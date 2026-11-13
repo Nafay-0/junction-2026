@@ -104,7 +104,7 @@ const CASES: Case[] = [
       served(r).flatMap((a) => [
         ...(m.profile(a.productId)?.whips === false ? [`${a.productId} does not whip`] : []),
         ...(!claimsOf(m, a.productId).includes("lactose_free") ? [`${a.productId} not lactose-free`] : []),
-        ...(/cooking/.test(a.kindLabel) ? [`${a.productId} is ${a.kindLabel}`] : []),
+        ...(/cooking/.test(a.kindLabel) && !/whip/.test(a.kindLabel) ? [`${a.productId} is ${a.kindLabel}`] : []),
       ]),
   },
   {
@@ -180,7 +180,7 @@ const ROLE_CASES: { q: string; claims?: string[]; expect: string; check: (r: Ret
 ];
 
 function runCases(map: KnowledgeMap, products: IndexedProduct[]) {
-  const out: { case: string; anchors: number; withSubs: number; problems: string[]; expect: string; sample: unknown[] }[] = [];
+  const out: { case: string; anchors: number; withSubs: number; top1ok: number; top3ok: number; top3n: number; problems: string[]; expect: string; sample: unknown[] }[] = [];
   for (const c of CASES) {
     const anchors = products
       .filter((p) => {
@@ -190,18 +190,30 @@ function runCases(map: KnowledgeMap, products: IndexedProduct[]) {
         if (c.anchor.notClaims?.some((x) => p.claims.includes(x))) return false;
         if (c.anchor.frozen !== undefined && (p.temperature.class === "frozen") !== c.anchor.frozen) return false;
         return c.anchor.extra ? c.anchor.extra(p) : true;
-      })
-      .slice(0, 12);
+      });
+    const step = Math.max(1, Math.floor(anchors.length / 15));
+    const picked = anchors.filter((_, i) => i % step === 0).slice(0, 15);
     const problems: string[] = [];
     let withSubs = 0;
+    let top1ok = 0;
+    let top3ok = 0;
+    let top3n = 0;
     const sample: unknown[] = [];
-    for (const a of anchors) {
+    for (const a of picked) {
       const r = map.alternatives(a.id, { use: c.use })!;
       if (r.substitutes.length) withSubs++;
       problems.push(...c.check(r, map).map((p) => `${a.id}: ${p}`));
-      if (sample.length < 3) sample.push({ anchor: a.id, use: r.use, subs: r.substitutes.map((s) => [s.productId, s.tier, s.confidence, s.reason]), packs: r.packAlternatives.length, none: r.none });
+      // Precision: judge each of the top substitutes on its own against the case's expectation.
+      r.substitutes.slice(0, 3).forEach((s, i) => {
+        const ok = c.check({ ...r, substitutes: [s], packAlternatives: [] }, map).length === 0;
+        if (i === 0 && ok) top1ok++;
+        top3n++;
+        if (ok) top3ok++;
+      });
+      const nm = (id: string) => map.fact(id)?.names.en ?? map.fact(id)?.names.fi;
+      sample.push({ anchor: a.id, anchorName: nm(a.id), use: r.use, subs: r.substitutes.slice(0, 3).map((s) => [s.productId, nm(s.productId), s.tier, s.confidence, s.reason]), packs: r.packAlternatives.length, none: r.none });
     }
-    out.push({ case: c.name, anchors: anchors.length, withSubs, problems, expect: c.expect, sample });
+    out.push({ case: c.name, anchors: picked.length, withSubs, top1ok, top3ok, top3n, problems, expect: c.expect, sample });
   }
   const roles: { q: string; uses: Use[]; kinds: string[]; products: number; problems: string[]; expect: string; top: unknown[] }[] = [];
   for (const rc of ROLE_CASES) {
@@ -237,7 +249,12 @@ function main() {
   // 2. hard cases
   const { cases, roles } = runCases(map, products);
   console.log(`\nHard cases (anchors chosen by rule; problems = expectation violated):`);
-  for (const c of cases) console.log(`  ${c.problems.length ? "FAIL" : "ok  "} ${c.case}: ${c.anchors} anchors, ${c.withSubs} with substitutes, ${c.problems.length} problems${c.problems.length ? ` (${c.problems.slice(0, 3).join("; ")})` : ""}`);
+  for (const c of cases)
+    console.log(
+      `  ${c.problems.length ? "FAIL" : "ok  "} ${c.case}: ${c.anchors} anchors, ${c.withSubs} with substitutes, P@1 ${pctOf(c.top1ok, c.withSubs)}, P@3 ${pctOf(c.top3ok, c.top3n)}${c.problems.length ? `; ${c.problems.length} problems (${c.problems.slice(0, 2).join("; ")})` : ""}`,
+    );
+  const t = cases.reduce((a, c) => ({ w: a.w + c.withSubs, p1: a.p1 + c.top1ok, p3: a.p3 + c.top3ok, n3: a.n3 + c.top3n }), { w: 0, p1: 0, p3: 0, n3: 0 });
+  console.log(`  all hard cases: P@1 ${pctOf(t.p1, t.w)}, P@3 ${pctOf(t.p3, t.n3)} (judged by data claims and the profile flags the case names)`);
   for (const r of roles) console.log(`  ${r.problems.length ? "FAIL" : "ok  "} role "${r.q}": uses ${r.uses.join(",")}; ${r.products} products; ${r.problems.length ? r.problems.slice(0, 3).join("; ") : "ok"}`);
 
   // 3. coverage over the whole map

@@ -198,6 +198,9 @@ export type Form = (typeof FORMS)[number];
 export const STATES = ["fresh", "chilled_processed", "frozen", "shelf_stable", "dried"] as const;
 export type ProductState = (typeof STATES)[number];
 
+/** Families whose products are plant foods by nature: their "vegan" and "vegetarian" tags are not assumed relied on (facts.ts). */
+export const INHERENTLY_VEGAN: readonly Family[] = ["vegetable", "fruit_berry", "potato", "legume", "herb_spice", "salt_seasoning", "nuts_seeds", "dried_fruit", "grain_rice", "flour", "juice", "coffee", "tea", "water", "oil_fat", "sugar_sweetener"];
+
 /** Families whose products are vegetarian by nature: their "vegetarian" tag is not assumed relied on (facts.ts). */
 export const INHERENTLY_VEGETARIAN: readonly Family[] = ["milk", "cream", "plant_drink", "plant_cream", "yoghurt", "fermented_milk", "quark", "sour_cream", "butter", "margarine_spread", "oil_fat", "egg", "flour", "grain_rice", "fruit_berry", "vegetable", "potato", "legume", "herb_spice", "salt_seasoning", "nuts_seeds", "dried_fruit", "sugar_sweetener", "coffee", "tea", "water", "juice"];
 

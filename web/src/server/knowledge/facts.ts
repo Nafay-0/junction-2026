@@ -7,7 +7,8 @@ import type { IndexedProduct } from "@/core/catalog/partner";
  * Claims the buyer relies on. Every claim the buyer states is enforced. Without a statement, the original's own
  * dietary claims are assumed relied on: lactose-free, low-lactose, gluten-free, vegan, vegetarian. Two exceptions,
  * both because the data makes the claim carry no information:
- *   - "vegetarian" is not assumed for products that are vegetarian by nature (milk, cream, yoghurt, butter, ...):
+ *   - "vegetarian" is not assumed for products that are vegetarian by nature (milk, cream, yoghurt, butter, ...),
+ *     nor "vegan" for plant foods by nature (vegetables, fruit, juice, spices, flour, ...):
  *     one maker tags every dairy product vegetarian and another tags none, so requiring it would only refuse every
  *     other brand. It is still enforced for cheese (rennet), ready meals, sweets and anything else, and always when
  *     the buyer asks for it.
@@ -45,11 +46,14 @@ const COVERED_BY_ALLERGENS = new Set(["egg_free", "soy_free", "wheat_free"]);
 export type CheckContext = {
   /** The original is vegetarian by nature (dairy): its "vegetarian" tag is not assumed relied on. */
   inherentlyVegetarian?: boolean;
+  /** The original is a plant food by nature (vegetables, juice, spices): its "vegan" and "vegetarian" tags are not assumed relied on. */
+  inherentlyVegan?: boolean;
 };
 
 /** The dietary claims of a product that a buyer may be relying on (for display). */
 export function protectedClaims(p: IndexedProduct, ctx: CheckContext = {}): string[] {
-  return p.claims.filter((c) => RELIED.has(c) && !(c === "vegetarian" && ctx.inherentlyVegetarian)).sort();
+  const implicit = (c: string) => (c === "vegetarian" && (ctx.inherentlyVegetarian || ctx.inherentlyVegan)) || (c === "vegan" && ctx.inherentlyVegan);
+  return p.claims.filter((c) => RELIED.has(c) && !implicit(c)).sort();
 }
 
 const present = (p: IndexedProduct) => new Set([...p.allergens.contains, ...p.allergens.mayContain]);

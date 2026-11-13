@@ -2,7 +2,7 @@ import type { IndexedProduct } from "@/core/catalog/partner";
 import { fold, LexicalSearch } from "@/core/catalog/search";
 import { hardCheck, protectedClaims, type AllergenEvidence, type BuyerConstraints, type HardCheck } from "./facts";
 import type { KindDef, KnowledgeData, Profile } from "./types";
-import { DISH_USES, FAMILY_BRIDGES, INHERENTLY_VEGETARIAN, USE_TEXT, USES, isUse, type Family, type Use } from "./vocab";
+import { DISH_USES, FAMILY_BRIDGES, INHERENTLY_VEGAN, INHERENTLY_VEGETARIAN, USE_TEXT, USES, isUse, type Family, type Use } from "./vocab";
 
 /**
  * The product knowledge map in memory: model-written profiles joined with the partner's data fields, and the
@@ -132,6 +132,27 @@ type Node = {
   content: { amount: number; unit: "L" | "kg" } | null;
   brandKey: string;
   nameKey: string;
+  /** Words naming the ingredient itself, in every language the product has (produce and fish only). */
+  ingredient: Set<string>;
+};
+
+/**
+ * For these families the product is the ingredient: a kind such as "sliced vegetables" can hold carrot and onion,
+ * which no cook swaps. Two of them must share an ingredient word (in any language) to be related.
+ */
+const INGREDIENT_FAMILIES = new Set<Family>(["vegetable", "fruit_berry", "herb_spice", "nuts_seeds", "dried_fruit", "legume", "fish", "seafood"]);
+const NOT_INGREDIENT = new Set(
+  "fresh frozen organic luomu sliced slices slice diced dice cube cubes cubed strips strip shredded grated whole chopped mix mixed pieces piece portions portion wavy thin thick fine very crinkle cut peeled washed cleaned raw cooked natural classic small big large mini baby extra premium red green yellow white black orange purple pink brown dark light box bag tray pack pcs kpl net ca app approx kg vac iqf greens valmix sallacarte bama fresh class cl ii iii fi finland suomi suomen kotimainen nl netherlands es spain it italy pl poland de germany fr france be belgium ma tn za pt pe ar cn china th dk se sweden no uk us tr eg il gr mx in au nz for with and the of in on from frozen pakaste pakastettu tuore finnish oy ab ltd viipale viipaleet viipaloitu kuutio kuutioitu suikale suikaleet raaste raastettu paloiteltu pala palat kokonainen kokonaisena siivu siivut rengas renkaat lohko lohkot murska sekoitus seos luomu kuorittu pesty skivad skivor tarnad strimlad riven hel fryst farsk bitar blandning ekologisk".split(" "),
+);
+/** A shared word, or one inside the other (compounds: watermelon / melon, jäävuorisalaatti / salaatti). */
+function sharesIngredient(a: Set<string>, b: Set<string>): boolean {
+  for (const x of a) for (const y of b) if (x === y || (x.length >= 4 && y.length >= 4 && (x.includes(y) || y.includes(x)))) return true;
+  return false;
+}
+const ingredientWords = (p: IndexedProduct): Set<string> => {
+  const brand = new Set(tokens(`${p.brand ?? ""} ${p.vendor ?? ""}`));
+  const words = [p.names.en, p.names.fi, p.names.sv].filter(Boolean).flatMap((n) => tokens(lineName(n!)));
+  return new Set(words.filter((w) => w.length > 2 && !NOT_INGREDIENT.has(w) && !brand.has(w) && !/^\d/.test(w)).map((w) => (w.length > 5 && w.endsWith("s") ? w.slice(0, -1) : w)));
 };
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
@@ -205,6 +226,7 @@ export class KnowledgeMap {
         content: contentOf(p),
         brandKey: fold(p.brand ?? p.vendor ?? ""),
         nameKey: lineName(name),
+        ingredient: INGREDIENT_FAMILIES.has(kind.family) ? ingredientWords(p) : new Set(),
       };
       this.nodes.set(p.id, node);
       const fam = this.byFamily.get(kind.family) ?? [];
@@ -253,7 +275,7 @@ export class KnowledgeMap {
         kindLabel: o?.kind.label ?? null,
         family: o?.kind.family ?? null,
         uses: o?.profile.uses ?? [],
-        claims: protectedClaims(fact, { inherentlyVegetarian: o ? INHERENTLY_VEGETARIAN.includes(o.kind.family) : false }),
+        claims: protectedClaims(fact, o ? ctxOf(o.kind.family) : {}),
       },
       threshold: SERVE_THRESHOLD,
     };
@@ -277,7 +299,7 @@ export class KnowledgeMap {
       const link = this.link(o, c, use);
       if (!link.ok) continue; // not related for this use at all: not even counted
       linked++;
-      const check = hardCheck(o.p, c.p, opts.constraints, { inherentlyVegetarian: INHERENTLY_VEGETARIAN.includes(o.kind.family) });
+      const check = hardCheck(o.p, c.p, opts.constraints, ctxOf(o.kind.family));
       if (!check.ok) {
         drop(c, check.reason, null, check.code === "claim_missing" ? `not ${readableClaims(check.reason.replace(/^not /, "").replace(/ by its data$/, "").split(", ").map((x) => x.replace(/ /g, "_"))).join(", ")} by data` : check.code === "allergen_new" ? "add an allergen" : "lack allergen data");
         continue;
@@ -367,6 +389,9 @@ export class KnowledgeMap {
     const labelSim = jaccard(tokens(o.kind.label), tokens(c.kind.label));
     let s = how === "kind" ? 0.86 : how === "family" ? 0.64 + 0.12 * labelSim : 0.58 + 0.12 * labelSim;
     if (how !== "kind") changes.push({ kind: "kind", text: `${c.kind.label} instead of ${o.kind.label}` });
+    if (INGREDIENT_FAMILIES.has(o.kind.family) && o.ingredient.size && c.ingredient.size && !sharesIngredient(o.ingredient, c.ingredient)) {
+      return { blocked: "a different ingredient", confidence: 0, changes, conditions, reason: "" };
+    }
     if (!c.profile.uses.includes(use)) s -= 0.12;
     s += 0.04 * jaccard(o.profile.uses, c.profile.uses);
     const P = o.profile;
@@ -408,6 +433,15 @@ export class KnowledgeMap {
       s -= 0.15;
       conditions.push(c.frozen ? { code: "frozen", text: "frozen: plan thawing time" } : { code: "not_frozen", text: "not frozen: shorter shelf life" });
     }
+    const fresh = (x: Profile) => x.state === "fresh";
+    if (!o.frozen && !c.frozen && fresh(P) !== fresh(Q) && (fresh(P) ? Q.state === "shelf_stable" || Q.state === "dried" : P.state === "shelf_stable" || P.state === "dried")) {
+      s -= 0.15;
+      changes.push({ kind: "storage", text: fresh(Q) ? "fresh instead of preserved" : `${Q.state.replace("_", "-")} instead of fresh` });
+    }
+    // Closeness within a kind: the same line name, maker and origin are the nearest stand-in.
+    s += 0.06 * jaccard(o.nameKey.split(" "), c.nameKey.split(" "));
+    if (o.brandKey && o.brandKey === c.brandKey) s += 0.02;
+    if (o.p.countryOfOrigin && o.p.countryOfOrigin === c.p.countryOfOrigin) s += 0.02;
     if (P.form !== Q.form) {
       const powder = (f: string) => f === "powder" || f === "granules";
       if (powder(P.form) !== powder(Q.form)) {
@@ -571,6 +605,8 @@ export class KnowledgeMap {
     return res;
   }
 }
+
+const ctxOf = (f: Family) => ({ inherentlyVegetarian: INHERENTLY_VEGETARIAN.includes(f), inherentlyVegan: INHERENTLY_VEGAN.includes(f) });
 
 const STOP = new Set(["for", "in", "the", "a", "an", "to", "of", "with", "and", "or", "my", "our", "some", "that", "use", "used", "using", "making", "make", "ja", "tai", "varten", "kanssa", "need", "want", "like", "good", "best", "which", "what"]);
 
