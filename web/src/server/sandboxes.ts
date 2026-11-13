@@ -1,7 +1,8 @@
 import type { PublicKeyCredentialCreationOptionsJSON, RegistrationResponseJSON } from "@simplewebauthn/server";
+import { importJWK, type CryptoKey, type JWK } from "jose";
 import type { Product } from "@/core/catalog";
 import type { KitchenRepository } from "@/core/kitchen";
-import { generateEd25519KeyPair, type KeyPair } from "@/core/keys";
+import { SIGN_ALG, generateEd25519KeyPair } from "@/core/keys";
 import { signMandate, type Mandate, type createTrustRegistry } from "@/core/mandate";
 import { DockError, type Dock, type PublicOrder } from "@/core/orders";
 import { PasskeyError, type PasskeyService, type RelyingParty } from "@/core/passkeys";
@@ -15,8 +16,9 @@ import { runKitchenScenario } from "./sandbox-scenario";
  * signing key, trusted by Dock), a signed mandate, a buyer agent, and becomes that organisation's only approver,
  * with a passkey on their phone. Visitors never see each other's orders. Kitchens expire; their number is capped.
  *
- * In memory, single process. With several instances, keep sandboxes and keys in Postgres (the private key
- * encrypted, or not kept at all once the mandate is signed) and add the org key to the trust registry table.
+ * Kept in a SandboxStore: in memory by default, PostgreSQL when DOCK_STORE=postgres (src/server/aiven). The
+ * organisation's private key is used once, to sign the mandate, and never stored; the store keeps the public
+ * key, and `restore()` puts it back in the trust registry after a restart so the kitchen's agent still works.
  */
 export type Sandbox = SandboxIdentity & {
   sandboxId: string;
@@ -38,12 +40,41 @@ export type SandboxSummary = Omit<Sandbox, "mandateToken" | "mandate"> & {
   weeklyBudgetCents: number;
 };
 
+/** A sandbox as stored: everything but the private key, plus the organisation's public key. */
+export type SandboxRecord = Sandbox & { publicJwk: JWK };
+
+/** Async so a database can hold the sandboxes (see src/server/aiven/pg/repositories.ts). */
+export interface SandboxStore {
+  put(s: SandboxRecord): Promise<void>;
+  get(sandboxId: string): Promise<SandboxRecord | undefined>;
+  list(): Promise<SandboxRecord[]>;
+  delete(sandboxId: string): Promise<void>;
+}
+
+export class InMemorySandboxStore implements SandboxStore {
+  private readonly items = new Map<string, SandboxRecord>();
+  async put(s: SandboxRecord) {
+    this.items.set(s.sandboxId, structuredClone(s));
+  }
+  async get(id: string) {
+    const s = this.items.get(id);
+    return s && structuredClone(s);
+  }
+  async list() {
+    return structuredClone([...this.items.values()]);
+  }
+  async delete(id: string) {
+    this.items.delete(id);
+  }
+}
+
 export type SandboxDeps = {
   dock: Dock;
   registry: ReturnType<typeof createTrustRegistry>;
   passkeys: PasskeyService;
   limits: () => { max: number; ttlMinutes: number };
   now?: () => Date;
+  store?: SandboxStore;
   /** Where each new kitchen's order history goes (the same repository the Dock instance reads). */
   kitchens?: KitchenRepository;
   /** Catalogue products the history is drawn from, by attribute (seed or real catalogue). */
@@ -51,27 +82,40 @@ export type SandboxDeps = {
 };
 
 export class SandboxService {
-  private readonly sandboxes = new Map<string, Sandbox & { key: KeyPair }>();
+  private readonly sandboxes: SandboxStore;
   private seq = 0;
   private readonly now: () => Date;
 
   constructor(private readonly deps: SandboxDeps) {
     this.now = deps.now ?? (() => new Date());
+    this.sandboxes = deps.store ?? new InMemorySandboxStore();
+  }
+
+  /** After a restart: trust the stored kitchens' organisation keys again. Returns how many are open. */
+  async restore(): Promise<number> {
+    await this.sweep();
+    const open = await this.sandboxes.list();
+    for (const s of open) {
+      const publicKey = (await importJWK(s.publicJwk, SIGN_ALG)) as CryptoKey;
+      this.deps.registry.add({ kid: String(s.publicJwk.kid ?? `${s.orgId}-key`), orgId: s.orgId, publicKey });
+    }
+    this.seq = Math.max(this.seq, open.length);
+    return open.length;
   }
 
   /** Drops expired kitchens and their approver accounts. Their orders stay in the ledger. */
   async sweep(): Promise<void> {
     const t = this.now().getTime();
-    for (const [id, s] of this.sandboxes) {
+    for (const s of await this.sandboxes.list()) {
       if (Date.parse(s.expiresAt) > t) continue;
-      this.sandboxes.delete(id);
+      await this.sandboxes.delete(s.sandboxId);
       await this.deps.passkeys.store.deleteAccount(s.approverId);
     }
   }
 
   private async ensureRoom(): Promise<void> {
     await this.sweep();
-    if (this.sandboxes.size >= this.deps.limits().max) {
+    if ((await this.sandboxes.list()).length >= this.deps.limits().max) {
       throw new DockError(503, "sandbox_full", "All demo kitchens are taken right now. Try again in a few minutes.");
     }
   }
@@ -124,7 +168,7 @@ export class SandboxService {
       { approverId, orgId, role: SANDBOX_ROLE.id, name: identity.approverName, userHandle: passkey?.userHandle ?? "", createdAt: now.toISOString(), expiresAt: expiresAt.toISOString() },
       passkey?.credential,
     );
-    const sandbox: Sandbox & { key: KeyPair } = {
+    const sandbox: SandboxRecord = {
       ...identity,
       sandboxId,
       orgId,
@@ -137,34 +181,34 @@ export class SandboxService {
       passkey: passkey !== undefined,
       createdAt: now.toISOString(),
       expiresAt: expiresAt.toISOString(),
-      key,
+      publicJwk: key.publicJwk,
     };
-    this.sandboxes.set(sandboxId, sandbox);
+    await this.sandboxes.put(sandbox);
     const sessionToken = await this.deps.passkeys.newSession(approverId, expiresAt);
     return { sandbox: summarize(sandbox), sessionToken };
   }
 
   async get(sandboxId: string): Promise<SandboxSummary | undefined> {
     await this.sweep();
-    const s = this.sandboxes.get(sandboxId);
+    const s = await this.sandboxes.get(sandboxId);
     return s && summarize(s);
   }
 
   async forApprover(approverId: string): Promise<SandboxSummary | undefined> {
     await this.sweep();
-    const s = [...this.sandboxes.values()].find((x) => x.approverId === approverId);
+    const s = (await this.sandboxes.list()).find((x) => x.approverId === approverId);
     return s && summarize(s);
   }
 
   async list(): Promise<SandboxSummary[]> {
     await this.sweep();
-    return [...this.sandboxes.values()].map(summarize);
+    return (await this.sandboxes.list()).map(summarize);
   }
 
   /** The agent credentials of a kitchen, for server-side callers (the scripted agent, an MCP bridge). */
   async agentCredentials(sandboxId: string): Promise<{ mandateToken: string; agentId: string } | undefined> {
     await this.sweep();
-    const s = this.sandboxes.get(sandboxId);
+    const s = await this.sandboxes.get(sandboxId);
     return s && { mandateToken: s.mandateToken, agentId: s.agentId };
   }
 
@@ -173,13 +217,13 @@ export class SandboxService {
     const creds = await this.agentCredentials(sandboxId);
     if (!creds) throw new DockError(404, "sandbox_not_found", "This demo kitchen does not exist or has closed.");
     const session = await this.deps.dock.authenticate(creds.mandateToken, creds.agentId);
-    const s = this.sandboxes.get(sandboxId);
+    const s = await this.sandboxes.get(sandboxId);
     return runKitchenScenario(this.deps.dock, session, { now: this.now(), by: s ? `${s.approverName} (scripted buyer)` : undefined });
   }
 }
 
 function summarize(s: Sandbox): SandboxSummary {
-  const { mandateToken: _t, mandate, key: _k, ...rest } = s as Sandbox & { key?: KeyPair };
+  const { mandateToken: _t, mandate, publicJwk: _k, ...rest } = s as Sandbox & { publicJwk?: JWK };
   void _t;
   void _k;
   return { ...rest, perOrderLimitCents: mandate.perOrderLimitCents, weeklyBudgetCents: mandate.weeklyBudgetCents };

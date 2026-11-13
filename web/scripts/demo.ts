@@ -21,6 +21,7 @@ import { formatDay, localNow, nextDeliveryDay } from "@/core/kitchen";
 import { KITCHEN_ORG, demoKitchenKeyPair, demoKitchenMandate } from "@/server/demo-kitchen";
 import { DEMO_ORG, demoMandate, demoOrgKeyPair } from "@/server/dev-fixtures";
 import { localFetch } from "@/server/local-transport";
+import { shutdownAiven } from "@/server/aiven";
 import { getRuntime } from "@/server/runtime";
 import { scenarioNeed } from "@/server/sandbox-scenario";
 import { DockClient, type Offer, type OptionCard, type Product, type Reply, type Step } from "./lib/client";
@@ -425,7 +426,10 @@ async function main() {
   say(`\nPartner API use for the whole run: ${catalog.liveCalls} live lookups by Dock, ${catalog.upstream ? `${catalog.upstream.httpRequests} HTTP requests to the partner (${catalog.upstream.cacheHits} answered from the cache)` : "none (seed catalogue)"}; ${catalog.searches} local master-data searches.`);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+main()
+  // Flush and close the Aiven adapters, if any are switched on (no-op in memory), so the process can exit.
+  .then(() => shutdownAiven())
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });

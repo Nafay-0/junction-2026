@@ -18,7 +18,7 @@ import {
   QuoteResultSchema,
 } from "../wire";
 import { AskHuman, answersFromBuyer, concernsFromBuyer, type HumanChannel } from "./ask-human";
-import type { LiveLookupGuard } from "./live-lookup-guard";
+import type { LiveBudget } from "@/server/aiven/valkey";
 import { nextStepForIntake, nextStepForOrder, waitingFor } from "./next-step";
 
 /**
@@ -32,7 +32,7 @@ import { nextStepForIntake, nextStepForOrder, waitingFor } from "./next-step";
  * To add a tool: append an entry here. Nothing else changes.
  */
 
-export type ToolContext = { dock: Dock; session: AgentSession; guard: LiveLookupGuard; agentKey: string; human: HumanChannel };
+export type ToolContext = { dock: Dock; session: AgentSession; guard: LiveBudget; agentKey: string; human: HumanChannel };
 
 type ToolDef<I extends z.ZodObject, O extends z.ZodObject> = {
   name: string;
@@ -189,7 +189,7 @@ const CORE_TOOLS = [
     readOnly: true,
     run: async ({ session, guard, agentKey }) => ({
       mandate: session.mandate,
-      liveLookupBudget: guard.remaining(agentKey),
+      liveLookupBudget: await guard.remaining(agentKey),
       nextStep: "Call submit_need with the buyer's need as structured fields.",
     }),
   }),
@@ -242,10 +242,10 @@ const CORE_TOOLS = [
     output: z.object({ offers: z.array(OfferSchema), liveLookupBudget: budget, nextStep }),
     readOnly: true,
     run: async ({ dock, session, guard, agentKey }, args) => {
-      guard.reserve(agentKey, args.productIds);
+      await guard.reserve(agentKey, args.productIds);
       return {
         offers: await dock.checkAvailability(session, args),
-        liveLookupBudget: guard.remaining(agentKey),
+        liveLookupBudget: await guard.remaining(agentKey),
         nextStep: "Choose quantities (in packs) that cover the need and call request_quote. If your first choice is short, add a substitute line.",
       };
     },
@@ -270,7 +270,7 @@ const CORE_TOOLS = [
     }),
     output: QuoteResultSchema.extend({ nextStep }),
     run: async ({ dock, session, guard, agentKey }, args) => {
-      guard.reserve(agentKey, args.lines.flatMap((l) => (l.substituteFor ? [l.productId, l.substituteFor] : [l.productId])));
+      await guard.reserve(agentKey, args.lines.flatMap((l) => (l.substituteFor ? [l.productId, l.substituteFor] : [l.productId])));
       const result = await dock.requestQuote(session, args);
       const preview = result.policyPreview;
       const hint =

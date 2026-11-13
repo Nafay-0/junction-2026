@@ -13,6 +13,7 @@ import { DockError } from "@/core/orders";
 import { authenticate } from "../http";
 import { getRuntime, type Runtime } from "../runtime";
 import { AskHuman, HUMAN_INPUT_META, type HumanChannel } from "./ask-human";
+import type { LiveBudget } from "@/server/aiven/valkey";
 import { LiveLookupGuard } from "./live-lookup-guard";
 import { nextStepFor } from "./next-step";
 import { TOOLS, type DockTool } from "./tools";
@@ -65,10 +66,14 @@ export function refusal(err: DockError) {
   );
 }
 
-const guards = new WeakMap<Runtime, LiveLookupGuard>();
-function guardFor(rt: Runtime): LiveLookupGuard {
+const guards = new WeakMap<Runtime, LiveBudget>();
+function guardFor(rt: Runtime): LiveBudget {
   let g = guards.get(rt);
-  if (!g) guards.set(rt, (g = new LiveLookupGuard(rt.dock.liveAllowance))); // the core's allowance: REST and MCP share it
+  // The Valkey-backed allowance when DOCK_CACHE=valkey (shared by every process), else the core's own, through the guard.
+  if (!g) {
+    g = rt.aiven?.liveBudget ?? new LiveLookupGuard(rt.dock.liveAllowance); // the core's allowance: REST and MCP share it
+    guards.set(rt, g);
+  }
   return g;
 }
 
