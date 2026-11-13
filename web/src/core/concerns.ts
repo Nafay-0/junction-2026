@@ -489,8 +489,9 @@ function contradiction(pref: StatedPreference, need: StructuredNeed, named: Prod
  *   15 kg, 50 pcs): below that a mistaken family costs a few euros, less than the buyer's time.
  * A declined product is raised whenever the buyer names it: a person turned it down in words, and naming it
  * again is either a change of mind (one tap) or a slip that the kitchen said it did not want.
- * An unusual delivery day is raised only from a delivery-days habit (the learner needs six deliveries over
- * eight weeks, all on those days) or a stated rule: goods arriving at a closed kitchen are refused or spoil.
+ * An unusual delivery day is raised only when a PERSON said which days the kitchen receives (in words, or as a
+ * rule): goods arriving at a closed kitchen are refused or spoil. Days merely read from order history (Mondays and
+ * Thursdays so far) are not raised: a kitchen that has not had a Friday delivery yet may still receive one.
  */
 export const STANDING_HIGH = 1.5;
 export const STANDING_LOW = 1 / 1.5;
@@ -611,7 +612,7 @@ export function checkReceivingDay(need: StructuredNeed, ctx: CheckContext): Conc
   const date = need.deliverBy;
   if (!date) return [];
   const wd = isoWeekday(date);
-  const m = activeMemory(ctx.profile, { now: ctx.now }).find((x) => x.fact.kind === "delivery_days" && heavy(x) && x.strength !== "one_off" && !x.fact.weekdays.includes(wd) && ctx.profile.deliveryWeekdays.includes(wd));
+  const m = activeMemory(ctx.profile, { now: ctx.now }).find((x) => x.fact.kind === "delivery_days" && x.origin !== "learned" && heavy(x) && x.strength !== "one_off" && !x.fact.weekdays.includes(wd) && ctx.profile.deliveryWeekdays.includes(wd));
   if (!m || m.fact.kind !== "delivery_days") return [];
   const earliest = earliestDeliveryDay(ctx.now, ctx.profile.deliveryWeekdays);
   const days = m.fact.weekdays;

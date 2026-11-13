@@ -146,6 +146,8 @@ export type MemoryItem = {
   updatedAt: string;
   lastUsedAt?: string;
   lastConfirmedAt?: string;
+  /** When `weight` was last decayed for time (habits fade; see server/memory/decide.ts). */
+  weighedAt?: string;
   confirmedBy?: { by: string; at: string };
   expiresAt?: string; // one-offs
   /** What happened to it, oldest first; a superseded value is kept here, not lost. */
@@ -155,10 +157,13 @@ export type MemoryItem = {
   /** A safety rule offered for the kitchen's signed mandate, so the gate enforces it and not only memory. */
   mandate?: { status: "offered" | "added" | "declined"; at: string; by?: string };
   supersededBy?: string;
+  /** A pending proposal that would replace this item when a person confirms it. */
+  replaces?: string;
 };
 
 /** The fact that something was forgotten: no content, only what kind it was and which interactions it rested on. */
-export type MemoryTombstone = { itemId: string; kind: MemoryKind; at: string; by: string; interactionIds: string[] };
+/** `declined`: a person said no to a proposal; `keyHash` (a hash of what it was about) keeps it from being asked again. */
+export type MemoryTombstone = { itemId: string; kind: MemoryKind; at: string; by: string; interactionIds: string[]; reason?: "forgotten" | "declined"; keyHash?: string };
 export type MemoryStaffRead = { by: string; at: string; items: number };
 export type MemoryProposal = { id: string; by: string; at: string; itemId?: string; text: string; fact?: MemoryFact; status: "open" | "accepted" | "declined"; decidedBy?: string; decidedAt?: string };
 export type KitchenMemory = { items: MemoryItem[]; forgotten: MemoryTombstone[]; staffReads: MemoryStaffRead[]; proposals: MemoryProposal[] };
