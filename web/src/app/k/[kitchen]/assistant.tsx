@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Target } from "../../_ui/target";
+import { Spinner } from "../../_ui/kit";
 import { shortProduct } from "../../_ui/plain";
 import { CallAgent } from "./call-agent";
 import { ChannelSlot } from "./channel-slot";
-import { requestLabel, usePortal } from "./portal";
+import { AgentIcon, requestLabel, usePortal } from "./portal";
 import type { AskReply } from "@/server/kitchen-assistant";
 
 /**
@@ -88,62 +88,64 @@ export function AssistantPanel() {
         <button
           type="button"
           onClick={agent.open}
-          className="fixed bottom-4 right-4 z-30 flex min-h-14 items-center gap-2 bg-ink px-5 font-semibold text-paper shadow-[0_4px_0_rgba(26,29,33,0.25)]"
+          aria-keyshortcuts="Control+K Meta+K"
+          className="fixed bottom-4 right-4 z-30 flex min-h-14 items-center gap-2 bg-lavender-deep px-5 font-semibold text-paper shadow-[0_6px_0_rgba(35,40,45,0.18)] hover:bg-ink"
         >
-          <Target size={22} tone="chalk" />
+          <AgentIcon size={22} />
           Ask the purchasing agent
         </button>
       )}
-      {open && <div aria-hidden className="fixed inset-0 z-30 bg-ink/30 xl:hidden" onClick={() => agent.setPanelOpen(false)} />}
+      {open && <div aria-hidden className="fixed inset-0 z-30 bg-ink/40 xl:hidden" onClick={() => agent.setPanelOpen(false)} />}
       <aside
         id="assistant"
         aria-label="Purchasing agent"
-        className={`${open ? "flex" : "hidden"} fixed inset-y-0 right-0 z-40 w-full max-w-[26rem] flex-col border-l-[3px] border-ink bg-paper xl:w-[24rem]`}
+        className={`${open ? "flex" : "hidden"} fixed inset-y-0 right-0 z-40 w-full max-w-[26rem] flex-col bg-lavender shadow-[-8px_0_0_rgba(35,40,45,0.06)] xl:w-[25rem]`}
       >
-        <header className="flex items-start gap-3 border-b border-ink/15 px-4 py-3">
-          <Target size={30} tone="ink" className="mt-0.5 shrink-0" />
+        <header className="on-dark flex items-start gap-3 bg-lavender-deep px-4 py-3 text-paper">
+          <span className="mt-1 flex size-9 shrink-0 items-center justify-center bg-paper/15">
+            <AgentIcon size={20} />
+          </span>
           <div className="min-w-0 flex-1">
-            <h2 className="font-display text-[1.3rem] font-bold leading-tight">Purchasing agent</h2>
-            <p className="text-[0.85rem] leading-snug text-ink-soft">
-              {kitchen.agentName}, working in the shop for {kitchen.name}. Answers come from the shop&apos;s records; orders go through the order cards and the kitchen&apos;s sign-off.
-            </p>
+            <h2 className="display text-[1.5rem]">{kitchen.agentName}</h2>
+            <p className="text-[0.85rem] leading-snug text-paper/80">Buys for {kitchen.name}. Answers from the shop&apos;s records; orders only through the order lane and the kitchen&apos;s sign-off.</p>
           </div>
-          <button type="button" onClick={() => agent.setPanelOpen(false)} className="min-h-11 min-w-11 text-[1.4rem] font-bold" aria-label="Close the agent panel">
+          <button type="button" onClick={() => agent.setPanelOpen(false)} className="min-h-11 min-w-11 text-[1.5rem] font-bold leading-none hover:bg-paper/10" aria-label="Close the agent panel">
             ×
           </button>
         </header>
 
-        <ol className="flex-1 space-y-3 overflow-y-auto px-4 py-3" aria-live="polite">
+        <ol className="flex-1 space-y-4 overflow-y-auto px-4 py-4" aria-live="polite">
           {turns.length === 0 && (
-            <li className="space-y-2">
-              <p className="text-[0.95rem] leading-snug text-ink-soft">Ask about what is on screen, the catalogue or the kitchen&apos;s orders, or say what the kitchen needs.</p>
-              <div className="flex flex-col items-start gap-1.5">
-                {[...suggestions(productId, orderId), kitchen.examples[1] ?? kitchen.examples[0]].filter(Boolean).map((s) => (
-                  <button key={s} type="button" onClick={() => void submit(s)} className="min-h-9 border border-ink/40 px-2.5 text-left text-[0.92rem] hover:border-ink">
-                    {s}
+            <li className="space-y-3">
+              <p className="text-[0.98rem] leading-snug text-ink">Ask about what is on screen, the catalogue or the kitchen&apos;s orders. Or say what the kitchen needs, and it becomes an order on the lane.</p>
+              <div className="flex flex-col items-stretch gap-1.5">
+                {[...suggestions(productId, orderId), kitchen.examples[1] ?? kitchen.examples[0]].filter(Boolean).map((s, i, all) => (
+                  <button key={s} type="button" onClick={() => void submit(s)} className="flex min-h-10 items-center justify-between gap-2 bg-paper px-3 py-1.5 text-left text-[0.95rem] hover:bg-paper/70 hover:outline-2 hover:outline-lavender-deep">
+                    <span>{s}</span>
+                    {i === all.length - 1 && <span className="shrink-0 text-[0.78rem] font-semibold text-lavender-deep">an order</span>}
                   </button>
                 ))}
               </div>
             </li>
           )}
           {turns.map((t) => (
-            <li key={t.id} className="space-y-1.5">
-              <p className="ml-6 bg-concrete px-3 py-2 text-[0.98rem] leading-snug">{t.q}</p>
+            <li key={t.id} className="space-y-2">
+              <p className="ml-8 bg-paper px-3 py-2 text-[0.98rem] leading-snug">{t.q}</p>
               {t.kind === "pending" && (
-                <p className="flex items-center gap-2 text-[0.92rem] text-ink-soft">
-                  <Target size={16} tone="hollow" spin /> Looking it up in the shop&apos;s records…
+                <p className="flex items-center gap-2 text-[0.92rem] text-lavender-deep">
+                  <Spinner size={14} /> Looking it up in the shop&apos;s records…
                 </p>
               )}
               {t.kind === "error" && <p className="border-l-4 border-ink pl-2 text-[0.95rem]">That did not work: {t.message}</p>}
               {t.kind === "order" && (
-                <div className="border-l-4 border-ink pl-3 text-[0.95rem] leading-snug">
-                  <p className="font-semibold">Taken as an order request.</p>
+                <div className="border-l-4 border-petrol bg-paper/60 py-1.5 pl-3 pr-2 text-[0.95rem] leading-snug">
+                  <p className="font-semibold">On the order lane now.</p>
                   <p className="text-ink-soft">
-                    The agent sets it up as cards on the{" "}
-                    <Link href={`${base}/order`} className="font-semibold text-ink underline decoration-2 underline-offset-4">
+                    Follow it on the{" "}
+                    <Link href={`${base}/order`} className="font-semibold text-petrol underline decoration-2 underline-offset-4">
                       Order page
                     </Link>
-                    : what it understood, the mistake check, options and a fixed price. Nothing is ordered until the gate passes it.
+                    : what the agent understood, the mistake check, options and a fixed price. Nothing is ordered until the gate passes it.
                   </p>
                 </div>
               )}
@@ -154,7 +156,7 @@ export function AssistantPanel() {
         </ol>
 
         <form
-          className="border-t-[3px] border-ink p-3"
+          className="border-t border-lavender-deep/20 bg-lavender p-3"
           onSubmit={(e) => {
             e.preventDefault();
             void submit(agent.draft);
@@ -163,29 +165,29 @@ export function AssistantPanel() {
           {(agent.followUp || agent.product) && (
             <div className="mb-2 flex flex-wrap gap-1.5">
               {agent.followUp && (
-                <span className="inline-flex max-w-full items-center gap-1.5 border-2 border-ink px-2 py-0.5 text-[0.88rem]">
-                  <span className="shrink-0 font-semibold">Changing</span>
+                <span className="inline-flex max-w-full items-center gap-1.5 bg-paper px-2 py-0.5 text-[0.88rem]">
+                  <span className="shrink-0 font-semibold text-lavender-deep">Changing</span>
                   <span className="truncate">{requestLabel(agent.followUp)}</span>
-                  <button type="button" className="shrink-0 px-1 font-bold" aria-label="Stop changing that request" onClick={() => agent.setFollowUp(undefined)}>
+                  <button type="button" className="min-h-8 shrink-0 px-1 font-bold" aria-label="Stop changing that request" onClick={() => agent.setFollowUp(undefined)}>
                     ×
                   </button>
                 </span>
               )}
               {agent.product && (
-                <span className="inline-flex max-w-full items-center gap-1.5 border-2 border-ink px-2 py-0.5 text-[0.88rem]">
-                  <span className="shrink-0 font-semibold">Product</span>
+                <span className="inline-flex max-w-full items-center gap-1.5 bg-paper px-2 py-0.5 text-[0.88rem]">
+                  <span className="shrink-0 font-semibold text-lavender-deep">Product</span>
                   <span className="truncate">{shortProduct(agent.product.names?.en ?? agent.product.name)}</span>
-                  <button type="button" className="shrink-0 px-1 font-bold" aria-label="Remove the product" onClick={() => agent.setProduct(undefined)}>
+                  <button type="button" className="min-h-8 shrink-0 px-1 font-bold" aria-label="Remove the product" onClick={() => agent.setProduct(undefined)}>
                     ×
                   </button>
                 </span>
               )}
             </div>
           )}
-          <label htmlFor="need" className="text-[0.88rem] font-semibold">
+          <label htmlFor="need" className="text-[0.88rem] font-semibold text-lavender-deep">
             {agent.followUp ? "What changes?" : agent.product ? "How much, and for when?" : "Ask, or say what the kitchen needs"}
           </label>
-          <div className="mt-1 flex border-[3px] border-ink focus-within:outline-[3px] focus-within:outline-offset-2 focus-within:outline-ink">
+          <div className="mt-1 flex bg-paper outline-2 outline-lavender-deep focus-within:outline-[3px] focus-within:outline-offset-2 focus-within:outline-petrol">
             <input
               id="need"
               ref={fieldRef}
@@ -194,17 +196,17 @@ export function AssistantPanel() {
               placeholder={agent.followUp ? "200 litres, for Thursday" : agent.product ? "40 cases for Monday" : "100 L lactose-free milk for Thursday"}
               autoComplete="off"
               enterKeyHint="send"
-              className="min-h-12 min-w-0 flex-1 bg-transparent px-3 text-[1.05rem] font-semibold placeholder:font-normal placeholder:text-ink-soft/80 focus:outline-none"
+              className="min-h-12 min-w-0 flex-1 bg-transparent px-3 text-[1.05rem] font-semibold placeholder:font-normal placeholder:text-ink-soft focus:outline-none"
             />
             {/* Microphone and "add a photo or document" mount here (see channel-slot.tsx). */}
             <ChannelSlot kitchen={kitchen.slug} lang={SPEECH[lang]} disabled={busy} onText={agent.setDraft} onSubmit={(t) => void submit(t)} />
-            <button type="submit" disabled={busy} aria-busy={busy || undefined} className="inline-flex min-h-12 shrink-0 items-center gap-2 bg-ink px-4 font-semibold text-paper hover:bg-ink-soft disabled:opacity-60">
-              {busy && <Target size={16} tone="hollow" spin className="text-paper" />}
+            <button type="submit" disabled={busy} aria-busy={busy || undefined} className="inline-flex min-h-12 shrink-0 items-center gap-2 bg-lime px-4 font-semibold text-ink hover:bg-lime-hover disabled:opacity-60">
+              {busy && <Spinner size={14} />}
               Send
             </button>
           </div>
-          <p className="mt-1.5 text-[0.8rem] leading-snug text-ink-soft">Questions are answered from the product data and this kitchen&apos;s records only. A request to buy becomes order cards; it is not ordered from here.</p>
-          <div className="mt-2 border-t border-ink/15 pt-2">
+          <p className="mt-1.5 text-[0.8rem] leading-snug text-ink-soft">Questions are answered from the product data and this kitchen&apos;s records only. A request to buy goes onto the order lane; nothing is ordered from here.</p>
+          <div className="mt-2 border-t border-lavender-deep/20 pt-2">
             <CallAgent compact />
           </div>
         </form>
@@ -215,7 +217,7 @@ export function AssistantPanel() {
 
 function Answer({ reply, base }: { reply: AskReply; base: string }) {
   return (
-    <div className="border-l-4 border-ink pl-3">
+    <div className="bg-paper px-3 py-2.5">
       <p className={`text-[0.98rem] leading-snug ${reply.kind === "no_model" ? "text-ink-soft" : ""}`}>{reply.answer}</p>
       {reply.dataMissing && reply.kind === "answer" && <p className="mt-1 inline-block border border-dashed border-ink-soft px-1.5 text-[0.82rem] italic text-ink-soft">The records do not say: no data</p>}
       {reply.citations.length > 0 && (
@@ -226,11 +228,11 @@ function Answer({ reply, base }: { reply: AskReply; base: string }) {
             return (
               <li key={c.id}>
                 {href ? (
-                  <Link href={href} className="inline-block max-w-[20rem] truncate bg-concrete px-1.5 py-0.5 text-[0.8rem] underline decoration-1 underline-offset-2">
+                  <Link href={href} className="inline-block max-w-[20rem] truncate bg-lavender px-1.5 py-0.5 text-[0.8rem] text-lavender-deep underline decoration-1 underline-offset-2">
                     {label}
                   </Link>
                 ) : (
-                  <span className="inline-block max-w-[20rem] truncate bg-concrete px-1.5 py-0.5 text-[0.8rem]">{label}</span>
+                  <span className="inline-block max-w-[20rem] truncate bg-lavender px-1.5 py-0.5 text-[0.8rem] text-lavender-deep">{label}</span>
                 )}
               </li>
             );

@@ -1,119 +1,196 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Target } from "../../_ui/target";
+import { AgentNote, Button as KitButton, Plate, Spinner, type ButtonKind, type ButtonSize } from "../../_ui/kit";
 
-/** Where a stage is: done, working on it, waiting for a person (safety), or the gate refused (safety). */
+export { ErrorPlate, Field, Missing } from "../../_ui/kit";
+
+/** Where a stage is: done, working on it, waiting for the buyer (active), or the gate stopped it (safety). */
 export type StageTone = "done" | "active" | "busy" | "safety";
 
-/**
- * One stage of the request: a numbered marker on the dock lane at the left, and its document on the right.
- * Stages only ever get added below, so nothing above a new stage moves.
- */
-export function Stage({ n, title, tone, aside, children, id }: { n: number; title: string; tone: StageTone; aside?: ReactNode; children: ReactNode; id?: string }) {
-  return (
-    <section id={id} aria-labelledby={`stage-${n}`} className="relative grid grid-cols-[2.25rem_1fr] gap-x-3 pb-8 sm:grid-cols-[3rem_1fr] sm:gap-x-4">
-      <div className="relative flex justify-center">
-        <span aria-hidden className="absolute bottom-0 top-10 w-[3px] bg-ink/15" />
-        <span className="relative mt-0.5 flex size-9 items-center justify-center bg-concrete sm:size-11">
-          <Target size={34} tone={tone === "safety" ? "safety" : tone === "busy" ? "hollow" : "ink"} spin={tone === "busy"} className="text-ink" />
-        </span>
-      </div>
-      <div className="min-w-0">
-        <header className="mb-2.5 flex min-h-11 flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <h2 id={`stage-${n}`} className="font-display text-[1.6rem] font-bold leading-tight tracking-tight">
-            <span className="sr-only">Step </span>
-            <span className="mr-2 text-ink-soft tabular">{n}</span>
-            <span className="sr-only">: </span>
-            {title}
-          </h2>
-          {aside}
-        </header>
-        {children}
-      </div>
-    </section>
-  );
+type ButtonProps = { children: ReactNode; onClick?: () => void; busy?: boolean; disabled?: boolean; pressed?: boolean; kind?: ButtonKind; size?: ButtonSize; type?: "button" | "submit"; className?: string; title?: string };
+
+export function Button(props: ButtonProps) {
+  return <KitButton {...props} />;
 }
 
-/** A document: white paper with a heavy top rule. Safety documents carry the hazard band instead. */
-export function Paper({ children, className = "", safety = false }: { children: ReactNode; className?: string; safety?: boolean }) {
+/** A document: white paper with a petrol top rule. Gate documents carry the hazard band instead. */
+export function Paper({ children, className = "", safety = false, agent = false }: { children: ReactNode; className?: string; safety?: boolean; agent?: boolean }) {
   return (
-    <div className={`bg-paper shadow-[0_1px_0_rgba(26,29,33,0.25)] ${className}`}>
-      <div aria-hidden className={safety ? "hazard h-3" : "h-[3px] bg-ink"} />
+    <Plate className={className} tone={safety ? "gate" : agent ? "agent" : "paper"}>
       {children}
-    </div>
-  );
-}
-
-/** A labelled field, as on a waybill: small label, the value under it. */
-export function Field({ label, children, className = "" }: { label: string; children: ReactNode; className?: string }) {
-  return (
-    <div className={`min-w-0 ${className}`}>
-      <dt className="text-[0.8rem] font-medium leading-tight text-ink-soft">{label}</dt>
-      <dd className="mt-0.5 text-[1.05rem] font-semibold leading-snug">{children}</dd>
-    </div>
-  );
-}
-
-export function Missing({ children }: { children: ReactNode }) {
-  return <span className="border border-dashed border-ink-soft px-1.5 py-px text-[0.95rem] font-medium italic text-ink-soft">{children}</span>;
-}
-
-type ButtonProps = { children: ReactNode; onClick?: () => void; busy?: boolean; disabled?: boolean; pressed?: boolean; kind?: "primary" | "secondary" | "quiet"; type?: "button" | "submit"; className?: string };
-
-export function Button({ children, onClick, busy, disabled, pressed, kind = "secondary", type = "button", className = "" }: ButtonProps) {
-  const look =
-    kind === "primary"
-      ? "bg-ink text-paper hover:bg-ink-soft"
-      : kind === "secondary"
-        ? "border-2 border-ink bg-paper text-ink hover:bg-concrete"
-        : "text-ink underline decoration-2 underline-offset-4 hover:decoration-ink-soft";
-  return (
-    <button
-      type={type}
-      onClick={onClick}
-      disabled={disabled || busy}
-      aria-busy={busy || undefined}
-      aria-pressed={pressed}
-      className={`relative inline-flex min-h-11 items-center justify-center gap-2 px-4 text-[1.02rem] font-semibold transition-colors disabled:cursor-not-allowed ${pressed ? "" : "disabled:opacity-55"} ${look} ${className}`}
-    >
-      {busy && <Target size={18} tone="hollow" spin className={kind === "primary" ? "text-paper" : "text-ink"} />}
-      {children}
-    </button>
-  );
-}
-
-export function ErrorPlate({ title, message, onRetry, extra }: { title: string; message: string; onRetry?: () => void; extra?: { label: string; onClick: () => void } | false | undefined }) {
-  return (
-    <div role="alert" className="mt-3 flex flex-wrap items-start justify-between gap-3 border-l-[6px] border-ink bg-paper px-4 py-3">
-      <div className="min-w-0">
-        <p className="font-semibold">{title}</p>
-        <p className="text-ink-soft">{message}</p>
-      </div>
-      {(onRetry || extra) && (
-        <div className="flex flex-wrap gap-2">
-          {onRetry && (
-            <Button onClick={onRetry} kind="secondary">
-              Try again
-            </Button>
-          )}
-          {extra && (
-            <Button onClick={extra.onClick} kind="quiet">
-              {extra.label}
-            </Button>
-          )}
-        </div>
-      )}
-    </div>
+    </Plate>
   );
 }
 
 /** A note that a value came from the kitchen's memory, not from a question. */
 export function MemoryNote({ children }: { children: ReactNode }) {
+  return <AgentNote>{children}</AgentNote>;
+}
+
+// ---------- the order lane ----------
+
+/** The stations a request travels through, in order. Every stage of the order page belongs to one. */
+export const STATIONS = ["Request", "Lookup", "Options", "Price", "Gate", "Sign-off", "Order"] as const;
+export type Station = (typeof STATIONS)[number];
+
+export type LaneStage = {
+  key: string;
+  station: Station;
+  title: string;
+  tone: StageTone;
+  /** One line that stands for the stage when it is collapsed. */
+  summary?: ReactNode;
+  aside?: ReactNode;
+  body: ReactNode;
+  /** Keep this stage open even when it is not the current one (a sign-off just arrived, say). */
+  keepOpen?: boolean;
+  /** Not part of the request's journey (the ledger): never counted as the current station. */
+  extra?: boolean;
+};
+
+export type StationState = "done" | "current" | "stopped" | "pending" | "skipped";
+
+/**
+ * The strip across the top of the order page: seven stations, readable from across a table. The current one is
+ * filled; when the gate stops the request, the gate and sign-off stations carry the hazard and the mark.
+ */
+export function StationStrip({ states, label }: { states: Record<Station, StationState>; label?: string }) {
   return (
-    <p className="flex gap-2 text-[0.98rem] leading-snug">
-      <span aria-hidden className="mt-[0.4em] size-2 shrink-0 rotate-45 bg-ink" />
-      <span>{children}</span>
-    </p>
+    <nav aria-label="Where the request is" className="bg-paper">
+      <ol className="grid grid-cols-7">
+        {STATIONS.map((s, i) => {
+          const st = states[s];
+          const look =
+            st === "current"
+              ? "bg-petrol-deep text-paper"
+              : st === "stopped"
+                ? "bg-safety-ink text-safety"
+                : st === "done"
+                  ? "bg-petrol-soft text-petrol-deep"
+                  : st === "skipped"
+                    ? "bg-paper text-ink-soft/70"
+                    : "bg-paper text-ink-soft";
+          return (
+            <li key={s} aria-current={st === "current" || st === "stopped" ? "step" : undefined} className={`relative flex min-h-[3.75rem] flex-col justify-center border-r border-paper px-1.5 py-2 last:border-r-0 sm:px-3 ${look}`}>
+              {st === "stopped" && <span aria-hidden className="hazard-thin absolute inset-x-0 top-0 h-1.5" />}
+              <span className="flex items-center gap-1.5">
+                {st === "stopped" ? (
+                  <Target size={18} tone="safety" className="hidden shrink-0 sm:block" />
+                ) : (
+                  <span aria-hidden className={`hidden size-4 shrink-0 items-center justify-center text-[0.7rem] font-bold sm:flex ${st === "current" ? "bg-lime text-ink" : st === "done" ? "bg-petrol text-paper" : "border border-current"}`}>
+                    {st === "done" ? "✓" : ""}
+                  </span>
+                )}
+                <span className={`display truncate text-[0.95rem] sm:text-[1.25rem] ${st === "skipped" ? "line-through decoration-1" : ""}`}>{s}</span>
+              </span>
+              <span className="sr-only">
+                {", step "}
+                {i + 1}
+                {": "}
+                {st === "current" ? "here now" : st === "stopped" ? "stopped, a person must decide" : st === "done" ? "done" : st === "skipped" ? "not needed" : "not reached yet"}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+      {label && <p className="sr-only" aria-live="polite">{label}</p>}
+    </nav>
   );
+}
+
+/**
+ * The lane: the request's stages in order. The current stage is open; earlier ones collapse to one line each and
+ * can be reopened. A new stage slides in from the lane's side; nothing above it moves.
+ */
+export function Lane({ stages, runKey }: { stages: LaneStage[]; runKey: string | number }) {
+  const [toggled, setToggled] = useState<Record<string, boolean>>({});
+  const [forRun, setForRun] = useState(runKey);
+  if (forRun !== runKey) {
+    setForRun(runKey);
+    setToggled({});
+  }
+  const journey = stages.filter((s) => !s.extra);
+  const lastKey = journey.at(-1)?.key;
+  return (
+    <ol className="relative">
+      {stages.map((st, i) => {
+        const auto = st.key === lastKey || st.keepOpen || st.tone === "active" || st.tone === "safety" || st.tone === "busy";
+        const open = toggled[st.key] ?? auto;
+        const last = i === stages.length - 1;
+        return (
+          <LaneRow
+            key={`${runKey}-${st.key}`}
+            n={i + 1}
+            st={st}
+            open={open}
+            last={last}
+            current={st.key === lastKey}
+            onToggle={() => setToggled((t) => ({ ...t, [st.key]: !open }))}
+          />
+        );
+      })}
+    </ol>
+  );
+}
+
+function LaneRow({ n, st, open, last, current, onToggle }: { n: number; st: LaneStage; open: boolean; last: boolean; current: boolean; onToggle: () => void }) {
+  const id = `st-${st.key}`;
+  const bodyId = `${id}-body`;
+  const node =
+    st.tone === "safety" ? (
+      <span className="flex size-10 items-center justify-center bg-safety-ink">
+        <Target size={30} tone="safety" />
+      </span>
+    ) : st.tone === "busy" ? (
+      <span className="flex size-10 items-center justify-center bg-petrol-deep text-paper">
+        <Spinner size={18} />
+      </span>
+    ) : current || st.tone === "active" ? (
+      <span className="display flex size-10 items-center justify-center bg-petrol-deep text-[1.35rem] text-paper tabular">{n}</span>
+    ) : (
+      <span className="display flex size-10 items-center justify-center border-2 border-petrol bg-paper text-[1.2rem] text-petrol tabular">{n}</span>
+    );
+  return (
+    <li id={id} className="lane-enter relative grid scroll-mt-28 grid-cols-[2.5rem_minmax(0,1fr)] gap-x-3 pb-5 sm:grid-cols-[3rem_minmax(0,1fr)] sm:gap-x-5">
+      <div className="relative flex justify-center">
+        {!last && <span aria-hidden className={`absolute bottom-0 top-10 w-[3px] ${st.tone === "safety" ? "hazard-thin" : "bg-petrol/30"}`} />}
+        <span className="relative">{node}</span>
+      </div>
+      <section aria-labelledby={`${id}-h`} className="min-w-0">
+        <header className={`flex min-h-10 flex-wrap items-center gap-x-4 gap-y-1 ${open ? "mb-3" : ""}`}>
+          <h2 id={`${id}-h`} className="display text-[1.55rem] text-ink sm:text-[1.75rem]">
+            <span className="sr-only">Step {n}: </span>
+            {st.title}
+          </h2>
+          {!open && st.summary && <p className="min-w-0 flex-1 truncate text-[1rem] text-ink-soft">{st.summary}</p>}
+          <span className="ml-auto flex items-center gap-4">
+            {st.aside}
+            <button type="button" aria-expanded={open} aria-controls={bodyId} onClick={onToggle} className="min-h-10 text-[0.95rem] font-semibold text-petrol underline decoration-2 underline-offset-4 hover:text-petrol-deep">
+              {open ? "Fold" : "Open"}
+              <span className="sr-only"> {st.title}</span>
+            </button>
+          </span>
+        </header>
+        <div id={bodyId} hidden={!open}>
+          {st.body}
+        </div>
+      </section>
+    </li>
+  );
+}
+
+/** Scroll a stage into view when it arrives, unless it is already on screen. */
+export function useFollowLane(count: number, lastKey: string | undefined) {
+  const prev = useRef(0);
+  useEffect(() => {
+    if (count > prev.current && count > 1 && lastKey) {
+      const el = document.getElementById(`st-${lastKey}`);
+      if (el && el.getBoundingClientRect().top > window.innerHeight - 160) {
+        el.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+      }
+    }
+    prev.current = count;
+  }, [count, lastKey]);
 }
