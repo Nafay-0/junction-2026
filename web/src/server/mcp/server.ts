@@ -15,6 +15,7 @@ import { resolveKitchen } from "../console-kitchens";
 import { authenticate, errorBody } from "../http";
 import { getRuntime, type Runtime } from "../runtime";
 import { AskHuman, HUMAN_INPUT_META, type HumanChannel } from "./ask-human";
+import type { LiveBudget } from "@/server/aiven/valkey";
 import { ConnectorService, connectorSecret, type Connector, type ConnectorKitchen, type ConnectorLimitKind } from "./connectors";
 import { LiveLookupGuard } from "./live-lookup-guard";
 import { nextStepFor } from "./next-step";
@@ -76,10 +77,14 @@ export function refusal(err: DockError) {
   );
 }
 
-const guards = new WeakMap<Runtime, LiveLookupGuard>();
-function guardFor(rt: Runtime): LiveLookupGuard {
+const guards = new WeakMap<Runtime, LiveBudget>();
+function guardFor(rt: Runtime): LiveBudget {
   let g = guards.get(rt);
-  if (!g) guards.set(rt, (g = new LiveLookupGuard(rt.dock.liveAllowance))); // the core's allowance: REST and MCP share it
+  // The Valkey-backed allowance when DOCK_CACHE=valkey (shared by every process), else the core's own, through the guard.
+  if (!g) {
+    g = rt.aiven?.liveBudget ?? new LiveLookupGuard(rt.dock.liveAllowance); // the core's allowance: REST and MCP share it
+    guards.set(rt, g);
+  }
   return g;
 }
 
@@ -103,6 +108,17 @@ export function connectorsFor(rt: Runtime): ConnectorService {
 
 /** A call that came in through a connector address: who it stands for, and what the client said it is. */
 export type ConnectorCall = { connector: Connector; kitchen: ConnectorKitchen; service: ConnectorService; client?: string };
+
+/**
+ * The request `authenticate` sees for a connector call: the kitchen's own mandate and agent id as the usual headers,
+ * so the operations layer (door log, suspensions) and the core check it exactly as on /api/mcp. The path carries the
+ * address's public id, never its secret token, because the door log shows paths to staff.
+ */
+function connectorCredentials(via: ConnectorCall): Request {
+  return new Request(`http://connector.invalid/api/mcp/c/${via.connector.connectorId}`, {
+    headers: { authorization: `Mandate ${via.kitchen.mandateToken}`, "dock-agent-id": via.kitchen.agentId },
+  });
+}
 
 /** Tools that count against a connector address's own limits, beyond the per-request one. */
 const COUNTED: Partial<Record<string, ConnectorLimitKind>> = { submit_need: "requests", open_request: "requests", place_order: "orders" };
@@ -165,7 +181,7 @@ export async function runTool(
   const { dock } = rt;
   let agentId = req?.headers.get("dock-agent-id") ?? "unknown";
   try {
-    const session = via ? await dock.authenticate(via.kitchen.mandateToken, via.kitchen.agentId) : await authenticate(req ?? new Request("http://dock.invalid/"), dock);
+    const session = await authenticate(via ? connectorCredentials(via) : (req ?? new Request("http://dock.invalid/")), dock);
     agentId = session.agentId;
     const agentKey = `${session.mandate.issuer.orgId}:${session.agentId}`;
     const counted = via && COUNTED[tool.name];

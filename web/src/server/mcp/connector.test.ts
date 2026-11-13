@@ -7,6 +7,8 @@ import { localNow, nextDeliveryDay } from "@/core/kitchen";
 import { signMandate } from "@/core/mandate";
 import { KITCHEN_ORG } from "../demo-kitchen";
 import { DEMO_ORG, demoMandate, demoOrgKeyPair } from "../dev-fixtures";
+import { doorLog } from "../ops/door";
+import { suspensions } from "../ops/suspensions";
 import { getRuntime, resetRuntime } from "../runtime";
 import { CONNECTOR_LIMITS, ConnectorLimiter, ConnectorService, type ConnectorKitchen } from "./connectors";
 import { connectorsFor } from "./server";
@@ -169,6 +171,22 @@ describe("connector address: same gate, nothing more", () => {
     for (let n = 0; n < 30; n += 10) await call(client, "check_availability", { requestId: opened.request.requestId, productIds: fake(n) });
     const over = await call(client, "check_availability", { requestId: opened.request.requestId, productIds: fake(30) });
     expect(over.s.error).toMatchObject({ code: "live_lookup_budget_exceeded", rule: "live_lookup_limit" });
+  });
+});
+
+describe("connector address: the operations layer", () => {
+  it("goes through the same door log and suspensions as every other door, without the secret in the log", async () => {
+    const url = await addressOf("kaari");
+    const client = await connect(url);
+    expect((await call(client, "read_mandate")).s.ok).toBe(true);
+    const { dock } = await getRuntime();
+    const last = doorLog(dock).all().at(-1)!;
+    expect(last).toMatchObject({ agentId: KITCHEN_ORG.agentId, via: "mcp", ok: true, path: expect.stringMatching(/^\/api\/mcp\/c\/con_[0-9a-f]{12}$/) });
+    expect(JSON.stringify(doorLog(dock).all())).not.toContain(tokenOf(url));
+
+    suspensions(dock).suspend({ scope: "agent", target: KITCHEN_ORG.agentId, label: "Kaari's agent", reason: "test", by: "ops" });
+    const r = await call(client, "read_mandate");
+    expect(r).toMatchObject({ isError: true, s: { error: { rule: "operator_suspension" } } });
   });
 });
 

@@ -1,0 +1,146 @@
+import type { LedgerEntryType } from "@/core/ledger";
+import { DockError, type AgentSession, type Dock } from "@/core/orders";
+import { newId } from "@/core/util";
+import { clock } from "@/app/_ui/plain";
+import type { Via } from "./door";
+
+/**
+ * Suspension: the wholesaler's operations staff stop an agent, or every agent of an organisation, at the door.
+ * It lives in the server layer in front of the core: `authenticate` (src/server/http.ts) asks `enforce` after the
+ * mandate verified and before any core function runs, so a suspended agent cannot search, look up live prices,
+ * quote, order or even read its mandate, over REST, MCP or the on-site console alike. Its next call is refused
+ * with the named rule `operator_suspension`, and the refusal is written to the ledger like every other.
+ *
+ * Every suspension and resumption is a ledger entry of its own (type "control"), so the audit trail shows who
+ * stopped which agent, when and why. Orders already waiting for a customer's sign-off are left to the customer:
+ * operations can stop an agent, never decide for a kitchen.
+ *
+ * In memory, per runtime. On several instances, keep it in shared storage next to the repository.
+ */
+export const SUSPENSION_RULE = "operator_suspension";
+
+/**
+ * The ledger's type list lives in src/core/ledger.ts, which this layer does not edit. "control" is recorded through
+ * the same hash chain; the core should add it to LedgerEntryType when it next changes.
+ */
+export const CONTROL_ENTRY = "control" as LedgerEntryType;
+
+export type SuspensionScope = "agent" | "org";
+
+export type Suspension = {
+  suspensionId: string;
+  scope: SuspensionScope;
+  /** agentId or orgId */
+  target: string;
+  /** "Kaari's buyer agent", "Ravintola Kaari": what staff saw when they pressed the button. */
+  label: string;
+  reason: string;
+  by: string;
+  at: string;
+  resumedAt?: string;
+  resumedBy?: string;
+  resumeNote?: string;
+  /** Calls refused while it was in force. */
+  refusals: number;
+  lastRefusalAt?: string;
+};
+
+export class SuspensionRegistry {
+  private readonly items: Suspension[] = [];
+
+  constructor(
+    private readonly dock: Dock,
+    private readonly now: () => Date = () => new Date(),
+  ) {}
+
+  all(): Suspension[] {
+    return structuredClone(this.items);
+  }
+
+  active(): Suspension[] {
+    return this.all().filter((s) => !s.resumedAt);
+  }
+
+  /** The suspension in force for this agent, if any: its own, or its organisation's. */
+  find(agentId: string, orgId: string): Suspension | undefined {
+    return this.items.find((s) => !s.resumedAt && ((s.scope === "agent" && s.target === agentId) || (s.scope === "org" && s.target === orgId)));
+  }
+
+  suspend(input: { scope: SuspensionScope; target: string; label: string; reason: string; by: string; orgId?: string }): Suspension {
+    const reason = input.reason.trim();
+    if (!reason) throw new DockError(400, "reason_required", "Say why: the reason is shown to the agent and written to the ledger.");
+    if (!input.target.trim()) throw new DockError(400, "target_required", "Name the agent or organisation to suspend.");
+    const existing = this.items.find((s) => !s.resumedAt && s.scope === input.scope && s.target === input.target);
+    if (existing) throw new DockError(409, "already_suspended", `${existing.label} is already suspended since ${clock(existing.at)}.`);
+    const s: Suspension = {
+      suspensionId: newId("sus"),
+      scope: input.scope,
+      target: input.target,
+      label: input.label,
+      reason,
+      by: input.by,
+      at: this.now().toISOString(),
+      refusals: 0,
+    };
+    this.items.push(s);
+    const what = input.scope === "agent" ? `agent ${input.target} (${input.label})` : `every agent of ${input.label} (${input.target})`;
+    this.dock.ledger.append({
+      type: CONTROL_ENTRY,
+      actor: `operator:${input.by}`,
+      summary: `Operations staff (${input.by}) suspended ${what}: "${reason}". Its next call is refused until it is resumed.`,
+      data: { action: "suspend", suspensionId: s.suspensionId, scope: s.scope, target: s.target, label: s.label, orgId: input.orgId, reason, by: input.by },
+    });
+    return structuredClone(s);
+  }
+
+  resume(suspensionId: string, input: { by: string; note?: string }): Suspension {
+    const s = this.items.find((x) => x.suspensionId === suspensionId);
+    if (!s) throw new DockError(404, "suspension_not_found", `No suspension ${suspensionId}.`);
+    if (s.resumedAt) throw new DockError(409, "already_resumed", `${s.label} was already resumed at ${clock(s.resumedAt)}.`);
+    s.resumedAt = this.now().toISOString();
+    s.resumedBy = input.by;
+    s.resumeNote = input.note?.trim() || undefined;
+    this.dock.ledger.append({
+      type: CONTROL_ENTRY,
+      actor: `operator:${input.by}`,
+      summary: `Operations staff (${input.by}) resumed ${s.scope === "agent" ? `agent ${s.target} (${s.label})` : `the agents of ${s.label} (${s.target})`}${s.resumeNote ? `: "${s.resumeNote}"` : ""}. It was suspended for ${s.refusals} refused call${s.refusals === 1 ? "" : "s"}.`,
+      data: { action: "resume", suspensionId: s.suspensionId, scope: s.scope, target: s.target, label: s.label, note: s.resumeNote, by: input.by, refusals: s.refusals },
+    });
+    return structuredClone(s);
+  }
+
+  /**
+   * Called for every agent call after its mandate verified. Throws the refusal (and writes it to the ledger) when
+   * the agent or its organisation is suspended.
+   */
+  enforce(session: AgentSession, call: { via: Via; path: string }): void {
+    const s = this.find(session.agentId, session.mandate.issuer.orgId);
+    if (!s) return;
+    s.refusals += 1;
+    s.lastRefusalAt = this.now().toISOString();
+    const whom = s.scope === "agent" ? "this agent" : `every agent of ${session.mandate.issuer.name}`;
+    const err = new DockError(
+      403,
+      s.scope === "agent" ? "agent_suspended" : "organisation_suspended",
+      `The wholesaler's operations staff suspended ${whom} at ${clock(s.at)} Helsinki time: "${s.reason}". No lookups, quotes or orders until they resume it.`,
+      SUSPENSION_RULE,
+      { suspensionId: s.suspensionId, scope: s.scope, since: s.at },
+    );
+    this.dock.ledger.append({
+      type: "refusal",
+      actor: `agent:${session.agentId}`,
+      summary: `Refused: ${err.message}`,
+      data: { code: err.code, rule: err.rule, status: err.status, suspensionId: s.suspensionId, orgId: session.mandate.issuer.orgId, via: call.via, path: call.path },
+    });
+    throw err;
+  }
+}
+
+const registries = new WeakMap<Dock, SuspensionRegistry>();
+
+/** The suspension registry of one runtime. */
+export function suspensions(dock: Dock): SuspensionRegistry {
+  let r = registries.get(dock);
+  if (!r) registries.set(dock, (r = new SuspensionRegistry(dock)));
+  return r;
+}

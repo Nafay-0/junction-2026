@@ -62,6 +62,7 @@ const BY_RULE: Record<string, string> = {
   approver_authority: "No approver named in the mandate may sign off this amount. Reduce the order; do not retry it unchanged.",
   approver_identity: "Only the human approver can decide on an approval. Agents cannot approve orders.",
   intake_sequence: "That step is not open now. Call get_intake_step and make the call its nextStep names.",
+  operator_suspension: `The wholesaler's operations staff suspended this agent; every call is refused until they resume it. ${DO_NOT_RETRY} Tell the buyer, and give them error.message.`,
   human_input: "This needs the human buyer's own answer. Relay the question to them and pass on exactly what they say; never answer for them.",
 };
 

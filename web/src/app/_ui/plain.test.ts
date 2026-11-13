@@ -20,5 +20,8 @@ describe("plain words for the screens", () => {
     expect(ruleTitle("weekly_budget")).toBe("The weekly budget is a hard limit");
     expect(ruleTitle("something_new")).toBe("A rule of the gate");
     expect(shortProduct("Arla lactose-free semi-skimmed milk drink 1.5 %, 10 L bag-in-box")).toBe("Arla 1.5 %, 10 L bag-in-box");
+    // The partner's names: no comma, trademark signs, long; the pack size survives the cut.
+    expect(shortProduct("Valio Hyvä suomalainen Arki® Eila® semi skimmed milk drink 1 l lactose free")).toBe("Valio Hyvä suomalainen Arki Eila semi…, 1 l");
+    expect(shortProduct("Arla Ruoka 15%")).toBe("Arla Ruoka 15%");
   });
 });
