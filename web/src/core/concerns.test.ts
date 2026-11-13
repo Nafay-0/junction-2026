@@ -136,6 +136,14 @@ describe("duplicates", () => {
     expect(checkDuplicate(need({ deliverBy: "2026-11-18" }), ctx(recent(72)))).toEqual([]);
   });
 
+  it("flags an order still waiting for sign-off, and says so", () => {
+    const pending = [{ orderId: "ord_wait", placedAt: new Date(NOW.getTime() - 2 * 3600_000).toISOString(), family: "milk", amount: 1000, unit: "L" as const, neededBy: "2026-11-18", deliveryDate: "2026-11-17" }];
+    const [c] = checkDuplicate(need({ deliverBy: "2026-11-18" }), ctx(kitchen(regularHistory()), { pending }));
+    expect(c).toMatchObject({ key: "duplicate_recent:ord_wait", evidence: { status: "pending_approval" } });
+    expect(c.message).toBe("You already asked for 1,000 L of milk 2 hours ago for Wed 18 Nov (order ord_wait), and that order is still waiting for sign-off. Order again?");
+    expect(checkDuplicate(need({ deliverBy: "2026-11-18" }), ctx(kitchen(regularHistory()), { pending: pending.map((p) => ({ ...p, family: "cream" })) }))).toEqual([]);
+  });
+
   it("without a date, flags a recent order that has not been delivered yet", () => {
     expect(checkDuplicate(need(), ctx(recent(3)))[0].code).toBe("duplicate_recent");
   });

@@ -217,6 +217,21 @@ describe("intake flow", () => {
     await expect(dock.intake.choose(session, dup.requestId, { by: "Aino", optionId: "opt_1" })).rejects.toMatchObject({ status: 409, code: "intake_wrong_state" });
   });
 
+  it("catches a repeat of an order still waiting for sign-off, not only of committed ones", async () => {
+    const big = await dock.intake.open(session, { need: need({ quantity: { amount: 1000, unit: "L" }, optimise: "price" }) });
+    const ok = await dock.intake.respondToConcerns(session, big.requestId, { by: "ignored", responses: [{ key: big.concerns[0].key, choice: "confirm" }] }, { channel: "portal_session", person: "Aino Virtanen" });
+    const q = ok.quote!;
+    const order = await dock.placeOrder(session, { requestId: big.requestId, quoteToken: q.quoteToken, lines: q.quote.lines.map(({ productId, quantity, unitPriceCents }) => ({ productId, quantity, unitPriceCents })) });
+    expect(order.status).toBe("pending_approval");
+    const again = await dock.intake.open(session, { need: need({ quantity: { amount: 1000, unit: "L" }, optimise: "price" }) });
+    const dup = again.concerns.find((c) => c.code === "duplicate_recent");
+    expect(dup).toMatchObject({ key: `duplicate_recent:${order.orderId}`, evidence: { status: "pending_approval" } });
+    expect(dup!.message).toMatch(/still waiting for sign-off/);
+    // Another day is not a repeat.
+    const other = await dock.intake.open(session, { need: need({ quantity: { amount: 1000, unit: "L" }, optimise: "price", deliverBy: "2026-11-19" }) });
+    expect(other.concerns.map((c) => c.code)).not.toContain("duplicate_recent");
+  });
+
   it("sets a stated rule aside only for this request when the buyer confirms 'just this once'", async () => {
     const r = await dock.intake.open(session, { need: need({ item: { text: "ordinary milk", category: "milk", excludedAttributes: ["lactose_free"] }, optimise: "price" }) });
     expect(r.concerns.map((c) => c.code)).toEqual(["contradicts_preference"]);
