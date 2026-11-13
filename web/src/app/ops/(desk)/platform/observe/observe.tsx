@@ -24,7 +24,7 @@ export function Observe() {
           <span className="flex items-center gap-3">
             {p && <span className="tabular">Read {whenSeconds(p.at)} as {p.readAs}</span>}
             {grafanaUrl && (
-              <a href={grafanaUrl} target="_blank" rel="noreferrer" className="font-semibold text-ink underline underline-offset-2">
+              <a href={grafanaUrl} target="_blank" rel="noreferrer" className="font-semibold text-petrol underline underline-offset-2">
                 Full Grafana dashboard
               </a>
             )}
@@ -32,9 +32,9 @@ export function Observe() {
         }
       />
       <PlatformTabs />
-      <div className="mt-3 flex gap-1" role="group" aria-label="Time range">
+      <div className="flex gap-1" role="group" aria-label="Time range">
         {(["1h", "24h", "7d"] as Range[]).map((r) => (
-          <button key={r} type="button" onClick={() => setRange(r)} aria-pressed={range === r} className={`px-3 py-1 text-[0.86rem] font-semibold ring-1 ring-ink ${range === r ? "bg-ink text-paper" : "bg-paper"}`}>
+          <button key={r} type="button" onClick={() => setRange(r)} aria-pressed={range === r} className={`min-h-9 px-3 text-[0.9rem] font-semibold ${range === r ? "bg-petrol text-paper" : "border-2 border-line bg-paper hover:border-petrol"}`}>
             {r === "1h" ? "Last hour" : r === "24h" ? "24 hours" : "7 days"}
           </button>
         ))}
@@ -46,7 +46,7 @@ export function Observe() {
 }
 
 const n = (v: unknown) => Number(v ?? 0) || 0;
-const eur = (v: number) => `€${v.toLocaleString("fi-FI", { maximumFractionDigits: 0 })}`;
+const eur = (v: number) => `${v.toLocaleString("fi-FI", { maximumFractionDigits: 0 })}\u00a0€`;
 
 function Body({ p }: { p: Panels }) {
   const t = p.panels.totals?.rows[0] ?? {};
@@ -61,7 +61,7 @@ function Body({ p }: { p: Panels }) {
   return (
     <>
       {errors.length > 0 && <p className="mt-3 border-l-4 border-safety bg-paper px-3 py-2 text-[0.86rem]">{errors.length} panels could not be read: {errors[0].error}</p>}
-      <Panel className="mt-3 grid grid-cols-2 divide-concrete sm:grid-cols-3 lg:grid-cols-6 lg:divide-x">
+      <Panel rule className="mt-3 grid grid-cols-2 divide-line/70 sm:grid-cols-3 lg:grid-cols-6 lg:divide-x">
         <Stat n={n(t.orders)} label="orders committed" sub={eur(n(t.value_eur))} />
         <Stat n={n(t.signoffs_asked)} label="sign-offs asked" sub={`${n(t.signoffs_granted)} granted, ${n(t.signoffs_denied)} declined`} />
         <Stat n={n(t.refused)} label="refused by the gate" safety={n(t.refused) > 0} />
@@ -104,10 +104,10 @@ function Body({ p }: { p: Panels }) {
           {(p.panels.health?.rows ?? []).length ? (
             <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {p.panels.health!.rows.map((r) => (
-                <li key={String(r.service)} className="border border-concrete px-2 py-1.5">
+                <li key={String(r.service)} className="bg-mist px-2.5 py-2">
                   <p className="font-semibold">{String(r.service)}</p>
                   <Status ok={r.ok as boolean} label={`${r.ok ? "up" : "down"}, ${fmtCell(r.ms)} ms`} />
-                  <p className="text-[0.72rem] text-ink-soft">{fmtCell(r.checked_at)}</p>
+                  <p className="text-[0.8rem] text-ink-soft">{fmtCell(r.checked_at)}</p>
                 </li>
               ))}
             </ul>
@@ -147,20 +147,20 @@ function Body({ p }: { p: Panels }) {
 function Stat({ n: value, label, sub, safety }: { n: number | string; label: string; sub?: string; safety?: boolean }) {
   return (
     <div className="min-w-0 px-3 py-2.5">
-      <p className="flex items-center gap-2 font-display text-[1.8rem] font-bold leading-none tabular">
+      <p className="display flex items-center gap-2 text-[2rem] leading-none tabular">
         {typeof value === "number" ? value.toLocaleString("fi-FI") : value}
-        {safety && <span aria-hidden className="inline-block h-2.5 w-2.5 bg-safety ring-1 ring-ink" />}
+        {safety && <span aria-hidden className="hazard-thin inline-block size-3.5" />}
       </p>
-      <p className="mt-1 text-[0.8rem] leading-snug text-ink-soft">{label}</p>
-      {sub && <p className="text-[0.76rem] text-ink-soft">{sub}</p>}
+      <p className="mt-1 text-[0.86rem] leading-snug text-ink-soft">{label}</p>
+      {sub && <p className="text-[0.82rem] text-ink-soft">{sub}</p>}
     </div>
   );
 }
 
 function Box({ title, sql, children }: { title: string; sql?: { sql: string; error?: string; ms?: number }; children: React.ReactNode }) {
   return (
-    <Panel className="px-4 py-3">
-      <h2 className="font-display text-[1.08rem] font-bold">{title}</h2>
+    <Panel rule className="px-4 py-4">
+      <h2 className="display text-[1.3rem]">{title}</h2>
       <div className="mt-2">{sql?.error ? <p className="text-[0.84rem] font-semibold">{sql.error}</p> : children}</div>
       {sql && <SqlBox sql={sql.sql} summary={`The query${sql.ms !== undefined ? ` (${sql.ms} ms)` : ""}`} />}
     </Panel>

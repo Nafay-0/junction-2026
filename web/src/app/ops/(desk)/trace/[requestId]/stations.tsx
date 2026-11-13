@@ -67,7 +67,7 @@ export function StationBody({ s, claims, animate }: { s: TraceStep; claims: Trac
       {s.phase === "asked" ? (
         <>
           {s.lines.map((l, i) => (
-            <p key={i} className="max-w-[60ch] border-l-[6px] border-lavender-deep bg-lavender px-4 py-3 text-[1.3rem] font-medium leading-snug">
+            <p key={i} className="max-w-[60ch] border-l-[6px] border-petrol bg-mist px-4 py-3 text-[1.3rem] font-medium leading-snug">
               {fi(l)}
             </p>
           ))}

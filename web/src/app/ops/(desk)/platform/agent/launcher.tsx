@@ -5,7 +5,8 @@ import { useEffect, useState } from "react";
 import type { LauncherStatus, Run, RunMessage } from "@/server/aiven/showcase/launcher";
 import type { StreamMessage } from "@/server/aiven/showcase/stream";
 import { api } from "../../../../_client/api";
-import { whenSeconds } from "../../../_ui/format";
+import { clockSeconds, ruleTitle } from "../../../../_ui/plain";
+import { fi, stamp, whenSeconds } from "../../../_ui/format";
 import { Button, LoadError, Loading, PageHead, Panel, useOps } from "../../../_ui/kit";
 import { OnAiven, PlatformTabs } from "../_parts/parts";
 
@@ -41,24 +42,24 @@ export function Launcher() {
       ) : (
         <div className="mt-4 grid gap-4 xl:grid-cols-[400px_minmax(0,1fr)]">
           <div className="space-y-3">
-            {s.presets.map((p) => (
-              <Panel key={p.id} className="px-4 py-3">
-                <p className="font-display text-[1.15rem] font-bold">{p.title}</p>
-                <p className="mt-1 text-[0.9rem] leading-snug">&ldquo;{p.message}&rdquo;</p>
-                <p className="mt-1 text-[0.82rem] text-ink-soft">Expect: {p.expect}</p>
-                <Button kind="primary" className="mt-2" disabled={busy || Boolean(s.running)} onClick={() => start(p.id)}>
-                  {s.blocked?.recording ? "Play the recording" : "Send it in"}
+            {s.presets.map((p, i) => (
+              <Panel key={p.id} rule className="px-4 py-4">
+                <p className="display text-[1.4rem] leading-tight">{p.title}</p>
+                <p className="mt-2 border-l-[6px] border-petrol bg-mist px-3 py-2 text-[0.98rem] leading-snug">&ldquo;{p.message}&rdquo;</p>
+                <p className="mt-2 text-[0.88rem] text-ink-soft">What should happen: {fi(p.expect)}</p>
+                <Button kind={i === 0 ? "go" : "primary"} size="md" className="mt-3" disabled={busy || Boolean(s.running)} onClick={() => start(p.id)}>
+                  {busy ? "Starting on Aiven…" : s.blocked?.recording ? "Play the recording" : "Send in the agent"}
                 </Button>
               </Panel>
             ))}
-            {problem && <p className="border-l-4 border-safety bg-paper px-3 py-2 text-[0.88rem]">{problem}</p>}
-            <Panel className="px-4 py-3 text-[0.84rem] leading-snug">
+            {problem && <p role="alert" className="border-l-[6px] border-petrol bg-paper px-3 py-2 text-[0.92rem]">{problem}</p>}
+            <Panel className="px-4 py-3 text-[0.9rem] leading-snug">
               <p>
                 <b>{s.left}</b> of {s.perDay} runs left today on this server; one at a time, {s.gapS} s apart.
                 {s.blocked && <span className="block font-semibold">{s.blocked.reason}{s.blocked.recording ? " Recorded runs play instead, marked as recordings." : ""}</span>}
               </p>
               <p className="mt-1.5 text-ink-soft">
-                The agent: {s.agent.label} ({s.agent.id}), model {s.agent.model}. Its mandate is minted on this server for each run: {s.agent.org}, €1,000 per order alone, valid {s.agent.mandateMinutes} minutes, handed straight to Aiven&apos;s credential store; the signed token is never shown. It connects to {s.dockUrl.replace(/^https?:\/\//, "")}.
+                The agent: {s.agent.label} ({s.agent.id}), model {s.agent.model}. Its mandate is minted on this server for each run: {s.agent.org}, 1 000 € per order alone, valid {s.agent.mandateMinutes} minutes, handed straight to Aiven&apos;s credential store; the signed token is never shown. It connects to {s.dockUrl.replace(/^https?:\/\//, "")}.
               </p>
               <p className="mt-1.5 text-ink-soft">{s.usageNote}</p>
               {!s.configured && <p className="mt-1.5 font-semibold">Not configured here ({s.missing.join(", ")}): only recordings play.</p>}
@@ -73,9 +74,9 @@ export function Launcher() {
 
 function EmptyRun() {
   return (
-    <Panel className="px-5 py-6">
-      <p className="font-display text-[1.2rem] font-bold">No run yet</p>
-      <p className="mt-1 text-[0.9rem] text-ink-soft">Pick a task on the left. Each step the agent takes on Aiven appears here as it happens: its tool calls into Dock and Dock&apos;s answers. About 30 seconds.</p>
+    <Panel rule className="px-5 py-6">
+      <p className="display text-[1.5rem]">No run yet</p>
+      <p className="mt-1 max-w-[60ch] text-[0.98rem] text-ink-soft">Pick a task on the left. Each step the agent takes on Aiven appears here as it happens: its tool calls into Dock and Dock&apos;s answers. About 30 seconds.</p>
     </Panel>
   );
 }
@@ -97,37 +98,38 @@ function RunView({ runId, dockUrl }: { runId: string; dockUrl: string }) {
   const ended = run.status === "done" || run.status === "failed";
   return (
     <Panel>
-      <div className={`border-b border-concrete px-4 py-3 ${run.recorded ? "bg-concrete/60" : ""}`}>
+      <div className={`border-b border-line/70 px-4 py-3 ${run.recorded ? "bg-mist" : "border-t-[3px] border-t-petrol"}`}>
         <div className="flex flex-wrap items-center gap-2">
-          {run.recorded ? <span className="bg-ink px-1.5 py-0.5 text-[0.75rem] font-bold uppercase tracking-wide text-paper">Recording of a real run, {new Date(run.recordedAt!).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span> : <OnAiven />}
-          <span className="font-display text-[1.15rem] font-bold">{run.title}</span>
-          <span className="text-[0.82rem] text-ink-soft">
-            {run.recorded ? "played back" : run.status === "starting" ? "starting on Aiven…" : run.status === "running" ? "running on Aiven…" : run.status} · {run.model}
-            {run.environment ? ` · ${run.environment}` : ""} · started {whenSeconds(run.startedAt)}
-          </span>
+          {run.recorded ? <span className="border border-ink px-1.5 py-0.5 text-[0.82rem] font-semibold">Recording of a real run, {stamp(run.recordedAt!)}</span> : <OnAiven />}
+          <span className="display text-[1.4rem]">{run.title}</span>
         </div>
-        <p className="mt-1 text-[0.9rem]">&ldquo;{run.question}&rdquo;</p>
-        {run.error && <p className={`mt-1 text-[0.85rem] ${run.recorded ? "" : "bg-safety px-2 py-1 font-semibold text-safety-ink"}`}>{run.error}</p>}
+        <p className="mt-1 flex items-center gap-2 text-[0.88rem] text-ink-soft">
+          {!run.recorded && !(run.status === "done" || run.status === "failed") && <span aria-hidden className="breathe size-2.5 bg-petrol" />}
+          {run.recorded ? "Played back" : run.status === "starting" ? "Starting on Aiven…" : run.status === "running" ? "Running on Aiven…" : run.status === "done" ? "Done" : run.status === "failed" ? "Failed" : run.status}, model {run.model}
+          {run.environment ? `, ${run.environment}` : ""}, started {whenSeconds(run.startedAt)}
+        </p>
+        <p className="mt-2 border-l-[6px] border-petrol bg-mist px-3 py-2 text-[0.98rem]">&ldquo;{run.question}&rdquo;</p>
+        {run.error && <p className={`mt-2 text-[0.92rem] ${run.recorded ? "" : "border-l-[6px] border-ink bg-mist px-3 py-1.5 font-semibold"}`}>{run.error}</p>}
       </div>
-      <ol className="divide-y divide-concrete" aria-live="polite">
+      <ol className="divide-y divide-line/60" aria-live="polite">
         {messages.map((m, i) => (
           <Message key={i} m={m} />
         ))}
         {!ended && !run.recorded && <li className="px-4 py-2 text-[0.85rem] text-ink-soft">The agent is working on Aiven; its own transcript arrives when it replies. Meanwhile, what the gate sees:</li>}
       </ol>
       {!run.recorded && (
-        <div className="border-t border-concrete px-4 py-2">
-          <p className="text-[0.8rem] font-semibold">At Dock&apos;s gate, live from Kafka (dock.actions, agent {run.gate === undefined ? "…" : "agent_laakso_aiven_01"})</p>
+        <div className="border-t border-line/70 bg-mist px-4 py-3">
+          <p className="text-[0.88rem] font-semibold">At Dock&apos;s gate, live from Kafka (dock.actions, agent {run.gate === undefined ? "…" : "agent_laakso_aiven_01"})</p>
           {run.gate && run.gate.length ? (
-            <ol className="mt-1 space-y-0.5 text-[0.8rem]">
+            <ol className="mt-1.5 space-y-0.5 text-[0.88rem]">
               {run.gate.map((m) => (
-                <li key={`${m.partition}:${m.offset}`} className={`grid grid-cols-[5.5rem_4.2rem_minmax(0,1fr)] gap-2 ${m.kind === "gate.refused" ? "bg-safety/60" : ""}`}>
-                  <span className="tabular text-ink-soft">{m.timestamp.slice(11, 19)}</span>
+                <li key={`${m.partition}:${m.offset}`} className={`grid grid-cols-[5.5rem_4.2rem_minmax(0,1fr)] gap-2 px-1 ${m.kind === "gate.refused" ? "bg-safety-ink text-paper" : ""}`}>
+                  <span className="tabular text-ink-soft">{clockSeconds(m.timestamp)}</span>
                   <span className="font-mono text-[0.72rem] text-ink-soft">p{m.partition}:{m.offset}</span>
                   <span>
                     <b>{m.kind}</b>
-                    {m.event.rule ? ` · ${m.event.rule}` : ""}
-                    {m.event.summary ? <span className="text-ink-soft"> · {m.event.summary.slice(0, 120)}</span> : null}
+                    {m.event.rule ? `, ${ruleTitle(m.event.rule).toLowerCase()}` : ""}
+                    {m.event.summary ? <span className={m.kind === "gate.refused" ? "text-paper/80" : "text-ink-soft"}>: {fi(m.event.summary).slice(0, 120)}</span> : null}
                   </span>
                 </li>
               ))}
@@ -138,21 +140,22 @@ function RunView({ runId, dockUrl }: { runId: string; dockUrl: string }) {
         </div>
       )}
       {(run.requestId || run.outcome) && (
-        <div className="border-t-2 border-ink px-4 py-3 text-[0.9rem]">
+        <div className={`border-t px-4 py-3 text-[0.95rem] ${run.outcome === "pending_approval" ? "border-t-0" : "border-line/70"}`}>
+          {run.outcome === "pending_approval" && <div aria-hidden className="hazard -mx-4 -mt-3 mb-3 h-2.5" />}
           <p>
             <b>Outcome at the gate:</b> {outcomeWords(run.outcome)}
           </p>
           {run.requestId && (
             <p className="mt-1 flex flex-wrap gap-x-4">
-              <a href={traceHref} className="font-semibold underline underline-offset-2">
-                Open the trace of {run.requestId}
+              <a href={traceHref} className="font-semibold text-petrol underline underline-offset-2">
+                Replay its trace
               </a>
               {!run.recorded && (
                 <>
-                  <Link href="/ops" className="underline underline-offset-2">
+                  <Link href="/ops" className="text-petrol underline underline-offset-2">
                     Live view
                   </Link>
-                  <Link href="/ops/platform/stream" className="underline underline-offset-2">
+                  <Link href="/ops/platform/stream" className="text-petrol underline underline-offset-2">
                     Its events on Kafka
                   </Link>
                 </>
@@ -170,7 +173,7 @@ function outcomeWords(o?: string) {
   if (!o) return "not reached";
   if (o === "pending_approval") return "stopped for a named person's sign-off (over what the agent may spend alone).";
   if (o === "committed") return "committed within the mandate and signed.";
-  if (o.startsWith("refused")) return `refused by the gate${o.includes(":") ? `, rule ${o.split(":")[1].trim()}` : ""}.`;
+  if (o.startsWith("refused")) return `refused by the gate${o.includes(":") ? `: ${ruleTitle(o.split(":")[1].trim()).toLowerCase()}` : ""}.`;
   return o;
 }
 
@@ -179,24 +182,24 @@ function Message({ m }: { m: RunMessage }) {
   if (m.type === "tool_call")
     return (
       <li className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2 px-4 py-1.5 text-[0.84rem]">
-        <span className="tabular text-ink-soft">{m.at.slice(11, 19)}</span>
+        <span className="tabular text-ink-soft">{clockSeconds(m.at)}</span>
         <span>
-          <span className="font-semibold">→ {tool}</span> <span className="break-all font-mono text-[0.74rem] text-ink-soft">{m.text.slice(0, 220)}</span>
+          <span className="font-semibold text-petrol">Calls {tool}</span> <span className="break-all font-mono text-[0.76rem] text-ink-soft">{m.text.slice(0, 220)}</span>
         </span>
       </li>
     );
   if (m.type === "tool_return") {
     const refused = /"ok":false|policy_rejected|Error from MCP tool/.test(m.text);
     return (
-      <li className={`grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2 px-4 py-1.5 text-[0.84rem] ${refused ? "shadow-[inset_4px_0_0_var(--color-safety)]" : ""}`}>
+      <li className={`grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2 px-4 py-1.5 text-[0.88rem] ${refused ? "shadow-[inset_6px_0_0_var(--color-safety-ink)]" : ""}`}>
         <span className="tabular text-ink-soft">Dock</span>
-        <span className="break-all font-mono text-[0.74rem]">{m.text.slice(0, 260)}</span>
+        <span className="break-all font-mono text-[0.76rem]">{m.text.slice(0, 260)}</span>
       </li>
     );
   }
   return (
-    <li className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2 px-4 py-2 text-[0.9rem]">
-      <span className="tabular text-ink-soft">{m.type === "user" ? "Buyer" : "Agent"}</span>
+    <li className={`grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2 px-4 py-2 text-[0.95rem] ${m.type === "user" ? "" : "bg-lavender/60"}`}>
+      <span className={`font-semibold ${m.type === "user" ? "text-ink-soft" : "text-lavender-deep"}`}>{m.type === "user" ? "Buyer" : "Agent"}</span>
       <span className="whitespace-pre-wrap leading-snug">{m.text.replace(/\*\*/g, "").replace(/^#+\s*/gm, "").slice(0, 900)}</span>
     </li>
   );

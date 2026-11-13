@@ -195,7 +195,7 @@ export function AuditOrder({ orderId }: { orderId: string }) {
         <div>
           <Section title="What was asked">
             <div className="bg-paper px-5 py-4">
-              <p className="max-w-[60ch] border-l-[6px] border-lavender-deep bg-lavender px-4 py-3 text-[1.2rem] font-medium leading-snug">“{fi(a.asked.text)}”</p>
+              <p className="max-w-[60ch] border-l-[6px] border-petrol bg-mist px-4 py-3 text-[1.2rem] font-medium leading-snug">“{fi(a.asked.text)}”</p>
               {a.asked.neededBy && <p className="mt-2 text-[0.92rem] text-ink-soft">Needed by {fi(a.asked.neededBy)}</p>}
             </div>
           </Section>
