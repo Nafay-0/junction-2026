@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import type { ControlView } from "@/server/ops/views";
 import { api } from "../../../_client/api";
+import { clock } from "../../../_ui/plain";
 import { fi, money, num, since, until, when, whenSeconds } from "../../_ui/format";
 import { Button, Details, Empty, KV, LoadError, Loading, PageHead, Panel, Section, useNow, useOps } from "../../_ui/kit";
 
@@ -135,7 +136,7 @@ function Body({ c, now, refresh }: { c: ControlView; now: number; refresh: () =>
                           {held ? (
                             <>
                               <p className={held.expired ? "font-semibold" : ""}>{held.expired ? "Price expired" : held.text}</p>
-                              <p className="text-[0.78rem] text-ink-soft">{held.expired ? "the re-check will refuse it" : `until ${when(w.priceHeldUntil)}`}</p>
+                              <p className="text-[0.78rem] text-ink-soft">{held.expired ? "the re-check will refuse it" : `until ${clock(w.priceHeldUntil!)}`}</p>
                             </>
                           ) : (
                             "–"

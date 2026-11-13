@@ -180,7 +180,7 @@ function needFacts(n: Need): { label: string; value: string }[] {
   if (n.item?.excludedAttributes?.length) f.push({ label: "Must not be", value: n.item.excludedAttributes.map(attr).join(", ") });
   if (n.requiredClaims?.length) f.push({ label: "Must carry", value: n.requiredClaims.map(attr).join(", ") });
   if (n.forbiddenAllergens?.length) f.push({ label: "No allergens", value: n.forbiddenAllergens.map(attr).join(", ") });
-  if (n.optimise) f.push({ label: "Matters most", value: OPTIMISE[n.optimise] ?? n.optimise.replaceAll("_", " ") });
+  if (n.optimise && n.optimise !== "unstated") f.push({ label: "Matters most", value: OPTIMISE[n.optimise] ?? n.optimise.replaceAll("_", " ") });
   if (n.sameAsLastTime) f.push({ label: "Repeat", value: "same as last time" });
   if (n.item?.productId) f.push({ label: "Named product", value: n.item.productId });
   return f;
