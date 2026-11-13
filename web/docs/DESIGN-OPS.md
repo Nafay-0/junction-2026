@@ -116,6 +116,39 @@ wall still says what it does. Ground petrol-deep, type in paper, the scan panel 
   "dock-app, startup plan, AWS Frankfurt"; ids live only in details.
 - *Numbered markers.* Only on the trace's stations, which are a true sequence.
 
-## Added beside the shared system (in `src/app/ops/_ui/`), for the system's owner to absorb
+## As built
 
-See the list at the end of this file, kept up to date as the work goes.
+- **Shell** (`ops/_ui/rail.tsx`): petrol-deep rail, lime bar on the active section, the gatehouse status at the top
+  (Helsinki clock, ledger chain, sign-offs waiting with the hazard square only when a person must act, suspensions),
+  `g` then a letter jumps to a section, the demo note at the foot. The entry page is the same petrol-deep with a
+  paper form and the lime "Enter" button.
+- **Trace**: as planned. Space, arrows (or j/k/l), Home and End drive the replay; the range input scrubs; each
+  station on the strip is a button; `?step=N` is written as the replay moves and read on load.
+- **Wall**: as planned, plus the crash test as a matrix (thirteen hazards across, one model per row, the mark for a
+  crash) that cycles through each model's failures with their one-line reason. Reads `crash-results/export`
+  (`pnpm crash:export`) or the run summaries, or `DOCK_CRASH_SUMMARY`; empty state when nothing is rated.
+- **Lime on the wall** is the scan panel, not a counter (DESIGN.md §8 suggested a live counter): the code is the one
+  thing a passer-by should do.
+- Lavender in the portal marks only what a model or an agent wrote or read: the agent's messages on the launcher,
+  model-read kinds and uses on the knowledge map, learned items on Customers. A buyer's own words are a quoted
+  plate with a petrol rule.
+
+## Added beside the shared system, for the system's owner to absorb
+
+In `src/app/ops/_ui/` unless noted. All use the tokens unchanged.
+
+| Piece | File | What it is |
+|---|---|---|
+| `Table` | `parts.tsx` | Dense table per DESIGN.md §8 (3 px petrol rule, hairline rows, sentence-case headers). The store could use it for order history. |
+| `Stamp` | `parts.tsx` | An outcome as a stamp: petrol border (signed), hazard frame (waiting on a person), black slab (refused). |
+| `CountBar` | `parts.tsx` | A count with a bar scaled to its group: "ruled out, and why". |
+| `Funnel` | `parts.tsx` | Catalogue, looked at for free, priced live, on a log scale. |
+| `CheckGrid` | `parts.tsx` | The gate's inspection sheet: hits large with reasons, then a tile per passed check. The store's gate stage could share it. |
+| `FilterBar`, `useUrlState` | `filters.tsx` | Search plus segmented filters, state in the URL, `/` to focus. |
+| `LiveMark` | `kit.tsx` | "Live, updated 14.05.32" with a breathing petrol square. |
+| `fi()` additions, `stamp()`, `country()` | `format.ts` | ISO stamps and dates to Helsinki words, unit codes (ST, KI, PAL…) to words, placeholder stock (999999…) to "an unreported amount", leftover codes to words. Worth moving into `_ui/plain.ts` so the store gets the same. |
+| `CrashMatrix`, `crashBoard()` | `_wall/crash-matrix.tsx`, `_wall/crash-board.ts` | The crash-test leaderboard (dark and light). |
+| Wall motion | `_wall/wall.module.css` | The gate post's scan light, a row wash on change, the barrier arms; all off under reduced motion. |
+
+Two gaps in the system the operations side worked around: a *dark-ground* `Tag`/`Field` (the wall and rail
+hand-roll them), and a *refused* tone for `Tag` (black with yellow type), used here for refusal chips.
