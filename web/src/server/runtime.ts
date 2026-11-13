@@ -3,7 +3,7 @@ import type { JWK } from "jose";
 import { InMemoryOutbox } from "@/core/approval";
 import { InMemoryCatalog, MeteredCatalog } from "@/core/catalog";
 import { InMemoryEventBus } from "@/core/events";
-import { InMemoryKitchenRepository } from "@/core/kitchen";
+import { InMemoryKitchenRepository, type KitchenRepository } from "@/core/kitchen";
 import { generateEd25519KeyPair, importEd25519KeyPair } from "@/core/keys";
 import { Ledger } from "@/core/ledger";
 import { createTrustRegistry } from "@/core/mandate";
@@ -40,6 +40,8 @@ export type Runtime = {
   passkeys: PasskeyService;
   /** Visitor kitchens created by scanning the join QR code. */
   sandboxes: SandboxService;
+  /** Kitchen memory (history, stated rules), shared with the Dock instance; the kitchen portal corrects stated rules here. */
+  kitchens: KitchenRepository;
 };
 
 const g = globalThis as typeof globalThis & { __dockRuntime?: Promise<Runtime> };
@@ -85,7 +87,7 @@ async function buildRuntime(): Promise<Runtime> {
     kitchens,
   });
   const sandboxes = new SandboxService({ dock, registry: trustedIssuers, passkeys, limits: sandboxLimits, kitchens, products: async () => products });
-  return { dock, outbox, catalog, catalogSource, events, passkeys, sandboxes };
+  return { dock, outbox, catalog, catalogSource, events, passkeys, sandboxes, kitchens };
 }
 
 const envValue = (name: string) => {
