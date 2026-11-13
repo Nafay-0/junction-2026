@@ -58,7 +58,7 @@ export function Launcher() {
                 {s.blocked && <span className="block font-semibold">{s.blocked.reason}{s.blocked.recording ? " Recorded runs play instead, marked as recordings." : ""}</span>}
               </p>
               <p className="mt-1.5 text-ink-soft">
-                The agent: {s.agent.label} ({s.agent.id}), model {s.agent.model}. Its mandate is minted on this server for each run: {s.agent.org}, €1,000 per order alone, valid {s.agent.mandateMinutes} minutes, handed straight to Aiven&apos;s credential store and never shown. It connects to {s.dockUrl.replace(/^https?:\/\//, "")}.
+                The agent: {s.agent.label} ({s.agent.id}), model {s.agent.model}. Its mandate is minted on this server for each run: {s.agent.org}, €1,000 per order alone, valid {s.agent.mandateMinutes} minutes, handed straight to Aiven&apos;s credential store; the signed token is never shown. It connects to {s.dockUrl.replace(/^https?:\/\//, "")}.
               </p>
               <p className="mt-1.5 text-ink-soft">{s.usageNote}</p>
               {!s.configured && <p className="mt-1.5 font-semibold">Not configured here ({s.missing.join(", ")}): only recordings play.</p>}
