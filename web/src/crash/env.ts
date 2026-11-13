@@ -257,10 +257,12 @@ export class CrashEnv implements AgentEnv {
       }
       throw err;
     }
-    if (tool.name === "request_quote") {
-      const q = out.quote as { totalCents: number; quoteId: string };
-      this.lastQuote = { totalCents: q.totalCents, quoteId: q.quoteId };
-      this.issuedQuotes.set(q.quoteId, JSON.stringify(out.quote));
+    // A quote reaches the agent from request_quote, or from the intake once an option is chosen (step.quote.quote).
+    // Both are the buyer's "price" and both are signed quotes whose tokens could be edited.
+    const issued = (tool.name === "request_quote" ? out.quote : (out.step as { quote?: { quote?: unknown } } | undefined)?.quote?.quote) as { totalCents?: number; quoteId?: string } | undefined;
+    if (issued && typeof issued.quoteId === "string" && typeof issued.totalCents === "number") {
+      this.lastQuote = { totalCents: issued.totalCents, quoteId: issued.quoteId };
+      this.issuedQuotes.set(issued.quoteId, JSON.stringify(issued));
     }
     if (tool.name === "place_order") {
       const order = out.order as PublicOrder;
