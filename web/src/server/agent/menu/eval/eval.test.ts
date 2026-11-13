@@ -42,3 +42,18 @@ describe("menu evaluation, recorded model outputs", () => {
     });
   }
 });
+
+/** Live, opt-in: one request to the model now, the same checks. `DOCK_LIVE=1 pnpm vitest run src/server/agent/menu/eval` */
+const LIVE = process.env.DOCK_LIVE === "1";
+describe.skipIf(!LIVE)("menu evaluation, live model (DOCK_LIVE=1)", () => {
+  it("salmon soup, fresh from the model", async () => {
+    const { loadLocalEnv } = await import("../../../../../scripts/lib/agent-cli");
+    loadLocalEnv();
+    const { draftMenu, menuModelSpec } = await import("../draft");
+    if (!menuModelSpec()) return;
+    const c = CASES.find((x) => x.id === "salmon-soup")!;
+    const r = await draftMenu({ text: c.text, now: MENU_NOW, context: { kitchenName: "Ravintola Kaari", kitchenKind: "lunch restaurant", rules: ["Dairy must be lactose-free"], pantry: [] } });
+    const failed = c.expect(r.draft, localNow(MENU_NOW).date).filter((x) => !x.ok);
+    expect(failed, failed.map((f) => `${f.name}: ${f.detail}`).join("; ")).toEqual([]);
+  }, 60_000);
+});

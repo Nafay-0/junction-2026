@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import { MENU_KITCHENS } from "@/server/agent/menu/kitchens";
 import { MenuPlanner } from "../../_plan/menu-planner";
 import { Wordmark } from "../../_ui/target";
@@ -16,7 +17,19 @@ const NAMES: Record<string, { name: string; kind: string }> = {
  * Preview of the menu planner components (app/_plan), as the kitchen portal will mount them: a chef states a dish or
  * a menu and covers, and gets one checked, fixed-price order through the gate.
  */
-export default async function PlanPage({ params }: PageProps<"/plan/[kitchen]">) {
+export function generateStaticParams() {
+  return MENU_KITCHENS.map((kitchen) => ({ kitchen }));
+}
+
+export default function PlanPage(props: PageProps<"/plan/[kitchen]">) {
+  return (
+    <Suspense fallback={<main className="min-h-dvh bg-concrete" />}>
+      <Loaded {...props} />
+    </Suspense>
+  );
+}
+
+async function Loaded({ params }: PageProps<"/plan/[kitchen]">) {
   const { kitchen } = await params;
   if (!(MENU_KITCHENS as string[]).includes(kitchen)) notFound();
   return (

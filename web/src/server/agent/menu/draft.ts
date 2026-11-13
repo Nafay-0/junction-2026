@@ -204,8 +204,12 @@ export function sanitiseDraft(raw: LlmMenuDraft): MenuDraft {
 // ---------- the model calls ----------
 
 /**
- * Chosen on 2026-11-13 by timing the candidates on this task: see MODEL_CHOICE in the evaluation file.
- * Sonnet 5.5 at low effort, outline first and then every dish in parallel.
+ * Chosen on 2026-11-13 by timing the candidates on this task (one salmon-soup plan each, same prompt):
+ *   Haiku 5.5   10.6 s, $0.001: plausible dishes, but bought 250 ml of liquid stock per cover; as the name check
+ *               it threw out good rye breads
+ *   Sonnet 5.5  15.9 s, $0.029: right Finnish recipes, yields and portions
+ *   Opus 5.5    23.3 s, $0.059: no better on this task, too slow for a screen
+ * Sonnet 5.5 at low effort, outline first and then every dish in parallel (a three-course lunch: about 15 s).
  */
 export const MENU_MODEL_DEFAULT = "anthropic:claude-sonnet-5-5";
 

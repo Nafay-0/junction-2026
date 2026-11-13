@@ -114,9 +114,29 @@ export function NeedsYou({ plan, onEdit, busy }: { plan: PlanWire; onEdit: (e: P
           {open.length} thing{open.length > 1 ? "s" : ""} for you to decide
         </h2>
         <p className="text-[0.95rem] text-ink-soft">Everything else on the plan goes through as it is. Each choice is recorded in the ledger with your name.</p>
+        {plan.totals.allLate && (
+          <div className="mt-3 border-l-[6px] border-ink bg-safety/30 px-3 py-2.5">
+            <p className="font-semibold">Nothing on this plan can arrive by {day(plan.totals.allLate.neededBy)}{plan.totals.allLate.earliest ? `: the earliest delivery is ${day(plan.totals.allLate.earliest)}` : ""}.</p>
+            <p className="text-[0.95rem]">One decision for the whole plan: move the day, or take the later delivery for every line that has one. Lines with no product at all stay below.</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {plan.totals.allLate.earliest && (
+                <Btn kind="primary" busy={busy} onClick={() => onEdit([{ op: "deliverBy", date: plan.totals.allLate!.earliest! }])}>
+                  Plan for {day(plan.totals.allLate.earliest)} instead
+                </Btn>
+              )}
+              <Btn
+                kind="safety"
+                busy={busy}
+                onClick={() => onEdit(open.filter(({ doubt }) => doubt.kind === "cannot_arrive" && doubt.acceptLabel).map(({ doubt }) => ({ op: "accept" as const, doubtId: doubt.doubtId })))}
+              >
+                Accept the later delivery for all
+              </Btn>
+            </div>
+          </div>
+        )}
         <ul className="mt-3 space-y-4">
           {open.map(({ line, doubt }) => (
-            <DoubtItem key={doubt.doubtId} line={line} doubt={doubt} pending={plan.pending} onEdit={onEdit} busy={busy} />
+            <DoubtItem key={doubt.doubtId} line={line} doubt={doubt} pending={plan.pending} refused={plan.live.refused} onEdit={onEdit} busy={busy} />
           ))}
         </ul>
       </div>
@@ -124,7 +144,7 @@ export function NeedsYou({ plan, onEdit, busy }: { plan: PlanWire; onEdit: (e: P
   );
 }
 
-function DoubtItem({ line, doubt, pending, onEdit, busy }: { line: Line; doubt: Doubt; pending: boolean; onEdit: (e: PlanEdit[]) => void; busy: boolean }) {
+function DoubtItem({ line, doubt, pending, refused, onEdit, busy }: { line: Line; doubt: Doubt; pending: boolean; refused?: string; onEdit: (e: PlanEdit[]) => void; busy: boolean }) {
   const offerFixes = ["cannot_arrive", "no_safe_product", "no_product", "rule_conflict"].includes(doubt.kind);
   return (
     <li className="border-l-[6px] border-ink bg-concrete/50 px-3 py-2.5">
@@ -169,7 +189,13 @@ function DoubtItem({ line, doubt, pending, onEdit, busy }: { line: Line; doubt: 
           })}
         </ul>
       )}
+      {doubt.kind === "not_priced" && refused && <p className="mt-1 text-[0.92rem] text-ink-soft">{refused}</p>}
       <div className="mt-2 flex flex-wrap gap-2">
+        {doubt.kind === "not_priced" && (
+          <Btn kind="primary" busy={busy} onClick={() => onEdit([{ op: "price" }])}>
+            Check price and delivery
+          </Btn>
+        )}
         {doubt.acceptLabel && (
           <Btn kind="safety" busy={busy} onClick={() => onEdit([{ op: "accept", doubtId: doubt.doubtId }])}>
             {doubt.acceptLabel}
