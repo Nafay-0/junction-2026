@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { MAX_LIVE_IDS_PER_CALL, type MeteredCatalog, type Product } from "./catalog";
-import { answerSchema, clarify, hardConstraints, optionLabel, violation, type Answer, type ConstraintSource, type MemoryNote, type Question } from "./clarify";
+import { facetsOf } from "./catalog/search";
+import { OPTIMISE_QUESTION_ID, answerSchema, clarify, hardConstraints, kindMismatch, optimiseQuestion, optionLabel, violation, type Answer, type ConstraintSource, type MemoryNote, type Question } from "./clarify";
 import { baseAmount, checkNeed, type CheckContext, type Concern, type ConcernCode } from "./concerns";
 import { DockError, parse } from "./errors";
 import {
@@ -18,9 +19,9 @@ import {
   type StatedPreference,
 } from "./kitchen";
 import type { Ledger } from "./ledger";
-import { NeedSchema, SPEC_DIMENSIONS, applyNeedPatch, describeNeed, formatAmount, type BaseUnit, type StructuredNeed } from "./need";
-import { LABEL_TEXT, buildOptions, preselect, shortlist, type OptionCard, type OptionLabel } from "./options";
-import type { AgentSession, DockRepository, Order, PurchaseRequest } from "./orders";
+import { NeedSchema, SPEC_DIMENSIONS, applyNeedPatch, describeNeed, dimensionValue, formatAmount, normaliseNeed, type BaseUnit, type OptimiseGoal, type StructuredNeed } from "./need";
+import { LABEL_TEXT, buildOptions, formatCutoff, preselect, shortlist, type Exclusion, type OptionCard, type OptionLabel, type Reference } from "./options";
+import type { AgentSession, DockRepository, LiveLookupResult, Order, PurchaseRequest } from "./orders";
 import type { Decision } from "./policy";
 import type { Quote, QuoteRequestLine } from "./quote";
 import { formatEur, newId } from "./util";
@@ -56,6 +57,8 @@ export type Intake = {
   answers: (Answer & { by: string; at: string })[];
   concerns: Concern[];
   questions: Question[];
+  /** Choices the buyer left open that the cards span (fat content, say). Not asked; answering them narrows the options. */
+  openChoices?: Question[];
   fromMemory: MemoryNote[];
   notAsked: string[];
   /** The hard rules every option obeys, and where each came from (mandate, request, a person's stated preference). */
@@ -63,7 +66,9 @@ export type Intake = {
   options: OptionCard[];
   preselected?: { optionId: string; reason: string; source: "request" | "answer" | "stated" | "learned" };
   notes: string[];
-  excluded: { productId: string; reason: string }[];
+  excluded: Exclusion[];
+  /** Plausibility warnings not asked of the buyer because a person signs the order off anyway: shown to that person. */
+  signOffNotes?: string[];
   chosen?: { optionId: string; labels: OptionLabel[]; by: string; at: string };
   quote?: { quote: Quote; quoteToken: string; policyPreview: Decision };
   createdAt: string;
@@ -108,7 +113,12 @@ export type IntakeDeps = {
   openRequest: (session: AgentSession, input: { text: string; neededBy?: string }) => Promise<PurchaseRequest>;
   requestQuote: (session: AgentSession, input: { requestId: string; lines: QuoteRequestLine[] }) => Promise<{ quote: Quote; quoteToken: string; policyPreview: Decision }>;
   spentThisWeek: (orgId: string) => Promise<number>;
+  /** The order flow's live lookup: allowance, delivery date, signed claims and ledger in one place (see orders.ts). */
+  liveLookup: (session: AgentSession, requestId: string, productIds: string[], deliveryDate: string | undefined, why: string) => Promise<LiveLookupResult>;
 };
+
+/** Who settled the goal. Only a goal the buyer gave (now or as a stated rule) lets the agent choose a card alone. */
+const DECIDING_SOURCES = new Set(["request", "answer", "stated"]);
 
 export type IntakeView = ReturnType<typeof view>;
 
@@ -133,8 +143,15 @@ export function createIntakeFlow(deps: IntakeDeps) {
     if (!states.includes(i.state)) throw new DockError(409, "intake_wrong_state", `Cannot ${what} now: request ${i.requestId} is ${i.state}.`, undefined, { state: i.state });
   }
 
-  async function familyProducts(family: string): Promise<Product[]> {
-    return catalog.searchProducts({ category: family, limit: 100 });
+  /** Master data of the family, already narrowed to the claims the request requires (a local search, no live call). */
+  async function familyProducts(family: string, need: StructuredNeed): Promise<Product[]> {
+    const attributes = [...new Set([...need.requiredClaims, ...need.item.attributes])];
+    let hits = await catalog.searchProducts({ category: family, ...(attributes.length ? { attributes } : {}), limit: 100 });
+    // Nothing carries every claim: look at the whole family, so the answer can say why each product does not fit.
+    if (hits.length === 0 && attributes.length) hits = await catalog.searchProducts({ category: family, limit: 100 });
+    // A named product is always considered, even when it lacks a claim: the concerns say why it cannot be had.
+    if (need.item.productId && !hits.some((p) => p.id === need.item.productId)) hits.push(...(await catalog.searchProducts({ ids: [need.item.productId], limit: 1 })));
+    return hits;
   }
 
   async function resolveFamily(need: StructuredNeed, profile: KitchenProfile): Promise<string> {
@@ -160,125 +177,166 @@ export function createIntakeFlow(deps: IntakeDeps) {
   async function advance(session: AgentSession, i: Intake): Promise<Intake> {
     const at = now();
     const profile = await profileOf(session);
-    const products = await familyProducts(i.family);
+    const products = await familyProducts(i.family, i.need);
     const ctx: CheckContext = { now: at, profile, family: i.family, candidates: products, suspendedPreferenceIds: i.suspendedPreferenceIds };
-    Object.assign(i, { concerns: [], questions: [], fromMemory: [], notAsked: [], rules: [], options: [], notes: [], excluded: [], preselected: undefined, updatedAt: at.toISOString() });
+    Object.assign(i, { concerns: [], questions: [], openChoices: [], fromMemory: [], notAsked: [], rules: [], options: [], notes: [], excluded: [], preselected: undefined, signOffNotes: undefined, updatedAt: at.toISOString() });
 
-    // 1. Likely mistakes block everything else.
+    // 1. Likely mistakes block everything else. Plausibility warnings a sign-off would show anyway wait (step 6).
     const acked = new Set(i.acknowledgements.map((a) => a.key));
-    const concerns = checkNeed(i.need, ctx).filter((c) => !acked.has(c.key));
-    if (concerns.length) {
-      i.state = "needs_confirmation";
-      i.concerns = concerns;
-      log(i, "dock", `Dock found ${concerns.length} thing${concerns.length > 1 ? "s" : ""} to check before any price lookup.`, {
-        step: "concerns",
-        reasons: concerns.map((c) => `${c.code}: ${c.message}`),
-        concerns: concerns.map((c) => ({ key: c.key, code: c.code, severity: c.severity })),
-      });
-      await intakes.save(i);
-      return i;
-    }
+    const open = checkNeed(i.need, ctx).filter((c) => !acked.has(c.key));
+    const blocking = open.filter((c) => !c.deferrable);
+    const deferred = open.filter((c) => c.deferrable);
+    if (blocking.length) return needsConfirmation(i, blocking, "before any price lookup");
     i.amount = baseAmount(i.need, ctx) ?? (i.need.sameAsLastTime ? lastAmount(profile, i.family) : undefined);
     if (!i.amount) throw new DockError(422, "amount_unknown", "Could not work out the amount in litres, kilos or pieces.");
 
-    // 2. Hard constraints: mandate, request, stated preferences.
+    // 2. Hard constraints: mandate, request, stated preferences, and the kind of product asked for.
     const stated = statedFor(profile, i.family);
     const constraints = hardConstraints(session.mandate, i.need, stated, i.suspendedPreferenceIds);
     i.rules = constraints.sources;
-    let allowed = products.filter((p) => {
-      const why = violation(p, constraints);
+    const wantedKinds = facetsOf(`${i.need.item.text} ${i.family}`);
+    const allowed = products.filter((p) => {
+      const why = violation(p, constraints) ?? kindMismatch(p, wantedKinds);
       if (why) i.excluded.push({ productId: p.id, reason: why });
       return !why;
     });
-    if (i.need.item.productId) allowed = allowed.filter((p) => p.id === i.need.item.productId);
     const learned = learnPreferences(profile, i.family);
     const last = lastOrder(profile, i.family);
     const usual = learned.find((l) => l.kind === "product");
     const spent = await deps.spentThisWeek(i.orgId);
+    const reference = referenceFor(i.need, allowed, last, usual);
 
-    // 3. "Same as last time": straight to a quote when the last product can still fill it.
-    if (i.need.sameAsLastTime && last) {
-      const lastProduct = allowed.find((p) => p.id === primaryLine(last).productId);
-      if (lastProduct) {
-        const offers = await liveOffers(session, i, [lastProduct]);
-        const { cards, excluded } = buildOptions({ amount: i.amount, candidates: [lastProduct], offers, mandate: session.mandate, now: at, neededBy: i.need.deliverBy, spentThisWeekCents: spent, last });
-        const card = cards[0] && { ...cards[0], labels: ["same_as_last_time" as const] };
-        if (card) {
-          i.options = [card];
-          i.notes = [`Repeats your order of ${formatAmount(last.amount, last.unit)} from ${last.placedAt.slice(0, 10)}.`];
-          return quoteOption(session, i, card, `agent ${session.agentId}`, "Same as last time, as asked.");
-        }
-        i.notes.push(`Same as last time is not possible: ${excluded[0]?.reason ?? "no offer"}. Here are the options instead.`);
-      } else {
-        const why = i.excluded.find((e) => e.productId === primaryLine(last).productId)?.reason ?? "not in the catalogue now";
-        i.notes.push(`Same as last time (${primaryLine(last).name}) is not possible: ${why}. Here are the options instead.`);
+    // 3. "Same as last time" settles every choice from the last order; otherwise ask only what matters and memory
+    //    does not answer.
+    let narrowed: Product[];
+    let span: ((p: Product) => string | undefined) | undefined;
+    let goal: { optimise?: OptimiseGoal | "no_preference"; within?: number; source?: string } = {};
+    const repeat = i.need.sameAsLastTime && last && reference?.source === "last" ? allowed.find((p) => p.id === reference.productId) : undefined;
+    if (i.need.sameAsLastTime && last && !repeat) {
+      const why = i.excluded.find((e) => e.productId === primaryLine(last).productId)?.reason ?? "not in the catalogue now";
+      i.notes.push(`Same as last time (${primaryLine(last).name}) is not possible: ${why}. Here are the options instead.`);
+    }
+    if (repeat) {
+      const spec = SPEC_DIMENSIONS.map((d) => [d, dimensionValue(d, repeat.attributes)] as const);
+      narrowed = allowed.filter((p) => spec.every(([d, v]) => v === undefined || dimensionValue(d, p.attributes) === v));
+      goal = goalFromMemory(i.need, stated, learned);
+    } else {
+      const c = clarify({ need: i.need, candidates: allowed, stated, learned, answers: i.answers, suspended: i.suspendedPreferenceIds });
+      i.fromMemory = c.fromMemory;
+      i.notAsked = c.notAsked;
+      if (c.questions.length) {
+        i.state = "needs_input";
+        i.questions = c.questions;
+        log(i, "dock", `Dock asked ${c.questions.length} question${c.questions.length > 1 ? "s" : ""}: ${c.questions.map((q) => q.text).join(" / ")}`, {
+          step: "questions",
+          questions: c.questions.map((q) => ({ id: q.id, options: q.options.map((o) => o.id) })),
+          reasons: memoryText(i, c.fromMemory).map((t) => `From memory: ${t}`),
+        });
+        await intakes.save(i);
+        return i;
       }
+      narrowed = allowed.filter((p) => c.settled.attributes.every((a) => p.attributes.includes(a)) && !c.settled.excludedAttributes.some((a) => p.attributes.includes(a)));
+      i.openChoices = c.spanned;
+      const openDims = c.spanned.map((q) => SPEC_DIMENSIONS.find((d) => d.id === q.dimension)!).filter(Boolean);
+      if (openDims.length) span = (p) => openDims.map((d) => dimensionValue(d, p.attributes) ?? "?").join("|");
+      goal = { optimise: c.settled.optimise, within: c.settled.optimiseWithinPctOfCheapest, source: c.settled.optimiseSource };
     }
-
-    // 4. Ask only what matters and what memory does not answer.
-    const c = clarify({ need: i.need, candidates: allowed, stated, learned, answers: i.answers, suspended: i.suspendedPreferenceIds });
-    i.fromMemory = c.fromMemory;
-    i.notAsked = c.notAsked;
-    const memoryText = [
-      ...i.rules.filter((r) => r.source === "stated").map((r) => r.text),
-      ...c.fromMemory.map((m) => `${m.question.text} ${m.label} (${m.source === "stated" ? "stated earlier" : "learned, pre-selected"})`),
-    ];
-    if (c.questions.length) {
-      i.state = "needs_input";
-      i.questions = c.questions;
-      log(i, "dock", `Dock asked ${c.questions.length} question${c.questions.length > 1 ? "s" : ""}: ${c.questions.map((q) => q.text).join(" / ")}`, {
-        step: "questions",
-        questions: c.questions.map((q) => ({ id: q.id, options: q.options.map((o) => o.id) })),
-        reasons: memoryText.map((t) => `From memory: ${t}`),
-      });
-      await intakes.save(i);
-      return i;
-    }
-
-    const narrowed = allowed.filter((p) => c.settled.attributes.every((a) => p.attributes.includes(a)) && !c.settled.excludedAttributes.some((a) => p.attributes.includes(a)));
     if (narrowed.length === 0) return noOptions(i, allowed.length ? "No product matches the answers given." : "No product in this family meets the mandate, the request and the kitchen's stated rules.");
 
-    // 5. Live prices for a short list only, then the option cards.
-    const offers = await liveOffers(session, i, shortlist(narrowed, [last && primaryLine(last).productId, usual?.kind === "product" ? usual.productId : undefined], MAX_LIVE_IDS_PER_CALL));
+    // 4. Live prices for a short list only (one call), then the option cards.
+    const prefer = [reference?.productId, last && primaryLine(last).productId, usual?.kind === "product" ? usual.productId : undefined];
+    const short = shortlist(narrowed, prefer, MAX_LIVE_IDS_PER_CALL, i.amount, span);
+    const live = await deps.liveLookup(session, i.requestId, short.map((p) => p.id), i.need.deliverBy, "Dock checked live price and availability for the shortlist");
+    const goalForRank = goal.optimise && goal.optimise !== "no_preference" ? goal.optimise : undefined;
     const result = buildOptions({
       amount: i.amount,
-      candidates: narrowed,
-      offers,
+      candidates: short,
+      offers: live.offers,
+      statuses: live.statuses,
       mandate: session.mandate,
       now: at,
       neededBy: i.need.deliverBy,
       spentThisWeekCents: spent,
       last,
       usual: usual?.kind === "product" ? { productId: usual.productId, text: usual.text } : undefined,
+      reference,
+      goal: goalForRank,
+      span,
+      estimates: i.acknowledgements.filter((a) => a.code === "pack_uncertain" && a.action === "confirmed").map((a) => a.key.split(":")[1]),
     });
-    i.notes.push(...result.notes, ...c.notAsked);
+    i.notes.push(...result.notes, ...i.notAsked);
     i.excluded.push(...result.excluded);
-    if (result.cards.length === 0) return noOptions(i, "Nothing in stock can be delivered in time within the mandate.");
-    i.state = "options_ready";
+    if (result.cards.length === 0) return noOptions(i, noOptionReason(result.excluded, i.need.deliverBy));
     i.options = result.cards;
-    const goal = c.settled.optimise === "no_preference" ? undefined : c.settled.optimise;
-    const pick = preselect(result.cards, goal, c.settled.optimiseWithinPctOfCheapest);
-    if (pick && c.settled.optimiseSource) i.preselected = { ...pick, source: c.settled.optimiseSource };
-    log(i, "dock", `Dock offered ${result.cards.length} option${result.cards.length > 1 ? "s" : ""} for ${formatAmount(i.amount.amount, i.amount.unit)} of ${i.family}${i.preselected ? `; pre-selected ${i.preselected.optionId} (${i.preselected.reason})` : ""}.`, {
+
+    // 5. Plausibility warnings: if every option goes to a person for sign-off anyway, that person sees the warning
+    //    with the order; the buyer is not asked twice. Otherwise ask now, before anything is chosen.
+    // A first order has nothing to compare with: its size is shown on every card and to whoever signs it off,
+    // never a blocking step (a hotel ordering 1,000 L is ordinary, and the buyer said it in words).
+    for (const c of deferred.filter((x) => x.code === "large_first_order")) {
+      for (const card of i.options) card.cons.push(c.message);
+      (i.signOffNotes ??= []).push(`Check the amount: ${c.message}`);
+      log(i, "dock", `Dock did not stop the buyer for large_first_order: it is a note on every option${i.options.some((o) => o.totalCents > session.mandate.perOrderLimitCents) ? " and goes to the person signing off" : ""}.`, { step: "noted", concerns: [{ key: c.key, code: c.code }], reasons: [c.message] });
+    }
+    const ask = deferred.filter((x) => x.code !== "large_first_order");
+    if (ask.length) {
+      const limit = session.mandate.perOrderLimitCents;
+      if (result.cards.every((c) => c.totalCents > limit)) {
+        (i.signOffNotes ??= []).push(...ask.map((c) => `Check the amount: ${c.message} (not asked before ordering, because a person signs this order off anyway).`));
+        log(i, "dock", `Dock did not stop the buyer for ${ask.map((c) => c.code).join(", ")}: every option is over the ${formatEur(limit)} the agent may spend alone, so the person signing it off sees it.`, {
+          step: "carried_to_sign_off",
+          concerns: ask.map((c) => ({ key: c.key, code: c.code })),
+          reasons: i.signOffNotes,
+        });
+      } else {
+        i.options = [];
+        return needsConfirmation(i, ask, "before an option is chosen: one of the options is within what the agent may spend alone, so no one else would look at it");
+      }
+    }
+
+    // 6. Choose. Same as last time, or the goal the buyer gave, picks a full match without asking. A learned habit
+    //    only pre-selects, and a compromise is always the buyer's call.
+    const repeatCard = repeat && i.options.find((o) => o.match === "full" && o.lines.length === 1 && o.lines[0].productId === repeat.id);
+    if (repeatCard) {
+      i.notes.unshift(`Repeats your order of ${formatAmount(last!.amount, last!.unit)} from ${last!.placedAt.slice(0, 10)}.`);
+      return quoteOption(session, i, { ...repeatCard, labels: ["same_as_last_time"] }, `agent ${session.agentId}`, "Same as last time, as asked.");
+    }
+    const pick = goalForRank ? preselect(i.options, goalForRank, goal.within) : undefined;
+    if (pick && goal.source) i.preselected = { ...pick, source: goal.source as NonNullable<Intake["preselected"]>["source"] };
+    const picked = i.preselected && i.options.find((o) => o.optionId === i.preselected!.optionId);
+    log(i, "dock", `Dock offered ${i.options.length} option${i.options.length > 1 ? "s" : ""} for ${formatAmount(i.amount.amount, i.amount.unit)} of ${i.family} (${i.options.every((o) => o.match === "full") ? "all full matches, ranked" : "none meets the whole request; each says what it gives up"})${i.preselected ? `; pre-selected ${i.preselected.optionId} (${i.preselected.reason})` : ""}.`, {
       step: "options",
-      reasons: [...result.cards.map(cardLine), ...memoryText.map((t) => `From memory: ${t}`)],
-      options: result.cards.map((o) => ({ optionId: o.optionId, labels: o.labels, totalCents: o.totalCents, lines: o.quoteLines })),
+      reasons: [...i.options.map(cardLine), ...result.excluded.filter((e) => e.code === "cutoff_passed").map((e) => `${e.productId}: ${e.reason}`), ...memoryText(i, i.fromMemory).map((t) => `From memory: ${t}`)],
+      options: i.options.map((o) => ({ optionId: o.optionId, rank: o.rank, match: o.match, givesUp: o.givesUp.map((g) => g.part), labels: o.labels, totalCents: o.totalCents, lines: o.quoteLines })),
       excluded: i.excluded,
+    });
+    // The cards differ on something the buyer left open (fat content): that choice is theirs, so the agent waits.
+    const openOnCards = !!span && new Set(i.options.map((o) => span(short.find((p) => p.id === o.lines[0].productId)!))).size > 1;
+    if (picked && picked.match === "full" && DECIDING_SOURCES.has(i.preselected!.source) && !openOnCards) {
+      return quoteOption(session, i, picked, `agent ${session.agentId}`, `${i.preselected!.reason} It meets the whole request, so the agent chose it without asking.`);
+    }
+    i.state = "options_ready";
+    await intakes.save(i);
+    return i;
+  }
+
+  async function needsConfirmation(i: Intake, concerns: Concern[], when: string): Promise<Intake> {
+    i.state = "needs_confirmation";
+    i.concerns = concerns;
+    log(i, "dock", `Dock found ${concerns.length} thing${concerns.length > 1 ? "s" : ""} to check ${when}.`, {
+      step: "concerns",
+      reasons: concerns.map((c) => `${c.code}: ${c.message}`),
+      concerns: concerns.map((c) => ({ key: c.key, code: c.code, severity: c.severity })),
     });
     await intakes.save(i);
     return i;
   }
 
-  async function liveOffers(session: AgentSession, i: Intake, products: Product[]) {
-    const offers = await catalog.getLiveOffers(products.map((p) => p.id));
-    ledger.append({
-      type: "lookup",
-      actor: agentActor(session),
-      requestId: i.requestId,
-      summary: `Dock checked live price and availability for ${products.length} shortlisted product(s) (live call #${catalog.stats().liveCalls}).`,
-      data: { source: "live", productIds: products.map((p) => p.id), offers },
-    });
-    return offers;
+  function memoryText(i: Intake, fromMemory: MemoryNote[]): string[] {
+    return [
+      ...i.rules.filter((r) => r.source === "stated").map((r) => r.text),
+      ...fromMemory.map((m) => `${m.question.text} ${m.label} (${m.source === "stated" ? "stated earlier" : "learned, pre-selected"})`),
+    ];
   }
 
   async function noOptions(i: Intake, reason: string): Promise<Intake> {
@@ -312,7 +370,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
     /** Start from a structured need. Returns the first state. */
     async open(session: AgentSession, input: z.input<typeof OpenIntakeInput>): Promise<IntakeView> {
       const body = parse(OpenIntakeInput, input);
-      const need = parse(NeedSchema, body.need);
+      const { need, changes } = normaliseNeed(parse(NeedSchema, body.need));
       const profile = await profileOf(session);
       const family = await resolveFamily(need, profile);
       if (need.sameAsLastTime && !need.quantity && !lastOrder(profile, family)) {
@@ -342,7 +400,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
         createdAt: at,
         updatedAt: at,
       };
-      log(i, agentActor(session), `Structured need (${family}): ${describeNeed(need)}.`, { step: "need", need, by: body.by });
+      log(i, agentActor(session), `Structured need (${family}): ${describeNeed(need)}.`, { step: "need", need, by: body.by, ...(changes.length ? { reasons: changes.map((c) => `In the catalogue's words: ${c}`) } : {}) });
       return view(await advance(session, i));
     },
 
@@ -395,7 +453,8 @@ export function createIntakeFlow(deps: IntakeDeps) {
       const { by: who, answers } = parse(AnswersInput, input);
       const i = await own(session, requestId);
       expectState(i, ["needs_input", "options_ready"], "answer questions");
-      const askable = [...i.questions, ...i.fromMemory.map((m) => m.question)];
+      // The goal can always be given (or changed): it is never asked up front, the cards answer it.
+      const askable = [...i.questions, ...(i.openChoices ?? []), ...i.fromMemory.map((m) => m.question), ...(i.fromMemory.some((m) => m.question.id === OPTIMISE_QUESTION_ID) ? [] : [optimiseQuestion()])];
       const at = now().toISOString();
       let profile = await profileOf(session);
       for (const a of answers) {
@@ -422,6 +481,14 @@ export function createIntakeFlow(deps: IntakeDeps) {
       expectState(i, ["options_ready"], "choose an option");
       const card = i.options.find((o) => o.optionId === optionId);
       if (!card) throw new DockError(404, "option_not_found", `No option ${optionId}; choose one of ${i.options.map((o) => o.optionId).join(", ")}.`);
+      if (card.givesUp.some((g) => g.part === "delivery_date")) {
+        // Choosing a later day is the buyer moving their own deadline: the request and the gate follow it.
+        const before = i.need.deliverBy;
+        i.need = applyNeedPatch(i.need, { deliverBy: card.deliveryDate });
+        const req = await repo.getRequest(requestId);
+        if (req) await repo.saveRequest({ ...req, neededBy: card.deliveryDate });
+        log(i, buyerActor(who), `${who} accepted a later delivery: ${card.deliveryDate} instead of ${before}.`, { step: "compromise", optionId, givesUp: card.givesUp, by: who, relayedBy: session.agentId });
+      }
       return view(await quoteOption(session, i, card, who));
     },
 
@@ -431,13 +498,47 @@ export function createIntakeFlow(deps: IntakeDeps) {
   };
 }
 
+/** The product the request is about, if any: named, repeated, or the kitchen's usual (a habit, not a requirement). */
+function referenceFor(need: StructuredNeed, allowed: Product[], last: HistoryEntry | undefined, usual: ReturnType<typeof learnPreferences>[number] | undefined): Reference | undefined {
+  if (need.item.productId) {
+    const p = allowed.find((x) => x.id === need.item.productId);
+    return p && { productId: p.id, name: p.name, source: "named" };
+  }
+  if (need.sameAsLastTime && last) {
+    const l = primaryLine(last);
+    return { productId: l.productId, name: l.name, source: "last" };
+  }
+  if (usual?.kind === "product" && allowed.some((p) => p.id === usual.productId)) return { productId: usual.productId, name: usual.name, source: "usual" };
+  return undefined;
+}
+
+/** The goal from the request, a stated rule or a learned habit, without asking (for "same as last time"). */
+function goalFromMemory(need: StructuredNeed, stated: StatedPreference[], learned: ReturnType<typeof learnPreferences>): { optimise?: OptimiseGoal | "no_preference"; within?: number; source?: string } {
+  if (need.optimise !== "unstated") return { optimise: need.optimise, source: "request" };
+  const s = stated.find((p) => p.kind === "optimise");
+  if (s && s.kind === "optimise") return { optimise: s.goal, within: s.withinPctOfCheapest, source: "stated" };
+  const l = learned.find((p) => p.kind === "optimise");
+  if (l && l.kind === "optimise") return { optimise: l.goal, source: "learned" };
+  return {};
+}
+
+/** Why nothing can be offered, leading with what the buyer can act on (a passed cut-off, a date too early). */
+function noOptionReason(excluded: Exclusion[], deliverBy: string | undefined): string {
+  const cutoff = excluded.filter((e) => e.code === "cutoff_passed");
+  if (cutoff.length && cutoff.length === excluded.length) return `Nothing can arrive by ${deliverBy ?? "the date asked"}: the order cut-off has passed for every product priced (${cutoff.map((e) => e.productId).join(", ")}).`;
+  if (excluded.length) return `Nothing on the short list can be delivered in time within the mandate: ${[...new Set(excluded.map((e) => e.reason))].slice(0, 3).join("; ")}.`;
+  return "Nothing in stock can be delivered in time within the mandate.";
+}
+
 function lastAmount(profile: KitchenProfile, family: string) {
   const l = lastOrder(profile, family);
   return l && { amount: l.amount, unit: l.unit };
 }
 
 function cardLine(c: OptionCard): string {
-  return `[${c.labels.map((l) => LABEL_TEXT[l]).join(", ")}] ${c.lines.map((l) => `${l.packs} x ${l.productId}`).join(" + ")} for ${formatEur(c.totalCents)}, delivery ${c.deliveryDate}`;
+  const labels = c.labels.map((l) => LABEL_TEXT[l]).join(", ");
+  const what = c.match === "full" ? `${c.rank}${labels ? `, ${labels}` : ""}` : `${c.rank} compromise, gives up ${c.givesUp.map((g) => g.part.replace("_", " ")).join(" and ")}`;
+  return `[${what}] ${c.lines.map((l) => `${l.packs} x ${l.productId}${l.substituteFor ? ` (for ${l.substituteFor})` : ""}`).join(" + ")} for ${formatEur(c.totalCents)}, delivery ${c.deliveryDate}${c.orderBy ? ` if ordered by ${formatCutoff(c.orderBy)}` : ""}${c.stockConfirmed ? "" : ", stock not reported"}`;
 }
 
 function rememberAnswer(q: Question, optionId: string, i: Intake, who: string, at: string): StatedPreference {
@@ -496,12 +597,14 @@ export function view(i: Intake) {
     amount: i.amount,
     concerns: i.concerns,
     questions: i.questions,
+    openChoices: i.openChoices ?? [],
     fromMemory: i.fromMemory,
     rules: i.rules,
     options: i.options,
     preselected: i.preselected,
     notes: i.notes,
     excluded: i.excluded,
+    signOffNotes: i.signOffNotes ?? [],
     acknowledgements: i.acknowledgements,
     chosen: i.chosen,
     quote: i.quote,
