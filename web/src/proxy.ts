@@ -30,6 +30,9 @@ const KITCHEN_WRITE_KITCHEN = rule("kitchen-write-kitchen", 120);
 const OPS_ENTER = rule("ops-enter", 10);
 const MENU_PLAN = rule("menu-plan", 6);
 const MENU_PLAN_KITCHEN = rule("menu-plan-kitchen", 12);
+// The voice door (src/app/_channels): starting a call mints a paid realtime session.
+const VOICE_CALL = rule("voice-call", 6);
+const VOICE_TOOL = rule("voice-tool", 60);
 
 const g = globalThis as typeof globalThis & { __dockRateLimiter?: RateLimiter };
 const limiter = (g.__dockRateLimiter ??= new RateLimiter());
@@ -63,6 +66,8 @@ function rulesFor(method: string, path: string): [RateRule, string?][] {
   if (post && path === "/ops-api/session") out.push([OPS_ENTER]);
   // Reissuing or revoking a connector takes the operator secret (or the visitor's own session).
   if ((post || method === "DELETE") && path.startsWith("/ui-api/connect/")) out.push([OPS_ENTER]);
+  if (post && /^\/ui-api\/voice\/[^/]+\/call$/.test(path)) out.push([VOICE_CALL]);
+  if (post && /^\/ui-api\/voice\/[^/]+\/tool$/.test(path)) out.push([VOICE_TOOL]);
   return out;
 }
 
@@ -95,5 +100,7 @@ export function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // /ui-api/scan/ takes photos and PDFs (up to 10 MB), larger than this proxy buffers (next.config.ts); those
+  // routes apply the same per-address limits and their own body cap (src/server/channels/scan/guard.ts).
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|ui-api/scan/).*)"],
 };
