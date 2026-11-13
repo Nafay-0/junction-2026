@@ -94,7 +94,7 @@ function desiredEnvironment(publicUrl) {
   for (const [name, key] of [["STORE", "DOCK_STORE"], ["ACTIONS", "DOCK_ACTIONS"], ["CACHE", "DOCK_CACHE"], ["BUS", "DOCK_BUS"], ["SEARCH", "DOCK_SEARCH"]]) {
     if (env(`DOCK_DEPLOY_${name}`)) vars.push([key, env(`DOCK_DEPLOY_${name}`)]);
   }
-  for (const k of ["DOCK_INTERPRET_MODEL", "DOCK_AGENT_MODEL", "VALIO_CUSTOMER"]) if (env(k)) vars.push([k, env(k)]);
+  for (const k of ["DOCK_INTERPRET_MODEL", "DOCK_AGENT_MODEL", "DOCK_ASSISTANT_MODEL", "DOCK_MEMORY_MODEL", "DOCK_SCAN_MODEL", "DOCK_MENU_MODEL", "DOCK_MENU_PICK_MODEL", "DOCK_VOICE_MODEL", "VALIO_CUSTOMER"]) if (env(k)) vars.push([k, env(k)]);
   // The operations portal's Platform section (web/src/server/aiven/showcase): which project and organisation to read.
   for (const k of ["AIVEN_PROJECT", "AIVEN_ORGANIZATION_ID", "DOCK_SHOWCASE_LAUNCHES_PER_DAY"]) if (env(k)) vars.push([k, env(k)]);
 

@@ -1,0 +1,130 @@
+/**
+ * Publish crash-test results where the rest of Dock reads them.
+ *
+ *   pnpm crash:export [result dirs...] [--out crash-results/export] [--no-db]
+ *
+ * Reads every <dir>/summary.json + trajectories.jsonl (default: every directory under crash-results/ that has them)
+ * and writes:
+ *   <out>/runs/<agent>__<scenario>__s<seed>r<repeat>.json   one trajectory per file (dock-crash-trajectory/1)
+ *   <out>/summary.json   { schema, generatedAt, agents: [{ agent, model, overall, licence, unsafeAttempts,
+ *                          invalid, costUsd, source, scenarios: [{ id, score, outcome, report, human, economy,
+ *                          safetyFactor, valid }] }] }
+ *   DOCK_LICENCES_FILE (default .data/licences.json): the operations portal's licence file,
+ *                          { licences: [{ agentId, level, name, rating, perOrderLimitCents, substitution, why,
+ *                          ratedAt, suite, crashAgent }] } (src/server/ops/licences.ts), agentId = the crash agent name.
+ * and, when DATABASE_URL is set, one telemetry.events row per suite run and per episode
+ * (source 'crash-test', kind 'crashtest.score', value = score, agent_id = agent, attrs.run / attrs.scenario).
+ */
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { LICENCE_LEVELS } from "@/crash/licence";
+import { SUITE_VERSION } from "@/crash/scenarios";
+import { pgConnectionString } from "@/server/aiven/env";
+import { loadLocalEnv } from "./lib/env";
+
+type Summary = {
+  agents: {
+    agent: string;
+    runs: { seed: number; repeat: number; overall: number; costUsd: number | null; unsafeAttempts: number; invalid?: number; scenarios: { id: string; score: number; outcome: number; report: number; human: number; economy: number; safetyFactor: number; valid?: boolean; fingerprint: string }[] }[];
+    licence: { level: string; name: string; perOrderLimitCents: number; substitution: string; why: string } | null;
+  }[];
+};
+
+const argv = process.argv.slice(2);
+const flag = (n: string) => argv.includes(`--${n}`);
+const opt = (n: string) => (argv.indexOf(`--${n}`) >= 0 ? argv[argv.indexOf(`--${n}`) + 1] : undefined);
+
+function resultDirs(): string[] {
+  const given = argv.filter((a, i) => !a.startsWith("--") && argv[i - 1] !== "--out");
+  if (given.length) return given;
+  const out: string[] = [];
+  const walk = (d: string, depth: number) => {
+    if (!existsSync(d) || depth > 2) return;
+    if (existsSync(path.join(d, "summary.json")) && existsSync(path.join(d, "trajectories.jsonl"))) out.push(d);
+    for (const e of readdirSync(d, { withFileTypes: true })) if (e.isDirectory() && e.name !== "export") walk(path.join(d, e.name), depth + 1);
+  };
+  walk("crash-results", 0);
+  return out;
+}
+
+const slug = (s: string) => s.replace(/[^A-Za-z0-9._-]+/g, "_");
+
+async function main() {
+  loadLocalEnv();
+  const outDir = opt("out") ?? path.join("crash-results", "export");
+  mkdirSync(path.join(outDir, "runs"), { recursive: true });
+  const ratedAt = new Date().toISOString();
+  const agents: Record<string, unknown>[] = [];
+  const licences: Record<string, unknown>[] = [];
+  const rows: { agent: string; value: number; ok: boolean; attrs: Record<string, unknown> }[] = [];
+
+  for (const dir of resultDirs()) {
+    const summary = JSON.parse(readFileSync(path.join(dir, "summary.json"), "utf8")) as Summary;
+    const trajectories = readFileSync(path.join(dir, "trajectories.jsonl"), "utf8").split("\n").filter(Boolean);
+    const models = new Map<string, string | null>();
+    for (const line of trajectories) {
+      const t = JSON.parse(line) as { agent: { name: string; model: string | null }; scenario: { id: string }; seed: number; repeat: number; agentInfo: { costUsd?: number | null } | null };
+      models.set(t.agent.name, t.agent.model ?? models.get(t.agent.name) ?? null);
+      writeFileSync(path.join(outDir, "runs", `${slug(t.agent.name)}__${t.scenario.id}__s${t.seed}r${t.repeat}.json`), line + "\n");
+    }
+    for (const a of summary.agents) {
+      const run = a.runs[0];
+      const worst = Math.min(...a.runs.map((r) => r.overall));
+      agents.push({
+        agent: a.agent,
+        model: models.get(a.agent) ?? null,
+        overall: run.overall,
+        worstRepeat: worst,
+        repeats: a.runs.length,
+        licence: a.licence,
+        unsafeAttempts: Math.max(...a.runs.map((r) => r.unsafeAttempts)),
+        invalid: run.invalid ?? 0,
+        costUsd: a.runs.reduce((s, r) => s + (r.costUsd ?? 0), 0) || null,
+        source: dir,
+        scenarios: run.scenarios.map(({ fingerprint: _f, ...s }) => (void _f, s)),
+      });
+      const level = a.licence ? LICENCE_LEVELS.find((l) => l.level === a.licence!.level) : undefined;
+      if (a.licence && level) {
+        licences.push({ agentId: a.agent, level: a.licence.level, name: a.licence.name, rating: worst, perOrderLimitCents: level.perOrderLimitCents, substitution: level.substitution, why: a.licence.why, ratedAt, suite: SUITE_VERSION, crashAgent: a.agent });
+      }
+      for (const r of a.runs) {
+        const runId = `${a.agent}#s${r.seed}r${r.repeat}`;
+        rows.push({ agent: a.agent, value: r.overall, ok: !!a.licence && a.licence.level !== "L0", attrs: { run: runId, scope: "suite", licence: a.licence?.level ?? null, suite: SUITE_VERSION } });
+        for (const s of r.scenarios) if (s.valid !== false) rows.push({ agent: a.agent, value: s.score, ok: s.score >= 70, attrs: { run: runId, scope: "scenario", scenario: s.id, suite: SUITE_VERSION } });
+      }
+    }
+  }
+
+  writeFileSync(path.join(outDir, "summary.json"), JSON.stringify({ schema: "dock-crash-export/1", suite: SUITE_VERSION, generatedAt: ratedAt, agents }, null, 2) + "\n");
+  const licencesFile = process.env.DOCK_LICENCES_FILE?.trim() || path.join(".data", "licences.json");
+  mkdirSync(path.dirname(licencesFile), { recursive: true });
+  writeFileSync(licencesFile, JSON.stringify({ licences }, null, 2) + "\n");
+  console.log(`${agents.length} agent result(s): ${outDir}/summary.json and ${outDir}/runs/; licences: ${licencesFile}`);
+
+  const url = pgConnectionString();
+  if (!url || flag("no-db")) return console.log(url ? "Database: skipped (--no-db)." : "Database: DATABASE_URL not set, no telemetry rows.");
+  const { Pool } = await import("pg");
+  const pool = new Pool({ connectionString: url, max: 1, connectionTimeoutMillis: 8_000, statement_timeout: 15_000 });
+  try {
+    for (let i = 0; i < rows.length; i += 200) {
+      const chunk = rows.slice(i, i + 200);
+      const values: unknown[] = [];
+      const sql = chunk.map((r, j) => {
+        values.push(r.agent, r.value, r.ok, JSON.stringify(r.attrs));
+        const b = j * 4;
+        return `('crash-test', 'crashtest.score', $${b + 1}, $${b + 2}, $${b + 3}, $${b + 4}::jsonb)`;
+      });
+      await pool.query(`insert into telemetry.events (source, kind, agent_id, value, ok, attrs) values ${sql.join(", ")}`, values);
+    }
+    console.log(`Database: ${rows.length} crashtest.score row(s) written to telemetry.events.`);
+  } catch (err) {
+    console.log(`Database: not written (${err instanceof Error ? err.message.slice(0, 160) : String(err)}).`);
+  } finally {
+    await pool.end();
+  }
+}
+
+main().catch((err) => {
+  console.error(err instanceof Error ? err.message : err);
+  process.exit(1);
+});
