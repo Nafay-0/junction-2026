@@ -1,5 +1,6 @@
 import { generateText, Output } from "ai";
 import { z } from "zod";
+import { recordLlmSpend, reserveLlmCall } from "@/server/limits";
 import { createModel } from "../models";
 import { costOf, tokensFromUsage, type Tokens } from "../pricing";
 import { withRetry } from "../retry";
@@ -28,6 +29,7 @@ export async function pickProducts(lines: PickLine[], model?: string | FixModel,
   })();
   const t0 = Date.now();
   const deadline = t0 + timeoutMs;
+  reserveLlmCall(); // public-demo caps: daily calls and spend, DOCK_LLM=off (server/limits.ts)
   const res = await withRetry(
     () =>
       generateText({
@@ -43,5 +45,6 @@ export async function pickProducts(lines: PickLine[], model?: string | FixModel,
     { deadline, policy: { maxRetries: 1, baseMs: 300, maxMs: 1500 } },
   );
   const tokens = tokensFromUsage(res.usage);
+  recordLlmSpend(costOf(tokens, m.price));
   return { pick: res.output as LlmPick, model: m.id, ms: Date.now() - t0, tokens, costUsd: costOf(tokens, m.price) };
 }

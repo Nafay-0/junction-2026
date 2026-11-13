@@ -12,7 +12,10 @@
     "test:watch": "vitest",
     "demo": "tsx scripts/demo.ts",
     "demo:mcp": "tsx scripts/demo-mcp.ts",
+    "memory:demo": "tsx scripts/memory-demo.ts",
+    "memory:record": "tsx scripts/memory-record.ts",
     "smoke": "tsx scripts/smoke.ts",
+    "restart-proof": "tsx scripts/restart-proof.ts",
     "aiven:agent": "tsx scripts/aiven-managed-agent.ts",
     "agent": "tsx scripts/agent.ts",
     "interpret": "tsx scripts/interpret.ts",
@@ -33,7 +36,10 @@
     "aiven:search:compare": "tsx scripts/aiven-search-compare.ts",
     "categories:build": "tsx scripts/category-labels.ts",
     "qa": "tsx qa/run.ts",
-    "menu:eval": "tsx scripts/menu-eval.ts"
+    "menu:eval": "tsx scripts/menu-eval.ts",
+    "knowledge:build": "tsx scripts/knowledge-build.ts",
+    "knowledge:eval": "tsx scripts/knowledge-eval.ts",
+    "knowledge:publish": "tsx scripts/knowledge-publish.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.102",
