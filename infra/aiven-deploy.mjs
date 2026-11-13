@@ -7,6 +7,8 @@
  *   node infra/aiven-deploy.mjs --config-only      only bring the app's settings up to date (no new build)
  *   node infra/aiven-deploy.mjs --smoke-only       only run the smoke test against what is live
  *   node infra/aiven-deploy.mjs --dry-run          show what would change, change nothing
+ *   node infra/aiven-deploy.mjs --restart          restart what is live (same commit, same settings), then smoke
+ *   node infra/aiven-deploy.mjs --rollback         deploy the commit that was live before the current one
  *
  * How: Runtime clones the repo with a read-only deploy key and builds the head of one branch; it cannot pin a
  * commit without the GitHub App. So the script makes a deploy commit on top of the ref that adds only
@@ -32,7 +34,7 @@ const DEPLOY_BRANCH = "deploy/aiven";
 
 const args = process.argv.slice(2);
 const has = (f) => args.includes(f);
-const ref = args.find((a) => !a.startsWith("--")) ?? "origin/main";
+let ref = args.find((a) => !a.startsWith("--")) ?? "origin/main";
 const dryRun = has("--dry-run");
 
 if (!existsSync(ENV_FILE)) fail(`no ${ENV_FILE}`);
@@ -82,7 +84,16 @@ function desiredEnvironment(publicUrl) {
     ["DOCK_LLM_DAILY_CALLS", env("DOCK_DEPLOY_LLM_DAILY_CALLS") ?? "500"],
     ["DOCK_LIVE_DAILY_CALLS", env("DOCK_DEPLOY_LIVE_DAILY_CALLS") ?? "3000"],
     ["DOCK_TRUSTED_PROXY_HOPS", env("DOCK_DEPLOY_TRUSTED_PROXY_HOPS") ?? "1"],
+    // The Aiven data plane (web/src/server/aiven): state in PostgreSQL, actions over Kafka, cache and live events
+    // in Valkey, product search in OpenSearch. Its own schema, so laptops (default schema "dock") never write the
+    // live ledger. A single adapter is switched off with DOCK_DEPLOY_<NAME>, e.g. DOCK_DEPLOY_SEARCH=in-process.
+    ["DOCK_AIVEN", "1"],
+    ["DOCK_PG_SCHEMA", env("DOCK_DEPLOY_PG_SCHEMA") ?? "dock_prod"],
+    ["DOCK_PG_POOL_MAX", "4"],
   ];
+  for (const [name, key] of [["STORE", "DOCK_STORE"], ["ACTIONS", "DOCK_ACTIONS"], ["CACHE", "DOCK_CACHE"], ["BUS", "DOCK_BUS"], ["SEARCH", "DOCK_SEARCH"]]) {
+    if (env(`DOCK_DEPLOY_${name}`)) vars.push([key, env(`DOCK_DEPLOY_${name}`)]);
+  }
   for (const k of ["DOCK_INTERPRET_MODEL", "DOCK_AGENT_MODEL", "VALIO_CUSTOMER"]) if (env(k)) vars.push([k, env(k)]);
 
   const secrets = [
@@ -94,10 +105,15 @@ function desiredEnvironment(publicUrl) {
     "ANTHROPIC_API_KEY",
     "OPENAI_API_KEY",
     "GEMINI_API_KEY",
+    // /ops can suspend agents: entering it needs this passcode on the public server.
+    "DOCK_OPS_PASSCODE",
+    // Demo kitchens' connector addresses (/api/mcp/c/<token>) are derived from it: stable across restarts.
+    // Also the operator bearer for reissuing or revoking connectors (/ui-api/connect/<kitchen>).
+    "DOCK_CONNECTOR_SECRET",
     // Not here: DATABASE_URL, OPENSEARCH_URI, VALKEY_URL and KAFKA_* come from the application_service_credential
     // integrations (Runtime refuses a variable that duplicates one of them).
   ];
-  const required = ["DOCK_WHOLESALER_JWK", "DOCK_DEMO_ORG_JWK", "DOCK_DEMO_KITCHEN_JWK", "VALIO_API_KEY"];
+  const required = ["DOCK_WHOLESALER_JWK", "DOCK_DEMO_ORG_JWK", "DOCK_DEMO_KITCHEN_JWK", "VALIO_API_KEY", "DOCK_OPS_PASSCODE", "DOCK_CONNECTOR_SECRET"];
   for (const k of required) if (!env(k)) fail(`${k} is not set in web/.env.local`);
   const out = vars.map(([key, value]) => ({ key, value, kind: "variable" }));
   for (const key of secrets) {
@@ -122,7 +138,7 @@ function diffEnvironment(current, desired) {
 
 // ---------- deploy commit ----------
 
-function deployCommit(sha) {
+function deployCommit(sha, previous) {
   const dir = mkdtempSync(join(tmpdir(), "dock-deploy-"));
   const indexFile = join(dir, "index");
   const genv = { ...process.env, GIT_INDEX_FILE: indexFile };
@@ -133,7 +149,7 @@ function deployCommit(sha) {
     const blob = run(["hash-object", "-w", "--stdin"], info);
     run(["update-index", "--add", "--cacheinfo", `100644,${blob},web/.build-info.json`]);
     const tree = run(["write-tree"]);
-    return run(["commit-tree", tree, "-p", sha, "-m", `Deploy ${sha.slice(0, 12)} (${ref}) to Aiven Runtime\n\nAdds web/.build-info.json only.`]);
+    return run(["commit-tree", tree, "-p", sha, "-m", `Deploy ${sha.slice(0, 12)} (${ref}) to Aiven Runtime\n\nAdds web/.build-info.json only.\nPrevious: ${previous ?? "unknown"}`]);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -150,7 +166,7 @@ async function health(publicUrl) {
   }
 }
 
-async function waitForCommit(publicUrl, sha, timeoutMs = 15 * 60_000) {
+async function waitForCommit(publicUrl, sha, timeoutMs = 15 * 60_000, startedAfter) {
   const t0 = Date.now();
   let last = "";
   while (Date.now() - t0 < timeoutMs) {
@@ -160,7 +176,7 @@ async function waitForCommit(publicUrl, sha, timeoutMs = 15 * 60_000) {
     const line = `build ${svc.metadata?.application_build_status ?? "?"}, deployment ${svc.metadata?.application_deployment_status ?? "?"}, live commit ${String(live).slice(0, 12)}`;
     if (line !== last) log(`  [${Math.round((Date.now() - t0) / 1000)} s] ${line}`);
     last = line;
-    if (live === sha) return h;
+    if (live === sha && (!startedAfter || (h.startedAt && h.startedAt > startedAfter))) return h;
     if (svc.metadata?.application_build_status === "FAILED") fail("the build failed; see the build log: POST /project/<p>/service/dock-app/logs {\"log_type\":\"application-build\"}");
     await sleep(10_000);
   }
@@ -184,6 +200,28 @@ log(`${SERVICE}: ${svc.state}, ${publicUrl}`);
 
 if (has("--smoke-only")) process.exit(smoke(publicUrl) ? 0 : 1);
 
+const liveBefore = await health(publicUrl);
+
+if (has("--restart")) {
+  // Runtime has no plain restart: a redeploy of the unchanged branch rebuilds the same commit and starts a new container.
+  const sha = liveBefore.version?.commit;
+  if (!sha || sha === "unknown") fail("cannot tell which commit is live (/api/health)");
+  log(`\nRestarting ${SERVICE} (live ${sha.slice(0, 12)}, started ${liveBefore.startedAt})`);
+  if (dryRun) process.exit(0);
+  await api("POST", `/service/${SERVICE}/application/redeploy`);
+  const h = await waitForCommit(publicUrl, sha, 15 * 60_000, liveBefore.startedAt);
+  log(`  restarted: started ${h.startedAt}`);
+  process.exit(smoke(publicUrl, sha) ? 0 : 1);
+}
+
+if (has("--rollback")) {
+  git("fetch", "--quiet", "origin");
+  const prev = /^Previous: ([0-9a-f]{40})$/m.exec(git("log", "-1", "--format=%B", `origin/${DEPLOY_BRANCH}`))?.[1];
+  if (!prev) fail(`origin/${DEPLOY_BRANCH} does not record the previous commit; deploy one by hand: node infra/aiven-deploy.mjs <sha>`);
+  ref = prev;
+  log(`Rolling back to ${prev.slice(0, 12)} (was live before ${String(liveBefore.version?.commit).slice(0, 12)})`);
+}
+
 const app = svc.user_config.application;
 const desiredEnv = desiredEnvironment(publicUrl);
 const changes = diffEnvironment(app.environment_variables ?? [], desiredEnv);
@@ -197,7 +235,8 @@ if (!has("--config-only")) {
   git("fetch", "--quiet", "origin");
   sha = git("rev-parse", "--verify", `${ref}^{commit}`);
   log(`\nDeploying ${ref} = ${sha} (${git("log", "-1", "--format=%s", sha)})`);
-  commit = deployCommit(sha);
+  const previous = liveBefore.version?.commit && liveBefore.version.commit !== "unknown" ? liveBefore.version.commit : undefined;
+  commit = deployCommit(sha, previous === sha ? undefined : previous);
   log(`  deploy commit ${commit.slice(0, 12)} -> branch ${DEPLOY_BRANCH}`);
 }
 const branchChanged = !has("--config-only") && app.source.branch !== DEPLOY_BRANCH;
@@ -239,7 +278,7 @@ if (has("--config-only")) {
 }
 
 log(`\nWaiting for ${sha.slice(0, 12)} to serve at ${publicUrl}/api/health`);
-const h = await waitForCommit(publicUrl, sha);
+const h = await waitForCommit(publicUrl, sha, 15 * 60_000, liveBefore.version?.commit === sha ? liveBefore.startedAt : undefined);
 log(`  live: commit ${h.version.commit.slice(0, 12)}, catalogue ${h.catalog.source} (${h.catalog.products} products)`);
 const ok = smoke(publicUrl, sha);
 log(`\n${ok ? "PASS" : "FAIL"}: ${ref} (${sha.slice(0, 12)}) is live at ${publicUrl}${ok ? " and passed the smoke test" : ", but the smoke test failed"}.`);
