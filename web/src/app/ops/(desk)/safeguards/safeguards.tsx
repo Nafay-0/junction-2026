@@ -126,7 +126,7 @@ function Body({ s }: { s: Safeguards }) {
                         <ViaTag via={c.via} />
                       </p>
                       <p className="mt-0.5">
-                        {c.tried}. <span className="bg-safety px-1 font-semibold text-safety-ink">Stopped: {ruleWord(c, s)}</span>
+                        {fi(c.tried)}. <span className="bg-safety px-1 font-semibold text-safety-ink">Stopped: {ruleWord(c, s)}</span>
                       </p>
                       <p className="mt-0.5 text-ink-soft">
                         {fi(c.reason)}

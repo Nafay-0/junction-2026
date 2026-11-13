@@ -1,6 +1,6 @@
 import type { LedgerEntry } from "@/core/ledger";
 import type { PublicOrder } from "@/core/orders";
-import { amount, attr, clock, day, eur, humanize, roleLabel, shortProduct } from "@/app/_ui/plain";
+import { amount, attr, clock, day, eur, humanize, roleLabel } from "@/app/_ui/plain";
 import { memoryCount, memoryParts, publicReasons } from "./privacy";
 import { ruleTitleOf } from "./rules";
 import type { Via } from "./door";
@@ -88,6 +88,20 @@ export type TraceInput = {
 };
 
 const SENTINEL_STOCK = 999_999;
+
+/** The partner's live problems (core/catalog.ts LiveProblem), in words. */
+const LIVE_PROBLEM: Record<string, string> = {
+  unknown_product: "not in the catalogue",
+  no_price: "no price from the wholesaler",
+  price_not_valid: "price not valid today",
+  sales_block: "blocked from sale",
+  not_deliverable: "cannot be delivered on any date",
+  out_of_stock: "none in stock",
+  stock_unknown: "stock not reported",
+  later_than_requested: "arrives later than asked",
+  cutoff_passed: "order cut-off for that day has passed",
+  unit_mismatch: "stock given in another unit",
+};
 
 const EXCLUSION_BUCKETS: [RegExp, string][] = [
   [/cut-?off|order by|orderby|ordering deadline|too late to order/i, "Order cut-off has passed"],
@@ -214,7 +228,12 @@ function offerNote(o: Record<string, unknown>): { note: string; tone: "plain" | 
 
 export function buildTrace(input: TraceInput): Trace {
   const names = input.names ?? {};
-  const name = (id: string) => (names[id] ? shortProduct(names[id]) : id);
+  // Staff need the exact product: the full name, trimmed, never a brand alone.
+  const name = (id: string) => {
+    const full = names[id];
+    if (!full) return id;
+    return full.length > 64 ? `${full.slice(0, 62).trimEnd()}…` : full;
+  };
   const say = (t: string) => humanize(t, names);
   const entries = [...input.entries].filter((e) => e.requestId === input.requestId).sort((a, b) => a.seq - b.seq);
   const orders = (input.orders ?? []).filter((o) => o.requestId === input.requestId);
@@ -348,7 +367,7 @@ export function buildTrace(input: TraceInput): Trace {
           const rows: ProductRow[] = ids.map((id) => {
             const o = offers.find((x) => x.productId === id);
             const u = unavailable.find((x) => x.productId === id);
-            if (!o) return { id, name: name(id), note: u?.message ? say(u.message) : u?.problems?.length ? `not quotable: ${u.problems.map((p) => p.replaceAll("_", " ")).join(", ")}` : "no offer", tone: "safety" as const };
+            if (!o) return { id, name: name(id), note: u?.problems?.length ? `cannot be quoted: ${u.problems.map((p) => LIVE_PROBLEM[p] ?? p.replaceAll("_", " ")).join("; ")}` : "no offer", tone: "safety" as const };
             const { note, tone } = offerNote(o);
             return { id, name: name(id), note, tone };
           });
@@ -498,7 +517,9 @@ export function buildTrace(input: TraceInput): Trace {
   }
 
   // The order records carry what the ledger alone does not (e.g. a declined order without an entry of its own).
-  const last = orders.slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+  // One request can carry several orders (a refused replay after a committed one): the strongest outcome speaks for it.
+  const PRIORITY = { committed: 0, pending_approval: 1, declined: 2, rejected: 3 } as const;
+  const last = orders.slice().sort((a, b) => PRIORITY[a.status] - PRIORITY[b.status] || b.updatedAt.localeCompare(a.updatedAt))[0];
   const intakeEnd = [...entries].reverse().find((e) => e.type === "intake");
   const lastEntry = entries.at(-1);
   let outcome: TraceOutcome = { kind: "open", label: "Still in progress" };

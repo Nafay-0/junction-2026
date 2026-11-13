@@ -54,7 +54,7 @@ function fileRecords(): Map<string, LicenceRecord> {
   const file = licencesFile();
   let mtime: number;
   try {
-    mtime = statSync(file).mtimeMs;
+    mtime = statSync(/*turbopackIgnore: true*/ file).mtimeMs;
   } catch {
     return new Map();
   }
@@ -62,7 +62,7 @@ function fileRecords(): Map<string, LicenceRecord> {
   if (hit && hit.file === file && hit.mtime === mtime) return hit.byAgent;
   const byAgent = new Map<string, LicenceRecord>();
   try {
-    const parsed = JSON.parse(readFileSync(file, "utf8")) as { licences?: unknown };
+    const parsed = JSON.parse(readFileSync(/*turbopackIgnore: true*/ file, "utf8")) as { licences?: unknown };
     for (const r of Array.isArray(parsed.licences) ? parsed.licences : []) {
       const rec = r as Partial<LicenceRecord>;
       if (typeof rec.agentId === "string" && typeof rec.level === "string") byAgent.set(rec.agentId, { name: rec.level, ...rec } as LicenceRecord);

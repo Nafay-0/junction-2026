@@ -99,7 +99,7 @@ export function Outcome({ kind, label }: { kind: string; label: string }) {
   return (
     <span className={`inline-flex items-center gap-1.5 text-[0.85rem] font-semibold ${safety ? "" : kind === "committed" ? "text-ink" : "text-ink-soft"}`}>
       <Target size={13} tone={safety ? "safety" : kind === "committed" ? "ink" : "hollow"} />
-      <span className={safety ? "bg-safety px-1 text-safety-ink" : ""}>{label}</span>
+      <span>{label}</span>
     </span>
   );
 }

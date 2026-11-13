@@ -12,7 +12,7 @@ import { VIA_LABEL, opsContext, type AgentInfo, type OpsContext } from "./contex
 import type { Via } from "./door";
 import { licenceSource, type LicenceRecord } from "./licences";
 import { disclose, isPrivate, type DisclosedEntry } from "./privacy";
-import { GROUPS, allRules, ruleInfo, ruleTitleOf, type RuleGroup } from "./rules";
+import { GROUPS, RULE_INFO, allRules, ruleInfo, ruleTitleOf, type RuleGroup } from "./rules";
 import { SUSPENSION_RULE, type Suspension } from "./suspensions";
 import { buildTrace, type Trace, type TraceOutcome } from "./trace";
 
@@ -358,7 +358,15 @@ export async function safeguards(rt: Runtime): Promise<Safeguards> {
       recent: mine.slice(0, 3),
     };
   });
-  const groups = GROUPS.map((g) => ({ ...g, rules: rows.filter((r) => r.group === g.id).map(({ group: _g, ...r }) => (void _g, r)) })).filter((g) => g.rules.length);
+  const order = Object.keys(RULE_INFO);
+  const rank = (rule: string) => (order.indexOf(rule) + 1 || order.length + 1);
+  const groups = GROUPS.map((g) => ({
+    ...g,
+    rules: rows
+      .filter((r) => r.group === g.id)
+      .sort((a, b) => rank(a.rule) - rank(b.rule))
+      .map(({ group: _g, ...r }) => (void _g, r)),
+  })).filter((g) => g.rules.length);
 
   // How much the live service was spared: per request, products looked at in master data vs the few priced live.
   let considered = 0;

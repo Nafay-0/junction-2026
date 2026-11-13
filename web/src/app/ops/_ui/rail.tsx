@@ -32,7 +32,9 @@ export function Rail() {
       if (!r.data.signedIn) router.replace(`/ops/enter?next=${encodeURIComponent(location.pathname)}`);
       return r.data;
     },
-    { events: "/api/v1/events", pollMs: 5000, pollMsStreaming: 8000 },
+    // Polling only: the page beside it holds the one event stream, so several open tabs stay within the
+    // browser's six connections per host.
+    { events: null, pollMs: 5000 },
   );
   const s = live.data;
   const active = (href: string) => (href === "/ops" ? path === "/ops" : path.startsWith(href));

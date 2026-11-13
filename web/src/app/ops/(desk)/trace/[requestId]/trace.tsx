@@ -302,7 +302,7 @@ function Station({ s, index, last, state, elapsed, claims, checked, onOpen, ref 
   const future = state === "future";
   const tone = future ? "hollow" : s.tone === "safety" ? "safety" : "ink";
   return (
-    <li ref={ref} className={`relative grid grid-cols-[76px_28px_minmax(0,1fr)] gap-x-2 ${future ? "opacity-45" : ""} ${state === "current" ? "arrive" : ""}`}>
+    <li ref={ref} className={`relative grid grid-cols-[76px_28px_minmax(0,1fr)] gap-x-2 ${future ? "opacity-45" : ""}`}>
       <div className="pt-3 text-right text-[0.78rem] leading-tight tabular text-ink-soft">
         <p className="font-semibold text-ink">{whenSeconds(s.at)}</p>
         <p>+{span(elapsed)}</p>
@@ -385,7 +385,12 @@ function Products({ rows }: { rows: NonNullable<TraceStep["products"]> }) {
       {rows.map((p) => (
         <li key={p.id} className="flex flex-wrap items-baseline justify-between gap-x-4 py-1">
           <span className="font-semibold">{p.name}</span>
-          {p.note && <span className={`text-right ${p.tone === "safety" ? "bg-safety/70 px-1" : "text-ink-soft"}`}>{fi(p.note)}</span>}
+          {p.note && (
+            <span className={`text-right ${p.tone === "safety" ? "text-ink" : "text-ink-soft"}`}>
+              {p.tone === "safety" && <span aria-hidden className="mr-1.5 inline-block h-2 w-2 bg-safety ring-1 ring-ink" />}
+              {fi(p.note)}
+            </span>
+          )}
         </li>
       ))}
     </ul>

@@ -28,7 +28,7 @@ export function ControlScreen() {
 
 function Body({ c, now, refresh }: { c: ControlView; now: number; refresh: () => void }) {
   return (
-    <div className="grid grid-cols-1 gap-x-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+    <div className="grid grid-cols-1 gap-x-6 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
       <div>
         <Section title="Suspend">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
@@ -131,7 +131,7 @@ function Body({ c, now, refresh }: { c: ControlView; now: number; refresh: () =>
                           <span className="bg-safety px-1 font-semibold text-safety-ink">{since(w.requestedAt, now).replace(" ago", "")}</span>
                           <p className="text-[0.78rem] text-ink-soft">since {when(w.requestedAt)}</p>
                         </td>
-                        <td className="whitespace-nowrap px-3 py-2 tabular">
+                        <td className="px-3 py-2 tabular">
                           {held ? (
                             <>
                               <p className={held.expired ? "font-semibold" : ""}>{held.expired ? "Price expired" : held.text}</p>
@@ -238,10 +238,8 @@ function ActiveRow({ s, now, onDone }: { s: Suspension; now: number; onDone: () 
     <li className="border-2 border-ink bg-paper shadow-[inset_6px_0_0_var(--color-safety)]">
       <div className="grid gap-3 px-4 py-3 pl-6 md:grid-cols-[minmax(0,1fr)_auto]">
         <div>
-          <p className="font-display text-[1.1rem] font-bold">
-            {s.label}
-            <span className="ml-2 bg-safety px-1.5 align-middle font-sans text-[0.78rem] font-bold text-safety-ink">{s.scope === "agent" ? "Agent suspended" : "Organisation suspended"}</span>
-          </p>
+          <p className="inline-block bg-safety px-1.5 text-[0.78rem] font-bold text-safety-ink">{s.scope === "agent" ? "Agent suspended" : "Organisation suspended"}</p>
+          <p className="mt-1 font-display text-[1.1rem] font-bold leading-tight">{s.label}</p>
           <p className="mt-0.5 text-[0.9rem]">“{s.reason}”</p>
           <p className="mt-0.5 text-[0.82rem] text-ink-soft tabular">
             By {s.by}, {when(s.at)} ({since(s.at, now)}). {num(s.refusals)} call{s.refusals === 1 ? "" : "s"} refused{s.lastRefusalAt ? `, the last ${since(s.lastRefusalAt, now)}` : ""}.
