@@ -350,8 +350,18 @@ function Station({ s, index, last, state, elapsed, claims, checked, onOpen, ref 
               {s.untouched && <p className="mt-1.5 text-[0.85rem] font-semibold">{s.untouched.replace(/(\d),(\d{3})/g, "$1 $2")}</p>}
               {s.excluded && s.excluded.length > 0 && <Excluded groups={s.excluded} />}
               {s.checks && <Checks checks={s.checks} />}
+              {s.applied && s.applied.length > 0 && (
+                <ul className="mt-1.5 text-[0.86rem]">
+                  {s.applied.map((a, i) => (
+                    <li key={i}>
+                      <b>{fi(a.text)}</b> applied{a.by ? `: stated by ${a.by}` : ""}
+                      {a.at ? ` on ${a.at.length > 10 ? when(a.at) : a.at.split("-").reverse().slice(0, 2).join(".") + "."}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              )}
               {s.memory && s.memory.length > 0 && (
-                <p className="mt-1.5 text-[0.82rem] text-ink-soft">Used the kitchen&apos;s own memory ({s.memory.join("; ")}). What it holds stays with the kitchen.</p>
+                <p className="mt-1.5 text-[0.82rem] text-ink-soft">Also used the kitchen&apos;s own memory ({s.memory.join("; ")}); items the kitchen keeps private are not shown here.</p>
               )}
               {s.claimIds && s.claimIds.length > 0 && <Claims ids={s.claimIds} claims={claims} />}
             </div>

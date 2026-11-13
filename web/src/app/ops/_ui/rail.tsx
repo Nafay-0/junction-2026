@@ -16,6 +16,7 @@ const NAV: { href: string; label: string; what: string; badge?: (s: Session) => 
   { href: "/ops/control", label: "Control", what: "Suspend, resume, waiting sign-offs", badge: (s) => (s.waiting || 0) + (s.suspended || 0) || undefined },
   { href: "/ops/audit", label: "Audit", what: "Orders, exports, verify a receipt" },
   { href: "/ops/agents", label: "Agents", what: "Licences and records" },
+  { href: "/ops/customers", label: "Customers", what: "What the kitchens share with us" },
 ];
 
 /**

@@ -17,6 +17,10 @@ export function memoryParts(e: Pick<LedgerEntry, "type" | "data">): string[] {
   if (typeof d.step === "string" && MEMORY_STEPS.has(d.step)) parts.push("mistake checks against the kitchen's history");
   const reasons = Array.isArray(d.reasons) ? d.reasons : [];
   if (reasons.some((r) => typeof r === "string" && /^From memory:/i.test(r))) parts.push("answers from the kitchen's memory");
+  for (const k of ["applied", "memoryApplied"]) {
+    const v = d[k];
+    if (Array.isArray(v) && v.some((x) => x && typeof x === "object" && ((x as Record<string, unknown>).shared === false || (x as Record<string, unknown>).private === true))) parts.push("items the kitchen keeps private");
+  }
   for (const k of ["preferenceIds", "suspendedPreferenceIds"]) {
     const v = d[k];
     if (Array.isArray(v) && v.length) parts.push("the kitchen's stated rules");

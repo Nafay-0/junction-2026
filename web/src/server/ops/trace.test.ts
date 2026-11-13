@@ -122,3 +122,42 @@ describe("the flow trace", () => {
     ]);
   });
 });
+
+describe("remembered items in the trace", () => {
+  it("shows shared items a step applied, with who stated them, and drops private ones", () => {
+    const entries = [
+      { seq: 0, at: "2026-11-13T10:00:00.000Z", type: "request", actor: "agent:a", requestId: "req_2", summary: "Agent a of Kaari opened a request", data: { text: "milk" }, prevHash: "0", hash: "h0" },
+      {
+        seq: 1,
+        at: "2026-11-13T10:00:01.000Z",
+        type: "intake",
+        actor: "agent:a",
+        requestId: "req_2",
+        summary: "Structured need (milk): milk.",
+        data: {
+          step: "need",
+          need: { item: { text: "milk" } },
+          applied: [
+            { text: "lactose-free", kind: "diet", source: { by: "Sanna Koskinen", at: "2026-11-03" } },
+            { text: "budget habit", shared: false },
+          ],
+        },
+        prevHash: "h0",
+        hash: "h1",
+      },
+    ] as never;
+    const t = buildTrace({ requestId: "req_2", entries });
+    expect(t.steps[1].applied).toEqual([{ text: "lactose-free", kind: "diet", by: "Sanna Koskinen", at: "2026-11-03" }]);
+  });
+});
+
+describe("the audit export's privacy line", () => {
+  it("withholds an entry that carries a private memory item, keeping its hashes", async () => {
+    const { disclose } = await import("./privacy");
+    const e = { seq: 1, at: "x", type: "intake", actor: "a", summary: "s", data: { step: "need", applied: [{ text: "budget habit", shared: false }] }, prevHash: "p", hash: "h" } as never;
+    const out = disclose(e);
+    expect(out.withheld).toBe("kitchen_memory");
+    expect(JSON.stringify(out)).not.toContain("budget habit");
+    expect(out.hash).toBe("h");
+  });
+});

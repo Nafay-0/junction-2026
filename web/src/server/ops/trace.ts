@@ -52,6 +52,8 @@ export type TraceStep = {
   untouched?: string;
   /** Signed claims (vc+jwt) this step issued or rests on, by id: the page fetches and verifies them. */
   claimIds?: string[];
+  /** Remembered items the kitchen shares with the wholesaler that this step applied, with where each came from. */
+  applied?: { text: string; by?: string; at?: string; kind?: string }[];
   /** Named, never shown: which of the kitchen's private memory this step used. */
   memory?: string[];
   ledger: { seq: number; hash: string; prevHash: string; type: string; actor: string; summary: string };
@@ -514,6 +516,8 @@ export function buildTrace(input: TraceInput): Trace {
       default:
         push({ phase: e.type === "control" ? "control" : "other", title: say(e.summary) });
     }
+    const applied = appliedOf(d);
+    if (applied.length && steps.at(-1)?.seq === e.seq) steps[steps.length - 1].applied = applied;
   }
 
   // The order records carry what the ledger alone does not (e.g. a declined order without an entry of its own).
@@ -548,6 +552,26 @@ export function buildTrace(input: TraceInput): Trace {
     priced: priced.size,
     catalogueSize: input.catalogueSize,
   };
+}
+
+/**
+ * Remembered items an intake step applied, when the entry carries them as data (the memory model writes them as
+ * `applied` or `memoryApplied`: { text | label, kind?, shared?, source?: { by, at } }). Items marked private are
+ * dropped here, so they never reach the wholesaler's screens.
+ */
+export function appliedOf(d: Record<string, unknown>): NonNullable<TraceStep["applied"]> {
+  const raw = Array.isArray(d.applied) ? d.applied : Array.isArray(d.memoryApplied) ? d.memoryApplied : [];
+  const out: NonNullable<TraceStep["applied"]> = [];
+  for (const r of raw as Record<string, unknown>[]) {
+    if (!r || r.shared === false || r.private === true) continue;
+    const src = (r.source ?? {}) as Record<string, unknown>;
+    const text = typeof r.text === "string" ? r.text : typeof r.label === "string" ? r.label : undefined;
+    if (!text) continue;
+    const by = typeof src.by === "string" ? src.by : typeof r.by === "string" ? r.by : undefined;
+    const at = typeof src.at === "string" ? src.at : typeof r.at === "string" ? r.at : undefined;
+    out.push({ text, by, at, kind: typeof r.kind === "string" ? r.kind : undefined });
+  }
+  return out;
 }
 
 /** On each live check, say how much of the catalogue the live service never saw (so far, for this request). */
