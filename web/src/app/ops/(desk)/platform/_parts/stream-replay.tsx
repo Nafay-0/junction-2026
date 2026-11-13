@@ -24,11 +24,11 @@ export function StreamReplay({ requestId, currentSeq }: { requestId: string; cur
     else setData(r.data);
   }
   return (
-    <div className="border border-concrete-deep bg-paper px-4 py-3">
-      <h2 className="font-display text-[1.05rem] font-bold">The same steps on the stream</h2>
+    <div className="border-t-[3px] border-petrol bg-paper px-4 py-4">
+      <h2 className="display text-[1.3rem]">The same steps on Kafka</h2>
       {!data ? (
         <>
-          <p className="mt-1 text-[0.86rem] leading-snug">Read this request back from Kafka (topic dock.actions), in order, with each message&apos;s partition and offset.</p>
+          <p className="mt-1 text-[0.88rem] leading-snug text-ink-soft">Read this request back from Kafka (topic dock.actions), in order, with each message&apos;s partition and offset.</p>
           <Button className="mt-2" onClick={load} disabled={busy}>
             {busy ? "Reading from Kafka…" : "Read from the stream"}
           </Button>
@@ -43,7 +43,7 @@ export function StreamReplay({ requestId, currentSeq }: { requestId: string; cur
             {data.messages.map((m) => {
               const on = currentSeq !== undefined && m.event.ledgerSeq === currentSeq;
               return (
-                <li key={`${m.partition}:${m.offset}`} className={`grid grid-cols-[3.6rem_minmax(0,1fr)_2.4rem] gap-1.5 px-1 ${on ? "bg-ink text-paper" : ""}`}>
+                <li key={`${m.partition}:${m.offset}`} className={`grid grid-cols-[3.6rem_minmax(0,1fr)_2.4rem] gap-1.5 px-1 ${on ? "bg-petrol text-paper" : ""}`}>
                   <span className="font-mono">
                     p{m.partition}:{m.offset}
                   </span>
@@ -55,7 +55,7 @@ export function StreamReplay({ requestId, currentSeq }: { requestId: string; cur
               );
             })}
           </ol>
-          <button type="button" onClick={load} className="mt-1 text-[0.78rem] underline underline-offset-2">
+          <button type="button" onClick={load} className="mt-1 text-[0.85rem] font-semibold text-petrol underline underline-offset-2">
             Read again
           </button>
         </>

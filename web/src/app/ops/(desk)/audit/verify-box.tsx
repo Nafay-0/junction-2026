@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { api } from "../../../_client/api";
-import { fi, money, when } from "../../_ui/format";
+import { country, fi, money, when } from "../../_ui/format";
 import { Button, Details, KV, Panel } from "../../_ui/kit";
 import { verifyToken, type TokenCheck } from "../../_ui/verify-client";
 
@@ -23,8 +23,8 @@ export function VerifyBox({ initial = "", title = "Check a receipt or a signed c
   }
 
   return (
-    <Panel className="px-4 py-3">
-      <h2 className="font-display text-[1.15rem] font-bold">{title}</h2>
+    <Panel rule className="px-4 py-4">
+      <h2 className="display text-[1.3rem]">{title}</h2>
       <p className="mt-0.5 text-[0.86rem] text-ink-soft">
         An order confirmation, a fixed-price quote, or a claim about price, availability or origin. Checked here against the keys published at /.well-known/jwks.json, not against this server&apos;s word.
       </p>
@@ -38,9 +38,9 @@ export function VerifyBox({ initial = "", title = "Check a receipt or a signed c
         spellCheck={false}
         placeholder="eyJhbGciOiJFZDI1NTE5Ii… or the JSON holding it"
         aria-label="Receipt or signed claim"
-        className="mt-2 w-full resize-y border border-concrete-deep bg-concrete/40 px-2 py-1.5 font-mono text-[0.75rem] leading-snug"
+        className="mt-2 w-full resize-y border-2 border-line bg-mist px-2 py-1.5 font-mono text-[0.75rem] leading-snug focus:border-petrol focus:outline-none"
       />
-      <Button kind="primary" onClick={run} disabled={busy || !text.trim()} className="mt-1.5">
+      <Button kind="primary" onClick={run} disabled={busy || !text.trim()} className="mt-2">
         {busy ? "Checking…" : "Check signature"}
       </Button>
       {result && <ResultView r={result} />}
@@ -51,9 +51,10 @@ export function VerifyBox({ initial = "", title = "Check a receipt or a signed c
 function ResultView({ r }: { r: TokenCheck & { checkedAt?: number } }) {
   if (!r.ok) {
     return (
-      <div role="status" className="mt-3 border-2 border-ink">
-        <p className="bg-safety px-3 py-1.5 font-display text-[1.05rem] font-bold text-safety-ink">Does not verify</p>
-        <p className="px-3 py-2 text-[0.88rem]">{r.problem}</p>
+      <div role="status" className="mt-3 bg-safety-ink text-paper">
+        <div aria-hidden className="hazard h-2" />
+        <p className="display px-3 pt-2 text-[1.3rem] text-safety">Does not verify</p>
+        <p className="px-3 pb-2.5 text-[0.92rem]">{r.problem}</p>
       </div>
     );
   }
@@ -61,8 +62,11 @@ function ResultView({ r }: { r: TokenCheck & { checkedAt?: number } }) {
   const exp = typeof p.exp === "number" ? p.exp * 1000 : typeof p.validUntil === "string" ? Date.parse(p.validUntil) : undefined;
   const expired = exp !== undefined && r.checkedAt !== undefined && exp < r.checkedAt;
   return (
-    <div role="status" className="mt-3 border-2 border-ink">
-      <p className="bg-ink px-3 py-1.5 font-display text-[1.05rem] font-bold text-paper">
+    <div role="status" className="mt-3 border-2 border-petrol">
+      <p className="flex items-center gap-2 bg-petrol px-3 py-1.5 text-[1.02rem] font-semibold text-paper">
+        <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden className="shrink-0">
+          <path d="M2.5 7.2 L5.6 10.2 L11.6 3.6" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="square" />
+        </svg>
         Valid {r.kind.toLowerCase()}, signed by the wholesaler
         {r.by === "server" && <span className="ml-2 font-sans text-[0.78rem] font-normal">(checked by the server: this browser has no Ed25519)</span>}
       </p>
@@ -76,7 +80,7 @@ function ResultView({ r }: { r: TokenCheck & { checkedAt?: number } }) {
             {r.anchor.matches === true
               ? `It anchors the ledger at entry ${r.anchor.seq}, and the ledger still holds that entry with the same hash: nothing before it was rewritten.`
               : r.anchor.matches === false
-                ? <span className="bg-safety px-1 font-semibold text-safety-ink">It anchors entry {r.anchor.seq}, but the ledger here no longer matches that hash.</span>
+                ? <span className="bg-safety-ink px-1.5 font-semibold text-safety">It anchors entry {r.anchor.seq}, but the ledger here no longer matches that hash.</span>
                 : `It anchors the ledger at entry ${r.anchor.seq}.`}
           </p>
         )}
@@ -131,9 +135,9 @@ function ClaimLines({ p }: { p: Record<string, unknown> }) {
     <>
       <p>
         About product <b>{String(subject.productId ?? p.sub)}</b>:{" "}
-        {price && `${money(price.unitPriceCents)} per ${price.per ?? "pack"}`}
-        {av && `delivery ${av.deliveryDate ?? "?"}${av.orderBy ? `, order by ${when(av.orderBy)}` : ""}${av.cutoffPassed ? ", cut-off passed" : ""}, stock ${av.stock?.known ? `${av.stock.packs} packs` : "not reported"}`}
-        {origin && `origin ${origin.countryOfOrigin ?? "not stated"}${origin.brand ? `, brand ${origin.brand}` : ""}`}.
+        {price && fi(`${money(price.unitPriceCents)} per ${price.per ?? "pack"}`)}
+        {av && `delivery ${av.deliveryDate ? fi(av.deliveryDate) : "not stated"}${av.orderBy ? `, order by ${when(av.orderBy)}` : ""}${av.cutoffPassed ? ", cut-off passed" : ""}, stock ${av.stock?.known ? `${av.stock.packs} packs` : "not reported"}`}
+        {origin && `origin ${origin.countryOfOrigin ? country(origin.countryOfOrigin) : "not stated"}${origin.brand ? `, brand ${origin.brand}` : ""}`}.
       </p>
       <p className="text-ink-soft">
         Observed {ev && typeof ev.observedAt === "string" ? when(ev.observedAt) : "?"} from {fi(String(ev?.source ?? "?"))}

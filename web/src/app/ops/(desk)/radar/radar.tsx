@@ -5,6 +5,7 @@ import type { HoldCard, NoticeCard, RadarView } from "@/server/radar/views";
 import { api } from "../../../_client/api";
 import { fi, num, since, span, when } from "../../_ui/format";
 import { Button, Details, Empty, LoadError, Loading, PageHead, Panel, Section, useNow, useOps } from "../../_ui/kit";
+import { Target } from "../../../_ui/target";
 
 type Evidence = { value: string; sentence?: string; verified: boolean; english?: string };
 
@@ -26,7 +27,7 @@ export function RadarScreen() {
     <>
       <PageHead
         title="Recall radar"
-        purpose="Watches food authorities and producers on the open web for recalls, reads each notice into facts with the sentences they came from, matches them against the assortment in code, and holds a product an authority names before any agent can order it. Doubtful matches wait for a person."
+        purpose="Is anything we sell being recalled? The radar reads food authorities' recall notices on the open web, keeps each fact with the sentence it came from, matches them against the assortment in code, and holds a product an authority names before any agent can order it. Doubtful matches wait for a person."
         right={v && now && fi1?.lastCheckAt ? <span className="tabular">Ruokavirasto checked {since(fi1.lastCheckAt, now)}</span> : undefined}
       />
       <LoadError message={live.error} />
@@ -40,10 +41,10 @@ function Body({ v, now, refresh }: { v: RadarView; now: number; refresh: () => v
   const realHolds = v.holds.filter((h) => !h.drill);
   return (
     <>
-      <Panel className="mt-4 grid grid-cols-2 divide-concrete sm:grid-cols-3 xl:grid-cols-6 xl:divide-x">
+      <Panel rule className="grid grid-cols-2 divide-line/70 sm:grid-cols-3 xl:grid-cols-6 xl:divide-x">
         <Tile n={num(v.stats.read)} label={`real notices read since ${fiDate(v.stats.window)}`} />
         <Tile n={num(v.stats.matchedAny)} label="matched anything in the assortment" sub={`${v.stats.confirmed} on a hard identifier, ${v.stats.possible} possible`} />
-        <Tile n={num(v.stats.holds)} label="real products on hold" safety={v.stats.holds > 0} sub={drillHolds.length ? `and ${drillHolds.length} drill hold${drillHolds.length > 1 ? "s" : ""}` : undefined} />
+        <Tile n={num(v.stats.holds)} label="real products on hold" gate={v.stats.holds > 0} sub={drillHolds.length ? `and ${drillHolds.length} drill hold${drillHolds.length > 1 ? "s" : ""}` : undefined} />
         <Tile n={num(v.stats.review)} label="matches waiting for a person" safety={v.stats.review > 0} />
         <Tile n={num(v.spend.contextDevCredits)} label="Context.dev credits used" sub={`${num(v.spend.contextDevCalls)} reads${v.spend.contextDevRemaining !== undefined ? `, ${num(v.spend.contextDevRemaining)} left on the account` : ""}`} />
         <Tile n={`$${v.spend.exaDollars.toFixed(3)}`} label="Exa spent" sub={`${num(v.spend.exaCalls)} searches since ${when(v.spend.since, new Date(now))}`} />
@@ -98,15 +99,15 @@ function Body({ v, now, refresh }: { v: RadarView; now: number; refresh: () => v
   );
 }
 
-function Tile({ n, label, sub, safety }: { n: ReactNode; label: string; sub?: string; safety?: boolean }) {
+function Tile({ n, label, sub, safety, gate }: { n: ReactNode; label: string; sub?: string; safety?: boolean; gate?: boolean }) {
   return (
-    <div className="min-w-0 border-b border-concrete px-4 py-3 xl:border-b-0">
-      <p className="flex items-center gap-2 font-display text-[1.8rem] font-bold leading-none tabular">
-        {n}
-        {safety && <span aria-hidden className="inline-block h-2.5 w-2.5 bg-safety ring-1 ring-ink" />}
+    <div className="min-w-0 border-b border-line/70 px-4 py-3 xl:border-b-0">
+      <p className="display flex items-center gap-2 text-[2.1rem] leading-none tabular">
+        {gate ? <span className="bg-safety-ink px-1.5 text-safety">{n}</span> : n}
+        {safety && <span aria-hidden className="hazard-thin inline-block size-3.5" />}
       </p>
-      <p className="mt-1 text-[0.82rem] leading-snug text-ink-soft">{label}</p>
-      {sub && <p className="text-[0.78rem] text-ink-soft">{sub}</p>}
+      <p className="mt-1 text-[0.88rem] leading-snug text-ink-soft">{label}</p>
+      {sub && <p className="text-[0.82rem] text-ink-soft">{sub}</p>}
     </div>
   );
 }
@@ -138,17 +139,20 @@ function DrillSection({ v, now, refresh }: { v: RadarView; now: number; refresh:
   }
   return (
     <Section title="Drill" aside="Never a real recall">
-      <div className="border-2 border-ink bg-paper">
-        <div className="bg-ink px-4 py-1.5 text-[0.8rem] font-bold uppercase tracking-wide text-chalk">Drill: test notice on Dock&apos;s own page</div>
+      <div className="bg-paper">
+        <div className="flex items-center gap-2 bg-petrol-deep px-4 py-2 text-[0.92rem] font-semibold text-paper">
+          <span aria-hidden className="size-2.5 border-2 border-paper" />
+          A drill: a test notice on Dock&apos;s own page, never a real recall
+        </div>
         <div className="px-4 py-3">
-          <p className="text-[0.88rem] text-ink-soft">
-            Publishes a notice marked HARJOITUS / DRILL on <a className="underline" href={v.partners.drillUrl} target="_blank" rel="noreferrer">Dock&apos;s drill page</a>, in the authority&apos;s layout. The radar picks it up through the same reader and matching as a real notice ({v.partners.drillReadVia === "context.dev" ? "read by Context.dev from the public address" : "read directly: Context.dev cannot reach this server's own address; set RADAR_PUBLIC_URL to a public one"}), and holds the product. Then try to order it.
+          <p className="text-[0.92rem] leading-snug text-ink-soft">
+            Publishes a notice marked “Harjoitus / Drill” on <a className="underline" href={v.partners.drillUrl} target="_blank" rel="noreferrer">Dock&apos;s drill page</a>, in the authority&apos;s layout. The radar picks it up through the same reader and matching as a real notice ({v.partners.drillReadVia === "context.dev" ? "read by Context.dev from the public address" : "read directly: Context.dev cannot reach this server's own address; set RADAR_PUBLIC_URL to a public one"}), and holds the product. Then try to order it.
           </p>
           {v.drill.active.length === 0 && (
             <div className="mt-2 flex flex-wrap items-end gap-2">
-              <label className="min-w-0 flex-1 text-[0.82rem] font-semibold">
-                Product
-                <select value={chosen} onChange={(e) => setProductId(e.target.value)} className="mt-0.5 block w-full border border-concrete-deep bg-paper px-2 py-1.5 text-[0.88rem] font-normal">
+              <label className="min-w-0 flex-1 text-[0.88rem] font-semibold">
+                Product to recall in the drill
+                <select value={chosen} onChange={(e) => setProductId(e.target.value)} className="mt-1 block min-h-11 w-full border-2 border-line bg-paper px-2 text-[0.95rem] font-normal focus:border-petrol">
                   {v.drill.candidates.map((c) => (
                     <option key={c.productId} value={c.productId}>
                       {c.name}: {c.why}
@@ -156,25 +160,34 @@ function DrillSection({ v, now, refresh }: { v: RadarView; now: number; refresh:
                   ))}
                 </select>
               </label>
-              <Button kind="stop" onClick={publish} disabled={busy || !chosen}>
+              <Button kind="primary" size="md" onClick={publish} disabled={busy || !chosen}>
                 {busy ? "Publishing…" : "Publish drill notice"}
               </Button>
             </div>
           )}
           {v.drill.active.map((d) => (
-            <div key={d.drillId} className="mt-2">
-              <p className="font-semibold">DRILL: {d.productName}</p>
-              <ol className="mt-1 grid grid-cols-2 gap-1 text-[0.85rem] sm:grid-cols-4">
-                <Step label="Published" value={when(d.publishedAt, new Date(now))} done />
-                <Step label="Picked up" value={d.secondsToPickUp !== undefined ? `+${span(d.secondsToPickUp * 1000)}` : "waiting…"} done={d.secondsToPickUp !== undefined} />
-                <Step label="Product held" value={d.secondsToHold !== undefined ? `+${span(d.secondsToHold * 1000)}` : "…"} done={d.secondsToHold !== undefined} />
-                <Step label="Order stopped" value={d.secondsToRefusal !== undefined ? `+${span(d.secondsToRefusal * 1000)}` : "try to order it"} done={d.secondsToRefusal !== undefined} />
+            <div key={d.drillId} className="mt-3">
+              <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-2">
+                <p className="basis-full text-[0.95rem]">
+                  <span className="text-ink-soft">Drill recall of</span> <b>{d.productName}</b>
+                </p>
+                {/* The stopwatch: from the notice going up to the first refused order. */}
+                <p className="basis-full">
+                  <span className="block text-[0.82rem] text-ink-soft">{d.secondsToRefusal !== undefined ? "Notice to stopped order" : "Since the notice went up"}</span>
+                  <span className="display text-[2.6rem] leading-none tabular">{d.secondsToRefusal !== undefined ? span(d.secondsToRefusal * 1000) : span(now - Date.parse(d.publishedAt))}</span>
+                </p>
+              </div>
+              <ol className="mt-2 grid grid-cols-2 gap-1 sm:grid-cols-4">
+                <Step n={1} label="Published" value={when(d.publishedAt, new Date(now))} done />
+                <Step n={2} label="Picked up by the radar" value={d.secondsToPickUp !== undefined ? `+${span(d.secondsToPickUp * 1000)}` : "waiting…"} done={d.secondsToPickUp !== undefined} />
+                <Step n={3} label="Product held" value={d.secondsToHold !== undefined ? `+${span(d.secondsToHold * 1000)}` : "…"} done={d.secondsToHold !== undefined} tone="gate" />
+                <Step n={4} label="An order stopped" value={d.secondsToRefusal !== undefined ? `+${span(d.secondsToRefusal * 1000)}` : "try to order it"} done={d.secondsToRefusal !== undefined} tone="gate" />
               </ol>
-              <p className="mt-1.5 flex flex-wrap gap-3 text-[0.85rem]">
-                <a href={d.url} target="_blank" rel="noreferrer" className="underline">
+              <p className="mt-2 flex flex-wrap gap-4 text-[0.92rem] font-semibold text-petrol">
+                <a href={d.url} target="_blank" rel="noreferrer" className="underline underline-offset-2">
                   Open the drill notice
                 </a>
-                <button type="button" className="underline" onClick={() => void end(d.drillId)}>
+                <button type="button" className="underline underline-offset-2" onClick={() => void end(d.drillId)}>
                   End drill and lift its hold
                 </button>
               </p>
@@ -187,11 +200,14 @@ function DrillSection({ v, now, refresh }: { v: RadarView; now: number; refresh:
   );
 }
 
-function Step({ label, value, done }: { label: string; value: string; done?: boolean }) {
+function Step({ n, label, value, done, tone = "plain" }: { n: number; label: string; value: string; done?: boolean; tone?: "plain" | "gate" }) {
+  const look = !done ? "border-2 border-dashed border-line text-ink-soft" : tone === "gate" ? "bg-safety-ink text-paper" : "bg-petrol text-paper";
   return (
-    <li className={`border px-2 py-1 ${done ? "border-ink" : "border-dashed border-concrete-deep text-ink-soft"}`}>
-      <span className="block text-[0.72rem] uppercase tracking-wide text-ink-soft">{label}</span>
-      <span className="font-semibold tabular">{value}</span>
+    <li className={`px-3 py-2 ${look}`}>
+      <span className={`block text-[0.82rem] ${done ? (tone === "gate" ? "text-safety" : "text-paper/80") : ""}`}>
+        {n}. {label}
+      </span>
+      <span className="display text-[1.3rem] leading-tight tabular">{value}</span>
     </li>
   );
 }
@@ -209,17 +225,20 @@ function HoldRow({ h, now, refresh }: { h: HoldCard; now: number; refresh: () =>
     refresh();
   }
   return (
-    <li className="border-2 border-ink bg-paper">
-      <div aria-hidden className="hazard-thin h-2" />
+    <li className="bg-paper">
+      <div aria-hidden className="hazard h-2.5" />
       <div className="px-4 py-3">
-        {h.drill && <span className="mb-1 inline-block bg-ink px-1.5 text-[0.75rem] font-bold uppercase text-chalk">Drill</span>}
-        <p className="font-display text-[1.1rem] font-bold leading-tight">{h.productName}</p>
+        <p className="flex items-center gap-2 text-[0.88rem] font-semibold">
+          <Target size={16} tone="safety" />
+          {h.drill ? "Held for a drill" : "Held: no quote, no order"}
+        </p>
+        <p className="display mt-1 text-[1.4rem] leading-tight">{h.productName}</p>
         <p className="mt-0.5 text-[0.9rem]">{h.reason}</p>
-        <p className="mt-1 text-[0.82rem] text-ink-soft">
+        <p className="mt-1 text-[0.88rem] text-ink-soft">
           Held {when(h.placedAt, new Date(now))} by {h.placedBy === "radar" ? "the radar (confirmed identifier)" : h.placedBy.replace(/^operator:/, "")}. {h.refusals} call{h.refusals === 1 ? "" : "s"} refused
           {h.lastRefusalAt ? `, last ${since(h.lastRefusalAt, now)}` : ""}.{" "}
-          <a href={h.noticeUrl} target="_blank" rel="noreferrer" className="underline">
-            Notice
+          <a href={h.noticeUrl} target="_blank" rel="noreferrer" className="font-semibold text-petrol underline underline-offset-2">
+            Read the notice
           </a>
         </p>
         {h.orders.length > 0 && (
@@ -233,7 +252,7 @@ function HoldRow({ h, now, refresh }: { h: HoldCard; now: number; refresh: () =>
           </ul>
         )}
         <form onSubmit={lift} className="mt-2 flex flex-wrap gap-2">
-          <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why lift it (stock checked: other batch…)" className="min-w-0 flex-1 border border-concrete-deep px-2 py-1 text-[0.85rem]" />
+          <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why lift it (stock checked: other batch…)" aria-label="Why lift the hold" className="min-h-10 min-w-0 flex-1 border-2 border-line px-2 text-[0.92rem] focus:border-petrol focus:outline-none" />
           <Button type="submit" disabled={!reason.trim()}>
             Lift hold
           </Button>
@@ -256,10 +275,10 @@ function ReviewRow({ m, refresh }: { m: RadarView["review"][number]; refresh: ()
     refresh();
   }
   return (
-    <li className="border border-ink bg-paper px-4 py-3">
-      <p className="text-[0.78rem] font-semibold uppercase tracking-wide text-ink-soft">
-        {m.drill ? "Drill · " : ""}
-        {m.strength === "confirmed" ? "Confirmed identifier, older notice" : "Possible match"}
+    <li className="border-l-[10px] border-safety bg-paper px-4 py-3">
+      <p className="text-[0.88rem] font-semibold text-ink-soft">
+        {m.drill ? "Drill, " : ""}
+        {m.strength === "confirmed" ? "a confirmed identifier on an older notice" : "a possible match"}: a person decides
       </p>
       <p className="font-semibold">{m.productName}</p>
       <p className="text-[0.88rem]">
@@ -268,7 +287,7 @@ function ReviewRow({ m, refresh }: { m: RadarView["review"][number]; refresh: ()
       <p className="mt-1 text-[0.85rem] text-ink-soft">{m.why}</p>
       {m.reviewReason && <p className="text-[0.85rem] text-ink-soft">{m.reviewReason}</p>}
       <div className="mt-2 flex flex-wrap gap-2">
-        <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (written to the ledger)" className="min-w-0 flex-1 border border-concrete-deep px-2 py-1 text-[0.85rem]" />
+        <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (written to the ledger)" aria-label="Reason" className="min-h-10 min-w-0 flex-1 border-2 border-line px-2 text-[0.92rem] focus:border-petrol focus:outline-none" />
         <Button kind="stop" disabled={!reason.trim()} onClick={() => void decide("confirm")}>
           Confirm and hold
         </Button>
@@ -276,7 +295,7 @@ function ReviewRow({ m, refresh }: { m: RadarView["review"][number]; refresh: ()
           Dismiss
         </Button>
       </div>
-      <a href={m.notice.url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[0.85rem] underline">
+      <a href={m.notice.url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-[0.9rem] font-semibold text-petrol underline underline-offset-2">
         Open the notice
       </a>
       <Msg m={msg} />
@@ -296,27 +315,30 @@ function SourcesSection({ v, now, refresh }: { v: RadarView; now: number; refres
   }
   return (
     <Section title="Sources" aside="Checked on a schedule; Context.dev watches the authority's list between checks">
-      <Panel>
-        <ul className="divide-y divide-concrete">
+      <Panel rule>
+        <ul className="divide-y divide-line/70">
           {v.sources.map((s) => (
             <li key={s.id} className="px-4 py-3">
               <div className="flex flex-wrap items-baseline justify-between gap-x-3">
                 <p className="font-semibold">
-                  {s.drill && <span className="mr-1 bg-ink px-1 text-[0.72rem] font-bold uppercase text-chalk">Drill</span>}
-                  <a href={s.homeUrl} target="_blank" rel="noreferrer" className="underline decoration-concrete-deep underline-offset-2">
+                  {s.drill && <span className="mr-1.5 border border-petrol px-1 text-[0.78rem] font-semibold text-petrol">Drill page</span>}
+                  <a href={s.homeUrl} target="_blank" rel="noreferrer" className="underline decoration-line underline-offset-2">
                     {s.name}
                   </a>
                 </p>
-                <span className={`text-[0.82rem] font-semibold ${s.status === "ok" ? "" : "bg-concrete px-1"}`}>{STATUS[s.status] ?? s.status}</span>
+                <span className={`inline-flex items-center gap-1.5 text-[0.88rem] font-semibold ${s.status === "ok" ? "text-petrol" : "text-ink"}`}>
+                  <span aria-hidden className={`size-2.5 ${s.status === "ok" ? "bg-petrol" : s.status === "down" || s.status === "layout_changed" ? "bg-ink" : "border-2 border-ink-soft"}`} />
+                  {STATUS[s.status] ?? s.status}
+                </span>
               </div>
               <p className="text-[0.8rem] text-ink-soft">
-                {s.publisher} · {LANG[s.language]}
-                {s.independent ? "" : " · same authority, other language"}
+                {s.publisher}, in {LANG[s.language]}
+                {s.independent ? "" : ", the same authority in another language"}
               </p>
               <p className="mt-1 text-[0.85rem] tabular">
                 Last checked {since(s.lastCheckAt, now)}
                 {s.lastCheckAt && s.nextCheckAt && !s.drill ? `, next ${Date.parse(s.nextCheckAt) > now ? `in ${span(Date.parse(s.nextCheckAt) - now)}` : "now"}` : ""}
-                {s.listed !== undefined ? ` · ${num(s.listed)} listed` : ""} · {num(s.noticesRead)} read
+                {s.listed !== undefined ? `; ${num(s.listed)} listed` : ""}; {num(s.noticesRead)} read
               </p>
               {s.monitor && (
                 <p className="text-[0.82rem] text-ink-soft tabular">
@@ -327,7 +349,7 @@ function SourcesSection({ v, now, refresh }: { v: RadarView; now: number; refres
               )}
               {s.lastError && <p className="mt-1 text-[0.82rem]">{s.lastError}</p>}
               <p className="mt-1 text-[0.8rem] text-ink-soft">{s.about}</p>
-              <button type="button" disabled={busy === s.id} onClick={() => void check(s.id)} className="mt-1 text-[0.82rem] font-semibold underline disabled:opacity-50">
+              <button type="button" disabled={busy === s.id} onClick={() => void check(s.id)} className="mt-1 text-[0.88rem] font-semibold text-petrol underline underline-offset-2 disabled:opacity-50">
                 {busy === s.id ? "Checking…" : "Check now"}
               </button>
             </li>
@@ -355,7 +377,7 @@ function NoticesSection({ v, now }: { v: RadarView; now: number }) {
     <Section title="Notices" aside={<span className="tabular">Newest first</span>}>
       <div className="mb-2 flex flex-wrap gap-1">
         {tabs.map(([id, label]) => (
-          <button key={id} type="button" onClick={() => setFilter(id)} aria-pressed={filter === id} className={`px-2.5 py-1 text-[0.85rem] font-semibold ${filter === id ? "bg-ink text-paper" : "bg-paper ring-1 ring-concrete-deep"}`}>
+          <button key={id} type="button" onClick={() => setFilter(id)} aria-pressed={filter === id} className={`min-h-9 px-3 text-[0.9rem] font-semibold ${filter === id ? "bg-petrol text-paper" : "border-2 border-line bg-paper hover:border-petrol"}`}>
             {label}
           </button>
         ))}
@@ -379,7 +401,7 @@ function Said({ label, e }: { label: string; e?: Evidence }) {
   if (!e) return null;
   return (
     <div className="mt-1.5">
-      <p className="text-[0.75rem] font-semibold uppercase tracking-wide text-ink-soft">{label}</p>
+      <p className="text-[0.82rem] font-semibold text-ink-soft">{label}</p>
       <p className="text-[0.9rem]">“{e.sentence ?? e.value}”</p>
       {e.english && <p className="text-[0.82rem] text-ink-soft">{e.english}</p>}
       {!e.verified && <p className="text-[0.75rem] font-semibold">Not found verbatim on the page: not used for matching.</p>}
@@ -389,13 +411,13 @@ function Said({ label, e }: { label: string; e?: Evidence }) {
 
 function NoticeRow({ n, now }: { n: NoticeCard; now: number }) {
   return (
-    <li className={`bg-paper px-4 py-3 ${n.drill ? "border-2 border-ink" : n.matches.length ? "border border-ink" : "border border-concrete-deep"}`}>
-      {n.drill && <p className="mb-1 inline-block bg-ink px-1.5 text-[0.75rem] font-bold uppercase text-chalk">Drill: not a real recall</p>}
-      <p className="text-[0.8rem] text-ink-soft">
-        {n.publisher} · {fiDate(n.publishedOn)} · seen {when(n.seenAt, new Date(now))} · {LANG[n.language] ?? n.language}
-        {n.readBy ? ` · read by ${n.readBy}` : ""}
+    <li className={`bg-paper px-4 py-3 ${n.matches.length ? "border-t-[3px] border-petrol" : ""}`}>
+      {n.drill && <p className="mb-1 inline-block border border-petrol px-1.5 text-[0.82rem] font-semibold text-petrol">Drill, not a real recall</p>}
+      <p className="text-[0.85rem] text-ink-soft">
+        {n.publisher}, {fiDate(n.publishedOn)}, in {LANG[n.language] ?? n.language}; seen {when(n.seenAt, new Date(now))}
+        {n.readBy ? `, read by ${n.readBy}` : ""}
       </p>
-      <a href={n.url} target="_blank" rel="noreferrer" className="font-display text-[1.05rem] font-bold leading-tight underline decoration-concrete-deep underline-offset-2" lang={n.language}>
+      <a href={n.url} target="_blank" rel="noreferrer" className="display mt-0.5 block text-[1.25rem] leading-tight underline decoration-line underline-offset-2" lang={n.language}>
         {n.title}
       </a>
       {n.state === "unreadable" && <p className="mt-1 text-[0.85rem]">Could not be read: {n.readError}. Retried on the next check.</p>}
@@ -413,8 +435,8 @@ function NoticeRow({ n, now }: { n: NoticeCard; now: number }) {
             <li key={i}>
               <span lang={n.language}>{p.name.value}</span>
               {p.pack && !p.name.value.includes(p.pack) ? `, ${p.pack}` : ""}
-              {p.eans.length ? <span className="text-ink-soft tabular"> · EAN {p.eans.join(", ")}</span> : null}
-              {p.lots ? <span className="text-ink-soft"> · {p.lots}</span> : null}
+              {p.eans.length ? <span className="text-ink-soft tabular">, EAN {p.eans.join(", ")}</span> : null}
+              {p.lots ? <span className="text-ink-soft">, {p.lots}</span> : null}
             </li>
           ))}
           {n.products.length > 6 && <li className="text-ink-soft">and {n.products.length - 6} more</li>}
@@ -423,7 +445,7 @@ function NoticeRow({ n, now }: { n: NoticeCard; now: number }) {
       {n.matches.length > 0 && (
         <ul className="mt-2 space-y-1">
           {n.matches.map((m) => (
-            <li key={m.matchId} className="border-l-4 border-ink pl-2 text-[0.85rem]">
+            <li key={m.matchId} className="border-l-4 border-petrol pl-2 text-[0.9rem]">
               <span className="font-semibold">{m.productName}</span>: {m.strength === "confirmed" ? "confirmed" : "possible"} ({m.status.replaceAll("_", " ")}). {fi(m.why)}
               {m.reviewReason && m.status === "confirmed" ? <span className="block text-ink-soft">{m.reviewReason}</span> : null}
               {m.review ? <span className="block text-ink-soft">{m.review.decision === "confirm" ? "Confirmed" : "Dismissed"} by {m.review.by}: “{m.review.reason}”</span> : null}
@@ -431,7 +453,7 @@ function NoticeRow({ n, now }: { n: NoticeCard; now: number }) {
           ))}
         </ul>
       )}
-      {n.feed && <p className="mt-1 text-[0.8rem] text-ink-soft">RASFF {n.feed.reference} · {n.feed.classification} · countries {n.feed.countries.join(", ")}</p>}
+      {n.feed && <p className="mt-1 text-[0.85rem] text-ink-soft">RASFF {n.feed.reference}, {n.feed.classification}; countries {n.feed.countries.join(", ")}</p>}
       <Details summary="What the notice says, in its own words" className="mt-2">
         <div className="font-sans text-[0.85rem] text-ink" lang={n.language}>
           <Said label="Hazard" e={n.hazard?.text} />
@@ -444,7 +466,7 @@ function NoticeRow({ n, now }: { n: NoticeCard; now: number }) {
         </div>
       </Details>
       {(n.corroboration.length > 0 || n.sameAs.length > 0) && (
-        <p className="mt-1.5 flex flex-wrap gap-x-3 text-[0.82rem]">
+        <p className="mt-1.5 flex flex-wrap gap-x-3 text-[0.88rem] text-petrol">
           {n.sameAs.map((x) => (
             <a key={x.noticeId} href={x.url} target="_blank" rel="noreferrer" className="underline">
               {LANG[x.language]} version

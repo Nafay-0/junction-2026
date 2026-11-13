@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { LagReport, StreamMessage } from "@/server/aiven/showcase/stream";
 import { api } from "../../../../_client/api";
+import { clockSeconds } from "../../../../_ui/plain";
+import { fi } from "../../../_ui/format";
 import { LoadError, PageHead, Panel, Section } from "../../../_ui/kit";
 import { Mono, PlatformTabs, Status } from "../_parts/parts";
 
@@ -56,18 +58,19 @@ export function StreamView() {
       <LoadError message={error} />
       <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <Panel>
-          <div className="flex items-center justify-between border-b border-concrete px-4 py-2">
-            <p className="text-[0.86rem]">
+          <div className="flex items-center justify-between border-b border-line/70 border-t-[3px] border-t-petrol px-4 py-2.5">
+            <p className="flex items-center gap-2 text-[0.92rem]">
+              {!paused && <span aria-hidden className="breathe size-2.5 bg-petrol" />}
               <b>Live tail</b> <span className="text-ink-soft">newest first, {msgs.length} shown{warming ? ", joining the topic…" : ""}</span>
             </p>
-            <button type="button" onClick={() => setPaused((p) => !p)} className="text-[0.84rem] font-semibold underline underline-offset-2">
+            <button type="button" onClick={() => setPaused((p) => !p)} className="text-[0.9rem] font-semibold text-petrol underline underline-offset-2">
               {paused ? "Resume" : "Pause"}
             </button>
           </div>
-          <ol className="max-h-[70vh] divide-y divide-concrete overflow-y-auto">
+          <ol className="max-h-[70vh] divide-y divide-line/60 overflow-y-auto">
             {newest.map((m) => (
-              <li key={`${m.partition}:${m.offset}`} className={`grid grid-cols-[5.2rem_4.5rem_minmax(0,1fr)] gap-2 px-4 py-1.5 text-[0.82rem] ${m.kind === "gate.refused" ? "shadow-[inset_4px_0_0_var(--color-safety)]" : ""}`}>
-                <span className="tabular text-ink-soft">{m.timestamp.slice(11, 23)}</span>
+              <li key={`${m.partition}:${m.offset}`} className={`grid grid-cols-[5.2rem_4.5rem_minmax(0,1fr)] gap-2 px-4 py-1.5 text-[0.88rem] ${m.kind === "gate.refused" ? "shadow-[inset_6px_0_0_var(--color-safety-ink)]" : ""}`}>
+                <span className="tabular text-ink-soft">{clockSeconds(m.timestamp)}</span>
                 <span className="font-mono text-[0.74rem] text-ink-soft" title="partition : offset">
                   p{m.partition}:{m.offset}
                 </span>
@@ -76,11 +79,11 @@ export function StreamView() {
                   {m.event.rule && <span className="ml-1.5 font-mono text-[0.74rem]">{m.event.rule}</span>}
                   {m.event.agentId && <span className="ml-1.5 text-ink-soft">{m.event.agentId}</span>}
                   {m.event.requestId && (
-                    <Link href={`/ops/trace/${m.event.requestId}`} className="ml-1.5 font-mono text-[0.72rem] underline decoration-concrete-deep underline-offset-2">
+                    <Link href={`/ops/trace/${m.event.requestId}`} className="ml-1.5 font-mono text-[0.76rem] text-petrol underline decoration-line underline-offset-2">
                       {m.event.requestId}
                     </Link>
                   )}
-                  {m.event.summary && <span className="block truncate text-[0.78rem] text-ink-soft">{m.event.summary}</span>}
+                  {m.event.summary && <span className="block truncate text-[0.84rem] text-ink-soft">{fi(m.event.summary)}</span>}
                 </span>
               </li>
             ))}
@@ -88,8 +91,8 @@ export function StreamView() {
           </ol>
         </Panel>
         <aside className="space-y-3">
-          <Panel className="px-4 py-3">
-            <h2 className="font-display text-[1.05rem] font-bold">Consumer lag</h2>
+          <Panel rule className="px-4 py-4">
+            <h2 className="display text-[1.3rem]">Consumer lag</h2>
             {lag ? (
               <>
                 <p className="mt-1 flex items-center gap-2 text-[0.9rem]">
@@ -98,7 +101,7 @@ export function StreamView() {
                 </p>
                 <table className="mt-2 w-full text-[0.82rem] tabular">
                   <thead>
-                    <tr className="border-b border-ink text-left">
+                    <tr className="border-b-2 border-petrol text-left text-ink-soft">
                       <th className="py-1">partition</th>
                       <th>end</th>
                       <th>committed</th>
@@ -107,7 +110,7 @@ export function StreamView() {
                   </thead>
                   <tbody>
                     {lag.partitions.map((p) => (
-                      <tr key={p.partition} className="border-b border-concrete">
+                      <tr key={p.partition} className="border-b border-line/70">
                         <td className="py-1">{p.partition}</td>
                         <td>{p.end}</td>
                         <td>{p.committed ?? "–"}</td>
@@ -124,8 +127,8 @@ export function StreamView() {
               <p className="mt-1 text-[0.86rem] text-ink-soft">Reading offsets…</p>
             )}
           </Panel>
-          <Panel className="px-4 py-3 text-[0.84rem] leading-snug">
-            <h2 className="font-display text-[1.05rem] font-bold">Replay from the stream</h2>
+          <Panel rule className="px-4 py-4 text-[0.92rem] leading-snug">
+            <h2 className="display text-[1.3rem]">Replay from the stream</h2>
             <p className="mt-1">
               The trace view reads a request&apos;s events back from Kafka in order, with each message&apos;s partition and offset beside its step (<Mono>/ops-api/platform/stream/request/&lt;id&gt;</Mono>). Any partition can also be read by offset range: <Mono>/ops-api/platform/stream/range?partition=1&amp;from=0&amp;to=50</Mono>.
             </p>

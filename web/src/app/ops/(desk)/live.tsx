@@ -2,10 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import type { Overview } from "@/server/ops/views";
 import { Target } from "../../_ui/target";
 import { VIA, fi, money, num, since, when, whenSeconds, type Via } from "../_ui/format";
-import { DoorGlyph, Empty, Licence, LoadError, Loading, Outcome, PageHead, Panel, Section, ViaTag, useNow, useOps } from "../_ui/kit";
+import { DoorGlyph, Empty, Licence, LiveMark, LoadError, Loading, Outcome, PageHead, Section, ViaTag, useNow, useOps } from "../_ui/kit";
+import { Table } from "../_ui/parts";
+import { FilterBar, useUrlState } from "../_ui/filters";
 
 const DOORS: Via[] = ["onsite", "mcp", "rest"];
 
@@ -17,8 +20,8 @@ export function LiveView() {
     <>
       <PageHead
         title="Live at the gate"
-        purpose="Every purchasing agent at the door right now, whichever door it came through. All three doors lead to one gate: the same mandate check, the same rules in plain code, the same ledger."
-        right={o && <span className="tabular">{live.streaming ? "Live" : "Polling"}, updated {whenSeconds(o.at)}</span>}
+        purpose="Who is at the door right now, and what happened to what they asked for. Three doors, one gate: every agent meets the same mandate check, the same rules in plain code and the same ledger."
+        right={o && <LiveMark at={whenSeconds(o.at)} error={live.error} />}
       />
       <LoadError message={live.error} />
       {!o ? <Loading /> : <Body o={o} now={now ?? Date.parse(o.at)} />}
@@ -30,111 +33,84 @@ function Body({ o, now }: { o: Overview; now: number }) {
   const c = o.counters;
   return (
     <>
-      <Section title="Three doors, one gate" aside={o.catalogue.kind === "valio" ? `Partner catalogue, ${num(o.catalogue.products)} products` : `Seed catalogue, ${num(o.catalogue.products)} products`}>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          {DOORS.map((v) => (
-            <div key={v} className="relative">
-              <Panel className="px-4 py-3">
-                <p className="flex items-center gap-2 font-display text-[1.15rem] font-bold">
-                  <DoorGlyph via={v} size={12} />
-                  {VIA[v].label}
-                </p>
-                <p className="mt-0.5 text-[0.82rem] text-ink-soft">{VIA[v].how}</p>
-                <p className="mt-2 text-[0.88rem] tabular">
-                  <b>{o.doors[v].agents}</b> agent{o.doors[v].agents === 1 ? "" : "s"}, <b>{num(o.doors[v].calls)}</b> calls
-                  {o.doors[v].refused > 0 && (
-                    <>
-                      , <span className="bg-safety px-1 font-semibold text-safety-ink">{o.doors[v].refused} refused at the door</span>
-                    </>
-                  )}
-                </p>
-              </Panel>
-              <span aria-hidden className="absolute left-1/2 top-full hidden h-3 w-0.5 -translate-x-1/2 bg-ink md:block" />
-            </div>
-          ))}
-        </div>
-        <div className="mt-3 border-2 border-ink bg-ink text-paper">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-2.5">
-            <p className="flex items-center gap-2 font-display text-[1.2rem] font-bold">
-              <Target size={20} tone="chalk" /> The gate
-            </p>
-            <p className="text-[0.88rem] text-chalk-soft">Mandate signature, then every rule, then a named person above the mandate. The model is never trusted.</p>
-            <p className="ml-auto text-[0.85rem] text-chalk-soft">
-              {o.chain.ok ? `Ledger intact, ${num(o.chain.length)} entries` : <span className="bg-safety px-1 font-semibold text-safety-ink">Ledger chain broken: {o.chain.message}</span>}
-            </p>
-          </div>
-          <div className="grid grid-cols-2 border-t border-steel-3 bg-paper text-ink sm:grid-cols-3 xl:grid-cols-6">
-            <Cell n={c.requests} label="Requests" />
-            <Cell n={c.byAgentAlone} label="Committed by the agent alone" />
-            <Cell n={c.byPerson} label="Committed after a person signed off" />
-            <Cell n={c.waiting} label="Waiting for a customer's sign-off" safety={c.waiting > 0} href="/ops/control" />
-            <Cell n={c.refused} label="Refused, each with a named rule" safety={c.refused > 0} href="/ops/safeguards" />
-            <Cell n={c.liveCalls} label="Calls to the live price service" href="/ops/safeguards#live" />
-          </div>
-        </div>
-      </Section>
+      <DoorsToGate o={o} />
 
-      <Section title="At the door now" aside={`Agents seen in the last 30 minutes${c.suspended ? `, ${c.suspended} suspension${c.suspended > 1 ? "s" : ""} in force` : ""}`}>
+      <Section title="At the door now" aside={`Agents seen in the last 30 minutes${c.suspended ? `; ${c.suspended} suspension${c.suspended > 1 ? "s" : ""} in force` : ""}`}>
         {o.atDoor.length === 0 ? (
-          <Empty title="No agent at the door">
-            Nothing has called in the last 30 minutes. Open a kitchen (<Link className="underline" href="/k/kaari">/k/kaari</Link>), scan the join code on the wall, or point an MCP client at <code>/api/mcp</code>.
+          <Empty
+            title="No agent at the door"
+            action={
+              <>
+                <Link className="font-semibold text-petrol underline underline-offset-2" href="/k/kaari">
+                  Open Ravintola Kaari&apos;s shop
+                </Link>
+                <Link className="font-semibold text-petrol underline underline-offset-2" href="/">
+                  Show the wall&apos;s join code
+                </Link>
+              </>
+            }
+          >
+            Nothing has called in the last 30 minutes. An agent appears here the moment it connects, whether it is a kitchen&apos;s own agent, an outside agent over MCP at <code>/api/mcp</code>, or a program over REST.
           </Empty>
         ) : (
-          <Panel className="overflow-x-auto">
-            <table className="w-full min-w-[920px] text-left text-[0.88rem]">
-              <thead className="border-b border-concrete-deep text-[0.78rem] text-ink-soft">
-                <tr>
-                  <th className="px-3 py-2 font-semibold">Agent</th>
-                  <th className="px-3 py-2 font-semibold">Door</th>
-                  <th className="px-3 py-2 font-semibold">Licence</th>
-                  <th className="px-3 py-2 font-semibold">Doing now</th>
-                  <th className="px-3 py-2 text-right font-semibold">Calls</th>
-                  <th className="px-3 py-2 font-semibold">Last call</th>
+          <Table label="Agents at the door">
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th>Door</th>
+                <th>Licence</th>
+                <th>Doing now</th>
+                <th className="text-right">Calls</th>
+                <th>Last call</th>
+              </tr>
+            </thead>
+            <tbody>
+              {o.atDoor.map((a) => (
+                <tr key={a.agentId}>
+                  <td>
+                    <p className="font-semibold">{a.agentLabel === a.agentId ? "An unnamed agent" : a.agentLabel}</p>
+                    <p className="text-[0.85rem] text-ink-soft">{a.orgName}</p>
+                  </td>
+                  <td>
+                    {a.vias.map((v) => (
+                      <ViaTag key={v} via={v} className="mr-3 block" />
+                    ))}
+                  </td>
+                  <td>
+                    <Licence licence={a.licence} />
+                  </td>
+                  <td className="max-w-[38ch]">
+                    {a.suspended ? (
+                      <p className="flex items-start gap-2">
+                        <span aria-hidden className="hazard-thin mt-1 size-3.5 shrink-0" />
+                        <span>
+                          <b>Suspended{a.suspended.scope === "org" ? " with its organisation" : ""}</b> since {when(a.suspended.since)}: <span className="text-ink-soft">“{a.suspended.reason}”</span>{" "}
+                          <Link href="/ops/control" className="font-semibold text-petrol underline underline-offset-2">
+                            Control
+                          </Link>
+                        </span>
+                      </p>
+                    ) : a.current ? (
+                      <Link href={`/ops/trace/${a.current.requestId}`} className="text-petrol underline decoration-line underline-offset-2 hover:decoration-petrol">
+                        {fi(a.current.doing)}
+                      </Link>
+                    ) : (
+                      <span className="text-ink-soft">Connected, no request yet</span>
+                    )}
+                  </td>
+                  <td className="text-right tabular">
+                    {num(a.calls)}
+                    {a.refused > 0 && <span className="ml-2 whitespace-nowrap bg-safety-ink px-1.5 text-[0.8rem] font-semibold text-safety">{a.refused} refused</span>}
+                  </td>
+                  <td className="whitespace-nowrap text-ink-soft tabular">{since(a.lastAt, now)}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {o.atDoor.map((a) => (
-                  <tr key={a.agentId} className="border-b border-concrete last:border-0 align-top">
-                    <td className="px-3 py-2">
-                      <p className="font-semibold">{a.agentLabel}</p>
-                      <p className="text-[0.8rem] text-ink-soft">{a.orgName}</p>
-                    </td>
-                    <td className="px-3 py-2">
-                      {a.vias.map((v) => (
-                        <ViaTag key={v} via={v} className="mr-3 block" />
-                      ))}
-                    </td>
-                    <td className="px-3 py-2">
-                      <Licence licence={a.licence} />
-                    </td>
-                    <td className="max-w-[34ch] px-3 py-2">
-                      {a.suspended ? (
-                        <p>
-                          <span className="bg-safety px-1 font-semibold text-safety-ink">Suspended{a.suspended.scope === "org" ? " with its organisation" : ""}</span>{" "}
-                          <span className="text-ink-soft">since {when(a.suspended.since)}: “{a.suspended.reason}”</span>
-                        </p>
-                      ) : a.current ? (
-                        <Link href={`/ops/trace/${a.current.requestId}`} className="underline decoration-concrete-deep underline-offset-2 hover:decoration-ink">
-                          {fi(a.current.doing)}
-                        </Link>
-                      ) : (
-                        <span className="text-ink-soft">Connected, no request yet</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular">
-                      {num(a.calls)}
-                      {a.refused > 0 && <span className="ml-1 bg-safety px-1 text-[0.8rem] font-semibold text-safety-ink">{a.refused} refused</span>}
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-2 tabular text-ink-soft">{since(a.lastAt, now)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Panel>
+              ))}
+            </tbody>
+          </Table>
         )}
       </Section>
 
-      <Section title="Requests" aside="Newest first. Open one to replay it step by step.">
+      <Section title="Requests" aside="Newest first. Open one to replay it station by station.">
         {o.sessions.length === 0 ? (
           <Empty title="No request yet">When an agent asks for something, it appears here with where it is and how it ended.</Empty>
         ) : (
@@ -145,78 +121,199 @@ function Body({ o, now }: { o: Overview; now: number }) {
   );
 }
 
-function Cell({ n, label, safety = false, href }: { n: number; label: string; safety?: boolean; href?: string }) {
-  const body = (
-    <>
-      <p className="flex items-center gap-2 font-display text-[1.9rem] font-bold leading-none tabular">
-        {num(n)}
-        {safety && <span aria-hidden className="inline-block h-2.5 w-2.5 bg-safety ring-1 ring-ink" />}
-      </p>
-      <p className="mt-1 text-[0.8rem] leading-snug text-ink-soft">{label}</p>
-    </>
-  );
-  const cls = "block border-concrete-deep px-4 py-3 [&:not(:last-child)]:border-r";
-  return href ? (
-    <Link href={href} className={`${cls} hover:bg-concrete`}>
-      {body}
-    </Link>
-  ) : (
-    <div className={cls}>{body}</div>
+// ---------- three doors, one gate ----------
+
+/** Remembers a number and says, for a moment, that it went up: a door that was just used lights its path. */
+function useBumped(n: number, ms = 1600): boolean {
+  const prev = useRef(n);
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    if (n > prev.current) {
+      queueMicrotask(() => setOn(true));
+      const t = setTimeout(() => setOn(false), ms);
+      prev.current = n;
+      return () => clearTimeout(t);
+    }
+    prev.current = n;
+  }, [n, ms]);
+  return on;
+}
+
+/**
+ * The diagram: three doors on the left, one gate in the middle, what came out on the right. Lines carry the calls;
+ * a door that was just used lights its line, so a judge sees an outside agent arrive at the same gate.
+ */
+function DoorsToGate({ o }: { o: Overview }) {
+  const c = o.counters;
+  const lit = { onsite: useBumped(o.doors.onsite.calls), mcp: useBumped(o.doors.mcp.calls), rest: useBumped(o.doors.rest.calls) };
+  const outs: { n: number; label: string; tone: "plain" | "person" | "gate"; href: string }[] = [
+    { n: c.byAgentAlone, label: "Bought by the agent alone, inside its mandate", tone: "plain", href: "/ops/audit" },
+    { n: c.byPerson, label: "Bought after a named person signed off", tone: "plain", href: "/ops/audit" },
+    { n: c.waiting, label: "Waiting for a person to sign off", tone: c.waiting ? "person" : "plain", href: "/ops/control#waiting" },
+    { n: c.refused, label: "Refused, each with the rule that refused it", tone: c.refused ? "gate" : "plain", href: "/ops/safeguards" },
+  ];
+  const doorY = [50, 150, 250];
+  const outY = [37.5, 112.5, 187.5, 262.5];
+  return (
+    <section aria-labelledby="doors" className="bg-paper">
+      <div aria-hidden className="h-[3px] bg-petrol" />
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 px-5 pt-4">
+        <h2 id="doors" className="display text-[1.6rem]">
+          Three doors, one gate
+        </h2>
+        <p className="text-[0.88rem] text-ink-soft">
+          {num(c.requests)} requests so far; {num(c.liveCalls)} calls to the live price service; {o.catalogue.kind === "valio" ? `the partner's catalogue, ${num(o.catalogue.products)} products` : `the seed catalogue, ${num(o.catalogue.products)} products`}
+        </p>
+      </div>
+      <div className="grid gap-y-4 px-5 pb-5 pt-4 lg:grid-cols-[minmax(0,1fr)_72px_minmax(0,0.9fr)_72px_minmax(0,1fr)] lg:gap-y-0">
+        {/* doors */}
+        <ul className="grid grid-rows-3 gap-2">
+          {DOORS.map((v) => {
+            const d = o.doors[v];
+            return (
+              <li key={v} className={`flex items-center gap-3 border-2 px-3 py-2.5 transition-colors motion-reduce:transition-none ${lit[v] ? "border-petrol bg-petrol-soft" : "border-line"}`}>
+                <span className="flex size-10 shrink-0 items-center justify-center bg-mist text-petrol">
+                  <DoorGlyph via={v} size={18} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-semibold leading-tight">{VIA[v].label}</span>
+                  <span className="block text-[0.84rem] leading-tight text-ink-soft">{VIA[v].how}</span>
+                </span>
+                <span className="shrink-0 text-right tabular">
+                  <span className="display block text-[1.6rem] leading-none">{num(d.calls)}</span>
+                  <span className="block text-[0.78rem] text-ink-soft">
+                    calls, {d.agents} agent{d.agents === 1 ? "" : "s"}
+                  </span>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+        <svg viewBox="0 0 72 300" preserveAspectRatio="none" aria-hidden className="hidden h-full w-full lg:block">
+          {DOORS.map((v, i) => (
+            <path key={v} d={`M0 ${doorY[i]} C 40 ${doorY[i]}, 32 150, 72 150`} fill="none" stroke={lit[v] ? "var(--color-petrol)" : "var(--color-line)"} strokeWidth={lit[v] ? 5 : Math.max(2, Math.min(6, 1 + Math.log2(1 + o.doors[v].calls)))} vectorEffect="non-scaling-stroke" />
+          ))}
+        </svg>
+        {/* the gate */}
+        <div className="on-dark flex flex-col justify-center bg-petrol-deep text-paper">
+          <div aria-hidden className="hazard h-2.5" />
+          <div className="px-5 py-4">
+            <p className="flex items-center gap-2.5">
+              <Target size={30} tone="chalk" />
+              <span className="display text-[2rem] leading-none">The gate</span>
+            </p>
+            <ol className="mt-3 space-y-1 text-[0.92rem] leading-snug text-paper/90">
+              <li>The mandate the kitchen signed, checked at the door.</li>
+              <li>Every rule, in plain code, on the exact order.</li>
+              <li>Above the mandate, a named person on their phone.</li>
+            </ol>
+            <p className="mt-3 flex items-center gap-2 text-[0.88rem]">
+              <Target size={14} tone={o.chain.ok ? "chalk" : "safety"} />
+              {o.chain.ok ? `Ledger intact, ${num(o.chain.length)} entries` : `Ledger chain broken: ${o.chain.message}`}
+            </p>
+          </div>
+          <div aria-hidden className="hazard h-2.5" />
+        </div>
+        <svg viewBox="0 0 72 300" preserveAspectRatio="none" aria-hidden className="hidden h-full w-full lg:block">
+          {outs.map((x, i) => (
+            <path key={x.label} d={`M0 150 C 40 150, 32 ${outY[i]}, 72 ${outY[i]}`} fill="none" stroke={x.tone === "gate" ? "var(--color-safety-ink)" : x.tone === "person" ? "var(--color-safety)" : "var(--color-line)"} strokeWidth={Math.max(2, Math.min(6, 1 + Math.log2(1 + x.n)))} vectorEffect="non-scaling-stroke" />
+          ))}
+        </svg>
+        {/* what came out */}
+        <ul className="grid grid-rows-4 gap-2">
+          {outs.map((x) => (
+            <li key={x.label}>
+              <Link
+                href={x.href}
+                className={`flex h-full items-center gap-3 px-3 py-2 ${x.tone === "gate" ? "bg-safety-ink text-paper hover:bg-ink" : x.tone === "person" ? "border-l-[8px] border-safety bg-mist hover:bg-petrol-soft" : "bg-mist hover:bg-petrol-soft"}`}
+              >
+                <span className={`display w-14 shrink-0 text-right text-[1.9rem] leading-none tabular ${x.tone === "gate" ? "text-safety" : ""}`}>{num(x.n)}</span>
+                <span className="text-[0.92rem] font-semibold leading-snug">{x.label}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
   );
 }
 
+// ---------- requests: search and filter at once, state in the URL ----------
+
+const SHOW = [
+  { id: "all", label: "All" },
+  { id: "committed", label: "Signed" },
+  { id: "waiting", label: "Waiting on a person" },
+  { id: "refused", label: "Refused" },
+  { id: "open", label: "Still moving" },
+] as const;
+
 function Sessions({ rows, now }: { rows: Overview["sessions"]; now: number }) {
   const router = useRouter();
+  const [q, setQ] = useUrlState("q", "");
+  const [show, setShow] = useUrlState("show", "all");
+  const needle = q.trim().toLowerCase();
+  const kindOf = (k: string) => (k === "declined" ? "refused" : k === "cancelled" ? "open" : k);
+  const shown = rows.filter(
+    (r) => (show === "all" || kindOf(r.outcome.kind) === show) && (!needle || `${r.orgName} ${r.agentLabel} ${r.asked} ${r.doing} ${r.outcome.label} ${r.requestId}`.toLowerCase().includes(needle)),
+  );
+  const counts = Object.fromEntries(SHOW.map((s) => [s.id, s.id === "all" ? rows.length : rows.filter((r) => kindOf(r.outcome.kind) === s.id).length]));
   return (
-    <Panel className="overflow-x-auto">
-      <table className="w-full min-w-[1000px] text-left text-[0.88rem]">
-        <thead className="border-b border-concrete-deep text-[0.78rem] text-ink-soft">
-          <tr>
-            <th className="px-3 py-2 font-semibold">Started</th>
-            <th className="px-3 py-2 font-semibold">Kitchen and agent</th>
-            <th className="px-3 py-2 font-semibold">Door</th>
-            <th className="px-3 py-2 font-semibold">Asked</th>
-            <th className="px-3 py-2 font-semibold">Last step</th>
-            <th className="px-3 py-2 font-semibold">Outcome</th>
-            <th className="px-3 py-2 text-right font-semibold">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr
-              key={r.requestId}
-              onClick={() => router.push(`/ops/trace/${r.requestId}`)}
-              className="cursor-pointer border-b border-concrete align-top last:border-0 hover:bg-concrete/60"
-            >
-              <td className="whitespace-nowrap px-3 py-2 tabular">
-                <Link href={`/ops/trace/${r.requestId}`} className="font-semibold underline decoration-concrete-deep underline-offset-2" onClick={(e) => e.stopPropagation()}>
-                  {when(r.startedAt)}
-                </Link>
-                <p className="text-[0.78rem] text-ink-soft">{since(r.lastAt, now)}</p>
-              </td>
-              <td className="px-3 py-2">
-                <p className="font-semibold">{r.orgName}</p>
-                <p className="text-[0.8rem] text-ink-soft">
-                  {r.agentLabel}
-                  {r.suspended && <span className="ml-1 bg-safety px-1 font-semibold text-safety-ink">suspended</span>}
-                </p>
-              </td>
-              <td className="px-3 py-2">
-                <ViaTag via={r.via} />
-                <p className="mt-0.5">
-                  <Licence licence={r.licence} />
-                </p>
-              </td>
-              <td className="max-w-[30ch] px-3 py-2">“{fi(r.asked)}”</td>
-              <td className="max-w-[34ch] px-3 py-2 text-ink-soft">{fi(r.doing)}</td>
-              <td className="px-3 py-2">
-                <Outcome kind={r.outcome.kind} label={fi(r.outcome.label)} />
-              </td>
-              <td className="whitespace-nowrap px-3 py-2 text-right tabular">{r.totalCents !== undefined ? money(r.totalCents) : "–"}</td>
+    <>
+      <FilterBar
+        q={q}
+        setQ={setQ}
+        placeholder="Kitchen, agent, words asked, outcome"
+        options={SHOW.map((s) => ({ id: s.id, label: s.label, count: counts[s.id] }))}
+        value={show}
+        setValue={setShow}
+        result={`${shown.length} of ${rows.length}`}
+      />
+      {shown.length === 0 ? (
+        <Empty title="Nothing matches">Clear the search or choose All to see every request.</Empty>
+      ) : (
+        <Table label="Requests">
+          <thead>
+            <tr>
+              <th>Started</th>
+              <th>Kitchen and agent</th>
+              <th>Door</th>
+              <th>Asked</th>
+              <th>Last step</th>
+              <th>Outcome</th>
+              <th className="text-right">Total</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </Panel>
+          </thead>
+          <tbody>
+            {shown.map((r) => (
+              <tr key={r.requestId} onClick={() => router.push(`/ops/trace/${r.requestId}`)} className="cursor-pointer hover:bg-petrol-soft/50">
+                <td className="whitespace-nowrap tabular">
+                  <Link href={`/ops/trace/${r.requestId}`} className="font-semibold text-petrol underline decoration-line underline-offset-2" onClick={(e) => e.stopPropagation()}>
+                    {when(r.startedAt)}
+                  </Link>
+                  <p className="text-[0.82rem] text-ink-soft">{since(r.lastAt, now)}</p>
+                </td>
+                <td>
+                  <p className="font-semibold">{r.orgName}</p>
+                  <p className="text-[0.85rem] text-ink-soft">
+                    {r.agentLabel}
+                    {r.suspended && <span className="ml-1.5 whitespace-nowrap border border-safety-ink bg-safety px-1 text-[0.78rem] font-semibold text-safety-ink">suspended</span>}
+                  </p>
+                </td>
+                <td>
+                  <ViaTag via={r.via} short />
+                </td>
+                <td className="max-w-[32ch]">“{fi(r.asked)}”</td>
+                <td className="max-w-[34ch] text-ink-soft">{fi(r.doing)}</td>
+                <td className="min-w-[14rem]">
+                  <Outcome kind={r.outcome.kind} label={fi(r.outcome.label)} />
+                </td>
+                <td className="whitespace-nowrap text-right tabular">{r.totalCents !== undefined ? money(r.totalCents) : "–"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      )}
+    </>
   );
 }

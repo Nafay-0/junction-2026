@@ -28,21 +28,23 @@ export function ChainCheck({ onResult, compact = false }: { onResult?: (r: Chain
 
   const res = state.result;
   return (
-    <div className={compact ? "" : "border border-concrete-deep bg-paper px-4 py-3"}>
+    <div className={compact ? "" : "border-t-[3px] border-petrol bg-paper px-4 py-4"}>
+      {!compact && <h2 className="display mb-1 text-[1.3rem]">The ledger&apos;s chain</h2>}
+      {!compact && <p className="mb-2 text-[0.9rem] text-ink-soft">Every entry hashes the one before it. Re-hash the whole chain here, without taking the server&apos;s word for it.</p>}
       <div className="flex flex-wrap items-center gap-3">
         <Button onClick={run} disabled={state.busy}>
           <Target size={14} tone="ink" className={state.busy ? "spin" : ""} />
           {state.busy ? "Checking…" : res ? "Check the chain again" : "Check the chain in this browser"}
         </Button>
         {res && (
-          <p className="text-[0.88rem]" role="status">
+          <p className="text-[0.92rem]" role="status">
             {res.ok ? (
               <>
                 <b>Intact.</b> {num(res.length)} entries followed from the first: {num(res.recomputed)} re-hashed here
                 {res.linked ? `, ${num(res.linked)} checked by link (content kept with the kitchen)` : ""}.
               </>
             ) : (
-              <span className="bg-safety px-1 font-semibold text-safety-ink">Broken at entry {res.brokenAt}: {res.message}</span>
+              <span className="bg-safety-ink px-1.5 font-semibold text-safety">Broken at entry {res.brokenAt}: {res.message}</span>
             )}
           </p>
         )}

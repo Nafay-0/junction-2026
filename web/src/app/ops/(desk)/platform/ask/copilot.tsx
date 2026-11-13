@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { McpStatus } from "@/server/aiven/showcase/aiven-mcp";
 import type { AnswerCard } from "@/server/aiven/showcase/copilot";
 import { api } from "../../../../_client/api";
-import { whenSeconds } from "../../../_ui/format";
+import { fi, whenSeconds } from "../../../_ui/format";
 import { Button, LoadError, PageHead, Panel, useOps } from "../../../_ui/kit";
 import { Mono, PlatformTabs, Rows, Status } from "../_parts/parts";
 
@@ -70,9 +70,9 @@ export function Copilot() {
             <label className="sr-only" htmlFor="copilot-q">
               Question
             </label>
-            <input id="copilot-q" value={q} onChange={(e) => setQ(e.target.value)} maxLength={500} placeholder="How many orders were refused in the last hour, and by which rule?" className="min-w-0 flex-1 border-2 border-ink bg-paper px-3 py-2 text-[1rem]" />
-            <Button type="submit" kind="primary" disabled={busy}>
-              {busy ? "Reading…" : "Ask"}
+            <input id="copilot-q" value={q} onChange={(e) => setQ(e.target.value)} maxLength={500} placeholder="How many orders were refused in the last hour, and by which rule?" className="min-h-12 min-w-0 flex-1 border-2 border-line bg-paper px-3 text-[1.05rem] placeholder:text-ink-soft focus:border-petrol focus:outline-none" />
+            <Button type="submit" kind="go" size="lg" disabled={busy}>
+              {busy ? "Reading…" : "Ask the platform"}
             </Button>
           </form>
           <div className="mt-2 flex flex-wrap gap-1.5">
@@ -84,16 +84,16 @@ export function Copilot() {
                   setQ(s);
                   void ask(s);
                 }}
-                className="border border-concrete-deep bg-paper px-2 py-1 text-left text-[0.8rem] hover:border-ink"
+                className="border-2 border-line bg-paper px-2.5 py-1 text-left text-[0.88rem] hover:border-petrol"
               >
                 {s}
               </button>
             ))}
           </div>
-          {problem && <p className="mt-2 border-l-4 border-safety bg-paper px-3 py-2 text-[0.88rem]">{problem}</p>}
+          {problem && <p role="alert" className="mt-2 border-l-[6px] border-petrol bg-paper px-3 py-2 text-[0.92rem]">{problem}</p>}
           {pinned.length > 0 && (
             <section className="mt-5">
-              <h2 className="font-display text-[1.15rem] font-bold">Pinned</h2>
+              <h2 className="display text-[1.5rem]">Pinned</h2>
               <div className="mt-2 space-y-3">
                 {pinned.map((c) => (
                   <Card key={c.id} c={c} pinned onPin={() => savePins(pinned.filter((p) => p.id !== c.id))} onAgain={() => void ask(c.question)} />
@@ -108,20 +108,20 @@ export function Copilot() {
           </div>
         </div>
         <aside className="space-y-3">
-          <Panel className="px-4 py-3 text-[0.86rem] leading-snug">
-            <h2 className="font-display text-[1.05rem] font-bold">Who answers</h2>
+          <Panel rule className="px-4 py-4 text-[0.92rem] leading-snug">
+            <h2 className="display text-[1.3rem]">Who answers</h2>
             <p className="mt-1.5 flex items-center justify-between gap-2">
               <b>Aiven MCP server</b> <Status ok={m ? (m.orgEnabled === false ? false : m.reachable) : null} label={!m ? "…" : m.orgEnabled === false ? "off" : m.reachable ? `on, ${m.tools} tools` : "not answering"} />
             </p>
             <p className="text-ink-soft">Service state, logs and metrics, with the read-only token. {m?.sql === false && "Its SQL tool needs a PG Editor permission the read-only token lacks, so SQL goes the direct way."}</p>
-            {m?.instruction && <p className="mt-1 bg-safety px-2 py-1 font-semibold text-safety-ink">{m.instruction}</p>}
+            {m?.instruction && <p className="mt-1 border-l-[6px] border-ink bg-mist px-2 py-1 font-semibold">{m.instruction}</p>}
             <p className="mt-2 flex items-center justify-between gap-2">
               <b>Direct read-only path</b> <Status ok={info.data ? info.data.direct : null} label={info.data?.direct ? "configured" : "not configured"} />
             </p>
             <p className="text-ink-soft">PostgreSQL as dock_copilot. The same limits on both paths.</p>
           </Panel>
-          <Panel className="px-4 py-3 text-[0.84rem] leading-snug">
-            <h2 className="font-display text-[1.05rem] font-bold">Hard limits</h2>
+          <Panel rule className="px-4 py-4 text-[0.92rem] leading-snug">
+            <h2 className="display text-[1.3rem]">Hard limits</h2>
             <ul className="mt-1 list-disc space-y-1 pl-4">
               <li>One SELECT at a time; writes, comments, catalogues and file or session functions are refused before anything is sent.</li>
               <li>
@@ -141,31 +141,31 @@ export function Copilot() {
 
 function Card({ c, pinned, onPin, onAgain }: { c: AnswerCard; pinned: boolean; onPin: () => void; onAgain: () => void }) {
   return (
-    <Panel className={c.refused ? "shadow-[inset_4px_0_0_var(--color-safety)]" : ""}>
+    <Panel className={c.refused ? "shadow-[inset_8px_0_0_var(--color-safety-ink)]" : "border-t-[3px] border-petrol"}>
       <div className="flex flex-wrap items-start justify-between gap-2 px-4 pt-3">
-        <p className="text-[0.84rem] text-ink-soft">&ldquo;{c.question}&rdquo;</p>
+        <p className="text-[0.92rem] text-ink-soft">&ldquo;{c.question}&rdquo;</p>
         <div className="flex gap-2">
-          <button type="button" onClick={onAgain} className="text-[0.8rem] underline underline-offset-2">
+          <button type="button" onClick={onAgain} className="text-[0.88rem] text-petrol underline underline-offset-2">
             Ask again
           </button>
-          <button type="button" onClick={onPin} className="text-[0.8rem] font-semibold underline underline-offset-2" aria-pressed={pinned}>
+          <button type="button" onClick={onPin} className="text-[0.88rem] font-semibold text-petrol underline underline-offset-2" aria-pressed={pinned}>
             {pinned ? "Unpin" : "Pin"}
           </button>
         </div>
       </div>
-      <p className={`px-4 pt-1 font-display text-[1.3rem] font-bold leading-snug ${c.answerable ? "" : "text-ink"}`}>{c.answer}</p>
-      <p className="px-4 pt-1 text-[0.78rem] text-ink-soft">
-        <b className="text-ink">{PATH_WORD[c.path]}</b> · {c.pathNote} · {whenSeconds(c.at)}
+      <p className="display px-4 pt-1 text-[1.6rem] leading-[1.1]">{fi(c.answer)}</p>
+      <p className="px-4 pt-1.5 text-[0.85rem] text-ink-soft">
+        <b className="text-ink">{PATH_WORD[c.path]}</b>; {c.pathNote}; {whenSeconds(c.at)}
       </p>
       {c.steps.map((s, i) => (
-        <div key={i} className="mt-2 border-t border-concrete px-4 py-2">
-          <p className="text-[0.78rem] text-ink-soft">
-            <b className="text-ink">{s.label}</b> · {s.kind === "mcp" ? "Aiven MCP tool call" : s.kind === "api" ? "Aiven API" : "SQL"} · {s.path === "aiven-mcp" ? "through Aiven MCP" : "direct"}
-            {s.as ? ` · as ${s.as}` : ""}
-            {s.ms !== undefined ? ` · ${s.ms} ms` : ""}
-            {s.truncated ? " · cut at the row cap" : ""}
+        <div key={i} className="mt-2 border-t border-line/70 px-4 py-2">
+          <p className="text-[0.85rem] text-ink-soft">
+            <b className="text-ink">{s.label}</b>: {s.kind === "mcp" ? "an Aiven MCP tool call" : s.kind === "api" ? "the Aiven API" : "SQL"}, {s.path === "aiven-mcp" ? "through Aiven MCP" : "direct"}
+            {s.as ? `, as ${s.as}` : ""}
+            {s.ms !== undefined ? `, ${s.ms} ms` : ""}
+            {s.truncated ? ", cut at the row cap" : ""}
           </p>
-          <pre className="mt-1 overflow-x-auto whitespace-pre-wrap bg-concrete/60 px-2 py-1.5 font-mono text-[0.74rem] leading-snug">{s.query}</pre>
+          <pre className="mt-1 overflow-x-auto whitespace-pre-wrap bg-mist px-3 py-2 font-mono text-[0.76rem] leading-snug">{s.query}</pre>
           {s.error ? <p className="mt-1 text-[0.84rem] font-semibold">{s.error}</p> : <div className="mt-1.5"><Rows columns={s.columns} rows={s.rows} /></div>}
         </div>
       ))}

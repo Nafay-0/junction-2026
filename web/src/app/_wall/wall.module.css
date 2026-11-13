@@ -1,0 +1,87 @@
+/*
+ * The wall's own motion. Only three things move: the light that runs down the gate post (the gate is checking,
+ * so an idle wall still looks alive), a row that just changed, and the barrier when a refusal lands.
+ * Reduced motion stops all of it.
+ */
+
+.post {
+  position: relative;
+  overflow: hidden;
+}
+
+/* A band of light that runs down the post, over and over: the gate reading its rules. */
+.scan::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 22%;
+  top: -22%;
+  background: linear-gradient(to bottom, transparent, rgb(255 255 255 / 0.55), transparent);
+  animation: scan 3.2s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+@keyframes scan {
+  to {
+    top: 100%;
+  }
+}
+
+/* A row whose state changed: a short wash of the gate's colour or petrol, then back. */
+.moved {
+  animation: moved 1.8s ease-out;
+}
+@keyframes moved {
+  from {
+    background-color: rgb(255 255 255 / 0.14);
+  }
+}
+
+/* The marker slides to its new station. */
+.marker {
+  transition: left 900ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* The barrier: two arms close across the gate when a refusal lands. */
+.armLeft {
+  animation: armLeft 900ms cubic-bezier(0.3, 0.9, 0.3, 1) both;
+}
+.armRight {
+  animation: armRight 900ms cubic-bezier(0.3, 0.9, 0.3, 1) both;
+}
+@keyframes armLeft {
+  from {
+    transform: translateX(-105%);
+  }
+}
+@keyframes armRight {
+  from {
+    transform: translateX(105%);
+  }
+}
+
+/* The rule the gate is reading now: it settles in from above. */
+.rule {
+  animation: rule 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes rule {
+  from {
+    opacity: 0;
+    transform: translateY(-0.35em);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scan::after {
+    animation: none;
+    display: none;
+  }
+  .moved,
+  .armLeft,
+  .armRight,
+  .rule {
+    animation: none;
+  }
+  .marker {
+    transition: none;
+  }
+}

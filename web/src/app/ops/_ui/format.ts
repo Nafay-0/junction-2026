@@ -1,4 +1,4 @@
-import { clock, clockSeconds, day, helsinkiToday } from "../../_ui/plain";
+import { RULE_TITLE, clock, clockSeconds, day, helsinkiToday } from "../../_ui/plain";
 
 /**
  * Finnish conventions for the operations portal: money as 1 280,50 €, dates as ti 17.11. (shown with the English
@@ -20,12 +20,66 @@ export function moneyShort(cents: number | undefined | null): string {
   return cents % 100 === 0 ? `${(cents / 100).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, nbsp)}${nbsp}€` : money(cents);
 }
 
-/** "€1,280.50" and "€500" inside a sentence -> "1 280,50 €", "500 €". Also "12.5 %" -> "12,5 %". */
+/** Codes the core still writes into sentences (mistake checks, attributes), in words. Rule codes use RULE_TITLE. */
+const CODE_WORD: Record<string, string> = {
+  quantity_tenfold: "an amount ten times the usual",
+  quantity_unusual: "an unusual amount",
+  unit_confusion: "a possible unit mix-up",
+  unit_unclear: "an unclear unit",
+  duplicate_recent: "a possible duplicate",
+  delivery_in_past: "a delivery date in the past",
+  delivery_not_delivery_day: "a day without deliveries",
+  delivery_after_cutoff: "a passed order cut-off",
+  contradicts_preference: "a clash with the kitchen's own rules",
+  large_first_order: "a large first order",
+  nothing_to_repeat: "nothing to repeat",
+  lactose_free: "lactose-free",
+  fat_free: "fat-free",
+  fat_1_5: "1,5 % fat",
+  fat_3_5: "3,5 % fat",
+  plant_drink: "plant drinks",
+  needs_human_approval: "sent to a person",
+  auto_approve: "passed",
+  pending_approval: "waiting for sign-off",
+  best_price: "best price",
+  lowest_carbon: "lowest carbon",
+  most_reliable: "most reliable",
+};
+
+/** The partner's unit codes, in words. */
+const UNIT_WORD: Record<string, string> = { ST: "piece", KPL: "piece", KI: "case", PAL: "pallet", KRS: "layer", PS: "bag", RAS: "box", LTR: "L", GRM: "g", KGM: "kg", KG: "kg" };
+
+/** An ISO timestamp anywhere in a sentence, as Helsinki time: "Fri 13.11. 23.24". "+0200" offsets are read too. */
+function isoInText(iso: string): string {
+  const fixed = iso.replace(/([+-]\d{2})(\d{2})$/, "$1:$2");
+  const t = Date.parse(fixed);
+  if (!Number.isFinite(t)) return iso;
+  return `${day(helsinkiToday(new Date(t)))} ${clock(new Date(t))}`;
+}
+
+/**
+ * A sentence the core wrote, made fit for the surface: "€1,280.50" -> "1 280,50 €", "12.5 %" -> "12,5 %",
+ * ISO timestamps -> Helsinki "Fri 13.11. 23.24", "2026-11-16" -> "Mon 16.11.", unit codes ("per ST", "EUR/KI")
+ * -> words, and the partner's placeholder stock amounts (999999 and up) -> "an unreported amount".
+ */
 export function fi(text: string | undefined | null): string {
   if (!text) return "";
   return text
+    .replace(/\b[a-z]+(?:_[a-z0-9]+)+\b/g, (code) => CODE_WORD[code] ?? (RULE_TITLE[code] ? `“${RULE_TITLE[code].toLowerCase()}”` : code))
+    .replace(/\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})/g, isoInText)
+    .replace(/\b(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2})\b/g, (_m, d: string, h: string, mi: string) => `${day(d)} ${h}.${mi}`)
+    .replace(/\b(\d{4}-\d{2}-\d{2})\b/g, (_m, d: string) => day(d))
+    .replace(/\bEUR\s?\/\s?([A-Z]{2,3})\b/g, (_m, u: string) => `€/${UNIT_WORD[u] ?? u.toLowerCase()}`)
+    .replace(/\bper ([A-Z]{2,3})\b/g, (_m, u: string) => `per ${UNIT_WORD[u] ?? u.toLowerCase()}`)
+    .replace(/\b9{6,}\b(?:\s*(?:packs?|pcs|units?))?/g, "an unreported amount")
     .replace(/€(\d{1,3}(?:,\d{3})*)(?:\.(\d{2}))?/g, (_m, w: string, f?: string) => `${w.replaceAll(",", nbsp)}${f ? `,${f}` : ""}${nbsp}€`)
     .replace(/(\d)\.(\d) ?%/g, "$1,$2 %");
+}
+
+/** "Fri 13.11. 23.54" for any timestamp, today or not: for records that must be read later. */
+export function stamp(iso: string | undefined): string {
+  if (!iso) return "–";
+  return `${day(helsinkiToday(new Date(iso)))} ${clock(iso)}`;
 }
 
 export function num(n: number | undefined | null): string {
@@ -83,3 +137,11 @@ export const VIA: Record<Via, { label: string; short: string; how: string }> = {
   mcp: { label: "Outside agent over MCP", short: "MCP", how: "Any company's agent, over the Model Context Protocol" },
   rest: { label: "Outside agent over REST", short: "REST", how: "Any program, over the documented HTTP API" },
 };
+
+const COUNTRY: Record<string, string> = { fi: "Finland", se: "Sweden", ee: "Estonia", de: "Germany", dk: "Denmark", nl: "the Netherlands", no: "Norway", pl: "Poland", lt: "Lithuania", lv: "Latvia", fr: "France", it: "Italy", es: "Spain", be: "Belgium", at: "Austria", gb: "the United Kingdom", ie: "Ireland" };
+
+/** "fi" -> "Finland": the partner writes origin as a country code. */
+export function country(code: string | null | undefined): string {
+  if (!code) return "not stated";
+  return COUNTRY[code.toLowerCase()] ?? code.toUpperCase();
+}

@@ -1,65 +1,105 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { AuditListRow, AuditRecord } from "@/server/ops/views";
+import { buttonClass } from "../../../_ui/kit";
 import { ChainCheck } from "../../_ui/chain";
-import { fi, money, when } from "../../_ui/format";
-import { Details, Empty, KV, LoadError, Loading, PageHead, Panel, Section, useOps } from "../../_ui/kit";
+import { country, fi, money, stamp, when } from "../../_ui/format";
+import { Details, Empty, KV, LoadError, Loading, Outcome, PageHead, Section, useOps } from "../../_ui/kit";
+import { FilterBar, useUrlState } from "../../_ui/filters";
+import { CheckGrid, Stamp, Table } from "../../_ui/parts";
 import { VerifyBox } from "./verify-box";
 
-const STATUS: Record<string, string> = { committed: "Committed", pending_approval: "Waiting for sign-off", rejected: "Refused by the gate", declined: "Declined" };
+const STATUS: Record<string, { label: string; kind: string }> = {
+  committed: { label: "Signed order", kind: "committed" },
+  pending_approval: { label: "Waiting for sign-off", kind: "waiting" },
+  rejected: { label: "Refused by the gate", kind: "refused" },
+  declined: { label: "Declined", kind: "declined" },
+};
+const statusOf = (s: string) => STATUS[s] ?? { label: s.replaceAll("_", " "), kind: "open" };
 
 export function AuditIndex() {
   const live = useOps<{ orders: AuditListRow[] }>("/ops-api/audit", { pollMs: 4000 });
   const rows = live.data?.orders;
+  const router = useRouter();
+  const [q, setQ] = useUrlState("q", "");
+  const [show, setShow] = useUrlState("show", "all");
+  const needle = q.trim().toLowerCase();
+  const shown = (rows ?? []).filter((o) => (show === "all" || o.status === show) && (!needle || `${o.orgName} ${o.agentLabel} ${o.signedBy ?? ""} ${o.orderId} ${statusOf(o.status).label}`.toLowerCase().includes(needle)));
+  const count = (s: string) => (rows ?? []).filter((o) => o.status === s).length;
   return (
     <>
       <PageHead
         title="Audit"
-        purpose="The wholesaler's side of the record: for any order, what was asked, what the wholesaler stated, what was committed and who signed. Exportable, and checkable against the published keys. A kitchen's private memory is not part of it."
+        purpose="Who approved an order, for exactly what, and the proof: for any order, what was asked, what the wholesaler stated, what was committed and who signed, checkable against the published keys. A kitchen's private memory is not part of it."
       />
       <LoadError message={live.error} />
-      <div className="mt-4 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_480px]">
-        <Section title="Orders">
+      <div className="grid grid-cols-1 gap-x-8 xl:grid-cols-[minmax(0,1fr)_440px]">
+        <Section title="Orders" className="mt-2">
           {!rows ? (
-            <Loading />
+            <Loading label="Reading the orders…" />
           ) : rows.length === 0 ? (
-            <Empty title="No order yet">Orders appear here once an agent places one, whether committed, waiting, refused or declined.</Empty>
+            <Empty title="No order yet">Orders appear here once an agent places one, whether signed, waiting, refused or declined.</Empty>
           ) : (
-            <Panel className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-left text-[0.86rem]">
-                <thead className="border-b border-concrete-deep text-[0.76rem] text-ink-soft">
-                  <tr>
-                    <th className="px-3 py-2 font-semibold">Last change</th>
-                    <th className="px-3 py-2 font-semibold">Kitchen</th>
-                    <th className="px-3 py-2 font-semibold">Status</th>
-                    <th className="px-3 py-2 font-semibold">Signed by</th>
-                    <th className="px-3 py-2 text-right font-semibold">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((o) => (
-                    <tr key={o.orderId} className="border-b border-concrete last:border-0">
-                      <td className="whitespace-nowrap px-3 py-2 tabular">
-                        <Link href={`/ops/audit/${o.orderId}`} className="font-semibold underline decoration-concrete-deep underline-offset-2 hover:decoration-ink">
-                          {when(o.at)}
-                        </Link>
-                      </td>
-                      <td className="px-3 py-2">
-                        {o.orgName}
-                        <span className="block text-[0.78rem] text-ink-soft">{o.agentLabel}</span>
-                      </td>
-                      <td className="px-3 py-2">{o.status === "rejected" || o.status === "pending_approval" ? <span className="bg-safety px-1 text-safety-ink">{STATUS[o.status]}</span> : STATUS[o.status] ?? o.status}</td>
-                      <td className="px-3 py-2">{o.signedBy ?? (o.status === "committed" ? "The mandate alone" : "–")}</td>
-                      <td className="whitespace-nowrap px-3 py-2 text-right tabular">{money(o.totalCents)}</td>
+            <>
+              <FilterBar
+                q={q}
+                setQ={setQ}
+                placeholder="Kitchen, agent, who signed, order id"
+                options={[
+                  { id: "all", label: "All", count: rows.length },
+                  { id: "committed", label: "Signed", count: count("committed") },
+                  { id: "pending_approval", label: "Waiting", count: count("pending_approval") },
+                  { id: "rejected", label: "Refused", count: count("rejected") },
+                  { id: "declined", label: "Declined", count: count("declined") },
+                ]}
+                value={show}
+                setValue={setShow}
+                result={`${shown.length} of ${rows.length}`}
+              />
+              {shown.length === 0 ? (
+                <Empty title="Nothing matches">Clear the search or choose All.</Empty>
+              ) : (
+                <Table label="Orders">
+                  <thead>
+                    <tr>
+                      <th>Last change</th>
+                      <th>Kitchen and agent</th>
+                      <th>Outcome</th>
+                      <th>Authorised by</th>
+                      <th className="text-right">Total</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </Panel>
+                  </thead>
+                  <tbody>
+                    {shown.map((o) => {
+                      const st = statusOf(o.status);
+                      return (
+                        <tr key={o.orderId} onClick={() => router.push(`/ops/audit/${o.orderId}`)} className="cursor-pointer hover:bg-petrol-soft/50">
+                          <td className="whitespace-nowrap tabular">
+                            <Link href={`/ops/audit/${o.orderId}`} onClick={(e) => e.stopPropagation()} className="font-semibold text-petrol underline decoration-line underline-offset-2">
+                              {when(o.at)}
+                            </Link>
+                          </td>
+                          <td>
+                            <p className="font-semibold">{o.orgName}</p>
+                            <p className="text-[0.85rem] text-ink-soft">{o.agentLabel}</p>
+                          </td>
+                          <td>
+                            <Outcome kind={st.kind} label={st.label} />
+                          </td>
+                          <td>{o.signedBy ? <b>{o.signedBy}</b> : o.status === "committed" ? <span className="text-ink-soft">The mandate alone</span> : <span className="text-ink-soft">No one yet</span>}</td>
+                          <td className="whitespace-nowrap text-right font-semibold tabular">{money(o.totalCents)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </Table>
+              )}
+            </>
           )}
         </Section>
-        <div className="space-y-4 xl:pt-[2.6rem]">
+        <div className="space-y-4 xl:pt-[4.6rem]">
           <VerifyBox />
           <ChainCheck />
         </div>
@@ -74,159 +114,213 @@ export function AuditOrder({ orderId }: { orderId: string }) {
   if (!a && live.error)
     return (
       <div className="mt-4">
-        <Empty title="This order is not on this server">
-          {live.error} <Link className="underline" href="/ops/audit">All orders</Link>
+        <Empty
+          title="This order is not on this server"
+          action={
+            <Link className="font-semibold text-petrol underline underline-offset-2" href="/ops/audit">
+              All orders
+            </Link>
+          }
+        >
+          {live.error}
         </Empty>
       </div>
     );
-  if (!a) return <Loading />;
+  if (!a) return <Loading label="Reading the order's record…" />;
   const c = a.committed;
+  const st = statusOf(a.order.status);
+  const names = new Map<string, string>();
+  for (const cl of a.claimed) for (const p of cl.products) names.set(p.productId, p.name);
+  for (const l of c.lines) names.set(l.productId, l.name);
+  const hits = c.decision.rules.filter((r) => r.outcome !== "pass");
   return (
     <>
+      <nav aria-label="Breadcrumb" className="text-[0.9rem] text-ink-soft">
+        <Link href="/ops/audit" className="font-semibold text-petrol underline underline-offset-2">
+          Audit
+        </Link>{" "}
+        / One order
+      </nav>
       <PageHead
-        title={`${a.order.orgName}: ${money(a.order.totalCents)}`}
-        purpose={`${STATUS[a.order.status] ?? a.order.status}. Placed ${when(a.order.createdAt)}, last change ${when(a.order.updatedAt)}.`}
+        title={`${a.order.orgName}, ${money(a.order.totalCents)}`}
+        purpose={`Placed ${stamp(a.order.createdAt)}, last change ${stamp(a.order.updatedAt)}, by ${a.order.agentId === "operations" ? "operations" : "its purchasing agent"}.`}
         right={
           <>
-            <Link href={`/ops/trace/${a.order.requestId}`} className="font-semibold text-ink underline underline-offset-2">
-              Trace
+            <Link href={`/ops/trace/${a.order.requestId}`} className="font-semibold text-petrol underline underline-offset-2">
+              Replay the request
             </Link>
-            <a href={`/ops-api/audit/${orderId}?download=1`} download className="bg-ink px-3 py-1.5 font-semibold text-paper hover:bg-ink/90">
-              Export record (JSON)
+            <a href={`/ops-api/audit/${orderId}?download=1`} download className={buttonClass("primary", "sm")}>
+              Export the record (JSON)
             </a>
           </>
         }
       />
       <LoadError message={live.error} />
-      <div className="mt-4 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_460px]">
+
+      {/* The ten-second answer: who, for exactly what, and the proof. */}
+      <section aria-label="Who approved what" className="grid gap-px bg-line lg:grid-cols-3">
+        <div className="bg-paper px-5 py-4">
+          <p className="text-[0.85rem] font-semibold text-ink-soft">Who authorised it</p>
+          <p className="display mt-1 text-[1.7rem] leading-tight">{c.signOff ? c.signOff.name : c.authorisedBy === "the mandate alone" ? "The mandate alone" : c.authorisedBy}</p>
+          {c.signOff ? (
+            <p className="mt-1 text-[0.95rem] leading-snug">
+              {c.signOff.role}, {c.signOff.method === "passkey" ? "with the passkey on their phone" : c.signOff.method === "link_token" ? "through the one-time link sent only to them" : c.signOff.method ? c.signOff.method.replaceAll("_", " ") : "method not recorded"}
+              {c.signOff.at ? `, ${stamp(c.signOff.at)}` : ""}.{" "}
+              <b>{c.signOff.verified ? "Verified by Dock." : c.signOff.verified === false ? "Not verified." : ""}</b>
+            </p>
+          ) : (
+            <p className="mt-1 text-[0.95rem] leading-snug text-ink-soft">{a.order.status === "committed" ? "Inside what the kitchen's signed mandate lets the agent buy alone; no person was needed." : "Nobody has authorised it."}</p>
+          )}
+        </div>
+        <div className="bg-paper px-5 py-4">
+          <p className="text-[0.85rem] font-semibold text-ink-soft">For exactly what</p>
+          <p className="display mt-1 text-[1.7rem] leading-tight tabular">{money(c.totalCents)}</p>
+          <p className="mt-1 text-[0.95rem] leading-snug">
+            {c.lines.length} line{c.lines.length === 1 ? "" : "s"}: {c.lines.map((l) => `${l.quantity} × ${l.name}`).join("; ")}.
+          </p>
+          {c.signOff && <p className="mt-1 text-[0.85rem] text-ink-soft">The sign-off covers this order&apos;s digest: a changed line, price or total would not match.</p>}
+        </div>
+        <div className="bg-paper px-5 py-4">
+          <p className="text-[0.85rem] font-semibold text-ink-soft">Outcome and proof</p>
+          <div className="mt-2">
+            <Stamp kind={st.kind} label={st.label} />
+          </div>
+          <p className="mt-2 text-[0.95rem] leading-snug">
+            {c.confirmation ? "The wholesaler signed the confirmation. Check it below against the published keys, in this browser." : "No signed confirmation: the order was not committed."}
+          </p>
+        </div>
+      </section>
+
+      <div className="mt-2 grid grid-cols-1 gap-x-8 xl:grid-cols-[minmax(0,1fr)_440px]">
         <div>
           <Section title="What was asked">
-            <Panel className="px-4 py-3">
-              <p className="font-display text-[1.25rem] font-bold leading-snug">“{fi(a.asked.text)}”</p>
-              {a.asked.neededBy && <p className="mt-1 text-[0.88rem] text-ink-soft">Needed by {a.asked.neededBy.split("-").reverse().join(".")}</p>}
-            </Panel>
+            <div className="bg-paper px-5 py-4">
+              <p className="max-w-[60ch] border-l-[6px] border-petrol bg-mist px-4 py-3 text-[1.2rem] font-medium leading-snug">“{fi(a.asked.text)}”</p>
+              {a.asked.neededBy && <p className="mt-2 text-[0.92rem] text-ink-soft">Needed by {fi(a.asked.neededBy)}</p>}
+            </div>
           </Section>
 
-          <Section title="What the wholesaler stated" aside="Live price and availability, and where it comes from">
+          <Section title="What the wholesaler stated" aside="Live price and availability at the time, each statement signed">
             {a.claimed.length === 0 ? (
-              <Empty title="No live statement on this request" />
+              <Empty title="No live statement on this request">The price came from an earlier check, or the order was refused before any lookup.</Empty>
             ) : (
-              <Panel>
+              <div className="space-y-3">
                 {a.claimed.map((cl) => (
-                  <div key={cl.seq} className="border-b border-concrete px-4 py-2 last:border-0">
-                    <p className="text-[0.78rem] text-ink-soft">
-                      {when(cl.at)}, ledger entry {cl.seq}
-                    </p>
-                    <ul className="mt-0.5 text-[0.86rem]">
+                  <Table key={cl.seq} label={`Live check at ${stamp(cl.at)}`}>
+                    <thead>
+                      <tr>
+                        <th>Checked {stamp(cl.at)}</th>
+                        <th className="text-right">Price per pack</th>
+                        <th>Stock</th>
+                        <th>Delivery</th>
+                        <th>Origin</th>
+                      </tr>
+                    </thead>
+                    <tbody>
                       {cl.products.map((p) => (
-                        <li key={p.productId} className="flex flex-wrap justify-between gap-x-4 py-0.5">
-                          <span className="font-semibold">{p.name}</span>
-                          <span className="text-ink-soft">
-                            {p.unitPriceCents !== undefined ? `${money(p.unitPriceCents)} per pack` : "no offer"}
-                            {p.availablePacks === null ? ", stock not reported" : p.availablePacks !== undefined ? `, ${p.availablePacks} packs` : ""}
-                            {p.deliveryDate ? `, delivery ${p.deliveryDate.split("-").reverse().slice(0, 2).join(".")}.` : ""}
-                            {p.origin !== undefined ? `, origin ${p.origin ?? "not stated"}` : ""}
-                            {p.claimIds?.length ? `, ${p.claimIds.length} signed claims` : ""}
-                          </span>
-                        </li>
+                        <tr key={p.productId}>
+                          <td className="font-semibold">
+                            {p.name}
+                            {p.claimIds?.length ? <span className="block text-[0.82rem] font-normal text-ink-soft">{p.claimIds.length} signed claims</span> : null}
+                          </td>
+                          <td className="whitespace-nowrap text-right tabular">{p.unitPriceCents !== undefined ? money(p.unitPriceCents) : <span className="text-ink-soft">No offer</span>}</td>
+                          <td>{p.availablePacks === null ? <span className="text-ink-soft">Not reported</span> : p.availablePacks !== undefined ? `${p.availablePacks} packs` : "–"}</td>
+                          <td className="whitespace-nowrap">{p.deliveryDate ? fi(p.deliveryDate) : "–"}</td>
+                          <td>{p.origin !== undefined ? country(p.origin) : "–"}</td>
+                        </tr>
                       ))}
-                    </ul>
-                  </div>
+                    </tbody>
+                  </Table>
                 ))}
-              </Panel>
+              </div>
             )}
-            <p className="mt-2 text-[0.86rem]">{a.signedClaims.note}</p>
+            <p className="mt-2 text-[0.9rem] text-ink-soft">{a.signedClaims.note}</p>
           </Section>
 
           <Section title="What was committed">
-            <Panel>
-              <table className="w-full text-left text-[0.86rem]">
-                <thead className="border-b border-concrete-deep text-[0.76rem] text-ink-soft">
-                  <tr>
-                    <th className="px-3 py-2 font-semibold">Product</th>
-                    <th className="px-3 py-2 text-right font-semibold">Packs</th>
-                    <th className="px-3 py-2 text-right font-semibold">Price</th>
-                    <th className="px-3 py-2 text-right font-semibold">Line</th>
-                    <th className="px-3 py-2 font-semibold">Delivery</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {c.lines.map((l) => (
-                    <tr key={l.productId} className="border-b border-concrete last:border-0">
-                      <td className="px-3 py-1.5">
-                        {l.name}
-                        {l.substituteFor && <span className="block text-[0.78rem] text-ink-soft">substitute for {l.substituteFor}</span>}
-                        {l.countryOfOrigin !== undefined && <span className="block text-[0.78rem] text-ink-soft">origin {l.countryOfOrigin ?? "not stated"}</span>}
-                      </td>
-                      <td className="px-3 py-1.5 text-right tabular">{l.quantity}</td>
-                      <td className="whitespace-nowrap px-3 py-1.5 text-right tabular">{money(l.unitPriceCents)}</td>
-                      <td className="whitespace-nowrap px-3 py-1.5 text-right tabular">{money(l.lineTotalCents)}</td>
-                      <td className="px-3 py-1.5 tabular">{l.deliveryDate.split("-").reverse().slice(0, 2).join(".")}.</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 border-ink font-semibold">
-                    <td className="px-3 py-2" colSpan={3}>
-                      Total
+            <Table label="Committed lines">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th className="text-right">Packs</th>
+                  <th className="text-right">Price</th>
+                  <th className="text-right">Line</th>
+                  <th>Delivery</th>
+                </tr>
+              </thead>
+              <tbody>
+                {c.lines.map((l) => (
+                  <tr key={l.productId}>
+                    <td>
+                      <span className="font-semibold">{l.name}</span>
+                      {l.substituteFor && <span className="block text-[0.85rem] text-ink-soft">A substitute, in place of {names.get(l.substituteFor) ?? "the product asked for"}</span>}
+                      {l.countryOfOrigin !== undefined && <span className="block text-[0.85rem] text-ink-soft">Origin {country(l.countryOfOrigin)}</span>}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2 text-right tabular">{money(c.totalCents)}</td>
-                    <td />
+                    <td className="text-right tabular">{l.quantity}</td>
+                    <td className="whitespace-nowrap text-right tabular">{money(l.unitPriceCents)}</td>
+                    <td className="whitespace-nowrap text-right tabular">{money(l.lineTotalCents)}</td>
+                    <td className="whitespace-nowrap">{fi(l.deliveryDate)}</td>
                   </tr>
-                </tfoot>
-              </table>
-            </Panel>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-ink font-semibold">
+                  <td className="px-3 py-2.5" colSpan={3}>
+                    Total
+                  </td>
+                  <td className="display whitespace-nowrap px-3 py-2.5 text-right text-[1.3rem] tabular">{money(c.totalCents)}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            </Table>
           </Section>
 
-          <Section title="Who signed">
-            <Panel className="px-4 py-3 text-[0.9rem]">
-              <p>
-                Authorised by <b>{c.authorisedBy}</b>.
-              </p>
-              {c.signOff && (
-                <p className="mt-1">
-                  {c.signOff.name} ({c.signOff.role}) signed {c.signOff.at ? when(c.signOff.at) : ""} {c.signOff.method === "passkey" ? "with a passkey on their phone" : c.signOff.method ? `by ${c.signOff.method.replaceAll("_", " ")}` : ""}
-                  {c.signOff.verified === false ? ", not verified" : c.signOff.verified ? ", verified" : ""}. The proof covers exactly this order (digest {c.signOff.orderDigest.slice(0, 12)}…).
-                </p>
-              )}
-              <p className="mt-1">
-                The gate&apos;s decision: {c.decision.rules.filter((r) => r.outcome === "pass").length} of {c.decision.rules.length} checks passed
-                {c.decision.rules.some((r) => r.outcome !== "pass") ? "; " + c.decision.rules.filter((r) => r.outcome !== "pass").map((r) => `${r.title.toLowerCase()} ${r.outcome === "fail" ? "refused" : "needed a person"}`).join(", ") : ""}.
-              </p>
-              {!c.confirmation && <p className="mt-1 text-ink-soft">No signed confirmation: the order was not committed.</p>}
-            </Panel>
+          <Section title="The gate's decision" aside={`${c.decision.rules.length - hits.length} of ${c.decision.rules.length} checks passed`}>
+            <div className="bg-paper px-5 py-4">
+              <CheckGrid checks={c.decision.rules} showPassReasons={false} />
+            </div>
           </Section>
 
           <Section title="The record, as the wholesaler reads it" aside={`${a.ledger.withheld} buyer-side step${a.ledger.withheld === 1 ? "" : "s"} kept with the kitchen`}>
-            <Panel className="px-4 py-3">
-              <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-[0.75rem] leading-relaxed">{fi(a.ledger.explanation.join("\n"))}</pre>
-              <p className="mt-2 text-[0.82rem] text-ink-soft">Not in this record: the kitchen&apos;s order history, the rules it stated and the patterns Dock learned from it. Those entries appear only by number and hash, so the chain still shows no gap.</p>
-            </Panel>
+            <div className="bg-paper px-5 py-4">
+              <ol className="space-y-1.5 text-[0.95rem] leading-snug">
+                {a.ledger.explanation.map((line, i) => (
+                  <li key={i} className="grid grid-cols-[2rem_minmax(0,1fr)] gap-x-2">
+                    <span className="text-right text-ink-soft tabular">{i + 1}</span>
+                    <span>{fi(line)}</span>
+                  </li>
+                ))}
+              </ol>
+              <p className="mt-3 border-t border-line/70 pt-2 text-[0.88rem] text-ink-soft">
+                Not in this record: the kitchen&apos;s order history, the rules it stated and the patterns Dock learned from it. Those entries appear only by number and hash, so the chain still shows no gap.
+              </p>
+            </div>
           </Section>
         </div>
 
-        <div className="space-y-4 xl:pt-[2.6rem]">
+        <div className="space-y-4 xl:sticky xl:top-4 xl:mt-8 xl:max-h-[calc(100dvh-2rem)] xl:self-start xl:overflow-y-auto">
           {c.confirmation ? <VerifyBox key={c.confirmation} initial={c.confirmation} title="Verify this order's signed confirmation" /> : <VerifyBox />}
           {a.signedClaims.tokens.length > 0 && (
-            <Panel className="px-4 py-3">
-              <h2 className="font-display text-[1.05rem] font-bold">Signed claims the quote rests on</h2>
-              <ul className="mt-1 space-y-1 text-[0.84rem]">
+            <div className="bg-paper px-4 py-4">
+              <h2 className="display text-[1.3rem]">Signed claims the quote rests on</h2>
+              <ul className="mt-2 divide-y divide-line/70 text-[0.9rem]">
                 {a.signedClaims.tokens.map((t) => (
-                  <li key={t.claimId}>
-                    <b>{t.type}</b> of {t.productId}, valid until {when(t.validUntil)}
-                    <Details summary="Token">
+                  <li key={t.claimId} className="py-1.5">
+                    <b className="capitalize">{t.type}</b> of {names.get(t.productId) ?? "a product"}, valid until {stamp(t.validUntil)}
+                    <Details summary="Token" className="mt-0.5">
                       <KV k="id" v={t.claimId} />
+                      <KV k="product" v={t.productId} />
                       <KV k="sha256" v={t.sha256} />
                       <p className="select-all">{t.token}</p>
                     </Details>
                   </li>
                 ))}
               </ul>
-              <p className="mt-1.5 text-[0.8rem] text-ink-soft">Paste any token above into the checker to verify it.</p>
-            </Panel>
+              <p className="mt-2 text-[0.85rem] text-ink-soft">Paste any token into the checker above to verify it.</p>
+            </div>
           )}
           <ChainCheck />
-          <Details summary="Ids">
+          <Details summary="Ids, keys and the ledger anchor">
             <KV k="order" v={a.order.orderId} />
             <KV k="request" v={a.order.requestId} />
             <KV k="quote" v={a.order.quoteId} />
@@ -234,6 +328,7 @@ export function AuditOrder({ orderId }: { orderId: string }) {
             <KV k="agent" v={a.order.agentId} />
             <KV k="mandate" v={a.order.mandateId} />
             <KV k="key" v={`${a.keys.kid} at ${a.keys.jwks}`} />
+            {c.signOff && <KV k="order digest" v={c.signOff.orderDigest} />}
             {c.ledgerHead && <KV k="anchor" v={`${c.ledgerHead.seq} ${c.ledgerHead.hash}`} />}
           </Details>
         </div>
