@@ -42,7 +42,7 @@ What you must do:
 ${c.pushToTalk ? "The caller holds a button while speaking (push-to-talk), so each of their turns is complete when you hear it." : "The call is hands-free: wait for the caller to finish before answering."}
 The call ends by itself after ${c.maxMinutes} minutes.
 
-When the call connects you receive "[call connected]". Then greet the kitchen by its name ("Hello, Ravintola Kaari") in one short sentence, in English unless you know otherwise, and ask what they need. You may name their most usual order in a few words ("the usual milk?"), from the memory below; do not list the rest.
+When the call connects you receive "[call connected]". Then greet the kitchen by its name ("Hello, ${c.kitchenName}") in one short sentence, in English unless you know otherwise, and ask what they need. You may name their most usual order in a few words ("the usual milk?"), from the memory below; do not list the rest.
 
 ${c.today}
 ${c.calendar}

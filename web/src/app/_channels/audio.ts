@@ -39,7 +39,7 @@ export const MIC_TEXT: Record<MicProblem, string> = {
   denied: "The microphone is blocked for this page. Allow it in the browser's site settings, or type instead.",
   no_device: "No microphone was found. Type instead.",
   insecure: "The microphone only works on a secure (https) address. Type instead.",
-  unsupported: "This browser cannot record audio here. Type instead.",
+  unsupported: "The microphone is not available to this page (blocked, or not supported by this browser). Allow it in the site settings, or type instead.",
   failed: "The microphone could not start. Type instead.",
 };
 
