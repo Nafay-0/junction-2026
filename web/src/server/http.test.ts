@@ -79,3 +79,24 @@ describe("readJson", () => {
     await expect(readJson(post("nope"))).rejects.toMatchObject({ status: 400, code: "invalid_json" });
   });
 });
+
+describe("authenticate", () => {
+  it("takes the agent id from ?agent_id= when no Dock-Agent-Id header is sent (MCP clients with only a token)", async () => {
+    resetRuntime();
+    const { signMandate } = await import("@/core/mandate");
+    const { DEMO_ORG, demoMandate, demoOrgKeyPair } = await import("./dev-fixtures");
+    const { localFetch } = await import("./local-transport");
+    const token = await signMandate(demoMandate(new Date()), await demoOrgKeyPair());
+    const open = (query: string) =>
+      localFetch(
+        new Request(`http://dock.test/api/v1/requests${query}`, {
+          method: "POST",
+          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: JSON.stringify({ text: "milk" }),
+        }),
+      );
+    expect((await open(`?agent_id=${DEMO_ORG.agentId}`)).status).toBe(201);
+    expect((await open("")).status).toBe(401);
+    expect((await open("?agent_id=agent_someone_else")).status).toBe(403);
+  });
+});

@@ -34,7 +34,20 @@ export async function handle(fn: (rt: Runtime) => Promise<Response>): Promise<Re
 export function authenticate(req: Request, dock: Dock): Promise<AgentSession> {
   const auth = req.headers.get("authorization") ?? "";
   const match = /^(?:Mandate|Bearer)\s+(\S+)$/i.exec(auth.trim());
-  return dock.authenticate(match?.[1], req.headers.get("dock-agent-id") ?? undefined);
+  return dock.authenticate(match?.[1], req.headers.get("dock-agent-id") ?? agentIdFromUrl(req) ?? undefined);
+}
+
+/**
+ * `?agent_id=` on the URL, for MCP clients that can send a bearer token but no custom header (an Aiven Managed
+ * Agent's custom integration takes only a URL and a token). The header wins when both are present; the mandate
+ * still has to name the same agent.
+ */
+function agentIdFromUrl(req: Request): string | undefined {
+  try {
+    return new URL(req.url).searchParams.get("agent_id")?.trim() || undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Largest JSON body any Dock route accepts. A passkey registration response is a few KB; an order is smaller. */
