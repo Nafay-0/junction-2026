@@ -40,9 +40,22 @@ pnpm demo:mcp --url http://localhost:3000   # stock MCP client, no LLM: the milk
 pnpm verify:receipt order.json --url http://localhost:3000
 export DOCK_MANDATE=$(pnpm -s dev:mandate)  # dev mandate for the demo buyer
 ```
+## Screens
+
+| Path | What |
+|---|---|
+| `/` | The wall, for a big screen: live requests through the gate across all kitchens, totals, recent refusals with their rule, and the join QR code. (`/screen` redirects here.) |
+| `/k/kaari`, `/k/laakso`, `/k/sbx_…` | The buyer console for one kitchen: request field, then what Dock understood, mistake check, questions, option cards, fixed price, the gate, the signed order and the ledger timeline. |
+
+The console's server side plays the kitchen's agent: `/ui-api/kitchens/[kitchen]/call` forwards a short allow-list of
+v1 calls with that kitchen's mandate (`src/server/console-kitchens.ts`). Live updates go through one hook,
+`src/app/_client/use-live.ts` (event stream, polling underneath). Free text becomes a structured need through
+`src/app/_client/interpret.ts`, which calls `POST /api/v1/agent/interpret` and falls back to the clearly marked
+stand-in in `interpret-standin.ts` while that endpoint is missing.
+
 ## Phone approval (passkeys)
 
-`/screen` shows a QR code for `/join`. Scanning it creates a demo kitchen (own buyer org key, mandate with a €500
+The wall at `/` shows a QR code for `/join`. Scanning it creates a demo kitchen (own buyer org key, mandate with a €500
 per-order limit, agent) and makes the phone its approver with a passkey (one tap, Face ID or fingerprint, no typing).
 `/approver` waits for requests over server-sent events and opens `/approve/[id]` when one arrives. Approving is a
 passkey assertion whose challenge is derived from the order's digest, so it cannot be moved to another or edited order.
