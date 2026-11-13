@@ -72,18 +72,42 @@ export function nextStepFor(err: Pick<DockError, "code" | "rule">): string {
   return BY_CODE[err.code] ?? (err.rule && BY_RULE[err.rule]) ?? "The call was refused; read error.message, fix the cause and only then call again.";
 }
 
+/**
+ * The same guidance over MCP and over REST: only the names of the calls differ. `{id}` is the request's id, `{order}`
+ * the order's.
+ */
+export type Transport = "mcp" | "rest";
+const CALLS: Record<string, Record<Transport, string>> = {
+  respond_to_concerns: { mcp: "respond_to_concerns", rest: "POST /api/v1/intake/{id}/concerns" },
+  answer_questions: { mcp: "answer_questions", rest: "POST /api/v1/intake/{id}/answers" },
+  choose_option: { mcp: "choose_option", rest: "POST /api/v1/intake/{id}/choice" },
+  place_order: { mcp: "place_order", rest: "POST /api/v1/orders" },
+  submit_need: { mcp: "submit_need", rest: "POST /api/v1/intake" },
+  get_intake_step: { mcp: "get_intake_step", rest: "GET /api/v1/intake/{id}" },
+  get_order: { mcp: "get_order", rest: "GET /api/v1/orders/{order}" },
+};
+function callName(name: string, via: Transport, ids: { id?: string; order?: string } = {}): string {
+  const c = CALLS[name]?.[via] ?? name;
+  return c.replace("{id}", ids.id ?? "{requestId}").replace("{order}", ids.order ?? "{orderId}");
+}
+
 type OrderLike = { status: string; orderId: string; approval?: { approver: { name: string; role: string } } };
 
-export function nextStepForOrder(order: OrderLike): string {
+export function nextStepForOrder(order: OrderLike, via: Transport = "mcp"): string {
+  const getOrder = callName("get_order", via, { order: order.orderId });
   switch (order.status) {
     case "committed":
       return "Done: the order is committed at the quoted price. `confirmation` is the wholesaler-signed receipt; anyone can verify it with the keys at /.well-known/jwks.json.";
     case "pending_approval": {
       const who = order.approval ? `${order.approval.approver.name} (${order.approval.approver.role})` : "a person named in the mandate";
-      return `This order now waits for a human sign-off by ${who}, who has been asked on their own phone. Tell the buyer exactly that in one plain sentence and stop. Do not retry, place it again, split it or look for another way round. Only if the buyer asks later, call get_order with orderId ${order.orderId} to see whether it was committed or declined.`;
+      return `Your part is done: this order now waits for a human sign-off by ${who}, who has been asked on their own phone. Tell the buyer exactly that in one plain sentence and stop. Do not retry, place it again, split it or look for another way round. Only if the buyer asks later, call ${getOrder}${via === "mcp" ? ` with orderId ${order.orderId}` : ""} to see whether it was committed or declined.`;
     }
     case "declined":
       return "A person declined this order. Do not retry it; tell the buyer.";
+    case "withdrawn":
+      return "The order was withdrawn before anyone signed it; it holds no money. Start a new request only if the buyer asks.";
+    case "expired":
+      return "Nobody signed this order before its fixed price ran out; it holds no money. Start a new request if the buyer still needs it.";
     default:
       return "The gate refused this order. error.rule names the rule; decision.rules has every rule's result.";
   }
@@ -107,21 +131,32 @@ export function waitingFor(state: string): "buyer" | "agent" | "nobody" {
 
 const RELAY = "This answer must come from the human buyer: relay the question in their words and wait. Do not answer for them, even if you think you know.";
 
-/** Exactly which call comes next for an intake step, written for the agent. */
-export function nextStepForIntake(step: StepLike): string {
+/** What to do with a fresh quote's gate preview, written for the agent. */
+export function nextStepForQuote(preview: { outcome: string; approver?: { name: string; role: string }; rules: { rule: string; outcome: string }[] }, via: Transport = "mcp"): string {
+  const place = callName("place_order", via);
+  if (preview.outcome === "reject") return `The gate would refuse this quote (rule ${preview.rules.find((r) => r.outcome === "fail")?.rule}). Change the lines rather than placing it.`;
+  if (preview.outcome === "needs_human_approval")
+    return `You may place it now: no sign-off is needed before ordering. Placing it will ask ${preview.approver ? `${preview.approver.name} (${preview.approver.role})` : "a person named in the mandate"} to sign off on their own phone. Call ${place} with quoteToken and quote.lines.`;
+  return `Within the mandate: no sign-off is needed. Call ${place} now with quoteToken and the quote's lines (productId, quantity, unitPriceCents); it commits at once.`;
+}
+
+/** Exactly which call comes next for an intake step, written for the agent. `answerUrl`: the buyer's one-time answer page. */
+export function nextStepForIntake(step: StepLike, via: Transport = "mcp", answerUrl?: string): string {
   const id = `requestId ${step.requestId}`;
+  const c = (name: string) => callName(name, via, { id: step.requestId });
+  const link = answerUrl ? ` Or give the buyer this one-time link to answer on Dock's own page, and then call ${c("get_intake_step")}: ${answerUrl}` : "";
   switch (step.state) {
     case "needs_confirmation": {
       const asks = step.concerns.map((c) => `"${c.message}" (choices: ${[...(c.confirmable ? ["confirm"] : []), ...c.corrections.map((x) => `${x.id} = ${x.label}`)].join("; ")})`).join(" and ");
-      return `Dock found a likely mistake. Ask the buyer: ${asks}. Then call respond_to_concerns with ${id}, by (the buyer's name) and one response per concern key. ${RELAY} Until the buyer answers, quotes and orders for this request are refused.`;
+      return `Dock found a likely mistake. Ask the buyer: ${asks}. Then call ${c("respond_to_concerns")}${via === "mcp" ? ` with ${id},` : " with"} by (the buyer's name) and one response per concern key. ${RELAY}${link} Until the buyer answers, quotes and orders for this request are refused.`;
     }
     case "needs_input": {
       const asks = step.questions.map((q) => `"${q.text}" (options: ${q.options.map((o) => `${o.id} = ${o.label}`).join("; ")})`).join(" and ");
-      return `Ask the buyer: ${asks}. Then call answer_questions with ${id}, by (the buyer's name) and one answer per questionId. ${RELAY}`;
+      return `Ask the buyer: ${asks}. Then call ${c("answer_questions")}${via === "mcp" ? ` with ${id},` : " with"} by (the buyer's name) and one answer per questionId. ${RELAY}${link}`;
     }
     case "options_ready": {
       const pre = step.preselected ? ` Dock pre-selected ${step.preselected.optionId} (${step.preselected.reason}).` : "";
-      return `Show the buyer the ${step.options.length} options (step.options: title, total, delivery, pros and cons, and signOff for any that need a person's sign-off).${pre} Call choose_option with ${id} and the optionId the buyer picks; it returns a signed fixed-price quote.`;
+      return `Show the buyer the ${step.options.length} options (step.options: title, total, delivery, pros and cons, and signOff for any that need a person's sign-off).${pre} Call ${c("choose_option")}${via === "mcp" ? ` with ${id} and` : " with"} the optionId the buyer picks; it returns a signed fixed-price quote.`;
     }
     case "quoted": {
       const p = step.quote?.policyPreview;
@@ -129,15 +164,15 @@ export function nextStepForIntake(step: StepLike): string {
         p?.outcome === "reject"
           ? ` The gate would refuse it (rule ${p.rules.find((r) => r.outcome === "fail")?.rule}): tell the buyer and do not place it.`
           : p?.outcome === "needs_human_approval"
-            ? ` Placing it will ask ${p.approver ? `${p.approver.name} (${p.approver.role})` : "a person named in the mandate"} to sign off on their own device.`
-            : " It is within the mandate and commits at once.";
-      return `Call place_order with just { "requestId": "${step.requestId}" }: Dock places the quote it signed for this request.${gate}`;
+            ? ` No sign-off is needed before ordering: placing it will ask ${p.approver ? `${p.approver.name} (${p.approver.role})` : "a person named in the mandate"} to sign off on their own device, and then your part is done.`
+            : " It is within the mandate, needs no sign-off, and commits at once.";
+      return `Call ${c("place_order")} now with just { "requestId": "${step.requestId}" }: Dock places the quote it signed for this request.${gate}`;
     }
     case "no_options":
-      return `Nothing meets the constraints: ${step.notes[0] ?? "see step.notes and step.excluded"}. Tell the buyer why; if they change the need, call submit_need again.`;
+      return `Nothing meets the constraints: ${step.notes[0] ?? "see step.notes and step.excluded"}. Tell the buyer why; if they change the need, call ${c("submit_need")} again.`;
     case "cancelled":
-      return "The buyer cancelled this request. Do not place an order. Call submit_need only if the buyer asks for something new.";
+      return `The buyer cancelled this request. Do not place an order. Call ${c("submit_need")} only if the buyer asks for something new.`;
     default:
-      return "Call get_intake_step to see where this request stands.";
+      return `Call ${c("get_intake_step")} to see where this request stands.`;
   }
 }

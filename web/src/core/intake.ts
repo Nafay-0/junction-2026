@@ -49,19 +49,26 @@ export type IntakeState = "needs_confirmation" | "needs_input" | "options_ready"
  *   approver_passkey      the approver's passkey on the sign-off screen
  *   protocol_elicitation  the protocol's own human-input mechanism (MCP elicitation: the client asked the user)
  *   voice                 the caller's own words on a voice call tied to their signed-in session
+ *   answer_link           Dock's own answer page, opened through a one-time link Dock handed out for this request
+ *                         (on paths without the protocol's human-input mechanism). The words are Dock's fixed choices,
+ *                         not an agent's paraphrase, but whoever holds the link can answer: the person is named only
+ *                         when their kitchen's signed-in session is present; without it, a confirmation that matters
+ *                         still goes to a named person's sign-off, as a relayed one does
  *   relayed               anything an agent merely passes on (the default): recorded as "relayed by the agent, not
  *                         verified"; where the concern matters, the order then goes to a named person's sign-off
  * Set only by server code in this process (see server/console-context.ts), never from a request field.
  */
-export type InputChannel = "portal_session" | "approver_passkey" | "protocol_elicitation" | "voice" | "relayed";
+export type InputChannel = "portal_session" | "approver_passkey" | "protocol_elicitation" | "voice" | "answer_link" | "relayed";
 export type HumanVia = { channel: InputChannel; /** The identified person's name, when the channel names one. */ person?: string; /** What the person said, for the ledger (voice). */ words?: string };
 export const RELAYED: HumanVia = { channel: "relayed" };
-const isVerified = (v: HumanVia) => v.channel !== "relayed";
+/** A person identified by the channel. An answer link names one only with the kitchen's signed-in session. */
+const isVerified = (v: HumanVia) => v.channel !== "relayed" && (v.channel !== "answer_link" || !!v.person);
 const CHANNEL_TEXT: Record<InputChannel, string> = {
   portal_session: "in the kitchen's signed-in portal",
   approver_passkey: "with their passkey",
   protocol_elicitation: "through the client's own prompt to the user (MCP elicitation)",
   voice: "on a voice call from their signed-in phone",
+  answer_link: "on Dock's own answer page through a one-time link",
   relayed: "relayed by the agent, not verified",
 };
 
@@ -164,6 +171,8 @@ export function createIntakeFlow(deps: IntakeDeps) {
   const { catalog, repo, kitchens, intakes, ledger, now } = deps;
   const agentActor = (s: AgentSession) => `agent:${s.agentId}`;
   const buyerActor = (who: string) => `buyer:${who}`;
+  /** Who acted, for the ledger: the identified person, Dock's answer page, or the agent relaying. */
+  const actorOf = (session: AgentSession, via: HumanVia, who: string) => (isVerified(via) ? buyerActor(who) : via.channel === "answer_link" ? "door:answer_link" : agentActor(session));
 
   async function profileOf(session: AgentSession): Promise<KitchenProfile> {
     return (await kitchens.getProfile(session.mandate.issuer.orgId)) ?? emptyProfile(session.mandate.issuer.orgId, session.mandate.issuer.name);
@@ -407,7 +416,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
     const at = now().toISOString();
     const byAgent = who.startsWith("agent ");
     const verified = isVerified(via);
-    log(i, byAgent || !verified ? agentActor(session) : buyerActor(who), `${who} chose ${card.optionId}${byAgent ? "" : ` (${howText(via)})`} (${card.labels.map((l) => LABEL_TEXT[l]).join(", ")}): ${cardLine(card)}${reason ? ` ${reason}` : ""}`, {
+    log(i, byAgent ? agentActor(session) : actorOf(session, via, who), `${who} chose ${card.optionId}${byAgent ? "" : ` (${howText(via)})`} (${card.labels.map((l) => LABEL_TEXT[l]).join(", ")}): ${cardLine(card)}${reason ? ` ${reason}` : ""}`, {
       channel: byAgent ? undefined : via.channel,
       verified: byAgent ? undefined : verified,
       step: "choice",
@@ -476,7 +485,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
       const { by: said, responses } = parse(ConcernResponseInput, input);
       const verified = isVerified(via);
       const who = verified && via.person ? via.person : said;
-      const actor = verified ? buyerActor(who) : agentActor(session);
+      const actor = actorOf(session, via, who);
       const how = howText(via);
       const i = await own(session, requestId);
       expectState(i, ["needs_confirmation"], "respond to concerns");
@@ -493,7 +502,9 @@ export function createIntakeFlow(deps: IntakeDeps) {
           if (matters) (i.unverified ??= []).push({ key: c.key, code: c.code, message: c.message, by: who, at });
           const summary = verified
             ? `${who} confirmed as intended, ${how}: ${c.message}`
-            : `Relayed by the agent, not verified: it says ${who} meant it this way: ${c.message}${matters ? " Nobody verified that, so the order cannot be decided by the agent alone: a named person signs it off, with this shown." : ""}`;
+            : via.channel === "answer_link"
+              ? `Confirmed as intended ${how}, answered as ${who} (the person is not identified: whoever holds the link can answer): ${c.message}${matters ? " Nobody verified who answered, so the order cannot be decided by the agent alone: a named person signs it off, with this shown." : ""}`
+              : `Relayed by the agent, not verified: it says ${who} meant it this way: ${c.message}${matters ? " Nobody verified that, so the order cannot be decided by the agent alone: a named person signs it off, with this shown." : ""}`;
           log(i, actor, summary, { step: "confirmation", key: c.key, code: c.code, by: who, relayedBy: session.agentId, channel: via.channel, verified, ...(via.words ? { words: via.words } : {}), ...(matters ? { needsSignOff: true } : {}), suspendedPreferenceIds: c.preferenceIds });
           continue;
         }
@@ -548,7 +559,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
           remembered = " Not stored as a kitchen rule: an answer relayed by the agent cannot set one; the kitchen can state it on its memory page.";
           notRemembered.push(`"${optionLabel(q, a.optionId)}" applies to this request only: an answer relayed by the agent is not stored as a kitchen rule.`);
         }
-        log(i, verified ? buyerActor(who) : agentActor(session), `${who} answered "${q.text}" (${how}): ${optionLabel(q, a.optionId)}.${remembered}`, { step: "answer", questionId: q.id, optionId: a.optionId, remember: !!a.remember && verified, by: who, relayedBy: session.agentId, channel: via.channel, verified, ...(via.words ? { words: via.words } : {}) });
+        log(i, actorOf(session, via, who), `${who} answered "${q.text}" (${how}): ${optionLabel(q, a.optionId)}.${remembered}`, { step: "answer", questionId: q.id, optionId: a.optionId, remember: !!a.remember && verified, by: who, relayedBy: session.agentId, channel: via.channel, verified, ...(via.words ? { words: via.words } : {}) });
       }
       await kitchens.saveProfile(profile);
       const next = await advance(session, i);
@@ -574,7 +585,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
         i.need = applyNeedPatch(i.need, { deliverBy: card.deliveryDate });
         const req = await repo.getRequest(requestId);
         if (req) await repo.saveRequest({ ...req, neededBy: card.deliveryDate });
-        log(i, verified ? buyerActor(who) : agentActor(session), `${who} accepted a later delivery (${howText(via)}): ${card.deliveryDate} instead of ${before}.`, { step: "compromise", optionId, givesUp: card.givesUp, by: who, relayedBy: session.agentId, channel: via.channel, verified });
+        log(i, actorOf(session, via, who), `${who} accepted a later delivery (${howText(via)}): ${card.deliveryDate} instead of ${before}.`, { step: "compromise", optionId, givesUp: card.givesUp, by: who, relayedBy: session.agentId, channel: via.channel, verified });
       }
       return view(await quoteOption(session, i, card, who, undefined, via));
     },

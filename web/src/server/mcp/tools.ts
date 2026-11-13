@@ -19,7 +19,7 @@ import {
 } from "../wire";
 import { AskHuman, answersFromBuyer, concernsFromBuyer, type HumanChannel } from "./ask-human";
 import type { LiveBudget } from "@/server/aiven/valkey";
-import { nextStepForIntake, nextStepForOrder, waitingFor } from "./next-step";
+import { nextStepForIntake, nextStepForOrder, nextStepForQuote, waitingFor } from "./next-step";
 
 /**
  * Dock's operations as MCP tools: one table, one entry per tool. Each entry is a name, a description for a
@@ -315,14 +315,7 @@ const CORE_TOOLS = [
     run: async ({ dock, session, guard, agentKey }, args) => {
       await guard.reserve(agentKey, args.lines.flatMap((l) => (l.substituteFor ? [l.productId, l.substituteFor] : [l.productId])));
       const result = await dock.requestQuote(session, args);
-      const preview = result.policyPreview;
-      const hint =
-        preview.outcome === "reject"
-          ? `The gate would refuse this quote (rule ${decidingRule(preview)?.rule}). Change the lines rather than placing it.`
-          : preview.outcome === "needs_human_approval"
-            ? `Placing it will ask ${preview.approver.name} (${preview.approver.role}) to sign off. Call place_order with quoteToken and quote.lines.`
-            : "Within the mandate: call place_order with quoteToken and the quote's lines (productId, quantity, unitPriceCents).";
-      return { ...result, nextStep: hint };
+      return { ...result, nextStep: nextStepForQuote(result.policyPreview) };
     },
   }),
   tool({

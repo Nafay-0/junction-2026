@@ -18,7 +18,10 @@ import { AskHuman, HUMAN_INPUT_META, type HumanChannel } from "./ask-human";
 import type { LiveBudget } from "@/server/aiven/valkey";
 import { ConnectorService, connectorSecret, type Connector, type ConnectorKitchen, type ConnectorLimitKind } from "./connectors";
 import { LiveLookupGuard } from "./live-lookup-guard";
-import { nextStepFor } from "./next-step";
+import { nextStepFor, nextStepForIntake } from "./next-step";
+import type { IntakeView } from "@/core/intake";
+import { answerLinkFor, needsBuyer } from "../answer-links";
+import { publicBaseUrl } from "../config";
 import { TOOLS, type DockTool } from "./tools";
 
 /**
@@ -189,6 +192,12 @@ export async function runTool(
     const run = tool.run as (ctx: Parameters<DockTool["run"]>[0], args: unknown) => Promise<Record<string, unknown> | AskHuman>;
     const out = await run({ dock, session, guard: guardFor(rt), agentKey, human, defaultBy: via && `${via.kitchen.by}, through the kitchen's connector` }, args);
     if (out instanceof AskHuman) return out.result;
+    // A client that cannot ask the buyer itself: hand the buyer Dock's own one-time answer page (server/answer-links.ts).
+    const step = out.step as IntakeView | undefined;
+    if (!human.canAsk && step && needsBuyer(step.state)) {
+      const answerUrl = answerLinkFor(session, step, publicBaseUrl(req));
+      if (answerUrl) Object.assign(out, { answerUrl, nextStep: nextStepForIntake(step, "mcp", answerUrl) });
+    }
     if (via && counted === "requests") {
       const requestId = (out.step as { requestId?: string } | undefined)?.requestId ?? (out.request as { requestId?: string } | undefined)?.requestId;
       if (requestId) logChannel(rt, via, session.agentId, requestId, tool.name);
