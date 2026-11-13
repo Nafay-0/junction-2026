@@ -231,6 +231,8 @@ Without a mandate or approver session, reachable by anyone:
 | `/ui-api/kitchens/{k}/assistant` (kitchen store assistant, model call) | model | 20/min per address, 60/min per kitchen; daily model caps |
 | `/ui-api/kitchens/{k}/catalog/live` | live partner lookups | 30/min per address; daily partner cap |
 | `/ui-api/kitchens/{k}/basket`, `/memory` | quotes (live lookups), kitchen memory writes | 60/min per address, 120/min per kitchen |
+| `POST /ui-api/plan/{k}`, `/ui-api/plan/{k}/{plan}` (menu planner: several model calls per plan) | model, live lookups | 6/min per address, 12/min per kitchen; every model call counts against the daily caps |
+| `POST /ui-api/plan/{k}/{plan}/quote`, `/order` | quotes, orders to the gate | 60/min per address, 120/min per kitchen |
 | `/api/mcp/c/<token>` (connector address) | as `/api/mcp` with the kitchen's mandate | 120 writes/min per address, plus the connector's own per-token limits |
 | `POST /ops-api/session`, `POST/DELETE /ui-api/connect/{k}` | passcode / operator-secret guesses | 10/min per address |
 | `POST /api/v1/sandboxes/{id}/demo-order` (wall button), `POST /api/v1/approver/demo-order` | live lookups, orders | 12/min per address, 6/min per kitchen; partner cap |

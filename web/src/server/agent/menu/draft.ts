@@ -1,5 +1,6 @@
 import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
+import { recordLlmSpend, reserveLlmCall } from "@/server/limits";
 import { DockError } from "@/core/errors";
 import { calendar } from "../interpret";
 import { createModel, hasCredentials, ModelConfigError, parseModelSpec } from "../models";
@@ -271,6 +272,7 @@ export async function draftMenu(opts: DraftOptions): Promise<DraftResult> {
     const s0 = Date.now();
     let res;
     try {
+      reserveLlmCall(); // public-demo caps: daily calls and spend, DOCK_LLM=off (server/limits.ts)
       res = await withRetry(
         () =>
           generateText({
@@ -291,6 +293,7 @@ export async function draftMenu(opts: DraftOptions): Promise<DraftResult> {
     }
     const tokens = tokensFromUsage(res.usage);
     calls.push({ step, ms: Date.now() - s0, tokens, costUsd: costOf(tokens, price) });
+    recordLlmSpend(costOf(tokens, price));
     return res.output as T;
   }
 

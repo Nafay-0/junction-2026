@@ -28,6 +28,8 @@ const LIVE_LOOKUP = rule("catalog-live", 30);
 const KITCHEN_WRITE = rule("kitchen-write", 60);
 const KITCHEN_WRITE_KITCHEN = rule("kitchen-write-kitchen", 120);
 const OPS_ENTER = rule("ops-enter", 10);
+const MENU_PLAN = rule("menu-plan", 6);
+const MENU_PLAN_KITCHEN = rule("menu-plan-kitchen", 12);
 
 const g = globalThis as typeof globalThis & { __dockRateLimiter?: RateLimiter };
 const limiter = (g.__dockRateLimiter ??= new RateLimiter());
@@ -54,6 +56,9 @@ function rulesFor(method: string, path: string): [RateRule, string?][] {
   if (post && (m = /^\/ui-api\/kitchens\/([^/]+)\/assistant$/.exec(path))) out.push([ASSISTANT], [ASSISTANT_KITCHEN, `k:${m[1]}`]);
   if (post && /^\/ui-api\/kitchens\/[^/]+\/catalog\/live$/.test(path)) out.push([LIVE_LOOKUP]);
   if (post && (m = /^\/ui-api\/kitchens\/([^/]+)\/(basket|memory)$/.exec(path))) out.push([KITCHEN_WRITE], [KITCHEN_WRITE_KITCHEN, `k:${m[1]}`]);
+  // The menu planner: one plan is several model calls (outline, each dish, picks, fixes) and live lookups.
+  if (post && (m = /^\/ui-api\/plan\/([^/]+)(\/[^/]+)?$/.exec(path))) out.push([MENU_PLAN], [MENU_PLAN_KITCHEN, `k:${m[1]}`]);
+  if (post && (m = /^\/ui-api\/plan\/([^/]+)\/[^/]+\/(quote|order)$/.exec(path))) out.push([KITCHEN_WRITE], [KITCHEN_WRITE_KITCHEN, `k:${m[1]}`]);
   // The operations desk: entering takes the passcode, so guessing is slowed down.
   if (post && path === "/ops-api/session") out.push([OPS_ENTER]);
   // Reissuing or revoking a connector takes the operator secret (or the visitor's own session).
