@@ -12,6 +12,7 @@
     "test:watch": "vitest",
     "demo": "tsx scripts/demo.ts",
     "demo:mcp": "tsx scripts/demo-mcp.ts",
+    "smoke": "tsx scripts/smoke.ts",
     "agent": "tsx scripts/agent.ts",
     "interpret": "tsx scripts/interpret.ts",
     "verify:receipt": "tsx scripts/verify-receipt.ts",
