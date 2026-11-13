@@ -128,6 +128,8 @@ export type Hold = {
   noticeId: string;
   matchId: string;
   drill: boolean;
+  /** The drill notice that caused it, for the drill's stopwatch. */
+  drillId?: string;
   /** What the agent and the approver are told, with the notice's title and publisher. */
   reason: string;
   noticeUrl: string;

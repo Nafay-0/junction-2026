@@ -15,6 +15,8 @@ import { KITCHEN_ORG, demoKitchenKeyPair, demoKitchenProfile, demoProducts } fro
 import { DEMO_ORG, demoOrgKeyPair } from "./dev-fixtures";
 import { selectAdapters, type AivenHandle } from "./aiven";
 import { LiveCacheSlot, liveCacheSlots } from "./aiven/live-slot";
+import { recallLayer } from "./radar/gate";
+import { radar } from "./radar/registry";
 import { SandboxService } from "./sandboxes";
 import { loadCatalogIndex, resolveCatalogIndex } from "./valio/index-store";
 import { ValioLiveClient } from "./valio/live-client";
@@ -85,8 +87,11 @@ async function buildRuntime(): Promise<Runtime> {
   // ---- END AIVEN ADAPTERS ----
   // Approvers who registered a passkey must use it; others (the scripted Laakso demo) keep the link token.
   const passkeys = new PasskeyService({ store: stores.passkeyStore, demoTapEnabled });
+  // RECALL RADAR HOOK (src/server/radar/gate.ts): held products read as sales-blocked, and quotes, orders and
+  // sign-offs that contain one are refused with the rule recall_hold.
+  const recall = recallLayer(stores.catalog);
   const dock = createDock({
-    catalog: new MeteredCatalog(stores.catalog),
+    catalog: new MeteredCatalog(recall.catalog),
     repo: stores.repo,
     ledger: new Ledger(stores.ledgerStore),
     trustedIssuers,
@@ -98,9 +103,12 @@ async function buildRuntime(): Promise<Runtime> {
     intakes: stores.intakes,
     liveAllowance: stores.liveAllowance,
   });
+  recall.attach(dock);
   const sandboxes = new SandboxService({ dock, registry: trustedIssuers, passkeys, limits: sandboxLimits, kitchens: stores.kitchens, products: async () => products, store: stores.sandboxStore });
   await sandboxes.restore();
-  return { dock, outbox, catalog, catalogSource, events, passkeys, sandboxes, aiven, kitchens: stores.kitchens };
+  const rt: Runtime = { dock, outbox, catalog, catalogSource, events, passkeys, sandboxes, aiven, kitchens: stores.kitchens };
+  radar(rt); // starts the recall radar's schedule (not under tests, during a build, or with RADAR_POLL=off)
+  return rt;
 }
 
 const envValue = (name: string) => {

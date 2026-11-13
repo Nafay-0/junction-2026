@@ -8,6 +8,7 @@ import { useLive, type Live } from "../../_client/use-live";
 import { DEMO_NOTE } from "../../_ui/brand";
 import { day, eur, helsinkiToday, shortProduct } from "../../_ui/plain";
 import { Target, Wordmark } from "../../_ui/target";
+import { RecallNotice } from "../../_radar/recall-notice";
 import { AssistantPanel, type Turn } from "./assistant";
 import type { KitchenChoice, KitchenInfo, LiveReply, LiveResult, Overview, PortalRequest, Product } from "./types";
 
@@ -229,6 +230,7 @@ export function Portal({ kitchen, kitchens, children }: { kitchen: KitchenInfo; 
         <p className="bg-ink px-4 py-1 text-center text-[0.82rem] leading-snug text-chalk sm:px-6">{DEMO_NOTE}</p>
         <Header />
         <main id="main" className="mx-auto min-w-0 max-w-[1440px] px-4 pb-24 sm:px-6 xl:px-8">
+          <RecallNotice kitchen={slug} />
           {children}
         </main>
         <AssistantPanel />

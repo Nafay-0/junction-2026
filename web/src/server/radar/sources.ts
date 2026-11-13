@@ -70,7 +70,7 @@ export const SOURCES: SourceConfig[] = [
     publisher: "Finnish Food Authority, Swedish-language pages",
     kind: "authority_listing",
     language: "sv",
-    homeUrl: "https://www.ruokavirasto.fi/sv/livsmedel3/instruktioner-for-konsumenter/aterkallelser-2023-/",
+    homeUrl: "https://www.ruokavirasto.fi/sv/aterkallelser/",
     checkEveryMinutes: 240,
     readWindowDays: 30,
     maxReadsPerCheck: 10,

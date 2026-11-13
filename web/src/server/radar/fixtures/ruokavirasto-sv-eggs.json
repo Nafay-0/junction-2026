@@ -1,0 +1,113 @@
+{
+ "url": "https://www.ruokavirasto.fi/sv/livsmedel3/instruktioner-for-konsumenter/aterkallelser-2023-/aterkallelse-av-honsagg2/",
+ "markdown": {
+  "requested": true,
+  "success": true,
+  "data": "# Återkallelse av hönsägg\n\n9\\. oktober 2026\n\nMunax Oy meddelar att salmonella har konstaterats i samband med myndighetens provtagning i ett av dess kontraktsproducenters hönserier. Äggen har saluhållits åtminstone i K- och S-kedjornas butiker under de varumärken som syns i listan nedan.\n\nÅterkallelsen gäller endast ägg som är stämplade med 1FI15493 och har bäst före datummärkningen 28.10. eller tidigare (Anteckningssätt t.ex. 28.10. eller 28/10 L).Återkallelsen gäller endast ägg med stämpel 1FI15493 på skalet. Om stämpeln inte stämmer, omfattas äggen inte av återkallelsen. \n\nÅterkallelsebara produkter och deras EAN-koder:\n\n- Kotimaista Ulko M10 580 g EAN: 6415715101210\n- Laitilan Kanatarha Ulko L6 408 g EAN: 6430017904017\n- Laitilan Kanatarha Ulko L10 680 g EAN: 6430017900576\n- Pirkka Ulko M8 464 g EAN: 6410405224316\n\nDet finns information om detta på [Munax webbplatsen.](https://www.munax.fi/yritys/ajankohtaista/kananmunien-takaisinveto-9-10-2026/) \nKonsumentkontakter begärs i första hand per e-post  [palaute@munax.fi](mailto:palaute@munax.fi). Munax växel: tel. 02 858 3400, kl. 10-15. \n\nÄrendet sköts vid Livsmedelsverket av specialexpert Paula Hietanen, tfn 050 59 69 637, förnamn.efternamn@ruokavirasto.fi."
+ },
+ "json": {
+  "requested": true,
+  "success": true,
+  "data": {
+   "title": "Återkallelse av hönsägg",
+   "published": "9. oktober 2026",
+   "language": "sv",
+   "is_recall_notice": true,
+   "producer": {
+    "name": "Munax Oy",
+    "sentence": "Munax Oy meddelar att salmonella har konstaterats i samband med myndighetens provtagning i ett av dess kontraktsproducenters hönserier."
+   },
+   "products": [
+    {
+     "name": "Kotimaista Ulko M10",
+     "brand": "Kotimaista",
+     "producer": "Munax Oy",
+     "pack_size": "580 g",
+     "eans": [
+      "6415715101210"
+     ],
+     "best_before": [
+      "28.10. eller tidigare"
+     ],
+     "batch_codes": [
+      "1FI15493"
+     ],
+     "sentence": "Kotimaista Ulko M10 580 g EAN: 6415715101210"
+    },
+    {
+     "name": "Laitilan Kanatarha Ulko L6",
+     "brand": "Laitilan Kanatarha",
+     "producer": "Munax Oy",
+     "pack_size": "408 g",
+     "eans": [
+      "6430017904017"
+     ],
+     "best_before": [
+      "28.10. eller tidigare"
+     ],
+     "batch_codes": [
+      "1FI15493"
+     ],
+     "sentence": "Laitilan Kanatarha Ulko L6 408 g EAN: 6430017904017"
+    },
+    {
+     "name": "Laitilan Kanatarha Ulko L10",
+     "brand": "Laitilan Kanatarha",
+     "producer": "Munax Oy",
+     "pack_size": "680 g",
+     "eans": [
+      "6430017900576"
+     ],
+     "best_before": [
+      "28.10. eller tidigare"
+     ],
+     "batch_codes": [
+      "1FI15493"
+     ],
+     "sentence": "Laitilan Kanatarha Ulko L10 680 g EAN: 6430017900576"
+    },
+    {
+     "name": "Pirkka Ulko M8",
+     "brand": "Pirkka",
+     "producer": "Munax Oy",
+     "pack_size": "464 g",
+     "eans": [
+      "6410405224316"
+     ],
+     "best_before": [
+      "28.10. eller tidigare"
+     ],
+     "batch_codes": [
+      "1FI15493"
+     ],
+     "sentence": "Pirkka Ulko M8 464 g EAN: 6410405224316"
+    }
+   ],
+   "hazard": {
+    "category": "microbial",
+    "allergens": [],
+    "sentence": "Munax Oy meddelar att salmonella har konstaterats i samband med myndighetens provtagning i ett av dess kontraktsproducenters hönserier.",
+    "english": "Munax Oy reports that salmonella has been detected in connection with the authorities’ sampling at one of its contract producers’ hen farms."
+   },
+   "consumer_action": {
+    "sentence": "Återkallelsen gäller endast ägg som är stämplade med 1FI15493 och har bäst före datummärkningen 28.10. eller tidigare (Anteckningssätt t.ex. 28.10. eller 28/10 L).",
+    "english": "The recall applies only to eggs stamped with 1FI15493 and with a best-before date of 28.10. or earlier (marking format e.g. 28.10. or 28/10 L)."
+   },
+   "business_action": null,
+   "summary_english": "Munax Oy is recalling four egg products sold under the Kotimaista, Laitilan Kanatarha and Pirkka brands. Salmonella was detected at a contract producer’s hen farm, and the recall applies only to eggs stamped 1FI15493 with a best-before date of 28 October or earlier."
+  }
+ },
+ "parsed": null,
+ "metadata": {
+  "title": "Återkallelse av hönsägg",
+  "language": "sv"
+ },
+ "cache_metadata": {
+  "status": "miss",
+  "age_ms": 0
+ },
+ "key_metadata": {
+  "credits_consumed": 5,
+  "credits_remaining": 50985
+ }
+}
