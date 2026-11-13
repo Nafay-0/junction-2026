@@ -61,6 +61,21 @@ export class DockClient {
     const p = new URLSearchParams(filter as Record<string, string>);
     return this.call<{ verification: { ok: boolean }; catalog: { searches: number; liveCalls: number; productsPriced: number }; explanation: string[]; entries: unknown[] }>("GET", `/api/v1/ledger?${p}`);
   }
+  intakeOpen(need: unknown, by?: string) {
+    return this.call<{ step: Step }>("POST", "/api/v1/intake", { need, by });
+  }
+  intakeConcerns(requestId: string, by: string, responses: { key: string; choice: string }[]) {
+    return this.call<{ step: Step }>("POST", `/api/v1/intake/${requestId}/concerns`, { by, responses });
+  }
+  intakeAnswers(requestId: string, by: string, answers: { questionId: string; optionId: string; remember?: boolean }[]) {
+    return this.call<{ step: Step }>("POST", `/api/v1/intake/${requestId}/answers`, { by, answers });
+  }
+  intakeChoice(requestId: string, by: string, optionId: string) {
+    return this.call<{ step: Step }>("POST", `/api/v1/intake/${requestId}/choice`, { by, optionId });
+  }
+  kitchen() {
+    return this.call<{ kitchen: Kitchen }>("GET", "/api/v1/kitchen");
+  }
   keys() {
     return this.call<{ keys: Record<string, string>[] }>("GET", "/api/v1/keys");
   }
@@ -79,3 +94,37 @@ export type QuoteLine = { productId: string; name: string; quantity: number; uni
 export type Quote = { quoteId: string; lines: QuoteLine[]; totalCents: number; expiresAt: string };
 export type Decision = { outcome: string; reasons: string[]; approver?: { name: string; role: string }; rules: { rule: string; outcome: string }[] };
 export type Order = { orderId: string; status: string; totalCents: number; lines: QuoteLine[]; decision: Decision; confirmation?: string; approval?: { approvalId: string; status: string } };
+
+export type Concern = { key: string; code: string; severity: string; message: string; confirmable: boolean; corrections: { id: string; label: string; cancel?: boolean }[] };
+export type Question = { id: string; text: string; options: { id: string; label: string }[] };
+export type OptionCard = {
+  optionId: string;
+  labels: string[];
+  title: string;
+  lines: { productId: string; packs: number; packSize: number; unit: string }[];
+  totalCents: number;
+  deliveryDate: string;
+  co2: { kg: number | null; basis: string };
+  reliability: number | null;
+  pros: string[];
+  cons: string[];
+};
+export type Step = {
+  requestId: string;
+  state: "needs_confirmation" | "needs_input" | "options_ready" | "quoted" | "no_options" | "cancelled";
+  need: { quantity?: { amount: number; unit: string } };
+  concerns: Concern[];
+  questions: Question[];
+  fromMemory: { question: Question; label: string; source: string; text: string }[];
+  rules: { text: string; source: string }[];
+  options: OptionCard[];
+  preselected?: { optionId: string; reason: string };
+  notes: string[];
+  quote?: { quote: Quote; quoteToken: string; policyPreview: Decision };
+  next: { method: string; path: string; example: Record<string, unknown> };
+};
+export type Kitchen = {
+  name: string;
+  stated: { text: string; statedBy: string }[];
+  families: { family: string; orders: number; usual: { text: string }; lastOrder: { placedAt: string; amount: number; unit: string; lines: { productId: string; packs: number }[] }; learned: { text: string }[] }[];
+};

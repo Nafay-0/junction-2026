@@ -9,6 +9,9 @@ import {
   type ApprovalVerifier,
 } from "./approval";
 import { CatalogError, ProductQuerySchema, type LiveOffer, type MeteredCatalog, type Product } from "./catalog";
+import { DockError, parse } from "./errors";
+import { InMemoryIntakeRepository, createIntakeFlow, recordCommittedOrder, type IntakeRepository } from "./intake";
+import { InMemoryKitchenRepository, type KitchenRepository } from "./kitchen";
 import { SIGN_ALG, type KeyPair } from "./keys";
 import type { Ledger, LedgerHead } from "./ledger";
 import { MandateError, verifyMandate, type Mandate, type TrustRegistry } from "./mandate";
@@ -24,25 +27,8 @@ import { addDays, canonicalJson, formatEur, newId, sha256Hex } from "./util";
 
 // ---------- errors ----------
 
-/** A refusal with an HTTP status, a machine-readable code and, where one fired, the rule that refused. */
-export class DockError extends Error {
-  constructor(
-    readonly status: number,
-    readonly code: string,
-    message: string,
-    readonly rule?: string,
-    readonly details?: Record<string, unknown>,
-  ) {
-    super(message);
-    this.name = "DockError";
-  }
-}
-
-function parse<T>(schema: z.ZodType<T>, input: unknown): T {
-  const r = schema.safeParse(input);
-  if (!r.success) throw new DockError(400, "invalid_request", z.prettifyError(r.error), undefined, { issues: r.error.issues });
-  return r.data;
-}
+// DockError lives in errors.ts so the intake modules can use it without an import cycle.
+export { DockError };
 
 // ---------- inputs ----------
 
@@ -194,6 +180,8 @@ export type DockDeps = {
   verifier?: ApprovalVerifier; // PASSKEY SEAM: swap in a WebAuthn verifier (see approval.ts)
   now?: () => Date;
   quoteTtlMinutes?: number;
+  kitchens?: KitchenRepository; // kitchen memory: order history and preferences (see kitchen.ts)
+  intakes?: IntakeRepository; // structured-need intake sessions (see intake.ts)
 };
 
 export type Dock = ReturnType<typeof createDock>;
@@ -205,6 +193,8 @@ export function createDock(deps: DockDeps) {
   const verifier = deps.verifier ?? linkTokenVerifier;
   const now = deps.now ?? (() => new Date());
   const quoteTtlMinutes = deps.quoteTtlMinutes ?? 30;
+  const kitchens = deps.kitchens ?? new InMemoryKitchenRepository();
+  const intakes = deps.intakes ?? new InMemoryIntakeRepository();
   const agentActor = (s: AgentSession) => `agent:${s.agentId}`;
 
   // One order decision per organisation at a time, so budget and replay checks never race.
@@ -291,6 +281,7 @@ export function createDock(deps: DockDeps) {
     order.status = "committed";
     order.updatedAt = committedAt;
     await repo.saveOrder(order);
+    await recordCommittedOrder({ kitchens, intakes }, order, (await repo.getRequest(order.requestId))?.neededBy);
     ledger.append({
       type: "order",
       actor: "dock",
@@ -301,7 +292,7 @@ export function createDock(deps: DockDeps) {
     });
   }
 
-  return {
+  const dock = {
     /** Verify the mandate the agent presents. Throws DockError (401/403) naming the failed check. */
     async authenticate(mandateToken: string | undefined, agentId: string | undefined): Promise<AgentSession> {
       const actor = `agent:${agentId ?? "unknown"}`;
@@ -597,4 +588,18 @@ export function createDock(deps: DockDeps) {
     ledger,
     wholesalerPublicJwk: wholesalerKey.publicJwk,
   };
+
+  /** Buyer-side intake: structured need -> concerns -> questions -> option cards -> quote (see intake.ts). */
+  const intake = createIntakeFlow({
+    catalog,
+    repo,
+    kitchens,
+    intakes,
+    ledger,
+    now,
+    openRequest: dock.openRequest,
+    requestQuote: dock.requestQuote,
+    spentThisWeek: (orgId) => spentThisWeek(orgId),
+  });
+  return { ...dock, intake };
 }

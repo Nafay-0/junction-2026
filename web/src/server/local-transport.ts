@@ -1,4 +1,10 @@
 import * as index from "@/app/api/v1/route";
+import * as intakeAnswers from "@/app/api/v1/intake/[requestId]/answers/route";
+import * as intakeChoice from "@/app/api/v1/intake/[requestId]/choice/route";
+import * as intakeConcerns from "@/app/api/v1/intake/[requestId]/concerns/route";
+import * as intakeOne from "@/app/api/v1/intake/[requestId]/route";
+import * as intake from "@/app/api/v1/intake/route";
+import * as kitchen from "@/app/api/v1/kitchen/route";
 import * as approval from "@/app/api/v1/approvals/[approvalId]/route";
 import * as approvals from "@/app/api/v1/approvals/route";
 import * as availability from "@/app/api/v1/availability/route";
@@ -27,6 +33,12 @@ const routes: [RegExp, string[], RouteModule][] = [
   [/^\/api\/v1\/ledger$/, [], ledger],
   [/^\/api\/v1\/keys$/, [], keys],
   [/^\/api\/v1\/dev\/outbox$/, [], outbox],
+  [/^\/api\/v1\/intake$/, [], intake],
+  [/^\/api\/v1\/intake\/([^/]+)$/, ["requestId"], intakeOne as RouteModule],
+  [/^\/api\/v1\/intake\/([^/]+)\/concerns$/, ["requestId"], intakeConcerns as RouteModule],
+  [/^\/api\/v1\/intake\/([^/]+)\/answers$/, ["requestId"], intakeAnswers as RouteModule],
+  [/^\/api\/v1\/intake\/([^/]+)\/choice$/, ["requestId"], intakeChoice as RouteModule],
+  [/^\/api\/v1\/kitchen$/, [], kitchen],
 ];
 
 /**

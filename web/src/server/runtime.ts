@@ -2,11 +2,13 @@ import { randomUUID } from "node:crypto";
 import type { JWK } from "jose";
 import { InMemoryOutbox } from "@/core/approval";
 import { InMemoryCatalog, MeteredCatalog } from "@/core/catalog";
+import { InMemoryKitchenRepository } from "@/core/kitchen";
 import { generateEd25519KeyPair, importEd25519KeyPair } from "@/core/keys";
 import { Ledger } from "@/core/ledger";
 import { createTrustRegistry } from "@/core/mandate";
 import { InMemoryDockRepository, createDock, type Dock } from "@/core/orders";
 import { SEED_PRODUCTS, SEED_STOCK } from "@/core/seed";
+import { KITCHEN_ORG, demoKitchenKeyPair, demoKitchenProfile } from "./demo-kitchen";
 import { DEMO_ORG, demoOrgKeyPair } from "./dev-fixtures";
 
 /**
@@ -35,15 +37,20 @@ async function buildRuntime(): Promise<Runtime> {
     ? await importEd25519KeyPair("dock-wholesaler", JSON.parse(process.env.DOCK_WHOLESALER_JWK) as JWK)
     : await generateEd25519KeyPair(`dock-wholesaler-${randomUUID().slice(0, 8)}`);
   const demoOrg = await demoOrgKeyPair();
+  const demoKitchen = await demoKitchenKeyPair();
   const catalog = new InMemoryCatalog(SEED_PRODUCTS, SEED_STOCK);
   const outbox = new InMemoryOutbox();
   const dock = createDock({
     catalog: new MeteredCatalog(catalog),
     repo: new InMemoryDockRepository(),
     ledger: new Ledger(),
-    trustedIssuers: createTrustRegistry([{ kid: demoOrg.kid, orgId: DEMO_ORG.orgId, publicKey: demoOrg.publicKey }]),
+    trustedIssuers: createTrustRegistry([
+      { kid: demoOrg.kid, orgId: DEMO_ORG.orgId, publicKey: demoOrg.publicKey },
+      { kid: demoKitchen.kid, orgId: KITCHEN_ORG.orgId, publicKey: demoKitchen.publicKey },
+    ]),
     wholesalerKey,
     notifier: outbox,
+    kitchens: new InMemoryKitchenRepository([demoKitchenProfile(new Date())]), // DEV: a returning kitchen with history
   });
   return { dock, outbox, catalog };
 }
