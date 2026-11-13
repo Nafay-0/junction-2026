@@ -40,3 +40,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# derived from partner data that must not be published (pnpm index:build)
+/.data/
