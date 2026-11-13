@@ -1,5 +1,5 @@
 import { decodeJwt } from "jose";
-import type { CatalogPort, LiveOptions, LiveStatus, Product } from "@/core/catalog";
+import { statusFromOffer, type CatalogPort, type LiveOptions, type LiveStatus, type Product } from "@/core/catalog";
 import { likeForLike } from "@/core/options";
 import { DockError, type AgentSession, type Dock } from "@/core/orders";
 import { alternativesFor as knowledgeAlternatives } from "../knowledge/service";
@@ -116,7 +116,12 @@ export function recallAwareCatalog<C extends CatalogPort>(inner: C, holdsOf: (id
   const getLiveStatus = async (productIds: string[], options?: LiveOptions): Promise<LiveStatus[]> => {
     const statuses: LiveStatus[] = inner.getLiveStatus
       ? await inner.getLiveStatus(productIds, options)
-      : (await inner.getLiveOffers(productIds, options)).map((o) => ({ productId: o.productId, orderable: o.availablePacks > 0, problems: [], offer: o, message: `${o.productId}: ${o.availablePacks} packs.` }));
+      : await (async () => {
+          // One status per id asked, unknown products included, as the core builds them: otherwise the core's
+          // short-lived cache has nothing for an unknown id and a re-check reaches the partner's live service again.
+          const byId = new Map((await inner.getLiveOffers(productIds, options)).map((o) => [o.productId, o]));
+          return productIds.map((id) => statusFromOffer(id, byId.get(id), options));
+        })();
     return statuses.map((s) => {
       const h = holdsOf([s.productId])[0];
       if (!h) return s;
