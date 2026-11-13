@@ -2,26 +2,29 @@ import { randomUUID } from "node:crypto";
 import type { JWK } from "jose";
 import { InMemoryOutbox } from "@/core/approval";
 import { InMemoryCatalog, MeteredCatalog } from "@/core/catalog";
-import { InMemoryEventBus } from "@/core/events";
-import { InMemoryKitchenRepository } from "@/core/kitchen";
+import type { InMemoryEventBus } from "@/core/events";
+import type { KitchenRepository } from "@/core/kitchen";
 import { generateEd25519KeyPair, importEd25519KeyPair } from "@/core/keys";
 import { Ledger } from "@/core/ledger";
 import { createTrustRegistry } from "@/core/mandate";
-import { InMemoryDockRepository, createDock, type Dock } from "@/core/orders";
-import { InMemoryPasskeyStore, PasskeyService } from "@/core/passkeys";
+import { createDock, type Dock } from "@/core/orders";
+import { PasskeyService } from "@/core/passkeys";
 import { SEED_PRODUCTS, SEED_STOCK } from "@/core/seed";
 import { demoTapEnabled, sandboxLimits } from "./config";
 import { KITCHEN_ORG, demoKitchenKeyPair, demoKitchenProfile, demoProducts } from "./demo-kitchen";
 import { DEMO_ORG, demoOrgKeyPair } from "./dev-fixtures";
+import { selectAdapters, type AivenHandle } from "./aiven";
+import { LiveCacheSlot, liveCacheSlots } from "./aiven/live-slot";
 import { SandboxService } from "./sandboxes";
-import { loadCatalogIndex } from "./valio/index-store";
+import { loadCatalogIndex, resolveCatalogIndex } from "./valio/index-store";
 import { ValioLiveClient } from "./valio/live-client";
 import { ValioCatalog } from "./valio/valio-catalog";
 
 /**
  * The one Dock instance of this server process, with in-memory storage.
  * Kept on globalThis so every route bundle (and dev hot reloads) share the same store.
- * To go persistent, replace InMemoryDockRepository and the ledger store here.
+ * Storage is in memory by default; the Aiven adapters (PostgreSQL, Kafka, Valkey, OpenSearch) replace each store
+ * when switched on by configuration (see the AIVEN ADAPTERS block and src/server/aiven/env.ts).
  *
  * Catalogue: the partner's real catalogue (ValioCatalog) when the index exists (`pnpm index:build`) and
  * VALIO_API_KEY is set; otherwise the 12-product seed, so a fresh clone runs with no partner data.
@@ -40,6 +43,10 @@ export type Runtime = {
   passkeys: PasskeyService;
   /** Visitor kitchens created by scanning the join QR code. */
   sandboxes: SandboxService;
+  /** Which Aiven adapters are on, their health check and shutdown (src/server/aiven). */
+  aiven: AivenHandle;
+  /** Kitchen memory (history, stated rules), shared with the Dock instance; the kitchen portal corrects stated rules here. */
+  kitchens: KitchenRepository;
 };
 
 const g = globalThis as typeof globalThis & { __dockRuntime?: Promise<Runtime> };
@@ -61,31 +68,39 @@ async function buildRuntime(): Promise<Runtime> {
     : await generateEd25519KeyPair(`dock-wholesaler-${randomUUID().slice(0, 8)}`);
   const demoOrg = await demoOrgKeyPair();
   const demoKitchen = await demoKitchenKeyPair();
-  const { catalog, catalogSource } = buildCatalog();
+  const { catalog, catalogSource } = buildCatalog(wantsRealCatalog() ? await resolveCatalogIndex() : undefined);
   const outbox = new InMemoryOutbox();
   const trustedIssuers = createTrustRegistry([
     { kid: demoOrg.kid, orgId: DEMO_ORG.orgId, publicKey: demoOrg.publicKey },
     { kid: demoKitchen.kid, orgId: KITCHEN_ORG.orgId, publicKey: demoKitchen.publicKey },
   ]);
-  const events = new InMemoryEventBus();
-  // Approvers who registered a passkey must use it; others (the scripted Laakso demo) keep the link token.
-  const passkeys = new PasskeyService({ store: new InMemoryPasskeyStore(), demoTapEnabled });
+  // ---- BEGIN AIVEN ADAPTERS (src/server/aiven, owner: data plane) ----
+  // Every store below is in memory unless configuration switches its Aiven adapter on: DOCK_STORE=postgres,
+  // DOCK_ACTIONS=kafka|postgres, DOCK_CACHE=valkey, DOCK_BUS=valkey, DOCK_SEARCH=opensearch, or DOCK_AIVEN=1 for all
+  // configured services (src/server/aiven/env.ts). `stores.catalog` is `catalog` with the live cache and search routing.
   // Demo histories come from the catalogue this process runs on (the real one when present), by attribute.
   const products = await demoProducts(catalog);
-  const kitchens = new InMemoryKitchenRepository([demoKitchenProfile(new Date(), products)]); // DEV: a returning kitchen with history
+  const stores = await selectAdapters({ catalog, seedKitchens: [demoKitchenProfile(new Date(), products)] }); // DEV: a returning kitchen with history
+  const { events, aiven } = stores;
+  // ---- END AIVEN ADAPTERS ----
+  // Approvers who registered a passkey must use it; others (the scripted Laakso demo) keep the link token.
+  const passkeys = new PasskeyService({ store: stores.passkeyStore, demoTapEnabled });
   const dock = createDock({
-    catalog: new MeteredCatalog(catalog),
-    repo: new InMemoryDockRepository(),
-    ledger: new Ledger(),
+    catalog: new MeteredCatalog(stores.catalog),
+    repo: stores.repo,
+    ledger: new Ledger(stores.ledgerStore),
     trustedIssuers,
     wholesalerKey,
     notifier: outbox,
     verifier: passkeys.verifier,
     events,
-    kitchens,
+    kitchens: stores.kitchens,
+    intakes: stores.intakes,
+    liveAllowance: stores.liveAllowance,
   });
-  const sandboxes = new SandboxService({ dock, registry: trustedIssuers, passkeys, limits: sandboxLimits, kitchens, products: async () => products });
-  return { dock, outbox, catalog, catalogSource, events, passkeys, sandboxes };
+  const sandboxes = new SandboxService({ dock, registry: trustedIssuers, passkeys, limits: sandboxLimits, kitchens: stores.kitchens, products: async () => products, store: stores.sandboxStore });
+  await sandboxes.restore();
+  return { dock, outbox, catalog, catalogSource, events, passkeys, sandboxes, aiven, kitchens: stores.kitchens };
 }
 
 const envValue = (name: string) => {
@@ -93,15 +108,24 @@ const envValue = (name: string) => {
   return v && v.trim() ? v.trim() : undefined;
 };
 
-/** Pick the catalogue from the environment. Never throws for a missing index or key: it falls back to the seed. */
-export function buildCatalog(): { catalog: InMemoryCatalog | ValioCatalog; catalogSource: CatalogSource } {
+const wantsRealCatalog = () => envValue("DOCK_CATALOG") !== "seed" && !!envValue("VALIO_API_KEY");
+
+/**
+ * Pick the catalogue from the environment. Never throws for a missing index or key: it falls back to the seed.
+ * `indexFile`: where `resolveCatalogIndex()` found the index (a local file, or a copy fetched from PostgreSQL).
+ */
+export function buildCatalog(indexFile?: string): { catalog: InMemoryCatalog | ValioCatalog; catalogSource: CatalogSource } {
   const apiKey = envValue("VALIO_API_KEY");
-  if (envValue("DOCK_CATALOG") !== "seed" && apiKey) {
-    const loaded = loadCatalogIndex();
+  if (wantsRealCatalog() && apiKey) {
+    const loaded = loadCatalogIndex(indexFile);
     if (loaded) {
-      const live = new ValioLiveClient({ baseUrl: envValue("VALIO_API_BASE") ?? "https://junction26.valioaimo.fi", apiKey, customer: envValue("VALIO_CUSTOMER") });
+      const client = new ValioLiveClient({ baseUrl: envValue("VALIO_API_BASE") ?? "https://junction26.valioaimo.fi", apiKey, customer: envValue("VALIO_CUSTOMER") });
+      // AIVEN HOOK: a slot in front of the partner API where the Valkey live cache plugs in (src/server/aiven/live-slot.ts).
+      const live = new LiveCacheSlot(client);
+      const valio = new ValioCatalog(loaded.index, live);
+      liveCacheSlots.set(valio, live);
       return {
-        catalog: new ValioCatalog(loaded.index, live),
+        catalog: valio,
         catalogSource: { kind: "valio", products: loaded.index.products.length, indexFile: loaded.file, loadMs: loaded.loadMs },
       };
     }
