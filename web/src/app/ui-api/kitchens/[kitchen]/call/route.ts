@@ -17,6 +17,7 @@ const ALLOWED: [string, RegExp][] = [
   ["POST", /^\/api\/v1\/intake\/req_[a-z0-9]+\/(concerns|answers|choice)$/],
   ["POST", /^\/api\/v1\/orders$/],
   ["GET", /^\/api\/v1\/orders\/ord_[a-z0-9]+$/],
+  ["POST", /^\/api\/v1\/orders\/ord_[a-z0-9]+\/withdraw$/],
   ["GET", /^\/api\/v1\/ledger(\?[\w=&%-]*)?$/],
   ["POST", /^\/api\/v1\/agent\/interpret$/],
 ];

@@ -113,6 +113,8 @@ export type IntakeDeps = {
   openRequest: (session: AgentSession, input: { text: string; neededBy?: string }) => Promise<PurchaseRequest>;
   requestQuote: (session: AgentSession, input: { requestId: string; lines: QuoteRequestLine[] }) => Promise<{ quote: Quote; quoteToken: string; policyPreview: Decision }>;
   spentThisWeek: (orgId: string) => Promise<number>;
+  /** Committed and held spend, with the orders holding money, for the budget's part of a "nothing fits" answer. */
+  budgetUse?: (orgId: string) => Promise<{ spentCents: number; heldCents: number; held: { orderId: string; totalCents: number; expiresAt: string }[] }>;
   /** The order flow's live lookup: allowance, delivery date, signed claims and ledger in one place (see orders.ts). */
   liveLookup: (session: AgentSession, requestId: string, productIds: string[], deliveryDate: string | undefined, why: string) => Promise<LiveLookupResult>;
 };
@@ -203,7 +205,8 @@ export function createIntakeFlow(deps: IntakeDeps) {
     const learned = learnPreferences(profile, i.family);
     const last = lastOrder(profile, i.family);
     const usual = learned.find((l) => l.kind === "product");
-    const spent = await deps.spentThisWeek(i.orgId);
+    const budget = deps.budgetUse ? await deps.budgetUse(i.orgId) : { spentCents: await deps.spentThisWeek(i.orgId), heldCents: 0, held: [] };
+    const spent = budget.spentCents;
     const reference = referenceFor(i.need, allowed, last, usual);
 
     // 3. "Same as last time" settles every choice from the last order; otherwise ask only what matters and memory
@@ -257,6 +260,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
       now: at,
       neededBy: i.need.deliverBy,
       spentThisWeekCents: spent,
+      heldThisWeekCents: budget.heldCents,
       last,
       usual: usual?.kind === "product" ? { productId: usual.productId, text: usual.text } : undefined,
       reference,
@@ -279,7 +283,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
     }
     i.notes.push(...result.notes, ...i.notAsked);
     i.excluded.push(...result.excluded);
-    if (result.cards.length === 0) return noOptions(i, noOptionReason(result.excluded, i.need.deliverBy));
+    if (result.cards.length === 0) return noOptions(i, noOptionReason(result.excluded, i.need.deliverBy, { mandate: session.mandate, ...budget }));
     i.options = result.cards;
 
     // 5. Plausibility warnings: if every option goes to a person for sign-off anyway, that person sees the warning
@@ -535,12 +539,40 @@ function goalFromMemory(need: StructuredNeed, stated: StatedPreference[], learne
   return {};
 }
 
-/** Why nothing can be offered, leading with what the buyer can act on (a passed cut-off, a date too early). */
-function noOptionReason(excluded: Exclusion[], deliverBy: string | undefined): string {
-  const cutoff = excluded.filter((e) => e.code === "cutoff_passed");
-  if (cutoff.length && cutoff.length === excluded.length) return `Nothing can arrive by ${deliverBy ?? "the date asked"}: the order cut-off has passed for every product priced (${cutoff.map((e) => e.productId).join(", ")}).`;
-  if (excluded.length) return `Nothing on the short list can be delivered in time within the mandate: ${[...new Set(excluded.map((e) => e.reason))].slice(0, 3).join("; ")}.`;
-  return "Nothing in stock can be delivered in time within the mandate.";
+/**
+ * Why nothing can be offered, naming the real blocker first. A product can be excluded for several reasons on the
+ * way (out of stock, then too late); what decides is the last gate the best plans hit. The weekly budget and a
+ * passed order cut-off lead whenever they removed an option, because the buyer can act on them (withdraw or sign
+ * a waiting order, order earlier); then the reason that removed the most products.
+ */
+export function noOptionReason(
+  excluded: Exclusion[],
+  deliverBy: string | undefined,
+  budget?: { mandate: { weeklyBudgetCents: number }; spentCents: number; heldCents: number; held: { orderId: string; totalCents: number; expiresAt: string }[] },
+): string {
+  if (!excluded.length) return "Nothing in stock can be delivered in time within the mandate.";
+  const by = new Map<string, Exclusion[]>();
+  for (const e of excluded) {
+    if (e.code === "compromise") continue;
+    const k = e.code ?? "other";
+    by.set(k, [...(by.get(k) ?? []), e]);
+  }
+  const overBudget = by.get("over_budget") ?? [];
+  const cutoff = by.get("cutoff_passed") ?? [];
+  const others = [...by.entries()].filter(([k]) => k !== "over_budget" && k !== "cutoff_passed").sort((a, b) => b[1].length - a[1].length);
+  const parts: string[] = [];
+  if (overBudget.length) {
+    const b = budget;
+    const committed = b ? b.spentCents - b.heldCents : undefined;
+    const left = b && committed !== undefined ? Math.max(0, b.mandate.weeklyBudgetCents - committed) : undefined;
+    parts.push(
+      `the weekly budget: ${overBudget.length === 1 ? "the option that fits" : `${overBudget.length} options that fit`} would cost more than ${left !== undefined ? `the ${formatEur(left)} left of ${formatEur(b!.mandate.weeklyBudgetCents)} this week (${formatEur(committed!)} already committed)` : "is left this week"}`,
+    );
+  }
+  if (cutoff.length) parts.push(`the order cut-off has passed for ${cutoff.map((e) => e.productId).join(", ")}, so ${cutoff.length > 1 ? "they" : "it"} cannot arrive by ${deliverBy ?? "the date asked"}`);
+  for (const [, list] of others) parts.push([...new Set(list.map((e) => `${e.productId}: ${e.reason}`))].slice(0, 2).join("; "));
+  if (!parts.length) return "Nothing on the short list can be delivered in time within the mandate.";
+  return `Nothing fits. The blocker is ${parts[0]}.${parts.length > 1 ? ` Also: ${parts.slice(1, 3).join("; ")}.` : ""}`;
 }
 
 function lastAmount(profile: KitchenProfile, family: string) {

@@ -7,6 +7,7 @@ import { generateEd25519KeyPair } from "./keys";
 import { Ledger, explain } from "./ledger";
 import { createTrustRegistry, signMandate } from "./mandate";
 import type { NeedInput } from "./need";
+import { noOptionReason } from "./intake";
 import { InMemoryDockRepository, createDock, type AgentSession, type Dock } from "./orders";
 import { sampleMandate } from "./test-fixtures";
 
@@ -197,6 +198,19 @@ describe("intake flow", () => {
     const r = await dock.intake.open(session, { need: need({ item: { text: "milk", category: "milk", attributes: ["vegan"] }, optimise: "price" }) });
     expect(r.state).toBe("no_options");
     expect(r.excluded.length).toBeGreaterThan(0);
+  });
+
+  it("names the weekly budget as the blocker when it removed the options (F-NO-OPTION-REASON)", () => {
+    const excluded = [
+      { productId: "A", reason: "earliest delivery Thu 19 Nov is after Wed 18 Nov, the latest the mandate allows", code: "too_late" as const },
+      { productId: "B", reason: "only 400 L in stock, and no substitute within the mandate covers the rest", code: "no_substitute" as const },
+      { productId: "C", reason: "€1,322.00 would go over the weekly budget", code: "over_budget" as const },
+      { productId: "D", reason: "€1,400.00 would go over the weekly budget", code: "over_budget" as const },
+    ];
+    const text = noOptionReason(excluded, "2026-11-16", { mandate: { weeklyBudgetCents: 200_000 }, spentCents: 132_200, heldCents: 0, held: [] });
+    expect(text).toMatch(/^Nothing fits\. The blocker is the weekly budget: 2 options that fit would cost more than the €678\.00 left of €2,000\.00 this week \(€1,322\.00 already committed\)/);
+    expect(text).toContain("A: earliest delivery");
+    expect(noOptionReason([{ productId: "A", reason: "x", code: "cutoff_passed" }], "2026-11-16")).toMatch(/^Nothing fits\. The blocker is the order cut-off has passed for A/);
   });
 
   it("keeps intakes private to the agent and validates input", async () => {

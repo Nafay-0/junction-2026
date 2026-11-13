@@ -288,6 +288,23 @@ export function ApprovalScreen({ approvalId, token }: { approvalId: string; toke
 }
 
 function Outcome({ view }: { view: ApprovalView }) {
+  if (view.state === "withdrawn" || view.state === "expired") {
+    return (
+      <div className="mt-8 flex flex-1 flex-col" role="status" aria-live="polite">
+        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-neutral-700 text-4xl text-white" aria-hidden>
+          ×
+        </div>
+        <h1 className="mt-5 text-3xl font-bold">{view.state === "withdrawn" ? "Withdrawn by the kitchen" : "Expired unsigned"}</h1>
+        <p className="mt-2 text-xl">
+          {view.total} · {view.delivery}
+        </p>
+        {view.closedReason && <p className="mt-4">{view.closedReason}</p>}
+        <Link href="/approver" className="mt-auto flex h-14 items-center justify-center rounded-xl border border-neutral-300 text-lg">
+          Back to my screen
+        </Link>
+      </div>
+    );
+  }
   const o = view.outcome;
   const placed = view.state === "committed";
   const declined = view.state === "declined";

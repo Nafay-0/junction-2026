@@ -124,6 +124,19 @@ describe("policy: spend limits", () => {
     expect(rule(d, "weekly_budget").details).toMatchObject({ budgetCents: 200_000, spentCents: 150_000, totalCents: 104_300 });
   });
 
+  it("money held by orders waiting for sign-off escalates instead of refusing; committed money still refuses (F-PENDING-HOLDS-BUDGET)", () => {
+    const small20 = quote([{ productId: "VA-1001", quantity: 20 }]); // €29.80, within what the agent may spend alone
+    const held = { spentThisWeekCents: 199_000, heldThisWeekCents: 150_000, heldOrders: [{ orderId: "ord_wait", totalCents: 150_000, expiresAt: addMinutes(NOW, 20).toISOString() }] };
+    const d = evaluatePolicy(mandate(), draft(small20), ctx(held));
+    expect(d.outcome).toBe("needs_human_approval");
+    expect(rule(d, "weekly_budget")).toMatchObject({ outcome: "escalate", details: { committedCents: 49_000, heldCents: 150_000 } });
+    expect(rule(d, "weekly_budget").reason).toContain("ord_wait");
+    // The same total with the money committed: refused.
+    expectRejectedBy(evaluatePolicy(mandate(), draft(small20), ctx({ spentThisWeekCents: 199_000 })), "weekly_budget");
+    // Committed alone already over: refused even though part is only held.
+    expectRejectedBy(evaluatePolicy(mandate(), draft(big()), ctx({ spentThisWeekCents: 199_000, heldThisWeekCents: 50_000 })), "weekly_budget");
+  });
+
   it("allows spending exactly up to the weekly budget", () => {
     const d = evaluatePolicy(mandate(), draft(small()), ctx({ spentThisWeekCents: 200_000 - 2980 }));
     expect(d.outcome).toBe("auto_approve");

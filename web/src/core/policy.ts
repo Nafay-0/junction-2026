@@ -30,7 +30,7 @@ export const RULES = [
   "delivery_deadline", // every line arrives by the need-by date and within the mandate's max lead time
   "substitution_rule", // substitutes allowed per the mandate's rule (none / same_attributes / needs_approval)
   "substitute_price", // substitute's price per unit within the tolerated increase
-  "weekly_budget", // committed + pending spend over 7 days stays within budget: hard limit
+  "weekly_budget", // committed spend over 7 days stays within budget (hard); money held by orders waiting for sign-off is a person's call
   "per_order_limit", // above it, a human must sign off
   "order_splitting", // several orders the agent placed alone for the same need may not add up to more than it may spend alone
   "approver_authority", // someone named in the mandate can sign off this amount
@@ -65,6 +65,14 @@ export type RecentOrder = {
 export type PolicyContext = {
   now: Date;
   spentThisWeekCents: number; // committed + pending orders of this organisation over the last 7 days
+  /**
+   * The part of spentThisWeekCents held by orders still waiting for sign-off (their fixed price not yet expired).
+   * Committed spend is a hard limit; held money only stops the agent spending it alone: an order that fits the
+   * budget unless every waiting order is signed too goes to a person, who sees both. Absent: 0 (all committed).
+   */
+  heldThisWeekCents?: number;
+  /** The orders holding that money, named in the reason. */
+  heldOrders?: { orderId: string; totalCents: number; expiresAt: string }[];
   quoteAlreadyUsed: boolean;
   /** Orders of this organisation in the last SPLIT_WINDOW_HOURS, for the order_splitting check. Absent: none. */
   recentOrders?: RecentOrder[];
@@ -211,12 +219,23 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
   }
 
   // Money
+  const held = Math.min(Math.max(0, ctx.heldThisWeekCents ?? 0), ctx.spentThisWeekCents);
+  const committed = ctx.spentThisWeekCents - held;
   const after = ctx.spentThisWeekCents + total;
-  const budgetDetails = { budgetCents: mandate.weeklyBudgetCents, spentCents: ctx.spentThisWeekCents, totalCents: total };
+  const budgetDetails = { budgetCents: mandate.weeklyBudgetCents, spentCents: ctx.spentThisWeekCents, committedCents: committed, heldCents: held, totalCents: total };
   if (after <= mandate.weeklyBudgetCents)
     add("weekly_budget", "pass", `Weekly spend would be ${formatEur(after)} of ${formatEur(mandate.weeklyBudgetCents)}.`, budgetDetails);
-  else
-    add("weekly_budget", "fail", `This ${formatEur(total)} order would take weekly spend to ${formatEur(after)}, over the ${formatEur(mandate.weeklyBudgetCents)} budget (already ${formatEur(ctx.spentThisWeekCents)}).`, budgetDetails);
+  else if (committed + total > mandate.weeklyBudgetCents)
+    add("weekly_budget", "fail", `This ${formatEur(total)} order would take weekly spend to ${formatEur(committed + total)}, over the ${formatEur(mandate.weeklyBudgetCents)} budget (already ${formatEur(committed)} committed${held ? `, ${formatEur(held)} more waiting for sign-off` : ""}).`, budgetDetails);
+  else {
+    const named = (ctx.heldOrders ?? []).map((o) => `${o.orderId} (${formatEur(o.totalCents)})`).join(", ");
+    add(
+      "weekly_budget",
+      "escalate",
+      `This ${formatEur(total)} order fits the ${formatEur(mandate.weeklyBudgetCents)} weekly budget with the ${formatEur(committed)} committed, but not together with the ${formatEur(held)} waiting for sign-off${named ? ` on ${named}` : ""}. The agent may not spend held money alone, so a person decides; if both are signed, the later one is refused.`,
+      { ...budgetDetails, heldOrders: ctx.heldOrders },
+    );
+  }
 
   const limitDetails = { limitCents: mandate.perOrderLimitCents, totalCents: total };
   if (total <= mandate.perOrderLimitCents)

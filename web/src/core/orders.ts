@@ -57,6 +57,12 @@ export const PlaceOrderInput = z.object({
   quoteToken: z.string().min(1),
   lines: z.array(z.object({ productId: z.string(), quantity: z.number(), unitPriceCents: z.number() })),
 });
+export const WithdrawInput = z.object({
+  /** Why, in the buyer's words; written to the ledger. */
+  reason: z.string().max(300).optional(),
+  /** Who asked for it, as relayed by the agent (recorded as relayed, not verified). */
+  by: z.string().min(1).max(120).optional(),
+});
 export const ApprovalDecisionInput = z.object({
   decision: z.enum(["approve", "decline"]),
   proof: ApprovalProofSchema,
@@ -77,7 +83,11 @@ export type PurchaseRequest = {
   createdAt: string;
 };
 
-export type OrderStatus = "pending_approval" | "committed" | "rejected" | "declined";
+/**
+ * pending_approval: waiting for a person, holding its total against the weekly budget until its quote expires.
+ * withdrawn: the buyer took it back before anyone signed. expired: its fixed price ran out before anyone signed.
+ */
+export type OrderStatus = "pending_approval" | "committed" | "rejected" | "declined" | "withdrawn" | "expired";
 
 export type Order = {
   orderId: string;
@@ -263,13 +273,59 @@ export function createDock(deps: DockDeps) {
     return r;
   }
 
-  async function spentThisWeek(orgId: string, excludeOrderId?: string): Promise<number> {
+  /**
+   * An order waiting for sign-off holds its total only while its fixed price does: once the quote expires nobody
+   * can sign it any more (the re-check would refuse it), so it is closed as expired, logged, and stops holding money.
+   */
+  const expiring = new Set<string>();
+  async function expireStale(orgId?: string): Promise<void> {
+    const t = now().getTime();
+    for (const o of await repo.listOrders()) {
+      if ((orgId && o.orgId !== orgId) || o.status !== "pending_approval" || Date.parse(o.quote.expiresAt) > t || expiring.has(o.orderId)) continue;
+      expiring.add(o.orderId);
+      try {
+        const at = now().toISOString();
+        o.status = "expired";
+        o.updatedAt = at;
+        if (o.approval && o.approval.status === "pending") {
+          o.approval.status = "expired";
+          o.approval.decidedAt = at;
+        }
+        await repo.saveOrder(o);
+        ledger.append({
+          type: "approval",
+          actor: "dock",
+          requestId: o.requestId,
+          orderId: o.orderId,
+          summary: `Order ${o.orderId} (${formatEur(o.totalCents)}) expired unsigned: its quote's fixed price ran out at ${o.quote.expiresAt.slice(0, 16).replace("T", " ")} UTC before anyone signed. It no longer holds the weekly budget; ask for a new quote to order again.`,
+          data: { approvalId: o.approval?.approvalId, decision: "expired", quoteExpiresAt: o.quote.expiresAt },
+        });
+        publish({ type: "approval_expired", at, orgId: o.orgId, orderId: o.orderId, approvalId: o.approval?.approvalId, totalCents: o.totalCents, summary: `${o.orgName}: the ${formatEur(o.totalCents)} order waiting for sign-off expired unsigned (its price ran out).` });
+      } finally {
+        expiring.delete(o.orderId);
+      }
+    }
+  }
+
+  /** The organisation's spend over the last 7 days: committed, and held by orders still waiting for sign-off. */
+  async function budgetUse(orgId: string, excludeOrderId?: string): Promise<{ spentCents: number; heldCents: number; held: { orderId: string; totalCents: number; expiresAt: string }[] }> {
+    await expireStale(orgId);
     const since = addDays(now(), -7).getTime();
-    return (await repo.listOrders())
-      .filter((o) => o.orgId === orgId && o.orderId !== excludeOrderId)
-      .filter((o) => o.status === "committed" || o.status === "pending_approval")
-      .filter((o) => Date.parse(o.createdAt) > since)
-      .reduce((sum, o) => sum + o.totalCents, 0);
+    const t = now().getTime();
+    const recent = (await repo.listOrders()).filter((o) => o.orgId === orgId && o.orderId !== excludeOrderId && Date.parse(o.createdAt) > since);
+    const committed = recent.filter((o) => o.status === "committed");
+    const held = recent.filter((o) => o.status === "pending_approval" && Date.parse(o.quote.expiresAt) > t);
+    const sum = (xs: Order[]) => xs.reduce((s, o) => s + o.totalCents, 0);
+    return { spentCents: sum(committed) + sum(held), heldCents: sum(held), held: held.map((o) => ({ orderId: o.orderId, totalCents: o.totalCents, expiresAt: o.quote.expiresAt })) };
+  }
+
+  async function spentThisWeek(orgId: string, excludeOrderId?: string): Promise<number> {
+    return (await budgetUse(orgId, excludeOrderId)).spentCents;
+  }
+
+  async function budgetContext(orgId: string, excludeOrderId?: string) {
+    const b = await budgetUse(orgId, excludeOrderId);
+    return { spentThisWeekCents: b.spentCents, heldThisWeekCents: b.heldCents, heldOrders: b.held };
   }
 
   /** Orders of this organisation in the splitting window, for the order_splitting rule. */
@@ -574,7 +630,7 @@ export function createDock(deps: DockDeps) {
       const policyPreview = evaluatePolicy(
         session.mandate,
         { agentId: session.agentId, quote, lines: quote.lines, neededBy: request.neededBy },
-        { now: now(), spentThisWeekCents: await spentThisWeek(quote.buyerOrgId), quoteAlreadyUsed: false, recentOrders: await recentOrders(quote.buyerOrgId) },
+        { now: now(), ...(await budgetContext(quote.buyerOrgId)), quoteAlreadyUsed: false, recentOrders: await recentOrders(quote.buyerOrgId) },
       );
       return { quote, quoteToken, policyPreview, claims };
     },
@@ -593,7 +649,7 @@ export function createDock(deps: DockDeps) {
       const orgId = session.mandate.issuer.orgId;
       return serialize(orgId, async () => {
         const draft = { agentId: session.agentId, quote, lines, neededBy: request.neededBy };
-        const ctx = { now: now(), spentThisWeekCents: await spentThisWeek(orgId), quoteAlreadyUsed: await repo.isQuoteUsed(quote.quoteId), recentOrders: await recentOrders(orgId) };
+        const ctx = { now: now(), ...(await budgetContext(orgId)), quoteAlreadyUsed: await repo.isQuoteUsed(quote.quoteId), recentOrders: await recentOrders(orgId) };
         let decision = evaluatePolicy(session.mandate, draft, ctx);
         if (decision.outcome !== "reject" && !(await repo.claimQuote(quote.quoteId))) {
           decision = evaluatePolicy(session.mandate, draft, { ...ctx, quoteAlreadyUsed: true });
@@ -682,6 +738,7 @@ export function createDock(deps: DockDeps) {
       const { decision, proof, note } = parse(ApprovalDecisionInput, input);
       const found = await repo.getOrderByApprovalId(approvalId);
       if (!found?.approval) throw new DockError(404, "approval_not_found", `No approval ${approvalId}.`);
+      await expireStale(found.orgId);
       return serialize(found.orgId, async () => {
         const order = (await repo.getOrder(found.orderId))!;
         const approval = order.approval!;
@@ -739,7 +796,7 @@ export function createDock(deps: DockDeps) {
         const recheck = evaluatePolicy(
           order.mandate,
           { agentId: order.agentId, quote: order.quote, lines: order.draftLines, neededBy: request?.neededBy },
-          { now: now(), spentThisWeekCents: await spentThisWeek(order.orgId, order.orderId), quoteAlreadyUsed: false, recentOrders: await recentOrders(order.orgId, order.orderId) },
+          { now: now(), ...(await budgetContext(order.orgId, order.orderId)), quoteAlreadyUsed: false, recentOrders: await recentOrders(order.orgId, order.orderId) },
         );
         if (recheck.outcome === "reject") {
           order.status = "rejected";
@@ -776,8 +833,10 @@ export function createDock(deps: DockDeps) {
 
     /** Everything a sign-off screen needs about one approval (no secrets). For the approver's phone, not for agents. */
     async approvalContext(approvalId: string): Promise<ApprovalContext> {
-      const o = await repo.getOrderByApprovalId(approvalId);
-      if (!o?.approval) throw new DockError(404, "approval_not_found", `No approval ${approvalId}.`);
+      const found = await repo.getOrderByApprovalId(approvalId);
+      if (!found?.approval) throw new DockError(404, "approval_not_found", `No approval ${approvalId}.`);
+      await expireStale(found.orgId);
+      const o = (await repo.getOrderByApprovalId(approvalId))!;
       const request = await repo.getRequest(o.requestId);
       return {
         order: toPublicOrder(o),
@@ -790,13 +849,15 @@ export function createDock(deps: DockDeps) {
     },
 
     async getOrder(session: AgentSession, orderId: string): Promise<PublicOrder> {
+      await expireStale(session.mandate.issuer.orgId);
       const o = await repo.getOrder(orderId);
       if (!o || o.orgId !== session.mandate.issuer.orgId) throw new DockError(404, "order_not_found", `No order ${orderId} for this organisation.`);
       return toPublicOrder(o);
     },
 
-    // APPROVER-AUTH SEAM: listing is open today; restrict it to signed-in approvers when passkeys land.
+    /** Every organisation's pending sign-offs. Callers decide who may see which (see server/authz.ts). */
     async listPendingApprovals(): Promise<PendingApproval[]> {
+      await expireStale();
       return (await repo.listOrders())
         .filter((o) => o.status === "pending_approval" && o.approval?.status === "pending")
         .map((o) => ({
@@ -813,7 +874,52 @@ export function createDock(deps: DockDeps) {
     },
 
     async listOrders(): Promise<PublicOrder[]> {
+      await expireStale();
       return (await repo.listOrders()).map(toPublicOrder);
+    },
+
+    /**
+     * The buyer takes back an order that waits for sign-off: it stops holding the weekly budget at once, the
+     * approver's phone shows it as withdrawn, and the ledger says who asked (relayed by the agent). Only the
+     * organisation's own pending orders; anything decided stays as it is.
+     */
+    async withdrawOrder(session: AgentSession, orderId: string, input: z.input<typeof WithdrawInput> = {}): Promise<PublicOrder> {
+      const { reason, by } = parse(WithdrawInput, input ?? {});
+      const orgId = session.mandate.issuer.orgId;
+      const found = await repo.getOrder(orderId);
+      if (!found || found.orgId !== orgId) throw new DockError(404, "order_not_found", `No order ${orderId} for this organisation.`);
+      return serialize(orgId, async () => {
+        await expireStale(orgId);
+        const order = (await repo.getOrder(orderId))!;
+        if (order.status !== "pending_approval") {
+          throw refuse(new DockError(409, "order_not_pending", `Order ${orderId} is ${order.status}; only an order waiting for sign-off can be withdrawn.`, "intake_sequence", { status: order.status }), agentActor(session), { requestId: order.requestId, orderId });
+        }
+        const at = now().toISOString();
+        order.status = "withdrawn";
+        order.updatedAt = at;
+        if (order.approval) {
+          order.approval.status = "withdrawn";
+          order.approval.decidedAt = at;
+          order.approval.note = reason;
+        }
+        await repo.saveOrder(order);
+        ledger.append({
+          type: "approval",
+          actor: agentActor(session),
+          requestId: order.requestId,
+          orderId,
+          summary: `Order ${orderId} (${formatEur(order.totalCents)}) withdrawn before sign-off${by ? `, at the request of ${by} (relayed by the agent, not verified)` : " by the agent"}${reason ? `: "${reason}"` : ""}. It no longer holds the weekly budget.`,
+          data: { approvalId: order.approval?.approvalId, decision: "withdrawn", reason, by, relayedBy: session.agentId },
+        });
+        publish({ type: "approval_withdrawn", at, orgId, orderId, approvalId: order.approval?.approvalId, totalCents: order.totalCents, summary: `${order.orgName}: the ${formatEur(order.totalCents)} order waiting for sign-off was withdrawn.` });
+        return toPublicOrder(order);
+      });
+    },
+
+    /** Weekly spend of the agent's organisation: committed, and held by orders waiting for sign-off. */
+    async budget(session: AgentSession) {
+      const b = await budgetUse(session.mandate.issuer.orgId);
+      return { budgetCents: session.mandate.weeklyBudgetCents, ...b, leftCents: session.mandate.weeklyBudgetCents - b.spentCents };
     },
 
     stats: () => catalog.stats(),
@@ -862,6 +968,7 @@ export function createDock(deps: DockDeps) {
     requestQuote: dock.requestQuote,
     liveLookup,
     spentThisWeek: (orgId) => spentThisWeek(orgId),
+    budgetUse: (orgId) => budgetUse(orgId),
   });
   return { ...dock, ...guarded, intake };
 }

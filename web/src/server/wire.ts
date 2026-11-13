@@ -87,7 +87,7 @@ export const OrderSchema = named("Order", z
     agentId: z.string(),
     mandateId: z.string(),
     quoteId: z.string(),
-    status: z.enum(["pending_approval", "committed", "rejected", "declined"]),
+    status: z.enum(["pending_approval", "committed", "rejected", "declined", "withdrawn", "expired"]),
     lines: z.array(QuoteLineOutSchema),
     totalCents: z.number().int(),
     decision: DecisionSchema,
@@ -95,7 +95,7 @@ export const OrderSchema = named("Order", z
       .looseObject({
         approvalId: z.string(),
         approver: ApproverSchema,
-        status: z.enum(["pending", "approved", "declined"]),
+        status: z.enum(["pending", "approved", "declined", "withdrawn", "expired"]),
         orderDigest: z.string(),
         requestedAt: z.iso.datetime(),
         decidedAt: z.iso.datetime().optional(),
@@ -312,7 +312,7 @@ export const DockEventSchema = named(
   "DockEvent",
   z.looseObject({
     id: z.number().int().describe("Also the SSE event id; send it back as Last-Event-ID to resume."),
-    type: z.enum(["approval_requested", "approval_approved", "approval_declined", "order_committed", "order_rejected"]),
+    type: z.enum(["approval_requested", "approval_approved", "approval_declined", "approval_withdrawn", "approval_expired", "order_committed", "order_rejected"]),
     at: z.iso.datetime(),
     orgId: z.string(),
     orderId: z.string(),

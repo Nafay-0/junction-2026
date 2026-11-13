@@ -109,6 +109,13 @@ describe("real responses match the documented status codes and schemas", () => {
     const oat = await agent("POST", "/api/v1/quotes", { requestId, lines: [{ productId: "PK-4001", quantity: 10 }] });
     expect((await agent("POST", "/api/v1/orders", { requestId, quoteToken: oat.body.quoteToken, lines: pick(oat.body) })).status).toBe(422);
 
+    const again = await agent("POST", "/api/v1/quotes", { requestId, lines: [{ productId: "VA-1010", quantity: 60 }, { productId: "AR-2010", quantity: 40, substituteFor: "VA-1010" }] });
+    const second = await agent("POST", "/api/v1/orders", { requestId, quoteToken: again.body.quoteToken, lines: pick(again.body) });
+    expect(second.status).toBe(202);
+    const withdrawn = await agent("POST", `/api/v1/orders/${second.body.order.orderId}/withdraw`, { reason: "ordered by phone" });
+    expect(withdrawn.body.order.status).toBe("withdrawn");
+    expect((await agent("POST", `/api/v1/orders/${second.body.order.orderId}/withdraw`, {})).status).toBe(409);
+
     await call("GET", "/api/v1/approvals");
     const msg = (await localFetch(new Request(`${BASE}/api/v1/dev/outbox`)).then((r) => r.json())).messages[0];
     expect((await call("POST", `/api/v1/approvals/${msg.approvalId}`, { decision: "approve", token: "wrong" })).status).toBe(403);

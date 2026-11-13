@@ -267,6 +267,18 @@ export const API: Operation[] = [
     responses: { 200: { description: "The order.", schema: OrderEnvelope }, 404: err("No such order for this organisation."), ...AUTH_ERRORS },
   },
   {
+    method: "post",
+    path: "/api/v1/orders/{orderId}/withdraw",
+    operationId: "withdrawOrder",
+    summary: "Withdraw an order that waits for sign-off",
+    description:
+      "The buyer takes back an order that is still pending_approval. It stops holding the weekly budget at once and the approver's screen shows it as withdrawn. `by` (who asked) is recorded as relayed by the agent, not verified. An order waiting for sign-off also stops holding the budget by itself when its quote's fixed price expires (status expired).",
+    auth: true,
+    params: [{ name: "orderId", in: "path", schema: z.string(), required: true }],
+    body: z.object({ reason: z.string().max(300).optional(), by: z.string().min(1).max(120).optional() }),
+    responses: { 200: { description: "The withdrawn order.", schema: OrderEnvelope }, 404: err("No such order for this organisation."), 409: err("The order is not waiting for sign-off any more."), ...AUTH_ERRORS },
+  },
+  {
     method: "get",
     path: "/api/v1/approvals",
     operationId: "listPendingApprovals",

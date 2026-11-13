@@ -98,6 +98,11 @@ export type OptionsInput = {
   now: Date;
   neededBy?: string;
   spentThisWeekCents: number;
+  /**
+   * The part of spentThisWeekCents held by orders waiting for sign-off. Only committed money excludes a card; a card
+   * that fits only if those orders are not signed is kept and says a person must sign it (policy.ts, weekly_budget).
+   */
+  heldThisWeekCents?: number;
   last?: HistoryEntry;
   usual?: { productId: string; text: string }; // learned usual product, for a "your usual" pro
   reference?: Reference;
@@ -299,9 +304,11 @@ export function buildOptions(input: OptionsInput): OptionsResult {
   }
 
   const total = (pl: Plan) => pl.lines.reduce((s, l) => s + l.lineTotalCents, 0);
+  const held = heldOf(input);
+  const committed = input.spentThisWeekCents - held;
   const affordable = plans.filter((pl) => {
-    const over = input.spentThisWeekCents + total(pl) > mandate.weeklyBudgetCents;
-    if (over) excluded.push({ productId: pl.primary.p.id, reason: `${formatEur(total(pl))} would go over the weekly budget (${formatEur(mandate.weeklyBudgetCents - input.spentThisWeekCents)} left)`, code: "over_budget" });
+    const over = committed + total(pl) > mandate.weeklyBudgetCents;
+    if (over) excluded.push({ productId: pl.primary.p.id, reason: `${formatEur(total(pl))} would go over the weekly budget (${formatEur(Math.max(0, mandate.weeklyBudgetCents - committed))} left of ${formatEur(mandate.weeklyBudgetCents)} after the ${formatEur(committed)} already committed this week)`, code: "over_budget" });
     return !over;
   });
 
@@ -440,6 +447,8 @@ export function likeForLike(original: Product, sub: Product): boolean {
   return original.category === sub.category && original.attributes.filter(isMaterialAttribute).every((a) => sub.attributes.includes(a));
 }
 
+const heldOf = (input: OptionsInput) => Math.min(Math.max(0, input.heldThisWeekCents ?? 0), input.spentThisWeekCents);
+
 function measure(pl: Plan, input: OptionsInput) {
   const total = pl.lines.reduce((s, l) => s + l.lineTotalCents, 0);
   const delivered = r2(pl.lines.reduce((s, l) => s + l.packs * l.packSize, 0));
@@ -453,6 +462,9 @@ function measure(pl: Plan, input: OptionsInput) {
   const signOff: string[] = [];
   const { mandate } = input;
   if (total > mandate.perOrderLimitCents) signOff.push(`Over the ${formatEur(mandate.perOrderLimitCents)} the agent may spend alone: a person must sign off.`);
+  const held = heldOf(input);
+  if (held > 0 && input.spentThisWeekCents + total > mandate.weeklyBudgetCents)
+    signOff.push(`${formatEur(held)} of this week's budget is held by an order waiting for sign-off; with it, this one would go over the ${formatEur(mandate.weeklyBudgetCents)} budget, so a person decides.`);
   const substitutes = pl.lines.filter((l) => l.substituteFor);
   if (substitutes.length && mandate.substitution.rule === "needs_approval") signOff.push("Includes a substitute: the mandate requires a person to approve it.");
   if (substitutes.length && mandate.substitution.rule === "within_preferences") {
