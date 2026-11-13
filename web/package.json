@@ -18,6 +18,7 @@
     "dev:mandate": "tsx scripts/dev-mandate.ts",
     "e2e": "next build && playwright test",
     "index:build": "tsx scripts/index-build.ts",
+    "index:publish": "tsx scripts/index-publish.ts",
     "valio:ping": "tsx scripts/valio-ping.ts",
     "infra:check": "tsx scripts/infra-check.ts"
   },
