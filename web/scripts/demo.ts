@@ -91,7 +91,8 @@ async function happyPath(): Promise<void> {
     s = s.state === "needs_confirmation" ? await settle(agent, s, LAAKSO) : (await agent.intakeAnswers(s.requestId, LAAKSO, s.questions.map((q) => ({ questionId: q.id, optionId: q.options[0].id })))).body.step;
   }
   const cutoffs = (s.excluded ?? []).filter((e) => e.code === "cutoff_passed");
-  step("lookup", `One live call for a short list. ${cutoffs.length ? "Order cut-off already passed for:" : "No passed cut-offs."}`);
+  const lookups = (await base.ledger({ requestId: s.requestId })).body.catalog.liveCalls - callsBefore;
+  step("lookup", `${lookups} live call${lookups === 1 ? "" : "s"} for short lists of at most 10 products. ${cutoffs.length ? "Order cut-off already passed for:" : "No passed cut-offs."}`);
   indent(cutoffs.map((e) => `${e.productId}: ${e.reason}`));
   if (s.state === "options_ready") {
     step("options", `Buyer interrupted ${interruptions} time${interruptions === 1 ? "" : "s"} before the options. Good, better, best:`);
@@ -273,7 +274,9 @@ async function attackProducts(agent: DockClient, requestId: string, m: Mandate) 
   const regular = (await search({ category: "milk" })).filter((p) => plain(p) && p.unit === "L" && !p.attributes.includes("lactose_free"));
   const drinks = await search({ category: "plant_drink", attributes: m.requiredAttributes });
   const allergen = drinks.filter((p) => p.allergens.some((a) => m.forbiddenAllergens.includes(a)));
-  const ids = [...litres.slice(0, 6), ...regular.slice(0, 2), ...allergen.slice(0, 2)].map((p) => p.id);
+  // Small packs first: the attacks order a handful, and single cartons are the items the wholesaler keeps in stock.
+  const small = (xs: Product[]) => [...xs].sort((a, b) => a.packSize - b.packSize || a.id.localeCompare(b.id));
+  const ids = [...small(litres).slice(0, 5), ...small(regular).slice(0, 3), ...allergen.slice(0, 2)].map((p) => p.id);
   const offers = (await agent.availability(requestId, ids)).body.offers ?? [];
   const byId = new Map([...litres, ...regular, ...allergen].map((p) => [p.id, p]));
   const offered = (ps: Product[]) => ps.filter((p) => offers.some((o) => o.productId === p.id));
@@ -368,9 +371,13 @@ async function attacks(): Promise<void> {
   // 11. Another agent presents this agent's mandate.
   results.push({ name: "A different agent presents this mandate", reply: await base.as(token, "agent_someone_else").openRequest("more milk") });
 
-  // 12. The agent tries to approve its own sign-off request (an order over what it may spend alone).
-  const bigQuote = await agent.quote(requestId, [{ productId: roomy.id, quantity: roomyPacks(m.perOrderLimitCents + 5_000) }]);
-  const pending = await agent.placeOrder(requestId, bigQuote.body.quoteToken, pick(bigQuote.body));
+  // 12. The agent tries to approve its own sign-off request: an order over what it may spend alone (a mandate with a
+  // €50 limit, so it fits this week's remaining budget whatever ran before).
+  const fifty = base.as(await mandateToken({ perOrderLimitCents: 5_000 }), DEMO_ORG.agentId);
+  const bigQuote = await fifty.quote(requestId, [{ productId: roomy.id, quantity: roomyPacks(6_000) }]);
+  if (bigQuote.status !== 201) throw new Error(`could not set up the sign-off attack: ${JSON.stringify(bigQuote.body.error)}`);
+  const pending = await fifty.placeOrder(requestId, bigQuote.body.quoteToken, pick(bigQuote.body));
+  if (!pending.body.order?.approval) throw new Error(`the sign-off attack needs a pending order: ${JSON.stringify(pending.body.error ?? pending.body.order?.status)}`);
   results.push({ name: "Approve its own order without the approver's link", reply: await agent.decide(pending.body.order.approval!.approvalId, "approve", "let-me-in") });
 
   // 13. Scrape the partner API.
@@ -414,6 +421,8 @@ async function main() {
   if (which === "all" || which === "happy") await happyPath();
   if (which === "all" || which === "kitchen") await returningKitchen();
   if (which === "all" || which === "attacks") await attacks();
+  const { catalog } = (await base.ledger()).body;
+  say(`\nPartner API use for the whole run: ${catalog.liveCalls} live lookups by Dock, ${catalog.upstream ? `${catalog.upstream.httpRequests} HTTP requests to the partner (${catalog.upstream.cacheHits} answered from the cache)` : "none (seed catalogue)"}; ${catalog.searches} local master-data searches.`);
 }
 
 main().catch((err) => {

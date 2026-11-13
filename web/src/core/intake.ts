@@ -20,7 +20,7 @@ import {
 } from "./kitchen";
 import type { Ledger } from "./ledger";
 import { NeedSchema, SPEC_DIMENSIONS, applyNeedPatch, describeNeed, dimensionValue, formatAmount, normaliseNeed, type BaseUnit, type OptimiseGoal, type StructuredNeed } from "./need";
-import { LABEL_TEXT, buildOptions, formatCutoff, preselect, shortlist, type Exclusion, type OptionCard, type OptionLabel, type Reference } from "./options";
+import { LABEL_TEXT, MAX_CARDS, buildOptions, formatCutoff, preselect, shortlist, type Exclusion, type OptionCard, type OptionLabel, type Reference } from "./options";
 import type { AgentSession, DockRepository, LiveLookupResult, Order, PurchaseRequest } from "./orders";
 import type { Decision } from "./policy";
 import type { Quote, QuoteRequestLine } from "./quote";
@@ -248,11 +248,11 @@ export function createIntakeFlow(deps: IntakeDeps) {
     const short = shortlist(narrowed, prefer, MAX_LIVE_IDS_PER_CALL, i.amount, span);
     const live = await deps.liveLookup(session, i.requestId, short.map((p) => p.id), i.need.deliverBy, "Dock checked live price and availability for the shortlist");
     const goalForRank = goal.optimise && goal.optimise !== "no_preference" ? goal.optimise : undefined;
-    const result = buildOptions({
-      amount: i.amount,
-      candidates: short,
-      offers: live.offers,
-      statuses: live.statuses,
+    const options = (priced: Product[], l: Pick<LiveLookupResult, "offers" | "statuses">) => buildOptions({
+      amount: i.amount!,
+      candidates: priced,
+      offers: l.offers,
+      statuses: l.statuses,
       mandate: session.mandate,
       now: at,
       neededBy: i.need.deliverBy,
@@ -264,6 +264,19 @@ export function createIntakeFlow(deps: IntakeDeps) {
       span,
       estimates: i.acknowledgements.filter((a) => a.code === "pack_uncertain" && a.action === "confirmed").map((a) => a.key.split(":")[1]),
     });
+    let result = options(short, live);
+    // One second chance, never more: when the short list leaves gaps (cut-offs passed, stock short, a kind the buyer
+    // left open with no card), price the next few products once rather than offer less than the catalogue has.
+    const covered = new Set(result.cards.map((c) => span?.(short.find((p) => p.id === c.lines[0].productId)!)));
+    const uncovered = span ? new Set(narrowed.map(span).filter((k) => k && !k.includes("?") && !covered.has(k))) : new Set<string>();
+    const rest = narrowed.filter((p) => !short.includes(p));
+    if (rest.length && (result.cards.length < MAX_CARDS || uncovered.size)) {
+      const wanted = rest.filter((p) => uncovered.has(span?.(p) ?? ""));
+      const pool = shortlist(wanted.length ? wanted : rest, [], MAX_LIVE_IDS_PER_CALL, i.amount, span);
+      const second = await deps.liveLookup(session, i.requestId, pool.map((p) => p.id), i.need.deliverBy, "The first short list left gaps; Dock checked the next few products once");
+      short.push(...pool);
+      result = options(short, { offers: [...live.offers, ...second.offers], statuses: [...live.statuses, ...second.statuses] });
+    }
     i.notes.push(...result.notes, ...i.notAsked);
     i.excluded.push(...result.excluded);
     if (result.cards.length === 0) return noOptions(i, noOptionReason(result.excluded, i.need.deliverBy));

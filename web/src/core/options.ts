@@ -150,11 +150,15 @@ export function shortlist(candidates: Product[], prefer: (string | undefined)[],
   const ids: string[] = [...new Set(prefer.filter((x): x is string => !!x && candidates.some((p) => p.id === x)))];
   if (span) {
     // Each value the buyer left open gets its best few products priced, so the cards can show every kind.
-    const keys = [...new Set(candidates.map(span))];
-    const per = Math.max(1, Math.floor((max - ids.length) / Math.max(keys.length, 1)));
+    // Products whose value is unknown ("?", say a 3 % milk the fat question does not name) come last.
+    const keys = [...new Set(candidates.map(span))].sort((a, b) => Number(a?.includes("?")) - Number(b?.includes("?")));
+    const known = keys.filter((k) => !k?.includes("?"));
+    const per = Math.max(1, Math.floor((max - ids.length) / Math.max(known.length, 1)));
     for (const key of keys) {
-      const pool = [...new Set([...byPack, ...byRel, ...byCo2])].filter((p) => span(p) === key && !ids.includes(p.id));
-      ids.push(...pool.slice(0, per).map((p) => p.id).slice(0, Math.max(0, max - ids.length)));
+      const lists = [byPack, byRel, byCo2].map((l) => l.filter((p) => span(p) === key));
+      const mine: string[] = [];
+      for (let i = 0; mine.length < per && i < candidates.length; i++) for (const l of lists) if (l[i] && !ids.includes(l[i].id) && !mine.includes(l[i].id) && mine.length < per) mine.push(l[i].id);
+      ids.push(...mine.slice(0, Math.max(0, max - ids.length)));
     }
   }
   for (let i = 0; ids.length < max && i < candidates.length; i++) {
@@ -368,11 +372,14 @@ export function buildOptions(input: OptionsInput): OptionsResult {
   const chosen: { plan: Plan; labels: OptionLabel[] }[] = [];
   if (input.span) {
     const seen = new Set<string | undefined>();
-    for (const plan of ranked) {
-      const key = input.span(plan.primary.p);
-      if (seen.has(key) || chosen.length >= MAX_CARDS) continue;
-      seen.add(key);
-      chosen.push({ plan, labels: [] });
+    // Values the buyer could have named first; a product whose value is unknown ("?") only fills a spare card.
+    for (const pass of [false, true]) {
+      for (const plan of ranked) {
+        const key = input.span(plan.primary.p);
+        if (Boolean(key?.includes("?")) !== pass || seen.has(key) || chosen.length >= MAX_CARDS) continue;
+        seen.add(key);
+        chosen.push({ plan, labels: [] });
+      }
     }
     const among = (l: OptionLabel, plan: Plan | undefined) => plan && chosen.find((c) => c.plan === plan)?.labels.push(l);
     const inChosen = (xs: Plan[]) => xs.filter((pl) => chosen.some((c) => c.plan === pl));
