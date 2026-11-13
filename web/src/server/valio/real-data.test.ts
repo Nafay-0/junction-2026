@@ -1,6 +1,8 @@
 // Checks against the real partner index and the live API. Both are optional:
 // - the index tests run only when `pnpm index:build` has been run on this machine (the data is never in the repo);
-// - the live test runs only when VALIO_API_KEY is in the environment, and prices three products, once.
+// - the live test runs only with VALIO_LIVE=1 and a key (from the shell or web/.env.local), and prices three
+//   products once: `VALIO_LIVE=1 pnpm vitest run src/server/valio/real-data.test.ts`. A plain `pnpm test` never calls the partner.
+import { existsSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { amountToSalesUnits } from "@/core/catalog/pack";
 import { LexicalSearch } from "@/core/catalog/search";
@@ -51,16 +53,22 @@ describe.skipIf(!hasIndex)("real catalogue index (skipped without pnpm index:bui
   });
 });
 
-const apiKey = process.env.VALIO_API_KEY?.trim();
+if (process.env.VALIO_LIVE === "1" && existsSync(".env.local")) process.loadEnvFile(".env.local");
+const apiKey = process.env.VALIO_LIVE === "1" ? process.env.VALIO_API_KEY?.trim() : undefined;
 
-describe.skipIf(!apiKey || !hasIndex)("live partner API (skipped without VALIO_API_KEY and the index)", () => {
-  it("prices three lactose-free milks", async () => {
+describe.skipIf(!apiKey || !hasIndex)("live partner API (opt-in: VALIO_LIVE=1, a key and the index)", () => {
+  it("prices three lactose-free milks", { timeout: 30_000 }, async () => {
     const live = new ValioLiveClient({ baseUrl: process.env.VALIO_API_BASE?.trim() || "https://junction26.valioaimo.fi", apiKey: apiKey! });
     const valio = new ValioCatalog(loaded!.index, live);
     const ids = valio.search({ text: "lactose-free milk", category: "milk", limit: 3 }).map((h) => h.product.id);
     const statuses = await valio.getLiveStatus(ids, { deliveryDate: helsinkiDate(new Date(Date.now() + 3 * 86_400_000)) });
     expect(statuses).toHaveLength(3);
-    for (const s of statuses) expect(s.message).toMatch(new RegExp(s.productId));
+    for (const s of statuses) {
+      expect(s.message).toMatch(new RegExp(s.productId));
+      console.log(`[live] ${s.orderable ? "orderable" : "not orderable"} ${s.problems.join(",") || "-"} | ${s.message}`);
+      if (s.offer) expect(s.offer.unitPriceCents).toBeGreaterThan(0);
+      if (s.offer && s.offer.availablePacks >= 999_999) expect(s.offer.stockKnown).toBe(false); // placeholders never count as stock
+    }
     expect(live.upstreamStats().httpRequests).toBeLessThanOrEqual(4);
   });
 });

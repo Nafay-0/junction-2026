@@ -23,6 +23,11 @@ export interface LiveLookup {
 
 /** Terminal products always report this amount: the real stock is not known. */
 export const TERMINAL_PLACEHOLDER_AMOUNT = 999999;
+/**
+ * Amounts at or above this are placeholders, not stock: seen as 999999 on Terminal products and as 9999999999 on
+ * Stock products in real responses. No food-service order line comes near it.
+ */
+export const IMPLAUSIBLE_AMOUNT = 999_999;
 
 type StockOverride = { unitPriceCents?: number; availablePacks?: number; leadDays?: number };
 
@@ -137,9 +142,10 @@ export class ValioCatalog implements CatalogPort, UpstreamMetered {
 }
 
 /** Problems that make a product impossible to order now. */
-const BLOCKING = new Set<LiveProblem>(["no_price", "price_not_valid", "sales_block", "not_deliverable", "unit_mismatch", "unknown_product", "out_of_stock"]);
+const BLOCKING = new Set<LiveProblem>(["no_price", "price_not_valid", "sales_block", "not_deliverable", "unit_mismatch", "unknown_product", "out_of_stock", "cutoff_passed"]);
 /** Problems that mean there is no truthful offer to hand to a quote at all. */
-const NO_OFFER = new Set<LiveProblem>(["no_price", "price_not_valid", "sales_block", "not_deliverable", "unit_mismatch", "unknown_product"]);
+// A passed cut-off makes the stated delivery date untrustworthy, so it is not handed to a quote either.
+const NO_OFFER = new Set<LiveProblem>(["no_price", "price_not_valid", "sales_block", "not_deliverable", "unit_mismatch", "unknown_product", "cutoff_passed"]);
 
 function usable(s: LiveStatus): boolean {
   return !s.problems.some((p) => NO_OFFER.has(p));
@@ -180,14 +186,20 @@ export function interpret(product: IndexedProduct, r: ValioLiveResult | undefine
 
   const line = avail?.line;
   const terminal = avail?.logisticModel?.toLowerCase() === "terminal";
+  const placeholder = line !== undefined && line.availableAmount >= IMPLAUSIBLE_AMOUNT;
+  const stockUnknown = terminal || placeholder;
   if (line) {
     if (line.salesUnit && line.salesUnit !== product.salesUnit) {
       problems.push("unit_mismatch");
       notes.push(`availability given per ${line.salesUnit}, product sold per ${product.salesUnit}`);
     }
-    if (terminal) {
+    if (stockUnknown) {
       problems.push("stock_unknown");
-      notes.push(`shipped from the supplier's warehouse: stock not known${line.availableAmount === TERMINAL_PLACEHOLDER_AMOUNT ? ` (${TERMINAL_PLACEHOLDER_AMOUNT} is a placeholder)` : ""}`);
+      notes.push(
+        terminal
+          ? `shipped from the supplier's warehouse: stock not known${placeholder ? ` (${line.availableAmount} is a placeholder)` : ""}`
+          : `stock not known (${line.availableAmount} is a placeholder, not a real quantity)`,
+      );
     } else if (line.availableAmount <= 0) {
       problems.push("out_of_stock");
       notes.push("none in stock");
@@ -200,7 +212,7 @@ export function interpret(product: IndexedProduct, r: ValioLiveResult | undefine
   const cutoff = avail?.closingTime ? cutoffPassed(avail.closingTime, avail.timeNow, now) : undefined;
   if (cutoff) {
     problems.push("cutoff_passed");
-    notes.push(`order cut-off ${avail!.closingTime} has passed`);
+    notes.push(`order cut-off ${avail!.closingTime} has passed: cannot be ordered for ${line?.availableDate ?? requested ?? "that date"} any more, whatever the schedule line says`);
   }
 
   let offer: LiveOffer | undefined;
@@ -212,7 +224,7 @@ export function interpret(product: IndexedProduct, r: ValioLiveResult | undefine
       deliveryDate: line.availableDate,
       requestedDate: requested,
       laterThanRequested: requested ? line.availableDate > requested : undefined,
-      stockKnown: !terminal,
+      stockKnown: !stockUnknown,
       logisticModel: avail?.logisticModel,
       salesUnit: line.salesUnit ?? product.salesUnit,
       orderBy: avail?.closingTime,

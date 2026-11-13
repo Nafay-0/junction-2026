@@ -27,7 +27,11 @@ const SCENARIOS: Record<string, FakeScenario> = {
   "900010": { price: 1.2, unit: "KI" }, // sold per ST, availability per KI
   "900008": { price: 3, validFrom: "2026-10-01", validTo: "2026-11-12", unit: "ST" },
   "900009": { price: 3, omit: "availability", unit: "ST" },
-  "900016": { price: 1.9, unit: "ST", closingTime: "2026-11-13T11:00:00" },
+  "900016": { price: 1.9, unit: "ST", closingTime: "2026-11-13T11:00:00" }, // cut-off an hour before the answer's timeNow
+  // Seen in real responses: a Terminal product whose cut-off passed the day before, with the schedule line still
+  // saying the requested date; and a Stock product reporting 9999999999 as its amount.
+  "900023": { price: 20, unit: "PAK", logisticModel: "Terminal", date: "2026-11-16", closingTime: "2026-11-12T15:00" },
+  "900011": { price: 1.1, unit: "ST", amount: 9999999999.0, date: "2026-11-16" },
 };
 
 function setup(scenarios = SCENARIOS, apiOpts: Parameters<typeof fakeValioApi>[1] = {}) {
@@ -95,7 +99,7 @@ describe("ValioCatalog: master data", () => {
 describe("ValioCatalog: live price and availability", () => {
   it("maps every documented case to an explicit problem", async () => {
     const { valio, api } = setup();
-    const ids = ["900001", "900003", "900002", "900005", "900006", "900007", "900010", "900008", "900009", "900016"];
+    const ids = ["900001", "900003", "900002", "900005", "900006", "900007", "900010", "900008", "900009", "900016", "900023", "900011"];
     const statuses = await valio.getLiveStatus([...ids, "123456"], { deliveryDate: "2026-11-16" });
     const by = Object.fromEntries(statuses.map((s) => [s.productId, s]));
     expect(by["900001"]).toMatchObject({ orderable: true, problems: [], offer: { unitPriceCents: 2580, availablePacks: 30, deliveryDate: "2026-11-16", stockKnown: true, priceValidUntil: "2026-11-30", unitPriceWithTaxCents: 2928, taxRatePct: 13.5, orderBy: "2026-11-13T14:00:00", cutoffPassed: false } });
@@ -108,7 +112,11 @@ describe("ValioCatalog: live price and availability", () => {
     expect(by["900010"]).toMatchObject({ orderable: false, problems: ["unit_mismatch"] });
     expect(by["900008"]).toMatchObject({ orderable: false, problems: ["price_not_valid"] });
     expect(by["900009"]).toMatchObject({ orderable: false, problems: ["not_deliverable"] });
-    expect(by["900016"]).toMatchObject({ orderable: true, problems: ["cutoff_passed"], offer: { cutoffPassed: true } });
+    expect(by["900016"]).toMatchObject({ orderable: false, problems: ["cutoff_passed"], offer: { cutoffPassed: true } });
+    expect(by["900023"]).toMatchObject({ orderable: false, problems: ["stock_unknown", "cutoff_passed"], offer: { deliveryDate: "2026-11-16", cutoffPassed: true, stockKnown: false } });
+    expect(by["900023"].message).toMatch(/cannot be ordered for 2026-11-16 any more/);
+    expect(by["900011"]).toMatchObject({ orderable: true, problems: ["stock_unknown"], offer: { stockKnown: false, logisticModel: "Stock" } });
+    expect(by["900011"].message).toMatch(/9999999999 is a placeholder/);
     expect(by["123456"]).toMatchObject({ orderable: false, problems: ["unknown_product"] });
     for (const s of statuses) expect(s.message.length).toBeGreaterThan(5);
     // The unknown id was never sent to the partner.
@@ -117,8 +125,9 @@ describe("ValioCatalog: live price and availability", () => {
 
   it("hands quotes only offers with a real price and delivery date", async () => {
     const { valio } = setup();
-    const offers = await valio.getLiveOffers(["900001", "900003", "900002", "900005", "900006", "900007", "900010", "900008"], { deliveryDate: "2026-11-16" });
-    expect(offers.map((o) => o.productId)).toEqual(["900001", "900003", "900007"]); // out of stock stays: 0 is a real figure
+    const offers = await valio.getLiveOffers(["900001", "900003", "900002", "900005", "900006", "900007", "900010", "900008", "900016", "900023", "900011"], { deliveryDate: "2026-11-16" });
+    // Out of stock stays (0 is a real figure); a passed cut-off does not (its delivery date can no longer be met).
+    expect(offers.map((o) => o.productId)).toEqual(["900001", "900003", "900007", "900011"]);
   });
 
   it("asks for today when no date is given and does not call that late", async () => {

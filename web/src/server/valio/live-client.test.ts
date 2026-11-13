@@ -77,6 +77,16 @@ describe("ValioLiveClient", () => {
     expect(api.calls.filter((x) => x.path === "/api/price")).toHaveLength(3);
   });
 
+  it("caps the cache even when a price is valid until 9999-12-31", async () => {
+    const api = fakeValioApi({ "1": { price: 2, validTo: "9999-12-31" } });
+    const { c, advance } = client(api);
+    const [r] = await c.lookup(["1"], "2026-11-16");
+    expect(r.price).toMatchObject({ ok: true, validTo: "9999-12-31" });
+    advance(10 * 60_000 + 1);
+    await c.lookup(["1"], "2026-11-16");
+    expect(api.calls.filter((x) => x.path === "/api/price")).toHaveLength(2);
+  });
+
   it("does not cache a price past its validity window", async () => {
     // valid to 13 Nov (ends 20:59 UTC); asking at 20:55 UTC caches for 4 minutes at most
     const api = fakeValioApi({ "1": { price: 2, validTo: "2026-11-13" } });
