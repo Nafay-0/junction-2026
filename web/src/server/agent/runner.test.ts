@@ -152,8 +152,9 @@ describe("buyer agent runner (scripted model)", () => {
 });
 
 /**
- * Intake tools as the MCP table will carry them, played here at the connection layer so the test does not
- * depend on them being in the table yet. The runner recognises them by their input shapes only.
+ * Intake tools under the names the MCP table gives them (submit_need, respond_to_concerns,
+ * answer_questions). Where the table does not carry them yet they are played here at the connection
+ * layer; where it does, the real ones are used. The runner recognises them by their input shapes only.
  */
 async function withIntakeTools(conn: DockConnection, creds: { mandate: string; agentId: string }): Promise<DockConnection> {
   const { dock } = await getRuntime();
@@ -170,13 +171,13 @@ async function withIntakeTools(conn: DockConnection, creds: { mandate: string; a
   };
   const extra: (DockTool & { run: (a: Record<string, unknown>) => Promise<ToolOutcome> })[] = [
     {
-      name: "start_intake",
+      name: "submit_need",
       description: "Start from a structured need.",
       inputSchema: { type: "object", properties: { need: { type: "object" }, by: { type: "string" } }, required: ["need"] },
       run: (a) => wrap(() => dock.intake.open(session, a as never)),
     },
     {
-      name: "confirm_concerns",
+      name: "respond_to_concerns",
       description: "Confirm or correct the concerns Dock raised.",
       inputSchema: {
         type: "object",
@@ -194,10 +195,13 @@ async function withIntakeTools(conn: DockConnection, creds: { mandate: string; a
       run: ({ requestId, ...rest }) => wrap(() => dock.intake.answer(session, requestId as string, rest as never)),
     },
   ];
+  const have = new Set(conn.tools().map((t) => t.name));
+  const missing = extra.filter((t) => !have.has(t.name));
+  if (missing.length === 0) return conn;
   return {
     instructions: conn.instructions,
-    tools: () => [...conn.tools(), ...extra],
-    call: (name, args) => extra.find((t) => t.name === name)?.run(args) ?? conn.call(name, args),
+    tools: () => [...conn.tools(), ...missing],
+    call: (name, args) => missing.find((t) => t.name === name)?.run(args) ?? conn.call(name, args),
     close: () => conn.close(),
   };
 }
@@ -213,7 +217,7 @@ describe("human-input steps", () => {
       { by: "Sanna", answers: [{ questionId: "optimise", optionId: "no_preference" }] },
     ]);
     const fake = scriptedModel([
-      { calls: [{ name: "start_intake", args: { need: { item: { text: "milk", category: "milk" }, quantity: { amount: 1000, unit: "L" }, deliverBy: day() } } }] },
+      { calls: [{ name: "submit_need", args: { need: { item: { text: "milk", category: "milk" }, quantity: { amount: 1000, unit: "L" }, deliverBy: day() } } }] },
       (s) => {
         const reqIdFromRelay = /"requestId":"([^"]+)"/.exec(s.userTexts.at(-1) ?? "")?.[1];
         return { calls: [{ name: "answer_questions", args: { requestId: reqIdFromRelay, by: "Sanna", answers: [{ questionId: "optimise", optionId: "price" }] } }] };
@@ -224,7 +228,7 @@ describe("human-input steps", () => {
 
     expect(human.asked.map((p) => p.kind)).toEqual(["confirmation", "questions"]);
     const relayed = ofType(r.events, "tool_call").filter((e) => e.by === "human_relay");
-    expect(relayed.map((e) => e.name)).toEqual(["confirm_concerns", "answer_questions"]);
+    expect(relayed.map((e) => e.name)).toEqual(["respond_to_concerns", "answer_questions"]);
     const [v] = ofType(r.events, "violation");
     expect(v).toMatchObject({ kind: "answered_for_human", name: "answer_questions" });
     expect(r.violations).toBe(1);
@@ -238,7 +242,7 @@ describe("human-input steps", () => {
   it("a buyer who does not answer ends the run as awaiting_human", async () => {
     const creds = await demoCredentials("kitchen");
     const dock = await withIntakeTools(await connectDock(creds), creds);
-    const fake = scriptedModel([{ calls: [{ name: "start_intake", args: { need: { item: { text: "milk", category: "milk" }, quantity: { amount: 1000, unit: "L" }, deliverBy: day() } } }] }]);
+    const fake = scriptedModel([{ calls: [{ name: "submit_need", args: { need: { item: { text: "milk", category: "milk" }, quantity: { amount: 1000, unit: "L" }, deliverBy: day() } } }] }]);
     const r = await runBuyerAgent({ model: fake, task: "1000 litres of milk", dock, human: absentHuman });
     expect(r.outcome).toBe("awaiting_human");
     expect(ofType(r.events, "human")[0].answer).toBeNull();
