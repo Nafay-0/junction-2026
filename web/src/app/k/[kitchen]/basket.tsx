@@ -4,11 +4,12 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { ApiError } from "../../_client/api";
 import { useLive } from "../../_client/use-live";
-import { eur, helsinkiToday } from "../../_ui/plain";
-import { Target } from "../../_ui/target";
-import { usePortal } from "./portal";
+import { day, helsinkiToday, measure, money, num } from "../../_ui/plain";
+import { usePortal, type BasketLine } from "./portal";
 import { Quantity } from "./qty";
-import { TEMP, nameIn, readable } from "./shop";
+import { PROBLEM, TEMP, TempMark, nameIn, packGlyph, readable } from "./shop";
+import { Glyph } from "../../_ui/glyphs";
+import { Empty, Working, buttonClass } from "../../_ui/kit";
 import { Gate, Quote, SignedOrder } from "./stages";
 import { Button, ErrorPlate } from "./ui";
 import { co2Of, contentOf, unitWord } from "./units";
@@ -22,7 +23,8 @@ import type { Order, QuoteBundle } from "./types";
 type Run = { phase: "idle" | "quoting" | "quoted" | "placing" | "done"; requestId?: string; quote?: QuoteBundle; order?: Order; refusal?: ApiError; error?: string };
 
 export function BasketPage() {
-  const { basket, live, ui, call, kitchen, overview, base, lang } = usePortal();
+  const { basket, live, ui, call, kitchen, overview, base, lang, agent } = usePortal();
+  const next = overview.data?.standing.map((x) => x.nextDue).filter((d): d is string => !!d).sort()[0];
   const [deliverBy, setDeliverBy] = useState("");
   const [run, setRun] = useState<Run>({ phase: "idle" });
   const check = live.check;
@@ -99,48 +101,69 @@ export function BasketPage() {
   };
   const locked = run.phase !== "idle";
 
+  const measures = [
+    { label: "Litres", value: totals.L ? measure(Math.round(totals.L * 10) / 10, "L") : "–" },
+    { label: "Kilograms", value: totals.kg ? measure(Math.round(totals.kg * 10) / 10, "kg") : "–" },
+    { label: "Carbon", value: totals.co2Lines ? `${num(totals.co2, 1)} kg` : "no data", note: totals.co2Lines > 0 && totals.co2Lines < basket.lines.length ? `${totals.co2Lines} of ${basket.lines.length} lines` : totals.co2Lines ? "CO2e" : undefined },
+  ];
+
   return (
-    <div className="mt-5 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_26rem]">
+    <div className="mt-5 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_27rem]">
       <section aria-labelledby="basket-h" className="min-w-0">
-        <h1 id="basket-h" className="font-display text-[2rem] font-bold leading-tight tracking-tight">
+        <h1 id="basket-h" className="display text-[2.6rem] text-ink sm:text-[3rem]">
           Basket
         </h1>
-        <p className="max-w-[62ch] leading-snug text-ink-soft">Ordered by hand, checked by the same gate as the agent&apos;s orders: the kitchen&apos;s mandate, limits and sign-off apply to both.</p>
+        <p className="max-w-[62ch] leading-snug text-ink-soft">Ordered by hand, checked by the same gate as the agent&apos;s orders: the kitchen&apos;s mandate, limits and sign-off apply to both. The basket stays in this browser tab.</p>
         {basket.lines.length === 0 ? (
-          <div className="mt-4 bg-paper p-5">
-            <p className="font-semibold">The basket is empty.</p>
-            <p className="mt-1 text-ink-soft">
-              Add products from the{" "}
-              <Link href={`${base}/catalogue`} className="font-semibold text-ink underline decoration-2 underline-offset-4">
-                catalogue
-              </Link>
-              , or ask the agent to order for you.
-            </p>
+          <div className="mt-4">
+            <Empty
+              title="The basket is empty"
+              glyph={<Glyph kind="case" size={48} />}
+              action={
+                <>
+                  <Link href={`${base}/catalogue`} className={buttonClass("primary")}>
+                    Open the catalogue
+                  </Link>
+                  <Button kind="quiet" onClick={agent.open}>
+                    Or tell the agent what you need
+                  </Button>
+                </>
+              }
+            >
+              {next ? `Your next delivery day is ${day(next)}. ` : ""}Add products from the catalogue; prices are checked live when you add them.
+            </Empty>
           </div>
         ) : (
-          <ul className="mt-4 space-y-px bg-ink/10">
+          <ul className="mt-4 space-y-px bg-line">
             {basket.lines.map((l) => {
               const r = live.results[l.productId];
               const o = r?.offer;
-              const t = TEMP[l.product.temperatureClass ?? ""];
               return (
-                <li key={l.productId} className="grid gap-x-4 gap-y-2 bg-paper p-4 sm:grid-cols-[minmax(0,1fr)_auto_7rem]" style={{ borderLeft: `6px solid ${t?.color ?? "var(--color-ink)"}` }}>
+                <li key={l.productId} className="grid grid-cols-[3.5rem_minmax(0,1fr)] gap-x-4 gap-y-3 bg-paper p-4 sm:grid-cols-[4.5rem_minmax(0,1fr)_auto]">
+                  <MiniPack p={l.product} />
                   <div className="min-w-0">
-                    <Link href={`${base}/catalogue/${encodeURIComponent(l.productId)}`} className="font-semibold leading-snug hover:underline">
+                    <p className="text-[0.82rem]">
+                      <TempMark t={l.product.temperatureClass} />
+                    </p>
+                    <Link href={`${base}/catalogue/${encodeURIComponent(l.productId)}`} className="text-[1.05rem] font-semibold leading-snug text-ink hover:text-petrol">
                       {readable(nameIn(l.product, lang))}
                     </Link>
                     <p className="text-[0.9rem] text-ink-soft">
-                      {o ? `${eur(o.unitPriceCents)} per ${unitWord(l.product, 1)}` : live.busy.includes(l.productId) ? "Checking the price…" : r ? "Not orderable now" : "No live price yet"}
+                      {o ? `${money(o.unitPriceCents)} per ${unitWord(l.product, 1)}` : live.busy.includes(l.productId) ? "Checking the price…" : r ? `Not orderable now: ${r.problems.length ? r.problems.map((x) => PROBLEM[x] ?? x).join("; ") : r.message}` : "No live price yet"}
                       {o?.stockKnown === false ? "; stock not confirmed" : ""}
                     </p>
-                    {!locked && (
-                      <button type="button" className="mt-1 min-h-9 text-[0.9rem] underline" onClick={() => basket.remove(l.productId)}>
-                        Remove
-                      </button>
-                    )}
+                    <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
+                      <Quantity p={l.product} value={l.packs} onChange={(n) => basket.set(l.productId, n)} id={`b-${l.productId}`} disabled={locked} compact />
+                      {!locked && (
+                        <button type="button" className="min-h-10 text-[0.92rem] text-petrol underline underline-offset-4" onClick={() => basket.remove(l.productId)}>
+                          Remove
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <Quantity p={l.product} value={l.packs} onChange={(n) => basket.set(l.productId, n)} id={`b-${l.productId}`} disabled={locked} />
-                  <p className="text-right font-display text-[1.3rem] font-bold tabular sm:pt-2">{o ? eur(o.unitPriceCents * l.packs) : "–"}</p>
+                  <p key={`${l.packs}-${o?.unitPriceCents}`} className="changed display col-span-2 text-right text-[1.7rem] tabular sm:col-span-1">
+                    {o ? money(o.unitPriceCents * l.packs) : "–"}
+                  </p>
                 </li>
               );
             })}
@@ -150,45 +173,43 @@ export function BasketPage() {
 
       <aside aria-label="Totals and checkout" className="space-y-3 lg:sticky lg:top-3">
         <div className="bg-paper">
-          <div aria-hidden className="h-[3px] bg-ink" />
-          <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1.5 p-4">
-            <dt className="font-semibold">Estimate, VAT 0 %</dt>
-            <dd className="font-display text-[1.9rem] font-bold leading-none tabular">{eur(totals.cents)}</dd>
+          <div aria-hidden className="h-1.5 bg-petrol" />
+          <div className="p-5">
+            <p className="text-[0.9rem] font-medium text-ink-soft">Estimate, VAT 0 %</p>
+            <p key={totals.cents} className="changed display text-[3.2rem] text-ink tabular">
+              {money(totals.cents)}
+            </p>
             {totals.priced < basket.lines.length && (
-              <dd className="col-span-2 text-[0.88rem] text-ink-soft">
+              <p className="text-[0.88rem] text-ink-soft">
                 {basket.lines.length - totals.priced} of {basket.lines.length} lines have no live price yet.
-              </dd>
+              </p>
             )}
-            <dt className="text-ink-soft">Litres</dt>
-            <dd className="tabular">{totals.L ? `${totals.L.toLocaleString("en-US", { maximumFractionDigits: 1 })} L` : "–"}</dd>
-            <dt className="text-ink-soft">Kilograms</dt>
-            <dd className="tabular">{totals.kg ? `${totals.kg.toLocaleString("en-US", { maximumFractionDigits: 1 })} kg` : "–"}</dd>
-            <dt className="text-ink-soft">Carbon</dt>
-            <dd className="text-right tabular">
-              {totals.co2Lines ? `${totals.co2.toLocaleString("en-US", { maximumFractionDigits: 1 })} kg CO2e` : "no data"}
-              {totals.co2Lines > 0 && totals.co2Lines < basket.lines.length && <span className="block text-[0.82rem] text-ink-soft">for {totals.co2Lines} of {basket.lines.length} lines</span>}
-            </dd>
-            <dd className="col-span-2 text-[0.82rem] leading-snug text-ink-soft">Carbon is the product group&apos;s average per kilo (a litre counted as a kilo), not a measurement of these products.</dd>
-          </dl>
+            <dl className="mt-4 grid grid-cols-3 gap-px bg-line">
+              {measures.map((x) => (
+                <div key={x.label} className="bg-paper py-2 pr-2 [&:not(:first-child)]:pl-3">
+                  <dt className="text-[0.8rem] text-ink-soft">{x.label}</dt>
+                  <dd className="display text-[1.5rem] tabular">{x.value}</dd>
+                  {x.note && <dd className="text-[0.78rem] text-ink-soft">{x.note}</dd>}
+                </div>
+              ))}
+            </dl>
+            <p className="mt-2 text-[0.8rem] leading-snug text-ink-soft">Carbon is the product group&apos;s average per kilo (a litre counted as a kilo), not a measurement of these products.</p>
+          </div>
           {basket.lines.length > 0 && run.phase === "idle" && (
-            <div className="border-t border-ink/15 p-4">
+            <div className="border-t border-line p-5">
               <label htmlFor="deliver-by" className="text-[0.95rem] font-semibold">
                 Deliver by <span className="font-normal text-ink-soft">(optional)</span>
               </label>
-              <input id="deliver-by" type="date" min={helsinkiToday()} value={deliverBy} onChange={(e) => setDeliverBy(e.target.value)} className="mt-1 block min-h-11 w-full border-2 border-ink px-2" />
-              <Button kind="primary" className="mt-3 w-full" onClick={() => void quote()}>
+              <input id="deliver-by" type="date" min={helsinkiToday()} value={deliverBy} onChange={(e) => setDeliverBy(e.target.value)} className="mt-1 block min-h-11 w-full border-2 border-petrol px-2" />
+              <Button kind="go" size="lg" className="mt-4 w-full" onClick={() => void quote()}>
                 Get a fixed price
               </Button>
               <p className="mt-2 text-[0.85rem] text-ink-soft">The wholesaler signs the price; it holds for a short time. Nothing is ordered until you place it.</p>
             </div>
           )}
-          {run.phase === "quoting" && (
-            <p className="flex items-center gap-2 border-t border-ink/15 p-4 text-ink-soft">
-              <Target size={18} tone="hollow" spin /> The wholesaler is fixing the price…
-            </p>
-          )}
+          {run.phase === "quoting" && <Working className="border-t border-line p-5">The wholesaler is fixing the price…</Working>}
           {run.error && (
-            <div className="px-4 pb-4">
+            <div className="px-5 pb-5">
               <ErrorPlate title="That did not go through" message={run.error} onRetry={run.phase === "quoted" ? () => void place() : undefined} />
             </div>
           )}
@@ -207,6 +228,16 @@ export function BasketPage() {
           </>
         )}
       </aside>
+    </div>
+  );
+}
+
+/** A small pack plate for a basket line. */
+function MiniPack({ p }: { p: BasketLine["product"] }) {
+  const t = TEMP[p.temperatureClass ?? ""];
+  return (
+    <div className="flex aspect-square items-center justify-center" style={{ background: t?.tint ?? "var(--color-mist)" }}>
+      <Glyph kind={packGlyph(p)} size={40} className="text-petrol-deep" />
     </div>
   );
 }

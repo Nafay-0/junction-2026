@@ -422,6 +422,20 @@ export function localNow(now: Date): { date: string; time: string } {
   return { date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}` };
 }
 
+/** The Helsinki calendar date of an ISO timestamp (an order placed at 00:30 Helsinki is that day's, not yesterday's in UTC). */
+export function localDateOf(iso: string): string {
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? localNow(new Date(t)).date : iso.slice(0, 10);
+}
+
+/**
+ * The latest delivery day a mandate allows: maxLeadDays Helsinki calendar days after today in Helsinki. Every
+ * comparison of delivery dates (the gate, the option cards, the seed's mocked availability) counts in Helsinki days.
+ */
+export function latestDeliveryDay(now: Date, maxLeadDays: number): string {
+  return addDaysIso(localNow(now).date, maxLeadDays);
+}
+
 export function addDaysIso(date: string, days: number): string {
   const d = new Date(`${date}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);

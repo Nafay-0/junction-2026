@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { api } from "../../_client/api";
 import { verifyChain, type ChainCheck } from "../../_client/verify-chain";
-import { actorLabel, clockSeconds, humanize } from "../../_ui/plain";
+import { actorLabel, clockSeconds, say } from "../../_ui/plain";
 import { Target } from "../../_ui/target";
 import { Button } from "./ui";
 import type { Entry, LedgerReply } from "./types";
@@ -12,7 +12,7 @@ import type { Entry, LedgerReply } from "./types";
 export function Timeline({ entries, names, agentName, kitchen, check = true }: { entries: Entry[]; names: Record<string, string>; agentName: string; kitchen: string; check?: boolean }) {
   return (
     <div>
-      <ol className="divide-y divide-ink/10">
+      <ol className="divide-y divide-line">
         {entries.map((e) => {
           const reasons = Array.isArray(e.data.reasons) ? (e.data.reasons as unknown[]).map(String) : [];
           return (
@@ -20,12 +20,12 @@ export function Timeline({ entries, names, agentName, kitchen, check = true }: {
               <span className="pt-px text-[0.9rem] text-ink-soft tabular">{clockSeconds(e.at)}</span>
               <span className="col-start-2 text-[0.9rem] font-semibold sm:col-start-auto sm:pt-px">{actorLabel(e.actor, { agent: agentName })}</span>
               <div className="col-start-2 min-w-0 sm:col-start-auto">
-                <p className="leading-snug">{humanize(e.summary, names)}</p>
+                <p className="leading-snug">{say(e.summary, names)}</p>
                 {reasons.length > 0 && (
                   <ul className="mt-1 space-y-0.5 text-[0.95rem] leading-snug text-ink-soft">
                     {reasons.slice(0, 6).map((r, i) => (
                       <li key={i} className="pl-3 [text-indent:-0.75rem]">
-                        – {humanize(r, names)}
+                        – {say(r, names)}
                       </li>
                     ))}
                   </ul>
@@ -36,7 +36,7 @@ export function Timeline({ entries, names, agentName, kitchen, check = true }: {
         })}
       </ol>
       <details className="mt-2 text-[0.92rem]">
-        <summary className="cursor-pointer py-2 font-semibold underline decoration-2 underline-offset-4">Show the raw ledger entries</summary>
+        <summary className="cursor-pointer py-2 font-semibold text-petrol underline decoration-2 underline-offset-4">Show the raw ledger entries</summary>
         <div className="mt-2 max-h-80 overflow-auto bg-concrete p-3">
           {entries.map((e) => (
             <div key={e.seq} className="mb-2 break-all font-mono text-[0.78rem] leading-snug">
@@ -87,7 +87,7 @@ function ChainCheckBox({ kitchen }: { kitchen: string }) {
   }
 
   return (
-    <div className="mt-4 border-t-[3px] border-ink pt-3">
+    <div className="mt-4 border-t-[3px] border-petrol pt-3">
       <div className="flex flex-wrap gap-2">
         <Button kind="primary" busy={busy === "verify"} disabled={!!busy} onClick={() => void run(false)}>
           Check the whole chain in this browser

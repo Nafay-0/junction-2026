@@ -119,7 +119,7 @@ export function MenuPlanner({ kitchen, base = "/ui-api/plan", initialText = "", 
             void submit();
           }}
         >
-          <label htmlFor="menu-request" className="font-display text-[1.6rem] font-bold leading-tight">
+          <label htmlFor="menu-request" className="display text-[1.6rem]">
             What are you serving?
           </label>
           <p className="text-[0.95rem] text-ink-soft">A dish, a day&apos;s menu or a week&apos;s, with covers and the day. English, Finnish or Swedish.</p>
@@ -132,22 +132,22 @@ export function MenuPlanner({ kitchen, base = "/ui-api/plan", initialText = "", 
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void submit();
             }}
-            className="mt-2 w-full border-2 border-ink px-3 py-2 text-[1.1rem] leading-snug"
+            className="mt-2 w-full border-2 border-petrol bg-paper px-3 py-2 text-[1.1rem] leading-snug"
             placeholder="Salmon soup for 300 on Friday"
           />
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Btn type="submit" kind="primary" busy={busy === "plan"} disabled={text.trim().length < 3} className="min-h-12 px-5 text-[1.1rem]">
+            <Btn type="submit" kind="go" busy={busy === "plan"} disabled={text.trim().length < 3} className="min-h-12 px-5 text-[1.1rem]">
               Plan it
             </Btn>
             {info?.kitchen.examples.map((ex) => (
-              <button key={ex} type="button" onClick={() => setText(ex)} className="border border-ink/40 px-2 py-1 text-left text-[0.9rem] hover:border-ink">
+              <button key={ex} type="button" onClick={() => setText(ex)} className="min-h-10 bg-mist px-3 py-1 text-left text-[0.92rem] hover:outline-2 hover:outline-petrol">
                 {ex}
               </button>
             ))}
           </div>
           {info?.mode === "recorded" && (
             <p className="mt-2 text-[0.9rem] text-ink-soft">
-              <span className="mr-1.5 border border-ink px-1.5 py-px font-semibold text-ink">No model configured</span>
+              <span className="mr-1.5 border border-petrol px-1.5 py-px font-semibold text-petrol">No model configured</span>
               Plans come from recorded model outputs for the examples above; everything after the model is live code.
             </p>
           )}
@@ -161,7 +161,7 @@ export function MenuPlanner({ kitchen, base = "/ui-api/plan", initialText = "", 
       </Sheet>
 
       {error && (
-        <div role="alert" className="border-l-[6px] border-ink bg-paper px-4 py-3">
+        <div role="alert" className="border-l-[6px] border-petrol bg-paper px-4 py-3">
           <p className="font-semibold">{error.code === "model_unavailable" ? "No model to read the request" : error.code === "plan_not_ready" ? "Not ready for a fixed price" : "Something stopped the plan"}</p>
           <p className="text-ink-soft">{error.message}</p>
         </div>
@@ -170,7 +170,7 @@ export function MenuPlanner({ kitchen, base = "/ui-api/plan", initialText = "", 
       {plan?.state === "declined" && (
         <Sheet>
           <div className="p-4 sm:p-5">
-            <h2 className="font-display text-[1.6rem] font-bold leading-tight">Not a menu to order for</h2>
+            <h2 className="display text-[1.6rem]">Not a menu to order for</h2>
             <p className="mt-1">{plan.declineReason}</p>
             <p className="mt-1 text-[0.95rem] text-ink-soft">Nothing was looked up or ordered.</p>
           </div>

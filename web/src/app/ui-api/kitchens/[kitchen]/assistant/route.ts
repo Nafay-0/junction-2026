@@ -8,7 +8,7 @@ import { noStore, portalRoute } from "@/server/kitchen-portal-http";
  * orders: a purchase request comes back as kind "order_request" for the staged order flow.
  */
 export async function POST(req: Request, ctx: RouteContext<"/ui-api/kitchens/[kitchen]/assistant">) {
-  return portalRoute(ctx.params, async (k) => {
+  return portalRoute(req, ctx.params, async (k) => {
     const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     const str = (x: unknown, max: number) => (typeof x === "string" && x.trim() ? x.trim().slice(0, max) : undefined);
     const question = str(b.question, 600);

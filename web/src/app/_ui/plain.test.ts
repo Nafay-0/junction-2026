@@ -16,6 +16,15 @@ describe("plain words for the screens", () => {
     expect(humanize("must be lactose_free")).toBe("must be lactose-free");
   });
 
+  it("writes money and measures the Finnish way on the customer side", async () => {
+    const { money, moneyShort, fiMoney, measure, num } = await import("./plain");
+    expect(money(128040)).toBe("1 280,40 €");
+    expect(moneyShort(50000)).toBe("500 €");
+    expect(num(2.5)).toBe("2,5");
+    expect(measure(1000, "L")).toBe("1 000 L");
+    expect(fiMoney("Over this agent's €500 per-order limit; total €1,280.50.")).toBe("Over this agent's 500 € per-order limit; total 1 280,50 €.");
+  });
+
   it("names every rule in plain words, with a fallback", () => {
     expect(ruleTitle("weekly_budget")).toBe("The weekly budget is a hard limit");
     expect(ruleTitle("something_new")).toBe("A rule of the gate");

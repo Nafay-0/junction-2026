@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { clock, day, eur, helsinkiToday, roleLabel, shortProduct } from "../../_ui/plain";
+import { clock, day, helsinkiToday, money, roleLabel, shortProduct } from "../../_ui/plain";
 import { usePortal } from "./portal";
 import type { PortalOrder, PortalRequest } from "./types";
 
@@ -41,16 +41,16 @@ export function History({ requests, loading, error, onRepeat, onChange }: { requ
   const shown = requests.filter((r) => r.kind !== "basket" || r.order).slice(0, all ? 12 : 5);
   return (
     <section aria-labelledby="earlier" className="bg-paper">
-      <div aria-hidden className="h-[3px] bg-ink" />
+      <div aria-hidden className="h-[3px] bg-petrol" />
       <div className="p-4">
-        <h2 id="earlier" className="font-display text-[1.3rem] font-bold leading-tight">
+        <h2 id="earlier" className="display text-[1.3rem]">
           Earlier requests
         </h2>
         <p className="mt-0.5 text-[0.9rem] leading-snug text-ink-soft">Repeat one as it was, or change one part of it: “same again but 200 litres”.</p>
-        {loading && <div className="mt-3 h-40 animate-pulse bg-concrete" aria-label="Loading earlier requests" />}
+        {loading && <div className="mt-3 h-40 animate-pulse bg-mist" aria-label="Loading earlier requests" />}
         {error && !requests.length && <p className="mt-2 text-ink-soft">Could not load the earlier requests: {error}</p>}
         {!loading && !error && shown.length === 0 && <p className="mt-2 text-[0.98rem] leading-snug text-ink-soft">None yet. Every request you send stays here with what it became.</p>}
-        <ol className="mt-2 divide-y divide-ink/10">
+        <ol className="mt-2 divide-y divide-line">
           {shown.map((r) => (
             <li key={r.key} className="py-2.5">
               <p className="text-[0.82rem] text-ink-soft tabular">{whenText(r.at)}</p>
@@ -58,17 +58,17 @@ export function History({ requests, loading, error, onRepeat, onChange }: { requ
               {r.order ? (
                 <p className="mt-0.5 text-[0.92rem] leading-snug text-ink-soft">
                   {r.text && <>{linesText(r.order)}, </>}
-                  {r.order.status !== "rejected" && r.order.status !== "declined" && <span className="tabular">{eur(r.order.totalCents)}, </span>}
+                  {r.order.status !== "rejected" && r.order.status !== "declined" && <span className="tabular">{money(r.order.totalCents)}, </span>}
                   delivery {day(r.order.deliveryDate)} {authorisedText(r.order)}.
                 </p>
               ) : (
                 <p className="mt-0.5 text-[0.92rem] text-ink-soft">{r.state === "cancelled" ? "Cancelled." : r.state === "no_options" ? "Nothing fitted; not ordered." : "Not ordered."}</p>
               )}
               <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
-                <button type="button" className="min-h-9 font-semibold underline decoration-2 underline-offset-4" onClick={() => onRepeat(r)}>
+                <button type="button" className="min-h-9 font-semibold text-petrol underline decoration-2 underline-offset-4" onClick={() => onRepeat(r)}>
                   Repeat
                 </button>
-                <button type="button" className="min-h-9 font-semibold underline decoration-2 underline-offset-4" onClick={() => onChange(r)}>
+                <button type="button" className="min-h-9 font-semibold text-petrol underline decoration-2 underline-offset-4" onClick={() => onChange(r)}>
                   Repeat with a change
                 </button>
                 {r.order && r.order.status !== "history" && (
@@ -81,7 +81,7 @@ export function History({ requests, loading, error, onRepeat, onChange }: { requ
           ))}
         </ol>
         {requests.length > 5 && (
-          <button type="button" className="mt-1 min-h-9 text-[0.95rem] font-semibold underline decoration-2 underline-offset-4" onClick={() => setAll((x) => !x)}>
+          <button type="button" className="mt-1 min-h-9 text-[0.95rem] font-semibold text-petrol underline decoration-2 underline-offset-4" onClick={() => setAll((x) => !x)}>
             {all ? "Show fewer" : `Show more (${Math.min(requests.length, 12)})`}
           </button>
         )}

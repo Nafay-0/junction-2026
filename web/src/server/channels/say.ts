@@ -113,5 +113,9 @@ export function orderForModel(o: PublicOrder): ForModel {
       return { ok: true, state: "rejected", say: `Dock's gate refused the order: ${o.decision.reasons.join(" ")}`, total };
     case "declined":
       return { ok: true, state: "declined", say: `${o.approval?.approver.name ?? "The approver"} declined the order; nothing was ordered.`, total };
+    case "withdrawn":
+      return { ok: true, state: "withdrawn", say: "The order was withdrawn before anyone signed it; nothing was ordered.", total };
+    case "expired":
+      return { ok: true, state: "expired", say: "Nobody signed the order before its fixed price ran out; nothing was ordered. Ask for a new quote if it is still needed.", total };
   }
 }

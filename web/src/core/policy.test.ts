@@ -104,6 +104,14 @@ describe("policy: happy paths", () => {
   });
 });
 
+describe("policy: quote binding", () => {
+  it("refuses a quote issued for another request (F-QUOTE-REQUEST)", () => {
+    const q = quote([{ productId: "VA-1001", quantity: 2 }]); // issued for req_1
+    expectRejectedBy(evaluatePolicy(mandate(), draft(q, { requestId: "req_2" }), ctx()), "quote_binding");
+    expect(rule(evaluatePolicy(mandate(), draft(q, { requestId: "req_1" }), ctx()), "quote_binding").outcome).toBe("pass");
+  });
+});
+
 describe("policy: spend limits", () => {
   const big = () => quote([{ productId: "VA-1001", quantity: 700 }]); // €1,043.00
 
@@ -122,6 +130,22 @@ describe("policy: spend limits", () => {
     const d = evaluatePolicy(mandate(), draft(big()), ctx({ spentThisWeekCents: 150_000 }));
     expectRejectedBy(d, "weekly_budget");
     expect(rule(d, "weekly_budget").details).toMatchObject({ budgetCents: 200_000, spentCents: 150_000, totalCents: 104_300 });
+  });
+
+  it("money held by orders waiting for sign-off: a person's call when they sign anyway, never the agent's alone (F-PENDING-HOLDS-BUDGET)", () => {
+    const heldOrders = [{ orderId: "ord_wait", totalCents: 104_300, expiresAt: addMinutes(NOW, 20).toISOString() }];
+    // €1,043 waiting, €1,043 more over the per-order limit: a person signs it anyway, so they decide with both in view.
+    const d = evaluatePolicy(mandate(), draft(big()), ctx({ spentThisWeekCents: 104_300, heldThisWeekCents: 104_300, heldOrders }));
+    expect(d.outcome).toBe("needs_human_approval");
+    expect(rule(d, "weekly_budget")).toMatchObject({ outcome: "escalate", details: { committedCents: 0, heldCents: 104_300 } });
+    expect(rule(d, "weekly_budget").reason).toContain("ord_wait");
+    // A small order the agent would place alone may not spend the held money: refused, naming the waiting order.
+    const small20 = quote([{ productId: "VA-1001", quantity: 20 }]); // €29.80
+    const alone = evaluatePolicy(mandate(), draft(small20), ctx({ spentThisWeekCents: 199_000, heldThisWeekCents: 104_300, heldOrders }));
+    expectRejectedBy(alone, "weekly_budget");
+    expect(rule(alone, "weekly_budget").reason).toMatch(/withdraw or decide the waiting order/);
+    // Committed alone already over: refused even though part is only held.
+    expectRejectedBy(evaluatePolicy(mandate(), draft(big()), ctx({ spentThisWeekCents: 199_000, heldThisWeekCents: 50_000 })), "weekly_budget");
   });
 
   it("allows spending exactly up to the weekly budget", () => {
@@ -367,5 +391,32 @@ describe("policy: real-data gaps", () => {
     }
     // The same request counts whatever the category or day.
     expect(rule(evaluatePolicy(mandate(), draft(q), ctx({ recentOrders: [{ ...earlier, requestId: "req_1", categories: ["cream"], deliveryDates: ["2026-12-01"] }] })), "order_splitting").outcome).toBe("escalate");
+  });
+});
+
+describe("policy: Helsinki dates (F-GATE-UTC-DATE)", () => {
+  it("counts the latest delivery day in Helsinki days at every hour, also just after local midnight", () => {
+    // 00:30 in Helsinki on Saturday 14 Nov is still Friday 13 Nov in UTC.
+    const now = new Date("2026-11-13T22:30:00Z");
+    const m = sampleMandate(now, { weeklyBudgetCents: 1e9 });
+    const latest = "2026-11-19"; // Sat 14 + 5 days, in Helsinki
+    const q = { ...quote([{ productId: "VA-1001", quantity: 1 }]), issuedAt: now.toISOString(), expiresAt: addMinutes(now, 30).toISOString() };
+    const onTime = { ...q, lines: q.lines.map((l) => ({ ...l, deliveryDate: latest })) };
+    expect(rule(evaluatePolicy(m, draft(onTime), ctx({ now })), "delivery_deadline").outcome).toBe("pass");
+    const late = { ...q, lines: q.lines.map((l) => ({ ...l, deliveryDate: "2026-11-20" })) };
+    expect(rule(evaluatePolicy(m, draft(late), ctx({ now })), "delivery_deadline").outcome).toBe("fail");
+  });
+});
+
+describe("policy: substitutes the agent did not declare (F-SUBST-SELF-DECLARED)", () => {
+  it("treats any product the request did not ask for as a substitute", () => {
+    const q = quote([{ productId: "AR-2010", quantity: 20 }]);
+    const asked = { productIds: ["VA-1010"] };
+    expectRejectedBy(evaluatePolicy(mandate({ substitution: { rule: "none", maxPriceIncreasePct: 0 } }), draft(q, { asked }), ctx()), "substitution_rule");
+    const loose = evaluatePolicy(mandate({ substitution: { rule: "within_preferences", maxPriceIncreasePct: 10 } }), draft(q, { asked }), ctx());
+    expect(rule(loose, "substitution_rule").outcome).toBe("escalate");
+    // Another family than the one asked for is not what was asked either.
+    expect(rule(evaluatePolicy(mandate(), draft(quote([{ productId: "VA-1001", quantity: 2 }]), { asked: { productIds: [], category: "cream" } }), ctx()), "substitution_rule").outcome).toBe("escalate");
+    expect(rule(evaluatePolicy(mandate(), draft(quote([{ productId: "VA-1010", quantity: 2 }]), { asked }), ctx()), "substitution_rule").outcome).toBe("pass");
   });
 });

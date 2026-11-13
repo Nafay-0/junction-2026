@@ -22,7 +22,8 @@ type RuleInfo = { group: RuleGroup; does: string; where: "gate" | "door" | "quot
 /** What each rule does, in one sentence. `where`: the gate (policy), the door (before the core), the quote, the intake. */
 export const RULE_INFO: Record<string, RuleInfo> = {
   per_order_limit: { group: "money", where: "gate", does: "Above the per-order limit in the kitchen's mandate, the agent cannot buy alone: a named person must sign off." },
-  weekly_budget: { group: "money", where: "gate", does: "Committed and waiting orders over seven days may not pass the weekly budget. A hard limit: no sign-off lifts it." },
+  weekly_budget: { group: "money", where: "gate", does: "Committed orders over seven days may not pass the weekly budget: a hard limit. Money held by orders waiting for sign-off the agent may not spend alone; a person decides." },
+  human_confirmation: { group: "authority", where: "gate", does: "A likely mistake that matters, confirmed only by the agent's word and not by a person, sends the order to a named person's sign-off." },
   approver_authority: { group: "money", where: "gate", does: "When a sign-off is needed, someone named in the mandate must be allowed to sign that amount, or the order is refused." },
   substitute_price: { group: "money", where: "gate", does: "A substitute may cost only the tolerated percentage more per litre or kilo than the product it replaces." },
   order_splitting: { group: "money", where: "gate", does: "Several orders the agent placed alone for one need may not add up to more than it may spend alone." },
@@ -40,6 +41,7 @@ export const RULE_INFO: Record<string, RuleInfo> = {
   human_input: { group: "authority", where: "intake", does: "Answers to Dock's questions and to likely mistakes must come from the buyer, not from the agent." },
   intake_sequence: { group: "authority", where: "intake", does: "A request follows its steps: no quote while a likely mistake waits for the buyer, nothing after they cancel." },
   operator_suspension: { group: "authority", where: "operations", does: "Operations staff can stop an agent or a whole organisation; its next call is refused until they resume it." },
+  recall_hold: { group: "food", where: "operations", does: "A product an authority's recall notice names (matched on its EAN, or on producer, exact name and pack) is held: no quote or order for it, and a waiting order with it cannot be approved. The notice is the stated reason." },
   live_lookup_limit: { group: "systems", where: "door", does: "The partner's live price service sees short lists only: at most ten products per call, and a cap per agent per hour." },
   quote_availability: { group: "systems", where: "quote", does: "A quote covers only what is in stock and can be delivered." },
   quote_signature: { group: "systems", where: "gate", does: "The order must carry the quote exactly as the wholesaler signed it." },
@@ -51,7 +53,9 @@ export const RULE_INFO: Record<string, RuleInfo> = {
 const EXTRA_TITLE: Record<string, string> = {
   order_splitting: "No splitting one need into small orders",
   human_input: "Answers come from the buyer",
+  human_confirmation: "A person confirms what matters",
   intake_sequence: "Steps in order",
+  recall_hold: "Recall hold",
 };
 
 export function ruleTitleOf(rule: string): string {

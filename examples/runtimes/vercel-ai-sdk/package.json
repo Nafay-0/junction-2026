@@ -1,0 +1,7 @@
+{
+  "name": "dock-buyer-vercel-ai-sdk",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node buyer.ts" },
+  "dependencies": { "ai": "7.0.172", "@ai-sdk/mcp": "2.0.99", "@ai-sdk/openai": "4.0.117", "@ai-sdk/anthropic": "4.0.104" }
+}

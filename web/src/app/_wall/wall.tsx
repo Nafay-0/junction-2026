@@ -225,19 +225,20 @@ function JoinPanel({ join, kitchens }: { join: { url: string; qrSvg: string }; k
         <div className="mt-[1.4vh]">
           <h3 className="text-[clamp(1rem,1.1vw,1.35rem)] font-semibold">Kitchens here now: {kitchens.length}</h3>
           <ul className="mt-1 divide-y divide-chalk/15">
-            {kitchens.slice(0, 3).map((k) => (
-              <li key={k.slug} className="flex items-center justify-between gap-2 py-1 text-[clamp(0.95rem,1.05vw,1.3rem)]">
+            {kitchens.slice(0, 3).map((k, i) => (
+              <li key={k.slug || `${k.name}-${i}`} className="flex items-center justify-between gap-2 py-1 text-[clamp(0.95rem,1.05vw,1.3rem)]">
                 <span className="min-w-0 truncate">
                   {k.name}, <span className="text-chalk-soft">{k.approverName}</span>
                 </span>
-                <span className="flex shrink-0 gap-2">
+                {/* Only the operations desk's screen gets the kitchens' ids, and so the buttons (server/authz.ts). */}
+                {k.slug && <span className="flex shrink-0 gap-2">
                   <Link href={`/k/${k.slug}`} className="border-2 border-chalk/60 px-2 py-0.5 font-semibold hover:border-chalk">
                     Console
                   </Link>
                   <button type="button" disabled={busy === k.slug} onClick={() => void start(k.slug)} className="border-2 border-chalk/60 px-2 py-0.5 font-semibold hover:border-chalk disabled:opacity-50">
                     {busy === k.slug ? "Starting…" : "Run 1,000 L"}
                   </button>
-                </span>
+                </span>}
               </li>
             ))}
           </ul>

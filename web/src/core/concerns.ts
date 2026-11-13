@@ -18,6 +18,7 @@ import {
   type KitchenProfile,
   type MemoryItem,
   type StatedPreference,
+  localDateOf,
 } from "./kitchen";
 import { SPEC_DIMENSIONS, dimensionLabel, dimensionValue, formatAmount, NONE, type BaseUnit, type NeedPatch, type NeedUnit, type StructuredNeed } from "./need";
 
@@ -148,6 +149,16 @@ export function baseAmount(need: StructuredNeed, ctx: CheckContext): { amount: n
 }
 
 const near = (a: number, b: number) => Math.abs(a - b) <= b * UNIT_MATCH_TOLERANCE;
+
+/**
+ * A suggested amount in the unit the buyer used. A count of packs stays a count only when it is a whole number of
+ * packs; otherwise it is said in litres or kilos ("the usual 1,105 L", never "the usual 110.5 packs").
+ */
+export function correctionAmount(baseUnits: number, pack: number | undefined, unit: NeedUnit, base: BaseUnit): { amount: number; unit: NeedUnit } {
+  if (!pack) return { amount: round(baseUnits), unit: unit === "pack" ? base : unit };
+  const packs = baseUnits / pack;
+  return Math.abs(packs - Math.round(packs)) < 1e-6 && Math.round(packs) > 0 ? { amount: Math.round(packs), unit } : { amount: round(baseUnits), unit: base };
+}
 const round = (n: number) => Math.round(n * 100) / 100;
 
 // ---------- the checks ----------
@@ -310,7 +321,7 @@ export function checkQuantity(need: StructuredNeed, ctx: CheckContext): Concern[
   }
 
   const ratio = base.amount / usual.amount;
-  const inUnit = (amount: number) => (packCount && pack ? { amount: round(amount / pack), unit: q.unit } : { amount: round(amount), unit: q.unit });
+  const inUnit = (amount: number) => correctionAmount(amount, packCount ? pack : undefined, q.unit, base.unit);
   if (ratio >= TENFOLD_LOW && ratio <= TENFOLD_HIGH) {
     const fix = inUnit(base.amount / 10);
     return [tenfold(q, fix, `${formatAmount(base.amount, base.unit)} where you usually order about ${usualText}: did you mean ${formatAmount(fix.amount, fix.unit)}?`, evidence)];
@@ -429,7 +440,7 @@ export function checkPreferences(need: StructuredNeed, ctx: CheckContext): Conce
       key: `contradicts_preference:${pref.id}`,
       code: "contradicts_preference",
       severity: "warning",
-      message: `${conflict.what} Your kitchen's standing rule, set by ${pref.statedBy} on ${formatDay(pref.statedAt.slice(0, 10))}: "${pref.text}".`,
+      message: `${conflict.what} Your kitchen's standing rule, set by ${pref.statedBy} on ${formatDay(localDateOf(pref.statedAt))}: "${pref.text}".`,
       confirmable: true,
       corrections: [{ id: `keep_${pref.id}`, label: conflict.fixLabel, patch: conflict.patch }],
       preferenceIds: [pref.id],
@@ -505,7 +516,7 @@ const daysText = (ds: number[]) => ds.map((d) => DAY[d]).join(", ");
 export function cite(m: MemoryItem): string {
   const s = [...m.sources].reverse().find((x) => x.quote) ?? m.sources.at(-1);
   const who = m.origin === "learned" ? "learned from your orders" : m.confirmedBy ? `confirmed by ${m.confirmedBy.by}` : s?.by ? `said by ${s.by}` : "remembered";
-  const when = s ? ` on ${formatDay(s.at.slice(0, 10))}` : "";
+  const when = s ? ` on ${formatDay(localDateOf(s.at))}` : "";
   return `Remembered: ${m.text} (${who}${when}${s?.quote ? `: "${s.quote}"` : ""}).`;
 }
 
@@ -558,7 +569,7 @@ export function checkDeclined(need: StructuredNeed, ctx: CheckContext): Concern[
     const f = m.fact;
     if (f.kind !== "substitute") return cite(m);
     const s = m.sources.at(-1);
-    return `${s?.by ?? "Your kitchen"} turned it down as a substitute${f.forName ? ` for ${f.forName}` : ""}${s ? ` on ${formatDay(s.at.slice(0, 10))}` : ""}${f.reason ? `: "${f.reason}"` : ""}.`;
+    return `${s?.by ?? "Your kitchen"} turned it down as a substitute${f.forName ? ` for ${f.forName}` : ""}${s ? ` on ${formatDay(localDateOf(s.at))}` : ""}${f.reason ? `: "${f.reason}"` : ""}.`;
   };
   const usual = mem.find((m) => m.fact.kind === "product" && m.fact.stance === "prefer" && m.fact.productId !== named.id && ctx.candidates.some((p) => p.id === (m.fact as { productId: string }).productId));
   const corrections: Correction[] = [];
@@ -591,7 +602,7 @@ export function checkStanding(need: StructuredNeed, ctx: CheckContext): Concern[
   if (base.amount <= f.high * STANDING_HIGH && base.amount >= f.low * STANDING_LOW) return [];
   const pack = referencePackSize(need, ctx);
   const packCount = isPackCount(q.unit, familyUnit(ctx));
-  const fix = packCount && pack ? { amount: round(f.amount / pack), unit: q.unit } : { amount: f.amount, unit: q.unit };
+  const fix = correctionAmount(f.amount, packCount ? pack : undefined, q.unit, base.unit);
   const how = base.amount > f.high ? `${round(base.amount / f.high)}x the most` : `under ${Math.round((base.amount / f.low) * 100)} % of the least`;
   return [
     {

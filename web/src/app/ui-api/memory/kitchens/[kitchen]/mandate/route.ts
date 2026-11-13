@@ -8,5 +8,5 @@ import { kitchenMemoryRoute } from "@/server/memory/http";
  */
 export async function GET(req: Request, ctx: RouteContext<"/ui-api/memory/kitchens/[kitchen]/mandate">) {
   void req.url;
-  return kitchenMemoryRoute(ctx.params, async (k, memory) => ({ offers: await memory.mandateOffers(k.info.orgId, k.info.mandate) }));
+  return kitchenMemoryRoute(req, ctx.params, async (k, memory) => ({ offers: await memory.mandateOffers(k.info.orgId, k.info.mandate) }));
 }

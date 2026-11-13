@@ -1,16 +1,20 @@
 import type { ApprovalProof } from "@/core/approval";
 import { DockError } from "@/core/orders";
 import { decidingRule } from "@/core/policy";
-import { approvalViewFor } from "@/server/approval-api";
+import { approvalViewFor, requireApprovalReader } from "@/server/approval-api";
 import { handleApprover, sessionTokenOf } from "@/server/approver-session";
 import { errorBody, readJson } from "@/server/http";
 
 type Ctx = { params: Promise<{ approvalId: string }> };
 
-/** The sign-off screen's content for one approval, in plain words (no secrets). */
+/**
+ * The sign-off screen's content for one approval, in plain words (no secrets). For its kitchen's approver (signed-in
+ * phone), its agent, the operations desk, or ?token= from the one-time link; 404 for anyone else (server/authz.ts).
+ */
 export async function GET(req: Request, ctx: Ctx) {
   return handleApprover(async (rt) => {
     const { approvalId } = await ctx.params;
+    await requireApprovalReader(rt, req, approvalId, new URL(req.url).searchParams.get("token"));
     return Response.json({ view: await approvalViewFor(rt, req, approvalId) });
   });
 }

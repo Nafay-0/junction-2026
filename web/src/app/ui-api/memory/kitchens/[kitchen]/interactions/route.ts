@@ -22,7 +22,7 @@ const Body = z.object({
 const EVENT_TYPES = new Set(["option_chosen", "substitute", "concern_response", "answer", "order_committed"]);
 
 export async function POST(req: Request, ctx: RouteContext<"/ui-api/memory/kitchens/[kitchen]/interactions">) {
-  return kitchenMemoryRoute(ctx.params, async (k, memory) => {
+  return kitchenMemoryRoute(req, ctx.params, async (k, memory) => {
     const b = await body(req, Body);
     // A rule can only be stated through the memory page's own action, never slipped in as an event here.
     const events = b.events.filter((e) => EVENT_TYPES.has(String(e.type))) as unknown as InteractionEvent[];

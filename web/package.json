@@ -35,10 +35,14 @@
     "aiven:search:index": "tsx scripts/aiven-search-index.ts",
     "aiven:search:compare": "tsx scripts/aiven-search-compare.ts",
     "categories:build": "tsx scripts/category-labels.ts",
+    "qa": "tsx qa/run.ts",
     "menu:eval": "tsx scripts/menu-eval.ts",
     "knowledge:build": "tsx scripts/knowledge-build.ts",
     "knowledge:eval": "tsx scripts/knowledge-eval.ts",
     "knowledge:publish": "tsx scripts/knowledge-publish.ts",
+    "aiven:showcase": "tsx scripts/aiven-showcase.ts",
+    "radar:gtins": "tsx scripts/radar-gtins.ts",
+    "radar:check": "tsx scripts/radar-check.ts",
     "qa": "tsx qa/run.ts"
   },
   "dependencies": {

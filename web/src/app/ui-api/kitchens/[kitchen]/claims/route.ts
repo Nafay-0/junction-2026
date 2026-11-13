@@ -7,7 +7,7 @@ import { noStore, portalRoute } from "@/server/kitchen-portal-http";
  * against the keys at /api/v1/keys. At most 30 ids.
  */
 export async function GET(req: Request, ctx: RouteContext<"/ui-api/kitchens/[kitchen]/claims">) {
-  return portalRoute(ctx.params, async (k) => {
+  return portalRoute(req, ctx.params, async (k) => {
     const ids = new URL(req.url).searchParams.getAll("id").filter((x) => x.length > 0 && x.length < 80).slice(0, 30);
     const { dock } = await getRuntime();
     const session = await dock.authenticate(k.mandateToken, k.agentId);

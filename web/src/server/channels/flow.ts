@@ -1,8 +1,10 @@
 import { DockError } from "@/core/errors";
-import type { IntakeView } from "@/core/intake";
+import { RELAYED, type HumanVia, type IntakeView } from "@/core/intake";
 import type { NeedInput } from "@/core/need";
 import type { AgentSession, PublicOrder } from "@/core/orders";
 import { interpretRequest } from "../agent/interpret";
+import { consoleKitchen } from "../authz";
+import type { ConsolePerson } from "../console-context";
 import { resolveKitchen, type ConsoleKitchenInfo } from "../console-kitchens";
 import { getRuntime, type Runtime } from "../runtime";
 
@@ -24,15 +26,31 @@ import { getRuntime, type Runtime } from "../runtime";
 export type Door = "voice" | "photo";
 export type Via = "speech" | "typed" | "image" | "pdf" | "text";
 
-export type KitchenAgent = { rt: Runtime; info: ConsoleKitchenInfo; session: AgentSession };
+/** `person`: the visitor signed in on this phone, for their own kitchen (server/authz.ts). Their answers are theirs. */
+export type KitchenAgent = { rt: Runtime; info: ConsoleKitchenInfo; session: AgentSession; person?: ConsolePerson };
 
-/** The kitchen's purchasing agent, as the console's server side holds it: the browser never sees the mandate. */
-export async function kitchenAgent(slug: string): Promise<KitchenAgent> {
-  const k = await resolveKitchen(slug);
-  if (!k) throw new DockError(404, "kitchen_not_found", "This kitchen does not exist or its demo time is over.");
+/**
+ * The kitchen's purchasing agent, as the console's server side holds it: the browser never sees the mandate. With the
+ * request, the console rule applies (a visitor's kitchen only from their own phone) and the signed-in person is known.
+ */
+export async function kitchenAgent(slug: string, req?: Request): Promise<KitchenAgent> {
   const rt = await getRuntime();
+  const viaConsole = req ? await consoleKitchen(req, rt, slug) : undefined;
+  const k = viaConsole ?? (req ? undefined : await resolveKitchen(slug));
+  if (!k) throw new DockError(404, "kitchen_not_found", "This kitchen does not exist or its demo time is over.");
   const session = await rt.dock.authenticate(k.mandateToken, k.agentId);
-  return { rt, info: k.info, session };
+  return { rt, info: k.info, session, person: viaConsole?.console.person };
+}
+
+/**
+ * Whose answer this is. The caller's own words on a call from their signed-in phone (voice), or a tap on their own
+ * screen (portal_session), are the person's. Otherwise (a built-in demo kitchen's open screen, no session) the
+ * answer is relayed and recorded as such; the words heard are still kept in the ledger.
+ */
+function humanVia(a: KitchenAgent, door: Door, heard?: HeardWords): HumanVia {
+  if (!a.person) return RELAYED;
+  if (door === "voice" && heard) return { channel: "voice", person: a.person.name, words: heard.text.slice(0, 300) };
+  return { channel: "portal_session", person: a.person.name };
 }
 
 export function byLine(info: ConsoleKitchenInfo, door: Door, via: Via): string {
@@ -83,17 +101,17 @@ export function getStep(a: KitchenAgent, requestId: string): Promise<IntakeView>
 
 export async function respond(a: KitchenAgent, requestId: string, key: string, choice: string, door: Door, via: Via, heard?: HeardWords): Promise<IntakeView> {
   recordHeard(a, requestId, door, choice === "confirm" ? `confirming ${key}` : `correcting ${key} (${choice})`, heard, { key, choice });
-  return a.rt.dock.intake.respondToConcerns(a.session, requestId, { by: byLine(a.info, door, via), responses: [{ key, choice }] });
+  return a.rt.dock.intake.respondToConcerns(a.session, requestId, { by: byLine(a.info, door, via), responses: [{ key, choice }] }, humanVia(a, door, heard));
 }
 
 export async function answer(a: KitchenAgent, requestId: string, questionId: string, optionId: string, door: Door, via: Via, heard?: HeardWords): Promise<IntakeView> {
   recordHeard(a, requestId, door, `answering ${questionId} with ${optionId}`, heard, { questionId, optionId });
-  return a.rt.dock.intake.answer(a.session, requestId, { by: byLine(a.info, door, via), answers: [{ questionId, optionId }] });
+  return a.rt.dock.intake.answer(a.session, requestId, { by: byLine(a.info, door, via), answers: [{ questionId, optionId }] }, humanVia(a, door, heard));
 }
 
 export async function choose(a: KitchenAgent, requestId: string, optionId: string, door: Door, via: Via, heard?: HeardWords): Promise<IntakeView> {
   recordHeard(a, requestId, door, `choosing ${optionId}`, heard, { optionId });
-  return a.rt.dock.intake.choose(a.session, requestId, { by: byLine(a.info, door, via), optionId });
+  return a.rt.dock.intake.choose(a.session, requestId, { by: byLine(a.info, door, via), optionId }, humanVia(a, door, heard));
 }
 
 /** Send the quoted order to the gate. The gate decides; anything beyond the mandate waits for a person's passkey. */

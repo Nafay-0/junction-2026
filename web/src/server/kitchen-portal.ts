@@ -1,3 +1,4 @@
+import { attachConsoleContext, type ConsoleContext } from "./console-context";
 import type { LiveOffer, LiveProblem, Product } from "@/core/catalog";
 import type { IntakeView } from "@/core/intake";
 import { addDaysIso, addStatedPreference, isoWeekday, kitchenView, localNow, primaryLine, type HistoryEntry, type KitchenProfile, type StatedPreference } from "@/core/kitchen";
@@ -18,13 +19,16 @@ import { getRuntime, type Runtime } from "./runtime";
  * written to the ledger like any agent's lookup.
  */
 
-export type Kitchen = NonNullable<Awaited<ReturnType<typeof resolveKitchen>>>;
+/** A resolved kitchen; `console` when a console route resolved it for a browser (server/authz.ts consoleKitchen). */
+export type Kitchen = NonNullable<Awaited<ReturnType<typeof resolveKitchen>>> & { console?: ConsoleContext };
 
 /** One call to Dock's public API as this kitchen's agent, in-process. */
 export async function agentCall<T = unknown>(k: Kitchen, method: "GET" | "POST", path: string, body?: unknown): Promise<{ status: number; json: T }> {
   const headers: Record<string, string> = { accept: "application/json", authorization: `Mandate ${k.mandateToken}`, "dock-agent-id": k.agentId };
   if (method === "POST") headers["content-type"] = "application/json";
-  const res = await localFetch(new Request(new URL(path, "http://dock.local"), { method, headers, body: method === "POST" ? JSON.stringify(body ?? {}) : undefined }));
+  const forwarded = new Request(new URL(path, "http://dock.local"), { method, headers, body: method === "POST" ? JSON.stringify(body ?? {}) : undefined });
+  if (k.console) attachConsoleContext(forwarded, k.console);
+  const res = await localFetch(forwarded);
   return { status: res.status, json: (await res.json()) as T };
 }
 

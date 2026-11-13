@@ -1,6 +1,7 @@
 import { unstable_rethrow } from "next/navigation";
 import { DockError, isDockError } from "@/core/errors";
 import type { AgentSession, Dock } from "@/core/orders";
+import { consoleContextOf } from "./console-context";
 import { doorLog, interfaceOf } from "./ops/door";
 import { suspensions } from "./ops/suspensions";
 import { getRuntime, type Runtime } from "./runtime";
@@ -54,6 +55,9 @@ export async function authenticate(req: Request, dock: Dock): Promise<AgentSessi
     throw err;
   }
   doorLog(dock).record({ ...call, ok: true }, session.mandate);
+  // The on-site console's browser session gets its own share of the live-lookup allowance (set in-process only).
+  const consoleCtx = consoleContextOf(req);
+  if (consoleCtx) session.share = `console:${consoleCtx.session}`;
   return session;
 }
 
