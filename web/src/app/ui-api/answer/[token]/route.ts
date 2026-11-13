@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { DockError } from "@/core/errors";
 import type { HumanVia } from "@/core/intake";
-import { openAnswerLink, useAnswerLink, ANSWER_LINK_MINUTES } from "@/server/answer-links";
+import { openAnswerLink, spendAnswerLink, ANSWER_LINK_MINUTES } from "@/server/answer-links";
 import { currentApprover } from "@/server/approver-session";
 import { handle, readJson } from "@/server/http";
 import type { Runtime } from "@/server/runtime";
@@ -67,7 +67,7 @@ export async function POST(req: Request, ctx: RouteContext<"/ui-api/answer/[toke
         : (() => {
             throw new DockError(400, "invalid_request", "Send responses (to concerns) or answers (to questions).");
           })();
-    useAnswerLink(token);
+    spendAnswerLink(token);
     return Response.json({ done: true, state: step.state, message: "Thank you. Your answer went to Dock; the agent carries on from here." }, { headers: noStore });
   });
 }

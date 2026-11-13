@@ -61,7 +61,7 @@ export function openAnswerLink(token: string, now = Date.now()): { session: Agen
 }
 
 /** Spend the link: called once an answer through it was accepted. */
-export function useAnswerLink(token: string, now = Date.now()): void {
+export function spendAnswerLink(token: string, now = Date.now()): void {
   const l = links.get(token);
   if (l) l.usedAt = now;
 }
