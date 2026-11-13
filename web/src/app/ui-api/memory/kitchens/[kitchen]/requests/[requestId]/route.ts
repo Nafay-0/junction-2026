@@ -21,13 +21,13 @@ async function intakeOf(k: ResolvedKitchen, requestId: string) {
 export async function GET(req: Request, ctx: RouteContext<"/ui-api/memory/kitchens/[kitchen]/requests/[requestId]">) {
   void req.url;
   const { requestId } = await ctx.params;
-  return kitchenMemoryRoute(ctx.params, async (k, memory) => ({ requestId, lines: await memory.usage(k.info.orgId, await intakeOf(k, requestId)) }));
+  return kitchenMemoryRoute(req, ctx.params, async (k, memory) => ({ requestId, lines: await memory.usage(k.info.orgId, await intakeOf(k, requestId)) }));
 }
 
 export async function POST(req: Request, ctx: RouteContext<"/ui-api/memory/kitchens/[kitchen]/requests/[requestId]">) {
   void req.url;
   const { requestId } = await ctx.params;
-  return kitchenMemoryRoute(ctx.params, async (k, memory) => {
+  return kitchenMemoryRoute(req, ctx.params, async (k, memory) => {
     const intake = await intakeOf(k, requestId);
     const profile = await memory.load(k.info.orgId, k.info.name);
     const { segments, events } = interactionFromIntake(profile, intake as never);

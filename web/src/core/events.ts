@@ -7,7 +7,14 @@
  * subscribe() holds one LISTEN connection per instance, and `since()` reads a durable events table by id,
  * so a client that reconnects to a different instance still gets what it missed.
  */
-export type DockEventType = "approval_requested" | "approval_approved" | "approval_declined" | "order_committed" | "order_rejected";
+export type DockEventType =
+  | "approval_requested"
+  | "approval_approved"
+  | "approval_declined"
+  | "approval_withdrawn" // the buyer (or its agent) took back an order that waited for sign-off
+  | "approval_expired" // the quote's fixed price ran out before anyone signed
+  | "order_committed"
+  | "order_rejected";
 
 export type DockEvent = {
   id: number; // monotonically increasing per bus; doubles as the SSE event id

@@ -185,22 +185,103 @@ describe("orders", () => {
     expect(ledger.entries().at(-1)?.type).toBe("refusal");
   });
 
-  it("counts committed and pending orders against the weekly budget, but not declined ones", async () => {
-    const bigOrder = async () => {
-      const req = await dock.openRequest(session, { text: "milk" });
-      const { quote, quoteToken } = await dock.requestQuote(session, { requestId: req.requestId, lines: [{ productId: "VA-1001", quantity: 700 }] });
-      return dock.placeOrder(session, { requestId: req.requestId, quoteToken, lines: linesOf(quote) }); // €1,043: needs sign-off
-    };
+  const bigOrder = async () => {
+    const req = await dock.openRequest(session, { text: "milk" });
+    const { quote, quoteToken } = await dock.requestQuote(session, { requestId: req.requestId, lines: [{ productId: "VA-1001", quantity: 700 }] });
+    return dock.placeOrder(session, { requestId: req.requestId, quoteToken, lines: linesOf(quote) }); // €1,043: needs sign-off
+  };
+  const budgetRule = (o: { decision: { rules: { rule: string; outcome: string }[] } }) => o.decision.rules.find((r) => r.rule === "weekly_budget")?.outcome;
+
+  it("committed spend is a hard weekly limit; money held by a waiting order sends the next one to a person", async () => {
     const first = await bigOrder();
     expect(first.status).toBe("pending_approval");
-    const second = await bigOrder(); // €1,043 pending + €1,043 > €2,000
-    expect(second.status).toBe("rejected");
-    expect(second.decision.rules.find((r) => r.rule === "weekly_budget")?.outcome).toBe("fail");
+    // €1,043 waiting + €1,043 > €2,000: the agent may not spend the held money alone, a person decides (F-PENDING-HOLDS-BUDGET).
+    const second = await bigOrder();
+    expect(second.status).toBe("pending_approval");
+    expect(budgetRule(second)).toBe("escalate");
+    expect(second.decision.rules.find((r) => r.rule === "weekly_budget")?.reason).toContain(first.orderId);
 
+    // Both signed: the first commits, the second's re-check now sees €1,043 committed and refuses it.
+    const [m1, m2] = outbox.messages();
+    expect((await dock.decideApproval(m1.approvalId, { decision: "approve", proof: { kind: "link_token", token: tokenFrom(m1.link) } })).status).toBe("committed");
+    const late = await dock.decideApproval(m2.approvalId, { decision: "approve", proof: { kind: "link_token", token: tokenFrom(m2.link) } });
+    expect(late.status).toBe("rejected");
+    expect(budgetRule(late)).toBe("fail");
+    // Committed money: a third is refused outright.
+    const third = await bigOrder();
+    expect(third.status).toBe("rejected");
+    expect(budgetRule(third)).toBe("fail");
+  });
+
+  it("a declined, withdrawn or expired order stops holding the budget", async () => {
+    const a = await bigOrder();
     const [msg] = outbox.messages();
     await dock.decideApproval(msg.approvalId, { decision: "decline", proof: { kind: "link_token", token: tokenFrom(msg.link) }, note: "Too much" });
-    expect((await dock.getOrder(session, first.orderId)).status).toBe("declined");
-    expect((await bigOrder()).status).toBe("pending_approval"); // budget freed
+    expect((await dock.getOrder(session, a.orderId)).status).toBe("declined");
+    expect((await dock.budget(session)).spentCents).toBe(0);
+
+    const b = await bigOrder();
+    expect((await dock.budget(session)).heldCents).toBe(b.totalCents);
+    const w = await dock.withdrawOrder(session, b.orderId, { reason: "ordered by phone instead", by: "Aino" });
+    expect(w.status).toBe("withdrawn");
+    expect(w.approval?.status).toBe("withdrawn");
+    expect((await dock.budget(session)).spentCents).toBe(0);
+    expect(ledger.entries().at(-1)?.summary).toMatch(/withdrawn before sign-off, at the request of Aino \(relayed by the agent, not verified\)/);
+    await expect(dock.withdrawOrder(session, b.orderId)).rejects.toMatchObject({ status: 409, code: "order_not_pending" });
+    const bApproval = outbox.messages().at(-1)!;
+    await expect(dock.decideApproval(bApproval.approvalId, { decision: "approve", proof: { kind: "link_token", token: tokenFrom(bApproval.link) } })).rejects.toMatchObject({ status: 409, code: "approval_not_pending" });
+
+    const c = await bigOrder();
+    expect((await dock.budget(session)).heldCents).toBe(c.totalCents);
+    now = addMinutes(START, 31); // the quote held its price for 30 minutes
+    expect(await dock.budget(session)).toMatchObject({ spentCents: 0, heldCents: 0 });
+    expect((await dock.getOrder(session, c.orderId)).status).toBe("expired");
+    expect(ledger.entries().some((e) => e.orderId === c.orderId && /expired unsigned/.test(e.summary))).toBe(true);
+  });
+
+  it("only the organisation's own pending order can be withdrawn", async () => {
+    const other = await generateEd25519KeyPair("other-org");
+    const d2 = createDock({
+      catalog,
+      repo: new InMemoryDockRepository(),
+      ledger,
+      trustedIssuers: createTrustRegistry([{ kid: buyer.kid, orgId: "org_laakso", publicKey: buyer.publicKey }, { kid: other.kid, orgId: "org_other", publicKey: other.publicKey }]),
+      wholesalerKey: wholesaler,
+      notifier: outbox,
+      now: () => now,
+    });
+    const mine = await d2.authenticate(token, mandate.agentId);
+    const m2 = { ...sampleMandate(START), mandateId: "mnd_other", issuer: { orgId: "org_other", name: "Other" } };
+    const theirs = await d2.authenticate(await signMandate(m2, other), m2.agentId);
+    const req = await d2.openRequest(mine, { text: "milk" });
+    const { quote, quoteToken } = await d2.requestQuote(mine, { requestId: req.requestId, lines: [{ productId: "VA-1001", quantity: 700 }] });
+    const o = await d2.placeOrder(mine, { requestId: req.requestId, quoteToken, lines: linesOf(quote) });
+    await expect(d2.withdrawOrder(theirs, o.orderId)).rejects.toMatchObject({ status: 404 });
+    const small = await d2.openRequest(mine, { text: "milk" });
+    const sq = await d2.requestQuote(mine, { requestId: small.requestId, lines: [{ productId: "VA-1001", quantity: 2 }] });
+    const committed = await d2.placeOrder(mine, { requestId: small.requestId, quoteToken: sq.quoteToken, lines: linesOf(sq.quote) });
+    await expect(d2.withdrawOrder(mine, committed.orderId)).rejects.toMatchObject({ status: 409, code: "order_not_pending" });
+  });
+
+  it("works out substitutes from what the request asked for, whatever the agent declares (F-SUBST-SELF-DECLARED)", async () => {
+    const strict = await dock.authenticate(await signMandate({ ...mandate, mandateId: "mnd_strict", substitution: { rule: "none", maxPriceIncreasePct: 0 } }, buyer), mandate.agentId);
+    const req = await dock.openRequest(strict, { text: "20 x VA-1010 (200 L), no substitutes" });
+    const q = await dock.requestQuote(strict, { requestId: req.requestId, lines: [{ productId: "AR-2010", quantity: 20 }] }); // not declared
+    expect(q.quote.lines[0].substituteFor?.productId).toBe("VA-1010");
+    const o = await dock.placeOrder(strict, { requestId: req.requestId, quoteToken: q.quoteToken, lines: linesOf(q.quote) });
+    expect(o.status).toBe("rejected");
+    expect(o.decision.rules.find((r) => r.rule === "substitution_rule")?.outcome).toBe("fail");
+
+    // The price is compared with the product asked for, not with an 'original' the agent picks.
+    const loose = await dock.authenticate(await signMandate({ ...mandate, mandateId: "mnd_loose", weeklyBudgetCents: 10_000_000, substitution: { rule: "within_preferences", maxPriceIncreasePct: 10 } }, buyer), mandate.agentId);
+    const r2 = await dock.openRequest(loose, { text: "100 L of VA-1010" });
+    const masked = await dock.requestQuote(loose, { requestId: r2.requestId, lines: [{ productId: "JP-3010", quantity: 100, substituteFor: "VA-1201" }] });
+    expect(masked.quote.lines[0].substituteFor?.productId).toBe("VA-1010");
+    expect(masked.policyPreview.rules.find((r) => r.rule === "substitute_price")?.outcome).toBe("fail");
+
+    // Ids only count when they exist; a plain amount is never read as one.
+    const r3 = await dock.openRequest(loose, { text: "1000 L milk, ref 123456789" });
+    expect((await dock.requestQuote(loose, { requestId: r3.requestId, lines: [{ productId: "VA-1001", quantity: 2 }] })).quote.lines[0].substituteFor).toBeUndefined();
   });
 
   it("refuses a request id that belongs to someone else", async () => {
@@ -247,14 +328,14 @@ describe("approvals", () => {
     });
   });
 
-  it("re-checks at sign-off: an approval after the quote expired does not commit", async () => {
+  it("an approval after the quote expired does not commit: the order closed as expired when its price ran out", async () => {
     const { order, message, token: t } = await pendingOrder();
     now = addMinutes(START, 31);
-    const result = await dock.decideApproval(message.approvalId, { decision: "approve", proof: { kind: "link_token", token: t } });
-    expect(result.status).toBe("rejected");
-    expect(result.decision.rules.find((r) => r.rule === "quote_expiry")?.outcome).toBe("fail");
-    expect(result.confirmation).toBeUndefined();
-    expect((await dock.getOrder(session, order.orderId)).status).toBe("rejected");
+    await expect(dock.decideApproval(message.approvalId, { decision: "approve", proof: { kind: "link_token", token: t } })).rejects.toMatchObject({ status: 409, code: "approval_not_pending" });
+    const after = await dock.getOrder(session, order.orderId);
+    expect(after.status).toBe("expired");
+    expect(after.confirmation).toBeUndefined();
+    expect(after.approval?.status).toBe("expired");
   });
 
   it("returns 404 for an unknown approval", async () => {

@@ -111,7 +111,9 @@ describe("phone approval over HTTP", () => {
     expect(view.delivery).toMatch(/^[A-Z][a-z]+day \d+ [A-Z][a-z]+$/);
     expect(JSON.stringify({ ...view, details: undefined, approvalId: undefined })).not.toMatch(/apr_|ord_|org_|VA-|AR-/);
 
-    const link = await json(linkRoute.GET(request("GET", `/api/v1/approvals/${approvalId}/link`), params({ approvalId })));
+    expect((await json(linkRoute.GET(request("GET", `/api/v1/approvals/${approvalId}/link`), params({ approvalId })))).status).toBe(404); // a stranger cannot tell it exists
+    expect((await json(approvalRoute.GET(request("GET", `/api/v1/approvals/${approvalId}`), params({ approvalId })))).status).toBe(404);
+    const link = await json(linkRoute.GET(request("GET", `/api/v1/approvals/${approvalId}/link`, { cookie }), params({ approvalId })));
     expect(link.body).toMatchObject({ url: `${BASE}/approve/${approvalId}`, qrPayload: `${BASE}/approve/${approvalId}` });
     expect(link.body.qrSvg).toMatch(/^<svg/);
 

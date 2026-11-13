@@ -97,7 +97,8 @@ export type SignOff =
 export type Approval = {
   approvalId: string;
   approver: Approver;
-  status: "pending" | "approved" | "declined";
+  /** withdrawn: the buyer took the order back; expired: the quote's fixed price ran out before anyone signed. */
+  status: "pending" | "approved" | "declined" | "withdrawn" | "expired";
   orderDigest: string; // sha256 of the order's canonical content: what the approver signs off
   tokenHash: string;
   requestedAt: string;

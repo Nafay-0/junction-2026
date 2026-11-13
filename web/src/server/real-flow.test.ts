@@ -170,7 +170,10 @@ describe("live service guards", () => {
     const req = await dock.openRequest(session, { text: "milk", neededBy: MONDAY });
     await dock.checkAvailability(session, { requestId: req.requestId, productIds: ["900002"] });
     await dock.checkAvailability(session, { requestId: req.requestId, productIds: ["900003"] });
-    await expect(dock.checkAvailability(session, { requestId: req.requestId, productIds: ["900002"] })).rejects.toMatchObject({ status: 429, code: "live_lookup_budget_exceeded", rule: "live_lookup_limit" });
+    // An answer the partner gave a moment ago is reused and not counted (F-SHARED-LIVE-ALLOWANCE)...
+    await dock.checkAvailability(session, { requestId: req.requestId, productIds: ["900002"] });
+    // ...but a call that has to reach the partner is refused, with when to retry.
+    await expect(dock.checkAvailability(session, { requestId: req.requestId, productIds: ["900004"] })).rejects.toMatchObject({ status: 429, code: "live_lookup_budget_exceeded", rule: "live_lookup_limit", message: expect.stringMatching(/Try again in about \d+ min/) });
     expect(dock.liveAllowance.remaining("org_laakso:agent_buyer_1").callsLeft).toBe(0);
   });
 

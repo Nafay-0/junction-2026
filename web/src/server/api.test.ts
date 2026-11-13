@@ -83,7 +83,8 @@ describe("HTTP API", () => {
     const placed = await agent("POST", "/api/v1/orders", { requestId, quoteToken: q.body.quoteToken, lines });
     expect(placed.status).toBe(202);
 
-    const pending = await call("GET", "/api/v1/approvals");
+    expect((await call("GET", "/api/v1/approvals")).status).toBe(401); // strangers see no one's sign-offs (F-APPROVALS-OPEN)
+    const pending = await agent("GET", "/api/v1/approvals");
     expect(pending.body.approvals).toHaveLength(1);
     expect(JSON.stringify(pending.body)).not.toMatch(/token/i);
 
@@ -102,7 +103,11 @@ describe("HTTP API", () => {
     const got = await agent("GET", `/api/v1/orders/${placed.body.order.orderId}`);
     expect(got.body.order.confirmation).toMatch(/^[\w-]+\.[\w-]+\.[\w-]+$/);
 
-    const ledger = await call("GET", `/api/v1/ledger?requestId=${requestId}`);
+    // A stranger can verify the chain but reads no entries (F-LEDGER-OPEN); the kitchen's own agent reads its own.
+    const anon = await call("GET", `/api/v1/ledger?requestId=${requestId}`);
+    expect(anon.body.verification.ok).toBe(true);
+    expect(anon.body.entries).toEqual([]);
+    const ledger = await agent("GET", `/api/v1/ledger?requestId=${requestId}`);
     expect(ledger.body.verification.ok).toBe(true);
     expect(ledger.body.catalog.liveCalls).toBe(1);
     expect(ledger.body.explanation.length).toBeGreaterThan(5);

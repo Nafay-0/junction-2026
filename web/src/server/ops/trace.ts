@@ -522,7 +522,7 @@ export function buildTrace(input: TraceInput): Trace {
 
   // The order records carry what the ledger alone does not (e.g. a declined order without an entry of its own).
   // One request can carry several orders (a refused replay after a committed one): the strongest outcome speaks for it.
-  const PRIORITY = { committed: 0, pending_approval: 1, declined: 2, rejected: 3 } as const;
+  const PRIORITY = { committed: 0, pending_approval: 1, declined: 2, withdrawn: 3, expired: 4, rejected: 5 } as const;
   const last = orders.slice().sort((a, b) => PRIORITY[a.status] - PRIORITY[b.status] || b.updatedAt.localeCompare(a.updatedAt))[0];
   const intakeEnd = [...entries].reverse().find((e) => e.type === "intake");
   const lastEntry = entries.at(-1);
@@ -530,6 +530,8 @@ export function buildTrace(input: TraceInput): Trace {
   if (last?.status === "committed") outcome = { kind: "committed", label: last.approval ? `Signed order, approved by ${last.approval.approver.name}` : "Signed order, within the agent's mandate" };
   else if (last?.status === "pending_approval") outcome = { kind: "waiting", label: `Waiting for ${last.approval?.approver.name ?? "a person"} to sign off` };
   else if (last?.status === "declined") outcome = { kind: "declined", label: `Declined by ${last.approval?.approver.name ?? "the approver"}` };
+  else if (last?.status === "withdrawn") outcome = { kind: "cancelled", label: "Withdrawn by the kitchen before sign-off" };
+  else if (last?.status === "expired") outcome = { kind: "cancelled", label: "Expired unsigned: the fixed price ran out" };
   else if (last?.status === "rejected") outcome = { kind: "refused", label: `Refused by the gate: ${ruleTitleOf(last.decision.rules.find((r) => r.outcome === "fail")?.rule ?? "").toLowerCase()}` };
   else if (lastEntry?.type === "refusal") outcome = { kind: "refused", label: `Refused: ${ruleTitleOf(String(lastEntry.data.rule ?? "")).toLowerCase()}` };
   else if (intakeEnd?.data.step === "cancelled") outcome = { kind: "cancelled", label: "Cancelled by the kitchen" };

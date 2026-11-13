@@ -144,6 +144,7 @@ export const RULE_TITLE: Record<string, string> = {
   weekly_budget: "The weekly budget is a hard limit",
   per_order_limit: "The agent's own spending limit",
   order_splitting: "No splitting one need into small orders",
+  human_confirmation: "A person confirms what matters",
   approver_authority: "Someone must be allowed to sign the amount",
   live_lookup_limit: "Live price checks for a short list only",
   approver_identity: "Only the named person can sign off",

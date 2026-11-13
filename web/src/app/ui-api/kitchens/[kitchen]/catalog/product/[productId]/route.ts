@@ -6,6 +6,7 @@ import { noStore, portalRoute } from "@/server/kitchen-portal-http";
 export async function GET(req: Request, ctx: RouteContext<"/ui-api/kitchens/[kitchen]/catalog/product/[productId]">) {
   void req.url;
   return portalRoute(
+    req,
     ctx.params.then((p) => ({ kitchen: p.kitchen })),
     async () => {
       const { productId } = await ctx.params;

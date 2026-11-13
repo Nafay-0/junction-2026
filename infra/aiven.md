@@ -116,11 +116,85 @@ How Dock should use them, in order of value for the demo:
   the €1,000 per-order limit, sign-off routed to Aino Virtanen. Three messages, about 20 s each. Note: the
   demo org's approvers have no passkey in production, so that order cannot be approved there; for an
   outside agent's order to reach a visitor's phone, the agent needs that visitor kitchen's mandate.
-- **An ops agent with Aiven MCP (Read-only role)** on a schedule: "summarise the last hour of gate
+- **Done, as the operations copilot (see "The Platform section" below).** Originally planned: an ops agent with Aiven MCP (Read-only role) on a schedule: "summarise the last hour of gate
   refusals from `dock-events` and any service not RUNNING". Cheap to add from the Console once the
   topics carry data.
 - **The team's coding agents use Aiven MCP** (`claude mcp add --transport http aiven
   https://mcp.aiven.live/mcp`) to inspect topics, slow queries and logs while building.
+
+## The Platform section of the operations portal (added 14 Nov)
+
+`/ops/platform` (server code `web/src/server/aiven/showcase/`, routes `/ops-api/platform/**`, pages
+`web/src/app/ops/(desk)/platform/`). The judges' brief is `infra/AIVEN-JUDGES.md`. Five tabs:
+
+| Tab | What it does | Reads / writes |
+|---|---|---|
+| The platform | Diagram of which service does which job and why; each service's live state and round trip; its last hour (telemetry rows, ledger entries, events through Kafka, cache hits, searches, agent runs); run rate, balance and share of the $50 credit; what was considered and not used | Aiven API (read-only token): services, plan prices (`/service_types`), `estimated_balance`, Managed Agents environment; the app's own probes; `dock_copilot` |
+| Send in an Aiven agent | Starts the Managed Agent buyer with one of three tasks (Valio's example: sign-off; inside the mandate: committed; pay below the quote: refused `order_matches_quote`), shows its tool calls and the gate's events live from Kafka, links the trace | Managed Agents API with `DOCK_AIVEN_LAUNCH_TOKEN`; Kafka tail |
+| Ask the platform | The operations copilot: one question box, answer cards with the path, the query and the rows; pin cards | Aiven MCP server (read-only token) for service state and logs; PostgreSQL as `dock_copilot` |
+| Observe | The Grafana dashboard's questions drawn in the portal, each panel with its SQL, plus sign-off wait times, escalation reasons, pipeline in/out, agent table, Managed Agent runs | `dock_copilot` |
+| The stream | Live tail of `dock.actions` with partition:offset, and the sink group's committed offset and lag per partition | Kafka (a throwaway consumer group that never commits) |
+
+The **trace view** (`/ops/trace/<id>`) got one panel, *The same steps on the stream*: the request read back from
+Kafka (`GET /ops-api/platform/stream/request/<id>`: offsets found by timestamp, read in a throwaway group, merged by
+ledger sequence), with the step the replay is on highlighted. Any partition can also be read by offset range:
+`GET /ops-api/platform/stream/range?partition=&from=&to=` (at most 500). The browser never talks to Kafka.
+
+### What was created on Aiven for it (all free, no plan changed)
+
+- **PostgreSQL service user `dock_copilot`** on dock-pg and the view **`telemetry.ops_events`** (`infra/copilot.sql`,
+  applied and checked by `node infra/copilot-user.mjs`; `--check` only checks). The user can `SELECT` that one view
+  and nothing else; sessions are `default_transaction_read_only`, `statement_timeout` 3 s, connection limit 2. The
+  view drops intake-step summaries (they can quote a kitchen's private memory) and free-form attrs. Its URL is
+  `DOCK_COPILOT_PG_URL` in `web/.env.local`.
+- **Organisation application user `dock-agent-launcher`**, project role `role:project:read` (the least that the
+  Managed Agents API accepts for creating sessions and rotating an integration's credential), token
+  `DOCK_AIVEN_LAUNCH_TOKEN`, expires 20 Nov. It cannot change services or plans.
+- **Managed Agents integration `dock-aiven`** (custom MCP URL `https://<app-host>/api/mcp?agent_id=agent_laakso_aiven_01`)
+  and **agent "Dock showcase buyer (Laakso Catering)"** (`gemini-3.8-flash`) in the existing environment
+  `managed-agents-a0074eab`. The integration's credential is a mandate minted per run (Laakso's demo org key, agent
+  `agent_laakso_aiven_01`, €1,000 per order alone, valid 20 minutes): `PUT …/integration/dock-aiven {token}` before
+  each run, so between runs it holds an expired mandate. The earlier "Laakso Catering purchasing agent" and its
+  7-day `dock` integration are untouched.
+
+Teardown of these: `DELETE /v1/organization/<org>/project/<project>/managed-agents/environment/<env>/integration/dock-aiven`,
+delete the application user `dock-agent-launcher` in the Console, `DELETE /v1/project/<project>/service/dock-pg/user/dock_copilot`.
+
+### The Aiven MCP server: on, and what it can do with a read-only token
+
+`GET /organization/<org>/config/authentication` reads `mcp_enabled` (the Console's Admin > Authentication > *Allow
+MCP connections*); on 13 Nov it was **true** (`mcp_read_only` false). The hosted server `https://mcp.aiven.live/mcp`
+accepts an API token as `Authorization: Bearer <token>` (no OAuth needed for a server-side client) and lists 64
+tools. With the **read-only** token: `aiven_service_list`, `aiven_service_get`, `aiven_service_metrics_fetch` and
+`aiven_project_get_service_logs` work; `aiven_pg_read` (runs through the PG Editor API), `aiven_pg_service_query_statistics`,
+`aiven_service_query_activity` and the Kafka topic tools answer 403; reading messages also needs Kafka REST, which is
+off on the free plan. So the copilot uses Aiven MCP for service state and logs, and its **direct** read-only path
+(`dock_copilot`) for SQL; every answer card names the path. We did not give the read-only user PG Editor rights:
+that would let the copilot read as `avnadmin`. If the switch is turned off, the page shows the one-line instruction
+and everything else keeps working. `pnpm aiven:showcase mcp` prints the detection.
+
+### The launcher's limits
+
+One run at a time, 45 s between starts, 12 starts per UTC day per server (`DOCK_SHOWCASE_LAUNCHES_PER_DAY`,
+`DOCK_SHOWCASE_LAUNCH_GAP_S`), counted in memory and in `telemetry.events` (`kind = 'aiven_agent.run'`), so a restart
+does not reset it. Aiven publishes no number for the free tier's daily run limit and its API reports no cost or
+token usage per run; when Aiven refuses a run (429 or a limit message), or the day's starts are used, the page plays a
+**recording** of a real run instead, labelled as one (`web/src/server/aiven/showcase/recordings/*.json`, made with
+`pnpm aiven:showcase record <agentId> <sessionId> <preset>`). The agent can only reach a public Dock: it connects to
+`DOCK_SHOWCASE_DOCK_URL`, else `DOCK_PUBLIC_URL`, else the deployed app, also when the portal runs on a laptop.
+Measured 13 Nov: one message, 25 to 60 s per run, all three presets ended as expected.
+
+### Settings it needs on dock-app
+
+`infra/aiven-deploy.mjs` now sends `AIVEN_PROJECT`, `AIVEN_ORGANIZATION_ID` (variables) and `AIVEN_READONLY_TOKEN`,
+`DOCK_AIVEN_LAUNCH_TOKEN`, `DOCK_COPILOT_PG_URL` (secrets). Never `AIVEN_API_TOKEN`. Without them each tab says which
+setting is missing; the launcher then only plays recordings.
+
+New telemetry kinds: `aiven_agent.run` (rule = preset, value = seconds, ok on finish) and `usage.model` (value = this
+server's model spend today in USD, attrs.products = calls; one row a minute when it changes).
+
+From `web/`: `pnpm aiven:showcase launch valio|within|refused`, `pnpm aiven:showcase ask "<question>"`,
+`pnpm aiven:showcase mcp`.
 
 ## Hosting on Aiven Runtime
 

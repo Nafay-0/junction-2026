@@ -195,12 +195,13 @@ describe("live price/availability guard", () => {
     expect(r.isError).toBe(true);
     expect(r.text).toMatch(/productIds/);
 
-    // Through a quote: 11 different products (with substitutes) is refused by the core cap, by rule.
+    expect((await getRuntime()).dock.stats()).toMatchObject({ liveCalls: 0, productsPriced: 0 });
+
+    // A long basket is one quote: Dock prices it in calls of at most 10 products, each counted.
     const lines = ids.map((productId) => ({ productId, quantity: 1 }));
     const q = await call(client, "request_quote", { requestId, lines });
-    expect(q.s.error).toMatchObject({ code: "too_many_products", rule: "live_lookup_limit" });
-
-    expect((await getRuntime()).dock.stats()).toMatchObject({ liveCalls: 0, productsPriced: 0 });
+    expect(q.s.error?.rule).not.toBe("live_lookup_limit");
+    expect((await getRuntime()).dock.stats()).toMatchObject({ liveCalls: 2, productsPriced: 11 });
   });
 
   it("stops an agent looping over the catalogue ten products at a time", async () => {
@@ -225,7 +226,7 @@ describe("live price/availability guard", () => {
     expect((await call(client, "check_availability", { requestId, productIds: fakeIds(0) })).isError).toBe(false);
 
     const { dock } = await getRuntime();
-    expect(dock.stats().productsPriced).toBe(max + 10);
+    expect(dock.stats().productsPriced).toBe(max); // the re-check was answered from the short-lived live cache: not counted
     expect(dock.ledger.entries({ requestId }).some((e) => e.type === "refusal" && e.data.rule === "live_lookup_limit")).toBe(true);
   });
 });
