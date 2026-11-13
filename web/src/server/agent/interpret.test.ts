@@ -8,7 +8,7 @@ import { NeedSchema } from "@/core/need";
 import { SEED_PRODUCTS } from "@/core/seed";
 import { DEMO_ORG, demoMandate, demoOrgKeyPair } from "../dev-fixtures";
 import { resetRuntime } from "../runtime";
-import { calendar, interpretNeed, toNeed, vocabularyFrom, type LlmNeed } from "./interpret";
+import { calendar, checkBasedOn, interpretNeed, toNeed, vocabularyFrom, type EarlierRequest, type LlmFollowUp, type LlmNeed } from "./interpret";
 
 /**
  * Outputs recorded from live runs on 2026-11-13 (now = Friday 2026-11-13 12:00 Helsinki). Haiku 5.5,
@@ -62,7 +62,7 @@ const RECORDED: Record<string, LlmNeed> = {
   },
 };
 
-function replay(output: LlmNeed, seen: LanguageModelV4CallOptions[] = []) {
+function replay(output: LlmNeed | LlmFollowUp, seen: LanguageModelV4CallOptions[] = []) {
   const model = new MockLanguageModelV4({
     doGenerate: async (o) => {
       seen.push(o);
@@ -121,6 +121,50 @@ describe("interpret (recorded model outputs)", () => {
     const err = (await interpret("Lactose-free milk for next Tuesday please").catch((e) => e)) as DockError;
     expect(err).toMatchObject({ status: 422, code: "need_incomplete", details: { missing: ["quantity"] } });
     expect((err.details as { partial: { deliverBy: string } }).partial.deliverBy).toBe("2026-11-17");
+  });
+});
+
+describe("follow-ups against an earlier request", () => {
+  const EARLIER: EarlierRequest[] = [
+    {
+      id: "req_thu",
+      at: "2026-11-11T08:10:00.000Z",
+      text: "100 litres of lactose-free milk for Thursday",
+      need: { item: { text: "lactose-free milk", category: "milk", attributes: ["lactose_free", "fat_1_5"] }, quantity: { amount: 100, unit: "L" }, deliverBy: "2026-11-12", optimise: "price" },
+      ordered: "100 x Valio Eila 1.5 %, 1 L",
+      deliveredOn: "2026-11-12",
+    },
+  ];
+  const sameAgain: LlmFollowUp = {
+    ...empty,
+    isPurchaseRequest: true,
+    item: { text: "lactose-free milk", category: "milk", attributes: ["lactose_free", "fat_1_5"], excludedAttributes: [], productId: null },
+    quantity: { amount: 200, unit: "L" },
+    deliverBy: null,
+    optimise: "price",
+    basedOnRequestId: "req_thu",
+    takenFromEarlier: ["item", "attributes", "optimise"],
+  };
+
+  it("passes the earlier requests to the model and returns which one the need was built on", async () => {
+    const seen: LanguageModelV4CallOptions[] = [];
+    const r = await interpretNeed({ text: "same again but 200 litres", now: NOW, model: replay(sameAgain, seen), earlier: EARLIER });
+    expect(r.need).toMatchObject({ text: "same again but 200 litres", item: { text: "lactose-free milk", attributes: ["lactose_free", "fat_1_5"] }, quantity: { amount: 200, unit: "L" }, optimise: "price" });
+    expect(r.need.deliverBy).toBeUndefined();
+    expect(r.basedOn).toEqual({ requestId: "req_thu", fields: ["item", "attributes", "optimise"] });
+    const prompt = JSON.stringify(seen[0].prompt);
+    expect(prompt).toContain("req_thu");
+    expect(prompt).toContain("delivered Thursday 2026-11-12");
+  });
+
+  it("drops a reference to a request it was not given", () => {
+    expect(checkBasedOn({ basedOnRequestId: "req_made_up", takenFromEarlier: ["item"] }, EARLIER)).toBeUndefined();
+    expect(checkBasedOn({ basedOnRequestId: null, takenFromEarlier: [] }, EARLIER)).toBeUndefined();
+  });
+
+  it("without earlier requests the plain schema is used and nothing is based on memory", async () => {
+    const r = await interpret("Tarvitsen 200 litraa maitoa perjantaiksi.");
+    expect(r.basedOn).toBeUndefined();
   });
 });
 
