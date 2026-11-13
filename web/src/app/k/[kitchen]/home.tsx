@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ago, amount, attr, day, eur, humanize, roleLabel, shortProduct } from "../../_ui/plain";
+import { ago, attr, day, measure, money, num, roleLabel, say, shortProduct } from "../../_ui/plain";
 import { Target } from "../../_ui/target";
 import { authorisedText, linesText } from "./history";
 import { usePortal, weekdaysText } from "./portal";
@@ -168,7 +168,7 @@ function WaitingCard({ o, href, now }: { o: PortalOrder; href: string; now: numb
         <Target size={44} tone="safety" className="shrink-0" />
         <div className="min-w-0 flex-1">
           <p className="font-display text-[1.45rem] font-bold leading-tight">
-            {eur(o.totalCents)} waiting for {a.by === "waiting" ? `${a.name}, ${roleLabel(a.role)}` : "a sign-off"}
+            {money(o.totalCents)} waiting for {a.by === "waiting" ? `${a.name}, ${roleLabel(a.role)}` : "a sign-off"}
           </p>
           <p className="text-[0.95rem] text-ink-soft">
             {linesText(o)}, delivery {day(o.deliveryDate)}. Asked {a.by === "waiting" ? ago(a.requestedAt, now) : ago(o.createdAt, now)}.
@@ -176,12 +176,12 @@ function WaitingCard({ o, href, now }: { o: PortalOrder; href: string; now: numb
           {o.reasons.length > 0 && (
             <ul className="mt-2 space-y-0.5 leading-snug">
               {o.reasons.slice(0, 3).map((r) => (
-                <li key={r}>– {humanize(r)}</li>
+                <li key={r}>– {say(r)}</li>
               ))}
             </ul>
           )}
         </div>
-        <Link href={href} className="inline-flex min-h-11 items-center bg-ink px-4 font-semibold text-paper hover:bg-ink-soft">
+        <Link href={href} className="inline-flex min-h-11 items-center bg-petrol px-4 font-semibold text-paper hover:bg-petrol-deep">
           Open the order
         </Link>
       </div>
@@ -217,7 +217,7 @@ function RepeatButtons({ family, requests }: { family: string; requests: PortalR
 function ThisWeek({ o }: { o: Overview }) {
   const w = o.week;
   const vs = w.versusAlternative;
-  const signed = (n: number, unit: string, less: string, more: string) => `${unit === "€" ? eur(Math.abs(n)) : `${Math.abs(n).toLocaleString("en-US", { maximumFractionDigits: 1 })} kg CO2e`} ${n >= 0 ? less : more}`;
+  const signed = (n: number, unit: string, less: string, more: string) => `${unit === "€" ? money(Math.abs(n)) : `${num(Math.abs(n), 1)} kg CO2e`} ${n >= 0 ? less : more}`;
   const rows: { n: string; text: React.ReactNode }[] = [
     { n: String(w.placedAlone), text: <>orders the agent placed alone, within the kitchen&apos;s mandate</> },
     { n: String(w.sentForSignOff), text: <>sent to a person for sign-off{w.waiting ? `, ${w.waiting} still waiting` : ""}</> },
@@ -229,7 +229,7 @@ function ThisWeek({ o }: { o: Overview }) {
         What the agent did
       </SectionTitle>
       <Paper>
-        <dl className="divide-y divide-ink/10">
+        <dl className="divide-y divide-line">
           {rows.map((r) => (
             <div key={r.n + String(r.text)} className="grid grid-cols-[4.5rem_1fr] items-baseline gap-3 px-4 py-3">
               <dt className="text-right font-display text-[2.4rem] font-bold leading-none tabular">{r.n}</dt>
@@ -286,10 +286,10 @@ function StandingOrders({ o, cutoffs, cutoffError, now }: { o: Overview; cutoffs
         </Paper>
       ) : (
         <div className="overflow-x-auto bg-paper">
-          <div aria-hidden className="h-[3px] bg-ink" />
+          <div aria-hidden className="h-[3px] bg-petrol" />
           <table className="w-full min-w-[46rem] text-left">
             <thead className="text-[0.85rem] text-ink-soft">
-              <tr className="border-b border-ink/15">
+              <tr className="border-b border-line">
                 <th className="px-4 py-2 font-medium">What</th>
                 <th className="px-2 py-2 font-medium">Usual</th>
                 <th className="px-2 py-2 font-medium">Days</th>
@@ -301,7 +301,7 @@ function StandingOrders({ o, cutoffs, cutoffError, now }: { o: Overview; cutoffs
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-ink/10">
+            <tbody className="divide-y divide-line">
               {rows.map((s) => (
                 <StandingRow key={s.family} s={s} item={cutoffs?.items.find((i) => i.family === s.family)} requests={o.requests} now={now} />
               ))}
@@ -324,7 +324,7 @@ function StandingRow({ s, item, requests, now }: { s: Standing; item?: CutoffRep
         <p className="font-semibold capitalize">{attr(s.family)}</p>
         <p className="text-[0.9rem] text-ink-soft">{shortProduct(s.product.name)}, {s.orders} orders</p>
       </td>
-      <td className="px-2 py-3 tabular">about {amount(s.usual.amount, s.usual.unit)}</td>
+      <td className="px-2 py-3 tabular">about {measure(s.usual.amount, s.usual.unit)}</td>
       <td className="px-2 py-3">{s.weekdays.length ? weekdaysText(s.weekdays) : "no fixed day"}</td>
       <td className="px-2 py-3">{s.nextDue ? day(s.nextDue) : "–"}</td>
       <td className="px-2 py-3">
@@ -389,7 +389,7 @@ function Deliveries({ o }: { o: Overview }) {
         {coming.length === 0 ? (
           <p className="p-4 leading-snug text-ink-soft">Nothing booked yet. Orders placed here, by the agent or from the basket, appear with their delivery day.</p>
         ) : (
-          <ul className="divide-y divide-ink/10">
+          <ul className="divide-y divide-line">
             {coming.map((x) => (
               <li key={x.orderId}>
                 <Link href={`${base}/orders/${x.orderId}`} className="grid gap-x-4 px-4 py-3 hover:bg-concrete/50 sm:grid-cols-[8rem_1fr_auto]">
@@ -398,7 +398,7 @@ function Deliveries({ o }: { o: Overview }) {
                     {linesText(x, 3)}
                     <span className="block text-[0.9rem] text-ink-soft">{authorisedText(x)}</span>
                   </span>
-                  <span className="font-semibold tabular">{eur(x.totalCents)}</span>
+                  <span className="font-semibold tabular">{money(x.totalCents)}</span>
                 </Link>
               </li>
             ))}

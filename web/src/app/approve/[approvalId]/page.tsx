@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { PhoneShell } from "../../_ui/phone";
 import { ApprovalScreen } from "./approval-screen";
 
 export const metadata: Metadata = { title: "Dock: sign-off" };
@@ -10,11 +11,11 @@ export const metadata: Metadata = { title: "Dock: sign-off" };
  */
 export default function ApprovePage(props: PageProps<"/approve/[approvalId]">) {
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col px-5 pb-6 pt-6 text-lg">
-      <Suspense fallback={<p className="mt-20 text-center text-neutral-600">Loading…</p>}>
+    <PhoneShell tone="gate" context="Sign-off">
+      <Suspense fallback={<p className="mt-20 text-center text-ink-soft">Opening the request…</p>}>
         <Approval {...props} />
       </Suspense>
-    </main>
+    </PhoneShell>
   );
 }
 

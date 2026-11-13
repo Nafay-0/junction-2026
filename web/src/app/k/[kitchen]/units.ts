@@ -1,3 +1,4 @@
+import { num } from "../../_ui/plain";
 import type { Product } from "./types";
 
 /**
@@ -35,7 +36,7 @@ export function stepOf(p: Pick<Product, "lotSize">): number {
   return l >= 1 ? Math.round(l) : 1;
 }
 
-const fmt = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+const fmt = (n: number) => num(n, 2);
 
 export type Measure = { amount: number; unit: "L" | "kg" | "pcs"; certain: boolean };
 

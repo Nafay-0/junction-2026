@@ -4,7 +4,7 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { DEMO_NOTE, PRODUCT_NAME } from "../_ui/brand";
-import { eurShort } from "../_ui/plain";
+import { moneyShort } from "../_ui/plain";
 import { Target, Wordmark } from "../_ui/target";
 import { SESSION_COOKIE } from "@/server/approver-session";
 import { listConsoleKitchens, resolveKitchen } from "@/server/console-kitchens";
@@ -54,7 +54,7 @@ async function Kitchens() {
               <p className="font-display text-[1.9rem] font-bold leading-tight">
                 {mine.kitchenName}, {mine.city}
               </p>
-              <p className="text-ink-soft">You are {mine.approverName}: orders over {eurShort(mine.perOrderLimitCents)} come to you to sign.</p>
+              <p className="text-ink-soft">You are {mine.approverName}: orders over {moneyShort(mine.perOrderLimitCents)} come to you to sign.</p>
             </div>
             <span className="bg-ink px-4 py-3 font-semibold text-paper">Open my shop</span>
           </div>
@@ -66,13 +66,13 @@ async function Kitchens() {
           return (
             <li key={k.slug}>
               <Link href={`/k/${k.slug}`} className="flex h-full flex-col bg-paper hover:outline-[3px] hover:outline-ink">
-                <div aria-hidden className="h-[3px] bg-ink" />
+                <div aria-hidden className="h-[3px] bg-petrol" />
                 <div className="flex flex-1 flex-col p-5">
                   <p className="font-display text-[1.9rem] font-bold leading-tight">{k.name}</p>
                   <p className="mt-1 leading-snug">{ABOUT[k.slug] ?? "A demo kitchen."}</p>
                   {m && (
                     <p className="mt-3 text-[0.95rem] text-ink-soft">
-                      Agent alone up to {eurShort(m.perOrderLimitCents)} per order; {m.approvers[0]?.name} signs above that.
+                      Agent alone up to {moneyShort(m.perOrderLimitCents)} per order; {m.approvers[0]?.name} signs above that.
                     </p>
                   )}
                   <span className="mt-4 self-start bg-ink px-4 py-2.5 font-semibold text-paper">Enter the shop</span>
@@ -86,7 +86,7 @@ async function Kitchens() {
         <section className="mt-10">
           <h2 className="font-display text-[1.5rem] font-bold">Visitors&apos; kitchens here now</h2>
           <p className="text-ink-soft">Made by scanning the QR code on the wall; each closes after 90 minutes.</p>
-          <ul className="mt-2 divide-y divide-ink/10 bg-paper">
+          <ul className="mt-2 divide-y divide-line bg-paper">
             {visitors.map((k) => (
               <li key={k.slug}>
                 <Link href={`/k/${k.slug}`} className="flex min-h-12 items-center justify-between px-4 py-2 hover:bg-concrete/50">

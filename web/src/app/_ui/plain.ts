@@ -57,6 +57,53 @@ export function eurShort(cents: number): string {
   return cents % 100 === 0 ? `€${(cents / 100).toLocaleString("en-US")}` : eur(cents);
 }
 
+// ---------- Finnish number conventions, for the customer-facing screens ----------
+// The API and the operations screens write "€1,280.50". The store and the phone pages write money and measures as
+// people in Finland do: "1 280,50 €", "2,5 kg", with a no-break space between groups and before the unit.
+
+const NBSP = " ";
+
+/** "1 280,5" — a number with a decimal comma and no-break spaces between thousands. */
+export function num(n: number, maxDigits = 2, minDigits = 0): string {
+  const s = Math.abs(n).toFixed(maxDigits);
+  let [int, frac = ""] = s.split(".");
+  frac = frac.replace(/0+$/, "");
+  while (frac.length < minDigits) frac += "0";
+  int = int.replace(/\B(?=(\d{3})+(?!\d))/g, NBSP);
+  return `${n < 0 && Number(s) !== 0 ? "−" : ""}${int}${frac ? `,${frac}` : ""}`;
+}
+
+/** "1 280,50 €" */
+export function money(cents: number): string {
+  return `${num(cents / 100, 2, 2)}${NBSP}€`;
+}
+
+/** "500 €" for whole euros, else "499,50 €". */
+export function moneyShort(cents: number): string {
+  return cents % 100 === 0 ? `${num(cents / 100, 0)}${NBSP}€` : money(cents);
+}
+
+/** Rewrite the API's English money ("€1,280.50", "€500") in a sentence into the Finnish form. */
+export function fiMoney(text: string): string {
+  return text.replace(/€\s?(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{1,2}))?(?![\d,]*\d)/g, (_m, int: string, frac?: string) => {
+    const cents = Number(int.replaceAll(",", "")) * 100 + (frac ? Number(frac.padEnd(2, "0")) : 0);
+    return frac ? money(cents) : moneyShort(cents);
+  });
+}
+
+/** humanize() for the customer side: ids out, and money as written in Finland. */
+export function say(text: string, products: Record<string, string> = {}): string {
+  return fiMoney(humanize(text, products));
+}
+
+/** "100 L", "2,5 kg", "12 pcs" with Finnish decimals. */
+export function measure(n: number, unit: string): string {
+  const v = num(n, 2);
+  if (unit === "pack") return `${v} pack${n === 1 ? "" : "s"}`;
+  if (unit === "pcs") return `${v}${NBSP}pcs`;
+  return `${v}${NBSP}${unit}`;
+}
+
 export function amount(n: number, unit: string): string {
   const v = n.toLocaleString("en-US", { maximumFractionDigits: 2 });
   if (unit === "pack") return `${v} pack${n === 1 ? "" : "s"}`;

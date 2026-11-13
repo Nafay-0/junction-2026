@@ -38,7 +38,7 @@ function Shell() {
     <div className="min-h-dvh bg-concrete">
       <p className="h-6 bg-ink" />
       <div className="h-[118px] border-b-[3px] border-ink bg-paper" />
-      <div className="h-[104px] border-b border-ink/15" />
+      <div className="h-[104px] border-b border-line" />
     </div>
   );
 }

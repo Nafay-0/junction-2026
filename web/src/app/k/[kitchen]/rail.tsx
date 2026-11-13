@@ -1,6 +1,6 @@
 "use client";
 
-import { amount, attr, day, eurShort, roleLabel, shortProduct } from "../../_ui/plain";
+import { attr, day, measure, moneyShort, roleLabel, shortProduct } from "../../_ui/plain";
 import type { Entry, KitchenInfo, KitchenMemory } from "./types";
 
 /** How many times this request touched the partner's live price and availability service, from the ledger. */
@@ -47,9 +47,9 @@ export function MandateBox({ k }: { k: KitchenInfo }) {
       <h2 id="mandate" className="text-[0.95rem] font-semibold">
         What the agent may do alone
       </h2>
-      <p className="mt-1 font-display text-3xl font-bold leading-tight tabular">{eurShort(m.perOrderLimitCents)} per order</p>
+      <p className="mt-1 font-display text-3xl font-bold leading-tight tabular">{moneyShort(m.perOrderLimitCents)} per order</p>
       <ul className="mt-2 space-y-1 text-[0.98rem] leading-snug">
-        <li>Weekly budget {eurShort(m.weeklyBudgetCents)}, never more.</li>
+        <li>Weekly budget {moneyShort(m.weeklyBudgetCents)}, never more.</li>
         <li>Only {m.allowedCategories.map(attr).join(", ")}.</li>
         {m.requiredAttributes.length > 0 && <li>Always {m.requiredAttributes.map(attr).join(", ")}.</li>}
         {m.forbiddenAllergens.length > 0 && <li>Never {m.forbiddenAllergens.map(attr).join(" or ")}.</li>}
@@ -68,7 +68,7 @@ export function MandateBox({ k }: { k: KitchenInfo }) {
       <ul className="mt-1 space-y-1 text-[0.98rem]">
         {m.approvers.map((a) => (
           <li key={a.role}>
-            {a.name}, {roleLabel(a.role)}: up to {eurShort(a.maxApprovalCents)}
+            {a.name}, {roleLabel(a.role)}: up to {moneyShort(a.maxApprovalCents)}
           </li>
         ))}
       </ul>
@@ -106,12 +106,12 @@ export function Memory({ memory, error, family }: { memory: KitchenMemory | unde
       {families.map((f) => {
         const last = f.lastOrder;
         return (
-          <div key={f.family} className="mt-3 border-t border-ink/15 pt-2">
+          <div key={f.family} className="mt-3 border-t border-line pt-2">
             <h3 className="font-display text-xl font-bold capitalize">{attr(f.family)}</h3>
             <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[0.98rem] leading-snug">
               <dt className="text-ink-soft">Usual</dt>
               <dd className="font-semibold tabular">
-                about {amount(f.usual.amount, f.usual.unit)} <span className="font-normal text-ink-soft">({f.orders} orders)</span>
+                about {measure(f.usual.amount, f.usual.unit)} <span className="font-normal text-ink-soft">({f.orders} orders)</span>
               </dd>
               <dt className="text-ink-soft">Last order</dt>
               <dd>

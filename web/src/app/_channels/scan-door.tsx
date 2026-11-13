@@ -214,10 +214,10 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
       {!result && !reading && (
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => cameraRef.current?.click()} className="min-h-12 rounded-lg bg-ink px-4 font-semibold text-paper">
+            <button type="button" onClick={() => cameraRef.current?.click()} className="min-h-12 bg-petrol px-4 font-semibold text-paper">
               Take a photo
             </button>
-            <button type="button" onClick={() => fileRef.current?.click()} className="min-h-12 rounded-lg border-2 border-ink bg-paper px-4 font-semibold">
+            <button type="button" onClick={() => fileRef.current?.click()} className="min-h-12 border-2 border-petrol bg-paper px-4 font-semibold text-petrol">
               Choose image or PDF
             </button>
             <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => e.target.files?.[0] && void readFile(e.target.files[0])} />
@@ -239,8 +239,8 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
             <label htmlFor="scan-paste" className="text-sm font-semibold text-ink-soft">
               Or drop a file here, or paste an email or a list
             </label>
-            <textarea id="scan-paste" value={paste} onChange={(e) => setPaste(e.target.value)} rows={4} className="mt-1 w-full rounded border border-concrete-deep p-2 text-[1rem]" placeholder={"Hei, torstaille 2 laatikkoa maitoa ja 15 kg rahkaa…"} />
-            <button type="button" disabled={!paste.trim()} onClick={() => void readText()} className="mt-2 min-h-11 rounded-lg bg-ink px-4 font-semibold text-paper disabled:opacity-40">
+            <textarea id="scan-paste" value={paste} onChange={(e) => setPaste(e.target.value)} rows={4} className="mt-1 w-full border-2 border-line p-2 text-[1rem]" placeholder={"Hei, torstaille 2 laatikkoa maitoa ja 15 kg rahkaa…"} />
+            <button type="button" disabled={!paste.trim()} onClick={() => void readText()} className="mt-2 min-h-11 bg-petrol px-4 font-semibold text-paper disabled:opacity-40">
               Read the text
             </button>
           </div>
@@ -250,7 +250,7 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
 
       {reading && <p className="text-[1.1rem]" role="status">Reading the list…</p>}
       {error && (
-        <p role="alert" className="rounded-lg border-2 border-ink bg-paper p-3">
+        <p role="alert" className="rounded-lg bg-paper p-3 shadow-[inset_0_3px_0_var(--color-petrol)]">
           {error}{" "}
           <button type="button" className="underline" onClick={() => setError(null)}>
             OK
@@ -261,7 +261,7 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
       {result && (
         <div className="grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
           {preview?.kind === "image" ? (
-            <div className="relative self-start overflow-hidden rounded-xl border-2 border-ink bg-paper">
+            <div className="relative self-start overflow-hidden border-2 border-line bg-paper">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={preview.url} alt="The list as photographed" className="block w-full" />
               {result.rows.map((r) =>
@@ -271,14 +271,14 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
                     type="button"
                     aria-label={`Line: ${r.read}`}
                     onClick={() => setFocus(r.id)}
-                    className={`absolute rounded border-2 ${focus === r.id ? "border-ink bg-safety/30" : r.status === "ready" ? "border-ink/40" : "border-safety bg-safety/10"}`}
+                    className={`absolute border-2 ${focus === r.id ? "border-petrol bg-petrol/20" : r.status === "ready" ? "border-petrol/50" : "border-dashed border-lavender-deep bg-lavender/30"}`}
                     style={{ left: `${r.box.x * 100}%`, top: `${r.box.y * 100}%`, width: `${r.box.w * 100}%`, height: `${r.box.h * 100}%` }}
                   />
                 ) : null,
               )}
             </div>
           ) : (
-            <div className="self-start rounded-xl border-2 border-ink bg-paper p-3 text-sm text-ink-soft">{result.kind === "pdf" ? "PDF read; positions are not shown for PDFs." : "Pasted text."}</div>
+            <div className="self-start bg-paper p-3 shadow-[inset_0_3px_0_var(--color-petrol)] text-sm text-ink-soft">{result.kind === "pdf" ? "PDF read; positions are not shown for PDFs." : "Pasted text."}</div>
           )}
 
           <div className="space-y-3">
@@ -287,19 +287,19 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
             </p>
             <label className="block text-sm font-semibold">
               Delivery, as written
-              <input value={deliverBy} onChange={(e) => setDeliverBy(e.target.value)} placeholder="none written" className="mt-1 block min-h-11 w-full rounded border-2 border-ink bg-paper px-2 text-[1rem]" />
+              <input value={deliverBy} onChange={(e) => setDeliverBy(e.target.value)} placeholder="none written" className="mt-1 block min-h-11 w-full border-2 border-line bg-paper px-2 text-[1rem]" />
             </label>
             <ul className="space-y-2">
               {result.rows.map((r) => {
                 const s = STATUS[r.status];
                 const off = s.tone === "off";
                 return (
-                  <li key={r.id} onFocus={() => setFocus(r.id)} onMouseEnter={() => setFocus(r.id)} className={`rounded-lg border-2 bg-paper p-3 ${focus === r.id ? "border-ink" : "border-concrete-deep"} ${off ? "opacity-70" : ""}`}>
+                  <li key={r.id} onFocus={() => setFocus(r.id)} onMouseEnter={() => setFocus(r.id)} className={`rounded-lg border-2 bg-paper p-3 ${focus === r.id ? "border-petrol" : "border-line"} ${off ? "opacity-70" : ""}`}>
                     <div className="flex items-start justify-between gap-2">
                       <p className={`text-[1.05rem] ${r.status === "instruction" ? "line-through" : ""}`}>
-                        <span className="text-xs font-bold uppercase text-ink-soft">Read: </span>“{r.read}”
+                        <span className="text-xs font-bold text-ink-soft">Read: </span>“{r.read}”
                       </p>
-                      <span className={`shrink-0 rounded px-2 py-0.5 text-xs font-bold ${s.tone === "warn" ? "bg-safety text-safety-ink" : s.tone === "ok" ? "bg-ink text-paper" : "bg-concrete-deep"}`}>
+                      <span className={`shrink-0 px-2 py-0.5 text-xs font-bold ${s.tone === "warn" ? "bg-lavender text-lavender-deep" : s.tone === "ok" ? "bg-petrol text-paper" : "bg-concrete-deep"}`}>
                         {s.label} · {r.confidence}
                       </span>
                     </div>
@@ -312,15 +312,15 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
                       <div className="mt-2 flex flex-wrap items-end gap-2">
                         <label className="flex min-w-0 flex-[2_1_10rem] flex-col text-xs font-semibold">
                           Item
-                          <input value={r.item ?? ""} onChange={(e) => edit(r.id, { item: e.target.value || null })} className="min-h-11 rounded border-2 border-ink px-2 text-[1rem] font-normal" />
+                          <input value={r.item ?? ""} onChange={(e) => edit(r.id, { item: e.target.value || null })} className="min-h-11 border-2 border-petrol px-2 text-[1rem] font-normal" />
                         </label>
                         <label className="flex w-24 flex-col text-xs font-semibold">
                           Amount
-                          <input type="number" inputMode="decimal" min={0} value={r.amount ?? ""} onChange={(e) => edit(r.id, { amount: e.target.value ? Number(e.target.value) : null })} className="min-h-11 rounded border-2 border-ink px-2 text-[1rem] font-normal tabular" />
+                          <input type="number" inputMode="decimal" min={0} value={r.amount ?? ""} onChange={(e) => edit(r.id, { amount: e.target.value ? Number(e.target.value) : null })} className="min-h-11 border-2 border-petrol px-2 text-[1rem] font-normal tabular" />
                         </label>
                         <label className="flex w-28 flex-col text-xs font-semibold">
                           Unit
-                          <select value={r.unit ?? ""} onChange={(e) => edit(r.id, { unit: (e.target.value || null) as NeedUnit | null })} className="min-h-11 rounded border-2 border-ink px-1 text-[1rem] font-normal">
+                          <select value={r.unit ?? ""} onChange={(e) => edit(r.id, { unit: (e.target.value || null) as NeedUnit | null })} className="min-h-11 border-2 border-petrol px-1 text-[1rem] font-normal">
                             <option value="">choose</option>
                             {UNITS.map((u) => (
                               <option key={u} value={u}>
@@ -341,7 +341,7 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
             </ul>
             {queue.length === 0 && (
               <div className="flex flex-wrap gap-2">
-                <button type="button" disabled={!sendable.length} onClick={start} className="min-h-12 rounded-lg bg-ink px-4 font-semibold text-paper disabled:opacity-40">
+                <button type="button" disabled={!sendable.length} onClick={start} className="min-h-12 bg-petrol px-4 font-semibold text-paper disabled:opacity-40">
                   Send {sendable.length} line{sendable.length === 1 ? "" : "s"} to the agent
                 </button>
                 <button
@@ -350,7 +350,7 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
                     setResult(null);
                     setPreview(null);
                   }}
-                  className="min-h-12 rounded-lg border-2 border-ink px-4 font-semibold"
+                  className="min-h-12 border-2 border-petrol px-4 font-semibold text-petrol"
                 >
                   Start over
                 </button>
@@ -365,7 +365,7 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
         <section className="space-y-3" aria-label="Lines going through the agent">
           <ol className="flex flex-wrap gap-2 text-sm">
             {queue.map((x, i) => (
-              <li key={x.row.id} className={`rounded-full border-2 px-3 py-1 ${x.state === "active" ? "border-ink bg-ink text-paper" : "border-concrete-deep bg-paper"}`}>
+              <li key={x.row.id} className={`rounded-full border-2 px-3 py-1 ${x.state === "active" ? "border-petrol bg-petrol text-paper" : "border-line bg-paper"}`}>
                 {i + 1}. {x.row.amount} {x.row.unit} {x.row.item} · {x.state === "done" ? (x.order ? (x.order.status === "pending_approval" ? "waiting for sign-off" : x.order.status) : "done") : x.state}
               </li>
             ))}
@@ -373,14 +373,14 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
           {active && (
             <div className="space-y-3">
               {active.problem && (
-                <p role="alert" className="rounded-lg border-2 border-ink bg-paper p-3">
+                <p role="alert" className="rounded-lg bg-paper p-3 shadow-[inset_0_3px_0_var(--color-petrol)]">
                   {active.problem}
                 </p>
               )}
               {active.order ? <OrderCard order={active.order} signOff={renderSignOff?.(active.order)} /> : active.step && <StepCards step={active.step} act={(n, a, l) => void act(n, a, l)} busy={busy} />}
               <div className="flex flex-wrap gap-2">
                 {queue.some((x) => x.state === "waiting") && (
-                  <button type="button" onClick={() => next(settled ? "done" : "skipped")} className="min-h-11 rounded-lg border-2 border-ink px-4 font-semibold">
+                  <button type="button" onClick={() => next(settled ? "done" : "skipped")} className="min-h-11 border-2 border-petrol px-4 font-semibold text-petrol">
                     {settled ? "Next line" : "Skip this line"}
                   </button>
                 )}

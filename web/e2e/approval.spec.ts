@@ -38,7 +38,7 @@ test("register -> request needing approval -> approve with passkey -> committed"
 
   await page.getByRole("button", { name: /ask my agent for 1,000 L of milk/ }).click();
   await page.waitForURL("**/approve/**"); // opened by the live event, not by the click
-  await expect(page.getByText("Over this agent's €500 per-order limit")).toBeVisible();
+  await expect(page.getByText("Over this agent's 500\u00a0€ per-order limit")).toBeVisible();
   // On the 12-product seed the scripted order always needs a substitute; on the partner's real catalogue it
   // depends on live stock, so there the sign-off may be for the limit alone.
   const health = (await (await page.request.get("/api/health")).json()) as { catalog?: { source?: string } };
@@ -48,7 +48,7 @@ test("register -> request needing approval -> approve with passkey -> committed"
   }
   await expect(screen.getByText(/^Waiting for /).first()).toBeVisible();
 
-  const approve = page.getByRole("button", { name: /^Approve €/ });
+  const approve = page.getByRole("button", { name: /^Approve \d/ });
   await expect(approve).toBeEnabled();
   await approve.click();
   await expect(page.getByRole("heading", { name: "Order placed" })).toBeVisible();
@@ -70,7 +70,7 @@ test("a failed passkey prompt shows an honest error and approves nothing", async
   await page.getByRole("button", { name: /ask my agent for 1,000 L of milk/ }).click();
   await page.waitForURL("**/approve/**");
   await cdp.send("WebAuthn.clearCredentials", { authenticatorId }); // the passkey is gone from this phone
-  await page.getByRole("button", { name: /^Approve €/ }).click();
+  await page.getByRole("button", { name: /^Approve \d/ }).click();
   await expect(page.getByRole("alert").filter({ hasText: "Cancelled" })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText(/Nothing happened/)).toBeVisible();
   await expect(page.getByRole("heading", { name: "Order placed" })).toHaveCount(0);

@@ -2,10 +2,12 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { attr } from "../../_ui/plain";
+import { attr, num } from "../../_ui/plain";
 import { usePortal, type Lang } from "./portal";
 import { CLAIM_LABEL, TEMP, Tile } from "./shop";
-import { ErrorPlate } from "./ui";
+import { Button, ErrorPlate } from "./ui";
+import { Empty, Skeleton } from "../../_ui/kit";
+import { DEPARTMENT_GLYPH, Glyph, TempGlyph } from "../../_ui/glyphs";
 import type { CatalogReply, ShopDepartment } from "./types";
 
 /**
@@ -32,7 +34,7 @@ export function Catalogue() {
   const free = params.getAll("free");
   const defaultCat = kitchen.mandate.allowedCategories[0];
   const category = params.get("c") ?? (applied ? "" : (defaultCat ?? ""));
-  const [q, setQ] = useState(applied);
+  const [, setQ] = useState(applied);
   const [depts, setDepts] = useState<ShopDepartment[]>();
   const [data, setData] = useState<CatalogReply>();
   const [error, setError] = useState<string>();
@@ -92,38 +94,44 @@ export function Catalogue() {
   const total = data?.source.products;
   const title = applied ? `“${applied}”` : current ? current.cat.label : category ? attr(category) : "All products";
 
+  const glyph = current ? DEPARTMENT_GLYPH[current.dept.id] : undefined;
+  const filtered = applied || category !== (defaultCat ?? "") || claims.length > 0 || free.length > 0;
+
   return (
-    <div className="mt-5 grid gap-6 lg:grid-cols-[15rem_minmax(0,1fr)]">
+    <div className="mt-5 grid gap-6 lg:grid-cols-[16rem_minmax(0,1fr)]">
       <nav aria-label="Departments" className="lg:sticky lg:top-3 lg:max-h-[calc(100dvh-1.5rem)] lg:overflow-y-auto">
-        <h2 className="text-[0.95rem] font-semibold">Departments</h2>
-        {!depts && <div className="mt-2 h-64 animate-pulse bg-paper/60" />}
-        <ul className="mt-1">
+        <h2 className="display text-[1.5rem] text-ink">Departments</h2>
+        {!depts && <Skeleton className="mt-2 h-64" />}
+        <ul className="mt-2 bg-paper">
           {depts?.map((d) => {
             const open = shownDept === d.id;
+            const g = DEPARTMENT_GLYPH[d.id];
             return (
-              <li key={d.id} className="border-b border-ink/10">
-                <button type="button" aria-expanded={open} onClick={() => setOpenDept(open ? "" : d.id)} className={`flex min-h-10 w-full items-baseline justify-between gap-2 py-1.5 text-left ${open ? "font-bold" : ""}`}>
-                  <span>{d.name}</span>
-                  <span className="text-[0.82rem] font-normal text-ink-soft tabular">{d.count.toLocaleString("en-US")}</span>
+              <li key={d.id} className="border-b border-line last:border-b-0">
+                <button type="button" aria-expanded={open} onClick={() => setOpenDept(open ? "" : d.id)} className={`flex min-h-11 w-full items-center gap-2.5 px-3 py-1.5 text-left ${open ? "bg-petrol-deep font-semibold text-paper" : "hover:bg-mist"}`}>
+                  {g ? <Glyph kind={g} size={22} className={`shrink-0 ${open ? "text-lime" : "text-petrol"}`} strokeWidth={3} /> : <span className="w-[22px]" />}
+                  <span className="min-w-0 flex-1 leading-tight">{d.name}</span>
+                  <span className={`text-[0.8rem] font-normal tabular ${open ? "text-paper/70" : "text-ink-soft"}`}>{num(d.count, 0)}</span>
                 </button>
                 {open && (
-                  <ul className="mb-2 space-y-px">
+                  <ul className="space-y-px py-1.5">
                     {d.categories.map((c) => (
                       <li key={c.id}>
                         <button
                           type="button"
                           aria-current={c.id === current?.cat.id ? "true" : undefined}
-                          onClick={() => {
-                            setQ("");
-                            set({ c: c.id, q: undefined });
-                          }}
-                          className={`flex min-h-8 w-full items-baseline justify-between gap-2 py-0.5 pl-3 pr-1 text-left text-[0.92rem] ${c.id === current?.cat.id ? "bg-ink font-semibold text-paper" : "hover:bg-paper"}`}
+                          onClick={() => set({ c: c.id, q: undefined })}
+                          className={`flex min-h-9 w-full items-center justify-between gap-2 py-0.5 pl-10 pr-3 text-left text-[0.92rem] ${c.id === current?.cat.id ? "bg-petrol-soft font-semibold text-petrol-deep shadow-[inset_4px_0_0_var(--color-petrol)]" : "hover:bg-mist"}`}
                         >
                           <span className="flex items-center gap-1.5">
-                            <span aria-hidden className="inline-block size-2 shrink-0" style={{ background: TEMP[c.temperature ?? ""]?.color ?? "transparent" }} />
+                            {c.temperature && TEMP[c.temperature] && (
+                              <span style={{ color: TEMP[c.temperature].color }} title={TEMP[c.temperature].label}>
+                                <TempGlyph t={c.temperature} size={11} />
+                              </span>
+                            )}
                             {c.label}
                           </span>
-                          <span className="text-[0.8rem] tabular opacity-70">{c.count}</span>
+                          <span className="text-[0.8rem] text-ink-soft tabular">{c.count}</span>
                         </button>
                       </li>
                     ))}
@@ -137,37 +145,38 @@ export function Catalogue() {
       </nav>
 
       <section aria-labelledby="shop-title" className="min-w-0">
-        <form
-          role="search"
-          className="flex flex-wrap items-end gap-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            set({ q: q.trim() || undefined, c: q.trim() ? undefined : category || undefined });
-          }}
-        >
-          <div className="min-w-[16rem] flex-1">
-            <label htmlFor="cat-q" className="text-[0.95rem] font-semibold">
-              Search {total ? `${total.toLocaleString("en-US")} products` : "products"}
-            </label>
-            <div className="mt-1 flex border-2 border-ink bg-paper">
-              <input id="cat-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="oat drink, kaurajuoma, havredryck…" className="min-h-12 min-w-0 flex-1 bg-transparent px-3 text-[1.05rem] focus:outline-none" />
-              <button type="submit" className="bg-ink px-4 font-semibold text-paper">
-                Search
-              </button>
+        <header className="on-dark relative overflow-hidden bg-petrol-deep px-5 py-6 text-paper sm:px-7 sm:py-8">
+          {glyph && !applied && <Glyph kind={glyph} size={220} strokeWidth={1.2} className="pointer-events-none absolute -right-6 -top-6 text-paper/10 sm:right-6" />}
+          <p className="relative text-[0.95rem] text-paper/75">{applied ? "Search" : current ? current.dept.name : "Catalogue"}</p>
+          <h1 id="shop-title" className="display relative mt-1 text-[2.6rem] text-paper sm:text-[3.4rem]">
+            {title}
+          </h1>
+          <p className="relative mt-2 text-[0.95rem] text-paper/80" aria-live="polite">
+            {loading ? "Searching…" : data ? `${data.products.length}${data.products.length === limit ? "+" : ""} products from the product files in ${data.ms} ms. No live call for the list.` : ""}
+          </p>
+          <div className="relative mt-4 flex flex-wrap items-end justify-between gap-4">
+            <p className="flex items-center gap-2" aria-live="polite">
+              <span className="display text-[2.4rem] text-lime tabular">{pageCalls}</span>
+              <span className="text-[0.9rem] leading-tight text-paper/85">
+                live price check{pageCalls === 1 ? "" : "s"} on this page
+                <span className="block text-paper/65">
+                  for {pageProducts} product{pageProducts === 1 ? "" : "s"} you opened or added, of {total ? num(total, 0) : "all"}
+                </span>
+              </span>
+            </p>
+            <div role="group" aria-label="Product names in" className="flex">
+              {LANGS.map((l) => (
+                <button key={l.id} type="button" aria-pressed={lang === l.id} onClick={() => setLang(l.id)} className={`-ml-[2px] min-h-10 border-2 border-paper/60 px-3 text-[0.92rem] first:ml-0 ${lang === l.id ? "bg-paper font-semibold text-petrol-deep" : "text-paper hover:bg-paper/10"}`}>
+                  {l.label}
+                </button>
+              ))}
             </div>
           </div>
-          <div role="group" aria-label="Product names in" className="flex">
-            {LANGS.map((l) => (
-              <button key={l.id} type="button" aria-pressed={lang === l.id} onClick={() => setLang(l.id)} className={`min-h-12 border-2 border-ink px-3 text-[0.92rem] ${lang === l.id ? "bg-ink font-semibold text-paper" : "bg-paper"} -ml-[2px] first:ml-0`}>
-                {l.label}
-              </button>
-            ))}
-          </div>
-        </form>
+        </header>
 
-        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 bg-paper px-4 py-3">
           <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Must be">
-            <span className="text-[0.9rem] font-semibold">Must be</span>
+            <span className="mr-1 text-[0.9rem] font-semibold">Must be</span>
             {CLAIMS.map((c) => (
               <Chip key={c} on={claims.includes(c)} onClick={() => set({ claim: toggle(claims, c) })}>
                 {CLAIM_LABEL[c]}
@@ -175,58 +184,44 @@ export function Catalogue() {
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Leave out allergens">
-            <span className="text-[0.9rem] font-semibold">Without</span>
+            <span className="mr-1 text-[0.9rem] font-semibold">Without</span>
             {ALLERGENS.map((a) => (
               <Chip key={a} on={free.includes(a)} onClick={() => set({ free: toggle(free, a) })}>
                 {attr(a)}
               </Chip>
             ))}
           </div>
+          {filtered && (
+            <button
+              type="button"
+              className="ml-auto min-h-9 font-semibold text-petrol underline decoration-2 underline-offset-4"
+              onClick={() => {
+                setQ("");
+                router.replace(pathname, { scroll: false });
+              }}
+            >
+              Clear
+            </button>
+          )}
         </div>
         {free.length > 0 && <p className="mt-1 text-[0.85rem] text-ink-soft">Products with no allergen data are left out too: unknown is not safe.</p>}
 
-        <div className="mt-4 flex flex-wrap items-end justify-between gap-3 border-b-[3px] border-ink pb-2">
-          <div>
-            {current && !applied && <p className="text-[0.88rem] text-ink-soft">{current.dept.name}</p>}
-            <h1 id="shop-title" className="font-display text-[1.9rem] font-bold leading-tight tracking-tight">
-              {title}
-            </h1>
-            <p className="text-[0.92rem] text-ink-soft" aria-live="polite">
-              {loading ? "Searching…" : data ? `${data.products.length}${data.products.length === limit ? "+" : ""} products from the product files in ${data.ms} ms. No live call for the list.` : ""}
-              {(applied || category !== (defaultCat ?? "") || claims.length > 0 || free.length > 0) && (
-                <button
-                  type="button"
-                  className="ml-2 font-semibold text-ink underline decoration-2 underline-offset-4"
-                  onClick={() => {
-                    setQ("");
-                    router.replace(pathname, { scroll: false });
-                  }}
-                >
-                  Clear
-                </button>
-              )}
-            </p>
+        {error && <ErrorPlate title="The catalogue did not load" message={`${error} Try again, or search for the product by name.`} />}
+        {!loading && data?.products.length === 0 && (
+          <div className="mt-3">
+            <Empty title="Nothing matches" action={filtered ? <Button kind="secondary" onClick={() => router.replace(pathname, { scroll: false })}>Clear the filters</Button> : undefined}>
+              Remove a filter, or search in another language: “maito”, “mjölk”. Or ask the agent: it finds products by what they are for.
+            </Empty>
           </div>
-          <p className="flex items-center gap-2" aria-live="polite">
-            <span className="font-display text-[1.9rem] font-bold leading-none tabular">{pageCalls}</span>
-            <span className="text-[0.88rem] leading-tight">
-              live price check{pageCalls === 1 ? "" : "s"} on this page
-              <span className="block text-ink-soft">
-                for {pageProducts} product{pageProducts === 1 ? "" : "s"} you opened or added
-              </span>
-            </span>
-          </p>
-        </div>
-
-        {error && <ErrorPlate title="The catalogue did not load" message={error} />}
-        {!loading && data?.products.length === 0 && <p className="mt-3 bg-paper p-4 text-ink-soft">Nothing matches. Remove a filter, or search in another language: “maito”, “mjölk”.</p>}
-        <ul className={`mt-3 grid gap-3 ${loading ? "opacity-60" : ""}`} style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 14.5rem), 1fr))" }}>
+        )}
+        <ul className={`mt-3 grid gap-3 ${loading ? "opacity-60" : ""}`} style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 15rem), 1fr))" }}>
           {data?.products.map((p) => <Tile key={p.id} p={p} />)}
+          {!data && loading && Array.from({ length: 8 }, (_, i) => <Skeleton key={i} className="h-[22rem]" />)}
         </ul>
         {data && data.products.length === limit && limit < 100 && (
-          <button type="button" onClick={() => setLimit(100)} className="mt-4 min-h-11 border-2 border-ink bg-paper px-4 font-semibold">
+          <Button kind="secondary" className="mt-4" onClick={() => setLimit(100)}>
             Show more
-          </button>
+          </Button>
         )}
         {live.error && <ErrorPlate title="The live check failed" message={live.error} />}
       </section>
@@ -236,7 +231,8 @@ export function Catalogue() {
 
 function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button type="button" aria-pressed={on} onClick={onClick} className={`min-h-9 border-2 px-2.5 text-[0.9rem] ${on ? "border-ink bg-ink font-semibold text-paper" : "border-ink/30 bg-paper hover:border-ink"}`}>
+    <button type="button" aria-pressed={on} onClick={onClick} className={`min-h-9 border-2 px-2.5 text-[0.9rem] ${on ? "border-petrol bg-petrol font-semibold text-paper" : "border-line bg-paper hover:border-petrol"}`}>
+      {on && <span aria-hidden>✓ </span>}
       {children}
     </button>
   );

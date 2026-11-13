@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { day, eur } from "../../_ui/plain";
+import { day, money } from "../../_ui/plain";
 import { authorisedText, linesText, whenText } from "./history";
 import { usePortal } from "./portal";
 import { Button } from "./ui";
@@ -54,7 +54,7 @@ export function OrdersList() {
         <div className="overflow-x-auto bg-paper">
           <table className="w-full min-w-[52rem] text-left">
             <thead className="text-[0.85rem] text-ink-soft">
-              <tr className="border-b border-ink/15">
+              <tr className="border-b border-line">
                 <th className="px-4 py-2 font-medium">Placed</th>
                 <th className="px-2 py-2 font-medium">What</th>
                 <th className="px-2 py-2 text-right font-medium">Total</th>
@@ -62,7 +62,7 @@ export function OrdersList() {
                 <th className="px-4 py-2 font-medium">Who let it through</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-ink/10">
+            <tbody className="divide-y divide-line">
               {rows.map((x) => {
                 const asked = text.get(x.orderId);
                 const waiting = x.status === "pending_approval";
@@ -79,7 +79,7 @@ export function OrdersList() {
                       )}
                       {asked && <span className="block text-[0.9rem] text-ink-soft">{asked.startsWith("Basket") ? "Basket, ordered by hand" : `Asked: “${asked.length > 80 ? `${asked.slice(0, 77)}…` : asked}”`}</span>}
                     </td>
-                    <td className="px-2 py-3 text-right font-semibold tabular">{eur(x.totalCents)}</td>
+                    <td className="px-2 py-3 text-right font-semibold tabular">{money(x.totalCents)}</td>
                     <td className="whitespace-nowrap px-2 py-3">{day(x.deliveryDate)}</td>
                     <td className={`px-4 py-3 text-[0.95rem] ${waiting ? "font-semibold" : ""}`}>{authorisedText(x)}</td>
                   </tr>
