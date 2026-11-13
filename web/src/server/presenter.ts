@@ -50,6 +50,32 @@ export function isDemoKitchenOrg(orgId: string): boolean {
   return orgId === KITCHEN_ORG.orgId || orgId === DEMO_ORG.orgId;
 }
 
+/**
+ * The built-in demo kitchen a presenter's passkey signs for, shaped like a visitor's sandbox summary so the
+ * approver's home screen (GET /api/v1/approver) and its "ask the agent" button work for both. Undefined for an
+ * approver who is not a presenter of a demo kitchen.
+ */
+export type PresenterKitchen = { slug: DemoKitchenSlug; orgId: string; kitchenName: string; city: string; approverName: string; roleLabel: string; agentName: string; passkey: true; perOrderLimitCents: number; weeklyBudgetCents: number; expiresAt: string };
+export function presenterKitchenOf(account: { orgId: string; role: string; name: string; expiresAt?: string }, now = new Date()): PresenterKitchen | undefined {
+  if (!isDemoKitchenOrg(account.orgId)) return undefined;
+  const slug: DemoKitchenSlug = account.orgId === KITCHEN_ORG.orgId ? "kaari" : "laakso";
+  const m = demoMandateOf(slug, now);
+  if (!m.approvers.some((a) => a.role === account.role)) return undefined;
+  return {
+    slug,
+    orgId: account.orgId,
+    kitchenName: slug === "kaari" ? KITCHEN_ORG.name : DEMO_ORG.name,
+    city: "Helsinki",
+    approverName: account.name,
+    roleLabel: account.role.replaceAll("_", " ").replace(/^./, (c) => c.toUpperCase()),
+    agentName: slug === "kaari" ? "Kaari's buyer agent" : "Laakso's buyer agent",
+    passkey: true,
+    perOrderLimitCents: m.perOrderLimitCents,
+    weeklyBudgetCents: m.weeklyBudgetCents,
+    expiresAt: account.expiresAt ?? new Date(now.getTime() + PRESENTER_HOURS * 3600_000).toISOString(),
+  };
+}
+
 const g = globalThis as typeof globalThis & { __dockPresenterFailures?: Map<string, number[]> };
 const failures = (g.__dockPresenterFailures ??= new Map<string, number[]>());
 const digest = (s: string) => createHash("sha256").update(s).digest();
