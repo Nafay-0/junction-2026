@@ -216,7 +216,7 @@ async function attacks(): Promise<void> {
 
   const ledger = (await base.ledger()).body;
   const copy = structuredClone(ledger.entries) as LedgerEntry[];
-  const victim = copy.findIndex((e) => e.type === "decision");
+  const victim = copy.findIndex((e) => e.type === "decision" && (e.data as { outcome: string }).outcome === "reject");
   (copy[victim].data as { outcome: string }).outcome = "auto_approve";
   const check = verifyLedger(copy);
   step("ledger", `Full chain verified: ${ledger.verification.ok} (${ledger.entries.length} entries).`);

@@ -1,3 +1,4 @@
+import { unstable_rethrow } from "next/navigation";
 import { DockError, type AgentSession, type Dock } from "@/core/orders";
 import { getRuntime, type Runtime } from "./runtime";
 
@@ -13,6 +14,7 @@ export async function handle(fn: (rt: Runtime) => Promise<Response>): Promise<Re
   try {
     return await fn(await getRuntime());
   } catch (err) {
+    unstable_rethrow(err); // let Next.js see its own control-flow errors (e.g. "this route is request-time")
     if (err instanceof DockError) return Response.json(errorBody(err.code, err.message, err.rule, err.details), { status: err.status });
     console.error(err);
     return Response.json(errorBody("internal_error", "Something went wrong inside Dock."), { status: 500 });
