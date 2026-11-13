@@ -94,18 +94,10 @@ function desiredEnvironment(publicUrl) {
     "ANTHROPIC_API_KEY",
     "OPENAI_API_KEY",
     "GEMINI_API_KEY",
-    // Set explicitly: the application_service_credential integrations stay in state "starting" and do not
-    // deliver these. PEM values are one line with \n escapes (Runtime values cannot hold newlines).
-    "DATABASE_URL",
-    "OPENSEARCH_URL",
-    "VALKEY_URL",
-    "KAFKA_BOOTSTRAP_SERVERS",
-    "KAFKA_SECURITY_PROTOCOL",
-    "KAFKA_ACCESS_KEY",
-    "KAFKA_ACCESS_CERT",
-    "KAFKA_CA_CERT",
+    // Not here: DATABASE_URL, OPENSEARCH_URI, VALKEY_URL and KAFKA_* come from the application_service_credential
+    // integrations (Runtime refuses a variable that duplicates one of them).
   ];
-  const required = ["DOCK_WHOLESALER_JWK", "DOCK_DEMO_ORG_JWK", "DOCK_DEMO_KITCHEN_JWK", "VALIO_API_KEY", "DATABASE_URL"];
+  const required = ["DOCK_WHOLESALER_JWK", "DOCK_DEMO_ORG_JWK", "DOCK_DEMO_KITCHEN_JWK", "VALIO_API_KEY"];
   for (const k of required) if (!env(k)) fail(`${k} is not set in web/.env.local`);
   const out = vars.map(([key, value]) => ({ key, value, kind: "variable" }));
   for (const key of secrets) {
