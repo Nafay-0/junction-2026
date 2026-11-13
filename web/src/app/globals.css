@@ -1,5 +1,85 @@
 @import "tailwindcss";
 
+/*
+ * Dock's tokens, shared by the wall, the buyer console and the phone pages.
+ *
+ * Signage, not SaaS: steel and concrete greys, white paper for anything that is a document (a need, a quote,
+ * an order), and one safety colour, warning-sign yellow, used ONLY where a person must decide or the gate
+ * refuses. Committed and automatic outcomes stay monochrome.
+ */
+@theme {
+  --font-sans: var(--font-barlow), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-barlow-condensed), var(--font-barlow), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --color-ink: #1a1d21; /* text and rules on light surfaces */
+  --color-ink-soft: #4a5058; /* secondary text on light (7.9:1 on paper) */
+  --color-concrete: #e4e6e4; /* console page */
+  --color-concrete-deep: #cfd3d1; /* console placeholders, quiet fills */
+  --color-paper: #ffffff; /* documents */
+  --color-steel: #1d2329; /* wall background */
+  --color-steel-2: #262e36; /* wall panels */
+  --color-steel-3: #36404a; /* wall rules */
+  --color-chalk: #eef1f0; /* text on steel */
+  --color-chalk-soft: #a9b3bb; /* secondary text on steel (7.6:1 on steel) */
+  --color-safety: #ffc20e; /* warning-sign yellow: human decisions and refusals only */
+  --color-safety-ink: #1a1d21; /* text on safety yellow */
+}
+
 body {
-  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-sans);
+  font-feature-settings: "tnum" 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Numerals that change (money, counters, countdowns) never jitter. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Black-and-yellow hazard band: marks a surface where a person must act, or the gate refused. */
+.hazard {
+  background-image: repeating-linear-gradient(-45deg, var(--color-safety) 0 14px, var(--color-ink) 14px 28px);
+}
+.hazard-thin {
+  background-image: repeating-linear-gradient(-45deg, var(--color-safety) 0 7px, var(--color-ink) 7px 14px);
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-ink);
+  outline-offset: 2px;
+}
+.on-steel :focus-visible {
+  outline-color: var(--color-safety);
+}
+
+@keyframes dock-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spin-slow {
+  animation: dock-spin 6s linear infinite;
+  transform-origin: center;
+}
+.spin {
+  animation: dock-spin 1.1s linear infinite;
+  transform-origin: center;
+}
+
+@keyframes dock-arrive {
+  from {
+    background-color: var(--color-steel-3);
+  }
+}
+.arrive {
+  animation: dock-arrive 1.6s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin-slow,
+  .spin,
+  .arrive {
+    animation: none;
+  }
 }

@@ -1,9 +1,13 @@
 import { z } from "zod";
 import { MAX_LIVE_IDS_PER_CALL } from "@/core/catalog";
+import { AnswersInput, ChoiceInput, ConcernResponseInput, type IntakeView } from "@/core/intake";
 import { explain } from "@/core/ledger";
+import { NEED_UNITS, NeedSchema, OPTIMISE_GOALS } from "@/core/need";
 import { AvailabilityInput, DockError, OpenRequestInput, PlaceOrderInput, QuoteInput, SearchInput, type AgentSession, type Dock } from "@/core/orders";
 import { decidingRule } from "@/core/policy";
 import {
+  IntakeStepSchema,
+  KitchenSchema,
   LedgerEntrySchema,
   LedgerVerificationSchema,
   MandateOutSchema,
@@ -13,18 +17,22 @@ import {
   PurchaseRequestSchema,
   QuoteResultSchema,
 } from "../wire";
+import { AskHuman, answersFromBuyer, concernsFromBuyer, type HumanChannel } from "./ask-human";
 import type { LiveLookupGuard } from "./live-lookup-guard";
-import { nextStepForOrder } from "./next-step";
+import { nextStepForIntake, nextStepForOrder, waitingFor } from "./next-step";
 
 /**
  * Dock's operations as MCP tools: one table, one entry per tool. Each entry is a name, a description for a
  * model that has never seen Dock, zod input and output schemas, and a `run` that calls the same `createDock`
  * functions the REST routes call. Authentication, refusals and result shaping live in server.ts, once.
  *
- * To add a tool (for example an intake step): append an entry here. Nothing else changes.
+ * The intake tools come first: they are how an order should start. The lower-level tools after them stay for
+ * follow-up. Tools marked `humanInput` need the human buyer's own answer (see ask-human.ts).
+ *
+ * To add a tool: append an entry here. Nothing else changes.
  */
 
-export type ToolContext = { dock: Dock; session: AgentSession; guard: LiveLookupGuard; agentKey: string };
+export type ToolContext = { dock: Dock; session: AgentSession; guard: LiveLookupGuard; agentKey: string; human: HumanChannel };
 
 type ToolDef<I extends z.ZodObject, O extends z.ZodObject> = {
   name: string;
@@ -33,7 +41,9 @@ type ToolDef<I extends z.ZodObject, O extends z.ZodObject> = {
   input: I;
   output: O;
   readOnly?: boolean;
-  run: (ctx: ToolContext, args: z.output<I>) => Promise<z.input<O>>;
+  /** The call carries the human buyer's own answer; Dock asks them through the client when it can. */
+  humanInput?: boolean;
+  run: (ctx: ToolContext, args: z.output<I>) => Promise<z.input<O> | AskHuman>;
 };
 
 const tool = <I extends z.ZodObject, O extends z.ZodObject>(def: ToolDef<I, O>) => def;
@@ -43,9 +53,132 @@ const budget = z
   .object({ windowMinutes: z.number(), maxProductsPerCall: z.number(), callsLeft: z.number(), newProductsLeft: z.number() })
   .describe("This agent's remaining allowance for live price/availability lookups (quotes count too).");
 
-const requestId = z.string().min(1).describe("The requestId returned by open_request.");
+const requestId = z.string().min(1).describe("The requestId returned by submit_need (step.requestId) or open_request.");
+const intakeId = z.string().min(1).describe("The requestId submit_need returned (step.requestId).");
+const by = z.string().min(1).max(120).describe("The name of the human buyer whose answer this is. Written to the audit ledger with the answer.");
 
-export const TOOLS = [
+const intakeOut = z.object({
+  step: IntakeStepSchema,
+  waitingFor: z.enum(["buyer", "agent", "nobody"]).describe("buyer: relay the step to the human buyer and wait for them. agent: your move. nobody: finished."),
+  nextStep,
+});
+const intakeResult = (step: IntakeView) => ({ step, waitingFor: waitingFor(step.state), nextStep: nextStepForIntake(step) });
+
+const wrongState = (step: IntakeView, what: string) =>
+  new DockError(409, "intake_wrong_state", `Cannot ${what} now: request ${step.requestId} is ${step.state}.`, "intake_sequence", { state: step.state });
+
+const humanAnswerRequired = (what: string) =>
+  new DockError(400, "human_answer_required", `${what} must come from the human buyer. Ask them, then call again with their answer and their name as by.`, "human_input");
+
+const n = NeedSchema.shape;
+const NeedArg = z
+  .object({
+    text: n.text.describe("The buyer's request in their own words, kept for the audit trail."),
+    item: n.item.extend({
+      text: n.item.shape.text.describe("What they want, e.g. 'lactose-free milk'."),
+      category: n.item.shape.category.describe("Product family if known, e.g. 'milk', 'cream', 'yoghurt'. Helps Dock find the right products."),
+      attributes: n.item.shape.attributes.describe("Attributes the product must have, e.g. ['lactose_free', 'fat_1_5']."),
+      excludedAttributes: n.item.shape.excludedAttributes.describe("Attributes the buyer explicitly does not want, e.g. ['lactose_free'] for 'ordinary milk'."),
+      productId: n.item.shape.productId.describe("A specific product id the buyer named, if any."),
+    }),
+    quantity: z
+      .object({ amount: z.number().positive().max(1_000_000), unit: z.enum(NEED_UNITS).describe("L, kg, pcs, or pack (the product's sales pack).") })
+      .optional()
+      .describe("How much, exactly as the buyer said it. Do not round or convert: Dock checks it against the kitchen's usual orders."),
+    deliverBy: n.deliverBy.describe("Latest acceptable delivery date, YYYY-MM-DD."),
+    requiredClaims: n.requiredClaims.describe("Claims every option must carry, e.g. ['organic']."),
+    forbiddenAllergens: n.forbiddenAllergens.describe("Allergens no option may contain."),
+    optimise: n.optimise.describe(`What the buyer said matters most: ${OPTIMISE_GOALS.join(", ")} or no_preference. Leave unstated if they said nothing; Dock asks if it matters.`),
+    sameAsLastTime: n.sameAsLastTime.describe("true when the buyer says 'same as last time'; quantity may then be left out."),
+  })
+  .describe("The buyer's need as fields. Fill only what the buyer actually said.");
+
+const INTAKE_TOOLS = [
+  tool({
+    name: "submit_need",
+    title: "Start an order from the buyer's need",
+    description:
+      "START HERE for any new purchase. Send the buyer's need as structured fields (what, how much, by when, must-haves). Dock checks it against the kitchen's own order history for likely mistakes (for example 1,000 L where they usually order 100 L, or a delivery day it cannot make), asks at most two short questions its memory cannot answer, then offers option cards with pros and cons. Returns a step whose `state` is needs_confirmation, needs_input, options_ready, quoted, no_options or cancelled; `nextStep` says exactly which tool to call next and `waitingFor` says whether you must wait for the human buyer.",
+    input: z.object({ need: NeedArg, by: by.optional().describe("The name of the person asking, if you know it.") }),
+    output: intakeOut,
+    run: async ({ dock, session }, args) => intakeResult(await dock.intake.open(session, args)),
+  }),
+  tool({
+    name: "respond_to_concerns",
+    title: "Pass on the buyer's answer to a mistake check",
+    description:
+      "Use only when the step is needs_confirmation. Dock found something that looks like a mistake (step.concerns: a message and fixed choices). The answer MUST come from the human buyer: relay each concern's message to them and pass on exactly what they choose; never confirm or correct on their behalf. For each concern send its key and choice: \"confirm\" (keep it as asked; only if the concern is confirmable) or one of its correction ids. If your MCP client supports elicitation, Dock asks the buyer directly through it and your arguments only pre-fill the form. Until this is answered, quotes and orders for the request are refused.",
+    input: z.object({
+      requestId: intakeId,
+      by: by.optional(),
+      responses: ConcernResponseInput.shape.responses
+        .optional()
+        .describe("The buyer's answer per concern: [{ key, choice }] where choice is \"confirm\" or a correction id from the concern."),
+    }),
+    output: intakeOut,
+    humanInput: true,
+    run: async ({ dock, session, human }, { requestId, ...proposed }) => {
+      const step = await dock.intake.get(session, requestId);
+      if (step.state !== "needs_confirmation") throw wrongState(step, "respond to concerns");
+      const answer = human.canAsk ? concernsFromBuyer(step, human, proposed) : proposed;
+      if (answer instanceof AskHuman) return answer;
+      if (!answer.by || !answer.responses) throw humanAnswerRequired("A confirmation or correction");
+      return intakeResult(await dock.intake.respondToConcerns(session, requestId, { by: answer.by, responses: answer.responses }));
+    },
+  }),
+  tool({
+    name: "answer_questions",
+    title: "Pass on the buyer's answers to Dock's questions",
+    description:
+      "Use when the step is needs_input (at most two questions in step.questions, each with fixed options), or in options_ready to change an answer Dock took from memory (step.fromMemory). The answers MUST come from the human buyer: ask them each question with its options and pass on what they pick; never guess or answer for them. Send one optionId per questionId; remember: true stores the answer as the kitchen's rule for next time. If your MCP client supports elicitation, Dock asks the buyer directly through it and your arguments only pre-fill the form.",
+    input: z.object({
+      requestId: intakeId,
+      by: by.optional(),
+      answers: AnswersInput.shape.answers.optional().describe("The buyer's answers: [{ questionId, optionId, remember? }], ids exactly as in step.questions."),
+    }),
+    output: intakeOut,
+    humanInput: true,
+    run: async ({ dock, session, human }, { requestId, ...proposed }) => {
+      const step = await dock.intake.get(session, requestId);
+      if (step.state !== "needs_input" && step.state !== "options_ready") throw wrongState(step, "answer questions");
+      const answer = human.canAsk ? answersFromBuyer(step, human, proposed) : proposed;
+      if (answer instanceof AskHuman) return answer;
+      if (!answer.by || !answer.answers) throw humanAnswerRequired("An answer");
+      return intakeResult(await dock.intake.answer(session, requestId, { by: answer.by, answers: answer.answers }));
+    },
+  }),
+  tool({
+    name: "choose_option",
+    title: "Choose an option and get its fixed-price quote",
+    description:
+      "Use when the step is options_ready. Show the buyer the option cards (title, total, delivery, pros, cons, and signOff for any that a person must approve) and send the optionId they pick, or step.preselected.optionId if they asked you to decide. The wholesaler signs a fixed-price quote for it; the step becomes quoted and `step.next.example` holds the exact arguments for place_order.",
+    input: z.object({ requestId: intakeId, optionId: ChoiceInput.shape.optionId.describe("An optionId from step.options."), by: by.describe("Who chose: the buyer's name, or yours if they asked you to decide.") }),
+    output: intakeOut,
+    run: async ({ dock, session }, { requestId, ...choice }) => intakeResult(await dock.intake.choose(session, requestId, choice)),
+  }),
+  tool({
+    name: "get_intake_step",
+    title: "Read where an order stands",
+    description:
+      "The current step of an order started with submit_need: its state, open concerns or questions, option cards, the quote once chosen, and `nextStep` naming the call to make. Use it to pick up where you left off.",
+    input: z.object({ requestId: intakeId }),
+    output: intakeOut,
+    readOnly: true,
+    run: async ({ dock, session }, { requestId }) => intakeResult(await dock.intake.get(session, requestId)),
+  }),
+  tool({
+    name: "read_kitchen_memory",
+    title: "Read what Dock remembers about this kitchen",
+    description:
+      "The buyer organisation's memory: order history, usual amounts per product family, rules people stated (for example 'Always lactose-free'), and patterns learned from past orders. Dock uses it to spot mistakes and to avoid asking what it already knows. Read it when the buyer asks what they usually order.",
+    input: z.object({}),
+    output: z.object({ kitchen: KitchenSchema, nextStep }),
+    readOnly: true,
+    run: async ({ dock, session }) => ({ kitchen: await dock.intake.kitchen(session), nextStep: "Start a new order with submit_need." }),
+  }),
+];
+
+const CORE_TOOLS = [
   tool({
     name: "read_mandate",
     title: "Read my mandate",
@@ -57,14 +190,14 @@ export const TOOLS = [
     run: async ({ session, guard, agentKey }) => ({
       mandate: session.mandate,
       liveLookupBudget: guard.remaining(agentKey),
-      nextStep: "Call open_request with the buyer's need in their own words.",
+      nextStep: "Call submit_need with the buyer's need as structured fields.",
     }),
   }),
   tool({
     name: "open_request",
     title: "Open a purchase request",
     description:
-      "Start a purchase. Pass the buyer's need in their own words (for example 'I need 1,000 litres of lactose-free milk by Monday') and, if there is one, the need-by date. Returns a requestId; every other step takes it. The need-by date becomes a delivery deadline the order must meet.",
+      "Lower-level: open a bare purchase request without Dock's mistake checks, questions or option cards. Prefer submit_need for any new order; use this only when you must build a quote line by line yourself. Pass the buyer's need in their own words and, if there is one, the need-by date. Returns a requestId for search_products, check_availability and request_quote. The need-by date becomes a delivery deadline the order must meet.",
     input: OpenRequestInput.extend({
       text: OpenRequestInput.shape.text.describe("The buyer's need in their own words."),
       neededBy: OpenRequestInput.shape.neededBy.describe("Latest acceptable delivery date, YYYY-MM-DD."),
@@ -79,7 +212,7 @@ export const TOOLS = [
     name: "search_products",
     title: "Search product master data",
     description:
-      "Search the wholesaler's product master data: names, brands, categories, pack sizes, attributes (such as lactose_free, fat_1_5, organic), allergens, certificates, on-time delivery rate and carbon footprint. Free and local: it does not call the live price or availability service. Use it to build a short list before asking for live prices.",
+      "Lower-level, for follow-up. Search the wholesaler's product master data: names, brands, categories, pack sizes, attributes (such as lactose_free, fat_1_5, organic), allergens, certificates, on-time delivery rate and carbon footprint. Free and local: it does not call the live price or availability service. Use it to build a short list before asking for live prices.",
     input: SearchInput.extend({
       requestId,
       text: SearchInput.shape.text.describe("Words that must all appear in the product's name, brand, category or attributes, e.g. 'milk'."),
@@ -97,7 +230,7 @@ export const TOOLS = [
   tool({
     name: "check_availability",
     title: "Live price and availability for a short list",
-    description: `Ask the wholesaler's live service for the current price per pack, packs in stock and earliest delivery date of a short list of products, at most ${MAX_LIVE_IDS_PER_CALL} per call. This service is metered: never use it to scan the catalogue. Each agent may price a limited number of different products per hour; the result shows what is left.`,
+    description: `Lower-level, for follow-up. Ask the wholesaler's live service for the current price per pack, packs in stock and earliest delivery date of a short list of products, at most ${MAX_LIVE_IDS_PER_CALL} per call. This service is metered: never use it to scan the catalogue. Each agent may price a limited number of different products per hour; the result shows what is left.`,
     input: AvailabilityInput.extend({
       requestId,
       productIds: z
@@ -121,7 +254,7 @@ export const TOOLS = [
     name: "request_quote",
     title: "Get a fixed-price quote",
     description:
-      "Ask the wholesaler for a signed, fixed-price quote for specific products and quantities. Quantities are in packs (see packSize). If the preferred product is short, quote what it has and add a line for another product with substituteFor set to the preferred productId. Returns the quote, a quoteToken (the signed quote; pass it unchanged to place_order) and policyPreview: what the mandate gate would decide now (auto_approve, needs_human_approval or reject, with the reason for each rule).",
+      "Lower-level, for follow-up (choose_option already returns a quote). Ask the wholesaler for a signed, fixed-price quote for specific products and quantities. Quantities are in packs (see packSize). If the preferred product is short, quote what it has and add a line for another product with substituteFor set to the preferred productId. Returns the quote, a quoteToken (the signed quote; pass it unchanged to place_order) and policyPreview: what the mandate gate would decide now (auto_approve, needs_human_approval or reject, with the reason for each rule).",
     input: QuoteInput.extend({
       requestId,
       lines: z
@@ -153,7 +286,7 @@ export const TOOLS = [
     name: "place_order",
     title: "Place an order against a quote",
     description:
-      "Order exactly what a quote offers, at the quoted prices. Dock's gate checks the order against your mandate in plain code. Three outcomes: committed (within the mandate; the result carries the wholesaler-signed confirmation), pending_approval (a person named in the mandate must sign off; they are notified directly, you must NOT retry), or refused (the error names the rule, e.g. weekly_budget). A quote buys once.",
+      "Order exactly what a quote offers, at the quoted prices: after choose_option, pass step.next.example as the arguments. Dock's gate checks the order against your mandate in plain code. Three outcomes: committed (within the mandate; the result carries the wholesaler-signed confirmation), pending_approval (a person named in the mandate must sign off; they are notified directly, you must NOT retry), or refused (the error names the rule, e.g. weekly_budget). A quote buys once.",
     input: PlaceOrderInput.extend({
       requestId,
       quoteToken: z.string().min(1).describe("quoteToken from request_quote, unchanged."),
@@ -204,6 +337,15 @@ export const TOOLS = [
       return { verification: dock.ledger.verify(), explanation: explain(entries), entries, nextStep: "Share the explanation with the buyer if they ask why." };
     },
   }),
+];
+
+const core = (name: string) => CORE_TOOLS.find((t) => t.name === name)!;
+
+/** In the order an agent meets them: the mandate, the intake, the order follow-up, then the lower-level steps. */
+export const TOOLS = [
+  core("read_mandate"),
+  ...INTAKE_TOOLS,
+  ...["place_order", "get_order", "explain", "open_request", "search_products", "check_availability", "request_quote"].map(core),
 ];
 
 export type DockTool = (typeof TOOLS)[number];

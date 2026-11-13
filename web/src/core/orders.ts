@@ -823,6 +823,33 @@ export function createDock(deps: DockDeps) {
     wholesalerPublicJwk: wholesalerKey.publicJwk,
   };
 
+  /**
+   * A request that came through the intake cannot go around it: while a likely mistake waits for the buyer's
+   * confirmation (or after the buyer cancelled), the lower-level quote and order calls refuse it. The intake
+   * itself quotes through the unguarded function.
+   */
+  async function intakeGate(session: AgentSession, requestId: string) {
+    const pending = await intakes.get(requestId);
+    if (pending?.state === "needs_confirmation") {
+      throw refuse(
+        new DockError(409, "intake_needs_confirmation", `Request ${requestId} has a likely mistake waiting for the buyer: ${pending.concerns.map((c) => c.message).join(" ")} The buyer must confirm or correct it first.`, "human_input", { state: pending.state, concerns: pending.concerns.map((c) => c.key) }),
+        agentActor(session),
+        { requestId },
+      );
+    }
+    if (pending?.state === "cancelled") throw refuse(new DockError(409, "intake_cancelled", `The buyer cancelled request ${requestId}.`, "intake_sequence", { state: pending.state }), agentActor(session), { requestId });
+  }
+  const guarded = {
+    requestQuote: async (session: AgentSession, input: z.input<typeof QuoteInput>) => {
+      await intakeGate(session, String((input as { requestId?: unknown }).requestId ?? ""));
+      return dock.requestQuote(session, input);
+    },
+    placeOrder: async (session: AgentSession, input: z.input<typeof PlaceOrderInput>) => {
+      await intakeGate(session, String((input as { requestId?: unknown }).requestId ?? ""));
+      return dock.placeOrder(session, input);
+    },
+  };
+
   /** Buyer-side intake: structured need -> concerns -> questions -> option cards -> quote (see intake.ts). */
   const intake = createIntakeFlow({
     catalog,
@@ -836,5 +863,5 @@ export function createDock(deps: DockDeps) {
     liveLookup,
     spentThisWeek: (orgId) => spentThisWeek(orgId),
   });
-  return { ...dock, intake };
+  return { ...dock, ...guarded, intake };
 }

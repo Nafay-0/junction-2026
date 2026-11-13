@@ -140,7 +140,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
   }
 
   function expectState(i: Intake, states: IntakeState[], what: string) {
-    if (!states.includes(i.state)) throw new DockError(409, "intake_wrong_state", `Cannot ${what} now: request ${i.requestId} is ${i.state}.`, undefined, { state: i.state });
+    if (!states.includes(i.state)) throw new DockError(409, "intake_wrong_state", `Cannot ${what} now: request ${i.requestId} is ${i.state}.`, "intake_sequence", { state: i.state });
   }
 
   /** Master data of the family, already narrowed to the claims the request requires (a local search, no live call). */
