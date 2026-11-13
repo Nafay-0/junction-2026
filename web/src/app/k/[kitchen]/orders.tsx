@@ -27,19 +27,19 @@ export function OrdersList() {
   const rows = (o?.orders ?? []).filter(TABS.find((t) => t.id === tab)?.test ?? (() => true));
   return (
     <div className="mt-5">
-      <h1 className="font-display text-[2rem] font-bold leading-tight tracking-tight">Orders</h1>
-      <p className="text-ink-soft">Every order the kitchen placed or tried to place: by its agent, from the basket, or by an outside agent with the same mandate.</p>
-      <div role="tablist" aria-label="Show" className="mt-3 flex flex-wrap gap-1 border-b-[3px] border-ink">
+      <h1 className="display text-[2.6rem] text-ink sm:text-[3rem]">Orders</h1>
+      <p className="mt-1 max-w-[70ch] text-[1.02rem] leading-snug text-ink-soft">Every order the kitchen placed or tried to place: by its agent, from the basket, or by an outside agent with the same mandate.</p>
+      <div role="tablist" aria-label="Show" className="mt-4 flex flex-wrap gap-1 border-b-2 border-petrol">
         {TABS.map((t) => {
           const n = (o?.orders ?? []).filter(t.test).length;
           return (
-            <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)} className={`min-h-11 px-3 ${tab === t.id ? "bg-ink font-semibold text-paper" : "hover:bg-paper"}`}>
+            <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)} className={`min-h-11 px-3 ${tab === t.id ? "bg-petrol font-semibold text-paper" : "text-petrol hover:bg-paper"}`}>
               {t.label} <span className="tabular opacity-70">{n}</span>
             </button>
           );
         })}
       </div>
-      {!o && !overview.error && <div className="mt-3 h-64 animate-pulse bg-paper/60" aria-label="Loading orders" />}
+      {!o && !overview.error && <div className="mt-3 h-64 animate-pulse bg-concrete-deep/60" aria-label="Loading orders" />}
       {overview.error && !o && (
         <div role="alert" className="mt-3 bg-paper p-4">
           <p className="font-semibold">The orders did not load</p>
@@ -49,9 +49,10 @@ export function OrdersList() {
           </Button>
         </div>
       )}
-      {o && rows.length === 0 && <p className="mt-3 bg-paper p-4 text-ink-soft">No orders here yet.</p>}
+      {o && rows.length === 0 && <p className="mt-3 bg-paper p-5 leading-snug text-ink-soft">{tab === "waiting" ? "Nothing is waiting for a sign-off. Orders the gate stops for a person appear here." : "No orders here yet. Orders placed by the agent, from the basket or by an outside agent with the same mandate appear here."}</p>}
       {o && rows.length > 0 && (
         <div className="overflow-x-auto bg-paper">
+          <div aria-hidden className="h-[3px] bg-petrol" />
           <table className="w-full min-w-[52rem] text-left">
             <thead className="text-[0.85rem] text-ink-soft">
               <tr className="border-b border-line">
@@ -67,7 +68,7 @@ export function OrdersList() {
                 const asked = text.get(x.orderId);
                 const waiting = x.status === "pending_approval";
                 return (
-                  <tr key={x.orderId} className={`align-top ${waiting ? "bg-safety/15" : ""}`}>
+                  <tr key={x.orderId} className={`align-top ${waiting ? "bg-safety/15 shadow-[inset_6px_0_0_var(--color-safety-ink)]" : "hover:bg-mist"}`}>
                     <td className="whitespace-nowrap px-4 py-3 text-[0.92rem] tabular">{whenText(x.createdAt)}</td>
                     <td className="px-2 py-3">
                       {x.status === "history" ? (
