@@ -77,6 +77,8 @@ export function rulesFor(method: string, path: string): [RateRule, string?][] {
   if (post && path === "/ops-api/session") out.push([OPS_ENTER]);
   // Reissuing or revoking a connector takes the operator secret (or the visitor's own session).
   if ((post || method === "DELETE") && path.startsWith("/ui-api/connect/")) out.push([OPS_ENTER]);
+  // The buyer's one-time answer page (server/answer-links.ts).
+  if (post && path.startsWith("/ui-api/answer/")) out.push([KITCHEN_WRITE]);
   if (post && /^\/ui-api\/voice\/[^/]+\/call$/.test(path)) out.push([VOICE_CALL]);
   if (post && /^\/ui-api\/voice\/[^/]+\/tool$/.test(path)) out.push([VOICE_TOOL]);
   return out;

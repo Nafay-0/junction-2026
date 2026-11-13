@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MAX_LIVE_IDS_PER_CALL, type MeteredCatalog, type Product } from "./catalog";
+import { MAX_LIVE_IDS_PER_CALL, scheduledOn, type MeteredCatalog, type Product } from "./catalog";
 import { facetsOf } from "./catalog/search";
 import { OPTIMISE_QUESTION_ID, answerSchema, clarify, hardConstraints, kindMismatch, optimiseQuestion, optionLabel, violation, type Answer, type ConstraintSource, type MemoryNote, type Question } from "./clarify";
 import { baseAmount, checkNeed, type CheckContext, type Concern, type ConcernCode, type PendingOrderSummary } from "./concerns";
@@ -49,19 +49,26 @@ export type IntakeState = "needs_confirmation" | "needs_input" | "options_ready"
  *   approver_passkey      the approver's passkey on the sign-off screen
  *   protocol_elicitation  the protocol's own human-input mechanism (MCP elicitation: the client asked the user)
  *   voice                 the caller's own words on a voice call tied to their signed-in session
+ *   answer_link           Dock's own answer page, opened through a one-time link Dock handed out for this request
+ *                         (on paths without the protocol's human-input mechanism). The words are Dock's fixed choices,
+ *                         not an agent's paraphrase, but whoever holds the link can answer: the person is named only
+ *                         when their kitchen's signed-in session is present; without it, a confirmation that matters
+ *                         still goes to a named person's sign-off, as a relayed one does
  *   relayed               anything an agent merely passes on (the default): recorded as "relayed by the agent, not
  *                         verified"; where the concern matters, the order then goes to a named person's sign-off
  * Set only by server code in this process (see server/console-context.ts), never from a request field.
  */
-export type InputChannel = "portal_session" | "approver_passkey" | "protocol_elicitation" | "voice" | "relayed";
+export type InputChannel = "portal_session" | "approver_passkey" | "protocol_elicitation" | "voice" | "answer_link" | "relayed";
 export type HumanVia = { channel: InputChannel; /** The identified person's name, when the channel names one. */ person?: string; /** What the person said, for the ledger (voice). */ words?: string };
 export const RELAYED: HumanVia = { channel: "relayed" };
-const isVerified = (v: HumanVia) => v.channel !== "relayed";
+/** A person identified by the channel. An answer link names one only with the kitchen's signed-in session. */
+const isVerified = (v: HumanVia) => v.channel !== "relayed" && (v.channel !== "answer_link" || !!v.person);
 const CHANNEL_TEXT: Record<InputChannel, string> = {
   portal_session: "in the kitchen's signed-in portal",
   approver_passkey: "with their passkey",
   protocol_elicitation: "through the client's own prompt to the user (MCP elicitation)",
   voice: "on a voice call from their signed-in phone",
+  answer_link: "on Dock's own answer page through a one-time link",
   relayed: "relayed by the agent, not verified",
 };
 
@@ -146,7 +153,7 @@ export type IntakeDeps = {
   intakes: IntakeRepository;
   ledger: Ledger;
   now: () => Date;
-  openRequest: (session: AgentSession, input: { text: string; neededBy?: string; productIds?: string[]; category?: string }) => Promise<PurchaseRequest>;
+  openRequest: (session: AgentSession, input: { text: string; neededBy?: string; deliverOn?: string; productIds?: string[]; category?: string }) => Promise<PurchaseRequest>;
   requestQuote: (session: AgentSession, input: { requestId: string; lines: QuoteRequestLine[] }) => Promise<{ quote: Quote; quoteToken: string; policyPreview: Decision }>;
   /** The order flow's way to move a request's need-by date (validated and written to the ledger, see orders.ts). */
   changeNeededBy?: (session: AgentSession, requestId: string, input: { neededBy: string | null; by?: string; reason?: string }) => Promise<unknown>;
@@ -166,6 +173,8 @@ export function createIntakeFlow(deps: IntakeDeps) {
   const { catalog, repo, kitchens, intakes, ledger, now } = deps;
   const agentActor = (s: AgentSession) => `agent:${s.agentId}`;
   const buyerActor = (who: string) => `buyer:${who}`;
+  /** Who acted, for the ledger: the identified person, Dock's answer page, or the agent relaying. */
+  const actorOf = (session: AgentSession, via: HumanVia, who: string) => (isVerified(via) ? buyerActor(who) : via.channel === "answer_link" ? "door:answer_link" : agentActor(session));
 
   async function profileOf(session: AgentSession): Promise<KitchenProfile> {
     return (await kitchens.getProfile(session.mandate.issuer.orgId)) ?? emptyProfile(session.mandate.issuer.orgId, session.mandate.issuer.name);
@@ -225,10 +234,10 @@ export function createIntakeFlow(deps: IntakeDeps) {
   }
 
   /** Move the request's need-by date with the intake's need (a correction, or a later delivery the buyer accepted). */
-  async function moveNeededBy(session: AgentSession, requestId: string, neededBy: string | undefined, by: string, reason: string) {
-    if (deps.changeNeededBy) return void (await deps.changeNeededBy(session, requestId, { neededBy: neededBy ?? null, by, reason }));
+  async function moveNeededBy(session: AgentSession, requestId: string, neededBy: string | undefined, by: string, reason: string, deliverOn?: string) {
+    if (deps.changeNeededBy) return void (await deps.changeNeededBy(session, requestId, { neededBy: neededBy ?? null, by, reason, ...(deliverOn ? { deliverOn } : {}) }));
     const req = await repo.getRequest(requestId);
-    if (req) await repo.saveRequest({ ...req, neededBy });
+    if (req) await repo.saveRequest({ ...req, neededBy, ...(deliverOn ? { deliverOn } : {}) });
   }
 
   function log(i: Intake, actor: string, summary: string, data: Record<string, unknown> = {}) {
@@ -310,7 +319,9 @@ export function createIntakeFlow(deps: IntakeDeps) {
     // 4. Live prices for a short list only (one call), then the option cards.
     const prefer = [reference?.productId, last && primaryLine(last).productId, usual?.kind === "product" ? usual.productId : undefined];
     const short = shortlist(narrowed, prefer, MAX_LIVE_IDS_PER_CALL, i.amount, span);
-    const live = await deps.liveLookup(session, i.requestId, short.map((p) => p.id), i.need.deliverBy, "Dock checked live price and availability for the shortlist");
+    // "On Monday": what is available earlier is delivered that day (orders.ts scheduledOn).
+    const on = (l: LiveLookupResult): LiveLookupResult => (i.need.deliverOn ? { ...l, offers: l.offers.map((o) => scheduledOn(o, i.need.deliverOn)), statuses: l.statuses.map((st) => (st.offer ? { ...st, offer: scheduledOn(st.offer, i.need.deliverOn) } : st)) } : l);
+    const live = on(await deps.liveLookup(session, i.requestId, short.map((p) => p.id), i.need.deliverBy, "Dock checked live price and availability for the shortlist"));
     const goalForRank = goal.optimise && goal.optimise !== "no_preference" ? goal.optimise : undefined;
     const options = (priced: Product[], l: Pick<LiveLookupResult, "offers" | "statuses">) => buildOptions({
       amount: i.amount!,
@@ -338,13 +349,13 @@ export function createIntakeFlow(deps: IntakeDeps) {
     if (rest.length && (result.cards.length < MAX_CARDS || uncovered.size)) {
       const wanted = rest.filter((p) => uncovered.has(span?.(p) ?? ""));
       const pool = shortlist(wanted.length ? wanted : rest, [], MAX_LIVE_IDS_PER_CALL, i.amount, span);
-      const second = await deps.liveLookup(session, i.requestId, pool.map((p) => p.id), i.need.deliverBy, "The first short list left gaps; Dock checked the next few products once");
+      const second = on(await deps.liveLookup(session, i.requestId, pool.map((p) => p.id), i.need.deliverBy, "The first short list left gaps; Dock checked the next few products once"));
       short.push(...pool);
       result = options(short, { offers: [...live.offers, ...second.offers], statuses: [...live.statuses, ...second.statuses] });
     }
     i.notes.push(...result.notes, ...i.notAsked);
     i.excluded.push(...result.excluded);
-    if (result.cards.length === 0) return noOptions(i, noOptionReason(result.excluded, i.need.deliverBy, { mandate: session.mandate, ...budget }));
+    if (result.cards.length === 0) return noOptions(i, noOptionReason(result.excluded, i.need.deliverBy, { mandate: session.mandate, ...budget }, Object.fromEntries(products.map((p) => [p.id, p.name]))));
     i.options = result.cards;
     // A confirmation that matters came only as the agent's word: every card says a named person will sign it.
     if (i.unverified?.length) for (const card of i.options) card.signOff.push(`The agent relayed a confirmation nobody verified (${i.unverified.map((u) => u.code).join(", ")}): a person must sign this order off.`);
@@ -431,7 +442,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
     const at = now().toISOString();
     const byAgent = who.startsWith("agent ");
     const verified = isVerified(via);
-    log(i, byAgent || !verified ? agentActor(session) : buyerActor(who), `${who} chose ${card.optionId}${byAgent ? "" : ` (${howText(via)})`} (${card.labels.map((l) => LABEL_TEXT[l]).join(", ")}): ${cardLine(card)}${reason ? ` ${reason}` : ""}`, {
+    log(i, byAgent ? agentActor(session) : actorOf(session, via, who), `${who} chose ${card.optionId}${byAgent ? "" : ` (${howText(via)})`} (${card.labels.map((l) => LABEL_TEXT[l]).join(", ")}): ${cardLine(card)}${reason ? ` ${reason}` : ""}`, {
       channel: byAgent ? undefined : via.channel,
       verified: byAgent ? undefined : verified,
       step: "choice",
@@ -463,7 +474,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
       }
       // What was asked for, for the gate: the product the buyer named, and the family. Anything else ordered under
       // this request is a substitute of it, whatever the agent declares (policy substitution_rule).
-      const request = await deps.openRequest(session, { text: need.text ?? describeNeed(need), neededBy: need.deliverBy, ...(need.item.productId ? { productIds: [need.item.productId] } : {}), category: family });
+      const request = await deps.openRequest(session, { text: need.text ?? describeNeed(need), neededBy: need.deliverBy, ...(need.deliverOn ? { deliverOn: need.deliverOn } : {}), ...(need.item.productId ? { productIds: [need.item.productId] } : {}), category: family });
       const at = now().toISOString();
       const i: Intake = {
         requestId: request.requestId,
@@ -500,7 +511,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
       const { by: said, responses } = parse(ConcernResponseInput, input);
       const verified = isVerified(via);
       const who = verified && via.person ? via.person : said;
-      const actor = verified ? buyerActor(who) : agentActor(session);
+      const actor = actorOf(session, via, who);
       const how = howText(via);
       const i = await own(session, requestId);
       expectState(i, ["needs_confirmation"], "respond to concerns");
@@ -517,7 +528,9 @@ export function createIntakeFlow(deps: IntakeDeps) {
           if (matters) (i.unverified ??= []).push({ key: c.key, code: c.code, message: c.message, by: who, at });
           const summary = verified
             ? `${who} confirmed as intended, ${how}: ${c.message}`
-            : `Relayed by the agent, not verified: it says ${who} meant it this way: ${c.message}${matters ? " Nobody verified that, so the order cannot be decided by the agent alone: a named person signs it off, with this shown." : ""}`;
+            : via.channel === "answer_link"
+              ? `Confirmed as intended ${how}, answered as ${who} (the person is not identified: whoever holds the link can answer): ${c.message}${matters ? " Nobody verified who answered, so the order cannot be decided by the agent alone: a named person signs it off, with this shown." : ""}`
+              : `Relayed by the agent, not verified: it says ${who} meant it this way: ${c.message}${matters ? " Nobody verified that, so the order cannot be decided by the agent alone: a named person signs it off, with this shown." : ""}`;
           log(i, actor, summary, { step: "confirmation", key: c.key, code: c.code, by: who, relayedBy: session.agentId, channel: via.channel, verified, ...(via.words ? { words: via.words } : {}), ...(matters ? { needsSignOff: true } : {}), suspendedPreferenceIds: c.preferenceIds });
           continue;
         }
@@ -537,7 +550,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
         i.acknowledgements.push({ key: c.key, code: c.code, action: "corrected", correctionId: fix.id, by: who, at, channel: via.channel, verified });
         log(i, actor, `${who} corrected ${c.code} (${how}): ${fix.label}.`, { step: "correction", key: c.key, code: c.code, correctionId: fix.id, by: who, relayedBy: session.agentId, channel: via.channel, verified, ...(via.words ? { words: via.words } : {}), before, after: describeNeed(i.need) });
       }
-      if (i.need.deliverBy !== neededBefore) await moveNeededBy(session, requestId, i.need.deliverBy, who, "corrected in the mistake check");
+      if (i.need.deliverBy !== neededBefore) await moveNeededBy(session, requestId, i.need.deliverBy, who, "corrected in the mistake check", i.need.deliverOn);
       return view(await advance(session, i));
     },
 
@@ -569,7 +582,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
           remembered = " Not stored as a kitchen rule: an answer relayed by the agent cannot set one; the kitchen can state it on its memory page.";
           notRemembered.push(`"${optionLabel(q, a.optionId)}" applies to this request only: an answer relayed by the agent is not stored as a kitchen rule.`);
         }
-        log(i, verified ? buyerActor(who) : agentActor(session), `${who} answered "${q.text}" (${how}): ${optionLabel(q, a.optionId)}.${remembered}`, { step: "answer", questionId: q.id, optionId: a.optionId, remember: !!a.remember && verified, by: who, relayedBy: session.agentId, channel: via.channel, verified, ...(via.words ? { words: via.words } : {}) });
+        log(i, actorOf(session, via, who), `${who} answered "${q.text}" (${how}): ${optionLabel(q, a.optionId)}.${remembered}`, { step: "answer", questionId: q.id, optionId: a.optionId, remember: !!a.remember && verified, by: who, relayedBy: session.agentId, channel: via.channel, verified, ...(via.words ? { words: via.words } : {}) });
       }
       await kitchens.saveProfile(profile);
       const next = await advance(session, i);
@@ -593,8 +606,8 @@ export function createIntakeFlow(deps: IntakeDeps) {
         // Choosing a later day is the buyer moving their own deadline: the request and the gate follow it.
         const before = i.need.deliverBy;
         i.need = applyNeedPatch(i.need, { deliverBy: card.deliveryDate });
-        await moveNeededBy(session, requestId, card.deliveryDate, who, `accepted a later delivery (${optionId})`);
-        log(i, verified ? buyerActor(who) : agentActor(session), `${who} accepted a later delivery (${howText(via)}): ${card.deliveryDate} instead of ${before}.`, { step: "compromise", optionId, givesUp: card.givesUp, by: who, relayedBy: session.agentId, channel: via.channel, verified });
+        await moveNeededBy(session, requestId, card.deliveryDate, who, `accepted a later delivery (${optionId})`, i.need.deliverOn ? card.deliveryDate : undefined);
+        log(i, actorOf(session, via, who), `${who} accepted a later delivery (${howText(via)}): ${card.deliveryDate} instead of ${before}.`, { step: "compromise", optionId, givesUp: card.givesUp, by: who, relayedBy: session.agentId, channel: via.channel, verified });
       }
       return view(await quoteOption(session, i, card, who, undefined, via));
     },
@@ -647,7 +660,10 @@ export function noOptionReason(
   excluded: Exclusion[],
   deliverBy: string | undefined,
   budget?: { mandate: { weeklyBudgetCents: number }; spentCents: number; heldCents: number; held: { orderId: string; totalCents: number; expiresAt: string }[] },
+  /** Product names by id, so the reason names each product a person would not know by its code. */
+  names: Record<string, string> = {},
 ): string {
+  const label = (id: string) => (names[id] ? `${names[id]} (${id})` : id);
   if (!excluded.length) return "Nothing in stock can be delivered in time within the mandate.";
   const by = new Map<string, Exclusion[]>();
   for (const e of excluded) {
@@ -667,8 +683,8 @@ export function noOptionReason(
       `the weekly budget: ${overBudget.length === 1 ? "the option that fits" : `${overBudget.length} options that fit`} would cost more than ${left !== undefined ? `the ${formatEur(left)} left of ${formatEur(b!.mandate.weeklyBudgetCents)} this week (${formatEur(committed!)} already committed)` : "is left this week"}${b && b.heldCents > 0 ? `, and ${formatEur(b.heldCents)} more is held by ${b.held.map((h) => h.orderId).join(", ")} waiting for sign-off: withdraw it or have it decided, or it stops holding money when its price expires` : ""}`,
     );
   }
-  if (cutoff.length) parts.push(`the order cut-off has passed for ${cutoff.map((e) => e.productId).join(", ")}, so ${cutoff.length > 1 ? "they" : "it"} cannot arrive by ${deliverBy ?? "the date asked"}`);
-  for (const [, list] of others) parts.push([...new Set(list.map((e) => `${e.productId}: ${e.reason}`))].slice(0, 2).join("; "));
+  if (cutoff.length) parts.push(`the order cut-off has passed for ${cutoff.map((e) => label(e.productId)).join(", ")}, so ${cutoff.length > 1 ? "they" : "it"} cannot arrive by ${deliverBy ?? "the date asked"}`);
+  for (const [, list] of others) parts.push([...new Set(list.map((e) => `${label(e.productId)}: ${e.reason}`))].slice(0, 2).join("; "));
   if (!parts.length) return "Nothing on the short list can be delivered in time within the mandate.";
   return `Nothing fits. The blocker is ${parts[0]}.${parts.length > 1 ? ` Also: ${parts.slice(1, 3).join("; ")}.` : ""}`;
 }
@@ -715,22 +731,24 @@ export async function recordCommittedOrder(deps: { kitchens: KitchenRepository; 
   await deps.kitchens.saveProfile(recordOrder(profile, entry));
 }
 
-/** What leaves Dock for an intake: the state, what to show, and the next call to make. */
+/**
+ * What leaves Dock for an intake: the state, what to show, and the next call to make. The example body of a step
+ * that waits for the buyer never holds an answer: only placeholders a person's own choice replaces (an agent that
+ * copied a pre-filled correction would turn 1,000 L into 100 L without anyone deciding it).
+ */
 export function view(i: Intake) {
   const base = `/api/v1/intake/${i.requestId}`;
+  const BY = "<the buyer's name>";
   const next =
     i.state === "needs_confirmation"
-      ? { method: "POST", path: `${base}/concerns`, example: { by: "<person>", responses: i.concerns.map((c) => ({ key: c.key, choice: c.corrections[0]?.id ?? "confirm" })) } }
+      ? { method: "POST", path: `${base}/concerns`, example: { by: BY, responses: i.concerns.map((c) => ({ key: c.key, choice: `<the buyer's choice: ${[...(c.confirmable ? ["confirm"] : []), ...c.corrections.map((x) => x.id)].join(" or ")}>` })) } }
       : i.state === "needs_input"
-        ? { method: "POST", path: `${base}/answers`, example: { by: "<person>", answers: i.questions.map((q) => ({ questionId: q.id, optionId: q.options[0].id, remember: false })) } }
+        ? { method: "POST", path: `${base}/answers`, example: { by: BY, answers: i.questions.map((q) => ({ questionId: q.id, optionId: `<the buyer's choice: ${q.options.map((o) => o.id).join(" or ")}>`, remember: false })) } }
         : i.state === "options_ready"
-          ? { method: "POST", path: `${base}/choice`, example: { by: "<person>", optionId: i.preselected?.optionId ?? i.options[0].optionId } }
+          ? { method: "POST", path: `${base}/choice`, example: { by: BY, optionId: `<the option the buyer picks: ${i.options.map((o) => o.optionId).join(" or ")}${i.preselected ? `; ${i.preselected.optionId} only if they asked the agent to decide` : ""}>` } }
           : i.state === "quoted"
-            ? {
-                method: "POST",
-                path: "/api/v1/orders",
-                example: { requestId: i.requestId, quoteToken: i.quote!.quoteToken, lines: i.quote!.quote.lines.map((l) => ({ productId: l.productId, quantity: l.quantity, unitPriceCents: l.unitPriceCents })) },
-              }
+            ? // The requestId alone places the quote Dock signed for this request (no long token to copy).
+              { method: "POST", path: "/api/v1/orders", example: { requestId: i.requestId } }
             : { method: "POST", path: "/api/v1/intake", example: { need: "<a new structured need>" } };
   return {
     requestId: i.requestId,

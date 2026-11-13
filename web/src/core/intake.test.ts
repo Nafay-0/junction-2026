@@ -48,7 +48,8 @@ describe("intake flow", () => {
     expect(first.state).toBe("needs_confirmation");
     expect(first.concerns.map((c) => c.code)).toEqual(["quantity_tenfold"]);
     expect(dock.stats().liveCalls).toBe(0); // no live lookup before the buyer has answered
-    expect(first.next).toEqual({ method: "POST", path: `/api/v1/intake/${first.requestId}/concerns`, example: { by: "<person>", responses: [{ key: "quantity_tenfold:1000:L", choice: "use_100_L" }] } });
+    // The example names the choices and pre-fills none of them: the answer is the buyer's.
+    expect(first.next).toEqual({ method: "POST", path: `/api/v1/intake/${first.requestId}/concerns`, example: { by: "<the buyer's name>", responses: [{ key: "quantity_tenfold:1000:L", choice: "<the buyer's choice: confirm or use_100_L>" }] } });
 
     const fixed = await dock.intake.respondToConcerns(session, first.requestId, { by: "Aino Virtanen", responses: [{ key: first.concerns[0].key, choice: "use_100_L" }] }, { channel: "portal_session", person: "Aino Virtanen" });
     expect(fixed.need.quantity).toEqual({ amount: 100, unit: "L" });
@@ -258,6 +259,10 @@ describe("intake flow", () => {
     expect(text).toMatch(/^Nothing fits\. The blocker is the weekly budget: 2 options that fit would cost more than the €678\.00 left of €2,000\.00 this week \(€1,322\.00 already committed\)/);
     expect(text).toContain("A: earliest delivery");
     expect(noOptionReason([{ productId: "A", reason: "x", code: "cutoff_passed" }], "2026-11-16")).toMatch(/^Nothing fits\. The blocker is the order cut-off has passed for A/);
+    // With names, a person reads the product, not only its code.
+    expect(noOptionReason([{ productId: "A", reason: "x", code: "cutoff_passed" }, { productId: "B", reason: "no valid price right now", code: "no_offer" }], "2026-11-16", undefined, { A: "Milk 10 l", B: "Oat drink 1 l" })).toMatch(
+      /order cut-off has passed for Milk 10 l \(A\).*Oat drink 1 l \(B\): no valid price/,
+    );
   });
 
   it("keeps intakes private to the agent and validates input", async () => {
@@ -272,5 +277,25 @@ describe("intake flow", () => {
     const k = await dock.intake.kitchen(session);
     expect(k.families[0]).toMatchObject({ family: "milk", orders: 10 });
     expect(k.stated.map((p) => p.text)).toEqual(["Always lactose-free"]);
+  });
+});
+
+describe("deliver on an exact day (not merely by it)", () => {
+  it("delivers every option on the day asked, quotes that day, and the gate holds the order to it", async () => {
+    const day = "2026-11-18"; // a few days out: the seed could deliver sooner
+    let step = await dock.intake.open(session, { need: need({ deliverBy: undefined, deliverOn: day, optimise: "price" }) });
+    expect(step.need).toMatchObject({ deliverOn: day, deliverBy: day });
+    if (step.state === "options_ready") step = await dock.intake.choose(session, step.requestId, { by: "Sanna", optionId: step.options[0].optionId });
+    expect(step.state).toBe("quoted");
+    expect(step.quote!.quote.lines.every((l) => l.deliveryDate === day)).toBe(true);
+    expect(step.quote!.policyPreview.rules.find((r) => r.rule === "delivery_deadline")).toMatchObject({ outcome: "pass", reason: `Every line arrives on ${day}, the day asked.` });
+    const order = await dock.placeOrder(session, { requestId: step.requestId });
+    expect(order.lines.every((l) => l.deliveryDate === day)).toBe(true);
+  });
+
+  it("without deliverOn nothing changes: the earliest day the wholesaler can", async () => {
+    const step = await dock.intake.open(session, { need: need({ optimise: "price" }) });
+    const lines = step.quote?.quote.lines ?? step.options[0].lines;
+    expect(lines.every((l) => l.deliveryDate < "2026-11-18")).toBe(true);
   });
 });

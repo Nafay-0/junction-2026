@@ -88,8 +88,9 @@ const OfferList = named("OfferList", z.object({
   claims: z.array(ClaimTokenSchema).optional().describe("With includeClaims: the signed price, availability and origin claims."),
   liveCallsSoFar: z.number().int(),
 }));
-const OrderEnvelope = named("OrderEnvelope", z.object({ order: OrderSchema }));
-const OrderRefused = named("OrderRefused", z.object({ error: ErrorSchema, order: OrderSchema }));
+const nextStepOut = z.string().describe("What to do next, in one or two sentences: the same guidance an MCP tool result carries.");
+const OrderEnvelope = named("OrderEnvelope", z.object({ order: OrderSchema, nextStep: nextStepOut.optional() }));
+const OrderRefused = named("OrderRefused", z.object({ error: ErrorSchema, order: OrderSchema, nextStep: nextStepOut.optional() }));
 const Refusal = named("Refusal", z.union([OrderRefused, ErrorBodySchema]));
 const ApprovalList = named("ApprovalList", z.object({ approvals: z.array(PendingApprovalSchema) }));
 const LedgerView = named(
@@ -103,7 +104,19 @@ const LedgerView = named(
     entries: z.array(z.union([LedgerEntrySchema, z.looseObject({ seq: z.number().int(), at: z.string(), hash: z.string(), type: z.string(), kind: z.string(), summary: z.string() })])),
   }),
 );
-const IntakeStepEnvelope = named("IntakeStepEnvelope", z.object({ step: IntakeStepSchema }));
+const QuoteCreated = named("QuoteCreated", QuoteResultSchema.extend({ nextStep: nextStepOut.optional() }));
+const IntakeStepEnvelope = named(
+  "IntakeStepEnvelope",
+  z.object({
+    step: IntakeStepSchema,
+    waitingFor: z.enum(["buyer", "agent", "nobody"]).optional().describe("buyer: relay the step to the human buyer and wait for them. agent: your move. nobody: finished."),
+    nextStep: nextStepOut.optional(),
+    answerUrl: z
+      .string()
+      .optional()
+      .describe("On a step that waits for the buyer (needs_confirmation, needs_input): a one-time page on Dock where the buyer answers Dock's fixed choices themselves. Give it to the buyer instead of relaying; it works once and expires in 30 minutes."),
+  }),
+);
 const KitchenEnvelope = named("KitchenEnvelope", z.object({ kitchen: KitchenSchema }));
 const ApprovalViewEnvelope = named("ApprovalViewEnvelope", z.object({ view: ApprovalViewSchema }));
 const ApprovalDecided = named("ApprovalDecided", z.object({ order: OrderSchema, view: ApprovalViewSchema }));
@@ -236,7 +249,7 @@ export const API: Operation[] = [
     auth: true,
     body: QuoteBody,
     responses: {
-      201: { description: "Quote issued.", schema: QuoteResultSchema },
+      201: { description: "Quote issued.", schema: QuoteCreated },
       400: err("Invalid lines or too many products."),
       404: err("Unknown requestId."),
       409: err("Not enough stock or no live offer (rule quote_availability); `details.available` says how many packs there are."),
@@ -573,7 +586,27 @@ function jsonSchema(schema: z.ZodType): Record<string, unknown> {
   return rest;
 }
 
-export function buildOpenApi(origin: string) {
+/**
+ * Who each operation is for. Approver operations decide or show a sign-off, or join a phone as an approver: an
+ * OpenAPI-to-tools converter should not offer them to a buyer agent (they are refused without the approver's
+ * passkey, session or link token anyway). `?audience=agent` serves the document without them.
+ */
+export const APPROVER_OPERATIONS = new Set(["decideApproval", "getApprovalView", "approvalChallenge", "approvalLink", "beginJoin", "completeJoin", "approverHome", "approverDemoOrder", "sandboxDemoOrder", "listSandboxes"]);
+/** Operations whose body must be the human buyer's own answer: the same marker MCP puts in the tools' `_meta["dock/humanInput"]`. */
+export const HUMAN_INPUT_OPS = new Set(["respondToConcerns", "answerQuestions"]);
+const HUMAN_INPUT_MARK = { required: true, from: "buyer", how: "the agent relays the buyer's own answer, or gives the buyer the step's answerUrl to answer on Dock's page; never answer for them" };
+type Audience = "agent" | "approver" | "public";
+function audienceOf(op: Operation): Audience {
+  if (APPROVER_OPERATIONS.has(op.operationId)) return "approver";
+  return op.auth === true || op.path.startsWith("/api/v1/intake") ? "agent" : op.auth === "approver" ? "approver" : "public";
+}
+const TAGS = [
+  { name: "agent", description: "For buyer agents, with the organisation's signed mandate." },
+  { name: "approver", description: "For the human approver's phone and the demo screens. Not for agents: approving needs the approver's own passkey, session or link token." },
+  { name: "public", description: "Discovery, keys, the ledger's public view and live events." },
+];
+
+export function buildOpenApi(origin: string, opts: { audience?: Audience } = {}) {
   const { schemas } = z.toJSONSchema(wire, TO_JSON);
   const components = Object.fromEntries(
     Object.entries(schemas).map(([id, sch]) => {
@@ -586,12 +619,16 @@ export function buildOpenApi(origin: string) {
 
   const paths: Record<string, Record<string, unknown>> = {};
   for (const op of API) {
+    if (opts.audience === "agent" && audienceOf(op) === "approver") continue;
     paths[op.path] ??= {};
     paths[op.path][op.method] = {
       operationId: op.operationId,
       summary: op.summary,
       ...(op.description ? { description: op.description } : {}),
       ...(op.auth === true ? {} : { security: op.auth === "approver" ? [{ approverSession: [] }] : [] }),
+      tags: [audienceOf(op)],
+      "x-dock-audience": audienceOf(op),
+      ...(HUMAN_INPUT_OPS.has(op.operationId) ? { "x-dock-human-input": HUMAN_INPUT_MARK } : {}),
       ...(op.params
         ? {
             parameters: op.params.map((p) => ({
@@ -624,6 +661,7 @@ export function buildOpenApi(origin: string) {
     servers: [{ url: origin }],
     externalDocs: { description: "How to connect an agent", url: `${origin}/llms.txt` },
     security: [{ mandate: [], agentId: [] }],
+    tags: TAGS,
     paths,
     components: {
       securitySchemes: {

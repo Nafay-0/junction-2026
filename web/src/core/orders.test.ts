@@ -354,3 +354,38 @@ describe("approvals", () => {
     await expect(dock.decideApproval("apr_nope", { decision: "approve", proof: { kind: "link_token", token: "x" } })).rejects.toBeInstanceOf(DockError);
   });
 });
+
+describe("ProductHolds: the gate checks a hold as the named rule recall_hold", () => {
+  it("previews, refuses and keeps an order with a held product; the re-check at sign-off refuses one held after it waited", async () => {
+    const held = new Set<string>();
+    const d = createDock({
+      catalog,
+      repo: new InMemoryDockRepository(),
+      ledger,
+      trustedIssuers: createTrustRegistry([{ kid: buyer.kid, orgId: "org_laakso", publicKey: buyer.publicKey }]),
+      wholesalerKey: wholesaler,
+      notifier: outbox,
+      now: () => now,
+      holds: { holdsFor: (ids) => ids.filter((id) => held.has(id)).map((productId) => ({ productId, reason: "Recall notice 7.", url: "https://notice.test/7" })) },
+    });
+    const s = await d.authenticate(token, mandate.agentId);
+    held.add("VA-1001");
+    const req = await d.openRequest(s, { text: "20 L lactose-free milk" });
+    const q = await d.requestQuote(s, { requestId: req.requestId, lines: [{ productId: "VA-1001", quantity: 20 }] });
+    expect(q.policyPreview.outcome).toBe("reject");
+    const o = await d.placeOrder(s, { requestId: req.requestId, quoteToken: q.quoteToken, lines: linesOf(q.quote) });
+    expect(o.status).toBe("rejected");
+    expect(o.decision.rules.find((r) => r.rule === "recall_hold")).toMatchObject({ outcome: "fail", reason: expect.stringContaining("Notice: https://notice.test/7") });
+
+    held.clear();
+    const big = await d.openRequest(s, { text: "1000 L lactose-free milk" });
+    const bq = await d.requestQuote(s, { requestId: big.requestId, lines: [{ productId: "VA-1001", quantity: 700 }] });
+    const waiting = await d.placeOrder(s, { requestId: big.requestId, quoteToken: bq.quoteToken, lines: linesOf(bq.quote) });
+    expect(waiting.status).toBe("pending_approval");
+    held.add("VA-1001");
+    const msg = outbox.messages().at(-1)!;
+    const after = await d.decideApproval(msg.approvalId, { decision: "approve", proof: { kind: "link_token", token: tokenFrom(msg.link) } });
+    expect(after.status).toBe("rejected");
+    expect(after.decision.rules.find((r) => r.rule === "recall_hold")?.outcome).toBe("fail");
+  });
+});

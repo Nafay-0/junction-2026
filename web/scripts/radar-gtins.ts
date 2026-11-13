@@ -4,8 +4,9 @@
  *
  *   pnpm radar:gtins     reads VALIO_DATA_DIR (default: ../data/valio from web/), writes .data/radar/gtins.json.gz
  *
- * The catalogue index (src/core/catalog/partner.ts) does not keep GTINs; this side file fills the gap until the
- * core does. Partner data: the output folder is git-ignored. Never commit it.
+ * The catalogue index keeps GTINs now (`pnpm index:build`, carried to a deployment by `pnpm index:publish`), and the
+ * radar reads them from there. This side file is only for an index built before that. Partner data: the output
+ * folder is git-ignored. Never commit it.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";

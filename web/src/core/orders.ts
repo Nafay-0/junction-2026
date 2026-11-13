@@ -13,7 +13,7 @@ import {
   type SignOff,
 } from "./approval";
 import type { EventPublisher } from "./events";
-import { CatalogError, ProductQuerySchema, usableOffer, type LiveOffer, type LiveStatus, type MeteredCatalog, type Product } from "./catalog";
+import { CatalogError, ProductQuerySchema, scheduledOn, usableOffer, type LiveOffer, type LiveStatus, type MeteredCatalog, type Product } from "./catalog";
 import { ClaimStore, availabilityClaimInput, issueClaim, originClaimInput, priceClaimInput, refOf, type IssuedClaim } from "./claims";
 import { DockError, parse } from "./errors";
 import { InMemoryIntakeRepository, createIntakeFlow, recordCommittedOrder, type IntakeRepository } from "./intake";
@@ -23,7 +23,8 @@ import type { Ledger, LedgerHead } from "./ledger";
 import { LiveLookupAllowance, shareKeyOf } from "./live-allowance";
 import { MAX_LIVE_IDS_PER_CALL } from "./catalog";
 import { MandateError, verifyMandate, type Mandate, type TrustRegistry } from "./mandate";
-import { SPLIT_WINDOW_HOURS, decidingRule, evaluatePolicy, type Decision, type OrderDraftLine, type RecentOrder } from "./policy";
+import { SPLIT_WINDOW_HOURS, decidingRule, evaluatePolicy, type Decision, type OrderDraftLine, type ProductHold, type RecentOrder } from "./policy";
+export type { ProductHold } from "./policy";
 import { QuoteError, QuoteRequestLineSchema, buildQuote, signQuote, verifyQuote, type Quote, type QuoteLine } from "./quote";
 import { addDays, canonicalJson, formatEur, newId } from "./util";
 
@@ -43,6 +44,8 @@ export { DockError };
 export const OpenRequestInput = z.object({
   text: z.string().min(1).max(2000), // the buyer's need in their own words
   neededBy: z.iso.date().optional(),
+  /** Exactly this day, not merely by it: every line is delivered that day (sets neededBy to the same day). */
+  deliverOn: z.iso.date().optional(),
   /** Products the buyer asked for by id. Product ids written in `text` count too (when they exist in the catalogue). */
   productIds: z.array(z.string().min(1).max(60)).max(20).optional(),
   /** The product family asked for, when known (the intake sets it). */
@@ -64,7 +67,8 @@ export const AvailabilityInput = z.object({
  */
 export const MAX_QUOTE_LINES = 60;
 export const QuoteInput = z.object({ requestId: z.string().min(1), lines: z.array(QuoteRequestLineSchema).min(1).max(MAX_QUOTE_LINES) });
-export const PlaceOrderInput = z.object({
+/** An order against a signed quote: the token and the lines exactly as quoted. */
+export const SignedOrderInput = z.object({
   requestId: z.string().min(1),
   quoteToken: z.string().min(1),
   lines: z.array(z.object({ productId: z.string(), quantity: z.number(), unitPriceCents: z.number() })),
@@ -76,6 +80,17 @@ export const ChangeNeededByInput = z.object({
   by: z.string().min(1).max(120).optional(),
   /** Why, in a few words; written to the ledger. */
   reason: z.string().max(300).optional(),
+  /** An exact delivery day ("on Monday"), when the request has one: moves with the need-by date. */
+  deliverOn: z.iso.date().nullable().optional(),
+});
+/**
+ * What an agent sends to place an order. After the intake quoted the request (choose_option, POST .../choice), the
+ * requestId alone is enough: Dock places the quote it signed for that request, checked exactly as if the agent had
+ * sent it, so no model has to copy a long token. After a lower-level quote, send quoteToken and lines unchanged.
+ */
+export const PlaceOrderInput = SignedOrderInput.extend({
+  quoteToken: SignedOrderInput.shape.quoteToken.optional().describe("The quoteToken from POST /api/v1/quotes, unchanged. Leave it out after the intake's choice: Dock uses the quote it signed for this request."),
+  lines: SignedOrderInput.shape.lines.optional().describe("Only with quoteToken: the quote's lines (productId, quantity, unitPriceCents) copied from quote.lines."),
 });
 export const WithdrawInput = z.object({
   /** Why, in the buyer's words; written to the ledger. */
@@ -104,6 +119,8 @@ export type PurchaseRequest = {
   mandateId: string;
   text: string;
   neededBy?: string;
+  /** Delivered exactly on this day (then neededBy is the same day). */
+  deliverOn?: string;
   /**
    * What the buyer asked for, as Dock read it (never what the agent declares at quote time): products named by id
    * (in the request's fields or its text) and the family. The gate treats any other product as a substitute of it.
@@ -250,7 +267,17 @@ export type DockDeps = {
   /** How long a live answer (per product and delivery date) is reused for option cards. Quotes always ask afresh. Default 120 s; 0 switches it off. */
   liveCacheTtlMs?: number;
   claims?: ClaimStore; // signed claims handed out (see claims.ts)
+  /**
+   * Products the wholesaler holds right now (a recall notice, a drill), checked by the gate as the rule recall_hold
+   * on every quote preview, order and re-check at sign-off. The server's recall radar implements it.
+   */
+  holds?: ProductHolds;
 };
+
+/** The holds in force on some products. Called with the products of one quote; must be cheap (no live call). */
+export interface ProductHolds {
+  holdsFor(productIds: string[]): ProductHold[] | Promise<ProductHold[]>;
+}
 
 /** What one live lookup found: quotable offers (with claim ids), the products that have none and why, and the claims. */
 export type LiveLookupResult = {
@@ -314,6 +341,26 @@ export function createDock(deps: DockDeps) {
     if (!ids.length) return [];
     const found = new Set((await catalog.searchProducts({ ids, limit: 100 })).map((p) => p.id));
     return ids.filter((id) => found.has(id) || explicit.includes(id));
+  }
+
+  /** What the request asked for, with the products' names (looked up in master data, free), for the gate's reasons. */
+  async function askedOf(request: PurchaseRequest | undefined): Promise<(NonNullable<PurchaseRequest["asked"]> & { names?: Record<string, string> }) | undefined> {
+    const asked = request?.asked;
+    if (!asked?.productIds.length) return asked;
+    try {
+      const found = await catalog.searchProducts({ ids: asked.productIds, limit: 100 });
+      const names = Object.fromEntries(found.map((p) => [p.id, p.name]));
+      return Object.keys(names).length ? { ...asked, names } : asked;
+    } catch {
+      return asked;
+    }
+  }
+
+  /** Holds in force on a quote's products (recall radar), for the gate's recall_hold rule. */
+  async function holdsOf(quote: Quote): Promise<{ holds?: ProductHold[] }> {
+    if (!deps.holds) return {};
+    const holds = await deps.holds.holdsFor([...new Set(quote.lines.map((l) => l.productId))]);
+    return holds.length ? { holds } : {};
   }
 
   /** Quote lines with substitutes as Dock reads them from the request (see requestQuote). */
@@ -635,7 +682,8 @@ export function createDock(deps: DockDeps) {
     },
 
     async openRequest(session: AgentSession, input: z.input<typeof OpenRequestInput>): Promise<PurchaseRequest> {
-      const { text, neededBy, productIds, category } = parse(OpenRequestInput, input);
+      const { text, neededBy: by, deliverOn, productIds, category } = parse(OpenRequestInput, input);
+      const neededBy = deliverOn ?? by;
       const named = await askedProducts(text, productIds ?? []);
       const r: PurchaseRequest = {
         requestId: newId("req"),
@@ -644,6 +692,7 @@ export function createDock(deps: DockDeps) {
         mandateId: session.mandate.mandateId,
         text,
         neededBy,
+        ...(deliverOn ? { deliverOn } : {}),
         ...(named.length || category ? { asked: { productIds: named, ...(category ? { category } : {}) } } : {}),
         createdAt: now().toISOString(),
       };
@@ -664,15 +713,15 @@ export function createDock(deps: DockDeps) {
      * committed: that order was decided against the old date. A date before today is refused.
      */
     async changeNeededBy(session: AgentSession, requestId: string, input: z.input<typeof ChangeNeededByInput>): Promise<PurchaseRequest> {
-      const { neededBy, by, reason } = parse(ChangeNeededByInput, input);
+      const { neededBy, by, reason, deliverOn } = parse(ChangeNeededByInput, input);
       const r = await ownRequest(session, requestId);
       const was = r.neededBy ?? null;
-      if (was === neededBy) return r;
+      if (was === neededBy && (deliverOn === undefined || (r.deliverOn ?? null) === deliverOn)) return r;
       const today = localNow(now()).date;
       if (neededBy && neededBy < today) throw new DockError(400, "needed_by_in_past", `${neededBy} is before today (${today}).`, "delivery_deadline");
       const placed = (await repo.listOrders()).find((o) => o.requestId === requestId && (o.status === "pending_approval" || o.status === "committed"));
       if (placed) throw new DockError(409, "request_has_order", `Order ${placed.orderId} for request ${requestId} is ${placed.status.replace("_", " ")}; it was decided against ${was ?? "the earliest date"}. Open a new request for another date.`, "intake_sequence", { orderId: placed.orderId });
-      const next: PurchaseRequest = { ...r, neededBy: neededBy ?? undefined };
+      const next: PurchaseRequest = { ...r, neededBy: neededBy ?? undefined, ...(deliverOn !== undefined ? { deliverOn: deliverOn ?? undefined } : {}) };
       await repo.saveRequest(next);
       ledger.append({
         type: "intake",
@@ -737,7 +786,7 @@ export function createDock(deps: DockDeps) {
       try {
         const products = await catalog.searchProducts({ ids, limit: 100 });
         const live = await liveLookup(session, requestId, ids, request.neededBy, "Dock asked live prices for a quote", { fresh: true, batch: true });
-        const offers = live.offers;
+        const offers = live.offers.map((o) => scheduledOn(o, request.deliverOn));
         // Say why a line cannot be quoted, in the partner's terms (a passed cut-off, a sales block, no price).
         for (const l of lines) {
           const st = live.statuses.find((x) => x.productId === l.productId);
@@ -745,7 +794,7 @@ export function createDock(deps: DockDeps) {
             throw new QuoteError("quote_no_offer", `${l.productId} cannot be quoted now: ${st.message}`, { productId: l.productId, problems: st.problems });
         }
         // The product a substitute replaces only lends its price for comparison: any priced status will do.
-        const referenceOffers = live.statuses.map((x) => x.offer).filter((o): o is LiveOffer => !!o);
+        const referenceOffers = live.statuses.map((x) => x.offer).filter((o): o is LiveOffer => !!o).map((o) => scheduledOn(o, request.deliverOn));
         const used = new Set(lines.map((l) => l.productId));
         const originals = new Set(lines.map((l) => l.substituteFor).filter((x): x is string => !!x));
         claims = live.claims.filter((c) => used.has(c.productId) || (originals.has(c.productId) && c.type === "price"));
@@ -781,15 +830,15 @@ export function createDock(deps: DockDeps) {
       });
       const policyPreview = evaluatePolicy(
         session.mandate,
-        { agentId: session.agentId, quote, lines: quote.lines, neededBy: request.neededBy, requestId, asked: request.asked },
-        { now: now(), ...(await budgetContext(quote.buyerOrgId)), ...(await unverifiedOf(requestId)), quoteAlreadyUsed: false, recentOrders: await recentOrders(quote.buyerOrgId) },
+        { agentId: session.agentId, quote, lines: quote.lines, neededBy: request.neededBy, deliverOn: request.deliverOn, requestId, asked: await askedOf(request) },
+        { now: now(), ...(await budgetContext(quote.buyerOrgId)), ...(await unverifiedOf(requestId)), ...(await holdsOf(quote)), quoteAlreadyUsed: false, recentOrders: await recentOrders(quote.buyerOrgId) },
       );
       return { quote, quoteToken, policyPreview, claims };
     },
 
     /** Place an order against a signed quote. Always returns the decision; refused orders are kept with their reasons. */
-    async placeOrder(session: AgentSession, input: z.input<typeof PlaceOrderInput>): Promise<PublicOrder> {
-      const { requestId, quoteToken, lines } = parse(PlaceOrderInput, input);
+    async placeOrder(session: AgentSession, input: z.input<typeof SignedOrderInput>): Promise<PublicOrder> {
+      const { requestId, quoteToken, lines } = parse(SignedOrderInput, input);
       const request = await ownRequest(session, requestId);
       let quote: Quote;
       try {
@@ -800,8 +849,8 @@ export function createDock(deps: DockDeps) {
       }
       const orgId = session.mandate.issuer.orgId;
       return serialize(orgId, async () => {
-        const draft = { agentId: session.agentId, quote, lines, neededBy: request.neededBy, requestId, asked: request.asked };
-        const ctx = { now: now(), ...(await budgetContext(orgId)), ...(await unverifiedOf(requestId)), quoteAlreadyUsed: await repo.isQuoteUsed(quote.quoteId), recentOrders: await recentOrders(orgId) };
+        const draft = { agentId: session.agentId, quote, lines, neededBy: request.neededBy, deliverOn: request.deliverOn, requestId, asked: await askedOf(request) };
+        const ctx = { now: now(), ...(await budgetContext(orgId)), ...(await unverifiedOf(requestId)), ...(await holdsOf(quote)), quoteAlreadyUsed: await repo.isQuoteUsed(quote.quoteId), recentOrders: await recentOrders(orgId) };
         let decision = evaluatePolicy(session.mandate, draft, ctx);
         if (decision.outcome !== "reject" && !(await repo.claimQuote(quote.quoteId))) {
           decision = evaluatePolicy(session.mandate, draft, { ...ctx, quoteAlreadyUsed: true });
@@ -947,8 +996,8 @@ export function createDock(deps: DockDeps) {
         const request = await repo.getRequest(order.requestId);
         const recheck = evaluatePolicy(
           order.mandate,
-          { agentId: order.agentId, quote: order.quote, lines: order.draftLines, neededBy: request?.neededBy, requestId: order.requestId, asked: request?.asked },
-          { now: now(), ...(await budgetContext(order.orgId, order.orderId)), ...(await unverifiedOf(order.requestId)), quoteAlreadyUsed: false, recentOrders: await recentOrders(order.orgId, order.orderId) },
+          { agentId: order.agentId, quote: order.quote, lines: order.draftLines, neededBy: request?.neededBy, deliverOn: request?.deliverOn, requestId: order.requestId, asked: await askedOf(request) },
+          { now: now(), ...(await budgetContext(order.orgId, order.orderId)), ...(await unverifiedOf(order.requestId)), ...(await holdsOf(order.quote)), quoteAlreadyUsed: false, recentOrders: await recentOrders(order.orgId, order.orderId) },
         );
         if (recheck.outcome === "reject") {
           order.status = "rejected";
@@ -1097,6 +1146,25 @@ export function createDock(deps: DockDeps) {
    * confirmation (or after the buyer cancelled), the lower-level quote and order calls refuse it. The intake
    * itself quotes through the unguarded function.
    */
+  /**
+   * The order for a request's current quote: the one the intake signed when the buyer chose an option. Refused, with
+   * what to do instead, when there is none, it has expired, or it already bought an order.
+   */
+  async function currentQuoteOrder(session: AgentSession, requestId: string): Promise<z.output<typeof SignedOrderInput>> {
+    const i = await intakes.get(requestId);
+    const actor = agentActor(session);
+    const none = (message: string, rule: string, details: Record<string, unknown> = {}) => refuse(new DockError(409, "no_current_quote", message, rule, { requestId, ...details }), actor, { requestId });
+    if (!i || i.orgId !== session.mandate.issuer.orgId || i.agentId !== session.agentId) {
+      if (!(await repo.getRequest(requestId))) throw new DockError(404, "request_not_found", `No open request ${requestId} for this agent.`);
+      throw none(`Request ${requestId} has no quote Dock signed through the intake: send quoteToken and lines from POST /api/v1/quotes, or start with POST /api/v1/intake.`, "intake_sequence");
+    }
+    if (i.state !== "quoted" || !i.quote) throw none(`Request ${requestId} has no current quote: it is ${i.state}. Choose an option first; the quote comes with the choice.`, "intake_sequence", { state: i.state });
+    const q = i.quote.quote;
+    if (Date.parse(q.expiresAt) <= now().getTime()) throw none(`The quote for request ${requestId} expired at ${q.expiresAt}: its fixed price no longer holds. Choose the option again for a new quote.`, "quote_expiry", { quoteId: q.quoteId, expiresAt: q.expiresAt });
+    if (await repo.isQuoteUsed(q.quoteId)) throw none(`The quote for request ${requestId} already bought an order; a quote buys once. Start a new request if the buyer needs more.`, "quote_replay", { quoteId: q.quoteId });
+    return { requestId, quoteToken: i.quote.quoteToken, lines: q.lines.map(({ productId, quantity, unitPriceCents }) => ({ productId, quantity, unitPriceCents })) };
+  }
+
   async function intakeGate(session: AgentSession, requestId: string) {
     const pending = await intakes.get(requestId);
     if (pending?.state === "needs_confirmation") {
@@ -1114,8 +1182,13 @@ export function createDock(deps: DockDeps) {
       return dock.requestQuote(session, input);
     },
     placeOrder: async (session: AgentSession, input: z.input<typeof PlaceOrderInput>) => {
-      await intakeGate(session, String((input as { requestId?: unknown }).requestId ?? ""));
-      return dock.placeOrder(session, input);
+      const body = parse(PlaceOrderInput, input);
+      await intakeGate(session, body.requestId);
+      if (body.quoteToken) {
+        if (!body.lines) throw new DockError(400, "invalid_request", "Send lines with quoteToken (copied from quote.lines), or leave both out after the intake's choice.");
+        return dock.placeOrder(session, { requestId: body.requestId, quoteToken: body.quoteToken, lines: body.lines });
+      }
+      return dock.placeOrder(session, await currentQuoteOrder(session, body.requestId));
     },
   };
 
