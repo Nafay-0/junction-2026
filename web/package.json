@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "demo": "tsx scripts/demo.ts",
     "demo:mcp": "tsx scripts/demo-mcp.ts",
-    "verify:receipt": "tsx scripts/verify-receipt.ts"
+    "verify:receipt": "tsx scripts/verify-receipt.ts",
+    "dev:mandate": "tsx scripts/dev-mandate.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "2.4.0",

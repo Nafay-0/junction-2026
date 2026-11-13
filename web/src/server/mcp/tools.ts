@@ -196,7 +196,7 @@ export const TOOLS = [
       if (orderId) await dock.getOrder(session, orderId); // 404 unless the order belongs to this organisation
       if (requestId) {
         const opened = dock.ledger.entries({ requestId }).find((e) => e.type === "request");
-        if (opened?.actor !== `agent:${session.agentId}` || opened.data.mandateId === undefined) {
+        if (opened?.actor !== `agent:${session.agentId}`) {
           throw new DockError(404, "request_not_found", `No request ${requestId} for this agent.`);
         }
       }

@@ -22,3 +22,21 @@ pnpm lint && pnpm typecheck && pnpm build
 | `scripts/demo.ts` | Scripted buyer agent. |
 
 Agents send `Authorization: Mandate <jws>` and `Dock-Agent-Id: <id>`. Errors are `{ error: { code, rule, message, details } }`.
+
+## Open interface
+
+Any MCP-capable agent can use Dock with no custom integration: see [docs/connect-an-agent.md](docs/connect-an-agent.md).
+
+| Path | What |
+|---|---|
+| `/api/mcp` | MCP over Streamable HTTP (2026-07-28 and 2025-era clients). Tools in `src/server/mcp/tools.ts`, one table. |
+| `/api/v1/openapi.json` | OpenAPI 3.1, generated from the zod schemas (`src/server/openapi.ts`), kept in sync by `openapi.test.ts`. |
+| `/.well-known/api-catalog` | RFC 9727 API catalog: the entry point from the base URL. |
+| `/.well-known/jwks.json` | Wholesaler keys (RFC 7517 JWK Set, Ed25519) to verify quotes and receipts offline. |
+| `/.well-known/dock.json`, `/llms.txt` | Dock's manifest (its own format, not a standard) and a brief for coding agents. |
+
+```bash
+pnpm demo:mcp --url http://localhost:3000   # stock MCP client, no LLM: the milk order end to end
+pnpm verify:receipt order.json --url http://localhost:3000
+export DOCK_MANDATE=$(pnpm -s dev:mandate)  # dev mandate for the demo buyer
+```
