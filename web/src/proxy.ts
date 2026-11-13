@@ -22,6 +22,12 @@ const DEMO_ORDER = rule("demo-order", 12);
 const DEMO_ORDER_KITCHEN = rule("demo-order-kitchen", 6);
 const AGENT_WRITE = rule("agent-write", 120);
 const EVENTS = rule("events", 60);
+const ASSISTANT = rule("assistant", 20);
+const ASSISTANT_KITCHEN = rule("assistant-kitchen", 30);
+const LIVE_LOOKUP = rule("catalog-live", 30);
+const KITCHEN_WRITE = rule("kitchen-write", 60);
+const KITCHEN_WRITE_KITCHEN = rule("kitchen-write-kitchen", 40);
+const OPS_ENTER = rule("ops-enter", 10);
 
 const g = globalThis as typeof globalThis & { __dockRateLimiter?: RateLimiter };
 const limiter = (g.__dockRateLimiter ??= new RateLimiter());
@@ -44,6 +50,12 @@ function rulesFor(method: string, path: string): [RateRule, string?][] {
   if (post && path === "/api/v1/approver/demo-order") out.push([DEMO_ORDER]);
   if (post && (path === "/api/mcp" || /^\/api\/v1\/(availability|quotes|orders|requests|intake)/.test(path))) out.push([AGENT_WRITE]);
   if (path === "/api/v1/events") out.push([EVENTS]);
+  // The kitchen store (/k): the assistant calls the model, catalog/live the partner's live API, basket the gate.
+  if (post && (m = /^\/ui-api\/kitchens\/([^/]+)\/assistant$/.exec(path))) out.push([ASSISTANT], [ASSISTANT_KITCHEN, `k:${m[1]}`]);
+  if (post && /^\/ui-api\/kitchens\/[^/]+\/catalog\/live$/.test(path)) out.push([LIVE_LOOKUP]);
+  if (post && (m = /^\/ui-api\/kitchens\/([^/]+)\/(basket|memory)$/.exec(path))) out.push([KITCHEN_WRITE], [KITCHEN_WRITE_KITCHEN, `k:${m[1]}`]);
+  // The operations desk: entering takes the passcode, so guessing is slowed down.
+  if (post && path === "/ops-api/session") out.push([OPS_ENTER]);
   return out;
 }
 
