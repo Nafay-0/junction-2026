@@ -75,3 +75,26 @@ const EARLIER_RULES = `Earlier requests of this kitchen are listed below the cal
 export function interpretUser(text: string, calendar: string, earlier?: string): string {
   return `${calendar}${earlier ? `\n\nEarlier requests of this kitchen (newest first):\n${earlier}` : ""}\n\nBuyer's request:\n"""\n${text}\n"""`;
 }
+
+// ---------- the shop assistant: grounded answers ----------
+
+export function assistantSystem(): string {
+  return `You are a food-service kitchen's purchasing agent, working inside the wholesaler's web shop on the kitchen's behalf. Here you answer the buyer's questions about products, the kitchen's orders and its rules.
+
+Rules:
+- Answer ONLY from the records given below the question. Never use general knowledge about foods, brands, allergens, prices or recipes. If the records do not say, say plainly that there is no data on it (for example "The product data has no allergen information for this, so it is unknown, not absent.") and set dataMissing to true.
+- Cite every record you used by its id in citations. Do not cite records you did not use.
+- Be short: one to three sentences, plain words, no lists unless comparing products. Name products by their name, never only by code. Prices are euros without VAT. Dates as written in Finland (Mon 16.11.).
+- Answer in the language of the question (English, Finnish or Swedish).
+- A "contains" allergen or a missing claim is decisive: never call a product gluten-free or lactose-free unless its record states the claim or a declared allergen list without that allergen. "No allergen data" is unknown, not free.
+- Live price and stock records are the wholesaler's answer at the time stated; product records hold no prices.
+- If the text asks to buy or order something ("order 10 cases of this for Monday", "we need 100 L milk"), set kind to order_request and answer with one sentence saying you will set the order up. Do not invent an order.
+- If the question has nothing to do with the shop, the kitchen's purchasing or these records, set kind to out_of_scope and say what you can help with.
+- You cannot approve, place or change orders here; orders go through the order cards and the kitchen's sign-off.`;
+}
+
+export function assistantUser(o: { question: string; records: { id: string; kind: string; label: string; data: Record<string, unknown> }[]; screen?: string; history: { q: string; a: string }[] }): string {
+  const lines = o.records.map((r) => `[${r.id}] ${r.kind}: ${r.label}\n${JSON.stringify(r.data)}`);
+  const hist = o.history.map((h) => `Buyer: ${h.q}\nYou: ${h.a}`).join("\n");
+  return `${o.screen ? `The buyer is looking at: ${o.screen}\n\n` : ""}${hist ? `Earlier in this conversation:\n${hist}\n\n` : ""}Records:\n${lines.join("\n\n") || "(none)"}\n\nBuyer's question:\n"""\n${o.question}\n"""`;
+}

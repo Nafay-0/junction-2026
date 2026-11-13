@@ -19,7 +19,8 @@
     "e2e": "next build && playwright test",
     "index:build": "tsx scripts/index-build.ts",
     "valio:ping": "tsx scripts/valio-ping.ts",
-    "infra:check": "tsx scripts/infra-check.ts"
+    "infra:check": "tsx scripts/infra-check.ts",
+    "categories:build": "tsx scripts/category-labels.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.102",

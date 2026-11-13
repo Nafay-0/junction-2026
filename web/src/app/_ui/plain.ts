@@ -96,6 +96,7 @@ export const RULE_TITLE: Record<string, string> = {
   substitute_price: "A swap may cost only a little more",
   weekly_budget: "The weekly budget is a hard limit",
   per_order_limit: "The agent's own spending limit",
+  order_splitting: "No splitting one need into small orders",
   approver_authority: "Someone must be allowed to sign the amount",
   live_lookup_limit: "Live price checks for a short list only",
   approver_identity: "Only the named person can sign off",
@@ -137,6 +138,7 @@ export function attr(a: string): string {
 
 /** "Valio Eila lactose-free semi-skimmed milk drink 1.5 %, 10 L bag-in-box" -> "Valio Eila 1.5 %, 10 L bag-in-box". */
 export function shortProduct(name: string): string {
+  if (!name.includes(",")) return shortCatalogueName(name);
   const [head, ...rest] = name.split(",");
   const words = head.trim().split(/\s+/);
   const brand = words.slice(0, words[1] && /^[A-Z]/.test(words[1]) ? 2 : 1).join(" ");
@@ -144,6 +146,19 @@ export function shortProduct(name: string): string {
   const kind = /oat|cream|yoghurt|organic/i.exec(head)?.[0]?.toLowerCase();
   const pack = rest.join(",").trim();
   return [brand, kind, fat].filter(Boolean).join(" ") + (pack ? `, ${pack}` : "");
+}
+
+/**
+ * The partner's own product names have no comma and can be long ("Valio Hyvä suomalainen Arki® Eila® semi skimmed
+ * milk drink 1 l lactose free"): drop the trademark signs and, when too long, cut at a word but keep the pack size.
+ */
+function shortCatalogueName(name: string, max = 48): string {
+  const clean = name.replace(/[®™©]/g, "").replace(/\s+/g, " ").trim();
+  if (clean.length <= max) return clean;
+  const pack = /\b\d+(?:[.,]\d+)?\s?(?:x\s?\d+(?:[.,]\d+)?\s?)?(?:l|L|dl|cl|ml|kg|g)\b/.exec(clean)?.[0];
+  const room = pack ? max - pack.length - 3 : max - 1;
+  const cut = clean.slice(0, room).replace(/\s+\S*$/, "");
+  return pack && !cut.includes(pack) ? `${cut}…, ${pack}` : `${cut}…`;
 }
 
 /**

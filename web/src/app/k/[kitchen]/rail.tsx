@@ -53,7 +53,16 @@ export function MandateBox({ k }: { k: KitchenInfo }) {
         <li>Only {m.allowedCategories.map(attr).join(", ")}.</li>
         {m.requiredAttributes.length > 0 && <li>Always {m.requiredAttributes.map(attr).join(", ")}.</li>}
         {m.forbiddenAllergens.length > 0 && <li>Never {m.forbiddenAllergens.map(attr).join(" or ")}.</li>}
-        <li>{m.substitution.rule === "none" ? "No substitutes." : `Substitutes need a person, and at most ${m.substitution.maxPriceIncreasePct} % dearer.`}</li>
+        <li>
+          {m.substitution.rule === "none"
+            ? "No substitutes."
+            : m.substitution.rule === "needs_approval"
+              ? `Substitutes need a person, and at most ${m.substitution.maxPriceIncreasePct} % dearer.`
+              : m.substitution.rule === "within_preferences"
+                ? `Like-for-like substitutes within the kitchen's preferences alone; others need a person.`
+                : "Only like-for-like substitutes."}
+        </li>
+        <li>No splitting one need into smaller orders.</li>
       </ul>
       <h3 className="mt-3 text-[0.95rem] font-semibold">Above that, a person signs off</h3>
       <ul className="mt-1 space-y-1 text-[0.98rem]">
