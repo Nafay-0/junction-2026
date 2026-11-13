@@ -1,0 +1,27 @@
+# OpenAI Agents SDK buyer against http://localhost:4517
+# 2026-11-14 00:56 EET, commit 9a8221d
+# command: (cd examples/runtimes/openai-agents && uv run -q buyer.py), agent id agent_kaari_buyer_openai_agents
+
+[connect] http://localhost:4517/api/mcp: 14 tools: read_mandate, submit_need, respond_to_concerns, answer_questions, choose_option, get_intake_step, read_kitchen_memory, place_order, get_order, explain, open_request, search_products, check_availability, request_quote
+[user] Order 1,000 litres of lactose-free milk for delivery on Monday for this kitchen; ask me if something needs my decision.
+[tool call] read_mandate {}
+[result] read_mandate  Call submit_need with the buyer's need as structured fields.
+[tool call] submit_need {"need":{"text":"Order 1,000 litres of lactose-free milk for delivery on Monday.","item":{"text":"lactose-free milk","category":"milk","attributes":["lactose_f…
+[result] submit_need needs_confirmation Dock found a likely mistake. Ask the buyer: "1,000 L where you usually order about 100 L: did you mean 100 L?" (choices: confirm; use_100_L = Make it 100 L). T…
+[agent] You usually order about 100 L of milk. Did you mean **100 L**, or should I keep the requested **1,000 L**? I’ll wait for your decision before proceeding.
+[buyer] Yes, 1,000 litres is right: we have a wedding this week. If something has to be chosen, take the cheapest option that meets our requirements; delivery any day up to Monday is fine. Go ahead and place the order. - Sanna Koskinen, head chef
+[tool call] respond_to_concerns {"requestId":"req_0a6926bacd5a4d0b","by":"Sanna Koskinen","responses":[{"key":"quantity_tenfold:1000:L","choice":"confirm"}]}
+[buyer review] respond_to_concerns {"requestId": "req_0a6926bacd5a4d0b", "by": "Sanna Koskinen", "responses": [{"key": "quantity_tenfold:1000:L", "choice": "confirm"}]} -> approved
+[result] respond_to_concerns options_ready Show the buyer the 3 options (step.options: title, total, delivery, pros and cons, and signOff for any that need a person's sign-off). Call choose_option with …
+[tool call] choose_option {"requestId":"req_0a6926bacd5a4d0b","optionId":"opt_1","by":"Purchasing agent"}
+[result] choose_option quoted Call place_order with step.next.example as its arguments (requestId, quoteToken, lines). Placing it will ask Jari Mäkelä (owner) to sign off on their own devic…
+[tool call] place_order {"requestId":"req_0a6926bacd5a4d0b","quoteToken":"<jws>
+[refused] place_order: quote_signature_invalid (rule quote_signature) Quote signature does not verify: it was altered or not issued by the wholesaler.
+[tool call] get_intake_step {"requestId":"req_0a6926bacd5a4d0b"}
+[result] get_intake_step quoted Call place_order with step.next.example as its arguments (requestId, quoteToken, lines). Placing it will ask Jari Mäkelä (owner) to sign off on their own devic…
+[tool call] place_order {"requestId":"req_0a6926bacd5a4d0b","quoteToken":"<jws>
+[result] place_order pending_approval This order now waits for a human sign-off by Jari Mäkelä (owner), who has been notified on their own channel. Do not retry and do not place it again. Tell the …
+[agent] The cheapest matching option is submitted for approval: **1,000 L lactose-free semi-skimmed milk for €1,322**, scheduled for **Saturday, 14 November** (within your Saturday-to-Monday window). It includes 600 L Valio and 400 L Arla because Valio alone is short.
+
+The order is **pending sign-off from owner Jari Mäkelä** because it exceeds my €100 per-order authority. Jari has been notified; it is not confirmed until he approves it.
+RESULT {"runtime": "openai-agents", "version": "0.24.0", "model": "openai:gpt-6-luna", "outcome": "pending_approval", "orderId": "ord_df06987de21a4c80", "steps": 9, "toolCalls": 7, "tools": ["read_mandate", "submit_need", "respond_to_concerns", "choose_option", "place_order", "get_intake_step", "place_order"], "refusals": [{"tool": "place_order", "code": "quote_signature_invalid", "rule": "quote_signature"}], "humanInput": "relay+approval", "humanTurns": 1, "selfAnswerAttempts": 0, "retriedAfterPending": false, "seconds": 95.9, "tokens": {"input": 140411, "output": 5562}, "costUsd": 0.01682, "notes": []}

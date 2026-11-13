@@ -1,0 +1,25 @@
+# Vercel AI SDK buyer against http://localhost:4517
+# 2026-11-14 00:59 EET, commit 9a8221d
+# command: (cd examples/runtimes/vercel-ai-sdk && node buyer.ts), agent id agent_kaari_buyer_vercel_ai_sdk
+
+[connect] http://localhost:4517/api/mcp: 14 tools: read_mandate, submit_need, respond_to_concerns, answer_questions, choose_option, get_intake_step, read_kitchen_memory, place_order, get_order, explain, open_request, search_products, check_availability, request_quote
+[user] Order 1,000 litres of lactose-free milk for delivery on Monday for this kitchen; ask me if something needs my decision.
+[tool call] read_mandate {}
+[result] read_mandate  Call submit_need with the buyer's need as structured fields.
+[tool call] submit_need {"need":{"text":"Order 1,000 litres of lactose-free milk for delivery on Monday for this kitchen.","item":{"text":"lactose-free milk","category":"milk","attrib…
+[result] submit_need needs_confirmation Dock found a likely mistake. Ask the buyer: "1,000 L where you usually order about 100 L: did you mean 100 L?" (choices: confirm; use_100_L = Make it 100 L). T…
+[agent] Dock flagged that this kitchen usually orders about 100 L. Did you mean **100 L**, or should I keep your request for **1,000 L**? I’ll wait for your choice before proceeding.
+[buyer] Yes, 1,000 litres is right: we have a wedding this week. If something has to be chosen, take the cheapest option that meets our requirements; delivery any day up to Monday is fine. Go ahead and place the order. - Sanna Koskinen, head chef
+[tool call] respond_to_concerns {"requestId":"req_4b4bdec6f1cb4056","by":"Sanna Koskinen","responses":[{"key":"quantity_tenfold:1000:L","choice":"confirm"}]}
+[buyer review] respond_to_concerns {"requestId":"req_4b4bdec6f1cb4056","by":"Sanna Koskinen","responses":[{"key":"quantity_tenfold:1000:L","choice":"confirm"}]} -> approved
+[buyer form] Dock spotted something that may be a mistake in this order. Please check it before anything is priced.
+             Sanna Koskinen answers: {"by":"Sanna Koskinen","quantity_tenfold:1000:L":"confirm"}
+[result] respond_to_concerns options_ready Show the buyer the 3 options (step.options: title, total, delivery, pros and cons, and signOff for any that need a person's sign-off). Call choose_option with …
+[tool call] choose_option {"requestId":"req_4b4bdec6f1cb4056","optionId":"opt_1","by":"Sanna Koskinen"}
+[result] choose_option quoted Call place_order with step.next.example as its arguments (requestId, quoteToken, lines). Placing it will ask Jari Mäkelä (owner) to sign off on their own devic…
+[tool call] place_order {"requestId":"req_4b4bdec6f1cb4056","quoteToken":"<jws>
+[result] place_order pending_approval This order now waits for a human sign-off by Jari Mäkelä (owner), who has been notified on their own channel. Do not retry and do not place it again. Tell the …
+[agent] The order is **pending Jari Mäkelä’s sign-off**; he has been notified, and I haven’t placed a duplicate order.
+
+It’s for **1,000 L** of lactose-free semi-skimmed milk, at the cheapest qualifying option: **600 L Valio** plus **400 L Arla** as a substitute. Total: **€1,322**. Delivery is scheduled for **Saturday, 14 November**, within your “up to Monday” window.
+RESULT {"runtime":"vercel-ai-sdk","version":"7.0.172","model":"openai:gpt-6-luna","outcome":"pending_approval","orderId":"ord_1ab5ea49fb5044db","steps":7,"toolCalls":5,"tools":["read_mandate","submit_need","respond_to_concerns","choose_option","place_order"],"refusals":[],"humanInput":"elicitation","humanTurns":1,"selfAnswerAttempts":0,"retriedAfterPending":false,"seconds":38.9,"tokens":{"input":66441,"output":2831},"costUsd":0.00806}
