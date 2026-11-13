@@ -1,9 +1,11 @@
 /**
  * Scripted buyer agent. No LLM, no API keys: fixed logic playing Valio Aimo's example
- * "I need 1,000 litres of lactose-free milk by Monday", then a run of attempts to make the agent misbehave.
+ * "I need 1,000 litres of lactose-free milk by Monday", then a returning restaurant kitchen going through the
+ * structured intake (mistake check, one question, option cards, "same as last time"), then a run of attempts
+ * to make the agent misbehave.
  *
- *   pnpm demo                       both runs, in-process (no server needed)
- *   pnpm demo happy | attacks       one run
+ *   pnpm demo                         all three runs, in-process (no server needed)
+ *   pnpm demo happy | kitchen | attacks   one run
  *   pnpm demo --url http://localhost:3000   the same against a running `pnpm dev` (fills the page at /)
  */
 import { base64url, compactVerify, importJWK, type CryptoKey } from "jose";
@@ -11,14 +13,16 @@ import { signMandate, type Mandate } from "@/core/mandate";
 import { verifyLedger, type LedgerEntry } from "@/core/ledger";
 import { addDays, formatEur, isoDate } from "@/core/util";
 import { generateEd25519KeyPair } from "@/core/keys";
+import { formatDay, localNow, nextDeliveryDay } from "@/core/kitchen";
+import { KITCHEN_ORG, demoKitchenKeyPair, demoKitchenMandate } from "@/server/demo-kitchen";
 import { DEMO_ORG, demoMandate, demoOrgKeyPair } from "@/server/dev-fixtures";
 import { localFetch } from "@/server/local-transport";
-import { DockClient, type Offer, type Product, type Reply } from "./lib/client";
+import { DockClient, type Offer, type OptionCard, type Product, type Reply, type Step } from "./lib/client";
 
 const args = process.argv.slice(2);
 const urlFlag = args.indexOf("--url");
 const baseUrl = urlFlag >= 0 ? args[urlFlag + 1] : "http://dock.local";
-const which = args.find((a) => a === "happy" || a === "attacks") ?? "all";
+const which = args.find((a) => a === "happy" || a === "kitchen" || a === "attacks") ?? "all";
 const base = new DockClient(urlFlag >= 0 ? (req) => fetch(req) : localFetch, baseUrl);
 
 const say = (s = "") => console.log(s);
@@ -119,11 +123,128 @@ async function happyPath(): Promise<void> {
   say(`\n      Partner API use so far: ${ledger.catalog.liveCalls} live price/availability calls covering ${ledger.catalog.productsPriced} product prices; ${ledger.catalog.searches} local master-data searches.`);
 }
 
+// ---------- RUN 2: a returning kitchen through the structured intake ----------
+
+const SANNA = "Sanna Koskinen (head chef)";
+
+function showStep(s: Step): void {
+  if (s.state === "needs_confirmation") {
+    for (const c of s.concerns) {
+      say(`      ! ${c.code} (${c.severity}): ${c.message}`);
+      indent([...c.corrections.map((x) => `[${x.id}] ${x.label}`), ...(c.confirmable ? ["[confirm] Yes, that is what I meant"] : [])], "          ");
+    }
+  }
+  indent(s.rules.filter((r) => r.source === "stated").map((r) => `rule from memory: ${r.text}`));
+  indent(s.fromMemory.map((m) => `from memory (${m.source}): ${m.question.text} ${m.label}. ${m.text}`));
+  if (s.state === "needs_input") {
+    for (const q of s.questions) say(`      ? ${q.text}  ${q.options.map((o) => `[${o.id}] ${o.label}`).join("  ")}`);
+  }
+  if (s.state === "options_ready") s.options.forEach(showCard);
+  for (const n of s.notes) say(`      note: ${n}`);
+}
+
+function showCard(c: OptionCard): void {
+  const co2 = c.co2.kg === null ? "no carbon data" : `${c.co2.kg} kg CO2e (product-group average)`;
+  const rel = c.reliability === null ? "no reliability data" : `${Math.round(c.reliability * 100)} % delivered in full`;
+  say(`      ${c.optionId}  ${c.labels.map((l) => l.replaceAll("_", " ")).join(" + ").toUpperCase()}`);
+  say(`             ${c.lines.map((l) => `${l.packs} x ${l.productId}`).join(" + ")}  ${formatEur(c.totalCents)}  delivery ${formatDay(c.deliveryDate)}  ${co2}  ${rel}`);
+  indent([...c.pros.map((p) => `+ ${p}`), ...c.cons.map((x) => `- ${x}`)], "             ");
+}
+
+/** Place the quoted order; if it needs a sign-off, the head chef approves it from the link on her phone. */
+async function orderAndApprove(agent: DockClient, s: Step): Promise<void> {
+  const placed = await agent.placeOrder(s.requestId, s.quote!.quoteToken, s.quote!.quote.lines.map(({ productId, quantity, unitPriceCents }) => ({ productId, quantity, unitPriceCents })));
+  const order = placed.body.order;
+  step("decision", `HTTP ${placed.status}: ${order.decision.outcome}`);
+  indent(order.decision.reasons.map((r) => `- ${r}`));
+  if (order.status !== "pending_approval") return;
+  const msg = (await base.outbox()).body.messages.find((x) => x.orderId === order.orderId);
+  if (!msg) return void say("      No approval message found (is the server in production mode?).");
+  const decided = await base.decide(msg.approvalId, "approve", new URL(msg.link, baseUrl).searchParams.get("token")!, "Fine.");
+  step("approval", `${msg.approver.name} approved on her phone. HTTP ${decided.status}: order ${decided.body.order.status}, ${formatEur(decided.body.order.totalCents)}.`);
+}
+
+/** Confirm anything left from an earlier run against the same server (e.g. a duplicate), so the script can go on. */
+async function settle(agent: DockClient, s: Step): Promise<Step> {
+  if (s.state !== "needs_confirmation") return s;
+  const responses = s.concerns.map((c) => ({ key: c.key, choice: c.confirmable ? "confirm" : c.corrections[0].id }));
+  return (await agent.intakeConcerns(s.requestId, SANNA, responses)).body.step;
+}
+
+async function returningKitchen(): Promise<void> {
+  say("\n" + "=".repeat(78));
+  say(" RUN 2  A returning kitchen: mistake check, one question, options, same as last time");
+  say("=".repeat(78));
+  const token = await signMandate(demoKitchenMandate(new Date()), await demoKitchenKeyPair());
+  const agent = base.as(token, KITCHEN_ORG.agentId);
+
+  const k = (await agent.kitchen()).body.kitchen;
+  step("memory", `What Dock remembers about ${k.name}:`);
+  for (const f of k.families) {
+    const last = f.lastOrder;
+    say(`      ${f.family}: ${f.orders} orders, ${f.usual.text}; last time ${last.lines.map((l) => `${l.packs} x ${l.productId}`).join(" + ")} on ${formatDay(last.placedAt.slice(0, 10))}`);
+    indent(f.learned.map((l) => `learned (pre-selects only): ${l.text}`), "        ");
+  }
+  indent(k.stated.map((p) => `stated rule: "${p.text}", set by ${p.statedBy}`));
+
+  // Three upcoming delivery days, at least two days out so the cut-off is never in the way.
+  const days: string[] = [];
+  let d = nextDeliveryDay(localNow(new Date()).date, [1, 2, 3, 4, 5])!;
+  while (days.length < 3) {
+    d = nextDeliveryDay(d, [1, 2, 3, 4, 5])!;
+    days.push(d);
+  }
+
+  // (a) 1,000 litres where the kitchen usually takes about 100.
+  say("\n  (a) The agent sends 1,000 L where the kitchen usually orders about 100 L.");
+  let s = (await agent.intakeOpen({ text: "1000 litres of lactose-free milk for " + formatDay(days[0]), item: { text: "lactose-free milk", category: "milk" }, quantity: { amount: 1000, unit: "L" }, deliverBy: days[0] }, SANNA)).body.step;
+  step(s.state, `Before any price lookup, Dock asks:`);
+  showStep(s);
+  const tenfold = s.concerns.find((c) => c.code === "quantity_tenfold");
+  if (tenfold) {
+    s = (await agent.intakeConcerns(s.requestId, SANNA, [{ key: tenfold.key, choice: tenfold.corrections[0].id }])).body.step;
+    step(s.state, `${SANNA} taps "${tenfold.corrections[0].label}": the request is now ${s.need.quantity?.amount} ${s.need.quantity?.unit}. Next Dock would ask:`);
+    showStep(s);
+    say("      (the kitchen leaves this one here)");
+  }
+
+  // (b) No stated preference: one question, three options, one chosen, quoted, approved.
+  say(`\n  (b) "100 litres of milk for ${formatDay(days[1])}", nothing said about price or CO2.`);
+  s = await settle(agent, (await agent.intakeOpen({ item: { text: "milk", category: "milk" }, quantity: { amount: 100, unit: "L" }, deliverBy: days[1] }, SANNA)).body.step);
+  step(s.state, `Dock asks ${s.questions.length} question${s.questions.length === 1 ? "" : "s"}; the rest comes from memory:`);
+  showStep(s);
+  const requestB = s.requestId;
+  if (s.state === "needs_input") {
+    s = (await agent.intakeAnswers(s.requestId, SANNA, s.questions.map((q) => ({ questionId: q.id, optionId: "no_preference" })))).body.step;
+    step(s.state, `${SANNA} answers "no preference". ${s.options.length} option${s.options.length === 1 ? "" : "s"}, pros and cons computed from the data:`);
+    showStep(s);
+  }
+  if (s.state === "options_ready") {
+    const pick = s.options.find((o) => o.labels.includes("best_price")) ?? s.options[0];
+    s = (await agent.intakeChoice(s.requestId, SANNA, pick.optionId)).body.step;
+    step("quoted", `${SANNA} picks ${pick.optionId}. Wholesaler signed quote ${s.quote!.quote.quoteId}: ${formatEur(s.quote!.quote.totalCents)}. Gate preview: ${s.quote!.policyPreview.outcome}.`);
+    await orderAndApprove(agent, s);
+  }
+
+  // (c) "Same as last time", in one call.
+  say(`\n  (c) "Same as last time, for ${formatDay(days[2])}."`);
+  s = await settle(agent, (await agent.intakeOpen({ item: { text: "milk", category: "milk" }, sameAsLastTime: true, deliverBy: days[2] }, SANNA)).body.step);
+  step(s.state, s.state === "quoted" ? `One call: ${s.quote!.quote.lines.map((l) => `${l.quantity} x ${l.productId}`).join(" + ")} for ${formatEur(s.quote!.quote.totalCents)}, quote ${s.quote!.quote.quoteId}.` : "Not possible in one step:");
+  if (s.state === "quoted") {
+    indent(s.notes);
+    await orderAndApprove(agent, s);
+  } else showStep(s);
+
+  const ledger = (await base.ledger({ requestId: requestB })).body;
+  step("ledger", `Request (b), every step in plain language (chain verified: ${ledger.verification.ok}):`);
+  indent(ledger.explanation);
+}
+
 type Attempt = { name: string; reply: Reply };
 
 async function attacks(): Promise<void> {
   say("\n" + "=".repeat(78));
-  say(" RUN 2  Trying to make the agent misbehave");
+  say(" RUN 3  Trying to make the agent misbehave");
   say("=".repeat(78));
   const token = await mandateToken();
   const agent = base.as(token, DEMO_ORG.agentId);
@@ -225,8 +346,9 @@ async function attacks(): Promise<void> {
 
 async function main() {
   say(`Dock scripted buyer: ${urlFlag >= 0 ? `against ${baseUrl}` : "in-process (no server)"}`);
-  if (which !== "attacks") await happyPath();
-  if (which !== "happy") await attacks();
+  if (which === "all" || which === "happy") await happyPath();
+  if (which === "all" || which === "kitchen") await returningKitchen();
+  if (which === "all" || which === "attacks") await attacks();
 }
 
 main().catch((err) => {
