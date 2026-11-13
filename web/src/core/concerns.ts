@@ -1,6 +1,7 @@
 import type { Product } from "./catalog";
 import { packsFor } from "./catalog/product";
 import {
+  activeMemory,
   addDaysIso,
   beforeCutoff,
   earliestDeliveryDay,
@@ -9,11 +10,13 @@ import {
   isoWeekday,
   lastOrder,
   localNow,
+  memoryItemIdOf,
   nextDeliveryDay,
   primaryLine,
   statedFor,
   usualAmount,
   type KitchenProfile,
+  type MemoryItem,
   type StatedPreference,
 } from "./kitchen";
 import { SPEC_DIMENSIONS, dimensionLabel, dimensionValue, formatAmount, NONE, type BaseUnit, type NeedPatch, type NeedUnit, type StructuredNeed } from "./need";
@@ -36,7 +39,13 @@ export type ConcernCode =
   | "contradicts_preference" // goes against a rule a person stated for this kitchen
   | "large_first_order" // a big order from a kitchen with no history
   | "nothing_to_repeat" // "same as last time" with no earlier order
-  | "pack_uncertain"; // the product the buyer named does not say for sure what one pack holds
+  | "pack_uncertain" // the product the buyer named does not say for sure what one pack holds
+  // From the kitchen's typed memory (profile.memory). Each cites the remembered items it rests on (memoryItemIds).
+  | "declined_before" // a product, brand or pack the kitchen turned down before
+  | "breaks_remembered_rule" // a product a person said never to order
+  | "standing_order_range" // far outside a standing order's normal range
+  | "delivery_unusual_day" // a weekday the kitchen does not receive on, by its own pattern
+  | "unrelated_first_order"; // a first order of a family unrelated to anything the kitchen buys
 
 export type Correction = { id: string; label: string; patch?: NeedPatch; cancel?: true };
 
@@ -49,6 +58,8 @@ export type Concern = {
   corrections: Correction[];
   preferenceIds?: string[]; // for contradicts_preference: the stated preferences a confirmation suspends
   evidence?: Record<string, unknown>;
+  /** The typed memory items the concern rests on: the facts its message cites. */
+  memoryItemIds?: string[];
   /**
    * A plausibility warning that a person signing the order off would see anyway. The intake asks it only when
    * some option is within what the agent may spend alone; otherwise it goes to the approver with the order.
@@ -64,6 +75,8 @@ export type CheckContext = {
   candidates: Product[];
   /** Stated preferences the buyer has set aside for this request ("just this once"). */
   suspendedPreferenceIds?: string[];
+  /** Are two product families related (a knowledge map can tell)? Default: relatedFamilies below. */
+  related?: (a: string, b: string) => boolean;
 };
 
 /** True when the catalogue reports each product's own order cut-off (the partner's live API does): then that decides. */
@@ -141,6 +154,7 @@ const round = (n: number) => Math.round(n * 100) / 100;
 
 export function checkNeed(need: StructuredNeed, ctx: CheckContext): Concern[] {
   const concerns = [...checkDelivery(need, ctx), ...checkRepeat(need, ctx), ...checkQuantity(need, ctx), ...checkPack(need, ctx), ...checkDuplicate(need, ctx), ...checkPreferences(need, ctx)];
+  concerns.push(...checkMemory(need, ctx, concerns));
   return concerns.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === "error" ? -1 : 1));
 }
 
@@ -169,15 +183,18 @@ export function checkDelivery(need: StructuredNeed, ctx: CheckContext): Concern[
     const before = nextDeliveryDay(date, days, -1);
     const after = nextDeliveryDay(date, days, 1);
     const corrections = [...(before && before >= (earliest ?? before) ? toDate(before, "The delivery day before") : []), ...toDate(after, "The next delivery day")];
+    // When a person told the memory which days the kitchen receives, say so in their words.
+    const told = activeMemory(ctx.profile, { now: ctx.now }).find((m) => m.fact.kind === "delivery_days" && m.strength === "rule" && m.derived?.deliveryWeekdaysBefore);
     return [
       {
         key: `delivery_not_delivery_day:${date}`,
         code: "delivery_not_delivery_day",
         severity: "error",
-        message: `Deliveries to ${ctx.profile.name} come on ${days.map((d) => ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][d]).join(", ")}; ${formatDay(date)} is not one of them.`,
+        message: `Deliveries to ${ctx.profile.name} come on ${days.map((d) => ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][d]).join(", ")}; ${formatDay(date)} is not one of them.${told ? ` ${cite(told)}` : ""}`,
         confirmable: false,
         corrections,
         evidence: { deliverBy: date, deliveryWeekdays: days },
+        ...(told ? { memoryItemIds: [told.id] } : {}),
       },
     ];
   }
@@ -416,6 +433,7 @@ export function checkPreferences(need: StructuredNeed, ctx: CheckContext): Conce
       confirmable: true,
       corrections: [{ id: `keep_${pref.id}`, label: conflict.fixLabel, patch: conflict.patch }],
       preferenceIds: [pref.id],
+      ...(memoryItemIdOf(pref.id) ? { memoryItemIds: [memoryItemIdOf(pref.id)!] } : {}),
     });
   }
   return out;
@@ -451,4 +469,185 @@ function contradiction(pref: StatedPreference, need: StructuredNeed, named: Prod
     };
   }
   return undefined;
+}
+
+// ---------- checks from the kitchen's typed memory ----------
+
+/**
+ * Thresholds for the memory checks. Every one of these stops the buyer for a tap, so each is set where a wrong
+ * order would cost more than the tap (the partner scores "least manual correction"):
+ *
+ * STANDING_HIGH / STANDING_LOW  a standing order's range is the min..max of the orders that formed it, so it
+ *   already holds the kitchen's normal week-to-week swing. 1.5x above its maximum is at least half a week of
+ *   extra perishable stock (milk keeps 7 to 10 days), which spoils before the next delivery; below 1/1.5 of its
+ *   minimum the kitchen runs out before the next one. Inside that band a bigger or smaller week is ordinary.
+ *   Tighter than UNUSUAL_RATIO (3x the median), because a standing order is a pattern the kitchen repeats on
+ *   purpose; looser than that and it would ask about every catering week.
+ * UNRELATED_MIN_ORDERS  "unrelated to anything it buys" needs a buying pattern: five orders. A new kitchen's
+ *   second family is not an anomaly.
+ * UNRELATED_MIN_SHARE  a first order of a new family is raised only from a tenth of LARGE_FIRST_ORDER (30 L,
+ *   15 kg, 50 pcs): below that a mistaken family costs a few euros, less than the buyer's time.
+ * A declined product is raised whenever the buyer names it: a person turned it down in words, and naming it
+ * again is either a change of mind (one tap) or a slip that the kitchen said it did not want.
+ * An unusual delivery day is raised only from a delivery-days habit (the learner needs six deliveries over
+ * eight weeks, all on those days) or a stated rule: goods arriving at a closed kitchen are refused or spoil.
+ */
+export const STANDING_HIGH = 1.5;
+export const STANDING_LOW = 1 / 1.5;
+export const UNRELATED_MIN_ORDERS = 5;
+export const UNRELATED_MIN_SHARE = 0.1;
+
+const DAY = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const daysText = (ds: number[]) => ds.map((d) => DAY[d]).join(", ");
+
+/** One line saying what was remembered, by whom, when, and in which words. Every memory concern ends with it. */
+export function cite(m: MemoryItem): string {
+  const s = [...m.sources].reverse().find((x) => x.quote) ?? m.sources.at(-1);
+  const who = m.origin === "learned" ? "learned from your orders" : m.confirmedBy ? `confirmed by ${m.confirmedBy.by}` : s?.by ? `said by ${s.by}` : "remembered";
+  const when = s ? ` on ${formatDay(s.at.slice(0, 10))}` : "";
+  return `Remembered: ${m.text} (${who}${when}${s?.quote ? `: "${s.quote}"` : ""}).`;
+}
+
+/** Related product families: the same group below, a shared word, or the same two-digit product-group code. */
+const FAMILY_GROUPS: string[][] = [
+  ["milk", "cream", "yoghurt", "plant_drink", "cheese", "butter", "quark", "sour_milk", "ice_cream", "dairy", "eggs", "dessert"],
+  ["meat", "poultry", "fish", "seafood", "sausage", "cold_cuts"],
+  ["vegetables", "fruit", "berries", "potatoes", "salad", "herbs", "mushrooms", "frozen_vegetables"],
+  ["bread", "bakery", "flour", "grain", "cereal", "muesli", "pasta", "rice", "porridge", "oats"],
+  ["beverage", "juice", "coffee", "tea", "water", "soft_drinks"],
+];
+export function relatedFamilies(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (/^\d{4,}$/.test(a) && /^\d{4,}$/.test(b)) return a.slice(0, 2) === b.slice(0, 2);
+  const words = (x: string) => new Set(x.split(/[_\s-]+/).filter((w) => w.length > 2));
+  const wa = words(a);
+  if ([...words(b)].some((w) => wa.has(w))) return true;
+  return FAMILY_GROUPS.some((g) => g.includes(a) && g.includes(b));
+}
+
+/** The memory checks. `already`: concerns the other checks raised, so the same slip is not asked twice. */
+export function checkMemory(need: StructuredNeed, ctx: CheckContext, already: Concern[] = []): Concern[] {
+  const out = [...checkDeclined(need, ctx)];
+  const quantityRaised = already.some((c) => c.code.startsWith("quantity_") || c.code.startsWith("unit_") || c.code === "large_first_order");
+  if (!quantityRaised) out.push(...checkStanding(need, ctx));
+  if (!already.some((c) => c.code.startsWith("delivery_"))) out.push(...checkReceivingDay(need, ctx));
+  out.push(...checkUnrelated(need, ctx));
+  return out;
+}
+
+const heavy = (m: MemoryItem) => m.strength === "rule" || m.weight >= 0.5;
+
+export function checkDeclined(need: StructuredNeed, ctx: CheckContext): Concern[] {
+  const named = need.item.productId ? ctx.candidates.find((p) => p.id === need.item.productId) : undefined;
+  if (!named) return [];
+  const mem = activeMemory(ctx.profile, { family: ctx.family, now: ctx.now });
+  const hits = mem.filter((m) => {
+    const f = m.fact;
+    if (f.kind === "substitute") return !f.accepted && f.productId === named.id; // a person said no, in words: enough
+    if (!heavy(m)) return false;
+    if (f.kind === "product") return f.stance === "avoid" && f.productId === named.id;
+    if (f.kind === "brand") return f.stance === "avoid" && !!named.brand && f.brand.toLowerCase() === named.brand.toLowerCase();
+    if (f.kind === "pack") return f.stance === "avoid" && f.unit === named.unit && Math.abs(f.packSize - named.packSize) < 1e-6;
+    return false;
+  });
+  if (!hits.length) return [];
+  const rule = hits.some((m) => m.strength === "rule");
+  const code: ConcernCode = rule ? "breaks_remembered_rule" : "declined_before";
+  const why = (m: MemoryItem) => {
+    const f = m.fact;
+    if (f.kind !== "substitute") return cite(m);
+    const s = m.sources.at(-1);
+    return `${s?.by ?? "Your kitchen"} turned it down as a substitute${f.forName ? ` for ${f.forName}` : ""}${s ? ` on ${formatDay(s.at.slice(0, 10))}` : ""}${f.reason ? `: "${f.reason}"` : ""}.`;
+  };
+  const usual = mem.find((m) => m.fact.kind === "product" && m.fact.stance === "prefer" && m.fact.productId !== named.id && ctx.candidates.some((p) => p.id === (m.fact as { productId: string }).productId));
+  const corrections: Correction[] = [];
+  if (usual && usual.fact.kind === "product") corrections.push({ id: `use_${usual.fact.productId}`, label: `Order your usual ${usual.fact.name} instead`, patch: { item: { productId: usual.fact.productId } } });
+  corrections.push({ id: "choose_other", label: "Show me other products", patch: { item: { productId: null } } });
+  return [
+    {
+      key: `${code}:${named.id}`,
+      code,
+      severity: "warning",
+      message: `${named.name}: ${hits.map(why).join(" ")} Order it anyway?`,
+      confirmable: true,
+      corrections,
+      memoryItemIds: hits.map((m) => m.id),
+      evidence: { productId: named.id },
+    },
+  ];
+}
+
+export function checkStanding(need: StructuredNeed, ctx: CheckContext): Concern[] {
+  const q = need.quantity;
+  const base = baseAmount(need, ctx);
+  if (!q || !base) return [];
+  const day = need.deliverBy ? isoWeekday(need.deliverBy) : undefined;
+  const so = activeMemory(ctx.profile, { family: ctx.family, now: ctx.now }).find(
+    (m) => m.family === ctx.family && m.fact.kind === "standing_order" && m.fact.unit === base.unit && heavy(m) && (day === undefined || m.fact.weekdays.includes(day)),
+  );
+  if (!so || so.fact.kind !== "standing_order") return [];
+  const f = so.fact;
+  if (base.amount <= f.high * STANDING_HIGH && base.amount >= f.low * STANDING_LOW) return [];
+  const pack = referencePackSize(need, ctx);
+  const packCount = isPackCount(q.unit, familyUnit(ctx));
+  const fix = packCount && pack ? { amount: round(f.amount / pack), unit: q.unit } : { amount: f.amount, unit: q.unit };
+  const how = base.amount > f.high ? `${round(base.amount / f.high)}x the most` : `under ${Math.round((base.amount / f.low) * 100)} % of the least`;
+  return [
+    {
+      key: `standing_order_range:${q.amount}:${q.unit}`,
+      code: "standing_order_range",
+      severity: "warning",
+      message: `${formatAmount(base.amount, base.unit)}${need.deliverBy ? ` for ${formatDay(need.deliverBy)}` : ""} is ${how} your standing ${daysText(f.weekdays)} ${ctx.family} order takes (normally ${formatAmount(f.low, f.unit)} to ${formatAmount(f.high, f.unit)}). ${cite(so)} Did you mean the usual ${formatAmount(fix.amount, fix.unit)}?`,
+      confirmable: true,
+      deferrable: true,
+      corrections: [{ id: `use_${fix.amount}_${fix.unit}`, label: `Make it the usual ${formatAmount(fix.amount, fix.unit)}`, patch: { quantity: fix } }],
+      memoryItemIds: [so.id],
+      evidence: { low: f.low, high: f.high, usual: f.amount, asked: base.amount },
+    },
+  ];
+}
+
+export function checkReceivingDay(need: StructuredNeed, ctx: CheckContext): Concern[] {
+  const date = need.deliverBy;
+  if (!date) return [];
+  const wd = isoWeekday(date);
+  const m = activeMemory(ctx.profile, { now: ctx.now }).find((x) => x.fact.kind === "delivery_days" && heavy(x) && x.strength !== "one_off" && !x.fact.weekdays.includes(wd) && ctx.profile.deliveryWeekdays.includes(wd));
+  if (!m || m.fact.kind !== "delivery_days") return [];
+  const earliest = earliestDeliveryDay(ctx.now, ctx.profile.deliveryWeekdays);
+  const days = m.fact.weekdays;
+  const options = [nextDeliveryDay(date, days, -1), nextDeliveryDay(date, days, 1)].filter((d): d is string => !!d && (!earliest || d >= earliest));
+  return [
+    {
+      key: `delivery_unusual_day:${date}`,
+      code: "delivery_unusual_day",
+      severity: "warning",
+      message: `${ctx.profile.name} receives deliveries on ${daysText(days)}; ${formatDay(date)} is not one of them. ${cite(m)}`,
+      confirmable: true,
+      corrections: options.map((d) => ({ id: `deliver_${d}`, label: `Deliver ${formatDay(d)} instead`, patch: { deliverBy: d } })),
+      memoryItemIds: [m.id],
+      evidence: { deliverBy: date, receivingDays: days },
+    },
+  ];
+}
+
+export function checkUnrelated(need: StructuredNeed, ctx: CheckContext): Concern[] {
+  const h = ctx.profile.history;
+  if (h.length < UNRELATED_MIN_ORDERS) return [];
+  const families = [...new Set(h.map((x) => x.family))].sort();
+  const related = ctx.related ?? relatedFamilies;
+  if (families.some((f) => related(f, ctx.family))) return [];
+  if ((ctx.profile.memory?.items ?? []).some((m) => m.family === ctx.family && m.status === "active")) return []; // the kitchen told us about it
+  const base = baseAmount(need, ctx);
+  if (base && base.amount < LARGE_FIRST_ORDER[base.unit] * UNRELATED_MIN_SHARE) return [];
+  return [
+    {
+      key: `unrelated_first_order:${ctx.family}`,
+      code: "unrelated_first_order",
+      severity: "warning",
+      message: `${ctx.profile.name} has never ordered ${ctx.family}: its last ${h.length} orders were all ${families.join(", ")}. Is ${ctx.family} what you meant?`,
+      confirmable: true,
+      corrections: [{ id: "cancel", label: "Cancel and say it again", cancel: true }],
+      evidence: { families, orders: h.length },
+    },
+  ];
 }

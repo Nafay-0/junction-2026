@@ -54,7 +54,8 @@ export type StatedPreference = StatedCommon &
 
 export type Evidence = { matching: number; total: number; orderIds: string[] };
 
-export type LearnedPreference = { family: string; text: string; evidence: Evidence } & (
+/** `memoryItemId`: the habit came from the kitchen's typed memory (see MemoryItem), not from order history alone. */
+export type LearnedPreference = { family: string; text: string; evidence: Evidence; memoryItemId?: string } & (
   | { kind: "dimension"; dimension: string; choice: string }
   | { kind: "product"; productId: string; name: string }
   | { kind: "optimise"; goal: OptimiseGoal }
@@ -66,7 +67,160 @@ export type KitchenProfile = {
   deliveryWeekdays: number[]; // ISO weekdays, 1 = Monday ... 7 = Sunday
   history: HistoryEntry[];
   stated: StatedPreference[];
+  /** Typed memory items, written by server/memory. Absent on profiles that predate it. */
+  memory?: KitchenMemory;
 };
+
+// ---------- typed memory ----------
+
+/**
+ * What the kitchen's agent remembers beyond order history: typed items, never a blob. Plain code in
+ * server/memory decides what gets stored; this module only defines the shape and how habits pre-select.
+ *
+ *   rule      a person stated it (or confirmed a model's proposal once): it CONSTRAINS, like a stated preference
+ *   habit     learned from behaviour or said in passing: it only PRE-SELECTS, and fades when behaviour changes
+ *   one_off   true for one request or event ("this week only"): context, never applied to later requests
+ *
+ * Kitchen-wide rules that the intake understands (allergen, diet, a spec choice, the goal) are projected into
+ * `stated` with id `pref_mem_<itemId>`, so the intake enforces them unchanged; delivery days a person stated
+ * are projected into `deliveryWeekdays`. Forgetting an item removes those projections too.
+ */
+export type MemoryStrength = "rule" | "habit" | "one_off";
+/** stated: a person said or confirmed it; learned: plain code read it from behaviour; inferred: a model proposed it from words. */
+export type MemoryOrigin = "stated" | "learned" | "inferred";
+export type MemoryStatus = "active" | "pending_confirmation" | "faded" | "superseded";
+/** shared: the wholesaler's staff can read it (to serve the kitchen better); private: only the kitchen. */
+export type MemoryAudience = "shared" | "private";
+export type MemoryDoor = "typed" | "voice" | "photo" | "option_choice" | "concern_response" | "substitute" | "answer" | "memory_page" | "order" | "staff_proposal";
+export type MemoryStance = "prefer" | "avoid";
+
+export type MemoryFact =
+  | { kind: "allergen"; allergen: string } // never this allergen
+  | { kind: "diet"; claim: string } // always this claim (lactose_free, gluten_free, vegan)
+  | { kind: "spec"; dimension: string; choice: string } // a SPEC_DIMENSIONS choice (fat content)
+  | { kind: "product"; productId: string; name: string; stance: MemoryStance }
+  | { kind: "brand"; brand: string; stance: MemoryStance }
+  | { kind: "pack"; packSize: number; unit: BaseUnit; stance: MemoryStance }
+  | { kind: "delivery_days"; weekdays: number[] }
+  | { kind: "receiving_hours"; from: string; to: string } // "06:00".."10:00"
+  | { kind: "budget"; weeklyCents?: number; perOrderCents?: number } // a habit; never touches the mandate's limits
+  | { kind: "substitute"; forProductId?: string; forName?: string; productId?: string; name: string; accepted: boolean; reason?: string }
+  | { kind: "standing_order"; weekdays: number[]; amount: number; unit: BaseUnit; low: number; high: number }
+  | { kind: "seasonal"; months: number[]; description: string; factor?: number }
+  | { kind: "goal"; goal: OptimiseGoal }
+  | { kind: "note"; text: string };
+export type MemoryKind = MemoryFact["kind"];
+
+/** Where an item came from: which door, which order or request, which exact words, who, when. */
+export type MemorySource = {
+  door: MemoryDoor;
+  at: string;
+  by?: string;
+  interactionId?: string;
+  requestId?: string;
+  orderId?: string;
+  /** The exact words it rests on, copied from the record (never the model's paraphrase). */
+  quote?: string;
+};
+
+export type MemoryItem = {
+  id: string;
+  fact: MemoryFact;
+  /** One line for people: "Never nuts: this is a school kitchen". */
+  text: string;
+  family?: string; // product family; undefined = every family
+  /** Within the kitchen: a site ("Päiväkoti Satu") or a named person the item is about. Undefined = the whole kitchen. */
+  scope?: { site?: string; person?: string };
+  strength: MemoryStrength;
+  origin: MemoryOrigin;
+  status: MemoryStatus;
+  audience: MemoryAudience;
+  /** Allergen and dietary items: offered for the mandate, never weakened without a person. */
+  safety: boolean;
+  /** Habit strength, 0..1. Rules stay at 1; habits fade with time and contrary behaviour. */
+  weight: number;
+  confirmations: number;
+  contradictions: number;
+  sources: MemorySource[];
+  createdAt: string;
+  updatedAt: string;
+  lastUsedAt?: string;
+  lastConfirmedAt?: string;
+  confirmedBy?: { by: string; at: string };
+  expiresAt?: string; // one-offs
+  /** What happened to it, oldest first; a superseded value is kept here, not lost. */
+  history: { at: string; change: string; by?: string; previous?: MemoryFact }[];
+  /** Data derived from it elsewhere in the profile, removed when it is forgotten. */
+  derived?: { preferenceId?: string; deliveryWeekdaysBefore?: number[] };
+  /** A safety rule offered for the kitchen's signed mandate, so the gate enforces it and not only memory. */
+  mandate?: { status: "offered" | "added" | "declined"; at: string; by?: string };
+  supersededBy?: string;
+};
+
+/** The fact that something was forgotten: no content, only what kind it was and which interactions it rested on. */
+export type MemoryTombstone = { itemId: string; kind: MemoryKind; at: string; by: string; interactionIds: string[] };
+export type MemoryStaffRead = { by: string; at: string; items: number };
+export type MemoryProposal = { id: string; by: string; at: string; itemId?: string; text: string; fact?: MemoryFact; status: "open" | "accepted" | "declined"; decidedBy?: string; decidedAt?: string };
+export type KitchenMemory = { items: MemoryItem[]; forgotten: MemoryTombstone[]; staffReads: MemoryStaffRead[]; proposals: MemoryProposal[] };
+
+/** A memory habit must weigh at least this much to pre-select: one passing remark (0.4) is not yet a habit. */
+export const MEMORY_HABIT_MIN_WEIGHT = 0.5;
+
+export function emptyMemory(): KitchenMemory {
+  return { items: [], forgotten: [], staffReads: [], proposals: [] };
+}
+
+/** The stated-preference id a memory rule is projected to, and back. */
+export const memoryPreferenceId = (itemId: string) => `pref_mem_${itemId}`;
+export const memoryItemIdOf = (preferenceId: string | undefined) => (preferenceId?.startsWith("pref_mem_") ? preferenceId.slice("pref_mem_".length) : undefined);
+
+export function isSafetyFact(f: MemoryFact): boolean {
+  return f.kind === "allergen" || f.kind === "diet";
+}
+
+/** Shared with the wholesaler unless it is the kitchen's own business: free-form notes and budget habits stay private. */
+export function defaultAudience(f: MemoryFact): MemoryAudience {
+  return f.kind === "note" || f.kind === "budget" ? "private" : "shared";
+}
+
+/** Items in force: active, not expired, for this family (or every family). Scoped items only when the scope matches. */
+export function activeMemory(profile: KitchenProfile, opts: { family?: string; site?: string; person?: string; now?: Date } = {}): MemoryItem[] {
+  const now = (opts.now ?? new Date()).toISOString();
+  return (profile.memory?.items ?? []).filter(
+    (m) =>
+      m.status === "active" &&
+      (!m.expiresAt || m.expiresAt > now) &&
+      (opts.family === undefined || m.family === undefined || m.family === opts.family) &&
+      (!m.scope?.site || m.scope.site === opts.site) &&
+      (!m.scope?.person || m.scope.person === opts.person),
+  );
+}
+
+/** Habits from memory that pre-select like history-learned ones: kitchen-wide, active, heavy enough. */
+function memoryHabits(profile: KitchenProfile, family: string): LearnedPreference[] {
+  const out: LearnedPreference[] = [];
+  for (const m of activeMemory(profile, { family })) {
+    if (m.strength !== "habit" || m.weight < MEMORY_HABIT_MIN_WEIGHT || m.scope) continue;
+    const evidence: Evidence = { matching: m.confirmations, total: m.confirmations + m.contradictions, orderIds: m.sources.flatMap((s) => (s.orderId ? [s.orderId] : [])) };
+    const base = { family, text: `${m.text} (remembered)`, evidence, memoryItemId: m.id };
+    const f = m.fact;
+    if (f.kind === "spec") out.push({ ...base, kind: "dimension", dimension: f.dimension, choice: f.choice });
+    else if (f.kind === "product" && f.stance === "prefer") out.push({ ...base, kind: "product", productId: f.productId, name: f.name, text: `Usually ${f.name}: ${m.text} (remembered)` });
+    else if (f.kind === "goal") out.push({ ...base, kind: "optimise", goal: f.goal });
+  }
+  return out;
+}
+
+/** Products the kitchen's memory says it turned down: a habit read from history must not pre-select them. */
+function avoidedProducts(profile: KitchenProfile, family: string): Set<string> {
+  const ids = new Set<string>();
+  for (const m of activeMemory(profile, { family })) {
+    if (m.scope) continue;
+    if (m.fact.kind === "product" && m.fact.stance === "avoid") ids.add(m.fact.productId);
+    if (m.fact.kind === "substitute" && !m.fact.accepted && m.fact.productId) ids.add(m.fact.productId);
+  }
+  return ids;
+}
 
 // ---------- thresholds ----------
 
@@ -139,8 +293,12 @@ export function statedFor(profile: KitchenProfile, family: string): StatedPrefer
   return profile.stated.filter((p) => p.family === undefined || p.family === family);
 }
 
-/** Habits read from history, each with the orders that support it. Never a rule: callers pre-select with these. */
+/** Habits read from history (and, when the profile has typed memory, its habits), each with its evidence. Never a rule: callers pre-select with these. */
 export function learnPreferences(profile: KitchenProfile, family: string): LearnedPreference[] {
+  return profile.memory?.items.length ? learnWithMemory(profile, family) : learnFromHistory(profile, family);
+}
+
+function learnFromHistory(profile: KitchenProfile, family: string): LearnedPreference[] {
   const recent = familyHistory(profile, family).slice(-LEARN_WINDOW);
   if (recent.length < LEARN_MIN_ORDERS) return [];
   const out: LearnedPreference[] = [];
@@ -170,6 +328,19 @@ export function learnPreferences(profile: KitchenProfile, family: string): Learn
   return out;
 }
 
+/**
+ * History-learned habits plus the typed memory's habits, for one family. Memory adds what history cannot say
+ * (a habit stated in passing, a goal) and removes a product the kitchen turned down; a history habit about the
+ * same thing wins over a memory habit, because it rests on more orders. Without memory this is learnPreferences.
+ */
+function learnWithMemory(profile: KitchenProfile, family: string): LearnedPreference[] {
+  const avoided = avoidedProducts(profile, family);
+  const fromHistory = learnFromHistory(profile, family).filter((l) => !(l.kind === "product" && avoided.has(l.productId)));
+  const key = (l: LearnedPreference) => (l.kind === "dimension" ? `d:${l.dimension}` : l.kind);
+  const have = new Set(fromHistory.map(key));
+  return [...fromHistory, ...memoryHabits(profile, family).filter((l) => !have.has(key(l)) && !(l.kind === "product" && avoided.has(l.productId)))];
+}
+
 function labelGoal(label: string): OptimiseGoal | undefined {
   return label === "best_price" ? "price" : label === "lowest_carbon" ? "co2" : label === "most_reliable" ? "reliability" : undefined;
 }
@@ -194,6 +365,8 @@ export function kitchenView(profile: KitchenProfile) {
       };
     }),
     recentHistory: profile.history.slice(-20),
+    /** What the typed memory holds in force, one line each (the full items are at /ui-api/memory). */
+    remembered: activeMemory(profile).map((m) => ({ id: m.id, text: m.text, strength: m.strength, family: m.family, audience: m.audience })),
   };
 }
 
@@ -203,6 +376,8 @@ export function kitchenView(profile: KitchenProfile) {
 export interface KitchenRepository {
   getProfile(orgId: string): Promise<KitchenProfile | undefined>;
   saveProfile(profile: KitchenProfile): Promise<void>;
+  /** Every kitchen's org id, for the wholesaler's read of shared memory. Optional: adapters without it fall back to known kitchens. */
+  listOrgIds?(): Promise<string[]>;
 }
 
 export class InMemoryKitchenRepository implements KitchenRepository {
@@ -216,6 +391,9 @@ export class InMemoryKitchenRepository implements KitchenRepository {
   }
   async saveProfile(profile: KitchenProfile) {
     this.profiles.set(profile.orgId, structuredClone(profile));
+  }
+  async listOrgIds() {
+    return [...this.profiles.keys()];
   }
 }
 
