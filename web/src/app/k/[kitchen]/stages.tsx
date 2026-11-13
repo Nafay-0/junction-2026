@@ -173,7 +173,7 @@ export function Questions({
                     <Button
                       key={o.id}
                       kind={chosen ? "primary" : "secondary"}
-                      aria-describedby={undefined}
+                      pressed={given ? chosen : undefined}
                       busy={busyKey === `${q.id}:${o.id}`}
                       disabled={!open || !!busyKey}
                       onClick={() => onAnswer(q.id, o.id, o.label, !!remember[q.id])}
@@ -210,7 +210,7 @@ export function Questions({
               .filter((m) => m.source === "learned")
               .map((m) => (
                 <MemoryNote key={m.question.id}>
-                  {m.question.text} <strong>{m.label}</strong>, learned from history ({m.text.replace(/^.*?: /, "")}). Pre-selected only.
+                  {m.question.text} <strong>{m.label}</strong>, learned from history{evidenceOf(m.text)}. Pre-selected only.
                 </MemoryNote>
               ))}
           </div>
@@ -218,6 +218,12 @@ export function Questions({
       </div>
     </Paper>
   );
+}
+
+/** " (10 of your last 10 milk orders)" out of a learned preference's text. */
+function evidenceOf(text: string): string {
+  const m = /(\d+ of your last \d+ [\w ]+? orders)/.exec(text);
+  return m ? ` (${m[1]})` : "";
 }
 
 // ---------- 4. options ----------
@@ -400,7 +406,7 @@ export function Quote({ step, names, decided, busy, onPlace, onNew }: { step: St
         <p className="mt-3 text-[0.98rem]">{lead}</p>
         {preview.outcome !== "auto_approve" && (
           <ul className="mt-1 space-y-0.5 text-[0.95rem] text-ink-soft">
-            {preview.reasons.map((r) => (
+            {preview.reasons.filter((r) => !r.startsWith("Sent to ")).map((r) => (
               <li key={r}>– {humanize(r, names)}</li>
             ))}
           </ul>
@@ -469,7 +475,7 @@ export function Gate({ order, refusal, kitchen, names, streaming }: { order?: Or
           ) : (
             <Verdict tone="safety" title={`Declined by ${a.approver.name}`} sub={`${who}, at ${clock(a.decidedAt ?? order.updatedAt)}`} />
           )}
-          <h3 className="mt-4 font-semibold">Why a person has to decide</h3>
+          <h3 className="mt-4 font-semibold">{a.status === "pending" ? "Why a person has to decide" : "Why a person had to decide"}</h3>
           <ul className="mt-1 space-y-1.5 leading-snug">
             {escalated.map((r) => (
               <li key={r.rule}>

@@ -22,7 +22,9 @@ export function Stage({ n, title, tone, aside, children, id }: { n: number; titl
       <div className="min-w-0">
         <header className="mb-2.5 flex min-h-11 flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <h2 id={`stage-${n}`} className="font-display text-[1.6rem] font-bold leading-tight tracking-tight">
+            <span className="sr-only">Step </span>
             <span className="mr-2 text-ink-soft tabular">{n}</span>
+            <span className="sr-only">: </span>
             {title}
           </h2>
           {aside}
@@ -57,9 +59,9 @@ export function Missing({ children }: { children: ReactNode }) {
   return <span className="border border-dashed border-ink-soft px-1.5 py-px text-[0.95rem] font-medium italic text-ink-soft">{children}</span>;
 }
 
-type ButtonProps = { children: ReactNode; onClick?: () => void; busy?: boolean; disabled?: boolean; kind?: "primary" | "secondary" | "quiet"; type?: "button" | "submit"; className?: string; "aria-describedby"?: string };
+type ButtonProps = { children: ReactNode; onClick?: () => void; busy?: boolean; disabled?: boolean; pressed?: boolean; kind?: "primary" | "secondary" | "quiet"; type?: "button" | "submit"; className?: string };
 
-export function Button({ children, onClick, busy, disabled, kind = "secondary", type = "button", className = "", ...rest }: ButtonProps) {
+export function Button({ children, onClick, busy, disabled, pressed, kind = "secondary", type = "button", className = "" }: ButtonProps) {
   const look =
     kind === "primary"
       ? "bg-ink text-paper hover:bg-ink-soft"
@@ -72,8 +74,8 @@ export function Button({ children, onClick, busy, disabled, kind = "secondary", 
       onClick={onClick}
       disabled={disabled || busy}
       aria-busy={busy || undefined}
-      className={`relative inline-flex min-h-11 items-center justify-center gap-2 px-4 text-[1.02rem] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-55 ${look} ${className}`}
-      {...rest}
+      aria-pressed={pressed}
+      className={`relative inline-flex min-h-11 items-center justify-center gap-2 px-4 text-[1.02rem] font-semibold transition-colors disabled:cursor-not-allowed ${pressed ? "" : "disabled:opacity-55"} ${look} ${className}`}
     >
       {busy && <Target size={18} tone="hollow" spin className={kind === "primary" ? "text-paper" : "text-ink"} />}
       {children}

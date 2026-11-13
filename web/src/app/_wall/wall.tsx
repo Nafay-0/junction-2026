@@ -30,6 +30,7 @@ export function Wall({ initial, join }: { initial: WallSnapshot; join: { url: st
   const snap = live.data ?? initial;
   const now = useClock();
   const c = snap.counters;
+  const t = now?.getTime() ?? Date.parse(snap.at); // server time until the clock starts, so hydration matches
 
   return (
     <div className="on-steel flex min-h-dvh flex-col bg-steel text-chalk lg:h-dvh lg:overflow-hidden">
@@ -66,14 +67,14 @@ export function Wall({ initial, join }: { initial: WallSnapshot; join: { url: st
             <h2 id="feed" className="font-display text-[clamp(1.6rem,2vw,2.6rem)] font-bold">
               Requests at the gate
             </h2>
-            <p className="text-[clamp(1rem,1.1vw,1.35rem)] text-chalk-soft">{live.error ? "Reconnecting to Dock…" : snap.lastActivityAt ? `Last activity ${ago(snap.lastActivityAt, now?.getTime())}` : "Waiting for the first request"}</p>
+            <p className="text-[clamp(1rem,1.1vw,1.35rem)] text-chalk-soft">{live.error ? "Reconnecting to Dock…" : snap.lastActivityAt ? `Last activity ${ago(snap.lastActivityAt, t)}` : "Waiting for the first request"}</p>
           </div>
-          {snap.feed.length === 0 ? <Idle /> : <Feed items={snap.feed} now={now?.getTime()} />}
+          {snap.feed.length === 0 ? <Idle /> : <Feed items={snap.feed} now={t} />}
         </section>
 
         <aside className="flex min-h-0 flex-col gap-[2vh] border-t-[3px] border-chalk bg-steel-2 px-[1.6vw] py-[2vh] lg:border-l-[3px] lg:border-t-0">
           <JoinPanel join={join} kitchens={snap.kitchens} />
-          <Refusals items={snap.refusals} now={now?.getTime()} />
+          <Refusals items={snap.refusals} now={t} />
         </aside>
       </div>
 
@@ -93,9 +94,10 @@ function useClock(): Date | undefined {
 }
 
 function Counter({ n, label, safety, safetyDot, sub }: { n: number; label: string; safety?: boolean; safetyDot?: boolean; sub?: string }) {
+  const fresh = useFresh();
   return (
     <div className={`relative border-chalk/25 px-[2.2vw] py-[1.6vh] [&:not(:last-child)]:border-r ${safety && n > 0 ? "bg-safety text-safety-ink" : ""}`}>
-      <p key={n} className="arrive font-display text-[clamp(4rem,7vw,8.5rem)] font-bold leading-[0.9] tracking-tight tabular">
+      <p key={n} className={`${fresh ? "arrive" : ""} font-display text-[clamp(4rem,7vw,8.5rem)] font-bold leading-[0.9] tracking-tight tabular`}>
         {n.toLocaleString("en-US")}
       </p>
       <p className={`mt-1 text-[clamp(1.05rem,1.25vw,1.55rem)] font-semibold leading-tight ${safety && n > 0 ? "" : "text-chalk-soft"}`}>{label}</p>
@@ -109,25 +111,40 @@ function Counter({ n, label, safety, safetyDot, sub }: { n: number; label: strin
   );
 }
 
-function Feed({ items, now }: { items: FeedItem[]; now?: number }) {
+function Feed({ items, now }: { items: FeedItem[]; now: number }) {
+  const fresh = useFresh();
   return (
     <ol className="mt-[1.4vh] min-h-0 flex-1 divide-y divide-chalk/15 overflow-hidden border-t border-chalk/30">
       {items.map((it) => (
-        <li key={`${it.key}-${it.status}`} className={`arrive grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-[1.6vw] gap-y-1 py-[1.15vh] xl:grid-cols-[minmax(0,15rem)_minmax(0,1fr)_auto_minmax(0,20rem)]`}>
-          <p className="truncate text-[clamp(1.1rem,1.35vw,1.7rem)] font-bold">{it.kitchen}</p>
-          <p className="order-3 col-span-2 truncate text-[clamp(1.05rem,1.3vw,1.6rem)] text-chalk-soft xl:order-none xl:col-span-1">{it.what}</p>
+        <li
+          key={`${it.key}-${it.status}`}
+          className={`${fresh ? "arrive" : ""} grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-[1.6vw] gap-y-[0.3vh] py-[1.1vh] xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1.25fr)]`}
+        >
+          <p className="truncate text-[clamp(1.15rem,1.45vw,1.8rem)] font-bold leading-tight">{it.kitchen}</p>
           <Track reached={it.reached} tone={it.tone} />
-          <div className="order-4 col-span-2 flex items-baseline justify-between gap-3 xl:order-none xl:col-span-1">
-            <p className={`truncate text-[clamp(1.05rem,1.3vw,1.6rem)] font-semibold ${it.tone === "safety" ? "bg-safety px-2 text-safety-ink" : ""}`}>{it.status}</p>
-            <p className="shrink-0 text-[clamp(0.95rem,1.1vw,1.35rem)] text-chalk-soft tabular">
-              {it.totalCents !== undefined ? `${eur(it.totalCents)}, ` : ""}
-              {ago(it.at, now)}
-            </p>
-          </div>
+          <p className="col-span-2 xl:col-span-1">
+            <span className={`inline-block max-w-full truncate align-bottom text-[clamp(1.15rem,1.45vw,1.8rem)] font-semibold leading-tight ${it.tone === "safety" ? "bg-safety px-2 text-safety-ink" : ""}`}>{it.status}</span>
+          </p>
+          <p className="col-span-2 truncate text-[clamp(0.98rem,1.15vw,1.4rem)] text-chalk-soft xl:col-span-3">
+            {it.what}
+            <span className="tabular">
+              {it.totalCents !== undefined ? `, ${eur(it.totalCents)}` : ""}, {ago(it.at, now)}
+            </span>
+          </p>
         </li>
       ))}
     </ol>
   );
+}
+
+/** False on the first render, so rows and counters only flash when they change, not when the wall loads. */
+function useFresh(): boolean {
+  const [fresh, setFresh] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setFresh(true), 1500);
+    return () => clearTimeout(t);
+  }, []);
+  return fresh;
 }
 
 /** Five stations from request to signed order. Reached ones fill; where a person must act, the station is yellow. */
@@ -151,6 +168,18 @@ function Idle() {
       <p className="max-w-[60ch] text-[clamp(1.1rem,1.4vw,1.7rem)] leading-snug text-chalk-soft">
         Every agent shows a mandate its kitchen signed. Dock fixes a price with the wholesaler, then plain code checks the order. Inside the mandate, the agent buys alone. Above it, a named person signs off on their phone. Outside it, the order is refused, with the rule that refused it.
       </p>
+      <div className="flex flex-wrap items-center gap-x-[1.2vw] gap-y-2 text-[clamp(1rem,1.15vw,1.4rem)] text-chalk-soft">
+        <span>Each request moves along five stations:</span>
+        {TRACK.map((t, i) => (
+          <span key={t} className="inline-flex items-center gap-2">
+            <span className={`inline-block h-[0.8em] w-[1.8em] ${i < 4 ? "bg-chalk" : "border-2 border-chalk/35"}`} />
+            {t}
+          </span>
+        ))}
+        <span className="inline-flex items-center gap-2">
+          <span className="inline-block h-[0.8em] w-[1.8em] bg-safety" />a person must act, or refused
+        </span>
+      </div>
       <p className="text-[clamp(1.05rem,1.2vw,1.5rem)]">
         Or open the buyer console:{" "}
         <Link href="/k/kaari" className="font-semibold underline decoration-2 underline-offset-4">
@@ -171,14 +200,14 @@ function JoinPanel({ join, kitchens }: { join: { url: string; qrSvg: string }; k
   return (
     <section aria-labelledby="join">
       {/* JOIN QR: the code a visitor scans to get their own kitchen and become its approver (see /join). */}
-      <div className="flex items-start gap-[1.2vw]">
-        <figure aria-label={`QR code for ${join.url}`} className="w-[clamp(9rem,11vw,15rem)] shrink-0 bg-paper p-2 [&>svg]:h-auto [&>svg]:w-full" dangerouslySetInnerHTML={{ __html: join.qrSvg }} />
+      <h2 id="join" className="font-display text-[clamp(1.6rem,2.1vw,2.7rem)] font-bold leading-[1.02]">
+        Scan to become the approver
+      </h2>
+      <div className="mt-[1vh] flex items-start gap-[1.2vw]">
+        <figure aria-label={`QR code for ${join.url}`} className="w-[clamp(9rem,12.5vw,16rem)] shrink-0 bg-paper p-2 [&>svg]:h-auto [&>svg]:w-full" dangerouslySetInnerHTML={{ __html: join.qrSvg }} />
         <div className="min-w-0">
-          <h2 id="join" className="font-display text-[clamp(1.6rem,2.1vw,2.7rem)] font-bold leading-[1.02]">
-            Scan to become the approver
-          </h2>
-          <p className="mt-1 text-[clamp(1rem,1.15vw,1.4rem)] leading-snug text-chalk-soft">You get a hotel kitchen of your own. Its agent asks you on your phone when it goes over its limit.</p>
-          <p className="mt-1 break-all text-[clamp(0.85rem,0.9vw,1.1rem)] text-chalk-soft">{join.url.replace(/^https?:\/\//, "")}</p>
+          <p className="text-[clamp(1rem,1.2vw,1.45rem)] leading-snug">You get a hotel kitchen of your own. Its agent asks you, on your phone, when it wants to go over its limit.</p>
+          <p className="mt-[1vh] break-all text-[clamp(0.9rem,0.95vw,1.15rem)] text-chalk-soft">{join.url.replace(/^https?:\/\//, "")}</p>
         </div>
       </div>
       {kitchens.length > 0 && (
@@ -207,7 +236,7 @@ function JoinPanel({ join, kitchens }: { join: { url: string; qrSvg: string }; k
   );
 }
 
-function Refusals({ items, now }: { items: WallSnapshot["refusals"]; now?: number }) {
+function Refusals({ items, now }: { items: WallSnapshot["refusals"]; now: number }) {
   return (
     <section aria-labelledby="refused" className="flex min-h-0 flex-1 flex-col">
       <h2 id="refused" className="flex items-center gap-2 font-display text-[clamp(1.5rem,1.9vw,2.4rem)] font-bold">
@@ -217,10 +246,10 @@ function Refusals({ items, now }: { items: WallSnapshot["refusals"]; now?: numbe
         <p className="mt-2 text-[clamp(1rem,1.2vw,1.5rem)] leading-snug text-chalk-soft">Nothing refused yet. Ask an agent for more than its budget, a product with a forbidden allergen, or to reuse a quote, and the reason appears here.</p>
       ) : (
         <ol className="mt-2 min-h-0 space-y-[1.2vh] overflow-hidden">
-          {items.map((r) => (
-            <li key={r.key} className="arrive">
+          {items.slice(0, 3).map((r) => (
+            <li key={r.key}>
               <p className="bg-safety px-2 py-1 text-[clamp(1.05rem,1.3vw,1.6rem)] font-bold leading-tight text-safety-ink">{r.rule}</p>
-              <p className="mt-1 line-clamp-2 text-[clamp(0.98rem,1.1vw,1.35rem)] leading-snug">{r.reason}</p>
+              <p className="mt-0.5 line-clamp-2 text-[clamp(0.98rem,1.1vw,1.35rem)] leading-snug">{r.reason}</p>
               <p className="text-[clamp(0.9rem,1vw,1.2rem)] text-chalk-soft">
                 {r.kitchen}, {ago(r.at, now)}
               </p>
@@ -244,7 +273,7 @@ function Ticker() {
       <Target size={26} tone="chalk" className="shrink-0" />
       <p className="truncate text-[clamp(1.05rem,1.3vw,1.6rem)]">
         <span className="text-chalk-soft">Checked on every order, by code, not by the model: </span>
-        <span key={i} className="arrive font-semibold">
+        <span key={i} className="font-semibold">
           {CHECKS[i]}
         </span>
       </p>

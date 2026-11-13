@@ -154,6 +154,8 @@ export function humanize(text: string, products: Record<string, string> = {}): s
   let out = text;
   for (const [id, name] of Object.entries(products)) out = out.replaceAll(id, shortProduct(name));
   return out
+    .replace(/ \((?:order )?ord_[a-z0-9]+\)/gi, "")
+    .replace(/\bquoted qt_[a-z0-9]+/gi, "fixed a price")
     .replace(/\border ord_[a-z0-9]+/gi, "the order")
     .replace(/\bord_[a-z0-9]+/gi, "the order")
     .replace(/\bquote qt_[a-z0-9]+/gi, "the quote")
@@ -167,8 +169,26 @@ export function humanize(text: string, products: Record<string, string> = {}): s
     .replace(/\bopt_(\d+)/g, "option $1")
     .replace(/ \((?:head_chef|owner|kitchen_manager|finance_director|purchasing_manager)\)/g, (m) => ` (${roleLabel(m.slice(2, -1))})`)
     .replace(/(\d{1,2}):(\d{2}) UTC/g, (_m, h: string, mm: string) => utcClockToHelsinki(h, mm))
-    .replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (_m, y: string, mo: string, d: string) => day(`${y}-${mo}-${d}`));
+    .replace(/\b(\d{4})-(\d{2})-(\d{2})\b\.?/g, (_m, y: string, mo: string, d: string) => day(`${y}-${mo}-${d}`))
+    .replace(/\bcorrected ([a-z_]+): /g, (_m, code: string) => `corrected ${CONCERN_WORD[code] ?? "the request"}: `)
+    .replace(/^([a-z]+(?:_[a-z0-9]+)+): /, "")
+    .replace(/\b(lactose_free|fat_1_5|fat_3_5|fat_free|plant_drink)\b/g, (m) => attr(m));
 }
+
+/** What a mistake check was about, for sentences like "corrected the amount". */
+const CONCERN_WORD: Record<string, string> = {
+  quantity_tenfold: "the amount",
+  quantity_unusual: "the amount",
+  unit_confusion: "the unit",
+  unit_unclear: "the unit",
+  duplicate_recent: "a possible duplicate",
+  delivery_in_past: "the delivery day",
+  delivery_not_delivery_day: "the delivery day",
+  delivery_after_cutoff: "the delivery day",
+  contradicts_preference: "a kitchen rule",
+  large_first_order: "the amount",
+  nothing_to_repeat: "the repeat order",
+};
 
 function utcClockToHelsinki(h: string, m: string): string {
   const now = new Date();

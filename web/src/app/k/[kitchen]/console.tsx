@@ -240,7 +240,7 @@ export function Console({ kitchen, kitchens }: { kitchen: KitchenInfo; kitchens:
     stages.push({
       key: "concerns",
       title: "Mistake check",
-      tone: open ? "active" : run.busy === "concern" ? "busy" : "done",
+      tone: run.busy === "concern" ? "busy" : open ? "safety" : "done",
       body: (
         <>
           <Concerns step={s} seen={run.concernsSeen} onRespond={respond} busyKey={run.busy === "concern" ? run.busyKey : undefined} names={names} />
@@ -252,7 +252,7 @@ export function Console({ kitchen, kitchens }: { kitchen: KitchenInfo; kitchens:
   if (s && state !== "needs_confirmation" && state !== "cancelled" && (run.asked.length > 0 || run.fromMemory.length > 0 || s.rules.some((r) => r.source === "stated"))) {
     stages.push({
       key: "questions",
-      title: run.asked.length > 1 ? "Two questions" : run.asked.length === 1 ? "One question" : "Questions",
+      title: run.asked.length ? `${["One question", "Two questions", "Three questions", "Four questions"][run.asked.length - 1] ?? `${run.asked.length} questions`}` : "Answered from memory",
       tone: state === "needs_input" ? (run.busy === "answer" ? "busy" : "active") : "done",
       body: (
         <>
@@ -355,9 +355,9 @@ export function Console({ kitchen, kitchens }: { kitchen: KitchenInfo; kitchens:
             )}
           </div>
         </div>
-        <aside aria-label="This kitchen" className="space-y-3 lg:sticky lg:top-4 lg:mt-6 lg:self-start">
+        <aside aria-label="This kitchen" className="mt-8 space-y-3 lg:mt-6">
           <LiveCalls entries={entries} active={!!requestId} />
-          <Memory memory={memory.data} error={memory.error} />
+          <Memory memory={memory.data} error={memory.error} family={s?.family} />
           <MandateBox k={kitchen} />
         </aside>
       </main>

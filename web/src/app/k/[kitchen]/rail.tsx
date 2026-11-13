@@ -67,7 +67,9 @@ export function MandateBox({ k }: { k: KitchenInfo }) {
   );
 }
 
-export function Memory({ memory, error }: { memory: KitchenMemory | undefined; error?: string }) {
+export function Memory({ memory, error, family }: { memory: KitchenMemory | undefined; error?: string; family?: string }) {
+  // The family this request is about first, then the ones the kitchen orders most.
+  const families = [...(memory?.families ?? [])].sort((a, b) => Number(b.family === family) - Number(a.family === family) || b.orders - a.orders);
   return (
     <section aria-labelledby="memory" className="bg-paper p-4">
       <h2 id="memory" className="text-[0.95rem] font-semibold">
@@ -92,7 +94,7 @@ export function Memory({ memory, error }: { memory: KitchenMemory | undefined; e
           </ul>
         </div>
       )}
-      {memory?.families.map((f) => {
+      {families.map((f) => {
         const last = f.lastOrder;
         return (
           <div key={f.family} className="mt-3 border-t border-ink/15 pt-2">

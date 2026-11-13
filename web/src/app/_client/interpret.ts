@@ -21,8 +21,12 @@ export class InterpretError extends Error {
   }
 }
 
+/** After a 404, skip the call for a minute: the endpoint is not on this server yet. */
+let missingUntil = 0;
+
 export async function interpretNeed(kitchen: string, text: string): Promise<Interpretation> {
   const started = performance.now();
+  if (Date.now() < missingUntil) return standIn(text, started, "the model reader is not on this server yet");
   const r = await api<{ need: NeedInput; model: string; ms: number }>("POST", `/ui-api/kitchens/${encodeURIComponent(kitchen)}/call`, {
     method: "POST",
     path: "/api/v1/agent/interpret",
@@ -33,7 +37,11 @@ export async function interpretNeed(kitchen: string, text: string): Promise<Inte
   // The model's own refusal ("I could not tell how much") is an answer: show it, do not paper over it.
   if (!r.ok && r.status >= 400 && r.status < 500 && r.status !== 404 && r.status !== 405) throw new InterpretError(r.error.message, r.error);
 
-  const fallbackReason = r.ok ? "the reader sent no need" : r.status === 404 ? "the model reader is not on this server yet" : "the model reader did not answer";
+  if (r.status === 404) missingUntil = Date.now() + 60_000;
+  return standIn(text, started, r.ok ? "the reader sent no need" : r.status === 404 ? "the model reader is not on this server yet" : "the model reader did not answer");
+}
+
+function standIn(text: string, started: number, fallbackReason: string): Interpretation {
   try {
     const need = standInInterpret(text, helsinkiToday());
     return { need, model: STAND_IN_MODEL, ms: Math.round(performance.now() - started), standIn: true, fallbackReason };
