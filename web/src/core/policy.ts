@@ -53,6 +53,8 @@ export type OrderDraft = {
   neededBy?: string; // YYYY-MM-DD, from the purchase request
   /** The request the order is placed under. A quote buys only for the request it was issued for. */
   requestId?: string;
+  /** What the request asked for (orders.ts PurchaseRequest.asked): any other product is a substitute of it. */
+  asked?: { productIds: string[]; category?: string };
 };
 
 /** An earlier order of the same organisation, as the splitting check needs it. */
@@ -185,33 +187,42 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
     `Every line arrives by ${latest}.`,
   );
 
-  // Substitution
+  // Substitution. The gate works out for itself what is a substitute: a declared one, or any line that is not what
+  // the request asked for (another product than the one named, or another family), declared or not.
+  const askedIds = draft.asked?.productIds ?? [];
+  const askedCategory = draft.asked?.category;
+  const undeclared = q.lines.filter(
+    (l) => !l.substituteFor && ((askedIds.length > 0 && !askedIds.includes(l.productId)) || (askedCategory !== undefined && l.category !== askedCategory)),
+  );
   const subs = q.lines.filter((l) => l.substituteFor);
   const rule = mandate.substitution.rule;
-  if (subs.length === 0) {
-    add("substitution_rule", "pass", "No substitutes.");
-    add("substitute_price", "pass", "No substitutes.");
-  } else {
+  // Declared substitutes: judged against the original they name (Dock names it from the request, see orders.ts).
+  let subRule: { outcome: RuleOutcome; reason: string; details?: Record<string, unknown> } = { outcome: "pass", reason: "No substitutes." };
+  if (subs.length) {
     const describe = (l: QuoteLine) => `${l.productId} substitutes for ${l.substituteFor!.productId}`;
-    if (rule === "none") {
-      add("substitution_rule", "fail", `${subs.map(describe).join("; ")}, but the mandate allows no substitutes.`);
-    } else {
-      const differences = subs.map((l) => attributeDifference(l)).filter((x): x is string => x !== null);
-      if (rule === "same_attributes") {
-        if (differences.length) add("substitution_rule", "fail", `Substitutes must match the original: ${differences.join(" ")}`);
-        else add("substitution_rule", "pass", `${subs.map(describe).join("; ")} with the same attributes.`);
-      } else if (rule === "within_preferences") {
-        if (differences.length)
-          add("substitution_rule", "escalate", `${subs.map(describe).join("; ")}, but not like for like, so a person must approve it: ${differences.join(" ")}`);
-        else add("substitution_rule", "pass", `${subs.map(describe).join("; ")}, like for like (same category, unit, diet, fat and organic status): the agent may decide.`);
-      } else {
-        add(
-          "substitution_rule",
-          "escalate",
-          `${subs.map(describe).join("; ")}; the mandate requires a person to approve substitutes.${differences.length ? " " + differences.join(" ") : ""}`,
-        );
-      }
-    }
+    const differences = subs.map((l) => attributeDifference(l)).filter((x): x is string => x !== null);
+    if (rule === "none") subRule = { outcome: "fail", reason: `${subs.map(describe).join("; ")}, but the mandate allows no substitutes.` };
+    else if (rule === "same_attributes")
+      subRule = differences.length ? { outcome: "fail", reason: `Substitutes must match the original: ${differences.join(" ")}` } : { outcome: "pass", reason: `${subs.map(describe).join("; ")} with the same attributes.` };
+    else if (rule === "within_preferences")
+      subRule = differences.length
+        ? { outcome: "escalate", reason: `${subs.map(describe).join("; ")}, but not like for like, so a person must approve it: ${differences.join(" ")}` }
+        : { outcome: "pass", reason: `${subs.map(describe).join("; ")}, like for like (same category, unit, diet, fat and organic status): the agent may decide.` };
+    else subRule = { outcome: "escalate", reason: `${subs.map(describe).join("; ")}; the mandate requires a person to approve substitutes.${differences.length ? " " + differences.join(" ") : ""}` };
+  }
+  // Undeclared ones: not what was asked, with no original to compare to. Never decided by the agent alone.
+  if (undeclared.length) {
+    const what = undeclared.map((l) => `${l.productId} is not what the request asked for (${askedIds.length ? askedIds.join(", ") : `category ${askedCategory}`})`).join("; ");
+    const strict = rule === "none" || rule === "same_attributes";
+    const u = strict
+      ? { outcome: "fail" as const, reason: `${what}, so it is a substitute, and the mandate allows ${rule === "none" ? "no substitutes" : "only like-for-like substitutes it can compare"}.` }
+      : { outcome: "escalate" as const, reason: `${what}, so it is a substitute nobody priced against the original: a person must approve it.` };
+    const worse = subRule.outcome === "fail" ? subRule : u;
+    subRule = { outcome: worse.outcome, reason: subs.length && subRule.outcome !== "pass" && worse !== subRule ? `${u.reason} ${subRule.reason}` : worse === subRule ? `${subRule.reason} ${u.reason}` : u.reason, details: { undeclared: undeclared.map((l) => l.productId) } };
+  }
+  add("substitution_rule", subRule.outcome, subRule.reason, subRule.details);
+  if (subs.length === 0) add("substitute_price", "pass", undeclared.length ? "No declared substitute to price; undeclared ones are judged by substitution_rule." : "No substitutes.");
+  else {
     const limit = mandate.substitution.maxPriceIncreasePct;
     const over = subs
       .map((l) => ({ l, pct: perUnitIncreasePct(l) }))

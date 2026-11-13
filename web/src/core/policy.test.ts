@@ -404,3 +404,16 @@ describe("policy: Helsinki dates (F-GATE-UTC-DATE)", () => {
     expect(rule(evaluatePolicy(m, draft(late), ctx({ now })), "delivery_deadline").outcome).toBe("fail");
   });
 });
+
+describe("policy: substitutes the agent did not declare (F-SUBST-SELF-DECLARED)", () => {
+  it("treats any product the request did not ask for as a substitute", () => {
+    const q = quote([{ productId: "AR-2010", quantity: 20 }]);
+    const asked = { productIds: ["VA-1010"] };
+    expectRejectedBy(evaluatePolicy(mandate({ substitution: { rule: "none", maxPriceIncreasePct: 0 } }), draft(q, { asked }), ctx()), "substitution_rule");
+    const loose = evaluatePolicy(mandate({ substitution: { rule: "within_preferences", maxPriceIncreasePct: 10 } }), draft(q, { asked }), ctx());
+    expect(rule(loose, "substitution_rule").outcome).toBe("escalate");
+    // Another family than the one asked for is not what was asked either.
+    expect(rule(evaluatePolicy(mandate(), draft(quote([{ productId: "VA-1001", quantity: 2 }]), { asked: { productIds: [], category: "cream" } }), ctx()), "substitution_rule").outcome).toBe("escalate");
+    expect(rule(evaluatePolicy(mandate(), draft(quote([{ productId: "VA-1010", quantity: 2 }]), { asked }), ctx()), "substitution_rule").outcome).toBe("pass");
+  });
+});

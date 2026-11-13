@@ -146,7 +146,7 @@ export type IntakeDeps = {
   intakes: IntakeRepository;
   ledger: Ledger;
   now: () => Date;
-  openRequest: (session: AgentSession, input: { text: string; neededBy?: string }) => Promise<PurchaseRequest>;
+  openRequest: (session: AgentSession, input: { text: string; neededBy?: string; productIds?: string[]; category?: string }) => Promise<PurchaseRequest>;
   requestQuote: (session: AgentSession, input: { requestId: string; lines: QuoteRequestLine[] }) => Promise<{ quote: Quote; quoteToken: string; policyPreview: Decision }>;
   spentThisWeek: (orgId: string) => Promise<number>;
   /** Committed and held spend, with the orders holding money, for the budget's part of a "nothing fits" answer. */
@@ -437,7 +437,9 @@ export function createIntakeFlow(deps: IntakeDeps) {
       if (need.sameAsLastTime && !need.quantity && !lastOrder(profile, family)) {
         throw new DockError(422, "nothing_to_repeat", `There is no earlier ${family} order to repeat. Send a quantity to see the options.`);
       }
-      const request = await deps.openRequest(session, { text: need.text ?? describeNeed(need), neededBy: need.deliverBy });
+      // What was asked for, for the gate: the product the buyer named, and the family. Anything else ordered under
+      // this request is a substitute of it, whatever the agent declares (policy substitution_rule).
+      const request = await deps.openRequest(session, { text: need.text ?? describeNeed(need), neededBy: need.deliverBy, ...(need.item.productId ? { productIds: [need.item.productId] } : {}), category: family });
       const at = now().toISOString();
       const i: Intake = {
         requestId: request.requestId,

@@ -43,6 +43,10 @@ export { DockError };
 export const OpenRequestInput = z.object({
   text: z.string().min(1).max(2000), // the buyer's need in their own words
   neededBy: z.iso.date().optional(),
+  /** Products the buyer asked for by id. Product ids written in `text` count too (when they exist in the catalogue). */
+  productIds: z.array(z.string().min(1).max(60)).max(20).optional(),
+  /** The product family asked for, when known (the intake sets it). */
+  category: z.string().min(1).max(60).optional(),
 });
 export const SearchInput = ProductQuerySchema.omit({ ids: true }).extend({ requestId: z.string().min(1) });
 export const AvailabilityInput = z.object({
@@ -92,6 +96,11 @@ export type PurchaseRequest = {
   mandateId: string;
   text: string;
   neededBy?: string;
+  /**
+   * What the buyer asked for, as Dock read it (never what the agent declares at quote time): products named by id
+   * (in the request's fields or its text) and the family. The gate treats any other product as a substitute of it.
+   */
+  asked?: { productIds: string[]; category?: string };
   createdAt: string;
 };
 
@@ -287,6 +296,32 @@ export function createDock(deps: DockDeps) {
     const run = (locks.get(key) ?? Promise.resolve()).then(fn);
     locks.set(key, run.catch(() => undefined));
     return run;
+  }
+
+  /** Product ids the buyer asked for: the explicit list, plus ids written in the text that exist in the catalogue. */
+  async function askedProducts(text: string, explicit: string[]): Promise<string[]> {
+    // Only id-shaped tokens (letters and digits with a dash, or six or more digits), never a plain amount like "1000".
+    const tokens = [...new Set(text.match(/\b(?:[A-Z]{1,5}-\d{2,8}|\d{6,10})\b/g) ?? [])].slice(0, 20);
+    const ids = [...new Set([...explicit, ...tokens])];
+    if (!ids.length) return [];
+    const found = new Set((await catalog.searchProducts({ ids, limit: 100 })).map((p) => p.id));
+    return ids.filter((id) => found.has(id) || explicit.includes(id));
+  }
+
+  /** Quote lines with substitutes as Dock reads them from the request (see requestQuote). */
+  async function substitutesOf(request: PurchaseRequest, lines: z.output<typeof QuoteInput>["lines"]): Promise<z.output<typeof QuoteInput>["lines"]> {
+    const asked = request.asked?.productIds ?? [];
+    if (!asked.length) return lines;
+    const products = await catalog.searchProducts({ ids: [...new Set([...asked, ...lines.map((l) => l.productId)])], limit: 100 });
+    const byId = new Map(products.map((p) => [p.id, p]));
+    const closest = (id: string) => {
+      const p = byId.get(id);
+      return asked.find((a) => byId.get(a)?.category === p?.category && byId.get(a)?.unit === p?.unit) ?? asked.find((a) => byId.get(a)?.category === p?.category) ?? asked[0];
+    };
+    return lines.map((l) => {
+      if (asked.includes(l.productId)) return l.substituteFor && asked.includes(l.substituteFor) ? l : { ...l, substituteFor: undefined };
+      return { ...l, substituteFor: l.substituteFor && asked.includes(l.substituteFor) ? l.substituteFor : closest(l.productId) };
+    });
   }
 
   async function ownRequest(session: AgentSession, requestId: string): Promise<PurchaseRequest> {
@@ -592,7 +627,8 @@ export function createDock(deps: DockDeps) {
     },
 
     async openRequest(session: AgentSession, input: z.input<typeof OpenRequestInput>): Promise<PurchaseRequest> {
-      const { text, neededBy } = parse(OpenRequestInput, input);
+      const { text, neededBy, productIds, category } = parse(OpenRequestInput, input);
+      const named = await askedProducts(text, productIds ?? []);
       const r: PurchaseRequest = {
         requestId: newId("req"),
         orgId: session.mandate.issuer.orgId,
@@ -600,6 +636,7 @@ export function createDock(deps: DockDeps) {
         mandateId: session.mandate.mandateId,
         text,
         neededBy,
+        ...(named.length || category ? { asked: { productIds: named, ...(category ? { category } : {}) } } : {}),
         createdAt: now().toISOString(),
       };
       await repo.saveRequest(r);
@@ -608,7 +645,7 @@ export function createDock(deps: DockDeps) {
         actor: agentActor(session),
         requestId: r.requestId,
         summary: `Agent ${session.agentId} of ${session.mandate.issuer.name} opened a request: "${text}"${neededBy ? `, needed by ${neededBy}` : ""}.`,
-        data: { text, neededBy, mandateId: r.mandateId },
+        data: { text, neededBy, mandateId: r.mandateId, ...(r.asked ? { asked: r.asked } : {}) },
       });
       return r;
     },
@@ -654,8 +691,12 @@ export function createDock(deps: DockDeps) {
 
     /** Ask the wholesaler for a fixed-price quote. Returns the signed quote and what the gate would decide on it now. */
     async requestQuote(session: AgentSession, input: z.input<typeof QuoteInput>) {
-      const { requestId, lines } = parse(QuoteInput, input);
+      const parsed = parse(QuoteInput, input);
+      const { requestId } = parsed;
       const request = await ownRequest(session, requestId);
+      // Dock decides what is a substitute, from what was asked: a line for any other product replaces the product
+      // asked for, and its price is compared with that product's, whatever the agent declared.
+      const lines = await substitutesOf(request, parsed.lines);
       const ids = [...new Set(lines.flatMap((l) => (l.substituteFor ? [l.productId, l.substituteFor] : [l.productId])))];
       let quote: Quote;
       let claims: IssuedClaim[] = [];
@@ -706,7 +747,7 @@ export function createDock(deps: DockDeps) {
       });
       const policyPreview = evaluatePolicy(
         session.mandate,
-        { agentId: session.agentId, quote, lines: quote.lines, neededBy: request.neededBy },
+        { agentId: session.agentId, quote, lines: quote.lines, neededBy: request.neededBy, requestId, asked: request.asked },
         { now: now(), ...(await budgetContext(quote.buyerOrgId)), ...(await unverifiedOf(requestId)), quoteAlreadyUsed: false, recentOrders: await recentOrders(quote.buyerOrgId) },
       );
       return { quote, quoteToken, policyPreview, claims };
@@ -725,7 +766,7 @@ export function createDock(deps: DockDeps) {
       }
       const orgId = session.mandate.issuer.orgId;
       return serialize(orgId, async () => {
-        const draft = { agentId: session.agentId, quote, lines, neededBy: request.neededBy, requestId };
+        const draft = { agentId: session.agentId, quote, lines, neededBy: request.neededBy, requestId, asked: request.asked };
         const ctx = { now: now(), ...(await budgetContext(orgId)), ...(await unverifiedOf(requestId)), quoteAlreadyUsed: await repo.isQuoteUsed(quote.quoteId), recentOrders: await recentOrders(orgId) };
         let decision = evaluatePolicy(session.mandate, draft, ctx);
         if (decision.outcome !== "reject" && !(await repo.claimQuote(quote.quoteId))) {
@@ -872,7 +913,7 @@ export function createDock(deps: DockDeps) {
         const request = await repo.getRequest(order.requestId);
         const recheck = evaluatePolicy(
           order.mandate,
-          { agentId: order.agentId, quote: order.quote, lines: order.draftLines, neededBy: request?.neededBy, requestId: order.requestId },
+          { agentId: order.agentId, quote: order.quote, lines: order.draftLines, neededBy: request?.neededBy, requestId: order.requestId, asked: request?.asked },
           { now: now(), ...(await budgetContext(order.orgId, order.orderId)), ...(await unverifiedOf(order.requestId)), quoteAlreadyUsed: false, recentOrders: await recentOrders(order.orgId, order.orderId) },
         );
         if (recheck.outcome === "reject") {
