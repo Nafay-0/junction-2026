@@ -1,5 +1,6 @@
 import {
   CatalogError,
+  NO_OFFER_PROBLEMS,
   type CatalogPort,
   type LiveOffer,
   type LiveOptions,
@@ -143,9 +144,8 @@ export class ValioCatalog implements CatalogPort, UpstreamMetered {
 
 /** Problems that make a product impossible to order now. */
 const BLOCKING = new Set<LiveProblem>(["no_price", "price_not_valid", "sales_block", "not_deliverable", "unit_mismatch", "unknown_product", "out_of_stock", "cutoff_passed"]);
-/** Problems that mean there is no truthful offer to hand to a quote at all. */
-// A passed cut-off makes the stated delivery date untrustworthy, so it is not handed to a quote either.
-const NO_OFFER = new Set<LiveProblem>(["no_price", "price_not_valid", "sales_block", "not_deliverable", "unit_mismatch", "unknown_product", "cutoff_passed"]);
+/** Problems that mean there is no truthful offer to hand to a quote at all (a passed cut-off included). */
+const NO_OFFER = NO_OFFER_PROBLEMS;
 
 function usable(s: LiveStatus): boolean {
   return !s.problems.some((p) => NO_OFFER.has(p));

@@ -95,6 +95,27 @@ describe("buildQuote", () => {
   });
 });
 
+describe("quote life", () => {
+  const withOffer = (over: Record<string, unknown>) => ({ ...input, offers: input.offers.map((o) => (o.productId === "VA-1001" ? { ...o, ...over } : o)), lines: [{ productId: "VA-1001", quantity: 1 }] });
+
+  it("never outlives the price it rests on", () => {
+    const q = buildQuote(withOffer({ priceValidUntil: "2026-12-31T00:00:00+0200" }));
+    expect(q).toMatchObject({ expiresAt: "2026-11-13T10:30:00.000Z", expiresBecause: "ttl" });
+    const short = buildQuote(withOffer({ priceValidUntil: "2026-11-13T12:10:00+02:00" }));
+    expect(short).toMatchObject({ expiresAt: "2026-11-13T10:10:00.000Z", expiresBecause: "price_validity" });
+  });
+
+  it("never outlives the order cut-off of the date it promises", () => {
+    const q = buildQuote(withOffer({ orderBy: "2026-11-13T12:20:00+0200", priceValidUntil: "9999-12-31T00:00:00+0200" }));
+    expect(q).toMatchObject({ expiresAt: "2026-11-13T10:20:00.000Z", expiresBecause: "order_cutoff" });
+  });
+
+  it("caps any configured time to live at a day, and refuses a quote with no time left", () => {
+    expect(buildQuote({ ...input, ttlMinutes: 60 * 24 * 365, lines: [{ productId: "VA-1001", quantity: 1 }] }).expiresAt).toBe("2026-11-14T10:00:00.000Z");
+    expect(() => buildQuote(withOffer({ orderBy: "2026-11-13T12:00:30+0200" }))).toThrow(expect.objectContaining({ code: "quote_source_expired" }));
+  });
+});
+
 describe("quote signatures", () => {
   it("round-trips through a compact JWS signed by the wholesaler", async () => {
     const q = buildQuote({ ...input, lines: [{ productId: "VA-1001", quantity: 20 }] });
@@ -103,7 +124,7 @@ describe("quote signatures", () => {
   });
 
   it("does not judge expiry itself: that is a policy rule with a reason", async () => {
-    const q = buildQuote({ ...input, ttlMinutes: 0.0001, lines: [{ productId: "VA-1001", quantity: 1 }] });
+    const q = buildQuote({ ...input, ttlMinutes: 3, lines: [{ productId: "VA-1001", quantity: 1 }] });
     const token = await signQuote(q, wholesaler);
     await expect(verifyQuote(token, wholesaler)).resolves.toMatchObject({ quoteId: "qt_1" });
   });

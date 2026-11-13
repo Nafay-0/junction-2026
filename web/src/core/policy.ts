@@ -1,6 +1,7 @@
 import type { Approver, Mandate } from "./mandate";
 import type { Quote, QuoteLine } from "./quote";
 import { addDays, formatEur, isoDate } from "./util";
+import { isMaterialAttribute } from "./vocabulary";
 
 /**
  * The gate. A pure function: same mandate, draft and context in, same decision out. No I/O, no clock,
@@ -8,7 +9,8 @@ import { addDays, formatEur, isoDate } from "./util";
  *
  * Outcomes per rule:
  *   pass      the rule is satisfied
- *   escalate  allowed only with a human sign-off (over the per-order limit, or a substitute under "needs_approval")
+ *   escalate  allowed only with a human sign-off (over the per-order limit, a substitute under "needs_approval" or one
+ *             that differs from the original under "within_preferences", or a need split into orders under the limit)
  *   fail      not allowed at all; the order is rejected
  *
  * Decision: any fail -> reject; else any escalate -> needs_human_approval (to the least senior approver
@@ -30,6 +32,7 @@ export const RULES = [
   "substitute_price", // substitute's price per unit within the tolerated increase
   "weekly_budget", // committed + pending spend over 7 days stays within budget: hard limit
   "per_order_limit", // above it, a human must sign off
+  "order_splitting", // several orders the agent placed alone for the same need may not add up to more than it may spend alone
   "approver_authority", // someone named in the mandate can sign off this amount
 ] as const;
 
@@ -47,11 +50,31 @@ export type OrderDraft = {
   neededBy?: string; // YYYY-MM-DD, from the purchase request
 };
 
+/** An earlier order of the same organisation, as the splitting check needs it. */
+export type RecentOrder = {
+  orderId: string;
+  requestId: string;
+  placedAt: string; // ISO
+  totalCents: number;
+  categories: string[];
+  deliveryDates: string[];
+  /** "mandate": the agent placed it alone; "approver": a person signed it off; "pending": waiting for sign-off. */
+  authorisedBy: "mandate" | "approver" | "pending";
+};
+
 export type PolicyContext = {
   now: Date;
   spentThisWeekCents: number; // committed + pending orders of this organisation over the last 7 days
   quoteAlreadyUsed: boolean;
+  /** Orders of this organisation in the last SPLIT_WINDOW_HOURS, for the order_splitting check. Absent: none. */
+  recentOrders?: RecentOrder[];
 };
+
+/**
+ * Orders for the same need within this window are read together. A day covers "three orders in a row before
+ * lunch" and the evening top-up for the next morning, without tying together unrelated orders of a busy week.
+ */
+export const SPLIT_WINDOW_HOURS = 24;
 
 type Common = { totalCents: number; rules: RuleResult[]; reasons: string[] };
 export type Decision =
@@ -111,13 +134,19 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
     },
     mandate.requiredAttributes.length ? `Every product is ${mandate.requiredAttributes.join(", ")}.` : "No attributes required.",
   );
+  // Unknown is never safe. A product whose maker sent no allergen data is refused when the mandate forbids any
+  // allergen, rather than sent to a person: the approver on a phone has no better data than Dock, and a sign-off
+  // would turn the organisation's hard safety rule into a tap. The fix is a product with declared allergens.
   lineCheck(
     "forbidden_allergens",
     (l) => {
       const found = l.allergens.filter((a) => mandate.forbiddenAllergens.includes(a));
-      return found.length ? `${l.productId} contains forbidden allergen(s): ${found.join(", ")}.` : null;
+      if (found.length) return `${l.productId} contains forbidden allergen(s): ${found.join(", ")}.`;
+      if (mandate.forbiddenAllergens.length && l.allergensDeclared === false)
+        return `${l.productId} has no allergen data from its maker, so nothing shows it is free of ${mandate.forbiddenAllergens.join(", ")}. Unknown is not safe: choose a product with declared allergens.`;
+      return null;
     },
-    "No product contains a forbidden allergen.",
+    mandate.forbiddenAllergens.length ? `No product contains ${mandate.forbiddenAllergens.join(", ")}, by declared allergen data.` : "No product contains a forbidden allergen.",
   );
   lineCheck(
     "required_certificates",
@@ -151,6 +180,10 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
       if (rule === "same_attributes") {
         if (differences.length) add("substitution_rule", "fail", `Substitutes must match the original: ${differences.join(" ")}`);
         else add("substitution_rule", "pass", `${subs.map(describe).join("; ")} with the same attributes.`);
+      } else if (rule === "within_preferences") {
+        if (differences.length)
+          add("substitution_rule", "escalate", `${subs.map(describe).join("; ")}, but not like for like, so a person must approve it: ${differences.join(" ")}`);
+        else add("substitution_rule", "pass", `${subs.map(describe).join("; ")}, like for like (same category, unit, diet, fat and organic status): the agent may decide.`);
       } else {
         add(
           "substitution_rule",
@@ -191,13 +224,17 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
   else
     add("per_order_limit", "escalate", `Total ${formatEur(total)} is over the ${formatEur(mandate.perOrderLimitCents)} per-order limit the agent may spend alone.`, limitDetails);
 
+  const split = splitCheck(mandate, draft, ctx);
+  add("order_splitting", split.outcome, split.reason, split.details);
+
   const needsHuman = results.some((r) => r.outcome === "escalate");
-  const approver = needsHuman ? pickApprover(mandate.approvers, total) : undefined;
+  const signAmount = split.outcome === "escalate" ? Math.max(total, split.combinedCents) : total;
+  const approver = needsHuman ? pickApprover(mandate.approvers, signAmount) : undefined;
   if (!needsHuman) add("approver_authority", "pass", "No sign-off needed.");
   else if (approver)
     add("approver_authority", "pass", `${approver.name} (${approver.role}) can sign off up to ${formatEur(approver.maxApprovalCents)}.`, { role: approver.role });
   else
-    add("approver_authority", "fail", `Sign-off is needed, but no approver in the mandate may sign ${formatEur(total)}.`, {
+    add("approver_authority", "fail", `Sign-off is needed, but no approver in the mandate may sign ${formatEur(signAmount)}.`, {
       approvers: mandate.approvers.map((a) => ({ role: a.role, maxApprovalCents: a.maxApprovalCents })),
     });
 
@@ -244,14 +281,54 @@ function compareLines(q: Quote, lines: OrderDraftLine[]): string | null {
   return null;
 }
 
+/**
+ * How a substitute differs from the product it replaces, on what makes them interchangeable: category, unit and
+ * the material attributes (diet, fat, organic). Marketing claims one brand states and another does not
+ * ("additive_free", "low_salt") do not count, or no two real products would ever match.
+ */
 function attributeDifference(l: QuoteLine): string | null {
   const o = l.substituteFor!;
   const parts: string[] = [];
   if (o.category !== l.category) parts.push(`category ${l.category} instead of ${o.category}`);
   if (o.unit !== l.unit) parts.push(`sold per ${l.unit} instead of ${o.unit}`);
-  const missing = o.attributes.filter((a) => !l.attributes.includes(a));
+  const missing = o.attributes.filter((a) => isMaterialAttribute(a) && !l.attributes.includes(a));
   if (missing.length) parts.push(`lacks ${missing.join(", ")}`);
+  const extra = l.attributes.filter((a) => /^fat_/.test(a) && isMaterialAttribute(a) && !o.attributes.includes(a));
+  if (extra.length && missing.some((a) => /^fat_/.test(a))) parts.push(`has ${extra.join(", ")}`);
   return parts.length ? `${l.productId} differs from ${o.productId}: ${parts.join("; ")}.` : null;
+}
+
+/**
+ * Order splitting: an agent that places several orders below its per-order limit for one need has spent more
+ * alone than the mandate lets it. Orders count together when the agent placed them alone (no person signed
+ * them) within SPLIT_WINDOW_HOURS, and they are for the same request, or for the same product category
+ * delivered on the same day. Over the limit together: a person signs off, with the earlier orders named.
+ */
+function splitCheck(mandate: Mandate, draft: OrderDraft, ctx: PolicyContext): { outcome: RuleOutcome; reason: string; combinedCents: number; details?: Record<string, unknown> } {
+  const q = draft.quote;
+  const since = ctx.now.getTime() - SPLIT_WINDOW_HOURS * 3600_000;
+  const categories = new Set(q.lines.map((l) => l.category));
+  const dates = new Set(q.lines.map((l) => l.deliveryDate));
+  const related = (ctx.recentOrders ?? []).filter(
+    (o) =>
+      o.authorisedBy === "mandate" &&
+      Date.parse(o.placedAt) > since &&
+      (o.requestId === q.requestId || (o.categories.some((c) => categories.has(c)) && o.deliveryDates.some((d) => dates.has(d)))),
+  );
+  const earlier = related.reduce((s, o) => s + o.totalCents, 0);
+  const combinedCents = earlier + q.totalCents;
+  if (related.length === 0) return { outcome: "pass", reason: "No earlier order the agent placed alone for the same need in the last day.", combinedCents };
+  const details = { windowHours: SPLIT_WINDOW_HOURS, limitCents: mandate.perOrderLimitCents, combinedCents, earlier: related.map((o) => ({ orderId: o.orderId, totalCents: o.totalCents, placedAt: o.placedAt })) };
+  const what = `${[...categories].join(", ")} for ${[...dates].sort().join(", ")}`;
+  if (q.totalCents > mandate.perOrderLimitCents || combinedCents <= mandate.perOrderLimitCents) {
+    return { outcome: "pass", reason: `With ${related.length} earlier order${related.length > 1 ? "s" : ""} the agent placed alone for ${what}, the total is ${formatEur(combinedCents)}${q.totalCents > mandate.perOrderLimitCents ? "; this order goes to a person anyway" : `, within the ${formatEur(mandate.perOrderLimitCents)} it may spend alone`}.`, combinedCents, details };
+  }
+  return {
+    outcome: "escalate",
+    reason: `Looks like one need split into smaller orders: with ${related.map((o) => `${o.orderId} (${formatEur(o.totalCents)})`).join(", ")} placed alone in the last ${SPLIT_WINDOW_HOURS} h for ${what}, this ${formatEur(q.totalCents)} order makes ${formatEur(combinedCents)}, over the ${formatEur(mandate.perOrderLimitCents)} the agent may spend alone. Splitting does not lift the limit, so a person must sign off.`,
+    combinedCents,
+    details,
+  };
 }
 
 /** Price increase per unit (per litre, per kg) of a substitute over the product it replaces, in percent. */
