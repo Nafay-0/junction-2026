@@ -3,6 +3,7 @@ import path from "node:path";
 import { connect as tlsConnect } from "node:tls";
 import Valkey from "iovalkey";
 import { SEED_PRODUCTS } from "@/core/seed";
+import { dailyUsage } from "./limits";
 import type { Runtime } from "./runtime";
 import { lastIndexResolution, pgClient } from "./valio/index-store";
 
@@ -132,6 +133,7 @@ export async function healthReport(rt: Runtime) {
       liveApi: env("VALIO_API_KEY") ? "configured" : "not configured",
     },
     services: await serviceHealth(),
+    demoLimits: dailyUsage(),
     settings: {
       publicUrl: env("DOCK_PUBLIC_URL") ?? null,
       passkeyRpId: env("DOCK_WEBAUTHN_RP_ID") ?? null,
