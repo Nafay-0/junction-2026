@@ -11,12 +11,14 @@ import { RawScan, toLines, type ScanLine, type SourceKind } from "./lines";
  * The file is passed to the model from memory and dropped when the request ends; nothing is written to disk
  * or kept.
  *
- * Model: DOCK_SCAN_MODEL as `provider:model-id`, default google:gemini-3.8-flash (chosen by the fixed
- * evaluation in web/scripts/eval-scan.ts; results in web/docs/doors.md). `featherless:<model-id>` runs a model
+ * Model: DOCK_SCAN_MODEL as `provider:model-id`, default anthropic:claude-haiku-5-5, chosen by the fixed
+ * evaluation (web/scripts/eval/eval-scan.ts; results in web/docs/doors.md): every line right and nothing unsafe in
+ * both runs, $0.001 and about 5 s a page. google:gemini-3.1-flash-lite scored the same in the evaluation but
+ * guessed a smudged amount once in a separate try. `featherless:<model-id>` runs a model
  * on Featherless (OpenAI-compatible, FEATHERLESS_API_KEY), which is how NVIDIA's models were evaluated.
  */
 
-export const DEFAULT_SCAN_MODEL = "google:gemini-3.8-flash";
+export const DEFAULT_SCAN_MODEL = "anthropic:claude-haiku-5-5";
 
 const EXTRA_PRICES: Record<string, Price> = {
   "featherless:nvidia/Cosmos-Reason2-32B": { inputPerM: 0.416, outputPerM: 1.664 },

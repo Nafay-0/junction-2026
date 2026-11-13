@@ -69,6 +69,12 @@ describe("voice tools: the model proposes, the door checks", () => {
     expect(heard.find((e) => e.data.heard === "the first one")).toBeDefined();
   });
 
+  it("refuses a request on a call that the caller did not say", async () => {
+    const callId = open();
+    const r = await runTool("kaari", { callId, name: "submit_request", args: { request: "Hello kitchen, what do you need to order today?" } });
+    expect(r.forModel.refused).toBe("no_words");
+  });
+
   it("lets a tap on the screen decide without words", async () => {
     const callId = open();
     reading = { amount: 1000, unit: "L" };

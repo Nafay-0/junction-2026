@@ -127,6 +127,9 @@ function fromStep(call: Call, step: IntakeView, heard?: HeardWords): ToolReply {
 async function submit(a: KitchenAgent, call: Call, request: string, heard: HeardWords | undefined, via: Via): Promise<ToolReply> {
   // The words shown on screen are the words acted on: the transcript, or what was typed. The model's own
   // rendering of the request is only a fallback, and a disagreement on numbers triggers a read-back.
+  // On a call, the request must be the caller's own words from this turn: the model may not submit a request
+  // nobody said (it has tried, with its own greeting as the "request").
+  if (via === "speech" && (!heard || heard.turn <= call.desk.lastTurnUsed)) return refuse("Not done: Dock did not hear the caller ask for anything. Ask the caller what they need and wait.", "no_words");
   const words = (heard?.text || request).trim().slice(0, 2000);
   if (!words) return refuse("Not done: Dock has no words to read. Ask the caller what they need.", "no_words");
   if (heard) call.desk.lastTurnUsed = Math.max(call.desk.lastTurnUsed, heard.turn);
