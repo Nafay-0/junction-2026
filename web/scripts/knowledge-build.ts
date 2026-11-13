@@ -9,7 +9,7 @@
  *   pnpm knowledge:build --executor modal         run the uncached calls as parallel Modal jobs, then finish locally
  *   pnpm knowledge:build --plan                   count the calls and estimate the cost, call nothing
  *
- * Every answer is cached on disk by the hash of its request (.data/valio/knowledge-cache/), so a rerun is free and
+ * Every answer is cached on disk by the hash of its request (.data/knowledge-build/cache/), so a rerun is free and
  * an interrupted build resumes. Output: .data/valio/knowledge-map.json.gz (git-ignored; partner-derived).
  */
 import { execFileSync } from "node:child_process";
@@ -21,7 +21,7 @@ import { costOf, priceOf } from "@/server/agent/pricing";
 import { DiskCache, runAll, specKey, spendOf, type CachedAnswer, type Effort, type LlmSpec } from "@/server/knowledge/build/llm";
 import { modelInput, nameLine } from "@/server/knowledge/build/inputs";
 import { PROFILE_SYSTEM, TAXONOMY_SCHEMA, TAXONOMY_SYSTEM, profileSchema, profileUser, taxonomyUser, type ProfileAnswer, type TaxonomyAnswer } from "@/server/knowledge/build/prompts";
-import { defaultKnowledgePath, knowledgeCacheDir } from "@/server/knowledge/store";
+import { defaultKnowledgePath, knowledgeBuildDir, knowledgeCacheDir } from "@/server/knowledge/store";
 import { encodeKnowledge, profileFromAnswer, type KindDef, type KnowledgeData, type Profile } from "@/server/knowledge/types";
 import { isFamily } from "@/server/knowledge/vocab";
 import { loadCatalogIndex, valioDataDir } from "@/server/valio/index-store";
@@ -75,7 +75,7 @@ async function answerAll(specs: LlmSpec[], cache: DiskCache, label: string, exec
 function runOnModal(specs: LlmSpec[], cache: DiskCache, label: string) {
   const todo = specs.map((s) => ({ s, key: specKey(s) })).filter(({ key }) => !cache.has(key));
   if (!todo.length) return;
-  const dir = path.join(cache.dir, "..", "modal-io");
+  const dir = path.join(knowledgeBuildDir(), "modal-io");
   mkdirSync(dir, { recursive: true });
   const stamp = `${label}-${Date.now()}`;
   const inFile = path.join(dir, `${stamp}.in.jsonl`);

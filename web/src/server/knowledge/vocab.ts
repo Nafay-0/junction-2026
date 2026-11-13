@@ -158,7 +158,8 @@ export const FAMILY_BRIDGES: { families: Family[]; uses: Use[] }[] = [
   { families: ["yoghurt", "fermented_milk", "quark", "sour_cream"], uses: ["breakfast", "dessert", "dressing", "baking", "smoothie", "sauce", "topping", "snack"] },
   { families: ["butter", "margarine_spread", "oil_fat"], uses: ["baking", "frying", "pastry", "sauce", "spreading", "roasting"] },
   { families: ["cheese", "plant_cheese"], uses: ["sandwich", "melting", "pizza", "gratin", "salad", "pasta_dish", "cold_buffet", "snack"] },
-  { families: ["beef", "pork", "poultry", "lamb_game", "plant_protein"], uses: ["stew", "main_course", "frying", "pasta_dish", "pizza", "grilling", "roasting"] },
+  // Meats cross only where they are cut small into a dish; a roast or a steak is the dish itself.
+  { families: ["beef", "pork", "poultry", "lamb_game", "plant_protein"], uses: ["stew", "pasta_dish", "pizza"] },
   { families: ["fish", "seafood"], uses: ["main_course", "salad", "sandwich", "soup", "frying", "cold_buffet"] },
   { families: ["sauce", "condiment", "dressing_mayo"], uses: ["dressing", "sandwich", "topping", "marinade", "sauce"] },
   { families: ["grain_rice", "pasta_noodles", "potato", "legume"], uses: ["side_dish"] },

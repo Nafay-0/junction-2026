@@ -105,10 +105,13 @@ export type RoleResult = {
 };
 
 /**
- * Below this a relation is not served. Set from the evaluation (scripts/knowledge-eval.ts): at 0.55 a same-kind
- * product with one real difference (fat level, form, or a sweetened version) still passes, while a same-family
- * product of a different kind needs to suit the use with no condition against it. Relations that only share a
- * family and carry a condition (will not whip, splits when boiled) fall under it.
+ * Below this a relation is not served at all. Set at 0.55 from the evaluation (scripts/knowledge-eval.ts, the
+ * "dropped by the threshold" sample in its report): just under it sit pairs no cook would accept (fish sauce for hot
+ * sauce, a tea stand for tea, thyme for dill before the kind-word rule), so the line is drawn where wrong pairs
+ * stop outnumbering right ones. A same-kind product scores 0.86 before differences; a different kind of the same
+ * family 0.64 to 0.76; across a family bridge 0.58 to 0.70. One real difference (fat level, form, a sweetened
+ * version, frozen vs fresh) keeps a same-kind product above it; a different kind with a condition against the use
+ * (will split when boiled, flavoured for a plain use) falls under it.
  */
 export const SERVE_THRESHOLD = 0.55;
 export const TIER_BEST = 0.82;
@@ -140,9 +143,9 @@ type Node = {
  * For these families the product is the ingredient: a kind such as "sliced vegetables" can hold carrot and onion,
  * which no cook swaps. Two of them must share an ingredient word (in any language) to be related.
  */
-const INGREDIENT_FAMILIES = new Set<Family>(["vegetable", "fruit_berry", "herb_spice", "nuts_seeds", "dried_fruit", "legume", "fish", "seafood"]);
+const INGREDIENT_FAMILIES = new Set<Family>(["vegetable", "potato", "fruit_berry", "herb_spice", "nuts_seeds", "dried_fruit", "legume", "fish", "seafood"]);
 const NOT_INGREDIENT = new Set(
-  "fresh frozen organic luomu sliced slices slice diced dice cube cubes cubed strips strip shredded grated whole chopped mix mixed pieces piece portions portion wavy thin thick fine very crinkle cut peeled washed cleaned raw cooked natural classic small big large mini baby extra premium red green yellow white black orange purple pink brown dark light box bag tray pack pcs kpl net ca app approx kg vac iqf greens valmix sallacarte bama fresh class cl ii iii fi finland suomi suomen kotimainen nl netherlands es spain it italy pl poland de germany fr france be belgium ma tn za pt pe ar cn china th dk se sweden no uk us tr eg il gr mx in au nz for with and the of in on from frozen pakaste pakastettu tuore finnish oy ab ltd viipale viipaleet viipaloitu kuutio kuutioitu suikale suikaleet raaste raastettu paloiteltu pala palat kokonainen kokonaisena siivu siivut rengas renkaat lohko lohkot murska sekoitus seos luomu kuorittu pesty skivad skivor tarnad strimlad riven hel fryst farsk bitar blandning ekologisk".split(" "),
+  "fresh frozen organic luomu sliced slices slice diced dice cube cubes cubed strips strip shredded grated whole chopped mix mixed pieces piece portions portion wavy thin thick fine very crinkle cut peeled washed cleaned raw cooked natural classic small big large mini baby extra premium red green yellow white black orange purple pink brown dark light box bag tray pack pcs kpl net ca app approx kg vac iqf class cl ii iii fi finland suomi suomen kotimainen nl netherlands es spain it italy pl poland de germany fr france be belgium ma tn za pt pe ar cn china th dk se sweden no uk us tr eg il gr mx in au nz for with and the of in on from frozen pakaste pakastettu tuore finnish oy ab ltd viipale viipaleet viipaloitu kuutio kuutioitu suikale suikaleet raaste raastettu paloiteltu pala palat kokonainen kokonaisena siivu siivut rengas renkaat lohko lohkot murska sekoitus seos luomu kuorittu pesty rouhe rouhittu jauhettu jauhe murskattu kuivattu skivad skivor tarnad strimlad riven hel fryst farsk bitar blandning ekologisk".split(" "),
 );
 /** A shared word, or one inside the other (compounds: watermelon / melon, jäävuorisalaatti / salaatti). */
 function sharesIngredient(a: Set<string>, b: Set<string>): boolean {
@@ -152,7 +155,7 @@ function sharesIngredient(a: Set<string>, b: Set<string>): boolean {
 const ingredientWords = (p: IndexedProduct): Set<string> => {
   const brand = new Set(tokens(`${p.brand ?? ""} ${p.vendor ?? ""}`));
   const words = [p.names.en, p.names.fi, p.names.sv].filter(Boolean).flatMap((n) => tokens(lineName(n!)));
-  return new Set(words.filter((w) => w.length > 2 && !NOT_INGREDIENT.has(w) && !brand.has(w) && !/^\d/.test(w)).map((w) => (w.length > 5 && w.endsWith("s") ? w.slice(0, -1) : w)));
+  return new Set(words.filter((w) => w.length > 3 && !NOT_INGREDIENT.has(w) && !brand.has(w) && !/^\d/.test(w)).map((w) => (w.length > 5 && w.endsWith("s") ? w.slice(0, -1) : w)));
 };
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
@@ -386,7 +389,15 @@ export class KnowledgeMap {
   private score(o: Node, c: Node, use: Use, how: "kind" | "family" | "bridge", check: Extract<HardCheck, { ok: true }>, prices?: AlternativesOptions["comparisonPrices"]) {
     const changes: Change[] = [];
     const conditions: Condition[] = [];
-    const labelSim = jaccard(tokens(o.kind.label), tokens(c.kind.label));
+    const labelSim = jaccard(kindWords(o.kind.label), kindWords(c.kind.label));
+    // Two kinds of one family with no word in common (thyme and dill, fish fingers and salmon cubes) are different
+    // things that happen to share a use; only the curated family bridges may cross without a shared word.
+    // Outside the families where a product stands in by function (creams, cheeses, flours, fats, sauces...), a
+    // different kind must share most of its name: potato salad and mushroom salad only share the word "salad".
+    const nameSim = jaccard(o.nameKey.split(" "), c.nameKey.split(" "));
+    if (how === "family" && !FUNCTIONAL_FAMILIES.has(o.kind.family) && !INGREDIENT_FAMILIES.has(o.kind.family) && labelSim < 0.5 && nameSim < 0.4) return { blocked: "a different kind of product", confidence: 0, changes: [] as Change[], conditions: [] as Condition[], reason: "" };
+    if (how === "family" && labelSim === 0 && !(INGREDIENT_FAMILIES.has(o.kind.family) && sharesIngredient(o.ingredient, c.ingredient))) return { blocked: "a different kind of product", confidence: 0, changes: [] as Change[], conditions: [] as Condition[], reason: "" };
+    if (how !== "kind" && o.kind.family === "non_food") return { blocked: "a different non-food item", confidence: 0, changes: [] as Change[], conditions: [] as Condition[], reason: "" };
     let s = how === "kind" ? 0.86 : how === "family" ? 0.64 + 0.12 * labelSim : 0.58 + 0.12 * labelSim;
     if (how !== "kind") changes.push({ kind: "kind", text: `${c.kind.label} instead of ${o.kind.label}` });
     if (INGREDIENT_FAMILIES.has(o.kind.family) && o.ingredient.size && c.ingredient.size && !sharesIngredient(o.ingredient, c.ingredient)) {
@@ -439,7 +450,7 @@ export class KnowledgeMap {
       changes.push({ kind: "storage", text: fresh(Q) ? "fresh instead of preserved" : `${Q.state.replace("_", "-")} instead of fresh` });
     }
     // Closeness within a kind: the same line name, maker and origin are the nearest stand-in.
-    s += 0.06 * jaccard(o.nameKey.split(" "), c.nameKey.split(" "));
+    s += 0.06 * nameSim;
     if (o.brandKey && o.brandKey === c.brandKey) s += 0.02;
     if (o.p.countryOfOrigin && o.p.countryOfOrigin === c.p.countryOfOrigin) s += 0.02;
     if (P.form !== Q.form) {
@@ -564,7 +575,10 @@ export class KnowledgeMap {
         const why: string[] = [`${k.label}`];
         if (useList.length) why.push(`suits ${useList.map((u) => USE_TEXT[u]).join(", ")}`);
         if (useList.some((u) => HEAT_USES.has(u))) {
-          if (n.profile.heatStable === true) (prop += 0.1), why.push("holds up when boiled");
+          if (n.profile.heatStable === true) {
+            prop += 0.1;
+            why.push("holds up when boiled");
+          }
           if (n.profile.heatStable === false) prop -= 0.3;
         }
         if (useList.includes("whipping")) {
@@ -572,8 +586,14 @@ export class KnowledgeMap {
           else if (n.profile.whips === false) continue;
         }
         if (useList.some((u) => MELT_USES.has(u))) {
-          if (n.profile.melts === true) (prop += 0.1), why.push("melts");
-          else if (n.profile.melts === false) prop -= 0.3;
+          if (n.profile.melts === true) {
+            prop += 0.1;
+            why.push("melts");
+          }
+          else if (n.profile.melts === false) {
+            if (useList.includes("melting") || useList.includes("pizza")) continue; // a cheese that does not melt is no pizza cheese
+            prop -= 0.3;
+          }
         }
         if (n.profile.flavoured === true && !terms.some((t) => fold(n.name).includes(t))) prop -= 0.15;
         matches.push({
@@ -607,6 +627,11 @@ export class KnowledgeMap {
 }
 
 const ctxOf = (f: Family) => ({ inherentlyVegetarian: INHERENTLY_VEGETARIAN.includes(f), inherentlyVegan: INHERENTLY_VEGAN.includes(f) });
+
+const KIND_STOP = new Set(["and", "or", "for", "with", "of", "the", "in", "other", "mixed", "assorted", "product", "products", "style", "type", "based", "general", "various", "fresh", "frozen", "dried", "whole", "sliced", "diced", "cut", "chopped", "ready", "cooked", "prepared", "plain", "flavoured", "natural", "organic", "small", "large", "portion", "portions", "pieces"]);
+/** Families where a product stands in by what it does in the recipe, so two kinds may relate on one shared word. */
+const FUNCTIONAL_FAMILIES = new Set<Family>(["milk", "cream", "plant_drink", "plant_cream", "yoghurt", "fermented_milk", "quark", "sour_cream", "cheese", "plant_cheese", "butter", "margarine_spread", "oil_fat", "flour", "grain_rice", "pasta_noodles", "sugar_sweetener", "baking_ingredient", "sauce", "condiment", "dressing_mayo", "soup_stock", "egg"]);
+const kindWords = (label: string) => tokens(label).filter((t) => !KIND_STOP.has(t)).map((t) => (t.length > 4 && t.endsWith("s") ? t.slice(0, -1) : t));
 
 const STOP = new Set(["for", "in", "the", "a", "an", "to", "of", "with", "and", "or", "my", "our", "some", "that", "use", "used", "using", "making", "make", "ja", "tai", "varten", "kanssa", "need", "want", "like", "good", "best", "which", "what"]);
 

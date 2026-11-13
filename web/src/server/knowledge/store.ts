@@ -17,12 +17,17 @@ const envValue = (name: string) => {
 
 /** `KNOWLEDGE_MAP_PATH`, or `.data/valio/knowledge-map.json.gz` under the web app. */
 export function defaultKnowledgePath(): string {
-  return envValue("KNOWLEDGE_MAP_PATH") ?? path.join(process.cwd(), ".data", "valio", "knowledge-map.json.gz");
+  return envValue("KNOWLEDGE_MAP_PATH") ?? path.join(/* turbopackIgnore: true */ process.cwd(), ".data", "valio", "knowledge-map.json.gz");
+}
+
+/** Build-only files (model answers cached by request hash, Modal I/O, the eval report): kept out of `.data/valio/`, which a local deploy ships. */
+export function knowledgeBuildDir(): string {
+  return path.join(/* turbopackIgnore: true */ process.cwd(), ".data", "knowledge-build");
 }
 
 /** Model answers cached by request hash (build only). */
 export function knowledgeCacheDir(): string {
-  return envValue("KNOWLEDGE_CACHE_DIR") ?? path.join(process.cwd(), ".data", "valio", "knowledge-cache");
+  return envValue("KNOWLEDGE_CACHE_DIR") ?? path.join(knowledgeBuildDir(), "cache");
 }
 
 export const KNOWLEDGE_TABLE = "partner_data.knowledge_map";
@@ -54,7 +59,7 @@ export type KnowledgeSource = { from: "file" | "database" | "cache"; file: strin
 export async function resolveKnowledgeFile(): Promise<KnowledgeSource> {
   const local = defaultKnowledgePath();
   if (existsSync(local)) return { from: "file", file: local };
-  const dir = path.join(process.cwd(), ".data", "valio", "cache");
+  const dir = path.join(/* turbopackIgnore: true */ process.cwd(), ".data", "valio", "cache");
   const url = envValue("DATABASE_URL");
   const cachedAny = () => {
     const f = path.join(dir, "knowledge-map-latest.json.gz");

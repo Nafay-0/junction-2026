@@ -75,7 +75,10 @@ export function KnowledgePreview() {
     getJson<AltResult>(`/ui-api/knowledge/alternatives?${p}`).then((r) => {
       if (!live) return;
       if ("error" in r) setError(r.error.message);
-      else (setResult(r), setError(null));
+      else {
+        setResult(r);
+        setError(null);
+      }
     });
     return () => {
       live = false;

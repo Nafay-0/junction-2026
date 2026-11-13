@@ -14,15 +14,15 @@
  * 3. Coverage: the share of products for which the map deliberately returns no substitute, tiers, and a sample of
  *    relations the threshold dropped.
  *
- * Prints ids and counts only. The detailed report, which names products, goes to .data/valio/knowledge-eval.json
- * (git-ignored: it is partner text).
+ * Prints ids and counts only. The detailed report, which names products, goes to .data/knowledge-build/knowledge-eval.json
+ * (.data/knowledge-build/, git-ignored and outside what a deploy ships: it is partner text).
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { IndexedProduct } from "@/core/catalog/partner";
 import { hardCheck } from "@/server/knowledge/facts";
 import { KnowledgeMap, SERVE_THRESHOLD, type AlternativesResult } from "@/server/knowledge/map";
-import { defaultKnowledgePath, loadKnowledgeFile } from "@/server/knowledge/store";
+import { defaultKnowledgePath, knowledgeBuildDir, loadKnowledgeFile } from "@/server/knowledge/store";
 import type { Use } from "@/server/knowledge/vocab";
 import { loadCatalogIndex } from "@/server/valio/index-store";
 import { loadLocalEnv } from "./lib/env";
@@ -59,9 +59,13 @@ function partnerEval(map: KnowledgeMap, products: IndexedProduct[]) {
       else {
         const check = hardCheck(o, map.fact(s)!);
         const d = res.dropped?.find((x) => x.productId === s);
-        if (!check.ok) (outcome = "hard_fact"), (detail = `${check.code}: ${check.reason}`);
-        else if (d && d.confidence !== null) (outcome = "below_threshold"), (detail = d.why);
-        else if (d) (outcome = "blocked_property"), (detail = d.why);
+        if (!check.ok) {
+          outcome = "hard_fact";
+          detail = `${check.code}: ${check.reason}`;
+        } else if (d) {
+          outcome = d.confidence !== null ? "below_threshold" : "blocked_property";
+          detail = d.why;
+        }
         else {
           outcome = "not_related";
           const a = map.profile(o.id);
@@ -271,7 +275,10 @@ function main() {
     const r = map.alternatives(p.id, { debug: total % 97 === 0 })!;
     const f = byFamily.get(pr.family) ?? { n: 0, empty: 0 };
     f.n++;
-    if (!r.substitutes.length) (empty++, f.empty++);
+    if (!r.substitutes.length) {
+      empty++;
+      f.empty++;
+    }
     byFamily.set(pr.family, f);
     for (const s of r.substitutes) tiers[s.tier]++;
     packs += r.packAlternatives.length;
@@ -284,7 +291,7 @@ function main() {
   const weak = [...byFamily.entries()].filter(([, v]) => v.n >= 30).sort((a, b) => b[1].empty / b[1].n - a[1].empty / a[1].n).slice(0, 8);
   console.log(`  families with the most empty answers: ${weak.map(([k, v]) => `${k} ${pctOf(v.empty, v.n)} of ${v.n}`).join(", ")}`);
 
-  const out = path.join(process.cwd(), ".data", "valio", "knowledge-eval.json");
+  const out = path.join(knowledgeBuildDir(), "knowledge-eval.json");
   mkdirSync(path.dirname(out), { recursive: true });
   const named = (id: string) => ({ id, name: map.fact(id)?.names.en ?? map.fact(id)?.names.fi, kind: map.profile(id)?.kindLabel, claims: map.fact(id)?.claims.filter((c) => !c.startsWith("fat_")) });
   writeFileSync(
