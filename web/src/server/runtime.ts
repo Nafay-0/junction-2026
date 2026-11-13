@@ -11,7 +11,7 @@ import { InMemoryDockRepository, createDock, type Dock } from "@/core/orders";
 import { InMemoryPasskeyStore, PasskeyService } from "@/core/passkeys";
 import { SEED_PRODUCTS, SEED_STOCK } from "@/core/seed";
 import { demoTapEnabled, sandboxLimits } from "./config";
-import { KITCHEN_ORG, demoKitchenKeyPair, demoKitchenProfile } from "./demo-kitchen";
+import { KITCHEN_ORG, demoKitchenKeyPair, demoKitchenProfile, demoProducts } from "./demo-kitchen";
 import { DEMO_ORG, demoOrgKeyPair } from "./dev-fixtures";
 import { SandboxService } from "./sandboxes";
 import { loadCatalogIndex } from "./valio/index-store";
@@ -25,7 +25,8 @@ import { ValioCatalog } from "./valio/valio-catalog";
  *
  * Catalogue: the partner's real catalogue (ValioCatalog) when the index exists (`pnpm index:build`) and
  * VALIO_API_KEY is set; otherwise the 12-product seed, so a fresh clone runs with no partner data.
- * DOCK_CATALOG=seed forces the seed (the scripted demo's product ids are seed ids).
+ * DOCK_CATALOG=seed forces the seed. Demo histories (the returning kitchen, visitor hotels) are drawn from whichever
+ * catalogue is in use, by attribute.
  */
 export type CatalogSource = { kind: "seed" } | { kind: "valio"; products: number; indexFile: string; loadMs: number };
 export type Runtime = {
@@ -69,6 +70,9 @@ async function buildRuntime(): Promise<Runtime> {
   const events = new InMemoryEventBus();
   // Approvers who registered a passkey must use it; others (the scripted Laakso demo) keep the link token.
   const passkeys = new PasskeyService({ store: new InMemoryPasskeyStore(), demoTapEnabled });
+  // Demo histories come from the catalogue this process runs on (the real one when present), by attribute.
+  const products = await demoProducts(catalog);
+  const kitchens = new InMemoryKitchenRepository([demoKitchenProfile(new Date(), products)]); // DEV: a returning kitchen with history
   const dock = createDock({
     catalog: new MeteredCatalog(catalog),
     repo: new InMemoryDockRepository(),
@@ -78,9 +82,9 @@ async function buildRuntime(): Promise<Runtime> {
     notifier: outbox,
     verifier: passkeys.verifier,
     events,
-    kitchens: new InMemoryKitchenRepository([demoKitchenProfile(new Date())]), // DEV: a returning kitchen with history
+    kitchens,
   });
-  const sandboxes = new SandboxService({ dock, registry: trustedIssuers, passkeys, limits: sandboxLimits });
+  const sandboxes = new SandboxService({ dock, registry: trustedIssuers, passkeys, limits: sandboxLimits, kitchens, products: async () => products });
   return { dock, outbox, catalog, catalogSource, events, passkeys, sandboxes };
 }
 

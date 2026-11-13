@@ -1,10 +1,13 @@
 import type { PublicKeyCredentialCreationOptionsJSON, RegistrationResponseJSON } from "@simplewebauthn/server";
+import type { Product } from "@/core/catalog";
+import type { KitchenRepository } from "@/core/kitchen";
 import { generateEd25519KeyPair, type KeyPair } from "@/core/keys";
 import { signMandate, type Mandate, type createTrustRegistry } from "@/core/mandate";
 import { DockError, type Dock, type PublicOrder } from "@/core/orders";
 import { PasskeyError, type PasskeyService, type RelyingParty } from "@/core/passkeys";
 import { addMinutes, newId } from "@/core/util";
 import { SANDBOX_ROLE, sandboxIdentity, sandboxMandate, type SandboxIdentity } from "./dev-fixtures";
+import { hotelKitchenProfile } from "./demo-kitchen";
 import { doorLog } from "./ops/door";
 import { suspensions } from "./ops/suspensions";
 import { runKitchenScenario } from "./sandbox-scenario";
@@ -43,6 +46,10 @@ export type SandboxDeps = {
   passkeys: PasskeyService;
   limits: () => { max: number; ttlMinutes: number };
   now?: () => Date;
+  /** Where each new kitchen's order history goes (the same repository the Dock instance reads). */
+  kitchens?: KitchenRepository;
+  /** Catalogue products the history is drawn from, by attribute (seed or real catalogue). */
+  products?: () => Promise<Product[]>;
 };
 
 export class SandboxService {
@@ -110,6 +117,10 @@ export class SandboxService {
     this.deps.registry.add({ kid: key.kid, orgId, publicKey: key.publicKey });
     const mandate = sandboxMandate({ now, expiresAt, orgId, orgName: `${identity.kitchenName}, ${identity.city}`, agentId, approverName: identity.approverName });
     const mandateToken = await signMandate(mandate, key);
+    if (this.deps.kitchens) {
+      // A plausible past: a hotel buying a few hundred litres of milk twice a week, from the catalogue it runs on.
+      await this.deps.kitchens.saveProfile(hotelKitchenProfile(orgId, mandate.issuer.name, now, await this.deps.products?.()));
+    }
     const approverId = newId("apv");
     await this.deps.passkeys.enrol(
       { approverId, orgId, role: SANDBOX_ROLE.id, name: identity.approverName, userHandle: passkey?.userHandle ?? "", createdAt: now.toISOString(), expiresAt: expiresAt.toISOString() },
@@ -174,7 +185,8 @@ export class SandboxService {
       throw err;
     }
     doorLog(this.deps.dock).record({ ...record, ok: true }, session.mandate);
-    return runKitchenScenario(this.deps.dock, session, { now: this.now() });
+    const s = this.sandboxes.get(sandboxId);
+    return runKitchenScenario(this.deps.dock, session, { now: this.now(), by: s ? `${s.approverName} (scripted buyer)` : undefined });
   }
 }
 

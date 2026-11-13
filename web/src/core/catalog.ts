@@ -45,6 +45,8 @@ export const ProductSchema = z.object({
   temperatureClass: z.enum(["ambient", "chilled", "frozen"]).nullable().optional(),
   countryOfOrigin: z.string().nullable().optional(),
   substitutes: z.array(z.string()).optional(), // substitutes the partner lists for this product
+  /** What kind of product the name makes it beyond its category ("coffee", "fermented", "portion"); empty when plain. */
+  kinds: z.array(z.string()).optional(),
 });
 export type Product = z.infer<typeof ProductSchema>;
 
@@ -81,6 +83,8 @@ export type LiveOffer = {
   fetchedAt?: string;
   /** Set when a demo override replaced the live figures (see setStock). */
   simulated?: boolean;
+  /** Ids of the signed claims Dock issued for this offer (see claims.ts). Set by the order flow, not by catalogues. */
+  claims?: { price?: string; availability?: string; origin?: string };
 };
 
 /** Why a product has no usable live offer, or what to watch out for. */
@@ -95,6 +99,14 @@ export type LiveProblem =
   | "later_than_requested" // earliest delivery after the requested date
   | "cutoff_passed" // the order cut-off for that date has passed
   | "unit_mismatch"; // availability given in another unit than the product's sales unit
+
+/** Problems that leave no truthful offer to quote: a passed cut-off makes the stated delivery date untrue. */
+export const NO_OFFER_PROBLEMS: ReadonlySet<LiveProblem> = new Set<LiveProblem>(["no_price", "price_not_valid", "sales_block", "not_deliverable", "unit_mismatch", "unknown_product", "cutoff_passed"]);
+
+/** The offer a status carries when it can be quoted, else undefined. */
+export function usableOffer(s: LiveStatus): LiveOffer | undefined {
+  return s.offer && !s.problems.some((p) => NO_OFFER_PROBLEMS.has(p)) ? s.offer : undefined;
+}
 
 export type LiveStatus = {
   productId: string;
@@ -262,10 +274,11 @@ export class InMemoryCatalog implements CatalogPort {
     for (const id of productIds) {
       const s = this.stock.get(id);
       if (!s) continue; // unknown or delisted: no offer
-      const earliest = isoDate(addDays(this.now(), s.leadDays));
-      // A later requested date is simply delivered then; an earlier one cannot be met.
-      const deliveryDate = options?.deliveryDate && options.deliveryDate > earliest ? options.deliveryDate : earliest;
-      offers.push({ productId: id, unitPriceCents: s.unitPriceCents, availablePacks: s.availablePacks, deliveryDate });
+      // Dock asks for the buyer's need-by date, which means "by": the earliest delivery is offered, and an
+      // earlier date than that cannot be met.
+      const deliveryDate = isoDate(addDays(this.now(), s.leadDays));
+      const requestedDate = options?.deliveryDate;
+      offers.push({ productId: id, unitPriceCents: s.unitPriceCents, availablePacks: s.availablePacks, deliveryDate, ...(requestedDate ? { requestedDate, laterThanRequested: deliveryDate > requestedDate } : {}) });
     }
     return offers;
   }
