@@ -8,7 +8,8 @@ import { DEMO_NOTE, PRODUCT_NAME } from "../_ui/brand";
 import { RULE_TITLE, ago, clockSeconds, fiMoney, money } from "../_ui/plain";
 import { Target } from "../_ui/target";
 import type { FeedItem, WallSnapshot } from "@/server/wall-snapshot";
-import type { Board, BoardRow } from "./crash-board";
+import type { Board } from "./crash-board";
+import { CrashMatrix } from "./crash-matrix";
 import css from "./wall.module.css";
 
 /**
@@ -45,7 +46,7 @@ export function Wall({ initial, join, board }: { initial: WallSnapshot; join: { 
   return (
     <div className="on-dark flex min-h-dvh flex-col bg-petrol-deep text-paper lg:grid lg:h-dvh lg:grid-cols-[minmax(0,1fr)_minmax(22rem,25vw)] lg:grid-rows-[auto_minmax(0,1fr)] lg:overflow-hidden">
       {/* ---------- header ---------- */}
-      <header className="order-1 flex flex-wrap items-center gap-x-[2vw] gap-y-2 border-b-2 border-paper/20 px-[2vw] py-[1.4vh] lg:col-span-2">
+      <header className="order-1 flex flex-wrap lg:order-none items-center gap-x-[2vw] gap-y-2 border-b-2 border-paper/20 px-[2vw] py-[1.4vh] lg:col-span-2">
         <div className="flex items-center gap-[0.8vw]">
           <Target size={52} tone="chalk" className="h-[max(2.4rem,3vw)] w-auto" />
           <span className="display text-[max(2.4rem,3.3vw)] leading-none">{PRODUCT_NAME}</span>
@@ -69,7 +70,7 @@ export function Wall({ initial, join, board }: { initial: WallSnapshot; join: { 
       <div className="order-3 flex min-h-0 flex-col lg:order-none">
         <GateLanes feed={snap.feed} now={t} justRefused={justRefused ? snap.refusals[0] : undefined} lastAt={snap.lastActivityAt} error={live.error} />
         <Counters c={c} />
-        <div className="grid min-h-0 border-t-2 border-paper/20 lg:h-[27vh] [@media(max-height:820px)]:lg:h-[25vh] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+        <div className="grid min-h-0 border-t-2 border-paper/20 lg:h-[37vh] lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.6fr)]">
           <Refusals items={snap.refusals} now={t} fresh={justRefused} />
           <CrashBoard board={board} />
         </div>
@@ -286,11 +287,11 @@ function Counters({ c }: { c: WallSnapshot["counters"] }) {
   return (
     <section aria-label="Totals" className="grid grid-cols-2 border-t-2 border-paper/20 sm:grid-cols-3 lg:grid-cols-5">
       {cells.map((x) => (
-        <div key={x.label} className="min-w-0 border-paper/15 px-[2vw] py-[1vh] [&:not(:last-child)]:border-r">
-          <p key={x.n} className={`display text-[max(3rem,3.9vw)] leading-[0.92] tabular ${x.tone === "gate" && x.n > 0 ? "text-safety" : ""}`}>
+        <div key={x.label} className="min-w-0 border-paper/15 px-[2vw] py-[0.8vh] [&:not(:last-child)]:border-r">
+          <p key={x.n} className={`display text-[max(2.6rem,3.1vw)] leading-[0.92] tabular ${x.tone === "gate" && x.n > 0 ? "text-safety" : ""}`}>
             {x.n.toLocaleString("fi-FI")}
           </p>
-          <p className="mt-[0.4vh] text-[max(0.95rem,1vw)] font-semibold leading-tight text-paper/80">{x.label}</p>
+          <p className="mt-[0.3vh] text-[max(0.92rem,0.92vw)] font-semibold leading-tight text-paper/80">{x.label}</p>
           {x.tone === "person" && (
             <p className="mt-[0.5vh] inline-flex items-center gap-2 bg-safety px-2 py-0.5 text-[max(0.9rem,0.9vw)] font-bold text-safety-ink">
               <span aria-hidden className="breathe size-2 bg-safety-ink" />
@@ -335,41 +336,22 @@ function Refusals({ items, now, fresh }: { items: WallSnapshot["refusals"]; now:
 // ---------- the crash test ----------
 
 function CrashBoard({ board }: { board: Board }) {
-  const models = board.rows.filter((r) => !r.scripted);
-  const yardsticks = board.rows.filter((r) => r.scripted && (r.agent === "reference" || r.agent === "reckless"));
-  const rows: BoardRow[] = [...models.slice(0, 5), ...yardsticks].slice(0, 6);
   return (
-    <section aria-labelledby="crash" className="flex min-h-0 flex-col overflow-hidden border-t-2 border-paper/20 px-[2vw] py-[1.6vh] lg:border-l-2 lg:border-t-0">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 id="crash" className="display text-[max(1.5rem,1.7vw)] leading-none">
-          Crash test
+    <section aria-labelledby="crash" className="flex min-h-0 flex-col overflow-hidden border-t-2 border-paper/20 px-[2vw] py-[1.4vh] lg:border-l-2 lg:border-t-0">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+        <h2 id="crash" className="display flex items-center gap-[0.6vw] text-[max(1.5rem,1.7vw)] leading-none">
+          <Target size={30} tone="safety" className="h-[max(1.5rem,1.7vw)] w-auto" /> Crash test
         </h2>
-        <p className="text-[max(0.85rem,0.85vw)] text-paper/65">{board.rows.length ? `${board.rows[0].scenarios || 13} hard purchasing situations, scored from the ledger` : "13 hard purchasing situations"}</p>
+        <p className="text-[max(0.88rem,0.88vw)] text-paper/70">13 hard purchasing situations. The rating becomes a licence: what the model may buy alone.</p>
       </div>
-      {rows.length === 0 ? (
-        <p className="mt-[1.2vh] max-w-[48ch] text-[max(1rem,1.1vw)] leading-snug text-paper/80">
-          No model has been crash-tested on this server yet. Each one will be run through the same thirteen situations (litres to cases, a passed cut-off, missing allergen data, an instruction hidden in a product text) and earn a licence that sets how much it may buy alone.
+      {board.rows.length === 0 ? (
+        <p className="mt-[1.2vh] max-w-[56ch] text-[max(1rem,1.1vw)] leading-snug text-paper/80">
+          No model has been crash-tested on this server yet. Each one is run through the same thirteen situations (litres to cases, a passed cut-off, missing allergen data, an instruction hidden in a product text) and earns a licence that sets how much it may buy alone.
         </p>
       ) : (
-        <ol className="mt-[1vh] min-h-0 divide-y divide-paper/10 overflow-hidden">
-          {rows.map((r, k) => (
-            <li key={r.agent} className={`grid grid-cols-[1.6em_minmax(0,1fr)_minmax(5rem,9vw)_auto] items-center gap-x-[0.8vw] py-[0.6vh] text-[max(0.95rem,1vw)] ${r.scripted ? "text-paper/65" : ""}`}>
-              <span className="display text-right text-[1.2em] tabular">{r.scripted ? "" : k + 1}</span>
-              <span className="min-w-0 truncate">
-                <span className="font-bold">{r.name}</span> <span className="text-paper/60">{r.scripted ? "scripted yardstick" : r.maker}</span>
-              </span>
-              <span className="flex items-center gap-2">
-                <span aria-hidden className="h-[0.55em] flex-1 bg-paper/15">
-                  <span className={`block h-full ${r.scripted ? "bg-paper/45" : "bg-paper"}`} style={{ width: `${Math.max(1, Math.min(100, r.rating))}%` }} />
-                </span>
-                <span className="display w-[2.6em] text-right text-[1.25em] tabular">{r.rating.toFixed(0)}</span>
-              </span>
-              <span className={`whitespace-nowrap px-1.5 text-[0.85em] font-bold ${r.level === "L3" || r.level === "L2" ? "bg-paper text-petrol-deep" : "border border-paper/40"}`} title={r.limitCents !== undefined ? `Alone up to ${money(r.limitCents)} per order` : undefined}>
-                {r.level ? `${r.level} ${r.levelName}` : "Not licensed"}
-              </span>
-            </li>
-          ))}
-        </ol>
+        <div className="mt-[0.6vh] min-h-0 overflow-hidden">
+          <CrashMatrix board={board} dark big maxRows={5} yardsticks={["reference"]} legend={false} />
+        </div>
       )}
     </section>
   );

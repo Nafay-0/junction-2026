@@ -3,12 +3,14 @@
 import type { AgentRow } from "@/server/ops/views";
 import { fi, num, when, whenSeconds } from "../../_ui/format";
 import Link from "next/link";
-import { Details, Empty, KV, Licence, LiveMark, LoadError, Loading, PageHead, ViaTag, useOps } from "../../_ui/kit";
+import type { Board } from "../../../_wall/crash-board";
+import { CrashMatrix, hazardOf, licenceLine } from "../../../_wall/crash-matrix";
+import { Details, Empty, KV, Licence, LiveMark, LoadError, Loading, PageHead, Section, ViaTag, useOps } from "../../_ui/kit";
 import { FilterBar, useUrlState } from "../../_ui/filters";
 
 const KIND: Record<AgentRow["kind"], string> = { demo: "Demo kitchen", visitor: "Visitor kitchen", outside: "Outside agent" };
 
-export function AgentsScreen() {
+export function AgentsScreen({ board }: { board?: Board }) {
   const live = useOps<{ at: string; licenceSource: string; agents: AgentRow[] }>("/ops-api/agents", { pollMs: 4000 });
   const d = live.data;
   const [q, setQ] = useUrlState("q", "");
@@ -61,6 +63,17 @@ export function AgentsScreen() {
           )}
         </>
       )}
+      <Section id="crash" title="Crash-test ratings" aside="Thirteen hard purchasing situations; the rating becomes a licence that sets what an agent may buy alone">
+        {board && board.rows.length > 0 ? (
+          <div className="bg-paper px-5 py-4">
+            <div aria-hidden className="-mx-5 -mt-4 mb-4 h-[3px] bg-petrol" />
+            <CrashMatrix board={board} maxRows={12} yardsticks={["reference", "reckless", "do-nothing"]} />
+            <Reasons board={board} />
+          </div>
+        ) : (
+          <Empty title="No crash-test results on this server">Run the suite (pnpm crash:reproduce, or a model with pnpm crash --agent) and publish it with pnpm crash:export; the ratings, each failure&apos;s reason and the licences appear here and on the wall.</Empty>
+        )}
+      </Section>
     </>
   );
 }
@@ -164,6 +177,37 @@ function Stat({ n, label, gate = false }: { n: number; label: string; gate?: boo
         {gate ? <span className="bg-safety-ink px-1.5 text-safety">{num(n)}</span> : num(n)}
       </dd>
       <p className="mt-1 text-[0.76rem] leading-tight text-ink-soft">{label}</p>
+    </div>
+  );
+}
+
+/** Every hazard a model did not get through, with the one line that says why: the detail behind the matrix. */
+function Reasons({ board }: { board: Board }) {
+  const models = board.rows.filter((r) => !r.scripted && r.scenarios.some((s) => s.score !== null && s.score < 90));
+  if (!models.length) return null;
+  return (
+    <div className="mt-5 grid gap-x-8 gap-y-4 border-t border-line/70 pt-4 lg:grid-cols-2">
+      {models.map((r) => (
+        <div key={r.agent}>
+          <p className="flex flex-wrap items-baseline justify-between gap-x-3">
+            <span className="display text-[1.3rem]">{r.name}</span>
+            <span className="text-[0.88rem] text-ink-soft">
+              {r.maker}, rating {r.rating.toFixed(1).replace(".", ",")}, {licenceLine(r)}
+            </span>
+          </p>
+          <ul className="mt-1 divide-y divide-line/60 text-[0.92rem]">
+            {r.scenarios
+              .filter((s) => s.score !== null && s.score < 90)
+              .map((s) => (
+                <li key={s.id} className="grid grid-cols-[8.5rem_2.5rem_minmax(0,1fr)] gap-x-2 py-1">
+                  <span className="font-semibold">{hazardOf(s.id).short}</span>
+                  <span className="text-right tabular">{Math.round(s.score ?? 0)}</span>
+                  <span className="text-ink-soft">{s.reason ?? "No reason recorded."}</span>
+                </li>
+              ))}
+          </ul>
+        </div>
+      ))}
     </div>
   );
 }
