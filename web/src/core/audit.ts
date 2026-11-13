@@ -23,7 +23,7 @@ export type WholesalerAuditEntry = {
   type: LedgerEntry["type"];
   requestId?: string;
   orderId?: string;
-  kind: "asked" | "claimed" | "quoted" | "decided" | "signed" | "committed" | "refused" | "private";
+  kind: "asked" | "claimed" | "quoted" | "decided" | "signed" | "committed" | "refused" | "control" | "private";
   summary: string;
   data?: Record<string, unknown>;
 };
@@ -68,6 +68,9 @@ export function wholesalerEntry(e: LedgerEntry): WholesalerAuditEntry {
       return { ...base, kind: "committed", summary: e.summary, data: pick(d, ["authorisedBy", "ledgerHead"]) };
     case "refusal":
       return { ...base, kind: "refused", summary: e.summary, data: pick(d, ["code", "rule", "status"]) };
+    case "control":
+      // The wholesaler's own act (an operator suspended or resumed an agent): theirs to read in full.
+      return { ...base, kind: "control", summary: e.summary, data: pick(d, ["action", "scope", "target", "suspensionId", "reason", "by"]) };
   }
 }
 
