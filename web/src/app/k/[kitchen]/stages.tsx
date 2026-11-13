@@ -248,7 +248,7 @@ export function Options({ step, options, onChoose, busyKey, names }: { step: Ste
               <div aria-hidden className={c.signOff.length ? "hazard-thin h-2" : "h-[3px] bg-ink"} />
               <div className="flex flex-1 flex-col p-4">
                 <h3 className="font-display text-[1.3rem] font-bold leading-tight">{c.labels.map((l) => LABEL[l]).join(" + ")}</h3>
-                <p className="mt-0.5 text-[0.95rem] leading-snug text-ink-soft">
+                <p className="mt-0.5 min-h-[2.75em] text-[0.95rem] leading-snug text-ink-soft">
                   {c.lines.map((l) => `${l.packs} × ${shortProduct(l.name)}${l.substituteFor ? " (swap)" : ""}`).join(" + ")}
                 </p>
                 <p className="mt-3 font-display text-[2.6rem] font-bold leading-none tabular">{eur(c.totalCents)}</p>

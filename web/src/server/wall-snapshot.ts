@@ -1,6 +1,6 @@
 import type { LedgerEntry } from "@/core/ledger";
 import { SEED_PRODUCTS } from "@/core/seed";
-import { amount, eur, humanize, roleLabel, ruleTitle } from "@/app/_ui/plain";
+import { amount, eur, humanize, ruleTitle } from "@/app/_ui/plain";
 import { KITCHEN_ORG } from "./demo-kitchen";
 import { DEMO_ORG } from "./dev-fixtures";
 import type { Runtime } from "./runtime";
@@ -146,7 +146,7 @@ function progress(list: LedgerEntry[]): Pick<FeedItem, "what" | "reached" | "sta
       totalCents = d.totalCents as number;
       const approver = d.approver as { name: string; role: string } | undefined;
       if (d.outcome === "auto_approve") [reached, status, tone] = [4, "Within the agent's mandate", "plain"];
-      else if (d.outcome === "needs_human_approval") [reached, status, tone] = [4, `Waiting for ${approver?.name ?? "a person"}${approver ? `, ${roleLabel(approver.role)}` : ""}`, "safety"];
+      else if (d.outcome === "needs_human_approval") [reached, status, tone] = [4, `Waiting for ${approver?.name ?? "a person"}`, "safety"];
       else {
         const failed = (d.rules as { rule: string; outcome: string }[] | undefined)?.find((r) => r.outcome === "fail");
         [reached, status, tone] = [4, `Refused: ${ruleTitle(failed?.rule).toLowerCase()}`, "safety"];

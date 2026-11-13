@@ -70,6 +70,7 @@ export function Wall({ initial, join }: { initial: WallSnapshot; join: { url: st
             <p className="text-[clamp(1rem,1.1vw,1.35rem)] text-chalk-soft">{live.error ? "Reconnecting to Dock…" : snap.lastActivityAt ? `Last activity ${ago(snap.lastActivityAt, t)}` : "Waiting for the first request"}</p>
           </div>
           {snap.feed.length === 0 ? <Idle /> : <Feed items={snap.feed} now={t} />}
+          {snap.feed.length > 0 && snap.feed.length < 4 && <Legend />}
         </section>
 
         <aside className="flex min-h-0 flex-col gap-[2vh] border-t-[3px] border-chalk bg-steel-2 px-[1.6vw] py-[2vh] lg:border-l-[3px] lg:border-t-0">
@@ -114,7 +115,7 @@ function Counter({ n, label, safety, safetyDot, sub }: { n: number; label: strin
 function Feed({ items, now }: { items: FeedItem[]; now: number }) {
   const fresh = useFresh();
   return (
-    <ol className="mt-[1.4vh] min-h-0 flex-1 divide-y divide-chalk/15 overflow-hidden border-t border-chalk/30">
+    <ol className="mt-[1.4vh] min-h-0 shrink divide-y divide-chalk/15 overflow-hidden border-t border-chalk/30">
       {items.map((it) => (
         <li
           key={`${it.key}-${it.status}`}
@@ -168,24 +169,31 @@ function Idle() {
       <p className="max-w-[60ch] text-[clamp(1.1rem,1.4vw,1.7rem)] leading-snug text-chalk-soft">
         Every agent shows a mandate its kitchen signed. Dock fixes a price with the wholesaler, then plain code checks the order. Inside the mandate, the agent buys alone. Above it, a named person signs off on their phone. Outside it, the order is refused, with the rule that refused it.
       </p>
-      <div className="flex flex-wrap items-center gap-x-[1.2vw] gap-y-2 text-[clamp(1rem,1.15vw,1.4rem)] text-chalk-soft">
-        <span>Each request moves along five stations:</span>
-        {TRACK.map((t, i) => (
-          <span key={t} className="inline-flex items-center gap-2">
-            <span className={`inline-block h-[0.8em] w-[1.8em] ${i < 4 ? "bg-chalk" : "border-2 border-chalk/35"}`} />
-            {t}
-          </span>
-        ))}
-        <span className="inline-flex items-center gap-2">
-          <span className="inline-block h-[0.8em] w-[1.8em] bg-safety" />a person must act, or refused
-        </span>
-      </div>
+      <Legend />
       <p className="text-[clamp(1.05rem,1.2vw,1.5rem)]">
         Or open the buyer console:{" "}
         <Link href="/k/kaari" className="font-semibold underline decoration-2 underline-offset-4">
           Ravintola Kaari
         </Link>
       </p>
+    </div>
+  );
+}
+
+/** How to read a row: the five stations, and what yellow means. */
+function Legend() {
+  return (
+    <div className="mt-auto flex flex-wrap items-center gap-x-[1.2vw] gap-y-2 pt-[2vh] text-[clamp(1rem,1.15vw,1.4rem)] text-chalk-soft">
+      <span>Each request moves along five stations:</span>
+      {TRACK.map((t, i) => (
+        <span key={t} className="inline-flex items-center gap-2">
+          <span className={`inline-block h-[0.8em] w-[1.8em] ${i < 4 ? "bg-chalk" : "border-2 border-chalk/35"}`} />
+          {t}
+        </span>
+      ))}
+      <span className="inline-flex items-center gap-2">
+        <span className="inline-block h-[0.8em] w-[1.8em] bg-safety" />a person must act, or refused
+      </span>
     </div>
   );
 }
