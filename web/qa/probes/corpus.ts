@@ -20,11 +20,11 @@ import type { Probe } from "../lib/probe";
 
 const DIR = path.join(process.cwd(), "qa", "corpus");
 const REQUESTS = path.join(DIR, "requests.json");
-const READINGS = path.join(DIR, "interpretations.json");
+const READINGS = process.env.QA_READINGS ? path.resolve(process.env.QA_READINGS) : path.join(DIR, "interpretations.json");
 const CLAIM_TAGS = new Set(["lactose_free", "organic", "gluten_free", "vegan", "vegetarian", "low_lactose", "fat_free", "fat_1_5", "fat_3_5", "free_from_lactose", "milk_free"]);
 
 type Case = { id: string; category: string; lang: string; text: string; expect: { amount: number | null; unit: string | null; deliverBy: string | null; statedClaims: string[]; statedAllergens: string[]; isPurchase: boolean; note: string } };
-type Reading = { status: number; need?: any; code?: string; message?: string; model?: string };
+type Reading = { status: number; need?: any; code?: string; message?: string; model?: string; ms?: number };
 
 const load = <T>(f: string, d: T): T => (existsSync(f) ? (JSON.parse(readFileSync(f, "utf8")) as T) : d);
 const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").replace(/^free_from_/, "").replace(/^contains_no_/, "");
@@ -41,6 +41,7 @@ export function checkReading(c: Case, r: Reading): string[] {
   if (r.status >= 500) p.push(`server: ${r.status} ${r.code}`);
   if (r.status !== 200) return p; // need_incomplete etc.: the intake asks; judged by category below
   const n = r.need;
+  if (c.category === "multi_need") p.push(`multi: one need kept (${n.item?.text}, ${n.quantity?.amount} ${n.quantity?.unit}); any other item in the message is dropped without a word`);
   if (e.amount !== null && n.quantity) {
     const same = Math.abs(n.quantity.amount - e.amount) < 1e-6;
     const unitOk = !e.unit || n.quantity.unit === e.unit || (["pack", "pcs"].includes(e.unit) && ["pack", "pcs"].includes(n.quantity.unit));
@@ -49,14 +50,22 @@ export function checkReading(c: Case, r: Reading): string[] {
   if (e.deliverBy && n.deliverBy !== e.deliverBy) p.push(`date: asked ${e.deliverBy}, read ${n.deliverBy ?? "none"}`);
   if (!e.deliverBy && n.deliverBy) p.push(`date: none asked, read ${n.deliverBy}`);
   const statedC = new Set(e.statedClaims.map(claimNorm));
+  // What the words themselves state: a milk type names its fat (semi-skimmed = 1.5 %, whole = 3.5 %, skimmed = 0.1 %);
+  // "gluten-free" is the claim and the forbidden allergen at once.
+  const t = c.text.toLowerCase();
+  if (/semi|kevyt|mellan|lätt|1[,.]5|1,5|1\.5/.test(t)) statedC.add("fat_1_5");
+  if (/whole|täys|standard|3[,.]5|helmjölk/.test(t)) statedC.add("fat_3_5");
+  if (/skim|rasvaton|fettfri|skumm|0[,.]1/.test(t)) statedC.add("fat_free");
   const readC = [...(n.requiredClaims ?? []), ...(n.item?.attributes ?? [])].map(claimNorm).filter((x) => CLAIM_TAGS.has(x) || x.endsWith("_free"));
   const extraC = readC.filter((x) => !statedC.has(x));
   if (extraC.length) p.push(`asserted: claims ${extraC.join(", ")} not stated`);
   const statedA = new Set(e.statedAllergens.map(allergenNorm));
+  for (const x of statedC) if (x.endsWith("_free") && x !== "lactose_free" && x !== "fat_free") statedA.add(allergenNorm(x.replace(/_free$/, "")));
   const readA = (n.forbiddenAllergens ?? []).map(allergenNorm);
-  const extraA = readA.filter((x: string) => !statedA.has(x));
+  const extraA = readA.filter((x: string) => !statedA.has(x) && !statedC.has(`${x}_free`));
   if (extraA.length) p.push(`asserted: allergens ${extraA.join(", ")} not stated`);
-  const lostA = [...statedA].filter((x) => !readA.includes(x) && !(x === "milk" && readC.includes("lactose_free")));
+  const readFree = new Set(readC.filter((x) => x.endsWith("_free")).map((x) => allergenNorm(x.replace(/_free$/, ""))));
+  const lostA = [...statedA].filter((x) => !readA.includes(x) && !readFree.has(x) && !(x === "milk" && readC.includes("lactose_free")));
   if (lostA.length) p.push(`lost: excluded allergen(s) ${lostA.join(", ")} dropped`);
   return p;
 }
@@ -78,7 +87,7 @@ export const corpusProbes = (opts: { corpus: boolean }): Probe[] => [
             for (const c of corpus.cases) {
               if (n % 25 === 24) a = await kaariAgent(http, { weeklyBudgetCents: 1e9 }); // the interpreter allows 30 calls an hour per agent
               const r = await a.post("/api/v1/agent/interpret", { text: c.text, now: corpus.now });
-              cache[c.id] = { status: r.status, need: r.body?.need, code: r.body?.error?.code, message: r.body?.error?.message?.slice(0, 200), model: r.body?.model };
+              cache[c.id] = { status: r.status, need: r.body?.need, code: r.body?.error?.code, message: r.body?.error?.message?.slice(0, 200), model: r.body?.model, ms: r.ms };
               if (r.status === 429 || r.status === 503) check.note(`${c.id}: ${r.status} ${r.body?.error?.code}`);
               n++;
             }
@@ -93,7 +102,7 @@ export const corpusProbes = (opts: { corpus: boolean }): Probe[] => [
     area: "interpreter",
     kind: "language",
     title: "Corpus readings keep what the buyer wrote and add nothing; each need replayed through the intake keeps the order invariants",
-    findings: ["F-INTERPRET-ASSERTS"],
+    findings: ["F-INTERPRET-MULTI-NEED", "F-INTERPRET-ALLERGY-DROPPED"],
     async run({ http, check }) {
       const corpus = load<{ cases: Case[] }>(REQUESTS, { cases: [] });
       const cache = load<Record<string, Reading>>(READINGS, {});
@@ -109,7 +118,7 @@ export const corpusProbes = (opts: { corpus: boolean }): Probe[] => [
           const kind = p.split(":")[0];
           byKind[kind] = (byKind[kind] ?? 0) + 1;
           // Safety-relevant kinds fail the run; amount/date differences are listed for review (the generator can be wrong too).
-          if (["decline", "asserted", "lost", "server"].includes(kind)) check.expect(false, `${c.id}: ${p} | "${c.text.slice(0, 90)}"`);
+          if (["decline", "asserted", "lost", "server", "multi"].includes(kind)) check.expect(false, `${c.id}: ${p} | "${c.text.slice(0, 90)}"`);
           else check.note(`${c.id}: ${p} | "${c.text.slice(0, 90)}"`);
         }
         if (r.status === 200 && r.need) {
