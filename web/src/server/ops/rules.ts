@@ -47,6 +47,7 @@ export const RULE_INFO: Record<string, RuleInfo> = {
   quote_expiry: { group: "systems", where: "gate", does: "A fixed price holds for a limited time; after that the agent asks again." },
   quote_replay: { group: "systems", where: "gate", does: "A quote buys once." },
   order_matches_quote: { group: "systems", where: "gate", does: "The order buys exactly what was quoted, at the quoted quantities and prices." },
+  grounding_check: { group: "food", where: "door", does: "Text a model wrote (the assistant's answers, the voice agent's speech, the menu planner's lines, the interpreter's reading, memory proposals, the Aiven agent's transcript) may name only products, prices, amounts, dates, dietary claims and allergen facts that the catalogue, a live lookup, the ledger or the kitchen's memory backs. Anything else is removed or shown as \"The data does not say\" before anyone reads it." },
 };
 
 const EXTRA_TITLE: Record<string, string> = {
@@ -54,6 +55,7 @@ const EXTRA_TITLE: Record<string, string> = {
   human_input: "Answers come from the buyer",
   human_confirmation: "A person confirms what matters",
   intake_sequence: "Steps in order",
+  grounding_check: "Model text checked against the data",
 };
 
 export function ruleTitleOf(rule: string): string {
