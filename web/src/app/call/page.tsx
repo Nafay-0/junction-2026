@@ -8,7 +8,7 @@ import { SESSION_COOKIE } from "@/server/approver-session";
 import { getRuntime } from "@/server/runtime";
 
 export const metadata: Metadata = { title: "Dock: call your agent" };
-export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#e4e6e4" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#f2f7f8" };
 
 /**
  * /call: what the call QR code opens on a phone. A visitor who has joined calls their own kitchen's agent;
@@ -17,7 +17,7 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1, view
  */
 export default function Call(props: PageProps<"/call">) {
   return (
-    <main className="min-h-dvh bg-concrete">
+    <main className="min-h-dvh bg-mist">
       <Suspense fallback={<p className="p-8 text-center text-ink-soft">Opening the call…</p>}>
         <Resolve {...props} />
       </Suspense>

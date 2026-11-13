@@ -4,8 +4,8 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { DEMO_NOTE, PRODUCT_NAME } from "../_ui/brand";
-import { eurShort } from "../_ui/plain";
-import { Target, Wordmark } from "../_ui/target";
+import { moneyShort } from "../_ui/plain";
+import { Glyph } from "../_ui/glyphs";
 import { SESSION_COOKIE } from "@/server/approver-session";
 import { listConsoleKitchens, resolveKitchen } from "@/server/console-kitchens";
 import { getRuntime } from "@/server/runtime";
@@ -15,13 +15,21 @@ export const metadata: Metadata = { title: `${PRODUCT_NAME}: enter a kitchen's s
 /** Demo entry: open a kitchen's shop with one click. No passwords: these are demo kitchens on synthetic data. */
 export default function KitchenEntry() {
   return (
-    <div className="min-h-dvh bg-concrete text-ink">
-      <p className="bg-ink px-4 py-1 text-center text-[0.82rem] text-chalk">{DEMO_NOTE}</p>
-      <main className="mx-auto max-w-[1100px] px-4 py-10 sm:px-8">
-        <Wordmark size={34} />
-        <h1 className="mt-8 font-display text-[2.6rem] font-bold leading-tight tracking-tight">Enter a kitchen&apos;s shop</h1>
-        <p className="mt-2 max-w-[60ch] text-[1.1rem] leading-snug text-ink-soft">Each kitchen has its own purchasing agent, its own signed rules and its own memory. Pick one; no password, it is a demo.</p>
-        <Suspense fallback={<div className="mt-8 h-64 animate-pulse bg-paper/60" />}>
+    <div className="min-h-dvh bg-mist text-ink">
+      <p className="bg-petrol-deep px-4 py-1 text-center text-[0.8rem] text-paper/85">{DEMO_NOTE}</p>
+      <header className="on-dark relative overflow-hidden bg-petrol text-paper">
+        <Glyph kind="case" size={320} strokeWidth={0.9} className="pointer-events-none absolute -right-10 -top-16 text-paper/10" />
+        <div className="relative mx-auto max-w-[1100px] px-4 pb-12 pt-6 sm:px-8">
+          <p className="flex items-baseline gap-2">
+            <span aria-hidden className="size-3 bg-lime" />
+            <span className="display text-[2.2rem]">{PRODUCT_NAME}</span>
+          </p>
+          <h1 className="display mt-10 text-[3rem] sm:text-[4.2rem]">Enter a kitchen&apos;s shop</h1>
+          <p className="mt-3 max-w-[60ch] text-[1.15rem] leading-snug text-paper/90">A wholesale shop for professional kitchens, with each kitchen&apos;s own purchasing agent working inside it: its own signed rules, its own memory, and a person who signs off when an order goes beyond them. Pick one; no password, it is a demo.</p>
+        </div>
+      </header>
+      <main className="mx-auto max-w-[1100px] px-4 pb-14 sm:px-8">
+        <Suspense fallback={<div className="mt-8 h-64 animate-pulse bg-concrete-deep/60" />}>
           <Kitchens />
         </Suspense>
       </main>
@@ -45,37 +53,37 @@ async function Kitchens() {
   return (
     <>
       {mine && (
-        <Link href={`/k/${mine.sandboxId}`} className="mt-8 block bg-paper hover:outline-[3px] hover:outline-ink">
-          <div aria-hidden className="hazard h-3" />
+        <Link href={`/k/${mine.sandboxId}`} className="mt-8 block bg-paper hover:outline-[3px] hover:outline-petrol">
+          <div aria-hidden className="h-2 bg-lime" />
           <div className="flex flex-wrap items-center gap-4 p-5">
-            <Target size={48} tone="safety" />
+            <Glyph kind="carton" size={48} className="text-petrol" />
             <div className="min-w-0 flex-1">
               <p className="text-ink-soft">Your kitchen, from the QR code on this phone</p>
-              <p className="font-display text-[1.9rem] font-bold leading-tight">
+              <p className="display text-[1.9rem]">
                 {mine.kitchenName}, {mine.city}
               </p>
-              <p className="text-ink-soft">You are {mine.approverName}: orders over {eurShort(mine.perOrderLimitCents)} come to you to sign.</p>
+              <p className="text-ink-soft">You are {mine.approverName}: orders over {moneyShort(mine.perOrderLimitCents)} come to you to sign.</p>
             </div>
-            <span className="bg-ink px-4 py-3 font-semibold text-paper">Open my shop</span>
+            <span className="bg-lime px-4 py-3 font-semibold text-ink">Open my shop</span>
           </div>
         </Link>
       )}
-      <ul className="mt-8 grid gap-4 md:grid-cols-2">
+      <ul className="-mt-6 grid gap-4 md:grid-cols-2">
         {demos.map((k, i) => {
           const m = info[i]?.info.mandate;
           return (
             <li key={k.slug}>
-              <Link href={`/k/${k.slug}`} className="flex h-full flex-col bg-paper hover:outline-[3px] hover:outline-ink">
-                <div aria-hidden className="h-[3px] bg-ink" />
-                <div className="flex flex-1 flex-col p-5">
-                  <p className="font-display text-[1.9rem] font-bold leading-tight">{k.name}</p>
+              <Link href={`/k/${k.slug}`} className="flex h-full flex-col bg-paper hover:outline-[3px] hover:outline-petrol">
+                <div aria-hidden className="h-1.5 bg-petrol-deep" />
+                <div className="flex flex-1 flex-col p-6">
+                  <p className="display text-[2.2rem]">{k.name}</p>
                   <p className="mt-1 leading-snug">{ABOUT[k.slug] ?? "A demo kitchen."}</p>
                   {m && (
                     <p className="mt-3 text-[0.95rem] text-ink-soft">
-                      Agent alone up to {eurShort(m.perOrderLimitCents)} per order; {m.approvers[0]?.name} signs above that.
+                      Agent alone up to {moneyShort(m.perOrderLimitCents)} per order; {m.approvers[0]?.name} signs above that.
                     </p>
                   )}
-                  <span className="mt-4 self-start bg-ink px-4 py-2.5 font-semibold text-paper">Enter the shop</span>
+                  <span className="mt-4 self-start bg-petrol px-4 py-2.5 font-semibold text-paper">Enter the shop</span>
                 </div>
               </Link>
             </li>
@@ -84,9 +92,9 @@ async function Kitchens() {
       </ul>
       {visitors.length > 0 && (
         <section className="mt-10">
-          <h2 className="font-display text-[1.5rem] font-bold">Visitors&apos; kitchens here now</h2>
+          <h2 className="display text-[1.5rem]">Visitors&apos; kitchens here now</h2>
           <p className="text-ink-soft">Made by scanning the QR code on the wall; each closes after 90 minutes.</p>
-          <ul className="mt-2 divide-y divide-ink/10 bg-paper">
+          <ul className="mt-2 divide-y divide-line bg-paper">
             {visitors.map((k) => (
               <li key={k.slug}>
                 <Link href={`/k/${k.slug}`} className="flex min-h-12 items-center justify-between px-4 py-2 hover:bg-concrete/50">
@@ -100,7 +108,7 @@ async function Kitchens() {
       )}
       <p className="mt-10 text-[0.95rem] text-ink-soft">
         Joined from the QR code on the big screen? Open{" "}
-        <Link href="/k/mine" className="font-semibold text-ink underline decoration-2 underline-offset-4">
+        <Link href="/k/mine" className="font-semibold text-petrol underline decoration-2 underline-offset-4">
           your own kitchen
         </Link>{" "}
         on the same phone.

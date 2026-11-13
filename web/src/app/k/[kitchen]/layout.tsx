@@ -6,7 +6,6 @@ import { SESSION_COOKIE } from "@/server/approver-session";
 import { getRuntime } from "@/server/runtime";
 import { Suspense } from "react";
 import { DEMO_NOTE, PRODUCT_NAME } from "../../_ui/brand";
-import { Wordmark } from "../../_ui/target";
 import { listConsoleKitchens, resolveKitchen } from "@/server/console-kitchens";
 import { Portal } from "./portal";
 
@@ -43,7 +42,7 @@ function Shell() {
     <div className="min-h-dvh bg-concrete">
       <p className="h-6 bg-ink" />
       <div className="h-[118px] border-b-[3px] border-ink bg-paper" />
-      <div className="h-[104px] border-b border-ink/15" />
+      <div className="h-[104px] border-b border-line" />
     </div>
   );
 }
@@ -51,13 +50,16 @@ function Shell() {
 function Closed({ kitchens }: { kitchens: { slug: string; name: string }[] }) {
   return (
     <main className="min-h-dvh bg-concrete px-4 py-10 text-ink sm:px-10">
-      <Wordmark size={30} />
-      <h1 className="mt-8 font-display text-4xl font-bold">This kitchen is not open</h1>
+      <p className="flex items-baseline gap-2">
+        <span aria-hidden className="size-3 bg-lime" />
+        <span className="display text-[2rem] text-petrol">{PRODUCT_NAME}</span>
+      </p>
+      <h1 className="display mt-8 text-[3rem] text-ink">This kitchen is not open</h1>
       <p className="mt-2 max-w-prose text-[1.1rem] text-ink-soft">Visitor kitchens close after 90 minutes. Pick a kitchen that is here now:</p>
       <ul className="mt-4 space-y-2">
         {kitchens.map((k) => (
           <li key={k.slug}>
-            <Link className="text-[1.1rem] font-semibold underline decoration-2 underline-offset-4" href={`/k/${k.slug}`}>
+            <Link className="text-[1.1rem] font-semibold text-petrol underline decoration-2 underline-offset-4" href={`/k/${k.slug}`}>
               {k.name}
             </Link>
           </li>

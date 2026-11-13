@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../../_client/api";
 import { attr, day, helsinkiToday } from "../../_ui/plain";
-import { Target } from "../../_ui/target";
 import { usePortal, weekdaysText } from "./portal";
+import { MemoryBook } from "./memory-book";
 import { approverLine, mandateWords } from "./rules";
 import { Button, ErrorPlate, Paper } from "./ui";
 import type { ConnectReply, KitchenMemory } from "./types";
@@ -29,8 +29,8 @@ export function AgentRules() {
   return (
     <div className="mt-5 space-y-8">
       <header>
-        <h1 className="font-display text-[2rem] font-bold leading-tight tracking-tight">Agent and rules</h1>
-        <p className="max-w-[70ch] text-ink-soft">
+        <h1 className="display text-[2.6rem] text-ink sm:text-[3rem]">Agent and rules</h1>
+        <p className="mt-1 max-w-[70ch] text-[1.02rem] leading-snug text-ink-soft">
           What {kitchen.agentName} may do for {kitchen.name}, who signs off the rest, and everything it knows about the kitchen. The rules below are read from the mandate the kitchen signed, valid until {day(helsinkiToday(new Date(kitchen.mandate.validUntil)))}; the gate checks every order against exactly these.
         </p>
       </header>
@@ -45,7 +45,7 @@ export function AgentRules() {
       </section>
 
       <WhoSees />
-      <SharedMemory fallback={<Memory memory={memory} loading={!memory && !overview.error} error={overview.error} />} />
+      <MemoryBook fallback={<Memory memory={memory} loading={!memory && !overview.error} error={overview.error} />} />
       <Connect />
     </div>
   );
@@ -55,11 +55,11 @@ function RuleList({ title, items, tone, extra }: { title: string; items: string[
   return (
     <Paper safety={tone === "safety"}>
       <div className="p-4">
-        <h3 className="font-display text-[1.35rem] font-bold">{title}</h3>
+        <h3 className="display text-[1.6rem]">{title}</h3>
         <ul className="mt-2 space-y-1.5 leading-snug">
           {items.map((t) => (
-            <li key={t} className="grid grid-cols-[1rem_1fr]">
-              <span aria-hidden>–</span>
+            <li key={t} className="grid grid-cols-[1.1rem_1fr]">
+              <span aria-hidden className="mt-[0.5em] size-1.5 bg-petrol" />
               {t}
             </li>
           ))}
@@ -94,22 +94,22 @@ function Memory({ memory, loading, error }: { memory?: KitchenMemory; loading: b
   return (
     <section aria-labelledby="knows" className="space-y-3">
       <div>
-        <h2 id="knows" className="font-display text-[1.6rem] font-bold">
+        <h2 id="knows" className="display text-[1.9rem]">
           What the agent knows about this kitchen
         </h2>
         <p className="max-w-[72ch] text-ink-soft">Two kinds, kept apart: a rule a person stated always constrains what the agent may offer; a habit it learned from orders only pre-selects an answer, which the buyer sees and can change.</p>
       </div>
-      {loading && <div className="h-48 animate-pulse bg-paper/60" />}
+      {loading && <div className="h-48 animate-pulse bg-concrete-deep/60" />}
       {error && !memory && <ErrorPlate title="The kitchen's memory did not load" message={error} onRetry={overview.refresh} />}
       {problem && <ErrorPlate title="That change did not go through" message={problem} />}
       {memory && (
         <div className="grid items-start gap-4 lg:grid-cols-2">
           <Paper>
             <div className="p-4">
-              <h3 className="font-display text-[1.3rem] font-bold">Rules a person stated</h3>
+              <h3 className="display text-[1.5rem]">Rules a person stated</h3>
               <p className="text-[0.92rem] text-ink-soft">Always applied. Products against a rule are not offered at all.</p>
               {memory.stated.length === 0 && <p className="mt-2 text-ink-soft">None yet. Ticking “remember this answer” on a question adds one.</p>}
-              <ul className="mt-2 divide-y divide-ink/10">
+              <ul className="mt-2 divide-y divide-line">
                 {memory.stated.map((s) => (
                   <li key={s.id} className="flex flex-wrap items-start justify-between gap-3 py-2.5">
                     <div className="min-w-0">
@@ -131,11 +131,11 @@ function Memory({ memory, loading, error }: { memory?: KitchenMemory; loading: b
           </Paper>
           <Paper>
             <div className="p-4">
-              <h3 className="font-display text-[1.3rem] font-bold">Habits learned from orders</h3>
+              <h3 className="display text-[1.5rem]">Habits learned from orders</h3>
               <p className="text-[0.92rem] text-ink-soft">Pre-select only. Learned after at least three orders, when most of them agree.</p>
               {memory.families.length === 0 && <p className="mt-2 text-ink-soft">Nothing learned yet: the kitchen has no order history here.</p>}
               {memory.families.map((f) => (
-                <div key={f.family} className="mt-3 border-t border-ink/15 pt-2">
+                <div key={f.family} className="mt-3 border-t border-line pt-2">
                   <p className="font-semibold capitalize">
                     {attr(f.family)} <span className="font-normal normal-case text-ink-soft">{f.usual.text}, {f.orders} orders</span>
                   </p>
@@ -184,8 +184,8 @@ function Memory({ memory, loading, error }: { memory?: KitchenMemory; loading: b
 function WhoSees() {
   const { kitchen } = usePortal();
   return (
-    <section aria-labelledby="who-sees" className="bg-paper p-4">
-      <h2 id="who-sees" className="font-display text-[1.35rem] font-bold">
+    <section aria-labelledby="who-sees" className="bg-paper p-5">
+      <h2 id="who-sees" className="display text-[1.6rem]">
         Who can see what
       </h2>
       <ul className="mt-1 space-y-1 leading-snug">
@@ -198,101 +198,6 @@ function WhoSees() {
         <li>
           <strong>Nobody else.</strong> Another kitchen never sees these, and an outside agent sees only what its mandate lets it ask for.
         </li>
-      </ul>
-    </section>
-  );
-}
-
-/**
- * The shared memory model (typed items with provenance, strength and audience), served under /ui-api/memory when
- * that service is deployed. Expected: GET /ui-api/memory/{kitchen} -> { items: MemoryItem[], staffLastLookedAt? };
- * changes: POST /ui-api/memory/{kitchen}/items/{id} { action: "share" | "private" | "forget" | "correct", text? }.
- * Until it answers, the view over the kitchen repository below is shown.
- */
-type MemoryItem = {
-  id: string;
-  kind: string;
-  text: string;
-  strength: "stated" | "learned" | "one_off" | string;
-  audience: "shared" | "private" | string;
-  provenance?: { source?: string; by?: string; at?: string; orderIds?: string[] };
-  staffLastLookedAt?: string;
-};
-
-function SharedMemory({ fallback }: { fallback: React.ReactNode }) {
-  const { kitchen } = usePortal();
-  const base = `/ui-api/memory/${encodeURIComponent(kitchen.slug)}`;
-  const [data, setData] = useState<{ items: MemoryItem[]; staffLastLookedAt?: string } | null>();
-  const [busy, setBusy] = useState<string>();
-  const [problem, setProblem] = useState<string>();
-  const [editing, setEditing] = useState<{ id: string; text: string }>();
-  const load = () => void api<{ items: MemoryItem[]; staffLastLookedAt?: string }>("GET", base).then((r) => setData(r.ok && Array.isArray(r.data.items) ? r.data : null));
-  useEffect(load, [base]);
-  if (data === undefined) return <div className="h-48 animate-pulse bg-paper/60" />;
-  if (data === null) return <>{fallback}</>;
-  const act = async (id: string, body: Record<string, string>) => {
-    setBusy(id);
-    setProblem(undefined);
-    const r = await api("POST", `${base}/items/${encodeURIComponent(id)}`, body);
-    setBusy(undefined);
-    if (!r.ok) setProblem(r.error.message);
-    setEditing(undefined);
-    load();
-  };
-  const STRENGTH: Record<string, string> = { stated: "Rule a person stated: constrains", learned: "Habit learned from orders: pre-selects only", one_off: "One-off: this order only" };
-  return (
-    <section aria-labelledby="knows" className="space-y-3">
-      <h2 id="knows" className="font-display text-[1.6rem] font-bold">
-        What the agent knows about this kitchen
-      </h2>
-      <p className="text-ink-soft">{data.staffLastLookedAt ? `The wholesaler's staff last looked at the shared items ${day(helsinkiToday(new Date(data.staffLastLookedAt)))}.` : "The wholesaler's staff have not looked at the shared items yet."}</p>
-      {problem && <ErrorPlate title="That change did not go through" message={problem} />}
-      <ul className="divide-y divide-ink/10 bg-paper">
-        {data.items.length === 0 && <li className="p-4 text-ink-soft">Nothing yet.</li>}
-        {data.items.map((it) => (
-          <li key={it.id} className="grid gap-3 p-4 md:grid-cols-[minmax(0,1fr)_auto]">
-            <div className="min-w-0">
-              {editing?.id === it.id ? (
-                <form
-                  className="flex gap-2"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    void act(it.id, { action: "correct", text: editing.text });
-                  }}
-                >
-                  <label className="sr-only" htmlFor={`fix-${it.id}`}>
-                    Correct this item
-                  </label>
-                  <input id={`fix-${it.id}`} value={editing.text} onChange={(e) => setEditing({ id: it.id, text: e.target.value })} className="min-h-10 min-w-0 flex-1 border-2 border-ink px-2" />
-                  <Button type="submit" kind="primary" busy={busy === it.id}>
-                    Save
-                  </Button>
-                </form>
-              ) : (
-                <p className="font-semibold">{it.text}</p>
-              )}
-              <p className="text-[0.9rem] text-ink-soft">
-                {STRENGTH[it.strength] ?? it.strength}. {it.provenance?.by ? `From ${it.provenance.by}` : it.provenance?.source ? `From ${it.provenance.source}` : ""}
-                {it.provenance?.at ? `, ${day(helsinkiToday(new Date(it.provenance.at)))}` : ""}
-                {it.provenance?.orderIds?.length ? `, ${it.provenance.orderIds.length} orders` : ""}.
-              </p>
-              <p className="text-[0.9rem]">
-                {it.audience === "private" ? "Private to the kitchen: the wholesaler's staff cannot see it." : `Shared with the wholesaler's staff${it.staffLastLookedAt ? `, last seen ${day(helsinkiToday(new Date(it.staffLastLookedAt)))}` : ", not seen yet"}.`}
-              </p>
-            </div>
-            <div className="flex flex-wrap items-start gap-2">
-              <Button kind="secondary" busy={busy === it.id} disabled={!!busy} onClick={() => void act(it.id, { action: it.audience === "private" ? "share" : "private" })}>
-                {it.audience === "private" ? "Share with the wholesaler" : "Make private"}
-              </Button>
-              <Button kind="quiet" disabled={!!busy} onClick={() => setEditing({ id: it.id, text: it.text })}>
-                Correct
-              </Button>
-              <Button kind="quiet" disabled={!!busy} onClick={() => void act(it.id, { action: "forget" })}>
-                Forget
-              </Button>
-            </div>
-          </li>
-        ))}
       </ul>
     </section>
   );
@@ -327,7 +232,7 @@ function Connect() {
   return (
     <section aria-labelledby="connect" className="space-y-3">
       <div>
-        <h2 id="connect" className="font-display text-[1.6rem] font-bold">
+        <h2 id="connect" className="display text-[1.9rem]">
           Connect your own agent
         </h2>
         <p className="max-w-[72ch] text-ink-soft">
@@ -338,7 +243,7 @@ function Connect() {
         <Paper>
           <div className="space-y-3 p-4">
             {!c ? (
-              <div className="h-32 animate-pulse bg-concrete" />
+              <div className="h-32 animate-pulse bg-mist" />
             ) : (
               <>
                 <dl className="grid grid-cols-[9rem_1fr] gap-x-3 gap-y-1.5 text-[0.95rem]">
@@ -358,7 +263,7 @@ function Connect() {
                       {copied === "json" ? "Copied" : "Copy"}
                     </Button>
                   </div>
-                  <pre className="mt-1 overflow-x-auto bg-concrete p-3 font-mono text-[0.8rem] leading-snug">{mcpJson}</pre>
+                  <pre className="mt-1 overflow-x-auto bg-mist p-3 font-mono text-[0.8rem] leading-snug">{mcpJson}</pre>
                 </div>
                 <div>
                   <div className="flex items-center justify-between">
@@ -367,7 +272,7 @@ function Connect() {
                       {copied === "cli" ? "Copied" : "Copy"}
                     </Button>
                   </div>
-                  <pre className="mt-1 overflow-x-auto bg-concrete p-3 font-mono text-[0.8rem] leading-snug">{cli}</pre>
+                  <pre className="mt-1 overflow-x-auto bg-mist p-3 font-mono text-[0.8rem] leading-snug">{cli}</pre>
                 </div>
               </>
             )}
@@ -375,7 +280,7 @@ function Connect() {
         </Paper>
         <Paper>
           <div className="space-y-3 p-4">
-            <h3 className="font-display text-[1.3rem] font-bold">The kitchen&apos;s mandate</h3>
+            <h3 className="display text-[1.5rem]">The kitchen&apos;s mandate</h3>
             <p className="text-[0.95rem] leading-snug">
               <code className="font-mono">DOCK_MANDATE</code> is the mandate {kitchen.name} signed for its agent: a JWT signed with the kitchen&apos;s own key. Whoever holds it can ask for anything within it; nothing beyond it, and nothing over {kitchen.mandate.approvers[0]?.name ?? "the approver"}&apos;s head.
             </p>
@@ -386,7 +291,7 @@ function Connect() {
                 </Button>
                 {show && (
                   <div>
-                    <pre className="max-h-40 overflow-auto break-all whitespace-pre-wrap bg-concrete p-3 font-mono text-[0.72rem]">{c.mandate}</pre>
+                    <pre className="max-h-40 overflow-auto break-all whitespace-pre-wrap bg-mist p-3 font-mono text-[0.72rem]">{c.mandate}</pre>
                     <Button kind="quiet" onClick={() => void copy("mandate", c.mandate)}>
                       {copied === "mandate" ? "Copied" : "Copy the mandate"}
                     </Button>
@@ -395,7 +300,7 @@ function Connect() {
                 )}
               </>
             )}
-            <div className="border-t border-ink/15 pt-3">
+            <div className="border-t border-line pt-3">
               <h3 className="font-semibold">For a personal assistant</h3>
               {connector === undefined ? (
                 <p className="text-ink-soft">Checking for a connector address…</p>
@@ -411,8 +316,8 @@ function Connect() {
                   )}
                 </div>
               ) : (
-                <p className="flex items-start gap-2 text-[0.95rem] text-ink-soft">
-                  <Target size={18} tone="hollow" className="mt-0.5 shrink-0" />A per-kitchen connector address for consumer assistants (with setup steps, revoke and reissue) is being added; until then, use the MCP address and mandate above.
+                <p className="text-[0.95rem] text-ink-soft">
+                  A per-kitchen connector address for consumer assistants (with setup steps, revoke and reissue) is being added; until then, use the MCP address and mandate above.
                 </p>
               )}
             </div>

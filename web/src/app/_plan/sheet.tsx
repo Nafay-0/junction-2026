@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { PlanEdit } from "@/server/agent/menu/service";
 import type { PlanWire } from "@/server/agent/menu/wire";
-import { day, eur } from "../_ui/plain";
+import { day, money } from "../_ui/plain";
 import { Btn, Chip, Field, Sheet, Spinner } from "./ui";
 
 type Line = PlanWire["lines"][number];
@@ -25,8 +25,8 @@ export function PlanHeader({ plan, onEdit, busy }: { plan: PlanWire; onEdit: (e:
   return (
     <Sheet>
       <div className="p-4 sm:p-5">
-        <blockquote className="font-display text-[1.5rem] font-semibold leading-tight sm:text-[1.8rem]">“{plan.text}”</blockquote>
-        <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-ink/15 pt-3 sm:grid-cols-4">
+        <blockquote className="display text-[1.5rem] sm:text-[1.8rem]">“{plan.text}”</blockquote>
+        <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-line pt-3 sm:grid-cols-4">
           <Field label="Covers">
             {locked ? (
               plan.settings.covers
@@ -38,7 +38,7 @@ export function PlanHeader({ plan, onEdit, busy }: { plan: PlanWire; onEdit: (e:
                   if (Number.isInteger(n) && n > 0) onEdit([{ op: "covers", covers: n }]);
                 }}
               >
-                <input aria-label="Covers" inputMode="numeric" value={covers} onChange={(e) => setCovers(e.target.value.replace(/[^0-9]/g, ""))} className={`w-24 border-2 px-2 py-1 tabular ${plan.settings.covers ? "border-ink/40" : "border-ink bg-safety/40"}`} placeholder="how many?" />
+                <input aria-label="Covers" inputMode="numeric" value={covers} onChange={(e) => setCovers(e.target.value.replace(/[^0-9]/g, ""))} className={`w-24 border-2 px-2 py-1 tabular ${plan.settings.covers ? "border-line" : "border-petrol bg-lavender"}`} placeholder="how many?" />
                 {String(plan.settings.covers ?? "") !== covers && (
                   <Btn type="submit" busy={busy} kind="primary" className="min-h-9 px-2 text-[0.9rem]">
                     Set
@@ -52,7 +52,7 @@ export function PlanHeader({ plan, onEdit, busy }: { plan: PlanWire; onEdit: (e:
               plan.settings.deliverBy ? day(plan.settings.deliverBy) : "earliest"
             ) : (
               <span className="flex items-center gap-2">
-                <input aria-label="Delivered by" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="border-2 border-ink/40 px-2 py-1" />
+                <input aria-label="Delivered by" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="border-2 border-line px-2 py-1" />
                 {date && date !== (plan.settings.deliverBy ?? "") && (
                   <Btn onClick={() => onEdit([{ op: "deliverBy", date }])} busy={busy} kind="primary" className="min-h-9 px-2 text-[0.9rem]">
                     Set
@@ -75,9 +75,9 @@ export function PlanHeader({ plan, onEdit, busy }: { plan: PlanWire; onEdit: (e:
         </dl>
         <ul className="mt-4 grid gap-2 sm:grid-cols-2">
           {plan.draft.dishes.map((d) => (
-            <li key={d.id} className="border-l-4 border-ink pl-3">
+            <li key={d.id} className="border-l-4 border-petrol pl-3">
               <p className="font-semibold">
-                <span className="mr-2 text-[0.8rem] uppercase tracking-wide text-ink-soft">{COURSE[d.course] ?? d.course}</span>
+                <span className="mr-2 text-[0.8rem] text-ink-soft">{COURSE[d.course] ?? d.course}</span>
                 {d.name}
                 {d.nameFi && d.nameFi.toLowerCase() !== d.name.toLowerCase() ? <span className="text-ink-soft"> · {d.nameFi}</span> : null}
                 {d.serviceDate ? <span className="text-ink-soft"> · {day(d.serviceDate)}</span> : null}
@@ -90,7 +90,7 @@ export function PlanHeader({ plan, onEdit, busy }: { plan: PlanWire; onEdit: (e:
         </ul>
         {(plan.draft.assumptions.length > 0 || plan.notes.length > 0) && (
           <details className="mt-3 text-[0.95rem]">
-            <summary className="cursor-pointer py-1 font-semibold underline decoration-2 underline-offset-4">Assumptions ({plan.draft.assumptions.length + plan.notes.length})</summary>
+            <summary className="min-h-10 cursor-pointer py-2 font-semibold text-petrol underline decoration-2 underline-offset-4">Assumptions ({plan.draft.assumptions.length + plan.notes.length})</summary>
             <ul className="mt-1 list-disc space-y-0.5 pl-5 text-ink-soft">
               {[...plan.notes, ...plan.draft.assumptions].map((a, i) => (
                 <li key={i}>{a}</li>
@@ -108,14 +108,14 @@ export function NeedsYou({ plan, onEdit, busy }: { plan: PlanWire; onEdit: (e: P
   const open = plan.lines.flatMap((l) => l.doubts.filter((d) => !d.accepted).map((d) => ({ line: l, doubt: d })));
   if (!open.length || plan.state !== "planned") return null;
   return (
-    <Sheet safety>
+    <Sheet agent>
       <div className="p-4 sm:p-5">
-        <h2 className="font-display text-[1.6rem] font-bold leading-tight">
+        <h2 className="display text-[1.8rem]">
           {open.length} thing{open.length > 1 ? "s" : ""} for you to decide
         </h2>
         <p className="text-[0.95rem] text-ink-soft">Everything else on the plan goes through as it is. Each choice is recorded in the ledger with your name.</p>
         {plan.totals.allLate && (
-          <div className="mt-3 border-l-[6px] border-ink bg-safety/30 px-3 py-2.5">
+          <div className="mt-3 border-l-[6px] border-lavender-deep bg-paper px-3 py-2.5">
             <p className="font-semibold">Nothing on this plan can arrive by {day(plan.totals.allLate.neededBy)}{plan.totals.allLate.earliest ? `: the earliest delivery is ${day(plan.totals.allLate.earliest)}` : ""}.</p>
             <p className="text-[0.95rem]">One decision for the whole plan: move the day, or take the later delivery for every line that has one. Lines with no product at all stay below.</p>
             <div className="mt-2 flex flex-wrap gap-2">
@@ -125,7 +125,7 @@ export function NeedsYou({ plan, onEdit, busy }: { plan: PlanWire; onEdit: (e: P
                 </Btn>
               )}
               <Btn
-                kind="safety"
+                kind="secondary"
                 busy={busy}
                 onClick={() => onEdit(open.filter(({ doubt }) => doubt.kind === "cannot_arrive" && doubt.acceptLabel).map(({ doubt }) => ({ op: "accept" as const, doubtId: doubt.doubtId })))}
               >
@@ -147,7 +147,7 @@ export function NeedsYou({ plan, onEdit, busy }: { plan: PlanWire; onEdit: (e: P
 function DoubtItem({ line, doubt, pending, refused, onEdit, busy }: { line: Line; doubt: Doubt; pending: boolean; refused?: string; onEdit: (e: PlanEdit[]) => void; busy: boolean }) {
   const offerFixes = ["cannot_arrive", "no_safe_product", "no_product", "rule_conflict"].includes(doubt.kind);
   return (
-    <li className="border-l-[6px] border-ink bg-concrete/50 px-3 py-2.5">
+    <li className="border-l-[6px] border-lavender-deep bg-paper px-3 py-2.5">
       <p className="font-semibold">
         {line.name}
         <span className="ml-2 font-normal text-ink-soft">{[...new Set(line.uses.map((u) => u.dish))].join(", ")}</span>
@@ -163,16 +163,16 @@ function DoubtItem({ line, doubt, pending, refused, onEdit, busy }: { line: Line
           {line.fixes.map((f) => {
             const c = f.check;
             return (
-              <li key={f.fixId} className={`flex flex-col justify-between border-2 bg-paper p-2.5 ${c?.ok ? "border-ink" : "border-ink/20 text-ink-soft"}`}>
+              <li key={f.fixId} className={`flex flex-col justify-between border-2 bg-paper p-2.5 ${c?.ok ? "border-petrol" : "border-line text-ink-soft"}`}>
                 <div>
                   <p className="font-semibold">
-                    {f.title} {f.changesDish ? <Chip tone="warn">changes the dish</Chip> : <Chip tone="muted">same dish</Chip>}
+                    {f.title} {f.changesDish ? <Chip tone="agent">changes the dish</Chip> : <Chip tone="muted">same dish</Chip>}
                   </p>
                   <p className="mt-0.5 text-[0.92rem] leading-snug">{f.effect}</p>
                   {c?.ok ? (
                     <p className="mt-1 text-[0.92rem] leading-snug">
-                      {c.product}: {c.packs}, <strong className="tabular">{eur(c.totalCents)}</strong>
-                      {c.deltaCents !== null ? <span className="tabular"> ({c.deltaCents >= 0 ? "+" : "−"}{eur(Math.abs(c.deltaCents))})</span> : null}, arrives {c.deliveryDate === "-" ? "-" : day(c.deliveryDate)}
+                      {c.product}: {c.packs}, <strong className="tabular">{money(c.totalCents)}</strong>
+                      {c.deltaCents !== null ? <span className="tabular"> ({c.deltaCents >= 0 ? "+" : "−"}{money(Math.abs(c.deltaCents))})</span> : null}, arrives {c.deliveryDate === "-" ? "-" : day(c.deliveryDate)}
                       {c.orderBy ? `, order by ${cutoff(c.orderBy)}` : ""}.{c.note ? ` ${c.note}` : ""}
                     </p>
                   ) : (
@@ -197,7 +197,7 @@ function DoubtItem({ line, doubt, pending, refused, onEdit, busy }: { line: Line
           </Btn>
         )}
         {doubt.acceptLabel && (
-          <Btn kind="safety" busy={busy} onClick={() => onEdit([{ op: "accept", doubtId: doubt.doubtId }])}>
+          <Btn kind="secondary" busy={busy} onClick={() => onEdit([{ op: "accept", doubtId: doubt.doubtId }])}>
             {doubt.acceptLabel}
           </Btn>
         )}
@@ -216,17 +216,17 @@ export function Lines({ plan, onEdit, busy }: { plan: PlanWire; onEdit: (e: Plan
   return (
     <Sheet>
       <div className="p-4 sm:p-5">
-        <h2 className="font-display text-[1.6rem] font-bold leading-tight">Purchase lines</h2>
+        <h2 className="display text-[1.6rem]">Purchase lines</h2>
         <p className="text-[0.95rem] text-ink-soft">Amounts are per cover × covers ÷ usable share, then whole packs. Tap an amount to change it.</p>
-        <ol className="mt-3 divide-y divide-ink/15">
+        <ol className="mt-3 divide-y divide-line">
           {buying.map((l, i) => (
             <LineRow key={l.lineId} n={i + 1} line={l} locked={plan.state !== "planned"} onEdit={onEdit} busy={busy} />
           ))}
         </ol>
         {aside.length > 0 && (
           <details className="mt-3" open={plan.settings.covers !== null && aside.some((l) => l.status === "struck" && !l.pantry)}>
-            <summary className="cursor-pointer py-1 font-semibold underline decoration-2 underline-offset-4">Not ordered ({aside.length})</summary>
-            <ul className="mt-1 divide-y divide-ink/10">
+            <summary className="min-h-10 cursor-pointer py-2 font-semibold text-petrol underline decoration-2 underline-offset-4">Not ordered ({aside.length})</summary>
+            <ul className="mt-1 divide-y divide-line">
               {aside.map((l) => (
                 <li key={l.lineId} className="flex flex-wrap items-center justify-between gap-2 py-2">
                   <span>
@@ -281,7 +281,7 @@ function LineRow({ n, line, locked, onEdit, busy }: { n: number; line: Line; loc
               <span className="font-semibold">{c.products.map((p) => p.name).join(" + ")}</span>
             </p>
             <p className="text-[0.95rem] leading-snug">
-              {c.products.map((p) => p.packText).join(" + ")} = <strong className="tabular">{eur(c.totalCents)}</strong>
+              {c.products.map((p) => p.packText).join(" + ")} = <strong className="tabular">{money(c.totalCents)}</strong>
             </p>
             <p className="mt-1 flex flex-wrap gap-1.5">
               <Chip tone={line.timing?.ok ? "ok" : "warn"} title={line.timing?.text}>
@@ -305,9 +305,9 @@ function LineRow({ n, line, locked, onEdit, busy }: { n: number; line: Line; loc
                 {alts && (
                   <ul className="mt-1 space-y-1.5">
                     {line.alternatives.map((a) => (
-                      <li key={a.optionId} className="flex flex-wrap items-center justify-between gap-2 border border-ink/20 px-2 py-1.5 text-[0.92rem]">
+                      <li key={a.optionId} className="flex flex-wrap items-center justify-between gap-2 border border-line px-2 py-1.5 text-[0.92rem]">
                         <span className="min-w-0">
-                          <Chip>{RANK[a.rank] ?? a.rank}</Chip> {a.products.map((p) => `${p.name}, ${p.packText}`).join(" + ")} = <strong className="tabular">{eur(a.totalCents)}</strong>
+                          <Chip>{RANK[a.rank] ?? a.rank}</Chip> {a.products.map((p) => `${p.name}, ${p.packText}`).join(" + ")} = <strong className="tabular">{money(a.totalCents)}</strong>
                           {a.cons[0] ? <span className="block text-ink-soft">{a.cons[0]}</span> : null}
                         </span>
                         {!locked && (
@@ -323,7 +323,7 @@ function LineRow({ n, line, locked, onEdit, busy }: { n: number; line: Line; loc
             )}
           </>
         ) : (
-          <p className="text-[0.95rem]">{open.length ? <Chip tone="warn">needs you</Chip> : null} <span className="text-ink-soft">{open[0]?.text.slice(0, 160) ?? line.statusText}</span></p>
+          <p className="text-[0.95rem]">{open.length ? <Chip tone="agent">needs you</Chip> : null} <span className="text-ink-soft">{open[0]?.text.slice(0, 160) ?? line.statusText}</span></p>
         )}
         {line.doubts
           .filter((d) => d.accepted)
@@ -364,13 +364,13 @@ function AmountEditor({ line, onEdit, busy, onDone }: { line: Line; onEdit: (e: 
       {line.uses.map((u) => (
         <label key={u.dishId} className="flex items-center gap-2 text-[0.9rem]">
           <span className="w-28 truncate text-ink-soft">{u.dish}</span>
-          <input inputMode="decimal" value={per[u.dishId]} onChange={(e) => setPer({ ...per, [u.dishId]: e.target.value })} className="w-20 border-2 border-ink/40 px-1.5 py-0.5 tabular" />
+          <input inputMode="decimal" value={per[u.dishId]} onChange={(e) => setPer({ ...per, [u.dishId]: e.target.value })} className="w-20 border-2 border-line px-1.5 py-0.5 tabular" />
           <span>{u.perCover.unit} per cover</span>
         </label>
       ))}
       <label className="flex items-center gap-2 text-[0.9rem]">
         <span className="w-28 text-ink-soft">Usable share</span>
-        <input inputMode="numeric" value={yieldPct} onChange={(e) => setYield(e.target.value)} className="w-20 border-2 border-ink/40 px-1.5 py-0.5 tabular" />
+        <input inputMode="numeric" value={yieldPct} onChange={(e) => setYield(e.target.value)} className="w-20 border-2 border-line px-1.5 py-0.5 tabular" />
         <span>%</span>
       </label>
       <Btn type="submit" kind="primary" busy={busy} className="min-h-9 text-[0.9rem]">

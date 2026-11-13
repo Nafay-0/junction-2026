@@ -1,4 +1,4 @@
-import { attr, eurShort, roleLabel } from "../../_ui/plain";
+import { attr, moneyShort, roleLabel } from "../../_ui/plain";
 import type { KitchenInfo } from "./types";
 
 /**
@@ -7,14 +7,14 @@ import type { KitchenInfo } from "./types";
  */
 export function mandateWords(m: KitchenInfo["mandate"]): { alone: string[]; person: string[]; never: string[] } {
   const alone: string[] = [
-    `Order up to ${eurShort(m.perOrderLimitCents)} per order without asking anyone.`,
+    `Order up to ${moneyShort(m.perOrderLimitCents)} per order without asking anyone.`,
     `Buy only ${m.allowedCategories.map(attr).join(", ")}.`,
     `Ask for delivery at most ${m.maxLeadDays} days ahead.`,
   ];
-  const person: string[] = [`Any order above ${eurShort(m.perOrderLimitCents)}: the approver named below, up to their own limit.`];
+  const person: string[] = [`Any order above ${moneyShort(m.perOrderLimitCents)}: the approver named below, up to their own limit.`];
   const never: string[] = [
-    `Spend more than ${eurShort(m.weeklyBudgetCents)} in seven days, even with a sign-off.`,
-    `Split one need into several small orders to stay under ${eurShort(m.perOrderLimitCents)}: orders for the same need count together.`,
+    `Spend more than ${moneyShort(m.weeklyBudgetCents)} in seven days, even with a sign-off.`,
+    `Split one need into several small orders to stay under ${moneyShort(m.perOrderLimitCents)}: orders for the same need count together.`,
     "Order at a price that was not fixed and signed by the wholesaler, or after that price expired.",
     "Approve its own order. Only the named person can, on their own phone.",
   ];
@@ -34,5 +34,5 @@ export function mandateWords(m: KitchenInfo["mandate"]): { alone: string[]; pers
 }
 
 export function approverLine(a: KitchenInfo["mandate"]["approvers"][number]): string {
-  return `${a.name}, ${roleLabel(a.role)}: signs orders up to ${eurShort(a.maxApprovalCents)}`;
+  return `${a.name}, ${roleLabel(a.role)}: signs orders up to ${moneyShort(a.maxApprovalCents)}`;
 }
