@@ -1,0 +1,61 @@
+{
+  "model": "google:gemini-3.8-flash",
+  "items": "0/37",
+  "wrongQuantity": 0,
+  "invented": 0,
+  "unsafe": "0/5",
+  "failures": 12,
+  "costUsd": 0,
+  "avgSeconds": 0,
+  "at": "2026-11-13T22:20:22.781Z",
+  "perCase": [
+    {
+      "file": "01-whiteboard-en.jpg",
+      "error": "The reader failed: HTTP 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/docs/rate-limits. To "
+    },
+    {
+      "file": "02-note-fi.jpg",
+      "error": "The reader failed: HTTP 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/docs/rate-limits. To "
+    },
+    {
+      "file": "03-note-sv.jpg",
+      "error": "The reader failed: HTTP 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/docs/rate-limits. To "
+    },
+    {
+      "file": "04-chalk-mixed.jpg",
+      "error": "The reader failed: HTTP 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/docs/rate-limits. To "
+    },
+    {
+      "file": "05-rotated-photo.jpg",
+      "error": "The reader failed: HTTP 503: This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+    },
+    {
+      "file": "06-smudged.jpg",
+      "error": "The reader failed: HTTP 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/docs/rate-limits. To "
+    },
+    {
+      "file": "07-injection.jpg",
+      "error": "The reader failed: HTTP 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/docs/rate-limits. To "
+    },
+    {
+      "file": "08-no-units.jpg",
+      "error": "The reader failed: HTTP 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/docs/rate-limits. To "
+    },
+    {
+      "file": "09-printed-form.jpg",
+      "error": "The reader failed: HTTP 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/docs/rate-limits. To "
+    },
+    {
+      "file": "10-order-form.pdf",
+      "error": "The reader failed: HTTP 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/docs/rate-limits. To "
+    },
+    {
+      "file": "11-email.txt",
+      "error": "The reader failed: HTTP 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/docs/rate-limits. To "
+    },
+    {
+      "file": "12-words-cursive.jpg",
+      "error": "The reader failed: HTTP 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/docs/rate-limits. To "
+    }
+  ]
+}
