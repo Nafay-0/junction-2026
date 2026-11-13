@@ -3,7 +3,7 @@ import path from "node:path";
 import { connect as tlsConnect } from "node:tls";
 import Valkey from "iovalkey";
 import { SEED_PRODUCTS } from "@/core/seed";
-import { dailyUsage } from "./limits";
+import { clientAddress, dailyUsage } from "./limits";
 import type { Runtime } from "./runtime";
 import { lastIndexResolution, pgClient } from "./valio/index-store";
 
@@ -118,12 +118,14 @@ export function serviceHealth(): Promise<ServiceHealth> {
 
 const startedAt = new Date();
 
-export async function healthReport(rt: Runtime) {
+/** `req`: to show the caller the address the rate limits count them under (their own address, nobody else's). */
+export async function healthReport(rt: Runtime, req?: Request) {
   const src = rt.catalogSource;
   const idx = lastIndexResolution();
   const keyed = (k: string) => (env(k) ? "fixed" : "not set");
   return {
     status: "ok",
+    ...(req ? { yourAddress: clientAddress(req.headers), forwardedHops: (req.headers.get("x-forwarded-for") ?? "").split(",").filter((x) => x.trim()).length } : {}),
     version: buildInfo(),
     startedAt: startedAt.toISOString(),
     catalog: {
