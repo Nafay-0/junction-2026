@@ -20,15 +20,15 @@ async function withQr(url: string): Promise<LinkWithQr> {
   return { url, qrPayload: url, qrSvg: await qrSvg(url) };
 }
 
-export function approvalUrl(approvalId: string, req?: Request): string {
+export function approvalUrl(approvalId: string, req?: Request | Headers): string {
   return `${publicBaseUrl(req)}/approve/${encodeURIComponent(approvalId)}`;
 }
 
-export async function approvalLink(approvalId: string, req?: Request): Promise<LinkWithQr> {
+export async function approvalLink(approvalId: string, req?: Request | Headers): Promise<LinkWithQr> {
   return withQr(approvalUrl(approvalId, req));
 }
 
 /** The QR code on the big screen: scanning it makes the visitor the approver of a fresh demo kitchen. */
-export async function joinLink(req?: Request): Promise<LinkWithQr> {
+export async function joinLink(req?: Request | Headers): Promise<LinkWithQr> {
   return withQr(`${publicBaseUrl(req)}/join`);
 }

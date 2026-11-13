@@ -61,6 +61,8 @@ export function demoMandate(now: Date, overrides: Partial<Mandate> = {}): Mandat
 
 /** The mandate role a visitor fills when they join. */
 export const SANDBOX_ROLE = { id: "purchasing_manager", label: "Purchasing manager" };
+/** What a visitor kitchen's agent may spend per order without asking: €500. */
+export const SANDBOX_PER_ORDER_LIMIT_CENTS = 50_000;
 
 const KITCHENS = ["Hotel Kaleva", "Hotel Aurora", "Hotel Saimaa", "Hotel Lumo", "Hotel Pohjola", "Hotel Revontuli", "Hotel Merikatu", "Hotel Tammi", "Hotel Kuura", "Hotel Ilves"];
 const CITIES = ["Helsinki", "Espoo", "Tampere", "Turku", "Oulu", "Jyväskylä", "Lahti", "Kuopio"];
@@ -94,7 +96,7 @@ export function sandboxMandate(input: {
     agentId: input.agentId,
     validFrom: new Date(input.now.getTime() - 60_000).toISOString(),
     validUntil: input.expiresAt.toISOString(),
-    perOrderLimitCents: 50_000, // €500 alone
+    perOrderLimitCents: SANDBOX_PER_ORDER_LIMIT_CENTS,
     weeklyBudgetCents: 1_000_000, // €10,000 hard cap, so a visitor can try a few orders
     approvers: [{ role: SANDBOX_ROLE.id, name: input.approverName, maxApprovalCents: 1_000_000 }],
   });

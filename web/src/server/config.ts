@@ -19,16 +19,22 @@ const firstHeader = (v: string | null) => v?.split(",")[0]?.trim() || undefined;
 
 /** The origin the browser used, honouring a proxy's X-Forwarded-* headers (tunnels, Vercel). */
 export function requestOrigin(req: Request): string {
-  const url = new URL(req.url);
-  const host = firstHeader(req.headers.get("x-forwarded-host")) ?? firstHeader(req.headers.get("host")) ?? url.host;
-  const proto = firstHeader(req.headers.get("x-forwarded-proto")) ?? url.protocol.replace(":", "");
+  return originFromHeaders(req.headers, new URL(req.url));
+}
+
+/** Same, for server components (`await headers()`), where there is no Request object. */
+export function originFromHeaders(headers: Headers, url?: URL): string {
+  const host = firstHeader(headers.get("x-forwarded-host")) ?? firstHeader(headers.get("host")) ?? url?.host ?? "localhost:3000";
+  const local = /^(localhost|127\.0\.0\.1)(:|$)/.test(host);
+  const proto = firstHeader(headers.get("x-forwarded-proto")) ?? url?.protocol.replace(":", "") ?? (local ? "http" : "https");
   return `${proto}://${host}`;
 }
 
-export function publicBaseUrl(req?: Request): string {
+export function publicBaseUrl(req?: Request | Headers): string {
   const fromEnv = process.env.DOCK_PUBLIC_URL?.trim();
   if (fromEnv) return new URL(fromEnv).origin;
-  return req ? requestOrigin(req) : "http://localhost:3000";
+  if (!req) return "http://localhost:3000";
+  return req instanceof Request ? requestOrigin(req) : originFromHeaders(req);
 }
 
 export function relyingParty(req: Request): RelyingParty {
