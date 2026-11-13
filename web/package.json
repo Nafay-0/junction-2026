@@ -31,7 +31,8 @@
     "aiven:smoke": "tsx scripts/aiven-smoke.ts",
     "aiven:search:index": "tsx scripts/aiven-search-index.ts",
     "aiven:search:compare": "tsx scripts/aiven-search-compare.ts",
-    "categories:build": "tsx scripts/category-labels.ts"
+    "categories:build": "tsx scripts/category-labels.ts",
+    "qa": "tsx qa/run.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.102",
