@@ -1,6 +1,7 @@
 import type { Product } from "../catalog";
 import { amountToSalesUnits, type Amount, type Conversion, type ConversionOptions, type PackInfo } from "./pack";
 import { categorySlug, type IndexedProduct } from "./partner";
+import { productFacets } from "./search";
 
 /**
  * Index record -> Dock `Product`. Keeps every field the policy and the quote already rely on, with the meaning they
@@ -57,6 +58,7 @@ export function toDockProduct(p: IndexedProduct): Product {
     temperatureClass: p.temperature.class,
     countryOfOrigin: p.countryOfOrigin,
     substitutes: [...p.substitutes],
+    kinds: productFacets(p),
   };
 }
 

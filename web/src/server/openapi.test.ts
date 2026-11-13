@@ -118,7 +118,7 @@ describe("real responses match the documented status codes and schemas", () => {
     await call("GET", `/api/v1/ledger?requestId=${requestId}`);
     await call("GET", "/api/v1/keys");
 
-    // The intake, as the returning demo kitchen: mistake check, one question, options, choice, quote.
+    // The intake, as the returning demo kitchen: mistake check, options (memory answers the rest), an answer, choice, quote.
     const kitchenMandate = await signMandate(demoKitchenMandate(new Date()), await demoKitchenKeyPair());
     const kitchen = (m: "GET" | "POST", path: string, body?: unknown) => call(m, path, body, { authorization: `Bearer ${kitchenMandate}`, "dock-agent-id": KITCHEN_ORG.agentId });
     const day = nextDeliveryDay(nextDeliveryDay(localNow(new Date()).date, [1, 2, 3, 4, 5])!, [1, 2, 3, 4, 5])!;
@@ -127,8 +127,8 @@ describe("real responses match the documented status codes and schemas", () => {
     expect(step.state).toBe("needs_confirmation");
     expect((await kitchen("POST", `/api/v1/intake/${step.requestId}/choice`, { by: "Sanna", optionId: "opt_1" })).status).toBe(409);
     step = (await kitchen("POST", step.next.path, { ...step.next.example, by: "Sanna" })).body.step;
-    expect(step.state).toBe("needs_input");
-    step = (await kitchen("POST", step.next.path, { by: "Sanna", answers: [{ questionId: "optimise", optionId: "no_preference" }] })).body.step;
+    expect(step.state).toBe("options_ready");
+    step = (await kitchen("POST", `/api/v1/intake/${step.requestId}/answers`, { by: "Sanna", answers: [{ questionId: "optimise", optionId: "no_preference" }] })).body.step;
     expect(step.state).toBe("options_ready");
     step = (await kitchen("POST", step.next.path, step.next.example)).body.step;
     expect(step.state).toBe("quoted");

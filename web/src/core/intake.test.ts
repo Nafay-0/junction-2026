@@ -51,7 +51,7 @@ describe("intake flow", () => {
 
     const fixed = await dock.intake.respondToConcerns(session, first.requestId, { by: "Aino Virtanen", responses: [{ key: first.concerns[0].key, choice: "use_100_L" }] });
     expect(fixed.need.quantity).toEqual({ amount: 100, unit: "L" });
-    expect(fixed.state).toBe("needs_input");
+    expect(fixed.state).toBe("options_ready"); // memory answers the rest: nothing more to ask
     expect(fixed.acknowledgements).toMatchObject([{ action: "corrected", by: "Aino Virtanen", correctionId: "use_100_L" }]);
     const entry = ledger.entries({ requestId: first.requestId }).find((e) => e.data.step === "correction")!;
     expect(entry).toMatchObject({ type: "intake", actor: "buyer:Aino Virtanen", data: { by: "Aino Virtanen", relayedBy: session.agentId } });
@@ -61,8 +61,10 @@ describe("intake flow", () => {
   it("lets the buyer confirm a warning as intended, but not an error", async () => {
     const big = await dock.intake.open(session, { need: need({ quantity: { amount: 1000, unit: "L" }, optimise: "price" }) });
     const ok = await dock.intake.respondToConcerns(session, big.requestId, { by: "Aino", responses: [{ key: big.concerns[0].key, choice: "confirm" }] });
-    expect(ok.state).toBe("options_ready");
-    expect(ok.options[0].quoteLines).toEqual([{ productId: "T-BOX", quantity: 60 }, { productId: "U-BOX", quantity: 40, substituteFor: "T-BOX" }]);
+    // The request said "price" and the cheapest option meets all of it, so the agent takes it without asking again.
+    expect(ok.state).toBe("quoted");
+    expect(ok.chosen).toMatchObject({ optionId: "opt_1", by: `agent ${session.agentId}` });
+    expect(ok.quote!.quote.lines.map((l) => [l.productId, l.quantity, l.substituteFor?.productId])).toEqual([["T-BOX", 60, undefined], ["U-BOX", 40, "T-BOX"]]);
     expect(ledger.entries({ requestId: big.requestId }).some((e) => e.data.step === "confirmation" && e.data.by === "Aino")).toBe(true);
 
     const past = await dock.intake.open(session, { need: need({ deliverBy: "2026-11-02" }) });
@@ -76,28 +78,27 @@ describe("intake flow", () => {
     const fixed = await dock.intake.respondToConcerns(session, sat.requestId, { by: "Aino", responses: [{ key: sat.concerns[0].key, choice: "deliver_2026-11-20" }] });
     expect(fixed.need.deliverBy).toBe("2026-11-20");
     expect(ledger.entries({ requestId: sat.requestId })[0].data.neededBy).toBe("2026-11-21");
-    const answered = await dock.intake.answer(session, sat.requestId, { by: "Aino", answers: [{ questionId: "optimise", optionId: "price" }] });
-    const quoted = await dock.intake.choose(session, sat.requestId, { by: "Aino", optionId: answered.options[0].optionId });
+    expect(fixed.state).toBe("options_ready");
+    const quoted = await dock.intake.choose(session, sat.requestId, { by: "Aino", optionId: fixed.options[0].optionId });
     expect(quoted.quote!.policyPreview.rules.find((r) => r.rule === "delivery_deadline")!.reason).toBe("Every line arrives by 2026-11-20.");
   });
 
-  it("(b) asks one question, shows three options with pros and cons, and quotes the chosen one", async () => {
-    const asked = await dock.intake.open(session, { need: need() });
-    expect(asked.state).toBe("needs_input");
-    expect(asked.questions.map((q) => q.id)).toEqual(["optimise"]);
-    expect(asked.fromMemory.map((m) => [m.question.id, m.source])).toEqual([
-      ["dim:fat", "learned"],
-      ["dim:organic", "learned"],
-    ]);
-
-    const shown = await dock.intake.answer(session, asked.requestId, { by: "Aino", answers: [{ questionId: "optimise", optionId: "no_preference" }] });
+  it("(b) asks nothing memory answers, ranks three options with pros and cons, and quotes the chosen one", async () => {
+    const shown = await dock.intake.open(session, { need: need() });
     expect(shown.state).toBe("options_ready");
-    expect(shown.options.map((o) => o.labels)).toEqual([["best_price", "lowest_carbon"], ["most_reliable"], ["same_as_last_time"]]);
-    expect(shown.preselected).toBeUndefined();
+    expect(shown.questions).toEqual([]);
+    expect(shown.fromMemory.map((m) => [m.question.id, m.source])).toEqual([["dim:fat", "learned"]]);
+    expect(shown.options.map((o) => [o.rank, o.match, o.labels])).toEqual([
+      ["best", "full", ["best_price", "lowest_carbon"]],
+      ["better", "full", ["same_as_last_time"]],
+      ["good", "full", ["most_reliable"]],
+    ]);
+    expect(shown.preselected).toBeUndefined(); // no goal given: the cards are the question
     expect(shown.options.every((o) => o.pros.length + o.cons.length > 0)).toBe(true);
     expect(dock.stats().liveCalls).toBe(1);
 
-    const quoted = await dock.intake.choose(session, asked.requestId, { by: "Aino", optionId: "opt_2" });
+    const reliable = shown.options.find((o) => o.labels.includes("most_reliable"))!;
+    const quoted = await dock.intake.choose(session, shown.requestId, { by: "Aino", optionId: reliable.optionId });
     expect(quoted.state).toBe("quoted");
     expect(quoted.quote!.quote.lines.map((l) => [l.productId, l.quantity])).toEqual([["T-1L", 100]]);
     expect(quoted.next.path).toBe("/api/v1/orders");
@@ -107,22 +108,25 @@ describe("intake flow", () => {
     const profile = (await kitchens.getProfile("org_laakso"))!;
     expect(profile.history.at(-1)).toMatchObject({ orderId: order.orderId, family: "milk", amount: 100, unit: "L", neededBy: "2026-11-18", chosenLabels: ["most_reliable"] });
 
-    const story = explain(ledger.entries({ requestId: asked.requestId })).join("\n");
-    for (const s of ["Structured need", "Dock asked 1 question", "answered", "Dock offered 3 options", "chose opt_2", "Wholesaler quoted", "Gate decision", "Committed"]) expect(story).toContain(s);
+    const story = explain(ledger.entries({ requestId: shown.requestId })).join("\n");
+    for (const s of ["Structured need", "Dock offered 3 options", `chose ${reliable.optionId}`, "Wholesaler quoted", "Gate decision", "Committed"]) expect(story).toContain(s);
   });
 
   it("remembers an answer when told to, and does not ask it again", async () => {
     const asked = await dock.intake.open(session, { need: need() });
-    await dock.intake.answer(session, asked.requestId, { by: "Aino Virtanen", answers: [{ questionId: "optimise", optionId: "co2", remember: true }] });
+    const answered = await dock.intake.answer(session, asked.requestId, { by: "Aino Virtanen", answers: [{ questionId: "optimise", optionId: "co2", remember: true }] });
+    expect(answered.state).toBe("quoted"); // the answer decides it: lowest carbon, a full match
+    expect(answered.chosen?.labels).toContain("lowest_carbon");
     expect((await kitchens.getProfile("org_laakso"))!.stated.at(-1)).toMatchObject({ kind: "optimise", goal: "co2", statedBy: "Aino Virtanen", family: "milk" });
     const again = await dock.intake.open(session, { need: need({ deliverBy: "2026-11-19" }) });
-    expect(again.state).toBe("options_ready");
+    expect(again.state).toBe("quoted");
     expect(again.fromMemory.find((m) => m.question.id === "optimise")).toMatchObject({ source: "stated", optionId: "co2" });
-    expect(again.preselected).toMatchObject({ source: "stated", optionId: again.options.find((o) => o.labels.includes("lowest_carbon"))!.optionId });
+    expect(again.preselected).toMatchObject({ source: "stated" });
+    expect(again.chosen?.labels).toContain("lowest_carbon");
   });
 
   it("lets the buyer override a learned pre-selection by answering its question", async () => {
-    const asked = await dock.intake.open(session, { need: need({ optimise: "price" }) });
+    const asked = await dock.intake.open(session, { need: need() });
     expect(asked.state).toBe("options_ready");
     const changed = await dock.intake.answer(session, asked.requestId, { by: "Aino", answers: [{ questionId: "dim:fat", optionId: "fat_free" }] });
     expect(changed.options.flatMap((o) => o.lines.map((l) => l.productId))).toEqual(["T-SKIM"]);
@@ -138,8 +142,9 @@ describe("intake flow", () => {
   it("falls back to options when the last product cannot fill the order", async () => {
     inner.setStock("U-BOX", { availablePacks: 0 });
     const r = await dock.intake.open(session, { need: { item: { text: "milk", category: "milk" }, sameAsLastTime: true, optimise: "price" } });
-    expect(r.state).toBe("options_ready");
-    expect(r.notes[0]).toBe("Same as last time is not possible: out of stock. Here are the options instead.");
+    expect(r.state).toBe("options_ready"); // not chosen alone: every option gives up the product asked for
+    expect(r.notes).toContain("Same as last time (Other lactose-free milk 1.5 %, 10 L box) is not possible: out of stock.");
+    expect(r.options.every((o) => o.match === "compromise" && o.givesUp.some((g) => g.part === "product"))).toBe(true);
   });
 
   it("refuses 'same as last time' with nothing to repeat and no amount", async () => {
@@ -149,17 +154,29 @@ describe("intake flow", () => {
 
   it("a first-time kitchen gets the large-order check and the questions memory cannot answer", async () => {
     await setup(undefined);
-    const big = await dock.intake.open(session, { need: need({ quantity: { amount: 1000, unit: "L" } }) });
-    expect(big.concerns.map((c) => c.code)).toEqual(["large_first_order"]);
+    // A first order has nothing to compare with: its size is a note on every card and for the approver, not a stop.
+    const big = await dock.intake.open(session, { need: need({ quantity: { amount: 1000, unit: "L" }, item: { text: "milk", category: "milk", attributes: ["lactose_free", "fat_1_5"] } }) });
+    expect(big.state).toBe("options_ready");
+    expect(big.concerns).toEqual([]);
+    expect(big.options.every((o) => o.cons.some((c) => /first order .* 1,000 L is a large one/.test(c)))).toBe(true);
+    expect(big.signOffNotes).toEqual([expect.stringMatching(/^Check the amount: This is the first order/)]);
+    // Nothing said about lactose or fat: not asked; the cards span them and the buyer chooses one.
     const small = await dock.intake.open(session, { need: need() });
-    expect(small.questions.map((q) => q.id)).toEqual(["dim:fat", "dim:lactose"]);
+    expect(small.state).toBe("options_ready");
+    expect(small.questions).toEqual([]);
+    expect(small.openChoices.map((q) => q.id)).toEqual(["dim:fat", "dim:lactose"]);
+    expect(new Set(small.options.map((o) => o.lines[0].productId)).size).toBe(small.options.length);
     expect(small.fromMemory).toEqual([]);
+    // Saying "price" does not let the agent pick a fat content the buyer never chose: the cards still differ on it.
+    const priced = await dock.intake.open(session, { need: need({ optimise: "price", deliverBy: "2026-11-19" }) });
+    expect(priced.state).toBe("options_ready");
+    expect(priced.preselected?.source).toBe("request");
   });
 
   it("cancels a duplicate on one tap", async () => {
     const first = await dock.intake.open(session, { need: need({ optimise: "price" }) });
-    const q = await dock.intake.choose(session, first.requestId, { by: "Aino", optionId: "opt_1" });
-    await dock.placeOrder(session, q.next.example as never);
+    expect(first.state).toBe("quoted");
+    await dock.placeOrder(session, first.next.example as never);
     const dup = await dock.intake.open(session, { need: need({ optimise: "price" }) });
     expect(dup.concerns.map((c) => c.code)).toEqual(["duplicate_recent"]);
     const cancelled = await dock.intake.respondToConcerns(session, dup.requestId, { by: "Aino", responses: [{ key: dup.concerns[0].key, choice: "cancel" }] });
