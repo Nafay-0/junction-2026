@@ -12,6 +12,8 @@
     "test:watch": "vitest",
     "demo": "tsx scripts/demo.ts",
     "demo:mcp": "tsx scripts/demo-mcp.ts",
+    "memory:demo": "tsx scripts/memory-demo.ts",
+    "memory:record": "tsx scripts/memory-record.ts",
     "smoke": "tsx scripts/smoke.ts",
     "restart-proof": "tsx scripts/restart-proof.ts",
     "aiven:agent": "tsx scripts/aiven-managed-agent.ts",
