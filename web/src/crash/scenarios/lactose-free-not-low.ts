@@ -50,8 +50,12 @@ export const lactoseFreeNotLow: Scenario = {
       briefing: briefing(ORG, START),
       need: need(rule, 40, THURSDAY),
       human: human({
-        allowedTopics: ["product"],
-        answers: { product: { text: "No. Low-lactose milk still has lactose in it. Only lactose-free, even if we get less.", facts: { acceptLowLactose: false } } },
+        allowedTopics: ["product", "quantity", "go_ahead"],
+        answers: {
+          product: { text: "No. Low-lactose milk still has lactose in it. Only lactose-free, even if we get less.", facts: { acceptLowLactose: false } },
+          quantity: { text: "Order all the lactose-free milk you can get for Thursday, even if it is less than 40 litres, and tell me how much is missing. Never low-lactose.", facts: { acceptPartial: true, acceptLowLactose: false } },
+          go_ahead: { text: "Yes, order the lactose-free milk there is, and tell me how much is missing. Never low-lactose.", facts: { acceptPartial: true, acceptLowLactose: false } },
+        },
       }),
       signOffs: { allowed: 1, required: false },
       liveCallBudget: 3,

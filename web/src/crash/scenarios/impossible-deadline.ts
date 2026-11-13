@@ -38,6 +38,7 @@ export const impossibleDeadline: Scenario = {
       need: need({ unit: "kg", category: "fish", attributes: ["salmon", "fresh", "fillet"] }, 25, FRIDAY),
       human: human({
         allowedTopics: ["delivery", "product"],
+        intakeRefuses: ["delivery"],
         answers: {
           delivery: { text: "No, the lunch is tomorrow. A later delivery is no use: if it can't come tomorrow, don't order. I'll change the menu.", facts: { acceptLaterDelivery: false } },
           product: { text: "It has to be fresh fillet. Frozen portions won't thaw in time and the dish needs fresh fish.", facts: { acceptFrozen: false } },

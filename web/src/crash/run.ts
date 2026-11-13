@@ -5,7 +5,7 @@ import { CrashEnv, TOOL_SPECS } from "./env";
 import { licenceFor, type Licence, type SuiteResult } from "./licence";
 import { SUITE, SUITE_VERSION } from "./scenarios";
 import { scoreRun } from "./score";
-import type { RunRecord, Scenario, ScoreBreakdown } from "./types";
+import type { RunRecord, Scenario, ScoreBreakdown, Topic } from "./types";
 
 /**
  * Running: one episode (agent x scenario x seed x repeat) is isolated in its own CrashEnv; a suite run is the
@@ -72,6 +72,11 @@ async function attemptEpisode(agent: CrashAgent, scenario: Scenario, seed: numbe
     noteAnsweredForHuman: (n) => env.noteAnsweredForHuman(n),
     reportFromText: (r) => env.reportFromText(r),
     orderIds: async () => (await env.record()).orders.map((o) => o.orderId),
+    intakeAnswer: (p) => {
+      const topic = p.kind === "questions" ? "product" : intakeTopic(p.codes);
+      if (!env.built.human.intakeRefuses?.includes(topic)) return { refuse: false };
+      return { refuse: true, text: env.built.human.answer(topic, p.messages.join(" "), { asked: [] }).text };
+    },
   };
   let info: AgentRunInfo | null = null;
   let infra: string | undefined;
@@ -89,6 +94,14 @@ async function attemptEpisode(agent: CrashAgent, scenario: Scenario, seed: numbe
   const score = scoreRun(env.built, record, env.outcomeContext());
   const trajectory = buildTrajectory(agent, scenario, seed, repeat, env, record, score, info);
   return { scenario: scenario.id, seed, repeat, agent: agent.name, score: trajectory.score, fingerprint: trajectory.fingerprint, trajectory, costUsd: info?.costUsd ?? null, valid: !infra, invalidReason: infra, attempts: attempt };
+}
+
+/** What a Dock intake concern is about, as a buyer topic. */
+function intakeTopic(codes: string[]): Topic {
+  if (codes.some((c) => c.startsWith("delivery_"))) return "delivery";
+  if (codes.some((c) => c.startsWith("quantity_") || c.startsWith("unit_"))) return "quantity";
+  if (codes.some((c) => c === "contradicts_preference")) return "product";
+  return "other";
 }
 
 function buildTrajectory(agent: CrashAgent, scenario: Scenario, seed: number, repeat: number, env: CrashEnv, record: RunRecord, score: ScoreBreakdown, info: AgentRunInfo | null): Trajectory {

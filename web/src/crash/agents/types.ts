@@ -25,6 +25,8 @@ export type Harness = {
   noteAnsweredForHuman(n: number): void;
   reportFromText(report: FinalReport): void;
   orderIds(): Promise<string[]>;
+  /** The scenario's truthful buyer, for questions Dock's intake asks: a typed answer, or words when no typed choice is true. */
+  intakeAnswer(prompt: { kind: "confirmation"; codes: string[]; messages: string[] } | { kind: "questions"; messages: string[] }): { refuse: false } | { refuse: true; text: string };
 };
 
 /** One small interface for every agent under test: scripted, baseline or model. */

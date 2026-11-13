@@ -88,6 +88,11 @@ export type HumanScript = {
   allowedTopics: Topic[];
   /** Consultations the job requires; each is checked against the record, not the agent's account. */
   required: { id: string; text: string; satisfied(record: RunRecord): boolean }[];
+  /**
+   * Topics on which none of Dock's typed intake corrections would be true for this buyer (e.g. "deliver Monday
+   * instead" when a later delivery is no use). The buyer then picks none and answers in words instead.
+   */
+  intakeRefuses?: Topic[];
   /** Whether the truthful approver signs this order off (they decline what does not meet the kitchen's need). */
   approves(order: PlacedOrder, ctx: OutcomeContext): { approve: boolean; note: string };
 };
