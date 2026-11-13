@@ -20,6 +20,7 @@
     "agent": "tsx scripts/agent.ts",
     "crash": "tsx scripts/crash.ts",
     "crash:reproduce": "tsx scripts/crash.ts --reproduce",
+    "crash:export": "tsx scripts/crash-export.ts",
     "interpret": "tsx scripts/interpret.ts",
     "verify:receipt": "tsx scripts/verify-receipt.ts",
     "dev:mandate": "tsx scripts/dev-mandate.ts",
