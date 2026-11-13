@@ -23,7 +23,7 @@ export function ensureUsageFlusher(pool: Pool | undefined): void {
   const flush = async () => {
     const u = dailyUsage();
     const sig = `${u.day}|${u.llm.calls}|${u.llm.usd}`;
-    if (sig === state.last || (u.llm.calls === 0 && state.last === "")) return;
+    if (sig === state.last) return; // the first snapshot is written even at zero: "no model spend today" is data too
     state.last = sig;
     await pool.query(`insert into telemetry.events (source, kind, value, attrs) values ('dock-app', 'usage.model', $1, $2::jsonb)`, [u.llm.usd, JSON.stringify({ products: u.llm.calls, day: u.day, detail: `max ${u.llm.maxCalls} calls / $${u.llm.maxUsd} a day` })]);
   };

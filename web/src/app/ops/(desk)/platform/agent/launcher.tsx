@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { LauncherStatus, Run, RunMessage } from "@/server/aiven/showcase/launcher";
+import type { StreamMessage } from "@/server/aiven/showcase/stream";
 import { api } from "../../../../_client/api";
 import { whenSeconds } from "../../../_ui/format";
 import { Button, LoadError, Loading, PageHead, Panel, useOps } from "../../../_ui/kit";
@@ -80,7 +81,7 @@ function EmptyRun() {
 }
 
 function RunView({ runId, dockUrl }: { runId: string; dockUrl: string }) {
-  const live = useOps<Run>(`/ops-api/platform/agent/${runId}`, { pollMs: 1500 });
+  const live = useOps<Run & { gate?: StreamMessage[] }>(`/ops-api/platform/agent/${runId}`, { pollMs: 1500 });
   const run = live.data;
   const [shown, setShown] = useState(0);
   // Recordings play back step by step, at most a second and a half apart.
@@ -112,8 +113,30 @@ function RunView({ runId, dockUrl }: { runId: string; dockUrl: string }) {
         {messages.map((m, i) => (
           <Message key={i} m={m} />
         ))}
-        {!ended && !run.recorded && <li className="px-4 py-2 text-[0.85rem] text-ink-soft">Waiting for the agent on Aiven…</li>}
+        {!ended && !run.recorded && <li className="px-4 py-2 text-[0.85rem] text-ink-soft">The agent is working on Aiven; its own transcript arrives when it replies. Meanwhile, what the gate sees:</li>}
       </ol>
+      {!run.recorded && (
+        <div className="border-t border-concrete px-4 py-2">
+          <p className="text-[0.8rem] font-semibold">At Dock&apos;s gate, live from Kafka (dock.actions, agent {run.gate === undefined ? "…" : "agent_laakso_aiven_01"})</p>
+          {run.gate && run.gate.length ? (
+            <ol className="mt-1 space-y-0.5 text-[0.8rem]">
+              {run.gate.map((m) => (
+                <li key={`${m.partition}:${m.offset}`} className={`grid grid-cols-[5.5rem_4.2rem_minmax(0,1fr)] gap-2 ${m.kind === "gate.refused" ? "bg-safety/60" : ""}`}>
+                  <span className="tabular text-ink-soft">{m.timestamp.slice(11, 19)}</span>
+                  <span className="font-mono text-[0.72rem] text-ink-soft">p{m.partition}:{m.offset}</span>
+                  <span>
+                    <b>{m.kind}</b>
+                    {m.event.rule ? ` · ${m.event.rule}` : ""}
+                    {m.event.summary ? <span className="text-ink-soft"> · {m.event.summary.slice(0, 120)}</span> : null}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="mt-1 text-[0.8rem] text-ink-soft">No event from this agent on the topic yet.</p>
+          )}
+        </div>
+      )}
       {(run.requestId || run.outcome) && (
         <div className="border-t-2 border-ink px-4 py-3 text-[0.9rem]">
           <p>

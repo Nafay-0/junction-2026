@@ -10,10 +10,11 @@ import { Bars, HBars, PlatformTabs, Rows, SqlBox, Status, fmtCell } from "../_pa
  * Observe: the Grafana dashboard's questions inside the operations portal, from the same table, read as the
  * read-only user, each panel with its SQL. Grafana itself stays behind its login (link at the top).
  */
-export function Observe({ grafanaUrl }: { grafanaUrl?: string }) {
+export function Observe() {
   const [range, setRange] = useState<Range>("24h");
   const live = useOps<Panels>(`/ops-api/platform/panels?range=${range}`, { pollMs: 15_000 });
   const p = live.data;
+  const grafanaUrl = p?.grafanaUrl;
   return (
     <>
       <PageHead
@@ -51,8 +52,9 @@ function Body({ p }: { p: Panels }) {
   const t = p.panels.totals?.rows[0] ?? {};
   const hits = n(t.cache_hits);
   const calls = n(t.partner_calls);
-  const considered = n(t.products_considered);
   const priced = n(t.products_priced);
+  const pricedRequests = n(t.requests_priced);
+  const catalogue = p.catalogueSize ?? 17_546;
   const wait = p.panels.signoffWait?.rows[0] ?? {};
   const spend = p.panels.spend?.rows ?? [];
   const errors = Object.values(p.panels).filter((x) => x.error);
@@ -64,7 +66,7 @@ function Body({ p }: { p: Panels }) {
         <Stat n={n(t.signoffs_asked)} label="sign-offs asked" sub={`${n(t.signoffs_granted)} granted, ${n(t.signoffs_denied)} declined`} />
         <Stat n={n(t.refused)} label="refused by the gate" safety={n(t.refused) > 0} />
         <Stat n={hits} label="live calls avoided by the cache" sub={hits + calls ? `${Math.round((hits / (hits + calls)) * 100)} % of live answers` : "no live lookups"} />
-        <Stat n={Math.max(0, considered - priced)} label="products narrowed out before pricing" sub={considered ? `${priced} of ${considered} sent to the live API` : "no lookups"} />
+        <Stat n={pricedRequests ? (priced / pricedRequests).toFixed(1).replace(".", ",") : "–"} label={`products priced per request, of ${catalogue.toLocaleString("fi-FI")}`} sub={pricedRequests ? `${Math.max(0, pricedRequests * catalogue - priced).toLocaleString("fi-FI")} live checks avoided by narrowing in master data first` : "no live lookups"} />
         <Stat n={n(t.agents)} label="agents at the door" sub={`${n(t.requests)} requests`} />
       </Panel>
       <p className="mt-1 text-[0.78rem] text-ink-soft">{p.label}.</p>

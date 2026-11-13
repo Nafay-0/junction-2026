@@ -16,6 +16,14 @@ const RANGES: Record<Range, { since: string; bucket: string; label: string }> = 
 
 export type Panel = { id: string; title: string; sql: string; rows: Record<string, unknown>[]; error?: string; ms?: number };
 
+/** Every bucket of the range, also the empty ones, so a quiet hour shows as a gap and not as nothing. */
+const series = (r: (typeof RANGES)[Range], cols: string, kinds: string) => `with b as (
+  select generate_series(date_trunc('${r.bucket}', ${r.since}), date_trunc('${r.bucket}', now()), interval '1 ${r.bucket}') as t
+)
+select b.t, ${cols}
+from b left join telemetry.ops_events e on date_trunc('${r.bucket}', e.ts) = b.t and e.kind in ${kinds} and e.ts > ${r.since}
+group by 1 order by 1`;
+
 const QUERIES = (r: (typeof RANGES)[Range]): Record<string, { title: string; sql: string }> => ({
   totals: {
     title: "Totals",
@@ -30,20 +38,17 @@ const QUERIES = (r: (typeof RANGES)[Range]): Record<string, { title: string; sql
   count(*) filter (where kind = 'request.opened') as requests,
   count(*) filter (where kind = 'partner_api.cache_hit') as cache_hits,
   count(*) filter (where kind = 'partner_api.call') as partner_calls,
-  coalesce(sum(products) filter (where kind = 'lookup.search'), 0) as products_considered,
   coalesce(sum(products) filter (where kind = 'lookup.live'), 0) as products_priced,
+  count(distinct request_id) filter (where kind = 'lookup.live') as requests_priced,
   count(distinct agent_id) as agents
 from telemetry.ops_events where ts > ${r.since}`,
   },
   timeline: {
     title: "Gate decisions over time",
-    sql: `select date_trunc('${r.bucket}', ts) as t,
-  count(*) filter (where kind = 'gate.allowed') as allowed,
-  count(*) filter (where kind = 'gate.escalated') as to_person,
-  count(*) filter (where kind = 'gate.refused') as refused,
-  count(*) filter (where kind = 'order.committed') as committed
-from telemetry.ops_events where ts > ${r.since} and kind in ('gate.allowed', 'gate.escalated', 'gate.refused', 'order.committed')
-group by 1 order by 1`,
+    sql: series(r, `count(e.id) filter (where e.kind = 'gate.allowed') as allowed,
+  count(e.id) filter (where e.kind = 'gate.escalated') as to_person,
+  count(e.id) filter (where e.kind = 'gate.refused') as refused,
+  count(e.id) filter (where e.kind = 'order.committed') as committed`, "('gate.allowed', 'gate.escalated', 'gate.refused', 'order.committed')"),
   },
   refusals: {
     title: "Refusals by rule",
@@ -76,11 +81,8 @@ group by 1 order by 2 desc, 4 desc`,
   },
   cache: {
     title: "Live price: cache against partner calls",
-    sql: `select date_trunc('${r.bucket}', ts) as t,
-  count(*) filter (where kind = 'partner_api.cache_hit') as from_cache,
-  count(*) filter (where kind = 'partner_api.call') as partner_calls
-from telemetry.ops_events where kind in ('partner_api.cache_hit', 'partner_api.call') and ts > ${r.since}
-group by 1 order by 1`,
+    sql: series(r, `count(e.id) filter (where e.kind = 'partner_api.cache_hit') as from_cache,
+  count(e.id) filter (where e.kind = 'partner_api.call') as partner_calls`, "('partner_api.cache_hit', 'partner_api.call')"),
   },
   spend: {
     title: "Model spend per day",
@@ -95,12 +97,9 @@ order by rule, ts desc`,
   },
   pipeline: {
     title: "Pipeline: events in and out",
-    sql: `select date_trunc('${r.bucket}', ts) as t,
-  coalesce(sum(value) filter (where kind = 'metric.events.published'), 0) as published,
-  coalesce(sum(value) filter (where kind = 'metric.events.consumed'), 0) as consumed,
-  coalesce(sum(value) filter (where kind = 'metric.events.dropped'), 0) as dropped
-from telemetry.ops_events where kind like 'metric.events.%' and ts > ${r.since}
-group by 1 order by 1`,
+    sql: series(r, `coalesce(sum(e.value) filter (where e.kind = 'metric.events.published'), 0) as published,
+  coalesce(sum(e.value) filter (where e.kind = 'metric.events.consumed'), 0) as consumed,
+  coalesce(sum(e.value) filter (where e.kind = 'metric.events.dropped'), 0) as dropped`, "('metric.events.published', 'metric.events.consumed', 'metric.events.dropped')"),
   },
   crash: {
     title: "Crash-test scores",
@@ -112,9 +111,9 @@ group by 1 order by 1`,
   },
 });
 
-export type Panels = { at: string; range: Range; label: string; panels: Record<string, Panel>; modelToday: ReturnType<typeof dailyUsage>["llm"]; readAs: string };
+export type Panels = { catalogueSize?: number; at: string; range: Range; label: string; panels: Record<string, Panel>; modelToday: ReturnType<typeof dailyUsage>["llm"]; readAs: string; grafanaUrl?: string };
 
-export async function panels(range: Range = "24h"): Promise<Panels> {
+export async function panels(range: Range = "24h", catalogueSize?: number): Promise<Panels> {
   const r = RANGES[range] ?? RANGES["24h"];
   const q = QUERIES(r);
   // One at a time: the read-only user holds one connection.
@@ -125,5 +124,6 @@ export async function panels(range: Range = "24h"): Promise<Panels> {
     if (res.ok) readAs = res.as;
     out[id] = { id, title, sql, rows: res.ok ? res.rows : [], error: res.ok ? undefined : res.reason, ms: res.ok ? res.ms : undefined };
   }
-  return { at: new Date().toISOString(), range, label: r.label, panels: out, modelToday: dailyUsage().llm, readAs };
+  const project = process.env.AIVEN_PROJECT?.trim();
+  return { catalogueSize, at: new Date().toISOString(), range, label: r.label, panels: out, modelToday: dailyUsage().llm, readAs, grafanaUrl: project ? `https://dock-grafana-${project}.e.aivencloud.com/d/dock-overview` : undefined };
 }
