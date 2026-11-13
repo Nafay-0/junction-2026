@@ -149,6 +149,16 @@ export function baseAmount(need: StructuredNeed, ctx: CheckContext): { amount: n
 }
 
 const near = (a: number, b: number) => Math.abs(a - b) <= b * UNIT_MATCH_TOLERANCE;
+
+/**
+ * A suggested amount in the unit the buyer used. A count of packs stays a count only when it is a whole number of
+ * packs; otherwise it is said in litres or kilos ("the usual 1,105 L", never "the usual 110.5 packs").
+ */
+export function correctionAmount(baseUnits: number, pack: number | undefined, unit: NeedUnit, base: BaseUnit): { amount: number; unit: NeedUnit } {
+  if (!pack) return { amount: round(baseUnits), unit: unit === "pack" ? base : unit };
+  const packs = baseUnits / pack;
+  return Math.abs(packs - Math.round(packs)) < 1e-6 && Math.round(packs) > 0 ? { amount: Math.round(packs), unit } : { amount: round(baseUnits), unit: base };
+}
 const round = (n: number) => Math.round(n * 100) / 100;
 
 // ---------- the checks ----------
@@ -311,7 +321,7 @@ export function checkQuantity(need: StructuredNeed, ctx: CheckContext): Concern[
   }
 
   const ratio = base.amount / usual.amount;
-  const inUnit = (amount: number) => (packCount && pack ? { amount: round(amount / pack), unit: q.unit } : { amount: round(amount), unit: q.unit });
+  const inUnit = (amount: number) => correctionAmount(amount, packCount ? pack : undefined, q.unit, base.unit);
   if (ratio >= TENFOLD_LOW && ratio <= TENFOLD_HIGH) {
     const fix = inUnit(base.amount / 10);
     return [tenfold(q, fix, `${formatAmount(base.amount, base.unit)} where you usually order about ${usualText}: did you mean ${formatAmount(fix.amount, fix.unit)}?`, evidence)];
@@ -592,7 +602,7 @@ export function checkStanding(need: StructuredNeed, ctx: CheckContext): Concern[
   if (base.amount <= f.high * STANDING_HIGH && base.amount >= f.low * STANDING_LOW) return [];
   const pack = referencePackSize(need, ctx);
   const packCount = isPackCount(q.unit, familyUnit(ctx));
-  const fix = packCount && pack ? { amount: round(f.amount / pack), unit: q.unit } : { amount: f.amount, unit: q.unit };
+  const fix = correctionAmount(f.amount, packCount ? pack : undefined, q.unit, base.unit);
   const how = base.amount > f.high ? `${round(base.amount / f.high)}x the most` : `under ${Math.round((base.amount / f.low) * 100)} % of the least`;
   return [
     {
