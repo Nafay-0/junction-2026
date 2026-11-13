@@ -1,0 +1,93 @@
+{
+ "recordedAt": "2026-11-13T22:17:56Z",
+ "preset": "valio",
+ "question": "I need 1,000 litres of lactose-free milk by Monday. Find an option that meets our requirements based on price and availability.",
+ "model": "gemini-3.8-flash",
+ "messages": [
+  {
+   "at": "2026-11-13T22:17:56Z",
+   "role": "user",
+   "type": "user",
+   "text": "I need 1,000 litres of lactose-free milk by Monday. Find an option that meets our requirements based on price and availability.\n\nStanding answers from the buyer, Aino Virtanen (kitchen manager), for anything Dock asks: the quantity is confirmed; no preference on fat content or organic, do not remember them; take the cheapest option that Dock offers."
+  },
+  {
+   "at": "2026-11-13T22:18:00Z",
+   "role": "tool",
+   "type": "tool_call",
+   "tool": "dock-aiven_read_mandate",
+   "text": "{}"
+  },
+  {
+   "at": "2026-11-13T22:18:00Z",
+   "role": "tool",
+   "type": "tool_return",
+   "tool": "dock-aiven_read_mandate",
+   "text": "{\"ok\":true,\"mandate\":{\"mandateId\":\"mnd_laakso_aiven_202611132217\",\"issuer\":{\"orgId\":\"org_laakso_catering\",\"name\":\"Laakso Catering Oy\"},\"agentId\":\"agent_laakso_aiven_01\",\"validFrom\":\"2026-11-13T22:16:53.441Z\",\"validUntil\":\"2026-11-13T22:37:53.441Z\",\"currency\":\"EUR\",\"perOrderLimitCents\":100000,\"weeklyBudgetCents\":2000000,\"allowedCategories\":[\"milk\",\"plant_drink\"],\"requiredAttributes\":[\"lactose_free\"],\"forbiddenAllergens\":[\"gluten\",\"nuts\"],\"requiredCertificates\":[],\"delivery\":{\"maxLeadDays\":5},\"substitution\":{\"rule\":\"needs_approval\",\"maxPriceIncreasePct\":10},\"approvers\":[{\"role\":\"kitchen_manager\",\"name\":\"Aino Virtanen\",\"maxApprovalCents\":250000},{\"role\":\"finance_director\",\"name\":\"Mikko Laine\",\""
+  },
+  {
+   "at": "2026-11-13T22:18:05Z",
+   "role": "tool",
+   "type": "tool_call",
+   "tool": "dock-aiven_submit_need",
+   "text": "{\"by\":\"Aino Virtanen\",\"need\":{\"deliverBy\":\"2026-11-16\",\"forbiddenAllergens\":[\"gluten\",\"nuts\"],\"item\":{\"attributes\":[\"lactose_free\"],\"category\":\"milk\",\"text\":\"lactose-free milk\"},\"optimise\":\"price\",\"quantity\":{\"amount\":1000,\"unit\":\"L\"},\"text\":\"I need 1,000 litres of lactose-free milk by Monday. Find an option that meets our requirements based on price and availability.\"}}"
+  },
+  {
+   "at": "2026-11-13T22:18:05Z",
+   "role": "tool",
+   "type": "tool_return",
+   "tool": "dock-aiven_submit_need",
+   "text": "{\"ok\":true,\"step\":{\"requestId\":\"req_8d6790fdc7ca4eb3\",\"state\":\"needs_confirmation\",\"family\":\"milk\",\"need\":{\"text\":\"I need 1,000 litres of lactose-free milk by Monday. Find an option that meets our requirements based on price and availability.\",\"item\":{\"text\":\"lactose-free milk\",\"category\":\"milk\",\"attributes\":[\"lactose_free\"],\"excludedAttributes\":[]},\"quantity\":{\"amount\":1000,\"unit\":\"L\"},\"deliverBy\":\"2026-11-16\",\"requiredClaims\":[],\"forbiddenAllergens\":[\"gluten\",\"nuts\"],\"optimise\":\"price\",\"sameAsLastTime\":false},\"concerns\":[{\"key\":\"quantity_tenfold:1000:L\",\"code\":\"quantity_tenfold\",\"severity\":\"warning\",\"message\":\"1,000 L where you usually order about 100 L: did you mean 100 L?\",\"confirmable\":"
+  },
+  {
+   "at": "2026-11-13T22:18:12Z",
+   "role": "tool",
+   "type": "tool_call",
+   "tool": "dock-aiven_respond_to_concerns",
+   "text": "{\"by\":\"Aino Virtanen\",\"requestId\":\"req_8d6790fdc7ca4eb3\",\"responses\":[{\"choice\":\"confirm\",\"key\":\"quantity_tenfold:1000:L\"}]}"
+  },
+  {
+   "at": "2026-11-13T22:18:12Z",
+   "role": "tool",
+   "type": "tool_return",
+   "tool": "dock-aiven_respond_to_concerns",
+   "text": "{\"ok\":true,\"step\":{\"requestId\":\"req_8d6790fdc7ca4eb3\",\"state\":\"options_ready\",\"family\":\"milk\",\"need\":{\"item\":{\"text\":\"lactose-free milk\",\"category\":\"milk\",\"attributes\":[\"lactose_free\"],\"excludedAttributes\":[]},\"text\":\"I need 1,000 litres of lactose-free milk by Monday. Find an option that meets our requirements based on price and availability.\",\"optimise\":\"price\",\"quantity\":{\"unit\":\"L\",\"amount\":1000},\"deliverBy\":\"2026-11-16\",\"requiredClaims\":[],\"sameAsLastTime\":false,\"forbiddenAllergens\":[\"gluten\",\"nuts\"]},\"amount\":{\"amount\":1000,\"unit\":\"L\"},\"concerns\":[],\"questions\":[],\"openChoices\":[{\"id\":\"dim:fat\",\"kind\":\"dimension\",\"dimension\":\"fat\",\"text\":\"Which fat content?\",\"options\":[{\"id\":\"fat_free\""
+  },
+  {
+   "at": "2026-11-13T22:18:19Z",
+   "role": "tool",
+   "type": "tool_call",
+   "tool": "dock-aiven_choose_option",
+   "text": "{\"by\":\"Aino Virtanen\",\"optionId\":\"opt_1\",\"requestId\":\"req_8d6790fdc7ca4eb3\"}"
+  },
+  {
+   "at": "2026-11-13T22:18:19Z",
+   "role": "tool",
+   "type": "tool_return",
+   "tool": "dock-aiven_choose_option",
+   "text": "{\"ok\":true,\"step\":{\"requestId\":\"req_8d6790fdc7ca4eb3\",\"state\":\"quoted\",\"family\":\"milk\",\"need\":{\"item\":{\"text\":\"lactose-free milk\",\"category\":\"milk\",\"attributes\":[\"lactose_free\"],\"excludedAttributes\":[]},\"text\":\"I need 1,000 litres of lactose-free milk by Monday. Find an option that meets our requirements based on price and availability.\",\"optimise\":\"price\",\"quantity\":{\"unit\":\"L\",\"amount\":1000},\"deliverBy\":\"2026-11-16\",\"requiredClaims\":[],\"sameAsLastTime\":false,\"forbiddenAllergens\":[\"gluten\",\"nuts\"]},\"amount\":{\"unit\":\"L\",\"amount\":1000},\"concerns\":[],\"questions\":[],\"openChoices\":[{\"id\":\"dim:fat\",\"kind\":\"dimension\",\"text\":\"Which fat content?\",\"options\":[{\"id\":\"fat_free\",\"label\":\"Fat-free (0.1 %"
+  },
+  {
+   "at": "2026-11-13T22:18:24Z",
+   "role": "tool",
+   "type": "tool_call",
+   "tool": "dock-aiven_place_order",
+   "text": "{\"requestId\":\"req_8d6790fdc7ca4eb3\"}"
+  },
+  {
+   "at": "2026-11-13T22:18:24Z",
+   "role": "tool",
+   "type": "tool_return",
+   "tool": "dock-aiven_place_order",
+   "text": "{\"ok\":true,\"order\":{\"orderId\":\"ord_d80d8e606c7c4d17\",\"requestId\":\"req_8d6790fdc7ca4eb3\",\"orgId\":\"org_laakso_catering\",\"orgName\":\"Laakso Catering Oy\",\"agentId\":\"agent_laakso_aiven_01\",\"mandateId\":\"mnd_laakso_aiven_202611132217\",\"quoteId\":\"qt_a9af747c014745cc\",\"status\":\"pending_approval\",\"lines\":[{\"productId\":\"464306\",\"name\":\"Valio Hyvä suomalainen Arki® Eila® semi skimmed milk drink 1 l lactose free\",\"category\":\"milk\",\"unit\":\"L\",\"packSize\":1,\"attributes\":[\"additive_free\",\"colouring_free\",\"fat_1_5\",\"lactose_free\",\"low_fat\",\"low_lactose\",\"low_salt\",\"no_added_sugar\",\"preservative_free\",\"sweetener_free\",\"vegetarian\"],\"allergens\":[\"milk\"],\"allergensDeclared\":true,\"certificates\":[\"hyvaa_suomesta\"],"
+  },
+  {
+   "at": "2026-11-13T22:18:24Z",
+   "role": "assistant",
+   "type": "assistant",
+   "text": "### Order Proposal Summary\n\n* **Product:** Valio Hyvä suomalainen Arki® Eila® semi skimmed milk drink 1 l lactose free (Product ID: `464306`)\n* **Quantity:** 1,000 × 1 L\n* **Total Price:** €1,010.00 (€1.01 / pack)\n* **Delivery Date:** Monday, 2026-11-16\n* **Status:** `pending_approval` (Order ID: `ord_d80d8e606c7c4d17`)\n\n---\n\n### Action Required\n\nThe order total of **€1,010.00** exceeds the €1,000.00 limit the agent can spend alone, so it requires human approval and has been sent to **Aino Virtanen (Kitchen Manager)** to sign off on her device."
+  }
+ ],
+ "requestId": "req_8d6790fdc7ca4eb3",
+ "orderId": "ord_d80d8e606c7c4d17",
+ "outcome": "pending_approval"
+}

@@ -95,6 +95,8 @@ function desiredEnvironment(publicUrl) {
     if (env(`DOCK_DEPLOY_${name}`)) vars.push([key, env(`DOCK_DEPLOY_${name}`)]);
   }
   for (const k of ["DOCK_INTERPRET_MODEL", "DOCK_AGENT_MODEL", "VALIO_CUSTOMER"]) if (env(k)) vars.push([k, env(k)]);
+  // The operations portal's Platform section (web/src/server/aiven/showcase): which project and organisation to read.
+  for (const k of ["AIVEN_PROJECT", "AIVEN_ORGANIZATION_ID", "DOCK_SHOWCASE_LAUNCHES_PER_DAY"]) if (env(k)) vars.push([k, env(k)]);
 
   const secrets = [
     // Fixed keys: quotes and receipts stay verifiable across restarts; the demo orgs' keys are not the public dev ones.
@@ -110,6 +112,12 @@ function desiredEnvironment(publicUrl) {
     // Demo kitchens' connector addresses (/api/mcp/c/<token>) are derived from it: stable across restarts.
     // Also the operator bearer for reissuing or revoking connectors (/ui-api/connect/<kitchen>).
     "DOCK_CONNECTOR_SECRET",
+    // Platform section, all read-only: the read-only application user's token (service state, cost, Aiven MCP), the
+    // launcher's token (application user dock-agent-launcher, project role read-only) and the copilot's database
+    // user dock_copilot (one view, read-only sessions). Never AIVEN_API_TOKEN.
+    "AIVEN_READONLY_TOKEN",
+    "DOCK_AIVEN_LAUNCH_TOKEN",
+    "DOCK_COPILOT_PG_URL",
     // Not here: DATABASE_URL, OPENSEARCH_URI, VALKEY_URL and KAFKA_* come from the application_service_credential
     // integrations (Runtime refuses a variable that duplicates one of them).
   ];
