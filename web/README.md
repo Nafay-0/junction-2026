@@ -50,8 +50,8 @@ export DOCK_MANDATE=$(pnpm -s dev:mandate)  # dev mandate for the demo buyer
 The console's server side plays the kitchen's agent: `/ui-api/kitchens/[kitchen]/call` forwards a short allow-list of
 v1 calls with that kitchen's mandate (`src/server/console-kitchens.ts`). Live updates go through one hook,
 `src/app/_client/use-live.ts` (event stream, polling underneath). Free text becomes a structured need through
-`src/app/_client/interpret.ts`, which calls `POST /api/v1/agent/interpret` and falls back to the clearly marked
-stand-in in `interpret-standin.ts` while that endpoint is missing.
+`src/app/_client/interpret.ts` (`POST /api/v1/agent/interpret`): an incomplete reading asks for exactly the missing
+fields; when the model is down, the buyer can retry or use the "offline example" reader in `interpret-standin.ts`.
 
 ## Phone approval (passkeys)
 

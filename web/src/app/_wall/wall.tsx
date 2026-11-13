@@ -43,6 +43,9 @@ export function Wall({ initial, join }: { initial: WallSnapshot; join: { url: st
           The loading dock for AI buyers. Plain code checks every order; above the limit, a person signs off.
         </p>
         <div className="flex items-center gap-[1.5vw]">
+          {snap.catalogue.kind === "valio" && (
+            <p className="text-[clamp(1rem,1.15vw,1.4rem)] font-semibold">Valio Aimo catalogue, {snap.catalogue.products.toLocaleString("en-US")} products</p>
+          )}
           <p className="flex items-center gap-2 text-[clamp(1rem,1.15vw,1.4rem)] font-semibold" title={snap.chain.ok ? "Every ledger entry links to the one before it" : "The ledger chain is broken"}>
             <Target size={26} tone={snap.chain.ok ? "chalk" : "safety"} className={snap.chain.ok ? "spin-slow" : ""} />
             {snap.chain.ok ? `Ledger intact, ${snap.chain.length.toLocaleString("en-US")} entries` : "Ledger chain broken"}

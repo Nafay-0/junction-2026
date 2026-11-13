@@ -83,17 +83,26 @@ export function Button({ children, onClick, busy, disabled, pressed, kind = "sec
   );
 }
 
-export function ErrorPlate({ title, message, onRetry }: { title: string; message: string; onRetry?: () => void }) {
+export function ErrorPlate({ title, message, onRetry, extra }: { title: string; message: string; onRetry?: () => void; extra?: { label: string; onClick: () => void } | false | undefined }) {
   return (
     <div role="alert" className="mt-3 flex flex-wrap items-start justify-between gap-3 border-l-[6px] border-ink bg-paper px-4 py-3">
       <div className="min-w-0">
         <p className="font-semibold">{title}</p>
         <p className="text-ink-soft">{message}</p>
       </div>
-      {onRetry && (
-        <Button onClick={onRetry} kind="secondary">
-          Try again
-        </Button>
+      {(onRetry || extra) && (
+        <div className="flex flex-wrap gap-2">
+          {onRetry && (
+            <Button onClick={onRetry} kind="secondary">
+              Try again
+            </Button>
+          )}
+          {extra && (
+            <Button onClick={extra.onClick} kind="quiet">
+              {extra.label}
+            </Button>
+          )}
+        </div>
       )}
     </div>
   );

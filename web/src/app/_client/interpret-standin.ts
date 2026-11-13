@@ -1,15 +1,13 @@
 import type { NeedInput } from "@/core/need";
 
 /**
- * STAND-IN for POST /api/v1/agent/interpret (being built elsewhere: an LLM turns the buyer's words into the
- * structured need). Until it merges, this fixed-rule reader covers the demo sentences so the console works
- * end to end: amounts in litres, kilos, packs or pieces; milk, cream, yoghurt and oat drink; lactose-free,
+ * OFFLINE EXAMPLE reader. POST /api/v1/agent/interpret (a model) is the real reader; this fixed-rule reader
+ * covers the demo sentences for when the model is down or the server has no interpret route, so the console
+ * still works end to end: amounts in litres, kilos, packs or pieces; milk, cream, yoghurt and oat drink; lactose-free,
  * organic and fat content; "by Monday", "tomorrow", "17.11."; cheapest, lowest CO2, most reliable;
- * "same as last time". It is labelled as a stand-in wherever its result is shown.
- *
- * Delete this file (and its use in interpret.ts) once the real endpoint answers.
+ * "same as last time". It is labelled "offline example" wherever its result is shown.
  */
-export const STAND_IN_MODEL = "stand-in rules (no model)";
+export const STAND_IN_MODEL = "the offline example reader (fixed rules, no model)";
 
 export class StandInError extends Error {}
 

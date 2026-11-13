@@ -1,3 +1,4 @@
+import * as interpret from "@/app/api/v1/agent/interpret/route";
 import { resolveKitchen } from "@/server/console-kitchens";
 import { errorBody } from "@/server/http";
 import { localFetch } from "@/server/local-transport";
@@ -17,7 +18,7 @@ const ALLOWED: [string, RegExp][] = [
   ["POST", /^\/api\/v1\/orders$/],
   ["GET", /^\/api\/v1\/orders\/ord_[a-z0-9]+$/],
   ["GET", /^\/api\/v1\/ledger(\?[\w=&%-]*)?$/],
-  ["POST", /^\/api\/v1\/agent\/interpret$/], // being built elsewhere; see _client/interpret.ts
+  ["POST", /^\/api\/v1\/agent\/interpret$/],
 ];
 
 export async function POST(req: Request, ctx: RouteContext<"/ui-api/kitchens/[kitchen]/call">) {
@@ -39,19 +40,9 @@ export async function POST(req: Request, ctx: RouteContext<"/ui-api/kitchens/[ki
   if (method === "POST") headers["content-type"] = "application/json";
   const init: RequestInit = { method, headers, body: method === "POST" ? JSON.stringify(call.body ?? {}) : undefined };
 
-  // In-process first (same handlers, no network hop). A route the in-process table does not know yet
-  // (e.g. /api/v1/agent/interpret before it lands there) goes over HTTP to this same server.
-  let res = await localFetch(new Request(new URL(path, "http://dock.local"), init));
-  if (res.status === 404) {
-    const body = (await res.clone().json().catch(() => ({}))) as { error?: { code?: string } };
-    if (body.error?.code === "not_found") {
-      try {
-        res = await fetch(new URL(path, new URL(req.url).origin), { ...init, cache: "no-store" });
-      } catch {
-        // keep the in-process 404
-      }
-    }
-  }
+  // In-process: the same route handlers, no network hop and no assumption about this server's own address.
+  const forwarded = new Request(new URL(path, "http://dock.local"), init);
+  const res = path === "/api/v1/agent/interpret" ? await interpret.POST(forwarded) : await localFetch(forwarded);
   const text = await res.text();
   return new Response(text, { status: res.status, headers: { "content-type": res.headers.get("content-type") ?? "application/json", "cache-control": "no-store" } });
 }

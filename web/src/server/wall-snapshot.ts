@@ -1,5 +1,4 @@
 import type { LedgerEntry } from "@/core/ledger";
-import { SEED_PRODUCTS } from "@/core/seed";
 import { amount, eur, humanize, ruleTitle } from "@/app/_ui/plain";
 import { KITCHEN_ORG } from "./demo-kitchen";
 import { DEMO_ORG } from "./dev-fixtures";
@@ -32,10 +31,33 @@ export type WallSnapshot = {
   refusals: RefusalItem[];
   kitchens: { slug: string; name: string; approverName: string }[];
   lastActivityAt?: string;
+  /** Which catalogue answers: the partner's real one, or the small built-in seed. */
+  catalogue: { kind: "valio"; products: number } | { kind: "seed" };
 };
 
-const PRODUCT_NAMES = Object.fromEntries(SEED_PRODUCTS.map((p) => [p.id, p.name]));
-const say = (t: string) => humanize(t, PRODUCT_NAMES);
+// Product names for sentences that carry product codes. Looked up once per id from master data (local, not metered).
+const g = globalThis as typeof globalThis & { __dockWallNames?: Map<string, string> };
+const NAMES = (g.__dockWallNames ??= new Map<string, string>());
+let say = (t: string) => humanize(t);
+
+async function learnNames(rt: Runtime, entries: LedgerEntry[]): Promise<void> {
+  const ids = new Set<string>();
+  for (const e of entries) {
+    const d = e.data as { productIds?: unknown; lines?: unknown; resultIds?: unknown };
+    for (const id of Array.isArray(d.productIds) ? d.productIds : []) if (typeof id === "string") ids.add(id);
+    for (const l of Array.isArray(d.lines) ? d.lines : []) if (l && typeof (l as { productId?: unknown }).productId === "string") ids.add((l as { productId: string }).productId);
+  }
+  const unknown = [...ids].filter((id) => !NAMES.has(id)).slice(0, 100);
+  if (unknown.length) {
+    try {
+      for (const p of await rt.catalog.searchProducts({ ids: unknown, limit: 100 })) NAMES.set(p.id, p.name);
+    } catch {
+      // names are a nicety; ids stay as they are
+    }
+  }
+  const names = Object.fromEntries(NAMES);
+  say = (t: string) => humanize(t, names);
+}
 
 export async function wallSnapshot(rt: Runtime): Promise<WallSnapshot> {
   const { dock, sandboxes } = rt;
@@ -43,6 +65,7 @@ export async function wallSnapshot(rt: Runtime): Promise<WallSnapshot> {
   const orders = await dock.listOrders();
   const kitchens = await sandboxes.list();
   const chain = dock.ledger.verify();
+  await learnNames(rt, entries.slice(-300));
 
   const agentOrg = new Map<string, string>([
     [KITCHEN_ORG.agentId, KITCHEN_ORG.name],
@@ -111,6 +134,7 @@ export async function wallSnapshot(rt: Runtime): Promise<WallSnapshot> {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .map((k) => ({ slug: k.sandboxId, name: `${k.kitchenName}, ${k.city}`, approverName: k.approverName })),
     lastActivityAt: entries.at(-1)?.at,
+    catalogue: rt.catalogSource.kind === "valio" ? { kind: "valio", products: rt.catalogSource.products } : { kind: "seed" },
   };
 }
 

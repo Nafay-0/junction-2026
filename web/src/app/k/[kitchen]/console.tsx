@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, type ApiError } from "../../_client/api";
-import { InterpretError, interpretNeed, type Interpretation } from "../../_client/interpret";
+import { interpretNeed, offlineExample, type InterpretOutcome, type Interpretation } from "../../_client/interpret";
+import type { NeedInput } from "@/core/need";
 import { useLive } from "../../_client/use-live";
 import { Wordmark } from "../../_ui/target";
 import { eurShort } from "../../_ui/plain";
@@ -15,12 +16,15 @@ import { Button, ErrorPlate, Stage, type StageTone } from "./ui";
 import type { KitchenChoice, KitchenInfo, KitchenMemory, LedgerReply, Order, Step } from "./types";
 
 type Busy = "interpret" | "open" | "concern" | "answer" | "choose" | "order";
-type Failure = { at: "understood" | "concerns" | "questions" | "options" | "quote"; title: string; message: string; retry?: () => void };
+type Failure = { at: "understood" | "concerns" | "questions" | "options" | "quote"; title: string; message: string; retry?: () => void; offline?: () => void };
+export type Incomplete = Extract<InterpretOutcome, { kind: "incomplete" }>;
 
 export type Run = {
   n: number;
   text: string;
   interp?: Interpretation;
+  /** The reader understood part of the request; the buyer fills in what is missing. */
+  incomplete?: Incomplete;
   step?: Step;
   concernsSeen: Step["concerns"];
   asked: { id: string; text: string; options: { id: string; label: string }[] }[];
@@ -69,6 +73,40 @@ export function Console({ kitchen, kitchens }: { kitchen: KitchenInfo; kitchens:
 
   // ---------- actions ----------
 
+  /** Hand a structured need to Dock's intake: the first step comes back. */
+  const openIntake = useCallback(
+    async (n: number, interp: Interpretation) => {
+      update(n, (r) => ({ ...r, interp, incomplete: undefined, busy: "open", failure: undefined }));
+      const res = await call<{ step: Step }>("POST", "/api/v1/intake", { need: interp.need, by: kitchen.by });
+      if (res.ok) update(n, (r) => absorb(r, res.data.step));
+      else
+        update(n, (r) => ({
+          ...r,
+          busy: undefined,
+          failure: { at: "understood", title: "Dock did not take the request", message: res.error.message, retry: res.status === 0 || res.status >= 500 ? () => void openIntake(n, interp) : undefined },
+        }));
+    },
+    [call, kitchen.by, update, absorb],
+  );
+
+  /** Read the buyer's words: with the model, or with the offline example reader when the buyer asks for it. */
+  const read = useCallback(
+    async (n: number, text: string, offline: boolean) => {
+      update(n, (r) => ({ ...r, busy: "interpret", failure: undefined, incomplete: undefined }));
+      const out = offline ? offlineExample(text) : await interpretNeed(slug, text);
+      if (out.kind === "ok") return openIntake(n, out.interp);
+      if (out.kind === "incomplete") return update(n, (r) => ({ ...r, busy: undefined, incomplete: out }));
+      const failure: Failure =
+        out.kind === "not_purchase"
+          ? { at: "understood", title: "That does not read as something to buy", message: `${out.message} Write what the kitchen needs and how much.` }
+          : out.kind === "unavailable"
+            ? { at: "understood", title: "The model reader did not answer", message: out.message, retry: () => void read(n, text, false), offline: () => void read(n, text, true) }
+            : { at: "understood", title: "Dock could not read that", message: out.message };
+      update(n, (r) => ({ ...r, busy: undefined, failure }));
+    },
+    [slug, update, openIntake],
+  );
+
   const submit = useCallback(
     async (text: string) => {
       const clean = text.trim();
@@ -78,25 +116,17 @@ export function Console({ kitchen, kitchens }: { kitchen: KitchenInfo; kitchens:
       }
       const n = ++runN.current;
       setRun({ ...fresh(n), text: clean, busy: "interpret" });
-      let interp: Interpretation;
-      try {
-        interp = await interpretNeed(slug, clean);
-      } catch (err) {
-        const message = err instanceof InterpretError ? err.message : "The request could not be read.";
-        update(n, (r) => ({ ...r, busy: undefined, failure: { at: "understood", title: "Dock could not read that", message } }));
-        return;
-      }
-      update(n, (r) => ({ ...r, interp, busy: "open" }));
-      const open = async () => {
-        update(n, (r) => ({ ...r, busy: "open", failure: undefined }));
-        const res = await call<{ step: Step }>("POST", "/api/v1/intake", { need: interp.need, by: kitchen.by });
-        if (res.ok) update(n, (r) => absorb(r, res.data.step));
-        else update(n, (r) => ({ ...r, busy: undefined, failure: { at: "understood", title: "Dock did not take the request", message: res.error.message, retry: res.status === 0 || res.status >= 500 ? () => void open() : undefined } }));
-      };
-      await open();
+      await read(n, clean, false);
     },
-    [slug, call, kitchen.by, update, absorb],
+    [read],
   );
+
+  /** The buyer filled in what the reader said was missing. */
+  const complete = (need: NeedInput) => {
+    const inc = run.incomplete;
+    if (!inc) return;
+    void openIntake(run.n, { need, model: inc.model, ms: 0, offline: false, addedByBuyer: inc.missing });
+  };
 
   async function stepCall(busy: Busy, busyKey: string, at: Failure["at"], path: string, body: unknown, after?: (r: Run) => Run): Promise<void> {
     const n = run.n;
@@ -226,11 +256,20 @@ export function Console({ kitchen, kitchens }: { kitchen: KitchenInfo; kitchens:
     stages.push({
       key: "understood",
       title: "What Dock understood",
-      tone: run.busy === "interpret" || run.busy === "open" ? "busy" : "done",
+      tone: run.busy === "interpret" || run.busy === "open" ? "busy" : run.incomplete ? "active" : "done",
       body: (
         <>
-          <Understood text={run.text} interp={run.interp} step={s} busy={run.busy === "interpret" ? "Reading the request…" : run.busy === "open" ? "Checking it against the kitchen's memory…" : undefined} />
-          {run.failure?.at === "understood" && <ErrorPlate title={run.failure.title} message={run.failure.message} onRetry={run.failure.retry} />}
+          <Understood
+            text={run.text}
+            interp={run.interp}
+            step={s}
+            incomplete={run.incomplete}
+            onComplete={complete}
+            busy={run.busy === "interpret" ? "Reading the request…" : run.busy === "open" ? "Checking it against the kitchen's memory…" : undefined}
+          />
+          {run.failure?.at === "understood" && (
+            <ErrorPlate title={run.failure.title} message={run.failure.message} onRetry={run.failure.retry} extra={run.failure.offline && { label: "Use the offline example reader", onClick: run.failure.offline }} />
+          )}
         </>
       ),
     });

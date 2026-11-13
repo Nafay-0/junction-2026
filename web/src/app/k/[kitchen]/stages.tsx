@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import type { ApiError } from "../../_client/api";
 import { api } from "../../_client/api";
 import type { Interpretation } from "../../_client/interpret";
+import type { NeedInput } from "@/core/need";
+import type { Incomplete } from "./console";
 import { amount, attr, clock, day, eur, humanize, roleLabel, ruleTitle, shortProduct } from "../../_ui/plain";
 import { Target } from "../../_ui/target";
 import { Button, Field, MemoryNote, Missing, Paper } from "./ui";
@@ -27,7 +29,22 @@ function useNow(ms = 1000): number {
 
 type NeedLike = NonNullable<Interpretation["need"]>;
 
-export function Understood({ text, interp, step, busy }: { text: string; interp?: Interpretation; step?: Step; busy?: string }) {
+export function Understood({
+  text,
+  interp,
+  step,
+  busy,
+  incomplete,
+  onComplete,
+}: {
+  text: string;
+  interp?: Interpretation;
+  step?: Step;
+  busy?: string;
+  incomplete?: Incomplete;
+  onComplete: (need: NeedInput) => void;
+}) {
+  if (incomplete) return <CompleteNeed text={text} incomplete={incomplete} onComplete={onComplete} />;
   const need = (step?.need ?? interp?.need) as NeedLike | undefined;
   const original = interp?.need;
   const corrected = step && original?.quantity && step.need.quantity && (original.quantity.amount !== step.need.quantity.amount || original.quantity.unit !== step.need.quantity.unit);
@@ -64,9 +81,14 @@ export function Understood({ text, interp, step, busy }: { text: string; interp?
         </div>
         {interp && (
           <p className="mt-3 text-[0.9rem] text-ink-soft">
-            {interp.standIn ? (
+            {interp.offline ? (
               <>
-                Read by the stand-in rule reader (no model) in {interp.ms} ms, because {interp.fallbackReason}. Everything after this line is plain code.
+                <span className="mr-1.5 border border-ink px-1.5 py-px font-semibold text-ink">Offline example</span>
+                Read by {interp.model} in {interp.ms} ms, not by the model. Everything after this line is plain code.
+              </>
+            ) : interp.addedByBuyer?.length ? (
+              <>
+                Read by {interp.model}; the buyer added the {interp.addedByBuyer.map((m) => (m === "item" ? "item" : "amount")).join(" and ")}. Everything after this line is plain code.
               </>
             ) : (
               <>
@@ -81,6 +103,82 @@ export function Understood({ text, interp, step, busy }: { text: string; interp?
           </p>
         )}
       </div>
+    </Paper>
+  );
+}
+
+/** The reader understood part of the request: show that, and ask for exactly what is missing, as fields. */
+function CompleteNeed({ text, incomplete, onComplete }: { text: string; incomplete: Incomplete; onComplete: (need: NeedInput) => void }) {
+  const p = incomplete.partial;
+  const needItem = incomplete.missing.includes("item") || !p.item?.text;
+  const needQty = incomplete.missing.includes("quantity") || (!p.quantity && !p.sameAsLastTime);
+  const [item, setItem] = useState(p.item?.text ?? "");
+  const [qty, setQty] = useState("");
+  const [unit, setUnit] = useState<"L" | "kg" | "pcs" | "pack">("L");
+  const n = Number(qty.replace(",", "."));
+  const ready = (!needItem || item.trim().length > 0) && (!needQty || (Number.isFinite(n) && n > 0));
+  const submit = () => {
+    if (!ready) return;
+    onComplete({
+      ...p,
+      text,
+      item: { ...(p.item ?? {}), text: needItem ? item.trim() : (p.item?.text ?? item.trim()) },
+      ...(needQty ? { quantity: { amount: n, unit } } : {}),
+    });
+  };
+  return (
+    <Paper>
+      <form
+        className="p-4 sm:p-5"
+        onSubmit={(e) => {
+          e.preventDefault();
+          submit();
+        }}
+      >
+        <blockquote className="font-display text-[1.55rem] font-semibold leading-tight sm:text-[1.8rem]">“{text}”</blockquote>
+        <p className="mt-2 text-[1.02rem]">{incomplete.message} Add it here; everything else stays as read.</p>
+        <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-ink/15 pt-3 sm:grid-cols-3">
+          <div>
+            <dt className="text-[0.8rem] font-medium text-ink-soft">
+              <label htmlFor="fix-item">Item</label>
+            </dt>
+            <dd className="mt-0.5">
+              {needItem ? (
+                <input id="fix-item" autoFocus value={item} onChange={(e) => setItem(e.target.value)} placeholder="e.g. lactose-free milk" className="min-h-11 w-full border-2 border-ink bg-paper px-2 font-semibold" />
+              ) : (
+                <span className="text-[1.05rem] font-semibold">{p.item?.text}</span>
+              )}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-[0.8rem] font-medium text-ink-soft">
+              <label htmlFor="fix-qty">Amount</label>
+            </dt>
+            <dd className="mt-0.5">
+              {needQty ? (
+                <span className="flex gap-1">
+                  <input id="fix-qty" autoFocus={!needItem} inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="100" className="min-h-11 w-24 border-2 border-ink bg-paper px-2 font-semibold tabular" />
+                  <select aria-label="Unit" value={unit} onChange={(e) => setUnit(e.target.value as typeof unit)} className="min-h-11 border-2 border-ink bg-paper px-1 font-semibold">
+                    <option value="L">litres</option>
+                    <option value="kg">kilos</option>
+                    <option value="pack">packs</option>
+                    <option value="pcs">pieces</option>
+                  </select>
+                </span>
+              ) : (
+                <span className="text-[1.05rem] font-semibold">{p.quantity ? amount(p.quantity.amount, p.quantity.unit) : "Same as last time"}</span>
+              )}
+            </dd>
+          </div>
+          <Field label="Deliver by">{p.deliverBy ? day(p.deliverBy) : <Missing>Not said</Missing>}</Field>
+          {[...(p.requiredClaims ?? []), ...(p.item?.attributes ?? [])].length > 0 && <Field label="Must be">{[...(p.requiredClaims ?? []), ...(p.item?.attributes ?? [])].map(attr).join(", ")}</Field>}
+        </dl>
+        <div className="mt-4">
+          <Button type="submit" kind="primary" disabled={!ready}>
+            Continue with this
+          </Button>
+        </div>
+      </form>
     </Paper>
   );
 }
