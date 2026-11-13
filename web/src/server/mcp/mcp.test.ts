@@ -41,7 +41,23 @@ describe("MCP server", () => {
   it("lists every tool with a description and JSON schemas, without a mandate", async () => {
     const client = await connect({});
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name)).toEqual(["read_mandate", "open_request", "search_products", "check_availability", "request_quote", "place_order", "get_order", "explain"]);
+    expect(tools.map((t) => t.name)).toEqual([
+      "read_mandate",
+      "submit_need",
+      "respond_to_concerns",
+      "answer_questions",
+      "choose_option",
+      "get_intake_step",
+      "read_kitchen_memory",
+      "place_order",
+      "get_order",
+      "explain",
+      "open_request",
+      "search_products",
+      "check_availability",
+      "request_quote",
+    ]);
+    expect(tools.some((t) => /approv|sign.?off|decide/i.test(t.name))).toBe(false); // an agent can never sign off its own order
     for (const t of tools) {
       expect(t.description!.length).toBeGreaterThan(80);
       expect(t.inputSchema.type).toBe("object");

@@ -1,8 +1,18 @@
-import { McpServer, createMcpHandler, localhostAllowedOrigins, originValidationResponse, type CallToolResult } from "@modelcontextprotocol/server";
+import {
+  CLIENT_CAPABILITIES_META_KEY,
+  McpServer,
+  createMcpHandler,
+  localhostAllowedOrigins,
+  originValidationResponse,
+  type CallToolResult,
+  type InputRequiredResult,
+  type ServerContext,
+} from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { DockError } from "@/core/orders";
 import { authenticate } from "../http";
 import { getRuntime, type Runtime } from "../runtime";
+import { AskHuman, HUMAN_INPUT_META, type HumanChannel } from "./ask-human";
 import { LiveLookupGuard } from "./live-lookup-guard";
 import { nextStepFor } from "./next-step";
 import { TOOLS, type DockTool } from "./tools";
@@ -24,7 +34,10 @@ export const MCP_SERVER_INFO = { name: "dock", title: "Dock", version: "1.0.0" }
 
 export const MCP_INSTRUCTIONS = `Dock is a wholesaler's ordering gateway for purchasing agents. You buy on behalf of an organisation that signed a mandate saying what you may buy; Dock checks every order against it in plain code.
 
-Flow: read_mandate -> open_request -> search_products (free master data) -> check_availability (live, metered, short lists only) -> request_quote (signed fixed price) -> place_order -> get_order / explain.
+Start every new order with submit_need (the buyer's need as fields). Dock then leads: each result has a step with a state and a nextStep naming the next call.
+Flow: read_mandate -> submit_need -> [respond_to_concerns] -> [answer_questions] -> choose_option (signed fixed-price quote) -> place_order -> get_order / explain.
+respond_to_concerns and answer_questions carry the human buyer's own answer: relay Dock's question to them and pass on what they say. Never confirm a likely mistake or answer a question for them. If your client supports elicitation, Dock asks the buyer directly.
+Lower-level tools for follow-up: open_request, search_products (free master data), check_availability (live, metered, short lists only), request_quote.
 
 Rules of the road:
 - Quantities are packs. Prices are euro cents ex VAT.
@@ -33,13 +46,13 @@ Rules of the road:
 - place_order may return pending_approval: a person signs off on their own device. Do not retry; follow up with get_order.
 - Every refusal names the rule that fired (error.rule) and says what to do next (nextStep).`;
 
-type ToolResult = CallToolResult & { structuredContent: Record<string, unknown> };
+type ToolResult = (CallToolResult & { structuredContent: Record<string, unknown> }) | InputRequiredResult;
 
-function result(structured: Record<string, unknown>, isError = false): ToolResult {
+function result(structured: Record<string, unknown>, isError = false): CallToolResult & { structuredContent: Record<string, unknown> } {
   return { content: [{ type: "text", text: JSON.stringify(structured) }], structuredContent: structured, ...(isError ? { isError } : {}) };
 }
 
-export function refusal(err: DockError): ToolResult {
+export function refusal(err: DockError) {
   const { order, ...details } = err.details ?? {};
   return result(
     {
@@ -59,14 +72,28 @@ function guardFor(rt: Runtime): LiveLookupGuard {
   return g;
 }
 
+/**
+ * Whether Dock can ask the human through this client: on 2026-07-28 the request's own envelope declares the
+ * `elicitation` capability (an empty object means form mode). 2025-era requests reach this stateless server
+ * without it, so the agent relays instead.
+ */
+export function humanChannel(ctx?: Pick<ServerContext, "mcpReq">): HumanChannel {
+  const envelope = ctx?.mcpReq.envelope as Record<string, { elicitation?: { form?: object; url?: object } } | undefined> | undefined;
+  const caps = envelope?.[CLIENT_CAPABILITIES_META_KEY];
+  const e = caps?.elicitation;
+  return { canAsk: !!e && (!!e.form || !e.url), responses: ctx?.mcpReq.inputResponses };
+}
+
 /** Authenticate the caller from the HTTP request, run one tool, and shape the result. Never throws a DockError. */
-export async function runTool(rt: Runtime, req: Request | undefined, tool: DockTool, args: unknown): Promise<ToolResult> {
+export async function runTool(rt: Runtime, req: Request | undefined, tool: DockTool, args: unknown, human: HumanChannel = { canAsk: false }): Promise<ToolResult> {
   const { dock } = rt;
   try {
     const session = await authenticate(req ?? new Request("http://dock.invalid/"), dock);
     const agentKey = `${session.mandate.issuer.orgId}:${session.agentId}`;
-    const run = tool.run as (ctx: Parameters<DockTool["run"]>[0], args: unknown) => Promise<Record<string, unknown>>;
-    return result({ ok: true, ...(await run({ dock, session, guard: guardFor(rt), agentKey }, args)) });
+    const run = tool.run as (ctx: Parameters<DockTool["run"]>[0], args: unknown) => Promise<Record<string, unknown> | AskHuman>;
+    const out = await run({ dock, session, guard: guardFor(rt), agentKey, human }, args);
+    if (out instanceof AskHuman) return out.result;
+    return result({ ok: true, ...out });
   } catch (err) {
     if (!(err instanceof DockError)) throw err; // the SDK turns it into a generic tool error
     if (err.code === "live_lookup_budget_exceeded") {
@@ -93,8 +120,11 @@ export function buildMcpServer(rt: Runtime, req?: Request): McpServer {
         inputSchema: tool.input,
         outputSchema: tool.output.extend({ ok: z.literal(true) }).loose(), // loose: new fields must not break clients
         annotations: { title: tool.title, readOnlyHint: tool.readOnly ?? false, destructiveHint: false, idempotentHint: tool.readOnly ?? false, openWorldHint: false },
+        ...("humanInput" in tool && tool.humanInput
+          ? { _meta: { [HUMAN_INPUT_META]: { required: true, from: "buyer", how: "elicitation (input_required) when the client supports it, else the agent relays the buyer's own answer" } } }
+          : {}),
       },
-      (args: unknown) => runTool(rt, req, tool, args),
+      (args: unknown, ctx: ServerContext) => runTool(rt, req, tool, args, humanChannel(ctx)),
     );
   }
   return server;
