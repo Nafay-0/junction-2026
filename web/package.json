@@ -22,7 +22,10 @@
     "index:build": "tsx scripts/index-build.ts",
     "index:publish": "tsx scripts/index-publish.ts",
     "valio:ping": "tsx scripts/valio-ping.ts",
-    "infra:check": "tsx scripts/infra-check.ts"
+    "infra:check": "tsx scripts/infra-check.ts",
+    "knowledge:build": "tsx scripts/knowledge-build.ts",
+    "knowledge:eval": "tsx scripts/knowledge-eval.ts",
+    "knowledge:publish": "tsx scripts/knowledge-publish.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.102",
