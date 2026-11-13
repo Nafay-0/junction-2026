@@ -1,6 +1,8 @@
 import { DockError } from "@/core/orders";
 import { currentOps, enterOps, leaveOps, opsMode, sessionCookie } from "@/server/ops/access";
 import { handle, readJson } from "@/server/http";
+import { suspensions } from "@/server/ops/suspensions";
+import { getRuntime } from "@/server/runtime";
 
 /**
  * The operations portal's entry. GET: am I in, and does entering need a passcode. POST { passcode?, name? }: enter
@@ -8,7 +10,15 @@ import { handle, readJson } from "@/server/http";
  */
 export async function GET(req: Request) {
   const s = currentOps(req);
-  return Response.json({ signedIn: !!s, name: s?.name, mode: opsMode() }, { headers: { "cache-control": "no-store" } });
+  if (!s) return Response.json({ signedIn: false, mode: opsMode() }, { headers: { "cache-control": "no-store" } });
+  // The rail's badges: is the chain intact, how many sign-offs wait, how many suspensions are in force.
+  const rt = await getRuntime();
+  const v = rt.dock.ledger.verify();
+  const waiting = (await rt.dock.listPendingApprovals()).length;
+  return Response.json(
+    { signedIn: true, name: s.name, mode: opsMode(), chain: { ok: v.ok, length: v.ok ? v.length : rt.dock.ledger.entries().length }, waiting, suspended: suspensions(rt.dock).active().length },
+    { headers: { "cache-control": "no-store" } },
+  );
 }
 
 export async function POST(req: Request) {
