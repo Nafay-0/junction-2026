@@ -27,7 +27,21 @@ export type AskReply = {
   looked: { products: number; orders: number; memory: number };
 };
 
-const LIVE_WORDS = /\b(price|prices|cost|costs|cheap|expensive|euro|€|stock|in stock|available|availability|deliver|delivery|cut-?off|order by|when can|hinta|maksaa|saatavilla|varasto|toimitus|pris|kostar|lager|leverans)\b/i;
+/**
+ * Questions only a live lookup can answer: price, stock, and when it can arrive (dates, weekdays, "tomorrow"), in
+ * English, Finnish and Swedish. Stems match inflected forms ("huomiseksi", "maanantaina", "leveransen").
+ */
+export const LIVE_WORDS = new RegExp(
+  [
+    "pric\\w*", "costs?", "cheap\\w*", "expensive", "euros?", "stock", "availab\\w*", "deliver\\w*", "cut-?off", "order by", "when", "arriv\\w*", "ship\\w*", "dates?", "earliest", "soon\\w*", "today", "tonight", "tomorrow", "next week",
+    "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+    "hin\\w*", "maksa\\w*", "saatavil\\w*", "varast\\w*", "toimit\\w*", "milloin", "ehti\\w*", "perill\\w*", "huomen\\w*", "huomis\\w*", "tänään", "ylihuomen\\w*",
+    "maanantai\\w*", "tiistai\\w*", "keskiviikko\\w*", "torstai\\w*", "perjantai\\w*", "lauantai\\w*", "sunnuntai\\w*",
+    "pris\\w*", "kostar", "lager\\w*", "leverans\\w*", "levereras", "när", "imorgon", "i morgon", "idag", "i dag", "anländ\\w*", "kommer fram",
+    "måndag\\w*", "tisdag\\w*", "onsdag\\w*", "torsdag\\w*", "fredag\\w*", "lördag\\w*", "söndag\\w*",
+  ].map((w) => `(?<![\\p{L}])${w}(?![\\p{L}])`).join("|") + "|€",
+  "iu",
+);
 const ALT_WORDS = /\b(alternative|alternatives|instead|substitute|replace|similar|other|korvaava|korvaa|vaihtoehto|ersätt|alternativ|istället)\b/i;
 const THIS_WORDS = /\b(this|it|that one|tämä|tätä|se|sitä|den|det|denna)\b/i;
 const CLAIM_WORDS: [RegExp, string][] = [
@@ -123,7 +137,8 @@ export async function ask(k: Kitchen, body: AskBody): Promise<AskReply> {
 
   // One live check, only for the one product a price or stock question is about.
   let liveCalls = 0;
-  const liveTarget = LIVE_WORDS.test(question) ? (focus ?? (named.length === 1 || THIS_WORDS.test(question) ? undefined : named[0])) : undefined;
+  // The product on screen, else the product the question names (a "this" with nothing on screen names nothing).
+  const liveTarget = LIVE_WORDS.test(question) ? (focus ?? (named.length && !THIS_WORDS.test(question) ? named[0] : undefined)) : undefined;
   if (liveTarget) {
     try {
       const live = await liveCheck(k, [liveTarget.id]);
