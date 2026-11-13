@@ -5,7 +5,10 @@ import { errMessage, log } from "../env";
 import { AivenApiError, aivenApi } from "./aiven-api";
 import { showcaseConfig, missing } from "./config";
 import { redact } from "./redact";
+import refusedRecording from "./recordings/refused.json";
 import valioRecording from "./recordings/valio.json";
+import { AIVEN_BUYER } from "./buyer";
+import withinRecording from "./recordings/within.json";
 
 /**
  * "Send in an Aiven agent": an outside buyer that runs on Aiven's Managed Agents runtime, started from the
@@ -20,14 +23,7 @@ import valioRecording from "./recordings/valio.json";
  * Aiven's free tier has a daily run limit it does not publish; when Aiven refuses a run, or the day's cap is used,
  * the launcher plays a recorded run instead, labelled as a recording.
  */
-export const AIVEN_BUYER = {
-  agentId: "agent_laakso_aiven_01",
-  label: "Laakso's buyer on Aiven Managed Agents",
-  integration: "dock-aiven",
-  agentName: "Dock showcase buyer (Laakso Catering)",
-  model: "gemini-3.8-flash",
-  mandateMinutes: 20,
-} as const;
+export { AIVEN_BUYER };
 
 const STANDING = `Standing answers from the buyer, Aino Virtanen (kitchen manager), for anything Dock asks: the quantity is confirmed; no preference on fat content or organic, do not remember them; take the cheapest option that Dock offers.`;
 
@@ -357,7 +353,7 @@ async function refreshMessages(run: Run, agentId: string): Promise<void> {
 
 type Recording = { recordedAt: string; preset: PresetId; question: string; model: string; messages: RunMessage[]; requestId?: string; orderId?: string; outcome?: string };
 
-const RECORDINGS: Partial<Record<PresetId, Recording>> = { valio: valioRecording as Recording };
+const RECORDINGS: Partial<Record<PresetId, Recording>> = { valio: valioRecording as Recording, within: withinRecording as Recording, refused: refusedRecording as Recording };
 
 /** A recorded run, played back with its original timing by the page. Clearly marked as a recording. */
 export function recordedRun(preset: PresetId, why: string): Run {
