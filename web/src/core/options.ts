@@ -268,7 +268,7 @@ export function buildOptions(input: OptionsInput): OptionsResult {
     }
     const sub = viable
       .filter((q) => q !== v && q.late === v.late && enough(q, rest))
-      .filter((q) => mandate.substitution.rule !== "same_attributes" || likeForLike(v.p, q.p))
+      .filter((q) => likeForLike(v.p, q.p)) // the rest of the same milk: never 400 L skimmed topped up with semi-skimmed
       .filter((q) => (perUnit(q) / perUnit(v) - 1) * 100 <= mandate.substitution.maxPriceIncreasePct + 1e-9)
       .sort((a, b) => perUnit(a) - perUnit(b) || a.p.id.localeCompare(b.p.id))[0];
     if (!sub) {
