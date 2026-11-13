@@ -38,7 +38,8 @@
     "menu:eval": "tsx scripts/menu-eval.ts",
     "knowledge:build": "tsx scripts/knowledge-build.ts",
     "knowledge:eval": "tsx scripts/knowledge-eval.ts",
-    "knowledge:publish": "tsx scripts/knowledge-publish.ts"
+    "knowledge:publish": "tsx scripts/knowledge-publish.ts",
+    "aiven:showcase": "tsx scripts/aiven-showcase.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.102",
