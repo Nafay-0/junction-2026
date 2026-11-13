@@ -104,6 +104,14 @@ describe("policy: happy paths", () => {
   });
 });
 
+describe("policy: quote binding", () => {
+  it("refuses a quote issued for another request (F-QUOTE-REQUEST)", () => {
+    const q = quote([{ productId: "VA-1001", quantity: 2 }]); // issued for req_1
+    expectRejectedBy(evaluatePolicy(mandate(), draft(q, { requestId: "req_2" }), ctx()), "quote_binding");
+    expect(rule(evaluatePolicy(mandate(), draft(q, { requestId: "req_1" }), ctx()), "quote_binding").outcome).toBe("pass");
+  });
+});
+
 describe("policy: spend limits", () => {
   const big = () => quote([{ productId: "VA-1001", quantity: 700 }]); // €1,043.00
 
@@ -380,5 +388,19 @@ describe("policy: real-data gaps", () => {
     }
     // The same request counts whatever the category or day.
     expect(rule(evaluatePolicy(mandate(), draft(q), ctx({ recentOrders: [{ ...earlier, requestId: "req_1", categories: ["cream"], deliveryDates: ["2026-12-01"] }] })), "order_splitting").outcome).toBe("escalate");
+  });
+});
+
+describe("policy: Helsinki dates (F-GATE-UTC-DATE)", () => {
+  it("counts the latest delivery day in Helsinki days at every hour, also just after local midnight", () => {
+    // 00:30 in Helsinki on Saturday 14 Nov is still Friday 13 Nov in UTC.
+    const now = new Date("2026-11-13T22:30:00Z");
+    const m = sampleMandate(now, { weeklyBudgetCents: 1e9 });
+    const latest = "2026-11-19"; // Sat 14 + 5 days, in Helsinki
+    const q = { ...quote([{ productId: "VA-1001", quantity: 1 }]), issuedAt: now.toISOString(), expiresAt: addMinutes(now, 30).toISOString() };
+    const onTime = { ...q, lines: q.lines.map((l) => ({ ...l, deliveryDate: latest })) };
+    expect(rule(evaluatePolicy(m, draft(onTime), ctx({ now })), "delivery_deadline").outcome).toBe("pass");
+    const late = { ...q, lines: q.lines.map((l) => ({ ...l, deliveryDate: "2026-11-20" })) };
+    expect(rule(evaluatePolicy(m, draft(late), ctx({ now })), "delivery_deadline").outcome).toBe("fail");
   });
 });

@@ -18,6 +18,7 @@ import {
   type KitchenProfile,
   type MemoryItem,
   type StatedPreference,
+  localDateOf,
 } from "./kitchen";
 import { SPEC_DIMENSIONS, dimensionLabel, dimensionValue, formatAmount, NONE, type BaseUnit, type NeedPatch, type NeedUnit, type StructuredNeed } from "./need";
 
@@ -429,7 +430,7 @@ export function checkPreferences(need: StructuredNeed, ctx: CheckContext): Conce
       key: `contradicts_preference:${pref.id}`,
       code: "contradicts_preference",
       severity: "warning",
-      message: `${conflict.what} Your kitchen's standing rule, set by ${pref.statedBy} on ${formatDay(pref.statedAt.slice(0, 10))}: "${pref.text}".`,
+      message: `${conflict.what} Your kitchen's standing rule, set by ${pref.statedBy} on ${formatDay(localDateOf(pref.statedAt))}: "${pref.text}".`,
       confirmable: true,
       corrections: [{ id: `keep_${pref.id}`, label: conflict.fixLabel, patch: conflict.patch }],
       preferenceIds: [pref.id],
@@ -505,7 +506,7 @@ const daysText = (ds: number[]) => ds.map((d) => DAY[d]).join(", ");
 export function cite(m: MemoryItem): string {
   const s = [...m.sources].reverse().find((x) => x.quote) ?? m.sources.at(-1);
   const who = m.origin === "learned" ? "learned from your orders" : m.confirmedBy ? `confirmed by ${m.confirmedBy.by}` : s?.by ? `said by ${s.by}` : "remembered";
-  const when = s ? ` on ${formatDay(s.at.slice(0, 10))}` : "";
+  const when = s ? ` on ${formatDay(localDateOf(s.at))}` : "";
   return `Remembered: ${m.text} (${who}${when}${s?.quote ? `: "${s.quote}"` : ""}).`;
 }
 
@@ -558,7 +559,7 @@ export function checkDeclined(need: StructuredNeed, ctx: CheckContext): Concern[
     const f = m.fact;
     if (f.kind !== "substitute") return cite(m);
     const s = m.sources.at(-1);
-    return `${s?.by ?? "Your kitchen"} turned it down as a substitute${f.forName ? ` for ${f.forName}` : ""}${s ? ` on ${formatDay(s.at.slice(0, 10))}` : ""}${f.reason ? `: "${f.reason}"` : ""}.`;
+    return `${s?.by ?? "Your kitchen"} turned it down as a substitute${f.forName ? ` for ${f.forName}` : ""}${s ? ` on ${formatDay(localDateOf(s.at))}` : ""}${f.reason ? `: "${f.reason}"` : ""}.`;
   };
   const usual = mem.find((m) => m.fact.kind === "product" && m.fact.stance === "prefer" && m.fact.productId !== named.id && ctx.candidates.some((p) => p.id === (m.fact as { productId: string }).productId));
   const corrections: Correction[] = [];

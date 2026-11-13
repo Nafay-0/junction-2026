@@ -1,6 +1,7 @@
 import type { Approver, Mandate } from "./mandate";
 import type { Quote, QuoteLine } from "./quote";
-import { addDays, formatEur, isoDate } from "./util";
+import { latestDeliveryDay } from "./kitchen";
+import { formatEur } from "./util";
 import { isMaterialAttribute } from "./vocabulary";
 
 /**
@@ -20,7 +21,7 @@ import { isMaterialAttribute } from "./vocabulary";
 export const RULES = [
   "mandate_agent", // the agent presenting the order is the one the mandate names
   "mandate_window", // the mandate is in force at decision time
-  "quote_binding", // the quote was issued to this organisation, agent and mandate
+  "quote_binding", // the quote was issued to this organisation, agent, mandate and request
   "quote_expiry", // the quote's fixed price still holds
   "quote_replay", // the quote has not been used for another order
   "order_matches_quote", // the order buys exactly what was quoted, at the quoted prices and quantities
@@ -50,6 +51,8 @@ export type OrderDraft = {
   quote: Quote; // signature already verified
   lines: OrderDraftLine[];
   neededBy?: string; // YYYY-MM-DD, from the purchase request
+  /** The request the order is placed under. A quote buys only for the request it was issued for. */
+  requestId?: string;
 };
 
 /** An earlier order of the same organisation, as the splitting check needs it. */
@@ -123,7 +126,9 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
   if (q.agentId !== mandate.agentId) binding.push(`agent ${q.agentId}`);
   if (q.mandateId !== mandate.mandateId) binding.push(`mandate ${q.mandateId}`);
   if (binding.length) add("quote_binding", "fail", `Quote ${q.quoteId} was issued to ${binding.join(", ")}, not to this mandate.`);
-  else add("quote_binding", "pass", `Quote ${q.quoteId} was issued under this mandate.`);
+  else if (draft.requestId !== undefined && q.requestId !== draft.requestId)
+    add("quote_binding", "fail", `Quote ${q.quoteId} was issued for request ${q.requestId}, not ${draft.requestId}; a quote buys only for the request it was made for.`, { quoteRequestId: q.requestId, orderRequestId: draft.requestId });
+  else add("quote_binding", "pass", `Quote ${q.quoteId} was issued under this mandate${draft.requestId ? ` for request ${draft.requestId}` : ""}.`);
 
   if (t < Date.parse(q.expiresAt)) add("quote_expiry", "pass", `Quote holds its prices until ${q.expiresAt}.`);
   else add("quote_expiry", "fail", `Quote ${q.quoteId} expired at ${q.expiresAt}; ask for a new quote.`, { expiresAt: q.expiresAt });
@@ -172,7 +177,7 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
     mandate.requiredCertificates.length ? `Every product carries ${mandate.requiredCertificates.join(", ")}.` : "No certificates required.",
   );
 
-  const leadLimit = isoDate(addDays(ctx.now, mandate.delivery.maxLeadDays));
+  const leadLimit = latestDeliveryDay(ctx.now, mandate.delivery.maxLeadDays); // Helsinki days, as the intake counts them
   const latest = draft.neededBy && draft.neededBy < leadLimit ? draft.neededBy : leadLimit;
   lineCheck(
     "delivery_deadline",

@@ -17,6 +17,8 @@ import {
   type KitchenProfile,
   type KitchenRepository,
   type StatedPreference,
+  formatDay,
+  localDateOf,
 } from "./kitchen";
 import type { Ledger } from "./ledger";
 import { NeedSchema, SPEC_DIMENSIONS, applyNeedPatch, describeNeed, dimensionValue, formatAmount, normaliseNeed, type BaseUnit, type OptimiseGoal, type StructuredNeed } from "./need";
@@ -352,7 +354,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
     //    only pre-selects, and a compromise is always the buyer's call.
     const repeatCard = repeat && i.options.find((o) => o.match === "full" && o.lines.length === 1 && o.lines[0].productId === repeat.id);
     if (repeatCard) {
-      i.notes.unshift(`Repeats your order of ${formatAmount(last!.amount, last!.unit)} from ${last!.placedAt.slice(0, 10)}.`);
+      i.notes.unshift(`Repeats your order of ${formatAmount(last!.amount, last!.unit)} from ${formatDay(localDateOf(last!.placedAt))}.`);
       return quoteOption(session, i, { ...repeatCard, labels: ["same_as_last_time"] }, `agent ${session.agentId}`, "Same as last time, as asked.");
     }
     const pick = goalForRank ? preselect(i.options, goalForRank, goal.within) : undefined;

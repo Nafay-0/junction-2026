@@ -1,10 +1,10 @@
 import { usableOffer, type LiveOffer, type LiveStatus, type Product } from "./catalog";
 import { packsFor as convertPacks } from "./catalog/product";
-import { formatDay, primaryLine, type HistoryEntry } from "./kitchen";
+import { formatDay, latestDeliveryDay, localDateOf, primaryLine, type HistoryEntry } from "./kitchen";
 import type { Mandate } from "./mandate";
 import { formatAmount, type BaseUnit, type OptimiseGoal } from "./need";
 import type { QuoteRequestLine } from "./quote";
-import { addDays, formatEur, isoDate } from "./util";
+import { formatEur } from "./util";
 import { isMaterialAttribute } from "./vocabulary";
 
 /**
@@ -215,7 +215,7 @@ export function buildOptions(input: OptionsInput): OptionsResult {
   const { amount, mandate } = input;
   const excluded: Exclusion[] = [];
   const notes: string[] = [];
-  const leadLimit = isoDate(addDays(input.now, mandate.delivery.maxLeadDays));
+  const leadLimit = latestDeliveryDay(input.now, mandate.delivery.maxLeadDays); // Helsinki days, as the gate counts them
   const latest = input.neededBy && input.neededBy < leadLimit ? input.neededBy : leadLimit;
   const statusOf = new Map((input.statuses ?? []).map((s) => [s.productId, s]));
   const offerOf = new Map(input.offers.map((o) => [o.productId, o]));
@@ -538,7 +538,7 @@ function explainCard(c: Card, all: Card[], input: OptionsInput): void {
   }
 
   c.cons.push(...c.signOff);
-  if (c.labels.includes("same_as_last_time") && input.last) c.pros.push(`Same product as your last order (${formatDay(input.last.placedAt.slice(0, 10))}).`);
+  if (c.labels.includes("same_as_last_time") && input.last) c.pros.push(`Same product as your last order (${formatDay(localDateOf(input.last.placedAt))}).`);
   if (input.usual && c._plan.primary.p.id === input.usual.productId) c.pros.push(`Your usual product (${input.usual.text.replace(/^Usually [^:]*: /, "")}).`);
 }
 

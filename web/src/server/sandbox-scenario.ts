@@ -1,5 +1,5 @@
 import { DockError, type AgentSession, type Dock, type PublicOrder } from "@/core/orders";
-import { addDays, isoDate } from "@/core/util";
+import { addDaysIso, isoWeekday, localNow } from "@/core/kitchen";
 
 /**
  * The scripted buyer for a visitor kitchen: the partner's example, "I need 1,000 litres of lactose-free milk by
@@ -12,9 +12,11 @@ import { addDays, isoDate } from "@/core/util";
  */
 export const SCENARIO_TEXT = "I need 1,000 litres of lactose-free milk by Monday. Find an option that meets our requirements based on price and availability.";
 
+/** The next Monday after today, counted in Helsinki days (just after midnight there it is already the next day). */
 export function nextMonday(from: Date): string {
-  const add = (8 - from.getUTCDay()) % 7 || 7;
-  return isoDate(addDays(from, add));
+  const today = localNow(from).date;
+  const add = (8 - isoWeekday(today)) % 7 || 7;
+  return addDaysIso(today, add);
 }
 
 /** The structured need an agent would make of SCENARIO_TEXT. */
