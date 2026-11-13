@@ -135,7 +135,8 @@ export function buildApprovalView(
   const state: ApprovalView["state"] =
     order.status === "pending_approval" && approval.status === "pending" ? "pending" : order.status === "committed" ? "committed" : order.status === "declined" ? "declined" : "not_placed";
   const s = approval.signOff;
-  const escalations = order.decision.rules.filter((r) => r.outcome === "escalate");
+  // The money rule first: it is the one people expect.
+  const escalations = order.decision.rules.filter((r) => r.outcome === "escalate").sort((a, b) => Number(b.rule === "per_order_limit") - Number(a.rule === "per_order_limit"));
   return {
     approvalId: approval.approvalId,
     state,

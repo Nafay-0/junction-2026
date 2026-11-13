@@ -149,37 +149,32 @@ export function ApprovalScreen({ approvalId, token }: { approvalId: string; toke
   return (
     <div className="flex flex-1 flex-col">
       <p className="text-base font-medium text-neutral-500">{view.kitchenName}</p>
-      <h1 className="mt-1 text-2xl font-bold leading-snug">{view.agentName} needs your OK to buy</h1>
+      <h1 className="mt-1 text-2xl font-bold leading-snug">{view.agentName} needs your OK</h1>
 
-      <ul className="mt-4 space-y-3">
-        {view.items.map((it, i) => (
-          <li key={i} className="rounded-xl bg-neutral-100 p-3">
-            <p className="text-2xl font-bold">{it.amount}</p>
-            <p className="text-lg leading-snug">{it.name}</p>
-            {it.substituteFor && <p className="mt-1 text-base font-semibold text-amber-800">Swapped in for {it.substituteFor}</p>}
-          </li>
-        ))}
-      </ul>
+      <p className="mt-4 text-5xl font-bold tabular-nums tracking-tight">{view.total}</p>
+      <p className="mt-1 text-xl">
+        Delivery <strong>{view.delivery}</strong>
+      </p>
 
-      <dl className="mt-5 grid grid-cols-2 gap-3">
-        <div>
-          <dt className="text-base text-neutral-500">Total</dt>
-          <dd className="text-4xl font-bold tabular-nums">{view.total}</dd>
-        </div>
-        <div>
-          <dt className="text-base text-neutral-500">Delivery</dt>
-          <dd className="text-xl font-semibold leading-tight">{view.delivery}</dd>
-        </div>
-      </dl>
-
-      <section className="mt-5">
-        <h2 className="text-base font-semibold uppercase tracking-wide text-neutral-500">Why you are asked</h2>
-        <ul className="mt-1 list-disc space-y-1 pl-5">
+      <section className="mt-4 rounded-xl bg-blue-50 p-3">
+        <h2 className="text-base font-semibold uppercase tracking-wide text-blue-900">Why you are asked</h2>
+        <ul className="mt-1 space-y-1 text-blue-950">
           {view.why.map((w, i) => (
             <li key={i}>{w}</li>
           ))}
         </ul>
       </section>
+
+      <ul className="mt-4 divide-y divide-neutral-200 rounded-xl bg-neutral-100 px-3">
+        {view.items.map((it, i) => (
+          <li key={i} className="py-3">
+            <p className="text-lg leading-snug">
+              <strong className="text-xl">{it.amount}</strong> {it.name}
+            </p>
+            {it.substituteFor && <p className="mt-1 text-base font-semibold text-amber-800">Swapped in for {it.substituteFor}</p>}
+          </li>
+        ))}
+      </ul>
 
       {view.differences.length > 0 && (
         <section className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-3">

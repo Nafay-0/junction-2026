@@ -37,7 +37,7 @@ export function ScreenFeed() {
   }, [loadKitchens]);
 
   useDockEvents(
-    "/api/v1/events",
+    "/api/v1/events?since=0", // replay recent events on first connect; reconnects resume from Last-Event-ID
     (e) => {
       setEvents((xs) => (xs.some((x) => x.id === e.id) ? xs : [e, ...xs].slice(0, 12)));
       void loadKitchens();

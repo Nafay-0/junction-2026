@@ -10,7 +10,8 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "demo": "tsx scripts/demo.ts"
+    "demo": "tsx scripts/demo.ts",
+    "e2e": "next build && playwright test"
   },
   "dependencies": {
     "@simplewebauthn/browser": "14.0.0",
@@ -23,6 +24,7 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.1",
     "@tailwindcss/turbopack": "4.3.3",
     "@types/node": "^20",
     "@types/qrcode": "1.5.6",
