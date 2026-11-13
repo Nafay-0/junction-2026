@@ -14,7 +14,9 @@
     "demo:mcp": "tsx scripts/demo-mcp.ts",
     "verify:receipt": "tsx scripts/verify-receipt.ts",
     "dev:mandate": "tsx scripts/dev-mandate.ts",
-    "e2e": "next build && playwright test"
+    "e2e": "next build && playwright test",
+    "index:build": "tsx scripts/index-build.ts",
+    "valio:ping": "tsx scripts/valio-ping.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "2.4.0",
