@@ -135,3 +135,18 @@ export const JwkSchema = named("Jwk", z
 export const JwksSchema = named("Jwks", z.object({ keys: z.array(JwkSchema) }));
 
 export const MandateOutSchema = named("Mandate", MandateSchema);
+
+export const PendingApprovalSchema = named(
+  "PendingApproval",
+  z.object({
+    approvalId: z.string(),
+    orderId: z.string(),
+    orgName: z.string(),
+    agentId: z.string(),
+    approver: ApproverSchema,
+    totalCents: z.number().int(),
+    reasons: z.array(z.string()),
+    lines: z.array(z.object({ productId: z.string(), name: z.string(), quantity: z.number().int(), substituteFor: z.string().optional() })),
+    requestedAt: z.iso.datetime(),
+  }),
+);
