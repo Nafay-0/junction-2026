@@ -4,6 +4,7 @@ import * as consoleCall from "@/app/ui-api/kitchens/[kitchen]/call/route";
 import * as kitchenRoute from "@/app/ui-api/kitchens/[kitchen]/route";
 import { signMandate } from "@/core/mandate";
 import { DEMO_ORG, demoMandate, demoOrgKeyPair } from "./dev-fixtures";
+import { attachConsoleContext, humanViaOf } from "./console-context";
 import { enterOps, sessionCookie as opsCookie } from "./ops/access";
 import { getRuntime, resetRuntime } from "./runtime";
 
@@ -53,5 +54,12 @@ describe("authorisation", () => {
     expect(info.kitchens.map((k: { slug: string }) => k.slug)).toEqual(["kaari", "laakso", a.sandbox.sandboxId]);
     const stranger = await (await kitchenRoute.GET(new Request(`${BASE}/ui-api/kitchens/kaari`), params("kaari"))).json();
     expect(stranger.kitchens.map((k: { slug: string }) => k.slug)).toEqual(["kaari", "laakso"]);
+  });
+
+  it("only server code can mark an answer as a signed-in person's; no header or cookie name can fake it (F-HUMAN-INPUT-BY-AGENT)", () => {
+    const forged = new Request(`${BASE}/api/v1/intake/req_x/concerns`, { method: "POST", headers: { "x-dock-human": "portal_session", "dock-channel": "voice", cookie: "dock_console=aaaaaaaaaaaaaaaaaaaa" } });
+    expect(humanViaOf(forged)).toEqual({ channel: "relayed" });
+    const real = attachConsoleContext(new Request(`${BASE}/api/v1/intake/req_x/concerns`, { method: "POST" }), { kitchen: "sbx_1", session: "s", person: { channel: "portal_session", name: "Helmi Salo", approverId: "apv_1" } });
+    expect(humanViaOf(real)).toEqual({ channel: "portal_session", person: "Helmi Salo" });
   });
 });

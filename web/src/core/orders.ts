@@ -352,6 +352,12 @@ export function createDock(deps: DockDeps) {
     return { spentThisWeekCents: b.spentCents, heldThisWeekCents: b.heldCents, heldOrders: b.held };
   }
 
+  /** Confirmations of the request's intake that matter but were only relayed by the agent (policy human_confirmation). */
+  async function unverifiedOf(requestId: string) {
+    const u = (await intakes.get(requestId))?.unverified ?? [];
+    return u.length ? { unverifiedConfirmations: u.map(({ code, message, by }) => ({ code, message, by })) } : {};
+  }
+
   /** Orders of this organisation in the splitting window, for the order_splitting rule. */
   async function recentOrders(orgId: string, excludeOrderId?: string): Promise<RecentOrder[]> {
     const since = now().getTime() - SPLIT_WINDOW_HOURS * 3600_000;
@@ -701,7 +707,7 @@ export function createDock(deps: DockDeps) {
       const policyPreview = evaluatePolicy(
         session.mandate,
         { agentId: session.agentId, quote, lines: quote.lines, neededBy: request.neededBy },
-        { now: now(), ...(await budgetContext(quote.buyerOrgId)), quoteAlreadyUsed: false, recentOrders: await recentOrders(quote.buyerOrgId) },
+        { now: now(), ...(await budgetContext(quote.buyerOrgId)), ...(await unverifiedOf(requestId)), quoteAlreadyUsed: false, recentOrders: await recentOrders(quote.buyerOrgId) },
       );
       return { quote, quoteToken, policyPreview, claims };
     },
@@ -720,7 +726,7 @@ export function createDock(deps: DockDeps) {
       const orgId = session.mandate.issuer.orgId;
       return serialize(orgId, async () => {
         const draft = { agentId: session.agentId, quote, lines, neededBy: request.neededBy };
-        const ctx = { now: now(), ...(await budgetContext(orgId)), quoteAlreadyUsed: await repo.isQuoteUsed(quote.quoteId), recentOrders: await recentOrders(orgId) };
+        const ctx = { now: now(), ...(await budgetContext(orgId)), ...(await unverifiedOf(requestId)), quoteAlreadyUsed: await repo.isQuoteUsed(quote.quoteId), recentOrders: await recentOrders(orgId) };
         let decision = evaluatePolicy(session.mandate, draft, ctx);
         if (decision.outcome !== "reject" && !(await repo.claimQuote(quote.quoteId))) {
           decision = evaluatePolicy(session.mandate, draft, { ...ctx, quoteAlreadyUsed: true });
@@ -867,7 +873,7 @@ export function createDock(deps: DockDeps) {
         const recheck = evaluatePolicy(
           order.mandate,
           { agentId: order.agentId, quote: order.quote, lines: order.draftLines, neededBy: request?.neededBy },
-          { now: now(), ...(await budgetContext(order.orgId, order.orderId)), quoteAlreadyUsed: false, recentOrders: await recentOrders(order.orgId, order.orderId) },
+          { now: now(), ...(await budgetContext(order.orgId, order.orderId)), ...(await unverifiedOf(order.requestId)), quoteAlreadyUsed: false, recentOrders: await recentOrders(order.orgId, order.orderId) },
         );
         if (recheck.outcome === "reject") {
           order.status = "rejected";

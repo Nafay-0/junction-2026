@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { RELAYED, type HumanVia } from "@/core/intake";
 import { readCookie } from "./approver-session";
 import { requestOrigin } from "./config";
 
@@ -23,6 +24,15 @@ export function attachConsoleContext(req: Request, ctx: ConsoleContext): Request
 
 export function consoleContextOf(req: Request): ConsoleContext | undefined {
   return contexts.get(req);
+}
+
+/**
+ * The channel an intake answer arrived through: the kitchen's signed-in portal session when the console resolved
+ * one (server/authz.ts consoleKitchen), else relayed by the agent. A header or body field can never set this.
+ */
+export function humanViaOf(req: Request): HumanVia {
+  const person = contexts.get(req)?.person;
+  return person ? { channel: person.channel, person: person.name } : RELAYED;
 }
 
 export const CONSOLE_COOKIE = "dock_console";

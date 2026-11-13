@@ -10,7 +10,8 @@ import { isMaterialAttribute } from "./vocabulary";
  * Outcomes per rule:
  *   pass      the rule is satisfied
  *   escalate  allowed only with a human sign-off (over the per-order limit, a substitute under "needs_approval" or one
- *             that differs from the original under "within_preferences", or a need split into orders under the limit)
+ *             that differs from the original under "within_preferences", a need split into orders under the limit,
+ *             money held by orders waiting for sign-off, or a confirmation that matters resting on the agent's word)
  *   fail      not allowed at all; the order is rejected
  *
  * Decision: any fail -> reject; else any escalate -> needs_human_approval (to the least senior approver
@@ -33,6 +34,7 @@ export const RULES = [
   "weekly_budget", // committed spend over 7 days stays within budget (hard); money held by orders waiting for sign-off is a person's call
   "per_order_limit", // above it, a human must sign off
   "order_splitting", // several orders the agent placed alone for the same need may not add up to more than it may spend alone
+  "human_confirmation", // a likely mistake that matters was confirmed only by the agent's word: a person signs off
   "approver_authority", // someone named in the mandate can sign off this amount
 ] as const;
 
@@ -73,6 +75,11 @@ export type PolicyContext = {
   heldThisWeekCents?: number;
   /** The orders holding that money, named in the reason. */
   heldOrders?: { orderId: string; totalCents: number; expiresAt: string }[];
+  /**
+   * Confirmations of likely mistakes that matter (an unusual amount, a request against a stated rule) that reached
+   * Dock only as the agent's word, not through a channel that identifies a person (intake.ts InputChannel).
+   */
+  unverifiedConfirmations?: { code: string; message: string; by: string }[];
   quoteAlreadyUsed: boolean;
   /** Orders of this organisation in the last SPLIT_WINDOW_HOURS, for the order_splitting check. Absent: none. */
   recentOrders?: RecentOrder[];
@@ -245,6 +252,16 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
 
   const split = splitCheck(mandate, draft, ctx);
   add("order_splitting", split.outcome, split.reason, split.details);
+
+  const unverified = ctx.unverifiedConfirmations ?? [];
+  if (unverified.length === 0) add("human_confirmation", "pass", "No confirmation rests on the agent's word alone.");
+  else
+    add(
+      "human_confirmation",
+      "escalate",
+      `The agent relayed that ${[...new Set(unverified.map((u) => u.by))].join(", ")} confirmed ${unverified.length > 1 ? "these" : "this"} as intended, but nobody verified it: ${unverified.map((u) => u.message).join(" ")} A named person must sign it off.`,
+      { confirmations: unverified.map((u) => ({ code: u.code, by: u.by })) },
+    );
 
   const needsHuman = results.some((r) => r.outcome === "escalate");
   const signAmount = split.outcome === "escalate" ? Math.max(total, split.combinedCents) : total;

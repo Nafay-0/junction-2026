@@ -130,10 +130,11 @@ describe("connector address: same gate, nothing more", () => {
     expect(["Sanna Koskinen", "Jari Mäkelä"]).toContain(approver); // the head chef, or the owner above €1,000
     expect(placed.s.nextStep).toMatch(new RegExp(`${approver}.*own phone.*Tell the buyer.*Do not retry`));
 
-    // The buyer's answers are recorded as the person behind the connector, not as the agent.
+    // An answer passed on through the connector is the agent's word: recorded as relayed, not verified (F-HUMAN-INPUT-BY-AGENT).
     const { dock, outbox } = await getRuntime();
     const confirmation = dock.ledger.entries({ requestId }).find((e) => e.data.step === "confirmation")!;
-    expect(confirmation.actor).toMatch(/^buyer:Kitchen staff at Ravintola Kaari, through the kitchen's connector/);
+    expect(confirmation).toMatchObject({ actor: `agent:${KITCHEN_ORG.agentId}`, data: { by: expect.stringMatching(/^Kitchen staff at Ravintola Kaari, through the kitchen's connector/), verified: false, channel: "relayed" } });
+    expect(confirmation.summary).toMatch(/^Relayed by the agent, not verified/);
 
     // Presenting the connector token as an approval proof is refused; the order still waits for the approver.
     const { approvalId } = outbox.messages().find((m) => m.orderId === placed.s.order.orderId)!;
