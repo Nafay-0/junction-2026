@@ -2,6 +2,7 @@ import { decodeJwt } from "jose";
 import type { CatalogPort, LiveOptions, LiveStatus, Product } from "@/core/catalog";
 import { likeForLike } from "@/core/options";
 import { DockError, type AgentSession, type Dock } from "@/core/orders";
+import { alternativesFor as knowledgeAlternatives } from "../knowledge/service";
 import { radarStore, type RadarStore } from "./store";
 import type { Hold } from "./types";
 
@@ -56,12 +57,25 @@ function refusal(store: RadarStore, h: Hold, alternatives: { productId: string; 
   return err;
 }
 
-/** Up to three products that could replace a held one: the partner's listed substitutes, then like for like. */
-async function alternativesFor(catalog: CatalogPort, store: RadarStore, productId: string): Promise<{ productId: string; name: string }[]> {
+/**
+ * Up to three products that could replace a held one: the product knowledge map's checked good/better/best
+ * substitutes when it is loaded (src/server/knowledge), else the partner's listed substitutes and like-for-like
+ * products from the catalogue. Never a held product.
+ */
+async function alternativesFor(catalog: CatalogPort, store: RadarStore, productId: string): Promise<{ productId: string; name: string; why?: string }[]> {
+  const held = (id: string) => store.activeHolds([id]).length > 0;
+  try {
+    const k = await knowledgeAlternatives(productId, { max: 5 });
+    if (k.available && "substitutes" in k) {
+      const subs = k.substitutes.filter((a) => !held(a.productId)).slice(0, 3);
+      if (subs.length) return subs.map((a) => ({ productId: a.productId, name: a.name, why: `${a.tier}: ${a.reason}` }));
+    }
+  } catch {
+    // the knowledge map is optional; the catalogue's own substitutes follow
+  }
   try {
     const [p] = await catalog.searchProducts({ ids: [productId], limit: 1 });
     if (!p) return [];
-    const held = (id: string) => store.activeHolds([id]).length > 0;
     const listed = p.substitutes?.length ? await catalog.searchProducts({ ids: p.substitutes.slice(0, 20), limit: 20 }) : [];
     const similar = await catalog.searchProducts({ category: p.category, attributes: p.attributes.filter((a) => /^(lactose_free|gluten_free|vegan|organic|fat_)/.test(a)), limit: 30 });
     const out: Product[] = [];

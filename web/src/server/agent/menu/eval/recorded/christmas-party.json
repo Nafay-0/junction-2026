@@ -1,0 +1,679 @@
+{
+ "id": "christmas-party",
+ "kitchen": "kaari",
+ "text": "Company Christmas party next Thursday for 450 guests: Karelian stew with mashed potatoes and lingonberries, then rice porridge with plum kissel",
+ "now": "2026-11-13T21:55:04.844Z",
+ "model": "anthropic:claude-sonnet-5-5",
+ "ms": 17034,
+ "costUsd": 0.099168,
+ "calls": [
+  {
+   "step": "outline",
+   "ms": 4179,
+   "tokens": {
+    "input": 2137,
+    "output": 512,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.009394
+  },
+  {
+   "step": "dish 2",
+   "ms": 7121,
+   "tokens": {
+    "input": 1843,
+    "output": 883,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.012516
+  },
+  {
+   "step": "dish 1",
+   "ms": 12854,
+   "tokens": {
+    "input": 1867,
+    "output": 1634,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.020074
+  },
+  {
+   "step": "pick",
+   "ms": 1989,
+   "tokens": {
+    "input": 1231,
+    "output": 96,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003422
+  },
+  {
+   "step": "pick",
+   "ms": 6561,
+   "tokens": {
+    "input": 1271,
+    "output": 193,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.004472
+  },
+  {
+   "step": "pick",
+   "ms": 2658,
+   "tokens": {
+    "input": 1215,
+    "output": 98,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00341
+  },
+  {
+   "step": "pick",
+   "ms": 3950,
+   "tokens": {
+    "input": 1313,
+    "output": 116,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003786
+  },
+  {
+   "step": "pick",
+   "ms": 6423,
+   "tokens": {
+    "input": 1207,
+    "output": 179,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.004204
+  },
+  {
+   "step": "pick",
+   "ms": 2450,
+   "tokens": {
+    "input": 1143,
+    "output": 106,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003346
+  },
+  {
+   "step": "pick",
+   "ms": 2703,
+   "tokens": {
+    "input": 1269,
+    "output": 128,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003818
+  },
+  {
+   "step": "pick",
+   "ms": 5952,
+   "tokens": {
+    "input": 1233,
+    "output": 144,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003906
+  },
+  {
+   "step": "pick",
+   "ms": 6046,
+   "tokens": {
+    "input": 1182,
+    "output": 126,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003624
+  },
+  {
+   "step": "pick",
+   "ms": 4157,
+   "tokens": {
+    "input": 1222,
+    "output": 105,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003494
+  },
+  {
+   "step": "pick",
+   "ms": 5828,
+   "tokens": {
+    "input": 1125,
+    "output": 133,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00358
+  },
+  {
+   "step": "fix pork_shoulder",
+   "ms": 5149,
+   "tokens": {
+    "input": 1936,
+    "output": 580,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.009672
+  },
+  {
+   "step": "pick",
+   "ms": 2385,
+   "tokens": {
+    "input": 1033,
+    "output": 115,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003216
+  },
+  {
+   "step": "pick",
+   "ms": 2470,
+   "tokens": {
+    "input": 1007,
+    "output": 122,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003234
+  }
+ ],
+ "raw": {
+  "isFoodOrderRequest": true,
+  "declineReason": null,
+  "covers": 450,
+  "serviceDate": "2026-11-19",
+  "occasion": "Company Christmas party",
+  "requiredClaims": [],
+  "forbiddenAllergens": [],
+  "assumptions": [
+   "'Next Thursday' taken as 2026-11-19.",
+   "Kitchen rule applies: all dairy lactose-free (mash, rice porridge).",
+   "Karelian stew served with mashed potatoes and lingonberries as one main dish.",
+   "Rice porridge made with lactose-free milk; plum kissel is naturally dairy-free."
+  ],
+  "conflicts": [],
+  "dishes": [
+   {
+    "name": "Karelian stew with mashed potatoes and lingonberries",
+    "nameFi": "Karjalanpaisti perunamuusilla ja puolukoilla",
+    "course": "main",
+    "serviceDate": "2026-11-19",
+    "portion": "200 g stew, 200 g mash, 30 g lingonberries",
+    "method": "Beef and pork are browned and slowly braised in the oven with onion, allspice and bay leaf; mash is made from boiled potatoes with lactose-free milk and lactose-free butter.",
+    "ingredients": [
+     {
+      "key": "beef_chuck",
+      "name": "Beef chuck, diced",
+      "searchTerms": [
+       "naudan liha",
+       "häränlapa",
+       "naudan paisti",
+       "beef chuck"
+      ],
+      "role": "Main meat of the stew",
+      "perCover": {
+       "amount": 100,
+       "unit": "g"
+      },
+      "yieldPct": 90,
+      "amountBasis": "half of 200 g stew is meat, about half beef; raw weight",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "jauheliha",
+       "minced",
+       "savustettu",
+       "smoked"
+      ]
+     },
+     {
+      "key": "pork_shoulder",
+      "name": "Pork shoulder, diced",
+      "searchTerms": [
+       "porsaan olkapää",
+       "porsaan liha",
+       "pork shoulder"
+      ],
+      "role": "Second meat of the stew, adds fat and flavour",
+      "perCover": {
+       "amount": 100,
+       "unit": "g"
+      },
+      "yieldPct": 90,
+      "amountBasis": "half of 200 g stew is meat, about half pork; raw weight",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "jauheliha",
+       "minced",
+       "savustettu",
+       "smoked",
+       "kinkku"
+      ]
+     },
+     {
+      "key": "yellow_onion",
+      "name": "Yellow onion",
+      "searchTerms": [
+       "keltasipuli",
+       "sipuli",
+       "yellow onion"
+      ],
+      "role": "Braising base",
+      "perCover": {
+       "amount": 50,
+       "unit": "g"
+      },
+      "yieldPct": 90,
+      "amountBasis": "about 1 part onion to 4 parts meat",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "punasipuli",
+       "red",
+       "ruohosipuli",
+       "kuivattu",
+       "paistettu"
+      ]
+     },
+     {
+      "key": "allspice",
+      "name": "Allspice, whole",
+      "searchTerms": [
+       "maustepippuri",
+       "maustepippuri kokonainen",
+       "allspice"
+      ],
+      "role": "Traditional spice for braise",
+      "perCover": {
+       "amount": 0.3,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 1 g per 3 portions",
+      "pantry": true,
+      "form": "dried",
+      "avoid": []
+     },
+     {
+      "key": "bay_leaf",
+      "name": "Bay leaf, dried",
+      "searchTerms": [
+       "laakerinlehti",
+       "bay leaf"
+      ],
+      "role": "Braising aroma",
+      "perCover": {
+       "amount": 0.1,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "1 leaf per about 20 portions",
+      "pantry": true,
+      "form": "dried",
+      "avoid": []
+     },
+     {
+      "key": "beef_stock",
+      "name": "Beef stock concentrate",
+      "searchTerms": [
+       "lihaliemifondi",
+       "lihaliemi",
+       "naudanliha fondi",
+       "beef stock"
+      ],
+      "role": "Braising liquid base",
+      "perCover": {
+       "amount": 4,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "concentrate for about 100 ml braising liquid per portion",
+      "pantry": false,
+      "form": "any",
+      "avoid": [
+       "kasvisliemi",
+       "vegetable"
+      ]
+     },
+     {
+      "key": "potato",
+      "name": "Potato, floury",
+      "searchTerms": [
+       "perunat",
+       "jauhoinen peruna",
+       "peruna",
+       "potato"
+      ],
+      "role": "Base of the mash",
+      "perCover": {
+       "amount": 200,
+       "unit": "g"
+      },
+      "yieldPct": 80,
+      "amountBasis": "200 g mash, about 1:1 from peeled potato; raw weight is bought",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "valmis",
+       "kuorittu",
+       "ranskalaiset",
+       "muussijauhe",
+       "jauhe"
+      ]
+     },
+     {
+      "key": "lactose_free_milk",
+      "name": "Lactose-free milk",
+      "searchTerms": [
+       "laktoositon maito",
+       "laktoositon kevytmaito",
+       "lactose-free milk"
+      ],
+      "role": "Loosens the mash",
+      "perCover": {
+       "amount": 50,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 1 dl per 400 g mash, scaled to 200 g",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "kasvi",
+       "kaura",
+       "oat",
+       "soija",
+       "maitojuoma"
+      ]
+     },
+     {
+      "key": "lactose_free_butter",
+      "name": "Lactose-free butter",
+      "searchTerms": [
+       "laktoositon voi",
+       "voi laktoositon",
+       "lactose-free butter"
+      ],
+      "role": "Richness in the mash and browning",
+      "perCover": {
+       "amount": 12,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 60 g per 1 kg mash, plus a little for browning",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "margariini",
+       "kasvirasva",
+       "voiseos",
+       "levite"
+      ]
+     },
+     {
+      "key": "lingonberries",
+      "name": "Lingonberries (jam or sauce)",
+      "searchTerms": [
+       "puolukkahillo",
+       "puolukka",
+       "lingonberry jam"
+      ],
+      "role": "Tart side for stew and mash",
+      "perCover": {
+       "amount": 30,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "portion given: 30 g",
+      "pantry": false,
+      "form": "canned_or_jarred",
+      "avoid": [
+       "mehu",
+       "juice",
+       "kiisseli",
+       "soppa"
+      ]
+     }
+    ]
+   },
+   {
+    "name": "Rice porridge with plum kissel",
+    "nameFi": "Riisipuuro ja luumukiisseli",
+    "course": "dessert",
+    "serviceDate": "2026-11-19",
+    "portion": "2 dl porridge, 1 dl kissel",
+    "method": "Porridge rice is simmered in lactose-free milk until soft; kissel is cooked from plums and thickened with potato starch.",
+    "ingredients": [
+     {
+      "key": "porridge_rice",
+      "name": "Porridge rice",
+      "searchTerms": [
+       "puuroriisi",
+       "pyöreäjyväinen riisi",
+       "porridge rice"
+      ],
+      "role": "Base of the rice porridge",
+      "perCover": {
+       "amount": 25,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 25 g dry rice per 2 dl porridge",
+      "pantry": false,
+      "form": "dried",
+      "avoid": [
+       "basmati",
+       "parboiled",
+       "kypsä"
+      ]
+     },
+     {
+      "key": "lactose_free_milk",
+      "name": "Lactose-free milk",
+      "searchTerms": [
+       "laktoositon maito",
+       "laktoton maito",
+       "lactose-free milk"
+      ],
+      "role": "Cooking liquid for the porridge",
+      "perCover": {
+       "amount": 220,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 9 parts milk to 1 part rice, some evaporates",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "kaura",
+       "soija",
+       "oat",
+       "soy",
+       "maitojuoma laktoosi"
+      ]
+     },
+     {
+      "key": "plums",
+      "name": "Plums",
+      "searchTerms": [
+       "luumu",
+       "luumut pakaste",
+       "plums"
+      ],
+      "role": "Fruit for the kissel",
+      "perCover": {
+       "amount": 80,
+       "unit": "g"
+      },
+      "yieldPct": 90,
+      "amountBasis": "about 1 dl kissel, plums 80 g after stoning",
+      "pantry": false,
+      "form": "frozen",
+      "avoid": [
+       "kuivattu",
+       "kuivatut",
+       "dried",
+       "prune",
+       "luumusose"
+      ]
+     },
+     {
+      "key": "potato_starch",
+      "name": "Potato starch",
+      "searchTerms": [
+       "perunajauho",
+       "potato starch"
+      ],
+      "role": "Thickener for the kissel",
+      "perCover": {
+       "amount": 6,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 6 g per 1 dl kissel for a soft set",
+      "pantry": false,
+      "form": "dried",
+      "avoid": [
+       "perunahiutale",
+       "modifioitu"
+      ]
+     },
+     {
+      "key": "sugar",
+      "name": "Sugar",
+      "searchTerms": [
+       "sokeri",
+       "sugar"
+      ],
+      "role": "Sweetens the kissel and porridge",
+      "perCover": {
+       "amount": 15,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 10 g kissel plus 5 g porridge",
+      "pantry": true,
+      "form": "any",
+      "avoid": []
+     },
+     {
+      "key": "salt",
+      "name": "Salt",
+      "searchTerms": [
+       "suola",
+       "salt"
+      ],
+      "role": "Seasons the porridge",
+      "perCover": {
+       "amount": 1,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "pinch per portion",
+      "pantry": true,
+      "form": "any",
+      "avoid": []
+     }
+    ]
+   }
+  ]
+ },
+ "fixes": {
+  "pork_shoulder": {
+   "options": [
+    {
+     "kind": "substitute",
+     "title": "Pork neck or belly instead",
+     "effect": "Another fatty pork cut braises just as long and keeps the stew's flavour and richness.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "pork_neck_diced",
+      "name": "Pork neck, diced",
+      "searchTerms": [
+       "pork neck",
+       "kassler",
+       "porsaan niska",
+       "pork collar",
+       "pork belly",
+       "porsaan kylki"
+      ],
+      "role": "Second meat of the stew, adds fat and flavour",
+      "perCover": {
+       "amount": 100,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "raw weight, trimmed and diced",
+      "form": "any",
+      "avoid": [
+       "smoked",
+       "cured",
+       "marinated",
+       "seasoned"
+      ]
+     },
+     "perCover": 100
+    },
+    {
+     "kind": "substitute",
+     "title": "Beef chuck in place of pork",
+     "effect": "Stew becomes all beef, slightly leaner but still tender after the long braise.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "beef_chuck_diced",
+      "name": "Beef chuck, diced",
+      "searchTerms": [
+       "beef chuck",
+       "naudan paisti",
+       "naudan liha kuutio",
+       "beef diced",
+       "häränniska"
+      ],
+      "role": "Second meat of the stew, replaces pork",
+      "perCover": {
+       "amount": 100,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "raw weight, trimmed and diced",
+      "form": "any",
+      "avoid": [
+       "smoked",
+       "cured",
+       "marinated",
+       "seasoned"
+      ]
+     },
+     "perCover": 100
+    },
+    {
+     "kind": "change_dish",
+     "title": "Beef-only Karelian stew",
+     "effect": "Pork is dropped and beef raised; the stew is a little leaner and guests may notice less fat.",
+     "changesDish": true,
+     "ingredient": null,
+     "perCover": null
+    }
+   ]
+  }
+ }
+}

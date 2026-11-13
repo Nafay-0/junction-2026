@@ -2,6 +2,7 @@ import { decodeJwt } from "jose";
 import type { LedgerEntry } from "@/core/ledger";
 import type { Mandate } from "@/core/mandate";
 import type { PublicOrder } from "@/core/orders";
+import { AIVEN_BUYER } from "../aiven/showcase/buyer";
 import { KITCHEN_ORG, demoKitchenMandate } from "../demo-kitchen";
 import { DEMO_ORG, demoMandate } from "../dev-fixtures";
 import type { Runtime } from "../runtime";
@@ -91,6 +92,7 @@ export async function opsContext(rt: Runtime, now = new Date()): Promise<OpsCont
 
   const agents = new Map<string, AgentInfo>();
   agents.set(KITCHEN_ORG.agentId, { agentId: KITCHEN_ORG.agentId, orgId: KITCHEN_ORG.orgId, orgName: KITCHEN_ORG.name, label: "Kaari's buyer agent", kind: "demo", mandate: door.mandateOf(KITCHEN_ORG.agentId) ?? demoKitchenMandate(now) });
+  agents.set(AIVEN_BUYER.agentId, { agentId: AIVEN_BUYER.agentId, orgId: DEMO_ORG.orgId, orgName: DEMO_ORG.name, label: AIVEN_BUYER.label, kind: "outside", mandate: door.mandateOf(AIVEN_BUYER.agentId) });
   agents.set(DEMO_ORG.agentId, { agentId: DEMO_ORG.agentId, orgId: DEMO_ORG.orgId, orgName: DEMO_ORG.name, label: "Laakso's buyer agent", kind: "demo", mandate: door.mandateOf(DEMO_ORG.agentId) ?? demoMandate(now) });
   for (const s of sandboxes) {
     const creds = await rt.sandboxes.agentCredentials(s.sandboxId);

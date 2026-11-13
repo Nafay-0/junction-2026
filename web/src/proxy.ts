@@ -16,12 +16,23 @@ const ANY = rule("any", 900);
 const PAGE = rule("page", 300);
 const INTERPRET = rule("interpret", 20);
 const CONSOLE_CALL = rule("console-call", 60);
-const CONSOLE_CALL_KITCHEN = rule("console-call-kitchen", 40);
+const CONSOLE_CALL_KITCHEN = rule("console-call-kitchen", 120);
 const JOIN = rule("join", 30);
 const DEMO_ORDER = rule("demo-order", 12);
 const DEMO_ORDER_KITCHEN = rule("demo-order-kitchen", 6);
 const AGENT_WRITE = rule("agent-write", 120);
 const EVENTS = rule("events", 60);
+const ASSISTANT = rule("assistant", 20);
+const ASSISTANT_KITCHEN = rule("assistant-kitchen", 60);
+const LIVE_LOOKUP = rule("catalog-live", 30);
+const KITCHEN_WRITE = rule("kitchen-write", 60);
+const KITCHEN_WRITE_KITCHEN = rule("kitchen-write-kitchen", 120);
+const OPS_ENTER = rule("ops-enter", 10);
+const MENU_PLAN = rule("menu-plan", 6);
+const MENU_PLAN_KITCHEN = rule("menu-plan-kitchen", 12);
+// The voice door (src/app/_channels): starting a call mints a paid realtime session.
+const VOICE_CALL = rule("voice-call", 6);
+const VOICE_TOOL = rule("voice-tool", 60);
 
 const g = globalThis as typeof globalThis & { __dockRateLimiter?: RateLimiter };
 const limiter = (g.__dockRateLimiter ??= new RateLimiter());
@@ -42,8 +53,21 @@ function rulesFor(method: string, path: string): [RateRule, string?][] {
   if (post && path.startsWith("/api/v1/join")) out.push([JOIN]);
   if (post && (m = /^\/api\/v1\/sandboxes\/([^/]+)\/demo-order$/.exec(path))) out.push([DEMO_ORDER], [DEMO_ORDER_KITCHEN, `k:${m[1]}`]);
   if (post && path === "/api/v1/approver/demo-order") out.push([DEMO_ORDER]);
-  if (post && (path === "/api/mcp" || /^\/api\/v1\/(availability|quotes|orders|requests|intake)/.test(path))) out.push([AGENT_WRITE]);
+  if (post && (path === "/api/mcp" || path.startsWith("/api/mcp/c/") || /^\/api\/v1\/(availability|quotes|orders|requests|intake)/.test(path))) out.push([AGENT_WRITE]);
   if (path === "/api/v1/events") out.push([EVENTS]);
+  // The kitchen store (/k): the assistant calls the model, catalog/live the partner's live API, basket the gate.
+  if (post && (m = /^\/ui-api\/kitchens\/([^/]+)\/assistant$/.exec(path))) out.push([ASSISTANT], [ASSISTANT_KITCHEN, `k:${m[1]}`]);
+  if (post && /^\/ui-api\/kitchens\/[^/]+\/catalog\/live$/.test(path)) out.push([LIVE_LOOKUP]);
+  if (post && (m = /^\/ui-api\/kitchens\/([^/]+)\/(basket|memory)$/.exec(path))) out.push([KITCHEN_WRITE], [KITCHEN_WRITE_KITCHEN, `k:${m[1]}`]);
+  // The menu planner: one plan is several model calls (outline, each dish, picks, fixes) and live lookups.
+  if (post && (m = /^\/ui-api\/plan\/([^/]+)(\/[^/]+)?$/.exec(path))) out.push([MENU_PLAN], [MENU_PLAN_KITCHEN, `k:${m[1]}`]);
+  if (post && (m = /^\/ui-api\/plan\/([^/]+)\/[^/]+\/(quote|order)$/.exec(path))) out.push([KITCHEN_WRITE], [KITCHEN_WRITE_KITCHEN, `k:${m[1]}`]);
+  // The operations desk: entering takes the passcode, so guessing is slowed down.
+  if (post && path === "/ops-api/session") out.push([OPS_ENTER]);
+  // Reissuing or revoking a connector takes the operator secret (or the visitor's own session).
+  if ((post || method === "DELETE") && path.startsWith("/ui-api/connect/")) out.push([OPS_ENTER]);
+  if (post && /^\/ui-api\/voice\/[^/]+\/call$/.test(path)) out.push([VOICE_CALL]);
+  if (post && /^\/ui-api\/voice\/[^/]+\/tool$/.test(path)) out.push([VOICE_TOOL]);
   return out;
 }
 
@@ -76,5 +100,7 @@ export function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // /ui-api/scan/ takes photos and PDFs (up to 10 MB), larger than this proxy buffers (next.config.ts); those
+  // routes apply the same per-address limits and their own body cap (src/server/channels/scan/guard.ts).
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|ui-api/scan/).*)"],
 };

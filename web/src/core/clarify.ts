@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { Product } from "./catalog";
-import type { Evidence, LearnedPreference, StatedPreference } from "./kitchen";
+import { memoryItemIdOf, type Evidence, type LearnedPreference, type StatedPreference } from "./kitchen";
 import type { Mandate } from "./mandate";
 import { NONE, SPEC_DIMENSIONS, dimensionLabel, dimensionValue, type OptimiseGoal, type SpecDimension, type StructuredNeed } from "./need";
 
@@ -113,6 +113,8 @@ export type MemoryNote = {
   text: string;
   preferenceId?: string;
   evidence?: Evidence;
+  /** The typed memory item that gave the answer (a rule projected to a stated preference, or a remembered habit). */
+  memoryItemId?: string;
 };
 
 export type Settled = {
@@ -206,13 +208,13 @@ export function clarify(input: {
     const s = stated.find((p) => p.kind === "dimension" && p.dimension === dim.id);
     if (s && s.kind === "dimension") {
       applyDimension(dim, s.choice);
-      fromMemory.push({ question: q, optionId: s.choice, label: optionLabel(q, s.choice), source: "stated", text: `${s.text} (set by ${s.statedBy})`, preferenceId: s.id });
+      fromMemory.push({ question: q, optionId: s.choice, label: optionLabel(q, s.choice), source: "stated", text: `${s.text} (set by ${s.statedBy})`, preferenceId: s.id, ...memoryRef(memoryItemIdOf(s.id)) });
       continue;
     }
     const l = input.learned.find((p) => p.kind === "dimension" && p.dimension === dim.id && values.includes(p.choice));
     if (l && l.kind === "dimension") {
       applyDimension(dim, l.choice);
-      fromMemory.push({ question: q, optionId: l.choice, label: optionLabel(q, l.choice), source: "learned", text: `Pre-selected from history: ${l.text}`, evidence: l.evidence });
+      fromMemory.push({ question: q, optionId: l.choice, label: optionLabel(q, l.choice), source: "learned", text: `Pre-selected from ${l.memoryItemId ? "memory" : "history"}: ${l.text}`, evidence: l.evidence, ...memoryRef(l.memoryItemId) });
       continue;
     }
     open.push({ q, spread: values.length, mustAsk: dim.mustAsk === true });
@@ -228,10 +230,10 @@ export function clarify(input: {
   else if (oa) Object.assign(settled, { optimise: oa.optionId as Settled["optimise"], optimiseSource: "answer" });
   else if (so && so.kind === "optimise") {
     Object.assign(settled, { optimise: so.goal, optimiseWithinPctOfCheapest: so.withinPctOfCheapest, optimiseSource: "stated" });
-    fromMemory.push({ question: oq, optionId: so.goal, label: optionLabel(oq, so.goal), source: "stated", text: `${so.text} (set by ${so.statedBy})`, preferenceId: so.id });
+    fromMemory.push({ question: oq, optionId: so.goal, label: optionLabel(oq, so.goal), source: "stated", text: `${so.text} (set by ${so.statedBy})`, preferenceId: so.id, ...memoryRef(memoryItemIdOf(so.id)) });
   } else if (lo && lo.kind === "optimise") {
     Object.assign(settled, { optimise: lo.goal, optimiseSource: "learned" });
-    fromMemory.push({ question: oq, optionId: lo.goal, label: optionLabel(oq, lo.goal), source: "learned", text: `Pre-selected from history: ${lo.text}`, evidence: lo.evidence });
+    fromMemory.push({ question: oq, optionId: lo.goal, label: optionLabel(oq, lo.goal), source: "learned", text: `Pre-selected from ${lo.memoryItemId ? "memory" : "history"}: ${lo.text}`, evidence: lo.evidence, ...memoryRef(lo.memoryItemId) });
   }
 
   open.sort((a, b) => b.spread - a.spread);
@@ -241,6 +243,8 @@ export function clarify(input: {
   const notAsked = spanned.map((q) => `${q.text} Not asked: you did not say, so the options show ${q.options.length > 3 ? "each kind" : "both"}.`);
   return { questions, spanned, fromMemory, notAsked, settled };
 }
+
+const memoryRef = (id: string | undefined) => (id ? { memoryItemId: id } : {});
 
 function order(dim: SpecDimension, value: string): number {
   const i = dim.values.findIndex((v) => v.attribute === value);

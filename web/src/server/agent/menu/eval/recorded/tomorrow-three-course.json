@@ -1,0 +1,1288 @@
+{
+ "id": "tomorrow-three-course",
+ "kitchen": "kaari",
+ "text": "Tomorrow, unexpected booking: 120 covers, three-course lunch, lactose-free and nut-free",
+ "now": "2026-11-13T21:55:37.642Z",
+ "model": "anthropic:claude-sonnet-5-5",
+ "ms": 14006,
+ "costUsd": 0.180034,
+ "calls": [
+  {
+   "step": "outline",
+   "ms": 5015,
+   "tokens": {
+    "input": 2122,
+    "output": 600,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.010244
+  },
+  {
+   "step": "dish 3",
+   "ms": 5135,
+   "tokens": {
+    "input": 1828,
+    "output": 516,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.008816
+  },
+  {
+   "step": "dish 2",
+   "ms": 8873,
+   "tokens": {
+    "input": 1847,
+    "output": 1048,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.014174
+  },
+  {
+   "step": "dish 1",
+   "ms": 8991,
+   "tokens": {
+    "input": 1831,
+    "output": 1205,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.015712
+  },
+  {
+   "step": "pick",
+   "ms": 3592,
+   "tokens": {
+    "input": 1176,
+    "output": 116,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003512
+  },
+  {
+   "step": "pick",
+   "ms": 2313,
+   "tokens": {
+    "input": 1301,
+    "output": 124,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003842
+  },
+  {
+   "step": "pick",
+   "ms": 2548,
+   "tokens": {
+    "input": 1185,
+    "output": 101,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00338
+  },
+  {
+   "step": "pick",
+   "ms": 3241,
+   "tokens": {
+    "input": 1317,
+    "output": 132,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003954
+  },
+  {
+   "step": "pick",
+   "ms": 2284,
+   "tokens": {
+    "input": 1347,
+    "output": 128,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003974
+  },
+  {
+   "step": "pick",
+   "ms": 2766,
+   "tokens": {
+    "input": 1353,
+    "output": 119,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003896
+  },
+  {
+   "step": "pick",
+   "ms": 5610,
+   "tokens": {
+    "input": 1211,
+    "output": 97,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003392
+  },
+  {
+   "step": "pick",
+   "ms": 2208,
+   "tokens": {
+    "input": 1233,
+    "output": 132,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003786
+  },
+  {
+   "step": "pick",
+   "ms": 2061,
+   "tokens": {
+    "input": 1300,
+    "output": 113,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00373
+  },
+  {
+   "step": "fix parsnip",
+   "ms": 4281,
+   "tokens": {
+    "input": 1813,
+    "output": 519,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.008816
+  },
+  {
+   "step": "fix lactose_free_cream",
+   "ms": 4756,
+   "tokens": {
+    "input": 1808,
+    "output": 581,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.009426
+  },
+  {
+   "step": "fix carrot",
+   "ms": 4867,
+   "tokens": {
+    "input": 1802,
+    "output": 587,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.009474
+  },
+  {
+   "step": "fix swede",
+   "ms": 4902,
+   "tokens": {
+    "input": 1801,
+    "output": 530,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.008902
+  },
+  {
+   "step": "fix vegetable_stock_concentrate",
+   "ms": 5158,
+   "tokens": {
+    "input": 1810,
+    "output": 616,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00978
+  },
+  {
+   "step": "fix salmon_fillet",
+   "ms": 5427,
+   "tokens": {
+    "input": 1852,
+    "output": 740,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.011104
+  },
+  {
+   "step": "pick",
+   "ms": 2347,
+   "tokens": {
+    "input": 1007,
+    "output": 126,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003274
+  },
+  {
+   "step": "pick",
+   "ms": 5476,
+   "tokens": {
+    "input": 1042,
+    "output": 85,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.002934
+  },
+  {
+   "step": "pick",
+   "ms": 2413,
+   "tokens": {
+    "input": 1022,
+    "output": 118,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003224
+  },
+  {
+   "step": "pick",
+   "ms": 1590,
+   "tokens": {
+    "input": 906,
+    "output": 42,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.002232
+  },
+  {
+   "step": "pick",
+   "ms": 2949,
+   "tokens": {
+    "input": 1010,
+    "output": 121,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00323
+  },
+  {
+   "step": "pick",
+   "ms": 4843,
+   "tokens": {
+    "input": 977,
+    "output": 83,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.002784
+  },
+  {
+   "step": "pick",
+   "ms": 5197,
+   "tokens": {
+    "input": 1058,
+    "output": 96,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003076
+  },
+  {
+   "step": "pick",
+   "ms": 3191,
+   "tokens": {
+    "input": 1024,
+    "output": 128,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003328
+  },
+  {
+   "step": "pick",
+   "ms": 2104,
+   "tokens": {
+    "input": 1124,
+    "output": 102,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003268
+  },
+  {
+   "step": "pick",
+   "ms": 1802,
+   "tokens": {
+    "input": 1084,
+    "output": 90,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003068
+  },
+  {
+   "step": "pick",
+   "ms": 5383,
+   "tokens": {
+    "input": 992,
+    "output": 99,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.002974
+  },
+  {
+   "step": "pick",
+   "ms": 1978,
+   "tokens": {
+    "input": 1072,
+    "output": 69,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.002834
+  },
+  {
+   "step": "pick",
+   "ms": 3517,
+   "tokens": {
+    "input": 1132,
+    "output": 163,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003894
+  }
+ ],
+ "raw": {
+  "isFoodOrderRequest": true,
+  "declineReason": null,
+  "covers": 120,
+  "serviceDate": "2026-11-14",
+  "occasion": "Three-course lunch (unexpected booking)",
+  "requiredClaims": [
+   "lactose_free"
+  ],
+  "forbiddenAllergens": [
+   "nuts"
+  ],
+  "assumptions": [
+   "Chef gave no dishes, so a starter, main and dessert were chosen that suit a Finnish November lunch.",
+   "Dishes share ingredients where possible (root vegetables, potatoes, berries).",
+   "All dairy is lactose-free per kitchen rules; no nuts in any dish.",
+   "Dishes chosen to be made without nut-containing products."
+  ],
+  "conflicts": [],
+  "dishes": [
+   {
+    "name": "Roasted root vegetable soup",
+    "nameFi": "Juuressosekeitto",
+    "course": "soup",
+    "serviceDate": "2026-11-14",
+    "portion": "2 dl",
+    "method": "Roast carrot, parsnip and swede, simmer in stock, blend and finish with lactose-free cream.",
+    "ingredients": [
+     {
+      "key": "carrot",
+      "name": "Carrot",
+      "searchTerms": [
+       "porkkana",
+       "carrot"
+      ],
+      "role": "roasted base vegetable",
+      "perCover": {
+       "amount": 60,
+       "unit": "g"
+      },
+      "yieldPct": 85,
+      "amountBasis": "2 dl soup, about 30% carrot as purchased",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "raaste",
+       "grated",
+       "raasittu",
+       "baby",
+       "lastu"
+      ]
+     },
+     {
+      "key": "parsnip",
+      "name": "Parsnip",
+      "searchTerms": [
+       "palsternakka",
+       "parsnip"
+      ],
+      "role": "roasted base vegetable, sweet earthy flavour",
+      "perCover": {
+       "amount": 50,
+       "unit": "g"
+      },
+      "yieldPct": 80,
+      "amountBasis": "2 dl soup, about 25% parsnip as purchased",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "kuivattu",
+       "dried",
+       "siemen",
+       "seed"
+      ]
+     },
+     {
+      "key": "swede",
+      "name": "Swede",
+      "searchTerms": [
+       "lanttu",
+       "swede"
+      ],
+      "role": "roasted base vegetable",
+      "perCover": {
+       "amount": 50,
+       "unit": "g"
+      },
+      "yieldPct": 75,
+      "amountBasis": "2 dl soup, about 25% swede as purchased",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "laatikko",
+       "casserole",
+       "raaste",
+       "kuutio"
+      ]
+     },
+     {
+      "key": "vegetable_stock_concentrate",
+      "name": "Vegetable stock concentrate",
+      "searchTerms": [
+       "kasvisliemifondi",
+       "kasvisliemi",
+       "vegetable stock concentrate"
+      ],
+      "role": "simmering liquid flavour",
+      "perCover": {
+       "amount": 4,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 20 g concentrate per litre, 2 dl portion",
+      "pantry": false,
+      "form": "any",
+      "avoid": [
+       "maitoa",
+       "milk",
+       "pähkinä",
+       "nut"
+      ]
+     },
+     {
+      "key": "lactose_free_cream",
+      "name": "Lactose-free cream",
+      "searchTerms": [
+       "laktoositon kerma",
+       "laktoositon ruokakerma",
+       "lactose-free cream"
+      ],
+      "role": "finishing the soup for richness",
+      "perCover": {
+       "amount": 20,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 1 dl per litre of soup, 2 dl portion",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "kasvi",
+       "oat",
+       "vispikerma makeutettu",
+       "maustettu"
+      ]
+     },
+     {
+      "key": "rapeseed_oil",
+      "name": "Rapeseed oil",
+      "searchTerms": [
+       "rypsiöljy",
+       "rapeseed oil"
+      ],
+      "role": "for roasting vegetables",
+      "perCover": {
+       "amount": 6,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "coating for roasting about 1 tbsp per 200 g vegetables",
+      "pantry": true,
+      "form": "any",
+      "avoid": [
+       "oliivi",
+       "olive",
+       "pähkinä",
+       "nut"
+      ]
+     },
+     {
+      "key": "salt",
+      "name": "Salt",
+      "searchTerms": [
+       "suola",
+       "salt"
+      ],
+      "role": "seasoning",
+      "perCover": {
+       "amount": 1.5,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "seasoning to taste, about 0.7% of soup",
+      "pantry": true,
+      "form": "any",
+      "avoid": []
+     },
+     {
+      "key": "black_pepper",
+      "name": "Black pepper",
+      "searchTerms": [
+       "mustapippuri",
+       "black pepper"
+      ],
+      "role": "seasoning",
+      "perCover": {
+       "amount": 0.2,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "light seasoning",
+      "pantry": true,
+      "form": "dried",
+      "avoid": [
+       "kokonainen",
+       "whole"
+      ]
+     }
+    ]
+   },
+   {
+    "name": "Baked salmon with dill potatoes and lactose-free cream sauce",
+    "nameFi": "Uunilohta, tilliperunat ja laktoositon kermakastike",
+    "course": "main",
+    "serviceDate": "2026-11-14",
+    "portion": "150 g salmon, 200 g potatoes",
+    "method": "Bake salmon fillets in the oven, boil potatoes with dill, make sauce from lactose-free cream and white pepper.",
+    "ingredients": [
+     {
+      "key": "salmon_fillet",
+      "name": "Salmon fillet",
+      "searchTerms": [
+       "lohifilee",
+       "lohifilee nahaton",
+       "salmon fillet"
+      ],
+      "role": "Baked main protein",
+      "perCover": {
+       "amount": 150,
+       "unit": "g"
+      },
+      "yieldPct": 90,
+      "amountBasis": "given portion 150 g",
+      "pantry": false,
+      "form": "any",
+      "avoid": [
+       "savu",
+       "savustettu",
+       "smoked",
+       "graavi",
+       "kypsä",
+       "marinoitu"
+      ]
+     },
+     {
+      "key": "potato",
+      "name": "Potato",
+      "searchTerms": [
+       "peruna",
+       "perunat",
+       "potato"
+      ],
+      "role": "Boiled with dill as side",
+      "perCover": {
+       "amount": 200,
+       "unit": "g"
+      },
+      "yieldPct": 80,
+      "amountBasis": "given portion 200 g",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "ranskalainen",
+       "french fries",
+       "muussi",
+       "jauhe",
+       "kuorittu valmis"
+      ]
+     },
+     {
+      "key": "fresh_dill",
+      "name": "Fresh dill",
+      "searchTerms": [
+       "tuore tilli",
+       "tilli",
+       "fresh dill"
+      ],
+      "role": "Flavour for potatoes and sauce",
+      "perCover": {
+       "amount": 5,
+       "unit": "g"
+      },
+      "yieldPct": 80,
+      "amountBasis": "small handful per portion",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "kuivattu",
+       "dried",
+       "siemen",
+       "seed"
+      ]
+     },
+     {
+      "key": "lactose_free_cream",
+      "name": "Lactose-free cream",
+      "searchTerms": [
+       "laktoositon kerma",
+       "laktoositon ruokakerma",
+       "lactose-free cream"
+      ],
+      "role": "Base of the cream sauce",
+      "perCover": {
+       "amount": 60,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "typical sauce portion",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "maitoa sisältävä",
+       "laktoositon kahvikerma",
+       "vispikerma sokeroitu",
+       "kasvi",
+       "kookos"
+      ]
+     },
+     {
+      "key": "salt",
+      "name": "Salt",
+      "searchTerms": [
+       "suola",
+       "salt"
+      ],
+      "role": "Seasoning for potato water, salmon and sauce",
+      "perCover": {
+       "amount": 4,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "seasoning estimate",
+      "pantry": true,
+      "form": "any",
+      "avoid": []
+     },
+     {
+      "key": "white_pepper",
+      "name": "White pepper",
+      "searchTerms": [
+       "valkopippuri",
+       "jauhettu valkopippuri",
+       "white pepper"
+      ],
+      "role": "Seasoning for cream sauce",
+      "perCover": {
+       "amount": 0.2,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "pinch per portion",
+      "pantry": true,
+      "form": "dried",
+      "avoid": [
+       "rouhe pippurimix"
+      ]
+     },
+     {
+      "key": "rapeseed_oil",
+      "name": "Rapeseed oil",
+      "searchTerms": [
+       "rypsiöljy",
+       "rapeseed oil"
+      ],
+      "role": "Oiling the baking tray and salmon",
+      "perCover": {
+       "amount": 5,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "light coating",
+      "pantry": true,
+      "form": "any",
+      "avoid": [
+       "pähkinä",
+       "oliiviöljy"
+      ]
+     }
+    ]
+   },
+   {
+    "name": "Lingonberry fool with lactose-free cream",
+    "nameFi": "Puolukkavaahto laktoosittomalla kermalla",
+    "course": "dessert",
+    "serviceDate": "2026-11-14",
+    "portion": "1.5 dl",
+    "method": "Whip lingonberries with sugar and lactose-free cream into a light mousse and chill.",
+    "ingredients": [
+     {
+      "key": "lingonberries",
+      "name": "Lingonberries",
+      "searchTerms": [
+       "puolukka",
+       "pakastepuolukka",
+       "lingonberry"
+      ],
+      "role": "main flavour and colour of the fool",
+      "perCover": {
+       "amount": 50,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about a third of a 1.5 dl portion",
+      "pantry": false,
+      "form": "frozen",
+      "avoid": [
+       "hillo",
+       "jam",
+       "mehu",
+       "juice",
+       "keitto",
+       "kiisseli"
+      ]
+     },
+     {
+      "key": "lactose_free_cream",
+      "name": "Lactose-free whipping cream",
+      "searchTerms": [
+       "laktoositon kuohukerma",
+       "kuohukerma laktoositon",
+       "lactose-free whipping cream"
+      ],
+      "role": "whipped into the mousse for lightness",
+      "perCover": {
+       "amount": 60,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "cream whips to about double volume in a 1.5 dl portion",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "kasvi",
+       "oat",
+       "soija",
+       "ruoka",
+       "cooking cream"
+      ]
+     },
+     {
+      "key": "sugar",
+      "name": "Sugar",
+      "searchTerms": [
+       "sokeri",
+       "hienosokeri",
+       "sugar"
+      ],
+      "role": "sweetens the tart berries",
+      "perCover": {
+       "amount": 15,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "typical sweetening for a berry mousse portion",
+      "pantry": true,
+      "form": "any",
+      "avoid": [
+       "siirappi",
+       "syrup",
+       "tomusokeri",
+       "icing"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ "fixes": {
+  "parsnip": {
+   "options": [
+    {
+     "kind": "substitute",
+     "title": "Celeriac instead of parsnip",
+     "effect": "Roasts and blends the same way, with a slightly less sweet, celery-like note that suits the soup.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "celeriac",
+      "name": "Celeriac",
+      "searchTerms": [
+       "celeriac",
+       "juuriselleri",
+       "rotselleri"
+      ],
+      "role": "roasted base vegetable",
+      "perCover": {
+       "amount": 50,
+       "unit": "g"
+      },
+      "yieldPct": 75,
+      "amountBasis": "raw weight, peeled and roasted",
+      "form": "fresh",
+      "avoid": [
+       "pickled",
+       "salad",
+       "ready-made soup"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "change_amount",
+     "title": "More carrot and swede",
+     "effect": "Dropping the parsnip leaves the soup a little less sweet and earthy, but it still works with the other two roots increased.",
+     "changesDish": false,
+     "ingredient": null,
+     "perCover": 0
+    },
+    {
+     "kind": "substitute",
+     "title": "Parsley root instead",
+     "effect": "Gives a sweet, earthy flavour close to parsnip, though availability may vary.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "parsley_root",
+      "name": "Parsley root",
+      "searchTerms": [
+       "parsley root",
+       "persiljajuuri",
+       "persiljerot"
+      ],
+      "role": "roasted base vegetable",
+      "perCover": {
+       "amount": 50,
+       "unit": "g"
+      },
+      "yieldPct": 75,
+      "amountBasis": "raw weight, peeled and roasted",
+      "form": "fresh",
+      "avoid": [
+       "dried",
+       "powder"
+      ]
+     },
+     "perCover": null
+    }
+   ]
+  },
+  "lactose_free_cream": {
+   "options": [
+    {
+     "kind": "substitute",
+     "title": "Oat cooking cream",
+     "effect": "Plant-based oat cream gives similar richness in the blended soup and is naturally lactose-free.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "oat_cooking_cream",
+      "name": "Oat cooking cream",
+      "searchTerms": [
+       "kaurakerma ruoanlaittoon",
+       "oat cooking cream",
+       "havregrädde matlagning"
+      ],
+      "role": "finishing richness in blended soup",
+      "perCover": {
+       "amount": 20,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "per cover, added at the end",
+      "form": "any",
+      "avoid": [
+       "nuts",
+       "peanuts",
+       "almond",
+       "cashew",
+       "coconut"
+      ]
+     },
+     "perCover": 20
+    },
+    {
+     "kind": "substitute",
+     "title": "Lactose-free cream cheese",
+     "effect": "Blended in at the end, it adds body and a slight tang to the soup.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "lactose_free_cream_cheese",
+      "name": "Lactose-free cream cheese",
+      "searchTerms": [
+       "laktoositon tuorejuusto",
+       "laktoositon maitorahka",
+       "lactose-free cream cheese"
+      ],
+      "role": "finishing richness in blended soup",
+      "perCover": {
+       "amount": 20,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "per cover, blended in at the end",
+      "form": "any",
+      "avoid": [
+       "nuts",
+       "peanuts",
+       "herb",
+       "garlic"
+      ]
+     },
+     "perCover": 20
+    },
+    {
+     "kind": "change_amount",
+     "title": "Use rapeseed oil instead",
+     "effect": "Drop the cream and finish with a splash of rapeseed oil; the soup is lighter but still smooth and vegan.",
+     "changesDish": false,
+     "ingredient": null,
+     "perCover": 0
+    }
+   ]
+  },
+  "carrot": {
+   "options": [
+    {
+     "kind": "change_amount",
+     "title": "More parsnip and swede",
+     "effect": "Carrot is dropped and the roasted base is made from the other two roots, so the soup is a little less sweet and paler.",
+     "changesDish": false,
+     "ingredient": null,
+     "perCover": null
+    },
+    {
+     "kind": "substitute",
+     "title": "Sweet potato instead",
+     "effect": "Roasts and blends like carrot, giving a sweet, orange, creamy soup with a slightly different flavour.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "sweet_potato",
+      "name": "Sweet potato",
+      "searchTerms": [
+       "bataatti",
+       "sweet potato",
+       "bataatti tuore"
+      ],
+      "role": "roasted base vegetable",
+      "perCover": {
+       "amount": 60,
+       "unit": "g"
+      },
+      "yieldPct": 80,
+      "amountBasis": "Raw weight, peeled, replaces carrot 1:1 for roasting",
+      "form": "fresh",
+      "avoid": [
+       "pre-cooked",
+       "fries",
+       "chips",
+       "breaded"
+      ]
+     },
+     "perCover": 60
+    },
+    {
+     "kind": "substitute",
+     "title": "Frozen carrot, roasted",
+     "effect": "Frozen carrot pieces roast from frozen and blend well, with slightly less caramelisation than fresh.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "carrot_frozen",
+      "name": "Carrot, frozen",
+      "searchTerms": [
+       "porkkana pakaste",
+       "porkkanakuutio pakaste",
+       "frozen carrot"
+      ],
+      "role": "roasted base vegetable",
+      "perCover": {
+       "amount": 60,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "Frozen weight, cleaned, ready to roast",
+      "form": "frozen",
+      "avoid": [
+       "cream",
+       "butter",
+       "sauce",
+       "glazed",
+       "mixed vegetables"
+      ]
+     },
+     "perCover": 60
+    }
+   ]
+  },
+  "swede": {
+   "options": [
+    {
+     "kind": "change_amount",
+     "title": "More carrot and parsnip",
+     "effect": "Drop the swede and raise carrot and parsnip; the soup is slightly sweeter and less earthy.",
+     "changesDish": false,
+     "ingredient": null,
+     "perCover": null
+    },
+    {
+     "kind": "substitute",
+     "title": "Celeriac instead of swede",
+     "effect": "Roasted celeriac gives a similar earthy, mild flavour and blends smoothly into the soup.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "celeriac",
+      "name": "Celeriac",
+      "searchTerms": [
+       "celeriac",
+       "juuriselleri",
+       "rotselleri"
+      ],
+      "role": "roasted base vegetable",
+      "perCover": {
+       "amount": 50,
+       "unit": "g"
+      },
+      "yieldPct": 75,
+      "amountBasis": "peeled weight, roasted and blended in the soup",
+      "form": "fresh",
+      "avoid": [
+       "pickled",
+       "pre-cooked ready meals"
+      ]
+     },
+     "perCover": 50
+    },
+    {
+     "kind": "substitute",
+     "title": "Potato instead of swede",
+     "effect": "Roasted potato gives body and a milder taste; the soup is less sweet and a little thicker.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "potato",
+      "name": "Potato",
+      "searchTerms": [
+       "potato",
+       "peruna",
+       "potatis",
+       "kuorittu peruna"
+      ],
+      "role": "roasted base vegetable",
+      "perCover": {
+       "amount": 45,
+       "unit": "g"
+      },
+      "yieldPct": 80,
+      "amountBasis": "peeled weight, roasted and blended in the soup",
+      "form": "fresh",
+      "avoid": [
+       "fried",
+       "french fries",
+       "mashed"
+      ]
+     },
+     "perCover": 45
+    }
+   ]
+  },
+  "vegetable_stock_concentrate": {
+   "options": [
+    {
+     "kind": "substitute",
+     "title": "Vegetable stock cubes",
+     "effect": "Cubes or powder give the same simmering-liquid flavour; the soup tastes the same.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "vegetable_stock_powder",
+      "name": "Vegetable stock powder or cubes",
+      "searchTerms": [
+       "kasvisliemijauhe",
+       "kasvisliemikuutio",
+       "vegetable stock powder",
+       "grönsaksbuljong"
+      ],
+      "role": "simmering liquid flavour",
+      "perCover": {
+       "amount": 4,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "dry powder or cube weight per cover, dissolved in the simmering water",
+      "form": "any",
+      "avoid": [
+       "nuts",
+       "peanuts",
+       "lactose",
+       "milk"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "substitute",
+     "title": "Ready liquid vegetable stock",
+     "effect": "Ready-made stock replaces water plus concentrate; flavour is the same, but more volume is bought.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "vegetable_stock_liquid",
+      "name": "Ready liquid vegetable stock",
+      "searchTerms": [
+       "kasvisliemi",
+       "valmis kasvisliemi",
+       "vegetable stock",
+       "grönsaksfond"
+      ],
+      "role": "simmering liquid flavour",
+      "perCover": {
+       "amount": 150,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "ready-to-use stock replacing part of the simmering water per cover",
+      "form": "any",
+      "avoid": [
+       "nuts",
+       "peanuts",
+       "lactose",
+       "milk"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "change_amount",
+     "title": "Less stock, more roast",
+     "effect": "Lower stock amount and rely on the roasted vegetables for flavour; the soup is milder but still works.",
+     "changesDish": false,
+     "ingredient": null,
+     "perCover": 2
+    }
+   ]
+  },
+  "salmon_fillet": {
+   "options": [
+    {
+     "kind": "substitute",
+     "title": "Rainbow trout fillet",
+     "effect": "Trout bakes the same way as salmon and gives a similar pink, oily fillet, so the dish stays almost the same.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "trout_fillet",
+      "name": "Rainbow trout fillet",
+      "searchTerms": [
+       "rainbow trout fillet",
+       "kirjolohifile",
+       "regnbåge filé"
+      ],
+      "role": "Baked main protein",
+      "perCover": {
+       "amount": 150,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "raw weight, skinless or skin-on fillet",
+      "form": "any",
+      "avoid": [
+       "smoked",
+       "marinated",
+       "gravad",
+       "breaded"
+      ]
+     },
+     "perCover": 150
+    },
+    {
+     "kind": "substitute",
+     "title": "Frozen salmon fillet",
+     "effect": "Thawed frozen salmon bakes well in the oven with the same sauce, with slightly softer texture.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "salmon_fillet_frozen",
+      "name": "Salmon fillet, frozen",
+      "searchTerms": [
+       "frozen salmon fillet",
+       "pakaste lohifile",
+       "fryst laxfilé"
+      ],
+      "role": "Baked main protein",
+      "perCover": {
+       "amount": 150,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "raw weight, thawed before baking",
+      "form": "frozen",
+      "avoid": [
+       "smoked",
+       "marinated",
+       "gravad",
+       "breaded",
+       "cold-smoked"
+      ]
+     },
+     "perCover": 150
+    },
+    {
+     "kind": "change_dish",
+     "title": "Baked white fish",
+     "effect": "Baked pollock or cod fillet replaces salmon with a milder, leaner fish; the dill potatoes and cream sauce still suit it.",
+     "changesDish": true,
+     "ingredient": {
+      "key": "white_fish_fillet",
+      "name": "White fish fillet (cod or pollock)",
+      "searchTerms": [
+       "cod fillet",
+       "pollock fillet",
+       "turskafile",
+       "seiti file",
+       "torskfilé"
+      ],
+      "role": "Baked main protein",
+      "perCover": {
+       "amount": 150,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "raw weight fillet",
+      "form": "any",
+      "avoid": [
+       "breaded",
+       "smoked",
+       "salted",
+       "marinated"
+      ]
+     },
+     "perCover": 150
+    }
+   ]
+  }
+ }
+}

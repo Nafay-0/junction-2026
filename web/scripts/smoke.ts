@@ -158,6 +158,82 @@ async function main() {
     return [r.status === 422 && e?.rule === "order_matches_quote", `HTTP ${r.status}, rule ${e?.rule}, code ${e?.code}`];
   });
 
+  // ---- the data plane, the kitchen store, the operations desk and the connector address ----
+
+  await check("data plane adapters", async () => {
+    const h = (await get("/api/health")).json?.dataPlane;
+    if (!h) return [false, "no dataPlane in /api/health"];
+    const sw = h.switches ?? {};
+    const used = (h.services ?? []).filter((x: { inUse: boolean }) => x.inUse);
+    const down = used.filter((x: { reachable: boolean }) => !x.reachable).map((x: { service: string }) => x.service);
+    const ledgerOk = !h.ledger || (!h.ledger.diverged && !h.ledger.lastError);
+    const detail = `store ${sw.store}, actions ${sw.actions}, cache ${sw.cache}, bus ${sw.bus}, search ${sw.search}; ${used.map((x: { service: string; reachable: boolean; ms: number }) => `${x.service} ${x.reachable ? "ok" : "DOWN"} ${x.ms ?? "-"} ms`).join(", ")}${h.ledger ? `; ledger ${h.ledger.length} entries, ${h.ledger.pending} pending${h.ledger.diverged ? `, DIVERGED ${h.ledger.diverged}` : ""}` : ""}`;
+    return [h.ok === true && down.length === 0 && ledgerOk, detail];
+  });
+
+  await check("kitchen store /k/kaari/catalogue", async () => {
+    const page = await get("/k/kaari/catalogue");
+    const cats = await get("/ui-api/kitchens/kaari/catalog/categories");
+    return [page.status === 200 && cats.status === 200, `page ${page.status}, categories ${cats.status}`];
+  });
+
+  let basketProducts: string[] = [];
+  await check("catalogue search (store)", async () => {
+    const r = await get("/ui-api/kitchens/kaari/catalog?q=maito&limit=5");
+    const items = (r.json?.products ?? r.json?.items ?? r.json?.results ?? []) as { id?: string; productId?: string }[];
+    basketProducts = items.map((i) => (i.productId ?? i.id)!).filter(Boolean);
+    return [r.status === 200 && items.length > 0, `HTTP ${r.status}, ${items.length} products, first ${basketProducts[0] ?? "-"}`];
+  });
+
+  await check("basket order to the gate", async () => {
+    if (!basketProducts.length) return [false, "no product from the catalogue search"];
+    // Up to three products: the first may be out of stock or past its cut-off, which the gate refuses by name.
+    let r!: Awaited<ReturnType<typeof get>>;
+    for (const id of basketProducts.slice(0, 3)) {
+      r = await get("/ui-api/kitchens/kaari/basket", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ lines: [{ productId: id, packs: 2 }], deliverBy: deliveryDay() }),
+      });
+      if (r.status === 201) break;
+    }
+    const preview = r.json?.policyPreview?.outcome ?? r.json?.error?.rule;
+    // A signed quote with the gate's verdict, or a named refusal (stock, cut-off, mandate): both mean the gate ran.
+    const gated = (r.status === 201 && !!r.json?.quoteToken) || (r.status >= 400 && r.status < 500 && !!r.json?.error?.rule);
+    return [gated, `HTTP ${r.status}, ${r.json?.quoteToken ? `quote ${r.json?.quote?.quoteId}, gate preview ${preview}` : `refused: rule ${preview}, ${r.json?.error?.code}`}`];
+  });
+
+  await check("operations desk /ops with passcode", async () => {
+    const page = await get("/ops");
+    const wrong = await get("/ops-api/session", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ passcode: "not-the-passcode", name: "Smoke test" }) });
+    const passcode = process.env.DOCK_OPS_PASSCODE?.trim();
+    if (!passcode) return [false, "DOCK_OPS_PASSCODE is not set locally"];
+    const enter = await get("/ops-api/session", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ passcode, name: "Smoke test" }) });
+    const cookie = (enter.headers.get("set-cookie") ?? "").split(";")[0];
+    const denied = await get("/ops-api/overview");
+    const overview = await get("/ops-api/overview", { headers: { cookie } });
+    await get("/ops-api/session", { method: "DELETE", headers: { cookie } });
+    const ok = page.status < 400 && wrong.status === 401 && enter.status === 200 && enter.json?.mode === "passcode" && denied.status === 401 && overview.status === 200;
+    return [ok, `page ${page.status}, wrong passcode ${wrong.status}, enter ${enter.status} (${enter.json?.mode}), overview without session ${denied.status}, with ${overview.status}`];
+  });
+
+  await check("connector address (MCP, no headers)", async () => {
+    const c = await get("/ui-api/connect/kaari");
+    const url: string | undefined = c.json?.connector?.url;
+    if (!url) return [false, `GET /ui-api/connect/kaari -> HTTP ${c.status}, no connector`];
+    const path = new URL(url).pathname;
+    const rpc = (p: string) =>
+      get(p, {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+      });
+    const ok = await rpc(path);
+    const tools = (/"tools":\[/.test(ok.text) ? ok.text.match(/"name":"[a-z_]+"/g)?.length : 0) ?? 0;
+    const wrong = await rpc(`/api/mcp/c/dk_${"A".repeat(43)}`);
+    return [ok.status === 200 && tools > 0 && wrong.status === 404, `tools/list ${ok.status} (${tools} names, source ${c.json?.connector?.source}), wrong token ${wrong.status}`];
+  });
+
   await check("no dev routes in production", async () => {
     const r = await get("/api/v1/dev/outbox");
     return [r.status === 404, `GET /api/v1/dev/outbox -> HTTP ${r.status}`];
