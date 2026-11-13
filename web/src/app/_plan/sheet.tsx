@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { PlanEdit } from "@/server/agent/menu/service";
 import type { PlanWire } from "@/server/agent/menu/wire";
-import { day, eur } from "../_ui/plain";
+import { day, money } from "../_ui/plain";
 import { Btn, Chip, Field, Sheet, Spinner } from "./ui";
 
 type Line = PlanWire["lines"][number];
@@ -26,7 +26,7 @@ export function PlanHeader({ plan, onEdit, busy }: { plan: PlanWire; onEdit: (e:
     <Sheet>
       <div className="p-4 sm:p-5">
         <blockquote className="font-display text-[1.5rem] font-semibold leading-tight sm:text-[1.8rem]">“{plan.text}”</blockquote>
-        <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-ink/15 pt-3 sm:grid-cols-4">
+        <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-line pt-3 sm:grid-cols-4">
           <Field label="Covers">
             {locked ? (
               plan.settings.covers
@@ -171,8 +171,8 @@ function DoubtItem({ line, doubt, pending, refused, onEdit, busy }: { line: Line
                   <p className="mt-0.5 text-[0.92rem] leading-snug">{f.effect}</p>
                   {c?.ok ? (
                     <p className="mt-1 text-[0.92rem] leading-snug">
-                      {c.product}: {c.packs}, <strong className="tabular">{eur(c.totalCents)}</strong>
-                      {c.deltaCents !== null ? <span className="tabular"> ({c.deltaCents >= 0 ? "+" : "−"}{eur(Math.abs(c.deltaCents))})</span> : null}, arrives {c.deliveryDate === "-" ? "-" : day(c.deliveryDate)}
+                      {c.product}: {c.packs}, <strong className="tabular">{money(c.totalCents)}</strong>
+                      {c.deltaCents !== null ? <span className="tabular"> ({c.deltaCents >= 0 ? "+" : "−"}{money(Math.abs(c.deltaCents))})</span> : null}, arrives {c.deliveryDate === "-" ? "-" : day(c.deliveryDate)}
                       {c.orderBy ? `, order by ${cutoff(c.orderBy)}` : ""}.{c.note ? ` ${c.note}` : ""}
                     </p>
                   ) : (
@@ -218,7 +218,7 @@ export function Lines({ plan, onEdit, busy }: { plan: PlanWire; onEdit: (e: Plan
       <div className="p-4 sm:p-5">
         <h2 className="font-display text-[1.6rem] font-bold leading-tight">Purchase lines</h2>
         <p className="text-[0.95rem] text-ink-soft">Amounts are per cover × covers ÷ usable share, then whole packs. Tap an amount to change it.</p>
-        <ol className="mt-3 divide-y divide-ink/15">
+        <ol className="mt-3 divide-y divide-line">
           {buying.map((l, i) => (
             <LineRow key={l.lineId} n={i + 1} line={l} locked={plan.state !== "planned"} onEdit={onEdit} busy={busy} />
           ))}
@@ -226,7 +226,7 @@ export function Lines({ plan, onEdit, busy }: { plan: PlanWire; onEdit: (e: Plan
         {aside.length > 0 && (
           <details className="mt-3" open={plan.settings.covers !== null && aside.some((l) => l.status === "struck" && !l.pantry)}>
             <summary className="cursor-pointer py-1 font-semibold underline decoration-2 underline-offset-4">Not ordered ({aside.length})</summary>
-            <ul className="mt-1 divide-y divide-ink/10">
+            <ul className="mt-1 divide-y divide-line">
               {aside.map((l) => (
                 <li key={l.lineId} className="flex flex-wrap items-center justify-between gap-2 py-2">
                   <span>
@@ -281,7 +281,7 @@ function LineRow({ n, line, locked, onEdit, busy }: { n: number; line: Line; loc
               <span className="font-semibold">{c.products.map((p) => p.name).join(" + ")}</span>
             </p>
             <p className="text-[0.95rem] leading-snug">
-              {c.products.map((p) => p.packText).join(" + ")} = <strong className="tabular">{eur(c.totalCents)}</strong>
+              {c.products.map((p) => p.packText).join(" + ")} = <strong className="tabular">{money(c.totalCents)}</strong>
             </p>
             <p className="mt-1 flex flex-wrap gap-1.5">
               <Chip tone={line.timing?.ok ? "ok" : "warn"} title={line.timing?.text}>
@@ -307,7 +307,7 @@ function LineRow({ n, line, locked, onEdit, busy }: { n: number; line: Line; loc
                     {line.alternatives.map((a) => (
                       <li key={a.optionId} className="flex flex-wrap items-center justify-between gap-2 border border-ink/20 px-2 py-1.5 text-[0.92rem]">
                         <span className="min-w-0">
-                          <Chip>{RANK[a.rank] ?? a.rank}</Chip> {a.products.map((p) => `${p.name}, ${p.packText}`).join(" + ")} = <strong className="tabular">{eur(a.totalCents)}</strong>
+                          <Chip>{RANK[a.rank] ?? a.rank}</Chip> {a.products.map((p) => `${p.name}, ${p.packText}`).join(" + ")} = <strong className="tabular">{money(a.totalCents)}</strong>
                           {a.cons[0] ? <span className="block text-ink-soft">{a.cons[0]}</span> : null}
                         </span>
                         {!locked && (

@@ -6,7 +6,7 @@ import { api } from "../../_client/api";
 import { useLive } from "../../_client/use-live";
 import { verifyChain, type ChainCheck } from "../../_client/verify-chain";
 import { sha256Hex, verifySigned, type KeySet } from "../../_client/verify-signed";
-import { clock, day, eur, helsinkiToday, humanize, shortProduct } from "../../_ui/plain";
+import { clock, day, helsinkiToday, money, say, shortProduct } from "../../_ui/plain";
 import { Target } from "../../_ui/target";
 import { askedText } from "./history";
 import { usePortal } from "./portal";
@@ -60,7 +60,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
           <h1 className="font-display text-[2.2rem] font-bold leading-tight tracking-tight">{o.lines.map((l) => `${l.quantity} × ${shortProduct(l.name)}`).join(" + ")}</h1>
           {asked && <p className="mt-1 text-[1.05rem]">{asked.startsWith("Basket") ? askedText(asked) : `Asked: “${asked}”`}</p>}
         </div>
-        <p className="font-display text-[2.8rem] font-bold leading-none tabular">{eur(o.totalCents)}</p>
+        <p className="font-display text-[2.8rem] font-bold leading-none tabular">{money(o.totalCents)}</p>
       </header>
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
@@ -80,7 +80,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
                     <th className="py-1.5 text-right font-medium">Arrives</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-ink/10">
+                <tbody className="divide-y divide-line">
                   {o.lines.map((l) => (
                     <tr key={l.productId}>
                       <td className="py-1.5 pr-2">
@@ -90,14 +90,14 @@ export function OrderDetail({ orderId }: { orderId: string }) {
                         {l.substituteFor && <span className="block text-[0.85rem] text-ink-soft">swap for {shortProduct(l.substituteFor.name)}</span>}
                       </td>
                       <td className="py-1.5 pr-2 text-right tabular">{l.quantity}</td>
-                      <td className="py-1.5 pr-2 text-right tabular">{eur(l.unitPriceCents)}</td>
-                      <td className="py-1.5 pr-2 text-right tabular">{eur(l.lineTotalCents)}</td>
+                      <td className="py-1.5 pr-2 text-right tabular">{money(l.unitPriceCents)}</td>
+                      <td className="py-1.5 pr-2 text-right tabular">{money(l.lineTotalCents)}</td>
                       <td className="py-1.5 text-right">{day(l.deliveryDate)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 border-t border-ink/15 pt-3 sm:grid-cols-3">
+              <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 border-t border-line pt-3 sm:grid-cols-3">
                 <Field label="Price fixed by">the wholesaler&apos;s signature</Field>
                 {q?.expiresAt && (
                   <Field label="Price held until">
@@ -170,7 +170,7 @@ function Verify({ order, evidence }: { order: Order; evidence: { claimId: string
         ? { ok: false, message: v.message }
         : v.payload.orderId !== order.orderId || v.payload.totalCents !== order.totalCents
           ? { ok: false, message: "The signature is valid but it is for another order or total." }
-          : { ok: true, message: `Signed by the wholesaler's key ${v.kid}: order ${v.payload.orderId.slice(0, 10)}…, ${eur(v.payload.totalCents)}, ${v.payload.lines.length} line${v.payload.lines.length === 1 ? "" : "s"}.` };
+          : { ok: true, message: `Signed by the wholesaler's key ${v.kid}: order ${v.payload.orderId.slice(0, 10)}…, ${money(v.payload.totalCents)}, ${v.payload.lines.length} line${v.payload.lines.length === 1 ? "" : "s"}.` };
     }
     const failed: string[] = [];
     let ok = 0;
@@ -193,7 +193,7 @@ function Verify({ order, evidence }: { order: Order; evidence: { claimId: string
 
   return (
     <section aria-labelledby="verify" className="bg-paper">
-      <div aria-hidden className="h-[3px] bg-ink" />
+      <div aria-hidden className="h-[3px] bg-petrol" />
       <div className="p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -216,7 +216,7 @@ function Verify({ order, evidence }: { order: Order; evidence: { claimId: string
               text={r.claims.total === 0 ? "This quote names no separate claims; its own signature covers the price." : r.claims.failed.length === 0 ? `All ${r.claims.total} claims (price, availability, origin) carry a valid wholesaler signature and are exactly the ones the quote names.` : `${r.claims.ok} of ${r.claims.total} check out. ${r.claims.failed.join("; ")}.`}
             />
             <Check ok={r.chain.ok} title="The ledger chain" text={r.chain.ok ? `All ${r.chain.length} entries link up: every SHA-256 recomputed from the first entry, in ${r.ms} ms in total.` : r.chain.message} />
-            <li className="text-[0.88rem] text-ink-soft">{humanize("A claim's own validity window (30 minutes for stock) may have passed since; the signature still proves what the wholesaler said at the time.")}</li>
+            <li className="text-[0.88rem] text-ink-soft">{say("A claim's own validity window (30 minutes for stock) may have passed since; the signature still proves what the wholesaler said at the time.")}</li>
           </ul>
         )}
       </div>

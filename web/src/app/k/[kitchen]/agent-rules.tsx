@@ -109,7 +109,7 @@ function Memory({ memory, loading, error }: { memory?: KitchenMemory; loading: b
               <h3 className="font-display text-[1.3rem] font-bold">Rules a person stated</h3>
               <p className="text-[0.92rem] text-ink-soft">Always applied. Products against a rule are not offered at all.</p>
               {memory.stated.length === 0 && <p className="mt-2 text-ink-soft">None yet. Ticking “remember this answer” on a question adds one.</p>}
-              <ul className="mt-2 divide-y divide-ink/10">
+              <ul className="mt-2 divide-y divide-line">
                 {memory.stated.map((s) => (
                   <li key={s.id} className="flex flex-wrap items-start justify-between gap-3 py-2.5">
                     <div className="min-w-0">
@@ -135,7 +135,7 @@ function Memory({ memory, loading, error }: { memory?: KitchenMemory; loading: b
               <p className="text-[0.92rem] text-ink-soft">Pre-select only. Learned after at least three orders, when most of them agree.</p>
               {memory.families.length === 0 && <p className="mt-2 text-ink-soft">Nothing learned yet: the kitchen has no order history here.</p>}
               {memory.families.map((f) => (
-                <div key={f.family} className="mt-3 border-t border-ink/15 pt-2">
+                <div key={f.family} className="mt-3 border-t border-line pt-2">
                   <p className="font-semibold capitalize">
                     {attr(f.family)} <span className="font-normal normal-case text-ink-soft">{f.usual.text}, {f.orders} orders</span>
                   </p>
@@ -247,7 +247,7 @@ function SharedMemory({ fallback }: { fallback: React.ReactNode }) {
       </h2>
       <p className="text-ink-soft">{data.staffLastLookedAt ? `The wholesaler's staff last looked at the shared items ${day(helsinkiToday(new Date(data.staffLastLookedAt)))}.` : "The wholesaler's staff have not looked at the shared items yet."}</p>
       {problem && <ErrorPlate title="That change did not go through" message={problem} />}
-      <ul className="divide-y divide-ink/10 bg-paper">
+      <ul className="divide-y divide-line bg-paper">
         {data.items.length === 0 && <li className="p-4 text-ink-soft">Nothing yet.</li>}
         {data.items.map((it) => (
           <li key={it.id} className="grid gap-3 p-4 md:grid-cols-[minmax(0,1fr)_auto]">
@@ -395,7 +395,7 @@ function Connect() {
                 )}
               </>
             )}
-            <div className="border-t border-ink/15 pt-3">
+            <div className="border-t border-line pt-3">
               <h3 className="font-semibold">For a personal assistant</h3>
               {connector === undefined ? (
                 <p className="text-ink-soft">Checking for a connector address…</p>

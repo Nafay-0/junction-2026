@@ -52,10 +52,10 @@ export function CallJoin() {
   const id = start?.identity;
   return (
     <div className="flex min-h-dvh flex-col px-5 py-8 text-ink">
-      <p className="text-sm font-semibold uppercase tracking-wide text-ink-soft">Dock demo · on synthetic data</p>
+      <p className="text-[0.95rem] font-semibold text-petrol">A demo on synthetic data</p>
       {id && (
         <>
-          <h1 className="mt-2 font-display text-[2rem] font-bold leading-tight">Call the purchasing agent of {id.kitchenName}, {id.city}</h1>
+          <h1 className="mt-2 display text-[2.4rem] leading-[0.98]">Call the purchasing agent of {id.kitchenName}, {id.city}</h1>
           <p className="mt-4 text-[1.15rem]">
             First, one tap makes you <strong>{id.approverName}</strong>, the kitchen&apos;s purchasing manager. The agent may spend up to {start!.perOrderLimit} per order alone; anything more comes back to this phone for your sign-off.
           </p>
@@ -63,22 +63,22 @@ export function CallJoin() {
         </>
       )}
       {problem && (
-        <div role="alert" className="mt-6 rounded-xl border-[3px] border-ink bg-paper p-4">
+        <div role="alert" className="mt-6 border-[3px] border-ink bg-paper p-4">
           <p className="font-semibold">{problem.title}</p>
           <p className="mt-1">{problem.body}</p>
         </div>
       )}
       {start && !(supported && start.secureOrigin) && (
-        <p role="alert" className="mt-6 rounded-xl border-2 border-ink bg-paper p-4">
+        <p role="alert" className="mt-6 border-2 border-ink bg-paper p-4">
           {start.secureOrigin ? "This browser can't create passkeys. Try Safari on iPhone or Chrome on Android." : "Passkeys only work over https. Open the https address of this demo."}
         </p>
       )}
       <div className="mt-auto space-y-3 pt-8">
-        <button type="button" disabled={busy || !start || !(supported && start.secureOrigin)} onClick={() => void join()} className="h-16 w-full rounded-2xl bg-[#1f7a3a] text-xl font-semibold text-paper disabled:opacity-50">
+        <button type="button" disabled={busy || !start || !(supported && start.secureOrigin)} onClick={() => void join()} className="min-h-16 w-full bg-lime text-xl font-semibold text-ink disabled:opacity-50">
           {busy ? "One moment…" : "Create passkey and call"}
         </button>
         {start?.demoTapEnabled && (
-          <button type="button" disabled={busy} onClick={() => void join({ fallback: true })} className="h-12 w-full rounded-xl border-2 border-ink text-base">
+          <button type="button" disabled={busy} onClick={() => void join({ fallback: true })} className="min-h-12 w-full border-2 border-dashed border-ink-soft text-base">
             Demo only: join without a passkey
           </button>
         )}

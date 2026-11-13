@@ -48,7 +48,7 @@ export function ProductPage({ id }: { id: string }) {
               {t && <span style={{ color: t.color }}>, {t.label.toLowerCase()}</span>}
             </p>
             <h1 className="mt-1 max-w-[30ch] font-display text-[2.3rem] font-bold leading-[1.05] tracking-tight">{readable(nameIn(p, lang))}</h1>
-            <div className="mt-5 border-t border-ink/15 pt-4">
+            <div className="mt-5 border-t border-line pt-4">
               <Facts p={p} lang={lang} />
             </div>
           </div>

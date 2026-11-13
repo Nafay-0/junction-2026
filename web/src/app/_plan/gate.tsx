@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { PlanWire } from "@/server/agent/menu/wire";
 import { api } from "../_client/api";
-import { clock, day, eur, roleLabel, ruleTitle } from "../_ui/plain";
+import { clock, day, money, roleLabel, ruleTitle } from "../_ui/plain";
 import { Target } from "../_ui/target";
 import { cutoff } from "./sheet";
 import { Btn, Field, Sheet } from "./ui";
@@ -18,7 +18,7 @@ export function Totals({ plan, onQuote, busy }: { plan: PlanWire; onQuote: () =>
       <div className="p-4 sm:p-5">
         <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
           <Field label="Total, before VAT">
-            <span className="font-display text-[2rem] font-bold leading-none tabular">{eur(t.totalCents)}</span>
+            <span className="font-display text-[2rem] font-bold leading-none tabular">{money(t.totalCents)}</span>
           </Field>
           <Field label="Lines">
             {t.lines} line{t.lines === 1 ? "" : "s"}, {t.products} product{t.products === 1 ? "" : "s"}
@@ -34,7 +34,7 @@ export function Totals({ plan, onQuote, busy }: { plan: PlanWire; onQuote: () =>
           </Field>
         </dl>
         {plan.state === "planned" && (
-          <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-ink/15 pt-3">
+          <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-line pt-3">
             <Btn kind="primary" busy={busy} disabled={!t.canQuote} onClick={onQuote} className="min-h-12 px-5 text-[1.1rem]">
               Get a fixed price
             </Btn>
@@ -79,7 +79,7 @@ export function GateStage({ plan, kitchen, onOrder, onRefresh, busy, base }: { p
         )}
         {q && (
           <>
-            <h2 className="font-display text-[1.6rem] font-bold leading-tight">Fixed price {eur(q.totalCents)}</h2>
+            <h2 className="font-display text-[1.6rem] font-bold leading-tight">Fixed price {money(q.totalCents)}</h2>
             <p className="text-[0.95rem] text-ink-soft">
               Quote {q.quoteId}, signed by the wholesaler, holds until {clock(q.expiresAt)}
               {q.expiresBecause === "order_cutoff" ? " (the order cut-off)" : q.expiresBecause === "price_validity" ? " (when the price stops being valid)" : ""}; it rests on {q.evidence} signed claims. {q.lines.length} lines.
@@ -121,14 +121,14 @@ function Decision({ order, kitchen, base }: { order: NonNullable<PlanWire["order
           ? `Declined by ${a?.approver.name}`
           : "Refused by the gate";
   return (
-    <div className="mt-4 grid gap-5 border-t border-ink/15 pt-4 md:grid-cols-[1fr_auto]">
+    <div className="mt-4 grid gap-5 border-t border-line pt-4 md:grid-cols-[1fr_auto]">
       <div className="min-w-0">
         <div className="flex items-start gap-3">
           <Target size={52} tone={order.status === "committed" && !a ? "ink" : "safety"} spin={order.status === "pending_approval"} className="shrink-0" />
           <div>
             <p className="font-display text-[1.9rem] font-bold leading-tight">{title}</p>
             <p className="text-ink-soft">
-              Order {order.orderId}, {eur(order.totalCents)}
+              Order {order.orderId}, {money(order.totalCents)}
               {order.confirmed ? ", confirmation signed by the wholesaler" : ""}.
             </p>
           </div>
@@ -144,7 +144,7 @@ function Decision({ order, kitchen, base }: { order: NonNullable<PlanWire["order
         )}
         <details className="mt-3 text-[0.92rem]">
           <summary className="cursor-pointer py-1 font-semibold underline decoration-2 underline-offset-4">All {order.decision.rules.length} checks</summary>
-          <ul className="mt-1 divide-y divide-ink/10">
+          <ul className="mt-1 divide-y divide-line">
             {order.decision.rules.map((r) => (
               <li key={r.rule} className="grid gap-x-3 py-1 sm:grid-cols-[13rem_5rem_1fr]">
                 <span className="font-semibold">{ruleTitle(r.rule)}</span>

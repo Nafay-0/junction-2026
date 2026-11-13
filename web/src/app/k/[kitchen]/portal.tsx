@@ -328,7 +328,7 @@ function Header() {
   }
   return (
     <header className="bg-paper">
-      <div className="mx-auto grid max-w-[1440px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-3 px-4 py-3 sm:px-6 lg:grid-cols-[auto_minmax(0,1fr)_minmax(16rem,30rem)_auto] xl:px-8">
+      <div className="mx-auto grid max-w-[1440px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-3 px-4 py-3 sm:px-6 lg:grid-cols-[auto_minmax(13rem,1fr)_minmax(14rem,28rem)_auto] xl:px-8">
         <Link href="/k" className="flex shrink-0 items-baseline gap-2" aria-label={`${PRODUCT_NAME}: all demo kitchens`}>
           <span aria-hidden className="size-3 translate-y-[-0.1em] bg-lime" />
           <span className="display text-[1.9rem] text-petrol">{PRODUCT_NAME}</span>
@@ -392,7 +392,7 @@ function Header() {
           >
             <AgentIcon />
             <span className="hidden sm:inline">Agent</span>
-            <span className="hidden items-center gap-0.5 xl:flex">
+            <span className="hidden items-center gap-0.5 2xl:flex">
               <Kbd dark={agent.panelOpen}>Ctrl K</Kbd>
             </span>
           </button>

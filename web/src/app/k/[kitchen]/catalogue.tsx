@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { attr } from "../../_ui/plain";
+import { attr, num } from "../../_ui/plain";
 import { usePortal, type Lang } from "./portal";
 import { CLAIM_LABEL, TEMP, Tile } from "./shop";
 import { ErrorPlate } from "./ui";
@@ -101,10 +101,10 @@ export function Catalogue() {
           {depts?.map((d) => {
             const open = shownDept === d.id;
             return (
-              <li key={d.id} className="border-b border-ink/10">
+              <li key={d.id} className="border-b border-line">
                 <button type="button" aria-expanded={open} onClick={() => setOpenDept(open ? "" : d.id)} className={`flex min-h-10 w-full items-baseline justify-between gap-2 py-1.5 text-left ${open ? "font-bold" : ""}`}>
                   <span>{d.name}</span>
-                  <span className="text-[0.82rem] font-normal text-ink-soft tabular">{d.count.toLocaleString("en-US")}</span>
+                  <span className="text-[0.82rem] font-normal text-ink-soft tabular">{num(d.count, 0)}</span>
                 </button>
                 {open && (
                   <ul className="mb-2 space-y-px">
@@ -147,7 +147,7 @@ export function Catalogue() {
         >
           <div className="min-w-[16rem] flex-1">
             <label htmlFor="cat-q" className="text-[0.95rem] font-semibold">
-              Search {total ? `${total.toLocaleString("en-US")} products` : "products"}
+              Search {total ? `${num(total, 0)} products` : "products"}
             </label>
             <div className="mt-1 flex border-2 border-ink bg-paper">
               <input id="cat-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="oat drink, kaurajuoma, havredryck…" className="min-h-12 min-w-0 flex-1 bg-transparent px-3 text-[1.05rem] focus:outline-none" />

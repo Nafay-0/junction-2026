@@ -548,13 +548,14 @@ export function Options({
 
 /** The options as columns, one row per fact, with the best value in each row marked. */
 function CompareTable({ options, step, open, chosen, busyKey, onChoose, names }: { options: Card[]; step: Step; open: boolean; chosen?: string; busyKey?: string; onChoose: (id: string) => void; names: Names }) {
+  // The best value in a row is marked only when the options differ on it.
   const min = (xs: (number | null)[]) => {
     const v = xs.filter((x): x is number => x !== null);
-    return v.length > 1 ? Math.min(...v) : undefined;
+    return v.length > 1 && new Set(v).size > 1 ? Math.min(...v) : undefined;
   };
   const max = (xs: (number | null)[]) => {
     const v = xs.filter((x): x is number => x !== null);
-    return v.length > 1 ? Math.max(...v) : undefined;
+    return v.length > 1 && new Set(v).size > 1 ? Math.max(...v) : undefined;
   };
   const cheapest = min(options.map((c) => c.totalCents));
   const greenest = min(options.map((c) => c.co2.kg));
@@ -936,8 +937,8 @@ export function SignOff({ order, kitchen, streaming }: { order: Order; kitchen: 
               <div>
                 <dt className="text-[0.8rem] font-medium text-ink-soft">Asked</dt>
                 <dd className="display text-[2rem] tabular" aria-live="off">
-                  {Math.floor(since / 60)}.{String(since % 60).padStart(2, "0")}
-                  <span className="ml-1 font-sans text-[0.9rem] font-medium text-ink-soft">min ago</span>
+                  {since < 60 ? `${since} s` : `${Math.floor(since / 60)} min ${String(since % 60).padStart(2, "0")} s`}
+                  <span className="ml-1 font-sans text-[0.9rem] font-medium text-ink-soft">ago</span>
                 </dd>
               </div>
               <div>

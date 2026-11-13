@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { ApiError } from "../../_client/api";
 import { useLive } from "../../_client/use-live";
-import { eur, helsinkiToday } from "../../_ui/plain";
+import { helsinkiToday, money, num } from "../../_ui/plain";
 import { Target } from "../../_ui/target";
 import { usePortal } from "./portal";
 import { Quantity } from "./qty";
@@ -130,7 +130,7 @@ export function BasketPage() {
                       {readable(nameIn(l.product, lang))}
                     </Link>
                     <p className="text-[0.9rem] text-ink-soft">
-                      {o ? `${eur(o.unitPriceCents)} per ${unitWord(l.product, 1)}` : live.busy.includes(l.productId) ? "Checking the price…" : r ? "Not orderable now" : "No live price yet"}
+                      {o ? `${money(o.unitPriceCents)} per ${unitWord(l.product, 1)}` : live.busy.includes(l.productId) ? "Checking the price…" : r ? "Not orderable now" : "No live price yet"}
                       {o?.stockKnown === false ? "; stock not confirmed" : ""}
                     </p>
                     {!locked && (
@@ -140,7 +140,7 @@ export function BasketPage() {
                     )}
                   </div>
                   <Quantity p={l.product} value={l.packs} onChange={(n) => basket.set(l.productId, n)} id={`b-${l.productId}`} disabled={locked} />
-                  <p className="text-right font-display text-[1.3rem] font-bold tabular sm:pt-2">{o ? eur(o.unitPriceCents * l.packs) : "–"}</p>
+                  <p className="text-right font-display text-[1.3rem] font-bold tabular sm:pt-2">{o ? money(o.unitPriceCents * l.packs) : "–"}</p>
                 </li>
               );
             })}
@@ -150,28 +150,28 @@ export function BasketPage() {
 
       <aside aria-label="Totals and checkout" className="space-y-3 lg:sticky lg:top-3">
         <div className="bg-paper">
-          <div aria-hidden className="h-[3px] bg-ink" />
+          <div aria-hidden className="h-[3px] bg-petrol" />
           <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1.5 p-4">
             <dt className="font-semibold">Estimate, VAT 0 %</dt>
-            <dd className="font-display text-[1.9rem] font-bold leading-none tabular">{eur(totals.cents)}</dd>
+            <dd className="font-display text-[1.9rem] font-bold leading-none tabular">{money(totals.cents)}</dd>
             {totals.priced < basket.lines.length && (
               <dd className="col-span-2 text-[0.88rem] text-ink-soft">
                 {basket.lines.length - totals.priced} of {basket.lines.length} lines have no live price yet.
               </dd>
             )}
             <dt className="text-ink-soft">Litres</dt>
-            <dd className="tabular">{totals.L ? `${totals.L.toLocaleString("en-US", { maximumFractionDigits: 1 })} L` : "–"}</dd>
+            <dd className="tabular">{totals.L ? `${num(totals.L, 1)} L` : "–"}</dd>
             <dt className="text-ink-soft">Kilograms</dt>
-            <dd className="tabular">{totals.kg ? `${totals.kg.toLocaleString("en-US", { maximumFractionDigits: 1 })} kg` : "–"}</dd>
+            <dd className="tabular">{totals.kg ? `${num(totals.kg, 1)} kg` : "–"}</dd>
             <dt className="text-ink-soft">Carbon</dt>
             <dd className="text-right tabular">
-              {totals.co2Lines ? `${totals.co2.toLocaleString("en-US", { maximumFractionDigits: 1 })} kg CO2e` : "no data"}
+              {totals.co2Lines ? `${num(totals.co2, 1)} kg CO2e` : "no data"}
               {totals.co2Lines > 0 && totals.co2Lines < basket.lines.length && <span className="block text-[0.82rem] text-ink-soft">for {totals.co2Lines} of {basket.lines.length} lines</span>}
             </dd>
             <dd className="col-span-2 text-[0.82rem] leading-snug text-ink-soft">Carbon is the product group&apos;s average per kilo (a litre counted as a kilo), not a measurement of these products.</dd>
           </dl>
           {basket.lines.length > 0 && run.phase === "idle" && (
-            <div className="border-t border-ink/15 p-4">
+            <div className="border-t border-line p-4">
               <label htmlFor="deliver-by" className="text-[0.95rem] font-semibold">
                 Deliver by <span className="font-normal text-ink-soft">(optional)</span>
               </label>
@@ -183,7 +183,7 @@ export function BasketPage() {
             </div>
           )}
           {run.phase === "quoting" && (
-            <p className="flex items-center gap-2 border-t border-ink/15 p-4 text-ink-soft">
+            <p className="flex items-center gap-2 border-t border-line p-4 text-ink-soft">
               <Target size={18} tone="hollow" spin /> The wholesaler is fixing the price…
             </p>
           )}

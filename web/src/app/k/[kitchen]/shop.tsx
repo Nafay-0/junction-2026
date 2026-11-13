@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { attr, day, eur, helsinkiToday } from "../../_ui/plain";
+import { attr, day, helsinkiToday, money, num } from "../../_ui/plain";
 import { Target } from "../../_ui/target";
 import { usePortal, type Lang } from "./portal";
 import { Quantity } from "./qty";
@@ -114,7 +114,7 @@ export function Tile({ p }: { p: Product }) {
           <span className="text-[0.88rem] leading-tight">
             {r?.offer ? (
               <>
-                <span className="font-display text-[1.3rem] font-bold tabular">{eur(r.offer.unitPriceCents)}</span>
+                <span className="font-display text-[1.3rem] font-bold tabular">{money(r.offer.unitPriceCents)}</span>
                 <span className="text-ink-soft"> / {unitWord(p, 1)}</span>
               </>
             ) : r ? (
@@ -165,14 +165,14 @@ export function LiveBox({ r, busy, p }: { r?: LiveResult & { checkedAt: string }
   return (
     <div>
       <p className="font-display text-[2.2rem] font-bold leading-none tabular">
-        {eur(o.unitPriceCents)} <span className="text-[1rem] font-semibold text-ink-soft">per {unitWord(p, 1)}, VAT 0 %</span>
+        {money(o.unitPriceCents)} <span className="text-[1rem] font-semibold text-ink-soft">per {unitWord(p, 1)}, VAT 0 %</span>
       </p>
       <dl className="mt-2 grid grid-cols-[8.5rem_1fr] gap-x-3 gap-y-0.5 text-[0.95rem]">
         {o.comparisonPriceCents !== undefined && o.comparisonUnit && (
           <>
             <dt className="text-ink-soft">Unit price</dt>
             <dd className="tabular">
-              {eur(o.comparisonPriceCents)} per {o.comparisonUnit.toLowerCase() === "l" ? "litre" : o.comparisonUnit.toLowerCase()}
+              {money(o.comparisonPriceCents)} per {o.comparisonUnit.toLowerCase() === "l" ? "litre" : o.comparisonUnit.toLowerCase()}
             </dd>
           </>
         )}
@@ -181,7 +181,7 @@ export function LiveBox({ r, busy, p }: { r?: LiveResult & { checkedAt: string }
         <dt className="text-ink-soft">Order by</dt>
         <dd>{o.orderBy ? (cutoffText(o.orderBy) ?? o.orderBy) : "no cut-off stated"}</dd>
         <dt className="text-ink-soft">Stock</dt>
-        <dd>{o.stockKnown === false ? "not confirmed by the wholesaler" : `${o.availablePacks.toLocaleString("en-US")} ${unitWord(p, o.availablePacks)}`}</dd>
+        <dd>{o.stockKnown === false ? "not confirmed by the wholesaler" : `${num(o.availablePacks, 0)} ${unitWord(p, o.availablePacks)}`}</dd>
       </dl>
       <p className="mt-1 text-[0.82rem] text-ink-soft">Checked live with the wholesaler, {day(helsinkiToday(new Date(r.checkedAt)))}</p>
     </div>
@@ -233,7 +233,7 @@ export function Facts({ p, lang }: { p: Product; lang: Lang }) {
       <dd>
         {p.carbonGroupAvgKgCo2ePerKg != null ? (
           <>
-            {p.carbonGroupAvgKgCo2ePerKg.toLocaleString("en-US", { maximumFractionDigits: 2 })} kg CO2e per kg
+            {num(p.carbonGroupAvgKgCo2ePerKg, 2)} kg CO2e per kg
             <span className="block text-[0.88rem] text-ink-soft">The average of the product group, not a measurement of this product.</span>
           </>
         ) : p.source === "valio" ? (
@@ -266,12 +266,12 @@ export function BuyBox({ p }: { p: Product }) {
   const line = basket.lines.find((l) => l.productId === p.id);
   return (
     <div className="bg-paper">
-      <div aria-hidden className="h-[3px] bg-ink" />
+      <div aria-hidden className="h-[3px] bg-petrol" />
       <div className="space-y-4 p-4">
         <LiveBox r={r} busy={live.busy.includes(p.id)} p={p} />
         {live.error && !r && <p className="text-ink-soft">The live check failed: {live.error}</p>}
         <Quantity p={p} value={n} onChange={setN} id={`qty-${p.id}`} />
-        {r?.offer && <p className="font-semibold tabular">{eur(r.offer.unitPriceCents * n)} for {quantityText(p, n)}</p>}
+        {r?.offer && <p className="font-semibold tabular">{money(r.offer.unitPriceCents * n)} for {quantityText(p, n)}</p>}
         <div className="flex flex-wrap gap-2">
           <Button kind="primary" onClick={() => basket.add(p, n)}>
             Add to basket

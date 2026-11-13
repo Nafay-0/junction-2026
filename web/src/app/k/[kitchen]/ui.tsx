@@ -79,8 +79,8 @@ export function StationStrip({ states, label }: { states: Record<Station, Statio
                 {st === "stopped" ? (
                   <Target size={18} tone="safety" className="hidden shrink-0 sm:block" />
                 ) : (
-                  <span aria-hidden className={`hidden size-4 shrink-0 items-center justify-center text-[0.7rem] font-bold sm:flex ${st === "current" ? "bg-lime text-ink" : st === "done" ? "bg-petrol text-paper" : "border border-current"}`}>
-                    {st === "done" ? "✓" : ""}
+                  <span aria-hidden className={`hidden size-5 shrink-0 items-center justify-center text-[0.75rem] font-bold tabular sm:flex ${st === "current" ? "bg-lime text-ink" : st === "done" ? "bg-petrol text-paper" : "text-current"}`}>
+                    {st === "done" ? "✓" : i + 1}
                   </span>
                 )}
                 <span className={`display truncate text-[0.95rem] sm:text-[1.25rem] ${st === "skipped" ? "line-through decoration-1" : ""}`}>{s}</span>

@@ -72,7 +72,7 @@ export function DoorButtons({
       {open &&
         createPortal(
           <div
-            className="fixed inset-0 z-50 overflow-y-auto bg-concrete"
+            className="fixed inset-0 z-50 overflow-y-auto bg-mist"
             role="dialog"
             aria-modal="true"
             aria-label={
@@ -94,13 +94,13 @@ export function DoorButtons({
             ) : (
               <div className="mx-auto max-w-5xl px-4 py-4">
                 <div className="mb-3 flex items-center justify-between">
-                  <h2 className="font-display text-[1.6rem] font-bold">
+                  <h2 className="display text-[2rem]">
                     Add a photo or document
                   </h2>
                   <button
                     type="button"
                     onClick={() => setOpen(null)}
-                    className="min-h-11 rounded-lg border-2 border-ink px-3 font-semibold"
+                    className="min-h-11 border-2 border-petrol px-3 font-semibold text-petrol"
                   >
                     Close
                   </button>
