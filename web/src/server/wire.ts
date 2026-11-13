@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ProductSchema } from "@/core/catalog";
 import { MandateSchema } from "@/core/mandate";
 import { RULES } from "@/core/policy";
+import { NeedSchema } from "@/core/need";
 import { QuoteLineSchema, QuoteSchema } from "@/core/quote";
 
 /**
@@ -150,3 +151,176 @@ export const PendingApprovalSchema = named(
     requestedAt: z.iso.datetime(),
   }),
 );
+
+// ---------- intake: from a structured need to a signed quote ----------
+
+export const INTAKE_STATES = ["needs_confirmation", "needs_input", "options_ready", "quoted", "no_options", "cancelled"] as const;
+
+export const NeedOutSchema = named("StructuredNeed", NeedSchema);
+
+const amount = z.looseObject({ amount: z.number(), unit: z.enum(["L", "kg", "pcs"]) });
+
+export const ConcernSchema = named(
+  "Concern",
+  z.looseObject({
+    key: z.string().describe("Send this key back with the buyer's response."),
+    code: z.string().describe("What kind of likely mistake, e.g. quantity_tenfold, unit_confusion, delivery_in_past, duplicate_recent."),
+    severity: z.enum(["error", "warning"]),
+    message: z.string().describe("The question to put to the buyer, in plain words."),
+    confirmable: z.boolean().describe("true: the buyer may confirm the need as it is. false: they must pick a correction."),
+    corrections: z.array(z.looseObject({ id: z.string(), label: z.string(), patch: z.record(z.string(), z.unknown()).optional(), cancel: z.literal(true).optional() })),
+    preferenceIds: z.array(z.string()).optional(),
+    evidence: z.record(z.string(), z.unknown()).optional(),
+  }),
+);
+
+export const QuestionSchema = named(
+  "Question",
+  z.looseObject({
+    id: z.string(),
+    kind: z.enum(["dimension", "optimise"]),
+    text: z.string().describe("The question to put to the buyer."),
+    options: z.array(z.looseObject({ id: z.string(), label: z.string() })).describe("The only answers Dock accepts: send one optionId."),
+    dimension: z.string().optional(),
+  }),
+);
+
+const MemoryNoteSchema = z.looseObject({ question: QuestionSchema, optionId: z.string(), label: z.string(), source: z.enum(["stated", "learned"]), text: z.string(), preferenceId: z.string().optional() });
+
+export const OptionCardSchema = named(
+  "OptionCard",
+  z.looseObject({
+    optionId: z.string(),
+    labels: z.array(z.enum(["best_price", "lowest_carbon", "most_reliable", "same_as_last_time"])),
+    title: z.string(),
+    lines: z.array(
+      z.looseObject({
+        productId: z.string(),
+        name: z.string(),
+        packs: z.number().int(),
+        packSize: z.number(),
+        unit: z.enum(["L", "kg", "pcs"]),
+        unitPriceCents: z.number().int(),
+        lineTotalCents: z.number().int(),
+        deliveryDate: z.iso.date(),
+        substituteFor: z.string().optional(),
+      }),
+    ),
+    totalCents: z.number().int(),
+    deliveryDate: z.iso.date(),
+    delivered: amount,
+    leftover: amount,
+    co2: z.looseObject({ kg: z.number().nullable(), basis: z.enum(["product_group_average", "missing"]) }),
+    reliability: z.number().nullable(),
+    signOff: z.array(z.string()).describe("Why a person will have to sign off this option, if they will."),
+    pros: z.array(z.string()),
+    cons: z.array(z.string()),
+    quoteLines: z.array(z.looseObject({ productId: z.string(), quantity: z.number().int(), substituteFor: z.string().optional() })),
+  }),
+);
+
+export const IntakeStepSchema = named(
+  "IntakeStep",
+  z.looseObject({
+    requestId: z.string(),
+    state: z.enum(INTAKE_STATES).describe("needs_confirmation, needs_input, options_ready, quoted, no_options or cancelled."),
+    family: z.string().describe("Product family, e.g. milk."),
+    need: NeedOutSchema,
+    amount: amount.optional().describe("The need in base units, once Dock could work it out."),
+    concerns: z.array(ConcernSchema).describe("needs_confirmation: likely mistakes the buyer must confirm or correct."),
+    questions: z.array(QuestionSchema).describe("needs_input: at most two questions for the buyer."),
+    fromMemory: z.array(MemoryNoteSchema).describe("Answers Dock took from the kitchen's memory instead of asking."),
+    rules: z.array(z.looseObject({ text: z.string(), source: z.enum(["mandate", "request", "stated"]), preferenceId: z.string().optional() })),
+    options: z.array(OptionCardSchema).describe("options_ready: the choices, with pros and cons."),
+    preselected: z.looseObject({ optionId: z.string(), reason: z.string(), source: z.enum(["request", "answer", "stated", "learned"]) }).optional(),
+    notes: z.array(z.string()),
+    excluded: z.array(z.looseObject({ productId: z.string(), reason: z.string() })),
+    acknowledgements: z.array(z.looseObject({ key: z.string(), code: z.string(), action: z.enum(["confirmed", "corrected", "cancelled"]), correctionId: z.string().optional(), by: z.string(), at: z.iso.datetime() })),
+    chosen: z.looseObject({ optionId: z.string(), labels: z.array(z.string()), by: z.string(), at: z.iso.datetime() }).optional(),
+    quote: QuoteResultSchema.optional().describe("quoted: the signed quote and the gate's preview."),
+    next: z.looseObject({ method: z.string(), path: z.string(), example: z.unknown() }).describe("The REST call to make next, with an example body."),
+  }),
+);
+
+export const KitchenSchema = named(
+  "Kitchen",
+  z.looseObject({
+    orgId: z.string(),
+    name: z.string(),
+    deliveryWeekdays: z.array(z.number().int()).describe("ISO weekdays the kitchen takes deliveries, 1 = Monday."),
+    stated: z.array(z.looseObject({ id: z.string(), kind: z.string(), text: z.string(), statedBy: z.string(), statedAt: z.iso.datetime() })).describe("Rules people stated for this kitchen."),
+    families: z.array(
+      z.looseObject({
+        family: z.string(),
+        orders: z.number().int(),
+        usual: z.looseObject({ amount: z.number(), unit: z.string(), text: z.string() }),
+        lastOrder: z.record(z.string(), z.unknown()),
+        learned: z.array(z.looseObject({ kind: z.string(), text: z.string() })).describe("Patterns Dock learned from the history."),
+      }),
+    ),
+    recentHistory: z.array(z.record(z.string(), z.unknown())),
+  }),
+);
+
+// ---------- the approver's phone and the big screen ----------
+
+export const ApprovalViewSchema = named(
+  "ApprovalView",
+  z.looseObject({
+    approvalId: z.string(),
+    state: z.enum(["pending", "committed", "declined", "not_placed"]),
+    kitchenName: z.string(),
+    agentName: z.string(),
+    approverName: z.string(),
+    approverRoleLabel: z.string(),
+    items: z.array(z.looseObject({ name: z.string(), amount: z.string(), packs: z.string(), lineTotal: z.string(), delivery: z.string(), substituteFor: z.string().optional() })),
+    total: z.string(),
+    totalCents: z.number().int(),
+    delivery: z.string(),
+    why: z.array(z.string()).describe("Why this person is asked, in plain words."),
+    differences: z.array(z.string()).describe("What differs from what was asked for."),
+    priceHeldUntil: z.iso.datetime(),
+    signIn: z.enum(["passkey", "demo_tap", "link_token"]).describe("How this approver signs."),
+    demoTapEnabled: z.boolean(),
+    viewerIsApprover: z.boolean(),
+    outcome: z.looseObject({ decision: z.enum(["approved", "declined"]), signedBy: z.string(), at: z.iso.datetime(), method: z.string(), verified: z.boolean(), note: z.string().optional() }).optional(),
+    details: z.looseObject({ approvalId: z.string(), orderId: z.string(), quoteId: z.string(), orgId: z.string(), agentId: z.string(), mandateId: z.string(), orderDigest: z.string() }),
+  }),
+);
+
+export const SandboxSchema = named(
+  "Sandbox",
+  z.looseObject({
+    sandboxId: z.string(),
+    kitchenName: z.string(),
+    city: z.string(),
+    approverName: z.string(),
+    agentName: z.string(),
+    orgId: z.string(),
+    agentId: z.string(),
+    role: z.string(),
+    roleLabel: z.string(),
+    passkey: z.boolean().describe("false only for the demo-only join without a passkey."),
+    perOrderLimitCents: z.number().int(),
+    weeklyBudgetCents: z.number().int(),
+    createdAt: z.iso.datetime(),
+    expiresAt: z.iso.datetime(),
+  }),
+);
+
+export const DockEventSchema = named(
+  "DockEvent",
+  z.looseObject({
+    id: z.number().int().describe("Also the SSE event id; send it back as Last-Event-ID to resume."),
+    type: z.enum(["approval_requested", "approval_approved", "approval_declined", "order_committed", "order_rejected"]),
+    at: z.iso.datetime(),
+    orgId: z.string(),
+    orderId: z.string(),
+    approvalId: z.string().optional(),
+    totalCents: z.number().int(),
+    summary: z.string(),
+  }),
+);
+
+/** WebAuthn options JSON (W3C WebAuthn Level 3, as PublicKeyCredentialCreationOptionsJSON / RequestOptionsJSON). Pass to the browser unchanged. */
+export const WebAuthnOptionsSchema = named("WebAuthnOptions", z.looseObject({ challenge: z.string() }));

@@ -3,13 +3,16 @@ import { join, relative } from "node:path";
 import { Validator } from "@seriousme/openapi-schema-validator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { GET as openapiRoute } from "@/app/api/v1/openapi.json/route";
+import { localNow, nextDeliveryDay } from "@/core/kitchen";
 import { signMandate } from "@/core/mandate";
+import { SoftwareAuthenticator } from "@/core/test-webauthn";
+import { KITCHEN_ORG, demoKitchenKeyPair, demoKitchenMandate } from "./demo-kitchen";
 import { DEMO_ORG, demoMandate, demoOrgKeyPair } from "./dev-fixtures";
 import { localFetch } from "./local-transport";
 import { API, UNDOCUMENTED_ROUTES, buildOpenApi } from "./openapi";
 import { resetRuntime } from "./runtime";
 
-const BASE = "http://dock.test";
+const BASE = "https://dock.test";
 const V1 = join(__dirname, "..", "app", "api", "v1");
 
 /** Every exported GET/POST of every route file under src/app/api/v1, as "get /api/v1/orders/{orderId}". */
@@ -52,18 +55,33 @@ describe("real responses match the documented status codes and schemas", () => {
   });
 
   const seen = new Set<string>();
+  /** The first `data:` of a server-sent event stream (or null if the stream opened without one), then hang up. */
+  async function firstEvent(res: Response): Promise<unknown> {
+    const reader = res.body!.getReader();
+    const idle = () => new Promise<ReadableStreamReadDoneResult<Uint8Array>>((r) => setTimeout(() => r({ done: true, value: undefined }), 50));
+    let text = "";
+    for (let chunk: ReadableStreamReadResult<Uint8Array> = await reader.read(); chunk.value; chunk = await Promise.race([reader.read(), idle()])) {
+      text += new TextDecoder().decode(chunk.value);
+      if (text.includes("\ndata: ")) break;
+    }
+    await reader.cancel();
+    const data = text.split("\n").find((l) => l.startsWith("data: "));
+    return data ? JSON.parse(data.slice(6)) : null;
+  }
   async function call(method: "GET" | "POST", path: string, body?: unknown, headers: Record<string, string> = {}) {
     const res = await localFetch(new Request(BASE + path, { method, headers: { "content-type": "application/json", ...headers }, body: body === undefined ? undefined : JSON.stringify(body) }));
-    const json = await res.json();
+    const sse = res.headers.get("content-type")?.startsWith("text/event-stream");
+    const json = sse ? await firstEvent(res) : await res.json();
     const pathname = new URL(BASE + path).pathname;
     const op = API.find((o) => o.method === method.toLowerCase() && new RegExp(`^${o.path.replace(/\{\w+\}/g, "[^/]+")}$`).test(pathname));
     expect(op, `${method} ${pathname} is documented`).toBeDefined();
     const documented = op!.responses[res.status];
     expect(documented, `${method} ${op!.path} documents status ${res.status}`).toBeDefined();
-    const parsed = documented.schema.safeParse(json);
+    expect(res.headers.get("content-type")?.split(";")[0], `${method} ${op!.path} ${res.status} content type`).toBe(documented.contentType ?? "application/json");
+    const parsed = sse && json === null ? { success: true as const } : documented.schema.safeParse(json);
     expect(parsed.success ? null : parsed.error.issues, `${method} ${op!.path} ${res.status} matches its schema`).toBeNull();
     seen.add(`${op!.method} ${op!.path} ${res.status}`);
-    return { status: res.status, body: json };
+    return { status: res.status, body: json, headers: res.headers };
   }
   const agent = (method: "GET" | "POST", path: string, body?: unknown) => call(method, path, body, { authorization: `Bearer ${mandate}`, "dock-agent-id": DEMO_ORG.agentId });
 
@@ -99,6 +117,47 @@ describe("real responses match the documented status codes and schemas", () => {
     expect((await agent("GET", "/api/v1/orders/ord_nope")).status).toBe(404);
     await call("GET", `/api/v1/ledger?requestId=${requestId}`);
     await call("GET", "/api/v1/keys");
+
+    // The intake, as the returning demo kitchen: mistake check, one question, options, choice, quote.
+    const kitchenMandate = await signMandate(demoKitchenMandate(new Date()), await demoKitchenKeyPair());
+    const kitchen = (m: "GET" | "POST", path: string, body?: unknown) => call(m, path, body, { authorization: `Bearer ${kitchenMandate}`, "dock-agent-id": KITCHEN_ORG.agentId });
+    const day = nextDeliveryDay(nextDeliveryDay(localNow(new Date()).date, [1, 2, 3, 4, 5])!, [1, 2, 3, 4, 5])!;
+    expect((await kitchen("POST", "/api/v1/intake", { need: { item: { text: "milk" } } })).status).toBe(400);
+    let step = (await kitchen("POST", "/api/v1/intake", { need: { item: { text: "milk", category: "milk" }, quantity: { amount: 1000, unit: "L" }, deliverBy: day }, by: "Sanna" })).body.step;
+    expect(step.state).toBe("needs_confirmation");
+    expect((await kitchen("POST", `/api/v1/intake/${step.requestId}/choice`, { by: "Sanna", optionId: "opt_1" })).status).toBe(409);
+    step = (await kitchen("POST", step.next.path, { ...step.next.example, by: "Sanna" })).body.step;
+    expect(step.state).toBe("needs_input");
+    step = (await kitchen("POST", step.next.path, { by: "Sanna", answers: [{ questionId: "optimise", optionId: "no_preference" }] })).body.step;
+    expect(step.state).toBe("options_ready");
+    step = (await kitchen("POST", step.next.path, step.next.example)).body.step;
+    expect(step.state).toBe("quoted");
+    await kitchen("GET", `/api/v1/intake/${step.requestId}`);
+    expect((await kitchen("GET", "/api/v1/intake/req_nope")).status).toBe(404);
+    await kitchen("GET", "/api/v1/kitchen");
+
+    // The approver's phone: join with a passkey, the kitchen's agent orders, sign off with the passkey.
+    const phone = new SoftwareAuthenticator(BASE);
+    const start = await call("POST", "/api/v1/join");
+    const joined = await call("POST", "/api/v1/join/verify", { response: phone.register(start.body.options) });
+    expect(joined.status).toBe(201);
+    const cookie = { cookie: joined.headers.get("set-cookie")!.split(";")[0] };
+    expect((await call("POST", "/api/v1/join/verify", {})).status).toBe(400);
+    expect((await call("GET", "/api/v1/approver")).status).toBe(401);
+    await call("GET", "/api/v1/approver", undefined, cookie);
+    const sandboxes = (await call("GET", "/api/v1/sandboxes")).body.sandboxes;
+    const placed = (await call("POST", "/api/v1/approver/demo-order", undefined, cookie)).body.order;
+    expect(placed.status).toBe("pending_approval");
+    expect((await call("POST", `/api/v1/sandboxes/${sandboxes[0].sandboxId}/demo-order`)).status).toBe(201);
+    await call("GET", `/api/v1/approvals/${placed.approvalId}`, undefined, cookie);
+    await call("GET", `/api/v1/approvals/${placed.approvalId}/link`);
+    expect((await call("POST", `/api/v1/approvals/${placed.approvalId}/challenge`, { decision: "maybe" })).status).toBe(400);
+    const challenge = (await call("POST", `/api/v1/approvals/${placed.approvalId}/challenge`, { decision: "approve" })).body.options;
+    const signed = await call("POST", `/api/v1/approvals/${placed.approvalId}`, { decision: "approve", proof: { kind: "webauthn", response: phone.assert(challenge) } });
+    expect(signed.body.view.state).toBe("committed");
+    expect((await call("POST", `/api/v1/approvals/${placed.approvalId}/challenge`, { decision: "approve" })).status).toBe(409);
+    expect((await call("GET", "/api/v1/events?scope=mine")).status).toBe(401);
+    expect((await call("GET", `/api/v1/events?since=0&approvalId=${placed.approvalId}`)).body).toMatchObject({ type: "approval_requested" });
 
     // Every documented operation was exercised at least once with a success status.
     const ok = new Set([...seen].filter((k) => /\s2\d\d$/.test(k)).map((k) => k.replace(/\s\d+$/, "")));
