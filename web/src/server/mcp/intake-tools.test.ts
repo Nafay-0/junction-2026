@@ -78,7 +78,7 @@ describe("intake tools", () => {
 
     const quoted = await call(client, "choose_option", { requestId, by: "Sanna", optionId: answered.s.step.options[0].optionId });
     expect(quoted.s).toMatchObject({ waitingFor: "agent", step: { state: "quoted", quote: { quoteToken: expect.any(String) } } });
-    expect(quoted.s.nextStep).toMatch(/place_order with step.next.example/);
+    expect(quoted.s.nextStep).toMatch(/place_order with just .*requestId/);
 
     const placed = await call(client, "place_order", quoted.s.step.next.example);
     expect(placed.isError).toBe(false);
@@ -173,5 +173,25 @@ describe("intake tools with a client that can ask the buyer (MCP elicitation)", 
     expect(r).toMatchObject({ isError: true, s: { error: { code: "buyer_declined", rule: "human_input" } } });
     expect(r.s.nextStep).toMatch(/Do not answer for them/);
     expect((await call(client, "get_intake_step", { requestId: step.requestId })).s.step.state).toBe("needs_confirmation");
+    // An explicit decline does not open the relay fallback.
+    const relayed = await call(client, "respond_to_concerns", { requestId: step.requestId, relay: true, by: "Sanna", responses: [{ key: step.concerns[0].key, choice: "confirm" }] });
+    expect(relayed.s.error).toMatchObject({ code: "buyer_declined" });
+  });
+
+  it("falls back to the agent relaying when the client closes the form unanswered (cannot show it)", async () => {
+    let shown = 0;
+    const client = await connect(kitchenAuth, () => (shown++, { action: "cancel" }));
+    const { step } = (await call(client, "submit_need", milk())).s;
+    const answer = { requestId: step.requestId, by: "Sanna", responses: [{ key: step.concerns[0].key, choice: "confirm" }] };
+
+    // relay: true before any form went unanswered changes nothing: Dock still asks through the form.
+    const early = await call(client, "respond_to_concerns", { ...answer, relay: true });
+    expect(early).toMatchObject({ isError: true, s: { error: { code: "form_not_answered", rule: "human_input" } } });
+    expect(early.s.nextStep).toMatch(/Ask the buyer.*relay: true.*Never answer for them/);
+    expect(shown).toBe(1);
+
+    const relayed = await call(client, "respond_to_concerns", { ...answer, relay: true });
+    expect(relayed.s).toMatchObject({ ok: true, step: { state: "options_ready" } });
+    expect(shown).toBe(1);
   });
 });
