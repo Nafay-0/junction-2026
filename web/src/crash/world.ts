@@ -1,4 +1,4 @@
-import { ProductSchema, type CatalogPort, type LiveOffer, type Product, type ProductQuery } from "@/core/catalog";
+import { ProductSchema, type CatalogPort, type LiveOffer, type LiveOptions, type LiveProblem, type LiveStatus, type Product, type ProductQuery } from "@/core/catalog";
 import { addDaysIso, isoWeekday, localNow } from "@/core/kitchen";
 import type { OfferSpec, WorldProduct } from "./types";
 
@@ -82,19 +82,22 @@ export class ScenarioCatalog implements CatalogPort {
     return structuredClone(hits.slice(0, q.limit ?? 20));
   }
 
-  async getLiveOffers(productIds: string[]): Promise<LiveOffer[]> {
+  async getLiveOffers(productIds: string[], options?: LiveOptions): Promise<LiveOffer[]> {
     const out: LiveOffer[] = [];
     for (const id of productIds) {
       const item = this.items.find((x) => x.product.id === id);
       if (!item?.offer) continue; // delisted: no offer
-      const { deliveryDate, orderBy, cutoffPassed } = earliestDelivery(this.now(), item.offer, this.weekdays);
+      const earliest = earliestDelivery(this.now(), item.offer, this.weekdays);
+      // A later requested date is simply delivered then; an earlier one cannot be met (the earliest date stands).
+      const deliveryDate = options?.deliveryDate && options.deliveryDate > earliest.deliveryDate ? options.deliveryDate : earliest.deliveryDate;
       out.push({
         productId: id,
         unitPriceCents: item.offer.unitPriceCents,
         availablePacks: item.offer.availablePacks,
         deliveryDate,
-        orderBy,
-        cutoffPassed,
+        ...(options?.deliveryDate ? { requestedDate: options.deliveryDate, laterThanRequested: deliveryDate > options.deliveryDate } : {}),
+        orderBy: earliest.orderBy,
+        cutoffPassed: earliest.cutoffPassed,
         logisticModel: item.offer.logistic,
         stockKnown: true,
         currency: "EUR",
@@ -102,6 +105,33 @@ export class ScenarioCatalog implements CatalogPort {
       });
     }
     return out;
+  }
+
+  /**
+   * As the partner's API answers for a requested date: a product that would have made the date but for a passed
+   * cut-off is reported cutoff_passed (Dock then refuses to quote it); one that is simply slower is
+   * later_than_requested, with its true date.
+   */
+  async getLiveStatus(productIds: string[], options?: LiveOptions): Promise<LiveStatus[]> {
+    const offers = await this.getLiveOffers(productIds, options);
+    return productIds.map((id) => {
+      const offer = offers.find((o) => o.productId === id);
+      const item = this.items.find((x) => x.product.id === id);
+      if (!offer || !item?.offer) return { productId: id, requestedDate: options?.deliveryDate, orderable: false, problems: ["unknown_product"], message: `No live offer for ${id}.` };
+      const problems: LiveProblem[] = [];
+      if (offer.availablePacks <= 0) problems.push("out_of_stock");
+      const wanted = options?.deliveryDate;
+      if (wanted && offer.deliveryDate > wanted) {
+        problems.push("later_than_requested");
+        const nominal = nextWeekday(addDaysIso(localNow(this.now()).date, item.offer.leadDays), this.weekdays);
+        if (offer.cutoffPassed && nominal <= wanted) problems.push("cutoff_passed");
+      }
+      const orderable = offer.availablePacks > 0 && !problems.includes("cutoff_passed");
+      const message = problems.length
+        ? `${id}: ${problems.join(", ")}; earliest delivery ${offer.deliveryDate}${offer.cutoffPassed ? `, the cut-off for ${wanted ?? "the nominal day"} has passed` : ""}.`
+        : `${id}: ${offer.availablePacks} packs, delivery ${offer.deliveryDate}.`;
+      return { productId: id, requestedDate: wanted, orderable, problems, offer, message };
+    });
   }
 
   /** Scripted events: a price moves, stock runs out. */

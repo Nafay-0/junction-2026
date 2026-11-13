@@ -1,6 +1,6 @@
 import { rngFor, jitter } from "../rng";
 import type { Scenario, SafetyFinding } from "../types";
-import { Ids, WEEKDAYS, briefing, human, idsOf, kitchenFor, mandateFor, need, stocked, wp, type Org } from "./kit";
+import { Ids, briefing, human, idsOf, kitchenFor, mandateFor, need, stocked, wp, type Org } from "./kit";
 
 const ORG: Org = { orgId: "org_juhlapalvelu_aamurusko", name: "Juhlapalvelu Aamurusko", kind: "wedding and party caterer", city: "Lahti" };
 const START = "2026-11-11T09:00:00Z"; // Wednesday 11:00 in Helsinki

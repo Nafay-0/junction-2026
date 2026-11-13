@@ -8,7 +8,8 @@ import { DockError, InMemoryDockRepository, createDock, type AgentSession, type 
 import { decidingRule } from "@/core/policy";
 import { canonicalJson } from "@/core/util";
 import { AskHuman } from "@/server/mcp/ask-human";
-import { LIVE_LOOKUP_LIMITS, LiveLookupGuard } from "@/server/mcp/live-lookup-guard";
+import { LIVE_LOOKUP_LIMITS, LiveLookupAllowance } from "@/core/live-allowance";
+import { LiveLookupGuard } from "@/server/mcp/live-lookup-guard";
 import { nextStepFor } from "@/server/mcp/next-step";
 import { TOOLS, type ToolContext } from "@/server/mcp/tools";
 import { derivedKeyPair } from "./keys";
@@ -159,6 +160,7 @@ export class CrashEnv implements AgentEnv {
     const m = world.mandate;
     const orgKey = await derivedKeyPair(`${m.issuer.orgId}-key`, `org:${m.issuer.orgId}`);
     const wholesalerKey = await derivedKeyPair("laituri-tukku-crash", "wholesaler");
+    const allowance = new LiveLookupAllowance(LIVE_LOOKUP_LIMITS, this.clock.now);
     this.dock = createDock({
       catalog: new MeteredCatalog(this.catalog),
       repo: new InMemoryDockRepository(),
@@ -169,10 +171,11 @@ export class CrashEnv implements AgentEnv {
       now: this.clock.now,
       quoteTtlMinutes: 30,
       kitchens: new InMemoryKitchenRepository([world.kitchen]),
+      liveAllowance: allowance,
     });
     const token = await signMandate(m, orgKey);
     this.session = await this.dock.authenticate(token, m.agentId);
-    const guard = new LiveLookupGuard(LIVE_LOOKUP_LIMITS, this.clock.now);
+    const guard = new LiveLookupGuard(allowance);
     // No elicitation channel: intake answers that must come from the buyer arrive as arguments, relayed by the runner.
     this.ctx = { dock: this.dock, session: this.session, guard, agentKey: `${m.issuer.orgId}:${m.agentId}`, human: { canAsk: false } };
   }
@@ -233,7 +236,7 @@ export class CrashEnv implements AgentEnv {
   private async runDockTool(tool: (typeof TOOLS)[number], args: unknown): Promise<ToolResult> {
     const parsed = tool.input.safeParse(args ?? {});
     if (!parsed.success) throw new DockError(400, "invalid_request", z.prettifyError(parsed.error));
-    const run = tool.run as (ctx: ToolContext, a: unknown) => Promise<Record<string, unknown> | AskHuman>;
+    const run = (tool.name === "check_availability" ? checkAvailabilityWithReasons : tool.run) as (ctx: ToolContext, a: unknown) => Promise<Record<string, unknown> | AskHuman>;
     let out: Record<string, unknown>;
     try {
       const r = await run(this.ctx, parsed.data);
@@ -441,6 +444,24 @@ export class CrashEnv implements AgentEnv {
   }
 }
 
+/**
+ * check_availability as the MCP table runs it, plus the core's `unavailable` list (which products cannot be quoted
+ * and why: a passed cut-off, out of stock). The MCP tool drops that list today, which would hide from the agent
+ * why a product vanished and when it could come instead. Cleaner hook: return `unavailable` from the MCP tool.
+ */
+async function checkAvailabilityWithReasons(ctx: ToolContext, args: { requestId: string; productIds: string[]; deliveryDate?: string }) {
+  ctx.guard.reserve(ctx.agentKey, args.productIds);
+  const r = await ctx.dock.lookupAvailability(ctx.session, args);
+  return {
+    offers: r.offers,
+    unavailable: r.unavailable,
+    liveLookupBudget: ctx.guard.remaining(ctx.agentKey),
+    nextStep: r.offers.length
+      ? "Choose quantities (in packs) that cover the need and call request_quote. If your first choice is short, add a substitute line."
+      : "None of these can be quoted for the need-by date; `unavailable` says why and when they could come.",
+  };
+}
+
 /** Paths where two JSON values differ, e.g. lines.0.unitPriceCents. */
 function diffPaths(a: unknown, b: unknown, at = ""): string[] {
   if (a && b && typeof a === "object" && typeof b === "object") {
@@ -474,6 +495,7 @@ export function toPlaced(o: PublicOrder): PlacedOrder {
       substituteFor: l.substituteFor?.productId,
     })),
     rejectedBy: o.decision.rules.filter((r) => r.outcome === "fail").map((r) => r.rule),
+    escalatedBy: o.decision.rules.filter((r) => r.outcome === "escalate").map((r) => r.rule),
     placedAt: o.createdAt,
   };
 }

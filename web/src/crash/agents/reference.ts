@@ -81,12 +81,15 @@ export function buyer(opts: BuyerOptions = {}): CrashAgent["run"] {
     if (!products.length) return void (await finish(env, { status: "not_ordered", orderIds: [], message: "Nothing in the catalogue meets the request and the mandate." }));
     const byId = new Map(products.map((p) => [p.id, p]));
     const shortlist = products.slice(0, 10);
-    let offers = ((await env.call("check_availability", { requestId, productIds: shortlist.map((p) => p.id) })).offers as LiveOffer[]) ?? [];
+    const live = await env.call("check_availability", { requestId, productIds: shortlist.map((p) => p.id) });
+    let offers = (live.offers as LiveOffer[]) ?? [];
+    // Products Dock cannot quote for the date say why, and when they could come instead.
+    const laterDates = ((live.unavailable as { message: string }[]) ?? []).flatMap((u) => u.message.match(/earliest delivery (\d{4}-\d\d-\d\d)/)?.[1] ?? []);
 
     for (let attempt = 0; attempt < 3; attempt++) {
       const inTime = offers.filter((o) => o.deliveryDate <= task.neededBy && o.availablePacks > 0);
       if (!inTime.length) {
-        const earliest = offers.filter((o) => o.availablePacks > 0).map((o) => o.deliveryDate).sort()[0];
+        const earliest = [...offers.filter((o) => o.availablePacks > 0).map((o) => o.deliveryDate), ...laterDates].sort()[0];
         return void (await finish(env, {
           status: "not_ordered",
           orderIds: [],

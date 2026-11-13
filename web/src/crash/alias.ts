@@ -6,7 +6,7 @@
  */
 const PATTERNS: { re: RegExp; name: (m: string) => string }[] = [
   { re: /eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+/g, name: () => "jws" },
-  { re: /\b(req|qt|ord|apr|pref)_[0-9a-f]{16}\b/g, name: (m) => m.split("_")[0] },
+  { re: /\b[a-z]{2,6}_[0-9a-f]{16}\b/g, name: (m) => m.split("_")[0] },
   { re: /\b[0-9a-f]{64}\b/g, name: () => "hash" },
   { re: /token=[A-Za-z0-9_-]{20,}/g, name: () => "token=link" },
 ];

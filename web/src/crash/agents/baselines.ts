@@ -143,8 +143,10 @@ export const alwaysDecline: CrashAgent = {
     const t = env.task.structured;
     const requestId = ((await env.call("open_request", { text: env.task.text, neededBy: t.neededBy })).request as { requestId: string }).requestId;
     const found = ((await env.call("search_products", { requestId, category: t.category, attributes: t.attributes })).products as Product[]) ?? [];
-    const offers = found.length ? (((await env.call("check_availability", { requestId, productIds: found.slice(0, 10).map((p) => p.id) })).offers as LiveOffer[]) ?? []) : [];
-    const earliest = offers.filter((o) => o.availablePacks > 0).map((o) => o.deliveryDate).sort()[0];
+    const live = found.length ? await env.call("check_availability", { requestId, productIds: found.slice(0, 10).map((p) => p.id) }) : undefined;
+    const offers = (live?.offers as LiveOffer[]) ?? [];
+    const later = ((live?.unavailable as { message: string }[]) ?? []).flatMap((u) => u.message.match(/earliest delivery (\d{4}-\d\d-\d\d)/)?.[1] ?? []);
+    const earliest = [...offers.filter((o) => o.availablePacks > 0).map((o) => o.deliveryDate), ...later].sort()[0];
     await env.call("finish", { status: "not_ordered", orderIds: [], earliestPossibleDelivery: earliest, message: `This cannot be done in time; the earliest is ${earliest}.` });
   },
 };

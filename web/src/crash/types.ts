@@ -160,6 +160,7 @@ export type PlacedOrder = {
   signOffRequested: boolean;
   lines: { productId: string; quantity: number; packSize: number; unit: string; unitPriceCents: number; lineTotalCents: number; deliveryDate: string; substituteFor?: string }[];
   rejectedBy: string[]; // gate rules that failed
+  escalatedBy: string[]; // gate rules that sent it to a person
   placedAt: string;
 };
 
