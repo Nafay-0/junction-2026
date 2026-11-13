@@ -71,7 +71,20 @@ const ChoiceBody = named("ChoiceBody", ChoiceInput);
 // Response bodies.
 const RequestCreated = named("RequestCreated", z.object({ request: PurchaseRequestSchema }));
 const ProductList = named("ProductList", z.object({ products: z.array(ProductOutSchema), liveCallsSoFar: z.number().int() }));
-const OfferList = named("OfferList", z.object({ offers: z.array(OfferSchema), liveCallsSoFar: z.number().int() }));
+const ClaimTokenSchema = named("SignedClaim", z.looseObject({
+  claimId: z.string(),
+  type: z.enum(["price", "availability", "origin"]),
+  productId: z.string(),
+  sha256: z.string().describe("Hex SHA-256 of the token; a quote's evidence names claims by id and this hash."),
+  token: z.string().describe("W3C Verifiable Credential secured as a compact JWS (typ vc+jwt, Ed25519), verifiable offline against /api/v1/keys."),
+  validUntil: z.iso.datetime(),
+}));
+const OfferList = named("OfferList", z.object({
+  offers: z.array(OfferSchema),
+  unavailable: z.array(z.looseObject({ productId: z.string(), problems: z.array(z.string()), message: z.string() })).optional().describe("Products that cannot be quoted now, and why (for example cutoff_passed)."),
+  claims: z.array(ClaimTokenSchema).optional().describe("With includeClaims: the signed price, availability and origin claims."),
+  liveCallsSoFar: z.number().int(),
+}));
 const OrderEnvelope = named("OrderEnvelope", z.object({ order: OrderSchema }));
 const OrderRefused = named("OrderRefused", z.object({ error: ErrorSchema, order: OrderSchema }));
 const Refusal = named("Refusal", z.union([OrderRefused, ErrorBodySchema]));
@@ -82,8 +95,9 @@ const LedgerView = named(
     verification: LedgerVerificationSchema,
     head: z.object({ seq: z.number().int(), hash: z.string() }).nullable(),
     catalog: CatalogStatsSchema,
+    view: z.enum(["buyer", "wholesaler"]).optional(),
     explanation: z.array(z.string()),
-    entries: z.array(LedgerEntrySchema),
+    entries: z.array(z.union([LedgerEntrySchema, z.looseObject({ seq: z.number().int(), at: z.string(), hash: z.string(), type: z.string(), kind: z.string(), summary: z.string() })])),
   }),
 );
 const IntakeStepEnvelope = named("IntakeStepEnvelope", z.object({ step: IntakeStepSchema }));
@@ -201,7 +215,14 @@ export const API: Operation[] = [
     description: `The partner's live service. At most ${MAX_LIVE_IDS_PER_CALL} products per call; more is refused with rule live_lookup_limit.`,
     auth: true,
     body: AvailabilityBody,
-    responses: { 200: { description: "Live offers.", schema: OfferList }, 400: err("Invalid body, or too many products (rule live_lookup_limit)."), 404: err("Unknown requestId."), ...AUTH_ERRORS },
+    responses: {
+      200: { description: "Live offers (each with the ids of its signed claims), the products that cannot be quoted and why, and with includeClaims the signed claims as vc+jwt tokens.", schema: OfferList },
+      400: err("Invalid body, or too many products (rule live_lookup_limit)."),
+      404: err("Unknown requestId."),
+      429: err("This agent's hourly allowance of live lookups is used up (rule live_lookup_limit)."),
+      503: err("The wholesaler's live service did not answer (code live_unavailable). Not a refusal: retry."),
+      ...AUTH_ERRORS,
+    },
   },
   {
     method: "post",
@@ -467,8 +488,9 @@ export const API: Operation[] = [
     params: [
       { name: "requestId", in: "query", schema: z.string() },
       { name: "orderId", in: "query", schema: z.string() },
+      { name: "view", in: "query", schema: z.enum(["buyer", "wholesaler"]) },
     ],
-    responses: { 200: { description: "Ledger view.", schema: LedgerView } },
+    responses: { 200: { description: "Ledger view. view=wholesaler: what was asked, claimed, committed and who signed, without the buyer's kitchen memory.", schema: LedgerView } },
   },
   {
     method: "get",
