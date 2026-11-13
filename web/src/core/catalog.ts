@@ -226,7 +226,8 @@ export class MeteredCatalog implements CatalogPort {
   }
 }
 
-function statusFromOffer(productId: string, offer: LiveOffer | undefined, options?: LiveOptions): LiveStatus {
+/** The status the core derives for one product from a plain offer (or its absence). Exported so wrappers around a catalogue answer for every id asked, exactly as the core would. */
+export function statusFromOffer(productId: string, offer: LiveOffer | undefined, options?: LiveOptions): LiveStatus {
   if (!offer) return { productId, requestedDate: options?.deliveryDate, orderable: false, problems: ["unknown_product"], message: `No live offer for ${productId}.` };
   const problems: LiveProblem[] = [];
   if (offer.availablePacks <= 0) problems.push("out_of_stock");

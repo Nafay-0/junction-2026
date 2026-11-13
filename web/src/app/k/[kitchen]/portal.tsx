@@ -9,6 +9,7 @@ import { DEMO_NOTE, PRODUCT_NAME } from "../../_ui/brand";
 import { Kbd } from "../../_ui/kit";
 import { day, helsinkiToday, money, shortProduct } from "../../_ui/plain";
 import { Target } from "../../_ui/target";
+import { RecallNotice } from "../../_radar/recall-notice";
 import { AssistantPanel, type Turn } from "./assistant";
 import type { KitchenChoice, KitchenInfo, LiveReply, LiveResult, Overview, PortalRequest, Product } from "./types";
 
@@ -280,6 +281,7 @@ export function Portal({ kitchen, kitchens, children }: { kitchen: KitchenInfo; 
         <p className="on-dark bg-petrol-deep px-4 py-1 text-center text-[0.8rem] leading-snug text-paper/85 sm:px-6">{DEMO_NOTE}</p>
         <Header />
         <main id="main" className="mx-auto min-w-0 max-w-[1440px] px-4 pb-24 sm:px-6 xl:px-8">
+          <RecallNotice kitchen={slug} />
           {children}
         </main>
         <footer className="border-t border-line bg-paper">

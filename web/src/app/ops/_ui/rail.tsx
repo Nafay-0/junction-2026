@@ -17,11 +17,11 @@ const NAV: { href: string; label: string; what: string; key: string }[] = [
   { href: "/ops", label: "Live", what: "Agents at the door", key: "l" },
   { href: "/ops/trace", label: "Trace", what: "One request, step by step", key: "t" },
   { href: "/ops/safeguards", label: "Safeguards", what: "The rule book as it runs", key: "s" },
+  { href: "/ops/radar", label: "Recall radar", what: "Recalls, holds, drills", key: "r" },
   { href: "/ops/control", label: "Control", what: "Suspend, resume, sign-offs", key: "c" },
   { href: "/ops/audit", label: "Audit", what: "Orders and their proof", key: "a" },
   { href: "/ops/agents", label: "Agents", what: "Licences and records", key: "g" },
   { href: "/ops/customers", label: "Customers", what: "What kitchens share", key: "u" },
-  { href: "/ops/radar", label: "Recall radar", what: "Held and recalled products", key: "r" },
   { href: "/ops/platform", label: "Platform", what: "What runs on Aiven, live", key: "p" },
 ];
 
@@ -33,7 +33,7 @@ export const OPS_DEMO_NOTE = "Demo on synthetic data, built for the Junction 202
  * the gatehouse's status (Helsinki clock, ledger chain, sign-offs waiting on a person, agents suspended), and every
  * section has a key: press g, then the letter (g l for Live, g t for Trace...).
  */
-export function Rail({ hasRadar = false }: { hasRadar?: boolean }) {
+export function Rail() {
   const path = usePathname();
   const router = useRouter();
   const now = useNow(1000);
@@ -49,7 +49,6 @@ export function Rail({ hasRadar = false }: { hasRadar?: boolean }) {
     { events: null, pollMs: 5000 },
   );
   const s = live.data;
-  const nav = NAV.filter((n) => n.href !== "/ops/radar" || hasRadar);
   const active = (href: string) => (href === "/ops" ? path === "/ops" : path.startsWith(href));
 
   // "g" then a letter jumps to a section, as in a mail client. Ignored while typing.
@@ -62,7 +61,7 @@ export function Rail({ hasRadar = false }: { hasRadar?: boolean }) {
         return;
       }
       if (armed && Date.now() - armed < 1200) {
-        const hit = NAV.find((n) => n.key === e.key && (n.href !== "/ops/radar" || hasRadar));
+        const hit = NAV.find((n) => n.key === e.key);
         armed = 0;
         if (hit) {
           e.preventDefault();
@@ -72,7 +71,7 @@ export function Rail({ hasRadar = false }: { hasRadar?: boolean }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [hasRadar, router]);
+  }, [router]);
 
   async function leave() {
     await fetch("/ops-api/session", { method: "DELETE", credentials: "same-origin" });
@@ -131,7 +130,7 @@ export function Rail({ hasRadar = false }: { hasRadar?: boolean }) {
       </div>
 
       <nav aria-label="Operations" className="flex gap-0.5 overflow-x-auto border-t border-paper/15 px-2 py-2 lg:flex-1 lg:flex-col lg:overflow-y-auto">
-        {nav.map((n) => {
+        {NAV.map((n) => {
           const on = active(n.href);
           return (
             <Link

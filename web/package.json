@@ -40,7 +40,9 @@
     "knowledge:build": "tsx scripts/knowledge-build.ts",
     "knowledge:eval": "tsx scripts/knowledge-eval.ts",
     "knowledge:publish": "tsx scripts/knowledge-publish.ts",
-    "aiven:showcase": "tsx scripts/aiven-showcase.ts"
+    "aiven:showcase": "tsx scripts/aiven-showcase.ts",
+    "radar:gtins": "tsx scripts/radar-gtins.ts",
+    "radar:check": "tsx scripts/radar-check.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.102",

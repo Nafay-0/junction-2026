@@ -1,0 +1,536 @@
+{
+ "url": "https://www.ruokavirasto.fi/takaisinvedot/",
+ "markdown": null,
+ "json": null,
+ "parsed": {
+  "requested": true,
+  "success": true,
+  "data": {
+   "items": [
+    {
+     "date": "11. marraskuuta 2026",
+     "title": "Muovisessa ensilusikassa kontaktimateriaalivirhe",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/muovisessa-ensilusikassa-kontaktimateriaalivirhe/"
+    },
+    {
+     "date": "27. lokakuuta 2026",
+     "title": "Pakastetussa chilissä kadmiumylitys",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/pakastetussa-chilissa-kadmiumylitys/"
+    },
+    {
+     "date": "26. lokakuuta 2026",
+     "title": "Proteiinivanukkaissa mahdollisesti lasinsiruja",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/proteiinivanukkaissa-mahdollisesti-lasinsiruja/"
+    },
+    {
+     "date": "9. lokakuuta 2026",
+     "title": "Kananmunien takaisinveto",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/kananmunien-takaisinveto2/"
+    },
+    {
+     "date": "6. lokakuuta 2026",
+     "title": "Täytetyn patongin ainesosaluettelo virheellinen, allergeenivaara",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/taytetyn-patongin-ainesosaluettelo-virheellinen-allergeenivaara/"
+    },
+    {
+     "date": "1. lokakuuta 2026",
+     "title": "Proteiiniriisipuurossa mahdollisesti gluteenijäämiä",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/proteiiniriisipuurossa-mahdollisesti-gluteenijaamia/"
+    },
+    {
+     "date": "25. syyskuuta 2026",
+     "title": "B3-vitamiinivalmisteissa liikaa nikotiinihappoa tai inositoliheksanikotinaattia",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/b3-vitamiinivalmisteissa-liikaa-nikotiinihappoa-tai-inositoliheksanikotinaattia/"
+    },
+    {
+     "date": "17. syyskuuta 2026",
+     "title": "Jäähilejuomissa liikaa glyserolia (E 422)",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/jaahilejuomissa-liikaa-glyserolia-e-422/"
+    },
+    {
+     "date": "4. syyskuuta 2026",
+     "title": "Hasselpähkinälevitteen pakkauksessa vääränkieliset merkinnät",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/hasselpahkinalevitteen-pakkauksessa-vaarankieliset-merkinnat/"
+    },
+    {
+     "date": "28. elokuuta 2026",
+     "title": "Vegaaninen raaste saattaa sisältää maitoa",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/vegaaninen-raaste-saattaa-sisaltaa-maitoa/"
+    },
+    {
+     "date": "19. elokuuta 2026",
+     "title": "Kananmunien takaisinveto",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/kananmunien-takaisinveto/"
+    },
+    {
+     "date": "5. elokuuta 2026",
+     "title": "Rucolassa torjunta-ainejäämiä",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/rucolassa-torjunta-ainejaamia/"
+    },
+    {
+     "date": "3. elokuuta 2026",
+     "title": "Riisipuurossa mahdollisesti allergeenivaara",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/riisipuurossa-mahdollisesti-allergeenivaara/"
+    },
+    {
+     "date": "30. kesäkuuta 2026",
+     "title": "Mikroruoka-keitossa säilyvyysongelma",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/mikroruoka-keitossa-sailyvyysongelma/"
+    },
+    {
+     "date": "26. kesäkuuta 2026",
+     "title": "Kebabissa todettu sianlihaa",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/kebabissa-todettu-sianlihaa/"
+    },
+    {
+     "date": "25. kesäkuuta 2026",
+     "title": "Valurautapannusta saattaa irrota ruokaan metalleja",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/valurautapannusta-saattaa-irrota-ruokaan-metalleja/"
+    },
+    {
+     "date": "23. kesäkuuta 2026",
+     "title": "Kananmunien takaisinveto varotoimenpiteenä",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/kananmunien-takaisinveto-varotoimenpiteena/"
+    },
+    {
+     "date": "22. kesäkuuta 2026",
+     "title": "Luomukauranaksuissa yhdessä erässä hometoksiiniylitys (päivitetty 8.7.)",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/luomukauranaksuissa-yhdessa-erassa-hometoksiiniylitys/"
+    },
+    {
+     "date": "18. kesäkuuta 2026",
+     "title": "Proteiinipatukoissa allergeenivirhe; todettu jäämää kananmunasta",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/proteiinipatukoissa-allergeenivirhe-todettu-jaamaa-kananmunasta/"
+    },
+    {
+     "date": "5. kesäkuuta 2026",
+     "title": "Palvilihaleikkeleen pakkauksessa saumausvirhe; tuote voi pilaantua",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/palvilihaleikkeleen-pakkauksessa-saumausvirhe-tuote-voi-pilaantua/"
+    },
+    {
+     "date": "4. kesäkuuta 2026",
+     "title": "Silikonisista pikkulasten lautasista siirtyy liikaa orgaanisia haihtuvia yhdisteitä",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/silikonisista-pikkulasten-lautasista-siirtyy-liikaa-orgaanisia-haihtuvia-yhdisteita/"
+    },
+    {
+     "date": "28. toukokuuta 2026",
+     "title": "Proteiinipatukassa toista tuotetta; allergeenivaara (maapähkinän lisäksi soijaa ja soijalesitiiniä)",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/proteiinipatukassa-toista-tuotetta-allergeenivaara/"
+    },
+    {
+     "date": "25. toukokuuta 2026",
+     "title": "Sinimailasen iduissa salmonellaepäily",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/sinimailasen-iduissa-salmonellaepaily/"
+    },
+    {
+     "date": "21. toukokuuta 2026",
+     "title": "Kuivatuissa viikunoissa yhdessä erässä hometoksiiniylitys",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/kuivatuissa-viikunoissa-yhdessa-erassa-hometoksiiniylitys/"
+    },
+    {
+     "date": "15. toukokuuta 2026",
+     "title": "Jäätelökakun merkinnöistä puuttuu tieto kananmunasta suomen kielellä",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/jaatelokakun-merkinnoista-puuttuu-tieto-kananmunasta-suomen-kielella/"
+    },
+    {
+     "date": "15. toukokuuta 2026",
+     "title": "Toisessakin valmisateriassa ilmoittamatonta sinapinsiementä",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/toisessakin-valmisateriassa-ilmoittamatonta-sinapinsiementa/"
+    },
+    {
+     "date": "13. toukokuuta 2026",
+     "title": "Valmisateriassa ilmoittamatonta sinappia",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/valmisateriassa-ilmoittamatonta-sinappia/"
+    },
+    {
+     "date": "12. toukokuuta 2026",
+     "title": "Kiivissä torjunta-ainejäämää myös toisessa erässä",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/kiivissa-torjunta-ainejaamaa/"
+    },
+    {
+     "date": "21. huhtikuuta 2026",
+     "title": "Proteiinijuomassa säilyvyysongelma",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/proteiinijuomassa-sailyvyysongelma/"
+    },
+    {
+     "date": "2. huhtikuuta 2026",
+     "title": "Kaurajuoma kahviin 2,5 dl -tuotteessa säilyvyysongelma",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/kaurajuoma-kahviin-25-dl--tuotteessa-sailyvyysongelma/"
+    },
+    {
+     "date": "1. huhtikuuta 2026",
+     "title": "Proteiinipatukassa allergeenivirhe; todettu jäämää kananmunasta - takaisinveto laajenee uusiin patukoihin ja proteiinijauheisiin",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/proteiinipatukassa-allergeenivirhe-todettu-jaamaa-kananmunasta.-takaisinveto-laajenee-uusiin-patukoihin-ja-proteiinijauheisiin"
+    },
+    {
+     "date": "27. maaliskuuta 2026",
+     "title": "Suklaalevyssä väärän tuotteen etiketti; allergeenivaara",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/suklaalevyssa-vaaran-tuotteen-etiketti-allergeenivaara/"
+    },
+    {
+     "date": "23. maaliskuuta 2026",
+     "title": "Juomalasista siirtyy liikaa lyijyä ja kadmiumia; takaisinveto laajenee",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/juomalasista-siirtyy-liikaa-lyijya-ja-kadmiumia-takaisinveto-laajenee/"
+    },
+    {
+     "date": "20. maaliskuuta 2026",
+     "title": "Proteiinipatukassa allergeenivirhe; todettu jäämää kananmunasta",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/proteiinipatukassa-allergeenivirhe-todettu-jaamaa-kananmunasta/"
+    },
+    {
+     "date": "20. maaliskuuta 2026",
+     "title": "Suklaamoussejauheen pakkauksesta puuttuvat suomen- ja ruotsinkieliset merkinnät",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/suklaamoussejauheen-pakkauksesta-puuttuvat-suomen--ja-ruotsinkieliset-merkinnat/"
+    },
+    {
+     "date": "6. maaliskuuta 2026",
+     "title": "Suodatinkahvissa vierasesineriski",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/suodatinkahvissa-vierasesineriski/"
+    },
+    {
+     "date": "2. maaliskuuta 2026",
+     "title": "Muffinssipakkauksessa toista tuotetta",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/muffinssipakkauksessa-toista-tuotetta/"
+    },
+    {
+     "date": "2. maaliskuuta 2026",
+     "title": "Suklaalevy saattaa sisältää kovia muovinpalasia",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/suklaalevy-saattaa-sisaltaa-kovia-muovinpalasia/"
+    },
+    {
+     "date": "19. helmikuuta 2026",
+     "title": "Syömäpuikkojen takaisinveto laajenee",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/syomapuikkojen-takaisinveto-laajenee/"
+    },
+    {
+     "date": "10. helmikuuta 2026",
+     "title": "Tiedote kananmunalle, maidolle ja sinapinsiemenille allergisille: Coleslaw-salaattirasiassa voi olla toisenlaista coleslaw-salaattia",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/tiedote-kananmunalle-maidolle-ja-sinapinsiemenille-allergisille-coleslaw-salaattirasiassa-voi-olla-toisenlaista-coleslaw-salaattia/"
+    },
+    {
+     "date": "9. helmikuuta 2026",
+     "title": "Yrttitee sisältää kiellettyä ainesosaa",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/yrttitee-sisaltaa-kiellettya-ainesosaa/"
+    },
+    {
+     "date": "4. helmikuuta 2026",
+     "title": "Äidinmaidonkorvikkeen takaisinvetoon lisää vielä kolme erää",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/aidinmaidonkorvikkeen-takaisinvetoon-lisaa-viela-kolme-eraa/"
+    },
+    {
+     "date": "29. tammikuuta 2026",
+     "title": "Juomalasista siirtyy liikaa lyijyä ja kadmiumia",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/juomalasista-siirtyy-liikaa-lyijya-ja-kadmiumia/"
+    },
+    {
+     "date": "26. tammikuuta 2026",
+     "title": "Syömäpuikoista siirtyy liikaa melamiinia ja formaldehydiä",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/syomapuikoista-siirtyy-liikaa-melamiinia-ja-formaldehydia/"
+    },
+    {
+     "date": "15. tammikuuta 2026",
+     "title": "Äidinmaidonkorvikkeen takaisinvetoon yksi lisätuote",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/aidinmaidonkorvikkeen-takaisinvetoon-yksi-lisatuote/"
+    },
+    {
+     "date": "5. tammikuuta 2026",
+     "title": "Äidinmaidonkorvikkeen takaisinveto laajenee",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/aidinmaidonkorvikkeen-takaisinveto-laajenee/"
+    },
+    {
+     "date": "23. joulukuuta 2025",
+     "title": "Pakastemansikoissa torjunta-ainejäämää",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/pakastemansikoissa-torjunta-ainejaamaa/"
+    },
+    {
+     "date": "19. joulukuuta 2025",
+     "title": "Täytepitkossa voi (maito) ilmoittamatta",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/taytepitkossa-voi-maito-ilmoittamatta/"
+    },
+    {
+     "date": "18. joulukuuta 2025",
+     "title": "Kidneypavuissa torjunta-ainejäämää",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/kidneypavuissa-torjunta-ainejaamaa/"
+    },
+    {
+     "date": "17. joulukuuta 2025",
+     "title": "Piparkakuissa mahdollisesti muovinpaloja",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/piparkakuissa-mahdollisesti-muovinpaloja/"
+    },
+    {
+     "date": "10. joulukuuta 2025",
+     "title": "Äidinmaidon korvikejauheen takaisinveto varotoimenpiteenä",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/aidinmaidon-korvikejauheen-takaisinveto-varotoimenpiteena/"
+    },
+    {
+     "date": "18. marraskuuta 2025",
+     "title": "Kahdessa lasten astiasetissä virheelliset merkinnät",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/kahdessa-lasten-astiasetissa-virheelliset-merkinnat/"
+    },
+    {
+     "date": "14. marraskuuta 2025",
+     "title": "Maustetut kermaperunat -pussi saattaa sisältää muovinpaloja",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/maustetut-kermaperunat-pussi-saattaa-sisaltaa-muovinpaloja/"
+    },
+    {
+     "date": "10. marraskuuta 2025",
+     "title": "Herkkusieni-kastikeaines saattaa sisältää metalli- ja kumipaloja",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/herkkusieni-kastikeaines-saattaa-sisaltaa-metalli--ja-kumipaloja/"
+    },
+    {
+     "date": "10. marraskuuta 2025",
+     "title": "Pastakauhasta siirtyy aromaattisia amiineja (PAA)",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/pastakauhasta-siirtyy-aromaattisia-amiineja-paa/"
+    },
+    {
+     "date": "10. marraskuuta 2025",
+     "title": "Konvehtirasiassa vääriä konvehteja",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/konvehtirasiassa-vaaria-konvehteja/"
+    },
+    {
+     "date": "6. marraskuuta 2025",
+     "title": "Lastenruokapurkissa muovinpalariski",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/lastenruokapurkissa-muovinpalariski/"
+    },
+    {
+     "date": "5. marraskuuta 2025",
+     "title": "Kuivatussa merilevässä puutteelliset käyttöohjeet",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/kuivatussa-merilevassa-puutteelliset-kayttoohjeet/"
+    },
+    {
+     "date": "27. lokakuuta 2025",
+     "title": "Lasten kauranaksuissa kovia paloja",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/lasten-kauranaksuissa-kovia-paloja/"
+    },
+    {
+     "date": "8. lokakuuta 2025",
+     "title": "Maitosuklaalevyssä ilmoittamatonta hasselpähkinää",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/maitosuklaalevyssa-ilmoittamatonta-hasselpahkinaa/"
+    },
+    {
+     "date": "30. syyskuuta 2025",
+     "title": "Metallimukista saattaa irrota raskasmetalleja",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/metallimukista-saattaa-irrota-raskasmetalleja/"
+    },
+    {
+     "date": "30. heinäkuuta 2025",
+     "title": "Takaisinveto: Hedelmäsalaatissa metallihiukkasten riski",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/takaisinveto-hedelmasalaatissa-metallihiukkasten-riski/"
+    },
+    {
+     "date": "29. heinäkuuta 2025",
+     "title": "Ravintolisässä allergeenivaara (kananmuna)",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/ravintolisassa-allergeenivaara-kananmuna/"
+    },
+    {
+     "date": "23. heinäkuuta 2025",
+     "title": "Suklaassa salmonellariski",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/suklaassa-salmonellariski/"
+    },
+    {
+     "date": "11. heinäkuuta 2025",
+     "title": "Takaisinveto: Lihapyöryköissä mahdollisesti luunpaloja",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/takaisinveto-lihapyorykoissa-mahdollisesti-luunpaloja/"
+    },
+    {
+     "date": "3. heinäkuuta 2025",
+     "title": "Tiedote maidolle allergisille: Tavallisten grillimakkaroiden pakkauksessa voi olla juustoa sisältävää makkaraa",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/tiedote-maidolle-allergisille-tavallisten-grillimakkaroiden-pakkauksessa-voi-olla-juustoa-sisaltavaa-makkaraa/"
+    },
+    {
+     "date": "25. kesäkuuta 2025",
+     "title": "Annosruuan kastikepussissa ilmoittamatonta maitoproteiinia",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/annosruuan-kastikepussissa-ilmoittamatonta-maitoproteiinia/"
+    },
+    {
+     "date": "13. toukokuuta 2025",
+     "title": "Säilykemaissitölkeissä valmistusviasta johtuva pilaantumisvaara",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/sailykemaissitolkeissa-valmistusviasta-johtuva-pilaantumisvaara/"
+    },
+    {
+     "date": "9. toukokuuta 2025",
+     "title": "Tiedote sinapille allergisille: Lihaliemijauheessa jäämiä sinapista",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/tiedote-sinapille-allergisille--lihaliemijauheessa-jaamia-sinapista2/"
+    },
+    {
+     "date": "8. toukokuuta 2025",
+     "title": "Kuorrutetuissa maapähkinöissä aflatoksiiniylitys",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/kuorrutetuissa-maapahkinoissa-aflatoksiiniylitys/"
+    },
+    {
+     "date": "7. toukokuuta 2025",
+     "title": "Lasten kauravellissä allergeenivaara (vehnä, speltti, ruis, omena ja päärynä)",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/lasten-kauravellissa-allergeenivaara-vehna-speltti-ruis-omena-ja-paaryna/"
+    },
+    {
+     "date": "6. toukokuuta 2025",
+     "title": "Tiedote sinapille allergisille: Maustesekoituksissa jäämiä sinapista",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/tiedote-sinapille-allergisille--maustesekoituksissa-jaamia-sinapista/"
+    },
+    {
+     "date": "6. toukokuuta 2025",
+     "title": "Tiedote sinapille allergisille: Lihaliemijauheessa jäämiä sinapista",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/tiedote-sinapille-allergisille--lihaliemijauheessa-jaamia-sinapista/"
+    },
+    {
+     "date": "2. toukokuuta 2025",
+     "title": "Tiedote sinapille allergisille: Kanakeitoissa jäämiä sinapista",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/tiedote-sinapille-allergisille-kanakeitoissa-jaamia-sinapista/"
+    },
+    {
+     "date": "23. huhtikuuta 2025",
+     "title": "Kaurakekseissä ilmoittamatonta maitoproteiinia",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/kaurakekseissa-ilmoittamatonta-maitoproteiinia/"
+    },
+    {
+     "date": "11. huhtikuuta 2025",
+     "title": "Lastenruokapurkissa mahdollisesti munakoisonvarren palasia",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/lastenruokapurkissa-mahdollisesti-munakoisonvarren-palasia/"
+    },
+    {
+     "date": "11. huhtikuuta 2025",
+     "title": "Piltti-lastenruoka-aterioissa okratoksiiniylitys",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/piltti-lastenruoka-aterioissa-okratoksiiniylitys/"
+    },
+    {
+     "date": "7. huhtikuuta 2025",
+     "title": "Lidlillä kaksi takaisinvetoa salmonellaepäilyn vuoksi",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/lidlilla-kaksi-takaisinvetoa-salmonellaepailyn-vuoksi/"
+    },
+    {
+     "date": "3. huhtikuuta 2025",
+     "title": "Suklaalevyissä mahdollisesti pieniä kiviä",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/suklaalevyissa-mahdollisesti-pienia-kivia/"
+    },
+    {
+     "date": "1. huhtikuuta 2025",
+     "title": "Riisipuuro saattaa sisältää gluteenia",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/riisipuuro-saattaa-sisaltaa-gluteenia/"
+    },
+    {
+     "date": "1. huhtikuuta 2025",
+     "title": "BBQ-maustetuissa siankamarasnackseissa salmonellaepäily",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/bbq-maustetuissa-siankamarasnackseissa-salmonellaepaily/"
+    },
+    {
+     "date": "27. maaliskuuta 2025",
+     "title": "Auringonkukansiemenissä salmonellariski",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/auringonkukansiemenissa-salmonellariski/"
+    },
+    {
+     "date": "27. maaliskuuta 2025",
+     "title": "Useissa auringonkukansiementä sisältävissä tuotteissa salmonellariski",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/useissa-auringonkukansiementa-sisaltavissa-tuotteissa-salmonellariski/"
+    },
+    {
+     "date": "21. maaliskuuta 2025",
+     "title": "Soijasuikaleissa aflatoksiinin riski",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/soijasuikaleissa-aflatoksiinin-riski/"
+    },
+    {
+     "date": "11. maaliskuuta 2025",
+     "title": "Proteiini-mustikkarahkassa hometta",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/proteiini-mustikkarahkassa-hometta/"
+    },
+    {
+     "date": "3. maaliskuuta 2025",
+     "title": "Muurinpohjapannusta saattaa irrota ruokaan metalleja",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/muurinpohjapannusta-saattaa-irrota-ruokaan-metalleja/"
+    },
+    {
+     "date": "27. helmikuuta 2025",
+     "title": "Kananmunissa salmonellaepäily",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/kananmunissa-salmonellaepaily/"
+    },
+    {
+     "date": "20. helmikuuta 2025",
+     "title": "Wok-kasvissekoituksessa allergeenivaara (kananmuna ja sinappi)",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/wok-kasvissekoituksessa-allergeenivaara-kananmuna-ja-sinappi/"
+    },
+    {
+     "date": "14. helmikuuta 2025",
+     "title": "Lastenruokapurkissa toista tuotetta, allergeenivaara (selleri)",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/lastenruokapurkissa-toista-tuotetta-allergeenivaara-selleri/"
+    },
+    {
+     "date": "4. helmikuuta 2025",
+     "title": "Suklaapäällysteisissä minipretzeleissä mahdollisesti terveysvaara",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/suklaapaallysteisissa-minipretzeleissa-mahdollisesti-terveysvaara/"
+    },
+    {
+     "date": "27. tammikuuta 2025",
+     "title": "Lastenruokapurkissa toista tuotetta, allergeenivaara (maito ja kananmuna)",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/lastenruokapurkissa-toista-tuotetta-allergeenivaara-maito-ja-kananmuna/"
+    },
+    {
+     "date": "22. tammikuuta 2025",
+     "title": "Valkosipulikastikkeessa allergeenien merkintävirhe (maito tai maitoproteiini, kananmuna)",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/valkosipulikastikkeessa-allergeenien-merkintavirhe-maito-tai-maitoproteiini-kananmuna/"
+    },
+    {
+     "date": "17. tammikuuta 2025",
+     "title": "Tahinissa ja halvassa salmonellariski",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/tahinissa-ja-halvassa-salmonellariski/"
+    },
+    {
+     "date": "10. tammikuuta 2025",
+     "title": "Energiajuomassa allergeenivirhe (maito tai maitoproteiini)",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/energiajuomassa-allergeenivirhe-maito-tai-maitoproteiini/"
+    },
+    {
+     "date": "1. marraskuuta 2024",
+     "title": "Pakasteankassa salmonellariski",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/pakasteankassa-salmonellariski/"
+    },
+    {
+     "date": "16. lokakuuta 2024",
+     "title": "Jalapenosäilykkeessä riski lasinpalasista",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/jalapenosailykkeessa-riski-lasinpalasista/"
+    },
+    {
+     "date": "6. syyskuuta 2024",
+     "title": "Salmiakkimakeisissa riski metallinpalasista",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/salmiakkimakeisissa-riski-metallinpalasista/"
+    },
+    {
+     "date": "26. elokuuta 2024",
+     "title": "Kananmunien takaisinveto: tuotantotilalla todettu salmonellaa",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/kananmunien-takaisinveto-tuotantotilalla-todettu-salmonellaa/"
+    },
+    {
+     "date": "17. heinäkuuta 2024",
+     "title": "Tahini-seesaminsiementahnassa salmonellariski",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/tahini--seesaminsiementahnassa-salmonellariski/"
+    },
+    {
+     "date": "15. heinäkuuta 2024",
+     "title": "Uusia eriä vedetään myynnistä - Siementuotteissa salmonellaa ja maapähkinöissä aflatoksiinia",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/siementuotteissa-salmonellaa-ja-maapahkinoissa-aflatoksiinia/"
+    },
+    {
+     "date": "4. syyskuuta 2025",
+     "title": "Pakasteaterioissa vaihtuneet ainesosamerkinnät",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot1/pakasteaterioissa-vaihtuneet-ainesosamerkinnat/"
+    },
+    {
+     "date": "12. tammikuuta 2021",
+     "title": "Hyväksymättömiä kasvikuituja sisältävien muovisten astioiden ja keittiötarvikkeiden takaisinvedot",
+     "url": "/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot1/hyvaksymattomia-kasvikuituja-sisaltavien-muovisten-astioiden-ja-keittiotarvikkeiden-takaisinvedot/"
+    }
+   ]
+  },
+  "type": "custom"
+ },
+ "metadata": {
+  "title": "Takaisinvedot",
+  "language": "fi"
+ },
+ "cache_metadata": {
+  "status": "miss",
+  "age_ms": 0
+ },
+ "key_metadata": {
+  "credits_consumed": 1,
+  "credits_remaining": 50996
+ }
+}

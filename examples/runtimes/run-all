@@ -1,0 +1,214 @@
+#!/usr/bin/env python3
+"""Run every buyer example against one Dock and write RESULTS.md, results.json and the transcripts.
+
+    examples/runtimes/run-all --url http://localhost:3000            all runtimes
+    examples/runtimes/run-all --url http://localhost:3000 --only pydantic-ai,langgraph
+
+Needs uv (Python examples) and Node 22+ (TypeScript examples run as `node buyer.ts`). Model keys come from the
+environment, or from web/.env.local when unset (only ANTHROPIC_API_KEY, OPENAI_API_KEY and GEMINI_API_KEY are
+read; values are never printed or written).
+
+The mandate: with DOCK_MANDATE and DOCK_AGENT_ID set, every example presents that one. Otherwise the runner mints
+one per runtime for the demo kitchen (mint-mandate.ts, via web/'s tsx), each naming its own agent id, signed with
+the demo kitchen's dev key or DOCK_DEMO_KITCHEN_JWK; the server must trust the same key. Transcripts never contain
+the mandate or any other signed token: every JWS is replaced with <jws>.
+"""
+
+import argparse
+import datetime as dt
+import json
+import os
+import re
+import shlex
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parent.parent
+WEB = ROOT / "web"
+REPO_URL = "https://github.com/Nafay-0/junction-2026/tree/main/examples/runtimes"
+KEYS = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY")
+
+RUNTIMES = [
+    {"slug": "pydantic-ai", "name": "Pydantic AI", "language": "Python", "package": "pydantic-ai-slim", "interface": "MCP", "cmd": ["uv", "run", "-q", "buyer.py"],
+     "notes": "MCP 2026-07-28: the gate asks the buyer through the client (elicitation_handler). Set tool_error_behavior='failed' (the default 'retry' turns the gate's refusals into retry prompts and stops the run after one retry) and include_instructions=True (the server's instructions are dropped by default). Pydantic AI warns that the elicitation handler 'will never be called' on a 2026-07-28 session; it is called."},
+    {"slug": "openai-agents", "name": "OpenAI Agents SDK", "language": "Python", "package": "openai-agents", "interface": "MCP", "cmd": ["uv", "run", "-q", "buyer.py"],
+     "notes": "No MCP elicitation in the SDK, so the model relays the buyer's answer; a require_approval callable that reads _meta['dock/humanInput'] sends those calls through the SDK's approval step (interruptions, state.approve/reject) to the scripted buyer."},
+    {"slug": "google-adk", "name": "Google ADK", "language": "Python", "package": "google-adk", "interface": "MCP", "cmd": ["uv", "run", "-q", "buyer.py"], "gemini": True,
+     "notes": "Connects with the 2025-11-25 handshake, so no elicitation; human-input tools go through ADK's require_confirmation (a second McpToolset filtered to them). ADK's experimental ADK_ENABLE_MCP_MODERN_PROTOCOL=1 negotiates 2026-07-28 but then fails on the gate's input_required result. Gemini 429/503 on the shared key: google-genai retry options set."},
+    {"slug": "claude-agent-sdk", "name": "Claude Agent SDK", "language": "TypeScript", "package": "@anthropic-ai/claude-agent-sdk", "interface": "MCP", "cmd": ["node", "buyer.ts"], "npm": True,
+     "notes": "MCP 2026-07-28 through the bundled Claude Code: onElicitation answers the gate's form. canUseTool reviews human-input tools (the SDK does not expose tool _meta, so the example reads it with one plain tools/list request). Built-in tools off, user settings not loaded."},
+    {"slug": "vercel-ai-sdk", "name": "Vercel AI SDK", "language": "TypeScript", "package": "ai", "interface": "MCP", "cmd": ["node", "buyer.ts"], "npm": True,
+     "notes": "ToolLoopAgent + @ai-sdk/mcp, MCP 2026-07-28 with onElicitationRequest; toolApproval on human-input tools. Standalone, not the project's own runner. MCP results reach the model as text (structuredContent only with an outputSchema)."},
+    {"slug": "langgraph", "name": "LangGraph", "language": "Python", "package": "langgraph", "interface": "MCP", "cmd": ["uv", "run", "-q", "buyer.py"],
+     "notes": "langchain-mcp-adapters 0.3.2 pins mcp<2 (2025-11-25), so no elicitation; HumanInTheLoopMiddleware interrupts human-input tools and the graph resumes from its checkpoint with Command(resume=...)."},
+    {"slug": "semantic-kernel-openapi", "name": "Semantic Kernel (OpenAPI, no MCP)", "language": "Python", "package": "semantic-kernel", "interface": "OpenAPI 3.1", "cmd": ["uv", "run", "-q", "buyer.py"],
+     "notes": "The REST door: tools generated from /api/v1/openapi.json, filtered to operations whose security is the mandate. Four workarounds for Semantic Kernel 1.47: inline $refs (it builds no body parameters from $ref request bodies), pass 4xx bodies through (it hides them behind 'Error running OpenAPI operation'), allow the http base URL, send reasoning_effort 'none' as extra_body for gpt-6-luna. Human-input operations are named by operationId: the OpenAPI document does not mark them."},
+]
+
+JWS = re.compile(r"eyJ[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]*){0,2}…?")  # whole or truncated JWS
+
+
+def env_local() -> dict:
+    out = {}
+    path = WEB / ".env.local"
+    if path.exists():
+        for line in path.read_text().splitlines():
+            key, _, value = line.strip().partition("=")
+            if key in KEYS and value:
+                out[key] = value.strip().strip('"').strip("'")
+    return out
+
+
+def mint(slug: str) -> tuple[str, str]:
+    out = subprocess.run(["pnpm", "-s", "exec", "tsx", str(HERE / "mint-mandate.ts"), slug], cwd=WEB, capture_output=True, text=True, check=True)
+    d = json.loads(out.stdout.strip().splitlines()[-1])
+    return d["token"], d["agentId"]
+
+
+def redact(text: str, secrets: list[str]) -> str:
+    for s in secrets:
+        if s:
+            text = text.replace(s, "<redacted>")
+    return JWS.sub("<jws>", text)
+
+
+def git(*args: str) -> str:
+    return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+
+
+def run_one(rt: dict, base: str, keys: dict, timeout: int) -> dict:
+    folder = HERE / rt["slug"]
+    if rt.get("npm") and not (folder / "node_modules").exists():
+        subprocess.run(["npm", "ci", "--no-fund", "--no-audit"], cwd=folder, check=True, capture_output=True)
+    if os.environ.get("DOCK_MANDATE") and os.environ.get("DOCK_AGENT_ID"):
+        token, agent_id = os.environ["DOCK_MANDATE"], os.environ["DOCK_AGENT_ID"]
+    else:
+        token, agent_id = mint(rt["slug"])
+    env = {**os.environ, **keys, "DOCK_URL": base, "DOCK_MANDATE": token, "DOCK_AGENT_ID": agent_id, "PYTHONUNBUFFERED": "1"}
+    if rt.get("gemini"):
+        env["GOOGLE_API_KEY"] = env.pop("GEMINI_API_KEY", env.get("GOOGLE_API_KEY", ""))
+    t0 = time.time()
+    try:
+        proc = subprocess.run(rt["cmd"], cwd=folder, env=env, capture_output=True, text=True, timeout=timeout)
+        stdout, stderr, code = proc.stdout, proc.stderr, proc.returncode
+    except subprocess.TimeoutExpired as e:
+        stdout, stderr, code = (e.stdout or b"").decode() if isinstance(e.stdout, bytes) else (e.stdout or ""), f"timed out after {timeout} s", -1
+    secrets = [token, *keys.values(), *(os.environ.get(k, "") for k in KEYS)]
+    stdout, stderr = redact(stdout, secrets), redact(stderr, secrets)
+    line = next((l for l in reversed(stdout.splitlines()) if l.startswith("RESULT ")), None)
+    result = json.loads(line[7:]) if line else {"outcome": "error", "error": (stderr.strip().splitlines() or ["no output"])[-1][:300]}
+    result.update({"date": dt.date.today().isoformat(), "slug": rt["slug"], "name": rt["name"], "language": rt["language"], "interface": rt["interface"], "agentId": agent_id,
+                   "exitCode": code, "wallSeconds": round(time.time() - t0, 1), "notes": rt["notes"]})
+    transcript = HERE / "transcripts" / f"{rt['slug']}.txt"
+    transcript.parent.mkdir(exist_ok=True)
+    header = (f"# {rt['name']} buyer against {base}\n# {dt.datetime.now().astimezone():%Y-%m-%d %H:%M %Z}, commit {git('rev-parse', '--short', 'HEAD')}\n"
+              f"# command: (cd examples/runtimes/{rt['slug']} && {shlex.join(rt['cmd'])}), agent id {agent_id}\n\n")
+    warnings = "\n".join(l for l in stderr.splitlines() if l.strip())[-4000:]
+    transcript.write_text(header + stdout + (f"\n--- stderr (last lines) ---\n{warnings}\n" if warnings else ""))
+    return result
+
+
+def fmt_refusals(r: dict) -> str:
+    refusals = r.get("refusals") or []
+    if not refusals:
+        return "none"
+    counts: dict[str, int] = {}
+    for x in refusals:
+        key = f"{x.get('code')} ({x.get('rule') or 'no rule'})"
+        counts[key] = counts.get(key, 0) + 1
+    return "; ".join(f"{k}{' x' + str(n) if n > 1 else ''}" for k, n in counts.items())
+
+
+def observations(r: dict) -> list[str]:
+    seen = []
+    if r.get("selfAnswerAttempts"):
+        seen.append(f"the model tried to answer a buyer's step itself {r['selfAnswerAttempts']}x; the runtime's approval step stopped it")
+    if r.get("retriedAfterPending"):
+        seen.append("placed the order again after pending_approval")
+    if any(x.get("rule") == "quote_signature" for x in r.get("refusals") or []):
+        seen.append("the model mangled the quoteToken it had to copy (refused by quote_signature)")
+    if r.get("outcome") not in ("committed", "pending_approval"):
+        seen.append(f"did not reach an order: {r.get('error') or r.get('outcome')}")
+    return seen
+
+
+def write_reports(results: list[dict], base: str) -> None:
+    today = dt.date.today().isoformat()
+    commit = git("rev-parse", "--short", "HEAD")
+    (HERE / "results.json").write_text(json.dumps({"date": today, "commit": commit, "baseUrl": base, "results": results}, indent=2) + "\n")
+    rows = []
+    for r in results:
+        cost = f"${r['costUsd']:.4f}" if isinstance(r.get("costUsd"), (int, float)) else "n/a"
+        ok = r.get("outcome") in ("committed", "pending_approval")
+        rows.append(f"| [{r['name']}]({r['slug']}/) | {r.get('version', '?')} | {r['interface']} | {r.get('model', '?')} | {'' if ok else '**FAILED** '}{r.get('outcome')} | "
+                    f"{r.get('steps', '?')} | {r.get('toolCalls', '?')} | {fmt_refusals(r)} | {r.get('humanInput', '?')} | {r.get('seconds', r.get('wallSeconds'))} | {cost} |")
+    total = sum(r["costUsd"] for r in results if isinstance(r.get("costUsd"), (int, float)))
+    notes = "\n".join(f"- **{r['name']}.** {r['notes']}" + "".join(f" Seen in this run: {o}." for o in observations(r)) for r in results)
+    md = f"""# Buyers on popular agent runtimes, against one gate
+
+Generated by `examples/runtimes/run-all` on {today} at commit `{commit}` against `{base}`.
+Each buyer gets the same task, "Order 1,000 litres of lactose-free milk for delivery on Monday for this kitchen; ask me if
+something needs my decision", connects with nothing but the address and a signed mandate, and runs until the order is
+committed or waits for a person's sign-off. The buyer's own decisions come from a scripted person (Sanna, the head chef),
+never from the model. Transcripts: [transcripts/](transcripts/). Gaps each runtime exposed and the fixes proposed: [GAPS.md](GAPS.md).
+
+| Runtime | Version | Interface | Model | Outcome | Steps | Tool calls | Refusals met (rule) | Buyer's answers via | Seconds | Est. cost |
+|---|---|---|---|---|---|---|---|---|---|---|
+{chr(10).join(rows)}
+
+Total estimated model cost of this run: ${total:.4f}. Steps are model requests; costs use list prices per million tokens
+(Claude Agent SDK reports its own). `pending_approval` is the expected end state: the order (about €1,322) is above
+the €100 the agent may spend alone, so the owner signs off on their phone and the agent must not retry. "elicitation"
+means the gate asked the buyer through the MCP client (MCP 2026-07-28); "relay+approval" means the model passed on the
+buyer's answer and the runtime's own approval step let the scripted buyer check it first.
+
+Every runtime presented the mandate as plain HTTP headers (`Authorization: Bearer`, `Dock-Agent-Id`); none needed a
+workaround for that. The mandate for each run names its own agent id and has a raised weekly budget (see
+`mint-mandate.ts`), so several runs fit in one week's budget on one server.
+
+## Notes per runtime
+
+{notes}
+"""
+    (HERE / "RESULTS.md").write_text(md)
+    works_with = [{
+        "runtime": r["name"], "slug": r["slug"], "language": r["language"], "package": next(x["package"] for x in RUNTIMES if x["slug"] == r["slug"]),
+        "version": r.get("version"), "interface": r["interface"], "model": r.get("model"), "outcome": r.get("outcome"),
+        "verified": r.get("outcome") in ("committed", "pending_approval"), "verifiedDate": r.get("date", today), "humanInput": r.get("humanInput"),
+        "examplePath": f"examples/runtimes/{r['slug']}", "exampleUrl": f"{REPO_URL}/{r['slug']}",
+    } for r in results]
+    target = WEB / "src" / "server" / "works-with.json"
+    old = json.loads(target.read_text()) if target.exists() else {"runtimes": []}
+    merged = {x["slug"]: x for x in old.get("runtimes", [])} | {x["slug"]: x for x in works_with}
+    order = [x["slug"] for x in RUNTIMES]
+    target.write_text(json.dumps({"generatedBy": "examples/runtimes/run-all", "commit": commit,
+                                  "runtimes": sorted(merged.values(), key=lambda x: order.index(x["slug"]) if x["slug"] in order else 99)}, indent=2) + "\n")
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--url", default=os.environ.get("DOCK_URL", "http://localhost:3000"))
+    ap.add_argument("--only", help="comma-separated slugs")
+    ap.add_argument("--timeout", type=int, default=600)
+    args = ap.parse_args()
+    base = args.url.rstrip("/")
+    keys = {k: v for k, v in env_local().items() if not os.environ.get(k)}
+    picked = [r for r in RUNTIMES if not args.only or r["slug"] in args.only.split(",")]
+    previous = json.loads((HERE / "results.json").read_text()).get("results", []) if (HERE / "results.json").exists() and args.only else []
+    results = {r["slug"]: r for r in previous}
+    for rt in picked:
+        print(f"== {rt['name']} ...", flush=True)
+        r = run_one(rt, base, keys, args.timeout)
+        results[rt["slug"]] = r
+        print(f"   {r.get('outcome')} in {r.get('seconds', r['wallSeconds'])} s, {r.get('toolCalls', '?')} tool calls, cost {r.get('costUsd')}", flush=True)
+    ordered = [results[x["slug"]] for x in RUNTIMES if x["slug"] in results]
+    write_reports(ordered, base)
+    print(f"wrote {HERE / 'RESULTS.md'}, results.json, transcripts/ and {WEB / 'src/server/works-with.json'}")
+    sys.exit(0 if all(r.get("outcome") in ("committed", "pending_approval") for r in ordered) else 1)
+
+
+if __name__ == "__main__":
+    main()
