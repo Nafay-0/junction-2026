@@ -2,12 +2,189 @@
 
 Dock speaks two open interfaces with the same operations and the same refusals:
 
-- **MCP** (Model Context Protocol) over Streamable HTTP at `/api/mcp`. Protocol revision 2026-07-28, plus the 2025-era handshake (2025-11-25 and earlier) that most clients still send.
+- **MCP** (Model Context Protocol) over Streamable HTTP at `/api/mcp`, and at a per-kitchen connector address `/api/mcp/c/<token>` for assistants that can only be given a URL (section 0). Protocol revision 2026-07-28, plus the 2025-era handshake (2025-11-25 and earlier) that most clients still send.
 - **REST** described by OpenAPI 3.1 at `/api/v1/openapi.json`.
 
 An agent that knows only the base URL can find both: `/.well-known/api-catalog` (RFC 9727), `/.well-known/dock.json` (Dock's own manifest) and `/llms.txt`.
 
 The examples use a local server. Replace `http://localhost:3000` with the deployed URL.
+
+## 0. Connect a consumer assistant with only a URL
+
+Consumer assistants (the Claude apps, ChatGPT) let a person add a remote MCP server by URL, with OAuth or with no sign-in, but not with the two request headers below. So every kitchen also has a **connector address**:
+
+```
+https://<dock>/api/mcp/c/dk_<43 random characters>
+```
+
+The token in the path stands for that kitchen's signed mandate and agent id, which stay on the server. A call through the address is exactly a call to `/api/mcp` with those headers: the same mandate check, the same gate, the same live-lookup allowance, the same human sign-off. It adds nothing. No tool approves an order, and the token is not an approval proof.
+
+| | |
+|---|---|
+| Get it | The kitchen portal's "connect your own agent" section, from `GET /ui-api/connect/<kitchen>` (address plus setup steps for each assistant). |
+| Visitor kitchens | Random at first request. Expires with the sandbox (90 minutes by default). |
+| Demo kitchens (`kaari`, `laakso`) | Derived from `DOCK_CONNECTOR_SECRET`, so the address is the same after every restart and deploy. Set it on the deployment and configure the assistant once, before the demo. Without the secret, the address is random per process. |
+| Revoke / reissue | `DELETE` / `POST /ui-api/connect/<kitchen>`. The old address stops at once (HTTP 404, and a `refusal` in the ledger). Visitor kitchens: the visitor's own phone session. Demo kitchens: `Authorization: Bearer <DOCK_CONNECTOR_SECRET>`. A revoked demo address comes back after a restart, because it is derived from configuration; change the secret to retire it for good. |
+| Ledger | A request opened through an address gets an `intake` entry with `data.step: "channel"`, `via: "connector"`, the address id (`con_…`, not the secret) and the client's User-Agent. |
+| Errors | An unknown, revoked or expired address answers **404, never 401**. A 401 with `WWW-Authenticate` makes Claude and ChatGPT start an OAuth sign-in, and Dock has none to offer. |
+
+### Limits on one address
+
+A leaked address cannot spend beyond the mandate:
+
+- Above the per-order limit, a named person signs off on their phone.
+- The weekly budget is a hard cap that no sign-off lifts.
+- Out-of-mandate products are refused.
+
+To bound load, each address also has its own limits. They come on top of the per-agent live-lookup allowance, which is shared with every other door of the same agent:
+
+| What | Limit | Refusal |
+|---|---|---|
+| HTTP requests (handshakes, `tools/list`, calls) | 120 a minute | HTTP 429 with `Retry-After` |
+| New purchase requests (`submit_need`, `open_request`) | 20 an hour | tool refusal `connector_rate_limited`, rule `connector_rate_limit` |
+| `place_order` calls, counted before the gate, so a person's phone cannot be flooded | 6 an hour | same |
+| Request body | 256 KiB | HTTP 413 |
+
+Connector refusals are written to the ledger at most once per address and reason every ten minutes, so a hammered address cannot flood it.
+
+### What the consumer assistants accept (vendors' own docs, read 2026-11-13)
+
+Most vendor pages carry no date. Where one did, it is given.
+
+| Assistant | How a user adds a server | Transport | Auth it supports | Plan | Confirmation and human input |
+|---|---|---|---|---|---|
+| **Claude** (claude.ai web, Desktop; mobile uses connectors added there) | Customize > Connectors > Add > Add custom connector: a name and the URL. Team/Enterprise: an owner adds it under Organization settings > Connectors. | Streamable HTTP (recommended); legacy SSE still accepted | No sign-in, or OAuth: CIMD ("Claude's published identity"), DCR (RFC 7591), or your own client id. PKCE S256, RFC 9728 metadata, found from a **401**. Custom headers only in a limited beta. Callback `https://claude.ai/api/mcp/auth_callback` | All plans; Free gets one custom connector | Asks before tool calls (Allow once / Always allow). Per tool: Always allow / Needs approval / Blocked; `readOnlyHint` sets the default. Anthropic does not document elicitation; "advanced or draft capabilities" are listed as unsupported. Tool results up to about 150k characters, 240 s per call. |
+| **ChatGPT** (web only) | Plugins > + > Add custom MCP server: name, URL, Authentication "No authentication", tick "I understand and want to continue", Create as a plugin, install. Use with `@` in the prompt box. | SSE and Streamable HTTP | No auth, OAuth (static client, CIMD `https://chatgpt.com/oauth/client.json`, then DCR; PKCE S256; RFC 9728; RFC 9207 `iss`), or mixed per tool. No custom API keys or headers. Callback `https://chatgpt.com/connector_platform_oauth_redirect` | Write tools: Business and Enterprise/Edu (on Business, admins and owners create). Pro: read/fetch tools only. Plus: not stated. | "Write actions by default require confirmation"; a tool without `readOnlyHint` counts as a write. Elicitation is recommended by the Apps SDK docs, but how ChatGPT shows it is not documented. ChatGPT reads the server's `instructions`. |
+| **Gemini app** | Settings > Connected Apps > Custom apps > Add a custom app (web; works on mobile once added) | not stated | DCR, or client credentials under Advanced features. No-auth servers are not mentioned. | 18+, **in the US**, personal account, English only. Not available in Finland. | "Gemini requires manual confirmation for any write actions." |
+| **Gemini CLI** | `gemini mcp add --transport http dock <url>`, or `mcpServers.dock.httpUrl` in `settings.json` | stdio, SSE (`url`), Streamable HTTP (`httpUrl`) | `headers` (so the header route works too), OAuth discovered on 401 with DCR | Since 18 June 2026 only with a paid Gemini API key or Code Assist Standard/Enterprise; free and Google One users were moved to Antigravity CLI | Asks per tool call unless `trust: true`. Elicitation is not documented, and the client source registers only `roots`. |
+| **Claude Code** | `claude mcp add --transport http dock <url>` | Streamable HTTP, SSE, stdio | Headers, OAuth | any | Asks per tool unless allowed. Elicitation forms are shown "only in interactive terminal sessions". Headless (`-p`), forms come back `cancel`. |
+
+So a plain URL is enough for the leading assistants: Claude on every plan, ChatGPT on Business/Enterprise, Claude Code, and Gemini CLI. **Dock does not implement OAuth.** The one consumer assistant that seems to need it, the Gemini app, is not offered in Finland anyway.
+
+Sources:
+- Claude:
+  - [add an unlisted connector](https://claude.com/docs/connectors/custom/add-unlisted)
+  - [authentication](https://claude.com/docs/connectors/building/authentication)
+  - [lazy authentication](https://claude.com/docs/connectors/building/lazy-authentication)
+  - [building](https://claude.com/docs/connectors/building)
+  - [getting started](https://claude.com/docs/connectors/getting-started)
+  - [troubleshooting](https://claude.com/docs/connectors/building/troubleshooting)
+  - [help centre: custom connectors](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp) (updated late October 2026)
+  - [help centre: connectors on mobile](https://support.claude.com/en/articles/11176164) (updated the week of 9 November 2026)
+- ChatGPT:
+  - [help centre: custom MCP servers](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt) (updated about 27 October 2026)
+  - [developer mode](https://developers.openai.com/api/docs/guides/developer-mode)
+  - [Apps SDK auth](https://developers.openai.com/apps-sdk/build/auth)
+- Gemini:
+  - [Gemini app custom apps](https://support.google.com/gemini/answer/17209137)
+  - [Gemini CLI MCP](https://geminicli.com/docs/tools/mcp-server) (updated 6 October 2026)
+  - [move to Antigravity CLI](https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli) (19 May 2026)
+- Other:
+  - [Claude Code MCP](https://code.claude.com/docs/en/mcp)
+  - [MCP authorization](https://modelcontextprotocol.io/specification/latest/basic/authorization) (revision 2026-07-28: authorization is optional; a server that uses it must publish RFC 9728 metadata; CIMD preferred, DCR deprecated)
+
+Menus move. Check the vendor page if a label differs.
+
+### Setup in two minutes, once the app is at its public HTTPS address
+
+Copy the kitchen's connector address from the portal ("connect your own agent"), or:
+
+```bash
+curl -s https://jolly-wondrous-bunny.eur-1.aiven.app/ui-api/connect/kaari | jq -r .connector.url
+```
+
+**Claude (claude.ai or Claude Desktop, any plan)**
+
+1. Sign in at claude.ai, or open Claude Desktop.
+2. Open **Customize > Connectors**, click **Add**, then **Add custom connector**.
+3. Fill in:
+   - **Name:** `Dock (Ravintola Kaari)`
+   - **Remote MCP server URL:** paste the address.
+4. Click **Continue**. If Claude asks how to sign in, choose **No sign-in**. Then click **Add**, then **Connect**.
+5. Optional, to avoid a prompt on every step: go to **Customize > Connectors > Dock > Tool permissions** and set the read tools to **Always allow**. Leave `place_order` on **Needs approval** if you want Claude to ask before ordering.
+6. Start a new chat. Check that Dock is switched on under **+ > Connectors**.
+7. Type: *"Using Dock, order 1,000 litres of lactose-free milk for our kitchen, delivered by Monday."* Click **Allow once** (or **Always allow**) when Claude asks to use a Dock tool.
+8. Answer the question Claude relays from Dock ("1,000 L where you usually order about 100 L?").
+9. Pick an option. The approver's phone (or the portal's sign-off QR code) then asks for the sign-off.
+
+The connector also shows up in the Claude mobile app at its next sign-in.
+
+**ChatGPT (web; Business or Enterprise/Edu workspace, as an admin or owner on Business)**
+
+1. Sign in at chatgpt.com in a browser.
+2. Open **Plugins**, click **+**, then **Add custom MCP server**.
+3. Fill in:
+   - **Name:** `Dock (Ravintola Kaari)`
+   - **Server URL:** paste the address.
+   - **Authentication:** **No authentication**.
+4. Tick **I understand and want to continue**, click **Create as a plugin**, then install it.
+5. In a new chat, type **@** and pick **Dock**, then the same request as above.
+6. ChatGPT asks you to confirm each write step (`submit_need`, `respond_to_concerns`, `choose_option`, `place_order`). Confirm each one. Answer Dock's question when ChatGPT relays it.
+
+On a Pro account, ChatGPT connects only read/fetch tools, so it cannot order.
+
+**Claude Code / Gemini CLI**
+
+```bash
+claude mcp add --transport http dock <address>
+gemini mcp add --transport http dock <address>   # needs a paid Gemini API key or Code Assist Standard/Enterprise
+```
+
+### What was proven, and with which client (local server, 13 November 2026)
+
+| Client | Result |
+|---|---|
+| Stock `@modelcontextprotocol/client`, given only the URL: no headers, no elicitation, the 2025-11-25 handshake a consumer assistant uses (`scripts/connector-smoke.ts`) | 14 tools, none that approves. Ran mandate, need, the mistake check relayed, options, quote and order, to `pending_approval` with "Do not retry". |
+| Claude Code 2.1.323 (`claude -p --mcp-config` with only `{"type":"http","url":…}`, model Opus) | **Turn 1:** it called `read_mandate` and `submit_need`, then stopped. It put Dock's question to the user ("Did you mean 100 L?") with both choices and did not answer it. **Turn 2:** the user confirmed 1,000 L. Claude Code declares elicitation but cannot show forms headless, so the form came back `cancel`. It then used the `relay: true` fallback and showed the three option cards in plain euros. **Turn 3:** the user picked option 1. It called `choose_option` and `place_order` (`pending_approval`), told the user in one sentence that Jari Mäkelä must sign off on his phone, and did not retry. |
+| Gemini CLI 0.25.2 (`settings.json` with only `httpUrl`; model gemini-3.5-flash-lite, on the team's free-tier key, because the CLI's default models are retired and the 3.5-flash quota was used up) | **First run:** every Dock call failed with `no schema with key or ref "https://json-schema.org/draft/2020-12/schema"` (Ajv, draft-07 default). Dock now publishes its schemas without the `$schema` keyword; 2020-12 is MCP's default anyway. **Second run:** it relayed the mistake check correctly. It then corrupted the long signed quote token while copying it into `place_order`, three times; the gate refused each one (`quote_signature`), but the model told the user the order was sent. `place_order` now takes only `requestId` after `choose_option`. **Third run:** need, relayed check, choice, then `place_order` (`pending_approval`, first try). It told the user Jari Mäkelä must sign off and did not retry. Two lapses remain, both the small model's: it chose the pre-selected cheapest option without asking, and it filled `by` with an approver's name from the mandate. |
+| Claude app, ChatGPT | Not run: no consumer account here. Follow the steps above against the deployed HTTPS address. |
+
+To check again against any address: `pnpm tsx scripts/connector-smoke.ts <address>`. It places one order, which then waits for sign-off.
+
+On a production build (`pnpm build && pnpm start`), the smoke script reaches `pending_approval` too. Revoking a demo kitchen's address without the operator secret gets 403.
+
+**Before the demo:**
+- Set `DOCK_CONNECTOR_SECRET` on the deployment. Otherwise the demo kitchens' addresses change with every restart, and the assistant has to be set up again.
+- Make sure the deployment runs this build. The public address was still serving an older build without `/api/mcp/c/…` on 13 November.
+
+### In a chat assistant: questions and sign-off
+
+Most chat assistants cannot show Dock's own form (elicitation), so the assistant relays. These rules are written for a model that has never seen Dock, and they appear in three places: the server `instructions`, each tool's description, and each result's `nextStep`.
+
+- **`waitingFor: "buyer"`:** ask the person Dock's question in plain words with its choices, stop, and pass on their reply. The original request does not count as the answer.
+- **`pending_approval`:** tell the person in one sentence who must sign off, on their own phone, and stop. Do not retry, place it again, split it, or find a way around it.
+- **A refusal is final** unless `nextStep` says how to fix it: tell the person, and do not loop.
+- **After `choose_option`, `place_order` needs only `requestId`.** Dock places the quote it signed for that request, so the model never has to copy a long signed token.
+- **`by` (the buyer's name) is optional through a connector.** When the assistant does not say, Dock records the kitchen's person "through the kitchen's connector". A chat assistant should not have to ask your name.
+- **If the client declares elicitation but closes the form unanswered** (`cancel`, as Claude Code does headless), the result is `form_not_answered`. For that request only, the agent may then ask in the chat and send the reply with `relay: true`. An explicit `decline` still stops.
+
+### The production version: how a buyer organisation would delegate to its assistant
+
+A URL that carries a secret works for a demo, and Dock keeps it narrow:
+
+- one address per kitchen
+- revocable and expiring
+- rate-limited
+- no more than the mandate
+
+It is still a bearer secret, in a place where URLs get copied and logged. Anthropic's connector guide says not to accept tokens in URLs.
+
+The production version is standard MCP authorization (OAuth 2.1), with the mandate kept as the grant:
+
+1. **The connection.** The buyer's purchasing manager adds `https://<dock>/api/mcp` (no token) in their assistant.
+   - Dock answers 401 with RFC 9728 protected-resource metadata pointing at Dock's authorization server, or at the buyer's own identity provider.
+   - The assistant identifies itself with its Client ID Metadata Document (Claude's or ChatGPT's published identity, so no registration step), with PKCE and an RFC 8707 `resource`.
+2. **The consent screen is the mandate.** The manager signs in with their organisation account and sees what they are delegating:
+   - which kitchen, and which categories
+   - the per-order limit and the weekly budget
+   - who signs off above the limit, and for how long
+   On approval, the organisation signs a mandate naming that assistant as the agent: its client id, not a made-up agent id. The access token references the mandate (scope `mandate:<id>`), is short-lived, and is bound to the client (DPoP), so a copied token is useless. Refresh tokens are revocable from the organisation's portal.
+3. **Enterprise version.** The organisation's IdP issues the assertion, using MCP's enterprise-managed authorization (an identity-assertion grant), so IT decides centrally which assistants may buy and for whom.
+4. **Nothing else changes.**
+   - The gate still checks every order in plain code against the signed mandate.
+   - Sign-off still happens on the approver's own device with a passkey.
+   - The ledger names the assistant's client id and the human who consented.
+   - Rate limits are per client and per organisation, in shared storage (the in-memory limits here are per process).
 
 ## 1. Get a mandate
 
@@ -53,7 +230,7 @@ Then ask, for example: *"Using the dock tools, order 1,000 litres of lactose-fre
 
 ## 3. Claude Desktop
 
-Claude Desktop's remote connectors expect OAuth, so Dock goes in through the `mcp-remote` bridge, which forwards custom headers. Put the headers in a file so the mandate stays out of the process list:
+The simplest way is the kitchen's connector address as a custom connector (section 0): no sign-in, no headers. To present your own mandate instead, go through the `mcp-remote` bridge, which forwards custom headers (Claude's own custom-header support is a limited beta). Put the headers in a file so the mandate stays out of the process list:
 
 ```
 # ~/.dock-headers.txt
