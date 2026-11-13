@@ -128,6 +128,7 @@ class Run:
         self.costs: dict[str, list[float]] = {}
         self.stop = threading.Event()
         self.started = time.time()
+        self.commit = git("rev-parse", "HEAD") + ("+dirty" if git("status", "--porcelain", "--untracked-files=no") else "")
         self.deadline = self.started + args.deadline_min * 60
 
     # ---------- bookkeeping ----------
@@ -183,7 +184,7 @@ class Run:
                     "--wall-s", str(a.wall_s), "--timeout-s", str(a.wall_s + 60), "--infra-retries", str(a.infra_retries),
                     "--retry-delay-s", "30" if prov == "featherless" else "20"]
         kwargs: dict = dict(app=app, image=image, workdir="/app/web", timeout=a.sandbox_timeout_s, cpu=CPU, memory=MEMORY_MIB,
-                            volumes={"/results": vol}, tags={"run": a.run_id[:63], "scenario": job["scenario"], "repeat": str(job["repeat"]), "provider": prov})
+                            volumes={"/results": vol}, env={"DOCK_COMMIT": self.commit}, tags={"run": a.run_id[:63], "scenario": job["scenario"], "repeat": str(job["repeat"]), "provider": prov})
         if prov == "scripted":
             kwargs["block_network"] = True
         else:

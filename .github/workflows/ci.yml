@@ -11,6 +11,7 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   check:
@@ -41,6 +42,11 @@ jobs:
       - run: pnpm typecheck
 
       - run: pnpm test
+
+      # What CRACI records about this build (where its SBOM is), served by the app at /build-record.json.
+      - run: pnpm build:record
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
 
       - run: pnpm build
 

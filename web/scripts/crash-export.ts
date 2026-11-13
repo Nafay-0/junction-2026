@@ -6,23 +6,32 @@
  * Reads every <dir>/summary.json + trajectories.jsonl (default: every directory under crash-results/ that has them)
  * and writes:
  *   <out>/runs/<agent>__<scenario>__s<seed>r<repeat>.json   one trajectory per file (dock-crash-trajectory/1)
- *   <out>/summary.json   { schema, generatedAt, agents: [{ agent, model, overall, licence, unsafeAttempts,
- *                          invalid, costUsd, source, scenarios: [{ id, score, outcome, report, human, economy,
- *                          safetyFactor, valid }] }] }
+ *   <out>/summary.json   { schema, generatedAt, agents: [{ agent, model, harness, overall (first repeat), ratingMean,
+ *                          worstRepeat, repeats, licence, unsafeAttempts, invalid, costUsd, secondsPerEpisode,
+ *                          questionsPerSuite, commit, failures: [{ scenario, repeat, score, reason }], source,
+ *                          scenarios: [{ id, score, outcome, report, human, economy, safetyFactor, valid }] }] }
  *   DOCK_LICENCES_FILE (default .data/licences.json): the operations portal's licence file,
  *                          { licences: [{ agentId, level, name, rating, perOrderLimitCents, substitution, why,
- *                          ratedAt, suite, crashAgent }] } (src/server/ops/licences.ts), agentId = the crash agent name.
+ *                          ratedAt, suite, crashAgent, model, harness, commit, repeats }] } (src/server/ops/licences.ts),
+ *                          agentId = the crash agent name; a running agent reaches one through a binding
+ *                          (src/server/ops/licence-gate.ts).
  * and, when DATABASE_URL is set, one telemetry.events row per suite run and per episode
  * (source 'crash-test', kind 'crashtest.score', value = score, agent_id = agent, attrs.run / attrs.scenario).
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { harnessOf, modelOf } from "@/crash/harness";
 import { LICENCE_LEVELS } from "@/crash/licence";
+import { lostPoints } from "@/crash/report";
+import type { EpisodeResult, Trajectory } from "@/crash/run";
 import { SUITE_VERSION } from "@/crash/scenarios";
 import { pgConnectionString } from "@/server/aiven/env";
 import { loadLocalEnv } from "./lib/env";
 
 type Summary = {
+  harnesses?: Record<string, string[]>;
+  episodeSeconds?: Record<string, { episodes: number; meanSeconds: number; maxSeconds: number }>;
+  run?: { commit?: string; runId?: string } | null;
   agents: {
     agent: string;
     runs: { seed: number; repeat: number; overall: number; costUsd: number | null; unsafeAttempts: number; invalid?: number; scenarios: { id: string; score: number; outcome: number; report: number; human: number; economy: number; safetyFactor: number; valid?: boolean; fingerprint: string }[] }[];
@@ -62,20 +71,43 @@ async function main() {
     const summary = JSON.parse(readFileSync(path.join(dir, "summary.json"), "utf8")) as Summary;
     const trajectories = readFileSync(path.join(dir, "trajectories.jsonl"), "utf8").split("\n").filter(Boolean);
     const models = new Map<string, string | null>();
+    // Per agent: why each scenario under 70 lost its points, read from the trajectory's own score (facts, not the
+    // agent's account); time per episode from the runner's transcript; questions to the buyer per suite run.
+    const failures = new Map<string, { scenario: string; repeat: number; score: number; reason: string }[]>();
+    const seconds = new Map<string, number[]>();
+    const questions = new Map<string, number[]>();
     for (const line of trajectories) {
-      const t = JSON.parse(line) as { agent: { name: string; model: string | null }; scenario: { id: string }; seed: number; repeat: number; agentInfo: { costUsd?: number | null } | null };
+      const t = JSON.parse(line) as Trajectory;
       models.set(t.agent.name, t.agent.model ?? models.get(t.agent.name) ?? null);
       writeFileSync(path.join(outDir, "runs", `${slug(t.agent.name)}__${t.scenario.id}__s${t.seed}r${t.repeat}.json`), line + "\n");
+      if (t.score.score < 70) {
+        const why = lostPoints({ score: t.score } as EpisodeResult) || t.score.notes.join(" ");
+        failures.set(t.agent.name, [...(failures.get(t.agent.name) ?? []), { scenario: t.scenario.id, repeat: t.repeat, score: t.score.score, reason: why.length > 240 ? `${why.slice(0, 237)}...` : why }]);
+      }
+      const tr = t.agentInfo?.transcript as { wallMs?: number } | { wallMs?: number }[] | undefined;
+      const ms = (Array.isArray(tr) ? tr : tr ? [tr] : []).reduce((sum, x) => sum + (x.wallMs ?? 0), 0);
+      if (ms) seconds.set(t.agent.name, [...(seconds.get(t.agent.name) ?? []), ms / 1000]);
+      const q = t.facts.human.filter((h) => h.kind === "question").length;
+      questions.set(t.agent.name, [...(questions.get(t.agent.name) ?? []), q]);
     }
+    const mean = (xs: number[]) => (xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10 : null);
     for (const a of summary.agents) {
       const run = a.runs[0];
       const worst = Math.min(...a.runs.map((r) => r.overall));
+      const harness = summary.harnesses?.[a.agent]?.[0] ?? harnessOf(a.agent);
+      const secs = summary.episodeSeconds?.[a.agent]?.meanSeconds ?? mean(seconds.get(a.agent) ?? []);
       agents.push({
         agent: a.agent,
-        model: models.get(a.agent) ?? null,
+        model: models.get(a.agent) ?? modelOf(a.agent),
+        harness,
         overall: run.overall,
+        ratingMean: mean(a.runs.map((r) => r.overall)),
         worstRepeat: worst,
         repeats: a.runs.length,
+        secondsPerEpisode: secs,
+        questionsPerSuite: a.runs.length ? Math.round(((questions.get(a.agent) ?? []).reduce((x, y) => x + y, 0) / a.runs.length) * 10) / 10 : null,
+        commit: summary.run?.commit ?? null,
+        failures: failures.get(a.agent) ?? [],
         licence: a.licence,
         unsafeAttempts: Math.max(...a.runs.map((r) => r.unsafeAttempts)),
         invalid: run.invalid ?? 0,
@@ -85,7 +117,7 @@ async function main() {
       });
       const level = a.licence ? LICENCE_LEVELS.find((l) => l.level === a.licence!.level) : undefined;
       if (a.licence && level) {
-        licences.push({ agentId: a.agent, level: a.licence.level, name: a.licence.name, rating: worst, perOrderLimitCents: level.perOrderLimitCents, substitution: level.substitution, why: a.licence.why, ratedAt, suite: SUITE_VERSION, crashAgent: a.agent });
+        licences.push({ agentId: a.agent, level: a.licence.level, name: a.licence.name, rating: worst, perOrderLimitCents: level.perOrderLimitCents, substitution: level.substitution, why: a.licence.why, ratedAt, suite: SUITE_VERSION, crashAgent: a.agent, model: models.get(a.agent) ?? modelOf(a.agent), harness, commit: summary.run?.commit ?? null, repeats: a.runs.length });
       }
       for (const r of a.runs) {
         const runId = `${a.agent}#s${r.seed}r${r.repeat}`;
