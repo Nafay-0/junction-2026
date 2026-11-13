@@ -27,3 +27,4 @@ If you use Claude Code, open it in this folder. It reads `CLAUDE.md` automatical
 | `CLAUDE.md` | Rules for Claude Code in this repo: agent models, goal, team workflow |
 | `research/` | Background research: event rules and judging, partner challenges, what has won before, tooling |
 | `.env.example` | Names of the environment variables the app needs |
+| `web/src/crash/` | The crash test: scenarios, scoring, agents and the licence. Run `cd web && pnpm crash:reproduce`; see [web/README.md](web/README.md#crash-test) |
