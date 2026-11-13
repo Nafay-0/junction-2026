@@ -12,14 +12,16 @@ import {
   type SignOff,
 } from "./approval";
 import type { EventPublisher } from "./events";
-import { CatalogError, ProductQuerySchema, type LiveOffer, type MeteredCatalog, type Product } from "./catalog";
+import { CatalogError, ProductQuerySchema, usableOffer, type LiveOffer, type LiveStatus, type MeteredCatalog, type Product } from "./catalog";
+import { ClaimStore, availabilityClaimInput, issueClaim, originClaimInput, priceClaimInput, refOf, type IssuedClaim } from "./claims";
 import { DockError, parse } from "./errors";
 import { InMemoryIntakeRepository, createIntakeFlow, recordCommittedOrder, type IntakeRepository } from "./intake";
 import { InMemoryKitchenRepository, type KitchenRepository } from "./kitchen";
 import { SIGN_ALG, type KeyPair } from "./keys";
 import type { Ledger, LedgerHead } from "./ledger";
+import { LiveLookupAllowance, agentKeyOf } from "./live-allowance";
 import { MandateError, verifyMandate, type Mandate, type TrustRegistry } from "./mandate";
-import { decidingRule, evaluatePolicy, type Decision, type OrderDraftLine } from "./policy";
+import { SPLIT_WINDOW_HOURS, decidingRule, evaluatePolicy, type Decision, type OrderDraftLine, type RecentOrder } from "./policy";
 import { QuoteError, QuoteRequestLineSchema, buildQuote, signQuote, verifyQuote, type Quote, type QuoteLine } from "./quote";
 import { addDays, canonicalJson, formatEur, newId } from "./util";
 
@@ -41,7 +43,14 @@ export const OpenRequestInput = z.object({
   neededBy: z.iso.date().optional(),
 });
 export const SearchInput = ProductQuerySchema.omit({ ids: true }).extend({ requestId: z.string().min(1) });
-export const AvailabilityInput = z.object({ requestId: z.string().min(1), productIds: z.array(z.string().min(1)).min(1) });
+export const AvailabilityInput = z.object({
+  requestId: z.string().min(1),
+  productIds: z.array(z.string().min(1)).min(1),
+  /** Delivery date to ask about. Default: the request's need-by date, else the earliest possible. */
+  deliveryDate: z.iso.date().optional(),
+  /** Also return the signed claims (price, availability, origin) as compact JWS tokens. Their ids are always on each offer. */
+  includeClaims: z.boolean().optional(),
+});
 export const QuoteInput = z.object({ requestId: z.string().min(1), lines: z.array(QuoteRequestLineSchema).min(1).max(20) });
 export const PlaceOrderInput = z.object({
   requestId: z.string().min(1),
@@ -82,6 +91,8 @@ export type Order = {
   lines: QuoteLine[];
   totalCents: number;
   decision: Decision;
+  /** Things the intake carried to the person signing off instead of asking the buyer first (see intake.ts). */
+  notes?: string[];
   approval?: Approval;
   /** Compact JWS signed by the wholesaler once the order is committed. */
   confirmation?: string;
@@ -196,7 +207,23 @@ export type DockDeps = {
   quoteTtlMinutes?: number;
   kitchens?: KitchenRepository; // kitchen memory: order history and preferences (see kitchen.ts)
   intakes?: IntakeRepository; // structured-need intake sessions (see intake.ts)
+  liveAllowance?: LiveLookupAllowance; // per-agent hourly allowance of live lookups (see live-allowance.ts)
+  claims?: ClaimStore; // signed claims handed out (see claims.ts)
 };
+
+/** What one live lookup found: quotable offers (with claim ids), the products that have none and why, and the claims. */
+export type LiveLookupResult = {
+  offers: LiveOffer[];
+  statuses: LiveStatus[];
+  unavailable: { productId: string; problems: LiveStatus["problems"]; message: string }[];
+  claims: IssuedClaim[];
+};
+
+/** One line about an offer for people: never prints a placeholder amount as stock. */
+export function describeOffer(o: LiveOffer): string {
+  const stock = o.stockKnown === false ? "stock not reported" : `${o.availablePacks} ${o.salesUnit ?? "packs"} in stock`;
+  return `${o.productId} ${stock} at ${formatEur(o.unitPriceCents)}/${o.salesUnit ?? "pack"}, delivery ${o.deliveryDate}${o.orderBy ? ` if ordered by ${o.orderBy.slice(0, 16).replace("T", " ")}` : ""}${o.simulated ? " (simulated)" : ""}`;
+}
 
 export type Dock = ReturnType<typeof createDock>;
 
@@ -209,6 +236,8 @@ export function createDock(deps: DockDeps) {
   const quoteTtlMinutes = deps.quoteTtlMinutes ?? 30;
   const kitchens = deps.kitchens ?? new InMemoryKitchenRepository();
   const intakes = deps.intakes ?? new InMemoryIntakeRepository();
+  const liveAllowance = deps.liveAllowance ?? new LiveLookupAllowance(undefined, now);
+  const claimStore = deps.claims ?? new ClaimStore();
   const agentActor = (s: AgentSession) => `agent:${s.agentId}`;
   const publish: EventPublisher["publish"] = (e) => {
     try {
@@ -241,6 +270,79 @@ export function createDock(deps: DockDeps) {
       .filter((o) => o.status === "committed" || o.status === "pending_approval")
       .filter((o) => Date.parse(o.createdAt) > since)
       .reduce((sum, o) => sum + o.totalCents, 0);
+  }
+
+  /** Orders of this organisation in the splitting window, for the order_splitting rule. */
+  async function recentOrders(orgId: string, excludeOrderId?: string): Promise<RecentOrder[]> {
+    const since = now().getTime() - SPLIT_WINDOW_HOURS * 3600_000;
+    return (await repo.listOrders())
+      .filter((o) => o.orgId === orgId && o.orderId !== excludeOrderId && Date.parse(o.createdAt) > since)
+      .filter((o) => o.status === "committed" || o.status === "pending_approval")
+      .map((o) => ({
+        orderId: o.orderId,
+        requestId: o.requestId,
+        placedAt: o.createdAt,
+        totalCents: o.totalCents,
+        categories: [...new Set(o.lines.map((l) => l.category))],
+        deliveryDates: [...new Set(o.lines.map((l) => l.deliveryDate))],
+        authorisedBy: o.status === "pending_approval" ? "pending" : o.approval ? "approver" : "mandate",
+      }));
+  }
+
+  /**
+   * The one way Dock asks the partner's live API: counted against the agent's hourly allowance, for the request's
+   * delivery date, with every statement signed as a claim and every problem named. A failure of the partner's
+   * service is reported as that (503, retry), not as a refusal by a rule.
+   */
+  async function liveLookup(session: AgentSession, requestId: string, productIds: string[], deliveryDate: string | undefined, why: string): Promise<LiveLookupResult> {
+    const actor = agentActor(session);
+    const ids = [...new Set(productIds)];
+    try {
+      liveAllowance.reserve(agentKeyOf(session.mandate.issuer.orgId, session.agentId), ids);
+    } catch (err) {
+      if (err instanceof DockError) throw refuse(err, actor, { requestId });
+      throw err;
+    }
+    let statuses: LiveStatus[];
+    try {
+      statuses = await catalog.getLiveStatus(ids, deliveryDate ? { deliveryDate } : undefined);
+    } catch (err) {
+      if (err instanceof CatalogError && err.code === "too_many_products") throw refuse(new DockError(400, err.code, err.message, "live_lookup_limit"), actor, { requestId });
+      if (err instanceof CatalogError) {
+        ledger.append({ type: "lookup", actor: "dock", requestId, summary: `The wholesaler's live price/availability service did not answer (${why}); nothing was looked up or refused.`, data: { source: "live", failed: true, code: err.code, productIds: ids } });
+        throw new DockError(503, "live_unavailable", `${err.message} This is the wholesaler's service, not a rule: try again in a minute.`, undefined, { retryable: true });
+      }
+      throw err;
+    }
+    const at = now();
+    const audience = session.mandate.issuer.orgId;
+    const products = await catalog.searchProducts({ ids, limit: 100 });
+    const claims: IssuedClaim[] = [];
+    const sign = async (input: Parameters<typeof issueClaim>[0]) => {
+      const c = await issueClaim(input, wholesalerKey);
+      claimStore.put(c, input.audience);
+      claims.push(c);
+      return c.claimId;
+    };
+    const offers: LiveOffer[] = [];
+    for (const st of statuses) {
+      const product = products.find((p) => p.id === st.productId);
+      const origin = product ? await sign(originClaimInput(product, at)) : undefined;
+      if (st.offer) {
+        st.offer.claims = { price: await sign(priceClaimInput(st.offer, at, audience)), availability: await sign(availabilityClaimInput(st.offer, at, audience)), origin };
+      }
+      const usable = usableOffer(st);
+      if (usable) offers.push(usable);
+    }
+    const unavailable = statuses.filter((st) => !usableOffer(st)).map((st) => ({ productId: st.productId, problems: st.problems, message: st.message }));
+    ledger.append({
+      type: "lookup",
+      actor,
+      requestId,
+      summary: `${why} for ${ids.length} product(s)${deliveryDate ? ` for delivery by ${deliveryDate}` : ""} (live call #${catalog.stats().liveCalls}): ${[...offers.map(describeOffer), ...unavailable.map((u) => `${u.productId} not quotable: ${u.problems.join(", ")}`)].join("; ")}. ${claims.length} signed claims issued.`,
+      data: { source: "live", productIds: ids, deliveryDate, offers, unavailable, claimIds: claims.map((c) => c.claimId) },
+    });
+    return { offers, statuses, unavailable, claims };
   }
 
   function refuse(error: DockError, actor: string, extra: { requestId?: string; orderId?: string } = {}): DockError {
@@ -398,25 +500,23 @@ export function createDock(deps: DockDeps) {
 
     /** Live price and availability for a short list. This is the partner's API; it is metered and capped. */
     async checkAvailability(session: AgentSession, input: z.input<typeof AvailabilityInput>): Promise<LiveOffer[]> {
-      const { requestId, productIds } = parse(AvailabilityInput, input);
-      await ownRequest(session, requestId);
-      let offers: LiveOffer[];
-      try {
-        offers = await catalog.getLiveOffers(productIds);
-      } catch (err) {
-        if (err instanceof CatalogError) throw refuse(new DockError(400, err.code, err.message, "live_lookup_limit"), agentActor(session), { requestId });
-        throw err;
-      }
-      ledger.append({
-        type: "lookup",
-        actor: agentActor(session),
-        requestId,
-        summary: `Agent checked live price and availability for ${productIds.length} product(s) (live call #${catalog.stats().liveCalls}): ${offers
-          .map((o) => `${o.productId} ${o.availablePacks} packs at ${formatEur(o.unitPriceCents)}, delivery ${o.deliveryDate}`)
-          .join("; ")}.`,
-        data: { source: "live", productIds, offers },
-      });
-      return offers;
+      return (await dock.lookupAvailability(session, input)).offers;
+    },
+
+    /**
+     * checkAvailability with everything around it: the products that cannot be quoted and why (a passed order
+     * cut-off, a sales block, no price), and, with includeClaims, the signed claims as tokens.
+     */
+    async lookupAvailability(session: AgentSession, input: z.input<typeof AvailabilityInput>): Promise<{ offers: LiveOffer[]; unavailable: LiveLookupResult["unavailable"]; claims?: IssuedClaim[] }> {
+      const { requestId, productIds, deliveryDate, includeClaims } = parse(AvailabilityInput, input);
+      const request = await ownRequest(session, requestId);
+      const r = await liveLookup(session, requestId, productIds, deliveryDate ?? request.neededBy, "Agent checked live price and availability");
+      return { offers: r.offers, unavailable: r.unavailable, ...(includeClaims ? { claims: r.claims } : {}) };
+    },
+
+    /** Signed claims Dock issued to this organisation, by id (the ids on offers and in a quote's evidence). */
+    async getClaims(session: AgentSession, claimIds: string[]): Promise<IssuedClaim[]> {
+      return claimStore.get(claimIds.slice(0, 100), session.mandate.issuer.orgId);
     },
 
     /** Ask the wholesaler for a fixed-price quote. Returns the signed quote and what the gate would decide on it now. */
@@ -425,8 +525,22 @@ export function createDock(deps: DockDeps) {
       const request = await ownRequest(session, requestId);
       const ids = [...new Set(lines.flatMap((l) => (l.substituteFor ? [l.productId, l.substituteFor] : [l.productId])))];
       let quote: Quote;
+      let claims: IssuedClaim[] = [];
       try {
-        const [products, offers] = [await catalog.searchProducts({ ids, limit: 100 }), await catalog.getLiveOffers(ids)];
+        const products = await catalog.searchProducts({ ids, limit: 100 });
+        const live = await liveLookup(session, requestId, ids, request.neededBy, "Dock asked live prices for a quote");
+        const offers = live.offers;
+        // Say why a line cannot be quoted, in the partner's terms (a passed cut-off, a sales block, no price).
+        for (const l of lines) {
+          const st = live.statuses.find((x) => x.productId === l.productId);
+          if (st && !usableOffer(st) && products.some((p) => p.id === l.productId))
+            throw new QuoteError("quote_no_offer", `${l.productId} cannot be quoted now: ${st.message}`, { productId: l.productId, problems: st.problems });
+        }
+        // The product a substitute replaces only lends its price for comparison: any priced status will do.
+        const referenceOffers = live.statuses.map((x) => x.offer).filter((o): o is LiveOffer => !!o);
+        const used = new Set(lines.map((l) => l.productId));
+        const originals = new Set(lines.map((l) => l.substituteFor).filter((x): x is string => !!x));
+        claims = live.claims.filter((c) => used.has(c.productId) || (originals.has(c.productId) && c.type === "price"));
         quote = buildQuote({
           quoteId: newId("qt"),
           buyerOrgId: session.mandate.issuer.orgId,
@@ -436,15 +550,16 @@ export function createDock(deps: DockDeps) {
           lines,
           products,
           offers,
+          referenceOffers,
           now: now(),
           ttlMinutes: quoteTtlMinutes,
+          evidence: claims.map(refOf),
         });
       } catch (err) {
         if (err instanceof QuoteError) {
-          const status = err.code === "quote_insufficient_stock" || err.code === "quote_no_offer" ? 409 : 400;
+          const status = err.code === "quote_insufficient_stock" || err.code === "quote_no_offer" || err.code === "quote_source_expired" ? 409 : 400;
           throw refuse(new DockError(status, err.code, err.message, "quote_availability", err.details), agentActor(session), { requestId });
         }
-        if (err instanceof CatalogError) throw refuse(new DockError(400, err.code, err.message, "live_lookup_limit"), agentActor(session), { requestId });
         throw err;
       }
       const quoteToken = await signQuote(quote, wholesalerKey);
@@ -453,15 +568,15 @@ export function createDock(deps: DockDeps) {
         type: "quote",
         actor: "dock",
         requestId,
-        summary: `Wholesaler quoted ${quote.quoteId}: ${quote.lines.map((l) => `${l.quantity} x ${l.productId}`).join(", ")} for ${formatEur(quote.totalCents)}${subs ? ` (${subs} substitute${subs > 1 ? "s" : ""})` : ""}, price fixed until ${quote.expiresAt.slice(11, 16)} UTC.`,
-        data: { quoteId: quote.quoteId, totalCents: quote.totalCents, expiresAt: quote.expiresAt, lines: quote.lines.map((l) => ({ productId: l.productId, quantity: l.quantity, unitPriceCents: l.unitPriceCents, substituteFor: l.substituteFor?.productId })) },
+        summary: `Wholesaler quoted ${quote.quoteId}: ${quote.lines.map((l) => `${l.quantity} x ${l.productId}`).join(", ")} for ${formatEur(quote.totalCents)}${subs ? ` (${subs} substitute${subs > 1 ? "s" : ""})` : ""}, price fixed until ${quote.expiresAt.slice(0, 16).replace("T", " ")} UTC${quote.expiresBecause === "order_cutoff" ? " (the order cut-off)" : quote.expiresBecause === "price_validity" ? " (when the price stops being valid)" : ""}; it rests on ${quote.evidence?.length ?? 0} signed claims.`,
+        data: { quoteId: quote.quoteId, totalCents: quote.totalCents, expiresAt: quote.expiresAt, expiresBecause: quote.expiresBecause, evidence: quote.evidence, lines: quote.lines.map((l) => ({ productId: l.productId, quantity: l.quantity, unitPriceCents: l.unitPriceCents, deliveryDate: l.deliveryDate, substituteFor: l.substituteFor?.productId })) },
       });
       const policyPreview = evaluatePolicy(
         session.mandate,
         { agentId: session.agentId, quote, lines: quote.lines, neededBy: request.neededBy },
-        { now: now(), spentThisWeekCents: await spentThisWeek(quote.buyerOrgId), quoteAlreadyUsed: false },
+        { now: now(), spentThisWeekCents: await spentThisWeek(quote.buyerOrgId), quoteAlreadyUsed: false, recentOrders: await recentOrders(quote.buyerOrgId) },
       );
-      return { quote, quoteToken, policyPreview };
+      return { quote, quoteToken, policyPreview, claims };
     },
 
     /** Place an order against a signed quote. Always returns the decision; refused orders are kept with their reasons. */
@@ -478,7 +593,7 @@ export function createDock(deps: DockDeps) {
       const orgId = session.mandate.issuer.orgId;
       return serialize(orgId, async () => {
         const draft = { agentId: session.agentId, quote, lines, neededBy: request.neededBy };
-        const ctx = { now: now(), spentThisWeekCents: await spentThisWeek(orgId), quoteAlreadyUsed: await repo.isQuoteUsed(quote.quoteId) };
+        const ctx = { now: now(), spentThisWeekCents: await spentThisWeek(orgId), quoteAlreadyUsed: await repo.isQuoteUsed(quote.quoteId), recentOrders: await recentOrders(orgId) };
         let decision = evaluatePolicy(session.mandate, draft, ctx);
         if (decision.outcome !== "reject" && !(await repo.claimQuote(quote.quoteId))) {
           decision = evaluatePolicy(session.mandate, draft, { ...ctx, quoteAlreadyUsed: true });
@@ -502,6 +617,8 @@ export function createDock(deps: DockDeps) {
           draftLines: lines,
           mandate: session.mandate,
         };
+        const carried = (await intakes.get(requestId))?.signOffNotes ?? [];
+        if (carried.length) order.notes = carried;
         ledger.append({
           type: "decision",
           actor: "dock",
@@ -529,7 +646,7 @@ export function createDock(deps: DockDeps) {
             orderId: order.orderId,
             approver: decision.approver,
             totalCents: order.totalCents,
-            reasons: decision.reasons,
+            reasons: [...decision.reasons, ...(order.notes ?? [])],
             link: `/approve/${order.approval.approvalId}?token=${token}`,
             sentAt: at,
           });
@@ -622,7 +739,7 @@ export function createDock(deps: DockDeps) {
         const recheck = evaluatePolicy(
           order.mandate,
           { agentId: order.agentId, quote: order.quote, lines: order.draftLines, neededBy: request?.neededBy },
-          { now: now(), spentThisWeekCents: await spentThisWeek(order.orgId, order.orderId), quoteAlreadyUsed: false },
+          { now: now(), spentThisWeekCents: await spentThisWeek(order.orgId, order.orderId), quoteAlreadyUsed: false, recentOrders: await recentOrders(order.orgId, order.orderId) },
         );
         if (recheck.outcome === "reject") {
           order.status = "rejected";
@@ -689,7 +806,7 @@ export function createDock(deps: DockDeps) {
           agentId: o.agentId,
           approver: o.approval!.approver,
           totalCents: o.totalCents,
-          reasons: o.decision.reasons,
+          reasons: [...o.decision.reasons, ...(o.notes ?? [])],
           lines: o.lines.map((l) => ({ productId: l.productId, name: l.name, quantity: l.quantity, substituteFor: l.substituteFor?.productId })),
           requestedAt: o.approval!.requestedAt,
         }));
@@ -700,6 +817,8 @@ export function createDock(deps: DockDeps) {
     },
 
     stats: () => catalog.stats(),
+    /** The per-agent hourly allowance of live lookups, shared by every transport (REST, MCP, intake). */
+    liveAllowance,
     ledger,
     wholesalerPublicJwk: wholesalerKey.publicJwk,
   };
@@ -714,6 +833,7 @@ export function createDock(deps: DockDeps) {
     now,
     openRequest: dock.openRequest,
     requestQuote: dock.requestQuote,
+    liveLookup,
     spentThisWeek: (orgId) => spentThisWeek(orgId),
   });
   return { ...dock, intake };
