@@ -327,3 +327,45 @@ function deepFreeze<T>(o: T): T {
   }
   return o;
 }
+
+describe("policy: real-data gaps", () => {
+  it("refuses a product with no allergen data when the mandate forbids an allergen: unknown is not safe", () => {
+    const q = small();
+    const unknown = { ...q, lines: q.lines.map((l) => ({ ...l, allergens: [], allergensDeclared: false })) };
+    const d = evaluatePolicy(mandate(), draft(unknown), ctx());
+    expectRejectedBy(d, "forbidden_allergens");
+    expect(rule(d, "forbidden_allergens").reason).toMatch(/no allergen data .* Unknown is not safe/);
+    // Declared data without the allergen passes; with no allergen forbidden, unknown data does not matter.
+    expect(rule(evaluatePolicy(mandate(), draft({ ...q, lines: q.lines.map((l) => ({ ...l, allergensDeclared: true })) }), ctx()), "forbidden_allergens").outcome).toBe("pass");
+    expect(rule(evaluatePolicy(mandate({ forbiddenAllergens: [] }), draft(unknown), ctx()), "forbidden_allergens").outcome).toBe("pass");
+  });
+
+  it("lets the agent choose a like-for-like substitute alone under within_preferences, and sends any other to a person", () => {
+    const like = quote([{ productId: "VA-1010", quantity: 10 }, { productId: "AR-2010", quantity: 5, substituteFor: "VA-1010" }]);
+    const m = mandate({ substitution: { rule: "within_preferences", maxPriceIncreasePct: 10 } });
+    expect(rule(evaluatePolicy(m, draft(like), ctx()), "substitution_rule")).toMatchObject({ outcome: "pass" });
+    // Marketing claims one brand states and the other does not do not make a substitute different.
+    const noisy = { ...like, lines: like.lines.map((l) => (l.substituteFor ? { ...l, substituteFor: { ...l.substituteFor, attributes: [...l.substituteFor.attributes, "additive_free", "low_salt"] } } : l)) };
+    expect(rule(evaluatePolicy(m, draft(noisy), ctx()), "substitution_rule").outcome).toBe("pass");
+    const whole = { ...like, lines: like.lines.map((l) => (l.substituteFor ? { ...l, attributes: ["lactose_free", "fat_3_5"] } : l)) };
+    const d = evaluatePolicy(m, draft(whole), ctx());
+    expect(rule(d, "substitution_rule")).toMatchObject({ outcome: "escalate" });
+    expect(rule(d, "substitution_rule").reason).toMatch(/lacks fat_1_5; has fat_3_5/);
+    expect(d.outcome).toBe("needs_human_approval");
+  });
+
+  it("sends a need split into orders under the per-order limit to a person, naming the earlier orders", () => {
+    const q = quote([{ productId: "VA-1001", quantity: 500 }]); // €745, under the €1,000 limit
+    const earlier = { orderId: "ord_a", requestId: "req_other", placedAt: addMinutes(NOW, -90).toISOString(), totalCents: 60_000, categories: ["milk"], deliveryDates: [q.lines[0].deliveryDate], authorisedBy: "mandate" as const };
+    const d = evaluatePolicy(mandate(), draft(q), ctx({ recentOrders: [earlier] }));
+    expect(rule(d, "order_splitting")).toMatchObject({ outcome: "escalate", details: { combinedCents: 134_500 } });
+    expect(rule(d, "order_splitting").reason).toMatch(/^Looks like one need split into smaller orders: with ord_a \(€600.00\)/);
+    expect(d.outcome).toBe("needs_human_approval");
+    // Not when a person signed the earlier one, when it was long ago, for another day, or when together it is within the limit.
+    for (const other of [{ ...earlier, authorisedBy: "approver" as const }, { ...earlier, placedAt: addMinutes(NOW, -60 * 25).toISOString() }, { ...earlier, deliveryDates: ["2026-12-01"] }, { ...earlier, totalCents: 10_000 }]) {
+      expect(rule(evaluatePolicy(mandate(), draft(q), ctx({ recentOrders: [other] })), "order_splitting").outcome).toBe("pass");
+    }
+    // The same request counts whatever the category or day.
+    expect(rule(evaluatePolicy(mandate(), draft(q), ctx({ recentOrders: [{ ...earlier, requestId: "req_1", categories: ["cream"], deliveryDates: ["2026-12-01"] }] })), "order_splitting").outcome).toBe("escalate");
+  });
+});

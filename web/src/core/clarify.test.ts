@@ -37,38 +37,36 @@ describe("hard constraints", () => {
 });
 
 describe("clarification", () => {
-  it("asks at most two questions, the most splitting dimension first", () => {
+  it("asks only what changes the product: not an opt-in like organic, and never the goal (the cards answer it)", () => {
     const c = run();
-    expect(c.questions.map((q) => q.id)).toEqual(["dim:fat", "dim:organic"]);
+    expect(c.questions).toEqual([]); // fat content was not mentioned and is not a safety matter: the cards span it
+    expect(c.spanned.map((q) => q.id)).toEqual(["dim:fat"]);
     expect(c.questions.length).toBeLessThanOrEqual(MAX_QUESTIONS);
-    expect(c.notAsked).toEqual(["What matters most for this order? Not asked, to keep it short: the options show each kind."]);
+    expect(c.notAsked).toEqual(["Which fat content? Not asked: you did not say, so the options show each kind."]);
+    expect(c.settled.optimise).toBeUndefined();
   });
 
-  it("gives every question a short fixed list ending in 'no preference'", () => {
-    for (const q of run().questions) {
+  it("gives every open choice a short fixed list ending in 'no preference'", () => {
+    for (const q of run().spanned) {
       expect(q.options.length).toBeLessThanOrEqual(5);
       expect(q.options.at(-1)).toEqual({ id: "no_preference", label: "No preference" });
     }
-    expect(run().questions[0].options.map((o) => o.label)).toEqual(["Fat-free (0.1 %)", "Semi-skimmed (1.5 %)", "Whole (3.5 %)", "No preference"]);
+    expect(run().spanned[0].options.map((o) => o.label)).toEqual(["Fat-free (0.1 %)", "Semi-skimmed (1.5 %)", "Whole (3.5 %)", "No preference"]);
   });
 
   it("never asks what the request already says", () => {
     const c = run({ need: need({ item: { text: "milk", category: "milk", attributes: ["fat_1_5"] }, optimise: "price" }) });
-    expect(c.questions.map((q) => q.id)).toEqual(["dim:organic"]);
+    expect(c.questions.map((q) => q.id)).toEqual([]);
     expect(c.settled.optimise).toBe("price");
   });
 
   it("does not ask what the kitchen's history answers, and says so (learned: pre-selected)", () => {
     const learned = learnPreferences(kitchen(regularHistory()), "milk");
     const c = run({ learned });
-    expect(c.questions.map((q) => q.id)).toEqual(["optimise"]);
-    expect(c.questions[0].options.map((o) => o.id)).toEqual(["price", "co2", "reliability", "no_preference"]);
-    expect(c.fromMemory.map((m) => [m.question.id, m.optionId, m.source])).toEqual([
-      ["dim:fat", "fat_1_5", "learned"],
-      ["dim:organic", "none", "learned"],
-    ]);
+    expect(c.questions).toEqual([]);
+    expect(c.fromMemory.map((m) => [m.question.id, m.optionId, m.source])).toEqual([["dim:fat", "fat_1_5", "learned"]]);
     expect(c.fromMemory[0].text).toMatch(/^Pre-selected from history: Semi-skimmed \(1.5 %\): 10 of your last 10 milk orders$/);
-    expect(c.settled).toMatchObject({ attributes: ["fat_1_5"], excludedAttributes: ["organic"] });
+    expect(c.settled).toMatchObject({ attributes: ["fat_1_5"], excludedAttributes: [] });
   });
 
   it("uses a stated optimisation preference with its tolerance, and says who set it", () => {
@@ -85,7 +83,7 @@ describe("clarification", () => {
     expect(c.questions).toEqual([]);
     expect(c.settled.attributes).toEqual([]);
     expect(c.settled.optimise).toBe("no_preference");
-    expect(c.fromMemory.map((m) => m.question.id)).toEqual(["dim:organic"]);
+    expect(c.fromMemory).toEqual([]);
   });
 
   it("does not ask about a dimension the remaining products agree on", () => {

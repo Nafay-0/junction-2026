@@ -22,19 +22,16 @@ async function call(method: string, path: string, body?: unknown, h = headers) {
 const day = () => nextDeliveryDay(nextDeliveryDay(localNow(new Date()).date, [1, 2, 3, 4, 5])!, [1, 2, 3, 4, 5])!;
 
 describe("intake over HTTP", () => {
-  it("an outside agent drives need -> concern -> question -> options -> quote -> order with structured calls only", async () => {
+  it("an outside agent drives need -> concern -> options -> quote -> order with structured calls only", async () => {
     const opened = await call("POST", "/api/v1/intake", { need: { item: { text: "milk", category: "milk" }, quantity: { amount: 1000, unit: "L" }, deliverBy: day() }, by: "Sanna" });
     expect(opened.status).toBe(201);
     let step = opened.body.step;
     expect(step.state).toBe("needs_confirmation");
 
     step = (await call("POST", step.next.path, { ...step.next.example, by: "Sanna" })).body.step;
-    expect(step.state).toBe("needs_input");
-    expect(step.questions.map((q: { id: string }) => q.id)).toEqual(["optimise"]);
+    expect(step.state).toBe("options_ready"); // memory answers the rest: no question
+    expect(step.questions).toEqual([]);
     expect(step.rules.map((r: { text: string }) => r.text)).toContain("Stated by Sanna Koskinen (head chef): Always lactose-free");
-
-    step = (await call("POST", step.next.path, { by: "Sanna", answers: [{ questionId: "optimise", optionId: "no_preference" }] })).body.step;
-    expect(step.state).toBe("options_ready");
     expect(step.options.length).toBeGreaterThanOrEqual(2);
 
     step = (await call("POST", step.next.path, step.next.example)).body.step;

@@ -209,7 +209,7 @@ async function withIntakeTools(conn: DockConnection, creds: { mandate: string; a
 describe("human-input steps", () => {
   const day = () => nextDeliveryDay(nextDeliveryDay(localNow(new Date()).date, [1, 2, 3, 4, 5])!, [1, 2, 3, 4, 5])!;
 
-  it("the buyer answers Dock's questions; the model's own attempt to answer is blocked and recorded", async () => {
+  it("the buyer answers Dock; the model's own attempt to answer is blocked and recorded", async () => {
     const creds = await demoCredentials("kitchen");
     const dock = await withIntakeTools(await connectDock(creds), creds);
     const human = scriptedHuman([
@@ -226,16 +226,17 @@ describe("human-input steps", () => {
     ]);
     const r = await runBuyerAgent({ model: fake, task: "1000 litres of milk", dock, human });
 
-    expect(human.asked.map((p) => p.kind)).toEqual(["confirmation", "questions"]);
+    // After the correction memory answers the rest, so Dock asks the buyer nothing more before the options.
+    expect(human.asked.map((p) => p.kind)).toEqual(["confirmation"]);
     const relayed = ofType(r.events, "tool_call").filter((e) => e.by === "human_relay");
-    expect(relayed.map((e) => e.name)).toEqual(["respond_to_concerns", "answer_questions"]);
+    expect(relayed.map((e) => e.name)).toEqual(["respond_to_concerns"]);
     const [v] = ofType(r.events, "violation");
     expect(v).toMatchObject({ kind: "answered_for_human", name: "answer_questions" });
     expect(r.violations).toBe(1);
-    // Dock never received the model's answer: the ledger holds only the buyer's two answers.
+    // Dock never received the model's answer: the ledger holds no answer at all.
     const { dock: d } = await getRuntime();
     const answers = d.ledger.entries().filter((e) => e.type === "intake" && (e.data as { step?: string }).step === "answer");
-    expect(answers.map((e) => (e.data as { optionId: string }).optionId)).toEqual(["no_preference"]);
+    expect(answers).toEqual([]);
     expect(r.outcome).toBe("gave_up");
   });
 

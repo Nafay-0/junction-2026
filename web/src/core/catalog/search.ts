@@ -165,6 +165,18 @@ function hasWord(tokens: string[], text: string, word: string): boolean {
   return text.includes(word);
 }
 
+/** The kinds of product a text names ("coffee", "fermented", "portion", ...): see FACETS. */
+export function facetsOf(text: string): string[] {
+  const folded = ` ${fold(text)} `;
+  const tokens = tokenize(text);
+  return FACETS.filter((f) => f.words.some((w) => hasWord(tokens, folded, w))).map((f) => f.id);
+}
+
+/** The kinds a product's names make it: coffee milk is "coffee", sour milk "fermented". Empty for a plain product. */
+export function productFacets(p: IndexedProduct): string[] {
+  return facetsOf([p.names.en, p.names.fi, p.names.sv].filter(Boolean).join(" "));
+}
+
 // ---------- the lexical backend ----------
 
 type Doc = { p: IndexedProduct; tokens: string[]; text: string; facets: Set<string>; nameLength: number };

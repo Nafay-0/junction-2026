@@ -68,7 +68,7 @@ export function refusal(err: DockError) {
 const guards = new WeakMap<Runtime, LiveLookupGuard>();
 function guardFor(rt: Runtime): LiveLookupGuard {
   let g = guards.get(rt);
-  if (!g) guards.set(rt, (g = new LiveLookupGuard()));
+  if (!g) guards.set(rt, (g = new LiveLookupGuard(rt.dock.liveAllowance))); // the core's allowance: REST and MCP share it
   return g;
 }
 
