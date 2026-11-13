@@ -138,8 +138,10 @@ How it is wired (all through the API, no Console clicks):
 - **Build**: `build_path = web`, `containerfile_path = web/Dockerfile`.
 - **Credentials**: `application_service_credential` integrations inject `DATABASE_URL`,
   `OPENSEARCH_URL`, `VALKEY_URL` and `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_SECURITY_PROTOCOL`,
-  `KAFKA_ACCESS_KEY`, `KAFKA_ACCESS_CERT`, `KAFKA_CA_CERT` (real newlines). This works even from the
-  free services, unlike every other integration type. node-postgres needs `uselibpqcompat=true` added
+  `KAFKA_ACCESS_KEY`, `KAFKA_ACCESS_CERT`, `KAFKA_CA_CERT` (real newlines). The API accepted all four
+  from the free services, unlike every other integration type, but after two redeploys their status
+  still reads `starting`, and nothing in the app reads the variables yet. First adapter to land: log
+  whether `DATABASE_URL` is set at boot; if it is missing, set the values as `secret` env vars instead. node-postgres needs `uselibpqcompat=true` added
   to `DATABASE_URL` (Aiven's Runtime docs do the same).
 - **Deploys are not automatic on push.** Redeploy the branch head with
   `curl -X POST -H "Authorization: aivenv1 $AIVEN_API_TOKEN" https://api.aiven.io/v1/project/$AIVEN_PROJECT/service/dock-app/application/redeploy`.
