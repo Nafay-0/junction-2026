@@ -203,6 +203,10 @@ Without a mandate or approver session, reachable by anyone:
 | `GET /api/v1/events` (SSE) | an open connection | 60 new streams/min per address |
 | `GET /ui-api/wall`, `/ui-api/kitchens/{k}`, `/api/v1/sandboxes`, `/api/v1/approvals`, `/api/v1/ledger`, `/api/health`, discovery documents, pages | nothing (reads) | 900/min per address overall, 300/min for pages |
 
+Client address: checked on the live app, Aiven's edge **replaces** `X-Forwarded-For` with the caller's
+own public address (one entry; a forged header is dropped), so the per-address limits cannot be dodged by
+sending one. `/api/health` shows callers their own address as `yourAddress`.
+
 Everywhere: request bodies over 64 KB are refused (413, and the proxy buffers at most 128 KB),
 `/api/v1/dev/*` is 404 in production. With a mandate (`/api/v1/*`, `/api/mcp`) the gate's own rules apply
 plus 120 writes/min per address. Per-address limits are generous because venue Wi-Fi puts many phones
