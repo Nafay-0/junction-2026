@@ -11,7 +11,7 @@ Each item says what happened, where, and the smallest change that would fix it. 
 SDK and the Vercel AI SDK reach MCP 2026-07-28 and let Dock ask the buyer itself.
 
 On every other path `respond_to_concerns` / `answer_questions` (REST `/concerns`, `/answers`) accept whatever `by`
-and `choice` the agent sends. In the Semantic Kernel run, gpt-6-luna called `respondToConcerns` with
+and `choice` the agent sends. In a Semantic Kernel development run, gpt-6-luna called `respondToConcerns` with
 `by: "buyer"` before asking anyone; only the runtime-side filter in the example stopped it (and the gate would have
 refused the invented choice id `keep_requested_quantity` anyway, but not a plain `"confirm"`). The examples hold the
 line with each runtime's approval step; an agent built without one would confirm the 1,000 L itself and the ledger
@@ -26,9 +26,10 @@ on 2025-11-25 (ADK and LangGraph do).
 
 ## 2. The model has to copy a 1 KB signed quote token into `place_order`
 
-**Seen with:** OpenAI Agents SDK + gpt-6-luna (one development run: five `place_order` calls refused with
-`quote_signature_invalid` / `quote_malformed`, two fresh quotes, no order); Google ADK + gemini-3.1-flash-lite and
-Vercel AI SDK + gpt-6-luna (one refusal each, then a correct copy). Claude Haiku 5.5 copied it every time.
+**Seen with:** OpenAI Agents SDK + gpt-6-luna: in five runs, three met `quote_signature_invalid` /
+`quote_malformed` and two of those never placed the order (five to six mangled copies each, fresh quotes in between,
+$0.06-0.10 spent instead of $0.01). Google ADK + gemini-3.1-flash-lite and Vercel AI SDK + gpt-6-luna each mangled it
+once in development and then copied it right. Claude Haiku 5.5 copied it every time.
 
 Small models truncate or alter long opaque strings. The gate does the right thing (refuses, rule `quote_signature`),
 but the buyer pays in retries, live lookups and sometimes the whole order.
@@ -52,8 +53,10 @@ result for anyone who wants to verify it; the model no longer has to transcribe 
 
 ## 4. REST intake steps carry less guidance than MCP's
 
-**Seen with:** Semantic Kernel + gpt-5-mini (development run): with the step at `quoted` it told the buyer four times
-that it needed a sign-off before it could place the order, and never placed it. The MCP result for the same step says
+**Seen with:** Semantic Kernel. With gpt-5-mini (development run), at `quoted` it told the buyer four times that it
+needed a sign-off before it could place the order, and never placed it. With gpt-6-luna (the recorded run,
+`transcripts/semantic-kernel-openapi.txt`) it said the same, called the valid quote expired, and opened a second
+intake before ordering. The MCP result for the same step says
 "Placing it will ask Jari Mäkelä (owner) to sign off on their own device"; the REST step has only
 `next: { method, path, example }`, no `nextStep` sentence and no `waitingFor`.
 
@@ -100,3 +103,29 @@ schema (`ok`, `step.state`, `nextStep`, `error`) and keep the full shapes in the
 - **The human-input marker is Dock's own.** MCP has no standard annotation for "needs a person", so every example
   that routes those tools through an approval step reads `_meta["dock/humanInput"]` (the Claude Agent SDK does not
   expose tool `_meta`, so that example sends one plain `tools/list`).
+
+## Design note: waiting hours for a sign-off
+
+Today the buyer agent stops when `place_order` returns `pending_approval`; the gate holds the order, the approver
+decides on their phone, and anyone can follow up with `get_order`. What the runtimes offer for pausing and resuming,
+from their current documentation:
+
+| Runtime | Pause/resume mechanism | Survives a restart? |
+|---|---|---|
+| Pydantic AI 2.68 | Deferred tools: a run ends with `DeferredToolRequests`; store the conversation and resume with `DeferredToolResults`. Durable execution through Temporal, DBOS, Prefect, Restate and others. | Yes, if you store the conversation or use a durable engine |
+| OpenAI Agents SDK 0.24 | `result.interruptions` + `RunState.to_json()` / `from_json()`; Temporal and DBOS integrations. | Yes, with stored RunState |
+| Google ADK 2.14 | `LongRunningFunctionTool` + `ResumabilityConfig` + `DatabaseSessionService` (best effort, at-least-once; tool confirmation is not supported with the database session service). | Partly |
+| Claude Agent SDK 0.3 | Session resume by id (local JSONL, cleaned after 30 days); `PreToolUse` hook can `defer` a call (`stop_reason: tool_deferred`) and resume later. | Yes, on the same machine or with a session store |
+| LangGraph 1.2 | `interrupt()` + a Postgres or SQLite checkpointer; resume with the same `thread_id`, hours or days later. | Yes |
+| Vercel AI SDK 7 | `WorkflowAgent` (`@ai-sdk/workflow`, Workflow DevKit 5): durable steps, `createHook` / `createWebhook`, `sleep("1d")`. Outside Vercel: Local World (development) or Postgres World (reference implementation, routes unauthenticated). | Yes, with a Workflow world |
+
+All of these pause the agent **before one of its own tool calls runs**, for the agent's human to approve it. Dock's
+sign-off has a different shape: the tool call has already run, the order exists, and a different person decides on
+the gate. The state that matters (the order, the approval, the ledger) already lives in the gate and survives
+restarts; the agent has nothing worth keeping while it waits. A durable runtime would add two things only: resuming
+the agent automatically when the decision lands, and keeping its conversation across a restart.
+
+Recommendation: keep the current design. If the agent must act on the decision (tell the kitchen, or re-plan after a
+decline), have the gate push the decision (it already streams `/api/v1/events`) and resume the agent from its stored
+messages; a `WorkflowAgent` with a hook keyed by `orderId` is the natural fit on the AI SDK if durability is needed in
+production, but it adds a workflow backend for no visible gain in the demo.
