@@ -22,6 +22,9 @@ const DEMO_ORDER = rule("demo-order", 12);
 const DEMO_ORDER_KITCHEN = rule("demo-order-kitchen", 6);
 const AGENT_WRITE = rule("agent-write", 120);
 const EVENTS = rule("events", 60);
+// The voice door (src/app/_channels): starting a call mints a paid realtime session.
+const VOICE_CALL = rule("voice-call", 6);
+const VOICE_TOOL = rule("voice-tool", 60);
 
 const g = globalThis as typeof globalThis & { __dockRateLimiter?: RateLimiter };
 const limiter = (g.__dockRateLimiter ??= new RateLimiter());
@@ -44,6 +47,8 @@ function rulesFor(method: string, path: string): [RateRule, string?][] {
   if (post && path === "/api/v1/approver/demo-order") out.push([DEMO_ORDER]);
   if (post && (path === "/api/mcp" || /^\/api\/v1\/(availability|quotes|orders|requests|intake)/.test(path))) out.push([AGENT_WRITE]);
   if (path === "/api/v1/events") out.push([EVENTS]);
+  if (post && /^\/ui-api\/voice\/[^/]+\/call$/.test(path)) out.push([VOICE_CALL]);
+  if (post && /^\/ui-api\/voice\/[^/]+\/tool$/.test(path)) out.push([VOICE_TOOL]);
   return out;
 }
 
@@ -76,5 +81,7 @@ export function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // /ui-api/scan/ takes photos and PDFs (up to 10 MB), larger than this proxy buffers (next.config.ts); those
+  // routes apply the same per-address limits and their own body cap (src/server/channels/scan/guard.ts).
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|ui-api/scan/).*)"],
 };

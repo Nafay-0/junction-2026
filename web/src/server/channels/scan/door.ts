@@ -5,6 +5,7 @@ import { NEED_UNITS, type NeedInput } from "@/core/need";
 import type { PublicOrder } from "@/core/orders";
 import { answer, asProblem, choose, getOrder, getStep, kitchenAgent, openNeed, place, readNeed, respond, type KitchenAgent, type Via } from "../flow";
 import { scanLimit } from "../limits";
+import { guard, readCapped } from "./guard";
 import { checkSize, lineRequest, MAX_TEXT_CHARS, sniff } from "./lines";
 import { readDocument, type ScanResult } from "./read";
 
@@ -14,13 +15,13 @@ import { readDocument, type ScanResult } from "./read";
  */
 
 export async function scan(kitchen: string, req: Request): Promise<ScanResult> {
+  guard(req, "read");
   await kitchenAgent(kitchen); // the kitchen must exist
   const type = req.headers.get("content-type") ?? "";
-  const declared = Number(req.headers.get("content-length") ?? "0");
-  if (declared > 11 * 1024 * 1024) throw new DockError(413, "scan_too_large", "That file is too large; the limit is 10 MB.");
+  const body = await readCapped(req, 11 * 1024 * 1024);
   let input: Parameters<typeof readDocument>[0];
   if (type.startsWith("multipart/form-data")) {
-    const form = await req.formData();
+    const form = await new Response(new Blob([body as Uint8Array<ArrayBuffer>]), { headers: { "content-type": type } }).formData();
     const file = form.get("file");
     if (!(file instanceof File)) throw new DockError(400, "invalid_request", "Send the photo or PDF as the form field \"file\".");
     const bytes = new Uint8Array(await file.arrayBuffer());
@@ -28,8 +29,13 @@ export async function scan(kitchen: string, req: Request): Promise<ScanResult> {
     checkSize(kind, bytes);
     input = { kind, bytes, mediaType };
   } else {
-    const body = (await req.json().catch(() => null)) as { text?: unknown } | null;
-    const text = typeof body?.text === "string" ? body.text.trim() : "";
+    let json: { text?: unknown } | null = null;
+    try {
+      json = JSON.parse(new TextDecoder().decode(body)) as { text?: unknown };
+    } catch {
+      json = null;
+    }
+    const text = typeof json?.text === "string" ? json.text.trim() : "";
     if (!text) throw new DockError(400, "invalid_request", "Send a file, or { text } with the pasted list or email.");
     if (text.length > MAX_TEXT_CHARS) throw new DockError(413, "scan_too_large", `Pasted text is limited to ${MAX_TEXT_CHARS} characters.`);
     input = { kind: "text", text };
@@ -62,7 +68,15 @@ export type StepReply = { step?: IntakeView; order?: PublicOrder; problem?: { co
 
 const viaOf = (s: "image" | "pdf" | "text"): Via => s;
 
-export async function scanStep(kitchen: string, input: unknown): Promise<StepReply> {
+export async function scanStep(kitchen: string, req: Request): Promise<StepReply> {
+  guard(req, "step");
+  let input: unknown;
+  try {
+    input = JSON.parse(new TextDecoder().decode(await readCapped(req, 64 * 1024)));
+  } catch (err) {
+    if (err instanceof DockError) throw err;
+    throw new DockError(400, "invalid_json", "Request body must be JSON.");
+  }
   const body = parse(StepBody, input);
   const a = await kitchenAgent(kitchen);
   try {

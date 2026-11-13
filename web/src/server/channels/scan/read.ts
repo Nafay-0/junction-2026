@@ -3,6 +3,7 @@ import { DockError } from "@/core/errors";
 import { createModel, ModelConfigError } from "../../agent/models";
 import { costOf, tokensFromUsage, type Price } from "../../agent/pricing";
 import { describeError, isRetryable, withRetry } from "../../agent/retry";
+import { recordLlmSpend, reserveLlmCall } from "../../limits";
 import { scanSystem, scanUser } from "../prompts";
 import { RawScan, toLines, type ScanLine, type SourceKind } from "./lines";
 
@@ -68,6 +69,7 @@ export async function readDocument(input: ScanInput, opts: { model?: string | { 
           { type: "file" as const, data: input.bytes, mediaType: input.mediaType },
           { type: "text" as const, text: scanUser(input.kind) },
         ];
+  reserveLlmCall(); // the server's daily model-call and spend caps (limits.ts)
   let res;
   try {
     res = await withRetry(
@@ -90,6 +92,7 @@ export async function readDocument(input: ScanInput, opts: { model?: string | { 
   const raw = RawScan.safeParse(res.output);
   if (!raw.success) throw new DockError(502, "scan_invalid_output", "The reader returned something that is not a list.");
   const tokens = tokensFromUsage(res.usage);
+  recordLlmSpend(costOf(tokens, m.price));
   return {
     kind: input.kind,
     isOrderList: raw.data.isOrderList,

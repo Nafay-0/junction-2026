@@ -5,6 +5,7 @@ import { currentApprover } from "../../approver-session";
 import { kitchenAgent, type KitchenAgent } from "../flow";
 import { voiceSystem, type CallContext } from "../prompts";
 import { spokenDate } from "../say";
+import { reserveLlmCall } from "../../limits";
 import { calls, voiceLimits, type Call } from "./calls";
 import { LIVE_WS_URL, liveSetup, mintLiveToken, voiceModel, type CallMode } from "./live";
 
@@ -49,6 +50,7 @@ export async function startCall(req: Request, slug: string, input: { mode?: stri
     const call = registry.open(slug, "typed", limits, input.carryFrom);
     return { ...base, callId: call.callId, mode, expiresAt: new Date(call.expiresAt).toISOString(), maxSeconds: Math.round((call.expiresAt - call.startedAt) / 1000) };
   }
+  reserveLlmCall(); // the server's daily model-call and spend caps (limits.ts); the spend is added at hang-up
   const call = registry.open(slug, mode, limits, input.carryFrom);
   try {
     const model = voiceModel();

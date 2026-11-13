@@ -1,5 +1,5 @@
 import { scanStep } from "@/server/channels/scan/door";
-import { handle, readJson } from "@/server/http";
+import { handle } from "@/server/http";
 
 /**
  * POST /ui-api/scan/{kitchen}/step
@@ -10,6 +10,6 @@ import { handle, readJson } from "@/server/http";
 export async function POST(req: Request, ctx: RouteContext<"/ui-api/scan/[kitchen]/step">) {
   return handle(async () => {
     const { kitchen } = await ctx.params;
-    return Response.json(await scanStep(kitchen, await readJson(req)), { headers: { "cache-control": "no-store" } });
+    return Response.json(await scanStep(kitchen, req), { headers: { "cache-control": "no-store" } });
   });
 }

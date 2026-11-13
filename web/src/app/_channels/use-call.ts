@@ -114,9 +114,11 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
     [set],
   );
 
+  // List prices: every prompt token at the text rate (the whole context is re-read each turn), audio input on
+  // top at its per-minute rate, response tokens at the audio-out rate (the replies are audio). Errs high.
   const cost = useCallback(() => {
     const a = audio.current;
-    return (a ? (a.seconds.in / 60) * PRICE.inPerMin + (a.seconds.out / 60) * PRICE.outPerMin : 0) + (tokens.current.prompt * PRICE.textInPerM + tokens.current.response * PRICE.textOutPerM) / 1e6 / 4;
+    return tokens.current.prompt * 0.75e-6 + tokens.current.response * 12e-6 + (a ? (a.seconds.in / 60) * PRICE.inPerMin : 0);
   }, []);
 
   const cleanup = useCallback(() => {

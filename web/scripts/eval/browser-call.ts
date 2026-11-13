@@ -102,7 +102,43 @@ async function join() {
   await browser.close();
 }
 
+async function scan() {
+  const browser = await chromium.launch();
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await ctx.newPage();
+  await page.goto(`${base}/channels?k=kaari`);
+  await page.locator('input[type=file][accept="image/*,application/pdf"]').setInputFiles(path.join(__dirname, "..", "..", "eval", "scan", "07-injection.jpg"));
+  await page.getByText(/lines? read by/).waitFor({ timeout: 90000 });
+  await shot(page, "scan-1-review");
+  console.log("review:", (await page.locator("li").allInnerTexts()).map((t) => t.replace(/\s+/g, " ").slice(0, 120)).join("\n  "));
+  await page.getByRole("button", { name: /Send \d+ lines? to the agent/ }).click();
+  await page.locator("section h3").first().waitFor({ timeout: 90000 });
+  await page.waitForTimeout(800);
+  await shot(page, "scan-2-first-line");
+  console.log("queue:", await page.locator('[aria-label="Lines going through the agent"] ol').innerText());
+  console.log("card:", (await page.locator("section h3").allInnerTexts()).join(" | "));
+  await browser.close();
+}
+
+async function portal() {
+  const browser = await chromium.launch();
+  const ctx = await browser.newContext({ ...phone });
+  const page = await ctx.newPage();
+  await page.goto(`${base}/k/kaari`);
+  await page.waitForTimeout(1500);
+  const buttons = await page.getByRole("button", { name: /Call your agent \(voice\)|Add a photo or document/ }).count();
+  console.log("portal door buttons:", buttons);
+  if (buttons) {
+    await page.getByRole("button", { name: "Add a photo or document" }).first().click();
+    await page.getByText("Take a photo").waitFor({ timeout: 5000 });
+    await shot(page, "portal-scan-overlay");
+  }
+  await browser.close();
+}
+
 (async () => {
+  if (want("scan")) await scan();
+  if (want("portal")) await portal();
   if (want("join")) await join();
   if (want("denied")) await denied();
   if (want("lost")) await lost();

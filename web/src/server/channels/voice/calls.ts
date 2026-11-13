@@ -1,7 +1,15 @@
 import { randomBytes } from "node:crypto";
 import { DockError } from "@/core/errors";
 import type { NeedInput } from "@/core/need";
-import type { CallMode } from "./live";
+import { recordLlmSpend } from "../../limits";
+import { LIVE_PRICE, type CallMode } from "./live";
+
+/** What a call cost at list prices, from the screen's usage report; at least one minute of each way when unknown. */
+export function callCostUsd(c: Pick<Call, "usage" | "startedAt" | "endedAt" | "expiresAt">): number {
+  const u = c.usage;
+  if (!u) return LIVE_PRICE.audioInPerMin + LIVE_PRICE.audioOutPerMin;
+  return (u.promptTokens * LIVE_PRICE.textInPerM + u.responseTokens * 12) / 1e6 + (u.audioInSeconds / 60) * LIVE_PRICE.audioInPerMin;
+}
 
 /**
  * Calls to a kitchen's purchasing agent, held in this server's memory.
@@ -14,7 +22,9 @@ import type { CallMode } from "./live";
  *     a photographed call QR code only ever opens a new visitor kitchen, and these caps bound the total
  *   - per call, at most 40 tool calls and 8 readings of free text by the interpret model
  *   - a call the page stops reporting on (tab closed, laptop asleep) frees the line after 30 s
- * Worst case per call: 5 min of audio each way is $0.115 at list price; 20 calls an hour is $2.30, a full day $13.80.
+ * Cost: a typical ordering call is a few cents (web/docs/doors.md); the worst case, five minutes of back-and-forth
+ * with the context re-read every turn, is about $0.35. Every call's estimated spend is added to the server's daily
+ * model cap (DOCK_LLM_DAILY_USD in limits.ts), which refuses new calls once it is used up.
  * DOCK_VOICE=off turns the voice door off (the typed fallback keeps working).
  *
  * A typed call (microphone unavailable, connection lost) uses the same desk and the same flow without a voice
@@ -140,6 +150,7 @@ export class CallRegistry {
   end(callId: string, kitchen: string, reason: string): Call | undefined {
     const c = this.calls.get(callId);
     if (!c || c.kitchen !== kitchen) return undefined;
+    if (c.endedAt === undefined && c.mode !== "typed") recordLlmSpend(callCostUsd(c));
     c.endedAt ??= this.now();
     c.endReason ??= reason.slice(0, 80);
     return c;

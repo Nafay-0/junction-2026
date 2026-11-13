@@ -7,19 +7,19 @@
   "failures": 12,
   "costUsd": 0,
   "avgSeconds": 0,
-  "at": "2026-11-13T22:15:44.095Z",
+  "at": "2026-11-13T22:20:22.781Z",
   "perCase": [
     {
       "file": "01-whiteboard-en.jpg",
-      "error": "The reader failed: HTTP 503: This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+      "error": "The reader failed: HTTP 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/docs/rate-limits. To "
     },
     {
       "file": "02-note-fi.jpg",
-      "error": "The reader failed: HTTP 503: This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+      "error": "The reader failed: HTTP 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/docs/rate-limits. To "
     },
     {
       "file": "03-note-sv.jpg",
-      "error": "The reader failed: HTTP 503: This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+      "error": "The reader failed: HTTP 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/docs/rate-limits. To "
     },
     {
       "file": "04-chalk-mixed.jpg",
