@@ -60,9 +60,9 @@ const DOOR: Record<string, string> = {
 const when = (iso: string) => day(helsinkiToday(new Date(iso)));
 
 function sinceText(iso: string | undefined, now: number): string {
-  if (!iso) return "not used on an order yet";
+  if (!iso) return "Not used on an order yet";
   const d = Math.floor((now - Date.parse(iso)) / 86_400_000);
-  return d <= 0 ? `last used today at ${clock(iso)}` : d === 1 ? "last used yesterday" : `last used ${d} days ago`;
+  return d <= 0 ? `Last used today at ${clock(iso)}` : d === 1 ? "Last used yesterday" : `Last used ${d} days ago`;
 }
 
 /** Where an item came from, in a sentence a buyer reads. */
@@ -71,18 +71,17 @@ function provenance(it: Item): ReactNode {
   if (!s) return it.origin === "learned" ? "Learned from orders." : "Stated in the shop.";
   if (it.origin === "learned") {
     const orders = new Set(it.sources.map((x) => x.orderId).filter(Boolean)).size;
-    return `Learned from ${orders || it.sources.length} order${(orders || it.sources.length) === 1 ? "" : "s"}, latest ${when(s.at)}.`;
+    return `Learned from ${orders || it.sources.length} order${(orders || it.sources.length) === 1 ? "" : "s"}, the latest on ${when(s.at)}`;
   }
   return (
     <>
       {it.origin === "inferred" ? "Read from " : "Said by "}
-      {s.by ? <strong className="font-semibold text-ink">{s.by.replace(/\s*\(.*\)$/, "")}</strong> : "the kitchen"}, {when(s.at)}, {DOOR[s.door] ?? s.door}
+      {s.by ? <strong className="font-semibold text-ink">{s.by.replace(/\s*\(.*\)$/, "")}</strong> : "the kitchen"} on {when(s.at)} in {DOOR[s.door] ?? s.door}
       {s.quote && (
         <>
           : <q className="italic">{s.quote}</q>
         </>
       )}
-      .
     </>
   );
 }
@@ -131,7 +130,7 @@ export function MemoryBook({ fallback }: { fallback: ReactNode }) {
         <p className="mt-2 max-w-[70ch] text-[1.05rem] leading-snug text-paper/90">
           {active.length === 0
             ? "Nothing yet. It learns usual amounts and days from the orders the kitchen places, and keeps anything a person tells it."
-            : `${active.length} thing${active.length === 1 ? "" : "s"}: ${groups.map((g) => `${active.filter((i) => i.strength === g.id).length} ${g.title.toLowerCase()}`).join(", ")}. Each says where it came from. Correct or forget any of them; the agent stops using it at once.`}
+            : `${active.length} thing${active.length === 1 ? "" : "s"}: ${groups.map((g) => { const n = active.filter((i) => i.strength === g.id).length; return `${n} ${n === 1 ? g.title.toLowerCase().replace(/s$/, "") : g.title.toLowerCase()}`; }).join(", ")}. Each says where it came from. Correct or forget any of them; the agent stops using it at once.`}
         </p>
         <dl className="mt-5 grid gap-px bg-paper/15 sm:grid-cols-3">
           <div className="bg-lavender-deep py-2 pr-3">
@@ -189,12 +188,12 @@ export function MemoryBook({ fallback }: { fallback: ReactNode }) {
         </div>
       )}
 
-      <div className="grid items-start gap-4 xl:grid-cols-2">
+      <div className="space-y-6">
         {groups.map((g) => {
           const items = active.filter((i) => i.strength === g.id);
           if (g.id === "one_off" && items.length === 0) return null;
           return (
-            <div key={g.id} className={g.id === "rule" ? "xl:col-span-2" : ""}>
+            <div key={g.id}>
               <div className="mb-2 flex flex-wrap items-baseline gap-x-3">
                 <h3 className="display text-[1.7rem] text-ink">{g.title}</h3>
                 <p className="text-[0.95rem] text-ink-soft">{g.note}</p>
@@ -202,7 +201,7 @@ export function MemoryBook({ fallback }: { fallback: ReactNode }) {
               {items.length === 0 ? (
                 <p className="bg-paper p-4 leading-snug text-ink-soft">{g.id === "rule" ? "None yet. Tick “remember this answer” on a question, or tell the agent below." : "None yet. After three orders of the same kind the agent knows the usual amount and day."}</p>
               ) : (
-                <ul className={`grid gap-3 ${g.id === "rule" ? "lg:grid-cols-2" : ""}`}>
+                <ul className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 21rem), 1fr))" }}>
                   {items.map((it) => (
                     <MemoryCard key={it.id} it={it} now={now} busy={busy} act={act} />
                   ))}
@@ -272,7 +271,7 @@ function MemoryCard({ it, now, busy, act }: { it: Item; now: number; busy?: stri
             <span className="text-[0.82rem] text-ink-soft tabular">{Math.round(it.weight * 100)} %</span>
           </div>
         )}
-        <p className="mt-1 text-[0.85rem] text-ink-soft">{sinceText(it.lastUsedAt, now)}.</p>
+        <p className="mt-1 text-[0.85rem] text-ink-soft">{sinceText(it.lastUsedAt, now)}</p>
 
         {it.mandate?.status === "offered" && (
           <div className="mt-3 border-l-4 border-ink bg-mist px-3 py-2">

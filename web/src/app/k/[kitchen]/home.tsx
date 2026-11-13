@@ -90,7 +90,6 @@ function Hero({ o, cutoffs, now }: { o: Overview; cutoffs?: CutoffReply; now: nu
   const usual = o.requests.find((r) => r.family === o.standing[0]?.family && r.order && (r.order.status === "committed" || r.order.status === "history"));
   return (
     <section aria-label="Your kitchen" className="on-dark relative overflow-hidden bg-petrol-deep text-paper">
-      <Glyph kind="carton" size={260} strokeWidth={1} className="pointer-events-none absolute -bottom-10 right-[34%] hidden text-paper/[0.06] lg:block" />
       <div className="relative grid gap-6 p-6 sm:p-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="min-w-0">
           <p className="text-[1rem] text-paper/75">{kitchen.agentName} buys for this kitchen within its signed rules.</p>
@@ -276,6 +275,7 @@ function isoMonday(iso: string): string {
 
 function Ledger({ o }: { o: Overview }) {
   const placed = o.orders.filter((x) => x.status === "committed" || x.status === "history");
+  const familyOf = new Map(o.requests.flatMap((r) => (r.order && r.family ? [[r.order.orderId, r.family] as const] : [])));
   if (placed.length === 0)
     return (
       <section aria-labelledby="book">
@@ -306,7 +306,7 @@ function Ledger({ o }: { o: Overview }) {
     cents += x.totalCents;
     orders += 1;
     for (const l of x.lines) {
-      const key = (l.attributes?.includes("plant_drink") ? "plant drinks" : /cream|kerma/i.test(l.name) ? "cream" : /yog|jogurt/i.test(l.name) ? "yoghurt" : /milk|maito/i.test(l.name) ? "milk" : "other");
+      const key = familyOf.get(x.orderId) ?? (/cream|kerma/i.test(l.name) ? "cream" : /milk|maito/i.test(l.name) ? "milk" : "other");
       const f = fam.get(key) ?? { L: 0, kg: 0, cents: 0 };
       const amount = l.quantity * (l.packSize ?? 0);
       if (l.unit === "L") f.L += amount;
@@ -335,7 +335,7 @@ function Ledger({ o }: { o: Overview }) {
             <dl className="mt-4 space-y-1.5">
               {families.map(([k, f]) => (
                 <div key={k} className="flex items-baseline justify-between gap-3 border-t border-line pt-1.5">
-                  <dt className="capitalize">{k}</dt>
+                  <dt className="capitalize">{attr(k)}</dt>
                   <dd className="font-semibold tabular">{[f.L ? measure(Math.round(f.L), "L") : "", f.kg ? measure(Math.round(f.kg), "kg") : ""].filter(Boolean).join(", ")}</dd>
                 </div>
               ))}
@@ -494,7 +494,7 @@ function StandingCard({ s, item, requests, now }: { s: Standing; item?: CutoffRe
             {s.drift.pricePct !== null && Math.abs(s.drift.pricePct) >= 10 && <>Price {s.drift.pricePct > 0 ? "+" : "−"}{Math.abs(s.drift.pricePct)} % on the usual.</>}
           </p>
         ) : (
-          s.drift.amountPct !== null && <p className="mt-2 text-[0.88rem] text-ink-soft">Within {Math.abs(s.drift.amountPct)} % of the usual amount.</p>
+          s.drift.amountPct !== null && <p className="mt-2 text-[0.88rem] text-ink-soft">{s.drift.amountPct === 0 ? "The last orders match the usual amount." : `The last orders are within ${Math.abs(s.drift.amountPct)} % of the usual amount.`}</p>
         )}
         {last && (
           <div className="mt-auto flex flex-wrap items-center gap-4 pt-4">
@@ -528,7 +528,7 @@ function Deliveries({ o }: { o: Overview }) {
       <SectionTitle id="deliveries">Deliveries coming</SectionTitle>
       {coming.length === 0 ? (
         <Empty title="Nothing booked yet" glyph={<Glyph kind="case" size={44} />}>
-          {nextDue ? `The next usual delivery day is ${day(nextDue)}. ` : ""}Orders placed here, by the agent or from the basket, appear with their delivery day.
+          {nextDue ? `Next usual delivery day: ${day(nextDue)} ` : ""}Orders placed here, by the agent or from the basket, appear with their delivery day.
         </Empty>
       ) : (
         <Plate>

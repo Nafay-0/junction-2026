@@ -59,7 +59,8 @@ export type StationState = "done" | "current" | "stopped" | "pending" | "skipped
 export function StationStrip({ states, label }: { states: Record<Station, StationState>; label?: string }) {
   return (
     <nav aria-label="Where the request is" className="bg-paper">
-      <ol className="grid grid-cols-7">
+      <CompactStrip states={states} />
+      <ol className="hidden grid-cols-7 sm:grid">
         {STATIONS.map((s, i) => {
           const st = states[s];
           const look =
@@ -97,6 +98,29 @@ export function StationStrip({ states, label }: { states: Record<Station, Statio
       </ol>
       {label && <p className="sr-only" aria-live="polite">{label}</p>}
     </nav>
+  );
+}
+
+/** On a phone: seven segments and the station the request is at, in words. */
+function CompactStrip({ states }: { states: Record<Station, StationState> }) {
+  const i = STATIONS.findIndex((s) => states[s] === "current" || states[s] === "stopped");
+  const here = i >= 0 ? STATIONS[i] : undefined;
+  const stopped = here ? states[here] === "stopped" : false;
+  return (
+    <div className="px-3 py-2 sm:hidden" aria-hidden>
+      <div className="flex gap-1">
+        {STATIONS.map((s) => (
+          <span key={s} className={`h-2 flex-1 ${states[s] === "stopped" ? "hazard-thin" : states[s] === "current" ? "bg-petrol-deep" : states[s] === "done" ? "bg-petrol" : "bg-line"}`} />
+        ))}
+      </div>
+      <p className="mt-1.5 flex items-center gap-2">
+        {stopped && <Target size={18} tone="safety" />}
+        <span className="display text-[1.3rem]">{here ? `${here}` : "Request"}</span>
+        <span className="text-[0.9rem] text-ink-soft">
+          {here ? `step ${i + 1} of 7${stopped ? ", stopped for a person" : ""}` : "nothing asked yet"}
+        </span>
+      </p>
+    </div>
   );
 }
 
@@ -153,10 +177,10 @@ function LaneRow({ n, st, open, last, current, onToggle }: { n: number; st: Lane
       <span className="display flex size-10 items-center justify-center border-2 border-petrol bg-paper text-[1.2rem] text-petrol tabular">{n}</span>
     );
   return (
-    <li id={id} className="lane-enter relative grid scroll-mt-28 grid-cols-[2.5rem_minmax(0,1fr)] gap-x-3 pb-5 sm:grid-cols-[3rem_minmax(0,1fr)] sm:gap-x-5">
+    <li id={id} className="lane-enter relative grid scroll-mt-28 grid-cols-[2rem_minmax(0,1fr)] gap-x-2.5 pb-5 sm:grid-cols-[3rem_minmax(0,1fr)] sm:gap-x-5">
       <div className="relative flex justify-center">
         {!last && <span aria-hidden className={`absolute bottom-0 top-10 w-[3px] ${st.tone === "safety" ? "hazard-thin" : "bg-petrol/30"}`} />}
-        <span className="relative">{node}</span>
+        <span className="relative origin-top scale-[0.8] sm:scale-100">{node}</span>
       </div>
       <section aria-labelledby={`${id}-h`} className="min-w-0">
         <header className={`flex min-h-10 flex-wrap items-center gap-x-4 gap-y-1 ${open ? "mb-3" : ""}`}>
@@ -164,14 +188,14 @@ function LaneRow({ n, st, open, last, current, onToggle }: { n: number; st: Lane
             <span className="sr-only">Step {n}: </span>
             {st.title}
           </h2>
-          {!open && st.summary && <p className="min-w-0 flex-1 truncate text-[1rem] text-ink-soft">{st.summary}</p>}
-          <span className="ml-auto flex items-center gap-4">
+          <span className="ml-auto flex items-center gap-4 sm:order-last">
             {st.aside}
             <button type="button" aria-expanded={open} aria-controls={bodyId} onClick={onToggle} className="min-h-10 text-[0.95rem] font-semibold text-petrol underline decoration-2 underline-offset-4 hover:text-petrol-deep">
               {open ? "Fold" : "Open"}
               <span className="sr-only"> {st.title}</span>
             </button>
           </span>
+          {!open && st.summary && <p className="basis-full truncate text-[1rem] text-ink-soft sm:min-w-0 sm:flex-1 sm:basis-auto">{st.summary}</p>}
         </header>
         <div id={bodyId} hidden={!open}>
           {st.body}
