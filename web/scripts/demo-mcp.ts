@@ -19,7 +19,11 @@ import { Client, StreamableHTTPClientTransport, type CallToolResult } from "@mod
 import { localNow, nextDeliveryDay } from "@/core/kitchen";
 import { signMandate } from "@/core/mandate";
 import { KITCHEN_ORG, demoKitchenKeyPair, demoKitchenMandate } from "@/server/demo-kitchen";
+import { loadLocalEnv } from "./lib/env";
 import { verifySigned } from "./lib/verify-receipt";
+
+// The server reads .env.local; so must this script, or it signs with the public dev key the server no longer trusts.
+loadLocalEnv();
 
 const args = process.argv.slice(2);
 const base = (args.includes("--url") ? args[args.indexOf("--url") + 1] : process.env.DOCK_URL) ?? "http://localhost:3000";
