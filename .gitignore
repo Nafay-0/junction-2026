@@ -9,3 +9,5 @@ __pycache__/
 .venv/
 .claude/settings.local.json
 .claude/worktrees/
+# partner data files: restricted to the challenge, never commit (see research/06-valio-api.md)
+/data/

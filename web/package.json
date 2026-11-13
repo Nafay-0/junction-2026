@@ -10,7 +10,9 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "demo": "tsx scripts/demo.ts"
+    "demo": "tsx scripts/demo.ts",
+    "index:build": "tsx scripts/index-build.ts",
+    "valio:ping": "tsx scripts/valio-ping.ts"
   },
   "dependencies": {
     "jose": "6.2.17",
