@@ -82,6 +82,25 @@ const wrongState = (step: IntakeView, what: string) =>
 const humanAnswerRequired = (what: string) =>
   new DockError(400, "human_answer_required", `${what} must come from the human buyer. Ask them, then call again with their answer and their name as by.`, "human_input");
 
+const relay = z
+  .boolean()
+  .optional()
+  .describe("Set true only after Dock's form came back unanswered (error.code form_not_answered): you asked the buyer in the chat and pass on their reply.");
+
+/** Requests whose form the client closed unanswered: the agent may relay the buyer's answer instead. In memory, per process. */
+const formUnanswered = new Set<string>();
+
+/** The buyer's answer: through the client's form when it can show one, else (or after an unanswered form) as relayed. */
+function fromBuyer<P, A>(key: string, human: HumanChannel, wantsRelay: boolean | undefined, proposed: P, ask: () => A | AskHuman): P | A | AskHuman {
+  if (!human.canAsk || (wantsRelay && formUnanswered.has(key))) return proposed;
+  try {
+    return ask();
+  } catch (err) {
+    if (err instanceof DockError && err.code === "form_not_answered") formUnanswered.add(key);
+    throw err;
+  }
+}
+
 const RELAY_ONLY =
   "The buyer's original request does not count as their answer: Dock asks because something differs from what it knows, so put the question to them and wait for their reply.";
 
@@ -126,16 +145,17 @@ const INTAKE_TOOLS = [
     input: z.object({
       requestId: intakeId,
       by: by.optional(),
+      relay,
       responses: ConcernResponseInput.shape.responses
         .optional()
         .describe("The buyer's answer per concern: [{ key, choice }] where choice is \"confirm\" or a correction id from the concern."),
     }),
     output: intakeOut,
     humanInput: true,
-    run: async ({ dock, session, human, defaultBy }, { requestId, ...proposed }) => {
+    run: async ({ dock, session, human, defaultBy }, { requestId, relay: wantsRelay, ...proposed }) => {
       const step = await dock.intake.get(session, requestId);
       if (step.state !== "needs_confirmation") throw wrongState(step, "respond to concerns");
-      const answer = human.canAsk ? concernsFromBuyer(step, human, proposed) : proposed;
+      const answer = fromBuyer(`${session.mandate.issuer.orgId}:${requestId}`, human, wantsRelay, proposed, () => concernsFromBuyer(step, human, proposed));
       if (answer instanceof AskHuman) return answer;
       const who = answer.by || defaultBy;
       if (!who || !answer.responses) throw humanAnswerRequired("A confirmation or correction");
@@ -150,14 +170,15 @@ const INTAKE_TOOLS = [
     input: z.object({
       requestId: intakeId,
       by: by.optional(),
+      relay,
       answers: AnswersInput.shape.answers.optional().describe("The buyer's answers: [{ questionId, optionId, remember? }], ids exactly as in step.questions."),
     }),
     output: intakeOut,
     humanInput: true,
-    run: async ({ dock, session, human, defaultBy }, { requestId, ...proposed }) => {
+    run: async ({ dock, session, human, defaultBy }, { requestId, relay: wantsRelay, ...proposed }) => {
       const step = await dock.intake.get(session, requestId);
       if (step.state !== "needs_input" && step.state !== "options_ready") throw wrongState(step, "answer questions");
-      const answer = human.canAsk ? answersFromBuyer(step, human, proposed) : proposed;
+      const answer = fromBuyer(`${session.mandate.issuer.orgId}:${requestId}`, human, wantsRelay, proposed, () => answersFromBuyer(step, human, proposed));
       if (answer instanceof AskHuman) return answer;
       const who = answer.by || defaultBy;
       if (!who || !answer.answers) throw humanAnswerRequired("An answer");

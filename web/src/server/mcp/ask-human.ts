@@ -14,6 +14,9 @@ import type { IntakeView } from "@/core/intake";
  *     with the agent's proposed answer (if any) pre-filled as the default; the agent cannot answer for them;
  *   - otherwise: the agent relays the question and passes the buyer's answer as arguments; the descriptions
  *     and nextStep say plainly that it must be the buyer's own answer.
+ * If the client closes the form without an answer (`cancel`: dismissed, or a client that declares elicitation but
+ * cannot show it), Dock lets the agent relay instead, for that request only: it asks the buyer in the chat and
+ * calls again with `relay: true`. An explicit `decline` stops there.
  * The tools also carry `_meta["dock/humanInput"]` in tools/list, Dock's own (non-standard) static marker.
  */
 
@@ -52,6 +55,10 @@ function form(message: string, fields: Record<string, Field>, by?: string, extra
 function answered(human: HumanChannel): Record<string, unknown> | undefined {
   const r = inputResponse(human.responses, ELICIT_KEY);
   if (r.kind !== "elicit") return undefined;
+  if (r.action === "cancel") {
+    // Dismissed without a choice, or a client that declares elicitation but cannot show the form (e.g. headless).
+    throw new DockError(409, "form_not_answered", "Dock's form was closed without an answer. Nothing was changed.", "human_input", { action: r.action });
+  }
   if (r.action !== "accept" || !r.content) {
     throw new DockError(409, "buyer_declined", "The buyer did not answer. Nothing was changed.", "human_input", { action: r.action });
   }
