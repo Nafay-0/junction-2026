@@ -1,0 +1,1276 @@
+{
+ "id": "school-salmon",
+ "kitchen": "laakso",
+ "text": "School lunch for 450 on Monday: salmon soup, rye bread, berry quark for dessert",
+ "now": "2026-11-13T21:56:10.653Z",
+ "model": "anthropic:claude-sonnet-5-5",
+ "ms": 14901,
+ "costUsd": 0.186162,
+ "calls": [
+  {
+   "step": "outline",
+   "ms": 4227,
+   "tokens": {
+    "input": 2152,
+    "output": 462,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.008924
+  },
+  {
+   "step": "dish 2",
+   "ms": 4229,
+   "tokens": {
+    "input": 1802,
+    "output": 216,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.005764
+  },
+  {
+   "step": "dish 3",
+   "ms": 5026,
+   "tokens": {
+    "input": 1821,
+    "output": 519,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.008832
+  },
+  {
+   "step": "dish 1",
+   "ms": 10673,
+   "tokens": {
+    "input": 1842,
+    "output": 1415,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.017834
+  },
+  {
+   "step": "pick",
+   "ms": 2533,
+   "tokens": {
+    "input": 1339,
+    "output": 120,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003878
+  },
+  {
+   "step": "pick",
+   "ms": 3480,
+   "tokens": {
+    "input": 1009,
+    "output": 73,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.002748
+  },
+  {
+   "step": "pick",
+   "ms": 4233,
+   "tokens": {
+    "input": 1189,
+    "output": 133,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003708
+  },
+  {
+   "step": "pick",
+   "ms": 2111,
+   "tokens": {
+    "input": 1207,
+    "output": 101,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003424
+  },
+  {
+   "step": "pick",
+   "ms": 2340,
+   "tokens": {
+    "input": 1252,
+    "output": 103,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003534
+  },
+  {
+   "step": "pick",
+   "ms": 2716,
+   "tokens": {
+    "input": 1257,
+    "output": 125,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003764
+  },
+  {
+   "step": "pick",
+   "ms": 2035,
+   "tokens": {
+    "input": 1253,
+    "output": 95,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003456
+  },
+  {
+   "step": "pick",
+   "ms": 2349,
+   "tokens": {
+    "input": 1410,
+    "output": 129,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00411
+  },
+  {
+   "step": "pick",
+   "ms": 2137,
+   "tokens": {
+    "input": 1220,
+    "output": 79,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00323
+  },
+  {
+   "step": "pick",
+   "ms": 2096,
+   "tokens": {
+    "input": 1225,
+    "output": 111,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00356
+  },
+  {
+   "step": "fix carrot",
+   "ms": 4946,
+   "tokens": {
+    "input": 2041,
+    "output": 604,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.010122
+  },
+  {
+   "step": "fix leek",
+   "ms": 5142,
+   "tokens": {
+    "input": 2031,
+    "output": 579,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.009852
+  },
+  {
+   "step": "fix salmon_fillet",
+   "ms": 5287,
+   "tokens": {
+    "input": 1970,
+    "output": 603,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00997
+  },
+  {
+   "step": "fix fresh_dill",
+   "ms": 5761,
+   "tokens": {
+    "input": 2092,
+    "output": 662,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.010804
+  },
+  {
+   "step": "fix potato",
+   "ms": 6042,
+   "tokens": {
+    "input": 1895,
+    "output": 694,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.01073
+  },
+  {
+   "step": "fix rye_bread",
+   "ms": 6684,
+   "tokens": {
+    "input": 1956,
+    "output": 827,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.012182
+  },
+  {
+   "step": "pick",
+   "ms": 2111,
+   "tokens": {
+    "input": 1057,
+    "output": 115,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003264
+  },
+  {
+   "step": "pick",
+   "ms": 2092,
+   "tokens": {
+    "input": 1145,
+    "output": 104,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00333
+  },
+  {
+   "step": "pick",
+   "ms": 2323,
+   "tokens": {
+    "input": 970,
+    "output": 104,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00298
+  },
+  {
+   "step": "pick",
+   "ms": 2055,
+   "tokens": {
+    "input": 1008,
+    "output": 123,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003246
+  },
+  {
+   "step": "pick",
+   "ms": 2579,
+   "tokens": {
+    "input": 992,
+    "output": 98,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.002964
+  },
+  {
+   "step": "pick",
+   "ms": 2262,
+   "tokens": {
+    "input": 1042,
+    "output": 92,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003004
+  },
+  {
+   "step": "pick",
+   "ms": 2111,
+   "tokens": {
+    "input": 1001,
+    "output": 102,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003022
+  },
+  {
+   "step": "pick",
+   "ms": 2774,
+   "tokens": {
+    "input": 999,
+    "output": 65,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.002648
+  },
+  {
+   "step": "pick",
+   "ms": 2347,
+   "tokens": {
+    "input": 980,
+    "output": 81,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00277
+  },
+  {
+   "step": "pick",
+   "ms": 1992,
+   "tokens": {
+    "input": 1026,
+    "output": 94,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.002992
+  },
+  {
+   "step": "pick",
+   "ms": 1985,
+   "tokens": {
+    "input": 1029,
+    "output": 76,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.002818
+  },
+  {
+   "step": "pick",
+   "ms": 5473,
+   "tokens": {
+    "input": 1096,
+    "output": 81,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003002
+  },
+  {
+   "step": "pick",
+   "ms": 2728,
+   "tokens": {
+    "input": 1026,
+    "output": 90,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.002952
+  },
+  {
+   "step": "pick",
+   "ms": 2895,
+   "tokens": {
+    "input": 1042,
+    "output": 134,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003424
+  },
+  {
+   "step": "pick",
+   "ms": 2320,
+   "tokens": {
+    "input": 1085,
+    "output": 115,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00332
+  }
+ ],
+ "raw": {
+  "isFoodOrderRequest": true,
+  "declineReason": null,
+  "covers": 450,
+  "serviceDate": "2026-11-16",
+  "occasion": "School lunch",
+  "requiredClaims": [],
+  "forbiddenAllergens": [],
+  "assumptions": [
+   "Salmon soup served as the main course, about 3.5 dl per portion",
+   "Quark and any dairy used must be lactose-free per kitchen rules",
+   "Rye bread chosen without nuts or seeds that carry nut traces",
+   "Berry quark made with frozen berries"
+  ],
+  "conflicts": [],
+  "dishes": [
+   {
+    "name": "Salmon soup",
+    "nameFi": "Lohikeitto",
+    "course": "soup",
+    "serviceDate": "2026-11-16",
+    "portion": "3.5 dl",
+    "method": "Simmer potato, carrot and leek in fish stock, add salmon pieces and lactose-free cream, cook gently until the salmon is done, season with dill.",
+    "ingredients": [
+     {
+      "key": "salmon_fillet",
+      "name": "Salmon fillet",
+      "searchTerms": [
+       "lohifilee",
+       "lohi, fileepala",
+       "salmon fillet"
+      ],
+      "role": "main protein, cut into pieces",
+      "perCover": {
+       "amount": 60,
+       "unit": "g"
+      },
+      "yieldPct": 90,
+      "amountBasis": "school soup portion 3.5 dl, about 55 g cooked fish",
+      "pantry": false,
+      "form": "any",
+      "avoid": [
+       "savustettu",
+       "smoked",
+       "graavi",
+       "cured",
+       "marinoitu"
+      ]
+     },
+     {
+      "key": "potato",
+      "name": "Potato",
+      "searchTerms": [
+       "peruna",
+       "keittoperuna",
+       "potato"
+      ],
+      "role": "soup body",
+      "perCover": {
+       "amount": 100,
+       "unit": "g"
+      },
+      "yieldPct": 80,
+      "amountBasis": "about 80 g peeled potato per 3.5 dl soup",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "perunamuusi",
+       "ranskalaiset",
+       "french fries",
+       "jauhe"
+      ]
+     },
+     {
+      "key": "carrot",
+      "name": "Carrot",
+      "searchTerms": [
+       "porkkana",
+       "carrot"
+      ],
+      "role": "vegetable in soup",
+      "perCover": {
+       "amount": 30,
+       "unit": "g"
+      },
+      "yieldPct": 85,
+      "amountBasis": "small vegetable share of soup",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "raaste",
+       "grated",
+       "mehu",
+       "juice"
+      ]
+     },
+     {
+      "key": "leek",
+      "name": "Leek",
+      "searchTerms": [
+       "purjo",
+       "leek"
+      ],
+      "role": "aromatic vegetable",
+      "perCover": {
+       "amount": 25,
+       "unit": "g"
+      },
+      "yieldPct": 65,
+      "amountBasis": "small vegetable share, white and light green part used",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "kuivattu",
+       "dried"
+      ]
+     },
+     {
+      "key": "lactose_free_cream",
+      "name": "Lactose-free cream",
+      "searchTerms": [
+       "laktoositon ruokakerma",
+       "laktoositon kerma",
+       "lactose-free cooking cream"
+      ],
+      "role": "creamy base",
+      "perCover": {
+       "amount": 50,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 1.5 dl per 3 portions for a light soup",
+      "pantry": false,
+      "form": "any",
+      "avoid": [
+       "kasvi",
+       "kaura",
+       "oat",
+       "soija",
+       "soy",
+       "manteli",
+       "almond",
+       "kookos",
+       "coconut"
+      ]
+     },
+     {
+      "key": "fish_stock_concentrate",
+      "name": "Fish stock concentrate",
+      "searchTerms": [
+       "kalafondi",
+       "kalaliemi",
+       "fish stock"
+      ],
+      "role": "soup liquid flavour",
+      "perCover": {
+       "amount": 4,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "concentrate or powder for about 2.5 dl stock",
+      "pantry": false,
+      "form": "any",
+      "avoid": [
+       "pähkinä",
+       "nut"
+      ]
+     },
+     {
+      "key": "fresh_dill",
+      "name": "Fresh dill",
+      "searchTerms": [
+       "tilli",
+       "tuore tilli",
+       "fresh dill"
+      ],
+      "role": "seasoning, added at end",
+      "perCover": {
+       "amount": 3,
+       "unit": "g"
+      },
+      "yieldPct": 90,
+      "amountBasis": "small handful per portion for seasoning and garnish",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "kuivattu",
+       "dried",
+       "siemen",
+       "seed"
+      ]
+     },
+     {
+      "key": "allspice",
+      "name": "Allspice",
+      "searchTerms": [
+       "maustepippuri",
+       "maustepippuri, kokonainen",
+       "allspice"
+      ],
+      "role": "classic soup seasoning",
+      "perCover": {
+       "amount": 0.1,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "pinch per portion",
+      "pantry": true,
+      "form": "dried",
+      "avoid": []
+     },
+     {
+      "key": "salt",
+      "name": "Salt",
+      "searchTerms": [
+       "suola",
+       "salt"
+      ],
+      "role": "seasoning",
+      "perCover": {
+       "amount": 2,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 0.6% of portion",
+      "pantry": true,
+      "form": "any",
+      "avoid": []
+     },
+     {
+      "key": "black_pepper",
+      "name": "Black pepper",
+      "searchTerms": [
+       "mustapippuri",
+       "black pepper"
+      ],
+      "role": "seasoning",
+      "perCover": {
+       "amount": 0.2,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "pinch per portion",
+      "pantry": true,
+      "form": "dried",
+      "avoid": []
+     }
+    ]
+   },
+   {
+    "name": "Rye bread",
+    "nameFi": "Ruisleipä",
+    "course": "bread",
+    "serviceDate": "2026-11-16",
+    "portion": "1-2 slices",
+    "method": "Served sliced, ready-baked.",
+    "ingredients": [
+     {
+      "key": "rye_bread",
+      "name": "Rye bread, sliced",
+      "searchTerms": [
+       "ruisleipä viipaloitu",
+       "ruisleipä",
+       "rye bread sliced"
+      ],
+      "role": "Served as the bread with the soup, ready-baked",
+      "perCover": {
+       "amount": 50,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "1-2 slices of about 25-30 g each, average 1.5 slices",
+      "pantry": false,
+      "form": "any",
+      "avoid": [
+       "pähkinä",
+       "nut",
+       "siemen",
+       "seed",
+       "näkkileipä",
+       "crispbread",
+       "hapankorppu"
+      ]
+     }
+    ]
+   },
+   {
+    "name": "Berry quark",
+    "nameFi": "Marjarahka",
+    "course": "dessert",
+    "serviceDate": "2026-11-16",
+    "portion": "1.5 dl",
+    "method": "Whisk lactose-free quark with sugar and mix in thawed berries, served chilled.",
+    "ingredients": [
+     {
+      "key": "quark_lactose_free",
+      "name": "Lactose-free quark",
+      "searchTerms": [
+       "laktoositon rahka",
+       "rahka laktoositon",
+       "quark lactose-free"
+      ],
+      "role": "base of the dessert",
+      "perCover": {
+       "amount": 100,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 2/3 of a 1.5 dl portion",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "maustettu",
+       "hedelmä",
+       "vanilja",
+       "flavoured",
+       "pähkinä",
+       "nut"
+      ]
+     },
+     {
+      "key": "mixed_berries",
+      "name": "Mixed berries, frozen",
+      "searchTerms": [
+       "marjasekoitus pakaste",
+       "pakastemarja",
+       "frozen mixed berries"
+      ],
+      "role": "thawed berries mixed into the quark",
+      "perCover": {
+       "amount": 40,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 1/4 of the portion by weight",
+      "pantry": false,
+      "form": "frozen",
+      "avoid": [
+       "tuore",
+       "fresh",
+       "kuivattu",
+       "dried",
+       "sokeroitu",
+       "pähkinä",
+       "nut"
+      ]
+     },
+     {
+      "key": "sugar",
+      "name": "Sugar",
+      "searchTerms": [
+       "sokeri",
+       "hienosokeri",
+       "sugar"
+      ],
+      "role": "sweetens the quark",
+      "perCover": {
+       "amount": 8,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 1.5 tsp per portion",
+      "pantry": true,
+      "form": "any",
+      "avoid": [
+       "tomusokeri",
+       "icing",
+       "siirappi",
+       "syrup"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ "fixes": {
+  "carrot": {
+   "options": [
+    {
+     "kind": "substitute",
+     "title": "Frozen carrot slices",
+     "effect": "Frozen carrot simmers in the soup just like fresh, with the same sweetness and colour; add it a few minutes later because it is blanched.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "carrot_frozen",
+      "name": "Carrot, frozen slices or cubes",
+      "searchTerms": [
+       "frozen carrot",
+       "carrot slices frozen",
+       "porkkana pakaste",
+       "morötter fryst"
+      ],
+      "role": "vegetable in soup",
+      "perCover": {
+       "amount": 30,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "Frozen, ready-cut carrot, no peeling loss",
+      "form": "frozen",
+      "avoid": [
+       "nuts",
+       "peanuts",
+       "sauce",
+       "seasoned",
+       "mixed vegetables"
+      ]
+     },
+     "perCover": 30
+    },
+    {
+     "kind": "substitute",
+     "title": "Swede instead of carrot",
+     "effect": "Swede gives a similar sweet, soft root bite in the broth but the soup is paler and slightly earthier.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "swede_fresh",
+      "name": "Swede, fresh",
+      "searchTerms": [
+       "swede",
+       "rutabaga",
+       "lanttu",
+       "kålrot"
+      ],
+      "role": "vegetable in soup",
+      "perCover": {
+       "amount": 35,
+       "unit": "g"
+      },
+      "yieldPct": 80,
+      "amountBasis": "Peeled weight, about 20% peeling loss",
+      "form": "fresh",
+      "avoid": [
+       "nuts",
+       "peanuts",
+       "pre-cooked",
+       "salad"
+      ]
+     },
+     "perCover": 35
+    },
+    {
+     "kind": "change_amount",
+     "title": "Less carrot, more potato",
+     "effect": "Halves the carrot to 15 g and relies on the potato and leek for body; the soup has less colour and sweetness.",
+     "changesDish": false,
+     "ingredient": null,
+     "perCover": 15
+    }
+   ]
+  },
+  "leek": {
+   "options": [
+    {
+     "kind": "substitute",
+     "title": "Frozen leek",
+     "effect": "Frozen sliced leek simmers in the soup with nearly the same flavour; texture is slightly softer.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "leek_frozen",
+      "name": "Leek, frozen",
+      "searchTerms": [
+       "frozen leek",
+       "purjo pakaste",
+       "purjorengas pakaste",
+       "purjo hienonnettu pakaste"
+      ],
+      "role": "aromatic vegetable",
+      "perCover": {
+       "amount": 25,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "frozen, sliced or diced, no prep waste",
+      "form": "frozen",
+      "avoid": [
+       "nuts",
+       "peanuts",
+       "lactose"
+      ]
+     },
+     "perCover": 25
+    },
+    {
+     "kind": "substitute",
+     "title": "Onion instead of leek",
+     "effect": "Yellow onion gives a similar sweet aromatic base in the soup, with a slightly stronger onion taste.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "onion_yellow",
+      "name": "Yellow onion",
+      "searchTerms": [
+       "yellow onion",
+       "keltasipuli",
+       "sipuli kuorittu",
+       "onion peeled sliced"
+      ],
+      "role": "aromatic vegetable",
+      "perCover": {
+       "amount": 20,
+       "unit": "g"
+      },
+      "yieldPct": 90,
+      "amountBasis": "peeled weight about 20 g per cover, bought weight includes peel loss",
+      "form": "any",
+      "avoid": [
+       "nuts",
+       "peanuts",
+       "lactose"
+      ]
+     },
+     "perCover": 20
+    },
+    {
+     "kind": "change_amount",
+     "title": "Drop leek, more carrot",
+     "effect": "Soup is made without leek and with more carrot for sweetness; slightly less aromatic depth.",
+     "changesDish": false,
+     "ingredient": null,
+     "perCover": 0
+    }
+   ]
+  },
+  "salmon_fillet": {
+   "options": [
+    {
+     "kind": "substitute",
+     "title": "Frozen salmon fillet",
+     "effect": "Frozen salmon pieces work in a simmered soup and keep the dish the same, thawed and cut before adding.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "salmon_fillet_frozen",
+      "name": "Frozen salmon fillet",
+      "searchTerms": [
+       "lohifile pakaste",
+       "frozen salmon fillet",
+       "lax fryst filé"
+      ],
+      "role": "main protein, cut into pieces",
+      "perCover": {
+       "amount": 60,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "raw weight of thawed fillet without skin and bones",
+      "form": "frozen",
+      "avoid": [
+       "smoked",
+       "marinated",
+       "breaded",
+       "nuts",
+       "peanuts"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "change_dish",
+     "title": "White-fish soup",
+     "effect": "Salmon is replaced by white fish such as pollock or cod, giving a milder soup with the same method.",
+     "changesDish": true,
+     "ingredient": {
+      "key": "white_fish_fillet",
+      "name": "White fish fillet (pollock or cod)",
+      "searchTerms": [
+       "valkoinen kalafile",
+       "seiti file",
+       "turskafile",
+       "vitfisk filé"
+      ],
+      "role": "main protein, cut into pieces",
+      "perCover": {
+       "amount": 70,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "raw weight of fillet without skin and bones",
+      "form": "any",
+      "avoid": [
+       "smoked",
+       "marinated",
+       "breaded",
+       "battered",
+       "nuts",
+       "peanuts"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "change_dish",
+     "title": "Salmon-free vegetable soup",
+     "effect": "Drops the fish and adds more potato for a vegetable chowder in fish stock, a clearly different dish.",
+     "changesDish": true,
+     "ingredient": null,
+     "perCover": null
+    }
+   ]
+  },
+  "fresh_dill": {
+   "options": [
+    {
+     "kind": "substitute",
+     "title": "Frozen dill",
+     "effect": "Frozen chopped dill gives nearly the same fresh flavour when stirred in at the end of cooking.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "dill_frozen",
+      "name": "Frozen dill",
+      "searchTerms": [
+       "frozen dill",
+       "pakastettu tilli",
+       "dill fryst"
+      ],
+      "role": "seasoning, added at end",
+      "perCover": {
+       "amount": 3,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "Same amount as fresh dill, added straight from frozen at the end.",
+      "form": "frozen",
+      "avoid": [
+       "nuts",
+       "peanuts"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "substitute",
+     "title": "Fresh chives",
+     "effect": "Chives add a mild fresh herb note in place of dill, so the soup tastes slightly less classic.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "chives_fresh",
+      "name": "Fresh chives",
+      "searchTerms": [
+       "fresh chives",
+       "ruohosipuli",
+       "gräslök"
+      ],
+      "role": "seasoning, added at end",
+      "perCover": {
+       "amount": 3,
+       "unit": "g"
+      },
+      "yieldPct": 90,
+      "amountBasis": "Chopped and stirred in at the end.",
+      "form": "fresh",
+      "avoid": [
+       "nuts",
+       "peanuts"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "substitute",
+     "title": "Fresh parsley",
+     "effect": "Flat-leaf parsley gives a fresh green finish, though without dill's aniseed note.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "parsley_fresh",
+      "name": "Fresh parsley",
+      "searchTerms": [
+       "fresh parsley",
+       "persilja",
+       "lehtipersilja"
+      ],
+      "role": "seasoning, added at end",
+      "perCover": {
+       "amount": 3,
+       "unit": "g"
+      },
+      "yieldPct": 85,
+      "amountBasis": "Chopped and stirred in at the end.",
+      "form": "fresh",
+      "avoid": [
+       "nuts",
+       "peanuts"
+      ]
+     },
+     "perCover": null
+    }
+   ]
+  },
+  "potato": {
+   "options": [
+    {
+     "kind": "substitute",
+     "title": "Unpeeled potato, peel in kitchen",
+     "effect": "Same potato, bought unpeeled and peeled on site, so the soup stays the same but needs extra prep time.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "potato_unpeeled",
+      "name": "Potato, unpeeled",
+      "searchTerms": [
+       "potato",
+       "peruna",
+       "kokonainen peruna",
+       "potatis"
+      ],
+      "role": "soup body",
+      "perCover": {
+       "amount": 125,
+       "unit": "g"
+      },
+      "yieldPct": 80,
+      "amountBasis": "raw weight with peel, about 20% lost in peeling",
+      "form": "fresh",
+      "avoid": [
+       "peeled",
+       "vacuum-packed",
+       "fried",
+       "mashed",
+       "nuts"
+      ]
+     },
+     "perCover": 125
+    },
+    {
+     "kind": "substitute",
+     "title": "Frozen diced potato",
+     "effect": "Frozen potato cubes hold their shape in simmered soup and need no peeling, with a slightly softer bite.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "potato_frozen_diced",
+      "name": "Potato cubes, frozen",
+      "searchTerms": [
+       "frozen potato cubes",
+       "peruna kuutio pakaste",
+       "potatiskuber fryst"
+      ],
+      "role": "soup body",
+      "perCover": {
+       "amount": 100,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "frozen weight, ready cut and peeled",
+      "form": "frozen",
+      "avoid": [
+       "fried",
+       "french fries",
+       "seasoned",
+       "breaded",
+       "nuts"
+      ]
+     },
+     "perCover": 100
+    },
+    {
+     "kind": "change_dish",
+     "title": "Root vegetable salmon soup",
+     "effect": "Swede or parsnip replaces the potato as soup body, giving a slightly sweeter soup.",
+     "changesDish": true,
+     "ingredient": {
+      "key": "swede",
+      "name": "Swede",
+      "searchTerms": [
+       "swede",
+       "lanttu",
+       "kålrot"
+      ],
+      "role": "soup body",
+      "perCover": {
+       "amount": 100,
+       "unit": "g"
+      },
+      "yieldPct": 80,
+      "amountBasis": "raw weight before peeling and trimming",
+      "form": "fresh",
+      "avoid": [
+       "nuts"
+      ]
+     },
+     "perCover": 100
+    }
+   ]
+  },
+  "rye_bread": {
+   "options": [
+    {
+     "kind": "substitute",
+     "title": "Sliced wheat toast bread",
+     "effect": "Serves a different but similar sliced bread with the soup; milder flavour, same role as the side bread.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "sliced_wheat_bread",
+      "name": "Sliced wheat bread",
+      "searchTerms": [
+       "vaalea paahtoleipä",
+       "vehnäleipä viipaloitu",
+       "toast bread sliced",
+       "limpa skivad"
+      ],
+      "role": "side bread served with the soup",
+      "perCover": {
+       "amount": 50,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "ready-baked sliced bread, weight as served",
+      "form": "any",
+      "avoid": [
+       "nuts",
+       "peanuts",
+       "may contain nuts",
+       "contains milk (non lactose-free)"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "substitute",
+     "title": "Mixed grain sliced bread",
+     "effect": "Dark sliced mixed grain or oat bread replaces rye as the side bread; close in texture and heartiness.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "sliced_mixed_grain_bread",
+      "name": "Sliced mixed grain bread",
+      "searchTerms": [
+       "moniviljaleipä viipaloitu",
+       "kauraleipä viipaloitu",
+       "sliced multigrain bread",
+       "fullkornsbröd skivat"
+      ],
+      "role": "side bread served with the soup",
+      "perCover": {
+       "amount": 50,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "ready-baked sliced bread, weight as served",
+      "form": "any",
+      "avoid": [
+       "nuts",
+       "peanuts",
+       "may contain nuts",
+       "seeds mix with nuts",
+       "contains milk (non lactose-free)"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "substitute",
+     "title": "Soft rye bread rolls",
+     "effect": "Ready-baked rye rolls served in place of sliced loaf; same rye taste, different shape.",
+     "changesDish": true,
+     "ingredient": {
+      "key": "rye_rolls",
+      "name": "Rye bread rolls, ready-baked",
+      "searchTerms": [
+       "ruisleipä sämpylä",
+       "ruissämpylä",
+       "rye roll",
+       "rågbröd småfranska"
+      ],
+      "role": "side bread served with the soup",
+      "perCover": {
+       "amount": 50,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "ready-baked roll weight as served",
+      "form": "any",
+      "avoid": [
+       "nuts",
+       "peanuts",
+       "may contain nuts",
+       "contains milk (non lactose-free)"
+      ]
+     },
+     "perCover": null
+    }
+   ]
+  }
+ }
+}
