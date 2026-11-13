@@ -48,7 +48,7 @@ function rulesFor(method: string, path: string): [RateRule, string?][] {
   if (post && path.startsWith("/api/v1/join")) out.push([JOIN]);
   if (post && (m = /^\/api\/v1\/sandboxes\/([^/]+)\/demo-order$/.exec(path))) out.push([DEMO_ORDER], [DEMO_ORDER_KITCHEN, `k:${m[1]}`]);
   if (post && path === "/api/v1/approver/demo-order") out.push([DEMO_ORDER]);
-  if (post && (path === "/api/mcp" || /^\/api\/v1\/(availability|quotes|orders|requests|intake)/.test(path))) out.push([AGENT_WRITE]);
+  if (post && (path === "/api/mcp" || path.startsWith("/api/mcp/c/") || /^\/api\/v1\/(availability|quotes|orders|requests|intake)/.test(path))) out.push([AGENT_WRITE]);
   if (path === "/api/v1/events") out.push([EVENTS]);
   // The kitchen store (/k): the assistant calls the model, catalog/live the partner's live API, basket the gate.
   if (post && (m = /^\/ui-api\/kitchens\/([^/]+)\/assistant$/.exec(path))) out.push([ASSISTANT], [ASSISTANT_KITCHEN, `k:${m[1]}`]);
@@ -56,6 +56,8 @@ function rulesFor(method: string, path: string): [RateRule, string?][] {
   if (post && (m = /^\/ui-api\/kitchens\/([^/]+)\/(basket|memory)$/.exec(path))) out.push([KITCHEN_WRITE], [KITCHEN_WRITE_KITCHEN, `k:${m[1]}`]);
   // The operations desk: entering takes the passcode, so guessing is slowed down.
   if (post && path === "/ops-api/session") out.push([OPS_ENTER]);
+  // Reissuing or revoking a connector takes the operator secret (or the visitor's own session).
+  if ((post || method === "DELETE") && path.startsWith("/ui-api/connect/")) out.push([OPS_ENTER]);
   return out;
 }
 

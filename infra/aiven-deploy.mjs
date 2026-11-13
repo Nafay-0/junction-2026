@@ -107,10 +107,13 @@ function desiredEnvironment(publicUrl) {
     "GEMINI_API_KEY",
     // /ops can suspend agents: entering it needs this passcode on the public server.
     "DOCK_OPS_PASSCODE",
+    // Demo kitchens' connector addresses (/api/mcp/c/<token>) are derived from it: stable across restarts.
+    // Also the operator bearer for reissuing or revoking connectors (/ui-api/connect/<kitchen>).
+    "DOCK_CONNECTOR_SECRET",
     // Not here: DATABASE_URL, OPENSEARCH_URI, VALKEY_URL and KAFKA_* come from the application_service_credential
     // integrations (Runtime refuses a variable that duplicates one of them).
   ];
-  const required = ["DOCK_WHOLESALER_JWK", "DOCK_DEMO_ORG_JWK", "DOCK_DEMO_KITCHEN_JWK", "VALIO_API_KEY", "DOCK_OPS_PASSCODE"];
+  const required = ["DOCK_WHOLESALER_JWK", "DOCK_DEMO_ORG_JWK", "DOCK_DEMO_KITCHEN_JWK", "VALIO_API_KEY", "DOCK_OPS_PASSCODE", "DOCK_CONNECTOR_SECRET"];
   for (const k of required) if (!env(k)) fail(`${k} is not set in web/.env.local`);
   const out = vars.map(([key, value]) => ({ key, value, kind: "variable" }));
   for (const key of secrets) {
