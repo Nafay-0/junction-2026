@@ -99,6 +99,7 @@ export const RULE_TITLE: Record<string, string> = {
   approver_authority: "Someone must be allowed to sign the amount",
   live_lookup_limit: "Live price checks for a short list only",
   approver_identity: "Only the named person can sign off",
+  operator_suspension: "Suspended by the wholesaler's staff",
 };
 
 export function ruleTitle(rule: string | undefined): string {
