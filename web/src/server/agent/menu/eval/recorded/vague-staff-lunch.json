@@ -1,0 +1,459 @@
+{
+ "id": "vague-staff-lunch",
+ "kitchen": "kaari",
+ "text": "Something warming for the staff lunch on Monday",
+ "now": "2026-11-13T21:57:16.222Z",
+ "model": "anthropic:claude-sonnet-5-5",
+ "ms": 14918,
+ "costUsd": 0.066514,
+ "calls": [
+  {
+   "step": "outline",
+   "ms": 3314,
+   "tokens": {
+    "input": 2100,
+    "output": 373,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00793
+  },
+  {
+   "step": "dish 2",
+   "ms": 3354,
+   "tokens": {
+    "input": 1755,
+    "output": 323,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00674
+  },
+  {
+   "step": "dish 1",
+   "ms": 11604,
+   "tokens": {
+    "input": 1784,
+    "output": 1507,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.018638
+  },
+  {
+   "step": "pick",
+   "ms": 2840,
+   "tokens": {
+    "input": 1354,
+    "output": 163,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.004338
+  },
+  {
+   "step": "pick",
+   "ms": 2837,
+   "tokens": {
+    "input": 1199,
+    "output": 106,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003458
+  },
+  {
+   "step": "pick",
+   "ms": 2176,
+   "tokens": {
+    "input": 1180,
+    "output": 102,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00338
+  },
+  {
+   "step": "pick",
+   "ms": 2257,
+   "tokens": {
+    "input": 1212,
+    "output": 103,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003454
+  },
+  {
+   "step": "pick",
+   "ms": 2454,
+   "tokens": {
+    "input": 1273,
+    "output": 125,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003796
+  },
+  {
+   "step": "pick",
+   "ms": 2397,
+   "tokens": {
+    "input": 1269,
+    "output": 140,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003938
+  },
+  {
+   "step": "pick",
+   "ms": 4132,
+   "tokens": {
+    "input": 1212,
+    "output": 112,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003544
+  },
+  {
+   "step": "pick",
+   "ms": 2796,
+   "tokens": {
+    "input": 1313,
+    "output": 105,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003676
+  },
+  {
+   "step": "pick",
+   "ms": 2380,
+   "tokens": {
+    "input": 1171,
+    "output": 128,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003622
+  }
+ ],
+ "raw": {
+  "isFoodOrderRequest": true,
+  "declineReason": null,
+  "covers": null,
+  "serviceDate": "2026-11-16",
+  "occasion": "Staff lunch",
+  "requiredClaims": [],
+  "forbiddenAllergens": [],
+  "assumptions": [
+   "Chef gave no dishes, so one warming main course was chosen: a classic Finnish soup.",
+   "Dairy must be lactose-free per kitchen rules; the soup uses lactose-free cream.",
+   "Number of covers not given, so it is left for code to ask."
+  ],
+  "conflicts": [],
+  "dishes": [
+   {
+    "name": "Finnish salmon soup (lohikeitto)",
+    "nameFi": "Lohikeitto",
+    "course": "soup",
+    "serviceDate": "2026-11-16",
+    "portion": "3.5 dl",
+    "method": "Simmer potatoes, carrot and onion in stock, add salmon pieces and lactose-free cream, finish with dill.",
+    "ingredients": [
+     {
+      "key": "salmon_fillet",
+      "name": "Salmon fillet, skin-on",
+      "searchTerms": [
+       "lohifilee",
+       "lohi filee ruodoton",
+       "salmon fillet"
+      ],
+      "role": "main protein, added at the end",
+      "perCover": {
+       "amount": 70,
+       "unit": "g"
+      },
+      "yieldPct": 90,
+      "amountBasis": "about 60 g cooked fish per 3.5 dl soup portion, as bought",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "savustettu",
+       "smoked",
+       "graavi",
+       "cured",
+       "suolattu"
+      ]
+     },
+     {
+      "key": "potato",
+      "name": "Potato",
+      "searchTerms": [
+       "peruna",
+       "keittoperuna",
+       "potato"
+      ],
+      "role": "body of the soup",
+      "perCover": {
+       "amount": 100,
+       "unit": "g"
+      },
+      "yieldPct": 80,
+      "amountBasis": "classic lohikeitto, about 80 g peeled per portion",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "muusi",
+       "mash",
+       "ranskalaiset",
+       "french fries",
+       "kuorittu valmis"
+      ]
+     },
+     {
+      "key": "carrot",
+      "name": "Carrot",
+      "searchTerms": [
+       "porkkana",
+       "carrot"
+      ],
+      "role": "sweetness and colour",
+      "perCover": {
+       "amount": 30,
+       "unit": "g"
+      },
+      "yieldPct": 85,
+      "amountBasis": "small share of the soup, peeled",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "raaste",
+       "grated",
+       "lehtiporkkana"
+      ]
+     },
+     {
+      "key": "yellow_onion",
+      "name": "Yellow onion",
+      "searchTerms": [
+       "keltasipuli",
+       "sipuli",
+       "yellow onion"
+      ],
+      "role": "aromatic base",
+      "perCover": {
+       "amount": 25,
+       "unit": "g"
+      },
+      "yieldPct": 90,
+      "amountBasis": "aromatic base, about 1/4 onion per portion",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "punasipuli",
+       "red onion",
+       "paistettu",
+       "fried",
+       "kuivattu"
+      ]
+     },
+     {
+      "key": "lactose_free_cream",
+      "name": "Lactose-free cooking cream",
+      "searchTerms": [
+       "laktoositon ruokakerma",
+       "laktoositon kerma",
+       "lactose-free cream"
+      ],
+      "role": "creamy broth, added with the salmon",
+      "perCover": {
+       "amount": 50,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 1.5 dl per 1 litre of soup",
+      "pantry": false,
+      "form": "any",
+      "avoid": [
+       "laktoositon vispikerma",
+       "kasvi",
+       "kauramix",
+       "kookos",
+       "coconut",
+       "sokeroitu"
+      ]
+     },
+     {
+      "key": "fish_stock_concentrate",
+      "name": "Fish stock concentrate",
+      "searchTerms": [
+       "kalafondi",
+       "kalaliemi",
+       "fish stock"
+      ],
+      "role": "flavoured cooking liquid",
+      "perCover": {
+       "amount": 4,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "concentrate or powder, about 10 g per litre of stock",
+      "pantry": false,
+      "form": "any",
+      "avoid": [
+       "liharuokalaji",
+       "kana",
+       "chicken",
+       "beef",
+       "naudan",
+       "vihannes",
+       "vegetable"
+      ]
+     },
+     {
+      "key": "allspice",
+      "name": "Allspice, whole or ground",
+      "searchTerms": [
+       "maustepippuri",
+       "maustepippuri jauhettu",
+       "allspice"
+      ],
+      "role": "classic spicing",
+      "perCover": {
+       "amount": 0.3,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "a pinch per portion",
+      "pantry": true,
+      "form": "dried",
+      "avoid": []
+     },
+     {
+      "key": "fresh_dill",
+      "name": "Fresh dill",
+      "searchTerms": [
+       "tuore tilli",
+       "tilli",
+       "fresh dill"
+      ],
+      "role": "finishing herb",
+      "perCover": {
+       "amount": 3,
+       "unit": "g"
+      },
+      "yieldPct": 80,
+      "amountBasis": "chopped handful to finish the soup",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "kuivattu",
+       "dried",
+       "siemen",
+       "seed",
+       "pakaste",
+       "frozen"
+      ]
+     },
+     {
+      "key": "salt",
+      "name": "Salt",
+      "searchTerms": [
+       "suola",
+       "salt"
+      ],
+      "role": "seasoning",
+      "perCover": {
+       "amount": 2,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "seasoning to taste",
+      "pantry": true,
+      "form": "any",
+      "avoid": []
+     },
+     {
+      "key": "black_pepper",
+      "name": "Black pepper",
+      "searchTerms": [
+       "mustapippuri",
+       "black pepper"
+      ],
+      "role": "seasoning",
+      "perCover": {
+       "amount": 0.3,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "seasoning to taste",
+      "pantry": true,
+      "form": "dried",
+      "avoid": []
+     }
+    ]
+   },
+   {
+    "name": "Rye bread",
+    "nameFi": "Ruisleipä",
+    "course": "bread",
+    "serviceDate": "2026-11-16",
+    "portion": "1 slice",
+    "method": "Served sliced with lactose-free margarine.",
+    "ingredients": [
+     {
+      "key": "rye_bread",
+      "name": "Rye bread",
+      "searchTerms": [
+       "ruisleipä",
+       "hapanleipä",
+       "rye bread"
+      ],
+      "role": "the bread itself, served sliced",
+      "perCover": {
+       "amount": 40,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "1 slice of about 40 g",
+      "pantry": false,
+      "form": "any",
+      "avoid": [
+       "näkkileipä",
+       "crispbread",
+       "jauho",
+       "flour"
+      ]
+     },
+     {
+      "key": "lactose_free_margarine",
+      "name": "Lactose-free margarine",
+      "searchTerms": [
+       "laktoositon margariini",
+       "margariini laktoositon",
+       "lactose-free margarine"
+      ],
+      "role": "spread served with the bread",
+      "perCover": {
+       "amount": 8,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about one portion pat per slice",
+      "pantry": false,
+      "form": "any",
+      "avoid": [
+       "voi",
+       "butter",
+       "maitoa sisältävä"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ "fixes": {}
+}

@@ -1,0 +1,578 @@
+{
+ "id": "lohikeitto-fi",
+ "kitchen": "kaari",
+ "text": "Lohikeitto 300 annosta perjantaiksi",
+ "now": "2026-11-13T21:54:36.485Z",
+ "model": "anthropic:claude-sonnet-5-5",
+ "ms": 13895,
+ "costUsd": 0.08065,
+ "calls": [
+  {
+   "step": "outline",
+   "ms": 3087,
+   "tokens": {
+    "input": 2105,
+    "output": 324,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00745
+  },
+  {
+   "step": "dish 1",
+   "ms": 10808,
+   "tokens": {
+    "input": 1786,
+    "output": 1544,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.019012
+  },
+  {
+   "step": "pick",
+   "ms": 2394,
+   "tokens": {
+    "input": 1346,
+    "output": 142,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.004112
+  },
+  {
+   "step": "pick",
+   "ms": 2267,
+   "tokens": {
+    "input": 1190,
+    "output": 114,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00352
+  },
+  {
+   "step": "pick",
+   "ms": 2155,
+   "tokens": {
+    "input": 1173,
+    "output": 110,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003446
+  },
+  {
+   "step": "pick",
+   "ms": 2519,
+   "tokens": {
+    "input": 1205,
+    "output": 140,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00381
+  },
+  {
+   "step": "pick",
+   "ms": 2739,
+   "tokens": {
+    "input": 1258,
+    "output": 166,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.004176
+  },
+  {
+   "step": "pick",
+   "ms": 2592,
+   "tokens": {
+    "input": 1163,
+    "output": 111,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003436
+  },
+  {
+   "step": "fix salmon_fillet",
+   "ms": 5045,
+   "tokens": {
+    "input": 1919,
+    "output": 593,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.009768
+  },
+  {
+   "step": "fix lactose_free_cream",
+   "ms": 6073,
+   "tokens": {
+    "input": 1850,
+    "output": 574,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00944
+  },
+  {
+   "step": "pick",
+   "ms": 1514,
+   "tokens": {
+    "input": 1058,
+    "output": 89,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003006
+  },
+  {
+   "step": "pick",
+   "ms": 2459,
+   "tokens": {
+    "input": 1145,
+    "output": 97,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00326
+  },
+  {
+   "step": "pick",
+   "ms": 4001,
+   "tokens": {
+    "input": 1008,
+    "output": 110,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003116
+  },
+  {
+   "step": "pick",
+   "ms": 2378,
+   "tokens": {
+    "input": 1029,
+    "output": 104,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003098
+  }
+ ],
+ "raw": {
+  "isFoodOrderRequest": true,
+  "declineReason": null,
+  "covers": 300,
+  "serviceDate": "2026-11-20",
+  "occasion": null,
+  "requiredClaims": [],
+  "forbiddenAllergens": [],
+  "assumptions": [
+   "Friday interpreted as the next Friday, 2026-11-20 (today is Friday 2026-11-13).",
+   "Kitchen rule: dairy must be lactose-free, so the soup uses lactose-free cream or milk.",
+   "Salmon soup served as a main lunch course, about 3.5 dl per cover."
+  ],
+  "conflicts": [],
+  "dishes": [
+   {
+    "name": "Finnish salmon soup",
+    "nameFi": "Lohikeitto",
+    "course": "soup",
+    "serviceDate": "2026-11-20",
+    "portion": "3.5 dl",
+    "method": "Simmer potatoes, carrots and leeks in fish stock with allspice and bay leaf, add lactose-free cream and salmon cubes, cook briefly and finish with dill.",
+    "ingredients": [
+     {
+      "key": "salmon_fillet",
+      "name": "Salmon fillet, skin-on",
+      "searchTerms": [
+       "lohifilee",
+       "lohi pala",
+       "salmon fillet"
+      ],
+      "role": "main protein, cubed",
+      "perCover": {
+       "amount": 70,
+       "unit": "g"
+      },
+      "yieldPct": 90,
+      "amountBasis": "about 60 g cooked salmon per 3.5 dl portion",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "savu",
+       "savustettu",
+       "smoked",
+       "graavi",
+       "suolattu"
+      ]
+     },
+     {
+      "key": "potato",
+      "name": "Potato",
+      "searchTerms": [
+       "peruna",
+       "keittoperuna",
+       "potato"
+      ],
+      "role": "soup body",
+      "perCover": {
+       "amount": 125,
+       "unit": "g"
+      },
+      "yieldPct": 80,
+      "amountBasis": "about 100 g peeled potato per portion",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "jauhettu",
+       "perunajauho",
+       "muussi",
+       "ranskalaiset",
+       "frozen"
+      ]
+     },
+     {
+      "key": "carrot",
+      "name": "Carrot",
+      "searchTerms": [
+       "porkkana",
+       "carrot"
+      ],
+      "role": "sweetness and colour",
+      "perCover": {
+       "amount": 35,
+       "unit": "g"
+      },
+      "yieldPct": 85,
+      "amountBasis": "about 30 g peeled carrot per portion",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "raaste",
+       "raastettu",
+       "mehu",
+       "baby"
+      ]
+     },
+     {
+      "key": "leek",
+      "name": "Leek",
+      "searchTerms": [
+       "purjo",
+       "leek"
+      ],
+      "role": "aromatic base",
+      "perCover": {
+       "amount": 35,
+       "unit": "g"
+      },
+      "yieldPct": 70,
+      "amountBasis": "about 25 g trimmed leek per portion",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "kuivattu",
+       "dried",
+       "jauhe"
+      ]
+     },
+     {
+      "key": "lactose_free_cream",
+      "name": "Lactose-free cooking cream",
+      "searchTerms": [
+       "laktoositon ruokakerma",
+       "laktoositon kerma",
+       "lactose-free cream"
+      ],
+      "role": "enriches the broth",
+      "perCover": {
+       "amount": 50,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 1.5 dl per 1 L soup, 3.5 dl portion",
+      "pantry": false,
+      "form": "any",
+      "avoid": [
+       "kasvi",
+       "kookos",
+       "vaahtokerma",
+       "laktoosi"
+      ]
+     },
+     {
+      "key": "fish_stock_concentrate",
+      "name": "Fish stock concentrate",
+      "searchTerms": [
+       "kalafondi",
+       "kalaliemi",
+       "fish stock"
+      ],
+      "role": "soup base liquid",
+      "perCover": {
+       "amount": 4,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "concentrate for about 3 dl stock",
+      "pantry": false,
+      "form": "any",
+      "avoid": [
+       "liha",
+       "kana",
+       "kasvis",
+       "chicken",
+       "beef"
+      ]
+     },
+     {
+      "key": "allspice",
+      "name": "Allspice, whole",
+      "searchTerms": [
+       "maustepippuri",
+       "maustepippuri kokonainen",
+       "allspice"
+      ],
+      "role": "traditional spice",
+      "perCover": {
+       "amount": 0.3,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 2 berries per portion",
+      "pantry": true,
+      "form": "dried",
+      "avoid": []
+     },
+     {
+      "key": "bay_leaf",
+      "name": "Bay leaf, dried",
+      "searchTerms": [
+       "laakerinlehti",
+       "bay leaf"
+      ],
+      "role": "aroma",
+      "perCover": {
+       "amount": 0.1,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "1 leaf per about 15 portions",
+      "pantry": true,
+      "form": "dried",
+      "avoid": []
+     },
+     {
+      "key": "fresh_dill",
+      "name": "Fresh dill",
+      "searchTerms": [
+       "tuore tilli",
+       "tilli",
+       "dill"
+      ],
+      "role": "finishing herb",
+      "perCover": {
+       "amount": 3,
+       "unit": "g"
+      },
+      "yieldPct": 90,
+      "amountBasis": "about 1 tbsp chopped per portion",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "kuivattu",
+       "dried",
+       "siemen",
+       "seed",
+       "pakaste"
+      ]
+     },
+     {
+      "key": "salt",
+      "name": "Salt",
+      "searchTerms": [
+       "suola",
+       "salt"
+      ],
+      "role": "seasoning",
+      "perCover": {
+       "amount": 2,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "seasoning to taste",
+      "pantry": true,
+      "form": "any",
+      "avoid": []
+     },
+     {
+      "key": "black_pepper",
+      "name": "Black pepper",
+      "searchTerms": [
+       "musta pippuri",
+       "black pepper"
+      ],
+      "role": "seasoning",
+      "perCover": {
+       "amount": 0.2,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "seasoning to taste",
+      "pantry": true,
+      "form": "any",
+      "avoid": []
+     }
+    ]
+   }
+  ]
+ },
+ "fixes": {
+  "salmon_fillet": {
+   "options": [
+    {
+     "kind": "substitute",
+     "title": "Frozen salmon fillet",
+     "effect": "Frozen salmon cubes hold up in a simmered soup with little loss in quality, so the dish stays the same.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "salmon_frozen",
+      "name": "Salmon fillet, frozen",
+      "searchTerms": [
+       "lohifilee pakaste",
+       "salmon fillet frozen",
+       "lohikuutio pakaste"
+      ],
+      "role": "main protein, cubed",
+      "perCover": {
+       "amount": 70,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "raw weight of fillet, skinless or skin-on, cubed",
+      "form": "frozen",
+      "avoid": [
+       "smoked",
+       "marinated",
+       "breaded",
+       "cured"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "change_dish",
+     "title": "White-fish soup",
+     "effect": "Salmon is replaced by firm white fish such as pollock or cod, giving a lighter, milder soup that guests will notice.",
+     "changesDish": true,
+     "ingredient": {
+      "key": "whitefish_fillet",
+      "name": "White fish fillet (pollock or cod)",
+      "searchTerms": [
+       "seiti filee",
+       "turskafilee",
+       "white fish fillet",
+       "kalafilee pakaste"
+      ],
+      "role": "main protein, cubed",
+      "perCover": {
+       "amount": 80,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "raw fillet weight, cubed",
+      "form": "any",
+      "avoid": [
+       "smoked",
+       "breaded",
+       "marinated",
+       "salted"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "change_amount",
+     "title": "Less salmon, more potato",
+     "effect": "Salmon is cut to 50 g per cover and the soup keeps its character, though it is slightly less rich in fish.",
+     "changesDish": false,
+     "ingredient": null,
+     "perCover": 50
+    }
+   ]
+  },
+  "lactose_free_cream": {
+   "options": [
+    {
+     "kind": "substitute",
+     "title": "Lactose-free milk with flour",
+     "effect": "Lactose-free milk thickened lightly with a little wheat flour gives a leaner but still creamy broth.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "lactose_free_milk",
+      "name": "Lactose-free milk",
+      "searchTerms": [
+       "laktoositon maito",
+       "lactose-free milk",
+       "laktoositon kevytmaito"
+      ],
+      "role": "enriches and lightly thickens the broth",
+      "perCover": {
+       "amount": 80,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "per cover, added with the salmon and cooked briefly",
+      "form": "any",
+      "avoid": [
+       "non-lactose-free milk",
+       "flavoured milk"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "substitute",
+     "title": "Oat cooking cream",
+     "effect": "Plant-based oat cream enriches the broth much like cream, with a slightly sweeter oat note.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "oat_cooking_cream",
+      "name": "Oat cooking cream",
+      "searchTerms": [
+       "kaurakerma",
+       "ruokakerma kaura",
+       "oat cream",
+       "kaura ruoanlaittokerma"
+      ],
+      "role": "enriches the broth",
+      "perCover": {
+       "amount": 50,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "per cover, added with the salmon",
+      "form": "any",
+      "avoid": [
+       "sweetened",
+       "vanilla"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "change_dish",
+     "title": "Clear salmon soup",
+     "effect": "Leave out the cream for a lighter clear-broth salmon soup that guests will notice is less rich.",
+     "changesDish": true,
+     "ingredient": null,
+     "perCover": null
+    }
+   ]
+  }
+ }
+}

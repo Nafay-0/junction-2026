@@ -1,0 +1,1219 @@
+{
+ "id": "peanut-satay-school",
+ "kitchen": "laakso",
+ "text": "Peanut satay chicken with rice for 200 pupils on Tuesday",
+ "now": "2026-11-13T21:57:38.412Z",
+ "model": "anthropic:claude-sonnet-5-5",
+ "ms": 16203,
+ "costUsd": 0.182818,
+ "calls": [
+  {
+   "step": "outline",
+   "ms": 3761,
+   "tokens": {
+    "input": 2145,
+    "output": 408,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00837
+  },
+  {
+   "step": "dish 2",
+   "ms": 4215,
+   "tokens": {
+    "input": 1802,
+    "output": 346,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.007064
+  },
+  {
+   "step": "dish 1",
+   "ms": 12442,
+   "tokens": {
+    "input": 1810,
+    "output": 1881,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.02243
+  },
+  {
+   "step": "pick",
+   "ms": 3503,
+   "tokens": {
+    "input": 1390,
+    "output": 120,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00398
+  },
+  {
+   "step": "pick",
+   "ms": 3184,
+   "tokens": {
+    "input": 1015,
+    "output": 87,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.0029
+  },
+  {
+   "step": "pick",
+   "ms": 3730,
+   "tokens": {
+    "input": 1189,
+    "output": 117,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003548
+  },
+  {
+   "step": "pick",
+   "ms": 3295,
+   "tokens": {
+    "input": 1247,
+    "output": 99,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003484
+  },
+  {
+   "step": "pick",
+   "ms": 3670,
+   "tokens": {
+    "input": 1294,
+    "output": 88,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003468
+  },
+  {
+   "step": "pick",
+   "ms": 3670,
+   "tokens": {
+    "input": 1310,
+    "output": 96,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00358
+  },
+  {
+   "step": "pick",
+   "ms": 3348,
+   "tokens": {
+    "input": 1312,
+    "output": 130,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003924
+  },
+  {
+   "step": "fix fresh_ginger",
+   "ms": 4144,
+   "tokens": {
+    "input": 2100,
+    "output": 423,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00843
+  },
+  {
+   "step": "fix yellow_onion",
+   "ms": 6111,
+   "tokens": {
+    "input": 2081,
+    "output": 708,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.011242
+  },
+  {
+   "step": "fix peanut_butter",
+   "ms": 6265,
+   "tokens": {
+    "input": 2147,
+    "output": 792,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.012214
+  },
+  {
+   "step": "fix chicken_breast",
+   "ms": 6591,
+   "tokens": {
+    "input": 2179,
+    "output": 803,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.012388
+  },
+  {
+   "step": "fix lime_juice",
+   "ms": 7254,
+   "tokens": {
+    "input": 1935,
+    "output": 913,
+    "cachedInput": 0,
+    "reasoning": 446
+   },
+   "costUsd": 0.013
+  },
+  {
+   "step": "fix coconut_milk",
+   "ms": 10605,
+   "tokens": {
+    "input": 1949,
+    "output": 1361,
+    "cachedInput": 0,
+    "reasoning": 570
+   },
+   "costUsd": 0.017508
+  },
+  {
+   "step": "pick",
+   "ms": 2649,
+   "tokens": {
+    "input": 1065,
+    "output": 120,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00333
+  },
+  {
+   "step": "pick",
+   "ms": 2360,
+   "tokens": {
+    "input": 1035,
+    "output": 135,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00342
+  },
+  {
+   "step": "pick",
+   "ms": 2564,
+   "tokens": {
+    "input": 1021,
+    "output": 119,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003232
+  },
+  {
+   "step": "pick",
+   "ms": 1930,
+   "tokens": {
+    "input": 1033,
+    "output": 98,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003046
+  },
+  {
+   "step": "pick",
+   "ms": 2437,
+   "tokens": {
+    "input": 970,
+    "output": 119,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00313
+  },
+  {
+   "step": "pick",
+   "ms": 2884,
+   "tokens": {
+    "input": 1019,
+    "output": 120,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003238
+  },
+  {
+   "step": "pick",
+   "ms": 3202,
+   "tokens": {
+    "input": 1035,
+    "output": 124,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00331
+  },
+  {
+   "step": "pick",
+   "ms": 3201,
+   "tokens": {
+    "input": 920,
+    "output": 84,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00268
+  },
+  {
+   "step": "pick",
+   "ms": 2361,
+   "tokens": {
+    "input": 1035,
+    "output": 115,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00322
+  },
+  {
+   "step": "pick",
+   "ms": 1820,
+   "tokens": {
+    "input": 1041,
+    "output": 74,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.002822
+  },
+  {
+   "step": "pick",
+   "ms": 2098,
+   "tokens": {
+    "input": 999,
+    "output": 83,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.002828
+  },
+  {
+   "step": "pick",
+   "ms": 2267,
+   "tokens": {
+    "input": 986,
+    "output": 104,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003012
+  },
+  {
+   "step": "pick",
+   "ms": 2203,
+   "tokens": {
+    "input": 984,
+    "output": 95,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.002918
+  },
+  {
+   "step": "pick",
+   "ms": 4326,
+   "tokens": {
+    "input": 972,
+    "output": 92,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.002864
+  },
+  {
+   "step": "pick",
+   "ms": 3381,
+   "tokens": {
+    "input": 904,
+    "output": 43,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.002238
+  }
+ ],
+ "raw": {
+  "isFoodOrderRequest": true,
+  "declineReason": null,
+  "covers": 200,
+  "serviceDate": "2026-11-17",
+  "occasion": "school lunch",
+  "requiredClaims": [],
+  "forbiddenAllergens": [],
+  "assumptions": [
+   "Tuesday taken as 2026-11-17, the next Tuesday.",
+   "Rice served as a side with the chicken."
+  ],
+  "conflicts": [
+   "Kitchen rule: no nuts or peanuts of any kind, but the chef asked for peanut satay chicken, which is made with peanuts.",
+   "Kitchen rule: dairy must be lactose-free; any dairy used in the satay must be lactose-free.",
+   "Kitchen rule: no nuts or peanuts of any kind. The chef explicitly asked for peanut satay chicken, so peanut butter is included. Needs chef's decision; a peanut-free sauce (e.g. sunflower seed butter) would meet the rule."
+  ],
+  "dishes": [
+   {
+    "name": "Peanut satay chicken",
+    "nameFi": "Maapähkinä-satay-kana",
+    "course": "main",
+    "serviceDate": "2026-11-17",
+    "portion": "about 150 g chicken with sauce",
+    "method": "Chicken pieces are browned and simmered in a peanut satay sauce.",
+    "ingredients": [
+     {
+      "key": "chicken_breast",
+      "name": "Chicken breast",
+      "searchTerms": [
+       "broilerin rintafilee",
+       "kanan rintafilee",
+       "chicken breast fillet"
+      ],
+      "role": "main protein, browned and simmered",
+      "perCover": {
+       "amount": 110,
+       "unit": "g"
+      },
+      "yieldPct": 95,
+      "amountBasis": "about 150 g portion with sauce, roughly 110 g raw chicken",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "savustettu",
+       "smoked",
+       "valmis",
+       "marinoitu",
+       "marinated"
+      ]
+     },
+     {
+      "key": "peanut_butter",
+      "name": "Peanut butter",
+      "searchTerms": [
+       "maapähkinävoi",
+       "peanut butter"
+      ],
+      "role": "base of the satay sauce",
+      "perCover": {
+       "amount": 20,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 20 g per portion for sauce body",
+      "pantry": false,
+      "form": "any",
+      "avoid": [
+       "suklaa",
+       "chocolate"
+      ]
+     },
+     {
+      "key": "coconut_milk",
+      "name": "Coconut milk",
+      "searchTerms": [
+       "kookosmaito",
+       "coconut milk"
+      ],
+      "role": "sauce liquid and creaminess",
+      "perCover": {
+       "amount": 40,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "sauce liquid for a 150 g portion",
+      "pantry": false,
+      "form": "canned_or_jarred",
+      "avoid": [
+       "kookosvesi",
+       "coconut water",
+       "makeutettu",
+       "sweetened"
+      ]
+     },
+     {
+      "key": "soy_sauce",
+      "name": "Soy sauce",
+      "searchTerms": [
+       "soijakastike",
+       "soy sauce"
+      ],
+      "role": "seasoning, umami",
+      "perCover": {
+       "amount": 5,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "seasoning for a sauce portion",
+      "pantry": false,
+      "form": "any",
+      "avoid": [
+       "makea",
+       "sweet"
+      ]
+     },
+     {
+      "key": "yellow_onion",
+      "name": "Yellow onion",
+      "searchTerms": [
+       "keltasipuli",
+       "sipuli",
+       "yellow onion"
+      ],
+      "role": "aromatic base",
+      "perCover": {
+       "amount": 25,
+       "unit": "g"
+      },
+      "yieldPct": 90,
+      "amountBasis": "small share of sauce base",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "punasipuli",
+       "red",
+       "paistettu",
+       "friteerattu",
+       "fried"
+      ]
+     },
+     {
+      "key": "garlic",
+      "name": "Garlic",
+      "searchTerms": [
+       "valkosipuli",
+       "garlic"
+      ],
+      "role": "aromatic",
+      "perCover": {
+       "amount": 2,
+       "unit": "g"
+      },
+      "yieldPct": 85,
+      "amountBasis": "about half a clove per portion",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "murskattu",
+       "jauhe",
+       "powder"
+      ]
+     },
+     {
+      "key": "fresh_ginger",
+      "name": "Fresh ginger",
+      "searchTerms": [
+       "inkivääri tuore",
+       "inkivääri",
+       "fresh ginger"
+      ],
+      "role": "aromatic, satay flavour",
+      "perCover": {
+       "amount": 2,
+       "unit": "g"
+      },
+      "yieldPct": 90,
+      "amountBasis": "small amount for flavour",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "jauhe",
+       "ground",
+       "kuivattu",
+       "dried"
+      ]
+     },
+     {
+      "key": "lime_juice",
+      "name": "Lime juice",
+      "searchTerms": [
+       "limemehu",
+       "lime juice"
+      ],
+      "role": "acidity to balance sauce",
+      "perCover": {
+       "amount": 3,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "splash per portion",
+      "pantry": false,
+      "form": "any",
+      "avoid": [
+       "siirappi",
+       "sweetened"
+      ]
+     },
+     {
+      "key": "brown_sugar",
+      "name": "Sugar",
+      "searchTerms": [
+       "sokeri",
+       "sugar"
+      ],
+      "role": "balances sauce sweetness",
+      "perCover": {
+       "amount": 2,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "pinch per portion",
+      "pantry": true,
+      "form": "any",
+      "avoid": []
+     },
+     {
+      "key": "ground_coriander",
+      "name": "Ground coriander",
+      "searchTerms": [
+       "korianterijauhe",
+       "ground coriander"
+      ],
+      "role": "dried spice for satay flavour",
+      "perCover": {
+       "amount": 0.5,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "seasoning",
+      "pantry": true,
+      "form": "dried",
+      "avoid": [
+       "tuore",
+       "fresh",
+       "siemen",
+       "seed"
+      ]
+     },
+     {
+      "key": "chili_flakes",
+      "name": "Mild chili flakes",
+      "searchTerms": [
+       "chilihiutaleet",
+       "chili flakes"
+      ],
+      "role": "mild heat, optional kept light for children",
+      "perCover": {
+       "amount": 0.2,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "very small amount for school children",
+      "pantry": true,
+      "form": "dried",
+      "avoid": [
+       "tuore",
+       "fresh"
+      ]
+     },
+     {
+      "key": "rapeseed_oil",
+      "name": "Rapeseed oil",
+      "searchTerms": [
+       "rypsiöljy",
+       "rapeseed oil"
+      ],
+      "role": "browning the chicken",
+      "perCover": {
+       "amount": 5,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "frying oil per portion",
+      "pantry": true,
+      "form": "any",
+      "avoid": [
+       "oliiviöljy",
+       "olive"
+      ]
+     },
+     {
+      "key": "salt",
+      "name": "Salt",
+      "searchTerms": [
+       "suola",
+       "salt"
+      ],
+      "role": "seasoning",
+      "perCover": {
+       "amount": 1.5,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "seasoning",
+      "pantry": true,
+      "form": "any",
+      "avoid": []
+     }
+    ]
+   },
+   {
+    "name": "Steamed rice",
+    "nameFi": "Keitetty riisi",
+    "course": "side",
+    "serviceDate": "2026-11-17",
+    "portion": "about 150 g cooked rice",
+    "method": "Rice is boiled or steamed in salted water until tender.",
+    "ingredients": [
+     {
+      "key": "long_grain_rice",
+      "name": "Long grain rice",
+      "searchTerms": [
+       "pitkäjyväinen riisi",
+       "jasmiiniriisi",
+       "long grain rice"
+      ],
+      "role": "main ingredient, cooked as the side",
+      "perCover": {
+       "amount": 55,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "150 g cooked rice, about 2.7x weight gain from dry",
+      "pantry": false,
+      "form": "dried",
+      "avoid": [
+       "riisinuudeli",
+       "noodle",
+       "riisijauho",
+       "flour",
+       "puuro",
+       "porridge",
+       "pikariisi",
+       "paistettu",
+       "ready",
+       "valmis",
+       "maitoriisi"
+      ]
+     },
+     {
+      "key": "salt",
+      "name": "Salt",
+      "searchTerms": [
+       "suola",
+       "salt"
+      ],
+      "role": "seasons the cooking water",
+      "perCover": {
+       "amount": 1,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 0.7% of cooking water, partly absorbed",
+      "pantry": true,
+      "form": "any",
+      "avoid": []
+     }
+    ]
+   }
+  ]
+ },
+ "fixes": {
+  "fresh_ginger": {
+   "options": [
+    {
+     "kind": "change_dish",
+     "title": "Peanut-free chicken curry",
+     "effect": "Dish becomes a peanut-free chicken sauce with a dried-spice flavour, so guests will notice it is no longer satay.",
+     "changesDish": true,
+     "ingredient": null,
+     "perCover": null
+    },
+    {
+     "kind": "substitute",
+     "title": "Dried ginger powder",
+     "effect": "Gives warm ginger flavour in the simmered sauce, a bit less fresh and sharp.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "ginger_ground",
+      "name": "Ground ginger",
+      "searchTerms": [
+       "ground ginger",
+       "ginger powder",
+       "inkivääri jauhettu",
+       "ingefära malen"
+      ],
+      "role": "aromatic, satay flavour",
+      "perCover": {
+       "amount": 0.7,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "About a third of the fresh amount, added to the simmering sauce.",
+      "form": "dried",
+      "avoid": [
+       "peanut",
+       "nut",
+       "may contain nuts"
+      ]
+     },
+     "perCover": 0.7
+    },
+    {
+     "kind": "change_amount",
+     "title": "Leave out ginger",
+     "effect": "Sauce is slightly less aromatic, but the dish still works with the other spices.",
+     "changesDish": false,
+     "ingredient": null,
+     "perCover": 0
+    }
+   ]
+  },
+  "yellow_onion": {
+   "options": [
+    {
+     "kind": "substitute",
+     "title": "Frozen chopped onion",
+     "effect": "Frozen chopped onion browns and softens in the sauce base just like fresh, with a slightly milder flavour.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "onion_frozen_chopped",
+      "name": "Frozen chopped onion",
+      "searchTerms": [
+       "frozen chopped onion",
+       "sipulikuutio pakaste",
+       "hackad lök fryst"
+      ],
+      "role": "aromatic base",
+      "perCover": {
+       "amount": 25,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "as bought, frozen, no waste",
+      "form": "frozen",
+      "avoid": [
+       "breaded",
+       "fried onion rings",
+       "crispy onion",
+       "sauce mixes",
+       "nut"
+      ]
+     },
+     "perCover": 25
+    },
+    {
+     "kind": "substitute",
+     "title": "Leek as aromatic base",
+     "effect": "Leek gives a milder, sweeter base that works well in the satay sauce.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "leek",
+      "name": "Leek",
+      "searchTerms": [
+       "leek",
+       "purjo",
+       "purjolök"
+      ],
+      "role": "aromatic base",
+      "perCover": {
+       "amount": 30,
+       "unit": "g"
+      },
+      "yieldPct": 70,
+      "amountBasis": "trimmed weight 30 g per cover, white and light green parts",
+      "form": "fresh",
+      "avoid": [
+       "pickled",
+       "cream sauce",
+       "ready mix",
+       "nut"
+      ]
+     },
+     "perCover": 30
+    },
+    {
+     "kind": "substitute",
+     "title": "Dried onion granules",
+     "effect": "Dried onion gives the same savoury base in the sauce at about a fifth of the amount, with less sweetness.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "onion_dried",
+      "name": "Dried onion granules",
+      "searchTerms": [
+       "dried onion",
+       "onion granules",
+       "kuivattu sipuli",
+       "sipulirouhe",
+       "torkad lök"
+      ],
+      "role": "aromatic base",
+      "perCover": {
+       "amount": 5,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "dried, about one fifth of fresh weight",
+      "form": "dried",
+      "avoid": [
+       "fried onion",
+       "crispy onion",
+       "seasoning mix",
+       "nut"
+      ]
+     },
+     "perCover": 5
+    }
+   ]
+  },
+  "peanut_butter": {
+   "options": [
+    {
+     "kind": "substitute",
+     "title": "Sunflower seed butter",
+     "effect": "Gives the same creamy, rich sauce base without peanuts; flavour is slightly less sweet and nutty but works with soy, lime and ginger.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "sunflower_seed_butter",
+      "name": "Sunflower seed butter",
+      "searchTerms": [
+       "sunflower seed butter",
+       "auringonkukansiemenvoi",
+       "solrosfrösmör"
+      ],
+      "role": "creamy base of the satay sauce",
+      "perCover": {
+       "amount": 20,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "same amount as peanut butter, stirred into the sauce",
+      "form": "any",
+      "avoid": [
+       "peanut",
+       "nuts",
+       "may contain nuts",
+       "may contain peanuts"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "substitute",
+     "title": "Tahini sesame paste",
+     "effect": "Provides a creamy, savoury sauce base; the taste is more sesame than peanut, and sesame must be declared as an allergen.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "tahini",
+      "name": "Tahini (sesame paste)",
+      "searchTerms": [
+       "tahini",
+       "seesamitahini",
+       "sesampasta"
+      ],
+      "role": "creamy base of the satay sauce",
+      "perCover": {
+       "amount": 15,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "slightly less than peanut butter as tahini is stronger and more bitter",
+      "form": "any",
+      "avoid": [
+       "peanut",
+       "nuts",
+       "may contain nuts",
+       "may contain peanuts"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "change_dish",
+     "title": "Peanut-free coconut chicken",
+     "effect": "Chicken is simmered in a mild coconut curry sauce instead of satay, so guests get a different but child-friendly dish.",
+     "changesDish": true,
+     "ingredient": {
+      "key": "coconut_milk",
+      "name": "Coconut milk",
+      "searchTerms": [
+       "coconut milk",
+       "kookosmaito",
+       "kokosmjölk"
+      ],
+      "role": "base of the replacement sauce",
+      "perCover": {
+       "amount": 50,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "replaces peanut butter as the sauce base, simmered with the chicken",
+      "form": "canned_or_jarred",
+      "avoid": [
+       "peanut",
+       "nuts",
+       "may contain nuts",
+       "may contain peanuts"
+      ]
+     },
+     "perCover": null
+    }
+   ]
+  },
+  "chicken_breast": {
+   "options": [
+    {
+     "kind": "substitute",
+     "title": "Frozen chicken thigh strips",
+     "effect": "Thigh meat browns and simmers well in the sauce and stays juicy, with a slightly richer taste than breast.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "chicken_thigh",
+      "name": "Chicken thigh meat, boneless",
+      "searchTerms": [
+       "chicken thigh boneless",
+       "kanan reisifilee",
+       "kyckling lårfilé",
+       "broilerin reisi"
+      ],
+      "role": "main protein, browned and simmered",
+      "perCover": {
+       "amount": 115,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "raw weight, boneless and skinless",
+      "form": "any",
+      "avoid": [
+       "breaded",
+       "marinated",
+       "seasoned",
+       "contains nuts",
+       "may contain nuts",
+       "may contain peanuts"
+      ]
+     },
+     "perCover": 115
+    },
+    {
+     "kind": "change_dish",
+     "title": "Sunflower seed satay chicken",
+     "effect": "The peanut sauce is made with sunflower seed butter, so it is nut-free but tastes milder and less like classic satay.",
+     "changesDish": true,
+     "ingredient": {
+      "key": "sunflower_seed_butter",
+      "name": "Sunflower seed butter",
+      "searchTerms": [
+       "sunflower seed butter",
+       "auringonkukkasiemenvoi",
+       "solrosfrösmör",
+       "sunflower spread"
+      ],
+      "role": "nut-free base for the satay sauce",
+      "perCover": {
+       "amount": 20,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "per cover for sauce",
+      "form": "any",
+      "avoid": [
+       "peanut",
+       "nuts",
+       "may contain nuts",
+       "may contain peanuts",
+       "no allergen data"
+      ]
+     },
+     "perCover": 20
+    },
+    {
+     "kind": "change_dish",
+     "title": "Chicken in coconut curry sauce",
+     "effect": "Chicken is simmered in a coconut and mild curry sauce with no peanut, so the dish is clearly different from satay.",
+     "changesDish": true,
+     "ingredient": {
+      "key": "coconut_milk",
+      "name": "Coconut milk",
+      "searchTerms": [
+       "coconut milk",
+       "kookosmaito",
+       "kokosmjölk"
+      ],
+      "role": "sauce base replacing the peanut satay sauce",
+      "perCover": {
+       "amount": 60,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "per cover for sauce",
+      "form": "canned_or_jarred",
+      "avoid": [
+       "may contain nuts",
+       "may contain peanuts",
+       "no allergen data"
+      ]
+     },
+     "perCover": 60
+    }
+   ]
+  },
+  "lime_juice": {
+   "options": [
+    {
+     "kind": "substitute",
+     "title": "Lemon juice instead",
+     "effect": "Gives the same fresh acidity to balance the sauce, with a slightly less aromatic citrus note.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "lemon_juice",
+      "name": "Lemon juice",
+      "searchTerms": [
+       "lemon juice",
+       "sitruunamehu",
+       "citronjuice"
+      ],
+      "role": "acidity to balance sauce",
+      "perCover": {
+       "amount": 3,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "same amount as lime juice",
+      "form": "any",
+      "avoid": [
+       "nuts",
+       "peanuts",
+       "sweetened"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "substitute",
+     "title": "Rice vinegar instead",
+     "effect": "Adds mild, clean acidity that balances the sauce, without the citrus flavour.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "rice_vinegar",
+      "name": "Rice vinegar",
+      "searchTerms": [
+       "rice vinegar",
+       "riisiviinietikka",
+       "risvinäger"
+      ],
+      "role": "acidity to balance sauce",
+      "perCover": {
+       "amount": 2.5,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "slightly less than lime juice, as it is milder in flavour but similar in acidity",
+      "form": "any",
+      "avoid": [
+       "nuts",
+       "peanuts",
+       "seasoned",
+       "sweetened"
+      ]
+     },
+     "perCover": null
+    }
+   ]
+  },
+  "coconut_milk": {
+   "options": [
+    {
+     "kind": "substitute",
+     "title": "Lactose-free cooking cream",
+     "effect": "Gives the sauce the same body and creaminess when simmered, without the coconut flavour.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "cooking_cream_lf",
+      "name": "Lactose-free cooking cream",
+      "searchTerms": [
+       "lactose-free cooking cream",
+       "laktoositon ruokakerma",
+       "laktosfri matlagningsgrädde"
+      ],
+      "role": "sauce liquid and creaminess",
+      "perCover": {
+       "amount": 40,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "Same volume as the coconut milk, simmered into the sauce",
+      "form": "any",
+      "avoid": [
+       "nuts",
+       "peanuts",
+       "products with lactose"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "substitute",
+     "title": "Chicken stock as sauce liquid",
+     "effect": "Keeps the sauce loose and savoury but makes it clearly less creamy.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "chicken_stock",
+      "name": "Chicken stock (liquid or from concentrate)",
+      "searchTerms": [
+       "chicken stock",
+       "kanaliemi",
+       "kycklingbuljong"
+      ],
+      "role": "sauce liquid",
+      "perCover": {
+       "amount": 50,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "A little more than the coconut milk, because some of it reduces while simmering",
+      "form": "any",
+      "avoid": [
+       "nuts",
+       "peanuts",
+       "products with lactose"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "change_dish",
+     "title": "Chicken in mild curry cream sauce",
+     "effect": "Becomes a mild, peanut-free curry chicken with a cream sauce; guests would notice the different dish.",
+     "changesDish": true,
+     "ingredient": {
+      "key": "cooking_cream_lf_curry",
+      "name": "Lactose-free cooking cream",
+      "searchTerms": [
+       "lactose-free cooking cream",
+       "laktoositon ruokakerma",
+       "laktosfri matlagningsgrädde"
+      ],
+      "role": "sauce base for curry chicken",
+      "perCover": {
+       "amount": 60,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "Replaces both the coconut milk and the peanut sauce body; mild curry spice is added from the dried spices in stock",
+      "form": "any",
+      "avoid": [
+       "nuts",
+       "peanuts",
+       "products with lactose"
+      ]
+     },
+     "perCover": null
+    }
+   ]
+  }
+ }
+}
