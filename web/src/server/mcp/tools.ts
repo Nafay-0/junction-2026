@@ -32,7 +32,15 @@ import { nextStepForIntake, nextStepForOrder, waitingFor } from "./next-step";
  * To add a tool: append an entry here. Nothing else changes.
  */
 
-export type ToolContext = { dock: Dock; session: AgentSession; guard: LiveLookupGuard; agentKey: string; human: HumanChannel };
+export type ToolContext = {
+  dock: Dock;
+  session: AgentSession;
+  guard: LiveLookupGuard;
+  agentKey: string;
+  human: HumanChannel;
+  /** Who the audit trail names when the agent does not say: set when Dock knows the person behind the connection (a kitchen's connector address). */
+  defaultBy?: string;
+};
 
 type ToolDef<I extends z.ZodObject, O extends z.ZodObject> = {
   name: string;
@@ -55,7 +63,11 @@ const budget = z
 
 const requestId = z.string().min(1).describe("The requestId returned by submit_need (step.requestId) or open_request.");
 const intakeId = z.string().min(1).describe("The requestId submit_need returned (step.requestId).");
-const by = z.string().min(1).max(120).describe("The name of the human buyer whose answer this is. Written to the audit ledger with the answer.");
+const by = z
+  .string()
+  .min(1)
+  .max(120)
+  .describe("The name of the human buyer whose answer this is, if they told you; written to the audit ledger with the answer. Do not invent one: leave it out and Dock says if it needs it.");
 
 const intakeOut = z.object({
   step: IntakeStepSchema,
@@ -69,6 +81,9 @@ const wrongState = (step: IntakeView, what: string) =>
 
 const humanAnswerRequired = (what: string) =>
   new DockError(400, "human_answer_required", `${what} must come from the human buyer. Ask them, then call again with their answer and their name as by.`, "human_input");
+
+const RELAY_ONLY =
+  "The buyer's original request does not count as their answer: Dock asks because something differs from what it knows, so put the question to them and wait for their reply.";
 
 const n = NeedSchema.shape;
 const NeedArg = z
@@ -101,13 +116,13 @@ const INTAKE_TOOLS = [
       "START HERE for any new purchase. Send the buyer's need as structured fields (what, how much, by when, must-haves). Dock checks it against the kitchen's own order history for likely mistakes (for example 1,000 L where they usually order 100 L, or a delivery day it cannot make), asks at most two short questions its memory cannot answer, then offers option cards with pros and cons. Returns a step whose `state` is needs_confirmation, needs_input, options_ready, quoted, no_options or cancelled; `nextStep` says exactly which tool to call next and `waitingFor` says whether you must wait for the human buyer.",
     input: z.object({ need: NeedArg, by: by.optional().describe("The name of the person asking, if you know it.") }),
     output: intakeOut,
-    run: async ({ dock, session }, args) => intakeResult(await dock.intake.open(session, args)),
+    run: async ({ dock, session, defaultBy }, args) => intakeResult(await dock.intake.open(session, { ...args, by: args.by ?? defaultBy })),
   }),
   tool({
     name: "respond_to_concerns",
     title: "Pass on the buyer's answer to a mistake check",
     description:
-      "Use only when the step is needs_confirmation. Dock found something that looks like a mistake (step.concerns: a message and fixed choices). The answer MUST come from the human buyer: relay each concern's message to them and pass on exactly what they choose; never confirm or correct on their behalf. For each concern send its key and choice: \"confirm\" (keep it as asked; only if the concern is confirmable) or one of its correction ids. If your MCP client supports elicitation, Dock asks the buyer directly through it and your arguments only pre-fill the form. Until this is answered, quotes and orders for the request are refused.",
+      `Use only when the step is needs_confirmation. Dock found something that looks like a mistake (step.concerns: a message and fixed choices). The answer MUST come from the human buyer: relay each concern's message to them in plain words with its choices, wait for their reply, and pass on exactly what they choose; never confirm or correct on their behalf. ${RELAY_ONLY} For each concern send its key and choice: \"confirm\" (keep it as asked; only if the concern is confirmable) or one of its correction ids. If your MCP client supports elicitation, Dock asks the buyer directly through it and your arguments only pre-fill the form. Until this is answered, quotes and orders for the request are refused.`,
     input: z.object({
       requestId: intakeId,
       by: by.optional(),
@@ -117,20 +132,21 @@ const INTAKE_TOOLS = [
     }),
     output: intakeOut,
     humanInput: true,
-    run: async ({ dock, session, human }, { requestId, ...proposed }) => {
+    run: async ({ dock, session, human, defaultBy }, { requestId, ...proposed }) => {
       const step = await dock.intake.get(session, requestId);
       if (step.state !== "needs_confirmation") throw wrongState(step, "respond to concerns");
       const answer = human.canAsk ? concernsFromBuyer(step, human, proposed) : proposed;
       if (answer instanceof AskHuman) return answer;
-      if (!answer.by || !answer.responses) throw humanAnswerRequired("A confirmation or correction");
-      return intakeResult(await dock.intake.respondToConcerns(session, requestId, { by: answer.by, responses: answer.responses }));
+      const who = answer.by || defaultBy;
+      if (!who || !answer.responses) throw humanAnswerRequired("A confirmation or correction");
+      return intakeResult(await dock.intake.respondToConcerns(session, requestId, { by: who, responses: answer.responses }));
     },
   }),
   tool({
     name: "answer_questions",
     title: "Pass on the buyer's answers to Dock's questions",
     description:
-      "Use when the step is needs_input (at most two questions in step.questions, each with fixed options), or in options_ready to change an answer Dock took from memory (step.fromMemory). The answers MUST come from the human buyer: ask them each question with its options and pass on what they pick; never guess or answer for them. Send one optionId per questionId; remember: true stores the answer as the kitchen's rule for next time. If your MCP client supports elicitation, Dock asks the buyer directly through it and your arguments only pre-fill the form.",
+      "Use when the step is needs_input (at most two questions in step.questions, each with fixed options), or in options_ready to change an answer Dock took from memory (step.fromMemory). The answers MUST come from the human buyer: ask them each question with its options, wait for their reply, and pass on what they pick; never guess or answer for them, even if the answer seems obvious from earlier in the conversation. Send one optionId per questionId; remember: true stores the answer as the kitchen's rule for next time. If your MCP client supports elicitation, Dock asks the buyer directly through it and your arguments only pre-fill the form.",
     input: z.object({
       requestId: intakeId,
       by: by.optional(),
@@ -138,23 +154,28 @@ const INTAKE_TOOLS = [
     }),
     output: intakeOut,
     humanInput: true,
-    run: async ({ dock, session, human }, { requestId, ...proposed }) => {
+    run: async ({ dock, session, human, defaultBy }, { requestId, ...proposed }) => {
       const step = await dock.intake.get(session, requestId);
       if (step.state !== "needs_input" && step.state !== "options_ready") throw wrongState(step, "answer questions");
       const answer = human.canAsk ? answersFromBuyer(step, human, proposed) : proposed;
       if (answer instanceof AskHuman) return answer;
-      if (!answer.by || !answer.answers) throw humanAnswerRequired("An answer");
-      return intakeResult(await dock.intake.answer(session, requestId, { by: answer.by, answers: answer.answers }));
+      const who = answer.by || defaultBy;
+      if (!who || !answer.answers) throw humanAnswerRequired("An answer");
+      return intakeResult(await dock.intake.answer(session, requestId, { by: who, answers: answer.answers }));
     },
   }),
   tool({
     name: "choose_option",
     title: "Choose an option and get its fixed-price quote",
     description:
-      "Use when the step is options_ready. Show the buyer the option cards (title, total, delivery, pros, cons, and signOff for any that a person must approve) and send the optionId they pick, or step.preselected.optionId if they asked you to decide. The wholesaler signs a fixed-price quote for it; the step becomes quoted and `step.next.example` holds the exact arguments for place_order.",
-    input: z.object({ requestId: intakeId, optionId: ChoiceInput.shape.optionId.describe("An optionId from step.options."), by: by.describe("Who chose: the buyer's name, or yours if they asked you to decide.") }),
+      "Use when the step is options_ready. Show the buyer the option cards in plain words (title, total, delivery, pros, cons, and signOff for any that a person must approve), wait for their pick, and send that optionId; send step.preselected.optionId only if they asked you to decide. The wholesaler signs a fixed-price quote for it; the step becomes quoted and `step.next.example` holds the exact arguments for place_order.",
+    input: z.object({ requestId: intakeId, optionId: ChoiceInput.shape.optionId.describe("An optionId from step.options."), by: by.optional().describe("Who chose: the buyer's name if they told you, or yours if they asked you to decide.") }),
     output: intakeOut,
-    run: async ({ dock, session }, { requestId, ...choice }) => intakeResult(await dock.intake.choose(session, requestId, choice)),
+    run: async ({ dock, session, defaultBy }, { requestId, optionId, by: chooser }) => {
+      const who = chooser ?? defaultBy;
+      if (!who) throw new DockError(400, "invalid_request", "Say who chose: send by with the buyer's name, or yours if they asked you to decide.");
+      return intakeResult(await dock.intake.choose(session, requestId, { optionId, by: who }));
+    },
   }),
   tool({
     name: "get_intake_step",
@@ -286,7 +307,7 @@ const CORE_TOOLS = [
     name: "place_order",
     title: "Place an order against a quote",
     description:
-      "Order exactly what a quote offers, at the quoted prices: after choose_option, pass step.next.example as the arguments. Dock's gate checks the order against your mandate in plain code. Three outcomes: committed (within the mandate; the result carries the wholesaler-signed confirmation), pending_approval (a person named in the mandate must sign off; they are notified directly, you must NOT retry), or refused (the error names the rule, e.g. weekly_budget). A quote buys once.",
+      "Order exactly what a quote offers, at the quoted prices: after choose_option, pass step.next.example as the arguments. Dock's gate checks the order against your mandate in plain code. Three outcomes: committed (within the mandate; the result carries the wholesaler-signed confirmation), pending_approval (a person named in the mandate must sign off on their own phone; tell the buyer who, in one sentence, and stop: you must NOT retry, re-place or split it), or refused (the error names the rule, e.g. weekly_budget). A quote buys once.",
     input: PlaceOrderInput.extend({
       requestId,
       quoteToken: z.string().min(1).describe("quoteToken from request_quote, unchanged."),

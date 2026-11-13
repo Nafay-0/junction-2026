@@ -1,5 +1,6 @@
 import {
   CLIENT_CAPABILITIES_META_KEY,
+  type AuthInfo,
   McpServer,
   createMcpHandler,
   localhostAllowedOrigins,
@@ -10,9 +11,11 @@ import {
 } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { DockError } from "@/core/orders";
-import { authenticate } from "../http";
+import { resolveKitchen } from "../console-kitchens";
+import { authenticate, errorBody } from "../http";
 import { getRuntime, type Runtime } from "../runtime";
 import { AskHuman, HUMAN_INPUT_META, type HumanChannel } from "./ask-human";
+import { ConnectorService, connectorSecret, type Connector, type ConnectorKitchen, type ConnectorLimitKind } from "./connectors";
 import { LiveLookupGuard } from "./live-lookup-guard";
 import { nextStepFor } from "./next-step";
 import { TOOLS, type DockTool } from "./tools";
@@ -22,9 +25,13 @@ import { TOOLS, type DockTool } from "./tools";
  * fresh McpServer from the factory below. Speaks the 2026-07-28 revision and, through the SDK's stateless
  * fallback, the 2025-era handshake (2025-11-25 and earlier) that most clients still send.
  *
- * Auth is the same credential the REST API takes, sent as HTTP headers on every request:
- *   Authorization: Bearer <mandate JWS>   (or `Mandate <jws>`)
- *   Dock-Agent-Id: <agent id the mandate names>
+ * Two doors, one gate:
+ *   /api/mcp            the agent presents its credential as HTTP headers on every request:
+ *                         Authorization: Bearer <mandate JWS>   (or `Mandate <jws>`)
+ *                         Dock-Agent-Id: <agent id the mandate names>
+ *   /api/mcp/c/<token>  a connector address (connectors.ts) for assistants that can only be given a URL: the
+ *                       token stands for one kitchen's mandate and agent id, held on the server. Every call is
+ *                       authenticated with exactly those, so the same checks apply, plus per-address limits.
  * Listing tools needs no mandate; every tool call verifies it. A refused call is a tool result with
  * isError and structuredContent `{ ok: false, error: { code, rule, message, details }, nextStep }`,
  * the same code and rule the REST API returns.
@@ -32,19 +39,23 @@ import { TOOLS, type DockTool } from "./tools";
 
 export const MCP_SERVER_INFO = { name: "dock", title: "Dock", version: "1.0.0" };
 
-export const MCP_INSTRUCTIONS = `Dock is a wholesaler's ordering gateway for purchasing agents. You buy on behalf of an organisation that signed a mandate saying what you may buy; Dock checks every order against it in plain code.
+export const MCP_INSTRUCTIONS = `Dock is a wholesaler's ordering gateway. You order food for a kitchen under a mandate its organisation signed; Dock checks every order in plain code and a named person signs off anything beyond it.
 
-Start every new order with submit_need (the buyer's need as fields). Dock then leads: each result has a step with a state and a nextStep naming the next call.
+Start every new order with submit_need. Each result has a step, waitingFor and nextStep: do what nextStep says.
+When waitingFor is "buyer", Dock needs the person's own answer: ask them Dock's question in plain words with its choices, then stop and wait for their reply. Never answer or confirm for them, even when one choice looks obvious.
+When place_order returns pending_approval, tell the person in one sentence who must sign off (they are asked on their own phone) and stop. Do not retry, place it again, split it or find another way round.
+
 Flow: read_mandate -> submit_need -> [respond_to_concerns] -> [answer_questions] -> choose_option (signed fixed-price quote) -> place_order -> get_order / explain.
-respond_to_concerns and answer_questions carry the human buyer's own answer: relay Dock's question to them and pass on what they say. Never confirm a likely mistake or answer a question for them. If your client supports elicitation, Dock asks the buyer directly.
+If your client supports elicitation, Dock asks the buyer directly instead.
 Lower-level tools for follow-up: open_request, search_products (free master data), check_availability (live, metered, short lists only), request_quote.
 
 Rules of the road:
+- Fill submit_need with only what the person said and call it; do not ask for details first. Dock asks only what changes the outcome.
+- Talk to the person in plain words: option titles, totals in euros, delivery days. No ids or JSON unless they ask.
 - Quantities are packs. Prices are euro cents ex VAT.
 - Ask live prices only for a short list (at most 10 products per call); never scan the catalogue.
 - If the preferred product is short, quote what it has and add a substitute line with substituteFor.
-- place_order may return pending_approval: a person signs off on their own device. Do not retry; follow up with get_order.
-- Every refusal names the rule that fired (error.rule) and says what to do next (nextStep).`;
+- Every refusal names the rule that fired (error.rule) and says what to do next (nextStep). A refusal is final unless nextStep says how to fix it: tell the person, do not loop.`;
 
 type ToolResult = (CallToolResult & { structuredContent: Record<string, unknown> }) | InputRequiredResult;
 
@@ -72,6 +83,59 @@ function guardFor(rt: Runtime): LiveLookupGuard {
   return g;
 }
 
+// ---------- connector addresses ----------
+
+/** Kitchens whose first connector address comes from configuration (DOCK_CONNECTOR_SECRET). */
+export const DEMO_CONNECTOR_KITCHENS = ["kaari", "laakso"] as const;
+
+async function connectorKitchen(slug: string): Promise<ConnectorKitchen | undefined> {
+  const k = await resolveKitchen(slug);
+  return k && { slug, kind: k.info.kind, name: k.info.name, mandateToken: k.mandateToken, agentId: k.agentId, by: k.info.by, expiresAt: k.info.expiresAt };
+}
+
+const connectorServices = new WeakMap<Runtime, ConnectorService>();
+/** This runtime's connector addresses (a fresh set after resetRuntime, like every other store). */
+export function connectorsFor(rt: Runtime): ConnectorService {
+  let c = connectorServices.get(rt);
+  if (!c) connectorServices.set(rt, (c = new ConnectorService({ resolveKitchen: connectorKitchen, demoKitchens: DEMO_CONNECTOR_KITCHENS, secret: connectorSecret })));
+  return c;
+}
+
+/** A call that came in through a connector address: who it stands for, and what the client said it is. */
+export type ConnectorCall = { connector: Connector; kitchen: ConnectorKitchen; service: ConnectorService; client?: string };
+
+/** Tools that count against a connector address's own limits, beyond the per-request one. */
+const COUNTED: Partial<Record<string, ConnectorLimitKind>> = { submit_need: "requests", open_request: "requests", place_order: "orders" };
+
+/** Which assistant a request came from, best effort from its User-Agent. For the audit trail only; never trusted. */
+export function clientOf(req: Request | undefined): string | undefined {
+  const ua = req?.headers.get("user-agent")?.slice(0, 120);
+  if (!ua) return undefined;
+  const vendor = /claude|anthropic/i.test(ua) ? "Claude" : /openai|chatgpt/i.test(ua) ? "ChatGPT" : /gemini|google/i.test(ua) ? "Gemini" : undefined;
+  return vendor ? `${vendor} (${ua})` : ua;
+}
+
+const lastLogged = new Map<string, number>();
+/** Write a connector refusal to the ledger, at most once per address and reason every ten minutes (a leaked address must not flood it). */
+function logConnectorRefusal(rt: Runtime, key: string, entry: { actor: string; summary: string; data: Record<string, unknown>; requestId?: string }) {
+  const t = Date.now();
+  if ((lastLogged.get(key) ?? 0) > t - 10 * 60_000) return;
+  lastLogged.set(key, t);
+  rt.dock.ledger.append({ type: "refusal", ...entry });
+}
+
+function logChannel(rt: Runtime, via: ConnectorCall, agentId: string, requestId: string, tool: string) {
+  rt.dock.ledger.append({
+    type: "intake",
+    actor: `agent:${agentId}`,
+    requestId,
+    summary: `${via.kitchen.name}: this request came in through the kitchen's connector address (${via.connector.connectorId}), from ${via.client ? `an outside assistant, ${via.client.replace(/ \(.*$/, "")}` : "an outside assistant"}.`,
+    data: { step: "channel", via: "connector", connectorId: via.connector.connectorId, kitchen: via.kitchen.slug, client: via.client, tool },
+  });
+}
+
+// ---------- tools ----------
+
 /**
  * Whether Dock can ask the human through this client: on 2026-07-28 the request's own envelope declares the
  * `elicitation` capability (an empty object means form mode). 2025-era requests reach this stateless server
@@ -84,32 +148,54 @@ export function humanChannel(ctx?: Pick<ServerContext, "mcpReq">): HumanChannel 
   return { canAsk: !!e && (!!e.form || !e.url), responses: ctx?.mcpReq.inputResponses };
 }
 
-/** Authenticate the caller from the HTTP request, run one tool, and shape the result. Never throws a DockError. */
-export async function runTool(rt: Runtime, req: Request | undefined, tool: DockTool, args: unknown, human: HumanChannel = { canAsk: false }): Promise<ToolResult> {
+/**
+ * Authenticate the caller, run one tool, and shape the result. Never throws a DockError.
+ * Through a connector address the credential is the kitchen's own mandate and agent id, held on the server; the
+ * request's headers are ignored. The call is then counted against the address's limits and, when it opens a
+ * request, the ledger records that it came through the connector.
+ */
+export async function runTool(
+  rt: Runtime,
+  req: Request | undefined,
+  tool: DockTool,
+  args: unknown,
+  human: HumanChannel = { canAsk: false },
+  via?: ConnectorCall,
+): Promise<ToolResult> {
   const { dock } = rt;
+  let agentId = req?.headers.get("dock-agent-id") ?? "unknown";
   try {
-    const session = await authenticate(req ?? new Request("http://dock.invalid/"), dock);
+    const session = via ? await dock.authenticate(via.kitchen.mandateToken, via.kitchen.agentId) : await authenticate(req ?? new Request("http://dock.invalid/"), dock);
+    agentId = session.agentId;
     const agentKey = `${session.mandate.issuer.orgId}:${session.agentId}`;
+    const counted = via && COUNTED[tool.name];
+    if (via && counted) via.service.limiter.hit(via.connector.connectorId, counted);
     const run = tool.run as (ctx: Parameters<DockTool["run"]>[0], args: unknown) => Promise<Record<string, unknown> | AskHuman>;
-    const out = await run({ dock, session, guard: guardFor(rt), agentKey, human }, args);
+    const out = await run({ dock, session, guard: guardFor(rt), agentKey, human, defaultBy: via && `${via.kitchen.by}, through the kitchen's connector` }, args);
     if (out instanceof AskHuman) return out.result;
+    if (via && counted === "requests") {
+      const requestId = (out.step as { requestId?: string } | undefined)?.requestId ?? (out.request as { requestId?: string } | undefined)?.requestId;
+      if (requestId) logChannel(rt, via, session.agentId, requestId, tool.name);
+    }
     return result({ ok: true, ...out });
   } catch (err) {
     if (!(err instanceof DockError)) throw err; // the SDK turns it into a generic tool error
+    const requestId = (args as { requestId?: string } | undefined)?.requestId;
     if (err.code === "live_lookup_budget_exceeded") {
-      dock.ledger.append({
-        type: "refusal",
-        actor: `agent:${req?.headers.get("dock-agent-id") ?? "unknown"}`,
-        requestId: (args as { requestId?: string }).requestId,
+      dock.ledger.append({ type: "refusal", actor: `agent:${agentId}`, requestId, summary: `Refused: ${err.message}`, data: { code: err.code, rule: err.rule, status: err.status, ...(via ? { via: "connector", connectorId: via.connector.connectorId } : {}) } });
+    } else if (err.code === "connector_rate_limited" && via) {
+      logConnectorRefusal(rt, `${via.connector.connectorId}:${String(err.details?.kind)}`, {
+        actor: `agent:${agentId}`,
+        requestId,
         summary: `Refused: ${err.message}`,
-        data: { code: err.code, rule: err.rule, status: err.status },
+        data: { code: err.code, rule: err.rule, status: err.status, via: "connector", connectorId: via.connector.connectorId, ...err.details },
       });
     }
     return refusal(err);
   }
 }
 
-export function buildMcpServer(rt: Runtime, req?: Request): McpServer {
+export function buildMcpServer(rt: Runtime, req?: Request, via?: ConnectorCall): McpServer {
   const server = new McpServer(MCP_SERVER_INFO, { instructions: MCP_INSTRUCTIONS });
   for (const tool of TOOLS) {
     server.registerTool(
@@ -124,7 +210,7 @@ export function buildMcpServer(rt: Runtime, req?: Request): McpServer {
           ? { _meta: { [HUMAN_INPUT_META]: { required: true, from: "buyer", how: "elicitation (input_required) when the client supports it, else the agent relays the buyer's own answer" } } }
           : {}),
       },
-      (args: unknown, ctx: ServerContext) => runTool(rt, req, tool, args, humanChannel(ctx)),
+      (args: unknown, ctx: ServerContext) => runTool(rt, req, tool, args, humanChannel(ctx), via),
     );
   }
   return server;
@@ -134,11 +220,65 @@ const handler = createMcpHandler(async ({ requestInfo }) => buildMcpServer(await
   onerror: (err) => console.error("[mcp]", err.message),
 });
 
+const CONNECTOR_AUTH = "dock-connector";
+const connectorHandler = createMcpHandler(
+  async ({ requestInfo, authInfo }) => buildMcpServer(await getRuntime(), requestInfo, authInfo?.clientId === CONNECTOR_AUTH ? (authInfo.extra?.call as ConnectorCall) : undefined),
+  { onerror: (err) => console.error("[mcp connector]", err.message), maxRequestBodySize: 256 * 1024 },
+);
+
+const sameSite = (req: Request) => originValidationResponse(req, [...localhostAllowedOrigins(), new URL(req.url).hostname]);
+
 /**
  * The /api/mcp endpoint. Browsers may only call it from this site or localhost (DNS-rebinding guard the
  * spec asks for); non-browser agents send no Origin and pass.
  */
 export async function serveMcp(req: Request): Promise<Response> {
-  const host = new URL(req.url).hostname;
-  return originValidationResponse(req, [...localhostAllowedOrigins(), host]) ?? handler.fetch(req);
+  return sameSite(req) ?? handler.fetch(req);
+}
+
+/** A JSON-RPC error with an HTTP status. Never 401: a 401 makes Claude and ChatGPT start an OAuth sign-in. */
+function connectorError(status: number, code: string, message: string, headers: Record<string, string> = {}): Response {
+  return Response.json({ jsonrpc: "2.0", id: null, error: { code: -32001, message, data: errorBody(code, message).error } }, { status, headers: { "cache-control": "no-store", ...headers } });
+}
+
+const GONE: Record<"unknown" | "revoked" | "expired", string> = {
+  unknown: "There is no Dock connector at this address. Check the address, or ask the kitchen for its current one.",
+  revoked: "This Dock connector address was revoked. Ask the kitchen for its new address.",
+  expired: "This Dock connector address has expired with its demo kitchen. Scan the code again for a new kitchen.",
+};
+
+/** The /api/mcp/c/<token> endpoint: the same MCP server, authenticated by the connector address. */
+export async function serveConnector(req: Request, token: string): Promise<Response> {
+  const blocked = sameSite(req);
+  if (blocked) return blocked;
+  const rt = await getRuntime();
+  const service = connectorsFor(rt);
+  const found = await service.resolve(token);
+  if (!found.ok) {
+    if (found.connectorId && found.kitchen) {
+      const k = await connectorKitchen(found.kitchen);
+      if (k) {
+        logConnectorRefusal(rt, `${found.connectorId}:${found.reason}`, {
+          actor: `agent:${k.agentId}`,
+          summary: `Refused: ${k.name}'s ${found.reason} connector address (${found.connectorId}) was used.`,
+          data: { code: `connector_${found.reason}`, rule: "connector_address", status: 404, via: "connector", connectorId: found.connectorId, client: clientOf(req) },
+        });
+      }
+    }
+    return connectorError(404, `connector_${found.reason}`, GONE[found.reason]);
+  }
+  try {
+    service.limiter.hit(found.connector.connectorId, "http");
+  } catch (err) {
+    if (!(err instanceof DockError)) throw err;
+    logConnectorRefusal(rt, `${found.connector.connectorId}:http`, {
+      actor: `agent:${found.kitchen.agentId}`,
+      summary: `Refused: ${err.message}`,
+      data: { code: err.code, rule: err.rule, status: 429, via: "connector", connectorId: found.connector.connectorId, client: clientOf(req) },
+    });
+    return connectorError(429, err.code, err.message, { "retry-after": String(err.details?.retryAfterSeconds ?? 60) });
+  }
+  const call: ConnectorCall = { connector: found.connector, kitchen: found.kitchen, service, client: clientOf(req) };
+  const authInfo: AuthInfo = { token: found.connector.connectorId, clientId: CONNECTOR_AUTH, scopes: [], extra: { call } };
+  return connectorHandler.fetch(req, { authInfo });
 }
