@@ -1,6 +1,5 @@
-import { approvalLink, qrSvg } from "@/server/approval-links";
-import { publicBaseUrl, demoTapEnabled } from "@/server/config";
-import { approverOf } from "@/server/approval-api";
+import { approvalLink } from "@/server/approval-links";
+import { demoApprovalQr } from "@/server/presenter";
 import { consoleKitchen } from "@/server/authz";
 import { errorBody, handle } from "@/server/http";
 
@@ -16,7 +15,7 @@ import { errorBody, handle } from "@/server/http";
  */
 export async function GET(req: Request, ctx: RouteContext<"/ui-api/kitchens/[kitchen]/approval/[approvalId]">) {
   return handle(async (rt) => {
-    const { dock, outbox } = rt;
+    const { dock } = rt;
     const { kitchen, approvalId } = await ctx.params;
     const k = await consoleKitchen(req, rt, kitchen);
     if (!k) return Response.json(errorBody("kitchen_not_found", "This kitchen does not exist or its demo time is over."), { status: 404 });
@@ -29,19 +28,6 @@ export async function GET(req: Request, ctx: RouteContext<"/ui-api/kitchens/[kit
       const link = await approvalLink(approvalId, req);
       return Response.json({ mode: "passkey", ...base, url: link.url, qrSvg: link.qrSvg });
     }
-    const { hasPasskey } = await approverOf(rt, approvalId);
-    if (hasPasskey) {
-      const link = await approvalLink(approvalId, req);
-      return Response.json({ mode: "passkey", ...base, url: link.url, qrSvg: link.qrSvg });
-    }
-    const msg = outbox.messages().find((m) => m.approvalId === approvalId);
-    const allowed = process.env.NODE_ENV !== "production" || demoTapEnabled();
-    if (msg && allowed) {
-      const url = `${publicBaseUrl(req)}${msg.link}`;
-      return Response.json({ mode: "demo_link", ...base, url, qrSvg: await qrSvg(url) });
-    }
-    const next = `/approve/${encodeURIComponent(approvalId)}`;
-    const url = `${publicBaseUrl(req)}/join/presenter?kitchen=${encodeURIComponent(kitchen)}&role=${encodeURIComponent(approver.role)}&next=${encodeURIComponent(next)}`;
-    return Response.json({ mode: "enrol", ...base, url, qrSvg: await qrSvg(url) });
+    return Response.json(await demoApprovalQr(rt, req, kitchen, approvalId));
   });
 }

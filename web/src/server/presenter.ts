@@ -6,6 +6,9 @@ import { PasskeyError, type RelyingParty } from "@/core/passkeys";
 import { newId } from "@/core/util";
 import { KITCHEN_ORG, demoKitchenMandate } from "./demo-kitchen";
 import { DEMO_ORG, demoMandate } from "./dev-fixtures";
+import { approverOf } from "./approval-api";
+import { approvalLink, qrSvg } from "./approval-links";
+import { demoTapEnabled, publicBaseUrl } from "./config";
 import { opsPasscode } from "./ops/access";
 import type { Runtime } from "./runtime";
 
@@ -117,4 +120,28 @@ export async function completePresenterEnrolment(rt: Runtime, response: Registra
   });
   const sessionToken = await rt.passkeys.newSession(approverId, new Date(expiresAt));
   return { approver: role, sessionToken, expiresAt };
+}
+
+/**
+ * The QR code a built-in demo kitchen's screen (the console, the menu planner) shows while its order waits:
+ *   passkey    a presenter has enrolled for that approver role: the sign-off screen, signed with their passkey
+ *   demo_link  outside production (or DOCK_DEMO_TAP_APPROVAL on): the one-time link Dock "sent to their phone"
+ *   enrol      otherwise: the presenter enrolment, which leads to the sign-off screen once the passkey exists
+ */
+export async function demoApprovalQr(rt: Runtime, req: Request, slug: string, approvalId: string) {
+  const { ctx: c, hasPasskey } = await approverOf(rt, approvalId);
+  const approver = { name: c.approval.approver.name, role: c.approval.approver.role };
+  const base = { approver, status: c.approval.status, orderId: c.order.orderId };
+  if (hasPasskey) {
+    const link = await approvalLink(approvalId, req);
+    return { mode: "passkey" as const, ...base, url: link.url, qrSvg: link.qrSvg };
+  }
+  const msg = rt.outbox.messages().find((m) => m.approvalId === approvalId);
+  if (msg && (process.env.NODE_ENV !== "production" || demoTapEnabled())) {
+    const url = `${publicBaseUrl(req)}${msg.link}`;
+    return { mode: "demo_link" as const, ...base, url, qrSvg: await qrSvg(url) };
+  }
+  const next = `/approve/${encodeURIComponent(approvalId)}`;
+  const url = `${publicBaseUrl(req)}/join/presenter?kitchen=${encodeURIComponent(slug)}&role=${encodeURIComponent(approver.role)}&next=${encodeURIComponent(next)}`;
+  return { mode: "enrol" as const, ...base, url, qrSvg: await qrSvg(url) };
 }

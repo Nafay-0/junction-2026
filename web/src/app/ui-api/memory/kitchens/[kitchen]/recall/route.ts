@@ -18,5 +18,5 @@ const Body = z.object({
 });
 
 export async function POST(req: Request, ctx: RouteContext<"/ui-api/memory/kitchens/[kitchen]/recall">) {
-  return kitchenMemoryRoute(ctx.params, async (k, memory) => memory.recall(k.info.orgId, await body(req, Body)));
+  return kitchenMemoryRoute(req, ctx.params, async (k, memory) => memory.recall(k.info.orgId, await body(req, Body)));
 }
