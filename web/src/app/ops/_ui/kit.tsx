@@ -4,12 +4,15 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { api } from "../../_client/api";
 import { useLive } from "../../_client/use-live";
+import { buttonClass, Spinner } from "../../_ui/kit";
 import { Target } from "../../_ui/target";
 import { VIA, type Via } from "./format";
 
 /**
- * The operations portal's building blocks. Dense, calm, monochrome; the safety yellow appears only on refusals and
- * on decisions a person must make. Ids, codes and hashes sit behind <Details>.
+ * The operations portal's building blocks, in the shared system's language (web/docs/DESIGN.md): paper plates on
+ * mist, petrol for structure, the display face for titles and figures. Safety yellow and the hazard stripe appear only
+ * on refusals, suspensions and sign-offs waiting on a person. Ids, codes and hashes sit behind <Details>.
+ * What this adds beside the system is listed in web/docs/DESIGN-OPS.md.
  */
 
 /** Live data from /ops-api: refetched on every order/approval event and polled underneath. 401 sends to the entry. */
@@ -40,76 +43,95 @@ export function useNow(ms = 1000): number | undefined {
   return now;
 }
 
+/** The page's title, the one question it answers, and on the right whether it is live. */
 export function PageHead({ title, purpose, right }: { title: string; purpose: string; right?: ReactNode }) {
   return (
-    <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 border-b-2 border-ink pb-3">
+    <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 pb-4">
       <div className="min-w-0">
-        <h1 className="font-display text-[1.9rem] font-bold leading-none tracking-tight">{title}</h1>
-        <p className="mt-1.5 max-w-[72ch] text-[0.95rem] text-ink-soft">{purpose}</p>
+        <h1 className="display text-[2.5rem] text-ink">{title}</h1>
+        <p className="mt-2 max-w-[70ch] text-[1rem] leading-snug text-ink-soft">{purpose}</p>
       </div>
-      {right && <div className="flex items-center gap-3 text-[0.85rem] text-ink-soft">{right}</div>}
+      {right && <div className="flex items-center gap-3 text-[0.88rem] text-ink-soft">{right}</div>}
     </header>
   );
 }
 
-export function Section({ title, aside, children, id }: { title: string; aside?: ReactNode; children: ReactNode; id?: string }) {
+/** "Live, updated 14.05.32": a small square that breathes while the stream is up. */
+export function LiveMark({ at, error }: { at?: string; error?: string }) {
   return (
-    <section aria-labelledby={id} className="mt-6">
-      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-4">
-        <h2 id={id} className="font-display text-[1.25rem] font-bold leading-tight">
+    <span className="inline-flex items-center gap-2" role="status">
+      <span aria-hidden className={`size-2.5 ${error ? "border border-ink-soft" : "breathe bg-petrol"}`} />
+      {error ? "Reconnecting…" : at ? `Live, updated ${at}` : "Connecting…"}
+    </span>
+  );
+}
+
+export function Section({ title, aside, children, id, className = "" }: { title: string; aside?: ReactNode; children: ReactNode; id?: string; className?: string }) {
+  return (
+    <section aria-labelledby={id} className={`mt-8 ${className}`}>
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
+        <h2 id={id} className="display text-[1.6rem] text-ink">
           {title}
         </h2>
-        {aside && <div className="text-[0.85rem] text-ink-soft">{aside}</div>}
+        {aside && <div className="text-[0.88rem] text-ink-soft">{aside}</div>}
       </div>
       {children}
     </section>
   );
 }
 
-export function Panel({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <div className={`border border-concrete-deep bg-paper ${className}`}>{children}</div>;
+/** A paper plate. `rule` adds the petrol top rule that marks a document. */
+export function Panel({ children, className = "", rule = false }: { children: ReactNode; className?: string; rule?: boolean }) {
+  return <div className={`bg-paper ${rule ? "border-t-[3px] border-petrol" : ""} ${className}`}>{children}</div>;
 }
 
 /** The door an agent came through. Same shape for all three: they meet the same gate. */
-export function ViaTag({ via, className = "" }: { via?: Via; className?: string }) {
-  if (!via) return <span className={`text-[0.8rem] text-ink-soft ${className}`}>unknown door</span>;
+export function ViaTag({ via, className = "", short = false }: { via?: Via; className?: string; short?: boolean }) {
+  if (!via) return <span className={`text-[0.85rem] text-ink-soft ${className}`}>Door not recorded</span>;
   return (
-    <span title={VIA[via].how} className={`inline-flex items-center gap-1.5 whitespace-nowrap text-[0.8rem] font-semibold ${className}`}>
+    <span title={VIA[via].how} className={`inline-flex items-center gap-1.5 whitespace-nowrap text-[0.85rem] font-semibold text-petrol ${className}`}>
       <DoorGlyph via={via} />
-      {VIA[via].label}
+      {short ? VIA[via].short : VIA[via].label}
     </span>
   );
 }
 
-/** Three small marks, one per door: a filled square (on-site), a split square (MCP), an open square (REST). */
-export function DoorGlyph({ via, size = 10 }: { via: Via; size?: number }) {
+/** Three marks, one per door: a filled square (on-site), a split square (MCP), an open square (REST). */
+export function DoorGlyph({ via, size = 11, color = "currentColor" }: { via: Via; size?: number; color?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 10 10" aria-hidden className="shrink-0">
-      <rect x="0.75" y="0.75" width="8.5" height="8.5" fill={via === "onsite" ? "var(--color-ink)" : "none"} stroke="var(--color-ink)" strokeWidth="1.5" />
-      {via === "mcp" && <path d="M0.75 9.25 L9.25 0.75 L9.25 9.25 Z" fill="var(--color-ink)" />}
+      <rect x="0.75" y="0.75" width="8.5" height="8.5" fill={via === "onsite" ? color : "none"} stroke={color} strokeWidth="1.5" />
+      {via === "mcp" && <path d="M0.75 9.25 L9.25 0.75 L9.25 9.25 Z" fill={color} />}
     </svg>
   );
 }
 
 export type Tone = "plain" | "safety" | "done";
 
-/** Outcome words. Safety only when a person must act or the gate refused. */
-export function Outcome({ kind, label }: { kind: string; label: string }) {
-  const safety = kind === "waiting" || kind === "refused" || kind === "declined";
+/**
+ * Outcome words. The gate's mark and yellow only when a person must act or the gate refused; a signed order gets a
+ * petrol square, anything still moving an open one.
+ */
+export function Outcome({ kind, label, size = "sm" }: { kind: string; label: string; size?: "sm" | "md" }) {
+  const gate = kind === "waiting" || kind === "refused" || kind === "declined";
+  const text = size === "md" ? "text-[0.98rem]" : "text-[0.88rem]";
   return (
-    <span className={`inline-flex items-center gap-1.5 text-[0.85rem] font-semibold ${safety ? "" : kind === "committed" ? "text-ink" : "text-ink-soft"}`}>
-      <Target size={13} tone={safety ? "safety" : kind === "committed" ? "ink" : "hollow"} />
+    <span className={`inline-flex items-start gap-1.5 font-semibold leading-snug ${text} ${kind === "committed" ? "text-petrol" : gate ? "text-ink" : "text-ink-soft"}`}>
+      <span className="mt-[0.2em] shrink-0">
+        {gate ? <Target size={14} tone="safety" /> : <span aria-hidden className={`block size-3 ${kind === "committed" ? "bg-petrol" : "border-[1.5px] border-current"}`} />}
+      </span>
       <span>{label}</span>
     </span>
   );
 }
 
 export function Licence({ licence }: { licence: { level: string; name: string; rating?: number } | null | undefined }) {
-  if (!licence) return <span className="text-[0.8rem] text-ink-soft">Not crash-tested yet</span>;
+  if (!licence) return <span className="text-[0.85rem] text-ink-soft">Not crash-tested yet</span>;
   return (
-    <span className="whitespace-nowrap text-[0.85rem] font-semibold">
-      {licence.level} {licence.name}
-      {licence.rating !== undefined && <span className="font-normal text-ink-soft"> ({licence.rating.toFixed(1).replace(".", ",")})</span>}
+    <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap text-[0.88rem] font-semibold">
+      <span className="bg-petrol px-1 text-[0.78rem] text-paper">{licence.level}</span>
+      {licence.name}
+      {licence.rating !== undefined && <span className="font-normal text-ink-soft tabular">{licence.rating.toFixed(1).replace(".", ",")}</span>}
     </span>
   );
 }
@@ -117,9 +139,14 @@ export function Licence({ licence }: { licence: { level: string; name: string; r
 /** Ids, codes and hashes: there when someone asks, out of the way otherwise. */
 export function Details({ summary = "Details", children, className = "" }: { summary?: string; children: ReactNode; className?: string }) {
   return (
-    <details className={`group text-[0.8rem] ${className}`}>
-      <summary className="cursor-pointer select-none text-ink-soft underline decoration-concrete-deep underline-offset-2 hover:text-ink">{summary}</summary>
-      <div className="mt-1.5 space-y-1 break-all font-mono text-[0.75rem] leading-relaxed text-ink-soft">{children}</div>
+    <details className={`group text-[0.82rem] ${className}`}>
+      <summary className="inline-flex cursor-pointer select-none items-center gap-1 text-ink-soft hover:text-ink">
+        <span aria-hidden className="inline-block transition-transform group-open:rotate-90 motion-reduce:transition-none">
+          ▸
+        </span>
+        <span className="underline decoration-line underline-offset-2">{summary}</span>
+      </summary>
+      <div className="mt-1.5 space-y-1 break-all font-mono text-[0.76rem] leading-relaxed text-ink-soft">{children}</div>
     </details>
   );
 }
@@ -133,11 +160,13 @@ export function KV({ k, v }: { k: string; v: ReactNode }) {
   );
 }
 
-export function Empty({ title, children }: { title: string; children?: ReactNode }) {
+/** An empty state is a direction: what is not here yet, and what makes it appear. */
+export function Empty({ title, children, action }: { title: string; children?: ReactNode; action?: ReactNode }) {
   return (
-    <div className="border border-dashed border-concrete-deep bg-paper/60 px-5 py-6">
-      <p className="font-display text-[1.1rem] font-bold">{title}</p>
-      {children && <div className="mt-1 max-w-[70ch] text-[0.9rem] text-ink-soft">{children}</div>}
+    <div className="border border-dashed border-line bg-paper/70 px-5 py-5">
+      <p className="text-[1.08rem] font-semibold">{title}</p>
+      {children && <div className="mt-1 max-w-[70ch] text-[0.95rem] leading-snug text-ink-soft">{children}</div>}
+      {action && <div className="mt-3 flex flex-wrap gap-3">{action}</div>}
     </div>
   );
 }
@@ -145,38 +174,69 @@ export function Empty({ title, children }: { title: string; children?: ReactNode
 export function LoadError({ message }: { message?: string }) {
   if (!message) return null;
   return (
-    <p role="status" className="mt-3 border-l-4 border-ink bg-paper px-3 py-2 text-[0.9rem]">
-      Could not refresh from Dock: {message} The view shows the last data it had and keeps trying.
+    <p role="status" className="mt-3 border-l-[6px] border-petrol bg-paper px-4 py-2.5 text-[0.95rem]">
+      <b>Could not refresh from Dock.</b> {message} The view shows the last data it had and keeps trying.
     </p>
   );
 }
 
-export function Loading() {
-  return <p className="mt-6 text-[0.9rem] text-ink-soft">Reading the gate…</p>;
-}
-
-export function Num({ n, label, sub, safety = false }: { n: ReactNode; label: string; sub?: ReactNode; safety?: boolean }) {
+/** Loading, in the shape of what is coming: a title bar and a few rows. */
+export function Loading({ label = "Reading the gate…" }: { label?: string }) {
   return (
-    <div className="min-w-0 px-4 py-3">
-      <p className="flex items-center gap-2 font-display text-[2rem] font-bold leading-none tabular">
-        {n}
-        {safety && <span aria-hidden className="inline-block h-2.5 w-2.5 bg-safety ring-1 ring-ink" />}
+    <div className="mt-2" role="status" aria-label={label}>
+      <div className="h-10 w-72 animate-pulse bg-concrete-deep/70 motion-reduce:animate-none" />
+      <div className="mt-3 h-4 w-[34rem] max-w-full animate-pulse bg-concrete-deep/50 motion-reduce:animate-none" />
+      <div className="mt-6 space-y-2">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="h-14 animate-pulse bg-paper motion-reduce:animate-none" />
+        ))}
+      </div>
+      <p className="mt-3 flex items-center gap-2 text-[0.9rem] text-ink-soft">
+        <Spinner size={14} className="text-petrol" /> {label}
       </p>
-      <p className="mt-1 text-[0.82rem] leading-snug text-ink-soft">{label}</p>
-      {sub && <p className="text-[0.78rem] text-ink-soft">{sub}</p>}
     </div>
   );
 }
 
-export function Button({ children, onClick, kind = "plain", disabled, type = "button", className = "" }: { children: ReactNode; onClick?: () => void; kind?: "plain" | "primary" | "stop"; disabled?: boolean; type?: "button" | "submit"; className?: string }) {
-  const look =
-    kind === "primary"
-      ? "bg-ink text-paper hover:bg-ink/90"
-      : kind === "stop"
-        ? "bg-safety text-safety-ink ring-2 ring-ink hover:brightness-95"
-        : "bg-paper text-ink ring-1 ring-ink hover:bg-concrete";
+/** A figure: the number in the display face, its meaning under it. `safety` only when a person must act. */
+export function Num({ n, label, sub, safety = false }: { n: ReactNode; label: string; sub?: ReactNode; safety?: boolean }) {
   return (
-    <button type={type} onClick={onClick} disabled={disabled} className={`inline-flex items-center justify-center gap-2 px-3 py-1.5 text-[0.9rem] font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${look} ${className}`}>
+    <div className="min-w-0 px-4 py-3">
+      <p className="flex items-center gap-2 display text-[2.4rem] tabular">
+        {n}
+        {safety && <span aria-hidden className="hazard-thin inline-block size-3.5" />}
+      </p>
+      <p className="mt-1 text-[0.88rem] leading-snug text-ink-soft">{label}</p>
+      {sub && <p className="text-[0.82rem] text-ink-soft">{sub}</p>}
+    </div>
+  );
+}
+
+/** The operations button, on the system's button: plain = secondary, primary = petrol, go = lime, stop = gate. */
+export function Button({
+  children,
+  onClick,
+  kind = "plain",
+  disabled,
+  type = "button",
+  className = "",
+  title,
+  ariaLabel,
+  size = "sm",
+}: {
+  children: ReactNode;
+  onClick?: () => void;
+  kind?: "plain" | "primary" | "stop" | "go" | "quiet";
+  disabled?: boolean;
+  type?: "button" | "submit";
+  className?: string;
+  title?: string;
+  ariaLabel?: string;
+  size?: "sm" | "md" | "lg";
+}) {
+  const k = kind === "primary" ? "primary" : kind === "stop" ? "safety" : kind === "go" ? "go" : kind === "quiet" ? "quiet" : "secondary";
+  return (
+    <button type={type} onClick={onClick} disabled={disabled} title={title} aria-label={ariaLabel} className={`${buttonClass(k, size, className)} disabled:opacity-45`}>
       {children}
     </button>
   );

@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Enter operations · Dock" };
 /** One click into the wholesaler's operations portal (or a passcode, when DOCK_OPS_PASSCODE is set). */
 export default function EnterPage() {
   return (
-    <Suspense fallback={<div className="min-h-dvh bg-steel" />}>
+    <Suspense fallback={<div className="min-h-dvh bg-petrol-deep" />}>
       <Loaded />
     </Suspense>
   );

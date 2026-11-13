@@ -4,10 +4,13 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { api } from "../../_client/api";
+import { PRODUCT_NAME } from "../../_ui/brand";
+import { buttonClass, Spinner } from "../../_ui/kit";
 import { Target } from "../../_ui/target";
+import { OPS_DEMO_NOTE } from "../_ui/rail";
 
 /**
- * The door to the wholesaler's side. Steel, like the wall and the rail, so it never looks like a kitchen's portal.
+ * The door to the wholesaler's side. Petrol-deep, like the rail and the wall, so it never looks like a kitchen's shop.
  * Demo mode: one button. Passcode mode: the button asks for the passcode first.
  */
 export function Entry({ mode }: { mode: "demo" | "passcode" }) {
@@ -31,67 +34,74 @@ export function Entry({ mode }: { mode: "demo" | "passcode" }) {
   }
 
   return (
-    <main className="on-steel flex min-h-dvh items-center bg-steel px-4 py-10 text-chalk">
-      <div className="mx-auto grid w-full max-w-[960px] gap-10 md:grid-cols-[1.1fr_1fr]">
+    <main className="grid min-h-dvh bg-mist text-ink md:grid-cols-[1.05fr_1fr]">
+      <section className="on-dark flex flex-col justify-between gap-10 bg-petrol-deep px-6 py-10 text-paper sm:px-12">
+        <div className="flex items-center gap-3">
+          <Target size={40} tone="chalk" />
+          <span className="display text-[2.4rem]">{PRODUCT_NAME}</span>
+        </div>
         <div>
-          <div className="flex items-center gap-3">
-            <Target size={44} tone="chalk" />
-            <span className="font-display text-[2.6rem] font-bold leading-none tracking-tight">Dock</span>
-          </div>
-          <h1 className="mt-8 font-display text-[2.3rem] font-bold leading-[1.05]">The wholesaler&apos;s operations desk</h1>
-          <p className="mt-3 max-w-[46ch] text-[1.05rem] leading-relaxed text-chalk-soft">
-            See every purchasing agent at the door, follow any request through the gate step by step, check what the rules refused, and stop an agent if it misbehaves.
+          <h1 className="display max-w-[16ch] text-[clamp(2.6rem,4.4vw,4.2rem)] leading-[0.95]">The wholesaler&apos;s operations desk</h1>
+          <p className="mt-5 max-w-[46ch] text-[1.08rem] leading-relaxed text-paper/85">
+            See every purchasing agent at the door, replay any request through the gate step by step, read what the rules refused, and stop an agent that misbehaves.
           </p>
-          <p className="mt-5 max-w-[46ch] text-[0.92rem] leading-relaxed text-chalk-soft">
+          <p className="mt-4 max-w-[46ch] text-[0.95rem] leading-relaxed text-paper/70">
             Staff here can suspend an agent. They cannot approve an order for a kitchen: only the person the kitchen&apos;s mandate names can, on their own phone.
           </p>
         </div>
-        <form onSubmit={enter} className="self-center border-2 border-chalk bg-steel-2 p-6">
-          <label className="block text-[0.9rem] font-semibold" htmlFor="ops-name">
-            Your name, for the record
-          </label>
-          <input
-            id="ops-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Operations desk"
-            maxLength={60}
-            autoComplete="name"
-            className="mt-1.5 w-full border border-steel-3 bg-steel px-3 py-2 text-[1rem] text-chalk placeholder:text-chalk-soft/70"
-          />
-          <p className="mt-1 text-[0.8rem] text-chalk-soft">Written to the ledger with every suspension you make.</p>
-          {mode === "passcode" && (
-            <>
-              <label className="mt-4 block text-[0.9rem] font-semibold" htmlFor="ops-passcode">
-                Passcode
-              </label>
-              <input
-                id="ops-passcode"
-                type="password"
-                required
-                value={passcode}
-                onChange={(e) => setPasscode(e.target.value)}
-                autoComplete="current-password"
-                className="mt-1.5 w-full border border-steel-3 bg-steel px-3 py-2 text-[1rem] text-chalk"
-              />
-            </>
-          )}
-          <button type="submit" disabled={busy} className="mt-5 w-full bg-chalk px-4 py-3 font-display text-[1.25rem] font-bold text-ink hover:bg-white disabled:opacity-60">
-            {busy ? "Entering…" : "Enter as operations staff"}
-          </button>
-          {error && (
-            <p role="alert" className="mt-3 bg-safety px-3 py-2 text-[0.9rem] font-semibold text-safety-ink">
-              {error}
+        <p className="text-[0.82rem] text-paper/60">{OPS_DEMO_NOTE}</p>
+      </section>
+      <section className="flex items-center px-6 py-10 sm:px-12">
+        <form onSubmit={enter} className="w-full max-w-[420px] bg-paper">
+          <div aria-hidden className="h-[3px] bg-petrol" />
+          <div className="p-6">
+            <label className="block text-[0.95rem] font-semibold" htmlFor="ops-name">
+              Your name, for the record
+            </label>
+            <input
+              id="ops-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Operations desk"
+              maxLength={60}
+              autoComplete="name"
+              className="mt-1.5 min-h-11 w-full border-2 border-line bg-paper px-3 text-[1rem] text-ink placeholder:text-ink-soft focus:border-petrol focus:outline-none"
+            />
+            <p className="mt-1 text-[0.84rem] text-ink-soft">Written to the ledger with every suspension you make.</p>
+            {mode === "passcode" && (
+              <>
+                <label className="mt-4 block text-[0.95rem] font-semibold" htmlFor="ops-passcode">
+                  Passcode
+                </label>
+                <input
+                  id="ops-passcode"
+                  type="password"
+                  required
+                  value={passcode}
+                  onChange={(e) => setPasscode(e.target.value)}
+                  autoComplete="current-password"
+                  className="mt-1.5 min-h-11 w-full border-2 border-line bg-paper px-3 text-[1rem] text-ink focus:border-petrol focus:outline-none"
+                />
+              </>
+            )}
+            <button type="submit" disabled={busy} className={buttonClass("go", "lg", "mt-5 w-full")}>
+              {busy && <Spinner size={16} />}
+              {busy ? "Entering…" : "Enter as operations staff"}
+            </button>
+            {error && (
+              <p role="alert" className="mt-3 border-l-[6px] border-petrol bg-mist px-3 py-2 text-[0.92rem] font-semibold">
+                {error}
+              </p>
+            )}
+            <p className="mt-4 text-[0.86rem] text-ink-soft">
+              {mode === "demo" ? "Demo entry: no password on this server." : "This server asks for a passcode."} Looking for a kitchen?{" "}
+              <Link href="/k" className="font-semibold text-petrol underline underline-offset-2">
+                Kitchen shop
+              </Link>
             </p>
-          )}
-          <p className="mt-4 text-[0.82rem] text-chalk-soft">
-            {mode === "demo" ? "Demo entry: no password on this server." : "This server asks for a passcode."} Looking for a kitchen?{" "}
-            <Link href="/k" className="underline underline-offset-2 hover:text-chalk">
-              Kitchen portal
-            </Link>
-          </p>
+          </div>
         </form>
-      </div>
+      </section>
     </main>
   );
 }
