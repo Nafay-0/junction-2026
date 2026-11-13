@@ -77,7 +77,7 @@ export function OrdersList() {
                           {linesText(x, 3)}
                         </Link>
                       )}
-                      {asked && <span className="block text-[0.9rem] text-ink-soft">Asked: “{asked.length > 80 ? `${asked.slice(0, 77)}…` : asked}”</span>}
+                      {asked && <span className="block text-[0.9rem] text-ink-soft">{asked.startsWith("Basket") ? "Basket, ordered by hand" : `Asked: “${asked.length > 80 ? `${asked.slice(0, 77)}…` : asked}”`}</span>}
                     </td>
                     <td className="px-2 py-3 text-right font-semibold tabular">{eur(x.totalCents)}</td>
                     <td className="whitespace-nowrap px-2 py-3">{day(x.deliveryDate)}</td>

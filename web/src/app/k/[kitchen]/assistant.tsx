@@ -59,6 +59,8 @@ export function AssistantPanel() {
 
   const toOrder = (text: string, id?: number) => {
     agent.send({ kind: "ask", text, followUp: agent.followUp, product: agent.product });
+    // On a phone the panel covers the page: close it so the order cards are in view.
+    if (!window.matchMedia("(min-width: 1280px)").matches) agent.setPanelOpen(false);
     setTurns((t) => (id ? t.map((x) => (x.id === id ? { id, q: text, kind: "order" as const } : x)) : [...t, { id: nextId.current++, q: text, kind: "order" as const }]));
   };
 

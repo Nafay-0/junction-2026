@@ -590,7 +590,7 @@ export function Quote({ q, names, decided, busy, onPlace, onNew }: { q: NonNulla
 
 const OUTCOME_WORD: Record<string, string> = { pass: "Passed", escalate: "Needs a person", fail: "Failed" };
 
-export function Gate({ order, refusal, kitchen, names, streaming }: { order?: Order; refusal?: ApiError; kitchen: KitchenInfo; names: Names; streaming: boolean }) {
+export function Gate({ order, refusal, kitchen, names, streaming, byHand = false }: { order?: Order; refusal?: ApiError; kitchen: KitchenInfo; names: Names; streaming: boolean; byHand?: boolean }) {
   if (!order) {
     return (
       <Paper safety>
@@ -656,7 +656,7 @@ export function Gate({ order, refusal, kitchen, names, streaming }: { order?: Or
   } else {
     body = (
       <>
-        <Verdict tone="ink" title="Approved on the agent's own authority" sub={`All ${rules.length} checks passed`} />
+        <Verdict tone="ink" title={byHand ? "Approved within the kitchen's mandate" : "Approved on the agent's own authority"} sub={`All ${rules.length} checks passed${byHand ? ", the same checks as an agent's order" : ""}`} />
         <p className="mt-3 text-[1.05rem]">{humanize(d.reasons[0] ?? "", names)}</p>
       </>
     );

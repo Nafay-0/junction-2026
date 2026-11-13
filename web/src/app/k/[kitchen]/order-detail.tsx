@@ -8,6 +8,7 @@ import { verifyChain, type ChainCheck } from "../../_client/verify-chain";
 import { sha256Hex, verifySigned, type KeySet } from "../../_client/verify-signed";
 import { clock, day, eur, helsinkiToday, humanize, shortProduct } from "../../_ui/plain";
 import { Target } from "../../_ui/target";
+import { askedText } from "./history";
 import { usePortal } from "./portal";
 import { Gate } from "./stages";
 import { Timeline } from "./timeline";
@@ -57,7 +58,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
             {statusWord}, {day(helsinkiToday(new Date(o.createdAt)))} {clock(o.createdAt)}
           </p>
           <h1 className="font-display text-[2.2rem] font-bold leading-tight tracking-tight">{o.lines.map((l) => `${l.quantity} × ${shortProduct(l.name)}`).join(" + ")}</h1>
-          {asked && <p className="mt-1 text-[1.05rem]">Asked: “{asked}”</p>}
+          {asked && <p className="mt-1 text-[1.05rem]">{asked.startsWith("Basket") ? askedText(asked) : `Asked: “${asked}”`}</p>}
         </div>
         <p className="font-display text-[2.8rem] font-bold leading-none tabular">{eur(o.totalCents)}</p>
       </header>
@@ -113,7 +114,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
           <h2 id="who" className="font-display text-[1.5rem] font-bold">
             Who let it through
           </h2>
-          <Gate order={o} kitchen={kitchen} names={names} streaming={live.streaming} />
+          <Gate order={o} kitchen={kitchen} names={names} streaming={live.streaming} byHand={!!asked?.startsWith("Basket")} />
         </section>
       </div>
 

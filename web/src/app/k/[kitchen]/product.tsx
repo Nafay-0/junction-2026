@@ -44,7 +44,8 @@ export function ProductPage({ id }: { id: string }) {
           <div aria-hidden className="h-2" style={{ background: t?.color ?? "var(--color-ink)" }} />
           <div className="p-5">
             <p className="text-[0.92rem] text-ink-soft">
-              {p.brand !== "unknown" ? p.brand : p.vendor} <span style={{ color: t?.color }}>{t ? `, ${t.label.toLowerCase()}` : ""}</span>
+              {p.brand !== "unknown" ? p.brand : p.vendor}
+              {t && <span style={{ color: t.color }}>, {t.label.toLowerCase()}</span>}
             </p>
             <h1 className="mt-1 max-w-[30ch] font-display text-[2.3rem] font-bold leading-[1.05] tracking-tight">{readable(nameIn(p, lang))}</h1>
             <div className="mt-5 border-t border-ink/15 pt-4">

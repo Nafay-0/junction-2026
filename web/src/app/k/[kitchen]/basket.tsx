@@ -196,7 +196,7 @@ export function BasketPage() {
         {(run.phase === "quoted" || run.phase === "placing" || run.phase === "done") && run.quote && <Quote q={run.quote} names={names} decided={run.phase === "done"} busy={run.phase === "placing"} onPlace={() => void place()} onNew={reset} />}
         {run.phase === "done" && (
           <>
-            <Gate order={shownOrder} refusal={run.refusal} kitchen={kitchen} names={names} streaming={orderLive.streaming} />
+            <Gate order={shownOrder} refusal={run.refusal} kitchen={kitchen} names={names} streaming={orderLive.streaming} byHand />
             {shownOrder && (shownOrder.status === "committed" || shownOrder.status === "declined") ? (
               <SignedOrder order={shownOrder} names={names} onNew={reset} />
             ) : (

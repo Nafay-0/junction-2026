@@ -16,6 +16,12 @@ export function authorisedText(o: PortalOrder): string {
   return o.status === "declined" ? "Declined, nothing ordered" : "Refused by the gate, nothing ordered";
 }
 
+/** The request's words as the buyer would recognise them; a basket shows as a basket. */
+export function askedText(text: string | null | undefined): string | null {
+  if (!text) return null;
+  return text.startsWith("Basket from the catalogue:") ? `Basket, ordered by hand: ${text.slice(26).trim()}` : text;
+}
+
 export function linesText(o: PortalOrder, max = 2): string {
   const shown = o.lines.slice(0, max).map((l) => `${l.quantity} × ${shortProduct(l.name)}`);
   return shown.join(" + ") + (o.lines.length > max ? ` + ${o.lines.length - max} more` : "");
@@ -48,7 +54,7 @@ export function History({ requests, loading, error, onRepeat, onChange }: { requ
           {shown.map((r) => (
             <li key={r.key} className="py-2.5">
               <p className="text-[0.82rem] text-ink-soft tabular">{whenText(r.at)}</p>
-              <p className="mt-0.5 leading-snug">{r.text ? <span className="font-semibold">“{r.text.length > 90 ? `${r.text.slice(0, 87)}…` : r.text}”</span> : <span className="font-semibold">{r.order ? linesText(r.order) : "Order"}</span>}</p>
+              <p className="mt-0.5 leading-snug">{r.text ? <span className="font-semibold">{r.kind === "basket" ? "Basket, ordered by hand" : `“${r.text.length > 90 ? `${r.text.slice(0, 87)}…` : r.text}”`}</span> : <span className="font-semibold">{r.order ? linesText(r.order) : "Order"}</span>}</p>
               {r.order ? (
                 <p className="mt-0.5 text-[0.92rem] leading-snug text-ink-soft">
                   {r.text && <>{linesText(r.order)}, </>}

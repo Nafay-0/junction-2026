@@ -222,7 +222,7 @@ export function Portal({ kitchen, kitchens, children }: { kitchen: KitchenInfo; 
 
   return (
     <PortalContext.Provider value={value}>
-      <div className={`min-h-dvh bg-concrete text-ink ${panelOpen ? "xl:pr-[24rem]" : ""}`}>
+      <div className={`min-h-dvh overflow-x-clip bg-concrete text-ink ${panelOpen ? "xl:pr-[24rem]" : ""}`}>
         <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:bg-paper focus:p-2">
           Skip to the page
         </a>
@@ -263,7 +263,7 @@ function Header() {
           <Wordmark size={26} />
         </Link>
         <span aria-hidden className="hidden h-8 w-px bg-ink/20 sm:block" />
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 basis-40">
           <label htmlFor="kitchen-switch" className="sr-only">
             Kitchen
           </label>
@@ -280,7 +280,7 @@ function Header() {
               </option>
             ))}
           </select>
-          <p className="text-[0.88rem] text-ink-soft">
+          <p className="hidden text-[0.88rem] text-ink-soft sm:block">
             {days ? `Deliveries ${weekdaysText(days)}. ` : ""}
             {approver ? `Signs off: ${approver.name}.` : ""}
             {kitchen.kind === "visitor" && kitchen.expiresAt ? " Your demo kitchen, open for 90 minutes." : ""}
@@ -300,7 +300,8 @@ function Header() {
           className={`flex min-h-11 items-center gap-2 border-2 border-ink px-3 font-semibold ${agent.panelOpen ? "bg-ink text-paper" : "hover:bg-concrete"}`}
         >
           <Target size={18} tone={agent.panelOpen ? "chalk" : "ink"} />
-          Purchasing agent
+          <span className="sm:hidden">Agent</span>
+          <span className="hidden sm:inline">Purchasing agent</span>
         </button>
         <Link href={`${base}/basket`} className="flex min-h-11 items-center gap-2 border-2 border-ink px-3 font-semibold hover:bg-concrete" aria-label={`Basket, ${basket.lines.length} products`}>
           Basket
