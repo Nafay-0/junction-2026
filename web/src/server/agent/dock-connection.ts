@@ -9,7 +9,7 @@ import { serveMcp } from "@/server/mcp/server";
  * it goes over the network to `${baseUrl}/api/mcp`.
  */
 
-export type DockTool = { name: string; title?: string; description: string; inputSchema: Record<string, unknown> };
+export type DockTool = { name: string; title?: string; description: string; inputSchema: Record<string, unknown>; meta?: Record<string, unknown> };
 
 export type ToolOutcome = {
   /** False when Dock refused or the call failed. */
@@ -47,7 +47,7 @@ export async function connectDock(creds: Credentials, target: DockTarget = {}): 
   let cursor: string | undefined;
   do {
     const page = await client.listTools(cursor ? { cursor } : undefined);
-    for (const t of page.tools) tools.push({ name: t.name, title: t.title, description: t.description ?? "", inputSchema: t.inputSchema as Record<string, unknown> });
+    for (const t of page.tools) tools.push({ name: t.name, title: t.title, description: t.description ?? "", inputSchema: t.inputSchema as Record<string, unknown>, meta: t._meta as Record<string, unknown> | undefined });
     cursor = page.nextCursor;
   } while (cursor);
 

@@ -11,7 +11,7 @@ import type { DockTool } from "./dock-connection";
  * Everything here is recognised by shape, not by tool name, so intake tools added to Dock later are picked
  * up without changes: a step is any object in a result with `state` needs_confirmation / needs_input and a
  * `requestId`; an answering tool is one whose input takes `responses: [{ key, choice }]` (confirmation) or
- * `answers: [{ questionId, optionId }]` (questions).
+ * `answers: [{ questionId, optionId }]` (questions), or that carries Dock's `dock/humanInput` marker.
  */
 
 export type HumanPrompt =
@@ -34,12 +34,16 @@ function itemKeys(s: Schema | undefined): string[] {
   return Object.keys(s?.items?.properties ?? {});
 }
 
-/** Which human-input step a tool answers, judged from its input schema; undefined for every other tool. */
+/** Dock's own marker on answering tools in tools/list (non-standard, so the schema check below also applies). */
+export const HUMAN_INPUT_META = "dock/humanInput";
+
+/** Which human-input step a tool answers, judged from its input schema (or Dock's marker); undefined for every other tool. */
 export function humanToolKind(tool: DockTool): HumanToolKind | undefined {
   const props = (tool.inputSchema as Schema).properties ?? {};
   const has = (field: string, keys: string[]) => !!props[field] && keys.every((k) => itemKeys(props[field]).includes(k));
   if (has("responses", ["key", "choice"])) return "confirmation";
   if (has("answers", ["questionId", "optionId"])) return "questions";
+  if (tool.meta?.[HUMAN_INPUT_META] !== undefined) return /concern|confirm/i.test(tool.name) || props.responses ? "confirmation" : "questions";
   return undefined;
 }
 
