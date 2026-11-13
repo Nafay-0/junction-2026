@@ -19,7 +19,14 @@
     "e2e": "next build && playwright test",
     "index:build": "tsx scripts/index-build.ts",
     "valio:ping": "tsx scripts/valio-ping.ts",
-    "infra:check": "tsx scripts/infra-check.ts"
+    "infra:check": "tsx scripts/infra-check.ts",
+    "test:aiven": "DOCK_AIVEN_TESTS=1 vitest run src/server/aiven",
+    "demo:aiven": "DOCK_AIVEN=1 tsx --env-file=.env.local scripts/demo.ts",
+    "aiven:migrate": "tsx scripts/aiven-migrate.ts",
+    "aiven:sink": "tsx scripts/aiven-sink.ts",
+    "aiven:restart-test": "tsx scripts/aiven-restart-test.ts",
+    "aiven:search:index": "tsx scripts/aiven-search-index.ts",
+    "aiven:search:compare": "tsx scripts/aiven-search-compare.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.102",

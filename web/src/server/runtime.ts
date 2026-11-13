@@ -2,17 +2,17 @@ import { randomUUID } from "node:crypto";
 import type { JWK } from "jose";
 import { InMemoryOutbox } from "@/core/approval";
 import { InMemoryCatalog, MeteredCatalog } from "@/core/catalog";
-import { InMemoryEventBus } from "@/core/events";
-import { InMemoryKitchenRepository } from "@/core/kitchen";
+import type { InMemoryEventBus } from "@/core/events";
 import { generateEd25519KeyPair, importEd25519KeyPair } from "@/core/keys";
 import { Ledger } from "@/core/ledger";
 import { createTrustRegistry } from "@/core/mandate";
-import { InMemoryDockRepository, createDock, type Dock } from "@/core/orders";
-import { InMemoryPasskeyStore, PasskeyService } from "@/core/passkeys";
+import { createDock, type Dock } from "@/core/orders";
+import { PasskeyService } from "@/core/passkeys";
 import { SEED_PRODUCTS, SEED_STOCK } from "@/core/seed";
 import { demoTapEnabled, sandboxLimits } from "./config";
 import { KITCHEN_ORG, demoKitchenKeyPair, demoKitchenProfile } from "./demo-kitchen";
 import { DEMO_ORG, demoOrgKeyPair } from "./dev-fixtures";
+import { selectAdapters, type AivenHandle } from "./aiven";
 import { SandboxService } from "./sandboxes";
 import { loadCatalogIndex } from "./valio/index-store";
 import { ValioLiveClient } from "./valio/live-client";
@@ -21,7 +21,8 @@ import { ValioCatalog } from "./valio/valio-catalog";
 /**
  * The one Dock instance of this server process, with in-memory storage.
  * Kept on globalThis so every route bundle (and dev hot reloads) share the same store.
- * To go persistent, replace InMemoryDockRepository and the ledger store here.
+ * Storage is in memory by default; the Aiven adapters (PostgreSQL, Kafka, Valkey, OpenSearch) replace each store
+ * when switched on by configuration (see the AIVEN ADAPTERS block and src/server/aiven/env.ts).
  *
  * Catalogue: the partner's real catalogue (ValioCatalog) when the index exists (`pnpm index:build`) and
  * VALIO_API_KEY is set; otherwise the 12-product seed, so a fresh clone runs with no partner data.
@@ -39,6 +40,8 @@ export type Runtime = {
   passkeys: PasskeyService;
   /** Visitor kitchens created by scanning the join QR code. */
   sandboxes: SandboxService;
+  /** Which Aiven adapters are on, their health check and shutdown (src/server/aiven). */
+  aiven: AivenHandle;
 };
 
 const g = globalThis as typeof globalThis & { __dockRuntime?: Promise<Runtime> };
@@ -66,22 +69,30 @@ async function buildRuntime(): Promise<Runtime> {
     { kid: demoOrg.kid, orgId: DEMO_ORG.orgId, publicKey: demoOrg.publicKey },
     { kid: demoKitchen.kid, orgId: KITCHEN_ORG.orgId, publicKey: demoKitchen.publicKey },
   ]);
-  const events = new InMemoryEventBus();
+  // ---- BEGIN AIVEN ADAPTERS (src/server/aiven, owner: data plane) ----
+  // Every store below is in memory unless configuration switches its Aiven adapter on: DOCK_STORE=postgres,
+  // DOCK_ACTIONS=kafka|postgres, DOCK_CACHE=valkey, DOCK_BUS=valkey, DOCK_SEARCH=opensearch, or DOCK_AIVEN=1 for all
+  // configured services (src/server/aiven/env.ts). `stores.catalog` is `catalog` with the live cache and search routing.
+  const stores = await selectAdapters({ catalog, seedKitchens: [demoKitchenProfile(new Date())] }); // DEV: a returning kitchen with history
+  const { events, aiven } = stores;
+  // ---- END AIVEN ADAPTERS ----
   // Approvers who registered a passkey must use it; others (the scripted Laakso demo) keep the link token.
-  const passkeys = new PasskeyService({ store: new InMemoryPasskeyStore(), demoTapEnabled });
+  const passkeys = new PasskeyService({ store: stores.passkeyStore, demoTapEnabled });
   const dock = createDock({
-    catalog: new MeteredCatalog(catalog),
-    repo: new InMemoryDockRepository(),
-    ledger: new Ledger(),
+    catalog: new MeteredCatalog(stores.catalog),
+    repo: stores.repo,
+    ledger: new Ledger(stores.ledgerStore),
     trustedIssuers,
     wholesalerKey,
     notifier: outbox,
     verifier: passkeys.verifier,
     events,
-    kitchens: new InMemoryKitchenRepository([demoKitchenProfile(new Date())]), // DEV: a returning kitchen with history
+    kitchens: stores.kitchens,
+    intakes: stores.intakes,
   });
-  const sandboxes = new SandboxService({ dock, registry: trustedIssuers, passkeys, limits: sandboxLimits });
-  return { dock, outbox, catalog, catalogSource, events, passkeys, sandboxes };
+  const sandboxes = new SandboxService({ dock, registry: trustedIssuers, passkeys, limits: sandboxLimits, store: stores.sandboxStore });
+  await sandboxes.restore();
+  return { dock, outbox, catalog, catalogSource, events, passkeys, sandboxes, aiven };
 }
 
 const envValue = (name: string) => {

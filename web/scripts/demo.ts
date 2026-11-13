@@ -17,6 +17,7 @@ import { formatDay, localNow, nextDeliveryDay } from "@/core/kitchen";
 import { KITCHEN_ORG, demoKitchenKeyPair, demoKitchenMandate } from "@/server/demo-kitchen";
 import { DEMO_ORG, demoMandate, demoOrgKeyPair } from "@/server/dev-fixtures";
 import { localFetch } from "@/server/local-transport";
+import { shutdownAiven } from "@/server/aiven";
 import { DockClient, type Offer, type OptionCard, type Product, type Reply, type Step } from "./lib/client";
 
 const args = process.argv.slice(2);
@@ -351,7 +352,10 @@ async function main() {
   if (which === "all" || which === "attacks") await attacks();
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+main()
+  // Flush and close the Aiven adapters, if any are switched on (no-op in memory), so the process can exit.
+  .then(() => shutdownAiven())
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
