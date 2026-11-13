@@ -4,6 +4,8 @@ import { MANDATE_AUDIENCE, MANDATE_TYP } from "@/core/mandate";
 import { ORDER_TYP } from "@/core/orders";
 import { RULES } from "@/core/policy";
 import { QUOTE_TYP } from "@/core/quote";
+import { INTAKE_STATES } from "./wire";
+import { HUMAN_INPUT_META } from "./mcp/ask-human";
 import { LIVE_LOOKUP_LIMITS } from "./mcp/live-lookup-guard";
 import { MCP_SERVER_INFO } from "./mcp/server";
 import { TOOLS } from "./mcp/tools";
@@ -72,9 +74,20 @@ export function manifest(origin: string) {
         transport: "streamable-http",
         protocolVersions: MCP_PROTOCOL_VERSIONS,
         serverInfo: MCP_SERVER_INFO,
-        tools: TOOLS.map((t) => ({ name: t.name, title: t.title, readOnly: t.readOnly ?? false })),
+        tools: TOOLS.map((t) => ({ name: t.name, title: t.title, readOnly: t.readOnly ?? false, humanInput: ("humanInput" in t && t.humanInput) || false })),
+        humanInput: {
+          tools: TOOLS.filter((t) => "humanInput" in t && t.humanInput).map((t) => t.name),
+          how: `These calls carry the human buyer's own answer (a mistake confirmation, a clarifying answer). If the client declares the MCP elicitation capability (2026-07-28), Dock asks the buyer directly with an input_required elicitation/create form; otherwise the agent relays the question and passes the buyer's answer. Marked in tools/list with _meta["${HUMAN_INPUT_META}"] (Dock's own key, not a standard).`,
+        },
       },
       rest: { baseUrl: u.rest, openapi: u.openapi },
+    },
+    ordering: {
+      start: { mcp: "submit_need", rest: "POST /api/v1/intake" },
+      summary:
+        "Start every order from a structured need. Dock checks it against the kitchen's history for likely mistakes, asks the buyer at most two typed questions, offers option cards with pros and cons, and quotes the chosen one at a fixed price. Each reply is a step with a state and the next call. The lower-level search, availability and quote calls stay available for follow-up.",
+      states: INTAKE_STATES,
+      humanOnly: ["Confirming or correcting a likely mistake", "Answering a clarifying question", "Signing off an order above the mandate (on the approver's own phone, never through MCP)"],
     },
     authentication: {
       summary: "Present the mandate your organisation signed for you, and your agent id, on every call. Same credential for MCP and REST. No OAuth, no Dock account.",
@@ -103,7 +116,8 @@ export function manifest(origin: string) {
         maxProductsPerCall: MAX_LIVE_IDS_PER_CALL,
         perAgent: { windowMinutes: LIVE_LOOKUP_LIMITS.windowMinutes, maxCalls: LIVE_LOOKUP_LIMITS.maxCalls, maxDistinctProducts: LIVE_LOOKUP_LIMITS.maxDistinctProducts, appliesTo: "MCP" },
       },
-      refusals: "Every refusal is { error: { code, rule, message, details } }; `rule` is one of `rules` or live_lookup_limit, quote_availability, quote_signature, approver_identity.",
+      refusals:
+        "Every refusal is { error: { code, rule, message, details } }; `rule` is one of `rules` or live_lookup_limit, quote_availability, quote_signature, approver_identity, intake_sequence (a step out of order), human_input (needs the buyer's own answer first).",
     },
     docs: { llmsTxt: u.llms, apiCatalog: u.apiCatalog },
   };
@@ -144,7 +158,19 @@ Claude Code:
 
 ${tools}
 
-Flow: read_mandate, open_request, search_products (free master data), check_availability (live, at most ${MAX_LIVE_IDS_PER_CALL} products per call), request_quote, place_order, then get_order and explain.
+## How an order goes
+
+Start every order with \`submit_need\`: the buyer's need as fields (what, how much exactly as they said it, by when, must-haves). Dock answers with a step; its \`state\` says what happens next and \`nextStep\` names the exact call.
+
+1. \`needs_confirmation\`: Dock found a likely mistake, for example 1,000 L where this kitchen usually orders 100 L. Ask the buyer and pass their answer to \`respond_to_concerns\` ("confirm" or a correction id).
+2. \`needs_input\`: at most two typed questions its memory cannot answer. Ask the buyer and pass their answers to \`answer_questions\`.
+3. \`options_ready\`: option cards with pros, cons and anything that needs a sign-off. \`choose_option\` with the buyer's pick returns a signed fixed-price quote.
+4. \`quoted\`: call \`place_order\` with \`step.next.example\`. It commits, or waits for a human sign-off on the approver's phone.
+5. \`no_options\` or \`cancelled\`: tell the buyer; do not order.
+
+**The buyer answers, not you.** A mistake confirmation and a clarifying answer must come from the human buyer: relay Dock's question in plain words and pass on exactly what they say. Never confirm or answer for them. These two tools are marked \`_meta["${HUMAN_INPUT_META}"]\` in tools/list. If your client supports MCP elicitation (2026-07-28), Dock asks the buyer directly with an \`input_required\` form and your arguments only pre-fill it. While a confirmation is pending, quotes and orders for that request are refused (rule human_input).
+
+Lower-level tools for follow-up: open_request, search_products (free master data), check_availability (live, at most ${MAX_LIVE_IDS_PER_CALL} products per call), request_quote. Then get_order and explain. Approving an order is never a tool: only the approver can, with their passkey.
 
 ## Rules an agent must follow
 
@@ -157,11 +183,11 @@ Flow: read_mandate, open_request, search_products (free master data), check_avai
 
 ## REST in one minute
 
-    curl -s -X POST ${u.rest}/requests \\
-      -H "Authorization: Bearer $DOCK_MANDATE" -H "Dock-Agent-Id: $DOCK_AGENT_ID" \\
-      -H "content-type: application/json" -d '{"text":"1,000 L lactose-free milk by Monday","neededBy":"2026-11-16"}'
+    curl -s -X POST ${u.rest}/intake \\
+      -H "Authorization: Bearer $DOCK_MANDATE" -H "Dock-Agent-Id: $DOCK_AGENT_ID" -H "content-type: application/json" \\
+      -d '{"need":{"item":{"text":"lactose-free milk","category":"milk"},"quantity":{"amount":1000,"unit":"L"},"deliverBy":"2026-11-16"}}'
 
-Then GET /products?requestId=..., POST /availability, POST /quotes, POST /orders (201 committed, 202 awaiting sign-off, 422 refused), GET /orders/{orderId}.
+The reply is { step } with \`step.next\`: the method, path and an example body of the next call (POST /intake/{id}/concerns, /answers, /choice, then POST /orders: 201 committed, 202 awaiting sign-off, 422 refused). Lower level: POST /requests, GET /products, POST /availability, POST /quotes.
 
 ## Verify a receipt
 
