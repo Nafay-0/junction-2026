@@ -89,7 +89,10 @@ export async function findCandidates(catalog: MenuCatalog, ing: DraftIngredient,
   for (const h of top) mass.set(familyOf(h.product), (mass.get(familyOf(h.product)) ?? 0) + h.score);
   const family = [...mass.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
   const head = fold(ing.searchTerms[0] ?? ing.name).split(/[^a-z0-9]+/).filter((w) => w.length >= 4);
-  const avoid = ing.avoid.map(fold).filter(Boolean);
+  // A word the model says to avoid that its own search terms contain ("laktoosi" for lactose-free cream) is a
+  // contradiction in the draft: ignored, or it would throw out every right product.
+  const own = ` ${fold([ing.name, ...ing.searchTerms].join(" "))} `;
+  const avoid = ing.avoid.map(fold).filter((w) => w && !own.includes(w));
 
   const out: Candidate[] = [];
   for (const h of hits) {
@@ -145,7 +148,7 @@ export async function findCandidates(catalog: MenuCatalog, ing: DraftIngredient,
     if (ing.form === "fresh" && (t === "frozen" || hasWord(n, "pakaste"))) {
       score *= 0.5;
       why.push("frozen, not fresh");
-    } else if (ing.form === "fresh" && t === "ambient" && familyOf(p) !== "174") {
+    } else if (ing.form === "fresh" && t === "ambient" && (family === "174" || family === "187") && familyOf(p) !== "174") {
       score *= 0.55;
       why.push("kept at room temperature: dried or preserved, not fresh");
     } else if (ing.form === "frozen" && t && t !== "frozen") {
@@ -155,7 +158,7 @@ export async function findCandidates(catalog: MenuCatalog, ing: DraftIngredient,
       score *= 0.7;
       why.push(`${t}, not ${ing.form.replace(/_/g, " ")}`);
     } else if (ing.form !== "any" && FORM_WORDS[ing.form]?.some((w) => n.includes(w))) score *= 1.1;
-    if (p.allergenInfo?.declared) score *= 1.05; // documented allergens: safer to serve, ties go to it
+    if (p.allergenInfo?.declared && rules.forbiddenAllergens.length) score *= 1.05; // an allergen rule: documented products first
     if (safety.verdict === "hold") {
       score *= 0.6;
       why.push("allergen data does not show it is safe");

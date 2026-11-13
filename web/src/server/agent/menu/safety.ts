@@ -81,7 +81,7 @@ export function checkSafety(p: Product, rules: DietRules): Safety {
     const bad = claim === "lactose_free" ? ["milk", "lactose"] : excludes;
     const found = bad.filter((x) => a.contains.includes(x));
     if (found.length) {
-      checks.push({ rule, verdict: "block", reason: `contains ${found.map(text).join(" and ")} and does not carry the claim` });
+      checks.push({ rule, verdict: "block", reason: `contains ${found.map(text).join(" and ")} and is not ${claim.replace(/_/g, "-")}` });
       continue;
     }
     if ((claim === "vegan" || claim === "vegetarian") && isMeatOrFish(p)) {

@@ -1,0 +1,35 @@
+{
+ "id": "decline-table",
+ "kitchen": "kaari",
+ "text": "Can you book us a table for four at a nice restaurant on Saturday evening?",
+ "now": "2026-11-13T21:57:36.314Z",
+ "model": "anthropic:claude-sonnet-5-5",
+ "ms": 1902,
+ "costUsd": 0.0054,
+ "calls": [
+  {
+   "step": "outline",
+   "ms": 1902,
+   "tokens": {
+    "input": 2110,
+    "output": 118,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.0054
+  }
+ ],
+ "raw": {
+  "isFoodOrderRequest": false,
+  "declineReason": "This is a table booking request, not a request to plan or buy food for the kitchen.",
+  "covers": null,
+  "serviceDate": null,
+  "occasion": null,
+  "requiredClaims": [],
+  "forbiddenAllergens": [],
+  "assumptions": [],
+  "conflicts": [],
+  "dishes": []
+ },
+ "fixes": {}
+}

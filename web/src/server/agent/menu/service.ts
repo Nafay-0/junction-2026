@@ -57,6 +57,8 @@ export type PlanRecord = {
   requestNeededBy?: string | null;
   model: { id: string; ms: number; costUsd: number | null; calls: CallStats[]; recorded: boolean };
   draft: MenuDraft;
+  /** The model's raw outputs, kept for recordings and the evaluation; never sent to screens. */
+  raw: { draft: import("./draft").LlmMenuDraft; fixes: Record<string, import("./fixes").LlmFixes> };
   specs: LineSpec[];
   candidates: PlanInput["candidates"];
   live: LiveData;
@@ -105,7 +107,7 @@ export class InMemoryPlanStore implements PlanStore {
 
 /** Live products per plan: two per line at first, so one plan stays inside the agent's hourly allowance. */
 export const LIVE_PER_LINE = 2;
-export const LIVE_MAX_PER_PLAN = 12;
+export const LIVE_MAX_PER_PLAN = 16;
 
 export function promptContext(k: MenuKitchen): MenuPromptContext {
   return { kitchenName: k.info.name, kitchenKind: k.info.kind, rules: k.info.rules.map((r) => r.text), pantry: k.info.pantry };
@@ -176,7 +178,9 @@ export function createPlanService(deps: PlanDeps) {
   /** Ways out for lines that cannot be bought as planned: proposed by the model, checked here. */
   async function proposeFixesFor(p: PlanRecord, k: MenuKitchen, s: AgentSession, view: PlanView): Promise<void> {
     if (!deps.fix) return;
-    const stuck = view.lines.filter((l) => l.doubts.some((d) => !d.accepted && ["cannot_arrive", "no_safe_product", "no_product", "rule_conflict"].includes(d.kind)) && !p.fixes[l.lineId]);
+    // When nothing can arrive by the date, the fix is the date, not every recipe: no proposals for lateness then.
+    const kinds = view.totals.allLate ? ["no_safe_product", "no_product", "rule_conflict"] : ["cannot_arrive", "no_safe_product", "no_product", "rule_conflict"];
+    const stuck = view.lines.filter((l) => l.doubts.some((d) => !d.accepted && kinds.includes(d.kind)) && !p.fixes[l.lineId]);
     if (!stuck.length) return;
     const t0 = Date.now();
     const rules = [...k.info.rules.map((r) => r.text), ...p.draft.requiredClaims.map((c) => `must be ${c.replace(/_/g, "-")}`), ...p.draft.forbiddenAllergens.map((a) => `no ${a}`)];
@@ -187,6 +191,7 @@ export function createPlanService(deps: PlanDeps) {
         const problem = line.doubts.filter((d) => !d.accepted).map((d) => d.text).join(" ");
         const r = await deps.fix!({ lineKey: spec.key, dish: dish.name, method: dish.method, ingredient: spec.ingredient, problem, rules }, promptContext(k));
         p.model.calls.push({ step: `fix ${spec.key}`, ms: r.ms, tokens: r.tokens, costUsd: r.costUsd });
+        p.raw.fixes[spec.key] = r.fixes;
         return { line, spec, proposals: toFixOptions(r.fixes, spec.ingredient) };
       }),
     );
@@ -323,6 +328,7 @@ export function createPlanService(deps: PlanDeps) {
       state: "planned",
       model: { id: d.model, ms: d.ms, costUsd: d.costUsd, calls: [...d.calls], recorded: !!d.recorded },
       draft: d.draft,
+      raw: { draft: d.raw, fixes: {} },
       specs: [],
       candidates: {},
       live: { statuses: {}, deliverBy: null, calls: 0, at },
@@ -391,7 +397,7 @@ export function createPlanService(deps: PlanDeps) {
     // chances and its proposals fit in the agent's hourly allowance.
     const left = dock.liveAllowance.remaining(agentKeyOf(s.mandate.issuer.orgId, s.agentId));
     const active = p.specs.filter((x) => !x.pantry).length;
-    const perLine = active <= 6 && left.newProductsLeft >= 2 * active ? LIVE_PER_LINE : 1;
+    const perLine = active * LIVE_PER_LINE <= LIVE_MAX_PER_PLAN && left.newProductsLeft >= LIVE_PER_LINE * active ? LIVE_PER_LINE : 1; // a week menu: one each, up to the cap
     await price(p, s, liveShortlist(p.specs, p.candidates, p.edits, { perLine, max: Math.min(LIVE_MAX_PER_PLAN, left.newProductsLeft) }));
 
     // A line whose first products cannot come: price its next products before changing the recipe.
@@ -427,6 +433,7 @@ export function createPlanService(deps: PlanDeps) {
     latest.liveUse = { calls: Math.max(latest.liveUse.calls, p.liveUse.calls), products: Math.max(latest.liveUse.products, p.liveUse.products), ...(p.liveUse.refused ? { refused: p.liveUse.refused } : {}) };
     latest.live.calls = latest.liveUse.calls;
     latest.model = p.model;
+    latest.raw = p.raw;
     latest.timings.fixMs = p.timings.fixMs;
     latest.timings.liveMs = Math.max(latest.timings.liveMs, p.timings.liveMs);
     latest.notes = [...new Set([...latest.notes, ...p.notes])];
@@ -492,6 +499,18 @@ export function createPlanService(deps: PlanDeps) {
         case "perCover":
           if (!(e.amount > 0) || e.amount > 2000) throw new DockError(400, "invalid_amount", "The amount per cover must be above 0.");
           ed!.perCover = { ...(ed!.perCover ?? {}), [e.dishId]: e.amount };
+          if (e.unit && e.unit !== line!.ingredient.perCover.unit) {
+            // Another measure (eggs in g instead of pieces): the line is searched again for products sold that way.
+            line!.ingredient = { ...line!.ingredient, perCover: { amount: e.amount, unit: e.unit } };
+            line!.uses = line!.uses.map((u) => ({ ...u, perCover: { amount: u.dishId === e.dishId ? e.amount : u.perCover.amount, unit: e.unit! } }));
+            ed!.perCover = { [e.dishId]: e.amount };
+            p.candidates[line!.lineId] = await findCandidates(catalog, line!.ingredient, k.diet, allowedFor(k), 8);
+            await pick(p, [line!]);
+            reprice = true;
+          }
+          break;
+        case "price":
+          reprice = true;
           break;
         case "yield":
           if (!(e.yieldPct >= 20 && e.yieldPct <= 100)) throw new DockError(400, "invalid_yield", "The usable share must be 20 to 100 %.");
@@ -540,7 +559,10 @@ export function createPlanService(deps: PlanDeps) {
         }
       }
     }
-    if (reprice) await price(p, s, liveShortlist(p.specs, p.candidates, p.edits, { perLine: 1, max: 10 }));
+    if (reprice) {
+      const room = dock.liveAllowance.remaining(agentKeyOf(s.mandate.issuer.orgId, s.agentId)).newProductsLeft;
+      await price(p, s, liveShortlist(p.specs, p.candidates, p.edits, { perLine: 1, max: Math.min(10, room), already: Object.keys(p.live.statuses) }));
+    }
     p.updatedAt = at;
     await store.save(p);
     return finishView(p, k);
@@ -618,7 +640,8 @@ export type PlanEdit =
   | { op: "covers"; covers: number }
   | { op: "deliverBy"; date: string }
   | { op: "strike"; lineId: string; struck: boolean }
-  | { op: "perCover"; lineId: string; dishId: string; amount: number }
+  | { op: "perCover"; lineId: string; dishId: string; amount: number; unit?: "g" | "ml" | "pcs" }
+  | { op: "price" }
   | { op: "yield"; lineId: string; yieldPct: number }
   | { op: "choose"; lineId: string; optionId: string }
   | { op: "accept"; doubtId: string }

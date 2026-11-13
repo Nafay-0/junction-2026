@@ -151,9 +151,15 @@ export type PlanTotals = {
   budget: { weeklyBudgetCents: number; spentCents: number; afterCents: number; ok: boolean };
   canQuote: boolean;
   blockers: string[];
+  /** Clashes the model saw between the request and the kitchen's rules: for the chef to read. */
+  warnings: string[];
+  /** Set when nothing can arrive by the date asked: the earliest date the products can come. */
+  allLate: { neededBy: string; earliest: string | null } | null;
 };
 
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
+/** One ingredient above this per cover is almost certainly a wrong amount or pack (a whole school lunch costs about €3). */
+export const MAX_LINE_CENTS_PER_COVER = 400;
 export function toBase(amount: number, unit: DraftUnit): Amount {
   return unit === "g" ? { amount: amount / 1000, unit: "kg" } : unit === "ml" ? { amount: amount / 1000, unit: "L" } : { amount, unit: "pcs" };
 }
@@ -311,7 +317,14 @@ function evaluateLine(spec: LineSpec, input: PlanInput): PlanLineView {
 
   // What the code thinks of the model's amounts.
   for (const c of input.draft.corrections) if (c.toLowerCase().includes(spec.name.toLowerCase()) && /beyond|no usable amount/.test(c)) addDoubt("amount_check", c, "The amount is right");
-  for (const c of input.draft.conflicts) if (c.toLowerCase().includes(spec.name.toLowerCase().split(" ")[0])) addDoubt("rule_conflict", `The request clashes with a kitchen rule: ${c}`, undefined, "conflict");
+  const allergenRefused = set.rejected.some((r) => /contains|may contain/.test(r.reason));
+  const keyWords = spec.key.split("_").filter((w) => w.length >= 4);
+  const conflict = input.draft.conflicts.find((c) => keyWords.some((w) => c.toLowerCase().includes(w)));
+  if (conflict && allergenRefused) addDoubt("rule_conflict", `The request clashes with a kitchen rule: ${conflict}`, undefined, "conflict");
+  if (spec.uses.some((u) => u.perCover.unit === "pcs")) {
+    addDoubt("amount_check", "Counted in pieces, but the catalogue's packs are not counted in pieces, so Dock will not guess how many packs that is. Give the amount per cover in g or ml, or strike the line.", undefined, "pieces");
+    return finish(view);
+  }
 
   if (gross.amount <= 0) {
     addDoubt("amount_check", "No amount per cover: fill it in or strike the line.");
@@ -353,6 +366,9 @@ function evaluateLine(spec: LineSpec, input: PlanInput): PlanLineView {
     ? { ok: false, text: card.givesUp.map((g) => g.text).join(" ") }
     : { ok: true, text: `Arrives ${formatDay(card.deliveryDate)}${card.orderBy ? `, if ordered by ${formatCutoff(card.orderBy)}` : ""}.` };
   if (late) addDoubt("cannot_arrive", view.timing.text, "Accept the later delivery", "late");
+  // A line that costs more per cover than a whole lunch usually does is a wrong amount or a wrong pack, whatever made it.
+  const perCoverCents = card.totalCents / covers;
+  if (perCoverCents > MAX_LINE_CENTS_PER_COVER) addDoubt("amount_check", `${spec.name} comes to ${formatEur(Math.round(perCoverCents))} per cover (${formatEur(card.totalCents)} in all), more than a whole lunch usually costs: check the amount and the packs.`, "The amount is right", "cost");
   for (const l of card.lines) {
     const c = candOf(l.productId);
     if (c?.safety.verdict === "hold") addDoubt("allergen_unknown", `${c.product.name}: ${safetyProblem(c.safety)}. A person must check the product before it is ordered.`, "I checked the product: it is safe here", l.productId);
@@ -431,6 +447,15 @@ export function computePlan(input: PlanInput): PlanView {
     blockers.push(`${productIds.size} products: the wholesaler fixes a price for at most ${MAX_LIVE_IDS_PER_CALL} products in one quote today. Strike ${productIds.size - MAX_LIVE_IDS_PER_CALL} line${productIds.size - MAX_LIVE_IDS_PER_CALL > 1 ? "s" : ""} the kitchen can cover, or plan fewer dishes; Dock does not split one need into several orders.`);
   if (after > m.weeklyBudgetCents) blockers.push(`${formatEur(totalCents)} would take this week's spend to ${formatEur(after)}, over the ${formatEur(m.weeklyBudgetCents)} budget.`);
   if (reasons.length && !approver) blockers.push(`No one in the mandate may sign off ${formatEur(totalCents)}.`);
+  // Nothing can come by the date: one message for the plan instead of one per line.
+  const open = lines.filter((l) => (l.status === "ready" || l.status === "needs_decision") && l.gross);
+  const late = open.filter((l) => l.doubts.some((d) => d.kind === "cannot_arrive" && !d.accepted));
+  let allLate: PlanTotals["allLate"] = null;
+  if (input.settings.deliverBy && open.length >= 2 && late.length === open.length) {
+    const earliest = late.flatMap((l) => [l.chosen?.deliveryDate, ...l.alternatives.map((a) => a.deliveryDate)]).filter((d): d is string => !!d).sort()[0] ?? null;
+    allLate = { neededBy: input.settings.deliverBy, earliest };
+    blockers.unshift(`Nothing on this plan can arrive by ${formatDay(input.settings.deliverBy)}${earliest ? `: the earliest delivery is ${formatDay(earliest)}` : ""}. Move the date, or buy locally.`);
+  }
   return {
     lines,
     totals: {
@@ -445,6 +470,8 @@ export function computePlan(input: PlanInput): PlanView {
       budget: { weeklyBudgetCents: m.weeklyBudgetCents, spentCents: input.spentThisWeekCents, afterCents: after, ok: after <= m.weeklyBudgetCents },
       canQuote: blockers.length === 0,
       blockers,
+      warnings: input.draft.conflicts,
+      allLate,
     },
   };
 }
