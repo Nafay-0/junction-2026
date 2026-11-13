@@ -65,8 +65,14 @@ export function agentProviderOptions(info: ModelInfo): ProviderOptions {
   return { google: { thinkingConfig: { thinkingLevel: "low", includeThoughts: true } } };
 }
 
-/** Options for worker calls: as little thinking as each family allows. */
+/** Options for sub-agents: light thinking, since they still have to decide what to search and read. */
 export function workerProviderOptions(info: ModelInfo): ProviderOptions {
   if (info.provider === "claude") return { anthropic: { effort: "low" } };
+  return { google: { thinkingConfig: { thinkingLevel: "minimal" } } };
+}
+
+/** Options for plain extraction jobs (text in, structured data out): no thinking, for speed. */
+export function extractionProviderOptions(info: ModelInfo): ProviderOptions {
+  if (info.provider === "claude") return { anthropic: { thinking: { type: "disabled" }, effort: "low" } };
   return { google: { thinkingConfig: { thinkingLevel: "minimal" } } };
 }

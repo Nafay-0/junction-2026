@@ -1,52 +1,70 @@
-# Exa project: "The Internet Butler"
+# Hovi: the Exa "Internet Butler" project
 
-**Owner:** Asadullah (`Asadullah378`). **Status:** challenge chosen, idea not locked yet (Fri 13 Nov, 22:00).
+**Owner:** Asadullah (`Asadullah378`). **Status (Sat 14 Nov, 00:45):** step 1 is built and runs locally. Not deployed yet.
 
-Dock, the Valio Aimo project, is a separate project in this repo, owned by Nafay. It lives in `web/` and `infra/`. Everything for this project lives in `exa/`.
+Hovi is a general web agent for Exa's challenge "The Internet Butler". You hand it a task; it searches the live web with Exa, answers with live widgets instead of plain text (a map, fare cards, price charts, a gallery, a research report), and ends with buttons that take the task as far as it can go. "Hovi" is a working title, set in `web/src/lib/brand.ts`.
 
-## The brief
+Dock, the Valio Aimo project, is a separate project in this repo, owned by Nafay. It lives in `/web` and `/infra` at the repo root. Everything for Hovi lives in `exa/`.
 
-Taken from the participant platform; the full table is in `research/05-official-briefs.md`.
+## The plan, in three steps
 
-- **Ask:** a personal agent that takes a tedious real-life task off someone's hands using live web search. It is demoed on a real case, including queries the judges type in themselves.
-- **Judging:** use of Exa, usefulness to a specific group, shown sources, originality, live demo. No weights published.
-- **Prizes:** $2,500 + $5,000 Exa credits / $1,500 / $500.
-- **Credits:** Exa gives $50 per participant (platform: Developer Tools and Assets).
-- **Exa workshop:** Sat 16:30–17:00, Loft (4th floor).
+1. **Agent with live widgets (built).** Exa is read-only: search, read, structured data. Widgets, sub-agents, parallel tools, a visible plan, clarifying questions, model switching, usage and cost tracking.
+2. **Live web actions (next).** The agent acts in a browser the user can watch, asks the user to sign in where needed, and asks for approval before the last step.
+3. **Phone app and voice (after that).** Installable web app, voice input, more autonomy (Exa Monitors that keep watching).
 
-## What the brief implies for the build
+## Run it
 
-- **Judges bring their own queries.** The agent has to handle input nobody rehearsed, live. A single scripted path will not survive judging.
-- **Sources are scored.** Every claim the agent makes links to the page it came from.
-- **One specific group, one tedious task.** "Usefulness to a specific group" penalises general assistants. Name the group in the first sentence of the pitch.
-- **The result is the demo, not the chat.** Show the finished task (the form filled, the list ranked, the letter drafted), with the sources beside it. A chat window as the main demo is on the playbook's avoid list (`research/03-winning-playbook.md`, 4.5).
-- **Expect a crowd.** This is likely the most crowded software challenge, so the angle has to carry it.
-- **The main prize applies too.** Peer reviewers score Innovation, Impact and Implementation at the table on Sunday 10:30.
+```bash
+cd exa
+cp .env.example .env.local   # fill in the five keys
+cd web
+pnpm install
+pnpm dev                     # http://localhost:3000
+```
 
-## Research (Fri 13 Nov, 23:15)
+- `pnpm smoke` checks that Claude (through AWS) and Gemini answer with your keys.
+- `/dev/widgets` shows every widget with sample data. `?only=flights,hotels` narrows it, `?loading=1` shows loading states, `?still=1` turns animation off.
+- `pnpm typecheck`, `pnpm lint` and `pnpm build` all pass.
 
-- **Report:** `exa/reports/Exa Internet Butler playbook.md`. Read it before building; Exa's API changed a lot in 2026 and older examples break.
-- **Notes behind it:** `exa/research_notes/Exa Internet Butler playbook/` (API reference, Websets/Monitors/MCP, pricing and limits, Exa's demos and past winners, task and audience, source display and agent design).
+## What it does today
 
-## Candidate ideas, ranked by the research (none locked)
+| Task | Widget | Where the data comes from | Typical time |
+|---|---|---|---|
+| Places, restaurants, "near me" | Map with cards, hours, directions | Exa's place records (search limited to `exa.ai`) | 1 s |
+| Weather | Forecast strip | Exa's weather pages | 1 to 2 s |
+| Stock prices | Live chart, refreshes every 30 s | Exa's market pages (`/contents`) | under 1 s |
+| Prediction markets | Odds and 30-day chart, refreshes every 20 s | Polymarket's public API, plus Exa news to explain the move | 2 s |
+| Flights | Fare cards with booking links | Jinko through Exa Connect (Exa Agent) | 20 to 30 s |
+| Hotels | Cards with photos and live rates | Jinko through Exa Connect (Exa Agent) | 30 to 60 s |
+| Products | Cards that appear one by one, compare view | Exa search, then a fast model lines them up | 10 s |
+| Images | Gallery with lightbox | Exa search with image links | 3 s |
+| Research | Parallel sub-agents, then a sourced report | Exa search and contents, 3 to 4 sub-agents | 30 s |
+| Anything else | Text with source pills | Exa search and contents | 5 to 10 s |
 
-1. **Internationals in Finland: "what changed for me since I arrived, and what must I do by when."** Finland changed residence, benefit and tax rules repeatedly in 2025 and 2026, so a model answering from memory is wrong. About 610,000 foreign-language residents; many are at the venue. Output: a dated timeline of rule changes with the quoted official text, plus drafted messages and calendar deadlines for the user to approve.
-2. **Price-increase and terms-change fighter:** paste a provider's notice; get the terms you signed up under, your right to cancel, alternatives, and a drafted termination.
-3. **EU261 flight-claim builder:** biggest money figure, but crowded, and needs flight data Exa does not have.
+The model can also show a comparison table, key facts, a plan, clarifying questions (answered with taps) and action buttons (book, call, directions, calendar, email).
 
-Ideas named in Exa's brief (rent checker, benefits finder, restaurant picker) will be crowded, and Exa's own Places demo already does the restaurant one.
+Every widget shows its sources. Every answer shows the model, the time, the number of Exa calls and the cost; the top bar adds them up for the conversation.
+
+## How it is built
+
+- **Stack:** Next.js 16, React 19, Tailwind 4, shadcn/ui, Vercel AI SDK 7. One app, one deployment.
+- **Models:** Claude through Claude Platform on AWS (`@ai-sdk/anthropic-aws`) and Gemini through Google AI Studio, switchable per message. Sub-agents and extraction run on the fast model of the same family. Prices are in `web/src/lib/agent/models.ts`.
+- **Why the AI SDK and not Pydantic AI or a hand-written loop:** see `research_notes/Agent runtime choice/`. Short version: one codebase, and each tool's output type is the widget's input type.
+- **Code map** (all under `web/src`):
+  - `lib/widgets/types.ts`: the contract between tools and widgets.
+  - `lib/exa/client.ts`: the Exa client (search, contents, agent runs), with cost tracking and a 5-minute cache.
+  - `lib/agent/tools/`: the 16 tools. `lib/agent/instructions.ts`: the system prompt.
+  - `app/api/chat/route.ts`: the agent loop, usage metadata, context trimming, prompt caching.
+  - `components/butler/`: the chat interface. `components/widgets/`: the widgets. `WIDGETS.md` at the app root is the guide for building one.
+
+## Research
+
+- `reports/Exa Internet Butler playbook.md`: Exa's API as of 13 Nov 2026, costs and how to stand out. Read it before touching the Exa calls; Exa changed a lot in 2026.
+- `research_notes/`: the notes behind it, and the runtime comparison.
 
 ## Open questions
 
-- **Two projects, one team of two.** Can one team submit two separate projects (Dock and this), and is each eligible for the main prize? Peer review needs someone at each table, and every participant must also review their assigned projects. Ask the organisers.
-- **Exa key:** claim the $50 credit and put the key in `exa/.env.local`.
-- **Does Exa cover kela.fi, migri.fi and vero.fi well?** Untested. Exa returns results only in the query's language. Run about ten real queries in English and Finnish before locking idea 1.
-- **Do hackathon credits unlock Snapshot (past page versions) and Websets?** Snapshot is not on the free tier, and its docs describe only a rolling 5-month window. Ask Exa's staff. Idea 1 must work without it, from dated official news pages.
-
-## Layout
-
-Nothing built yet. The stack is chosen once the idea is locked.
-
-## Secrets
-
-Keys go in `exa/.env.local`, which the root `.gitignore` already ignores. Variable names go in `exa/.env.example` with empty values.
+- **Two projects, one team of two.** Can one team submit two projects (Dock and this), and is each eligible for the main prize? Someone has to be at each table during peer review. Ask the organisers.
+- **Deployment.** Not done. The app needs a public address for the submission's demo link and for phones at the table.
+- **Hotels are slow** (up to a minute through Jinko). A faster source would improve the trip demo.
+- **Not yet checked on a phone.** The layout is responsive, but nobody has used it on one.

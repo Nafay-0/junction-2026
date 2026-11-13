@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
+import { ThemeProvider } from "next-themes";
 import { Providers } from "@/components/providers";
 import { APP_DESCRIPTION, APP_NAME, APP_TAGLINE } from "@/lib/brand";
 import "./globals.css";
@@ -29,7 +30,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} ${display.variable} h-full antialiased`}>
       <body className="h-full min-h-full bg-background">
-        <Providers>{children}</Providers>
+        {/* Rendered from the server layout so its no-flash theme script is part of the first HTML. */}
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          <Providers>{children}</Providers>
+        </ThemeProvider>
       </body>
     </html>
   );

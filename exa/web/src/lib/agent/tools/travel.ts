@@ -10,6 +10,9 @@ import { runStructured, slug, whileWaiting } from "./structured";
  * Live fares and room rates come from Jinko through Exa Connect: the Exa Agent queries the
  * partner's inventory and returns structured, cited results. Nothing here is cached data
  * from a model's memory.
+ *
+ * These tools are async generators: each `yield` replaces what the widget shows, and the last
+ * value yielded is the tool's result (a generator's `return` value is ignored by the AI SDK).
  */
 
 const legSchema = {
@@ -70,6 +73,28 @@ function toLeg(raw: RawLeg, airline: string): FlightLeg {
   };
 }
 
+/** A link that opens this exact search, for when the fare source gives no booking page of its own. */
+function flightSearchUrl(from: string, to: string, departDate: string, returnDate?: string): string {
+  const q = `Flights from ${from} to ${to} on ${departDate}${returnDate ? ` through ${returnDate}` : ""}`;
+  return `https://www.google.com/travel/flights?q=${encodeURIComponent(q)}`;
+}
+
+function hotelSearchUrl(name: string, location: string, checkIn: string, checkOut: string, guests: number): string {
+  const params = new URLSearchParams({ ss: `${name}, ${location}`, checkin: checkIn, checkout: checkOut, group_adults: String(guests), no_rooms: "1" });
+  return `https://www.booking.com/searchresults.html?${params.toString()}`;
+}
+
+/** True for a link to a specific page, false for a bare home page such as https://gojinko.com. */
+function isDeepLink(url: string | undefined): url is string {
+  if (!url || !/^https?:\/\//.test(url)) return false;
+  try {
+    const u = new URL(url);
+    return u.pathname.length > 1 || u.search.length > 1;
+  } catch {
+    return false;
+  }
+}
+
 function tagFlights(options: FlightOption[]): FlightOption[] {
   if (options.length < 2) return options;
   const total = (o: FlightOption) => (o.outbound.durationMinutes ?? 9e9) + (o.inbound?.durationMinutes ?? 0);
@@ -94,7 +119,7 @@ export function searchFlightsTool(ctx: ToolContext) {
       adults: z.number().int().min(1).max(9).optional(),
       preferences: z.string().optional().describe('For example "direct only", "morning departure", "business class", "with checked bag".'),
     }),
-    async *execute(input, { abortSignal }): AsyncGenerator<FlightsData, FlightsData> {
+    async *execute(input, { abortSignal }): AsyncGenerator<FlightsData> {
       const adults = input.adults ?? 1;
       const base = {
         kind: "flights" as const,
@@ -135,10 +160,10 @@ export function searchFlightsTool(ctx: ToolContext) {
             outbound: toLeg(o.outbound, o.airline),
             inbound: o.inbound ? toLeg(o.inbound, o.airline) : undefined,
             fareNote: o.fareNote,
-            bookingUrl: o.bookingUrl,
+            bookingUrl: isDeepLink(o.bookingUrl) ? o.bookingUrl : flightSearchUrl(o.outbound.fromAirport, o.outbound.toAirport, input.departDate, input.returnDate),
           }))
           .sort((a, b) => a.price - b.price);
-        return {
+        yield {
           ...base,
           options: tagFlights(options),
           note: result.data.note,
@@ -147,7 +172,7 @@ export function searchFlightsTool(ctx: ToolContext) {
           error: options.length === 0 ? "No flights came back for those dates. Try nearby dates or airports." : undefined,
         };
       } catch (err) {
-        return { ...base, options: [], sources: [], error: errorMessage(err) };
+        yield { ...base, options: [], sources: [], error: errorMessage(err) };
       }
     },
     toModelOutput: ({ output }) => {
@@ -232,7 +257,7 @@ export function searchHotelsTool(ctx: ToolContext) {
       guests: z.number().int().min(1).max(8).optional(),
       preferences: z.string().optional().describe('For example "under 150 EUR a night", "with sauna", "near the train station", "boutique".'),
     }),
-    async *execute(input, { abortSignal }): AsyncGenerator<HotelsData, HotelsData> {
+    async *execute(input, { abortSignal }): AsyncGenerator<HotelsData> {
       const guests = input.guests ?? 2;
       const base = { kind: "hotels" as const, location: input.location, checkIn: input.checkIn, checkOut: input.checkOut, guests };
       try {
@@ -245,6 +270,7 @@ export function searchHotelsTool(ctx: ToolContext) {
               " Use live prices from the hotel search. Include a range of prices, and a photo URL for each when one is available.",
             schema: hotelsSchema,
             providers: ["jinko"],
+            deadlineMs: 110_000,
           },
           abortSignal,
         );
@@ -252,7 +278,14 @@ export function searchHotelsTool(ctx: ToolContext) {
           ...base,
           options: [],
           sources: [],
-          stage: s < 6 ? "Asking Jinko for live room rates" : s < 14 ? "Comparing hotels and locations" : "Checking availability",
+          stage:
+            s < 8
+              ? "Asking Jinko for live room rates"
+              : s < 22
+                ? "Comparing hotels and locations"
+                : s < 40
+                  ? "Checking availability for your dates"
+                  : "Still checking: live hotel inventory can take a minute",
         }));
         const options: HotelOption[] = (result.data.options ?? [])
           .filter((o) => o?.name && typeof o.pricePerNight === "number")
@@ -266,12 +299,12 @@ export function searchHotelsTool(ctx: ToolContext) {
             stars: o.stars,
             rating: o.rating,
             reviewCount: o.reviewCount,
-            pricePerNight: o.pricePerNight,
-            totalPrice: o.totalPrice,
+            pricePerNight: Math.round(o.pricePerNight),
+            totalPrice: typeof o.totalPrice === "number" ? Math.round(o.totalPrice) : undefined,
             currency: o.currency || "EUR",
             image: o.imageUrl && /^https?:\/\//.test(o.imageUrl) ? o.imageUrl : undefined,
             amenities: o.amenities?.slice(0, 6),
-            bookingUrl: o.bookingUrl,
+            bookingUrl: isDeepLink(o.bookingUrl) ? o.bookingUrl : hotelSearchUrl(o.name, input.location, input.checkIn, input.checkOut, guests),
             note: o.note,
           }));
         if (options.length > 1) {
@@ -279,7 +312,7 @@ export function searchHotelsTool(ctx: ToolContext) {
           const best = options.filter((o) => o.rating).reduce<HotelOption | undefined>((a, b) => (!a || (b.rating ?? 0) > (a.rating ?? 0) ? b : a), undefined);
           for (const o of options) o.tag = o === cheapest ? "Lowest price" : o === best ? "Top rated" : undefined;
         }
-        return {
+        yield {
           ...base,
           options,
           note: result.data.note,
@@ -288,7 +321,7 @@ export function searchHotelsTool(ctx: ToolContext) {
           error: options.length === 0 ? "No hotels came back for those dates. Try different dates or a wider area." : undefined,
         };
       } catch (err) {
-        return { ...base, options: [], sources: [], error: errorMessage(err) };
+        yield { ...base, options: [], sources: [], error: errorMessage(err) };
       }
     },
     toModelOutput: ({ output }) => {

@@ -16,6 +16,8 @@ export async function runStructured<T>(
     schema: Record<string, unknown>;
     providers?: string[];
     effort?: "minimal" | "low" | "medium";
+    /** Give up after this long. Live hotel inventory can take close to a minute. */
+    deadlineMs?: number;
   },
   signal?: AbortSignal,
 ): Promise<{ data: T; sources: Source[]; costUsd: number }> {
@@ -27,7 +29,7 @@ export async function runStructured<T>(
       systemPrompt: `Today is ${ctx.today}. Answer in English. Use live data and return only what the sources support; leave a field out rather than guess.`,
       dataSources: args.providers?.map((provider) => ({ provider })),
     },
-    { meter: ctx.meter, signal },
+    { meter: ctx.meter, signal, deadlineMs: args.deadlineMs },
   );
   const data = run.output?.structured as T | undefined;
   if (data === undefined || data === null) throw new Error("The lookup returned no structured data.");

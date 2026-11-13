@@ -123,7 +123,7 @@ export function deepResearchTool(ctx: ToolContext, mainModel: LanguageModel) {
         .max(4)
         .describe("Two to four independent angles, one per sub-agent, each a specific sub-question that can be researched on its own."),
     }),
-    async *execute({ question, angles }, { abortSignal }): AsyncGenerator<ResearchData, ResearchData> {
+    async *execute({ question, angles }, { abortSignal }): AsyncGenerator<ResearchData> {
       const state: ResearchData = {
         kind: "research",
         question,
@@ -193,7 +193,8 @@ export function deepResearchTool(ctx: ToolContext, mainModel: LanguageModel) {
       }
       state.status = "done";
       state.stage = undefined;
-      return snapshot();
+      // The last value yielded is the tool's result.
+      yield snapshot();
     },
     toModelOutput: ({ output }) => {
       if (output.status !== "done") return { type: "text", value: "Research in progress." };
