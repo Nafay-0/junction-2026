@@ -19,11 +19,8 @@ import type { Via } from "./door";
  */
 export const SUSPENSION_RULE = "operator_suspension";
 
-/**
- * The ledger's type list lives in src/core/ledger.ts, which this layer does not edit. "control" is recorded through
- * the same hash chain; the core should add it to LedgerEntryType when it next changes.
- */
-export const CONTROL_ENTRY = "control" as LedgerEntryType;
+/** Suspensions and resumptions go into the same hash chain as every other entry, as type "control" (core/ledger.ts). */
+export const CONTROL_ENTRY = "control" satisfies LedgerEntryType;
 
 export type SuspensionScope = "agent" | "org";
 

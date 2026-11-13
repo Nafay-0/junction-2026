@@ -486,6 +486,10 @@ export function createPlanService(deps: PlanDeps) {
           if (!/^\d{4}-\d{2}-\d{2}$/.test(e.date) || e.date < localNow(deps.now()).date) throw new DockError(400, "invalid_date", "The delivery date must be today or later, as YYYY-MM-DD.");
           if (e.date !== p.settings.deliverBy) {
             p.settings.deliverBy = e.date;
+            if (p.requestId) {
+              await dock.changeNeededBy(s, p.requestId, { neededBy: e.date, by, reason: "the chef changed the plan's delivery date" });
+              p.requestNeededBy = e.date;
+            }
             // Cut-offs depend on the date: what was priced for the old one is asked again, in batches.
             const ids = Object.keys(p.live.statuses);
             p.live = { statuses: {}, deliverBy: e.date, calls: p.live.calls, at };
@@ -575,11 +579,9 @@ export function createPlanService(deps: PlanDeps) {
     const spent = await spentThisWeek(k.mandate.issuer.orgId);
     const view = computePlan(input(p, k, spent));
     if (!view.totals.canQuote) throw new DockError(409, "plan_not_ready", view.totals.blockers.join(" "), "human_input", { blockers: view.totals.blockers });
-    // The request's need-by date must be the plan's: open a new one if the chef changed it.
+    // The request's need-by date must be the plan's: move it if the chef changed it (same request, one ledger line).
     if (p.requestNeededBy !== p.settings.deliverBy) {
-      const req = await dock.openRequest(s, { text: `Menu plan: ${p.text}`.slice(0, 2000), ...(p.settings.deliverBy ? { neededBy: p.settings.deliverBy } : {}) });
-      log(p, k, `agent:${k.agentId}`, `The delivery date changed to ${p.settings.deliverBy ? formatDay(p.settings.deliverBy) : "the earliest"}; the plan continues as request ${req.requestId}.`, { newRequestId: req.requestId });
-      p.requestId = req.requestId;
+      await dock.changeNeededBy(s, p.requestId!, { neededBy: p.settings.deliverBy, by, reason: "the chef changed the plan's delivery date" });
       p.requestNeededBy = p.settings.deliverBy;
     }
     const buying = view.lines.filter((l) => l.chosen && (l.status === "ready" || l.status === "needs_decision"));

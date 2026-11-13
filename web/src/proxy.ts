@@ -12,24 +12,35 @@ const MIN = 60_000;
 const rule = (name: string, limit: number): RateRule => ({ name, limit, windowMs: MIN });
 
 // Generous per address: at a venue many phones share one public address.
-const ANY = rule("any", 900);
-const PAGE = rule("page", 300);
-const INTERPRET = rule("interpret", 20);
-const CONSOLE_CALL = rule("console-call", 60);
-const CONSOLE_CALL_KITCHEN = rule("console-call-kitchen", 120);
+//
+// Measured on a production build (scripts/edge-cost.ts, 14 Nov 2026): one ordinary order through the kitchen store
+// on a phone (/k/kaari: open the shop, the catalogue and a product, ask the agent in words, take the cards to a fixed
+// price, place it) and one minute on the sign-off screen cost
+//   any 83 (30 browsing, 16 ordering, 37 per minute waiting), page 20, console-call 46 (11 ordering, 35 per minute
+//   waiting: the order every 3 s and the ledger every 4 s while the event stream is open), catalog-live 1, events 3.
+// The limits below hold ten visitors doing that at the same minute behind one venue address, all on the same demo
+// kitchen, with about 30 % headroom. Money is not protected here: the daily model and partner caps (limits.ts), the
+// per-caller interpret allowance and the per-agent live-lookup allowance stay as they were.
+const ANY = rule("any", 1500); // 10 x 83 = 830
+const PAGE = rule("page", 300); // 10 x 20 = 200
+const INTERPRET = rule("interpret", 20); // outside agents calling the reader directly; the store's reader goes through console-call
+const CONSOLE_CALL = rule("console-call", 600); // 10 x 46 = 460
+const CONSOLE_CALL_KITCHEN = rule("console-call-kitchen", 600); // ten phones on one built-in demo kitchen: 460
 const JOIN = rule("join", 30);
 const DEMO_ORDER = rule("demo-order", 12);
 const DEMO_ORDER_KITCHEN = rule("demo-order-kitchen", 6);
 const AGENT_WRITE = rule("agent-write", 120);
-const EVENTS = rule("events", 60);
-const ASSISTANT = rule("assistant", 20);
+const EVENTS = rule("events", 60); // 10 x 3 = 30 (each page opens one stream)
+const ASSISTANT = rule("assistant", 40); // two questions a minute each for ten visitors; every answer is a capped model call
 const ASSISTANT_KITCHEN = rule("assistant-kitchen", 60);
-const LIVE_LOOKUP = rule("catalog-live", 30);
+const LIVE_LOOKUP = rule("catalog-live", 60); // a product page checks its live price once: 10 visitors x 3 products = 30
 const KITCHEN_WRITE = rule("kitchen-write", 60);
 const KITCHEN_WRITE_KITCHEN = rule("kitchen-write-kitchen", 120);
 const OPS_ENTER = rule("ops-enter", 10);
-const MENU_PLAN = rule("menu-plan", 6);
-const MENU_PLAN_KITCHEN = rule("menu-plan-kitchen", 12);
+// The planner: creating a plan is several model calls; every edit of a plan (covers, a decision, a date) is one POST
+// too, about four a minute while a chef works through a plan.
+const MENU_PLAN = rule("menu-plan", 40);
+const MENU_PLAN_KITCHEN = rule("menu-plan-kitchen", 60);
 // The voice door (src/app/_channels): starting a call mints a paid realtime session.
 const VOICE_CALL = rule("voice-call", 6);
 const VOICE_TOOL = rule("voice-tool", 60);
@@ -41,8 +52,8 @@ function refuse(status: number, code: string, message: string, rule: string, hea
   return NextResponse.json({ error: { code, rule, message } }, { status, headers: { "cache-control": "no-store", ...headers } });
 }
 
-/** The rules a request counts against: [rule, key-suffix]. */
-function rulesFor(method: string, path: string): [RateRule, string?][] {
+/** The rules a request counts against: [rule, key-suffix]. Exported for the edge-cost measurement (scripts/edge-cost.ts). */
+export function rulesFor(method: string, path: string): [RateRule, string?][] {
   const api = path.startsWith("/api/") || path.startsWith("/ui-api/");
   const out: [RateRule, string?][] = [[ANY]];
   if (!api) out.push([PAGE]);

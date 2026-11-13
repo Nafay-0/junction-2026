@@ -177,6 +177,16 @@ export function toNeed(raw: LlmNeed, text: string): StructuredNeed {
   return parsed.data;
 }
 
+/**
+ * Tests only: the model every interpretation uses when the caller passes none (a scripted AI SDK model), so tests
+ * that go through the routes (the OpenAPI "every documented route succeeds" test) never reach a provider.
+ * Production code never calls this; `undefined` restores the configured model.
+ */
+let modelForTests: InterpretOptions["model"] | undefined;
+export function setInterpretModelForTests(model: Exclude<InterpretOptions["model"], string> | undefined): void {
+  modelForTests = model;
+}
+
 export async function interpretNeed(opts: InterpretOptions): Promise<InterpretResult> {
   const text = opts.text.trim();
   if (!text) throw new DockError(400, "invalid_request", "text must not be empty.");
@@ -185,9 +195,10 @@ export async function interpretNeed(opts: InterpretOptions): Promise<InterpretRe
   let model: LanguageModel;
   let id: string;
   let price: Price | undefined;
-  if (opts.model && typeof opts.model !== "string") ({ model, id, price } = opts.model);
+  const given = opts.model ?? modelForTests;
+  if (given && typeof given !== "string") ({ model, id, price } = given);
   else {
-    const spec = opts.model ?? defaultModel("DOCK_INTERPRET_MODEL");
+    const spec = (typeof given === "string" ? given : undefined) ?? defaultModel("DOCK_INTERPRET_MODEL");
     if (!spec) throw new DockError(503, "model_unavailable", "No model is configured for interpretation: set DOCK_INTERPRET_MODEL or a provider API key.");
     try {
       const m = createModel(spec, opts.modelOptions);

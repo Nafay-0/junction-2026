@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { MAX_LIVE_IDS_PER_CALL } from "@/core/catalog";
 import { AnswersInput, ChoiceInput, ConcernResponseInput, OpenIntakeInput } from "@/core/intake";
+import { InterpretBody, InterpretResponse } from "@/server/agent/interpret";
 import { AvailabilityInput, OpenRequestInput, PlaceOrderInput, QuoteInput, SearchInput } from "@/core/orders";
 import {
   ApprovalViewSchema,
@@ -64,6 +65,8 @@ const JoinVerifyBody = named(
   }),
 );
 const IntakeBody = named("IntakeBody", OpenIntakeInput.extend({ need: NeedOutSchema }));
+const InterpretRequestBody = named("InterpretBody", InterpretBody);
+const Interpretation = named("Interpretation", InterpretResponse);
 const ConcernResponseBody = named("ConcernResponseBody", ConcernResponseInput);
 const AnswersBody = named("AnswersBody", AnswersInput);
 const ChoiceBody = named("ChoiceBody", ChoiceInput);
@@ -437,6 +440,26 @@ export const API: Operation[] = [
     },
   },
   {
+    method: "post",
+    path: "/api/v1/agent/interpret",
+    operationId: "interpretRequest",
+    summary: "Free text to a structured need",
+    description:
+      "Optional helper before POST /api/v1/intake: a language model reads the buyer's words (English, Finnish or Swedish) and fills only what was said; plain code checks every field, copies the buyer's own words, and leaves anything unstated empty so the intake can ask or consult memory. The model never decides anything: the intake and the gate do. With `earlier` (the kitchen's earlier requests) a follow-up such as \"same again but 200 litres\" is resolved against one of them and `basedOn` names it. Each caller has an hourly allowance of model calls; the same text for the same kitchen on the same day is answered from a cache (`cached: true`).",
+    auth: true,
+    body: InterpretRequestBody,
+    responses: {
+      200: { description: "The structured need, ready for POST /api/v1/intake.", schema: Interpretation },
+      400: err("Empty or too long text, or an invalid body."),
+      422: err("not_a_purchase_request (the text does not ask to buy anything), or need_incomplete (details.missing lists item and/or quantity; details.partial holds what was understood)."),
+      429: err("This caller's hourly allowance of model calls is used up (interpret_quota_exceeded); see Retry-After."),
+      502: err("The model failed or returned something plain code refused (interpret_failed, interpret_invalid_output)."),
+      503: err("No model is configured or the provider is unavailable (model_unavailable)."),
+      504: err("The model did not answer in time (interpret_timeout)."),
+      ...AUTH_ERRORS,
+    },
+  },
+  {
     method: "get",
     path: "/api/v1/intake/{requestId}",
     operationId: "getIntake",
@@ -527,9 +550,6 @@ export const API: Operation[] = [
 /** Route files that are deliberately not part of the published contract. */
 export const UNDOCUMENTED_ROUTES = [
   "/api/v1/dev/outbox", // dev only, 404 in production
-  // TODO(document): calls a live model, so the "every documented route succeeds" test cannot exercise it yet.
-  // Publish it once that test can inject a scripted model. Contract: POST { text } -> { need, model, ms }.
-  "/api/v1/agent/interpret",
 ];
 
 const REF = (id: string) => `#/components/schemas/${id}`;

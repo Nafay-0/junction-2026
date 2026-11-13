@@ -7,6 +7,7 @@ import type { Mandate } from "@/core/mandate";
 import { SEED_PRODUCTS, SEED_STOCK } from "@/core/seed";
 import { known } from "@/core/options";
 import { addDays, sha256Hex } from "@/core/util";
+import { DEMO_WEEKLY_BUDGET_CENTS } from "./dev-fixtures";
 
 /**
  * DEV ONLY. A returning restaurant kitchen for the demo: six weeks of milk and cream orders, and one rule
@@ -43,7 +44,7 @@ export function demoKitchenMandate(now: Date, overrides: Partial<Mandate> = {}):
     validUntil: addDays(now, 7).toISOString(),
     currency: "EUR",
     perOrderLimitCents: 10_000,
-    weeklyBudgetCents: 150_000,
+    weeklyBudgetCents: DEMO_WEEKLY_BUDGET_CENTS, // sized for a day of demos (dev-fixtures.ts)
     allowedCategories: ["milk", "cream", "yoghurt"],
     requiredAttributes: [],
     forbiddenAllergens: ["nuts"],

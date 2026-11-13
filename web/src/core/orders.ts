@@ -17,7 +17,7 @@ import { CatalogError, ProductQuerySchema, usableOffer, type LiveOffer, type Liv
 import { ClaimStore, availabilityClaimInput, issueClaim, originClaimInput, priceClaimInput, refOf, type IssuedClaim } from "./claims";
 import { DockError, parse } from "./errors";
 import { InMemoryIntakeRepository, createIntakeFlow, recordCommittedOrder, type IntakeRepository } from "./intake";
-import { InMemoryKitchenRepository, type KitchenRepository } from "./kitchen";
+import { InMemoryKitchenRepository, localNow, type KitchenRepository } from "./kitchen";
 import { SIGN_ALG, type KeyPair } from "./keys";
 import type { Ledger, LedgerHead } from "./ledger";
 import { LiveLookupAllowance, shareKeyOf } from "./live-allowance";
@@ -68,6 +68,14 @@ export const PlaceOrderInput = z.object({
   requestId: z.string().min(1),
   quoteToken: z.string().min(1),
   lines: z.array(z.object({ productId: z.string(), quantity: z.number(), unitPriceCents: z.number() })),
+});
+export const ChangeNeededByInput = z.object({
+  /** The new need-by date (Helsinki day), or null for "the earliest possible". */
+  neededBy: z.iso.date().nullable(),
+  /** Who asked for it, as relayed by the agent. */
+  by: z.string().min(1).max(120).optional(),
+  /** Why, in a few words; written to the ledger. */
+  reason: z.string().max(300).optional(),
 });
 export const WithdrawInput = z.object({
   /** Why, in the buyer's words; written to the ledger. */
@@ -650,6 +658,32 @@ export function createDock(deps: DockDeps) {
       return r;
     },
 
+    /**
+     * Move a request's need-by date (the buyer chose a later day, the chef changed the service day). The gate's
+     * delivery check and every later live lookup follow it. Not once an order for the request waits or is
+     * committed: that order was decided against the old date. A date before today is refused.
+     */
+    async changeNeededBy(session: AgentSession, requestId: string, input: z.input<typeof ChangeNeededByInput>): Promise<PurchaseRequest> {
+      const { neededBy, by, reason } = parse(ChangeNeededByInput, input);
+      const r = await ownRequest(session, requestId);
+      const was = r.neededBy ?? null;
+      if (was === neededBy) return r;
+      const today = localNow(now()).date;
+      if (neededBy && neededBy < today) throw new DockError(400, "needed_by_in_past", `${neededBy} is before today (${today}).`, "delivery_deadline");
+      const placed = (await repo.listOrders()).find((o) => o.requestId === requestId && (o.status === "pending_approval" || o.status === "committed"));
+      if (placed) throw new DockError(409, "request_has_order", `Order ${placed.orderId} for request ${requestId} is ${placed.status.replace("_", " ")}; it was decided against ${was ?? "the earliest date"}. Open a new request for another date.`, "intake_sequence", { orderId: placed.orderId });
+      const next: PurchaseRequest = { ...r, neededBy: neededBy ?? undefined };
+      await repo.saveRequest(next);
+      ledger.append({
+        type: "intake",
+        actor: agentActor(session),
+        requestId,
+        summary: `The need-by date of request ${requestId} changed from ${was ?? "the earliest possible"} to ${neededBy ?? "the earliest possible"}${by ? `, for ${by} (relayed by the agent)` : ""}${reason ? `: ${reason}` : ""}.`,
+        data: { step: "needed_by", from: was, to: neededBy, ...(by ? { by } : {}), ...(reason ? { reason } : {}) },
+      });
+      return next;
+    },
+
     /** Master-data search. Local, cheap, does not touch the live price/availability API. */
     async searchProducts(session: AgentSession, input: z.input<typeof SearchInput>): Promise<Product[]> {
       const { requestId, ...query } = parse(SearchInput, input);
@@ -1094,6 +1128,7 @@ export function createDock(deps: DockDeps) {
     ledger,
     now,
     openRequest: dock.openRequest,
+    changeNeededBy: dock.changeNeededBy,
     requestQuote: dock.requestQuote,
     liveLookup: (session, requestId, productIds, deliveryDate, why) => liveLookup(session, requestId, productIds, deliveryDate, why, { batch: true }),
     spentThisWeek: (orgId) => spentThisWeek(orgId),

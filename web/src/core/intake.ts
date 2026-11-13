@@ -2,7 +2,7 @@ import { z } from "zod";
 import { MAX_LIVE_IDS_PER_CALL, type MeteredCatalog, type Product } from "./catalog";
 import { facetsOf } from "./catalog/search";
 import { OPTIMISE_QUESTION_ID, answerSchema, clarify, hardConstraints, kindMismatch, optimiseQuestion, optionLabel, violation, type Answer, type ConstraintSource, type MemoryNote, type Question } from "./clarify";
-import { baseAmount, checkNeed, type CheckContext, type Concern, type ConcernCode } from "./concerns";
+import { baseAmount, checkNeed, type CheckContext, type Concern, type ConcernCode, type PendingOrderSummary } from "./concerns";
 import { DockError, parse } from "./errors";
 import {
   addStatedPreference,
@@ -148,6 +148,8 @@ export type IntakeDeps = {
   now: () => Date;
   openRequest: (session: AgentSession, input: { text: string; neededBy?: string; productIds?: string[]; category?: string }) => Promise<PurchaseRequest>;
   requestQuote: (session: AgentSession, input: { requestId: string; lines: QuoteRequestLine[] }) => Promise<{ quote: Quote; quoteToken: string; policyPreview: Decision }>;
+  /** The order flow's way to move a request's need-by date (validated and written to the ledger, see orders.ts). */
+  changeNeededBy?: (session: AgentSession, requestId: string, input: { neededBy: string | null; by?: string; reason?: string }) => Promise<unknown>;
   spentThisWeek: (orgId: string) => Promise<number>;
   /** Committed and held spend, with the orders holding money, for the budget's part of a "nothing fits" answer. */
   budgetUse?: (orgId: string) => Promise<{ spentCents: number; heldCents: number; held: { orderId: string; totalCents: number; expiresAt: string }[] }>;
@@ -207,6 +209,28 @@ export function createIntakeFlow(deps: IntakeDeps) {
     throw new DockError(422, "family_unknown", `No product family matches "${need.item.text}". Send item.category (for example "milk").`);
   }
 
+  /** This kitchen's orders still waiting for sign-off (their price not expired), for the duplicate check. */
+  async function pendingOrders(i: Intake): Promise<PendingOrderSummary[]> {
+    const t = now().getTime();
+    const waiting = (await repo.listOrders()).filter((o) => o.orgId === i.orgId && o.requestId !== i.requestId && o.status === "pending_approval" && Date.parse(o.quote.expiresAt) > t);
+    const out: PendingOrderSummary[] = [];
+    for (const o of waiting) {
+      if (!o.lines.length) continue;
+      const main = [...o.lines].sort((a, b) => b.quantity * b.packSize - a.quantity * a.packSize)[0];
+      const amount = Math.round(o.lines.filter((l) => l.unit === main.unit).reduce((s, l) => s + l.quantity * l.packSize, 0) * 100) / 100;
+      const neededBy = (await repo.getRequest(o.requestId))?.neededBy;
+      out.push({ orderId: o.orderId, placedAt: o.createdAt, family: main.category, amount, unit: main.unit, ...(neededBy ? { neededBy } : {}), deliveryDate: o.lines.map((l) => l.deliveryDate).sort().at(-1)! });
+    }
+    return out;
+  }
+
+  /** Move the request's need-by date with the intake's need (a correction, or a later delivery the buyer accepted). */
+  async function moveNeededBy(session: AgentSession, requestId: string, neededBy: string | undefined, by: string, reason: string) {
+    if (deps.changeNeededBy) return void (await deps.changeNeededBy(session, requestId, { neededBy: neededBy ?? null, by, reason }));
+    const req = await repo.getRequest(requestId);
+    if (req) await repo.saveRequest({ ...req, neededBy });
+  }
+
   function log(i: Intake, actor: string, summary: string, data: Record<string, unknown> = {}) {
     ledger.append({ type: "intake", actor, requestId: i.requestId, summary, data });
   }
@@ -216,7 +240,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
     const at = now();
     const profile = await profileOf(session);
     const products = await familyProducts(i.family, i.need);
-    const ctx: CheckContext = { now: at, profile, family: i.family, candidates: products, suspendedPreferenceIds: i.suspendedPreferenceIds };
+    const ctx: CheckContext = { now: at, profile, family: i.family, candidates: products, suspendedPreferenceIds: i.suspendedPreferenceIds, pending: await pendingOrders(i) };
     Object.assign(i, { concerns: [], questions: [], openChoices: [], fromMemory: [], notAsked: [], rules: [], options: [], notes: [], excluded: [], preselected: undefined, signOffNotes: undefined, updatedAt: at.toISOString() });
     if (i.unverified?.length) i.signOffNotes = i.unverified.map(unverifiedNote);
 
@@ -513,10 +537,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
         i.acknowledgements.push({ key: c.key, code: c.code, action: "corrected", correctionId: fix.id, by: who, at, channel: via.channel, verified });
         log(i, actor, `${who} corrected ${c.code} (${how}): ${fix.label}.`, { step: "correction", key: c.key, code: c.code, correctionId: fix.id, by: who, relayedBy: session.agentId, channel: via.channel, verified, ...(via.words ? { words: via.words } : {}), before, after: describeNeed(i.need) });
       }
-      if (i.need.deliverBy !== neededBefore) {
-        const req = await repo.getRequest(requestId);
-        if (req) await repo.saveRequest({ ...req, neededBy: i.need.deliverBy });
-      }
+      if (i.need.deliverBy !== neededBefore) await moveNeededBy(session, requestId, i.need.deliverBy, who, "corrected in the mistake check");
       return view(await advance(session, i));
     },
 
@@ -572,8 +593,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
         // Choosing a later day is the buyer moving their own deadline: the request and the gate follow it.
         const before = i.need.deliverBy;
         i.need = applyNeedPatch(i.need, { deliverBy: card.deliveryDate });
-        const req = await repo.getRequest(requestId);
-        if (req) await repo.saveRequest({ ...req, neededBy: card.deliveryDate });
+        await moveNeededBy(session, requestId, card.deliveryDate, who, `accepted a later delivery (${optionId})`);
         log(i, verified ? buyerActor(who) : agentActor(session), `${who} accepted a later delivery (${howText(via)}): ${card.deliveryDate} instead of ${before}.`, { step: "compromise", optionId, givesUp: card.givesUp, by: who, relayedBy: session.agentId, channel: via.channel, verified });
       }
       return view(await quoteOption(session, i, card, who, undefined, via));

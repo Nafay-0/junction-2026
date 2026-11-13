@@ -4,7 +4,7 @@ import { draftMenu, sanitiseDraft, type LlmMenuDraft } from "./draft";
 import type { LlmFixes } from "./fixes";
 import { menuTestDock, MENU_NOW } from "./eval/fixture-catalog";
 import { resolveMenuKitchen } from "./kitchens";
-import { menuCatalogOf } from "./match";
+import { menuCatalogOf, stockMismatch } from "./match";
 import { useAmount } from "./plan";
 import { checkSafety } from "./safety";
 
@@ -90,6 +90,16 @@ const DRAFTS: Record<string, LlmMenuDraft> = {
     serviceDate: "2026-11-17",
     conflicts: ["Peanut butter breaks the kitchen's no-nuts rule; kept as the chef asked."],
     dishes: [dish("Peanut satay chicken", [ing("chicken", "Chicken breast", ["broilerin rintafilee", "chicken breast"], 110, "g"), ing("peanut_butter", "Peanut butter", ["maapähkinävoi", "peanut butter"], 15, "g", { form: "any" }), ing("rice", "Rice", ["riisi", "rice"], 70, "g", { form: "dried" })])],
+  }),
+  "egg pancakes for 100": draft({
+    covers: 100,
+    serviceDate: "2026-11-16",
+    dishes: [dish("Oven pancake", [ing("egg", "Egg", ["kananmuna", "egg"], 1.5, "pcs", { form: "fresh" })], { course: "dessert" })],
+  }),
+  "peeled potatoes for 300": draft({
+    covers: 300,
+    serviceDate: "2026-11-16",
+    dishes: [dish("Boiled potatoes", [ing("potato", "Potato", ["peruna", "potato"], 120, "g", { yieldPct: 80 })], { course: "side" })],
   }),
   "book a table": draft({ isFoodOrderRequest: false, declineReason: "A table booking, not food to buy.", covers: null, serviceDate: null, dishes: [] }),
   "something warming": draft({ covers: null, dishes: SALMON_SOUP.dishes }),
@@ -210,6 +220,23 @@ describe("menu to order, on the fixture catalogue", () => {
     expect(entries.some((s) => /Not ordered: Salt/.test(s))).toBe(true);
   });
 
+  it("a changed delivery date moves the same request's need-by date, not a new request", async () => {
+    const { service, kaari, dock } = await setup();
+    const { record } = await service.plan(kaari, "salmon soup for 300 on Friday", "chef");
+    await service.settled(record.planId);
+    const requestId = (await service.get(kaari, record.planId)).record.requestId!;
+    await service.edit(kaari, record.planId, [{ op: "deliverBy", date: "2026-11-17" }], "Sanna");
+    await service.settled(record.planId);
+    await service.edit(kaari, record.planId, [{ op: "accept", doubtId: "salmon_fillet:different_form:800003" }], "Sanna");
+    await service.quote(kaari, record.planId, "Sanna");
+    const p = (await service.get(kaari, record.planId)).record;
+    expect(p.requestId).toBe(requestId);
+    expect(p.quote!.quote.requestId).toBe(requestId);
+    const moved = dock.ledger.entries({ requestId }).find((e) => e.data.step === "needed_by");
+    expect(moved).toMatchObject({ data: { to: "2026-11-17" } });
+    expect(moved!.summary).toMatch(/for Sanna/);
+  });
+
   it("when no product can come, proposes ways out by the dish's logic, checked by code, and applies one", async () => {
     const { MENU_SCENARIOS } = await import("./eval/fixture-catalog");
     const { dock, valio } = await menuTestDock({ ...MENU_SCENARIOS, "800003": { ...MENU_SCENARIOS["800003"], salesBlock: true } });
@@ -272,6 +299,59 @@ describe("menu to order, on the fixture catalogue", () => {
     expect(view.totals.blockers[0]).toMatch(/covers/);
     const { view: v } = await service.edit(kaari, record.planId, [{ op: "covers", covers: 100 }], "chef");
     expect(v.lines.find((l) => l.lineId === "potato")!.working).toBe("120 g × 100 covers = 12 kg ÷ 80 % usable = 15 kg");
+  });
+
+  it("counts eggs in the pieces the pack holds, never in packages", async () => {
+    const { service, kaari } = await setup();
+    const { record } = await service.plan(kaari, "egg pancakes for 100", "chef");
+    await service.settled(record.planId);
+    const { view } = await service.get(kaari, record.planId);
+    const egg = view.lines.find((l) => l.lineId === "egg")!;
+    expect(egg.doubts.map((d) => d.kind)).not.toContain("amount_check");
+    expect(egg.gross).toEqual({ amount: 150, unit: "pcs" });
+    // 150 eggs: 15 trays of 10 (€48) or 2 cases of 120 (€58): the cheaper, in whole packs, with the count shown.
+    expect(egg.chosen!.products[0]).toMatchObject({ productId: "800024", packs: 15 });
+    expect(egg.chosen!.delivered).toEqual({ amount: 150, unit: "pcs" });
+    expect(egg.alternatives.some((a) => a.products[0].productId === "800025" && a.products[0].packs === 2)).toBe(true);
+  });
+
+  it("buys peeled potatoes by the net amount: no peeling allowance on a product already peeled", async () => {
+    const { MENU_SCENARIOS } = await import("./eval/fixture-catalog");
+    // Peeled potatoes on offer cheap enough to win: 36 kg net is 8 x 5 kg; with the allowance it would be 9.
+    const { dock, valio } = await menuTestDock({ ...MENU_SCENARIOS, "800005": { ...MENU_SCENARIOS["800005"], price: 4.5 } });
+    const service = createPlanService({ dock, catalog: menuCatalogOf(valio), now: () => MENU_NOW, store: new InMemoryPlanStore(), draft: async (text) => ({ draft: sanitiseDraft(DRAFTS[text]), raw: DRAFTS[text], model: "scripted:menu", ms: 1, tokens: { input: 0, output: 0, cachedInput: 0, reasoning: 0 }, costUsd: 0, calls: [] }), fix: async () => ({ fixes: { options: [] }, ms: 1, tokens: { input: 0, output: 0, cachedInput: 0, reasoning: 0 }, costUsd: 0 }) });
+    const kaari = (await resolveMenuKitchen("kaari", { catalog: valio }, MENU_NOW))!;
+    const { record } = await service.plan(kaari, "peeled potatoes for 300", "chef");
+    await service.settled(record.planId);
+    const potato = (await service.get(kaari, record.planId)).view.lines.find((l) => l.lineId === "potato")!;
+    expect(potato.chosen!.products[0]).toMatchObject({ productId: "800005", packs: 8 });
+    expect(potato.gross).toEqual({ amount: 36, unit: "kg" });
+    expect(potato.working).toMatch(/no peeling allowance/);
+    // The washed potato is still a card, bought with the allowance (45 kg = 23 x 2 kg).
+    expect(potato.alternatives.find((a) => a.products[0].productId === "800004")!.products[0].packs).toBe(23);
+  });
+
+  it("never buys a liquid concentrate by an amount written for powder, nor the other way round", () => {
+    const powderNeed = { key: "fish_stock", name: "Fish stock", searchTerms: ["kalafondi", "kalaliemi"], role: "base", perCover: { amount: 4, unit: "g" as const }, yieldPct: 100, amountBasis: "concentrate or powder for about 2.5 dl stock", pantry: false, form: "any" as const, avoid: [] };
+    const concentrate = { id: "c", name: "Fish fond concentrate 1 l bottle", names: { fi: "Kalafondi tiiviste 1 l pullo" }, brand: "b", category: "x", unit: "L" as const, packSize: 1, attributes: [], allergens: [], certificates: [], deliveryReliability: 0, carbonKgPerUnit: 0 };
+    const powder = { ...concentrate, id: "p", name: "Fish bouillon powder 600g", names: { fi: "Kalaliemijauhe 12g/l 600g" }, unit: "kg" as const, packSize: 0.6 };
+    const ready = { ...concentrate, id: "r", name: "Fish bouillon 1 l tetra", names: { fi: "Kalaliemi 1 l tetra" } };
+    expect(stockMismatch(powderNeed, concentrate)).toMatch(/liquid concentrate, where the 4 g per cover is for powder/);
+    expect(stockMismatch(powderNeed, powder)).toBeUndefined();
+    const readyNeed = { ...powderNeed, searchTerms: ["kalaliemi", "fish stock"], perCover: { amount: 150, unit: "ml" as const }, amountBasis: "ready-to-use stock replacing the water" };
+    expect(stockMismatch(readyNeed, concentrate)).toMatch(/is for ready-to-use stock/);
+    expect(stockMismatch(readyNeed, ready)).toBeUndefined();
+    expect(stockMismatch({ ...readyNeed, amountBasis: "liquid concentrate, 8 ml per cover" }, concentrate)).toBeUndefined();
+    expect(stockMismatch({ ...powderNeed, key: "potato", name: "Potato", searchTerms: ["peruna"], amountBasis: "a portion" }, concentrate)).toBeUndefined(); // not stock
+  });
+
+  it("finds the stock powder, not the liquid concentrate, for a powder amount (fixture catalogue)", async () => {
+    const { service, kaari } = await setup();
+    const { record } = await service.plan(kaari, "salmon soup for 300 on Friday", "chef");
+    await service.settled(record.planId);
+    const stock = (await service.get(kaari, record.planId)).view.lines.find((l) => l.lineId === "fish_stock")!;
+    expect(stock.chosen!.products[0].productId).toBe("800012");
+    expect(stock.excluded.find((e) => e.productId === "800026")?.reason).toMatch(/dosed differently/);
   });
 
   it("declines what is not a food order, without a live call", async () => {

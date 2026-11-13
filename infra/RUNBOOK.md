@@ -55,7 +55,12 @@ cd .. && node infra/aiven-deploy.mjs --restart           # required right after
 Clears orders, requests, intakes, kitchen memory (Kaari's history is re-seeded at start), used quotes and the
 ledger. Keeps approvers, passkeys, sessions and visitor kitchens, so a visitor who joined earlier can still sign.
 Why it matters: an order, even one still waiting for sign-off, counts against a kitchen's weekly budget for
-seven days, so the demo kitchens' budgets fill after a few runs. Between the reset and the restart the site
+seven days. The built-in demo kitchens (Laakso, Kaari and their menu agents) share one weekly budget per kitchen of
+EUR 150,000 (`DEMO_WEEKLY_BUDGET_CENTS` in `web/src/server/dev-fixtures.ts`): about 40 runs of the 1,000-litre
+example and 40 menu orders, a full day of demonstrations, so a reset is needed between demo days, not between runs.
+Their per-order limits stay low (Laakso EUR 1,000, Kaari EUR 100), so the 1,000-litre order still goes to a person
+for sign-off. Visitor kitchens are new organisations with their own EUR 10,000 week. A local `pnpm start` keeps
+everything in memory: restarting it is the reset. Between the reset and the restart the site
 refuses ledger writes (health shows the ledger as diverged): do it only when nobody is on stage.
 Wipe everything instead (passkeys too): `DOCK_PG_SCHEMA=dock_prod pnpm aiven:migrate --reset --yes`, then restart.
 

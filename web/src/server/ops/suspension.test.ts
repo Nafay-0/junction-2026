@@ -5,6 +5,7 @@ import { GET as controlGet, POST as controlPost } from "@/app/ops-api/control/ro
 import { GET as overviewGet } from "@/app/ops-api/overview/route";
 import { POST as sessionPost } from "@/app/ops-api/session/route";
 import { POST as consoleCall } from "@/app/ui-api/kitchens/[kitchen]/call/route";
+import { auditFor } from "@/core/audit";
 import { signMandate } from "@/core/mandate";
 import { DEMO_ORG, demoMandate, demoOrgKeyPair } from "../dev-fixtures";
 import { KITCHEN_ORG } from "../demo-kitchen";
@@ -113,6 +114,11 @@ describe("suspension", () => {
       ["resume", "operator:Riikka (ops)"],
     ]);
     expect(rt.dock.ledger.verify().ok).toBe(true);
+    // The wholesaler's audit reads its own control entries (it used to fall through the core's type list).
+    const audit = auditFor("wholesaler", rt.dock.ledger.entries());
+    const controlled = audit.entries.filter((e) => "kind" in e && e.kind === "control");
+    expect(controlled).toHaveLength(2);
+    expect(audit.explanation.some((l) => l.includes("[control]"))).toBe(true);
     await client.close();
   });
 

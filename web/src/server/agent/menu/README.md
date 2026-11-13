@@ -22,7 +22,15 @@ preview `/plan/kaari` and `/plan/laakso`.
    often needs 12 to 20. Batching the quote's own lookup in tens would keep it one quote and one sign-off.
 2. The hourly live allowance (30 products per agent) is tight for menus: a three-course plan prices 15 to 25
    products. A per-request or per-plan budget, or counting cached answers as free, would fit menus better.
-3. `toDockProduct` uses `unit: "pcs"` for packs whose content is unknown, so "pieces" means packages, not eggs or
-   lemons. A piece count per pack (from GS1) would let pieces be converted instead of held.
-4. A way to change a request's need-by date (the intake does it through the repository); the planner opens a new
-   request instead.
+3. Done: pieces convert by the count a pack states (`piecesPerSalesUnit` in `core/catalog/product.ts`: the
+   partner's egg size codes such as "M10 580g", and "8x18pc" reconciled with the packaging hierarchy). A product
+   whose pack does not say how many pieces it holds is left out of a piece line with that reason, never counted
+   in packages; only when none of the products found says so is the line held.
+4. Done: `dock.changeNeededBy(session, requestId, { neededBy, by, reason })` moves a request's need-by date
+   (validated, refused once an order stands on the request, one ledger line `data.step = "needed_by"`). The planner
+   moves its own request when the chef changes the date; the intake uses it for corrections and later deliveries.
+
+Also fixed in plain code: a stock amount written for powder (grams) is never bought as a liquid concentrate, nor
+millilitres of ready stock as concentrate (`stockMismatch` in `match.ts`); a product already peeled or cut is
+bought by the net amount, without the peeling allowance (`isPrePrepared` in `plan.ts`), and the raw product stays a
+card with the allowance.

@@ -78,7 +78,15 @@ export type CheckContext = {
   suspendedPreferenceIds?: string[];
   /** Are two product families related (a knowledge map can tell)? Default: relatedFamilies below. */
   related?: (a: string, b: string) => boolean;
+  /**
+   * Orders of this kitchen still waiting for a person's sign-off. They are not in the history yet (it holds committed
+   * orders only), but they are just as likely to be what a second request repeats.
+   */
+  pending?: PendingOrderSummary[];
 };
+
+/** An order waiting for sign-off, as the duplicate check needs it (the intake builds these from the repository). */
+export type PendingOrderSummary = { orderId: string; placedAt: string; family: string; amount: number; unit: BaseUnit; neededBy?: string; deliveryDate: string };
 
 /** True when the catalogue reports each product's own order cut-off (the partner's live API does): then that decides. */
 export function hasProductCutoffs(ctx: CheckContext): boolean {
@@ -407,24 +415,28 @@ export function checkPack(need: StructuredNeed, ctx: CheckContext): Concern[] {
 export function checkDuplicate(need: StructuredNeed, ctx: CheckContext): Concern[] {
   const since = ctx.now.getTime() - DUPLICATE_WINDOW_HOURS * 3600_000;
   const today = localNow(ctx.now).date;
-  const dup = familyHistory(ctx.profile, ctx.family)
-    .reverse()
-    .find((h) => {
-      if (Date.parse(h.placedAt) < since) return false;
-      const forDay = h.neededBy ?? h.deliveryDate;
-      return need.deliverBy ? forDay === need.deliverBy : h.deliveryDate >= today;
-    });
+  const matches = (h: { placedAt: string; neededBy?: string; deliveryDate: string }) => {
+    if (Date.parse(h.placedAt) < since) return false;
+    const forDay = h.neededBy ?? h.deliveryDate;
+    return need.deliverBy ? forDay === need.deliverBy : h.deliveryDate >= today;
+  };
+  // A waiting order first: it is the likelier repeat (the buyer may think the first one did not go through).
+  const waiting = (ctx.pending ?? []).filter((o) => o.family === ctx.family).sort((a, b) => b.placedAt.localeCompare(a.placedAt)).find(matches);
+  const dup = waiting ?? familyHistory(ctx.profile, ctx.family).reverse().find(matches);
   if (!dup) return [];
   const hours = Math.max(1, Math.round((ctx.now.getTime() - Date.parse(dup.placedAt)) / 3600_000));
+  const message = waiting
+    ? `You already asked for ${formatAmount(dup.amount, dup.unit)} of ${dup.family} ${hours} hour${hours === 1 ? "" : "s"} ago for ${formatDay(dup.neededBy ?? dup.deliveryDate)} (order ${dup.orderId}), and that order is still waiting for sign-off. Order again?`
+    : `You already ordered ${formatAmount(dup.amount, dup.unit)} of ${dup.family} ${hours} hour${hours === 1 ? "" : "s"} ago for ${formatDay(dup.neededBy ?? dup.deliveryDate)} (order ${dup.orderId}). Order again?`;
   return [
     {
       key: `duplicate_recent:${dup.orderId}`,
       code: "duplicate_recent",
       severity: "warning",
-      message: `You already ordered ${formatAmount(dup.amount, dup.unit)} of ${dup.family} ${hours} hour${hours === 1 ? "" : "s"} ago for ${formatDay(dup.neededBy ?? dup.deliveryDate)} (order ${dup.orderId}). Order again?`,
+      message,
       confirmable: true,
-      corrections: [{ id: "cancel", label: "Cancel: the earlier order covers it", cancel: true }],
-      evidence: { orderId: dup.orderId, placedAt: dup.placedAt },
+      corrections: [{ id: "cancel", label: waiting ? "Cancel: the order waiting for sign-off covers it" : "Cancel: the earlier order covers it", cancel: true }],
+      evidence: { orderId: dup.orderId, placedAt: dup.placedAt, ...(waiting ? { status: "pending_approval" } : {}) },
     },
   ];
 }
