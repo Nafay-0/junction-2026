@@ -320,7 +320,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
     }
     i.notes.push(...result.notes, ...i.notAsked);
     i.excluded.push(...result.excluded);
-    if (result.cards.length === 0) return noOptions(i, noOptionReason(result.excluded, i.need.deliverBy, { mandate: session.mandate, ...budget }));
+    if (result.cards.length === 0) return noOptions(i, noOptionReason(result.excluded, i.need.deliverBy, { mandate: session.mandate, ...budget }, Object.fromEntries(products.map((p) => [p.id, p.name]))));
     i.options = result.cards;
     // A confirmation that matters came only as the agent's word: every card says a named person will sign it.
     if (i.unverified?.length) for (const card of i.options) card.signOff.push(`The agent relayed a confirmation nobody verified (${i.unverified.map((u) => u.code).join(", ")}): a person must sign this order off.`);
@@ -627,7 +627,10 @@ export function noOptionReason(
   excluded: Exclusion[],
   deliverBy: string | undefined,
   budget?: { mandate: { weeklyBudgetCents: number }; spentCents: number; heldCents: number; held: { orderId: string; totalCents: number; expiresAt: string }[] },
+  /** Product names by id, so the reason names each product a person would not know by its code. */
+  names: Record<string, string> = {},
 ): string {
+  const label = (id: string) => (names[id] ? `${names[id]} (${id})` : id);
   if (!excluded.length) return "Nothing in stock can be delivered in time within the mandate.";
   const by = new Map<string, Exclusion[]>();
   for (const e of excluded) {
@@ -647,8 +650,8 @@ export function noOptionReason(
       `the weekly budget: ${overBudget.length === 1 ? "the option that fits" : `${overBudget.length} options that fit`} would cost more than ${left !== undefined ? `the ${formatEur(left)} left of ${formatEur(b!.mandate.weeklyBudgetCents)} this week (${formatEur(committed!)} already committed)` : "is left this week"}${b && b.heldCents > 0 ? `, and ${formatEur(b.heldCents)} more is held by ${b.held.map((h) => h.orderId).join(", ")} waiting for sign-off: withdraw it or have it decided, or it stops holding money when its price expires` : ""}`,
     );
   }
-  if (cutoff.length) parts.push(`the order cut-off has passed for ${cutoff.map((e) => e.productId).join(", ")}, so ${cutoff.length > 1 ? "they" : "it"} cannot arrive by ${deliverBy ?? "the date asked"}`);
-  for (const [, list] of others) parts.push([...new Set(list.map((e) => `${e.productId}: ${e.reason}`))].slice(0, 2).join("; "));
+  if (cutoff.length) parts.push(`the order cut-off has passed for ${cutoff.map((e) => label(e.productId)).join(", ")}, so ${cutoff.length > 1 ? "they" : "it"} cannot arrive by ${deliverBy ?? "the date asked"}`);
+  for (const [, list] of others) parts.push([...new Set(list.map((e) => `${label(e.productId)}: ${e.reason}`))].slice(0, 2).join("; "));
   if (!parts.length) return "Nothing on the short list can be delivered in time within the mandate.";
   return `Nothing fits. The blocker is ${parts[0]}.${parts.length > 1 ? ` Also: ${parts.slice(1, 3).join("; ")}.` : ""}`;
 }

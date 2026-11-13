@@ -243,6 +243,10 @@ describe("intake flow", () => {
     expect(text).toMatch(/^Nothing fits\. The blocker is the weekly budget: 2 options that fit would cost more than the €678\.00 left of €2,000\.00 this week \(€1,322\.00 already committed\)/);
     expect(text).toContain("A: earliest delivery");
     expect(noOptionReason([{ productId: "A", reason: "x", code: "cutoff_passed" }], "2026-11-16")).toMatch(/^Nothing fits\. The blocker is the order cut-off has passed for A/);
+    // With names, a person reads the product, not only its code.
+    expect(noOptionReason([{ productId: "A", reason: "x", code: "cutoff_passed" }, { productId: "B", reason: "no valid price right now", code: "no_offer" }], "2026-11-16", undefined, { A: "Milk 10 l", B: "Oat drink 1 l" })).toMatch(
+      /order cut-off has passed for Milk 10 l \(A\).*Oat drink 1 l \(B\): no valid price/,
+    );
   });
 
   it("keeps intakes private to the agent and validates input", async () => {
