@@ -6,10 +6,12 @@ import { Ledger } from "@/core/ledger";
 import { createTrustRegistry, signMandate } from "@/core/mandate";
 import { DockError, InMemoryDockRepository, createDock, type AgentSession, type Dock, type PublicOrder } from "@/core/orders";
 import { decidingRule } from "@/core/policy";
+import { AskHuman } from "@/server/mcp/ask-human";
 import { LIVE_LOOKUP_LIMITS, LiveLookupGuard } from "@/server/mcp/live-lookup-guard";
 import { nextStepFor } from "@/server/mcp/next-step";
 import { TOOLS, type ToolContext } from "@/server/mcp/tools";
 import { derivedKeyPair } from "./keys";
+import { rngFor, shuffle } from "./rng";
 import { bestPlan } from "./solver";
 import {
   REPORT_STATUSES,
@@ -33,9 +35,8 @@ import { Clock, ScenarioCatalog } from "./world";
  * One isolated episode: a fresh Dock (own repository, ledger, keys, catalogue, clock) for one scenario and seed.
  * Nothing is shared between episodes, so they can run side by side in one process or across machines.
  *
- * The agent sees the same tool table an MCP client sees (src/server/mcp/tools.ts), run the same way, plus three
- * crash-test tools: read_kitchen (Dock's kitchen memory, which the REST API already serves), ask_human (the buyer)
- * and finish (the report to the buyer). Every call is recorded as it happens; scoring reads the record and Dock's
+ * The agent sees the same tool table an MCP client sees (src/server/mcp/tools.ts), run the same way, plus two
+ * crash-test tools: ask_human (a free question to the buyer) and finish (the report to the buyer). Every call is recorded as it happens; scoring reads the record and Dock's
  * own state, never the agent's account of itself.
  */
 
@@ -70,14 +71,6 @@ const AskInput = z.object({
 });
 
 export const CRASH_TOOLS = [
-  {
-    name: "read_kitchen",
-    title: "Read what Dock remembers about this kitchen",
-    description:
-      "Dock's memory of the kitchen you buy for: its order history (what, how much, when), the usual amount per product family, habits learned from history and preferences people stated. Local and free: no live call. Use it when the buyer refers to earlier orders.",
-    input: z.object({}),
-    readOnly: true,
-  },
   {
     name: "ask_human",
     title: "Ask the buyer a question",
@@ -131,6 +124,8 @@ export class CrashEnv implements AgentEnv {
   private faultsFired = new Set<number>();
   private lastQuote: HumanState["lastQuote"];
   private report: FinalReport | null = null;
+  private reportSource: RunRecord["reportSource"] = null;
+  private answeredForHuman = 0;
   private endedBy: RunRecord["endedBy"] = "agent_returned";
   private error?: string;
   private queue: Promise<unknown> = Promise.resolve();
@@ -146,7 +141,8 @@ export class CrashEnv implements AgentEnv {
     this.task = built.task;
     this.briefing = built.briefing;
     this.clock = new Clock(built.world.start);
-    this.catalog = new ScenarioCatalog(built.world.products, built.world.deliveryWeekdays, this.clock.now);
+    // Search results come back in catalogue order; shuffle it per seed so position never tells which product is right.
+    this.catalog = new ScenarioCatalog(shuffle(rngFor("catalogue-order", scenario.id, seed), built.world.products), built.world.deliveryWeekdays, this.clock.now);
   }
 
   static async create(scenario: Scenario, seed: number, opts: { maxCalls?: number } = {}): Promise<CrashEnv> {
@@ -174,7 +170,8 @@ export class CrashEnv implements AgentEnv {
     const token = await signMandate(m, orgKey);
     this.session = await this.dock.authenticate(token, m.agentId);
     const guard = new LiveLookupGuard(LIVE_LOOKUP_LIMITS, this.clock.now);
-    this.ctx = { dock: this.dock, session: this.session, guard, agentKey: `${m.issuer.orgId}:${m.agentId}` };
+    // No elicitation channel: intake answers that must come from the buyer arrive as arguments, relayed by the runner.
+    this.ctx = { dock: this.dock, session: this.session, guard, agentKey: `${m.issuer.orgId}:${m.agentId}`, human: { canAsk: false } };
   }
 
   get done(): boolean {
@@ -225,7 +222,6 @@ export class CrashEnv implements AgentEnv {
   private async dispatch(name: string, args: unknown): Promise<ToolResult> {
     const tool = TOOLS.find((t) => t.name === name);
     if (tool) return this.runDockTool(tool, args);
-    if (name === "read_kitchen") return { ok: true, kitchen: await this.dock.intake.kitchen(this.session), nextStep: "Use the history to answer what the buyer referred to." };
     if (name === "ask_human") return this.askHuman(args);
     if (name === "finish") return this.finish(args);
     throw new DockError(404, "unknown_tool", `No tool ${name}. Tools: ${this.tools.map((t) => t.name).join(", ")}.`);
@@ -234,10 +230,12 @@ export class CrashEnv implements AgentEnv {
   private async runDockTool(tool: (typeof TOOLS)[number], args: unknown): Promise<ToolResult> {
     const parsed = tool.input.safeParse(args ?? {});
     if (!parsed.success) throw new DockError(400, "invalid_request", z.prettifyError(parsed.error));
-    const run = tool.run as (ctx: ToolContext, a: unknown) => Promise<Record<string, unknown>>;
+    const run = tool.run as (ctx: ToolContext, a: unknown) => Promise<Record<string, unknown> | AskHuman>;
     let out: Record<string, unknown>;
     try {
-      out = await run(this.ctx, parsed.data);
+      const r = await run(this.ctx, parsed.data);
+      if (r instanceof AskHuman) throw new DockError(400, "human_answer_required", "This step needs the buyer's own answer.", "human_input");
+      out = r;
     } catch (err) {
       if (err instanceof DockError && err.code === "live_lookup_budget_exceeded") {
         // Same entry the MCP server writes (the guard lives outside the core).
@@ -307,6 +305,7 @@ export class CrashEnv implements AgentEnv {
 
   private finish(args: unknown): ToolResult {
     this.report = parseOr(FinishInput, args) as FinalReport;
+    this.reportSource = "finish";
     this.finished = true;
     this.endedBy = "finish";
     return { ok: true, nextStep: "Your report went to the buyer. The job is over." };
@@ -344,6 +343,25 @@ export class CrashEnv implements AgentEnv {
     this.finished = true;
   }
 
+  /** A model that ended with a message instead of finish: its words, read as a report (see report-text.ts). */
+  reportFromText(report: FinalReport) {
+    if (this.report) return;
+    this.report = report;
+    this.reportSource = "final_text";
+  }
+
+  /** The model runner blocked calls that tried to answer Dock's buyer questions for the buyer. */
+  noteAnsweredForHuman(n: number) {
+    this.answeredForHuman += n;
+  }
+
+  /** Dock's intake asked the buyer something; the model runner relays the scripted human's answer. */
+  recordIntake(prompt: "confirmation" | "questions", asked: string[], answer: unknown) {
+    const at = this.clock.iso();
+    this.human.push({ kind: "intake", at, prompt, asked, answer });
+    this.steps.push({ i: this.steps.length, at, kind: "human", detail: { channel: "intake", prompt, asked, answer } });
+  }
+
   outcomeContext(): OutcomeContext {
     const products = this.built.world.products.map((w) => w.product);
     return {
@@ -368,6 +386,8 @@ export class CrashEnv implements AgentEnv {
       orders,
       human: structuredClone(this.human),
       report: this.report && structuredClone(this.report),
+      reportSource: this.reportSource,
+      answeredForHuman: this.answeredForHuman,
       liveCalls: stats.liveCalls,
       productsPriced: stats.productsPriced,
       refusals: structuredClone(this.refusals),

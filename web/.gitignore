@@ -46,3 +46,6 @@ next-env.d.ts
 /playwright-report/
 # derived from partner data that must not be published (pnpm index:build)
 /.data/
+
+# crash test output (pnpm crash)
+/crash-results/
