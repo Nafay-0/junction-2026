@@ -30,7 +30,7 @@ export const NeedSchema = z
     quantity: z.object({ amount: z.number().positive().max(1_000_000), unit: z.enum(NEED_UNITS) }).optional(),
     deliverBy: z.iso.date().optional(), // latest acceptable delivery date
     requiredClaims: z.array(tag).max(10).default([]), // "lactose_free", "organic"
-    requiredLabels: z.array(tag).max(10).default([]), // certificates and labels: "hyvaa_suomesta", "msc"
+    requiredLabels: z.array(tag).max(10).optional(), // certificates and labels: "hyvaa_suomesta", "msc"
     forbiddenAllergens: z.array(tag).max(10).default([]),
     /** unstated: the buyer said nothing; no_preference: asked, and said it does not matter. */
     optimise: z.enum([...OPTIMISE_GOALS, "no_preference", "unstated"]).default("unstated"),
@@ -55,7 +55,7 @@ export function normaliseNeed(need: StructuredNeed): { need: StructuredNeed; cha
   const n = structuredClone(need);
   const changes: string[] = [];
   const claims = new Set<string>();
-  const labels = new Set(n.requiredLabels.map((l) => normaliseWantedTag(l).value));
+  const labels = new Set((n.requiredLabels ?? []).map((l) => normaliseWantedTag(l).value));
   const forbidden = new Set(n.forbiddenAllergens.map(normaliseAllergen));
   const route = (tag: string, into: Set<string>) => {
     const t = normaliseWantedTag(tag);
@@ -70,7 +70,8 @@ export function normaliseNeed(need: StructuredNeed): { need: StructuredNeed; cha
   for (const a of n.forbiddenAllergens) if (normaliseAllergen(a) !== a) changes.push(`allergen "${a}" read as ${normaliseAllergen(a)}`);
   n.requiredClaims = [...claims];
   n.item.attributes = [...attrs].filter((a) => !n.item.excludedAttributes.includes(a) && !claims.has(a));
-  n.requiredLabels = [...labels];
+  if (labels.size) n.requiredLabels = [...labels];
+  else delete n.requiredLabels;
   n.forbiddenAllergens = [...forbidden];
   return { need: NeedSchema.parse(n), changes };
 }
@@ -149,7 +150,7 @@ export function describeNeed(n: StructuredNeed): string {
   const parts = [n.quantity ? `${formatAmount(n.quantity.amount, n.quantity.unit)} of ${n.item.text}` : `${n.item.text} (same amount as last time)`];
   const claims = [...n.requiredClaims, ...n.item.attributes];
   if (claims.length) parts.push(`must be ${claims.join(", ")}`);
-  if (n.requiredLabels.length) parts.push(`labelled ${n.requiredLabels.join(", ")}`);
+  if (n.requiredLabels?.length) parts.push(`labelled ${n.requiredLabels.join(", ")}`);
   if (n.item.excludedAttributes.length) parts.push(`not ${n.item.excludedAttributes.join(", ")}`);
   if (n.item.productId) parts.push(`product ${n.item.productId}`);
   if (n.forbiddenAllergens.length) parts.push(`no ${n.forbiddenAllergens.join(", ")}`);

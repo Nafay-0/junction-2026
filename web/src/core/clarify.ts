@@ -42,8 +42,8 @@ export function hardConstraints(mandate: Mandate, need: StructuredNeed, stated: 
   if (wanted.length) add(`Request: must be ${wanted.join(", ")}`, "request");
   if (need.item.excludedAttributes.length) add(`Request: not ${need.item.excludedAttributes.join(", ")}`, "request");
   if (need.forbiddenAllergens.length) add(`Request: no ${need.forbiddenAllergens.join(", ")}`, "request");
-  if (need.requiredLabels.length) add(`Request: labelled ${need.requiredLabels.join(", ")}`, "request");
-  c.requiredCertificates.push(...need.requiredLabels);
+  if (need.requiredLabels?.length) add(`Request: labelled ${need.requiredLabels.join(", ")}`, "request");
+  c.requiredCertificates.push(...(need.requiredLabels ?? []));
   c.requiredAttributes.push(...wanted);
   c.excludedAttributes.push(...need.item.excludedAttributes);
   c.forbiddenAllergens.push(...need.forbiddenAllergens);
