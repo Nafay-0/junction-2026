@@ -131,7 +131,7 @@ describe("the partner's example, end to end", () => {
     expect(ledger.entries().find((e) => e.seq === confirmation.ledgerHead.seq)?.hash).toBe(confirmation.ledgerHead.hash);
 
     const story = ledger.entries({ requestId: req.requestId }).map((e) => e.type);
-    expect(story).toEqual(["request", "lookup", "lookup", "refusal", "quote", "decision", "approval_requested", "approval", "order"]);
+    expect(story).toEqual(["request", "lookup", "lookup", "lookup", "refusal", "lookup", "quote", "decision", "approval_requested", "approval", "order"]); // every live call is on the ledger, quotes' too
     expect(ledger.verify().ok).toBe(true);
     expect(catalog.stats()).toMatchObject({ liveCalls: 3 }); // availability + failed quote + quote
     expect(await dock.listPendingApprovals()).toEqual([]);

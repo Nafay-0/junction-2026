@@ -98,6 +98,7 @@ export function sandboxMandate(input: {
     validUntil: input.expiresAt.toISOString(),
     perOrderLimitCents: SANDBOX_PER_ORDER_LIMIT_CENTS,
     weeklyBudgetCents: 1_000_000, // €10,000 hard cap, so a visitor can try a few orders
+    substitution: { rule: "within_preferences", maxPriceIncreasePct: 10 }, // like for like alone; anything else to the visitor
     approvers: [{ role: SANDBOX_ROLE.id, name: input.approverName, maxApprovalCents: 1_000_000 }],
   });
 }

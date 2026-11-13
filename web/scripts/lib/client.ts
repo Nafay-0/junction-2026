@@ -39,11 +39,11 @@ export class DockClient {
     for (const a of q.attributes ?? []) p.append("attribute", a);
     return this.call<{ products: Product[] }>("GET", `/api/v1/products?${p}`);
   }
-  availability(requestId: string, productIds: string[]) {
-    return this.call<{ offers: Offer[]; liveCallsSoFar: number }>("POST", "/api/v1/availability", { requestId, productIds });
+  availability(requestId: string, productIds: string[], includeClaims = false) {
+    return this.call<{ offers: Offer[]; unavailable?: { productId: string; problems: string[]; message: string }[]; claims?: SignedClaim[]; liveCallsSoFar: number }>("POST", "/api/v1/availability", { requestId, productIds, ...(includeClaims ? { includeClaims } : {}) });
   }
   quote(requestId: string, lines: { productId: string; quantity: number; substituteFor?: string }[]) {
-    return this.call<{ quote: Quote; quoteToken: string; policyPreview: Decision }>("POST", "/api/v1/quotes", { requestId, lines });
+    return this.call<{ quote: Quote; quoteToken: string; policyPreview: Decision; claims?: SignedClaim[] }>("POST", "/api/v1/quotes", { requestId, lines });
   }
   placeOrder(requestId: string, quoteToken: string, lines: { productId: string; quantity: number; unitPriceCents: number }[]) {
     return this.call<{ order: Order }>("POST", "/api/v1/orders", { requestId, quoteToken, lines });
@@ -57,9 +57,9 @@ export class DockClient {
   decide(approvalId: string, decision: "approve" | "decline", token: string, note?: string) {
     return this.call<{ order: Order }>("POST", `/api/v1/approvals/${approvalId}`, { decision, token, note });
   }
-  ledger(filter: { requestId?: string; orderId?: string } = {}) {
+  ledger(filter: { requestId?: string; orderId?: string; view?: "buyer" | "wholesaler" } = {}) {
     const p = new URLSearchParams(filter as Record<string, string>);
-    return this.call<{ verification: { ok: boolean }; catalog: { searches: number; liveCalls: number; productsPriced: number }; explanation: string[]; entries: unknown[] }>("GET", `/api/v1/ledger?${p}`);
+    return this.call<{ verification: { ok: boolean }; catalog: { searches: number; liveCalls: number; productsPriced: number; upstream?: Record<string, number> }; view?: string; explanation: string[]; entries: unknown[] }>("GET", `/api/v1/ledger?${p}`);
   }
   intakeOpen(need: unknown, by?: string) {
     return this.call<{ step: Step }>("POST", "/api/v1/intake", { need, by });
@@ -88,17 +88,23 @@ export class DockClient {
 }
 
 // Wire shapes the demo reads (the server's types live in src/core).
-export type Product = { id: string; name: string; packSize: number; unit: string; attributes: string[]; deliveryReliability: number; carbonKgPerUnit: number };
-export type Offer = { productId: string; unitPriceCents: number; availablePacks: number; deliveryDate: string };
+export type Product = { id: string; name: string; category: string; packSize: number; unit: string; attributes: string[]; allergens: string[]; allergenInfo?: { declared: boolean }; kinds?: string[]; deliveryReliability: number; carbonKgPerUnit: number; source?: string };
+export type Offer = { productId: string; unitPriceCents: number; availablePacks: number; deliveryDate: string; stockKnown?: boolean; orderBy?: string; salesUnit?: string; claims?: Record<string, string> };
+export type SignedClaim = { claimId: string; type: string; productId: string; sha256: string; token: string; validUntil: string };
 export type QuoteLine = { productId: string; name: string; quantity: number; unitPriceCents: number; lineTotalCents: number; deliveryDate: string; substituteFor?: { productId: string } };
-export type Quote = { quoteId: string; lines: QuoteLine[]; totalCents: number; expiresAt: string };
-export type Decision = { outcome: string; reasons: string[]; approver?: { name: string; role: string }; rules: { rule: string; outcome: string }[] };
+export type Quote = { quoteId: string; lines: QuoteLine[]; totalCents: number; expiresAt: string; expiresBecause?: string; evidence?: { claimId: string; type: string; productId: string; sha256: string }[] };
+export type Decision = { outcome: string; reasons: string[]; approver?: { name: string; role: string }; rules: { rule: string; outcome: string; reason?: string }[] };
 export type Order = { orderId: string; status: string; totalCents: number; lines: QuoteLine[]; decision: Decision; confirmation?: string; approval?: { approvalId: string; status: string } };
 
 export type Concern = { key: string; code: string; severity: string; message: string; confirmable: boolean; corrections: { id: string; label: string; cancel?: boolean }[] };
 export type Question = { id: string; text: string; options: { id: string; label: string }[] };
 export type OptionCard = {
   optionId: string;
+  rank?: string;
+  match?: string;
+  givesUp?: { part: string; text: string }[];
+  orderBy?: string;
+  stockConfirmed?: boolean;
   labels: string[];
   title: string;
   lines: { productId: string; packs: number; packSize: number; unit: string }[];
@@ -112,15 +118,19 @@ export type OptionCard = {
 export type Step = {
   requestId: string;
   state: "needs_confirmation" | "needs_input" | "options_ready" | "quoted" | "no_options" | "cancelled";
-  need: { quantity?: { amount: number; unit: string } };
+  need: { quantity?: { amount: number; unit: string }; deliverBy?: string };
   concerns: Concern[];
   questions: Question[];
   fromMemory: { question: Question; label: string; source: string; text: string }[];
+  openChoices?: Question[];
+  excluded?: { productId: string; reason: string; code?: string }[];
+  signOffNotes?: string[];
+  chosen?: { optionId: string; by: string };
   rules: { text: string; source: string }[];
   options: OptionCard[];
   preselected?: { optionId: string; reason: string };
   notes: string[];
-  quote?: { quote: Quote; quoteToken: string; policyPreview: Decision };
+  quote?: { quote: Quote; quoteToken: string; policyPreview: Decision; claims?: SignedClaim[] };
   next: { method: string; path: string; example: Record<string, unknown> };
 };
 export type Kitchen = {

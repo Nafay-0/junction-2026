@@ -13,7 +13,13 @@ export const ApproverSchema = z.object({
   maxApprovalCents: z.number().int().nonnegative(), // largest order total this person may sign off
 });
 
-export const SubstitutionRule = z.enum(["none", "same_attributes", "needs_approval"]);
+/**
+ * none                no substitutes
+ * same_attributes     only like-for-like substitutes (same category, unit and material attributes); others refused
+ * within_preferences  like-for-like substitutes the agent may choose alone; any other substitute needs a person
+ * needs_approval      every substitute needs a person
+ */
+export const SubstitutionRule = z.enum(["none", "same_attributes", "within_preferences", "needs_approval"]);
 
 export const MandateSchema = z
   .object({

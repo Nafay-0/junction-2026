@@ -1,6 +1,7 @@
 import { CompactSign, compactVerify, errors } from "jose";
 import { z } from "zod";
 import type { LiveOffer, Product } from "./catalog";
+import { ClaimRefSchema, cutoffMs, statedUntilMs, type ClaimRef } from "./claims";
 import { SIGN_ALG, VERIFY_ALGS, type SigningKey, type VerifyingKey } from "./keys";
 import { addMinutes } from "./util";
 
@@ -21,6 +22,8 @@ const ProductFacts = {
 export const QuoteLineSchema = z.object({
   ...ProductFacts,
   allergens: z.array(z.string()),
+  /** False when the maker sent no allergen data: `allergens` is then empty because nothing is known. Absent: declared. */
+  allergensDeclared: z.boolean().optional(),
   certificates: z.array(z.string()),
   quantity: z.number().int().positive(), // packs
   unitPriceCents: z.number().int().nonnegative(), // per pack
@@ -42,6 +45,10 @@ export const QuoteSchema = z
     totalCents: z.number().int().nonnegative(),
     issuedAt: z.iso.datetime(),
     expiresAt: z.iso.datetime(),
+    /** What ended the quote's life: its own time to live, a price's stated validity, or an order cut-off. */
+    expiresBecause: z.enum(["ttl", "price_validity", "order_cutoff"]).optional(),
+    /** The signed claims (price, availability, origin) the quote rests on, by id and token hash. See claims.ts. */
+    evidence: z.array(ClaimRefSchema).optional(),
   })
   .refine((q) => q.lines.every((l) => l.lineTotalCents === l.quantity * l.unitPriceCents), "line totals do not add up")
   .refine((q) => q.totalCents === q.lines.reduce((s, l) => s + l.lineTotalCents, 0), "quote total does not add up");
@@ -63,6 +70,7 @@ export type QuoteErrorCode =
   | "quote_no_offer"
   | "quote_insufficient_stock"
   | "quote_invalid_line"
+  | "quote_source_expired"
   | "quote_malformed"
   | "quote_signature_invalid";
 
@@ -86,9 +94,33 @@ export type QuoteInput = {
   lines: QuoteRequestLine[];
   products: Product[]; // master data for every product in `lines`, including originals of substitutes
   offers: LiveOffer[]; // live offers for the same products
+  /** Priced offers for products that substitutes replace, used only for the price comparison (they need not be orderable). */
+  referenceOffers?: LiveOffer[];
   now: Date;
   ttlMinutes: number;
+  evidence?: ClaimRef[];
 };
+
+/** However long a deployment configures quotes to live, a fixed price holds at most a day. */
+export const MAX_QUOTE_TTL_MINUTES = 24 * 60;
+/** A quote that would hold for less than this is not worth issuing: the order could not be placed in time. */
+export const MIN_QUOTE_LIFE_MINUTES = 2;
+
+/**
+ * When a quote stops holding: its time to live (capped at MAX_QUOTE_TTL_MINUTES), and never after the stated
+ * validity of a price it uses or the order cut-off of a delivery date it promises.
+ */
+export function quoteExpiry(now: Date, ttlMinutes: number, offers: LiveOffer[]): { expiresAt: Date; because: NonNullable<Quote["expiresBecause"]> } {
+  let expiresAt = addMinutes(now, Math.min(Math.max(ttlMinutes, 0), MAX_QUOTE_TTL_MINUTES));
+  let because: NonNullable<Quote["expiresBecause"]> = "ttl";
+  for (const o of offers) {
+    const price = statedUntilMs(o.priceValidUntil);
+    if (price !== undefined && price < expiresAt.getTime()) [expiresAt, because] = [new Date(price), "price_validity"];
+    const cut = cutoffMs(o.orderBy);
+    if (cut !== undefined && cut < expiresAt.getTime()) [expiresAt, because] = [new Date(cut), "order_cutoff"];
+  }
+  return { expiresAt, because };
+}
 
 /** Build an unsigned quote at live prices. Throws QuoteError if a line cannot be offered as asked. */
 export function buildQuote(input: QuoteInput): Quote {
@@ -125,7 +157,7 @@ export function buildQuote(input: QuoteInput): Quote {
     let substituteFor: QuoteLine["substituteFor"];
     if (req.substituteFor) {
       const orig = product(req.substituteFor);
-      const origOffer = offer(req.substituteFor);
+      const origOffer = input.referenceOffers?.find((x) => x.productId === req.substituteFor) ?? offer(req.substituteFor);
       substituteFor = {
         productId: orig.id,
         name: orig.name,
@@ -144,6 +176,7 @@ export function buildQuote(input: QuoteInput): Quote {
       packSize: p.packSize,
       attributes: p.attributes,
       allergens: p.allergens,
+      ...(p.allergenInfo ? { allergensDeclared: p.allergenInfo.declared } : {}),
       certificates: p.certificates,
       quantity: req.quantity,
       unitPriceCents: o.unitPriceCents,
@@ -153,6 +186,15 @@ export function buildQuote(input: QuoteInput): Quote {
     };
   });
 
+  const lineOffers = lines.map((l) => offer(l.productId));
+  const { expiresAt, because } = quoteExpiry(input.now, input.ttlMinutes, lineOffers);
+  if (expiresAt.getTime() - input.now.getTime() < MIN_QUOTE_LIFE_MINUTES * 60_000) {
+    throw new QuoteError(
+      "quote_source_expired",
+      because === "order_cutoff" ? "The order cut-off for this delivery date is now: there is no time left to place an order at this price." : "A price in this quote stops being valid now: ask again for a fresh price.",
+      { expiresAt: expiresAt.toISOString(), because },
+    );
+  }
   return QuoteSchema.parse({
     quoteId: input.quoteId,
     buyerOrgId: input.buyerOrgId,
@@ -163,7 +205,9 @@ export function buildQuote(input: QuoteInput): Quote {
     lines,
     totalCents: lines.reduce((s, l) => s + l.lineTotalCents, 0),
     issuedAt: input.now.toISOString(),
-    expiresAt: addMinutes(input.now, input.ttlMinutes).toISOString(),
+    expiresAt: expiresAt.toISOString(),
+    expiresBecause: because,
+    ...(input.evidence?.length ? { evidence: input.evidence } : {}),
   });
 }
 

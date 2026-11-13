@@ -52,7 +52,7 @@ describe("intake tools", () => {
     for (const name of human) expect(tools.find((t) => t.name === name)!.description).toMatch(/MUST come from the human buyer/);
   });
 
-  it("drives need -> mistake check -> question -> options -> quote -> order, with the agent relaying the buyer's answers", async () => {
+  it("drives need -> mistake check -> options -> quote -> order, with the agent relaying the buyer's answers", async () => {
     const client = await connect(kitchenAuth);
     const opened = await call(client, "submit_need", milk());
     expect(opened.s).toMatchObject({ ok: true, waitingFor: "buyer", step: { state: "needs_confirmation" } });
@@ -67,9 +67,10 @@ describe("intake tools", () => {
     expect(blank.s.nextStep).toMatch(/Never answer for them/);
 
     const confirmed = await call(client, "respond_to_concerns", { requestId, by: "Sanna", responses: [{ key: concerns[0].key, choice: "confirm" }] });
-    expect(confirmed.s).toMatchObject({ waitingFor: "buyer", step: { state: "needs_input", questions: [{ id: "optimise" }] } });
-    expect(confirmed.s.nextStep).toMatch(/answer_questions.*must come from the human buyer/);
+    // Memory answers everything else, so the buyer goes straight to the options (no question first).
+    expect(confirmed.s).toMatchObject({ waitingFor: "buyer", step: { state: "options_ready", questions: [] } });
 
+    // The buyer may still say what matters most; "no preference" keeps the choice theirs.
     const answered = await call(client, "answer_questions", { requestId, by: "Sanna", answers: [{ questionId: "optimise", optionId: "no_preference" }] });
     expect(answered.s).toMatchObject({ waitingFor: "buyer", step: { state: "options_ready" } });
     expect(answered.s.step.options.length).toBeGreaterThanOrEqual(2);
@@ -117,15 +118,24 @@ describe("intake tools", () => {
   it("reaches cancelled and no_options, and says what to do in each", async () => {
     const laakso = await signMandate(demoMandate(new Date()), await demoOrgKeyPair());
     const firstTimer = await connect({ authorization: `Bearer ${laakso}`, "dock-agent-id": DEMO_ORG.agentId });
+    // A first order of 1,000 L is not stopped: the size is a note on every option card.
     const big = (await call(firstTimer, "submit_need", milk())).s.step;
-    expect(big.concerns.map((c: { code: string }) => c.code)).toEqual(["large_first_order"]);
-    const cancelled = await call(firstTimer, "respond_to_concerns", { requestId: big.requestId, by: "Aino", responses: [{ key: big.concerns[0].key, choice: "cancel" }] });
+    expect(big).toMatchObject({ state: "options_ready", concerns: [] });
+    expect(big.options[0].cons.join(" ")).toMatch(/first order/);
+
+    // The same need twice: the second one is a likely duplicate, and the buyer cancels it.
+    const client = await connect(kitchenAuth);
+    const once = (await call(client, "submit_need", { ...milk(60), need: { ...milk(60).need, optimise: "price" } })).s.step;
+    expect(once.state).toBe("quoted");
+    expect((await call(client, "place_order", once.next.example)).isError).toBe(false);
+    const dup = (await call(client, "submit_need", { ...milk(60), need: { ...milk(60).need, optimise: "price" } })).s.step;
+    expect(dup.concerns.map((c: { code: string }) => c.code)).toEqual(["duplicate_recent"]);
+    const cancelled = await call(client, "respond_to_concerns", { requestId: dup.requestId, by: "Sanna", responses: [{ key: dup.concerns[0].key, choice: "cancel" }] });
     expect(cancelled.s).toMatchObject({ waitingFor: "nobody", step: { state: "cancelled" } });
     expect(cancelled.s.nextStep).toMatch(/Do not place an order/);
-    expect((await call(firstTimer, "request_quote", { requestId: big.requestId, lines: [{ productId: "VA-1001", quantity: 1 }] })).s.error).toMatchObject({ code: "intake_cancelled", rule: "intake_sequence" });
+    expect((await call(client, "request_quote", { requestId: dup.requestId, lines: [{ productId: "VA-1001", quantity: 1 }] })).s.error).toMatchObject({ code: "intake_cancelled", rule: "intake_sequence" });
 
-    const client = await connect(kitchenAuth);
-    const none = await call(client, "submit_need", { need: { item: { text: "milk", category: "milk", attributes: ["vegan"] }, quantity: { amount: 100, unit: "L" }, deliverBy: day(), optimise: "price" } });
+    const none = await call(client, "submit_need", { need: { item: { text: "milk", category: "milk", attributes: ["vegan"] }, quantity: { amount: 100, unit: "L" }, deliverBy: nextDeliveryDay(day(), [1, 2, 3, 4, 5]), optimise: "price" } });
     expect(none.s).toMatchObject({ waitingFor: "nobody", step: { state: "no_options" } });
     expect(none.s.nextStep).toMatch(/Tell the buyer why/);
 
@@ -150,14 +160,10 @@ describe("intake tools with a client that can ask the buyer (MCP elicitation)", 
 
     // The agent proposes a correction; the buyer sees it pre-selected, and confirms the 1,000 L instead.
     const r = await call(client, "respond_to_concerns", { requestId: step.requestId, by: "agent guess", responses: [{ key, choice: step.concerns[0].corrections[0].id }] });
-    expect(r.s).toMatchObject({ ok: true, step: { state: "needs_input", need: { quantity: { amount: 1000 } }, acknowledgements: [{ action: "confirmed", by: "Sanna Koskinen" }] } });
+    expect(r.s).toMatchObject({ ok: true, step: { state: "options_ready", need: { quantity: { amount: 1000 } }, acknowledgements: [{ action: "confirmed", by: "Sanna Koskinen" }] } });
     expect(forms[0].requestedSchema.properties[key]).toMatchObject({ default: step.concerns[0].corrections[0].id, oneOf: expect.arrayContaining([{ const: "confirm", title: expect.any(String) }]) });
     expect(forms[0].requestedSchema.required).toEqual(["by", key]);
 
-    // No arguments at all: Dock still asks the buyer.
-    const a = await call(client, "answer_questions", { requestId: step.requestId });
-    expect(a.s).toMatchObject({ ok: true, step: { state: "options_ready", preselected: { source: "answer" } } });
-    expect(Object.keys(forms[1].requestedSchema.properties)).toEqual(["by", "optimise", "remember"]);
   });
 
   it("changes nothing when the buyer declines", async () => {
