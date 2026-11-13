@@ -111,6 +111,14 @@ async function main() {
   const b = run(["after", result]);
   process.stdout.write(b.stdout);
   process.exitCode = b.status ?? 1;
+  if (!process.env.DOCK_PG_SCHEMA && !process.argv.includes("--keep")) {
+    // The free plan has 1 GB of disk: do not leave test schemas behind.
+    const { createPool } = await import("@/server/aiven/pg/pool");
+    const pool = createPool(undefined, 1);
+    await pool.query(`drop schema if exists ${env.DOCK_PG_SCHEMA} cascade`);
+    await pool.end();
+    console.log(`dropped schema ${env.DOCK_PG_SCHEMA} (pass --keep to inspect it)`);
+  }
 }
 
 void main().catch((err) => {

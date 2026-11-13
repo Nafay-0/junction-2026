@@ -33,6 +33,8 @@ export type AivenSwitches = {
 };
 
 export function aivenSwitches(): AivenSwitches {
+  // Aiven Runtime injects OPENSEARCH_URI for a connected OpenSearch service; the app reads OPENSEARCH_URL.
+  if (!value("OPENSEARCH_URL") && value("OPENSEARCH_URI")) process.env.OPENSEARCH_URL = value("OPENSEARCH_URI");
   const all = on("DOCK_AIVEN");
   const pg = Boolean(value("DATABASE_URL"));
   const kafka = Boolean(kafkaConfig());

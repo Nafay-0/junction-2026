@@ -25,6 +25,7 @@
     "aiven:migrate": "tsx scripts/aiven-migrate.ts",
     "aiven:sink": "tsx scripts/aiven-sink.ts",
     "aiven:restart-test": "tsx scripts/aiven-restart-test.ts",
+    "aiven:smoke": "tsx scripts/aiven-smoke.ts",
     "aiven:search:index": "tsx scripts/aiven-search-index.ts",
     "aiven:search:compare": "tsx scripts/aiven-search-compare.ts"
   },

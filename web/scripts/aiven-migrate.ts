@@ -1,9 +1,11 @@
 /**
- * pnpm aiven:migrate [--verify]
+ * pnpm aiven:migrate [--verify] [--reset --yes]
  *
  * Create or update Dock's tables in PostgreSQL (idempotent; the app also runs this at start when
  * DOCK_STORE=postgres). Schema from DOCK_PG_SCHEMA (default `dock`). With --verify, also re-checks the
- * ledger's hash chain in SQL and prints the result. Reads web/.env.local. Never prints secrets.
+ * ledger's hash chain in SQL and prints the result. With --reset --yes, first DROPS the schema (orders, ledger,
+ * passkeys: everything Dock stored there) and starts empty, e.g. before a rehearsal: a persistent store keeps the
+ * week's orders, so the demo buyer's weekly budget fills up after a run or two. Reads web/.env.local. Never prints secrets.
  */
 import { loadLocalEnv } from "./lib/env";
 
@@ -15,6 +17,11 @@ async function main() {
   const schema = pgSchema();
   const pool = createPool(undefined, 1);
   try {
+    if (process.argv.includes("--reset")) {
+      if (!process.argv.includes("--yes")) throw new Error(`--reset drops schema ${schema} and everything in it; add --yes to confirm.`);
+      await pool.query(`drop schema if exists ${schema} cascade`);
+      console.log(`dropped schema ${schema}`);
+    }
     const t0 = Date.now();
     await migrate(pool, schema);
     const tables = await pool.query<{ table_name: string }>(`select table_name from information_schema.tables where table_schema = $1 order by 1`, [schema]);
