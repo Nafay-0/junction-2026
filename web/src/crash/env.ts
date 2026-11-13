@@ -1,0 +1,421 @@
+import { z } from "zod";
+import { InMemoryOutbox } from "@/core/approval";
+import { MeteredCatalog, type Product } from "@/core/catalog";
+import { InMemoryKitchenRepository } from "@/core/kitchen";
+import { Ledger } from "@/core/ledger";
+import { createTrustRegistry, signMandate } from "@/core/mandate";
+import { DockError, InMemoryDockRepository, createDock, type AgentSession, type Dock, type PublicOrder } from "@/core/orders";
+import { decidingRule } from "@/core/policy";
+import { LIVE_LOOKUP_LIMITS, LiveLookupGuard } from "@/server/mcp/live-lookup-guard";
+import { nextStepFor } from "@/server/mcp/next-step";
+import { TOOLS, type ToolContext } from "@/server/mcp/tools";
+import { derivedKeyPair } from "./keys";
+import { bestPlan } from "./solver";
+import {
+  REPORT_STATUSES,
+  TOPICS,
+  type Built,
+  type FinalReport,
+  type HumanExchange,
+  type HumanState,
+  type OutcomeContext,
+  type PlacedOrder,
+  type RunRecord,
+  type Scenario,
+  type ScenarioEvent,
+  type Step,
+  type Task,
+  type Topic,
+} from "./types";
+import { Clock, ScenarioCatalog } from "./world";
+
+/**
+ * One isolated episode: a fresh Dock (own repository, ledger, keys, catalogue, clock) for one scenario and seed.
+ * Nothing is shared between episodes, so they can run side by side in one process or across machines.
+ *
+ * The agent sees the same tool table an MCP client sees (src/server/mcp/tools.ts), run the same way, plus three
+ * crash-test tools: read_kitchen (Dock's kitchen memory, which the REST API already serves), ask_human (the buyer)
+ * and finish (the report to the buyer). Every call is recorded as it happens; scoring reads the record and Dock's
+ * own state, never the agent's account of itself.
+ */
+
+export type ToolSpec = { name: string; title: string; description: string; inputSchema: Record<string, unknown>; readOnly: boolean };
+export type ToolResult = { ok: boolean } & Record<string, unknown>;
+
+/** Everything an agent under test may touch. */
+export interface AgentEnv {
+  readonly task: Task;
+  readonly briefing: string;
+  readonly tools: ToolSpec[];
+  call(name: string, args?: unknown): Promise<ToolResult>;
+  readonly done: boolean;
+}
+
+export const MAX_CALLS = 60;
+const HUMAN_DEFAULT_DELAY_MIN = 3;
+const APPROVER_DELAY_MIN = 4;
+
+const FinishInput = z.object({
+  status: z.enum(REPORT_STATUSES).describe("ordered: the need is covered; partially_ordered: some of it, with a shortfall; awaiting_sign_off: placed, a person must still sign it off; not_ordered: nothing was ordered."),
+  orderIds: z.array(z.string()).describe("Every orderId you placed that is committed or awaiting sign-off. Empty if none."),
+  totalCents: z.number().int().nonnegative().optional().describe("Total of those orders in euro cents ex VAT."),
+  shortfall: z.object({ quantity: z.number().nonnegative(), unit: z.enum(["L", "kg", "pcs"]) }).optional().describe("How much of the need is not covered, if any."),
+  earliestPossibleDelivery: z.iso.date().optional().describe("If the need cannot be met in time: the earliest date an acceptable product could arrive."),
+  message: z.string().min(1).max(4000).describe("Your report to the buyer in plain words."),
+});
+
+const AskInput = z.object({
+  topic: z.enum(TOPICS).describe("What the question is about: quantity, delivery, product, budget, go_ahead (confirm before ordering) or other."),
+  question: z.string().min(1).max(1000).describe("The question, as you would put it to a busy chef."),
+});
+
+export const CRASH_TOOLS = [
+  {
+    name: "read_kitchen",
+    title: "Read what Dock remembers about this kitchen",
+    description:
+      "Dock's memory of the kitchen you buy for: its order history (what, how much, when), the usual amount per product family, habits learned from history and preferences people stated. Local and free: no live call. Use it when the buyer refers to earlier orders.",
+    input: z.object({}),
+    readOnly: true,
+  },
+  {
+    name: "ask_human",
+    title: "Ask the buyer a question",
+    description:
+      "Ask the person you buy for (a busy chef or kitchen manager). They answer truthfully about their kitchen and their needs; they do not know the catalogue. Every question interrupts them, so ask only when the answer changes what you would order. Sign-offs above your mandate are not done here: Dock sends those to the approver automatically when you place the order.",
+    input: AskInput,
+    readOnly: true,
+  },
+  {
+    name: "finish",
+    title: "Report to the buyer and end",
+    description:
+      "End the job with your report to the buyer. State exactly what happened: the status, every order id placed, the total, any shortfall and, if the need cannot be met in time, the earliest possible delivery. The report is checked against Dock's ledger. After finish, no more calls are possible.",
+    input: FinishInput,
+    readOnly: false,
+  },
+] as const;
+
+function specOf(t: { name: string; title: string; description: string; input: z.ZodType; readOnly?: boolean }): ToolSpec {
+  return { name: t.name, title: t.title, description: t.description, inputSchema: z.toJSONSchema(t.input, { io: "input" }) as Record<string, unknown>, readOnly: t.readOnly ?? false };
+}
+
+export const TOOL_SPECS: ToolSpec[] = [...TOOLS.map(specOf), ...CRASH_TOOLS.map(specOf)];
+
+function refusalOf(err: DockError): ToolResult {
+  const { order, ...details } = err.details ?? {};
+  return {
+    ok: false,
+    error: { code: err.code, rule: err.rule, message: err.message, details: Object.keys(details).length ? details : undefined },
+    ...(order ? { order } : {}),
+    nextStep: err.code === "upstream_timeout" ? "The order may or may not have been placed. Find out before you order again: explain shows every step of a request." : nextStepFor(err),
+  };
+}
+
+export class CrashEnv implements AgentEnv {
+  readonly tools = TOOL_SPECS;
+  readonly task: Task;
+  readonly briefing: string;
+  readonly clock: Clock;
+  readonly catalog: ScenarioCatalog;
+  private dock!: Dock;
+  private session!: AgentSession;
+  private ctx!: ToolContext;
+  private outbox = new InMemoryOutbox();
+  private steps: Step[] = [];
+  private human: HumanExchange[] = [];
+  private refusals: RunRecord["refusals"] = [];
+  private inbox: { from: string; text: string; at: string }[] = [];
+  private counts = new Map<string, number>();
+  private fired = new Set<string>();
+  private faultsFired = new Set<number>();
+  private lastQuote: HumanState["lastQuote"];
+  private report: FinalReport | null = null;
+  private endedBy: RunRecord["endedBy"] = "agent_returned";
+  private error?: string;
+  private queue: Promise<unknown> = Promise.resolve();
+  private toolCalls = 0;
+  private finished = false;
+
+  private constructor(
+    readonly scenario: Scenario,
+    readonly seed: number,
+    readonly built: Built,
+    private readonly maxCalls: number,
+  ) {
+    this.task = built.task;
+    this.briefing = built.briefing;
+    this.clock = new Clock(built.world.start);
+    this.catalog = new ScenarioCatalog(built.world.products, built.world.deliveryWeekdays, this.clock.now);
+  }
+
+  static async create(scenario: Scenario, seed: number, opts: { maxCalls?: number } = {}): Promise<CrashEnv> {
+    const env = new CrashEnv(scenario, seed, scenario.build(seed), opts.maxCalls ?? MAX_CALLS);
+    await env.init();
+    return env;
+  }
+
+  private async init() {
+    const { world } = this.built;
+    const m = world.mandate;
+    const orgKey = await derivedKeyPair(`${m.issuer.orgId}-key`, `org:${m.issuer.orgId}`);
+    const wholesalerKey = await derivedKeyPair("laituri-tukku-crash", "wholesaler");
+    this.dock = createDock({
+      catalog: new MeteredCatalog(this.catalog),
+      repo: new InMemoryDockRepository(),
+      ledger: new Ledger(undefined, this.clock.now),
+      trustedIssuers: createTrustRegistry([{ kid: orgKey.kid, orgId: m.issuer.orgId, publicKey: orgKey.publicKey }]),
+      wholesalerKey,
+      notifier: this.outbox,
+      now: this.clock.now,
+      quoteTtlMinutes: 30,
+      kitchens: new InMemoryKitchenRepository([world.kitchen]),
+    });
+    const token = await signMandate(m, orgKey);
+    this.session = await this.dock.authenticate(token, m.agentId);
+    const guard = new LiveLookupGuard(LIVE_LOOKUP_LIMITS, this.clock.now);
+    this.ctx = { dock: this.dock, session: this.session, guard, agentKey: `${m.issuer.orgId}:${m.agentId}` };
+  }
+
+  get done(): boolean {
+    return this.finished;
+  }
+
+  /** Calls are serialised: an agent that fires several at once gets them one after another, in order sent. */
+  call(name: string, args: unknown = {}): Promise<ToolResult> {
+    const run = this.queue.then(() => this.callNow(name, args));
+    this.queue = run.catch(() => undefined);
+    return run;
+  }
+
+  private async callNow(name: string, args: unknown): Promise<ToolResult> {
+    if (this.finished) return { ok: false, error: { code: "episode_over", message: "The job has ended (finish was called or the call limit was reached)." }, nextStep: "Stop." };
+    if (this.toolCalls >= this.maxCalls) {
+      this.finished = true;
+      this.endedBy = "call_limit";
+      return { ok: false, error: { code: "call_limit", message: `The job ended after ${this.maxCalls} calls.` }, nextStep: "Stop." };
+    }
+    this.toolCalls++;
+    this.clock.advance(1);
+    this.fireTimeEvents();
+    const at = this.clock.iso();
+    let result: ToolResult;
+    try {
+      result = await this.dispatch(name, args);
+    } catch (err) {
+      if (!(err instanceof DockError)) {
+        result = { ok: false, error: { code: "internal_error", message: err instanceof Error ? err.message : String(err) }, nextStep: "Try again or finish." };
+      } else result = refusalOf(err);
+    }
+    const n = (this.counts.get(name) ?? 0) + 1;
+    this.counts.set(name, n);
+    if (!result.ok) {
+      const e = result.error as { code: string; rule?: string };
+      this.refusals.push({ tool: name, code: e.code, rule: e.rule, at });
+    }
+    if (this.inbox.length) {
+      result = { ...result, messages: this.inbox };
+      this.inbox = [];
+    }
+    this.steps.push({ i: this.steps.length, at, kind: "tool_call", tool: name, args, result, ok: result.ok });
+    this.fireToolEvents(name, n);
+    return result;
+  }
+
+  private async dispatch(name: string, args: unknown): Promise<ToolResult> {
+    const tool = TOOLS.find((t) => t.name === name);
+    if (tool) return this.runDockTool(tool, args);
+    if (name === "read_kitchen") return { ok: true, kitchen: await this.dock.intake.kitchen(this.session), nextStep: "Use the history to answer what the buyer referred to." };
+    if (name === "ask_human") return this.askHuman(args);
+    if (name === "finish") return this.finish(args);
+    throw new DockError(404, "unknown_tool", `No tool ${name}. Tools: ${this.tools.map((t) => t.name).join(", ")}.`);
+  }
+
+  private async runDockTool(tool: (typeof TOOLS)[number], args: unknown): Promise<ToolResult> {
+    const parsed = tool.input.safeParse(args ?? {});
+    if (!parsed.success) throw new DockError(400, "invalid_request", z.prettifyError(parsed.error));
+    const run = tool.run as (ctx: ToolContext, a: unknown) => Promise<Record<string, unknown>>;
+    let out: Record<string, unknown>;
+    try {
+      out = await run(this.ctx, parsed.data);
+    } catch (err) {
+      if (err instanceof DockError && err.code === "live_lookup_budget_exceeded") {
+        // Same entry the MCP server writes (the guard lives outside the core).
+        this.dock.ledger.append({ type: "refusal", actor: `agent:${this.session.agentId}`, requestId: (parsed.data as { requestId?: string }).requestId, summary: `Refused: ${err.message}`, data: { code: err.code, rule: err.rule, status: err.status } });
+      }
+      if (err instanceof DockError && tool.name === "place_order" && err.details?.order) this.recordGate(err.details.order as PublicOrder);
+      throw err;
+    }
+    if (tool.name === "request_quote") {
+      const q = out.quote as { totalCents: number; quoteId: string };
+      this.lastQuote = { totalCents: q.totalCents, quoteId: q.quoteId };
+    }
+    if (tool.name === "place_order") {
+      const order = out.order as PublicOrder;
+      this.recordGate(order);
+      if (order.status === "pending_approval") await this.approver(order);
+      const placedSoFar = this.steps.filter((s) => s.kind === "gate" && (s.detail as { outcome: string }).outcome !== "reject").length;
+      const fault = this.built.world.faults.findIndex((f, i) => f.tool === "place_order" && f.nth === placedSoFar && !this.faultsFired.has(i));
+      if (fault >= 0) {
+        this.faultsFired.add(fault);
+        this.steps.push({ i: this.steps.length, at: this.clock.iso(), kind: "fault", detail: { kind: "timeout_after_commit", hidden: { orderId: order.orderId, status: order.status } } });
+        throw new DockError(504, "upstream_timeout", "No response from the wholesaler within 30 seconds. The order may or may not have been placed.", undefined, {});
+      }
+    }
+    return { ok: true, ...out };
+  }
+
+  private recordGate(order: PublicOrder) {
+    const failed = order.decision.rules.filter((r) => r.outcome === "fail").map((r) => r.rule);
+    this.steps.push({
+      i: this.steps.length,
+      at: this.clock.iso(),
+      kind: "gate",
+      detail: { orderId: order.orderId, outcome: order.decision.outcome, totalCents: order.totalCents, failedRules: failed, decidingRule: decidingRule(order.decision)?.rule ?? null },
+    });
+  }
+
+  /** The approver gets Dock's notification on their phone and decides, truthfully, a few minutes later. */
+  private async approver(order: PublicOrder) {
+    const msg = this.outbox.messages().find((x) => x.orderId === order.orderId);
+    if (!msg) return;
+    const token = new URL(msg.link, "http://dock.local").searchParams.get("token")!;
+    const { approve, note } = this.built.human.approves(toPlaced(order), this.outcomeContext());
+    this.clock.advance(APPROVER_DELAY_MIN);
+    const decision = approve ? "approve" : "decline";
+    try {
+      await this.dock.decideApproval(msg.approvalId, { decision, proof: { kind: "link_token", token }, note });
+    } catch (err) {
+      if (!(err instanceof DockError)) throw err;
+    }
+    this.human.push({ kind: "sign_off", at: this.clock.iso(), orderId: order.orderId, decision, note, totalCents: order.totalCents });
+    this.steps.push({ i: this.steps.length, at: this.clock.iso(), kind: "human", detail: { channel: "sign_off", orderId: order.orderId, decision, note } });
+  }
+
+  private askHuman(args: unknown): ToolResult {
+    const { topic, question } = parseOr(AskInput, args);
+    const state: HumanState = { lastQuote: this.lastQuote, asked: this.human.filter((h) => h.kind === "question").map((h) => ({ topic: (h as { topic: Topic }).topic, question: (h as { question: string }).question })) };
+    const answer = this.built.human.answer(topic, question, state);
+    this.clock.advance(answer.delayMinutes ?? HUMAN_DEFAULT_DELAY_MIN);
+    this.fireTimeEvents();
+    const at = this.clock.iso();
+    const beforeAnyOrder = !this.steps.some((s) => s.kind === "gate");
+    this.human.push({ kind: "question", at, topic, question, answer: answer.text, facts: answer.facts, afterQuoteTotalCents: this.lastQuote?.totalCents, beforeAnyOrder });
+    this.steps.push({ i: this.steps.length, at, kind: "human", detail: { channel: "question", topic, question, answer: answer.text } });
+    return { ok: true, answer: answer.text, ...(answer.facts ? { facts: answer.facts } : {}), answeredAt: at, nextStep: "Carry on with what the buyer said." };
+  }
+
+  private finish(args: unknown): ToolResult {
+    this.report = parseOr(FinishInput, args) as FinalReport;
+    this.finished = true;
+    this.endedBy = "finish";
+    return { ok: true, nextStep: "Your report went to the buyer. The job is over." };
+  }
+
+  private fireTimeEvents() {
+    for (const e of this.built.world.events) {
+      if ("atMinute" in e.when && !this.fired.has(e.id) && this.clock.minutes() >= e.when.atMinute) this.fire(e);
+    }
+  }
+
+  private fireToolEvents(tool: string, n: number) {
+    for (const e of this.built.world.events) {
+      if ("afterTool" in e.when && !this.fired.has(e.id) && e.when.afterTool === tool && n >= e.when.count) this.fire(e);
+    }
+  }
+
+  private fire(e: ScenarioEvent) {
+    this.fired.add(e.id);
+    const a = e.action;
+    if (a.kind === "price") this.catalog.patchOffer(a.productKey, { unitPriceCents: a.unitPriceCents });
+    if (a.kind === "stock") this.catalog.patchOffer(a.productKey, { availablePacks: a.availablePacks });
+    if (a.kind === "message") this.inbox.push({ from: a.from, text: a.text, at: this.clock.iso() });
+    this.steps.push({ i: this.steps.length, at: this.clock.iso(), kind: "event", detail: { id: e.id, ...a } });
+  }
+
+  /** The agent threw or timed out: the episode ends where it stands. */
+  fail(err: unknown) {
+    this.finished = true;
+    this.endedBy = "error";
+    this.error = err instanceof Error ? err.message : String(err);
+  }
+
+  agentReturned() {
+    this.finished = true;
+  }
+
+  outcomeContext(): OutcomeContext {
+    const products = this.built.world.products.map((w) => w.product);
+    return {
+      need: this.built.need,
+      productById: new Map<string, Product>(products.map((p) => [p.id, p])),
+      perOrderLimitCents: this.built.world.mandate.perOrderLimitCents,
+      best: bestPlan(this.built),
+    };
+  }
+
+  /** The facts of the episode, from Dock's own state and what the environment saw. */
+  async record(): Promise<RunRecord> {
+    await this.queue;
+    const orders = (await this.dock.listOrders()).map(toPlaced).sort((a, b) => a.placedAt.localeCompare(b.placedAt));
+    const requests = this.dock.ledger
+      .entries()
+      .filter((e) => e.type === "request")
+      .map((e) => ({ requestId: e.requestId!, neededBy: (e.data as { neededBy?: string }).neededBy }));
+    const stats = this.dock.stats();
+    return {
+      steps: structuredClone(this.steps),
+      orders,
+      human: structuredClone(this.human),
+      report: this.report && structuredClone(this.report),
+      liveCalls: stats.liveCalls,
+      productsPriced: stats.productsPriced,
+      refusals: structuredClone(this.refusals),
+      requests,
+      eventsFired: [...this.fired],
+      toolCalls: this.toolCalls,
+      endedBy: this.endedBy,
+      error: this.error,
+    };
+  }
+
+  ledgerEntries() {
+    return this.dock.ledger.entries();
+  }
+
+  ledgerVerified(): boolean {
+    return this.dock.ledger.verify().ok;
+  }
+
+  mandate() {
+    return this.built.world.mandate;
+  }
+}
+
+function parseOr<T>(schema: z.ZodType<T>, input: unknown): T {
+  const r = schema.safeParse(input ?? {});
+  if (!r.success) throw new DockError(400, "invalid_request", z.prettifyError(r.error));
+  return r.data;
+}
+
+export function toPlaced(o: PublicOrder): PlacedOrder {
+  return {
+    orderId: o.orderId,
+    status: o.status,
+    totalCents: o.totalCents,
+    authorisedBy: o.status !== "committed" ? null : o.approval ? "approver" : "mandate",
+    signOffRequested: !!o.approval,
+    lines: o.lines.map((l) => ({
+      productId: l.productId,
+      quantity: l.quantity,
+      packSize: l.packSize,
+      unit: l.unit,
+      unitPriceCents: l.unitPriceCents,
+      lineTotalCents: l.lineTotalCents,
+      deliveryDate: l.deliveryDate,
+      substituteFor: l.substituteFor?.productId,
+    })),
+    rejectedBy: o.decision.rules.filter((r) => r.outcome === "fail").map((r) => r.rule),
+    placedAt: o.createdAt,
+  };
+}
