@@ -23,7 +23,8 @@ import type { Ledger, LedgerHead } from "./ledger";
 import { LiveLookupAllowance, shareKeyOf } from "./live-allowance";
 import { MAX_LIVE_IDS_PER_CALL } from "./catalog";
 import { MandateError, verifyMandate, type Mandate, type TrustRegistry } from "./mandate";
-import { SPLIT_WINDOW_HOURS, decidingRule, evaluatePolicy, type Decision, type OrderDraftLine, type RecentOrder } from "./policy";
+import { SPLIT_WINDOW_HOURS, decidingRule, evaluatePolicy, type Decision, type OrderDraftLine, type ProductHold, type RecentOrder } from "./policy";
+export type { ProductHold } from "./policy";
 import { QuoteError, QuoteRequestLineSchema, buildQuote, signQuote, verifyQuote, type Quote, type QuoteLine } from "./quote";
 import { addDays, canonicalJson, formatEur, newId } from "./util";
 
@@ -242,7 +243,17 @@ export type DockDeps = {
   /** How long a live answer (per product and delivery date) is reused for option cards. Quotes always ask afresh. Default 120 s; 0 switches it off. */
   liveCacheTtlMs?: number;
   claims?: ClaimStore; // signed claims handed out (see claims.ts)
+  /**
+   * Products the wholesaler holds right now (a recall notice, a drill), checked by the gate as the rule recall_hold
+   * on every quote preview, order and re-check at sign-off. The server's recall radar implements it.
+   */
+  holds?: ProductHolds;
 };
+
+/** The holds in force on some products. Called with the products of one quote; must be cheap (no live call). */
+export interface ProductHolds {
+  holdsFor(productIds: string[]): ProductHold[] | Promise<ProductHold[]>;
+}
 
 /** What one live lookup found: quotable offers (with claim ids), the products that have none and why, and the claims. */
 export type LiveLookupResult = {
@@ -306,6 +317,26 @@ export function createDock(deps: DockDeps) {
     if (!ids.length) return [];
     const found = new Set((await catalog.searchProducts({ ids, limit: 100 })).map((p) => p.id));
     return ids.filter((id) => found.has(id) || explicit.includes(id));
+  }
+
+  /** What the request asked for, with the products' names (looked up in master data, free), for the gate's reasons. */
+  async function askedOf(request: PurchaseRequest | undefined): Promise<(NonNullable<PurchaseRequest["asked"]> & { names?: Record<string, string> }) | undefined> {
+    const asked = request?.asked;
+    if (!asked?.productIds.length) return asked;
+    try {
+      const found = await catalog.searchProducts({ ids: asked.productIds, limit: 100 });
+      const names = Object.fromEntries(found.map((p) => [p.id, p.name]));
+      return Object.keys(names).length ? { ...asked, names } : asked;
+    } catch {
+      return asked;
+    }
+  }
+
+  /** Holds in force on a quote's products (recall radar), for the gate's recall_hold rule. */
+  async function holdsOf(quote: Quote): Promise<{ holds?: ProductHold[] }> {
+    if (!deps.holds) return {};
+    const holds = await deps.holds.holdsFor([...new Set(quote.lines.map((l) => l.productId))]);
+    return holds.length ? { holds } : {};
   }
 
   /** Quote lines with substitutes as Dock reads them from the request (see requestQuote). */
@@ -747,8 +778,8 @@ export function createDock(deps: DockDeps) {
       });
       const policyPreview = evaluatePolicy(
         session.mandate,
-        { agentId: session.agentId, quote, lines: quote.lines, neededBy: request.neededBy, requestId, asked: request.asked },
-        { now: now(), ...(await budgetContext(quote.buyerOrgId)), ...(await unverifiedOf(requestId)), quoteAlreadyUsed: false, recentOrders: await recentOrders(quote.buyerOrgId) },
+        { agentId: session.agentId, quote, lines: quote.lines, neededBy: request.neededBy, requestId, asked: await askedOf(request) },
+        { now: now(), ...(await budgetContext(quote.buyerOrgId)), ...(await unverifiedOf(requestId)), ...(await holdsOf(quote)), quoteAlreadyUsed: false, recentOrders: await recentOrders(quote.buyerOrgId) },
       );
       return { quote, quoteToken, policyPreview, claims };
     },
@@ -766,8 +797,8 @@ export function createDock(deps: DockDeps) {
       }
       const orgId = session.mandate.issuer.orgId;
       return serialize(orgId, async () => {
-        const draft = { agentId: session.agentId, quote, lines, neededBy: request.neededBy, requestId, asked: request.asked };
-        const ctx = { now: now(), ...(await budgetContext(orgId)), ...(await unverifiedOf(requestId)), quoteAlreadyUsed: await repo.isQuoteUsed(quote.quoteId), recentOrders: await recentOrders(orgId) };
+        const draft = { agentId: session.agentId, quote, lines, neededBy: request.neededBy, requestId, asked: await askedOf(request) };
+        const ctx = { now: now(), ...(await budgetContext(orgId)), ...(await unverifiedOf(requestId)), ...(await holdsOf(quote)), quoteAlreadyUsed: await repo.isQuoteUsed(quote.quoteId), recentOrders: await recentOrders(orgId) };
         let decision = evaluatePolicy(session.mandate, draft, ctx);
         if (decision.outcome !== "reject" && !(await repo.claimQuote(quote.quoteId))) {
           decision = evaluatePolicy(session.mandate, draft, { ...ctx, quoteAlreadyUsed: true });
@@ -913,8 +944,8 @@ export function createDock(deps: DockDeps) {
         const request = await repo.getRequest(order.requestId);
         const recheck = evaluatePolicy(
           order.mandate,
-          { agentId: order.agentId, quote: order.quote, lines: order.draftLines, neededBy: request?.neededBy, requestId: order.requestId, asked: request?.asked },
-          { now: now(), ...(await budgetContext(order.orgId, order.orderId)), ...(await unverifiedOf(order.requestId)), quoteAlreadyUsed: false, recentOrders: await recentOrders(order.orgId, order.orderId) },
+          { agentId: order.agentId, quote: order.quote, lines: order.draftLines, neededBy: request?.neededBy, requestId: order.requestId, asked: await askedOf(request) },
+          { now: now(), ...(await budgetContext(order.orgId, order.orderId)), ...(await unverifiedOf(order.requestId)), ...(await holdsOf(order.quote)), quoteAlreadyUsed: false, recentOrders: await recentOrders(order.orgId, order.orderId) },
         );
         if (recheck.outcome === "reject") {
           order.status = "rejected";

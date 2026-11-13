@@ -88,10 +88,11 @@ async function buildRuntime(): Promise<Runtime> {
   // Approvers who registered a passkey must use it; others (the scripted Laakso demo) keep the link token.
   const passkeys = new PasskeyService({ store: stores.passkeyStore, demoTapEnabled });
   // RECALL RADAR HOOK (src/server/radar/gate.ts): held products read as sales-blocked, and quotes, orders and
-  // sign-offs that contain one are refused with the rule recall_hold.
+  // sign-offs that contain one are refused by the gate with the rule recall_hold (the core's ProductHolds dependency).
   const recall = recallLayer(stores.catalog);
   const dock = createDock({
     catalog: new MeteredCatalog(recall.catalog),
+    holds: recall.holds,
     repo: stores.repo,
     ledger: new Ledger(stores.ledgerStore),
     trustedIssuers,
