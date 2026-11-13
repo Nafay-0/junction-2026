@@ -57,6 +57,53 @@ export function eurShort(cents: number): string {
   return cents % 100 === 0 ? `€${(cents / 100).toLocaleString("en-US")}` : eur(cents);
 }
 
+// ---------- Finnish number conventions, for the customer-facing screens ----------
+// The API and the operations screens write "€1,280.50". The store and the phone pages write money and measures as
+// people in Finland do: "1 280,50 €", "2,5 kg", with a no-break space between groups and before the unit.
+
+const NBSP = " ";
+
+/** "1 280,5" — a number with a decimal comma and no-break spaces between thousands. */
+export function num(n: number, maxDigits = 2, minDigits = 0): string {
+  const s = Math.abs(n).toFixed(maxDigits);
+  let [int, frac = ""] = s.split(".");
+  frac = frac.replace(/0+$/, "");
+  while (frac.length < minDigits) frac += "0";
+  int = int.replace(/\B(?=(\d{3})+(?!\d))/g, NBSP);
+  return `${n < 0 && Number(s) !== 0 ? "−" : ""}${int}${frac ? `,${frac}` : ""}`;
+}
+
+/** "1 280,50 €" */
+export function money(cents: number): string {
+  return `${num(cents / 100, 2, 2)}${NBSP}€`;
+}
+
+/** "500 €" for whole euros, else "499,50 €". */
+export function moneyShort(cents: number): string {
+  return cents % 100 === 0 ? `${num(cents / 100, 0)}${NBSP}€` : money(cents);
+}
+
+/** Rewrite the API's English money ("€1,280.50", "€500") in a sentence into the Finnish form. */
+export function fiMoney(text: string): string {
+  return text.replace(/€\s?(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{1,2}))?(?![\d,]*\d)/g, (_m, int: string, frac?: string) => {
+    const cents = Number(int.replaceAll(",", "")) * 100 + (frac ? Number(frac.padEnd(2, "0")) : 0);
+    return frac ? money(cents) : moneyShort(cents);
+  });
+}
+
+/** humanize() for the customer side: ids out, and money as written in Finland. */
+export function say(text: string, products: Record<string, string> = {}): string {
+  return fiMoney(humanize(text, products));
+}
+
+/** "100 L", "2,5 kg", "12 pcs" with Finnish decimals. */
+export function measure(n: number, unit: string): string {
+  const v = num(n, 2);
+  if (unit === "pack") return `${v} pack${n === 1 ? "" : "s"}`;
+  if (unit === "pcs") return `${v}${NBSP}pcs`;
+  return `${v}${NBSP}${unit}`;
+}
+
 export function amount(n: number, unit: string): string {
   const v = n.toLocaleString("en-US", { maximumFractionDigits: 2 });
   if (unit === "pack") return `${v} pack${n === 1 ? "" : "s"}`;
@@ -96,9 +143,12 @@ export const RULE_TITLE: Record<string, string> = {
   substitute_price: "A swap may cost only a little more",
   weekly_budget: "The weekly budget is a hard limit",
   per_order_limit: "The agent's own spending limit",
+  order_splitting: "No splitting one need into small orders",
+  human_confirmation: "A person confirms what matters",
   approver_authority: "Someone must be allowed to sign the amount",
   live_lookup_limit: "Live price checks for a short list only",
   approver_identity: "Only the named person can sign off",
+  operator_suspension: "Suspended by the wholesaler's staff",
 };
 
 export function ruleTitle(rule: string | undefined): string {
@@ -137,6 +187,7 @@ export function attr(a: string): string {
 
 /** "Valio Eila lactose-free semi-skimmed milk drink 1.5 %, 10 L bag-in-box" -> "Valio Eila 1.5 %, 10 L bag-in-box". */
 export function shortProduct(name: string): string {
+  if (!name.includes(",")) return shortCatalogueName(name);
   const [head, ...rest] = name.split(",");
   const words = head.trim().split(/\s+/);
   const brand = words.slice(0, words[1] && /^[A-Z]/.test(words[1]) ? 2 : 1).join(" ");
@@ -144,6 +195,19 @@ export function shortProduct(name: string): string {
   const kind = /oat|cream|yoghurt|organic/i.exec(head)?.[0]?.toLowerCase();
   const pack = rest.join(",").trim();
   return [brand, kind, fat].filter(Boolean).join(" ") + (pack ? `, ${pack}` : "");
+}
+
+/**
+ * The partner's own product names have no comma and can be long ("Valio Hyvä suomalainen Arki® Eila® semi skimmed
+ * milk drink 1 l lactose free"): drop the trademark signs and, when too long, cut at a word but keep the pack size.
+ */
+function shortCatalogueName(name: string, max = 48): string {
+  const clean = name.replace(/[®™©]/g, "").replace(/\s+/g, " ").trim();
+  if (clean.length <= max) return clean;
+  const pack = /\b\d+(?:[.,]\d+)?\s?(?:x\s?\d+(?:[.,]\d+)?\s?)?(?:l|L|dl|cl|ml|kg|g)\b/.exec(clean)?.[0];
+  const room = pack ? max - pack.length - 3 : max - 1;
+  const cut = clean.slice(0, room).replace(/\s+\S*$/, "");
+  return pack && !cut.includes(pack) ? `${cut}…, ${pack}` : `${cut}…`;
 }
 
 /**

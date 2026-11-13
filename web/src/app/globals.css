@@ -1,35 +1,58 @@
 @import "tailwindcss";
 
 /*
- * Dock's tokens, shared by the wall, the buyer console and the phone pages.
+ * Dock's tokens. The full contract, with do and do not, is web/docs/DESIGN.md.
  *
- * Signage, not SaaS: steel and concrete greys, white paper for anything that is a document (a need, a quote,
- * an order), and one safety colour, warning-sign yellow, used ONLY where a person must decide or the gate
- * refuses. Committed and automatic outcomes stay monochrome.
+ * The store lives in the wholesaler's world: petrol blue for structure, white paper for documents and tiles, a mist
+ * ground, charcoal text, lime for the one main action in view, lavender for anything the agent remembered or wrote.
+ * Warning-sign yellow with black hazard striping belongs ONLY to the gate: a rule refused, or a person must decide.
+ * Square corners everywhere; the round crash-test mark is the only circle.
  */
 @theme {
   --font-sans: var(--font-barlow), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-barlow-condensed), var(--font-barlow), ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  --color-ink: #1a1d21; /* text and rules on light surfaces */
-  --color-ink-soft: #4a5058; /* secondary text on light (7.9:1 on paper) */
-  --color-concrete: #e4e6e4; /* console page */
-  --color-concrete-deep: #cfd3d1; /* console placeholders, quiet fills */
-  --color-paper: #ffffff; /* documents */
-  --color-steel: #1d2329; /* wall background */
-  --color-steel-2: #262e36; /* wall panels */
-  --color-steel-3: #36404a; /* wall rules */
-  --color-chalk: #eef1f0; /* text on steel */
-  --color-chalk-soft: #a9b3bb; /* secondary text on steel (7.6:1 on steel) */
+  /* --- the store (light) --- */
+  --color-petrol: #005670; /* structure: nav band, links, active states, document rules (8.1:1 on white) */
+  --color-petrol-deep: #003646; /* dark grounds: demo strip, plates, the lane's current station */
+  --color-petrol-soft: #d5e6eb; /* petrol tint: selected rows, hover on mist */
+  --color-ink: #23282d; /* text on light (14.6:1 on white) */
+  --color-ink-soft: #55616b; /* secondary text (6.3:1 on white, 5.9:1 on mist, 5.4:1 on lavender) */
+  --color-line: #c9d6db; /* hairlines and quiet borders */
+  --color-mist: #f2f7f8; /* the page ground */
+  --color-lavender: #eee8f5; /* the agent's tint */
+  --color-lavender-deep: #5b4a7a; /* the agent's marks on lavender (7.0:1) */
+  --color-lime: #c0e021; /* the main action; text on lime is ink (11:1) */
+  --color-lime-hover: #aed01a;
+  --color-paper: #ffffff; /* documents and tiles */
+
+  /* Older names, kept so every screen keeps working: concrete is the page ground, concrete-deep a quiet fill. */
+  --color-concrete: #f2f7f8;
+  --color-concrete-deep: #dce7ea;
+
+  /* Temperature: a quiet code with a glyph, never the only signal and never a fill behind text. */
+  --color-chilled: #2b8c9e;
+  --color-frozen: #4f67b5;
+  --color-ambient: #a97e36;
+
+  /* --- the gate (the only loud thing) --- */
   --color-safety: #ffc20e; /* warning-sign yellow: human decisions and refusals only */
-  --color-safety-ink: #1a1d21; /* text on safety yellow */
+  --color-safety-ink: #1a1d21; /* text on safety yellow, and the black of the hazard stripe */
+
+  /* --- the wall and the operations desk (dark), until they are restyled --- */
+  --color-steel: #1d2329;
+  --color-steel-2: #262e36;
+  --color-steel-3: #36404a;
+  --color-chalk: #eef1f0;
+  --color-chalk-soft: #a9b3bb;
 }
 
 body {
   font-family: var(--font-sans);
-  font-feature-settings: "tnum" 0;
   -webkit-font-smoothing: antialiased;
+  background: var(--color-mist);
+  color: var(--color-ink);
 }
 
 /* Numerals that change (money, counters, countdowns) never jitter. */
@@ -37,21 +60,39 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* Black-and-yellow hazard band: marks a surface where a person must act, or the gate refused. */
+/* Display type: the heavy condensed register. Tight, never tracked out. */
+.display {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+
+/* Black-and-yellow hazard: marks a surface where a person must act, or the gate refused. Gate only. */
 .hazard {
-  background-image: repeating-linear-gradient(-45deg, var(--color-safety) 0 14px, var(--color-ink) 14px 28px);
+  background-image: repeating-linear-gradient(-45deg, var(--color-safety) 0 14px, var(--color-safety-ink) 14px 28px);
 }
 .hazard-thin {
-  background-image: repeating-linear-gradient(-45deg, var(--color-safety) 0 7px, var(--color-ink) 7px 14px);
+  background-image: repeating-linear-gradient(-45deg, var(--color-safety) 0 7px, var(--color-safety-ink) 7px 14px);
+}
+/* A hazard frame around a dark slab: the gate when it stops something. */
+.hazard-frame {
+  border: 10px solid transparent;
+  background:
+    linear-gradient(var(--color-safety-ink), var(--color-safety-ink)) padding-box,
+    repeating-linear-gradient(-45deg, var(--color-safety) 0 14px, var(--color-safety-ink) 14px 28px) border-box;
 }
 
 :focus-visible {
-  outline: 3px solid var(--color-ink);
+  outline: 3px solid var(--color-petrol);
   outline-offset: 2px;
 }
+.on-dark :focus-visible,
 .on-steel :focus-visible {
-  outline-color: var(--color-safety);
+  outline-color: var(--color-lime);
 }
+
+/* ---------- motion: only to show what changed ---------- */
 
 @keyframes dock-spin {
   to {
@@ -76,10 +117,89 @@ body {
   animation: dock-arrive 1.6s ease-out;
 }
 
+/* A new stage arrives on the lane: it slides in from the lane's side. */
+@keyframes lane-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+}
+.lane-enter {
+  animation: lane-enter 360ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* The gate closes: two barrier arms swing in from the sides and meet. */
+@keyframes barrier-left {
+  from {
+    transform: translateX(-102%);
+  }
+}
+@keyframes barrier-right {
+  from {
+    transform: translateX(102%);
+  }
+}
+.barrier-left {
+  animation: barrier-left 700ms cubic-bezier(0.3, 0.9, 0.3, 1) both;
+}
+.barrier-right {
+  animation: barrier-right 700ms cubic-bezier(0.3, 0.9, 0.3, 1) both;
+}
+
+/* A sign-off lands: a stamp settles onto the document. */
+@keyframes stamp {
+  0% {
+    opacity: 0;
+    transform: scale(1.35) rotate(-4deg);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(0.97) rotate(-2deg);
+  }
+  100% {
+    transform: scale(1) rotate(-2deg);
+  }
+}
+.stamp {
+  animation: stamp 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* Waiting for a person: the waiting dot breathes. */
+@keyframes breathe {
+  50% {
+    opacity: 0.35;
+  }
+}
+.breathe {
+  animation: breathe 1.6s ease-in-out infinite;
+}
+
+/* A value just changed (basket total, quantity meaning): a brief petrol wash. */
+@keyframes changed {
+  from {
+    background-color: var(--color-petrol-soft);
+  }
+}
+.changed {
+  animation: changed 900ms ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .spin-slow,
   .spin,
-  .arrive {
+  .arrive,
+  .lane-enter,
+  .barrier-left,
+  .barrier-right,
+  .stamp,
+  .breathe,
+  .changed {
     animation: none;
+  }
+  .stamp {
+    transform: rotate(-2deg);
+  }
+  html {
+    scroll-behavior: auto;
   }
 }

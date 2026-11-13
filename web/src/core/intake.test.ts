@@ -7,6 +7,7 @@ import { generateEd25519KeyPair } from "./keys";
 import { Ledger, explain } from "./ledger";
 import { createTrustRegistry, signMandate } from "./mandate";
 import type { NeedInput } from "./need";
+import { noOptionReason } from "./intake";
 import { InMemoryDockRepository, createDock, type AgentSession, type Dock } from "./orders";
 import { sampleMandate } from "./test-fixtures";
 
@@ -49,13 +50,45 @@ describe("intake flow", () => {
     expect(dock.stats().liveCalls).toBe(0); // no live lookup before the buyer has answered
     expect(first.next).toEqual({ method: "POST", path: `/api/v1/intake/${first.requestId}/concerns`, example: { by: "<person>", responses: [{ key: "quantity_tenfold:1000:L", choice: "use_100_L" }] } });
 
-    const fixed = await dock.intake.respondToConcerns(session, first.requestId, { by: "Aino Virtanen", responses: [{ key: first.concerns[0].key, choice: "use_100_L" }] });
+    const fixed = await dock.intake.respondToConcerns(session, first.requestId, { by: "Aino Virtanen", responses: [{ key: first.concerns[0].key, choice: "use_100_L" }] }, { channel: "portal_session", person: "Aino Virtanen" });
     expect(fixed.need.quantity).toEqual({ amount: 100, unit: "L" });
     expect(fixed.state).toBe("options_ready"); // memory answers the rest: nothing more to ask
-    expect(fixed.acknowledgements).toMatchObject([{ action: "corrected", by: "Aino Virtanen", correctionId: "use_100_L" }]);
+    expect(fixed.acknowledgements).toMatchObject([{ action: "corrected", by: "Aino Virtanen", correctionId: "use_100_L", verified: true }]);
     const entry = ledger.entries({ requestId: first.requestId }).find((e) => e.data.step === "correction")!;
-    expect(entry).toMatchObject({ type: "intake", actor: "buyer:Aino Virtanen", data: { by: "Aino Virtanen", relayedBy: session.agentId } });
-    expect(entry.summary).toBe("Aino Virtanen corrected quantity_tenfold: Make it 100 L.");
+    expect(entry).toMatchObject({ type: "intake", actor: "buyer:Aino Virtanen", data: { by: "Aino Virtanen", relayedBy: session.agentId, channel: "portal_session", verified: true } });
+    expect(entry.summary).toBe("Aino Virtanen corrected quantity_tenfold (in the kitchen's signed-in portal): Make it 100 L.");
+  });
+
+  it("a confirmation the agent only relays is not the person's: logged as relayed, and the order goes to a named person (F-HUMAN-INPUT-BY-AGENT)", async () => {
+    const big = await dock.intake.open(session, { need: need({ quantity: { amount: 1000, unit: "L" }, optimise: "price" }) });
+    expect(big.concerns.map((c) => c.code)).toEqual(["quantity_tenfold"]);
+    const relayed = await dock.intake.respondToConcerns(session, big.requestId, { by: "Sanna Koskinen (head chef)", responses: [{ key: big.concerns[0].key, choice: "confirm" }] });
+    const entry = ledger.entries({ requestId: big.requestId }).find((e) => e.data.step === "confirmation")!;
+    expect(entry.actor).toBe(`agent:${session.agentId}`);
+    expect(entry.summary).not.toMatch(/confirmed as intended/);
+    expect(entry.summary).toMatch(/^Relayed by the agent, not verified/);
+    expect(relayed.acknowledgements[0]).toMatchObject({ verified: false, channel: "relayed" });
+    expect(relayed.signOffNotes.join(" ")).toMatch(/Not verified: the agent relayed that Sanna Koskinen \(head chef\) confirmed/);
+    // The cheapest card is within the agent's own limit, yet the order may not be decided by the agent alone.
+    const q = relayed.quote!;
+    expect(q.policyPreview.rules.find((r) => r.rule === "human_confirmation")?.outcome).toBe("escalate");
+    const order = await dock.placeOrder(session, { requestId: big.requestId, quoteToken: q.quoteToken, lines: q.quote.lines.map(({ productId, quantity, unitPriceCents }) => ({ productId, quantity, unitPriceCents })) });
+    expect(order.status).toBe("pending_approval");
+    expect(order.notes?.join(" ")).toMatch(/Not verified/);
+
+    // The same confirmation from the kitchen's signed-in portal is the person's own: no extra sign-off.
+    const again = await dock.intake.open(session, { need: need({ quantity: { amount: 1000, unit: "L" }, optimise: "price", deliverBy: "2026-11-19" }) });
+    const own = await dock.intake.respondToConcerns(session, again.requestId, { by: "ignored", responses: [{ key: again.concerns[0].key, choice: "confirm" }] }, { channel: "portal_session", person: "Aino Virtanen" });
+    expect(own.quote!.policyPreview.rules.find((r) => r.rule === "human_confirmation")?.outcome).toBe("pass");
+    expect(ledger.entries({ requestId: again.requestId }).find((e) => e.data.step === "confirmation")).toMatchObject({ actor: "buyer:Aino Virtanen", summary: expect.stringMatching(/^Aino Virtanen confirmed as intended, in the kitchen's signed-in portal/) });
+  });
+
+  it("a relayed 'remember this' applies to the request only: it never becomes a kitchen rule", async () => {
+    const asked = await dock.intake.open(session, { need: need() });
+    const before = (await kitchens.getProfile("org_laakso"))!.stated.length;
+    const r = await dock.intake.answer(session, asked.requestId, { by: "Aino", answers: [{ questionId: "optimise", optionId: "co2", remember: true }] });
+    expect((await kitchens.getProfile("org_laakso"))!.stated.length).toBe(before);
+    expect(r.notes.join(" ")).toMatch(/not stored as a kitchen rule/);
   });
 
   it("lets the buyer confirm a warning as intended, but not an error", async () => {
@@ -114,7 +147,7 @@ describe("intake flow", () => {
 
   it("remembers an answer when told to, and does not ask it again", async () => {
     const asked = await dock.intake.open(session, { need: need() });
-    const answered = await dock.intake.answer(session, asked.requestId, { by: "Aino Virtanen", answers: [{ questionId: "optimise", optionId: "co2", remember: true }] });
+    const answered = await dock.intake.answer(session, asked.requestId, { by: "Aino Virtanen", answers: [{ questionId: "optimise", optionId: "co2", remember: true }] }, { channel: "portal_session", person: "Aino Virtanen" });
     expect(answered.state).toBe("quoted"); // the answer decides it: lowest carbon, a full match
     expect(answered.chosen?.labels).toContain("lowest_carbon");
     expect((await kitchens.getProfile("org_laakso"))!.stated.at(-1)).toMatchObject({ kind: "optimise", goal: "co2", statedBy: "Aino Virtanen", family: "milk" });
@@ -197,6 +230,19 @@ describe("intake flow", () => {
     const r = await dock.intake.open(session, { need: need({ item: { text: "milk", category: "milk", attributes: ["vegan"] }, optimise: "price" }) });
     expect(r.state).toBe("no_options");
     expect(r.excluded.length).toBeGreaterThan(0);
+  });
+
+  it("names the weekly budget as the blocker when it removed the options (F-NO-OPTION-REASON)", () => {
+    const excluded = [
+      { productId: "A", reason: "earliest delivery Thu 19 Nov is after Wed 18 Nov, the latest the mandate allows", code: "too_late" as const },
+      { productId: "B", reason: "only 400 L in stock, and no substitute within the mandate covers the rest", code: "no_substitute" as const },
+      { productId: "C", reason: "€1,322.00 would go over the weekly budget", code: "over_budget" as const },
+      { productId: "D", reason: "€1,400.00 would go over the weekly budget", code: "over_budget" as const },
+    ];
+    const text = noOptionReason(excluded, "2026-11-16", { mandate: { weeklyBudgetCents: 200_000 }, spentCents: 132_200, heldCents: 0, held: [] });
+    expect(text).toMatch(/^Nothing fits\. The blocker is the weekly budget: 2 options that fit would cost more than the €678\.00 left of €2,000\.00 this week \(€1,322\.00 already committed\)/);
+    expect(text).toContain("A: earliest delivery");
+    expect(noOptionReason([{ productId: "A", reason: "x", code: "cutoff_passed" }], "2026-11-16")).toMatch(/^Nothing fits\. The blocker is the order cut-off has passed for A/);
   });
 
   it("keeps intakes private to the agent and validates input", async () => {

@@ -13,7 +13,7 @@ import {
 import type { CatalogIndex, IndexedProduct } from "@/core/catalog/partner";
 import { toDockProduct } from "@/core/catalog/product";
 import { LexicalSearch, type SearchBackend, type SearchHit, type SearchQuery } from "@/core/catalog/search";
-import { addDays, isoDate } from "@/core/util";
+import { addDaysIso, localNow } from "@/core/kitchen";
 import { ValioApiError, helsinkiDate, validFromMs, validUntilMs, type UpstreamStats, type ValioLiveResult } from "./live-client";
 
 /** What ValioCatalog needs from the live API. ValioLiveClient implements it; tests use a fake. */
@@ -135,7 +135,7 @@ export class ValioCatalog implements CatalogPort, UpstreamMetered {
       offer.availablePacks = o.availablePacks;
       offer.stockKnown = true;
     }
-    if (o.leadDays !== undefined) offer.deliveryDate = isoDate(addDays(now, o.leadDays));
+    if (o.leadDays !== undefined) offer.deliveryDate = addDaysIso(localNow(now).date, o.leadDays); // Helsinki days
     const problems: LiveProblem[] = status.problems.filter((p) => p !== "out_of_stock" && p !== "stock_unknown");
     if (offer.availablePacks <= 0) problems.push("out_of_stock");
     return { ...status, offer, problems, orderable: !problems.some((p) => BLOCKING.has(p)), message: `${status.message} (simulated)` };

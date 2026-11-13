@@ -1,6 +1,8 @@
 import * as interpret from "@/app/api/v1/agent/interpret/route";
-import { resolveKitchen } from "@/server/console-kitchens";
+import { consoleKitchen, refusalResponse } from "@/server/authz";
+import { attachConsoleContext } from "@/server/console-context";
 import { errorBody } from "@/server/http";
+import { getRuntime } from "@/server/runtime";
 import { localFetch } from "@/server/local-transport";
 
 /**
@@ -17,13 +19,21 @@ const ALLOWED: [string, RegExp][] = [
   ["POST", /^\/api\/v1\/intake\/req_[a-z0-9]+\/(concerns|answers|choice)$/],
   ["POST", /^\/api\/v1\/orders$/],
   ["GET", /^\/api\/v1\/orders\/ord_[a-z0-9]+$/],
+  ["POST", /^\/api\/v1\/orders\/ord_[a-z0-9]+\/withdraw$/],
   ["GET", /^\/api\/v1\/ledger(\?[\w=&%-]*)?$/],
   ["POST", /^\/api\/v1\/agent\/interpret$/],
 ];
 
 export async function POST(req: Request, ctx: RouteContext<"/ui-api/kitchens/[kitchen]/call">) {
   const { kitchen } = await ctx.params;
-  const k = await resolveKitchen(kitchen);
+  let k;
+  try {
+    k = await consoleKitchen(req, await getRuntime(), kitchen); // a visitor's kitchen only from their own phone (server/authz.ts)
+  } catch (err) {
+    const refused = refusalResponse(err);
+    if (refused) return refused;
+    throw err;
+  }
   if (!k) return Response.json(errorBody("kitchen_not_found", "This kitchen does not exist or its demo time is over."), { status: 404 });
   let call: { method?: unknown; path?: unknown; body?: unknown };
   try {
@@ -42,7 +52,14 @@ export async function POST(req: Request, ctx: RouteContext<"/ui-api/kitchens/[ki
 
   // In-process: the same route handlers, no network hop and no assumption about this server's own address.
   const forwarded = new Request(new URL(path, "http://dock.local"), init);
+  attachConsoleContext(forwarded, k.console);
   const res = path === "/api/v1/agent/interpret" ? await interpret.POST(forwarded) : await localFetch(forwarded);
   const text = await res.text();
-  return new Response(text, { status: res.status, headers: { "content-type": res.headers.get("content-type") ?? "application/json", "cache-control": "no-store" } });
+  const out: Record<string, string> = { "content-type": res.headers.get("content-type") ?? "application/json", "cache-control": "no-store" };
+  for (const h of ["retry-after", "ratelimit-limit", "ratelimit-remaining", "ratelimit-reset"]) {
+    const v = res.headers.get(h);
+    if (v) out[h] = v;
+  }
+  if (k.setCookie) out["set-cookie"] = k.setCookie;
+  return new Response(text, { status: res.status, headers: out });
 }

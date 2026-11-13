@@ -159,7 +159,7 @@ export type Step = {
 
 export type PlacedOrder = {
   orderId: string;
-  status: "pending_approval" | "committed" | "rejected" | "declined";
+  status: "pending_approval" | "committed" | "rejected" | "declined" | "withdrawn" | "expired";
   totalCents: number;
   authorisedBy: "mandate" | "approver" | null;
   signOffRequested: boolean;

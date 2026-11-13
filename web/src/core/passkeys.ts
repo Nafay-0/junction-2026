@@ -133,7 +133,14 @@ export class InMemoryPasskeyStore implements PasskeyStore {
   }
 }
 
+const PASSKEY_ERROR = Symbol.for("dock.error.PasskeyError");
+
+/** Branded like DockError (see errors.ts): the passkey service lives in the shared runtime, routes may hold another copy of this class. */
 export class PasskeyError extends Error {
+  static [Symbol.hasInstance](value: unknown): value is PasskeyError {
+    return typeof value === "object" && value !== null && (value as Record<symbol, unknown>)[PASSKEY_ERROR] === true;
+  }
+
   constructor(
     readonly status: number,
     readonly code: string,
@@ -141,6 +148,7 @@ export class PasskeyError extends Error {
   ) {
     super(message);
     this.name = "PasskeyError";
+    Object.defineProperty(this, PASSKEY_ERROR, { value: true });
   }
 }
 

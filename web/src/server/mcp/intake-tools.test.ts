@@ -78,7 +78,7 @@ describe("intake tools", () => {
 
     const quoted = await call(client, "choose_option", { requestId, by: "Sanna", optionId: answered.s.step.options[0].optionId });
     expect(quoted.s).toMatchObject({ waitingFor: "agent", step: { state: "quoted", quote: { quoteToken: expect.any(String) } } });
-    expect(quoted.s.nextStep).toMatch(/place_order with step.next.example/);
+    expect(quoted.s.nextStep).toMatch(/place_order with just .*requestId/);
 
     const placed = await call(client, "place_order", quoted.s.step.next.example);
     expect(placed.isError).toBe(false);
@@ -90,7 +90,8 @@ describe("intake tools", () => {
 
     const { dock } = await getRuntime();
     const confirmation = dock.ledger.entries({ requestId }).find((e) => e.data.step === "confirmation")!;
-    expect(confirmation).toMatchObject({ actor: "buyer:Sanna", data: { relayedBy: KITCHEN_ORG.agentId } });
+    // Relayed by the agent (no elicitation here): recorded as such, never as Sanna's own confirmation.
+    expect(confirmation).toMatchObject({ actor: `agent:${KITCHEN_ORG.agentId}`, data: { by: "Sanna", relayedBy: KITCHEN_ORG.agentId, verified: false } });
   });
 
   it("cannot skip a pending confirmation, through the intake tools or around them", async () => {
@@ -163,7 +164,8 @@ describe("intake tools with a client that can ask the buyer (MCP elicitation)", 
     expect(r.s).toMatchObject({ ok: true, step: { state: "options_ready", need: { quantity: { amount: 1000 } }, acknowledgements: [{ action: "confirmed", by: "Sanna Koskinen" }] } });
     expect(forms[0].requestedSchema.properties[key]).toMatchObject({ default: step.concerns[0].corrections[0].id, oneOf: expect.arrayContaining([{ const: "confirm", title: expect.any(String) }]) });
     expect(forms[0].requestedSchema.required).toEqual(["by", key]);
-
+    // Elicitation is the protocol's own human-input mechanism: the answer is the buyer's, not relayed.
+    expect(r.s.step.acknowledgements[0]).toMatchObject({ channel: "protocol_elicitation", verified: true });
   });
 
   it("changes nothing when the buyer declines", async () => {
@@ -173,5 +175,26 @@ describe("intake tools with a client that can ask the buyer (MCP elicitation)", 
     expect(r).toMatchObject({ isError: true, s: { error: { code: "buyer_declined", rule: "human_input" } } });
     expect(r.s.nextStep).toMatch(/Do not answer for them/);
     expect((await call(client, "get_intake_step", { requestId: step.requestId })).s.step.state).toBe("needs_confirmation");
+    // An explicit decline does not open the relay fallback.
+    const relayed = await call(client, "respond_to_concerns", { requestId: step.requestId, relay: true, by: "Sanna", responses: [{ key: step.concerns[0].key, choice: "confirm" }] });
+    expect(relayed.s.error).toMatchObject({ code: "buyer_declined" });
+  });
+
+  it("falls back to the agent relaying when the client closes the form unanswered (cannot show it)", async () => {
+    let shown = 0;
+    const client = await connect(kitchenAuth, () => (shown++, { action: "cancel" }));
+    const { step } = (await call(client, "submit_need", milk())).s;
+    const answer = { requestId: step.requestId, by: "Sanna", responses: [{ key: step.concerns[0].key, choice: "confirm" }] };
+
+    // relay: true before any form went unanswered changes nothing: Dock still asks through the form.
+    const early = await call(client, "respond_to_concerns", { ...answer, relay: true });
+    expect(early).toMatchObject({ isError: true, s: { error: { code: "form_not_answered", rule: "human_input" } } });
+    expect(early.s.nextStep).toMatch(/Ask the buyer.*relay: true.*Never answer for them/);
+    expect(shown).toBe(1);
+
+    const relayed = await call(client, "respond_to_concerns", { ...answer, relay: true });
+    expect(relayed.s).toMatchObject({ ok: true, step: { state: "options_ready" } });
+    expect(relayed.s.step.acknowledgements[0]).toMatchObject({ channel: "relayed", verified: false });
+    expect(shown).toBe(1);
   });
 });

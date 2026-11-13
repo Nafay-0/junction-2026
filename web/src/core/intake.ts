@@ -17,6 +17,8 @@ import {
   type KitchenProfile,
   type KitchenRepository,
   type StatedPreference,
+  formatDay,
+  localDateOf,
 } from "./kitchen";
 import type { Ledger } from "./ledger";
 import { NeedSchema, SPEC_DIMENSIONS, applyNeedPatch, describeNeed, dimensionValue, formatAmount, normaliseNeed, type BaseUnit, type OptimiseGoal, type StructuredNeed } from "./need";
@@ -41,7 +43,39 @@ import { formatEur, newId } from "./util";
 
 export type IntakeState = "needs_confirmation" | "needs_input" | "options_ready" | "quoted" | "no_options" | "cancelled";
 
-export type Acknowledgement = { key: string; code: ConcernCode; action: "confirmed" | "corrected" | "cancelled"; correctionId?: string; by: string; at: string };
+/**
+ * How a person's answer reached Dock. Only a channel that identifies the person makes it theirs:
+ *   portal_session        the kitchen's signed-in portal session (a visitor's passkey-backed phone)
+ *   approver_passkey      the approver's passkey on the sign-off screen
+ *   protocol_elicitation  the protocol's own human-input mechanism (MCP elicitation: the client asked the user)
+ *   voice                 the caller's own words on a voice call tied to their signed-in session
+ *   relayed               anything an agent merely passes on (the default): recorded as "relayed by the agent, not
+ *                         verified"; where the concern matters, the order then goes to a named person's sign-off
+ * Set only by server code in this process (see server/console-context.ts), never from a request field.
+ */
+export type InputChannel = "portal_session" | "approver_passkey" | "protocol_elicitation" | "voice" | "relayed";
+export type HumanVia = { channel: InputChannel; /** The identified person's name, when the channel names one. */ person?: string; /** What the person said, for the ledger (voice). */ words?: string };
+export const RELAYED: HumanVia = { channel: "relayed" };
+const isVerified = (v: HumanVia) => v.channel !== "relayed";
+const CHANNEL_TEXT: Record<InputChannel, string> = {
+  portal_session: "in the kitchen's signed-in portal",
+  approver_passkey: "with their passkey",
+  protocol_elicitation: "through the client's own prompt to the user (MCP elicitation)",
+  voice: "on a voice call from their signed-in phone",
+  relayed: "relayed by the agent, not verified",
+};
+
+/**
+ * Concerns whose confirmation decides something a person must own: an unusual amount, a request against a stated or
+ * remembered rule, a likely duplicate. Confirmed through a relayed channel, they do not let the agent decide alone:
+ * the order goes to a named person's sign-off with the concern shown.
+ */
+export const CONFIRMATION_MATTERS: readonly ConcernCode[] = ["quantity_tenfold", "quantity_unusual", "unit_confusion", "contradicts_preference", "duplicate_recent", "declined_before", "breaks_remembered_rule", "standing_order_range"];
+
+export type Acknowledgement = { key: string; code: ConcernCode; action: "confirmed" | "corrected" | "cancelled"; correctionId?: string; by: string; at: string; channel?: InputChannel; verified?: boolean };
+
+/** A confirmation that matters but reached Dock only as the agent's word: a person signs the order off. */
+export type UnverifiedConfirmation = { key: string; code: ConcernCode; message: string; by: string; at: string };
 
 export type Intake = {
   requestId: string;
@@ -69,6 +103,8 @@ export type Intake = {
   excluded: Exclusion[];
   /** Plausibility warnings not asked of the buyer because a person signs the order off anyway: shown to that person. */
   signOffNotes?: string[];
+  /** Confirmations that matter but were only relayed by the agent: the order needs a person's sign-off (policy human_confirmation). */
+  unverified?: UnverifiedConfirmation[];
   chosen?: { optionId: string; labels: OptionLabel[]; by: string; at: string };
   quote?: { quote: Quote; quoteToken: string; policyPreview: Decision };
   createdAt: string;
@@ -110,9 +146,11 @@ export type IntakeDeps = {
   intakes: IntakeRepository;
   ledger: Ledger;
   now: () => Date;
-  openRequest: (session: AgentSession, input: { text: string; neededBy?: string }) => Promise<PurchaseRequest>;
+  openRequest: (session: AgentSession, input: { text: string; neededBy?: string; productIds?: string[]; category?: string }) => Promise<PurchaseRequest>;
   requestQuote: (session: AgentSession, input: { requestId: string; lines: QuoteRequestLine[] }) => Promise<{ quote: Quote; quoteToken: string; policyPreview: Decision }>;
   spentThisWeek: (orgId: string) => Promise<number>;
+  /** Committed and held spend, with the orders holding money, for the budget's part of a "nothing fits" answer. */
+  budgetUse?: (orgId: string) => Promise<{ spentCents: number; heldCents: number; held: { orderId: string; totalCents: number; expiresAt: string }[] }>;
   /** The order flow's live lookup: allowance, delivery date, signed claims and ledger in one place (see orders.ts). */
   liveLookup: (session: AgentSession, requestId: string, productIds: string[], deliveryDate: string | undefined, why: string) => Promise<LiveLookupResult>;
 };
@@ -180,6 +218,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
     const products = await familyProducts(i.family, i.need);
     const ctx: CheckContext = { now: at, profile, family: i.family, candidates: products, suspendedPreferenceIds: i.suspendedPreferenceIds };
     Object.assign(i, { concerns: [], questions: [], openChoices: [], fromMemory: [], notAsked: [], rules: [], options: [], notes: [], excluded: [], preselected: undefined, signOffNotes: undefined, updatedAt: at.toISOString() });
+    if (i.unverified?.length) i.signOffNotes = i.unverified.map(unverifiedNote);
 
     // 1. Likely mistakes block everything else. Plausibility warnings a sign-off would show anyway wait (step 6).
     const acked = new Set(i.acknowledgements.map((a) => a.key));
@@ -203,7 +242,8 @@ export function createIntakeFlow(deps: IntakeDeps) {
     const learned = learnPreferences(profile, i.family);
     const last = lastOrder(profile, i.family);
     const usual = learned.find((l) => l.kind === "product");
-    const spent = await deps.spentThisWeek(i.orgId);
+    const budget = deps.budgetUse ? await deps.budgetUse(i.orgId) : { spentCents: await deps.spentThisWeek(i.orgId), heldCents: 0, held: [] };
+    const spent = budget.spentCents;
     const reference = referenceFor(i.need, allowed, last, usual);
 
     // 3. "Same as last time" settles every choice from the last order; otherwise ask only what matters and memory
@@ -257,6 +297,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
       now: at,
       neededBy: i.need.deliverBy,
       spentThisWeekCents: spent,
+      heldThisWeekCents: budget.heldCents,
       last,
       usual: usual?.kind === "product" ? { productId: usual.productId, text: usual.text } : undefined,
       reference,
@@ -279,8 +320,10 @@ export function createIntakeFlow(deps: IntakeDeps) {
     }
     i.notes.push(...result.notes, ...i.notAsked);
     i.excluded.push(...result.excluded);
-    if (result.cards.length === 0) return noOptions(i, noOptionReason(result.excluded, i.need.deliverBy));
+    if (result.cards.length === 0) return noOptions(i, noOptionReason(result.excluded, i.need.deliverBy, { mandate: session.mandate, ...budget }));
     i.options = result.cards;
+    // A confirmation that matters came only as the agent's word: every card says a named person will sign it.
+    if (i.unverified?.length) for (const card of i.options) card.signOff.push(`The agent relayed a confirmation nobody verified (${i.unverified.map((u) => u.code).join(", ")}): a person must sign this order off.`);
 
     // 5. Plausibility warnings: if every option goes to a person for sign-off anyway, that person sees the warning
     //    with the order; the buyer is not asked twice. Otherwise ask now, before anything is chosen.
@@ -311,7 +354,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
     //    only pre-selects, and a compromise is always the buyer's call.
     const repeatCard = repeat && i.options.find((o) => o.match === "full" && o.lines.length === 1 && o.lines[0].productId === repeat.id);
     if (repeatCard) {
-      i.notes.unshift(`Repeats your order of ${formatAmount(last!.amount, last!.unit)} from ${last!.placedAt.slice(0, 10)}.`);
+      i.notes.unshift(`Repeats your order of ${formatAmount(last!.amount, last!.unit)} from ${formatDay(localDateOf(last!.placedAt))}.`);
       return quoteOption(session, i, { ...repeatCard, labels: ["same_as_last_time"] }, `agent ${session.agentId}`, "Same as last time, as asked.");
     }
     const pick = goalForRank ? preselect(i.options, goalForRank, goal.within) : undefined;
@@ -360,9 +403,13 @@ export function createIntakeFlow(deps: IntakeDeps) {
     return i;
   }
 
-  async function quoteOption(session: AgentSession, i: Intake, card: OptionCard, who: string, reason?: string): Promise<Intake> {
+  async function quoteOption(session: AgentSession, i: Intake, card: OptionCard, who: string, reason?: string, via: HumanVia = RELAYED): Promise<Intake> {
     const at = now().toISOString();
-    log(i, who.startsWith("agent ") ? agentActor(session) : buyerActor(who), `${who} chose ${card.optionId} (${card.labels.map((l) => LABEL_TEXT[l]).join(", ")}): ${cardLine(card)}${reason ? ` ${reason}` : ""}`, {
+    const byAgent = who.startsWith("agent ");
+    const verified = isVerified(via);
+    log(i, byAgent || !verified ? agentActor(session) : buyerActor(who), `${who} chose ${card.optionId}${byAgent ? "" : ` (${howText(via)})`} (${card.labels.map((l) => LABEL_TEXT[l]).join(", ")}): ${cardLine(card)}${reason ? ` ${reason}` : ""}`, {
+      channel: byAgent ? undefined : via.channel,
+      verified: byAgent ? undefined : verified,
       step: "choice",
       optionId: card.optionId,
       labels: card.labels,
@@ -370,6 +417,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
       by: who,
       relayedBy: session.agentId,
     });
+    await intakes.save(i); // the gate's preview reads what the intake knows (an unverified confirmation, say)
     const quoted = await deps.requestQuote(session, { requestId: i.requestId, lines: card.quoteLines });
     i.chosen = { optionId: card.optionId, labels: card.labels, by: who, at };
     i.quote = quoted;
@@ -389,7 +437,9 @@ export function createIntakeFlow(deps: IntakeDeps) {
       if (need.sameAsLastTime && !need.quantity && !lastOrder(profile, family)) {
         throw new DockError(422, "nothing_to_repeat", `There is no earlier ${family} order to repeat. Send a quantity to see the options.`);
       }
-      const request = await deps.openRequest(session, { text: need.text ?? describeNeed(need), neededBy: need.deliverBy });
+      // What was asked for, for the gate: the product the buyer named, and the family. Anything else ordered under
+      // this request is a substitute of it, whatever the agent declares (policy substitution_rule).
+      const request = await deps.openRequest(session, { text: need.text ?? describeNeed(need), neededBy: need.deliverBy, ...(need.item.productId ? { productIds: [need.item.productId] } : {}), category: family });
       const at = now().toISOString();
       const i: Intake = {
         requestId: request.requestId,
@@ -422,8 +472,12 @@ export function createIntakeFlow(deps: IntakeDeps) {
     },
 
     /** Confirm a concern as intended, or take one of its corrections. */
-    async respondToConcerns(session: AgentSession, requestId: string, input: z.input<typeof ConcernResponseInput>): Promise<IntakeView> {
-      const { by: who, responses } = parse(ConcernResponseInput, input);
+    async respondToConcerns(session: AgentSession, requestId: string, input: z.input<typeof ConcernResponseInput>, via: HumanVia = RELAYED): Promise<IntakeView> {
+      const { by: said, responses } = parse(ConcernResponseInput, input);
+      const verified = isVerified(via);
+      const who = verified && via.person ? via.person : said;
+      const actor = verified ? buyerActor(who) : agentActor(session);
+      const how = howText(via);
       const i = await own(session, requestId);
       expectState(i, ["needs_confirmation"], "respond to concerns");
       const at = now().toISOString();
@@ -433,26 +487,31 @@ export function createIntakeFlow(deps: IntakeDeps) {
         if (!c) throw new DockError(409, "concern_not_open", `No open concern ${r.key}.`, undefined, { open: i.concerns.map((x) => x.key) });
         if (r.choice === "confirm") {
           if (!c.confirmable) throw new DockError(409, "concern_not_confirmable", `${c.code} cannot be confirmed as is; choose one of: ${c.corrections.map((x) => x.id).join(", ") || "(none: start a new request)"}.`);
-          i.acknowledgements.push({ key: c.key, code: c.code, action: "confirmed", by: who, at });
+          i.acknowledgements.push({ key: c.key, code: c.code, action: "confirmed", by: who, at, channel: via.channel, verified });
           i.suspendedPreferenceIds.push(...(c.preferenceIds ?? []));
-          log(i, buyerActor(who), `${who} confirmed as intended: ${c.message}`, { step: "confirmation", key: c.key, code: c.code, by: who, relayedBy: session.agentId, suspendedPreferenceIds: c.preferenceIds });
+          const matters = !verified && CONFIRMATION_MATTERS.includes(c.code);
+          if (matters) (i.unverified ??= []).push({ key: c.key, code: c.code, message: c.message, by: who, at });
+          const summary = verified
+            ? `${who} confirmed as intended, ${how}: ${c.message}`
+            : `Relayed by the agent, not verified: it says ${who} meant it this way: ${c.message}${matters ? " Nobody verified that, so the order cannot be decided by the agent alone: a named person signs it off, with this shown." : ""}`;
+          log(i, actor, summary, { step: "confirmation", key: c.key, code: c.code, by: who, relayedBy: session.agentId, channel: via.channel, verified, ...(via.words ? { words: via.words } : {}), ...(matters ? { needsSignOff: true } : {}), suspendedPreferenceIds: c.preferenceIds });
           continue;
         }
         const fix = c.corrections.find((x) => x.id === r.choice);
         if (!fix) throw new DockError(400, "correction_unknown", `Concern ${c.key} has no correction ${r.choice}; use "confirm"${c.confirmable ? "" : " (not allowed here)"} or one of: ${c.corrections.map((x) => x.id).join(", ")}.`);
         if (fix.cancel) {
-          i.acknowledgements.push({ key: c.key, code: c.code, action: "cancelled", correctionId: fix.id, by: who, at });
+          i.acknowledgements.push({ key: c.key, code: c.code, action: "cancelled", correctionId: fix.id, by: who, at, channel: via.channel, verified });
           i.state = "cancelled";
           i.concerns = [];
           i.updatedAt = at;
-          log(i, buyerActor(who), `${who} cancelled the request: ${fix.label}.`, { step: "cancelled", key: c.key, code: c.code, by: who, relayedBy: session.agentId });
+          log(i, actor, `${who} cancelled the request (${how}): ${fix.label}.`, { step: "cancelled", key: c.key, code: c.code, by: who, relayedBy: session.agentId, channel: via.channel, verified });
           await intakes.save(i);
           return view(i);
         }
         const before = describeNeed(i.need);
         i.need = applyNeedPatch(i.need, fix.patch ?? {});
-        i.acknowledgements.push({ key: c.key, code: c.code, action: "corrected", correctionId: fix.id, by: who, at });
-        log(i, buyerActor(who), `${who} corrected ${c.code}: ${fix.label}.`, { step: "correction", key: c.key, code: c.code, correctionId: fix.id, by: who, relayedBy: session.agentId, before, after: describeNeed(i.need) });
+        i.acknowledgements.push({ key: c.key, code: c.code, action: "corrected", correctionId: fix.id, by: who, at, channel: via.channel, verified });
+        log(i, actor, `${who} corrected ${c.code} (${how}): ${fix.label}.`, { step: "correction", key: c.key, code: c.code, correctionId: fix.id, by: who, relayedBy: session.agentId, channel: via.channel, verified, ...(via.words ? { words: via.words } : {}), before, after: describeNeed(i.need) });
       }
       if (i.need.deliverBy !== neededBefore) {
         const req = await repo.getRequest(requestId);
@@ -462,34 +521,49 @@ export function createIntakeFlow(deps: IntakeDeps) {
     },
 
     /** Answer questions (or change an answer that memory pre-selected). `remember` stores it as a stated preference. */
-    async answer(session: AgentSession, requestId: string, input: z.input<typeof AnswersInput>): Promise<IntakeView> {
-      const { by: who, answers } = parse(AnswersInput, input);
+    async answer(session: AgentSession, requestId: string, input: z.input<typeof AnswersInput>, via: HumanVia = RELAYED): Promise<IntakeView> {
+      const { by: said, answers } = parse(AnswersInput, input);
+      const verified = isVerified(via);
+      const who = verified && via.person ? via.person : said;
+      const how = howText(via);
       const i = await own(session, requestId);
       expectState(i, ["needs_input", "options_ready"], "answer questions");
       // The goal can always be given (or changed): it is never asked up front, the cards answer it.
       const askable = [...i.questions, ...(i.openChoices ?? []), ...i.fromMemory.map((m) => m.question), ...(i.fromMemory.some((m) => m.question.id === OPTIMISE_QUESTION_ID) ? [] : [optimiseQuestion()])];
       const at = now().toISOString();
       let profile = await profileOf(session);
+      const notRemembered: string[] = [];
       for (const a of answers) {
         const q = askable.find((x) => x.id === a.questionId);
         if (!q) throw new DockError(409, "question_not_open", `Question ${a.questionId} is not open.`, undefined, { open: askable.map((x) => x.id) });
         if (!q.options.some((o) => o.id === a.optionId)) throw new DockError(400, "option_unknown", `${a.optionId} is not an option of ${q.id}: ${q.options.map((o) => o.id).join(", ")}.`);
         i.answers.push({ ...a, by: who, at });
         let remembered = "";
-        if (a.remember) {
+        if (a.remember && verified) {
           const pref = rememberAnswer(q, a.optionId, i, who, at);
           profile = addStatedPreference(profile, pref);
           remembered = ` Remembered for next time as "${pref.text}".`;
+        } else if (a.remember) {
+          // A rule of the kitchen is a person's word. An answer only relayed by an agent applies to this request.
+          remembered = " Not stored as a kitchen rule: an answer relayed by the agent cannot set one; the kitchen can state it on its memory page.";
+          notRemembered.push(`"${optionLabel(q, a.optionId)}" applies to this request only: an answer relayed by the agent is not stored as a kitchen rule.`);
         }
-        log(i, buyerActor(who), `${who} answered "${q.text}": ${optionLabel(q, a.optionId)}.${remembered}`, { step: "answer", questionId: q.id, optionId: a.optionId, remember: !!a.remember, by: who, relayedBy: session.agentId });
+        log(i, verified ? buyerActor(who) : agentActor(session), `${who} answered "${q.text}" (${how}): ${optionLabel(q, a.optionId)}.${remembered}`, { step: "answer", questionId: q.id, optionId: a.optionId, remember: !!a.remember && verified, by: who, relayedBy: session.agentId, channel: via.channel, verified, ...(via.words ? { words: via.words } : {}) });
       }
       await kitchens.saveProfile(profile);
-      return view(await advance(session, i));
+      const next = await advance(session, i);
+      if (notRemembered.length) {
+        next.notes.push(...notRemembered);
+        await intakes.save(next);
+      }
+      return view(next);
     },
 
     /** Choose an option card: Dock asks the wholesaler for a signed quote and runs the policy preview. */
-    async choose(session: AgentSession, requestId: string, input: z.input<typeof ChoiceInput>): Promise<IntakeView> {
-      const { by: who, optionId } = parse(ChoiceInput, input);
+    async choose(session: AgentSession, requestId: string, input: z.input<typeof ChoiceInput>, via: HumanVia = RELAYED): Promise<IntakeView> {
+      const { by: said, optionId } = parse(ChoiceInput, input);
+      const verified = isVerified(via);
+      const who = verified && via.person ? via.person : said;
       const i = await own(session, requestId);
       expectState(i, ["options_ready"], "choose an option");
       const card = i.options.find((o) => o.optionId === optionId);
@@ -500,15 +574,23 @@ export function createIntakeFlow(deps: IntakeDeps) {
         i.need = applyNeedPatch(i.need, { deliverBy: card.deliveryDate });
         const req = await repo.getRequest(requestId);
         if (req) await repo.saveRequest({ ...req, neededBy: card.deliveryDate });
-        log(i, buyerActor(who), `${who} accepted a later delivery: ${card.deliveryDate} instead of ${before}.`, { step: "compromise", optionId, givesUp: card.givesUp, by: who, relayedBy: session.agentId });
+        log(i, verified ? buyerActor(who) : agentActor(session), `${who} accepted a later delivery (${howText(via)}): ${card.deliveryDate} instead of ${before}.`, { step: "compromise", optionId, givesUp: card.givesUp, by: who, relayedBy: session.agentId, channel: via.channel, verified });
       }
-      return view(await quoteOption(session, i, card, who));
+      return view(await quoteOption(session, i, card, who, undefined, via));
     },
 
     async kitchen(session: AgentSession) {
       return kitchenView(await profileOf(session));
     },
   };
+}
+
+function howText(via: HumanVia): string {
+  return via.words ? `${CHANNEL_TEXT[via.channel]}, in their words: "${via.words.slice(0, 200)}"` : CHANNEL_TEXT[via.channel];
+}
+
+function unverifiedNote(u: UnverifiedConfirmation): string {
+  return `Not verified: the agent relayed that ${u.by} confirmed this as intended. Check it before signing: ${u.message}`;
 }
 
 /** The product the request is about, if any: named, repeated, or the kitchen's usual (a habit, not a requirement). */
@@ -535,12 +617,40 @@ function goalFromMemory(need: StructuredNeed, stated: StatedPreference[], learne
   return {};
 }
 
-/** Why nothing can be offered, leading with what the buyer can act on (a passed cut-off, a date too early). */
-function noOptionReason(excluded: Exclusion[], deliverBy: string | undefined): string {
-  const cutoff = excluded.filter((e) => e.code === "cutoff_passed");
-  if (cutoff.length && cutoff.length === excluded.length) return `Nothing can arrive by ${deliverBy ?? "the date asked"}: the order cut-off has passed for every product priced (${cutoff.map((e) => e.productId).join(", ")}).`;
-  if (excluded.length) return `Nothing on the short list can be delivered in time within the mandate: ${[...new Set(excluded.map((e) => e.reason))].slice(0, 3).join("; ")}.`;
-  return "Nothing in stock can be delivered in time within the mandate.";
+/**
+ * Why nothing can be offered, naming the real blocker first. A product can be excluded for several reasons on the
+ * way (out of stock, then too late); what decides is the last gate the best plans hit. The weekly budget and a
+ * passed order cut-off lead whenever they removed an option, because the buyer can act on them (withdraw or sign
+ * a waiting order, order earlier); then the reason that removed the most products.
+ */
+export function noOptionReason(
+  excluded: Exclusion[],
+  deliverBy: string | undefined,
+  budget?: { mandate: { weeklyBudgetCents: number }; spentCents: number; heldCents: number; held: { orderId: string; totalCents: number; expiresAt: string }[] },
+): string {
+  if (!excluded.length) return "Nothing in stock can be delivered in time within the mandate.";
+  const by = new Map<string, Exclusion[]>();
+  for (const e of excluded) {
+    if (e.code === "compromise") continue;
+    const k = e.code ?? "other";
+    by.set(k, [...(by.get(k) ?? []), e]);
+  }
+  const overBudget = by.get("over_budget") ?? [];
+  const cutoff = by.get("cutoff_passed") ?? [];
+  const others = [...by.entries()].filter(([k]) => k !== "over_budget" && k !== "cutoff_passed").sort((a, b) => b[1].length - a[1].length);
+  const parts: string[] = [];
+  if (overBudget.length) {
+    const b = budget;
+    const committed = b ? b.spentCents - b.heldCents : undefined;
+    const left = b && committed !== undefined ? Math.max(0, b.mandate.weeklyBudgetCents - committed) : undefined;
+    parts.push(
+      `the weekly budget: ${overBudget.length === 1 ? "the option that fits" : `${overBudget.length} options that fit`} would cost more than ${left !== undefined ? `the ${formatEur(left)} left of ${formatEur(b!.mandate.weeklyBudgetCents)} this week (${formatEur(committed!)} already committed)` : "is left this week"}${b && b.heldCents > 0 ? `, and ${formatEur(b.heldCents)} more is held by ${b.held.map((h) => h.orderId).join(", ")} waiting for sign-off: withdraw it or have it decided, or it stops holding money when its price expires` : ""}`,
+    );
+  }
+  if (cutoff.length) parts.push(`the order cut-off has passed for ${cutoff.map((e) => e.productId).join(", ")}, so ${cutoff.length > 1 ? "they" : "it"} cannot arrive by ${deliverBy ?? "the date asked"}`);
+  for (const [, list] of others) parts.push([...new Set(list.map((e) => `${e.productId}: ${e.reason}`))].slice(0, 2).join("; "));
+  if (!parts.length) return "Nothing on the short list can be delivered in time within the mandate.";
+  return `Nothing fits. The blocker is ${parts[0]}.${parts.length > 1 ? ` Also: ${parts.slice(1, 3).join("; ")}.` : ""}`;
 }
 
 function lastAmount(profile: KitchenProfile, family: string) {

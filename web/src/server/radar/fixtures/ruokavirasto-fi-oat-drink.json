@@ -1,0 +1,60 @@
+{
+ "url": "https://www.ruokavirasto.fi/elintarvikkeet/ohjeita-kuluttajille/takaisinvedot-2023-/kaurajuoma-kahviin-25-dl--tuotteessa-sailyvyysongelma/",
+ "markdown": {
+  "requested": true,
+  "success": true,
+  "data": "# Kaurajuoma kahviin 2,5 dl -tuotteessa säilyvyysongelma\n\n2\\. huhtikuuta 2026\n\nRaisio ilmoittaa vetävänsä myynnistä yhden erän tuotetta **Elovena® kaurajuoma kahviin, 2,5 dl**. Takaisinveto koskee erää, jonka parasta ennen -merkintä on **5.10.2026** (EAN-koodi 6411200000082). Osassa erän tuotteista säilyvyys ei vastaa vaatimuksia. Valmistajan mukaan laadultaan heikentyneet, virheelliset tuotteet ovat tunnistettavissa aistinvaraisesti ennen käyttöä.  \n\nNyt takaisinvedettävää erää on ollut myynnissä helmikuun loppupuolelta alkaen K- ja S-ryhmien myymälöissä. \n\n[Valmistajan tiedote](https://elovena.fi/uutiset/takaisinveto-yksi-era-elovena-kaurajuoma-kahviin-25-desilitran-pakkauksissa-vedetaan-takaisin/ 'Valmistajan tiedote')\n\nLisätietoja: Raisio Oyj: 02 4432 022 (tiistai-torstai kello 9−11) \n\nAsiaa hoitaa Ruokavirastossa erityisasiantuntija Mika Varjonen, p. 050 38 68 416, etunimi.sukunimi@ruokavirasto.fi. \n\nKuva tuotteesta:  \n(Kuva: Raisio Oyj )"
+ },
+ "json": {
+  "requested": true,
+  "success": true,
+  "data": {
+   "title": "Kaurajuoma kahviin 2,5 dl -tuotteessa säilyvyysongelma",
+   "published": "2. huhtikuuta 2026",
+   "language": "fi",
+   "is_recall_notice": true,
+   "producer": {
+    "name": "Raisio",
+    "sentence": "Raisio ilmoittaa vetävänsä myynnistä yhden erän tuotetta **Elovena® kaurajuoma kahviin, 2,5 dl**."
+   },
+   "products": [
+    {
+     "name": "Elovena® kaurajuoma kahviin",
+     "brand": "Elovena®",
+     "producer": "Raisio",
+     "pack_size": "2,5 dl",
+     "eans": [
+      "6411200000082"
+     ],
+     "best_before": [
+      "5.10.2026"
+     ],
+     "batch_codes": [],
+     "sentence": "Takaisinveto koskee erää, jonka parasta ennen -merkintä on **5.10.2026** (EAN-koodi 6411200000082)."
+    }
+   ],
+   "hazard": {
+    "category": "spoilage",
+    "allergens": [],
+    "sentence": "Osassa erän tuotteista säilyvyys ei vastaa vaatimuksia.",
+    "english": "The shelf life of some products in the batch does not meet requirements."
+   },
+   "consumer_action": null,
+   "business_action": null,
+   "summary_english": "Raisio is recalling one batch of Elovena® oat drink for coffee, 2.5 dl. Some products in the batch do not meet shelf-life requirements."
+  }
+ },
+ "parsed": null,
+ "metadata": {
+  "title": "Kaurajuoma kahviin 2,5 dl -tuotteessa säilyvyysongelma",
+  "language": "fi"
+ },
+ "cache_metadata": {
+  "status": "hit",
+  "age_ms": 286389
+ },
+ "key_metadata": {
+  "credits_consumed": 5,
+  "credits_remaining": 50990
+ }
+}

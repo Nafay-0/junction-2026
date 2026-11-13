@@ -1,6 +1,6 @@
 "use client";
 
-import { amount, attr, day, eurShort, roleLabel, shortProduct } from "../../_ui/plain";
+import { attr, day, measure, moneyShort, roleLabel, shortProduct } from "../../_ui/plain";
 import type { Entry, KitchenInfo, KitchenMemory } from "./types";
 
 /** How many times this request touched the partner's live price and availability service, from the ledger. */
@@ -27,7 +27,7 @@ export function LiveCalls({ entries, active }: { entries: Entry[]; active: boole
         Live price checks for this request
       </h2>
       <p className="mt-1 flex items-baseline gap-3">
-        <span className="font-display text-6xl font-bold leading-none tabular">{calls}</span>
+        <span className="display text-[3.6rem] text-petrol-deep tabular">{calls}</span>
         <span className="text-[0.98rem] leading-snug text-ink-soft">
           {!active
             ? "Nothing asked yet."
@@ -47,19 +47,28 @@ export function MandateBox({ k }: { k: KitchenInfo }) {
       <h2 id="mandate" className="text-[0.95rem] font-semibold">
         What the agent may do alone
       </h2>
-      <p className="mt-1 font-display text-3xl font-bold leading-tight tabular">{eurShort(m.perOrderLimitCents)} per order</p>
+      <p className="mt-1 display text-[2rem] tabular">{moneyShort(m.perOrderLimitCents)} per order</p>
       <ul className="mt-2 space-y-1 text-[0.98rem] leading-snug">
-        <li>Weekly budget {eurShort(m.weeklyBudgetCents)}, never more.</li>
+        <li>Weekly budget {moneyShort(m.weeklyBudgetCents)}, never more.</li>
         <li>Only {m.allowedCategories.map(attr).join(", ")}.</li>
         {m.requiredAttributes.length > 0 && <li>Always {m.requiredAttributes.map(attr).join(", ")}.</li>}
         {m.forbiddenAllergens.length > 0 && <li>Never {m.forbiddenAllergens.map(attr).join(" or ")}.</li>}
-        <li>{m.substitution.rule === "none" ? "No substitutes." : `Substitutes need a person, and at most ${m.substitution.maxPriceIncreasePct} % dearer.`}</li>
+        <li>
+          {m.substitution.rule === "none"
+            ? "No substitutes."
+            : m.substitution.rule === "needs_approval"
+              ? `Substitutes need a person, and at most ${m.substitution.maxPriceIncreasePct} % dearer.`
+              : m.substitution.rule === "within_preferences"
+                ? `Like-for-like substitutes within the kitchen's preferences alone; others need a person.`
+                : "Only like-for-like substitutes."}
+        </li>
+        <li>No splitting one need into smaller orders.</li>
       </ul>
       <h3 className="mt-3 text-[0.95rem] font-semibold">Above that, a person signs off</h3>
       <ul className="mt-1 space-y-1 text-[0.98rem]">
         {m.approvers.map((a) => (
           <li key={a.role}>
-            {a.name}, {roleLabel(a.role)}: up to {eurShort(a.maxApprovalCents)}
+            {a.name}, {roleLabel(a.role)}: up to {moneyShort(a.maxApprovalCents)}
           </li>
         ))}
       </ul>
@@ -71,11 +80,11 @@ export function Memory({ memory, error, family }: { memory: KitchenMemory | unde
   // The family this request is about first, then the ones the kitchen orders most.
   const families = [...(memory?.families ?? [])].sort((a, b) => Number(b.family === family) - Number(a.family === family) || b.orders - a.orders);
   return (
-    <section aria-labelledby="memory" className="bg-paper p-4">
+    <section aria-labelledby="memory" className="bg-lavender p-4">
       <h2 id="memory" className="text-[0.95rem] font-semibold">
         What Dock remembers about this kitchen
       </h2>
-      {!memory && !error && <div className="mt-2 h-24 animate-pulse bg-concrete" aria-label="Loading the kitchen's memory" />}
+      {!memory && !error && <div className="mt-2 h-24 animate-pulse bg-mist" aria-label="Loading the kitchen's memory" />}
       {error && !memory && <p className="mt-1 text-ink-soft">Could not load the kitchen&apos;s memory: {error}</p>}
       {memory && memory.families.length === 0 && memory.stated.length === 0 && (
         <p className="mt-1 text-[0.98rem] leading-snug text-ink-soft">
@@ -97,12 +106,12 @@ export function Memory({ memory, error, family }: { memory: KitchenMemory | unde
       {families.map((f) => {
         const last = f.lastOrder;
         return (
-          <div key={f.family} className="mt-3 border-t border-ink/15 pt-2">
-            <h3 className="font-display text-xl font-bold capitalize">{attr(f.family)}</h3>
+          <div key={f.family} className="mt-3 border-t border-line pt-2">
+            <h3 className="display text-[1.4rem] capitalize">{attr(f.family)}</h3>
             <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[0.98rem] leading-snug">
               <dt className="text-ink-soft">Usual</dt>
               <dd className="font-semibold tabular">
-                about {amount(f.usual.amount, f.usual.unit)} <span className="font-normal text-ink-soft">({f.orders} orders)</span>
+                about {measure(f.usual.amount, f.usual.unit)} <span className="font-normal text-ink-soft">({f.orders} orders)</span>
               </dd>
               <dt className="text-ink-soft">Last order</dt>
               <dd>

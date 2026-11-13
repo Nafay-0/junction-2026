@@ -192,3 +192,12 @@ describe("checkNeed", () => {
     expect(checkNeed(need({ deliverBy: "2026-11-18" }), ctx())).toEqual([]);
   });
 });
+
+describe("suggested amounts in packs (QA improvement: no fractional packs)", () => {
+  it("keeps a count of packs only when it is whole, else says it in litres", async () => {
+    const { correctionAmount } = await import("./concerns");
+    expect(correctionAmount(1105, 10, "pack", "L")).toEqual({ amount: 1105, unit: "L" }); // never "110.5 packs"
+    expect(correctionAmount(1100, 10, "pack", "L")).toEqual({ amount: 110, unit: "pack" });
+    expect(correctionAmount(100, undefined, "L", "L")).toEqual({ amount: 100, unit: "L" });
+  });
+});

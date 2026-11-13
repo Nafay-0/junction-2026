@@ -1,0 +1,784 @@
+{
+ "id": "chanterelles-week",
+ "kitchen": "kaari",
+ "text": "Next week's lunch menu around chanterelles: two dishes, 250 covers a day, Wednesday and Thursday",
+ "now": "2026-11-13T21:56:44.855Z",
+ "model": "anthropic:claude-sonnet-5-5",
+ "ms": 14457,
+ "costUsd": 0.107702,
+ "calls": [
+  {
+   "step": "outline",
+   "ms": 4933,
+   "tokens": {
+    "input": 2124,
+    "output": 530,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.009548
+  },
+  {
+   "step": "dish 1",
+   "ms": 8926,
+   "tokens": {
+    "input": 1813,
+    "output": 1173,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.015356
+  },
+  {
+   "step": "dish 2",
+   "ms": 9523,
+   "tokens": {
+    "input": 1841,
+    "output": 1338,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.017062
+  },
+  {
+   "step": "pick",
+   "ms": 5846,
+   "tokens": {
+    "input": 1339,
+    "output": 136,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.004038
+  },
+  {
+   "step": "pick",
+   "ms": 1932,
+   "tokens": {
+    "input": 1233,
+    "output": 97,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003436
+  },
+  {
+   "step": "pick",
+   "ms": 4603,
+   "tokens": {
+    "input": 1218,
+    "output": 129,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003726
+  },
+  {
+   "step": "pick",
+   "ms": 6692,
+   "tokens": {
+    "input": 1301,
+    "output": 155,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.004152
+  },
+  {
+   "step": "pick",
+   "ms": 2284,
+   "tokens": {
+    "input": 1147,
+    "output": 113,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003424
+  },
+  {
+   "step": "pick",
+   "ms": 2621,
+   "tokens": {
+    "input": 1450,
+    "output": 146,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00436
+  },
+  {
+   "step": "pick",
+   "ms": 2182,
+   "tokens": {
+    "input": 1364,
+    "output": 109,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003818
+  },
+  {
+   "step": "fix chicken_stock",
+   "ms": 5034,
+   "tokens": {
+    "input": 2008,
+    "output": 604,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.010056
+  },
+  {
+   "step": "fix chanterelle",
+   "ms": 6251,
+   "tokens": {
+    "input": 1948,
+    "output": 784,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.011736
+  },
+  {
+   "step": "pick",
+   "ms": 2385,
+   "tokens": {
+    "input": 1062,
+    "output": 159,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003714
+  },
+  {
+   "step": "pick",
+   "ms": 2173,
+   "tokens": {
+    "input": 1042,
+    "output": 113,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003214
+  },
+  {
+   "step": "pick",
+   "ms": 2057,
+   "tokens": {
+    "input": 1030,
+    "output": 128,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00334
+  },
+  {
+   "step": "pick",
+   "ms": 2008,
+   "tokens": {
+    "input": 1029,
+    "output": 115,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003208
+  },
+  {
+   "step": "pick",
+   "ms": 2253,
+   "tokens": {
+    "input": 1032,
+    "output": 145,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003514
+  }
+ ],
+ "raw": {
+  "isFoodOrderRequest": true,
+  "declineReason": null,
+  "covers": 250,
+  "serviceDate": null,
+  "occasion": "Lunch menu around chanterelles, Wednesday and Thursday next week",
+  "requiredClaims": [],
+  "forbiddenAllergens": [],
+  "assumptions": [
+   "Chef gave only a key ingredient, so two dishes were chosen: one per day, both using chanterelles.",
+   "Next week's Wednesday and Thursday taken as 2026-11-18 and 2026-11-19.",
+   "Kitchen rule applies: all dairy must be lactose-free.",
+   "Chanterelle cream sauce and soup use lactose-free cream; both dishes share onion, chanterelles and cream.",
+   "250 covers on each day."
+  ],
+  "conflicts": [],
+  "dishes": [
+   {
+    "name": "Chanterelle soup",
+    "nameFi": "Kantarellikeitto",
+    "course": "soup",
+    "serviceDate": "2026-11-18",
+    "portion": "3.5 dl",
+    "method": "Sweat onion and chanterelles in oil, add stock and potato, simmer, finish with lactose-free cream and season.",
+    "ingredients": [
+     {
+      "key": "chanterelle",
+      "name": "Chanterelle",
+      "searchTerms": [
+       "kantarelli",
+       "suppilovahvero",
+       "chanterelle"
+      ],
+      "role": "main flavour of the soup",
+      "perCover": {
+       "amount": 60,
+       "unit": "g"
+      },
+      "yieldPct": 90,
+      "amountBasis": "about 60 g cleaned mushrooms per 3.5 dl soup",
+      "pantry": false,
+      "form": "any",
+      "avoid": [
+       "kuivattu",
+       "dried",
+       "säilyke"
+      ]
+     },
+     {
+      "key": "yellow_onion",
+      "name": "Yellow onion",
+      "searchTerms": [
+       "keltasipuli",
+       "sipuli",
+       "yellow onion"
+      ],
+      "role": "sweated base",
+      "perCover": {
+       "amount": 30,
+       "unit": "g"
+      },
+      "yieldPct": 90,
+      "amountBasis": "small onion share per portion",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "punasipuli",
+       "red",
+       "kuivattu",
+       "paistettu",
+       "fried"
+      ]
+     },
+     {
+      "key": "potato",
+      "name": "Potato",
+      "searchTerms": [
+       "peruna",
+       "kuorittu peruna",
+       "potato"
+      ],
+      "role": "body and light thickening",
+      "perCover": {
+       "amount": 60,
+       "unit": "g"
+      },
+      "yieldPct": 80,
+      "amountBasis": "about 60 g peeled potato per portion",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "ranskalainen",
+       "french fries",
+       "pakaste",
+       "muusi",
+       "mashed"
+      ]
+     },
+     {
+      "key": "lactose_free_cream",
+      "name": "Lactose-free cream",
+      "searchTerms": [
+       "laktoositon ruokakerma",
+       "laktoositon kerma",
+       "lactose-free cream"
+      ],
+      "role": "finishing cream",
+      "perCover": {
+       "amount": 50,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 1.5 dl cream per 1 l soup",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "kasvi",
+       "kaura",
+       "oat",
+       "soija",
+       "vispikerma sokeroitu"
+      ]
+     },
+     {
+      "key": "vegetable_stock_concentrate",
+      "name": "Vegetable stock concentrate",
+      "searchTerms": [
+       "kasvisliemifondi",
+       "kasvisliemikuutio",
+       "vegetable stock concentrate"
+      ],
+      "role": "soup liquid base",
+      "perCover": {
+       "amount": 4,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "concentrate for about 3 dl stock",
+      "pantry": false,
+      "form": "any",
+      "avoid": [
+       "valmis keitto",
+       "soup ready"
+      ]
+     },
+     {
+      "key": "rapeseed_oil",
+      "name": "Rapeseed oil",
+      "searchTerms": [
+       "rypsiöljy",
+       "rapeseed oil"
+      ],
+      "role": "sweating fat",
+      "perCover": {
+       "amount": 5,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "for sweating onion and mushrooms",
+      "pantry": true,
+      "form": "any",
+      "avoid": [
+       "oliiviöljy",
+       "olive"
+      ]
+     },
+     {
+      "key": "salt",
+      "name": "Salt",
+      "searchTerms": [
+       "suola",
+       "salt"
+      ],
+      "role": "seasoning",
+      "perCover": {
+       "amount": 2,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "seasoning to taste",
+      "pantry": true,
+      "form": "any",
+      "avoid": []
+     },
+     {
+      "key": "white_pepper",
+      "name": "White pepper",
+      "searchTerms": [
+       "valkopippuri",
+       "white pepper"
+      ],
+      "role": "seasoning",
+      "perCover": {
+       "amount": 0.3,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "light seasoning",
+      "pantry": true,
+      "form": "dried",
+      "avoid": [
+       "rouhe",
+       "kokonainen",
+       "whole"
+      ]
+     }
+    ]
+   },
+   {
+    "name": "Chicken in chanterelle cream sauce with potatoes",
+    "nameFi": "Kanaa kantarellikermakastikkeessa ja keitetyt perunat",
+    "course": "main",
+    "serviceDate": "2026-11-19",
+    "portion": "150 g chicken, 2 dl sauce, 200 g potatoes",
+    "method": "Pan-fry chicken and bake until done, make sauce from sauteed onion and chanterelles with stock and lactose-free cream, boil potatoes.",
+    "ingredients": [
+     {
+      "key": "chicken_breast_fillet",
+      "name": "Chicken breast fillet",
+      "searchTerms": [
+       "kanan rintafilee",
+       "broilerin rintafilee",
+       "chicken breast fillet"
+      ],
+      "role": "main protein, pan-fried and baked",
+      "perCover": {
+       "amount": 150,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "portion given: 150 g",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "savustettu",
+       "smoked",
+       "maustettu",
+       "marinated",
+       "suikale"
+      ]
+     },
+     {
+      "key": "chanterelle",
+      "name": "Chanterelle",
+      "searchTerms": [
+       "kantarelli",
+       "suppilovahvero",
+       "chanterelle"
+      ],
+      "role": "sauce flavour and body",
+      "perCover": {
+       "amount": 60,
+       "unit": "g"
+      },
+      "yieldPct": 90,
+      "amountBasis": "about 2 dl sauce with generous mushrooms, cleaned",
+      "pantry": false,
+      "form": "any",
+      "avoid": [
+       "kuivattu",
+       "dried",
+       "säilyke",
+       "suolattu"
+      ]
+     },
+     {
+      "key": "lactose_free_cream",
+      "name": "Lactose-free cream",
+      "searchTerms": [
+       "laktoositon kerma",
+       "laktoositon ruokakerma",
+       "lactose-free cream"
+      ],
+      "role": "sauce base",
+      "perCover": {
+       "amount": 120,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 60% of 2 dl sauce",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "kasvi",
+       "oat",
+       "vaahtokerma",
+       "jäätelö"
+      ]
+     },
+     {
+      "key": "yellow_onion",
+      "name": "Yellow onion",
+      "searchTerms": [
+       "keltasipuli",
+       "sipuli",
+       "yellow onion"
+      ],
+      "role": "sauteed sauce base",
+      "perCover": {
+       "amount": 25,
+       "unit": "g"
+      },
+      "yieldPct": 90,
+      "amountBasis": "small amount for 2 dl sauce",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "punasipuli",
+       "red",
+       "kuivattu",
+       "paistettu",
+       "fried"
+      ]
+     },
+     {
+      "key": "chicken_stock",
+      "name": "Chicken stock concentrate",
+      "searchTerms": [
+       "kanaliemifondi",
+       "kanaliemijauhe",
+       "chicken stock concentrate"
+      ],
+      "role": "sauce liquid and depth",
+      "perCover": {
+       "amount": 4,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "concentrate for about 0.5 dl stock",
+      "pantry": false,
+      "form": "any",
+      "avoid": [
+       "valmis liemi",
+       "kasvis",
+       "vegetable"
+      ]
+     },
+     {
+      "key": "potato",
+      "name": "Potato",
+      "searchTerms": [
+       "peruna",
+       "kiinteä peruna",
+       "potato"
+      ],
+      "role": "boiled side",
+      "perCover": {
+       "amount": 200,
+       "unit": "g"
+      },
+      "yieldPct": 80,
+      "amountBasis": "portion given: 200 g peeled",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "kuorittu",
+       "peeled",
+       "uuni",
+       "french fries",
+       "ranskalaiset",
+       "jauhe"
+      ]
+     },
+     {
+      "key": "rapeseed_oil",
+      "name": "Rapeseed oil",
+      "searchTerms": [
+       "rypsiöljy",
+       "rapeseed oil"
+      ],
+      "role": "pan-frying chicken and sauteing",
+      "perCover": {
+       "amount": 8,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "frying chicken, onion and mushrooms",
+      "pantry": true,
+      "form": "any",
+      "avoid": []
+     },
+     {
+      "key": "salt",
+      "name": "Salt",
+      "searchTerms": [
+       "suola",
+       "salt"
+      ],
+      "role": "seasoning",
+      "perCover": {
+       "amount": 4,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "chicken, sauce and potato water",
+      "pantry": true,
+      "form": "any",
+      "avoid": []
+     },
+     {
+      "key": "black_pepper",
+      "name": "Black pepper",
+      "searchTerms": [
+       "mustapippuri",
+       "black pepper"
+      ],
+      "role": "seasoning",
+      "perCover": {
+       "amount": 0.3,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "light seasoning",
+      "pantry": true,
+      "form": "dried",
+      "avoid": []
+     }
+    ]
+   }
+  ]
+ },
+ "fixes": {
+  "chicken_stock": {
+   "options": [
+    {
+     "kind": "substitute",
+     "title": "Vegetable stock concentrate",
+     "effect": "Gives the sauce liquid and savoury depth with a slightly less chicken-like flavour; chicken and cream carry the dish.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "vegetable_stock_concentrate",
+      "name": "Vegetable stock concentrate",
+      "searchTerms": [
+       "vegetable bouillon",
+       "kasvislientä",
+       "kasvisliemifondi",
+       "grönsaksbuljong"
+      ],
+      "role": "sauce liquid and depth",
+      "perCover": {
+       "amount": 4,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "concentrate or powder, made up with water for the sauce",
+      "form": "any",
+      "avoid": [
+       "lactose",
+       "milk"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "substitute",
+     "title": "Chicken fond or stock",
+     "effect": "Keeps the chicken flavour in the sauce; ready liquid stock is needed in a larger amount than concentrate.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "chicken_stock_liquid",
+      "name": "Chicken stock, ready liquid or fond",
+      "searchTerms": [
+       "chicken stock",
+       "kanafondi",
+       "kanaliemi",
+       "kycklingfond"
+      ],
+      "role": "sauce liquid and depth",
+      "perCover": {
+       "amount": 60,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "ready-to-use liquid stock replacing concentrate plus water",
+      "form": "any",
+      "avoid": [
+       "lactose",
+       "milk"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "change_amount",
+     "title": "Less stock, more salt-seasoning",
+     "effect": "Halves the stock and reduces the sauce liquid; the sauce stays creamy but is a little less deep.",
+     "changesDish": false,
+     "ingredient": null,
+     "perCover": 2
+    }
+   ]
+  },
+  "chanterelle": {
+   "options": [
+    {
+     "kind": "substitute",
+     "title": "Cultivated mushrooms instead",
+     "effect": "Champignon or oyster mushrooms give a milder, less fruity soup but the method stays the same.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "mushroom_cultivated",
+      "name": "Cultivated mushroom (champignon or oyster)",
+      "searchTerms": [
+       "herkkusieni",
+       "osterivinokas",
+       "kuohusieni",
+       "champignon"
+      ],
+      "role": "main flavour of the soup",
+      "perCover": {
+       "amount": 70,
+       "unit": "g"
+      },
+      "yieldPct": 95,
+      "amountBasis": "fresh, cleaned weight, sliced",
+      "form": "fresh",
+      "avoid": [
+       "marinated",
+       "pickled",
+       "canned"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "substitute",
+     "title": "Dried funnel chanterelle boost",
+     "effect": "Part of the mushrooms is replaced with dried funnel chanterelle or porcini, adding deep forest flavour at lower cost.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "mushroom_dried_forest",
+      "name": "Dried forest mushroom (funnel chanterelle or porcini)",
+      "searchTerms": [
+       "suppilovahvero kuivattu",
+       "herkkutatti kuivattu",
+       "kuivattu sieni",
+       "dried porcini"
+      ],
+      "role": "main flavour of the soup",
+      "perCover": {
+       "amount": 6,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "dried weight, soaked and added with the soaking liquid",
+      "form": "dried",
+      "avoid": [
+       "seasoned",
+       "mixed with salt"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "change_dish",
+     "title": "Mushroom soup",
+     "effect": "Soup becomes a mixed mushroom soup with cultivated mushrooms and no chanterelle flavour; the guest sees a different soup.",
+     "changesDish": true,
+     "ingredient": {
+      "key": "mushroom_mixed",
+      "name": "Mixed cultivated mushrooms",
+      "searchTerms": [
+       "sienisekoitus",
+       "herkkusieni",
+       "osterivinokas",
+       "metsäsienisekoitus"
+      ],
+      "role": "main flavour of the soup",
+      "perCover": {
+       "amount": 70,
+       "unit": "g"
+      },
+      "yieldPct": 95,
+      "amountBasis": "fresh or frozen, cleaned weight",
+      "form": "any",
+      "avoid": [
+       "marinated",
+       "pickled",
+       "canned"
+      ]
+     },
+     "perCover": null
+    }
+   ]
+  }
+ }
+}

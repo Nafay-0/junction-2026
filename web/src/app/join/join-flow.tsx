@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, passkeyProblem } from "../_client/api";
+import { fiMoney } from "../_ui/plain";
+import { PhoneNotice, PhoneProblem, bigButton } from "../_ui/phone";
 
 type Identity = { kitchenName: string; city: string; approverName: string; agentName: string };
 type Start = {
@@ -81,27 +83,27 @@ export function JoinFlow() {
     await finish({ response });
   }
 
-  if (phase === "loading") return <p className="mt-20 text-center text-neutral-600">Setting up your kitchen…</p>;
+  if (phase === "loading") return <p className="mt-20 text-center text-ink-soft">Setting up your kitchen…</p>;
   if (phase === "full" || phase === "offline")
     return (
-      <Notice title={problem?.title ?? "Can't reach Dock"} body={problem?.body ?? ""}>
-        <button className="mt-6 h-14 w-full rounded-xl bg-neutral-900 text-lg font-semibold text-white" onClick={() => void load()}>
+      <PhoneNotice title={problem?.title ?? "Can't reach Dock"} body={problem?.body ?? ""}>
+        <button className={`mt-6 ${bigButton("dark")}`} onClick={() => void load()}>
           Try again
         </button>
-      </Notice>
+      </PhoneNotice>
     );
   if (!start) return null;
 
   if (start.current && !skipCurrent)
     return (
-      <Notice title={`You are already ${start.current.approverName}`} body={`Purchasing manager at ${start.current.kitchenName}.`}>
-        <Link href="/approver" className="mt-6 flex h-14 w-full items-center justify-center rounded-xl bg-neutral-900 text-lg font-semibold text-white">
+      <PhoneNotice title={`You are already ${start.current.approverName}`} body={`Purchasing manager at ${start.current.kitchenName}.`}>
+        <Link href="/approver" className={`mt-6 ${bigButton("go")}`}>
           Go to my screen
         </Link>
-        <button className="mt-3 h-12 w-full rounded-xl border border-neutral-300 text-base" onClick={() => setSkipCurrent(true)}>
+        <button className={`mt-3 ${bigButton("secondary")} min-h-14 text-[1.05rem]`} onClick={() => setSkipCurrent(true)}>
           Start over with a new kitchen
         </button>
-      </Notice>
+      </PhoneNotice>
     );
 
   const id = start.identity;
@@ -109,54 +111,38 @@ export function JoinFlow() {
   const canPasskey = supported && start.secureOrigin;
   return (
     <div className="flex flex-1 flex-col">
-      <p className="text-base font-medium uppercase tracking-wide text-neutral-500">Dock demo</p>
-      <h1 className="mt-2 text-3xl font-bold leading-tight">
+      <p className="text-[1rem] font-semibold text-petrol">A demo kitchen, yours for 90 minutes</p>
+      <h1 className="display mt-2 text-[2.6rem] leading-[0.98] text-ink">
         Become the purchasing manager of {id.kitchenName}, {id.city}
       </h1>
-      <p className="mt-4">
-        You will be <strong>{id.approverName}</strong>. The kitchen&apos;s AI buyer may spend up to {start.perOrderLimit} per order on its own. Anything bigger, or any
-        swap to a different product, comes to this phone for your OK.
-      </p>
-      <p className="mt-4 text-base text-neutral-600">
-        One tap creates a passkey on this phone: Face ID or your fingerprint, no name, no email, no password. It is deleted from Dock when the demo kitchen closes.
-      </p>
+      <div className="mt-5 bg-paper p-4">
+        <p className="leading-snug">
+          You will be <strong>{id.approverName}</strong>. The kitchen&apos;s AI buyer may spend up to <strong className="tabular">{fiMoney(start.perOrderLimit)}</strong> per order on its own. Anything bigger, or any swap to a different product, stops at the gate and comes to this phone for your OK.
+        </p>
+      </div>
+      <ol className="mt-5 space-y-3">
+        {["Create a passkey: one tap, Face ID or fingerprint.", "Keep this screen open.", "When the agent goes beyond its limit, the request opens here. You approve or decline."].map((t, i) => (
+          <li key={t} className="grid grid-cols-[2rem_1fr] items-baseline gap-2 leading-snug">
+            <span className="display flex size-7 items-center justify-center border-2 border-petrol text-[1rem] text-petrol">{i + 1}</span>
+            {t}
+          </li>
+        ))}
+      </ol>
+      <p className="mt-5 text-[0.95rem] leading-snug text-ink-soft">No name, no email, no password. The passkey is deleted from Dock when the demo kitchen closes.</p>
 
-      {problem && phase === "failed" && (
-        <div role="alert" className="mt-6 rounded-xl border border-red-300 bg-red-50 p-4">
-          <p className="font-semibold text-red-900">{problem.title}</p>
-          <p className="mt-1 text-base text-red-900">{problem.body}</p>
-        </div>
-      )}
-      {!canPasskey && (
-        <div role="alert" className="mt-6 rounded-xl border border-amber-300 bg-amber-50 p-4 text-base text-amber-950">
-          {start.secureOrigin ? "This browser can't create passkeys. Try Safari on iPhone or Chrome on Android." : "Passkeys only work over https. Open the https address of this demo."}
-        </div>
-      )}
+      {problem && phase === "failed" && <PhoneProblem title={problem.title} body={problem.body} />}
+      {!canPasskey && <PhoneProblem quiet title="Passkeys are not available here" body={start.secureOrigin ? "This browser can't create passkeys. Try Safari on iPhone or Chrome on Android." : "Passkeys only work over https. Open the https address of this demo."} />}
 
       <div className="mt-auto pt-8">
-        <button
-          className="h-16 w-full rounded-2xl bg-green-700 text-xl font-semibold text-white disabled:opacity-50"
-          onClick={() => void createPasskey()}
-          disabled={busy || !canPasskey}
-        >
+        <button className={bigButton("go")} onClick={() => void createPasskey()} disabled={busy || !canPasskey}>
           {phase === "prompt" ? "Waiting for Face ID or fingerprint…" : phase === "saving" ? "Setting up…" : "Create my passkey and start"}
         </button>
         {start.demoTapEnabled && (phase === "failed" || !canPasskey) && (
-          <button className="mt-3 h-14 w-full rounded-2xl border-2 border-dashed border-amber-500 text-base text-amber-900" disabled={busy} onClick={() => void finish({ fallback: true })}>
+          <button className={`mt-3 ${bigButton("demo")} min-h-14 text-[1rem]`} disabled={busy} onClick={() => void finish({ fallback: true })}>
             Demo only: continue without a passkey (your approvals will be marked unverified)
           </button>
         )}
       </div>
-    </div>
-  );
-}
-
-function Notice({ title, body, children }: { title: string; body: string; children?: React.ReactNode }) {
-  return (
-    <div className="mt-16">
-      <h1 className="text-3xl font-bold">{title}</h1>
-      <p className="mt-3">{body}</p>
-      {children}
     </div>
   );
 }

@@ -21,6 +21,7 @@ import { formatDay, localNow, nextDeliveryDay } from "@/core/kitchen";
 import { KITCHEN_ORG, demoKitchenKeyPair, demoKitchenMandate } from "@/server/demo-kitchen";
 import { DEMO_ORG, demoMandate, demoOrgKeyPair } from "@/server/dev-fixtures";
 import { localFetch } from "@/server/local-transport";
+import { shutdownAiven } from "@/server/aiven";
 import { getRuntime } from "@/server/runtime";
 import { scenarioNeed } from "@/server/sandbox-scenario";
 import { DockClient, type Offer, type OptionCard, type Product, type Reply, type Step } from "./lib/client";
@@ -132,10 +133,11 @@ async function happyPath(): Promise<void> {
     indent([`authorised by: ${confirmation.authorisedBy.kind === "mandate" ? "the mandate" : `${confirmation.authorisedBy.name} (${confirmation.authorisedBy.role})`}; ledger head at commit: #${confirmation.ledgerHead.seq}`]);
   }
 
-  const ledger = (await base.ledger({ requestId: s.requestId })).body;
+  // A kitchen's ledger entries are its own: read with the agent's mandate (strangers see only the verification).
+  const ledger = (await agent.ledger({ requestId: s.requestId })).body;
   step("ledger", `Buyer's view (chain verified: ${ledger.verification.ok}):`);
   indent(ledger.explanation);
-  const wholesaler = (await base.ledger({ requestId: s.requestId, view: "wholesaler" })).body;
+  const wholesaler = (await agent.ledger({ requestId: s.requestId, view: "wholesaler" })).body;
   step("ledger", "Wholesaler's view of the same chain (no kitchen memory):");
   indent(wholesaler.explanation);
   say(`\n      Buyer interruptions before options: ${interruptions}. Live price/availability calls for this request: ${ledger.catalog.liveCalls - callsBefore} (partner HTTP so far: ${JSON.stringify(ledger.catalog.upstream ?? "seed, none")}).`);
@@ -259,7 +261,7 @@ async function returningKitchen(): Promise<void> {
     await orderAndApprove(agent, s);
   } else showStep(s);
 
-  const ledger = (await base.ledger({ requestId: requestB })).body;
+  const ledger = (await agent.ledger({ requestId: requestB })).body;
   step("ledger", `Request (b), every step in plain language (chain verified: ${ledger.verification.ok}):`);
   indent(ledger.explanation);
 }
@@ -406,13 +408,27 @@ async function attacks(): Promise<void> {
   step("split", `One need, two orders of ${formatEur(half * roomyPrice)} under the €200 limit: the first ${one.body.order.status}, the second ${two.body.order.status}.`);
   indent(two.body.order.decision.rules.filter((r) => r.rule === "order_splitting" && r.outcome !== "pass").map((r) => `order_splitting (${r.outcome}): ${(r as { reason?: string }).reason ?? ""}`));
 
-  const ledger = (await base.ledger()).body;
+  const ledger = await fullLedger();
   const copy = structuredClone(ledger.entries) as LedgerEntry[];
   const victim = copy.findIndex((e) => e.type === "decision" && (e.data as { outcome: string }).outcome === "reject");
   (copy[victim].data as { outcome: string }).outcome = "auto_approve";
   const check = verifyLedger(copy);
   step("ledger", `Full chain verified: ${ledger.verification.ok} (${ledger.entries.length} entries).`);
   say(`      Someone edits entry #${copy[victim].seq} to say "auto_approve": ${check.ok ? "not detected?!" : `detected (${check.problem} at #${check.brokenAt})`}.`);
+}
+
+/**
+ * The whole chain, as the wholesaler's operations desk reads it: in process straight from the runtime; against a
+ * server through the operations session (DOCK_OPS_PASSCODE when the server sets one).
+ */
+async function fullLedger(): Promise<{ verification: { ok: boolean }; entries: unknown[] }> {
+  if (urlFlag < 0) {
+    const { dock } = await getRuntime();
+    return { verification: dock.ledger.verify(), entries: dock.ledger.entries() };
+  }
+  const enter = await fetch(new URL("/ops-api/session", baseUrl), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ passcode: process.env.DOCK_OPS_PASSCODE, name: "Scripted demo" }) });
+  const cookie = (enter.headers.get("set-cookie") ?? "").split(";")[0];
+  return (await (await fetch(new URL("/api/v1/ledger", baseUrl), { headers: { cookie } })).json()) as { verification: { ok: boolean }; entries: unknown[] };
 }
 
 async function main() {
@@ -425,7 +441,10 @@ async function main() {
   say(`\nPartner API use for the whole run: ${catalog.liveCalls} live lookups by Dock, ${catalog.upstream ? `${catalog.upstream.httpRequests} HTTP requests to the partner (${catalog.upstream.cacheHits} answered from the cache)` : "none (seed catalogue)"}; ${catalog.searches} local master-data searches.`);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+main()
+  // Flush and close the Aiven adapters, if any are switched on (no-op in memory), so the process can exit.
+  .then(() => shutdownAiven())
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });

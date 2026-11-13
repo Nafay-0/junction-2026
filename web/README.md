@@ -275,3 +275,26 @@ a virtual one); fault injection around `place_order` (we wrap the tool; a transp
 `check_availability` returning the core's `unavailable` list (we call `lookupAvailability`; the MCP tool should return
 it); and deterministic ids (`newId` uses random UUIDs; an injectable id source would make trajectories identical
 without aliasing).
+## Recall radar
+
+`/ops/radar` (code in `src/server/radar/`, sources and budgets in `src/server/radar/sources.ts`). It watches the
+Finnish Food Authority's recall list in Finnish and Swedish, producers' and retailers' notices on the open web, and
+EU RASFF alerts involving Finland; reads each notice into facts with the sentences they came from; matches them
+against the assortment in code; and holds a product a recent notice names by EAN, or by producer, exact name and
+pack. A held product is refused at quote, order and sign-off with the rule `recall_hold` and the notice as the reason;
+possible matches wait for staff. Drills publish a test notice on Dock's own page (`/ui-api/radar/drill`) in the
+authority's layout and go through the same path.
+
+| Partner | What it does here |
+|---|---|
+| Context.dev | Reads the authority's listing with a CSS parser (1 credit), each notice into Markdown and JSON against our schema (5 credits), and watches the listing with a page monitor every 30 min (read for free). |
+| Exa | Finds producers' and retailers' own notices by meaning and date, and corroborating pages for each authority notice. |
+
+```bash
+pnpm radar:gtins     # GTINs from the partner's product file -> .data/radar/gtins.json.gz (never commit)
+pnpm radar:check     # opt-in live check of every source; tests use recorded responses only
+```
+
+Without a public address (`RADAR_PUBLIC_URL` or `DOCK_PUBLIC_URL`) Context.dev cannot reach the drill page, so the
+radar reads it directly and says so on the screen. The hook the core should gain is described in
+`src/server/radar/gate.ts`.

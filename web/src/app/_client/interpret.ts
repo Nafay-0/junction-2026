@@ -17,7 +17,22 @@ import { STAND_IN_MODEL, StandInError, standInInterpret } from "./interpret-stan
  * OFFLINE EXAMPLE: interpret-standin.ts, a fixed-rule reader for the demo sentences. Used only when the buyer
  * asks for it after the model failed, or automatically on a server that has no interpret route at all (404).
  */
-export type Interpretation = { need: NeedInput; model: string; ms: number; offline: boolean; addedByBuyer?: ("item" | "quantity")[] };
+export type Interpretation = {
+  need: NeedInput;
+  model: string;
+  ms: number;
+  offline: boolean;
+  addedByBuyer?: ("item" | "quantity")[];
+  /** The earlier request a follow-up was resolved against, and the fields taken from it (checked by the server). */
+  basedOn?: { requestId: string; fields: string[] };
+  /** One plain line for the card when memory answered something that would otherwise have been asked. */
+  memoryLine?: string;
+  /** Set when no model read anything (a one-click repeat). */
+  noModel?: boolean;
+};
+
+/** An earlier request as the interpreter takes it (see EarlierRequestSchema on the server). */
+export type EarlierRequest = { id: string; at: string; text: string | null; need: Record<string, unknown> | null; ordered: string | null; deliveredOn: string | null };
 
 export type InterpretOutcome =
   | { kind: "ok"; interp: Interpretation }
@@ -28,14 +43,15 @@ export type InterpretOutcome =
 
 type Details = { missing?: string[]; partial?: NeedInput };
 
-export async function interpretNeed(kitchen: string, text: string): Promise<InterpretOutcome> {
+export async function interpretNeed(kitchen: string, text: string, earlier?: EarlierRequest[]): Promise<InterpretOutcome> {
   const started = performance.now();
-  const r = await api<{ need: NeedInput; model: string; ms: number }>("POST", `/ui-api/kitchens/${encodeURIComponent(kitchen)}/call`, {
+  const r = await api<{ need: NeedInput; model: string; ms: number; basedOn?: { requestId: string; fields: string[] } }>("POST", `/ui-api/kitchens/${encodeURIComponent(kitchen)}/call`, {
     method: "POST",
     path: "/api/v1/agent/interpret",
-    body: { text },
+    body: earlier?.length ? { text, earlier } : { text },
   });
-  if (r.ok && r.data.need) return { kind: "ok", interp: { need: { ...r.data.need, text: r.data.need.text ?? text }, model: r.data.model, ms: r.data.ms, offline: false } };
+  if (r.ok && r.data.need)
+    return { kind: "ok", interp: { need: { ...r.data.need, text: r.data.need.text ?? text }, model: r.data.model, ms: r.data.ms, offline: false, ...(r.data.basedOn ? { basedOn: r.data.basedOn } : {}) } };
   if (r.ok) return { kind: "unavailable", message: "The reader answered without a need." };
 
   const e = r.error;

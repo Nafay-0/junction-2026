@@ -1,3 +1,5 @@
+import { PRODUCT_NAME } from "./brand";
+
 /**
  * The quartered crash-test target: Dock's mark. Two opposite quarters filled, two open, in a ring.
  *
@@ -37,13 +39,13 @@ export function Target({ size = 24, tone = "ink", spin = false, className = "", 
   );
 }
 
-/** The word mark: target plus "Dock" in the condensed cut. */
+/** The word mark: target plus the product name in the condensed cut. */
 export function Wordmark({ tone = "ink", size = 28 }: { tone?: "ink" | "chalk"; size?: number }) {
   return (
     <span className="inline-flex items-center gap-2">
       <Target size={size} tone={tone} />
       <span className="font-display font-bold leading-none tracking-tight" style={{ fontSize: size * 1.05 }}>
-        Dock
+        {PRODUCT_NAME}
       </span>
     </span>
   );
