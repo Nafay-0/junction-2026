@@ -134,11 +134,11 @@ describe("real responses match the documented status codes and schemas", () => {
     let step = (await kitchen("POST", "/api/v1/intake", { need: { item: { text: "milk", category: "milk" }, quantity: { amount: 1000, unit: "L" }, deliverBy: day }, by: "Sanna" })).body.step;
     expect(step.state).toBe("needs_confirmation");
     expect((await kitchen("POST", `/api/v1/intake/${step.requestId}/choice`, { by: "Sanna", optionId: "opt_1" })).status).toBe(409);
-    step = (await kitchen("POST", step.next.path, { ...step.next.example, by: "Sanna" })).body.step;
+    step = (await kitchen("POST", step.next.path, { by: "Sanna", responses: step.concerns.map((c: { key: string; corrections: { id: string }[] }) => ({ key: c.key, choice: c.corrections[0].id })) })).body.step;
     expect(step.state).toBe("options_ready");
     step = (await kitchen("POST", `/api/v1/intake/${step.requestId}/answers`, { by: "Sanna", answers: [{ questionId: "optimise", optionId: "no_preference" }] })).body.step;
     expect(step.state).toBe("options_ready");
-    step = (await kitchen("POST", step.next.path, step.next.example)).body.step;
+    step = (await kitchen("POST", step.next.path, { by: "Sanna", optionId: step.options[0].optionId })).body.step;
     expect(step.state).toBe("quoted");
     await kitchen("GET", `/api/v1/intake/${step.requestId}`);
     expect((await kitchen("GET", "/api/v1/intake/req_nope")).status).toBe(404);

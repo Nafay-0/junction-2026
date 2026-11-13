@@ -70,9 +70,9 @@ describe("catalogue index", () => {
   });
 
   it("keeps every valid GTIN (sales unit and packaging levels), drops bad ones, and carries them through the file", () => {
-    const raw = { ...rawProduct({ id: "G1", names: { fi: "Testimaito 1 l" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1], ["PK", 12]] }), salesUnitGtin: "6408430000135" };
-    (raw.units as { gtin?: string }[])[1].gtin = "06408430000142"; // a case GTIN-14
-    (raw.units as { gtin?: string }[])[0].gtin = "6408430000136"; // bad check digit
+    const raw = { ...rawProduct({ id: "G1", names: { fi: "Testimaito 1 l" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1], ["PK", 12]] }), salesUnitGtin: "6408430000135" } as unknown as Record<string, unknown> & { units: { gtin?: string }[] };
+    raw.units[1].gtin = "06408430000142"; // a case GTIN-14
+    raw.units[0].gtin = "6408430000136"; // bad check digit
     const idx = buildCatalogIndex([raw, rawProduct({ id: "G2", names: { fi: "Ei koodia" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]] })], "", "", NOW);
     expect(idx.products.find((p) => p.id === "G1")!.gtins).toEqual(["6408430000135", "06408430000142"]);
     expect(idx.products.find((p) => p.id === "G2")!.gtins).toEqual([]);

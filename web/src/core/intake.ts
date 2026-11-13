@@ -698,22 +698,24 @@ export async function recordCommittedOrder(deps: { kitchens: KitchenRepository; 
   await deps.kitchens.saveProfile(recordOrder(profile, entry));
 }
 
-/** What leaves Dock for an intake: the state, what to show, and the next call to make. */
+/**
+ * What leaves Dock for an intake: the state, what to show, and the next call to make. The example body of a step
+ * that waits for the buyer never holds an answer: only placeholders a person's own choice replaces (an agent that
+ * copied a pre-filled correction would turn 1,000 L into 100 L without anyone deciding it).
+ */
 export function view(i: Intake) {
   const base = `/api/v1/intake/${i.requestId}`;
+  const BY = "<the buyer's name>";
   const next =
     i.state === "needs_confirmation"
-      ? { method: "POST", path: `${base}/concerns`, example: { by: "<person>", responses: i.concerns.map((c) => ({ key: c.key, choice: c.corrections[0]?.id ?? "confirm" })) } }
+      ? { method: "POST", path: `${base}/concerns`, example: { by: BY, responses: i.concerns.map((c) => ({ key: c.key, choice: `<the buyer's choice: ${[...(c.confirmable ? ["confirm"] : []), ...c.corrections.map((x) => x.id)].join(" or ")}>` })) } }
       : i.state === "needs_input"
-        ? { method: "POST", path: `${base}/answers`, example: { by: "<person>", answers: i.questions.map((q) => ({ questionId: q.id, optionId: q.options[0].id, remember: false })) } }
+        ? { method: "POST", path: `${base}/answers`, example: { by: BY, answers: i.questions.map((q) => ({ questionId: q.id, optionId: `<the buyer's choice: ${q.options.map((o) => o.id).join(" or ")}>`, remember: false })) } }
         : i.state === "options_ready"
-          ? { method: "POST", path: `${base}/choice`, example: { by: "<person>", optionId: i.preselected?.optionId ?? i.options[0].optionId } }
+          ? { method: "POST", path: `${base}/choice`, example: { by: BY, optionId: `<the option the buyer picks: ${i.options.map((o) => o.optionId).join(" or ")}${i.preselected ? `; ${i.preselected.optionId} only if they asked the agent to decide` : ""}>` } }
           : i.state === "quoted"
-            ? {
-                method: "POST",
-                path: "/api/v1/orders",
-                example: { requestId: i.requestId, quoteToken: i.quote!.quoteToken, lines: i.quote!.quote.lines.map((l) => ({ productId: l.productId, quantity: l.quantity, unitPriceCents: l.unitPriceCents })) },
-              }
+            ? // The requestId alone places the quote Dock signed for this request (no long token to copy).
+              { method: "POST", path: "/api/v1/orders", example: { requestId: i.requestId } }
             : { method: "POST", path: "/api/v1/intake", example: { need: "<a new structured need>" } };
   return {
     requestId: i.requestId,

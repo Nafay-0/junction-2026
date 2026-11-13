@@ -16,6 +16,8 @@ const BY_CODE: Record<string, string> = {
   quote_invalid_line: "Each line needs a distinct productId and a whole number of packs above zero; a product cannot substitute for itself.",
   live_lookup_budget_exceeded:
     "This agent has used its live price/availability allowance for now. Work with the offers and quotes you already have, or wait for the window to pass.",
+  no_current_quote:
+    "There is no quote to place for this request now (error.message says why: no option chosen yet, the price expired, or it already bought an order). Follow the intake: get_intake_step shows the step; choose_option makes a fresh quote.",
   order_not_found: "Use an orderId returned by place_order for this organisation.",
   intake_not_found: "Use the requestId submit_need returned to this agent, or start with submit_need.",
   intake_needs_confirmation:

@@ -48,7 +48,8 @@ describe("intake flow", () => {
     expect(first.state).toBe("needs_confirmation");
     expect(first.concerns.map((c) => c.code)).toEqual(["quantity_tenfold"]);
     expect(dock.stats().liveCalls).toBe(0); // no live lookup before the buyer has answered
-    expect(first.next).toEqual({ method: "POST", path: `/api/v1/intake/${first.requestId}/concerns`, example: { by: "<person>", responses: [{ key: "quantity_tenfold:1000:L", choice: "use_100_L" }] } });
+    // The example names the choices and pre-fills none of them: the answer is the buyer's.
+    expect(first.next).toEqual({ method: "POST", path: `/api/v1/intake/${first.requestId}/concerns`, example: { by: "<the buyer's name>", responses: [{ key: "quantity_tenfold:1000:L", choice: "<the buyer's choice: confirm or use_100_L>" }] } });
 
     const fixed = await dock.intake.respondToConcerns(session, first.requestId, { by: "Aino Virtanen", responses: [{ key: first.concerns[0].key, choice: "use_100_L" }] }, { channel: "portal_session", person: "Aino Virtanen" });
     expect(fixed.need.quantity).toEqual({ amount: 100, unit: "L" });

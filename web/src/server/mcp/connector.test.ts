@@ -150,7 +150,7 @@ describe("connector address: same gate, nothing more", () => {
     expect((await call(client, "place_order", { requestId })).s.error).toMatchObject({ rule: "quote_replay" });
     // Without a chosen quote, the short form is refused with a reason.
     const { s: bare } = await call(client, "open_request", { text: "milk" });
-    expect((await call(client, "place_order", { requestId: bare.request.requestId })).s.error).toMatchObject({ code: "invalid_request" });
+    expect((await call(client, "place_order", { requestId: bare.request.requestId })).s.error).toMatchObject({ code: "no_current_quote", rule: "intake_sequence" });
   });
 
   it("cannot exceed the mandate: the weekly budget refuses, whatever the address", async () => {

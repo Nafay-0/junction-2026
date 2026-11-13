@@ -65,10 +65,20 @@ export const AvailabilityInput = z.object({
  */
 export const MAX_QUOTE_LINES = 60;
 export const QuoteInput = z.object({ requestId: z.string().min(1), lines: z.array(QuoteRequestLineSchema).min(1).max(MAX_QUOTE_LINES) });
-export const PlaceOrderInput = z.object({
+/** An order against a signed quote: the token and the lines exactly as quoted. */
+export const SignedOrderInput = z.object({
   requestId: z.string().min(1),
   quoteToken: z.string().min(1),
   lines: z.array(z.object({ productId: z.string(), quantity: z.number(), unitPriceCents: z.number() })),
+});
+/**
+ * What an agent sends to place an order. After the intake quoted the request (choose_option, POST .../choice), the
+ * requestId alone is enough: Dock places the quote it signed for that request, checked exactly as if the agent had
+ * sent it, so no model has to copy a long token. After a lower-level quote, send quoteToken and lines unchanged.
+ */
+export const PlaceOrderInput = SignedOrderInput.extend({
+  quoteToken: SignedOrderInput.shape.quoteToken.optional().describe("The quoteToken from POST /api/v1/quotes, unchanged. Leave it out after the intake's choice: Dock uses the quote it signed for this request."),
+  lines: SignedOrderInput.shape.lines.optional().describe("Only with quoteToken: the quote's lines (productId, quantity, unitPriceCents) copied from quote.lines."),
 });
 export const WithdrawInput = z.object({
   /** Why, in the buyer's words; written to the ledger. */
@@ -785,8 +795,8 @@ export function createDock(deps: DockDeps) {
     },
 
     /** Place an order against a signed quote. Always returns the decision; refused orders are kept with their reasons. */
-    async placeOrder(session: AgentSession, input: z.input<typeof PlaceOrderInput>): Promise<PublicOrder> {
-      const { requestId, quoteToken, lines } = parse(PlaceOrderInput, input);
+    async placeOrder(session: AgentSession, input: z.input<typeof SignedOrderInput>): Promise<PublicOrder> {
+      const { requestId, quoteToken, lines } = parse(SignedOrderInput, input);
       const request = await ownRequest(session, requestId);
       let quote: Quote;
       try {
@@ -1094,6 +1104,25 @@ export function createDock(deps: DockDeps) {
    * confirmation (or after the buyer cancelled), the lower-level quote and order calls refuse it. The intake
    * itself quotes through the unguarded function.
    */
+  /**
+   * The order for a request's current quote: the one the intake signed when the buyer chose an option. Refused, with
+   * what to do instead, when there is none, it has expired, or it already bought an order.
+   */
+  async function currentQuoteOrder(session: AgentSession, requestId: string): Promise<z.output<typeof SignedOrderInput>> {
+    const i = await intakes.get(requestId);
+    const actor = agentActor(session);
+    const none = (message: string, rule: string, details: Record<string, unknown> = {}) => refuse(new DockError(409, "no_current_quote", message, rule, { requestId, ...details }), actor, { requestId });
+    if (!i || i.orgId !== session.mandate.issuer.orgId || i.agentId !== session.agentId) {
+      if (!(await repo.getRequest(requestId))) throw new DockError(404, "request_not_found", `No open request ${requestId} for this agent.`);
+      throw none(`Request ${requestId} has no quote Dock signed through the intake: send quoteToken and lines from POST /api/v1/quotes, or start with POST /api/v1/intake.`, "intake_sequence");
+    }
+    if (i.state !== "quoted" || !i.quote) throw none(`Request ${requestId} has no current quote: it is ${i.state}. Choose an option first; the quote comes with the choice.`, "intake_sequence", { state: i.state });
+    const q = i.quote.quote;
+    if (Date.parse(q.expiresAt) <= now().getTime()) throw none(`The quote for request ${requestId} expired at ${q.expiresAt}: its fixed price no longer holds. Choose the option again for a new quote.`, "quote_expiry", { quoteId: q.quoteId, expiresAt: q.expiresAt });
+    if (await repo.isQuoteUsed(q.quoteId)) throw none(`The quote for request ${requestId} already bought an order; a quote buys once. Start a new request if the buyer needs more.`, "quote_replay", { quoteId: q.quoteId });
+    return { requestId, quoteToken: i.quote.quoteToken, lines: q.lines.map(({ productId, quantity, unitPriceCents }) => ({ productId, quantity, unitPriceCents })) };
+  }
+
   async function intakeGate(session: AgentSession, requestId: string) {
     const pending = await intakes.get(requestId);
     if (pending?.state === "needs_confirmation") {
@@ -1111,8 +1140,13 @@ export function createDock(deps: DockDeps) {
       return dock.requestQuote(session, input);
     },
     placeOrder: async (session: AgentSession, input: z.input<typeof PlaceOrderInput>) => {
-      await intakeGate(session, String((input as { requestId?: unknown }).requestId ?? ""));
-      return dock.placeOrder(session, input);
+      const body = parse(PlaceOrderInput, input);
+      await intakeGate(session, body.requestId);
+      if (body.quoteToken) {
+        if (!body.lines) throw new DockError(400, "invalid_request", "Send lines with quoteToken (copied from quote.lines), or leave both out after the intake's choice.");
+        return dock.placeOrder(session, { requestId: body.requestId, quoteToken: body.quoteToken, lines: body.lines });
+      }
+      return dock.placeOrder(session, await currentQuoteOrder(session, body.requestId));
     },
   };
 
