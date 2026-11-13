@@ -50,6 +50,8 @@ export type TraceStep = {
   excluded?: ExclusionGroup[];
   /** "The other 3,412 products were not sent to the live service." */
   untouched?: string;
+  /** Signed claims (vc+jwt) this step issued or rests on, by id: the page fetches and verifies them. */
+  claimIds?: string[];
   /** Named, never shown: which of the kitchen's private memory this step used. */
   memory?: string[];
   ledger: { seq: number; hash: string; prevHash: string; type: string; actor: string; summary: string };
@@ -100,16 +102,31 @@ const EXCLUSION_BUCKETS: [RegExp, string][] = [
   [/organic|fat|attribute|lacks|required|claim/i, "Does not meet the kitchen's requirements"],
 ];
 
-export function exclusionBucket(reason: string): string {
+/** Reason codes the option builder states (core/options.ts), in words. Free-text reasons fall back to the patterns above. */
+const EXCLUSION_CODES: Record<string, string> = {
+  cutoff_passed: "Order cut-off has passed",
+  too_late: "Cannot arrive in time",
+  out_of_stock: "Not in stock",
+  no_offer: "No live offer",
+  blocked: "Blocked by the wholesaler",
+  wrong_unit: "Sold in a unit that does not fit the need",
+  pack_uncertain: "Pack size not certain",
+  no_substitute: "No allowed substitute",
+  over_budget: "Over the money limits",
+  compromise: "Gives something up while others meet the whole request",
+};
+
+export function exclusionBucket(reason: string, code?: string): string {
+  if (code && EXCLUSION_CODES[code]) return EXCLUSION_CODES[code];
   for (const [re, label] of EXCLUSION_BUCKETS) if (re.test(reason)) return label;
   const r = humanize(reason).replace(/\.$/, "");
   return r.length > 70 ? `${r.slice(0, 67).trimEnd()}…` : r;
 }
 
-export function groupExclusions(excluded: { productId: string; reason: string }[], name: (id: string) => string): ExclusionGroup[] {
+export function groupExclusions(excluded: { productId: string; reason: string; code?: string }[], name: (id: string) => string): ExclusionGroup[] {
   const groups = new Map<string, { ids: Set<string> }>();
   for (const x of excluded) {
-    const key = exclusionBucket(x.reason);
+    const key = exclusionBucket(x.reason, x.code);
     const g = groups.get(key) ?? { ids: new Set<string>() };
     g.ids.add(x.productId);
     groups.set(key, g);
@@ -183,15 +200,16 @@ function actorOf(actor: string, approverNames: Map<string, string>): string {
 
 function offerNote(o: Record<string, unknown>): { note: string; tone: "plain" | "safety" } {
   const parts: string[] = [];
-  const price = typeof o.unitPriceCents === "number" ? `${eur(o.unitPriceCents)} per pack` : undefined;
-  if (price) parts.push(price);
+  if (typeof o.unitPriceCents === "number") parts.push(`${eur(o.unitPriceCents)} per pack`);
   const packs = typeof o.availablePacks === "number" ? o.availablePacks : undefined;
-  if (packs !== undefined) parts.push(packs >= SENTINEL_STOCK ? "stock not reported" : packs === 0 ? "none in stock" : `${packs.toLocaleString("en-US")} packs`);
-  if (typeof o.deliveryDate === "string") parts.push(`delivery ${day(o.deliveryDate)}`);
+  const unknownStock = o.stockKnown === false || (packs !== undefined && packs >= SENTINEL_STOCK);
+  if (unknownStock) parts.push("stock not reported");
+  else if (packs !== undefined) parts.push(packs === 0 ? "none in stock" : `${packs.toLocaleString("en-US")} packs in stock`);
+  if (typeof o.deliveryDate === "string") parts.push(`delivery ${day(o.deliveryDate)}${o.laterThanRequested === true ? ", later than asked" : ""}`);
   const cutoffPassed = o.cutoffPassed === true;
   if (cutoffPassed) parts.push("order cut-off passed");
-  else if (typeof o.orderBy === "string") parts.push(`order by ${day(o.orderBy.slice(0, 10))} ${o.orderBy.length > 10 ? clock(o.orderBy) : ""}`.trim());
-  return { note: parts.join(", "), tone: packs === 0 || cutoffPassed ? "safety" : "plain" };
+  else if (typeof o.orderBy === "string") parts.push(`order by ${day(o.orderBy.slice(0, 10))}${o.orderBy.length > 10 ? ` ${clock(o.orderBy)}` : ""}`);
+  return { note: parts.join(", "), tone: packs === 0 || cutoffPassed || o.laterThanRequested === true ? "safety" : "plain" };
 }
 
 export function buildTrace(input: TraceInput): Trace {
@@ -271,14 +289,16 @@ export function buildTrace(input: TraceInput): Trace {
         } else if (step === "answer") {
           push({ phase: "answered", tone: "safety", title: `${typeof d.by === "string" ? d.by : base.actor} answered`, lines: [say(e.summary.replace(/^.+? answered /, "")).replace(/^"/, "“").replace(/": /, "”: ")] });
         } else if (step === "options" || step === "no_options") {
-          const options = (Array.isArray(d.options) ? d.options : []) as { optionId: string; labels?: string[]; totalCents?: number; lines?: { productId: string; quantity: number; substituteFor?: string }[] }[];
-          const excluded = (Array.isArray(d.excluded) ? d.excluded : []) as { productId: string; reason: string }[];
+          const options = (Array.isArray(d.options) ? d.options : []) as { optionId: string; rank?: string; match?: string; givesUp?: string[]; labels?: string[]; totalCents?: number; lines?: { productId: string; quantity: number; substituteFor?: string }[] }[];
+          const excluded = (Array.isArray(d.excluded) ? d.excluded : []) as { productId: string; reason: string; code?: string }[];
           for (const x of excluded) considered.add(x.productId);
           for (const o of options) for (const l of o.lines ?? []) considered.add(l.productId);
           const products: ProductRow[] = options.map((o) => ({
             id: o.optionId,
-            name: `${o.optionId.replace(/^opt_/, "Option ")}${o.labels?.length ? `: ${o.labels.map((l) => l.replaceAll("_", " ")).join(", ")}` : ""}`,
+            name: `${o.rank ? `${o.rank.replace(/^./, (c) => c.toUpperCase())}: ` : ""}${o.optionId.replace(/^opt_/, "option ")}${o.labels?.length ? ` (${o.labels.map((l) => l.replaceAll("_", " ")).join(", ")})` : ""}`,
+            tone: o.match === "compromise" ? ("safety" as const) : ("plain" as const),
             note: [
+              o.match === "compromise" && o.givesUp?.length ? `gives up ${o.givesUp.map((g) => g.replaceAll("_", " ")).join(", ")}` : o.match === "full" ? "meets the whole request" : "",
               (o.lines ?? []).map((l) => `${l.quantity} × ${name(l.productId)}${l.substituteFor ? ` (in place of ${name(l.substituteFor)})` : ""}`).join(" + "),
               typeof o.totalCents === "number" ? eur(o.totalCents) : "",
             ]
@@ -314,24 +334,37 @@ export function buildTrace(input: TraceInput): Trace {
         break;
       }
       case "lookup": {
-        if (d.source === "live") {
+        if (d.source === "live" && d.failed) {
+          push({ phase: "priced", tone: "safety", title: "The live price service did not answer", lines: ["Nothing was looked up or refused; the agent was told to try again in a minute."] });
+        } else if (d.source === "live") {
           const offers = (Array.isArray(d.offers) ? d.offers : []) as Record<string, unknown>[];
+          const unavailable = (Array.isArray(d.unavailable) ? d.unavailable : []) as { productId: string; problems?: string[]; message?: string }[];
           const ids = (Array.isArray(d.productIds) ? d.productIds : []) as string[];
+          const claimIds = (Array.isArray(d.claimIds) ? d.claimIds : []) as string[];
           for (const id of ids) {
             priced.add(id);
             considered.add(id);
           }
           const rows: ProductRow[] = ids.map((id) => {
             const o = offers.find((x) => x.productId === id);
-            if (!o) return { id, name: name(id), note: "no offer", tone: "safety" as const };
+            const u = unavailable.find((x) => x.productId === id);
+            if (!o) return { id, name: name(id), note: u?.message ? say(u.message) : u?.problems?.length ? `not quotable: ${u.problems.map((p) => p.replaceAll("_", " ")).join(", ")}` : "no offer", tone: "safety" as const };
             const { note, tone } = offerNote(o);
             return { id, name: name(id), note, tone };
           });
           push({
             phase: "priced",
             title: `Checked live price and availability for ${ids.length === 1 ? "one product" : `${ids.length} products`}`,
-            lines: ["The wholesaler's live price service saw only this short list."],
+            lines: [
+              "The wholesaler's live price service saw only this short list.",
+              ...(claimIds.length ? [`Every statement came back signed: ${claimIds.length} claims on price, availability and origin, each verifiable against the wholesaler's published keys.`] : []),
+            ],
             products: rows,
+            facts: [
+              ...(typeof d.deliveryDate === "string" ? [{ label: "Asked for delivery", value: day(d.deliveryDate) }] : []),
+              ...(claimIds.length ? [{ label: "Signed claims", value: String(claimIds.length) }] : []),
+            ],
+            claimIds,
           });
         } else {
           const result = (Array.isArray(d.resultIds) ? d.resultIds : []) as string[];
@@ -353,7 +386,13 @@ export function buildTrace(input: TraceInput): Trace {
         push({
           phase: "quoted",
           title: `The wholesaler fixed the price: ${eur(Number(d.totalCents ?? 0))}`,
-          lines: typeof d.expiresAt === "string" ? [`The price holds until ${clock(d.expiresAt)} Helsinki time, signed with the wholesaler's key.`] : [],
+          lines: [
+            ...(typeof d.expiresAt === "string"
+              ? [`The price holds until ${day(d.expiresAt.slice(0, 10))} ${clock(d.expiresAt)} Helsinki time${d.expiresBecause === "order_cutoff" ? ", the order cut-off" : d.expiresBecause === "price_validity" ? ", when the price list stops" : ""}; the quote is signed with the wholesaler's key.`]
+              : []),
+            ...(Array.isArray(d.evidence) && d.evidence.length ? [`It rests on ${d.evidence.length} signed claims, each named by id and SHA-256, so the quote binds exactly those statements.`] : []),
+          ],
+          claimIds: Array.isArray(d.evidence) ? (d.evidence as { claimId?: string }[]).map((x) => x.claimId).filter((x): x is string => typeof x === "string") : undefined,
           products: lines.map((l) => ({
             id: l.productId,
             name: name(l.productId),
@@ -383,7 +422,7 @@ export function buildTrace(input: TraceInput): Trace {
           phase: "gate",
           tone: d.outcome === "auto_approve" ? "plain" : "safety",
           title,
-          lines: publicReasons(d.reasons).filter((r) => d.outcome !== "auto_approve").map(say),
+          lines: d.outcome === "auto_approve" ? [] : publicReasons(d.reasons).map(say),
           checks,
           facts: [{ label: "Total", value: eur(Number(d.totalCents ?? 0)) }],
         });

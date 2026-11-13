@@ -1,6 +1,8 @@
+import { auditFor, type WholesalerAuditEntry } from "@/core/audit";
+import type { IssuedClaim } from "@/core/claims";
 import type { LedgerEntry } from "@/core/ledger";
 import type { Mandate } from "@/core/mandate";
-import { DockError } from "@/core/orders";
+import { DockError, type AgentSession } from "@/core/orders";
 import { RULES } from "@/core/policy";
 import { eur, humanize, roleLabel } from "@/app/_ui/plain";
 import { LIVE_LOOKUP_LIMITS } from "../mcp/live-lookup-guard";
@@ -31,6 +33,23 @@ function traceFor(ctx: OpsContext, requestId: string): Trace {
     via: ctx.viaOfRequest(requestId),
   });
 }
+
+/**
+ * Signed claims the wholesaler issued, as the wholesaler's own staff may read them. The core hands claims out per
+ * organisation (dock.getClaims checks the audience); operations reads them for the organisation the request
+ * belongs to, which is the same audience the claims were issued to.
+ */
+export async function claimsOf(rt: Runtime, orgId: string, ids: string[]): Promise<IssuedClaim[]> {
+  if (!ids.length) return [];
+  const asOrg = { mandate: { issuer: { orgId } }, agentId: "operations" } as unknown as AgentSession;
+  try {
+    return await rt.dock.getClaims(asOrg, [...new Set(ids)].slice(0, 100));
+  } catch {
+    return [];
+  }
+}
+
+export type ClaimToken = { claimId: string; type: string; productId: string; sha256: string; token: string; validUntil: string };
 
 function suspensionOf(ctx: OpsContext, agent: AgentInfo | undefined): Suspension | undefined {
   return agent ? ctx.suspensions.find(agent.agentId, agent.orgId) : undefined;
@@ -180,6 +199,8 @@ export type TraceView = Trace & {
   viaLabel?: string;
   chain: { ok: boolean; length: number; head: { seq: number; hash: string } | null; message?: string };
   others: { requestId: string; label: string; at: string }[];
+  /** The signed claims named in the trace, by id, so the page can verify each against the published keys. */
+  claims: Record<string, ClaimToken>;
 };
 
 export async function traceView(rt: Runtime, requestId: string): Promise<TraceView> {
@@ -187,8 +208,11 @@ export async function traceView(rt: Runtime, requestId: string): Promise<TraceVi
   if (!ctx.requests.has(requestId)) throw new DockError(404, "request_not_found", `No request ${requestId} on this server.`);
   const t = traceFor(ctx, requestId);
   const chain = rt.dock.ledger.verify();
+  const orgId = ctx.orders.find((o) => o.requestId === requestId)?.orgId ?? ctx.agents.get(t.agentId)?.orgId;
+  const issued = orgId ? await claimsOf(rt, orgId, t.steps.flatMap((s) => s.claimIds ?? [])) : [];
   return {
     ...t,
+    claims: Object.fromEntries(issued.map((c) => [c.claimId, { claimId: c.claimId, type: c.type, productId: c.productId, sha256: c.sha256, token: c.token, validUntil: c.validUntil }])),
     asked: t.asked,
     agentLabel: ctx.agents.get(t.agentId)?.label ?? t.agentId,
     licence: licenceView(ctx.licence(t.agentId)),
@@ -507,8 +531,8 @@ export type AuditRecord = {
     seq: number;
     products: { productId: string; name: string; unitPriceCents?: number; availablePacks?: number | null; deliveryDate?: string; origin?: string | null; claimIds?: string[] }[];
   }[];
-  /** Signed claims (price, availability, origin as W3C VCs) arrive with the trust-protocol work on the core; until then null. */
-  signedClaims: { available: boolean; note: string; refs: unknown[] };
+  /** The signed claims (W3C VC 2.0 as vc+jwt) the quote rests on, with their tokens, verifiable offline. */
+  signedClaims: { available: boolean; note: string; refs: unknown[]; tokens: ClaimToken[] };
   committed: {
     lines: { productId: string; name: string; quantity: number; unitPriceCents: number; lineTotalCents: number; deliveryDate: string; substituteFor?: string; countryOfOrigin?: string | null }[];
     totalCents: number;
@@ -519,7 +543,8 @@ export type AuditRecord = {
     ledgerHead?: { seq: number; hash: string } | null;
   };
   keys: { jwks: string; kid?: string };
-  ledger: { verified: boolean; head: { seq: number; hash: string } | null; entries: DisclosedEntry[]; withheld: number };
+  /** The wholesaler's reading of the ledger (core/audit.ts), and the same entries with hashes for an offline chain check. */
+  ledger: { verified: boolean; head: { seq: number; hash: string } | null; explanation: string[]; wholesalerView: WholesalerAuditEntry[]; entries: DisclosedEntry[]; withheld: number };
 };
 
 export async function auditRecord(rt: Runtime, orderId: string): Promise<AuditRecord> {
@@ -553,7 +578,7 @@ export async function auditRecord(rt: Runtime, orderId: string): Promise<AuditRe
             availablePacks: packs,
             deliveryDate: typeof o?.deliveryDate === "string" ? o.deliveryDate : undefined,
             origin: products.get(id)?.origin,
-            claimIds: Array.isArray(e.data.claimIds) ? (e.data.claimIds as string[]) : undefined,
+            claimIds: o?.claims && typeof o.claims === "object" ? Object.values(o.claims as Record<string, unknown>).filter((x): x is string => typeof x === "string") : undefined,
           };
         }),
       };
@@ -565,6 +590,9 @@ export async function auditRecord(rt: Runtime, orderId: string): Promise<AuditRe
   const signOff = approvalEntry?.data.signOff as { method?: string; verified?: boolean; at?: string } | undefined;
   const chain = rt.dock.ledger.verify();
   const disclosed = entries.map(disclose);
+  const view = auditFor("wholesaler", entries);
+  const quoteClaimIds = (evidence as { claimId?: string }[]).map((x) => x.claimId).filter((x): x is string => typeof x === "string");
+  const tokens = (await claimsOf(rt, order.orgId, quoteClaimIds)).map((c) => ({ claimId: c.claimId, type: c.type, productId: c.productId, sha256: c.sha256, token: c.token, validUntil: c.validUntil }));
   return {
     schema: "dock-wholesaler-audit/1",
     exportedAt: ctx.now.toISOString(),
@@ -584,8 +612,8 @@ export async function auditRecord(rt: Runtime, orderId: string): Promise<AuditRe
     asked: { text: String(request?.data.text ?? ""), neededBy: request?.data.neededBy as string | undefined, understoodAs: need },
     claimed,
     signedClaims: evidence.length
-      ? { available: true, note: "The quote rests on these signed claims; each is a compact JWS verifiable against the published keys.", refs: evidence }
-      : { available: false, note: "Signed price, availability and origin claims are not issued by this server yet; the quote and the order confirmation are signed.", refs: [] },
+      ? { available: true, note: "The quote rests on these signed claims (price, availability, origin); each token is a W3C Verifiable Credential as a compact JWS, verifiable against the published keys.", refs: evidence, tokens }
+      : { available: false, note: "This quote names no signed claims; the quote and the order confirmation are signed.", refs: [], tokens: [] },
     committed: {
       lines: order.lines.map((l) => ({
         productId: l.productId,
@@ -607,7 +635,7 @@ export async function auditRecord(rt: Runtime, orderId: string): Promise<AuditRe
       ledgerHead: (orderEntry?.data.ledgerHead as { seq: number; hash: string } | null | undefined) ?? undefined,
     },
     keys: { jwks: "/.well-known/jwks.json", kid: rt.dock.wholesalerPublicJwk.kid },
-    ledger: { verified: chain.ok, head: rt.dock.ledger.head(), entries: disclosed, withheld: disclosed.filter((e) => e.withheld).length },
+    ledger: { verified: chain.ok, head: rt.dock.ledger.head(), explanation: view.explanation, wholesalerView: view.entries as WholesalerAuditEntry[], entries: disclosed, withheld: disclosed.filter((e) => e.withheld).length },
   };
 }
 
