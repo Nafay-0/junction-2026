@@ -19,11 +19,12 @@ const TABS: { id: string; label: string; test: (o: PortalOrder) => boolean }[] =
 ];
 
 export function OrdersList() {
-  const { overview, base } = usePortal();
+  const { overview, base, agent } = usePortal();
   const params = useSearchParams();
   const [tab, setTab] = useState(params.get("show") ?? "all");
   const o = overview.data;
   const text = new Map((o?.requests ?? []).map((r) => [r.order?.orderId, r.text]));
+  const reqOf = new Map((o?.requests ?? []).flatMap((r) => (r.order ? [[r.order.orderId, r] as const] : [])));
   const rows = (o?.orders ?? []).filter(TABS.find((t) => t.id === tab)?.test ?? (() => true));
   return (
     <div className="mt-5">
@@ -53,14 +54,17 @@ export function OrdersList() {
       {o && rows.length > 0 && (
         <div className="overflow-x-auto bg-paper">
           <div aria-hidden className="h-[3px] bg-petrol" />
-          <table className="w-full min-w-[52rem] text-left">
+          <table className="w-full min-w-[60rem] text-left">
             <thead className="text-[0.85rem] text-ink-soft">
               <tr className="border-b border-line">
                 <th className="px-4 py-2 font-medium">Placed</th>
                 <th className="px-2 py-2 font-medium">What</th>
                 <th className="px-2 py-2 text-right font-medium">Total</th>
                 <th className="px-2 py-2 font-medium">Delivery</th>
-                <th className="px-4 py-2 font-medium">Who let it through</th>
+                <th className="px-2 py-2 font-medium">Who let it through</th>
+                <th className="px-4 py-2 font-medium">
+                  <span className="sr-only">Repeat</span>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -82,7 +86,26 @@ export function OrdersList() {
                     </td>
                     <td className="px-2 py-3 text-right font-semibold tabular">{money(x.totalCents)}</td>
                     <td className="whitespace-nowrap px-2 py-3">{day(x.deliveryDate)}</td>
-                    <td className={`px-4 py-3 text-[0.95rem] ${waiting ? "font-semibold" : ""}`}>{authorisedText(x)}</td>
+                    <td className={`px-2 py-3 text-[0.95rem] ${waiting ? "font-semibold" : ""}`}>{authorisedText(x)}</td>
+                    <td className="whitespace-nowrap px-4 py-2">
+                      {reqOf.get(x.orderId) && (x.status === "committed" || x.status === "history") && (
+                        <span className="flex gap-3">
+                          <button type="button" className="min-h-9 text-[0.92rem] font-semibold text-petrol underline decoration-2 underline-offset-4" onClick={() => agent.send({ kind: "repeat", request: reqOf.get(x.orderId)! })}>
+                            Repeat
+                          </button>
+                          <button
+                            type="button"
+                            className="min-h-9 text-[0.92rem] text-petrol underline underline-offset-4"
+                            onClick={() => {
+                              agent.setFollowUp(reqOf.get(x.orderId));
+                              agent.focus();
+                            }}
+                          >
+                            With a change
+                          </button>
+                        </span>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
