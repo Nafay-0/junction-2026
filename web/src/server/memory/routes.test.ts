@@ -7,18 +7,18 @@ import * as wholesaler from "@/app/ui-api/memory/wholesaler/route";
 import * as proposals from "@/app/ui-api/memory/wholesaler/proposals/route";
 import { resetRuntime } from "@/server/runtime";
 import { resetMemoryService } from "./runtime";
+import { enterOps } from "@/server/ops/access";
 import { OPS_COOKIE } from "./staff";
 
 /** The routes the kitchen portal and the operations portal call, end to end on the in-process runtime. */
 
 process.env.DOCK_MEMORY_LLM = "off"; // no model calls in tests: taps and statements only
-const g = globalThis as typeof globalThis & { __dockOpsSessions?: Map<string, { token: string; name: string; expiresAt: string }> };
-const STAFF = { cookie: `${OPS_COOKIE}=tok_staff` };
+let STAFF: { cookie: string };
 
 beforeEach(() => {
   resetRuntime();
   resetMemoryService();
-  g.__dockOpsSessions = new Map([["tok_staff", { token: "tok_staff", name: "Pirjo (customer service)", expiresAt: new Date(Date.now() + 3600_000).toISOString() }]]);
+  STAFF = { cookie: `${OPS_COOKIE}=${encodeURIComponent(enterOps({ name: "Pirjo (customer service)", passcode: process.env.DOCK_OPS_PASSCODE }).token)}` };
 });
 
 const params = (kitchen: string) => ({ params: Promise.resolve({ kitchen }) }) as never;
