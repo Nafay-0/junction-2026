@@ -29,7 +29,14 @@ Win the overall Junction 2026 main prize (€10,000), not only a partner challen
 
 **Pitch:** the open loading dock for AI buyers. Any company's purchasing agent can order from a wholesaler through open standards, carrying a signed mandate that says what it may buy; anything beyond the mandate needs a human sign-off on their phone. The model is never trusted: plain code checks every order.
 
-**Valio's rubric:** working end-to-end demo 30%, solving the user's need 20%, autonomy and controls (guardrails) 20%, robustness to exceptions 15%, openness and path to production 15%.
+**Valio's rubric** (full text and their wish list in `research/07-valio-challenge-detail.md`; read it before changing behaviour):
+- 30% working end-to-end demo: the full request → lookup → order/approval flow in the mocked environment.
+- 20% solving the user's need: how precisely the agent matches what the buyer asked for, **with the least manual correction needed**. Ask or confirm only when it changes the outcome.
+- 20% autonomy and controls: what the agent decides alone, what needs sign-off, how decisions are logged and auditable.
+- 15% robustness to exceptions: partial availability, substitutions, delivery constraints (order cut-off times).
+- 15% openness and path to production: open documented standards, visible assumptions, justified choices, next steps.
+
+**What Valio says it would love to see:** a trust protocol (an outside agent can verify Valio's claims on stock, price and origin without a manual check); a guardrails model (spend thresholds, substitutions outside stated preferences); "good-better-best" ranking for substitutes and partial availability; an audit trail readable by both the buyer and Valio.
 
 **Valio's required flow:** Request → Lookup → Order (commit at a fixed price) → Approval (agent decides alone, or a human signs off). Their example: "I need 1,000 litres of lactose-free milk by Monday. Find an option that meets our requirements based on price and availability."
 

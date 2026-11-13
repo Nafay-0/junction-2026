@@ -12,8 +12,39 @@ export const ProductSchema = z.object({
   attributes: z.array(z.string()), // "lactose_free", "organic", "fat_1_5", ...
   allergens: z.array(z.string()),
   certificates: z.array(z.string()), // labels such as "hyvaa_suomesta", "eu_organic"
-  deliveryReliability: z.number().min(0).max(1), // share of past deliveries on time
-  carbonKgPerUnit: z.number().nonnegative(), // kg CO2e per unit (per litre, per kg)
+  deliveryReliability: z.number().min(0).max(1), // share of past deliveries on time (0 when unknown: see deliveryReliabilityKnown)
+  carbonKgPerUnit: z.number().nonnegative(), // kg CO2e per unit (per litre, per kg) (0 when unknown: see carbonKnown)
+
+  // ----- Optional detail, set by catalogues built from the partner's data (core/catalog/). Absent for the seed. -----
+  source: z.enum(["seed", "valio"]).optional(),
+  names: z.object({ en: z.string().optional(), fi: z.string().optional(), sv: z.string().optional() }).optional(),
+  vendor: z.string().nullable().optional(),
+  categoryCode: z.string().optional(), // the partner's numeric category; `category` is Dock's slug for it
+  salesUnit: z.string().optional(), // the partner's unit code a pack is: KI (case), ST (piece), KG, ...
+  baseUnit: z.string().optional(),
+  lotSize: z.number().positive().optional(), // order quantity must be a multiple of this, in packs (0.01 = any)
+  /** What one pack holds and how sure that is. When `certain` is false, `unit` is "pcs" and packSize counts base units. */
+  packContent: z
+    .object({
+      perSalesUnit: z.object({ L: z.number().optional(), kg: z.number().optional() }),
+      baseUnitsPerSalesUnit: z.number().nullable(),
+      certain: z.boolean(),
+      certainMeasures: z.array(z.enum(["L", "kg"])),
+      issues: z.array(z.string()),
+      label: z.string(),
+    })
+    .optional(),
+  /** Allergen evidence. `declared: false` means no allergen data: every allergen is unknown, not absent. */
+  allergenInfo: z
+    .object({ declared: z.boolean(), contains: z.array(z.string()), mayContain: z.array(z.string()), freeFrom: z.array(z.string()) })
+    .optional(),
+  deliveryReliabilityKnown: z.boolean().optional(),
+  carbonKnown: z.boolean().optional(),
+  /** kg CO2e per kg, an average for the product group, not a measurement of this product. */
+  carbonGroupAvgKgCo2ePerKg: z.number().nullable().optional(),
+  temperatureClass: z.enum(["ambient", "chilled", "frozen"]).nullable().optional(),
+  countryOfOrigin: z.string().nullable().optional(),
+  substitutes: z.array(z.string()).optional(), // substitutes the partner lists for this product
 });
 export type Product = z.infer<typeof ProductSchema>;
 
@@ -23,6 +54,62 @@ export type LiveOffer = {
   unitPriceCents: number; // per pack
   availablePacks: number;
   deliveryDate: string; // YYYY-MM-DD, earliest possible delivery
+
+  // ----- Optional detail from live adapters (absent for the seed). Explicit, never silent defaults. -----
+  /** The delivery date that was asked for, when one was. */
+  requestedDate?: string;
+  /** True when the earliest delivery is after the requested date. */
+  laterThanRequested?: boolean;
+  /** False when the wholesaler does not know the stock (Terminal products report 999999): availablePacks is not a real figure. */
+  stockKnown?: boolean;
+  /** "Stock" (wholesaler holds it) or "Terminal" (shipped from the supplier's warehouse). */
+  logisticModel?: string;
+  salesUnit?: string;
+  /** Order cut-off as the partner states it: order by then to get `deliveryDate`. */
+  orderBy?: string;
+  /** True when the cut-off has passed at lookup time (the date may then slip). */
+  cutoffPassed?: boolean;
+  priceValidFrom?: string;
+  priceValidUntil?: string;
+  unitPriceWithTaxCents?: number;
+  taxRatePct?: number;
+  comparisonPriceCents?: number; // per comparisonUnit
+  comparisonUnit?: string; // KG or L
+  listPriceCents?: number;
+  netPrice?: boolean; // a customer-specific price was applied
+  currency?: string;
+  fetchedAt?: string;
+  /** Set when a demo override replaced the live figures (see setStock). */
+  simulated?: boolean;
+};
+
+/** Why a product has no usable live offer, or what to watch out for. */
+export type LiveProblem =
+  | "unknown_product" // not in the catalogue
+  | "no_price" // the price API returned error: true
+  | "price_not_valid" // the price's validity window does not cover today
+  | "sales_block" // cannot be ordered right now
+  | "not_deliverable" // no schedule line: cannot be delivered on any date
+  | "out_of_stock" // a real stock figure of 0
+  | "stock_unknown" // Terminal product: the quantity is not known
+  | "later_than_requested" // earliest delivery after the requested date
+  | "cutoff_passed" // the order cut-off for that date has passed
+  | "unit_mismatch"; // availability given in another unit than the product's sales unit
+
+export type LiveStatus = {
+  productId: string;
+  requestedDate?: string;
+  /** True when an order can be placed now: priced, not blocked, deliverable, stock not known to be zero. */
+  orderable: boolean;
+  problems: LiveProblem[];
+  /** Present whenever there is a price and a delivery date, even if not orderable. */
+  offer?: LiveOffer;
+  message: string;
+};
+
+export type LiveOptions = {
+  /** YYYY-MM-DD the buyer wants delivery on. Default: the earliest possible. */
+  deliveryDate?: string;
 };
 
 export const ProductQuerySchema = z.object({
@@ -31,6 +118,9 @@ export const ProductQuerySchema = z.object({
   attributes: z.array(z.string()).optional(),
   ids: z.array(z.string()).optional(),
   limit: z.number().int().positive().max(100).optional(),
+  // Optional, honoured by catalogues that have the data (the seed ignores them).
+  forbiddenAllergens: z.array(z.string()).optional(), // unknown allergen data is excluded, not assumed safe
+  minPackContent: z.object({ amount: z.number().positive(), unit: z.enum(["L", "kg"]) }).optional(),
 });
 export type ProductQuery = z.infer<typeof ProductQuerySchema>;
 
@@ -42,14 +132,19 @@ export type ProductQuery = z.infer<typeof ProductQuerySchema>;
  */
 export interface CatalogPort {
   searchProducts(query: ProductQuery): Promise<Product[]>;
-  getLiveOffers(productIds: string[]): Promise<LiveOffer[]>;
+  /** Offers for the products that have a price and a delivery date; others are left out (see getLiveStatus for why). */
+  getLiveOffers(productIds: string[], options?: LiveOptions): Promise<LiveOffer[]>;
+  /** One entry per requested product, saying whether it can be ordered and why not. Optional for implementations. */
+  getLiveStatus?(productIds: string[], options?: LiveOptions): Promise<LiveStatus[]>;
 }
 
 export const MAX_LIVE_IDS_PER_CALL = 10;
 
+export type CatalogErrorCode = "too_many_products" | "live_unavailable";
+
 export class CatalogError extends Error {
   constructor(
-    readonly code: "too_many_products",
+    readonly code: CatalogErrorCode,
     message: string,
   ) {
     super(message);
@@ -57,7 +152,18 @@ export class CatalogError extends Error {
   }
 }
 
-export type CatalogStats = { searches: number; liveCalls: number; productsPriced: number };
+export type CatalogStats = {
+  searches: number;
+  liveCalls: number;
+  productsPriced: number;
+  /** HTTP traffic to the partner, when the catalogue talks to a live API. */
+  upstream?: { httpRequests: number; retries: number; cacheHits: number; failures: number };
+};
+
+/** Implemented by catalogues that call a remote API, so the meter can report real traffic. */
+export interface UpstreamMetered {
+  upstreamStats(): NonNullable<CatalogStats["upstream"]>;
+}
 
 /** Wraps any CatalogPort, counts calls and refuses bulk live lookups. Dock always talks to the catalog through this. */
 export class MeteredCatalog implements CatalogPort {
@@ -73,7 +179,22 @@ export class MeteredCatalog implements CatalogPort {
     return this.inner.searchProducts(query);
   }
 
-  async getLiveOffers(productIds: string[]): Promise<LiveOffer[]> {
+  async getLiveOffers(productIds: string[], options?: LiveOptions): Promise<LiveOffer[]> {
+    const ids = this.admit(productIds);
+    if (ids.length === 0) return [];
+    return options ? this.inner.getLiveOffers(ids, options) : this.inner.getLiveOffers(ids);
+  }
+
+  /** Same metering and cap as getLiveOffers. Falls back to deriving the status from offers if the inner catalogue cannot say more. */
+  async getLiveStatus(productIds: string[], options?: LiveOptions): Promise<LiveStatus[]> {
+    const ids = this.admit(productIds);
+    if (ids.length === 0) return [];
+    if (this.inner.getLiveStatus) return this.inner.getLiveStatus(ids, options);
+    const offers = await this.inner.getLiveOffers(ids, options);
+    return ids.map((id) => statusFromOffer(id, offers.find((o) => o.productId === id), options));
+  }
+
+  private admit(productIds: string[]): string[] {
     const ids = [...new Set(productIds)];
     if (ids.length === 0) return [];
     if (ids.length > this.maxIdsPerCall) {
@@ -84,12 +205,28 @@ export class MeteredCatalog implements CatalogPort {
     }
     this.counters.liveCalls += 1;
     this.counters.productsPriced += ids.length;
-    return this.inner.getLiveOffers(ids);
+    return ids;
   }
 
   stats(): CatalogStats {
-    return { ...this.counters };
+    const upstream = (this.inner as Partial<UpstreamMetered>).upstreamStats?.();
+    return upstream ? { ...this.counters, upstream } : { ...this.counters };
   }
+}
+
+function statusFromOffer(productId: string, offer: LiveOffer | undefined, options?: LiveOptions): LiveStatus {
+  if (!offer) return { productId, requestedDate: options?.deliveryDate, orderable: false, problems: ["unknown_product"], message: `No live offer for ${productId}.` };
+  const problems: LiveProblem[] = [];
+  if (offer.availablePacks <= 0) problems.push("out_of_stock");
+  if (options?.deliveryDate && offer.deliveryDate > options.deliveryDate) problems.push("later_than_requested");
+  return {
+    productId,
+    requestedDate: options?.deliveryDate,
+    orderable: offer.availablePacks > 0,
+    problems,
+    offer,
+    message: problems.length ? `${productId}: ${problems.join(", ")}.` : `${productId}: ${offer.availablePacks} packs, delivery ${offer.deliveryDate}.`,
+  };
 }
 
 type StockEntry = { unitPriceCents: number; availablePacks: number; leadDays: number };
@@ -120,17 +257,15 @@ export class InMemoryCatalog implements CatalogPort {
     return structuredClone(hits.slice(0, query.limit ?? 20));
   }
 
-  async getLiveOffers(productIds: string[]): Promise<LiveOffer[]> {
+  async getLiveOffers(productIds: string[], options?: LiveOptions): Promise<LiveOffer[]> {
     const offers: LiveOffer[] = [];
     for (const id of productIds) {
       const s = this.stock.get(id);
       if (!s) continue; // unknown or delisted: no offer
-      offers.push({
-        productId: id,
-        unitPriceCents: s.unitPriceCents,
-        availablePacks: s.availablePacks,
-        deliveryDate: isoDate(addDays(this.now(), s.leadDays)),
-      });
+      const earliest = isoDate(addDays(this.now(), s.leadDays));
+      // A later requested date is simply delivered then; an earlier one cannot be met.
+      const deliveryDate = options?.deliveryDate && options.deliveryDate > earliest ? options.deliveryDate : earliest;
+      offers.push({ productId: id, unitPriceCents: s.unitPriceCents, availablePacks: s.availablePacks, deliveryDate });
     }
     return offers;
   }

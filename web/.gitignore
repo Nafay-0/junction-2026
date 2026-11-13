@@ -44,3 +44,5 @@ next-env.d.ts
 # playwright
 /test-results/
 /playwright-report/
+# derived from partner data that must not be published (pnpm index:build)
+/.data/

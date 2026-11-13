@@ -17,6 +17,22 @@ const BY_CODE: Record<string, string> = {
   live_lookup_budget_exceeded:
     "This agent has used its live price/availability allowance for now. Work with the offers and quotes you already have, or wait for the window to pass.",
   order_not_found: "Use an orderId returned by place_order for this organisation.",
+  intake_not_found: "Use the requestId submit_need returned to this agent, or start with submit_need.",
+  intake_needs_confirmation:
+    "The buyer has not yet confirmed a likely mistake on this request. Call get_intake_step, relay the concern to the buyer, and call respond_to_concerns with their answer. Do not go around it.",
+  intake_cancelled: "The buyer cancelled this request. Do not quote or order it; start a new one with submit_need if the buyer asks.",
+  concern_not_open: "Answer only the concerns listed in step.concerns (error.details.open has their keys); call get_intake_step to see them.",
+  concern_not_confirmable: "This concern cannot be confirmed as is. Ask the buyer to pick one of its corrections and send that correction id as choice.",
+  correction_unknown: "Send \"confirm\" (if the concern is confirmable) or a correction id exactly as listed in the concern's corrections.",
+  question_not_open: "Answer only the questions in step.questions (error.details.open has their ids); call get_intake_step to see them.",
+  option_unknown: "Send an optionId exactly as listed in the question's options.",
+  option_not_found: "Choose an optionId from step.options; call get_intake_step to see them.",
+  family_unknown: "Say what kind of product it is: send need.item.category, e.g. \"milk\" (search_products shows the categories).",
+  amount_unknown: "Send need.quantity with an amount and a unit (L, kg, pcs or pack).",
+  nothing_to_repeat: "There is no earlier order to repeat. Ask the buyer how much they need and send need.quantity.",
+  human_answer_required:
+    "Ask the human buyer the question in step.concerns or step.questions, in plain words, wait for their answer, and call again with it and their name as by. Never answer for them.",
+  buyer_declined: "The buyer did not answer. Do not answer for them and do not go around the question; tell them the order waits for their answer, and call get_intake_step when they are ready.",
 };
 
 const BY_RULE: Record<string, string> = {
@@ -41,6 +57,8 @@ const BY_RULE: Record<string, string> = {
   weekly_budget: "The weekly budget is a hard limit that no sign-off can lift. Do not retry or split the order; tell the buyer.",
   approver_authority: "No approver named in the mandate may sign off this amount. Reduce the order; do not retry it unchanged.",
   approver_identity: "Only the human approver can decide on an approval. Agents cannot approve orders.",
+  intake_sequence: "That step is not open now. Call get_intake_step and make the call its nextStep names.",
+  human_input: "This needs the human buyer's own answer. Relay the question to them and pass on exactly what they say; never answer for them.",
 };
 
 export function nextStepFor(err: Pick<DockError, "code" | "rule">): string {
@@ -61,5 +79,58 @@ export function nextStepForOrder(order: OrderLike): string {
       return "A person declined this order. Do not retry it; tell the buyer.";
     default:
       return "The gate refused this order. error.rule names the rule; decision.rules has every rule's result.";
+  }
+}
+
+type StepLike = {
+  requestId: string;
+  state: string;
+  concerns: { key: string; message: string; confirmable: boolean; corrections: { id: string; label: string }[] }[];
+  questions: { id: string; text: string; options: { id: string; label: string }[] }[];
+  options: { optionId: string; title: string; totalCents: number; signOff: string[] }[];
+  preselected?: { optionId: string; reason: string };
+  notes: string[];
+  quote?: { policyPreview: { outcome: string; approver?: { name: string; role: string }; rules: { rule: string; outcome: string }[] } };
+};
+
+/** Who the intake waits for in each state. */
+export function waitingFor(state: string): "buyer" | "agent" | "nobody" {
+  return state === "needs_confirmation" || state === "needs_input" || state === "options_ready" ? "buyer" : state === "quoted" ? "agent" : "nobody";
+}
+
+const RELAY = "This answer must come from the human buyer: relay the question in their words and wait. Do not answer for them, even if you think you know.";
+
+/** Exactly which call comes next for an intake step, written for the agent. */
+export function nextStepForIntake(step: StepLike): string {
+  const id = `requestId ${step.requestId}`;
+  switch (step.state) {
+    case "needs_confirmation": {
+      const asks = step.concerns.map((c) => `"${c.message}" (choices: ${[...(c.confirmable ? ["confirm"] : []), ...c.corrections.map((x) => `${x.id} = ${x.label}`)].join("; ")})`).join(" and ");
+      return `Dock found a likely mistake. Ask the buyer: ${asks}. Then call respond_to_concerns with ${id}, by (the buyer's name) and one response per concern key. ${RELAY} Until the buyer answers, quotes and orders for this request are refused.`;
+    }
+    case "needs_input": {
+      const asks = step.questions.map((q) => `"${q.text}" (options: ${q.options.map((o) => `${o.id} = ${o.label}`).join("; ")})`).join(" and ");
+      return `Ask the buyer: ${asks}. Then call answer_questions with ${id}, by (the buyer's name) and one answer per questionId. ${RELAY}`;
+    }
+    case "options_ready": {
+      const pre = step.preselected ? ` Dock pre-selected ${step.preselected.optionId} (${step.preselected.reason}).` : "";
+      return `Show the buyer the ${step.options.length} options (step.options: title, total, delivery, pros and cons, and signOff for any that need a person's sign-off).${pre} Call choose_option with ${id} and the optionId the buyer picks; it returns a signed fixed-price quote.`;
+    }
+    case "quoted": {
+      const p = step.quote?.policyPreview;
+      const gate =
+        p?.outcome === "reject"
+          ? ` The gate would refuse it (rule ${p.rules.find((r) => r.outcome === "fail")?.rule}): tell the buyer and do not place it.`
+          : p?.outcome === "needs_human_approval"
+            ? ` Placing it will ask ${p.approver ? `${p.approver.name} (${p.approver.role})` : "a person named in the mandate"} to sign off on their own device.`
+            : " It is within the mandate and commits at once.";
+      return `Call place_order with step.next.example as its arguments (requestId, quoteToken, lines).${gate}`;
+    }
+    case "no_options":
+      return `Nothing meets the constraints: ${step.notes[0] ?? "see step.notes and step.excluded"}. Tell the buyer why; if they change the need, call submit_need again.`;
+    case "cancelled":
+      return "The buyer cancelled this request. Do not place an order. Call submit_need only if the buyer asks for something new.";
+    default:
+      return "Call get_intake_step to see where this request stands.";
   }
 }
