@@ -44,6 +44,12 @@ Win the overall Junction 2026 main prize (€10,000), not only a partner challen
 
 **The demo path that must always work:** reviewer scans a QR code and becomes the approver → agent gets the milk request → lookup hits partial availability → agent proposes a substitute → order exceeds the mandate → approval arrives on the reviewer's phone → signed order appears on the main screen → reviewer tries to make the agent misbehave and the gate refuses with a reason.
 
+**The experience (decided Fri 13 Nov, late):** the project is shown as a two-sided portal, the shape this team won Valio Aimo's challenge with last year (Omni-Valio), not as a bare API.
+- **Kitchen portal** (`/k/<kitchen>`): feels like a food-service webshop; the kitchen's own purchasing agent works inside it, remembers earlier requests and orders, and shows its work as structured cards. Not a chat thread: the partner says twice that this is not a chatbot.
+- **Operations portal** (`/ops`): the wholesaler's staff see every agent at the door, a replayable step-by-step trace of any request, the safeguards and how often each fired, and can suspend an agent.
+- **Phone sign-off** (`/join`, `/approve/<id>`), **the wall** (`/`), and the **open interface** (`/api/mcp`, OpenAPI) that outside agents use. The on-site agent is only one client of the same gate.
+- Do not copy code from last year's project; event rules restrict pre-existing code. Do not imitate the real company's branding; keep the "demo on synthetic data" note visible.
+
 **Main-prize judging:** assigned peer reviewers score Innovation, Impact, Implementation at our table on Sunday 10:30; top 5 pitch for 3 minutes plus 3 minutes of questions. Final submission Sunday 10:00 with a video of at most 2:00.
 
 **Code layout:** the app lives in `web/` (Next.js, TypeScript, pnpm). Framework-free logic lives in `web/src/core/` and is covered by tests; nothing in `core/` may call an LLM.
