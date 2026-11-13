@@ -1,4 +1,6 @@
 import { generateText, Output, type LanguageModel } from "ai";
+import { recordLlmSpend, reserveLlmCall } from "@/server/limits";
+import { costOf, tokensFromUsage, type Price } from "./pricing";
 import { z } from "zod";
 import { DockError } from "@/core/errors";
 import { createModel, defaultModel, ModelConfigError } from "./models";
@@ -41,6 +43,7 @@ export async function askAssistant(opts: AskOptions): Promise<AssistantAnswer> {
   if (!question) throw new DockError(400, "invalid_request", "The question is empty.");
   let model: LanguageModel;
   let id: string;
+  let price: Price | undefined;
   if (opts.model && typeof opts.model !== "string") ({ model, id } = opts.model);
   else {
     const spec = opts.model ?? defaultModel("DOCK_ASSISTANT_MODEL") ?? defaultModel("DOCK_INTERPRET_MODEL");
@@ -49,11 +52,13 @@ export async function askAssistant(opts: AskOptions): Promise<AssistantAnswer> {
       const m = createModel(spec);
       model = m.model;
       id = m.spec.id;
+      price = m.price;
     } catch (err) {
       if (err instanceof ModelConfigError) throw new DockError(503, "model_unavailable", err.message);
       throw err;
     }
   }
+  reserveLlmCall(); // public-demo caps: daily calls and spend, and the DOCK_LLM=off switch (server/limits.ts)
   const timeoutMs = opts.timeoutMs ?? 25_000;
   const t0 = Date.now();
   const deadline = t0 + timeoutMs;
@@ -76,6 +81,7 @@ export async function askAssistant(opts: AskOptions): Promise<AssistantAnswer> {
     if (Date.now() >= deadline || (err as Error)?.name === "TimeoutError") throw new DockError(504, "assistant_timeout", `The assistant did not answer within ${timeoutMs} ms.`);
     throw new DockError(isRetryable(err) ? 503 : 502, "assistant_failed", `The model call failed: ${describeError(err)}`);
   }
+  recordLlmSpend(costOf(tokensFromUsage(res.usage), price));
   return { ...checkAnswer(res.output as LlmAnswer, opts.records), model: id, ms: Date.now() - t0 };
 }
 
