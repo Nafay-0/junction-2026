@@ -1,0 +1,317 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "streamdown/styles.css";
+
+@source "../../node_modules/streamdown/dist/*.js";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Design system: "Concierge".
+ * Ivory paper and ink in light mode, a green-black room in dark mode, one emerald
+ * accent, a brass detail for small highlights. Serif display type for headings,
+ * Geist for the interface, Geist Mono for numbers.
+ * Every colour in the app comes from these tokens; do not hard-code hex values in components.
+ */
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-heading: var(--font-display), ui-serif, Georgia, serif;
+  --font-display: var(--font-display), ui-serif, Georgia, serif;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+
+  /* Brand and semantic colours beyond the shadcn set */
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
+  --color-brass: var(--brass);
+  --color-up: var(--up);
+  --color-down: var(--down);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-hairline: var(--hairline);
+  --color-subtle: var(--subtle);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  --shadow-card: 0 1px 0 0 oklch(0 0 0 / 0.02), 0 1px 2px -1px oklch(0 0 0 / 0.06), 0 8px 24px -12px oklch(0 0 0 / 0.1);
+  --shadow-float: 0 2px 4px -2px oklch(0 0 0 / 0.08), 0 16px 40px -12px oklch(0 0 0 / 0.22);
+
+  --animate-shimmer: shimmer 1.6s linear infinite;
+  --animate-rise: rise 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-fade: fade 0.35s ease-out both;
+  --animate-pulse-dot: pulse-dot 1.4s ease-in-out infinite;
+  --animate-sweep: sweep 2.2s ease-in-out infinite;
+
+  @keyframes shimmer {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.35; transform: scale(0.8); }
+  }
+  @keyframes sweep {
+    0% { transform: translateX(-100%); }
+    60%, 100% { transform: translateX(260%); }
+  }
+}
+
+:root {
+  --radius: 0.75rem;
+
+  --background: oklch(0.984 0.004 95);
+  --foreground: oklch(0.2 0.012 165);
+  --surface: oklch(0.97 0.005 95);
+  --surface-raised: oklch(0.998 0.002 95);
+  --card: oklch(0.998 0.002 95);
+  --card-foreground: oklch(0.2 0.012 165);
+  --popover: oklch(0.998 0.002 95);
+  --popover-foreground: oklch(0.2 0.012 165);
+  --primary: oklch(0.36 0.075 168);
+  --primary-foreground: oklch(0.985 0.01 160);
+  --secondary: oklch(0.955 0.006 95);
+  --secondary-foreground: oklch(0.24 0.014 165);
+  --muted: oklch(0.96 0.005 95);
+  --muted-foreground: oklch(0.49 0.012 155);
+  --subtle: oklch(0.62 0.01 155);
+  --accent: oklch(0.948 0.014 160);
+  --accent-foreground: oklch(0.26 0.04 166);
+  --destructive: oklch(0.577 0.2 27);
+  --border: oklch(0.912 0.006 95);
+  --hairline: oklch(0.2 0.012 165 / 8%);
+  --input: oklch(0.895 0.006 95);
+  --ring: oklch(0.6 0.1 165);
+
+  --brand: oklch(0.52 0.12 164);
+  --brand-soft: oklch(0.94 0.035 162);
+  --brass: oklch(0.7 0.11 82);
+  --up: oklch(0.56 0.14 160);
+  --down: oklch(0.58 0.19 27);
+
+  --chart-1: oklch(0.56 0.13 164);
+  --chart-2: oklch(0.72 0.12 80);
+  --chart-3: oklch(0.55 0.11 250);
+  --chart-4: oklch(0.66 0.16 32);
+  --chart-5: oklch(0.58 0.13 305);
+
+  --sidebar: oklch(0.972 0.005 95);
+  --sidebar-foreground: oklch(0.2 0.012 165);
+  --sidebar-primary: oklch(0.36 0.075 168);
+  --sidebar-primary-foreground: oklch(0.985 0.01 160);
+  --sidebar-accent: oklch(0.948 0.014 160);
+  --sidebar-accent-foreground: oklch(0.26 0.04 166);
+  --sidebar-border: oklch(0.912 0.006 95);
+  --sidebar-ring: oklch(0.6 0.1 165);
+}
+
+.dark {
+  --background: oklch(0.155 0.008 168);
+  --foreground: oklch(0.955 0.006 95);
+  --surface: oklch(0.185 0.009 168);
+  --surface-raised: oklch(0.215 0.01 168);
+  --card: oklch(0.195 0.01 168);
+  --card-foreground: oklch(0.955 0.006 95);
+  --popover: oklch(0.215 0.01 168);
+  --popover-foreground: oklch(0.955 0.006 95);
+  --primary: oklch(0.8 0.13 163);
+  --primary-foreground: oklch(0.18 0.03 168);
+  --secondary: oklch(0.25 0.012 168);
+  --secondary-foreground: oklch(0.955 0.006 95);
+  --muted: oklch(0.235 0.01 168);
+  --muted-foreground: oklch(0.71 0.012 155);
+  --subtle: oklch(0.56 0.012 160);
+  --accent: oklch(0.27 0.022 166);
+  --accent-foreground: oklch(0.95 0.012 160);
+  --destructive: oklch(0.704 0.191 22);
+  --border: oklch(1 0 0 / 9%);
+  --hairline: oklch(1 0 0 / 7%);
+  --input: oklch(1 0 0 / 13%);
+  --ring: oklch(0.66 0.12 163);
+
+  --brand: oklch(0.8 0.13 163);
+  --brand-soft: oklch(0.3 0.045 166);
+  --brass: oklch(0.8 0.1 85);
+  --up: oklch(0.78 0.15 160);
+  --down: oklch(0.72 0.17 25);
+
+  --chart-1: oklch(0.78 0.14 163);
+  --chart-2: oklch(0.82 0.11 85);
+  --chart-3: oklch(0.72 0.11 250);
+  --chart-4: oklch(0.74 0.14 32);
+  --chart-5: oklch(0.74 0.12 305);
+
+  --sidebar: oklch(0.175 0.009 168);
+  --sidebar-foreground: oklch(0.955 0.006 95);
+  --sidebar-primary: oklch(0.8 0.13 163);
+  --sidebar-primary-foreground: oklch(0.18 0.03 168);
+  --sidebar-accent: oklch(0.27 0.022 166);
+  --sidebar-accent-foreground: oklch(0.95 0.012 160);
+  --sidebar-border: oklch(1 0 0 / 9%);
+  --sidebar-ring: oklch(0.66 0.12 163);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "ss01", "cv11";
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  ::selection {
+    background: color-mix(in oklch, var(--brand) 28%, transparent);
+  }
+  /* Thin, quiet scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklch, var(--foreground) 18%, transparent) transparent;
+  }
+}
+
+@layer utilities {
+  /* Serif display type for greetings and section titles */
+  .font-display {
+    font-family: var(--font-display), ui-serif, Georgia, serif;
+    font-weight: 400;
+    letter-spacing: -0.015em;
+  }
+  /* Tabular numbers for prices, odds and counters */
+  .nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+  /* Loading skeleton with a moving sheen */
+  .shimmer {
+    background-image: linear-gradient(
+      100deg,
+      color-mix(in oklch, var(--foreground) 6%, transparent) 20%,
+      color-mix(in oklch, var(--foreground) 13%, transparent) 40%,
+      color-mix(in oklch, var(--foreground) 6%, transparent) 60%
+    );
+    background-size: 200% 100%;
+    animation: var(--animate-shimmer);
+  }
+  /* Text that shimmers while the agent is working */
+  .text-shimmer {
+    background-image: linear-gradient(
+      100deg,
+      var(--muted-foreground) 30%,
+      var(--foreground) 50%,
+      var(--muted-foreground) 70%
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: var(--animate-shimmer);
+  }
+  /* Soft page backdrop: a faint emerald glow at the top of the room */
+  .backdrop-room {
+    background-image:
+      radial-gradient(60rem 28rem at 50% -8rem, color-mix(in oklch, var(--brand) 11%, transparent), transparent 70%),
+      radial-gradient(40rem 20rem at 85% 0%, color-mix(in oklch, var(--brass) 7%, transparent), transparent 70%);
+    background-repeat: no-repeat;
+  }
+  .hairline {
+    box-shadow: inset 0 0 0 1px var(--hairline);
+  }
+  .safe-bottom {
+    padding-bottom: max(env(safe-area-inset-bottom), 0.75rem);
+  }
+}
+
+/* Agent prose: comfortable measure, quiet headings, tables that scroll inside themselves */
+.butler-prose {
+  font-size: 0.95rem;
+  line-height: 1.65;
+  color: var(--foreground);
+}
+.butler-prose > :first-child { margin-top: 0; }
+.butler-prose > :last-child { margin-bottom: 0; }
+.butler-prose h1,
+.butler-prose h2,
+.butler-prose h3 {
+  font-family: var(--font-display), ui-serif, Georgia, serif;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+.butler-prose h1 { font-size: 1.5rem; }
+.butler-prose h2 { font-size: 1.3rem; }
+.butler-prose h3 { font-size: 1.12rem; }
+.butler-prose strong { font-weight: 600; }
+.butler-prose table { font-size: 0.85rem; }
+.butler-prose li::marker { color: var(--subtle); }
+
+/* Turns animation off inside an element; used by the widget gallery's ?still=1 mode. */
+.still,
+.still * {
+  animation-duration: 0.01ms !important;
+  animation-delay: 0s !important;
+  transition-duration: 0.01ms !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
