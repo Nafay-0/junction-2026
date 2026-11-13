@@ -13,6 +13,7 @@ const NAV: { href: string; label: string; what: string; badge?: (s: Session) => 
   { href: "/ops", label: "Live", what: "Agents at the door" },
   { href: "/ops/trace", label: "Trace", what: "One request, step by step" },
   { href: "/ops/safeguards", label: "Safeguards", what: "The rule book as it runs" },
+  { href: "/ops/radar", label: "Recall radar", what: "Recalls on the web, holds, drills" },
   { href: "/ops/control", label: "Control", what: "Suspend, resume, waiting sign-offs", badge: (s) => (s.waiting || 0) + (s.suspended || 0) || undefined },
   { href: "/ops/audit", label: "Audit", what: "Orders, exports, verify a receipt" },
   { href: "/ops/agents", label: "Agents", what: "Licences and records" },

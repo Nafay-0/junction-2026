@@ -3,7 +3,7 @@
 import { browserSupportsWebAuthn, startAuthentication, type PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/browser";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ApprovalView } from "@/server/approval-view";
+import type { ApprovalViewWithRecall as ApprovalView } from "@/server/approval-api";
 import { api, passkeyProblem, type ApiError } from "../../_client/api";
 import { useDockEvents } from "../../_client/use-dock-events";
 
@@ -155,6 +155,17 @@ export function ApprovalScreen({ approvalId, token }: { approvalId: string; toke
       <p className="mt-1 text-xl">
         Delivery <strong>{view.delivery}</strong>
       </p>
+
+      {view.recall?.map((r) => (
+        <section key={r.productId} role="alert" className="mt-4 rounded-xl border-4 border-neutral-900 bg-yellow-300 p-3 text-neutral-950">
+          <h2 className="text-base font-bold uppercase tracking-wide">{r.drill ? "Drill, not a real recall: " : ""}Recall hold on {r.productName}</h2>
+          <p className="mt-1">{r.reason}</p>
+          <p className="mt-1 font-semibold">The wholesaler will not deliver it, so this order cannot be approved. Decline it; the agent can order an alternative.</p>
+          <a href={r.noticeUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block font-semibold underline underline-offset-4">
+            Open the notice ({r.publisher})
+          </a>
+        </section>
+      ))}
 
       <section className="mt-4 rounded-xl bg-blue-50 p-3">
         <h2 className="text-base font-semibold uppercase tracking-wide text-blue-900">Why you are asked</h2>
