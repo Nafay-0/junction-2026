@@ -264,3 +264,23 @@ describe("intake flow", () => {
     expect(k.stated.map((p) => p.text)).toEqual(["Always lactose-free"]);
   });
 });
+
+describe("deliver on an exact day (not merely by it)", () => {
+  it("delivers every option on the day asked, quotes that day, and the gate holds the order to it", async () => {
+    const day = "2026-11-18"; // a few days out: the seed could deliver sooner
+    let step = await dock.intake.open(session, { need: need({ deliverBy: undefined, deliverOn: day, optimise: "price" }) });
+    expect(step.need).toMatchObject({ deliverOn: day, deliverBy: day });
+    if (step.state === "options_ready") step = await dock.intake.choose(session, step.requestId, { by: "Sanna", optionId: step.options[0].optionId });
+    expect(step.state).toBe("quoted");
+    expect(step.quote!.quote.lines.every((l) => l.deliveryDate === day)).toBe(true);
+    expect(step.quote!.policyPreview.rules.find((r) => r.rule === "delivery_deadline")).toMatchObject({ outcome: "pass", reason: `Every line arrives on ${day}, the day asked.` });
+    const order = await dock.placeOrder(session, { requestId: step.requestId });
+    expect(order.lines.every((l) => l.deliveryDate === day)).toBe(true);
+  });
+
+  it("without deliverOn nothing changes: the earliest day the wholesaler can", async () => {
+    const step = await dock.intake.open(session, { need: need({ optimise: "price" }) });
+    const lines = step.quote?.quote.lines ?? step.options[0].lines;
+    expect(lines.every((l) => l.deliveryDate < "2026-11-18")).toBe(true);
+  });
+});

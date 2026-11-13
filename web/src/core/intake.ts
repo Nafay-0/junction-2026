@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MAX_LIVE_IDS_PER_CALL, type MeteredCatalog, type Product } from "./catalog";
+import { MAX_LIVE_IDS_PER_CALL, scheduledOn, type MeteredCatalog, type Product } from "./catalog";
 import { facetsOf } from "./catalog/search";
 import { OPTIMISE_QUESTION_ID, answerSchema, clarify, hardConstraints, kindMismatch, optimiseQuestion, optionLabel, violation, type Answer, type ConstraintSource, type MemoryNote, type Question } from "./clarify";
 import { baseAmount, checkNeed, type CheckContext, type Concern, type ConcernCode } from "./concerns";
@@ -153,7 +153,7 @@ export type IntakeDeps = {
   intakes: IntakeRepository;
   ledger: Ledger;
   now: () => Date;
-  openRequest: (session: AgentSession, input: { text: string; neededBy?: string; productIds?: string[]; category?: string }) => Promise<PurchaseRequest>;
+  openRequest: (session: AgentSession, input: { text: string; neededBy?: string; deliverOn?: string; productIds?: string[]; category?: string }) => Promise<PurchaseRequest>;
   requestQuote: (session: AgentSession, input: { requestId: string; lines: QuoteRequestLine[] }) => Promise<{ quote: Quote; quoteToken: string; policyPreview: Decision }>;
   spentThisWeek: (orgId: string) => Promise<number>;
   /** Committed and held spend, with the orders holding money, for the budget's part of a "nothing fits" answer. */
@@ -295,7 +295,9 @@ export function createIntakeFlow(deps: IntakeDeps) {
     // 4. Live prices for a short list only (one call), then the option cards.
     const prefer = [reference?.productId, last && primaryLine(last).productId, usual?.kind === "product" ? usual.productId : undefined];
     const short = shortlist(narrowed, prefer, MAX_LIVE_IDS_PER_CALL, i.amount, span);
-    const live = await deps.liveLookup(session, i.requestId, short.map((p) => p.id), i.need.deliverBy, "Dock checked live price and availability for the shortlist");
+    // "On Monday": what is available earlier is delivered that day (orders.ts scheduledOn).
+    const on = (l: LiveLookupResult): LiveLookupResult => (i.need.deliverOn ? { ...l, offers: l.offers.map((o) => scheduledOn(o, i.need.deliverOn)), statuses: l.statuses.map((st) => (st.offer ? { ...st, offer: scheduledOn(st.offer, i.need.deliverOn) } : st)) } : l);
+    const live = on(await deps.liveLookup(session, i.requestId, short.map((p) => p.id), i.need.deliverBy, "Dock checked live price and availability for the shortlist"));
     const goalForRank = goal.optimise && goal.optimise !== "no_preference" ? goal.optimise : undefined;
     const options = (priced: Product[], l: Pick<LiveLookupResult, "offers" | "statuses">) => buildOptions({
       amount: i.amount!,
@@ -323,7 +325,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
     if (rest.length && (result.cards.length < MAX_CARDS || uncovered.size)) {
       const wanted = rest.filter((p) => uncovered.has(span?.(p) ?? ""));
       const pool = shortlist(wanted.length ? wanted : rest, [], MAX_LIVE_IDS_PER_CALL, i.amount, span);
-      const second = await deps.liveLookup(session, i.requestId, pool.map((p) => p.id), i.need.deliverBy, "The first short list left gaps; Dock checked the next few products once");
+      const second = on(await deps.liveLookup(session, i.requestId, pool.map((p) => p.id), i.need.deliverBy, "The first short list left gaps; Dock checked the next few products once"));
       short.push(...pool);
       result = options(short, { offers: [...live.offers, ...second.offers], statuses: [...live.statuses, ...second.statuses] });
     }
@@ -448,7 +450,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
       }
       // What was asked for, for the gate: the product the buyer named, and the family. Anything else ordered under
       // this request is a substitute of it, whatever the agent declares (policy substitution_rule).
-      const request = await deps.openRequest(session, { text: need.text ?? describeNeed(need), neededBy: need.deliverBy, ...(need.item.productId ? { productIds: [need.item.productId] } : {}), category: family });
+      const request = await deps.openRequest(session, { text: need.text ?? describeNeed(need), neededBy: need.deliverBy, ...(need.deliverOn ? { deliverOn: need.deliverOn } : {}), ...(need.item.productId ? { productIds: [need.item.productId] } : {}), category: family });
       const at = now().toISOString();
       const i: Intake = {
         requestId: request.requestId,
@@ -526,7 +528,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
       }
       if (i.need.deliverBy !== neededBefore) {
         const req = await repo.getRequest(requestId);
-        if (req) await repo.saveRequest({ ...req, neededBy: i.need.deliverBy });
+        if (req) await repo.saveRequest({ ...req, neededBy: i.need.deliverBy, ...(i.need.deliverOn ? { deliverOn: i.need.deliverOn } : {}) });
       }
       return view(await advance(session, i));
     },
@@ -584,7 +586,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
         const before = i.need.deliverBy;
         i.need = applyNeedPatch(i.need, { deliverBy: card.deliveryDate });
         const req = await repo.getRequest(requestId);
-        if (req) await repo.saveRequest({ ...req, neededBy: card.deliveryDate });
+        if (req) await repo.saveRequest({ ...req, neededBy: card.deliveryDate, ...(i.need.deliverOn ? { deliverOn: card.deliveryDate } : {}) });
         log(i, actorOf(session, via, who), `${who} accepted a later delivery (${howText(via)}): ${card.deliveryDate} instead of ${before}.`, { step: "compromise", optionId, givesUp: card.givesUp, by: who, relayedBy: session.agentId, channel: via.channel, verified });
       }
       return view(await quoteOption(session, i, card, who, undefined, via));

@@ -13,7 +13,7 @@ import {
   type SignOff,
 } from "./approval";
 import type { EventPublisher } from "./events";
-import { CatalogError, ProductQuerySchema, usableOffer, type LiveOffer, type LiveStatus, type MeteredCatalog, type Product } from "./catalog";
+import { CatalogError, ProductQuerySchema, scheduledOn, usableOffer, type LiveOffer, type LiveStatus, type MeteredCatalog, type Product } from "./catalog";
 import { ClaimStore, availabilityClaimInput, issueClaim, originClaimInput, priceClaimInput, refOf, type IssuedClaim } from "./claims";
 import { DockError, parse } from "./errors";
 import { InMemoryIntakeRepository, createIntakeFlow, recordCommittedOrder, type IntakeRepository } from "./intake";
@@ -44,6 +44,8 @@ export { DockError };
 export const OpenRequestInput = z.object({
   text: z.string().min(1).max(2000), // the buyer's need in their own words
   neededBy: z.iso.date().optional(),
+  /** Exactly this day, not merely by it: every line is delivered that day (sets neededBy to the same day). */
+  deliverOn: z.iso.date().optional(),
   /** Products the buyer asked for by id. Product ids written in `text` count too (when they exist in the catalogue). */
   productIds: z.array(z.string().min(1).max(60)).max(20).optional(),
   /** The product family asked for, when known (the intake sets it). */
@@ -107,6 +109,8 @@ export type PurchaseRequest = {
   mandateId: string;
   text: string;
   neededBy?: string;
+  /** Delivered exactly on this day (then neededBy is the same day). */
+  deliverOn?: string;
   /**
    * What the buyer asked for, as Dock read it (never what the agent declares at quote time): products named by id
    * (in the request's fields or its text) and the family. The gate treats any other product as a substitute of it.
@@ -668,7 +672,8 @@ export function createDock(deps: DockDeps) {
     },
 
     async openRequest(session: AgentSession, input: z.input<typeof OpenRequestInput>): Promise<PurchaseRequest> {
-      const { text, neededBy, productIds, category } = parse(OpenRequestInput, input);
+      const { text, neededBy: by, deliverOn, productIds, category } = parse(OpenRequestInput, input);
+      const neededBy = deliverOn ?? by;
       const named = await askedProducts(text, productIds ?? []);
       const r: PurchaseRequest = {
         requestId: newId("req"),
@@ -677,6 +682,7 @@ export function createDock(deps: DockDeps) {
         mandateId: session.mandate.mandateId,
         text,
         neededBy,
+        ...(deliverOn ? { deliverOn } : {}),
         ...(named.length || category ? { asked: { productIds: named, ...(category ? { category } : {}) } } : {}),
         createdAt: now().toISOString(),
       };
@@ -744,7 +750,7 @@ export function createDock(deps: DockDeps) {
       try {
         const products = await catalog.searchProducts({ ids, limit: 100 });
         const live = await liveLookup(session, requestId, ids, request.neededBy, "Dock asked live prices for a quote", { fresh: true, batch: true });
-        const offers = live.offers;
+        const offers = live.offers.map((o) => scheduledOn(o, request.deliverOn));
         // Say why a line cannot be quoted, in the partner's terms (a passed cut-off, a sales block, no price).
         for (const l of lines) {
           const st = live.statuses.find((x) => x.productId === l.productId);
@@ -752,7 +758,7 @@ export function createDock(deps: DockDeps) {
             throw new QuoteError("quote_no_offer", `${l.productId} cannot be quoted now: ${st.message}`, { productId: l.productId, problems: st.problems });
         }
         // The product a substitute replaces only lends its price for comparison: any priced status will do.
-        const referenceOffers = live.statuses.map((x) => x.offer).filter((o): o is LiveOffer => !!o);
+        const referenceOffers = live.statuses.map((x) => x.offer).filter((o): o is LiveOffer => !!o).map((o) => scheduledOn(o, request.deliverOn));
         const used = new Set(lines.map((l) => l.productId));
         const originals = new Set(lines.map((l) => l.substituteFor).filter((x): x is string => !!x));
         claims = live.claims.filter((c) => used.has(c.productId) || (originals.has(c.productId) && c.type === "price"));
@@ -788,7 +794,7 @@ export function createDock(deps: DockDeps) {
       });
       const policyPreview = evaluatePolicy(
         session.mandate,
-        { agentId: session.agentId, quote, lines: quote.lines, neededBy: request.neededBy, requestId, asked: await askedOf(request) },
+        { agentId: session.agentId, quote, lines: quote.lines, neededBy: request.neededBy, deliverOn: request.deliverOn, requestId, asked: await askedOf(request) },
         { now: now(), ...(await budgetContext(quote.buyerOrgId)), ...(await unverifiedOf(requestId)), ...(await holdsOf(quote)), quoteAlreadyUsed: false, recentOrders: await recentOrders(quote.buyerOrgId) },
       );
       return { quote, quoteToken, policyPreview, claims };
@@ -807,7 +813,7 @@ export function createDock(deps: DockDeps) {
       }
       const orgId = session.mandate.issuer.orgId;
       return serialize(orgId, async () => {
-        const draft = { agentId: session.agentId, quote, lines, neededBy: request.neededBy, requestId, asked: await askedOf(request) };
+        const draft = { agentId: session.agentId, quote, lines, neededBy: request.neededBy, deliverOn: request.deliverOn, requestId, asked: await askedOf(request) };
         const ctx = { now: now(), ...(await budgetContext(orgId)), ...(await unverifiedOf(requestId)), ...(await holdsOf(quote)), quoteAlreadyUsed: await repo.isQuoteUsed(quote.quoteId), recentOrders: await recentOrders(orgId) };
         let decision = evaluatePolicy(session.mandate, draft, ctx);
         if (decision.outcome !== "reject" && !(await repo.claimQuote(quote.quoteId))) {
@@ -954,7 +960,7 @@ export function createDock(deps: DockDeps) {
         const request = await repo.getRequest(order.requestId);
         const recheck = evaluatePolicy(
           order.mandate,
-          { agentId: order.agentId, quote: order.quote, lines: order.draftLines, neededBy: request?.neededBy, requestId: order.requestId, asked: await askedOf(request) },
+          { agentId: order.agentId, quote: order.quote, lines: order.draftLines, neededBy: request?.neededBy, deliverOn: request?.deliverOn, requestId: order.requestId, asked: await askedOf(request) },
           { now: now(), ...(await budgetContext(order.orgId, order.orderId)), ...(await unverifiedOf(order.requestId)), ...(await holdsOf(order.quote)), quoteAlreadyUsed: false, recentOrders: await recentOrders(order.orgId, order.orderId) },
         );
         if (recheck.outcome === "reject") {

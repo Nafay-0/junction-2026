@@ -445,3 +445,15 @@ describe("policy: refusals name the original product, not only its code", () => 
     expect(rule(bare, "substitution_rule").reason).toContain("asked for (VA-1010)");
   });
 });
+
+describe("policy: deliverOn, an exact day", () => {
+  it("passes a line delivered that day and fails one that arrives any other day", () => {
+    const q = small();
+    const day = q.lines[0].deliveryDate;
+    expect(rule(evaluatePolicy(mandate(), draft(q, { deliverOn: day, neededBy: day }), ctx()), "delivery_deadline").outcome).toBe("pass");
+    const later = "2026-11-20";
+    const d = evaluatePolicy(mandate(), draft(q, { deliverOn: later, neededBy: later }), ctx());
+    expectRejectedBy(d, "delivery_deadline");
+    expect(rule(d, "delivery_deadline").reason).toContain(`not on ${later}, the day the request asked for`);
+  });
+});

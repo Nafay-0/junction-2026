@@ -52,6 +52,8 @@ export type OrderDraft = {
   quote: Quote; // signature already verified
   lines: OrderDraftLine[];
   neededBy?: string; // YYYY-MM-DD, from the purchase request
+  /** Delivered exactly on this day (YYYY-MM-DD), when the request asked for a day rather than a deadline. */
+  deliverOn?: string;
   /** The request the order is placed under. A quote buys only for the request it was issued for. */
   requestId?: string;
   /** What the request asked for (orders.ts PurchaseRequest.asked): any other product is a substitute of it. */
@@ -199,8 +201,13 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
   const latest = draft.neededBy && draft.neededBy < leadLimit ? draft.neededBy : leadLimit;
   lineCheck(
     "delivery_deadline",
-    (l) => (l.deliveryDate <= latest ? null : `${l.productId} arrives ${l.deliveryDate}, after the latest acceptable date ${latest}.`),
-    `Every line arrives by ${latest}.`,
+    (l) =>
+      l.deliveryDate > latest
+        ? `${l.productId} arrives ${l.deliveryDate}, after the latest acceptable date ${latest}.`
+        : draft.deliverOn && l.deliveryDate !== draft.deliverOn
+          ? `${l.productId} arrives ${l.deliveryDate}, not on ${draft.deliverOn}, the day the request asked for.`
+          : null,
+    draft.deliverOn ? `Every line arrives on ${draft.deliverOn}, the day asked.` : `Every line arrives by ${latest}.`,
   );
 
   // Substitution. The gate works out for itself what is a substitute: a declared one, or any line that is not what
