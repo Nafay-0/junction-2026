@@ -90,13 +90,13 @@ export function writtenNumbers(s: string): number[] {
 }
 
 const UNIT_TOKENS: [NeedUnit, RegExp][] = [
-  ["L", /(\d|\b)(l|ltr|lt|litra[a-z]*|liter[a-z]*|litre[s]?|dl)\b/i],
-  ["kg", /(\d|\b)(kg|kilo[a-z]*|kiloa)\b/i],
-  ["pcs", /(\d|\b)(kpl|st|stk|pcs|pc|pieces?|kappale[a-z]*|styck[a-z]*)\b/i],
-  ["pack", /(\d|\b)(ltk|laatik[a-zä]*|box(es)?|cases?|pack[s]?|pkt|paketti[a-z]*|back[a]?|låd[a-z]*|kartong[a-z]*|ps|pussi[a-z]*|säck[a-z]*|tray[s]?|ras[a-z]*)\b/i],
+  ["L", /(?<![\p{L}])(l|ltr|lt|litra[a-z]*|liter[a-z]*|litre[s]?|dl)(?![\p{L}])/iu],
+  ["kg", /(?<![\p{L}])(kg|kilo[a-z]*|kiloa)(?![\p{L}])/iu],
+  ["pcs", /(?<![\p{L}])(kpl|st|stk|pcs|pc|pieces?|kappale[a-z]*|styck[a-z]*)(?![\p{L}])/iu],
+  ["pack", /(?<![\p{L}])(ltk|laatik[a-zä]*|box(es)?|cases?|pack[s]?|pkt|paketti[a-z]*|back[a]?|låd[a-z]*|kartong[a-z]*|ps|pussi[a-z]*|säck[a-z]*|tray[s]?|crate[s]?|kenno[a-z]*|ras[a-z]*)(?![\p{L}])/iu],
 ];
 
-const INSTRUCTION = /\b(ignore|disregard|forget|override|bypass|approve|auto-?approve|without (approval|sign[- ]?off|asking)|system( prompt)?|assistant|you are|as an ai|ai agent|the agent|prompt|jailbreak|unohda|ohita|hyväksy|älä kysy|ilman hyväksyntää|ignorera|glöm|godkänn|utan godkännande)\b/i;
+const INSTRUCTION = /(?<![\p{L}\p{N}])(ignore|disregard|forget|override|bypass|approve|auto-?approve|without (approval|sign[- ]?off|asking)|system( prompt)?|assistant|you are|as an ai|ai agent|the agent|prompt|jailbreak|unohda|ohita|hyväksy|älä kysy|ilman hyväksyntää|ignorera|glöm|godkänn|utan godkännande)(?![\p{L}\p{N}])/iu;
 
 /** Model output to lines the buyer reviews. Pure; `sourceText` is the pasted text, when that is the source. */
 export function toLines(raw: RawScan, kind: SourceKind): ScanLine[] {
@@ -143,7 +143,8 @@ function boxOf(b: number[] | null, page: number | null): { box?: ScanLine["box"]
   if (!b || b.length !== 4 || b.some((n) => !Number.isFinite(n))) return {};
   const [ymin, xmin, ymax, xmax] = b.map((n) => Math.max(0, Math.min(1000, n)) / 1000);
   if (ymax <= ymin || xmax <= xmin) return {};
-  return { box: { x: xmin, y: ymin, w: xmax - xmin, h: ymax - ymin, page: page && page > 0 ? Math.round(page) : 1 } };
+  const r4 = (n: number) => Math.round(n * 10_000) / 10_000;
+  return { box: { x: r4(xmin), y: r4(ymin), w: r4(xmax - xmin), h: r4(ymax - ymin), page: page && page > 0 ? Math.round(page) : 1 } };
 }
 
 /** The words a reviewed line is read as by the same interpret step as typed text. */

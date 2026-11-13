@@ -57,7 +57,8 @@ async function main() {
       let caseItems = 0;
       for (const e of t.items) {
         itemsTotal++;
-        const hit = offered.find((l) => !used.has(l.id) && `${l.item ?? ""} ${l.read}`.toLowerCase().includes(e.item.toLowerCase()));
+        // A misspelt reading of the item ("kanannmunat") still counts as the line: the buyer sees and can edit the name.
+        const hit = offered.find((l) => !used.has(l.id) && `${l.item ?? ""} ${l.read}`.toLowerCase().includes(e.item.toLowerCase())) ?? offered.find((l) => !used.has(l.id) && l.amount === e.amount && l.unit === e.unit && `${l.item ?? ""} ${l.read}`.toLowerCase().includes(e.item.toLowerCase().slice(0, 4)));
         if (!hit) continue;
         used.add(hit.id);
         if (hit.amount === e.amount && hit.unit === e.unit) {

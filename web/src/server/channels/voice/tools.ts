@@ -115,8 +115,8 @@ function pendingView(call: Call): Pending | undefined {
   return { need: p.need, summary: parsed.success ? describeNeed(parsed.data) : "", reason: p.reason, say: q ? readBackSay(parsed.success ? parsed.data.item.text : "", q, p.reason) : "" };
 }
 
-function readBackSay(item: string, q: { amount: number; unit: NeedInput["quantity"] extends infer Q ? (Q extends { unit: infer U } ? U : never) : never }, reason: string) {
-  return `Read the amount back: ${formatAmount(q.amount, q.unit)} (${amountInWords(q.amount, q.unit)}) of ${item}. Dock asks because ${reason}.`;
+function readBackSay(item: string, q: { amount: number; unit: NonNullable<NeedInput["quantity"]>["unit"] }, reason: string) {
+  return `${formatAmount(q.amount, q.unit)} (${amountInWords(q.amount, q.unit)}) of ${item}: I am checking because ${reason}.`;
 }
 
 function fromStep(call: Call, step: IntakeView, heard?: HeardWords): ToolReply {
@@ -153,7 +153,7 @@ async function submit(a: KitchenAgent, call: Call, request: string, heard: Heard
     call.desk.requestId = undefined;
     call.desk.orderId = undefined;
     return {
-      forModel: { ok: true, state: "read_back", say, ask: "Ask the caller: is that right? If they correct it, call submit_request again with their correction.", amount: formatAmount(need.quantity.amount, need.quantity.unit), item: need.item.text, ...(need.deliverBy ? { deliverBy: need.deliverBy } : {}) },
+      forModel: { ok: true, state: "read_back", say, ask: "Is that right? (If the caller corrects it, call submit_request again with their correction.)", amount: formatAmount(need.quantity.amount, need.quantity.unit), item: need.item.text, ...(need.deliverBy ? { deliverBy: need.deliverBy } : {}) },
       screen: { pending: { need: read.need, summary: describeNeed(need), reason, say }, heard: words },
     };
   }

@@ -72,7 +72,7 @@ export class CallRegistry {
 
   private live(c: Call): boolean {
     const t = this.now();
-    return c.mode !== "typed" && !c.endedAt && t < c.expiresAt && t - c.lastSeen < CALL_LIMITS.staleMs;
+    return c.mode !== "typed" && c.endedAt === undefined && t < c.expiresAt && t - c.lastSeen < CALL_LIMITS.staleMs;
   }
 
   /** Reserve a line. Throws 409 when the kitchen is already on a call, 429 when the hourly limits are used up. */

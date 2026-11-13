@@ -91,8 +91,8 @@ export function digitsIn(text: string): number[] {
   return out;
 }
 
-const YES = /\b(yes|yeah|yep|yup|correct|right|exactly|sure|ok|okay|confirm(ed)?|go ahead|place it|do it|kyllä|kylla|joo|juu|jep|kyl|oikein|just niin|selvä|tilaa|ja|japp|jo|precis|stämmer|stammer|rätt|ratt|okej|kör|beställ)\b/i;
-const NO = /\b(no|nope|not|wrong|don'?t|stop|cancel|wait|ei|älä|ala|väärin|varin|peru|odota|nej|inte|fel|vänta|avbryt)\b/i;
+const YES = /(?<![\p{L}\p{N}])(yes|yeah|yep|yup|correct|right|exactly|sure|ok|okay|confirm(ed)?|go ahead|place it|do it|kyllä|kylla|joo|juu|jep|kyl|oikein|just niin|selvä|tilaa|ja|japp|jo|precis|stämmer|stammer|rätt|ratt|okej|kör|beställ)(?![\p{L}\p{N}])/iu;
+const NO = /(?<![\p{L}\p{N}])(no|nope|not|wrong|don'?t|stop|cancel|wait|ei|älä|ala|väärin|varin|peru|odota|nej|inte|fel|vänta|avbryt)(?![\p{L}\p{N}])/iu;
 
 /** "yes" | "no" | "unclear", from what the person said. A sentence with both counts as unclear. */
 export function yesOrNo(text: string): "yes" | "no" | "unclear" {

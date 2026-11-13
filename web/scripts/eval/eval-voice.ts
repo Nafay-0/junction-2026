@@ -67,7 +67,7 @@ async function runCase(file: string, t: Truth[string], model: string, system: st
       }
       const sc = m.serverContent;
       if (sc?.inputTranscription?.text) heard += sc.inputTranscription.text;
-      if (sc?.outputTranscription?.text && phase === "reply") said += sc.outputTranscription.text;
+      if (sc?.outputTranscription?.text && phase !== "greeting") said += sc.outputTranscription.text;
       if (m.usageMetadata) usage = { prompt: usage.prompt + (m.usageMetadata.promptTokenCount ?? 0), response: usage.response + (m.usageMetadata.responseTokenCount ?? 0) };
       if (sc?.turnComplete) {
         if (phase === "greeting") {
@@ -101,10 +101,11 @@ async function runCase(file: string, t: Truth[string], model: string, system: st
         }
         const q = need?.quantity;
         const result = q
-          ? { ok: true, state: "read_back", say: `Read the amount back: ${q.amount} ${q.unit} (${amountInWords(q.amount, q.unit)}) of ${need!.item.text}. Dock asks because there is no earlier order to compare it with.`, ask: "Ask the caller: is that right?", amount: `${q.amount} ${q.unit}`, item: need!.item.text }
+          ? { ok: true, state: "read_back", say: `${q.amount} ${q.unit} (${amountInWords(q.amount, q.unit)}) of ${need!.item.text}: I am checking because there is no earlier order to compare it with.`, ask: "Is that right? (If the caller corrects it, call submit_request again with their correction.)", amount: `${q.amount} ${q.unit}`, item: need!.item.text, ...(need!.deliverBy ? { deliverBy: need!.deliverBy } : {}) }
           : { ok: false, state: "incomplete", say: "Dock understood part of it but needs how much, with the unit.", ask: "Ask the caller for how much, with the unit." };
         facts = addFacts(emptyFacts(), result);
         phase = "reply";
+        said = "";
         ws.send(JSON.stringify({ toolResponse: { functionResponses: [{ id: fc.id, name: fc.name, response: result }] } }));
       }
     };

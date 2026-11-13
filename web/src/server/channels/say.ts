@@ -53,7 +53,7 @@ export function stepForModel(step: IntakeView): ForModel {
         total: formatEur(o.totalCents),
         delivery: spokenDate(o.deliveryDate),
         ...(o.orderBy ? { orderBy: formatCutoff(o.orderBy) } : {}),
-        tradeOff: o.match === "full" ? (o.cons[0] ?? "meets the whole request") : `gives up: ${o.givesUp.map((g) => g.text).join("; ")}`,
+        tradeOff: (o.match === "full" ? (o.cons[0] ?? "meets the whole request") : `gives up: ${o.givesUp.map((g) => g.text).join("; ")}`).replace(/\.+$/, ""),
         needsSignOff: o.signOff.length > 0,
       }));
       const lines = options.map((o) => `Option ${o.number}${o.labels.length ? ` (${o.labels.join(", ")})` : ""}: ${o.products.join(" plus ")}, ${o.total}, delivered ${o.delivery}; ${o.tradeOff}.`);

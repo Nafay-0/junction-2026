@@ -15,7 +15,7 @@ import { amount, clock, day, eur } from "../_ui/plain";
 export type Act = (name: string, args: Record<string, unknown>, label: string) => void;
 
 const LABEL: Record<string, string> = { best_price: "Best price", lowest_carbon: "Lowest carbon", most_reliable: "Most reliable", same_as_last_time: "Same as last time" };
-const RANK: Record<string, string> = { best: "Good · Better · Best: best", better: "better", good: "good" };
+const RANK: Record<string, string> = { best: "Best", better: "Better", good: "Good" };
 
 function Btn({ children, onClick, disabled, tone = "ink" }: { children: ReactNode; onClick: () => void; disabled?: boolean; tone?: "ink" | "plain" }) {
   return (

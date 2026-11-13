@@ -244,6 +244,9 @@ export function CallScreen({ kitchen, signOffHref, renderSignOff, onStep, onOrde
             <button type="button" onClick={() => void c.call(mode, c.callId() ?? undefined)} className="min-h-12 rounded-full bg-[#1f7a3a] px-6 font-semibold text-paper">
               {v.phase === "lost" ? "Call back" : "Call again"}
             </button>
+            <button type="button" onClick={() => void c.typeInstead()} className="min-h-12 rounded-full border-2 border-ink bg-paper px-6 font-semibold">
+              Type instead
+            </button>
           </div>
         </div>
       )}

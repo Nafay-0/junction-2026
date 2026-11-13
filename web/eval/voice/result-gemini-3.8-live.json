@@ -1,33 +1,238 @@
 {
   "summary": {
     "model": "gemini-3.8-live",
-    "cases": 1,
-    "amountInTranscript": "1/1",
-    "calledSubmitRequest": "1/1",
-    "structuredNeedCorrect": "1/1",
-    "replyGrounded": "1/1",
-    "replyInCallerLanguage": "1/1",
-    "medianToolMs": 1758
+    "cases": 12,
+    "amountInTranscript": "7/12",
+    "calledSubmitRequest": "10/12",
+    "structuredNeedCorrect": "7/12",
+    "replyGrounded": "11/12",
+    "replyInCallerLanguage": "9/12",
+    "medianToolMs": 1437
   },
-  "at": "2026-11-13T22:08:47.462Z",
+  "at": "2026-11-13T22:12:37.498Z",
   "rows": [
     {
       "file": "01-en-gb-1000l.wav",
       "heard": "I need 1,000 L of lactose-free milk by Monday.",
       "amountInTranscript": true,
       "tool": true,
-      "toolRequest": "I need 1000 liters of lactose-free milk by Monday.",
+      "toolRequest": "I need 1,000 L of lactose-free milk by Monday.",
       "need": "1000 L lactose-free milk",
       "needOk": true,
-      "reply": "Is that right, one thousand litres of lactose-free milk?",
+      "reply": "Does that sound right: one thousand litres of lactose-free milk?",
       "replyLang": "en",
       "langOk": true,
       "grounded": true,
       "violations": [],
-      "toolMs": 1758,
+      "toolMs": 1437,
       "usage": {
-        "prompt": 6576,
-        "response": 201
+        "prompt": 6585,
+        "response": 223
+      }
+    },
+    {
+      "file": "02-en-in-oat.wav",
+      "heard": "Can you get us 200 L of oat drink for Wednesday?",
+      "amountInTranscript": true,
+      "tool": true,
+      "toolRequest": "Can you get us 200 L of oat drink for Wednesday?",
+      "need": "200 L oat drink",
+      "needOk": true,
+      "reply": "Two hundred litres of oat drink. Is that right?",
+      "replyLang": "en",
+      "langOk": true,
+      "grounded": true,
+      "violations": [],
+      "toolMs": 1586,
+      "usage": {
+        "prompt": 6521,
+        "response": 186
+      }
+    },
+    {
+      "file": "03-en-us-fifteen.wav",
+      "heard": "15 kilos of powder, please, for Friday.",
+      "amountInTranscript": true,
+      "tool": true,
+      "toolRequest": "15 kilos of powder, please, for Friday.",
+      "need": "15 kg powder",
+      "needOk": false,
+      "reply": "For Friday, you need 15 kg of powder. Is that right?",
+      "replyLang": "en",
+      "langOk": true,
+      "grounded": false,
+      "violations": [
+        "friday"
+      ],
+      "toolMs": 1512,
+      "usage": {
+        "prompt": 6528,
+        "response": 218
+      }
+    },
+    {
+      "file": "04-en-za-cream-noise.wav",
+      "heard": "50 L of cream for tomorrow",
+      "amountInTranscript": true,
+      "tool": true,
+      "toolRequest": "50 L of cream for tomorrow",
+      "need": "50 L cream",
+      "needOk": true,
+      "reply": "50 L of cream. Is that right?",
+      "replyLang": "en",
+      "langOk": true,
+      "grounded": true,
+      "violations": [],
+      "toolMs": 1253,
+      "usage": {
+        "prompt": 7951,
+        "response": 160
+      }
+    },
+    {
+      "file": "05-fi-maito.wav",
+      "heard": "Tarvitsen 100 litraa laktoositonta maitoa torstaiksi.",
+      "amountInTranscript": true,
+      "tool": true,
+      "toolRequest": "Tarvitsen 100 litraa laktoositonta maitoa torstaiksi.",
+      "need": "100 L laktoositonta maitoa",
+      "needOk": true,
+      "reply": "Sata litraa laktoositonta maitoa. Onko tämä oikein?",
+      "replyLang": "fi",
+      "langOk": true,
+      "grounded": true,
+      "violations": [],
+      "toolMs": 1552,
+      "usage": {
+        "prompt": 6575,
+        "response": 210
+      }
+    },
+    {
+      "file": "06-fi-voi-noise.wav",
+      "heard": "",
+      "amountInTranscript": false,
+      "tool": false,
+      "needOk": false,
+      "reply": "",
+      "replyLang": "en",
+      "langOk": false,
+      "grounded": true,
+      "violations": [],
+      "usage": {
+        "prompt": 0,
+        "response": 0
+      }
+    },
+    {
+      "file": "07-sv-gradde.wav",
+      "heard": "Vi behöver 30 liter grädde till fredag.",
+      "amountInTranscript": true,
+      "tool": false,
+      "needOk": false,
+      "reply": "",
+      "replyLang": "en",
+      "langOk": false,
+      "grounded": true,
+      "violations": [],
+      "usage": {
+        "prompt": 1990,
+        "response": 175
+      }
+    },
+    {
+      "file": "08-sv-yoghurt-noise.wav",
+      "heard": "sauce de yaourt",
+      "amountInTranscript": false,
+      "tool": true,
+      "toolRequest": "two plates of salmon with yogurt sauce",
+      "need": "The request does not say how much.",
+      "needOk": false,
+      "reply": "Dock understood part of it but needs how much, with the unit.",
+      "replyLang": "en",
+      "langOk": false,
+      "grounded": true,
+      "violations": [],
+      "toolMs": 1324,
+      "usage": {
+        "prompt": 6427,
+        "response": 182
+      }
+    },
+    {
+      "file": "09-en-au-last-time.wav",
+      "heard": "Same milk as last time but 80 L.",
+      "amountInTranscript": true,
+      "tool": true,
+      "toolRequest": "Same milk as last time but 80 L.",
+      "need": "80 L milk",
+      "needOk": true,
+      "reply": "You want eighty litres of milk. Is that right?    <input name=\"city\" type=\"text\">\n  </label>\n</fieldset>\n<fieldset>\n  <legend>Employment</legend>\n  <label for=\"employer\">Employer:</label>\n  <input name=\"employer\" type=\"text\" id=\"employer\">\n  <label for=\"position\">Position:</label>\n  <input name=\"position\" type=\"text\" id=\"position\">\n</fieldset>\n<button type=\"submit\">Submit</button>\n</form>",
+      "replyLang": "en",
+      "langOk": true,
+      "grounded": true,
+      "violations": [],
+      "toolMs": 6520,
+      "usage": {
+        "prompt": 6532,
+        "response": 219
+      }
+    },
+    {
+      "file": "10-en-ie-decimal.wav",
+      "heard": "2 and 1/2 kilos of parmesan for Thursday.",
+      "amountInTranscript": false,
+      "tool": true,
+      "toolRequest": "2 and 1/2 kilos of parmesan for Thursday",
+      "need": "2.5 kg parmesan",
+      "needOk": true,
+      "reply": "Read the amount back: 2.5 kg of parmesan. Is that right?  Is that right?",
+      "replyLang": "en",
+      "langOk": true,
+      "grounded": true,
+      "violations": [],
+      "toolMs": 1521,
+      "usage": {
+        "prompt": 6463,
+        "response": 230
+      }
+    },
+    {
+      "file": "11-en-in-eggs-loud.wav",
+      "heard": "two plates of salad",
+      "amountInTranscript": false,
+      "tool": true,
+      "toolRequest": "two plates of salad",
+      "need": "2 pcs salad",
+      "needOk": false,
+      "reply": "I have 2 pcs of salad. Is that right?",
+      "replyLang": "en",
+      "langOk": true,
+      "grounded": true,
+      "violations": [],
+      "toolMs": 1183,
+      "usage": {
+        "prompt": 6488,
+        "response": 198
+      }
+    },
+    {
+      "file": "12-en-us-cases-loud.wav",
+      "heard": "six cases of semi-skimmed milk",
+      "amountInTranscript": false,
+      "tool": true,
+      "toolRequest": "six cases of semi-skimmed milk",
+      "need": "6 pack semi-skimmed milk",
+      "needOk": true,
+      "reply": "Do you want me to read back six packs of semi-skimmed milk, is that right?",
+      "replyLang": "en",
+      "langOk": true,
+      "grounded": true,
+      "violations": [],
+      "toolMs": 1298,
+      "usage": {
+        "prompt": 6470,
+        "response": 200
       }
     }
   ]

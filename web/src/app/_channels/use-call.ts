@@ -234,6 +234,7 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
       } catch (err) {
         cleanup();
         const p = micProblem(err);
+        console.warn("microphone:", (err as Error)?.name, (err as Error)?.message);
         await startTyped(p, MIC_TEXT[p], carryFrom);
         return;
       }
@@ -348,7 +349,8 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
         return;
       }
       screen(r.data);
-      addLine("dock", [r.data.forModel.say, r.data.forModel.ask && !r.data.forModel.ask.startsWith("Ask") ? r.data.forModel.ask : ""].filter(Boolean).join(" "));
+      // On screen the cards carry the detail: the transcript gets Dock's first sentence only.
+      addLine("dock", r.data.forModel.say.split(/(?<=[.:])\s/)[0]);
     },
     [addLine, base, screen, set],
   );
@@ -461,5 +463,7 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
     cleanup();
   }, [base, cleanup]);
 
-  return { view: v, call, hangUp, pressTalk, releaseTalk, typed, tap, callId: () => callId.current, level: () => audio.current?.level ?? 0 };
+  const typeInstead = useCallback(() => startTyped(undefined, "Typing instead of talking: the same request, the same checks.", callId.current ?? undefined), [startTyped]);
+
+  return { view: v, call, hangUp, typeInstead, pressTalk, releaseTalk, typed, tap, callId: () => callId.current, level: () => audio.current?.level ?? 0 };
 }
