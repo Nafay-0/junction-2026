@@ -5,10 +5,10 @@
  *     an agent order through the intake, committed alone; remembers the order, its used quote and the ledger head
  *   ... restart the app (node infra/aiven-deploy.mjs --restart) ...
  *   pnpm restart-proof after --url https://<host> --state <file>
- *     the order reads back unchanged, the ledger verifies (app and operations desk) and still contains the head
+ *     the order reads back unchanged, the ledger verifies and still contains the head
  *     seen before, and placing the order again with the used quote is refused
  *
- * Signs Laakso Catering's demo mandate with DOCK_DEMO_ORG_JWK (web/.env.local); enters /ops with DOCK_OPS_PASSCODE.
+ * Signs Laakso Catering's demo mandate with DOCK_DEMO_ORG_JWK (web/.env.local).
  * Prints PASS or FAIL; exits 1 on failure. Prints no secrets.
  */
 import { readFileSync, writeFileSync } from "node:fs";
@@ -57,16 +57,6 @@ async function ledgerCheck(): Promise<{ ok: boolean; length: number; head?: { se
   return { ok: false, length: 0, detail: `GET /api/v1/ledger -> ${r.status}` };
 }
 
-async function opsVerify(): Promise<string> {
-  const passcode = process.env.DOCK_OPS_PASSCODE?.trim();
-  if (!passcode) return "no DOCK_OPS_PASSCODE";
-  const enter = await json("/ops-api/session", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ passcode, name: "Restart proof" }) });
-  const cookie = (enter.headers.get("set-cookie") ?? "").split(";")[0];
-  const v = await json("/ops-api/verify", { headers: { cookie } });
-  await fetch(url + "/ops-api/session", { method: "DELETE", headers: { cookie } });
-  return v.status === 200 ? JSON.stringify(v.body).slice(0, 200) : `HTTP ${v.status}`;
-}
-
 async function main() {
   const agent = new DockClient((r) => fetch(r), url).as(await signMandate(demoMandate(new Date()), await demoOrgKeyPair()), DEMO_ORG.agentId);
   const health = (await json("/api/health")).body;
@@ -101,7 +91,6 @@ async function main() {
     const r = await json(`/api/v1/ledger?orderId=${st.orderId}`);
     const keepsHead = (l.head?.seq ?? -1) >= st.head.seq && (r.body.entries ?? []).length > 0;
     record("ledger verifies after restart", l.ok && keepsHead, `${l.detail}, head #${st.head.seq} -> #${l.head?.seq}, ${(r.body.entries ?? []).length} entries for the order`);
-    console.log(`      operations desk verify: ${await opsVerify()}`);
   }
   const failed = results.filter((x) => !x[1]).length;
   console.log(`\n${failed ? "FAIL" : "PASS"}: ${results.length - failed} of ${results.length} (${phase} restart).`);
