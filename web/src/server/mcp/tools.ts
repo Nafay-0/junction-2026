@@ -3,7 +3,7 @@ import { MAX_LIVE_IDS_PER_CALL } from "@/core/catalog";
 import { AnswersInput, ChoiceInput, ConcernResponseInput, type IntakeView } from "@/core/intake";
 import { explain } from "@/core/ledger";
 import { NEED_UNITS, NeedSchema, OPTIMISE_GOALS } from "@/core/need";
-import { AvailabilityInput, DockError, OpenRequestInput, PlaceOrderInput, QuoteInput, SearchInput, type AgentSession, type Dock } from "@/core/orders";
+import { AvailabilityInput, DockError, OpenRequestInput, PlaceOrderInput, QuoteInput, SearchInput, type AgentSession, type Dock, MAX_QUOTE_LINES } from "@/core/orders";
 import { decidingRule } from "@/core/policy";
 import {
   IntakeStepSchema,
@@ -159,7 +159,8 @@ const INTAKE_TOOLS = [
       if (answer instanceof AskHuman) return answer;
       const who = answer.by || defaultBy;
       if (!who || !answer.responses) throw humanAnswerRequired("A confirmation or correction");
-      return intakeResult(await dock.intake.respondToConcerns(session, requestId, { by: who, responses: answer.responses }));
+      // Answered through the client's own prompt to the user (elicitation) only when the form came back; else relayed.
+      return intakeResult(await dock.intake.respondToConcerns(session, requestId, { by: who, responses: answer.responses }, answer === proposed ? undefined : { channel: "protocol_elicitation" }));
     },
   }),
   tool({
@@ -182,7 +183,7 @@ const INTAKE_TOOLS = [
       if (answer instanceof AskHuman) return answer;
       const who = answer.by || defaultBy;
       if (!who || !answer.answers) throw humanAnswerRequired("An answer");
-      return intakeResult(await dock.intake.answer(session, requestId, { by: who, answers: answer.answers }));
+      return intakeResult(await dock.intake.answer(session, requestId, { by: who, answers: answer.answers }, answer === proposed ? undefined : { channel: "protocol_elicitation" }));
     },
   }),
   tool({
@@ -308,7 +309,7 @@ const CORE_TOOLS = [
           }),
         )
         .min(1)
-        .max(20),
+        .max(MAX_QUOTE_LINES),
     }),
     output: QuoteResultSchema.extend({ nextStep }),
     run: async ({ dock, session, guard, agentKey }, args) => {

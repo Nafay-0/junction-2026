@@ -14,7 +14,8 @@ import { getRuntime } from "./runtime";
  *   laakso     Laakso Catering: the partner's example org, no history (dev-fixtures.ts)
  *   sbx_...    a visitor's own kitchen, made by scanning the join QR code (sandboxes.ts)
  *
- * DEMO NOTE: anyone who can open the console URL can make that kitchen's agent ask for things. The agent still
+ * Who may use a console is decided in server/authz.ts (consoleKitchen): the two demo kitchens are open to anyone at
+ * the table; a visitor's kitchen only from the phone that joined it. Anyone at a demo kitchen can make its agent ask for things. The agent still
  * cannot approve anything: sign-off needs the named person (their passkey, or the one-time link for the two
  * demo kitchens, which have no real person behind them).
  */
@@ -117,10 +118,14 @@ export async function resolveKitchen(slug: string): Promise<Resolved | undefined
   };
 }
 
-/** Kitchens a console can switch to right now: the two demo kitchens, then visitors' kitchens, newest first. */
-export async function listConsoleKitchens(): Promise<{ slug: string; name: string; kind: "demo" | "visitor"; approverName?: string }[]> {
+/**
+ * Kitchens a console can switch to right now: the two demo kitchens, then the viewer's own visitor kitchen (pass the
+ * org of the phone's approver session). Other visitors' kitchens are never listed (server/authz.ts).
+ */
+export async function listConsoleKitchens(viewerOrgId?: string): Promise<{ slug: string; name: string; kind: "demo" | "visitor"; approverName?: string }[]> {
   const { sandboxes } = await getRuntime();
   const visitors = (await sandboxes.list())
+    .filter((s) => viewerOrgId !== undefined && s.orgId === viewerOrgId)
     .slice()
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .map((s) => ({ slug: s.sandboxId, name: `${s.kitchenName}, ${s.city}`, kind: "visitor" as const, approverName: s.approverName }));

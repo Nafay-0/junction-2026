@@ -12,8 +12,10 @@ import { DISPLAY_TIME_ZONE } from "./config";
  */
 export type ApprovalView = {
   approvalId: string;
-  /** pending: waiting for this person. committed / declined / not_placed: decided. */
-  state: "pending" | "committed" | "declined" | "not_placed";
+  /** pending: waiting for this person. committed / declined / not_placed: decided. withdrawn / expired: closed unsigned. */
+  state: "pending" | "committed" | "declined" | "not_placed" | "withdrawn" | "expired";
+  /** For withdrawn and expired: one sentence on why nobody needs to sign any more. */
+  closedReason?: string;
   kitchenName: string;
   agentName: string;
   approverName: string;
@@ -133,7 +135,15 @@ export function buildApprovalView(
   const lines = order.lines;
   const dates = [...new Set(lines.map((l) => l.deliveryDate))].sort();
   const state: ApprovalView["state"] =
-    order.status === "pending_approval" && approval.status === "pending" ? "pending" : order.status === "committed" ? "committed" : order.status === "declined" ? "declined" : "not_placed";
+    order.status === "pending_approval" && approval.status === "pending"
+      ? "pending"
+      : order.status === "committed"
+        ? "committed"
+        : order.status === "declined"
+          ? "declined"
+          : order.status === "withdrawn" || order.status === "expired"
+            ? order.status
+            : "not_placed";
   const s = approval.signOff;
   // The money rule first: it is the one people expect.
   const escalations = order.decision.rules.filter((r) => r.outcome === "escalate").sort((a, b) => Number(b.rule === "per_order_limit") - Number(a.rule === "per_order_limit"));
@@ -164,8 +174,14 @@ export function buildApprovalView(
     signIn: opts.signIn,
     demoTapEnabled: opts.demoTapEnabled,
     viewerIsApprover: opts.viewerIsApprover,
+    closedReason:
+      state === "withdrawn"
+        ? `The kitchen withdrew this order${approval.note ? `: "${approval.note}"` : ""}. Nothing to sign.`
+        : state === "expired"
+          ? `The fixed price ran out at ${timeText(ctx.quoteExpiresAt)} before anyone signed. Nothing to sign; the agent asks for a new quote if it is still needed.`
+          : undefined,
     outcome:
-      approval.status === "pending"
+      approval.status !== "approved" && approval.status !== "declined"
         ? undefined
         : {
             decision: approval.status,

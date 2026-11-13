@@ -1,0 +1,762 @@
+{
+  "summary": {
+    "at": "2026-11-13T21:53:29.254Z",
+    "url": "http://localhost:4312",
+    "seed": 20261113,
+    "probes": 38,
+    "cases": 294,
+    "pass": 25,
+    "fail": 13,
+    "error": 0,
+    "skip": 0,
+    "httpCalls": 328,
+    "invariantViolations": 0,
+    "ledgerVerifies": true,
+    "liveLookupsOnRealServer": 0,
+    "openFindings": [
+      "F-PENDING-HOLDS-BUDGET",
+      "F-DEMO-KITCHEN-UNSIGNABLE",
+      "F-NO-OPTION-REASON",
+      "F-GATE-UTC-DATE",
+      "F-QUOTE-REQUEST",
+      "F-SUBST-SELF-DECLARED",
+      "F-HUMAN-INPUT-BY-AGENT",
+      "F-LEDGER-OPEN",
+      "F-APPROVALS-OPEN",
+      "F-SANDBOX-OPEN",
+      "F-MODEL-SPEND",
+      "F-SHARED-LIVE-ALLOWANCE"
+    ]
+  },
+  "matrix": {
+    "gate": {
+      "plausible": 1,
+      "hostile": 4,
+      "boundary": 2,
+      "sequence": 3,
+      "authority": 15,
+      "exhaustion": 0,
+      "inconsistency": 0,
+      "language": 0,
+      "usability": 0
+    },
+    "quotes": {
+      "plausible": 0,
+      "hostile": 3,
+      "boundary": 13,
+      "sequence": 2,
+      "authority": 1,
+      "exhaustion": 0,
+      "inconsistency": 1,
+      "language": 0,
+      "usability": 0
+    },
+    "ledger": {
+      "plausible": 0,
+      "hostile": 0,
+      "boundary": 0,
+      "sequence": 0,
+      "authority": 2,
+      "exhaustion": 0,
+      "inconsistency": 0,
+      "language": 0,
+      "usability": 0
+    },
+    "mandate": {
+      "plausible": 0,
+      "hostile": 8,
+      "boundary": 0,
+      "sequence": 0,
+      "authority": 3,
+      "exhaustion": 0,
+      "inconsistency": 0,
+      "language": 0,
+      "usability": 0
+    },
+    "intake": {
+      "plausible": 3,
+      "hostile": 9,
+      "boundary": 0,
+      "sequence": 4,
+      "authority": 3,
+      "exhaustion": 0,
+      "inconsistency": 0,
+      "language": 0,
+      "usability": 0
+    },
+    "conversion": {
+      "plausible": 0,
+      "hostile": 0,
+      "boundary": 19,
+      "sequence": 0,
+      "authority": 0,
+      "exhaustion": 0,
+      "inconsistency": 0,
+      "language": 0,
+      "usability": 0
+    },
+    "dates": {
+      "plausible": 0,
+      "hostile": 0,
+      "boundary": 150,
+      "sequence": 0,
+      "authority": 0,
+      "exhaustion": 0,
+      "inconsistency": 0,
+      "language": 0,
+      "usability": 0
+    },
+    "memory": {
+      "plausible": 1,
+      "hostile": 0,
+      "boundary": 0,
+      "sequence": 0,
+      "authority": 0,
+      "exhaustion": 0,
+      "inconsistency": 0,
+      "language": 0,
+      "usability": 0
+    },
+    "interpreter": {
+      "plausible": 0,
+      "hostile": 0,
+      "boundary": 0,
+      "sequence": 0,
+      "authority": 0,
+      "exhaustion": 1,
+      "inconsistency": 0,
+      "language": 0,
+      "usability": 0
+    },
+    "runner": {
+      "plausible": 0,
+      "hostile": 0,
+      "boundary": 0,
+      "sequence": 0,
+      "authority": 0,
+      "exhaustion": 0,
+      "inconsistency": 0,
+      "language": 0,
+      "usability": 0
+    },
+    "rest": {
+      "plausible": 0,
+      "hostile": 7,
+      "boundary": 0,
+      "sequence": 0,
+      "authority": 0,
+      "exhaustion": 0,
+      "inconsistency": 0,
+      "language": 0,
+      "usability": 0
+    },
+    "mcp": {
+      "plausible": 0,
+      "hostile": 0,
+      "boundary": 0,
+      "sequence": 0,
+      "authority": 0,
+      "exhaustion": 0,
+      "inconsistency": 0,
+      "language": 0,
+      "usability": 0
+    },
+    "sandbox": {
+      "plausible": 1,
+      "hostile": 0,
+      "boundary": 0,
+      "sequence": 0,
+      "authority": 7,
+      "exhaustion": 0,
+      "inconsistency": 0,
+      "language": 0,
+      "usability": 0
+    },
+    "screens": {
+      "plausible": 0,
+      "hostile": 0,
+      "boundary": 0,
+      "sequence": 0,
+      "authority": 0,
+      "exhaustion": 0,
+      "inconsistency": 0,
+      "language": 0,
+      "usability": 0
+    },
+    "dependency": {
+      "plausible": 0,
+      "hostile": 0,
+      "boundary": 0,
+      "sequence": 0,
+      "authority": 0,
+      "exhaustion": 31,
+      "inconsistency": 0,
+      "language": 0,
+      "usability": 0
+    }
+  },
+  "results": [
+    {
+      "id": "demo.headline_twice_laakso",
+      "area": "gate",
+      "kind": "sequence",
+      "title": "Valio's own example on /k/laakso, tried by two judges in a row: the second still gets options",
+      "status": "fail",
+      "cases": 2,
+      "failures": [
+        "the console offers no way to sign the demo kitchen's order (mode view_only): it stays pending",
+        "second judge: no_options; Nothing on the short list can be delivered in time within the mandate: earliest delivery Thu 19 Nov is after Wed 18 Nov, the latest the mandate allows; only 400 L in stock, and no substitute within the mandate covers the",
+        "the buyer is told \"Nothing on the short list can be delivered in time within the mandate: earliest delivery Thu 19 Nov is after Wed 18 Nov, the latest the mandate allows; only 400...\" but 4 products were excluded only by the weekly budget the first, unsignable order still holds"
+      ],
+      "notes": [],
+      "violations": 0,
+      "ms": 84,
+      "findings": [
+        "F-PENDING-HOLDS-BUDGET",
+        "F-DEMO-KITCHEN-UNSIGNABLE",
+        "F-NO-OPTION-REASON"
+      ]
+    },
+    {
+      "id": "dates.gate_latest_day_helsinki",
+      "area": "dates",
+      "kind": "boundary",
+      "title": "The gate's latest delivery day (maxLeadDays) is counted in Helsinki days at every hour, as the intake counts it",
+      "status": "fail",
+      "cases": 144,
+      "failures": [
+        "14 of 144 hours refuse a delivery exactly maxLeadDays ahead in Helsinki; first: 2026-11-13T22:00:00.000Z (Helsinki 2026-11-14 00:00): delivery on 2026-11-19, 5 Helsinki days ahead, refused: VA-1001 arrives 2026-11-19, after the latest acceptable date 2026-11-18."
+      ],
+      "notes": [],
+      "violations": 0,
+      "ms": 19,
+      "findings": [
+        "F-GATE-UTC-DATE"
+      ]
+    },
+    {
+      "id": "gate.happy_path",
+      "area": "gate",
+      "kind": "plausible",
+      "title": "A small in-mandate order commits, totals add up, the ledger verifies",
+      "status": "pass",
+      "cases": 1,
+      "failures": [],
+      "notes": [],
+      "violations": 0,
+      "ms": 16
+    },
+    {
+      "id": "gate.per_order_limit",
+      "area": "gate",
+      "kind": "boundary",
+      "title": "Exactly at the per-order limit passes per_order_limit; one cent over escalates it to a person",
+      "status": "pass",
+      "cases": 2,
+      "failures": [],
+      "notes": [],
+      "violations": 0,
+      "ms": 15
+    },
+    {
+      "id": "gate.order_lines_tampered",
+      "area": "gate",
+      "kind": "hostile",
+      "title": "Order lines that differ from the quote (quantity, price, extra line, duplicate) are refused with order_matches_quote",
+      "status": "pass",
+      "cases": 4,
+      "failures": [],
+      "notes": [],
+      "violations": 0,
+      "ms": 28
+    },
+    {
+      "id": "gate.quote_token_tampered",
+      "area": "quotes",
+      "kind": "hostile",
+      "title": "A quote whose payload was edited (price, quantity, org) keeps its signature and is refused",
+      "status": "pass",
+      "cases": 3,
+      "failures": [],
+      "notes": [],
+      "violations": 0,
+      "ms": 19
+    },
+    {
+      "id": "gate.quote_replay",
+      "area": "quotes",
+      "kind": "sequence",
+      "title": "A quote buys once: a second order with the same quote is refused (quote_replay)",
+      "status": "pass",
+      "cases": 1,
+      "failures": [],
+      "notes": [],
+      "violations": 0,
+      "ms": 15
+    },
+    {
+      "id": "gate.quote_replay_concurrent",
+      "area": "quotes",
+      "kind": "sequence",
+      "title": "Eight orders racing on one quote: exactly one commits",
+      "status": "pass",
+      "cases": 1,
+      "failures": [],
+      "notes": [],
+      "violations": 0,
+      "ms": 26
+    },
+    {
+      "id": "gate.quote_other_request",
+      "area": "quotes",
+      "kind": "inconsistency",
+      "title": "A quote issued for request A cannot be placed as an order on request B",
+      "status": "fail",
+      "cases": 1,
+      "failures": [
+        "quote for req_6f0923e26ee04687 committed under req_c9bb9f0fdfc34b0c (order.requestId=req_c9bb9f0fdfc34b0c, quote.requestId=req_6f0923e26ee04687)"
+      ],
+      "notes": [],
+      "violations": 0,
+      "ms": 12,
+      "findings": [
+        "F-QUOTE-REQUEST"
+      ]
+    },
+    {
+      "id": "gate.quote_other_org",
+      "area": "quotes",
+      "kind": "authority",
+      "title": "Kaari's quote presented by Laakso's agent is refused (quote_binding)",
+      "status": "pass",
+      "cases": 1,
+      "failures": [],
+      "notes": [],
+      "violations": 0,
+      "ms": 11
+    },
+    {
+      "id": "gate.other_org_request",
+      "area": "mandate",
+      "kind": "authority",
+      "title": "One organisation cannot quote, order or read on another organisation's request or order",
+      "status": "pass",
+      "cases": 3,
+      "failures": [],
+      "notes": [],
+      "violations": 0,
+      "ms": 18
+    },
+    {
+      "id": "mandate.forged_altered_expired",
+      "area": "mandate",
+      "kind": "hostile",
+      "title": "Altered, forged, expired, not-yet-valid, unsigned and wrong-agent mandates are refused with 401/403 and a rule",
+      "status": "pass",
+      "cases": 8,
+      "failures": [],
+      "notes": [],
+      "violations": 0,
+      "ms": 16
+    },
+    {
+      "id": "gate.mandate_rules",
+      "area": "gate",
+      "kind": "authority",
+      "title": "Category, required attribute, forbidden allergen and certificate rules refuse with their rule name",
+      "status": "pass",
+      "cases": 4,
+      "failures": [],
+      "notes": [],
+      "violations": 0,
+      "ms": 38
+    },
+    {
+      "id": "gate.weekly_budget_race",
+      "area": "gate",
+      "kind": "sequence",
+      "title": "Twelve orders racing against a weekly budget that fits five: at most five commit",
+      "status": "pass",
+      "cases": 1,
+      "failures": [],
+      "notes": [],
+      "violations": 0,
+      "ms": 112
+    },
+    {
+      "id": "gate.order_splitting",
+      "area": "gate",
+      "kind": "authority",
+      "title": "Splitting one need into orders under the limit: no order whose running total crosses the limit commits alone",
+      "status": "pass",
+      "cases": 3,
+      "failures": [],
+      "notes": [],
+      "violations": 0,
+      "ms": 33
+    },
+    {
+      "id": "gate.substitution_undeclared",
+      "area": "gate",
+      "kind": "authority",
+      "title": "With substitution 'none', ordering a different product without declaring it a substitute",
+      "status": "fail",
+      "cases": 2,
+      "failures": [
+        "request named VA-1010; AR-2010 committed alone under \"no substitutes\" because the agent did not declare it (substitution_rule: pass)"
+      ],
+      "notes": [],
+      "violations": 0,
+      "ms": 17,
+      "findings": [
+        "F-SUBST-SELF-DECLARED"
+      ]
+    },
+    {
+      "id": "gate.substitute_price_reference",
+      "area": "gate",
+      "kind": "authority",
+      "title": "Substitute price check compares against an 'original' the agent chooses",
+      "status": "fail",
+      "cases": 1,
+      "failures": [
+        "the +25 % substitute passes substitute_price when the agent names a pricier 'original' (VA-1201) instead of the requested VA-1010"
+      ],
+      "notes": [],
+      "violations": 0,
+      "ms": 11,
+      "findings": [
+        "F-SUBST-SELF-DECLARED"
+      ]
+    },
+    {
+      "id": "gate.quantity_boundaries",
+      "area": "quotes",
+      "kind": "boundary",
+      "title": "Zero, negative, fractional, huge, NaN-like and string quantities give 4xx with a code, never 5xx",
+      "status": "pass",
+      "cases": 9,
+      "failures": [],
+      "notes": [],
+      "violations": 0,
+      "ms": 21
+    },
+    {
+      "id": "gate.empty_and_many_lines",
+      "area": "quotes",
+      "kind": "boundary",
+      "title": "No lines, 21 lines, unknown product, substitute for itself",
+      "status": "pass",
+      "cases": 4,
+      "failures": [],
+      "notes": [],
+      "violations": 0,
+      "ms": 8
+    },
+    {
+      "id": "intake.tenfold_confirmed_by_agent",
+      "area": "intake",
+      "kind": "authority",
+      "title": "A tenfold slip waits for the buyer, but the agent itself can 'confirm' it in any person's name",
+      "status": "fail",
+      "cases": 3,
+      "failures": [
+        "the agent confirmed the tenfold slip with only its mandate; the ledger records it as \"buyer:Sanna Koskinen (head chef): Sanna Koskinen (head chef) confirmed as intended: 1,000 L where you usually order about 10...\" (state now options_ready)"
+      ],
+      "notes": [],
+      "violations": 0,
+      "ms": 18,
+      "findings": [
+        "F-HUMAN-INPUT-BY-AGENT"
+      ]
+    },
+    {
+      "id": "intake.conversion_grid",
+      "area": "conversion",
+      "kind": "boundary",
+      "title": "Amounts in L, kg, pcs and packs: every card delivers at least what was asked and never a whole pack extra; money adds up; committed = quoted = card",
+      "status": "pass",
+      "cases": 19,
+      "failures": [],
+      "notes": [
+        "1 L milk: needs_confirmation > quoted > order_committed | 1xVA-1001",
+        "3 L milk: needs_confirmation > needs_confirmation > quoted > order_committed | 3xVA-1001",
+        "7 L milk: needs_confirmation > quoted > order_committed | 7xVA-1001",
+        "9.5 L milk: needs_confirmation > quoted > order_committed | 10xVA-1001",
+        "10 L milk: needs_confirmation > options_ready > quoted > order_committed | 1xVA-1010",
+        "12.5 L milk: needs_confirmation > quoted > order_committed | 13xVA-1001",
+        "19 L milk: needs_confirmation > options_ready > quoted > order_committed | 2xVA-1010",
+        "20 L milk: needs_confirmation > quoted > order_committed | 2xVA-1010",
+        "99 L milk: needs_confirmation > options_ready > quoted > order_committed | 10xVA-1010",
+        "100 L milk: needs_confirmation > options_ready > quoted > order_committed | 10xVA-1010",
+        "101 L milk: needs_confirmation > needs_confirmation > quoted > order_committed | 101xVA-1001",
+        "250 L milk: needs_confirmation > quoted > order_committed | 250xVA-1001",
+        "333 L milk: needs_confirmation > needs_confirmation > quoted > order_committed | 34xVA-1010",
+        "999 L milk: needs_confirmation > options_ready > quoted > order_pending_approval | 60xVA-1010+40xAR-2010",
+        "6 L cream: no_options",
+        "5 kg yoghurt: no_options",
+        "2.5 kg yoghurt: no_options",
+        "20 pack milk: needs_confirmation > quoted > order_committed | 20xVA-1010",
+        "12 pcs milk: needs_confirmation > options_ready > quoted > order_committed | 12xVA-1010"
+      ],
+      "violations": 0,
+      "ms": 316
+    },
+    {
+      "id": "intake.dates",
+      "area": "dates",
+      "kind": "boundary",
+      "title": "Past, today, Sunday, far-future and impossible dates: a typed concern or a 4xx, never an order for the wrong day",
+      "status": "pass",
+      "cases": 6,
+      "failures": [],
+      "notes": [],
+      "violations": 0,
+      "ms": 15
+    },
+    {
+      "id": "intake.sequence",
+      "area": "intake",
+      "kind": "sequence",
+      "title": "Steps out of order, twice and concurrently: choose twice, answer after quoting, concurrent choices",
+      "status": "pass",
+      "cases": 4,
+      "failures": [],
+      "notes": [
+        "did not reach options_ready: needs_confirmation"
+      ],
+      "violations": 0,
+      "ms": 2
+    },
+    {
+      "id": "intake.hostile_need",
+      "area": "intake",
+      "kind": "hostile",
+      "title": "Hostile structured needs: markup, control characters, long strings, path-like categories, injected product ids",
+      "status": "pass",
+      "cases": 9,
+      "failures": [],
+      "notes": [],
+      "violations": 0,
+      "ms": 14
+    },
+    {
+      "id": "intake.allergen_and_claims",
+      "area": "intake",
+      "kind": "plausible",
+      "title": "A forbidden allergen or required claim the request states is obeyed by every option and by the committed order",
+      "status": "pass",
+      "cases": 3,
+      "failures": [],
+      "notes": [
+        "organic: needs_confirmation > options_ready > quoted > order_committed | Same as last time (Valio Eila lactose-free semi-skimmed milk drink 1.5 %, 10 L bag-in-box) is not possible: it does not ",
+        "no milk allergen (milk!): needs_confirmation > no_options | No product in this family meets the mandate, the request and the kitchen's stated rules.",
+        "vegan oat drink: no_options | No product in this family meets the mandate, the request and the kitchen's stated rules."
+      ],
+      "violations": 0,
+      "ms": 28
+    },
+    {
+      "id": "memory.same_as_last_time",
+      "area": "memory",
+      "kind": "plausible",
+      "title": "Kaari 'same as last time' repeats the last milk order without a question and respects the stated lactose-free rule",
+      "status": "pass",
+      "cases": 1,
+      "failures": [],
+      "notes": [
+        "same as last time: quoted Repeats your order of 1 L from 2026-11-13."
+      ],
+      "violations": 0,
+      "ms": 10
+    },
+    {
+      "id": "exposure.ledger_public",
+      "area": "ledger",
+      "kind": "authority",
+      "title": "A stranger with no credentials reads another kitchen's request text from GET /api/v1/ledger",
+      "status": "fail",
+      "cases": 1,
+      "failures": [
+        "unauthenticated ledger read returned Kaari's request text (status 200, 483 entries across 58 actors)"
+      ],
+      "notes": [],
+      "violations": 0,
+      "ms": 17,
+      "findings": [
+        "F-LEDGER-OPEN"
+      ]
+    },
+    {
+      "id": "exposure.console_ledger_cross_kitchen",
+      "area": "ledger",
+      "kind": "authority",
+      "title": "Kaari's console back end returns Laakso's ledger entries",
+      "status": "fail",
+      "cases": 1,
+      "failures": [
+        "/ui-api/kitchens/kaari/call GET /api/v1/ledger contains Laakso's request (200)"
+      ],
+      "notes": [],
+      "violations": 0,
+      "ms": 20,
+      "findings": [
+        "F-LEDGER-OPEN"
+      ]
+    },
+    {
+      "id": "exposure.approvals_public",
+      "area": "sandbox",
+      "kind": "authority",
+      "title": "GET /api/v1/approvals and GET /api/v1/approvals/{id} with no credentials show other kitchens' pending orders and mandates",
+      "status": "fail",
+      "cases": 2,
+      "failures": [
+        "anonymous GET /api/v1/approvals lists Laakso's pending apr_d194e44e67164937 (8 pending across 1 orgs)",
+        "anonymous GET /api/v1/approvals/apr_d194e44e67164937: 200 with approvalId,state,kitchenName,agentName,approverName,approverRoleLabel,items,total,totalCents,delivery,why,differences,as"
+      ],
+      "notes": [],
+      "violations": 0,
+      "ms": 21,
+      "findings": [
+        "F-APPROVALS-OPEN"
+      ]
+    },
+    {
+      "id": "exposure.events_public",
+      "area": "sandbox",
+      "kind": "authority",
+      "title": "GET /api/v1/events with no credentials streams every kitchen's events",
+      "status": "fail",
+      "cases": 1,
+      "failures": [
+        "anonymous event stream replayed events of 2 organisations (org_laakso_catering, org_ravintola_kaari)"
+      ],
+      "notes": [],
+      "violations": 0,
+      "ms": 806,
+      "findings": [
+        "F-APPROVALS-OPEN"
+      ]
+    },
+    {
+      "id": "exposure.agent_cannot_approve",
+      "area": "gate",
+      "kind": "authority",
+      "title": "The agent cannot approve its own order: mandate headers, a guessed token, demo tap or session proofs are refused",
+      "status": "pass",
+      "cases": 5,
+      "failures": [],
+      "notes": [],
+      "violations": 0,
+      "ms": 35
+    },
+    {
+      "id": "sandbox.passkey_approval_e2e",
+      "area": "sandbox",
+      "kind": "plausible",
+      "title": "Visitor joins with a passkey, the demo order needs their sign-off, the passkey approves it, the ledger verifies",
+      "status": "pass",
+      "cases": 1,
+      "failures": [],
+      "notes": [],
+      "violations": 0,
+      "ms": 56
+    },
+    {
+      "id": "sandbox.other_visitor_cannot_approve",
+      "area": "sandbox",
+      "kind": "authority",
+      "title": "Visitor B's passkey and session cannot approve or decline visitor A's order",
+      "status": "pass",
+      "cases": 2,
+      "failures": [],
+      "notes": [],
+      "violations": 0,
+      "ms": 25
+    },
+    {
+      "id": "sandbox.stranger_triggers_demo_order",
+      "area": "sandbox",
+      "kind": "authority",
+      "title": "A stranger lists visitor kitchens and makes their agent order (sign-off requests land on the visitor's phone)",
+      "status": "fail",
+      "cases": 1,
+      "failures": [
+        "anonymous: sandbox listed=true, POST demo-order -> 201 (approval apr_dcc28b01fb3741fc) on someone else's kitchen"
+      ],
+      "notes": [],
+      "violations": 0,
+      "ms": 20,
+      "findings": [
+        "F-SANDBOX-OPEN"
+      ]
+    },
+    {
+      "id": "sandbox.stranger_spends_visitor_budget",
+      "area": "sandbox",
+      "kind": "authority",
+      "title": "Through /ui-api/kitchens/<visitor>/call a stranger acts as that visitor's agent (intake, quote, order within the mandate)",
+      "status": "pass",
+      "cases": 1,
+      "failures": [],
+      "notes": [
+        "stranger's intake on sbx_49a4e3eeed1c4470: 201 state=needs_confirmation"
+      ],
+      "violations": 0,
+      "ms": 9,
+      "findings": [
+        "F-CONSOLE-OPEN"
+      ]
+    },
+    {
+      "id": "exposure.interpret_unmetered",
+      "area": "interpreter",
+      "kind": "exhaustion",
+      "title": "The model interpreter is reachable with no credentials through the console back end, with no rate limit",
+      "status": "fail",
+      "cases": 1,
+      "failures": [
+        "anonymous visitor made 3 paid model calls with no rate limit or quota signal"
+      ],
+      "notes": [
+        "3 anonymous interpret calls: statuses 200,200,200"
+      ],
+      "violations": 0,
+      "ms": 3731,
+      "findings": [
+        "F-MODEL-SPEND"
+      ]
+    },
+    {
+      "id": "exposure.oversized_and_malformed",
+      "area": "rest",
+      "kind": "hostile",
+      "title": "Malformed JSON, wrong content type, 5 MB bodies, deep nesting, odd encodings: 4xx, never 5xx",
+      "status": "pass",
+      "cases": 7,
+      "failures": [],
+      "notes": [],
+      "violations": 0,
+      "ms": 43
+    },
+    {
+      "id": "demo.shared_live_allowance_kaari",
+      "area": "dependency",
+      "kind": "exhaustion",
+      "title": "Thirty-one visitors each make one request on /k/kaari within an hour: all of them get an answer",
+      "status": "fail",
+      "cases": 31,
+      "failures": [
+        "visitor 31 on /k/kaari got 429 live_lookup_budget_exceeded: \"This agent already made 30 live price/availability lookups in the last 60 minutes; the limit is 30.\" (the allowance is per agent, and every visitor of the demo kitchen is the same agent)"
+      ],
+      "notes": [],
+      "violations": 0,
+      "ms": 221,
+      "findings": [
+        "F-SHARED-LIVE-ALLOWANCE"
+      ]
+    }
+  ],
+  "violations": []
+}

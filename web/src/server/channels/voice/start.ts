@@ -34,7 +34,7 @@ export type CallStart = {
 };
 
 export async function startCall(req: Request, slug: string, input: { mode?: string; carryFrom?: string }): Promise<CallStart> {
-  const a = await kitchenAgent(slug);
+  const a = await kitchenAgent(slug, req);
   if (a.info.kind === "visitor") {
     const me = await currentApprover(req, a.rt);
     if (me?.sandbox?.sandboxId !== slug) throw new DockError(403, "call_not_yours", "Only the phone that joined this kitchen can call its agent. Scan the call QR code to get a kitchen of your own.");

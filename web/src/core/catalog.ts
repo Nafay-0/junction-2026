@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { addDays, isoDate } from "./util";
+import { addDaysIso, localNow } from "./kitchen";
 
 /** Product master data: what the partner ships as files. Local, cheap to query. */
 export const ProductSchema = z.object({
@@ -276,7 +276,7 @@ export class InMemoryCatalog implements CatalogPort {
       if (!s) continue; // unknown or delisted: no offer
       // Dock asks for the buyer's need-by date, which means "by": the earliest delivery is offered, and an
       // earlier date than that cannot be met.
-      const deliveryDate = isoDate(addDays(this.now(), s.leadDays));
+      const deliveryDate = addDaysIso(localNow(this.now()).date, s.leadDays); // Helsinki days, like the gate
       const requestedDate = options?.deliveryDate;
       offers.push({ productId: id, unitPriceCents: s.unitPriceCents, availablePacks: s.availablePacks, deliveryDate, ...(requestedDate ? { requestedDate, laterThanRequested: deliveryDate > requestedDate } : {}) });
     }

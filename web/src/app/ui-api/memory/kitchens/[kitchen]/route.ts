@@ -17,11 +17,11 @@ import { body, kitchenMemoryRoute, MemoryAction } from "@/server/memory/http";
  */
 export async function GET(req: Request, ctx: RouteContext<"/ui-api/memory/kitchens/[kitchen]">) {
   void req.url;
-  return kitchenMemoryRoute(ctx.params, (k, memory) => memory.view(k.info.orgId, k.info.name));
+  return kitchenMemoryRoute(req, ctx.params, (k, memory) => memory.view(k.info.orgId, k.info.name));
 }
 
 export async function POST(req: Request, ctx: RouteContext<"/ui-api/memory/kitchens/[kitchen]">) {
-  return kitchenMemoryRoute(ctx.params, async (k, memory) => {
+  return kitchenMemoryRoute(req, ctx.params, async (k, memory) => {
     const a = await body(req, MemoryAction);
     const org = k.info.orgId;
     const by = k.info.by;

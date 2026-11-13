@@ -8,7 +8,7 @@ import { noStore, portalRoute } from "@/server/kitchen-portal-http";
  * POST /api/v1/orders through the console's call route, the same gate an agent's order goes through.
  */
 export async function POST(req: Request, ctx: RouteContext<"/ui-api/kitchens/[kitchen]/basket">) {
-  return portalRoute(ctx.params, async (k) => {
+  return portalRoute(req, ctx.params, async (k) => {
     const body = (await req.json().catch(() => ({}))) as { lines?: unknown; deliverBy?: unknown };
     const lines = (Array.isArray(body.lines) ? body.lines : [])
       .map((l) => l as { productId?: unknown; packs?: unknown })

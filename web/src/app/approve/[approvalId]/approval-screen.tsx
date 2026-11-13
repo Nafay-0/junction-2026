@@ -27,7 +27,7 @@ export function ApprovalScreen({ approvalId, token }: { approvalId: string; toke
   const prepared = useRef<{ options: PublicKeyCredentialRequestOptionsJSON; at: number } | null>(null);
 
   const refresh = useCallback(async () => {
-    const r = await api<{ view: ApprovalView }>("GET", `/api/v1/approvals/${encodeURIComponent(approvalId)}`);
+    const r = await api<{ view: ApprovalView }>("GET", `/api/v1/approvals/${encodeURIComponent(approvalId)}${token ? `?token=${encodeURIComponent(token)}` : ""}`);
     if (r.ok) {
       setView(r.data.view);
       setLoadError(null);
@@ -35,7 +35,7 @@ export function ApprovalScreen({ approvalId, token }: { approvalId: string; toke
     }
     setLoadError(r.error);
     return null;
-  }, [approvalId]);
+  }, [approvalId, token]);
 
   /** Prepare the passkey prompt before the tap: Safari only opens it straight from a tap, with no fetch in between. */
   const prepare = useCallback(async () => {
@@ -61,7 +61,7 @@ export function ApprovalScreen({ approvalId, token }: { approvalId: string; toke
     };
   }, [refresh, prepare]);
 
-  useDockEvents(`/api/v1/events?approvalId=${encodeURIComponent(approvalId)}`, () => void refresh(), () => void refresh());
+  useDockEvents(`/api/v1/events?approvalId=${encodeURIComponent(approvalId)}${token ? `&token=${encodeURIComponent(token)}` : ""}`, () => void refresh(), () => void refresh());
 
   async function send(body: Record<string, unknown>): Promise<boolean> {
     setPhase("sending");
@@ -288,6 +288,23 @@ export function ApprovalScreen({ approvalId, token }: { approvalId: string; toke
 }
 
 function Outcome({ view }: { view: ApprovalView }) {
+  if (view.state === "withdrawn" || view.state === "expired") {
+    return (
+      <div className="mt-8 flex flex-1 flex-col" role="status" aria-live="polite">
+        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-neutral-700 text-4xl text-white" aria-hidden>
+          ×
+        </div>
+        <h1 className="mt-5 text-3xl font-bold">{view.state === "withdrawn" ? "Withdrawn by the kitchen" : "Expired unsigned"}</h1>
+        <p className="mt-2 text-xl">
+          {view.total} · {view.delivery}
+        </p>
+        {view.closedReason && <p className="mt-4">{view.closedReason}</p>}
+        <Link href="/approver" className="mt-auto flex h-14 items-center justify-center rounded-xl border border-neutral-300 text-lg">
+          Back to my screen
+        </Link>
+      </div>
+    );
+  }
   const o = view.outcome;
   const placed = view.state === "committed";
   const declined = view.state === "declined";

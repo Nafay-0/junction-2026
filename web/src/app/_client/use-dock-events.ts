@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 
 export type LiveEvent = {
   id: number;
-  type: "approval_requested" | "approval_approved" | "approval_declined" | "order_committed" | "order_rejected";
+  type: "approval_requested" | "approval_approved" | "approval_declined" | "approval_withdrawn" | "approval_expired" | "order_committed" | "order_rejected";
   at: string;
   orgId: string;
   orderId: string;
@@ -13,7 +13,7 @@ export type LiveEvent = {
   summary: string;
 };
 
-const TYPES: LiveEvent["type"][] = ["approval_requested", "approval_approved", "approval_declined", "order_committed", "order_rejected"];
+const TYPES: LiveEvent["type"][] = ["approval_requested", "approval_approved", "approval_declined", "approval_withdrawn", "approval_expired", "order_committed", "order_rejected"];
 
 /**
  * Subscribe to /api/v1/events with EventSource (server-sent events). The browser reconnects by itself and
