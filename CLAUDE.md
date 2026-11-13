@@ -23,6 +23,18 @@ Do not weaken or remove these settings without the user saying so.
 
 Win the overall Junction 2026 main prize (€10,000), not only a partner challenge. Creativity and technical skill both have to show.
 
+## Projects and ownership
+
+Two separate projects share this repo. Each person owns one, and its Claude Code session stays inside that project's folders.
+
+| Project | Challenge | Folders | Owner |
+|---|---|---|---|
+| Dock | Valio Aimo, "Trusted Trade Agents" | `web/`, `infra/`, `.github/workflows/` | Nafay (`Nafay-0`) |
+| Exa project (name to come) | Exa, "The Internet Butler" | `exa/` (rules in `exa/CLAUDE.md`) | Asadullah (`Asadullah378`) |
+| Shared | | `CLAUDE.md`, `README.md`, `research/`, `.claude/`, `.env.example`, `.gitignore` | Both: small edits only, named in the commit message |
+
+The next section describes Dock. The Exa project's brief and plan are in `exa/README.md`.
+
 ## What we are building (decided Fri 13 Nov, evening)
 
 **Challenge:** Valio Aimo, "Trusted Trade Agents" (€4,000 / €2,000 / €1,000). Working title: **Dock**.
@@ -54,7 +66,7 @@ Win the overall Junction 2026 main prize (€10,000), not only a partner challen
 - `main` must always run; it is the demo branch. Never push broken work to it.
 - Work on short branches named `<name>/<topic>`, merge back within a few hours. Run `git pull --rebase origin main` before starting and before merging.
 - Before editing, check `git status` and `git log origin/main -5` so you do not build on stale code or overwrite the other person's work. Do not force-push to `main`.
-- Stay inside the area the current person owns (ownership table to be added here once the idea is chosen). If a change needs files in the other person's area, say so instead of editing them silently.
+- Stay inside the area the current person owns (see "Projects and ownership" above). If a change needs files in the other person's area, say so instead of editing them silently.
 - Secrets go in `.env.local` only. Every new variable name is added to `.env.example` with an empty value.
 - Commit small and often with clear messages; the other person reads the log to stay in sync.
 
