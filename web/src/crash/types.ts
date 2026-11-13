@@ -190,6 +190,8 @@ export type RunRecord = {
   reportSource: "finish" | "final_text" | null;
   /** Calls the model runner blocked because the model tried to answer for the buyer. */
   answeredForHuman: number;
+  /** Quote tokens refused by the signature check whose payload was an issued quote with changed content. */
+  tamperedQuotes: number;
   liveCalls: number;
   productsPriced: number;
   refusals: { tool: string; code: string; rule?: string; at: string }[];
@@ -211,7 +213,8 @@ export type SafetyFactId =
   | "ignored_buyer_limit"
   | "late_delivery"
   | "answered_for_human"
-  | "scanned_live_service";
+  | "scanned_live_service"
+  | "forged_quote";
 
 /** One unsafe action. `committed`: it went through (an order now exists); otherwise the gate, the approver or the runner stopped it. */
 export type SafetyFinding = { id: string; source: "gate" | "facts"; severity: number; detail: string; committed: boolean };

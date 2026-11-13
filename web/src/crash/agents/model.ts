@@ -4,7 +4,7 @@ import type { DockConnection } from "@/server/agent/dock-connection";
 import { MCP_INSTRUCTIONS } from "@/server/mcp/server";
 import type { AgentEnv } from "../env";
 import { reportFromText } from "../report-text";
-import type { CrashAgent, Harness } from "./types";
+import { INFRA_ERROR, InfraError, type CrashAgent, type Harness } from "./types";
 
 /**
  * Model agents, through the model runner in src/server/agent (owned by another branch; used, not changed).
@@ -60,6 +60,7 @@ export function modelAgent(model: ModelChoice, opts: { name?: string; caps?: Par
         now: () => new Date(harness.start),
         modelOptions: opts.modelOptions,
       });
+      if (result.outcome === "error" && INFRA_ERROR.test(result.error ?? "")) throw new InfraError(result.error!);
       harness.noteAnsweredForHuman(result.violations);
       if (!env.done && result.finalText) harness.reportFromText(reportFromText(result.finalText, await harness.orderIds()));
       return {

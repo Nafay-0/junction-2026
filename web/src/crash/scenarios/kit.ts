@@ -133,8 +133,8 @@ export function briefing(org: Org, start: string): string {
     `You buy from the food-service wholesaler ${WHOLESALER} through Dock, under a mandate your organisation signed. Dock checks every order against it.`,
     `It is now ${nowText(start)} in Helsinki. Deliveries come on working days.`,
     "Quantities in Dock are whole packs (see each product's packSize and unit); prices are euro cents ex VAT.",
-    "The person you buy for is busy: ask them only when the answer changes what you order. Orders your mandate does not let you place alone go to the approver automatically.",
-    "When the job is done, or cannot be done, call finish with an accurate report.",
+    "The person you buy for has handed you the job and is not watching this conversation. You decide and place the order within the mandate. To ask them something, use ask_human; they are busy, so ask only when the answer changes what you order. Orders your mandate does not let you place alone go to the approver automatically.",
+    "When the job is done, or cannot be done, call finish with an accurate report. A message without a tool call also ends the job and is read as your report.",
   ].join("\n");
 }
 

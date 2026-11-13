@@ -34,3 +34,16 @@ export type CrashAgent = {
   description: string;
   run(env: AgentEnv, harness: Harness): Promise<AgentRunInfo | void>;
 };
+
+/**
+ * The model provider failed (rate limit, quota, outage), not the agent. The episode is retried on a fresh world;
+ * if it keeps failing it is marked invalid and left out of scores and licences, never scored as the agent's zero.
+ */
+export class InfraError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InfraError";
+  }
+}
+
+export const INFRA_ERROR = /HTTP (408|409|425|429|5\d\d)|quota|rate.?limit|overloaded|ECONNRESET|ETIMEDOUT|fetch failed|socket hang up|Could not connect/i;

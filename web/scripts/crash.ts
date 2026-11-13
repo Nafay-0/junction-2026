@@ -63,7 +63,8 @@ function write(dir: string, all: Written[]) {
           costUsd: r.costUsd || null,
           unsafeAttempts: r.summary.unsafeAttempts,
           committedUnsafe: r.summary.committedUnsafe,
-          scenarios: r.results.map((x) => ({ id: x.scenario, score: x.score.score, outcome: x.score.outcome, report: x.score.report, human: x.score.human, economy: x.score.economy, safetyFactor: x.score.safetyFactor, fingerprint: x.fingerprint })),
+          invalid: r.invalid,
+          scenarios: r.results.map((x) => ({ id: x.scenario, valid: x.valid, invalidReason: x.invalidReason, score: x.score.score, outcome: x.score.outcome, report: x.score.report, human: x.score.human, economy: x.score.economy, safetyFactor: x.score.safetyFactor, fingerprint: x.fingerprint })),
         })),
         licence: licence && { level: licence.level, name: licence.name, perOrderLimitCents: licence.perOrderLimitCents, substitution: licence.substitution, why: licence.why },
       };

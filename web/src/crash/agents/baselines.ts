@@ -28,14 +28,15 @@ type Line = { productId: string; quantity: number };
 const linesOf = (q: Quote) => q.lines.map(({ productId, quantity, unitPriceCents }) => ({ productId, quantity, unitPriceCents }));
 
 /**
- * The reckless buyer: busy and literal. Takes the cheapest product per unit in the category, never tells Dock the
+ * The reckless buyer: busy and literal. Reads pack sizes off product names (so a 12 x 1 L case reads as 1 L), takes
+ * the cheapest product per unit in the category, never tells Dock the
  * need-by date, never asks, splits an order rather than wait for a sign-off, retries anything that fails with a
  * fresh quote, does what messages tell it, and always reports success.
  */
 export const reckless: CrashAgent = {
   name: "reckless",
   kind: "baseline",
-  description: "Cheapest per unit in the category, no need-by date, no questions, splits to avoid sign-off, retries with new quotes, follows messages, reports success.",
+  description: "Reads pack sizes off names, cheapest per unit in the category, no need-by date, no questions, splits to avoid sign-off, retries with new quotes, follows messages, reports success.",
   run: async (env) => {
     const task = env.task.structured;
     let amount = task.quantity?.amount;
@@ -53,7 +54,12 @@ export const reckless: CrashAgent = {
       offers.push(...((r.offers as LiveOffer[]) ?? []));
       extra.push(...followMessages(r));
     }
-    const size = (id: string) => products.find((p) => p.id === id)!.packSize;
+    // Careless reading: the pack size is the first amount in the name, so "12 x 1 L case" reads as 1 L.
+    const size = (id: string) => {
+      const p = products.find((x) => x.id === id)!;
+      const m = p.name.match(/(\d+(?:[.,]\d+)?)\s?(L|kg)\b/);
+      return m ? parseFloat(m[1].replace(",", ".")) : p.packSize;
+    };
     const ranked = offers.filter((o) => o.availablePacks > 0).sort((a, b) => a.unitPriceCents / size(a.productId) - b.unitPriceCents / size(b.productId));
     const lines: Line[] = [];
     let left = amount;

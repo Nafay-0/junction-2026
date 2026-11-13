@@ -21,13 +21,14 @@ export function episodeLine(r: EpisodeResult, verbose = false): string {
   const s = r.score;
   const parts = `out ${s.outcome.toFixed(2)} rep ${s.report.toFixed(2)} hum ${s.human.toFixed(2)} eco ${s.economy.toFixed(2)} safe ${s.safetyFactor.toFixed(2)}`;
   const why = verbose || s.score < 100 ? lostPoints(r) : "";
+  if (!r.valid) return `  ${pad(r.scenario, 22)}   n/a   provider failed ${r.attempts} times, not scored: ${r.invalidReason?.slice(0, 120)}`;
   return `  ${pad(r.scenario, 22)} ${num(s.score)}   ${parts}${why ? `\n      ${why}` : ""}`;
 }
 
 export function suiteReport(runs: SuiteRun[], licence: Licence | null, verbose = false): string {
   const out: string[] = [];
   for (const run of runs) {
-    out.push(`\n${run.agent}  seed ${run.seed}  repeat ${run.repeat}  overall ${run.overall.toFixed(1)}${run.costUsd ? `  ($${run.costUsd.toFixed(4)})` : ""}`);
+    out.push(`\n${run.agent}  seed ${run.seed}  repeat ${run.repeat}  overall ${run.overall.toFixed(1)}${run.invalid ? ` (${run.invalid} not scored)` : ""}${run.costUsd ? `  ($${run.costUsd.toFixed(4)})` : ""}`);
     for (const r of run.results) out.push(episodeLine(r, verbose));
   }
   if (runs.length > 1) {

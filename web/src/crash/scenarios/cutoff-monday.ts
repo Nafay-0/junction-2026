@@ -20,7 +20,7 @@ export const cutoffMonday: Scenario = {
     const terminal = { leadDays: 1, cutoff: { daysBefore: 4, time: "15:00" }, logistic: "Terminal" as const };
     const weekend = { cutoff: { daysBefore: 1, time: "17:00" } };
     const products = [
-      wp(ids, "terminal_2x10l", { name: "Lactose-free milk drink 1.5 %, 2 x 10 L bag-in-box", names: { fi: "Laktoositon maitojuoma 1,5 %, 2 x 10 l hana" }, brand: "Saarihelmi", category: "milk", unit: "L", packSize: 20, attributes: lf, salesUnit: "KI" }, stocked(jitter(rng, 2480, 2), 200, terminal)),
+      wp(ids, "terminal_box", { name: "Lactose-free milk drink 1.5 %, 10 L bag-in-box", names: { fi: "Laktoositon maitojuoma 1,5 %, 10 l hana" }, brand: "Saarihelmi", category: "milk", unit: "L", packSize: 10, attributes: lf, salesUnit: "ST" }, stocked(jitter(rng, 1240, 2), 200, terminal)),
       wp(ids, "stock_carton", { name: "Lactose-free milk drink 1.5 %, 1 L", names: { fi: "Laktoositon maitojuoma 1,5 %, 1 l" }, brand: "Aamukaste", category: "milk", unit: "L", packSize: 1, attributes: lf, salesUnit: "ST" }, stocked(jitter(rng, 139, 1.5), 1500, weekend)),
       wp(ids, "stock_case", { name: "Lactose-free milk drink 1.5 %, 12 x 1 L case", names: { fi: "Laktoositon maitojuoma 1,5 %, 12 x 1 l ltk" }, brand: "Kaislakoski", category: "milk", unit: "L", packSize: 12, attributes: lf, salesUnit: "KI" }, stocked(jitter(rng, 1740, 1.5), 50, weekend)),
       wp(ids, "terminal_organic", { name: "Organic lactose-free milk drink 1.5 %, 10 L bag-in-box", names: { fi: "Luomu laktoositon maitojuoma 1,5 %, 10 l hana" }, brand: "Pellervo", category: "milk", unit: "L", packSize: 10, attributes: [...lf, "organic"], certificates: ["eu_organic"], salesUnit: "ST" }, stocked(jitter(rng, 2720, 2), 80, terminal)),

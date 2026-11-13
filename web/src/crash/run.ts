@@ -1,6 +1,6 @@
 import { canonicalJson, sha256Hex } from "@/core/util";
 import { Aliaser } from "./alias";
-import type { AgentRunInfo, CrashAgent, Harness } from "./agents/types";
+import { InfraError, type AgentRunInfo, type CrashAgent, type Harness } from "./agents/types";
 import { CrashEnv, TOOL_SPECS } from "./env";
 import { licenceFor, type Licence, type SuiteResult } from "./licence";
 import { SUITE, SUITE_VERSION } from "./scenarios";
@@ -35,11 +35,36 @@ export type Trajectory = {
   fingerprint: string;
 };
 
-export type EpisodeResult = { scenario: string; seed: number; repeat: number; agent: string; score: ScoreBreakdown; fingerprint: string; trajectory: Trajectory; costUsd: number | null };
+export type EpisodeResult = {
+  scenario: string;
+  seed: number;
+  repeat: number;
+  agent: string;
+  score: ScoreBreakdown;
+  fingerprint: string;
+  trajectory: Trajectory;
+  costUsd: number | null;
+  /** False when the model provider kept failing: the episode says nothing about the agent and is not scored. */
+  valid: boolean;
+  invalidReason?: string;
+  attempts: number;
+};
 
-export type RunOptions = { timeoutMs?: number };
+export type RunOptions = { timeoutMs?: number; infraRetries?: number; retryDelayMs?: number };
 
+/** Run one episode; when the provider fails (not the agent), start again on a fresh world. */
 export async function runEpisode(agent: CrashAgent, scenario: Scenario, seed: number, repeat: number, opts: RunOptions = {}): Promise<EpisodeResult> {
+  const retries = opts.infraRetries ?? 3;
+  let last: EpisodeResult | undefined;
+  for (let attempt = 1; attempt <= retries + 1; attempt++) {
+    last = await attemptEpisode(agent, scenario, seed, repeat, opts, attempt);
+    if (last.valid) return last;
+    if (attempt <= retries) await new Promise((r) => setTimeout(r, (opts.retryDelayMs ?? 15_000) * attempt));
+  }
+  return last!;
+}
+
+async function attemptEpisode(agent: CrashAgent, scenario: Scenario, seed: number, repeat: number, opts: RunOptions, attempt: number): Promise<EpisodeResult> {
   const env = await CrashEnv.create(scenario, seed);
   const harness: Harness = {
     start: env.built.world.start,
@@ -49,6 +74,7 @@ export async function runEpisode(agent: CrashAgent, scenario: Scenario, seed: nu
     orderIds: async () => (await env.record()).orders.map((o) => o.orderId),
   };
   let info: AgentRunInfo | null = null;
+  let infra: string | undefined;
   try {
     const timeout = opts.timeoutMs ?? (agent.kind === "model" ? 300_000 : 30_000);
     let timer: NodeJS.Timeout | undefined;
@@ -56,12 +82,13 @@ export async function runEpisode(agent: CrashAgent, scenario: Scenario, seed: nu
     info = out ?? null;
     env.agentReturned();
   } catch (err) {
+    if (err instanceof InfraError) infra = err.message;
     env.fail(err);
   }
   const record = await env.record();
   const score = scoreRun(env.built, record, env.outcomeContext());
   const trajectory = buildTrajectory(agent, scenario, seed, repeat, env, record, score, info);
-  return { scenario: scenario.id, seed, repeat, agent: agent.name, score: trajectory.score, fingerprint: trajectory.fingerprint, trajectory, costUsd: info?.costUsd ?? null };
+  return { scenario: scenario.id, seed, repeat, agent: agent.name, score: trajectory.score, fingerprint: trajectory.fingerprint, trajectory, costUsd: info?.costUsd ?? null, valid: !infra, invalidReason: infra, attempts: attempt };
 }
 
 function buildTrajectory(agent: CrashAgent, scenario: Scenario, seed: number, repeat: number, env: CrashEnv, record: RunRecord, score: ScoreBreakdown, info: AgentRunInfo | null): Trajectory {
@@ -92,6 +119,8 @@ export type SuiteRun = {
   repeat: number;
   overall: number;
   results: EpisodeResult[];
+  /** Episodes the provider kept failing; left out of `overall`. A suite with any is not licensed. */
+  invalid: number;
   summary: SuiteResult;
   costUsd: number;
 };
@@ -109,15 +138,17 @@ export async function runSuite(agent: CrashAgent, opts: { seed: number; repeat: 
     }
   };
   await Promise.all(Array.from({ length: Math.max(1, opts.concurrency ?? 1) }, worker));
-  const scores = results.map((r) => r.score.score);
-  const overall = Math.round((scores.reduce((s, x) => s + x, 0) / scores.length) * 10) / 10;
-  const findings = results.flatMap((r) => r.score.safety);
+  const valid = results.filter((r) => r.valid);
+  const scores = valid.map((r) => r.score.score);
+  const overall = scores.length ? Math.round((scores.reduce((s, x) => s + x, 0) / scores.length) * 10) / 10 : 0;
+  const findings = valid.flatMap((r) => r.score.safety);
   return {
     agent: agent.name,
     seed: opts.seed,
     repeat: opts.repeat,
     overall,
     results,
+    invalid: results.length - valid.length,
     summary: { overall, scenarioScores: scores, unsafeAttempts: findings.length, committedUnsafe: findings.filter((f) => f.committed).length },
     costUsd: results.reduce((s, r) => s + (r.costUsd ?? 0), 0),
   };
@@ -125,6 +156,6 @@ export async function runSuite(agent: CrashAgent, opts: { seed: number; repeat: 
 
 /** A licence needs the full suite; partial runs get none. */
 export function licenceOf(runs: SuiteRun[]): Licence | null {
-  if (!runs.length || runs.some((r) => r.results.length !== SUITE.length)) return null;
+  if (!runs.length || runs.some((r) => r.results.length !== SUITE.length || r.invalid > 0)) return null;
   return licenceFor(runs.map((r) => r.summary));
 }
