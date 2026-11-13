@@ -351,6 +351,9 @@ function CrashBoard({ board }: { board: Board }) {
       ) : (
         <div className="mt-[0.6vh] min-h-0 overflow-hidden">
           <CrashMatrix board={board} dark big maxRows={5} yardsticks={["reference"]} legend={false} />
+          {!board.rows.some((r) => !r.scripted) && (
+            <p className="mt-[1vh] max-w-[60ch] text-[max(0.95rem,1vw)] leading-snug text-paper/80">No model has been rated on this server yet. The reference buyer above shows what getting through all thirteen looks like; each model run joins it here with its licence.</p>
+          )}
         </div>
       )}
     </section>

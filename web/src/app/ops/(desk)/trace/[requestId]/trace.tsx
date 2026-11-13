@@ -29,14 +29,14 @@ export function TraceScreen({ requestId }: { requestId: string }) {
     return (
       <div className="mt-4">
         <Empty
-          title="This request is not on this server"
+          title={/not found|no request/i.test(live.error) ? "This request is not on this server" : "Could not read this request just now"}
           action={
             <Link className="font-semibold text-petrol underline underline-offset-2" href="/ops">
               Back to the live view
             </Link>
           }
         >
-          {live.error} Requests live in memory, so after a restart the ledger starts again.
+          {live.error} {/not found|no request/i.test(live.error) ? "Requests live in memory, so after a restart the ledger starts again." : "The page keeps trying on its own."}
         </Empty>
       </div>
     );
