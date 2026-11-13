@@ -97,6 +97,8 @@ async function buildRuntime(): Promise<Runtime> {
     kitchens: stores.kitchens,
     intakes: stores.intakes,
     liveAllowance: stores.liveAllowance,
+    // Live answers reused for option cards (not quotes) for this long; each reuse costs the partner nothing.
+    liveCacheTtlMs: Number(envValue("DOCK_LIVE_CACHE_SECONDS") ?? 120) * 1000 || 0,
   });
   const sandboxes = new SandboxService({ dock, registry: trustedIssuers, passkeys, limits: sandboxLimits, kitchens: stores.kitchens, products: async () => products, store: stores.sandboxStore });
   await sandboxes.restore();

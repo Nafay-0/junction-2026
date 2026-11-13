@@ -1,4 +1,5 @@
 import * as interpret from "@/app/api/v1/agent/interpret/route";
+import { attachConsoleContext, consoleSession } from "@/server/console-context";
 import { resolveKitchen } from "@/server/console-kitchens";
 import { errorBody } from "@/server/http";
 import { localFetch } from "@/server/local-transport";
@@ -43,7 +44,15 @@ export async function POST(req: Request, ctx: RouteContext<"/ui-api/kitchens/[ki
 
   // In-process: the same route handlers, no network hop and no assumption about this server's own address.
   const forwarded = new Request(new URL(path, "http://dock.local"), init);
+  const sessionId = consoleSession(req);
+  attachConsoleContext(forwarded, { kitchen, session: sessionId.id });
   const res = path === "/api/v1/agent/interpret" ? await interpret.POST(forwarded) : await localFetch(forwarded);
   const text = await res.text();
-  return new Response(text, { status: res.status, headers: { "content-type": res.headers.get("content-type") ?? "application/json", "cache-control": "no-store" } });
+  const out: Record<string, string> = { "content-type": res.headers.get("content-type") ?? "application/json", "cache-control": "no-store" };
+  for (const h of ["retry-after", "ratelimit-limit", "ratelimit-remaining", "ratelimit-reset"]) {
+    const v = res.headers.get(h);
+    if (v) out[h] = v;
+  }
+  if (sessionId.setCookie) out["set-cookie"] = sessionId.setCookie;
+  return new Response(text, { status: res.status, headers: out });
 }

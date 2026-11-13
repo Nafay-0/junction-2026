@@ -3,7 +3,7 @@ import { MAX_LIVE_IDS_PER_CALL } from "@/core/catalog";
 import { AnswersInput, ChoiceInput, ConcernResponseInput, type IntakeView } from "@/core/intake";
 import { explain } from "@/core/ledger";
 import { NEED_UNITS, NeedSchema, OPTIMISE_GOALS } from "@/core/need";
-import { AvailabilityInput, DockError, OpenRequestInput, PlaceOrderInput, QuoteInput, SearchInput, type AgentSession, type Dock } from "@/core/orders";
+import { AvailabilityInput, DockError, OpenRequestInput, PlaceOrderInput, QuoteInput, SearchInput, type AgentSession, type Dock, MAX_QUOTE_LINES } from "@/core/orders";
 import { decidingRule } from "@/core/policy";
 import {
   IntakeStepSchema,
@@ -308,7 +308,7 @@ const CORE_TOOLS = [
           }),
         )
         .min(1)
-        .max(20),
+        .max(MAX_QUOTE_LINES),
     }),
     output: QuoteResultSchema.extend({ nextStep }),
     run: async ({ dock, session, guard, agentKey }, args) => {

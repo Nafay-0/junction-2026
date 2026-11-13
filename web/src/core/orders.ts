@@ -19,7 +19,8 @@ import { InMemoryIntakeRepository, createIntakeFlow, recordCommittedOrder, type 
 import { InMemoryKitchenRepository, type KitchenRepository } from "./kitchen";
 import { SIGN_ALG, type KeyPair } from "./keys";
 import type { Ledger, LedgerHead } from "./ledger";
-import { LiveLookupAllowance, agentKeyOf } from "./live-allowance";
+import { LiveLookupAllowance, shareKeyOf } from "./live-allowance";
+import { MAX_LIVE_IDS_PER_CALL } from "./catalog";
 import { MandateError, verifyMandate, type Mandate, type TrustRegistry } from "./mandate";
 import { SPLIT_WINDOW_HOURS, decidingRule, evaluatePolicy, type Decision, type OrderDraftLine, type RecentOrder } from "./policy";
 import { QuoteError, QuoteRequestLineSchema, buildQuote, signQuote, verifyQuote, type Quote, type QuoteLine } from "./quote";
@@ -51,7 +52,13 @@ export const AvailabilityInput = z.object({
   /** Also return the signed claims (price, availability, origin) as compact JWS tokens. Their ids are always on each offer. */
   includeClaims: z.boolean().optional(),
 });
-export const QuoteInput = z.object({ requestId: z.string().min(1), lines: z.array(QuoteRequestLineSchema).min(1).max(20) });
+/**
+ * Lines one quote may hold: a wholesale basket (a week's menu) has dozens. The money rules (per-order limit, weekly
+ * budget, order splitting) are what protect the buyer, not a line count; the live lookup for a long quote is made
+ * in calls of MAX_LIVE_IDS_PER_CALL, each counted against the agent's allowance.
+ */
+export const MAX_QUOTE_LINES = 60;
+export const QuoteInput = z.object({ requestId: z.string().min(1), lines: z.array(QuoteRequestLineSchema).min(1).max(MAX_QUOTE_LINES) });
 export const PlaceOrderInput = z.object({
   requestId: z.string().min(1),
   quoteToken: z.string().min(1),
@@ -71,7 +78,11 @@ export const ApprovalDecisionInput = z.object({
 
 // ---------- records ----------
 
-export type AgentSession = { mandate: Mandate; agentId: string };
+/**
+ * `share`: an on-site console's browser session, set by the server only (never from a header an outside caller can
+ * send). It gives that session its own share of the agent's live-lookup allowance (see live-allowance.ts).
+ */
+export type AgentSession = { mandate: Mandate; agentId: string; share?: string };
 
 export type PurchaseRequest = {
   requestId: string;
@@ -218,6 +229,8 @@ export type DockDeps = {
   kitchens?: KitchenRepository; // kitchen memory: order history and preferences (see kitchen.ts)
   intakes?: IntakeRepository; // structured-need intake sessions (see intake.ts)
   liveAllowance?: LiveLookupAllowance; // per-agent hourly allowance of live lookups (see live-allowance.ts)
+  /** How long a live answer (per product and delivery date) is reused for option cards. Quotes always ask afresh. Default 120 s; 0 switches it off. */
+  liveCacheTtlMs?: number;
   claims?: ClaimStore; // signed claims handed out (see claims.ts)
 };
 
@@ -237,6 +250,12 @@ export function describeOffer(o: LiveOffer): string {
 
 export type Dock = ReturnType<typeof createDock>;
 
+/** "3 x A, 2 x B" for the ledger; a long basket names its first 12 lines and counts the rest. */
+function listLines(lines: { quantity: number; productId: string }[]): string {
+  const shown = lines.slice(0, 12).map((l) => `${l.quantity} x ${l.productId}`).join(", ");
+  return lines.length > 12 ? `${shown} and ${lines.length - 12} more line${lines.length - 12 > 1 ? "s" : ""} (${lines.length} in all)` : shown;
+}
+
 export const ORDER_TYP = "order+jws";
 
 export function createDock(deps: DockDeps) {
@@ -248,6 +267,10 @@ export function createDock(deps: DockDeps) {
   const intakes = deps.intakes ?? new InMemoryIntakeRepository();
   const liveAllowance = deps.liveAllowance ?? new LiveLookupAllowance(undefined, now);
   const claimStore = deps.claims ?? new ClaimStore();
+  const liveCacheTtlMs = deps.liveCacheTtlMs ?? 120_000;
+  /** Live answers by product and delivery date, with when the partner gave them. Bounded; oldest dropped first. */
+  const liveCache = new Map<string, { at: number; status: LiveStatus }>();
+  const LIVE_CACHE_MAX = 5000;
   const agentActor = (s: AgentSession) => `agent:${s.agentId}`;
   const publish: EventPublisher["publish"] = (e) => {
     try {
@@ -350,26 +373,71 @@ export function createDock(deps: DockDeps) {
    * delivery date, with every statement signed as a claim and every problem named. A failure of the partner's
    * service is reported as that (503, retry), not as a refusal by a rule.
    */
-  async function liveLookup(session: AgentSession, requestId: string, productIds: string[], deliveryDate: string | undefined, why: string): Promise<LiveLookupResult> {
+  async function liveLookup(
+    session: AgentSession,
+    requestId: string,
+    productIds: string[],
+    deliveryDate: string | undefined,
+    why: string,
+    opts: { fresh?: boolean; batch?: boolean } = {},
+  ): Promise<LiveLookupResult> {
     const actor = agentActor(session);
     const ids = [...new Set(productIds)];
-    try {
-      liveAllowance.reserve(agentKeyOf(session.mandate.issuer.orgId, session.agentId), ids);
-    } catch (err) {
-      if (err instanceof DockError) throw refuse(err, actor, { requestId });
-      throw err;
-    }
-    let statuses: LiveStatus[];
-    try {
-      statuses = await catalog.getLiveStatus(ids, deliveryDate ? { deliveryDate } : undefined);
-    } catch (err) {
-      if (err instanceof CatalogError && err.code === "too_many_products") throw refuse(new DockError(400, err.code, err.message, "live_lookup_limit"), actor, { requestId });
-      if (err instanceof CatalogError) {
-        ledger.append({ type: "lookup", actor: "dock", requestId, summary: `The wholesaler's live price/availability service did not answer (${why}); nothing was looked up or refused.`, data: { source: "live", failed: true, code: err.code, productIds: ids } });
-        throw new DockError(503, "live_unavailable", `${err.message} This is the wholesaler's service, not a rule: try again in a minute.`, undefined, { retryable: true });
+    const cacheKey = (id: string) => `${id}|${deliveryDate ?? ""}`;
+    const t0 = now().getTime();
+    // Answers the partner gave a moment ago are reused for option cards: they cost the partner nothing and are not
+    // counted. A quote fixes a price, so it always asks afresh.
+    const fromCache = new Map<string, { at: number; status: LiveStatus }>();
+    if (!opts.fresh && liveCacheTtlMs > 0) {
+      for (const id of ids) {
+        const hit = liveCache.get(cacheKey(id));
+        if (hit && t0 - hit.at < liveCacheTtlMs) fromCache.set(id, hit);
       }
-      throw err;
     }
+    const missing = ids.filter((id) => !fromCache.has(id));
+    if (!opts.batch && missing.length > MAX_LIVE_IDS_PER_CALL) {
+      throw refuse(new DockError(400, "too_many_products", `At most ${MAX_LIVE_IDS_PER_CALL} products per live price/availability call; this asked for ${missing.length}. Shortlist first with a master-data search.`, "live_lookup_limit"), actor, { requestId });
+    }
+    const chunks: string[][] = [];
+    for (let i = 0; i < missing.length; i += MAX_LIVE_IDS_PER_CALL) chunks.push(missing.slice(i, i + MAX_LIVE_IDS_PER_CALL));
+    const shareKey = shareKeyOf(session.mandate.issuer.orgId, session.agentId, session.share);
+    let statuses: LiveStatus[] = [];
+    const fetchedAt = new Map<string, number>();
+    for (const chunk of chunks) {
+      try {
+        liveAllowance.reserve(shareKey, chunk);
+      } catch (err) {
+        if (err instanceof DockError) throw refuse(err, actor, { requestId });
+        throw err;
+      }
+      let got: LiveStatus[];
+      try {
+        got = await catalog.getLiveStatus(chunk, deliveryDate ? { deliveryDate } : undefined);
+      } catch (err) {
+        if (err instanceof CatalogError && err.code === "too_many_products") throw refuse(new DockError(400, err.code, err.message, "live_lookup_limit"), actor, { requestId });
+        if (err instanceof CatalogError) {
+          ledger.append({ type: "lookup", actor: "dock", requestId, summary: `The wholesaler's live price/availability service did not answer (${why}); nothing was looked up or refused.`, data: { source: "live", failed: true, code: err.code, productIds: ids } });
+          throw new DockError(503, "live_unavailable", `${err.message} This is the wholesaler's service, not a rule: try again in a minute.`, undefined, { retryable: true });
+        }
+        throw err;
+      }
+      const at = now().getTime();
+      for (const st of got) {
+        fetchedAt.set(st.productId, at);
+        if (liveCacheTtlMs > 0) {
+          liveCache.delete(cacheKey(st.productId));
+          liveCache.set(cacheKey(st.productId), { at, status: structuredClone(st) });
+        }
+      }
+      while (liveCache.size > LIVE_CACHE_MAX) liveCache.delete(liveCache.keys().next().value!);
+      statuses.push(...got);
+    }
+    const cached = [...fromCache.values()].map((h) => {
+      const st = structuredClone(h.status);
+      fetchedAt.set(st.productId, h.at);
+      return st;
+    });
+    statuses = [...statuses, ...cached].sort((a, b) => ids.indexOf(a.productId) - ids.indexOf(b.productId));
     const at = now();
     const audience = session.mandate.issuer.orgId;
     const products = await catalog.searchProducts({ ids, limit: 100 });
@@ -383,9 +451,10 @@ export function createDock(deps: DockDeps) {
     const offers: LiveOffer[] = [];
     for (const st of statuses) {
       const product = products.find((p) => p.id === st.productId);
-      const origin = product ? await sign(originClaimInput(product, at)) : undefined;
+      const seen = new Date(fetchedAt.get(st.productId) ?? at.getTime()); // a cached answer is claimed as of when the partner gave it
+      const origin = product ? await sign(originClaimInput(product, seen)) : undefined;
       if (st.offer) {
-        st.offer.claims = { price: await sign(priceClaimInput(st.offer, at, audience)), availability: await sign(availabilityClaimInput(st.offer, at, audience)), origin };
+        st.offer.claims = { price: await sign(priceClaimInput(st.offer, seen, audience)), availability: await sign(availabilityClaimInput(st.offer, seen, audience)), origin };
       }
       const usable = usableOffer(st);
       if (usable) offers.push(usable);
@@ -395,8 +464,8 @@ export function createDock(deps: DockDeps) {
       type: "lookup",
       actor,
       requestId,
-      summary: `${why} for ${ids.length} product(s)${deliveryDate ? ` for delivery by ${deliveryDate}` : ""} (live call #${catalog.stats().liveCalls}): ${[...offers.map(describeOffer), ...unavailable.map((u) => `${u.productId} not quotable: ${u.problems.join(", ")}`)].join("; ")}. ${claims.length} signed claims issued.`,
-      data: { source: "live", productIds: ids, deliveryDate, offers, unavailable, claimIds: claims.map((c) => c.claimId) },
+      summary: `${why} for ${ids.length} product(s)${deliveryDate ? ` for delivery by ${deliveryDate}` : ""} (${chunks.length ? `${chunks.length} live call${chunks.length > 1 ? "s" : ""}, #${catalog.stats().liveCalls} so far` : "no live call"}${fromCache.size ? `; ${fromCache.size} answer${fromCache.size > 1 ? "s" : ""} reused from the last ${Math.round(liveCacheTtlMs / 1000)} s, not counted` : ""}): ${[...offers.map(describeOffer), ...unavailable.map((u) => `${u.productId} not quotable: ${u.problems.join(", ")}`)].join("; ")}. ${claims.length} signed claims issued.`,
+      data: { source: "live", productIds: ids, deliveryDate, offers, unavailable, claimIds: claims.map((c) => c.claimId), liveCalls: chunks.length, cached: [...fromCache.keys()] },
     });
     return { offers, statuses, unavailable, claims };
   }
@@ -584,7 +653,7 @@ export function createDock(deps: DockDeps) {
       let claims: IssuedClaim[] = [];
       try {
         const products = await catalog.searchProducts({ ids, limit: 100 });
-        const live = await liveLookup(session, requestId, ids, request.neededBy, "Dock asked live prices for a quote");
+        const live = await liveLookup(session, requestId, ids, request.neededBy, "Dock asked live prices for a quote", { fresh: true, batch: true });
         const offers = live.offers;
         // Say why a line cannot be quoted, in the partner's terms (a passed cut-off, a sales block, no price).
         for (const l of lines) {
@@ -624,7 +693,7 @@ export function createDock(deps: DockDeps) {
         type: "quote",
         actor: "dock",
         requestId,
-        summary: `Wholesaler quoted ${quote.quoteId}: ${quote.lines.map((l) => `${l.quantity} x ${l.productId}`).join(", ")} for ${formatEur(quote.totalCents)}${subs ? ` (${subs} substitute${subs > 1 ? "s" : ""})` : ""}, price fixed until ${quote.expiresAt.slice(0, 16).replace("T", " ")} UTC${quote.expiresBecause === "order_cutoff" ? " (the order cut-off)" : quote.expiresBecause === "price_validity" ? " (when the price stops being valid)" : ""}; it rests on ${quote.evidence?.length ?? 0} signed claims.`,
+        summary: `Wholesaler quoted ${quote.quoteId}: ${listLines(quote.lines)} for ${formatEur(quote.totalCents)}${subs ? ` (${subs} substitute${subs > 1 ? "s" : ""})` : ""}, price fixed until ${quote.expiresAt.slice(0, 16).replace("T", " ")} UTC${quote.expiresBecause === "order_cutoff" ? " (the order cut-off)" : quote.expiresBecause === "price_validity" ? " (when the price stops being valid)" : ""}; it rests on ${quote.evidence?.length ?? 0} signed claims.`,
         data: { quoteId: quote.quoteId, totalCents: quote.totalCents, expiresAt: quote.expiresAt, expiresBecause: quote.expiresBecause, evidence: quote.evidence, lines: quote.lines.map((l) => ({ productId: l.productId, quantity: l.quantity, unitPriceCents: l.unitPriceCents, deliveryDate: l.deliveryDate, substituteFor: l.substituteFor?.productId })) },
       });
       const policyPreview = evaluatePolicy(
@@ -966,7 +1035,7 @@ export function createDock(deps: DockDeps) {
     now,
     openRequest: dock.openRequest,
     requestQuote: dock.requestQuote,
-    liveLookup,
+    liveLookup: (session, requestId, productIds, deliveryDate, why) => liveLookup(session, requestId, productIds, deliveryDate, why, { batch: true }),
     spentThisWeek: (orgId) => spentThisWeek(orgId),
     budgetUse: (orgId) => budgetUse(orgId),
   });
