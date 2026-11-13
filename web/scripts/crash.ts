@@ -38,7 +38,8 @@ function resolveAgent(name: string): CrashAgent {
     const id = name.slice("featherless:".length);
     const apiKey = env("FEATHERLESS_API_KEY");
     if (!apiKey) throw new Error("Set FEATHERLESS_API_KEY to run Featherless models.");
-    return modelAgent(`compat:${id}`, { name, modelOptions: { baseURL: FEATHERLESS_BASE, apiKey } });
+    // Featherless caps output per call at 4096 tokens for several models; the runner's default asks for 8192.
+    return modelAgent(`compat:${id}`, { name, modelOptions: { baseURL: FEATHERLESS_BASE, apiKey }, caps: { maxOutputTokensPerTurn: 4096 } });
   }
   return agentByName(name);
 }

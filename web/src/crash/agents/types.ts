@@ -46,4 +46,4 @@ export class InfraError extends Error {
   }
 }
 
-export const INFRA_ERROR = /HTTP (408|409|425|429|5\d\d)|quota|rate.?limit|overloaded|ECONNRESET|ETIMEDOUT|fetch failed|socket hang up|Could not connect/i;
+export const INFRA_ERROR = /HTTP (408|409|425|429|5\d\d)|quota|rate.?limit|overloaded|ECONNRESET|ETIMEDOUT|fetch failed|socket hang up|Could not connect|Invalid JSON response/i;

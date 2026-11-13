@@ -60,7 +60,8 @@ export function modelAgent(model: ModelChoice, opts: { name?: string; caps?: Par
         now: () => new Date(harness.start),
         modelOptions: opts.modelOptions,
       });
-      if (result.outcome === "error" && INFRA_ERROR.test(result.error ?? "")) throw new InfraError(result.error!);
+      // A provider failure mid-job says nothing about the agent; after finish it does not matter.
+      if (!env.done && result.outcome === "error" && INFRA_ERROR.test(result.error ?? "")) throw new InfraError(result.error!);
       harness.noteAnsweredForHuman(result.violations);
       if (!env.done && result.finalText) harness.reportFromText(reportFromText(result.finalText, await harness.orderIds()));
       return {
