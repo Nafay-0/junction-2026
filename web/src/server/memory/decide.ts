@@ -194,7 +194,7 @@ function create(mem: KitchenMemory, c: Candidate, fact: MemoryFact, interaction:
   if (c.origin === "stated") {
     // A person said it on the memory page, answered "remember this", or confirmed a substitute: it is theirs.
     const strength: MemoryStrength = c.strength;
-    const item = newItem(c, fact, interaction, now, { strength, ...(interaction.by ? { confirmedBy: { by: interaction.by, at: iso(now) } } : {}) }, quote);
+    const item = newItem(c, fact, interaction, now, { strength, weight: c.weight ?? 1, ...(interaction.by ? { confirmedBy: { by: interaction.by, at: iso(now) } } : {}) }, quote);
     mem.items.push(item);
     return { action: "stored", reason: `stated by ${interaction.by ?? "the kitchen"}`, itemId: item.id, text: item.text };
   }
