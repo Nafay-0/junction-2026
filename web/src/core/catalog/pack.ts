@@ -210,7 +210,7 @@ export function parsePackName(rawName: string): NameParse {
   if (leading) {
     const n = Number(leading[1]);
     if (out.count === undefined) {
-      // "12 x Arla whole milk 1 L": twelve items of the single size.
+      // "12 x whole milk 1 L": twelve items of the single size.
       for (const m of measures) if (out.item[m] !== undefined) out.total[m] = roundQty(out.item[m]! * n);
       out.count = n;
       out.countKind = "multiplier";
