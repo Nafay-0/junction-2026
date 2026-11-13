@@ -4,6 +4,7 @@ import type { DockConnection } from "@/server/agent/dock-connection";
 import { MCP_INSTRUCTIONS } from "@/server/mcp/server";
 import type { AgentEnv } from "../env";
 import { reportFromText } from "../report-text";
+import { crashModelChoice } from "./caching";
 import { INFRA_ERROR, InfraError, type CrashAgent, type Harness } from "./types";
 
 /**
@@ -58,28 +59,40 @@ function recordingHuman(h: Harness, said: string[]): Human {
 /** Sessions per episode: the first, plus one after each time the buyer answered Dock's question in words. */
 const MAX_SESSIONS = 3;
 
-export function modelAgent(model: ModelChoice, opts: { name?: string; caps?: Partial<RunCaps>; modelOptions?: Parameters<typeof runBuyerAgent>[0]["modelOptions"] } = {}): CrashAgent {
+/**
+ * `caps` apply to each session; `episodeCostUsd` (default: the session cap times MAX_SESSIONS, as before) caps the
+ * whole episode: a follow-up session only gets what is left of it.
+ */
+export function modelAgent(model: ModelChoice, opts: { name?: string; caps?: Partial<RunCaps>; episodeCostUsd?: number; modelOptions?: Parameters<typeof runBuyerAgent>[0]["modelOptions"] } = {}): CrashAgent {
   const id = typeof model === "string" ? model : model.id;
+  const sessionCaps = { ...CRASH_CAPS, ...opts.caps };
+  const episodeCap = opts.episodeCostUsd ?? (sessionCaps.maxCostUsd ?? 0.05) * MAX_SESSIONS;
   return {
     name: opts.name ?? `model:${id}`,
     kind: "model",
     description: `${id} through the model runner (src/server/agent).`,
     async run(env, harness) {
+      // Anthropic models get prompt caching (same requests, a fraction of the bill); see caching.ts.
+      const choice = typeof model === "string" ? crashModelChoice(model, opts.modelOptions) : model;
       const sessions: Awaited<ReturnType<typeof runBuyerAgent>>[] = [];
       const said: string[] = [];
       let task = env.task.text;
+      let spent = 0;
       for (let i = 0; i < MAX_SESSIONS && !env.done; i++) {
         const before = said.length;
+        const left = episodeCap - spent;
+        if (i > 0 && left <= 0) break;
         const result = await runBuyerAgent({
-          model,
+          model: choice,
           task,
           dock: connectionFor(env),
           human: recordingHuman(harness, said),
-          caps: { ...CRASH_CAPS, ...opts.caps },
+          caps: { ...sessionCaps, maxCostUsd: Math.min(sessionCaps.maxCostUsd ?? Infinity, left) },
           now: () => new Date(harness.start),
           modelOptions: opts.modelOptions,
         });
         sessions.push(result);
+        spent += result.costUsd ?? 0;
         // A provider failure mid-job says nothing about the agent; after finish it does not matter.
         if (!env.done && result.outcome === "error" && INFRA_ERROR.test(result.error ?? "")) throw new InfraError(result.error!);
         harness.noteAnsweredForHuman(result.violations);

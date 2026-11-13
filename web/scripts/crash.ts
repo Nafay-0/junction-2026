@@ -12,17 +12,16 @@
  * --verbose (why points were lost, for every scenario). Every invocation writes to its own directory, so runs
  * on many machines or in parallel processes never collide.
  */
-import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { canonicalJson, sha256Hex } from "@/core/util";
 import { REPRODUCE, SCRIPTED, agentByName } from "@/crash/agents";
-import { modelAgent } from "@/crash/agents/model";
+import { resolveAgent } from "@/crash/agents/resolve";
 import type { CrashAgent } from "@/crash/agents/types";
 import { describeLicence, LICENCE_LEVELS } from "@/crash/licence";
 import { leaderboard, suiteReport } from "@/crash/report";
-import { licenceOf, runSuite, TRAJECTORY_SCHEMA, type SuiteRun } from "@/crash/run";
-import { SUITE, SUITE_VERSION, scenarioById } from "@/crash/scenarios";
-import { env, loadLocalEnv } from "./lib/env";
+import { writeResults, type Written } from "@/crash/output";
+import { licenceOf, runSuite, type SuiteRun } from "@/crash/run";
+import { SUITE, scenarioById } from "@/crash/scenarios";
+import { loadLocalEnv } from "./lib/env";
 
 const argv = process.argv.slice(2);
 const flag = (name: string) => argv.includes(`--${name}`);
@@ -30,52 +29,6 @@ const opt = (name: string) => {
   const i = argv.indexOf(`--${name}`);
   return i >= 0 ? argv[i + 1] : undefined;
 };
-
-const FEATHERLESS_BASE = "https://api.featherless.ai/v1";
-
-function resolveAgent(name: string): CrashAgent {
-  if (name.startsWith("featherless:")) {
-    const id = name.slice("featherless:".length);
-    const apiKey = env("FEATHERLESS_API_KEY");
-    if (!apiKey) throw new Error("Set FEATHERLESS_API_KEY to run Featherless models.");
-    // Featherless caps output per call at 4096 tokens for several models; the runner's default asks for 8192.
-    return modelAgent(`compat:${id}`, { name, modelOptions: { baseURL: FEATHERLESS_BASE, apiKey }, caps: { maxOutputTokensPerTurn: 4096 } });
-  }
-  return agentByName(name);
-}
-
-type Written = { agent: string; runs: SuiteRun[] };
-
-function write(dir: string, all: Written[]) {
-  mkdirSync(dir, { recursive: true });
-  const lines: string[] = [];
-  const summary = {
-    schema: "dock-crash-summary/1",
-    suite: SUITE_VERSION,
-    trajectorySchema: TRAJECTORY_SCHEMA,
-    agents: all.map(({ agent, runs }) => {
-      const licence = licenceOf(runs);
-      return {
-        agent,
-        runs: runs.map((r) => ({
-          seed: r.seed,
-          repeat: r.repeat,
-          overall: r.overall,
-          costUsd: r.costUsd || null,
-          unsafeAttempts: r.summary.unsafeAttempts,
-          committedUnsafe: r.summary.committedUnsafe,
-          invalid: r.invalid,
-          scenarios: r.results.map((x) => ({ id: x.scenario, valid: x.valid, invalidReason: x.invalidReason, score: x.score.score, outcome: x.score.outcome, report: x.score.report, human: x.score.human, economy: x.score.economy, safetyFactor: x.score.safetyFactor, fingerprint: x.fingerprint })),
-        })),
-        licence: licence && { level: licence.level, name: licence.name, perOrderLimitCents: licence.perOrderLimitCents, substitution: licence.substitution, why: licence.why },
-      };
-    }),
-  };
-  for (const { runs } of all) for (const r of runs) for (const x of r.results) lines.push(JSON.stringify(x.trajectory));
-  writeFileSync(path.join(dir, "summary.json"), JSON.stringify(summary, null, 2) + "\n");
-  writeFileSync(path.join(dir, "trajectories.jsonl"), lines.join("\n") + "\n");
-  return sha256Hex(canonicalJson(summary)).slice(0, 16);
-}
 
 async function runAgent(agent: CrashAgent, seed: number, repeats: number, concurrency: number, scenarios = SUITE, quiet = false): Promise<SuiteRun[]> {
   const runs: SuiteRun[] = [];
@@ -119,7 +72,7 @@ async function main() {
     for (const { runs } of all.slice(0, 4)) console.log(suiteReport(runs.slice(0, 1), licenceOf(runs)));
     console.log(`\n${leaderboard(all.map(({ agent, runs }) => ({ agent, runs, licence: licenceOf(runs) })))}`);
     const dir = opt("out") ?? path.join("crash-results", "reproduce");
-    const digest = write(dir, all);
+    const digest = writeResults(dir, all);
     const identical = all.every(({ runs }) => runs.every((r) => r.results.every((x, i) => x.fingerprint === runs[0].results[i].fingerprint)));
     console.log(`\nRepeats identical for every scripted agent: ${identical ? "yes" : "NO"}. Summary digest ${digest}. Written to ${dir}/`);
     if (!identical) process.exitCode = 1;
@@ -135,7 +88,7 @@ async function main() {
   console.log(suiteReport(runs, licence, verbose));
   if (!licence) console.log("Licence: needs the full suite.");
   const dir = opt("out") ?? path.join("crash-results", `${agent.name.replace(/[^A-Za-z0-9._-]+/g, "_")}-s${seed}-${stamp}-${process.pid}`);
-  const digest = write(dir, [{ agent: agent.name, runs }]);
+  const digest = writeResults(dir, [{ agent: agent.name, runs }]);
   console.log(`\nWritten to ${dir}/ (summary.json, trajectories.jsonl). Summary digest ${digest}.${licence ? ` ${describeLicence(licence)}` : ""}`);
 }
 

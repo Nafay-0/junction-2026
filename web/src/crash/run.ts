@@ -151,14 +151,22 @@ export async function runSuite(agent: CrashAgent, opts: { seed: number; repeat: 
     }
   };
   await Promise.all(Array.from({ length: Math.max(1, opts.concurrency ?? 1) }, worker));
+  return suiteFromResults(agent.name, opts.seed, opts.repeat, results);
+}
+
+/**
+ * A suite run from its episode results, in suite order. runSuite uses it; so does the Modal fan-out
+ * (scripts/crash-collect.ts), which runs every episode in its own container and assembles them here.
+ */
+export function suiteFromResults(agent: string, seed: number, repeat: number, results: EpisodeResult[]): SuiteRun {
   const valid = results.filter((r) => r.valid);
   const scores = valid.map((r) => r.score.score);
   const overall = scores.length ? Math.round((scores.reduce((s, x) => s + x, 0) / scores.length) * 10) / 10 : 0;
   const findings = valid.flatMap((r) => r.score.safety);
   return {
-    agent: agent.name,
-    seed: opts.seed,
-    repeat: opts.repeat,
+    agent,
+    seed,
+    repeat,
     overall,
     results,
     invalid: results.length - valid.length,

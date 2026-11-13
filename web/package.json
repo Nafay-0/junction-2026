@@ -21,6 +21,8 @@
     "crash": "tsx scripts/crash.ts",
     "crash:reproduce": "tsx scripts/crash.ts --reproduce",
     "crash:export": "tsx scripts/crash-export.ts",
+    "crash:modal": "uv run --quiet --python 3.12 --with modal==1.6.4 python ../modal/crash_modal.py",
+    "crash:modal:secrets": "uv run --quiet --python 3.12 --with modal==1.6.4 python ../modal/make_secrets.py",
     "interpret": "tsx scripts/interpret.ts",
     "verify:receipt": "tsx scripts/verify-receipt.ts",
     "dev:mandate": "tsx scripts/dev-mandate.ts",
