@@ -4,6 +4,8 @@ import { getOrder, kitchenAgent } from "@/server/channels/flow";
 import { orderForModel } from "@/server/channels/say";
 import { calls } from "@/server/channels/voice/calls";
 import { handle, readJson } from "@/server/http";
+import type { Violation } from "@/core/grounding";
+import { recordGrounding } from "@/server/grounding";
 
 /**
  * POST /ui-api/voice/{kitchen}/call/{callId}
@@ -41,6 +43,7 @@ export async function POST(req: Request, ctx: RouteContext<"/ui-api/voice/[kitch
     const c = registry.heartbeat(callId, kitchen, body.op === "beat" ? { usage: body.usage, grounding: body.grounding } : undefined);
     if (body.op === "dropped") {
       c.grounding.dropped += 1;
+      recordGrounding("voice", body.said.split(", ").map((said, i) => ({ kind: (body.kinds[i] ?? body.kinds[0] ?? "number") as Violation["kind"], said })), `call ${callId}`, false);
       if (c.desk.requestId) {
         dock.ledger.append({
           type: "intake",
