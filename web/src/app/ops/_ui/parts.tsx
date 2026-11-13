@@ -12,11 +12,11 @@ import { fi, num } from "./format";
 
 // ---------- dense table ----------
 
-/** A dense table on paper: petrol header rule, hairline rows, a petrol-soft wash on hover when rows are links. */
+/** A dense table on paper (DESIGN.md §8): a 3 px petrol rule on top, hairline rows, sentence-case headers. */
 export function Table({ children, className = "", label }: { children: ReactNode; className?: string; label?: string }) {
   return (
-    <div className={`overflow-x-auto bg-paper ${className}`}>
-      <table aria-label={label} className="w-full border-collapse text-left text-[0.92rem] [&_td]:border-t [&_td]:border-line/70 [&_td]:px-3 [&_td]:py-2.5 [&_td]:align-top [&_th]:px-3 [&_th]:pb-2 [&_th]:pt-3 [&_th]:text-[0.8rem] [&_th]:whitespace-nowrap [&_th]:font-semibold [&_th]:text-ink-soft [&_thead]:border-b-2 [&_thead]:border-petrol">
+    <div className={`overflow-x-auto border-t-[3px] border-petrol bg-paper ${className}`}>
+      <table aria-label={label} className="w-full border-collapse text-left text-[0.92rem] [&_td]:border-t [&_td]:border-line/70 [&_td]:px-3 [&_td]:py-2.5 [&_td]:align-top [&_th]:px-3 [&_th]:pb-2 [&_th]:pt-3 [&_th]:text-[0.8rem] [&_th]:whitespace-nowrap [&_th]:font-semibold [&_th]:text-ink-soft [&_thead]:border-b [&_thead]:border-line">
         {children}
       </table>
     </div>
