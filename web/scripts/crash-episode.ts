@@ -10,6 +10,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { resolveAgent } from "@/crash/agents/resolve";
+import { harnessOf } from "@/crash/harness";
 import { runEpisode } from "@/crash/run";
 import { scenarioById } from "@/crash/scenarios";
 import { loadLocalEnv } from "./lib/env";
@@ -41,7 +42,7 @@ async function main() {
     retryDelayMs: (num("retry-delay-s") ?? 20) * 1000,
   });
   const wallMs = Date.now() - t0;
-  const out = JSON.stringify({ ...result, wallMs });
+  const out = JSON.stringify({ ...result, wallMs, harness: harnessOf(name), commit: process.env.DOCK_COMMIT ?? null });
   const what = result.valid ? String(result.score.score) : `invalid (${result.invalidReason?.slice(0, 160)})`;
   process.stderr.write(`${name} ${scenarioId} s${seed}r${repeat}: ${what} in ${(wallMs / 1000).toFixed(1)} s${result.costUsd ? `, $${result.costUsd.toFixed(4)}` : ""}\n`);
   const file = opt("out");

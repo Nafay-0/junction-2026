@@ -23,7 +23,7 @@ function main() {
   const dir = argv.find((a, i) => !a.startsWith("--") && !argv[i - 1]?.startsWith("--"));
   const out = opt("out");
   if (!dir || !out) throw new Error("Usage: crash-collect <episodes dir> --out <run dir> [--meta run.json]");
-  const episodes: (EpisodeResult & { wallMs?: number })[] = [];
+  const episodes: (EpisodeResult & { wallMs?: number; harness?: string })[] = [];
   for (const f of readdirSync(dir).filter((x) => x.endsWith(".json")).sort()) episodes.push(JSON.parse(readFileSync(path.join(dir, f), "utf8")));
 
   const order = new Map(SUITE.map((s, i) => [s.id, i]));
@@ -52,7 +52,10 @@ function main() {
   const missing = (meta?.jobs ?? []).filter((j) => !j.status.startsWith("done")).map((j) => ({ agent: j.agent, scenario: j.scenario, repeat: j.repeat, status: j.status, reason: j.reason ?? null }));
   const { jobs: _jobs, ...runMeta } = meta ?? {};
   void _jobs;
-  const digest = writeResults(out, all, { run: meta ? { ...runMeta, missing } : null, episodeSeconds: timing });
+  // The harness each agent ran in, as the episodes recorded it when they ran (the licence names model and harness).
+  const harnesses: Record<string, string[]> = {};
+  for (const e of episodes) if (e.harness) harnesses[e.agent] = [...new Set([...(harnesses[e.agent] ?? []), e.harness])];
+  const digest = writeResults(out, all, { run: meta ? { ...runMeta, missing } : null, episodeSeconds: timing, harnesses });
   console.log(leaderboard(all.map(({ agent, runs }) => ({ agent, runs, licence: licenceOf(runs) }))));
   const incomplete = all.filter(({ runs }) => runs.some((r) => r.results.length !== SUITE.length));
   if (incomplete.length) console.log(`Incomplete suites (no licence): ${incomplete.map((a) => a.agent).join(", ")}`);

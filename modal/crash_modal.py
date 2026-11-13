@@ -64,8 +64,8 @@ SCENARIOS = [
 PROVIDERS = {
     "anthropic": ("dock-crash-anthropic", ["api.anthropic.com"], 13),
     "openai": ("dock-crash-openai", ["api.openai.com"], 13),
-    "google": ("dock-crash-google", ["generativelanguage.googleapis.com"], 8),
-    "featherless": ("dock-crash-featherless", ["api.featherless.ai"], 2),
+    "google": ("dock-crash-google", ["generativelanguage.googleapis.com"], 3),
+    "featherless": ("dock-crash-featherless", ["api.featherless.ai"], 3),
     "scripted": (None, [], 26),
 }
 
@@ -267,16 +267,23 @@ class Run:
             if self.stop.is_set():
                 job.update(status="not started", reason="driver deadline reached before it started")
                 return
-            with self.lock:
-                # Reserve for every paid episode in flight what an episode of that agent has cost so far (the cap
-                # until three have finished), and do not start one that could take the total past the budget.
-                reserve = sum(self.expected_cost(x) for x in self.flying) + self.expected_cost(job["agent"]) if paid(job) else 0
-                if paid(job) and self.spent_usd + reserve > a.budget_usd:
-                    job.update(status="not started", reason=f"budget: ${self.spent_usd:.2f} spent + ${reserve:.2f} reserved would pass ${a.budget_usd:.2f}")
+            # Reserve for every paid episode in flight what an episode of that agent has cost so far (its cap until
+            # three have finished). Refuse an episode that alone could take the total past the budget; wait while
+            # the episodes in flight could.
+            while paid(job):
+                with self.lock:
+                    own = self.expected_cost(job["agent"])
+                    flying = sum(self.expected_cost(x) for x in self.flying)
+                    if self.spent_usd + own > a.budget_usd:
+                        job.update(status="not started", reason=f"budget: ${self.spent_usd:.2f} spent + ${own:.2f} for this episode would pass ${a.budget_usd:.2f}")
+                        return
+                    if not self.flying or self.spent_usd + flying + own <= a.budget_usd:
+                        self.in_flight += 1
+                        self.flying.append(job["agent"])
+                        break
+                if self.stop.wait(3):
+                    job.update(status="not started", reason="driver deadline reached before it started")
                     return
-                if paid(job):
-                    self.in_flight += 1
-                    self.flying.append(job["agent"])
             try:
                 attempt = 0
                 while True:

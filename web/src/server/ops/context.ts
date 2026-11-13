@@ -8,6 +8,7 @@ import { DEMO_ORG, demoMandate } from "../dev-fixtures";
 import type { Runtime } from "../runtime";
 import type { SandboxSummary } from "../sandboxes";
 import { doorLog, type DoorLog, type Via } from "./door";
+import { resolveLicence } from "./licence-gate";
 import { licenceSource, type LicenceRecord } from "./licences";
 import { suspensions, type SuspensionRegistry } from "./suspensions";
 
@@ -144,7 +145,12 @@ export async function opsContext(rt: Runtime, now = new Date()): Promise<OpsCont
     agents,
     requests,
     byRequest,
-    licence: (agentId) => lic.get(agentId),
+    // A running agent's licence comes through a binding (licence-gate.ts); a record keyed by the agent id itself
+    // (the older file shape) still shows.
+    licence: (agentId) => {
+      const r = resolveLicence({ agentId, orgId: agents.get(agentId)?.orgId ?? "" });
+      return r.record ? { ...r.record, agentId } : lic.get(agentId);
+    },
     viaOfRequest: (requestId) => {
       const r = requests.get(requestId);
       return r ? door.viaAt(r.actor.replace(/^agent:/, ""), r.at)?.via : undefined;
