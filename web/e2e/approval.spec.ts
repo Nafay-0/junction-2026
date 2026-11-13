@@ -31,17 +31,17 @@ test("register -> request needing approval -> approve with passkey -> committed"
 
   const screenContext = await browser.newContext();
   const screen = await screenContext.newPage();
-  await screen.goto("/screen");
-  await expect(screen.getByRole("heading", { name: "Become the approver" })).toBeVisible();
+  await screen.goto("/"); // the wall (the old /screen redirects here)
+  await expect(screen.getByRole("heading", { name: "Scan to become the approver" })).toBeVisible();
   await expect(screen.locator("figure svg")).toBeVisible();
-  await expect(screen.getByText(/Kitchens here now \(\d+\)/)).toBeVisible();
+  await expect(screen.getByText(/Kitchens here now: \d+/)).toBeVisible();
 
   await page.getByRole("button", { name: /ask my agent for 1,000 L of milk/ }).click();
   await page.waitForURL("**/approve/**"); // opened by the live event, not by the click
   await expect(page.getByText("Over this agent's €500 per-order limit")).toBeVisible();
   await expect(page.getByText("Not exactly what was asked")).toBeVisible();
   await expect(page.getByText(/instead of/).first()).toBeVisible();
-  await expect(screen.getByText("Needs sign-off").first()).toBeVisible();
+  await expect(screen.getByText(/^Waiting for /).first()).toBeVisible();
 
   const approve = page.getByRole("button", { name: /^Approve €/ });
   await expect(approve).toBeEnabled();
@@ -49,7 +49,7 @@ test("register -> request needing approval -> approve with passkey -> committed"
   await expect(page.getByRole("heading", { name: "Order placed" })).toBeVisible();
   await expect(page.getByText(/with a passkey/)).toBeVisible();
 
-  await expect(screen.getByText("Signed order").first()).toBeVisible();
+  await expect(screen.getByText(/^Signed order/).first()).toBeVisible();
   const approvalId = page.url().split("/approve/")[1];
   const view = await (await page.request.get(`/api/v1/approvals/${approvalId}`)).json();
   expect(view.view).toMatchObject({ state: "committed", outcome: { method: "passkey", verified: true } });
