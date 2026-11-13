@@ -49,7 +49,7 @@ export async function authenticate(req: Request, dock: Dock): Promise<AgentSessi
   }
   const call = { at: new Date().toISOString(), agentId: session.agentId, orgId: session.mandate.issuer.orgId, orgName: session.mandate.issuer.name, ...door };
   try {
-    suspensions(dock).enforce(session, door);
+    suspensions(dock).enforce(session, { ...door, method: req.method });
   } catch (err) {
     if (isDockError(err)) doorLog(dock).record({ ...call, ok: false, code: err.code, rule: err.rule });
     throw err;
