@@ -644,7 +644,7 @@ export function noOptionReason(
     const committed = b ? b.spentCents - b.heldCents : undefined;
     const left = b && committed !== undefined ? Math.max(0, b.mandate.weeklyBudgetCents - committed) : undefined;
     parts.push(
-      `the weekly budget: ${overBudget.length === 1 ? "the option that fits" : `${overBudget.length} options that fit`} would cost more than ${left !== undefined ? `the ${formatEur(left)} left of ${formatEur(b!.mandate.weeklyBudgetCents)} this week (${formatEur(committed!)} already committed)` : "is left this week"}`,
+      `the weekly budget: ${overBudget.length === 1 ? "the option that fits" : `${overBudget.length} options that fit`} would cost more than ${left !== undefined ? `the ${formatEur(left)} left of ${formatEur(b!.mandate.weeklyBudgetCents)} this week (${formatEur(committed!)} already committed)` : "is left this week"}${b && b.heldCents > 0 ? `, and ${formatEur(b.heldCents)} more is held by ${b.held.map((h) => h.orderId).join(", ")} waiting for sign-off: withdraw it or have it decided, or it stops holding money when its price expires` : ""}`,
     );
   }
   if (cutoff.length) parts.push(`the order cut-off has passed for ${cutoff.map((e) => e.productId).join(", ")}, so ${cutoff.length > 1 ? "they" : "it"} cannot arrive by ${deliverBy ?? "the date asked"}`);

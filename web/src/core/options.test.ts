@@ -123,10 +123,14 @@ describe("option cards", () => {
     expect(broke.cards).toEqual([]);
     expect(broke.excluded[0].reason).toBe("€129.00 would go over the weekly budget (€50.00 left of €2,000.00 after the €1,950.00 already committed this week)");
     // Money held by an order waiting for sign-off does not remove a card: it says a person decides (F-PENDING-HOLDS-BUDGET).
-    const held = buildOptions(input({ spentThisWeekCents: 195_000, heldThisWeekCents: 195_000 }));
+    // ...when a person signs the card anyway (over the agent's own limit). Within it, the agent may not spend held money.
+    const held = buildOptions(input({ spentThisWeekCents: 195_000, heldThisWeekCents: 195_000, mandate: sampleMandate(NOW, { perOrderLimitCents: 5_000 }) }));
     expect(held.cards.length).toBeGreaterThan(0);
     expect(held.excluded.filter((e) => e.code === "over_budget")).toEqual([]);
     expect(held.cards[0].signOff.join(" ")).toMatch(/held by an order waiting for sign-off/);
+    const alone = buildOptions(input({ spentThisWeekCents: 195_000, heldThisWeekCents: 195_000 }));
+    expect(alone.cards).toEqual([]);
+    expect(alone.excluded).toContainEqual(expect.objectContaining({ code: "over_budget", reason: expect.stringMatching(/held by an order waiting for sign-off is not signed; withdraw or decide that order first/) }));
     expect(slow.excluded[0]).toMatchObject({ code: "too_late", reason: "earliest delivery Mon 30 Nov is after Sat 21 Nov, the latest the mandate allows" });
   });
 

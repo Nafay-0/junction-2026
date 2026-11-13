@@ -251,13 +251,9 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
   else if (committed + total > mandate.weeklyBudgetCents)
     add("weekly_budget", "fail", `This ${formatEur(total)} order would take weekly spend to ${formatEur(committed + total)}, over the ${formatEur(mandate.weeklyBudgetCents)} budget (already ${formatEur(committed)} committed${held ? `, ${formatEur(held)} more waiting for sign-off` : ""}).`, budgetDetails);
   else {
-    const named = (ctx.heldOrders ?? []).map((o) => `${o.orderId} (${formatEur(o.totalCents)})`).join(", ");
-    add(
-      "weekly_budget",
-      "escalate",
-      `This ${formatEur(total)} order fits the ${formatEur(mandate.weeklyBudgetCents)} weekly budget with the ${formatEur(committed)} committed, but not together with the ${formatEur(held)} waiting for sign-off${named ? ` on ${named}` : ""}. The agent may not spend held money alone, so a person decides; if both are signed, the later one is refused.`,
-      { ...budgetDetails, heldOrders: ctx.heldOrders },
-    );
+    // Fits with what is committed, not with what waits for sign-off. Decided below, once the other rules are in:
+    // an order a person signs anyway goes to them with both in view; one the agent would place alone is refused.
+    add("weekly_budget", "escalate", "", { ...budgetDetails, heldOrders: ctx.heldOrders, held: true });
   }
 
   const limitDetails = { limitCents: mandate.perOrderLimitCents, totalCents: total };
@@ -278,6 +274,18 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
       `The agent relayed that ${[...new Set(unverified.map((u) => u.by))].join(", ")} confirmed ${unverified.length > 1 ? "these" : "this"} as intended, but nobody verified it: ${unverified.map((u) => u.message).join(" ")} A named person must sign it off.`,
       { confirmations: unverified.map((u) => ({ code: u.code, by: u.by })) },
     );
+
+  const heldBudget = results.find((r) => r.rule === "weekly_budget" && r.details?.held === true);
+  if (heldBudget) {
+    const named = (ctx.heldOrders ?? []).map((o) => `${o.orderId} (${formatEur(o.totalCents)})`).join(", ");
+    const why = `This ${formatEur(total)} order fits the ${formatEur(mandate.weeklyBudgetCents)} weekly budget with the ${formatEur(committed)} committed, but not together with the ${formatEur(held)} waiting for sign-off${named ? ` on ${named}` : ""}.`;
+    if (results.some((r) => r.outcome === "escalate" && r !== heldBudget)) {
+      heldBudget.reason = `${why} A person signs this order anyway, so they decide with both in view; if both are signed, the later one is refused.`;
+    } else {
+      heldBudget.outcome = "fail";
+      heldBudget.reason = `${why} The agent may not spend money held for another order alone: withdraw or decide the waiting order, or wait until its price expires.`;
+    }
+  }
 
   const needsHuman = results.some((r) => r.outcome === "escalate");
   const signAmount = split.outcome === "escalate" ? Math.max(total, split.combinedCents) : total;

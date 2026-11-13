@@ -309,7 +309,11 @@ export function buildOptions(input: OptionsInput): OptionsResult {
   const affordable = plans.filter((pl) => {
     const over = committed + total(pl) > mandate.weeklyBudgetCents;
     if (over) excluded.push({ productId: pl.primary.p.id, reason: `${formatEur(total(pl))} would go over the weekly budget (${formatEur(Math.max(0, mandate.weeklyBudgetCents - committed))} left of ${formatEur(mandate.weeklyBudgetCents)} after the ${formatEur(committed)} already committed this week)`, code: "over_budget" });
-    return !over;
+    // Fits only if the order waiting for sign-off is not signed: offered when a person signs this one anyway
+    // (over the agent's own limit), since the agent may not spend held money alone (policy weekly_budget).
+    const heldOver = !over && held > 0 && input.spentThisWeekCents + total(pl) > mandate.weeklyBudgetCents && total(pl) <= mandate.perOrderLimitCents;
+    if (heldOver) excluded.push({ productId: pl.primary.p.id, reason: `${formatEur(total(pl))} fits only if the ${formatEur(held)} held by an order waiting for sign-off is not signed; withdraw or decide that order first`, code: "over_budget" });
+    return !over && !heldOver;
   });
 
   const givesUp = (pl: Plan): GiveUp[] => {
