@@ -10,6 +10,7 @@ import { ChainCheck } from "../../../_ui/chain";
 import { fi, num, span, when, whenSeconds } from "../../../_ui/format";
 import { Button, Details, Empty, KV, Licence, LoadError, Loading, Outcome, Panel, ViaTag, useOps } from "../../../_ui/kit";
 import { verifyToken, type ChainResult, type TokenCheck } from "../../../_ui/verify-client";
+import { StreamReplay } from "../../platform/_parts/stream-replay";
 
 /**
  * The flow trace: one request as a path through Dock, in the order it happened, with a replay control so a
@@ -224,6 +225,7 @@ function Trace({ t, error }: { t: TraceView; error?: string }) {
               <KV k="ledger head" v={t.chain.head ? `${t.chain.head.seq} ${t.chain.head.hash.slice(0, 24)}…` : "empty"} />
             </Details>
           </Panel>
+          <StreamReplay requestId={t.requestId} currentSeq={current?.seq} />
           <p className="px-1 text-[0.8rem] text-ink-soft">Keys: space plays or pauses, arrows step, Home and End jump.</p>
         </aside>
       </div>

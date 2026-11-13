@@ -1,5 +1,7 @@
 "use client";
 
+import { DoorButtons } from "../../_channels/door-buttons";
+
 /**
  * THE PLACE FOR INPUT CHANNELS in the assistant panel: a microphone button and an "add a photo or document"
  * button mount here, next to the field and the Send button. Built separately under web/src/app/_channels/
@@ -16,6 +18,5 @@ export type ChannelSlotProps = {
 };
 
 export function ChannelSlot(props: ChannelSlotProps) {
-  void props;
-  return null;
+  return <DoorButtons kitchen={props.kitchen} disabled={props.disabled} />;
 }
