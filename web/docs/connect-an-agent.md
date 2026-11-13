@@ -315,9 +315,11 @@ Every intake result is `{ ok, step, waitingFor, nextStep }`. `step.state` is whe
 The MCP specification has no tool annotation for "needs a person" (annotations are only the `readOnlyHint`, `destructiveHint`, `idempotentHint` and `openWorldHint` hints). What the 2026-07-28 revision does define is **elicitation through `input_required` results**: a tool answers with an `elicitation/create` form, the client shows it to the user (not the model), and retries the call with the user's answer. Dock uses exactly that:
 
 - **Client declares the `elicitation` capability** (form mode): Dock asks the buyer directly. The agent's arguments, if any, only pre-fill the form; the buyer's answer is what counts, and a declined form changes nothing (code `buyer_declined`).
-- **Client without elicitation** (or a 2025-era connection, which this stateless server cannot push requests to): the agent passes the buyer's answer as `by` and `responses` / `answers`. A call with no answer is refused with code `human_answer_required`.
+- **Client without elicitation** (or a 2025-era connection, which this stateless server cannot push requests to): the agent passes the buyer's answer as `by` and `responses` / `answers`, recorded as relayed and not verified. A call with no answer is refused with code `human_answer_required`. The step also carries **`answerUrl`**, a one-time page on Dock (30 minutes, single use, bound to that exact step) where the buyer taps one of Dock's fixed choices themselves; the agent is told to hand it over instead of relaying. Answers there are recorded with the channel `answer_link`. Whoever holds the link can answer, so without the kitchen's signed-in session on that phone a confirmation that matters (an unusual amount, a rule broken) still goes to a named person's sign-off.
 
-Both tools also carry `_meta: { "dock/humanInput": { "required": true, … } }` in `tools/list` and `humanInput: true` in the manifest. That key is Dock's own, not a standard.
+Both tools also carry `_meta: { "dock/humanInput": { "required": true, … } }` in `tools/list` and `humanInput: true` in the manifest; in the OpenAPI document the same two operations carry `x-dock-human-input`. Those keys are Dock's own, not a standard. Operations for the approver's phone are tagged `approver` (`x-dock-audience: approver`); `/api/v1/openapi.json?audience=agent` leaves them out, so an OpenAPI-to-tools converter never offers an agent a tool to approve orders.
+
+Output schemas in `tools/list` are published shallow (the top-level fields with their descriptions, one level of shape below): some runtimes send every output schema to their model on each call. The full shapes are in the OpenAPI document.
 
 ### Results and refusals
 
@@ -346,11 +348,14 @@ Same headers, same flow. The OpenAPI document lists every status and schema.
 DOCK=http://localhost:3000
 H=(-H "Authorization: Bearer $DOCK_MANDATE" -H "Dock-Agent-Id: $DOCK_AGENT_ID" -H "content-type: application/json")
 
-# start from a structured need; every reply is { step } and step.next is the next call with an example body
+# start from a structured need; every reply is { step, waitingFor, nextStep } (plus answerUrl when the buyer must
+# answer), and step.next is the next call with an example body whose answers are placeholders, never a pre-filled choice
 STEP=$(curl -s -X POST $DOCK/api/v1/intake "${H[@]}" \
-  -d '{"need":{"item":{"text":"lactose-free milk","category":"milk"},"quantity":{"amount":20,"unit":"L"},"deliverBy":"2026-11-17"},"by":"Aino"}')
-echo "$STEP" | jq '{state: .step.state, next: .step.next}'
-# then POST .step.next.path with the buyer's answer: /intake/{id}/concerns, /answers, /choice, and finally /orders
+  -d '{"need":{"item":{"text":"lactose-free milk","category":"milk"},"quantity":{"amount":20,"unit":"L"},"deliverOn":"2026-11-17"},"by":"Aino"}')
+echo "$STEP" | jq '{state: .step.state, waitingFor, nextStep, answerUrl, next: .step.next}'
+# then POST .step.next.path with the buyer's answer: /intake/{id}/concerns, /answers, /choice, and finally
+# POST /orders with just {"requestId": …}: Dock places the quote it signed at the choice.
+# "deliverOn" asks for that exact day; "deliverBy" for that day at the latest.
 ```
 
 The lower-level calls, for follow-up or a quote built line by line:

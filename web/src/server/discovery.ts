@@ -165,7 +165,7 @@ Start every order with \`submit_need\`: the buyer's need as fields (what, how mu
 1. \`needs_confirmation\`: Dock found a likely mistake, for example 1,000 L where this kitchen usually orders 100 L. Ask the buyer and pass their answer to \`respond_to_concerns\` ("confirm" or a correction id).
 2. \`needs_input\`: at most two typed questions its memory cannot answer. Ask the buyer and pass their answers to \`answer_questions\`.
 3. \`options_ready\`: option cards with pros, cons and anything that needs a sign-off. \`choose_option\` with the buyer's pick returns a signed fixed-price quote.
-4. \`quoted\`: call \`place_order\` with \`step.next.example\`. It commits, or waits for a human sign-off on the approver's phone.
+4. \`quoted\`: call \`place_order\` with just the requestId (\`step.next.example\`). It commits, or waits for a human sign-off on the approver's phone.
 5. \`no_options\` or \`cancelled\`: tell the buyer; do not order.
 
 **The buyer answers, not you.** A mistake confirmation and a clarifying answer must come from the human buyer: relay Dock's question in plain words and pass on exactly what they say. Never confirm or answer for them. These two tools are marked \`_meta["${HUMAN_INPUT_META}"]\` in tools/list. If your client supports MCP elicitation (2026-07-28), Dock asks the buyer directly with an \`input_required\` form and your arguments only pre-fill it. While a confirmation is pending, quotes and orders for that request are refused (rule human_input).

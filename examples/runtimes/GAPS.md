@@ -1,8 +1,14 @@
 # What the runtimes showed up in the gate
 
 Found while building and running the buyers in this folder (2026-11-13/14, seed catalogue, demo kitchen mandate).
-Each item says what happened, where, and the smallest change that would fix it. None of these is fixed here:
-`web/src/server/mcp/` and `web/src/core/` belong to others.
+Each item says what happened, where, and the smallest change that would fix it.
+
+**Status (14 Nov, branch `claude/integrate`):** 1 fixed (`answerUrl`, a one-time answer page, channel `answer_link`;
+relayed answers stay "relayed, unverified"); 2 fixed in the core, so REST too (`POST /api/v1/orders` with only
+`requestId`; refusal `no_current_quote` says why when there is none); 3 fixed (`x-dock-human-input`, tags and
+`x-dock-audience: approver`, `?audience=agent`); 4 fixed (`nextStep` and `waitingFor` on every REST intake, quote and
+order reply; examples hold placeholders, never a pre-filled answer); 5 fixed (`need.deliverOn`, an exact day held by
+the gate); 6 fixed (output schemas published shallow: tools/list 129 KB -> 30 KB, output schemas 109 KB -> 11 KB).
 
 ## 1. On clients that cannot elicit, the gate cannot tell a buyer's answer from the model's
 
