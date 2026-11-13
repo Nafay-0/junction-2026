@@ -12,6 +12,7 @@
  *   aiven-api   AIVEN_API_TOKEN + AIVEN_PROJECT        list services and their state and plan
  *
  * Exits 1 if any configured service fails; unconfigured services do not fail the run.
+ * With --record, also writes one telemetry.events row per service (the Grafana "Latest infra:check" table).
  */
 import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -241,7 +242,32 @@ async function main() {
   }
   const failed = results.filter((r) => r.status === "FAIL").length;
   console.log(`\n${failed ? `${failed} failed` : "all configured services passed"} in ${Date.now() - started} ms`);
+  if (process.argv.includes("--record")) await record(results);
   process.exit(failed ? 1 : 0);
+}
+
+/** --record: one telemetry.events row per configured service (see infra/telemetry.sql), for Grafana. */
+async function record(results: Array<{ name: string; status: Result["status"]; detail: string; ms: number }>) {
+  const raw = env("DATABASE_URL");
+  if (!raw) return console.log("record: DATABASE_URL not set, nothing recorded");
+  const url = new URL(raw);
+  if (!url.searchParams.has("uselibpqcompat")) url.searchParams.set("uselibpqcompat", "true");
+  const client = new PgClient({ connectionString: url.toString(), connectionTimeoutMillis: TIMEOUT_MS });
+  try {
+    await client.connect();
+    const rows = results.filter((r) => r.status !== "not configured");
+    for (const r of rows) {
+      await client.query(
+        `insert into telemetry.events (source, kind, rule, value, ok, attrs) values ('infra-check', 'infra.check', $1, $2, $3, $4)`,
+        [r.name, r.ms, r.status === "PASS", { detail: scrub(r.detail) }],
+      );
+    }
+    console.log(`record: ${rows.length} rows written to telemetry.events`);
+  } catch (e) {
+    console.log(`record: failed (${scrub(e instanceof Error ? e.message : String(e))})`);
+  } finally {
+    await client.end().catch(() => {});
+  }
 }
 
 void main();
