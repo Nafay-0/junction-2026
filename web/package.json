@@ -16,15 +16,20 @@
     "dev:mandate": "tsx scripts/dev-mandate.ts",
     "e2e": "next build && playwright test",
     "index:build": "tsx scripts/index-build.ts",
-    "valio:ping": "tsx scripts/valio-ping.ts"
+    "valio:ping": "tsx scripts/valio-ping.ts",
+    "infra:check": "tsx scripts/infra-check.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "2.4.0",
+    "@opensearch-project/opensearch": "3.9.0",
     "@simplewebauthn/browser": "14.0.0",
     "@simplewebauthn/server": "14.0.3",
+    "iovalkey": "0.4.0",
     "jose": "6.2.17",
+    "kafkajs": "2.2.4",
     "next": "16.4.6",
     "qrcode": "1.5.4",
+    "pg": "8.23.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "zod": "4.6.7"
@@ -36,6 +41,7 @@
     "@tailwindcss/turbopack": "4.3.3",
     "@types/node": "^20",
     "@types/qrcode": "1.5.6",
+    "@types/pg": "8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
