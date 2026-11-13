@@ -11,6 +11,8 @@ import { DEMO_ORG, demoMandate, demoOrgKeyPair } from "./dev-fixtures";
 import { localFetch } from "./local-transport";
 import { API, UNDOCUMENTED_ROUTES, buildOpenApi } from "./openapi";
 import { resetRuntime } from "./runtime";
+import { setInterpretModelForTests } from "./agent/interpret";
+import { scriptedModel } from "./agent/testing";
 
 const BASE = "https://dock.test";
 const V1 = join(__dirname, "..", "app", "api", "v1");
@@ -143,6 +145,19 @@ describe("real responses match the documented status codes and schemas", () => {
     await kitchen("GET", `/api/v1/intake/${step.requestId}`);
     expect((await kitchen("GET", "/api/v1/intake/req_nope")).status).toBe(404);
     await kitchen("GET", "/api/v1/kitchen");
+
+    // Free text to a structured need, with a scripted model (no provider is called).
+    const scripted = { item: { text: "lactose-free milk", category: "milk", attributes: ["lactose_free"], excludedAttributes: [], productId: null }, quantity: { amount: 1000, unit: "L" }, deliverBy: null, requiredClaims: [], forbiddenAllergens: [], optimise: "price", sameAsLastTime: false, isPurchaseRequest: true, notPurchaseReason: null };
+    setInterpretModelForTests({ ...scriptedModel([{ text: JSON.stringify(scripted) }]), id: "scripted:interpret" });
+    try {
+      const read = await kitchen("POST", "/api/v1/agent/interpret", { text: "1000 l laktoositonta maitoa, halvin" });
+      expect(read.body).toMatchObject({ need: { quantity: { amount: 1000, unit: "L" }, item: { category: "milk" } }, model: "scripted:interpret" });
+      expect((await kitchen("POST", "/api/v1/agent/interpret", { text: "" })).status).toBe(400);
+      setInterpretModelForTests({ ...scriptedModel([{ text: JSON.stringify({ ...scripted, isPurchaseRequest: false, notPurchaseReason: "A question about opening hours." }) }]), id: "scripted:interpret" });
+      expect((await kitchen("POST", "/api/v1/agent/interpret", { text: "When do you open on Saturdays?" })).status).toBe(422);
+    } finally {
+      setInterpretModelForTests(undefined);
+    }
 
     // The approver's phone: join with a passkey, the kitchen's agent orders, sign off with the passkey.
     const phone = new SoftwareAuthenticator(BASE);
