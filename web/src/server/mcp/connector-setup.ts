@@ -68,7 +68,7 @@ export function connectorSetup({ url, kitchenName }: { url: string; kitchenName:
         needs: "Any Claude Code install.",
         steps: ["Paste the command in a terminal, start claude, and type the request."],
         paste: `claude mcp add --transport http dock ${url}`,
-        docs: "https://docs.claude.com/en/docs/claude-code/mcp",
+        docs: "https://code.claude.com/docs/en/mcp",
       },
       {
         id: "gemini-cli",

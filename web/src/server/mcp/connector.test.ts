@@ -63,7 +63,8 @@ async function orderToSignOff(client: Client) {
   expect(r.s.step.state).toBe("options_ready");
   const quoted = await call(client, "choose_option", { requestId, optionId: r.s.step.options[0].optionId });
   expect(quoted.s.step.state).toBe("quoted");
-  const placed = await call(client, "place_order", quoted.s.step.next.example);
+  // As a chat assistant should: only the requestId, so a long signed token is never copied by the model.
+  const placed = await call(client, "place_order", { requestId });
   return { requestId, placed, example: quoted.s.step.next.example };
 }
 
@@ -140,8 +141,12 @@ describe("connector address: same gate, nothing more", () => {
     expect(res.status).toBeGreaterThanOrEqual(400);
     expect((await call(client, "get_order", { orderId: placed.s.order.orderId })).s.order.status).toBe("pending_approval");
 
-    // A retry of the same order is refused by rule.
+    // A retry of the same order is refused by rule, whichever way it is sent.
     expect((await call(client, "place_order", example)).s.error).toMatchObject({ rule: "quote_replay" });
+    expect((await call(client, "place_order", { requestId })).s.error).toMatchObject({ rule: "quote_replay" });
+    // Without a chosen quote, the short form is refused with a reason.
+    const { s: bare } = await call(client, "open_request", { text: "milk" });
+    expect((await call(client, "place_order", { requestId: bare.request.requestId })).s.error).toMatchObject({ code: "invalid_request" });
   });
 
   it("cannot exceed the mandate: the weekly budget refuses, whatever the address", async () => {

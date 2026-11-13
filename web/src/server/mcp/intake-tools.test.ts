@@ -78,7 +78,7 @@ describe("intake tools", () => {
 
     const quoted = await call(client, "choose_option", { requestId, by: "Sanna", optionId: answered.s.step.options[0].optionId });
     expect(quoted.s).toMatchObject({ waitingFor: "agent", step: { state: "quoted", quote: { quoteToken: expect.any(String) } } });
-    expect(quoted.s.nextStep).toMatch(/place_order with step.next.example/);
+    expect(quoted.s.nextStep).toMatch(/place_order with just .*requestId/);
 
     const placed = await call(client, "place_order", quoted.s.step.next.example);
     expect(placed.isError).toBe(false);

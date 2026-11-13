@@ -195,6 +195,22 @@ export async function runTool(
   }
 }
 
+type JsonSchemaHook = { input: (o: unknown) => Record<string, unknown>; output: (o: unknown) => Record<string, unknown> };
+const dropDialect = ({ $schema: _, ...rest }: Record<string, unknown>) => (void _, rest);
+
+/**
+ * The tool schemas as published, without the `$schema` keyword zod adds. MCP's default dialect is already JSON Schema
+ * 2020-12, and some clients' validators (Gemini CLI 0.25, with Ajv's draft-07 default) refuse every call to a tool
+ * whose schema names a dialect they do not know. Validation stays with zod; only the published JSON changes.
+ */
+export function published<T extends z.ZodType>(schema: T): T {
+  const std = schema["~standard"] as T["~standard"] & { jsonSchema?: JsonSchemaHook };
+  if (!std.jsonSchema) return schema;
+  const jsonSchema: JsonSchemaHook = { input: (o) => dropDialect(std.jsonSchema!.input(o)), output: (o) => dropDialect(std.jsonSchema!.output(o)) };
+  const standard = { ...std, jsonSchema };
+  return new Proxy(schema, { get: (target, key, receiver) => (key === "~standard" ? standard : Reflect.get(target, key, receiver)) });
+}
+
 export function buildMcpServer(rt: Runtime, req?: Request, via?: ConnectorCall): McpServer {
   const server = new McpServer(MCP_SERVER_INFO, { instructions: MCP_INSTRUCTIONS });
   for (const tool of TOOLS) {
@@ -203,8 +219,8 @@ export function buildMcpServer(rt: Runtime, req?: Request, via?: ConnectorCall):
       {
         title: tool.title,
         description: tool.description,
-        inputSchema: tool.input,
-        outputSchema: tool.output.extend({ ok: z.literal(true) }).loose(), // loose: new fields must not break clients
+        inputSchema: published(tool.input),
+        outputSchema: published(tool.output.extend({ ok: z.literal(true) }).loose()), // loose: new fields must not break clients
         annotations: { title: tool.title, readOnlyHint: tool.readOnly ?? false, destructiveHint: false, idempotentHint: tool.readOnly ?? false, openWorldHint: false },
         ...("humanInput" in tool && tool.humanInput
           ? { _meta: { [HUMAN_INPUT_META]: { required: true, from: "buyer", how: "elicitation (input_required) when the client supports it, else the agent relays the buyer's own answer" } } }

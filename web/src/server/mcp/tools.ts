@@ -328,16 +328,32 @@ const CORE_TOOLS = [
     name: "place_order",
     title: "Place an order against a quote",
     description:
-      "Order exactly what a quote offers, at the quoted prices: after choose_option, pass step.next.example as the arguments. Dock's gate checks the order against your mandate in plain code. Three outcomes: committed (within the mandate; the result carries the wholesaler-signed confirmation), pending_approval (a person named in the mandate must sign off on their own phone; tell the buyer who, in one sentence, and stop: you must NOT retry, re-place or split it), or refused (the error names the rule, e.g. weekly_budget). A quote buys once.",
+      "Order exactly what a quote offers, at the quoted prices. After choose_option, pass only requestId: Dock places the quote it signed for that request (no need to copy the long quoteToken). After request_quote, pass requestId, quoteToken and lines unchanged. Dock's gate checks the order against your mandate in plain code. Three outcomes: committed (within the mandate; the result carries the wholesaler-signed confirmation), pending_approval (a person named in the mandate must sign off on their own phone; tell the buyer who, in one sentence, and stop: you must NOT retry, re-place or split it), or refused (the error names the rule, e.g. weekly_budget). A quote buys once.",
     input: PlaceOrderInput.extend({
       requestId,
-      quoteToken: z.string().min(1).describe("quoteToken from request_quote, unchanged."),
+      quoteToken: z.string().min(1).optional().describe("Only after request_quote: its quoteToken, unchanged. Leave it out after choose_option."),
       lines: z
         .array(z.object({ productId: z.string(), quantity: z.number(), unitPriceCents: z.number() }))
-        .describe("The quote's lines: productId, quantity and unitPriceCents copied from quote.lines."),
+        .optional()
+        .describe("Only with quoteToken: the quote's lines (productId, quantity, unitPriceCents) copied from quote.lines."),
     }),
     output: z.object({ order: OrderSchema, nextStep }),
-    run: async ({ dock, session }, args) => {
+    run: async ({ dock, session }, { requestId, quoteToken, lines }) => {
+      let args: z.input<typeof PlaceOrderInput>;
+      if (quoteToken) {
+        if (!lines) throw new DockError(400, "invalid_request", "Send lines with quoteToken (copied from quote.lines), or leave both out after choose_option.");
+        args = { requestId, quoteToken, lines };
+      } else {
+        // The quote Dock signed for this request at choose_option. The core verifies it exactly as if the agent had sent it.
+        const step = await dock.intake.get(session, requestId).catch((err: unknown) => {
+          if (err instanceof DockError && err.code === "intake_not_found") {
+            throw new DockError(400, "invalid_request", "No chosen quote for this request: pass quoteToken and lines from request_quote, or start with submit_need.");
+          }
+          throw err;
+        });
+        if (step.state !== "quoted" || !step.quote) throw wrongState(step, "place an order without a quoteToken");
+        args = { requestId, quoteToken: step.quote.quoteToken, lines: step.quote.quote.lines.map(({ productId, quantity, unitPriceCents }) => ({ productId, quantity, unitPriceCents })) };
+      }
       const order = await dock.placeOrder(session, args);
       if (order.status === "rejected") {
         const rule = decidingRule(order.decision);

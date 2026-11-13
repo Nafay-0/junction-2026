@@ -128,7 +128,7 @@ export function nextStepForIntake(step: StepLike): string {
           : p?.outcome === "needs_human_approval"
             ? ` Placing it will ask ${p.approver ? `${p.approver.name} (${p.approver.role})` : "a person named in the mandate"} to sign off on their own device.`
             : " It is within the mandate and commits at once.";
-      return `Call place_order with step.next.example as its arguments (requestId, quoteToken, lines).${gate}`;
+      return `Call place_order with just { "requestId": "${step.requestId}" }: Dock places the quote it signed for this request.${gate}`;
     }
     case "no_options":
       return `Nothing meets the constraints: ${step.notes[0] ?? "see step.notes and step.excluded"}. Tell the buyer why; if they change the need, call submit_need again.`;
