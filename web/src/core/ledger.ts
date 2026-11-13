@@ -7,6 +7,7 @@ import { canonicalJson, sha256Hex } from "./util";
  */
 export type LedgerEntryType =
   | "request" // the agent opened a purchase request
+  | "intake" // structured need, concerns, confirmations, questions, answers, options and the buyer's choice
   | "lookup" // master-data search or live price/availability check
   | "quote" // the wholesaler issued a fixed-price quote
   | "decision" // the policy gate decided on an order
