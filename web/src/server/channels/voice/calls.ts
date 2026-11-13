@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { DockError } from "@/core/errors";
 import type { NeedInput } from "@/core/need";
+import { recordGroundingChecks } from "../../grounding";
 import { recordLlmSpend } from "../../limits";
 import { LIVE_PRICE, type CallMode } from "./live";
 
@@ -143,7 +144,10 @@ export class CallRegistry {
     if (!c || c.kitchen !== kitchen) throw new DockError(404, "call_not_found", "No such call for this kitchen.");
     c.lastSeen = this.now();
     if (report?.usage) c.usage = report.usage;
-    if (report?.grounding) c.grounding = report.grounding;
+    if (report?.grounding) {
+      recordGroundingChecks("voice", report.grounding.checked - c.grounding.checked); // the operations portal's count (server/grounding.ts)
+      c.grounding = report.grounding;
+    }
     return c;
   }
 

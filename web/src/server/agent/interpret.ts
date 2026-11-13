@@ -9,6 +9,7 @@ import { createModel, defaultModel, ModelConfigError, type ModelOptions } from "
 import { costOf, tokensFromUsage, type Price, type Tokens } from "./pricing";
 import { interpretSystem, interpretUser, type Vocabulary } from "./prompts";
 import { describeError, isRetryable, withRetry } from "./retry";
+import { groundInterpretation } from "./interpret-grounding";
 
 /**
  * Job 1: a buyer's free text (English, Finnish or Swedish) to the structured need, and nothing more.
@@ -77,6 +78,8 @@ export type InterpretOptions = {
   timeoutMs?: number;
   /** The kitchen's earlier requests, newest first, for follow-ups that refer to one. */
   earlier?: EarlierRequest[];
+  /** More text the need may rest on besides the buyer's words (the kitchen's remembered rules): see interpret-grounding.ts. */
+  evidence?: string[];
 };
 
 const WEEKDAYS: [string, string, string][] = [
@@ -237,7 +240,8 @@ export async function interpretNeed(opts: InterpretOptions): Promise<InterpretRe
     const status = isRetryable(err) ? 503 : 502;
     throw new DockError(status, "interpret_failed", `The model call failed: ${describeError(err)}`);
   }
-  const raw = res.output as LlmNeed | LlmFollowUp;
+  // Nothing the buyer did not say: a claim, allergen, product, amount or date with no backing is removed (grounding check).
+  const raw = groundInterpretation(res.output as LlmNeed | LlmFollowUp, { text, earlier, extra: opts.evidence }).raw;
   const tokens = tokensFromUsage(res.usage);
   recordLlmSpend(costOf(tokens, price));
   const basedOn = earlier.length ? checkBasedOn(raw as LlmFollowUp, earlier) : undefined;

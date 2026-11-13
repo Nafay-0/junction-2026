@@ -1,5 +1,6 @@
 import { agentKeyOf } from "@/core/live-allowance";
 import type { Dock } from "@/core/orders";
+import { groundPlanText } from "./grounding";
 import type { MenuKitchen, MenuKitchenInfo } from "./kitchens";
 import type { PlanView } from "./plan";
 import type { PlanRecord } from "./service";
@@ -7,10 +8,13 @@ import type { PlanRecord } from "./service";
 /**
  * What leaves the server for a plan: the sheet (lines with their working, flags, totals), the model's part and how
  * long everything took, the live calls it cost, and, once there is one, the quote and the gate's decision. No
- * mandate, no quote token: the server holds those and acts for the kitchen.
+ * mandate, no quote token: the server holds those and acts for the kitchen. The model's words in it (dishes,
+ * assumptions, warnings, roles, reasons, proposals) have passed the grounding check (./grounding.ts); `brands`: the
+ * catalogue's brand names for its product check.
  */
-export function planWire(record: PlanRecord, view: PlanView, kitchen: MenuKitchen, dock: Dock) {
+export function planWire(record: PlanRecord, view: PlanView, kitchen: MenuKitchen, dock: Dock, brands: string[] = []) {
   const q = record.quote;
+  const shown = groundPlanText(record, view, kitchen, brands);
   const left = dock.liveAllowance.remaining(agentKeyOf(kitchen.mandate.issuer.orgId, kitchen.agentId));
   return {
     planId: record.planId,
@@ -20,26 +24,26 @@ export function planWire(record: PlanRecord, view: PlanView, kitchen: MenuKitche
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
     pending: record.pending ?? false,
-    declineReason: record.declineReason ?? null,
+    declineReason: record.declineReason ? shown.draft.declineReason : null,
     kitchen: kitchen.info as MenuKitchenInfo,
     model: record.model,
     draft: {
       covers: record.draft.covers,
       serviceDate: record.draft.serviceDate,
-      occasion: record.draft.occasion,
-      assumptions: record.draft.assumptions,
-      conflicts: record.draft.conflicts,
+      occasion: shown.draft.occasion,
+      assumptions: shown.draft.assumptions,
+      conflicts: shown.draft.conflicts,
       corrections: record.draft.corrections,
       requiredClaims: record.draft.requiredClaims,
       forbiddenAllergens: record.draft.forbiddenAllergens,
-      dishes: record.draft.dishes.map((d) => ({ id: d.id, name: d.name, nameFi: d.nameFi, course: d.course, serviceDate: d.serviceDate, portion: d.portion, method: d.method })),
+      dishes: record.draft.dishes.map((d, i) => ({ id: d.id, name: shown.draft.dishes[i].name, nameFi: shown.draft.dishes[i].nameFi, course: d.course, serviceDate: d.serviceDate, portion: shown.draft.dishes[i].portion, method: shown.draft.dishes[i].method })),
     },
     settings: record.settings,
     notes: record.notes,
     timings: record.timings,
     live: { ...record.liveUse, allowance: { callsLeft: left.callsLeft, newProductsLeft: left.newProductsLeft, windowMinutes: left.windowMinutes } },
     acceptances: record.acceptances,
-    lines: view.lines,
+    lines: shown.lines,
     totals: view.totals,
     quote: q
       ? {

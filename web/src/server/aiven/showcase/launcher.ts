@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { groundRunMessages } from "./grounding";
 import { signMandate } from "@/core/mandate";
 import { DEMO_ORG, demoMandate, demoOrgKeyPair } from "@/server/dev-fixtures";
 import { errMessage, log } from "../env";
@@ -163,13 +164,17 @@ const base = () => {
 
 type ApiMessage = { created_at?: string; role?: string; message_type?: string; name?: string; content?: string; tool_call?: { name?: string; arguments?: unknown }; tool_return?: string };
 
-/** Aiven's message objects as the cards show them: redacted, long tool answers cut. */
+/** Aiven's message objects as the cards show them: redacted, long tool answers cut, the agent's words grounded. */
 export function toRunMessages(list: ApiMessage[]): RunMessage[] {
-  return list.map((m) => {
+  const full: string[] = [];
+  const out = list.map((m) => {
     const type: RunMessage["type"] = m.message_type === "tool_call_message" ? "tool_call" : m.message_type === "tool_return_message" ? "tool_return" : m.role === "user" ? "user" : "assistant";
     const text = type === "tool_call" ? JSON.stringify(m.tool_call?.arguments ?? {}) : type === "tool_return" ? String(m.tool_return ?? m.content ?? "") : String(m.content ?? "");
+    full.push(text);
     return { at: m.created_at ?? new Date().toISOString(), role: m.role ?? "", type, tool: (m.tool_call?.name ?? m.name) || undefined, text: redact(text).slice(0, type === "tool_return" ? 700 : 2_000) };
   });
+  // The agent's own words, checked against the tool answers before them (whole, not cut for the card): grounding.ts.
+  return groundRunMessages(out, full);
 }
 
 /** What Dock said in the tool answers: the request, the order and how it ended. */
@@ -369,7 +374,7 @@ export function recordedRun(preset: PresetId, why: string): Run {
     status: "done",
     startedAt: new Date().toISOString(),
     endedAt: new Date().toISOString(),
-    messages: rec.messages,
+    messages: groundRunMessages(rec.messages),
     requestId: rec.requestId,
     orderId: rec.orderId,
     outcome: rec.outcome,
