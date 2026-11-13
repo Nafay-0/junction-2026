@@ -153,14 +153,15 @@ describe("connector address: same gate, nothing more", () => {
     expect((await call(client, "place_order", { requestId: bare.request.requestId })).s.error).toMatchObject({ code: "invalid_request" });
   });
 
-  it("cannot exceed the mandate: the weekly budget refuses, whatever the address", async () => {
+  it("cannot exceed the mandate: a product outside its categories is refused, whatever the address", async () => {
+    // (The demo kitchens' weekly budget is sized for a day of demos, beyond what the seed's stock can reach.)
     const client = await connect(await addressOf("kaari"));
-    const { s: opened } = await call(client, "open_request", { text: "a lot of milk" });
+    const { s: opened } = await call(client, "open_request", { text: "oat drink" });
     const requestId = opened.request.requestId;
-    const q = await call(client, "request_quote", { requestId, lines: [{ productId: "VA-1001", quantity: 1500 }] });
+    const q = await call(client, "request_quote", { requestId, lines: [{ productId: "PK-4001", quantity: 10 }] });
     expect(q.s.policyPreview).toMatchObject({ outcome: "reject" });
     const r = await call(client, "place_order", { requestId, quoteToken: q.s.quoteToken, lines: q.s.quote.lines.map(({ productId, quantity, unitPriceCents }: Record<string, unknown>) => ({ productId, quantity, unitPriceCents })) });
-    expect(r).toMatchObject({ isError: true, s: { error: { code: "policy_rejected", rule: "weekly_budget" } } });
+    expect(r).toMatchObject({ isError: true, s: { error: { code: "policy_rejected", rule: "category_allowed" } } });
   });
 
   it("shares the per-agent live-lookup allowance with every other door of the same agent", async () => {

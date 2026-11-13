@@ -29,6 +29,7 @@
     "test:aiven": "DOCK_AIVEN_TESTS=1 vitest run src/server/aiven",
     "demo:aiven": "DOCK_AIVEN=1 tsx --env-file=.env.local scripts/demo.ts",
     "aiven:migrate": "tsx scripts/aiven-migrate.ts",
+    "aiven:reset-demo": "tsx scripts/aiven-reset-demo.ts",
     "aiven:sink": "tsx scripts/aiven-sink.ts",
     "aiven:restart-test": "tsx scripts/aiven-restart-test.ts",
     "aiven:smoke": "tsx scripts/aiven-smoke.ts",

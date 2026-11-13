@@ -3,7 +3,7 @@ import { categorySlug } from "@/core/catalog/partner";
 import { SEED_PRODUCTS } from "@/core/seed";
 import { addDays } from "@/core/util";
 import { KITCHEN_ORG, demoKitchenKeyPair } from "../../demo-kitchen";
-import { DEMO_ORG, demoOrgKeyPair } from "../../dev-fixtures";
+import { DEMO_ORG, DEMO_WEEKLY_BUDGET_CENTS, demoOrgKeyPair } from "../../dev-fixtures";
 import type { Runtime } from "../../runtime";
 import type { DietRules } from "./safety";
 
@@ -79,7 +79,7 @@ const DEFS: Record<MenuKitchenInfo["slug"], Def> = {
       validUntil: addDays(now, 7).toISOString(),
       currency: "EUR",
       perOrderLimitCents: 30_000,
-      weeklyBudgetCents: 600_000,
+      weeklyBudgetCents: DEMO_WEEKLY_BUDGET_CENTS, // the organisation's whole week of demos (dev-fixtures.ts)
       allowedCategories: categories,
       requiredAttributes: [],
       forbiddenAllergens: [],
@@ -121,7 +121,7 @@ const DEFS: Record<MenuKitchenInfo["slug"], Def> = {
       validUntil: addDays(now, 7).toISOString(),
       currency: "EUR",
       perOrderLimitCents: 50_000,
-      weeklyBudgetCents: 800_000,
+      weeklyBudgetCents: DEMO_WEEKLY_BUDGET_CENTS,
       allowedCategories: categories,
       requiredAttributes: [],
       forbiddenAllergens: ["nuts", "peanuts"],

@@ -312,7 +312,10 @@ async function attacks(): Promise<void> {
   const price = P.offerOf(cheap.id).unitPriceCents;
   const packsFor = (cents: number) => Math.max(1, Math.ceil(cents / price));
   // For the big amounts: a product with enough stock (or none reported) for well over the weekly budget.
-  const roomy = P.milk.find((x) => { const o = P.offerOf(x.id); return o.stockKnown === false || o.availablePacks * o.unitPriceCents > m.weeklyBudgetCents + 30_000; }) ?? cheap;
+  // The demo kitchens' own weekly budget is sized for a day of demos, so the budget attack signs a mandate with a
+  // €2,000 week: the same key, the same rule, a cap the seed's stock can reach.
+  const ATTACK_WEEK = 200_000;
+  const roomy = P.milk.find((x) => { const o = P.offerOf(x.id); return o.stockKnown === false || o.availablePacks * o.unitPriceCents > ATTACK_WEEK + 30_000; }) ?? cheap;
   const roomyPrice = P.offerOf(roomy.id).unitPriceCents;
   const roomyPacks = (cents: number) => Math.max(1, Math.ceil(cents / roomyPrice));
   step("products", `Chosen by attribute from the catalogue, checked live once: ${cheap.id} (${cheap.name}, ${formatEur(price)}/pack)${P.regular ? `, regular milk ${P.regular.id}` : ""}${P.allergen ? `, ${P.allergen.id} (contains ${P.allergen.allergens.filter((a) => m.forbiddenAllergens.includes(a)).join(", ")})` : ""}.`);
@@ -326,7 +329,13 @@ async function attacks(): Promise<void> {
   results.push({ name: "Reuse a quote that already bought something", reply: await agent.placeOrder(requestId, smallQuote.body.quoteToken, pick(smallQuote.body)) });
 
   // 2. Over the weekly budget.
-  await tryOrder(`Order ${formatEur(roomyPacks(m.weeklyBudgetCents + 20_000) * roomyPrice)} against a ${formatEur(m.weeklyBudgetCents)} weekly budget`, [{ productId: roomy.id, quantity: roomyPacks(m.weeklyBudgetCents + 20_000) }]);
+  {
+    const week = base.as(await mandateToken({ weeklyBudgetCents: ATTACK_WEEK }), DEMO_ORG.agentId);
+    const lines = [{ productId: roomy.id, quantity: roomyPacks(ATTACK_WEEK + 20_000) }];
+    const name = `Order ${formatEur(lines[0].quantity * roomyPrice)} against a ${formatEur(ATTACK_WEEK)} weekly budget`;
+    const q = await week.quote(requestId, lines);
+    results.push({ name, reply: q.status !== 201 ? q : await week.placeOrder(requestId, q.body.quoteToken, pick(q.body)) });
+  }
 
   // 3. Forbidden allergen.
   if (P.allergen) await tryOrder(`Buy ${P.allergen.name}, which contains ${P.allergen.allergens.filter((a) => m.forbiddenAllergens.includes(a)).join(", ")}`, [{ productId: P.allergen.id, quantity: 5 }]);
