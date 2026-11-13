@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { IntakeView } from "@/core/intake";
 import type { PublicOrder } from "@/core/orders";
 import { OrderCard, ReadBack, StepCards, type Act } from "./cards";
@@ -40,11 +41,13 @@ export function CallAgent(props: Omit<CallProps, "onClose"> & { label?: string }
       <button type="button" onClick={() => setOpen(true)} className="inline-flex min-h-12 items-center gap-2 rounded-full bg-ink px-5 py-2 text-[1.05rem] font-semibold text-paper">
         <PhoneIcon /> {props.label ?? "Call your agent"}
       </button>
-      {open && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-concrete" role="dialog" aria-modal="true" aria-label="Call with your agent">
-          <CallScreen {...props} onClose={() => setOpen(false)} />
-        </div>
-      )}
+      {open &&
+        createPortal(
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-concrete" role="dialog" aria-modal="true" aria-label="Call with your agent">
+            <CallScreen {...props} onClose={() => setOpen(false)} />
+          </div>,
+          document.body,
+        )}
     </>
   );
 }

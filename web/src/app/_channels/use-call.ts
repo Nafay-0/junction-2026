@@ -262,7 +262,7 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
           stopRing.current?.();
           stopRing.current = null;
           set({ phase: "connected" });
-          s.text("[call connected]");
+          s.text(`[call connected] The caller is ${start.kitchen.name}.`);
           if (modeRef.current === "hands_free") a.setSending(true);
         },
         onAudio: (b64) => a.play(b64),
@@ -281,7 +281,7 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
         onSaid: (t) => {
           heardOpen.current = false;
           if (said.current.id < 0) said.current = { id: addLine("agent", "", false), text: "", flagged: new Set() };
-          said.current.text += t;
+          said.current.text += t.replace(/<\/?[a-z_]{2,20}>/gi, ""); // control tokens the transcript sometimes carries ("<stop>")
           const text = said.current.text;
           patchLine(said.current.id, (l) => ({ ...l, text }));
           checkSaid(false);

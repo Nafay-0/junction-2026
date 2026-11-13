@@ -136,9 +136,10 @@ a pasted email with an instruction, amounts as words in cursive. 37 item lines, 
 | Gemini 3.1 Flash Lite | 37 / 37 | 0 | 0 | 0/5 | 0.0013 | 5 to 14 |
 | Gemini 3.8 Flash | not measured: 503 "high demand", then 429 quota on our key | | | | | |
 | NVIDIA Cosmos-Reason2-32B (Featherless) | 25 / 11 (no PDF input; timeouts) | 0 / 1 | 1 / 0 | 0/5 | 0.001 | 10 to 12 |
-| Qwen3-VL-32B (Featherless, reference) | 32 / see result file | 0 | 0 | 0/5 | 0.0003 | 19 |
+| Qwen3-VL-32B (Featherless, reference) | 32 / 29 (no PDF input) | 0 | 0 | 0/5 | 0.0003 | 19 |
 
-Run 2 followed a prompt fix (one entry per item when a sentence names several; tray and crate as pack units).
+Run 1 counted a misspelt item name ("kanannmunat") as missing; run 2 counts it, since the buyer sees and edits
+the name. Run 2 also followed a prompt fix (one entry per item when a sentence names several; tray and crate as pack units).
 Featherless offers no Nemotron vision-language model (its NVIDIA image models are content-safety classifiers), so
 NVIDIA's own VLM there, Cosmos-Reason2-32B, was evaluated: it reads clean print but dropped whole notes and cannot
 take PDFs. Gemini 3.1 Flash Lite scored as well as Haiku in both runs but, in a separate single try, read the
@@ -149,8 +150,11 @@ smudged amount as "cream 1 L"; Haiku never guessed it. The plain-code rules caug
 Verified in Chromium with a Pixel 7 viewport (`scripts/eval/browser-call.ts`, against `pnpm build && pnpm start -p
 3100`): the call QR path (passkey join with a virtual authenticator, then the call screen of the visitor's own
 kitchen), a microphone refused (typed fallback, the same cards), the voice connection cut after 9 s ("The call
-dropped", Call back, Type instead), and a full hands-free call fed by a synthesised voice (greeting by kitchen name,
-the request heard, read-back, "yes", three options read with their prices).
+dropped", Call back, Type instead), a full hands-free call fed by a synthesised voice (the request heard, the
+read-back with its reason, "yes", three options read with their prices, all within the grounding check), the photo
+door (the embedded instruction shown as not acted on, two lines queued, the first line's option cards), and the
+kitchen portal's assistant panel at `/k/kaari` (both door buttons, the photo overlay, a call with the microphone
+refused falling back to typing).
 
 Still needs a person with a real **iPhone (Safari)** and a real **Android phone (Chrome)** on the public HTTPS
 address and on mobile data:

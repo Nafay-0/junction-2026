@@ -49,7 +49,7 @@ async function voice() {
 
 async function denied() {
   // A microphone exists, but the page is refused permission (as when the visitor taps "Don't allow").
-  const browser = await chromium.launch({ args: ["--use-fake-device-for-media-stream"] });
+  const browser = await chromium.launch({ args: ["--use-fake-device-for-media-stream", "--deny-permission-prompts"] });
   const ctx = await browser.newContext({ ...phone, permissions: [] });
   const page = await ctx.newPage();
   await page.goto(`${base}/call?k=laakso`);
@@ -115,24 +115,28 @@ async function scan() {
   await page.locator("section h3").first().waitFor({ timeout: 90000 });
   await page.waitForTimeout(800);
   await shot(page, "scan-2-first-line");
-  console.log("queue:", await page.locator('[aria-label="Lines going through the agent"] ol').innerText());
+  console.log("queue:", await page.locator('[aria-label="Lines going through the agent"] ol').first().innerText());
   console.log("card:", (await page.locator("section h3").allInnerTexts()).join(" | "));
   await browser.close();
 }
 
 async function portal() {
-  const browser = await chromium.launch();
-  const ctx = await browser.newContext({ ...phone });
+  // The kitchen portal's assistant panel (desktop layout): the two door buttons in its channel slot.
+  const browser = await chromium.launch({ args: ["--use-fake-device-for-media-stream", "--deny-permission-prompts"] });
+  const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
   const page = await ctx.newPage();
   await page.goto(`${base}/k/kaari`);
   await page.waitForTimeout(1500);
-  const buttons = await page.getByRole("button", { name: /Call your agent \(voice\)|Add a photo or document/ }).count();
-  console.log("portal door buttons:", buttons);
-  if (buttons) {
-    await page.getByRole("button", { name: "Add a photo or document" }).first().click();
-    await page.getByText("Take a photo").waitFor({ timeout: 5000 });
-    await shot(page, "portal-scan-overlay");
-  }
+  console.log("portal door buttons:", await page.getByRole("button", { name: /Call your agent \(voice\)|Add a photo or document/ }).count());
+  await page.getByRole("button", { name: "Add a photo or document" }).first().click();
+  await page.getByText("Take a photo").waitFor({ timeout: 5000 });
+  await shot(page, "portal-scan-overlay");
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: "Call your agent (voice)" }).first().click();
+  await page.getByRole("button", { name: "Call", exact: true }).click();
+  await page.getByPlaceholder(/100 litres/).waitFor({ timeout: 15000 });
+  console.log("portal call, microphone refused:", (await page.getByRole("dialog").innerText()).replace(/\s+/g, " ").slice(0, 200));
+  await shot(page, "portal-call-denied");
   await browser.close();
 }
 
