@@ -35,6 +35,8 @@ describe("discovery from the base URL", () => {
     expect(m.interfaces.rest.openapi).toBe(`${BASE}/api/v1/openapi.json`);
     expect(m.verification.jwksUri).toBe(`${BASE}/.well-known/jwks.json`);
     expect(m.authentication.headers).toHaveProperty("Dock-Agent-Id");
+    expect(m.ordering.start).toEqual({ mcp: "submit_need", rest: "POST /api/v1/intake" });
+    expect(m.interfaces.mcp.humanInput.tools).toEqual(["respond_to_concerns", "answer_questions"]);
   });
 
   it("serves llms.txt in the llmstxt.org shape with absolute links", async () => {
@@ -44,6 +46,8 @@ describe("discovery from the base URL", () => {
     expect(text).toMatch(/^# Dock\n\n> /);
     expect(text).toContain(`(${BASE}/api/mcp)`);
     expect(text).toMatch(/do NOT retry/);
+    expect(text).toMatch(/Start every order with `submit_need`/);
+    expect(text).toMatch(/The buyer answers, not you/);
   });
 });
 

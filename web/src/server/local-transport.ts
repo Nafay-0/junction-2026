@@ -6,6 +6,15 @@ import * as intakeOne from "@/app/api/v1/intake/[requestId]/route";
 import * as intake from "@/app/api/v1/intake/route";
 import * as kitchen from "@/app/api/v1/kitchen/route";
 import * as approval from "@/app/api/v1/approvals/[approvalId]/route";
+import * as approvalChallenge from "@/app/api/v1/approvals/[approvalId]/challenge/route";
+import * as approvalLink from "@/app/api/v1/approvals/[approvalId]/link/route";
+import * as approver from "@/app/api/v1/approver/route";
+import * as approverDemoOrder from "@/app/api/v1/approver/demo-order/route";
+import * as events from "@/app/api/v1/events/route";
+import * as join from "@/app/api/v1/join/route";
+import * as joinVerify from "@/app/api/v1/join/verify/route";
+import * as sandboxes from "@/app/api/v1/sandboxes/route";
+import * as sandboxDemoOrder from "@/app/api/v1/sandboxes/[sandboxId]/demo-order/route";
 import * as approvals from "@/app/api/v1/approvals/route";
 import * as availability from "@/app/api/v1/availability/route";
 import * as outbox from "@/app/api/v1/dev/outbox/route";
@@ -30,6 +39,15 @@ const routes: [RegExp, string[], RouteModule][] = [
   [/^\/api\/v1\/orders\/([^/]+)$/, ["orderId"], order as RouteModule],
   [/^\/api\/v1\/approvals$/, [], approvals],
   [/^\/api\/v1\/approvals\/([^/]+)$/, ["approvalId"], approval as RouteModule],
+  [/^\/api\/v1\/approvals\/([^/]+)\/challenge$/, ["approvalId"], approvalChallenge as RouteModule],
+  [/^\/api\/v1\/approvals\/([^/]+)\/link$/, ["approvalId"], approvalLink as RouteModule],
+  [/^\/api\/v1\/approver$/, [], approver],
+  [/^\/api\/v1\/approver\/demo-order$/, [], approverDemoOrder],
+  [/^\/api\/v1\/events$/, [], events],
+  [/^\/api\/v1\/join$/, [], join],
+  [/^\/api\/v1\/join\/verify$/, [], joinVerify],
+  [/^\/api\/v1\/sandboxes$/, [], sandboxes],
+  [/^\/api\/v1\/sandboxes\/([^/]+)\/demo-order$/, ["sandboxId"], sandboxDemoOrder as RouteModule],
   [/^\/api\/v1\/ledger$/, [], ledger],
   [/^\/api\/v1\/keys$/, [], keys],
   [/^\/api\/v1\/dev\/outbox$/, [], outbox],
