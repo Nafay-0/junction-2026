@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { MAX_LIVE_IDS_PER_CALL } from "@/core/catalog";
+import { reserveLiveLookup } from "@/server/limits";
 
 /**
  * Client for the partner's two live endpoints, POST /api/price and POST /api/availability.
@@ -298,6 +299,7 @@ export class ValioLiveClient {
   private async request(method: "GET" | "POST", path: string, body?: unknown): Promise<Response> {
     const doFetch = this.cfg.fetch ?? fetch;
     for (let attempt = 0; ; attempt++) {
+      reserveLiveLookup(); // public-demo cap on partner API requests per day (server/limits.ts)
       this.counters.httpRequests += 1;
       let res: Response | undefined;
       let failure: ValioApiError | undefined;
