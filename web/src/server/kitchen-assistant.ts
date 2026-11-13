@@ -4,6 +4,7 @@ import { askAssistant, type AssistantRecord } from "./agent/assistant";
 import { categoryIdOf, categoryLabel } from "./kitchen-catalog";
 import { liveCheck, overview, type Kitchen, type PortalOrder } from "./kitchen-portal";
 import { getRuntime } from "./runtime";
+import { addDaysIso, localNow } from "@/core/kitchen";
 
 /**
  * Retrieval for the shop assistant, in plain code: the product on screen, products the question names, the
@@ -144,7 +145,10 @@ export async function ask(k: Kitchen, body: AskBody): Promise<AskReply> {
     });
 
   try {
-    const a = await askAssistant({ question, records, screen: body.screen, history: body.history });
+    const now = localNow(new Date());
+    const weekday = new Date(`${now.date}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" });
+    const today = `Today is ${weekday} ${now.date}, ${now.time} Helsinki time; "last week" means ${addDaysIso(now.date, -7)} to ${addDaysIso(now.date, -1)}.`;
+    const a = await askAssistant({ question, records, screen: `${body.screen ?? "the shop"}. ${today}`, history: body.history });
     return { kind: a.kind, answer: a.answer, citations: cite(a.citations), dataMissing: a.dataMissing, model: a.model, ms: a.ms, liveCalls, looked };
   } catch (err) {
     if (err instanceof DockError && (err.status === 503 || err.status === 504 || err.status === 502)) {

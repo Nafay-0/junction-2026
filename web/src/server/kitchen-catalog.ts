@@ -1,4 +1,5 @@
 import type { Product } from "@/core/catalog";
+import { CATEGORY_SLUGS } from "@/core/catalog/partner";
 import generated from "./catalog-categories.json";
 import { getRuntime } from "./runtime";
 
@@ -8,7 +9,7 @@ import { getRuntime } from "./runtime";
  * substitutes and neighbours. Master data only: nothing here calls the partner's live API.
  */
 
-export type ShopCategory = { id: string; code: string | null; label: string; count: number; temperature: string | null };
+export type ShopCategory = { id: string; code: string | null; slug?: string; label: string; count: number; temperature: string | null };
 export type ShopDepartment = { id: string; name: string; count: number; categories: ShopCategory[] };
 
 const DATA = generated as { departments: Record<string, string>; categories: Record<string, { label: string; count: number; temperature: string | null }> };
@@ -37,7 +38,7 @@ export async function departments(): Promise<ShopDepartment[]> {
     const name = DATA.departments[prefix] ?? "Other";
     const d = byDept.get(name) ?? { id: `d${prefix}`, name, count: 0, categories: [] };
     d.count += c.count;
-    d.categories.push({ id: `cat_${code}`, code, label: c.label, count: c.count, temperature: c.temperature });
+    d.categories.push({ id: `cat_${code}`, code, ...(CATEGORY_SLUGS[code] ? { slug: CATEGORY_SLUGS[code] } : {}), label: c.label, count: c.count, temperature: c.temperature });
     byDept.set(name, d);
   }
   const out = [...byDept.values()].sort((a, b) => b.count - a.count);

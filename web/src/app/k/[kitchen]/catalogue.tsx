@@ -112,12 +112,12 @@ export function Catalogue() {
                       <li key={c.id}>
                         <button
                           type="button"
-                          aria-current={c.id === category ? "true" : undefined}
+                          aria-current={c.id === current?.cat.id ? "true" : undefined}
                           onClick={() => {
                             setQ("");
                             set({ c: c.id, q: undefined });
                           }}
-                          className={`flex min-h-8 w-full items-baseline justify-between gap-2 py-0.5 pl-3 pr-1 text-left text-[0.92rem] ${c.id === category ? "bg-ink font-semibold text-paper" : "hover:bg-paper"}`}
+                          className={`flex min-h-8 w-full items-baseline justify-between gap-2 py-0.5 pl-3 pr-1 text-left text-[0.92rem] ${c.id === current?.cat.id ? "bg-ink font-semibold text-paper" : "hover:bg-paper"}`}
                         >
                           <span className="flex items-center gap-1.5">
                             <span aria-hidden className="inline-block size-2 shrink-0" style={{ background: TEMP[c.temperature ?? ""]?.color ?? "transparent" }} />
@@ -243,6 +243,6 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
 }
 
 function findCategory(depts: ShopDepartment[] | undefined, id: string) {
-  for (const d of depts ?? []) for (const c of d.categories) if (c.id === id) return { dept: d, cat: c };
+  for (const d of depts ?? []) for (const c of d.categories) if (c.id === id || c.slug === id) return { dept: d, cat: c };
   return undefined;
 }

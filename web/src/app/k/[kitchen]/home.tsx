@@ -6,6 +6,7 @@ import { ago, amount, attr, day, eur, humanize, roleLabel, shortProduct } from "
 import { Target } from "../../_ui/target";
 import { authorisedText, linesText } from "./history";
 import { usePortal, weekdaysText } from "./portal";
+import { CallAgent } from "./call-agent";
 import { Button, Paper } from "./ui";
 import type { CutoffReply, Overview, PortalOrder, PortalRequest, Standing } from "./types";
 import { cutoffMs, cutoffText, untilText } from "./when";
@@ -51,6 +52,7 @@ export function Home() {
 
   return (
     <div className="mt-6 space-y-8">
+      <Greeting o={o} />
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <Attention o={o} cutoffs={cutoffs} now={now} />
         <ThisWeek o={o} />
@@ -58,6 +60,29 @@ export function Home() {
       <StandingOrders o={o} cutoffs={cutoffs} cutoffError={cutoffError} now={now} />
       <Deliveries o={o} />
     </div>
+  );
+}
+
+/** The top of Home: whose shop this is, and the two ways to hand work to the agent. */
+function Greeting({ o }: { o: Overview }) {
+  const { kitchen, agent } = usePortal();
+  const waiting = o.orders.filter((x) => x.status === "pending_approval").length;
+  return (
+    <section aria-label="Your agent" className="flex flex-wrap items-end justify-between gap-4 border-b-[3px] border-ink pb-4">
+      <div>
+        <h1 className="font-display text-[2.2rem] font-bold leading-tight tracking-tight">{kitchen.name}</h1>
+        <p className="text-[1.05rem] text-ink-soft">
+          {kitchen.agentName} buys for this kitchen within its signed rules.{" "}
+          {waiting ? `${waiting} order${waiting === 1 ? " is" : "s are"} waiting for a person.` : "Nothing is waiting for a person."}
+        </p>
+      </div>
+      <div className="flex flex-wrap items-start gap-3">
+        <Button kind="primary" onClick={agent.open}>
+          Tell the agent what you need
+        </Button>
+        <CallAgent />
+      </div>
+    </section>
   );
 }
 

@@ -9,7 +9,7 @@ import { Button } from "./ui";
 import type { Entry, LedgerReply } from "./types";
 
 /** "What the agent did and why": this request's ledger entries in plain words, and a chain check run in the browser. */
-export function Timeline({ entries, names, agentName, kitchen }: { entries: Entry[]; names: Record<string, string>; agentName: string; kitchen: string }) {
+export function Timeline({ entries, names, agentName, kitchen, check = true }: { entries: Entry[]; names: Record<string, string>; agentName: string; kitchen: string; check?: boolean }) {
   return (
     <div>
       <ol className="divide-y divide-ink/10">
@@ -49,7 +49,7 @@ export function Timeline({ entries, names, agentName, kitchen }: { entries: Entr
           ))}
         </div>
       </details>
-      <ChainCheckBox kitchen={kitchen} />
+      {check && <ChainCheckBox kitchen={kitchen} />}
     </div>
   );
 }

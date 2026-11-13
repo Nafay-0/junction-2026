@@ -130,13 +130,13 @@ export function Tile({ p }: { p: Product }) {
           ) : (
             <Button
               kind="primary"
-              className="min-h-10 px-3 text-[0.92rem]"
+              className="min-h-10 whitespace-nowrap px-3 text-[0.92rem]"
               onClick={() => {
                 basket.add(p, stepOf(p));
                 void live.check([p.id]);
               }}
             >
-              Add {stepOf(p)} {unitWord(p, stepOf(p))}
+              {stepOf(p) > 1 || p.salesUnit === "KG" ? `Add ${stepOf(p)} ${unitWord(p, stepOf(p))}` : `Add a ${unitWord(p, 1)}`}
             </Button>
           )}
         </div>

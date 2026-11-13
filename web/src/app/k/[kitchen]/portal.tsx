@@ -222,18 +222,16 @@ export function Portal({ kitchen, kitchens, children }: { kitchen: KitchenInfo; 
 
   return (
     <PortalContext.Provider value={value}>
-      <div className="min-h-dvh bg-concrete text-ink">
+      <div className={`min-h-dvh bg-concrete text-ink ${panelOpen ? "xl:pr-[24rem]" : ""}`}>
         <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:bg-paper focus:p-2">
           Skip to the page
         </a>
         <p className="bg-ink px-4 py-1 text-center text-[0.82rem] leading-snug text-chalk sm:px-6">{DEMO_NOTE}</p>
         <Header />
-        <div className="flex">
-          <main id="main" className="mx-auto min-w-0 max-w-[1440px] flex-1 px-4 pb-24 sm:px-6 xl:px-8">
-            {children}
-          </main>
-          <AssistantPanel />
-        </div>
+        <main id="main" className="mx-auto min-w-0 max-w-[1440px] px-4 pb-24 sm:px-6 xl:px-8">
+          {children}
+        </main>
+        <AssistantPanel />
       </div>
     </PortalContext.Provider>
   );

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Target } from "../../_ui/target";
 import { shortProduct } from "../../_ui/plain";
+import { CallAgent } from "./call-agent";
 import { ChannelSlot } from "./channel-slot";
 import { requestLabel, usePortal } from "./portal";
 import type { AskReply } from "@/server/kitchen-assistant";
@@ -95,7 +96,7 @@ export function AssistantPanel() {
       <aside
         id="assistant"
         aria-label="Purchasing agent"
-        className={`${open ? "flex" : "hidden"} fixed inset-y-0 right-0 z-40 w-full max-w-[26rem] flex-col border-l-[3px] border-ink bg-paper xl:sticky xl:top-0 xl:z-auto xl:h-dvh xl:w-[24rem] xl:max-w-none xl:shrink-0`}
+        className={`${open ? "flex" : "hidden"} fixed inset-y-0 right-0 z-40 w-full max-w-[26rem] flex-col border-l-[3px] border-ink bg-paper xl:w-[24rem]`}
       >
         <header className="flex items-start gap-3 border-b border-ink/15 px-4 py-3">
           <Target size={30} tone="ink" className="mt-0.5 shrink-0" />
@@ -201,6 +202,9 @@ export function AssistantPanel() {
             </button>
           </div>
           <p className="mt-1.5 text-[0.8rem] leading-snug text-ink-soft">Questions are answered from the product data and this kitchen&apos;s records only. A request to buy becomes order cards; it is not ordered from here.</p>
+          <div className="mt-2 border-t border-ink/15 pt-2">
+            <CallAgent compact />
+          </div>
         </form>
       </aside>
     </>
