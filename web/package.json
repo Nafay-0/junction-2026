@@ -16,7 +16,12 @@
     "dev:mandate": "tsx scripts/dev-mandate.ts"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "4.0.102",
+    "@ai-sdk/google": "4.0.119",
+    "@ai-sdk/openai": "4.0.115",
+    "@ai-sdk/openai-compatible": "3.0.91",
     "@modelcontextprotocol/server": "2.4.0",
+    "ai": "7.0.170",
     "jose": "6.2.17",
     "next": "16.4.6",
     "react": "19.3.0",
@@ -24,6 +29,7 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@ai-sdk/provider": "4.0.37",
     "@modelcontextprotocol/client": "2.4.0",
     "@seriousme/openapi-schema-validator": "2.11.0",
     "@tailwindcss/turbopack": "4.3.3",
