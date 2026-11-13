@@ -1,4 +1,4 @@
-import { convertToModelMessages, createUIMessageStreamResponse, isStepCount, pruneMessages, streamText, toUIMessageStream, type ModelMessage } from "ai";
+import { convertToModelMessages, createUIMessageStreamResponse, isStepCount, pruneMessages, streamText, toUIMessageStream, type ModelMessage, type SystemModelMessage } from "ai";
 import { buildContext, buildInstructions } from "@/lib/agent/instructions";
 import { RunMeter, round, toTokenUsage } from "@/lib/agent/meter";
 import { costOf, getModel, type RunStats } from "@/lib/agent/models";
@@ -67,7 +67,7 @@ export async function POST(req: Request) {
 
   // The fixed instructions come first and carry a cache marker, so Claude re-reads them (and the
   // tool definitions before them) at a tenth of the price on every later step and request.
-  const system: ModelMessage[] = [
+  const instructions: SystemModelMessage[] = [
     { role: "system", content: buildInstructions(), providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } } },
     { role: "system", content: buildContext({ today, time, place: body.place?.slice(0, 80) }) },
   ];
@@ -75,7 +75,8 @@ export async function POST(req: Request) {
   let steps = 0;
   const result = streamText({
     model,
-    messages: [...system, ...history],
+    instructions,
+    messages: history,
     tools,
     stopWhen: isStepCount(MAX_STEPS),
     providerOptions: agentProviderOptions(info),
