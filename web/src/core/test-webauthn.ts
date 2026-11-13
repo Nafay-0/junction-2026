@@ -67,9 +67,9 @@ export class SoftwareAuthenticator {
       Buffer.from(this.coseKey()),
     ]);
     const attestationObject = isoCBOR.encode(
-      new Map<string, string | Uint8Array | Map<string, never>>([
+      new Map<string, Parameters<typeof isoCBOR.encode>[0]>([
         ["fmt", "none"],
-        ["attStmt", new Map()],
+        ["attStmt", new Map<string, never>()],
         ["authData", Uint8Array.from(authData)],
       ]),
     );

@@ -56,3 +56,46 @@ export function demoMandate(now: Date, overrides: Partial<Mandate> = {}): Mandat
     ...overrides,
   };
 }
+
+// ---------- visitor kitchens (the "scan the QR code" demo) ----------
+
+/** The mandate role a visitor fills when they join. */
+export const SANDBOX_ROLE = { id: "purchasing_manager", label: "Purchasing manager" };
+
+const KITCHENS = ["Hotel Kaleva", "Hotel Aurora", "Hotel Saimaa", "Hotel Lumo", "Hotel Pohjola", "Hotel Revontuli", "Hotel Merikatu", "Hotel Tammi", "Hotel Kuura", "Hotel Ilves"];
+const CITIES = ["Helsinki", "Espoo", "Tampere", "Turku", "Oulu", "Jyväskylä", "Lahti", "Kuopio"];
+const FIRST = ["Aino", "Eero", "Helmi", "Juho", "Lumi", "Onni", "Sanna", "Veera", "Mikael", "Iida", "Leevi", "Ella"];
+const LAST = ["Virtanen", "Korhonen", "Mäkinen", "Nieminen", "Heikkinen", "Koskinen", "Järvinen", "Lehtonen", "Saarinen", "Salo"];
+
+export type SandboxIdentity = { kitchenName: string; city: string; approverName: string; agentName: string };
+
+/** A fictional hotel kitchen and its purchasing manager, for one visitor. Names are made up. */
+export function sandboxIdentity(seq: number, random = Math.random): SandboxIdentity {
+  const pick = <T,>(xs: T[]) => xs[Math.floor(random() * xs.length)];
+  const kitchenName = `${KITCHENS[seq % KITCHENS.length]} kitchen`;
+  return { kitchenName, city: pick(CITIES), approverName: `${pick(FIRST)} ${pick(LAST)}`, agentName: `${KITCHENS[seq % KITCHENS.length]} buyer agent` };
+}
+
+/**
+ * The visitor kitchen's mandate: the demo mandate with a €500 per-order limit, so the 1,000 L milk order
+ * needs the visitor's sign-off, and the visitor as the only approver. Valid only while the sandbox lives.
+ */
+export function sandboxMandate(input: {
+  now: Date;
+  expiresAt: Date;
+  orgId: string;
+  orgName: string;
+  agentId: string;
+  approverName: string;
+}): Mandate {
+  return demoMandate(input.now, {
+    mandateId: `mnd_${input.orgId}`,
+    issuer: { orgId: input.orgId, name: input.orgName },
+    agentId: input.agentId,
+    validFrom: new Date(input.now.getTime() - 60_000).toISOString(),
+    validUntil: input.expiresAt.toISOString(),
+    perOrderLimitCents: 50_000, // €500 alone
+    weeklyBudgetCents: 1_000_000, // €10,000 hard cap, so a visitor can try a few orders
+    approvers: [{ role: SANDBOX_ROLE.id, name: input.approverName, maxApprovalCents: 1_000_000 }],
+  });
+}

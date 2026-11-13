@@ -1,4 +1,5 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
+import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
 import { z } from "zod";
 import type { Approver } from "./mandate";
 import type { QuoteLine } from "./quote";
@@ -25,8 +26,8 @@ import { canonicalJson, sha256Hex } from "./util";
 
 const B64Url = z.string().regex(/^[A-Za-z0-9_-]*$/, "base64url");
 
-/** What @simplewebauthn/browser's startAuthentication() returns. */
-export const WebAuthnAssertionSchema = z.object({
+/** What @simplewebauthn/browser's startAuthentication() returns. Shape-checked here; the signature in passkeys.ts. */
+const AssertionShape = z.object({
   id: B64Url.min(1),
   rawId: B64Url.min(1),
   type: z.literal("public-key"),
@@ -39,7 +40,8 @@ export const WebAuthnAssertionSchema = z.object({
   clientExtensionResults: z.record(z.string(), z.unknown()).default({}),
   authenticatorAttachment: z.enum(["platform", "cross-platform"]).optional(),
 });
-export type WebAuthnAssertion = z.infer<typeof WebAuthnAssertionSchema>;
+export const WebAuthnAssertionSchema = AssertionShape as unknown as z.ZodType<AuthenticationResponseJSON>;
+export type WebAuthnAssertion = AuthenticationResponseJSON;
 
 export const ApprovalProofSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("link_token"), token: z.string() }),
