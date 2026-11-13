@@ -56,6 +56,7 @@ describe("MCP server", () => {
     it(`runs the milk order end to end (${era} protocol era)`, async () => {
       const client = await connect(auth(), era);
       expect(client.getNegotiatedProtocolVersion()).toBe(era === "modern" ? "2026-07-28" : "2025-11-25");
+      await client.listTools(); // the client now validates every result against the tool's published output schema
       const { s: m } = await call(client, "read_mandate");
       expect(m).toMatchObject({ ok: true, mandate: { agentId: DEMO_ORG.agentId } });
 

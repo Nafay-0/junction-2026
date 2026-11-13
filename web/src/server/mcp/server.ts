@@ -91,7 +91,7 @@ export function buildMcpServer(rt: Runtime, req?: Request): McpServer {
         title: tool.title,
         description: tool.description,
         inputSchema: tool.input,
-        outputSchema: tool.output.extend({ ok: z.literal(true) }),
+        outputSchema: tool.output.extend({ ok: z.literal(true) }).loose(), // loose: new fields must not break clients
         annotations: { title: tool.title, readOnlyHint: tool.readOnly ?? false, destructiveHint: false, idempotentHint: tool.readOnly ?? false, openWorldHint: false },
       },
       (args: unknown) => runTool(rt, req, tool, args),

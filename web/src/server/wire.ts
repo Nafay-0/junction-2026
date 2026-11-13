@@ -18,17 +18,17 @@ export function named<T extends z.ZodType>(id: string, schema: T): T {
 }
 
 export const ErrorSchema = named("Error", z
-  .object({
+  .looseObject({
     code: z.string().describe("Machine-readable error code, e.g. mandate_expired, quote_insufficient_stock, policy_rejected."),
     rule: z.string().optional().describe("The named check that refused, e.g. weekly_budget, live_lookup_limit, mandate_signature."),
     message: z.string().describe("Plain-language reason."),
     details: z.record(z.string(), z.unknown()).optional(),
   }));
 
-export const ErrorBodySchema = named("ErrorBody", z.object({ error: ErrorSchema }));
+export const ErrorBodySchema = named("ErrorBody", z.looseObject({ error: ErrorSchema }));
 
 export const PurchaseRequestSchema = named("PurchaseRequest", z
-  .object({
+  .looseObject({
     requestId: z.string(),
     orgId: z.string(),
     agentId: z.string(),
@@ -41,7 +41,7 @@ export const PurchaseRequestSchema = named("PurchaseRequest", z
 export const ProductOutSchema = named("Product", ProductSchema);
 
 export const OfferSchema = named("Offer", z
-  .object({
+  .looseObject({
     productId: z.string(),
     unitPriceCents: z.number().int().describe("Live price per pack, euro cents ex VAT."),
     availablePacks: z.number().int().describe("Packs in stock right now."),
@@ -49,17 +49,17 @@ export const OfferSchema = named("Offer", z
   }));
 
 export const RuleResultSchema = named("RuleResult", z
-  .object({
+  .looseObject({
     rule: z.enum(RULES),
     outcome: z.enum(["pass", "escalate", "fail"]),
     reason: z.string(),
     details: z.record(z.string(), z.unknown()).optional(),
   }));
 
-const ApproverSchema = z.object({ role: z.string(), name: z.string(), maxApprovalCents: z.number().int() });
+const ApproverSchema = z.looseObject({ role: z.string(), name: z.string(), maxApprovalCents: z.number().int() });
 
 export const DecisionSchema = named("Decision", z
-  .object({
+  .looseObject({
     outcome: z.enum(["auto_approve", "needs_human_approval", "reject"]),
     totalCents: z.number().int(),
     rules: z.array(RuleResultSchema).describe("Every rule of the gate with its result, so a refusal names exactly what fired."),
@@ -71,14 +71,14 @@ export const QuoteLineOutSchema = named("QuoteLine", QuoteLineSchema);
 export const QuoteOutSchema = named("Quote", QuoteSchema);
 
 export const QuoteResultSchema = named("QuoteResult", z
-  .object({
+  .looseObject({
     quote: QuoteOutSchema,
     quoteToken: z.string().describe("The quote as a compact JWS signed by the wholesaler (typ quote+jws). Pass it unchanged to place an order."),
     policyPreview: DecisionSchema.describe("What the gate would decide on this quote right now. Not binding."),
   }));
 
 export const OrderSchema = named("Order", z
-  .object({
+  .looseObject({
     orderId: z.string(),
     requestId: z.string(),
     orgId: z.string(),
@@ -91,7 +91,7 @@ export const OrderSchema = named("Order", z
     totalCents: z.number().int(),
     decision: DecisionSchema,
     approval: z
-      .object({
+      .looseObject({
         approvalId: z.string(),
         approver: ApproverSchema,
         status: z.enum(["pending", "approved", "declined"]),
@@ -110,7 +110,7 @@ export const OrderSchema = named("Order", z
   }));
 
 export const LedgerEntrySchema = named("LedgerEntry", z
-  .object({
+  .looseObject({
     seq: z.number().int(),
     at: z.iso.datetime(),
     type: z.string(),
@@ -124,21 +124,21 @@ export const LedgerEntrySchema = named("LedgerEntry", z
   }));
 
 export const LedgerVerificationSchema = named("LedgerVerification", z
-  .object({ ok: z.boolean(), length: z.number().int().optional(), brokenAt: z.number().int().optional(), problem: z.string().optional(), message: z.string().optional() }));
+  .looseObject({ ok: z.boolean(), length: z.number().int().optional(), head: z.object({ seq: z.number().int(), hash: z.string() }).nullable().optional(), brokenAt: z.number().int().optional(), problem: z.string().optional(), message: z.string().optional() }));
 
 export const CatalogStatsSchema = named("CatalogStats", z
-  .object({ searches: z.number().int(), liveCalls: z.number().int(), productsPriced: z.number().int() }));
+  .looseObject({ searches: z.number().int(), liveCalls: z.number().int(), productsPriced: z.number().int() }));
 
 export const JwkSchema = named("Jwk", z
-  .object({ kty: z.literal("OKP"), crv: z.literal("Ed25519"), x: z.string(), kid: z.string(), alg: z.string(), use: z.literal("sig") }));
+  .looseObject({ kty: z.literal("OKP"), crv: z.literal("Ed25519"), x: z.string(), kid: z.string(), alg: z.string(), use: z.literal("sig") }));
 
-export const JwksSchema = named("Jwks", z.object({ keys: z.array(JwkSchema) }));
+export const JwksSchema = named("Jwks", z.looseObject({ keys: z.array(JwkSchema) }));
 
 export const MandateOutSchema = named("Mandate", MandateSchema);
 
 export const PendingApprovalSchema = named(
   "PendingApproval",
-  z.object({
+  z.looseObject({
     approvalId: z.string(),
     orderId: z.string(),
     orgName: z.string(),
@@ -146,7 +146,7 @@ export const PendingApprovalSchema = named(
     approver: ApproverSchema,
     totalCents: z.number().int(),
     reasons: z.array(z.string()),
-    lines: z.array(z.object({ productId: z.string(), name: z.string(), quantity: z.number().int(), substituteFor: z.string().optional() })),
+    lines: z.array(z.looseObject({ productId: z.string(), name: z.string(), quantity: z.number().int(), substituteFor: z.string().optional() })),
     requestedAt: z.iso.datetime(),
   }),
 );
