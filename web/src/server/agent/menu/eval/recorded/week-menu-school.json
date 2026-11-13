@@ -1,0 +1,2481 @@
+{
+ "id": "week-menu-school",
+ "kitchen": "laakso",
+ "text": "Next week's menu, 450 pupils a day:\nMon meatball sauce with potatoes\nTue fish fingers with mashed potatoes\nWed vegetable soup with bread\nThu chicken curry with rice\nFri pea soup with pancakes",
+ "now": "2026-11-13T21:58:16.518Z",
+ "model": "anthropic:claude-sonnet-5-5",
+ "ms": 21228,
+ "costUsd": 0.33335,
+ "calls": [
+  {
+   "step": "outline",
+   "ms": 7614,
+   "tokens": {
+    "input": 2206,
+    "output": 1074,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.015152
+  },
+  {
+   "step": "dish 6",
+   "ms": 2892,
+   "tokens": {
+    "input": 1912,
+    "output": 219,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.006014
+  },
+  {
+   "step": "dish 3",
+   "ms": 3129,
+   "tokens": {
+    "input": 1917,
+    "output": 216,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.005994
+  },
+  {
+   "step": "dish 2",
+   "ms": 3419,
+   "tokens": {
+    "input": 1910,
+    "output": 316,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00698
+  },
+  {
+   "step": "dish 8",
+   "ms": 3858,
+   "tokens": {
+    "input": 1909,
+    "output": 319,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.007008
+  },
+  {
+   "step": "dish 9",
+   "ms": 6525,
+   "tokens": {
+    "input": 1920,
+    "output": 856,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.0124
+  },
+  {
+   "step": "dish 5",
+   "ms": 7317,
+   "tokens": {
+    "input": 1921,
+    "output": 951,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.013352
+  },
+  {
+   "step": "dish 4",
+   "ms": 7590,
+   "tokens": {
+    "input": 1919,
+    "output": 882,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.012658
+  },
+  {
+   "step": "dish 10",
+   "ms": 7644,
+   "tokens": {
+    "input": 1925,
+    "output": 993,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.01378
+  },
+  {
+   "step": "dish 7",
+   "ms": 7761,
+   "tokens": {
+    "input": 1923,
+    "output": 1058,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.014426
+  },
+  {
+   "step": "dish 1",
+   "ms": 13614,
+   "tokens": {
+    "input": 1936,
+    "output": 1907,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.022942
+  },
+  {
+   "step": "pick",
+   "ms": 3293,
+   "tokens": {
+    "input": 1248,
+    "output": 125,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003746
+  },
+  {
+   "step": "pick",
+   "ms": 3390,
+   "tokens": {
+    "input": 1100,
+    "output": 101,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00321
+  },
+  {
+   "step": "pick",
+   "ms": 2450,
+   "tokens": {
+    "input": 1317,
+    "output": 134,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003974
+  },
+  {
+   "step": "pick",
+   "ms": 2195,
+   "tokens": {
+    "input": 1116,
+    "output": 91,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003142
+  },
+  {
+   "step": "pick",
+   "ms": 2797,
+   "tokens": {
+    "input": 1331,
+    "output": 150,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.004162
+  },
+  {
+   "step": "pick",
+   "ms": 2146,
+   "tokens": {
+    "input": 1311,
+    "output": 110,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003722
+  },
+  {
+   "step": "pick",
+   "ms": 2661,
+   "tokens": {
+    "input": 1254,
+    "output": 133,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003838
+  },
+  {
+   "step": "pick",
+   "ms": 2176,
+   "tokens": {
+    "input": 1063,
+    "output": 113,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003256
+  },
+  {
+   "step": "pick",
+   "ms": 2429,
+   "tokens": {
+    "input": 1396,
+    "output": 134,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.004132
+  },
+  {
+   "step": "pick",
+   "ms": 2225,
+   "tokens": {
+    "input": 1326,
+    "output": 122,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003872
+  },
+  {
+   "step": "pick",
+   "ms": 2313,
+   "tokens": {
+    "input": 1264,
+    "output": 137,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003898
+  },
+  {
+   "step": "pick",
+   "ms": 2441,
+   "tokens": {
+    "input": 1196,
+    "output": 122,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003612
+  },
+  {
+   "step": "pick",
+   "ms": 2266,
+   "tokens": {
+    "input": 1185,
+    "output": 103,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.0034
+  },
+  {
+   "step": "pick",
+   "ms": 2064,
+   "tokens": {
+    "input": 941,
+    "output": 71,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.002592
+  },
+  {
+   "step": "pick",
+   "ms": 2335,
+   "tokens": {
+    "input": 1102,
+    "output": 114,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003344
+  },
+  {
+   "step": "pick",
+   "ms": 2895,
+   "tokens": {
+    "input": 1285,
+    "output": 135,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00392
+  },
+  {
+   "step": "pick",
+   "ms": 2518,
+   "tokens": {
+    "input": 1499,
+    "output": 115,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.004148
+  },
+  {
+   "step": "pick",
+   "ms": 2838,
+   "tokens": {
+    "input": 1008,
+    "output": 90,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.002916
+  },
+  {
+   "step": "pick",
+   "ms": 2104,
+   "tokens": {
+    "input": 1126,
+    "output": 92,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003172
+  },
+  {
+   "step": "pick",
+   "ms": 2142,
+   "tokens": {
+    "input": 1056,
+    "output": 88,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.002992
+  },
+  {
+   "step": "pick",
+   "ms": 1896,
+   "tokens": {
+    "input": 1404,
+    "output": 80,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003608
+  },
+  {
+   "step": "pick",
+   "ms": 2540,
+   "tokens": {
+    "input": 1197,
+    "output": 131,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003704
+  },
+  {
+   "step": "pick",
+   "ms": 2529,
+   "tokens": {
+    "input": 1198,
+    "output": 133,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003726
+  },
+  {
+   "step": "fix swede",
+   "ms": 5208,
+   "tokens": {
+    "input": 1957,
+    "output": 616,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.010074
+  },
+  {
+   "step": "fix yellow_onion",
+   "ms": 5548,
+   "tokens": {
+    "input": 2086,
+    "output": 666,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.010832
+  },
+  {
+   "step": "fix fish_fingers",
+   "ms": 5652,
+   "tokens": {
+    "input": 1952,
+    "output": 692,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.010824
+  },
+  {
+   "step": "fix carrot",
+   "ms": 5797,
+   "tokens": {
+    "input": 2021,
+    "output": 735,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.011392
+  },
+  {
+   "step": "fix white_cabbage",
+   "ms": 6313,
+   "tokens": {
+    "input": 1948,
+    "output": 754,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.011436
+  },
+  {
+   "step": "fix potato",
+   "ms": 6596,
+   "tokens": {
+    "input": 1871,
+    "output": 835,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.012092
+  },
+  {
+   "step": "pick",
+   "ms": 2755,
+   "tokens": {
+    "input": 1015,
+    "output": 130,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00333
+  },
+  {
+   "step": "pick",
+   "ms": 2399,
+   "tokens": {
+    "input": 1085,
+    "output": 122,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00339
+  },
+  {
+   "step": "pick",
+   "ms": 2560,
+   "tokens": {
+    "input": 1042,
+    "output": 117,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003254
+  },
+  {
+   "step": "pick",
+   "ms": 3261,
+   "tokens": {
+    "input": 1032,
+    "output": 103,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003094
+  },
+  {
+   "step": "pick",
+   "ms": 2371,
+   "tokens": {
+    "input": 1155,
+    "output": 83,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00314
+  },
+  {
+   "step": "pick",
+   "ms": 2195,
+   "tokens": {
+    "input": 1015,
+    "output": 129,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00332
+  },
+  {
+   "step": "pick",
+   "ms": 1876,
+   "tokens": {
+    "input": 1066,
+    "output": 76,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.002892
+  },
+  {
+   "step": "pick",
+   "ms": 2350,
+   "tokens": {
+    "input": 1030,
+    "output": 133,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00339
+  },
+  {
+   "step": "pick",
+   "ms": 2306,
+   "tokens": {
+    "input": 1049,
+    "output": 91,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003008
+  },
+  {
+   "step": "pick",
+   "ms": 3118,
+   "tokens": {
+    "input": 1008,
+    "output": 115,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003166
+  },
+  {
+   "step": "pick",
+   "ms": 1954,
+   "tokens": {
+    "input": 1055,
+    "output": 99,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.0031
+  },
+  {
+   "step": "pick",
+   "ms": 2076,
+   "tokens": {
+    "input": 982,
+    "output": 98,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.002944
+  },
+  {
+   "step": "pick",
+   "ms": 2533,
+   "tokens": {
+    "input": 1010,
+    "output": 101,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.00303
+  },
+  {
+   "step": "pick",
+   "ms": 2149,
+   "tokens": {
+    "input": 976,
+    "output": 111,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003062
+  },
+  {
+   "step": "pick",
+   "ms": 2374,
+   "tokens": {
+    "input": 1096,
+    "output": 108,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003272
+  },
+  {
+   "step": "pick",
+   "ms": 2424,
+   "tokens": {
+    "input": 1067,
+    "output": 131,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003444
+  },
+  {
+   "step": "pick",
+   "ms": 2090,
+   "tokens": {
+    "input": 1006,
+    "output": 106,
+    "cachedInput": 0,
+    "reasoning": 0
+   },
+   "costUsd": 0.003072
+  }
+ ],
+ "raw": {
+  "isFoodOrderRequest": true,
+  "declineReason": null,
+  "covers": 450,
+  "serviceDate": null,
+  "occasion": "School lunch week menu",
+  "requiredClaims": [],
+  "forbiddenAllergens": [],
+  "assumptions": [
+   "Next week taken as Mon 2026-11-16 to Fri 2026-11-20.",
+   "Dairy in all dishes (mashed potatoes, pancakes, sauces) is lactose-free per kitchen rules.",
+   "Bread served with vegetable soup is a plain nut-free bread, a side.",
+   "Pancakes served with pea soup are a dessert course, as is traditional in Finland."
+  ],
+  "conflicts": [],
+  "dishes": [
+   {
+    "name": "Meatball sauce",
+    "nameFi": "Lihapullakastike",
+    "course": "main",
+    "serviceDate": "2026-11-16",
+    "portion": "about 4 meatballs and 1 dl sauce",
+    "method": "Bake meatballs in the oven and simmer in a lactose-free cream and stock sauce.",
+    "ingredients": [
+     {
+      "key": "ground_beef",
+      "name": "Ground beef",
+      "searchTerms": [
+       "naudan jauheliha",
+       "jauheliha",
+       "ground beef"
+      ],
+      "role": "meatballs",
+      "perCover": {
+       "amount": 70,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "4 meatballs of about 17 g raw each",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "pihvi",
+       "burger",
+       "maustettu"
+      ]
+     },
+     {
+      "key": "breadcrumbs",
+      "name": "Breadcrumbs",
+      "searchTerms": [
+       "korppujauho",
+       "leivonnaisjauho",
+       "breadcrumbs"
+      ],
+      "role": "binds meatballs",
+      "perCover": {
+       "amount": 6,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 8% of meat weight",
+      "pantry": false,
+      "form": "dried",
+      "avoid": [
+       "pähkinä",
+       "mantelijauho",
+       "nut"
+      ]
+     },
+     {
+      "key": "yellow_onion",
+      "name": "Yellow onion",
+      "searchTerms": [
+       "keltasipuli",
+       "sipuli",
+       "yellow onion"
+      ],
+      "role": "meatball flavour",
+      "perCover": {
+       "amount": 10,
+       "unit": "g"
+      },
+      "yieldPct": 90,
+      "amountBasis": "finely chopped in meatball mix",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "punasipuli",
+       "ruohosipuli",
+       "paistettu",
+       "kuivattu"
+      ]
+     },
+     {
+      "key": "milk_lactose_free",
+      "name": "Lactose-free milk",
+      "searchTerms": [
+       "laktoositon maito",
+       "maito laktoositon",
+       "lactose-free milk"
+      ],
+      "role": "soaks breadcrumbs for meatballs",
+      "perCover": {
+       "amount": 15,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 2 tbsp per 70 g meat",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "kaura",
+       "soija",
+       "mantel",
+       "maustettu"
+      ]
+     },
+     {
+      "key": "egg",
+      "name": "Egg",
+      "searchTerms": [
+       "kananmuna",
+       "muna",
+       "egg"
+      ],
+      "role": "binds meatballs",
+      "perCover": {
+       "amount": 0.1,
+       "unit": "pcs"
+      },
+      "yieldPct": 100,
+      "amountBasis": "1 egg per about 10 portions",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "keitetty",
+       "vuohen",
+       "kuivattu"
+      ]
+     },
+     {
+      "key": "cream_lactose_free",
+      "name": "Lactose-free cooking cream",
+      "searchTerms": [
+       "laktoositon ruokakerma",
+       "ruokakerma laktoositon",
+       "lactose-free cooking cream"
+      ],
+      "role": "sauce base",
+      "perCover": {
+       "amount": 60,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "1 dl sauce, about 60% cream",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "kasvi",
+       "kaura",
+       "kookos",
+       "vispikerma",
+       "mantel"
+      ]
+     },
+     {
+      "key": "beef_stock_concentrate",
+      "name": "Beef stock concentrate",
+      "searchTerms": [
+       "lihaliemifondi",
+       "lihaliemi",
+       "beef stock concentrate"
+      ],
+      "role": "sauce flavour and liquid",
+      "perCover": {
+       "amount": 3,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "concentrate for about 4 ml stock per cover",
+      "pantry": false,
+      "form": "any",
+      "avoid": [
+       "pähkinä",
+       "nut"
+      ]
+     },
+     {
+      "key": "wheat_flour",
+      "name": "Wheat flour",
+      "searchTerms": [
+       "vehnäjauho",
+       "wheat flour"
+      ],
+      "role": "thickens sauce",
+      "perCover": {
+       "amount": 5,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "roux for 1 dl sauce",
+      "pantry": true,
+      "form": "any",
+      "avoid": [
+       "täysjyvä",
+       "mantel",
+       "pähkinä"
+      ]
+     },
+     {
+      "key": "butter_lactose_free",
+      "name": "Lactose-free butter",
+      "searchTerms": [
+       "laktoositon voi",
+       "voi laktoositon",
+       "lactose-free butter"
+      ],
+      "role": "roux fat",
+      "perCover": {
+       "amount": 5,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "equal to flour in roux",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "voiseos",
+       "kasvi",
+       "maustettu"
+      ]
+     },
+     {
+      "key": "allspice",
+      "name": "Allspice, ground",
+      "searchTerms": [
+       "maustepippuri jauhettu",
+       "maustepippuri",
+       "ground allspice"
+      ],
+      "role": "classic meatball spice",
+      "perCover": {
+       "amount": 0.2,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "small pinch per portion",
+      "pantry": true,
+      "form": "dried",
+      "avoid": [
+       "pavut",
+       "kokonainen"
+      ]
+     },
+     {
+      "key": "salt",
+      "name": "Salt",
+      "searchTerms": [
+       "suola",
+       "salt"
+      ],
+      "role": "seasoning",
+      "perCover": {
+       "amount": 1.5,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 1% of meat and sauce",
+      "pantry": true,
+      "form": "any",
+      "avoid": []
+     },
+     {
+      "key": "black_pepper",
+      "name": "Black pepper",
+      "searchTerms": [
+       "mustapippuri jauhettu",
+       "mustapippuri",
+       "black pepper"
+      ],
+      "role": "seasoning",
+      "perCover": {
+       "amount": 0.2,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "pinch per portion",
+      "pantry": true,
+      "form": "dried",
+      "avoid": [
+       "kokonainen"
+      ]
+     },
+     {
+      "key": "rapeseed_oil",
+      "name": "Rapeseed oil",
+      "searchTerms": [
+       "rypsiöljy",
+       "rapeseed oil"
+      ],
+      "role": "greasing baking trays",
+      "perCover": {
+       "amount": 2,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "light coating on trays",
+      "pantry": true,
+      "form": "any",
+      "avoid": [
+       "oliivi",
+       "pähkinä"
+      ]
+     }
+    ]
+   },
+   {
+    "name": "Boiled potatoes",
+    "nameFi": "Keitetyt perunat",
+    "course": "side",
+    "serviceDate": "2026-11-16",
+    "portion": "200 g",
+    "method": "Boil peeled potatoes in salted water until tender.",
+    "ingredients": [
+     {
+      "key": "potato",
+      "name": "Potato",
+      "searchTerms": [
+       "peruna",
+       "keittoperuna",
+       "potato"
+      ],
+      "role": "main ingredient, boiled whole",
+      "perCover": {
+       "amount": 250,
+       "unit": "g"
+      },
+      "yieldPct": 80,
+      "amountBasis": "200 g peeled portion, 80% yield after peeling: 200/0.8",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "perunajauho",
+       "potato starch",
+       "muusi",
+       "lastu",
+       "friteeraus",
+       "ranskalainen",
+       "french fries",
+       "jauhe",
+       "mash"
+      ]
+     },
+     {
+      "key": "salt",
+      "name": "Salt",
+      "searchTerms": [
+       "suola",
+       "salt"
+      ],
+      "role": "seasoning for cooking water",
+      "perCover": {
+       "amount": 2,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 1 percent of cooking water, part absorbed",
+      "pantry": true,
+      "form": "any",
+      "avoid": []
+     }
+    ]
+   },
+   {
+    "name": "Fish fingers",
+    "nameFi": "Kalapuikot",
+    "course": "main",
+    "serviceDate": "2026-11-17",
+    "portion": "3 pieces, about 100 g",
+    "method": "Bake ready-made fish fingers in the oven.",
+    "ingredients": [
+     {
+      "key": "fish_fingers",
+      "name": "Fish fingers, ready-made, frozen",
+      "searchTerms": [
+       "kalapuikot",
+       "pakaste kalapuikko",
+       "fish fingers"
+      ],
+      "role": "main item, baked in oven",
+      "perCover": {
+       "amount": 100,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "portion of 3 pieces, about 100 g",
+      "pantry": false,
+      "form": "frozen",
+      "avoid": [
+       "pähkinä",
+       "nut",
+       "maapähkinä",
+       "peanut",
+       "kala-annos",
+       "gratiini",
+       "gratin",
+       "fish burger",
+       "kalapihvi"
+      ]
+     }
+    ]
+   },
+   {
+    "name": "Mashed potatoes",
+    "nameFi": "Perunamuusi",
+    "course": "side",
+    "serviceDate": "2026-11-17",
+    "portion": "200 g",
+    "method": "Boil potatoes and mash with lactose-free milk and lactose-free butter.",
+    "ingredients": [
+     {
+      "key": "potato",
+      "name": "Potato",
+      "searchTerms": [
+       "peruna",
+       "kuorimaton peruna",
+       "potato"
+      ],
+      "role": "Main ingredient, boiled and mashed",
+      "perCover": {
+       "amount": 200,
+       "unit": "g"
+      },
+      "yieldPct": 80,
+      "amountBasis": "200 g portion of mash, about same weight as peeled potato, so raw weight is portion divided by yield",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "ranskalainen",
+       "french fries",
+       "perunajauho",
+       "starch",
+       "muusi",
+       "jauhe",
+       "powder",
+       "flakes",
+       "hiutale"
+      ]
+     },
+     {
+      "key": "lactose_free_milk",
+      "name": "Lactose-free milk",
+      "searchTerms": [
+       "laktoositon maito",
+       "laktoositon kevytmaito",
+       "lactose-free milk"
+      ],
+      "role": "Loosens and enriches the mash",
+      "perCover": {
+       "amount": 40,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 2 dl milk per kg of potatoes",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "kaura",
+       "oat",
+       "soija",
+       "soy",
+       "mantel",
+       "almond",
+       "maitojauhe",
+       "powder"
+      ]
+     },
+     {
+      "key": "lactose_free_butter",
+      "name": "Lactose-free butter",
+      "searchTerms": [
+       "laktoositon voi",
+       "voi laktoositon",
+       "lactose-free butter"
+      ],
+      "role": "Adds richness and flavour to the mash",
+      "perCover": {
+       "amount": 8,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 40 g butter per kg of potatoes",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "margariini",
+       "margarine",
+       "voimaku",
+       "mantelivoi",
+       "almond",
+       "pähkinä",
+       "nut",
+       "peanut",
+       "maapähkinä"
+      ]
+     },
+     {
+      "key": "salt",
+      "name": "Salt",
+      "searchTerms": [
+       "suola",
+       "ruokasuola",
+       "salt"
+      ],
+      "role": "Seasoning for cooking water and mash",
+      "perCover": {
+       "amount": 2,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 1 percent of the portion weight",
+      "pantry": true,
+      "form": "any",
+      "avoid": [
+       "sipulisuola",
+       "valkosipulisuola",
+       "kylpysuola",
+       "bath"
+      ]
+     },
+     {
+      "key": "white_pepper",
+      "name": "White pepper",
+      "searchTerms": [
+       "valkopippuri",
+       "jauhettu valkopippuri",
+       "white pepper"
+      ],
+      "role": "Light seasoning for the mash",
+      "perCover": {
+       "amount": 0.1,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "small pinch per portion",
+      "pantry": true,
+      "form": "dried",
+      "avoid": [
+       "pähkinä",
+       "nut",
+       "maapähkinä"
+      ]
+     }
+    ]
+   },
+   {
+    "name": "Vegetable soup",
+    "nameFi": "Kasviskeitto",
+    "course": "soup",
+    "serviceDate": "2026-11-18",
+    "portion": "3.5 dl",
+    "method": "Simmer root vegetables and cabbage in vegetable stock until tender.",
+    "ingredients": [
+     {
+      "key": "potato",
+      "name": "Potato",
+      "searchTerms": [
+       "peruna",
+       "perunat",
+       "potato"
+      ],
+      "role": "root vegetable, body of the soup",
+      "perCover": {
+       "amount": 70,
+       "unit": "g"
+      },
+      "yieldPct": 80,
+      "amountBasis": "3.5 dl soup, about 20% potato",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "valmis",
+       "kuorittu",
+       "pakaste",
+       "jauhe",
+       "mash"
+      ]
+     },
+     {
+      "key": "carrot",
+      "name": "Carrot",
+      "searchTerms": [
+       "porkkana",
+       "carrot"
+      ],
+      "role": "root vegetable, sweetness and colour",
+      "perCover": {
+       "amount": 50,
+       "unit": "g"
+      },
+      "yieldPct": 85,
+      "amountBasis": "3.5 dl soup, root vegetable share",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "raaste",
+       "mehu",
+       "juice",
+       "lastu"
+      ]
+     },
+     {
+      "key": "swede",
+      "name": "Swede",
+      "searchTerms": [
+       "lanttu",
+       "swede",
+       "rutabaga"
+      ],
+      "role": "root vegetable, typical Finnish soup flavour",
+      "perCover": {
+       "amount": 40,
+       "unit": "g"
+      },
+      "yieldPct": 75,
+      "amountBasis": "3.5 dl soup, root vegetable share",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "laatikko",
+       "soseena",
+       "pakaste",
+       "casserole"
+      ]
+     },
+     {
+      "key": "white_cabbage",
+      "name": "White cabbage",
+      "searchTerms": [
+       "valkokaali",
+       "white cabbage",
+       "kaali"
+      ],
+      "role": "cabbage, tender vegetable body",
+      "perCover": {
+       "amount": 40,
+       "unit": "g"
+      },
+      "yieldPct": 85,
+      "amountBasis": "3.5 dl soup, cabbage share",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "hapankaali",
+       "sauerkraut",
+       "kimchi",
+       "suolattu"
+      ]
+     },
+     {
+      "key": "yellow_onion",
+      "name": "Yellow onion",
+      "searchTerms": [
+       "keltasipuli",
+       "sipuli",
+       "yellow onion"
+      ],
+      "role": "aromatic base",
+      "perCover": {
+       "amount": 20,
+       "unit": "g"
+      },
+      "yieldPct": 90,
+      "amountBasis": "small share for flavour base",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "kuivattu",
+       "paistettu",
+       "punasipuli",
+       "dried",
+       "fried"
+      ]
+     },
+     {
+      "key": "vegetable_stock_concentrate",
+      "name": "Vegetable stock concentrate",
+      "searchTerms": [
+       "kasvisliemifondi",
+       "kasvisliemijauhe",
+       "vegetable stock concentrate"
+      ],
+      "role": "flavoured cooking liquid",
+      "perCover": {
+       "amount": 4,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 1 g concentrate per dl of liquid, 3.5 dl portion",
+      "pantry": false,
+      "form": "any",
+      "avoid": [
+       "pähkinä",
+       "nut",
+       "kana",
+       "chicken",
+       "liha",
+       "beef"
+      ]
+     }
+    ]
+   },
+   {
+    "name": "Bread",
+    "nameFi": "Leipä",
+    "course": "bread",
+    "serviceDate": "2026-11-18",
+    "portion": "1 slice, 40 g",
+    "method": "Serve sliced nut-free bread.",
+    "ingredients": [
+     {
+      "key": "bread_sliced",
+      "name": "Sliced bread, nut-free",
+      "searchTerms": [
+       "vaalea leipä viipaloitu",
+       "leipä viipaloitu",
+       "sliced bread"
+      ],
+      "role": "Served as the bread slice with vegetable soup",
+      "perCover": {
+       "amount": 40,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "1 slice, 40 g as stated in the portion",
+      "pantry": false,
+      "form": "any",
+      "avoid": [
+       "pähkinä",
+       "manteli",
+       "hasselpähkinä",
+       "nut",
+       "almond",
+       "seeds",
+       "siemen",
+       "pähkinäleipä"
+      ]
+     }
+    ]
+   },
+   {
+    "name": "Chicken curry",
+    "nameFi": "Kana-currykastike",
+    "course": "main",
+    "serviceDate": "2026-11-19",
+    "portion": "about 200 g",
+    "method": "Fry chicken with onion and curry, add coconut milk and stock, and simmer until done.",
+    "ingredients": [
+     {
+      "key": "chicken_breast",
+      "name": "Chicken breast",
+      "searchTerms": [
+       "broilerin rintafilee",
+       "kanafilee",
+       "chicken breast fillet"
+      ],
+      "role": "main protein, fried then simmered",
+      "perCover": {
+       "amount": 110,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "200 g portion with sauce, about 55% meat",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "savu",
+       "smoked",
+       "maustettu",
+       "marinated",
+       "paneroitu",
+       "breaded"
+      ]
+     },
+     {
+      "key": "yellow_onion",
+      "name": "Yellow onion",
+      "searchTerms": [
+       "keltasipuli",
+       "sipuli",
+       "yellow onion"
+      ],
+      "role": "flavour base for the sauce",
+      "perCover": {
+       "amount": 25,
+       "unit": "g"
+      },
+      "yieldPct": 90,
+      "amountBasis": "about 1/4 onion per portion",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "punasipuli",
+       "red",
+       "hopeasipuli",
+       "paistettu",
+       "fried",
+       "kuivattu"
+      ]
+     },
+     {
+      "key": "curry_powder",
+      "name": "Curry powder",
+      "searchTerms": [
+       "currijauhe",
+       "curry",
+       "curry powder"
+      ],
+      "role": "main spice",
+      "perCover": {
+       "amount": 1,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 1 tsp per 4 portions",
+      "pantry": true,
+      "form": "dried",
+      "avoid": [
+       "kastike",
+       "sauce",
+       "paste",
+       "tahna"
+      ]
+     },
+     {
+      "key": "coconut_milk",
+      "name": "Coconut milk",
+      "searchTerms": [
+       "kookosmaito",
+       "coconut milk"
+      ],
+      "role": "creamy sauce base",
+      "perCover": {
+       "amount": 60,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 1 can per 6-7 portions",
+      "pantry": false,
+      "form": "canned_or_jarred",
+      "avoid": [
+       "kookosvesi",
+       "coconut water",
+       "juoma",
+       "drink",
+       "jogurtti",
+       "jäätelö"
+      ]
+     },
+     {
+      "key": "chicken_stock_concentrate",
+      "name": "Chicken stock concentrate",
+      "searchTerms": [
+       "kanaliemifondi",
+       "kanaliemijauhe",
+       "chicken stock concentrate"
+      ],
+      "role": "stock for simmering",
+      "perCover": {
+       "amount": 2,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "concentrate for about 60 ml liquid",
+      "pantry": false,
+      "form": "any",
+      "avoid": [
+       "pähkinä",
+       "nut"
+      ]
+     },
+     {
+      "key": "rapeseed_oil",
+      "name": "Rapeseed oil",
+      "searchTerms": [
+       "rypsiöljy",
+       "rapeseed oil"
+      ],
+      "role": "frying fat",
+      "perCover": {
+       "amount": 5,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "for frying chicken and onion",
+      "pantry": true,
+      "form": "any",
+      "avoid": [
+       "oliiviöljy",
+       "olive",
+       "voimaku",
+       "butter"
+      ]
+     },
+     {
+      "key": "salt",
+      "name": "Salt",
+      "searchTerms": [
+       "suola",
+       "salt"
+      ],
+      "role": "seasoning",
+      "perCover": {
+       "amount": 1.5,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 0.7% of portion weight",
+      "pantry": true,
+      "form": "any",
+      "avoid": []
+     }
+    ]
+   },
+   {
+    "name": "Boiled rice",
+    "nameFi": "Keitetty riisi",
+    "course": "side",
+    "serviceDate": "2026-11-19",
+    "portion": "about 200 g cooked",
+    "method": "Boil rice in salted water until tender.",
+    "ingredients": [
+     {
+      "key": "long_grain_rice",
+      "name": "Long grain rice",
+      "searchTerms": [
+       "pitkäjyväinen riisi",
+       "parboiled riisi",
+       "long grain rice"
+      ],
+      "role": "main component of the side dish",
+      "perCover": {
+       "amount": 75,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "200 g cooked, rice about 2.7x weight when boiled",
+      "pantry": false,
+      "form": "dried",
+      "avoid": [
+       "täysjyvä",
+       "basmati",
+       "jasmiini",
+       "puuro",
+       "risotto",
+       "maitoriisi",
+       "wild"
+      ]
+     },
+     {
+      "key": "salt",
+      "name": "Salt",
+      "searchTerms": [
+       "suola",
+       "salt"
+      ],
+      "role": "seasoning in cooking water",
+      "perCover": {
+       "amount": 2,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 1% of the cooking water, partly stays in water",
+      "pantry": true,
+      "form": "any",
+      "avoid": []
+     }
+    ]
+   },
+   {
+    "name": "Pea soup",
+    "nameFi": "Hernekeitto",
+    "course": "soup",
+    "serviceDate": "2026-11-20",
+    "portion": "3.5 dl",
+    "method": "Simmer soaked dried peas with ham or pork and onion until soft.",
+    "ingredients": [
+     {
+      "key": "dried_yellow_peas",
+      "name": "Dried yellow peas",
+      "searchTerms": [
+       "keltaherne",
+       "kuivattu herne",
+       "dried yellow peas",
+       "split peas"
+      ],
+      "role": "Main body of the soup",
+      "perCover": {
+       "amount": 50,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 50 g dry peas per 3.5 dl portion",
+      "pantry": false,
+      "form": "dried",
+      "avoid": [
+       "tuore",
+       "fresh",
+       "pakaste",
+       "frozen",
+       "vihreä herne"
+      ]
+     },
+     {
+      "key": "smoked_ham",
+      "name": "Smoked ham or pork",
+      "searchTerms": [
+       "savukinkku",
+       "porsaan kinkku",
+       "smoked ham",
+       "pork"
+      ],
+      "role": "Meat and flavour for the soup",
+      "perCover": {
+       "amount": 40,
+       "unit": "g"
+      },
+      "yieldPct": 90,
+      "amountBasis": "about 40 g meat per portion of soup",
+      "pantry": false,
+      "form": "any",
+      "avoid": [
+       "leikkele",
+       "pähkinä",
+       "nut"
+      ]
+     },
+     {
+      "key": "yellow_onion",
+      "name": "Yellow onion",
+      "searchTerms": [
+       "keltasipuli",
+       "sipuli",
+       "yellow onion"
+      ],
+      "role": "Aromatic base",
+      "perCover": {
+       "amount": 20,
+       "unit": "g"
+      },
+      "yieldPct": 90,
+      "amountBasis": "small amount of onion per portion",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "punasipuli",
+       "kuivattu",
+       "paistettu",
+       "dried",
+       "fried",
+       "red"
+      ]
+     },
+     {
+      "key": "dried_marjoram",
+      "name": "Dried marjoram",
+      "searchTerms": [
+       "meirami",
+       "kuivattu meirami",
+       "dried marjoram"
+      ],
+      "role": "Traditional pea soup seasoning",
+      "perCover": {
+       "amount": 0.1,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "pinch per portion",
+      "pantry": true,
+      "form": "dried",
+      "avoid": []
+     },
+     {
+      "key": "salt",
+      "name": "Salt",
+      "searchTerms": [
+       "suola",
+       "salt"
+      ],
+      "role": "Seasoning",
+      "perCover": {
+       "amount": 2,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 0.6 percent of the soup",
+      "pantry": true,
+      "form": "any",
+      "avoid": []
+     },
+     {
+      "key": "black_pepper",
+      "name": "Black pepper",
+      "searchTerms": [
+       "musta pippuri",
+       "black pepper"
+      ],
+      "role": "Seasoning",
+      "perCover": {
+       "amount": 0.1,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "pinch per portion",
+      "pantry": true,
+      "form": "dried",
+      "avoid": []
+     }
+    ]
+   },
+   {
+    "name": "Pancakes",
+    "nameFi": "Pannukakku",
+    "course": "dessert",
+    "serviceDate": "2026-11-20",
+    "portion": "1 piece with jam",
+    "method": "Bake a batter of lactose-free milk, eggs and flour in oven trays.",
+    "ingredients": [
+     {
+      "key": "lactose_free_milk",
+      "name": "Lactose-free milk",
+      "searchTerms": [
+       "laktoositon maito",
+       "maito laktoositon",
+       "lactose-free milk"
+      ],
+      "role": "batter liquid",
+      "perCover": {
+       "amount": 120,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "oven pancake batter, about 1 dl milk per piece plus a little extra",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "kaura",
+       "soija",
+       "kasvi",
+       "oat",
+       "soy",
+       "juoma"
+      ]
+     },
+     {
+      "key": "egg",
+      "name": "Egg",
+      "searchTerms": [
+       "kananmuna",
+       "muna",
+       "egg"
+      ],
+      "role": "binds batter",
+      "perCover": {
+       "amount": 0.5,
+       "unit": "pcs"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 1 egg per 2 portions of oven pancake",
+      "pantry": false,
+      "form": "fresh",
+      "avoid": [
+       "keitetty",
+       "boiled",
+       "kuorittu",
+       "jauhe",
+       "powder"
+      ]
+     },
+     {
+      "key": "wheat_flour",
+      "name": "Wheat flour",
+      "searchTerms": [
+       "vehnäjauho",
+       "wheat flour"
+      ],
+      "role": "batter base",
+      "perCover": {
+       "amount": 35,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 0.5 dl flour per piece",
+      "pantry": true,
+      "form": "dried",
+      "avoid": [
+       "täysjyvä",
+       "gluteeniton",
+       "gluten-free"
+      ]
+     },
+     {
+      "key": "sugar",
+      "name": "Sugar",
+      "searchTerms": [
+       "sokeri",
+       "sugar"
+      ],
+      "role": "sweetens batter",
+      "perCover": {
+       "amount": 5,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "small amount in batter",
+      "pantry": true,
+      "form": "dried",
+      "avoid": [
+       "tomusokeri",
+       "icing",
+       "hyytelö"
+      ]
+     },
+     {
+      "key": "salt",
+      "name": "Salt",
+      "searchTerms": [
+       "suola",
+       "salt"
+      ],
+      "role": "seasons batter",
+      "perCover": {
+       "amount": 0.5,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "pinch per portion",
+      "pantry": true,
+      "form": "dried",
+      "avoid": []
+     },
+     {
+      "key": "rapeseed_oil",
+      "name": "Rapeseed oil",
+      "searchTerms": [
+       "rypsiöljy",
+       "rapeseed oil"
+      ],
+      "role": "greases trays",
+      "perCover": {
+       "amount": 3,
+       "unit": "ml"
+      },
+      "yieldPct": 100,
+      "amountBasis": "light greasing of oven trays",
+      "pantry": true,
+      "form": "any",
+      "avoid": [
+       "oliivi",
+       "olive"
+      ]
+     },
+     {
+      "key": "jam",
+      "name": "Jam",
+      "searchTerms": [
+       "mansikkahillo",
+       "hillo",
+       "strawberry jam"
+      ],
+      "role": "served with pancake",
+      "perCover": {
+       "amount": 30,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "about 2 tbsp jam per portion",
+      "pantry": false,
+      "form": "canned_or_jarred",
+      "avoid": [
+       "pähkin",
+       "nut",
+       "manteli",
+       "almond",
+       "sokeriton"
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ "fixes": {
+  "swede": {
+   "options": [
+    {
+     "kind": "substitute",
+     "title": "Carrot instead of swede",
+     "effect": "Carrot simmers tender in the same time and gives a sweeter, mild soup that pupils usually like.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "carrot",
+      "name": "Carrot",
+      "searchTerms": [
+       "carrot",
+       "porkkana",
+       "morot"
+      ],
+      "role": "root vegetable",
+      "perCover": {
+       "amount": 40,
+       "unit": "g"
+      },
+      "yieldPct": 85,
+      "amountBasis": "peeled weight per cover",
+      "form": "any",
+      "avoid": [
+       "nuts",
+       "peanuts"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "substitute",
+     "title": "Whole swede, cut in kitchen",
+     "effect": "Same flavour as planned, but needs peeling and dicing in the kitchen; whole swede may be an available product.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "swede_whole",
+      "name": "Swede, whole",
+      "searchTerms": [
+       "swede whole",
+       "lanttu",
+       "kokonainen lanttu",
+       "kålrot"
+      ],
+      "role": "root vegetable",
+      "perCover": {
+       "amount": 40,
+       "unit": "g"
+      },
+      "yieldPct": 75,
+      "amountBasis": "peeled weight per cover",
+      "form": "fresh",
+      "avoid": [
+       "nuts",
+       "peanuts"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "substitute",
+     "title": "Potato instead of swede",
+     "effect": "Potato cooks tender and makes the soup slightly thicker and milder, losing the swede flavour.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "potato",
+      "name": "Potato",
+      "searchTerms": [
+       "potato",
+       "peruna",
+       "potatis"
+      ],
+      "role": "root vegetable",
+      "perCover": {
+       "amount": 45,
+       "unit": "g"
+      },
+      "yieldPct": 80,
+      "amountBasis": "peeled weight per cover",
+      "form": "fresh",
+      "avoid": [
+       "nuts",
+       "peanuts"
+      ]
+     },
+     "perCover": null
+    }
+   ]
+  },
+  "yellow_onion": {
+   "options": [
+    {
+     "kind": "substitute",
+     "title": "Dried onion granules",
+     "effect": "Dried onion gives the same sweet onion flavour in the meatballs at about a third of the fresh weight.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "onion_dried",
+      "name": "Dried onion granules",
+      "searchTerms": [
+       "dried onion",
+       "onion granules",
+       "onion powder",
+       "kuivattu sipuli",
+       "sipulirouhe"
+      ],
+      "role": "meatball flavour",
+      "perCover": {
+       "amount": 3,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "dried weight, about one third of fresh onion",
+      "form": "dried",
+      "avoid": [
+       "nuts",
+       "peanuts"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "substitute",
+     "title": "Frozen diced onion",
+     "effect": "Frozen chopped onion works in meatball mix and sauce with the same flavour, slightly softer texture.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "onion_frozen",
+      "name": "Frozen diced onion",
+      "searchTerms": [
+       "frozen onion",
+       "diced onion frozen",
+       "pakastesipuli",
+       "sipulikuutio pakaste"
+      ],
+      "role": "meatball flavour",
+      "perCover": {
+       "amount": 10,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "frozen weight, ready to use",
+      "form": "frozen",
+      "avoid": [
+       "nuts",
+       "peanuts"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "substitute",
+     "title": "Leek instead of onion",
+     "effect": "Finely chopped leek gives a milder onion note to the meatballs and sauce.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "leek",
+      "name": "Leek",
+      "searchTerms": [
+       "leek",
+       "purjo",
+       "purjosipuli"
+      ],
+      "role": "meatball flavour",
+      "perCover": {
+       "amount": 12,
+       "unit": "g"
+      },
+      "yieldPct": 75,
+      "amountBasis": "trimmed weight from whole leek, white and light green parts",
+      "form": "fresh",
+      "avoid": [
+       "nuts",
+       "peanuts"
+      ]
+     },
+     "perCover": null
+    }
+   ]
+  },
+  "fish_fingers": {
+   "options": [
+    {
+     "kind": "substitute",
+     "title": "Frozen breaded fish portions",
+     "effect": "Oven-baked breaded fish fillet portions take the place of the fingers; the dish is much the same, but the shape differs.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "breaded_fish_portion_frozen",
+      "name": "Breaded fish fillet portion, frozen",
+      "searchTerms": [
+       "breaded fish fillet frozen",
+       "fish portion breaded",
+       "paneroitu kalafilee pakaste",
+       "panerad fiskfilé fryst"
+      ],
+      "role": "main item, baked in oven",
+      "perCover": {
+       "amount": 100,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "ready-made frozen weight, baked from frozen",
+      "form": "frozen",
+      "avoid": [
+       "nuts",
+       "peanuts",
+       "lactose",
+       "almond"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "change_dish",
+     "title": "Oven-baked white fish with crumb",
+     "effect": "Plain frozen white fish fillets are coated in flour and breadcrumbs and baked, giving a similar crispy fish dish made in the kitchen.",
+     "changesDish": true,
+     "ingredient": {
+      "key": "white_fish_fillet_frozen",
+      "name": "White fish fillet, frozen (pollock, cod or similar)",
+      "searchTerms": [
+       "white fish fillet frozen",
+       "pollock fillet frozen",
+       "seithi file pakaste",
+       "kalafilee pakaste",
+       "vitfisk filé fryst"
+      ],
+      "role": "main item, coated and baked in oven",
+      "perCover": {
+       "amount": 90,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "frozen weight, thawed before coating",
+      "form": "frozen",
+      "avoid": [
+       "nuts",
+       "peanuts",
+       "lactose",
+       "almond",
+       "marinated",
+       "smoked"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "change_amount",
+     "title": "Smaller portion, more sides",
+     "effect": "Cuts the fish to 80 g per cover and adds a bit more of the side dishes, so a smaller supply of fingers is enough.",
+     "changesDish": false,
+     "ingredient": null,
+     "perCover": 80
+    }
+   ]
+  },
+  "carrot": {
+   "options": [
+    {
+     "kind": "substitute",
+     "title": "Frozen carrot cubes",
+     "effect": "Frozen carrot gives the same sweetness and colour and simmers tender in the soup.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "carrot_frozen",
+      "name": "Carrot, frozen diced or sliced",
+      "searchTerms": [
+       "frozen carrot",
+       "pakastekaarna",
+       "porkkana pakaste",
+       "morötter fryst"
+      ],
+      "role": "root vegetable, sweetness and colour",
+      "perCover": {
+       "amount": 50,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "Frozen, already peeled and cut, so no trimming loss.",
+      "form": "frozen",
+      "avoid": [
+       "nuts",
+       "peanuts",
+       "sauce",
+       "seasoned"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "substitute",
+     "title": "Swede instead of carrot",
+     "effect": "Swede is a sweet root vegetable that simmers tender like carrot, but the soup is paler and slightly milder.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "swede_fresh",
+      "name": "Swede, fresh",
+      "searchTerms": [
+       "swede",
+       "lanttu",
+       "kålrot"
+      ],
+      "role": "root vegetable, sweetness",
+      "perCover": {
+       "amount": 50,
+       "unit": "g"
+      },
+      "yieldPct": 80,
+      "amountBasis": "Fresh swede, peeled; amount is the cooked weight per cover.",
+      "form": "fresh",
+      "avoid": [
+       "nuts",
+       "peanuts",
+       "waxed"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "change_dish",
+     "title": "Parsnip and potato soup",
+     "effect": "Parsnip adds sweetness in place of carrot, so the soup is a paler root vegetable soup.",
+     "changesDish": true,
+     "ingredient": {
+      "key": "parsnip_fresh",
+      "name": "Parsnip, fresh",
+      "searchTerms": [
+       "parsnip",
+       "palsternakka",
+       "palsternacka"
+      ],
+      "role": "root vegetable, sweetness",
+      "perCover": {
+       "amount": 50,
+       "unit": "g"
+      },
+      "yieldPct": 80,
+      "amountBasis": "Fresh parsnip, peeled; amount is the cooked weight per cover.",
+      "form": "fresh",
+      "avoid": [
+       "nuts",
+       "peanuts"
+      ]
+     },
+     "perCover": null
+    }
+   ]
+  },
+  "white_cabbage": {
+   "options": [
+    {
+     "kind": "substitute",
+     "title": "Savoy or pointed cabbage",
+     "effect": "Another fresh cabbage that simmers tender in the soup with a slightly milder, sweeter taste.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "pointed_cabbage",
+      "name": "Pointed cabbage",
+      "searchTerms": [
+       "pointed cabbage",
+       "kiinankaali",
+       "savoy cabbage",
+       "kyssäkaali",
+       "spetskål"
+      ],
+      "role": "cabbage, tender vegetable body",
+      "perCover": {
+       "amount": 40,
+       "unit": "g"
+      },
+      "yieldPct": 85,
+      "amountBasis": "raw weight trimmed, simmered until tender",
+      "form": "fresh",
+      "avoid": [
+       "pickled",
+       "sauerkraut",
+       "marinated",
+       "red cabbage"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "substitute",
+     "title": "Frozen cabbage or mixed veg",
+     "effect": "Frozen cut cabbage simmers tender in the soup and keeps the same texture and role.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "frozen_cabbage",
+      "name": "Frozen cabbage",
+      "searchTerms": [
+       "frozen cabbage",
+       "pakaste kaali",
+       "pakastekaali",
+       "vitkål fryst"
+      ],
+      "role": "cabbage, tender vegetable body",
+      "perCover": {
+       "amount": 40,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "frozen weight, added directly to the simmering stock",
+      "form": "frozen",
+      "avoid": [
+       "pickled",
+       "sauerkraut",
+       "sauce",
+       "cream",
+       "butter"
+      ]
+     },
+     "perCover": null
+    },
+    {
+     "kind": "change_dish",
+     "title": "Extra root vegetables instead",
+     "effect": "Soup becomes a root vegetable soup with more swede, carrot and potato and no cabbage.",
+     "changesDish": true,
+     "ingredient": {
+      "key": "swede",
+      "name": "Swede",
+      "searchTerms": [
+       "swede",
+       "lanttu",
+       "kålrot",
+       "rutabaga"
+      ],
+      "role": "root vegetable replacing cabbage as the tender vegetable body",
+      "perCover": {
+       "amount": 40,
+       "unit": "g"
+      },
+      "yieldPct": 80,
+      "amountBasis": "raw peeled weight, simmered until tender",
+      "form": "fresh",
+      "avoid": [
+       "pickled",
+       "pre-cooked",
+       "puree",
+       "sauce"
+      ]
+     },
+     "perCover": null
+    }
+   ]
+  },
+  "potato": {
+   "options": [
+    {
+     "kind": "substitute",
+     "title": "Unpeeled potatoes, peel in kitchen",
+     "effect": "Same boiled potatoes, but the kitchen peels or boils them in their skins; needs more raw weight for peeling loss.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "potato_unpeeled",
+      "name": "Potato, unpeeled, firm boiling variety",
+      "searchTerms": [
+       "potato unpeeled",
+       "perunta pesty",
+       "kokkiperuna",
+       "potatis oskalad"
+      ],
+      "role": "main ingredient, boiled whole",
+      "perCover": {
+       "amount": 300,
+       "unit": "g"
+      },
+      "yieldPct": 85,
+      "amountBasis": "raw weight with skin; about 15% lost in peeling, giving about 250 g peeled per cover",
+      "form": "fresh",
+      "avoid": [
+       "peeled",
+       "vacuum-packed peeled",
+       "pre-cooked",
+       "fried",
+       "mashed",
+       "nut-containing products"
+      ]
+     },
+     "perCover": 300
+    },
+    {
+     "kind": "substitute",
+     "title": "Frozen whole potatoes",
+     "effect": "Boiled whole potatoes from frozen, already peeled; texture slightly softer.",
+     "changesDish": false,
+     "ingredient": {
+      "key": "potato_frozen_peeled",
+      "name": "Potato, peeled, whole or halved, frozen",
+      "searchTerms": [
+       "frozen potato peeled",
+       "pakaste perunta kuorittu",
+       "keitetty peruna pakaste",
+       "fryst potatis skalad"
+      ],
+      "role": "main ingredient, boiled whole",
+      "perCover": {
+       "amount": 250,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "peeled weight, ready to boil",
+      "form": "frozen",
+      "avoid": [
+       "french fries",
+       "wedges",
+       "breaded",
+       "seasoned with butter",
+       "cream sauce",
+       "nut-containing products"
+      ]
+     },
+     "perCover": 250
+    },
+    {
+     "kind": "change_dish",
+     "title": "Boiled rice instead",
+     "effect": "Potatoes are replaced by boiled rice as the side, so guests get a different dish.",
+     "changesDish": true,
+     "ingredient": {
+      "key": "rice_long_grain",
+      "name": "Long-grain rice, dry",
+      "searchTerms": [
+       "long grain rice",
+       "pitkäjyväinen riisi",
+       "riisi",
+       "ris"
+      ],
+      "role": "side starch replacing potatoes",
+      "perCover": {
+       "amount": 70,
+       "unit": "g"
+      },
+      "yieldPct": 100,
+      "amountBasis": "dry weight, boiled in salted water",
+      "form": "dried",
+      "avoid": [
+       "flavoured",
+       "seasoned",
+       "microwave pouch with sauce",
+       "nut-containing products"
+      ]
+     },
+     "perCover": 70
+    }
+   ]
+  }
+ }
+}

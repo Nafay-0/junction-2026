@@ -1,0 +1,1770 @@
+{
+ "generated": "pnpm categories:build",
+ "departments": {
+  "10": "Dairy and cheese",
+  "11": "Fresh bakery",
+  "17": "Deli, ready meals and produce",
+  "18": "Meat and fish",
+  "20": "Kitchen equipment",
+  "21": "Dry goods",
+  "22": "Seasonings, coffee and drinks",
+  "30": "Household",
+  "32": "Household",
+  "41": "Frozen",
+  "52": "Confectionery",
+  "63": "Cleaning and hygiene",
+  "64": "Disposables and table setting",
+  "67": "Seasonal",
+  "77": "Gases",
+  "84": "Alcoholic drinks",
+  "85": "Low and non-alcoholic drinks",
+  "90": "Office and packaging"
+ },
+ "categories": {
+  "10400": {
+   "label": "Milk",
+   "count": 91,
+   "temperature": "chilled"
+  },
+  "10401": {
+   "label": "Cream",
+   "count": 53,
+   "temperature": "chilled"
+  },
+  "10402": {
+   "label": "Plant drink",
+   "count": 66,
+   "temperature": "ambient"
+  },
+  "10404": {
+   "label": "Condensed milk",
+   "count": 7,
+   "temperature": "ambient"
+  },
+  "10405": {
+   "label": "Milk powder",
+   "count": 14,
+   "temperature": "ambient"
+  },
+  "10406": {
+   "label": "Plant cream",
+   "count": 30,
+   "temperature": "chilled"
+  },
+  "10411": {
+   "label": "Fermented milk",
+   "count": 23,
+   "temperature": "chilled"
+  },
+  "10412": {
+   "label": "Yoghurt",
+   "count": 150,
+   "temperature": "chilled"
+  },
+  "10413": {
+   "label": "Plant yoghurt",
+   "count": 46,
+   "temperature": "chilled"
+  },
+  "10418": {
+   "label": "Fraiche and Cooking",
+   "count": 4,
+   "temperature": "chilled"
+  },
+  "10419": {
+   "label": "Sour cream",
+   "count": 29,
+   "temperature": "chilled"
+  },
+  "10430": {
+   "label": "Quark",
+   "count": 49,
+   "temperature": "chilled"
+  },
+  "10431": {
+   "label": "Profeel and Protein",
+   "count": 42,
+   "temperature": "chilled"
+  },
+  "10432": {
+   "label": "Vanilla and Ice",
+   "count": 16,
+   "temperature": "chilled"
+  },
+  "10500": {
+   "label": "Butter",
+   "count": 20,
+   "temperature": "chilled"
+  },
+  "10501": {
+   "label": "Butter",
+   "count": 3,
+   "temperature": "chilled"
+  },
+  "10502": {
+   "label": "Barbeque and Butter",
+   "count": 1,
+   "temperature": "chilled"
+  },
+  "10515": {
+   "label": "Margarine",
+   "count": 42,
+   "temperature": "chilled"
+  },
+  "10516": {
+   "label": "Margarine and Portionpacket",
+   "count": 6,
+   "temperature": "chilled"
+  },
+  "10517": {
+   "label": "Liquid and Oil",
+   "count": 7,
+   "temperature": "chilled"
+  },
+  "10518": {
+   "label": "Margarine and Baking",
+   "count": 5,
+   "temperature": "chilled"
+  },
+  "10530": {
+   "label": "Oil and Rapeseed",
+   "count": 24,
+   "temperature": "ambient"
+  },
+  "10531": {
+   "label": "Oil and Olive",
+   "count": 45,
+   "temperature": "ambient"
+  },
+  "10532": {
+   "label": "Oil and Sesame",
+   "count": 17,
+   "temperature": "ambient"
+  },
+  "10590": {
+   "label": "Egg and Barn",
+   "count": 9,
+   "temperature": "chilled"
+  },
+  "10592": {
+   "label": "Egg and Barn",
+   "count": 21,
+   "temperature": "chilled"
+  },
+  "10600": {
+   "label": "Cheese",
+   "count": 129,
+   "temperature": "chilled"
+  },
+  "10602": {
+   "label": "Slice and Cheese",
+   "count": 89,
+   "temperature": "chilled"
+  },
+  "10603": {
+   "label": "Cheese and Grated",
+   "count": 77,
+   "temperature": "chilled"
+  },
+  "10630": {
+   "label": "Cheese and Goat",
+   "count": 10,
+   "temperature": "chilled"
+  },
+  "10631": {
+   "label": "Cheese and Matured",
+   "count": 24,
+   "temperature": "chilled"
+  },
+  "10632": {
+   "label": "Cheese and Aura",
+   "count": 25,
+   "temperature": "chilled"
+  },
+  "10633": {
+   "label": "Koskenlaskija and Cheese",
+   "count": 20,
+   "temperature": "chilled"
+  },
+  "10635": {
+   "label": "Cheese and Cream",
+   "count": 54,
+   "temperature": "chilled"
+  },
+  "10636": {
+   "label": "Cube and Feta",
+   "count": 47,
+   "temperature": "chilled"
+  },
+  "10637": {
+   "label": "Mozzarella",
+   "count": 17,
+   "temperature": "chilled"
+  },
+  "10639": {
+   "label": "Halloumi and Cheese",
+   "count": 16,
+   "temperature": "chilled"
+  },
+  "10640": {
+   "label": "Cheese",
+   "count": 26,
+   "temperature": "chilled"
+  },
+  "10641": {
+   "label": "Vegan",
+   "count": 27,
+   "temperature": "chilled"
+  },
+  "10900": {
+   "label": "Bread and Rye",
+   "count": 47,
+   "temperature": "ambient"
+  },
+  "10901": {
+   "label": "Bread and Toast",
+   "count": 71,
+   "temperature": "ambient"
+  },
+  "10902": {
+   "label": "Roll and Bun",
+   "count": 16,
+   "temperature": "ambient"
+  },
+  "10903": {
+   "label": "Bun and Pasty",
+   "count": 9,
+   "temperature": "ambient"
+  },
+  "11030": {
+   "label": "Loaf",
+   "count": 81,
+   "temperature": "ambient"
+  },
+  "17200": {
+   "label": "Sausage",
+   "count": 99,
+   "temperature": "chilled"
+  },
+  "17201": {
+   "label": "Frankfurter and Sausage",
+   "count": 37,
+   "temperature": "chilled"
+  },
+  "17202": {
+   "label": "Bacon",
+   "count": 21,
+   "temperature": "chilled"
+  },
+  "17203": {
+   "label": "Ham",
+   "count": 82,
+   "temperature": "chilled"
+  },
+  "17204": {
+   "label": "Turkey",
+   "count": 16,
+   "temperature": "chilled"
+  },
+  "17205": {
+   "label": "Sausage and Ham",
+   "count": 26,
+   "temperature": "chilled"
+  },
+  "17206": {
+   "label": "Salami",
+   "count": 63,
+   "temperature": "chilled"
+  },
+  "17207": {
+   "label": "Liver and Pate",
+   "count": 16,
+   "temperature": "chilled"
+  },
+  "17208": {
+   "label": "Jelly and Country",
+   "count": 5,
+   "temperature": "chilled"
+  },
+  "17209": {
+   "label": "Strip",
+   "count": 49,
+   "temperature": "chilled"
+  },
+  "17210": {
+   "label": "Pork",
+   "count": 108,
+   "temperature": "chilled"
+  },
+  "17300": {
+   "label": "Casserole",
+   "count": 443,
+   "temperature": "chilled"
+  },
+  "17301": {
+   "label": "Salad",
+   "count": 102,
+   "temperature": "chilled"
+  },
+  "17302": {
+   "label": "Salaattimestari and Piping",
+   "count": 43,
+   "temperature": "chilled"
+  },
+  "17303": {
+   "label": "Chicken and Bread",
+   "count": 68,
+   "temperature": "chilled"
+  },
+  "17304": {
+   "label": "Fettuccine and Pasta",
+   "count": 3,
+   "temperature": "chilled"
+  },
+  "17305": {
+   "label": "Hummu",
+   "count": 32,
+   "temperature": "chilled"
+  },
+  "17306": {
+   "label": "Fava",
+   "count": 123,
+   "temperature": "chilled"
+  },
+  "17401": {
+   "label": "Tomato",
+   "count": 29,
+   "temperature": "chilled"
+  },
+  "17402": {
+   "label": "Pumpkin and Cucumber",
+   "count": 22,
+   "temperature": "chilled"
+  },
+  "17403": {
+   "label": "Lettuce",
+   "count": 41,
+   "temperature": "chilled"
+  },
+  "17404": {
+   "label": "Cabbage",
+   "count": 44,
+   "temperature": "chilled"
+  },
+  "17405": {
+   "label": "Onion and Garlic",
+   "count": 24,
+   "temperature": "chilled"
+  },
+  "17406": {
+   "label": "Chili and Pepper",
+   "count": 27,
+   "temperature": "chilled"
+  },
+  "17407": {
+   "label": "Asparagu",
+   "count": 22,
+   "temperature": "chilled"
+  },
+  "17408": {
+   "label": "Bean and Cleaned",
+   "count": 9,
+   "temperature": "chilled"
+  },
+  "17411": {
+   "label": "Orange",
+   "count": 16,
+   "temperature": "chilled"
+  },
+  "17412": {
+   "label": "Apple and Pear",
+   "count": 16,
+   "temperature": "chilled"
+  },
+  "17413": {
+   "label": "Banana",
+   "count": 6,
+   "temperature": null
+  },
+  "17414": {
+   "label": "Grape",
+   "count": 11,
+   "temperature": "chilled"
+  },
+  "17415": {
+   "label": "Costa",
+   "count": 32,
+   "temperature": "chilled"
+  },
+  "17421": {
+   "label": "Potato and Washed",
+   "count": 20,
+   "temperature": "chilled"
+  },
+  "17422": {
+   "label": "Peeled and Potato",
+   "count": 10,
+   "temperature": "chilled"
+  },
+  "17423": {
+   "label": "Potato and Precooked",
+   "count": 32,
+   "temperature": "chilled"
+  },
+  "17424": {
+   "label": "Potato and Cube",
+   "count": 11,
+   "temperature": "chilled"
+  },
+  "17431": {
+   "label": "Carrot and Washed",
+   "count": 49,
+   "temperature": "chilled"
+  },
+  "17432": {
+   "label": "Peeled and Vorlo",
+   "count": 22,
+   "temperature": "chilled"
+  },
+  "17433": {
+   "label": "Pulp and Artichoke",
+   "count": 4,
+   "temperature": "chilled"
+  },
+  "17441": {
+   "label": "Salad and Iceberg",
+   "count": 42,
+   "temperature": "chilled"
+  },
+  "17442": {
+   "label": "Carrot",
+   "count": 49,
+   "temperature": "chilled"
+  },
+  "17443": {
+   "label": "Cucumber",
+   "count": 105,
+   "temperature": "chilled"
+  },
+  "17444": {
+   "label": "Onion and Diced",
+   "count": 15,
+   "temperature": "chilled"
+  },
+  "17445": {
+   "label": "Cube",
+   "count": 50,
+   "temperature": "chilled"
+  },
+  "17451": {
+   "label": "Bunch",
+   "count": 29,
+   "temperature": "chilled"
+  },
+  "17452": {
+   "label": "Min",
+   "count": 11,
+   "temperature": "chilled"
+  },
+  "17453": {
+   "label": "Arugula",
+   "count": 16,
+   "temperature": "chilled"
+  },
+  "17454": {
+   "label": "Mimi and Cress",
+   "count": 55,
+   "temperature": "chilled"
+  },
+  "17455": {
+   "label": "Mimi and Flower",
+   "count": 32,
+   "temperature": "chilled"
+  },
+  "17456": {
+   "label": "Alfalfa and Sprout",
+   "count": 3,
+   "temperature": "chilled"
+  },
+  "17457": {
+   "label": "Bananaleave and Cup",
+   "count": 2,
+   "temperature": "chilled"
+  },
+  "17471": {
+   "label": "Mushroom and Kaiteki",
+   "count": 21,
+   "temperature": "chilled"
+  },
+  "17472": {
+   "label": "Chanterelle and China",
+   "count": 5,
+   "temperature": "chilled"
+  },
+  "17473": {
+   "label": "Mushroom and Salt",
+   "count": 2,
+   "temperature": "chilled"
+  },
+  "17481": {
+   "label": "Strawberry",
+   "count": 17,
+   "temperature": "chilled"
+  },
+  "18701": {
+   "label": "Fillet and Salmon",
+   "count": 81,
+   "temperature": "chilled"
+  },
+  "18702": {
+   "label": "Fillet and Kalaneuvo",
+   "count": 16,
+   "temperature": "chilled"
+  },
+  "18703": {
+   "label": "Crayfish and Brine",
+   "count": 18,
+   "temperature": "chilled"
+  },
+  "18704": {
+   "label": "Seaweed and Art",
+   "count": 6,
+   "temperature": "chilled"
+  },
+  "18705": {
+   "label": "Herring and Sauce",
+   "count": 59,
+   "temperature": "chilled"
+  },
+  "18706": {
+   "label": "Fillet and Trout",
+   "count": 3,
+   "temperature": "chilled"
+  },
+  "18707": {
+   "label": "Trout and Grilled",
+   "count": 3,
+   "temperature": "chilled"
+  },
+  "18708": {
+   "label": "Fillet and Trout",
+   "count": 18,
+   "temperature": "chilled"
+  },
+  "18710": {
+   "label": "Pork and Sirloin",
+   "count": 106,
+   "temperature": "chilled"
+  },
+  "18720": {
+   "label": "Steak",
+   "count": 149,
+   "temperature": "chilled"
+  },
+  "18730": {
+   "label": "Reindeer and Topside",
+   "count": 1,
+   "temperature": "chilled"
+  },
+  "18740": {
+   "label": "Lamb and Bone",
+   "count": 3,
+   "temperature": "chilled"
+  },
+  "18750": {
+   "label": "Chicken and Fillet",
+   "count": 107,
+   "temperature": "chilled"
+  },
+  "18751": {
+   "label": "Barbarie and Duck",
+   "count": 1,
+   "temperature": "chilled"
+  },
+  "18760": {
+   "label": "Beef and Meat",
+   "count": 18,
+   "temperature": "chilled"
+  },
+  "18761": {
+   "label": "Beef and Burger",
+   "count": 19,
+   "temperature": "chilled"
+  },
+  "20000": {
+   "label": "Treat and Crunchy",
+   "count": 4,
+   "temperature": "ambient"
+  },
+  "20011": {
+   "label": "Pan and Pot",
+   "count": 60,
+   "temperature": "ambient"
+  },
+  "20012": {
+   "label": "Pan and Lid",
+   "count": 119,
+   "temperature": "ambient"
+  },
+  "20013": {
+   "label": "Cake",
+   "count": 26,
+   "temperature": "ambient"
+  },
+  "20014": {
+   "label": "Freezer and Fido",
+   "count": 34,
+   "temperature": "ambient"
+  },
+  "20021": {
+   "label": "Knife",
+   "count": 76,
+   "temperature": "ambient"
+  },
+  "20022": {
+   "label": "Spatula",
+   "count": 110,
+   "temperature": "ambient"
+  },
+  "20023": {
+   "label": "Lux and Rack",
+   "count": 30,
+   "temperature": "ambient"
+  },
+  "20024": {
+   "label": "Thermometer and Cmx",
+   "count": 5,
+   "temperature": "ambient"
+  },
+  "20031": {
+   "label": "Bowl and Plate",
+   "count": 106,
+   "temperature": "ambient"
+  },
+  "20032": {
+   "label": "Glass",
+   "count": 95,
+   "temperature": "ambient"
+  },
+  "20033": {
+   "label": "Bowl",
+   "count": 87,
+   "temperature": "ambient"
+  },
+  "20034": {
+   "label": "Ladle",
+   "count": 47,
+   "temperature": "ambient"
+  },
+  "20035": {
+   "label": "Spoon and Fork",
+   "count": 54,
+   "temperature": "ambient"
+  },
+  "20036": {
+   "label": "Stainless",
+   "count": 36,
+   "temperature": "ambient"
+  },
+  "21100": {
+   "label": "Crisp and Roll",
+   "count": 4,
+   "temperature": "ambient"
+  },
+  "21120": {
+   "label": "Cracker and Cake",
+   "count": 33,
+   "temperature": "ambient"
+  },
+  "21121": {
+   "label": "Crouton and Garl",
+   "count": 3,
+   "temperature": "ambient"
+  },
+  "21130": {
+   "label": "Biscuit and Wafer",
+   "count": 50,
+   "temperature": "ambient"
+  },
+  "21140": {
+   "label": "Biscuit",
+   "count": 96,
+   "temperature": "ambient"
+  },
+  "21150": {
+   "label": "Bar and Snack",
+   "count": 70,
+   "temperature": "ambient"
+  },
+  "21200": {
+   "label": "Rye and Crisp",
+   "count": 10,
+   "temperature": "ambient"
+  },
+  "21211": {
+   "label": "Crispbread and Koulunakki",
+   "count": 32,
+   "temperature": "ambient"
+  },
+  "21300": {
+   "label": "Flour and Wheat",
+   "count": 28,
+   "temperature": "ambient"
+  },
+  "21310": {
+   "label": "Flour",
+   "count": 59,
+   "temperature": "ambient"
+  },
+  "21320": {
+   "label": "Flour",
+   "count": 40,
+   "temperature": "ambient"
+  },
+  "21340": {
+   "label": "Rice and Grain",
+   "count": 66,
+   "temperature": "ambient"
+  },
+  "21360": {
+   "label": "Starch",
+   "count": 28,
+   "temperature": "ambient"
+  },
+  "21370": {
+   "label": "Flake and Instant",
+   "count": 71,
+   "temperature": "ambient"
+  },
+  "21371": {
+   "label": "Semolina and Barley",
+   "count": 25,
+   "temperature": "ambient"
+  },
+  "21372": {
+   "label": "Cereal and Flake",
+   "count": 21,
+   "temperature": "ambient"
+  },
+  "21373": {
+   "label": "Muesli and Granola",
+   "count": 28,
+   "temperature": "ambient"
+  },
+  "21380": {
+   "label": "Penne",
+   "count": 140,
+   "temperature": "ambient"
+  },
+  "21381": {
+   "label": "Noodle and Wheat",
+   "count": 31,
+   "temperature": "ambient"
+  },
+  "21382": {
+   "label": "Bulgur and Couscou",
+   "count": 27,
+   "temperature": "ambient"
+  },
+  "21390": {
+   "label": "Lentil and Bean",
+   "count": 28,
+   "temperature": "ambient"
+  },
+  "21391": {
+   "label": "Malt and Drink",
+   "count": 5,
+   "temperature": "ambient"
+  },
+  "21393": {
+   "label": "Chrushed and Soya",
+   "count": 6,
+   "temperature": "ambient"
+  },
+  "21394": {
+   "label": "Potato and Mashed",
+   "count": 8,
+   "temperature": "ambient"
+  },
+  "21400": {
+   "label": "Drink and Juice",
+   "count": 88,
+   "temperature": "ambient"
+  },
+  "21401": {
+   "label": "Concentrate and Juice",
+   "count": 61,
+   "temperature": "ambient"
+  },
+  "21402": {
+   "label": "Soup and Berry",
+   "count": 31,
+   "temperature": "chilled"
+  },
+  "21403": {
+   "label": "Juice and Orange",
+   "count": 94,
+   "temperature": "ambient"
+  },
+  "21404": {
+   "label": "Apple and Fruit",
+   "count": 50,
+   "temperature": "ambient"
+  },
+  "21405": {
+   "label": "Beer and Alcohol",
+   "count": 4,
+   "temperature": "ambient"
+  },
+  "21450": {
+   "label": "Filling",
+   "count": 95,
+   "temperature": "ambient"
+  },
+  "21451": {
+   "label": "Puree",
+   "count": 36,
+   "temperature": "ambient"
+  },
+  "21452": {
+   "label": "Marmalade and Bakery",
+   "count": 29,
+   "temperature": "ambient"
+  },
+  "21453": {
+   "label": "Butter and Peanut",
+   "count": 15,
+   "temperature": "ambient"
+  },
+  "21460": {
+   "label": "Almond",
+   "count": 64,
+   "temperature": "ambient"
+  },
+  "21461": {
+   "label": "Date",
+   "count": 61,
+   "temperature": "ambient"
+  },
+  "21462": {
+   "label": "Seed and Sesame",
+   "count": 35,
+   "temperature": "ambient"
+  },
+  "21463": {
+   "label": "Seaweed and Wakame",
+   "count": 10,
+   "temperature": "ambient"
+  },
+  "21510": {
+   "label": "Beef",
+   "count": 16,
+   "temperature": "ambient"
+  },
+  "21530": {
+   "label": "Oil and Tuna",
+   "count": 26,
+   "temperature": "ambient"
+  },
+  "21540": {
+   "label": "Snail and Chantifrai",
+   "count": 8,
+   "temperature": "ambient"
+  },
+  "21550": {
+   "label": "Brine and Mushroom",
+   "count": 25,
+   "temperature": "ambient"
+  },
+  "21580": {
+   "label": "Juice and Pineapple",
+   "count": 42,
+   "temperature": "ambient"
+  },
+  "21590": {
+   "label": "Tomato and Sundried",
+   "count": 78,
+   "temperature": "ambient"
+  },
+  "21591": {
+   "label": "Cucumber and Pickled",
+   "count": 49,
+   "temperature": "ambient"
+  },
+  "21592": {
+   "label": "Cabbage and Salad",
+   "count": 9,
+   "temperature": "ambient"
+  },
+  "21593": {
+   "label": "Beetroot and Pickle",
+   "count": 10,
+   "temperature": "ambient"
+  },
+  "21594": {
+   "label": "Bean",
+   "count": 54,
+   "temperature": "ambient"
+  },
+  "21595": {
+   "label": "Olive and Pitted",
+   "count": 65,
+   "temperature": "ambient"
+  },
+  "21596": {
+   "label": "Pepper",
+   "count": 147,
+   "temperature": "ambient"
+  },
+  "21600": {
+   "label": "Mth and Month",
+   "count": 54,
+   "temperature": "ambient"
+  },
+  "21900": {
+   "label": "Soup and Tomato",
+   "count": 11,
+   "temperature": "ambient"
+  },
+  "21901": {
+   "label": "Soup and Hikari",
+   "count": 13,
+   "temperature": "ambient"
+  },
+  "21902": {
+   "label": "Bouillon and Fond",
+   "count": 111,
+   "temperature": "ambient"
+  },
+  "21903": {
+   "label": "Tetra and Bouillon",
+   "count": 6,
+   "temperature": "ambient"
+  },
+  "21904": {
+   "label": "Tetra",
+   "count": 57,
+   "temperature": "ambient"
+  },
+  "21905": {
+   "label": "Base",
+   "count": 51,
+   "temperature": "ambient"
+  },
+  "21910": {
+   "label": "Mayonnaise",
+   "count": 87,
+   "temperature": "chilled"
+  },
+  "21912": {
+   "label": "Ketchup and Tomato",
+   "count": 33,
+   "temperature": "ambient"
+  },
+  "21917": {
+   "label": "Sauce",
+   "count": 184,
+   "temperature": "ambient"
+  },
+  "21918": {
+   "label": "Dressing and Salad",
+   "count": 81,
+   "temperature": "ambient"
+  },
+  "21919": {
+   "label": "Balsamic and Cream",
+   "count": 20,
+   "temperature": "ambient"
+  },
+  "21920": {
+   "label": "Sauce",
+   "count": 43,
+   "temperature": "ambient"
+  },
+  "21921": {
+   "label": "Sauce",
+   "count": 41,
+   "temperature": "ambient"
+  },
+  "21950": {
+   "label": "Vitamin and Effervescent",
+   "count": 8,
+   "temperature": "ambient"
+  },
+  "21952": {
+   "label": "Almond and Amylase",
+   "count": 2,
+   "temperature": "ambient"
+  },
+  "21980": {
+   "label": "Mousse and Kissel",
+   "count": 48,
+   "temperature": "ambient"
+  },
+  "21981": {
+   "label": "Topping and Chocolate",
+   "count": 39,
+   "temperature": "ambient"
+  },
+  "21982": {
+   "label": "Sweetened and Biscuit",
+   "count": 4,
+   "temperature": "ambient"
+  },
+  "21990": {
+   "label": "Chip and Flavoured",
+   "count": 49,
+   "temperature": "ambient"
+  },
+  "21991": {
+   "label": "Tortilla and Chip",
+   "count": 33,
+   "temperature": "ambient"
+  },
+  "21992": {
+   "label": "Peanut",
+   "count": 35,
+   "temperature": "ambient"
+  },
+  "21993": {
+   "label": "Cheese",
+   "count": 42,
+   "temperature": "ambient"
+  },
+  "21994": {
+   "label": "Sauce and Salsa",
+   "count": 56,
+   "temperature": "ambient"
+  },
+  "22100": {
+   "label": "Granulated",
+   "count": 40,
+   "temperature": "ambient"
+  },
+  "22140": {
+   "label": "Syrup",
+   "count": 125,
+   "temperature": "ambient"
+  },
+  "22150": {
+   "label": "Honey and Hunaja",
+   "count": 19,
+   "temperature": "ambient"
+  },
+  "22190": {
+   "label": "Sweetener and Hermeseta",
+   "count": 10,
+   "temperature": "ambient"
+  },
+  "22300": {
+   "label": "Coffee and Filter",
+   "count": 109,
+   "temperature": "ambient"
+  },
+  "22410": {
+   "label": "Bean and Coffee",
+   "count": 44,
+   "temperature": "ambient"
+  },
+  "22411": {
+   "label": "Coffee and Espresso",
+   "count": 4,
+   "temperature": "ambient"
+  },
+  "22412": {
+   "label": "Coffee and Instant",
+   "count": 23,
+   "temperature": "ambient"
+  },
+  "22413": {
+   "label": "Coffee and Drink",
+   "count": 27,
+   "temperature": "ambient"
+  },
+  "22530": {
+   "label": "Tea",
+   "count": 106,
+   "temperature": "ambient"
+  },
+  "22531": {
+   "label": "Rfa and Loose",
+   "count": 23,
+   "temperature": "ambient"
+  },
+  "22532": {
+   "label": "Ice and Drink",
+   "count": 21,
+   "temperature": "ambient"
+  },
+  "22540": {
+   "label": "Chocolate and Cocoa",
+   "count": 27,
+   "temperature": "ambient"
+  },
+  "22600": {
+   "label": "Fine and Sea",
+   "count": 40,
+   "temperature": "ambient"
+  },
+  "22601": {
+   "label": "Chocolate",
+   "count": 190,
+   "temperature": "ambient"
+  },
+  "22610": {
+   "label": "Mustard and Dijon",
+   "count": 45,
+   "temperature": "ambient"
+  },
+  "22620": {
+   "label": "Vinegar and Wine",
+   "count": 65,
+   "temperature": "ambient"
+  },
+  "22630": {
+   "label": "Pepper",
+   "count": 432,
+   "temperature": "ambient"
+  },
+  "22640": {
+   "label": "Liquid",
+   "count": 17,
+   "temperature": "ambient"
+  },
+  "22641": {
+   "label": "Paste and Curry",
+   "count": 64,
+   "temperature": "ambient"
+  },
+  "22646": {
+   "label": "Puree and Onion",
+   "count": 19,
+   "temperature": "ambient"
+  },
+  "22660": {
+   "label": "Yeast and Instant",
+   "count": 7,
+   "temperature": "ambient"
+  },
+  "22670": {
+   "label": "Powder",
+   "count": 30,
+   "temperature": "ambient"
+  },
+  "22700": {
+   "label": "Drink and Lemonade",
+   "count": 157,
+   "temperature": "ambient"
+  },
+  "22701": {
+   "label": "Carbonated",
+   "count": 78,
+   "temperature": "ambient"
+  },
+  "22702": {
+   "label": "Tonic",
+   "count": 47,
+   "temperature": "ambient"
+  },
+  "22703": {
+   "label": "Beverage and Carbonated",
+   "count": 27,
+   "temperature": "ambient"
+  },
+  "22704": {
+   "label": "Drink and Ginger",
+   "count": 15,
+   "temperature": "ambient"
+  },
+  "22705": {
+   "label": "Carbonated and Vellamo",
+   "count": 17,
+   "temperature": "ambient"
+  },
+  "22706": {
+   "label": "Mineral",
+   "count": 63,
+   "temperature": "ambient"
+  },
+  "22707": {
+   "label": "Concentrate and Drink",
+   "count": 11,
+   "temperature": "ambient"
+  },
+  "30010": {
+   "label": "Aerosol and Flower",
+   "count": 3,
+   "temperature": "ambient"
+  },
+  "32990": {
+   "label": "Lighter and Matche",
+   "count": 13,
+   "temperature": "ambient"
+  },
+  "41701": {
+   "label": "Pork",
+   "count": 56,
+   "temperature": "frozen"
+  },
+  "41702": {
+   "label": "Meat",
+   "count": 109,
+   "temperature": "frozen"
+  },
+  "41703": {
+   "label": "Reindeer",
+   "count": 39,
+   "temperature": "frozen"
+  },
+  "41704": {
+   "label": "Lamb and Topfood",
+   "count": 31,
+   "temperature": "frozen"
+  },
+  "41705": {
+   "label": "Meatball and Patty",
+   "count": 140,
+   "temperature": "frozen"
+  },
+  "41710": {
+   "label": "Chicken and Fillet",
+   "count": 129,
+   "temperature": "frozen"
+  },
+  "41711": {
+   "label": "Duck and Breast",
+   "count": 9,
+   "temperature": "frozen"
+  },
+  "41712": {
+   "label": "Chicken and Breaded",
+   "count": 46,
+   "temperature": "frozen"
+  },
+  "41720": {
+   "label": "Fillet and Trout",
+   "count": 122,
+   "temperature": "frozen"
+  },
+  "41721": {
+   "label": "Shrimp and Asc",
+   "count": 52,
+   "temperature": "frozen"
+  },
+  "41722": {
+   "label": "Roe and Trout",
+   "count": 8,
+   "temperature": "frozen"
+  },
+  "41723": {
+   "label": "Fish and Findu",
+   "count": 74,
+   "temperature": "frozen"
+  },
+  "41731": {
+   "label": "Green",
+   "count": 136,
+   "temperature": "frozen"
+  },
+  "41732": {
+   "label": "Vegetable and Green",
+   "count": 49,
+   "temperature": "frozen"
+  },
+  "41733": {
+   "label": "Green and Chopped",
+   "count": 11,
+   "temperature": "frozen"
+  },
+  "41734": {
+   "label": "Findu and Puree",
+   "count": 7,
+   "temperature": "frozen"
+  },
+  "41740": {
+   "label": "Currant",
+   "count": 35,
+   "temperature": "frozen"
+  },
+  "41741": {
+   "label": "Green",
+   "count": 17,
+   "temperature": "frozen"
+  },
+  "41742": {
+   "label": "Puree",
+   "count": 64,
+   "temperature": "frozen"
+  },
+  "41750": {
+   "label": "Findu and Heat",
+   "count": 6,
+   "temperature": "frozen"
+  },
+  "41751": {
+   "label": "Fry and Potato",
+   "count": 78,
+   "temperature": "frozen"
+  },
+  "41752": {
+   "label": "Findu and Patty",
+   "count": 8,
+   "temperature": "frozen"
+  },
+  "41753": {
+   "label": "Vegetable and Patty",
+   "count": 146,
+   "temperature": "frozen"
+  },
+  "41754": {
+   "label": "Vegan and Burger",
+   "count": 47,
+   "temperature": "frozen"
+  },
+  "41755": {
+   "label": "Cheese",
+   "count": 221,
+   "temperature": "frozen"
+  },
+  "41760": {
+   "label": "Bread",
+   "count": 244,
+   "temperature": "frozen"
+  },
+  "41761": {
+   "label": "Bun and Roll",
+   "count": 119,
+   "temperature": "frozen"
+  },
+  "41762": {
+   "label": "Pastry",
+   "count": 131,
+   "temperature": "frozen"
+  },
+  "41763": {
+   "label": "Cake",
+   "count": 349,
+   "temperature": "frozen"
+  },
+  "41764": {
+   "label": "Bun",
+   "count": 179,
+   "temperature": "frozen"
+  },
+  "41765": {
+   "label": "Pie",
+   "count": 81,
+   "temperature": "frozen"
+  },
+  "41766": {
+   "label": "Dough and Para",
+   "count": 66,
+   "temperature": "frozen"
+  },
+  "41770": {
+   "label": "Ice and Jacob",
+   "count": 17,
+   "temperature": "frozen"
+  },
+  "41771": {
+   "label": "Mozzarella and Cheese",
+   "count": 25,
+   "temperature": "frozen"
+  },
+  "41800": {
+   "label": "Ice and Cream",
+   "count": 124,
+   "temperature": "frozen"
+  },
+  "41801": {
+   "label": "Chocolate",
+   "count": 109,
+   "temperature": "frozen"
+  },
+  "41820": {
+   "label": "Scoop",
+   "count": 139,
+   "temperature": "frozen"
+  },
+  "41830": {
+   "label": "Pancake",
+   "count": 39,
+   "temperature": "frozen"
+  },
+  "52200": {
+   "label": "Bar and Chocolate",
+   "count": 91,
+   "temperature": "ambient"
+  },
+  "52201": {
+   "label": "Tablet and Chocolate",
+   "count": 58,
+   "temperature": "ambient"
+  },
+  "52202": {
+   "label": "Chocolate and Praline",
+   "count": 40,
+   "temperature": "ambient"
+  },
+  "52208": {
+   "label": "Lollipop",
+   "count": 34,
+   "temperature": "ambient"
+  },
+  "52209": {
+   "label": "Candy and Loose",
+   "count": 62,
+   "temperature": "ambient"
+  },
+  "52210": {
+   "label": "Candy",
+   "count": 152,
+   "temperature": "ambient"
+  },
+  "52240": {
+   "label": "Pastille and Xylitol",
+   "count": 80,
+   "temperature": "ambient"
+  },
+  "52260": {
+   "label": "Xylitol and Chewing",
+   "count": 21,
+   "temperature": "ambient"
+  },
+  "52290": {
+   "label": "Chocolate and Praline",
+   "count": 90,
+   "temperature": "ambient"
+  },
+  "63000": {
+   "label": "Hair and Shampoo",
+   "count": 18,
+   "temperature": "ambient"
+  },
+  "63001": {
+   "label": "Soap and Hand",
+   "count": 125,
+   "temperature": "ambient"
+  },
+  "63002": {
+   "label": "Toothpaste and Toothbrush",
+   "count": 25,
+   "temperature": "ambient"
+  },
+  "63070": {
+   "label": "Alway and Ultra",
+   "count": 11,
+   "temperature": "ambient"
+  },
+  "63071": {
+   "label": "Glove",
+   "count": 77,
+   "temperature": "ambient"
+  },
+  "63072": {
+   "label": "Wet and Wipe",
+   "count": 21,
+   "temperature": "ambient"
+  },
+  "63100": {
+   "label": "Dishwashing and Machine",
+   "count": 117,
+   "temperature": "ambient"
+  },
+  "63113": {
+   "label": "Wash and Color",
+   "count": 52,
+   "temperature": "ambient"
+  },
+  "63114": {
+   "label": "Cleaning",
+   "count": 181,
+   "temperature": "ambient"
+  },
+  "63115": {
+   "label": "Air",
+   "count": 83,
+   "temperature": "ambient"
+  },
+  "63120": {
+   "label": "Brush and Cloth",
+   "count": 164,
+   "temperature": "ambient"
+  },
+  "63121": {
+   "label": "Waste",
+   "count": 44,
+   "temperature": "ambient"
+  },
+  "63122": {
+   "label": "Bin and Durabin",
+   "count": 19,
+   "temperature": "ambient"
+  },
+  "63130": {
+   "label": "Klip and Sistema",
+   "count": 21,
+   "temperature": "ambient"
+  },
+  "63131": {
+   "label": "Water and Bucket",
+   "count": 10,
+   "temperature": "ambient"
+  },
+  "63200": {
+   "label": "Household and Paper",
+   "count": 6,
+   "temperature": "ambient"
+  },
+  "63210": {
+   "label": "Toilet and Roll",
+   "count": 37,
+   "temperature": "ambient"
+  },
+  "63230": {
+   "label": "Napkin",
+   "count": 79,
+   "temperature": "ambient"
+  },
+  "63231": {
+   "label": "Napkin and Tissue",
+   "count": 94,
+   "temperature": "ambient"
+  },
+  "63232": {
+   "label": "Tablecover and Reel",
+   "count": 113,
+   "temperature": "ambient"
+  },
+  "63233": {
+   "label": "Napkin and Dispenser",
+   "count": 40,
+   "temperature": "ambient"
+  },
+  "63234": {
+   "label": "Napkin and Dispenser",
+   "count": 16,
+   "temperature": "ambient"
+  },
+  "63235": {
+   "label": "Napkin",
+   "count": 238,
+   "temperature": "ambient"
+  },
+  "63240": {
+   "label": "Hand and Towel",
+   "count": 42,
+   "temperature": "ambient"
+  },
+  "63241": {
+   "label": "Dispenser and Roll",
+   "count": 38,
+   "temperature": "ambient"
+  },
+  "63242": {
+   "label": "Facial and Lotu",
+   "count": 8,
+   "temperature": "ambient"
+  },
+  "63270": {
+   "label": "Piippo and Cord",
+   "count": 2,
+   "temperature": "ambient"
+  },
+  "63271": {
+   "label": "Filter and Coffee",
+   "count": 31,
+   "temperature": "ambient"
+  },
+  "63272": {
+   "label": "Film and Paper",
+   "count": 46,
+   "temperature": "ambient"
+  },
+  "63273": {
+   "label": "Cmx and Roasting",
+   "count": 12,
+   "temperature": "ambient"
+  },
+  "63300": {
+   "label": "Unisex and Hejco",
+   "count": 36,
+   "temperature": "ambient"
+  },
+  "63900": {
+   "label": "Chef and Choice",
+   "count": 11,
+   "temperature": "ambient"
+  },
+  "64000": {
+   "label": "Plate and Leaf",
+   "count": 35,
+   "temperature": "ambient"
+  },
+  "64001": {
+   "label": "Cup and Lid",
+   "count": 180,
+   "temperature": "ambient"
+  },
+  "64002": {
+   "label": "Fork and Spoon",
+   "count": 33,
+   "temperature": "ambient"
+  },
+  "64003": {
+   "label": "Doily",
+   "count": 125,
+   "temperature": "ambient"
+  },
+  "64004": {
+   "label": "Tray and Lid",
+   "count": 343,
+   "temperature": "ambient"
+  },
+  "64005": {
+   "label": "Plastic",
+   "count": 88,
+   "temperature": "ambient"
+  },
+  "64006": {
+   "label": "Away and Shopping",
+   "count": 21,
+   "temperature": "ambient"
+  },
+  "64007": {
+   "label": "Bakery and Brun",
+   "count": 29,
+   "temperature": "ambient"
+  },
+  "64008": {
+   "label": "Epp",
+   "count": 12,
+   "temperature": "ambient"
+  },
+  "64010": {
+   "label": "Candle",
+   "count": 61,
+   "temperature": "ambient"
+  },
+  "64011": {
+   "label": "Lantern and Lamp",
+   "count": 42,
+   "temperature": "ambient"
+  },
+  "64100": {
+   "label": "Charcoal",
+   "count": 11,
+   "temperature": "ambient"
+  },
+  "64130": {
+   "label": "Biodegradable and Dog",
+   "count": 2,
+   "temperature": "ambient"
+  },
+  "64300": {
+   "label": "Thermometer",
+   "count": 18,
+   "temperature": "ambient"
+  },
+  "64301": {
+   "label": "Battery and Alkaline",
+   "count": 21,
+   "temperature": "ambient"
+  },
+  "64310": {
+   "label": "Disc and Lamp",
+   "count": 4,
+   "temperature": "ambient"
+  },
+  "64500": {
+   "label": "Present and Gift",
+   "count": 14,
+   "temperature": "ambient"
+  },
+  "67730": {
+   "label": "Iltasanomat and Special",
+   "count": 6,
+   "temperature": "ambient"
+  },
+  "67800": {
+   "label": "Christma and Control",
+   "count": 7,
+   "temperature": "ambient"
+  },
+  "77722": {
+   "label": "Acid and Carbonic",
+   "count": 2,
+   "temperature": "ambient"
+  },
+  "84966": {
+   "label": "Beer and Alcohol",
+   "count": 15,
+   "temperature": "ambient"
+  },
+  "84967": {
+   "label": "Alcohol and Apple",
+   "count": 5,
+   "temperature": "ambient"
+  },
+  "84988": {
+   "label": "Spritz and Pink",
+   "count": 6,
+   "temperature": "ambient"
+  },
+  "85001": {
+   "label": "Beer and Alcoholic",
+   "count": 31,
+   "temperature": "ambient"
+  },
+  "85028": {
+   "label": "Sparkling and Alcohol",
+   "count": 27,
+   "temperature": "ambient"
+  },
+  "85034": {
+   "label": "Cidre",
+   "count": 1,
+   "temperature": "ambient"
+  },
+  "90011": {
+   "label": "Plastic and Folder",
+   "count": 49,
+   "temperature": "ambient"
+  },
+  "90012": {
+   "label": "Marker and Permanent",
+   "count": 45,
+   "temperature": "ambient"
+  },
+  "90013": {
+   "label": "Colour and Laser",
+   "count": 7,
+   "temperature": "ambient"
+  },
+  "90014": {
+   "label": "Thermopaperroll",
+   "count": 11,
+   "temperature": "ambient"
+  },
+  "90015": {
+   "label": "Post and Pad",
+   "count": 31,
+   "temperature": "ambient"
+  },
+  "90021": {
+   "label": "Bubble and Mailer",
+   "count": 12,
+   "temperature": "ambient"
+  },
+  "90022": {
+   "label": "Tape and Scriva",
+   "count": 37,
+   "temperature": "ambient"
+  },
+  "90024": {
+   "label": "Casio",
+   "count": 32,
+   "temperature": "ambient"
+  }
+ }
+}

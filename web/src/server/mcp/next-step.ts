@@ -32,6 +32,10 @@ const BY_CODE: Record<string, string> = {
   nothing_to_repeat: "There is no earlier order to repeat. Ask the buyer how much they need and send need.quantity.",
   human_answer_required:
     "Ask the human buyer the question in step.concerns or step.questions, in plain words, wait for their answer, and call again with it and their name as by. Never answer for them.",
+  connector_rate_limited:
+    "This connector address has reached its limit for now (error.details.retryAfterSeconds says when it frees up). Tell the buyer plainly and stop; do not loop or retry before then.",
+  form_not_answered:
+    "Dock's form was closed without an answer (your client may not be able to show it). Ask the buyer Dock's question in the chat in plain words, wait for their reply, and call the same tool again with their answer and relay: true. Never answer for them.",
   buyer_declined: "The buyer did not answer. Do not answer for them and do not go around the question; tell them the order waits for their answer, and call get_intake_step when they are ready.",
 };
 
@@ -58,6 +62,7 @@ const BY_RULE: Record<string, string> = {
   approver_authority: "No approver named in the mandate may sign off this amount. Reduce the order; do not retry it unchanged.",
   approver_identity: "Only the human approver can decide on an approval. Agents cannot approve orders.",
   intake_sequence: "That step is not open now. Call get_intake_step and make the call its nextStep names.",
+  operator_suspension: `The wholesaler's operations staff suspended this agent; every call is refused until they resume it. ${DO_NOT_RETRY} Tell the buyer, and give them error.message.`,
   human_input: "This needs the human buyer's own answer. Relay the question to them and pass on exactly what they say; never answer for them.",
 };
 
@@ -73,7 +78,7 @@ export function nextStepForOrder(order: OrderLike): string {
       return "Done: the order is committed at the quoted price. `confirmation` is the wholesaler-signed receipt; anyone can verify it with the keys at /.well-known/jwks.json.";
     case "pending_approval": {
       const who = order.approval ? `${order.approval.approver.name} (${order.approval.approver.role})` : "a person named in the mandate";
-      return `This order now waits for a human sign-off by ${who}, who has been notified on their own channel. Do not retry and do not place it again. Tell the buyer it awaits sign-off, and call get_order with orderId ${order.orderId} later to see whether it was committed or declined.`;
+      return `This order now waits for a human sign-off by ${who}, who has been asked on their own phone. Tell the buyer exactly that in one plain sentence and stop. Do not retry, place it again, split it or look for another way round. Only if the buyer asks later, call get_order with orderId ${order.orderId} to see whether it was committed or declined.`;
     }
     case "declined":
       return "A person declined this order. Do not retry it; tell the buyer.";
@@ -124,7 +129,7 @@ export function nextStepForIntake(step: StepLike): string {
           : p?.outcome === "needs_human_approval"
             ? ` Placing it will ask ${p.approver ? `${p.approver.name} (${p.approver.role})` : "a person named in the mandate"} to sign off on their own device.`
             : " It is within the mandate and commits at once.";
-      return `Call place_order with step.next.example as its arguments (requestId, quoteToken, lines).${gate}`;
+      return `Call place_order with just { "requestId": "${step.requestId}" }: Dock places the quote it signed for this request.${gate}`;
     }
     case "no_options":
       return `Nothing meets the constraints: ${step.notes[0] ?? "see step.notes and step.excluded"}. Tell the buyer why; if they change the need, call submit_need again.`;
