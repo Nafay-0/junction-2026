@@ -9,6 +9,7 @@ import type { Incomplete } from "./console";
 import { amount, attr, clock, day, eur, humanize, roleLabel, ruleTitle, shortProduct } from "../../_ui/plain";
 import { Target } from "../../_ui/target";
 import { Button, Field, MemoryNote, Missing, Paper } from "./ui";
+import { cutoffText } from "./when";
 import type { ApprovalQr, KitchenInfo, Order, Step } from "./types";
 
 type Names = Record<string, string>;
@@ -79,9 +80,16 @@ export function Understood({
             </dl>
           )}
         </div>
+        {interp?.memoryLine && (
+          <div className="mt-3">
+            <MemoryNote>{interp.memoryLine}</MemoryNote>
+          </div>
+        )}
         {interp && (
           <p className="mt-3 text-[0.9rem] text-ink-soft">
-            {interp.offline ? (
+            {interp.noModel ? (
+              <>No model read this: it is the earlier request&apos;s own fields. Everything after this line is plain code.</>
+            ) : interp.offline ? (
               <>
                 <span className="mr-1.5 border border-ink px-1.5 py-px font-semibold text-ink">Offline example</span>
                 Read by {interp.model} in {interp.ms} ms, not by the model. Everything after this line is plain code.
@@ -326,11 +334,43 @@ function evidenceOf(text: string): string {
 
 // ---------- 4. options ----------
 
-export function Options({ step, options, onChoose, busyKey, names }: { step: Step; options: Step["options"]; onChoose: (optionId: string) => void; busyKey?: string; names: Names }) {
+const RANK: Record<string, string> = { best: "Best", better: "Better", good: "Good" };
+
+export function Options({
+  step,
+  options,
+  onChoose,
+  onNarrow,
+  busyKey,
+  names,
+}: {
+  step: Step;
+  options: Step["options"];
+  onChoose: (optionId: string) => void;
+  onNarrow?: (questionId: string, optionId: string, label: string) => void;
+  busyKey?: string;
+  names: Names;
+}) {
   const chosen = step.chosen?.optionId;
   const open = step.state === "options_ready";
+  const choices = step.openChoices ?? [];
   return (
     <div>
+      {open && choices.length > 0 && onNarrow && (
+        <div className="mb-3 space-y-2 bg-paper p-3">
+          <p className="text-[0.95rem] text-ink-soft">The request did not say, so the cards cover more than one. Narrow it only if it matters:</p>
+          {choices.map((q) => (
+            <div key={q.id} className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold">{q.text}</span>
+              {q.options.map((o) => (
+                <Button key={o.id} kind="secondary" className="min-h-9 px-3 text-[0.95rem]" busy={busyKey === `${q.id}:${o.id}`} disabled={!!busyKey} onClick={() => onNarrow(q.id, o.id, o.label)}>
+                  {o.label}
+                </Button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
       {step.preselected && open && (
         <p className="mb-2 text-[1rem]">
           <strong>Pre-selected:</strong> {humanize(step.preselected.reason, names)}
@@ -342,10 +382,20 @@ export function Options({ step, options, onChoose, busyKey, names }: { step: Ste
           const isChosen = chosen === c.optionId;
           const dim = !open && !isChosen;
           return (
-            <article key={c.optionId} className={`flex flex-col bg-paper ${isChosen || (open && pre) ? "outline-[3px] outline-ink" : ""} ${dim ? "opacity-55" : ""}`} aria-label={c.labels.map((l) => LABEL[l]).join(" and ")}>
+            <article
+              key={c.optionId}
+              className={`flex flex-col bg-paper ${isChosen || (open && pre) ? "outline-[3px] outline-ink" : ""} ${c.match === "compromise" ? "border-2 border-dashed border-ink/60" : ""} ${dim ? "opacity-55" : ""}`}
+              aria-label={`${c.rank ? RANK[c.rank] : "Option"}${c.match === "compromise" ? ", a compromise" : ""}${c.labels.length ? `: ${c.labels.map((l) => LABEL[l]).join(" and ")}` : ""}`}
+            >
               <div aria-hidden className={c.signOff.length ? "hazard-thin h-2" : "h-[3px] bg-ink"} />
               <div className="flex flex-1 flex-col p-4">
-                <h3 className="font-display text-[1.3rem] font-bold leading-tight">{c.labels.map((l) => LABEL[l]).join(" + ")}</h3>
+                <h3 className="font-display text-[1.3rem] font-bold leading-tight">
+                  {c.rank && <span className="mr-2">{RANK[c.rank]}</span>}
+                  {c.labels.length > 0 && <span className={c.rank ? "font-semibold text-ink-soft" : ""}>{c.labels.map((l) => LABEL[l]).join(" + ")}</span>}
+                </h3>
+                {c.match === "compromise" && (
+                  <p className="mt-1 text-[0.95rem] font-semibold leading-snug">Compromise: {(c.givesUp ?? []).map((g) => humanize(g.text, names).replace(/\.$/, "")).join("; ") || "does not meet the whole request"}.</p>
+                )}
                 <p className="mt-0.5 min-h-[2.75em] text-[0.95rem] leading-snug text-ink-soft">
                   {c.lines.map((l) => `${l.packs} × ${shortProduct(l.name)}${l.substituteFor ? " (swap)" : ""}`).join(" + ")}
                 </p>
@@ -361,6 +411,8 @@ export function Options({ step, options, onChoose, busyKey, names }: { step: Ste
                     {c.co2.kg !== null && <span className="block text-[0.82rem] font-medium leading-tight text-ink-soft">product-group average</span>}
                   </Field>
                   <Field label="Delivered in full">{c.reliability === null ? <Missing>No data</Missing> : <span className="tabular">{Math.round(c.reliability * 100)} % of past deliveries</span>}</Field>
+                  {c.orderBy && <Field label="Order by">{cutoffText(c.orderBy) ?? c.orderBy}</Field>}
+                  {c.stockConfirmed === false && <Field label="Stock">not confirmed by the wholesaler</Field>}
                 </dl>
                 <ul className="mt-3 space-y-1 text-[0.95rem] leading-snug">
                   {c.pros.map((p) => (
@@ -400,6 +452,16 @@ export function Options({ step, options, onChoose, busyKey, names }: { step: Ste
             <li key={n}>{humanize(n, names)}</li>
           ))}
         </ul>
+      )}
+      {(step.signOffNotes ?? []).length > 0 && (
+        <div className="mt-3">
+          <p className="font-semibold">For the person who signs off</p>
+          <ul className="mt-1 space-y-1 text-[0.98rem]">
+            {step.signOffNotes!.map((n) => (
+              <li key={n}>– {humanize(n, names)}</li>
+            ))}
+          </ul>
+        </div>
       )}
       <Excluded step={step} names={names} />
     </div>
@@ -445,9 +507,8 @@ export function NoOptions({ step, names, onNew }: { step: Step; names: Names; on
 
 // ---------- 5. fixed price ----------
 
-export function Quote({ step, names, decided, busy, onPlace, onNew }: { step: Step; names: Names; decided: boolean; busy: boolean; onPlace: () => void; onNew: () => void }) {
+export function Quote({ q, names, decided, busy, onPlace, onNew }: { q: NonNullable<Step["quote"]>; names: Names; decided: boolean; busy: boolean; onPlace: () => void; onNew: () => void }) {
   const now = useNow();
-  const q = step.quote!;
   const left = Math.max(0, Date.parse(q.quote.expiresAt) - now);
   const mm = Math.floor(left / 60_000);
   const ss = Math.floor((left % 60_000) / 1000);
@@ -529,7 +590,7 @@ export function Quote({ step, names, decided, busy, onPlace, onNew }: { step: St
 
 const OUTCOME_WORD: Record<string, string> = { pass: "Passed", escalate: "Needs a person", fail: "Failed" };
 
-export function Gate({ order, refusal, kitchen, names, streaming }: { order?: Order; refusal?: ApiError; kitchen: KitchenInfo; names: Names; streaming: boolean }) {
+export function Gate({ order, refusal, kitchen, names, streaming, byHand = false }: { order?: Order; refusal?: ApiError; kitchen: KitchenInfo; names: Names; streaming: boolean; byHand?: boolean }) {
   if (!order) {
     return (
       <Paper safety>
@@ -595,7 +656,7 @@ export function Gate({ order, refusal, kitchen, names, streaming }: { order?: Or
   } else {
     body = (
       <>
-        <Verdict tone="ink" title="Approved on the agent's own authority" sub={`All ${rules.length} checks passed`} />
+        <Verdict tone="ink" title={byHand ? "Approved within the kitchen's mandate" : "Approved on the agent's own authority"} sub={`All ${rules.length} checks passed${byHand ? ", the same checks as an agent's order" : ""}`} />
         <p className="mt-3 text-[1.05rem]">{humanize(d.reasons[0] ?? "", names)}</p>
       </>
     );
@@ -638,7 +699,7 @@ function Verdict({ tone, title, sub, spin }: { tone: "ink" | "safety"; title: st
   );
 }
 
-function ApprovalPanel({ kitchen, approvalId }: { kitchen: KitchenInfo; approvalId: string }) {
+export function ApprovalPanel({ kitchen, approvalId }: { kitchen: KitchenInfo; approvalId: string }) {
   const [qr, setQr] = useState<ApprovalQr>();
   const [error, setError] = useState<string>();
   useEffect(() => {

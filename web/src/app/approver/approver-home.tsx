@@ -100,6 +100,11 @@ export function ApproverHome() {
         </p>
         {!home.approver.passkey && <p className="mt-2 font-semibold text-amber-800">Demo only: you joined without a passkey, so your approvals are marked unverified.</p>}
       </div>
+      {/* /k/mine is a redirect route, not a page: a plain link does the full navigation it needs. */}
+      {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+      <a href="/k/mine" className="mt-3 flex h-12 items-center justify-center rounded-xl border-2 border-neutral-900 text-base font-semibold">
+        Open my kitchen&apos;s shop
+      </a>
 
       {home.pending.length > 0 ? (
         <section className="mt-6">

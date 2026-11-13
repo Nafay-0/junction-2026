@@ -39,7 +39,32 @@ const LlmNeed = z.object({
 });
 export type LlmNeed = z.infer<typeof LlmNeed>;
 
-export type InterpretResult = { need: StructuredNeed; model: string; ms: number; tokens: Tokens; costUsd: number | null; raw: LlmNeed };
+/**
+ * Follow-ups ("same again but 200 litres", "like last Friday, for Thursday"): the caller passes the kitchen's
+ * earlier requests, and the model says which one the text refers to and which fields it took from it. Only
+ * used when earlier requests are given, so the plain schema above stays exactly as it was.
+ */
+export const EARLIER_FIELDS = ["item", "quantity", "deliverBy", "attributes", "optimise", "allergens"] as const;
+const LlmFollowUp = LlmNeed.extend({
+  basedOnRequestId: z.string().nullable().describe("id of the earlier request the text refers to, or null"),
+  takenFromEarlier: z.array(z.enum(EARLIER_FIELDS)).describe("fields copied from that earlier request because the buyer did not restate them"),
+});
+export type LlmFollowUp = z.infer<typeof LlmFollowUp>;
+
+export const EarlierRequestSchema = z.object({
+  id: z.string().min(1).max(80).describe("The earlier request's id (or order id for history without a request)."),
+  at: z.string().min(10).max(40).describe("When it was asked or placed (ISO date or timestamp)."),
+  text: z.string().max(2000).nullable().describe("The buyer's own words, when there were any."),
+  need: z.record(z.string(), z.unknown()).nullable().describe("The structured need it became, as POST /api/v1/intake took it."),
+  ordered: z.string().max(600).nullable().describe("What was ordered, in one line."),
+  deliveredOn: z.iso.date().nullable().describe("Delivery date of what was ordered."),
+});
+export type EarlierRequest = z.infer<typeof EarlierRequestSchema>;
+
+/** Which earlier request the need was built on, and the fields memory answered. Checked by plain code. */
+export type BasedOn = { requestId: string; fields: (typeof EARLIER_FIELDS)[number][] };
+
+export type InterpretResult = { need: StructuredNeed; model: string; ms: number; tokens: Tokens; costUsd: number | null; raw: LlmNeed; basedOn?: BasedOn };
 
 export type InterpretOptions = {
   text: string;
@@ -50,6 +75,8 @@ export type InterpretOptions = {
   vocabulary?: Vocabulary;
   modelOptions?: ModelOptions;
   timeoutMs?: number;
+  /** The kitchen's earlier requests, newest first, for follow-ups that refer to one. */
+  earlier?: EarlierRequest[];
 };
 
 const WEEKDAYS: [string, string, string][] = [
@@ -174,6 +201,8 @@ export async function interpretNeed(opts: InterpretOptions): Promise<InterpretRe
 
   reserveLlmCall(); // public-demo caps: daily calls and spend, and the DOCK_LLM=off switch (server/limits.ts)
   const now = opts.now ?? new Date();
+  const earlier = (opts.earlier ?? []).slice(0, MAX_EARLIER);
+  const schema = earlier.length ? LlmFollowUp : LlmNeed;
   const timeoutMs = opts.timeoutMs ?? 30_000;
   const t0 = Date.now();
   const deadline = t0 + timeoutMs;
@@ -183,9 +212,9 @@ export async function interpretNeed(opts: InterpretOptions): Promise<InterpretRe
       () =>
         generateText({
           model,
-          instructions: interpretSystem(opts.vocabulary ?? { categories: [], attributes: [], allergens: [] }),
-          prompt: interpretUser(text, calendar(now)),
-          output: Output.object({ schema: LlmNeed, name: "structured_need", description: "The buyer's need, with unstated fields left empty." }),
+          instructions: interpretSystem(opts.vocabulary ?? { categories: [], attributes: [], allergens: [] }, earlier.length > 0),
+          prompt: interpretUser(text, calendar(now), earlier.length ? earlierBlock(earlier) : undefined),
+          output: Output.object({ schema, name: "structured_need", description: "The buyer's need, with unstated fields left empty." }),
           maxOutputTokens: 4000,
           maxRetries: 0,
           abortSignal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
@@ -197,10 +226,31 @@ export async function interpretNeed(opts: InterpretOptions): Promise<InterpretRe
     const status = isRetryable(err) ? 503 : 502;
     throw new DockError(status, "interpret_failed", `The model call failed: ${describeError(err)}`);
   }
-  const raw = res.output as LlmNeed;
+  const raw = res.output as LlmNeed | LlmFollowUp;
   const tokens = tokensFromUsage(res.usage);
   recordLlmSpend(costOf(tokens, price));
-  return { need: toNeed(raw, text), model: id, ms: Date.now() - t0, tokens, costUsd: costOf(tokens, price), raw };
+  const basedOn = earlier.length ? checkBasedOn(raw as LlmFollowUp, earlier) : undefined;
+  return { need: toNeed(raw, text), model: id, ms: Date.now() - t0, tokens, costUsd: costOf(tokens, price), raw, ...(basedOn ? { basedOn } : {}) };
+}
+
+const MAX_EARLIER = 6;
+
+/** Plain code: the model may only point at a request it was given, and only name known fields. */
+export function checkBasedOn(raw: Pick<LlmFollowUp, "basedOnRequestId" | "takenFromEarlier">, earlier: EarlierRequest[]): BasedOn | undefined {
+  const id = raw.basedOnRequestId?.trim();
+  if (!id || !earlier.some((e) => e.id === id)) return undefined;
+  const fields = [...new Set((raw.takenFromEarlier ?? []).filter((f): f is BasedOn["fields"][number] => (EARLIER_FIELDS as readonly string[]).includes(f)))];
+  return { requestId: id, fields };
+}
+
+/** The earlier requests as the model sees them: one compact JSON line each, newest first. */
+export function earlierBlock(earlier: EarlierRequest[]): string {
+  return earlier
+    .map((e) => {
+      const day = e.deliveredOn ? ` (delivered ${WEEKDAYS[isoWeekday(e.deliveredOn) - 1][0]} ${e.deliveredOn})` : "";
+      return `- ${JSON.stringify({ id: e.id, at: e.at, buyerSaid: e.text, need: e.need, ordered: e.ordered })}${day}`;
+    })
+    .join("\n");
 }
 
 // ---------- the HTTP contract: POST /api/v1/agent/interpret ----------
@@ -208,12 +258,21 @@ export async function interpretNeed(opts: InterpretOptions): Promise<InterpretRe
 export const InterpretBody = z.object({
   text: z.string().min(1).max(2000).describe("The buyer's request in their own words (English, Finnish or Swedish)."),
   now: z.iso.datetime({ offset: true }).optional().describe("Resolve relative dates against this instant instead of the server clock (tests, replays)."),
+  earlier: z
+    .array(EarlierRequestSchema)
+    .max(MAX_EARLIER)
+    .optional()
+    .describe("The kitchen's earlier requests, newest first, so a follow-up such as \"same again but 200 litres\" can be resolved."),
 });
 
 export const InterpretResponse = z.object({
   need: NeedSchema,
   model: z.string().describe("provider:model-id that interpreted the text."),
   ms: z.number().int().describe("Time the model took, in milliseconds."),
+  basedOn: z
+    .object({ requestId: z.string(), fields: z.array(z.enum(EARLIER_FIELDS)) })
+    .optional()
+    .describe("Present when the text referred to one of the earlier requests: which one, and the fields taken from it."),
 });
 
 type Mandateish = { allowedCategories: string[]; requiredAttributes: string[]; forbiddenAllergens: string[] };
@@ -225,6 +284,6 @@ export async function interpretRequest(
 ): Promise<z.input<typeof InterpretResponse>> {
   const products = await ctx.catalog.searchProducts({ limit: 100 });
   const vocabulary = vocabularyFrom(products, { categories: ctx.mandate.allowedCategories, attributes: ctx.mandate.requiredAttributes, allergens: ctx.mandate.forbiddenAllergens });
-  const r = await interpretNeed({ text: body.text, now: body.now ? new Date(body.now) : undefined, vocabulary });
-  return { need: r.need, model: r.model, ms: r.ms };
+  const r = await interpretNeed({ text: body.text, now: body.now ? new Date(body.now) : undefined, vocabulary, earlier: body.earlier });
+  return { need: r.need, model: r.model, ms: r.ms, ...(r.basedOn ? { basedOn: r.basedOn } : {}) };
 }

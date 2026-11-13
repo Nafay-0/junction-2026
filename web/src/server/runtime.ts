@@ -3,6 +3,7 @@ import type { JWK } from "jose";
 import { InMemoryOutbox } from "@/core/approval";
 import { InMemoryCatalog, MeteredCatalog } from "@/core/catalog";
 import type { InMemoryEventBus } from "@/core/events";
+import type { KitchenRepository } from "@/core/kitchen";
 import { generateEd25519KeyPair, importEd25519KeyPair } from "@/core/keys";
 import { Ledger } from "@/core/ledger";
 import { createTrustRegistry } from "@/core/mandate";
@@ -44,6 +45,8 @@ export type Runtime = {
   sandboxes: SandboxService;
   /** Which Aiven adapters are on, their health check and shutdown (src/server/aiven). */
   aiven: AivenHandle;
+  /** Kitchen memory (history, stated rules), shared with the Dock instance; the kitchen portal corrects stated rules here. */
+  kitchens: KitchenRepository;
 };
 
 const g = globalThis as typeof globalThis & { __dockRuntime?: Promise<Runtime> };
@@ -97,7 +100,7 @@ async function buildRuntime(): Promise<Runtime> {
   });
   const sandboxes = new SandboxService({ dock, registry: trustedIssuers, passkeys, limits: sandboxLimits, kitchens: stores.kitchens, products: async () => products, store: stores.sandboxStore });
   await sandboxes.restore();
-  return { dock, outbox, catalog, catalogSource, events, passkeys, sandboxes, aiven };
+  return { dock, outbox, catalog, catalogSource, events, passkeys, sandboxes, aiven, kitchens: stores.kitchens };
 }
 
 const envValue = (name: string) => {
