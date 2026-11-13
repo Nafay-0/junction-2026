@@ -176,6 +176,36 @@ To stop all model spend at once: `DOCK_DEPLOY_LLM=off node infra/aiven-deploy.mj
 `DOCK_DEMO_TAP_APPROVAL` is deliberately not set: the demo kitchens' fictional approvers have no passkey,
 so their console QR is view-only in production; the visitor path (join by QR, own passkey) is the live one.
 
+### State on Aiven (the data plane, live since 14 Nov)
+
+dock-app runs with `DOCK_AIVEN=1` in PostgreSQL schema **`dock_prod`** (`DOCK_PG_POOL_MAX=4`). All five
+adapters of `web/src/server/aiven/` are on:
+
+| Adapter | Live setting | What it holds | Fallback switch (runbook) |
+|---|---|---|---|
+| store | `postgres` (`dock_prod`) | orders, requests, intakes, kitchens, approvers, passkeys, sessions, visitor kitchens, used quotes, the hash-chained ledger | `memory` (last resort: loses everything at restart) |
+| actions | `kafka` (consumer in the app writes `telemetry.events`) | every agent action and gate decision | `postgres` or `off` |
+| cache | `valkey` | live price/availability cache, per-agent live-lookup budget | `memory` |
+| bus | `valkey` | live events to phones and the wall | `memory` |
+| search | `opensearch` (alias `dock-products`, 17,546 docs) | product search; in-process search is the automatic fallback | `in-process` |
+
+Set up once: `DOCK_PG_SCHEMA=dock_prod pnpm aiven:migrate` (the app also migrates at start) and
+`VALIO_INDEX_PATH=<index> pnpm aiven:search:index` (rerun after `pnpm index:build`). Laptops default to schema
+`dock`, so they never write the live ledger; a second process on `dock_prod` would make the live one stop
+persisting its ledger (`dataPlane.ledger.diverged` in `/api/health`), fixed by a restart.
+
+Restart proof (14 Nov, on the live site, across `node infra/aiven-deploy.mjs --restart`): `pnpm restart-proof
+before|after --url <site> --state <file>` (an agent order, its used quote, the ledger head) and
+`RESTART_PHASE=before|after RESTART_STATE=<file> E2E_BASE_URL=<site> pnpm exec playwright test e2e/restart.spec.ts`
+(a visitor's passkey registered before the restart signs off after it, the virtual authenticator carrying
+the same credential).
+
+Also set now: `DOCK_OPS_PASSCODE` (entering `/ops`, which can suspend agents; also the coming approver
+enrolment for the demo kitchens) and `DOCK_CONNECTOR_SECRET` (demo kitchens' connector addresses
+`/api/mcp/c/<token>` stay the same across restarts; the operator bearer for reissue and revoke). Both are in
+the shared `web/.env.local`. Connector revocations, per-connector limits and `/ops` sign-ins are still held in
+memory and are forgotten by a restart.
+
 ### The real catalogue on the server
 
 The product index is built from partner files that are in neither the repo nor the image. `pnpm
@@ -197,7 +227,12 @@ Without a mandate or approver session, reachable by anyone:
 
 | Route | Spends | Bound |
 |---|---|---|
-| `/ui-api/kitchens/{kaari,laakso,sbx_…}/call` (console back end; holds the kitchen's mandate server-side) | model calls (interpret), live partner lookups, in-memory orders and ledger | 60/min per address, 40/min per kitchen; daily model and partner caps (429 `demo_limit_reached`) |
+| `/ui-api/kitchens/{kaari,laakso,sbx_…}/call` (console back end; holds the kitchen's mandate server-side) | model calls (interpret), live partner lookups, orders and ledger rows | 60/min per address, 120/min per kitchen; daily model and partner caps (429 `demo_limit_reached`) |
+| `/ui-api/kitchens/{k}/assistant` (kitchen store assistant, model call) | model | 20/min per address, 60/min per kitchen; daily model caps |
+| `/ui-api/kitchens/{k}/catalog/live` | live partner lookups | 30/min per address; daily partner cap |
+| `/ui-api/kitchens/{k}/basket`, `/memory` | quotes (live lookups), kitchen memory writes | 60/min per address, 120/min per kitchen |
+| `/api/mcp/c/<token>` (connector address) | as `/api/mcp` with the kitchen's mandate | 120 writes/min per address, plus the connector's own per-token limits |
+| `POST /ops-api/session`, `POST/DELETE /ui-api/connect/{k}` | passcode / operator-secret guesses | 10/min per address |
 | `POST /api/v1/sandboxes/{id}/demo-order` (wall button), `POST /api/v1/approver/demo-order` | live lookups, orders | 12/min per address, 6/min per kitchen; partner cap |
 | `POST /api/v1/join`, `/join/verify` | a visitor kitchen (max 200 alive, 90 min each) | 30/min per address |
 | `GET /api/v1/events` (SSE) | an open connection | 60 new streams/min per address |
