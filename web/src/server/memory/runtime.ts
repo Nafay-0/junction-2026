@@ -1,4 +1,6 @@
 import { Pool } from "pg";
+import { KITCHEN_ORG } from "@/server/demo-kitchen";
+import { DEMO_ORG } from "@/server/dev-fixtures";
 import { getRuntime } from "@/server/runtime";
 import { pgConnectionString } from "@/server/valio/index-store";
 import { llmProposer, memoryModelSpec } from "./propose";
@@ -42,6 +44,7 @@ async function build(): Promise<MemoryService> {
     ledger: rt.dock.ledger,
     proposer: memoryModelSpec() ? llmProposer() : undefined,
     index: index(),
-    knownOrgIds: async () => (await rt.sandboxes.list()).map((s) => s.orgId),
+    // The PostgreSQL kitchen store cannot list its kitchens: the demo kitchens and the visitors' are the ones there are.
+    knownOrgIds: async () => [KITCHEN_ORG.orgId, DEMO_ORG.orgId, ...(await rt.sandboxes.list()).map((s) => s.orgId)],
   });
 }

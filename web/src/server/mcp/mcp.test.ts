@@ -62,6 +62,8 @@ describe("MCP server", () => {
       expect(t.description!.length).toBeGreaterThan(80);
       expect(t.inputSchema.type).toBe("object");
       expect(t.outputSchema?.type).toBe("object");
+      // No dialect keyword: MCP's default is 2020-12, and older validators (Gemini CLI 0.25) refuse unknown dialects.
+      expect(JSON.stringify([t.inputSchema, t.outputSchema])).not.toContain("$schema");
     }
     const avail = tools.find((t) => t.name === "check_availability")!;
     expect((avail.inputSchema.properties as Record<string, { maxItems?: number }>).productIds.maxItems).toBe(10);

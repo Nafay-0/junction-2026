@@ -1,6 +1,8 @@
 import { unstable_rethrow } from "next/navigation";
 import { DockError, isDockError } from "@/core/errors";
 import type { AgentSession, Dock } from "@/core/orders";
+import { doorLog, interfaceOf } from "./ops/door";
+import { suspensions } from "./ops/suspensions";
 import { getRuntime, type Runtime } from "./runtime";
 
 /** Error body for every failure: `{ error: { code, rule?, message, details? } }`. `rule` names the check that refused. */
@@ -31,10 +33,28 @@ export async function handle(fn: (rt: Runtime) => Promise<Response>): Promise<Re
  *   Authorization: Mandate <compact JWS>   (Bearer is accepted too)
  *   Dock-Agent-Id: <agent id named in the mandate>
  */
-export function authenticate(req: Request, dock: Dock): Promise<AgentSession> {
+export async function authenticate(req: Request, dock: Dock): Promise<AgentSession> {
   const auth = req.headers.get("authorization") ?? "";
   const match = /^(?:Mandate|Bearer)\s+(\S+)$/i.exec(auth.trim());
-  return dock.authenticate(match?.[1], req.headers.get("dock-agent-id") ?? agentIdFromUrl(req) ?? undefined);
+  // The operations layer in front of the core: which door the call came through, and whether staff suspended it.
+  const door = interfaceOf(req);
+  const agentId = req.headers.get("dock-agent-id") ?? agentIdFromUrl(req) ?? undefined;
+  let session: AgentSession;
+  try {
+    session = await dock.authenticate(match?.[1], agentId);
+  } catch (err) {
+    if (isDockError(err)) doorLog(dock).record({ at: new Date().toISOString(), agentId: agentId ?? "unknown", ...door, ok: false, code: err.code, rule: err.rule });
+    throw err;
+  }
+  const call = { at: new Date().toISOString(), agentId: session.agentId, orgId: session.mandate.issuer.orgId, orgName: session.mandate.issuer.name, ...door };
+  try {
+    suspensions(dock).enforce(session, door);
+  } catch (err) {
+    if (isDockError(err)) doorLog(dock).record({ ...call, ok: false, code: err.code, rule: err.rule });
+    throw err;
+  }
+  doorLog(dock).record({ ...call, ok: true }, session.mandate);
+  return session;
 }
 
 /**
