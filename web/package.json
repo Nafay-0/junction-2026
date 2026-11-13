@@ -37,6 +37,7 @@
     "aiven:search:compare": "tsx scripts/aiven-search-compare.ts",
     "categories:build": "tsx scripts/category-labels.ts",
     "qa": "tsx qa/run.ts",
+    "edge:cost": "tsx scripts/edge-cost.ts",
     "menu:eval": "tsx scripts/menu-eval.ts",
     "knowledge:build": "tsx scripts/knowledge-build.ts",
     "knowledge:eval": "tsx scripts/knowledge-eval.ts",
