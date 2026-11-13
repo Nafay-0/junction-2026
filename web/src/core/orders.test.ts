@@ -284,6 +284,18 @@ describe("orders", () => {
     expect((await dock.requestQuote(loose, { requestId: r3.requestId, lines: [{ productId: "VA-1001", quantity: 2 }] })).quote.lines[0].substituteFor).toBeUndefined();
   });
 
+  it("moves a request's need-by date in one place: validated, logged, and refused once an order stands on it", async () => {
+    const req = await dock.openRequest(session, { text: "milk for Friday", neededBy: "2026-11-20" });
+    const moved = await dock.changeNeededBy(session, req.requestId, { neededBy: "2026-11-23", by: "Sanna", reason: "the event moved" });
+    expect(moved.neededBy).toBe("2026-11-23");
+    expect(ledger.entries({ requestId: req.requestId }).at(-1)).toMatchObject({ type: "intake", data: { step: "needed_by", from: "2026-11-20", to: "2026-11-23" } });
+    expect((await dock.changeNeededBy(session, req.requestId, { neededBy: null })).neededBy).toBeUndefined();
+    await expect(dock.changeNeededBy(session, req.requestId, { neededBy: "2026-11-01" })).rejects.toMatchObject({ status: 400, code: "needed_by_in_past" });
+    await expect(dock.changeNeededBy(session, "req_nope", { neededBy: "2026-11-23" })).rejects.toMatchObject({ status: 404 });
+    const { req: ordered } = await smallOrder();
+    await expect(dock.changeNeededBy(session, ordered.requestId, { neededBy: "2026-11-23" })).rejects.toMatchObject({ status: 409, code: "request_has_order" });
+  });
+
   it("refuses a request id that belongs to someone else", async () => {
     await expect(dock.searchProducts(session, { requestId: "req_nope", text: "milk" })).rejects.toMatchObject({ status: 404, code: "request_not_found" });
   });

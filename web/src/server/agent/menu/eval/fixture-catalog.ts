@@ -44,6 +44,10 @@ export const MENU_FIXTURES: FixtureSpec[] = [
   { id: "800021", names: { fi: "Siipi broilerin rintafilee 2,5kg", en: "Siipi chicken breast fillet 2,5kg" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "18750", freeFrom: ["AN", "AP"], labels: COOL, each: kg(2.5) },
   { id: "800022", names: { fi: "Jyvä riisi 5kg", en: "Jyva rice 5kg" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "21340", freeFrom: ["AN", "AP"], labels: AMB, each: kg(5) },
   { id: "800023", names: { fi: "SIPULI 10KG", en: "ONION 10KG" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "17405", labels: COOL, each: kg(10) },
+  // Eggs counted by the partner's size code; a liquid concentrate dosed differently from powder.
+  { id: "800024", names: { fi: "Kanala vapaan kanan muna M10 580g", en: "Kanala barn egg M10 580g" }, salesUnit: "RAS", baseUnit: "RAS", units: [["RAS", 1]], category: "10590", allergens: [["AE", "CONTAINS"]], labels: COOL, each: kg(0.58) },
+  { id: "800025", names: { fi: "20 x Kanala vapaan kanan muna L6 408g", en: "20 x Kanala barn egg L6 408g" }, salesUnit: "KI", baseUnit: "RAS", units: [["RAS", 1], ["KI", 20]], category: "10590", allergens: [["AE", "CONTAINS"]], labels: COOL, each: kg(0.408) },
+  { id: "800026", names: { fi: "Liemi kalaliemitiiviste 1 l pullo", en: "Liemi fish stock concentrate 1 l bottle" }, salesUnit: "BOT", baseUnit: "BOT", units: [["BOT", 1]], category: "21902", allergens: [["AF", "CONTAINS"]], labels: AMB, each: { ...l(1), ...kg(1.1) } },
 ];
 
 export const MENU_NOW = new Date("2026-11-13T10:00:00.000Z"); // Friday 12:00 in Helsinki
@@ -74,6 +78,9 @@ export const MENU_SCENARIOS: Record<string, FakeScenario> = {
   "800021": ok(17.5, { unit: "ST" }),
   "800022": ok(6.4, { unit: "ST" }),
   "800023": ok(8.9, { unit: "ST" }),
+  "800024": ok(3.2, { unit: "RAS" }),
+  "800025": ok(29.0, { unit: "KI" }),
+  "800026": ok(11.5, { unit: "BOT" }),
 };
 
 /** A Dock over the fixture catalogue and a fake live API, trusting the two demo kitchens' keys. */

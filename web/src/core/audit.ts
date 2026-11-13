@@ -39,6 +39,7 @@ function intakeForWholesaler(e: LedgerEntry): Omit<WholesalerAuditEntry, "seq" |
   }
   if (d.step === "choice") return { kind: "asked", summary: `Option ${String(d.optionId)} chosen (${(d.labels as string[] | undefined)?.join(", ") || "no label"}).`, data: pick(d, ["optionId", "labels", "lines"]) };
   if (d.step === "compromise") return { kind: "asked", summary: "The buyer accepted a later delivery date.", data: pick(d, ["optionId", "givesUp"]) };
+  if (d.step === "needed_by") return { kind: "asked", summary: `Need-by date changed from ${String(d.from ?? "the earliest possible")} to ${String(d.to ?? "the earliest possible")}.`, data: pick(d, ["from", "to"]) };
   return { kind: "private", summary: "Buyer-side intake step, kept with the buyer." };
 }
 

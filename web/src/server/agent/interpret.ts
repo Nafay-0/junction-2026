@@ -198,7 +198,7 @@ export async function interpretNeed(opts: InterpretOptions): Promise<InterpretRe
   const given = opts.model ?? modelForTests;
   if (given && typeof given !== "string") ({ model, id, price } = given);
   else {
-    const spec = opts.model ?? defaultModel("DOCK_INTERPRET_MODEL");
+    const spec = (typeof given === "string" ? given : undefined) ?? defaultModel("DOCK_INTERPRET_MODEL");
     if (!spec) throw new DockError(503, "model_unavailable", "No model is configured for interpretation: set DOCK_INTERPRET_MODEL or a provider API key.");
     try {
       const m = createModel(spec, opts.modelOptions);

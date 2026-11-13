@@ -148,6 +148,8 @@ export type IntakeDeps = {
   now: () => Date;
   openRequest: (session: AgentSession, input: { text: string; neededBy?: string; productIds?: string[]; category?: string }) => Promise<PurchaseRequest>;
   requestQuote: (session: AgentSession, input: { requestId: string; lines: QuoteRequestLine[] }) => Promise<{ quote: Quote; quoteToken: string; policyPreview: Decision }>;
+  /** The order flow's way to move a request's need-by date (validated and written to the ledger, see orders.ts). */
+  changeNeededBy?: (session: AgentSession, requestId: string, input: { neededBy: string | null; by?: string; reason?: string }) => Promise<unknown>;
   spentThisWeek: (orgId: string) => Promise<number>;
   /** Committed and held spend, with the orders holding money, for the budget's part of a "nothing fits" answer. */
   budgetUse?: (orgId: string) => Promise<{ spentCents: number; heldCents: number; held: { orderId: string; totalCents: number; expiresAt: string }[] }>;
@@ -220,6 +222,13 @@ export function createIntakeFlow(deps: IntakeDeps) {
       out.push({ orderId: o.orderId, placedAt: o.createdAt, family: main.category, amount, unit: main.unit, ...(neededBy ? { neededBy } : {}), deliveryDate: o.lines.map((l) => l.deliveryDate).sort().at(-1)! });
     }
     return out;
+  }
+
+  /** Move the request's need-by date with the intake's need (a correction, or a later delivery the buyer accepted). */
+  async function moveNeededBy(session: AgentSession, requestId: string, neededBy: string | undefined, by: string, reason: string) {
+    if (deps.changeNeededBy) return void (await deps.changeNeededBy(session, requestId, { neededBy: neededBy ?? null, by, reason }));
+    const req = await repo.getRequest(requestId);
+    if (req) await repo.saveRequest({ ...req, neededBy });
   }
 
   function log(i: Intake, actor: string, summary: string, data: Record<string, unknown> = {}) {
@@ -528,10 +537,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
         i.acknowledgements.push({ key: c.key, code: c.code, action: "corrected", correctionId: fix.id, by: who, at, channel: via.channel, verified });
         log(i, actor, `${who} corrected ${c.code} (${how}): ${fix.label}.`, { step: "correction", key: c.key, code: c.code, correctionId: fix.id, by: who, relayedBy: session.agentId, channel: via.channel, verified, ...(via.words ? { words: via.words } : {}), before, after: describeNeed(i.need) });
       }
-      if (i.need.deliverBy !== neededBefore) {
-        const req = await repo.getRequest(requestId);
-        if (req) await repo.saveRequest({ ...req, neededBy: i.need.deliverBy });
-      }
+      if (i.need.deliverBy !== neededBefore) await moveNeededBy(session, requestId, i.need.deliverBy, who, "corrected in the mistake check");
       return view(await advance(session, i));
     },
 
@@ -587,8 +593,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
         // Choosing a later day is the buyer moving their own deadline: the request and the gate follow it.
         const before = i.need.deliverBy;
         i.need = applyNeedPatch(i.need, { deliverBy: card.deliveryDate });
-        const req = await repo.getRequest(requestId);
-        if (req) await repo.saveRequest({ ...req, neededBy: card.deliveryDate });
+        await moveNeededBy(session, requestId, card.deliveryDate, who, `accepted a later delivery (${optionId})`);
         log(i, verified ? buyerActor(who) : agentActor(session), `${who} accepted a later delivery (${howText(via)}): ${card.deliveryDate} instead of ${before}.`, { step: "compromise", optionId, givesUp: card.givesUp, by: who, relayedBy: session.agentId, channel: via.channel, verified });
       }
       return view(await quoteOption(session, i, card, who, undefined, via));
