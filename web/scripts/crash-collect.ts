@@ -3,7 +3,7 @@
  * result directory: summary.json (dock-crash-summary/1) and trajectories.jsonl, so `pnpm crash:export` and the
  * leaderboard read a fanned-out run exactly like a local one.
  *
- *   pnpm tsx scripts/crash-collect.ts <episodes dir> --out <run dir> [--meta run.json]
+ *   pnpm tsx scripts/crash-collect.ts <episodes dir>... --out <run dir> [--meta run.json]
  *
  * Episodes are grouped by agent, seed and repeat and put in suite order. A suite run missing a scenario keeps the
  * scenarios it has and gets no licence (licences need the full suite); `--meta` (the Modal driver's run.json) is
@@ -20,12 +20,18 @@ const argv = process.argv.slice(2);
 const opt = (n: string) => (argv.indexOf(`--${n}`) >= 0 ? argv[argv.indexOf(`--${n}`) + 1] : undefined);
 
 function main() {
-  const dir = argv.find((a, i) => !a.startsWith("--") && !argv[i - 1]?.startsWith("--"));
+  const dirs = argv.filter((a, i) => !a.startsWith("--") && !argv[i - 1]?.startsWith("--"));
   const out = opt("out");
-  if (!dir || !out) throw new Error("Usage: crash-collect <episodes dir> --out <run dir> [--meta run.json]");
-  const episodes: (EpisodeResult & { wallMs?: number; harness?: string })[] = [];
-  for (const f of readdirSync(dir).filter((x) => x.endsWith(".json")).sort()) episodes.push(JSON.parse(readFileSync(path.join(dir, f), "utf8")));
-
+  if (!dirs.length || !out) throw new Error("Usage: crash-collect <episodes dir>... --out <run dir> [--meta run.json]");
+  // Several directories merge; for the same agent, scenario, seed and repeat the later directory wins (a re-run of
+  // some scenarios after a fix replaces the earlier episodes, and only those).
+  const byKey = new Map<string, EpisodeResult & { wallMs?: number; harness?: string; commit?: string | null }>();
+  for (const dir of dirs)
+    for (const f of readdirSync(dir).filter((x) => x.endsWith(".json")).sort()) {
+      const e = JSON.parse(readFileSync(path.join(dir, f), "utf8")) as EpisodeResult & { wallMs?: number; harness?: string };
+      byKey.set(`${e.agent}|${e.scenario}|${e.seed}|${e.repeat}`, e);
+    }
+  const episodes = [...byKey.values()];
   const order = new Map(SUITE.map((s, i) => [s.id, i]));
   const byAgent = new Map<string, Map<string, EpisodeResult[]>>();
   for (const e of episodes) {

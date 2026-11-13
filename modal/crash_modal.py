@@ -33,8 +33,10 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -97,17 +99,23 @@ def git(*args: str) -> str:
 
 
 def build_image() -> modal.Image:
-    ignore = ["node_modules", ".next", "crash-results", ".data", ".env*", "e2e", "qa", "eval", "docs"]
+    """The episode image: Node 24, web/'s dependencies, and a snapshot of web/src and web/scripts taken now (copied to
+    a staging directory first, so editing the working tree while Modal uploads cannot break or mix the build)."""
+    stage = Path(tempfile.mkdtemp(prefix="dock-crash-image-"))
+    for name in ["package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "tsconfig.json"]:
+        shutil.copy2(WEB / name, stage / name)
+    shutil.copytree(WEB / "src", stage / "src", ignore=shutil.ignore_patterns("*.test.ts", "*.test.tsx"))
+    shutil.copytree(WEB / "scripts", stage / "scripts")
     return (
         modal.Image.from_registry("node:24-bookworm-slim")
         .run_commands("corepack enable")
-        .add_local_file(WEB / "package.json", "/app/web/package.json", copy=True)
-        .add_local_file(WEB / "pnpm-lock.yaml", "/app/web/pnpm-lock.yaml", copy=True)
-        .add_local_file(WEB / "pnpm-workspace.yaml", "/app/web/pnpm-workspace.yaml", copy=True)
+        .add_local_file(stage / "package.json", "/app/web/package.json", copy=True)
+        .add_local_file(stage / "pnpm-lock.yaml", "/app/web/pnpm-lock.yaml", copy=True)
+        .add_local_file(stage / "pnpm-workspace.yaml", "/app/web/pnpm-workspace.yaml", copy=True)
         .run_commands("cd /app/web && COREPACK_ENABLE_DOWNLOAD_PROMPT=0 pnpm install --frozen-lockfile --ignore-scripts")
-        .add_local_file(WEB / "tsconfig.json", "/app/web/tsconfig.json", copy=True)
-        .add_local_dir(WEB / "src", "/app/web/src", copy=True, ignore=["**/*.test.ts", "**/*.test.tsx"])
-        .add_local_dir(WEB / "scripts", "/app/web/scripts", copy=True)
+        .add_local_file(stage / "tsconfig.json", "/app/web/tsconfig.json", copy=True)
+        .add_local_dir(stage / "src", "/app/web/src", copy=True)
+        .add_local_dir(stage / "scripts", "/app/web/scripts", copy=True)
     )
 
 
