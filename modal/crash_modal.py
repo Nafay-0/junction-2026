@@ -182,7 +182,7 @@ class Run:
         if prov != "scripted":
             cmd += ["--episode-cost-usd", str(a.episode_cost_usd), "--session-cost-usd", str(a.episode_cost_usd),
                     "--wall-s", str(a.wall_s), "--timeout-s", str(a.wall_s + 60), "--infra-retries", str(a.infra_retries),
-                    "--retry-delay-s", "30" if prov == "featherless" else "20"]
+                    "--retry-delay-s", str(a.retry_delay_s.get(prov, 20))]
         kwargs: dict = dict(app=app, image=image, workdir="/app/web", timeout=a.sandbox_timeout_s, cpu=CPU, memory=MEMORY_MIB,
                             volumes={"/results": vol}, env={"DOCK_COMMIT": self.commit}, tags={"run": a.run_id[:63], "scenario": job["scenario"], "repeat": str(job["repeat"]), "provider": prov})
         if prov == "scripted":
@@ -304,7 +304,8 @@ class Run:
                         self.flying.remove(job["agent"])
 
         # One pool per provider, sized to what that provider tolerates at once.
-        pools = {p: cf.ThreadPoolExecutor(max_workers=c if a.concurrency is None else min(c, a.concurrency)) for p, (_, _, c) in PROVIDERS.items()}
+        size = lambda p, c: a.provider_concurrency.get(p, c if a.concurrency is None else min(c, a.concurrency))  # noqa: E731
+        pools = {p: cf.ThreadPoolExecutor(max_workers=size(p, c)) for p, (_, _, c) in PROVIDERS.items()}
         futures = [pools[j["provider"]].submit(worker, j) for j in todo]
         try:
             while True:
@@ -390,7 +391,12 @@ def main() -> int:
     ap.add_argument("--sandbox-timeout-s", type=int, default=1200, help="hard lifetime of each Sandbox")
     ap.add_argument("--deadline-min", type=float, default=45, help="total time the driver waits before terminating what is left")
     ap.add_argument("--concurrency", type=int, help="cap episodes at once per provider (default: per-provider table)")
+    ap.add_argument("--provider-concurrency", default="", help="per provider, e.g. google=1,featherless=2")
+    ap.add_argument("--retry-delay", default="featherless=30,google=60", help="seconds between provider-failure retries inside an episode, per provider")
     args = ap.parse_args()
+    kv = lambda text: {k.strip(): int(v) for k, v in (x.split("=") for x in text.split(",") if x.strip())}  # noqa: E731
+    args.provider_concurrency = kv(args.provider_concurrency)
+    args.retry_delay_s = kv(args.retry_delay)
     if args.resume:
         meta = json.loads((WEB / "crash-results" / "modal" / args.resume / "run.json").read_text())
         args.run_id, args.models, args.repeats, args.seed = args.resume, meta["agents"], meta["repeats"], meta["seed"]

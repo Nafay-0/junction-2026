@@ -35,7 +35,7 @@ async function ownJobId(): Promise<string | undefined> {
     return undefined;
   }
 }
-const jobId = await ownJobId();
+let jobId: string | undefined;
 const api = (what: "sbom" | "network-trace") => (repo && jobId ? `https://api.craci.com/v1preview1/${what}?provider=github&repo=${encodeURIComponent(repo)}&job_id=${jobId}` : null);
 
 function sbomSummary(text?: string) {
@@ -74,27 +74,35 @@ function traceSummary(text?: string) {
   }
 }
 
-const inCi = e.GITHUB_ACTIONS === "true";
-const gate = read(opt("gate"));
-const record = {
-  schema: "dock-build-record/1",
-  builtAt: new Date().toISOString(),
-  source: inCi ? "github-actions" : "local",
-  repository: repo ?? null,
-  commit: e.GITHUB_SHA ?? null,
-  ref: e.GITHUB_REF_NAME ?? null,
-  run: inCi ? { id: e.GITHUB_RUN_ID, attempt: Number(e.GITHUB_RUN_ATTEMPT ?? 1), workflow: e.GITHUB_WORKFLOW, url: `${e.GITHUB_SERVER_URL}/${repo}/actions/runs/${e.GITHUB_RUN_ID}` } : null,
-  runner: inCi ? { name: e.RUNNER_NAME ?? null, os: e.RUNNER_OS ?? null, label: "craci" } : null,
-  craci: {
-    jobId: jobId ?? null,
-    sbom: { location: api("sbom"), format: "CycloneDX 1.7 (application/vnd.cyclonedx+json)", needs: "a CRACI API token (organisation admin: Settings > API tokens); available once the job is finished", fetched: sbomSummary(read(opt("sbom"))) },
-    networkTrace: { location: api("network-trace"), fetched: traceSummary(read(opt("trace"))) },
-    docs: "https://docs.craci.com/api/reference/",
-  },
-  crashGate: gate ? JSON.parse(gate) : null,
-  note: inCi ? undefined : "Built outside CI: no CRACI record exists for this build.",
-};
-const out = opt("out") ?? path.join("public", "build-record.json");
-mkdirSync(path.dirname(out), { recursive: true });
-writeFileSync(out, JSON.stringify(record, null, 2) + "\n");
-console.log(`Build record: ${out}${record.craci.sbom.location ? ` (SBOM at ${record.craci.sbom.location}${record.craci.sbom.fetched ? ", fetched" : ""})` : ""}`);
+async function main() {
+  jobId = await ownJobId();
+  const inCi = e.GITHUB_ACTIONS === "true";
+  const gate = read(opt("gate"));
+  const record = {
+    schema: "dock-build-record/1",
+    builtAt: new Date().toISOString(),
+    source: inCi ? "github-actions" : "local",
+    repository: repo ?? null,
+    commit: e.GITHUB_SHA ?? null,
+    ref: e.GITHUB_REF_NAME ?? null,
+    run: inCi ? { id: e.GITHUB_RUN_ID, attempt: Number(e.GITHUB_RUN_ATTEMPT ?? 1), workflow: e.GITHUB_WORKFLOW, url: `${e.GITHUB_SERVER_URL}/${repo}/actions/runs/${e.GITHUB_RUN_ID}` } : null,
+    runner: inCi ? { name: e.RUNNER_NAME ?? null, os: e.RUNNER_OS ?? null, label: "craci" } : null,
+    craci: {
+      jobId: jobId ?? null,
+      sbom: { location: api("sbom"), format: "CycloneDX 1.7 (application/vnd.cyclonedx+json)", needs: "a CRACI API token (organisation admin: Settings > API tokens); available once the job is finished", fetched: sbomSummary(read(opt("sbom"))) },
+      networkTrace: { location: api("network-trace"), fetched: traceSummary(read(opt("trace"))) },
+      docs: "https://docs.craci.com/api/reference/",
+    },
+    crashGate: gate ? JSON.parse(gate) : null,
+    note: inCi ? undefined : "Built outside CI: no CRACI record exists for this build.",
+  };
+  const out = opt("out") ?? path.join("public", "build-record.json");
+  mkdirSync(path.dirname(out), { recursive: true });
+  writeFileSync(out, JSON.stringify(record, null, 2) + "\n");
+  console.log(`Build record: ${out}${record.craci.sbom.location ? ` (SBOM at ${record.craci.sbom.location}${record.craci.sbom.fetched ? ", fetched" : ""})` : ""}`);
+}
+
+main().catch((err) => {
+  console.error(err instanceof Error ? err.message : err);
+  process.exit(1);
+});
