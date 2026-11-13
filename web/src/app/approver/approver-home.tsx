@@ -148,6 +148,9 @@ export function ApproverHome() {
             {note}
           </p>
         )}
+        <Link href="/call" className="mb-3 flex h-16 w-full items-center justify-center rounded-2xl bg-green-700 text-xl font-semibold text-white">
+          Call your agent
+        </Link>
         <button className="h-14 w-full rounded-xl border border-neutral-300 text-base" disabled={asking} onClick={() => void askAgent()}>
           {asking ? "Asking the agent…" : "Demo: ask my agent for 1,000 L of milk"}
         </button>

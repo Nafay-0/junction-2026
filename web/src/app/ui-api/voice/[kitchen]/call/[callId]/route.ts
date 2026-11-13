@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { parse } from "@/core/errors";
+import { getOrder, kitchenAgent } from "@/server/channels/flow";
+import { orderForModel } from "@/server/channels/say";
 import { calls } from "@/server/channels/voice/calls";
 import { handle, readJson } from "@/server/http";
 
@@ -8,6 +10,7 @@ import { handle, readJson } from "@/server/http";
  *   { op: "beat", usage?, grounding? }   the call screen is still there (every 10 s); frees the line when it stops
  *   { op: "end", reason }               hang up
  *   { op: "dropped", said, kinds }      the grounding check cut off something the agent said; written to the ledger
+ *   { op: "order" }                     where the call's order stands (the screen polls this while it waits for sign-off)
  */
 const Body = z.discriminatedUnion("op", [
   z.object({
@@ -17,6 +20,7 @@ const Body = z.discriminatedUnion("op", [
   }),
   z.object({ op: z.literal("end"), reason: z.string().max(80).default("hung up") }),
   z.object({ op: z.literal("dropped"), said: z.string().max(300), kinds: z.array(z.string().max(20)).max(10) }),
+  z.object({ op: z.literal("order") }),
 ]);
 
 export async function POST(req: Request, ctx: RouteContext<"/ui-api/voice/[kitchen]/call/[callId]">) {
@@ -27,6 +31,12 @@ export async function POST(req: Request, ctx: RouteContext<"/ui-api/voice/[kitch
     if (body.op === "end") {
       const c = registry.end(callId, kitchen, body.reason);
       return Response.json({ ended: !!c });
+    }
+    if (body.op === "order") {
+      const c = registry.heartbeat(callId, kitchen);
+      if (!c.desk.orderId) return Response.json({ order: null });
+      const order = await getOrder(await kitchenAgent(kitchen), c.desk.orderId);
+      return Response.json({ order, forModel: orderForModel(order) }, { headers: { "cache-control": "no-store" } });
     }
     const c = registry.heartbeat(callId, kitchen, body.op === "beat" ? { usage: body.usage, grounding: body.grounding } : undefined);
     if (body.op === "dropped") {

@@ -1,0 +1,34 @@
+{
+  "summary": {
+    "model": "gemini-3.8-live",
+    "cases": 1,
+    "amountInTranscript": "1/1",
+    "calledSubmitRequest": "1/1",
+    "structuredNeedCorrect": "1/1",
+    "replyGrounded": "1/1",
+    "replyInCallerLanguage": "1/1",
+    "medianToolMs": 1758
+  },
+  "at": "2026-11-13T22:08:47.462Z",
+  "rows": [
+    {
+      "file": "01-en-gb-1000l.wav",
+      "heard": "I need 1,000 L of lactose-free milk by Monday.",
+      "amountInTranscript": true,
+      "tool": true,
+      "toolRequest": "I need 1000 liters of lactose-free milk by Monday.",
+      "need": "1000 L lactose-free milk",
+      "needOk": true,
+      "reply": "Is that right, one thousand litres of lactose-free milk?",
+      "replyLang": "en",
+      "langOk": true,
+      "grounded": true,
+      "violations": [],
+      "toolMs": 1758,
+      "usage": {
+        "prompt": 6576,
+        "response": 201
+      }
+    }
+  ]
+}
