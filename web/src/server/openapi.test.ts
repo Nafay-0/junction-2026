@@ -41,6 +41,23 @@ describe("OpenAPI document", () => {
     expect(documented).toEqual(onDisk);
   });
 
+  it("marks the buyer's own answers and tags approver operations, which the agent view leaves out", async () => {
+    type Doc = { paths: Record<string, Record<string, { operationId: string; tags: string[]; "x-dock-audience": string; "x-dock-human-input"?: { required: boolean; from: string } }>> };
+    const ops = (d: Doc) => Object.values(d.paths).flatMap((p) => Object.values(p));
+    const all = ops(buildOpenApi(BASE) as unknown as Doc);
+    expect(all.filter((o) => o["x-dock-human-input"]).map((o) => o.operationId).sort()).toEqual(["answerQuestions", "respondToConcerns"]);
+    expect(all.find((o) => o.operationId === "respondToConcerns")!["x-dock-human-input"]).toMatchObject({ required: true, from: "buyer" });
+    const approver = all.filter((o) => o["x-dock-audience"] === "approver").map((o) => o.operationId);
+    expect(approver).toEqual(expect.arrayContaining(["decideApproval", "approvalChallenge", "approvalLink", "beginJoin", "completeJoin", "approverDemoOrder", "sandboxDemoOrder", "listSandboxes"]));
+    for (const o of all) expect(o.tags).toEqual([o["x-dock-audience"]]);
+    expect(all.find((o) => o.operationId === "placeOrder")!["x-dock-audience"]).toBe("agent");
+    const res = await openapiRoute(new Request(`${BASE}/api/v1/openapi.json?audience=agent`));
+    const agentOps = ops((await res.json()) as Doc).map((o) => o.operationId);
+    expect(agentOps).toContain("openIntake");
+    for (const id of approver) expect(agentOps).not.toContain(id);
+    expect((await new Validator().validate(buildOpenApi(BASE, { audience: "agent" }))).valid).toBe(true);
+  });
+
   it("is what /api/v1/openapi.json serves", async () => {
     const res = await openapiRoute(new Request(`${BASE}/api/v1/openapi.json`));
     expect(await res.json()).toEqual(JSON.parse(JSON.stringify(buildOpenApi(BASE))));
