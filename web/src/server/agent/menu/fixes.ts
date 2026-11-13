@@ -1,5 +1,6 @@
 import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
+import { recordLlmSpend, reserveLlmCall } from "@/server/limits";
 import { DockError } from "@/core/errors";
 import { createModel, ModelConfigError } from "../models";
 import { costOf, tokensFromUsage, type Price, type Tokens } from "../pricing";
@@ -62,6 +63,7 @@ export async function proposeFixes(req: FixRequest, ctx: MenuPromptContext, mode
   const t0 = Date.now();
   const deadline = t0 + timeoutMs;
   try {
+    reserveLlmCall(); // public-demo caps: daily calls and spend, DOCK_LLM=off (server/limits.ts)
     const res = await withRetry(
       () =>
         generateText({
@@ -85,6 +87,7 @@ export async function proposeFixes(req: FixRequest, ctx: MenuPromptContext, mode
       { deadline, policy: { maxRetries: 1, baseMs: 500, maxMs: 2000 } },
     );
     const tokens = tokensFromUsage(res.usage);
+    recordLlmSpend(costOf(tokens, m.price));
     return { fixes: res.output as LlmFixes, ms: Date.now() - t0, tokens, costUsd: costOf(tokens, m.price) };
   } catch (err) {
     if (Date.now() >= deadline || (err as Error)?.name === "TimeoutError") throw new DockError(504, "menu_timeout", `The model did not propose fixes within ${timeoutMs} ms.`);
