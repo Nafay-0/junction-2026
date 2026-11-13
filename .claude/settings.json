@@ -1,0 +1,11 @@
+{
+  "model": "fable",
+  "switchModelsOnFlag": false,
+  "env": {
+    "CLAUDE_CODE_SUBAGENT_MODEL": "opus",
+    "CLAUDE_CODE_SUBAGENT_MODEL_FORCE": "1"
+  },
+  "permissions": {
+    "deny": ["Agent(claude-code-guide)", "Agent(statusline-setup)"]
+  }
+}

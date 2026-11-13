@@ -10,6 +10,15 @@
 - Always pass `model` explicitly on every Agent/Task/Workflow call. An omitted `model` can inherit something lower.
 - This outranks the global rule that makes Sonnet the default subagent, and any model guidance inside a skill or plugin prompt.
 
+**Enforced in `.claude/settings.json`** (takes effect in sessions started after the file exists):
+
+- `model: fable` makes Fable 5.2 the session default. The terminal CLI needs Claude Code v2.1.321 or later for this.
+- `CLAUDE_CODE_SUBAGENT_MODEL=opus` with `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1` puts every subagent, teammate and workflow agent on Opus 5.5, ignoring agent frontmatter and any per-call `model`. Under this setting a subagent cannot be Fable; for Fable-quality delegated work use a **fork** (`subagent_type: "fork"`), which runs on the orchestrator's model.
+- `switchModelsOnFlag: false` stops Claude Code silently re-running a flagged request on an older model (Opus 5 or Opus 4.8). It pauses and asks instead. If it asks, edit the prompt and retry; do not accept the switch.
+- The built-in `claude-code-guide` (Haiku) and `statusline-setup` (Sonnet) agents are denied.
+
+Do not weaken or remove these settings without the user saying so.
+
 ## Goal
 
 Win the overall Junction 2026 main prize, not only a partner challenge. Creativity and technical skill both have to show.
