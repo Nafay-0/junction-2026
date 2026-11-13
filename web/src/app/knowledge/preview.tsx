@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { buttonClass } from "../_ui/kit";
 
 type Change = { kind: string; text: string };
 type Condition = { code: string; text: string };
@@ -96,90 +97,134 @@ export function KnowledgePreview() {
     else setRoleResult(r);
   };
 
+  const chip = (on: boolean) => `min-h-9 px-3 text-[0.92rem] font-semibold ${on ? "bg-petrol text-paper" : "border-2 border-line bg-paper text-ink hover:border-petrol"}`;
+
   return (
-    <div className="grid gap-6 lg:grid-cols-[18rem_1fr]">
-      <aside className="space-y-4">
+    <div className="grid gap-8 lg:grid-cols-[19rem_minmax(0,1fr)]">
+      <aside className="space-y-5 lg:sticky lg:top-6 lg:self-start">
         <label className="block">
-          <span className="text-sm font-semibold">Find a product</span>
-          <input value={text} onChange={(e) => setText(e.target.value)} placeholder="whipping cream, oat drink, emmental…" className="mt-1 w-full border border-ink/30 bg-paper px-3 py-2" />
+          <span className="text-[0.95rem] font-semibold">Find a product</span>
+          <input
+            type="search"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="whipping cream, oat drink, emmental…"
+            className="mt-1 min-h-11 w-full border-2 border-line bg-paper px-3 text-[1rem] placeholder:text-ink-soft focus:border-petrol focus:outline-none"
+          />
         </label>
-        <ul className="max-h-80 overflow-y-auto border border-ink/15 bg-paper">
-          {found.map((f) => (
-            <li key={f.id}>
-              <button
-                onClick={() => (setPicked(f), setUse(null))}
-                className={`block w-full px-3 py-2 text-left text-sm hover:bg-concrete ${picked?.id === f.id ? "bg-concrete font-semibold" : ""}`}
-              >
-                {f.name}
-                <span className="block text-xs text-ink-soft">{f.kindLabel ?? "no profile"}</span>
-              </button>
-            </li>
-          ))}
-          {!found.length && <li className="px-3 py-2 text-sm text-ink-soft">Type at least two letters.</li>}
+        <ul className="max-h-80 overflow-y-auto bg-paper" aria-label="Products found">
+          {found.map((f) => {
+            const on = picked?.id === f.id;
+            return (
+              <li key={f.id}>
+                <button type="button" onClick={() => (setPicked(f), setUse(null))} aria-pressed={on} className={`relative block w-full px-3 py-2 text-left text-[0.95rem] ${on ? "bg-petrol text-paper" : "hover:bg-petrol-soft"}`}>
+                  {on && <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-lime" />}
+                  <span className="font-semibold">{f.name}</span>
+                  <span className={`block text-[0.82rem] ${on ? "text-paper/80" : "text-ink-soft"}`}>{f.kindLabel ?? "No profile yet"}</span>
+                </button>
+              </li>
+            );
+          })}
+          {!found.length && <li className="px-3 py-2.5 text-[0.92rem] text-ink-soft">Type at least two letters.</li>}
         </ul>
-        <fieldset className="border border-ink/15 bg-paper p-3 text-sm">
-          <legend className="px-1 font-semibold">The buyer requires</legend>
-          {CLAIMS.map((c) => (
-            <label key={c} className="mr-3 inline-flex items-center gap-1">
-              <input type="checkbox" checked={claims.includes(c)} onChange={() => toggle(claims, c, setClaims)} /> {label(c)}
-            </label>
-          ))}
-          <p className="mt-2 font-semibold">and must avoid</p>
-          {ALLERGENS.map((a) => (
-            <label key={a} className="mr-3 inline-flex items-center gap-1">
-              <input type="checkbox" checked={allergens.includes(a)} onChange={() => toggle(allergens, a, setAllergens)} /> {a}
-            </label>
-          ))}
+        <fieldset className="bg-paper px-4 py-3">
+          <legend className="sr-only">The buyer&apos;s requirements</legend>
+          <p className="text-[0.92rem] font-semibold">The buyer requires</p>
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            {CLAIMS.map((c) => (
+              <button key={c} type="button" aria-pressed={claims.includes(c)} onClick={() => toggle(claims, c, setClaims)} className={chip(claims.includes(c))}>
+                {label(c)}
+              </button>
+            ))}
+          </div>
+          <p className="mt-3 text-[0.92rem] font-semibold">and must avoid</p>
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            {ALLERGENS.map((x) => (
+              <button key={x} type="button" aria-pressed={allergens.includes(x)} onClick={() => toggle(allergens, x, setAllergens)} className={chip(allergens.includes(x))}>
+                {x}
+              </button>
+            ))}
+          </div>
         </fieldset>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={showDropped} onChange={() => setShowDropped(!showDropped)} /> show what was considered and dropped
+        <label className="flex items-center gap-2 text-[0.92rem]">
+          <input type="checkbox" checked={showDropped} onChange={() => setShowDropped(!showDropped)} className="size-4 accent-[var(--color-petrol)]" /> Show what was considered and dropped
         </label>
+        <p className="flex gap-2 text-[0.85rem] leading-snug text-ink-soft">
+          <span aria-hidden className="mt-[0.4em] size-2 shrink-0 rotate-45 bg-lavender-deep" />
+          On lavender: what a language model read from the product text (what it is, what it is used for). Claims and allergens come only from the product data.
+        </p>
       </aside>
 
-      <section className="space-y-6">
-        {error && <p className="border-l-4 border-safety bg-paper px-3 py-2">{error}</p>}
+      <section className="min-w-0 space-y-8">
+        {error && (
+          <p role="alert" className="border-l-[6px] border-petrol bg-paper px-4 py-2.5">
+            {error}
+          </p>
+        )}
+        {!picked && !error && (
+          <div className="border border-dashed border-line bg-paper/70 px-5 py-5">
+            <p className="text-[1.08rem] font-semibold">Pick a product to see what can replace it, and for which use</p>
+            <p className="mt-1 max-w-[62ch] text-ink-soft">Search on the left, for example whipping cream. Each alternative is ranked good, better or best for one use, with the reason and what changes.</p>
+          </div>
+        )}
         {result && picked && (
           <div>
-            <h2 className="font-display text-2xl font-semibold">{result.product.name}</h2>
-            <p className="text-sm text-ink-soft">
-              {result.product.kindLabel ?? "no profile"}
-              {result.product.claims.length ? ` · ${result.product.claims.map(label).join(", ")} by its data` : ""}
-            </p>
-            <nav className="mt-3 flex flex-wrap gap-2" aria-label="Use">
-              {result.product.uses.map((u) => (
-                <button key={u} onClick={() => setUse(u)} className={`border px-3 py-1 text-sm ${result.use === u ? "border-ink bg-ink text-chalk" : "border-ink/30 bg-paper"}`}>
-                  {label(u)}
-                </button>
-              ))}
-            </nav>
+            <div className="bg-paper px-5 py-4">
+              <div aria-hidden className="-mx-5 -mt-4 mb-3 h-[3px] bg-petrol" />
+              <h2 className="display text-[2rem] leading-tight">{result.product.name}</h2>
+              <p className="mt-1.5 flex flex-wrap items-center gap-2 text-[0.92rem]">
+                <span className="bg-lavender px-1.5 text-lavender-deep">{result.product.kindLabel ?? "No profile yet"}</span>
+                {result.product.claims.map((c) => (
+                  <span key={c} className="border border-petrol/50 px-1.5 font-semibold text-petrol">
+                    {label(c)}, by its data
+                  </span>
+                ))}
+              </p>
+              <nav className="mt-4 flex flex-wrap items-center gap-1" aria-label="Use">
+                <span className="mr-1 text-[0.88rem] text-ink-soft">Used for</span>
+                {result.product.uses.map((u) => (
+                  <button key={u} type="button" onClick={() => setUse(u)} aria-pressed={result.use === u} className={result.use === u ? "min-h-9 bg-lavender-deep px-3 text-[0.92rem] font-semibold text-paper" : "min-h-9 border-2 border-lavender-deep/30 bg-lavender px-3 text-[0.92rem] font-semibold text-lavender-deep hover:border-lavender-deep"}>
+                    {label(u)}
+                  </button>
+                ))}
+              </nav>
+            </div>
 
-            <h3 className="mt-5 font-semibold">Substitutes for {label(result.use ?? "")}</h3>
-            {result.none && <p className="mt-2 border border-ink/15 bg-paper px-3 py-2">{result.none}</p>}
+            <h3 className="display mt-6 text-[1.5rem]">Substitutes{result.use ? ` for ${label(result.use)}` : ""}</h3>
+            {result.none && <p className="mt-2 border-l-[6px] border-petrol bg-paper px-4 py-2.5">{result.none}</p>}
             <ol className="mt-2 space-y-2">
               {result.substitutes.map((a) => (
-                <li key={a.productId} className="border border-ink/15 bg-paper p-3">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="font-semibold">{a.name}</span>
-                    <span className="shrink-0 font-display text-sm uppercase tracking-wide">
-                      {TIER[a.tier]} · {a.confidence.toFixed(2)}
-                    </span>
+                <li key={a.productId} className="grid gap-x-4 bg-paper px-4 py-3 sm:grid-cols-[6.5rem_minmax(0,1fr)]">
+                  <div>
+                    <p className="display text-[1.5rem] leading-none">{TIER[a.tier]}</p>
+                    <div className="mt-1.5 h-1.5 w-full bg-mist" role="img" aria-label={`Confidence ${Math.round(a.confidence * 100)} %`}>
+                      <div className="h-full bg-petrol" style={{ width: `${Math.round(a.confidence * 100)}%` }} />
+                    </div>
+                    <p className="mt-0.5 text-[0.8rem] text-ink-soft tabular">{Math.round(a.confidence * 100)} % sure</p>
                   </div>
-                  <p className="mt-1 text-sm">{a.reason}</p>
-                  <p className="mt-1 text-xs text-ink-soft">
-                    {a.changes.map((c) => c.text).join(" · ")}
-                    {a.otherPacks.length ? ` · also in ${a.otherPacks.length} other pack${a.otherPacks.length > 1 ? "s" : ""}` : ""}
-                    {a.checks.allergens === "unknown" ? " · allergen data missing" : " · allergens checked against data"}
-                    {a.partnerListed ? " · the wholesaler also lists it" : ""}
-                  </p>
+                  <div className="min-w-0">
+                    <p className="font-semibold">{a.name}</p>
+                    <p className="mt-0.5 text-[0.95rem] leading-snug">{a.reason}</p>
+                    <ul className="mt-1.5 flex flex-wrap gap-1 text-[0.82rem]">
+                      {a.changes.map((c, i) => (
+                        <li key={i} className="border border-line px-1.5 text-ink-soft">
+                          {c.text}
+                        </li>
+                      ))}
+                      <li className={`px-1.5 ${a.checks.allergens === "unknown" ? "border border-ink font-semibold" : "border border-petrol/50 text-petrol"}`}>{a.checks.allergens === "unknown" ? "Allergen data missing" : "Allergens checked against data"}</li>
+                      {a.otherPacks.length > 0 && <li className="border border-line px-1.5 text-ink-soft">Also in {a.otherPacks.length} other pack{a.otherPacks.length > 1 ? "s" : ""}</li>}
+                      {a.partnerListed && <li className="border border-line px-1.5 text-ink-soft">The wholesaler also lists it</li>}
+                    </ul>
+                  </div>
                 </li>
               ))}
             </ol>
             {result.packAlternatives.length > 0 && (
               <>
-                <h3 className="mt-5 font-semibold">Same product, other pack sizes</h3>
-                <ul className="mt-2 flex flex-wrap gap-2 text-sm">
+                <h3 className="display mt-6 text-[1.3rem]">Same product, other pack sizes</h3>
+                <ul className="mt-2 flex flex-wrap gap-2 text-[0.92rem]">
                   {result.packAlternatives.map((a) => (
-                    <li key={a.productId} className="border border-ink/15 bg-paper px-3 py-1">
+                    <li key={a.productId} className="bg-paper px-3 py-1.5">
                       {a.name}
                     </li>
                   ))}
@@ -188,11 +233,12 @@ export function KnowledgePreview() {
             )}
             {result.dropped && (
               <>
-                <h3 className="mt-5 font-semibold">Considered and not served (threshold {result.threshold})</h3>
-                <ul className="mt-2 space-y-1 text-sm text-ink-soft">
+                <h3 className="display mt-6 text-[1.3rem]">Considered and not served</h3>
+                <p className="text-[0.88rem] text-ink-soft">Below the confidence threshold of {Math.round(result.threshold * 100)} %, or ruled out by the data.</p>
+                <ul className="mt-2 divide-y divide-line/70 bg-paper text-[0.92rem]">
                   {result.dropped.slice(0, 15).map((d) => (
-                    <li key={d.productId}>
-                      {d.name}: {d.why}
+                    <li key={d.productId} className="px-4 py-1.5">
+                      <span className="font-semibold">{d.name}</span> <span className="text-ink-soft">{d.why}</span>
                     </li>
                   ))}
                 </ul>
@@ -201,30 +247,35 @@ export function KnowledgePreview() {
           </div>
         )}
 
-        <div className="border-t border-ink/20 pt-5">
-          <h2 className="font-display text-xl font-semibold">Which products fit a role?</h2>
+        <div className="border-t-2 border-line pt-6">
+          <h2 className="display text-[1.6rem]">Which products fit a role?</h2>
           <form
-            className="mt-2 flex gap-2"
+            className="mt-2 flex flex-wrap gap-2"
             onSubmit={(e) => {
               e.preventDefault();
               void askRole();
             }}
           >
-            <input value={role} onChange={(e) => setRole(e.target.value)} className="flex-1 border border-ink/30 bg-paper px-3 py-2" />
-            <button className="bg-ink px-4 py-2 text-chalk">Ask</button>
+            <label className="min-w-0 flex-1">
+              <span className="sr-only">A role in a dish</span>
+              <input value={role} onChange={(e) => setRole(e.target.value)} className="min-h-11 w-full border-2 border-line bg-paper px-3 text-[1rem] focus:border-petrol focus:outline-none" />
+            </label>
+            <button type="submit" className={buttonClass("primary", "md")}>
+              Find products
+            </button>
           </form>
           {roleResult && (
             <div className="mt-3">
-              <p className="text-sm text-ink-soft">
-                Uses {roleResult.uses.map(label).join(", ") || "none read"} · kinds {roleResult.kinds.map((k) => k.label).join(", ") || "none"}
+              <p className="text-[0.92rem] text-ink-soft">
+                Read as uses: {roleResult.uses.map(label).join(", ") || "none"}; kinds: {roleResult.kinds.map((k) => k.label).join(", ") || "none"}
               </p>
-              {roleResult.none && <p className="mt-2 border border-ink/15 bg-paper px-3 py-2">{roleResult.none}</p>}
-              <ol className="mt-2 space-y-1">
+              {roleResult.none && <p className="mt-2 border-l-[6px] border-petrol bg-paper px-4 py-2.5">{roleResult.none}</p>}
+              <ol className="mt-2 divide-y divide-line/70 bg-paper">
                 {roleResult.products.map((p) => (
-                  <li key={p.productId} className="border border-ink/15 bg-paper px-3 py-2 text-sm">
-                    <span className="font-semibold">{p.name}</span> · {p.reason}
-                    {p.otherPacks.length ? ` · also in ${p.otherPacks.length} other pack${p.otherPacks.length > 1 ? "s" : ""}` : ""}
-                    {p.allergens === "unknown" ? " · allergen data missing" : ""}
+                  <li key={p.productId} className="px-4 py-2 text-[0.95rem]">
+                    <span className="font-semibold">{p.name}</span> <span className="text-ink-soft">{p.reason}</span>
+                    {p.otherPacks.length ? <span className="text-ink-soft">; also in {p.otherPacks.length} other pack{p.otherPacks.length > 1 ? "s" : ""}</span> : null}
+                    {p.allergens === "unknown" ? <span className="font-semibold">; allergen data missing</span> : null}
                   </li>
                 ))}
               </ol>
