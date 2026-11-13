@@ -1,6 +1,7 @@
 import type { Approver, Mandate } from "./mandate";
 import type { Quote, QuoteLine } from "./quote";
-import { addDays, formatEur, isoDate } from "./util";
+import { latestDeliveryDay } from "./kitchen";
+import { formatEur } from "./util";
 import { isMaterialAttribute } from "./vocabulary";
 
 /**
@@ -10,7 +11,8 @@ import { isMaterialAttribute } from "./vocabulary";
  * Outcomes per rule:
  *   pass      the rule is satisfied
  *   escalate  allowed only with a human sign-off (over the per-order limit, a substitute under "needs_approval" or one
- *             that differs from the original under "within_preferences", or a need split into orders under the limit)
+ *             that differs from the original under "within_preferences", a need split into orders under the limit,
+ *             money held by orders waiting for sign-off, or a confirmation that matters resting on the agent's word)
  *   fail      not allowed at all; the order is rejected
  *
  * Decision: any fail -> reject; else any escalate -> needs_human_approval (to the least senior approver
@@ -19,7 +21,7 @@ import { isMaterialAttribute } from "./vocabulary";
 export const RULES = [
   "mandate_agent", // the agent presenting the order is the one the mandate names
   "mandate_window", // the mandate is in force at decision time
-  "quote_binding", // the quote was issued to this organisation, agent and mandate
+  "quote_binding", // the quote was issued to this organisation, agent, mandate and request
   "quote_expiry", // the quote's fixed price still holds
   "quote_replay", // the quote has not been used for another order
   "order_matches_quote", // the order buys exactly what was quoted, at the quoted prices and quantities
@@ -30,9 +32,10 @@ export const RULES = [
   "delivery_deadline", // every line arrives by the need-by date and within the mandate's max lead time
   "substitution_rule", // substitutes allowed per the mandate's rule (none / same_attributes / needs_approval)
   "substitute_price", // substitute's price per unit within the tolerated increase
-  "weekly_budget", // committed + pending spend over 7 days stays within budget: hard limit
+  "weekly_budget", // committed spend over 7 days stays within budget (hard); money held by orders waiting for sign-off is a person's call
   "per_order_limit", // above it, a human must sign off
   "order_splitting", // several orders the agent placed alone for the same need may not add up to more than it may spend alone
+  "human_confirmation", // a likely mistake that matters was confirmed only by the agent's word: a person signs off
   "approver_authority", // someone named in the mandate can sign off this amount
 ] as const;
 
@@ -48,6 +51,10 @@ export type OrderDraft = {
   quote: Quote; // signature already verified
   lines: OrderDraftLine[];
   neededBy?: string; // YYYY-MM-DD, from the purchase request
+  /** The request the order is placed under. A quote buys only for the request it was issued for. */
+  requestId?: string;
+  /** What the request asked for (orders.ts PurchaseRequest.asked): any other product is a substitute of it. */
+  asked?: { productIds: string[]; category?: string };
 };
 
 /** An earlier order of the same organisation, as the splitting check needs it. */
@@ -65,6 +72,19 @@ export type RecentOrder = {
 export type PolicyContext = {
   now: Date;
   spentThisWeekCents: number; // committed + pending orders of this organisation over the last 7 days
+  /**
+   * The part of spentThisWeekCents held by orders still waiting for sign-off (their fixed price not yet expired).
+   * Committed spend is a hard limit; held money only stops the agent spending it alone: an order that fits the
+   * budget unless every waiting order is signed too goes to a person, who sees both. Absent: 0 (all committed).
+   */
+  heldThisWeekCents?: number;
+  /** The orders holding that money, named in the reason. */
+  heldOrders?: { orderId: string; totalCents: number; expiresAt: string }[];
+  /**
+   * Confirmations of likely mistakes that matter (an unusual amount, a request against a stated rule) that reached
+   * Dock only as the agent's word, not through a channel that identifies a person (intake.ts InputChannel).
+   */
+  unverifiedConfirmations?: { code: string; message: string; by: string }[];
   quoteAlreadyUsed: boolean;
   /** Orders of this organisation in the last SPLIT_WINDOW_HOURS, for the order_splitting check. Absent: none. */
   recentOrders?: RecentOrder[];
@@ -108,7 +128,9 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
   if (q.agentId !== mandate.agentId) binding.push(`agent ${q.agentId}`);
   if (q.mandateId !== mandate.mandateId) binding.push(`mandate ${q.mandateId}`);
   if (binding.length) add("quote_binding", "fail", `Quote ${q.quoteId} was issued to ${binding.join(", ")}, not to this mandate.`);
-  else add("quote_binding", "pass", `Quote ${q.quoteId} was issued under this mandate.`);
+  else if (draft.requestId !== undefined && q.requestId !== draft.requestId)
+    add("quote_binding", "fail", `Quote ${q.quoteId} was issued for request ${q.requestId}, not ${draft.requestId}; a quote buys only for the request it was made for.`, { quoteRequestId: q.requestId, orderRequestId: draft.requestId });
+  else add("quote_binding", "pass", `Quote ${q.quoteId} was issued under this mandate${draft.requestId ? ` for request ${draft.requestId}` : ""}.`);
 
   if (t < Date.parse(q.expiresAt)) add("quote_expiry", "pass", `Quote holds its prices until ${q.expiresAt}.`);
   else add("quote_expiry", "fail", `Quote ${q.quoteId} expired at ${q.expiresAt}; ask for a new quote.`, { expiresAt: q.expiresAt });
@@ -157,7 +179,7 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
     mandate.requiredCertificates.length ? `Every product carries ${mandate.requiredCertificates.join(", ")}.` : "No certificates required.",
   );
 
-  const leadLimit = isoDate(addDays(ctx.now, mandate.delivery.maxLeadDays));
+  const leadLimit = latestDeliveryDay(ctx.now, mandate.delivery.maxLeadDays); // Helsinki days, as the intake counts them
   const latest = draft.neededBy && draft.neededBy < leadLimit ? draft.neededBy : leadLimit;
   lineCheck(
     "delivery_deadline",
@@ -165,33 +187,42 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
     `Every line arrives by ${latest}.`,
   );
 
-  // Substitution
+  // Substitution. The gate works out for itself what is a substitute: a declared one, or any line that is not what
+  // the request asked for (another product than the one named, or another family), declared or not.
+  const askedIds = draft.asked?.productIds ?? [];
+  const askedCategory = draft.asked?.category;
+  const undeclared = q.lines.filter(
+    (l) => !l.substituteFor && ((askedIds.length > 0 && !askedIds.includes(l.productId)) || (askedCategory !== undefined && l.category !== askedCategory)),
+  );
   const subs = q.lines.filter((l) => l.substituteFor);
   const rule = mandate.substitution.rule;
-  if (subs.length === 0) {
-    add("substitution_rule", "pass", "No substitutes.");
-    add("substitute_price", "pass", "No substitutes.");
-  } else {
+  // Declared substitutes: judged against the original they name (Dock names it from the request, see orders.ts).
+  let subRule: { outcome: RuleOutcome; reason: string; details?: Record<string, unknown> } = { outcome: "pass", reason: "No substitutes." };
+  if (subs.length) {
     const describe = (l: QuoteLine) => `${l.productId} substitutes for ${l.substituteFor!.productId}`;
-    if (rule === "none") {
-      add("substitution_rule", "fail", `${subs.map(describe).join("; ")}, but the mandate allows no substitutes.`);
-    } else {
-      const differences = subs.map((l) => attributeDifference(l)).filter((x): x is string => x !== null);
-      if (rule === "same_attributes") {
-        if (differences.length) add("substitution_rule", "fail", `Substitutes must match the original: ${differences.join(" ")}`);
-        else add("substitution_rule", "pass", `${subs.map(describe).join("; ")} with the same attributes.`);
-      } else if (rule === "within_preferences") {
-        if (differences.length)
-          add("substitution_rule", "escalate", `${subs.map(describe).join("; ")}, but not like for like, so a person must approve it: ${differences.join(" ")}`);
-        else add("substitution_rule", "pass", `${subs.map(describe).join("; ")}, like for like (same category, unit, diet, fat and organic status): the agent may decide.`);
-      } else {
-        add(
-          "substitution_rule",
-          "escalate",
-          `${subs.map(describe).join("; ")}; the mandate requires a person to approve substitutes.${differences.length ? " " + differences.join(" ") : ""}`,
-        );
-      }
-    }
+    const differences = subs.map((l) => attributeDifference(l)).filter((x): x is string => x !== null);
+    if (rule === "none") subRule = { outcome: "fail", reason: `${subs.map(describe).join("; ")}, but the mandate allows no substitutes.` };
+    else if (rule === "same_attributes")
+      subRule = differences.length ? { outcome: "fail", reason: `Substitutes must match the original: ${differences.join(" ")}` } : { outcome: "pass", reason: `${subs.map(describe).join("; ")} with the same attributes.` };
+    else if (rule === "within_preferences")
+      subRule = differences.length
+        ? { outcome: "escalate", reason: `${subs.map(describe).join("; ")}, but not like for like, so a person must approve it: ${differences.join(" ")}` }
+        : { outcome: "pass", reason: `${subs.map(describe).join("; ")}, like for like (same category, unit, diet, fat and organic status): the agent may decide.` };
+    else subRule = { outcome: "escalate", reason: `${subs.map(describe).join("; ")}; the mandate requires a person to approve substitutes.${differences.length ? " " + differences.join(" ") : ""}` };
+  }
+  // Undeclared ones: not what was asked, with no original to compare to. Never decided by the agent alone.
+  if (undeclared.length) {
+    const what = undeclared.map((l) => `${l.productId} is not what the request asked for (${askedIds.length ? askedIds.join(", ") : `category ${askedCategory}`})`).join("; ");
+    const strict = rule === "none" || rule === "same_attributes";
+    const u = strict
+      ? { outcome: "fail" as const, reason: `${what}, so it is a substitute, and the mandate allows ${rule === "none" ? "no substitutes" : "only like-for-like substitutes it can compare"}.` }
+      : { outcome: "escalate" as const, reason: `${what}, so it is a substitute nobody priced against the original: a person must approve it.` };
+    const worse = subRule.outcome === "fail" ? subRule : u;
+    subRule = { outcome: worse.outcome, reason: subs.length && subRule.outcome !== "pass" && worse !== subRule ? `${u.reason} ${subRule.reason}` : worse === subRule ? `${subRule.reason} ${u.reason}` : u.reason, details: { undeclared: undeclared.map((l) => l.productId) } };
+  }
+  add("substitution_rule", subRule.outcome, subRule.reason, subRule.details);
+  if (subs.length === 0) add("substitute_price", "pass", undeclared.length ? "No declared substitute to price; undeclared ones are judged by substitution_rule." : "No substitutes.");
+  else {
     const limit = mandate.substitution.maxPriceIncreasePct;
     const over = subs
       .map((l) => ({ l, pct: perUnitIncreasePct(l) }))
@@ -211,12 +242,19 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
   }
 
   // Money
+  const held = Math.min(Math.max(0, ctx.heldThisWeekCents ?? 0), ctx.spentThisWeekCents);
+  const committed = ctx.spentThisWeekCents - held;
   const after = ctx.spentThisWeekCents + total;
-  const budgetDetails = { budgetCents: mandate.weeklyBudgetCents, spentCents: ctx.spentThisWeekCents, totalCents: total };
+  const budgetDetails = { budgetCents: mandate.weeklyBudgetCents, spentCents: ctx.spentThisWeekCents, committedCents: committed, heldCents: held, totalCents: total };
   if (after <= mandate.weeklyBudgetCents)
     add("weekly_budget", "pass", `Weekly spend would be ${formatEur(after)} of ${formatEur(mandate.weeklyBudgetCents)}.`, budgetDetails);
-  else
-    add("weekly_budget", "fail", `This ${formatEur(total)} order would take weekly spend to ${formatEur(after)}, over the ${formatEur(mandate.weeklyBudgetCents)} budget (already ${formatEur(ctx.spentThisWeekCents)}).`, budgetDetails);
+  else if (committed + total > mandate.weeklyBudgetCents)
+    add("weekly_budget", "fail", `This ${formatEur(total)} order would take weekly spend to ${formatEur(committed + total)}, over the ${formatEur(mandate.weeklyBudgetCents)} budget (already ${formatEur(committed)} committed${held ? `, ${formatEur(held)} more waiting for sign-off` : ""}).`, budgetDetails);
+  else {
+    // Fits with what is committed, not with what waits for sign-off. Decided below, once the other rules are in:
+    // an order a person signs anyway goes to them with both in view; one the agent would place alone is refused.
+    add("weekly_budget", "escalate", "", { ...budgetDetails, heldOrders: ctx.heldOrders, held: true });
+  }
 
   const limitDetails = { limitCents: mandate.perOrderLimitCents, totalCents: total };
   if (total <= mandate.perOrderLimitCents)
@@ -226,6 +264,28 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
 
   const split = splitCheck(mandate, draft, ctx);
   add("order_splitting", split.outcome, split.reason, split.details);
+
+  const unverified = ctx.unverifiedConfirmations ?? [];
+  if (unverified.length === 0) add("human_confirmation", "pass", "No confirmation rests on the agent's word alone.");
+  else
+    add(
+      "human_confirmation",
+      "escalate",
+      `The agent relayed that ${[...new Set(unverified.map((u) => u.by))].join(", ")} confirmed ${unverified.length > 1 ? "these" : "this"} as intended, but nobody verified it: ${unverified.map((u) => u.message).join(" ")} A named person must sign it off.`,
+      { confirmations: unverified.map((u) => ({ code: u.code, by: u.by })) },
+    );
+
+  const heldBudget = results.find((r) => r.rule === "weekly_budget" && r.details?.held === true);
+  if (heldBudget) {
+    const named = (ctx.heldOrders ?? []).map((o) => `${o.orderId} (${formatEur(o.totalCents)})`).join(", ");
+    const why = `This ${formatEur(total)} order fits the ${formatEur(mandate.weeklyBudgetCents)} weekly budget with the ${formatEur(committed)} committed, but not together with the ${formatEur(held)} waiting for sign-off${named ? ` on ${named}` : ""}.`;
+    if (results.some((r) => r.outcome === "escalate" && r !== heldBudget)) {
+      heldBudget.reason = `${why} A person signs this order anyway, so they decide with both in view; if both are signed, the later one is refused.`;
+    } else {
+      heldBudget.outcome = "fail";
+      heldBudget.reason = `${why} The agent may not spend money held for another order alone: withdraw or decide the waiting order, or wait until its price expires.`;
+    }
+  }
 
   const needsHuman = results.some((r) => r.outcome === "escalate");
   const signAmount = split.outcome === "escalate" ? Math.max(total, split.combinedCents) : total;

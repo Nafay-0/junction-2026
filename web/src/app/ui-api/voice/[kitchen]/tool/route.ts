@@ -9,6 +9,6 @@ import { handle, readJson } from "@/server/http";
 export async function POST(req: Request, ctx: RouteContext<"/ui-api/voice/[kitchen]/tool">) {
   return handle(async () => {
     const { kitchen } = await ctx.params;
-    return Response.json(await runTool(kitchen, await readJson(req)), { headers: { "cache-control": "no-store" } });
+    return Response.json(await runTool(kitchen, await readJson(req), req), { headers: { "cache-control": "no-store" } });
   });
 }

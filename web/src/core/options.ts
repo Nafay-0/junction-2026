@@ -1,10 +1,10 @@
 import { usableOffer, type LiveOffer, type LiveStatus, type Product } from "./catalog";
 import { packsFor as convertPacks } from "./catalog/product";
-import { formatDay, primaryLine, type HistoryEntry } from "./kitchen";
+import { formatDay, latestDeliveryDay, localDateOf, primaryLine, type HistoryEntry } from "./kitchen";
 import type { Mandate } from "./mandate";
 import { formatAmount, type BaseUnit, type OptimiseGoal } from "./need";
 import type { QuoteRequestLine } from "./quote";
-import { addDays, formatEur, isoDate } from "./util";
+import { formatEur } from "./util";
 import { isMaterialAttribute } from "./vocabulary";
 
 /**
@@ -98,6 +98,11 @@ export type OptionsInput = {
   now: Date;
   neededBy?: string;
   spentThisWeekCents: number;
+  /**
+   * The part of spentThisWeekCents held by orders waiting for sign-off. Only committed money excludes a card; a card
+   * that fits only if those orders are not signed is kept and says a person must sign it (policy.ts, weekly_budget).
+   */
+  heldThisWeekCents?: number;
   last?: HistoryEntry;
   usual?: { productId: string; text: string }; // learned usual product, for a "your usual" pro
   reference?: Reference;
@@ -210,7 +215,7 @@ export function buildOptions(input: OptionsInput): OptionsResult {
   const { amount, mandate } = input;
   const excluded: Exclusion[] = [];
   const notes: string[] = [];
-  const leadLimit = isoDate(addDays(input.now, mandate.delivery.maxLeadDays));
+  const leadLimit = latestDeliveryDay(input.now, mandate.delivery.maxLeadDays); // Helsinki days, as the gate counts them
   const latest = input.neededBy && input.neededBy < leadLimit ? input.neededBy : leadLimit;
   const statusOf = new Map((input.statuses ?? []).map((s) => [s.productId, s]));
   const offerOf = new Map(input.offers.map((o) => [o.productId, o]));
@@ -299,10 +304,16 @@ export function buildOptions(input: OptionsInput): OptionsResult {
   }
 
   const total = (pl: Plan) => pl.lines.reduce((s, l) => s + l.lineTotalCents, 0);
+  const held = heldOf(input);
+  const committed = input.spentThisWeekCents - held;
   const affordable = plans.filter((pl) => {
-    const over = input.spentThisWeekCents + total(pl) > mandate.weeklyBudgetCents;
-    if (over) excluded.push({ productId: pl.primary.p.id, reason: `${formatEur(total(pl))} would go over the weekly budget (${formatEur(mandate.weeklyBudgetCents - input.spentThisWeekCents)} left)`, code: "over_budget" });
-    return !over;
+    const over = committed + total(pl) > mandate.weeklyBudgetCents;
+    if (over) excluded.push({ productId: pl.primary.p.id, reason: `${formatEur(total(pl))} would go over the weekly budget (${formatEur(Math.max(0, mandate.weeklyBudgetCents - committed))} left of ${formatEur(mandate.weeklyBudgetCents)} after the ${formatEur(committed)} already committed this week)`, code: "over_budget" });
+    // Fits only if the order waiting for sign-off is not signed: offered when a person signs this one anyway
+    // (over the agent's own limit), since the agent may not spend held money alone (policy weekly_budget).
+    const heldOver = !over && held > 0 && input.spentThisWeekCents + total(pl) > mandate.weeklyBudgetCents && total(pl) <= mandate.perOrderLimitCents;
+    if (heldOver) excluded.push({ productId: pl.primary.p.id, reason: `${formatEur(total(pl))} fits only if the ${formatEur(held)} held by an order waiting for sign-off is not signed; withdraw or decide that order first`, code: "over_budget" });
+    return !over && !heldOver;
   });
 
   const givesUp = (pl: Plan): GiveUp[] => {
@@ -440,6 +451,8 @@ export function likeForLike(original: Product, sub: Product): boolean {
   return original.category === sub.category && original.attributes.filter(isMaterialAttribute).every((a) => sub.attributes.includes(a));
 }
 
+const heldOf = (input: OptionsInput) => Math.min(Math.max(0, input.heldThisWeekCents ?? 0), input.spentThisWeekCents);
+
 function measure(pl: Plan, input: OptionsInput) {
   const total = pl.lines.reduce((s, l) => s + l.lineTotalCents, 0);
   const delivered = r2(pl.lines.reduce((s, l) => s + l.packs * l.packSize, 0));
@@ -453,6 +466,9 @@ function measure(pl: Plan, input: OptionsInput) {
   const signOff: string[] = [];
   const { mandate } = input;
   if (total > mandate.perOrderLimitCents) signOff.push(`Over the ${formatEur(mandate.perOrderLimitCents)} the agent may spend alone: a person must sign off.`);
+  const held = heldOf(input);
+  if (held > 0 && input.spentThisWeekCents + total > mandate.weeklyBudgetCents)
+    signOff.push(`${formatEur(held)} of this week's budget is held by an order waiting for sign-off; with it, this one would go over the ${formatEur(mandate.weeklyBudgetCents)} budget, so a person decides.`);
   const substitutes = pl.lines.filter((l) => l.substituteFor);
   if (substitutes.length && mandate.substitution.rule === "needs_approval") signOff.push("Includes a substitute: the mandate requires a person to approve it.");
   if (substitutes.length && mandate.substitution.rule === "within_preferences") {
@@ -526,7 +542,7 @@ function explainCard(c: Card, all: Card[], input: OptionsInput): void {
   }
 
   c.cons.push(...c.signOff);
-  if (c.labels.includes("same_as_last_time") && input.last) c.pros.push(`Same product as your last order (${formatDay(input.last.placedAt.slice(0, 10))}).`);
+  if (c.labels.includes("same_as_last_time") && input.last) c.pros.push(`Same product as your last order (${formatDay(localDateOf(input.last.placedAt))}).`);
   if (input.usual && c._plan.primary.p.id === input.usual.productId) c.pros.push(`Your usual product (${input.usual.text.replace(/^Usually [^:]*: /, "")}).`);
 }
 

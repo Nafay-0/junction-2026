@@ -7,7 +7,7 @@ import { useLive } from "../../_client/use-live";
 import { day, helsinkiToday, measure, money, num } from "../../_ui/plain";
 import { usePortal, type BasketLine } from "./portal";
 import { Quantity } from "./qty";
-import { TEMP, TempMark, nameIn, packGlyph, readable } from "./shop";
+import { PROBLEM, TEMP, TempMark, nameIn, packGlyph, readable } from "./shop";
 import { Glyph } from "../../_ui/glyphs";
 import { Empty, Working, buttonClass } from "../../_ui/kit";
 import { Gate, Quote, SignedOrder } from "./stages";
@@ -139,31 +139,29 @@ export function BasketPage() {
               const r = live.results[l.productId];
               const o = r?.offer;
               return (
-                <li key={l.productId} className="grid gap-x-5 gap-y-3 bg-paper p-4 sm:grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1fr)_auto_8rem]">
-                  <div className="flex min-w-0 gap-3">
-                    <div className="w-[4.5rem] shrink-0 self-start">
-                      <MiniPack p={l.product} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[0.82rem]">
-                        <TempMark t={l.product.temperatureClass} />
-                      </p>
-                      <Link href={`${base}/catalogue/${encodeURIComponent(l.productId)}`} className="font-semibold leading-snug text-ink hover:text-petrol">
-                        {readable(nameIn(l.product, lang))}
-                      </Link>
-                      <p className="text-[0.9rem] text-ink-soft">
-                        {o ? `${money(o.unitPriceCents)} per ${unitWord(l.product, 1)}` : live.busy.includes(l.productId) ? "Checking the price…" : r ? "Not orderable now" : "No live price yet"}
-                        {o?.stockKnown === false ? "; stock not confirmed" : ""}
-                      </p>
+                <li key={l.productId} className="grid grid-cols-[3.5rem_minmax(0,1fr)] gap-x-4 gap-y-3 bg-paper p-4 sm:grid-cols-[4.5rem_minmax(0,1fr)_auto]">
+                  <MiniPack p={l.product} />
+                  <div className="min-w-0">
+                    <p className="text-[0.82rem]">
+                      <TempMark t={l.product.temperatureClass} />
+                    </p>
+                    <Link href={`${base}/catalogue/${encodeURIComponent(l.productId)}`} className="text-[1.05rem] font-semibold leading-snug text-ink hover:text-petrol">
+                      {readable(nameIn(l.product, lang))}
+                    </Link>
+                    <p className="text-[0.9rem] text-ink-soft">
+                      {o ? `${money(o.unitPriceCents)} per ${unitWord(l.product, 1)}` : live.busy.includes(l.productId) ? "Checking the price…" : r ? `Not orderable now: ${r.problems.length ? r.problems.map((x) => PROBLEM[x] ?? x).join("; ") : r.message}` : "No live price yet"}
+                      {o?.stockKnown === false ? "; stock not confirmed" : ""}
+                    </p>
+                    <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
+                      <Quantity p={l.product} value={l.packs} onChange={(n) => basket.set(l.productId, n)} id={`b-${l.productId}`} disabled={locked} compact />
                       {!locked && (
-                        <button type="button" className="mt-1 min-h-9 text-[0.9rem] text-petrol underline underline-offset-4" onClick={() => basket.remove(l.productId)}>
+                        <button type="button" className="min-h-10 text-[0.92rem] text-petrol underline underline-offset-4" onClick={() => basket.remove(l.productId)}>
                           Remove
                         </button>
                       )}
                     </div>
                   </div>
-                  <Quantity p={l.product} value={l.packs} onChange={(n) => basket.set(l.productId, n)} id={`b-${l.productId}`} disabled={locked} compact />
-                  <p key={`${l.packs}-${o?.unitPriceCents}`} className="changed display self-start text-right text-[1.6rem] tabular sm:col-span-2 md:col-span-1 md:pt-1.5">
+                  <p key={`${l.packs}-${o?.unitPriceCents}`} className="changed display col-span-2 text-right text-[1.7rem] tabular sm:col-span-1">
                     {o ? money(o.unitPriceCents * l.packs) : "–"}
                   </p>
                 </li>

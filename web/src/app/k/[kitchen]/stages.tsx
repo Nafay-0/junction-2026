@@ -1010,11 +1010,13 @@ export function ApprovalPanel({ kitchen, approvalId }: { kitchen: KitchenInfo; a
         {qr?.mode === "passkey" && <>Scan with {name}&apos;s phone. Approving needs their passkey.</>}
         {qr?.mode === "demo_link" && <>{name} is made up for this demo kitchen. Scan to sign off in their place, with the one-time link sent to their phone.</>}
         {qr?.mode === "view_only" && <>{name} signs off with the link sent to their phone.</>}
+        {qr?.mode === "enrol" && <>{name} is made up for this demo kitchen. A presenter scans this, enters the operations passcode and makes a passkey to sign in their place.</>}
         {qr && (
           <a href={qr.url} target="_blank" rel="noreferrer" className="mt-1 block font-semibold text-petrol underline decoration-2 underline-offset-4">
-            Open the sign-off screen
+            {qr.mode === "enrol" ? "Become the approver" : "Open the sign-off screen"}
           </a>
         )}
+        {qr?.orderId && qr.status === "pending" && <WithdrawButton kitchen={kitchen} orderId={qr.orderId} />}
         {!qr && !error && (
           <span className="flex items-center gap-2 text-ink-soft">
             <Spinner size={14} /> Preparing the code…
@@ -1022,6 +1024,26 @@ export function ApprovalPanel({ kitchen, approvalId }: { kitchen: KitchenInfo; a
         )}
       </figcaption>
     </figure>
+  );
+}
+
+/** The buyer takes the waiting order back: it stops holding the weekly budget, and the approver's phone shows it withdrawn. */
+function WithdrawButton({ kitchen, orderId }: { kitchen: KitchenInfo; orderId: string }) {
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState<string>();
+  async function withdraw() {
+    setBusy(true);
+    const r = await api<{ order: Order }>("POST", `/ui-api/kitchens/${encodeURIComponent(kitchen.slug)}/call`, { method: "POST", path: `/api/v1/orders/${orderId}/withdraw`, body: { reason: "withdrawn from the kitchen portal" } });
+    setBusy(false);
+    setDone(r.ok ? "Withdrawn. It no longer holds the weekly budget." : r.error.message);
+  }
+  if (done) return <span className="mt-2 block text-ink-soft">{done}</span>;
+  return (
+    <span className="mt-2 block">
+      <Button kind="quiet" busy={busy} onClick={() => void withdraw()}>
+        Withdraw this order
+      </Button>
+    </span>
   );
 }
 

@@ -7,7 +7,7 @@ import { noStore, portalRoute } from "@/server/kitchen-portal-http";
  * few products the buyer opened or added, through Dock's metered POST /api/v1/availability (in the ledger).
  */
 export async function POST(req: Request, ctx: RouteContext<"/ui-api/kitchens/[kitchen]/catalog/live">) {
-  return portalRoute(ctx.params, async (k) => {
+  return portalRoute(req, ctx.params, async (k) => {
     const body = (await req.json().catch(() => ({}))) as { productIds?: unknown };
     const ids = Array.isArray(body.productIds) ? body.productIds.filter((x): x is string => typeof x === "string" && x.length > 0 && x.length < 60) : [];
     if (ids.length === 0) return Response.json(errorBody("invalid_request", "Send productIds: the products to check."), { status: 400 });

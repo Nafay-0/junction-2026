@@ -214,7 +214,7 @@ export function Catalogue() {
             </Empty>
           </div>
         )}
-        <ul className={`mt-3 grid gap-3 ${loading ? "opacity-60" : ""}`} style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 15rem), 1fr))" }}>
+        <ul className={`mt-3 grid gap-3 ${loading ? "opacity-60" : ""}`} style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 13.5rem), 1fr))" }}>
           {data?.products.map((p) => <Tile key={p.id} p={p} />)}
           {!data && loading && Array.from({ length: 8 }, (_, i) => <Skeleton key={i} className="h-[22rem]" />)}
         </ul>

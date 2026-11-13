@@ -39,7 +39,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   const names = useMemo(() => Object.fromEntries((d?.order.lines ?? []).map((l) => [l.productId, l.name])), [d]);
 
   if (live.error && !d) return <ErrorPlate title="This order did not load" message={live.error} onRetry={live.refresh} />;
-  if (!d) return <div className="mt-6 h-96 animate-pulse bg-paper/60" aria-label="Loading the order" />;
+  if (!d) return <div className="mt-6 h-96 animate-pulse bg-concrete-deep/60" aria-label="Loading the order" />;
   const o = d.order;
   const quoteEntry = d.entries.find((e) => e.type === "quote" && e.data.quoteId === o.quoteId);
   const q = quoteEntry?.data as { expiresAt?: string; expiresBecause?: string; evidence?: { claimId: string; type: string; productId: string; sha256: string }[] } | undefined;
@@ -57,15 +57,15 @@ export function OrderDetail({ orderId }: { orderId: string }) {
           <p className="text-ink-soft">
             {statusWord}, {day(helsinkiToday(new Date(o.createdAt)))} {clock(o.createdAt)}
           </p>
-          <h1 className="font-display text-[2.2rem] font-bold leading-tight tracking-tight">{o.lines.map((l) => `${l.quantity} × ${shortProduct(l.name)}`).join(" + ")}</h1>
+          <h1 className="display text-[2.2rem]">{o.lines.map((l) => `${l.quantity} × ${shortProduct(l.name)}`).join(" + ")}</h1>
           {asked && <p className="mt-1 text-[1.05rem]">{asked.startsWith("Basket") ? askedText(asked) : `Asked: “${asked}”`}</p>}
         </div>
-        <p className="font-display text-[2.8rem] font-bold leading-none tabular">{money(o.totalCents)}</p>
+        <p className="display text-[2.8rem] tabular">{money(o.totalCents)}</p>
       </header>
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <section aria-labelledby="lines" className="space-y-3">
-          <h2 id="lines" className="font-display text-[1.5rem] font-bold">
+          <h2 id="lines" className="display text-[1.5rem]">
             Fixed price
           </h2>
           <Paper>
@@ -111,7 +111,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
           </Paper>
         </section>
         <section aria-labelledby="who" className="space-y-3">
-          <h2 id="who" className="font-display text-[1.5rem] font-bold">
+          <h2 id="who" className="display text-[1.5rem]">
             Who let it through
           </h2>
           <Gate order={o} kitchen={kitchen} names={names} streaming={live.streaming} byHand={!!asked?.startsWith("Basket")} />
@@ -122,7 +122,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
 
       {d.entries.length > 0 && (
         <section aria-labelledby="timeline">
-          <h2 id="timeline" className="font-display text-[1.5rem] font-bold">
+          <h2 id="timeline" className="display text-[1.5rem]">
             What the agent did and why
           </h2>
           <p className="text-[0.95rem] text-ink-soft">{d.entries.length} ledger entries for this request, each chained to the one before.</p>
@@ -197,7 +197,7 @@ function Verify({ order, evidence }: { order: Order; evidence: { claimId: string
       <div className="p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 id="verify" className="font-display text-[1.5rem] font-bold">
+            <h2 id="verify" className="display text-[1.5rem]">
               Verify
             </h2>
             <p className="text-[0.95rem] text-ink-soft">Checked in this browser against the wholesaler&apos;s published keys, without trusting the server&apos;s own answer.</p>

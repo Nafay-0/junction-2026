@@ -203,16 +203,14 @@ describe("passkey sign-off", () => {
     expect(await statusOf(a)).toBe("pending_approval");
   });
 
-  it("approving after the fixed-price quote expired is recorded but does not commit", async () => {
+  it("approving after the fixed-price quote expired does not commit: the order closed as expired", async () => {
     const k = await kitchen("org_a");
     const a = await bigOrder(k);
     now = addMinutes(START, 31); // quotes hold for 30 minutes
-    const done = await decide(a, await passkeyProof(k, a));
-    expect(done.status).toBe("rejected");
-    expect(done.confirmation).toBeUndefined();
-    expect(done.approval).toMatchObject({ status: "approved", signOff: { method: "passkey" } });
-    expect(done.decision.rules.find((r) => r.rule === "quote_expiry")?.outcome).toBe("fail");
-    expect(seen.map((e) => e.type)).toEqual(["approval_requested", "approval_approved", "order_rejected"]);
+    const proof = await passkeyProof(k, a).catch((e: unknown) => e);
+    if (!(proof instanceof Error)) await expect(decide(a, proof as never)).rejects.toMatchObject({ status: 409, code: "approval_not_pending" });
+    expect(await statusOf(a)).toBe("expired");
+    expect(seen.map((e) => e.type)).toEqual(["approval_requested", "approval_expired"]);
   });
 
   it("refuses the wrong approver: another kitchen's passkey or phone", async () => {

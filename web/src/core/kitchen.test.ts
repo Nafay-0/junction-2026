@@ -128,3 +128,13 @@ describe("structured need", () => {
     expect(describeNeed(n)).toBe("100 L of milk; must be lactose_free, fat_1_5; deliver by 2026-11-18; optimise: co2");
   });
 });
+
+describe("Helsinki calendar days (F-GATE-UTC-DATE)", () => {
+  it("counts lead days and history dates in Helsinki, across midnight and the end of summer time", async () => {
+    const { latestDeliveryDay, localDateOf } = await import("./kitchen");
+    expect(latestDeliveryDay(new Date("2026-11-13T22:30:00Z"), 5)).toBe("2026-11-19"); // 00:30 Sat in Helsinki
+    expect(latestDeliveryDay(new Date("2026-11-13T21:30:00Z"), 5)).toBe("2026-11-18"); // 23:30 Fri
+    expect(latestDeliveryDay(new Date("2026-10-24T21:30:00Z"), 5)).toBe("2026-10-30"); // 00:30 Sun, summer time
+    expect(localDateOf("2026-11-13T22:30:00.000Z")).toBe("2026-11-14");
+  });
+});

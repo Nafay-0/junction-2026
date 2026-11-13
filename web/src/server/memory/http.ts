@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { DockError } from "@/core/errors";
-import { resolveKitchen } from "@/server/console-kitchens";
+import { consoleKitchen } from "@/server/authz";
+import type { resolveKitchen } from "@/server/console-kitchens";
 import { handle, readJson } from "@/server/http";
 import { getMemoryService } from "./runtime";
 import type { MemoryService } from "./service";
@@ -14,11 +15,18 @@ import { staffFromRequest } from "./staff";
 export type ResolvedKitchen = NonNullable<Awaited<ReturnType<typeof resolveKitchen>>>;
 const noStore = { "cache-control": "no-store" };
 
-export function kitchenMemoryRoute(params: Promise<{ kitchen: string }>, fn: (k: ResolvedKitchen, memory: MemoryService) => Promise<unknown>): Promise<Response> {
-  return handle(async () => {
+/**
+ * Who may read or change a kitchen's memory is the console rule (server/authz.ts): a built-in demo kitchen's open
+ * console, or a visitor's kitchen only from their own phone. `k.info.by` is replaced by who actually answered: the
+ * visitor's name when their passkey-backed session is present, else the console's relayed name marked unverified.
+ */
+export function kitchenMemoryRoute(req: Request, params: Promise<{ kitchen: string }>, fn: (k: ResolvedKitchen, memory: MemoryService) => Promise<unknown>): Promise<Response> {
+  return handle(async (rt) => {
     const { kitchen } = await params;
-    const k = await resolveKitchen(kitchen);
-    if (!k) throw new DockError(404, "kitchen_not_found", "This kitchen does not exist or its demo time is over.");
+    const found = await consoleKitchen(req, rt, kitchen);
+    if (!found) throw new DockError(404, "kitchen_not_found", "This kitchen does not exist or its demo time is over.");
+    const person = found.console.person;
+    const k: ResolvedKitchen = { ...found, info: { ...found.info, by: person ? `${person.name} (signed in)` : `${found.info.by} (open demo console, not verified)` } };
     return Response.json(await fn(k, await getMemoryService()), { headers: noStore });
   });
 }

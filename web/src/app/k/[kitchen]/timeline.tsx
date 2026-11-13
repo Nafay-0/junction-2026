@@ -36,7 +36,7 @@ export function Timeline({ entries, names, agentName, kitchen, check = true }: {
         })}
       </ol>
       <details className="mt-2 text-[0.92rem]">
-        <summary className="cursor-pointer py-2 font-semibold underline decoration-2 underline-offset-4">Show the raw ledger entries</summary>
+        <summary className="cursor-pointer py-2 font-semibold text-petrol underline decoration-2 underline-offset-4">Show the raw ledger entries</summary>
         <div className="mt-2 max-h-80 overflow-auto bg-concrete p-3">
           {entries.map((e) => (
             <div key={e.seq} className="mb-2 break-all font-mono text-[0.78rem] leading-snug">
@@ -87,7 +87,7 @@ function ChainCheckBox({ kitchen }: { kitchen: string }) {
   }
 
   return (
-    <div className="mt-4 border-t-[3px] border-ink pt-3">
+    <div className="mt-4 border-t-[3px] border-petrol pt-3">
       <div className="flex flex-wrap gap-2">
         <Button kind="primary" busy={busy === "verify"} disabled={!!busy} onClick={() => void run(false)}>
           Check the whole chain in this browser

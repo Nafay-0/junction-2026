@@ -90,7 +90,8 @@ describe("intake tools", () => {
 
     const { dock } = await getRuntime();
     const confirmation = dock.ledger.entries({ requestId }).find((e) => e.data.step === "confirmation")!;
-    expect(confirmation).toMatchObject({ actor: "buyer:Sanna", data: { relayedBy: KITCHEN_ORG.agentId } });
+    // Relayed by the agent (no elicitation here): recorded as such, never as Sanna's own confirmation.
+    expect(confirmation).toMatchObject({ actor: `agent:${KITCHEN_ORG.agentId}`, data: { by: "Sanna", relayedBy: KITCHEN_ORG.agentId, verified: false } });
   });
 
   it("cannot skip a pending confirmation, through the intake tools or around them", async () => {
@@ -163,7 +164,8 @@ describe("intake tools with a client that can ask the buyer (MCP elicitation)", 
     expect(r.s).toMatchObject({ ok: true, step: { state: "options_ready", need: { quantity: { amount: 1000 } }, acknowledgements: [{ action: "confirmed", by: "Sanna Koskinen" }] } });
     expect(forms[0].requestedSchema.properties[key]).toMatchObject({ default: step.concerns[0].corrections[0].id, oneOf: expect.arrayContaining([{ const: "confirm", title: expect.any(String) }]) });
     expect(forms[0].requestedSchema.required).toEqual(["by", key]);
-
+    // Elicitation is the protocol's own human-input mechanism: the answer is the buyer's, not relayed.
+    expect(r.s.step.acknowledgements[0]).toMatchObject({ channel: "protocol_elicitation", verified: true });
   });
 
   it("changes nothing when the buyer declines", async () => {
@@ -192,6 +194,7 @@ describe("intake tools with a client that can ask the buyer (MCP elicitation)", 
 
     const relayed = await call(client, "respond_to_concerns", { ...answer, relay: true });
     expect(relayed.s).toMatchObject({ ok: true, step: { state: "options_ready" } });
+    expect(relayed.s.step.acknowledgements[0]).toMatchObject({ channel: "relayed", verified: false });
     expect(shown).toBe(1);
   });
 });

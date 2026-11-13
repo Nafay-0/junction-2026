@@ -21,6 +21,7 @@ import * as outbox from "@/app/api/v1/dev/outbox/route";
 import * as keys from "@/app/api/v1/keys/route";
 import * as ledger from "@/app/api/v1/ledger/route";
 import * as order from "@/app/api/v1/orders/[orderId]/route";
+import * as orderWithdraw from "@/app/api/v1/orders/[orderId]/withdraw/route";
 import * as orders from "@/app/api/v1/orders/route";
 import * as products from "@/app/api/v1/products/route";
 import * as quotes from "@/app/api/v1/quotes/route";
@@ -37,6 +38,7 @@ const routes: [RegExp, string[], RouteModule][] = [
   [/^\/api\/v1\/quotes$/, [], quotes],
   [/^\/api\/v1\/orders$/, [], orders],
   [/^\/api\/v1\/orders\/([^/]+)$/, ["orderId"], order as RouteModule],
+  [/^\/api\/v1\/orders\/([^/]+)\/withdraw$/, ["orderId"], orderWithdraw as RouteModule],
   [/^\/api\/v1\/approvals$/, [], approvals],
   [/^\/api\/v1\/approvals\/([^/]+)$/, ["approvalId"], approval as RouteModule],
   [/^\/api\/v1\/approvals\/([^/]+)\/challenge$/, ["approvalId"], approvalChallenge as RouteModule],

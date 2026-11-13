@@ -409,19 +409,22 @@ function JoinPanel({ join, kitchens }: { join: { url: string; qrSvg: string }; k
         <div className="mt-[2vh] px-[1.6vw]">
           <h3 className="text-[max(1rem,1vw)] font-semibold">Kitchens here now: {kitchens.length}</h3>
           <ul className="mt-1 divide-y divide-paper/15 border-t border-paper/15">
-            {kitchens.slice(0, 3).map((k) => (
-              <li key={k.slug} className="flex items-center justify-between gap-2 py-[0.6vh] text-[max(0.92rem,0.9vw)]">
+            {kitchens.slice(0, 3).map((k, i) => (
+              <li key={k.slug || `${k.name}-${i}`} className="flex items-center justify-between gap-2 py-[0.6vh] text-[max(0.92rem,0.9vw)]">
                 <span className="min-w-0 truncate">
                   {k.name}, <span className="text-paper/70">{k.approverName}</span>
                 </span>
-                <span className="flex shrink-0 gap-2">
-                  <Link href={`/k/${k.slug}`} className="border-2 border-paper/60 px-2 py-0.5 font-semibold hover:border-paper">
-                    Shop
-                  </Link>
-                  <button type="button" disabled={busy === k.slug} onClick={() => void start(k.slug)} className="border-2 border-paper/60 px-2 py-0.5 font-semibold hover:border-paper disabled:opacity-50">
-                    {busy === k.slug ? "Starting…" : "Run 1 000 L"}
-                  </button>
-                </span>
+                {/* Only the operations desk's screen gets the kitchens' ids, and so the buttons (server/authz.ts). */}
+                {k.slug && (
+                  <span className="flex shrink-0 gap-2">
+                    <Link href={`/k/${k.slug}`} className="border-2 border-paper/60 px-2 py-0.5 font-semibold hover:border-paper">
+                      Shop
+                    </Link>
+                    <button type="button" disabled={busy === k.slug} onClick={() => void start(k.slug)} className="border-2 border-paper/60 px-2 py-0.5 font-semibold hover:border-paper disabled:opacity-50">
+                      {busy === k.slug ? "Starting…" : "Run 1 000 L"}
+                    </button>
+                  </span>
+                )}
               </li>
             ))}
           </ul>

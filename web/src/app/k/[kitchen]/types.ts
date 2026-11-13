@@ -21,7 +21,7 @@ export type LedgerReply = {
   entries: LedgerEntry[];
 };
 
-export type ApprovalQr = { mode: "passkey" | "demo_link" | "view_only"; approver: { name: string; role: string }; status: string; url: string; qrSvg: string };
+export type ApprovalQr = { mode: "passkey" | "demo_link" | "enrol" | "view_only"; approver: { name: string; role: string }; status: string; orderId?: string; url: string; qrSvg: string };
 
 // ---------- the kitchen portal ----------
 export type { CutoffReply, LiveReply, LiveResult, Overview, PortalOrder, PortalRequest, Standing, WeekNumbers, ShopCategory, ShopDepartment };

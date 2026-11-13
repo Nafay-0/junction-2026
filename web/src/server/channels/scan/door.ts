@@ -16,7 +16,7 @@ import { readDocument, type ScanResult } from "./read";
 
 export async function scan(kitchen: string, req: Request): Promise<ScanResult> {
   guard(req, "read");
-  await kitchenAgent(kitchen); // the kitchen must exist
+  await kitchenAgent(kitchen, req); // the kitchen must exist, and a visitor's only from their own phone
   const type = req.headers.get("content-type") ?? "";
   const body = await readCapped(req, 11 * 1024 * 1024);
   let input: Parameters<typeof readDocument>[0];
@@ -78,7 +78,7 @@ export async function scanStep(kitchen: string, req: Request): Promise<StepReply
     throw new DockError(400, "invalid_json", "Request body must be JSON.");
   }
   const body = parse(StepBody, input);
-  const a = await kitchenAgent(kitchen);
+  const a = await kitchenAgent(kitchen, req);
   try {
     switch (body.action) {
       case "open":

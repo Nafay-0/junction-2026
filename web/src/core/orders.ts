@@ -2,6 +2,7 @@ import { CompactSign } from "jose";
 import { z } from "zod";
 import {
   ApprovalProofSchema,
+  checkLinkToken,
   describeSignOff,
   linkTokenVerifier,
   newApprovalToken,
@@ -19,7 +20,8 @@ import { InMemoryIntakeRepository, createIntakeFlow, recordCommittedOrder, type 
 import { InMemoryKitchenRepository, type KitchenRepository } from "./kitchen";
 import { SIGN_ALG, type KeyPair } from "./keys";
 import type { Ledger, LedgerHead } from "./ledger";
-import { LiveLookupAllowance, agentKeyOf } from "./live-allowance";
+import { LiveLookupAllowance, shareKeyOf } from "./live-allowance";
+import { MAX_LIVE_IDS_PER_CALL } from "./catalog";
 import { MandateError, verifyMandate, type Mandate, type TrustRegistry } from "./mandate";
 import { SPLIT_WINDOW_HOURS, decidingRule, evaluatePolicy, type Decision, type OrderDraftLine, type RecentOrder } from "./policy";
 import { QuoteError, QuoteRequestLineSchema, buildQuote, signQuote, verifyQuote, type Quote, type QuoteLine } from "./quote";
@@ -41,6 +43,10 @@ export { DockError };
 export const OpenRequestInput = z.object({
   text: z.string().min(1).max(2000), // the buyer's need in their own words
   neededBy: z.iso.date().optional(),
+  /** Products the buyer asked for by id. Product ids written in `text` count too (when they exist in the catalogue). */
+  productIds: z.array(z.string().min(1).max(60)).max(20).optional(),
+  /** The product family asked for, when known (the intake sets it). */
+  category: z.string().min(1).max(60).optional(),
 });
 export const SearchInput = ProductQuerySchema.omit({ ids: true }).extend({ requestId: z.string().min(1) });
 export const AvailabilityInput = z.object({
@@ -51,11 +57,23 @@ export const AvailabilityInput = z.object({
   /** Also return the signed claims (price, availability, origin) as compact JWS tokens. Their ids are always on each offer. */
   includeClaims: z.boolean().optional(),
 });
-export const QuoteInput = z.object({ requestId: z.string().min(1), lines: z.array(QuoteRequestLineSchema).min(1).max(20) });
+/**
+ * Lines one quote may hold: a wholesale basket (a week's menu) has dozens. The money rules (per-order limit, weekly
+ * budget, order splitting) are what protect the buyer, not a line count; the live lookup for a long quote is made
+ * in calls of MAX_LIVE_IDS_PER_CALL, each counted against the agent's allowance.
+ */
+export const MAX_QUOTE_LINES = 60;
+export const QuoteInput = z.object({ requestId: z.string().min(1), lines: z.array(QuoteRequestLineSchema).min(1).max(MAX_QUOTE_LINES) });
 export const PlaceOrderInput = z.object({
   requestId: z.string().min(1),
   quoteToken: z.string().min(1),
   lines: z.array(z.object({ productId: z.string(), quantity: z.number(), unitPriceCents: z.number() })),
+});
+export const WithdrawInput = z.object({
+  /** Why, in the buyer's words; written to the ledger. */
+  reason: z.string().max(300).optional(),
+  /** Who asked for it, as relayed by the agent (recorded as relayed, not verified). */
+  by: z.string().min(1).max(120).optional(),
 });
 export const ApprovalDecisionInput = z.object({
   decision: z.enum(["approve", "decline"]),
@@ -65,7 +83,11 @@ export const ApprovalDecisionInput = z.object({
 
 // ---------- records ----------
 
-export type AgentSession = { mandate: Mandate; agentId: string };
+/**
+ * `share`: an on-site console's browser session, set by the server only (never from a header an outside caller can
+ * send). It gives that session its own share of the agent's live-lookup allowance (see live-allowance.ts).
+ */
+export type AgentSession = { mandate: Mandate; agentId: string; share?: string };
 
 export type PurchaseRequest = {
   requestId: string;
@@ -74,10 +96,19 @@ export type PurchaseRequest = {
   mandateId: string;
   text: string;
   neededBy?: string;
+  /**
+   * What the buyer asked for, as Dock read it (never what the agent declares at quote time): products named by id
+   * (in the request's fields or its text) and the family. The gate treats any other product as a substitute of it.
+   */
+  asked?: { productIds: string[]; category?: string };
   createdAt: string;
 };
 
-export type OrderStatus = "pending_approval" | "committed" | "rejected" | "declined";
+/**
+ * pending_approval: waiting for a person, holding its total against the weekly budget until its quote expires.
+ * withdrawn: the buyer took it back before anyone signed. expired: its fixed price ran out before anyone signed.
+ */
+export type OrderStatus = "pending_approval" | "committed" | "rejected" | "declined" | "withdrawn" | "expired";
 
 export type Order = {
   orderId: string;
@@ -208,6 +239,8 @@ export type DockDeps = {
   kitchens?: KitchenRepository; // kitchen memory: order history and preferences (see kitchen.ts)
   intakes?: IntakeRepository; // structured-need intake sessions (see intake.ts)
   liveAllowance?: LiveLookupAllowance; // per-agent hourly allowance of live lookups (see live-allowance.ts)
+  /** How long a live answer (per product and delivery date) is reused for option cards. Quotes always ask afresh. Default 120 s; 0 switches it off. */
+  liveCacheTtlMs?: number;
   claims?: ClaimStore; // signed claims handed out (see claims.ts)
 };
 
@@ -227,6 +260,12 @@ export function describeOffer(o: LiveOffer): string {
 
 export type Dock = ReturnType<typeof createDock>;
 
+/** "3 x A, 2 x B" for the ledger; a long basket names its first 12 lines and counts the rest. */
+function listLines(lines: { quantity: number; productId: string }[]): string {
+  const shown = lines.slice(0, 12).map((l) => `${l.quantity} x ${l.productId}`).join(", ");
+  return lines.length > 12 ? `${shown} and ${lines.length - 12} more line${lines.length - 12 > 1 ? "s" : ""} (${lines.length} in all)` : shown;
+}
+
 export const ORDER_TYP = "order+jws";
 
 export function createDock(deps: DockDeps) {
@@ -238,6 +277,10 @@ export function createDock(deps: DockDeps) {
   const intakes = deps.intakes ?? new InMemoryIntakeRepository();
   const liveAllowance = deps.liveAllowance ?? new LiveLookupAllowance(undefined, now);
   const claimStore = deps.claims ?? new ClaimStore();
+  const liveCacheTtlMs = deps.liveCacheTtlMs ?? 120_000;
+  /** Live answers by product and delivery date, with when the partner gave them. Bounded; oldest dropped first. */
+  const liveCache = new Map<string, { at: number; status: LiveStatus }>();
+  const LIVE_CACHE_MAX = 5000;
   const agentActor = (s: AgentSession) => `agent:${s.agentId}`;
   const publish: EventPublisher["publish"] = (e) => {
     try {
@@ -255,6 +298,32 @@ export function createDock(deps: DockDeps) {
     return run;
   }
 
+  /** Product ids the buyer asked for: the explicit list, plus ids written in the text that exist in the catalogue. */
+  async function askedProducts(text: string, explicit: string[]): Promise<string[]> {
+    // Only id-shaped tokens (letters and digits with a dash, or six or more digits), never a plain amount like "1000".
+    const tokens = [...new Set(text.match(/\b(?:[A-Z]{1,5}-\d{2,8}|\d{6,10})\b/g) ?? [])].slice(0, 20);
+    const ids = [...new Set([...explicit, ...tokens])];
+    if (!ids.length) return [];
+    const found = new Set((await catalog.searchProducts({ ids, limit: 100 })).map((p) => p.id));
+    return ids.filter((id) => found.has(id) || explicit.includes(id));
+  }
+
+  /** Quote lines with substitutes as Dock reads them from the request (see requestQuote). */
+  async function substitutesOf(request: PurchaseRequest, lines: z.output<typeof QuoteInput>["lines"]): Promise<z.output<typeof QuoteInput>["lines"]> {
+    const asked = request.asked?.productIds ?? [];
+    if (!asked.length) return lines;
+    const products = await catalog.searchProducts({ ids: [...new Set([...asked, ...lines.map((l) => l.productId)])], limit: 100 });
+    const byId = new Map(products.map((p) => [p.id, p]));
+    const closest = (id: string) => {
+      const p = byId.get(id);
+      return asked.find((a) => byId.get(a)?.category === p?.category && byId.get(a)?.unit === p?.unit) ?? asked.find((a) => byId.get(a)?.category === p?.category) ?? asked[0];
+    };
+    return lines.map((l) => {
+      if (asked.includes(l.productId)) return l.substituteFor && asked.includes(l.substituteFor) ? l : { ...l, substituteFor: undefined };
+      return { ...l, substituteFor: l.substituteFor && asked.includes(l.substituteFor) ? l.substituteFor : closest(l.productId) };
+    });
+  }
+
   async function ownRequest(session: AgentSession, requestId: string): Promise<PurchaseRequest> {
     const r = await repo.getRequest(requestId);
     if (!r || r.orgId !== session.mandate.issuer.orgId || r.agentId !== session.agentId) {
@@ -263,13 +332,65 @@ export function createDock(deps: DockDeps) {
     return r;
   }
 
-  async function spentThisWeek(orgId: string, excludeOrderId?: string): Promise<number> {
+  /**
+   * An order waiting for sign-off holds its total only while its fixed price does: once the quote expires nobody
+   * can sign it any more (the re-check would refuse it), so it is closed as expired, logged, and stops holding money.
+   */
+  const expiring = new Set<string>();
+  async function expireStale(orgId?: string): Promise<void> {
+    const t = now().getTime();
+    for (const o of await repo.listOrders()) {
+      if ((orgId && o.orgId !== orgId) || o.status !== "pending_approval" || Date.parse(o.quote.expiresAt) > t || expiring.has(o.orderId)) continue;
+      expiring.add(o.orderId);
+      try {
+        const at = now().toISOString();
+        o.status = "expired";
+        o.updatedAt = at;
+        if (o.approval && o.approval.status === "pending") {
+          o.approval.status = "expired";
+          o.approval.decidedAt = at;
+        }
+        await repo.saveOrder(o);
+        ledger.append({
+          type: "approval",
+          actor: "dock",
+          requestId: o.requestId,
+          orderId: o.orderId,
+          summary: `Order ${o.orderId} (${formatEur(o.totalCents)}) expired unsigned: its quote's fixed price ran out at ${o.quote.expiresAt.slice(0, 16).replace("T", " ")} UTC before anyone signed. It no longer holds the weekly budget; ask for a new quote to order again.`,
+          data: { approvalId: o.approval?.approvalId, decision: "expired", quoteExpiresAt: o.quote.expiresAt },
+        });
+        publish({ type: "approval_expired", at, orgId: o.orgId, orderId: o.orderId, approvalId: o.approval?.approvalId, totalCents: o.totalCents, summary: `${o.orgName}: the ${formatEur(o.totalCents)} order waiting for sign-off expired unsigned (its price ran out).` });
+      } finally {
+        expiring.delete(o.orderId);
+      }
+    }
+  }
+
+  /** The organisation's spend over the last 7 days: committed, and held by orders still waiting for sign-off. */
+  async function budgetUse(orgId: string, excludeOrderId?: string): Promise<{ spentCents: number; heldCents: number; held: { orderId: string; totalCents: number; expiresAt: string }[] }> {
+    await expireStale(orgId);
     const since = addDays(now(), -7).getTime();
-    return (await repo.listOrders())
-      .filter((o) => o.orgId === orgId && o.orderId !== excludeOrderId)
-      .filter((o) => o.status === "committed" || o.status === "pending_approval")
-      .filter((o) => Date.parse(o.createdAt) > since)
-      .reduce((sum, o) => sum + o.totalCents, 0);
+    const t = now().getTime();
+    const recent = (await repo.listOrders()).filter((o) => o.orgId === orgId && o.orderId !== excludeOrderId && Date.parse(o.createdAt) > since);
+    const committed = recent.filter((o) => o.status === "committed");
+    const held = recent.filter((o) => o.status === "pending_approval" && Date.parse(o.quote.expiresAt) > t);
+    const sum = (xs: Order[]) => xs.reduce((s, o) => s + o.totalCents, 0);
+    return { spentCents: sum(committed) + sum(held), heldCents: sum(held), held: held.map((o) => ({ orderId: o.orderId, totalCents: o.totalCents, expiresAt: o.quote.expiresAt })) };
+  }
+
+  async function spentThisWeek(orgId: string, excludeOrderId?: string): Promise<number> {
+    return (await budgetUse(orgId, excludeOrderId)).spentCents;
+  }
+
+  async function budgetContext(orgId: string, excludeOrderId?: string) {
+    const b = await budgetUse(orgId, excludeOrderId);
+    return { spentThisWeekCents: b.spentCents, heldThisWeekCents: b.heldCents, heldOrders: b.held };
+  }
+
+  /** Confirmations of the request's intake that matter but were only relayed by the agent (policy human_confirmation). */
+  async function unverifiedOf(requestId: string) {
+    const u = (await intakes.get(requestId))?.unverified ?? [];
+    return u.length ? { unverifiedConfirmations: u.map(({ code, message, by }) => ({ code, message, by })) } : {};
   }
 
   /** Orders of this organisation in the splitting window, for the order_splitting rule. */
@@ -294,26 +415,72 @@ export function createDock(deps: DockDeps) {
    * delivery date, with every statement signed as a claim and every problem named. A failure of the partner's
    * service is reported as that (503, retry), not as a refusal by a rule.
    */
-  async function liveLookup(session: AgentSession, requestId: string, productIds: string[], deliveryDate: string | undefined, why: string): Promise<LiveLookupResult> {
+  async function liveLookup(
+    session: AgentSession,
+    requestId: string,
+    productIds: string[],
+    deliveryDate: string | undefined,
+    why: string,
+    opts: { fresh?: boolean; batch?: boolean } = {},
+  ): Promise<LiveLookupResult> {
     const actor = agentActor(session);
     const ids = [...new Set(productIds)];
-    try {
-      liveAllowance.reserve(agentKeyOf(session.mandate.issuer.orgId, session.agentId), ids);
-    } catch (err) {
-      if (err instanceof DockError) throw refuse(err, actor, { requestId });
-      throw err;
-    }
-    let statuses: LiveStatus[];
-    try {
-      statuses = await catalog.getLiveStatus(ids, deliveryDate ? { deliveryDate } : undefined);
-    } catch (err) {
-      if (err instanceof CatalogError && err.code === "too_many_products") throw refuse(new DockError(400, err.code, err.message, "live_lookup_limit"), actor, { requestId });
-      if (err instanceof CatalogError) {
-        ledger.append({ type: "lookup", actor: "dock", requestId, summary: `The wholesaler's live price/availability service did not answer (${why}); nothing was looked up or refused.`, data: { source: "live", failed: true, code: err.code, productIds: ids } });
-        throw new DockError(503, "live_unavailable", `${err.message} This is the wholesaler's service, not a rule: try again in a minute.`, undefined, { retryable: true });
+    const cacheKey = (id: string) => `${id}|${deliveryDate ?? ""}`;
+    const t0 = now().getTime();
+    // Answers the partner gave a moment ago are reused for option cards: they cost the partner nothing and are not
+    // counted. A quote fixes a price, so it always asks afresh.
+    const fromCache = new Map<string, { at: number; status: LiveStatus }>();
+    if (!opts.fresh && liveCacheTtlMs > 0) {
+      for (const id of ids) {
+        const hit = liveCache.get(cacheKey(id));
+        if (hit && t0 - hit.at < liveCacheTtlMs) fromCache.set(id, hit);
       }
-      throw err;
     }
+    const missing = ids.filter((id) => !fromCache.has(id));
+    if (!opts.batch && ids.length > MAX_LIVE_IDS_PER_CALL) {
+      // The per-call cap is on what the agent asks for, cached or not: a short list is a short list.
+      throw refuse(new DockError(400, "too_many_products", `At most ${MAX_LIVE_IDS_PER_CALL} products per live price/availability call; this asked for ${ids.length}. Shortlist first with a master-data search.`, "live_lookup_limit"), actor, { requestId });
+    }
+    const chunks: string[][] = [];
+    for (let i = 0; i < missing.length; i += MAX_LIVE_IDS_PER_CALL) chunks.push(missing.slice(i, i + MAX_LIVE_IDS_PER_CALL));
+    const shareKey = shareKeyOf(session.mandate.issuer.orgId, session.agentId, session.share);
+    let statuses: LiveStatus[] = [];
+    const fetchedAt = new Map<string, number>();
+    for (const chunk of chunks) {
+      try {
+        liveAllowance.reserve(shareKey, chunk);
+      } catch (err) {
+        if (err instanceof DockError) throw refuse(err, actor, { requestId });
+        throw err;
+      }
+      let got: LiveStatus[];
+      try {
+        got = await catalog.getLiveStatus(chunk, deliveryDate ? { deliveryDate } : undefined);
+      } catch (err) {
+        if (err instanceof CatalogError && err.code === "too_many_products") throw refuse(new DockError(400, err.code, err.message, "live_lookup_limit"), actor, { requestId });
+        if (err instanceof CatalogError) {
+          ledger.append({ type: "lookup", actor: "dock", requestId, summary: `The wholesaler's live price/availability service did not answer (${why}); nothing was looked up or refused.`, data: { source: "live", failed: true, code: err.code, productIds: ids } });
+          throw new DockError(503, "live_unavailable", `${err.message} This is the wholesaler's service, not a rule: try again in a minute.`, undefined, { retryable: true });
+        }
+        throw err;
+      }
+      const at = now().getTime();
+      for (const st of got) {
+        fetchedAt.set(st.productId, at);
+        if (liveCacheTtlMs > 0) {
+          liveCache.delete(cacheKey(st.productId));
+          liveCache.set(cacheKey(st.productId), { at, status: structuredClone(st) });
+        }
+      }
+      while (liveCache.size > LIVE_CACHE_MAX) liveCache.delete(liveCache.keys().next().value!);
+      statuses.push(...got);
+    }
+    const cached = [...fromCache.values()].map((h) => {
+      const st = structuredClone(h.status);
+      fetchedAt.set(st.productId, h.at);
+      return st;
+    });
+    statuses = [...statuses, ...cached].sort((a, b) => ids.indexOf(a.productId) - ids.indexOf(b.productId));
     const at = now();
     const audience = session.mandate.issuer.orgId;
     const products = await catalog.searchProducts({ ids, limit: 100 });
@@ -327,9 +494,10 @@ export function createDock(deps: DockDeps) {
     const offers: LiveOffer[] = [];
     for (const st of statuses) {
       const product = products.find((p) => p.id === st.productId);
-      const origin = product ? await sign(originClaimInput(product, at)) : undefined;
+      const seen = new Date(fetchedAt.get(st.productId) ?? at.getTime()); // a cached answer is claimed as of when the partner gave it
+      const origin = product ? await sign(originClaimInput(product, seen)) : undefined;
       if (st.offer) {
-        st.offer.claims = { price: await sign(priceClaimInput(st.offer, at, audience)), availability: await sign(availabilityClaimInput(st.offer, at, audience)), origin };
+        st.offer.claims = { price: await sign(priceClaimInput(st.offer, seen, audience)), availability: await sign(availabilityClaimInput(st.offer, seen, audience)), origin };
       }
       const usable = usableOffer(st);
       if (usable) offers.push(usable);
@@ -339,8 +507,8 @@ export function createDock(deps: DockDeps) {
       type: "lookup",
       actor,
       requestId,
-      summary: `${why} for ${ids.length} product(s)${deliveryDate ? ` for delivery by ${deliveryDate}` : ""} (live call #${catalog.stats().liveCalls}): ${[...offers.map(describeOffer), ...unavailable.map((u) => `${u.productId} not quotable: ${u.problems.join(", ")}`)].join("; ")}. ${claims.length} signed claims issued.`,
-      data: { source: "live", productIds: ids, deliveryDate, offers, unavailable, claimIds: claims.map((c) => c.claimId) },
+      summary: `${why} for ${ids.length} product(s)${deliveryDate ? ` for delivery by ${deliveryDate}` : ""} (${chunks.length ? `${chunks.length} live call${chunks.length > 1 ? "s" : ""}, #${catalog.stats().liveCalls} so far` : "no live call"}${fromCache.size ? `; ${fromCache.size} answer${fromCache.size > 1 ? "s" : ""} reused from the last ${Math.round(liveCacheTtlMs / 1000)} s, not counted` : ""}): ${[...offers.map(describeOffer), ...unavailable.map((u) => `${u.productId} not quotable: ${u.problems.join(", ")}`)].join("; ")}. ${claims.length} signed claims issued.`,
+      data: { source: "live", productIds: ids, deliveryDate, offers, unavailable, claimIds: claims.map((c) => c.claimId), liveCalls: chunks.length, cached: [...fromCache.keys()] },
     });
     return { offers, statuses, unavailable, claims };
   }
@@ -459,7 +627,8 @@ export function createDock(deps: DockDeps) {
     },
 
     async openRequest(session: AgentSession, input: z.input<typeof OpenRequestInput>): Promise<PurchaseRequest> {
-      const { text, neededBy } = parse(OpenRequestInput, input);
+      const { text, neededBy, productIds, category } = parse(OpenRequestInput, input);
+      const named = await askedProducts(text, productIds ?? []);
       const r: PurchaseRequest = {
         requestId: newId("req"),
         orgId: session.mandate.issuer.orgId,
@@ -467,6 +636,7 @@ export function createDock(deps: DockDeps) {
         mandateId: session.mandate.mandateId,
         text,
         neededBy,
+        ...(named.length || category ? { asked: { productIds: named, ...(category ? { category } : {}) } } : {}),
         createdAt: now().toISOString(),
       };
       await repo.saveRequest(r);
@@ -475,7 +645,7 @@ export function createDock(deps: DockDeps) {
         actor: agentActor(session),
         requestId: r.requestId,
         summary: `Agent ${session.agentId} of ${session.mandate.issuer.name} opened a request: "${text}"${neededBy ? `, needed by ${neededBy}` : ""}.`,
-        data: { text, neededBy, mandateId: r.mandateId },
+        data: { text, neededBy, mandateId: r.mandateId, ...(r.asked ? { asked: r.asked } : {}) },
       });
       return r;
     },
@@ -521,14 +691,18 @@ export function createDock(deps: DockDeps) {
 
     /** Ask the wholesaler for a fixed-price quote. Returns the signed quote and what the gate would decide on it now. */
     async requestQuote(session: AgentSession, input: z.input<typeof QuoteInput>) {
-      const { requestId, lines } = parse(QuoteInput, input);
+      const parsed = parse(QuoteInput, input);
+      const { requestId } = parsed;
       const request = await ownRequest(session, requestId);
+      // Dock decides what is a substitute, from what was asked: a line for any other product replaces the product
+      // asked for, and its price is compared with that product's, whatever the agent declared.
+      const lines = await substitutesOf(request, parsed.lines);
       const ids = [...new Set(lines.flatMap((l) => (l.substituteFor ? [l.productId, l.substituteFor] : [l.productId])))];
       let quote: Quote;
       let claims: IssuedClaim[] = [];
       try {
         const products = await catalog.searchProducts({ ids, limit: 100 });
-        const live = await liveLookup(session, requestId, ids, request.neededBy, "Dock asked live prices for a quote");
+        const live = await liveLookup(session, requestId, ids, request.neededBy, "Dock asked live prices for a quote", { fresh: true, batch: true });
         const offers = live.offers;
         // Say why a line cannot be quoted, in the partner's terms (a passed cut-off, a sales block, no price).
         for (const l of lines) {
@@ -568,13 +742,13 @@ export function createDock(deps: DockDeps) {
         type: "quote",
         actor: "dock",
         requestId,
-        summary: `Wholesaler quoted ${quote.quoteId}: ${quote.lines.map((l) => `${l.quantity} x ${l.productId}`).join(", ")} for ${formatEur(quote.totalCents)}${subs ? ` (${subs} substitute${subs > 1 ? "s" : ""})` : ""}, price fixed until ${quote.expiresAt.slice(0, 16).replace("T", " ")} UTC${quote.expiresBecause === "order_cutoff" ? " (the order cut-off)" : quote.expiresBecause === "price_validity" ? " (when the price stops being valid)" : ""}; it rests on ${quote.evidence?.length ?? 0} signed claims.`,
+        summary: `Wholesaler quoted ${quote.quoteId}: ${listLines(quote.lines)} for ${formatEur(quote.totalCents)}${subs ? ` (${subs} substitute${subs > 1 ? "s" : ""})` : ""}, price fixed until ${quote.expiresAt.slice(0, 16).replace("T", " ")} UTC${quote.expiresBecause === "order_cutoff" ? " (the order cut-off)" : quote.expiresBecause === "price_validity" ? " (when the price stops being valid)" : ""}; it rests on ${quote.evidence?.length ?? 0} signed claims.`,
         data: { quoteId: quote.quoteId, totalCents: quote.totalCents, expiresAt: quote.expiresAt, expiresBecause: quote.expiresBecause, evidence: quote.evidence, lines: quote.lines.map((l) => ({ productId: l.productId, quantity: l.quantity, unitPriceCents: l.unitPriceCents, deliveryDate: l.deliveryDate, substituteFor: l.substituteFor?.productId })) },
       });
       const policyPreview = evaluatePolicy(
         session.mandate,
-        { agentId: session.agentId, quote, lines: quote.lines, neededBy: request.neededBy },
-        { now: now(), spentThisWeekCents: await spentThisWeek(quote.buyerOrgId), quoteAlreadyUsed: false, recentOrders: await recentOrders(quote.buyerOrgId) },
+        { agentId: session.agentId, quote, lines: quote.lines, neededBy: request.neededBy, requestId, asked: request.asked },
+        { now: now(), ...(await budgetContext(quote.buyerOrgId)), ...(await unverifiedOf(requestId)), quoteAlreadyUsed: false, recentOrders: await recentOrders(quote.buyerOrgId) },
       );
       return { quote, quoteToken, policyPreview, claims };
     },
@@ -592,8 +766,8 @@ export function createDock(deps: DockDeps) {
       }
       const orgId = session.mandate.issuer.orgId;
       return serialize(orgId, async () => {
-        const draft = { agentId: session.agentId, quote, lines, neededBy: request.neededBy };
-        const ctx = { now: now(), spentThisWeekCents: await spentThisWeek(orgId), quoteAlreadyUsed: await repo.isQuoteUsed(quote.quoteId), recentOrders: await recentOrders(orgId) };
+        const draft = { agentId: session.agentId, quote, lines, neededBy: request.neededBy, requestId, asked: request.asked };
+        const ctx = { now: now(), ...(await budgetContext(orgId)), ...(await unverifiedOf(requestId)), quoteAlreadyUsed: await repo.isQuoteUsed(quote.quoteId), recentOrders: await recentOrders(orgId) };
         let decision = evaluatePolicy(session.mandate, draft, ctx);
         if (decision.outcome !== "reject" && !(await repo.claimQuote(quote.quoteId))) {
           decision = evaluatePolicy(session.mandate, draft, { ...ctx, quoteAlreadyUsed: true });
@@ -682,6 +856,7 @@ export function createDock(deps: DockDeps) {
       const { decision, proof, note } = parse(ApprovalDecisionInput, input);
       const found = await repo.getOrderByApprovalId(approvalId);
       if (!found?.approval) throw new DockError(404, "approval_not_found", `No approval ${approvalId}.`);
+      await expireStale(found.orgId);
       return serialize(found.orgId, async () => {
         const order = (await repo.getOrder(found.orderId))!;
         const approval = order.approval!;
@@ -738,8 +913,8 @@ export function createDock(deps: DockDeps) {
         const request = await repo.getRequest(order.requestId);
         const recheck = evaluatePolicy(
           order.mandate,
-          { agentId: order.agentId, quote: order.quote, lines: order.draftLines, neededBy: request?.neededBy },
-          { now: now(), spentThisWeekCents: await spentThisWeek(order.orgId, order.orderId), quoteAlreadyUsed: false, recentOrders: await recentOrders(order.orgId, order.orderId) },
+          { agentId: order.agentId, quote: order.quote, lines: order.draftLines, neededBy: request?.neededBy, requestId: order.requestId, asked: request?.asked },
+          { now: now(), ...(await budgetContext(order.orgId, order.orderId)), ...(await unverifiedOf(order.requestId)), quoteAlreadyUsed: false, recentOrders: await recentOrders(order.orgId, order.orderId) },
         );
         if (recheck.outcome === "reject") {
           order.status = "rejected";
@@ -776,8 +951,10 @@ export function createDock(deps: DockDeps) {
 
     /** Everything a sign-off screen needs about one approval (no secrets). For the approver's phone, not for agents. */
     async approvalContext(approvalId: string): Promise<ApprovalContext> {
-      const o = await repo.getOrderByApprovalId(approvalId);
-      if (!o?.approval) throw new DockError(404, "approval_not_found", `No approval ${approvalId}.`);
+      const found = await repo.getOrderByApprovalId(approvalId);
+      if (!found?.approval) throw new DockError(404, "approval_not_found", `No approval ${approvalId}.`);
+      await expireStale(found.orgId);
+      const o = (await repo.getOrderByApprovalId(approvalId))!;
       const request = await repo.getRequest(o.requestId);
       return {
         order: toPublicOrder(o),
@@ -790,13 +967,15 @@ export function createDock(deps: DockDeps) {
     },
 
     async getOrder(session: AgentSession, orderId: string): Promise<PublicOrder> {
+      await expireStale(session.mandate.issuer.orgId);
       const o = await repo.getOrder(orderId);
       if (!o || o.orgId !== session.mandate.issuer.orgId) throw new DockError(404, "order_not_found", `No order ${orderId} for this organisation.`);
       return toPublicOrder(o);
     },
 
-    // APPROVER-AUTH SEAM: listing is open today; restrict it to signed-in approvers when passkeys land.
+    /** Every organisation's pending sign-offs. Callers decide who may see which (see server/authz.ts). */
     async listPendingApprovals(): Promise<PendingApproval[]> {
+      await expireStale();
       return (await repo.listOrders())
         .filter((o) => o.status === "pending_approval" && o.approval?.status === "pending")
         .map((o) => ({
@@ -813,7 +992,63 @@ export function createDock(deps: DockDeps) {
     },
 
     async listOrders(): Promise<PublicOrder[]> {
+      await expireStale();
       return (await repo.listOrders()).map(toPublicOrder);
+    },
+
+    /**
+     * The buyer takes back an order that waits for sign-off: it stops holding the weekly budget at once, the
+     * approver's phone shows it as withdrawn, and the ledger says who asked (relayed by the agent). Only the
+     * organisation's own pending orders; anything decided stays as it is.
+     */
+    async withdrawOrder(session: AgentSession, orderId: string, input: z.input<typeof WithdrawInput> = {}): Promise<PublicOrder> {
+      const { reason, by } = parse(WithdrawInput, input ?? {});
+      const orgId = session.mandate.issuer.orgId;
+      const found = await repo.getOrder(orderId);
+      if (!found || found.orgId !== orgId) throw new DockError(404, "order_not_found", `No order ${orderId} for this organisation.`);
+      return serialize(orgId, async () => {
+        await expireStale(orgId);
+        const order = (await repo.getOrder(orderId))!;
+        if (order.status !== "pending_approval") {
+          throw refuse(new DockError(409, "order_not_pending", `Order ${orderId} is ${order.status}; only an order waiting for sign-off can be withdrawn.`, "intake_sequence", { status: order.status }), agentActor(session), { requestId: order.requestId, orderId });
+        }
+        const at = now().toISOString();
+        order.status = "withdrawn";
+        order.updatedAt = at;
+        if (order.approval) {
+          order.approval.status = "withdrawn";
+          order.approval.decidedAt = at;
+          order.approval.note = reason;
+        }
+        await repo.saveOrder(order);
+        ledger.append({
+          type: "approval",
+          actor: agentActor(session),
+          requestId: order.requestId,
+          orderId,
+          summary: `Order ${orderId} (${formatEur(order.totalCents)}) withdrawn before sign-off${by ? `, at the request of ${by} (relayed by the agent, not verified)` : " by the agent"}${reason ? `: "${reason}"` : ""}. It no longer holds the weekly budget.`,
+          data: { approvalId: order.approval?.approvalId, decision: "withdrawn", reason, by, relayedBy: session.agentId },
+        });
+        publish({ type: "approval_withdrawn", at, orgId, orderId, approvalId: order.approval?.approvalId, totalCents: order.totalCents, summary: `${order.orgName}: the ${formatEur(order.totalCents)} order waiting for sign-off was withdrawn.` });
+        return toPublicOrder(order);
+      });
+    },
+
+    /** The organisation a request belongs to, for deciding who may read its ledger entries. */
+    async orgOfRequest(requestId: string): Promise<string | undefined> {
+      return (await repo.getRequest(requestId))?.orgId;
+    },
+
+    /** Does this one-time link token belong to this approval? (The link proves only who received the message.) */
+    async approvalTokenMatches(approvalId: string, token: string): Promise<boolean> {
+      const o = await repo.getOrderByApprovalId(approvalId);
+      return !!o?.approval && checkLinkToken(o.approval, token);
+    },
+
+    /** Weekly spend of the agent's organisation: committed, and held by orders waiting for sign-off. */
+    async budget(session: AgentSession) {
+      const b = await budgetUse(session.mandate.issuer.orgId);
+      return { budgetCents: session.mandate.weeklyBudgetCents, ...b, leftCents: session.mandate.weeklyBudgetCents - b.spentCents };
     },
 
     stats: () => catalog.stats(),
@@ -860,8 +1095,9 @@ export function createDock(deps: DockDeps) {
     now,
     openRequest: dock.openRequest,
     requestQuote: dock.requestQuote,
-    liveLookup,
+    liveLookup: (session, requestId, productIds, deliveryDate, why) => liveLookup(session, requestId, productIds, deliveryDate, why, { batch: true }),
     spentThisWeek: (orgId) => spentThisWeek(orgId),
+    budgetUse: (orgId) => budgetUse(orgId),
   });
   return { ...dock, ...guarded, intake };
 }

@@ -10,7 +10,7 @@ import { noStore, portalRoute } from "@/server/kitchen-portal-http";
  * real shop would hand it out only to the kitchen's signed-in administrator.
  */
 export async function GET(req: Request, ctx: RouteContext<"/ui-api/kitchens/[kitchen]/connect">) {
-  return portalRoute(ctx.params, async (k) => {
+  return portalRoute(req, ctx.params, async (k) => {
     const base = publicBaseUrl(req);
     return Response.json(
       {

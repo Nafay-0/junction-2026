@@ -287,7 +287,7 @@ export function Portal({ kitchen, kitchens, children }: { kitchen: KitchenInfo; 
             <p>
               {PRODUCT_NAME}, a demo for the Junction 2026 challenge. Synthetic kitchens; the catalogue and prices come from the partner&apos;s test interface.
             </p>
-            <p className="flex items-center gap-2">
+            <p className="hidden items-center gap-2 md:flex">
               <Kbd>Ctrl</Kbd>
               <Kbd>K</Kbd> the agent, <Kbd>/</Kbd> search
             </p>

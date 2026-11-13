@@ -10,7 +10,7 @@ import { noStore, portalRoute } from "@/server/kitchen-portal-http";
  *   free      allergens no hit may contain or "may contain"; products without allergen data are left out, repeatable
  */
 export async function GET(req: Request, ctx: RouteContext<"/ui-api/kitchens/[kitchen]/catalog">) {
-  return portalRoute(ctx.params, async () => {
+  return portalRoute(req, ctx.params, async () => {
     const p = new URL(req.url).searchParams;
     const { catalog, catalogSource } = await getRuntime();
     const text = p.get("q")?.trim().slice(0, 200) || undefined;
