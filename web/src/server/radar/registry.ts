@@ -232,7 +232,7 @@ export class RadarRegistry {
 
   /** The Finnish and Swedish versions of one notice: same date, and a shared EAN or the only notice that day. */
   private pairLanguages(n: Notice) {
-    if (!n.publishedOn) return;
+    if (!n.publishedOn || n.sourceId === "exa-web" || n.sourceId === "rasff") return;
     const other = this.state.notices.filter((x) => x !== n && x.language !== n.language && x.publishedOn === n.publishedOn && x.sourceId !== "exa-web" && x.sourceId !== "rasff" && x.drill === n.drill);
     const sameDayMine = this.state.notices.filter((x) => x.language === n.language && x.publishedOn === n.publishedOn && x.sourceId === n.sourceId);
     const pair = other.find((x) => (x.facts?.eans ?? []).some((e) => n.facts?.eans.includes(e))) ?? (other.length === 1 && sameDayMine.length === 1 ? other[0] : undefined);
@@ -502,7 +502,9 @@ function hazardWords(n: Notice): string {
   return hz.allergens.length ? `${base} (${hz.allergens.join(", ")})` : (hz.text?.english ?? base);
 }
 
-const registries = new WeakMap<object, RadarRegistry>();
+// On globalThis for the same reason as the store (store.ts): one radar and one schedule per Dock, whichever bundle asks.
+const gr = globalThis as typeof globalThis & { __dockRadars?: WeakMap<object, RadarRegistry> };
+const registries = (gr.__dockRadars ??= new WeakMap<object, RadarRegistry>());
 
 /** The radar of one runtime. The schedule starts with it unless RADAR_POLL=off, under tests, or during a build. */
 export function radar(rt: Pick<Runtime, "dock" | "catalog">, opts?: RadarOptions): RadarRegistry {

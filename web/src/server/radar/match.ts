@@ -144,7 +144,12 @@ export function matchNotice(facts: NoticeFacts, assortment: AssortmentItem[]): P
     }
   }
   const all = [...out.values()].sort((a, b) => b.score - a.score);
-  const possible = all.filter((m) => m.strength === "possible");
+  // A notice product that matched on a hard identifier is that product: its look-alikes are not also possible.
+  const key = (n: string) => [...nameTokens(n)].sort().join(" ");
+  const confirmedNames = new Set(all.filter((m) => m.strength === "confirmed" && m.noticeProduct).map((m) => key(m.noticeProduct!)));
+  const distinct = new Set(facts.products.map((p) => key(p.name.value)));
+  const onlyOne = distinct.size === 1 && all.some((m) => m.strength === "confirmed");
+  const possible = all.filter((m) => m.strength === "possible" && !onlyOne && !confirmedNames.has(key(m.noticeProduct ?? "")));
   const byNoticeProduct = new Map<string, number>();
   const keptPossible = possible.filter((m) => {
     const k = m.noticeProduct ?? "";

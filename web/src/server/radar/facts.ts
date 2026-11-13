@@ -1,5 +1,5 @@
 import type { Evidence, HazardKind, Lots, NoticeFacts, NoticeProduct } from "./types";
-import { appearsIn, findDates, findGtins, fold, parsePack, sentences, validGtin } from "./text";
+import { appearsIn, findDates, findGtins, fold, nameTokens, parsePack, sentences, validGtin } from "./text";
 
 /**
  * From page text to facts. Two readers feed this, and code has the last word:
@@ -215,7 +215,8 @@ export function buildFacts(input: { text: string; title: string; publishedOn?: s
   }
   // Code's reading of the labelled format joins (or, without a model, stands alone).
   for (const lp of productsFromLabels(text, ref)) {
-    const dup = products.find((p) => fold(p.name.value) === fold(lp.name.value));
+    const key = (n: string) => [...nameTokens(n)].sort().join(" ");
+    const dup = products.find((p) => key(p.name.value) === key(lp.name.value));
     if (dup) {
       dup.eans = [...new Set([...dup.eans, ...lp.eans])];
       if (!dup.pack && lp.pack) dup.pack = lp.pack;

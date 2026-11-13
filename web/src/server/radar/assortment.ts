@@ -23,9 +23,9 @@ export function gtinIndexPath(): string {
 
 function loadGtins(): GtinIndex | undefined {
   const file = gtinIndexPath();
-  if (!existsSync(file)) return undefined;
+  if (!existsSync(/*turbopackIgnore: true*/ file)) return undefined;
   try {
-    const buf = readFileSync(file);
+    const buf = readFileSync(/*turbopackIgnore: true*/ file);
     return JSON.parse((file.endsWith(".gz") ? gunzipSync(buf) : buf).toString("utf8")) as GtinIndex;
   } catch {
     return undefined;

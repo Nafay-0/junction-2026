@@ -230,8 +230,8 @@ async function drillCandidates(rt: Runtime, orders: PublicOrder[]): Promise<Rada
   const ordered = new Set(orders.map((o) => o.quoteId));
   for (const e of [...ledger].reverse()) {
     if (e.type !== "quote") continue;
-    const d = e.data as { quoteId?: string; lines?: { productId: string }[] };
-    if (!d.quoteId || ordered.has(d.quoteId)) continue;
+    const d = e.data as { quoteId?: string; expiresAt?: string; lines?: { productId: string }[] };
+    if (!d.quoteId || ordered.has(d.quoteId) || (d.expiresAt && Date.parse(d.expiresAt) < Date.now())) continue;
     for (const l of d.lines ?? []) if (!out.has(l.productId)) out.set(l.productId, { productId: l.productId, name: l.productId, why: "in an open quote: about to be ordered" });
   }
   for (const o of orders.filter((x) => x.status === "pending_approval")) for (const l of o.lines) if (!out.has(l.productId)) out.set(l.productId, { productId: l.productId, name: l.name, why: `in ${o.orgName}'s order waiting for sign-off` });
@@ -284,14 +284,16 @@ export async function kitchenNotices(rt: Runtime, k: { orgId: string; agentId: s
   const quoted = new Set<string>();
   for (const e of ledger) {
     if (e.type !== "quote" || !myRequests.has(e.requestId)) continue;
-    const d = e.data as { quoteId?: string; lines?: { productId: string }[] };
-    if (d.quoteId && !ordered.has(d.quoteId)) for (const l of d.lines ?? []) quoted.add(l.productId);
+    const d = e.data as { quoteId?: string; expiresAt?: string; lines?: { productId: string }[] };
+    if (d.quoteId && !ordered.has(d.quoteId) && !(d.expiresAt && Date.parse(d.expiresAt) < now.getTime())) for (const l of d.lines ?? []) quoted.add(l.productId);
   }
   const out: KitchenNotice[] = [];
   for (const m of live) {
     const n = r.store.notice(m.noticeId);
     if (!n?.facts) continue;
     const held = s.holds.some((h) => h.matchId === m.matchId && !h.liftedAt);
+    // Staff lifted its hold (a drill ended, or the stock was checked): nothing more to tell the kitchen.
+    if (m.holdId && !held) continue;
     const mine = orders.filter((o) => o.lines.some((l) => l.productId === m.productId));
     const waiting = mine.find((o) => o.status === "pending_approval");
     const received = mine.find((o) => {

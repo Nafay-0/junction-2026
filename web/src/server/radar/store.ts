@@ -68,9 +68,9 @@ export class RadarStore {
 
   private load(): RadarState {
     const fresh = freshState();
-    if (!this.file || !existsSync(this.file)) return fresh;
+    if (!this.file || !existsSync(/*turbopackIgnore: true*/ this.file)) return fresh;
     try {
-      const s = JSON.parse(readFileSync(this.file, "utf8")) as RadarState;
+      const s = JSON.parse(readFileSync(/*turbopackIgnore: true*/ this.file, "utf8")) as RadarState;
       if (s.version !== 1) return fresh;
       // New sources added to the config since the file was written start unchecked; spend starts again per process.
       for (const id of Object.keys(fresh.sources) as SourceId[]) s.sources[id] ??= fresh.sources[id];
@@ -95,10 +95,10 @@ export class RadarStore {
   flush(): void {
     if (!this.file) return;
     try {
-      mkdirSync(path.dirname(this.file), { recursive: true });
+      mkdirSync(/*turbopackIgnore: true*/ path.dirname(this.file), { recursive: true });
       const tmp = `${this.file}.tmp`;
-      writeFileSync(tmp, JSON.stringify(this.state));
-      renameSync(tmp, this.file);
+      writeFileSync(/*turbopackIgnore: true*/ tmp, JSON.stringify(this.state));
+      renameSync(/*turbopackIgnore: true*/ tmp, this.file);
     } catch {
       // read-only disk: the state stays in memory for this process
     }
@@ -115,7 +115,10 @@ export class RadarStore {
   }
 }
 
-const stores = new WeakMap<Dock, RadarStore>();
+// On globalThis: Next.js can load this module once per bundle (instrumentation, each route), and the gate attached at
+// start-up must see the holds the operations routes place. One store per Dock across every copy of the module.
+const g = globalThis as typeof globalThis & { __dockRadarStores?: WeakMap<Dock, RadarStore> };
+const stores = (g.__dockRadarStores ??= new WeakMap<Dock, RadarStore>());
 
 /** The radar state of one runtime's Dock (a fresh runtime, as in tests, gets a fresh store). */
 export function radarStore(dock: Dock): RadarStore {

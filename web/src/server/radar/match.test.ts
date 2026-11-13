@@ -75,9 +75,12 @@ describe("matching a notice to the assortment", () => {
 
   it("wrong pack: same name and brand in another pack size is only possible", () => {
     const f = facts("Tuote: Kauravakka kaurajuoma kahviin\nValmistaja: Kauravakka Oy\nPakkauskoko: 1 l\nTuotteessa on säilyvyysongelma.");
-    const m = matchNotice(f, ASSORTMENT);
-    expect(m.find((x) => x.productId === OAT_BIG.id)).toMatchObject({ strength: "confirmed" });
-    const small = m.find((x) => x.productId === OAT.id)!;
+    // The 1 l pack the notice names is in the assortment: it is that one, and the 2,5 dl pack is not a match.
+    const withBig = matchNotice(f, ASSORTMENT);
+    expect(withBig.find((x) => x.productId === OAT_BIG.id)).toMatchObject({ strength: "confirmed" });
+    expect(withBig.some((x) => x.productId === OAT.id)).toBe(false);
+    // Without it, the same name in another pack is a possible match for a person, never confirmed.
+    const small = matchNotice(f, ASSORTMENT.filter((x) => x.id !== OAT_BIG.id)).find((x) => x.productId === OAT.id)!;
     expect(small.strength).toBe("possible");
     expect(small.why).toMatch(/pack is 1 l, ours 2,5 dl/);
   });

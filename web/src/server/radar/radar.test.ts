@@ -155,6 +155,14 @@ describe("a source that is down or changes its layout", () => {
   });
 });
 
+describe("one radar per Dock, across bundles", () => {
+  it("keeps the store and the radar on globalThis, so the gate attached at start-up sees holds placed by any route", () => {
+    const g = globalThis as { __dockRadarStores?: WeakMap<object, unknown>; __dockRadars?: WeakMap<object, unknown> };
+    expect(g.__dockRadarStores?.get(rt.dock)).toBe(r.store);
+    expect(g.__dockRadars?.get(rt.dock)).toBe(r);
+  });
+});
+
 describe("the drill", () => {
   it("travels the real path (listing, notice page, reader, matching) and holds the product", async () => {
     const d = await drillAndPickUp("VA-1001");
