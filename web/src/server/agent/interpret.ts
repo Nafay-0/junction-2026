@@ -2,6 +2,7 @@ import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
 import type { Product } from "@/core/catalog";
 import { DockError } from "@/core/errors";
+import { recordLlmSpend, reserveLlmCall } from "@/server/limits";
 import { addDaysIso, isoWeekday, localNow } from "@/core/kitchen";
 import { NEED_UNITS, NeedSchema, OPTIMISE_GOALS, type StructuredNeed } from "@/core/need";
 import { createModel, defaultModel, ModelConfigError, type ModelOptions } from "./models";
@@ -171,6 +172,7 @@ export async function interpretNeed(opts: InterpretOptions): Promise<InterpretRe
     }
   }
 
+  reserveLlmCall(); // public-demo caps: daily calls and spend, and the DOCK_LLM=off switch (server/limits.ts)
   const now = opts.now ?? new Date();
   const timeoutMs = opts.timeoutMs ?? 30_000;
   const t0 = Date.now();
@@ -197,6 +199,7 @@ export async function interpretNeed(opts: InterpretOptions): Promise<InterpretRe
   }
   const raw = res.output as LlmNeed;
   const tokens = tokensFromUsage(res.usage);
+  recordLlmSpend(costOf(tokens, price));
   return { need: toNeed(raw, text), model: id, ms: Date.now() - t0, tokens, costUsd: costOf(tokens, price), raw };
 }
 

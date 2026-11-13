@@ -1,0 +1,80 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { RateLimiter, clientAddress, rateLimitsEnabled, type RateRule } from "@/server/limits";
+
+/**
+ * The public server's front door: per-address (and per-kitchen) rate limits, a body-size cap, and dev-only
+ * routes closed in production. Money and partner quota are capped again where they are spent (limits.ts),
+ * because the buyer console forwards its calls in-process and never passes through here a second time.
+ */
+
+const MAX_BODY_BYTES = 64 * 1024;
+const MIN = 60_000;
+const rule = (name: string, limit: number): RateRule => ({ name, limit, windowMs: MIN });
+
+// Generous per address: at a venue many phones share one public address.
+const ANY = rule("any", 900);
+const PAGE = rule("page", 300);
+const INTERPRET = rule("interpret", 20);
+const CONSOLE_CALL = rule("console-call", 60);
+const CONSOLE_CALL_KITCHEN = rule("console-call-kitchen", 40);
+const JOIN = rule("join", 30);
+const DEMO_ORDER = rule("demo-order", 12);
+const DEMO_ORDER_KITCHEN = rule("demo-order-kitchen", 6);
+const AGENT_WRITE = rule("agent-write", 120);
+const EVENTS = rule("events", 60);
+
+const g = globalThis as typeof globalThis & { __dockRateLimiter?: RateLimiter };
+const limiter = (g.__dockRateLimiter ??= new RateLimiter());
+
+function refuse(status: number, code: string, message: string, rule: string, headers: Record<string, string> = {}) {
+  return NextResponse.json({ error: { code, rule, message } }, { status, headers: { "cache-control": "no-store", ...headers } });
+}
+
+/** The rules a request counts against: [rule, key-suffix]. */
+function rulesFor(method: string, path: string): [RateRule, string?][] {
+  const api = path.startsWith("/api/") || path.startsWith("/ui-api/");
+  const out: [RateRule, string?][] = [[ANY]];
+  if (!api) out.push([PAGE]);
+  const post = method === "POST";
+  let m: RegExpExecArray | null;
+  if (post && path === "/api/v1/agent/interpret") out.push([INTERPRET]);
+  if (post && (m = /^\/ui-api\/kitchens\/([^/]+)\/call$/.exec(path))) out.push([CONSOLE_CALL], [CONSOLE_CALL_KITCHEN, `k:${m[1]}`]);
+  if (post && path.startsWith("/api/v1/join")) out.push([JOIN]);
+  if (post && (m = /^\/api\/v1\/sandboxes\/([^/]+)\/demo-order$/.exec(path))) out.push([DEMO_ORDER], [DEMO_ORDER_KITCHEN, `k:${m[1]}`]);
+  if (post && path === "/api/v1/approver/demo-order") out.push([DEMO_ORDER]);
+  if (post && (path === "/api/mcp" || /^\/api\/v1\/(availability|quotes|orders|requests|intake)/.test(path))) out.push([AGENT_WRITE]);
+  if (path === "/api/v1/events") out.push([EVENTS]);
+  return out;
+}
+
+export function proxy(req: NextRequest) {
+  const path = req.nextUrl.pathname;
+
+  if (process.env.NODE_ENV === "production" && path.startsWith("/api/v1/dev/")) {
+    return refuse(404, "not_found", "Not available in production.", "dev_only");
+  }
+
+  const declared = Number(req.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
+    return refuse(413, "body_too_large", `Request body is larger than ${MAX_BODY_BYTES / 1024} KB.`, "body_size");
+  }
+
+  if (rateLimitsEnabled()) {
+    const who = clientAddress(req.headers);
+    for (const [r, suffix] of rulesFor(req.method, path)) {
+      // Per-kitchen rules are shared by every caller; per-address rules are keyed by the caller.
+      const retryAfter = limiter.hit(r, suffix ?? who);
+      if (retryAfter !== null) {
+        const what = suffix ? "this kitchen" : "your address";
+        return refuse(429, "rate_limited", `Too many requests from ${what}; try again in ${retryAfter} s. (Demo server limit "${r.name}".)`, "rate_limit", {
+          "retry-after": String(retryAfter),
+        });
+      }
+    }
+  }
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+};

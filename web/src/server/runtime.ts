@@ -15,7 +15,7 @@ import { DEMO_ORG, demoOrgKeyPair } from "./dev-fixtures";
 import { selectAdapters, type AivenHandle } from "./aiven";
 import { LiveCacheSlot, liveCacheSlots } from "./aiven/live-slot";
 import { SandboxService } from "./sandboxes";
-import { loadCatalogIndex } from "./valio/index-store";
+import { loadCatalogIndex, resolveCatalogIndex } from "./valio/index-store";
 import { ValioLiveClient } from "./valio/live-client";
 import { ValioCatalog } from "./valio/valio-catalog";
 
@@ -65,7 +65,7 @@ async function buildRuntime(): Promise<Runtime> {
     : await generateEd25519KeyPair(`dock-wholesaler-${randomUUID().slice(0, 8)}`);
   const demoOrg = await demoOrgKeyPair();
   const demoKitchen = await demoKitchenKeyPair();
-  const { catalog, catalogSource } = buildCatalog();
+  const { catalog, catalogSource } = buildCatalog(wantsRealCatalog() ? await resolveCatalogIndex() : undefined);
   const outbox = new InMemoryOutbox();
   const trustedIssuers = createTrustRegistry([
     { kid: demoOrg.kid, orgId: DEMO_ORG.orgId, publicKey: demoOrg.publicKey },
@@ -105,11 +105,16 @@ const envValue = (name: string) => {
   return v && v.trim() ? v.trim() : undefined;
 };
 
-/** Pick the catalogue from the environment. Never throws for a missing index or key: it falls back to the seed. */
-export function buildCatalog(): { catalog: InMemoryCatalog | ValioCatalog; catalogSource: CatalogSource } {
+const wantsRealCatalog = () => envValue("DOCK_CATALOG") !== "seed" && !!envValue("VALIO_API_KEY");
+
+/**
+ * Pick the catalogue from the environment. Never throws for a missing index or key: it falls back to the seed.
+ * `indexFile`: where `resolveCatalogIndex()` found the index (a local file, or a copy fetched from PostgreSQL).
+ */
+export function buildCatalog(indexFile?: string): { catalog: InMemoryCatalog | ValioCatalog; catalogSource: CatalogSource } {
   const apiKey = envValue("VALIO_API_KEY");
-  if (envValue("DOCK_CATALOG") !== "seed" && apiKey) {
-    const loaded = loadCatalogIndex();
+  if (wantsRealCatalog() && apiKey) {
+    const loaded = loadCatalogIndex(indexFile);
     if (loaded) {
       const client = new ValioLiveClient({ baseUrl: envValue("VALIO_API_BASE") ?? "https://junction26.valioaimo.fi", apiKey, customer: envValue("VALIO_CUSTOMER") });
       // AIVEN HOOK: a slot in front of the partner API where the Valkey live cache plugs in (src/server/aiven/live-slot.ts).

@@ -39,8 +39,13 @@ test("register -> request needing approval -> approve with passkey -> committed"
   await page.getByRole("button", { name: /ask my agent for 1,000 L of milk/ }).click();
   await page.waitForURL("**/approve/**"); // opened by the live event, not by the click
   await expect(page.getByText("Over this agent's €500 per-order limit")).toBeVisible();
-  await expect(page.getByText("Not exactly what was asked")).toBeVisible();
-  await expect(page.getByText(/instead of/).first()).toBeVisible();
+  // On the 12-product seed the scripted order always needs a substitute; on the partner's real catalogue it
+  // depends on live stock, so there the sign-off may be for the limit alone.
+  const health = (await (await page.request.get("/api/health")).json()) as { catalog?: { source?: string } };
+  if (health.catalog?.source !== "valio") {
+    await expect(page.getByText("Not exactly what was asked")).toBeVisible();
+    await expect(page.getByText(/instead of/).first()).toBeVisible();
+  }
   await expect(screen.getByText(/^Waiting for /).first()).toBeVisible();
 
   const approve = page.getByRole("button", { name: /^Approve €/ });
