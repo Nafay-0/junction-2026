@@ -137,3 +137,11 @@ export const VIA: Record<Via, { label: string; short: string; how: string }> = {
   mcp: { label: "Outside agent over MCP", short: "MCP", how: "Any company's agent, over the Model Context Protocol" },
   rest: { label: "Outside agent over REST", short: "REST", how: "Any program, over the documented HTTP API" },
 };
+
+const COUNTRY: Record<string, string> = { fi: "Finland", se: "Sweden", ee: "Estonia", de: "Germany", dk: "Denmark", nl: "the Netherlands", no: "Norway", pl: "Poland", lt: "Lithuania", lv: "Latvia", fr: "France", it: "Italy", es: "Spain", be: "Belgium", at: "Austria", gb: "the United Kingdom", ie: "Ireland" };
+
+/** "fi" -> "Finland": the partner writes origin as a country code. */
+export function country(code: string | null | undefined): string {
+  if (!code) return "not stated";
+  return COUNTRY[code.toLowerCase()] ?? code.toUpperCase();
+}
