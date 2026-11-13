@@ -47,11 +47,12 @@ function str(args: Record<string, unknown>, k: string): string {
   return v.trim().slice(0, 200);
 }
 
-export async function runTool(kitchen: string, input: unknown): Promise<ToolReply> {
+/** `req`: the call screen's request; the visitor's session on it makes their spoken or tapped answers theirs (flow.ts). */
+export async function runTool(kitchen: string, input: unknown, req?: Request): Promise<ToolReply> {
   const body = parse(ToolBody, input);
   const registry = calls();
   const call = registry.use(body.callId, kitchen, body.via);
-  const a = await kitchenAgent(kitchen);
+  const a = await kitchenAgent(kitchen, req);
   const via: Via = body.via;
   const heard: HeardWords | undefined = body.heard && body.heard.text.trim() ? { text: body.heard.text.trim(), turn: body.heard.turn } : undefined;
 
