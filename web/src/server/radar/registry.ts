@@ -499,7 +499,7 @@ function hazardWords(n: Notice): string {
   const hz = n.facts?.hazard;
   if (!hz) return "see the notice";
   const base = HAZARD_WORDS[hz.kind] ?? "safety fault";
-  return hz.allergens.length ? `${base} (${hz.allergens.join(", ")})` : (hz.text?.english ?? base);
+  return hz.allergens.length ? `${base} (${hz.allergens.join(", ")})` : (hz.text?.english?.replace(/[.\s]+$/, "") ?? base);
 }
 
 // On globalThis for the same reason as the store (store.ts): one radar and one schedule per Dock, whichever bundle asks.

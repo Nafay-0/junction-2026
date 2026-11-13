@@ -87,12 +87,14 @@ export function matchNotice(facts: NoticeFacts, assortment: AssortmentItem[]): P
   };
   const noticeGtins = new Map(facts.eans.map((e) => [gtinKey(e), e]));
   const productOfEan = (code: string) => facts.products.find((p) => p.eans.includes(code));
+  const matchedCodes = new Set<string>();
 
   for (const item of assortment) {
     // 1. A GTIN on the notice is this product's.
     const hit = item.gtins.map(gtinKey).find((g) => noticeGtins.has(g));
     if (hit) {
       const code = noticeGtins.get(hit)!;
+      matchedCodes.add(code);
       const np = productOfEan(code);
       keep({
         productId: item.id,
@@ -149,7 +151,10 @@ export function matchNotice(facts: NoticeFacts, assortment: AssortmentItem[]): P
   const confirmedNames = new Set(all.filter((m) => m.strength === "confirmed" && m.noticeProduct).map((m) => key(m.noticeProduct!)));
   const distinct = new Set(facts.products.map((p) => key(p.name.value)));
   const onlyOne = distinct.size === 1 && all.some((m) => m.strength === "confirmed");
-  const possible = all.filter((m) => m.strength === "possible" && !onlyOne && !confirmedNames.has(key(m.noticeProduct ?? "")));
+  // Every EAN on the notice found its product: a notice product without an EAN of its own is one of those.
+  const allEansMatched = facts.eans.length > 0 && facts.eans.every((e) => matchedCodes.has(e));
+  const ownEans = (name?: string) => facts.products.find((p) => p.name.value === name)?.eans.length ?? 0;
+  const possible = all.filter((m) => m.strength === "possible" && !onlyOne && !confirmedNames.has(key(m.noticeProduct ?? "")) && !(allEansMatched && ownEans(m.noticeProduct) === 0));
   const byNoticeProduct = new Map<string, number>();
   const keptPossible = possible.filter((m) => {
     const k = m.noticeProduct ?? "";
