@@ -219,6 +219,8 @@ export type DraftOptions = {
   /** `provider:model-id`, or an AI SDK model (tests). Default: DOCK_MENU_MODEL, else MENU_MODEL_DEFAULT. */
   model?: string | { model: LanguageModel; id: string; price?: Price };
   timeoutMs?: number;
+  /** Called with each dish's checked ingredients as soon as that dish is written. */
+  onDish?: (ingredients: DraftIngredient[]) => void;
 };
 
 export function menuModelSpec(env: Record<string, string | undefined> = process.env): string | undefined {
@@ -297,7 +299,15 @@ export async function draftMenu(opts: DraftOptions): Promise<DraftResult> {
         LlmDishDetail,
         dishSystem(opts.context),
         dishUser({ text, dish: d, otherDishes: dishes.filter((x) => x !== d).map((x) => x.name), claims: outline.requiredClaims, allergens: outline.forbiddenAllergens }),
-      ),
+      ).then((detail) => {
+        // Hand each dish on as soon as it is in, so the catalogue search for it overlaps the dishes still being written.
+        try {
+          opts.onDish?.(sanitiseDraft({ ...outline, conflicts: [], dishes: [{ ...d, ingredients: detail.ingredients }] }).dishes[0]?.ingredients ?? []);
+        } catch {
+          // the plan is assembled from the full draft anyway
+        }
+        return detail;
+      }),
     ),
   );
   const raw: LlmMenuDraft = {

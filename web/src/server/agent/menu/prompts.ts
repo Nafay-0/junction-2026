@@ -69,3 +69,40 @@ export function dishUser(input: { text: string; dish: { name: string; course: st
     .filter((l, i) => l !== "" || i > 0)
     .join("\n");
 }
+
+/** Step 3, only for a line that cannot be bought as planned: what a cook would do instead, by the dish's logic. */
+export function fixSystem(ctx: MenuPromptContext): string {
+  return `${COMMON}
+
+Your job in this step: one ingredient of a dish cannot be bought as planned (it cannot arrive in time, or no product meets the kitchen's rules). Propose up to 3 ways out that a professional cook would accept, by the dish's logic rather than a like-for-like product swap:
+- substitute: another ingredient that does the same job in THIS dish, judged by how it is cooked (cooking cream works in a soup but will not whip for a dessert; frozen salmon works in a soup, not for gravlax; dried dill can replace fresh in a soup at about a third of the amount). Give the full ingredient with per-cover amount.
+- change_amount: use less or more of this ingredient (perCover), when the dish still works.
+- change_dish: change the dish so the ingredient is not needed or another one takes its place (salmon soup becomes white-fish soup). Give the ingredient that comes in, if any.
+For each option: title (a few words), effect (what it does to the dish, one sentence), changesDish (true when a guest would notice a different dish). Rules of the kitchen and the menu still apply to every option. Plain code checks each option against the catalogue, the rules, prices and delivery, and drops what fails.
+
+${kitchenLines(ctx)}`;
+}
+
+export function fixUser(input: { dish: string; method: string; ingredient: string; role: string; perCover: string; problem: string; rules: string[] }): string {
+  return [
+    `Dish: ${input.dish}. How it is cooked: ${input.method}`,
+    `Ingredient: ${input.ingredient} (${input.role}), ${input.perCover} per cover.`,
+    `Problem: ${input.problem}`,
+    `Menu rules: ${input.rules.join("; ") || "none beyond the kitchen's"}.`,
+  ].join("\n");
+}
+
+/** Between search and price: which catalogue products are the ingredient, judged by a cook. */
+export const PICK_SYSTEM = `${COMMON}
+
+Your job in this step: plain code searched the wholesaler's catalogue for each ingredient of a menu and lists candidate products by id and name. For each ingredient, say which candidates ARE that ingredient as a professional cook would use it for the stated role, best first.
+- A candidate fits when it is this ingredient, or a form of it a kitchen uses the same way in this dish (washed, peeled, diced, sliced; frozen when the role allows it, such as in a soup or a stew).
+- It does not fit when it is another food (crackers for onion, a fish for berries), a ready dish, a snack, a seasoned or flavoured version the dish did not ask for, or a form that changes the amount (dried herbs for fresh ones).
+- Order the fitting ones by how well they suit the role: the plain, standard product first, specialty varieties (purple carrots, baby potatoes) later.
+- fits may be empty: then say in note what was missing. Use only ids from the list.`;
+
+export function pickUser(lines: { lineId: string; ingredient: string; role: string; form: string; candidates: { id: string; name: string }[] }[]): string {
+  return lines
+    .map((l) => [`Ingredient ${l.lineId}: ${l.ingredient}; role: ${l.role}; form wanted: ${l.form}.`, ...l.candidates.map((c) => `  ${c.id}: ${c.name}`)].join("\n"))
+    .join("\n\n");
+}
