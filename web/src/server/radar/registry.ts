@@ -79,13 +79,16 @@ export class RadarRegistry {
 
   private async doCheck(id: SourceId, opts: { force?: boolean }): Promise<SourceState> {
     const source = sourceOf(id)!;
+    // A drill, or a person pressing "check now", may use the reserve of Context.dev's per-minute allowance.
+    const urgent = !!source.drill || !!opts.force;
+    const deps: ReaderDeps = { ...this.deps, urgent };
     const st = this.state.sources[id];
     st.lastCheckAt = this.now().toISOString();
     st.checks += 1;
     try {
-      if (source.kind === "authority_listing") await this.checkListing(source, st, opts);
-      else if (source.kind === "web_search") await this.checkWeb(source, st);
-      else await this.checkFeed(source, st);
+      if (source.kind === "authority_listing") await this.checkListing(source, st, opts, deps);
+      else if (source.kind === "web_search") await this.checkWeb(source, st, deps);
+      else await this.checkFeed(source, st, deps);
       if (st.status !== "layout_changed" && st.status !== "degraded") st.status = "ok";
       if (st.status === "ok" || st.status === "degraded") {
         st.lastOkAt = st.lastCheckAt;
@@ -101,8 +104,8 @@ export class RadarRegistry {
     return structuredClone(st);
   }
 
-  private async checkListing(source: SourceConfig, st: SourceState, opts: { force?: boolean }) {
-    const read = await readListing(source, this.deps, { force: opts.force, previousCount: st.listedLastTime });
+  private async checkListing(source: SourceConfig, st: SourceState, opts: { force?: boolean }, deps: ReaderDeps) {
+    const read = await readListing(source, deps, { force: opts.force, previousCount: st.listedLastTime });
     if (read.items.length === 0 && (st.listedLastTime ?? 0) > 0) {
       st.status = "layout_changed";
       st.lastError = read.note ?? "The listing showed no notices where it had some: its layout probably changed. Nothing was concluded from it.";
@@ -113,19 +116,19 @@ export class RadarRegistry {
     st.listedLastTime = read.items.length;
     const recent = read.items.filter((i) => !i.publishedOn || days(i.publishedOn, this.today()) <= source.readWindowDays);
     const fresh = recent.filter((i) => !this.state.notices.some((n) => n.url === i.url && n.state === "read"));
-    for (const item of fresh.slice(0, source.maxReadsPerCheck)) await this.readNotice(source, item);
+    for (const item of fresh.slice(0, source.maxReadsPerCheck)) await this.readNotice(source, item, deps);
   }
 
-  private async checkWeb(source: SourceConfig, st: SourceState) {
-    if (!this.deps.exa.configured) throw new PartnerError("exa", "no_key", "EXA_API_KEY is not set.");
-    const items = await discoverOnWeb(source, this.deps);
+  private async checkWeb(source: SourceConfig, st: SourceState, deps: ReaderDeps) {
+    if (!deps.exa.configured) throw new PartnerError("exa", "no_key", "EXA_API_KEY is not set.");
+    const items = await discoverOnWeb(source, deps);
     const fresh = items.filter((i) => !this.state.notices.some((n) => n.url === i.url) && !this.state.notRecalls.includes(i.url));
     st.listedLastTime = items.length;
-    for (const item of fresh.slice(0, source.maxReadsPerCheck)) await this.readNotice(source, item);
+    for (const item of fresh.slice(0, source.maxReadsPerCheck)) await this.readNotice(source, item, deps);
   }
 
-  private async checkFeed(source: SourceConfig, st: SourceState) {
-    const items = await readRasff(source, this.deps);
+  private async checkFeed(source: SourceConfig, st: SourceState, deps: ReaderDeps) {
+    const items = await readRasff(source, deps);
     st.listedLastTime = items.length;
     for (const f of items) {
       if (this.state.notices.some((n) => n.url === f.url)) continue;
@@ -152,7 +155,7 @@ export class RadarRegistry {
   }
 
   /** List a notice (if new), read its page into facts, then match and act on it. */
-  private async readNotice(source: SourceConfig, item: ListingItem): Promise<Notice> {
+  private async readNotice(source: SourceConfig, item: ListingItem, deps: ReaderDeps = this.deps): Promise<Notice> {
     let n = this.state.notices.find((x) => x.url === item.url);
     if (!n) {
       n = {
@@ -173,7 +176,7 @@ export class RadarRegistry {
       if (d && !d.pickedUpAt) d.pickedUpAt = n.seenAt;
     }
     try {
-      const page = await readPage(item.url, source, this.deps);
+      const page = await readPage(item.url, source, deps);
       if (source.kind === "web_search" && page.model?.is_recall_notice === false) {
         this.state.notices = this.state.notices.filter((x) => x !== n);
         this.state.notRecalls.push(item.url);
@@ -214,6 +217,19 @@ export class RadarRegistry {
     return n;
   }
 
+  /**
+   * Run matching again on every notice already read (after the matching rules changed). Only undecided matches are
+   * replaced: anything a person reviewed, and every hold, stays as it is.
+   */
+  async rematchAll(): Promise<{ before: number; after: number }> {
+    const before = this.state.matches.length;
+    const undecided = (m: Match) => !m.review && !m.holdId;
+    this.state.matches = this.state.matches.filter((m) => !undecided(m));
+    for (const n of this.state.notices.filter((x) => x.state === "read" && x.facts)) await this.act(n, sourceOf(n.sourceId)!);
+    this.store.save();
+    return { before, after: this.state.matches.length };
+  }
+
   /** The Finnish and Swedish versions of one notice: same date, and a shared EAN or the only notice that day. */
   private pairLanguages(n: Notice) {
     if (!n.publishedOn) return;
@@ -246,7 +262,7 @@ export class RadarRegistry {
         why: p.why,
         noticeProduct: p.noticeProduct,
         lots: p.lots,
-        newDeliveriesAffected: !d.note,
+        newDeliveriesAffected: d.status !== "confirmed" || d.hold,
         status: d.status,
         reviewReason: d.reviewReason ?? d.note,
         createdAt: this.now().toISOString(),
@@ -256,6 +272,8 @@ export class RadarRegistry {
       const what = `${publisherOf(n)} notice "${n.title}" (${fiDay(n.publishedOn)}, ${n.url})`;
       if (d.hold) {
         this.placeHold(m, n, "radar");
+      } else if (d.status === "history") {
+        // nothing to decide: shown with the notice
       } else if (d.status === "review") {
         this.log(`${tag}Recall radar: possible match for review. ${p.productName} (${p.productId}) against the ${what}. ${p.why} ${d.reviewReason}`, { action: "recall_review_raised", matchId: m.matchId, noticeId: n.noticeId, productId: p.productId, strength: p.strength, basis: p.basis, drill: n.drill, noticeUrl: n.url });
       } else {

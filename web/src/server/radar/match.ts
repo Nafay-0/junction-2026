@@ -1,4 +1,4 @@
-import { AUTO_HOLD_MAX_AGE_DAYS } from "./sources";
+import { AUTO_HOLD_MAX_AGE_DAYS, REVIEW_MAX_AGE_DAYS } from "./sources";
 import type { Lots, MatchBasis, MatchStatus, MatchStrength, NoticeFacts, NoticeProduct } from "./types";
 import { describePack, fold, gtinKey, nameTokens, parsePack, samePack, sameCompany, type PackSize } from "./text";
 
@@ -38,7 +38,7 @@ export type ProposedMatch = {
   score: number;
 };
 
-const MAX_POSSIBLE_PER_PRODUCT = 4;
+const MAX_POSSIBLE_PER_PRODUCT = 3;
 
 export function displayName(item: AssortmentItem): string {
   return item.names.en ?? item.names.fi ?? item.names.sv ?? item.id;
@@ -130,11 +130,13 @@ export function matchNotice(facts: NoticeFacts, assortment: AssortmentItem[]): P
         continue;
       }
       if (brandOk || producerOk) {
-        const bt = brandTokens(item);
-        const strip = (ts: string[]) => ts.filter((t) => !bt.includes(t));
-        const best = Math.max(...names.map((n) => familyOverlap(strip(nt), strip(nameTokens(n))).share), 0);
-        const shared = Math.max(...names.map((n) => familyOverlap(strip(nt), strip(nameTokens(n))).shared), 0);
-        if (shared >= 1 && best >= 0.5) {
+        // Brand and company words do not count as product words: two words of the product itself must agree.
+        const noise = new Set([...brandTokens(item), ...(item.vendor ? nameTokens(item.vendor) : []), ...(np.brand ? nameTokens(np.brand.value) : []), ...(producer ? nameTokens(producer) : [])]);
+        const strip = (ts: string[]) => ts.filter((t) => !noise.has(t) && !/^[a-z]?\d/.test(t));
+        const overlaps = names.map((n) => familyOverlap(strip(nt), strip(nameTokens(n))));
+        const best = Math.max(...overlaps.map((o) => o.share), 0);
+        const shared = Math.max(...overlaps.map((o) => o.shared), 0);
+        if (shared >= 2 && best >= 0.5) {
           keep({ ...base, strength: "possible", basis: "brand_family", why: `Same ${brandOk ? "brand" : "producer"} and a similar product (${Math.round(best * 100)} % of the name's words), but no EAN and not the exact name. A person decides.`, score: 40 + best * 20 });
         }
       }
@@ -198,9 +200,13 @@ export type MatchDecision = { status: MatchStatus; hold: boolean; reviewReason?:
  *   confirmed, every affected date passed    no hold: deliveries now carry later dates; earlier buyers are told
  *   confirmed, older notice                  a person decides (a first read goes months back)
  *   possible                                 a person confirms or dismisses
+ *   possible, notice older than 60 days      kept with the notice as history (a first read goes back months)
  */
 export function decide(m: { strength: MatchStrength; lots: Lots }, ctx: { today: string; noticeAgeDays: number | undefined }): MatchDecision {
-  if (m.strength === "possible") return { status: "review", hold: false, reviewReason: "Possible match: no hard identifier agrees. Confirm to hold the product, or dismiss with a reason." };
+  if (m.strength === "possible") {
+    if (ctx.noticeAgeDays !== undefined && ctx.noticeAgeDays > REVIEW_MAX_AGE_DAYS) return { status: "history", hold: false, note: `Possible match on a notice ${ctx.noticeAgeDays} days old: kept with the notice, not queued for review.` };
+    return { status: "review", hold: false, reviewReason: "Possible match: no hard identifier agrees. Confirm to hold the product, or dismiss with a reason." };
+  }
   if (!newDeliveriesAffected(m.lots, ctx.today)) {
     return { status: "confirmed", hold: false, note: `Every affected best-before date (${describeLots(m.lots)}) has passed, so deliveries from today cannot contain an affected pack. No hold; kitchens that received it earlier are told.` };
   }

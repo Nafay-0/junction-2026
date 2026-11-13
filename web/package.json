@@ -32,7 +32,8 @@
     "aiven:search:index": "tsx scripts/aiven-search-index.ts",
     "aiven:search:compare": "tsx scripts/aiven-search-compare.ts",
     "categories:build": "tsx scripts/category-labels.ts",
-    "radar:gtins": "tsx scripts/radar-gtins.ts"
+    "radar:gtins": "tsx scripts/radar-gtins.ts",
+    "radar:check": "tsx scripts/radar-check.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.102",

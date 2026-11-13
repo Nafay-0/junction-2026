@@ -137,12 +137,16 @@ export function companyTokens(name: string): string[] {
 
 const COMPANY_NOISE = new Set(["oy", "oyj", "ab", "abp", "ltd", "ky", "ay", "inc", "gmbh", "as", "aps", "srl", "spa", "bv", "nv", "the", "suomi", "finland", "sverige", "sweden", "group", "tuore", "viilea", "pakaste", "kuiva", "kuivat", "tukku", "foods", "food", "trading", "company", "co"]);
 
-/** Same company: a significant token of one appears inside a token of the other ("raisio" in "ravintoraisio"). */
+/**
+ * Same company: a significant word is the same, or one is the head of the other's compound ("raisio" ends
+ * "ravintoraisio"). Finnish compounds put the head last, so "juusto" does not make "Juustoportti" the same company.
+ */
 export function sameCompany(a: string | undefined | null, b: string | undefined | null): boolean {
   if (!a || !b) return false;
-  const ta = companyTokens(a);
-  const tb = companyTokens(b);
-  return ta.some((x) => x.length >= 4 && tb.some((y) => y.includes(x) || (y.length >= 4 && x.includes(y))));
+  const ta = companyTokens(a).filter((t) => t.length >= 4);
+  const tb = companyTokens(b).filter((t) => t.length >= 4);
+  const head = (long: string, short: string) => short.length >= 5 && long.length > short.length && long.endsWith(short);
+  return ta.some((x) => tb.some((y) => x === y || head(x, y) || head(y, x)));
 }
 
 // ---------- dates ----------

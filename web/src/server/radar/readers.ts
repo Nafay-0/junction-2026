@@ -27,6 +27,8 @@ export type ReaderDeps = {
   now: () => Date;
   /** Where the drill page lives: a public base Context.dev can reach, or this server's own origin. */
   drill: { publicBase?: string; localOrigin?: string };
+  /** A drill or a person's "check now": may use the reserve of Context.dev's per-minute allowance. */
+  urgent?: boolean;
 };
 
 /** The CSS rules for the authority's listing, used by Context.dev's parser and by the direct reader alike. */
@@ -114,12 +116,12 @@ export async function readListing(source: SourceConfig, deps: ReaderDeps, opts: 
     return { items: parseListingHtml(html, target.url), via: "direct", note: target.via === "direct" ? "Read directly: Context.dev cannot reach this server's own address." : "Read directly: no Context.dev key." };
   }
   const maxAgeMs = opts.force || source.drill ? 0 : BUDGET.listingMaxAgeMinutes * 60_000;
-  const r = await deps.cd.scrape({ url: target.url, formats: { parse: true }, parseParams: { rules: LISTING_RULES }, maxAgeMs });
+  const r = await deps.cd.scrape({ url: target.url, formats: { parse: true }, parseParams: { rules: LISTING_RULES }, maxAgeMs }, 60_000, deps.urgent);
   if (r.parsed?.success === false) throw new PartnerError("context.dev", "http", `Context.dev could not read the listing: ${r.parsed.message ?? r.parsed.error_code ?? "unknown error"}.`);
   const items = toItems(r.parsed?.data, r.url || target.url);
   // A listing that had notices and now parses to none changed its layout; try reading it by meaning once.
   if (items.length === 0 && (opts.previousCount ?? 0) > 0) {
-    const j = await deps.cd.scrape({ url: target.url, formats: { json: true }, jsonParams: { schema: LISTING_SCHEMA, instructions: "List every recall notice linked on this page with its title, date as written and link." }, maxAgeMs: 0 });
+    const j = await deps.cd.scrape({ url: target.url, formats: { json: true }, jsonParams: { schema: LISTING_SCHEMA, instructions: "List every recall notice linked on this page with its title, date as written and link." }, maxAgeMs: 0 }, 90_000, deps.urgent);
     const viaJson = toItems(j.json?.data, j.url || target.url);
     return { items: viaJson, via: "context.dev-json", note: viaJson.length ? "The listing's layout changed: read by meaning instead of by its CSS classes." : "The listing's layout changed and nothing could be read." };
   }
@@ -137,6 +139,7 @@ export async function readPage(url: string, source: SourceConfig, deps: ReaderDe
   const r = await deps.cd.scrape(
     { url, formats: { markdown: true, json: true }, jsonParams: { schema: NOTICE_SCHEMA, instructions: NOTICE_INSTRUCTIONS }, sharedParams: { mainContentOnly: true }, ...(source.drill ? { maxAgeMs: 0 } : {}) },
     90_000,
+    deps.urgent,
   );
   const text = r.markdown?.success ? (r.markdown.data ?? "") : "";
   if (!text.trim()) throw new PartnerError("context.dev", "bad_response", `Context.dev returned no text for ${url}${r.markdown?.message ? `: ${r.markdown.message}` : ""}.`);

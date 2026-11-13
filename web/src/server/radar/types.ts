@@ -96,7 +96,9 @@ export type MatchStatus =
   /** A person confirmed it. */
   | "confirmed_by_staff"
   /** A person dismissed it, with a reason. */
-  | "dismissed";
+  | "dismissed"
+  /** A possible match on a notice older than the review window: kept with the notice as history, not queued. */
+  | "history";
 
 export type Match = {
   matchId: string;

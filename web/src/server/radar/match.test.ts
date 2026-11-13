@@ -55,6 +55,7 @@ describe("text tools", () => {
   it("compares companies without legal forms and trade qualifiers", () => {
     expect(sameCompany("Vakka Oyj", "RAVINTOVAKKA OY VIILEÄ")).toBe(true);
     expect(sameCompany("Kanala Oy", "MEIJERIMAA OY")).toBe(false);
+    expect(sameCompany("Juustola Oy", "juusto")).toBe(false); // a word at the start of a compound is not its head
   });
 });
 
@@ -82,10 +83,11 @@ describe("matching a notice to the assortment", () => {
   });
 
   it("possible: same brand and a similar product, never a hold by itself", () => {
-    const f = facts("Tuote: Kauravakka kaurajuoma luomu\nValmistaja: Kauravakka Oy\nPakkauskoko: 1 l\nTuotteessa on säilyvyysongelma.");
+    const f = facts("Tuote: Kauravakka kaurajuoma kahviin vanilja\nValmistaja: Kauravakka Oy\nPakkauskoko: 2,5 dl\nTuotteessa on säilyvyysongelma.");
     const m = matchNotice(f, ASSORTMENT);
-    const p = m.find((x) => x.productId === OAT_PLAIN.id)!;
-    expect(p.strength).toBe("possible");
+    const p = m.find((x) => x.productId === OAT.id)!;
+    expect(p).toMatchObject({ strength: "possible", basis: "brand_family" });
+    expect(m.some((x) => x.productId === OAT_PLAIN.id)).toBe(false); // one shared word ("kaurajuoma") is not enough
     expect(decide(p, { today: "2026-11-14", noticeAgeDays: 1 })).toMatchObject({ status: "review", hold: false });
   });
 

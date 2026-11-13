@@ -248,7 +248,7 @@ describe("the hold at the gate", () => {
     fr.deps.exa = new Exa(fr.state.spend, { apiKey: "", fetch: noNetwork });
     const n = { noticeId: "ntc_test", sourceId: "ruokavirasto-fi" as const, drill: false, url: "https://example.test/notice", title: "Testitiedote (fictional)", language: "fi" as const, publishedOn: fr.today(), seenAt: new Date().toISOString(), state: "listed" as const, corroboration: [], sameAs: [] };
     fr.state.notices.push(n);
-    await fr.ingest(n, { text: "Tuote: Kuvitelma kaurajuoma luomu\nTuotemerkki: Kuvitelma\nPakkauskoko: 1 l\nTuotteessa on vierasesineriski.", via: "context.dev", cached: false }, sourceOf("ruokavirasto-fi")!);
+    await fr.ingest(n, { text: "Tuote: Kuvitelma kaurajuoma kahviin vanilja\nTuotemerkki: Kuvitelma\nPakkauskoko: 2,5 dl\nTuotteessa on vierasesineriski.", via: "context.dev", cached: false }, sourceOf("ruokavirasto-fi")!);
     const m = fr.state.matches.find((x) => x.noticeId === n.noticeId)!;
     expect(m).toMatchObject({ productId: "T-1", strength: "possible", status: "review" });
     expect(fr.store.activeHolds(["T-1"])).toHaveLength(0);

@@ -59,8 +59,8 @@ export const SOURCES: SourceConfig[] = [
     homeUrl: "https://www.ruokavirasto.fi/takaisinvedot/",
     checkEveryMinutes: 120,
     monitor: { everyMinutes: 30, includeSelectors: [".content-list-block"] },
-    readWindowDays: 120,
-    maxReadsPerCheck: 40,
+    readWindowDays: 320,
+    maxReadsPerCheck: 60,
     independent: true,
     about: "The authority's recall list in Finnish. Context.dev watches it every 30 minutes; each new notice is read into facts.",
   },
@@ -150,6 +150,9 @@ export const BUDGET = {
  * (a first backfill reads months back) a person decides, since the wholesaler will long since have acted on it.
  */
 export const AUTO_HOLD_MAX_AGE_DAYS = 14;
+
+/** Possible matches on notices older than this are kept as history with the notice, not queued for review. */
+export const REVIEW_MAX_AGE_DAYS = 60;
 
 /** Kitchens are told about deliveries of an affected product received within this many days. */
 export const RECENT_ORDER_DAYS = 60;

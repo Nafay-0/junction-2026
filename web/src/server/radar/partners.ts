@@ -78,6 +78,33 @@ export type ScrapeResponse = {
 
 export type Monitor = { id: string; name: string; status: string; last_run_at: string | null; next_run_at: string | null; last_change_at: string | null; last_error?: { code?: string; message?: string } | null };
 
+/**
+ * Context.dev allows a few request units per minute on this plan (10 at the time of writing). The radar keeps under
+ * it: at most CD_PER_MINUTE charged calls in any minute, of which the last two are kept for urgent reads (a drill
+ * waiting to be picked up, a staff member's "check now"), so a first backfill never makes a drill wait. A 429 is
+ * retried once after the delay it names.
+ */
+const CD_PER_MINUTE = 9;
+const CD_URGENT_RESERVE = 2;
+
+class MinuteLimiter {
+  private readonly stamps: number[] = [];
+  async take(urgent: boolean): Promise<void> {
+    for (;;) {
+      const now = Date.now();
+      while (this.stamps.length && now - this.stamps[0] >= 60_000) this.stamps.shift();
+      const cap = urgent ? CD_PER_MINUTE : CD_PER_MINUTE - CD_URGENT_RESERVE;
+      if (this.stamps.length < cap) {
+        this.stamps.push(now);
+        return;
+      }
+      await new Promise((ok) => setTimeout(ok, Math.max(250, 60_000 - (now - this.stamps[0]) + 50)));
+    }
+  }
+}
+
+const limiters = new WeakMap<object, MinuteLimiter>();
+
 export class ContextDev {
   private readonly base = "https://api.context.dev/v1";
   constructor(
@@ -93,16 +120,29 @@ export class ContextDev {
     return this.opts.apiKey ?? (process.env.CONTEXT_DEV_API_KEY?.trim() || undefined);
   }
 
-  private async request<T>(method: "GET" | "POST" | "PATCH", path: string, body: unknown, timeoutMs: number, charged: boolean): Promise<T> {
+  private async request<T>(method: "GET" | "POST" | "PATCH", path: string, body: unknown, timeoutMs: number, charged: boolean, urgent = false): Promise<T> {
     const key = this.key();
     if (!key) throw new PartnerError("context.dev", "no_key", "CONTEXT_DEV_API_KEY is not set.");
     if (charged && this.spend.contextDevCredits >= BUDGET.contextDevCreditsPerProcess)
       throw new PartnerError("context.dev", "budget", `The radar has spent its ${BUDGET.contextDevCreditsPerProcess} Context.dev credits for this run; reads pause until the next start.`);
-    const res = await call("context.dev", this.opts.fetch ?? fetch, `${this.base}${path}`, {
-      method,
-      headers: { authorization: `Bearer ${key}`, "content-type": "application/json", accept: "application/json" },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    }, timeoutMs);
+    // One limiter per spend meter, i.e. per radar: every client of one radar shares the allowance.
+    let limiter = limiters.get(this.spend);
+    if (!limiter) limiters.set(this.spend, (limiter = new MinuteLimiter()));
+    const send = async () => {
+      if (charged && !this.opts.fetch) await limiter.take(urgent);
+      return call("context.dev", this.opts.fetch ?? fetch, `${this.base}${path}`, {
+        method,
+        headers: { authorization: `Bearer ${key}`, "content-type": "application/json", accept: "application/json" },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      }, timeoutMs);
+    };
+    let res = await send();
+    if (res.status === 429) {
+      const text = await res.text();
+      const wait = Number(/retry in (\d+)/i.exec(text)?.[1] ?? res.headers.get("retry-after") ?? 10);
+      await new Promise((ok) => setTimeout(ok, Math.min(30, Math.max(1, wait)) * 1000 + 250));
+      res = await send();
+    }
     const used = Number(res.headers.get("x-credits-used") ?? NaN);
     const out = await json<T & { key_metadata?: ScrapeResponse["key_metadata"] }>("context.dev", res);
     if (charged) {
@@ -114,9 +154,9 @@ export class ContextDev {
     return out;
   }
 
-  /** POST /v1/web/scrape. Charged: 1 credit, +4 for a JSON extraction that succeeds. */
-  async scrape(body: Record<string, unknown>, timeoutMs = 60_000): Promise<ScrapeResponse> {
-    const r = await this.request<ScrapeResponse>("POST", "/web/scrape", body, timeoutMs, true);
+  /** POST /v1/web/scrape. Charged: 1 credit, +4 for a JSON extraction that succeeds. `urgent` may use the reserve. */
+  async scrape(body: Record<string, unknown>, timeoutMs = 60_000, urgent = false): Promise<ScrapeResponse> {
+    const r = await this.request<ScrapeResponse>("POST", "/web/scrape", body, timeoutMs, true, urgent);
     if (r.cache_metadata?.status === "hit") this.spend.cacheHits += 1;
     return r;
   }
