@@ -67,6 +67,7 @@ async function main() {
   for (const p of probes) {
     rec.current = p.id;
     rec.allow5xx.clear();
+    rec.allowCodes = new Set();
     const check = new Checks();
     const before = rec.violations.length;
     const t0 = Date.now();
@@ -85,6 +86,11 @@ async function main() {
         status = "error";
         check.failures.push(`probe threw: ${(err as Error).stack?.split("\n").slice(0, 3).join(" | ")}`);
       }
+    }
+    if (rec.rateLimited) {
+      status = "error";
+      check.failures.unshift(`the server rate-limited this address ${rec.rateLimited} time(s): start it with DOCK_RATE_LIMITS=off (qa/bin/fresh-server.sh does) for the full run`);
+      rec.rateLimited = 0;
     }
     const violations = rec.violations.length - before;
     if (status === "pass" && (check.failures.length || violations)) status = "fail";

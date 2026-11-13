@@ -53,7 +53,7 @@ export function scanResponse(
   const out: Violation[] = [];
   const probe = rec.current;
   const where = `${r.method} ${r.path.slice(0, 120)}`;
-  if (r.status >= 500 && !rec.allow5xx.has(r.path.split("?")[0])) out.push({ invariant: "no_5xx", probe, detail: `${where} -> ${r.status} ${r.text.slice(0, 200)}` });
+  if (r.status >= 500 && !rec.allow5xx.has(r.path.split("?")[0]) && !rec.allowCodes.has((r.body as any)?.error?.code)) out.push({ invariant: "no_5xx", probe, detail: `${where} -> ${r.status} ${r.text.slice(0, 200)}` });
   for (const re of STACK) if (re.test(r.text)) out.push({ invariant: "no_stack_trace", probe, detail: `${where}: matches ${re}` });
   for (const s of secrets()) if (r.text.includes(s.value)) out.push({ invariant: "no_secret", probe, detail: `${where}: contains the value of ${s.name}` });
   for (const re of KEY_SHAPES) if (re.test(r.text)) out.push({ invariant: "no_secret", probe, detail: `${where}: matches key shape ${re}` });
