@@ -1,6 +1,7 @@
 import Valkey from "iovalkey";
 import { MAX_LIVE_IDS_PER_CALL, type CatalogPort, type LiveOffer, type LiveOptions, type LiveStatus, type ProductQuery, type UpstreamMetered } from "@/core/catalog";
 import { InMemoryEventBus, type DockEvent, type DockEventInput } from "@/core/events";
+import { LIVE_LOOKUP_LIMITS, LiveLookupAllowance, type LiveAllowanceLeft, type LiveLookupLimits } from "@/core/live-allowance";
 import { DockError } from "@/core/orders";
 import type { UpstreamStats, ValioLiveResult } from "@/server/valio/live-client";
 import { validUntilMs } from "@/server/valio/live-client";
@@ -210,100 +211,148 @@ export class ValkeyCachedCatalog implements CatalogPort, UpstreamMetered {
 }
 
 // ---------------------------------------------------------------------------------------------------------
-// Per-agent hourly budget of live lookups
+// Per-agent hourly allowance of live lookups, shared by every process
 
-export const LIVE_BUDGET = { windowMinutes: 60, maxCalls: 30, maxDistinctProducts: 3 * MAX_LIVE_IDS_PER_CALL };
-export type BudgetRemaining = { windowMinutes: number; maxProductsPerCall: number; callsLeft: number; newProductsLeft: number };
+export type BudgetRemaining = LiveAllowanceLeft;
 
-/** What the MCP tools need from a budget. LiveLookupGuard (in memory) and ValkeyLiveBudget both fit. */
+/** What the MCP tools need from a budget. LiveLookupGuard (the core's allowance) and the Valkey one both fit. */
 export interface LiveBudget {
   reserve(agentKey: string, productIds: string[]): void | Promise<void>;
   remaining(agentKey: string): BudgetRemaining | Promise<BudgetRemaining>;
 }
 
-// Atomic check-and-reserve: refuse if the call count or the distinct-product count would exceed the budget.
-// KEYS[1] calls counter, KEYS[2] set of products priced; ARGV[1] maxCalls, ARGV[2] maxDistinct, ARGV[3] ttl, ARGV[4..] ids
-const RESERVE_LUA = `
-local calls = tonumber(redis.call('GET', KEYS[1]) or '0')
-local known = redis.call('SCARD', KEYS[2])
-if calls >= tonumber(ARGV[1]) then return {-1, calls, known} end
-local fresh = 0
-for i = 4, #ARGV do
-  if redis.call('SISMEMBER', KEYS[2], ARGV[i]) == 0 then fresh = fresh + 1 end
+// Record one live call: count it and add its products, both keys expiring with the window. Returns the totals.
+// KEYS[1] calls counter, KEYS[2] set of products priced; ARGV[1] ttl, ARGV[2..] ids
+const RECORD_LUA = `
+local calls = redis.call('INCR', KEYS[1])
+redis.call('EXPIRE', KEYS[1], ARGV[1])
+if #ARGV >= 2 then
+  redis.call('SADD', KEYS[2], unpack(ARGV, 2))
+  redis.call('EXPIRE', KEYS[2], ARGV[1])
 end
-if known + fresh > tonumber(ARGV[2]) then return {-2, calls, known, fresh} end
-redis.call('INCR', KEYS[1])
-redis.call('EXPIRE', KEYS[1], ARGV[3])
-if #ARGV >= 4 then
-  redis.call('SADD', KEYS[2], unpack(ARGV, 4))
-  redis.call('EXPIRE', KEYS[2], ARGV[3])
-end
-return {0, calls + 1, known + fresh}
+return {calls, redis.call('SCARD', KEYS[2])}
 `;
 
+type Shared = { bucket: number; calls: number; products: Set<string>; at: number };
+
 /**
- * The live-lookup budget shared by every process: per agent and clock hour, at most `maxCalls` lookups and
- * `maxDistinctProducts` different products (so nobody walks the catalogue ten products at a time). Both keys
- * expire with the hour. If Valkey cannot answer, the in-process guard decides instead (fail safe, not open).
+ * The core's live-lookup allowance (core/live-allowance.ts), with the counts shared through Valkey, so an agent
+ * cannot get a fresh allowance by landing on another app process. createDock calls it synchronously (REST, MCP and
+ * the intake all go through it), so it decides from this process's own rolling window plus the last known shared
+ * counts for the agent's clock hour, and records each call in Valkey right behind it; the answer refreshes the
+ * shared view. The MCP tools refresh before they check. Both keys expire with the hour (`noeviction` plan).
+ * Without Valkey it is exactly the in-memory allowance.
  */
-export class ValkeyLiveBudget implements LiveBudget {
+export class ValkeyLiveAllowance extends LiveLookupAllowance {
+  private readonly shared = new Map<string, Shared>();
+
   constructor(
     private readonly valkey: Valkey,
-    private readonly fallback: LiveBudget,
-    private readonly limits = LIVE_BUDGET,
-    private readonly now: () => number = Date.now,
-    private readonly actions?: ActionStream,
-  ) {}
+    limits: LiveLookupLimits = LIVE_LOOKUP_LIMITS,
+    private readonly clock: () => Date = () => new Date(),
+    /** Keeps separate deployments (stores) apart, e.g. a rehearsal schema; partner answers in the cache are shared. */
+    private readonly namespace = "dock",
+  ) {
+    super(limits, clock);
+  }
 
-  private keys(agentKey: string): [string, string] {
-    const bucket = Math.floor(this.now() / (this.limits.windowMinutes * 60_000));
-    const base = `${KEY_PREFIX}:budget:${encodeURIComponent(agentKey)}:${bucket}`;
+  private bucket(): number {
+    return Math.floor(this.clock().getTime() / (this.limits.windowMinutes * 60_000));
+  }
+
+  private keys(agentKey: string, bucket: number): [string, string] {
+    const base = `${KEY_PREFIX}:allowance:${this.namespace}:${encodeURIComponent(agentKey)}:${bucket}`;
     return [`${base}:calls`, `${base}:products`];
   }
 
-  async reserve(agentKey: string, productIds: string[]): Promise<void> {
-    const ids = [...new Set(productIds)];
-    if (ids.length > MAX_LIVE_IDS_PER_CALL) return; // the core refuses this call before it reaches the partner
-    const { windowMinutes, maxCalls, maxDistinctProducts } = this.limits;
-    let res: number[];
+  private snapshot(agentKey: string): Shared | undefined {
+    const s = this.shared.get(agentKey);
+    return s && s.bucket === this.bucket() ? s : undefined;
+  }
+
+  /** Read the agent's shared counts for this hour from Valkey. Never throws. */
+  async refresh(agentKey: string): Promise<void> {
+    const bucket = this.bucket();
     try {
-      const ttl = windowMinutes * 60 + 60;
-      res = (await this.valkey.eval(RESERVE_LUA, 2, ...this.keys(agentKey), maxCalls, maxDistinctProducts, ttl, ...ids)) as number[];
+      const [callsKey, productsKey] = this.keys(agentKey, bucket);
+      const [calls, products] = await Promise.all([this.valkey.get(callsKey), this.valkey.smembers(productsKey)]);
+      this.shared.set(agentKey, { bucket, calls: Number(calls ?? 0), products: new Set(products), at: Date.now() });
     } catch (err) {
       metrics.inc("cache.error");
-      log("warn", "live budget check failed in Valkey; using the in-process budget", { error: errMessage(err) });
-      return this.fallback.reserve(agentKey, productIds);
+      log("warn", "live allowance could not read Valkey; using this process's own counts", { error: errMessage(err) });
     }
-    const [code, calls, known] = res;
-    if (code === 0) return;
-    metrics.inc("budget.refused");
-    this.actions?.emit(actionEvent({ kind: "budget.refused", agentId: agentKey, rule: "live_lookup_limit", ok: false, attrs: { calls, known } }));
-    if (code === -1) {
-      throw new DockError(429, "live_lookup_budget_exceeded", `This agent already made ${calls} live price/availability lookups this hour; the limit is ${maxCalls}.`, "live_lookup_limit", { maxCalls, windowMinutes });
+  }
+
+  check(agentKey: string, productIds: string[]): void {
+    super.check(agentKey, productIds); // this process's rolling window
+    const ids = [...new Set(productIds)];
+    if (ids.length === 0 || ids.length > MAX_LIVE_IDS_PER_CALL) return;
+    const s = this.snapshot(agentKey);
+    if (!s || Date.now() - s.at > 5_000) void this.refresh(agentKey); // keep the shared view fresh for the next call
+    if (!s) return;
+    const { windowMinutes, maxCalls, maxDistinctProducts } = this.limits;
+    if (s.calls >= maxCalls) {
+      metrics.inc("budget.refused");
+      throw new DockError(429, "live_lookup_budget_exceeded", `This agent already made ${s.calls} live price/availability lookups this hour (all Dock servers together); the limit is ${maxCalls}.`, "live_lookup_limit", { maxCalls, windowMinutes, shared: true });
     }
-    throw new DockError(
-      429,
-      "live_lookup_budget_exceeded",
-      `Live price/availability is for a short list: at most ${maxDistinctProducts} different products per agent per hour. This call would make it ${known + Number(res[3] ?? 0)}.`,
-      "live_lookup_limit",
-      { maxDistinctProducts, windowMinutes, alreadyPriced: known, requested: ids.length },
+    const after = new Set([...s.products, ...ids]).size;
+    if (after > maxDistinctProducts) {
+      metrics.inc("budget.refused");
+      throw new DockError(
+        429,
+        "live_lookup_budget_exceeded",
+        `Live price/availability is for a short list: at most ${maxDistinctProducts} different products per agent per hour (all Dock servers together). This call would make it ${after}.`,
+        "live_lookup_limit",
+        { maxDistinctProducts, windowMinutes, alreadyPriced: s.products.size, requested: ids.length, shared: true },
+      );
+    }
+  }
+
+  reserve(agentKey: string, productIds: string[]): void {
+    super.reserve(agentKey, productIds); // runs check() above, then records locally
+    const ids = [...new Set(productIds)];
+    if (ids.length === 0 || ids.length > MAX_LIVE_IDS_PER_CALL) return;
+    const bucket = this.bucket();
+    const s = this.snapshot(agentKey) ?? { bucket, calls: 0, products: new Set<string>(), at: 0 };
+    s.calls += 1;
+    for (const id of ids) s.products.add(id);
+    this.shared.set(agentKey, s);
+    const ttl = this.limits.windowMinutes * 60 + 60;
+    (this.valkey.eval(RECORD_LUA, 2, ...this.keys(agentKey, bucket), ttl, ...ids) as Promise<number[]>).then(
+      ([calls]) => {
+        const cur = this.shared.get(agentKey);
+        if (cur && cur.bucket === bucket) cur.calls = Math.max(cur.calls, Number(calls));
+      },
+      (err) => {
+        metrics.inc("cache.error");
+        log("warn", "live allowance could not record the call in Valkey", { error: errMessage(err) });
+      },
     );
   }
 
-  async remaining(agentKey: string): Promise<BudgetRemaining> {
-    const { windowMinutes, maxCalls, maxDistinctProducts } = this.limits;
-    try {
-      const [callsKey, productsKey] = this.keys(agentKey);
-      const [calls, known] = await Promise.all([this.valkey.get(callsKey), this.valkey.scard(productsKey)]);
-      return {
-        windowMinutes,
-        maxProductsPerCall: MAX_LIVE_IDS_PER_CALL,
-        callsLeft: Math.max(0, maxCalls - Number(calls ?? 0)),
-        newProductsLeft: Math.max(0, maxDistinctProducts - Number(known ?? 0)),
-      };
-    } catch {
-      return this.fallback.remaining(agentKey);
-    }
+  remaining(agentKey: string): LiveAllowanceLeft {
+    const local = super.remaining(agentKey);
+    const s = this.snapshot(agentKey);
+    if (!s) return local;
+    return {
+      ...local,
+      callsLeft: Math.min(local.callsLeft, Math.max(0, this.limits.maxCalls - s.calls)),
+      newProductsLeft: Math.min(local.newProductsLeft, Math.max(0, this.limits.maxDistinctProducts - s.products.size)),
+    };
+  }
+
+  /** The MCP view: refresh from Valkey first, then check or report. */
+  asBudget(): LiveBudget {
+    return {
+      reserve: async (agentKey, ids) => {
+        await this.refresh(agentKey);
+        this.check(agentKey, ids);
+      },
+      remaining: async (agentKey) => {
+        await this.refresh(agentKey);
+        return this.remaining(agentKey);
+      },
+    };
   }
 }
 

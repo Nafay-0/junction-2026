@@ -5,9 +5,8 @@ import { InMemoryCatalog } from "@/core/catalog";
 import { DockError } from "@/core/orders";
 import { SEED_PRODUCTS, SEED_STOCK } from "@/core/seed";
 import type { ValioLiveResult } from "@/server/valio/live-client";
-import { LiveLookupGuard } from "@/server/mcp/live-lookup-guard";
 import type { ActionEvent } from "./actions";
-import { ValkeyCachedCatalog, ValkeyEventBus, ValkeyLiveBudget, ValkeyLiveCache, liveTtlSeconds } from "./valkey";
+import { ValkeyCachedCatalog, ValkeyEventBus, ValkeyLiveAllowance, ValkeyLiveCache, liveTtlSeconds } from "./valkey";
 
 /** A tiny in-memory stand-in for the Valkey commands the adapters use. Records every expiry it was given. */
 function fakeValkey(opts: { down?: () => boolean } = {}) {
@@ -108,13 +107,29 @@ describe("live price/availability cache", () => {
   });
 });
 
-describe("live lookup budget", () => {
-  it("uses the in-process guard when Valkey cannot answer", async () => {
-    const { client } = fakeValkey();
-    const guard = new LiveLookupGuard({ windowMinutes: 60, maxCalls: 1, maxDistinctProducts: 30 });
-    const budget = new ValkeyLiveBudget(client, guard);
-    await budget.reserve("agent-1", ["a"]);
-    await expect(budget.reserve("agent-1", ["b"])).rejects.toBeInstanceOf(DockError);
+describe("live lookup allowance shared through Valkey", () => {
+  const limits = { windowMinutes: 60, maxCalls: 2, maxDistinctProducts: 30 };
+
+  it("still enforces this process's own allowance when Valkey cannot answer", async () => {
+    const { client } = fakeValkey({ down: () => true }); // every command fails
+    const allowance = new ValkeyLiveAllowance(client, { ...limits, maxCalls: 1 });
+    allowance.reserve("org:agent-1", ["a"]);
+    expect(() => allowance.reserve("org:agent-1", ["b"])).toThrow(DockError);
+    await expect(allowance.asBudget().reserve("org:agent-1", ["c"])).rejects.toBeInstanceOf(DockError);
+  });
+
+  it("refuses an agent whose hour was used up on another process", async () => {
+    const { client, data } = fakeValkey();
+    const allowance = new ValkeyLiveAllowance(client, limits);
+    const fakeRead = client as unknown as { get(k: string): Promise<string | null>; smembers(k: string): Promise<string[]> };
+    fakeRead.get = async (k) => data.get(k) ?? null;
+    fakeRead.smembers = async () => ["x", "y"];
+    const bucket = Math.floor(Date.now() / 3_600_000);
+    data.set(`dock:v1:allowance:dock:${encodeURIComponent("org:agent-2")}:${bucket}:calls`, "2"); // two calls made elsewhere
+    expect(allowance.remaining("org:agent-2").callsLeft).toBe(2); // not known yet
+    await expect(allowance.asBudget().reserve("org:agent-2", ["a"])).rejects.toMatchObject({ rule: "live_lookup_limit" });
+    expect(() => allowance.check("org:agent-2", ["a"])).toThrow(/all Dock servers together/); // REST path, after the refresh
+    expect(allowance.remaining("org:agent-2").callsLeft).toBe(0);
   });
 });
 

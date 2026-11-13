@@ -78,8 +78,8 @@ describe("ledger entries become action events", () => {
     const replay = await dock.placeOrder(session, { requestId: req.requestId, quoteToken: q.quoteToken, lines });
     expect(replay.status).toBe("rejected");
     const kinds = cap.events.map((e) => e.kind);
-    expect(kinds).toEqual(["request.opened", "quote.issued", "gate.allowed", "order.committed", "gate.refused"]);
+    expect(kinds).toEqual(["request.opened", "lookup.live", "quote.issued", "gate.allowed", "order.committed", "gate.refused"]); // the quote asks live prices first
     expect(cap.events.at(-1)?.rule).toBe("quote_replay");
-    expect(cap.events[3].value).toBe(order.totalCents / 100);
+    expect(cap.events[4].value).toBe(order.totalCents / 100);
   });
 });

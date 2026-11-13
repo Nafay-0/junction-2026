@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normaliseAllergen, normaliseWantedTag } from "./vocabulary";
 
 /**
  * The structured need: what a buyer wants, in fields rather than words. An LLM (outside core/) turns free
@@ -29,6 +30,7 @@ export const NeedSchema = z
     quantity: z.object({ amount: z.number().positive().max(1_000_000), unit: z.enum(NEED_UNITS) }).optional(),
     deliverBy: z.iso.date().optional(), // latest acceptable delivery date
     requiredClaims: z.array(tag).max(10).default([]), // "lactose_free", "organic"
+    requiredLabels: z.array(tag).max(10).optional(), // certificates and labels: "hyvaa_suomesta", "msc"
     forbiddenAllergens: z.array(tag).max(10).default([]),
     /** unstated: the buyer said nothing; no_preference: asked, and said it does not matter. */
     optimise: z.enum([...OPTIMISE_GOALS, "no_preference", "unstated"]).default("unstated"),
@@ -43,6 +45,36 @@ export const NeedSchema = z
 
 export type StructuredNeed = z.infer<typeof NeedSchema>;
 export type NeedInput = z.input<typeof NeedSchema>;
+
+/**
+ * Put a need in the catalogue's words: "lactose-free" and "FREE_FROM_LACTOSE" become lactose_free, "nut free"
+ * becomes a forbidden allergen, "Hyvää Suomesta" a required label. Returns the need and one line per change,
+ * for the ledger. Idempotent.
+ */
+export function normaliseNeed(need: StructuredNeed): { need: StructuredNeed; changes: string[] } {
+  const n = structuredClone(need);
+  const changes: string[] = [];
+  const claims = new Set<string>();
+  const labels = new Set((n.requiredLabels ?? []).map((l) => normaliseWantedTag(l).value));
+  const forbidden = new Set(n.forbiddenAllergens.map(normaliseAllergen));
+  const route = (tag: string, into: Set<string>) => {
+    const t = normaliseWantedTag(tag);
+    const target = t.kind === "label" ? labels : t.kind === "forbid_allergen" ? forbidden : into;
+    target.add(t.value);
+    if (t.value !== tag || t.kind !== "claim") changes.push(`"${tag}" read as ${t.kind === "label" ? "label" : t.kind === "forbid_allergen" ? "no" : "claim"} ${t.value}`);
+  };
+  for (const c of n.requiredClaims) route(c, claims);
+  const attrs = new Set<string>();
+  for (const a of n.item.attributes) route(a, attrs);
+  n.item.excludedAttributes = [...new Set(n.item.excludedAttributes.map((a) => normaliseWantedTag(a).value))];
+  for (const a of n.forbiddenAllergens) if (normaliseAllergen(a) !== a) changes.push(`allergen "${a}" read as ${normaliseAllergen(a)}`);
+  n.requiredClaims = [...claims];
+  n.item.attributes = [...attrs].filter((a) => !n.item.excludedAttributes.includes(a) && !claims.has(a));
+  if (labels.size) n.requiredLabels = [...labels];
+  else delete n.requiredLabels;
+  n.forbiddenAllergens = [...forbidden];
+  return { need: NeedSchema.parse(n), changes };
+}
 
 /** One-tap edit to a need. `null` removes an optional field. */
 export type NeedPatch = {
@@ -74,7 +106,9 @@ export function applyNeedPatch(need: StructuredNeed, patch: NeedPatch): Structur
  * have said. The product data has no notion of these, so they are derived here from attribute tags.
  * `none` is the value for a product carrying none of the listed attributes (regular milk, not organic).
  */
-export type SpecDimension = { id: string; question: string; values: { attribute: string; label: string }[]; noneLabel?: string };
+/** `optIn`: a buyer who wants it says so (organic); a request that says nothing accepts either, so Dock does not ask. */
+/** `mustAsk`: guessing it would make every option wrong or unsafe, so it is asked before any lookup (none today). */
+export type SpecDimension = { id: string; question: string; values: { attribute: string; label: string }[]; noneLabel?: string; optIn?: boolean; mustAsk?: boolean };
 
 export const SPEC_DIMENSIONS: SpecDimension[] = [
   { id: "lactose", question: "Lactose-free or regular?", values: [{ attribute: "lactose_free", label: "Lactose-free" }], noneLabel: "Regular (contains lactose)" },
@@ -87,7 +121,7 @@ export const SPEC_DIMENSIONS: SpecDimension[] = [
       { attribute: "fat_3_5", label: "Whole (3.5 %)" },
     ],
   },
-  { id: "organic", question: "Organic?", values: [{ attribute: "organic", label: "Organic" }], noneLabel: "Not organic" },
+  { id: "organic", question: "Organic?", values: [{ attribute: "organic", label: "Organic" }], noneLabel: "Not organic", optIn: true },
 ];
 
 export const NONE = "none";
@@ -116,6 +150,7 @@ export function describeNeed(n: StructuredNeed): string {
   const parts = [n.quantity ? `${formatAmount(n.quantity.amount, n.quantity.unit)} of ${n.item.text}` : `${n.item.text} (same amount as last time)`];
   const claims = [...n.requiredClaims, ...n.item.attributes];
   if (claims.length) parts.push(`must be ${claims.join(", ")}`);
+  if (n.requiredLabels?.length) parts.push(`labelled ${n.requiredLabels.join(", ")}`);
   if (n.item.excludedAttributes.length) parts.push(`not ${n.item.excludedAttributes.join(", ")}`);
   if (n.item.productId) parts.push(`product ${n.item.productId}`);
   if (n.forbiddenAllergens.length) parts.push(`no ${n.forbiddenAllergens.join(", ")}`);

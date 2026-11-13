@@ -12,8 +12,7 @@ import { PgLedgerStore } from "./pg/ledger-store";
 import { createPool, migrate } from "./pg/pool";
 import { PgDockRepository, PgPasskeyStore } from "./pg/repositories";
 import { createTestDock } from "./test-dock";
-import { ValkeyEventBus, ValkeyLiveBudget, ValkeyLiveCache, valkeyClient } from "./valkey";
-import { LiveLookupGuard } from "@/server/mcp/live-lookup-guard";
+import { ValkeyEventBus, ValkeyLiveAllowance, ValkeyLiveCache, valkeyClient } from "./valkey";
 
 /**
  * Against the real Aiven services, each in a throwaway namespace removed afterwards (a schema, key prefix or
@@ -116,13 +115,17 @@ describe.skipIf(!valkeyOn)("Valkey adapters on dock-cache", () => {
     await client!.del(ValkeyLiveCache.key(date, "p1"), ValkeyLiveCache.key(date, "p2"));
   });
 
-  it("enforces the hourly budget atomically across concurrent reservations", async () => {
-    const budget = new ValkeyLiveBudget(client!, new LiveLookupGuard(), { windowMinutes: 60, maxCalls: 3, maxDistinctProducts: 30 });
-    const agent = `test-${prefix}`;
-    const out = await Promise.allSettled(Array.from({ length: 6 }, (_, i) => budget.reserve(agent, [`x${i}`])));
-    expect(out.filter((r) => r.status === "fulfilled")).toHaveLength(3);
-    expect((await budget.remaining(agent)).callsLeft).toBe(0);
-    const keys = await client!.keys(`dock:v1:budget:${agent}:*`);
+  it("shares the hourly allowance between two processes, with an expiry on its keys", async () => {
+    const limits = { windowMinutes: 60, maxCalls: 3, maxDistinctProducts: 30 };
+    const one = new ValkeyLiveAllowance(client!, limits); // "process one"
+    const two = new ValkeyLiveAllowance(client!, limits); // "process two"
+    const agent = `test-${prefix}:agent`;
+    for (let i = 0; i < 3; i++) one.reserve(agent, [`x${i}`]);
+    await new Promise((r) => setTimeout(r, 500)); // the records land in Valkey right behind the calls
+    await expect(two.asBudget().reserve(agent, ["y"])).rejects.toMatchObject({ rule: "live_lookup_limit" });
+    expect((await two.asBudget().remaining(agent)).callsLeft).toBe(0);
+    const keys = await client!.keys(`dock:v1:allowance:dock:${encodeURIComponent(agent)}:*`);
+    expect(keys).toHaveLength(2);
     for (const k of keys) expect(await client!.ttl(k)).toBeGreaterThan(3500);
     await client!.del(...keys);
   });

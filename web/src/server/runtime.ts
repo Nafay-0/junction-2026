@@ -10,9 +10,10 @@ import { createDock, type Dock } from "@/core/orders";
 import { PasskeyService } from "@/core/passkeys";
 import { SEED_PRODUCTS, SEED_STOCK } from "@/core/seed";
 import { demoTapEnabled, sandboxLimits } from "./config";
-import { KITCHEN_ORG, demoKitchenKeyPair, demoKitchenProfile } from "./demo-kitchen";
+import { KITCHEN_ORG, demoKitchenKeyPair, demoKitchenProfile, demoProducts } from "./demo-kitchen";
 import { DEMO_ORG, demoOrgKeyPair } from "./dev-fixtures";
 import { selectAdapters, type AivenHandle } from "./aiven";
+import { LiveCacheSlot, liveCacheSlots } from "./aiven/live-slot";
 import { SandboxService } from "./sandboxes";
 import { loadCatalogIndex } from "./valio/index-store";
 import { ValioLiveClient } from "./valio/live-client";
@@ -26,7 +27,8 @@ import { ValioCatalog } from "./valio/valio-catalog";
  *
  * Catalogue: the partner's real catalogue (ValioCatalog) when the index exists (`pnpm index:build`) and
  * VALIO_API_KEY is set; otherwise the 12-product seed, so a fresh clone runs with no partner data.
- * DOCK_CATALOG=seed forces the seed (the scripted demo's product ids are seed ids).
+ * DOCK_CATALOG=seed forces the seed. Demo histories (the returning kitchen, visitor hotels) are drawn from whichever
+ * catalogue is in use, by attribute.
  */
 export type CatalogSource = { kind: "seed" } | { kind: "valio"; products: number; indexFile: string; loadMs: number };
 export type Runtime = {
@@ -73,7 +75,9 @@ async function buildRuntime(): Promise<Runtime> {
   // Every store below is in memory unless configuration switches its Aiven adapter on: DOCK_STORE=postgres,
   // DOCK_ACTIONS=kafka|postgres, DOCK_CACHE=valkey, DOCK_BUS=valkey, DOCK_SEARCH=opensearch, or DOCK_AIVEN=1 for all
   // configured services (src/server/aiven/env.ts). `stores.catalog` is `catalog` with the live cache and search routing.
-  const stores = await selectAdapters({ catalog, seedKitchens: [demoKitchenProfile(new Date())] }); // DEV: a returning kitchen with history
+  // Demo histories come from the catalogue this process runs on (the real one when present), by attribute.
+  const products = await demoProducts(catalog);
+  const stores = await selectAdapters({ catalog, seedKitchens: [demoKitchenProfile(new Date(), products)] }); // DEV: a returning kitchen with history
   const { events, aiven } = stores;
   // ---- END AIVEN ADAPTERS ----
   // Approvers who registered a passkey must use it; others (the scripted Laakso demo) keep the link token.
@@ -89,8 +93,9 @@ async function buildRuntime(): Promise<Runtime> {
     events,
     kitchens: stores.kitchens,
     intakes: stores.intakes,
+    liveAllowance: stores.liveAllowance,
   });
-  const sandboxes = new SandboxService({ dock, registry: trustedIssuers, passkeys, limits: sandboxLimits, store: stores.sandboxStore });
+  const sandboxes = new SandboxService({ dock, registry: trustedIssuers, passkeys, limits: sandboxLimits, kitchens: stores.kitchens, products: async () => products, store: stores.sandboxStore });
   await sandboxes.restore();
   return { dock, outbox, catalog, catalogSource, events, passkeys, sandboxes, aiven };
 }
@@ -106,9 +111,13 @@ export function buildCatalog(): { catalog: InMemoryCatalog | ValioCatalog; catal
   if (envValue("DOCK_CATALOG") !== "seed" && apiKey) {
     const loaded = loadCatalogIndex();
     if (loaded) {
-      const live = new ValioLiveClient({ baseUrl: envValue("VALIO_API_BASE") ?? "https://junction26.valioaimo.fi", apiKey, customer: envValue("VALIO_CUSTOMER") });
+      const client = new ValioLiveClient({ baseUrl: envValue("VALIO_API_BASE") ?? "https://junction26.valioaimo.fi", apiKey, customer: envValue("VALIO_CUSTOMER") });
+      // AIVEN HOOK: a slot in front of the partner API where the Valkey live cache plugs in (src/server/aiven/live-slot.ts).
+      const live = new LiveCacheSlot(client);
+      const valio = new ValioCatalog(loaded.index, live);
+      liveCacheSlots.set(valio, live);
       return {
-        catalog: new ValioCatalog(loaded.index, live),
+        catalog: valio,
         catalogSource: { kind: "valio", products: loaded.index.products.length, indexFile: loaded.file, loadMs: loaded.loadMs },
       };
     }

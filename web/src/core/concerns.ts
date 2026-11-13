@@ -1,4 +1,5 @@
 import type { Product } from "./catalog";
+import { packsFor } from "./catalog/product";
 import {
   addDaysIso,
   beforeCutoff,
@@ -34,7 +35,8 @@ export type ConcernCode =
   | "delivery_after_cutoff" // too late to order for that day
   | "contradicts_preference" // goes against a rule a person stated for this kitchen
   | "large_first_order" // a big order from a kitchen with no history
-  | "nothing_to_repeat"; // "same as last time" with no earlier order
+  | "nothing_to_repeat" // "same as last time" with no earlier order
+  | "pack_uncertain"; // the product the buyer named does not say for sure what one pack holds
 
 export type Correction = { id: string; label: string; patch?: NeedPatch; cancel?: true };
 
@@ -47,6 +49,11 @@ export type Concern = {
   corrections: Correction[];
   preferenceIds?: string[]; // for contradicts_preference: the stated preferences a confirmation suspends
   evidence?: Record<string, unknown>;
+  /**
+   * A plausibility warning that a person signing the order off would see anyway. The intake asks it only when
+   * some option is within what the agent may spend alone; otherwise it goes to the approver with the order.
+   */
+  deferrable?: boolean;
 };
 
 export type CheckContext = {
@@ -58,6 +65,11 @@ export type CheckContext = {
   /** Stated preferences the buyer has set aside for this request ("just this once"). */
   suspendedPreferenceIds?: string[];
 };
+
+/** True when the catalogue reports each product's own order cut-off (the partner's live API does): then that decides. */
+export function hasProductCutoffs(ctx: CheckContext): boolean {
+  return ctx.candidates.some((p) => p.source === "valio");
+}
 
 // ---------- thresholds ----------
 
@@ -88,7 +100,12 @@ export const LARGE_FIRST_ORDER: Record<BaseUnit, number> = { L: 300, kg: 150, pc
 
 /** The base unit this family is bought in: from the kitchen's history, else from the product data. */
 export function familyUnit(ctx: CheckContext): BaseUnit | undefined {
-  return lastOrder(ctx.profile, ctx.family)?.unit ?? ctx.candidates[0]?.unit;
+  const last = lastOrder(ctx.profile, ctx.family)?.unit;
+  if (last) return last;
+  // The unit most products of the family are measured in; "pcs" only when nothing has a certain content.
+  const counts = new Map<BaseUnit, number>();
+  for (const p of ctx.candidates) counts.set(p.unit, (counts.get(p.unit) ?? 0) + (p.unit === "pcs" && p.packContent ? 0.1 : 1));
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
 }
 
 /** The pack size a count of "packs" most likely refers to: the named product, the kitchen's usual pack, or the only one there is. */
@@ -123,7 +140,7 @@ const round = (n: number) => Math.round(n * 100) / 100;
 // ---------- the checks ----------
 
 export function checkNeed(need: StructuredNeed, ctx: CheckContext): Concern[] {
-  const concerns = [...checkDelivery(need, ctx), ...checkRepeat(need, ctx), ...checkQuantity(need, ctx), ...checkDuplicate(need, ctx), ...checkPreferences(need, ctx)];
+  const concerns = [...checkDelivery(need, ctx), ...checkRepeat(need, ctx), ...checkQuantity(need, ctx), ...checkPack(need, ctx), ...checkDuplicate(need, ctx), ...checkPreferences(need, ctx)];
   return concerns.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === "error" ? -1 : 1));
 }
 
@@ -164,7 +181,10 @@ export function checkDelivery(need: StructuredNeed, ctx: CheckContext): Concern[
       },
     ];
   }
-  if (!beforeCutoff(date, ctx.now)) {
+  // The kitchen-level cut-off is a fallback for catalogues that do not report one. The partner's API states each
+  // product's own cut-off (Sunday 17:00 for stock items, days earlier for supplier-shipped ones): Dock then
+  // judges every option by its own and never blocks a request on a guess.
+  if (!hasProductCutoffs(ctx) && !beforeCutoff(date, ctx.now)) {
     return [
       {
         key: `delivery_after_cutoff:${date}`,
@@ -292,6 +312,7 @@ export function checkQuantity(need: StructuredNeed, ctx: CheckContext): Concern[
         severity: "warning",
         message: `${formatAmount(base.amount, base.unit)} is ${how} your usual ${usualText} (median of your last ${usual.orders} ${ctx.family} orders).`,
         confirmable: true,
+        deferrable: true,
         corrections: [{ id: `use_${fix.amount}_${fix.unit}`, label: `Make it the usual ${formatAmount(fix.amount, fix.unit)}`, patch: { quantity: fix } }],
         evidence: { ...evidence, ratio: round(ratio) },
       },
@@ -321,8 +342,36 @@ function largeFirstOrder(need: StructuredNeed, ctx: CheckContext, base: { amount
       severity: "warning",
       message: `This is the first order from ${ctx.profile.name}, and ${formatAmount(base.amount, base.unit)} is a large one. Please check the amount.`,
       confirmable: true,
+      deferrable: true,
       corrections: [{ id: "cancel", label: "Cancel and enter the amount again", cancel: true }],
       evidence: { threshold: LARGE_FIRST_ORDER[base.unit], unit: base.unit },
+    },
+  ];
+}
+
+/**
+ * The buyer named a product whose pack content is not certain (the name and the packaging data disagree, or say
+ * nothing): Dock will not guess how many packs make the amount. It shows its estimate and asks once; the
+ * confirmation lets the options use it.
+ */
+export function checkPack(need: StructuredNeed, ctx: CheckContext): Concern[] {
+  const q = need.quantity;
+  const named = need.item.productId ? ctx.candidates.find((p) => p.id === need.item.productId) : undefined;
+  if (!q || !named?.packContent || named.packContent.certain || (q.unit !== "L" && q.unit !== "kg")) return [];
+  const conv = packsFor(named, { amount: q.amount, unit: q.unit });
+  if (conv.ok) return [];
+  const estimate = conv.estimate;
+  return [
+    {
+      key: `pack_uncertain:${named.id}:${q.amount}:${q.unit}`,
+      code: "pack_uncertain",
+      severity: "warning",
+      message: estimate
+        ? `${named.name}: what one ${named.salesUnit ?? "pack"} holds is not certain (${named.packContent.label}). Dock's estimate is ${estimate.salesUnits} ${named.salesUnit ?? "packs"} = ${formatAmount(estimate.delivered.amount, estimate.delivered.unit)}. Use the estimate?`
+        : `${named.name}: what one ${named.salesUnit ?? "pack"} holds is not known (${named.packContent.label}), so ${formatAmount(q.amount, q.unit)} cannot be turned into packs.`,
+      confirmable: !!estimate,
+      corrections: [{ id: "choose_other", label: "Show products with a known pack size instead", patch: { item: { productId: null } } }],
+      evidence: { productId: named.id, label: named.packContent.label, issues: named.packContent.issues, estimate },
     },
   ];
 }

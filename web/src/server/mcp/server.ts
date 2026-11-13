@@ -69,9 +69,9 @@ export function refusal(err: DockError) {
 const guards = new WeakMap<Runtime, LiveBudget>();
 function guardFor(rt: Runtime): LiveBudget {
   let g = guards.get(rt);
-  // The Valkey budget when DOCK_CACHE=valkey (shared by every process), else this process's own guard.
+  // The Valkey-backed allowance when DOCK_CACHE=valkey (shared by every process), else the core's own, through the guard.
   if (!g) {
-    g = rt.aiven?.liveBudget ?? new LiveLookupGuard();
+    g = rt.aiven?.liveBudget ?? new LiveLookupGuard(rt.dock.liveAllowance); // the core's allowance: REST and MCP share it
     guards.set(rt, g);
   }
   return g;

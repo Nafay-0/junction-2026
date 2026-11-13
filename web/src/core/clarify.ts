@@ -42,6 +42,8 @@ export function hardConstraints(mandate: Mandate, need: StructuredNeed, stated: 
   if (wanted.length) add(`Request: must be ${wanted.join(", ")}`, "request");
   if (need.item.excludedAttributes.length) add(`Request: not ${need.item.excludedAttributes.join(", ")}`, "request");
   if (need.forbiddenAllergens.length) add(`Request: no ${need.forbiddenAllergens.join(", ")}`, "request");
+  if (need.requiredLabels?.length) add(`Request: labelled ${need.requiredLabels.join(", ")}`, "request");
+  c.requiredCertificates.push(...(need.requiredLabels ?? []));
   c.requiredAttributes.push(...wanted);
   c.excludedAttributes.push(...need.item.excludedAttributes);
   c.forbiddenAllergens.push(...need.forbiddenAllergens);
@@ -61,6 +63,7 @@ export function hardConstraints(mandate: Mandate, need: StructuredNeed, stated: 
   c.requiredAttributes = uniq(c.requiredAttributes);
   c.excludedAttributes = uniq(c.excludedAttributes);
   c.forbiddenAllergens = uniq(c.forbiddenAllergens);
+  c.requiredCertificates = uniq(c.requiredCertificates);
   return c;
 }
 
@@ -73,12 +76,23 @@ export function violation(p: Product, c: HardConstraints): string | undefined {
   if (excluded.length) return `is ${excluded.join(", ")}`;
   const allergens = p.allergens.filter((a) => c.forbiddenAllergens.includes(a));
   if (allergens.length) return `contains ${allergens.join(", ")}`;
+  if (c.forbiddenAllergens.length && p.allergenInfo?.declared === false) return `no allergen data from its maker, so it cannot be shown free of ${c.forbiddenAllergens.join(", ")}`;
   const certs = c.requiredCertificates.filter((x) => !p.certificates.includes(x));
   if (certs.length) return `lacks ${certs.join(", ")}`;
   return undefined;
 }
 
 // ---------- clarification ----------
+
+/**
+ * Products of another kind than asked: coffee milk, sour milk and portion cups share the word "milk" and the
+ * category with plain milk, but a kitchen asking for milk does not want them. Kinds come from the product names
+ * (see catalog/search.ts); a product without kinds (the seed) is never excluded here.
+ */
+export function kindMismatch(p: Product, wantedKinds: readonly string[]): string | undefined {
+  const extra = (p.kinds ?? []).filter((k) => !wantedKinds.includes(k));
+  return extra.length ? `a different kind of product (${extra.join(", ").replace("fermented", "sour or fermented milk")}) than asked` : undefined;
+}
 
 /** At most two questions for the common case: more and people stop answering and start guessing. */
 export const MAX_QUESTIONS = 2;
@@ -109,7 +123,13 @@ export type Settled = {
   optimiseSource?: "request" | "answer" | "stated" | "learned";
 };
 
-export type Clarification = { questions: Question[]; fromMemory: MemoryNote[]; notAsked: string[]; settled: Settled };
+/**
+ * questions  asked before any lookup: only dimensions marked `mustAsk` (a fact that would make every option wrong
+ *            or unsafe if guessed). None of today's dimensions is one.
+ * spanned    dimensions the products differ on and nothing settles (fat content, lactose when unsaid): not asked;
+ *            the option cards cover each value instead, and the buyer may still answer them to narrow.
+ */
+export type Clarification = { questions: Question[]; spanned: Question[]; fromMemory: MemoryNote[]; notAsked: string[]; settled: Settled };
 
 const OPTIMISE_LABELS: Record<OptimiseGoal | typeof NO_PREFERENCE, string> = {
   price: "Lowest price",
@@ -142,9 +162,11 @@ export function optionLabel(q: Question, optionId: string): string {
 }
 
 /**
- * Decide what to ask. A dimension is asked only when the products still allowed differ on it and neither
- * the request, an earlier answer, nor the kitchen's memory settles it. What the profile answers is never
- * asked; it is reported in `fromMemory` instead.
+ * Decide what to ask, which is almost nothing. A dimension the products differ on and that neither the request,
+ * an answer nor the kitchen's memory settles is not asked up front: the buyer did not mention it, and it does not
+ * change safety (allergens and the mandate's rules are hard constraints, applied before this). The option cards
+ * span its values instead, and memory pre-selects. Only a dimension marked `mustAsk` is asked first. What the
+ * profile answers is never asked; it is reported in `fromMemory`.
  */
 export function clarify(input: {
   need: StructuredNeed;
@@ -158,7 +180,7 @@ export function clarify(input: {
   const stated = input.stated.filter((p) => !input.suspended?.includes(p.id));
   const settled: Settled = { attributes: [], excludedAttributes: [] };
   const fromMemory: MemoryNote[] = [];
-  const open: { q: Question; spread: number }[] = [];
+  const open: { q: Question; spread: number; mustAsk: boolean }[] = [];
   const answerFor = (id: string) => answers.findLast((a) => a.questionId === id);
 
   const applyDimension = (dim: SpecDimension, choice: string) => {
@@ -172,6 +194,7 @@ export function clarify(input: {
     values.sort((a, b) => order(dim, a) - order(dim, b));
     if (values.length < 2) continue;
     const valueAttrs = dim.values.map((v) => v.attribute);
+    if (dim.optIn && !answerFor(`dim:${dim.id}`) && !stated.some((p) => p.kind === "dimension" && p.dimension === dim.id)) continue; // asked for when wanted
     if (need.item.attributes.some((a) => valueAttrs.includes(a))) continue; // the request says
     if (dim.noneLabel && valueAttrs.every((a) => need.item.excludedAttributes.includes(a))) continue;
     const q = dimensionQuestion(dim, values);
@@ -192,14 +215,15 @@ export function clarify(input: {
       fromMemory.push({ question: q, optionId: l.choice, label: optionLabel(q, l.choice), source: "learned", text: `Pre-selected from history: ${l.text}`, evidence: l.evidence });
       continue;
     }
-    open.push({ q, spread: values.length });
+    open.push({ q, spread: values.length, mustAsk: dim.mustAsk === true });
   }
 
   const oq = optimiseQuestion();
   const oa = answerFor(oq.id);
   const so = stated.find((p) => p.kind === "optimise");
   const lo = input.learned.find((p) => p.kind === "optimise");
-  let askOptimise = false;
+  // The goal is never asked up front: the option cards are labelled best price, lowest carbon and most reliable,
+  // so choosing a card answers it. Asking first would cost the buyer a second step for the same answer.
   if (need.optimise !== "unstated") Object.assign(settled, { optimise: need.optimise, optimiseSource: "request" });
   else if (oa) Object.assign(settled, { optimise: oa.optionId as Settled["optimise"], optimiseSource: "answer" });
   else if (so && so.kind === "optimise") {
@@ -208,13 +232,14 @@ export function clarify(input: {
   } else if (lo && lo.kind === "optimise") {
     Object.assign(settled, { optimise: lo.goal, optimiseSource: "learned" });
     fromMemory.push({ question: oq, optionId: lo.goal, label: optionLabel(oq, lo.goal), source: "learned", text: `Pre-selected from history: ${lo.text}`, evidence: lo.evidence });
-  } else askOptimise = candidates.length > 0;
+  }
 
   open.sort((a, b) => b.spread - a.spread);
-  const all = [...open.map((o) => o.q), ...(askOptimise ? [oq] : [])];
-  const questions = all.slice(0, MAX_QUESTIONS);
-  const notAsked = all.slice(MAX_QUESTIONS).map((q) => `${q.text} Not asked, to keep it short: the options show each kind.`);
-  return { questions, fromMemory, notAsked, settled };
+  const ask = open.filter((o) => o.mustAsk).map((o) => o.q);
+  const questions = ask.slice(0, MAX_QUESTIONS);
+  const spanned = [...open.filter((o) => !o.mustAsk).map((o) => o.q), ...ask.slice(MAX_QUESTIONS)];
+  const notAsked = spanned.map((q) => `${q.text} Not asked: you did not say, so the options show ${q.options.length > 3 ? "each kind" : "both"}.`);
+  return { questions, spanned, fromMemory, notAsked, settled };
 }
 
 function order(dim: SpecDimension, value: string): number {

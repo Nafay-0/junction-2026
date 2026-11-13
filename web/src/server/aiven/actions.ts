@@ -131,7 +131,8 @@ export class LedgerToActions {
         return actionEvent({
           ...base,
           kind: d.source === "live" ? "lookup.live" : "lookup.search",
-          attrs: { products: Array.isArray(d.productIds) ? d.productIds.length : Array.isArray(d.resultIds) ? d.resultIds.length : undefined },
+          ok: d.failed === true ? false : undefined, // the wholesaler's live service did not answer
+          attrs: { products: Array.isArray(d.productIds) ? d.productIds.length : Array.isArray(d.resultIds) ? d.resultIds.length : undefined, failed: d.failed === true || undefined, code: typeof d.code === "string" ? d.code : undefined },
         });
       case "quote":
         return actionEvent({ ...base, kind: "quote.issued", value: cents(d.totalCents), attrs: pick(d, ["quoteId", "expiresAt"]) });

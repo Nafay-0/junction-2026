@@ -8,9 +8,9 @@ import { InMemoryKitchenRepository, type KitchenProfile, type KitchenRepository 
 import { InMemoryLedgerStore, type LedgerStore } from "@/core/ledger";
 import { InMemoryDockRepository, type DockRepository } from "@/core/orders";
 import { InMemoryPasskeyStore, type PasskeyStore } from "@/core/passkeys";
-import { LiveLookupGuard } from "@/server/mcp/live-lookup-guard";
+import { LiveLookupAllowance } from "@/core/live-allowance";
 import { InMemorySandboxStore, type SandboxRecord, type SandboxStore } from "@/server/sandboxes";
-import { ValioCatalog, type LiveLookup } from "@/server/valio/valio-catalog";
+import { ValioCatalog } from "@/server/valio/valio-catalog";
 import { TappedLedgerStore, noActions, type ActionStream } from "./actions";
 import { aivenSwitches, errMessage, kafkaConfig, log, pgSchema, valkeyUrl, type AivenSwitches } from "./env";
 import { checkServices, type HealthReport } from "./health";
@@ -22,7 +22,8 @@ import { createPool, migrate } from "./pg/pool";
 import { PgDockRepository, PgIntakeRepository, PgKitchenRepository, PgPasskeyStore, PgRecordStore } from "./pg/repositories";
 import { OpenSearchProductSearch, SearchRoutedCatalog } from "./search";
 import { PgActionStream, writeHealthRows, writeMetricRows } from "./telemetry-sink";
-import { ValkeyCachedCatalog, ValkeyEventBus, ValkeyLiveBudget, ValkeyLiveCache, valkeyClient, type LiveBudget } from "./valkey";
+import { liveCacheSlots } from "./live-slot";
+import { ValkeyCachedCatalog, ValkeyEventBus, ValkeyLiveAllowance, ValkeyLiveCache, valkeyClient, type LiveBudget } from "./valkey";
 
 /** Live handles, for the health route and for shutdown. */
 export type AivenHandle = {
@@ -36,6 +37,7 @@ export type AivenHandle = {
   valkey?: Valkey;
   search?: OpenSearchProductSearch;
   routed?: SearchRoutedCatalog;
+  /** For the MCP tools: the shared allowance, refreshed from Valkey before each check (undefined: the core's own). */
   liveBudget?: LiveBudget;
   health(): Promise<HealthReport>;
   shutdown(): Promise<void>;
@@ -50,6 +52,8 @@ export type Adapters = {
   sandboxStore: SandboxStore;
   ledgerStore: LedgerStore;
   events: InMemoryEventBus;
+  /** The per-agent live-lookup allowance for createDock: shared through Valkey when DOCK_CACHE=valkey. */
+  liveAllowance: LiveLookupAllowance;
   /** The catalogue to wrap in MeteredCatalog: the given one, with the live cache and search routing applied. */
   catalog: CatalogPort;
   aiven: AivenHandle;
@@ -84,6 +88,7 @@ export async function selectAdapters(input: AdapterInput): Promise<Adapters> {
   let ledgerStore: LedgerStore = new InMemoryLedgerStore();
   let events = new InMemoryEventBus();
   let catalog: CatalogPort = input.catalog;
+  let liveAllowance = new LiveLookupAllowance();
 
   const needPg = switches.store === "postgres" || switches.actions !== "off";
   if (needPg) {
@@ -122,15 +127,16 @@ export async function selectAdapters(input: AdapterInput): Promise<Adapters> {
   if (switches.cache === "valkey") {
     const v = handle.valkey!;
     if (input.catalog instanceof ValioCatalog) {
-      // ValioCatalog keeps its live client in a private field; wrap it in place so the runtime's catalogue
-      // object (and its demo overrides) stay the same object. Skipped, with a warning, if the field moves.
-      const holder = input.catalog as unknown as { live?: LiveLookup };
-      if (holder.live && typeof holder.live.lookup === "function") holder.live = new ValkeyLiveCache(holder.live, v, { actions: handle.actions });
-      else log("warn", "ValioCatalog has no `live` field any more; the Valkey live cache is not in front of the partner API");
+      // buildCatalog's AIVEN HOOK: the slot in front of the partner API (live-slot.ts). Below the demo overrides.
+      const slot = liveCacheSlots.get(input.catalog);
+      if (slot) slot.attach((inner) => new ValkeyLiveCache(inner, v, { actions: handle.actions }));
+      else log("warn", "this ValioCatalog was not built by buildCatalog; the Valkey live cache is not in front of the partner API");
     } else {
       catalog = new ValkeyCachedCatalog(input.catalog, v, { actions: handle.actions });
     }
-    handle.liveBudget = new ValkeyLiveBudget(v, new LiveLookupGuard(), undefined, undefined, handle.actions);
+    const shared = new ValkeyLiveAllowance(v, undefined, undefined, pgSchema());
+    liveAllowance = shared;
+    handle.liveBudget = shared.asBudget();
   }
   if (switches.bus === "valkey") {
     const sub = valkeyClient(valkeyUrl()!, "dock-app-sub");
@@ -152,7 +158,7 @@ export async function selectAdapters(input: AdapterInput): Promise<Adapters> {
 
   if (handle.pool) startMetricsFlusher(handle);
   registerShutdownHook(handle);
-  return { repo, kitchens, intakes, passkeyStore, sandboxStore, ledgerStore, events, catalog, aiven: handle };
+  return { repo, kitchens, intakes, passkeyStore, sandboxStore, ledgerStore, events, liveAllowance, catalog, aiven: handle };
 }
 
 // ---------- background: counters to telemetry.events, expired documents swept ----------
@@ -195,7 +201,7 @@ async function shutdown(h: AivenHandle): Promise<void> {
   await h.actions.flush(8_000).catch(() => undefined);
   // Wait (bounded) until the last event this process sent has reached telemetry.events, through whichever sink.
   const last = h.actions.lastEventId?.();
-  if (h.sink && last && h.pool) await waitForTelemetry(h.pool, last, 15_000);
+  if (h.sink && last && h.pool) await waitForTelemetry(h.pool, last, 10_000);
   await flushMetrics(h).catch(() => undefined);
   await h.actions.close().catch(() => undefined);
   await h.sink?.stop();

@@ -145,7 +145,7 @@ export class KafkaActionStream implements ActionStream {
   async close(): Promise<void> {
     await this.flush();
     this.closed = true;
-    await this.producer.disconnect().catch(() => undefined);
+    await Promise.race([this.producer.disconnect().catch(() => undefined), new Promise((r) => setTimeout(r, 5_000).unref())]);
   }
 
   lastEventId(): string | undefined {
@@ -227,8 +227,9 @@ export class TelemetrySink {
     return this.consumed >= count;
   }
 
-  async stop(): Promise<void> {
-    await this.consumer.disconnect().catch(() => undefined);
+  /** Leave the group. Bounded: a consumer mid-rebalance can take a session timeout to leave, and shutdown must not wait for it. */
+  async stop(timeoutMs = 5_000): Promise<void> {
+    await Promise.race([this.consumer.disconnect().catch(() => undefined), new Promise((r) => setTimeout(r, timeoutMs).unref())]);
   }
 
   stats() {

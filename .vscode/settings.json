@@ -1,0 +1,5 @@
+{
+  "files.watcherExclude": { "**/.claude/worktrees/**": true, "**/node_modules/**": true, "**/.next/**": true },
+  "search.exclude": { "**/.claude/worktrees/**": true },
+  "files.exclude": { "**/.claude/worktrees": true }
+}
