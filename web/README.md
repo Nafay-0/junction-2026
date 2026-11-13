@@ -40,3 +40,18 @@ pnpm demo:mcp --url http://localhost:3000   # stock MCP client, no LLM: the milk
 pnpm verify:receipt order.json --url http://localhost:3000
 export DOCK_MANDATE=$(pnpm -s dev:mandate)  # dev mandate for the demo buyer
 ```
+## Phone approval (passkeys)
+
+`/screen` shows a QR code for `/join`. Scanning it creates a demo kitchen (own buyer org key, mandate with a €500
+per-order limit, agent) and makes the phone its approver with a passkey (one tap, Face ID or fingerprint, no typing).
+`/approver` waits for requests over server-sent events and opens `/approve/[id]` when one arrives. Approving is a
+passkey assertion whose challenge is derived from the order's digest, so it cannot be moved to another or edited order.
+
+```bash
+pnpm e2e        # build, start on :3107, run the flow in Chromium with a virtual authenticator
+```
+
+Passkeys need https (or `http://localhost`). For phones, run behind an HTTPS tunnel or a single-instance deployment;
+see `.env.example` for `DOCK_PUBLIC_URL`, `DOCK_WEBAUTHN_*` and the demo-only `DOCK_DEMO_TAP_APPROVAL`.
+Code: `src/core/approval.ts` (digest, proofs), `src/core/passkeys.ts`, `src/core/events.ts`, `src/server/sandboxes.ts`,
+`src/server/approval-links.ts` (`approvalLink(approvalId)` for other screens).

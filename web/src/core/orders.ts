@@ -1,13 +1,17 @@
 import { CompactSign } from "jose";
 import { z } from "zod";
 import {
+  ApprovalProofSchema,
+  describeSignOff,
   linkTokenVerifier,
   newApprovalToken,
+  orderDigest,
   type Approval,
   type ApprovalNotifier,
-  type ApprovalProof,
   type ApprovalVerifier,
+  type SignOff,
 } from "./approval";
+import type { EventPublisher } from "./events";
 import { CatalogError, ProductQuerySchema, type LiveOffer, type MeteredCatalog, type Product } from "./catalog";
 import { DockError, parse } from "./errors";
 import { InMemoryIntakeRepository, createIntakeFlow, recordCommittedOrder, type IntakeRepository } from "./intake";
@@ -17,7 +21,7 @@ import type { Ledger, LedgerHead } from "./ledger";
 import { MandateError, verifyMandate, type Mandate, type TrustRegistry } from "./mandate";
 import { decidingRule, evaluatePolicy, type Decision, type OrderDraftLine } from "./policy";
 import { QuoteError, QuoteRequestLineSchema, buildQuote, signQuote, verifyQuote, type Quote, type QuoteLine } from "./quote";
-import { addDays, canonicalJson, formatEur, newId, sha256Hex } from "./util";
+import { addDays, canonicalJson, formatEur, newId } from "./util";
 
 /**
  * The order flow: request -> lookup -> quote -> policy decision -> (human approval) -> committed order.
@@ -46,7 +50,7 @@ export const PlaceOrderInput = z.object({
 });
 export const ApprovalDecisionInput = z.object({
   decision: z.enum(["approve", "decline"]),
-  proof: z.object({ kind: z.literal("link_token"), token: z.string() }),
+  proof: ApprovalProofSchema,
   note: z.string().max(500).optional(),
 });
 
@@ -104,6 +108,15 @@ export type PendingApproval = {
   reasons: string[];
   lines: { productId: string; name: string; quantity: number; substituteFor?: string }[];
   requestedAt: string;
+};
+
+export type ApprovalContext = {
+  order: PublicOrder;
+  approval: Omit<Approval, "tokenHash">;
+  orderDigest: string;
+  request?: { text: string; neededBy?: string };
+  quoteExpiresAt: string;
+  mandate: Mandate;
 };
 
 export function toPublicOrder(o: Order): PublicOrder {
@@ -177,7 +190,8 @@ export type DockDeps = {
   trustedIssuers: TrustRegistry; // buyer organisations' mandate keys
   wholesalerKey: KeyPair; // signs quotes and order confirmations
   notifier: ApprovalNotifier;
-  verifier?: ApprovalVerifier; // PASSKEY SEAM: swap in a WebAuthn verifier (see approval.ts)
+  verifier?: ApprovalVerifier; // passkeys: PasskeyService.verifier (see passkeys.ts); default accepts link tokens only
+  events?: EventPublisher; // live updates for the approver's phone and the big screen
   now?: () => Date;
   quoteTtlMinutes?: number;
   kitchens?: KitchenRepository; // kitchen memory: order history and preferences (see kitchen.ts)
@@ -196,6 +210,13 @@ export function createDock(deps: DockDeps) {
   const kitchens = deps.kitchens ?? new InMemoryKitchenRepository();
   const intakes = deps.intakes ?? new InMemoryIntakeRepository();
   const agentActor = (s: AgentSession) => `agent:${s.agentId}`;
+  const publish: EventPublisher["publish"] = (e) => {
+    try {
+      deps.events?.publish(e);
+    } catch {
+      // live updates are best effort; they never block an order
+    }
+  };
 
   // One order decision per organisation at a time, so budget and replay checks never race.
   const locks = new Map<string, Promise<unknown>>();
@@ -250,7 +271,16 @@ export function createDock(deps: DockDeps) {
     };
   }
 
-  async function commit(order: Order, authorisedBy: { kind: "mandate" } | { kind: "approver"; role: string; name: string }) {
+  type AuthorisedBy =
+    | { kind: "mandate" }
+    | {
+        kind: "approver";
+        role: string;
+        name: string;
+        signOff: { method: SignOff["method"]; verified: boolean; at: string; orderDigest: string; approverId?: string; credentialId?: string };
+      };
+
+  async function commit(order: Order, authorisedBy: AuthorisedBy) {
     const committedAt = now().toISOString();
     const ledgerHead: LedgerHead | null = ledger.head();
     const body = {
@@ -289,6 +319,18 @@ export function createDock(deps: DockDeps) {
       orderId: order.orderId,
       summary: `Committed order ${order.orderId} at the quoted ${formatEur(order.totalCents)}; the wholesaler signed the confirmation.`,
       data: { authorisedBy, ledgerHead },
+    });
+    publish({
+      type: "order_committed",
+      at: committedAt,
+      orgId: order.orgId,
+      orderId: order.orderId,
+      approvalId: order.approval?.approvalId,
+      totalCents: order.totalCents,
+      summary:
+        authorisedBy.kind === "mandate"
+          ? `${order.orgName}: order placed by the agent within its mandate, ${formatEur(order.totalCents)}.`
+          : `${order.orgName}: order placed, ${formatEur(order.totalCents)}, signed by ${authorisedBy.name}${authorisedBy.signOff.verified ? "" : " (UNVERIFIED demo tap)"}.`,
     });
   }
 
@@ -477,7 +519,7 @@ export function createDock(deps: DockDeps) {
             approvalId: newId("apr"),
             approver: decision.approver,
             status: "pending",
-            orderDigest: sha256Hex(canonicalJson({ orderId: order.orderId, quoteId: order.quoteId, lines: order.lines, totalCents: order.totalCents })),
+            orderDigest: orderDigest(order),
             tokenHash,
             requestedAt: at,
           };
@@ -499,6 +541,15 @@ export function createDock(deps: DockDeps) {
             summary: `Asked ${decision.approver.name} (${decision.approver.role}) to sign off ${formatEur(order.totalCents)}; a one-time link went to them, not to the agent.`,
             data: { approvalId: order.approval.approvalId, role: decision.approver.role, orderDigest: order.approval.orderDigest },
           });
+          publish({
+            type: "approval_requested",
+            at,
+            orgId,
+            orderId: order.orderId,
+            approvalId: order.approval.approvalId,
+            totalCents: order.totalCents,
+            summary: `${order.orgName}: the agent needs ${decision.approver.name} to sign off ${formatEur(order.totalCents)}.`,
+          });
         } else {
           await repo.saveOrder(order);
         }
@@ -506,7 +557,10 @@ export function createDock(deps: DockDeps) {
       });
     },
 
-    /** A human approves or declines. The gate re-checks the order at sign-off before committing. */
+    /**
+     * A human approves or declines. The proof is checked against the order's digest recomputed now, so it covers
+     * exactly what is stored; the gate then re-checks the order (quote expiry, budget) before committing.
+     */
     async decideApproval(approvalId: string, input: z.input<typeof ApprovalDecisionInput>): Promise<PublicOrder> {
       const { decision, proof, note } = parse(ApprovalDecisionInput, input);
       const found = await repo.getOrderByApprovalId(approvalId);
@@ -516,23 +570,48 @@ export function createDock(deps: DockDeps) {
         const approval = order.approval!;
         const actor = `approver:${approval.approver.role}`;
         const ids = { requestId: order.requestId, orderId: order.orderId };
-        if (!(await verifier.verify(approval, proof as ApprovalProof))) {
-          throw refuse(new DockError(403, "approval_proof_invalid", "The approval proof does not match this approval.", "approver_identity"), "unknown", ids);
+        const digest = orderDigest(order);
+        if (digest !== approval.orderDigest) {
+          throw refuse(
+            new DockError(409, "approval_order_changed", "The order changed after sign-off was requested; nothing was approved.", "approver_identity", { expected: approval.orderDigest, actual: digest }),
+            "dock",
+            ids,
+          );
+        }
+        const verified = await verifier.verify({ approval, orgId: order.orgId, orderDigest: digest, decision, now: now() }, proof);
+        if (!verified.ok) {
+          throw refuse(
+            new DockError(403, "approval_proof_invalid", verified.message, "approver_identity", { reason: verified.reason, proof: proof.kind }),
+            proof.kind === "link_token" ? "unknown" : actor,
+            ids,
+          );
         }
         if (approval.status !== "pending") {
           throw new DockError(409, "approval_not_pending", `Approval ${approvalId} was already ${approval.status}.`);
         }
+        const signOff = verified.signOff;
         const at = now().toISOString();
         approval.status = decision === "approve" ? "approved" : "declined";
         approval.decidedAt = at;
         approval.note = note;
+        approval.signOff = signOff;
         order.updatedAt = at;
+        const lineText = order.lines.map((l) => `${l.quantity} x ${l.productId} at ${formatEur(l.unitPriceCents)}, delivery ${l.deliveryDate}`).join("; ");
         ledger.append({
           type: "approval",
           actor,
           ...ids,
-          summary: `${approval.approver.name} (${approval.approver.role}) ${approval.status} order ${order.orderId}${note ? `: "${note}"` : ""}.`,
-          data: { approvalId, decision: approval.status, note, orderDigest: approval.orderDigest },
+          summary: `${approval.approver.name} (${approval.approver.role}) ${approval.status} order ${order.orderId}${note ? `: "${note}"` : ""}. ${describeSignOff(signOff, approval.approver)}; it covers exactly ${lineText}, total ${formatEur(order.totalCents)}.`,
+          data: { approvalId, decision: approval.status, note, orderDigest: approval.orderDigest, signOff },
+        });
+        publish({
+          type: decision === "approve" ? "approval_approved" : "approval_declined",
+          at,
+          orgId: order.orgId,
+          orderId: order.orderId,
+          approvalId,
+          totalCents: order.totalCents,
+          summary: `${order.orgName}: ${approval.approver.name} ${approval.status} ${formatEur(order.totalCents)}${signOff.verified ? "" : " (UNVERIFIED demo tap)"}.`,
         });
         if (decision === "decline") {
           order.status = "declined";
@@ -550,11 +629,47 @@ export function createDock(deps: DockDeps) {
           order.decision = recheck;
           await repo.saveOrder(order);
           ledger.append({ type: "decision", actor: "dock", ...ids, summary: decisionSummary(order.orderId, recheck, "Re-check at sign-off"), data: decisionData(recheck) });
+          publish({
+            type: "order_rejected",
+            at,
+            orgId: order.orgId,
+            orderId: order.orderId,
+            approvalId,
+            totalCents: order.totalCents,
+            summary: `${order.orgName}: approved, but not placed: ${recheck.reasons[0] ?? "the re-check refused it"}`,
+          });
           return toPublicOrder(order);
         }
-        await commit(order, { kind: "approver", role: approval.approver.role, name: approval.approver.name });
+        await commit(order, {
+          kind: "approver",
+          role: approval.approver.role,
+          name: approval.approver.name,
+          signOff: {
+            method: signOff.method,
+            verified: signOff.verified,
+            at: signOff.at,
+            orderDigest: signOff.orderDigest,
+            approverId: "approverId" in signOff ? signOff.approverId : undefined,
+            credentialId: signOff.method === "passkey" ? signOff.credentialId : undefined,
+          },
+        });
         return toPublicOrder(order);
       });
+    },
+
+    /** Everything a sign-off screen needs about one approval (no secrets). For the approver's phone, not for agents. */
+    async approvalContext(approvalId: string): Promise<ApprovalContext> {
+      const o = await repo.getOrderByApprovalId(approvalId);
+      if (!o?.approval) throw new DockError(404, "approval_not_found", `No approval ${approvalId}.`);
+      const request = await repo.getRequest(o.requestId);
+      return {
+        order: toPublicOrder(o),
+        approval: toPublicOrder(o).approval!,
+        orderDigest: orderDigest(o),
+        request: request ? { text: request.text, neededBy: request.neededBy } : undefined,
+        quoteExpiresAt: o.quote.expiresAt,
+        mandate: structuredClone(o.mandate),
+      };
     },
 
     async getOrder(session: AgentSession, orderId: string): Promise<PublicOrder> {
