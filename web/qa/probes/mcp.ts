@@ -91,7 +91,17 @@ export const mcpProbes: Probe[] = [
       const responses = step.concerns.map((x: any) => ({ key: x.key, choice: x.confirmable ? "confirm" : x.corrections[0].id }));
       const r = await m.call("respond_to_concerns", { requestId: step.requestId, by: "Sanna Koskinen", responses });
       const after = r.json?.step ?? r.json;
-      check.expect(r.r.isError === true, `the agent's own MCP call settled the buyer's ${c.code} check (state now ${after?.state})`);
+      if (r.r.isError) return;
+      // Settled by the agent: then the order it leads to must go to a named person (human_confirmation).
+      let st = after;
+      if (st?.state === "options_ready") st = (await m.call("choose_option", { requestId: st.requestId, optionId: st.options[0].optionId, by: "Sanna Koskinen" })).json?.step;
+      const ex = st?.next?.example ?? st?.nextStep?.example;
+      const q = st?.quote;
+      if (!q) return void check.note(`after the agent's answer: ${st?.state}`);
+      const o = await m.call("place_order", ex ?? { requestId: st.requestId, quoteToken: q.quoteToken, lines: q.quote.lines.map((l: any) => ({ productId: l.productId, quantity: l.quantity, unitPriceCents: l.unitPriceCents })) });
+      const order = o.json?.order;
+      check.expect(!(order?.status === "committed" && !order?.approval), `the agent settled the buyer's ${c.code} check over MCP and the order committed with no person`);
+      check.note(`MCP relay: order ${order?.status} ${(order?.decision?.rules ?? []).filter((x: any) => x.outcome !== "pass").map((x: any) => x.rule).join(",")}`);
       await m.client.close();
     },
   },

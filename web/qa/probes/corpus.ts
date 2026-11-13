@@ -73,9 +73,10 @@ export const corpusProbes = (opts: { corpus: boolean }): Probe[] => [
             const corpus = load<{ now: string; cases: Case[] }>(REQUESTS, { now: "", cases: [] });
             if (!corpus.cases.length) return { skip: "no corpus: pnpm qa --regen-corpus" };
             const cache = load<Record<string, Reading>>(READINGS, {});
-            const a = await kaariAgent(http, { weeklyBudgetCents: 1e9 });
+            let a = await kaariAgent(http, { weeklyBudgetCents: 1e9 });
             let n = 0;
             for (const c of corpus.cases) {
+              if (n % 25 === 24) a = await kaariAgent(http, { weeklyBudgetCents: 1e9 }); // the interpreter allows 30 calls an hour per agent
               const r = await a.post("/api/v1/agent/interpret", { text: c.text, now: corpus.now });
               cache[c.id] = { status: r.status, need: r.body?.need, code: r.body?.error?.code, message: r.body?.error?.message?.slice(0, 200), model: r.body?.model };
               if (r.status === 429 || r.status === 503) check.note(`${c.id}: ${r.status} ${r.body?.error?.code}`);
