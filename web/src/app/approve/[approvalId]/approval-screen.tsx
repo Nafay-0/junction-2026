@@ -27,7 +27,7 @@ export function ApprovalScreen({ approvalId, token }: { approvalId: string; toke
   const prepared = useRef<{ options: PublicKeyCredentialRequestOptionsJSON; at: number } | null>(null);
 
   const refresh = useCallback(async () => {
-    const r = await api<{ view: ApprovalView }>("GET", `/api/v1/approvals/${encodeURIComponent(approvalId)}`);
+    const r = await api<{ view: ApprovalView }>("GET", `/api/v1/approvals/${encodeURIComponent(approvalId)}${token ? `?token=${encodeURIComponent(token)}` : ""}`);
     if (r.ok) {
       setView(r.data.view);
       setLoadError(null);
@@ -35,7 +35,7 @@ export function ApprovalScreen({ approvalId, token }: { approvalId: string; toke
     }
     setLoadError(r.error);
     return null;
-  }, [approvalId]);
+  }, [approvalId, token]);
 
   /** Prepare the passkey prompt before the tap: Safari only opens it straight from a tap, with no fetch in between. */
   const prepare = useCallback(async () => {
@@ -61,7 +61,7 @@ export function ApprovalScreen({ approvalId, token }: { approvalId: string; toke
     };
   }, [refresh, prepare]);
 
-  useDockEvents(`/api/v1/events?approvalId=${encodeURIComponent(approvalId)}`, () => void refresh(), () => void refresh());
+  useDockEvents(`/api/v1/events?approvalId=${encodeURIComponent(approvalId)}${token ? `&token=${encodeURIComponent(token)}` : ""}`, () => void refresh(), () => void refresh());
 
   async function send(body: Record<string, unknown>): Promise<boolean> {
     setPhase("sending");

@@ -1,7 +1,7 @@
 import { approvalLink, qrSvg } from "@/server/approval-links";
 import { publicBaseUrl, demoTapEnabled } from "@/server/config";
 import { approverOf } from "@/server/approval-api";
-import { resolveKitchen } from "@/server/console-kitchens";
+import { consoleKitchen } from "@/server/authz";
 import { errorBody, handle } from "@/server/http";
 
 /**
@@ -18,7 +18,7 @@ export async function GET(req: Request, ctx: RouteContext<"/ui-api/kitchens/[kit
   return handle(async (rt) => {
     const { dock, outbox } = rt;
     const { kitchen, approvalId } = await ctx.params;
-    const k = await resolveKitchen(kitchen);
+    const k = await consoleKitchen(req, rt, kitchen);
     if (!k) return Response.json(errorBody("kitchen_not_found", "This kitchen does not exist or its demo time is over."), { status: 404 });
     const c = await dock.approvalContext(approvalId);
     if (c.order.orgId !== k.info.orgId) return Response.json(errorBody("approval_not_found", "No such sign-off for this kitchen."), { status: 404 });

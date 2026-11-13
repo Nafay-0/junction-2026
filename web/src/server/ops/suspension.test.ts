@@ -118,10 +118,10 @@ describe("suspension", () => {
 
   it("suspends a whole organisation, including the on-site console and its scripted buyer", async () => {
     const rt = await getRuntime();
-    const { sandbox } = await rt.sandboxes.joinWithoutPasskey();
+    const { sandbox, sessionToken } = await rt.sandboxes.joinWithoutPasskey();
     const s = await control({ action: "suspend", scope: "org", target: sandbox.orgId, reason: "Visitor kitchen misbehaving" });
     expect(s.status).toBe(201);
-    const res = await consoleCall(new Request(`${BASE}/ui-api/kitchens/${sandbox.sandboxId}/call`, { method: "POST", body: JSON.stringify({ method: "POST", path: "/api/v1/intake", body: { need: { text: "milk", item: { text: "milk" }, quantity: { amount: 10, unit: "L" } } } }) }), {
+    const res = await consoleCall(new Request(`${BASE}/ui-api/kitchens/${sandbox.sandboxId}/call`, { method: "POST", headers: { cookie: `dock_approver=${encodeURIComponent(sessionToken)}` }, body: JSON.stringify({ method: "POST", path: "/api/v1/intake", body: { need: { text: "milk", item: { text: "milk" }, quantity: { amount: 10, unit: "L" } } } }) }), {
       params: Promise.resolve({ kitchen: sandbox.sandboxId }),
     });
     expect(res.status).toBe(403);

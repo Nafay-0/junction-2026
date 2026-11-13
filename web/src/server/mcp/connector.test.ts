@@ -219,8 +219,9 @@ describe("connector address: revocation and expiry", () => {
   it("a visitor kitchen's address expires with the kitchen", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     const { sandboxes } = await getRuntime();
-    const { sandbox } = await sandboxes.joinWithoutPasskey();
-    const r = await connect$(sandbox.sandboxId);
+    const { sandbox, sessionToken } = await sandboxes.joinWithoutPasskey();
+    expect((await connect$(sandbox.sandboxId)).status).toBe(401); // a visitor's connector address is only for that visitor
+    const r = await connect$(sandbox.sandboxId, "GET", { cookie: `dock_approver=${encodeURIComponent(sessionToken)}` });
     const body = (await r.json()) as { connector: { url: string; expiresAt: string }; setup: { assistants: { id: string; steps: string[] }[] } };
     expect(body.connector.expiresAt).toBe(sandbox.expiresAt);
     expect(body.setup.assistants.find((a) => a.id === "claude")!.steps.join(" ")).toMatch(/No sign-in/);
@@ -253,7 +254,9 @@ describe("connector address: revocation and expiry", () => {
   it("only the visitor can change their own kitchen's address", async () => {
     const { sandboxes } = await getRuntime();
     const { sandbox, sessionToken } = await sandboxes.joinWithoutPasskey();
-    expect((await connect$(sandbox.sandboxId, "POST")).status).toBe(403);
+    expect((await connect$(sandbox.sandboxId, "POST")).status).toBe(401);
+    const other = await sandboxes.joinWithoutPasskey();
+    expect((await connect$(sandbox.sandboxId, "POST", { cookie: `dock_approver=${encodeURIComponent(other.sessionToken)}` })).status).toBe(403);
     const mine = await connect$(sandbox.sandboxId, "POST", { cookie: `dock_approver=${encodeURIComponent(sessionToken)}` });
     expect(mine.status).toBe(200);
   });

@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { connection } from "next/server";
+import { SESSION_COOKIE } from "@/server/approver-session";
+import { getRuntime } from "@/server/runtime";
 import { Suspense } from "react";
 import { DEMO_NOTE, PRODUCT_NAME } from "../../_ui/brand";
 import { Wordmark } from "../../_ui/target";
@@ -24,7 +27,9 @@ export default function KitchenLayout(props: LayoutProps<"/k/[kitchen]">) {
 async function Loaded({ params, children }: LayoutProps<"/k/[kitchen]">) {
   const { kitchen } = await params;
   await connection(); // request-time: kitchens come and go
-  const [k, kitchens] = await Promise.all([resolveKitchen(kitchen), listConsoleKitchens()]);
+  const [jar, rt] = await Promise.all([cookies(), getRuntime()]);
+  const viewer = await rt.passkeys.sessionApprover(jar.get(SESSION_COOKIE)?.value); // lists only this phone's own visitor kitchen
+  const [k, kitchens] = await Promise.all([resolveKitchen(kitchen), listConsoleKitchens(viewer?.orgId)]);
   if (!k) return <Closed kitchens={kitchens} />;
   return (
     <Portal key={k.info.slug} kitchen={k.info} kitchens={kitchens}>

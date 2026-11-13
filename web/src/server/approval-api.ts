@@ -1,4 +1,6 @@
+import { DockError } from "@/core/errors";
 import type { PublicOrder } from "@/core/orders";
+import { canRead, principalOf } from "./authz";
 import { buildApprovalView, type ApprovalView } from "./approval-view";
 import { currentApprover } from "./approver-session";
 import { demoTapEnabled } from "./config";
@@ -23,6 +25,19 @@ export async function approvalViewFor(rt: Runtime, req: Request, approvalId: str
     agentName: sandbox?.agentName,
     roleLabel: sandbox?.roleLabel,
   });
+}
+
+/**
+ * May this caller see this sign-off (its screen, QR link and live events)? Its kitchen's approver on their signed-in
+ * phone, the kitchen's own agent, the operations desk, or whoever holds the one-time link token of this approval.
+ * Throws 404 for anyone else, so a stranger cannot even tell the approval exists.
+ */
+export async function requireApprovalReader(rt: Runtime, req: Request, approvalId: string, token?: string | null): Promise<void> {
+  const c = await rt.dock.approvalContext(approvalId); // 404 for unknown approvals
+  if (token && (await rt.dock.approvalTokenMatches(approvalId, token))) return;
+  const who = await principalOf(req, rt);
+  if (canRead(who, c.order.orgId)) return;
+  throw new DockError(404, "approval_not_found", `No approval ${approvalId} for you. Open it on the approver's phone, or with the link Dock sent them.`, "data_access");
 }
 
 /** Pending approvals of one organisation, newest first. */

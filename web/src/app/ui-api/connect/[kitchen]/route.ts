@@ -5,7 +5,7 @@ import { errorBody, handle } from "@/server/http";
 import { connectorSetup } from "@/server/mcp/connector-setup";
 import { connectorSecret, type Connector } from "@/server/mcp/connectors";
 import { connectorsFor } from "@/server/mcp/server";
-import { resolveKitchen } from "@/server/console-kitchens";
+import { consoleKitchen } from "@/server/authz";
 import type { Runtime } from "@/server/runtime";
 
 /**
@@ -54,7 +54,7 @@ async function canManage(req: Request, rt: Runtime, slug: string, kind: "demo" |
 
 async function load(req: Request, ctx: RouteContext<"/ui-api/connect/[kitchen]">, rt: Runtime) {
   const { kitchen: slug } = await ctx.params;
-  const k = await resolveKitchen(slug);
+  const k = await consoleKitchen(req, rt, slug); // a visitor's connector address only for that visitor (server/authz.ts)
   if (!k) return undefined;
   const kitchen = { slug, name: k.info.name, kind: k.info.kind, expiresAt: k.info.expiresAt };
   return { slug, kitchen, manage: await canManage(req, rt, slug, k.info.kind) };

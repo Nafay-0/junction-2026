@@ -269,6 +269,7 @@ export const InterpretResponse = z.object({
   need: NeedSchema,
   model: z.string().describe("provider:model-id that interpreted the text."),
   ms: z.number().int().describe("Time the model took, in milliseconds."),
+  cached: z.boolean().optional().describe("True when the same text for the same kitchen was already interpreted today: no model call."),
   basedOn: z
     .object({ requestId: z.string(), fields: z.array(z.enum(EARLIER_FIELDS)) })
     .optional()

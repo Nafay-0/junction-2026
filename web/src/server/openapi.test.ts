@@ -116,7 +116,8 @@ describe("real responses match the documented status codes and schemas", () => {
     expect(withdrawn.body.order.status).toBe("withdrawn");
     expect((await agent("POST", `/api/v1/orders/${second.body.order.orderId}/withdraw`, {})).status).toBe(409);
 
-    await call("GET", "/api/v1/approvals");
+    expect((await call("GET", "/api/v1/approvals")).status).toBe(401);
+    await agent("GET", "/api/v1/approvals");
     const msg = (await localFetch(new Request(`${BASE}/api/v1/dev/outbox`)).then((r) => r.json())).messages[0];
     expect((await call("POST", `/api/v1/approvals/${msg.approvalId}`, { decision: "approve", token: "wrong" })).status).toBe(403);
     expect((await call("POST", `/api/v1/approvals/${msg.approvalId}`, { decision: "approve", token: new URL(msg.link, BASE).searchParams.get("token") })).status).toBe(200);
@@ -155,16 +156,24 @@ describe("real responses match the documented status codes and schemas", () => {
     const sandboxes = (await call("GET", "/api/v1/sandboxes")).body.sandboxes;
     const placed = (await call("POST", "/api/v1/approver/demo-order", undefined, cookie)).body.order;
     expect(placed.status).toBe("pending_approval");
-    expect((await call("POST", `/api/v1/sandboxes/${sandboxes[0].sandboxId}/demo-order`)).status).toBe(201);
+    const mySandbox = joined.body.sandbox.sandboxId;
+    expect(sandboxes[0].sandboxId).toBeUndefined(); // strangers get names, not ids
+    expect((await call("POST", `/api/v1/sandboxes/${mySandbox}/demo-order`)).status).toBe(401);
+    expect((await call("POST", `/api/v1/sandboxes/${mySandbox}/demo-order`, undefined, cookie)).status).toBe(201);
+    expect((await call("GET", `/api/v1/approvals/${placed.approvalId}`)).status).toBe(404);
     await call("GET", `/api/v1/approvals/${placed.approvalId}`, undefined, cookie);
-    await call("GET", `/api/v1/approvals/${placed.approvalId}/link`);
+    await call("GET", `/api/v1/approvals/${placed.approvalId}/link`, undefined, cookie);
     expect((await call("POST", `/api/v1/approvals/${placed.approvalId}/challenge`, { decision: "maybe" })).status).toBe(400);
     const challenge = (await call("POST", `/api/v1/approvals/${placed.approvalId}/challenge`, { decision: "approve" })).body.options;
     const signed = await call("POST", `/api/v1/approvals/${placed.approvalId}`, { decision: "approve", proof: { kind: "webauthn", response: phone.assert(challenge) } });
     expect(signed.body.view.state).toBe("committed");
     expect((await call("POST", `/api/v1/approvals/${placed.approvalId}/challenge`, { decision: "approve" })).status).toBe(409);
     expect((await call("GET", "/api/v1/events?scope=mine")).status).toBe(401);
-    expect((await call("GET", `/api/v1/events?since=0&approvalId=${placed.approvalId}`)).body).toMatchObject({ type: "approval_requested" });
+    expect((await call("GET", `/api/v1/events?since=0&approvalId=${placed.approvalId}`, undefined, cookie)).body).toMatchObject({ type: "approval_requested" });
+    expect((await call("GET", `/api/v1/events?since=0&approvalId=${placed.approvalId}`)).status).toBe(404);
+    const pub = (await call("GET", "/api/v1/events?since=0")).body;
+    expect(pub).toMatchObject({ type: expect.any(String) });
+    expect(pub.orgId).toBeUndefined(); // the public stream says what happened, never whose
 
     // Every documented operation was exercised at least once with a success status.
     const ok = new Set([...seen].filter((k) => /\s2\d\d$/.test(k)).map((k) => k.replace(/\s\d+$/, "")));

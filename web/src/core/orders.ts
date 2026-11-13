@@ -2,6 +2,7 @@ import { CompactSign } from "jose";
 import { z } from "zod";
 import {
   ApprovalProofSchema,
+  checkLinkToken,
   describeSignOff,
   linkTokenVerifier,
   newApprovalToken,
@@ -395,8 +396,9 @@ export function createDock(deps: DockDeps) {
       }
     }
     const missing = ids.filter((id) => !fromCache.has(id));
-    if (!opts.batch && missing.length > MAX_LIVE_IDS_PER_CALL) {
-      throw refuse(new DockError(400, "too_many_products", `At most ${MAX_LIVE_IDS_PER_CALL} products per live price/availability call; this asked for ${missing.length}. Shortlist first with a master-data search.`, "live_lookup_limit"), actor, { requestId });
+    if (!opts.batch && ids.length > MAX_LIVE_IDS_PER_CALL) {
+      // The per-call cap is on what the agent asks for, cached or not: a short list is a short list.
+      throw refuse(new DockError(400, "too_many_products", `At most ${MAX_LIVE_IDS_PER_CALL} products per live price/availability call; this asked for ${ids.length}. Shortlist first with a master-data search.`, "live_lookup_limit"), actor, { requestId });
     }
     const chunks: string[][] = [];
     for (let i = 0; i < missing.length; i += MAX_LIVE_IDS_PER_CALL) chunks.push(missing.slice(i, i + MAX_LIVE_IDS_PER_CALL));
@@ -983,6 +985,17 @@ export function createDock(deps: DockDeps) {
         publish({ type: "approval_withdrawn", at, orgId, orderId, approvalId: order.approval?.approvalId, totalCents: order.totalCents, summary: `${order.orgName}: the ${formatEur(order.totalCents)} order waiting for sign-off was withdrawn.` });
         return toPublicOrder(order);
       });
+    },
+
+    /** The organisation a request belongs to, for deciding who may read its ledger entries. */
+    async orgOfRequest(requestId: string): Promise<string | undefined> {
+      return (await repo.getRequest(requestId))?.orgId;
+    },
+
+    /** Does this one-time link token belong to this approval? (The link proves only who received the message.) */
+    async approvalTokenMatches(approvalId: string, token: string): Promise<boolean> {
+      const o = await repo.getOrderByApprovalId(approvalId);
+      return !!o?.approval && checkLinkToken(o.approval, token);
     },
 
     /** Weekly spend of the agent's organisation: committed, and held by orders waiting for sign-off. */
