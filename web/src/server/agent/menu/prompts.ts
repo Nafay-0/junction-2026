@@ -28,6 +28,7 @@ export function outlineSystem(ctx: MenuPromptContext): string {
 
 Your job in this step: read the chef's request and decide the dishes, without ingredients.
 - If the chef names dishes, list exactly those. If the chef gives only an occasion or a key ingredient (a seasonal ingredient, "three-course lunch"), choose a small number of sensible dishes a Finnish professional kitchen would cook for it, and say so in assumptions. Prefer dishes that share ingredients, so fewer products are bought.
+- name: the dish in English; nameFi and nameSv: the same dish's name in Finnish and in Swedish, as a menu there would write it.
 - portion: the portion per cover in a few words (a lunch soup as a main is about 3.5 dl; as a starter about 2 dl).
 - covers: the number of portions the chef gave, else null (code will ask; do not guess). serviceDate: the day the food is served, YYYY-MM-DD from the calendar, else null. For a week menu give each dish its own serviceDate.
 - requiredClaims and forbiddenAllergens: only what the request itself states (lactose_free, gluten_free, vegan; nuts, peanuts, gluten, milk, eggs, fish).
@@ -46,6 +47,7 @@ Your job in this step: list what has to be bought to cook ONE dish from scratch 
 - Classic Finnish dishes keep their usual recipes (lohikeitto: salmon, potatoes, onion or leek, carrot, cream, fish stock, allspice, dill). Leave out water.
 - key: snake_case English name of the ingredient (salmon_fillet, yellow_onion), the plain generic one.
 - perCover: amount per cover in g or ml (eggs in g: one egg is about 55 g); pcs only for what is bought and counted by the piece and has no sensible weight. As eaten in a normal portion of this dish. amountBasis: how you got the figure, in a few words. yieldPct: usable share after trimming, peeling or bones (salmon fillet with skin about 90, peeled potatoes about 80, onions about 90); 100 when nothing is lost. For stock, give the amount of the product a kitchen buys (stock concentrate or powder in g), not of the finished liquid.
+- List every ingredient the recipe needs, staples included (a cake has its flour and sugar): plain code checks the recipe is complete and shows staples as assumed in stock.
 - pantry: true only for staples nearly every professional kitchen keeps (salt, pepper, sugar, flour, cooking oil, dried spices) and anything the kitchen lists as always in stock.
 - form: the form this dish needs (fresh, frozen, dried, canned_or_jarred) or any. avoid: words in Finnish or English product names that would be wrong for this use (fresh dill in a soup: kuivattu, dried, siemen, seed).
 - searchTerms: 2 to 4 short phrases as a Finnish wholesaler names the product, Finnish first, then English (["lohifilee", "salmon fillet"]). Generic names, no brands.

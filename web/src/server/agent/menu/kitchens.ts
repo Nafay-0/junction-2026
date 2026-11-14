@@ -190,6 +190,8 @@ export function menuRules(def: Pick<Def, "diet" | "rules">, consoleMandate: Pick
   for (const sp of profile?.stated ?? []) {
     if (sp.kind === "forbid_allergen") addAllergen(sp.allergen, `stated by ${sp.statedBy}`);
     else if (sp.kind === "require_claim") addClaim(sp.claim, `stated by ${sp.statedBy}`);
+    // "Always lactose-free" is stated as a dimension choice; kitchen-wide (no family), it binds every line of a menu.
+    else if (sp.kind === "dimension" && !sp.family) addClaim(sp.choice, `stated by ${sp.statedBy}`);
   }
   for (const m of profile ? activeMemory(profile, { now }) : []) {
     if (m.strength !== "rule" || m.scope) continue;

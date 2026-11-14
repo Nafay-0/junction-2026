@@ -37,3 +37,16 @@ describe("pack choice for a small need", () => {
     expect(leftoverNote(7, 2, "kg", fmt)).toBeUndefined();
   });
 });
+
+describe("a tiny need against a huge top pack", () => {
+  it("6 l of stock: a 125 l pack scored a little lower goes before the 1,000 l one the search ranked first", () => {
+    const found = [
+      { id: "1000l", score: 0.836, packSize: 1000 },
+      { id: "1562l", score: 0.678, packSize: 1562 },
+      { id: "125l", score: 0.675, packSize: 125 },
+      { id: "87l", score: 0.526, packSize: 87 },
+    ];
+    expect(orderByFit(found, 6)[0].id).toBe("87l");
+    expect(orderByFit(found, 6).map((x) => x.id).slice(0, 2)).toEqual(["87l", "125l"]);
+  });
+});
