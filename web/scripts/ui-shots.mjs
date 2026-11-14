@@ -247,7 +247,8 @@ async function shootPublicBeforeJoin() {
 async function shootAll() {
   // Public.
   for (const [name, url] of [
-    ["public-wall", "/"],
+    ["public-landing", "/"],
+    ["public-wall", "/wall"],
     ["public-door", "/k"],
     ["public-signup", "/k/signup"],
     ["public-try", "/try"],

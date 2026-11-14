@@ -1,15 +1,31 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { SearchX } from "lucide-react";
 import { DEMO_NOTES } from "./_ui/brand";
 import { IconDisc } from "./_ui/kit";
 import { LINK_PRIMARY, LINK_SECONDARY } from "./k/_account/links";
 import { Wordmark } from "./_ui/wordmark";
+import type { Lang } from "./_i18n/lang";
 import { requestLang } from "./_i18n/server";
 import { NOT_FOUND_TEXT } from "./not-found.text";
 
-/** An address that does not exist: the product's own page, in the visitor's language, with a way on. */
-export default async function NotFound() {
-  const lang = await requestLang();
+/**
+ * An address that does not exist: the product's own page, in the visitor's language, with a way on. The English page
+ * is prerendered; the visitor's language (a cookie) streams in.
+ */
+export default function NotFound() {
+  return (
+    <Suspense fallback={<NotFoundPage lang="en" />}>
+      <Localized />
+    </Suspense>
+  );
+}
+
+async function Localized() {
+  return <NotFoundPage lang={await requestLang()} />;
+}
+
+function NotFoundPage({ lang }: { lang: Lang }) {
   const tx = NOT_FOUND_TEXT[lang];
   return (
     <div className="flex min-h-dvh flex-col bg-mist text-ink">
