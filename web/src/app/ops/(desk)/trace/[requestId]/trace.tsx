@@ -250,6 +250,11 @@ function Trace({ t, error }: { t: TraceView; error?: string }) {
                   Open the audit record{t.orderIds.length > 1 ? ` of order ${i + 1}` : ""}
                 </Link>
               ))}
+              {t.orderIds.map((id, i) => (
+                <Link key={`tm-${id}`} href={`/ops/time-machine?order=${encodeURIComponent(id)}`} className="font-semibold text-petrol underline underline-offset-2">
+                  The rules at this moment{t.orderIds.length > 1 ? `, order ${i + 1}` : ""}
+                </Link>
+              ))}
             </p>
           )}
         </section>

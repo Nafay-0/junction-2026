@@ -2,7 +2,7 @@ import type { RecentOrder } from "@/core/policy";
 import type { Maria } from "./client";
 import { changesFrom, kitchens, listOrders, moments, orderBodyOf, recentOrdersAsOf, rulesAsOf, versionsBetween, type Change, type OrderListItem, type RuleRow, type Shown } from "./history";
 import type { MirrorStatus } from "./mirror";
-import { differences, judge, reproduces, stateFor, termsDisagree, type Difference, type Verdict } from "./replay";
+import { differences, judge, mandateRuleValue, reproduces, stateFor, termsDisagree, type Difference, type Verdict } from "./replay";
 import type { OrderBody } from "./rows";
 import { describeChange, describeRule, kitchenSentence } from "./words";
 
@@ -28,6 +28,8 @@ export type Replay = {
   reproduces: { same: boolean; rules: string[] };
   /** The mirror's mandate terms agree with the mandate the order itself carried (fields that differ, if any). */
   termsDisagree: string[];
+  /** The mandate was not in the mirror yet the instant before the order: the one the order carried stood in. */
+  mandateFromOrder: boolean;
   kitchenSentence: string;
 };
 
@@ -66,7 +68,7 @@ export async function timeMachineView(db: Maria, q: Query): Promise<TimeMachineV
   const picked = q.orderId ? list.rows.find((o) => o.orderId === q.orderId) : undefined;
   const body = q.orderId ? await orderBodyOf(db, q.orderId) : q.requestId ? await bodyByRequest(db, q.requestId) : undefined;
   const orderItem = picked ?? (body ? list.rows.find((o) => o.orderId === body.orderId) : undefined);
-  const orgId = body?.orgId ?? q.orgId ?? ks.find((k) => !k.scenario)?.orgId ?? ks[0]?.orgId;
+  const orgId = body?.orgId ?? q.orgId ?? ks.find((k) => !k.scenario)?.orgId ?? ks.find((k) => k.orgId === "org_demo_aurinko")?.orgId ?? ks[0]?.orgId;
   const at = q.at && !Number.isNaN(Date.parse(q.at)) ? new Date(q.at).toISOString() : body ? justBefore(body.createdAt) : new Date(Date.parse(now) - 7 * 86_400_000).toISOString();
   if (!orgId) return { at, now, kitchens: ks, orders: list.rows, rulesAt: [], rulesNow: [], changes: [], rawChanges: [], moments: [], sql };
 
@@ -76,7 +78,7 @@ export async function timeMachineView(db: Maria, q: Query): Promise<TimeMachineV
     versionsBetween(db, orgId, at < now ? at : now, at < now ? now : at).then((s) => show("Every version in force in between", s)),
     moments(db, orgId).then((s) => show("Every moment a rule changed (the slider's ticks)", s)),
   ]);
-  const raw = changesFrom(versions.rows, at < now ? at : now, at < now ? now : at);
+  let raw = changesFrom(versions.rows, at < now ? at : now, at < now ? now : at);
   const mandateNow = rulesNow.rows.find((r) => r.area === "mandate");
   const orgName = String(mandateNow?.value.orgName ?? rulesAt.rows.find((r) => r.area === "mandate")?.value.orgName ?? ks.find((k) => k.orgId === orgId)?.name ?? orgId);
 
@@ -86,10 +88,24 @@ export async function timeMachineView(db: Maria, q: Query): Promise<TimeMachineV
     const thenRows = before === at ? rulesAt : await rulesAsOf(db, orgId, before).then((s) => show("The rules the instant before the order", s));
     const recent = await recentOrdersAsOf(db, orgId, before, body.orderId).then((s) => show("The kitchen's other orders of that day, as they stood (the splitting check)", s));
     const recentOrders: RecentOrder[] = recent.rows;
-    const then = judge(body, stateFor(thenRows.rows, body, before), recentOrders);
-    const atV = judge(body, stateFor(rulesAt.rows, body, at), recentOrders);
+    // The live mirror writes a moment after the app sees a change, so a mandate first presented with this very order
+    // may not be in MariaDB's history at the instant before it. Then the mandate the order carried stands in, and the
+    // page says so (mandateFromOrder) rather than claiming no mandate was in force.
+    const carried = (rows: RuleRow[]): RuleRow[] =>
+      rows.some((r) => r.area === "mandate" && r.item === body.agentId)
+        ? rows
+        : [...rows, { area: "mandate", orgId: body.orgId, item: body.agentId, inForce: true, value: mandateRuleValue(body.mandate), changedBy: `${body.mandate.issuer.name}, the mandate presented with this order`, since: body.createdAt }];
+    const mandateFromOrder = !thenRows.rows.some((r) => r.area === "mandate" && r.item === body.agentId);
+    const thenState = carried(thenRows.rows);
+    const then = judge(body, stateFor(thenState, body, before), recentOrders);
+    const atV = judge(body, stateFor(before === at ? thenState : rulesAt.rows, body, at), recentOrders);
     const nowV = judge(body, stateFor(rulesNow.rows, body, now), recentOrders);
     const thenVsNow = differences(then, nowV);
+    if (mandateFromOrder) {
+      // The mirror's first sight of the mandate the order carried is not a change of rule since the order.
+      const same = JSON.stringify({ ...mandateRuleValue(body.mandate), issuedAs: 0 });
+      raw = raw.filter((c) => !(c.area === "mandate" && c.kind === "added" && c.item === body.agentId && JSON.stringify({ ...c.after?.value, issuedAs: 0 }) === same));
+    }
     replay = {
       then,
       at: atV,
@@ -97,7 +113,8 @@ export async function timeMachineView(db: Maria, q: Query): Promise<TimeMachineV
       thenVsNow,
       atVsNow: differences(atV, nowV),
       reproduces: reproduces(body, then),
-      termsDisagree: termsDisagree(body, thenRows.rows.find((r) => r.area === "mandate" && r.item === body.agentId)),
+      termsDisagree: mandateFromOrder ? [] : termsDisagree(body, thenRows.rows.find((r) => r.area === "mandate" && r.item === body.agentId)),
+      mandateFromOrder,
       kitchenSentence: kitchenSentence(then, nowV, thenVsNow),
     };
   }

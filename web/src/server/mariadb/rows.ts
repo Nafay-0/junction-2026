@@ -27,6 +27,8 @@ type Spec = {
   jsonCols: string[];
   /** A row the app no longer has: delete it (no longer in force), or keep it (the audit record outlives the process). */
   missing: "delete" | "keep";
+  /** For a kept row still in force that the app no longer has (its in-memory state was lost on a restart): end it. */
+  end?: { status: string; from?: string; by?: string };
 };
 
 export const SPECS: Record<TableName, Spec> = {
@@ -39,10 +41,13 @@ export const SPECS: Record<TableName, Spec> = {
     missing: "delete",
   },
   gate_kitchen_rule: { key: ["org_id", "rule_id"], versioned: ["strength", "kind", "family", "text", "fact"], quiet: [], meta: ["changed_by"], jsonCols: ["fact"], missing: "delete" },
-  gate_product_hold: { key: ["hold_id"], versioned: ["product_id", "product_name", "reason", "notice_url", "drill", "status"], quiet: [], meta: ["changed_by", "change_note"], jsonCols: [], missing: "keep" },
-  gate_suspension: { key: ["suspension_id"], versioned: ["scope", "target", "org_id", "label", "reason", "status"], quiet: [], meta: ["changed_by", "change_note"], jsonCols: [], missing: "keep" },
-  gate_budget: { key: ["org_id"], versioned: ["committed_cents", "held_cents", "week_orders", "orders_in_week"], quiet: [], meta: ["changed_by"], jsonCols: ["week_orders"], missing: "keep" },
-  gate_order: { key: ["order_id"], versioned: ["status", "outcome", "authorised_by", "total_cents"], quiet: [], meta: ["org_id", "agent_id", "request_id", "categories", "delivery_dates", "created_at", "changed_by"], jsonCols: ["categories", "delivery_dates"], missing: "keep" },
+  gate_product_hold: { key: ["hold_id"], versioned: ["product_id", "product_name", "reason", "notice_url", "drill", "status"], quiet: [], meta: ["changed_by", "change_note"], jsonCols: [], missing: "keep", end: { status: "lifted", from: "held" } },
+  gate_suspension: { key: ["suspension_id"], versioned: ["scope", "target", "org_id", "label", "reason", "status"], quiet: [], meta: ["changed_by", "change_note"], jsonCols: [], missing: "keep", end: { status: "resumed", from: "active" } },
+  // An organisation with no orders the app knows has no spend the gate would count: the row goes.
+  gate_budget: { key: ["org_id"], versioned: ["committed_cents", "held_cents", "week_orders", "orders_in_week"], quiet: [], meta: ["changed_by"], jsonCols: ["week_orders"], missing: "delete" },
+  // An order the app no longer has (its in-memory store restarted) stays as the audit record, marked so that the gate
+  // replay does not count it among the orders the gate itself could see (the splitting check).
+  gate_order: { key: ["order_id"], versioned: ["status", "outcome", "authorised_by", "total_cents"], quiet: [], meta: ["org_id", "agent_id", "request_id", "categories", "delivery_dates", "created_at", "changed_by"], jsonCols: ["categories", "delivery_dates"], missing: "keep", end: { status: "forgotten", by: "no longer in the app's state (it restarted); kept here as the record" } },
   gate_order_body: { key: ["order_id"], versioned: [], quiet: ["org_id", "created_at", "body"], meta: [], jsonCols: ["body"], missing: "keep" },
 };
 
@@ -276,7 +281,15 @@ export function planWrites(table: TableName, written: Map<string, Row>, desired:
       out.push({ table, op: "update", row: r, cols: [...spec.versioned, ...spec.meta, ...spec.quiet] });
     } else if (!same(table, spec.quiet, prev, row)) out.push({ table, op: "touch", row, cols: spec.quiet });
   }
-  if (spec.missing === "delete") for (const [k, prev] of written) if (!seen.has(k)) out.push({ table, op: "delete", row: prev });
+  for (const [k, prev] of written) {
+    if (seen.has(k)) continue;
+    if (spec.missing === "delete") out.push({ table, op: "delete", row: prev });
+    else if (spec.end && (spec.end.from === undefined ? prev.status !== spec.end.status : prev.status === spec.end.from)) {
+      const row: Row = { ...prev, status: spec.end.status, changed_by: spec.end.by ?? "no longer in the app's state (it restarted)" };
+      if ("change_note" in prev) row.change_note = null;
+      out.push({ table, op: "update", row, cols: [...spec.versioned, ...spec.meta, ...spec.quiet] });
+    }
+  }
   return out;
 }
 

@@ -32,9 +32,18 @@ describe("planning the mirror's writes", () => {
     expect(planWrites("gate_mandate", written([mandateRow(m1)]), []).map((x) => x.op)).toEqual(["delete"]);
   });
 
-  it("orders are never deleted from the mirror, even when the app forgets them (an in-memory restart)", () => {
+  it("orders are never deleted from the mirror; one the app forgot (an in-memory restart) is marked, once", () => {
     const o = { order_id: "ord_1", status: "committed", outcome: "auto_approve", authorised_by: "mandate", total_cents: 100 };
-    expect(planWrites("gate_order", new Map([["ord_1", o]]), [])).toEqual([]);
+    const w = planWrites("gate_order", new Map([["ord_1", o]]), []);
+    expect(w).toMatchObject([{ op: "update", row: { order_id: "ord_1", status: "forgotten" } }]);
+    expect(planWrites("gate_order", new Map([["ord_1", { ...o, status: "forgotten" }]]), [])).toEqual([]);
+  });
+
+  it("a suspension the app no longer has after a restart is ended, not left in force", () => {
+    const prev = { suspension_id: "s1", scope: "agent", target: "a", org_id: "o", label: "A", reason: "r", status: "active", changed_by: "Jussi", change_note: null };
+    const w = planWrites("gate_suspension", new Map([["s1", prev]]), []);
+    expect(w).toMatchObject([{ op: "update", row: { status: "resumed", changed_by: "no longer in the app's state (it restarted)" } }]);
+    expect(planWrites("gate_suspension", new Map([["s1", { ...prev, status: "resumed" }]]), [])).toEqual([]);
   });
 
   it("a budget that drops with no new order says the window moved on", () => {
@@ -74,5 +83,20 @@ describe("the mirror is never in the path of an order", () => {
     expect(mirrorHealth(mirror.status()).state).toBe("failing");
     await mirror.stop();
     await db.close().catch(() => undefined);
+  });
+});
+
+describe("suspensions as the ledger records them", () => {
+  it("rebuilds the registry's suspensions, resumes included, from the control entries", async () => {
+    const { createTestDock } = await import("../aiven/test-dock");
+    const { SuspensionRegistry } = await import("../ops/suspensions");
+    const { suspensionsFromLedger } = await import("./attach");
+    const { dock } = await createTestDock();
+    const reg = new SuspensionRegistry(dock);
+    const a = reg.suspend({ scope: "agent", target: "agent_x", label: "X", reason: "Night calls", by: "Jussi" });
+    reg.suspend({ scope: "org", target: "org_y", label: "Y", reason: "Unpaid", by: "Leena" });
+    reg.resume(a.suspensionId, { by: "Jussi", note: "Checked" });
+    const pick = (s: { suspensionId: string; scope: string; target: string; reason: string; by: string; resumedBy?: string; resumeNote?: string }) => ({ id: s.suspensionId, scope: s.scope, target: s.target, reason: s.reason, by: s.by, resumedBy: s.resumedBy, note: s.resumeNote });
+    expect(suspensionsFromLedger(dock.ledger.entries()).map(pick)).toEqual(reg.all().map(pick));
   });
 });

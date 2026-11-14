@@ -96,6 +96,7 @@ export function describeChange(c: Change): { at: string; when: string; what: str
   if (c.area === "hold") what = c.kind === "added" ? `${String(v.productName)} put on ${v.drill ? "a recall drill" : "recall hold"}: ${String(v.reason)}` : `Hold on ${String(v.productName)} lifted${c.after?.value.note ? `: ${String(c.after.value.note)}` : ""}`;
   else if (c.area === "suspension") what = c.kind === "added" ? `${String(v.label)} suspended: “${String(v.reason)}”` : `${String(v.label)} resumed${c.after?.value.note ? `: “${String(c.after.value.note)}”` : ""}`;
   else if (c.area === "kitchen_rule") what = c.kind === "added" ? `Rule added: “${String(v.text)}”` : c.kind === "ended" ? `Rule removed: “${String(v.text)}”` : `Rule changed: “${String(c.before?.value.text)}” to “${String(v.text)}”`;
+  else if (c.area === "budget" && c.kind === "added") what = `Weekly spend: ${eurShort(Number(v.committedCents))} committed${Number(v.heldCents) ? `, ${eurShort(Number(v.heldCents))} waiting for sign-off` : ""}`;
   else if (c.area === "budget") what = `Weekly spend ${c.fields.filter((f) => f.field.endsWith("Cents")).map((f) => `${FIELD_LABEL[f.field].toLowerCase()} ${fieldValue(f.field, f.before)} to ${fieldValue(f.field, f.after)}`).join(", ") || "changed"}`;
   else if (c.kind === "added") what = `Mandate in force for ${String(v.orgName)}: up to ${eurShort(Number(v.perOrderLimitCents))} per order alone, ${eurShort(Number(v.weeklyBudgetCents))} a week`;
   else if (c.kind === "ended") what = `Mandate of ${String(v.orgName)} no longer in force`;

@@ -20,6 +20,7 @@ const NAV: { href: string; label: string; what: string; key: string }[] = [
   { href: "/ops/radar", label: "Recall radar", what: "Recalls, holds, drills", key: "r" },
   { href: "/ops/control", label: "Control", what: "Suspend, resume, sign-offs", key: "c" },
   { href: "/ops/audit", label: "Audit", what: "Orders and their proof", key: "a" },
+  { href: "/ops/time-machine", label: "Time machine", what: "The rules as they stood", key: "m" },
   { href: "/ops/agents", label: "Agents", what: "Licences and records", key: "g" },
   { href: "/ops/customers", label: "Customers", what: "What kitchens share", key: "u" },
   { href: "/ops/platform", label: "Platform", what: "What runs on Aiven, live", key: "p" },
