@@ -14,6 +14,8 @@ COPY . .
 # The hosted build has 4 GB of memory, and `next build`'s own type check was killed at that limit on 14 Nov. Types
 # are checked before every merge (pnpm typecheck in the check chain and in CI), so the image build skips that step.
 ENV DOCK_BUILD_SKIP_TYPES=1
+# The build machine reports many cores but has 4 GB: fifteen build workers were killed there. Three fit.
+ENV DOCK_BUILD_WORKERS=3
 RUN pnpm build && pnpm prune --prod
 
 FROM node:24-alpine
