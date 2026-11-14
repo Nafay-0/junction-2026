@@ -60,7 +60,7 @@ sentence the buyer has to type or another page. The design lead builds the widge
 | `alternatives` | **Alternatives picker**: candidates side by side (packs, total, per litre or kilo, delivery and order-by, attributes, CO2, reliability, what each differs on, each one's gate preview); chips re-rank by another requirement (price, CO2, reliability, same kind, organic, lactose-free, pack size) | `alt_rerank`, `alt_pick` |
 | `menu` | **Menu builder**: `proposals` to choose from; then dishes with covers (stepper) and service day; each ingredient line with its product, packs, line total, other products (swap), "we have this", amount per cover, and its conflicts (allergen, stated rule, mandate, the planner's doubts) on the line they concern; cost per cover; blockers; the gate's preview; one button to the order sheet | `menu_choose`, `menu_covers`, `menu_day`, `menu_line_swap`, `menu_line_have`, `menu_line_per_cover`, `menu_accept`, `menu_to_sheet` |
 | `question` | **Answer widgets**: `input.kind` chooses chips (`choice`), a day picker (`day`: options carry `date` and `orderBy`) or a stepper (`amount`: `unit`, `min`, `max`, `step`) | `answer` (as before) |
-| `options` | Unchanged, plus "Edit before ordering" on any option: it becomes a sheet | `choose` (order now), `sheet_from_option` |
+| `options` | Unchanged, plus "Change amount, day or product" under the lead option: it becomes a sheet | `choose` (order now), `sheet_from_option` |
 | `price`, `order` | **In place, not elsewhere**: the proof of a fixed price (`price.proof`: the signed quote and the signed claims it rests on, verifiable in the browser) and the order's details and signed confirmation open inside the card | none (expansion is presentation) |
 | `memory` | Remember this in the kitchen's own words, then keep or drop each proposal | `remember_this`, `remember` |
 | `rules` | **The kitchen's rules** (live): the signed mandate (`current`: per-order limit, weekly budget, product groups, required claims, forbidden allergens, who signs, lead days, substitution) and the rules its people stated (`stated`), from records. A change (tapped on the card, or typed: "never nuts", "raise the limit to 800", the agent's `rules` tool) is first a `proposal` with `after` and a field-by-field `diff` (`widens` marks what lets the agent do more), worked out in plain code; nothing is signed until the kitchen's own signed-in person taps sign. `editable` says what this browser may sign and `why` not | `rules_show`, `rules_propose { change }`, `rules_sign { proposalId }`, `rules_cancel { proposalId }` |
@@ -105,6 +105,30 @@ sentence the buyer has to type or another page. The design lead builds the widge
   menu's edits are refused: the sheet is the order now.
 - `sheet_place` asks the wholesaler for one signed quote of all lines at the sheet's day, then places it: the gate
   decides, and the gate and order cards follow as for any order (sign-off from the thread as before).
+
+**How the store draws them** (`k/[kitchen]/thread-sheet.tsx`, the design kit's `OrderSheet`, `AlternativesPicker`,
+`ChoiceAnswer`; words in `thread-sheet.text.ts`, en/fi/sv)
+- The sheet's outcome line and its one button come from `gate` (the preview), in the kitchen's words: "Inside your
+  rules: under your 500 € limit" / "Order this, 404,00 €"; "Aino OKs it on their phone: it is over your 500 € limit"
+  / "Send to Aino for an OK, 1 010,00 €"; a refusal says what to do. Never mandate, gate, sign-off, quote.
+- Stepper taps are one edit: the sheet shows the new total at once and sends `sheet_packs` once the buyer stops
+  (650 ms), against the card's `version`. Only the confirm button orders.
+- In-place edits (`sheet_packs`, `sheet_day`, `sheet_swap`, `sheet_remove`, the undo, `alt_*`, `menu_*` edits) are
+  not bubbles: the card changes; an agent turn with no card after one is not drawn. A refusal still shows.
+- `removed` on the card: the line the last edit took off, put back with one tap (`sheet_add` of it).
+- An options card hands over to the sheet ("Change amount, day or product", `sheet_from_option`); the options card
+  then says so and offers no order button, so only one place orders.
+- The sheet's day is the day it arrives (`deliverOn` on its request): moving it to Thursday delivers Thursday.
+- Questions: one at a time (the first unanswered), with why it is asked and "No preference" as the stated safe skip.
+- A placed order can be taken back until the wholesaler's order cut-off: `order.takeBackUntil`, a `withdraw` tap by
+  the kitchen's signed-in person (core `withdrawOrder(…, { takeBack })`, not the published withdraw, which still takes
+  back only an order waiting for an OK). The order leaves the kitchen's history and its weekly budget; the ledger has
+  `taken_back`; the event is `order_withdrawn`.
+- A change to a placed order replaces it: "make it 200" after 100 was placed takes the 100 back once the 200 is placed
+  (waiting for an OK, or before the cut-off), so one order stands. The repeat check on it is answered by the words.
+- "The usual" with no product: the recurring orders due next at their usual amounts, on a sheet (plain code).
+- Sending: a busy store (`503 store_unavailable`, `429`) or a dropped connection is tried again by itself with the same
+  `clientTurnId`; only then the buyer is told, in words, and their words stay in the box.
 
 ### The home: the agent is where the kitchen starts (agent-thread-3, live)
 
