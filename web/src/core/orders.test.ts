@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { compactVerify } from "jose";
 import { InMemoryOutbox } from "./approval";
-import { InMemoryCatalog, MeteredCatalog } from "./catalog";
+import { CatalogError, InMemoryCatalog, MeteredCatalog } from "./catalog";
 import { generateEd25519KeyPair, type KeyPair } from "./keys";
 import { Ledger } from "./ledger";
 import { createTrustRegistry, signMandate, type Mandate } from "./mandate";
@@ -393,9 +393,11 @@ describe("ProductHolds: the gate checks a hold as the named rule recall_hold", (
 // QA F-SLOW-PARTNER-WAIT: when the wholesaler's live service fails, a refusal that needs no price is still given.
 describe("the gate when the wholesaler's live service does not answer", () => {
   beforeEach(() => {
-    inner.getLiveStatus = async () => {
-      throw new (await import("./catalog")).CatalogError("live_unavailable", "The wholesaler's live price and availability service is slow or busy right now (timeout).", 20);
-    };
+    Object.assign(inner, {
+      getLiveStatus: async () => {
+        throw new CatalogError("live_unavailable", "The wholesaler's live price and availability service is slow or busy right now (timeout).", 20);
+      },
+    });
   });
 
   it("refuses a product the mandate forbids on its master data, naming the rule, without a live answer", async () => {
