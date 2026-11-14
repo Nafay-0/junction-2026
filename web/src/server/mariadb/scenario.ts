@@ -9,8 +9,9 @@ import { SEED_PRODUCTS, SEED_STOCK } from "@/core/seed";
 import { addDays } from "@/core/util";
 import { SuspensionRegistry } from "../ops/suspensions";
 import type { Hold } from "../radar/types";
-import type { Maria } from "./client";
-import { MariaMirror } from "./mirror";
+import type { BackfillSources } from "../history/backfill";
+import type { HistoryStore } from "../history/store";
+import { HistoryMirror } from "./mirror";
 import type { GateSources } from "./rows";
 
 /**
@@ -50,6 +51,7 @@ export type ScenarioResult = {
   /** For "decisions like this one": who each order belongs to, and the door its request came through. */
   owner: Map<string, { orgId: string; agentId: string; door?: string }>;
   counts: { orders: number; decisions: number; refusals: number; syncs: number; rows: { insert: number; update: number; touch: number; delete: number } };
+  sources: () => Promise<BackfillSources>;
 };
 
 /** A small deterministic random source, so every run seeds the same background. */
@@ -85,7 +87,7 @@ function mandateOf(k: { orgId: string; name: string; agentId: string }, version:
   };
 }
 
-export async function runScenario(db: Maria, opts: { now?: Date; log?: (line: string) => void } = {}): Promise<ScenarioResult> {
+export async function runScenario(store: HistoryStore, opts: { now?: Date; log?: (line: string) => void } = {}): Promise<ScenarioResult> {
   const log = opts.log ?? (() => undefined);
   const realNow = opts.now ?? new Date();
   const anchor = new Date(Math.floor((realNow.getTime() - 25 * 86_400_000) / 86_400_000) * 86_400_000);
@@ -123,8 +125,8 @@ export async function runScenario(db: Maria, opts: { now?: Date; log?: (line: st
   const sessions = new Map<string, AgentSession>();
   const presented = new Map<string, Mandate>();
 
-  const mirror = new MariaMirror({
-    db,
+  const mirror = new HistoryMirror({
+    store,
     writer: SCENARIO_WRITER,
     sessionClock: clock,
     intervalMs: 0,
@@ -319,5 +321,12 @@ export async function runScenario(db: Maria, opts: { now?: Date; log?: (line: st
     ledger,
     owner,
     counts: { orders: owner.size, decisions: ledger.filter((e) => e.type === "decision").length, refusals, syncs: st.syncs, rows: st.writes },
+    // The scenario's own stores as they stand at its end, for building the same history from the ledger (history/backfill.ts).
+    sources: async () => {
+      const orders = await repo.listOrders();
+      const requests = new Map((await Promise.all(orders.map((o) => repo.getRequest(o.requestId)))).filter((r) => r).map((r) => [r!.requestId, r!]));
+      const profiles = (await Promise.all([AURINKO, SATAMA, LINNA].map((k) => kitchens.getProfile(k.orgId)))).filter((p): p is KitchenProfile => !!p);
+      return { ledger, orders, requests, unverified: new Map(), kitchens: profiles, holds: structuredClone(holds) };
+    },
   };
 }
