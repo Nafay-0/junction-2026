@@ -4,10 +4,13 @@ import { Check, ChevronDown, ScanFace, Sparkles } from "lucide-react";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useFormat, useText } from "../../_i18n/provider";
 import { clock, money } from "../../_ui/plain";
-import type { AgentTurn, BuyerTurn, GateCard as GateCardT, OfferCard, ScenarioCard, WatchCard, OptionView, OrderCard, Thread, ThreadAction, ThreadStep, TodayCard } from "@/server/thread/types";
+import type { AgentTurn, BuyerTurn, GateCard as GateCardT, RulesCard as RulesCardT, OfferCard, ScenarioCard, WatchCard, OptionView, OrderCard, Thread, ThreadAction, ThreadStep, TodayCard } from "@/server/thread/types";
 import { usePortal } from "./portal";
 import { Dishes } from "./thread-dishes";
 import { RulesSignOffSlab } from "./thread-rules-signoff";
+import { groupNameL } from "./rules-change";
+import { THREAD_RULES_TEXT } from "./thread-rules.text";
+import { attrL } from "../../_i18n/format";
 import { THREAD_LINE_TEXT } from "./thread-line.text";
 import { useSignOff } from "./thread-signoff";
 import { THREAD_WORDS } from "./thread-words.text";
@@ -210,10 +213,24 @@ function AgentNode({ turn, thread, tap, busy, latest }: { turn: AgentTurn; threa
       <Memory turn={turn} />
       {cards.map((c) => (c.type === "gate" && c.outcome === "waiting" && c.approvalId ? <SignOffSlab key={c.cardId} card={c} thread={thread} tap={tap} /> : c.type === "gate" && c.outcome === "approved" && c.orderId ? <SignedSlab key={c.cardId} card={c} thread={thread} /> : null))}
       {today?.items.filter((i) => i.kind === "sign_off").map((i) => (i.kind === "sign_off" ? <SignOffSlab key={i.approvalId} card={{ type: "gate", cardId: `gate:${i.orderId}`, requestId: i.requestId ?? "", orderId: i.orderId, approvalId: i.approvalId, outcome: "waiting", approver: i.approver, reasons: [], rules: [] } as GateCardT} thread={thread} tap={tap} total={i.totalCents} what={i.lines.map((l) => `${f.num(l.quantity)} × ${l.name}`).join(", ")} /> : null))}
-      {cards.map((c) => (c.type === "rules" && c.proposal?.approval && ["waiting", "signed", "declined", "expired"].includes(c.proposal.state) ? <RulesSignOffSlab key={c.cardId} card={c} /> : null))}
+      {/* A change to the rules that waits for the approver: its slab under the reply that said so (the card itself may
+          have been first shown a turn earlier), always in view, never inside a disclosure. */}
+      {rulesSlabsFor(turn, thread).map((c) => (
+        <RulesSignOffSlab key={c.cardId} card={c} />
+      ))}
       {thinks.length > 0 && <Steps steps={thinks} />}
     </li>
   );
+}
+
+/** The rules changes whose sign-off this turn shows: said to wait in this turn, or (older cards) first shown here. */
+function rulesSlabsFor(turn: AgentTurn, thread: Thread): RulesCardT[] {
+  const all = thread.turns.flatMap((x) => (x.role === "agent" ? x.cards.map((card) => ({ at: x.turnId, card })) : []));
+  return all.flatMap(({ at, card }) => {
+    if (card.type !== "rules" || !card.proposal?.approval || !["waiting", "signed", "declined", "expired"].includes(card.proposal.state)) return [];
+    const here = card.proposal.approval.turnId && thread.turns.some((x) => x.turnId === card.proposal!.approval!.turnId) ? card.proposal.approval.turnId : at;
+    return here === turn.turnId ? [card] : [];
+  });
 }
 
 // ---------- choices: at most three, only for a real choice ----------
@@ -281,8 +298,19 @@ function perUnitOf(o: OptionView, f: ReturnType<typeof useFormat>): string | und
 
 // ---------- the order's lines, behind "Show the list" ----------
 
+/** A rule's value in words for the list under a reply: product groups and claims by name, never a code. */
+function ruleValue(field: string, v: string, lang: "en" | "fi" | "sv"): string {
+  if (!v) return "";
+  const xs = v.split(", ").filter(Boolean);
+  if (field === "groups") return xs.map((g) => groupNameL(g, lang)).join(", ");
+  if (field === "forbiddenAllergens" || field === "requiredAttributes") return xs.map((a) => attrL(a, lang)).join(", ");
+  if (field === "perOrderLimitEur" || field === "weeklyBudgetEur") return `${v} €`;
+  return v.replaceAll("_", " ");
+}
+
 function Lists({ turn, thread, latest }: { turn: AgentTurn; thread: Thread; latest?: boolean }) {
   const tx = useText(THREAD_LINE_TEXT);
+  const rx = useText(THREAD_RULES_TEXT);
   const f = useThreadFormat();
   const lists: { key: string; rows: { item: string; amount?: string; total?: string }[]; total?: string }[] = [];
   const fromSheet = new Set(thread.turns.flatMap((x) => (x.role === "agent" ? x.cards.flatMap((c) => (c.type === "sheet" && c.orderId ? [c.orderId] : [])) : [])));
@@ -296,7 +324,8 @@ function Lists({ turn, thread, latest }: { turn: AgentTurn; thread: Thread; late
     else if (c.type === "deliveries") lists.push({ key: c.cardId, rows: c.items.map((d) => ({ item: d.lines.map((l) => l.name).join(", "), amount: f.day(d.deliveryDate), total: money(d.totalCents) })) });
     else if (c.type === "backup" && c.others.length) lists.push({ key: c.cardId, rows: c.others.map((o) => ({ item: o })) });
     else if (c.type === "memory_list") lists.push({ key: c.cardId, rows: c.items.map((m) => ({ item: m.text })) });
-    else if (c.type === "rules") lists.push({ key: c.cardId, rows: c.proposal ? c.diff.map((d) => ({ item: d.field.replaceAll("_", " "), amount: `${d.before || "—"} → ${d.after || "—"}` })) : [{ item: tx.rulesAlone, amount: money(c.current.perOrderLimitCents) }, { item: tx.rulesWeek, amount: money(c.current.weeklyBudgetCents) }, ...c.stated.map((s) => ({ item: tx.statedRule(s.text) }))] });
+    else if (c.type === "rules" && c.proposal?.approval) continue;
+    else if (c.type === "rules") lists.push({ key: c.cardId, rows: c.proposal ? c.diff.map((d) => ({ item: rx.field[d.field] ?? d.field.replaceAll("_", " "), amount: `${ruleValue(d.field, d.before, f.lang) || "—"} → ${ruleValue(d.field, d.after, f.lang) || "—"}` })) : [{ item: tx.rulesAlone, amount: money(c.current.perOrderLimitCents) }, { item: tx.rulesWeek, amount: money(c.current.weeklyBudgetCents) }, ...c.stated.map((s) => ({ item: tx.statedRule(s.text) }))] });
   }
   // A reply that gives a total for the menu or the order on the table ("comes to 23,48 €") always has its lines one tap
   // away, even when the card it changed sits in an earlier turn.

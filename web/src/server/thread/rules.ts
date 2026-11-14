@@ -401,7 +401,7 @@ export async function signRules(run: TurnRun, proposalId: string, opts: { signOf
       };
       record(run, "rules_signoff_requested", `A change that widens what the agent may do (${describe(diffNow.filter((d) => d.widens || d.field === "signer"))}) waits for ${approver.name}'s passkey; nothing is changed yet.`, { proposalId, approvalId: p.approval.approvalId, digest, diff: diffNow, approver });
       run.store.save(run.thread);
-      const card = cardFor(run, proposalId, mandate, before, await statedOf(run), { proposal: { proposalId, change: p.change, kind: p.kind, state: "waiting", canSign: false, approval: { approvalId: p.approval.approvalId, approver, expiresAt: p.approval.expiresAt } }, after: snapshotAfter(before, p.change, terms), diff: diffNow });
+      const card = cardFor(run, proposalId, mandate, before, await statedOf(run), { proposal: { proposalId, change: p.change, kind: p.kind, state: "waiting", canSign: false, approval: { approvalId: p.approval.approvalId, approver, expiresAt: p.approval.expiresAt, turnId: run.turnId } }, after: snapshotAfter(before, p.change, terms), diff: diffNow });
       run.store.card(run.thread, run.turnId, card);
       run.facts.push(card);
       run.rulesWaiting = card;
@@ -432,7 +432,7 @@ export async function signRules(run: TurnRun, proposalId: string, opts: { signOf
   // The thread's next turns present the new mandate: resolveKitchen reads it fresh every turn.
   const now = await current(run);
   const after = await withRenew(run, snapshotOf(now.mandate, now.terms), p.change);
-  const card = cardFor(run, proposalId, now.mandate, after, await statedOf(run), { proposal: { proposalId, change: p.change, kind: p.kind, state: "signed", canSign: false, signedAs: now.mandate.mandateId, ...(p.approval ? { approval: { approvalId: p.approval.approvalId, approver: p.approval.approver, ...(p.approval.decided ? { decided: { by: p.approval.decided.by, at: p.approval.decided.at } } : {}) } } : {}) }, after, diff: diffOf(before, after) });
+  const card = cardFor(run, proposalId, now.mandate, after, await statedOf(run), { proposal: { proposalId, change: p.change, kind: p.kind, state: "signed", canSign: false, signedAs: now.mandate.mandateId, ...(p.approval ? { approval: { approvalId: p.approval.approvalId, approver: p.approval.approver, ...(p.approval.turnId ? { turnId: p.approval.turnId } : {}), ...(p.approval.decided ? { decided: { by: p.approval.decided.by, at: p.approval.decided.at } } : {}) } } : {}) }, after, diff: diffOf(before, after) });
   run.store.card(run.thread, run.turnId, card);
   run.facts.push(card);
   run.store.save(run.thread);
@@ -465,7 +465,7 @@ export async function expireRules(run: TurnRun, proposalId: string): Promise<Rul
 async function closedCard(run: TurnRun, p: Proposal, state: "declined" | "expired"): Promise<RulesCard> {
   const { mandate, terms } = await current(run);
   const now = snapshotOf(mandate, terms);
-  const card = cardFor(run, p.proposalId, mandate, now, await statedOf(run), { proposal: { proposalId: p.proposalId, change: p.change, kind: p.kind, state, canSign: false, ...(p.approval ? { approval: { approvalId: p.approval.approvalId, approver: p.approval.approver, ...(p.approval.decided ? { decided: { by: p.approval.decided.by, at: p.approval.decided.at, ...(p.approval.decided.note ? { note: p.approval.decided.note } : {}) } } : {}) } } : {}) }, diff: p.approval?.shown ?? [] });
+  const card = cardFor(run, p.proposalId, mandate, now, await statedOf(run), { proposal: { proposalId: p.proposalId, change: p.change, kind: p.kind, state, canSign: false, ...(p.approval ? { approval: { approvalId: p.approval.approvalId, approver: p.approval.approver, ...(p.approval.turnId ? { turnId: p.approval.turnId } : {}), ...(p.approval.decided ? { decided: { by: p.approval.decided.by, at: p.approval.decided.at, ...(p.approval.decided.note ? { note: p.approval.decided.note } : {}) } } : {}) } } : {}) }, diff: p.approval?.shown ?? [] });
   run.store.card(run.thread, run.turnId, card);
   run.store.save(run.thread);
   return card;
