@@ -8,6 +8,7 @@ import { whenSeconds } from "../../_ui/format";
 import { buttonClass } from "../../../_ui/kit";
 import { Details, LiveMark, LoadError, Loading, PageHead, Panel, Section, useOps } from "../../_ui/kit";
 import { PlatformTabs, Status } from "./_parts/parts";
+import { RecallProbe } from "./_parts/recall-probe";
 
 /**
  * The Aiven story on one screen, for a judge: which service does which job and why, whether each answers now and
@@ -78,6 +79,7 @@ function Watch({ o }: { o: Overview }) {
         ) : (
           <p className="mt-1 text-[0.95rem] text-ink-soft">No smart search has run on this server yet.</p>
         )}
+        <RecallProbe />
       </Panel>
     </div>
   );
