@@ -1,181 +1,101 @@
 # AimoPilot design system
 
-The customer side of AimoPilot (the kitchen store under `/k/**`, the menu planner, the phone pages) and the system the
-operations portal (`/ops/**`) and the wall (`/`) should adopt. Tokens live in `src/app/globals.css`; components in
-`src/app/_ui/`. This file is the contract: if you add a surface, use these and nothing else.
+The contract for every screen: the store, the phone pages, the operations portal and the wall. Tokens are in
+`src/app/globals.css`, components in `src/app/_ui/` (shared) and `src/app/ops/_ui/` (operations). Every component
+and state can be seen on sample data at **`/design`**. The two finished reference pages are the store's Home
+(`k/[kitchen]/home.tsx`) and the operations portal's Live (`ops/(desk)/live.tsx`): when in doubt, do what they do.
 
-## 1. The idea in one paragraph
+## 1. The idea
 
-A wholesaler's webshop for professional kitchens, in the wholesaler's own world (petrol blue, white, charcoal, a
-sharp lime for the one thing to do, square corners, a heavy condensed display face), with the kitchen's purchasing
-agent living inside it. The shop is calm. **The gate is loud**: warning-sign yellow, black hazard striping and the
-quartered crash-test mark appear only where a rule stops an order or a named person must decide. Nothing else on
-the customer side uses them, so when they appear a viewer across the room knows what happened.
+A modern food-service ordering product: **calm, bright, appetising, precise**. Soft where the first version was hard,
+quiet where it was loud. A chef should feel it belongs beside the best tools already on their phone; a wholesaler's
+operator, beside the best admin products.
 
-This is a demo built for the Junction 2026 challenge on synthetic data. It borrows the partner's palette, geometry
-and tone; it does not copy their logo, wordmark, artwork, photographs or page layouts, and the demo note stays
-visible on every store page (`DEMO_NOTE` in `_ui/brand.ts`).
+- **Still in the partner's world.** Petrol blue is the brand colour, lime is the one main action, lavender is what
+  the agent remembered or wrote, on white surfaces and a light mist ground. Petrol is an accent and the colour of
+  the few dark surfaces (the Home hero, the operations sidebar), not a border on everything.
+- **The thread is the heart of the store.** The buyer orders by talking to their agent, typed or spoken. The thread
+  is always one step away: a column beside the shop on a desk, the middle of the tab bar on a phone (section 7).
+- **The gate is the signature, and the only loud thing.** Warning yellow, the hazard stripe and the quartered mark
+  appear where plain code stopped an order or a person must sign, and nowhere else.
+- **Hierarchy comes from spacing and type**, not from boxes. Surfaces differ by role (section 4).
 
-## 2. Plan, and the review against generic defaults
+## 2. Tokens (`@theme` in `globals.css`)
 
-**Colour, five working values plus the gate's pair.**
+| Role | Token | Value | Use |
+|---|---|---|---|
+| Brand | `petrol` / `petrol-deep` / `petrol-soft` | `#005670` / `#003646` / `#e2eef1` | links, active states, strong secondary actions / dark surfaces / selected, hover, quiet fills |
+| Text | `ink` / `ink-soft` / `ink-faint` | `#15242b` / `#55666e` / `#8a999f` | text (15.9:1) / secondary (6.0:1 on white, 5.6:1 on mist) / placeholders and decoration only |
+| Surfaces | `paper` / `mist` / `surface` | `#ffffff` / `#f4f8f8` / `#ecf3f4` | cards, sheets, fields / page ground / a sunken or tinted panel on white |
+| Lines | `line` / `line-strong` | `#dde7ea` / `#b9c8cd` | hairlines / field borders |
+| Action | `lime` / `lime-hover` / `lime-soft` | `#c0e021` / `#b1d315` / `#f1f8cf` | the one main action in view (ink text, 12:1) / a just-changed wash |
+| Agent | `lavender` / `lavender-mid` / `lavender-deep` | `#f1ecf8` / `#dfd5ee` / `#5b4a7a` | the thread's ground, memory / its borders / the agent's marks, the buyer's bubble (7.0:1) |
+| Meaning | `good`, `bad`, `notice` (+ `-soft`) | `#1c6b4a`, `#a3312b`, `#96501d` | placed, intact / a failed call / "this looks off" (the anomaly card). Never the only signal |
+| Gate | `safety` / `safety-soft` / `safety-ink` | `#ffc20e` / `#fff5d1` / `#1a1d21` | refusals and sign-offs only |
 
-| Token | Hex | Role |
-|---|---|---|
-| `petrol` | `#005670` | Structure: the navigation band, links, active states, document rules, secondary buttons |
-| `petrol-deep` | `#003646` | Dark grounds: demo strip, department plates, the order lane's current station, the assistant header |
-| `ink` | `#23282D` | Text on light |
-| `lime` | `#C0E021` | The one main action per view (Add to basket, Place the order, Send). Text on lime is `ink` (11:1) |
-| `mist` | `#F2F7F8` | The page ground; quiet fills |
-| `lavender` | `#EEE8F5` | The agent's tint: anything the agent remembered, inferred or wrote sits on lavender |
-| `paper` | `#FFFFFF` | Documents and tiles |
-| `safety` | `#FFC20E` | Gate only: a person must decide, or a rule refused |
-| `ink` + `safety` hazard | stripes | Gate only, as a band or a frame |
+All text pairs meet 4.5:1. The older names (`concrete`, `steel`, `chalk`) remain so unrestyled screens keep working.
 
-Temperature is a quiet code, never a fill behind text: chilled `#2B8C9E` (cold water), frozen `#4F67B5` (ice),
-ambient `#A97E36` (grain), each with a small glyph so colour is never the only signal.
+## 3. Type
 
-**Type: Barlow Condensed (display) and Barlow (text), kept deliberately.** Both are drawn from road and highway
-signage, which is the voice of a loading dock; the condensed cut at 700/800 carries the partner's "heavy condensed
-headline" register, and Barlow is a plain, friendly grotesque for reading. They are free (OFL) and already loaded,
-so there is no second download. Sentence case everywhere; no tracked capitals.
+- **Figtree** (`font-sans`) for everything people read. **Bricolage Grotesque** (`font-display`, class `.display`)
+  for titles and big figures: weight 650, width 86 % (its width axis keeps Finnish compounds on one line), tracking
+  -0.022em. Both have full Finnish and Swedish glyphs and tabular figures (`.tabular` on anything that changes).
+- Scale (rem): 0.75 meta, 0.82 card kind and captions, 0.875 secondary, 0.95 to 1 body, 1.05 to 1.15 lead and row
+  titles; display 1.2 to 1.45 card and section titles, 1.9 to 2.2 page titles, 2.1 to 3.3 hero and key figures.
+- Sentence case everywhere. **No all-caps labels**, no tracked-out eyebrows. Lines of 60 to 75 characters.
+- Finnish and Swedish: texts carry soft hyphens at compound boundaries (`hyphens: manual`); check every large heading
+  at 390 px in Finnish.
 
-**Layout concept.** A webshop shell (utility row with the kitchen and a big catalogue search, a petrol navigation
-band, a mist page) with the agent docked on the right as a lavender panel on wide screens and a sheet on phones.
-Content is left-aligned on a 12-column grid, max 1440 px wide.
+## 4. Shape, depth and motion
 
-```
- demo note (petrol-deep, one line)
- ┌──────────────────────────────────────────────────────────────┬───────────────┐
- │ ▣ AimoPilot  Ravintola Kaari ▾      [ search 17 546 products ] │ Agent  ⌘K     │
- │          deliveries Mon–Fri       [Ask the agent ⌘K] [Basket 3  412,00 €]   │ (lavender)    │
- ├──────────────────────────────────────────────────────────────┤               │
- │ Home  Order  Catalogue  Menu planner  Orders  Agent and rules│  answers,     │
- │ (petrol band, active item: lime underline)  [▨ 1 waiting]   │  citations    │
- ├──────────────────────────────────────────────────────────────┤               │
- │ mist page                                                     │  [field][Send]│
- └──────────────────────────────────────────────────────────────┴───────────────┘
-```
+- **Radius by role**, never one number: tags and keys 6 (`rounded-xs`), small marks 8, fields and list rows 12
+  (`rounded-md`), inner panels and tiles 16 (`rounded-lg`), cards 20 (`rounded-xl`), feature surfaces and sheets 28
+  (`rounded-2xl`). Buttons, chips, badges, search and the composer are pills. A raw `<button>` or `<input>` gets 12
+  from the base layer, so nothing is square by accident.
+- **Surfaces by role.** A **card** (white, hairline, 20) for a thing that stands alone. A **list inside one card**
+  for rows (hairline dividers; not a card per row). A **tinted panel** (`surface`, lavender, no border, 16) for an
+  aside or a group of figures. A **dark feature** (petrol-deep, 28) once per page at most. Do not wrap everything in
+  identical cards.
+- **Depth is sparing**: flat with a hairline by default; `shadow-sm` for the composer and things that float,
+  `shadow-lg` for sheets. Interactive cards may use `.lift`.
+- **Spacing** on an 8-point rhythm: 16 px page gutter on a phone, 24 to 32 on a desk; 40 to 48 between sections;
+  20 to 24 inside a card.
+- **Motion** is short and shows what changed: 150 ms on press and hover, `lane-enter` when a turn or stage arrives,
+  `sheet-up` for sheets, `stamp` when a sign-off lands, `changed` (a lime wash) on a value that just changed.
+  **Loading is a skeleton** in the shape of what is coming (`.skeleton`, `Skeleton`, `CardSkeleton`); a spinner only
+  inside a busy button and on a live step line. Everything stops under `prefers-reduced-motion`.
+- **Focus**: 2 px petrol outline (lime on dark); fields and the composer draw their own ring. Targets are 44 px on
+  touch (`pointer-coarse:` raises the small sizes).
+- **Icons**: `lucide-react`, line icons at 1.9 to 2.3 stroke, 15 to 22 px. The gate's mark (`Target`) and the pilot
+  light (`Wordmark`) are the only drawn marks. No emoji.
 
-**The order lane.** The stages are a real sequence, so they are numbered and shown as a lane. A station strip
-across the top (readable from across a table) and the stages below it; the current stage is open, earlier ones
-collapse to one line each and can be reopened.
+## 5. Components
 
-```
-  Request ─ Lookup ─ Options ─ Price ─ [ GATE ] ─ Sign-off ─ Order        (strip; current = filled)
-  ●  1 Request   “100 L lactose-free milk for Thursday”  100 L, Thu 19.11.        Open
-  │
-  ●  2 Lookup    Nothing unusual; 2 answers from memory                           Open
-  │
-  ◉  3 Options   ┌ Good ──────┐┌ Better ────┐┌ Best ──────┐   [Compare side by side]
-  ┆              │ 128,40 €   ││ 131,31 €   ││ 140,00 €   │
-  ┆              └────────────┘└────────────┘└────────────┘
-  ○  4 Price
-  ○  5 Gate         ← when it stops: full-width black slab, hazard frame, the mark, barrier closes
-  ○  6 Sign-off     ← phone frame with the QR, the named person, a running clock
-  ○  7 Order
-```
+`_ui/kit.tsx` (import from here; do not restyle by hand):
 
-**A product tile (no photographs in the data).** A generated illustration of the kind of product (marked
-"Illustration"), with the pack content set large on a paper badge, so "10 L" or "2,5 kg" reads before the name.
-Where there is no picture, the drawn pack glyph on a pale plate (see §6).
-
-```
- ┌───────────────────────────┐
- │ ❄ Chilled           Valio │  temperature glyph + word, brand
- │ ┌───────────────────────┐ │
- │ │  ▯   10 L             │ │  pack plate: glyph, content in display type
- │ └───────────────────────┘ │
- │ Valio skimmed milk 10 l   │
- │ 1 case = 10 L, Finland    │
- │ Lactose-free  Organic     │  claims as outlined labels
- │───────────────────────────│
- │ 1,40 €/piece   [− 1 +][Add]│  price after a live check, else "Price when opened"
- └───────────────────────────┘
-```
-
-**Principles.**
-1. The shop is calm; the gate is loud. Yellow and black only at the gate and sign-off.
-2. Lime means "do it": at most one lime button in view.
-3. Lavender means the agent. If the agent remembered or inferred it, it sits on lavender.
-4. Square and flat. No radius (the round mark is the only circle), no drop shadows except the docked panel.
-5. Every number in the kitchen's units: "3 cases = 30 L", euros with a comma, Helsinki time.
-6. Motion only to show a change: a stage moving on, the barrier closing, a sign-off landing.
-
-**Review against the generic defaults, and what changed.**
-- *Near-black ground with one acid accent*: not used; the ground is white and mist, and lime is the partner's own
-  call-to-action colour, rationed to one per view.
-- *Broadsheet hairlines with zero radius*: square corners are the partner's geometry, but I dropped the dense
-  ruled-column idea from my first sketch; documents are white plates on mist with a single petrol top rule.
-- *SaaS card kit*: the first plan put Home's figures in four equal tiles. Revised to a ledger row (period, litres,
-  kilograms, euros) over a weekly bar strip, so it reads as the kitchen's own book, not a dashboard template.
-- *Tracked capitals, middle-dot meta strings, mono labels, arrows on links*: removed from the phone pages ("DOCK
-  DEMO" eyebrow) and the gate (mono rule codes); meta text uses commas.
-- *Numbered markers*: kept only on the order lane, which is a true sequence.
-- First plan used one generated photograph per department; the Gemini key had no image quota. The images were later
-  made with OpenAI's image model instead; see §6.
-
-## 3. Tokens (`src/app/globals.css`, Tailwind 4 `@theme`)
-
-Use the Tailwind names (`bg-petrol`, `text-ink-soft`, `border-line`) or the CSS variables (`var(--color-petrol)`).
-
-| Group | Tokens |
+| Component | Notes |
 |---|---|
-| Structure | `petrol` #005670, `petrol-deep` #003646, `petrol-soft` #D5E6EB (selected rows, a value that just changed) |
-| Text | `ink` #23282D, `ink-soft` #55616B (passes 4.5:1 on white, mist and lavender) |
-| Grounds | `mist` #F2F7F8 (page), `paper` #FFFFFF (documents, tiles), `line` #C9D6DB (hairlines) |
-| Action | `lime` #C0E021, `lime-hover` #AED01A, text on lime is `ink` |
-| The agent | `lavender` #EEE8F5 (ground), `lavender-deep` #5B4A7A (marks and text on lavender) |
-| Temperature | `chilled` #2B8C9E, `frozen` #4F67B5, `ambient` #A97E36, always with `TempGlyph` and the word |
-| The gate | `safety` #FFC20E, `safety-ink` #1A1D21, utilities `.hazard`, `.hazard-thin`, `.hazard-frame` |
-| Dark (wall, ops today) | `steel`, `steel-2`, `steel-3`, `chalk`, `chalk-soft`: kept until those surfaces move to `petrol-deep` |
-| Old names | `concrete` = mist, `concrete-deep` = a quiet fill; kept so older screens keep working |
+| `Button`, `buttonClass` | kinds: `go` (lime, one per view), `primary` (petrol), `secondary`, `quiet` (text), `safety` (gate only), `dark`, `ghost-dark`; sizes sm, md, lg; `busy` |
+| `IconButton` | round, 44 px, always labelled |
+| `Input`, `Select`, `.field` | label above, hint or error below, icon inside; one field look |
+| `Tabs` | segmented pill for a few views or filters, with counts |
+| `Tag`, `Badge` | a chip for a claim; a status with a dot (`waiting` and `refused` are the gate's) |
+| `Card`, `Panel`, `Plate` | card; tinted panel; `Plate` is the older name (tone `agent`, `gate`) |
+| `ListRow`, `Avatar`, `IconDisc` | rows inside a card; initials; a soft round ground for an icon |
+| `Steps` | done, current, pending, stopped by the gate; a segmented bar on a phone |
+| `Sheet` / `Dialog` | bottom sheet on a phone, centred or right panel on a desk; Escape and outside tap close |
+| `Toaster`, `useToast` | a pill that confirms an action for four seconds |
+| `Empty`, `ErrorPlate`, `Skeleton`, `Missing` | an empty state is a direction; an error says what to do; never a blank |
+| `Price`, `Field`, `SectionTitle`, `Kbd`, `AgentNote` | figures in the display face, tabular |
 
-Motion utilities, each disabled under `prefers-reduced-motion`: `.lane-enter` (a stage arrives), `.barrier-left` /
-`.barrier-right` (the gate closes), `.stamp` (a sign-off lands), `.breathe` (waiting for a person), `.changed` (a
-value just changed: a brief petrol wash), `.spin` (working). Focus: a 3 px petrol outline, lime on dark grounds
-(add `on-dark` to the dark container).
+Also: the quantity stepper (`k/[kitchen]/qty.tsx`), the order lane's stepper and rows (`k/[kitchen]/ui.tsx`), the
+language switch (`_i18n/provider.tsx`), the word mark (`_ui/wordmark.tsx`).
 
-## 4. Type
-
-Two families, both OFL, loaded in `app/layout.tsx`: **Barlow Condensed** (display, weight 800 through the `.display`
-class) and **Barlow** (everything people read, 400 to 700). Sentence case everywhere. No tracked capitals, no
-monospace except code a developer copies (the MCP config on Agent and rules).
-
-| Role | Class | Size |
-|---|---|---|
-| Page title | `display` | 2.6 to 3 rem (3.8 rem in a hero) |
-| Section title | `display` (`SectionTitle`) | 1.75 rem |
-| Stage title on the lane | `display` | 1.55 to 1.75 rem |
-| Money and big numbers | `display tabular` | 2 to 3.4 rem |
-| Body | Barlow | 1 to 1.08 rem, leading-snug, lines under 75 characters |
-| Labels on fields | Barlow 500 | 0.8 rem, `text-ink-soft` |
-
-Numbers: `num`, `money`, `moneyShort`, `measure` in `_ui/plain.ts` write Finnish conventions ("1 280,50 €",
-"2,5 kg", no-break spaces). `say(text, names)` is `humanize` plus Finnish money for sentences the API wrote. Dates
-stay `day()` ("Mon 16.11.") and `clock()` ("14.05"), Helsinki time. Never put an id, a rule code or a raw timestamp
-on the main surface; put them behind "Show details".
-
-## 5. Components (`src/app/_ui/`)
-
-- `kit.tsx`: `Button` (kinds `go` lime, `primary` petrol, `secondary` petrol outline, `quiet` link, `dark`,
-  `ghost-dark` on dark grounds, `safety` for the gate only; sizes `sm`, `md`, `lg`), `buttonClass()` for links that
-  look like buttons, `Plate` (document with a petrol rule; tone `agent` lavender, tone `gate` hazard band), `Field`,
-  `Missing` ("No data", never blank), `Tag`, `SectionTitle`, `ErrorPlate` (what happened, how to fix it), `Empty`
-  (an empty state is a direction), `AgentNote`, `Spinner`, `Working`, `Skeleton`, `Kbd`.
-- `glyphs.tsx`: drawn pack glyphs (carton, bag-in-box, tub, block, sack, bottle, canister, case, bag, can) and
-  department glyphs, `TempGlyph`, `DEPARTMENT_GLYPH`.
-- `phone.tsx`: `PhoneShell` (one column, demo note at the foot; tone `gate` adds the hazard band), `GateHead` (the
-  black slab with the mark, for a phone), `bigButton()`, `PhoneNotice`, `PhoneProblem`.
-- `wordmark.tsx`: the product's sign. `Wordmark` (tone `petrol` on light grounds, `paper` on petrol-deep) and
-  `PilotLight` (the lamp alone). The pilot light is the indicator lamp on a control panel that says a system is on
-  and supervised: a lime square in a square petrol-deep bezel, then "AimoPilot" in Barlow Condensed 800 with a hair of
-  negative tracking. One weight for the whole name, no colour split. The app icon (`app/icon.svg`) is the lamp.
-- `target.tsx`: the crash-test mark. It is the gate's symbol, not the product's: use it only at the gate (a stopped
-  order, a refusal, a sign-off), never beside the name.
-- The order lane (`k/[kitchen]/ui.tsx`): `StationStrip` (seven stations, compact on phones), `Lane` (current stage
-  open, earlier ones one line each), `useFollowLane`. Stage cards are in `k/[kitchen]/stages.tsx`; `Gate` and
-  `SignOff` are the loud moment and the hand-off.
+Operations (`ops/_ui/`): `PageHead`, `Section`, `Panel`, `LiveMark`, `Outcome`, `Licence`, `ViaTag`, `Details`,
+`Num`, `Loading`, `Empty`, `FilterBar`, and in `parts.tsx` the **data table** (`Table`: a card with hairline rows;
+on a phone each row becomes a small card and every cell is labelled with its column heading, automatically),
+`Stamp`, `CountBar`, `Funnel`, `CheckGrid`. The time machine's slider (`(desk)/time-machine/time-machine.tsx`) marks each
+moment a rule changed, shaped by kind, with the order as a pointer and the lime thumb as the one action.
 
 ## 6. Images
 
@@ -235,37 +155,79 @@ pnpm tsx scripts/art/map-categories.ts                      # after adding a til
 To add a picture: add a key to `prompts.json` (subject only; style and negative are shared), generate, look at it,
 compress, and map it. Keep to the art direction above and the "illustration" mark on tiles.
 
-## 7. Do and do not
+## 7. The thread (`_ui/thread.tsx`)
 
-Do
-- Put one lime button in view: the thing the page is for (Add to basket, Place the order, Approve, Send).
-- Use lavender for anything the agent remembered, inferred or said, so a buyer can see what came from memory.
-- Show the kitchen's units next to the sales unit: "3 cases = 30 L".
-- Say what is missing ("No data", "not confirmed by the wholesaler"); unknown is never shown as absent.
-- Give every empty state a next step ("Nothing is waiting for you; your next cut-off is Sun 17.00").
-- Keep the demo note (`DEMO_NOTE`) on every page.
+The buyer's one conversation with their agent, typed or spoken. Names and states follow the thread's contract,
+`web/docs/agent-thread.md`. All of it is presentational: pass words and data, get the look and the states.
 
-Do not
-- Use yellow, hazard stripes or the crash-test mark anywhere but the gate and sign-off. Not for warnings, not for
-  "new", not for low confidence (use lavender), not for decoration.
-- Round corners (the phone drawing around a QR code is the one exception: it depicts a phone).
-- Add drop shadows, gradients or decorative images that carry no information. The generated pictures (§6) say what
-  kind of product or department this is, and are marked as illustrations.
-- Write all caps labels, middle-dot meta strings, arrows on links, or numbered markers on things that are not a
-  sequence.
-- Copy the partner's logo, wordmark, artwork, photographs or page layouts.
+- **`ThreadDock`**: where it lives. Phone: the primary screen, filling the screen above the tab bar (the tab bar's
+  middle button opens it; the shop is one tab away). Tablet: a side sheet. Desk (1280 and up): a 27 to 30 rem column
+  docked beside the shop, open by default. Slots: the thread, `footer` (the composer), `aside` (header controls).
+- **`Thread`, `BuyerTurn`, `AgentTurn`**: the buyer's turns are short lavender-deep bubbles on the right (`via`
+  marks voice and photo). An agent turn is one line of text at most, then its cards; `status="waiting_approver"`
+  shows the wait.
+- **`StepLines`**: what the agent is doing now, line by line; the line in progress turns, finished lines tick and go
+  quiet, and when all are done they fold to "3 steps". **`CardSkeleton`** holds the place of a card on its way.
+- **The cards are one family** (`ThreadCard`: a mark, the kind of card, the content, the actions; white, hairline, 20):
 
-## 8. For the operations portal and the wall
+| Card | Component | States and notes |
+|---|---|---|
+| `understood` | `UnderstoodCard` | the need as fields; a value from memory carries the lavender "from memory" chip; `basedOn`, `alsoAsked` |
+| `anomaly` | `AnomalyCard` | **warm and calm** (`notice`), never the gate's yellow: the reason as numbers (usual against asked bars); `answered` replaces the actions |
+| `question` | `QuestionCard` | one question, choices as pills; chosen, others dimmed |
+| `options` | `OptionsCard` | best, better, good; keeps (tick) and gives up (dash); `preselected` and why; `signOff` when choosing it needs a person; chosen |
+| `price` | `PriceCard` | the figure, lines, how long it holds (a draining bar, warm under 20 %), signed by the wholesaler |
+| `gate` | `GateCard` | **the signature**. `checking` (mark turning), `placed_alone` (quiet, good), `waiting` (the dark slab, hazard band, who must sign, countdown), `approved` (a stamp with the signer's name), `refused` (the slab, the rule and its reason), `declined` / `withdrawn` / `expired` (plain) |
+| `order` | `OrderCard` | lines, total, delivery, status badge, link |
+| `memory` | `MemoryCard` | lavender; keep or drop on each proposal; kept, dropped |
+| `records` | `RecordsCard` | answer rows from the kitchen's records, each linkable, with the source |
+| `notice` | `NoticeCard` | could not do it, in plain words, with what to do; `tone="gate"` for a suspension |
 
-- The portal is the wholesaler's own desk: use `petrol-deep` as its dark ground instead of `steel`, `paper` for
-  documents (an order, a trace step), `mist` for the page if it goes light. The wall can stay dark: `petrol-deep`
-  ground, `paper` text, lime for the one live counter, `safety` and the mark only for a stopped or refused order.
-- Reuse `Plate`, `Tag`, `Field`, `Button`, `SectionTitle`, `ErrorPlate`, `Empty` from `_ui/kit.tsx`, and
-  `money`/`say` from `_ui/plain.ts` so euros look the same on both sides (the ops screens still call `eur()`).
-- The gate's look is shared: a stopped order is the black slab in a hazard frame (`.hazard-frame` with `on-dark`),
-  the mark, the rule titles from `ruleTitle()`; a passed order is a quiet white plate with a petrol check.
-- Lavender means "the kitchen's agent or its memory": use it on the ops memory view for kitchen-held items.
-- Tables: `bg-paper` with a 3 px petrol rule on top, `divide-line` rows, `text-ink-soft` headers in sentence case,
-  money right-aligned and `tabular`.
-- The tokens `concrete`, `ink`, `ink-soft` changed value (to mist and the partner's charcoal), so existing ops screens
-  already shifted slightly; nothing else in them was touched.
+- **`Composer`**: one field, the microphone (hold to talk), a photo, send (lime, an arrow). States: idle; listening
+  (the field gives way to what is heard and moving bars, the microphone fills and pulses); processing; busy.
+  `size="lg"` on Home. `tools` replaces the built-in buttons.
+- **`VoiceStatus`**: `listening`, `thinking`, `speaking`, `waiting` (the only one that borrows the gate's mark),
+  `reconnecting`, `idle`; a pill (`sm`) or the call screen's centre (`lg`). `VoiceBars` alone for inline use.
+
+## 8. The shells and the operations portal
+
+**Store** (`k/[kitchen]/portal.tsx`): a slim demo strip; one white sticky header (word mark, the kitchen as a pill
+that is its own switch, search, language, agent, basket) with the sections as pills under it on a desk. On a phone the
+header keeps the mark, the kitchen and a search toggle; the sections are a **tab bar** (Home, Order, the agent in the
+middle, Catalogue, More), the basket rides above it when it holds something, and More is a sheet (Orders, Basket,
+Menu planner, Agent and rules, language, kitchen).
+
+**Operations** (`ops/_ui/rail.tsx`, `ops/(desk)/layout.tsx`): a petrol-deep icon sidebar (15 rem; press g then a
+letter) and a status bar above the page: ledger chain, sign-offs waiting (the gate's yellow, a link), suspensions,
+Helsinki time, who is signed in. On a phone: a top bar with the same status as compact pills, a tab bar (Live,
+Trace, Safeguards, Control, More) and the rest in a sheet. Pages are a `PageHead` (the title and the one question
+the page answers), then `Section`s. Ids, codes and hashes sit behind `Details`. Dense data is a `Table`; figures are
+`Num`; the gate's slab and yellow mark only refusals, suspensions and waiting sign-offs. A new section added to `NAV`
+gets an icon in `ICON` (a ring shows until it has one).
+
+**Phone pages** (`_ui/phone.tsx`) and **the wall** (`_wall/`) inherit the tokens and the type; their layouts are on
+the roll-out list.
+
+## 9. Do and do not
+
+- Do use lime for exactly one action in view; everything else is petrol, white or text.
+- Do keep yellow, the hazard stripe and `Target` for the gate: refused, waiting on a person, suspended.
+- Do say what a value is and where it came from; show "not stated" (`Missing`) rather than a blank.
+- Do build pages from the kit; if a page needs a look the kit lacks, add it to the kit.
+- Do not use thick or petrol borders, square corners, all-caps labels, or the old condensed display sizes.
+- Do not put a card around everything, or the same shadow on everything; do not use gradients as decoration
+  (the one scrim over the hero picture is there to keep text readable).
+- Do not use CSS modules (they silently break in this build; a test forbids them). Tailwind classes, or a prefixed
+  global class in `globals.css` inside `@layer components` so utilities can still refine it.
+- Do not put a string in a component: store texts live in `*.text.ts` in English, Finnish and Swedish.
+- Keep "demo on synthetic data, not the wholesaler's own shop" visible on every screen, and never use the partner's
+  logo or artwork.
+
+## 10. Rolling it out
+
+Every page already inherits the type, colours, buttons, tags, cards (`Plate`, `Panel`), fields' and raw buttons'
+radius, tables, empty and error states, focus and motion. What each page still needs is its own hand-written
+markup brought into line: replace `border-2 border-petrol`, `border-t-[3px]`, `border-l-[6px]`, `bg-paper` boxes
+with no radius, `font-display text-[…]` at the old sizes, hand-drawn `<svg>` icons and hand-made inputs with the
+kit (`Card`, `Panel`, `Input`, `Select`, `Tabs`, `Badge`, `ListRow`, lucide icons), and check 390, 768 and 1440 in
+English and Finnish.

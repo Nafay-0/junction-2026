@@ -1,11 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Barlow, Barlow_Condensed } from "next/font/google";
+import { Bricolage_Grotesque, Figtree } from "next/font/google";
 import "./globals.css";
 
-// Barlow is drawn after the lettering on road and highway signs: the voice of a loading dock, not of an app.
-// The condensed cut carries big numerals and headings; the regular cut carries everything people read.
-const barlow = Barlow({ subsets: ["latin", "latin-ext"], weight: ["400", "500", "600", "700"], variable: "--font-barlow", display: "swap" });
-const barlowCondensed = Barlow_Condensed({ subsets: ["latin", "latin-ext"], weight: ["500", "600", "700", "800"], variable: "--font-barlow-condensed", display: "swap" });
+// Figtree carries everything people read: open, friendly, even at small sizes, with true tabular figures.
+// Bricolage Grotesque carries titles and big figures: a contemporary grotesque with some warmth, set a little narrow
+// (its width axis) so Finnish compounds fit. Both have full Finnish and Swedish glyphs.
+const figtree = Figtree({ subsets: ["latin", "latin-ext"], variable: "--font-figtree", display: "swap" });
+const bricolage = Bricolage_Grotesque({ subsets: ["latin", "latin-ext"], axes: ["opsz", "wdth"], variable: "--font-bricolage", display: "swap" });
 
 export const metadata: Metadata = {
   title: "AimoPilot",
@@ -13,11 +14,11 @@ export const metadata: Metadata = {
   applicationName: "AimoPilot",
 };
 
-export const viewport: Viewport = { themeColor: "#003646" };
+export const viewport: Viewport = { themeColor: "#ffffff", viewportFit: "cover" };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${barlow.variable} ${barlowCondensed.variable}`}>
+    <html lang="en" className={`${figtree.variable} ${bricolage.variable}`}>
       <body>{children}</body>
     </html>
   );

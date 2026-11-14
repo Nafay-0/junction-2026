@@ -87,14 +87,14 @@ export function useFormat() {
 }
 
 /**
- * The language switch: three square buttons, the active one filled. Each button names its language in that language
- * for screen readers ("Suomi"), and shows the short code.
+ * The language switch: a small segmented pill, the chosen language a white pill on a tinted track. Each button names
+ * its language in that language for screen readers ("Suomi"), and shows the short code.
  */
 export function LangSwitch({ tone = "light", className = "" }: { tone?: "light" | "dark"; className?: string }) {
   const { lang, setLang } = useLang();
   const dark = tone === "dark";
   return (
-    <div role="group" aria-label="Kieli, språk, language" className={`inline-flex shrink-0 border-2 ${dark ? "border-paper/60" : "border-petrol"} ${className}`}>
+    <div role="group" aria-label="Kieli, språk, language" className={`inline-flex shrink-0 gap-0.5 rounded-full p-0.5 ${dark ? "bg-paper/12" : "bg-surface"} ${className}`}>
       {LANGS.map((l) => {
         const on = l === lang;
         return (
@@ -106,8 +106,8 @@ export function LangSwitch({ tone = "light", className = "" }: { tone?: "light" 
             aria-label={LANG_NAME[l]}
             title={LANG_NAME[l]}
             onClick={() => setLang(l)}
-            className={`min-h-9 min-w-10 px-2 text-[0.85rem] font-bold tabular ${
-              on ? (dark ? "bg-paper text-petrol-deep" : "bg-petrol text-paper") : dark ? "text-paper hover:bg-paper/15" : "text-petrol hover:bg-petrol-soft"
+            className={`min-h-8 min-w-9 rounded-full px-2 text-[0.76rem] font-semibold tabular transition-[background-color,color,box-shadow] duration-150 pointer-coarse:min-h-10 pointer-coarse:min-w-10 ${
+              on ? (dark ? "bg-paper text-petrol-deep" : "bg-paper text-ink shadow-xs") : dark ? "text-paper/80 hover:text-paper" : "text-ink-soft hover:text-ink"
             }`}
           >
             {LANG_SHORT[l]}

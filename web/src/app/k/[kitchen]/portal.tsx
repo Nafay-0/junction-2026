@@ -6,7 +6,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { api, type ApiResult } from "../../_client/api";
 import { useLive, type Live } from "../../_client/use-live";
 import { DEMO_NOTES, PRODUCT_NAME } from "../../_ui/brand";
-import { Kbd } from "../../_ui/kit";
+import { ChefHat, ChevronDown, ChevronRight, ClipboardList, Ellipsis, House, LayoutGrid, ReceiptText, Search, ShieldCheck, ShoppingBasket, Sparkles } from "lucide-react";
+import { Avatar, IconButton, IconDisc, Kbd, ListRow, Select, Sheet, Toaster } from "../../_ui/kit";
 import { helsinkiToday, money, shortProduct } from "../../_ui/plain";
 import { LangSwitch, useLang, useText } from "../../_i18n/provider";
 import { dayL, weekdaysL } from "../../_i18n/format";
@@ -287,28 +288,34 @@ export function Portal({ kitchen, kitchens, account, children }: { kitchen: Kitc
 
   return (
     <PortalContext.Provider value={value}>
-      <div className={`relative min-h-dvh overflow-x-clip bg-mist text-ink ${panelOpen ? "xl:pr-[25rem]" : ""}`}>
-        <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:bg-paper focus:p-2">
-          {tx.skip}
-        </a>
-        <p className="on-dark bg-petrol-deep px-4 py-1 text-center text-[0.8rem] leading-snug text-paper/85 sm:px-6">{DEMO_NOTES[lang]}</p>
-        <AccountBar kitchen={kitchen} account={account} />
-        <Header />
-        <main id="main" className="mx-auto min-w-0 max-w-[1440px] px-4 pb-24 sm:px-6 xl:px-8">
-          <RecallNotice kitchen={slug} />
-          {children}
-        </main>
-        <footer className="border-t border-line bg-paper">
-          <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-3 px-4 py-5 text-[0.85rem] text-ink-soft sm:px-6 xl:px-8">
-            <p className="max-w-[80ch]">{tx.footer(PRODUCT_NAME)}</p>
-            <p className="hidden items-center gap-2 md:flex">
-              <Kbd>Ctrl</Kbd>
-              <Kbd>K</Kbd> {tx.keysAgent}, <Kbd>/</Kbd> {tx.keysSearch}
-            </p>
-          </div>
-        </footer>
-        <AssistantPanel />
-      </div>
+      <Toaster>
+        <div className={`relative min-h-dvh overflow-x-clip bg-mist text-ink ${panelOpen ? "xl:pr-[27rem] 2xl:pr-[30rem]" : ""}`}>
+          <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded-full focus:bg-paper focus:px-4 focus:py-2 focus:shadow-md">
+            {tx.skip}
+          </a>
+          <p className="on-dark bg-petrol-deep px-4 py-1.5 text-center text-[0.75rem] leading-snug text-paper/80 sm:px-6">
+            <span className="sm:hidden">{tx.demoShort}</span>
+            <span className="hidden sm:inline">{DEMO_NOTES[lang]}</span>
+          </p>
+          <AccountBar kitchen={kitchen} account={account} />
+          <Header />
+          <main id="main" className="mx-auto min-w-0 max-w-[1320px] px-4 pb-12 sm:px-6 xl:px-8">
+            <RecallNotice kitchen={slug} />
+            {children}
+          </main>
+          <footer className="border-t border-line bg-paper">
+            <div className="pb-tabbar mx-auto flex max-w-[1320px] flex-wrap items-center justify-between gap-3 px-4 pt-5 text-[0.82rem] text-ink-soft sm:px-6 lg:!pb-5 xl:px-8">
+              <p className="max-w-[80ch]">{tx.footer(PRODUCT_NAME)}</p>
+              <p className="hidden items-center gap-1.5 lg:flex">
+                <Kbd>Ctrl</Kbd>
+                <Kbd>K</Kbd> {tx.keysAgent}, <Kbd>/</Kbd> {tx.keysSearch}
+              </p>
+            </div>
+          </footer>
+          <TabBar />
+          <AssistantPanel />
+        </div>
+      </Toaster>
     </PortalContext.Provider>
   );
 }
@@ -320,6 +327,16 @@ export function weekdaysText(days: number[], lang: Lang = "en"): string {
   return weekdaysL(days, lang);
 }
 
+function isActive(pathname: string, base: string, sub: string): boolean {
+  const href = `${base}${sub}`;
+  return sub === "" ? pathname === base : pathname === href || pathname.startsWith(`${href}/`);
+}
+
+/**
+ * The store's header: one quiet white bar that stays at the top. The word mark, whose kitchen this is, the catalogue
+ * search, the language, the agent and the basket; under it, on a desk, the sections as pills. On a phone the bar
+ * keeps the mark, the kitchen and the search, and the sections move to the tab bar under the thumb.
+ */
 function Header() {
   const { kitchen, kitchens, base, overview, basket, live, agent, lang } = usePortal();
   const tx = useText(PORTAL_TEXT);
@@ -334,27 +351,44 @@ function Header() {
   const onCatalogue = pathname.startsWith(`${base}/catalogue`);
   const [q, setQ] = useState(onCatalogue ? (params.get("q") ?? "") : "");
   const [forPath, setForPath] = useState(pathname);
+  const [searchOpen, setSearchOpen] = useState(false);
   if (forPath !== pathname) {
     setForPath(pathname);
     if (!onCatalogue) setQ("");
+    setSearchOpen(false);
   }
+  const showSearch = searchOpen || onCatalogue;
+  const waitingLabel = waiting.length === 1 ? tx.waitingFor(waiting[0].authorised.by === "waiting" ? waiting[0].authorised.name : tx.aSignOff) : tx.ordersWaiting(waiting.length);
   return (
-    <header className="bg-paper">
-      <div className="mx-auto grid max-w-[1440px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-3 px-4 py-3 sm:px-6 lg:grid-cols-[auto_minmax(13rem,1fr)_minmax(14rem,28rem)_auto] xl:px-8">
-        <Link href="/k" className="flex shrink-0 items-center" aria-label={`${PRODUCT_NAME}: ${tx.allKitchens}`}>
-          <Wordmark size={34} />
+    <header className="sticky top-0 z-30 border-b border-line bg-paper/90 backdrop-blur-md supports-[not(backdrop-filter:blur(0))]:bg-paper">
+      <div className="mx-auto flex max-w-[1320px] flex-wrap items-center gap-x-3 gap-y-2.5 px-4 py-2.5 sm:px-6 lg:flex-nowrap lg:gap-x-5 lg:py-3 xl:px-8">
+        <Link href="/k" className="flex shrink-0 items-center rounded-md" aria-label={`${PRODUCT_NAME}: ${tx.allKitchens}`}>
+          <span className="lg:hidden">
+            <Wordmark size={25} />
+          </span>
+          <span className="hidden lg:block">
+            <Wordmark size={30} />
+          </span>
         </Link>
-        <div className="col-span-2 row-start-2 flex min-w-0 items-center gap-3 lg:col-span-1 lg:row-start-auto lg:border-l lg:border-line lg:pl-4">
-          <div className="min-w-0 flex-1">
+
+        {/* Whose kitchen this is. The whole pill is the switch: a native select laid over it. */}
+        <div className="relative flex min-w-0 flex-1 items-center gap-2.5 rounded-full py-1 pl-1 pr-2.5 transition-colors focus-within:bg-surface hover:bg-surface lg:min-w-[9rem] lg:max-w-[17rem] lg:flex-initial lg:border-l lg:border-line lg:rounded-none lg:rounded-r-full lg:py-0.5 lg:pl-5">
+          <Avatar name={kitchen.name} size={34} />
+          <div className="min-w-0">
+            <p className="flex items-center gap-1 text-[0.95rem] font-semibold leading-tight">
+              <span className="truncate">{kitchen.name}</span>
+              <ChevronDown aria-hidden size={15} className="shrink-0 text-ink-soft" />
+            </p>
+            <p className="hidden truncate text-[0.78rem] leading-snug text-ink-soft lg:block">
+              {days ? tx.deliveries(weekdaysText(days, lang)) : ""}
+              {approver ? tx.signsOff(approver.name) : ""}
+              {kitchen.kind === "visitor" && kitchen.expiresAt ? tx.visitor : ""}
+            </p>
+          </div>
           <label htmlFor="kitchen-switch" className="sr-only">
             {tx.kitchen}
           </label>
-          <select
-            id="kitchen-switch"
-            className="-ml-1 max-w-full truncate bg-transparent pr-1 font-display text-[1.3rem] font-bold leading-tight text-ink"
-            value={kitchen.slug}
-            onChange={(e) => router.push(`/k/${e.target.value}`)}
-          >
+          <select id="kitchen-switch" className="absolute inset-0 size-full cursor-pointer rounded-full opacity-0" value={kitchen.slug} onChange={(e) => router.push(`/k/${e.target.value}`)}>
             {kitchens.map((k) => (
               <option key={k.slug} value={k.slug}>
                 {k.name}
@@ -362,20 +396,12 @@ function Header() {
               </option>
             ))}
           </select>
-          <p className="line-clamp-2 text-[0.85rem] leading-snug text-ink-soft">
-            {days ? tx.deliveries(weekdaysText(days, lang)) : ""}
-            {approver ? tx.signsOff(approver.name) : ""}
-            {kitchen.kind === "visitor" && kitchen.expiresAt ? tx.visitor : ""}
-          </p>
-          </div>
-          <div className="lg:hidden">
-            <LangSwitch />
-          </div>
         </div>
+
         <form
           role="search"
           aria-label={tx.searchRegion}
-          className="col-span-2 row-start-3 flex border-2 border-petrol bg-paper focus-within:outline-[3px] focus-within:outline-offset-2 focus-within:outline-petrol lg:col-span-1 lg:row-start-auto"
+          className={`${showSearch ? "flex" : "hidden"} relative order-last basis-full items-center rounded-full bg-surface transition-[background-color,box-shadow] duration-150 focus-within:bg-paper focus-within:shadow-[0_0_0_2px_var(--color-petrol)] lg:order-none lg:flex lg:min-w-[8rem] lg:flex-1 lg:basis-0`}
           onSubmit={(e) => {
             e.preventDefault();
             const t = q.trim();
@@ -385,109 +411,218 @@ function Header() {
           <label htmlFor="shop-search" className="sr-only">
             {tx.searchLabel}
           </label>
+          <button type="submit" className="absolute left-1 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-full text-ink-soft hover:text-petrol" aria-label={tx.search}>
+            <Search aria-hidden size={18} />
+          </button>
           <input
             id="shop-search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder={tx.searchPlaceholder}
             autoComplete="off"
-            className="min-h-11 min-w-0 flex-1 bg-transparent px-3 text-[1rem] placeholder:text-ink-soft focus:outline-none"
+            enterKeyHint="search"
+            className="min-h-11 min-w-0 flex-1 rounded-full bg-transparent pl-11 pr-4 text-[0.95rem] placeholder:text-ink-soft focus:outline-none"
           />
-          <button type="submit" className="flex min-h-11 items-center bg-petrol px-4 font-semibold text-paper hover:bg-petrol-deep" aria-label={tx.search}>
-            <SearchIcon />
-          </button>
+          <span className="pointer-events-none mr-3 hidden xl:block">
+            <Kbd>/</Kbd>
+          </span>
         </form>
-        <div className="col-start-2 row-start-1 flex items-center justify-end gap-2 lg:col-start-auto lg:row-start-auto">
+
+        <div className="flex shrink-0 items-center gap-1.5 lg:gap-2">
           <div className="hidden lg:block">
             <LangSwitch />
           </div>
+          <IconButton label={tx.searchLabel} onClick={() => { setSearchOpen((x) => !x); setTimeout(() => document.getElementById("shop-search")?.focus(), 30); }} expanded={showSearch} className="lg:hidden">
+            <Search aria-hidden size={20} />
+          </IconButton>
           <button
             type="button"
             onClick={() => (agent.panelOpen ? agent.setPanelOpen(false) : agent.open())}
             aria-expanded={agent.panelOpen}
             aria-controls="assistant"
             aria-keyshortcuts="Control+K Meta+K"
-            className={`flex min-h-11 items-center gap-2 px-3 font-semibold ${agent.panelOpen ? "bg-lavender-deep text-paper" : "bg-lavender text-lavender-deep hover:bg-[#e3daf0]"}`}
+            className={`hidden min-h-11 items-center gap-2 rounded-full px-4 text-[0.92rem] font-semibold transition-colors duration-150 lg:inline-flex ${agent.panelOpen ? "bg-lavender-deep text-paper" : "bg-lavender text-lavender-deep hover:bg-lavender-mid"}`}
           >
-            <AgentIcon />
-            <span className="hidden sm:inline">{tx.agentButton}</span>
-            <span className="hidden items-center gap-0.5 2xl:flex">
+            <AgentIcon size={18} />
+            <span className={agent.panelOpen ? "sr-only" : ""}>{tx.agentButton}</span>
+            <span className={agent.panelOpen ? "hidden" : "hidden items-center gap-0.5 2xl:flex"}>
               <Kbd dark={agent.panelOpen}>Ctrl K</Kbd>
             </span>
           </button>
           <Link
             href={`${base}/basket`}
             aria-current={pathname === `${base}/basket` ? "page" : undefined}
-            className="flex min-h-11 items-center gap-2 bg-petrol px-3 font-semibold text-paper hover:bg-petrol-deep"
+            className="hidden min-h-11 items-center gap-2 rounded-full border border-line-strong bg-paper pl-3.5 pr-1.5 text-[0.92rem] font-semibold text-ink transition-colors duration-150 hover:border-ink-soft hover:bg-mist lg:inline-flex"
             aria-label={tx.basketLabel(basket.lines.length, priced ? money(basketTotal) : undefined)}
           >
-            <BasketIcon />
-            <span key={basket.lines.length} className="changed min-w-5 bg-lime px-1 text-center text-ink tabular">
+            <ShoppingBasket aria-hidden size={19} />
+            {basket.lines.length > 0 && <span className="tabular">{priced ? money(basketTotal) : tx.notPriced}</span>}
+            <span key={basket.lines.length} className={`changed flex h-8 min-w-8 items-center justify-center rounded-full px-2 tabular ${basket.lines.length > 0 ? "bg-lime text-ink" : "bg-surface text-ink-soft"}`}>
               {basket.lines.length}
             </span>
-            {basket.lines.length > 0 && <span className="hidden tabular sm:inline">{priced ? money(basketTotal) : tx.notPriced}</span>}
           </Link>
         </div>
       </div>
-      <nav aria-label={tx.navLabel} className="on-dark bg-petrol">
-        <div className="mx-auto flex max-w-[1440px] items-stretch gap-3 px-4 sm:px-6 xl:px-8">
-          <ul className="flex min-w-0 flex-1 gap-1 overflow-x-auto whitespace-nowrap">
+
+      <nav aria-label={tx.navLabel} className="hidden border-t border-line/70 lg:block">
+        <div className="mx-auto flex max-w-[1320px] items-center gap-3 px-6 py-1.5 xl:px-8">
+          <ul className="-ml-3 flex min-w-0 flex-1 gap-1 overflow-x-auto whitespace-nowrap">
             {NAV.map((n) => {
-              const href = `${base}${n.href}`;
-              const active = n.href === "" ? pathname === base : pathname === href || pathname.startsWith(`${href}/`);
+              const active = isActive(pathname, base, n.href);
               return (
                 <li key={n.key}>
                   <Link
-                    href={href}
+                    href={`${base}${n.href}`}
                     aria-current={active ? "page" : undefined}
-                    className={`relative flex min-h-12 items-center px-3 text-[1.02rem] ${active ? "font-bold text-paper" : "text-paper/80 hover:text-paper"}`}
+                    className={`flex min-h-10 items-center rounded-full px-3.5 text-[0.92rem] transition-colors duration-150 ${active ? "bg-petrol-soft font-semibold text-petrol-deep" : "font-medium text-ink-soft hover:bg-surface hover:text-ink"}`}
                   >
                     {tx.nav[n.key]}
-                    <span aria-hidden className={`absolute inset-x-3 bottom-0 h-1 ${active ? "bg-lime" : ""}`} />
                   </Link>
                 </li>
               );
             })}
           </ul>
-          {waiting.length > 0 && (
-            <Link href={`${base}/orders?show=waiting`} className="my-1.5 flex shrink-0 items-center gap-2 bg-safety px-3 text-[0.95rem] font-semibold text-safety-ink">
-              <Target size={18} tone="safety" />
-              <span className="hidden sm:inline">
-                {waiting.length === 1 ? tx.waitingFor(waiting[0].authorised.by === "waiting" ? waiting[0].authorised.name : tx.aSignOff) : tx.ordersWaiting(waiting.length)}
-              </span>
-              <span className="sm:hidden">{tx.waitingShort(waiting.length)}</span>
-            </Link>
-          )}
+          {waiting.length > 0 && <WaitingPill href={`${base}/orders?show=waiting`} label={waitingLabel} />}
         </div>
       </nav>
+      {waiting.length > 0 && (
+        <div className="border-t border-line/70 px-4 py-1.5 sm:px-6 lg:hidden">
+          <WaitingPill href={`${base}/orders?show=waiting`} label={waitingLabel} full />
+        </div>
+      )}
     </header>
   );
 }
 
-function SearchIcon() {
+/** A sign-off is waiting on a person: the gate's colours, so it is the one thing in the header that asks for attention. */
+function WaitingPill({ href, label, full = false }: { href: string; label: string; full?: boolean }) {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="square">
-      <path d="M10.5 3.5a7 7 0 1 1 0 14 7 7 0 0 1 0-14Zm5 12 5 5" />
-    </svg>
+    <Link href={href} className={`flex min-h-9 shrink-0 items-center gap-2 rounded-full bg-safety px-3.5 text-[0.88rem] font-semibold text-safety-ink transition-[filter] hover:brightness-95 ${full ? "w-full justify-center" : ""}`}>
+      <Target size={16} tone="safety" />
+      <span className="truncate">{label}</span>
+      <ChevronRight aria-hidden size={15} className="shrink-0" />
+    </Link>
   );
 }
 
-function BasketIcon() {
+// ---------- the phone: sections under the thumb ----------
+
+const TABS: { href: string; key: "home" | "order" | "catalogue"; icon: typeof House }[] = [
+  { href: "", key: "home", icon: House },
+  { href: "/order", key: "order", icon: ClipboardList },
+];
+const TABS_AFTER: { href: string; key: "home" | "order" | "catalogue"; icon: typeof House }[] = [{ href: "/catalogue", key: "catalogue", icon: LayoutGrid }];
+
+/**
+ * On a phone the sections sit in a bar at the bottom edge, with the agent in the middle: one tap opens its sheet.
+ * When the basket holds something it rides just above the bar. Wider than a phone, the header carries all of this.
+ */
+function TabBar() {
+  const { base, basket, live, agent, kitchens, kitchen } = usePortal();
+  const tx = useText(PORTAL_TEXT);
+  const router = useRouter();
+  const pathname = usePathname() ?? base;
+  const [more, setMore] = useState(false);
+  const [forPath, setForPath] = useState(pathname);
+  if (forPath !== pathname) {
+    setForPath(pathname);
+    setMore(false);
+  }
+  const basketTotal = basket.lines.reduce((s, l) => s + (live.results[l.productId]?.offer?.unitPriceCents ?? 0) * l.packs, 0);
+  const priced = basket.lines.length > 0 && basket.lines.every((l) => live.results[l.productId]?.offer);
+  const moreActive = ["/menu", "/orders", "/agent", "/basket"].some((sub) => isActive(pathname, base, sub));
+  // On a phone the thread is a screen of its own: going to another tab leaves it.
+  const leaveThread = () => agent.panelOpen && agent.setPanelOpen(false);
+  const tab = (href: string, label: string, Icon: typeof House, active: boolean) => (
+    <Link key={href} href={`${base}${href}`} onClick={leaveThread} aria-current={active ? "page" : undefined} className={`flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-xl text-[0.7rem] font-medium transition-colors ${active ? "text-petrol" : "text-ink-soft"}`}>
+      <Icon aria-hidden size={22} strokeWidth={active ? 2.3 : 1.9} />
+      <span className="max-w-full truncate px-1">{label}</span>
+    </Link>
+  );
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="miter">
-      <path d="M3 9h18l-2 11H5L3 9Zm4 0 3-6m7 6-3-6M9 13v4m6-4v4" />
-    </svg>
+    <>
+      {basket.lines.length > 0 && pathname !== `${base}/basket` && !agent.panelOpen && (
+        <Link
+          href={`${base}/basket`}
+          aria-label={tx.basketLabel(basket.lines.length, priced ? money(basketTotal) : undefined)}
+          className="sheet-up fixed inset-x-4 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-30 flex min-h-12 items-center gap-3 rounded-full bg-petrol-deep pl-4 pr-2 text-[0.95rem] font-semibold text-paper shadow-lg lg:hidden"
+        >
+          <ShoppingBasket aria-hidden size={19} />
+          <span className="flex-1">{tx.basketTab}</span>
+          {priced && <span className="tabular text-paper/85">{money(basketTotal)}</span>}
+          <span key={basket.lines.length} className="flex h-8 min-w-8 items-center justify-center rounded-full bg-lime px-2 text-ink tabular">
+            {basket.lines.length}
+          </span>
+        </Link>
+      )}
+      <nav aria-label={tx.tabsLabel} className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-paper/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden">
+        <div className="mx-auto grid max-w-md grid-cols-5 items-end px-2">
+          {TABS.map((t) => tab(t.href, tx.nav[t.key], t.icon, !agent.panelOpen && isActive(pathname, base, t.href)))}
+          <button
+            type="button"
+            onClick={() => (agent.panelOpen ? agent.setPanelOpen(false) : agent.open())}
+            aria-expanded={agent.panelOpen}
+            aria-controls="assistant"
+            className="flex min-h-14 flex-col items-center justify-end gap-0.5 rounded-xl pb-[0.3rem] text-[0.7rem] font-semibold text-lavender-deep"
+          >
+            <span className="-mt-5 flex size-13 items-center justify-center rounded-full bg-lavender-deep text-paper shadow-md ring-4 ring-paper transition-transform duration-150 active:scale-95">
+              <AgentIcon size={22} />
+            </span>
+            <span>{tx.agentButton}</span>
+          </button>
+          {TABS_AFTER.map((t) => tab(t.href, tx.nav[t.key], t.icon, !agent.panelOpen && isActive(pathname, base, t.href)))}
+          <button type="button" onClick={() => { leaveThread(); setMore(true); }} aria-haspopup="dialog" aria-expanded={more} className={`flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-xl text-[0.7rem] font-medium ${moreActive ? "text-petrol" : "text-ink-soft"}`}>
+            <Ellipsis aria-hidden size={22} strokeWidth={moreActive ? 2.3 : 1.9} />
+            <span>{tx.more}</span>
+          </button>
+        </div>
+      </nav>
+      <Sheet open={more} onClose={() => setMore(false)} title={tx.more}>
+        <ul className="-mx-5 divide-y divide-line border-y border-line">
+          {(
+            [
+              { sub: "/orders", key: "orders", icon: ReceiptText },
+              { sub: "/basket", key: "basket", icon: ShoppingBasket },
+              { sub: "/menu", key: "menu", icon: ChefHat },
+              { sub: "/agent", key: "agent", icon: ShieldCheck },
+            ] as const
+          ).map(({ sub, key, icon: Icon }) => (
+            <li key={sub}>
+              <ListRow
+                href={`${base}${sub}`}
+                leading={
+                  <IconDisc size={38} tone={isActive(pathname, base, sub) ? "petrol" : "muted"}>
+                    <Icon size={19} />
+                  </IconDisc>
+                }
+                title={key === "basket" ? tx.basketTab : tx.nav[key]}
+                trailing={key === "basket" && basket.lines.length > 0 ? <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-lime px-2 text-[0.85rem] font-semibold tabular">{basket.lines.length}</span> : <ChevronRight aria-hidden size={18} className="text-ink-faint" />}
+              />
+            </li>
+          ))}
+        </ul>
+        <div className="mt-5 flex items-center justify-between gap-4">
+          <p className="text-[0.92rem] font-medium">{tx.language}</p>
+          <LangSwitch />
+        </div>
+        {kitchens.length > 1 && (
+          <Select label={tx.kitchen} className="mt-5" value={kitchen.slug} onChange={(v) => router.push(`/k/${v}`)}>
+            {kitchens.map((k) => (
+              <option key={k.slug} value={k.slug}>
+                {k.name}
+                {k.kind === "visitor" ? ` (${k.approverName})` : ""}
+              </option>
+            ))}
+          </Select>
+        )}
+      </Sheet>
+    </>
   );
 }
 
-/** The agent: a speech mark with a spark, on lavender. */
+/** The agent's mark: a spark, on lavender. */
 export function AgentIcon({ size = 20 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="miter">
-      <path d="M3 4h18v12H9l-5 4v-4H3V4Z" />
-      <path d="M12 7v6M9 10h6" />
-    </svg>
-  );
+  return <Sparkles aria-hidden size={size} />;
 }
 
 /** "100 L lactose-free milk for Thursday" (Tue 10.11.) or the order it stands for. */
