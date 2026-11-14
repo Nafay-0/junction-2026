@@ -172,6 +172,17 @@ Model and tool calls also go to the action stream (Aiven) as `agent.model` and `
 - A door that is not a browser (a phone call) passes the kitchen slug: the turn then has no signed-in person and
   every answer is recorded as relayed.
 
+## The voice call is a door of the thread
+
+The call keeps its realtime model, its recogniser primed with the kitchen's words, and its spoken read-back
+(`server/channels/voice/`). Every tool step of the call is also a turn of the kitchen's thread
+(`server/thread/voice-bridge.ts`, hooked in `voice/tools.ts runTool`): the heard words are the buyer turn (door
+`voice`), the read-back is the `understood` card with the read-back sentence as the agent's line, and the intake's
+answer is the same cards the typed store shows. When the intake's options come back for a routine request, the
+engine's rule places it alone and the voice model is told what was placed, so a routine spoken order is the
+request, the read-back and one "yes". The store's microphone opens the call (`/call?k=<kitchen>`, or `/call` for a
+visitor's kitchen): there is no browser speech recognition. `DOCK_THREAD_VOICE=off` stops the mirroring.
+
 ## What runs where (as built)
 
 | Piece | File |
