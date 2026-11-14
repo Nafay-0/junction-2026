@@ -63,14 +63,21 @@ async function productsOf(run: TurnRun, ids: string[]): Promise<Map<string, Prod
   return new Map(found.map((p) => [p.id, p]));
 }
 
-/** Live prices for the lines (and the products they replace), for the sheet's day: one call, short list only. */
-async function price(run: TurnRun, s: SheetRecord): Promise<void> {
-  const ids = [...new Set(s.lines.flatMap((l) => [l.productId, ...(l.substituteFor ? [l.substituteFor] : [])]))].slice(0, 10);
+/** Products priced per live call: the sheet's lines go in batches of this many, every line priced. */
+export const PRICE_BATCH = 10;
+
+/** Live prices for every line (and the products they replace), for the sheet's day: in batches of ten, never a line left out. */
+export async function price(run: TurnRun, s: SheetRecord): Promise<void> {
+  const ids = [...new Set(s.lines.flatMap((l) => [l.productId, ...(l.substituteFor ? [l.substituteFor] : [])]))];
   const st = step(run, "lookup", "Checking live prices and the day");
   try {
-    const r = await run.rt.dock.lookupAvailability(run.session, { requestId: s.requestId, productIds: ids, deliveryDate: s.deliveryDate });
-    for (const o of r.offers) s.offers[o.productId] = o;
-    st.done(`${r.offers.length}`);
+    let n = 0;
+    for (let i = 0; i < ids.length; i += PRICE_BATCH) {
+      const r = await run.rt.dock.lookupAvailability(run.session, { requestId: s.requestId, productIds: ids.slice(i, i + PRICE_BATCH), deliveryDate: s.deliveryDate });
+      for (const o of r.offers) s.offers[o.productId] = o;
+      n += r.offers.length;
+    }
+    st.done(`${n}`);
   } catch (err) {
     st.fail(err instanceof DockError ? err.code : undefined);
     throw err;
