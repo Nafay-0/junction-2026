@@ -8,7 +8,7 @@ export const RULES_CHANGE_TEXT = defineText({
   en: {
     opening: "Opening the request…",
     title: "A change to the rules",
-    sub: (kitchen: string, approver: string) => `${kitchen}'s agent asks to do more, ${approver}. Nothing changes until you sign.`,
+    sub: (kitchen: string, approver: string) => `${kitchen}'s agent asks to do more${approver ? `, ${approver}` : ""}. Nothing changes until you sign.`,
     whatChanges: "What would change",
     asked: (who: string, time: string) => `Asked by ${who} at ${time}`,
     thenWhat: (what: string) => `Waiting on it: the ${what}, which the current rules do not allow.`,
@@ -40,7 +40,7 @@ export const RULES_CHANGE_TEXT = defineText({
   fi: {
     opening: "Avataan pyyntöä…",
     title: "Sääntöjen muutos",
-    sub: (kitchen: string, approver: string) => `Keittiön ${kitchen} agentti pyytää lupaa tehdä enemmän, ${approver}. Mikään ei muutu ennen allekirjoitustasi.`,
+    sub: (kitchen: string, approver: string) => `Keittiön ${kitchen} agentti pyytää lupaa tehdä enemmän${approver ? `, ${approver}` : ""}. Mikään ei muutu ennen allekirjoitustasi.`,
     whatChanges: "Mikä muuttuisi",
     asked: (who: string, time: string) => `Pyysi ${who} ${time}`,
     thenWhat: (what: string) => `Tätä odottaa: ${what}, jota nykyiset säännöt eivät salli.`,
@@ -72,7 +72,7 @@ export const RULES_CHANGE_TEXT = defineText({
   sv: {
     opening: "Öppnar förfrågan…",
     title: "En ändring av reglerna",
-    sub: (kitchen: string, approver: string) => `Agenten för ${kitchen} ber om att få göra mer, ${approver}. Inget ändras förrän du signerar.`,
+    sub: (kitchen: string, approver: string) => `Agenten för ${kitchen} ber om att få göra mer${approver ? `, ${approver}` : ""}. Inget ändras förrän du signerar.`,
     whatChanges: "Vad som skulle ändras",
     asked: (who: string, time: string) => `Begärt av ${who} ${time}`,
     thenWhat: (what: string) => `Väntar på den: ${what}, som de nuvarande reglerna inte tillåter.`,

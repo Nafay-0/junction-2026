@@ -2,7 +2,9 @@
  * No mark left in sight: the agent writes **a figure** and {{a day}} for the store to render, and every place a reply
  * is shown must render them. This opens each kitchen's conversation as it stands on a server (after an evaluation run,
  * so its recorded conversations), at 390 px and 1440 px, opens every "Show the list" and "N steps" under the replies,
- * and fails if any visible text holds "{{", "}}" or a stray "**".
+ * and fails if any visible text holds "{{", "}}" or a stray "**". The spoken path too: every reply in the thread to a
+ * turn that came by voice (the read-back, what the call said) must be plain, since a voice reads it as it is; what
+ * the voice model itself is given is made plain at its one door (server/channels/voice/tools.ts runTool, spokenOf).
  *
  *   pnpm tsx eval/thread/marks.ts --url http://localhost:4830 [--kitchens hotel-lumo,kahvila-sointu,koulu-metsola] [--shots dir]
  */
@@ -39,7 +41,13 @@ async function check(slug: string, width: number): Promise<string[]> {
     await page.waitForTimeout(500);
     if (shots) await page.screenshot({ path: `${shots}/marks-${slug}-${width}.png`, fullPage: true });
     const text = await page.locator("body").innerText();
-    return text.split("\n").filter((l) => MARK.test(l)).map((l) => `${slug} @${width}: ${l.trim().slice(0, 160)}`);
+    const seen = text.split("\n").filter((l) => MARK.test(l)).map((l) => `${slug} @${width}: ${l.trim().slice(0, 160)}`);
+    // The spoken path: replies to voice turns, from the thread itself.
+    const t = (await (await page.request.get(`${url}/ui-api/kitchens/${slug}/thread`)).json()) as { thread?: { turns: { turnId: string; role: string; door?: string; replyTo?: string; line?: string }[] } };
+    const turns = t.thread?.turns ?? [];
+    const voiced = new Set(turns.filter((x) => x.role === "buyer" && x.door === "voice").map((x) => x.turnId));
+    for (const x of turns) if (x.role === "agent" && x.replyTo && voiced.has(x.replyTo) && MARK.test(x.line ?? "")) seen.push(`${slug} (spoken): ${(x.line ?? "").slice(0, 160)}`);
+    return seen;
   } finally {
     await browser.close();
   }

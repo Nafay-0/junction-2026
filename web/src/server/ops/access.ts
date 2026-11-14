@@ -4,8 +4,11 @@ import { DockError } from "@/core/orders";
 /**
  * Who may use the operations portal (/ops) and its back end (/ops-api).
  *
+ *   anyone                    a viewer: every page reads, nothing acts (handler.ts opsRead; viewer.ts hides other
+ *                             people's own words); no name is asked and nothing is stored
  *   DOCK_OPS_PASSCODE unset   demo: one click enters as operations staff, no password
- *   DOCK_OPS_PASSCODE=...     entering needs the passcode; without it nobody can suspend agents or read the views
+ *   DOCK_OPS_PASSCODE=...     acting as staff needs the passcode: suspending agents, staging, running the watch or the
+ *                             selling agent, the copilot, launching agents, resets (handler.ts opsRoute)
  *
  * Either way every /ops-api call needs the session cookie entry sets (HttpOnly, SameSite=Strict), so a link or a
  * form on another site cannot suspend an agent. A demo, not staff sign-in: a real deployment puts the

@@ -10,6 +10,7 @@ import { CrashMatrix, hazardOf, licenceLine } from "../../../_wall/crash-matrix"
 import { Details, Empty, KV, Licence, LiveMark, LoadError, Loading, PageHead, Section, ViaTag, useOps } from "../../_ui/kit";
 import { FilterBar, useUrlState } from "../../_ui/filters";
 import { AgentWatch } from "./watch";
+import { AGENTS_TEXT } from "./agents.text";
 
 const KIND: Record<AgentRow["kind"], string> = { demo: "Demo kitchen", visitor: "Visitor kitchen", account: "Account kitchen", outside: "Outside agent" };
 
@@ -24,8 +25,8 @@ export function AgentsScreen({ board }: { board?: Board }) {
   return (
     <>
       <PageHead
-        title="Agents and licences"
-        purpose="Every agent at this gate: its licence, its record, and what it may do alone now."
+        title={AGENTS_TEXT.en.title}
+        purpose={AGENTS_TEXT.en.purpose}
         about="Every agent that has come to this gate: its crash-test licence when it has one, its record here, and what it may do alone right now, which is the kitchen's mandate capped by the licence."
         right={d && <LiveMark at={whenSeconds(d.at)} error={live.error} />}
       />
@@ -40,7 +41,7 @@ export function AgentsScreen({ board }: { board?: Board }) {
       {!d ? (
         <Loading label="Reading the agents…" />
       ) : d.agents.length === 0 ? (
-        <Empty title="No agent has come to the gate yet">An agent appears here once it presents a mandate at the door, whichever door it uses.</Empty>
+        <Empty title={AGENTS_TEXT.en.emptyTitle}>{AGENTS_TEXT.en.empty}</Empty>
       ) : (
         <>
           <FilterBar
@@ -74,7 +75,7 @@ export function AgentsScreen({ board }: { board?: Board }) {
         {board && board.rows.length > 0 ? (
           <div className="rounded-xl border border-line bg-paper p-5 sm:p-6">
             <div className="-mx-1 overflow-x-auto px-1">
-              <div className="min-w-[44rem]">
+              <div className="min-w-[58rem]">
                 <CrashMatrix board={board} maxRows={12} yardsticks={["reference", "reckless", "do-nothing"]} />
               </div>
             </div>

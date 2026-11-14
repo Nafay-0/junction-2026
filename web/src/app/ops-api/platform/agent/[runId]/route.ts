@@ -1,5 +1,5 @@
 import { DockError } from "@/core/errors";
-import { opsRoute } from "@/server/ops/handler";
+import { opsRead } from "@/server/ops/handler";
 import { AIVEN_BUYER } from "@/server/aiven/showcase/buyer";
 import { getRun } from "@/server/aiven/showcase/launcher";
 import { streamConfigured, tail, type StreamMessage } from "@/server/aiven/showcase/stream";
@@ -11,7 +11,7 @@ import { streamConfigured, tail, type StreamMessage } from "@/server/aiven/showc
  */
 export async function GET(req: Request, ctx: RouteContext<"/ops-api/platform/agent/[runId]">) {
   const { runId } = await ctx.params;
-  return opsRoute(req, async () => {
+  return opsRead(req, async () => {
     const run = getRun(runId);
     if (!run) throw new DockError(404, "run_not_found", "No such run on this server (runs are kept in memory, the last 30).");
     let gate: StreamMessage[] = [];

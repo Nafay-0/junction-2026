@@ -22,7 +22,7 @@ export const RULES_SIGNOFF_TEXT = defineText({
     toPhone: (who: string) => `Send to ${who}'s phone`,
     hidePhone: "Hide the code",
     phoneHint: (who: string) => `${who} scans this with their phone, or opens the link, and signs with their passkey.`,
-    phoneAddHint: (who: string) => `${who}'s phone has no passkey yet: scanning this adds it, then opens the change to sign.`,
+    phoneAddHint: (who: string) => `Scanning this with ${who}'s phone adds its passkey, then opens the change to sign.`,
     openLink: "Open the link",
     signHere: "Sign here instead",
     signedBy: (who: string, time: string) => `Signed by ${who} at ${time}`,

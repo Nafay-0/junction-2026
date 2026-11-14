@@ -1,13 +1,15 @@
 "use client";
 
+import { sentenceCase } from "../../../_ui/plain";
 import { useState, type ReactNode } from "react";
 import type { HoldCard, NoticeCard, RadarView } from "@/server/radar/views";
 import { api } from "../../../_client/api";
 import { fi, num, since, span, when } from "../../_ui/format";
-import { Button, Details, Empty, LoadError, Loading, PageHead, Panel, Section, useNow, useOps } from "../../_ui/kit";
+import { Button, Details, Empty, LoadError, Loading, PageHead, Panel, Section, useNow, useOps, StaffButton } from "../../_ui/kit";
 import { Check, CircleAlert, ExternalLink, FlaskConical } from "lucide-react";
 import { Badge, Select, Tag, buttonClass } from "../../../_ui/kit";
 import { Target } from "../../../_ui/target";
+import { RADAR_TEXT } from "./radar.text";
 
 type Evidence = { value: string; sentence?: string; verified: boolean; english?: string };
 
@@ -28,8 +30,8 @@ export function RadarScreen() {
   return (
     <>
       <PageHead
-        title="Recall radar"
-        purpose="Is anything we sell being recalled?"
+        title={RADAR_TEXT.en.title}
+        purpose={RADAR_TEXT.en.purpose}
         about="Is anything we sell being recalled? The radar reads food authorities' recall notices on the open web, keeps each fact with the sentence it came from, matches them against the assortment in code, and holds a product an authority names before any agent can order it. Doubtful matches wait for a person."
         right={v && now && fi1?.lastCheckAt ? <span className="tabular">Ruokavirasto checked {since(fi1.lastCheckAt, now)}</span> : undefined}
       />
@@ -71,7 +73,7 @@ function Body({ v, now, refresh }: { v: RadarView; now: number; refresh: () => v
                 {v.lifted.map((h) => (
                   <p key={h.holdId} className="font-sans">
                     {h.drill ? "DRILL: " : ""}
-                    {h.productName}: lifted {when(h.liftedAt, new Date(now))} by {h.liftedBy}, “{h.liftReason}”. Refused {h.refusals} call{h.refusals === 1 ? "" : "s"}.
+                    {sentenceCase(h.productName)}: lifted {when(h.liftedAt, new Date(now))} by {h.liftedBy}, “{h.liftReason}”. Refused {h.refusals} call{h.refusals === 1 ? "" : "s"}.
                   </p>
                 ))}
               </Details>
@@ -166,7 +168,7 @@ function DrillSection({ v, now, refresh }: { v: RadarView; now: number; refresh:
                   </option>
                 ))}
               </Select>
-              <Button kind="primary" size="md" onClick={publish} disabled={busy || !chosen}>
+              <Button staff kind="primary" size="md" onClick={publish} disabled={busy || !chosen}>
                 {busy ? "Publishing…" : "Publish drill notice"}
               </Button>
             </div>
@@ -175,7 +177,7 @@ function DrillSection({ v, now, refresh }: { v: RadarView; now: number; refresh:
             <div key={d.drillId} className="mt-3">
               <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-2">
                 <p className="basis-full text-[0.95rem]">
-                  <span className="text-ink-soft">Drill recall of</span> <b>{d.productName}</b>
+                  <span className="text-ink-soft">Drill recall of</span> <b>{sentenceCase(d.productName)}</b>
                 </p>
                 {/* The stopwatch: from the notice going up to the first refused order. */}
                 <p className="basis-full">
@@ -194,9 +196,9 @@ function DrillSection({ v, now, refresh }: { v: RadarView; now: number; refresh:
                   <ExternalLink aria-hidden size={15} />
                   Open the drill notice
                 </a>
-                <button type="button" className={buttonClass("secondary", "sm")} onClick={() => void end(d.drillId)}>
+                <StaffButton className={buttonClass("secondary", "sm")} onClick={() => void end(d.drillId)}>
                   End drill and lift its hold
-                </button>
+                </StaffButton>
               </p>
             </div>
           ))}
@@ -239,7 +241,7 @@ function HoldRow({ h, now, refresh }: { h: HoldCard; now: number; refresh: () =>
           <Target size={16} tone="safety" />
           {h.drill ? "Held for a drill" : "Held: no quote, no order"}
         </p>
-        <p className="display mt-1 text-[1.4rem] leading-tight">{h.productName}</p>
+        <p className="display mt-1 text-[1.4rem] leading-tight">{sentenceCase(h.productName)}</p>
         <p className="mt-0.5 text-[0.9rem]">{h.reason}</p>
         <p className="mt-1 text-[0.88rem] text-ink-soft">
           Held {when(h.placedAt, new Date(now))} by {h.placedBy === "radar" ? "the radar (confirmed identifier)" : h.placedBy.replace(/^operator:/, "")}. {h.refusals} call{h.refusals === 1 ? "" : "s"} refused
@@ -260,7 +262,7 @@ function HoldRow({ h, now, refresh }: { h: HoldCard; now: number; refresh: () =>
         )}
         <form onSubmit={lift} className="mt-3.5 flex flex-wrap gap-2.5">
           <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why lift it (stock checked: other batch…)" aria-label="Why lift the hold" className="field min-w-0 flex-1 basis-[14rem] !text-[0.92rem]" />
-          <Button type="submit" size="md" disabled={!reason.trim()}>
+          <Button staff type="submit" size="md" disabled={!reason.trim()}>
             Lift hold
           </Button>
         </form>
@@ -288,7 +290,7 @@ function ReviewRow({ m, refresh }: { m: RadarView["review"][number]; refresh: ()
         {m.drill ? "Drill, " : ""}
         {m.strength === "confirmed" ? "a confirmed identifier on an older notice" : "a possible match"}: a person decides
       </p>
-      <p className="display mt-1 text-[1.25rem] leading-tight">{m.productName}</p>
+      <p className="display mt-1 text-[1.25rem] leading-tight">{sentenceCase(m.productName)}</p>
       <p className="text-[0.88rem]">
         Notice: “{m.notice.title}” ({m.notice.publisher}, {fiDate(m.notice.publishedOn)}){m.noticeProduct ? `, product “${m.noticeProduct}”` : ""}.
       </p>
@@ -296,10 +298,10 @@ function ReviewRow({ m, refresh }: { m: RadarView["review"][number]; refresh: ()
       {m.reviewReason && <p className="text-[0.85rem] text-ink-soft">{m.reviewReason}</p>}
       <div className="mt-3.5 flex flex-wrap gap-2.5">
         <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (written to the ledger)" aria-label="Reason" className="field min-w-0 flex-1 basis-[14rem] !text-[0.92rem]" />
-        <Button kind="stop" size="md" disabled={!reason.trim()} onClick={() => void decide("confirm")}>
+        <Button staff kind="stop" size="md" disabled={!reason.trim()} onClick={() => void decide("confirm")}>
           Confirm and hold
         </Button>
-        <Button size="md" disabled={!reason.trim()} onClick={() => void decide("dismiss")}>
+        <Button staff size="md" disabled={!reason.trim()} onClick={() => void decide("dismiss")}>
           Dismiss
         </Button>
       </div>
@@ -358,9 +360,9 @@ function SourcesSection({ v, now, refresh }: { v: RadarView; now: number; refres
               )}
               {s.lastError && <p className="mt-1 text-[0.82rem]">{s.lastError}</p>}
               <p className="mt-1 text-[0.8rem] text-ink-soft">{s.about}</p>
-              <button type="button" disabled={busy === s.id} onClick={() => void check(s.id)} className={buttonClass("secondary", "sm", "mt-2.5 disabled:opacity-50")}>
+              <StaffButton disabled={busy === s.id} onClick={() => void check(s.id)} className={buttonClass("secondary", "sm", "mt-2.5 disabled:opacity-50")}>
                 {busy === s.id ? "Checking…" : "Check now"}
-              </button>
+              </StaffButton>
             </li>
           ))}
         </ul>
@@ -465,7 +467,7 @@ function NoticeRow({ n, now }: { n: NoticeCard; now: number }) {
         <ul className="mt-3 space-y-1.5">
           {n.matches.map((m) => (
             <li key={m.matchId} className="rounded-md bg-petrol-soft px-3 py-2 text-[0.9rem]">
-              <span className="font-semibold">{m.productName}</span>: {m.strength === "confirmed" ? "confirmed" : "possible"} ({m.status.replaceAll("_", " ")}). {fi(m.why)}
+              <span className="font-semibold">{sentenceCase(m.productName)}</span>: {m.strength === "confirmed" ? "confirmed" : "possible"} ({m.status.replaceAll("_", " ")}). {fi(m.why)}
               {m.reviewReason && m.status === "confirmed" ? <span className="block text-ink-soft">{m.reviewReason}</span> : null}
               {m.review ? <span className="block text-ink-soft">{m.review.decision === "confirm" ? "Confirmed" : "Dismissed"} by {m.review.by}: “{m.review.reason}”</span> : null}
             </li>

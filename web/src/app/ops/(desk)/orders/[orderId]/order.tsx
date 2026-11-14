@@ -6,10 +6,11 @@ import { ChevronDown } from "lucide-react";
 import type { OrderTimelineView } from "@/server/ops/orders-view";
 import type { TimelineStep } from "@/server/ops/order-timeline";
 import { Badge } from "../../../../_ui/kit";
-import { clockSeconds, day, timelineFact } from "../../../../_ui/plain";
+import { clockSeconds, dayEn as day, timelineFact } from "../../../../_ui/plain";
 import { lookupsTitle, shownSteps } from "../../../../_ui/timeline-steps";
 import { STATUS_WORD, decidedWords, fi, money, since, statusTone, whenSeconds } from "../../../_ui/format";
 import { Details, KV, LiveMark, LoadError, Loading, PageHead, Panel, useNow, useOps } from "../../../_ui/kit";
+import { SamplePill, isSample } from "../../../../_ui/sample";
 
 const link = "font-medium text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol";
 const ACTOR_TONE: Record<TimelineStep["actor"]["kind"], "agent" | "info" | "neutral" | "good"> = { agent: "agent", person: "info", system: "neutral", wholesaler: "good" };
@@ -26,6 +27,11 @@ export function OrderScreen({ orderId }: { orderId: string }) {
           All orders
         </Link>
       </p>
+      {isSample(live.data) && (
+        <p className="mb-1">
+          <SamplePill className="ml-0" />
+        </p>
+      )}
       <PageHead
         title={t ? t.what : "Order"}
         purpose={t ? `${t.orgName} · ${money(t.totalCents)}${t.deliveryDate ? ` · delivery ${day(t.deliveryDate)}` : ""} · placed by ${t.agentLabel}, ${fi(t.sourceText)}` : "Reading the order…"}

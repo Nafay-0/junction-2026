@@ -20,10 +20,12 @@ import { ThreadStore, type StoredThread } from "./store";
 import { subjectOf } from "./subject";
 import { runWidget } from "./widgets";
 import { speakFacts } from "./speak";
-import { codeLeaks, englishDays, insideOrTell } from "./refusal";
+import { codeLeaks, englishDays, insideOrTell, readable } from "./refusal";
+import { shortName } from "./watch";
 import { fmtFor, gateReasons } from "@/app/k/[kitchen]/thread-words";
 import { THREAD_WORDS } from "@/app/k/[kitchen]/thread-words.text";
 import { changeLines, groupNameL } from "@/app/k/[kitchen]/rules-change";
+import { signerL } from "@/app/_i18n/signer";
 import { fixTypos } from "./pipeline";
 import { hasToday, helsinkiToday, postToday, todayCardId } from "./home";
 import { ensureTelemetry } from "./telemetry";
@@ -31,6 +33,7 @@ import { failureOf, turnOutcome, type TurnFailure } from "./outcome";
 import type { AgentTurn, BuyerTurn, Card, GateCard, MemoryCard, MenuCard, OrderCard, RecordsCard, RulesCard, SubmitTurn, SubmitTurnReply, ThreadAction, ThreadDoor } from "./types";
 
 type RulesDiff = RulesCard["diff"];
+const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
 
 /**
  * One conversation per kitchen, one engine for every door. A door submits a turn (typed words, a transcript, a tap
@@ -455,6 +458,17 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
         // Words about the order emails ("email receipts to chef@…", "stop the emails", "which address?"): plain code,
         // never the model, never the reader (server/notify/thread.ts).
         const { mailWordsOf, answerMailWords } = await import("@/server/notify/thread");
+        // "Yes" to "Shall I email the receipt? I'd need an address.": the one question that moves it on.
+        const { MAIL_SAY_TEXT } = await import("@/server/notify/say.text");
+        const lastLine = [...thread.turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "");
+        const { yesOrNo } = await import("@/server/channels/speech");
+        if (lastLine?.role === "agent" && (lastLine.line ?? "").includes(MAIL_SAY_TEXT[body.lang ?? "en"].offer) && body.text!.trim().split(/\s+/).length <= 4 && yesOrNo(body.text!) === "yes" && !/@/.test(body.text!)) {
+          if (run.opening) first.done("email");
+          store.line(thread, run.turnId, { en: "Which address shall I send the receipts to?", fi: "Mihin osoitteeseen lähetän kuitit?", sv: "Vilken adress ska jag skicka kvittona till?" }[body.lang ?? "en"]);
+          store.mark(thread, run.turnId, "line", Date.now() - run.t0);
+          await finishTurn(run);
+          return;
+        }
         const mail = mailWordsOf(body.text!);
         if (mail) {
           const r = await answerMailWords(run.rt, run.k, mail, { person: run.person, via: "thread", lang: body.lang ?? "en" });
@@ -808,14 +822,16 @@ const thousands = (n: number) => String(n).replace(".", ",").replace(/\B(?=(\d{3
 function waitingSentence(order: OrderCard, gate: GateCard, lang: "en" | "fi" | "sv", cards: Card[] = []): string {
   const eur = (c: number) => `**${(c / 100).toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, " ")} €**`;
   const first = order.lines[0];
-  const what = first ? `${thousands(first.quantity)} × ${first.name.replace(/[®™]/g, "").split(/\s+/).slice(0, 4).join(" ")}${order.lines.length > 1 ? (lang === "fi" ? ` ja ${order.lines.length - 1} muuta` : lang === "sv" ? ` och ${order.lines.length - 1} till` : ` and ${order.lines.length - 1} more`) : ""}` : "";
+  // The product as a chef says it; a fractional lot as its amount ("2,1 kg of the Peltolan churned butter").
+  const shortOf = (n: string) => readable(shortName(n.replace(/[®™]/g, "")), lang);
+  const what = first ? `${Number.isInteger(first.quantity) ? `${thousands(first.quantity)} × ${shortOf(first.name)}` : `${thousands(Math.round(first.quantity * (first.packSize ?? 1) * 100) / 100)} ${first.unit === "L" ? "l" : (first.unit ?? "")} ${{ en: "of the", fi: "", sv: "av" }[lang]} ${shortOf(first.name)}`.replace(/\s+/g, " ")}${order.lines.length > 1 ? (lang === "fi" ? ` ja ${order.lines.length - 1} muuta` : lang === "sv" ? ` och ${order.lines.length - 1} till` : ` and ${order.lines.length - 1} more`) : ""}` : "";
   const over = gate.rules?.find((r) => r.rule === "per_order_limit" && r.outcome !== "pass");
   const limit = over?.details?.limitCents;
   // A signer named by role on the test kitchens ("Kitchen manager") is said in the buyer's language.
   const ROLES: Record<string, Record<"fi" | "sv", string>> = { "kitchen manager": { fi: "keittiöpäällikkö", sv: "köksansvarig" }, "head chef": { fi: "keittiömestari", sv: "kökschef" }, owner: { fi: "omistaja", sv: "ägare" }, "food service manager": { fi: "ruokapalvelupäällikkö", sv: "måltidschef" } };
   const raw = gate.approver?.name ?? "";
   const who = raw ? (lang === "en" ? raw : (ROLES[raw.toLowerCase()]?.[lang] ?? raw)) : lang === "fi" ? "vastuuhenkilö" : lang === "sv" ? "en ansvarig" : "a person";
-  const whoEn = /^[A-Z][a-z]+ [a-z]/.test(who) ? `the ${who.toLowerCase()}` : who;
+  const whoEn = /^[A-Z][a-z]+ [a-z]/.test(who) || ROLES[who.toLowerCase()] ? `the ${who.toLowerCase()}` : who;
   if (typeof limit === "number") {
     if (lang === "fi") return `${what} hintaan ${eur(order.totalCents)} ylittää ${eur(limit)}, jonka voin käyttää yksin, joten se tarvitsee hyväksynnän: ${who}.`;
     if (lang === "sv") return `${what} för ${eur(order.totalCents)} är över de ${eur(limit)} jag får handla för själv, så det behöver godkännas av ${who}.`;
@@ -957,7 +973,10 @@ async function tellRequestDifferences(run: TurnRun): Promise<void> {
       const day = u.deliverOn ?? u.deliverBy;
       const one = o.lines.length === 1 ? o.lines[0] : undefined;
       const pack = one?.packSize && one.unit && one.packSize !== 1 ? { count: one.quantity, size: one.packSize, unit: one.unit } : undefined;
-      const diffs = optionDifferences({ key: u.requestId!, name: u.item, ...(u.amount ? { amount: u.amount } : {}), ...(day ? { day } : {}), exact: !!u.deliverOn }, { delivered: o.delivered, deliveryDate: sheet?.type === "sheet" ? sheet.deliveryDate : o.deliveryDate, ...(sub ? { substituteFor: sub.substituteFor, title: o.title } : {}), ...(pack ? { pack } : {}) });
+      // A stand-in by its short name, and not again when the reply already names it.
+      const subName = sub ? readable(shortName(o.title.replace(/[®™]/g, "").replace(/^(Valio )?Hyvä suomalainen /i, "$1").replace(/\s*\(.*\)$/, "")), lang) : "";
+      const named = !!subName && (fold(line).includes(fold(subName.split(/\s+/).slice(0, 2).join(" "))) || /\b(instead|in place of|tilalla|tilalle|i stället)\b/i.test(line));
+      const diffs = optionDifferences({ key: u.requestId!, name: u.item, ...(u.amount ? { amount: u.amount } : {}), ...(day ? { day } : {}), exact: !!u.deliverOn }, { delivered: o.delivered, deliveryDate: sheet?.type === "sheet" ? sheet.deliveryDate : o.deliveryDate, ...(sub && !named ? { substituteFor: sub.substituteFor, title: subName } : {}), ...(pack ? { pack } : {}) });
       fresh.push(...diffs.filter((d) => !told[keyOf(d)]));
     } else if (understood.length > 1 && notice?.type === "notice" && (notice.kind === "refused" || notice.kind === "not_found" || notice.kind === "unavailable")) {
       // An item of a several-item order that will not be on it: its own refusal (the rule, the reason, the next step).
@@ -1013,7 +1032,7 @@ function sayRulesWaiting(run: TurnRun): void {
   const c = run.rulesWaiting;
   if (c?.type !== "rules" || !c.proposal?.approval) return;
   const lang = run.lang ?? "en";
-  const who = c.proposal.approval.approver.name;
+  const who = signerL(c.proposal.approval.approver.name, lang);
   const what = rulesWhat(c.diff, lang);
   run.store.line(run.thread, run.turnId, {
     en: `That widens what I may do${what ? ` (${what})` : ""}, so it needs ${who}'s OK with their passkey: I've sent it to their phone. Nothing changes until they sign.`,
@@ -1125,7 +1144,7 @@ async function askOwnerToAdd(run: TurnRun, lang: "en" | "fi" | "sv"): Promise<st
   record(run, "rules_drafted", `A change to the kitchen's rules was drafted at the buyer's word, for a dish it could not buy completely: add ${ids.join(", ")}.`, { proposalId: card.proposal.proposalId });
   if (!card.proposal.canSign) return { en: `I've drafted it: ${list(names)} added to what I may buy. Only the kitchen's own account can confirm it, under Your rules.`, fi: `Laadin muutoksen: ${list(names)} lisätään ostettaviin. Sen voi vahvistaa vain keittiön oma tili kohdassa Sääntösi.`, sv: `Jag har skrivit ändringen: ${list(names)} läggs till. Bara kökets eget konto kan bekräfta den, under Dina regler.` }[lang];
   const signer = card.current.approvers[0]?.name ?? "";
-  return { en: `I've drafted it: ${list(names)} added to what I may buy. That needs ${signer || "the signer"}'s OK with their passkey: shall I send it to them? Then I'll plan the dish again.`, fi: `Laadin muutoksen: ${list(names)} lisätään ostettaviin. Se tarvitsee hyväksynnän pääsyavaimella (${signer || "allekirjoittaja"}): lähetänkö sen? Sitten suunnittelen ruuan uudelleen.`, sv: `Jag har skrivit ändringen: ${list(names)} läggs till. Den behöver godkännas med nyckel (${signer || "den som signerar"}): ska jag skicka den? Sedan planerar jag rätten igen.` }[lang];
+  return { en: `I've drafted it: ${list(names)} added to what I may buy. That needs ${signer ? signerL(signer, "en") : "the signer"}'s OK with their passkey: shall I send it to them? Then I'll plan the dish again.`, fi: `Laadin muutoksen: ${list(names)} lisätään ostettaviin. Se tarvitsee hyväksynnän pääsyavaimella (${signer ? signerL(signer, "fi") : "allekirjoittaja"}): lähetänkö sen? Sitten suunnittelen ruuan uudelleen.`, sv: `Jag har skrivit ändringen: ${list(names)} läggs till. Den behöver godkännas med nyckel (${signer ? signerL(signer, "sv") : "den som signerar"}): ska jag skicka den? Sedan planerar jag rätten igen.` }[lang];
 }
 
 /** A turn that failed or timed out, in the ledger (and so the telemetry): a stable code and the duration, no words. */
@@ -1253,7 +1272,7 @@ export async function rulesSignOff(kitchen: Kitchen | string, proposalId: string
   const h = await rulesHolderRun(kitchen, proposalId);
   const card = await withTurn({ threadId: h.thread.threadId, turnId: h.run.turnId, door: "typed", kitchen: h.r.k.info.slug, orgId: h.r.k.info.orgId, agentId: h.r.session.agentId }, async () => {
     const card = await signRules(h.run, proposalId, { signOff: v.signOff });
-    const name = v.signOff.method === "passkey" ? v.signOff.approverName : a.approval.approver.name;
+    const name = cap(signerL(v.signOff.method === "passkey" ? v.signOff.approverName : a.approval.approver.name, h.lang));
     const { changeClauses } = await import("@/app/k/[kitchen]/rules-change");
     const what = changeClauses(card.diff, h.lang);
     const next = waitingOn(h.thread, proposalId);
@@ -1281,7 +1300,8 @@ export async function rulesDecline(kitchen: Kitchen | string, proposalId: string
     if (next.words) t.afterRulesUsed = [...(t.afterRulesUsed ?? []), proposalId];
     const lang = h.lang;
     const left = next.words ? { en: next.what ? `, so I haven't ordered the ${next.what}` : ", so nothing that waited on it is ordered", fi: next.what ? `, joten en tilannut: ${next.what}` : ", joten mitään sitä odottanutta ei tilattu", sv: next.what ? `, så jag har inte beställt ${next.what}` : ", så inget som väntade på den är beställt" }[lang] : "";
-    sayBeneath(h.run, { en: `${decided.by} declined the change at ${clockHki(decided.at)}: your rules stay as they were${left}.`, fi: `${decided.by} hylkäsi muutoksen klo ${clockHki(decided.at)}: säännöt pysyvät ennallaan${left}.`, sv: `${decided.by} avböjde ändringen kl. ${clockHki(decided.at)}: era regler är som förut${left}.` }[lang]);
+    const by = cap(signerL(decided.by, lang));
+    sayBeneath(h.run, { en: `${by} declined the change at ${clockHki(decided.at)}: your rules stay as they were${left}.`, fi: `${by} hylkäsi muutoksen klo ${clockHki(decided.at)}: säännöt pysyvät ennallaan${left}.`, sv: `${by} avböjde ändringen kl. ${clockHki(decided.at)}: era regler är som förut${left}.` }[lang]);
     h.e.store.save(h.thread);
     return card;
   });
@@ -1637,6 +1657,10 @@ async function changeMenuInWords(run: TurnRun, words: string, lang: "en" | "fi" 
   if (!c.edits.length) return undefined;
   // "New total 19,00 € (was 19,00 €)" says nothing: the old total only when it changed.
   if (c.beforeCents === c.totalCents) c.say = c.say.replace(/\s*\((?:was|oli|var) [^)]*\)/, "");
+  if (!c.changed.length) {
+    const { MENU_SAY_TEXT } = await import("@/server/agent/menu/say.text");
+    c.say = c.say.replace(MENU_SAY_TEXT[lang].nothingElse, "").replace(/\s+/g, " ").trim();
+  }
   const { refreshMenu } = await import("./menu");
   let card = await refreshMenu(run, subj.planId).catch(() => undefined);
   // A line the kitchen's allergen rule still stops (the chocolate with milk in it): one search for the same ingredient
@@ -1719,7 +1743,7 @@ async function draftRulesChange(run: TurnRun, words: string, lang: "en" | "fi" |
   if (!card.proposal.canSign) return { en: `I've drafted it: ${g} added to what I may buy. Only the kitchen's own account can confirm it, under Your rules.`, fi: `Laadin muutoksen: ${g} lisätään ostettaviin. Sen voi vahvistaa vain keittiön oma tili kohdassa Sääntösi.`, sv: `Jag har skrivit ändringen: ${g} läggs till. Bara kökets eget konto kan bekräfta den, under Dina regler.` }[lang];
   // Adding a product group widens what the agent may buy: it goes to the named approver's passkey, never a typed yes.
   const signer = card.current.approvers[0]?.name ?? "";
-  return { en: `I've drafted it: ${g} added to what I may buy. That needs ${signer || "the signer"}'s OK with their passkey: shall I send it to them? Then I'll order the ${notice.addGroup.what}.`, fi: `Laadin muutoksen: ${g} lisätään ostettaviin. Se tarvitsee hyväksynnän pääsyavaimella (${signer || "allekirjoittaja"}): lähetänkö sen? Sitten tilaan: ${notice.addGroup.what}.`, sv: `Jag har skrivit ändringen: ${g} läggs till. Den behöver godkännas med nyckel (${signer || "den som signerar"}): ska jag skicka den? Sedan beställer jag ${notice.addGroup.what}.` }[lang];
+  return { en: `I've drafted it: ${g} added to what I may buy. That needs ${signer ? signerL(signer, "en") : "the signer"}'s OK with their passkey: shall I send it to them? Then I'll order the ${notice.addGroup.what}.`, fi: `Laadin muutoksen: ${g} lisätään ostettaviin. Se tarvitsee hyväksynnän pääsyavaimella (${signer ? signerL(signer, "fi") : "allekirjoittaja"}): lähetänkö sen? Sitten tilaan: ${notice.addGroup.what}.`, sv: `Jag har skrivit ändringen: ${g} läggs till. Den behöver godkännas med nyckel (${signer ? signerL(signer, "sv") : "den som signerar"}): ska jag skicka den? Sedan beställer jag ${notice.addGroup.what}.` }[lang];
 }
 
 /** The buyer's short answer to the offer the last agent turn (or the opening) said: done by plain code, or undefined. */

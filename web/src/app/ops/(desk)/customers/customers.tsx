@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { AgentRow } from "@/server/ops/views";
-import { fi, when } from "../../_ui/format";
+import { categoriesInWords, fi, when } from "../../_ui/format";
 import { Button, Empty, LoadError, Loading, PageHead, Section, useOps } from "../../_ui/kit";
+import { useViewer } from "../../_ui/role";
 import { Table } from "../../_ui/parts";
 import { Check, Eye, Search, Sparkles } from "lucide-react";
 import { Avatar, Tag, buttonClass } from "../../../_ui/kit";
 import { groupOf, proposeCorrection, readMemory, type MemoryItem, type MemoryState } from "../../_ui/memory";
+import { CUSTOMERS_TEXT } from "./customers.text";
 
 const SOURCE: Record<string, string> = { stated: "stated by", confirmed: "confirmed by", learned: "learned from orders" };
 
@@ -28,15 +30,15 @@ export function CustomersScreen({ orgId }: { orgId?: string }) {
   return (
     <>
       <PageHead
-        title="Customers"
-        purpose="What each kitchen shares with us, and where we learned it."
+        title={CUSTOMERS_TEXT.en.title}
+        purpose={CUSTOMERS_TEXT.en.purpose}
         about="What do we know about this kitchen, and where did we learn it? Only what the kitchen shares, each item with who stated it or which orders taught it, and when it was last used. Corrections go to the kitchen to confirm."
       />
       <LoadError message={agents.error} />
       {!agents.data ? (
         <Loading label="Reading the kitchens…" />
       ) : orgs.length === 0 ? (
-        <Empty title="No kitchen has come to the gate yet">A kitchen appears here once its agent presents a signed mandate at the door.</Empty>
+        <Empty title={CUSTOMERS_TEXT.en.emptyTitle}>{CUSTOMERS_TEXT.en.empty}</Empty>
       ) : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[17rem_minmax(0,1fr)]">
           <nav aria-label="Kitchens" className="lg:sticky lg:top-[4.5rem] lg:self-start">
@@ -73,6 +75,7 @@ export function CustomersScreen({ orgId }: { orgId?: string }) {
 const KIND_WORD: Record<string, string> = { visitor: "Visitor kitchen", demo: "Demo kitchen", account: "Account kitchen", outside: "Outside organisation" };
 
 function Kitchen({ orgId, name, kind, agents }: { orgId: string; name: string; kind: string; agents: AgentRow[] }) {
+  const viewer = useViewer();
   const [m, setM] = useState<MemoryState>();
   useEffect(() => {
     let live = true;
@@ -118,7 +121,7 @@ function Kitchen({ orgId, name, kind, agents }: { orgId: string; name: string; k
               {agents[0].allows.map((x, i) => (
                 <li key={i} className="flex gap-2">
                   <Check aria-hidden size={14} strokeWidth={2.6} className="mt-[0.25em] shrink-0 text-good" />
-                  {fi(x.line)}
+                  {fi(categoriesInWords(x.line))}
                 </li>
               ))}
             </ul>
@@ -140,7 +143,11 @@ function Kitchen({ orgId, name, kind, agents }: { orgId: string; name: string; k
           </Empty>
         </div>
       ) : m.state === "error" ? (
-        <LoadError message={m.message} />
+        viewer ? (
+          <p className="mt-4 rounded-lg bg-surface px-4 py-3 text-[0.92rem]">What {name} shares with the wholesaler is shown to staff only: sign in with the passcode to read it.</p>
+        ) : (
+          <LoadError message={m.message} />
+        )
       ) : (
         <>
           <Section title="What we know, and where we learned it" aside={items.length ? `${stated} stated by the kitchen, ${learned} learned from its orders` : undefined}>
@@ -257,7 +264,7 @@ function Item({ orgId, it }: { orgId: string; it: MemoryItem }) {
             <form onSubmit={send} className="grid gap-2.5 md:grid-cols-[1fr_1fr_auto]">
               <input required value={text} onChange={(e) => setText(e.target.value)} placeholder="What it should say" aria-label="Proposed text" className="field !text-[0.92rem]" />
               <input required value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why (the kitchen sees this)" aria-label="Reason" className="field !text-[0.92rem]" />
-              <Button type="submit" kind="primary" size="md">
+              <Button staff type="submit" kind="primary" size="md">
                 Send to the kitchen
               </Button>
               {msg && <p className={`text-[0.88rem] md:col-span-3 ${msg.ok ? "" : "font-semibold"}`}>{msg.message}</p>}

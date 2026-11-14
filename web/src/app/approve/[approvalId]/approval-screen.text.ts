@@ -58,7 +58,7 @@ export const APPROVAL_TEXT = defineText({
     decline: (reason: string) => `Decline${reason ? `: ${reason}` : ""}`,
     addReason: "Add reason",
     // the outcome
-    withdrawn: "Withdrawn by the kitchen",
+    withdrawn: "Taken back by the kitchen",
     expired: "Expired unsigned",
     back: "Back to my screen",
     how: {

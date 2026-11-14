@@ -1,4 +1,4 @@
-import { opsRoute } from "@/server/ops/handler";
+import { opsRead, opsRoute } from "@/server/ops/handler";
 import { platformRoute } from "@/server/aiven/showcase/routes";
 import { lastProbe, runProbe } from "@/server/search/probe-run";
 
@@ -8,7 +8,7 @@ import { lastProbe, runProbe } from "@/server/search/probe-run";
  * embeddings only, no judge). Operations staff only; one run a minute.
  */
 export async function GET(req: Request) {
-  return opsRoute(req, async () => Response.json({ last: lastProbe() ?? null }, { headers: { "cache-control": "no-store" } }));
+  return opsRead(req, async () => Response.json({ last: lastProbe() ?? null }, { headers: { "cache-control": "no-store" } }));
 }
 
 export async function POST(req: Request) {

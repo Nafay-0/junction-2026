@@ -96,6 +96,18 @@ describe("edge rate limits", () => {
     expect([...run(60, own)]).toEqual([]);
   });
 
+  it("hold a room of sixty viewers each with an operations page open for a minute, without using the page budget", () => {
+    // Measured on a production build: /ops/agents, the busiest desk page, polls two reads and the session badge.
+    const VIEWER_MINUTE: [string, string, number][] = [["GET", "/ops/agents", 1], ["GET", "/ops-api/agents", 12], ["GET", "/ops-api/agents/watch", 11], ["GET", "/ops-api/session", 12], ["GET", "/api/v1/events", 2]];
+    expect([...run(60, VIEWER_MINUTE)]).toEqual([]);
+    const page = rulesFor("GET", "/ops-api/overview").map(([r]) => r.name);
+    expect(page).toContain("ops-view");
+    expect(page).not.toContain("page");
+    // Staff (the session cookie) are not counted as viewers; one viewer looping is stopped.
+    expect(rulesFor("GET", "/ops-api/overview", "dock_ops=abc").map(([r]) => r.name)).not.toContain("ops-view");
+    expect(run(1, [["GET", "/ops-api/overview", 3000]]).get("ops-view")).toBe(600);
+  });
+
   it("keep one phone, one kitchen and one address bounded", () => {
     // one approver phone asking its agent again and again
     expect(run(1, [["POST", "/api/v1/approver/demo-order", 20]]).get("demo-order-session")).toBe(14);

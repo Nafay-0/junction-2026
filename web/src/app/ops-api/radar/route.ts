@@ -1,6 +1,6 @@
 import { DockError } from "@/core/orders";
 import { readJson } from "@/server/http";
-import { opsRoute } from "@/server/ops/handler";
+import { opsRead, opsRoute } from "@/server/ops/handler";
 import { radar } from "@/server/radar/registry";
 import { sourceOf, type SourceId } from "@/server/radar/sources";
 import { radarView } from "@/server/radar/views";
@@ -18,7 +18,7 @@ import { radarView } from "@/server/radar/views";
  * Everything a person decides is written to the ledger with their name and reason.
  */
 export async function GET(req: Request) {
-  return opsRoute(req, async (rt) => Response.json(await radarView(rt)));
+  return opsRead(req, async (rt) => Response.json(await radarView(rt)));
 }
 
 export async function POST(req: Request) {

@@ -26,6 +26,7 @@ export const THREAD_LINE_TEXT = defineText({
     placeholder: "What does the kitchen need?",
     greeting: (part: "morning" | "day" | "evening", name: string) => `${part === "morning" ? "Good morning" : part === "day" ? "Hello" : "Good evening"}${name ? `, ${name}` : ""}.`,
     examples: ["Same as last week", "Plan lunch for 10 tomorrow", "What did we spend this week?"],
+    examplesNew: ["40 litres of lactose-free milk for Friday", "Plan lunch for 10 tomorrow", "What can I try?"],
     menu: "Menu",
     sections: { catalogue: "Catalogue", orders: "Orders", rules: "Your rules", language: "Language" },
     // the slab
@@ -124,6 +125,7 @@ export const THREAD_LINE_TEXT = defineText({
     placeholder: "Mitä keittiö tarvitsee?",
     greeting: (part: "morning" | "day" | "evening", name: string) => `${part === "morning" ? "Huomenta" : part === "day" ? "Hei" : "Hyvää iltaa"}${name ? `, ${name}` : ""}.`,
     examples: ["Sama kuin viime viikolla", "Lounas 10 hengelle huomiseksi", "Paljonko käytimme tällä viikolla?"],
+    examplesNew: ["40 litraa laktoositonta maitoa perjantaiksi", "Lounas 10 hengelle huomiseksi", "Mitä voin kokeilla?"],
     menu: "Valikko",
     sections: { catalogue: "Tuotteet", orders: "Tilaukset", rules: "Sääntösi", language: "Kieli" },
     needsOk: "Tarvitsee hyväksyntäsi",
@@ -218,6 +220,7 @@ export const THREAD_LINE_TEXT = defineText({
     placeholder: "Vad behöver köket?",
     greeting: (part: "morning" | "day" | "evening", name: string) => `${part === "morning" ? "God morgon" : part === "day" ? "Hej" : "God kväll"}${name ? `, ${name}` : ""}.`,
     examples: ["Samma som förra veckan", "Lunch för 10 i morgon", "Vad har vi handlat för i veckan?"],
+    examplesNew: ["40 liter laktosfri mjölk till fredag", "Lunch för 10 i morgon", "Vad kan jag prova?"],
     menu: "Meny",
     sections: { catalogue: "Produkter", orders: "Beställningar", rules: "Dina regler", language: "Språk" },
     needsOk: "Behöver ditt godkännande",

@@ -13,9 +13,10 @@ import { Target } from "../../_ui/target";
 import { Wordmark } from "../../_ui/wordmark";
 import { num } from "./format";
 import { useNow } from "./kit";
+import { setOpsRole } from "./role";
 
 type Models = { calls: number; usd: number; maxCalls: number; maxUsd: number; enabled: boolean };
-type Session = { signedIn: boolean; name?: string; mode: "demo" | "passcode"; chain?: { ok: boolean; length: number }; waiting?: number; suspended?: number; models?: Models };
+type Session = { signedIn: boolean; viewer?: boolean; name?: string; mode: "demo" | "passcode"; chain?: { ok: boolean; length: number }; waiting?: number; suspended?: number; models?: Models };
 const modelsLow = (m: Models) => !m.enabled || m.maxUsd - m.usd < m.maxUsd * 0.1 || m.maxCalls - m.calls < m.maxCalls * 0.1;
 
 type NavItem = { href: string; label: string; what: string; key: string; /** In the phone's tab bar. */ short?: string };
@@ -106,7 +107,8 @@ export function Rail() {
     async () => {
       const r = await api<Session>("GET", "/ops-api/session");
       if (!r.ok) throw new Error(r.error.message);
-      if (!r.data.signedIn) router.replace(`/ops/enter?next=${encodeURIComponent(location.pathname)}`);
+      // Without the passcode a visitor is a viewer: every page reads, every action answers "staff only".
+      setOpsRole(r.data.signedIn ? "staff" : "viewer");
       return r.data;
     },
     // Polling only: the page beside it holds the one event stream, so several open tabs stay within the
@@ -157,14 +159,14 @@ export function Rail() {
   const status = (compact: boolean) => (
     <>
       {s?.chain && (
-        <span title="Every ledger entry hashes the one before it" className={`inline-flex min-h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[0.82rem] font-medium ${s.chain.ok ? "bg-good-soft text-good" : "bg-safety-ink text-safety"}`}>
+        <span title="Every ledger entry hashes the one before it" className={`inline-flex min-h-8 max-lg:min-h-11 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[0.82rem] font-medium ${s.chain.ok ? "bg-good-soft text-good" : "bg-safety-ink text-safety"}`}>
           {s.chain.ok ? <ShieldCheck aria-hidden size={15} /> : <Target size={14} tone="safety" />}
           {s.chain.ok ? (compact ? `${num(s.chain.length)}` : `Ledger intact, ${num(s.chain.length)} entries`) : "Ledger chain broken"}
           {compact && s.chain.ok && <span className="sr-only"> ledger entries, chain intact</span>}
         </span>
       )}
       {waiting > 0 ? (
-        <Link href="/ops/control#waiting" className="inline-flex min-h-8 items-center gap-1.5 whitespace-nowrap rounded-full bg-safety px-3 text-[0.82rem] font-semibold text-safety-ink transition-[filter] hover:brightness-95">
+        <Link href="/ops/control#waiting" className="inline-flex min-h-8 max-lg:min-h-11 items-center gap-1.5 whitespace-nowrap rounded-full bg-safety px-3 text-[0.82rem] font-semibold text-safety-ink transition-[filter] hover:brightness-95">
           <Target size={14} tone="safety" />
           {compact ? waiting : `${waiting} sign-off${waiting === 1 ? "" : "s"} waiting`}
           {compact && <span className="sr-only"> sign-offs waiting</span>}
@@ -175,14 +177,14 @@ export function Rail() {
       {s?.models && (
         <span
           title="The day's model cap on this server (resets at midnight UTC). When it is used up, the agent's reading pauses and the thread offers ordering without a model."
-          className={`inline-flex min-h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[0.82rem] font-medium ${modelsLow(s.models) ? "bg-safety-soft text-safety-ink ring-1 ring-inset ring-safety/60" : "bg-surface text-ink-soft"}`}
+          className={`inline-flex min-h-8 max-lg:min-h-11 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[0.82rem] font-medium ${modelsLow(s.models) ? "bg-safety-soft text-safety-ink ring-1 ring-inset ring-safety/60" : "bg-surface text-ink-soft"}`}
         >
           {compact ? `$${Math.max(0, s.models.maxUsd - s.models.usd).toFixed(0)}` : `Models: $${Math.max(0, s.models.maxUsd - s.models.usd).toFixed(2)} of $${s.models.maxUsd} left, ${num(Math.max(0, s.models.maxCalls - s.models.calls))} calls`}
           {compact && <span className="sr-only"> of the day&apos;s model cap left</span>}
         </span>
       )}
       {suspended > 0 && (
-        <Link href="/ops/control" className="inline-flex min-h-8 items-center gap-1.5 whitespace-nowrap rounded-full bg-safety-soft px-3 text-[0.82rem] font-semibold text-safety-ink ring-1 ring-inset ring-safety/60">
+        <Link href="/ops/control" className="inline-flex min-h-8 max-lg:min-h-11 items-center gap-1.5 whitespace-nowrap rounded-full bg-safety-soft px-3 text-[0.82rem] font-semibold text-safety-ink ring-1 ring-inset ring-safety/60">
           <CirclePause aria-hidden size={15} />
           {suspended}
           {!compact && " suspended"}
@@ -246,6 +248,16 @@ export function Rail() {
           {now ? clockSeconds(new Date(now)) : "–"}
         </span>
         <span className="mx-1 h-5 w-px bg-line-strong" aria-hidden />
+        {s && !s.signedIn ? (
+          <span className="flex min-w-0 items-center gap-3 text-[0.86rem]">
+            <span className="truncate text-ink-soft">
+              You are looking, not operating.<span className="hidden 2xl:inline"> Staff sign in to act.</span>
+            </span>
+            <Link href={`/ops/enter?next=${encodeURIComponent(path)}`} className="inline-flex min-h-8 shrink-0 items-center whitespace-nowrap rounded-full bg-paper px-3 font-semibold text-petrol ring-1 ring-inset ring-line hover:ring-petrol/40">
+              Staff sign-in
+            </Link>
+          </span>
+        ) : (
         <span className="flex items-center gap-2 text-[0.86rem]">
           <Avatar name={s?.name ?? "Operations"} size={30} />
           <span className="hidden font-medium xl:inline">{s?.name ?? "…"}</span>
@@ -253,15 +265,24 @@ export function Rail() {
             <LogOut aria-hidden size={17} />
           </button>
         </span>
+        )}
       </div>
 
       {/* ----- a phone: a top bar with the status, and the sections under the thumb ----- */}
       <header className="sticky top-0 z-20 flex items-center gap-2 border-b border-line bg-paper/90 px-4 py-2.5 backdrop-blur-md lg:hidden">
-        <Link href="/ops" className="mr-auto flex min-w-0 items-center" aria-label={`${PRODUCT_NAME}, wholesaler operations`}>
+        <Link href="/ops" className="mr-auto flex min-h-11 min-w-0 items-center" aria-label={`${PRODUCT_NAME}, wholesaler operations`}>
           <Wordmark size={24} />
         </Link>
         {status(true)}
       </header>
+      {s && !s.signedIn && (
+        <p className="flex items-center justify-between gap-3 border-b border-line bg-surface px-4 py-1.5 text-[0.82rem] text-ink-soft lg:hidden">
+          <span>You are looking, not operating. Staff sign in to act.</span>
+          <Link href={`/ops/enter?next=${encodeURIComponent(path)}`} className="shrink-0 font-semibold text-petrol underline decoration-petrol/30 underline-offset-4">
+            Staff sign-in
+          </Link>
+        </p>
+      )}
       <nav aria-label="Operations" className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-paper/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden">
         <div className="mx-auto grid max-w-md grid-cols-4 px-2">
           {NAV.filter((n) => PRIMARY.includes(n.href)).map((n) => {
@@ -299,7 +320,7 @@ export function Rail() {
             Signed in as <span className="font-semibold text-ink">{s?.name ?? "…"}</span>
             {s?.mode === "demo" && ", demo entry"}
           </span>
-          <button type="button" onClick={leave} className="inline-flex min-h-10 items-center gap-2 rounded-full border border-line-strong px-4 font-semibold">
+          <button type="button" onClick={leave} className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line-strong px-4 font-semibold">
             <LogOut aria-hidden size={16} />
             Leave
           </button>

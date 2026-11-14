@@ -16,9 +16,12 @@ import { clock } from "../../_ui/plain";
 import { Target } from "../../_ui/target";
 import { changeBefore, changeLines, signedRows } from "../../k/[kitchen]/rules-change";
 import { RULES_CHANGE_TEXT } from "./rules-change-screen.text";
+import { isRole, signerL } from "../../_i18n/signer";
 
 const OPTIONS_FRESH_MS = 4 * 60_000;
 const POLL_MS = 4000;
+
+const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
 
 /** "21.04" today, "Sun 21.04" on another day, in the reader's language and Helsinki time. */
 function when(iso: string, lang: Lang): string {
@@ -159,7 +162,7 @@ export function RulesChangeScreen({ approvalId }: { approvalId: string }) {
   const rows = signedRows(view.changes);
   return (
     <div className="flex flex-1 flex-col">
-      <GateHead title={tx.title} sub={tx.sub(view.kitchenName, view.approverName)}>
+      <GateHead title={tx.title} sub={tx.sub(view.kitchenName, isRole(view.approverName) ? "" : view.approverName)}>
         <ul className="mt-5 space-y-2.5" aria-label={tx.whatChanges}>
           {lines.map((l, i) => (
             <li key={l} className="display text-[1.45rem] leading-snug text-paper [overflow-wrap:break-word]">
@@ -239,7 +242,7 @@ function Decided({ view }: { view: RulesChangeView }) {
   const signed = view.state === "signed";
   const declined = view.state === "declined";
   const title = signed ? tx.signed : declined ? tx.declined : view.state === "expired" ? tx.expired : tx.closed;
-  const body = signed && o ? tx.signedBody(o.by, when(o.at, lang)) : declined && o ? tx.declinedBody(o.by, when(o.at, lang)) : view.state === "expired" ? tx.expiredBody : tx.closedBody;
+  const body = signed && o ? tx.signedBody(cap(signerL(o.by, lang)), when(o.at, lang)) : declined && o ? tx.declinedBody(cap(signerL(o.by, lang)), when(o.at, lang)) : view.state === "expired" ? tx.expiredBody : tx.closedBody;
   return (
     <div className="flex flex-1 flex-col" role="status" aria-live="polite">
       <IconDisc tone={signed ? "good" : "muted"} size={60}>

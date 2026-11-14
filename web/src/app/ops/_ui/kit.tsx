@@ -1,5 +1,6 @@
 "use client";
 
+import { STAFF_ONLY, useViewer } from "./role";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { api } from "../../_client/api";
@@ -7,7 +8,7 @@ import { useLive } from "../../_client/use-live";
 import { Check, ChevronRight } from "lucide-react";
 import { buttonClass } from "../../_ui/kit";
 import { Target } from "../../_ui/target";
-import { VIA, type Via } from "./format";
+import { VIA, envOut, type Via } from "./format";
 
 /**
  * The operations portal's building blocks, in the shared system's language (web/docs/DESIGN.md): white cards with
@@ -56,7 +57,7 @@ export function PageHead({ title, purpose, about, right }: { title: string; purp
         <p className="mt-2 text-[1rem] leading-relaxed text-ink-soft">{purpose}</p>
         {about && (
           <details className="group mt-1 text-[0.92rem]">
-            <summary className="inline-flex min-h-9 cursor-pointer select-none list-none items-center gap-1 rounded-full pr-2 font-medium text-petrol hover:underline [&::-webkit-details-marker]:hidden">
+            <summary className="inline-flex min-h-9 max-sm:min-h-11 cursor-pointer select-none list-none items-center gap-1 rounded-full pr-2 font-medium text-petrol hover:underline [&::-webkit-details-marker]:hidden">
               <ChevronRight aria-hidden size={15} className="transition-transform duration-150 group-open:rotate-90 motion-reduce:transition-none" />
               How this page works
             </summary>
@@ -161,7 +162,7 @@ export function Licence({ licence }: { licence: { level: string; name: string; r
 export function Details({ summary = "Details", children, className = "", dark = false }: { summary?: string; children: ReactNode; className?: string; dark?: boolean }) {
   return (
     <details className={`group text-[0.82rem] ${className}`}>
-      <summary className={`inline-flex min-h-8 cursor-pointer select-none list-none items-center gap-1 rounded-full pr-2 [&::-webkit-details-marker]:hidden ${dark ? "text-paper/70 hover:text-paper" : "text-ink-soft hover:text-ink"}`}>
+      <summary className={`inline-flex min-h-8 max-sm:min-h-11 cursor-pointer select-none list-none items-center gap-1 rounded-full pr-2 [&::-webkit-details-marker]:hidden ${dark ? "text-paper/70 hover:text-paper" : "text-ink-soft hover:text-ink"}`}>
         <ChevronRight aria-hidden size={14} className="transition-transform duration-150 group-open:rotate-90 motion-reduce:transition-none" />
         <span>{summary}</span>
       </summary>
@@ -192,10 +193,35 @@ export function Empty({ title, children, action }: { title: string; children?: R
 
 export function LoadError({ message }: { message?: string }) {
   if (!message) return null;
+  const said = envOut(message);
+  // A service this server does not have is not a failure: say so calmly, the setting's name behind a detail.
+  if (said.names.length)
+    return (
+      <div role="status" className="mb-4 rounded-lg border border-line bg-surface px-4 py-3 text-[0.95rem]">
+        <Said text={message} />
+      </div>
+    );
   return (
     <p role="status" className="mb-4 rounded-lg border border-bad/20 bg-bad-soft px-4 py-3 text-[0.95rem]">
       <b className="font-semibold">Could not refresh from AimoPilot.</b> {message} The view shows the last data it had and keeps trying.
     </p>
+  );
+}
+
+/** A server note in words; environment variable names it carries wait behind "Setting". */
+export function Said({ text, className = "" }: { text?: string | null; className?: string }) {
+  const said = envOut(text);
+  return (
+    <span className={className}>
+      {said.text}
+      {said.names.length > 0 && (
+        <Details summary="Setting" className="mt-0.5">
+          {said.names.map((n) => (
+            <p key={n}>{n}</p>
+          ))}
+        </Details>
+      )}
+    </span>
   );
 }
 
@@ -240,6 +266,7 @@ export function Button({
   title,
   ariaLabel,
   size = "sm",
+  staff = false,
 }: {
   children: ReactNode;
   onClick?: () => void;
@@ -250,11 +277,45 @@ export function Button({
   title?: string;
   ariaLabel?: string;
   size?: "sm" | "md" | "lg";
+  /** An action (it changes something, costs money or calls outside): disabled for a viewer, with "Staff only". */
+  staff?: boolean;
 }) {
+  const viewer = useViewer();
   const k = kind === "primary" ? "primary" : kind === "stop" ? "safety" : kind === "go" ? "go" : kind === "quiet" ? "quiet" : "secondary";
-  return (
-    <button type={type} onClick={onClick} disabled={disabled} title={title} aria-label={ariaLabel} className={`${buttonClass(k, size, className)} disabled:opacity-45`}>
+  const off = staff && viewer;
+  const button = (
+    <button type={type} onClick={off ? undefined : onClick} disabled={disabled || off} title={off ? `${STAFF_ONLY}: sign in with the passcode to act` : title} aria-label={ariaLabel} className={`${buttonClass(k, size, className)} disabled:opacity-45`}>
       {children}
     </button>
   );
+  if (!off) return button;
+  return (
+    <span className="inline-flex flex-col items-start gap-0.5">
+      {button}
+      <StaffOnlyNote />
+    </span>
+  );
+}
+
+/** A plain button that acts (a link-styled one, a pill): disabled for a viewer, with "Staff only". */
+export function StaffButton({ children, onClick, disabled, className, title, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  const viewer = useViewer();
+  const button = (
+    <button {...rest} type="button" onClick={viewer ? undefined : onClick} disabled={disabled || viewer} title={viewer ? `${STAFF_ONLY}: sign in with the passcode to act` : title} className={`${className ?? ""} disabled:opacity-45`}>
+      {children}
+    </button>
+  );
+  return viewer ? (
+    <span className="inline-flex flex-wrap items-baseline gap-x-1.5">
+      {button}
+      <StaffOnlyNote />
+    </span>
+  ) : (
+    button
+  );
+}
+
+/** The one line beside an action a viewer may not take. */
+export function StaffOnlyNote({ className = "" }: { className?: string }) {
+  return <span className={`text-[0.78rem] font-medium text-ink-soft ${className}`}>{STAFF_ONLY}</span>;
 }

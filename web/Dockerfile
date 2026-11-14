@@ -16,6 +16,9 @@ COPY . .
 ENV DOCK_BUILD_SKIP_TYPES=1
 # The build machine reports many cores but has 4 GB: fifteen build workers were killed there. Three fit.
 ENV DOCK_BUILD_WORKERS=3
+# The compile step itself peaked at 4.2 GB (measured 14 Nov) and was killed. Without source maps and the on-disk
+# compile cache, which a fresh image never reads back, it peaks at 3.0 GB.
+ENV DOCK_BUILD_LEAN=1
 RUN pnpm build && pnpm prune --prod
 
 FROM node:24-alpine

@@ -38,7 +38,12 @@ const ASK: Record<Lang, (best: string, rest: boolean) => string> = {
 };
 
 /** An option's name as said: no "instead of …" (the sentence says what it replaces). */
-const optionName = (o: SubOption) => (o.kind === "dish" && o.dish ? o.dish.name : lower(o.title.replace(/\s+instead( of .*)?$/i, "").replace(/\s+\(.*\)$/, "")));
+const optionName = (o: SubOption) => {
+  if (o.kind === "dish" && o.dish) return o.dish.name;
+  // A catalogue name in capitals ("PARSLEY EU") as people write it, never "pARSLEY EU".
+  const t = readable(o.title.replace(/\s+instead( of .*)?$/i, "").replace(/\s+\(.*\)$/, ""), "en");
+  return /^[A-ZÄÖÅ]{2,}\b/.test(t) ? t : lower(t);
+};
 
 /** The event said short, from its figures: the count, the one that matters most and why, the best swap, the rest listed. */
 async function eventShort(run: TurnRun, r: EventResult, lang: Lang, fallback: ThreadScenario): Promise<{ say: string; ask: string }> {
@@ -47,7 +52,7 @@ async function eventShort(run: TurnRun, r: EventResult, lang: Lang, fallback: Th
   const ids = r.cannotArrive.flatMap((x) => (x.product ? [x.product.productId] : []));
   const ps = lang === "en" ? [] : await run.rt.catalog.searchProducts({ ids, limit: 50 }).catch(() => []);
   const { shortName } = await import("./watch");
-  const what = (x: EventResult["cannotArrive"][number]) => (lang === "en" || !x.product ? lower(x.ingredient) : shortName(((ps.find((p) => p.id === x.product!.productId) as { names?: Partial<Record<Lang, string>> } | undefined)?.names?.[lang]) ?? x.ingredient));
+  const what = (x: EventResult["cannotArrive"][number]) => (lang === "en" || !x.product ? lower(x.ingredient).replace(/,.*$/, "").replace(/\s*\(.*\)$/, "") : shortName(((ps.find((p) => p.id === x.product!.productId) as { names?: Partial<Record<Lang, string>> } | undefined)?.names?.[lang]) ?? x.ingredient));
   const why = (x: EventResult["cannotArrive"][number]) => {
     const a = x.arrival;
     const fn = t.why[a.code as keyof typeof t.why] as (s: string) => string;

@@ -33,6 +33,8 @@ export type OrderRow = {
   status: OrderTimeline["status"];
   statusWords: string;
   waitingSinceAt?: string;
+  /** Set on the way out (server/alive marks.ts) when the order was played by the sample activity. */
+  sample?: boolean;
 };
 
 export type OrdersFilter = { kitchen?: string; agent?: string; source?: string; status?: string; day?: string; q?: string; page?: number; size?: number };

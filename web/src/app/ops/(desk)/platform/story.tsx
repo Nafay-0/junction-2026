@@ -5,11 +5,12 @@ import type { PlatformOverview, ServiceCard } from "@/server/aiven/showcase/plat
 import type { AlertState } from "@/server/ops/alerts";
 import type { RecallRouterStats } from "@/server/search/recall-router";
 import type { PartnerGateState } from "@/server/valio/partner-gate";
-import { when, whenSeconds } from "../../_ui/format";
+import { envOut, when, whenSeconds } from "../../_ui/format";
 import { buttonClass } from "../../../_ui/kit";
 import { Details, LiveMark, LoadError, Loading, PageHead, Panel, Section, useOps } from "../../_ui/kit";
 import { PlatformTabs, Status } from "./_parts/parts";
 import { RecallProbe } from "./_parts/recall-probe";
+import { PLATFORM_TEXT } from "./story.text";
 
 /**
  * The Aiven story on one screen, for a judge: which service does which job and why, whether each answers now and
@@ -21,8 +22,8 @@ export function Story() {
   return (
     <>
       <PageHead
-        title="The platform"
-        purpose="The Aiven services AimoPilot runs on: is each alive, and what did it do in the last hour."
+        title={PLATFORM_TEXT.en.title}
+        purpose={PLATFORM_TEXT.en.purpose}
         about="Everything AimoPilot runs on is an Aiven service, each with one job, chosen for a reason. Is each one alive, and what did it do in the last hour? Every number here is read live from the service itself or from Aiven's API."
         right={o && <LiveMark at={whenSeconds(o.at)} error={live.error} />}
       />
@@ -149,7 +150,16 @@ function Body({ o }: { o: Overview }) {
   const down = o.services.filter((c) => c.reachable === false);
   return (
     <>
-      {o.missing.length > 0 && <p className="mb-5 rounded-lg bg-surface px-4 py-3 text-[0.92rem]">Not configured on this server: {o.missing.join("; ")}.</p>}
+      {o.missing.length > 0 && (
+        <div className="mb-5 rounded-lg bg-surface px-4 py-3 text-[0.92rem]">
+          Not connected on this server: {o.missing.map((m) => /\(([^)]+)\)/.exec(m)?.[1] ?? envOut(m).text).join("; ")}.
+          <Details summary="Settings" className="mt-0.5">
+            {o.missing.map((m) => (
+              <p key={m}>{m}</p>
+            ))}
+          </Details>
+        </div>
+      )}
       <Watch o={o} />
 
       {/* The one thing to press, beside what it all costs. */}

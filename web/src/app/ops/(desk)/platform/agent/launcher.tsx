@@ -48,7 +48,7 @@ export function Launcher() {
                 <p className="display text-[1.4rem] leading-tight">{p.title}</p>
                 <p className="mt-2 rounded-lg bg-surface px-4 py-3 text-[0.98rem] leading-snug">&ldquo;{p.message}&rdquo;</p>
                 <p className="mt-2 text-[0.88rem] text-ink-soft">What should happen: {fi(p.expect)}</p>
-                <Button kind={i === 0 ? "go" : "primary"} size="md" className="mt-3" disabled={busy || Boolean(s.running)} onClick={() => start(p.id)}>
+                <Button staff kind={i === 0 ? "go" : "primary"} size="md" className="mt-3" disabled={busy || Boolean(s.running)} onClick={() => start(p.id)}>
                   {busy ? "Starting on Aiven…" : s.blocked?.recording ? "Play the recording" : "Send in the agent"}
                 </Button>
               </Panel>

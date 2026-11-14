@@ -6,10 +6,12 @@ import { Check, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { Overview } from "@/server/ops/views";
 import { Target } from "../../_ui/target";
-import { VIA, fi, money, num, since, when, whenSeconds, type Via } from "../_ui/format";
+import { VIA, askedWords, fi, money, num, since, when, whenSeconds, type Via } from "../_ui/format";
 import { DoorGlyph, Empty, Licence, LiveMark, LoadError, Loading, Outcome, PageHead, Section, ViaTag, useNow, useOps } from "../_ui/kit";
 import { Table } from "../_ui/parts";
 import { FilterBar, useUrlState } from "../_ui/filters";
+import { LIVE_TEXT } from "./live.text";
+import { StartHere } from "../_ui/sample-bar";
 
 const DOORS: Via[] = ["onsite", "mcp", "rest"];
 
@@ -20,11 +22,12 @@ export function LiveView() {
   return (
     <>
       <PageHead
-        title="Live at the gate"
-        purpose="Who is at the door right now, and what happened to what they asked for."
+        title={LIVE_TEXT.en.title}
+        purpose={LIVE_TEXT.en.purpose}
         about="Who is at the door right now, and what happened to what they asked for. Three doors, one gate: every agent meets the same mandate check, the same rules in plain code and the same ledger."
         right={o && <LiveMark at={whenSeconds(o.at)} error={live.error} />}
       />
+      <StartHere />
       <LoadError message={live.error} />
       {!o ? <Loading /> : <Body o={o} now={now ?? Date.parse(o.at)} />}
     </>
@@ -114,7 +117,7 @@ function Body({ o, now }: { o: Overview; now: number }) {
 
       <Section title="Requests" aside="Newest first. Open one to replay it station by station.">
         {o.sessions.length === 0 ? (
-          <Empty title="No request yet">When an agent asks for something, it appears here with where it is and how it ended.</Empty>
+          <Empty title={LIVE_TEXT.en.requestsEmptyTitle}>{LIVE_TEXT.en.requestsEmpty}</Empty>
         ) : (
           <Sessions rows={o.sessions} now={now} />
         )}
@@ -306,7 +309,9 @@ function Sessions({ rows, now }: { rows: Overview["sessions"]; now: number }) {
                   <ViaTag via={r.via} short />
                 </td>
                 <td className="max-w-[32ch]">
-                  <span className="line-clamp-3" title={fi(r.asked)}>“{fi(r.asked)}”</span>
+                  <span className={`line-clamp-3 ${askedWords(r.asked).system ? "text-ink-soft" : ""}`} title={fi(r.asked)}>
+                    {askedWords(r.asked).system ? askedWords(r.asked).words : `“${fi(r.asked)}”`}
+                  </span>
                 </td>
                 <td className="max-w-[34ch] text-ink-soft">
                   <span className="line-clamp-3" title={fi(r.doing)}>{fi(r.doing)}</span>

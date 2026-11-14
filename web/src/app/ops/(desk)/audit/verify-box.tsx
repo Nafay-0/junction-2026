@@ -42,7 +42,7 @@ export function VerifyBox({ initial = "", title = "Check a receipt or a signed c
         aria-label="Receipt or signed claim"
         className="field mt-3 !min-h-[7rem] resize-y bg-mist !px-3 py-2 font-mono !text-[0.76rem] leading-snug"
       />
-      <Button kind="primary" onClick={run} disabled={busy || !text.trim()} className="mt-3">
+      <Button staff kind="primary" onClick={run} disabled={busy || !text.trim()} className="mt-3">
         {busy ? "Checking…" : "Check signature"}
       </Button>
       {result && <ResultView r={result} />}

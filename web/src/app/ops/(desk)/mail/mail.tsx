@@ -7,6 +7,8 @@ import { Badge } from "../../../_ui/kit";
 import { num, when } from "../../_ui/format";
 import { Button, Empty, LoadError, Loading, Num, PageHead, Panel, Section, useNow, useOps } from "../../_ui/kit";
 import { Table } from "../../_ui/parts";
+import { MAIL_TEXT } from "./mail.text";
+import { SamplePill, isSample } from "../../../_ui/sample";
 
 type Mail = MailView["mails"][number];
 
@@ -27,8 +29,8 @@ export function MailScreen() {
   return (
     <>
       <PageHead
-        title="Mail"
-        purpose="Receipts and alerts emailed to kitchens, after the fact."
+        title={MAIL_TEXT.en.title}
+        purpose={MAIL_TEXT.en.purpose}
         about="Receipts and alerts emailed to kitchens, after the fact and never in the path of an order. Only a kitchen that gave an address and confirmed it gets mail; one mail per event; every mail sent, skipped or failed is in the ledger without the address. Addresses are shown masked: staff never see them."
         right={v ? <span>{v.configured ? `${v.transport}, from ${v.from}` : "No mail service configured"}</span> : undefined}
       />
@@ -66,7 +68,7 @@ function Body({ v, now }: { v: MailView; now: number }) {
         <div>
           <Section title="What was emailed, to whom, and what happened" aside={v.mails.length ? `${v.mails.length}` : undefined}>
             {v.mails.length === 0 ? (
-              <Empty title="No mail yet">A kitchen gives its address in the store (Agent and rules) or in words to its agent; after it confirms, receipts and alerts appear here.</Empty>
+              <Empty title={MAIL_TEXT.en.emptyTitle}>{MAIL_TEXT.en.empty}</Empty>
             ) : (
               <Table label="Mails">
                 <thead>
@@ -84,6 +86,7 @@ function Body({ v, now }: { v: MailView; now: number }) {
                       <td className="tabular whitespace-nowrap">{when(m.at, new Date(now))}</td>
                       <td>
                         <span className="font-semibold">{m.kitchenName}</span>
+                        {isSample(m) && <SamplePill />}
                         <span className="block text-[0.85rem] text-ink-soft">{m.maskedTo}</span>
                       </td>
                       <td>

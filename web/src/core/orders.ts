@@ -527,6 +527,11 @@ export type DockDeps = {
    * customer-specific). Default: a stable demo number per organisation (core/pricing.ts demoCustomerNumber).
    */
   customerOf?: (orgId: string) => string;
+  /**
+   * Which orders the current caller sees in the lists below (listOrders, pendingOrders, listPendingApprovals): the
+   * server narrows them for a page that hides the sample activity (server/alive). Undefined: all of them.
+   */
+  visibleOrder?: () => ((o: { orderId: string; requestId: string }) => boolean) | undefined;
 };
 
 /** The holds in force on some products. Called with the products of one quote; must be cheap (no live call). */
@@ -602,6 +607,11 @@ export function createDock(deps: DockDeps) {
   const verifier = deps.verifier ?? linkTokenVerifier;
   const now = deps.now ?? (() => new Date());
   const quoteTtlMinutes = deps.quoteTtlMinutes ?? 30;
+  /** The orders the current caller sees (deps.visibleOrder); all of them unless the server narrows the view. */
+  const seen = <O extends { orderId: string; requestId: string }>(list: O[]): O[] => {
+    const keep = deps.visibleOrder?.();
+    return keep ? list.filter(keep) : list;
+  };
   const kitchens = deps.kitchens ?? new InMemoryKitchenRepository();
   const intakes = deps.intakes ?? new InMemoryIntakeRepository();
   const liveAllowance = deps.liveAllowance ?? new LiveLookupAllowance(undefined, now);
@@ -1567,7 +1577,7 @@ export function createDock(deps: DockDeps) {
     /** Every organisation's pending sign-offs. Callers decide who may see which (see server/authz.ts). */
     async listPendingApprovals(orgId?: string): Promise<PendingApproval[]> {
       await expireStale(orgId);
-      return (await repo.pendingOrders(orgId))
+      return seen(await repo.pendingOrders(orgId))
         .filter((o) => o.status === "pending_approval" && o.approval?.status === "pending")
         .map((o) => ({
           approvalId: o.approval!.approvalId,
@@ -1585,18 +1595,19 @@ export function createDock(deps: DockDeps) {
     /** Every order, or one organisation's (oldest first). The store's copies, stripped of what never leaves Dock. */
     async listOrders(filter: { orgId?: string } = {}): Promise<PublicOrder[]> {
       await expireStale(filter.orgId);
-      return (filter.orgId ? await repo.ordersOf(filter.orgId) : await repo.listOrders()).map(stripOrder);
+      return seen(filter.orgId ? await repo.ordersOf(filter.orgId) : await repo.listOrders()).map(stripOrder);
     },
 
     /** Orders waiting for sign-off, of one organisation or all (oldest first). */
     async pendingOrders(orgId?: string): Promise<PublicOrder[]> {
       await expireStale(orgId);
-      return (await repo.pendingOrders(orgId)).map(stripOrder);
+      return seen(await repo.pendingOrders(orgId)).map(stripOrder);
     },
 
     /** How many orders wait for sign-off, after closing those whose price ran out. */
     async pendingCount(): Promise<number> {
       await expireStale();
+      if (deps.visibleOrder?.()) return seen(await repo.pendingOrders()).filter((o) => o.status === "pending_approval").length;
       return repo.pendingCount();
     },
 
