@@ -97,6 +97,7 @@ through the real gate again as of then and as of now. Set `DOCK_MARIADB_URL` to 
 | `qa/` | Findings from the QA agent whose job was to break the product, and what was fixed |
 | `docs/pitch/` | Pitch, table demo, the claims we make and the evidence for each ([docs/pitch/claims.md](docs/pitch/claims.md)) |
 | `research/` | Notes on the event, the challenges and the partner's API |
+| `exa/` | Beryl, a separate project by the same team for Exa's challenge, "The Internet Butler": an internet butler for the web, the desktop and the phone. It shares no code with AimoPilot. See [exa/README.md](exa/README.md) |
 
 In code, routes and environment variables the product is still called "Dock", its working title.
 

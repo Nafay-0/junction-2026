@@ -1,0 +1,66 @@
+name: Beryl deploy
+
+# Builds the Beryl server image and puts it on Cloud Run. It runs when main changes under
+# exa/web, or by hand. A deploy replaces the running server: tasks in progress at that moment
+# are lost, so avoid running it while people are using the site.
+on:
+  push:
+    branches: [main]
+    paths: ["exa/web/**", ".github/workflows/beryl-deploy.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: beryl-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write # to sign in to Google Cloud without a stored key
+
+env:
+  PROJECT: beryl-exa
+  REGION: europe-north1
+  SERVICE: beryl
+  IMAGE: europe-north1-docker.pkg.dev/beryl-exa/beryl/web
+  # Not secrets: they only name where to sign in and as what.
+  WIF_PROVIDER: projects/58963151537/locations/global/workloadIdentityPools/github/providers/junction-2026
+  DEPLOY_ACCOUNT: beryl-deploy@beryl-exa.iam.gserviceaccount.com
+
+jobs:
+  deploy:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOY_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+      - uses: docker/setup-buildx-action@v3
+      - name: Build and push the image
+        uses: docker/build-push-action@v6
+        with:
+          context: exa/web
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Deploy to Cloud Run
+        # Only the image changes. The service keeps its settings: one instance that stays up,
+        # its secrets, its database connection.
+        run: gcloud run deploy "$SERVICE" --project "$PROJECT" --region "$REGION" --image "$IMAGE:${{ github.sha }}" --quiet
+      - name: Check that it answers
+        run: |
+          # Asked at the service's own address, so the check does not depend on DNS or the certificate.
+          url=$(gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format 'value(status.url)')
+          for attempt in 1 2 3 4 5 6; do
+            if curl --fail --silent --show-error "$url/api/health"; then echo; exit 0; fi
+            sleep 10
+          done
+          echo "The server did not report healthy at $url/api/health" >&2
+          exit 1

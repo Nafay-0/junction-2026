@@ -1,0 +1,12 @@
+# The demo video's Remotion project: built and rendered on one machine, not part of the repo.
+video/
+
+# Agent skills installed for making the video (Remotion, Hyperframes). Put back with:
+#   npx skills add remotion-dev/skills --agent claude-code --yes
+#   npx skills add heygen-com/hyperframes --agent claude-code --yes
+.claude/skills/
+skills-lock.json
+
+# A local copy of the demo film for the landing page (BERYL_DEMO_VIDEO=/landing/demo.mp4). The live
+# site plays it from the downloads bucket; its poster, demo-poster.jpg, is in the repo.
+web/public/landing/demo.mp4

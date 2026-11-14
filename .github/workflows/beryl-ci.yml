@@ -1,0 +1,42 @@
+name: Beryl checks
+
+# Beryl is the Exa project in exa/. These workflows only run for changes there and do not touch Dock.
+on:
+  push:
+    branches: [main, "asad/**"]
+    paths: ["exa/**", ".github/workflows/beryl-*.yml"]
+  pull_request:
+    paths: ["exa/**", ".github/workflows/beryl-*.yml"]
+
+concurrency:
+  group: beryl-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Typecheck, lint, guard test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: exa/web
+    env:
+      # Electron is only needed to run the desktop app, not to check the code.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: exa/web/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: exa/web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test:guard
