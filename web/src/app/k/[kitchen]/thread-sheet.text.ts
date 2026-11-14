@@ -7,6 +7,10 @@ import { defineText } from "../../_i18n/lang";
  */
 export const THREAD_SHEET_TEXT = defineText({
   en: {
+    sendProblem: {
+      busy: { words: "The shop is busy right now. Your words are kept below: send them again in a moment.", tap: "The shop is busy right now. Nothing changed: tap again in a moment." },
+      offline: { words: "No connection. Your words are kept below: send them again when you are back online.", tap: "No connection. Nothing changed: tap again when you are back online." },
+    },
     ask: {
       kind: "One question",
       q: { optimise: "What matters most for this order?", "dim:lactose": "Lactose-free or regular?", "dim:fat": "Which fat content?", "dim:organic": "Organic?" } as Record<string, string>,
@@ -78,6 +82,10 @@ export const THREAD_SHEET_TEXT = defineText({
     onTime: (pct: string) => `${pct} %`,
   },
   fi: {
+    sendProblem: {
+      busy: { words: "Kauppa on juuri nyt ruuhkainen. Sanasi ovat tallessa alla: lähetä ne hetken päästä uudelleen.", tap: "Kauppa on juuri nyt ruuhkainen. Mikään ei muuttunut: napauta hetken päästä uudelleen." },
+      offline: { words: "Ei yhteyttä. Sanasi ovat tallessa alla: lähetä ne uudelleen, kun yhteys palaa.", tap: "Ei yhteyttä. Mikään ei muuttunut: napauta uudelleen, kun yhteys palaa." },
+    },
     ask: {
       kind: "Yksi kysymys",
       q: { optimise: "Mikä on tässä tilauksessa tärkeintä?", "dim:lactose": "Laktoositon vai tavallinen?", "dim:fat": "Mikä rasvapitoisuus?", "dim:organic": "Luomu?" } as Record<string, string>,
@@ -149,6 +157,10 @@ export const THREAD_SHEET_TEXT = defineText({
     onTime: (pct: string) => `${pct} %`,
   },
   sv: {
+    sendProblem: {
+      busy: { words: "Butiken har mycket att göra just nu. Dina ord finns kvar nedan: skicka dem igen om en stund.", tap: "Butiken har mycket att göra just nu. Inget ändrades: tryck igen om en stund." },
+      offline: { words: "Ingen anslutning. Dina ord finns kvar nedan: skicka dem igen när du är online.", tap: "Ingen anslutning. Inget ändrades: tryck igen när du är online." },
+    },
     ask: {
       kind: "En fråga",
       q: { optimise: "Vad är viktigast för den här beställningen?", "dim:lactose": "Laktosfri eller vanlig?", "dim:fat": "Vilken fetthalt?", "dim:organic": "Ekologisk?" } as Record<string, string>,

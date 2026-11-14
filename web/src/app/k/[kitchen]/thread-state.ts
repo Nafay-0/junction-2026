@@ -2,6 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../_client/api";
+
+/** Statuses worth trying again by themselves: no connection, rate limited, the store busy or restarting. */
+const TRANSIENT = new Set([0, 429, 502, 503, 504]);
+/** An `error` that is not a server message but one of these, said in the buyer's words by the page. */
+export const SEND_PROBLEM = "@send:";
 import type { AgentTurn, BuyerTurn, SubmitTurn, SubmitTurnReply, Thread, ThreadEvent, Turn } from "@/server/thread/types";
 
 /**
@@ -191,11 +196,18 @@ export function useThreadState(slug: string): ThreadApi {
       setPending((p) => [...p, optimistic]);
       setPosting(true);
       setError(undefined);
-      const r = await api<SubmitTurnReply>("POST", `${base}/turns`, { ...turn, clientTurnId });
+      // A busy store (503 store_unavailable, a rate limit) or a dropped connection: tried again by itself, with the
+      // same client id, so the server counts it once. Only then the buyer is told, in words, and their words are kept.
+      let r = await api<SubmitTurnReply>("POST", `${base}/turns`, { ...turn, clientTurnId });
+      for (const wait of [1000, 2500, 5000]) {
+        if (r.ok || !TRANSIENT.has(r.status)) break;
+        await new Promise((ok) => setTimeout(ok, wait));
+        r = await api<SubmitTurnReply>("POST", `${base}/turns`, { ...turn, clientTurnId });
+      }
       setPosting(false);
       if (!r.ok) {
         setPending((p) => p.filter((x) => x.clientTurnId !== clientTurnId));
-        setError(r.error.message);
+        setError(r.status === 0 ? `${SEND_PROBLEM}offline:${turn.text ? "words" : "tap"}` : TRANSIENT.has(r.status) ? `${SEND_PROBLEM}busy:${turn.text ? "words" : "tap"}` : r.error.message);
         return false;
       }
       // The stream may have dropped meanwhile: make sure it is open, so the answer arrives.

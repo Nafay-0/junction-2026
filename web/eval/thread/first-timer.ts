@@ -11,6 +11,7 @@
  *   2 order something new        6 plan a lunch for 40 and order it
  *   3 make it 200 instead of 100 7 OK an order over the limit (passkey on this device)
  *   4 pick the lactose-free one  8 take one back
+ *   9 and 10: two orders in one conversation, the second after a person's OK, typed and through the order sheet
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -145,6 +146,11 @@ async function task(name: string, n: number, body: (r: Run) => Promise<string | 
   await page.request.post(`${base}/ui-api/kitchens/${account.username}/thread/reset`, { data: {} });
   await ctx.addCookies([{ name: "aimopilot-lang", value: lang, url: base }]);
   await page.goto(`${base}/k/${account.username}?agent=open`);
+  // The agent's panel, as a first-timer opens it if the page did not: the Agent tab.
+  const log = page.getByRole("log").first();
+  await page.waitForTimeout(1500);
+  if (!(await log.isVisible().catch(() => false))) await page.getByRole("button", { name: /^(Agent|Agentti)$/ }).or(page.getByRole("link", { name: /^(Agent|Agentti)$/ })).first().click();
+  await log.waitFor({ timeout: 30_000 });
   await page.getByRole("textbox").last().waitFor({ timeout: 30_000 });
   const r = new Run(page);
   let result: Result;
@@ -196,8 +202,29 @@ const TASKS: [string, (r: Run) => Promise<string | void>][] = [
     async (r) => {
       await r.say(L.hundred);
       const lead = r.log.getByRole("button", { name: L.order }).first();
-      await r.waitFor(lead);
+      // A routine order may be placed at once (inside the rules): then "make it 200" changes a placed order.
+      const end = Date.now() + 90_000;
+      let placedFirst = false;
+      while (Date.now() < end) {
+        if (await lead.isVisible().catch(() => false)) break;
+        if (ordered(["committed", "pending_approval"])((await r.thread())!)) {
+          placedFirst = true;
+          break;
+        }
+        await r.page.waitForTimeout(400);
+      }
       await r.say(L.make200);
+      if (placedFirst) {
+        // Whatever the agent does with a placed order: wait for a second order or a button, and say what happened to the first.
+        const t = await r.until((t) => cardsOf(t).filter((c) => c.type === "order").length >= 2 || cardsOf(t).some((c) => c.type === "order" && c.status === "withdrawn"), 60_000).catch(() => undefined);
+        const again = r.log.getByRole("button", { name: L.order }).last();
+        if (!t && (await again.isVisible().catch(() => false))) {
+          await r.tap(again);
+        }
+        const fin = await r.until((t) => cardsOf(t).filter((c) => c.type === "order" && ["committed", "pending_approval"].includes(c.status)).length >= 1 && cardsOf(t).some((c) => c.type === "order" && c.lines.reduce((s, l) => s + l.quantity * (l.packSize ?? 1), 0) >= 180), 60_000);
+        const orders = cardsOf(fin).filter((c): c is Extract<Card, { type: "order" }> => c.type === "order");
+        return `the 100 L was placed alone first; after "make it 200": ${orders.map((o) => `${o.lines.reduce((s, l) => s + l.quantity * (l.packSize ?? 1), 0)} L ${o.status}`).join(", ")}`;
+      }
       // The new options (or the sheet) for 200 L: the first-timer checks the amount on the button's card and orders.
       await r.page.waitForTimeout(1500);
       const again = r.log.getByRole("button", { name: L.order }).last();
@@ -315,7 +342,46 @@ const TASKS: [string, (r: Run) => Promise<string | void>][] = [
       return `take back ${((Date.now() - t0) / 1000).toFixed(1)} s`;
     },
   ],
+  [
+    "two orders: after an OK, a second typed",
+    async (r) => {
+      await bigSigned(r);
+      await r.say(L.oat);
+      const lead = r.log.getByRole("button", { name: L.order }).last();
+      await r.waitFor(lead);
+      await r.tap(lead);
+      await r.until((t) => cardsOf(t).filter((c) => c.type === "order" && ["committed", "pending_approval"].includes(c.status)).length >= 2);
+    },
+  ],
+  [
+    "two orders: after an OK, a second through the order sheet",
+    async (r) => {
+      await bigSigned(r);
+      await r.say(L.fifty);
+      const adjust = r.log.getByRole("button", { name: L.adjust }).last();
+      const lead = r.log.getByRole("button", { name: L.order }).last();
+      await r.waitFor(adjust);
+      await r.tap(adjust);
+      await r.until((t) => !!sheet(t));
+      await r.page.waitForTimeout(500);
+      await r.tap(lead);
+      await r.until((t) => cardsOf(t).filter((c) => c.type === "order" && ["committed", "pending_approval"].includes(c.status)).length >= 2);
+    },
+  ],
 ];
+
+/** The headline order, over the limit, signed on this device: the start of a two-order conversation. */
+async function bigSigned(r: Run) {
+  await r.say(L.big);
+  const lead = r.log.getByRole("button", { name: L.order }).first();
+  await r.waitFor(lead);
+  await r.tap(lead);
+  const sign = r.log.getByRole("button", { name: L.sign }).first();
+  await r.waitFor(sign);
+  await r.tap(sign);
+  await r.until(ordered(["committed"]), 60_000);
+  await r.page.waitForTimeout(3000); // the agent's closing line
+}
 
 (async () => {
   const results: Result[] = [];

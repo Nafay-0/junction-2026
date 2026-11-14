@@ -160,6 +160,8 @@ export type ItemOutcome = {
   options?: { ref: string; optionId: string; title: string; totalCents: number; deliveryDate: string; match: string }[];
   concerns?: { message: string; choices: string[] }[];
   questions?: { text: string; choices: string[] }[];
+  /** The words went on an order sheet to confirm (the usual, from the kitchen's recurring orders). */
+  sheet?: { sheetId: string; deliveryDate: string; lines: { name: string; packs: number }[]; totalCents: number };
 };
 
 function noticeFrom(err: unknown, ref: string, words: string): NoticeCard {
@@ -176,6 +178,29 @@ function noticeFrom(err: unknown, ref: string, words: string): NoticeCard {
     return { type: "notice", cardId: id, kind: "refused", message: err.message, ...(err.rule ? { rule: err.rule } : {}) };
   }
   return { type: "notice", cardId: cardId("notice", ref), kind: "error", message: "Something went wrong on our side. Try again.", retry: true };
+}
+
+/** "The usual", in the kitchen's languages. */
+const USUAL = /\b(the usual|usual order|as usual|tavalli\w*|tavanomai\w*|det vanliga|som vanligt|vanliga)\b/i;
+
+/** The recurring orders due next (one day: the soonest any is due), at their usual amounts, as one order sheet. */
+async function usualSheet(run: TurnRun, words: string): Promise<{ requestId: string; sheetId: string; deliveryDate: string; lines: { name: string; packs: number }[]; totalCents: number } | undefined> {
+  const { standing } = await import("@/server/kitchen-portal");
+  const { createSheet } = await import("./sheet");
+  const profile = await run.rt.kitchens.getProfile(run.session.mandate.issuer.orgId);
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Helsinki" }).format(new Date());
+  const due = standing(profile, today).filter((s) => s.nextDue);
+  const next = due.map((s) => s.nextDue!).sort()[0];
+  if (!next) return undefined;
+  const lines: { productId: string; packs: number }[] = [];
+  for (const s of due.filter((x) => x.nextDue === next)) {
+    const [p] = await run.rt.catalog.searchProducts({ ids: [s.product.productId], limit: 1 });
+    if (p && run.session.mandate.allowedCategories.includes(p.category)) lines.push({ productId: p.id, packs: Math.max(1, Math.ceil(s.usual.amount / p.packSize - 1e-9)) });
+  }
+  if (!lines.length) return undefined;
+  record(run, "usual", `"${words.slice(0, 80)}" named no product: the kitchen's recurring orders due ${next} go on the order sheet at their usual amounts.`, { day: next, lines });
+  const card = await createSheet(run, { lines, deliveryDate: next, text: words, asked: lines.map((l) => l.productId) });
+  return { requestId: card.requestId!, sheetId: card.sheetId, deliveryDate: card.deliveryDate, lines: card.lines.map((l) => ({ name: l.name, packs: l.packs })), totalCents: card.totalCents };
 }
 
 /**
@@ -207,6 +232,15 @@ export async function orderFromWords(run: TurnRun, words: string, earlier: Earli
       reading.done("several items: read one by one");
       record(run, "split_items", `The message names ${parts.length} items; each is read on its own: ${parts.map((x) => `"${x}"`).join(", ")}.`, { parts });
       return (await Promise.all(parts.map((x, i) => orderFromWords(run, x, [], { ...opts, item: i + 1 })))).flat();
+    }
+    // "The usual" with no product named: the kitchen's own records say what that is (its recurring orders due
+    // next, at their usual amounts), on the order sheet to confirm. Plain code, nothing guessed.
+    if (notice.kind === "incomplete" && notice.missing?.includes("what to buy") && !opts.item && USUAL.test(words)) {
+      const usual = await usualSheet(run, words).catch(() => undefined);
+      if (usual) {
+        reading.done("the usual, from your recurring orders");
+        return [{ words, requestId: usual.requestId, sheet: usual }];
+      }
     }
     reading.fail(err instanceof DockError ? err.code : undefined);
     run.store.card(run.thread, run.turnId, notice);

@@ -223,9 +223,10 @@ export type ApprovalContext = {
 /**
  * The order cut-off each quote promises (the earliest of its lines' order-by times), kept in this process only: a
  * committed order can be taken back until it (withdrawOrder with `takeBack`). Nothing here reaches a response, a
- * signature or the ledger; after a restart an order simply has no take-back, which errs on the safe side.
+ * signature or the ledger; after a restart an order simply has no take-back, which errs on the safe side. On
+ * globalThis: a bundler may load this module once per route, and the thread reads what the API side wrote.
  */
-const quoteCutoffs = new Map<string, string>();
+const quoteCutoffs: Map<string, string> = ((globalThis as typeof globalThis & { __dockQuoteCutoffs?: Map<string, string> }).__dockQuoteCutoffs ??= new Map());
 
 /** Until when the kitchen may still take back this committed order, if the wholesaler's cut-off is known. */
 export function takeBackUntil(o: Pick<Order, "quoteId" | "status">, at: Date = new Date()): string | undefined {

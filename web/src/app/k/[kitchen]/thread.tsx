@@ -35,6 +35,7 @@ import { RulesCardView } from "./thread-rules";
 import { OptionsDecision } from "./thread-options";
 import { PickerView, QuestionView, SheetView, isQuiet, sheetOrders, whenText } from "./thread-sheet";
 import { THREAD_SHEET_TEXT } from "./thread-sheet.text";
+import { SEND_PROBLEM } from "./thread-state";
 import { THREAD_WORDS } from "./thread-words.text";
 import { concernText, correctionLabel, fmtFor, gateReasons, memoryKey, memoryText, stepLabel } from "./thread-words";
 import { callOn, useVoiceMode } from "../../_channels/voice-mode";
@@ -55,6 +56,7 @@ type Tap = (action: ThreadAction, label: string) => void;
 export function ThreadLog({ className = "" }: { className?: string }) {
   const { thread: api, base } = usePortal();
   const tx = useText(THREAD_PAGE_TEXT);
+  const sx = useText(THREAD_SHEET_TEXT);
   const endRef = useRef<HTMLLIElement>(null);
   const t = api.thread;
   const voice = useVoiceMode();
@@ -96,7 +98,12 @@ export function ThreadLog({ className = "" }: { className?: string }) {
       {api.error && (
         <li>
           <p role="alert" className="rounded-xl bg-bad-soft px-4 py-3 text-[0.92rem]">
-            {tx.sendFailed(api.error)}
+            {api.error.startsWith(SEND_PROBLEM)
+              ? (() => {
+                  const [kind, what] = api.error.slice(SEND_PROBLEM.length).split(":") as ["busy" | "offline", "words" | "tap"];
+                  return sx.sendProblem[kind]?.[what] ?? tx.sendFailed(api.error);
+                })()
+              : tx.sendFailed(api.error)}
           </p>
         </li>
       )}
