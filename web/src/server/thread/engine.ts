@@ -412,7 +412,6 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
       const lead = (opts.preselected && opts.options.find((o) => o.optionId === opts.preselected!.optionId && o.gate?.outcome !== "reject")) || opts.options.find((o) => o.gate?.outcome !== "reject");
       if (lead && opts.requestId) {
         body = { ...body, action: { type: "choose", requestId: opts.requestId, optionId: lead.optionId }, label: body.text };
-        record(run, "yes_takes_first", `"${body.text}" to the options: the one named first, ${lead.title}.`, { optionId: lead.optionId }, opts.requestId);
       }
     }
   }
