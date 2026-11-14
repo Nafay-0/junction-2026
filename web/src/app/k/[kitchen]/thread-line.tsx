@@ -393,7 +393,11 @@ function SignOffSlab({ card, thread, tap, total, what }: { card: GateCardT; thre
   // At most three lines on the slab; a longer order says how many and lists them behind the reply's "Show the list".
   const all = order?.lines ?? [];
   const lines = what ?? (all.length > 3 ? tx.many(all.length, all.slice(0, 2).map((l) => l.name).join(", ")) : all.map((l) => `${f.num(l.quantity)} × ${l.name}`).join(", "));
-  const why = gateReasons(card.rules, card.reasons, w, fmtFor(f.lang), f.lang)[0];
+  // The same reason the sentence gives: over the limit by the gate's figures, or the mistake check's own comparison.
+  const overLimit = card.rules?.some((r) => r.rule === "per_order_limit" && r.outcome !== "pass");
+  const u = thread.turns.flatMap((x) => (x.role === "agent" ? x.cards : [])).find((c) => c.type === "understood" && c.requestId === card.requestId);
+  const note = !overLimit && u?.type === "understood" ? (u.notes ?? []).map((n) => w.note[n.code]?.(n.params as Record<string, string | number>, fmtFor(f.lang))).find(Boolean) : undefined;
+  const why = note ?? gateReasons(card.rules, card.reasons, w, fmtFor(f.lang), f.lang)[0];
   return (
     <section aria-label={tx.needsOk} data-slab="waiting" className="tl-in mt-4 overflow-hidden rounded-[1.4rem] bg-safety-ink text-paper">
       <div className="hazard-thin h-1.5" />

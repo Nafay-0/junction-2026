@@ -20,10 +20,12 @@ import { ThreadStore, type StoredThread } from "./store";
 import { runWidget } from "./widgets";
 import { speakFacts } from "./speak";
 import { codeLeaks, englishDays, insideOrTell } from "./refusal";
+import { fmtFor, gateReasons } from "@/app/k/[kitchen]/thread-words";
+import { THREAD_WORDS } from "@/app/k/[kitchen]/thread-words.text";
 import { fixTypos } from "./pipeline";
 import { hasToday, helsinkiToday, postToday, todayCardId } from "./home";
 import { ensureTelemetry } from "./telemetry";
-import type { AgentTurn, BuyerTurn, GateCard, MemoryCard, OrderCard, RecordsCard, SubmitTurn, SubmitTurnReply, ThreadAction, ThreadDoor } from "./types";
+import type { AgentTurn, BuyerTurn, Card, GateCard, MemoryCard, OrderCard, RecordsCard, SubmitTurn, SubmitTurnReply, ThreadAction, ThreadDoor } from "./types";
 
 /**
  * One conversation per kitchen, one engine for every door. A door submits a turn (typed words, a transcript, a tap
@@ -275,6 +277,20 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
   record(run, "turn", body.action ? `The buyer tapped "${body.label ?? body.action.type}" (${run.door}).` : `The buyer said (${run.door}): "${(body.text ?? "").slice(0, 300)}"`, { via: body.via, ...(body.text ? { words: body.text.slice(0, 2000) } : {}), ...(body.action ? { action: body.action } : {}) });
   let line = "";
   let agentResult: AgentRunResult | undefined;
+  // An answer in words to the mistake check just said ("yes, 1 000", "100", "it's for an event"): the same as the tap,
+  // and a reason the buyer gives is recorded as theirs.
+  if (!body.action && body.text) {
+    const last = [...thread.turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "");
+    const open = last?.role === "agent" ? last.cards.find((c) => c.type === "anomaly" && !c.answered) : undefined;
+    if (open?.type === "anomaly") {
+      const { guardAnswerOf } = await import("./guard");
+      const a = guardAnswerOf(open, body.text);
+      if (a) {
+        if (a.reason) record(run, "buyer_reason", `The buyer kept the amount as asked, with a reason: "${a.reason}".`, { reason: a.reason, key: open.concerns[0]?.key }, open.requestId);
+        body = { ...body, action: a.action, label: body.text };
+      }
+    }
+  }
   try {
     if (body.action) {
       first.done();
@@ -389,6 +405,13 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
     }
   }
   if (line) await showLine(run, line);
+  // The mistake check paused this request: the sentence is the finding's own comparison, both figures, and one question.
+  const guardCard = store.agentTurn(thread, run.turnId)?.cards.find((c) => c.type === "anomaly" && !c.answered);
+  if (guardCard?.type === "anomaly") {
+    const { guardWords } = await import("./guard");
+    const said = guardWords(guardCard, body.lang ?? "en");
+    if (said) store.line(thread, run.turnId, said);
+  }
   // An order that went straight to a person's OK, with no words from the agent: what, how much and why, in one sentence.
   const sent = store.agentTurn(thread, run.turnId);
   const gateHere = sent?.cards.find((c) => c.type === "gate" && c.outcome === "waiting");
@@ -401,7 +424,7 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
   }
   if (sent && !sent.line && gateHere?.type === "gate") {
     const order = sent.cards.find((c) => c.type === "order" && c.orderId === gateHere.orderId);
-    if (order?.type === "order") store.line(thread, run.turnId, waitingSentence(order, gateHere, body.lang ?? "en") + (pressed ? { en: ` Only their own OK, on their own device, places it.`, fi: " Vain hänen oma hyväksyntänsä omalla laitteellaan tekee tilauksen.", sv: " Bara deras eget godkännande, på deras egen enhet, lägger den." }[body.lang ?? "en"] : ""));
+    if (order?.type === "order") store.line(thread, run.turnId, waitingSentence(order, gateHere, body.lang ?? "en", store.cards(thread).map((x) => x.card)) + (pressed ? { en: ` Only their own OK, on their own device, places it.`, fi: " Vain hänen oma hyväksyntänsä omalla laitteellaan tekee tilauksen.", sv: " Bara deras eget godkännande, på deras egen enhet, lägger den." }[body.lang ?? "en"] : ""));
   }
   // Never an empty reply: when the agent's words did not come (or none were backed), plain words from what the engine knows.
   const after = store.agentTurn(thread, run.turnId);
@@ -458,16 +481,29 @@ function plainLine(run: TurnRun, text: string): string {
 }
 
 /** "1 000 × Valio Eila 1 l for 1 010,00 € is over the 500,00 € I may spend alone, so it needs the kitchen manager's OK." */
-function waitingSentence(order: OrderCard, gate: GateCard, lang: "en" | "fi" | "sv"): string {
+function waitingSentence(order: OrderCard, gate: GateCard, lang: "en" | "fi" | "sv", cards: Card[] = []): string {
   const eur = (c: number) => `**${(c / 100).toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, " ")} €**`;
   const first = order.lines[0];
   const what = first ? `${first.quantity} × ${first.name.replace(/[®™]/g, "").split(/\s+/).slice(0, 4).join(" ")}${order.lines.length > 1 ? (lang === "fi" ? ` ja ${order.lines.length - 1} muuta` : lang === "sv" ? ` och ${order.lines.length - 1} till` : ` and ${order.lines.length - 1} more`) : ""}` : "";
-  const limit = gate.rules?.find((r) => r.rule === "per_order_limit")?.details?.limitCents;
+  const over = gate.rules?.find((r) => r.rule === "per_order_limit" && r.outcome !== "pass");
+  const limit = over?.details?.limitCents;
   const who = gate.approver?.name ?? (lang === "fi" ? "vastuuhenkilö" : lang === "sv" ? "en ansvarig" : "a person");
   const whoEn = /^[A-Z][a-z]+ [a-z]/.test(who) ? `the ${who.toLowerCase()}` : who;
-  if (lang === "fi") return `${what} hintaan ${eur(order.totalCents)}${typeof limit === "number" ? ` ylittää ${eur(limit)}, jonka voin käyttää yksin, joten` : ", joten"} se tarvitsee hyväksynnän: ${who}.`;
-  if (lang === "sv") return `${what} för ${eur(order.totalCents)}${typeof limit === "number" ? ` är över de ${eur(limit)} jag får handla för själv, så` : ", så"} det behöver godkännas av ${who}.`;
-  return `${what} for ${eur(order.totalCents)}${typeof limit === "number" ? ` is over the ${eur(limit)} I may spend alone, so it` : " needs a person's check, so it"} needs ${whoEn}'s OK.`;
+  if (typeof limit === "number") {
+    if (lang === "fi") return `${what} hintaan ${eur(order.totalCents)} ylittää ${eur(limit)}, jonka voin käyttää yksin, joten se tarvitsee hyväksynnän: ${who}.`;
+    if (lang === "sv") return `${what} för ${eur(order.totalCents)} är över de ${eur(limit)} jag får handla för själv, så det behöver godkännas av ${who}.`;
+    return `${what} for ${eur(order.totalCents)} is over the ${eur(limit)} I may spend alone, so it needs ${whoEn}'s OK.`;
+  }
+  // The mistake check sent it to a person: the comparison that triggered it, from the kitchen's own figures (the
+  // gate's shared record names only the kind of check), the same reason the slab shows.
+  const w = THREAD_WORDS[lang];
+  const f = fmtFor(lang);
+  const u = cards.find((c) => c.type === "understood" && c.requestId === order.requestId);
+  const note = u?.type === "understood" ? (u.notes ?? []).map((n) => w.note[n.code]?.(n.params as Record<string, string | number>, f)).find(Boolean) : undefined;
+  const why = note ?? gateReasons(gate.rules, gate.reasons, w, f, lang)[0] ?? "";
+  if (lang === "fi") return `${what} hintaan ${eur(order.totalCents)}${why ? `: ${why.replace(/\.$/, "")}` : ""}, joten se tarvitsee hyväksynnän: ${who}.`;
+  if (lang === "sv") return `${what} för ${eur(order.totalCents)}${why ? `: ${why.replace(/\.$/, "")}` : ""}, så det behöver godkännas av ${who}.`;
+  return `${what} for ${eur(order.totalCents)}${why ? `: ${why.replace(/\.$/, "").replace(/^./, (c) => c.toLowerCase())}` : ""}, so ${whoEn} is asked to OK it.`;
 }
 
 /** The end of an agent turn: what to remember, its status (waiting for the buyer, for a person, or done) and the record. */

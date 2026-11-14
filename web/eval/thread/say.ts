@@ -9,7 +9,8 @@
 import { TEST_ACCOUNTS } from "@/server/accounts/test-accounts";
 (async () => {
   const base = "http://localhost:4522";
-  const args = process.argv.slice(2).filter((a, i, all) => a !== "--check" && all[i - 1] !== "--check");
+  const expects = process.argv.flatMap((a, i, all) => (all[i - 1] === "--expect" ? [new RegExp(a, "i")] : []));
+  const args = process.argv.slice(2).filter((a, i, all) => a !== "--check" && all[i + 1] !== undefined || true).filter((a, i, all) => !["--check", "--expect"].includes(a) && !["--check", "--expect"].includes(all[i - 1]));
   const check = process.argv.includes("--check") ? process.argv[process.argv.indexOf("--check") + 1] : undefined;
   const slug = args[0] ?? "kahvila-sointu";
   const lines: { line: string; cards: string }[] = [];
@@ -25,6 +26,13 @@ import { TEST_ACCOUNTS } from "@/server/accounts/test-accounts";
     const cards = (a?.cards ?? []).map((c: any) => c.type + (c.proposal ? `:${c.proposal.state}` : "")).join(",");
     lines.push({ line: a?.line ?? "", cards });
     console.log(`> ${text}\n  [${a?.status}; ${cards}] ${a?.line ?? ""}`);
+  }
+  // --expect: each pattern must be in the last reply (a guard's reply carries both figures, for instance).
+  if (expects.length) {
+    const last = lines.at(-1)?.line ?? "";
+    const missing = expects.filter((re) => !re.test(last));
+    console.log(missing.length ? `expect: FAIL (missing ${missing.map((r) => r.source).join(", ")})` : "expect: PASS");
+    if (missing.length) process.exit(1);
   }
   if (check === "rules-draft") {
     const broken = lines.some((l) => /can't (send|draft|set)|cannot (send|draft)|not a change I can/i.test(l.line));
