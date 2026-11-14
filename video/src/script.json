@@ -1,11 +1,38 @@
 [
-  { "id": "problem", "text": "AI agents are starting to do the buying. But the webshop was built for people. So who signs for a machine that can order?" },
-  { "id": "title", "text": "This is AimoPilot. Let AI do the buying, and keep the last word. Built for Valio Aimo, at Junction twenty twenty-six." },
-  { "id": "flow", "text": "A kitchen asks for a thousand litres of lactose-free milk by Monday. The agent searches seventeen thousand products, and asks a live price for just three. The usual boxes can't make Monday, so it offers three ranked options. It's over the limit, so a person signs on their phone. One passkey, and it's placed at a fixed price." },
-  { "id": "gate", "text": "The model is never trusted. Twenty rules in plain code check every order. We tried a forged mandate, a replayed quote, an agent approving itself. All stopped, and all on a tamper-evident ledger." },
-  { "id": "agents", "text": "A planner knows what you have, and what it can't get. A watch lines up a backup before a stock-out. A seller makes signed offers. Hands-free voice. Outside agents, through MCP. They only meet at the gate." },
-  { "id": "memory", "text": "It remembers how each kitchen buys. So it catches four thousand litres instead of four hundred, and asks only when it matters." },
-  { "id": "search", "text": "On a hundred eighty-nine real requests, the best standard search got the first answer right seventy-two percent of the time. AimoPilot? Ninety-seven." },
-  { "id": "aiven", "text": "All of it runs on Aiven: Runtime hosts the app, Postgres holds the ledger and memory, Kafka carries every action, Valkey caches live prices, OpenSearch runs keyword and vector search, and Grafana watches it all. A Managed Agent buys through our MCP door, and Aiven's MCP server feeds our copilot." },
-  { "id": "close", "text": "The wholesaler sees every agent and every decision, and can stop any of them. AimoPilot. Keep the last word." }
+  {
+    "id": "problem",
+    "text": "AI agents are starting to do the buying. But the webshop was built for people. So who signs for a machine that can order?"
+  },
+  {
+    "id": "title",
+    "text": "This is AimoPilot. Let AI do the buying, and keep the last word. Built for Valio Aimo, at Junction twenty twenty-six."
+  },
+  {
+    "id": "flow",
+    "text": "A kitchen asks for a thousand litres of lactose-free milk by Monday. The agent searches seventeen thousand products, and asks a live price for just three. The usual boxes can't make Monday, so it offers three ranked options. It's over the limit, so a person signs on their phone. One passkey, and it's placed at a fixed price."
+  },
+  {
+    "id": "gate",
+    "text": "The model is never trusted. Twenty rules in plain code check every order. We tried a forged mandate, a replayed quote, an agent approving itself. All stopped, and all on a tamper-evident ledger."
+  },
+  {
+    "id": "agents",
+    "text": "Six agents, built on the AI SDK and MCP: the buyer, by text or voice, a menu planner, a stock-out watch, the wholesaler's seller, any outside agent, and an operations copilot. None can order past the gate."
+  },
+  {
+    "id": "memory",
+    "text": "It remembers how each kitchen buys. So it catches four thousand litres instead of four hundred, and asks only when it matters."
+  },
+  {
+    "id": "search",
+    "text": "Vector and keyword search recall fifty candidates, inside the kitchen's rules. A decision model judges them, and code checks the judge. Standard search is right first time seventy-two percent at best. AimoPilot? Ninety-seven."
+  },
+  {
+    "id": "aiven",
+    "text": "All of it runs on Aiven: Runtime hosts the app, Postgres holds the ledger and memory, Kafka carries every action, Valkey caches live prices, OpenSearch runs keyword and vector search, and Grafana watches it all. A Managed Agent buys through our MCP door, and Aiven's MCP server feeds our copilot."
+  },
+  {
+    "id": "close",
+    "text": "The wholesaler sees every agent and every decision, and can stop any of them. AimoPilot. Keep the last word."
+  }
 ]

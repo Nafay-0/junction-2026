@@ -1,1 +1,1 @@
-{ "lead": 12, "tail": 12, "fade": 12, "beat": 18, "extra": { "problem": 10, "title": 0, "flow": 0, "gate": 16, "agents": 8, "memory": 20, "search": 14, "aiven": 9, "close": 48 } }
+{ "lead": 12, "tail": 12, "fade": 12, "beat": 18, "extra": { "problem": 2, "title": 12, "flow": 6, "gate": 2, "agents": 7, "memory": 8, "search": 15, "aiven": 12, "close": 47 } }

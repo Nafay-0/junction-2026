@@ -11,12 +11,18 @@ export const prog = (frame: number, at: number, dur = 18) => interpolate(frame, 
 /** 1 → 0 from `at` over `dur` frames. */
 export const fall = (frame: number, at: number, dur = 10) => interpolate(frame, [at, at + dur], [1, 0], clamp);
 
-/** Fades and rises in at `at`; with `exit`, fades out there. */
-export const Rise = ({ at, dur = 18, y = 26, exit, exitDur = 10, children, style }: { at: number; dur?: number; y?: number; exit?: number; exitDur?: number; children: ReactNode; style?: CSSProperties }) => {
+/** The film's three durations, in frames. */
+export const Q = 12;
+export const M = 18;
+export const L = 30;
+
+/** Arrives with a short travel and opacity at `at`; with `exit`, leaves the same way before the next thing arrives. */
+export const Rise = ({ at, dur = M, y = 26, x = 0, exit, exitDur = Q, children, style }: { at: number; dur?: number; y?: number; x?: number; exit?: number; exitDur?: number; children: ReactNode; style?: CSSProperties }) => {
   const frame = useCurrentFrame();
   const p = prog(frame, at, dur);
-  const o = exit === undefined ? p : p * fall(frame, exit, exitDur);
-  return <div style={{ opacity: o, translate: `0px ${(1 - p) * y}px`, ...style }}>{children}</div>;
+  const q = exit === undefined ? 0 : interpolate(frame, [exit, exit + exitDur], [0, 1], { ...clamp, easing: EASE_IO });
+  if (frame < at - 1 || q >= 1) return null;
+  return <div style={{ opacity: p * (1 - q), translate: `${(1 - p) * x}px ${(1 - p) * y - q * 14}px`, ...style }}>{children}</div>;
 };
 
 /** Grows from no height to its content's height at `at`, pushing what is above it: a new line arriving in a thread. */
@@ -70,13 +76,44 @@ export const fi = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " "
 export const Drift = ({ children, by = 0.025, origin = "50% 50%" }: { children: ReactNode; by?: number; origin?: string }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
-  return <AbsoluteFill style={{ scale: String(1 + by * (frame / durationInFrames)), transformOrigin: origin }}>{children}</AbsoluteFill>;
+  return <AbsoluteFill style={{ scale: String(1 + by * EASE_IO(frame / durationInFrames) * 0.5 + by * 0.5 * (frame / durationInFrames)), transformOrigin: origin, willChange: "transform" }}>{children}</AbsoluteFill>;
 };
 
-/** The film's one transition: the old scene pushes toward the camera while the new one settles in from behind it. */
+/**
+ * The film's one transition, a push-through on the beat: the old scene pushes toward the camera and clears, then the
+ * new one settles in from behind it. The two never show their words over each other.
+ */
 const Through = ({ children, presentationDirection, presentationProgress }: TransitionPresentationComponentProps<Record<string, never>>) => {
-  const p = EASE_IO(presentationProgress);
   const entering = presentationDirection === "entering";
-  return <AbsoluteFill style={{ opacity: entering ? presentationProgress : 1, scale: String(entering ? 0.955 + 0.045 * p : 1 + 0.05 * p) }}>{children}</AbsoluteFill>;
+  const p = entering ? interpolate(presentationProgress, [0.45, 1], [0, 1], clamp) : interpolate(presentationProgress, [0, 0.55], [0, 1], clamp);
+  return <AbsoluteFill style={{ opacity: entering ? p : 1 - p, scale: String(entering ? 0.94 + 0.06 * EASE(p) : 1 + 0.08 * EASE_IO(p)) }}>{children}</AbsoluteFill>;
 };
 export const through = () => ({ component: Through, props: {} });
+
+/** A point on a cubic curve. */
+export const bez = (p: number[][], t: number): [number, number] => {
+  const u = 1 - t;
+  return [0, 1].map((k) => u * u * u * p[0][k] + 3 * u * u * t * p[1][k] + 3 * u * t * t * p[2][k] + t * t * t * p[3][k]) as [number, number];
+};
+
+/**
+ * A line in a diagram (inside an svg): it draws on from `at` with a moving head; once drawn, with `every` set, a token
+ * travels along it again and again (`back` sends it the other way).
+ */
+export const Wire = ({ pts, at, dur = M, color = "#c0e021", width = 3, every = 0, offset = 0, back = false, rest = 0.5 }: { pts: number[][]; at: number; dur?: number; color?: string; width?: number; every?: number; offset?: number; back?: boolean; rest?: number }) => {
+  const frame = useCurrentFrame();
+  const p = prog(frame, at, dur);
+  if (frame < at) return null;
+  const d = `M ${pts[0]} C ${pts[1]}, ${pts[2]}, ${pts[3]}`;
+  const head = bez(pts, p);
+  const run = every > 0 && frame > at + dur;
+  const u = run ? EASE_IO((((frame - at - dur + offset) % every) + every) % every / every) : 0;
+  const tok = bez(pts, back ? 1 - u : u);
+  return (
+    <>
+      <path d={d} fill="none" stroke={color} strokeOpacity={rest} strokeWidth={width} strokeLinecap="round" pathLength={1} strokeDasharray={1} strokeDashoffset={1 - p} />
+      {p > 0 && p < 1 && <circle cx={head[0]} cy={head[1]} r={width * 2} fill={color} />}
+      {run && <circle cx={tok[0]} cy={tok[1]} r={width * 2.2} fill={color} opacity={Math.sin(u * Math.PI) ** 0.5} />}
+    </>
+  );
+};

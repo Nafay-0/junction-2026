@@ -6,7 +6,7 @@
 // Writes public/vo/raw/<id>.mp3 and .json (the take as recorded, with its alignment), public/vo/<id>.mp3 (the take at
 // TEMPO, pitch kept: this model ignores the API's speed setting) and src/vo.json (seconds and word times the film is
 // timed from, at that tempo). The key is read from the git-ignored web/.env.local and never printed.
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -53,12 +53,38 @@ function words(al) {
   return out.map((x) => ({ w: x.w, s: Math.round((x.s / TEMPO) * 1000) / 1000, e: Math.round((x.e / TEMPO) * 1000) / 1000 }));
 }
 
-/** The film's clip from the raw take: the same voice at TEMPO, and its word times. */
+/**
+ * Long pauses in the take, tightened the way an editor would: every silence longer than PAUSE_OVER seconds keeps
+ * PAUSE_KEEP seconds (half at each side) and loses its middle. Returns the parts of the take that stay.
+ */
+const PAUSE_OVER = Number(process.env.VO_PAUSE_OVER ?? 0.34);
+const PAUSE_KEEP = Number(process.env.VO_PAUSE_KEEP ?? 0.28);
+function cuts(file) {
+  const log = spawnSync("ffmpeg", ["-hide_banner", "-nostats", "-i", file, "-af", `silencedetect=noise=-36dB:d=${PAUSE_OVER}`, "-f", "null", "-"], { encoding: "utf8" }).stderr;
+  const starts = [...log.matchAll(/silence_start: ([\d.]+)/g)].map((m) => Number(m[1]));
+  const ends = [...log.matchAll(/silence_end: ([\d.]+)/g)].map((m) => Number(m[1]));
+  return starts.flatMap((a, i) => (ends[i] !== undefined && a > 0.05 && ends[i] - a > PAUSE_KEEP + 0.02 ? [[a + PAUSE_KEEP / 2, ends[i] - PAUSE_KEEP / 2]] : []));
+}
+
+/** The film's clip from the raw take: pauses tightened, the same voice at TEMPO, levelled; and its word times. */
 function finalize(id) {
+  const rawFile = join(root, "public/vo/raw", `${id}.mp3`);
   const raw = JSON.parse(readFileSync(join(root, "public/vo/raw", `${id}.json`), "utf8"));
-  execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-i", join(root, "public/vo/raw", `${id}.mp3`), "-filter:a", `atempo=${TEMPO},loudnorm=I=-17:TP=-1.5:LRA=11`, "-ar", "44100", "-b:a", "192k", join(root, "public/vo", `${id}.mp3`)]);
-  const ws = words(raw.alignment);
-  return { seconds: ws.at(-1).e, words: ws };
+  const removed = cuts(rawFile);
+  const dur = Number(spawnSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", rawFile], { encoding: "utf8" }).stdout);
+  const keep = [];
+  let at = 0;
+  for (const [a, b] of removed) keep.push([at, a]), (at = b);
+  keep.push([at, dur]);
+  const F = 0.008;
+  const parts = keep.map(([a, b], i) => `[0:a]atrim=${a.toFixed(4)}:${b.toFixed(4)},asetpts=PTS-STARTPTS,afade=t=in:d=${F},afade=t=out:st=${Math.max(0, b - a - F).toFixed(4)}:d=${F}[p${i}]`);
+  const graph = `${parts.join(";")};${keep.map((_, i) => `[p${i}]`).join("")}concat=n=${keep.length}:v=0:a=1,atempo=${TEMPO},loudnorm=I=-17:TP=-1.5:LRA=11[out]`;
+  execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-i", rawFile, "-filter_complex", graph, "-map", "[out]", "-ar", "44100", "-b:a", "192k", join(root, "public/vo", `${id}.mp3`)]);
+  const shift = (t) => t - removed.reduce((s, [a, b]) => s + Math.max(0, Math.min(t, b) - a), 0);
+  const al = raw.alignment;
+  const moved = { characters: al.characters, character_start_times_seconds: al.character_start_times_seconds.map(shift), character_end_times_seconds: al.character_end_times_seconds.map(shift) };
+  const ws = words(moved);
+  return { seconds: ws.at(-1).e, words: ws, tightened: Math.round(removed.reduce((s, [a, b]) => s + b - a, 0) * 100) / 100 };
 }
 
 const voPath = join(root, "src/vo.json");
@@ -68,7 +94,7 @@ for (const scene of script) {
   if (only.length && !only.includes(scene.id)) continue;
   if (postOnly) {
     vo[scene.id] = finalize(scene.id);
-    console.log(scene.id, `${vo[scene.id].seconds.toFixed(2)} s`);
+    console.log(scene.id, `${vo[scene.id].seconds.toFixed(2)} s`, `(pauses tightened by ${vo[scene.id].tightened} s)`);
     continue;
   }
   const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE}/with-timestamps?output_format=mp3_44100_192`, {

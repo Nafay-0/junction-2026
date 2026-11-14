@@ -1,150 +1,124 @@
 import { AbsoluteFill, interpolate, useCurrentFrame } from "remotion";
-import { clamp, EASE, fall, prog, Rise } from "../anim";
-import { C, display, sans } from "../theme";
+import { clamp, EASE, EASE_IO, M, prog, Q, Rise, Wire } from "../anim";
+import { C, display, sans, SHADOW } from "../theme";
 import { GateMark, Ground, IconCheck } from "../ui";
 import { cue } from "../vo";
 
 const c = (phrase: string, shift = 0) => cue("gate", phrase, shift);
 const T = {
-  pipe: c("Twenty rules", -8),
+  order: c("Twenty rules", -8),
   rules: c("rules"),
-  rulesEnd: c("order", 16),
-  tried: c("We tried", -8),
-  rows: [c("forged", -4), c("replayed", -4), c("an agent approving", -4), c("itself", 14), c("itself", 19), c("itself", 24), c("itself", 29)],
-  tally: c("All stopped", 2),
-  ledger: c("tamper-evident", -16),
+  rulesEnd: c("order", 6),
+  pass: c("order", 10),
+  attacks: [c("forged", -10), c("replayed", -10), c("an agent approving", -10)],
+  tally: c("All stopped", -2),
+  chain: c("tamper-evident", -14),
 };
-
-/** The five stations every order passes (web/src/app/_landing2/landing2.text.ts). */
-const STATIONS = [
-  { name: "Mandate", who: "signed by the buyer" },
-  { name: "Quote", who: "signed by the wholesaler" },
-  { name: "Gate", who: "plain code, 20 rules" },
-  { name: "Sign-off", who: "a named person's passkey" },
-  { name: "Ledger", who: "hash-chained, verifiable" },
+/** Three of the seven recorded attempts (web/src/server/show/recordings/attacks.json); all seven were stopped. */
+const ATTACKS = ["Forged mandate", "Replayed quote", "Self-approval"];
+/** A real SHA-256 chain over these labels: each block carries the hash of the one before. */
+const BLOCKS = [
+  { at: T.pass + M, label: "order placed", hash: "fa63b6cc…535d", ok: true },
+  { at: T.attacks[0] + 30, label: "refused", hash: "8259a448…7281", ok: false },
+  { at: T.attacks[1] + 30, label: "refused", hash: "96a5c12f…b17f", ok: false },
+  { at: T.attacks[2] + 30, label: "refused", hash: "4448bec4…bc69", ok: false },
 ];
+const GATE = { x: 800, y: 230, w: 320, h: 620 };
+const LANE = 540;
+const CARD = { w: 380, h: 200 };
 
-/** The gate's rules, in its own order (web/src/core/policy.ts RULES). */
-const RULES = ["mandate_agent", "mandate_window", "quote_binding", "quote_expiry", "quote_replay", "order_matches_quote", "category_allowed", "required_attributes", "forbidden_allergens", "nutrition_rules", "required_certificates", "recall_hold", "delivery_deadline", "substitution_rule", "substitute_price", "weekly_budget", "per_order_limit", "order_splitting", "human_confirmation", "approver_authority"];
-
-/** The recorded attempts (web/src/server/show/recordings/attacks.json), each with the gate's own answer. */
-const ATTACKS = [
-  { title: "A forged mandate", how: "Refused" },
-  { title: "A replayed fixed price", how: "Refused" },
-  { title: "The agent approves its own order", how: "Refused" },
-  { title: "One need, split to dodge the limit", how: "To a person" },
-  { title: "Ten times too much", how: "Stopped" },
-  { title: "“The chef said yes”", how: "To a person" },
-  { title: "Suspended by the wholesaler", how: "Refused" },
-];
-
-/** A real SHA-256 chain over these five labels: each entry carries the hash of the one before. */
-const CHAIN = [
-  { label: "request", hash: "8259a448…7281" },
-  { label: "quote signed", hash: "96a5c12f…b17f" },
-  { label: "gate decision", hash: "4448bec4…bc69" },
-  { label: "sign-off, passkey", hash: "469b5e71…0fa3" },
-  { label: "order placed", hash: "fa63b6cc…535d" },
-];
-
-const Pipeline = () => {
-  const frame = useCurrentFrame();
-  const out = fall(frame, T.tried, 12);
-  const travel = interpolate(frame, [T.pipe + 14, T.rulesEnd + 6], [0, 4], { ...clamp, easing: EASE });
-  const W = 310;
-  const GAP = 34;
-  const x0 = 117;
-  return (
-    <div style={{ position: "absolute", inset: 0, opacity: out }}>
-      <div style={{ position: "absolute", left: x0 + W / 2, top: 404, width: 4 * (W + GAP), height: 3, background: "rgb(255 255 255 / 0.16)", opacity: prog(frame, T.pipe + 6, 20) }}>
-        <div style={{ height: 3, width: `${(travel / 4) * 100}%`, background: C.lime }} />
-      </div>
-      {STATIONS.map((s, i) => {
-        const p = prog(frame, T.pipe + i * 9, 18);
-        const lit = travel >= i - 0.05;
-        const gate = i === 2;
-        return (
-          <div key={s.name} style={{ position: "absolute", left: x0 + i * (W + GAP), top: 310, width: W, height: 190, boxSizing: "border-box", borderRadius: 24, padding: "30px 30px", background: gate ? C.slab : "rgb(255 255 255 / 0.07)", border: `2px solid ${lit ? C.lime : "rgb(255 255 255 / 0.16)"}`, opacity: p, translate: `0px ${(1 - p) * 30}px` }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-              {gate && <GateMark size={40} />}
-              <span style={{ ...display, fontSize: 50, color: gate ? C.safety : C.paper }}>{s.name}</span>
-            </div>
-            <div style={{ ...sans, fontSize: 28, color: "rgb(255 255 255 / 0.74)", marginTop: 14, lineHeight: 1.25 }}>{s.who}</div>
-          </div>
-        );
-      })}
-      <div style={{ position: "absolute", left: x0, top: 590, width: 1686, display: "flex", flexWrap: "wrap", gap: 14, opacity: prog(frame, T.pipe + 20, 18) }}>
-        {RULES.map((r, i) => {
-          const at = T.rules + (i * (T.rulesEnd - T.rules)) / RULES.length;
-          const p = prog(frame, at, 10);
-          return (
-            <div key={r} style={{ ...sans, display: "flex", alignItems: "center", gap: 10, height: 54, padding: "0 20px", borderRadius: 27, fontSize: 25, background: p > 0.5 ? "rgb(192 224 33 / 0.14)" : "rgb(255 255 255 / 0.06)", color: p > 0.5 ? C.paper : "rgb(255 255 255 / 0.45)", border: `1.5px solid ${p > 0.5 ? "rgb(192 224 33 / 0.6)" : "rgb(255 255 255 / 0.12)"}` }}>
-              <IconCheck size={22} color={C.lime} style={{ opacity: p, scale: String(0.5 + p * 0.5) }} />
-              {r.replaceAll("_", " ")}
-            </div>
-          );
-        })}
-      </div>
-      <Rise at={T.rules + 10} style={{ position: "absolute", left: x0, top: 880, ...display, fontSize: 56, color: C.paper }}>
-        No model. The same answer, every time.
-      </Rise>
-    </div>
-  );
-};
-
-const Attacks = () => {
-  const frame = useCurrentFrame();
-  if (frame < T.tried) return null;
-  return (
-    <div style={{ position: "absolute", inset: 0 }}>
-      <Rise at={T.tried + 4} style={{ position: "absolute", left: 117, top: 244, ...display, fontSize: 68, color: C.lime }}>
-        We tried to break it.
-      </Rise>
-      <div style={{ position: "absolute", left: 117, top: 356, width: 1070 }}>
-        {ATTACKS.map((a, i) => {
-          const at = T.rows[i];
-          const p = prog(frame, at, 14);
-          const stamp = prog(frame, at + 10, 10);
-          return (
-            <div key={a.title} style={{ display: "flex", alignItems: "center", gap: 24, height: 78, borderTop: "1px solid rgb(255 255 255 / 0.13)", opacity: p, translate: `${(1 - p) * 40}px 0px` }}>
-              <div style={{ flex: 1, minWidth: 0, ...sans, fontSize: 38, fontWeight: 600, color: C.paper }}>{a.title}</div>
-              <div style={{ ...sans, height: 48, padding: "0 22px", borderRadius: 24, display: "flex", alignItems: "center", fontSize: 25, fontWeight: 700, background: C.safety, color: C.slab, opacity: stamp, scale: String(1.25 - stamp * 0.25), whiteSpace: "nowrap" }}>{a.how}</div>
-            </div>
-          );
-        })}
-      </div>
-      <Rise at={T.tally} dur={16} style={{ position: "absolute", left: 1290, top: 250, width: 540 }}>
-        <div style={{ ...display, fontSize: 176, color: C.lime, lineHeight: 0.95, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>7 of 7</div>
-        <div style={{ ...sans, fontSize: 38, color: "rgb(255 255 255 / 0.84)", marginTop: 12 }}>held at the real gate.</div>
-      </Rise>
-      <div style={{ position: "absolute", left: 1290, top: 540, width: 540 }}>
-        <Rise at={T.ledger - 6} style={{ ...sans, fontSize: 28, color: "rgb(255 255 255 / 0.7)", marginBottom: 14 }}>
-          A hash-chained ledger
-        </Rise>
-        {CHAIN.map((b, i) => {
-          const p = prog(frame, T.ledger + i * 7, 12);
-          return (
-            <div key={b.label} style={{ ...sans, display: "flex", alignItems: "center", gap: 16, height: 56, marginTop: i ? 8 : 0, padding: "0 20px", borderRadius: 14, background: "rgb(255 255 255 / 0.08)", border: "1.5px solid rgb(255 255 255 / 0.16)", opacity: p, translate: `0px ${(1 - p) * 18}px` }}>
-              <span style={{ width: 12, height: 12, borderRadius: "50%", background: C.lime }} />
-              <span style={{ fontSize: 26, color: C.paper, flex: 1 }}>{b.label}</span>
-              <span style={{ fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace', fontSize: 22, color: "rgb(255 255 255 / 0.62)" }}>{b.hash}</span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
-
-/** The gate: never the model, always plain code; the recorded attempts to break it; the ledger. */
-export const Gate = () => (
-  <AbsoluteFill>
-    <Ground tone="slab">
-      <Rise at={4} dur={20} style={{ position: "absolute", left: 117, top: 92, ...display, fontSize: 112, color: C.paper }}>
-        The model is never trusted.
-      </Rise>
-      <Pipeline />
-      <Attacks />
-    </Ground>
-  </AbsoluteFill>
+const OrderCard = ({ title, big, sub, bad = false }: { title: string; big: string; sub: string; bad?: boolean }) => (
+  <div style={{ width: CARD.w, height: CARD.h, boxSizing: "border-box", borderRadius: 26, background: C.paper, boxShadow: SHADOW.xl, borderTop: `8px solid ${bad ? C.bad : C.lime}`, padding: "20px 26px", ...sans }}>
+    <div style={{ fontSize: 24, color: C.inkSoft }}>{title}</div>
+    <div style={{ ...display, fontSize: 52, color: C.ink, marginTop: 6, whiteSpace: "nowrap" }}>{big}</div>
+    <div style={{ fontSize: 24, color: C.inkSoft, marginTop: 6, whiteSpace: "nowrap" }}>{sub}</div>
+  </div>
 );
+
+/** An attempt: flies in, hits the gate, is stamped, and falls back. */
+const Attack = ({ at, name }: { at: number; name: string }) => {
+  const frame = useCurrentFrame();
+  if (frame < at || frame > at + 70) return null;
+  const inP = interpolate(frame, [at, at + M], [0, 1], { ...clamp, easing: EASE });
+  const hit = at + M;
+  const back = interpolate(frame, [hit + 8, hit + 8 + 30], [0, 1], { ...clamp, easing: EASE_IO });
+  const stamp = prog(frame, hit, Q);
+  const x = -420 + (GATE.x - CARD.w - 14 + 420) * inP - 300 * back;
+  return (
+    <div style={{ position: "absolute", left: x, top: LANE - CARD.h / 2 + 120 * back, rotate: `${-9 * back}deg`, opacity: 1 - back }}>
+      <OrderCard title="Attempt" big={name} sub="tries to get past" bad />
+      <div style={{ position: "absolute", right: -16, top: -22, height: 62, padding: "0 26px", borderRadius: 31, background: C.safety, color: C.slab, display: "flex", alignItems: "center", ...sans, fontSize: 32, fontWeight: 800, rotate: "6deg", opacity: stamp, scale: String(1.5 - 0.5 * stamp), boxShadow: SHADOW.md }}>Refused</div>
+    </div>
+  );
+};
+
+/** The gate as a world: a signed order passes its twenty rules and becomes a ledger block; attempts bounce off. */
+export const Gate = () => {
+  const frame = useCurrentFrame();
+  const gate = prog(frame, 6, M);
+  const inP = interpolate(frame, [T.order, T.order + 30], [0, 1], { ...clamp, easing: EASE });
+  const pass = interpolate(frame, [T.pass, T.pass + M], [0, 1], { ...clamp, easing: EASE_IO });
+  const lit = interpolate(frame, [T.rules, T.rulesEnd], [0, 20], clamp);
+  const knock = T.attacks.reduce((s, at) => s + interpolate(frame, [at + M - 2, at + M + 2, at + M + 14], [0, 1, 0], clamp), 0);
+  const cx = GATE.x + GATE.w / 2;
+  return (
+    <AbsoluteFill>
+      <Ground tone="slab">
+        <Rise at={6} style={{ position: "absolute", left: 100, top: 72, ...display, fontSize: 104, color: C.paper }}>
+          The model is never trusted.
+        </Rise>
+
+        <svg width={1920} height={1080} style={{ position: "absolute", inset: 0 }}>
+          <Wire at={T.pass + 4} dur={M} pts={[[GATE.x + GATE.w, LANE], [1240, LANE], [1220, 292], [1330, 292]]} rest={0.5} />
+          {BLOCKS.slice(1).map((b, i) => (
+            <Wire key={b.hash} at={Math.max(b.at, T.chain + i * 6)} dur={Q} pts={[[1380, 334 + i * 126], [1380, 350 + i * 126], [1380, 360 + i * 126], [1380, 376 + i * 126]]} width={4} rest={0.9} />
+          ))}
+        </svg>
+
+        <div style={{ position: "absolute", left: GATE.x + 6 * knock, top: GATE.y, width: GATE.w, height: GATE.h, boxSizing: "border-box", borderRadius: 40, overflow: "hidden", background: C.slab, border: `3px solid ${C.safety}`, boxShadow: `${SHADOW.xl}, 0 0 ${70 * knock}px -6px rgb(255 194 14 / ${0.7 * knock})`, opacity: gate, scale: String(0.94 + 0.06 * gate) }}>
+          <div style={{ height: 22, background: `repeating-linear-gradient(135deg, ${C.safety} 0 22px, ${C.slab} 22px 44px)` }} />
+          <div style={{ position: "relative", width: 260, height: 260, margin: "62px auto 0" }}>
+            {Array.from({ length: 20 }, (_, i) => {
+              const a = (i / 20) * Math.PI * 2 - Math.PI / 2;
+              const on = interpolate(lit, [i, i + 1], [0, 1], clamp);
+              return <span key={i} style={{ position: "absolute", left: 130 + Math.cos(a) * 118 - 5, top: 130 + Math.sin(a) * 118 - 13, width: 10, height: 26, borderRadius: 5, rotate: `${(a * 180) / Math.PI + 90}deg`, background: on > 0.5 ? C.lime : "rgb(255 255 255 / 0.2)", boxShadow: on > 0.5 ? "0 0 14px rgb(192 224 33 / 0.8)" : "none" }} />;
+            })}
+            <div style={{ position: "absolute", left: 60, top: 60 }}>
+              <GateMark size={140} />
+            </div>
+          </div>
+          <div style={{ ...display, fontSize: 64, color: C.safety, textAlign: "center", marginTop: 34 }}>20 rules</div>
+          <div style={{ ...sans, fontSize: 30, color: C.chalkSoft, textAlign: "center", marginTop: 6 }}>plain code</div>
+        </div>
+
+        {frame >= T.order && pass < 1 && (
+          <div style={{ position: "absolute", left: -420 + (GATE.x - CARD.w - 14 + 420) * inP + (cx - GATE.x + 40) * pass, top: LANE - CARD.h / 2, opacity: 1 - pass, scale: String(1 - 0.5 * pass) }}>
+            <OrderCard title="Order" big="1 010,00 €" sub="signed mandate, signed quote" />
+          </div>
+        )}
+        {T.attacks.map((at, i) => (
+          <Attack key={at} at={at} name={ATTACKS[i]} />
+        ))}
+
+        <Rise at={T.pass + M - 4} dur={Q} y={0} style={{ position: "absolute", left: 1330, top: 196, ...sans, fontSize: 30, color: "rgb(255 255 255 / 0.74)" }}>
+          One hash-chained ledger
+        </Rise>
+        {BLOCKS.map((b, i) => {
+          const p = prog(frame, b.at, M);
+          const linked = prog(frame, T.chain + i * 6, Q);
+          return (
+            <div key={b.hash} style={{ position: "absolute", left: 1330, top: 250 + i * 126, width: 500, height: 84, boxSizing: "border-box", borderRadius: 20, background: "rgb(255 255 255 / 0.08)", border: `2.5px solid ${b.ok ? C.lime : `rgb(255 194 14 / ${0.5 + 0.5 * linked})`}`, display: "flex", alignItems: "center", gap: 18, padding: "0 24px", ...sans, opacity: p, translate: `${(1 - p) * 40}px 0px` }}>
+              <span style={{ width: 40, height: 40, borderRadius: "50%", background: b.ok ? C.lime : C.safety, display: "flex", alignItems: "center", justifyContent: "center", ...display, fontSize: 26, color: C.slab }}>{b.ok ? <IconCheck size={24} color={C.slab} /> : "×"}</span>
+              <span style={{ fontSize: 32, color: C.paper, flex: 1 }}>{b.label}</span>
+              <span style={{ fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace', fontSize: 23, color: "rgb(255 255 255 / 0.66)", opacity: 0.4 + 0.6 * linked }}>{b.hash}</span>
+            </div>
+          );
+        })}
+
+        <Rise at={T.tally} style={{ position: "absolute", left: 100, top: 880, ...display, fontSize: 112, color: C.lime, whiteSpace: "nowrap" }}>
+          7 of 7 attempts stopped.
+        </Rise>
+      </Ground>
+    </AbsoluteFill>
+  );
+};

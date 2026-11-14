@@ -5,10 +5,10 @@ import { Agent, B, Buyer, Ground, Say, ThreadLine } from "../ui";
 import { cue } from "../vo";
 
 const c = (phrase: string, shift = 0) => cue("memory", phrase, shift);
-const T = { notes: c("remembers", -4), ask: c("So it catches", -6), reply: c("four thousand", 4), only: c("and asks", -4), mail: c("matters", 18), time: c("matters", 28) };
+const T = { notes: c("remembers", -4), ask: c("So it catches", -6), reply: c("four thousand", 4), only: c("and asks", -4), mail: c("and asks", 8), time: c("and asks", 14) };
 
 /** What the kitchen's agent remembers, in the product's own words (reel-thread.json, attacks.json). */
-const NOTES = ["Always lactose-free: many breakfast guests ask for it, as always (Kitchen manager, Tue 27.10.)", "Semi-skimmed 1.5 %, as usual", "Milk: about 400 L an order"];
+const NOTES = ["Always lactose-free", "Semi-skimmed 1.5 %, as usual", "Milk: about 400 L an order"];
 
 export const Memory = () => {
   const frame = useCurrentFrame();

@@ -1,17 +1,11 @@
 import { AbsoluteFill, Img, interpolate, staticFile, useCurrentFrame } from "remotion";
-import { clamp, EASE, fall, prog, Rise } from "../anim";
+import { clamp, EASE, EASE_IO, fall, prog, Rise } from "../anim";
 import { C, display, sans } from "../theme";
-import { BrowserFrame, Ground, IconCheck } from "../ui";
+import { BrowserFrame, Ground } from "../ui";
 import { cue } from "../vo";
 
 const c = (phrase: string, shift = 0) => cue("close", phrase, shift);
-const T = { agent: c("every agent", -4), decision: c("every decision", -4), stop: c("stop", -4), end: c("AimoPilot", -8), line: c("Keep", -4), foot: c("word", 4) };
-
-const POINTS = [
-  { at: T.agent, text: "Every agent at the door." },
-  { at: T.decision, text: "Every decision, replayable." },
-  { at: T.stop, text: "Suspend any agent." },
-];
+const T = { agent: c("every agent", -4), decision: c("every decision", -4), stop: c("stop", -4), end: c("AimoPilot", -8), line: c("Keep", -4), foot: c("AimoPilot", 10) };
 
 export const Close = () => {
   const frame = useCurrentFrame();
@@ -23,24 +17,19 @@ export const Close = () => {
     <AbsoluteFill>
       <Ground>
         <div style={{ position: "absolute", inset: 0, opacity: out }}>
-          <div style={{ position: "absolute", left: 80, top: 150, opacity: p, translate: `0px ${(1 - p) * 60}px`, scale: String(interpolate(frame, [0, T.end], [1, 1.035], clamp)), transformOrigin: "0 50%" }}>
-            <BrowserFrame width={1120} height={700} url="aimopilot.zeroanomaly.tech/ops">
-              <Img src={staticFile("shots/ops-live.webp")} style={{ width: 1120 }} />
-            </BrowserFrame>
+          <div style={{ position: "absolute", inset: 0, perspective: 2600 }}>
+            <div style={{ position: "absolute", left: 120, top: 150, opacity: p, translate: `0px ${(1 - p) * 60}px`, rotate: `y ${interpolate(frame, [0, T.end + 12], [13, 7], { ...clamp, easing: EASE_IO })}deg`, scale: String(interpolate(frame, [0, T.end + 12], [1, 1.05], { ...clamp, easing: EASE_IO })), transformOrigin: "0 50%", willChange: "transform" }}>
+              <BrowserFrame width={1180} height={737} url="aimopilot.zeroanomaly.tech/ops">
+                <Img src={staticFile("shots/ops-live.webp")} style={{ width: 1180 }} />
+              </BrowserFrame>
+            </div>
           </div>
-          <div style={{ position: "absolute", left: 1270, top: 190, width: 570 }}>
-            <Rise at={6} style={{ ...display, fontSize: 76, color: C.paper }}>
-              The wholesaler sees it all.
-            </Rise>
-            {POINTS.map((x) => (
-              <Rise key={x.text} at={x.at} style={{ display: "flex", gap: 18, alignItems: "flex-start", marginTop: 34, ...sans, fontSize: 42, lineHeight: 1.3, color: "rgb(255 255 255 / 0.9)" }}>
-                <span style={{ width: 40, height: 40, borderRadius: "50%", background: C.lime, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 4 }}>
-                  <IconCheck size={26} color={C.ink} />
-                </span>
-                {x.text}
-              </Rise>
-            ))}
-          </div>
+          <Rise at={T.agent - 20} x={40} y={0} style={{ position: "absolute", left: 1330, top: 380, width: 520, ...display, fontSize: 92, color: C.paper }}>
+            The wholesaler sees it all.
+          </Rise>
+          <Rise at={T.stop} x={40} y={0} style={{ position: "absolute", left: 1330, top: 720, ...sans, display: "inline-flex", alignItems: "center", height: 76, padding: "0 34px", borderRadius: 38, background: C.safety, color: C.slab, fontSize: 36, fontWeight: 800 }}>
+            Suspend any agent
+          </Rise>
         </div>
 
         <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", opacity: end }}>
