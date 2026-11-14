@@ -662,6 +662,39 @@ export type ScenarioCard = CardBase & {
   state: "open" | "answered";
 };
 
+/**
+ * A menu as content, shown in the reply (not behind "Show the list"): each dish in the order of the meal, its
+ * ingredients with the amount for the covers, and how an ingredient is covered when it is not simply ordered. A
+ * snapshot at the moment of the reply, so a change ("make it lactose-free") shows the dish again beside the earlier one.
+ */
+export type DishesCard = CardBase & {
+  type: "dishes";
+  planId: string;
+  covers: number | null;
+  serviceDate?: string;
+  dishes: {
+    dishId: string;
+    name: Record<"en" | "fi" | "sv", string>;
+    course: string;
+    items: {
+      lineId: string;
+      name: Record<"en" | "fi" | "sv", string>;
+      /** What the covers need, in the line's unit (kg, L, pcs). */
+      need?: { amount: number; unit: string };
+      /** The product bought for it (never shown here: it is for marking what changed). */
+      productId?: string;
+      /**
+       * How it is covered, when it is not simply ordered: on hand or a staple (have), left off (with why), can't
+       * arrive (by), a swap (to: what is bought in its place), arrives later (date), still open; or changed by the
+       * buyer's last words.
+       */
+      note?: { code: "have" | "left_out" | "late" | "swap" | "later" | "open" | "changed"; to?: Record<"en" | "fi" | "sv", string>; date?: string; why?: string; basis?: "staple" | "on_hand" | "chef" };
+    }[];
+  }[];
+  totalCents: number;
+  costPerCoverCents?: number;
+};
+
 /** A backup in case a product with a poor delivery record does not come (server/reliability), said after the order. */
 export type BackupCard = CardBase & {
   type: "backup";
@@ -677,7 +710,7 @@ export type BackupCard = CardBase & {
   state: "open" | "set" | "declined";
 };
 
-export type Card = BackupCard | ScenarioCard | WatchCard | OfferCard | UnderstoodCard | AnomalyCard | QuestionCard | OptionsCard | PriceCard | GateCard | OrderCard | MemoryCard | RecordsCard | NoticeCard | SheetCard | AlternativesCard | MenuCard | TodayCard | ProductsCard | ProductCard | StandingCard | DeliveriesCard | MemoryListCard | RulesCard;
+export type Card = DishesCard | BackupCard | ScenarioCard | WatchCard | OfferCard | UnderstoodCard | AnomalyCard | QuestionCard | OptionsCard | PriceCard | GateCard | OrderCard | MemoryCard | RecordsCard | NoticeCard | SheetCard | AlternativesCard | MenuCard | TodayCard | ProductsCard | ProductCard | StandingCard | DeliveriesCard | MemoryListCard | RulesCard;
 // ---------- the kitchen's rules (docs/agent-thread.md "Widgets": rules) ----------
 
 /** The mandate as the rules card shows it: plain values. `groups` only where the kitchen has terms (an account). */

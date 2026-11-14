@@ -39,6 +39,8 @@ export type TurnRun = {
   scenarioReply?: string;
   /** A menu scenario said this turn: its words are the reply (scenario.ts). */
   scenarioSaid?: string;
+  /** A menu plan shown or changed in this turn: its dishes and ingredients are shown in the reply (menu.ts dishesCard). */
+  dishesFor?: { planId: string; standIns?: Record<string, string>; changed?: boolean };
   /** The watch's moment the buyer asked about this turn: its words are the reply (watch.ts). */
   watchAsked?: string;
   /** The wholesaler's offer the buyer asked for this turn: its own words are the reply (offer.ts). */

@@ -243,6 +243,8 @@ async function fullCard(run: TurnRun, svc: Svc, m: MenuState, planned: Planned, 
   }
   const t = view.totals;
   const covers = p.settings.covers;
+  // A menu ready in this turn (not yet on a sheet) is shown as dishes in the reply.
+  if (!resolving && p.state === "planned" && !m.sheetId) run.dishesFor = { planId: p.planId };
   const days = resolving ? [] : await daysOf(run, svc, planned);
   const problem = dayProblem(m, p.settings.deliverBy, days);
   return {
@@ -586,4 +588,76 @@ export function openMenu(run: TurnRun): MenuCard | undefined {
     .filter((c): c is MenuCard => c.type === "menu")
     .reverse()
     .find((c) => (c.stage === "ready" || c.stage === "choose") && !c.sheetId);
+}
+
+// ---------- the menu as content: dishes and their ingredients, in the reply ----------
+
+type Dishes = import("./types").DishesCard;
+type DishItem = Dishes["dishes"][number]["items"][number];
+const COURSE_ORDER = ["starter", "soup", "salad", "main", "side", "bread", "dessert", "drink", "snack", "other"];
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const three = (en: string, fi?: string | null, sv?: string | null) => ({ en, fi: fi || en, sv: sv || en });
+
+/**
+ * The dishes of a plan with their ingredients and amounts, from the planner's record (plain code, no live call): the
+ * menu the chef decides on. The products, packs and prices stay on the menu card behind "Show the list". `before` is
+ * the earlier snapshot of the same plan: an ingredient bought as another product now is marked changed. `standIns`:
+ * the best stand-in for a line that cannot arrive (the short-notice booking's own).
+ */
+export async function dishesCard(run: TurnRun, planId: string, before?: Dishes, standIns: Record<string, string> = {}): Promise<Dishes | undefined> {
+  const svc = await planner(run);
+  const { record: p, view } = await svc.service.get(svc.kitchen, planId);
+  if (p.state !== "planned" || !p.draft.dishes.length) return undefined;
+  const deliverBy = p.settings.deliverBy;
+  const was = new Map((before?.dishes ?? []).flatMap((d) => d.items.map((i) => [i.lineId, i] as const)));
+  const leftByBuyer = (run.thread as unknown as { leftOff?: Record<string, string[]> }).leftOff?.[planId] ?? [];
+  const dishes = [...p.draft.dishes]
+    .sort((a, b) => COURSE_ORDER.indexOf(a.course) - COURSE_ORDER.indexOf(b.course))
+    .map((d) => ({ dishId: d.id, name: three(d.name, d.nameFi, d.nameSv), course: d.course, items: [] as DishItem[] }));
+  for (const l of view.lines) {
+    if (l.status === "merged") continue;
+    // The planner's own ingredient words: English, and Finnish first among its search terms.
+    const fi = l.searchTerms.find((x) => /[äöå]/i.test(x)) ?? l.searchTerms[0];
+    const name = three(cap(l.name), fi ? cap(fi) : undefined);
+    const productId = l.chosen?.products[0]?.productId;
+    const late = l.doubts.find((x) => x.kind === "cannot_arrive" && !x.accepted);
+    let note: DishItem["note"];
+    if (l.status === "struck") {
+      const chef = !!p.edits[l.lineId]?.struck;
+      const left = leftByBuyer.includes(l.lineId);
+      note = !left && (l.onHand || l.pantry || chef) ? { code: "have", basis: l.onHand ? "on_hand" : chef ? "chef" : "staple" } : { code: "left_out", ...(late ? { why: plain(late.text) } : !left && l.struckReason ? { why: l.struckReason } : {}) };
+    } else if (!l.chosen) note = p.settings.covers ? { code: "open", ...(l.doubts[0] ? { why: plain(l.doubts[0].text) } : {}) } : undefined;
+    else if (late) note = { code: "late", ...(deliverBy ? { date: deliverBy } : {}), ...(standIns[l.lineId] ? { to: three(standIns[l.lineId]) } : {}) };
+    else if (l.replaces) note = { code: "swap", to: name };
+    else if (deliverBy && l.chosen.deliveryDate > deliverBy) note = { code: "later", date: l.chosen.deliveryDate };
+    const prev = was.get(l.lineId);
+    if (before && (!note || note.code === "swap") && prev && prev.productId !== productId) note = { code: "changed" };
+    // A line used in several dishes is shown under each, with that dish's own amount.
+    const uses = l.uses.length ? l.uses : [{ dishId: dishes[0]?.dishId ?? "", gross: l.gross }];
+    for (const use of uses) {
+      const dish = dishes.find((x) => x.dishId === use.dishId) ?? dishes[0];
+      const gross = l.uses.length > 1 ? use.gross : l.gross;
+      if (!dish || dish.items.some((i) => i.lineId === l.lineId)) continue;
+      dish.items.push({
+        lineId: l.lineId,
+        // A swap is shown on the ingredient it replaces ("frozen whitefish in its place").
+        name: l.replaces ? three(cap(l.replaces.name)) : name,
+        ...(gross && gross.amount > 0 ? { need: { amount: gross.amount, unit: gross.unit } } : {}),
+        ...(productId ? { productId } : {}),
+        ...(note ? { note } : {}),
+      });
+    }
+  }
+  const covers = p.settings.covers;
+  const total = view.totals.totalCents;
+  return {
+    type: "dishes",
+    cardId: cardId("dishes", run.turnId),
+    planId,
+    covers,
+    ...(deliverBy ? { serviceDate: deliverBy } : {}),
+    dishes: dishes.filter((d) => d.items.length),
+    totalCents: total,
+    ...(covers && total ? { costPerCoverCents: Math.round(total / covers) } : {}),
+  };
 }

@@ -57,6 +57,7 @@ export const THREAD_LINE_TEXT = defineText({
     },
     // steps, written for a person
     step: {
+      have: { staple: "Taken as a staple your kitchen keeps", on_hand: "Taken as on hand, as you told me", chef: "Left to you: you said you have it" },
       read: "Read your request",
       history: "Looked at your history",
       searched: "Searched the assortment",
@@ -144,6 +145,7 @@ export const THREAD_LINE_TEXT = defineText({
       more: (n: number) => `Ja ${n} muuta asiaa tänään.`,
     },
     step: {
+      have: { staple: "Oletettu peruselintarvikkeeksi, jota keittiössä on aina", on_hand: "Oletettu varastossa olevaksi, kuten kerroit", chef: "Jätetty teille: kerroit, että sitä on" },
       read: "Luin pyyntösi",
       history: "Katsoin historiaasi",
       searched: "Hain valikoimasta",
@@ -231,6 +233,7 @@ export const THREAD_LINE_TEXT = defineText({
       more: (n: number) => `Och ${n} saker till i dag.`,
     },
     step: {
+      have: { staple: "Antaget som en basvara köket alltid har", on_hand: "Antaget att det finns i lager, som du sa", chef: "Lämnat åt er: du sa att ni har det" },
       read: "Läste din beställning",
       history: "Tittade på er historik",
       searched: "Sökte i sortimentet",

@@ -26,7 +26,7 @@ import { fixTypos } from "./pipeline";
 import { hasToday, helsinkiToday, postToday, todayCardId } from "./home";
 import { ensureTelemetry } from "./telemetry";
 import { failureOf, turnOutcome, type TurnFailure } from "./outcome";
-import type { AgentTurn, BuyerTurn, Card, GateCard, MemoryCard, OrderCard, RecordsCard, SubmitTurn, SubmitTurnReply, ThreadAction, ThreadDoor } from "./types";
+import type { AgentTurn, BuyerTurn, Card, GateCard, MemoryCard, MenuCard, OrderCard, RecordsCard, SubmitTurn, SubmitTurnReply, ThreadAction, ThreadDoor } from "./types";
 
 /**
  * One conversation per kitchen, one engine for every door. A door submits a turn (typed words, a transcript, a tap
@@ -298,6 +298,19 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
         if (sc.state !== "open") run.store.card(thread, run.turnId, { ...sc, state: "open" });
         body = { ...body, action: { type: "scenario_answer", planId: sc.planId, answer: a }, label: body.text };
       }
+    }
+  }
+  // "Yes" to "Shall I leave the chocolate out?" (a line the kitchen's allergen rule stops): that line is left off.
+  const leaveOut = (thread as unknown as { leaveOut?: { planId: string; lineId: string } }).leaveOut;
+  if (leaveOut && !body.action && body.text && body.text.trim().split(/\s+/).length <= 6) {
+    const { yesOrNo } = await import("@/server/channels/speech");
+    const last = [...thread.turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "");
+    if (last?.role === "agent" && /(leave the .+ out\?|jätänkö sen pois|ska jag utelämna)/i.test(last.line ?? "") && yesOrNo(body.text) === "yes") {
+      body = { ...body, action: { type: "menu_line_have", planId: leaveOut.planId, lineId: leaveOut.lineId, have: true }, label: body.text };
+      const left = ((thread as unknown as { leftOff?: Record<string, string[]> }).leftOff ??= {});
+      left[leaveOut.planId] = [...(left[leaveOut.planId] ?? []), leaveOut.lineId];
+      delete (thread as unknown as { leaveOut?: unknown }).leaveOut;
+      run.dishesFor = { planId: leaveOut.planId, changed: true };
     }
   }
   // "Yes" to "Shall I order it?" for the menu on the table: ordered (the same as its order button, then the gate).
@@ -620,6 +633,24 @@ function waitingSentence(order: OrderCard, gate: GateCard, lang: "en" | "fi" | "
   return `${what} for ${eur(order.totalCents)}${why ? `: ${why.replace(/\.$/, "").replace(/^./, (c) => c.toLowerCase())}` : ""}, so ${whoEn} is asked to OK it.`;
 }
 
+/**
+ * A menu shown, planned or changed in this turn: its dishes and ingredients in the reply (menu.ts dishesCard), the
+ * changed ones marked against the dishes shown before. Not once it is on an order sheet: then the order is the news.
+ */
+async function showDishes(run: TurnRun): Promise<void> {
+  const d = run.dishesFor;
+  if (!d) return;
+  const here = run.store.agentTurn(run.thread, run.turnId)?.cards ?? [];
+  if (here.some((c) => c.type === "sheet" || c.type === "order" || c.type === "dishes")) return;
+  const before = d.changed ? run.store.cards(run.thread).map((x) => x.card).filter((c): c is Extract<Card, { type: "dishes" }> => c.type === "dishes" && c.planId === d.planId).at(-1) : undefined;
+  const { dishesCard } = await import("./menu");
+  const card = await dishesCard(run, d.planId, before, d.standIns).catch((err) => {
+    console.error("[thread] dishes", err);
+    return undefined;
+  });
+  if (card?.dishes.length) run.store.card(run.thread, run.turnId, card);
+}
+
 /** A turn that failed or timed out, in the ledger (and so the telemetry): a stable code and the duration, no words. */
 function turnFailed(run: TurnRun, code: TurnFailure): void {
   const ms = Date.now() - run.t0;
@@ -633,6 +664,7 @@ function turnFailed(run: TurnRun, code: TurnFailure): void {
 /** The end of an agent turn: what to remember, its status (waiting for the buyer, for a person, or done) and the record. */
 async function finishTurn(run: TurnRun): Promise<void> {
   const { store, thread } = run;
+  await showDishes(run);
   const a = store.agentTurn(thread, run.turnId)!;
   const waitingApprover = a.cards.some((c) => c.type === "gate" && c.outcome === "waiting");
   const waitingBuyer = !waitingApprover && a.cards.some((c) => (c.type === "anomaly" && !c.answered) || c.type === "question" || (c.type === "options" && !c.chosen) || (c.type === "menu" && !c.sheetId && (c.stage === "choose" || c.stage === "ready")) || (c.type === "price" && !a.cards.some((x) => x.type === "gate" && x.requestId === c.requestId)));
@@ -931,6 +963,17 @@ const MENU_CHANGE = /\b(make it|make them|no\s+\w+|without|lactose|gluten|nut-?f
 
 /** "Make it lactose-free" while a menu is the subject: changed by the menu adapter, its sentence said; else undefined. */
 async function changeMenuInWords(run: TurnRun, words: string, lang: "en" | "fi" | "sv"): Promise<string | undefined> {
+  // "Yes" to "shall I find one without it?" (an ingredient the kitchen's allergen rule stops): the same as "make it lactose-free".
+  if (words.trim().split(/\s+/).length <= 5) {
+    const { yesOrNo } = await import("@/server/channels/speech");
+    const last = [...run.thread.turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "");
+    const { openMenu } = await import("./menu");
+    const stop = openMenu(run)?.dishes.flatMap((d) => d.lines).flatMap((l) => l.conflicts).find((x) => x.blocking && x.code === "forbidden_allergens");
+    if (stop && yesOrNo(words) === "yes" && last?.role === "agent" && /(without (it|that|them|lactose|gluten|milk)|ilman (sitä|niitä|laktoosia|gluteenia)|utan (den|det|laktos|gluten))[^.]*\?/i.test(last.line ?? "")) {
+      const allergen = /allergen\(s\): ([a-z_ ,]+)/i.exec(stop.text)?.[1]?.split(/,\s*/)[0] ?? "lactose";
+      words = `make it ${{ lactose: "lactose-free", gluten: "gluten-free", milk: "dairy-free" }[allergen] ?? `${allergen}-free`}`;
+    }
+  }
   if (words.trim().split(/\s+/).length > 14 || !MENU_CHANGE.test(words)) return undefined;
   const { subjectOf } = await import("./subject");
   const subj = subjectOf(run);
@@ -941,7 +984,37 @@ async function changeMenuInWords(run: TurnRun, words: string, lang: "en" | "fi" 
   const c = await changeMenu(run.k.info.slug, subj.planId, words, byLine(run), lang);
   if (!c.edits.length) return undefined;
   const { refreshMenu } = await import("./menu");
-  const card = await refreshMenu(run, subj.planId).catch(() => undefined);
+  let card = await refreshMenu(run, subj.planId).catch(() => undefined);
+  // A line the kitchen's allergen rule still stops (the chocolate with milk in it): one search for the same ingredient
+  // without it, and if none is found, said by name with the one way on (leave it out), never "made it lactose-free".
+  const blockedOf = (m: MenuCard | undefined) => (m?.dishes ?? []).flatMap((d) => d.lines).find((l) => l.conflicts.some((x) => x.blocking && x.code === "forbidden_allergens"));
+  let blocked = blockedOf(card);
+  if (blocked) {
+    const allergen = /allergen\(s\): ([a-z_ ,]+)/i.exec(blocked.conflicts.find((x) => x.code === "forbidden_allergens")?.text ?? "")?.[1]?.split(/,\s*/)[0] ?? "lactose";
+    const free = { lactose: "lactose-free", gluten: "gluten-free", milk: "dairy-free" }[allergen] ?? `${allergen}-free`;
+    const again = await changeMenu(run.k.info.slug, subj.planId, `use ${free} ${blocked.ingredient.toLowerCase()} instead of the ${blocked.ingredient.toLowerCase()}`, byLine(run), lang).catch(() => undefined);
+    if (again?.edits.length) {
+      card = await refreshMenu(run, subj.planId).catch(() => card);
+      blocked = blockedOf(card);
+    }
+  }
+  run.dishesFor = { planId: subj.planId, changed: true };
+  if (blocked) {
+    const allergen = /allergen\(s\): ([a-z_ ,]+)/i.exec(blocked.conflicts.find((x) => x.code === "forbidden_allergens")?.text ?? "")?.[1]?.split(/,\s*/)[0] ?? "lactose";
+    const { attrL } = await import("@/app/_i18n/format");
+    const a = attrL(allergen, lang).toLowerCase();
+    // The ingredient in the buyer's language: the planner's own word for it (the dishes shown below).
+    const { dishesCard } = await import("./menu");
+    const named = (await dishesCard(run, subj.planId).catch(() => undefined))?.dishes.flatMap((d) => d.items).find((i) => i.lineId === blocked!.lineId)?.name[lang];
+    const ing = (named ?? blocked.ingredient).toLowerCase();
+    (run.thread as unknown as { leaveOut?: { planId: string; lineId: string } }).leaveOut = { planId: subj.planId, lineId: blocked.lineId };
+    const head = c.say.replace(/^(Made it|Muutin sen:|Gjorde den)[^.]*\.\s*/, "");
+    return {
+      en: `${head} The ${ing} still contains ${a}, and I found none without it, so it can't be ordered as it is. Shall I leave the ${ing} out?`,
+      fi: `${head} Raaka-aineessa ${ing} on yhä ${a}, enkä löytänyt sitä ilman, joten tätä ei voi tilata näin. Jätänkö sen pois?`,
+      sv: `${head} ${ing.charAt(0).toUpperCase() + ing.slice(1)} innehåller fortfarande ${a}, och jag hittade ingen utan, så det går inte att beställa så här. Ska jag utelämna den?`,
+    }[lang].trim();
+  }
   record(run, "menu_changed", `The menu on the table was changed in words ("${words.slice(0, 80)}"): ${c.changed.slice(0, 4).join("; ")}.`, { planId: subj.planId, changed: c.changed });
   if (c.checks.refusedDish) {
     const m = await menuChecks(run.k.info.slug, subj.planId, lang).catch(() => undefined);
