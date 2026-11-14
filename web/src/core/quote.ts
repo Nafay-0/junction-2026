@@ -101,6 +101,13 @@ export type QuoteInput = {
   evidence?: ClaimRef[];
 };
 
+/**
+ * Most packs one line may ask for. No kitchen orders a million packs of one product; without a ceiling, a product
+ * whose stock the wholesaler reports as a placeholder (so no stock check applies) could be quoted for an amount
+ * whose total no longer fits an exact integer of cents.
+ */
+export const MAX_LINE_PACKS = 1_000_000;
+
 /** However long a deployment configures quotes to live, a fixed price holds at most a day. */
 export const MAX_QUOTE_TTL_MINUTES = 24 * 60;
 /** A quote that would hold for less than this is not worth issuing: the order could not be placed in time. */
@@ -142,6 +149,8 @@ export function buildQuote(input: QuoteInput): Quote {
     seen.add(req.productId);
     if (!Number.isInteger(req.quantity) || req.quantity <= 0)
       throw new QuoteError("quote_invalid_line", `Quantity for ${req.productId} must be a whole number of packs above zero.`);
+    if (req.quantity > MAX_LINE_PACKS)
+      throw new QuoteError("quote_invalid_line", `Quantity for ${req.productId} is ${req.quantity} packs; one line takes at most ${MAX_LINE_PACKS.toLocaleString("en-US")}.`, { productId: req.productId, requested: req.quantity, max: MAX_LINE_PACKS });
     if (req.substituteFor === req.productId)
       throw new QuoteError("quote_invalid_line", `${req.productId} cannot substitute for itself.`);
 
