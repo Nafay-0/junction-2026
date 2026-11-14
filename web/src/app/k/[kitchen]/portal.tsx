@@ -310,7 +310,7 @@ export function Portal({ kitchen, kitchens, account, children }: { kitchen: Kitc
 
   return (
     <PortalContext.Provider value={value}>
-      <VoiceModeProvider kitchen={slug}>
+      <VoiceModeProvider kitchen={slug} thread={thread}>
       <Toaster>
         <div className={`relative min-h-dvh overflow-x-clip bg-mist text-ink ${panelOpen && !onOrderPage ? "xl:pr-[34rem] 2xl:pr-[38rem]" : ""}`}>
           <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded-full focus:bg-paper focus:px-4 focus:py-2 focus:shadow-md">
