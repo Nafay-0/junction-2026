@@ -143,3 +143,26 @@ export async function answerWatchIn(run: TurnRun, card: WatchCard, answer: strin
   record(run, "watch_answer", `The buyer answered the watch's ${card.kind.replace("_", " ")} ${card.momentId}: ${answer}${words ? ` ("${words.slice(0, 80)}")` : ""}.`, { momentId: card.momentId, answer, ...(r.order ? { orderId: r.order.orderId } : {}) });
   return r.reply;
 }
+
+/**
+ * "Switch auto-renew on for the weekly milk order" (or off): the kitchen's own choice for one of its recurring orders,
+ * recorded with who said it (server/watch). Returns the agent's line, or undefined when the words are not about it.
+ */
+export async function autoRenewFromWords(run: TurnRun, words: string): Promise<string | undefined> {
+  const { autoRenewIntentOf, setAutoRenewFromThread } = await import("@/server/watch/thread");
+  const intent = autoRenewIntentOf(words);
+  if (!intent) return undefined;
+  const { standing } = await import("@/server/kitchen-portal");
+  const profile = await run.rt.kitchens.getProfile(run.session.mandate.issuer.orgId).catch(() => undefined);
+  const rows = standing(profile, new Date().toISOString().slice(0, 10));
+  const lang = run.lang ?? "en";
+  const w = words.toLowerCase();
+  const row = rows.find((r) => [r.family, familyL(r.family, "en"), familyL(r.family, "fi"), familyL(r.family, "sv")].some((x) => x && w.includes(x.toLowerCase()))) ?? (rows.length === 1 ? rows[0] : undefined);
+  if (!row) {
+    const names = rows.map((r) => familyL(r.family, lang).toLowerCase());
+    return { en: `Which recurring order: ${names.join(" or ")}?`, fi: `Mikä vakiotilaus: ${names.join(" vai ")}?`, sv: `Vilken stående beställning: ${names.join(" eller ")}?` }[lang];
+  }
+  const r = await setAutoRenewFromThread(run.rt, run.session, row.family, intent === "on", { by: run.person?.name ?? run.k.info.name, via: `${run.door}: ${byLine(run)}`, lang, what: familyL(row.family, lang).toLowerCase() });
+  record(run, "auto_renew", `Auto-renew ${intent} for ${row.family}, in the buyer's words "${words.slice(0, 80)}".`, { family: row.family, on: intent === "on" });
+  return r.reply;
+}

@@ -12,7 +12,7 @@ import { callTool } from "@/server/mcp/server";
 import { TOOLS } from "@/server/mcp/tools";
 import { cardId, gateCard, orderCard } from "./cards";
 import { withFallback } from "./fallback";
-import { combineItems, orderFromWords, record, REPEAT_SCALED, repeatScaled, runAction, step, type ItemOutcome, type TurnRun } from "./pipeline";
+import { byLine, combineItems, orderFromWords, record, REPEAT_SCALED, repeatScaled, runAction, step, type ItemOutcome, type TurnRun } from "./pipeline";
 import { ADDITION, isShort, subjectLine, subjectOf, type Subject } from "./subject";
 import type { Card, RecordsCard, ThreadAction } from "./types";
 import { earlierFor } from "./earlier";
@@ -317,6 +317,10 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
       execute: async ({ words: w }) => {
         // The model may only pass on words the buyer said: anything else is read from the buyer's message itself.
         let said = words.includes(w.trim()) ? w.trim() : words;
+        // "Switch auto-renew on for the weekly milk order": the kitchen's own choice for a recurring order (server/watch).
+        const { autoRenewFromWords } = await import("./watch");
+        const auto = await autoRenewFromWords(run, said);
+        if (auto) return { done: "auto-renew", say: auto };
         // What the conversation is about now (subject.ts): a short follow-up completes, changes or adds to it.
         const subj = subjectOf(run);
         let followUp = false;

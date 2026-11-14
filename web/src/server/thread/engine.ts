@@ -298,6 +298,16 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
       await paused(run);
     } else {
       try {
+        // "Switch auto-renew on for the milk": done by plain code (server/watch), said in the store's own words.
+        const { autoRenewFromWords } = await import("./watch");
+        const auto = await autoRenewFromWords(run, body.text!).catch(() => undefined);
+        if (auto) {
+          if (run.opening) first.done("auto-renew");
+          store.line(thread, run.turnId, auto);
+          store.mark(thread, run.turnId, "line", Date.now() - run.t0);
+          await finishTurn(run);
+          return;
+        }
         agentResult = await agentTurn(run, body.text!);
       } catch (err) {
         if (!(err instanceof DockError) || !PAUSED_CODES.has(err.code)) throw err;

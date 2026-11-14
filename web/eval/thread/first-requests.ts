@@ -27,6 +27,9 @@ const REQUESTS: Record<string, { text: string; lang: "en" | "fi" }[]> = {
     { text: "raise the limit to 800", lang: "en" },
     // The rules answer first: no question about the amount for something the kitchen may not buy.
     { text: "something for the dishwasher", lang: "en" },
+    // The tester's own words: the watch answers both.
+    { text: "is anything we order every week going to be missing?", lang: "en" },
+    { text: "switch auto-renew on for the weekly milk order", lang: "en" },
     // Five items: each on the order or named as left out with why.
     { text: "for tuesday: 200 l lactose free milk, 10 kg butter, 20 l whipping cream, 30 kg natural yoghurt and 5 kg grated cheese", lang: "en" },
   ],
