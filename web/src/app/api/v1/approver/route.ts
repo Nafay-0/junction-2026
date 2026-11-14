@@ -12,7 +12,7 @@ export async function GET(req: Request) {
     // A visitor's own kitchen, or a built-in demo kitchen a presenter enrolled for (/join/presenter).
     const s = me?.sandbox ?? (me ? presenterKitchenOf(me.account) : undefined);
     if (!s) throw new DockError(401, "not_joined", "This phone has not joined a demo kitchen. Scan the QR code to join.", "approver_identity");
-    const orders = (await rt.dock.listOrders()).filter((o) => o.orgId === s.orgId).reverse();
+    const orders = (await rt.dock.listOrders({ orgId: s.orgId })).reverse();
     const pending = await pendingFor(rt, s.orgId);
     return Response.json({
       approver: { name: s.approverName, roleLabel: s.roleLabel, passkey: s.passkey },

@@ -9,6 +9,6 @@ export async function POST(req: Request) {
     const body = (await readJson(req)) as { text?: unknown };
     if (typeof body.text !== "string" || !body.text.trim()) throw new DockError(400, "invalid_request", "Paste a receipt, a quote or a signed claim.");
     const jwks = { keys: [rt.dock.wholesalerPublicJwk as never] };
-    return Response.json(await verifyPasted(body.text.slice(0, 200_000), jwks, rt.dock.ledger.entries()));
+    return Response.json(await verifyPasted(body.text.slice(0, 200_000), jwks, rt.dock.ledger.readonly()));
   });
 }

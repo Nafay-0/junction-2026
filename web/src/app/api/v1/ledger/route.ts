@@ -15,7 +15,7 @@ export async function GET(req: Request) {
     const { dock } = rt;
     const p = new URL(req.url).searchParams;
     const who = await principalOf(req, rt);
-    const all = dock.ledger.entries({ requestId: p.get("requestId") ?? undefined, orderId: p.get("orderId") ?? undefined });
+    const all = dock.ledger.readonly({ requestId: p.get("requestId") ?? undefined, orderId: p.get("orderId") ?? undefined });
     const entries = await readableEntries(rt, who, all);
     const audit = auditFor(p.get("view") === "wholesaler" ? "wholesaler" : "buyer", entries);
     const signedIn = !!(who.ops || who.approver || who.agent);

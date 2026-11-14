@@ -233,7 +233,7 @@ export async function traceView(rt: Runtime, requestId: string): Promise<TraceVi
 
 /** The latest request, for /ops/trace without an id. */
 export async function latestRequestId(rt: Runtime): Promise<string | undefined> {
-  return rt.dock.ledger.entries().filter((e) => e.type === "request").at(-1)?.requestId;
+  return rt.dock.ledger.readonly().filter((e) => e.type === "request").at(-1)?.requestId;
 }
 
 // ---------- safeguards ----------
@@ -358,7 +358,7 @@ export type SecondReadingStats = {
 };
 
 /** The second reader's record, from the ledger alone. */
-export function secondReadingStats(entries: LedgerEntry[], orgOf: (requestId: string) => string | undefined = () => undefined): SecondReadingStats {
+export function secondReadingStats(entries: readonly LedgerEntry[], orgOf: (requestId: string) => string | undefined = () => undefined): SecondReadingStats {
   const out: SecondReadingStats = { agreed: 0, differed: 0, unavailable: 0, unavailableBy: {}, settled: { keptFirst: 0, tookSecond: 0, rewrote: 0 }, readers: { first: [], second: [] }, recent: [] };
   const firsts = new Set<string>();
   const seconds = new Set<string>();
@@ -723,7 +723,7 @@ export async function auditRecord(rt: Runtime, orderId: string): Promise<AuditRe
 
 /** The whole chain for a browser check: every entry, with the kitchen's private steps withheld but hashes kept. */
 export function ledgerForCheck(rt: Runtime): { entries: DisclosedEntry[]; withheld: number; server: { ok: boolean; length: number; message?: string } } {
-  const all = rt.dock.ledger.entries();
+  const all = rt.dock.ledger.readonly();
   const entries = all.map(disclose);
   const v = rt.dock.ledger.verify();
   return { entries, withheld: all.filter(isPrivate).length, server: v.ok ? { ok: true, length: v.length } : { ok: false, length: all.length, message: v.message } };

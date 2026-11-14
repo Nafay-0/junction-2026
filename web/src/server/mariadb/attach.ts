@@ -68,14 +68,14 @@ export function attachTimeMachine(
     const orgIds = new Set([...(rt.kitchens.listOrgIds ? await rt.kitchens.listOrgIds() : []), ...orders.map((o) => o.orgId)]);
     const kitchens = (await Promise.all([...orgIds].map((id) => rt.kitchens.getProfile(id)))).filter((p): p is KitchenProfile => !!p);
     const mandates = [...presented.values()].map((x) => x.mandate).filter((m) => Date.parse(m.validUntil) > now.getTime());
-    return { now, mandates, orders, requests, unverified, kitchens, holds: structuredClone(radarStore(dock).state.holds), suspensions: suspensionsFromLedger(dock.ledger.entries()) /* SWITCH POINT, see below */ };
+    return { now, mandates, orders, requests, unverified, kitchens, holds: structuredClone(radarStore(dock).state.holds), suspensions: suspensionsFromLedger(dock.ledger.readonly()) /* SWITCH POINT, see below */ };
   };
 
   const embedder = openAiEmbedder(env.OPENAI_API_KEY?.trim());
   let indexedSeq = -1;
   const afterSync = embedder
     ? async () => {
-        const fresh = dock.ledger.entries().filter((e) => e.seq > indexedSeq && e.type === "decision");
+        const fresh = dock.ledger.readonly().filter((e) => e.seq > indexedSeq && e.type === "decision");
         if (!fresh.length) return;
         const owners = new Map<string, { orgId: string; agentId: string; door?: string }>();
         for (const o of await stores.repo.listOrders()) owners.set(o.orderId, { orgId: o.orgId, agentId: o.agentId, door: (await stores.repo.getRequest(o.requestId))?.door });
@@ -123,7 +123,7 @@ export function attachTimeMachine(
 
 /**
  * SWITCH POINT (suspensions): read from the ledger until claude/review-core lands, which persists suspensions and
- * enforces admission inside the core's `authenticate`. Then replace `suspensionsFromLedger(dock.ledger.entries())` in
+ * enforces admission inside the core's `authenticate`. Then replace `suspensionsFromLedger(dock.ledger.readonly())` in
  * `read()` above with the persisted store's list; rows.ts `suspensionRow` takes the same Suspension shape.
  *
  * Suspensions as the ledger records them (every suspend and resume is a "control" entry, server/ops/suspensions.ts).

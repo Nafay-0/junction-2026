@@ -33,7 +33,7 @@ export type AgentInfo = {
 export type OpsContext = {
   rt: Runtime;
   now: Date;
-  entries: LedgerEntry[];
+  entries: readonly LedgerEntry[];
   orders: PublicOrder[];
   sandboxes: SandboxSummary[];
   door: DoorLog;
@@ -55,7 +55,7 @@ export type OpsContext = {
 const g = globalThis as typeof globalThis & { __dockOpsNames?: Map<string, string> };
 const NAMES = (g.__dockOpsNames ??= new Map<string, string>());
 
-async function learnNames(rt: Runtime, entries: LedgerEntry[]): Promise<void> {
+async function learnNames(rt: Runtime, entries: readonly LedgerEntry[]): Promise<void> {
   const ids = new Set<string>();
   const add = (v: unknown) => typeof v === "string" && ids.add(v);
   for (const e of entries) {
@@ -89,7 +89,7 @@ function mandateOfToken(token: string): Mandate | undefined {
 
 export async function opsContext(rt: Runtime, now = new Date()): Promise<OpsContext> {
   const { dock } = rt;
-  const entries = dock.ledger.entries();
+  const entries = dock.ledger.readonly();
   const orders = await dock.listOrders();
   const sandboxes = await rt.sandboxes.list();
   const door = doorLog(dock);

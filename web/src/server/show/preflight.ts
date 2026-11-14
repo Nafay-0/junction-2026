@@ -54,7 +54,7 @@ export async function preflight(rt: Runtime, opts: { sandboxId?: string; model?:
     // Orders the agent placed alone today count together against its limit (order splitting): a second week in the
     // same kitchen within a day sends some routine orders to the person. Say so before the pitch, not during it.
     const dayAgo = Date.now() - 24 * 3600_000;
-    const alone = (await rt.dock.listOrders()).filter((o) => o.orgId === k.ref.orgId && o.status === "committed" && o.decision.outcome === "auto_approve" && Date.parse(o.createdAt) > dayAgo);
+    const alone = (await rt.dock.listOrders({ orgId: k.ref.orgId })).filter((o) => o.status === "committed" && o.decision.outcome === "auto_approve" && Date.parse(o.createdAt) > dayAgo);
     if (alone.length && !k.ref.house) add({ id: "fresh", label: "A fresh kitchen", state: "warn", detail: `${k.ref.name}'s agent already placed ${alone.length} order${alone.length === 1 ? "" : "s"} alone today; the gate counts them together with the week's, so a routine order may go to the person.`, fix: "Scan the QR code again with the approver's phone for a fresh kitchen, then pick it (K)." });
     const susp = suspensions(rt.dock).find(k.ref.agentId, k.ref.orgId);
     if (susp) add({ id: "suspended", label: "Agent suspended", state: "fail", detail: `${susp.label} is suspended since the last demo.`, fix: "Press R (resume)." });
