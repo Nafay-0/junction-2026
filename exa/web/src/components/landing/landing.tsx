@@ -116,6 +116,16 @@ export function Landing({ signedIn = false, demoVideo = "" }: { signedIn?: boole
             </div>
           </section>
 
+          {/* ───────── Watch it work ───────── */}
+          <section id="watch" className="scroll-mt-16 border-t border-border/60 bg-surface/50">
+            <div className="mx-auto w-full max-w-[960px] px-5 py-16 sm:px-8 sm:py-24">
+              <SectionTitle title="Watch it work" lead="Everything it does, in under two minutes." />
+              <Reveal className="mt-10 sm:mt-12">
+                <DemoVideo src={demoVideo} />
+              </Reveal>
+            </div>
+          </section>
+
           {/* ───────── Ask for anything ───────── */}
           <section id="ask" className="scroll-mt-16 border-t border-border/60">
             <div className="mx-auto w-full max-w-[1180px] px-5 py-16 sm:px-8 sm:py-24">
@@ -367,18 +377,8 @@ export function Landing({ signedIn = false, demoVideo = "" }: { signedIn?: boole
             </div>
           </section>
 
-          {/* ───────── Watch it work ───────── */}
-          <section id="watch" className="scroll-mt-16 border-t border-border/60 bg-surface/50">
-            <div className="mx-auto w-full max-w-[960px] px-5 py-16 sm:px-8 sm:py-24">
-              <SectionTitle title="Watch it work" lead="Two minutes, from a question to the finished result." />
-              <Reveal className="mt-10 sm:mt-12">
-                <DemoVideo src={demoVideo} />
-              </Reveal>
-            </div>
-          </section>
-
           {/* ───────── Use it anywhere ───────── */}
-          <section id="anywhere" className="scroll-mt-16 border-t border-border/60">
+          <section id="anywhere" className="scroll-mt-16 border-t border-border/60 bg-surface/50">
             <div className="mx-auto w-full max-w-[1180px] px-5 py-16 sm:px-8 sm:py-24">
               <SectionTitle title="Use it anywhere" lead="Sign in once. Your chats and your jobs are there on every screen." />
 
@@ -416,7 +416,7 @@ export function Landing({ signedIn = false, demoVideo = "" }: { signedIn?: boole
           </section>
 
           {/* ───────── Download ───────── */}
-          <section id="download" className="scroll-mt-16 border-t border-border/60 bg-surface/50">
+          <section id="download" className="scroll-mt-16 border-t border-border/60">
             <div className="mx-auto grid w-full max-w-[1180px] gap-10 px-5 py-16 sm:px-8 sm:py-24 lg:grid-cols-[0.85fr_1.15fr] lg:gap-16">
               <Reveal>
                 <h2 className="font-display text-[2rem] leading-[1.1] text-balance sm:text-[2.6rem]">Get the desktop app</h2>
@@ -432,7 +432,7 @@ export function Landing({ signedIn = false, demoVideo = "" }: { signedIn?: boole
           </section>
 
           {/* ───────── Powered by ───────── */}
-          <section id="powered" className="scroll-mt-16 border-t border-border/60">
+          <section id="powered" className="scroll-mt-16 border-t border-border/60 bg-surface/50">
             <div className="mx-auto w-full max-w-[1180px] px-5 py-16 sm:px-8 sm:py-20">
               <p className="text-center text-[0.78rem] font-medium tracking-[0.14em] text-subtle uppercase">Powered by</p>
               <Stagger className="mx-auto mt-8 grid max-w-[1040px] grid-cols-1 gap-4 sm:grid-cols-3">
@@ -462,10 +462,10 @@ export function Landing({ signedIn = false, demoVideo = "" }: { signedIn?: boole
             </div>
             <nav aria-label="Footer" className="flex flex-wrap gap-x-5 gap-y-2">
               {[
+                ["#watch", "Watch"],
                 ["#ask", "What it does"],
                 ["#desktop", "Desktop app"],
                 ["#jobs", "Jobs"],
-                ["#watch", "Watch"],
                 ["#download", "Download"],
                 [signedIn ? "/" : "/login", signedIn ? `Open ${APP_NAME}` : "Sign in"],
               ].map(([href, label]) => (

@@ -93,11 +93,12 @@ export function VoiceBars({ className }: { className?: string }) {
 
 /* ───────── The bar at the top ───────── */
 
+/** In the order the sections come down the page. */
 const LINKS = [
+  { id: "watch", label: "Watch" },
   { id: "ask", label: "What it does" },
   { id: "desktop", label: "Desktop app" },
   { id: "jobs", label: "Jobs" },
-  { id: "watch", label: "Watch" },
   { id: "download", label: "Download" },
 ];
 
