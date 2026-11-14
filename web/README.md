@@ -44,7 +44,7 @@ export DOCK_MANDATE=$(pnpm -s dev:mandate)  # dev mandate for the demo buyer
 
 | Path | What |
 |---|---|
-| `/` | The landing page: what AimoPilot is, every agent with a screenshot, the security model, the measured search and crash-test results, and the ways in (Talk to the agent, sign up, operations, connect your own agent, the wall). Text in `src/app/_landing/landing.text.ts`; screenshots made by `pnpm landing:shots`. |
+| `/` | The landing page: the conversation playing itself, the four facts that matter, the agent at work driven by the scroll, search and the crash test as animated comparisons, the gate, how the agents connect, every agent, both screen sizes, and the ways in. Complete without script or with reduced motion. `src/app/_landing2/` (text in `landing2.text.ts`, figures read from their sources in `data.ts`); frames by `pnpm landing:shots --only reel`. The first version stays at `/landing/classic` (`src/app/_landing/`). |
 | `/wall` | The wall, for a big screen: live requests through the gate across all kitchens, totals, recent refusals with their rule, and the join QR code. (`/screen` redirects here.) |
 | `/k/kaari`, `/k/laakso`, `/k/sbx_…` | The buyer console for one kitchen: request field, then what AimoPilot understood, mistake check, questions, option cards, fixed price, the gate, the signed order and the ledger timeline. |
 

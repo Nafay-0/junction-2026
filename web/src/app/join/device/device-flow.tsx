@@ -21,7 +21,7 @@ export function DeviceFlow() {
   const link = params.get("t") ?? "";
   // Where to go once the device is added: an order's sign-off screen (from the thread's "Send to my phone"), else home.
   const nextParam = params.get("next") ?? "";
-  const next = /^\/approve\/apr_[A-Za-z0-9]{6,40}$/.test(nextParam) ? nextParam : "/approver";
+  const next = /^\/approve\/(apr_[A-Za-z0-9]{6,40}|rch_[A-Za-z0-9_]{4,60})$/.test(nextParam) ? nextParam : "/approver";
   const [begin, setBegin] = useState<Begin>();
   const [done, setDone] = useState<string>();
   const [busy, setBusy] = useState(false);

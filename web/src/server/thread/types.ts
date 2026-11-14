@@ -735,6 +735,8 @@ export type RulesSnapshot = {
   approvers: { name: string; role: string; maxApprovalCents: number }[];
   maxLeadDays: number;
   substitution: string;
+  /** Recurring orders the agent renews by itself (their families), when the change is about them. */
+  autoRenew?: string[];
 };
 
 /**
@@ -753,6 +755,8 @@ export type RulesChange = {
   maxLeadDays?: number;
   signer?: string;
   substitution?: "within_preferences" | "needs_approval" | "none";
+  /** Let the agent renew these recurring orders (families) by itself: widens, so it needs the approver's passkey. */
+  autoRenewOn?: string[];
 };
 
 export type RulesCard = CardBase & {
@@ -770,7 +774,7 @@ export type RulesCard = CardBase & {
   /** The values the widget may offer (the mandate's vocabulary). */
   vocabulary: { forbid: string[]; require: string[]; substitution: string[]; groups: { id: string; name: string }[] };
   /** A proposed change: nothing is signed until `rules_sign`. */
-  proposal?: { proposalId: string; change: RulesChange; kind: "narrow" | "terms"; state: "open" | "waiting" | "signed" | "cancelled"; canSign: boolean; why?: string; signedAs?: string; /** waiting: the named approver's passkey sign-off this widening needs. */ approval?: { approvalId: string; approver: { name: string; role: string } } };
+  proposal?: { proposalId: string; change: RulesChange; kind: "narrow" | "terms" | "auto_renew"; state: "open" | "waiting" | "signed" | "cancelled" | "declined" | "expired"; canSign: boolean; why?: string; signedAs?: string; /** waiting: the named approver's passkey sign-off this widening needs (on their phone at /approve/{approvalId}); then who decided and when. */ approval?: { approvalId: string; approver: { name: string; role: string }; expiresAt?: string; /** The reply that said it waits: its slab is shown there, never folded away in an earlier turn. */ turnId?: string; decided?: { by: string; at: string; note?: string } } };
   after?: RulesSnapshot;
   /** Before and after, field by field; `widens` marks a change that lets the agent do more. */
   diff: { field: string; before: string; after: string; widens: boolean }[];

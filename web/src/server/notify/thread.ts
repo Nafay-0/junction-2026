@@ -15,6 +15,7 @@ import { MAIL_SAY_TEXT } from "./say.text";
  *                                                          address", at most once per conversation (threadId).
  *   mailWordsOf(words)                                     the buyer's words about email, or undefined:
  *        -> { kind: "set", address } | { kind: "stop" } | { kind: "which" } | { kind: "set_invalid" }
+ *           | { kind: "ask" }  ("can you email me the receipts?": where they go now, or "tell me the address")
  *   answerMailWords(rt, k, intent, { person, via, lang })  does it and returns { reply } in the kitchen's language.
  *                                                          Setting an address needs the kitchen's signed-in person
  *                                                          (run.person, not a call-only session); it sends only the
@@ -27,11 +28,14 @@ import { MAIL_SAY_TEXT } from "./say.text";
 export type ThreadKitchen = { info: { slug: string; orgId: string; name: string } };
 export type ThreadPerson = { name: string; callOnly?: boolean } | undefined;
 
-export type MailIntent = { kind: "set"; address: string } | { kind: "set_invalid" } | { kind: "stop" } | { kind: "which" };
+export type MailIntent = { kind: "set"; address: string } | { kind: "set_invalid" } | { kind: "stop" } | { kind: "which" } | { kind: "ask" };
 
 const MAIL_WORD = /\b(e-?mails?|mails?|mejl\w*|e-post\w*|sähköpost\w*|s-?posti\w*|meili\w*|receipts?|kuit\w*|kvitt\w*|address|osoit\w*|adress\w*)\b/iu;
 const STOP = /\b(stop|no more|unsubscribe|don'?t (send|email)|do not (send|email)|turn off|lopeta|lopettakaa|älä (lähetä|enää)|ei enää|pois päältä|sluta|inga (fler|mer)|avsluta|stäng av)\b/iu;
 const WHICH = /\b(which|what|whose)\b.*\b(e-?mail|address|mail)\b|\bwhere do you (send|email)\b|\bmi(hin|kä|tä)\b.*\b(osoit|sähköpost)\w*|\bvilken\b.*\b(adress|mejl|e-post)\w*|\bvart (skickar|mejlar)\b/iu;
+/** Email itself (not "address" or "receipt" alone, which an order can say), and words that ask for it. */
+const EMAIL_WORD = /\b(e-?mails?|e-?mail(ed|ing)?|mejl\w*|e-post\w*|sähköpost\w*|s-?posti\w*|meili\w*)\b/iu;
+const ASK = /\b(can you|could you|please|i want|we want|i'?d like|we'?d like|send|email (me|us)|let (me|us) know|notify|tell (me|us)|inform|alert|haluan|haluaisin|haluamme|voitko|voisitko|lähetä|lähettäkää|ilmoita|ilmoittakaa|kerro|kertokaa|kan du|kan ni|vill|skicka|meddela)\b/iu;
 const SET = /\b(send|email|e-mail|mail|use|set|to|lähetä|lähettäkää|käytä|osoitteeseen|skicka|mejla|använd|till)\b/iu;
 
 /** The buyer's words about email, in English, Finnish or Swedish; undefined for anything else. */
@@ -45,6 +49,9 @@ export function mailWordsOf(words: string): MailIntent | undefined {
   if (WHICH.test(w)) return { kind: "which" };
   // "email receipts to chef@" with a broken address: say so rather than order something
   if (/@/.test(w) && SET.test(w)) return { kind: "set_invalid" };
+  // "Can you email me the receipts?", "email us when an order is placed": where they go, or ask for the address.
+  // Words that also order something ("20 l milk for Friday and email me the receipt") go to the order, not here.
+  if (EMAIL_WORD.test(w) && ASK.test(w) && !/@/.test(w) && !/\d/.test(w) && w.length <= 160) return { kind: "ask" };
   return undefined;
 }
 
@@ -91,6 +98,13 @@ export async function answerMailWords(rt: Runtime, k: ThreadKitchen, intent: Mai
       if (!own) return { reply: t.setNotPerson, changed: false };
       await removeAddress(rt, k.info.orgId, { by: who.person!.name, via: who.via });
       return { reply: t.stopOk(a.masked ?? ""), changed: true };
+    }
+    case "ask": {
+      if (!transportOf(rt)) return { reply: t.notConfigured, changed: false };
+      const a = await addressOf(rt, k.info.orgId, { own: false });
+      if (a.state === "confirmed") return { reply: t.whichConfirmed(a.masked ?? ""), changed: false };
+      if (a.state === "pending") return { reply: t.whichPending(a.masked ?? ""), changed: false };
+      return { reply: t.askNone, changed: false };
     }
     case "which": {
       const a = await addressOf(rt, k.info.orgId, { own });

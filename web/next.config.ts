@@ -7,7 +7,9 @@ const nextConfig: NextConfig = {
   // the build's 4 GB there. Everywhere else the build checks types as usual, and `pnpm typecheck` gates every merge.
   typescript: { ignoreBuildErrors: process.env.DOCK_BUILD_SKIP_TYPES === "1" },
   // src/proxy.ts makes Next.js buffer request bodies; cap that buffer (Dock's JSON bodies are at most 64 KB).
-  experimental: { proxyClientMaxBodySize: "128kb" },
+  // DOCK_BUILD_WORKERS (set in web/Dockerfile): how many workers `next build` may use. The hosted build machine
+  // reports many cores but has 4 GB, and fifteen workers ran it out of memory on 14 Nov.
+  experimental: { proxyClientMaxBodySize: "128kb", ...(Number(process.env.DOCK_BUILD_WORKERS) > 0 ? { cpus: Number(process.env.DOCK_BUILD_WORKERS) } : {}) },
   // Read with fs at runtime, so shipped with the server functions: the partner catalogue index when it was built,
   // and the published crash-test results (the wall and the Agents page show them on a server that ran none itself).
   outputFileTracingIncludes: { "/*": ["./.data/valio/**/*", "./src/crash/results/*.json", "./src/crash/*.md", "./docs/*.md"] },
