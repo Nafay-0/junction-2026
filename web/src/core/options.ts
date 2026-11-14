@@ -165,7 +165,9 @@ export type OptionsInput = {
   nutritionFocus?: Nutrient[];
 };
 
-export type ExclusionCode = "no_offer" | "cutoff_passed" | "out_of_stock" | "too_late" | "pack_uncertain" | "wrong_unit" | "over_budget" | "no_substitute" | "blocked" | "compromise" | "nutrition_rule";
+export type ExclusionCode = "no_offer" | "cutoff_passed" | "out_of_stock" | "too_late" | "pack_uncertain" | "wrong_unit" | "over_budget" | "no_substitute" | "blocked" | "compromise" | "nutrition_rule"
+  /** The kitchen's own rules (core/clarify.ts violationOf): a dietary claim not shown (`claim:lactose_free`), a product group, an allergen, a label. */
+  | "category_rule" | "allergen_rule" | "label_rule" | "excluded_claim" | `claim:${string}`;
 /** `params`: for nutrition_rule, the nutrient, the problem (over, under, unknown), the figure and the rule's bounds. */
 export type Exclusion = { productId: string; reason: string; code?: ExclusionCode; params?: Record<string, string | number> };
 export type OptionsResult = { cards: OptionCard[]; excluded: Exclusion[]; notes: string[] };

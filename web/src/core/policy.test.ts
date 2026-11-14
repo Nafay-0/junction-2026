@@ -185,7 +185,7 @@ describe("policy: product rules", () => {
   it("rejects a product missing a required attribute (regular milk on a lactose-free mandate)", () => {
     const d = evaluatePolicy(mandate(), draft(quote([{ productId: "VA-1110", quantity: 5 }])), ctx());
     expectRejectedBy(d, "required_attributes");
-    expect(rule(d, "required_attributes").reason).toMatch(/lactose_free/);
+    expect(rule(d, "required_attributes").reason).toMatch(/VA-1110 is not lactose-free: its allergen declaration lists milk and it carries no lactose-free claim/);
   });
 
   it("rejects a product containing a forbidden allergen", () => {
@@ -518,7 +518,7 @@ describe("policy: nutrition rules and label rules (data depth)", () => {
     const d = evaluatePolicy(withRules([{ nutrient: "protein", min: 3, categories: ["milk", "plant_drink"] }]), draft(q), ctx());
     expectRejectedBy(d, "nutrition_rules");
     expect(rule(d, "nutrition_rules").reason).toMatch(/PK-4001 has 1 g protein per 100 ml, under the 3 g the kitchen requires/);
-    expect(rule(d, "nutrition_rules").details).toEqual({ findings: [{ productId: "PK-4001", name: expect.any(String), nutrient: "protein", problem: "under", value: 1, min: 3, per: "100ml" }] });
+    expect(rule(d, "nutrition_rules").details).toEqual({ findings: [{ productId: "PK-4001", name: expect.any(String), nutrient: "protein", problem: "under", value: 1, min: 3, per: "100ml", kinds: ["milk", "plant_drink"] }] });
   });
 
   it("refuses a product whose maker declares no figure: unknown is not compliant, and no sign-off can lift it", () => {
@@ -534,5 +534,34 @@ describe("policy: nutrition rules and label rules (data depth)", () => {
     expectRejectedBy(evaluatePolicy(mandate({ requiredCertificates: ["origin_fi"] }), draft(q), ctx()), "required_certificates");
     const fi = { ...q, lines: q.lines.map((l) => ({ ...l, countryOfOrigin: "fi" })) };
     expect(rule(evaluatePolicy(mandate({ requiredCertificates: ["origin_fi"] }), draft(fi), ctx()), "required_certificates").outcome).toBe("pass");
+  });
+});
+
+describe("policy: dietary claims met by evidence other than the maker's claim", () => {
+  const lf = () => mandate({ requiredAttributes: ["lactose_free"], allowedCategories: ["milk", "cat_21410", "cat_17443", "cat_63210"] });
+  const as = (patch: Record<string, unknown>) => {
+    const q = quote([{ productId: "VA-1110", quantity: 1 }]);
+    return { ...q, lines: q.lines.map((l) => ({ ...l, ...patch })) };
+  };
+
+  it("passes an oil whose declaration lists no milk, and records the evidence kind", () => {
+    const d = evaluatePolicy(lf(), draft(as({ productId: "VA-1110", category: "cat_21410", attributes: [], allergens: [], allergensDeclared: true })), ctx());
+    expect(rule(d, "required_attributes")).toMatchObject({ outcome: "pass", details: { evidence: [{ productId: "VA-1110", claim: "lactose_free", kind: "declaration" }] } });
+    expect(rule(d, "required_attributes").reason).toMatch(/no milk in the maker's allergen declaration/);
+  });
+
+  it("refuses a butter whose declaration lists milk, and a food with no declaration", () => {
+    const butter = evaluatePolicy(lf(), draft(as({ category: "milk", attributes: [], allergens: ["milk"] })), ctx());
+    expectRejectedBy(butter, "required_attributes");
+    expect(rule(butter, "required_attributes").details).toMatchObject({ evidence: [{ claim: "lactose_free", shortfall: "declared_present", allergens: ["milk"] }] });
+    expectRejectedBy(evaluatePolicy(lf(), draft(as({ category: "cat_21410", attributes: [], allergens: [], allergensDeclared: false })), ctx()), "required_attributes");
+  });
+
+  it("produce by its nature passes unless the mandate asks for declared data; non-food passes either way", () => {
+    const carrot = as({ category: "cat_17443", attributes: [], allergens: [], allergensDeclared: false, allergensByNature: { allergens: [], basis: "carrot, fresh and whole" } });
+    expect(rule(evaluatePolicy(lf(), draft(carrot), ctx()), "required_attributes")).toMatchObject({ outcome: "pass", details: { evidence: [{ kind: "nature" }] } });
+    expectRejectedBy(evaluatePolicy(mandate({ ...lf(), allergenEvidence: "declared" }), draft(carrot), ctx()), "required_attributes");
+    const soap = as({ category: "cat_63210", attributes: [], allergens: [], allergensDeclared: false });
+    expect(rule(evaluatePolicy(mandate({ ...lf(), allergenEvidence: "declared" }), draft(soap), ctx()), "required_attributes")).toMatchObject({ outcome: "pass", details: { evidence: [{ kind: "not_food" }] } });
   });
 });

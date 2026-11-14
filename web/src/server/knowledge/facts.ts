@@ -1,3 +1,5 @@
+import { claimEvidence } from "@/core/claim-evidence";
+import { subjectOfIndexed } from "@/core/catalog/search";
 import type { IndexedProduct } from "@/core/catalog/partner";
 import { forbiddenPresent, resolveConstraints } from "@/core/vocabulary";
 
@@ -82,7 +84,8 @@ export function hardCheck(original: IndexedProduct, candidate: IndexedProduct, b
   const bothDeclared = original.allergens.declared && candidate.allergens.declared;
   const assumed = protectedClaims(original, ctx).filter((c) => !(bothDeclared && COVERED_BY_ALLERGENS.has(c)));
   const needed = [...new Set([...assumed, ...(buyer.requiredClaims ?? [])])].sort();
-  const missing = needed.filter((c) => !candidate.claims.includes(c));
+  // The map stays strict on "by nature"; a claim its declaration shows (no milk: lactose-free) is kept like a stated one.
+  const missing = needed.filter((c) => !claimEvidence(subjectOfIndexed(candidate), c, { strict: true }).met);
   if (missing.length) return { ok: false, code: "claim_missing", reason: `not ${missing.map(pretty).join(", ")} by its data` };
 
   const forbidden = buyer.forbiddenAllergens ?? [];

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { MAX_LIVE_IDS_PER_CALL, scheduledOn, type LiveOffer, type MeteredCatalog, type Product } from "./catalog";
 import { facetsOf } from "./catalog/search";
 import type { ProductFinder } from "./catalog/finder";
-import { OPTIMISE_QUESTION_ID, answerSchema, clarify, hardConstraints, kindMismatch, nutritionExclusion, optimiseQuestion, optionLabel, violation, type Answer, type ConstraintSource, type MemoryNote, type Question } from "./clarify";
+import { OPTIMISE_QUESTION_ID, answerSchema, clarify, hardConstraints, kindMismatch, violationOf, optimiseQuestion, optionLabel, violation, type Answer, type ConstraintSource, type MemoryNote, type Question } from "./clarify";
 import { proposedIds, type AlternativesAnswer, type AlternativesSource } from "./alternatives";
 import { alsoAskedIn, alsoAskedNote, groupsIn, type AlsoAsked } from "./also-asked";
 import { qualifiersOf } from "./qualifiers";
@@ -30,7 +30,7 @@ import {
 } from "./kitchen";
 import type { Ledger } from "./ledger";
 import { NeedSchema, SPEC_DIMENSIONS, applyNeedPatch, describeNeed, dimensionValue, formatAmount, normaliseNeed, type BaseUnit, type OptimiseGoal, type StructuredNeed } from "./need";
-import { LABEL_TEXT, MAX_CARDS, buildOptions, formatCutoff, preselect, shortlist, type Exclusion, type OptionCard, type OptionLabel, type Reference } from "./options";
+import { LABEL_TEXT, MAX_CARDS, buildOptions, formatCutoff, preselect, shortlist, type Exclusion, type ExclusionCode, type OptionCard, type OptionLabel, type Reference } from "./options";
 import type { AgentSession, DockRepository, LiveLookupResult, Order, PurchaseRequest } from "./orders";
 import type { Decision } from "./policy";
 import type { Quote, QuoteRequestLine } from "./quote";
@@ -402,11 +402,9 @@ export function createIntakeFlow(deps: IntakeDeps) {
     i.rules = constraints.sources;
     const wantedKinds = facetsOf(`${i.need.item.text} ${i.family}`);
     const allowed = products.filter((p) => {
-      const why = violation(p, constraints) ?? kindMismatch(p, wantedKinds);
-      if (why) {
-        const n = nutritionExclusion(p, constraints);
-        i.excluded.push({ productId: p.id, reason: why, ...(n && n.reason === why ? { code: n.code, params: n.params } : {}) });
-      }
+      const v = violationOf(p, constraints);
+      const why = v?.reason ?? kindMismatch(p, wantedKinds);
+      if (why) i.excluded.push({ productId: p.id, reason: why, ...(v ? { code: v.code as ExclusionCode, ...(v.params ? { params: v.params } : {}) } : {}) });
       return !why;
     });
     const learned = learnPreferences(profile, i.family);
