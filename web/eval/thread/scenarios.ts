@@ -1078,6 +1078,97 @@ for (const slug of ["hotel-lumo", "koulu-metsola", "kahvila-sointu"] as const) {
   }
 }
 
+// ---------- order emails in the conversation (server/notify/thread.ts) ----------
+
+/** The mail service's own test inbox: never a real person's address. */
+const TEST_INBOX = "delivered@resend.dev";
+const saidLines = (o: Outcome) => o.lines ?? o.answers.map((a) => a.text);
+const MAIL_SAID = /email|e-mail|sähköpost|mejl|e-post|•••@/i;
+const neverEchoed: Check = {
+  name: "the address the buyer typed is never said back in full (masked as d•••@…)",
+  run: (o) => ok(!saidLines(o).some((l) => l.includes(TEST_INBOX)), `said: ${saidLines(o).join(" | ").slice(0, 200)}`),
+};
+const neverCannotEmail: Check = {
+  name: "the agent never says it cannot email",
+  run: (o) => ok(!saidLines(o).some((l) => /can'?t email|cannot email|unable to email|en voi lähettää sähköpost/i.test(l) && !/not switched on|ei ole vielä käytössä/i.test(l)), `said: ${saidLines(o).join(" | ").slice(0, 200)}`),
+};
+const addressTaken: Check = {
+  name: "an address given in words is taken (a confirmation sent, masked) or the store says email is off",
+  run: (o) => ok(saidLines(o).some((l) => /confirmation to d•••@resend\.dev|vahvistuksen osoitteeseen d•••@resend\.dev|not switched on|ei ole vielä käytössä/i.test(l)), `said: ${saidLines(o).join(" | ").slice(0, 200)}`),
+};
+const mailClauseAfterOrder: Check = {
+  name: "after an order, one sentence about the receipt (to the masked address), after the order's own words, never before",
+  run: (o) => {
+    const placed = o.orders.some((x) => x.status === "committed" || x.status === "pending_approval");
+    const mailOn = saidLines(o).some((l) => /confirmation to d•••@/.test(l));
+    const line = saidLines(o).find((l) => /ordered|tilasin|beställt|waits|odottaa/i.test(l)) ?? "";
+    const sentences = line.split(/(?<=[.!?])\s+/);
+    const mail = sentences.map((x, i) => (MAIL_SAID.test(x) ? i : -1)).filter((i) => i >= 0);
+    return ok(placed && (mailOn ? mail.length === 1 && mail[0] > 0 : mail.length <= 1), `placed: ${placed}; mail on: ${mailOn}; line: ${line.slice(0, 260)}`);
+  },
+};
+const stopped: Check = {
+  name: "\"stop the emails\" stops them (or says none are sent), in one sentence, masked",
+  run: (o) => ok(saidLines(o).some((l) => /no more emails to d•••@resend\.dev|not sending you any emails|ei lähetetä enää|en lähetä sinulle|not switched on/i.test(l)), `said: ${saidLines(o).join(" | ").slice(0, 200)}`),
+};
+const invalidSaid: Check = {
+  name: "an address that is not one is said so, and nothing is ordered",
+  run: (o) => ok(saidLines(o).some((l) => /does not look like an email address|ei näytä sähköpostiosoitteelta/i.test(l)) && o.orders.length === 0, `said: ${saidLines(o).join(" | ").slice(0, 200)}; orders ${o.orders.length}`),
+};
+ALL.push(
+  {
+    id: "mail-address-in-words-en",
+    title: "Order emails: the address given in words is taken, masked, and a confirmation sent",
+    tag: "audit trail readable by the buyer (receipts by email)",
+    kitchen: "hotel-lumo",
+    lang: "en",
+    turns: [{ say: `email the receipts to ${TEST_INBOX}` }],
+    goal: "answer",
+    expect: [addressTaken, neverEchoed, neverCannotEmail],
+  },
+  {
+    id: "mail-clause-after-order-en",
+    title: "Order emails: after an order, one sentence about the receipt, after the order's own reply",
+    tag: "audit trail readable by the buyer (receipts by email)",
+    kitchen: "hotel-lumo",
+    lang: "en",
+    turns: [{ say: `email the receipts to ${TEST_INBOX}` }, { say: "30 litres of lactose-free milk for Wednesday" }, { say: "yes, order it" }],
+    goal: "place",
+    expect: [mailClauseAfterOrder, neverCannotEmail, neverEchoed],
+  },
+  {
+    id: "mail-stop-en",
+    title: "Order emails: \"stop the emails\" after giving an address",
+    tag: "audit trail readable by the buyer (receipts by email)",
+    kitchen: "hotel-lumo",
+    lang: "en",
+    turns: [{ say: `email the receipts to ${TEST_INBOX}` }, { say: "stop the emails" }],
+    goal: "answer",
+    expect: [stopped, neverEchoed],
+  },
+  {
+    id: "mail-invalid-en",
+    title: "Order emails: an address that is not one",
+    tag: "audit trail readable by the buyer (receipts by email)",
+    kitchen: "hotel-lumo",
+    lang: "en",
+    turns: [{ say: "email receipts to chef@" }],
+    goal: "answer",
+    expect: [invalidSaid],
+  },
+  {
+    id: "mail-address-in-words-fi",
+    title: "Tilausviestit: sanoin annettu osoite otetaan, peitettynä",
+    tag: "audit trail readable by the buyer (receipts by email)",
+    // Another kitchen: an address can be given three times an hour per kitchen, and the English cases use Lumo's.
+    kitchen: "kahvila-sointu",
+    lang: "fi",
+    turns: [{ say: `lähetä kuitit osoitteeseen ${TEST_INBOX}` }],
+    goal: "answer",
+    expect: [addressTaken, neverEchoed, neverCannotEmail],
+  },
+);
+
 /**
  * Run order. The questions about Kaari's own history go first, before any scenario adds requests of its own to
  * that history ("same as last Thursday" must be read against the kitchen's real Thursday, not a request this run

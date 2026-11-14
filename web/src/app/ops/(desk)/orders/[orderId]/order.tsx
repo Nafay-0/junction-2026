@@ -1,10 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
+import { ChevronDown } from "lucide-react";
 import type { OrderTimelineView } from "@/server/ops/orders-view";
 import type { TimelineStep } from "@/server/ops/order-timeline";
 import { Badge } from "../../../../_ui/kit";
 import { clockSeconds, day, timelineFact } from "../../../../_ui/plain";
+import { lookupsTitle, shownSteps } from "../../../../_ui/timeline-steps";
 import { STATUS_WORD, decidedWords, fi, money, since, statusTone, whenSeconds } from "../../../_ui/format";
 import { Details, KV, LiveMark, LoadError, Loading, PageHead, Panel, useNow, useOps } from "../../../_ui/kit";
 
@@ -83,14 +86,57 @@ export function OrderScreen({ orderId }: { orderId: string }) {
             </p>
           )}
           {!t.complete.ok && <p className="mt-3 rounded-lg bg-safety-soft px-4 py-2.5 text-[0.9rem] ring-1 ring-inset ring-safety/60">Missing from the record: {fi(t.complete.missing.join(", "))}.</p>}
-          <ol className="mt-5 divide-y divide-line rounded-xl border border-line bg-paper" aria-label="The order's timeline">
-            {t.steps.map((s) => (
-              <Step key={s.seq} s={s} t={t} />
-            ))}
-          </ol>
-          <p className="mt-2 text-[0.82rem] text-ink-soft">{t.steps.length} steps from the hash-chained ledger. The kitchen sees the same steps on its own order page.</p>
+          <Steps t={t} />
         </>
       )}
+    </>
+  );
+}
+
+/** The steps that matter first (the live checks folded into one line that opens), every step one click away. */
+function Steps({ t }: { t: OrderTimelineView }) {
+  const [all, setAll] = useState(false);
+  const shown = shownSteps(t.steps);
+  const visible = all ? shown : shown.filter((x) => x.key);
+  const hidden = shown.length - shown.filter((x) => x.key).length;
+  return (
+    <>
+      <ol className="mt-5 divide-y divide-line rounded-xl border border-line bg-paper" aria-label="The order's timeline">
+        {visible.map((x) =>
+          x.kind === "step" ? (
+            <Step key={x.step.seq} s={x.step} t={t} />
+          ) : (
+            <li key={`lookups-${x.seq}`}>
+              <details className="group">
+                <summary className="grid cursor-pointer list-none grid-cols-1 gap-x-4 gap-y-1.5 px-4 py-3.5 hover:bg-mist/60 sm:grid-cols-[5.5rem_12rem_minmax(0,1fr)] sm:px-5 [&::-webkit-details-marker]:hidden">
+                  <span className="text-[0.88rem] text-ink-soft tabular">{clockSeconds(x.steps[0].at)}</span>
+                  <span>
+                    <Badge tone={ACTOR_TONE[x.steps[0].actor.kind]}>{x.steps[0].actor.name}</Badge>
+                  </span>
+                  <span className="flex items-start gap-1.5 font-semibold leading-snug">
+                    {lookupsTitle(x.steps)}
+                    <ChevronDown aria-hidden size={17} className="mt-0.5 shrink-0 text-petrol transition-transform duration-150 group-open:rotate-180 motion-reduce:transition-none" />
+                  </span>
+                </summary>
+                <ol className="divide-y divide-line border-t border-line bg-mist/40">
+                  {x.steps.map((s) => (
+                    <Step key={s.seq} s={s} t={t} />
+                  ))}
+                </ol>
+              </details>
+            </li>
+          ),
+        )}
+      </ol>
+      <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.82rem] text-ink-soft">
+        {hidden > 0 && (
+          <button type="button" onClick={() => setAll((v) => !v)} aria-expanded={all} className="inline-flex min-h-10 items-center gap-1.5 rounded-full text-[0.92rem] font-semibold text-petrol hover:underline">
+            <ChevronDown aria-hidden size={16} className={`transition-transform duration-150 motion-reduce:transition-none ${all ? "rotate-180" : ""}`} />
+            {all ? "Show the main steps only" : `Show every step (${t.steps.length})`}
+          </button>
+        )}
+        <span>From the hash-chained ledger; the kitchen sees the same steps on its own order page.</span>
+      </p>
     </>
   );
 }

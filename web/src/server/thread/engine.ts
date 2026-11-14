@@ -23,11 +23,14 @@ import { speakFacts } from "./speak";
 import { codeLeaks, englishDays, insideOrTell } from "./refusal";
 import { fmtFor, gateReasons } from "@/app/k/[kitchen]/thread-words";
 import { THREAD_WORDS } from "@/app/k/[kitchen]/thread-words.text";
+import { changeLines, groupNameL } from "@/app/k/[kitchen]/rules-change";
 import { fixTypos } from "./pipeline";
 import { hasToday, helsinkiToday, postToday, todayCardId } from "./home";
 import { ensureTelemetry } from "./telemetry";
 import { failureOf, turnOutcome, type TurnFailure } from "./outcome";
-import type { AgentTurn, BuyerTurn, Card, GateCard, MemoryCard, MenuCard, OrderCard, RecordsCard, SubmitTurn, SubmitTurnReply, ThreadAction, ThreadDoor } from "./types";
+import type { AgentTurn, BuyerTurn, Card, GateCard, MemoryCard, MenuCard, OrderCard, RecordsCard, RulesCard, SubmitTurn, SubmitTurnReply, ThreadAction, ThreadDoor } from "./types";
+
+type RulesDiff = RulesCard["diff"];
 
 /**
  * One conversation per kitchen, one engine for every door. A door submits a turn (typed words, a transcript, a tap
@@ -75,6 +78,7 @@ const RulesChangeSchema = z.object({
   maxLeadDays: z.number().int().min(1).max(30).optional(),
   signer: z.string().trim().min(2).max(60).optional(),
   substitution: z.enum(["within_preferences", "needs_approval", "none"]).optional(),
+  autoRenewOn: z.array(z.string().regex(/^[a-z0-9_]{2,40}$/)).max(4).optional(),
 });
 
 const ActionSchema: z.ZodType<ThreadAction> = z.discriminatedUnion("type", [
@@ -657,7 +661,10 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
   }
   // An order placed or waiting in this turn with a product whose delivery record is poor: one sentence beneath the
   // order's own reply (server/reliability), a backup offered in case it is not delivered. Most orders say nothing.
-  const ordered = store.agentTurn(thread, run.turnId)?.cards.find((c) => c.type === "order" && (c.status === "committed" || c.status === "pending_approval"));
+  // An order placed by a yes to a card shown earlier updates that card where it was first shown: the orders this turn
+  // placed count too.
+  const placedNow = [...run.orders.values()].find((o) => o.status === "committed" || o.status === "pending_approval");
+  const ordered = store.agentTurn(thread, run.turnId)?.cards.find((c) => c.type === "order" && (c.status === "committed" || c.status === "pending_approval")) ?? (placedNow ? ({ type: "order", orderId: placedNow.orderId, status: placedNow.status } as const) : undefined);
   if (ordered?.type === "order") {
     const { sayBackup } = await import("./backup");
     const b = await sayBackup(run, { orderId: ordered.orderId }, body.lang ?? "en").catch(() => undefined);
@@ -666,9 +673,14 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
     // The order emails: one clause after the order's own reply; when the backup question was asked, after its answer.
     if (!b) {
       const { mailFactAfterOrder } = await import("@/server/notify/thread");
-      const mailFact = await mailFactAfterOrder(run.rt, run.k, { orderId: ordered.orderId, status: ordered.status }, { lang: body.lang ?? "en", threadId: thread.threadId }).catch(() => undefined);
+      const mailFact = await mailFactAfterOrder(run.rt, run.k, { orderId: ordered.orderId, status: ordered.status }, { lang: body.lang ?? "en", threadId: thread.threadId }).catch((err) => {
+        console.error("[thread] mail clause", err);
+        return undefined;
+      });
       const line = store.agentTurn(thread, run.turnId)?.line ?? "";
       if (mailFact && !line.includes(mailFact)) store.line(thread, run.turnId, line ? `${line} ${mailFact}` : mailFact);
+      // Whether a sentence about the receipt was said (never the address itself).
+      record(run, "mail_clause", mailFact ? "One sentence about the order's email was said after the order." : "Nothing about email was said after the order.", { orderId: ordered.orderId, said: !!mailFact });
     }
   }
   // Never an empty reply: when the agent's words did not come (or none were backed), plain words from what the engine knows.
@@ -959,12 +971,28 @@ function sayRulesWaiting(run: TurnRun): void {
   if (c?.type !== "rules" || !c.proposal?.approval) return;
   const lang = run.lang ?? "en";
   const who = c.proposal.approval.approver.name;
-  const what = c.diff.filter((d) => d.widens || d.field === "signer").map((d) => (d.field === "groups" ? d.after.split(", ").filter((x) => !d.before.split(", ").includes(x)).join(", ").toLowerCase() : d.field === "perOrderLimitEur" ? `${d.after} € an order` : d.field === "weeklyBudgetEur" ? `${d.after} € a week` : d.after)).filter(Boolean).join(", ");
+  const what = rulesWhat(c.diff, lang);
   run.store.line(run.thread, run.turnId, {
-    en: `That widens what I may buy${what ? ` (${what})` : ""}, so it needs ${who}'s OK: it's waiting for them to sign it with their passkey. Nothing changes until they do.`,
-    fi: `Tämä laajentaa sitä, mitä saan ostaa${what ? ` (${what})` : ""}, joten se tarvitsee hyväksynnän: ${who}. Lähetin sen allekirjoitettavaksi pääsyavaimella. Mikään ei muutu ennen sitä.`,
-    sv: `Det vidgar vad jag får köpa${what ? ` (${what})` : ""}, så det behöver ${who}s godkännande: jag har skickat det för signering med nyckel. Inget ändras förrän dess.`,
+    en: `That widens what I may do${what ? ` (${what})` : ""}, so it needs ${who}'s OK with their passkey: I've sent it to their phone. Nothing changes until they sign.`,
+    fi: `Tämä laajentaa sitä, mitä saan tehdä${what ? ` (${what})` : ""}, joten se tarvitsee hyväksynnän pääsyavaimella: ${who}. Lähetin sen hänen puhelimeensa. Mikään ei muutu ennen allekirjoitusta.`,
+    sv: `Det vidgar vad jag får göra${what ? ` (${what})` : ""}, så det behöver ${who}s godkännande med nyckel: jag har skickat det till deras telefon. Inget ändras förrän det är signerat.`,
   }[lang]);
+}
+
+/** The widening in a few words for a sentence: "frozen", "800 € an order", in the buyer's language. */
+function rulesWhat(diff: RulesDiff, lang: "en" | "fi" | "sv"): string {
+  return diff
+    .filter((d) => d.widens || d.field === "signer")
+    .map((d) => {
+      if (d.field === "groups") return d.after.split(", ").filter((x) => x && !d.before.split(", ").includes(x)).map((g) => groupNameL(g, lang)).join(", ");
+      if (d.field === "perOrderLimitEur") return { en: `${d.after} € an order`, fi: `${d.after} € kerralla`, sv: `${d.after} € per order` }[lang];
+      if (d.field === "weeklyBudgetEur") return { en: `${d.after} € a week`, fi: `${d.after} € viikossa`, sv: `${d.after} € i veckan` }[lang];
+      if (d.field === "autoRenew") return { en: "renewing a recurring order by myself", fi: "vakiotilauksen uusiminen itse", sv: "att förnya en stående order själv" }[lang];
+      const l = changeLines([d], lang)[0] ?? "";
+      return l.charAt(0).toLowerCase() + l.slice(1);
+    })
+    .filter(Boolean)
+    .join(", ");
 }
 
 /** "Which order?" after "You already ordered …": that order by what it holds, its total and day, and the question again. */
@@ -1120,21 +1148,54 @@ export async function doorTurn<T>(kitchen: Kitchen | string, buyer: { door: Thre
 }
 
 /**
- * A change to the kitchen's rules that widens what the agent may do, signed by the named approver's passkey: the
- * prompt (bound to the exact change, the mandate it changes and a fresh nonce) and the signature, checked by the same
- * verifier as an order's sign-off. Only a verified passkey signature applies the change; it is then said in the thread.
+ * A change to the kitchen's rules that widens what the agent may do, decided by the named approver: on their phone
+ * (/approve/rch_..., server/thread/rules-signoff.ts) or in this browser. The prompt is bound to the exact change, the
+ * mandate it changes, the decision and a fresh nonce; the answer is checked by the same verifier as an order's
+ * sign-off. Only a verified passkey signature applies the change. Either way the conversation says it where the
+ * change waited, and then carries on with what was waiting on it (the buy the rules refused).
  */
-export async function rulesSignOffOptions(kitchen: Kitchen, proposalId: string, rp: Parameters<Runtime["passkeys"]["approvalOptions"]>[0]) {
+export async function rulesSignOffOptions(kitchen: Kitchen | string, proposalId: string, rp: Parameters<Runtime["passkeys"]["approvalOptions"]>[0], decision: "approve" | "decline" = "approve") {
   const r = await resolve(kitchen, "typed");
   const e = await engine(r.rt);
   const thread = e.store.get(r.k.info.slug, r.k.info.orgId);
   const { rulesApproval } = await import("./rules");
   const a = rulesApproval({ thread, k: r.k }, proposalId);
   if (!a) throw new DockError(409, "rules_change_not_waiting", "That change is not waiting for a sign-off.");
-  return r.rt.passkeys.approvalOptions(rp, { approvalId: a.approval.approvalId, orgId: a.orgId, role: a.approval.approver.role, orderDigest: a.digest, decision: "approve" });
+  return r.rt.passkeys.approvalOptions(rp, { approvalId: a.approval.approvalId, orgId: a.orgId, role: a.approval.approver.role, orderDigest: a.digest, decision });
 }
 
-export async function rulesSignOff(kitchen: Kitchen, proposalId: string, proof: unknown) {
+/** A run on the turn that holds the waiting change: what is decided is said there, beneath what was said before. */
+async function rulesHolderRun(kitchen: Kitchen | string, proposalId: string) {
+  const r = await resolve(kitchen, "typed");
+  const e = await engine(r.rt);
+  const thread = e.store.get(r.k.info.slug, r.k.info.orgId);
+  const id = cardId("rules", proposalId);
+  const p = ((thread as unknown as { rulesProposals?: Record<string, import("./rules").Proposal> }).rulesProposals ?? {})[proposalId];
+  // Said beneath the reply that said it waits (the card itself is updated in place wherever it was first shown).
+  const holder = (p?.approval?.turnId ? e.store.agentTurn(thread, p.approval.turnId) : undefined) ?? [...thread.turns].reverse().find((x): x is AgentTurn => x.role === "agent" && x.cards.some((c) => c.cardId === id));
+  if (!holder) throw new DockError(409, "rules_change_not_waiting", "That change is not waiting for a sign-off.");
+  const asked = e.store.turn(thread, holder.replyTo);
+  const buyer: BuyerTurn = asked?.role === "buyer" ? asked : { turnId: holder.replyTo, role: "buyer", at: holder.at, door: "typed", via: "tap" };
+  const lang = p?.approval?.lang ?? "en";
+  const run: TurnRun = { rt: r.rt, store: e.store, thread, turnId: holder.turnId, buyer, k: r.k, session: r.session, person: r.person, door: "typed", lang, t0: Date.now(), facts: [], requests: new Set(), orders: new Map(), readings: new Map() };
+  return { r, e, thread, holder, run, lang };
+}
+
+const clockHki = (iso: string) => new Date(iso).toLocaleTimeString("fi-FI", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Helsinki" });
+
+/** "…then I'll order the burger buns": the buy that waited on this change, as the conversation said it. */
+function waitingOn(thread: StoredThread, proposalId: string): { words?: string; what?: string } {
+  const t = thread as unknown as { afterRules?: Record<string, string>; afterRulesWhat?: Record<string, string>; afterRulesUsed?: string[] };
+  if (t.afterRulesUsed?.includes(proposalId)) return {};
+  return { words: t.afterRules?.[proposalId], what: t.afterRulesWhat?.[proposalId] };
+}
+
+function sayBeneath(run: TurnRun, text: string): void {
+  const before = run.store.agentTurn(run.thread, run.turnId)?.line ?? "";
+  run.store.line(run.thread, run.turnId, before && !before.includes(text) ? `${before}\n${text}` : text);
+}
+
+export async function rulesSignOff(kitchen: Kitchen | string, proposalId: string, proof: unknown) {
   const r = await resolve(kitchen, "typed");
   const e = await engine(r.rt);
   const thread = e.store.get(r.k.info.slug, r.k.info.orgId);
@@ -1146,13 +1207,89 @@ export async function rulesSignOff(kitchen: Kitchen, proposalId: string, proof: 
   if (!p.success || p.data.kind !== "webauthn") throw new DockError(400, "passkey_required", "A change that widens what the agent may do is signed with the approver's passkey.");
   const v = await r.rt.passkeys.verifier.verify({ approval: a.approval, orgId: a.orgId, orderDigest: a.digest, decision: "approve", now: new Date() }, p.data);
   if (!v.ok) throw new DockError(403, v.reason, v.message);
-  return doorTurn(kitchen, { door: "typed", via: "tap", label: "Signed the change to the rules" }, async (run) => {
-    const card = await signRules(run, proposalId, { signOff: v.signOff });
-    const lang = run.lang ?? "en";
+  const h = await rulesHolderRun(kitchen, proposalId);
+  const card = await withTurn({ threadId: h.thread.threadId, turnId: h.run.turnId, door: "typed", kitchen: h.r.k.info.slug, orgId: h.r.k.info.orgId, agentId: h.r.session.agentId }, async () => {
+    const card = await signRules(h.run, proposalId, { signOff: v.signOff });
     const name = v.signOff.method === "passkey" ? v.signOff.approverName : a.approval.approver.name;
-    run.store.line(run.thread, run.turnId, { en: `${name} signed it with a passkey: the change is now in your rules.`, fi: `${name} allekirjoitti sen pääsyavaimella: muutos on nyt säännöissänne.`, sv: `${name} signerade med en nyckel: ändringen gäller nu.` }[lang]);
-    return { proposal: card.proposal?.state };
+    const { changeClauses } = await import("@/app/k/[kitchen]/rules-change");
+    const what = changeClauses(card.diff, h.lang);
+    const next = waitingOn(h.thread, proposalId);
+    const lang = h.lang;
+    const carry = next.words ? { en: next.what ? ` Now the ${next.what}.` : " Now, what was waiting on it.", fi: next.what ? ` Jatkan nyt: ${next.what}.` : " Jatkan nyt siitä, mikä odotti.", sv: next.what ? ` Nu fortsätter jag med ${next.what}.` : " Nu fortsätter jag med det som väntade." }[lang] : "";
+    const at = clockHki(v.signOff.at);
+    sayBeneath(h.run, { en: `${name} signed the change with their passkey at ${at}${what ? `: ${what}` : ""}.${carry}`, fi: `${name} allekirjoitti muutoksen pääsyavaimella klo ${at}${what ? `: ${what}` : ""}.${carry}`, sv: `${name} signerade ändringen med nyckel kl. ${at}${what ? `: ${what}` : ""}.${carry}` }[lang]);
+    h.e.store.save(h.thread);
+    return card;
   });
+  // The buy that waited on this change, asked again now that the rules allow it: a reply of its own, beneath.
+  const next = waitingOn(thread, proposalId);
+  if (next.words) void carryOn(kitchen, h, proposalId, next.words).catch((err) => console.error("[thread] after rules", err));
+  return { proposal: card.proposal?.state };
+}
+
+/** The approver declined: nothing changes; the conversation says so, and that what waited on it is not bought. */
+export async function rulesDecline(kitchen: Kitchen | string, proposalId: string, decided: { by: string; at: string; method: string; note?: string }) {
+  const h = await rulesHolderRun(kitchen, proposalId);
+  const { declineRules } = await import("./rules");
+  const card = await withTurn({ threadId: h.thread.threadId, turnId: h.run.turnId, door: "typed", kitchen: h.r.k.info.slug, orgId: h.r.k.info.orgId, agentId: h.r.session.agentId }, async () => {
+    const card = await declineRules(h.run, proposalId, decided);
+    const next = waitingOn(h.thread, proposalId);
+    const t = h.thread as unknown as { afterRulesUsed?: string[] };
+    if (next.words) t.afterRulesUsed = [...(t.afterRulesUsed ?? []), proposalId];
+    const lang = h.lang;
+    const left = next.words ? { en: next.what ? `, so I haven't ordered the ${next.what}` : ", so nothing that waited on it is ordered", fi: next.what ? `, joten en tilannut: ${next.what}` : ", joten mitään sitä odottanutta ei tilattu", sv: next.what ? `, så jag har inte beställt ${next.what}` : ", så inget som väntade på den är beställt" }[lang] : "";
+    sayBeneath(h.run, { en: `${decided.by} declined the change at ${clockHki(decided.at)}: your rules stay as they were${left}.`, fi: `${decided.by} hylkäsi muutoksen klo ${clockHki(decided.at)}: säännöt pysyvät ennallaan${left}.`, sv: `${decided.by} avböjde ändringen kl. ${clockHki(decided.at)}: era regler är som förut${left}.` }[lang]);
+    h.e.store.save(h.thread);
+    return card;
+  });
+  return { proposal: card.proposal?.state };
+}
+
+/** A change nobody signed in time, found lapsed: said once where it waited; nothing changes. */
+export async function rulesLapse(kitchen: Kitchen | string, proposalId: string) {
+  const h = await rulesHolderRun(kitchen, proposalId);
+  const { expireRules } = await import("./rules");
+  await withTurn({ threadId: h.thread.threadId, turnId: h.run.turnId, door: "typed", kitchen: h.r.k.info.slug, orgId: h.r.k.info.orgId, agentId: h.r.session.agentId }, async () => {
+    const card = await expireRules(h.run, proposalId);
+    if (!card) return;
+    sayBeneath(h.run, { en: "Nobody signed the change in time, so your rules stay as they were.", fi: "Kukaan ei allekirjoittanut muutosta ajoissa, joten säännöt pysyvät ennallaan.", sv: "Ingen signerade ändringen i tid, så era regler är som förut." }[h.lang]);
+    h.e.store.save(h.thread);
+  });
+}
+
+/**
+ * The buy that waited on a change to the rules, asked again once it is signed: a new agent turn answering the same
+ * request (no new buyer words appear), through the same engine, queued behind any turn still working.
+ */
+async function carryOn(kitchen: Kitchen | string, h: Awaited<ReturnType<typeof rulesHolderRun>>, proposalId: string, words: string): Promise<void> {
+  const t = h.thread as unknown as { afterRulesUsed?: string[] };
+  if (t.afterRulesUsed?.includes(proposalId)) return;
+  t.afterRulesUsed = [...(t.afterRulesUsed ?? []), proposalId];
+  const { e, thread, lang } = h;
+  // The kitchen read again: its agent's session must present the mandate just signed, not the one before it.
+  const fresh = await resolveKitchen(h.r.k.info.slug);
+  if (!fresh) return;
+  const r = await resolve(typeof kitchen === "string" ? fresh : ({ ...fresh, ...(kitchen.console ? { console: kitchen.console } : {}) } as Kitchen), "typed");
+  const at = new Date().toISOString();
+  const turn: AgentTurn = { turnId: newId("trn"), role: "agent", at, replyTo: h.holder.replyTo, status: "working", steps: [], cards: [] };
+  e.store.addTurn(thread, turn);
+  e.store.status(thread, turn.turnId, "working");
+  const buyer: BuyerTurn = { ...h.run.buyer, text: words };
+  const run: TurnRun = { rt: r.rt, store: e.store, thread, turnId: turn.turnId, buyer, k: r.k, session: r.session, person: r.person, door: "typed", lang, t0: Date.now(), facts: [], requests: new Set(), orders: new Map(), readings: new Map() };
+  const usage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, costUsd: 0, fallbacks: 0, toolCalls: 0 };
+  const first = step(run, "read", "Reading your request");
+  run.opening = first;
+  record(run, "after_rules", `The rules now allow it: the earlier request "${words.slice(0, 80)}" is asked again after the change was signed.`, { proposalId });
+  const queued = e.queues.get(thread.threadId) ?? Promise.resolve();
+  const next = Promise.race([queued, new Promise<void>((res) => setTimeout(res, 20_000))]).then(() =>
+    withTurn({ threadId: thread.threadId, turnId: turn.turnId, door: "typed", kitchen: r.k.info.slug, orgId: r.k.info.orgId, agentId: r.session.agentId, usage }, () => work(run, { door: "typed", via: "typed", text: words, lang }, first)).catch((err) => {
+      console.error("[thread] after rules", err);
+      e.store.status(thread, turn.turnId, "failed", { ms: Date.now() - run.t0 });
+      turnFailed(run, failureOf(err));
+    }),
+  );
+  e.queues.set(thread.threadId, next);
+  await next;
 }
 
 /** A sentence the door's own code wrote (the read-back), shown as the agent's line after the same grounding check. */
@@ -1510,6 +1647,7 @@ async function draftRulesChange(run: TurnRun, words: string, lang: "en" | "fi" |
   const card = await showRules(run, { groupsAdd: [notice.addGroup.id] });
   if (!card.proposal || card.proposal.state !== "open") return undefined;
   (run.thread as unknown as { afterRules?: Record<string, string> }).afterRules = { ...((run.thread as unknown as { afterRules?: Record<string, string> }).afterRules ?? {}), [card.proposal.proposalId]: notice.addGroup.words };
+  (run.thread as unknown as { afterRulesWhat?: Record<string, string> }).afterRulesWhat = { ...((run.thread as unknown as { afterRulesWhat?: Record<string, string> }).afterRulesWhat ?? {}), [card.proposal.proposalId]: notice.addGroup.what };
   const { groupOf } = await import("./refusal");
   const { DEPARTMENT_NAME } = await import("@/app/k/[kitchen]/catalogue.text");
   const name = (lang === "en" ? undefined : DEPARTMENT_NAME[lang][notice.addGroup.id]) ?? card.vocabulary.groups.find((g) => g.id === notice.addGroup!.id)?.name ?? groupOf(notice.addGroup.id, lang) ?? "";
