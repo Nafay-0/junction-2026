@@ -38,12 +38,13 @@ describe("what the kitchen probably still has", () => {
 });
 
 describe("the season", () => {
-  it("knows what is in season in Finland, says when, and finds it in words in three languages", () => {
+  it("knows what is in season in Finland from the calendar, says when, and finds it in words in three languages", () => {
     const nov = inSeason("2026-11-20").map((x) => x.key);
-    expect(nov).toEqual(expect.arrayContaining(["beetroot", "swede", "elk"]));
+    expect(nov).toEqual(expect.arrayContaining(["root_vegetables", "cabbage", "moose"]));
     expect(nov).not.toContain("strawberry");
-    expect(seasonText(inSeason("2026-11-20").find((x) => x.key === "beetroot")!, "en")).toBe("Aug–Mar");
-    expect(seasonalIn("Punajuurisalaatti ja lanttusose").map((x) => x.key)).toEqual(expect.arrayContaining(["beetroot", "swede"]));
+    expect(seasonText(inSeason("2026-11-20").find((x) => x.key === "root_vegetables")!, "en")).toBe("Sep–Mar");
+    expect(seasonText(inSeason("2026-11-20").find((x) => x.key === "root_vegetables")!, "fi")).toBe("syys–maalis");
+    expect(seasonalIn("Punajuurisalaatti ja hirvikäristys").map((x) => x.key)).toEqual(expect.arrayContaining(["root_vegetables", "moose"]));
     expect(langOf("Mikä on sesongissa ensi viikolla?")).toBe("fi");
     expect(langOf("What is in season next week?")).toBe("en");
   });

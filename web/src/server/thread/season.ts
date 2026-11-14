@@ -38,8 +38,9 @@ export async function seasonCard(run: TurnRun, words: string, from?: string, to?
   for (const d of [a, b]) for (const x of inSeason(d)) seen.set(x.key, x);
   const allowed = new Set(await allowedCategories(run));
   const rows: RecordsCard["rows"] = [];
-  for (const item of [...seen.values()].slice(0, 12)) {
-    const found = await run.rt.catalog.searchProducts({ text: item.search[0], limit: 6 }).catch(() => []);
+  for (const item of [...seen.values()].slice(0, 14)) {
+    // Master data only: the calendar's own words for it, and only products the calendar says are it.
+    const found = (await Promise.all(item.search.slice(0, 3).map((t) => run.rt.catalog.searchProducts({ text: t, limit: 8 }).catch(() => [])))).flat().filter((x) => item.matches(x));
     const p = found.find((x) => allowed.has(x.category)) ?? found[0];
     if (!p) continue;
     const w = WORDS[lang];

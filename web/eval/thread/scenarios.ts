@@ -410,7 +410,17 @@ const ALL: Scenario[] = [
     lang: "en",
     turns: [{ say: "Is there anything new or seasonal we should try this month?" }],
     goal: "answer",
-    limitation: "Nothing in the store suggests a product on its own: no push from the wholesaler's side. The end state is what a buyer gets by asking: an answer from the records citing real products, and nothing ordered.",
+    // The season calendar (core/season.ts) answers it: what is in season in Finland, each with a real product.
+    expect: [answered("product"), noOrder, optionsInCatalogue],
+  },
+  {
+    id: "seasonal-fi",
+    title: "Sesonki suomeksi: \"mikä on sesongissa ensi viikolla?\"",
+    tag: "need to recipe to order (seasonal)",
+    kitchen: "kaari",
+    lang: "fi",
+    turns: [{ say: "Mikä on sesongissa ensi viikolla?" }],
+    goal: "answer",
     expect: [answered("product"), noOrder, optionsInCatalogue],
   },
   {
