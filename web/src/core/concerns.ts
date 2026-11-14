@@ -262,8 +262,10 @@ export function checkQuantity(need: StructuredNeed, ctx: CheckContext): Concern[
   const unit = familyUnit(ctx);
   const asked = formatAmount(q.amount, q.unit);
 
-  // A base unit the family is not sold in (kilos of milk).
-  if (unit && q.unit !== "pack" && q.unit !== "pcs" && q.unit !== unit) {
+  // A base unit the family is not sold in (kilos of milk). Litres of cream the kitchen usually counts in boxes are not
+  // a mistake when the family's products state their content in litres: only a unit nothing is measured in is.
+  const measuredIn = (u: string) => ctx.candidates.some((p) => p.unit === u || ((p as { packContent?: { perSalesUnit?: Record<string, number> } }).packContent?.perSalesUnit?.[u === "L" ? "l" : u] ?? (p as { packContent?: { perSalesUnit?: Record<string, number> } }).packContent?.perSalesUnit?.[u]) !== undefined);
+  if (unit && q.unit !== "pack" && q.unit !== "pcs" && q.unit !== unit && !measuredIn(q.unit)) {
     return [
       {
         key: `unit_unclear:${q.amount}:${q.unit}`,

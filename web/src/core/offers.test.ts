@@ -191,6 +191,16 @@ describe("the signed offer", () => {
     await expect(verifyOffer(token, [other], { now: NOW })).rejects.toMatchObject({ code: "offer_unknown_key" });
   });
 
+  it("the buyer's own check judges a nutrition rule on the product's master data, not on the offer's short facts", () => {
+    // Metsola's case: a school's rule needs a declared figure. The offer carries no nutrition declaration, so judged on
+    // the offer alone every offer looks "undeclared" and was hidden from the kitchen while operations showed it open.
+    const school = k({ mandate: { ...k().mandate, nutritionRules: [{ nutrient: "sugar", max: 12, categories: ["cream"] }] } });
+    const product = { ...cream("L-CREAM"), nutrition: { per: "100ml" as const, values: { sugar: 3 } } };
+    expect(buyerCheck(body(), school, NOW)).toMatchObject({ show: false });
+    expect(buyerCheck(body(), school, NOW, product)).toEqual({ show: true });
+    expect(buyerCheck(body(), school, NOW, { ...product, nutrition: { per: "100ml", values: { sugar: 20 } } })).toMatchObject({ show: false });
+  });
+
   it("the buyer's own check: rules, mutes, offers off, already bought", () => {
     const b = body();
     expect(buyerCheck(b, k(), NOW)).toEqual({ show: true });

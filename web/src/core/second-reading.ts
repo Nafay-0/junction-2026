@@ -605,7 +605,11 @@ export function readingConcerns(need: Reading, record: SecondReadingRecord | und
         key: `readings_differ:${d.field}:${record.firstValues[d.field]}`,
         code: "readings_differ" as const,
         severity: "warning" as const,
-        message: `Two independent readers read ${FIELD_WORDS[d.field]} differently: ${readerName(record.firstModel)} read ${d.first}, ${readerName(record.secondModel)} read ${d.second}. Which did you mean?`,
+        // The same model can do both readings (separately, by two different methods): then the readers are not named apart.
+        message:
+          readerName(record.firstModel) === readerName(record.secondModel)
+            ? `Two separate readings of your request give ${FIELD_WORDS[d.field]} differently: one read ${d.first}, the other read ${d.second}. Which did you mean?`
+            : `Two independent readers read ${FIELD_WORDS[d.field]} differently: ${readerName(record.firstModel)} read ${d.first}, ${readerName(record.secondModel)} read ${d.second}. Which did you mean?`,
         confirmable: false,
         corrections,
         evidence: { field: d.field, first: d.first, second: d.second, why: d.why, firstModel: record.firstModel, secondModel: record.secondModel },
@@ -615,7 +619,8 @@ export function readingConcerns(need: Reading, record: SecondReadingRecord | und
 
 /** One line for the ledger. */
 export function describeSecondReading(r: SecondReadingRecord): string {
-  const who = `${readerName(r.firstModel)} and ${readerName(r.secondModel)}`;
+  const same = readerName(r.firstModel) === readerName(r.secondModel);
+  const who = same ? `${readerName(r.firstModel)} in two separate readings` : `${readerName(r.firstModel)} and ${readerName(r.secondModel)}`;
   if (r.status === "agreed") return `Read twice, by ${who}: the two readings agree on the amount, the claims, the allergens, the product and the delivery day.`;
   if (r.status === "differed") return `Read twice, by ${who}: they differ on ${r.differences.map((d) => `${FIELD_WORDS[d.field]} (${d.first} against ${d.second})`).join("; ")}. The buyer is asked before any price is fixed.`;
   return `Read once: the second reader (${readerName(r.secondModel)}) was unavailable (${r.reason ?? "failed"}${r.detail ? `: ${r.detail}` : ""}). Dock carried on with the first reading.`;

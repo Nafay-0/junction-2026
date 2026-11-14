@@ -118,8 +118,21 @@ export function tradeOffs(o: OptionView, shared: Reason[], w: ThreadWords, f: Fm
 }
 
 /** An option's title in the buyer's language: the engine marks a split's second product "(substitute)". */
-export function titleOf(o: Pick<OptionView, "title">, w: ThreadWords): string {
-  return o.title.replace(/\s*\(substitute\)\s*$/, ` (${w.substituteWord})`);
+export function titleOf(o: Pick<OptionView, "title"> & Partial<Pick<OptionView, "lines">>, w: ThreadWords): string {
+  // A basket of two products (part of the amount from each): each named short, as a person would, never "(other product)".
+  if (o.lines && o.lines.length > 1) return o.lines.map((l) => shortProduct(l.name)).join(" + ");
+  return o.title.replace(/\s*\(substitute\)\s*$/, ` (${w.substituteWord})`).replace(/\s*\(other product\)/gi, "");
+}
+
+/** A catalogue name as people say it: the brand and the line, no marks, no pack size ("Valio Arki Eila"). */
+export function shortProduct(name: string): string {
+  const out: string[] = [];
+  for (const word of name.replace(/[®™©]/g, "").split(/\s+/).filter(Boolean)) {
+    if (/\d/.test(word) || /^(x|l|kg|g|ml|dl|cl)$/i.test(word) || out.length >= 4) break;
+    if (/^(hyvä|suomalainen)$/i.test(word)) continue;
+    out.push(word);
+  }
+  return out.join(" ") || name;
 }
 
 /** Price per litre or kilo, when the option is sold by volume or weight. */
