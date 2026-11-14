@@ -1,5 +1,5 @@
 import { readJson } from "@/server/http";
-import { opsRoute } from "@/server/ops/handler";
+import { opsRead, opsRoute } from "@/server/ops/handler";
 import { refreshSample, sampleStatus } from "@/server/alive/start";
 import { hidesSample } from "@/server/alive/clock";
 
@@ -9,7 +9,8 @@ import { hidesSample } from "@/server/alive/clock";
  * new set now. Operations staff only.
  */
 export async function GET(req: Request) {
-  return opsRoute(req, async (rt) => Response.json({ ...sampleStatus(rt), hidden: hidesSample(req.headers.get("cookie")) }));
+  // Readable without the passcode: a viewer sees the sample banner and "Start here" too. Refreshing is staff only.
+  return opsRead(req, async (rt) => Response.json({ ...sampleStatus(rt), hidden: hidesSample(req.headers.get("cookie")) }));
 }
 
 export async function POST(req: Request) {
