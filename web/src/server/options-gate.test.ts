@@ -94,7 +94,8 @@ describe("2. an alternative picked instead of the product asked for is a substit
 
   it("over the price tolerance it is refused, whatever the agent declares about it", async () => {
     const requestId = await askedForTheBox();
-    for (const line of [{ productId: OVER, quantity: 100 }, { productId: OVER, quantity: 100, substituteFor: OVER === BOX ? WITHIN : undefined }]) {
+    // As asked, and with the agent declaring it replaces something cheaper to compare against.
+    for (const line of [{ productId: OVER, quantity: 100 }, { productId: OVER, quantity: 100, substituteFor: "VA-1201" }]) {
       const { policyPreview, quote, quoteToken } = await dock.requestQuote(session, { requestId, lines: [line] });
       expect(quote.lines[0].substituteFor?.productId).toBe(BOX);
       expect(policyPreview.rules.find((r) => r.rule === "substitute_price")?.outcome).toBe("fail");
