@@ -1,0 +1,1224 @@
+/*
+ * The landing page (/). Global on purpose, with an lp- prefix: next.config.ts hands every *.css file to Tailwind as
+ * plain CSS, so CSS modules would render no class names (src/app/no-css-modules.test.ts).
+ *
+ * One bold choice: the thread. The line that runs down the agent's conversation runs down the whole page, each
+ * section a node on it, and it draws itself in lime as the reader scrolls (a scroll-driven animation, no script).
+ * Everything else is quiet: the product's own tokens, its type, its pill controls, one dark feature (the gate).
+ */
+
+@layer components {
+
+
+.lp {
+  --lp-rail: 15px; /* the line's x inside the content box */
+  --lp-indent: 34px; /* where content starts, right of the line */
+}
+@media (min-width: 768px) {
+  .lp {
+    --lp-rail: 22px;
+    --lp-indent: 76px;
+  }
+}
+
+/* ---------- the thread ---------- */
+
+.lp-rail {
+  position: absolute;
+  top: 3.6rem;
+  bottom: 9rem;
+  left: calc(1rem + var(--lp-rail) - 1px);
+  width: 2px;
+  border-radius: 2px;
+  background: var(--color-line-strong);
+  pointer-events: none;
+}
+@media (min-width: 640px) {
+  .lp-rail {
+    left: calc(2rem + var(--lp-rail) - 1px);
+  }
+}
+.lp-rail::after {
+  content: "";
+  position: absolute;
+  inset: 0 -1px;
+  border-radius: 3px;
+  background: var(--color-lime);
+  transform-origin: top;
+  transform: scaleY(0);
+}
+@supports (animation-timeline: scroll()) {
+  .lp-rail::after {
+    animation: lp-draw linear both;
+    animation-timeline: scroll(root);
+  }
+}
+@keyframes lp-draw {
+  from {
+    transform: scaleY(0.015);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+.lp-section {
+  position: relative;
+  padding-left: var(--lp-indent);
+  padding-top: 5.5rem;
+}
+@media (min-width: 768px) {
+  .lp-section {
+    padding-top: 8.5rem;
+  }
+}
+.lp-hero {
+  padding-top: 3rem;
+}
+@media (min-width: 768px) {
+  .lp-hero {
+    padding-top: 4.5rem;
+  }
+}
+.lp-end {
+  padding-bottom: 7rem;
+}
+
+/* A node on the line: the agent's mark from the conversation (petrol ring, lime light). */
+.lp-node {
+  position: absolute;
+  left: calc(var(--lp-rail) - 10px);
+  top: calc(5.5rem + 0.35em);
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--color-petrol-deep);
+  box-shadow: 0 0 0 5px var(--color-mist);
+}
+.lp-node::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border-radius: 999px;
+  background: var(--color-lime);
+}
+@media (min-width: 768px) {
+  .lp-node {
+    top: calc(8.5rem + 0.55em);
+  }
+}
+.lp-hero .lp-node {
+  top: calc(3rem + 0.5rem);
+}
+@media (min-width: 768px) {
+  .lp-hero .lp-node {
+    top: calc(4.5rem + 0.9rem);
+  }
+}
+.lp-node-pilot {
+  display: grid;
+  place-items: center;
+  background: transparent;
+}
+.lp-node-pilot::after {
+  display: none;
+}
+/* In the gate the node is the gate's own mark. */
+.lp-node-gate {
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  box-shadow: none;
+}
+.lp-node-gate::after {
+  display: none;
+}
+
+/* ---------- type ---------- */
+
+.lp-h1 {
+  font-size: clamp(2.35rem, 5.6vw, 3.7rem);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  max-width: 16ch;
+  text-wrap: balance;
+}
+.lp-h2 {
+  font-size: clamp(1.9rem, 4.6vw, 3rem);
+  line-height: 1.05;
+  letter-spacing: -0.026em;
+  max-width: 22ch;
+  text-wrap: balance;
+}
+
+/* ---------- hero ---------- */
+
+.lp-hero-grid {
+  display: grid;
+  gap: 3rem;
+}
+@media (min-width: 1100px) {
+  .lp-hero-grid {
+    grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.14fr);
+    align-items: center;
+    gap: 3rem;
+  }
+  /* the product runs out to the page's edge */
+  .lp-hero-product {
+    margin-right: -2rem;
+  }
+}
+
+/* ---------- frames ---------- */
+
+.lp-phone {
+  position: relative;
+  border-radius: 34px;
+  padding: 6px;
+  background: var(--color-paper);
+  border: 1px solid var(--color-line);
+  box-shadow: var(--shadow-md);
+}
+.lp-phone-screen {
+  overflow: hidden;
+  border-radius: 28px;
+  background: var(--color-mist);
+  /* a soft inner edge, like glass on a screen */
+  box-shadow: inset 0 0 0 1px rgb(0 54 70 / 0.06);
+}
+.lp-phone-screen img {
+  border-radius: 28px;
+}
+
+.lp-browser {
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  background: var(--color-paper);
+  border: 1px solid var(--color-line);
+  box-shadow: var(--shadow-md);
+}
+.lp-browser-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 30px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-mist);
+}
+.lp-dots {
+  display: inline-flex;
+  gap: 5px;
+}
+.lp-dots i {
+  width: 8px;
+  height: 8px;
+  border-radius: 99px;
+  background: var(--color-line-strong);
+}
+.lp-url {
+  flex: 1;
+  max-width: 26rem;
+  margin: 0 auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  border-radius: 99px;
+  background: var(--color-paper);
+  border: 1px solid var(--color-line);
+  padding: 1px 12px;
+  font-size: 0.7rem;
+  color: var(--color-ink-soft);
+  text-align: center;
+}
+
+.lp-missing {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  background: repeating-linear-gradient(-45deg, var(--color-surface) 0 10px, var(--color-mist) 10px 20px);
+  color: var(--color-ink-soft);
+  font-size: 0.85rem;
+}
+
+.lp-duo {
+  position: relative;
+  padding-bottom: 12%;
+}
+.lp-duo > .lp-browser {
+  width: 88%;
+}
+.lp-duo-phone {
+  position: absolute;
+  bottom: 0;
+  width: 31%;
+  border-radius: 26px;
+  padding: 4px;
+}
+.lp-duo-phone .lp-phone-screen,
+.lp-duo-phone .lp-phone-screen img {
+  border-radius: 22px;
+}
+.lp-duo-right > .lp-browser {
+  margin-right: auto;
+}
+.lp-duo-right .lp-duo-phone {
+  right: 0;
+}
+.lp-duo-left > .lp-browser {
+  margin-left: auto;
+}
+.lp-duo-left .lp-duo-phone {
+  left: 0;
+}
+.lp-hero .lp-duo > .lp-browser {
+  width: 82%;
+}
+.lp-hero .lp-duo-phone {
+  width: 34%;
+}
+@media (max-width: 639px) {
+  .lp-duo > .lp-browser,
+  .lp-hero .lp-duo > .lp-browser {
+    width: 100%;
+  }
+  .lp-hero .lp-duo-phone {
+    width: 44%;
+  }
+  .lp-duo {
+    padding-bottom: 46%;
+  }
+  .lp-duo-phone {
+    width: 40%;
+    border-radius: 20px;
+  }
+  .lp-duo-phone .lp-phone-screen,
+  .lp-duo-phone .lp-phone-screen img {
+    border-radius: 16px;
+  }
+}
+
+/* ---------- the film ---------- */
+
+.lp-film {
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--radius-2xl);
+  background: var(--color-petrol-deep);
+  box-shadow: var(--shadow-md);
+}
+.lp-poster {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 90% at 85% 110%, rgb(192 224 33 / 0.16), transparent 55%),
+    var(--color-petrol-deep);
+}
+/* The thread, crossing the poster: the same line, in lime. */
+.lp-poster::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: clamp(1.4rem, 6%, 4rem);
+  width: 2px;
+  background: linear-gradient(var(--color-lime), rgb(192 224 33 / 0.15));
+}
+.lp-poster-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: clamp(1.2rem, 4%, 3rem) clamp(1.2rem, 5%, 3.5rem) clamp(1.2rem, 5%, 3.5rem) calc(clamp(1.4rem, 6%, 4rem) + clamp(1rem, 3%, 2.5rem));
+}
+.lp-play {
+  display: inline-block;
+  width: 34px;
+  height: 34px;
+  border-radius: 99px;
+  border: 1.5px solid rgb(255 255 255 / 0.45);
+  position: relative;
+}
+.lp-play::after {
+  content: "";
+  position: absolute;
+  left: 13px;
+  top: 10px;
+  border-left: 10px solid rgb(255 255 255 / 0.75);
+  border-top: 6.5px solid transparent;
+  border-bottom: 6.5px solid transparent;
+}
+@media (max-width: 639px) {
+  .lp-poster-inner .display {
+    font-size: 1.35rem;
+  }
+}
+
+/* ---------- the flow: five screens in a row on a desk, a sideways strip on a phone ---------- */
+
+.lp-flow {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  margin-right: -1rem;
+  padding: 0.5rem 1rem 1.5rem 0.25rem;
+  scrollbar-width: thin;
+}
+.lp-flow:focus-visible {
+  outline: 2px solid var(--color-petrol);
+  outline-offset: 4px;
+  border-radius: var(--radius-lg);
+}
+.lp-flow-step {
+  flex: 0 0 min(72%, 17rem);
+  scroll-snap-align: start;
+}
+@media (min-width: 1024px) {
+  .lp-flow {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 1.25rem;
+    overflow: visible;
+    margin-right: 0;
+    padding: 0;
+  }
+}
+.lp-step-no {
+  display: inline-grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 99px;
+  background: var(--color-petrol-soft);
+  color: var(--color-petrol-deep);
+  font-size: 0.8rem;
+  font-weight: 700;
+  transform: translateY(-2px);
+}
+
+/* ---------- agents ---------- */
+
+.lp-agent {
+  display: grid;
+  gap: 2.25rem;
+}
+@media (min-width: 1024px) {
+  .lp-agent {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    align-items: center;
+    gap: 4rem;
+  }
+  .lp-agent-flip .lp-agent-copy {
+    order: 2;
+  }
+  .lp-agent-text {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  }
+}
+.lp-agent-copy {
+  max-width: 34rem;
+}
+.lp-fact {
+  border-left: 3px solid var(--color-lime);
+  padding: 0.15rem 0 0.15rem 1rem;
+}
+.lp-two-phones {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  max-width: 34rem;
+  margin: 0 auto;
+}
+.lp-two-phones > :last-child {
+  transform: translateY(2.5rem);
+}
+@media (max-width: 639px) {
+  .lp-two-phones > :last-child {
+    transform: translateY(1.5rem);
+  }
+}
+
+.lp-scenarios {
+  display: grid;
+  border-top: 1px solid var(--color-line);
+}
+.lp-scenarios > li {
+  padding: 1.25rem 0;
+  border-bottom: 1px solid var(--color-line);
+}
+@media (min-width: 768px) {
+  .lp-scenarios {
+    grid-template-columns: 1fr 1fr;
+    column-gap: 3rem;
+  }
+}
+@media (min-width: 1200px) {
+  .lp-scenarios {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+}
+
+/* ---------- the gate: the one dark feature ---------- */
+
+.lp-gate {
+  position: relative;
+  margin-left: calc(-1 * var(--lp-indent));
+  border-radius: var(--radius-2xl);
+  background: var(--color-petrol-deep);
+  color: var(--color-paper);
+  padding: 2.5rem 1.25rem 2.5rem var(--lp-indent);
+  overflow: hidden;
+}
+/* The hazard band along the top: a person decides here, or the gate refuses. */
+.lp-gate::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 8px;
+  background-image: repeating-linear-gradient(-45deg, var(--color-safety) 0 10px, var(--color-safety-ink) 10px 20px);
+}
+/* The thread runs on through the gate. */
+.lp-gate::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 0;
+  left: calc(var(--lp-rail) - 1px);
+  width: 2px;
+  background: rgb(255 255 255 / 0.18);
+}
+@media (min-width: 768px) {
+  .lp-gate {
+    padding: 3.75rem 3rem 3.5rem var(--lp-indent);
+  }
+}
+.lp-gate .lp-node-gate {
+  left: calc(var(--lp-rail) - 11px);
+  top: calc(2.5rem + 0.4em);
+  z-index: 1;
+}
+@media (min-width: 768px) {
+  .lp-gate .lp-node-gate {
+    top: calc(3.75rem + 0.6em);
+  }
+}
+
+.lp-chain {
+  display: grid;
+  gap: 0.75rem;
+  counter-reset: none;
+}
+@media (min-width: 1100px) {
+  .lp-chain {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 1.6rem;
+  }
+}
+.lp-station {
+  position: relative;
+  border-radius: var(--radius-xl);
+  background: rgb(255 255 255 / 0.06);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12);
+  padding: 1.1rem 1.1rem 1.2rem 3.4rem;
+}
+@media (min-width: 1100px) {
+  .lp-station {
+    padding: 3.4rem 1.1rem 1.2rem;
+  }
+}
+/* The connector: an arrow to the next station, down on a phone, across on a desk. */
+.lp-station:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 1.95rem;
+  bottom: -0.75rem;
+  width: 2px;
+  height: 0.75rem;
+  background: var(--color-lime);
+}
+@media (min-width: 1100px) {
+  .lp-station:not(:last-child)::after {
+    left: auto;
+    right: -1.6rem;
+    top: 2.05rem;
+    bottom: auto;
+    width: 1.6rem;
+    height: 2px;
+  }
+  .lp-station:not(:last-child)::before {
+    content: "";
+    position: absolute;
+    right: -0.7rem;
+    top: calc(2.05rem - 4px);
+    border-left: 7px solid var(--color-lime);
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    z-index: 1;
+  }
+}
+.lp-station-mark {
+  position: absolute;
+  left: 1rem;
+  top: 1.1rem;
+  display: grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+}
+@media (min-width: 1100px) {
+  .lp-station-mark {
+    top: 1.1rem;
+  }
+}
+.lp-station-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 99px;
+  background: var(--color-lime);
+  box-shadow: 0 0 0 5px rgb(192 224 33 / 0.18);
+}
+.lp-station-gate {
+  background: var(--color-safety-ink);
+  box-shadow: inset 0 0 0 1px rgb(255 194 14 / 0.4);
+  overflow: hidden;
+}
+.lp-station-gate::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 6px;
+  background-image: repeating-linear-gradient(-45deg, var(--color-safety) 0 9px, var(--color-safety-ink) 9px 18px);
+}
+@media (min-width: 1100px) {
+  .lp-station-gate::before {
+    right: 0;
+    border-left: none;
+    border-top: none;
+    border-bottom: none;
+    top: 0;
+  }
+}
+.lp-std {
+  display: inline-block;
+  border-radius: 99px;
+  padding: 2px 10px;
+  font-size: 0.75rem;
+  background: rgb(255 255 255 / 0.1);
+  color: rgb(255 255 255 / 0.9);
+}
+.lp-station-gate .lp-std {
+  background: var(--color-safety);
+  color: var(--color-safety-ink);
+  font-weight: 600;
+}
+
+.lp-rules {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr));
+  gap: 0.35rem 1rem;
+}
+@media (max-width: 639px) {
+  .lp-rules {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.35rem 0.5rem;
+  }
+  .lp-rules code {
+    font-size: 0.68rem;
+  }
+  .lp-rules li::before {
+    margin-right: 5px;
+  }
+}
+.lp-rules code {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: rgb(255 255 255 / 0.88);
+}
+.lp-rules li::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 8px;
+  border-radius: 2px;
+  background: var(--color-safety);
+  transform: translateY(-2px);
+}
+.lp-facts {
+  display: grid;
+  gap: 1.25rem 2rem;
+}
+@media (min-width: 640px) {
+  .lp-facts {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.lp-facts > li {
+  border-top: 1px solid rgb(255 255 255 / 0.16);
+  padding-top: 0.9rem;
+}
+.lp-standards {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+}
+@media (min-width: 1100px) {
+  .lp-standards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.lp-standards > li {
+  border-radius: var(--radius-lg);
+  background: rgb(255 255 255 / 0.06);
+  padding: 0.8rem 1rem;
+}
+.lp-gate .lp-browser {
+  border-color: rgb(255 255 255 / 0.14);
+  box-shadow: none;
+}
+
+/* ---------- thinking ---------- */
+
+.lp-think {
+  display: grid;
+  gap: 2.5rem;
+  align-items: start;
+}
+.lp-think > figure:first-child {
+  max-width: 19rem;
+}
+@media (min-width: 1024px) {
+  .lp-think {
+    grid-template-columns: 17rem minmax(0, 1fr);
+    gap: 3.5rem;
+  }
+}
+
+/* ---------- search ---------- */
+
+.lp-search {
+  display: grid;
+  gap: 2.5rem;
+  align-items: start;
+}
+.lp-search > * {
+  min-width: 0;
+}
+@media (min-width: 1100px) {
+  .lp-search {
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    gap: 3rem;
+  }
+}
+.lp-key {
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+  border-radius: 3px;
+}
+.lp-bars {
+  border-collapse: separate;
+  border-spacing: 0 0.9rem;
+  margin-top: 0.4rem;
+}
+.lp-bar-label {
+  width: 34%;
+  padding-right: 1rem;
+  text-align: left;
+  vertical-align: middle;
+  font-size: 0.92rem;
+  line-height: 1.25;
+}
+@media (max-width: 639px) {
+  .lp-bars,
+  .lp-bars tbody,
+  .lp-bars tr,
+  .lp-bars th,
+  .lp-bars td.lp-bar-cell {
+    display: block;
+    width: auto;
+  }
+  .lp-bars {
+    border-spacing: 0;
+  }
+  .lp-bars tr {
+    margin-bottom: 1rem;
+  }
+  .lp-bar-label {
+    padding: 0 0 0.35rem;
+  }
+}
+.lp-bar-track {
+  position: relative;
+  display: block;
+  margin-right: 5.6rem;
+}
+.lp-bar-svg {
+  display: block;
+  width: 100%;
+  height: 26px;
+  overflow: visible;
+}
+.lp-bar-tick {
+  stroke: var(--color-line);
+  stroke-width: 1;
+}
+.lp-bar-top3 {
+  fill: #c9dade;
+}
+.lp-bar-first {
+  fill: #7b8d94;
+}
+.lp-key-first {
+  background: #7b8d94;
+}
+.lp-key-top3 {
+  background: #c9dade;
+}
+.lp-bar-quiet .lp-bar-first {
+  fill: var(--color-line-strong);
+}
+.lp-bar-quiet .lp-bar-label span:first-child {
+  color: var(--color-ink-soft);
+}
+.lp-bar-ours .lp-bar-first {
+  fill: var(--color-petrol-deep);
+}
+.lp-bar-ours .lp-bar-top3 {
+  fill: var(--color-petrol);
+}
+.lp-bar-value {
+  position: absolute;
+  top: 50%;
+  right: -5.6rem;
+  width: 5rem;
+  transform: translateY(-50%);
+  font-size: 1.05rem;
+  line-height: 1.1;
+  color: var(--color-ink);
+  white-space: nowrap;
+}
+.lp-bar-ours .lp-bar-value .display {
+  font-size: 1.4rem;
+  color: var(--color-petrol-deep);
+}
+.lp-axis {
+  position: relative;
+  height: 1.2rem;
+  margin-left: 34%;
+  margin-right: 5.6rem;
+  font-size: 0.72rem;
+  color: var(--color-ink-soft);
+}
+.lp-axis span {
+  position: absolute;
+  transform: translateX(-50%);
+}
+.lp-axis span:first-child {
+  transform: none;
+}
+@media (max-width: 639px) {
+  .lp-axis {
+    margin-left: 0;
+  }
+}
+
+.lp-scroll {
+  overflow-x: auto;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-line);
+  background: var(--color-paper);
+}
+.lp-scroll:focus-visible {
+  outline: 2px solid var(--color-petrol);
+  outline-offset: 2px;
+}
+.lp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.lp-table th,
+.lp-table td {
+  padding: 0.7rem 0.9rem;
+  border-bottom: 1px solid var(--color-line);
+  text-align: right;
+  vertical-align: middle;
+}
+.lp-table thead th {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-ink-soft);
+  line-height: 1.25;
+  vertical-align: bottom;
+  background: var(--color-mist);
+}
+.lp-table td {
+  white-space: nowrap;
+}
+.lp-table thead th:not(:first-child) {
+  min-width: 6.5rem;
+}
+.lp-table tbody tr:last-child > * {
+  border-bottom: none;
+}
+.lp-row-ours > * {
+  background: var(--color-lime-soft);
+}
+.lp-row-ours th {
+  color: var(--color-petrol-deep);
+}
+.lp-row-quiet > * {
+  color: var(--color-ink-soft);
+}
+.lp-crash th:first-child {
+  min-width: 11rem;
+}
+.lp-crash td,
+.lp-crash tbody th {
+  padding-top: 0.45rem;
+  padding-bottom: 0.45rem;
+}
+.lp-crash-bar {
+  text-align: left !important;
+  min-width: 10rem;
+  white-space: nowrap;
+}
+.lp-mini {
+  display: inline-block;
+  width: 6rem;
+  height: 8px;
+  margin-right: 0.6rem;
+  border-radius: 99px;
+  background: var(--color-surface);
+  overflow: hidden;
+  vertical-align: middle;
+}
+@media (max-width: 639px) {
+  .lp-mini {
+    display: none;
+  }
+  .lp-crash-bar {
+    min-width: 0;
+  }
+  .lp-bar-track {
+    margin-right: 4.6rem;
+  }
+  .lp-bar-value {
+    right: -4.6rem;
+    width: 4.2rem;
+  }
+  .lp-axis {
+    margin-right: 4.6rem;
+  }
+}
+.lp-mini > span {
+  display: block;
+  height: 100%;
+  background: var(--color-ink-faint);
+}
+.lp-row-ours .lp-mini > span {
+  background: var(--color-petrol-deep);
+}
+.lp-licence {
+  display: inline-block;
+  border-radius: 99px;
+  padding: 2px 9px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--color-surface);
+  color: var(--color-ink-soft);
+}
+.lp-licence-L3 {
+  background: var(--color-petrol-deep);
+  color: var(--color-paper);
+}
+.lp-licence-L2,
+.lp-licence-L1 {
+  background: var(--color-petrol-soft);
+  color: var(--color-petrol-deep);
+}
+
+.lp-points {
+  display: grid;
+  gap: 1.25rem;
+  max-width: 64rem;
+}
+@media (min-width: 900px) {
+  .lp-points {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+  }
+}
+.lp-points > li {
+  border-top: 2px solid var(--color-petrol-deep);
+  padding-top: 0.9rem;
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
+.lp-counts {
+  display: grid;
+  gap: 1.75rem 2.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+}
+.lp-counts > div {
+  border-top: 1px solid var(--color-line-strong);
+  padding-top: 1rem;
+}
+
+/* ---------- operations ---------- */
+
+.lp-biz {
+  display: grid;
+  gap: 2rem;
+  align-items: start;
+}
+@media (min-width: 1100px) {
+  .lp-biz {
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+    gap: 3rem;
+  }
+}
+.lp-biz-list {
+  display: grid;
+  gap: 1.1rem;
+}
+.lp-biz-list > li {
+  border-top: 1px solid var(--color-line);
+  padding-top: 0.9rem;
+}
+.lp-aiven > div {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--color-line);
+}
+@media (min-width: 640px) {
+  .lp-aiven > div {
+    grid-template-columns: 9.5rem 1fr;
+    gap: 1rem;
+  }
+}
+
+/* ---------- on every screen ---------- */
+
+.lp-pairs {
+  display: grid;
+  gap: 3.5rem 3rem;
+}
+@media (min-width: 1100px) {
+  .lp-pairs {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+/* The phone stands in front of the desk's lower-left corner: one moment, two sizes. */
+.lp-pair-shots {
+  position: relative;
+  margin-top: 1rem;
+  padding-left: 22%;
+  padding-bottom: 10%;
+}
+.lp-pair-shots > .lp-phone {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 30%;
+  z-index: 1;
+  border-radius: 24px;
+  padding: 4px;
+}
+.lp-pair-shots > .lp-phone .lp-phone-screen,
+.lp-pair-shots > .lp-phone .lp-phone-screen img {
+  border-radius: 20px;
+}
+@media (max-width: 639px) {
+  .lp-pair-shots {
+    padding-left: 18%;
+    padding-bottom: 30%;
+  }
+  .lp-pair-shots > .lp-phone {
+    width: 38%;
+    border-radius: 18px;
+  }
+  .lp-pair-shots > .lp-phone .lp-phone-screen,
+  .lp-pair-shots > .lp-phone .lp-phone-screen img {
+    border-radius: 14px;
+  }
+}
+
+/* ---------- the copilot's questions (no screenshot: it needs the hosted services) ---------- */
+
+.lp-ask {
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+  padding: 1.25rem 1.25rem 1.1rem;
+  max-width: 34rem;
+}
+.lp-ask-q {
+  display: inline-flex;
+  margin-right: 0.4rem;
+  border-radius: 99px;
+  background: var(--color-paper);
+  border: 1px solid var(--color-line);
+  padding: 0.4rem 0.9rem;
+  font-size: 0.9rem;
+  color: var(--color-ink);
+}
+.lp-ask-refused {
+  border-radius: var(--radius-lg);
+  background: var(--color-safety-ink);
+  color: rgb(255 255 255 / 0.85);
+  padding: 0.85rem 1rem;
+  position: relative;
+  overflow: hidden;
+}
+.lp-ask-refused::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4px;
+  background-image: repeating-linear-gradient(-45deg, var(--color-safety) 0 6px, var(--color-safety-ink) 6px 12px);
+}
+.lp-ask-refused code {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--color-safety);
+  text-decoration: line-through;
+}
+
+/* The poster's phone: the gate card, standing in the frame's lower right. */
+.lp-poster-phone {
+  position: absolute;
+  right: 6%;
+  bottom: -18%;
+  width: 26%;
+  transform: rotate(-4deg);
+}
+@media (max-width: 767px) {
+  .lp-poster-phone {
+    display: none;
+  }
+}
+
+/* ---------- mail ---------- */
+
+.lp-mails {
+  display: grid;
+  gap: 2rem;
+  align-items: start;
+}
+@media (min-width: 900px) {
+  .lp-mails {
+    grid-template-columns: 1fr 1fr;
+    gap: 2.5rem;
+  }
+}
+.lp-mail {
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-line);
+  background: var(--color-paper);
+  box-shadow: var(--shadow-sm);
+  max-width: 34rem;
+}
+.lp-mail-head {
+  padding: 0.85rem 1.1rem;
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-mist);
+}
+.lp-mail-body {
+  max-height: 44rem;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(#000 85%, transparent);
+  mask-image: linear-gradient(#000 85%, transparent);
+}
+
+/* ---------- honest ---------- */
+
+.lp-honest {
+  display: grid;
+  gap: 2rem;
+}
+@media (min-width: 900px) {
+  .lp-honest {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2.5rem;
+  }
+}
+.lp-honest > div {
+  border-top: 2px solid var(--color-petrol-deep);
+  padding-top: 1rem;
+}
+.lp-honest li {
+  padding-left: 1rem;
+  position: relative;
+}
+.lp-honest li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 6px;
+  height: 6px;
+  border-radius: 99px;
+  background: var(--color-petrol);
+}
+
+/* ---------- the header's menu on a phone (no script: a details element) ---------- */
+
+.lp-menu {
+  position: relative;
+}
+.lp-menu-button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 99px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--color-ink);
+}
+.lp-menu-button::-webkit-details-marker {
+  display: none;
+}
+.lp-menu-button:hover {
+  background: var(--color-mist);
+}
+.lp-menu-sheet {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  display: grid;
+  min-width: 15rem;
+  padding: 0.5rem;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-line);
+  background: var(--color-paper);
+  box-shadow: var(--shadow-lg);
+}
+.lp-menu-sheet a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 0.9rem;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  color: var(--color-ink);
+}
+.lp-menu-sheet a:hover {
+  background: var(--color-mist);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-rail::after {
+    animation: none;
+    transform: scaleY(0);
+  }
+}
+
+} /* @layer components */

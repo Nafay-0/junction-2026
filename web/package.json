@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "demo": "tsx scripts/demo.ts",
     "demo:mcp": "tsx scripts/demo-mcp.ts",
+    "landing:shots": "tsx scripts/landing-shots.ts",
     "memory:demo": "tsx scripts/memory-demo.ts",
     "memory:record": "tsx scripts/memory-record.ts",
     "smoke": "tsx scripts/smoke.ts",

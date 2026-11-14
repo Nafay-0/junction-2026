@@ -222,7 +222,7 @@ environment, redeploys, polls `/api/health` until the new commit answers (about 
 build, image scan, start) and runs `pnpm smoke` against the public URL. Deploys are not automatic on push.
 
 `pnpm smoke --url <url> [--commit <sha>]` (in `web/`) is the smoke test: health and expected commit, the
-wall `/` first (it used to break every later API error), the console `/k/kaari` and its `/ui-api` back
+landing page `/` and the wall `/wall` first (the wall used to break every later API error), the console `/k/kaari` and its `/ui-api` back
 end, `/join` and the passkey options (RP ID must equal the host), the five discovery documents, a search,
 one intake through to a signed quote, two refusals with rule and status (tampered mandate: 401
 `mandate_signature`; order below the quoted price: 422 `order_matches_quote`), and `/api/v1/dev/*` closed.

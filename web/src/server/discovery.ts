@@ -146,6 +146,7 @@ It is not a chatbot and not a marketplace. One wholesaler, one catalogue, signed
 - [Manifest](${u.manifest}): auth, mandate format, keys, limits.
 - [Public keys](${u.jwks}): JWK Set (Ed25519) to verify quotes and order receipts offline.
 - [Developer guide](${origin}/docs/raw/connect-an-agent.md) and [assumptions and next steps](${origin}/docs/raw/assumptions.md), as Markdown; [every document](${u.docs}) as pages.
+- For people: [what AimoPilot is](${origin}/) (the landing page), [the wall](${origin}/wall) (live requests at the gate, and the code to become an approver).
 
 ## Authenticate
 

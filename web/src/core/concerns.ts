@@ -138,10 +138,23 @@ export function familyUnit(ctx: CheckContext): BaseUnit | undefined {
 export function referencePackSize(need: StructuredNeed, ctx: CheckContext): number | undefined {
   const named = need.item.productId && ctx.candidates.find((p) => p.id === need.item.productId);
   if (named) return named.packSize;
+  // The pack the buyer named in their words ("Peltolan blue cheese 400 g", "2 packs of 400 g"): that is the pack.
+  const stated = statedPackSize([need.item.text, ...need.item.attributes.map((a) => a.replaceAll("_", " "))].join(" "));
+  if (stated && (!ctx.candidates.length || ctx.candidates.some((p) => p.unit === stated.unit))) return stated.size;
   const last = lastOrder(ctx.profile, ctx.family);
   if (last) return primaryLine(last).packSize;
   const sizes = [...new Set(ctx.candidates.map((p) => p.packSize))];
   return sizes.length === 1 ? sizes[0] : undefined;
+}
+
+/** A pack size written in the item's words ("blue cheese 400 g", "cream 2,5 l"), in the base unit (kg, L). */
+export function statedPackSize(text: string): { size: number; unit: "kg" | "L" } | undefined {
+  const m = /(\d+(?:[.,]\d+)?)\s*(kg|g|l|dl|ml)(?![a-zäöå])/i.exec(text);
+  if (!m) return undefined;
+  const n = Number(m[1].replace(",", "."));
+  const u = m[2].toLowerCase();
+  if (!(n > 0)) return undefined;
+  return u === "kg" ? { size: n, unit: "kg" } : u === "g" ? { size: n / 1000, unit: "kg" } : u === "l" ? { size: n, unit: "L" } : u === "dl" ? { size: n / 10, unit: "L" } : { size: n / 1000, unit: "L" };
 }
 
 /** Is this unit a count of packs for this family? "pcs" of milk means cartons or boxes, not litres. */
@@ -328,7 +341,8 @@ export function checkQuantity(need: StructuredNeed, ctx: CheckContext): Concern[
         },
       ];
     }
-    if (!packCount && !near(q.amount, usual.amount) && near(q.amount * pack, usual.amount)) {
+    // Never on a unit the product is sold in: "20 L" of milk is litres, whatever the kitchen usually orders.
+    if (!packCount && !measuredIn(q.unit) && !near(q.amount, usual.amount) && near(q.amount * pack, usual.amount)) {
       return [
         {
           key: `unit_confusion:${q.amount}:${q.unit}`,

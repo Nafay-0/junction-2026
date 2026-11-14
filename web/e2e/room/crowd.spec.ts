@@ -71,7 +71,7 @@ async function crowd(browser: Browser, n: number): Promise<Visitor[]> {
   const wall = await wallContext.newPage();
   const wallRefusals: string[] = [];
   wall.on("response", (r) => r.status() === 429 && wallRefusals.push(new URL(r.url()).pathname));
-  await wall.goto("/");
+  await wall.goto("/wall");
   let release!: () => void;
   const gate = new Promise<void>((r) => (release = r));
   // Visitors arrive over ~5 s, as when a QR code goes up on the wall.
