@@ -78,6 +78,9 @@ export function ThreadLine({ className = "", landing = false }: { className?: st
   const opening = turns.find((x): x is AgentTurn => x.role === "agent" && x.cards.some((c) => c.type === "today"));
   const onlyOpening = buyers.length === 0 && api.pending.length === 0;
   const lastAgent = [...turns].reverse().find((x): x is AgentTurn => x.role === "agent");
+  // Replies not started yet because an earlier one is still being worked on: shown as waiting their turn.
+  const firstWorking = turns.findIndex((x) => x.role === "agent" && x.status === "working");
+  const queued = new Set(firstWorking < 0 ? [] : turns.slice(firstWorking + 1).flatMap((x) => (x.role === "agent" && x.status === "working" && !x.steps.length && !x.cards.length && !x.line ? [x.turnId] : [])));
 
   return (
     <div className={`relative ${className}`}>
@@ -91,15 +94,17 @@ export function ThreadLine({ className = "", landing = false }: { className?: st
           turns.map((x) =>
             x.role === "agent" && x === opening && !onlyOpening && !x.cards.some((c) => (c.type === "today" && c.items.length > 0) || c.type === "offer") ? null : x.role === "buyer" ? (
               <BuyerLine key={x.turnId} turn={x} />
+            ) : queued.has(x.turnId) ? (
+              <QueuedNode key={x.turnId} />
             ) : (
               <AgentNode key={x.turnId} turn={x} thread={t!} tap={tap} busy={api.posting} latest={x === lastAgent} />
             ),
           )
         )}
-        {api.pending.map((p) => (
+        {api.pending.map((p, i) => (
           <Fragment key={p.turnId}>
             <BuyerLine turn={p} />
-            <WorkingNode label={undefined} />
+            {i === 0 && firstWorking < 0 ? <WorkingNode label={undefined} /> : <QueuedNode />}
           </Fragment>
         ))}
         {api.error && (
@@ -131,6 +136,17 @@ function WorkingNode({ label }: { label?: string }) {
     <li className="relative" aria-busy>
       <span aria-hidden className="tl-pulse absolute -left-[2.35rem] top-[0.25em] size-[1.15rem] rounded-full bg-lime" />
       <p className="tl-sheen text-[1.02rem] font-medium text-petrol">{label ?? tx.working}</p>
+    </li>
+  );
+}
+
+/** A message sent while the agent still works on the one before: kept, and answered next, in order. */
+function QueuedNode() {
+  const tx = useText(THREAD_LINE_TEXT);
+  return (
+    <li className="relative" data-queued>
+      <span aria-hidden className="absolute -left-[2.2rem] top-[0.35em] size-[0.85rem] rounded-full border-2 border-petrol/40 bg-mist" />
+      <p className="text-[0.92rem] text-ink-soft">{tx.queued}</p>
     </li>
   );
 }
@@ -192,7 +208,7 @@ function Choices({ turn, thread, tap, busy }: { turn: AgentTurn; thread: Thread;
     } else if (c.type === "anomaly" && !c.answered) {
       const k = c.concerns[0];
       if (k) {
-        if (k.confirmable) rows.push({ key: "confirm", title: concernText(k, w, wf, f.lang), differs: w.correction.keep, action: { type: "concern", requestId: c.requestId, key: k.key, choice: "confirm" } });
+        if (k.confirmable) rows.push({ key: "confirm", title: tx.asSaid, action: { type: "concern", requestId: c.requestId, key: k.key, choice: "confirm" } });
         for (const x of k.corrections.slice(0, 2)) rows.push({ key: x.id, title: correctionLabel(x, w, wf, f.lang), action: { type: "concern", requestId: c.requestId, key: k.key, choice: x.id } });
       }
     }
@@ -200,9 +216,9 @@ function Choices({ turn, thread, tap, busy }: { turn: AgentTurn; thread: Thread;
   if (!rows.length) return null;
   return (
     <div className="mt-3">
-      <div className="flex flex-col gap-1.5">
+      <div role="group" aria-label={tx.choices} className="flex flex-col gap-1.5">
         {rows.map((r) => (
-          <button key={r.key} type="button" disabled={busy} onClick={() => tap(r.action, r.title)} className="group flex items-baseline gap-3 rounded-xl bg-paper/70 px-3 py-2 text-left transition-colors hover:bg-paper disabled:opacity-60">
+          <button key={r.key} type="button" aria-label={r.price ? `${r.title}, ${r.price}` : r.title} disabled={busy} onClick={() => tap(r.action, r.title)} className="group flex items-baseline gap-3 rounded-xl bg-paper/70 px-3 py-2 text-left transition-colors hover:bg-paper disabled:opacity-60">
             <span className="min-w-0 flex-1">
               <span className="block text-[0.95rem] font-medium leading-snug [overflow-wrap:anywhere]">{r.title}</span>
               {r.differs && <span className="block text-[0.8rem] leading-snug text-ink-soft">{r.differs}</span>}
@@ -337,7 +353,7 @@ function SignOffSlab({ card, thread, tap, total, what }: { card: GateCardT; thre
   const lines = what ?? (all.length > 3 ? tx.many(all.length, all.slice(0, 2).map((l) => l.name).join(", ")) : all.map((l) => `${f.num(l.quantity)} × ${l.name}`).join(", "));
   const why = gateReasons(card.rules, card.reasons, w, fmtFor(f.lang), f.lang)[0];
   return (
-    <div className="tl-in mt-4 overflow-hidden rounded-[1.4rem] bg-safety-ink text-paper">
+    <section aria-label={tx.needsOk} data-slab="waiting" className="tl-in mt-4 overflow-hidden rounded-[1.4rem] bg-safety-ink text-paper">
       <div className="hazard-thin h-1.5" />
       <div className="p-4 pt-3.5">
         <p className="text-[0.78rem] font-medium tracking-wide text-safety">{tx.needsOk}</p>
@@ -380,7 +396,7 @@ function SignOffSlab({ card, thread, tap, total, what }: { card: GateCardT; thre
           </div>
         )}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -389,7 +405,7 @@ function SignedSlab({ card, thread }: { card: GateCardT; thread: Thread }) {
   const f = useFormat();
   const order = orderOf(thread, card.orderId);
   return (
-    <div className="tl-in mt-4 overflow-hidden rounded-[1.4rem] bg-safety-ink text-paper">
+    <section aria-label={tx.okd} data-slab="signed" className="tl-in mt-4 overflow-hidden rounded-[1.4rem] bg-safety-ink text-paper">
       <div className="p-4">
         <p className="text-[0.78rem] font-medium tracking-wide text-paper/55">{tx.needsOk}</p>
         {order && <p className="display mt-1.5 text-[2.1rem] leading-none tabular">{money(order.totalCents)}</p>}
@@ -398,7 +414,7 @@ function SignedSlab({ card, thread }: { card: GateCardT; thread: Thread }) {
           <Check aria-hidden size={18} strokeWidth={2.6} /> {card.approver ? tx.okBy(card.approver.name) : tx.okDone("")}
         </p>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -440,7 +456,7 @@ function thinking(turn: AgentTurn, thread: Thread, tx: Tx, w: (typeof THREAD_WOR
         out.push({ label: tx.step.offer, detail: c.steps.join(" "), tone: "live" });
         break;
       case "understood": {
-        const bits = [c.amount ? f.measure(c.amount.amount, c.amount.unit) : "", c.item, c.claims.map((x) => f.attr(x)).join(", "), c.deliverOn ? f.day(c.deliverOn) : c.deliverBy ? f.day(c.deliverBy) : ""].filter(Boolean);
+        const bits = [c.amount ? f.measure(c.amount.amount, c.amount.unit) : "", c.item, c.claims.map((x) => f.attr(x)).filter((a) => !c.item.toLowerCase().includes(a.toLowerCase())).join(", "), c.deliverOn ? f.day(c.deliverOn) : c.deliverBy ? f.day(c.deliverBy) : ""].filter(Boolean);
         out.push({ label: tx.step.read, detail: bits.join(", ") });
         const mem = (c.memory?.length ? c.memory : c.memoryUsed).map((m) => memoryText(m, w, wf, f.lang)).filter((x): x is string => !!x);
         const notes = (c.notes ?? []).map((n) => w.note[n.code]?.(n.params, wf)).filter((x): x is string => !!x);
@@ -454,7 +470,7 @@ function thinking(turn: AgentTurn, thread: Thread, tx: Tx, w: (typeof THREAD_WOR
         const prices = c.options.map((o) => o.totalCents);
         const days = [...new Set(c.options.map((o) => o.deliveryDate))];
         out.push({ label: tx.step.searched, detail: c.options.map((o) => titleOf(o, w)).slice(0, 3).join(" · ") });
-        out.push({ label: tx.step.live(c.options.length), detail: [days.length === 1 ? tx.step.allBy(f.day(days[0])) : "", prices.length ? tx.step.cheapest(money(Math.min(...prices))) : ""].filter(Boolean).join(" "), tone: "live" });
+        out.push({ label: tx.step.live(c.options.length), detail: [days.length === 1 ? tx.step.allBy(f.day(days[0]).replace(/\.$/, "")) : "", prices.length ? tx.step.cheapest(money(Math.min(...prices))) : ""].filter(Boolean).join(" "), tone: "live" });
         const left = leftOutGroups(c, w, f.lang);
         const n = left.reduce((s, g) => s + g.count, 0);
         if (n) out.push({ label: tx.step.leftOut(n), detail: left.slice(0, 2).map((g) => `${g.label} (${g.count})`).join("; "), tone: "left" });
@@ -498,12 +514,16 @@ function fallbackLine(turn: AgentTurn, thread: Thread, tx: Tx, f: ReturnType<typ
     if (c.type === "gate" && c.outcome === "waiting") return tx.fallback.waiting(c.approver?.name ?? "");
     if (c.type === "order" && c.status === "committed") return tx.fallback.ordered(f.day(c.deliveryDate));
     if (c.type === "sheet" && c.state === "editing") return tx.fallback.sheet(money(c.totalCents), f.day(c.deliveryDate));
-    if (c.type === "options" && !c.chosen) return tx.fallback.options(c.options.length);
+    if (c.type === "options" && !c.chosen) {
+      const n = c.options.filter((o) => o.gate?.outcome !== "reject").length;
+      return n === 1 ? tx.fallback.one : tx.fallback.options(n);
+    }
     if (c.type === "menu") return c.stage === "choose" ? tx.fallback.menus : c.stage === "ready" ? tx.fallback.menu : tx.fallback.planning;
     if (c.type === "records") return tx.fallback.records;
     if (c.type === "rules") return tx.fallback.rules;
     if (c.type === "products") return tx.fallback.products;
-    if (c.type === "notice") return c.message;
+    // The engine's own notice, short: its first two sentences, without product codes.
+    if (c.type === "notice") return c.message.replace(/\s*\([A-Z]{2}-\d{3,}\)/g, "").split(/(?<=[.!?])\s+/).slice(0, 2).join(" ").slice(0, 280);
   }
   void thread;
   return "";
