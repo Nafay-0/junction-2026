@@ -7,6 +7,8 @@
  * fallback), lost (the voice connection cut after 9 s), join (the call QR path: passkey join with a virtual
  * authenticator, then the call screen for the visitor's own kitchen). Screenshots go to outDir.
  * The voice scenario spends real money (one short Gemini Live call, about $0.01).
+ * The stage kitchens are accounts: each page first signs in to the one it calls, with DOCK_KAARI_PASSWORD or
+ * DOCK_LAAKSO_PASSWORD from the environment (web/.env.local).
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -16,6 +18,14 @@ const [base, out, wav, ...which] = process.argv.slice(2);
 const want = (s: string) => !which.length || which.includes(s);
 const phone = { ...devices["Pixel 7"] };
 fs.mkdirSync(out, { recursive: true });
+
+/** Sign this page's browser context in to a stage kitchen's account (its store, call and channels are closed otherwise). */
+async function signIn(page: Page, kitchen: "kaari" | "laakso") {
+  const password = process.env[kitchen === "kaari" ? "DOCK_KAARI_PASSWORD" : "DOCK_LAAKSO_PASSWORD"];
+  if (!password) throw new Error(`Set DOCK_${kitchen.toUpperCase()}_PASSWORD to drive ${kitchen}'s call screen.`);
+  const r = await page.request.post(`${base}/ui-api/account/signin`, { data: { username: kitchen, password } });
+  if (r.status() !== 200) throw new Error(`sign-in as ${kitchen}: HTTP ${r.status()}`);
+}
 
 async function shot(page: Page, name: string) {
   await page.screenshot({ path: path.join(out, `${name}.png`), fullPage: true });
@@ -29,6 +39,7 @@ async function voice() {
   const ctx = await browser.newContext({ ...phone, permissions: ["microphone"] });
   const page = await ctx.newPage();
   page.on("console", (m) => m.type() === "error" && console.log("console:", m.text()));
+  await signIn(page, "laakso");
   await page.goto(`${base}/call?k=laakso`);
   await page.getByText("Hands-free").click();
   await shot(page, "voice-0-idle");
@@ -52,6 +63,7 @@ async function denied() {
   const browser = await chromium.launch({ args: ["--use-fake-device-for-media-stream", "--deny-permission-prompts"] });
   const ctx = await browser.newContext({ ...phone, permissions: [] });
   const page = await ctx.newPage();
+  await signIn(page, "laakso");
   await page.goto(`${base}/call?k=laakso`);
   await page.getByRole("button", { name: "Call", exact: true }).click();
   await page.getByPlaceholder(/100 litres/).waitFor({ timeout: 15000 });
@@ -77,6 +89,7 @@ async function lost() {
       server.close().catch(() => {});
     }, 9000);
   });
+  await signIn(page, "kaari");
   await page.goto(`${base}/call?k=kaari`);
   await page.getByRole("button", { name: "Call", exact: true }).click();
   await page.getByText(/dropped/).waitFor({ timeout: 30000 });
@@ -106,6 +119,7 @@ async function scan() {
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();
+  await signIn(page, "kaari");
   await page.goto(`${base}/channels?k=kaari`);
   await page.locator('input[type=file][accept="image/*,application/pdf"]').setInputFiles(path.join(__dirname, "..", "..", "eval", "scan", "07-injection.jpg"));
   await page.getByText(/lines? read by/).waitFor({ timeout: 90000 });
@@ -125,6 +139,7 @@ async function portal() {
   const browser = await chromium.launch({ args: ["--use-fake-device-for-media-stream", "--deny-permission-prompts"] });
   const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
   const page = await ctx.newPage();
+  await signIn(page, "kaari");
   await page.goto(`${base}/k/kaari`);
   await page.waitForTimeout(1500);
   console.log("portal door buttons:", await page.getByRole("button", { name: /Call your agent \(voice\)|Add a photo or document/ }).count());
