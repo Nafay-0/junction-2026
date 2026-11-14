@@ -109,7 +109,7 @@ export type Intake = {
   family: string;
   need: StructuredNeed;
   originalNeed: StructuredNeed;
-  amount?: { amount: number; unit: BaseUnit };
+  amount?: { amount: number; unit: BaseUnit; packs?: number };
   acknowledgements: Acknowledgement[];
   suspendedPreferenceIds: string[];
   answers: (Answer & { by: string; at: string })[];

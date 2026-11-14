@@ -25,6 +25,12 @@ const input = (over: Partial<OptionsInput> = {}): OptionsInput => ({
 });
 
 describe("option cards", () => {
+  it("a count of packs is that many of each product's own pack, whatever it holds", () => {
+    const { cards } = buildOptions(input({ amount: { amount: 20, unit: "L", packs: 2 }, candidates: [P.box, P.litre], offers: [offer(P.box), offer(P.litre)] }));
+    expect(cards.length).toBeGreaterThan(0);
+    for (const c of cards) expect(c.lines.reduce((n, l) => n + l.packs, 0)).toBe(2);
+  });
+
   it("ranks full matches best, better, good by the goal, labelling what each is best at", () => {
     const { cards } = buildOptions(input({ last: past(P.box2, 10, 4) }));
     expect(cards.map((c) => [c.optionId, c.rank, c.match, c.labels, c.lines.map((l) => `${l.packs}x${l.productId}`), c.totalCents])).toEqual([

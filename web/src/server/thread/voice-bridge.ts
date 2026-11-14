@@ -160,11 +160,12 @@ export async function heardTurn(k: Kitchen | string, call: Call, h: Heard): Prom
     return { state: "goodbye", say: bye, lang };
   }
   if (STOP.test(text)) {
+    // The engine cannot stop a turn midway (a price being fixed, an order at the gate, a plan being drafted): said
+    // plainly, and the result is still said when it comes, so nothing happens unheard.
     const working = [...call.desk.turns].reverse()[0];
     const a = working ? await agentTurnOf(slug, working) : undefined;
-    if (a?.status === "working") call.desk.muted.push(a.turnId);
-    ledger("stopped", `The buyer said "${text.slice(0, 40)}": the voice door stopped speaking about the work in progress.`, call, { heard: text, agentTurnId: a?.turnId });
-    const stop = say3(lang, a?.status === "working" ? { en: "Stopped. What would you like instead?", fi: "Selvä, lopetin. Mitä haluaisit sen sijaan?", sv: "Okej, jag slutar. Vad vill du i stället?" } : { en: "OK.", fi: "Selvä.", sv: "Okej." });
+    ledger("stopped", `The buyer said "${text.slice(0, 40)}"${a?.status === "working" ? ": the work in progress cannot be stopped midway, and the buyer was told so" : ""}.`, call, { heard: text, agentTurnId: a?.turnId });
+    const stop = say3(lang, a?.status === "working" ? { en: "I can't stop this one midway. I'll finish it and tell you how it ended.", fi: "En voi keskeyttää tätä kesken. Teen sen loppuun ja kerron, miten kävi.", sv: "Jag kan inte avbryta det här mitt i. Jag gör klart det och säger hur det gick." } : { en: "OK.", fi: "Selvä.", sv: "Okej." });
     said(call, stop);
     return { state: "stopped", say: stop, lang };
   }
@@ -179,10 +180,18 @@ export async function heardTurn(k: Kitchen | string, call: Call, h: Heard): Prom
     ledger("numbers_disagree", `Two hearings of the numbers disagreed (transcript ${nums.heard.join(", ")}, voice model ${nums.model.join(", ")}): asked again, nothing sent.`, call, { heard: text, model: h.modelWords?.slice(0, 500) });
     return { state: "asked", say: ask, lang, why: "numbers_disagree" };
   }
+  // One turn works at a time: a new request while one is still working is answered next, and the buyer is told.
+  const prev = [...call.desk.turns].reverse()[0];
+  const busy = prev ? (await agentTurnOf(slug, prev))?.status === "working" : false;
   // The words go to the engine, exactly as typed words do; the transcript is the evidence (the engine records it).
   const reply = await submitTurn(k, { door: "voice", via: "speech", text, lang, clientTurnId: `${call.callId}:${h.turn}` });
   call.desk.turns = [...call.desk.turns, reply.agentTurnId].slice(-40);
   ledger("heard", `The voice door heard the buyer and sent their words to the conversation: "${text.slice(0, 200)}".`, call, { step: "heard", heard: text, ...(h.modelWords ? { model: h.modelWords.slice(0, 500) } : {}), agentTurnId: reply.agentTurnId, threadId: reply.threadId });
+  if (busy) {
+    const next = say3(lang, { en: "I'll finish the one before first, then this.", fi: "Teen ensin edellisen loppuun, sitten tämän.", sv: "Jag gör klart det förra först, sedan det här." });
+    said(call, next);
+    return { state: "working", say: next, lang, agentTurnId: reply.agentTurnId };
+  }
   return nextSpoken(k, call, reply.agentTurnId, ACK_MS, true);
 }
 

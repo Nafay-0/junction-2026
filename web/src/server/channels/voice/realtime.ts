@@ -49,8 +49,10 @@ export function realtimeSession(opts: { model: string; system: string; mode: Cal
         noise_reduction: { type: "near_field" },
         // The transcript is what AimoPilot acts on, so it gets the kitchen's words and the three languages.
         transcription: transcriptionFor(opts.mode, keywords),
-        // Hands-free: semantic turn detection, slow to jump in; speech over the agent interrupts it.
-        turn_detection: { type: "semantic_vad", eagerness: "low", create_response: true, interrupt_response: true },
+        // Hands-free: the server's voice detection with a fixed pause, as on Gemini. Semantic turn detection waited 5 to
+        // 9 s after a short answer ("the first one") in the live run, at low and at medium eagerness. Speech over the
+        // agent interrupts it.
+        turn_detection: { type: "server_vad", threshold: 0.6, prefix_padding_ms: 300, silence_duration_ms: 500, create_response: true, interrupt_response: true },
       },
       output: { format: { type: "audio/pcm", rate: 24000 }, voice: "marin" },
     },

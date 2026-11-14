@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- The Beryl mark as the browser tab's icon. The shapes are copied from LOGO in src/lib/brand.ts:
+       change them together. It follows the browser's own light or dark setting. -->
+  <style>
+    .tile { fill: #004935 }
+    .mark { fill: #f5fcf8 }
+    @media (prefers-color-scheme: dark) {
+      .tile { fill: #62d8a6 }
+      .mark { fill: #03160f }
+    }
+  </style>
+  <rect class="tile" width="32" height="32" rx="9"/>
+  <path class="mark" opacity="0.62" d="M16.42 5.81 24.62 10.55 21.01 12.62 16.42 9.97Z"/>
+  <path class="mark" opacity="0.4" d="M25.03 11.27 25.03 20.73 21.43 18.66 21.43 13.34Z"/>
+  <path class="mark" opacity="0.4" d="M24.62 21.45 16.42 26.19 16.42 22.03 21.01 19.38Z"/>
+  <path class="mark" opacity="0.62" d="M15.58 26.19 7.38 21.45 10.99 19.38 15.58 22.03Z"/>
+  <path class="mark" opacity="0.92" d="M6.97 20.73 6.97 11.27 10.57 13.34 10.57 18.66Z"/>
+  <path class="mark" opacity="0.92" d="M7.38 10.55 15.58 5.81 15.58 9.97 10.99 12.62Z"/>
+  <path class="mark" d="M16.00 11.60 19.81 13.80 19.81 18.20 16.00 20.40 12.19 18.20 12.19 13.80Z"/>
+</svg>

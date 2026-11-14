@@ -48,7 +48,7 @@ describe("the spoken form", () => {
   it("reads a held order back: how many of what, how much in all, the day and the total, then asks", () => {
     const a = turn({ turnId: "t1", status: "waiting_buyer", cards: [{ type: "options", cardId: "options:r1", requestId: "r1", options: [option()], excluded: [], notes: [] }] });
     const said = readBackOf(a, { requestId: "r1", optionId: "opt1", turnId: "t1" }, "en");
-    expect(said).toBe("12 Valio Eila lactose-free milk drink, that's 12 litres, for Monday the sixteenth of November: 11 euros 40. Shall I order it?");
+    expect(said).toBe("12 Valio Eila lactose-free milk, that's 12 litres, for Monday the sixteenth of November: 11 euros 40. Shall I order it?");
     expect(spokenOf(a, "fi", { requestId: "r1", optionId: "opt1", turnId: "t1" })).toMatch(/^12 Valio Eila .*maanantaina 16\. marraskuuta: 11 euroa 40 senttiä\. Tilaanko sen\?$/);
   });
 
@@ -57,7 +57,7 @@ describe("the spoken form", () => {
     expect(spokenOf(waiting, "en")).toMatch(/needs Sanna Koskinen's OK: it's on their phone now/);
     const opts = turn({ status: "waiting_buyer", line: "I found milk for Monday.", cards: [{ type: "options", cardId: "options:r1", requestId: "r1", options: [option(), option({ optionId: "o2", totalCents: 990, title: "Arla lactose-free milk 1 l" }), option({ optionId: "o3", totalCents: 1500 })], excluded: [], notes: [] }] });
     // One question a yes answers, about the first option; the cheapest named when it is another.
-    expect(spokenOf(opts, "en")).toBe("I found milk for Monday. 3 options. The first: Valio Eila lactose-free milk drink, 11 euros 40, for Monday the sixteenth of November; the cheapest is Arla lactose-free milk 1 l at 9 euros 90. Shall I order the first one?");
+    expect(spokenOf(opts, "en")).toBe("3 options. The first: Valio Eila lactose-free milk, 11 euros 40, for Monday the sixteenth of November; the cheapest is Arla lactose-free milk at 9 euros 90. Shall I order the first one?");
     const asked = spokenReply({ ...opts, line: "Three options. Which one would you like?" }, "en");
     expect(asked.say.match(/\?/g)).toHaveLength(1);
     expect(asked.hold).toEqual({ requestId: "r1", optionId: "opt1", turnId: "trn_a" });
