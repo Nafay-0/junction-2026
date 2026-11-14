@@ -5,6 +5,7 @@ import { Ground } from "../ui";
 import { cue } from "../vo";
 
 const HIT = cue("title", "AimoPilot", -5);
+const LINE = cue("title", "Let AI", -4);
 const BUILT = cue("title", "Built for", -4);
 
 /** The name arrives on the music's lift, with scale and light; then the line; then who it was built for. */
@@ -24,7 +25,10 @@ export const Title = () => {
             </span>
             <span style={{ ...display, fontSize: 236, fontWeight: 700, letterSpacing: `${-0.03 + 0.03 * (1 - hit)}em`, color: C.paper, lineHeight: 1 }}>AimoPilot</span>
           </div>
-          <Rise at={BUILT} dur={20} style={{ ...sans, fontSize: 38, color: "rgb(255 255 255 / 0.72)", marginTop: 70 }}>
+          <Rise at={LINE} dur={20} style={{ ...display, fontSize: 84, color: C.paper, marginTop: 64 }}>
+            Let AI do the buying. Keep the last word.
+          </Rise>
+          <Rise at={BUILT} dur={20} style={{ ...sans, fontSize: 38, color: "rgb(255 255 255 / 0.72)", marginTop: 44 }}>
             Built for Valio Aimo at Junction 2026.
           </Rise>
         </div>

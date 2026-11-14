@@ -213,8 +213,8 @@ export const AgentNode = ({ name, sub, lit = 1, ghost = 0, w = AGENT_W, style }:
   const k = w / AGENT_W;
   return (
     <div style={{ width: w, height: 118 * k, ...style }}>
-      <div style={{ width: AGENT_W, height: 118, transformOrigin: "0 0", transform: `scale(${k})`, boxSizing: "border-box", borderRadius: 26, padding: "20px 24px", background: `rgb(255 255 255 / ${0.05 * ghost + 0.08 * lit})`, border: `2.5px ${lit > 0.02 ? "solid" : "dashed"} rgb(192 224 33 / ${0.4 * ghost * (1 - lit) + lit})`, opacity: Math.max(ghost, lit), boxShadow: lit > 0.02 ? `0 20px 50px -24px rgb(0 0 0 / 0.7), 0 0 ${56 * lit}px -12px rgb(192 224 33 / ${0.7 * lit})` : "none", display: "flex", alignItems: "center", gap: 18 }}>
-        <span style={{ width: 22, height: 22, borderRadius: "50%", flexShrink: 0, background: lit > 0.02 ? C.lime : "rgb(255 255 255 / 0.2)", opacity: Math.max(ghost * 0.5, lit), boxShadow: `0 0 ${18 * lit}px rgb(192 224 33 / 0.9)` }} />
+      <div style={{ width: AGENT_W, height: 118, transformOrigin: "0 0", transform: `scale(${k})`, boxSizing: "border-box", borderRadius: 26, padding: "20px 24px", background: `rgb(255 255 255 / ${0.05 * ghost + 0.08 * lit})`, border: `2.5px ${lit > 0.02 ? "solid" : "dashed"} rgb(192 224 33 / ${0.62 * ghost * (1 - lit) + lit})`, opacity: Math.max(ghost, lit), boxShadow: lit > 0.02 ? `0 20px 50px -24px rgb(0 0 0 / 0.7), 0 0 ${56 * lit}px -12px rgb(192 224 33 / ${0.7 * lit})` : "none", display: "flex", alignItems: "center", gap: 18 }}>
+        <span style={{ width: 22, height: 22, borderRadius: "50%", flexShrink: 0, background: lit > 0.02 ? C.lime : "rgb(255 255 255 / 0.2)", opacity: Math.max(ghost * 0.8, lit), boxShadow: `0 0 ${18 * lit}px rgb(192 224 33 / 0.9)` }} />
         <div style={{ opacity: lit, minWidth: 0 }}>
           <div style={{ ...display, fontSize: 38, color: C.paper, whiteSpace: "nowrap" }}>{name}</div>
           <div style={{ ...sans, fontSize: 23, color: "rgb(255 255 255 / 0.74)", marginTop: 3, whiteSpace: "nowrap" }}>{sub}</div>

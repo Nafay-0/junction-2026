@@ -10,7 +10,7 @@ const c = (phrase: string, shift = 0) => cue("aiven", phrase, shift);
 const T = { runtime: c("Runtime", -3), pg: c("Postgres", -3), kafka: c("Kafka", -3), valkey: c("Valkey", -3), os: c("OpenSearch", -3), grafana: c("Grafana", -3), agent: c("Managed Agent", -3), door: c("MCP door", -6), mcp: c("Aiven's MCP", -3), all: c("feeds", -2) };
 
 const APP = { x: 700, y: 380, w: 520, h: 340 };
-const COL = { x: 1400, w: 440, h: 150 };
+const COL = { x: 1366, w: 440, h: 150 };
 const ROWS = { pg: 170, kafka: 344, valkey: 518, os: 692 };
 const mid = (y: number) => y + COL.h / 2;
 /** From the app's right edge to a service on the right. */
@@ -49,7 +49,7 @@ export const Aiven = () => {
   const flash = interpolate(frame, [T.runtime, T.runtime + 6, T.runtime + 40], [0, 1, 0.25], clamp);
   const door = prog(frame, T.door, Q);
   const W = { pg: out(ROWS.pg, 0), kafka: out(ROWS.kafka, 1), valkey: out(ROWS.valkey, 2), os: out(ROWS.os, 3) };
-  const bus = 1884;
+  const bus = 1852;
   const agentWire = [[520, 375], [620, 375], [600, 520], [APP.x, 520]];
   const mcpWire = [[520, 775], [600, 775], [640, 800], [760, 800]];
   return (

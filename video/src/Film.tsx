@@ -52,7 +52,7 @@ const scene = (id: SceneId, picture: ReactNode) => (
  * (public/music/bed.mp3, made for this film: 100 beats a minute, 18 frames a beat, the film's exact length) starts
  * quieter for its first bars, so the opening is ducked less.
  */
-const UNDER = 0.16;
+const UNDER = 0.19;
 const OPEN = 0.5;
 const speech = SCENES.map((id) => {
   const w = vo[id].words;
@@ -100,7 +100,7 @@ export const Film = () => (
       {move("search")}
       {scene("search", <Drift by={0.02}>{<Search />}</Drift>)}
       {move("aiven")}
-      {scene("aiven", <Drift by={0.02}>{<Aiven />}</Drift>)}
+      {scene("aiven", <Drift by={0.012} origin="40% 50%">{<Aiven />}</Drift>)}
       {move("close")}
       {scene("close", <Close />)}
     </TransitionSeries>

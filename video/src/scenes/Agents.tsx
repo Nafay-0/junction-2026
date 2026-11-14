@@ -200,7 +200,7 @@ export const Agents = () => {
             const pts = [[x0, a.y], [left ? x0 + 150 : x0 - 150, a.y], [left ? x1 - 150 : x1 + 150, y1], [x1, y1]];
             return (
               <g key={a.name}>
-                <path d={`M ${pts[0]} C ${pts[1]}, ${pts[2]}, ${pts[3]}`} fill="none" stroke="rgb(192 224 33 / 0.28)" strokeWidth={2} strokeDasharray="6 10" opacity={prog(frame, T.ghosts + 10 + k * 4, 16)} />
+                <path d={`M ${pts[0]} C ${pts[1]}, ${pts[2]}, ${pts[3]}`} fill="none" stroke="rgb(192 224 33 / 0.4)" strokeWidth={2.5} strokeDasharray="6 10" opacity={prog(frame, T.ghosts + 10 + k * 4, 16)} />
                 <Wire pts={pts} at={a.at - 4} dur={14} every={54} offset={k * 9} rest={0.6} />
                 {frame >= T.meet + 2 && <Wire pts={pts} at={T.meet + 2} dur={14} rest={0} width={5} />}
               </g>
