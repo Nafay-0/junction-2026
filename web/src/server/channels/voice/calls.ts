@@ -107,6 +107,10 @@ export class CallRegistry {
     this.prune();
     if (mode !== "typed") {
       if (!limits.enabled) throw new DockError(503, "voice_off", "Voice calls are switched off on this server. Type the request instead.");
+      // The call this one carries on from (a switch of provider, a reconnect) is being replaced, not competing for the
+      // line: it is ended here, whatever order the browser's "end" and this request arrive in.
+      const replaced = carryFrom ? this.calls.get(carryFrom) : undefined;
+      if (replaced && replaced.kitchen === kitchen && replaced.endedAt === undefined && replaced.mode !== "typed") this.end(replaced.callId, kitchen, "replaced");
       const busy = [...this.calls.values()].find((c) => c.kitchen === kitchen && this.live(c));
       if (busy) throw new DockError(409, "line_busy", "This kitchen's agent is already on a call. Hang up the other call first, or wait for it to end.", undefined, { retryAfterSeconds: Math.ceil(Math.min(busy.expiresAt - t, CALL_LIMITS.staleMs - (t - busy.lastSeen)) / 1000) });
       const hour = [...this.calls.values()].filter((c) => c.mode !== "typed" && t - c.startedAt < 3_600_000);

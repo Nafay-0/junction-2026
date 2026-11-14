@@ -597,7 +597,7 @@ export function ThreadComposer({ id = "need", size = "md", standalone = false, p
     if (wasOn.current && !on && !byUser.current && voice) {
       const words = voice.view.pending ? ((voice.view.pending.need as { text?: string }).text ?? "") : "";
       if (words) setDraft(words);
-      toast.show(voice.view.notice ?? voice.view.endReason ?? vtx.ended, "bad");
+      toast.show(voice.view.endReason ?? voice.view.notice ?? vtx.ended, "bad");
     }
     if (!on) byUser.current = false;
     wasOn.current = on;
