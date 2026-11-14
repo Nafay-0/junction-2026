@@ -1,6 +1,6 @@
 # Dock QA report
 
-Build under test: `main` at `d7611f0` (Sat 14 Nov 2026, includes the fix branch `b155a58`), production build
+Build under test: `main` at `ec88340` (Sat 14 Nov 2026, includes the fix branch `b155a58`; re-test run on `d7611f0`, final run on `ec88340`), production build
 (`pnpm build && pnpm start`) on servers QA ran itself: the real catalogue with the partner's live API (4310, 4316),
 the seed catalogue with rate limits off (4311, 4312, 4317), with the public limits on (4314), and the real catalogue
 pointed at a fake partner (4315 + `qa/bin/fake-partner.ts` on 4399). Machine-readable twin:
@@ -10,7 +10,7 @@ Severity: **lose demo** = a judge on the demo path or trying the obvious thing h
 probing controls, data or exceptions finds it; **cosmetic** = visible, harmless.
 Criteria: Demo (30 %), Need (20 %), Controls (20 %), Robustness (15 %), Openness (15 %).
 
-## Re-test of wave 1 (13 findings) on `d7611f0`
+## Re-test of wave 1 (13 findings) after the fix branch
 
 | # | Finding | Status | Evidence |
 |---|---|---|---|
@@ -52,53 +52,88 @@ sign-off is the better fix and passes.
 - **Cause** `web/src/server/dev-fixtures.ts` `weeklyBudgetCents: 200_000` against a €1,322 headline order.
 - **Fix** give the demo kitchens a budget that fits a day of judging (e.g. €50,000) or reset demo spend daily.
 
-### 3. The knowledge map accepts allergen words it does not know and calls nut products "verified"
+### 3. With Opus as the default model, the $5 daily model cap switches free text off after about 300 readings
+- **Severity** lose demo. **Criteria** Demo, Robustness. **Probe** `corpus.interpret` on a server with the shared `.env.local` (Opus).
+- **Reproduce** `QA_READINGS=qa/corpus/interpretations-opus.json pnpm qa --url <that server> --corpus --only corpus.interpret`.
+- **Actual** after about 312 readings every call answers 429 `demo_limit_reached` ("the model spend for today on this server"). An Opus reading costs about $0.016, a Haiku one about $0.0015, and the assistant, memory writer and planner draw on the same cap.
+- **Cause** `web/src/server/limits.ts` `DOCK_LLM_DAILY_USD` default 5, unchanged when the models moved to Opus.
+- **Fix** raise `DOCK_LLM_DAILY_USD` on the deployment (e.g. 50) and give each console session a share; or keep the interpreter on the faster model (see the comparison below).
+
+### 4. The knowledge map accepts allergen words it does not know and calls nut products "verified"
 - **Severity** lose points (allergen-safe substitution is one of Valio's scenarios). **Criteria** Controls, Need. **Probe** `safety.knowledge_unknown_allergen_word`.
 - **Reproduce** `GET /ui-api/knowledge/role?q=pesto%20for%20pasta&allergens=tree_nuts`: 9 pestos containing nuts, each "allergens verified"; `q=granola for breakfast&allergens=peanut` returns 471758, which contains peanuts.
 - **Cause** `web/src/server/knowledge/service.ts:81-89` checks only the word's format.
 - **Fix** map synonyms (tree_nuts → nuts, peanut → peanuts) and answer 400 to unknown allergen words.
 
-### 4. Forbidding "lactose" on the knowledge map still serves ordinary milk as verified
+### 5. Forbidding "lactose" on the knowledge map still serves ordinary milk as verified
 - **Severity** lose points. **Probe** `safety.knowledge_lactose_as_allergen`.
 - **Reproduce** `GET /ui-api/knowledge/role?q=milk%20for%20coffee&allergens=lactose`: 460396, 463149, 463938, 465058, 475665 (milk, no lactose-free claim).
 - **Cause** `facts.ts:79`, `map.ts:570` compare raw allergen tags; milk does not imply lactose for candidates.
 - **Fix** treat "contains milk, no `lactose_free`" as containing lactose.
 
-### 5. "Buy 50 kg of beef" shows a developer error and leaves no refusal anywhere
+### 6. Several items in one message: the interpreter keeps one and drops the rest without a word
+- **Severity** lose points. **Criteria** Need. **Probe** `corpus.invariants`.
+- **Reproduce** "Need 100 L milk plus 20 kg yoghurt by Tuesday please." → one need, 100 L milk; the yoghurt is gone. Haiku did this on 20 of 28 multi-item messages, Opus on 11 (it refuses more of them as incomplete).
+- **Cause** `web/src/server/agent/interpret.ts`: the schema holds one item. **Fix** return a list of needs, or say "one item per request" and name what was left out.
+
+### 7. On Haiku, stated allergies get dropped
+- **Severity** lose points. **Criteria** Controls, Need. **Probe** `corpus.invariants` with `QA_READINGS=qa/corpus/interpretations-haiku.json`.
+- **Actual** "We have a guest with an egg allergy this week", "One guest is allergic to soy", "en gäst har sojaallergi": no allergen in the need (3 cases); "vanlig mellanmjölk" read as whole milk (2); paper towels and gloves became needs (3). Opus: 0, 0 and 0 on the same 336 texts.
+- **Fix** keep the stronger model on the interpreter, and add a plain-code check that every allergen word in the text reached `forbiddenAllergens`.
+
+### 8. "Buy 50 kg of beef" shows a developer error and leaves no refusal anywhere
 - **Severity** lose points. **Criteria** Need, Controls.
 - **Reproduce** console intake `{item:{text:"beef"},quantity:{amount:50,unit:"kg"}}` → 422 `family_unknown`: "No product family matches "beef". Send item.category (for example "milk")." Nothing on the wall, in the ledger or in ops. Seen three times (browser and API).
 - **Cause** `web/src/core/intake.ts:169` throws before a request is opened.
 - **Fix** open the request and refuse it with `category_allowed`, in words a chef understands.
 
-### 6. The duplicate check misses an identical order still waiting for sign-off
+### 9. The duplicate check misses an identical order still waiting for sign-off
 - **Severity** lose points. **Criteria** Need, Controls.
 - **Reproduce** Kaari: 100 L milk for Thursday waits for sign-off; submit the same need again → `options_ready`, no concern; two identical orders wait for the same person (`order_splitting` counts only orders the agent placed alone).
 - **Cause** `web/src/core/concerns.ts:379` reads committed history only. **Fix** include the org's pending orders.
 
-### 7. Two open order pages behind one venue address exceed the console's address limit
+### 10. Two open order pages behind one venue address exceed the console's address limit
 - **Severity** lose points. **Criteria** Demo, Robustness. **Probe** `limits.two_waiting_pages_block_kitchen`.
 - **Reproduce** `LIMITS=on qa/bin/fresh-server.sh 4314; pnpm qa --limits-url http://localhost:4314 --only limits.two`: two pages polling as `console.tsx:239-258` does (order every 3 s, ledger every 4 s, with the event stream up) for 75 s from one address: 92 calls, 10 refused 429 "Too many requests from your address".
 - **What a demo table sees**: one page watching a waiting order costs about 35 console calls a minute against `console-call` 60/min per address (`src/proxy.ts:18`), so behind one venue address only one such page works; a second phone's page starts failing within the minute and so do new requests from that address. `agent-write` 120/min per address is not reached by people. The per-kitchen console limit (now 120/min) was not hit.
 - **Fix** do not poll while the event stream is up (refetch on events), or key the console limits by console session. The harness should keep running with `DOCK_RATE_LIMITS=off` (it is hundreds of agents behind one address); the limit probes run against a second server with limits on.
 
-### 8. A stranger can make a demo kitchen forget its stated rules
+### 11. A stranger can make a demo kitchen forget its stated rules
 - **Severity** lose points. **Probe** `portal.memory_rule_forgotten_by_stranger`.
 - **Reproduce** anonymous `POST /ui-api/kitchens/kaari/memory {"action":"forget","preferenceId":"pref_kaari_lactose"}` → 200; "Always lactose-free" is gone for every visitor (partly masked by a learned habit).
 - **Fix** make memory writes on demo kitchens per console session, or reset them.
 
-### 9. The assistant finds no substitute within Kaari's rules; the knowledge map has five
+### 12. The assistant finds no substitute within Kaari's rules; the knowledge map has five
 - **Severity** lose points. **Probe** `safety.assistant_substitute_respects_rules`.
 - **Reproduce** `POST /ui-api/kitchens/kaari/assistant {"question":"Suggest a substitute for this cream for whipping desserts.","productId":"469050"}` → "cannot suggest a substitute".
 - **Cause** `web/src/server/kitchen-assistant.ts:106`. **Fix** use `alternativesFor` with the mandate and stated rules.
 
-### 10. "Can it arrive tomorrow?" gets no live lookup and "no delivery data"
+### 13. "Can it arrive tomorrow?" gets no live lookup and "no delivery data"
 - **Severity** lose points. **Probe** `safety.assistant_arrival_question_looked_up`.
 - **Cause** `kitchen-assistant.ts:29` `LIVE_WORDS` lacks arrive/tomorrow/when. **Fix** always look up the product on screen for date and stock questions.
 
-### 11. A rate-limiting or hanging partner API makes the buyer wait 30-36 s
+### 14. A rate-limiting or hanging partner API makes the buyer wait 30-36 s
 - **Severity** lose points. **Criteria** Robustness. **Probe** `dependency.partner_failures`.
 - **Actual** partner 429 with `Retry-After: 30` → 30 s, then `live_unavailable`; answers after 20 s → 36 s. Partner down, non-JSON, and hostile values (negative and huge prices, past validity, negative and sentinel stock, missing and extra products, non-dates) all answer fast and correctly: no bogus price reaches a card, quote or order.
 - **Fix** cap the total wait per buyer request (about 8 s) and report "busy, retry in N s" instead of sleeping on it.
+
+## Model comparison: Haiku 5.5 vs Opus 5.5 on the deciding paths
+
+Same 336-case corpus (12 categories × English, Finnish, Swedish, mixed), same build, two servers side by side:
+`anthropic:claude-haiku-5-5` (the earlier default) and `anthropic:claude-opus-5-5` (the shared `.env.local` now).
+Latency is the harness's round trip per interpret call. Wave-1 and fix-retest probes ran on Haiku (they make no
+model call except `exposure.interpret_unmetered`); the safety probes ran on Haiku (first pass) and on both models
+for the assistant; the final run's corpus replay used the Opus readings.
+
+| Interpreter | needs | refused | lost an allergen | invented an attribute | non-food accepted | multi-item dropped | median | p90 | cost per reading |
+|---|---|---|---|---|---|---|---|---|---|
+| Haiku 5.5 | 249 | 87 | 3 | 2 | 3 | 20 | 2.6 s | 4.4 s | ≈ $0.0015 |
+| Opus 5.5 | 238 | 98 | **0** | **0** | **0** | 11 | 3.4 s | 5.7 s | ≈ $0.016 |
+
+- **Interpreter: Opus is measurably safer** (every safety-relevant miss gone) for +0.9 s median and about 10× the cost; dates are a wash (13 disagreements, each model better on some: Opus reads "tisdag nästa vecka" right where Haiku once took the week after; Haiku keeps "yesterday" as a past date that the intake then flags). Keep Opus here, and raise the daily cap (finding 3).
+- **Assistant panel: no measurable difference.** The five seed safety probes (dates, live price, unknown product price, injection, arrival question) gave the same results on both models in two runs each, at similar times (Opus 1.8–6.3 s, Haiku 1.8–5.1 s per probe). The remaining assistant findings (12, 13) are in plain code (word list, search), not the model. On this path the faster model is as safe in what QA measured.
+- **Menu planner:** the allergen breach (finding 1) comes from the planner's own mandate, so no model fixes it.
+- Not compared: the memory writer, the photo reader and the buyer-agent runner (no ground-truth corpus for them yet).
 
 ## Seen in the browser (wave 2, on `a4177b9`), worth a look
 
@@ -120,7 +155,7 @@ From a Playwright pass over every page at 360/768/2560 px, keyboard only, slow n
 
 ## What held (evidence the team can show)
 
-Across the full run on `d7611f0`: 65 probes, 911 cases, 823 HTTP calls, **0 server errors, 0 stack traces, 0 secret
+Across the final run on `ec88340`: 66 probes, 907 cases, 1,027 HTTP calls, **0 server errors, 0 stack traces, 0 secret
 values**, the ledger verified after every run.
 - Altered quote payloads (price 1 cent, expiry +1 year, forged attributes): 422 `quote_signature_invalid`. Order lines that differ from the quote (quantity, price, extra, duplicate): 422 `order_matches_quote`. Same over MCP.
 - **8 orders racing on one quote: exactly 1 committed. 12 orders racing on a budget for 5: exactly 5 accepted.**
@@ -144,13 +179,14 @@ Probe cases by area and kind, one full run (seed 20261113; the corpus and safety
 |---|---|---|---|---|---|---|---|---|
 | gate / quotes / mandate | 1 | 15 | 15 | 6 | 14 | | 1 | |
 | intake / conversion / dates / memory | 5 | 9 | 25 + 144 | 4 | 4 | | | |
-| interpreter | | | | | | 4 | | CORPUS_CASES |
-| knowledge / planner / assistant / voice | SAFETY_CASES | | | | | | | |
+| interpreter | | | | | | 4 | | 336 × 3 readings + 488 intake replays |
+| knowledge / planner / assistant / voice | ~590 (17 probes) | | | | | | | |
 | ledger / sandbox / rest / mcp | 2 | 14 | | | 10 | | | |
 | dependency / screens | | 12 | | | | 63 | | |
 
-Partner live lookups used in the whole session: about 20 (budget: well under 150). Model spend: under $3
-(corpus generation with Sonnet about $1.0, corpus interpretation with Haiku, assistant/planner probes, browser pass).
+Partner live lookups used in the whole session: about 20 (budget: well under 150). Model spend: about $3 on the
+cheap-model work (corpus generation with Sonnet about $1, two Haiku corpus passes, assistant and planner probes, the
+browser pass) and about $6 on the Opus comparison (one corpus pass plus the cases the daily cap cut off).
 
 **Not tested, and why**: signing as a presenter (needs the ops passcode, deliberately not used); a real voice call
 (Gemini Live needs a microphone); passkeys on a real phone (software and virtual authenticators only); the public
@@ -177,5 +213,5 @@ pnpm qa --list | --only gate,intake | --seed 7 ; QA_URL=https://host pnpm qa  (a
 ```
 
 Results: `web/qa/results/<date>-seed<seed>.json` (summary, coverage matrix, failures and notes per probe);
-`web/qa/results/baseline.json` is the wave-1 run. Mandate probes mint mandates with the demo organisations' keys
+`web/qa/results/baseline.json` is the final run on `ec88340` (9 probes fail: the open findings). Mandate probes mint mandates with the demo organisations' keys
 from the environment; against a server with other keys they are skipped, not failed.

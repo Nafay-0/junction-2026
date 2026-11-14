@@ -1,7 +1,7 @@
 {
   "schema": "dock-qa-findings/1",
   "generated": "2026-11-14",
-  "build": "main @ d7611f0 (includes fix1, b155a58)",
+  "build": "main @ ec88340 (merged as cf2cf77)",
   "severityScale": [
     "lose_demo",
     "lose_points",
@@ -64,6 +64,29 @@
       "rank": 2
     },
     {
+      "id": "F-OPUS-DAILY-CAP",
+      "title": "With Opus as the default model, the server's $5 daily model cap switches free text off for everyone after about 300 readings",
+      "severity": "lose_demo",
+      "criteria": [
+        "demo",
+        "robustness"
+      ],
+      "probe": "corpus.interpret (Opus server)",
+      "reproduce": "QA_READINGS=qa/corpus/interpretations-opus.json pnpm qa --url <server with the shared .env.local> --corpus --only corpus.interpret",
+      "steps": [
+        "Interpret the 336-case corpus through one server whose .env.local now selects anthropic:claude-opus-5-5."
+      ],
+      "expected": "A day of judging fits inside the cap.",
+      "actual": "After about 312 readings every call answers 429 demo_limit_reached ('the model spend for today on this server'). One Opus reading costs about $0.016 against about $0.0015 on Haiku, and the assistant, memory writer and planner draw on the same cap.",
+      "cause": "web/src/server/limits.ts DOCK_LLM_DAILY_USD default 5, unchanged when the models moved to Opus.",
+      "fix": "Raise DOCK_LLM_DAILY_USD on the deployment to fit the larger model (e.g. 50) and give each console session a share, or keep the interpreter on the faster model (see the model comparison).",
+      "observed": true,
+      "reproducedTimes": 1,
+      "status": "open",
+      "firstSeen": "wave 2",
+      "rank": 3
+    },
+    {
       "id": "F-KM-UNKNOWN-ALLERGEN",
       "title": "The knowledge map accepts allergen words it does not know: 'tree_nuts' returns nut pestos and 'peanut' a peanut granola, all marked 'verified'",
       "severity": "lose_points",
@@ -84,7 +107,7 @@
       "reproducedTimes": 3,
       "status": "open",
       "firstSeen": "wave 2",
-      "rank": 3
+      "rank": 4
     },
     {
       "id": "F-KM-LACTOSE-ALLERGEN",
@@ -107,7 +130,52 @@
       "reproducedTimes": 3,
       "status": "open",
       "firstSeen": "wave 2",
-      "rank": 4
+      "rank": 5
+    },
+    {
+      "id": "F-INTERPRET-MULTI-NEED",
+      "title": "Several items in one message: the interpreter keeps one and drops the rest without a word",
+      "severity": "lose_points",
+      "criteria": [
+        "need"
+      ],
+      "probe": "corpus.invariants",
+      "reproduce": "pnpm qa --only corpus.invariants (cached readings)",
+      "steps": [
+        "'Need 100 L milk plus 20 kg yoghurt by Tuesday please.'"
+      ],
+      "expected": "Both items, or a question saying only one item can be handled per request.",
+      "actual": "One need (100 L milk); the yoghurt is gone. Haiku: 20 of 28 multi-item messages; Opus: 11 of 28 (it refuses more of them as incomplete instead).",
+      "cause": "web/src/server/agent/interpret.ts: the schema holds exactly one item.",
+      "fix": "Return a list of needs (or say 'one item per request' and name what was left out).",
+      "observed": true,
+      "reproducedTimes": 2,
+      "status": "open",
+      "firstSeen": "wave 2",
+      "rank": 6
+    },
+    {
+      "id": "F-INTERPRET-ALLERGY-DROPPED",
+      "title": "On Haiku the interpreter drops some stated allergies ('a guest with an egg allergy', 'allergic to soy') and reads 'vanlig mellanmjölk' as whole milk",
+      "severity": "lose_points",
+      "criteria": [
+        "controls",
+        "need"
+      ],
+      "probe": "corpus.invariants",
+      "reproduce": "pnpm qa --only corpus.invariants with QA_READINGS=qa/corpus/interpretations-haiku.json",
+      "steps": [
+        "'5 crates lactose free milk, 1.5% fat, by Wednesday. We have a guest with an egg allergy this week.'"
+      ],
+      "expected": "forbiddenAllergens [egg].",
+      "actual": "Haiku: no allergen (3 cases lost an allergen, 2 invented a fat class, 3 non-food requests became needs). Opus: 0, 0 and 0 on the same 336 texts.",
+      "cause": "Model reading quality; nothing in plain code re-checks that every allergen word in the text reached forbiddenAllergens.",
+      "fix": "Keep the stronger model on the interpreter, and add a plain-code check that flags allergen words in the text that are missing from the need.",
+      "observed": true,
+      "reproducedTimes": 2,
+      "status": "open on Haiku, closed on Opus",
+      "firstSeen": "wave 2",
+      "rank": 7
     },
     {
       "id": "F-OFF-CATALOGUE-RAW",
@@ -130,7 +198,7 @@
       "reproducedTimes": 3,
       "status": "open",
       "firstSeen": "wave 2",
-      "rank": 5
+      "rank": 8
     },
     {
       "id": "F-DUP-PENDING",
@@ -154,7 +222,7 @@
       "reproducedTimes": 2,
       "status": "open",
       "firstSeen": "wave 2",
-      "rank": 6
+      "rank": 9
     },
     {
       "id": "F-POLLING-VS-LIMITS",
@@ -177,7 +245,7 @@
       "reproducedTimes": 2,
       "status": "open",
       "firstSeen": "wave 2",
-      "rank": 7
+      "rank": 10
     },
     {
       "id": "F-PORTAL-MEMORY-OPEN",
@@ -199,7 +267,7 @@
       "reproducedTimes": 3,
       "status": "open",
       "firstSeen": "wave 2",
-      "rank": 8
+      "rank": 11
     },
     {
       "id": "F-ASSIST-NO-SUBSTITUTE",
@@ -222,7 +290,7 @@
       "reproducedTimes": 3,
       "status": "open",
       "firstSeen": "wave 2",
-      "rank": 9
+      "rank": 12
     },
     {
       "id": "F-ASSIST-ARRIVE-NO-LIVE",
@@ -244,7 +312,7 @@
       "reproducedTimes": 3,
       "status": "open",
       "firstSeen": "wave 2",
-      "rank": 10
+      "rank": 13
     },
     {
       "id": "F-SLOW-PARTNER-WAIT",
@@ -266,11 +334,11 @@
       "reproducedTimes": 2,
       "status": "open",
       "firstSeen": "wave 2",
-      "rank": 11
+      "rank": 14
     },
     {
       "id": "F-PENDING-HOLDS-BUDGET",
-      "rank": 12,
+      "rank": 15,
       "title": "A sign-off nobody can give holds the kitchen's weekly budget for seven days; the next judge's milk order has no options",
       "severity": "lose_demo",
       "criteria": [
@@ -295,7 +363,7 @@
     },
     {
       "id": "F-DEMO-KITCHEN-UNSIGNABLE",
-      "rank": 13,
+      "rank": 16,
       "title": "On a production build the demo kitchens' sign-offs cannot be given at all",
       "severity": "lose_demo",
       "criteria": [
@@ -321,7 +389,7 @@
     },
     {
       "id": "F-SHARED-LIVE-ALLOWANCE",
-      "rank": 14,
+      "rank": 17,
       "title": "Every visitor of /k/kaari or /k/laakso is the same agent: the 31st request in an hour gets 429 for everyone",
       "severity": "lose_demo",
       "criteria": [
@@ -344,7 +412,7 @@
     },
     {
       "id": "F-LEDGER-OPEN",
-      "rank": 15,
+      "rank": 18,
       "title": "Anyone can read every kitchen's ledger, including request texts and kitchen memory, with no credentials",
       "severity": "lose_points",
       "criteria": [
@@ -368,7 +436,7 @@
     },
     {
       "id": "F-HUMAN-INPUT-BY-AGENT",
-      "rank": 16,
+      "rank": 19,
       "title": "The agent can 'confirm' a likely mistake itself, and the ledger records it as the head chef's confirmation",
       "severity": "lose_points",
       "criteria": [
@@ -392,7 +460,7 @@
     },
     {
       "id": "F-SUBST-SELF-DECLARED",
-      "rank": 17,
+      "rank": 20,
       "title": "Substitution rules only apply when the agent declares a substitute; 'no substitutes' and the price cap can be walked around",
       "severity": "lose_points",
       "criteria": [
@@ -416,7 +484,7 @@
     },
     {
       "id": "F-APPROVALS-OPEN",
-      "rank": 18,
+      "rank": 21,
       "title": "Pending sign-offs, the sign-off screen and the live event stream of every kitchen are open to anyone",
       "severity": "lose_points",
       "criteria": [
@@ -439,7 +507,7 @@
     },
     {
       "id": "F-SANDBOX-OPEN",
-      "rank": 19,
+      "rank": 22,
       "title": "A stranger can list visitors' kitchens and make their agents order, sending sign-off requests to other people's phones",
       "severity": "lose_points",
       "criteria": [
@@ -463,7 +531,7 @@
     },
     {
       "id": "F-CONSOLE-OPEN",
-      "rank": 20,
+      "rank": 23,
       "title": "Anyone who knows a kitchen's slug acts as its agent through the console back end, including visitors' kitchens",
       "severity": "lose_points",
       "criteria": [
@@ -486,7 +554,7 @@
     },
     {
       "id": "F-MODEL-SPEND",
-      "rank": 21,
+      "rank": 24,
       "title": "The paid model interpreter is reachable anonymously through the console, with no rate limit or quota",
       "severity": "lose_points",
       "criteria": [
@@ -509,7 +577,7 @@
     },
     {
       "id": "F-NO-OPTION-REASON",
-      "rank": 22,
+      "rank": 25,
       "title": "'No options' leads with stock and delivery reasons when the budget is what blocked it",
       "severity": "lose_points",
       "criteria": [
@@ -532,7 +600,7 @@
     },
     {
       "id": "F-QUOTE-REQUEST",
-      "rank": 23,
+      "rank": 26,
       "title": "A quote issued for one request can be placed as an order on another request",
       "severity": "lose_points",
       "criteria": [
@@ -557,7 +625,7 @@
     },
     {
       "id": "F-GATE-UTC-DATE",
-      "rank": 24,
+      "rank": 27,
       "title": "Between 00:00 and 02:00 Helsinki (03:00 in summer) the gate's latest delivery day is one day short",
       "severity": "lose_points",
       "criteria": [
@@ -578,5 +646,33 @@
       "status": "closed",
       "retest": "b155a58: 0 of 144 sampled hours refuse a delivery maxLeadDays Helsinki days ahead."
     }
-  ]
+  ],
+  "modelComparison": {
+    "corpus": 336,
+    "haiku": {
+      "model": "anthropic:claude-haiku-5-5",
+      "needs": 249,
+      "refused": 87,
+      "lostAllergen": 3,
+      "inventedAttribute": 2,
+      "nonFoodAccepted": 3,
+      "multiNeedDropped": 20,
+      "medianMs": 2570,
+      "p90Ms": 4353,
+      "usdPerReading": 0.0015
+    },
+    "opus": {
+      "model": "anthropic:claude-opus-5-5",
+      "needs": 238,
+      "refused": 98,
+      "lostAllergen": 0,
+      "inventedAttribute": 0,
+      "nonFoodAccepted": 0,
+      "multiNeedDropped": 11,
+      "medianMs": 3446,
+      "p90Ms": 5685,
+      "usdPerReading": 0.016
+    },
+    "note": "Latency is the harness's round trip per interpret call, both servers run side by side on the same machine. Date readings: 13 disagreements, about even. Assistant safety probes: same results on both models."
+  }
 }
