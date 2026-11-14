@@ -1,3 +1,4 @@
+import { alternativesSource } from "../../knowledge/service";
 import { getRuntime } from "../../runtime";
 import { draftMenu, menuModelSpec } from "./draft";
 import { proposeFixes } from "./fixes";
@@ -31,6 +32,8 @@ export async function menuRuntime() {
       draft: async (text, ctx, now) => (recorded ? recordedDraft(text, ctx) : draftMenu({ text, context: ctx, now })),
       fix: async (req, ctx) => (recorded ? recordedFix(req) : proposeFixes(req, ctx)),
       ...(recorded ? {} : { pick: (lines) => pickProducts(lines) }),
+      // The product knowledge map's alternatives by the dish's use (real catalogue only).
+      ...(rt.catalogSource.kind === "valio" && process.env.DOCK_KNOWLEDGE !== "off" ? { alternatives: alternativesSource() } : {}),
     });
     g.__dockMenu = { service, store, key: rt };
   }

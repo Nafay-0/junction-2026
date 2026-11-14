@@ -1,58 +1,55 @@
-import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
-import { describe, expect, it } from "vitest";
+import { Client, StreamableHTTPClientTransport, type CallToolResult } from "@modelcontextprotocol/client";
+import { beforeEach, describe, expect, it } from "vitest";
+import { POST as mcpRoute } from "@/app/api/mcp/route";
+import { POST as intakeRoute } from "@/app/api/v1/intake/route";
+import { localNow, nextDeliveryDay } from "@/core/kitchen";
+import { signMandate } from "@/core/mandate";
+import { kitchenAgent, openNeed } from "./channels/flow";
+import { KITCHEN_ORG, demoKitchenKeyPair, demoKitchenMandate } from "./demo-kitchen";
+import { getRuntime, resetRuntime } from "./runtime";
 
 /**
- * One way in. An agent's mandate is verified by the core (`dock.authenticate`), and then the operations layer is
- * asked whether staff suspended the agent. Two functions do both: `authenticate` in server/http.ts for calls that
- * arrive as HTTP requests (REST, MCP, the on-site console), and `onsiteSession` in server/ops/onsite.ts for doors
- * that call Dock in-process. A door that calls `dock.authenticate` itself skips the operations check: that is how
- * a suspended agent could still order by voice, by photo and through the menu planner.
- *
- * This test reads the server's source and fails when a new file verifies a mandate on its own. If it fails for
- * your file: take the session from `onsiteSession(dock, creds, "<door>")`, or from `authenticate(req, dock)` when
- * you have the agent's HTTP request. Only add the file below when it never acts for the agent (it reads, to show a
- * page) or it runs the operations check itself, and say which.
+ * One path for every door: a remembered rule of the kitchen (Kaari: "Always lactose-free", stated by its head chef)
+ * is applied without being asked, on every door, and each use shows as one line on the request.
  */
-const WEB = join(__dirname, "..", "..");
+const BASE = "http://dock.test";
+const day = () => nextDeliveryDay(nextDeliveryDay(localNow(new Date()).date, [1, 2, 3, 4, 5])!, [1, 2, 3, 4, 5])!;
+const need = () => ({ item: { text: "milk", category: "milk" }, quantity: { amount: 100, unit: "L" as const }, deliverBy: day(), optimise: "price" as const });
+type Step = { requestId: string; state: string; memoryUsed: { text: string }[]; options: { lines: { productId: string }[] }[]; quote?: { quote: { lines: { productId: string; attributes: string[] }[] } } };
 
-const MAY_VERIFY_A_MANDATE: Record<string, string> = {
-  "src/server/http.ts": "the way in for HTTP calls: verifies, then enforces suspensions",
-  "src/server/ops/onsite.ts": "the way in for in-process doors: verifies, then enforces suspensions",
-  "src/server/sandboxes.ts": "the scripted buyer: enforces suspensions itself, right after",
-  "src/app/api/v1/approver/demo-order/route.ts": "the presenter's scripted buyer: enforces suspensions itself, right after",
-  "src/server/kitchen-portal.ts": "read only: the store's pages, which show the suspension instead of failing",
-  "src/app/ui-api/kitchens/[kitchen]/claims/route.ts": "read only: signed claims already issued to the kitchen",
-  "src/app/ui-api/memory/kitchens/[kitchen]/requests/[requestId]/route.ts": "read only: the request's own record, for the kitchen's memory",
-  "src/server/aiven/test-dock.ts": "test helper",
-  "src/server/memory/bench.ts": "offline benchmark on a dock of its own",
-};
-/** Files that enforce by hand must keep doing so. */
-const ENFORCES_ITSELF = ["src/server/sandboxes.ts", "src/app/api/v1/approver/demo-order/route.ts"];
+let auth: Record<string, string>;
+beforeEach(async () => {
+  resetRuntime();
+  const m = await signMandate(demoKitchenMandate(new Date()), await demoKitchenKeyPair());
+  auth = { authorization: `Bearer ${m}`, "dock-agent-id": KITCHEN_ORG.agentId };
+});
 
-function sources(dir: string, out: string[] = []): string[] {
-  for (const name of readdirSync(dir)) {
-    const path = join(dir, name);
-    if (statSync(path).isDirectory()) sources(path, out);
-    else if (/\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name)) out.push(path);
-  }
-  return out;
+async function lactoseFreeEverywhere(step: Step) {
+  expect(step.memoryUsed.map((l) => l.text)).toContainEqual(expect.stringMatching(/^Always lactose-free applied: stated by Sanna Koskinen/));
+  const { catalog } = await getRuntime();
+  const ids = [...step.options.flatMap((o) => o.lines.map((l) => l.productId)), ...(step.quote?.quote.lines.map((l) => l.productId) ?? [])];
+  expect(ids.length).toBeGreaterThan(0);
+  for (const p of await catalog.searchProducts({ ids, limit: 50 })) expect(p.attributes).toContain("lactose_free");
 }
 
-describe("every door takes its agent session through the operations check", () => {
-  const files = [...sources(join(WEB, "src", "server")), ...sources(join(WEB, "src", "app"))];
-  const verifying = files.filter((f) => /\bdock\s*\.\s*authenticate\s*\(/.test(readFileSync(f, "utf8"))).map((f) => relative(WEB, f));
-
-  it("no server file verifies a mandate on its own, outside the two ways in", () => {
-    const strays = verifying.filter((f) => !(f in MAY_VERIFY_A_MANDATE));
-    expect(strays, `These files call dock.authenticate directly, which skips the suspension check. Use onsiteSession (server/ops/onsite.ts) or authenticate (server/http.ts): ${strays.join(", ")}`).toEqual([]);
+describe("a remembered rule on every door", () => {
+  it("REST (and the typed console, which forwards to it)", async () => {
+    const res = await intakeRoute(new Request(`${BASE}/api/v1/intake`, { method: "POST", headers: { ...auth, "content-type": "application/json" }, body: JSON.stringify({ need: need(), by: "Sanna" }) }));
+    await lactoseFreeEverywhere(((await res.json()) as { step: Step }).step);
   });
 
-  it("the files that enforce suspensions by hand still do", () => {
-    for (const f of ENFORCES_ITSELF) expect(readFileSync(join(WEB, f), "utf8"), f).toMatch(/suspensions\([^)]*\)\s*\.enforce\(/);
+  it("MCP", async () => {
+    const client = new Client({ name: "test-agent", version: "0.0.0" }, { versionNegotiation: { mode: { pin: "2026-07-28" } } });
+    await client.connect(new StreamableHTTPClientTransport(new URL("/api/mcp", BASE), { fetch: async (u, i) => mcpRoute(new Request(u, i)), requestInit: { headers: auth } }));
+    const r = (await client.callTool({ name: "submit_need", arguments: { need: need(), by: "Sanna" } })) as CallToolResult;
+    await lactoseFreeEverywhere((r.structuredContent as { step: Step }).step);
   });
 
-  it("the list of exceptions names only files that exist and still need it", () => {
-    for (const f of Object.keys(MAY_VERIFY_A_MANDATE)) expect(verifying, `${f} no longer calls dock.authenticate: remove it from the list`).toContain(f);
+  it("voice and photo (the doors' shared flow)", async () => {
+    const a = await kitchenAgent("kaari");
+    for (const door of ["voice", "photo"] as const) {
+      const step = await openNeed(a, need(), door, door === "voice" ? "speech" : "image", { summary: `test ${door}` });
+      await lactoseFreeEverywhere(step as unknown as Step);
+    }
   });
 });

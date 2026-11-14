@@ -83,6 +83,8 @@ export type CheckContext = {
    * orders only), but they are just as likely to be what a second request repeats.
    */
   pending?: PendingOrderSummary[];
+  /** The site within the kitchen the request is for (a daycare unit of a school kitchen): amounts compare with its own orders. */
+  site?: string;
 };
 
 /** An order waiting for sign-off, as the duplicate check needs it (the intake builds these from the repository). */
@@ -290,9 +292,15 @@ export function checkQuantity(need: StructuredNeed, ctx: CheckContext): Concern[
     ];
   }
 
-  const usual = usualAmount(ctx.profile, ctx.family);
+  const usual = usualAmount(ctx.profile, ctx.family, ctx.site);
   const base = baseAmount(need, ctx);
   if (!base) return [];
+  if (!usual && ctx.site) {
+    // A site's first order: never "too small" against the whole kitchen; only an amount above the kitchen's own
+    // usual is worth a word.
+    const kitchen = usualAmount(ctx.profile, ctx.family);
+    return kitchen && kitchen.unit === base.unit && base.amount <= kitchen.amount * TENFOLD_LOW ? [] : largeFirstOrder(need, ctx, base);
+  }
   if (!usual) return largeFirstOrder(need, ctx, base);
   if (usual.unit !== base.unit) return [];
   const usualText = formatAmount(usual.amount, usual.unit);

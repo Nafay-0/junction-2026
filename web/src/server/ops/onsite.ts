@@ -12,7 +12,7 @@ import { suspensions } from "./suspensions";
  * itself skips that second step, and a suspended agent could go on ordering through it. So a door that acts for an
  * agent without an HTTP request takes its session from here: the same mandate check in the core, the same
  * operations check (rule `operator_suspension`, refusal written to the ledger), the same door log.
- * `server/doors.test.ts` keeps it that way.
+ * `server/one-way-in.test.ts` keeps it that way.
  */
 
 /** A session the core already verified, about to act through an in-process door. Throws the refusal if suspended. */

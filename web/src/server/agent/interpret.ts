@@ -81,6 +81,8 @@ export type InterpretOptions = {
   earlier?: EarlierRequest[];
   /** More text the need may rest on besides the buyer's words (the kitchen's remembered rules): see interpret-grounding.ts. */
   evidence?: string[];
+  /** What the kitchen's memory recalls for this request (server/memory/recall.ts forInterpreter): context, never copied into the need. */
+  memory?: string;
 };
 
 const WEEKDAYS: [string, string, string][] = [
@@ -228,7 +230,7 @@ export async function interpretNeed(opts: InterpretOptions): Promise<InterpretRe
         generateText({
           model,
           instructions: interpretSystem(opts.vocabulary ?? { categories: [], attributes: [], allergens: [] }, earlier.length > 0),
-          prompt: interpretUser(text, calendar(now), earlier.length ? earlierBlock(earlier) : undefined),
+          prompt: interpretUser(text, calendar(now), earlier.length ? earlierBlock(earlier) : undefined, opts.memory || undefined),
           output: Output.object({ schema, name: "structured_need", description: "The buyer's need, with unstated fields left empty." }),
           maxOutputTokens: 4000,
           maxRetries: 0,
@@ -296,7 +298,19 @@ export const InterpretResponse = z.object({
     .describe("Present when the text referred to one of the earlier requests: which one, and the fields taken from it."),
 });
 
-type Mandateish = { allowedCategories: string[]; requiredAttributes: string[]; forbiddenAllergens: string[] };
+type Mandateish = { allowedCategories: string[]; requiredAttributes: string[]; forbiddenAllergens: string[]; issuer?: { orgId: string } };
+
+/** What the kitchen's memory recalls for these words, as the interpreter's context block, and its lines as grounding evidence. */
+async function recallFor(orgId: string | undefined, text: string): Promise<{ block?: string; lines: string[] }> {
+  if (!orgId || process.env.DOCK_MEMORY === "off") return { lines: [] };
+  try {
+    const { getMemoryService } = await import("@/server/memory/runtime");
+    const r = await (await getMemoryService()).recall(orgId, { text });
+    return { block: r.forInterpreter || undefined, lines: r.items.map((x) => x.text) };
+  } catch {
+    return { lines: [] }; // memory is context; the intake applies the kitchen's rules either way
+  }
+}
 
 /** The route body: vocabulary from the product data and the caller's mandate, then interpretNeed. */
 export async function interpretRequest(
@@ -305,7 +319,9 @@ export async function interpretRequest(
 ): Promise<z.input<typeof InterpretResponse>> {
   const products = await ctx.catalog.searchProducts({ limit: 100 });
   const vocabulary = vocabularyFrom(products, { categories: ctx.mandate.allowedCategories, attributes: ctx.mandate.requiredAttributes, allergens: ctx.mandate.forbiddenAllergens });
-  const r = await interpretNeed({ text: body.text, now: body.now ? new Date(body.now) : undefined, vocabulary, earlier: body.earlier });
+  // The kitchen's memory, recalled for these words, goes to the reader as context (never copied into the need).
+  const recalled = await recallFor(ctx.mandate.issuer?.orgId, body.text);
+  const r = await interpretNeed({ text: body.text, now: body.now ? new Date(body.now) : undefined, vocabulary, earlier: body.earlier, ...(recalled.block ? { memory: recalled.block, evidence: recalled.lines } : {}) });
   // Plain code, not the model's word: whatever else the buyer's text names is returned, so it can be offered next.
   const alsoAsked = alsoAskedIn(body.text, r.need);
   return { need: r.need, model: r.model, ms: r.ms, ...(r.basedOn ? { basedOn: r.basedOn } : {}), ...(alsoAsked.length ? { alsoAsked } : {}) };

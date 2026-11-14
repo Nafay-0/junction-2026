@@ -1,7 +1,7 @@
 import { attachConsoleContext, type ConsoleContext } from "./console-context";
 import type { LiveOffer, LiveProblem, Product } from "@/core/catalog";
 import type { IntakeView } from "@/core/intake";
-import { addDaysIso, addStatedPreference, isoWeekday, kitchenView, localNow, primaryLine, type HistoryEntry, type KitchenProfile, type StatedPreference } from "@/core/kitchen";
+import { addDaysIso, addStatedPreference, isoWeekday, kitchenView, localNow, primaryLine, withKitchenLock, type HistoryEntry, type KitchenProfile, type StatedPreference } from "@/core/kitchen";
 import { SPEC_DIMENSIONS, dimensionLabel, type StructuredNeed } from "@/core/need";
 import type { AgentSession, PublicOrder } from "@/core/orders";
 import { newId } from "@/core/util";
@@ -430,6 +430,11 @@ export type MemoryChange =
 /** Forget a stated rule, or turn a learned habit (or its opposite) into a stated rule. Written to the ledger. */
 export async function changeMemory(k: Kitchen, change: MemoryChange): Promise<ReturnType<typeof kitchenView>> {
   const rt = await getRuntime();
+  // The kitchen's lock (core/kitchen.ts): a memory write or an order's history in between is not lost.
+  return withKitchenLock(rt.kitchens, k.info.orgId, () => changeMemoryLocked(rt, k, change));
+}
+
+async function changeMemoryLocked(rt: Awaited<ReturnType<typeof getRuntime>>, k: Kitchen, change: MemoryChange): Promise<ReturnType<typeof kitchenView>> {
   const profile = (await rt.kitchens.getProfile(k.info.orgId)) ?? { orgId: k.info.orgId, name: k.info.name, deliveryWeekdays: [1, 2, 3, 4, 5], history: [], stated: [] };
   const actor = `buyer:${change.by}`;
   if (change.action === "forget") {

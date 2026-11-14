@@ -3,9 +3,10 @@ import { DockError } from "@/core/errors";
 import { askAssistant, type AssistantRecord } from "./agent/assistant";
 import { categoryIdOf, categoryLabel } from "./kitchen-catalog";
 import { liveCheck, overview, type Kitchen, type PortalOrder } from "./kitchen-portal";
+import { alternativesSource } from "./knowledge/service";
 import { getRuntime } from "./runtime";
 import { catalogBrands } from "./grounding";
-import { addDaysIso, localNow } from "@/core/kitchen";
+import { addDaysIso, kitchenRulesFor, localNow } from "@/core/kitchen";
 
 /**
  * Retrieval for the shop assistant, in plain code: the product on screen, products the question names, the
@@ -116,10 +117,29 @@ export async function ask(k: Kitchen, body: AskBody): Promise<AskReply> {
   if (!focus || !THIS_WORDS.test(question)) named = await rt.catalog.searchProducts({ text: question, limit: 5 });
   for (const p of named) add(productRecord(p));
   if (focus && ALT_WORDS.test(question)) {
-    const subs = focus.substitutes?.length ? await rt.catalog.searchProducts({ ids: focus.substitutes.slice(0, 5), limit: 5 }) : [];
     const claims = CLAIM_WORDS.filter(([re]) => re.test(question)).map(([, c]) => c);
-    const same = await rt.catalog.searchProducts({ category: categoryIdOf(focus), attributes: claims.length ? claims : undefined, limit: 6 });
-    for (const p of [...subs, ...same].filter((p) => p.id !== focus.id).slice(0, 8)) add(productRecord(p));
+    // The product map ranks what can stand in, for the use the question names, within the kitchen's own rules
+    // (mandate, stated rules, memory's safety rules). Only good and meaningful alternatives; with none, its reason.
+    const rules = kitchenRulesFor(await rt.kitchens.getProfile(k.info.orgId), k.info.mandate, focus.category);
+    const alt = await alternativesSource()(focus.id, { text: question, requiredClaims: [...new Set([...rules.requiredClaims, ...claims])], forbiddenAllergens: rules.forbiddenAllergens });
+    if (alt) {
+      const ids = alt.substitutes.map((x) => x.productId);
+      const found = new Map((ids.length ? await rt.catalog.searchProducts({ ids, limit: ids.length }) : []).map((p) => [p.id, p]));
+      const allowed = k.info.mandate.allowedCategories;
+      for (const x of alt.substitutes) {
+        const p = found.get(x.productId);
+        if (!p || (allowed.length && !allowed.includes(p.category))) continue;
+        const r = productRecord(p);
+        add({ ...r, data: { ...r.data, alternativeTo: focus.id, rankedByProductMap: x.tier, whyItFits: x.reason, forUse: alt.use ?? "its most typical use", withinTheKitchensRules: rules.sources.map((s) => s.text) } });
+      }
+      if (!records.some((r) => r.data.alternativeTo === focus.id)) {
+        add({ id: `alternatives:${focus.id}`, kind: "product", label: `No good alternative to ${short(focus)}`, data: { noGoodAlternative: alt.none ?? "The product map ranks no substitute for it that the kitchen's rules and mandate allow.", kitchenRules: rules.sources.map((s) => s.text) } });
+      }
+    } else {
+      const subs = focus.substitutes?.length ? await rt.catalog.searchProducts({ ids: focus.substitutes.slice(0, 5), limit: 5 }) : [];
+      const same = await rt.catalog.searchProducts({ category: categoryIdOf(focus), attributes: claims.length ? claims : undefined, limit: 6 });
+      for (const p of [...subs, ...same].filter((p) => p.id !== focus.id).slice(0, 8)) add(productRecord(p));
+    }
   }
 
   // The kitchen's own records: orders, memory, mandate.

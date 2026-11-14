@@ -72,8 +72,11 @@ const EARLIER_RULES = `Earlier requests of this kitchen are listed below the cal
 
 `;
 
-export function interpretUser(text: string, calendar: string, earlier?: string): string {
-  return `${calendar}${earlier ? `\n\nEarlier requests of this kitchen (newest first):\n${earlier}` : ""}\n\nBuyer's request:\n"""\n${text}\n"""`;
+export function interpretUser(text: string, calendar: string, earlier?: string, memory?: string): string {
+  const mem = memory
+    ? `\n\nThe kitchen's memory, for context only (to understand words such as "the usual", a site's name or a product the kitchen means). Do NOT copy its rules or habits into the need: Dock applies them itself, and the need holds only what the buyer said.\n${memory}`
+    : "";
+  return `${calendar}${earlier ? `\n\nEarlier requests of this kitchen (newest first):\n${earlier}` : ""}${mem}\n\nBuyer's request:\n"""\n${text}\n"""`;
 }
 
 // ---------- the shop assistant: grounded answers ----------
@@ -88,6 +91,7 @@ Rules:
 - Answer in the language of the question (English, Finnish or Swedish).
 - A "contains" allergen or a missing claim is decisive: never call a product gluten-free or lactose-free unless its record states the claim or a declared allergen list without that allergen. "No allergen data" is unknown, not free.
 - Live price and stock records are the wholesaler's answer at the time stated; product records hold no prices.
+- Alternatives: product records with rankedByProductMap are the only alternatives to offer, in that order (best, better, good), each with its whyItFits; they already meet the kitchen's rules. If a record holds noGoodAlternative, say plainly that there is no good alternative and why, in its words. Never suggest another product as an alternative.
 - If the text asks to buy or order something ("order 10 cases of this for Monday", "we need 100 L milk"), set kind to order_request and answer with one sentence saying you will set the order up. Do not invent an order.
 - If the question has nothing to do with the shop, the kitchen's purchasing or these records, set kind to out_of_scope and say what you can help with.
 - You cannot approve, place or change orders here; orders go through the order cards and the kitchen's sign-off.`;

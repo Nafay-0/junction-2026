@@ -123,6 +123,12 @@ export function usageLines(profile: KitchenProfile, intake: IntakeLike): { lines
     if (r.source !== "stated") continue;
     const m = itemFor(r.preferenceId);
     if (m) add(m, `${factLabel(m.fact)} applied: ${provenance(m)}`);
+    else {
+      // A rule a person stated before typed memory existed (or on the portal's rules page): still one line.
+      const pref = profile.stated.find((p) => p.id === r.preferenceId);
+      const text = `${pref?.text ?? r.text} applied${pref ? `: stated by ${pref.statedBy} on ${shortDay(pref.statedAt)}` : ""}`;
+      if (!lines.some((l) => l.text === text)) lines.push({ text });
+    }
   }
   for (const n of intake.fromMemory) {
     const m = itemFor(n.preferenceId, n.memoryItemId);
