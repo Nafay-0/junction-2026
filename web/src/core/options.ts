@@ -163,9 +163,17 @@ export type OptionsInput = {
   preferLabels?: string[];
   /** Nutrients the kitchen rules on, named first when a substitute's declaration is compared with the original's. */
   nutritionFocus?: Nutrient[];
+  /**
+   * The words that say which kind within the family the buyer asked for ("truffle" oil, "oat" drink) that a product
+   * does not carry (core/qualifiers.ts): such a product stands in for the kind asked and gives that up on its card,
+   * so a product of the kind asked, when there is one, is the full match.
+   */
+  wordsNotCarried?: (p: Product) => string[];
 };
 
-export type ExclusionCode = "no_offer" | "cutoff_passed" | "out_of_stock" | "too_late" | "pack_uncertain" | "wrong_unit" | "over_budget" | "no_substitute" | "blocked" | "compromise" | "nutrition_rule";
+export type ExclusionCode = "no_offer" | "cutoff_passed" | "out_of_stock" | "too_late" | "pack_uncertain" | "wrong_unit" | "over_budget" | "no_substitute" | "blocked" | "compromise" | "nutrition_rule"
+  /** The kitchen's own rules (core/clarify.ts violationOf): a dietary claim not shown (`claim:lactose_free`), a product group, an allergen, a label. */
+  | "category_rule" | "allergen_rule" | "label_rule" | "excluded_claim" | `claim:${string}`;
 /** `params`: for nutrition_rule, the nutrient, the problem (over, under, unknown), the figure and the rule's bounds. */
 export type Exclusion = { productId: string; reason: string; code?: ExclusionCode; params?: Record<string, string | number> };
 export type OptionsResult = { cards: OptionCard[]; excluded: Exclusion[]; notes: string[] };
@@ -407,6 +415,8 @@ export function buildOptions(input: OptionsInput): OptionsResult {
 
   const givesUp = (pl: Plan): GiveUp[] => {
     const out: GiveUp[] = [];
+    const missingWords = input.wordsNotCarried ? [...new Set([pl.primary.p, ...(pl.split ? [pl.split.sub.p] : [])].flatMap((p) => input.wordsNotCarried!(p)))] : [];
+    if (missingWords.length) out.push({ part: "product", code: "kind_words", params: { words: missingWords.join(" ") }, text: `Not the kind asked for (${missingWords.join(" ")}): ${pl.primary.p.name} instead.` });
     if (pl.partial) {
       const p = pl.partial;
       out.push(

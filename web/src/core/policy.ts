@@ -2,6 +2,7 @@ import type { Approver, Mandate } from "./mandate";
 import type { Quote, QuoteLine } from "./quote";
 import { latestDeliveryDay } from "./kitchen";
 import { formatEur } from "./util";
+import { claimsEvidence, evidenceText, shortfallText, subjectOfLine, type ClaimEvidence } from "./claim-evidence";
 import { nutritionFindings, ruleText } from "./nutrition";
 import { allergenOf, forbiddenPresent, holdsLabel, isMaterialAttribute } from "./vocabulary";
 
@@ -187,14 +188,25 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
     (l) => (mandate.allowedCategories.includes(l.category) ? null : `${l.productId} is in category "${l.category}", which the mandate does not allow (allowed: ${mandate.allowedCategories.join(", ")}).`),
     "Every product is in an allowed category.",
   );
-  lineCheck(
-    "required_attributes",
-    (l) => {
-      const missing = mandate.requiredAttributes.filter((a) => !l.attributes.includes(a));
-      return missing.length ? `${l.productId} lacks required attribute(s): ${missing.join(", ")}.` : null;
-    },
-    mandate.requiredAttributes.length ? `Every product is ${mandate.requiredAttributes.join(", ")}.` : "No attributes required.",
-  );
+  // A dietary claim is met by the maker's claim, or by its signed allergen declaration (no milk: lactose-free), by its
+  // nature for whole fresh produce, or because it is not food (core/claim-evidence.ts); each way named in the record.
+  {
+    const strict = mandate.allergenEvidence === "declared";
+    const ev = q.lines.flatMap((l) => claimsEvidence(subjectOfLine(l), mandate.requiredAttributes, { strict, rule: true }).map((e) => ({ l, e })));
+    const short = ev.filter((x) => !x.e.met);
+    const evidence = ev.map(({ l, e }) => ({ productId: l.productId, claim: e.claim, ...(e.met ? { kind: e.kind } : { shortfall: e.why, ...(e.allergens ? { allergens: e.allergens } : {}) }) }));
+    if (short.length) add("required_attributes", "fail", short.map(({ l, e }) => `${l.productId} is ${shortfallText(e as Extract<ClaimEvidence, { met: false }>)}.`).join(" "), { evidence });
+    else if (!mandate.requiredAttributes.length) add("required_attributes", "pass", "No attributes required.");
+    else {
+      const derived = ev.filter(({ e }) => e.met && e.kind !== "claim");
+      add(
+        "required_attributes",
+        "pass",
+        `Every product is ${mandate.requiredAttributes.join(", ")}${derived.length ? `; ${derived.map(({ l, e }) => `${l.productId}: ${evidenceText(e as Extract<ClaimEvidence, { met: true }>)}`).join("; ")}` : ""}.`,
+        { evidence },
+      );
+    }
+  }
   // Unknown is never safe. A product whose maker sent no allergen data is refused when the mandate forbids any
   // allergen, rather than sent to a person: the approver on a phone has no better data than Dock, and a sign-off
   // would turn the organisation's hard safety rule into a tap. The fix is a product with declared allergens.
@@ -227,7 +239,7 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
   if (nutritionFound.length)
     add("nutrition_rules", "fail", nutritionFound.map(({ f }) => f.reason).join(" "), {
       // As data, for a sentence in the buyer's language: which product, which nutrient, over, under or unknown.
-      findings: nutritionFound.map(({ l, f }) => ({ productId: l.productId, name: l.name, nutrient: f.rule.nutrient, problem: f.problem, ...(f.value !== undefined ? { value: f.value } : {}), ...(f.rule.max !== undefined ? { max: f.rule.max } : {}), ...(f.rule.min !== undefined ? { min: f.rule.min } : {}), per: l.nutrition?.per ?? "100g" })),
+      findings: nutritionFound.map(({ l, f }) => ({ productId: l.productId, name: l.name, nutrient: f.rule.nutrient, problem: f.problem, ...(f.value !== undefined ? { value: f.value } : {}), ...(f.rule.max !== undefined ? { max: f.rule.max } : {}), ...(f.rule.min !== undefined ? { min: f.rule.min } : {}), per: l.nutrition?.per ?? "100g", ...(f.rule.categories?.length ? { kinds: f.rule.categories } : {}) })),
     });
   else add("nutrition_rules", "pass", nutritionRules.length ? `Every product keeps the kitchen's nutrition rules by its maker's declaration: ${nutritionRules.map(ruleText).join("; ")}.` : "No nutrition rules.");
   lineCheck(
