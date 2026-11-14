@@ -138,15 +138,16 @@ export async function renameConversation(id: string, title: string): Promise<voi
   const current = snapshot.find((c) => c.id === id);
   if (!current) return;
   const next = { ...current, title: title.trim() || current.title };
+  // The list first: a save that lands while the database opens then keeps the new title.
+  publish(snapshot.map((c) => (c.id === id ? next : c)));
   try {
     const db = await openDb();
     const tx = db.transaction(META, "readwrite");
-    tx.objectStore(META).put(next);
+    tx.objectStore(META).put(snapshot.find((c) => c.id === id) ?? next);
     await done(tx);
   } catch {
     /* keep the in-memory rename */
   }
-  publish(snapshot.map((c) => (c.id === id ? next : c)));
 }
 
 export async function deleteConversation(id: string): Promise<void> {
@@ -179,14 +180,29 @@ export function newConversationId(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
 
+const titleOf = (text: string) => {
+  const clean = text.replace(/\s+/g, " ").trim();
+  return clean.length > 72 ? `${clean.slice(0, 70).trimEnd()}…` : clean;
+};
+
 /** A title from the first thing the user asked. */
 export function titleFrom(messages: ButlerMessage[]): string {
   const first = messages.find((m) => m.role === "user");
   const text = first?.parts.find((p) => p.type === "text");
-  const raw = text && text.type === "text" ? text.text : "";
-  const clean = raw.replace(/\s+/g, " ").trim();
-  if (!clean) return first?.parts.some((p) => p.type === "file") ? "Image search" : "New task";
-  return clean.length > 72 ? `${clean.slice(0, 70).trimEnd()}…` : clean;
+  const title = titleOf(text && text.type === "text" ? text.text : "");
+  if (!title) return first?.parts.some((p) => p.type === "file") ? "Image search" : "New task";
+  return title;
+}
+
+/**
+ * The first message was edited and sent again: the title follows it, unless the user gave the
+ * conversation a name of their own. `before` is the conversation as it was before the edit.
+ */
+export function retitleAfterEdit(id: string, before: ButlerMessage[], editedText: string): void {
+  const current = snapshot.find((c) => c.id === id);
+  const next = titleOf(editedText);
+  if (!current || !next || current.title !== titleFrom(before)) return;
+  void renameConversation(id, next);
 }
 
 /** Tools the user answers in the browser: these may rightly still be waiting when a conversation is reopened. */

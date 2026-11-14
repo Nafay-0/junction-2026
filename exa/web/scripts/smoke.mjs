@@ -1,10 +1,13 @@
 // Smoke test for the model providers. Run from exa/web: node scripts/smoke.mjs
 // Reads keys from exa/.env.local. Prints results and timings, never the keys.
-import { generateText, streamText, tool, isStepCount } from "ai";
+import { generateText, streamText, tool, isStepCount, Output } from "ai";
 import { createAnthropicAws } from "@ai-sdk/anthropic-aws";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogle } from "@ai-sdk/google";
 import { z } from "zod";
+// Plain TypeScript with no runtime imports: Node strips the types when it loads them.
+import { MODELS } from "../src/lib/agent/models.ts";
+import { MODEL_JOBS, modelOptions } from "../src/lib/agent/options.ts";
 
 process.loadEnvFile(new URL("../../.env.local", import.meta.url));
 const env = process.env;
@@ -81,4 +84,33 @@ if (which === "all" || which === "tools") {
       return `steps=${steps.length} toolCallsPerStep=${calls} firstText=${first}ms in=${usage.inputTokens} out=${usage.outputTokens} cacheRead=${usage.inputTokenDetails?.cacheReadTokens ?? 0} text=${JSON.stringify(text.slice(0, 90))}`;
     });
   }
+}
+
+// Every model with the exact options the app sends for each job (src/lib/agent/options.ts).
+// A model that rejects a thinking setting fails here, not in front of a user.
+// node scripts/smoke.mjs options [model id]
+if (which === "all" || which === "options") {
+  const only = which === "options" ? process.argv[3] : undefined;
+  const runs = [];
+  for (const info of MODELS.filter((m) => !only || m.id === only)) {
+    const model = info.provider === "claude" ? aws(info.id) : google(info.id);
+    for (const job of MODEL_JOBS) {
+      const providerOptions = modelOptions(info, job);
+      runs.push(
+        timed(`${info.id} as ${job} ${JSON.stringify(providerOptions)}`, async () => {
+          if (job === "extraction") {
+            const r = await generateText({ model, providerOptions, output: Output.object({ schema: z.object({ city: z.string(), country: z.string() }) }), prompt: "Espoo is a city in Finland. Extract the city and the country." });
+            return `${JSON.stringify(r.output)} reasoning=${r.usage.outputTokenDetails?.reasoningTokens ?? 0}`;
+          }
+          const tools = { lookUp: tool({ description: "Look up the population of a city", inputSchema: z.object({ city: z.string() }), execute: async () => ({ population: 320000 }) }) };
+          const r = await generateText({ model, providerOptions, tools, stopWhen: isStepCount(3), prompt: "Use the tool to look up the population of Espoo, then answer in one short sentence." });
+          return `steps=${r.steps.length} reasoning=${r.totalUsage.outputTokenDetails?.reasoningTokens ?? 0} text=${JSON.stringify(r.text.slice(0, 60))}`;
+        }),
+      );
+    }
+  }
+  const results = await Promise.all(runs);
+  const failed = results.filter((ok) => !ok).length;
+  console.log(failed ? `\n${failed} of ${results.length} option sets were rejected.` : `\nAll ${results.length} option sets were accepted.`);
+  if (failed) process.exitCode = 1;
 }

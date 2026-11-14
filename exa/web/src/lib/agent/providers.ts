@@ -2,8 +2,9 @@ import "server-only";
 
 import { createAnthropicAws } from "@ai-sdk/anthropic-aws";
 import { createGoogle } from "@ai-sdk/google";
-import type { generateText, LanguageModel } from "ai";
+import type { LanguageModel } from "ai";
 import { getModel, WORKER_MODEL, type ModelInfo } from "./models";
+import { modelOptions, type ProviderOptions } from "./options";
 
 /**
  * Claude runs through Claude Platform on AWS (Anthropic-operated, bare model ids),
@@ -11,7 +12,7 @@ import { getModel, WORKER_MODEL, type ModelInfo } from "./models";
  * family does not break the other.
  */
 
-export type ProviderOptions = NonNullable<Parameters<typeof generateText>[0]["providerOptions"]>;
+export type { ProviderOptions };
 
 let claude: ReturnType<typeof createAnthropicAws> | undefined;
 let gemini: ReturnType<typeof createGoogle> | undefined;
@@ -48,31 +49,11 @@ export function workerModelFor(info: ModelInfo): { info: ModelInfo; model: Langu
   return { info: worker, model: languageModel(worker) };
 }
 
-/**
- * Per-family request options for the main agent.
- * Claude: adaptive thinking with a readable summary, low effort so answers start quickly.
- * Gemini: light thinking, with thoughts returned so the UI can show them.
- */
-export function agentProviderOptions(info: ModelInfo): ProviderOptions {
-  if (info.provider === "claude") {
-    return {
-      anthropic: {
-        thinking: { type: "adaptive", display: "summarized" },
-        effort: info.id === "claude-fable-5-2" ? "medium" : "low",
-      },
-    };
-  }
-  return { google: { thinkingConfig: { thinkingLevel: "low", includeThoughts: true } } };
-}
+/** The main agent, and the writer of a research report. See `options.ts` for what each model is sent. */
+export const agentProviderOptions = (info: ModelInfo): ProviderOptions => modelOptions(info, "agent");
 
-/** Options for sub-agents: light thinking, since they still have to decide what to search and read. */
-export function workerProviderOptions(info: ModelInfo): ProviderOptions {
-  if (info.provider === "claude") return { anthropic: { effort: "low" } };
-  return { google: { thinkingConfig: { thinkingLevel: "minimal" } } };
-}
+/** Research sub-agents: light thinking, since they still have to decide what to search and read. */
+export const workerProviderOptions = (info: ModelInfo): ProviderOptions => modelOptions(info, "worker");
 
-/** Options for plain extraction jobs (text in, structured data out): no thinking, for speed. */
-export function extractionProviderOptions(info: ModelInfo): ProviderOptions {
-  if (info.provider === "claude") return { anthropic: { thinking: { type: "disabled" }, effort: "low" } };
-  return { google: { thinkingConfig: { thinkingLevel: "minimal" } } };
-}
+/** Plain extraction jobs (text in, structured data out): thinking off where the model allows it. */
+export const extractionProviderOptions = (info: ModelInfo): ProviderOptions => modelOptions(info, "extraction");

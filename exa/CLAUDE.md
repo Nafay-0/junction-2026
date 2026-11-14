@@ -21,4 +21,5 @@ These apply on top of the root `CLAUDE.md`. Its agent model policy and team work
 - Reasoning is never replayed across turns (see the comment in `web/src/app/api/chat/route.ts`). Keep it that way: it is what makes model switching and context trimming safe.
 - New widgets follow `web/WIDGETS.md` and get a fixture so they show up in `/dev/widgets`.
 - Before committing: `pnpm typecheck`, `pnpm lint`, and for anything that touches the agent, one real question through the running app.
+- Thinking and effort settings live in `web/src/lib/agent/options.ts`, one entry per model and job. Claude and Gemini take different parameters, and models inside a family reject different values. After changing that file or adding a model, run `pnpm smoke options` (18 small requests against the live APIs).
 - Keys go in `exa/.env.local`. Add every new variable name to `exa/.env.example` with an empty value.

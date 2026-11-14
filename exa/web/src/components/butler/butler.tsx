@@ -14,6 +14,7 @@ import {
   newConversationId,
   persistConversation,
   renameConversation,
+  retitleAfterEdit,
   useConversations,
 } from "@/lib/conversations";
 import { describe, locate, useExactLocation, type LocateResult } from "@/lib/location";
@@ -293,6 +294,32 @@ function ChatView({
     [sendMessage, clearError, conversationId, followLatest],
   );
 
+  // Edit a message and send it again: it takes the place of the old one, and everything after it goes.
+  const editAndResend = React.useCallback(
+    (message: ButlerMessage, text: string) => {
+      const files = message.parts.filter((p): p is FileUIPart => p.type === "file");
+      if (!text && files.length === 0) return;
+      const before = latest.current;
+      if (before.find((m) => m.role === "user")?.id === message.id) retitleAfterEdit(conversationId, before, text);
+      clearError();
+      remember(conversationId);
+      followLatest();
+      void sendMessage(files.length ? { text: text || "What is this? Find out more about it.", files, messageId: message.id } : { text, messageId: message.id });
+    },
+    [sendMessage, clearError, conversationId, followLatest],
+  );
+
+  // Answer again from the same request: this answer and everything after it goes.
+  const retry = React.useCallback(
+    (messageId: string) => {
+      clearError();
+      remember(conversationId);
+      followLatest();
+      void regenerate({ messageId });
+    },
+    [regenerate, clearError, conversationId, followLatest],
+  );
+
   // A position is always shown by name, never as coordinates. If it was saved before its name
   // could be looked up (the lookup is not allowed to hold up the conversation), keep trying.
   React.useEffect(() => {
@@ -375,9 +402,16 @@ function ChatView({
           <div className="mx-auto flex w-full max-w-[760px] flex-col gap-7 px-4 pt-4 pb-10">
             {messages.map((message, i) =>
               message.role === "user" ? (
-                <UserMessage key={message.id} message={message} />
+                <UserMessage key={message.id} message={message} busy={busy} hasLater={i < messages.length - 1} onEdit={(text) => editAndResend(message, text)} />
               ) : (
-                <AssistantMessage key={message.id} message={message} active={busy && i === messages.length - 1} handlers={handlers} />
+                <AssistantMessage
+                  key={message.id}
+                  message={message}
+                  active={busy && i === messages.length - 1}
+                  handlers={handlers}
+                  busy={busy}
+                  onRetry={() => retry(message.id)}
+                />
               ),
             )}
             {waitingForFirstToken ? <WorkingLine /> : null}

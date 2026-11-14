@@ -2,9 +2,14 @@
 
 import * as React from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { BookOpen, Check, ChevronDown, Globe, Lightbulb, PenLine, Search, Telescope, Users, X } from "lucide-react";
+import { BookOpen, Check, ChevronDown, Download, FileCode, FileText, Globe, Lightbulb, PenLine, Printer, Search, Telescope, Users, X } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { APP_NAME } from "@/lib/brand";
+import { downloadFile, fileSlug, openDocument, portableHtml, reportDocument } from "@/lib/export";
+import { CopyAction, IconAction } from "@/components/butler/icon-action";
 import { Markdown } from "@/components/butler/markdown";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   faviconOf,
   type ResearchAgent,
@@ -33,6 +38,9 @@ export function Research({ data, loading }: WidgetProps<ResearchData>) {
   const searches = agents.reduce((n, a) => n + (a.steps ?? []).filter((s) => s.type === "search").length, 0);
   const finished = agents.filter((a) => a.status === "done" || a.status === "failed").length;
 
+  // The report as it is drawn on screen: the source for a formatted copy and for the downloads.
+  const reportRef = React.useRef<HTMLDivElement>(null);
+
   const subtitle = done
     ? `${agents.length} ${plural(agents.length, "researcher")} · ${allSources.length} ${plural(allSources.length, "source")}`
     : undefined;
@@ -44,7 +52,13 @@ export function Research({ data, loading }: WidgetProps<ResearchData>) {
       subtitle={subtitle}
       loading={working}
       stage={data?.stage ?? stageFor(status, finished, agents.length)}
-      aside={working && !data?.error ? <LiveDot label={phaseLabel(status)} /> : null}
+      aside={
+        data?.error ? null : working ? (
+          <LiveDot label={phaseLabel(status)} />
+        ) : data?.report ? (
+          <ReportActions question={data.question} report={data.report} sources={allSources} rendered={reportRef} />
+        ) : null
+      }
       sources={allSources}
       footerNote={done && typeof data?.exaCostUsd === "number" ? <span className="nums">Search cost ${data.exaCostUsd.toFixed(2)}</span> : undefined}
     >
@@ -70,7 +84,7 @@ export function Research({ data, loading }: WidgetProps<ResearchData>) {
                 transition={{ duration: 0.35, ease: EASE }}
               >
                 <EffortSummary researchers={agents.length} searches={searches} sources={allSources.length} />
-                <div className="mt-4">
+                <div ref={reportRef} className="mt-4">
                   <Markdown>{data.report}</Markdown>
                 </div>
                 {agents.length > 0 ? <Methodology agents={agents} /> : null}
@@ -101,6 +115,88 @@ export function Research({ data, loading }: WidgetProps<ResearchData>) {
         </>
       )}
     </WidgetFrame>
+  );
+}
+
+/* ───────────────────────── Copy and download ───────────────────────── */
+
+const today = () => new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+const credit = () => `Researched with ${APP_NAME}, which searches the live web with Exa. Check important details at the source before you act.`;
+
+/** The report as a markdown file: the question as the title, the report, then a numbered source list. */
+function reportMarkdown(question: string, report: string, sources: Source[]) {
+  const list = sources.map((s, i) => `${i + 1}. [${(s.title?.trim() || s.domain || s.url).replace(/[[\]]/g, "")}](${s.url})`).join("\n");
+  return [`# ${question || "Research report"}`, report.trim(), list ? `## Sources\n\n${list}` : "", `---\n\n${today()}. ${credit()}`].filter(Boolean).join("\n\n") + "\n";
+}
+
+/**
+ * Copy this report, or save it on its own: as markdown, as a web page that opens anywhere, or
+ * through the print dialog as a PDF. Only the report, not the rest of the conversation.
+ */
+function ReportActions({
+  question,
+  report,
+  sources,
+  rendered,
+}: {
+  question: string;
+  report: string;
+  sources: Source[];
+  /** The report as drawn on screen. */
+  rendered: React.RefObject<HTMLDivElement | null>;
+}) {
+  const title = question || "Research report";
+  const name = fileSlug(title, "research-report");
+  const bodyHtml = () => (rendered.current ? portableHtml(rendered.current) : "");
+  const page = (print?: boolean) =>
+    reportDocument({ title, bodyHtml: bodyHtml(), sources, kicker: `Research report · ${today()}`, footer: credit(), print });
+
+  const saveMarkdown = () => {
+    downloadFile(`${name}.md`, reportMarkdown(question, report, sources), "text/markdown");
+    toast.success("Report saved", { description: `${name}.md` });
+  };
+  const savePage = () => {
+    downloadFile(`${name}.html`, page(), "text/html");
+    toast.success("Report saved", { description: `${name}.html` });
+  };
+  const print = () => {
+    if (!openDocument(page(true))) toast.error("Your browser blocked the new tab", { description: "Allow pop-ups for this site, or download the web page and print that." });
+  };
+
+  return (
+    <div className="-mr-1.5 flex items-center gap-0.5">
+      <CopyAction
+        label="Copy report"
+        text={() => `# ${title}\n\n${report.trim()}`}
+        html={() => {
+          const body = bodyHtml();
+          return body ? `<h1>${title.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</h1>${body}` : undefined;
+        }}
+      />
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <IconAction label="Download report">
+            <Download />
+          </IconAction>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuItem onSelect={saveMarkdown} className="gap-2.5 px-2 py-1.5">
+            <FileText className="text-muted-foreground" />
+            <span className="flex-1">Markdown</span>
+            <span className="text-[0.72rem] text-subtle">.md</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={savePage} className="gap-2.5 px-2 py-1.5">
+            <FileCode className="text-muted-foreground" />
+            <span className="flex-1">Web page</span>
+            <span className="text-[0.72rem] text-subtle">.html</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={print} className="gap-2.5 px-2 py-1.5">
+            <Printer className="text-muted-foreground" />
+            <span className="flex-1">Print or save as PDF</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }
 
