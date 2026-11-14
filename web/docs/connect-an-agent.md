@@ -25,7 +25,10 @@ The store's agent and an outside agent call the same core functions through the 
 | Memory, history, the mandate's rules | `read_kitchen_memory`, `read_mandate`, `list_orders` | `GET /kitchen`, `GET /orders` |
 | "Why?": the audit trail | `explain` | `GET /ledger` |
 | Offers from the wholesaler's selling agent | `list_offers`, `accept_offer`, `decline_offer`, `mute_offers` ([offers.md](offers.md)) | `/api/v1/offers` |
-| Menu planning, a last-minute event, stock-out watch, standing-order renewal | being added on `claude/scenarios-menu` and `claude/scenarios-watch` | the same |
+| A menu around what is in season: the anchor (season calendar, with its source; products the range has), the dishes, per ingredient the need, what is on hand (the kitchen's history or the person's words, each labelled; nothing assumed when nothing is known) and the shortfall in the smallest covering pack | `plan_seasonal_menu` | `POST /menus/seasonal` |
+| A booking at short notice: what cannot arrive by the day and why (cut-off at a time, stock, no delivery), the earliest day; substitutes by the ingredient's role in the dish, verified (in the range, arrives in time, the kitchen's rules and nutrition rules), best / better / good with trade-offs and the gate's word | `plan_event_menu` (for one product that is short: `find_alternatives`) | `POST /menus/event` |
+| The planned menu as one order: substitutes declared so the gate judges them; the agent takes a swap alone only where the gate passes it | `order_menu` | `POST /menus/{planId}/order` |
+| Stock-out watch, standing-order renewal | being added on `claude/scenarios-watch` | the same |
 | Changing the kitchen's rules | not offered: only the kitchen's signed-in person signs new terms; an agent reads them (`read_mandate`) | none |
 | Approving an order | never a tool, on either side: the named person's passkey on their own phone | approver operations only (`?audience=agent` leaves them out) |
 
