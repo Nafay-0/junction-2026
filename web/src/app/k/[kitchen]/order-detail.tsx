@@ -11,6 +11,7 @@ import { Target } from "../../_ui/target";
 import { askedText } from "./history";
 import { usePortal } from "./portal";
 import { Gate } from "./stages";
+import { RulesThen } from "./rules-then";
 import { Timeline } from "./timeline";
 import { Button, ErrorPlate, Field, Paper } from "./ui";
 import type { LedgerReply, Order } from "./types";
@@ -119,6 +120,8 @@ export function OrderDetail({ orderId }: { orderId: string }) {
       </div>
 
       <Verify order={o} evidence={q?.evidence ?? []} />
+
+      <RulesThen orderId={o.orderId} />
 
       {d.entries.length > 0 && (
         <section aria-labelledby="timeline">
