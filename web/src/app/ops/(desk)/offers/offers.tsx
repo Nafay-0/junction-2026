@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import type { Campaign, OffersView } from "@/server/offers/service";
 import { api } from "../../../_client/api";
@@ -169,7 +170,14 @@ function OfferRow({ o, now }: { o: Offer; now: number }) {
           <p className="mt-1 text-[0.82rem] text-ink-soft">
             {o.answer.by}, {o.answer.via}
             {o.answer.scope ? ` (${o.answer.scope})` : ""}
-            {o.answer.requestId ? ` · ${o.answer.requestId}` : ""}
+            {o.answer.requestId && (
+              <>
+                {" · "}
+                <Link href={`/ops/orders?q=${o.answer.requestId}`} className="text-petrol underline decoration-petrol/30 underline-offset-4">
+                  the order it started
+                </Link>
+              </>
+            )}
           </p>
         )}
       </td>
