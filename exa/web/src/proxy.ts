@@ -16,7 +16,7 @@ import { SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth/cookie";
 const PUBLIC_PAGES = new Set(["/login", "/about"]);
 /** The desktop app names itself in its window's User-Agent (desktop/main.cjs). */
 const DESKTOP_APP = /BerylDesktop\//;
-const PUBLIC_API = new Set(["/api/auth/login", "/api/auth/logout"]);
+const PUBLIC_API = new Set(["/api/auth/login", "/api/auth/logout", "/api/health"]);
 /** Icons, the web app manifest and the like: needed before anyone has signed in. */
 const PUBLIC_FILE = /^\/(?:favicon\.ico|icon(?:[-.\w]*)?|apple-icon(?:[-.\w]*)?|manifest\.(?:webmanifest|json)|sw\.js|robots\.txt)$|\.(?:png|svg|ico|webp|jpg|jpeg|woff2?)$/;
 

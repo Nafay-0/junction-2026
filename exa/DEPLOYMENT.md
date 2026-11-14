@@ -1,65 +1,83 @@
-# Deploying Beryl: the plan
+# Beryl in production
 
-Nothing here is set up yet. This is what I propose, what it costs, and what I need before I start.
+Set up on Saturday 14 November 2026 in the Google Cloud project `beryl-exa`, region `europe-north1`. The project is meant to stay up through Sunday 15 November and be shut down after.
 
-## What has to run
+- Site: https://beryl.zeroanomaly.tech (once the DNS record below is in)
+- Always works, with HTTPS: https://beryl-58963151537.europe-north1.run.app
+- Health: `/api/health` on either address
 
-| Piece | What it is | Why it matters for hosting |
+## What runs
+
+| Piece | Name | Notes |
 |---|---|---|
-| Web server | The Next.js app in `exa/web` | Must be one process that stays up. Running tasks live in its memory (`src/lib/runs.ts`), so it cannot scale to zero or to several copies. |
-| Database | Postgres | Accounts, conversations, usage. Migrations run when the server starts. |
-| Desktop downloads | Three files, about 100 MB each | Too big to ship inside the server image. They go in a public bucket. |
-| Secrets | Exa, Claude on AWS, Gemini, admin login | Never in the repo or the image. |
+| Server | Cloud Run service `beryl` | Exactly one instance, always on (min 1, max 1, CPU never throttled), 2 vCPU, 2 GB, requests up to 60 minutes. Running tasks live in its memory, so it must not scale. |
+| Database | Cloud SQL `beryl`, Postgres 17 | 1 vCPU, 3.75 GB, 10 GB disk. Database `beryl`, user `beryl`. The server reaches it through the socket Cloud Run mounts. Maintenance window is Wednesday, so not this weekend. |
+| Secrets | Secret Manager | `EXA_API_KEY`, `ANTHROPIC_AWS_API_KEY`, `ANTHROPIC_AWS_WORKSPACE_ID`, `GOOGLE_API_KEY`, `ADMIN_PASSWORD`, `DATABASE_URL`. Copied from `exa/.env.local` at setup, so the live admin signs in with the same email and password as locally. |
+| Images | Artifact Registry `beryl` | `europe-north1-docker.pkg.dev/beryl-exa/beryl/web` |
+| Desktop installers | Bucket `gs://beryl-exa-downloads` | Public. The site's `/download/...` links redirect there. |
+| Domain and HTTPS | Global load balancer | Address `136.68.87.95`, a Google-managed certificate for `beryl.zeroanomaly.tech`, and a redirect from http to https. |
+| Accounts | `beryl-run` (the server), `beryl-deploy` (GitHub Actions) | GitHub signs in without a stored key, and only this repository may. |
 
-Voice needs nothing extra: the browser talks to Gemini directly with a short-lived token from our server.
+## The one DNS record
 
-## Proposed setup on GCP
+At the registrar of `zeroanomaly.tech`:
 
-Region `europe-north1` (Finland), everything in one project.
+| Type | Name | Value | TTL |
+|---|---|---|---|
+| A | `beryl` | `136.68.87.95` | 300 (or the lowest offered) |
 
-- **Cloud Run** for the web server, pinned to exactly one instance (min 1, max 1) with CPU always on. That keeps background tasks alive between requests and keeps the task list in one place. Requests can stream for up to 60 minutes, which covers the longest research.
-- **Cloud SQL for Postgres**, the smallest shared-core instance, connected from Cloud Run through the built-in connector.
-- **Secret Manager** for every key and the admin password, mounted as environment variables.
-- **Artifact Registry** for the Docker image.
-- **Cloud Storage** bucket, public read, for the desktop installers. The site's `/download/...` links redirect there (`BERYL_DOWNLOADS_URL`).
-- **Domain**: mapped straight onto the Cloud Run service (supported in `europe-north1`), with Google's managed certificate. A `downloads.` subdomain is optional; the bucket's own URL works too.
+Nothing else is needed. No AAAA record, no CNAME. Once the record resolves, Google issues the certificate on its own, usually within 15 to 60 minutes. Until then `https://beryl.zeroanomaly.tech` shows a certificate error and the `run.app` address is the one to use.
 
-Rough cost: about 50 to 60 USD a month for the always-on instance, about 10 USD for the database, cents for the rest. A small VM running Docker would be cheaper (about 15 USD) but we would look after it ourselves. I'd take Cloud Run unless the budget says otherwise.
+Check progress with:
 
-One thing to know: a deploy restarts the server, and a task running at that moment is lost (its conversation keeps what was saved up to its last step). Fine for now. The fix later is to move the running-task list to Redis.
+```bash
+gcloud compute ssl-certificates describe beryl-cert --project beryl-exa --global --format="value(managed.status,managed.domainStatus)"
+```
 
-## CI/CD
+## Deploying
 
-GitHub Actions, signing in to GCP with Workload Identity Federation, so no key file is stored anywhere.
+By hand, from `exa/web`:
 
-1. **Checks** on every push that touches `exa/`: typecheck, lint, the guard test.
-2. **Web deploy** on push to `main` that touches `exa/`: build the image, push it, deploy the new revision to Cloud Run. The server applies migrations as it starts.
-3. **Desktop release** on a tag like `beryl-v0.2.0`: a macOS runner builds the two Mac installers and the Windows one, with the real server address baked in, and uploads them to the bucket. The download buttons on the site then serve the new version.
+```bash
+gcloud builds submit . --project beryl-exa --region europe-north1 --tag europe-north1-docker.pkg.dev/beryl-exa/beryl/web:<tag>
+gcloud run deploy beryl --project beryl-exa --region europe-north1 --image europe-north1-docker.pkg.dev/beryl-exa/beryl/web:<tag>
+```
 
-`.github/workflows/` is Nafay's folder under our repo rules, and Dock already has `ci.yml` there. I'd add files named `beryl-*.yml` that only run for changes under `exa/`. Nafay needs to be fine with that.
+The second command only changes the image. The service keeps its settings.
 
-## What I'd change in the code first (small)
+From GitHub, once these files are on `main` (they are in `.github/workflows/`, which is otherwise Nafay's folder; they only run for changes under `exa/`):
 
-- A `Dockerfile` and `.dockerignore` in `exa/web`, with Next's standalone output.
-- A `/api/health` route for Cloud Run's checks.
-- `BERYL_DOWNLOADS_URL` and the public site address as environment variables.
-- The workflow files.
+- `beryl-ci.yml`: typecheck, lint and the guard test on every push that touches `exa/`.
+- `beryl-deploy.yml`: builds and deploys the server when `main` changes under `exa/web`, or when started by hand.
+- `beryl-desktop.yml`: builds the three installers and uploads them, for a tag like `beryl-v0.2.0` or by hand.
 
-None of this needs access. I can have it ready and tested locally in Docker before the project exists.
+None of the three has run yet: they start working after the first push.
 
-## What I need from you
+**A deploy restarts the server, and a task running at that moment is lost.** During the judging, do not push to `main` under `exa/web` unless you mean to redeploy.
 
-1. **GCP project**: its ID, billing switched on, and access for whoever runs the setup. If I do it from this machine, `gcloud` signed in as you (or a service account) with Owner on that project is the simple route. Tell me if Dock uses the same project or a separate one.
-2. **Domain**: the name, and who controls its DNS. I need to add two or three records, or you add them when I give you the values.
-3. **GitHub**: Nafay's OK for the `beryl-*.yml` workflows, and someone with admin on the repo to add two repository variables (project ID and the identity provider's name). You push, as always.
-4. **Keys for production**: are the Exa, Claude and Gemini keys in `exa/.env.local` the ones to use in production, or are there separate ones? And a real admin email and password for the live site.
-5. **Signing, optional**: an Apple Developer account (99 USD a year) removes the Mac security warning on first launch. Without it the app still works, with two extra clicks the first time. Windows signing costs more and can wait.
-6. **A decision**: Cloud Run or a plain VM. And a monthly budget ceiling, so I can set an alert.
+## Desktop installers
 
-## Order of work once I have access
+```bash
+BERYL_SERVER_URL=https://beryl.zeroanomaly.tech pnpm desktop:release
+gcloud storage cp desktop/release/downloads/* gs://beryl-exa-downloads/ --cache-control="no-cache, max-age=0"
+```
 
-1. Create the project resources (database, bucket, secrets, registry, service account). About an hour.
-2. First deploy by hand from this machine, check sign-in, a search, a research run, voice, and a task surviving a reload.
-3. Point the domain at it.
-4. Turn on the workflows.
-5. Build the desktop apps against the real address, upload them, and check a download from the live site on a second machine.
+The address is baked into the app. The installers in the bucket today open the `run.app` address, which keeps working; they are rebuilt for the domain once its certificate is active.
+
+## Changing a setting
+
+- A key: `printf %s "<value>" | gcloud secrets versions add <NAME> --project beryl-exa --data-file=-`, then `gcloud run services update beryl --project beryl-exa --region europe-north1 --update-secrets <NAME>=<NAME>:latest`.
+- The demo video: `gcloud run services update beryl --project beryl-exa --region europe-north1 --update-env-vars BERYL_DEMO_VIDEO=<link>`.
+
+Each of these starts a new revision, so the same warning about running tasks applies.
+
+## Not done
+
+- Nobody has signed in on the live site from this setup: the checks so far are the ones that need no account (health, the landing page, the sign-in page, the API gate, downloads). Sign in once and run a search, a research task and a call.
+- The installers are not signed or notarised, and the Windows and Intel builds have not been run.
+- No alerting. If the site matters after Sunday, add an uptime check on `/api/health`.
+- Running tasks are in the server's memory. For more than one instance they would move to Redis.
+
+## Shutting it down
+
+Deleting the project removes everything. To keep the project but stop paying for the two things that cost money, delete the Cloud Run service and the Cloud SQL instance, and release the address `beryl-ip`.

@@ -1,0 +1,59 @@
+name: Beryl desktop release
+
+# Builds the desktop app's installers (Mac for Apple silicon and Intel, Windows) and puts them
+# where the website's download buttons point. Runs for a tag like beryl-v0.2.0, or by hand.
+on:
+  push:
+    tags: ["beryl-v*"]
+  workflow_dispatch:
+    inputs:
+      site:
+        description: The address the app should open (leave empty for the usual one)
+        required: false
+
+concurrency:
+  group: beryl-desktop
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write # to sign in to Google Cloud without a stored key
+
+env:
+  PROJECT: beryl-exa
+  BUCKET: gs://beryl-exa-downloads
+  # The address baked into the app.
+  SITE: https://beryl.zeroanomaly.tech
+  WIF_PROVIDER: projects/58963151537/locations/global/workloadIdentityPools/github/providers/junction-2026
+  DEPLOY_ACCOUNT: beryl-deploy@beryl-exa.iam.gserviceaccount.com
+
+jobs:
+  release:
+    name: Build and upload the installers
+    # One Mac builds all three: the Windows app is assembled without Windows.
+    runs-on: macos-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: exa/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: exa/web/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: exa/web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: Build the installers
+        run: BERYL_SERVER_URL="${{ inputs.site || env.SITE }}" pnpm desktop:release
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOY_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Upload
+        # Not cached by browsers or Google's edge, so the buttons serve the new files at once.
+        run: gcloud storage cp desktop/release/downloads/* "$BUCKET/" --cache-control="no-cache, max-age=0"

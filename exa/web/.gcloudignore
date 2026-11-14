@@ -1,0 +1,18 @@
+# Kept out of the image and out of what is sent to the builder.
+node_modules
+.next
+out
+coverage
+.git
+.env*
+*.log
+.DS_Store
+
+# The desktop app's build output and installers: hundreds of megabytes, hosted elsewhere.
+desktop/release
+desktop/dist
+
+# Test fixtures and notes the server does not need.
+scripts/fixtures
+*.md
+!README.md
