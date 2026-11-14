@@ -10,7 +10,7 @@ import { Target } from "../_ui/target";
 import type { FeedItem, WallSnapshot } from "@/server/wall-snapshot";
 import type { Board } from "./crash-board";
 import { CrashMatrix } from "./crash-matrix";
-import css from "./wall.module.css";
+import "./wall.css";
 
 /**
  * The wall: the big screen at the table, read from three metres by people walking past. Its one bold thing is the
@@ -153,14 +153,14 @@ function GateLanes({ feed, now, justRefused, lastAt, error }: { feed: FeedItem[]
         {/* The readout: the rule the gate reads now, or the rule that just refused something. */}
         <p className="min-w-0 text-[max(1rem,1.1vw)] leading-tight" aria-live="polite">
           {justRefused ? (
-            <span key={justRefused.key} className={`${css.rule} inline-flex max-w-full items-center gap-2 bg-safety-ink px-2 py-1 font-bold text-safety`}>
+            <span key={justRefused.key} className={`wall-rule inline-flex max-w-full items-center gap-2 bg-safety-ink px-2 py-1 font-bold text-safety`}>
               <Target size={20} tone="safety" />
               <span className="truncate">Refused just now: {justRefused.rule}</span>
             </span>
           ) : (
             <>
               <span className="text-paper/70">The gate checks every order: </span>
-              <span key={i} className={`${css.rule} inline-block font-semibold`}>
+              <span key={i} className={`wall-rule inline-block font-semibold`}>
                 {CHECKS[i]}
               </span>
             </>
@@ -185,18 +185,18 @@ function GateLanes({ feed, now, justRefused, lastAt, error }: { feed: FeedItem[]
         <div aria-hidden className={`pointer-events-none absolute inset-y-0 hidden lg:grid ${cols} left-0 right-0 gap-x-[1.2vw]`}>
           <span />
           <span />
-          <span className={`hazard ${css.post} ${css.scan} border-x-[3px] border-safety-ink`} />
+          <span className={`hazard wall-post wall-scan border-x-[3px] border-safety-ink`} />
           <span />
         </div>
         {justRefused && (
           <div aria-hidden className={`pointer-events-none absolute inset-y-0 left-0 right-0 hidden lg:grid ${cols} gap-x-[1.2vw]`}>
             <span />
             <span className="relative overflow-hidden">
-              <span className={`${css.armLeft} absolute right-0 top-1/2 h-[1.4vh] w-1/2 -translate-y-1/2 hazard-thin`} />
+              <span className={`wall-arm-left absolute right-0 top-1/2 h-[1.4vh] w-1/2 -translate-y-1/2 hazard-thin`} />
             </span>
             <span />
             <span className="relative overflow-hidden">
-              <span className={`${css.armRight} absolute left-0 top-1/2 h-[1.4vh] w-1/3 -translate-y-1/2 hazard-thin`} />
+              <span className={`wall-arm-right absolute left-0 top-1/2 h-[1.4vh] w-1/3 -translate-y-1/2 hazard-thin`} />
             </span>
           </div>
         )}
@@ -239,7 +239,7 @@ function Lane({ it, now, cols, fresh }: { it: FeedItem; now: number; cols: strin
   const passed = it.tone === "done";
   const marker = stopped ? "bg-safety-ink ring-[3px] ring-safety" : waiting ? "bg-safety ring-[3px] ring-safety-ink" : "bg-paper";
   return (
-    <li className={`${fresh ? css.moved : ""} grid min-h-0 flex-1 [@media(max-height:820px)]:[&:nth-child(n+5)]:hidden grid-cols-1 items-center gap-x-[1.2vw] gap-y-1 border-t border-paper/15 py-[0.6vh] ${cols}`} key={`${it.key}-${it.status}`}>
+    <li className={`${fresh ? "wall-moved" : ""} grid min-h-0 flex-1 [@media(max-height:820px)]:[&:nth-child(n+5)]:hidden grid-cols-1 items-center gap-x-[1.2vw] gap-y-1 border-t border-paper/15 py-[0.6vh] ${cols}`} key={`${it.key}-${it.status}`}>
       <div className="min-w-0">
         <p className="truncate text-[max(1.15rem,1.4vw)] font-bold leading-tight">{it.kitchen}</p>
         <p className="truncate text-[max(0.92rem,1vw)] leading-tight text-paper/70 [@media(max-height:820px)]:hidden">
@@ -254,7 +254,7 @@ function Lane({ it, now, cols, fresh }: { it: FeedItem; now: number; cols: strin
         {PRE_GATE.map((s, k) => (
           <span key={s} aria-hidden className="absolute top-1/2 size-[0.7vw] min-h-2 min-w-2 -translate-x-1/2 -translate-y-1/2 border-2 border-paper/40 bg-petrol-deep" style={{ left: `${((k + 0.5) / PRE_GATE.length) * 100}%` }} />
         ))}
-        <span aria-hidden className={`${css.marker} absolute top-1/2 h-[max(1.2rem,2vh)] w-[max(1.6rem,1.9vw)] -translate-y-1/2 ${marker}`} style={{ left: `calc(${at}% - ${at >= 100 ? "max(1.6rem,1.9vw)" : "max(0.8rem,0.95vw)"})` }} />
+        <span aria-hidden className={`wall-marker absolute top-1/2 h-[max(1.2rem,2vh)] w-[max(1.6rem,1.9vw)] -translate-y-1/2 ${marker}`} style={{ left: `calc(${at}% - ${at >= 100 ? "max(1.6rem,1.9vw)" : "max(0.8rem,0.95vw)"})` }} />
       </div>
       {/* through the post: only a request that passed */}
       <div aria-hidden className="relative hidden h-full lg:block">{passed && <span className="absolute inset-x-0 top-1/2 h-[max(0.5rem,0.9vh)] -translate-y-1/2 bg-paper" />}</div>
@@ -319,7 +319,7 @@ function Refusals({ items, now, fresh }: { items: WallSnapshot["refusals"]; now:
       ) : (
         <ol className="mt-[1.2vh] min-h-0 space-y-[1vh] overflow-hidden">
           {items.slice(0, 3).map((r, k) => (
-            <li key={r.key} className={`${k === 0 && fresh ? css.armLeft : ""} lg:[&:nth-child(3)]:hidden`}>
+            <li key={r.key} className={`${k === 0 && fresh ? "wall-arm-left" : ""} lg:[&:nth-child(3)]:hidden`}>
               <p className="inline-block max-w-full truncate bg-safety-ink px-2 py-0.5 text-[max(1.05rem,1.2vw)] font-bold leading-tight text-safety">{r.rule}</p>
               <p className="mt-0.5 line-clamp-1 text-[max(0.95rem,1vw)] leading-snug">{fiMoney(r.reason)}</p>
               <p className="text-[max(0.85rem,0.85vw)] text-paper/60">
