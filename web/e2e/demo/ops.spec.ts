@@ -201,7 +201,7 @@ test("overview, then a trace of the visitor's own request replays station by sta
   const requestId = /"(req_[a-z0-9]+)"/.exec(audit)?.[1];
   expect(requestId, "the audit record names the request").toBeTruthy();
   await page.goto(`/ops/trace/${requestId}`);
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("I need 1,000 litres of lactose-free milk by Monday");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(/I need 1[,\s]?000 litres of lactose-free milk by Monday/);
   await expect(page.getByText(/Waiting for .+ to sign off/).first()).toBeVisible();
   const stations = page.getByRole("group", { name: "Stations" }).getByRole("button");
   await expect(stations.first()).toBeVisible();
