@@ -114,8 +114,9 @@ async function run(id: keyof typeof W & ("milk" | "lunch" | "oat" | "reorder")):
       await page.waitForTimeout(1200);
       if (step === 0) await shot("1-working");
       let t = await idle(page, typed.length);
-      if (done(t)) break;
       const a = lastAgent(t)!;
+      if (args.includes("--verbose")) console.log(`  > ${next}\n    [${a.cards.map((x) => (x.type === "menu" ? `menu:${x.stage}` : x.type === "sheet" ? `sheet:${x.state}` : x.type === "notice" ? `notice:${x.kind}` : x.type)).join(",")}] ${a.line ?? ""}`);
+      if (done(t)) break;
       const c = a.cards;
       const open = (type: Card["type"]) => cardsOf(t).filter((x) => x.type === type).at(-1);
       // The one action: the passkey OK.
@@ -139,7 +140,8 @@ async function run(id: keyof typeof W & ("milk" | "lunch" | "oat" | "reorder")):
       const options = c.find((x) => x.type === "options" && !x.chosen && !x.adjusted);
       const question = c.find((x) => x.type === "question");
       const incomplete = c.find((x) => x.type === "notice" && x.kind === "incomplete");
-      if (incomplete || (/how (much|many)|kuinka paljon|montako|paljonko/i.test(a.line ?? "") && !c.some((x) => x.type === "options" || x.type === "sheet"))) next = W.amount;
+      // Only the oat request leaves the amount out; anywhere else an amount question is the agent's mistake, not answered.
+      if (id === "oat" && (incomplete || (/how (much|many)|kuinka paljon|montako|paljonko/i.test(a.line ?? "") && !c.some((x) => x.type === "options" || x.type === "sheet")))) next = W.amount;
       else if (anomaly) next = W.yes;
       else if (menu?.type === "menu" && menu.stage === "choose") next = W.firstMenu;
       else if (menu?.type === "menu" && menu.stage === "ready" && !menu.sheetId) next = W.go;

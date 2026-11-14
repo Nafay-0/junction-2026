@@ -32,7 +32,7 @@ export const THREAD_LINE_TEXT = defineText({
     // memory
     remembered: "Remembered",
     canRemember: "I can remember this",
-    sayRemember: "say “remember it”",
+    sayRemember: "a yes is enough",
     // the day's opening, said in sentences
     today: {
       none: "Nothing needs you today.",
@@ -41,7 +41,7 @@ export const THREAD_LINE_TEXT = defineText({
       drift: (product: string) => `Your recurring ${product} order has changed lately.`,
       recall: (product: string) => `A recall notice touches ${product}: it is held.`,
       delivery: (day: string) => `A delivery arrives {{${day}}}.`,
-      more: (n: number) => `And ${n} more thing${n === 1 ? "" : "s"}: ask me “what's on today”.`,
+      more: (n: number) => `And ${n} more thing${n === 1 ? "" : "s"} today.`,
     },
     // steps, written for a person
     step: {
@@ -102,7 +102,7 @@ export const THREAD_LINE_TEXT = defineText({
     takeBack: "Peru tilaus",
     remembered: "Muistan",
     canRemember: "Voin muistaa tämän",
-    sayRemember: "sano ”muista se”",
+    sayRemember: "kyllä riittää",
     today: {
       none: "Tänään ei ole mitään hoidettavaa.",
       signOff: (total: string, name: string) => `Yksi tilaus odottaa ${name ? `hyväksyntää: ${name}` : "hyväksyntääsi"}: **${total}**.`,
@@ -110,7 +110,7 @@ export const THREAD_LINE_TEXT = defineText({
       drift: (product: string) => `Toistuva tilauksesi ${product} on muuttunut viime aikoina.`,
       recall: (product: string) => `Takaisinveto koskee tuotetta ${product}: se on pysäytetty.`,
       delivery: (day: string) => `Toimitus saapuu {{${day}}}.`,
-      more: (n: number) => `Ja ${n} muuta asiaa: kysy ”mitä tänään”.`,
+      more: (n: number) => `Ja ${n} muuta asiaa tänään.`,
     },
     step: {
       read: "Luin pyyntösi",
@@ -170,7 +170,7 @@ export const THREAD_LINE_TEXT = defineText({
     takeBack: "Ta tillbaka",
     remembered: "Jag minns",
     canRemember: "Jag kan minnas det här",
-    sayRemember: "säg ”kom ihåg det”",
+    sayRemember: "ett ja räcker",
     today: {
       none: "Inget behöver dig i dag.",
       signOff: (total: string, name: string) => `En beställning väntar på ${name ? `godkännande av ${name}` : "ditt godkännande"}: **${total}**.`,
@@ -178,7 +178,7 @@ export const THREAD_LINE_TEXT = defineText({
       drift: (product: string) => `Din återkommande beställning av ${product} har ändrats på sistone.`,
       recall: (product: string) => `En återkallelse gäller ${product}: den är stoppad.`,
       delivery: (day: string) => `En leverans kommer {{${day}}}.`,
-      more: (n: number) => `Och ${n} saker till: fråga ”vad gäller i dag”.`,
+      more: (n: number) => `Och ${n} saker till i dag.`,
     },
     step: {
       read: "Läste din beställning",

@@ -42,7 +42,32 @@ type MenuState = {
   dishes: Record<string, DraftIngredient[]>;
   /** When the outline and the ready card were shown, ms after the tool started (the record and the eval read them). */
   timings: { outlineMs?: number; matchedMs?: number; readyMs?: number; startedAt: number };
+  /** The kitchen's delivery weekdays (1 = Monday) and how far ahead it may order: for the day check before products are priced. */
+  weekdays?: number[];
+  maxLeadDays?: number;
 };
+
+/**
+ * The day asked for, checked: on the priced days when there are some, else on the kitchen's delivery weekdays.
+ * Undefined when it can be had (or nothing was asked).
+ */
+function dayProblem(m: MenuState, asked: string | null | undefined, days: MenuCard["days"]): MenuCard["dayProblem"] {
+  if (!asked) return undefined;
+  if (days.length) {
+    const here = days.find((d) => d.date === asked);
+    if (here?.available) return undefined;
+    const earliest = days.find((d) => d.available && d.date > asked)?.date ?? days.find((d) => d.available)?.date;
+    return { asked, ...(earliest ? { earliest } : {}) };
+  }
+  const weekdays = m.weekdays ?? [1, 2, 3, 4, 5];
+  if (weekdays.includes(isoWeekday(asked))) return undefined;
+  const today = localNow(new Date()).date;
+  for (let i = 1; i <= (m.maxLeadDays ?? 7); i++) {
+    const d = addDaysIso(today, i);
+    if (d > asked && weekdays.includes(isoWeekday(d))) return { asked, earliest: d };
+  }
+  return { asked };
+}
 
 const menusOf = (run: TurnRun): Record<string, MenuState> => ((run.thread as unknown as { menus?: Record<string, MenuState> }).menus ??= {});
 
@@ -93,6 +118,7 @@ function streamingCard(m: MenuState): MenuCard {
     proposals: m.proposals,
     covers,
     ...(o?.serviceDate ? { serviceDate: o.serviceDate } : {}),
+    ...(dayProblem(m, o?.serviceDate, []) ? { dayProblem: dayProblem(m, o?.serviceDate, []) } : {}),
     days: [],
     dishes: (o?.dishes ?? []).map((d) => ({ dishId: d.dishId, name: d.name, course: d.course, ...(d.portion ? { portion: d.portion } : {}), lines: (m.dishes[d.dishId] ?? []).map((ing) => draftLine(ing, covers)) })),
     totalCents: 0,
@@ -189,7 +215,9 @@ async function daysOf(run: TurnRun, svc: Svc, planned: Planned): Promise<MenuCar
     const here = d === p.settings.deliverBy;
     out.push({ date: d, ...(here && view.totals.orderBy ? { orderBy: view.totals.orderBy } : {}), available: !earliest || d >= earliest });
   }
-  if (p.settings.deliverBy && !out.some((x) => x.date === p.settings.deliverBy)) out.unshift({ date: p.settings.deliverBy, ...(view.totals.orderBy ? { orderBy: view.totals.orderBy } : {}), available: true });
+  // The day asked for, when it is not one of those (a Sunday, or further ahead): available only on a delivery weekday.
+  const asked = p.settings.deliverBy;
+  if (asked && !out.some((x) => x.date === asked)) out.unshift({ date: asked, ...(view.totals.orderBy ? { orderBy: view.totals.orderBy } : {}), available: weekdays.includes(isoWeekday(asked)) && (!earliest || asked >= earliest) });
   return out;
 }
 
@@ -215,6 +243,8 @@ async function fullCard(run: TurnRun, svc: Svc, m: MenuState, planned: Planned, 
   }
   const t = view.totals;
   const covers = p.settings.covers;
+  const days = resolving ? [] : await daysOf(run, svc, planned);
+  const problem = dayProblem(m, p.settings.deliverBy, days);
   return {
     type: "menu",
     cardId: m.key,
@@ -223,7 +253,8 @@ async function fullCard(run: TurnRun, svc: Svc, m: MenuState, planned: Planned, 
     proposals: m.proposals,
     covers,
     ...(p.settings.deliverBy ? { serviceDate: p.settings.deliverBy } : {}),
-    days: resolving ? [] : await daysOf(run, svc, planned),
+    ...(problem ? { dayProblem: problem } : {}),
+    days,
     dishes,
     totalCents: t.totalCents,
     ...(covers && t.totalCents ? { costPerCoverCents: Math.round(t.totalCents / covers) } : {}),
@@ -363,7 +394,8 @@ export async function menuFromWords(run: TurnRun, words: string) {
     st.fail(err instanceof DockError ? err.code : undefined);
     return { state: "error", notice: failNotice(run, err, run.turnId).message };
   }
-  const m: MenuState = { key: cardId("menu", run.turnId), words, planId: "", proposals: [], stage: "proposing", dishes: {}, timings: { startedAt: Date.now() } };
+  const profile = await run.rt.kitchens.getProfile(svc.kitchen.mandate.issuer.orgId).catch(() => undefined);
+  const m: MenuState = { key: cardId("menu", run.turnId), words, planId: "", proposals: [], stage: "proposing", dishes: {}, timings: { startedAt: Date.now() }, ...(profile?.deliveryWeekdays?.length ? { weekdays: profile.deliveryWeekdays } : {}), maxLeadDays: svc.kitchen.mandate.delivery.maxLeadDays };
   menusOf(run)[m.key] = m;
   let outlined!: () => void;
   const outline = new Promise<void>((r) => (outlined = r));
@@ -412,8 +444,10 @@ async function choose(run: TurnRun, planId: string, proposalId: string): Promise
     show(run, early ? await fullCard(run, svc, m, early, true) : streamingCard(m));
     const planned = running ? await running : await svc.service.get(svc.kitchen, planId);
     m.stage = planned.record.state === "declined" ? "declined" : "ready";
-    show(run, await fullCard(run, svc, m, planned));
+    const card = await fullCard(run, svc, m, planned);
+    show(run, card);
     st.done();
+    await toEarliest(run, m, card);
     return;
   }
   // Another menu: planned from the buyer's words with its dishes fixed, into the same card.
@@ -426,6 +460,18 @@ async function choose(run: TurnRun, planId: string, proposalId: string): Promise
   show(run, { ...streamingCard(m), planId });
   const planned = await startPlan(run, svc, m, `${m.words}\n\nCook exactly these dishes (${pr.title}): ${pr.dishes.join("; ")}.`, proposalId);
   st.done(`${planned.view.lines.length} lines`);
+  const card = lastCard(run, m.key);
+  if (card) await toEarliest(run, m, card);
+}
+
+/**
+ * A menu chosen for a day nothing can arrive on: planned for the earliest day that can, as the agent said with the
+ * menus ("Nothing can arrive on Sunday; the earliest is Monday"). Choosing one of them is choosing that day.
+ */
+async function toEarliest(run: TurnRun, m: MenuState, card: MenuCard): Promise<void> {
+  const d = card.dayProblem;
+  if (!d?.earliest || card.stage !== "ready" || !m.planId) return;
+  await edit(run, m.planId, [{ op: "deliverBy", date: d.earliest }], `Moved to ${d.earliest}, the earliest day it can arrive (${d.asked} cannot)`);
 }
 
 /** An edit on the card, as the planner's own edit ops: the plan recomputed, the card again with the gate's preview. */

@@ -26,6 +26,8 @@ const CHAINS: Record<"en" | "fi", Chain[]> = {
     { id: "milk", turns: [{ text: "lactose-free milk", says: ["item"] }, { text: "200 litres", says: ["amount"] }, { text: "for Friday", says: ["day"] }], expect: { item: /milk/i, amount: 200, day: true } },
     { id: "correct", turns: [{ text: "100 litres of lactose-free milk for Friday", says: ["item", "amount", "day"] }, { text: "no, 200", says: ["amount"] }], expect: { item: /milk/i, amount: 200, day: true } },
     { id: "add", turns: [{ text: "50 litres of lactose-free milk for Friday", says: ["item", "amount", "day"] }, { text: "and 12 litres of oat drink too", says: ["item", "amount"] }], expect: { item: /oat|milk/i, day: true } },
+    // A follow-up the agent cannot place at once: asked once, then never again in other words (its best reading instead).
+    { id: "again", turns: [{ text: "salmon soup for 10 on Monday", says: ["amount", "day"] }, { text: "12 litres", says: [] }, { text: "12 litres", says: [] }], expect: { item: /./ } },
     { id: "back", turns: [{ text: "30 litres of lactose-free milk for Friday", says: ["item", "amount", "day"] }, { text: "what did we spend this week?", says: [] }, { text: "make it 40", says: ["amount"] }], expect: { item: /milk/i, amount: 40, day: true } },
   ],
   fi: [
@@ -33,6 +35,7 @@ const CHAINS: Record<"en" | "fi", Chain[]> = {
     { id: "milk", turns: [{ text: "laktoositonta maitoa", says: ["item"] }, { text: "200 litraa", says: ["amount"] }, { text: "perjantaiksi", says: ["day"] }], expect: { item: /maito|milk/i, amount: 200, day: true } },
     { id: "correct", turns: [{ text: "100 litraa laktoositonta maitoa perjantaiksi", says: ["item", "amount", "day"] }, { text: "ei, 200", says: ["amount"] }], expect: { item: /maito|milk/i, amount: 200, day: true } },
     { id: "add", turns: [{ text: "50 litraa laktoositonta maitoa perjantaiksi", says: ["item", "amount", "day"] }, { text: "ja 12 litraa kaurajuomaa myös", says: ["item", "amount"] }], expect: { item: /kaura|oat|maito|milk/i, day: true } },
+    { id: "again", turns: [{ text: "lohikeitto 10 hengelle maanantaiksi", says: ["amount", "day"] }, { text: "12 litraa", says: [] }, { text: "12 litraa", says: [] }], expect: { item: /./ } },
     { id: "back", turns: [{ text: "30 litraa laktoositonta maitoa perjantaiksi", says: ["item", "amount", "day"] }, { text: "paljonko käytimme tällä viikolla?", says: [] }, { text: "tee siitä 40", says: ["amount"] }], expect: { item: /maito|milk/i, amount: 40, day: true } },
   ],
 };
@@ -55,6 +58,7 @@ async function main() {
     await resetThread(k as never);
     const said = new Set<Said>();
     let repeated = 0;
+    let lastAsked = "";
     const log: string[] = [];
     for (const turn of chain.turns) {
       const t0 = Date.now();
@@ -74,6 +78,11 @@ async function main() {
       const incomplete = a.cards.find((c) => c.type === "notice" && c.kind === "incomplete");
       const missing = incomplete?.type === "notice" ? (incomplete.missing ?? []) : [];
       const missedSaid = missing.filter((m) => (/amount|how much|quantity/i.test(m) && said.has("amount")) || (/what to buy|item/i.test(m) && said.has("item")) || (/day|date/i.test(m) && said.has("day")));
+      // The same clarification as last turn (asked again in other words) is a repeated question too.
+      const askedNow = missing.length ? missing.join("+") : "";
+      const again = !!askedNow && askedNow === lastAsked;
+      lastAsked = askedNow;
+      if (again) missedSaid.push(`the same as last turn (${askedNow})`);
       if (asks.length || missedSaid.length) repeated++;
       const u = a.cards.filter((c) => c.type === "understood").at(-1);
       const menu = store.cards(store.peek(kitchen)!).map((x) => x.card).filter((c) => c.type === "menu").at(-1);

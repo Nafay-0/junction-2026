@@ -480,7 +480,8 @@ export function settled(messages: ModelMessage[]): ModelMessage[] {
  */
 async function showLine(run: TurnRun, text: string): Promise<void> {
   // Two to four sentences, with the agent's two marks (**figure**, {{day}}) kept for display and stripped for the check.
-  const one = text.replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n").trim().slice(0, 600);
+  // A date written "16.11." carries its own full stop: a sentence ending on it gets no second one ("16.11..", "16.11.}}.").
+  const one = text.replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n").trim().slice(0, 600).replace(/(\d{1,2}\.\d{1,2}\.)(\}\}|\*\*)?\./g, "$1$2");
   const plain = one.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\{\{([^}]+)\}\}/g, "$1");
   // Under 60 words: whole sentences from the start while they fit, and a closing question kept (it is what is open).
   const words = (x: string) => x.replace(/\*\*|\{\{|\}\}/g, "").split(/\s+/).filter(Boolean).length;

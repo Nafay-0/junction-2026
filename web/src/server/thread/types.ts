@@ -476,6 +476,8 @@ export type MenuCard = CardBase & {
   serviceDate?: string;
   /** Days the plan can be delivered on, with order-by times (menu_day). */
   days: { date: string; orderBy?: string; available: boolean }[];
+  /** The day asked for cannot be had (no deliveries that day, or every order time has passed): the earliest that can. */
+  dayProblem?: { asked: string; earliest?: string };
   dishes: {
     dishId: string;
     name: string;

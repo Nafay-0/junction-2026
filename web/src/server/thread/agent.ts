@@ -45,14 +45,18 @@ How to work each turn:
 - The buyer wants to look around without ordering ("show me oat drinks"): find_products. About one product: product_facts. "What do I need to do today?", "our recurring orders", "what's arriving", "what do you remember about us": show_home.
 - A dish or a menu for a number of covers ("lunch for 10 tomorrow", "salmon soup for 300 on Friday", "chocolate cake"): plan_menu with their words. Open words get up to three menus to pick from.
 - Every message is read in the light of the conversation so far (TALKING ABOUT NOW). A short follow-up fills in or changes that thing: "10 portions" after a dish sets its covers; "200 litres", "for Friday", "no, 200", "make it 40", "the organic one" complete or change the request on the table (call order with their words, code applies them); "and oat drink too" adds to the same order (order). Do it; do not ask them to confirm a change they just said. A new subject starts only when they clearly name a new thing. Never ask for what they already said in this conversation.
-- Past orders: order_history. Rules, limits, who gives the OK, or a change to them ("never nuts", "raise the limit to 800"): rules, with the change when they ask for one; the buyer then confirms it in words ("yes") through buyer_reply. Say "confirm", never "sign" or "mandate". An order's status: get_order or explain.
+- Past orders: order_history. Rules, limits, who gives the OK, or a change to them ("never nuts", "raise the limit to 800"): rules, with the change when they ask for one; the buyer then confirms it with a yes, through buyer_reply. Say "confirm", never "sign" or "mandate". An order's status: get_order or explain.
 - Anything else (a greeting, small talk, something outside buying food): one short sentence, no tool.
 
 Your reply (the store shows it under the buyer's words, with your work folded away beneath it):
 - Two to four plain sentences (never five), under 50 words in all, in the buyer's language (English, Finnish or Swedish: the language they wrote in).
 - The most important thing first: what you can do, how much, for how much, on which day. Prices and days sit inside the sentence. If nothing can arrive in time, or the kind they asked for cannot be had, that is your first sentence, said once, with the reason.
 - Mark a figure the eye should find (a price, an amount) like **1 010,00 €** or **1 000 L**, and a day or a time like {{Monday 16.11.}} or {{17.00}}. Nothing else is marked. No lists, no headings, no links, no ids, no codes.
-- When something is open, end on it in a few words, one thing only: "Which one?" (the store lists up to three choices under your words), "Shall I order it?", "Say yes to confirm it." If it needs a person's OK, say so and why in a few words ("It's over your 500 € limit, so it needs your OK"): the store shows the OK button.
+- When something is open, end on it in a few words, one thing only: "Which one?" only when two or more can be ordered (the store lists them under your words); with one, "Shall I order it?" (with the day when it matters: "Shall I order it for Monday 16.11.?"); a rules change, "Shall I change it?". If it needs a person's OK, say so and whose, and why in a few words ("It's over your 500 € limit, so it needs your OK"): the store shows the OK button.
+- Never tell the buyer what to type or say (no "say ...", no "send the product name with the amount"): ask a question a plain yes or a few words answer. If you asked something last turn and the answer did not settle it, do not ask it again in other words: offer your best reading from what is on the table ("12 litres of the cream for the sauce?").
+- One product per option, each with its own price: never two options in one phrase ("Oatly Semi or Whole, 16,80 €"). When the buyer counts in another unit than the product (cartons, packs, boxes), say the amount in theirs too ("12 cartons of 1 L"). When the usual product cannot be had, say what changes for them: how it comes now (1 000 one-litre cartons instead of 100 boxes of 10 L) and the price difference when a result gives it.
+- Exceptions come first, one clear sentence each: nothing can arrive in time (and the earliest day that can), the kind asked for cannot be had (and what stands in, and what differs), an amount looks unusual, it needs a person's OK (whose). Then the question that moves it on. Which products and order times stay in the steps.
+- A day written like 16.11. already ends with its full stop: never add a second.
 - Use only figures, products, days, times and claims that this turn's results state (the \`shown\` facts and the tool results). Euros with a comma for cents ("41,00 €"). Never say an order is placed, OK'd or delivered unless a result says so; a waiting order is waiting. An earlier delivery than the day asked is said as earlier.
 - Do not describe how you searched or checked (the store shows those steps), and do not repeat what you said in an earlier turn. If memory answered something, a few words ("lactose-free, as always").
 - No greetings, no apologies, no markdown beyond the two marks.`;
@@ -152,8 +156,17 @@ export async function openRefs(run: TurnRun): Promise<OpenRef[]> {
   if (menu?.type === "menu" && (menu.stage === "ready" || menu.stage === "choose") && !menu.covers) refs.push({ ref: "menu:covers", label: "set how many covers (portions, people) the menu is for; pass amount", action: { type: "menu_covers", planId: menu.planId, covers: 1 }, needs: "amount" });
   if (menu?.type === "menu" && menu.stage === "choose") {
     /* the proposals above */
+  } else if (menu?.type === "menu" && menu.stage === "ready" && menu.dayProblem?.earliest) {
+    // Nothing can arrive on the day asked: the yes moves it to the earliest day that can (said first); then it is ordered.
+    refs.push({ ref: "menu:earliest", label: `move the menu to ${menu.dayProblem.earliest}, the earliest day it can arrive (a yes to that question)`, action: { type: "menu_day", planId: menu.planId, date: menu.dayProblem.earliest }, confirm: true });
+    refs.push({ ref: "menu:day", label: `move the menu to another day (possible: ${menu.days.filter((d) => d.available).map((d) => d.date).join(", ")}); pass date`, action: { type: "menu_day", planId: menu.planId, date: menu.serviceDate ?? "" }, needs: "date" });
   } else if (menu?.type === "menu" && menu.stage === "ready" && menu.totalCents > 0 && !menu.blockers.length) {
     refs.push({ ref: "menu", label: `order the menu (${menu.dishes.map((d) => d.name).join(", ")}), €${(menu.totalCents / 100).toFixed(2)}`, action: { type: "menu_to_sheet", planId: menu.planId }, confirm: true });
+    // An amount of one ingredient in all ("12 litres" of the cream): its amount per cover, from the total the buyer said.
+    if (menu.covers)
+      for (const d of menu.dishes)
+        for (const l of d.lines.filter((x) => (x.status === "ready" || x.status === "decide") && (x.perCover.unit === "ml" || x.perCover.unit === "g")).slice(0, 8))
+          refs.push({ ref: `menu:${l.lineId}:amount`, label: `${l.ingredient} (${d.name}): ${l.need.amount} ${l.need.unit} in all now; pass the total the buyer said, with unit L or kg`, action: { type: "menu_line_per_cover", planId: menu.planId, lineId: l.lineId, dishId: d.dishId, amount: l.perCover.amount }, needs: "amount" });
     if (menu.covers) refs.push({ ref: "menu:covers", label: `change the number of covers (now ${menu.covers}); pass amount`, action: { type: "menu_covers", planId: menu.planId, covers: menu.covers }, needs: "amount" });
     if (menu.days.some((d) => d.available)) refs.push({ ref: "menu:day", label: `move the menu to another day (possible: ${menu.days.filter((d) => d.available).map((d) => d.date).join(", ")}); pass date`, action: { type: "menu_day", planId: menu.planId, date: menu.serviceDate ?? "" }, needs: "date" });
   }
@@ -294,10 +307,23 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
         // A number or a day is taken only when the buyer's own words carry it (code checks; never the model's guess).
         let r = r0;
         if (r0?.needs === "amount") {
-          const said = amount !== undefined && new RegExp(`(?<![\\d.,])${String(amount).replace(".", "[.,]")}(?![\\d])`).test(words.replace(/\s+/g, ""));
+          // In their newest words, or in the words before, when this is the yes to the agent's reading of them.
+          const prevBuyer = [...run.thread.turns].reverse().find((x) => x.role === "buyer" && x.turnId !== run.buyer.turnId);
+          const inWords = (x: string) => amount !== undefined && new RegExp(`(?<![\\d.,])${String(amount).replace(".", "[.,]")}(?![\\d])`).test(x.replace(/\s+/g, ""));
+          const said = inWords(words) || (yesOrNo(words) === "yes" && prevBuyer?.role === "buyer" && !!prevBuyer.text && inWords(prevBuyer.text));
           if (amount === undefined || !said) return { ok: false, refused: "amount_not_in_words", say: "Ask the buyer for the number." };
           const a = r0.action;
+          // "12 litres" is an amount of something, not a number of covers.
+          if (a.type === "menu_covers" && /\d\s*(l\b|litr|liter|kg\b|kilo|g\b|dl\b|ml\b|cartons?|packs?|boxes|tölk|pakk|purk|laatik)/i.test(words)) return { ok: false, refused: "not_covers", say: "Those words are an amount of an ingredient, not covers: say your best reading of which ingredient, as a yes/no question." };
           if (a.type === "menu_covers") r = { ...r0, action: { ...a, covers: Math.round(amount) } };
+          else if (a.type === "menu_line_per_cover") {
+            const card = run.store.cards(run.thread).map((x) => x.card).find((c) => c.type === "menu" && c.planId === a.planId);
+            const line = card?.type === "menu" ? card.dishes.flatMap((d) => d.lines).find((l) => l.lineId === a.lineId) : undefined;
+            const covers = card?.type === "menu" ? card.covers : null;
+            if (!line || !covers) return { ok: false, refused: "not_open", say: "That line is not on the menu now." };
+            const total = unit === "L" || unit === "kg" || unit === undefined ? amount * 1000 : amount;
+            r = { ...r0, action: { ...a, amount: Math.round((total / covers) * 10) / 10 } };
+          }
           else if (a.type === "sheet_packs") {
             const card = run.store.cards(run.thread).map((x) => x.card).find((c) => c.type === "sheet" && c.sheetId === a.sheetId);
             const line = card?.type === "sheet" ? card.lines.find((l) => l.lineId === a.lineId) : undefined;
