@@ -370,7 +370,14 @@ export async function placeSheet(run: TurnRun, sheetId: string, version: number)
   s.placed = order.orderId;
   run.orders.set(order.orderId, order);
   await render(run, s);
-  run.store.card(run.thread, run.turnId, gateCard(order));
+  // A refusal names the rule and the figure, from the gate's own finding (refusal.ts), never "turned down".
+  const g = gateCard(order);
+  if (g.outcome === "refused") {
+    const { worded } = await import("./pipeline");
+    const { refusalOfRule } = await import("./refusal");
+    const what = order.lines.length === 1 ? order.lines[0].name : run.lang === "fi" ? "tilaus" : "this order";
+    run.store.card(run.thread, run.turnId, { ...g, said: worded((l) => refusalOfRule(run, g.rule, what, g.rules?.find((x) => x.rule === g.rule)?.details, l)).said });
+  } else run.store.card(run.thread, run.turnId, g);
   run.store.card(run.thread, run.turnId, orderCard(order));
   run.store.mark(run.thread, run.turnId, order.status === "pending_approval" ? "waiting" : "placed", Date.now() - run.t0);
   run.store.save(run.thread);

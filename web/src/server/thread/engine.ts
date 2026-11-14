@@ -299,7 +299,7 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
   if (!body.action && body.text && body.text.trim().split(/\s+/).length <= 6) {
     const { yesOrNo } = await import("@/server/channels/speech");
     const last = [...thread.turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "");
-    const asked = last?.role === "agent" && /(shall i order it|tilaanko sen|ska jag beställa)/i.test(last.line ?? "");
+    const asked = last?.role === "agent" && /(shall i order|tilaanko|ska jag beställa)/i.test(last.line ?? "");
     const { openMenu } = await import("./menu");
     const m = openMenu(run);
     if (asked && yesOrNo(body.text) === "yes" && m?.stage === "ready" && m.totalCents > 0 && !m.blockers.length) body = { ...body, action: { type: "menu_to_sheet", planId: m.planId }, label: body.text };
@@ -497,6 +497,9 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
     const said = guardWords(guardCard, body.lang ?? "en");
     if (said) store.line(thread, run.turnId, said);
   }
+  // An order the gate refused in this turn: the refusal's own words (the rule, the product, the next step), always.
+  const refusedHere = store.agentTurn(thread, run.turnId)?.cards.find((c) => c.type === "gate" && c.outcome === "refused" && c.said);
+  if (refusedHere?.type === "gate" && refusedHere.said) store.line(thread, run.turnId, refusedHere.said[body.lang ?? "en"]);
   // An order that went straight to a person's OK, with no words from the agent: what, how much and why, in one sentence.
   const sent = store.agentTurn(thread, run.turnId);
   const gateHere = sent?.cards.find((c) => c.type === "gate" && c.outcome === "waiting");
