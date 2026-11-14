@@ -2,7 +2,7 @@ import { DockError } from "@/core/errors";
 import { addDaysIso, isoWeekday, localNow } from "@/core/kitchen";
 import type { LiveOffer, Product } from "@/core/catalog";
 import type { Decision } from "@/core/policy";
-import type { PublicOrder } from "@/core/orders";
+import type { AgentSession, PublicOrder } from "@/core/orders";
 import { cardId, gateCard, orderCard } from "./cards";
 import { record, step, type TurnRun } from "./pipeline";
 import type { AlternativesCard, GatePreview, SheetCard } from "./types";
@@ -30,7 +30,16 @@ type SheetRecord = {
   placed?: string;
   /** The last live offers, by product: prices, stock, days, cut-offs. */
   offers: Record<string, LiveOffer>;
+  /**
+   * The agent the sheet's request belongs to, when it is not the thread's own: a menu's sheet is the kitchen's menu
+   * agent's (its mandate covers food of every kind, where the store's agent may buy only dairy), so every lookup,
+   * preview, quote and the order run under that mandate and the gate judges the menu by it.
+   */
+  session?: AgentSession;
 };
+
+/** The turn as the sheet's own agent: the thread's, or the one the sheet was opened for (a menu's). */
+const on = (run: TurnRun, s: Pick<SheetRecord, "session">): TurnRun => (s.session ? { ...run, session: s.session } : run);
 
 const sheetsOf = (run: TurnRun): Record<string, SheetRecord> => ((run.thread as unknown as { sheets?: Record<string, SheetRecord> }).sheets ??= {});
 
@@ -157,11 +166,12 @@ async function daysFor(run: TurnRun, s: SheetRecord): Promise<SheetCard["days"]>
  * A new sheet for the thread: one request (so the gate knows what was asked), the lines priced live for the day, the
  * gate's preview, and the card. `asked`: the products the buyer first asked for, so a different one is a substitute.
  */
-export async function createSheet(run: TurnRun, input: { lines: SheetLineInput[]; deliveryDate?: string; text: string; category?: string; asked?: string[] }): Promise<SheetCard> {
+export async function createSheet(run: TurnRun, input: { lines: SheetLineInput[]; deliveryDate?: string; text: string; category?: string; asked?: string[]; session?: AgentSession }): Promise<SheetCard> {
   if (!input.lines.length) throw new DockError(400, "sheet_empty", "A sheet needs at least one line.");
+  run = on(run, input);
   const day = input.deliveryDate ?? (await daysFor(run, { lines: [], offers: {}, deliveryDate: addDaysIso(localNow(new Date()).date, 1) } as unknown as SheetRecord)).find((d) => d.available)?.date ?? addDaysIso(localNow(new Date()).date, 1);
   const request = await run.rt.dock.openRequest(run.session, { text: input.text.slice(0, 2000), neededBy: day, ...(input.asked?.length ? { productIds: input.asked } : {}), ...(input.category ? { category: input.category } : {}) });
-  const s: SheetRecord = { sheetId: `sh_${request.requestId.slice(4)}`, requestId: request.requestId, version: 1, turnId: run.turnId, deliveryDate: day, lines: input.lines.map((l) => ({ ...l, lineId: newLineId() })), offers: {} };
+  const s: SheetRecord = { sheetId: `sh_${request.requestId.slice(4)}`, requestId: request.requestId, version: 1, turnId: run.turnId, deliveryDate: day, lines: input.lines.map((l) => ({ ...l, lineId: newLineId() })), offers: {}, ...(input.session ? { session: input.session } : {}) };
   sheetsOf(run)[s.sheetId] = s;
   run.requests.add(s.requestId);
   await price(run, s);
@@ -187,6 +197,7 @@ const line = (s: SheetRecord, lineId: string) => {
 /** One edit, by the kitchen's person: applied by plain code, re-priced where it changed, the gate's preview again. */
 export async function editSheet(run: TurnRun, sheetId: string, version: number | undefined, edit: { kind: "packs"; lineId: string; packs: number } | { kind: "day"; date: string } | { kind: "swap"; lineId: string; productId: string } | { kind: "remove"; lineId: string } | { kind: "add"; productId: string; packs: number }): Promise<SheetCard> {
   const s = own(run, sheetId, version);
+  run = on(run, s);
   const changed: string[] = [];
   let reprice = false;
   switch (edit.kind) {
@@ -244,6 +255,7 @@ export async function editSheet(run: TurnRun, sheetId: string, version: number |
 /** One signed quote of every line at the sheet's day, then the gate: one order. */
 export async function placeSheet(run: TurnRun, sheetId: string, version: number): Promise<PublicOrder> {
   const s = own(run, sheetId, version);
+  run = on(run, s);
   const q = step(run, "quote", "Fixing the price with the wholesaler");
   let quoted;
   try {
@@ -288,6 +300,7 @@ const CHIP_LABEL: Record<string, string> = { price: "Cheapest", same_kind: "Clos
 export async function openAlternatives(run: TurnRun, sheetId: string, lineId: string, chip = "same_kind"): Promise<AlternativesCard> {
   const s = sheetsOf(run)[sheetId];
   if (!s) throw new DockError(404, "sheet_not_found", "That order sheet is not in this conversation.");
+  run = on(run, s);
   const l = line(s, lineId);
   const [current] = await run.rt.catalog.searchProducts({ ids: [l.productId], limit: 1 });
   if (!current) throw new DockError(404, "product_not_found", "That product is not in the assortment.");
@@ -368,6 +381,7 @@ export async function pickAlternative(run: TurnRun, pickerId: string, productId:
   if (!p) throw new DockError(404, "picker_not_found", "That picker is not in this conversation.");
   if (!p.candidates.includes(productId)) throw new DockError(409, "turn_card_stale", "That product is not one of the picker's candidates.", "intake_sequence");
   const s = own(run, p.sheetId);
+  run = on(run, s);
   const l = line(s, p.lineId);
   const [now] = await run.rt.catalog.searchProducts({ ids: [productId], limit: 1 });
   const [was] = await run.rt.catalog.searchProducts({ ids: [l.productId], limit: 1 });

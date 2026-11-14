@@ -794,7 +794,10 @@ export function createPlanService(deps: PlanDeps) {
     return dock.previewDecision(await session(k), p.requestId, [...merged.values()], offers).catch(() => undefined);
   }
 
-  return { plan, planItems, get, edit, quote, order, settled, preview };
+  /** The kitchen's menu agent as Dock sees it (its own mandate): for an order sheet made from a plan (server/thread/menu.ts). */
+  const agentSession = (k: MenuKitchen) => session(k);
+
+  return { plan, planItems, get, edit, quote, order, settled, preview, agentSession };
 }
 
 /** One line of a list, as a person reviewed it (the photo door's reviewed lines). */
