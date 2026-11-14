@@ -34,7 +34,9 @@ export function RulesThen({ orderId }: { orderId: string }) {
 
   if (error) return null;
   if (!r) return null;
-  if (!r.attached || !r.mirrored)
+  // No history kept on this deployment: nothing to show the kitchen (the server's sentence is a note for engineers).
+  if (!r.attached) return null;
+  if (!r.mirrored)
     return (
       <section aria-labelledby="rules-then" className="text-[0.92rem] text-ink-soft">
         <h2 id="rules-then" className="sr-only">

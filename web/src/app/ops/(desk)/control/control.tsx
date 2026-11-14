@@ -24,6 +24,7 @@ export function ControlScreen() {
       <PageHead
         title={CONTROL_TEXT.en.title}
         purpose={CONTROL_TEXT.en.purpose}
+        about="Stop an agent, or a whole organisation, with a reason: its next call over any door is refused, and the suspension is written to the ledger. Nothing is deleted; resume it here at any time."
         right={c && <LiveMark at={whenSeconds(c.at)} error={live.error} />}
       />
       <LoadError message={live.error} />
@@ -165,7 +166,7 @@ function Body({ c, now, refresh }: { c: ControlView; now: number; refresh: () =>
         </Section>
         <p className="mt-4 text-[0.82rem] text-ink-soft">
           {c.mode === "demo"
-            ? "Demo entry: anyone with this server's address can open operations. Set DOCK_OPS_PASSCODE before a public demo."
+            ? "Demo entry: anyone with this server's address can open operations. Set a passcode before a public demo."
             : "Operations on this server needs the passcode."}
         </p>
       </div>

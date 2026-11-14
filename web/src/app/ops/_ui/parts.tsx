@@ -24,6 +24,8 @@ export function Table({ children, className = "", label, inset = false }: { chil
     const heads = Array.from(t.querySelectorAll("thead th")).map((th) => th.textContent?.trim() ?? "");
     t.querySelectorAll("tbody tr").forEach((tr) =>
       Array.from(tr.children).forEach((td, i) => {
+        // A cell that spans columns names itself (data-own-label), so a phone does not label it with the wrong heading.
+        if (td.hasAttribute("data-own-label")) return;
         if (heads[i] && td.getAttribute("data-label") !== heads[i]) td.setAttribute("data-label", heads[i]);
       }),
     );

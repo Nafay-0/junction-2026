@@ -127,23 +127,23 @@ const CENTS_PER_UNIT: Record<string, number> = { milk: 150, cream: 450, plant_dr
 
 const byId = (products: Product[], id: string) => products.find((p) => p.id === id);
 
-function pick(products: Product[], ok: (p: Product) => boolean): Product | undefined {
+export function pick(products: Product[], ok: (p: Product) => boolean): Product | undefined {
   return products.filter(ok).sort((a, b) => a.id.localeCompare(b.id))[0];
 }
 
-function price(p: Product): number {
+export function price(p: Product): number {
   return SEED_STOCK[p.id]?.unitPriceCents ?? Math.round((CENTS_PER_UNIT[p.category] ?? 300) * p.packSize);
 }
 
 /** Delivery days on the given weekdays in the six weeks before today, the most recent `count`. */
-function pastDays(now: Date, weekdays: number[], count: number): string[] {
+export function pastDays(now: Date, weekdays: number[], count: number): string[] {
   const today = localNow(now).date;
   const out: string[] = [];
   for (let d = addDaysIso(today, -42); d < today; d = addDaysIso(d, 1)) if (weekdays.includes(isoWeekday(d))) out.push(d);
   return out.slice(-count);
 }
 
-function series(p: Product | undefined, days: string[], amounts: number[], prefix: string): HistoryEntry[] {
+export function series(p: Product | undefined, days: string[], amounts: number[], prefix: string): HistoryEntry[] {
   if (!p) return [];
   return days.map((d, i) => {
     const packs = Math.max(1, Math.round(amounts[i % amounts.length] / p.packSize));
@@ -166,7 +166,7 @@ function series(p: Product | undefined, days: string[], amounts: number[], prefi
  * A recurring order that creeps up: about `start` base units for the first week, then a whole pack or a tenth more
  * each week over the last four (a steady trend over weeks, not one odd order), so the watch learns it as drift.
  */
-function creeping(p: Product | undefined, days: string[], start: number, prefix: string): HistoryEntry[] {
+export function creeping(p: Product | undefined, days: string[], start: number, prefix: string): HistoryEntry[] {
   if (!p) return [];
   const first = Math.max(1, Math.round(start / p.packSize));
   const step = Math.max(1, Math.round(first * 0.12));
@@ -174,7 +174,7 @@ function creeping(p: Product | undefined, days: string[], start: number, prefix:
   return series(p, days, amounts, prefix);
 }
 
-const sorted = (h: HistoryEntry[]) => h.sort((a, b) => a.placedAt.localeCompare(b.placedAt));
+export const sorted = (h: HistoryEntry[]) => h.sort((a, b) => a.placedAt.localeCompare(b.placedAt));
 
 type Body = { kind: "dimension"; dimension: string; choice: string; family?: string } | { kind: "forbid_allergen"; allergen: string } | { kind: "optimise"; goal: "price" | "co2" | "reliability" };
 

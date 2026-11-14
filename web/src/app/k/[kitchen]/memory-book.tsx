@@ -7,7 +7,8 @@ import { Button, Card, ErrorPlate, Input, Panel, Skeleton, Switch, Tag } from ".
 import { dayL } from "../../_i18n/format";
 import type { Lang } from "../../_i18n/lang";
 import { useFormat, useText } from "../../_i18n/provider";
-import { clock, helsinkiToday } from "../../_ui/plain";
+import { clock, helsinkiToday, say } from "../../_ui/plain";
+import { categoryCodesL } from "./groups";
 import { familyL } from "./family.text";
 import { MEMORY_BOOK_TEXT } from "./memory-book.text";
 import { usePortal, weekdaysText } from "./portal";
@@ -176,7 +177,7 @@ export function MemoryBook({ fallback }: { fallback: ReactNode }) {
             <li key={p.id} className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-lavender-mid bg-paper p-5">
               <div className="min-w-0 flex-1 basis-60">
                 <p className="text-[0.88rem] font-medium text-lavender-deep">{tx.suggested(p.by, when(p.at, lang))}</p>
-                <p className="mt-0.5 text-[1.08rem] font-semibold leading-snug">{p.text}</p>
+                <p className="mt-0.5 text-[1.08rem] font-semibold leading-snug">{say(categoryCodesL(p.text, lang))}</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button kind="primary" busy={busy === `p:${p.id}`} disabled={!!busy} onClick={() => void act(`p:${p.id}`, { action: "proposal", proposalId: p.id, accept: true })}>
@@ -267,7 +268,7 @@ function MemoryRow({ it, now, busy, act }: { it: Item; now: number; busy?: strin
           </div>
         </form>
       ) : (
-        <p className="mt-2.5 text-[1.12rem] font-semibold leading-snug">{it.text}</p>
+        <p className="mt-2.5 text-[1.12rem] font-semibold leading-snug">{say(categoryCodesL(it.text, lang))}</p>
       )}
       <p className="mt-1 text-[0.92rem] leading-snug text-ink-soft">{provenance(it, lang)}</p>
       <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.85rem] text-ink-soft">

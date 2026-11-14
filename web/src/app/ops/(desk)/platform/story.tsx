@@ -5,7 +5,7 @@ import type { PlatformOverview, ServiceCard } from "@/server/aiven/showcase/plat
 import type { AlertState } from "@/server/ops/alerts";
 import type { RecallRouterStats } from "@/server/search/recall-router";
 import type { PartnerGateState } from "@/server/valio/partner-gate";
-import { whenSeconds } from "../../_ui/format";
+import { when, whenSeconds } from "../../_ui/format";
 import { buttonClass } from "../../../_ui/kit";
 import { Details, LiveMark, LoadError, Loading, PageHead, Panel, Section, useOps } from "../../_ui/kit";
 import { PlatformTabs, Status } from "./_parts/parts";
@@ -24,6 +24,7 @@ export function Story() {
       <PageHead
         title={PLATFORM_TEXT.en.title}
         purpose={PLATFORM_TEXT.en.purpose}
+        about="Everything AimoPilot runs on is an Aiven service, each with one job, chosen for a reason. Is each one alive, and what did it do in the last hour? Every number here is read live from the service itself or from Aiven's API."
         right={o && <LiveMark at={whenSeconds(o.at)} error={live.error} />}
       />
       <PlatformTabs />
@@ -33,7 +34,8 @@ export function Story() {
   );
 }
 
-type Overview = PlatformOverview & { alerts?: AlertState; recall?: (RecallRouterStats & { index?: string }) | null; partner?: PartnerGateState };
+type Overview = PlatformOverview & {
+  history?: { backend: string; label: string; display: string; backfill: string; moments: number | null; builtAt: string | null } | null; alerts?: AlertState; recall?: (RecallRouterStats & { index?: string }) | null; partner?: PartnerGateState };
 
 /**
  * The wholesaler's price and availability service: the pace this server keeps (Valio: over 10 calls a second is not
@@ -111,6 +113,18 @@ function Watch({ o }: { o: Overview }) {
         )}
         <RecallProbe />
       </Panel>
+      {o.history && (
+        <Panel className="px-5 py-4">
+          <p className="text-[0.84rem] font-medium text-ink-soft">The time machine&apos;s history</p>
+          <p className="mt-1 text-[0.95rem]">
+            <b>{o.history.label}</b> ({o.history.display}).{" "}
+            {o.history.backfill === "running" ? "Building the past from the ledger now." : o.history.builtAt ? `The past was built from the ledger on ${when(o.history.builtAt)} (${o.history.moments} moments); every change since is mirrored as it happens.` : o.history.backfill === "failed" ? "Building the past from the ledger failed; changes are mirrored as they happen." : "Every change is mirrored as it happens."}{" "}
+            <Link href="/ops/time-machine" className="font-medium text-petrol underline decoration-petrol/30 underline-offset-4">
+              Open the Time machine
+            </Link>
+          </p>
+        </Panel>
+      )}
     </div>
   );
 }

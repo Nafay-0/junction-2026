@@ -62,6 +62,14 @@ const MAX_SOURCES = 12;
  * at once (it only pre-selects, so it needs no question): the least manual correction.
  */
 export const RULE_KINDS = new Set(["allergen", "diet", "goal", "delivery_days"]);
+/**
+ * A habit learned from what the kitchen ORDERED this many times is put to its person once as a standing rule ("You've
+ * asked for lactose-free milk three times. Shall I treat that as a standing rule?"). Never applied by itself: it waits
+ * for a yes (answerConfirmation); a no is remembered and not asked again. Only kinds that narrow what is bought.
+ */
+export const PROPOSE_RULE_AFTER = 3;
+const PROPOSABLE = new Set(["spec", "goal"]);
+const PROPOSED = "proposed as a standing rule";
 
 export type Outcome = {
   action: "stored" | "confirm" | "merged" | "superseded" | "contradicted" | "discarded";
@@ -173,7 +181,10 @@ export function decide(profile: KitchenProfile, candidates: Candidate[], interac
       return discard(cand, "covered: the same words are already a typed item");
     }
     const exact = mem.items.find((m) => live(m) && subjectOf(m) === subject && valueOf(m.fact) === valueOf(fact));
-    if (exact) return outcomes.push(merge(exact, cand, interaction, now, quote));
+    if (exact) {
+      const merged = merge(exact, cand, interaction, now, quote);
+      return outcomes.push(proposeRule(mem, exact, cand, interaction, now) ?? merged);
+    }
     const same = mem.items.find((m) => (m.status === "active" || m.status === "pending_confirmation") && subjectOf(m) === subject) ?? mem.items.find((m) => live(m) && subjectOf(m) === subject);
     // Deliveries on some of the days a person said the kitchen receives agree with what they said.
     if (same && fact.kind === "delivery_days" && same.fact.kind === "delivery_days" && cand.origin === "learned" && same.origin !== "learned") {
@@ -188,6 +199,23 @@ export function decide(profile: KitchenProfile, candidates: Candidate[], interac
   cap(mem);
   project(p, now);
   return { profile: p, outcomes };
+}
+
+/**
+ * After a merge: a habit learned from orders that has now been seen PROPOSE_RULE_AFTER times becomes a one-line
+ * question to the kitchen's person (a rule waiting for a yes, replacing the habit when confirmed). Once per habit.
+ */
+function proposeRule(mem: KitchenMemory, habit: MemoryItem, c: Candidate, interaction: Interaction, now: Date): Outcome | undefined {
+  if (c.origin !== "learned" || habit.strength !== "habit" || habit.status !== "active" || !PROPOSABLE.has(habit.fact.kind)) return undefined;
+  if (habit.confirmations < PROPOSE_RULE_AFTER || habit.history.some((h) => h.change.startsWith(PROPOSED))) return undefined;
+  if (mem.items.some((m) => m.status === "pending_confirmation" && m.replaces === habit.id)) return undefined;
+  const at = iso(now);
+  habit.history.push({ at, change: `${PROPOSED} after ${habit.confirmations} orders`, by: interaction.by });
+  const item = newItem({ ...c, text: habit.text }, habit.fact, interaction, now, { strength: "rule", status: "pending_confirmation", weight: 1, replaces: habit.id, sources: habit.sources.slice(-MAX_SOURCES) });
+  item.history.push({ at, change: `${PROPOSED}: seen in ${habit.confirmations} orders`, by: interaction.by });
+  mem.items.push(item);
+  const what = habit.text.charAt(0).toLowerCase() + habit.text.slice(1);
+  return { action: "confirm", reason: `learned from ${habit.confirmations} orders: put to the person once as a standing rule, never applied alone`, itemId: item.id, text: item.text, question: `You've asked for ${what} ${habit.confirmations} times. Shall I treat that as a standing rule?` };
 }
 
 function create(mem: KitchenMemory, c: Candidate, fact: MemoryFact, interaction: Interaction, now: Date, quote: string | undefined): Outcome {

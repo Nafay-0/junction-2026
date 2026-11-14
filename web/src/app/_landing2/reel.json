@@ -1,0 +1,74 @@
+{
+  "frames": [
+    {
+      "key": "r01-typed",
+      "src": "/landing/reel/r01-typed.webp",
+      "w": 600,
+      "h": 1299,
+      "caption": "The buyer's request typed into the agent's composer on a phone, not yet sent."
+    },
+    {
+      "key": "r02-reading",
+      "src": "/landing/reel/r02-reading.webp",
+      "w": 600,
+      "h": 1299,
+      "caption": "Sent: the buyer's words in the thread and the agent's first step line turning."
+    },
+    {
+      "key": "r03-working",
+      "src": "/landing/reel/r03-working.webp",
+      "w": 600,
+      "h": 1299,
+      "caption": "The agent at work: step lines ticking off as the thread's line draws down."
+    },
+    {
+      "key": "r04-reply",
+      "src": "/landing/reel/r04-reply.webp",
+      "w": 600,
+      "h": 1299,
+      "caption": "The reply: the usual 10 l boxes can't arrive in time, so it would come as one-litre cartons; which one?"
+    },
+    {
+      "key": "r05-steps",
+      "src": "/landing/reel/r05-steps.webp",
+      "w": 600,
+      "h": 1299,
+      "caption": "The same reply with its steps opened: request read, history, the assortment searched, live price for a few, the rest left out and why."
+    },
+    {
+      "key": "r06-options",
+      "src": "/landing/reel/r06-options.webp",
+      "w": 600,
+      "h": 1299,
+      "caption": "The three options in one-litre cartons, each with its fixed total, price per litre and Monday delivery."
+    },
+    {
+      "key": "r07-choice",
+      "src": "/landing/reel/r07-choice.webp",
+      "w": 600,
+      "h": 1299,
+      "caption": "\"the first one\" sent; the agent takes the order to the gate."
+    },
+    {
+      "key": "r08-gate",
+      "src": "/landing/reel/r08-gate.webp",
+      "w": 600,
+      "h": 1299,
+      "caption": "Over the 500 € the agent may spend alone: the dark slab, needs your OK, with OK with Face ID."
+    },
+    {
+      "key": "r09-ok-given",
+      "src": "/landing/reel/r09-ok-given.webp",
+      "w": 600,
+      "h": 1299,
+      "caption": "OK with Face ID tapped and signed with this phone's passkey: the card turns to OK given, OK'd by the kitchen manager."
+    },
+    {
+      "key": "r11-thread-signed",
+      "src": "/landing/reel/r11-thread-signed.webp",
+      "w": 600,
+      "h": 1299,
+      "caption": "Back in the thread: OK'd by the kitchen manager, the order placed at the quoted price for Monday."
+    }
+  ]
+}

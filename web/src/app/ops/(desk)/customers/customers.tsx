@@ -6,10 +6,10 @@ import type { AgentRow } from "@/server/ops/views";
 import { fi, when } from "../../_ui/format";
 import { Button, Empty, LoadError, Loading, PageHead, Section, useOps } from "../../_ui/kit";
 import { Table } from "../../_ui/parts";
-import { CUSTOMERS_TEXT } from "./customers.text";
 import { Check, Eye, Search, Sparkles } from "lucide-react";
 import { Avatar, Tag, buttonClass } from "../../../_ui/kit";
 import { groupOf, proposeCorrection, readMemory, type MemoryItem, type MemoryState } from "../../_ui/memory";
+import { CUSTOMERS_TEXT } from "./customers.text";
 
 const SOURCE: Record<string, string> = { stated: "stated by", confirmed: "confirmed by", learned: "learned from orders" };
 
@@ -31,6 +31,7 @@ export function CustomersScreen({ orgId }: { orgId?: string }) {
       <PageHead
         title={CUSTOMERS_TEXT.en.title}
         purpose={CUSTOMERS_TEXT.en.purpose}
+        about="What do we know about this kitchen, and where did we learn it? Only what the kitchen shares, each item with who stated it or which orders taught it, and when it was last used. Corrections go to the kitchen to confirm."
       />
       <LoadError message={agents.error} />
       {!agents.data ? (

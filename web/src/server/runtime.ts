@@ -2,6 +2,7 @@ import type { Records } from "./records";
 import { findSecondReading } from "./agent/second-reading-store";
 import { randomUUID } from "node:crypto";
 import type { JWK } from "jose";
+import { connection } from "next/server";
 import { InMemoryOutbox } from "@/core/approval";
 import { InMemoryCatalog, MeteredCatalog } from "@/core/catalog";
 import type { InMemoryEventBus } from "@/core/events";
@@ -79,7 +80,28 @@ const g = globalThis as typeof globalThis & { __dockRuntime?: Promise<Runtime> }
 
 export function getRuntime(): Promise<Runtime> {
   g.__dockRuntime ??= buildRuntime();
-  return g.__dockRuntime;
+  const runtime = g.__dockRuntime;
+  // Everything that needs the runtime is request-time. `next build` test-renders every GET route and page; the
+  // runtime is started by instrumentation as each build worker starts, so on a machine with no catalogue file and no
+  // database it could be ready before a route was test-rendered, the route then read `req.url` or the headers inside
+  // the test render, and the build failed ("needs to bail out of prerendering at this point"): a race that broke the
+  // hosted build on 14 Nov. `connection()` says "request-time" first: in a test render it never resolves, so the
+  // route is left for request time; in a request it resolves at once. Outside Next's request handling (server start,
+  // a timer, a script, a unit test) there is nothing to declare, and `connection()` refuses to be called: carry on.
+  return requestTime().then(() => runtime);
+}
+
+const outsideRequest = (err: unknown) => err instanceof Error && /outside a request scope/.test(err.message);
+
+function requestTime(): Promise<void> {
+  try {
+    return connection().catch((err: unknown) => {
+      if (!outsideRequest(err)) throw err; // Next's own control-flow errors must pass through
+    });
+  } catch (err) {
+    if (!outsideRequest(err)) throw err;
+    return Promise.resolve();
+  }
 }
 
 /** For tests and the in-process demo: start over with an empty store. */

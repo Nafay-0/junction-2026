@@ -4,6 +4,9 @@
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
+  // Not during `next build`: every build worker would start the whole app (catalogue, keys, stores), which with
+  // fifteen workers ran the hosted build out of its 4 GB on 14 Nov, and nothing at build time needs the runtime.
+  if (process.env.NEXT_PHASE === "phase-production-build") return;
   const { getRuntime } = await import("./server/runtime");
   const t0 = Date.now();
   getRuntime().then(

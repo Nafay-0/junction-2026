@@ -6,7 +6,7 @@ import type { MirrorStatus } from "@/server/mariadb/mirror";
 import type { Similar } from "@/server/mariadb/vector";
 import type { Described, TimeMachineView } from "@/server/mariadb/service";
 import type { Difference, Verdict } from "@/server/mariadb/replay";
-import { Check, Database, Route } from "lucide-react";
+import { Check, ClipboardList, Database, Route } from "lucide-react";
 import { api } from "../../../_client/api";
 import { Badge, Select, Tag, buttonClass } from "../../../_ui/kit";
 import { ruleTitle } from "../../../_ui/plain";
@@ -18,7 +18,21 @@ import { TIME_MACHINE_TEXT } from "./time-machine.text";
 
 type Reply =
   | { attached: false; env: string; sentence: string }
-  | { attached: true; server: string; status: MirrorStatus; health: { state: string; sentence: string }; vectors: string | null; view?: TimeMachineView; reachable?: false; sentence?: string };
+  | {
+      attached: true;
+      backend: "mariadb" | "postgres" | "memory";
+      label: string;
+      server: string;
+      status: MirrorStatus;
+      health: { state: string; sentence: string };
+      backfill: { state: string; report?: { moments: number; writes: number; at: string; ran: boolean }; error?: string };
+      vectors: string | null;
+      view?: TimeMachineView;
+      reachable?: false;
+      sentence?: string;
+    };
+
+const WHERE = { mariadb: "MariaDB", postgres: "Aiven PostgreSQL", memory: "this server's memory" } as const;
 
 const AREA = {
   mandate: { label: "Mandate", mark: "h-7 w-1 rounded-full bg-petrol" },
@@ -47,20 +61,20 @@ export function TimeMachineScreen() {
       <PageHead
         title={TIME_MACHINE_TEXT.en.title}
         purpose={TIME_MACHINE_TEXT.en.purpose}
+        about={`What changed in between, who changed it, and whether the order would pass today. Every answer is one query on the history${r?.attached ? ` in ${WHERE[r.backend]}` : ""}, shown under the page.`}
         right={r?.attached ? <MirrorMark r={r} /> : undefined}
       />
       <LoadError message={live.error} />
       {!r ? (
-        <Loading label="Asking MariaDB…" />
+        <Loading label="Reading the history…" />
       ) : !r.attached ? (
         <NotAttached env={r.env} sentence={r.sentence} />
       ) : r.reachable === false || !r.view ? (
-        <Empty title="MariaDB did not answer">{r.sentence ?? r.health.sentence}</Empty>
-      ) : r.view.kitchens.length === 0 ? (
-        <Empty title={TIME_MACHINE_TEXT.en.emptyTitle}>{TIME_MACHINE_TEXT.en.empty}</Empty>
+        <Empty title={`${WHERE[r.backend]} did not answer`}>{r.sentence ?? r.health.sentence}</Empty>
       ) : (
         <Machine
           v={r.view}
+          backend={r.backend}
           vectors={r.vectors}
           order={order}
           pick={(o) => {
@@ -84,7 +98,9 @@ function MirrorMark({ r }: { r: Extract<Reply, { attached: true }> }) {
     <span className="inline-flex max-w-[30rem] items-start gap-2 text-right" role="status" title={r.health.sentence}>
       <span aria-hidden className={`mt-1.5 size-2 shrink-0 rounded-full ${ok ? "breathe bg-good" : "border-[1.5px] border-ink-soft"}`} />
       <span>
-        MariaDB at {r.server}. {ok ? `Mirror current${r.status.lastOkAt ? `, written ${whenSeconds(r.status.lastOkAt)}` : ""}.` : r.health.state === "behind" ? "The mirror is behind; ordering is not affected." : "The mirror cannot write just now; ordering is not affected."}
+        {r.label} ({r.server}).{" "}
+        {r.backfill.state === "running" ? "Building the past from the ledger now. " : r.backfill.report ? `The past built from the ledger on ${when(r.backfill.report.at)}. ` : ""}
+        {ok ? `Mirror current${r.status.lastOkAt ? `, written ${whenSeconds(r.status.lastOkAt)}` : ""}.` : r.health.state === "behind" ? "The mirror is behind; ordering is not affected." : "The mirror cannot write just now; ordering is not affected."}
       </span>
     </span>
   );
@@ -97,17 +113,17 @@ function NotAttached({ env, sentence }: { env: string; sentence: string }) {
         <Database size={20} />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="display text-[1.35rem]">No time machine on this deployment</p>
+        <p className="display text-[1.35rem]">The time machine is starting</p>
         <p className="mt-1.5 leading-relaxed">{sentence}</p>
         <p className="mt-3 text-[0.95rem] leading-relaxed text-ink-soft">
-          To see it, run it locally against the pinned MariaDB (one command, from <code className="rounded-xs bg-surface px-1.5 py-0.5 text-[0.88em] text-ink">web/</code>): <code className="rounded-xs bg-surface px-1.5 py-0.5 text-[0.88em] text-ink">pnpm mariadb:reproduce</code>, then start the app with <code className="rounded-xs bg-surface px-1.5 py-0.5 text-[0.88em] text-ink">{env}</code> set to the address it prints. A hosted MariaDB 11.8 or later works the same way.
+          It keeps its history in MariaDB when <code className="rounded-xs bg-surface px-1.5 py-0.5 text-[0.88em] text-ink">{env}</code> is set, in the site&apos;s PostgreSQL when that is on, and in the server&apos;s memory otherwise.
         </p>
       </div>
     </div>
   );
 }
 
-function Machine({ v, vectors, order, pick, pickOrg, setAt }: { v: TimeMachineView; vectors: string | null; order: string; pick: (o: string) => void; pickOrg: (o: string) => void; setAt: (iso: string) => void }) {
+function Machine({ v, backend, vectors, order, pick, pickOrg, setAt }: { v: TimeMachineView; backend: "mariadb" | "postgres" | "memory"; vectors: string | null; order: string; pick: (o: string) => void; pickOrg: (o: string) => void; setAt: (iso: string) => void }) {
   const orders = v.orders.filter((o) => o.orgId === v.orgId);
   const [shown, setShown] = useState(v.at);
   const [prevAt, setPrevAt] = useState(v.at);
@@ -122,8 +138,11 @@ function Machine({ v, vectors, order, pick, pickOrg, setAt }: { v: TimeMachineVi
   }, [shown, v.at, setAt]);
 
   const placed = v.order?.body.createdAt;
-  const start = Math.min(...[...v.moments.map((m) => Date.parse(m.at)), placed ? Date.parse(placed) : Infinity, Date.parse(v.now) - 7 * 86_400_000]) - 3_600_000;
   const end = Date.parse(v.now);
+  // The rail spans the history there is: the first change (or the order) to now, with a little room, at most the
+  // last week when nothing older is kept, so a short history is not squeezed into the last pixels of a week.
+  const first = Math.min(...v.moments.map((m) => Date.parse(m.at)), placed ? Date.parse(placed) : Infinity, Date.parse(v.at));
+  const start = Number.isFinite(first) ? first - Math.max(120_000, (end - first) * 0.08) : end - 7 * 86_400_000;
   const pos = (iso: string) => `${Math.max(0, Math.min(100, ((Date.parse(iso) - start) / (end - start)) * 100))}%`;
   const relation = placed && Math.abs(Date.parse(shown) - Date.parse(placed)) <= 1 ? `the instant before ${shortId(v.order!.orderId)} arrived` : `${Math.max(0, Math.round((end - Date.parse(shown)) / 86_400_000))} days before now`;
 
@@ -147,10 +166,16 @@ function Machine({ v, vectors, order, pick, pickOrg, setAt }: { v: TimeMachineVi
           ))}
         </Select>
         {v.order && (
-          <Link className={buttonClass("secondary", "md")} href={`/ops/trace/${v.order.body.requestId}`}>
-            <Route aria-hidden size={16} />
-            Open its trace
-          </Link>
+          <>
+            <Link className={buttonClass("secondary", "md")} href={`/ops/orders/${v.order.orderId}`}>
+              <ClipboardList aria-hidden size={16} />
+              Its whole timeline
+            </Link>
+            <Link className={buttonClass("secondary", "md")} href={`/ops/trace/${v.order.body.requestId}`}>
+              <Route aria-hidden size={16} />
+              Open its trace
+            </Link>
+          </>
         )}
       </div>
 
@@ -230,11 +255,23 @@ function Machine({ v, vectors, order, pick, pickOrg, setAt }: { v: TimeMachineVi
 
       <Changes v={v} />
 
-      {v.order && <Similar orderId={v.order.orderId} vectors={vectors} />}
+      {v.order && backend === "mariadb" && <Similar orderId={v.order.orderId} vectors={vectors} />}
 
       <Section title="How each answer was read">
         <p className="mb-2 max-w-[78ch] text-[0.95rem] leading-snug text-ink-soft">
-          Each panel above is one statement on MariaDB. The tables are declared <code>WITH SYSTEM VERSIONING</code>: the app only inserts, updates and deletes current rows, and MariaDB keeps every earlier version with the moment it stopped being true. <code>gate_rules</code> is a view over the five of them, and <code>FOR SYSTEM_TIME</code> applied to the view reaches each table under it.
+          {backend === "mariadb" ? (
+            <>
+              Each panel above is one statement on MariaDB. The tables are declared <code>WITH SYSTEM VERSIONING</code>: the app only inserts, updates and deletes current rows, and MariaDB keeps every earlier version with the moment it stopped being true. <code>gate_rules</code> is a view over the five of them, and <code>FOR SYSTEM_TIME</code> applied to the view reaches each table under it.
+            </>
+          ) : backend === "postgres" ? (
+            <>
+              Each panel above is one statement on Aiven PostgreSQL. Every version of a rule carries <code>during</code>, the time range it was in force (<code>tstzrange</code>); an exclusion constraint keeps two versions of one item from overlapping, so at any instant exactly one holds. A change closes the current range and opens the next. &ldquo;As of&rdquo; is <code>during @&gt; t</code>, &ldquo;what changed between&rdquo; is range overlap <code>&amp;&amp;</code>, and the slider&apos;s marks are the ranges&apos; lower bounds. <code>gate_rules</code> is a view over the five tables.
+            </>
+          ) : (
+            <>
+              This server keeps no database for the history, so it keeps the same versions in its memory: built from the ledger when it started, then mirrored as it runs, each with the moment it came into force and the moment it stopped. Each answer below names the filter it applied. With PostgreSQL or MariaDB configured, the same questions are database statements.
+            </>
+          )}
         </p>
         <Table label="Statements run for this page">
           <thead>
@@ -304,14 +341,14 @@ function Verdicts({ v }: { v: TimeMachineView }) {
       )}
       <ul className="mt-3 space-y-1 text-[0.92rem] leading-snug">
         <li>
-          <b>The gate, run again:</b> the same pure function the order went through (<code>evaluatePolicy</code>), given the rules from MariaDB. The order&apos;s own facts stay as they were: its quote, prices, lines, the moment it was placed and the agent&apos;s mandate id and window; only the rules come from the moment chosen.
+          <b>The gate, run again:</b> the same pure function the order went through (<code>evaluatePolicy</code>), given the rules from the history. The order&apos;s own facts stay as they were: its quote, prices, lines, the moment it was placed and the agent&apos;s mandate id and window; only the rules come from the moment chosen.
         </li>
         <li>
-          <b>Against the rules the instant before it arrived</b>, the replay {r.reproduces.same ? "reproduces exactly what the gate decided then" : `differs from what the gate recorded then (${r.reproduces.rules.join(", ")})`}
+          <b>Against the rules the instant before it arrived</b>, the replay {r.reproduces.same ? "reproduces exactly what the gate decided then" : `differs from what the gate recorded then (${r.reproduces.rules.map((x) => titleOf(x).toLowerCase()).join("; ")})`}
           {r.mandateFromOrder
             ? ". The agent presented its mandate with this very order, a moment before the mirror wrote it, so the terms the order carried stand in for that instant"
             : r.termsDisagree.length
-              ? `; the mirrored mandate differs from the one the order carried in ${r.termsDisagree.join(", ")}`
+              ? `; the mirrored mandate differs from the one the order carried in ${r.termsDisagree.map((x) => x.replaceAll("_", " ")).join(", ")}`
               : ", and the mirrored mandate terms match the mandate the order carried"}
           .
         </li>

@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { ShieldCheck } from "lucide-react";
-import { useFormat, useText } from "../../_i18n/provider";
+import { useFormat, useLang, useText } from "../../_i18n/provider";
 import { Chip, buttonClass } from "../../_ui/kit";
 import { ThreadCard } from "../../_ui/thread";
 import { Stepper as KitStepper } from "../../_ui/widgets";
@@ -14,6 +14,7 @@ import type {
   ThreadAction,
 } from "@/server/thread/types";
 import { DEPARTMENT_NAME } from "./catalogue.text";
+import { familyL } from "./family.text";
 import { DOOR_TEXT } from "../door.text";
 import { THREAD_RULES_TEXT } from "./thread-rules.text";
 
@@ -62,6 +63,7 @@ export function RulesCardView({
 // ---------- words ----------
 
 function useWords() {
+  const { lang } = useLang();
   const tx = useText(THREAD_RULES_TEXT);
   const dx = useText(DOOR_TEXT);
   const f = useFormat();
@@ -91,6 +93,7 @@ function useWords() {
     if (field === "requiredAttributes") return claims(v.split(", "));
     if (field === "substitution") return dx.subs[v] ?? v;
     if (field === "groups") return groups(card, v.split(", "));
+    if (field === "autoRenew") return v.split(", ").map((x) => familyL(x, lang).toLowerCase()).join(", ");
     return v;
   };
   return { tx: tx as Tx, dx, f, eur, allergens, claims, groups, value };

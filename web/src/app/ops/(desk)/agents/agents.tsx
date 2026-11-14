@@ -1,7 +1,7 @@
 "use client";
 
 import type { AgentRow } from "@/server/ops/views";
-import { fi, num, when, whenSeconds } from "../../_ui/format";
+import { categoriesInWords, fi, num, when, whenSeconds } from "../../_ui/format";
 import Link from "next/link";
 import { Check, Info } from "lucide-react";
 import { Avatar } from "../../../_ui/kit";
@@ -27,6 +27,7 @@ export function AgentsScreen({ board }: { board?: Board }) {
       <PageHead
         title={AGENTS_TEXT.en.title}
         purpose={AGENTS_TEXT.en.purpose}
+        about="Every agent that has come to this gate: its crash-test licence when it has one, its record here, and what it may do alone right now, which is the kitchen's mandate capped by the licence."
         right={d && <LiveMark at={whenSeconds(d.at)} error={live.error} />}
       />
       <LoadError message={live.error} />
@@ -151,7 +152,7 @@ function AgentCard({ a }: { a: AgentRow }) {
             <li key={i} className="grid grid-cols-[1rem_minmax(0,1fr)] gap-x-2 leading-snug">
               <Check aria-hidden size={14} strokeWidth={2.6} className="mt-[0.2em] text-good" />
               <span>
-              {fi(x.line)}
+              {fi(categoriesInWords(x.line))}
               {x.detail && <span className="block text-[0.84rem] text-ink-soft">{fi(x.detail)}</span>}
               </span>
             </li>

@@ -1,6 +1,6 @@
 import type { RecentOrder } from "@/core/policy";
-import type { Maria } from "./client";
-import { changesFrom, kitchens, listOrders, moments, orderBodyOf, recentOrdersAsOf, rulesAsOf, versionsBetween, type Change, type OrderListItem, type RuleRow, type Shown } from "./history";
+import type { HistoryStore } from "../history/store";
+import { changesFrom, type Change, type OrderListItem, type RuleRow, type Shown } from "./history";
 import type { MirrorStatus } from "./mirror";
 import { differences, judge, mandateRuleValue, reproduces, stateFor, termsDisagree, type Difference, type Verdict } from "./replay";
 import type { OrderBody } from "./rows";
@@ -57,26 +57,26 @@ const describe = (rows: RuleRow[]): Described[] => rows.map((r) => ({ ...describ
 /** The instant before: an order's own effects (its spend, its status) are not part of the rules it was judged by. */
 export const justBefore = (iso: string) => new Date(Date.parse(iso) - 1).toISOString();
 
-export async function timeMachineView(db: Maria, q: Query): Promise<TimeMachineView> {
+export async function timeMachineView(store: HistoryStore, q: Query): Promise<TimeMachineView> {
   const now = (q.now ?? new Date()).toISOString();
   const sql: ShownSql[] = [];
   const show = <T>(label: string, s: Shown<T[]>): Shown<T[]> => {
     sql.push({ label, sql: s.sql, params: s.params, ms: round(s.ms), rows: s.rows.length });
     return s;
   };
-  const [ks, list] = await Promise.all([kitchens(db), listOrders(db)]);
+  const [ks, list] = await Promise.all([store.kitchens(), store.listOrders()]);
   const picked = q.orderId ? list.rows.find((o) => o.orderId === q.orderId) : undefined;
-  const body = q.orderId ? await orderBodyOf(db, q.orderId) : q.requestId ? await bodyByRequest(db, q.requestId) : undefined;
+  const body = q.orderId ? await store.orderBody(q.orderId) : q.requestId ? await bodyByRequest(store, q.requestId) : undefined;
   const orderItem = picked ?? (body ? list.rows.find((o) => o.orderId === body.orderId) : undefined);
   const orgId = body?.orgId ?? q.orgId ?? ks.find((k) => !k.scenario)?.orgId ?? ks.find((k) => k.orgId === "org_demo_aurinko")?.orgId ?? ks[0]?.orgId;
   const at = q.at && !Number.isNaN(Date.parse(q.at)) ? new Date(q.at).toISOString() : body ? justBefore(body.createdAt) : new Date(Date.parse(now) - 7 * 86_400_000).toISOString();
   if (!orgId) return { at, now, kitchens: ks, orders: list.rows, rulesAt: [], rulesNow: [], changes: [], rawChanges: [], moments: [], sql };
 
   const [rulesAt, rulesNow, versions, ticks] = await Promise.all([
-    rulesAsOf(db, orgId, at).then((s) => show("The rules at the chosen moment", s)),
-    rulesAsOf(db, orgId, now).then((s) => show("The rules now", s)),
-    versionsBetween(db, orgId, at < now ? at : now, at < now ? now : at).then((s) => show("Every version in force in between", s)),
-    moments(db, orgId).then((s) => show("Every moment a rule changed (the slider's ticks)", s)),
+    store.rulesAsOf(orgId, at).then((s) => show("The rules at the chosen moment", s)),
+    store.rulesAsOf(orgId, now).then((s) => show("The rules now", s)),
+    store.versionsBetween(orgId, at < now ? at : now, at < now ? now : at).then((s) => show("Every version in force in between", s)),
+    store.moments(orgId).then((s) => show("Every moment a rule changed (the slider's ticks)", s)),
   ]);
   let raw = changesFrom(versions.rows, at < now ? at : now, at < now ? now : at);
   const mandateNow = rulesNow.rows.find((r) => r.area === "mandate");
@@ -85,8 +85,8 @@ export async function timeMachineView(db: Maria, q: Query): Promise<TimeMachineV
   let replay: Replay | undefined;
   if (body) {
     const before = justBefore(body.createdAt);
-    const thenRows = before === at ? rulesAt : await rulesAsOf(db, orgId, before).then((s) => show("The rules the instant before the order", s));
-    const recent = await recentOrdersAsOf(db, orgId, before, body.orderId).then((s) => show("The kitchen's other orders of that day, as they stood (the splitting check)", s));
+    const thenRows = before === at ? rulesAt : await store.rulesAsOf(orgId, before).then((s) => show("The rules the instant before the order", s));
+    const recent = await store.recentOrdersAsOf(orgId, before, body.orderId).then((s) => show("The kitchen's other orders of that day, as they stood (the splitting check)", s));
     const recentOrders: RecentOrder[] = recent.rows;
     // The live mirror writes a moment after the app sees a change, so a mandate first presented with this very order
     // may not be in MariaDB's history at the instant before it. Then the mandate the order carried stands in, and the
@@ -137,9 +137,9 @@ export async function timeMachineView(db: Maria, q: Query): Promise<TimeMachineV
   };
 }
 
-async function bodyByRequest(db: Maria, requestId: string): Promise<OrderBody | undefined> {
-  const r = await db.query("SELECT order_id FROM gate_order WHERE request_id = ? ORDER BY created_at DESC LIMIT 1", [requestId]);
-  return r.rows[0] ? orderBodyOf(db, String(r.rows[0].order_id)) : undefined;
+async function bodyByRequest(store: HistoryStore, requestId: string): Promise<OrderBody | undefined> {
+  const id = await store.latestOrderOfRequest(requestId);
+  return id ? store.orderBody(id) : undefined;
 }
 
 function dedupe(xs: { at: string; what: string; by: string }[]) {
@@ -150,8 +150,8 @@ function dedupe(xs: { at: string; what: string; by: string }[]) {
 const round = (ms: number) => Math.round(ms * 100) / 100;
 
 /** The mirror's state in words: attached and current, behind, or failing. */
-export function mirrorHealth(s: MirrorStatus, now = Date.now()): { state: "current" | "behind" | "failing"; sentence: string } {
-  if (s.lastError) return { state: "failing", sentence: `The mirror could not write to MariaDB (${s.lastError.message}). Ordering is not affected; the history here stops at ${s.lastOkAt ?? "the start"} until it catches up.` };
+export function mirrorHealth(s: MirrorStatus, now = Date.now(), where = "MariaDB"): { state: "current" | "behind" | "failing"; sentence: string } {
+  if (s.lastError) return { state: "failing", sentence: `The mirror could not write to ${where} (${s.lastError.message}). Ordering is not affected; the history here stops at ${s.lastOkAt ?? "the start"} until it catches up.` };
   if (s.pendingSince && now - Date.parse(s.pendingSince) > 5000) return { state: "behind", sentence: `The mirror is behind: changes since ${s.pendingSince} are not written yet. Ordering is not affected.` };
   return { state: "current", sentence: s.lastOkAt ? `Mirror current: everything the gate reads was written at ${s.lastOkAt}.` : "Mirror starting." };
 }

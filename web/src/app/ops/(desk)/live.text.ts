@@ -4,7 +4,7 @@ import { defineText } from "../../_i18n/lang";
 export const LIVE_TEXT = defineText({
   en: {
     title: "Live at the gate",
-    purpose: "Who is at the door right now and what happened to what they asked for. Every agent, whichever door it uses, meets the same mandate check, the same rules and the same ledger.",
+    purpose: "Who is at the door right now, and what happened to what they asked for.",
     emptyTitle: "No agent at the door",
     empty: "Nothing has called in the last 30 minutes. Sign in as a test kitchen (hotel-lumo on /k) and ask its agent for something, or send in an outside agent over MCP: it appears here the moment it connects.",
     requestsEmptyTitle: "No request yet",
@@ -12,7 +12,7 @@ export const LIVE_TEXT = defineText({
   },
   fi: {
     title: "Portilla nyt",
-    purpose: "Kuka on ovella juuri nyt ja mitä sen pyynnölle tapahtui. Jokainen agentti, mitä ovea se käyttääkin, kohtaa saman valtakirjan tarkistuksen, samat säännöt ja saman tapahtumalokin.",
+    purpose: "Kuka on ovella juuri nyt ja mitä heidän pyynnöilleen tapahtui.",
     emptyTitle: "Ovella ei ole agenttia",
     empty: "Kukaan ei ole ottanut yhteyttä 30 minuuttiin. Kirjaudu testikeittiöön (hotel-lumo osoitteessa /k) ja pyydä sen agentilta jotakin, tai lähetä ulkopuolinen agentti MCP:n kautta: se näkyy tässä heti, kun se ottaa yhteyden.",
     requestsEmptyTitle: "Ei vielä pyyntöjä",
@@ -20,7 +20,7 @@ export const LIVE_TEXT = defineText({
   },
   sv: {
     title: "Vid grinden nu",
-    purpose: "Vem som står vid dörren just nu och vad som hände med det de bad om. Varje agent, vilken dörr den än använder, möter samma fullmaktskontroll, samma regler och samma händelselogg.",
+    purpose: "Vem som står vid dörren just nu, och vad som hände med det de bad om.",
     emptyTitle: "Ingen agent vid dörren",
     empty: "Ingen har hört av sig på 30 minuter. Logga in som ett testkök (hotel-lumo på /k) och be dess agent om något, eller skicka in en utomstående agent via MCP: den syns här så fort den ansluter.",
     requestsEmptyTitle: "Inga förfrågningar än",

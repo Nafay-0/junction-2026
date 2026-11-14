@@ -16,6 +16,7 @@
  *
  * Reads web/.env.local if present (for OPENAI_API_KEY), never prints a secret.
  */
+import { MariaStore } from "../src/server/history/maria-store";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -70,12 +71,12 @@ async function main() {
 
     h("Seeding the scenario through the real order flow");
     const t0 = performance.now();
-    const sc = await runScenario(db, { log: out });
+    const sc = await runScenario(new MariaStore(db), { log: out });
     out(`Seeded in ${Math.round(performance.now() - t0)} ms: ${sc.counts.orders} orders, ${sc.counts.decisions} gate decisions, ${sc.counts.refusals} calls refused before an order, ${sc.counts.syncs} mirror transactions (${sc.counts.rows.insert} inserts, ${sc.counts.rows.update} updates, ${sc.counts.rows.touch} quiet updates, ${sc.counts.rows.delete} deletes).`);
     out(`Scenario starts ${when(sc.anchor)} (Helsinki); every row's ROW_START is the scenario's own moment.`);
 
     const now = new Date();
-    const B = await timeMachineView(db, { orderId: sc.orders.B, now });
+    const B = await timeMachineView(new MariaStore(db), { orderId: sc.orders.B, now });
 
     h(`The rules for ${AURINKO.name} the instant before order B (${when(B.at)}) and now`);
     const side = (rows: typeof B.rulesAt) => rows.flatMap((r) => [`  ${r.title}  (since ${when(r.since)}, by ${r.by})`, ...r.lines.map((l) => `      ${l}`)]);
@@ -92,7 +93,7 @@ async function main() {
     h("Would it pass today? The real gate (core/policy.ts evaluatePolicy), run again");
     const verdictLine = (label: string, v: NonNullable<typeof B.replay>["then"]) => `  ${label.padEnd(30)} ${outcomeWord(v.outcome)}`;
     for (const letter of ["A", "B", "D"] as const) {
-      const v = await timeMachineView(db, { orderId: sc.orders[letter], now });
+      const v = await timeMachineView(new MariaStore(db), { orderId: sc.orders[letter], now });
       const r = v.replay!;
       out(`\nOrder ${letter}: ${v.order?.summary} (${eurShort(v.order?.totalCents ?? 0)}), placed ${when(v.order!.body.createdAt)}`);
       out(`  recorded then by the gate     ${v.order?.body.recorded.outcome}  -> replay reproduces it: ${r.reproduces.same ? "yes" : `NO (${r.reproduces.rules.join(", ")})`}; mirror terms match the order's own mandate: ${r.termsDisagree.length ? `NO (${r.termsDisagree.join(", ")})` : "yes"}`);
@@ -105,7 +106,7 @@ async function main() {
     const holdAt = sc.moments.find((m) => m.label.startsWith("Recall drill"))!.at;
     const suspendedAt = sc.moments.find((m) => m.label === "Agent suspended")!.at;
     for (const [label, at] of [["during the recall drill", new Date(Date.parse(holdAt) + 3600_000).toISOString()], ["while the agent was suspended", new Date(Date.parse(suspendedAt) + 1800_000).toISOString()]] as const) {
-      const v = await timeMachineView(db, { orderId: sc.orders.D, at, now });
+      const v = await timeMachineView(new MariaStore(db), { orderId: sc.orders.D, at, now });
       out(`\nOrder D slid to ${when(at)} (${label}): ${outcomeWord(v.replay!.at.outcome)}`);
       for (const d of v.replay!.atVsNow) out(`    differs from now: ${title(d.rule)} [${d.rule}]: ${d.then?.outcome} then, ${d.at?.outcome} now. ${d.then?.reason ?? ""}`);
     }
@@ -134,7 +135,7 @@ async function main() {
     const tReplay: number[] = [];
     for (let i = 0; i < 50; i++) {
       const t1 = performance.now();
-      await timeMachineView(db, { orderId: sc.orders.B, now });
+      await timeMachineView(new MariaStore(db), { orderId: sc.orders.B, now });
       tReplay.push(performance.now() - t1);
     }
     const qr = stats(tReplay);

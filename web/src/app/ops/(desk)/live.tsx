@@ -24,6 +24,7 @@ export function LiveView() {
       <PageHead
         title={LIVE_TEXT.en.title}
         purpose={LIVE_TEXT.en.purpose}
+        about="Who is at the door right now, and what happened to what they asked for. Three doors, one gate: every agent meets the same mandate check, the same rules in plain code and the same ledger."
         right={o && <LiveMark at={whenSeconds(o.at)} error={live.error} />}
       />
       <StartHere />
@@ -42,7 +43,7 @@ function Body({ o, now }: { o: Overview; now: number }) {
       <Section title="At the door now" aside={`Agents seen in the last 30 minutes${c.suspended ? `; ${c.suspended} suspension${c.suspended > 1 ? "s" : ""} in force` : ""}`}>
         {o.atDoor.length === 0 ? (
           <Empty
-            title={LIVE_TEXT.en.emptyTitle}
+            title="No agent at the door"
             action={
               <>
                 <Link className="font-semibold text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol" href="/k/kaari">
@@ -54,7 +55,7 @@ function Body({ o, now }: { o: Overview; now: number }) {
               </>
             }
           >
-            {LIVE_TEXT.en.empty} To send one in, see <Link href="/try">Try it as an outside agent</Link>.
+            Nothing has called in the last 30 minutes. An agent appears here the moment it connects, whether it is a kitchen&apos;s own agent, an outside agent over MCP at <code>/api/mcp</code> (or a consumer assistant through a kitchen&apos;s connector address, which is the same door), or a program over REST. To send one in, see <Link href="/try">Try it as an outside agent</Link>.
           </Empty>
         ) : (
           <Table label="Agents at the door">
@@ -95,7 +96,7 @@ function Body({ o, now }: { o: Overview; now: number }) {
                         </span>
                       </p>
                     ) : a.current ? (
-                      <Link href={`/ops/trace/${a.current.requestId}`} className="text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol">
+                      <Link href={`/ops/trace/${a.current.requestId}`} title={fi(a.current.doing)} className="line-clamp-3 text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol">
                         {fi(a.current.doing)}
                       </Link>
                     ) : (
@@ -307,8 +308,12 @@ function Sessions({ rows, now }: { rows: Overview["sessions"]; now: number }) {
                 <td>
                   <ViaTag via={r.via} short />
                 </td>
-                <td className="max-w-[32ch]">“{fi(r.asked)}”</td>
-                <td className="max-w-[34ch] text-ink-soft">{fi(r.doing)}</td>
+                <td className="max-w-[32ch]">
+                  <span className="line-clamp-3" title={fi(r.asked)}>“{fi(r.asked)}”</span>
+                </td>
+                <td className="max-w-[34ch] text-ink-soft">
+                  <span className="line-clamp-3" title={fi(r.doing)}>{fi(r.doing)}</span>
+                </td>
                 <td className="min-w-[14rem]">
                   <Outcome kind={r.outcome.kind} label={fi(r.outcome.label)} />
                 </td>

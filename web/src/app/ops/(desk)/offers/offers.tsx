@@ -6,7 +6,7 @@ import type { Campaign, OffersView } from "@/server/offers/service";
 import { api } from "../../../_client/api";
 import { verifySigned, type KeySet } from "../../../_client/verify-signed";
 import { Badge } from "../../../_ui/kit";
-import { num, when } from "../../_ui/format";
+import { fi, num, when } from "../../_ui/format";
 import { Button, Empty, LoadError, Loading, Num, PageHead, Panel, Section, useNow, useOps } from "../../_ui/kit";
 import { Table } from "../../_ui/parts";
 import { OFFERS_TEXT } from "./offers.text";
@@ -49,6 +49,7 @@ export function OffersScreen() {
       <PageHead
         title={OFFERS_TEXT.en.title}
         purpose={OFFERS_TEXT.en.purpose}
+        about="Our own agent, offering the buyers' agents what is genuinely worth it: new in the assortment, in season in Finland, or a like-for-like cheaper per litre, more reliable or lower in carbon than what a kitchen buys every week. Plain code picks from data and checks every guardrail; each offer is signed, open and never an order. Kitchens can mute it or turn it off."
         right={v ? <span className="tabular">{num(v.stats.liveCalls)} live price calls this process</span> : undefined}
       />
       <LoadError message={live.error} />
@@ -121,7 +122,7 @@ function Body({ v, now, refresh }: { v: OffersView; now: number; refresh: () => 
                       {isSample(o) && <SamplePill />}
                     </p>
                     <p className="text-ink-soft">
-                      <Badge tone="refused">{RULE[o.rule ?? ""] ?? o.rule}</Badge> {o.reason} <span className="tabular">({when(o.at, new Date(now))})</span>
+                      <Badge tone="refused">{RULE[o.rule ?? ""] ?? fi(o.rule)}</Badge> {fi(o.reason)} <span className="tabular">({when(o.at, new Date(now))})</span>
                     </p>
                   </li>
                 ))}
@@ -159,11 +160,11 @@ function OfferRow({ o, now }: { o: Offer; now: number }) {
   return (
     <tr>
       <td className="tabular whitespace-nowrap">{when(o.at, new Date(now))}</td>
-      <td>{o.kitchenName}</td>
+      <td className="min-w-[9rem]">{o.kitchenName}</td>
       <td>
         <p className="font-semibold">{o.productName}</p>
         <p className="text-[0.86rem] text-ink-soft">{o.reasons.map((r) => REASON[r.kind] ?? r.kind).join(" · ")}</p>
-        <p className="text-[0.86rem]">{o.line}</p>
+        <p className="text-[0.86rem]">{fi(o.line)}</p>
         {o.lineBy === "model" && <p className="text-[0.78rem] text-ink-soft">Line by a model, checked against the figures</p>}
         <Proof offerId={o.offerId} />
       </td>

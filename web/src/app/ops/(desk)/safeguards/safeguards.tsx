@@ -25,6 +25,7 @@ export function SafeguardsView() {
       <PageHead
         title={SAFEGUARDS_TEXT.en.title}
         purpose={SAFEGUARDS_TEXT.en.purpose}
+        about="What an agent may decide alone, what needs a person, and what is refused outright: the rule book exactly as the code runs it, grouped by what each rule protects, with how often it fired and its latest cases."
         right={s && <LiveMark at={whenSeconds(s.at)} error={live.error} />}
       />
       <LoadError message={live.error} />
@@ -104,7 +105,7 @@ function Body({ s, counts }: { s: Safeguards; counts?: Overview["counters"] }) {
 
           <Section title="Refused attempts" aside="What was tried, and the rule that stopped it">
             {s.refusedFeed.length === 0 ? (
-              <Empty title={SAFEGUARDS_TEXT.en.emptyTitle}>{SAFEGUARDS_TEXT.en.empty}</Empty>
+              <Empty title="Nothing refused yet">Ask an agent for more than the weekly budget, or call the API with a changed mandate: the refusal appears here with its rule.</Empty>
             ) : (
               <ol className="max-h-[70vh] divide-y divide-line overflow-y-auto rounded-xl border border-line bg-paper">
                 {s.refusedFeed.map((c) => (
@@ -290,7 +291,7 @@ function ReadTwice({ r }: { r: Safeguards["secondReading"] }) {
     <Section title="Read twice" id="read-twice" aside="Two readers, different makers; plain code compares">
       <div className="rounded-xl border border-line bg-paper p-5">
         {total === 0 ? (
-          <Empty title="No request read twice yet">With DOCK_SECOND_READER_MODEL set, every typed or spoken request is read again by an independent model before any price is fixed.</Empty>
+          <Empty title="No request read twice yet">When the second reader is on, every typed or spoken request is read again by an independent model before any price is fixed.</Empty>
         ) : (
           <>
             <dl className="grid grid-cols-3 gap-x-4 gap-y-3 rounded-lg bg-surface p-4">
