@@ -217,9 +217,11 @@ export function Rail() {
         </span>
         <span className="mx-1 h-5 w-px bg-line-strong" aria-hidden />
         {s && !s.signedIn ? (
-          <span className="flex items-center gap-3 text-[0.86rem]">
-            <span className="text-ink-soft">You are looking, not operating. Staff sign in to act.</span>
-            <Link href={`/ops/enter?next=${encodeURIComponent(path)}`} className="inline-flex min-h-8 items-center rounded-full bg-paper px-3 font-semibold text-petrol ring-1 ring-inset ring-line hover:ring-petrol/40">
+          <span className="flex min-w-0 items-center gap-3 text-[0.86rem]">
+            <span className="truncate text-ink-soft">
+              You are looking, not operating.<span className="hidden 2xl:inline"> Staff sign in to act.</span>
+            </span>
+            <Link href={`/ops/enter?next=${encodeURIComponent(path)}`} className="inline-flex min-h-8 shrink-0 items-center whitespace-nowrap rounded-full bg-paper px-3 font-semibold text-petrol ring-1 ring-inset ring-line hover:ring-petrol/40">
               Staff sign-in
             </Link>
           </span>

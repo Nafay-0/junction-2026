@@ -75,7 +75,9 @@ test("signed in to a public test account: catalogue and one product page with a 
   expect(errors).toEqual([]);
 });
 
-test("operations desk asks for the passcode", async ({ page }) => {
+test("operations desk: anyone may look; staff sign in with the passcode", async ({ page }) => {
+  await page.goto("/ops");
+  await expect(page.locator("text=You are looking, not operating. >> visible=true").first()).toBeVisible({ timeout: 20_000 });
   await page.goto("/ops/enter");
   await expect(page.getByLabel("Passcode")).toBeVisible();
 });

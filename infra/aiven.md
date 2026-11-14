@@ -274,7 +274,7 @@ before|after --url <site> --state <file>` (an agent order, its used quote, the l
 (a visitor's passkey registered before the restart signs off after it, the virtual authenticator carrying
 the same credential).
 
-Also set now: `DOCK_OPS_PASSCODE` (entering `/ops`, which can suspend agents; also the coming approver
+Also set now: `DOCK_OPS_PASSCODE` (acting on `/ops`, which can suspend agents; looking needs none; also the coming approver
 enrolment for the demo kitchens) and `DOCK_CONNECTOR_SECRET` (demo kitchens' connector addresses
 `/api/mcp/c/<token>` stay the same across restarts; the operator bearer for reissue and revoke). Both are in
 the shared `web/.env.local`. Connector revocations, per-connector limits and `/ops` sign-ins are still held in
@@ -311,6 +311,7 @@ Without a mandate or approver session, reachable by anyone:
 | `POST /ops-api/session`, `POST/DELETE /ui-api/connect/{k}` | passcode / operator-secret guesses | 10/min per address |
 | `POST /api/v1/sandboxes/{id}/demo-order` (wall button), `POST /api/v1/approver/demo-order` | live lookups, orders | 12/min per address, 6/min per kitchen; partner cap |
 | `POST /api/v1/join`, `/join/verify` | a visitor kitchen (max 200 alive, 90 min each) | 30/min per address |
+| `GET /ops-api/*` without the staff session (a viewer looking at `/ops`) | nothing (reads; one shared answer per page every 4 s, however many viewers poll) | 2400/min per address (`DOCK_LIMIT_OPS_VIEW`); every other method 403 `staff_only` |
 | `GET /api/v1/events` (SSE) | an open connection | 60 new streams/min per address |
 | `GET /ui-api/wall`, `/ui-api/kitchens/{k}`, `/api/v1/sandboxes`, `/api/v1/approvals`, `/api/v1/ledger`, `/api/health`, discovery documents, pages | nothing (reads) | 900/min per address overall, 300/min for pages |
 

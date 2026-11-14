@@ -44,8 +44,10 @@ const KITCHEN_WRITE_KITCHEN = rule("kitchen-write-kitchen", 120);
 const THREAD = rule("thread", 300); // 60 x 5
 const THREAD_KITCHEN = rule("thread-kitchen", 30); // one kitchen: a turn every 2 s, sustained
 const OPS_ENTER = rule("ops-enter", 10);
-// Viewers of the operations portal (no passcode): its pages poll a few reads every few seconds; a room of 60 on
-// one address, each with a page open, stays within it. Reads are shared answers on the server (ops/handler.ts).
+// Viewers of the operations portal (no passcode): a page polls its read and the session badge; measured on a
+// production build (14 Nov 2026), one viewer with one ops page open for a minute: 31 requests on /ops (19 reads
+// + 12 session), 35 on /ops/agents (the busiest: 23 + 12). A room of 60 on one address stays within it (60 x 35 = 2100). Reads are shared answers on the server
+// (ops/handler.ts), so the room costs one computation per page every 4 s, not 60.
 const OPS_VIEW = rule("ops-view", 2400);
 // Accounts: sign-in, sign-up, sign-out, the mandate, signing devices. Failed sign-ins are limited again per account
 // and per address in server/accounts/service.ts, which holds even with DOCK_RATE_LIMITS=off.
@@ -63,7 +65,7 @@ const VOICE_TOOL = rule("voice-tool", 300);
 export const EDGE_RULES = [
   ANY, PAGE, INTERPRET, CONSOLE_CALL, CONSOLE_CALL_KITCHEN, JOIN, JOIN_VERIFY, DEMO_ORDER, DEMO_ORDER_KITCHEN, DEMO_ORDER_SESSION,
   AGENT_WRITE, EVENTS, ASSISTANT, ASSISTANT_KITCHEN, LIVE_LOOKUP, KITCHEN_WRITE, KITCHEN_WRITE_KITCHEN, THREAD, THREAD_KITCHEN,
-  OPS_ENTER, ACCOUNT, MENU_PLAN, MENU_PLAN_KITCHEN, VOICE_CALL, VOICE_TOOL,
+  OPS_ENTER, OPS_VIEW, ACCOUNT, MENU_PLAN, MENU_PLAN_KITCHEN, VOICE_CALL, VOICE_TOOL,
 ];
 
 /** The approver phone's session cookie (server/approver-session.ts SESSION_COOKIE), as a short key. */
@@ -81,7 +83,8 @@ function refuse(status: number, code: string, message: string, rule: string, hea
 
 /** The rules a request counts against: [rule, key-suffix]. Exported for the edge-cost measurement (scripts/edge-cost.ts). */
 export function rulesFor(method: string, path: string, cookie?: string | null): [RateRule, string?][] {
-  const api = path.startsWith("/api/") || path.startsWith("/ui-api/");
+  // The operations desk's reads are API calls too: a room of viewers polling them must not use up the page budget.
+  const api = path.startsWith("/api/") || path.startsWith("/ui-api/") || path.startsWith("/ops-api/");
   const out: [RateRule, string?][] = [[ANY]];
   if (!api) out.push([PAGE]);
   const post = method === "POST";
