@@ -37,6 +37,8 @@ type ChatRequest = {
   locationDeclined?: boolean;
   /** This visitor's live browser. */
   browserId?: string;
+  /** Which browser they chose: the app's own, or a window of their own Chrome. */
+  browserKind?: string;
 };
 
 const estimateTokens = (messages: ModelMessage[]) => Math.ceil(JSON.stringify(messages).length / 4);
@@ -74,6 +76,7 @@ export async function POST(req: Request) {
   const browserId = validBrowserId(body.browserId) ? body.browserId : undefined;
   const browser = browserId ? browserFor(browserId) : undefined;
   browser?.setTimeZone(timeZone);
+  browser?.preferKind(body.browserKind === "own" ? "own" : "assisted");
   browser?.beginTurn();
 
   const ctx: ToolContext = { meter, model: info, worker, country, today, coords: coords ? { lat: coords.lat, lng: coords.lng, label: coords.label } : undefined, browserId };

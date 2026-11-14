@@ -62,14 +62,17 @@ export type BrowserState = {
   /** The page takes payment. The agent never acts here; the user may pay themselves. */
   paymentPage: boolean;
   /**
-   * Set while the page is open in an ordinary Chrome window on the computer that runs the app,
-   * with nothing attached to it. That is where a step is done that a site will not accept from an
-   * assisted browser (Google's sign-in is the usual one). The live view is paused until the user
-   * comes back; what they did there (a sign-in) is kept.
+   * Which browser the agent works in. "assisted": a Chrome of its own on the computer running the
+   * app, hidden, with sign-ins of its own. "own": a window of the Chrome the user already uses,
+   * signed in to their accounts, so there is nothing to sign in to.
    */
-  outside?: { site: string };
-  /** The app runs on a computer with a screen and Chrome, so such a window can be opened. */
-  canOpenWindow: boolean;
+  kind: "assisted" | "own";
+  /**
+   * Whether the user's own Chrome can be used. "ready": Chrome allows an app to attach.
+   * "setup": the user has to turn that on in Chrome first (chrome://inspect/#remote-debugging).
+   * "unavailable": the app is not running on a computer with the user's Chrome.
+   */
+  own: "ready" | "setup" | "unavailable";
   /** Set with status "error". */
   error?: string;
 };
@@ -87,7 +90,8 @@ export const IDLE_STATE: BrowserState = {
   busy: false,
   activity: "",
   paymentPage: false,
-  canOpenWindow: false,
+  kind: "assisted",
+  own: "unavailable",
 };
 
 export type Box = { x: number; y: number; width: number; height: number };
@@ -152,12 +156,10 @@ export type ControlRequest =
   | { action: "navigate"; url: string }
   | { action: "tab"; tabId: string }
   /**
-   * Open the page in an ordinary Chrome window on the computer running the app, for a step the
-   * site will not accept from an assisted browser. `url` defaults to the page that is open.
+   * Work in the user's own Chrome, or go back to the assisted browser. `reopen` carries the page
+   * that is open over to the other browser (used when a sign-in is why the user is switching).
    */
-  | { action: "window"; url?: string }
-  /** The user is done in that window: close it and bring the live view back. */
-  | { action: "window-done" }
+  | { action: "kind"; kind: "assisted" | "own"; reopen?: boolean }
   /** Close the browser. Sign-ins are kept. */
   | { action: "close" }
   /** Close the browser and wipe every sign-in, cookie and saved form entry. */

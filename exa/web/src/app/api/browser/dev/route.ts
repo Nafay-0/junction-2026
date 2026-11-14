@@ -1,4 +1,4 @@
-import { browserFor, validBrowserId, type ActInput } from "@/lib/browser/session";
+import { browserFor, devUseChromeFolder, validBrowserId, type ActInput } from "@/lib/browser/session";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -12,7 +12,12 @@ export async function POST(req: Request) {
   if (process.env.NODE_ENV === "production") return Response.json({ error: "Not available." }, { status: 404 });
   const id = new URL(req.url).searchParams.get("id");
   if (!validBrowserId(id)) return Response.json({ error: "Missing or invalid browser id." }, { status: 400 });
-  const body = (await req.json().catch(() => ({}))) as { open?: string; act?: ActInput; read?: { scope?: "view" | "page"; find?: string }; review?: ActInput; look?: boolean };
+  const body = (await req.json().catch(() => ({}))) as { open?: string; act?: ActInput; read?: { scope?: "view" | "page"; find?: string }; review?: ActInput; look?: boolean; chromeFolder?: string };
+  // Tests point "the user's own Chrome" at a stand-in, so they never touch the real one.
+  if (body.chromeFolder !== undefined) {
+    devUseChromeFolder(body.chromeFolder);
+    return Response.json(browserFor(id).snapshotState());
+  }
   const session = browserFor(id);
   if (body.open) return Response.json(await session.open(body.open));
   if (body.read) return Response.json(await session.read({ scope: body.read.scope ?? "view", find: body.read.find }));

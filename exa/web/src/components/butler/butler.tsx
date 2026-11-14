@@ -64,12 +64,13 @@ type Coords = Pick<ExactLocation, "lat" | "lng" | "accuracyM" | "label" | "count
  * created once, always reads the latest choice: switching model mid-conversation just works,
  * including when the chat resumes on its own after the user answers a question or shares a location.
  */
-const live: { modelId: string; place: string; timeZone: string; coords?: Coords; locationDeclined: boolean; browserId: string } = {
+const live: { modelId: string; place: string; timeZone: string; coords?: Coords; locationDeclined: boolean; browserId: string; browserKind: string } = {
   modelId: DEFAULT_MODEL_ID,
   place: "",
   timeZone: "Europe/Helsinki",
   locationDeclined: false,
   browserId: "",
+  browserKind: "assisted",
 };
 
 const transport = new DefaultChatTransport<ButlerMessage>({
@@ -82,6 +83,7 @@ const transport = new DefaultChatTransport<ButlerMessage>({
     coords: live.coords,
     locationDeclined: live.locationDeclined,
     browserId: live.browserId || undefined,
+    browserKind: live.browserKind,
   }),
 });
 
@@ -244,6 +246,7 @@ function ChatView({
   const approximatePlace = place || defaultPlace(timeZone);
   const modelLabel = getModel(modelId).label;
   const browserId = useBrowserId();
+  const [browserKind] = useStored("hovi.browser.kind", "assisted");
 
   React.useEffect(() => {
     live.modelId = getModel(modelId).id;
@@ -252,7 +255,8 @@ function ChatView({
     live.coords = location ? { lat: location.lat, lng: location.lng, accuracyM: location.accuracyM, label: location.label, country: location.country } : undefined;
     live.locationDeclined = declined;
     live.browserId = browserId;
-  }, [modelId, approximatePlace, timeZone, location, declined, browserId]);
+    live.browserKind = browserKind;
+  }, [modelId, approximatePlace, timeZone, location, declined, browserId, browserKind]);
 
   const [seed] = React.useState(() => liveMessages.get(conversationId) ?? initialMessages);
   const { messages, sendMessage, status, stop, error, regenerate, addToolOutput, addToolApprovalResponse, clearError } = useChat<ButlerMessage>({

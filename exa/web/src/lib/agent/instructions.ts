@@ -83,13 +83,17 @@ export function buildContext(args: {
   /** True when the user has already said no to sharing their exact location in this browser. */
   locationDeclined?: boolean;
   /** The live browser, when one is open. */
-  browser?: { status: string; url: string; title: string; control: string };
+  browser?: { status: string; url: string; title: string; control: string; kind?: string };
 }): string {
   const open = args.browser?.status === "ready" && args.browser.url;
   const browser = open
     ? ` The live browser is open on "${args.browser!.title.slice(0, 80)}" (${args.browser!.url.slice(0, 200)})${args.browser!.control === "user" ? ", and the user is driving it at the moment" : ""}. Read it with browserRead before acting on it: it may have changed.`
     : "";
-  const now = `Now: ${args.today}, ${args.time}.${browser}`;
+  const own =
+    args.browser?.kind === "own"
+      ? " The live browser is a window of the user's own Chrome, signed in to their accounts. They are usually signed in already, so open the page and look before asking them to sign in. What you see there is private: read and do only what the task needs."
+      : "";
+  const now = `Now: ${args.today}, ${args.time}.${browser}${own}`;
   if (args.coords) {
     const { lat, lng, accuracyM, label } = args.coords;
     return (

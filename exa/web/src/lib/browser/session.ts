@@ -1,12 +1,10 @@
 import "server-only";
 
-import { spawn, type ChildProcess } from "node:child_process";
-import { once } from "node:events";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
-import { chromium, type BrowserContext, type CDPSession, type Locator, type Page } from "playwright-core";
+import { chromium, type Browser, type BrowserContext, type CDPSession, type Locator, type Page } from "playwright-core";
 import { isIdentityHost, isPaymentFrame, isPaymentHost, isSensitiveField, judge, refusesAssistedSignIn, type Step, type Target, type Verdict } from "./guard";
 import {
   IDLE_STATE,
@@ -45,28 +43,93 @@ const IDLE_CLOSE_MS = 20 * 60_000;
 /** How long the agent waits for the user to hand the page back before giving up on a step. */
 const WAIT_FOR_USER_MS = 90_000;
 
-/**
- * The installed Chrome, for opening an ordinary window on this computer: a plain Chrome with
- * nothing attached, where the user does a step that a site will not accept from an assisted
- * browser. Null on a machine without a screen or without Chrome, and when HOVI_BROWSER_WINDOW=0
- * (set that on a hosted server: the window would open where no user can see it).
+/*
+ * The user's own Chrome: the browser they already use, signed in to their accounts.
+ *
+ * Chrome (144 and later) lets an app attach to it once the user has turned that on at
+ * chrome://inspect/#remote-debugging, and asks them to allow each connection. Chrome then writes
+ * where to connect into its profile folder; that file is how we know the setting is on. Nothing is
+ * hidden from sites: Chrome shows that it is being controlled. There is simply nothing to sign in
+ * to, because the user did that themselves, in their own browser, long before.
+ *
+ * Baton opens a window of its own there and works only in it. The user's other windows and tabs
+ * are never read, touched or closed.
+ *
+ * Set HOVI_OWN_CHROME=0 on a hosted server, where "the user's Chrome" is not on that machine.
  */
-const WINDOW_BINARY: string | null = (() => {
-  if (process.env.HOVI_BROWSER_WINDOW === "0") return null;
-  const env = process.env;
-  const candidates =
-    process.platform === "darwin"
-      ? ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", `${env.HOME ?? ""}/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`]
+function chromeFolder(): string | null {
+  if (process.env.HOVI_OWN_CHROME === "0") return null;
+  const folder =
+    registry.chromeFolder ??
+    process.env.HOVI_CHROME_DIR ??
+    (process.platform === "darwin"
+      ? path.join(homedir(), "Library", "Application Support", "Google", "Chrome")
       : process.platform === "win32"
-        ? [`${env.PROGRAMFILES ?? ""}\\Google\\Chrome\\Application\\chrome.exe`, `${env["PROGRAMFILES(X86)"] ?? ""}\\Google\\Chrome\\Application\\chrome.exe`, `${env.LOCALAPPDATA ?? ""}\\Google\\Chrome\\Application\\chrome.exe`]
-        : env.DISPLAY || env.WAYLAND_DISPLAY
-          ? ["/usr/bin/google-chrome", "/usr/bin/google-chrome-stable", "/opt/google/chrome/chrome"]
-          : [];
-  return candidates.find((candidate) => existsSync(candidate)) ?? null;
-})();
+        ? path.join(process.env.LOCALAPPDATA ?? "", "Google", "Chrome", "User Data")
+        : path.join(homedir(), ".config", "google-chrome"));
+  return existsSync(folder) ? folder : null;
+}
 
-/** The idle state with the optional parts spelled out, so closing a browser leaves no stale banner behind. */
-const CLEARED: BrowserState = { ...IDLE_STATE, handover: undefined, approval: undefined, outside: undefined, error: undefined, canOpenWindow: WINDOW_BINARY !== null };
+function ownStatus(): BrowserState["own"] {
+  const folder = chromeFolder();
+  if (!folder) return "unavailable";
+  return existsSync(path.join(folder, "DevToolsActivePort")) ? "ready" : "setup";
+}
+
+/** Where Chrome says an app may connect: the port and path it wrote into its profile folder. */
+function ownEndpoint(): string | null {
+  const folder = chromeFolder();
+  if (!folder) return null;
+  try {
+    const [port, wsPath] = readFileSync(path.join(folder, "DevToolsActivePort"), "utf8").trim().split("\n");
+    return port && wsPath ? `ws://127.0.0.1:${port.trim()}${wsPath.trim()}` : null;
+  } catch {
+    return null;
+  }
+}
+
+const OWN_SETUP = "Your Chrome does not allow an app to connect yet. Open chrome://inspect/#remote-debugging in Chrome and turn on \"Allow remote debugging for this browser instance\".";
+
+type OwnChrome = { browser: Browser; context: BrowserContext; cdp: CDPSession };
+
+/**
+ * One connection to the user's Chrome for the whole server, kept open between tasks so Chrome
+ * asks the user to allow it once, not every time.
+ */
+function ownChrome(): Promise<OwnChrome> {
+  registry.own ??= (async () => {
+    const endpoint = ownEndpoint();
+    if (!endpoint) throw new Error(OWN_SETUP);
+    // Chrome shows "Allow remote debugging?" and waits for the user: give them time to press Allow.
+    const browser = await chromium.connectOverCDP(endpoint, { timeout: 120_000 });
+    const context = browser.contexts()[0];
+    if (!context) {
+      await browser.close().catch(() => {});
+      throw new Error("Chrome connected but has no window to work in. Open a Chrome window and try again.");
+    }
+    const cdp = await browser.newBrowserCDPSession();
+    browser.on("disconnected", () => {
+      registry.own = undefined;
+      for (const session of registry.sessions.values()) session.ownChromeGone();
+    });
+    return { browser, context, cdp };
+  })();
+  registry.own.catch(() => {
+    registry.own = undefined;
+  });
+  return registry.own;
+}
+
+async function targetIdOf(page: Page): Promise<string | null> {
+  try {
+    const session = await page.context().newCDPSession(page);
+    const info = (await session.send("Target.getTargetInfo")) as { targetInfo: { targetId: string } };
+    await session.detach().catch(() => {});
+    return info.targetInfo.targetId;
+  } catch {
+    return null;
+  }
+}
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 const hostOf = (url: string) => {
@@ -216,13 +279,16 @@ export class BrowserSession {
   private starting?: Promise<void>;
   private listeners = new Set<Listener>();
   private lastFrame?: Extract<BrowserEvent, { type: "frame" }>;
-  private state: BrowserState = { ...IDLE_STATE, canOpenWindow: WINDOW_BINARY !== null };
-  /** The ordinary Chrome window, while the user is doing a step there. */
-  private plain?: ChildProcess;
-  /** True while the assisted browser lets go of the profile for that window: not a real close. */
-  private switching = false;
-  private returning?: Promise<void>;
-  private resumeUrl?: string;
+  private state: BrowserState = { ...IDLE_STATE, own: ownStatus() };
+  private kind: BrowserState["kind"] = "assisted";
+  /** In the user's own Chrome: the connection, and the window that is ours. Everything else there is theirs. */
+  private own?: OwnChrome;
+  private windowId?: number;
+  private ownPageListener?: (page: Page) => void;
+  private heartbeat?: ReturnType<typeof setInterval>;
+  private frameTimers: Array<ReturnType<typeof setTimeout>> = [];
+  private lastFrameAt = 0;
+  private snapping = false;
   /** Message boxes the page showed since the model last read it. */
   private dialogs: string[] = [];
   /** Pictures of the page taken for the model, by tool call. Only the last few are kept. */
@@ -245,7 +311,12 @@ export class BrowserSession {
   /* ───────────────────────── Watching ───────────────────────── */
 
   snapshotState(): BrowserState {
-    return { ...this.state, tabs: this.tabs() };
+    return { ...this.state, kind: this.kind, own: ownStatus(), tabs: this.tabs() };
+  }
+
+  /** The idle state with the optional parts spelled out, so closing a browser leaves no stale banner behind. */
+  private cleared(): BrowserState {
+    return { ...IDLE_STATE, handover: undefined, approval: undefined, error: undefined, kind: this.kind, own: ownStatus() };
   }
 
   subscribe(listener: Listener): () => void {
@@ -253,14 +324,10 @@ export class BrowserSession {
     this.lastUsed = Date.now();
     listener({ type: "state", state: this.snapshotState() });
     if (this.lastFrame && this.state.status === "ready") listener(this.lastFrame);
+    this.kick(60);
     return () => {
       this.listeners.delete(listener);
     };
-  }
-
-  /** True while the user is in the ordinary Chrome window. */
-  get outside(): boolean {
-    return Boolean(this.plain);
   }
 
   get watchers(): number {
@@ -268,7 +335,7 @@ export class BrowserSession {
   }
 
   get running(): boolean {
-    return Boolean(this.context) || Boolean(this.plain);
+    return Boolean(this.context);
   }
 
   private emit(event: BrowserEvent) {
@@ -316,30 +383,154 @@ export class BrowserSession {
   private async start() {
     this.patch({ status: "starting", error: undefined });
     try {
-      await makeRoom(this);
-      const userAgent = HEADED ? undefined : await plainUserAgent();
-      const context = await chromium.launchPersistentContext(path.join(PROFILE_ROOT, this.id), {
-        channel: "chrome",
-        headless: !HEADED,
-        viewport: { ...VIEWPORT },
-        userAgent,
-        locale: "en-GB",
-        timezoneId: this.timeZone,
-        acceptDownloads: false,
-        // The agent's own pointer is drawn by the interface, so Chrome's automation banner would only confuse.
-        args: ["--disable-infobars", "--no-default-browser-check", "--no-first-run"],
-      });
-      this.context = context;
-      context.on("page", (page) => this.adopt(page, true));
-      context.on("close", () => this.onClosed());
-      const first = context.pages()[0] ?? (await context.newPage());
-      for (const page of context.pages()) this.adopt(page, page === first);
-      this.patch({ status: "ready" });
+      if (this.kind === "own") await this.startInOwnChrome();
+      else await this.startAssisted();
+      this.patch({ status: "ready", activity: "" });
     } catch (err) {
       this.context = undefined;
       this.page = undefined;
       const message = err instanceof Error ? err.message.split("\n")[0] : "The browser could not be started.";
-      this.patch({ status: "error", error: /executable doesn't exist|chrome.*not found|ENOENT/i.test(message) ? "Google Chrome is not installed on the computer that runs this app." : clip(message, 200) });
+      const error = /executable doesn't exist|chrome.*not found|ENOENT/i.test(message)
+        ? "Google Chrome is not installed on the computer that runs this app."
+        : this.kind === "own" && /timeout|ECONNREFUSED|closed|refused|socket/i.test(message)
+          ? "Chrome did not let the app connect. Check that Chrome is open, that remote debugging is still turned on at chrome://inspect/#remote-debugging, and press Allow when Chrome asks."
+          : clip(message, 260);
+      this.patch({ status: "error", error, activity: "" });
+    }
+  }
+
+  /** A Chrome of the app's own: hidden, with a profile per visitor that keeps their sign-ins. */
+  private async startAssisted() {
+    await makeRoom(this);
+    const userAgent = HEADED ? undefined : await plainUserAgent();
+    const context = await chromium.launchPersistentContext(path.join(PROFILE_ROOT, this.id), {
+      channel: "chrome",
+      headless: !HEADED,
+      viewport: { ...VIEWPORT },
+      userAgent,
+      locale: "en-GB",
+      timezoneId: this.timeZone,
+      acceptDownloads: false,
+      // The agent's own pointer is drawn by the interface, so Chrome's automation banner would only confuse.
+      args: ["--disable-infobars", "--no-default-browser-check", "--no-first-run"],
+    });
+    this.context = context;
+    context.on("page", (page) => this.adopt(page, true));
+    context.on("close", () => this.onClosed());
+    const first = context.pages()[0] ?? (await context.newPage());
+    for (const page of context.pages()) this.adopt(page, page === first);
+  }
+
+  /** A window of our own in the Chrome the user already uses. */
+  private async startInOwnChrome() {
+    if (ownStatus() !== "ready") throw new Error(OWN_SETUP);
+    this.patch({ activity: "Waiting for you to press Allow in Chrome" });
+    const own = await ownChrome();
+    this.patch({ activity: "" });
+    const created: Page[] = [];
+    const collect = (page: Page) => {
+      created.push(page);
+    };
+    own.context.on("page", collect);
+    let page: Page | undefined;
+    try {
+      // In the background: the user is looking at Baton, and the live view shows them the page.
+      const { targetId } = (await own.cdp.send("Target.createTarget", { url: "about:blank", newWindow: true, background: true })) as { targetId: string };
+      const { windowId } = (await own.cdp.send("Browser.getWindowForTarget", { targetId })) as { windowId: number };
+      this.windowId = windowId;
+      for (let i = 0; i < 60 && !page; i++) {
+        for (const candidate of created) if ((await targetIdOf(candidate)) === targetId) page = candidate;
+        if (!page) await delay(100);
+      }
+      await own.cdp.send("Browser.setWindowBounds", { windowId, bounds: { width: VIEWPORT.width + 24, height: VIEWPORT.height + 150 } }).catch(() => {});
+    } finally {
+      own.context.off("page", collect);
+    }
+    if (!page) throw new Error("Chrome did not open a window for the app to work in.");
+    await page.setViewportSize({ ...VIEWPORT });
+    this.own = own;
+    this.context = own.context;
+    this.ownPageListener = (candidate) => void this.adoptIfOurs(candidate);
+    own.context.on("page", this.ownPageListener);
+    // A window behind others stops sending pictures by itself: ask for one now and then.
+    this.heartbeat = setInterval(() => void this.snap(), 2500);
+    this.adopt(page, true);
+  }
+
+  /** In the user's Chrome, only what our own window opens is ours. Their tabs are not adopted. */
+  private async adoptIfOurs(page: Page) {
+    if (this.kind !== "own" || !this.own) return;
+    try {
+      const opener = await page.opener().catch(() => null);
+      let ours = Boolean(opener && this.pages.includes(opener));
+      if (!ours) {
+        const targetId = await targetIdOf(page);
+        if (targetId) {
+          const { windowId } = (await this.own.cdp.send("Browser.getWindowForTarget", { targetId })) as { windowId: number };
+          ours = windowId === this.windowId;
+        }
+      }
+      if (!ours) return;
+      await page.setViewportSize({ ...VIEWPORT }).catch(() => {});
+      this.adopt(page, true);
+    } catch {
+      /* the page closed before we could tell */
+    }
+  }
+
+  /** Close our window in the user's Chrome. The connection stays, so Chrome does not ask again next time. */
+  private async leaveOwnChrome() {
+    clearInterval(this.heartbeat);
+    this.heartbeat = undefined;
+    for (const timer of this.frameTimers) clearTimeout(timer);
+    this.frameTimers = [];
+    if (this.own && this.ownPageListener) this.own.context.off("page", this.ownPageListener);
+    this.ownPageListener = undefined;
+    const pages = [...this.pages];
+    this.pages = [];
+    this.page = undefined;
+    for (const page of pages) await page.close().catch(() => {});
+    this.own = undefined;
+    this.windowId = undefined;
+    this.context = undefined;
+  }
+
+  /** The user quit Chrome, or turned remote debugging off. */
+  ownChromeGone() {
+    if (this.kind !== "own" || !this.context) return;
+    clearInterval(this.heartbeat);
+    this.heartbeat = undefined;
+    this.own = undefined;
+    this.windowId = undefined;
+    this.onClosed();
+  }
+
+  /**
+   * In the user's own Chrome the window can sit behind others, where Chrome stops sending pictures
+   * of it. After anything that may have changed the page, take one ourselves.
+   */
+  private kick(...delays: number[]) {
+    if (this.kind !== "own" || !this.context) return;
+    for (const ms of delays.length ? delays : [150, 700, 1800]) this.frameTimers.push(setTimeout(() => void this.snap(), ms));
+    if (this.frameTimers.length > 40) this.frameTimers.splice(0, this.frameTimers.length - 40);
+  }
+
+  private async snap() {
+    const page = this.page;
+    if (this.kind !== "own" || !page || page.isClosed() || this.listeners.size === 0 || this.snapping) return;
+    if (Date.now() - this.lastFrameAt < 250) return;
+    this.snapping = true;
+    try {
+      const shot = await page.screenshot({ type: "jpeg", quality: 70, scale: "css", caret: "initial", timeout: 4000 });
+      if (page === this.page) {
+        this.lastFrameAt = Date.now();
+        this.lastFrame = { type: "frame", data: shot.toString("base64"), width: VIEWPORT.width, height: VIEWPORT.height };
+        this.emit(this.lastFrame);
+      }
+    } catch {
+      /* the page is navigating: the next one will do */
+    } finally {
+      this.snapping = false;
     }
   }
 
@@ -353,6 +544,11 @@ export class BrowserSession {
         this.page = undefined;
         const next = this.pages.at(-1);
         if (next) void this.activate(next);
+      }
+      // In the user's Chrome, closing our window by hand is closing the browser as far as the app goes.
+      if (this.kind === "own" && this.context && this.pages.length === 0) {
+        void this.leaveOwnChrome().then(() => this.onClosed());
+        return;
       }
       this.patch({});
     });
@@ -383,7 +579,7 @@ export class BrowserSession {
     else this.patch({});
   }
 
-  private async activate(page: Page) {
+  private async activate(page: Page, raise = false) {
     const previous = this.page;
     if (previous === page) return;
     this.page = page;
@@ -393,12 +589,15 @@ export class BrowserSession {
       /* already stopped */
     }
     try {
-      await page.bringToFront();
+      // In the user's own Chrome, bringing a tab forward would pull that window over the app they
+      // are looking at. Only do it when they picked the tab themselves.
+      if (this.kind !== "own" || raise) await page.bringToFront();
       await page.screencast.start({
         size: { ...VIEWPORT },
         quality: 72,
         onFrame: (frame) => {
           if (page !== this.page) return;
+          this.lastFrameAt = Date.now();
           this.lastFrame = { type: "frame", data: frame.data.toString("base64"), width: frame.viewportWidth, height: frame.viewportHeight };
           this.emit(this.lastFrame);
         },
@@ -407,6 +606,7 @@ export class BrowserSession {
       /* the page closed while we were switching to it */
     }
     await this.refresh(page);
+    this.kick();
   }
 
   /** Bring the address, title and history buttons up to date. */
@@ -437,10 +637,10 @@ export class BrowserSession {
       /* not worth failing over */
     }
     this.patch({ url: url === "about:blank" ? "" : url, title: this.titles.get(page) ?? "", canGoBack, canGoForward, paymentPage: await this.looksLikePayment(page) });
+    this.kick(200, 900);
   }
 
   private onClosed() {
-    if (this.switching) return;
     this.context = undefined;
     this.page = undefined;
     this.pages = [];
@@ -449,88 +649,18 @@ export class BrowserSession {
     this.pictures.clear();
     this.approvals.clear();
     this.modifiers.clear();
-    this.patch({ ...CLEARED, status: "closed" });
-  }
-
-  /* ───────────────────────── An ordinary Chrome window, for what an assisted browser may not do ───────────────────────── */
-
-  /**
-   * Move the page to an ordinary Chrome window on this computer. The assisted browser closes
-   * first (one Chrome per profile), a plain Chrome opens on the same profile with nothing
-   * attached to it, and the user does the step there: typically signing in to Google, which
-   * refuses sign-ins from a browser that is being driven. What they type goes to that Chrome
-   * directly; it never passes through this app.
-   */
-  private async openOutside(rawUrl?: string) {
-    if (!WINDOW_BINARY || this.plain) return;
-    const current = this.page && !this.page.isClosed() ? this.page.url() : "";
-    const url = rawUrl?.trim() ? toAddress(rawUrl) : /^https?:/.test(current) ? current : "about:blank";
-    this.resumeUrl = /^https?:/.test(current) ? current : undefined;
-    this.switching = true;
-    try {
-      await this.context?.close();
-    } catch {
-      /* already gone */
-    }
-    this.context = undefined;
-    this.page = undefined;
-    this.pages = [];
-    const child = spawn(WINDOW_BINARY, [`--user-data-dir=${path.join(PROFILE_ROOT, this.id)}`, "--use-mock-keychain", "--no-first-run", "--no-default-browser-check", "--new-window", url], {
-      stdio: "ignore",
-    });
-    this.plain = child;
-    const back = () => {
-      if (this.plain === child) void this.comeBack();
-    };
-    child.once("exit", back);
-    child.once("error", back);
-    this.patch({ status: "ready", control: "user", outside: { site: hostOf(url) || "the page" }, busy: false, activity: "", loading: false, approval: undefined });
-  }
-
-  /** The user is done in the ordinary window (or closed it): quit it so it saves, and bring the assisted browser back. */
-  private async closeOutside() {
-    const child = this.plain;
-    if (child && child.exitCode === null && child.signalCode === null) {
-      child.kill("SIGTERM");
-      await Promise.race([once(child, "exit"), delay(6000)]);
-      if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
-    }
-    await this.comeBack();
-  }
-
-  private comeBack(): Promise<void> {
-    this.returning ??= (async () => {
-      this.plain = undefined;
-      this.switching = false;
-      await delay(250); // Chrome has just let go of the profile
-      this.patch({ outside: undefined, status: "starting" });
-      try {
-        const page = await this.ensureStarted();
-        if (this.resumeUrl) await page.goto(this.resumeUrl, { waitUntil: "domcontentloaded", timeout: 25_000 }).catch(() => {});
-        await this.refresh(page);
-      } catch {
-        /* the error state says why */
-      }
-    })().finally(() => {
-      this.returning = undefined;
-    });
-    return this.returning;
+    this.patch({ ...this.cleared(), status: "closed" });
   }
 
   async close() {
-    if (this.plain) {
-      const child = this.plain;
-      this.plain = undefined;
-      this.switching = false;
-      child.removeAllListeners("exit");
-      child.kill("SIGTERM");
-      await Promise.race([once(child, "exit"), delay(4000)]).catch(() => {});
-      this.patch({ ...CLEARED, status: "closed" });
+    if (this.kind === "own") {
+      await this.leaveOwnChrome();
+      this.onClosed();
       return;
     }
     const context = this.context;
     if (!context) {
-      this.patch({ ...CLEARED, status: "closed" });
+      this.patch({ ...this.cleared(), status: "closed" });
       return;
     }
     try {
@@ -540,11 +670,42 @@ export class BrowserSession {
     }
   }
 
-  /** Close the browser and wipe every sign-in, cookie and saved form entry. */
+  /** Close the browser and wipe every sign-in, cookie and saved form entry of the assisted browser. */
   async forget() {
     await this.close();
-    await rm(path.join(PROFILE_ROOT, this.id), { recursive: true, force: true }).catch(() => {});
-    this.patch({ ...CLEARED });
+    // The user's own Chrome is theirs: nothing of it is ever wiped from here.
+    if (this.kind === "assisted") await rm(path.join(PROFILE_ROOT, this.id), { recursive: true, force: true }).catch(() => {});
+    this.patch({ ...this.cleared() });
+  }
+
+  /** What the interface last chose, applied when no browser is open. A running browser is not swapped behind the agent's back. */
+  preferKind(kind: BrowserState["kind"]) {
+    if (kind === this.kind || this.running || this.starting) return;
+    if (kind === "own" && ownStatus() === "unavailable") return;
+    this.kind = kind;
+    this.patch({});
+  }
+
+  /** Move to the other browser. With `reopen`, the page that is open comes along, and so does a hand-over in progress. */
+  private async switchKind(kind: BrowserState["kind"], reopen: boolean) {
+    if (kind === this.kind || (kind === "own" && ownStatus() === "unavailable")) {
+      this.patch({});
+      return;
+    }
+    const url = this.page && !this.page.isClosed() ? this.page.url() : "";
+    const carried = { control: this.state.control, handover: this.state.handover };
+    if (this.running) await this.close();
+    this.kind = kind;
+    this.patch({ ...this.cleared(), ...(reopen ? carried : {}) });
+    if (!reopen || !/^https?:/.test(url)) return;
+    try {
+      const page = await this.ensureStarted();
+      this.patch(carried);
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 25_000 }).catch(() => {});
+      await this.refresh(page);
+    } catch {
+      /* the error state says why */
+    }
   }
 
   /* ───────────────────────── The user's side ───────────────────────── */
@@ -566,16 +727,11 @@ export class BrowserSession {
         this.patch({ control: "user" });
         break;
       case "release":
-        // Handing back from the ordinary window: close it first, so the agent has its browser again.
-        if (this.plain || this.returning) await this.closeOutside();
         this.modifiers.clear();
         this.patch({ control: "agent", handover: undefined });
         break;
-      case "window":
-        await this.openOutside(request.url);
-        break;
-      case "window-done":
-        await this.closeOutside();
+      case "kind":
+        await this.switchKind(request.kind === "own" ? "own" : "assisted", request.reopen === true);
         break;
       case "close":
         await this.close();
@@ -584,9 +740,8 @@ export class BrowserSession {
         await this.forget();
         break;
       case "tab": {
-        if (this.plain) break;
         const page = this.pages.find((p) => this.pageIds.get(p) === request.tabId);
-        if (page) await this.activate(page);
+        if (page) await this.activate(page, true);
         break;
       }
       case "back":
@@ -594,7 +749,7 @@ export class BrowserSession {
       case "reload":
       case "navigate": {
         // The address bar and its buttons are the user's: they work only while the user is driving.
-        if (this.state.control !== "user" || this.plain) break;
+        if (this.state.control !== "user") break;
         const page = await this.ensureStarted();
         try {
           if (request.action === "back") await page.goBack({ waitUntil: "domcontentloaded", timeout: 15_000 });
@@ -637,6 +792,7 @@ export class BrowserSession {
           /* a key Chrome does not know, or the page went away: skip it */
         }
       }
+      this.kick(90, 450, 1200);
     });
     return true;
   }
@@ -682,10 +838,12 @@ export class BrowserSession {
   private announce(action: Omit<AgentAction, "id">) {
     this.emit({ type: "action", action: { ...action, id: ++this.actionId } });
     this.patch({ busy: true, activity: action.label });
+    this.kick(action.leadMs + 250, action.leadMs + 900);
   }
 
   private done() {
     this.patch({ busy: false, activity: "" });
+    this.kick();
   }
 
   private async locate(page: Page, ref: string | undefined): Promise<Locator | null> {
@@ -781,8 +939,8 @@ export class BrowserSession {
       }
       if (isIdentityHost(page.url())) {
         text += `\n\nThis is a sign-in page. Signing in is the user's, start to finish: do not click or type here. Call requestUserAction with kind "login".`;
-        if (refusesAssistedSignIn(page.url()) && this.state.canOpenWindow) {
-          text += ` This site only accepts sign-ins from an ordinary browser, so tell the user in your reason to press "Use a normal Chrome window" in the live browser and sign in there.`;
+        if (this.kind === "assisted" && refusesAssistedSignIn(page.url()) && ownStatus() !== "unavailable") {
+          text += ` This site does not accept sign-ins typed into this browser. In your reason, tell the user to press "Use my own Chrome" in the live browser: the task then carries on in their own Chrome, where they are already signed in.`;
         }
       }
       if (this.state.paymentPage) {
@@ -1150,12 +1308,27 @@ function toAddress(input: string): string {
 
 /* ───────────────────────── All browsers on this server ───────────────────────── */
 
-type Registry = { sessions: Map<string, BrowserSession>; sweeper?: ReturnType<typeof setInterval>; userAgent?: Promise<string | undefined> };
+type Registry = {
+  sessions: Map<string, BrowserSession>;
+  sweeper?: ReturnType<typeof setInterval>;
+  userAgent?: Promise<string | undefined>;
+  /** The connection to the user's own Chrome, shared by every session on this server. */
+  own?: Promise<OwnChrome>;
+  /** Development only: use this folder as "the user's Chrome", so tests never touch the real one. */
+  chromeFolder?: string;
+};
 
 // On globalThis so the chat route and the browser routes share one set of browsers, and so a
 // code reload in development does not orphan a running Chrome.
 const store = globalThis as unknown as { __hoviBrowsers?: Registry };
 const registry: Registry = (store.__hoviBrowsers ??= { sessions: new Map() });
+
+/** Development only: point "the user's own Chrome" at a stand-in, or back at the real one. */
+export function devUseChromeFolder(folder: string | undefined) {
+  registry.chromeFolder = folder || undefined;
+  if (registry.own) void registry.own.then((own) => own.browser.close()).catch(() => {});
+  registry.own = undefined;
+}
 
 export const validBrowserId = (id: unknown): id is string => typeof id === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(id);
 
@@ -1174,7 +1347,7 @@ function sweep() {
   const timer = setInterval(() => {
     for (const [id, session] of registry.sessions) {
       const idle = Date.now() - session.lastUsed > IDLE_CLOSE_MS;
-      if (idle && session.watchers === 0 && !session.outside) {
+      if (idle && session.watchers === 0) {
         if (session.running) void session.close();
         registry.sessions.delete(id);
       }
