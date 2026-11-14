@@ -49,6 +49,11 @@ export async function qualifiersOf(catalog: Search, family: string, item: string
       if (inFamily.length || v === w || v.length < 3) continue;
       inFamily = await catalog.searchProducts({ category: family, text: v, limit: 2000 });
     }
+    // A Finnish or Swedish compound, inflected ("ruisriisipiirakoita"), carries a long word of the name ("riisipiirakka").
+    if (!inFamily.length && w.length >= 10) {
+      const all = await catalog.searchProducts({ category: family, limit: 2000 });
+      inFamily = all.filter((p) => `${p.name} ${Object.values(p.names ?? {}).join(" ")}`.toLowerCase().split(/[^\p{L}]+/u).some((x) => x.length >= 8 && w.includes(x.slice(0, 6))));
+    }
     // A country said as a word ("Finnish lollo rosso") is carried by the products of that origin, whether the name
     // says it ("LOLLOROSSO FI", "SUOMI") or only the data does.
     const country = COUNTRY.find((c) => c.said.test(w));
