@@ -543,8 +543,12 @@ const IDEAS = new Map<string, { slug: string; draft: import("./draft").MenuDraft
 export async function menuIdeas(slug: KitchenRef, words: string, by: string, lang: Lang = "en", opts: { have?: string; count?: number } = {}): Promise<{ ideasId: string; ideas: MenuIdea[]; ms: number; say: string; ask: string }> {
   const { service, kitchen } = await kit(slug);
   const have = saidHave(`${words}. ${opts.have ? `We have ${opts.have}` : ""}`).map((x) => x.item);
-  const n = Math.min(4, Math.max(2, opts.count ?? 4));
-  const text = `${words}\n\nSuggest ${n} different dishes that fit this, each a separate dish (not a menu of courses), for a professional kitchen. Prefer dishes made from what the kitchen's product groups cover${have.length ? ` and that use what it already has: ${have.join(", ")}` : ""}. In assumptions, give one short reason per dish, in the same order, starting with the dish name.`;
+  const n = Math.min(4, Math.max(2, opts.count ?? 3));
+  const { kitchenGroups } = await import("./coverage");
+  const { codeOfSlug } = await import("./service");
+  const groups = kitchenGroups(kitchen.mandate.allowedCategories, codeOfSlug);
+  // The kitchen's product groups go into the request, so the ideas start from what it can buy; plain code checks after.
+  const text = `${words}\n\nSuggest ${n} different dishes that fit this, each a separate dish (not a menu of courses), for a professional kitchen. This kitchen can buy only from these product groups: ${groups.join("; ")}. Suggest first dishes made entirely from those groups${have.length ? `, using what it already has: ${have.join(", ")}` : ""}. In assumptions, give one short reason per dish, in the same order, starting with the dish name.`;
   const r = await service.ideaCheck(kitchen, text.slice(0, 3900));
   const ideasId = `ideas_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   IDEAS.set(ideasId, { slug: slugOf(slug), draft: r.draft, words, have });
