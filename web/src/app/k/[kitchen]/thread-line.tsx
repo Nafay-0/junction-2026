@@ -51,7 +51,8 @@ export function Rich({ text }: { text: string }) {
             {p.slice(2, -2)}
           </span>
         ) : (
-          <Fragment key={i}>{p}</Fragment>
+          // An unmarked amount never wraps mid-number ("1 010,00 €").
+          <Fragment key={i}>{p.replace(/(\d) (?=\d{3}\b)/g, "$1\u00a0").replace(/(\d) (€|%|L|l|kg)(?![\p{L}])/gu, "$1\u00a0$2")}</Fragment>
         ),
       )}
     </>
@@ -357,7 +358,21 @@ function orderOf(thread: Thread, orderId?: string): OrderCard | undefined {
   return found;
 }
 
+/** A signer named by role on the test kitchens ("Kitchen manager"), in the buyer's language; a person's name as it is. */
+function roleL(name: string, lang: "en" | "fi" | "sv"): string {
+  const ROLES: Record<string, Record<"fi" | "sv", string>> = {
+    "kitchen manager": { fi: "keittiöpäällikkö", sv: "köksansvarig" },
+    "head chef": { fi: "keittiömestari", sv: "kökschef" },
+    owner: { fi: "omistaja", sv: "ägare" },
+    "food service manager": { fi: "ruokapalvelupäällikkö", sv: "måltidschef" },
+    "purchasing manager": { fi: "hankintapäällikkö", sv: "inköpschef" },
+  };
+  const r = ROLES[name.trim().toLowerCase()];
+  return lang === "en" || !r ? name : r[lang];
+}
+
 function SignOffSlab({ card, thread, tap, total, what }: { card: GateCardT; thread: Thread; tap: Tap; total?: number; what?: string }) {
+  const { account } = usePortal();
   const tx = useText(THREAD_LINE_TEXT);
   const f = useThreadFormat();
   const w = useText(THREAD_WORDS);
@@ -378,6 +393,9 @@ function SignOffSlab({ card, thread, tap, total, what }: { card: GateCardT; thre
         <p className="text-[0.86rem] leading-snug text-paper/55">
           {[order?.deliveryDate ? f.day(order.deliveryDate).replace(/\.$/, "") : "", why].filter(Boolean).join(". ")}
         </p>
+        {s.canSignHere && s.phase !== "signed" && account?.shared && card.approver && (
+          <p className="mt-3 text-[0.8rem] leading-snug text-paper/65">{tx.testSigner(roleL(card.approver.name, f.lang))}</p>
+        )}
         {s.canSignHere && s.phase !== "signed" ? (
           <button type="button" disabled={s.busy} onClick={() => void s.sign()} className="mt-4 flex min-h-13 w-full items-center justify-center gap-2.5 rounded-full bg-lime text-[1rem] font-semibold text-ink transition-transform active:scale-[0.98] disabled:opacity-70">
             <ScanFace aria-hidden size={21} />
@@ -388,7 +406,7 @@ function SignOffSlab({ card, thread, tap, total, what }: { card: GateCardT; thre
             <Check aria-hidden size={18} strokeWidth={2.6} /> {tx.okDone(clock(new Date()))}
           </p>
         ) : (
-          <p className="mt-4 text-[0.9rem] text-paper/75">{card.approver ? tx.waitsFor(card.approver.name) : s.where}</p>
+          <p className="mt-4 text-[0.9rem] text-paper/75">{card.approver ? tx.waitsFor(roleL(card.approver.name, f.lang)) : s.where}</p>
         )}
         <div className="mt-2 flex flex-wrap gap-x-4">
           {s.offerPhone && s.phase !== "signed" && (
@@ -423,11 +441,11 @@ function SignedSlab({ card, thread }: { card: GateCardT; thread: Thread }) {
   return (
     <section aria-label={tx.okd} data-slab="signed" className="tl-in mt-4 overflow-hidden rounded-[1.4rem] bg-safety-ink text-paper">
       <div className="p-4">
-        <p className="text-[0.78rem] font-medium tracking-wide text-paper/55">{tx.needsOk}</p>
+        <p className="text-[0.78rem] font-medium tracking-wide text-paper/55">{tx.okd}</p>
         {order && <p className="display mt-1.5 text-[2.1rem] leading-none tabular">{money(order.totalCents)}</p>}
         {order && <p className="mt-2 text-[0.92rem] leading-snug text-paper/85">{order.lines.length > 3 ? tx.many(order.lines.length, order.lines.slice(0, 2).map((l) => l.name).join(", ")) : order.lines.map((l) => `${f.num(l.quantity)} × ${l.name}`).join(", ")}</p>}
         <p className="mt-4 flex min-h-12 items-center justify-center gap-2 rounded-full bg-paper/10 text-[0.95rem] font-semibold text-lime">
-          <Check aria-hidden size={18} strokeWidth={2.6} /> {card.approver ? tx.okBy(card.approver.name) : tx.okDone("")}
+          <Check aria-hidden size={18} strokeWidth={2.6} /> {card.approver ? tx.okBy(roleL(card.approver.name, f.lang)) : tx.okDone("")}
         </p>
       </div>
     </section>
@@ -533,7 +551,7 @@ function thinking(turn: AgentTurn, thread: Thread, tx: Tx, w: (typeof THREAD_WOR
 
 function fallbackLine(turn: AgentTurn, thread: Thread, tx: Tx, f: ReturnType<typeof useFormat>): string {
   for (const c of [...turn.cards].reverse()) {
-    if (c.type === "gate" && c.outcome === "waiting") return tx.fallback.waiting(c.approver?.name ?? "");
+    if (c.type === "gate" && c.outcome === "waiting") return tx.fallback.waiting(roleL(c.approver?.name ?? "", f.lang));
     if (c.type === "order" && c.status === "committed") return tx.fallback.ordered(f.day(c.deliveryDate));
     if (c.type === "sheet" && c.state === "editing") return tx.fallback.sheet(money(c.totalCents), f.day(c.deliveryDate));
     if (c.type === "options" && !c.chosen) {

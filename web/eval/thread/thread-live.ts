@@ -127,6 +127,9 @@ async function run(id: keyof typeof W & ("milk" | "lunch" | "oat" | "reorder")):
       const waiting = cardsOf(t).find((x) => x.type === "gate" && x.outcome === "waiting" && x.approvalId);
       if (waiting) {
         await shot(`2-ok`);
+        // On the shared test kitchens the buyer's own browser signs as the kitchen's signer: the slab says so.
+        const slabText = await page.locator('[data-slab="waiting"]').last().innerText().catch(() => "");
+        if (!/test account|testitilillä|testkontot/i.test(slabText)) misbehaveNote ||= "the slab does not say the test account signs as the kitchen's signer";
         // The demo's "make it misbehave" step: the agent refuses, in words, about the order it knows is waiting.
         if (id === "milk" && !misbehaved) {
           misbehaved = true;
