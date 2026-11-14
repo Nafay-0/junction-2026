@@ -51,17 +51,21 @@ export function useLiveWeek(runId: string | undefined, initial?: WeekRun): { run
  * wall clock onto the recorded one, so countdowns count as they did.
  */
 export function useRecording<T extends { startedAt?: string }>(rec: Recording<T> | undefined, playing: boolean, speed = 1): { data?: T; offset: number; done: boolean } {
-  const [i, setI] = useState(0);
-  const [offset, setOffset] = useState(0);
+  const [pos, setPos] = useState<{ rec?: Recording<T>; i: number; offset: number }>({ i: 0, offset: 0 });
   useEffect(() => {
     if (!rec || !playing) return;
-    setI(0);
     const t0 = Date.now();
     const recordedStart = rec.frames[0]?.data.startedAt ? Date.parse(rec.frames[0].data.startedAt) : t0;
-    setOffset(recordedStart - t0);
-    const timers = rec.frames.map((f, k) => setTimeout(() => setI(k), f.t / speed));
-    return () => timers.forEach(clearTimeout);
+    const tick = () => {
+      const elapsed = (Date.now() - t0) * speed;
+      let i = 0;
+      while (i + 1 < rec.frames.length && rec.frames[i + 1].t <= elapsed) i++;
+      setPos({ rec, i, offset: recordedStart - t0 });
+    };
+    const first = setTimeout(tick, 0);
+    const t = setInterval(tick, 200);
+    return () => (clearTimeout(first), clearInterval(t));
   }, [rec, playing, speed]);
-  if (!rec || !playing) return { offset: 0, done: false };
-  return { data: rec.frames[Math.min(i, rec.frames.length - 1)]?.data, offset, done: i >= rec.frames.length - 1 };
+  if (!rec || !playing || pos.rec !== rec) return { data: rec && playing ? rec.frames[0]?.data : undefined, offset: 0, done: false };
+  return { data: rec.frames[pos.i]?.data, offset: pos.offset, done: pos.i >= rec.frames.length - 1 };
 }

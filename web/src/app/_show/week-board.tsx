@@ -6,7 +6,7 @@ import { day as dayText, money, moneyShort } from "../_ui/plain";
 import { Target } from "../_ui/target";
 import type { OptionView, WeekRun, WeekStep } from "@/server/show/types";
 import { GatePanel, Lane } from "./gate-moment";
-import css from "./show.module.css";
+import { css } from "./css";
 import { SHORT_DAY, outcomeLine, titleOf } from "./words";
 
 /**
@@ -15,7 +15,7 @@ import { SHORT_DAY, outcomeLine, titleOf } from "./words";
  * the gate and what the gate decided. The running tally in plain words at the foot. When the week ends, the six
  * days and the tally stay up as the summary.
  */
-export function WeekBoard({ run, compact = false, greeting }: { run: WeekRun; compact?: boolean; greeting?: string }) {
+export function WeekBoard({ run, compact = false, greeting, aside }: { run: WeekRun; compact?: boolean; greeting?: string; aside?: React.ReactNode }) {
   const current = run.steps[run.current];
   const finished = run.state === "finished" || run.state === "cancelled" || run.state === "failed";
   return (
@@ -27,7 +27,7 @@ export function WeekBoard({ run, compact = false, greeting }: { run: WeekRun; co
         {!finished && current && <Bay key={current.kind} step={current} compact={compact} />}
         {finished && <Summary run={run} compact={compact} />}
       </div>
-      <Footer run={run} />
+      <Footer run={run} aside={aside} />
     </section>
   );
 }
@@ -131,9 +131,9 @@ function Bay({ step, compact }: { step: WeekStep; compact: boolean }) {
         <Lane step={step} />
         {step.concern && <ConcernCard step={step} />}
         {step.options.length > 0 && !(step.gate && step.gate.outcome !== "auto_approve") && <Options options={step.options} compact={compact} />}
-        {step.excluded.length > 0 && !(step.gate && step.gate.outcome !== "auto_approve") && (
+        {shownExcluded(step).length > 0 && !(step.gate && step.gate.outcome !== "auto_approve") && (
           <ul className={`space-y-1 text-paper/80 ${css.small}`}>
-            {step.excluded.slice(0, compact ? 1 : 3).map((e) => (
+            {shownExcluded(step).slice(0, compact ? 1 : 3).map((e) => (
               <li key={e.name + e.reason}>
                 {e.simulated && <strong className="mr-2 bg-paper px-1.5 text-petrol-deep">Simulated</strong>}
                 Left out: {e.name}: {e.reason}
@@ -145,6 +145,13 @@ function Bay({ step, compact }: { step: WeekStep; compact: boolean }) {
       </div>
     </div>
   );
+}
+
+/** What availability took away, where it is the story: the simulated stock-out on Wednesday, passed cut-offs on Thursday. */
+function shownExcluded(step: WeekStep) {
+  if (step.kind === "stockout") return step.excluded.filter((e) => e.simulated || e.code === "out_of_stock");
+  if (step.kind === "lastminute") return step.excluded.filter((e) => e.code === "cutoff_passed" || e.code === "too_late");
+  return [];
 }
 
 function ConcernCard({ step }: { step: WeekStep }) {
@@ -223,10 +230,11 @@ function Count({ n, label }: { n: number; label: string }) {
   );
 }
 
-function Footer({ run }: { run: WeekRun }) {
+function Footer({ run, aside }: { run: WeekRun; aside?: React.ReactNode }) {
   const t = run.tally;
   return (
-    <footer className="border-t border-paper/15 px-[clamp(0.9rem,2vw,2.6rem)] pb-[clamp(0.5rem,1vw,1.2rem)] pt-[clamp(0.4rem,0.8vw,1rem)]">
+    <footer className="flex items-end gap-4 border-t border-paper/15 px-[clamp(0.9rem,2vw,2.6rem)] pb-[clamp(0.5rem,1vw,1.2rem)] pt-[clamp(0.4rem,0.8vw,1rem)]">
+      <div className="min-w-0 flex-1">
       <p className="flex flex-wrap items-baseline gap-x-[clamp(1rem,2.4vw,3rem)] gap-y-1" aria-live="polite">
         <Count n={t.decisions} label={t.decisions === 1 ? "decision" : "decisions"} />
         <Count n={t.askedPerson} label="asked a person" />
@@ -237,6 +245,8 @@ function Footer({ run }: { run: WeekRun }) {
         Every step is a real request through {PRODUCT_NAME}&apos;s gate, {run.catalogue === "partner" ? "on the partner's real catalogue and live prices" : "on the 12-product sample catalogue"}; {run.liveCalls} live price calls so far. Answers to questions are scripted; the sign-off is a real person.
         {run.simulated.length > 0 && <> {run.simulated.join(". ")}.</>} {DEMO_NOTE}
       </p>
+      </div>
+      {aside}
     </footer>
   );
 }

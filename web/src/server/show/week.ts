@@ -30,6 +30,8 @@ import type { ExcludedView, GateView, KitchenRef, OptionView, OrderView, StepKin
 
 export type Pace = { introMs: number; beatMs: number; dwellMs: number; gateDwellMs: number };
 export const LIVE_PACE: Pace = { introMs: 1200, beatMs: 1800, dwellMs: 5200, gateDwellMs: 6000 };
+/** For the three-minute pitch: the same steps with shorter pauses, so the week fits its minute. */
+export const BRISK_PACE: Pace = { introMs: 700, beatMs: 1300, dwellMs: 3800, gateDwellMs: 4500 };
 export const TEST_PACE: Pace = { introMs: 0, beatMs: 0, dwellMs: 0, gateDwellMs: 0 };
 
 export type DirectorOptions = {
@@ -253,7 +255,7 @@ export class WeekDirector {
     );
     const view = this.viewOf(v, step);
     this.meant.set(view.requestId, USUAL_MILK_LITRES);
-    this.readIntake(step, view);
+    await this.readIntake(step, view);
     step.did.push(view.state === "quoted" ? `Repeated the last order: ${shortName(milk.name)}, from the kitchen's memory, without asking.` : "Read the request against the kitchen's memory.");
     await this.finishIntake(step, view);
   }
@@ -271,7 +273,7 @@ export class WeekDirector {
     const concern = (view.concerns as Json[]).find((c) => c.code === "quantity_tenfold") ?? (view.concerns as Json[])[0];
     if (view.state !== "needs_confirmation" || !concern) {
       step.note = "The mistake check did not stop this one; see the reason below.";
-      this.readIntake(step, view);
+      await this.readIntake(step, view);
       return this.finishIntake(step, view);
     }
     const fix = (concern.corrections as Json[])[0];
@@ -289,7 +291,7 @@ export class WeekDirector {
     view = this.viewOf(await this.locked(() => this.agent.concerns(view.requestId, this.by(), [{ key: concern.key, choice: fix ? fix.id : "confirm" }])), step);
     this.meant.set(view.requestId, Number(view.need?.quantity?.amount ?? USUAL_MILK_LITRES));
     step.did.push(`Took the answer: ${String(fix?.label ?? "as asked").replace(/^Make it /, "")}.`);
-    this.readIntake(step, view);
+    await this.readIntake(step, view);
     await this.finishIntake(step, view);
   }
 
@@ -321,7 +323,7 @@ export class WeekDirector {
       step.decisions += 1;
       step.did.push(`Ranked ${(view.options as Json[]).length} alternatives good, better, best; every one keeps the kitchen's rule (lactose-free).`);
     }
-    this.readIntake(step, view);
+    await this.readIntake(step, view);
     await this.finishIntake(step, view);
   }
 
@@ -339,7 +341,7 @@ export class WeekDirector {
     this.meant.set(view.requestId, litres);
     const late = (view.excluded as Json[]).filter((e) => e.code === "cutoff_passed" || e.code === "too_late");
     step.did.push(late.length ? `Dropped ${late.length} product${late.length === 1 ? "" : "s"} whose order cut-off for ${dayText(date)} has passed.` : `Checked what can still arrive by ${dayText(date)}.`);
-    this.readIntake(step, view);
+    await this.readIntake(step, view);
     await this.finishIntake(step, view, this.o.signOffTimeoutMs ?? SIGNOFF_TIMEOUT_MS);
   }
 
@@ -360,7 +362,7 @@ export class WeekDirector {
     if (view.state !== "needs_confirmation" || !concern) {
       step.note = "The standing-order check did not stop this renewal; see the reason below.";
       this.meant.set(view.requestId, last);
-      this.readIntake(step, view);
+      await this.readIntake(step, view);
       return this.finishIntake(step, view);
     }
     const fix = (concern.corrections as Json[])[0];
@@ -378,7 +380,7 @@ export class WeekDirector {
     view = this.viewOf(await this.locked(() => this.agent.concerns(view.requestId, this.by(), [{ key: concern.key, choice: fix ? fix.id : "confirm" }])), step);
     this.meant.set(view.requestId, Number(view.need?.quantity?.amount ?? drift.agreed));
     step.did.push(`Renewed at the agreed amount: ${String(fix?.label ?? "").replace(/^Make it (the usual )?/, "") || `${drift.agreed} L`}.`);
-    this.readIntake(step, view);
+    await this.readIntake(step, view);
     await this.finishIntake(step, view);
   }
 
@@ -442,8 +444,11 @@ export class WeekDirector {
   }
 
   /** Copy what the intake decided onto the step: memory, options, what was left out and why. */
-  private readIntake(step: WeekStep, v: Json) {
+  private async readIntake(step: WeekStep, v: Json) {
     for (const p of [...(v.options as Json[]).flatMap((o) => o.lines as Json[]), ...(v.excluded as Json[])]) if (p.name) this.products.set(p.productId, p.name);
+    // Products the intake left out carry only their id: name them from master data (local, no live call).
+    const unnamed = [...new Set((v.excluded as Json[]).map((e) => String(e.productId)).filter((id) => !this.products.has(id)))];
+    if (unnamed.length) for (const p of await this.o.rt.catalog.searchProducts({ ids: unnamed.slice(0, 40), limit: 40 })) this.products.set(p.id, p.name);
     const memory = [
       ...(v.rules as Json[]).filter((r) => r.source === "stated").map((r) => String(r.text)),
       ...(v.fromMemory as Json[]).map((m) => `${String(m.question?.text ?? "")} ${String(m.label ?? "")}`.trim()),
@@ -486,19 +491,19 @@ export class WeekDirector {
       this.changed();
       await this.pause(this.pace.beatMs);
       v = this.viewOf(await this.locked(() => this.agent.concerns(v.requestId, this.by(), (v.concerns as Json[]).map((x) => ({ key: x.key, choice: x.confirmable ? "confirm" : (x.corrections?.[0]?.id ?? "confirm") })))), step);
-      this.readIntake(step, v);
+      await this.readIntake(step, v);
       return this.finishIntake(step, v, signOffTimeoutMs);
     }
     if (v.state === "options_ready") {
       const pick = v.preselected?.optionId ?? (v.options as Json[]).find((o) => o.match === "full")?.optionId ?? (v.options as Json[])[0]?.optionId;
       v = this.viewOf(await this.locked(() => this.agent.choose(v.requestId, this.by(), pick)), step);
       step.did.push("Chose the option the kitchen's goal ranks first (best price).");
-      this.readIntake(step, v);
+      await this.readIntake(step, v);
     } else if (v.state === "needs_input") {
       v = this.viewOf(await this.locked(() => this.agent.answers(v.requestId, this.by(), (v.questions as Json[]).map((q) => ({ questionId: q.id, optionId: q.options[0].id })))), step);
       step.askedPerson += 1;
       step.did.push("Asked the kitchen one question (answer scripted for the demo).");
-      this.readIntake(step, v);
+      await this.readIntake(step, v);
       if (v.state === "options_ready") return this.finishIntake(step, v, signOffTimeoutMs);
     }
     if (v.state !== "quoted" || !v.quote) {

@@ -102,7 +102,7 @@ export async function startWeek(rt: Runtime, opts: StartOptions = {}): Promise<W
   if (active >= SHOW_LIMITS.concurrent) throw new DockError(429, "show_busy", `${active} weeks are playing already; the table runs at most ${SHOW_LIMITS.concurrent} at once. Try again in a minute.`, "show_limit");
   if (s.started >= SHOW_LIMITS.perDay) throw new DockError(429, "show_daily_cap", `The show's ${SHOW_LIMITS.perDay} weeks for today are used up; switch to the recording (key F).`, "show_limit");
   s.started += 1;
-  let entry: Entry | undefined;
+  const holder: { entry?: Entry } = {};
   const director = new WeekDirector({
     rt,
     kitchen: ref,
@@ -113,6 +113,7 @@ export async function startWeek(rt: Runtime, opts: StartOptions = {}): Promise<W
     now: opts.now,
     signOffTimeoutMs: opts.signOffTimeoutMs ?? SHOW_LIMITS.signOffTimeoutMs,
     onChange: (run) => {
+      const entry = holder.entry;
       if (!entry) return;
       entry.latest = run;
       entry.frames.push({ t: Date.now() - entry.t0, data: run });
@@ -120,17 +121,17 @@ export async function startWeek(rt: Runtime, opts: StartOptions = {}): Promise<W
       for (const w of [...entry.waiters]) w();
     },
   });
-  entry = { director, latest: structuredClone(director.run), frames: [{ t: 0, data: structuredClone(director.run) }], t0: Date.now(), waiters: new Set(), promise: Promise.resolve(director.run) };
+  const entry: Entry = { director, latest: structuredClone(director.run), frames: [{ t: 0, data: structuredClone(director.run) }], t0: Date.now(), waiters: new Set(), promise: Promise.resolve(director.run) };
+  holder.entry = entry;
   s.runs.set(director.run.runId, entry);
   s.byKitchen.set(ref.sandboxId, director.run.runId);
-  const e = entry;
   entry.promise = director.play().then((run) => {
     s.finished.push({ runId: run.runId, liveCalls: run.liveCalls });
     if (s.byKitchen.get(ref.sandboxId) === run.runId) s.byKitchen.delete(ref.sandboxId);
     pruneRuns(s);
     return run;
   });
-  void e.promise.catch(() => undefined);
+  void entry.promise.catch(() => undefined);
   return structuredClone(entry.latest);
 }
 

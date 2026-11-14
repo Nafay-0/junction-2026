@@ -4,7 +4,7 @@ import { clockSeconds, money, say } from "../_ui/plain";
 import { Target } from "../_ui/target";
 import type { SignOffView, WeekStep } from "@/server/show/types";
 import { useShowNow } from "./clock";
-import css from "./show.module.css";
+import { css } from "./css";
 import { titleOf } from "./words";
 
 /**
@@ -178,7 +178,7 @@ function PhoneGlyph({ frac, seconds }: { frac: number; seconds: number }) {
     <svg viewBox="0 0 80 120" className="h-[clamp(4.5rem,7vw,8.5rem)] w-auto shrink-0" aria-label={`${seconds} seconds left`} role="img">
       <rect x="4" y="4" width="72" height="112" rx="12" fill="none" stroke="var(--color-paper)" strokeWidth="4" />
       <rect x="30" y="10" width="20" height="4" rx="2" fill="var(--color-paper)" />
-      <circle cx="40" cy="60" r={r} fill="none" stroke="color-mix(in srgb, var(--color-paper) 20%, transparent)" strokeWidth="6" />
+      <circle cx="40" cy="60" r={r} fill="none" stroke="rgb(255 255 255 / 0.2)" strokeWidth="6" />
       <circle cx="40" cy="60" r={r} fill="none" stroke="var(--color-safety)" strokeWidth="6" strokeDasharray={c} strokeDashoffset={c * (1 - frac)} transform="rotate(-90 40 60)" className={css.ring} />
       <text x="40" y="68" textAnchor="middle" fontSize="22" fontWeight="700" fill="var(--color-paper)" style={{ fontVariantNumeric: "tabular-nums" }}>
         {seconds}
