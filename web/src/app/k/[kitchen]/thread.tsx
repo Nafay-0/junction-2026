@@ -380,6 +380,8 @@ function CardView({ card, tap, busy, gated, base, turn, thread, memory }: { card
     case "rules":
       return <RulesCardView card={card} busy={busy} tap={tap} />;
     case "notice": {
+      // A tap on a card that has moved on (another tap, a newer version): said plainly, never as a rule.
+      if (card.rule === "intake_sequence") return <NoticeCard kind={tx.kind.notice} title={sx.stale.title} tone="plain">{sx.stale.body}</NoticeCard>;
       const missing = (card.missing ?? []).map((m) => (/what to buy/.test(m) ? w.notice.missingItem : w.notice.missingAmount));
       const body =
         f.lang === "en"
