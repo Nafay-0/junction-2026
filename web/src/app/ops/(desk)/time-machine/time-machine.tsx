@@ -10,7 +10,7 @@ import { Check, ClipboardList, Database, Route } from "lucide-react";
 import { api } from "../../../_client/api";
 import { Badge, Select, Tag, buttonClass } from "../../../_ui/kit";
 import { ruleTitle } from "../../../_ui/plain";
-import { fi, money, when, whenSeconds } from "../../_ui/format";
+import { categoriesInWords, fi, money, when, whenSeconds } from "../../_ui/format";
 import { Button, Details, Empty, LoadError, Loading, PageHead, Section, useOps } from "../../_ui/kit";
 import { Stamp, Table } from "../../_ui/parts";
 import { useUrlState } from "../../_ui/filters";
@@ -94,16 +94,19 @@ export function TimeMachineScreen() {
 
 function MirrorMark({ r }: { r: Extract<Reply, { attached: true }> }) {
   const ok = r.health.state === "current";
+  const full = `${r.label} (${r.server}). ${r.backfill.state === "running" ? "Building the past from the ledger now. " : r.backfill.report ? `The past built from the ledger on ${when(r.backfill.report.at)}. ` : ""}${r.health.sentence}`;
+  // One short pill, as every live page has; the whole status on hover.
   return (
-    <span className="inline-flex max-w-[30rem] items-start gap-2 text-right" role="status" title={r.health.sentence}>
-      <span aria-hidden className={`mt-1.5 size-2 shrink-0 rounded-full ${ok ? "breathe bg-good" : "border-[1.5px] border-ink-soft"}`} />
-      <span>
-        {r.label} ({r.server}).{" "}
-        {r.backfill.state === "running" ? "Building the past from the ledger now. " : r.backfill.report ? `The past built from the ledger on ${when(r.backfill.report.at)}. ` : ""}
-        {ok ? `Mirror current${r.status.lastOkAt ? `, written ${whenSeconds(r.status.lastOkAt)}` : ""}.` : r.health.state === "behind" ? "The mirror is behind; ordering is not affected." : "The mirror cannot write just now; ordering is not affected."}
-      </span>
+    <span className={`inline-flex min-h-8 items-center gap-2 whitespace-nowrap rounded-full px-3 text-[0.82rem] font-medium tabular ${ok ? "bg-good-soft text-good" : "bg-surface text-ink-soft"}`} role="status" title={full}>
+      <span aria-hidden className={`size-2 shrink-0 rounded-full ${ok ? "breathe bg-good" : "border-[1.5px] border-ink-soft"}`} />
+      {r.backfill.state === "running" ? "Building the past…" : ok ? `History current${r.status.lastOkAt ? `, ${whenSeconds(r.status.lastOkAt)}` : ""}` : r.health.state === "behind" ? "History behind; ordering not affected" : "History not writing; ordering not affected"}
     </span>
   );
+}
+
+/** "Kitchen manager (mandate mnd_4f…)" -> "Kitchen manager": who set a rule, without the mandate's id. */
+function byWords(by: string): string {
+  return fi(by.replace(/\s*\((?:mandate |signed )?mnd_[A-Za-z0-9_]+\)/g, "").replace(/,?\s*mandate mnd_[A-Za-z0-9_]+/g, "").replace(/\bmnd_[A-Za-z0-9_]+/g, "a mandate"));
 }
 
 function NotAttached({ env, sentence }: { env: string; sentence: string }) {
@@ -204,7 +207,7 @@ function Machine({ v, backend, vectors, order, pick, pickOrg, setAt }: { v: Time
               key={`${m.at}${i}`}
               type="button"
               tabIndex={-1}
-              title={`${when(m.at)}: ${AREA[m.what as keyof typeof AREA]?.label ?? m.what}, ${m.by}`}
+              title={`${when(m.at)}: ${AREA[m.what as keyof typeof AREA]?.label ?? m.what}, ${byWords(m.by)}`}
               onClick={() => setShown(m.at)}
               className={`absolute bottom-0 -translate-x-1/2 ${AREA[m.what as keyof typeof AREA]?.mark ?? "h-3 w-px bg-ink"}`}
               style={{ left: pos(m.at) }}
@@ -402,19 +405,32 @@ function RuleList({ rows, other, side }: { rows: Described[]; other: Described[]
                 const moved = state === "changed" && twin && !twin.lines.includes(l);
                 return (
                   <li key={i} className={moved ? "-mx-1.5 rounded-xs bg-lime-soft px-1.5 font-semibold" : ""}>
-                    {fi(l)}
+                    {fi(categoriesInWords(l))}
                   </li>
                 );
               })}
             </ul>
             <p className="mt-1.5 text-[0.82rem] text-ink-soft">
-              In force since {when(r.since)}, set by {r.by}
+              In force since {when(r.since)}, {/^learned\b/i.test(byWords(r.by)) ? byWords(r.by) : `set by ${byWords(r.by)}`}
             </p>
           </li>
         );
       })}
     </ul>
   );
+}
+
+/** The same change made again and again (a mandate reissued with the same terms) as one row with a count. */
+function folded<C extends { at: string; area: string; what: string; by: string }>(list: C[]): { c: C; n: number; last: string }[] {
+  const out: { c: C; n: number; last: string }[] = [];
+  for (const c of list) {
+    const prev = out.at(-1);
+    if (prev && prev.c.area === c.area && prev.c.what === c.what && byWords(prev.c.by) === byWords(c.by)) {
+      prev.n += 1;
+      prev.last = c.at;
+    } else out.push({ c, n: 1, last: c.at });
+  }
+  return out;
 }
 
 function Changes({ v }: { v: TimeMachineView }) {
@@ -436,16 +452,20 @@ function Changes({ v }: { v: TimeMachineView }) {
             </tr>
           </thead>
           <tbody>
-            {list.map((c, i) => (
+            {folded(list).map(({ c, n, last }, i) => (
               <tr key={i}>
-                <td className="whitespace-nowrap tabular">{when(c.at)}</td>
+                <td className="whitespace-nowrap tabular">
+                  {when(c.at)}
+                  {n > 1 && <span className="block text-[0.8rem] text-ink-soft">to {when(last)}</span>}
+                </td>
                 <td>
                   <span className="mr-2">
                     <Tag tone="muted">{c.area}</Tag>
                   </span>
-                  {fi(c.what)}
+                  {fi(categoriesInWords(c.what))}
+                  {n > 1 && <span className="ml-1.5 text-[0.86rem] text-ink-soft">({n} times, the same)</span>}
                 </td>
-                <td className="text-ink-soft">{c.by}</td>
+                <td className="text-ink-soft">{byWords(c.by)}</td>
               </tr>
             ))}
           </tbody>

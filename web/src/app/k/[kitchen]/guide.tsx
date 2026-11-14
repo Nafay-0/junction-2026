@@ -113,7 +113,7 @@ export function TryEverything() {
                       <span>{t.title}</span>
                       {row.done && <Badge tone="good">{tx.done}</Badge>}
                       {!row.done && isNext && <Badge tone="info">{tx.next}</Badge>}
-                      {(row.staged || result) && <Badge tone="waiting">{tx.staged}</Badge>}
+                      {(row.staged || result) && <Badge tone="staged">{tx.staged}</Badge>}
                     </h2>
                     <p className="mt-0.5 text-[0.95rem] leading-snug text-ink-soft">{t.shows(words)}</p>
                   </div>
@@ -134,7 +134,7 @@ export function TryEverything() {
                 {row.needs === "history" && <p className="pl-11 text-[0.88rem] leading-snug text-ink-soft">{tx.needsHistory}</p>}
                 {say.length > 0 && (
                   <div className="space-y-1.5 pl-11">
-                    <p className="text-[0.8rem] font-medium uppercase tracking-wide text-ink-faint">{tx.say}</p>
+                    <p className="text-[0.82rem] font-medium text-ink-soft">{tx.say}</p>
                     <ul className="space-y-1.5">
                       {say.map((s, j) => {
                         const key = `${row.id}:${j}`;

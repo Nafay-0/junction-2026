@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { AuditListRow, AuditRecord } from "@/server/ops/views";
 import { ChevronRight, Download, FileCheck2, Lock, Quote, ReceiptText, Route, UserCheck } from "lucide-react";
 import { Avatar, Badge, buttonClass } from "../../../_ui/kit";
+import { clockSeconds } from "../../../_ui/plain";
 import { ChainCheck } from "../../_ui/chain";
 import { country, fi, money, stamp, when } from "../../_ui/format";
 import { Details, Empty, KV, LoadError, Loading, Outcome, PageHead, Section, useOps } from "../../_ui/kit";
@@ -305,7 +306,7 @@ export function AuditOrder({ orderId }: { orderId: string }) {
                 {a.ledger.explanation.map((line, i) => (
                   <li key={i} className="grid grid-cols-[1.75rem_minmax(0,1fr)] gap-x-3">
                     <span className="flex size-6 items-center justify-center rounded-full bg-petrol-soft text-[0.75rem] font-semibold text-petrol tabular">{i + 1}</span>
-                    <span className="pt-0.5">{fi(line)}</span>
+                    <span className="pt-0.5">{fi(auditLine(line, a.order.createdAt))}</span>
                   </li>
                 ))}
               </ol>
@@ -354,4 +355,12 @@ export function AuditOrder({ orderId }: { orderId: string }) {
       </div>
     </>
   );
+}
+
+/**
+ * A line of the core's audit explanation ("18:37:24  [intake] Understood…", the time in UTC) as the desk reads it:
+ * Helsinki time with a dot, and the entry's kind left to the record's details.
+ */
+function auditLine(line: string, dayOf: string): string {
+  return line.replace(/^(\d{2}):(\d{2}):(\d{2})\s+(?:\[[a-z_]+\]\s+)?/, (_m, h: string, mi: string, se: string) => `${clockSeconds(`${dayOf.slice(0, 10)}T${h}:${mi}:${se}Z`)}  `);
 }

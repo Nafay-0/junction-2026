@@ -119,16 +119,16 @@ function Scores({ rows: all, onDone }: { rows: ScoreRow[]; onDone: () => void })
           <th className="text-right">To a person</th>
           <th className="text-right">Refused</th>
           <th className="text-right">Failed</th>
-          <th className="text-right">Decided p50 / p90</th>
+          <th className="text-right" title="Median and 90th percentile time from request to decision">To decide</th>
           <th className="text-right">Corrected</th>
           <th className="text-right">Per order</th>
-          <th>What a person might do</th>
+          <th>Next step</th>
         </tr>
       </thead>
       <tbody>
         {rows.map((r) => (
           <tr key={r.agentId}>
-            <td className="min-w-[19rem] max-w-[26rem]">
+            <td className="min-w-[13rem] max-w-[22rem]">
               <span className="flex flex-wrap items-baseline gap-x-2">
                 <b>{r.label}</b>
                 <Badge tone={STATUS[r.status].tone}>{STATUS[r.status].label}</Badge>
@@ -159,7 +159,8 @@ function Scores({ rows: all, onDone }: { rows: ScoreRow[]; onDone: () => void })
               <span className="block text-[0.8rem] text-ink-soft">of {num(r.turns)} turns</span>
             </td>
             <td className="text-right tabular">
-              {secs(r.decideP50S)} / {secs(r.decideP90S)}
+              {secs(r.decideP50S)}
+              <span className="block text-[0.8rem] text-ink-soft">90 %: {secs(r.decideP90S)}</span>
             </td>
             <td className="text-right tabular">
               {num(r.corrections)}
@@ -169,7 +170,7 @@ function Scores({ rows: all, onDone }: { rows: ScoreRow[]; onDone: () => void })
               {r.perOrder.spendUsd === null ? (r.spendUsd ? `$${r.spendUsd.toFixed(3)} in all` : "–") : `$${r.perOrder.spendUsd.toFixed(3)} models`}
               <span className="block text-[0.8rem] text-ink-soft">{r.perOrder.liveLookups === null ? (r.liveLookups ? `${r.liveLookups} live calls in all` : "no live calls") : `${r.perOrder.liveLookups.toFixed(1)} live calls`}</span>
             </td>
-            <td className="min-w-[11rem]">
+            <td className="min-w-[9rem]">
               <Proposal r={r} onDone={onDone} />
             </td>
           </tr>

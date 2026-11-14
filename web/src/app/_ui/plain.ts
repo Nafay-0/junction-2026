@@ -16,6 +16,17 @@ export function day(isoDate: string): string {
   return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()}.${d.getUTCMonth() + 1}.`;
 }
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/**
+ * "Tue 17 Nov": the product's one English form of a day, for display only. (`day()` stays "Tue 17.11.": the server
+ * writes it into sentences and its checks read it back.)
+ */
+export function dayEn(isoDate: string): string {
+  const d = new Date(`${isoDate}T12:00:00Z`);
+  return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+}
+
 /** "17.11.2026" */
 export function fullDate(isoDate: string): string {
   const d = new Date(`${isoDate}T12:00:00Z`);
@@ -309,4 +320,11 @@ export function isRawId(value: string): boolean {
 export function timelineFact(f: { label: string; value: string }): { label: string; value: string; id: boolean } {
   if (f.label === "Shown") return { label: "Showed", value: f.value.split(/,\s*/).map((k) => CARD_WORD[k] ?? k.replaceAll("_", " ")).join(", "), id: false };
   return { ...f, id: isRawId(f.value) };
+}
+
+/** A product name the partner writes in capitals ("VANILLAYOGHURT WITH LESS FAT 200G") in sentence case for reading. */
+export function sentenceCase(name: string): string {
+  if (name !== name.toUpperCase() || !/[A-ZÅÄÖ]{3}/.test(name)) return name;
+  const lower = name.toLowerCase().replace(/(\d)(g|kg|l|ml|dl)\b/g, "$1 $2");
+  return lower.charAt(0).toUpperCase() + lower.slice(1);
 }

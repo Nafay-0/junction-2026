@@ -33,7 +33,7 @@ const LOOK: Record<ButtonKind, string> = {
   "ghost-dark": "border border-paper/35 bg-paper/5 text-paper hover:bg-paper/15",
 };
 const SIZE: Record<ButtonSize, string> = {
-  sm: "min-h-9 px-3.5 text-[0.875rem] pointer-coarse:min-h-11",
+  sm: "min-h-9 px-3.5 text-[0.875rem] pointer-coarse:min-h-11 max-sm:min-h-11",
   md: "min-h-11 px-5 text-[0.95rem]",
   lg: "min-h-13 px-6 text-[1.05rem]",
 };
@@ -191,11 +191,12 @@ export function Tag({ children, tone = "plain", title }: { children: ReactNode; 
   );
 }
 
-export type BadgeTone = "neutral" | "good" | "info" | "agent" | "waiting" | "refused" | "bad";
+export type BadgeTone = "neutral" | "good" | "info" | "agent" | "waiting" | "refused" | "bad" | "staged";
 
 /**
- * A status badge: a dot and a word. "waiting" and "refused" are the gate's and carry its colours; everything else
- * is quiet. Never rely on the colour alone: the word says it.
+ * A status badge: a dot and a word. "waiting" and "refused" are the gate's and carry its colours; "good" is placed;
+ * "staged" (dashed) marks a demo condition or sample activity; everything else is quiet. The same meaning wears the
+ * same badge in the store and in operations. Never rely on the colour alone: the word says it.
  */
 export function Badge({ children, tone = "neutral", className = "" }: { children: ReactNode; tone?: BadgeTone; className?: string }) {
   const look: Record<BadgeTone, [string, string]> = {
@@ -206,6 +207,8 @@ export function Badge({ children, tone = "neutral", className = "" }: { children
     waiting: ["bg-safety-soft text-safety-ink ring-1 ring-inset ring-safety/60", "bg-safety ring-1 ring-safety-ink/40"],
     refused: ["bg-safety-ink text-safety", "bg-safety"],
     bad: ["bg-bad-soft text-bad", "bg-bad"],
+    // Set up for a demo or sample activity, not a real event: dashed, quiet, the same everywhere.
+    staged: ["border border-dashed border-ink-faint bg-paper text-ink-soft", "bg-ink-faint"],
   };
   const [pill, dot] = look[tone];
   return (
@@ -239,7 +242,7 @@ export function PageHeader({ title, lead, context, back, actions, className = ""
     <header className={`flex flex-wrap items-end justify-between gap-x-8 gap-y-4 ${className}`}>
       <div className="min-w-0 max-w-[46rem] flex-1 basis-[22rem]">
         {back && (
-          <Link href={back.href} className="-ml-1 mb-2 inline-flex min-h-9 items-center gap-1 rounded-full pl-1 pr-2.5 text-[0.9rem] font-medium text-petrol transition-colors hover:bg-petrol-soft pointer-coarse:min-h-11">
+          <Link href={back.href} className="-ml-1 mb-2 inline-flex min-h-9 items-center gap-1 rounded-full pl-1 pr-2.5 text-[0.9rem] font-medium text-petrol transition-colors hover:bg-petrol-soft pointer-coarse:min-h-11 max-sm:min-h-11">
             <ChevronLeft aria-hidden size={17} />
             {back.label}
           </Link>
@@ -464,7 +467,7 @@ export function Chip({ on, onClick, children, count, className = "" }: { on: boo
       type="button"
       aria-pressed={on}
       onClick={onClick}
-      className={`inline-flex min-h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 text-[0.88rem] font-medium transition-[background-color,border-color,color] duration-150 pointer-coarse:min-h-11 ${on ? "border-petrol bg-petrol text-paper" : "border-line bg-paper text-ink hover:border-line-strong hover:bg-mist"} ${className}`}
+      className={`inline-flex min-h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 text-[0.88rem] font-medium transition-[background-color,border-color,color] duration-150 pointer-coarse:min-h-11 max-sm:min-h-11 ${on ? "border-petrol bg-petrol text-paper" : "border-line bg-paper text-ink hover:border-line-strong hover:bg-mist"} ${className}`}
     >
       {on && <Check aria-hidden size={14} strokeWidth={2.6} className="-ml-0.5" />}
       {children}
@@ -506,7 +509,7 @@ export function Tabs<T extends string>({ options, value, onChange, label, size =
             role="tab"
             aria-selected={on}
             onClick={() => onChange(o.id)}
-            className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full font-medium transition-[background-color,color,box-shadow] duration-150 ${size === "sm" ? "min-h-8 px-3 text-[0.82rem] pointer-coarse:min-h-10" : "min-h-9 px-4 text-[0.9rem] pointer-coarse:min-h-10"} ${on ? "bg-paper text-ink shadow-xs" : "text-ink-soft hover:text-ink"}`}
+            className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full font-medium transition-[background-color,color,box-shadow] duration-150 ${size === "sm" ? "min-h-8 px-3 text-[0.82rem] pointer-coarse:min-h-11 max-sm:min-h-11" : "min-h-9 px-4 text-[0.9rem] pointer-coarse:min-h-11 max-sm:min-h-11"} ${on ? "bg-paper text-ink shadow-xs" : "text-ink-soft hover:text-ink"}`}
           >
             {o.label}
             {o.count !== undefined && <span className={`tabular text-[0.78rem] ${on ? "text-ink-soft" : "text-ink-faint"}`}>{o.count}</span>}

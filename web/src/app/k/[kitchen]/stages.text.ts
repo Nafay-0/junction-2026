@@ -231,7 +231,7 @@ export const STAGES_TEXT = defineText({
     addDevice: "Add a signing device",
     openSignOff: "Open the sign-off screen",
     preparing: "Preparing the code…",
-    withdrawn: "Withdrawn. It no longer holds the weekly budget.",
+    withdrawn: "Taken back. It no longer holds the weekly budget.",
     withdraw: "Withdraw this order",
     // 8. signed order
     declinedNothing: (name: string | undefined) => `Nothing was ordered: ${name ?? "the approver"} declined.`,

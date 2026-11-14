@@ -75,7 +75,7 @@ export function AgentsScreen({ board }: { board?: Board }) {
         {board && board.rows.length > 0 ? (
           <div className="rounded-xl border border-line bg-paper p-5 sm:p-6">
             <div className="-mx-1 overflow-x-auto px-1">
-              <div className="min-w-[44rem]">
+              <div className="min-w-[58rem]">
                 <CrashMatrix board={board} maxRows={12} yardsticks={["reference", "reckless", "do-nothing"]} />
               </div>
             </div>

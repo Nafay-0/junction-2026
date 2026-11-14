@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { AgentRow } from "@/server/ops/views";
-import { fi, when } from "../../_ui/format";
+import { categoriesInWords, fi, when } from "../../_ui/format";
 import { Button, Empty, LoadError, Loading, PageHead, Section, useOps } from "../../_ui/kit";
 import { Table } from "../../_ui/parts";
 import { Check, Eye, Search, Sparkles } from "lucide-react";
@@ -119,7 +119,7 @@ function Kitchen({ orgId, name, kind, agents }: { orgId: string; name: string; k
               {agents[0].allows.map((x, i) => (
                 <li key={i} className="flex gap-2">
                   <Check aria-hidden size={14} strokeWidth={2.6} className="mt-[0.25em] shrink-0 text-good" />
-                  {fi(x.line)}
+                  {fi(categoriesInWords(x.line))}
                 </li>
               ))}
             </ul>

@@ -97,7 +97,8 @@ export function CrashMatrix({ board, dark = false, big = false, maxRows = 8, yar
     <div className={t}>
       <table className="w-full table-fixed border-collapse">
         <colgroup>
-          <col />
+          {/* The model's name keeps its room in a narrow frame (the table scrolls inside its own frame instead). */}
+          <col className={big ? "" : "w-[11rem]"} />
           {cols.map((h) => (
             <col key={h.id} className={big ? "w-[max(1.75rem,1.85vw)]" : "w-8"} />
           ))}

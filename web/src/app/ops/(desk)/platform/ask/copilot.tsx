@@ -7,7 +7,7 @@ import type { McpStatus } from "@/server/aiven/showcase/aiven-mcp";
 import type { AnswerCard } from "@/server/aiven/showcase/copilot";
 import { api } from "../../../../_client/api";
 import { fi, whenSeconds } from "../../../_ui/format";
-import { Button, LoadError, PageHead, Panel, useOps } from "../../../_ui/kit";
+import { Button, LoadError, PageHead, Panel, Said, useOps } from "../../../_ui/kit";
 import { Mono, PlatformTabs, Rows, Status } from "../_parts/parts";
 
 type Info = { mcp: McpStatus; direct: boolean; suggestions: string[] };
@@ -169,7 +169,7 @@ function Card({ c, pinned, onPin, onAgain }: { c: AnswerCard; pinned: boolean; o
             {s.truncated ? ", cut at the row cap" : ""}
           </p>
           <pre className="mt-1.5 overflow-x-auto whitespace-pre-wrap rounded-md bg-surface px-3 py-2.5 font-mono text-[0.76rem] leading-snug">{s.query}</pre>
-          {s.error ? <p className="mt-1 text-[0.84rem] font-semibold">{s.error}</p> : <div className="mt-1.5"><Rows columns={s.columns} rows={s.rows} /></div>}
+          {s.error ? <Said text={s.error} className="mt-1 block text-[0.84rem] text-ink-soft" /> : <div className="mt-1.5"><Rows columns={s.columns} rows={s.rows} /></div>}
         </div>
       ))}
       <div className="h-2" />

@@ -89,7 +89,7 @@ export function FilterBar({
                 type="button"
                 aria-pressed={on}
                 onClick={() => setValue(o.id)}
-                className={`inline-flex min-h-9 shrink-0 items-center whitespace-nowrap rounded-full px-3.5 text-[0.86rem] font-medium transition-[background-color,color,box-shadow] duration-150 pointer-coarse:min-h-10 ${on ? "bg-paper text-ink shadow-xs" : "text-ink-soft hover:text-ink"}`}
+                className={`inline-flex min-h-9 max-sm:min-h-11 shrink-0 items-center whitespace-nowrap rounded-full px-3.5 text-[0.86rem] font-medium transition-[background-color,color,box-shadow] duration-150 pointer-coarse:min-h-10 ${on ? "bg-paper text-ink shadow-xs" : "text-ink-soft hover:text-ink"}`}
               >
                 {o.label}
                 {o.count !== undefined && <span className={`ml-1.5 text-[0.78rem] tabular ${on ? "text-ink-soft" : "text-ink-faint"}`}>{o.count}</span>}
