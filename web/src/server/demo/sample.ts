@@ -4,7 +4,6 @@ import type { Mandate } from "@/core/mandate";
 import { forbiddenBy } from "@/core/offers";
 import { deliveryRecordOf } from "@/core/reliability";
 import { creeping, series, sorted } from "../accounts/test-accounts";
-import { categoriesOf } from "../accounts/terms";
 
 /**
  * A demo account's SAMPLE HISTORY: several weeks of made-up orders, so everything the agent does with a kitchen's
@@ -108,12 +107,14 @@ export async function sampleHistory(catalog: Catalog, mandate: Mandate, opts: { 
   const poorFamilies = [...new Set([...WEEKLY.flat(), ...CREEPING, ...VARIETY, ...mandate.allowedCategories.slice(0, 40)])];
   for (const family of poorFamilies) {
     const ps = (await usable(catalog, mandate, family, now, used)).filter((p) => deliveryRecordOf(p, warn)?.poor);
-    const p = ps.sort((a, b) => b.deliveryReliability - a.deliveryReliability)[0];
+    // A name a person would type (an English name, plain case, no words that read as a claim such as "hand made").
+    const plain = (x: Product) => (x.names?.en ? 2 : 0) + (x.name === x.name.toUpperCase() ? 0 : 1) + (/hand ?made|käsin|artisan/i.test(x.names?.en ?? x.name) ? -3 : 0);
+    const p = ps.sort((a, b) => plain(b) - plain(a) || b.deliveryReliability - a.deliveryReliability)[0];
     if (!p) continue;
     used.add(p.id);
     const when = pastDays(now, [days[days.length - 1]], 6).filter((_, i) => i % 2 === 1);
     history.push(...sample(series(p, when, [Math.max(p.packSize * 3, 6)], `ord_p_`)));
-    summary.poor = { productId: p.id, name: p.name, family: p.category, words: deliveryRecordOf(p, warn)!.words };
+    summary.poor = { productId: p.id, name: p.names?.en ?? p.name, family: p.category, words: deliveryRecordOf(p, warn)!.words };
     break;
   }
 
@@ -135,5 +136,3 @@ export async function sampleHistory(catalog: Catalog, mandate: Mandate, opts: { 
   return { history: sorted(history), summary };
 }
 
-/** Every category the mandate's groups cover (for a mandate built by hand in tests). */
-export const allowedFamilies = (groups: string[]) => categoriesOf(groups);
