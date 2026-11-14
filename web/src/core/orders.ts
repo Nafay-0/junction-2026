@@ -487,6 +487,12 @@ export type DockDeps = {
   /** How long a live answer (per product and delivery date) is reused for option cards. Quotes always ask afresh. Default 120 s; 0 switches it off. */
   liveCacheTtlMs?: number;
   claims?: ClaimStore; // signed claims handed out (see claims.ts)
+  /**
+   * A condition staged for one organisation's demo (server/watch/overlay.ts: a stock-out staff staged for a test or
+   * demo kitchen), laid over every live answer that organisation gets, after the shared cache and before any claim is
+   * signed: a staged offer carries `simulated: true`, so every claim signed from it says so.
+   */
+  liveOverlay?: (orgId: string, statuses: LiveStatus[]) => LiveStatus[];
   /** The interpreter's second readings, for the intake (see second-reading.ts): only ever adds a question. */
   secondReadings?: (orgId: string, text: string | undefined) => SecondReadingRecord | undefined;
   /**
@@ -854,6 +860,7 @@ export function createDock(deps: DockDeps) {
       return st;
     });
     statuses = [...statuses, ...cached].sort((a, b) => ids.indexOf(a.productId) - ids.indexOf(b.productId));
+    if (deps.liveOverlay) statuses = deps.liveOverlay(session.mandate.issuer.orgId, statuses);
     const at = now();
     const audience = session.mandate.issuer.orgId;
     const products = await catalog.searchProducts({ ids, limit: 100 });

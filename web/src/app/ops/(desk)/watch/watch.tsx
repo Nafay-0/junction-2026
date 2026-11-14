@@ -58,7 +58,7 @@ function Body({ v, now, refresh }: { v: View; now: number; refresh: () => void }
         <Num n={num(v.stats.sentForSignOff)} label="sent for sign-off" />
         <Num n={num(v.stats.held)} label="renewals held" sub="drifted: the kitchen is asked" />
         <Num n={num(v.stats.autoRenewOn)} label="auto-renew on" sub="off by default" />
-        <Num n={num(v.stats.staged)} label="staged now" sub="demo kitchens only" />
+        <Num n={num(v.stats.staged)} label="staged now" sub="demo and test kitchens only" />
       </Panel>
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <Button kind="primary" onClick={() => void run()} disabled={running}>
@@ -282,9 +282,9 @@ function StageForm({ kitchens, refresh }: { kitchens: Kitchens; refresh: () => v
     refresh();
   };
   return (
-    <Section title="Stage a condition (demo kitchens only)">
+    <Section title="Stage a condition (demo and test kitchens)">
       <Panel className="space-y-3 p-4 text-[0.9rem]">
-        <p className="text-ink-soft">The partner&apos;s live data will not run out on cue. A staged condition applies only to the kitchen agent&apos;s watch for this kitchen, is marked staged wherever it shows, and is signed as simulated.</p>
+        <p className="text-ink-soft">The partner&apos;s live data will not run out on cue. A staged stock-out applies to every live answer this one kitchen gets (its agent, its orders, the watch), never to another kitchen; it is marked staged wherever it shows, signed as simulated, and lifted by a test account reset.</p>
         {kitchens.length === 0 ? (
           <p>No demo kitchen with a recurring order.</p>
         ) : (
@@ -294,7 +294,7 @@ function StageForm({ kitchens, refresh }: { kitchens: Kitchens; refresh: () => v
               <select value={slug} onChange={(e) => (setSlug(e.target.value), setFamily(""))} className="mt-1 min-h-11 w-full rounded-lg border border-line-strong bg-paper px-3">
                 {kitchens.map((x) => (
                   <option key={x.slug} value={x.slug}>
-                    {x.name} ({x.kind})
+                    {x.name} ({x.kind === "account" ? "test account" : x.kind})
                   </option>
                 ))}
               </select>

@@ -41,10 +41,11 @@ export const TEST_ACCOUNTS: TestAccountSeed[] = [
     terms: { ...DEFAULT_TERMS, perOrderLimitEur: 500, weeklyBudgetEur: 9_000, signer: "Kitchen manager", maxLeadDays: 7 },
     profile: (orgId, name, now, products) => {
       const boxes = bigMilkBoxes(products);
-      const cream = pick(products, (p) => p.category === "cream" && p.attributes.includes("lactose_free"));
+      const cream = pick(products, (p) => p.category === "cream" && p.attributes.includes("lactose_free") && p.packSize <= 2) ?? pick(products, (p) => p.category === "cream" && p.attributes.includes("lactose_free"));
       const history = [
         ...series(boxes[0], pastDays(now, [1, 4], 10), [400, 380, 420, 400, 440, 400, 380, 400, 420, 400], `ord_t_lumo_m`),
-        ...series(cream, pastDays(now, [4], 5), [20, 20, 25, 20, 20], `ord_t_lumo_c`),
+        // The breakfast cream creeps up week by week: the watch's standing-order drift has something real to hold.
+        ...creeping(cream, pastDays(now, [4], 5), 16, `ord_t_lumo_c`),
       ];
       return {
         ...emptyProfile(orgId, name),
@@ -76,7 +77,8 @@ export const TEST_ACCOUNTS: TestAccountSeed[] = [
       const yoghurt = pick(products, (p) => p.category === "yoghurt");
       const history = [
         ...series(milk, pastDays(now, [1, 3, 5], 12), [60, 60, 55, 60, 65, 60, 60, 55, 60, 60, 65, 60], `ord_t_metsola_m`),
-        ...series(yoghurt, pastDays(now, [2], 5), [30, 30, 35, 30, 30], `ord_t_metsola_y`),
+        // Yoghurt for Tuesday lunch creeps up week by week (the watch's standing-order drift).
+        ...creeping(yoghurt, pastDays(now, [2], 5), 24, `ord_t_metsola_y`),
       ];
       return {
         ...emptyProfile(orgId, name),
@@ -97,7 +99,9 @@ export const TEST_ACCOUNTS: TestAccountSeed[] = [
     profile: (orgId, name, now, products) => {
       const oat = pick(products, (p) => p.category === "plant_drink");
       const milk = pick(products, (p) => p.category === "milk" && p.packSize <= 2 && !p.attributes.includes("lactose_free")) ?? pick(products, (p) => p.category === "milk");
-      const history = [...series(oat, pastDays(now, [2, 5], 10), [12, 12, 10, 12, 14, 12, 12, 10, 12, 12], `ord_t_sointu_o`), ...series(milk, pastDays(now, [2, 5], 10), [10, 10, 8, 10, 10, 12, 10, 10, 8, 10], `ord_t_sointu_m`)];
+      // The milk creeps up on both delivery days (the watch's standing-order drift); the oat drink stays as usual.
+      const milkDays = pastDays(now, [2, 5], 10);
+      const history = [...series(oat, pastDays(now, [2, 5], 10), [12, 12, 10, 12, 14, 12, 12, 10, 12, 12], `ord_t_sointu_o`), ...creeping(milk, milkDays.filter((_, i) => i % 2 === 0), 8, `ord_t_sointu_ma`), ...creeping(milk, milkDays.filter((_, i) => i % 2 === 1), 8, `ord_t_sointu_mb`)];
       return {
         ...emptyProfile(orgId, name),
         deliveryWeekdays: [2, 5],
@@ -147,6 +151,18 @@ function series(p: Product | undefined, days: string[], amounts: number[], prefi
       lines: [{ productId: p.id, name: p.name, category: p.category, attributes: p.attributes, packs, packSize: p.packSize, unit: p.unit, unitPriceCents }],
     };
   });
+}
+
+/**
+ * A recurring order that creeps up: about `start` base units for the first week, then a whole pack or a tenth more
+ * each week over the last four (a steady trend over weeks, not one odd order), so the watch learns it as drift.
+ */
+function creeping(p: Product | undefined, days: string[], start: number, prefix: string): HistoryEntry[] {
+  if (!p) return [];
+  const first = Math.max(1, Math.round(start / p.packSize));
+  const step = Math.max(1, Math.round(first * 0.12));
+  const amounts = days.map((_, i) => (first + Math.max(0, i - (days.length - 4)) * step) * p.packSize);
+  return series(p, days, amounts, prefix);
 }
 
 const sorted = (h: HistoryEntry[]) => h.sort((a, b) => a.placedAt.localeCompare(b.placedAt));

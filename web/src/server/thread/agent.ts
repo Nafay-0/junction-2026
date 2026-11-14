@@ -55,12 +55,14 @@ Your reply (the store shows it under the buyer's words, with your work folded aw
 - The most important thing first: what you can do, how much, for how much, on which day. Prices and days sit inside the sentence. If nothing can arrive in time, or the kind they asked for cannot be had, that is your first sentence, said once, with the reason.
 - Mark a figure the eye should find (a price, an amount) like **1 010,00 €** or **1 000 L**, and a day or a time like {{Monday 16 Nov}} (in Finnish {{maanantaina 16.11.}}) or {{17.00}}. Nothing else is marked. No lists, no headings, no links, no ids, no codes.
 - When something is open, end on it in a few words, one thing only: "Which one?" only when two or more can be ordered (the store lists them under your words); with one, "Shall I order it?" (with the day when it matters: "Shall I order it for Monday 16.11.?"); a rules change, "Shall I change it?". If it needs a person's OK, say so and whose, and why in a few words ("It's over your 500 € limit, so it needs your OK"): the store shows the OK button.
+- A plain yes to your own proposal ("Is it still for 120 kids?") is a yes: act on it with the figure you proposed or the buyer gave earlier. A figure given once in the conversation is never asked for again.
 - Never tell the buyer what to type or say (no "say ...", no "send the product name with the amount"): ask a question a plain yes or a few words answer. If you asked something last turn and the answer did not settle it, do not ask it again in other words: offer your best reading from what is on the table ("12 litres of the cream for the sauce?").
 - Name the options in their order (n = 1 first, as the store lists them), so "the first one" is the one you named first. One product per option, each with its own price: never two options in one phrase ("Oatly Semi or Whole, 16,80 €"). When the buyer counts in another unit than the product (cartons, packs, boxes), say the amount in theirs too ("12 cartons of 1 L"). When the usual product cannot be had, say what changes for them: how it comes now (1 000 one-litre cartons instead of 100 boxes of 10 L) and the price difference when a result gives it.
 - Exceptions come first, one clear sentence each: nothing can arrive in time (and the earliest day that can), the kind asked for cannot be had (and what stands in, and what differs), an amount looks unusual, it needs a person's OK (whose). Then the question that moves it on. Which products and order times stay in the steps.
 - Never describe how you work inside ("the store treated your message", "the results", "my tools"): say what you found, what you did and what you need, as a person would.
 - In Finnish, packs are said with their size: "1 000 yhden litran tölkkiä" (never "1 000 litran tölkkeinä"), "10 litran laatikko"; in English "10 l box", never "novobox".
 - Every item the buyer asked for is on the order or named as left out, with why, in one sentence (notOnTheOrder). Never drop one without a word.
+- Never say the kitchen's rules stop something unless a result names the rule (a refusal, a gate decision, an exclusion by the mandate); "nothing fits" for another reason (the day, stock, another kind of product) is said as that reason.
 - Never call a product or a menu nut-free, gluten-free or lactose-free unless a result states it; "without nuts, as you asked" only when the result says the plan left them out.
 - In English a day is "Monday 16 Nov"; in Finnish and Swedish "16.11.", whose own dot is never followed by another mark: end the sentence before the date or rephrase.
 - When something cannot be done, say it in the first person ("I can't buy burger buns for this kitchen"), the kitchen's product groups in words (at most three), never a code, an id or a rule name, and end on the next step when there is one ("The owner can add bread under Your rules; shall I ask them?"). A refusal in the results already says it that way: keep its sense.
@@ -326,7 +328,7 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
         let followUp = false;
         let addTo: Extract<Subject, { kind: "need" }> | undefined;
         if (subj && isShort(said) && !REPEAT_SCALED.test(said)) {
-          if (subj.kind === "incomplete") said = `${subj.words} ${said}`;
+          if (subj.kind === "incomplete") said = subj.usual && yesOrNo(said) === "yes" ? `${subj.words} ${subj.usual}` : `${subj.words} ${said}`;
           else if (subj.kind === "need" && ADDITION.test(said)) addTo = subj;
           else if (subj.kind === "need") followUp = true;
         }
@@ -374,7 +376,12 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
           // In their newest words, or in the words before, when this is the yes to the agent's reading of them.
           const prevBuyer = [...run.thread.turns].reverse().find((x) => x.role === "buyer" && x.turnId !== run.buyer.turnId);
           const inWords = (x: string) => amount !== undefined && new RegExp(`(?<![\\d.,])${String(amount).replace(".", "[.,]")}(?![\\d])`).test(x.replace(/\s+/g, ""));
-          const said = inWords(words) || (yesOrNo(words) === "yes" && prevBuyer?.role === "buyer" && !!prevBuyer.text && inWords(prevBuyer.text));
+          // A plain yes to the agent's own proposal ("Is it still for 120 kids?"): the figure the buyer gave earlier in this
+          // conversation, or the one the agent proposed in its last words, stands. A figure given once is never asked again.
+          const lastAgent = [...run.thread.turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId);
+          const lastAgentLine = lastAgent?.role === "agent" ? (lastAgent.line ?? "") : "";
+          const earlier = run.thread.turns.flatMap((x) => (x.role === "buyer" && x.text && x.turnId !== run.buyer.turnId ? [x.text] : []));
+          const said = inWords(words) || (yesOrNo(words) === "yes" && ((prevBuyer?.role === "buyer" && !!prevBuyer.text && inWords(prevBuyer.text)) || inWords(lastAgentLine) || earlier.some(inWords)));
           if (amount === undefined || !said) return { ok: false, refused: "amount_not_in_words", say: "Ask the buyer for the number." };
           const a = r0.action;
           // "12 litres" is an amount of something, not a number of covers.

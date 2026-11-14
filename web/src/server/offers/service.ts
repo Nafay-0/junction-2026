@@ -23,6 +23,7 @@ import {
   shortlist,
   verifyOffer,
   type KitchenView,
+  type MandateRules,
   type MuteScope,
   type NewListing,
   type OfferBody,
@@ -36,6 +37,7 @@ import {
 } from "@/core/offers";
 import { WHOLESALER_ISSUER } from "@/core/claims";
 import { recordGrounding } from "../grounding";
+import { familyL } from "@/app/k/[kitchen]/family.text";
 import { radarStore } from "../radar/store";
 import type { Runtime } from "../runtime";
 import type { RecordStore } from "../records";
@@ -74,10 +76,13 @@ export type OfferRecord = {
   rule?: string;
   reason?: string;
   answer?: { at: string; by: string; via: string; scope?: MuteScope; requestId?: string; orderId?: string };
+  /** Set when staff reset the kitchen's offers (a demo, or the test accounts' scheduled reset): no longer counts. */
+  cleared?: string;
 };
 
-export type CampaignResult = { kitchen: string; name: string; outcome: "offered" | "not_relevant" | "withheld"; rule?: string; reason: string; offerId?: string };
-export type Campaign = { campaignId: string; productId: string; productName: string; category: string; by: string; at: string; claims: OfferReasonKind[]; listedAsNew: boolean; results: CampaignResult[] };
+/** `why` and `wouldHelp`: the outcome in a salesperson's words, and what would make the product relevant there. */
+export type CampaignResult = { kitchen: string; name: string; outcome: "offered" | "not_relevant" | "withheld"; rule?: string; reason: string; offerId?: string; why?: string; wouldHelp?: string };
+export type Campaign = { campaignId: string; productId: string; productName: string; category: string; by: string; at: string; claims: OfferReasonKind[]; listedAsNew: boolean; reachAllowed?: boolean; results: CampaignResult[] };
 type PrefsRecord = OfferPrefs & { orgId: string };
 
 type State = {
@@ -144,10 +149,10 @@ async function bought(rt: Runtime, orgId: string, profileIds: string[]): Promise
   return [...new Set([...profileIds, ...orders.flatMap((o) => o.lines.map((l) => l.productId))])];
 }
 
-async function viewOf(rt: Runtime, k: { orgId: string; name: string; mandate: Pick<Mandate, "allowedCategories" | "requiredAttributes" | "forbiddenAllergens" | "requiredCertificates"> }): Promise<KitchenView> {
+async function viewOf(rt: Runtime, k: { orgId: string; name: string; mandate: MandateRules }): Promise<KitchenView> {
   const s = await ready(rt);
   const profile = await rt.kitchens.getProfile(k.orgId);
-  const past: PastOffer[] = [...s.offers.values()].filter((o) => o.orgId === k.orgId).map((o) => ({ offerId: o.offerId, productId: o.productId, family: o.family, at: o.at, status: o.status }));
+  const past: PastOffer[] = [...s.offers.values()].filter((o) => o.orgId === k.orgId && !o.cleared).map((o) => ({ offerId: o.offerId, productId: o.productId, family: o.family, at: o.at, status: o.status }));
   const prefs = s.prefs.get(k.orgId) ?? { orgId: k.orgId, ...emptyPrefs() };
   return { orgId: k.orgId, name: k.name, profile, mandate: k.mandate, prefs: { off: prefs.off, mutes: prefs.mutes }, past, bought: await bought(rt, k.orgId, (profile?.history ?? []).flatMap((h) => h.lines.map((l) => l.productId))) };
 }
@@ -253,13 +258,13 @@ async function productsFor(rt: Runtime, view: KitchenView, extra: string[]): Pro
 }
 
 /** Run the selling agent for one kitchen: at most the weekly cap of signed offers, and what it held back. */
-async function runKitchen(rt: Runtime, k: OfferKitchen, opts: { now: Date; writer?: LineWriter; campaign?: { campaignId: string; product: Product; claims: OfferReasonKind[] } }): Promise<RunReport> {
+async function runKitchen(rt: Runtime, k: OfferKitchen, opts: { now: Date; writer?: LineWriter; campaign?: { campaignId: string; product: Product; claims: OfferReasonKind[]; reachAllowed?: boolean } }): Promise<RunReport> {
   const s = await ready(rt);
   const view = await viewOf(rt, k);
   const ctx = { now: opts.now, newListings: [...s.listings.values()] };
   const report: RunReport = { kitchen: k.slug, name: k.name, offered: [], withheld: [], liveCalls: 0 };
   const camp = opts.campaign;
-  if (camp && familyOrders(view.profile, camp.product.category) === 0 && !forbiddenBy(camp.product, view, opts.now)) {
+  if (camp && !camp.reachAllowed && familyOrders(view.profile, camp.product.category) === 0 && !forbiddenBy(camp.product, view, opts.now)) {
     report.notRelevant = `${k.name} does not buy ${camp.product.category.replaceAll("_", " ")}.`;
     return report;
   }
@@ -343,7 +348,7 @@ export async function runSellingAgent(rt: Runtime, opts: { kitchens?: string[]; 
  * record, dated); the selling agent decides kitchen by kitchen whether it is relevant, and offers it only where every
  * guardrail passes. `claims`: what staff want said about it; each must be backed by the data for that kitchen.
  */
-export async function startCampaign(rt: Runtime, input: { productId: string; by: string; listAsNew?: boolean; claims?: OfferReasonKind[]; kitchens?: string[]; now?: Date; writer?: LineWriter }): Promise<Campaign> {
+export async function startCampaign(rt: Runtime, input: { productId: string; by: string; listAsNew?: boolean; claims?: OfferReasonKind[]; kitchens?: string[]; reachAllowed?: boolean; now?: Date; writer?: LineWriter }): Promise<Campaign> {
   const s = await ready(rt);
   const now = input.now ?? new Date();
   const [product] = await rt.catalog.searchProducts({ ids: [input.productId], limit: 1 });
@@ -354,7 +359,7 @@ export async function startCampaign(rt: Runtime, input: { productId: string; by:
     s.listings.set(product.id, listing);
     await s.stores.listings.put(product.id, listing);
   }
-  const campaign: Campaign = { campaignId: newId("cmp"), productId: product.id, productName: product.name, category: product.category, by: input.by, at: now.toISOString(), claims, listedAsNew: !!input.listAsNew, results: [] };
+  const campaign: Campaign = { campaignId: newId("cmp"), productId: product.id, productName: product.name, category: product.category, by: input.by, at: now.toISOString(), claims, listedAsNew: !!input.listAsNew, ...(input.reachAllowed ? { reachAllowed: true } : {}), results: [] };
   ledger(rt, { actor: `staff:${input.by}`, summary: `${input.by} started a campaign for ${product.name}${input.listAsNew ? " (listed as new in the assortment)" : ""}; the selling agent decides which kitchens it is relevant to.`, data: { step: "campaign", campaignId: campaign.campaignId, productId: product.id, claims, listedAsNew: !!input.listAsNew, by: input.by } });
   const held = recalled(rt).has(product.id);
   for (const k of (await allKitchens(rt)).filter((x) => !input.kitchens || input.kitchens.includes(x.slug))) {
@@ -362,16 +367,55 @@ export async function startCampaign(rt: Runtime, input: { productId: string; by:
       campaign.results.push({ kitchen: k.slug, name: k.name, outcome: "withheld", rule: "recall_hold", reason: "The recall radar holds this product: it is not offered to anyone." });
       continue;
     }
-    const r = await runKitchen(rt, k, { now, writer: input.writer, campaign: { campaignId: campaign.campaignId, product, claims } });
+    const r = await runKitchen(rt, k, { now, writer: input.writer, campaign: { campaignId: campaign.campaignId, product, claims, reachAllowed: input.reachAllowed } });
     const offered = r.offered.find((o) => o.productId === product.id);
     const w = r.withheld.find((o) => o.productId === product.id);
     if (offered) campaign.results.push({ kitchen: k.slug, name: k.name, outcome: "offered", reason: offered.line, offerId: offered.offerId });
     else if (w) campaign.results.push({ kitchen: k.slug, name: k.name, outcome: w.rule === "unsupported_claim" && !claims.length ? "not_relevant" : "withheld", rule: w.rule, reason: w.reason ?? "" });
     else campaign.results.push({ kitchen: k.slug, name: k.name, outcome: "not_relevant", reason: r.notRelevant ?? "Nothing the data supports makes it worth suggesting there." });
   }
+  for (const r of campaign.results) Object.assign(r, explainResult(r, product, { listedAsNew: campaign.listedAsNew, reachAllowed: !!input.reachAllowed, claims }));
   s.campaigns.set(campaign.campaignId, campaign);
   await s.stores.campaigns.put(campaign.campaignId, campaign);
   return campaign;
+}
+
+/**
+ * A campaign's outcome for one kitchen in a salesperson's words, and what would make the product relevant there.
+ * Plain code over the rule that decided; no model.
+ */
+export function explainResult(r: CampaignResult, product: Pick<Product, "category" | "name">, c: { listedAsNew: boolean; reachAllowed: boolean; claims: OfferReasonKind[] }): { why: string; wouldHelp?: string } {
+  const fam = familyL(product.category, "en");
+  const reason = r.reason.replace(/^Not offered: /, "").replace(/^the kitchen's rules: /, "").replace(/\.+$/, "");
+  if (r.outcome === "offered") return { why: `Offered: ${r.reason}` };
+  switch (r.rule) {
+    case undefined:
+      if (/already buys it/.test(r.reason)) return { why: `${r.name} already buys this product.`, wouldHelp: "Nothing to sell here; suggest something new to them instead." };
+      if (/does not buy/.test(r.reason)) return { why: `${r.name} has never ordered ${fam}, so the agent does not push it there.`, wouldHelp: `Tick "also kitchens that have not bought this kind yet": their rules allow it, so it goes as something new to try.` };
+      return { why: `Nothing the agent could truthfully say about it for ${r.name}.`, wouldHelp: c.listedAsNew ? undefined : `Tick "it is new in our assortment" if it is.` };
+    case "forbidden_by_rule":
+      if (/mandate does not cover/.test(r.reason)) return { why: `${r.name}'s own rules let its agent buy only from the product groups it chose, and ${fam} is not one of them.`, wouldHelp: `Only the kitchen can change that, by adding ${fam} to its rules.` };
+      return { why: `${r.name}'s rules rule it out: ${reason}.`, wouldHelp: "Offer a product that meets their rules (one that declares the figure their rules need, or is free from the allergen)." };
+    case "not_available":
+      return { why: "The price service has no price or delivery date for it right now, so there is nothing to offer.", wouldHelp: "Make sure it is priced and deliverable this week, then start the campaign again." };
+    case "weekly_cap":
+      return { why: `${r.name} already had ${OFFER_WEEKLY_CAP} offers this week; the agent never sends more.`, wouldHelp: "Wait until next week. For the shared test kitchens, the demo reset above clears it." };
+    case "already_offered":
+      return { why: `${r.name} already has an open offer of this product.`, wouldHelp: "Wait for their answer." };
+    case "declined_recently":
+      return { why: `${r.name} said no to this product in the last 30 days.`, wouldHelp: "Respect it; try again after 30 days." };
+    case "muted":
+      return { why: `${r.name} asked not to be offered this kind of thing.`, wouldHelp: "Only the kitchen can lift that." };
+    case "offers_off":
+      return { why: `${r.name} turned offers off.`, wouldHelp: "Only the kitchen can turn them on again." };
+    case "recall_hold":
+      return { why: "The recall radar holds this product: nobody is offered it.", wouldHelp: "Nothing until the hold is lifted." };
+    case "unsupported_claim":
+      if (c.claims.length && /does not support "/.test(r.reason)) return { why: `You asked to say ${r.reason.match(/"([^"]+)"/)?.[1] ?? "something"} about it, and the data does not back that for ${r.name}.`, wouldHelp: "Drop that claim, or list it as new if it is." };
+      return { why: `Nothing the agent could truthfully say about it for ${r.name}: it is not new to the assortment, not in season, and not cheaper than what they buy.`, wouldHelp: c.listedAsNew ? undefined : `Tick "it is new in our assortment" if it is.` };
+    default:
+      return { why: r.reason };
+  }
 }
 
 // ---------- the buyer's side ----------
@@ -398,7 +442,7 @@ export async function offersForOrg(rt: Runtime, orgId: string, opts: { open?: bo
   const now = opts.now ?? new Date();
   const key = await wholesalerKey(rt);
   const out: BuyerOffer[] = [];
-  for (const o of [...s.offers.values()].filter((x) => x.orgId === orgId && x.token).sort((a, b) => b.at.localeCompare(a.at))) {
+  for (const o of [...s.offers.values()].filter((x) => x.orgId === orgId && x.token && !x.cleared).sort((a, b) => b.at.localeCompare(a.at))) {
     expire(s, o, now);
     const cur = s.offers.get(o.offerId)!;
     if (opts.open && cur.status !== "offered") continue;
@@ -409,16 +453,64 @@ export async function offersForOrg(rt: Runtime, orgId: string, opts: { open?: bo
 }
 
 /**
- * The kitchen's own agent's pick for "Today": the open offers that pass its own check against the kitchen (core
- * buyerCheck: its rules, memory, mutes, offers off, what it already buys), verified, best first. At most one is shown.
+ * One source of truth for an open offer: the kitchen's own agent's check (core buyerCheck: its signed rules, judged
+ * on the product's master data, its memory, mutes, offers off, what it already buys) and the signature. An open offer
+ * that fails it is closed here, as held back by the kitchen's agent with the reason, in the record and the ledger: the
+ * operations page and the conversation then say the same thing.
  */
-export async function offerForToday(rt: Runtime, session: AgentSession, name: string, now = new Date()): Promise<BuyerOffer | undefined> {
-  const orgId = session.mandate.issuer.orgId;
-  const view = await viewOf(rt, { orgId, name, mandate: session.mandate });
-  for (const o of await offersForOrg(rt, orgId, { open: true, now })) {
-    if (o.verified && buyerCheck(o.offer, view, now).show) return o;
+export async function reconcileOpen(rt: Runtime, k: { orgId: string; name: string; mandate: MandateRules }, now = new Date()): Promise<BuyerOffer[]> {
+  const s = await ready(rt);
+  const view = await viewOf(rt, k);
+  const shown: BuyerOffer[] = [];
+  for (const o of await offersForOrg(rt, k.orgId, { open: true, now })) {
+    const [product] = await rt.catalog.searchProducts({ ids: [o.offer.product.productId], limit: 1 });
+    const check = !o.verified ? { show: false as const, why: "its signature does not verify against the wholesaler's key" } : !product ? { show: false as const, why: "the product is no longer in the assortment" } : buyerCheck(o.offer, view, now, product);
+    if (check.show) {
+      shown.push(o);
+      continue;
+    }
+    const rec = s.offers.get(o.offerId)!;
+    if (check.why === "expired") continue;
+    const reason = `The kitchen's own agent does not show it: ${check.why}.`;
+    save(s, { ...rec, status: "withheld", rule: "kitchen_check", reason });
+    ledger(rt, { actor: `buyer:${k.orgId}`, summary: `${k.name}'s own agent did not show the offer of ${rec.productName}: ${check.why}.`, data: { step: "withheld", offerId: rec.offerId, kitchen: rec.kitchen, orgId: k.orgId, productId: rec.productId, rule: "kitchen_check", reason } });
   }
-  return undefined;
+  return shown;
+}
+
+/** The kitchen's own agent's pick: the newest open offer that passes its own check (reconcileOpen). At most one is said. */
+export async function offerForToday(rt: Runtime, session: AgentSession, name: string, now = new Date()): Promise<BuyerOffer | undefined> {
+  return (await reconcileOpen(rt, { orgId: session.mandate.issuer.orgId, name, mandate: session.mandate }, now))[0];
+}
+
+/**
+ * Staff (a demo) or the test accounts' scheduled reset: the given kitchens' offers stop counting (no weekly cap, no
+ * "already offered" or "declined" memory, open ones withdrawn) and their mutes and "offers off" are cleared. Recorded
+ * in the ledger with who and why. Only ever for the shared test kitchens.
+ */
+export async function resetKitchenOffers(rt: Runtime, slugs: string[], by: string, why: string, now = new Date()): Promise<{ kitchens: string[]; cleared: number }> {
+  const s = await ready(rt);
+  const at = now.toISOString();
+  let cleared = 0;
+  const orgs = new Set<string>();
+  for (const o of [...s.offers.values()].filter((x) => slugs.includes(x.kitchen) && !x.cleared)) {
+    save(s, { ...o, cleared: at, ...(o.status === "offered" ? { status: "expired" as const } : {}) });
+    orgs.add(o.orgId);
+    cleared += 1;
+  }
+  for (const k of (await allKitchens(rt)).filter((x) => slugs.includes(x.slug))) orgs.add(k.orgId);
+  for (const p of [...s.prefs.values()].filter((x) => orgs.has(x.orgId))) {
+    const empty: PrefsRecord = { orgId: p.orgId, ...emptyPrefs() };
+    s.prefs.set(p.orgId, empty);
+    await s.stores.prefs.put(p.orgId, empty);
+  }
+  ledger(rt, { actor: `staff:${by}`, summary: `${by} reset the selling agent's offers for ${slugs.join(", ")} (${why}): ${cleared} earlier offer${cleared === 1 ? "" : "s"} no longer count, and their mutes are cleared.`, data: { step: "reset", kitchens: slugs, cleared, by, why } });
+  return { kitchens: slugs, cleared };
+}
+
+/** The shared test kitchens (the public test accounts): the only ones a demo reset may touch. */
+export async function testKitchens(rt: Runtime): Promise<string[]> {
+  return (await rt.accounts.list()).filter((a) => a.kind === "test" && a.kitchen).map((a) => a.kitchen!);
 }
 
 async function own(rt: Runtime, orgId: string, offerId: string, now: Date): Promise<OfferRecord> {
@@ -515,25 +607,51 @@ export async function prefsOf(rt: Runtime, orgId: string): Promise<OfferPrefs> {
 
 // ---------- the operations view ----------
 
+/** What a kitchen told the selling agent, in words, with the kitchen's name. */
+export type KitchenPrefsView = { orgId: string; name: string; off?: { by: string; at: string }; mutes: OfferPrefs["mutes"]; said: string[] };
+
 export type OffersView = {
-  stats: { offered: number; accepted: number; declined: number; muted: number; expired: number; withheld: number; open: number; kitchensOff: number; liveCalls: number; weeklyCap: number };
+  stats: { offered: number; accepted: number; declined: number; muted: number; expired: number; withheld: number; open: number; kitchensOff: number; liveCalls: number; weeklyCap: number; cleared: number };
   offers: Omit<OfferRecord, "token" | "body">[];
   campaigns: Campaign[];
   listings: NewListing[];
-  prefs: (OfferPrefs & { orgId: string })[];
+  prefs: KitchenPrefsView[];
+  /** The shared test kitchens the demo reset may touch, with how many offers count against their weekly cap now. */
+  testKitchens: { slug: string; name: string; thisWeek: number }[];
 };
+
+const REASON_WORDS: Record<string, string> = { new_in_assortment: "new in the assortment", new_to_kitchen: "new to the kitchen", in_season: "in season", cheaper: "cheaper like-for-like", more_reliable: "more reliable", lower_carbon: "lower in carbon" };
 
 export async function offersView(rt: Runtime, now = new Date()): Promise<OffersView> {
   const s = await ready(rt);
+  const kitchens = await allKitchens(rt);
+  // The same check the conversation makes, so this page and the kitchen's agent agree on what is open.
+  for (const k of kitchens) await reconcileOpen(rt, k, now).catch(() => []);
   for (const o of s.offers.values()) expire(s, o, now);
-  const all = [...s.offers.values()].sort((a, b) => b.at.localeCompare(a.at));
+  const all = [...s.offers.values()].filter((o) => !o.cleared).sort((a, b) => b.at.localeCompare(a.at));
   const count = (st: OfferStatus) => all.filter((o) => o.status === st).length;
+  const nameOf = (orgId: string) => kitchens.find((k) => k.orgId === orgId)?.name ?? [...s.offers.values()].find((o) => o.orgId === orgId)?.kitchenName ?? "A kitchen no longer open";
+  const productOf = (id: string) => [...s.offers.values()].find((o) => o.productId === id)?.productName ?? `product ${id}`;
+  const prefs: KitchenPrefsView[] = [...s.prefs.values()]
+    .filter((p) => p.off || p.mutes.length)
+    .map((p) => ({
+      orgId: p.orgId,
+      name: nameOf(p.orgId),
+      off: p.off,
+      mutes: p.mutes,
+      said: [
+        ...(p.off ? [`turned offers off (${p.off.by}, ${p.off.at.slice(0, 10)})`] : []),
+        ...p.mutes.map((m) => `no more ${m.scope === "family" ? `${familyL(m.value, "en")} suggestions` : m.scope === "reason" ? `"${REASON_WORDS[m.value] ?? m.value}" suggestions` : `offers of ${productOf(m.value)}`} (${m.by}, ${m.at.slice(0, 10)})`),
+      ],
+    }));
+  const tests = await testKitchens(rt);
   return {
-    stats: { offered: all.filter((o) => o.status !== "withheld").length, accepted: count("accepted"), declined: count("declined"), muted: count("muted"), expired: count("expired"), withheld: count("withheld"), open: count("offered"), kitchensOff: [...s.prefs.values()].filter((p) => p.off).length, liveCalls: s.liveCalls, weeklyCap: OFFER_WEEKLY_CAP },
+    stats: { offered: all.filter((o) => o.status !== "withheld").length, accepted: count("accepted"), declined: count("declined"), muted: count("muted"), expired: count("expired"), withheld: count("withheld"), open: count("offered"), kitchensOff: prefs.filter((p) => p.off).length, liveCalls: s.liveCalls, weeklyCap: OFFER_WEEKLY_CAP, cleared: [...s.offers.values()].filter((o) => o.cleared).length },
     offers: all.slice(0, 200).map(({ token: _t, body: _b, ...o }) => (void _t, void _b, o)),
     campaigns: [...s.campaigns.values()].sort((a, b) => b.at.localeCompare(a.at)),
     listings: [...s.listings.values()],
-    prefs: [...s.prefs.values()],
+    prefs,
+    testKitchens: kitchens.filter((k) => tests.includes(k.slug)).map((k) => ({ slug: k.slug, name: k.name, thisWeek: sentThisWeek(all.filter((o) => o.orgId === k.orgId).map((o) => ({ offerId: o.offerId, productId: o.productId, family: o.family, at: o.at, status: o.status })), now) })),
   };
 }
 

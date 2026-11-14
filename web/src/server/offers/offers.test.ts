@@ -13,7 +13,7 @@ import { getRuntime, resetRuntime } from "@/server/runtime";
 import { submitTurn, threadStore } from "@/server/thread/engine";
 import type { Card, OrderCard, SheetCard } from "@/server/thread/types";
 import { KITCHEN_ORG, demoKitchenKeyPair, demoKitchenMandate } from "../demo-kitchen";
-import { offersView, runSellingAgent, startCampaign } from "./service";
+import { explainResult, offersForOrg, offersView, resetKitchenOffers, runSellingAgent, startCampaign } from "./service";
 import { answerOffer, offerAnswerOf, offerForThread, offerOnSheet } from "./thread";
 
 /**
@@ -197,3 +197,54 @@ describe("an outside buyer's agent over MCP", () => {
     expect(rt.dock.ledger.verify().ok).toBe(true);
   });
 });
+
+describe("operations and the conversation agree; the demo reset; campaigns explained", () => {
+  it("an open offer the kitchen's own agent will not say is closed with its reason, so both sides show the same", async () => {
+    const { rt, k, session } = await kaariSession();
+    await startCampaign(rt, { productId: NEW_MILK, by: "Staff Tester", listAsNew: true });
+    expect((await offersView(rt)).offers.find((o) => o.kitchen === "kaari")?.status).toBe("offered");
+    // The kitchen turns offers off through another door (an outside agent): the record still says open until checked.
+    const { muteOffers } = await import("./service");
+    await muteOffers(rt, session, { scope: "family", value: "milk" }, { by: "Mira", via: "mcp" });
+    expect(await offerForThread(rt, session, k.info.name)).toBeUndefined();
+    const v = await offersView(rt);
+    const o = v.offers.find((x) => x.kitchen === "kaari")!;
+    expect(o).toMatchObject({ status: "withheld", rule: "kitchen_check" });
+    expect(v.prefs.find((p) => p.orgId === KITCHEN_ORG.orgId)).toMatchObject({ name: "Ravintola Kaari", said: [expect.stringMatching(/^no more milk suggestions/)] });
+  });
+
+  it("the demo reset clears the weekly cap, open offers and mutes, and is in the ledger", async () => {
+    const { rt, session } = await kaariSession();
+    await startCampaign(rt, { productId: NEW_MILK, by: "Staff Tester", listAsNew: true });
+    await startCampaign(rt, { productId: "VA-1002", by: "Staff Tester", listAsNew: true });
+    const capped = await startCampaign(rt, { productId: "VA-1035", by: "Staff Tester", listAsNew: true });
+    expect(capped.results.find((r) => r.kitchen === "kaari")).toMatchObject({ rule: "weekly_cap", why: expect.stringMatching(/already had 2 offers this week/) });
+    const { muteOffers } = await import("./service");
+    await muteOffers(rt, session, { scope: "reason", value: "in_season" }, { by: "Mira", via: "mcp" });
+    const r = await resetKitchenOffers(rt, ["kaari"], "Staff Tester", "a test");
+    expect(r.cleared).toBe(3); // two offers and the one held back by the cap
+    expect(await offersForOrg(rt, KITCHEN_ORG.orgId)).toEqual([]);
+    expect((await offersView(rt)).prefs).toEqual([]);
+    expect((await startCampaign(rt, { productId: "VA-1035", by: "Staff Tester", listAsNew: true })).results.find((x) => x.kitchen === "kaari")?.outcome).toBe("offered");
+    expect(rt.dock.ledger.entries().some((e) => e.type === "offer" && e.data.step === "reset")).toBe(true);
+  });
+
+  it("a campaign relevant to nobody says why, kitchen by kitchen, and what would change it", async () => {
+    const rt = await getRuntime();
+    const c = await startCampaign(rt, { productId: "PK-4001", by: "Staff Tester", listAsNew: true }); // oat drink: Kaari's rules cover dairy only
+    const kaari = c.results.find((r) => r.kitchen === "kaari")!;
+    expect(kaari.why).toMatch(/own rules let its agent buy only from the product groups it chose/);
+    expect(kaari.wouldHelp).toMatch(/adding .* to its rules/);
+    expect(c.results.find((r) => r.kitchen === "laakso")!.why).toMatch(/Laakso Catering Oy's rules rule it out: .*gluten/);
+    // Laakso has bought no milk yet: not relevant, and the page says what would change it.
+    const milk = await startCampaign(rt, { productId: "VA-1035", by: "Staff Tester", listAsNew: true });
+    const laakso = milk.results.find((r) => r.kitchen === "laakso")!;
+    expect(laakso.why).toMatch(/has never ordered/);
+    expect(laakso.wouldHelp).toMatch(/have not bought this kind yet/);
+    // ... and with that box ticked, Laakso (whose rules allow milk) gets it as something new to try.
+    const wider = await startCampaign(rt, { productId: "VA-1035", by: "Staff Tester", listAsNew: true, reachAllowed: true });
+    expect(wider.results.find((r) => r.kitchen === "laakso")?.outcome).toBe("offered");
+    expect(explainResult({ kitchen: "x", name: "X", outcome: "withheld", rule: "not_available", reason: "" }, { category: "milk", name: "m" }, { listedAsNew: true, reachAllowed: false, claims: [] }).wouldHelp).toMatch(/priced and deliverable/);
+  });
+});
+

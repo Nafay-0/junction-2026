@@ -32,6 +32,7 @@
     "verify:offer": "tsx scripts/verify-offer.ts",
     "offers": "tsx scripts/offers.ts",
     "scenarios": "tsx scripts/scenarios.ts",
+    "watch:acceptance": "tsx scripts/watch-acceptance.ts",
     "scenarios:menu": "tsx scripts/menu-scenarios.ts",
     "dev:mandate": "tsx scripts/dev-mandate.ts",
     "e2e": "next build && playwright test",

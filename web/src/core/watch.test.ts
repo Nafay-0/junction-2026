@@ -163,7 +163,7 @@ describe("substitutes: good, better, best, and who decides", () => {
       ["better", "U-BOX", true], // another maker, 8 cents more per litre
       ["good", "T-WHOLE", false], // another fat level: needs a person
     ]);
-    expect(ranked[0].why).toMatch(/0\.09 € more per litre; 100 × 1 l; same maker/);
+    expect(ranked[0].why).toMatch(/0\.09 € more per litre; 100 l as 100 × 1 l; same maker/);
   });
 
   it("the wholesaler's own substitute list ranks first among equals; nutrition compared from the declarations", () => {
@@ -173,6 +173,17 @@ describe("substitutes: good, better, best, and who decides", () => {
     expect(ranked[0]).toMatchObject({ productId: "U-BOX", tradeOff: { wholesalerLists: true } });
     expect(ranked[0].tradeOff.nutritionText).toMatch(/less protein/);
     expect(ranked[0].why).toMatch(/the wholesaler lists it as a substitute/);
+  });
+
+  it("a case of 20 l boxes counted in pieces: the substitute covers the same litres (20 boxes = 400 l as 400 × 1 l)", () => {
+    const box: Product = { ...P.box, id: "CREAM-20L", name: "Whipping cream 20 l novobox lactose free", category: "cream", unit: "pcs", packSize: 1, attributes: ["lactose_free", "fat_35"], packContent: { perSalesUnit: { L: 20, kg: 19.9 }, baseUnitsPerSalesUnit: 1, certain: false, certainMeasures: [], issues: ["case_content_unclear"], label: "20 l per CS" } };
+    const litre: Product = { ...P.litre, id: "CREAM-1L", name: "Whipping cream 1 l lactose free", category: "cream", attributes: ["lactose_free", "fat_35"] };
+    const m = sampleMandate(new Date("2026-11-16T08:00:00Z"), { substitution: { rule: "within_preferences", maxPriceIncreasePct: 10 }, allowedCategories: ["cream"], requiredAttributes: [], forbiddenAllergens: [] });
+    // The usual: 20 boxes at 90 € a box (4,50 € a litre); the 1 l carton at 4,60 €.
+    const [r] = rankSubstitutes(box, 9000, [{ product: litre, label: "exact", offer: { productId: "CREAM-1L", unitPriceCents: 460, availablePacks: 1000, deliveryDate: "2026-11-19" } }], { amount: 20, date: "2026-11-19" }, { mandate: m });
+    expect(r.tradeOff).toMatchObject({ packs: 400, packSize: 1, unit: "L", delivered: 400, need: { amount: 400, unit: "L", estimated: true }, usualPerUnitCents: 450, perUnitCents: 460, perUnitDiffCents: 10 });
+    expect(r.insidePreferences).toBe(true);
+    expect(r.why).toMatch(/400 l as 400 × 1 l \(pack content estimated\)/);
   });
 
   it("never offers what the mandate refuses outright, nor pads the list", () => {

@@ -27,6 +27,7 @@ export type Refusal =
   | { code: "mandate_ended" }
   | { code: "licence"; signer?: string }
   | { code: "recall"; what: string }
+  | { code: "no_such_kind"; what: string }
   | { code: "nothing_fits"; what: string };
 
 const DATA = generated as { departments: Record<string, string>; categories: Record<string, { label: string }> };
@@ -128,10 +129,14 @@ export function sayRefusal(r: Refusal, lang: Lang): string {
       if (fi) return `${cap(r.what)} on pysäytetty takaisinvedon vuoksi, joten en tilaa sitä. Etsinkö korvaavan?`;
       if (sv) return `${cap(r.what)} är stoppad på grund av en återkallelse, så jag beställer den inte. Ska jag leta efter en ersättare?`;
       return `${cap(r.what)} is held under a recall notice, so I won't order it. Shall I look for a stand-in?`;
+    case "no_such_kind":
+      if (fi) return `Valikoimassa ei ole juuri tätä (${r.what}) sille päivälle; löytämäni ovat muita lajeja. Näytänkö lähimmät?`;
+      if (sv) return `Sortimentet har inte just ${r.what} för den dagen; det jag hittade är andra sorter. Ska jag visa de närmaste?`;
+      return `I couldn't find ${r.what} as such for that day; what the assortment has are other kinds. Shall I show the closest?`;
     case "nothing_fits":
-      if (fi) return `Mikään valikoiman tuote (${r.what}) ei sovi sääntöihinne tälle päivälle. Katsonko toisen päivän tai väljemmän vaihtoehdon?`;
-      if (sv) return `Inget i sortimentet (${r.what}) passar era regler för den dagen. Ska jag titta på en annan dag, eller något mindre strikt?`;
-      return `Nothing in the assortment for ${r.what} fits your rules for that day. Shall I look at another day, or loosen something?`;
+      if (fi) return `En löytänyt tuotetta ${r.what}, jonka voisin tilata sille päivälle. Katsonko toisen päivän?`;
+      if (sv) return `Jag hittade inget ${r.what} som kan beställas för den dagen. Ska jag titta på en annan dag?`;
+      return `I couldn't find ${r.what} that can be ordered for that day. Shall I look at another day?`;
   }
 }
 
@@ -161,6 +166,9 @@ export function refusalOfStep(run: TurnRun, step: IntakeView, lang: Lang): Refus
     const e = step.excluded.find((x) => x.code === "nutrition_rule");
     return { code: "nutrition_rule", what, ...(e ? { detail: plainDetail(e.reason) } : {}) };
   }
+  // Most of what was looked at is another kind of product: say that, never "your rules" (it is not a rule).
+  const kinds = step.excluded.filter((e) => /different kind of product/i.test(e.reason)).length;
+  if (kinds > 0 && kinds >= step.excluded.length / 2) return { code: "no_such_kind", what };
   const allergens = step.excluded.flatMap((e) => /contains ([a-z_, ]+)/i.exec(e.reason)?.[1]?.split(/,\s*/) ?? []).filter((a) => m.forbiddenAllergens.includes(a.trim()));
   if (allergens.length) return { code: "forbidden_allergen", what, allergens: [...new Set(allergens.map((a) => a.trim()))].slice(0, 3) };
   return { code: "nothing_fits", what };
@@ -235,10 +243,7 @@ export function readable(text: string, lang: Lang): string {
     if (!parts.some((w) => w.length >= 5 && !KEEP.has(w))) return m;
     return parts.map((w, i) => (KEEP.has(w) || /^[A-ZÄÖÅ]{2}$/.test(w) ? w : i === 0 ? w.charAt(0) + w.slice(1).toLowerCase() : w.toLowerCase())).join("");
   });
-  if (lang === "en") {
-    const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    t = t.replace(/\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday) (\d{1,2})\.(\d{1,2})\.?/g, (m, w: string, d: string, mo: string) => (Number(mo) >= 1 && Number(mo) <= 12 ? `${w} ${Number(d)} ${MON[Number(mo) - 1]}` : m));
-  }
+  if (lang === "en") t = englishDays(t);
   return t.replace(/(\d{1,2}\.\d{1,2}\.)\./g, "$1").replace(/(\d{1,2}\.\d{1,2})\.(?=[?;:,!])/g, "$1");
 }
 
@@ -248,4 +253,20 @@ const INSIDE = /\b(the store treated|treated your message|neither result|the res
 /** A sentence that tells the buyer what to type, or says how the system works inside: never shown. */
 export function insideOrTell(sentence: string): boolean {
   return TELL.test(sentence) || INSIDE.test(sentence);
+}
+
+/**
+ * English days as people write them: "Tue 17.11." becomes "Tue 17 Nov". The date's own dot often also ends the
+ * sentence ("... arrives Monday 16.11." or "16.11. Shall I"): then the sentence keeps a full stop.
+ */
+export function englishDays(text: string): string {
+  const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return text.replace(/\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Mon|Tue|Wed|Thu|Fri|Sat|Sun)( |\u00a0)(\d{1,2})\.(\d{1,2})(\.?)/g, (m: string, w: string, sp: string, d: string, mo: string, dot: string, offset: number, all: string) => {
+    if (!(Number(mo) >= 1 && Number(mo) <= 12 && Number(d) <= 31)) return m;
+    const rest = all.slice(offset + m.length);
+    const mark = /^(\}\}|\*\*)/.exec(rest)?.[0] ?? "";
+    const after = rest.slice(mark.length);
+    const ends = dot === "." && (/^\s*$/.test(after) || /^\s+[\p{Lu}"“*{]/u.test(after));
+    return `${w}${sp}${Number(d)} ${MON[Number(mo) - 1]}${ends && !mark ? "." : ""}${ends && mark ? "" : ""}`;
+  }).replace(/(\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec))(\}\}|\*\*)(?=\s+[\p{Lu}"“*{]|\s*$)/gu, "$1$2.");
 }
