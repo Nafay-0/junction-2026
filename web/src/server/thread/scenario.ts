@@ -3,9 +3,9 @@ import { clock, money } from "@/app/_ui/plain";
 import { localNow } from "@/core/kitchen";
 import type { EventResult, SubOption } from "@/server/agent/menu/scenarios";
 import { MENU_SAY_TEXT } from "@/server/agent/menu/say.text";
-import { actOnScenario, eventForThread, inLanguage, scenarioAnswerOf, seasonalForThread, type PendingScenario, type ScenarioAnswer, type ScenarioKind, type ThreadScenario } from "@/server/agent/menu/thread";
+import { actOnScenario, eventForThread, incompleteChoices, inLanguage, scenarioAnswerOf, seasonalForThread, type IncompleteChoices, type PendingScenario, type ScenarioAnswer, type ScenarioKind, type ThreadScenario } from "@/server/agent/menu/thread";
 import { cardId } from "./cards";
-import { readable } from "./refusal";
+import { canDraft, groupIdByName, readable } from "./refusal";
 import { byLine, record, step, type TurnRun } from "./pipeline";
 import type { ScenarioCard } from "./types";
 
@@ -73,9 +73,11 @@ async function eventShort(run: TurnRun, r: EventResult, lang: Lang, fallback: Th
     const trade = lang === "en" ? lower(best.tradeoff.taste.split(/;\s*/)[0].replace(/\.$/, "")) : "";
     parts.push(t.instead(what(first), label, trade).replace(/:\s*\.$/, "."));
     if (best.signOff.needed && best.signOff.approver) parts.push(t.needsOk(best.signOff.approver.name));
-  } else parts.push(t.noOption(what(first)));
+  } else parts.push(t.noOption(what(first)).replace(/;[^.]*\.$/, "."));
   if (n > 1) parts.push(REST[lang](n - 1));
-  return { say: parts.join(" ").replace(/\.\.(?=\s|$)/g, "."), ask: best ? ASK[lang](optionName(best), n > 1) : fallback.ask };
+  // No stand-in for the one that matters most: the question is what to cook in its place (never a side line's pick).
+  const instead = { en: `What shall I plan in place of the ${what(first)}?`, fi: `Mitä suunnittelen tilalle (${what(first)})?`, sv: `Vad ska jag planera i stället för ${what(first)}?` }[lang];
+  return { say: parts.join(" ").replace(/\.\.(?=\s|$)/g, "."), ask: best ? ASK[lang](optionName(best), n > 1) : instead };
 }
 
 function score(x: EventResult["cannotArrive"][number], r: EventResult): number {
@@ -138,6 +140,19 @@ async function cardOf(run: TurnRun, base: ThreadScenario, lang: Lang): Promise<S
     const short = base.kind === "event" ? await eventShort(run, s.facts.event as EventResult, l, s) : { say: s.say, ask: s.ask };
     text[l] = { say: readable(short.say, l), ask: readable(short.ask, l) };
   }
+  // A seasonal menu that cannot be bought in full never ends on "Shall I put it on the order sheet?": the menu, what
+  // is missing and why, then the ways forward (read by engine.ts ways, not as a yes to the sheet).
+  let incomplete = false;
+  if (base.kind === "seasonal") {
+    const inc = await incompleteChoices(run.k.info.slug, base.planId, lang, { ideas: false }).catch(() => undefined);
+    if (inc && !inc.complete && inc.missing.length) {
+      incomplete = true;
+      const said = incompleteSaid(run, base.pending as PendingScenario, inc, lang);
+      run.scenarioReplyIsLine = false;
+      const menuPart = text[lang].say.split(/(?<=[.!?])\s+/).filter((x) => !/\b(\d+ of the \d+|\d+\/\d+|\d+ av de \d+)\b/.test(x)).join(" ");
+      text[lang] = { say: readable(`${menuPart} ${said}`.trim(), lang), ask: "" };
+    }
+  }
   const ev = base.kind === "event" ? (base.facts.event as EventResult) : undefined;
   const others = ev ? ev.cannotArrive.map((x) => `${lower(x.ingredient)}: ${ev.options[x.lineId]?.[0] ? lower(ev.options[x.lineId][0].title) : "-"}`) : undefined;
   const card: ScenarioCard = {
@@ -149,7 +164,7 @@ async function cardOf(run: TurnRun, base: ThreadScenario, lang: Lang): Promise<S
     steps: base.steps.slice(0, 40),
     pending: base.pending,
     ...(others?.length ? { others } : {}),
-    state: "open",
+    state: incomplete ? "answered" : "open",
   };
   run.store.card(run.thread, run.turnId, card);
   run.facts.push(card, base.facts);
@@ -158,6 +173,92 @@ async function cardOf(run: TurnRun, base: ThreadScenario, lang: Lang): Promise<S
   run.dishesFor = { planId: base.planId, ...(ev ? { standIns: Object.fromEntries(ev.cannotArrive.flatMap((x) => (ev.options[x.lineId]?.[0] ? [[x.lineId, lower(ev.options[x.lineId][0].title)]] : []))) } : {}) };
   record(run, "scenario_said", `The ${base.kind === "event" ? "short-notice booking" : "seasonal menu"} ${base.planId} was said in the conversation.`, { planId: base.planId, kind: base.kind });
   return card;
+}
+
+/** A scenario's plan that cannot be completed, said: the count, each missing ingredient with its reason, the ways. */
+function incompleteSaid(run: TurnRun, pending: PendingScenario, inc: IncompleteChoices, lang: Lang): string {
+  const reason = (m: IncompleteChoices["missing"][number]) => lower(m.words.split(/[;:]\s|\.\s/)[0].replace(/\.$/, "").replace(/\s*\((?:[A-Z]{2}-)?\d{4,}\)/g, "")).slice(0, 90);
+  const and = lang === "fi" ? " ja " : lang === "sv" ? " och " : " and ";
+  const list = (xs: string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")}${and}${xs.at(-1)}`);
+  // Grouped by reason: what the kitchen's product groups do not cover, in one clause; each other one with its own.
+  const outside = inc.missing.filter((m) => m.group);
+  const others = inc.missing.filter((m) => !m.group);
+  const groupsOut = [...new Set(outside.map((m) => lower(m.group!.split(":")[0])))];
+  const names = (ms: typeof inc.missing) => list([...new Set(ms.map((m) => lower(m.ingredient).replace(/\s*\(.*\)$/, "")))].slice(0, 5)) + (new Set(ms.map((m) => m.ingredient)).size > 5 ? { en: " and more", fi: " ja muita", sv: " med flera" }[lang] : "");
+  const parts = [
+    ...(outside.length ? [{ en: `${names(outside)}: your rules don't cover ${list(groupsOut)}`, fi: `${names(outside)}: sääntönne eivät kata ryhmiä ${list(groupsOut)}`, sv: `${names(outside)}: era regler omfattar inte ${list(groupsOut)}` }[lang]] : []),
+    ...others.slice(0, 4).map((m) => `${lower(m.ingredient)} (${reason(m)})`),
+  ];
+  const missing = parts.join("; ");
+  const more = others.length > 4 ? { en: `; and ${others.length - 4} more`, fi: `; ja ${others.length - 4} muuta`, sv: `; och ${others.length - 4} till` }[lang] : "";
+  const head = {
+    en: `I can't order this menu as planned: only ${inc.covered} of its ${inc.of} ingredients can be bought. Not covered: ${missing}${more}.`,
+    fi: `En voi tilata tätä menua suunnitellusti: vain ${inc.covered}/${inc.of} raaka-ainetta saa tilattua. Puuttuu: ${missing}${more}.`,
+    sv: `Jag kan inte beställa menyn som den är planerad: bara ${inc.covered} av ${inc.of} ingredienser går att köpa. Saknas: ${missing}${more}.`,
+  }[lang];
+  const ownerChoice = inc.choices.find((c) => c.kind === "ask_owner");
+  const groupIds = ownerChoice?.kind === "ask_owner" ? [...new Set(ownerChoice.groups.map(groupIdByName).filter((x): x is string => !!x))] : [];
+  run.scenarioReplyIsLine = true;
+  const w = run.thread as unknown as { ways?: Record<string, unknown> };
+  w.ways = { planId: inc.planId, categories: [], owner: groupIds.length > 0 && canDraft(run), groupIds, scenario: pending, turnId: run.turnId };
+  record(run, "scenario_incomplete", `The ${pending.kind} ${inc.planId} cannot be completed (${inc.covered} of ${inc.of}): said with each missing ingredient and the ways forward, no order.`, { planId: inc.planId, missing: inc.missing.map((m) => m.ingredient) });
+  // Only the ways this conversation can carry out: asking the owner only where a change can be drafted here.
+  const t = MENU_SAY_TEXT[lang];
+  const choices = inc.choices
+    .filter((c) => c.kind !== "ask_owner" || (w.ways as { owner: boolean }).owner)
+    .map((c) => (c.kind === "ask_owner" ? t.choiceOwner(list(groupsOut.length ? groupsOut : c.groups.map((g) => lower(g.split(":")[0])))) : c.kind === "order_partial" ? t.choicePartial(c.items.length > 4 ? { en: `${c.items.length} ingredients`, fi: `${c.items.length} raaka-ainetta`, sv: `${c.items.length} ingredienser` }[lang] : list(c.items.map(lower))) : c.words));
+  const ask = choices.length ? { en: `Shall I ${choices.join(", or ")}?`, fi: `${choices.map((c, i) => (i === 0 ? c.charAt(0).toUpperCase() + c.slice(1) : c)).join(", vai ")}?`, sv: `Ska jag ${choices.join(", eller ")}?` }[lang] : "";
+  return readable(`${head} ${ask}`.trim(), lang);
+}
+
+/** "Only what can be bought": the scenario's own partial order, on the order sheet to confirm (nothing is ordered yet). */
+export async function orderScenarioPartial(run: TurnRun, pending: unknown, lang: Lang): Promise<string> {
+  const r = await actOnScenario(run.k.info.slug, pending as PendingScenario, { kind: "partial" }, { by: byLine(run) }, lang);
+  if (!r.sheet) return r.reply;
+  const { createSheet } = await import("./sheet");
+  const sheet = await createSheet(run, { lines: r.sheet.lines, ...(r.sheet.deliveryDate ? { deliveryDate: r.sheet.deliveryDate } : {}), text: r.sheet.text, session: r.sheet.session });
+  record(run, "scenario_sheet", `Only what can be bought of ${(pending as PendingScenario).planId} is on order sheet ${sheet.sheetId}: ${money(sheet.totalCents)}.`, { sheetId: sheet.sheetId });
+  const day = sheet.deliveryDate ? dayL(sheet.deliveryDate, lang) : "";
+  // A form the planner bought in place of the one in the recipe (onion powder for fresh onion) is said as a swap.
+  const { dishGroups } = await import("@/server/agent/menu/thread");
+  const g = await dishGroups(run.k.info.slug, (pending as PendingScenario).planId, lang).catch(() => undefined);
+  const { shortName } = await import("./watch");
+  const swaps = (g?.toOrder ?? []).filter((i) => i.standIn && i.product).map((i) => ({ en: `${shortName(i.product!)} in place of ${lower(i.ingredient)}`, fi: `${shortName(i.product!)} raaka-aineen ${lower(i.ingredient)} tilalla`, sv: `${shortName(i.product!)} i stället för ${lower(i.ingredient)}` }[lang]));
+  const t = MENU_SAY_TEXT[lang];
+  const left = (r.sheet as { leftOff?: { name: string }[] }).leftOff ?? [];
+  const and = lang === "fi" ? " ja " : lang === "sv" ? " och " : " and ";
+  const list = (xs: string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")}${and}${xs.at(-1)}`);
+  const reply = [t.onSheet, left.length ? t.leftOff(list([...new Set(left.map((x) => lower(x.name)))])) : "", swaps.length ? `${cap(list(swaps))}.` : ""].filter(Boolean).join(" ");
+  return readable({ en: `${reply} ${money(sheet.totalCents)}${day ? ` for ${day}` : ""}. Shall I order it?`, fi: `${reply} ${money(sheet.totalCents)}${day ? ` (${day})` : ""}. Tilaanko sen?`, sv: `${reply} ${money(sheet.totalCents)}${day ? ` till ${day}` : ""}. Ska jag beställa det?` }[lang], lang);
+}
+
+/**
+ * "Braised pork shoulder instead": the named dish takes the place of the booking's dish that cannot come, in the same
+ * plan (the menu adapter's own edit, covers and day kept), then the booking is worked out again and said.
+ */
+export async function replaceInEvent(run: TurnRun, r: { planId: string; pending: unknown; words: string }, lang: Lang): Promise<string | undefined> {
+  const { changeMenu } = await import("@/server/agent/menu/thread");
+  const st = step(run, "plan", { en: "Planning that dish in its place", fi: "Suunnittelen ruuan tilalle", sv: "Planerar rätten i stället" }[lang]);
+  const c = await changeMenu(run.k.info.slug, r.planId, r.words, byLine(run), lang).catch(() => undefined);
+  if (!c?.edits.length) {
+    st.done();
+    return undefined;
+  }
+  const p = r.pending as PendingScenario;
+  const old = run.store.cards(run.thread).map((x) => x.card).filter((x): x is ScenarioCard => x.type === "scenario" && x.planId === r.planId).at(-1);
+  if (old) run.store.card(run.thread, run.turnId, { ...old, state: "answered" });
+  // The day the booking is planned for now (the buyer may have moved it): the plan's own, not the words' first day.
+  const { dishGroups } = await import("@/server/agent/menu/thread");
+  const day = p.earliest ?? (await dishGroups(run.k.info.slug, r.planId, lang).catch(() => undefined))?.day ?? undefined;
+  // The booking worked out ahead for that day was for the plan before the change: not reused.
+  const ahead = (globalThis as { __dockEventAhead?: Map<string, unknown> }).__dockEventAhead;
+  for (const k of [...(ahead?.keys() ?? [])]) if (k.startsWith(`${r.planId}:`)) ahead!.delete(k);
+  const next = await eventForThread(run.k.info.slug, p.words, byLine(run), lang, day, r.planId);
+  st.done();
+  record(run, "event_replace", `The buyer named a dish for the booking's main that cannot come: "${r.words.slice(0, 80)}" (${c.changed.slice(0, 2).join("; ")}).`, { planId: r.planId });
+  const card = await cardOf(run, next, lang);
+  run.scenarioSaid = undefined;
+  return `${card.text[lang].say} ${card.text[lang].ask}`.trim();
 }
 
 /** The open scenario card (newest), when its question is still open. */
@@ -182,6 +283,9 @@ export async function answerScenarioIn(run: TurnRun, card: ScenarioCard, answer:
       const next = await cardOf(run, r.next, lang);
       return `${next.text[lang].say} ${next.text[lang].ask}`;
     }
+    // The plan cannot be completed (the main cannot arrive, a line breaks a rule): no order of what is left. What is
+    // missing and why, each named, then the ways forward; the answer is read against them (engine.ts ways).
+    if (r.incomplete && !r.incomplete.complete) return incompleteSaid(run, card.pending as PendingScenario, r.incomplete, lang);
     if (r.sheet) {
       const { createSheet } = await import("./sheet");
       const sheet = await createSheet(run, { lines: r.sheet.lines, ...(r.sheet.deliveryDate ? { deliveryDate: r.sheet.deliveryDate } : {}), text: r.sheet.text, session: r.sheet.session });
