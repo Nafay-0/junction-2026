@@ -286,8 +286,8 @@ async function main() {
   await row("backup", async () => {
     const s = await stage("poor_record");
     if (!s.ok) return { said: [s.body.error?.message ?? "staging failed"], partly: "no poor-record product" };
-    const st = s.body.staged as { packs?: number; amount?: number; unit?: string; productName?: string };
-    const r = await say(`Order ${st.unit && st.unit !== "pcs" && st.amount ? `${st.amount} ${st.unit === "L" ? "litres" : st.unit}` : `${st.packs ?? 4} packs`} of ${st.productName} for ${day}.`);
+    const st = s.body.staged as { packs?: number; amount?: number; unit?: string; productName?: string; day?: string };
+    const r = await say(`Order ${st.unit && st.unit !== "pcs" && st.amount ? `${st.amount} ${st.unit === "L" ? "litres" : st.unit}` : `${st.packs ?? 4} packs`} of ${st.productName} for ${st.day ? new Date(`${st.day}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" }) : day}.`);
     const said = [s.body.staged!.summary, ...(await follow(r))];
     said.push(...(await say("Yes, line it up.")).lines);
     return { said };

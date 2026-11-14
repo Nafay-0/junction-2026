@@ -12,7 +12,7 @@ const eur = (n: number, lang: Lang) => `${fmt(n, lang)} €`;
 const unitWord = (u: string, lang: Lang) => (u === "L" ? { en: "litres", fi: "litraa", sv: "liter" }[lang] : u === "kg" ? "kg" : { en: "packs", fi: "pakkausta", sv: "förpackningar" }[lang]);
 export const weekdayOf = (iso: string, lang: Lang) => WEEKDAY_LONG[lang][new Date(`${iso}T12:00:00Z`).getUTCDay()];
 
-export function guideWords(fx: GuideFacts, lang: Lang, staged?: { productName?: string; packs?: number; amount?: number; unit?: string }): GuideWords {
+export function guideWords(fx: GuideFacts, lang: Lang, staged?: { productName?: string; packs?: number; amount?: number; unit?: string; day?: string }): GuideWords {
   const poorName = staged?.productName ?? fx.poor?.name;
   const poorPacks = staged?.packs ?? fx.poor?.packs ?? 4;
   const poorAmount = staged?.amount ?? fx.poor?.amount;
@@ -24,7 +24,7 @@ export function guideWords(fx: GuideFacts, lang: Lang, staged?: { productName?: 
     ...(fx.usual ? { usual: { tenTimes: fmt(fx.usual.tenTimes, lang), unit: unitWord(fx.usual.unit, lang), name: fx.usual.name } } : {}),
     ...(fx.weekly ? { weeklyFamily: fx.weekly.name } : {}),
     ...(fx.creeping ? { creepingFamily: fx.creeping.name } : {}),
-    ...(poorName ? { poor: { name: poorName, packs: poorPacks, amount: poorUnit !== "pcs" && poorAmount ? `${fmt(poorAmount, lang)} ${unitWord(poorUnit, lang)}` : `${poorPacks} ${unitWord("pcs", lang)}` } } : {}),
+    ...(poorName ? { poor: { name: poorName, packs: poorPacks, ...(staged?.day ? { day: weekdayOf(staged.day, lang) } : {}), amount: poorUnit !== "pcs" && poorAmount ? `${fmt(poorAmount, lang)} ${unitWord(poorUnit, lang)}` : `${poorPacks} ${unitWord("pcs", lang)}` } } : {}),
     day: weekdayOf(fx.day, lang),
     raiseTo: eur(Math.max(fx.limitEur * 3, fx.limitEur + 500), lang),
   };

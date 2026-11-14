@@ -92,7 +92,7 @@ async function recurring(rt: Runtime, orgId: string) {
 }
 
 /** A product with a poor delivery record the kitchen may buy: from its own history first, else master data in its groups. */
-export async function poorRecordProduct(rt: Runtime, a: Account, opts: { live?: boolean } = {}): Promise<{ product: Product; name: string; words: string; packs: number; amount: number; unit: string } | undefined> {
+export async function poorRecordProduct(rt: Runtime, a: Account, opts: { live?: boolean } = {}): Promise<{ product: Product; name: string; words: string; packs: number; amount: number; unit: string; day?: string } | undefined> {
   const k = a.kitchen!;
   const { forbiddenBy } = await import("@/core/offers");
   const { warnLevel } = await import("../reliability/service");
@@ -117,17 +117,22 @@ export async function poorRecordProduct(rt: Runtime, a: Account, opts: { live?: 
   }
   if (!pool.length) return undefined;
   let p = pool[0];
-  if (opts.live && pool.length > 1) {
-    // Staging only (a person's tap, capped): ONE live call for at most ten candidates, so the one picked can come.
-    const cat = rt.catalog as { getLiveStatus?: (ids: string[]) => Promise<{ productId: string; orderable: boolean }[]> };
-    const st = await cat.getLiveStatus?.(pool.slice(0, 10).map((x) => x.id)).catch(() => undefined);
-    const can = st?.find((x) => x.orderable)?.productId;
-    p = pool.find((x) => x.id === can) ?? p;
+  let day: string | undefined;
+  if (opts.live) {
+    // Staging only (a person's tap, capped): ONE live call for at most ten candidates, so the one picked can come;
+    // its first delivery day is the day the words name.
+    const ids = pool.slice(0, 10).map((x) => x.id);
+    const offers = await rt.catalog.getLiveOffers(ids).catch(() => [] as import("@/core/catalog").LiveOffer[]);
+    const can = ids.map((id) => offers.find((o) => o.productId === id && o.availablePacks > 0 && o.unitPriceCents > 0)).find(Boolean);
+    if (can) {
+      p = pool.find((x) => x.id === can.productId) ?? p;
+      day = can.deliveryDate;
+    }
   }
   const usual = (profile?.history ?? []).filter((h) => h.lines.some((l) => l.productId === p.id)).at(-1);
   const packs = usual?.lines.find((l) => l.productId === p.id)?.packs ?? Math.max(2, Math.min(10, Math.round(6 / Math.max(1, p.packSize)) || 2));
   const name = p.names?.en ?? p.name;
-  return { product: p, name, words: deliveryRecordOf(p, warn)!.words, packs, amount: Math.round(packs * p.packSize * 100) / 100, unit: p.unit };
+  return { product: p, name, words: deliveryRecordOf(p, warn)!.words, packs, amount: Math.round(packs * p.packSize * 100) / 100, unit: p.unit, ...(day ? { day } : {}) };
 }
 
 export type Staged = { kind: StageKind; summary: string; productId?: string; productName?: string; family?: string; until?: string; offerId?: string; words?: string; packs?: number; amount?: number; unit?: string; day?: string };
@@ -181,7 +186,8 @@ export async function stageForAccount(rt: Runtime, a: Account, kind: StageKind, 
   } else {
     const found = await poorRecordProduct(rt, a, { live: true });
     if (!found) throw new DockError(409, "no_poor_record", "No product this kitchen may buy has a poor delivery record in the wholesaler's file.", "account");
-    const day = nextDay(await weekdaysOf(rt, k.orgId), now);
+    const usualDay = nextDay(await weekdaysOf(rt, k.orgId), now);
+    const day = found.day && found.day > usualDay ? found.day : usualDay;
     ledger(rt, a, `STAGED for the demo by ${by(a)}: ${found.product.name} (${found.product.id}), which ${found.words} (the wholesaler's delivery file, unchanged), was picked for ${a.restaurant} to put on an order.`, { step: "staged", kind, staged: true, productId: found.product.id }, "watch");
     out = { kind, summary: `${found.name} ${found.words}. Order it and the agent offers a backup.`, productId: found.product.id, productName: found.name, family: found.product.category, packs: found.packs, amount: found.amount, unit: found.unit, day };
   }
