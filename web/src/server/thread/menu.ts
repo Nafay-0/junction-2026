@@ -191,7 +191,9 @@ function lateOf(l: PlanLineView): MenuCard["dishes"][number]["lines"][number]["l
   const c = f?.check as Extract<NonNullable<(typeof ok)[number]["check"]>, { ok: true }> | undefined;
   // Without a checked way out the planner's own doubt stays on the line as before (with "accept the later delivery").
   if (!f || !c) return undefined;
-  return { reason: plain(d.text), way: { optionId: `fix:${f.fixId}`, kind: f.kind, title: f.title, effect: f.effect, name: c.product, totalCents: c.totalCents } };
+  // The first product's reason is the line's reason: the rest say the same of the others.
+  const reason = plain(d.text).split("; ")[0].replace(/\.?$/, ".");
+  return { reason, way: { optionId: `fix:${f.fixId}`, kind: f.kind, title: f.title, effect: f.effect, name: c.product, totalCents: c.totalCents } };
 }
 
 /** Days the plan can move to: the kitchen's delivery days inside the mandate's lead time, none earlier than every line can come. */
