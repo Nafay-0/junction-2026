@@ -47,10 +47,15 @@ export const THREAD_LINE_TEXT = defineText({
     sayRemember: "a yes is enough",
     // the day's opening, said in sentences
     today: {
-      none: "Nothing needs you today.",
+      none: "Nothing needs you today. What does the kitchen need?",
       signOff: (total: string, name: string) => `One order is waiting for ${name ? `${name}'s` : "your"} OK: **${total}**.`,
       cutoff: (product: string, time: string) => `The order time for ${product} closes at {{${time}}}.`,
-      drift: (product: string) => `Your recurring ${product} order has changed lately.`,
+      drift: (d: { what: string; usual: string; amountPct: number | null; pricePct: number | null; day?: string }) =>
+        [
+          d.amountPct !== null ? `Your last ${d.what} orders are **${Math.abs(d.amountPct)} %** ${d.amountPct > 0 ? "above" : "below"} the usual **${d.usual}**${d.pricePct !== null && Math.abs(d.pricePct) >= 10 ? `, and the price is ${d.pricePct > 0 ? "up" : "down"} **${Math.abs(d.pricePct)} %**` : ""}.` : `The price of your usual ${d.what} is ${(d.pricePct ?? 0) > 0 ? "up" : "down"} **${Math.abs(d.pricePct ?? 0)} %**.`,
+          d.day ? `Shall I set up the next one, for {{${d.day}}}, at the usual **${d.usual}**?` : "",
+        ].filter(Boolean).join(" "),
+      intro: "I'm your kitchen's buying agent: I order from the wholesaler inside the rules you set, and anything beyond them goes to your phone for an OK.",
       recall: (product: string) => `A recall notice touches ${product}: it is held.`,
       delivery: (day: string) => `A delivery arrives {{${day}}}.`,
       more: (n: number) => `And ${n} more thing${n === 1 ? "" : "s"} today.`,
@@ -136,10 +141,15 @@ export const THREAD_LINE_TEXT = defineText({
     canRemember: "Voin muistaa tämän",
     sayRemember: "kyllä riittää",
     today: {
-      none: "Tänään ei ole mitään hoidettavaa.",
+      none: "Tänään ei ole mitään hoidettavaa. Mitä keittiö tarvitsee?",
       signOff: (total: string, name: string) => `Yksi tilaus odottaa ${name ? `hyväksyntää: ${name}` : "hyväksyntääsi"}: **${total}**.`,
       cutoff: (product: string, time: string) => `Tuotteen ${product} tilausaika päättyy {{${time}}}.`,
-      drift: (product: string) => `Toistuva tilauksesi ${product} on muuttunut viime aikoina.`,
+      drift: (d: { what: string; usual: string; amountPct: number | null; pricePct: number | null; day?: string }) =>
+        [
+          d.amountPct !== null ? `Viimeisimmät tilauksesi (${d.what}) ovat **${Math.abs(d.amountPct)} %** ${d.amountPct > 0 ? "suurempia" : "pienempiä"} kuin tavallinen **${d.usual}**${d.pricePct !== null && Math.abs(d.pricePct) >= 10 ? `, ja hinta on ${d.pricePct > 0 ? "noussut" : "laskenut"} **${Math.abs(d.pricePct)} %**` : ""}.` : `Tavallisen tuotteen (${d.what}) hinta on ${(d.pricePct ?? 0) > 0 ? "noussut" : "laskenut"} **${Math.abs(d.pricePct ?? 0)} %**.`,
+          d.day ? `Teenkö seuraavan tilauksen {{${d.day}}} tavallisena, **${d.usual}**?` : "",
+        ].filter(Boolean).join(" "),
+      intro: "Olen keittiösi ostoagentti: tilaan tukusta asettamiesi sääntöjen sisällä, ja kaikki niiden yli menee puhelimeesi hyväksyttäväksi.",
       recall: (product: string) => `Takaisinveto koskee tuotetta ${product}: se on pysäytetty.`,
       delivery: (day: string) => `Toimitus saapuu {{${day}}}.`,
       more: (n: number) => `Ja ${n} muuta asiaa tänään.`,
@@ -224,10 +234,15 @@ export const THREAD_LINE_TEXT = defineText({
     canRemember: "Jag kan minnas det här",
     sayRemember: "ett ja räcker",
     today: {
-      none: "Inget behöver dig i dag.",
+      none: "Inget behöver dig i dag. Vad behöver köket?",
       signOff: (total: string, name: string) => `En beställning väntar på ${name ? `godkännande av ${name}` : "ditt godkännande"}: **${total}**.`,
       cutoff: (product: string, time: string) => `Beställningstiden för ${product} går ut {{${time}}}.`,
-      drift: (product: string) => `Din återkommande beställning av ${product} har ändrats på sistone.`,
+      drift: (d: { what: string; usual: string; amountPct: number | null; pricePct: number | null; day?: string }) =>
+        [
+          d.amountPct !== null ? `Dina senaste beställningar av ${d.what} ligger **${Math.abs(d.amountPct)} %** ${d.amountPct > 0 ? "över" : "under"} det vanliga **${d.usual}**${d.pricePct !== null && Math.abs(d.pricePct) >= 10 ? `, och priset har ${d.pricePct > 0 ? "stigit" : "sjunkit"} **${Math.abs(d.pricePct)} %**` : ""}.` : `Priset på din vanliga ${d.what} har ${(d.pricePct ?? 0) > 0 ? "stigit" : "sjunkit"} **${Math.abs(d.pricePct ?? 0)} %**.`,
+          d.day ? `Ska jag lägga upp nästa, {{${d.day}}}, med det vanliga **${d.usual}**?` : "",
+        ].filter(Boolean).join(" "),
+      intro: "Jag är ditt köks inköpsagent: jag beställer från grossisten inom de regler du satt, och allt utöver dem går till din telefon för godkännande.",
       recall: (product: string) => `En återkallelse gäller ${product}: den är stoppad.`,
       delivery: (day: string) => `En leverans kommer {{${day}}}.`,
       more: (n: number) => `Och ${n} saker till i dag.`,

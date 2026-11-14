@@ -51,6 +51,8 @@ export type TurnRun = {
   placedPlan?: string;
   /** A sentence plain code has for the buyer's words: said as the reply, with no model call. */
   sayNow?: string;
+  /** The demo guide's own words for this turn ("what can I try?", a staged condition): the reply, as they are. */
+  demoSaid?: string;
   /** A change to the rules sent in this turn to the signer's passkey (said by plain code, never as done). */
   rulesWaiting?: import("./types").RulesCard;
   /** The watch's moment the buyer asked about this turn: its words are the reply (watch.ts). */
