@@ -33,7 +33,14 @@ export type ThreadAction =
   /** The after-order memory proposal: keep it, or not. */
   | { type: "remember"; itemId: string; yes: boolean }
   /** Run the last failed step of an agent turn again. */
-  | { type: "retry"; turnId: string };
+  | { type: "retry"; turnId: string }
+  /** Order a menu plan as it stands: one fixed-price quote for every line, then the gate (the plan card's one confirmation). */
+  | { type: "plan_order"; planId: string }
+  /**
+   * Order an earlier order again, rebuilt by plain code (no model): the same product, amount and goal, for the next
+   * same weekday. `ref` is the earlier request's id, or the order id for history without a request.
+   */
+  | { type: "repeat"; ref: string };
 
 export type BuyerTurn = {
   turnId: string;
@@ -106,9 +113,22 @@ export type UnderstoodCard = CardBase & {
   basedOn?: { requestId: string; fields: string[]; label?: string };
   /** One line per remembered thing used instead of asking ("Lactose-free: your stated rule, 3 Nov"). */
   memoryUsed: string[];
+  /**
+   * The same lines as data, for words in the buyer's language (server/memory/recall.ts usageLines): `code` is
+   * applied | preselected | checked, `params` names the remembered fact and where it came from.
+   */
+  memory?: MemoryLine[];
   /** Other items the same message named; each gets its own cards in the same agent turn. */
   alsoAsked: string[];
+  /**
+   * Things noticed that do not stop the order (the mistake check's quiet tier, core/concerns.ts): one line each, from
+   * a code and parameters, e.g. { code: "amount_above_usual", params: { ratio: 2.5, usual: 400, unit: "L" } }.
+   */
+  notes?: { code: string; params: Record<string, string | number> }[];
 };
+
+/** A line of what memory used, as text and as data (server/memory/recall.ts usageLines). */
+export type MemoryLine = { itemId?: string; text: string; code?: string; params?: Record<string, string | number> };
 
 export type AnomalyCard = CardBase & {
   type: "anomaly";
@@ -119,6 +139,8 @@ export type AnomalyCard = CardBase & {
     message: string;
     confirmable: boolean;
     corrections: { id: string; label: string }[];
+    /** The figures the message rests on (core/concerns.ts Concern.evidence), for the message in the buyer's language. */
+    evidence?: Record<string, unknown>;
   }[];
   /** Set once answered: what the buyer chose, and whether it counted as the person's own (verified) or relayed. */
   answered?: { choice: string; by: string; verified: boolean };
@@ -148,7 +170,16 @@ export type OptionView = {
   signOff: string[];
   pros: string[];
   cons: string[];
+  /** The pros, cons and sign-off reasons as codes and parameters (core/options.ts OptionReason): say them in the buyer's language, and a reason every option shares once. */
+  reasons: { code: string; tone: "pro" | "con" | "quiet" | "signoff"; params: Record<string, string | number> }[];
   alternative?: { for: string; tier: string; reason: string };
+  /** The catalogue's kind of product (the art by kind), for the option's illustration. */
+  category?: string;
+  /**
+   * What happens when it is tapped, from the gate's own preview (core/intake.ts): placed by the agent alone, sent to
+   * the named person, or refused with the rule (then it is not a choice, only shown to say why it is missing).
+   */
+  gate?: { outcome: "auto_approve" | "needs_human_approval" | "reject"; rule?: string; approver?: { name: string; role: string }; reasons: string[] };
 };
 
 export type OptionsCard = CardBase & {
@@ -158,7 +189,8 @@ export type OptionsCard = CardBase & {
   /** The card the agent would pick, and why (the buyer's goal, a stated rule, a habit). */
   preselected?: { optionId: string; reason: string };
   /** Why products were left out, grouped ("12 not lactose-free"). */
-  excluded: { reason: string; count: number }[];
+  /** Why products were left out, grouped; `code` (core/options.ts ExclusionCode) for words in the buyer's language. */
+  excluded: { reason: string; count: number; code?: string }[];
   notes: string[];
   chosen?: string;
 };
@@ -185,6 +217,8 @@ export type GateCard = CardBase & {
   /** The rule that decided (refused) or escalated (waiting). */
   rule?: string;
   reasons: string[];
+  /** Every rule the gate checked, as codes and parameters (core/policy.ts RuleResult), for words in the buyer's language. */
+  rules?: { rule: string; outcome: string; details?: Record<string, unknown> }[];
   approver?: { name: string; role: string };
   approvalId?: string;
   /** Plain words: what the buyer can do now ("Nothing: Aino signs on her phone"). */
@@ -222,11 +256,14 @@ export type RecordsCard = CardBase & {
   rows: { kind: "order" | "request" | "product" | "memory" | "mandate"; label: string; detail?: string; totalCents?: number; date?: string; ref?: string }[];
   /** "same as last Thursday": the buyer can repeat one row as a new request. */
   repeat?: { ref: string; label: string };
+  /** Every row with a `ref` can be ordered again with one tap (a `repeat` action, no model). */
+  repeatable?: boolean;
 };
 
 export type NoticeCard = CardBase & {
   type: "notice";
-  kind: "not_found" | "not_purchase" | "incomplete" | "unavailable" | "refused" | "error" | "suspended";
+  /** `paused`: the agent's reading is paused for today (the server's daily model cap); ordering without a model still works. */
+  kind: "not_found" | "not_purchase" | "incomplete" | "unavailable" | "refused" | "error" | "suspended" | "paused";
   message: string;
   /** For `incomplete`: what is missing ("how much, with the unit"). */
   missing?: string[];
@@ -235,7 +272,55 @@ export type NoticeCard = CardBase & {
   retry?: boolean;
 };
 
-export type Card = UnderstoodCard | AnomalyCard | QuestionCard | OptionsCard | PriceCard | GateCard | OrderCard | MemoryCard | RecordsCard | NoticeCard;
+/** One point of a plan, by the planner's code: cannot_arrive, no_safe_product, no_product, not_priced, allergen_unknown, different_form, amount_check, rule_conflict. */
+export type PlanPoint = { ingredient: string; kind: string; text: string };
+
+/**
+ * A dish or a menu for a number of covers, planned by the menu planner (server/agent/menu): the ingredients it worked
+ * out, the product chosen for each with the amount in packs and the line's price, and what ordering it means. One
+ * confirmation (`plan_order`) orders the whole plan as one fixed-price order through the gate.
+ */
+export type PlanCard = CardBase & {
+  type: "plan";
+  planId: string;
+  requestId?: string;
+  state: "planned" | "quoted" | "ordered" | "declined";
+  covers: number | null;
+  serviceDate?: string;
+  dishes: string[];
+  lines: {
+    lineId: string;
+    /** The ingredient as the plan names it ("salmon fillet"). */
+    ingredient: string;
+    /** For which dishes, when there are several. */
+    dishes: string[];
+    status: "ready" | "decide" | "left_out";
+    /** The product chosen, its full name. */
+    product?: string;
+    /** Packs as the wholesaler sells them ("12 × 1 kg"). */
+    packs?: string;
+    totalCents?: number;
+    /** Why a line is left out, or what ordering accepts for it: the planner's code and its sentence. */
+    point?: { kind: string; text: string };
+  }[];
+  /**
+   * What the one confirmation also does: points it accepts as they are, and lines it leaves out because nothing fits.
+   * `kind` is the planner's reason code (translated at the edge); `text` its own sentence, for detail.
+   */
+  onOrder: { accepts: PlanPoint[]; leavesOut: PlanPoint[] };
+  /** Why it cannot be ordered yet (no number of covers, nothing can arrive by the day): the button stays off. */
+  blockers: string[];
+  totalCents: number;
+  deliveryDate?: string;
+  orderBy?: string;
+  signOff?: { approver?: { name: string; role: string }; reasons: string[] };
+  canOrder: boolean;
+  /** Where the plan's lines can be edited one by one (the menu planner page). */
+  editUrl: string;
+  declined?: string;
+};
+
+export type Card = UnderstoodCard | AnomalyCard | QuestionCard | OptionsCard | PriceCard | GateCard | OrderCard | MemoryCard | RecordsCard | NoticeCard | PlanCard;
 export type CardType = Card["type"];
 
 // ---------- the thread and its event stream ----------

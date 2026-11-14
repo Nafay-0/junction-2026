@@ -103,41 +103,78 @@ export function applyScopedRules(need: StructuredNeed, profile: KitchenProfile, 
 
 type IntakeLike = {
   rules: { text: string; source: string; preferenceId?: string }[];
-  fromMemory: { label: string; source: string; text: string; preferenceId?: string; memoryItemId?: string; question: { text: string } }[];
+  fromMemory: { label: string; source: string; text: string; preferenceId?: string; memoryItemId?: string; optionId?: string; question: { text: string; dimension?: string } }[];
   concerns: { code: string; memoryItemIds?: string[] }[];
 };
 
+/** What the screen needs to say a remembered fact in the buyer's language: its kind and the codes it rests on. */
+function factParams(f: MemoryItem["fact"]): Record<string, string | number> {
+  switch (f.kind) {
+    case "diet":
+      return { kind: f.kind, claim: f.claim };
+    case "allergen":
+      return { kind: f.kind, allergen: f.allergen };
+    case "spec":
+      return { kind: f.kind, dimension: f.dimension, choice: f.choice };
+    case "product":
+      return { kind: f.kind, name: f.name, stance: f.stance };
+    case "brand":
+      return { kind: f.kind, brand: f.brand, stance: f.stance };
+    case "goal":
+      return { kind: f.kind, goal: f.goal };
+    case "standing_order":
+      return { kind: f.kind, weekdays: f.weekdays.join(","), amount: f.amount, unit: f.unit, low: f.low, high: f.high };
+    case "delivery_days":
+      return { kind: f.kind, weekdays: f.weekdays.join(",") };
+    default:
+      return { kind: f.kind };
+  }
+}
+
+/** Where a remembered item came from, as data: who stated or confirmed it and when, or how many orders taught it. */
+function provenanceParams(m: MemoryItem): Record<string, string | number> {
+  if (m.confirmedBy) return { how: m.origin === "inferred" ? "confirmed" : "stated", by: m.confirmedBy.by, at: m.confirmedBy.at.slice(0, 10) };
+  const orders = new Set(m.sources.flatMap((s) => (s.orderId ? [s.orderId] : []))).size;
+  if (m.origin === "learned") return orders ? { how: "learned_orders", n: orders } : { how: "learned_choices", n: m.confirmations };
+  const s = [...m.sources].reverse().find((x) => x.by);
+  return s ? { how: "said", by: s.by!, at: s.at.slice(0, 10) } : { how: "remembered" };
+}
+
 /** One line per remembered thing the intake used, for the card. Also the item ids, so their last use is recorded. */
-export function usageLines(profile: KitchenProfile, intake: IntakeLike): { lines: { itemId?: string; text: string }[]; itemIds: string[] } {
+export type UsageLine = { itemId?: string; text: string; code?: "applied" | "preselected" | "checked"; params?: Record<string, string | number> };
+
+export function usageLines(profile: KitchenProfile, intake: IntakeLike): { lines: UsageLine[]; itemIds: string[] } {
   const items = new Map((profile.memory?.items ?? []).map((m) => [m.id, m]));
   const byPref = new Map((profile.memory?.items ?? []).flatMap((m) => (m.derived?.preferenceId ? [[m.derived.preferenceId, m] as const] : [])));
   const itemFor = (prefId?: string, itemId?: string) => (itemId && items.get(itemId)) || (prefId && (byPref.get(prefId) ?? items.get(memoryItemIdOf(prefId) ?? ""))) || undefined;
-  const lines: { itemId?: string; text: string }[] = [];
+  const lines: UsageLine[] = [];
   const seen = new Set<string>();
-  const add = (m: MemoryItem | undefined, text: string) => {
+  // The text stays as it was (ledger, voice, MCP); code and params let a screen say the same in another language.
+  const add = (m: MemoryItem | undefined, text: string, code?: UsageLine["code"], params?: Record<string, string | number>) => {
     if (m && seen.has(m.id)) return;
     if (m) seen.add(m.id);
-    lines.push({ ...(m ? { itemId: m.id } : {}), text });
+    lines.push({ ...(m ? { itemId: m.id } : {}), text, ...(code ? { code } : {}), ...(params ? { params } : {}) });
   };
   for (const r of intake.rules) {
     if (r.source !== "stated") continue;
     const m = itemFor(r.preferenceId);
-    if (m) add(m, `${factLabel(m.fact)} applied: ${provenance(m)}`);
+    if (m) add(m, `${factLabel(m.fact)} applied: ${provenance(m)}`, "applied", { ...factParams(m.fact), label: factLabel(m.fact), ...provenanceParams(m) });
     else {
       // A rule a person stated before typed memory existed (or on the portal's rules page): still one line.
       const pref = profile.stated.find((p) => p.id === r.preferenceId);
       const text = `${pref?.text ?? r.text} applied${pref ? `: stated by ${pref.statedBy} on ${shortDay(pref.statedAt)}` : ""}`;
-      if (!lines.some((l) => l.text === text)) lines.push({ text });
+      if (!lines.some((l) => l.text === text)) lines.push({ text, code: "applied", params: { kind: "rule", label: pref?.text ?? r.text, ...(pref ? { how: "stated", by: pref.statedBy, at: pref.statedAt.slice(0, 10) } : {}) } });
     }
   }
   for (const n of intake.fromMemory) {
     const m = itemFor(n.preferenceId, n.memoryItemId);
-    if (m) add(m, `${factLabel(m.fact)} ${n.source === "stated" ? "applied" : "pre-selected"}: ${provenance(m)}`);
-    else if (n.source === "learned") add(undefined, `${n.label} pre-selected: ${n.text.replace(/^Pre-selected from history: /, "")}`);
+    const code = n.source === "stated" ? "applied" : "preselected";
+    if (m) add(m, `${factLabel(m.fact)} ${n.source === "stated" ? "applied" : "pre-selected"}: ${provenance(m)}`, code, { ...factParams(m.fact), label: factLabel(m.fact), ...provenanceParams(m) });
+    else if (n.source === "learned") add(undefined, `${n.label} pre-selected: ${n.text.replace(/^Pre-selected from history: /, "")}`, "preselected", { kind: "learned", label: n.label, ...(n.question?.dimension ? { dimension: n.question.dimension, choice: n.optionId } : {}) });
   }
   for (const c of intake.concerns) for (const id of c.memoryItemIds ?? []) {
     const m = items.get(id);
-    if (m) add(m, `Checked against memory: ${m.text} (${provenance(m)})`);
+    if (m) add(m, `Checked against memory: ${m.text} (${provenance(m)})`, "checked", { ...factParams(m.fact), label: m.text, ...provenanceParams(m) });
   }
   return { lines, itemIds: [...seen] };
 }

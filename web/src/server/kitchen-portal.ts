@@ -420,7 +420,38 @@ export async function basketQuote(k: Kitchen, lines: BasketLine[], deliverBy?: s
   if (!req.json.request) return req;
   const requestId = req.json.request.requestId;
   const q = await agentCall<Record<string, unknown>>(k, "POST", "/api/v1/quotes", { requestId, lines: lines.map((l) => ({ productId: l.productId, quantity: l.packs })) });
-  return { status: q.status, json: { ...q.json, requestId } };
+  // The gate's mistake check runs on every order. Here the kitchen's own signed-in person is at the screen, so its
+  // question is put to them with the price (basketPlace records the answer); to anyone else nothing is shown, and an
+  // order the check flags goes to sign-off.
+  const person = basketPerson(k);
+  const quoteToken = typeof q.json.quoteToken === "string" ? q.json.quoteToken : undefined;
+  const session = person && quoteToken ? await sessionOf(rt, k) : undefined;
+  const concerns = session && quoteToken ? await rt.dock.orderConcerns(session, { requestId, quoteToken }).catch(() => []) : [];
+  if (!session || !quoteToken || !concerns.length) return { status: q.status, json: { ...q.json, requestId } };
+  // The gate's preview as it will decide once this person has confirmed what is asked: no sign-off announced that
+  // their own answer removes.
+  const policyPreview = await rt.dock.previewConfirmed(session, { requestId, quoteToken, keys: concerns.map((c) => c.key) });
+  return { status: q.status, json: { ...q.json, requestId, policyPreview, concerns: concerns.map(({ key, message }) => ({ key, message })) } };
+}
+
+/** The kitchen's own signed-in person at this screen (not a phone signed in by the call code), if any. */
+function basketPerson(k: Kitchen) {
+  const p = k.console?.person;
+  return p && !p.callOnly ? p : undefined;
+}
+
+/**
+ * Send the basket's quoted order to the gate. `confirm` names the mistake check's concerns the person at the screen
+ * saw and confirmed as intended: recorded as their verified confirmation (only for the kitchen's own signed-in
+ * person; from anyone else it is ignored), so the gate does not send the order to sign-off for them.
+ */
+export async function basketPlace(k: Kitchen, input: { requestId: string; quoteToken: string; lines: { productId: string; quantity: number; unitPriceCents: number }[]; confirm?: string[] }): Promise<{ status: number; json: unknown }> {
+  const rt = await getRuntime();
+  const person = basketPerson(k);
+  if (person && input.confirm?.length) {
+    await rt.dock.confirmConcerns(await sessionOf(rt, k), { requestId: input.requestId, quoteToken: input.quoteToken, keys: input.confirm }, { channel: "portal_session", person: person.name });
+  }
+  return agentCall(k, "POST", "/api/v1/orders", { requestId: input.requestId, quoteToken: input.quoteToken, lines: input.lines });
 }
 
 // ---------- memory corrections ----------

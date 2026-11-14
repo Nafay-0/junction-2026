@@ -192,7 +192,7 @@ export function ThreadCard({ mark, kind, aside, children, actions, tone = "plain
 export type UnderstoodItem = { label: string; value: ReactNode; from?: "said" | "memory" };
 
 /** What the agent understood: the need as fields. A value that came from memory, not from the buyer's words, says so. */
-export function UnderstoodCard({ kind, summary, items, basedOn, alsoAsked, actions }: { kind: ReactNode; summary?: ReactNode; items: UnderstoodItem[]; basedOn?: ReactNode; alsoAsked?: ReactNode; actions?: ReactNode }) {
+export function UnderstoodCard({ kind, summary, items, basedOn, alsoAsked, actions, notes, memory }: { kind: ReactNode; summary?: ReactNode; items: UnderstoodItem[]; basedOn?: ReactNode; alsoAsked?: ReactNode; actions?: ReactNode; /** Things noticed that do not stop the order, one quiet line each ("2,5 × your usual 400 L"). */ notes?: ReactNode[]; /** What memory answered instead of asking, one line each, said once in a thread. */ memory?: ReactNode[] }) {
   const tx = useText(THREAD_TEXT);
   return (
     <ThreadCard kind={kind} mark={<Check aria-hidden size={15} strokeWidth={2.6} />} actions={actions}>
@@ -214,6 +214,26 @@ export function UnderstoodCard({ kind, summary, items, basedOn, alsoAsked, actio
         ))}
       </dl>
       {basedOn && <p className="mt-3.5 text-[0.84rem] leading-snug text-ink-soft">{basedOn}</p>}
+      {notes && notes.length > 0 && (
+        <ul className="mt-3 space-y-1 text-[0.86rem] leading-snug">
+          {notes.map((n, i) => (
+            <li key={i} className="flex items-start gap-2 text-notice">
+              <CircleAlert aria-hidden size={14} className="mt-[0.2em] shrink-0" />
+              <span className="text-ink">{n}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {memory && memory.length > 0 && (
+        <ul className="mt-3 space-y-1 text-[0.86rem] leading-snug text-lavender-deep">
+          {memory.map((m, i) => (
+            <li key={i} className="flex items-start gap-2">
+              <Sparkles aria-hidden size={13} className="mt-[0.2em] shrink-0" />
+              <span>{m}</span>
+            </li>
+          ))}
+        </ul>
+      )}
       {alsoAsked && <p className="mt-3 rounded-md bg-surface px-3 py-2 text-[0.86rem] leading-snug">{alsoAsked}</p>}
     </ThreadCard>
   );

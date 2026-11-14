@@ -18,17 +18,18 @@ import type { EventPublisher } from "./events";
 import { CatalogError, ProductQuerySchema, scheduledOn, usableOffer, type LiveOffer, type LiveStatus, type MeteredCatalog, type Product } from "./catalog";
 import { ClaimStore, availabilityClaimInput, issueClaim, originClaimInput, priceClaimInput, refOf, type IssuedClaim } from "./claims";
 import { DockError, isDockError, parse } from "./errors";
-import { concernsOfOrder, unaskedNote } from "./order-check";
-import { InMemoryIntakeRepository, createIntakeFlow, recordCommittedOrder, type IntakeDeps, type IntakeRepository } from "./intake";
+import { concernsOfOrder, unaskedNote, type OrderConcern } from "./order-check";
+import { qualifiersOf, wordsNotCarried } from "./qualifiers";
+import { InMemoryIntakeRepository, createIntakeFlow, isVerified, recordCommittedOrder, type HumanVia, type IntakeDeps, type IntakeRepository } from "./intake";
 import { InMemoryKitchenRepository, localNow, type KitchenRepository } from "./kitchen";
 import { SIGN_ALG, type KeyPair } from "./keys";
 import type { Ledger, LedgerHead } from "./ledger";
 import { LiveLookupAllowance, shareKeyOf } from "./live-allowance";
 import { MAX_LIVE_IDS_PER_CALL } from "./catalog";
-import { MandateError, supersededBy, supersededMessage, verifyMandateToken, type Mandate, type MandateRegister, type TrustRegistry } from "./mandate";
+import { MandateError, supersededBy, supersededMessage, verifyMandateToken, type Mandate, type MandateRegister, type TrustRegistry, lacksRulesMessage, missingAddedRules } from "./mandate";
 import { SPLIT_NAMED_MAX, SPLIT_WINDOW_HOURS, decidingRule, evaluatePolicy, type Decision, type OrderDraftLine, type ProductHold, type RecentOrder, type RuleResult, type SplitWindow } from "./policy";
 export type { ProductHold } from "./policy";
-import { QuoteError, QuoteRequestLineSchema, buildQuote, signQuote, verifyQuote, type Quote, type QuoteLine } from "./quote";
+import { QuoteError, QuoteRequestLineSchema, buildQuote, signQuote, verifyQuote, type Quote, type QuoteLine, type QuoteRequestLine } from "./quote";
 import { addDays, canonicalJson, formatEur, newId } from "./util";
 
 /**
@@ -148,7 +149,13 @@ export type PurchaseRequest = {
    * What the buyer asked for, as Dock read it (never what the agent declares at quote time): products named by id
    * (in the request's fields or its text) and the family. The gate treats any other product as a substitute of it.
    */
-  asked?: { productIds: string[]; category?: string };
+  asked?: { productIds: string[]; category?: string; /** Words that say what kind of product it is (core/qualifiers.ts), set by the intake: a line that does not carry them is a stand-in. */ words?: string[] };
+  /**
+   * What the gate's mistake check flagged in a quote of this request and an identified person confirmed as intended
+   * (confirmConcerns below): by quote and concern, with who and through which channel. An order on that quote is
+   * then not sent to sign-off for it. Only a channel bound to a person can write this (intake.ts isVerified).
+   */
+  confirmed?: { quoteId: string; key: string; code: string; by: string; at: string; channel: string }[];
   /** Which door it came through (server-set; see Door). */
   door?: Door;
   createdAt: string;
@@ -467,10 +474,11 @@ export type DockDeps = {
    * Admission: called with every session right after its mandate verified, before the session is handed out, and
    * again for a session held across calls (admit below). Throwing a DockError refuses the agent. The server's
    * operations layer plugs in here (a suspended agent or organisation), so no door can verify a mandate and
-   * forget to ask: there is no way to a session that does not pass this. `entrance` is whatever the caller says
+   * forget to ask: there is no way to a session that does not pass this. It may return the session with tighter terms
+   * (never wider: the gate still checks the signed quote and the order against whatever mandate the session carries). `entrance` is whatever the caller says
    * about where the call came from; the core only passes it on.
    */
-  admit?: (session: AgentSession, entrance?: unknown) => void | Promise<void>;
+  admit?: (session: AgentSession, entrance?: unknown) => void | AgentSession | Promise<void | AgentSession>;
   /**
    * The kitchens' reissued mandates (mandate.ts): the gate accepts only a kitchen's current mandate. Checked when a
    * mandate is presented, when a held session is used again, and on every decision (rule mandate_window), so an
@@ -584,15 +592,27 @@ export function createDock(deps: DockDeps) {
   }
 
   /** What the request asked for, with the products' names (looked up in master data, free), for the gate's reasons. */
-  async function askedOf(request: PurchaseRequest | undefined): Promise<(NonNullable<PurchaseRequest["asked"]> & { names?: Record<string, string> }) | undefined> {
+  async function askedOf(request: PurchaseRequest | undefined, quote?: Quote): Promise<(NonNullable<PurchaseRequest["asked"]> & { names?: Record<string, string>; standIns?: string[] }) | undefined> {
     const asked = request?.asked;
-    if (!asked?.productIds.length) return asked;
+    if (!asked) return asked;
+    let out: NonNullable<PurchaseRequest["asked"]> & { names?: Record<string, string>; standIns?: string[] } = asked;
+    // The kind asked for ("oat" drink): a line of the family that does not carry those words stands in for it.
+    if (quote && asked.words?.length && asked.category) {
+      try {
+        const q = await qualifiersOf(catalog, asked.category, asked.words.join(" "));
+        const standIns = quote.lines.filter((l) => l.category === asked.category && !l.substituteFor && wordsNotCarried(q, l.productId).length).map((l) => l.productId);
+        if (standIns.length) out = { ...out, standIns };
+      } catch {
+        // the catalogue did not answer: judged by product and family only
+      }
+    }
+    if (!asked.productIds.length) return out;
     try {
       const found = await catalog.searchProducts({ ids: asked.productIds, limit: 100 });
       const names = Object.fromEntries(found.map((p) => [p.id, p.name]));
-      return Object.keys(names).length ? { ...asked, names } : asked;
+      return Object.keys(names).length ? { ...out, names } : out;
     } catch {
-      return asked;
+      return out;
     }
   }
 
@@ -686,15 +706,19 @@ export function createDock(deps: DockDeps) {
    * The intake's own quote is not checked twice: its questions were put to the buyer, and how they were answered
    * is the first list.
    */
-  async function mistakeCheckOf(org: { orgId: string; name: string }, request: PurchaseRequest | undefined, quote: Quote, intakeQuote = false) {
+  async function mistakeCheckOf(org: { orgId: string; name: string }, request: PurchaseRequest | undefined, quote: Quote, intakeQuote = false, assumeConfirmed: string[] = []) {
     const i = request ? await intakes.get(request.requestId) : undefined;
     const u = i?.unverified ?? [];
     const fromIntake = intakeQuote || i?.quote?.quote.quoteId === quote.quoteId;
-    const flagged = fromIntake ? [] : await concernsOfOrder({ catalog, kitchens }, { orgId: org.orgId, orgName: org.name, lines: quote.lines, neededBy: request?.neededBy, now: now() });
+    const found = fromIntake ? [] : await concernsOfOrder({ catalog, kitchens }, { orgId: org.orgId, orgName: org.name, lines: quote.lines, neededBy: request?.neededBy, now: now() });
+    // What an identified person already confirmed for this very quote (the store's basket asks its signed-in person).
+    const flagged = found.filter((c) => !assumeConfirmed.includes(c.key) && !request?.confirmed?.some((x) => x.quoteId === quote.quoteId && x.key === c.key));
     return {
       context: {
         ...(u.length ? { unverifiedConfirmations: u.map(({ code, message, by }) => ({ code, message, by })) } : {}),
         ...(flagged.length ? { unconfirmedConcerns: flagged.map(({ code, message }) => ({ code, message })) } : {}),
+        // The intake's own quote, chosen by the kitchen's identified person: their confirmation of a stand-in.
+        ...(fromIntake && i?.chosen?.verified ? { substitutionConfirmedBy: i.chosen.by } : {}),
       },
       notes: [...(i?.signOffNotes ?? []), ...flagged.map(unaskedNote)],
     };
@@ -834,15 +858,24 @@ export function createDock(deps: DockDeps) {
   }
 
   /** The gate accepts only a kitchen's current mandate: one the kitchen has since reissued is refused at the door. */
+  /** Why this mandate is not the kitchen's current one, in words: replaced by a reissue, or without a rule one added. */
+  function notCurrent(mandate: Mandate, issuedAt: string | undefined): { message: string; at: string } | undefined {
+    const r = supersededBy(mandate, issuedAt, deps.mandates);
+    if (r) return { message: supersededMessage(mandate.issuer.name, r), at: r.at };
+    const missing = missingAddedRules(mandate, deps.mandates);
+    const reissue = missing.length ? deps.mandates?.reissueOf(mandate.issuer.orgId) : undefined;
+    return reissue ? { message: lacksRulesMessage(mandate.issuer.name, reissue, missing), at: reissue.at } : undefined;
+  }
+
   function refuseSuperseded(session: AgentSession, actor: string): void {
-    const r = supersededBy(session.mandate, session.mandateIssuedAt, deps.mandates);
-    if (r) throw refuse(new DockError(401, "mandate_superseded", supersededMessage(session.mandate.issuer.name, r), "mandate_window", { reissuedAt: r.at }), actor);
+    const why = notCurrent(session.mandate, session.mandateIssuedAt);
+    if (why) throw refuse(new DockError(401, "mandate_superseded", why.message, "mandate_window", { reissuedAt: why.at }), actor);
   }
 
   /** The same check for a decision (policy mandate_window): the reason in words when the mandate was replaced. */
   function supersession(mandate: Mandate, issuedAt: string | undefined): { mandateSuperseded?: string } {
-    const r = supersededBy(mandate, issuedAt, deps.mandates);
-    return r ? { mandateSuperseded: supersededMessage(mandate.issuer.name, r) } : {};
+    const why = notCurrent(mandate, issuedAt);
+    return why ? { mandateSuperseded: why.message } : {};
   }
 
   function decisionSummary(orderId: string, d: Decision, prefix = "Gate decision"): string {
@@ -947,19 +980,20 @@ export function createDock(deps: DockDeps) {
       }
       const session: AgentSession = { mandate, agentId, mandateIssuedAt };
       refuseSuperseded(session, actor);
-      await deps.admit?.(session, entrance);
-      return session;
+      // Admission may hand back the session with tighter terms (the server's licence gate): that is the session.
+      return (await deps.admit?.(session, entrance)) ?? session;
     },
 
     /** Admission for a session that was verified earlier and is used again later (a link that outlives the call that made it). */
     async admit(session: AgentSession, entrance?: unknown): Promise<AgentSession> {
       refuseSuperseded(session, agentActor(session));
-      await deps.admit?.(session, entrance);
-      return session;
+      return (await deps.admit?.(session, entrance)) ?? session;
     },
 
-    async openRequest(session: AgentSession, input: z.input<typeof OpenRequestInput>): Promise<PurchaseRequest> {
+    /** `internal.askedWords`: set by the intake only (never from a request body): the words that say what kind of product was asked for. */
+    async openRequest(session: AgentSession, input: z.input<typeof OpenRequestInput>, internal: { askedWords?: string[] } = {}): Promise<PurchaseRequest> {
       const { text, neededBy: by, deliverOn, productIds, category } = parse(OpenRequestInput, input);
+      const words = category && internal.askedWords?.length ? internal.askedWords.slice(0, 6) : undefined;
       const neededBy = deliverOn ?? by;
       const named = await askedProducts(text, productIds ?? []);
       const r: PurchaseRequest = {
@@ -970,7 +1004,7 @@ export function createDock(deps: DockDeps) {
         text,
         neededBy,
         ...(deliverOn ? { deliverOn } : {}),
-        ...(named.length || category ? { asked: { productIds: named, ...(category ? { category } : {}) } } : {}),
+        ...(named.length || category ? { asked: { productIds: named, ...(category ? { category } : {}), ...(words ? { words } : {}) } } : {}),
         ...(session.door ? { door: session.door } : {}),
         createdAt: now().toISOString(),
       };
@@ -1051,6 +1085,30 @@ export function createDock(deps: DockDeps) {
       return claimStore.get(claimIds.slice(0, 100), session.mandate.issuer.orgId);
     },
 
+    /**
+     * What the gate would decide on these lines at these live prices, for an option card before anyone taps it: the
+     * same rules and context as a quote's preview (orders.ts requestQuote), on an unsigned quote that is never issued,
+     * stored or logged. Undefined when the lines cannot be priced from the offers given.
+     */
+    async previewDecision(session: AgentSession, requestId: string, input: QuoteRequestLine[], offers: LiveOffer[]): Promise<Decision | undefined> {
+      const request = await ownRequest(session, requestId);
+      const lines = await substitutesOf(request, input);
+      const ids = [...new Set(lines.flatMap((l) => (l.substituteFor ? [l.productId, l.substituteFor] : [l.productId])))];
+      const products = await catalog.searchProducts({ ids, limit: 100 });
+      const priced = offers.map((o) => scheduledOn(o, request.deliverOn));
+      let quote: Quote;
+      try {
+        quote = buildQuote({ quoteId: "preview", buyerOrgId: session.mandate.issuer.orgId, agentId: session.agentId, mandateId: session.mandate.mandateId, requestId, lines, products, offers: priced, referenceOffers: priced, now: now(), ttlMinutes: quoteTtlMinutes });
+      } catch {
+        return undefined;
+      }
+      return evaluatePolicy(
+        session.mandate,
+        { agentId: session.agentId, quote, lines: quote.lines.map(({ productId, quantity, unitPriceCents }) => ({ productId, quantity, unitPriceCents })), neededBy: request.neededBy, deliverOn: request.deliverOn, requestId, asked: await askedOf(request, quote) },
+        { now: now(), ...supersession(session.mandate, session.mandateIssuedAt), ...(await budgetContext(quote.buyerOrgId)), ...(await mistakeCheckOf(session.mandate.issuer, request, quote, true)).context, ...(await holdsOf(quote)), quoteAlreadyUsed: false, ...(await splitWindowOf(quote)) },
+      );
+    },
+
     /** Ask the wholesaler for a fixed-price quote. Returns the signed quote and what the gate would decide on it now. */
     async requestQuote(session: AgentSession, input: z.input<typeof QuoteInput>, internal: { intakeQuote?: boolean } = {}) {
       const parsed = parse(QuoteInput, input);
@@ -1118,7 +1176,7 @@ export function createDock(deps: DockDeps) {
       });
       const policyPreview = evaluatePolicy(
         session.mandate,
-        { agentId: session.agentId, quote, lines: quote.lines, neededBy: request.neededBy, deliverOn: request.deliverOn, requestId, asked: await askedOf(request) },
+        { agentId: session.agentId, quote, lines: quote.lines, neededBy: request.neededBy, deliverOn: request.deliverOn, requestId, asked: await askedOf(request, quote) },
         { now: now(), ...supersession(session.mandate, session.mandateIssuedAt), ...(await budgetContext(quote.buyerOrgId)), ...(await mistakeCheckOf(session.mandate.issuer, request, quote, internal.intakeQuote)).context, ...(await holdsOf(quote)), quoteAlreadyUsed: false, ...(await splitWindowOf(quote)) },
       );
       return { quote, quoteToken, policyPreview, claims };
@@ -1137,7 +1195,7 @@ export function createDock(deps: DockDeps) {
       }
       const orgId = session.mandate.issuer.orgId;
       return serialize(orgId, async () => {
-        const draft = { agentId: session.agentId, quote, lines, neededBy: request.neededBy, deliverOn: request.deliverOn, requestId, asked: await askedOf(request) };
+        const draft = { agentId: session.agentId, quote, lines, neededBy: request.neededBy, deliverOn: request.deliverOn, requestId, asked: await askedOf(request, quote) };
         const check = await mistakeCheckOf(session.mandate.issuer, request, quote);
         const ctx = { now: now(), ...supersession(session.mandate, session.mandateIssuedAt), ...(await budgetContext(orgId)), ...check.context, ...(await holdsOf(quote)), quoteAlreadyUsed: await repo.isQuoteUsed(quote.quoteId), ...(await splitWindowOf(quote)) };
         let decision = evaluatePolicy(session.mandate, draft, ctx);
@@ -1286,7 +1344,7 @@ export function createDock(deps: DockDeps) {
         const request = await repo.getRequest(order.requestId);
         const recheck = evaluatePolicy(
           order.mandate,
-          { agentId: order.agentId, quote: order.quote, lines: order.draftLines, neededBy: request?.neededBy, deliverOn: request?.deliverOn, requestId: order.requestId, asked: await askedOf(request) },
+          { agentId: order.agentId, quote: order.quote, lines: order.draftLines, neededBy: request?.neededBy, deliverOn: request?.deliverOn, requestId: order.requestId, asked: await askedOf(request, order.quote) },
           { now: now(), ...supersession(order.mandate, order.mandateIssuedAt), ...(await budgetContext(order.orgId, order.orderId)), ...(await mistakeCheckOf({ orgId: order.orgId, name: order.orgName }, request, order.quote)).context, ...(await holdsOf(order.quote)), quoteAlreadyUsed: false, ...(await splitWindowOf(order.quote, order.orderId)) },
         );
         if (recheck.outcome === "reject") {
@@ -1320,6 +1378,61 @@ export function createDock(deps: DockDeps) {
         });
         return toPublicOrder(order);
       });
+    },
+
+    /**
+     * What the gate's own mistake check finds in a signed quote that nobody was asked about, with the words (the
+     * kitchen's own data): for a door where the kitchen's signed-in person is present and can be asked, the basket.
+     */
+    async orderConcerns(session: AgentSession, input: { requestId: string; quoteToken: string }): Promise<OrderConcern[]> {
+      const request = await ownRequest(session, input.requestId);
+      const quote = await verifyQuote(input.quoteToken, wholesalerKey).catch((err) => {
+        throw err instanceof QuoteError ? new DockError(422, err.code, err.message, "quote_signature") : err;
+      });
+      if (quote.requestId !== request.requestId) throw new DockError(409, "quote_other_request", "That quote was issued for another request.", "quote_binding");
+      const found = await concernsOfOrder({ catalog, kitchens }, { orgId: session.mandate.issuer.orgId, orgName: session.mandate.issuer.name, lines: quote.lines, neededBy: request.neededBy, now: now() });
+      return found.filter((c) => !request.confirmed?.some((x) => x.quoteId === quote.quoteId && x.key === c.key));
+    },
+
+    /**
+     * What the gate will decide on a quote once the person at the screen has confirmed these concerns: a preview
+     * only (nothing is recorded), so the screen that asks them does not announce a sign-off their answer removes.
+     */
+    async previewConfirmed(session: AgentSession, input: { requestId: string; quoteToken: string; keys: string[] }): Promise<Decision> {
+      const request = await ownRequest(session, input.requestId);
+      const quote = await verifyQuote(input.quoteToken, wholesalerKey);
+      return evaluatePolicy(
+        session.mandate,
+        { agentId: session.agentId, quote, lines: quote.lines, neededBy: request.neededBy, deliverOn: request.deliverOn, requestId: request.requestId, asked: await askedOf(request) },
+        { now: now(), ...supersession(session.mandate, session.mandateIssuedAt), ...(await budgetContext(quote.buyerOrgId)), ...(await mistakeCheckOf(session.mandate.issuer, request, quote, false, input.keys)).context, ...(await holdsOf(quote)), quoteAlreadyUsed: await repo.isQuoteUsed(quote.quoteId), ...(await splitWindowOf(quote)) },
+      );
+    },
+
+    /**
+     * An identified person confirms, as intended, what the mistake check flagged in a quote. Only through a channel
+     * bound to the person (intake.ts isVerified: the kitchen's signed-in store session, their passkey); a relayed
+     * yes is refused here, and the order then goes to sign-off as before. `via` is set by server code, never taken
+     * from a request. Recorded on the request and in the ledger; an order on that quote is not asked about it again.
+     */
+    async confirmConcerns(session: AgentSession, input: { requestId: string; quoteToken: string; keys: string[] }, via: HumanVia): Promise<{ confirmed: OrderConcern[]; open: OrderConcern[] }> {
+      if (!isVerified(via) || !via.person) throw new DockError(403, "confirmation_needs_person", "Only the kitchen's own signed-in person can confirm a likely mistake. A relayed answer does not count: the order goes to a named person's sign-off instead.", "human_input");
+      const open = await dock.orderConcerns(session, input);
+      const quote = await verifyQuote(input.quoteToken, wholesalerKey);
+      const confirmed = open.filter((c) => input.keys.includes(c.key));
+      if (!confirmed.length) return { confirmed, open };
+      const request = await ownRequest(session, input.requestId);
+      const at = now().toISOString();
+      await repo.saveRequest({ ...request, confirmed: [...(request.confirmed ?? []), ...confirmed.map((c) => ({ quoteId: quote.quoteId, key: c.key, code: c.code, by: via.person!, at, channel: via.channel }))] });
+      for (const c of confirmed) {
+        ledger.append({
+          type: "intake",
+          actor: `buyer:${via.person}`,
+          requestId: request.requestId,
+          summary: `${via.person} confirmed as intended, in the kitchen's signed-in store, before sending the order: ${c.message}`,
+          data: { step: "confirmation", key: c.key, code: c.code, by: via.person, channel: via.channel, verified: true, quoteId: quote.quoteId },
+        });
+      }
+      return { confirmed, open: open.filter((c) => !input.keys.includes(c.key)) };
     },
 
     /** Everything a sign-off screen needs about one approval (no secrets). For the approver's phone, not for agents. */
@@ -1515,6 +1628,7 @@ export function createDock(deps: DockDeps) {
     openRequest: dock.openRequest,
     changeNeededBy: dock.changeNeededBy,
     requestQuote: (session, input) => dock.requestQuote(session, input, { intakeQuote: true }),
+    previewDecision: (session, requestId, lines, offers) => dock.previewDecision(session, requestId, lines, offers),
     liveLookup: (session, requestId, productIds, deliveryDate, why) => liveLookup(session, requestId, productIds, deliveryDate, why, { batch: true }),
     spentThisWeek: (orgId) => spentThisWeek(orgId),
     budgetUse: (orgId) => budgetUse(orgId),

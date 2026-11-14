@@ -160,34 +160,47 @@ export async function resolveCatalogIndex(opts: { timeoutMs?: number } = {}): Pr
   const url = envValue("DATABASE_URL");
   if (!url) return fallback("no local index file and DATABASE_URL is not set");
 
-  const t0 = performance.now();
-  const client = pgClient(url, opts.timeoutMs);
-  client.on("error", () => {}); // a dropped connection after we are done must not crash the process
-  try {
-    await client.connect();
-    const head = await client.query<{ sha256: string; built_at: Date }>(`select sha256, built_at from ${INDEX_TABLE} where id = 1`);
-    const row = head.rows[0];
-    if (!row) return fallback(`no index published in ${INDEX_TABLE} (run \`pnpm index:publish\`)`);
-    const file = cachedFile(dir, row.sha256);
-    const meta = { sha256: row.sha256, builtAt: row.built_at.toISOString() };
-    if (existsSync(file) && sha256Hex(readFileSync(file)) === row.sha256) {
-      log("info", "catalogue index: using the cached copy of the published index", { file, ...meta });
-      return done({ from: "database", file, ...meta, downloaded: false, ms: Math.round(performance.now() - t0) });
+  // One slow answer from the database at start must not leave the server on the seed catalogue until its next
+  // restart (that happened on the public site on 14 Nov, under load from elsewhere). The default path therefore
+  // tries several times, giving the database longer each time. A caller that sets its own timeout gets one try.
+  const tries = opts.timeoutMs === undefined ? [10_000, 20_000, 30_000, 30_000] : [opts.timeoutMs];
+  const pauses = [2_000, 5_000, 10_000];
+  let lastError = "";
+  for (let i = 0; i < tries.length; i++) {
+    const t0 = performance.now();
+    const client = pgClient(url, tries[i]);
+    client.on("error", () => {}); // a dropped connection after we are done must not crash the process
+    try {
+      await client.connect();
+      const head = await client.query<{ sha256: string; built_at: Date }>(`select sha256, built_at from ${INDEX_TABLE} where id = 1`);
+      const row = head.rows[0];
+      if (!row) return fallback(`no index published in ${INDEX_TABLE} (run \`pnpm index:publish\`)`);
+      const file = cachedFile(dir, row.sha256);
+      const meta = { sha256: row.sha256, builtAt: row.built_at.toISOString() };
+      if (existsSync(file) && sha256Hex(readFileSync(file)) === row.sha256) {
+        log("info", "catalogue index: using the cached copy of the published index", { file, ...meta });
+        return done({ from: "database", file, ...meta, downloaded: false, ms: Math.round(performance.now() - t0) });
+      }
+      const body = await client.query<{ bytes: Buffer }>(`select bytes from ${INDEX_TABLE} where id = 1 and sha256 = $1`, [row.sha256]);
+      const bytes = body.rows[0]?.bytes;
+      if (!bytes) return fallback("the published index changed while it was being read");
+      if (sha256Hex(bytes) !== row.sha256) return fallback("the published index does not match its content hash");
+      mkdirSync(dir, { recursive: true });
+      const tmp = `${file}.${process.pid}.tmp`;
+      writeFileSync(tmp, bytes);
+      renameSync(tmp, file);
+      const ms = Math.round(performance.now() - t0);
+      log("info", "catalogue index: downloaded from PostgreSQL and cached", { file, bytes: bytes.length, ms, attempt: i + 1, ...meta });
+      return done({ from: "database", file, ...meta, downloaded: true, ms });
+    } catch (err) {
+      lastError = errText(err);
+      if (i < tries.length - 1) {
+        log("warn", `catalogue index: PostgreSQL did not answer (${lastError}); trying again`, { attempt: i + 1, of: tries.length });
+        await new Promise((r) => setTimeout(r, pauses[i] ?? 10_000));
+      }
+    } finally {
+      await client.end().catch(() => {});
     }
-    const body = await client.query<{ bytes: Buffer }>(`select bytes from ${INDEX_TABLE} where id = 1 and sha256 = $1`, [row.sha256]);
-    const bytes = body.rows[0]?.bytes;
-    if (!bytes) return fallback("the published index changed while it was being read");
-    if (sha256Hex(bytes) !== row.sha256) return fallback("the published index does not match its content hash");
-    mkdirSync(dir, { recursive: true });
-    const tmp = `${file}.${process.pid}.tmp`;
-    writeFileSync(tmp, bytes);
-    renameSync(tmp, file);
-    const ms = Math.round(performance.now() - t0);
-    log("info", "catalogue index: downloaded from PostgreSQL and cached", { file, bytes: bytes.length, ms, ...meta });
-    return done({ from: "database", file, ...meta, downloaded: true, ms });
-  } catch (err) {
-    return fallback(`PostgreSQL unreachable or unreadable (${errText(err)})`);
-  } finally {
-    await client.end().catch(() => {});
   }
+  return fallback(`PostgreSQL unreachable or unreadable (${lastError})`);
 }

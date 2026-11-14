@@ -3,6 +3,7 @@ import { POST as memoryPost } from "@/app/ui-api/memory/kitchens/[kitchen]/route
 import { localNow, nextDeliveryDay } from "@/core/kitchen";
 import { signMandate, supersededBy } from "@/core/mandate";
 import { menuKitchen } from "./agent/menu/runtime";
+import { demoCredentials } from "./agent/runner";
 import { resolveKitchen } from "./console-kitchens";
 import { KITCHEN_ORG, demoKitchenKeyPair, demoKitchenMandate } from "./demo-kitchen";
 import { reissueKitchenMandate } from "./mandate-reissue";
@@ -80,9 +81,16 @@ describe("reissuing a built-in kitchen's mandate with a remembered rule", () => 
     expect(signed.status).toBe("rejected");
     expect(signed.decision.rules.find((r) => r.rule === "mandate_window")?.reason).toMatch(/reissued its mandate on .* signed before that and no longer works/);
 
-    // What the kitchen signs after the reissue is its current word: its own key is its authority.
+    // A mandate signed after the reissue from the old terms (a script holding the kitchen's key, a server path
+    // minting from defaults) is not the kitchen's current mandate either: it lacks the rule the kitchen added.
     const later = await signMandate(demoKitchenMandate(new Date(), { agentId: "agent_kaari_other", mandateId: "mnd_kaari_other_2" }), await demoKitchenKeyPair());
-    await expect(dock.authenticate(later, "agent_kaari_other")).resolves.toBeDefined();
+    await expect(dock.authenticate(later, "agent_kaari_other")).rejects.toMatchObject({ ...superseded, message: expect.stringMatching(/does not carry what Ravintola Kaari added.*every product lactose-free/) });
+    // One that carries it is accepted: the kitchen's key signing the kitchen's current terms.
+    const current = await signMandate(demoKitchenMandate(new Date(), { agentId: "agent_kaari_other", mandateId: "mnd_kaari_other_3", requiredAttributes: ["lactose_free"] }), await demoKitchenKeyPair());
+    await expect(dock.authenticate(current, "agent_kaari_other")).resolves.toBeDefined();
+    // The server's own built-in agent presents the current mandate (agent/runner.ts demoCredentials).
+    const builtIn = await demoCredentials("kitchen");
+    await expect(dock.authenticate(builtIn.mandate, builtIn.agentId)).resolves.toMatchObject({ mandate: { requiredAttributes: ["lactose_free"] } });
     // The menu agent's mandate is signed again too, and is never wider than the console's.
     const menu = (await menuKitchen("kaari")).kitchen!;
     await expect(dock.authenticate(menu.mandateToken, menu.agentId)).resolves.toBeDefined();

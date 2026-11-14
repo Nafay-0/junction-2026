@@ -9,6 +9,7 @@ import { groundForDisplay } from "@/server/grounding";
 import type { Kitchen } from "@/server/kitchen-portal";
 import { interactionFromIntake } from "@/server/memory/intake-events";
 import { onsiteSession } from "@/server/ops/onsite";
+import { llmRoom } from "@/server/limits";
 import { getRuntime, type Runtime } from "@/server/runtime";
 import { runAgent, remember, type AgentRunResult } from "./agent";
 import { cardId, gateCard, orderCard } from "./cards";
@@ -17,7 +18,7 @@ import { checkOpen, read, record, runAction, step, type ItemOutcome, type TurnRu
 import { earlierFor } from "./earlier";
 import { ThreadStore, type StoredThread } from "./store";
 import { ensureTelemetry } from "./telemetry";
-import type { AgentTurn, BuyerTurn, MemoryCard, SubmitTurn, SubmitTurnReply, ThreadAction, ThreadDoor } from "./types";
+import type { AgentTurn, BuyerTurn, MemoryCard, RecordsCard, SubmitTurn, SubmitTurnReply, ThreadAction, ThreadDoor } from "./types";
 
 /**
  * One conversation per kitchen, one engine for every door. A door submits a turn (typed words, a transcript, a tap
@@ -60,6 +61,8 @@ const ActionSchema: z.ZodType<ThreadAction> = z.discriminatedUnion("type", [
   z.object({ type: z.literal("withdraw"), orderId: z.string().min(1).max(80) }),
   z.object({ type: z.literal("remember"), itemId: z.string().min(1).max(80), yes: z.boolean() }),
   z.object({ type: z.literal("retry"), turnId: z.string().min(1).max(80) }),
+  z.object({ type: z.literal("plan_order"), planId: z.string().min(1).max(80) }),
+  z.object({ type: z.literal("repeat"), ref: z.string().min(1).max(80) }),
 ]);
 
 export const SubmitTurnSchema = z
@@ -141,12 +144,14 @@ export async function submitTurn(kitchen: Kitchen | string, input: unknown): Pro
   if (!body.action) run.opening = first;
 
   // A speculative reading of new words, in parallel with the agent's first step (agent.ts asks for the same reading).
-  if (body.text && !body.action && worthReading(body.text)) {
+  if (body.text && !body.action && worthReading(body.text) && llmRoom()) {
     void withTurn(turnCtx(), () => earlierFor(run, body.text!).then((earlier) => read(run, body.text!, earlier))).catch(() => undefined);
   }
 
   // One agent turn at a time per thread: a turn sent while one works is answered next.
-  const prev = e.queues.get(slug) ?? Promise.resolve();
+  // One agent turn at a time per thread (a reset starts a new queue), and never stuck behind one that hangs.
+  const queued = e.queues.get(thread.threadId) ?? Promise.resolve();
+  const prev = Promise.race([queued, new Promise<void>((r) => setTimeout(r, 20_000))]);
   const next = prev.then(() =>
     withTurn(turnCtx(), () => work(run, body, first)).catch((err) => {
       console.error("[thread]", err);
@@ -154,7 +159,7 @@ export async function submitTurn(kitchen: Kitchen | string, input: unknown): Pro
       e.store.status(thread, agentTurn.turnId, "failed", { ms: Date.now() - t0 });
     }),
   );
-  e.queues.set(slug, next);
+  e.queues.set(thread.threadId, next);
   return { threadId: thread.threadId, buyerTurnId: buyer.turnId, agentTurnId: agentTurn.turnId, seq: thread.seq };
 }
 
@@ -186,8 +191,17 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
         await checkOpen(run, body.action);
         await runAction(run, body.action, body.text);
       }
+    } else if (!llmRoom()) {
+      // The day's model cap is reached: say so in one line, and keep ordering possible without a model.
+      if (run.opening) first.skip("paused for today");
+      await paused(run);
     } else {
-      agentResult = await agentTurn(run, body.text!);
+      try {
+        agentResult = await agentTurn(run, body.text!);
+      } catch (err) {
+        if (!(err instanceof DockError) || !PAUSED_CODES.has(err.code)) throw err;
+        await paused(run);
+      }
       if (run.opening) first.done(); // no reading was needed (a reply to a card, a question)
     }
     line = agentResult?.text ?? "";
@@ -211,13 +225,14 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
 /** The end of an agent turn: what to remember, its status (waiting for the buyer, for a person, or done) and the record. */
 async function finishTurn(run: TurnRun): Promise<void> {
   const { store, thread } = run;
-  await proposeMemory(run);
   const a = store.agentTurn(thread, run.turnId)!;
   const waitingApprover = a.cards.some((c) => c.type === "gate" && c.outcome === "waiting");
-  const waitingBuyer = !waitingApprover && a.cards.some((c) => (c.type === "anomaly" && !c.answered) || c.type === "question" || (c.type === "options" && !c.chosen) || (c.type === "price" && !a.cards.some((x) => x.type === "gate" && x.requestId === c.requestId)));
+  const waitingBuyer = !waitingApprover && a.cards.some((c) => (c.type === "anomaly" && !c.answered) || c.type === "question" || (c.type === "options" && !c.chosen) || (c.type === "plan" && c.state === "planned" && c.canOrder) || (c.type === "price" && !a.cards.some((x) => x.type === "gate" && x.requestId === c.requestId)));
   store.mark(thread, run.turnId, "done", Date.now() - run.t0);
   store.status(thread, run.turnId, waitingApprover ? "waiting_approver" : waitingBuyer ? "waiting_buyer" : "done", { ms: Date.now() - run.t0, marks: a.marks });
   record(run, "turn_done", `Agent turn finished (${a.status}) in ${Date.now() - run.t0} ms: ${a.cards.map((c) => c.type).join(", ") || "no cards"}.`, { status: a.status, marks: a.marks, cards: a.cards.map((c) => c.type), requests: [...run.requests], orders: [...run.orders.keys()] });
+  // What to remember comes after: the memory writer reads the order with a model, and nothing waits for it.
+  await proposeMemory(run);
 }
 
 // ---------- a door that converses itself (the voice call) ----------
@@ -253,6 +268,35 @@ export async function doorTurn<T>(kitchen: Kitchen | string, buyer: { door: Thre
 /** A sentence the door's own code wrote (the read-back), shown as the agent's line after the same grounding check. */
 export async function doorLine(run: TurnRun, text: string): Promise<void> {
   await showLine(run, text);
+}
+
+const PAUSED_CODES = new Set(["demo_limit_reached", "llm_disabled"]);
+
+/**
+ * The agent's reading is paused for today (the server's daily model cap, server/limits.ts): one line saying so, and
+ * what still works without a model, as one-tap repeats of the kitchen's recent orders (each a `repeat` action, rebuilt
+ * by plain code and sent through the same intake and gate). The catalogue, the basket and standing orders work as
+ * ever; the notice names them.
+ */
+async function paused(run: TurnRun): Promise<void> {
+  run.store.card(run.thread, run.turnId, { type: "notice", cardId: cardId("notice", `${run.turnId}:paused`), kind: "paused", message: "The agent's reading is paused for today on this server. You can still order: repeat an earlier order below, or use the catalogue and the basket. Everything still goes through the gate." });
+  record(run, "paused", "The day's model cap is reached: the agent did not read the words; ordering without a model was offered.", {});
+  try {
+    const { overview } = await import("@/server/kitchen-portal");
+    const ov = await overview(run.k);
+    const seen = new Set<string>();
+    const rows: RecordsCard["rows"] = [];
+    for (const r of ov.requests) {
+      const label = r.order?.lines.map((l) => `${l.quantity} × ${l.name}`).join(", ");
+      if (!r.order || !label || seen.has(label)) continue;
+      seen.add(label);
+      rows.push({ kind: "order", label, totalCents: r.order.totalCents, date: r.order.deliveryDate, ref: r.requestId ?? r.key });
+      if (rows.length >= 5) break;
+    }
+    if (rows.length) run.store.card(run.thread, run.turnId, { type: "records", cardId: cardId("records", `${run.turnId}:paused`), question: "", rows, repeatable: true });
+  } catch {
+    // the notice alone still says what works
+  }
 }
 
 /** The agent loop for words (or a nudge from the engine), with the thread's history; the loop's messages are kept. */

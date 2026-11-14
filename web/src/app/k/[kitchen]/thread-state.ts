@@ -99,6 +99,8 @@ export function useThreadState(slug: string): ThreadApi {
   const backoff = useRef(1000);
   const alive = useRef(true);
   const reconnect = useRef<() => void>(() => undefined);
+  /** Set once the first snapshot is in: until then the stream is not opened (it opens from the snapshot's seq). */
+  const loaded = useRef(false);
 
   const load = useCallback(async () => {
     const r = await api<{ thread: Thread }>("GET", base);
@@ -109,7 +111,11 @@ export function useThreadState(slug: string): ThreadApi {
     seq.current = r.data.thread.seq;
     threadId.current = r.data.thread.threadId;
     setThread(r.data.thread);
+    // A turn sent before this snapshot arrived is in it already: its optimistic copy goes.
+    const sent = new Set(r.data.thread.turns.flatMap((t) => (t.role === "buyer" && t.clientTurnId ? [t.clientTurnId] : [])));
+    setPending((p) => p.filter((x) => !sent.has(x.clientTurnId ?? "")));
     setError(undefined);
+    loaded.current = true;
     return true;
   }, [base]);
 
@@ -126,7 +132,7 @@ export function useThreadState(slug: string): ThreadApi {
         return;
       }
       // A started-over kitchen keeps the old thread's events in its log: only this thread's count.
-      if (threadId.current && e.threadId !== threadId.current) return;
+      if (!threadId.current || e.threadId !== threadId.current) return;
       if (e.type === "reset") {
         setPending([]);
         seq.current = 0;
@@ -193,7 +199,7 @@ export function useThreadState(slug: string): ThreadApi {
         return false;
       }
       // The stream may have dropped meanwhile: make sure it is open, so the answer arrives.
-      if (!es.current || es.current.readyState === EventSource.CLOSED) connect();
+      if (loaded.current && (!es.current || es.current.readyState === EventSource.CLOSED)) connect();
       return true;
     },
     [base, connect],

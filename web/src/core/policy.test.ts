@@ -292,6 +292,33 @@ describe("policy: substitution", () => {
     expect(rule(evaluatePolicy(mandate({ substitution: { rule: "needs_approval", maxPriceIncreasePct: 16 } }), draft(q), ctx()), "substitute_price").outcome).toBe("pass");
   });
 
+  it("holds a stand-in of the kind asked for (not declared) like any substitute, on every door", () => {
+    // The request asked for one kind of milk (core/qualifiers.ts words); the order buys another of the same family.
+    const q = quote([{ productId: "AR-2010", quantity: 10 }]);
+    const asked = { productIds: [], category: "milk", standIns: ["AR-2010"] };
+    const relayed = evaluatePolicy(mandate(), draft(q, { asked }), ctx());
+    expect(relayed.outcome).toBe("needs_human_approval");
+    expect(rule(relayed, "substitution_rule").outcome).toBe("escalate");
+    expect(rule(relayed, "substitution_rule").reason).toMatch(/not the kind of milk the words asked for/);
+    expectRejectedBy(evaluatePolicy(mandate({ substitution: { rule: "none", maxPriceIncreasePct: 10 } }), draft(q, { asked }), ctx()), "substitution_rule");
+  });
+
+  it("takes the kitchen's own identified person's choice as their confirmation of a stand-in, never a relayed one", () => {
+    const q = quote([{ productId: "AR-2010", quantity: 10 }]);
+    const asked = { productIds: [], category: "milk", standIns: ["AR-2010"] };
+    const own = evaluatePolicy(mandate(), draft(q, { asked }), ctx({ substitutionConfirmedBy: "Sanna Koskinen" }));
+    expect(rule(own, "substitution_rule")).toMatchObject({ outcome: "pass", details: { confirmedBy: "Sanna Koskinen" } });
+    expect(own.outcome).toBe("auto_approve");
+    // A mandate that allows no substitutes is not lifted by anyone's choice.
+    expectRejectedBy(evaluatePolicy(mandate({ substitution: { rule: "none", maxPriceIncreasePct: 10 } }), draft(q, { asked }), ctx({ substitutionConfirmedBy: "Sanna Koskinen" })), "substitution_rule");
+  });
+
+  it("keeps the price cap for a declared substitute whoever chose it", () => {
+    const d = evaluatePolicy(mandate(), draft(sub("JP-3010", 50)), ctx({ substitutionConfirmedBy: "Sanna Koskinen" }));
+    expect(rule(d, "substitution_rule").outcome).toBe("pass");
+    expectRejectedBy(d, "substitute_price");
+  });
+
   it("passes the substitution rules when nothing is substituted", () => {
     const d = evaluatePolicy(mandate({ substitution: { rule: "none", maxPriceIncreasePct: 0 } }), draft(small()), ctx());
     expect(d.outcome).toBe("auto_approve");

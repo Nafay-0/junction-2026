@@ -29,6 +29,8 @@ export type ApprovalView = {
   asked?: string;
   licence?: string;
   priceHeldUntil: string; // ISO
+  /** The server's clock when this view was made: the screen measures the time left from it, not from the phone's clock. */
+  serverNow?: string;
   priceHeldUntilText: string;
   /** How this approver signs: passkey; demo tap (joined without a passkey, demo only); or the link token (legacy demo org). */
   signIn: "passkey" | "demo_tap" | "link_token";
@@ -173,6 +175,8 @@ export function buildApprovalView(
     licence: licenceOf(ctx),
     priceHeldUntil: ctx.quoteExpiresAt,
     priceHeldUntilText: timeText(ctx.quoteExpiresAt),
+    // The server's own time, so the screen counts down without trusting the phone's clock (approve/.../price-clock.ts).
+    serverNow: new Date().toISOString(),
     signIn: opts.signIn,
     demoTapEnabled: opts.demoTapEnabled,
     viewerIsApprover: opts.viewerIsApprover,

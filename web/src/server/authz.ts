@@ -92,7 +92,7 @@ export async function consoleKitchen(req: Request, rt: Runtime, slug: string) {
     }
     if (mine && signedIn) {
       requireSameOrigin(req, { json: false });
-      console.person = { channel: "portal_session", name: `${signedIn.account.restaurant} (${signedIn.account.username})`, account: signedIn.account.username };
+      console.person = { channel: "portal_session", name: `${signedIn.account.restaurant} (${signedIn.account.username})`, account: signedIn.account.username, ...(signedIn.session.scope === "call" ? { callOnly: true as const } : {}) };
     }
   } else if (k.info.kind === "visitor") {
     requireSameOrigin(req, { json: false });
@@ -112,7 +112,7 @@ export async function consoleKitchen(req: Request, rt: Runtime, slug: string) {
  * visitor's own phone for their kitchen. A relayed name or the operations desk can read memory, never change it.
  */
 export function requireKitchenPerson(k: { info: { kind: string; name: string }; console?: ConsoleContext }, what = "Changing this kitchen's rules"): void {
-  if (k.console?.person) return;
+  if (k.console?.person && !k.console.person.callOnly) return;
   throw new DockError(
     401,
     "kitchen_person_required",

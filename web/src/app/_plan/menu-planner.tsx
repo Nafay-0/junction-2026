@@ -86,6 +86,17 @@ export function MenuPlanner({ kitchen, base = "/ui-api/plan", initialText = "", 
     return () => clearInterval(t);
   }, [pendingId, base, k, accept]);
 
+  // A plan the store's agent made in the thread (?plan=<planId>): opened here to edit its lines one by one.
+  useEffect(() => {
+    const id = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("plan");
+    if (!id || !/^plan_[a-z0-9]+$/i.test(id)) return;
+    let gone = false;
+    void api<PlanWire>("GET", `${base}/${k}/${id}`).then((r) => !gone && accept(r));
+    return () => {
+      gone = true;
+    };
+  }, [base, k, accept]);
+
   // A list from the photo door: one plan, one quote, one order.
   const listed = items ? JSON.stringify(items) : undefined;
   useEffect(() => {

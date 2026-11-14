@@ -1,5 +1,5 @@
 import type { Product, ProductQuery } from "./catalog";
-import { checkNeed, type Concern, type PendingOrderSummary } from "./concerns";
+import { checkNeed, farFromUsual, noticeQuantity, type Concern, type PendingOrderSummary } from "./concerns";
 import { CONFIRMATION_MATTERS } from "./intake";
 import { emptyProfile, type KitchenRepository } from "./kitchen";
 import { NeedSchema } from "./need";
@@ -43,8 +43,16 @@ export async function concernsOfOrder(
     const known = await deps.catalog.searchProducts({ category: family, limit: 100 });
     const named = ids.some((id) => !known.some((p) => p.id === id)) ? await deps.catalog.searchProducts({ ids, limit: 100 }) : [];
     const candidates = [...known, ...named.filter((p) => !known.some((k) => k.id === p.id))];
-    for (const c of checkNeed(need.data, { now: input.now, profile, family, candidates, ...(input.pending ? { pending: input.pending } : {}) })) {
+    const ctx = { now: input.now, profile, family, candidates, ...(input.pending ? { pending: input.pending } : {}) };
+    for (const c of checkNeed(need.data, ctx)) {
       if (CONFIRMATION_MATTERS.includes(c.code) && !out.some((x) => x.key === c.key)) out.push({ key: c.key, code: c.code, message: c.message });
+    }
+    // An order nobody was asked about, far from the kitchen's usual amount: the intake only notes it to the buyer it
+    // talks to; here nobody was told anything, so a person sees it before it goes (as quantity_unusual).
+    if (farFromUsual(need.data, ctx)) {
+      const n = noticeQuantity(need.data, ctx)[0];
+      const key = `quantity_unusual:${amount}:${main.unit}`;
+      if (!out.some((x) => x.key === key)) out.push({ key, code: "quantity_unusual", message: n.message });
     }
   }
   return out;

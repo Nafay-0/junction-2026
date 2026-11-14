@@ -79,6 +79,7 @@ export const DOOR_TEXT = defineText({
     deviceButton: "Create the passkey on this phone",
     deviceDone: (restaurant: string) => `Done. This phone signs for ${restaurant}.`,
     deviceHome: "Open the signer's home on this phone",
+    deviceSign: "Sign the waiting order",
     deviceExpired: "This code has expired or was used. Show a new one from Agent and rules.",
   },
   fi: {
@@ -149,6 +150,7 @@ export const DOOR_TEXT = defineText({
     deviceButton: "Luo pääsyavain tähän puhelimeen",
     deviceDone: (restaurant: string) => `Valmis. Tällä puhelimella hyväksytään tilaukset: ${restaurant}.`,
     deviceHome: "Avaa hyväksyjän näkymä tällä puhelimella",
+    deviceSign: "Hyväksy odottava tilaus",
     deviceExpired: "Koodi on vanhentunut tai käytetty. Näytä uusi kohdasta Agentti ja säännöt.",
   },
   sv: {
@@ -219,6 +221,7 @@ export const DOOR_TEXT = defineText({
     deviceButton: "Skapa nyckeln på den här telefonen",
     deviceDone: (restaurant: string) => `Klart. Den här telefonen godkänner för ${restaurant}.`,
     deviceHome: "Öppna godkännarens vy på den här telefonen",
+    deviceSign: "Godkänn den väntande ordern",
     deviceExpired: "Koden har gått ut eller använts. Visa en ny under Agent och regler.",
   },
 });

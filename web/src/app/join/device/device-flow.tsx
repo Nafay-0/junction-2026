@@ -17,7 +17,11 @@ type Begin = { options: PublicKeyCredentialCreationOptionsJSON; restaurant: stri
 export function DeviceFlow() {
   const tx = useText(DOOR_TEXT);
   const { lang } = useLang();
-  const link = useSearchParams().get("t") ?? "";
+  const params = useSearchParams();
+  const link = params.get("t") ?? "";
+  // Where to go once the device is added: an order's sign-off screen (from the thread's "Send to my phone"), else home.
+  const nextParam = params.get("next") ?? "";
+  const next = /^\/approve\/apr_[A-Za-z0-9]{6,40}$/.test(nextParam) ? nextParam : "/approver";
   const [begin, setBegin] = useState<Begin>();
   const [done, setDone] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -55,8 +59,8 @@ export function DeviceFlow() {
           </IconDisc>
         }
       >
-        <Link href="/approver" className={`mt-auto ${bigButton("go")}`}>
-          {tx.deviceHome}
+        <Link href={next} className={`mt-auto ${bigButton("go")}`}>
+          {next === "/approver" ? tx.deviceHome : tx.deviceSign}
         </Link>
       </PhoneNotice>
     );

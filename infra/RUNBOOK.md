@@ -21,8 +21,9 @@ node infra/aiven-deploy.mjs                     # origin/main
 node infra/aiven-deploy.mjs origin/claude/deploy  # or any branch, tag or commit
 ```
 
-Takes about 5 minutes (build about 4, then start) and ends with the smoke test. The site keeps serving the
-old version until the new one is up. Passkeys and data survive (they are in PostgreSQL schema `dock_prod`).
+Usually takes about 5 minutes (build about 4, then start) and ends with the smoke test; on Sat 14 Nov one build
+took over 15 minutes, so the script now waits up to 30. The old version serves until the new one starts, and
+then the site does not answer for about a minute while it switches: never deploy while someone is being shown it. Passkeys and data survive (they are in PostgreSQL schema `dock_prod`).
 
 ## Roll back to the previous commit
 
