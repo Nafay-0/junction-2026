@@ -45,7 +45,7 @@ describe("the in-memory store's order queries", () => {
 describe("order_splitting on the store's sums", () => {
   it("decides as it does on the full list, and names only the newest few of a busy day", async () => {
     const m = sampleMandate(QUERY_NOW, { perOrderLimitCents: 10_000, weeklyBudgetCents: 1_000_000 });
-    const quote = { quoteId: "qt_new", buyerOrgId: m.issuer.orgId, agentId: m.agentId, mandateId: m.mandateId, requestId: "req_new", currency: "EUR" as const, lines: [{ productId: "VA-1001", name: "Milk", category: "milk", unit: "l", packSize: 1, attributes: [], allergens: [], certificates: [], quantity: 5, unitPriceCents: 1_000, lineTotalCents: 5_000, deliveryDate: "2026-11-16" }], totalCents: 5_000, issuedAt: QUERY_NOW.toISOString(), expiresAt: new Date(QUERY_NOW.getTime() + 1800_000).toISOString() };
+    const quote = { quoteId: "qt_new", buyerOrgId: m.issuer.orgId, agentId: m.agentId, mandateId: m.mandateId, requestId: "req_new", currency: "EUR" as const, lines: [{ productId: "VA-1001", name: "Milk", category: "milk", unit: "L" as const, packSize: 1, attributes: [], allergens: [], certificates: [], quantity: 5, unitPriceCents: 1_000, lineTotalCents: 5_000, deliveryDate: "2026-11-16" }], totalCents: 5_000, issuedAt: QUERY_NOW.toISOString(), expiresAt: new Date(QUERY_NOW.getTime() + 1800_000).toISOString() };
     const draft = { agentId: m.agentId, quote, lines: quote.lines.map(({ productId, quantity, unitPriceCents }) => ({ productId, quantity, unitPriceCents })) };
     const earlier = Array.from({ length: 40 }, (_, i) => ({
       ...recentOrderOf({ ...randomOrders(1, i + 1)[0], orderId: `ord_${String(i).padStart(2, "0")}`, status: "committed", approval: undefined, totalCents: 200 }),

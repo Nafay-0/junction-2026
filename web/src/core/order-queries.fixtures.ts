@@ -33,7 +33,7 @@ export function randomOrders(n: number, seed = 7): Order[] {
       mandateId: "mnd_1",
       quoteId: `qt_${i}`,
       status,
-      lines: cats.map((category, j) => ({ productId: `P-${j}`, name: "p", category, unit: "l", packSize: 1, attributes: [], allergens: [], certificates: [], quantity: 1 + j, unitPriceCents: 100, lineTotalCents: 100, deliveryDate: `2026-11-${String(15 + j).padStart(2, "0")}` })),
+      lines: cats.map((category, j) => ({ productId: `P-${j}`, name: "p", category, unit: "L" as const, packSize: 1, attributes: [], allergens: [], certificates: [], quantity: 1 + j, unitPriceCents: 100, lineTotalCents: 100, deliveryDate: `2026-11-${String(15 + j).padStart(2, "0")}` })),
       totalCents: 100 + Math.floor(rnd() * 100_000),
       decision: { outcome: "auto_approve", totalCents: 0, rules: [], reasons: [] },
       ...(signed ? { approval: { approvalId: `apr_${i}`, approver: { role: "r", name: "R", maxApprovalCents: 1 }, status: "pending", orderDigest: "d", tokenHash: "t", requestedAt: created.toISOString() } } : {}),
