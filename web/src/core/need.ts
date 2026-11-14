@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { normaliseAllergen, normaliseWantedTag } from "./vocabulary";
+import { labelOf, normaliseAllergen, normaliseWantedTag, softLabelsIn } from "./vocabulary";
 
 /**
  * The structured need: what a buyer wants, in fields rather than words. An LLM (outside core/) turns free
@@ -33,6 +33,8 @@ export const NeedSchema = z
     deliverOn: z.iso.date().optional(),
     requiredClaims: z.array(tag).max(10).default([]), // "lactose_free", "organic"
     requiredLabels: z.array(tag).max(10).optional(), // certificates and labels: "hyvaa_suomesta", "msc"
+    /** Labels wanted if possible ("MSC if you can"): ranked first with their price said, never a reason to refuse. */
+    preferredLabels: z.array(tag).max(10).optional(),
     forbiddenAllergens: z.array(tag).max(10).default([]),
     /** unstated: the buyer said nothing; no_preference: asked, and said it does not matter. */
     optimise: z.enum([...OPTIMISE_GOALS, "no_preference", "unstated"]).default("unstated"),
@@ -72,8 +74,13 @@ export function normaliseNeed(need: StructuredNeed): { need: StructuredNeed; cha
   for (const a of n.forbiddenAllergens) if (normaliseAllergen(a) !== a) changes.push(`allergen "${a}" read as ${normaliseAllergen(a)}`);
   n.requiredClaims = [...claims];
   n.item.attributes = [...attrs].filter((a) => !n.item.excludedAttributes.includes(a) && !claims.has(a));
+  // "MSC if possible": a label the words ask for softly is a preference, wherever the reading put it.
+  const soft = new Set([...(n.preferredLabels ?? []).map((l) => labelOf(l) ?? normaliseWantedTag(l).value), ...softLabelsIn(n.text)]);
+  for (const l of soft) if (labels.delete(l)) changes.push(`label ${l} read as preferred, not required: the words ask for it if possible`);
   if (labels.size) n.requiredLabels = [...labels];
   else delete n.requiredLabels;
+  if (soft.size) n.preferredLabels = [...soft].sort();
+  else delete n.preferredLabels;
   n.forbiddenAllergens = [...forbidden];
   // "On Monday" is also "by Monday": every deadline check reads deliverBy, and the delivery day is pinned to deliverOn.
   if (n.deliverOn && n.deliverBy !== n.deliverOn) {
@@ -165,6 +172,7 @@ export function describeNeed(n: StructuredNeed): string {
   const claims = [...n.requiredClaims, ...n.item.attributes];
   if (claims.length) parts.push(`must be ${claims.join(", ")}`);
   if (n.requiredLabels?.length) parts.push(`labelled ${n.requiredLabels.join(", ")}`);
+  if (n.preferredLabels?.length) parts.push(`preferably ${n.preferredLabels.join(", ")}`);
   if (n.item.excludedAttributes.length) parts.push(`not ${n.item.excludedAttributes.join(", ")}`);
   if (n.item.productId) parts.push(`product ${n.item.productId}`);
   if (n.forbiddenAllergens.length) parts.push(`no ${n.forbiddenAllergens.join(", ")}`);

@@ -84,7 +84,7 @@ export function useOrderDemo(initial: { variant?: "plain" | "unavailable" | "bud
         day={day}
         onDay={setDay}
         total={money(cents)}
-        totalNote={f ? "alv 0 %, kiinteä hinta 30 min" : "VAT 0 %, price fixed for 30 min"}
+        totalNote={f ? "veroton, kiinteä hinta 30 min" : "before VAT, price fixed for 30 min"}
         outcome={outcome}
         notices={notices}
         confirm={confirm}

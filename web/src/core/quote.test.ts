@@ -3,7 +3,7 @@ import { base64url } from "jose";
 import { InMemoryCatalog } from "./catalog";
 import { generateEd25519KeyPair, type KeyPair } from "./keys";
 import { signMandate } from "./mandate";
-import { QuoteError, buildQuote, signQuote, verifyQuote, type QuoteInput } from "./quote";
+import { QuoteError, QuoteSchema, buildQuote, signQuote, verifyQuote, type QuoteInput } from "./quote";
 import { SEED_PRODUCTS, SEED_STOCK } from "./seed";
 import { sampleMandate } from "./test-fixtures";
 
@@ -148,5 +148,35 @@ describe("quote signatures", () => {
     await expect(verifyQuote("x.y.z", wholesaler)).rejects.toMatchObject({ code: "quote_malformed" });
     const mandateToken = await signMandate(sampleMandate(NOW), wholesaler);
     await expect(verifyQuote(mandateToken, wholesaler)).rejects.toMatchObject({ code: "quote_malformed" });
+  });
+});
+
+describe("quote: deposits, VAT and the customer's own price (data depth)", () => {
+  const NOW2 = new Date("2026-11-13T10:00:00.000Z");
+  const product = { ...SEED_PRODUCTS.find((p) => p.id === "VA-1001")!, deposits: [{ material: "4", quantity: 24 }, { material: "171", quantity: 1 }] };
+  const offer = { productId: "VA-1001", unitPriceCents: 2469, availablePacks: 100, deliveryDate: "2026-11-16", taxRatePct: 13.5, listPriceCents: 3086, netPrice: false };
+  const build = (p = product, o: Record<string, unknown> = offer) => buildQuote({ quoteId: "q", buyerOrgId: "o", agentId: "a", mandateId: "m", requestId: "r", lines: [{ productId: "VA-1001", quantity: 10 }], products: [p], offers: [o as never], now: NOW2, ttlMinutes: 30 });
+
+  it("adds the deposit as its own part of the total, outside VAT, and names what it cannot price", () => {
+    const q = build();
+    const l = q.lines[0];
+    expect(l.deposit).toMatchObject({ perPackCents: 360, totalCents: 3600, unknown: ["171"] });
+    expect(q).toMatchObject({ goodsCents: 24690, depositCents: 3600, totalCents: 28290 });
+    expect(q.vat).toEqual({ byRate: [{ ratePct: 13.5, baseCents: 24690, vatCents: 3333 }], vatCents: 3333, incomplete: false });
+    expect(QuoteSchema.safeParse({ ...q, totalCents: 24690 }).success).toBe(false); // a total without the deposit does not add up
+  });
+
+  it("states the rate and where it came from, and the list price beside the customer's own", () => {
+    const l = build().lines[0];
+    expect(l).toMatchObject({ taxRatePct: 13.5, taxSource: "price_service", listUnitPriceCents: 3086 });
+    const fromFile = build(product, { ...offer, taxRatePct: undefined, listPriceCents: 2469 }).lines[0];
+    expect(fromFile).toMatchObject({ taxRatePct: 13.5, taxSource: "product_file" });
+    expect(fromFile.listUnitPriceCents).toBeUndefined();
+    const unknown = build({ ...product, vatRatePct: undefined }, { ...offer, taxRatePct: undefined }).lines[0];
+    expect(unknown.taxRatePct).toBeUndefined();
+  });
+
+  it("signs the nutrition declaration with the line, for the gate", () => {
+    expect(build().lines[0].nutrition?.values.protein).toBe(3.6);
   });
 });

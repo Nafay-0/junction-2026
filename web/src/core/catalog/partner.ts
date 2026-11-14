@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { NUTRIENTS, type Nutrient, type Nutrition } from "../nutrition";
+import { vatRateOfCode } from "../pricing";
+import { countryOfNumeric } from "./origin";
 import { derivePackContent, describePack, type GsLevel, type Measure, type PackContent, type PackIssue } from "./pack";
 
 /**
@@ -53,7 +56,46 @@ export type IndexedProduct = {
    * GTINs were kept.
    */
   gtins?: string[];
+
+  // ----- Read from the product file since the data-depth index. Absent: the file says nothing (or the index is older). -----
+  /** The maker's nutrition declaration per 100 g or 100 ml. Absent: no declaration, every nutrient unknown. */
+  nutrition?: Nutrition;
+  /** Returnable-packaging deposits charged with one sales unit (core/pricing.ts prices them). */
+  deposits?: { material: string; quantity: number }[];
+  /** VAT rate from the product file's VAT class (13.5, 25.5, 10); the price service's rate wins when there is one. */
+  vatRatePct?: number;
+  /** What a buyer reads about the product, in English and Finnish where the maker gave them, shortened (see TEXT_CAPS). */
+  texts?: ProductTexts;
+  /** The characterising ingredient with its share and where it comes from, by production stage. */
+  mainIngredient?: { names: { en?: string; fi?: string; sv?: string }; pct?: number; origins: { stage: string; country: string }[] };
+  /** Every country of origin the data states (alpha-2; "eu" and "non_eu" as stated). */
+  origins?: string[];
+  /** Catch information of fish products: species, how it was produced, gear and area codes. */
+  fish?: FishReport[];
+  /** Storage temperature range in degrees Celsius, as the maker states it. */
+  storageTempC?: { min?: number; max?: number };
 };
+
+export type Lang2 = { en?: string; fi?: string };
+/** Product texts, each in English and Finnish where the maker wrote them; `about` is the start of the marketing text. */
+export type ProductTexts = { ingredients?: Lang2; storage?: Lang2; usage?: Lang2; disposal?: Lang2; about?: Lang2 };
+export type FishReport = {
+  /** FAO 3-alpha species code (SAL, HER, COD). */
+  species: string;
+  latin?: string;
+  production?: "aquaculture" | "marine_fishery" | "inland_fishery";
+  /** Fishing gear codes as stated (FAO ISSCFG letters such as TM, or the GS1 catch method numbers). */
+  methods: string[];
+  /** FAO fishing area codes (27, 27.3.d, 05). */
+  areas: string[];
+};
+
+/**
+ * How long each text may be in the index. Ingredient lists are kept whole up to 400 characters (most are shorter:
+ * median 150) and otherwise cut at a comma with "…"; the full list is on the pack. Marketing text is kept only as
+ * its opening (80 characters), for search and a one-line description.
+ */
+export const TEXT_CAPS = { ingredients: 400, storage: 140, usage: 180, disposal: 90, about: 80 } as const;
 
 export type CatalogIndex = {
   version: typeof INDEX_VERSION;
@@ -66,6 +108,8 @@ export type CatalogIndex = {
 
 const text = (max: number) => z.string().transform((s) => s.slice(0, max));
 const LangText = z.object({ value: text(300).catch(""), language: z.string().max(8).catch("") });
+/** A longer text (an ingredient list, an instruction): read up to 4,000 characters, then shortened by `shorten`. */
+const LongText = z.object({ value: text(4000).catch(""), language: z.string().max(8).catch("") });
 const GsVal = z.object({ value: z.number().nullable().optional().catch(undefined), unit: z.string().max(16).nullable().optional().catch(undefined) }).nullable().optional().catch(undefined);
 const ClassValue = z.object({ id: z.string().max(64), unit: z.string().max(32).optional().catch(undefined), value: z.number().optional().catch(undefined) });
 
@@ -81,14 +125,68 @@ export const RawProductSchema = z.object({
   units: z.array(z.object({ unitId: z.string().max(8), sizeInBaseUnits: z.number().positive(), gtin: z.string().max(20).optional().catch(undefined) })).catch([]),
   salesUnitGtin: z.string().max(20).optional().catch(undefined),
   substitutions: z.array(z.object({ product: z.string().max(32).optional(), substituteProduct: z.string().max(32) })).optional().catch([]),
+  deposits: z.array(z.object({ material: z.string().min(1).max(32), quantity: z.number().positive().max(10_000) }).loose()).optional().catch([]),
   synkkaData: z
     .object({
       names: z.array(LangText).catch([]),
       brand: text(120).nullable().optional().catch(null),
       variableUnit: z.boolean().optional().catch(undefined),
       maxTemperature: z.number().optional().catch(undefined),
+      minTemperature: z.number().optional().catch(undefined),
+      vatCode: z.string().max(32).nullable().optional().catch(undefined),
+      countriesOfOrigin: z.array(z.string().max(8)).max(20).optional().catch([]),
+      keyIngredients: z.array(LongText).optional().catch([]),
+      storageInstructions: z.array(LongText).optional().catch([]),
+      usageInstructions: z.array(LongText).optional().catch([]),
+      preparationInstructions: z.array(LongText).optional().catch([]),
+      disposalInformations: z.array(LongText).optional().catch([]),
+      marketingTexts: z.array(LongText).optional().catch([]),
+      ingredients: z
+        .array(
+          z
+            .object({
+              sequence: z.number().optional().catch(undefined),
+              percentage: z.number().min(0).max(100).optional().catch(undefined),
+              names: z.array(LangText).catch([]),
+              origins: z.array(z.object({ type: z.string().max(32).optional().catch(undefined), country: z.string().max(8).optional().catch(undefined) }).loose()).optional().catch([]),
+            })
+            .loose(),
+        )
+        .max(50)
+        .optional()
+        .catch([]),
+      fishingReports: z
+        .array(
+          z
+            .object({
+              id: z.string().max(8).optional().catch(undefined),
+              name: text(80).optional().catch(undefined),
+              catchMethods: z
+                .array(z.object({ methods: z.array(z.string().max(12)).max(10).catch([]), areas: z.array(z.string().max(16)).max(10).catch([]), productionMethod: z.string().max(32).optional().catch(undefined) }).loose())
+                .max(10)
+                .catch([]),
+            })
+            .loose(),
+        )
+        .max(10)
+        .optional()
+        .catch([]),
       unitConversions: z.array(z.object({ synkkaPackagingType: z.string().max(32), volume: GsVal, netWeight: GsVal }).loose()).optional().catch([]),
-      nutritionalContent: z.array(z.object({ id: z.string().max(32), value: z.number().optional().catch(undefined), unit: z.string().max(16).optional().catch(undefined) }).loose()).optional().catch([]),
+      nutritionalContent: z
+        .array(
+          z
+            .object({
+              id: z.string().max(32),
+              value: z.number().optional().catch(undefined),
+              unit: z.string().max(16).optional().catch(undefined),
+              basisQuantity: z.number().optional().catch(undefined),
+              basisQuantityUnit: z.string().max(8).optional().catch(undefined),
+              unitPrecision: z.string().max(32).optional().catch(undefined),
+            })
+            .loose(),
+        )
+        .optional()
+        .catch([]),
       classifications: z.array(z.object({ name: z.string().max(64), values: z.array(ClassValue.loose()).catch([]) }).loose()).catch([]),
     })
     .loose()
@@ -264,6 +362,156 @@ function classValues(p: RawProduct, name: string) {
 
 const formatFat = (v: number) => `fat_${String(Math.round(v * 10) / 10).replace(".", "_")}`;
 
+/** GS1 nutrient codes as the partner sends them, onto Dock's nutrients. Energy in kJ is left out: kcal is kept. */
+const NUTRIENT_CODES: Record<string, Nutrient> = {
+  "ENER-E14": "energy_kcal",
+  FAT: "fat",
+  FASAT: "saturated_fat",
+  CHOAVL: "carbohydrate",
+  "SUGAR-": "sugar",
+  FIBTG: "fibre",
+  "PRO-": "protein",
+  SALTEQ: "salt",
+  LACS: "lactose",
+  CA: "calcium",
+  FE: "iron",
+  "VITD-": "vitamin_d",
+  VITD: "vitamin_d",
+  VITB12: "vitamin_b12",
+};
+const NUTRIENT_TARGET: Record<Nutrient, "kcal" | "g" | "mg" | "µg"> = {
+  energy_kcal: "kcal", fat: "g", saturated_fat: "g", carbohydrate: "g", sugar: "g", fibre: "g", protein: "g", salt: "g", lactose: "g", calcium: "mg", iron: "mg", vitamin_d: "µg", vitamin_b12: "µg",
+};
+const SCALE: Record<string, number> = { GRM: 1, MGM: 1e-3, MC: 1e-6, MCG: 1e-6 };
+const TARGET_SCALE = { g: 1, mg: 1e-3, "µg": 1e-6 } as const;
+
+/** A declared value in the nutrient's own unit, or undefined when the unit is not one Dock can read or the value is implausible. */
+function nutrientValue(n: Nutrient, value: number, unit: string | undefined): number | undefined {
+  const target = NUTRIENT_TARGET[n];
+  let v: number | undefined;
+  if (target === "kcal") v = unit === "E14" ? value : undefined;
+  else {
+    const from = unit ? SCALE[unit] : target === "g" ? 1 : undefined; // a missing unit on a gram figure is grams
+    v = from === undefined ? undefined : (value * from) / TARGET_SCALE[target];
+  }
+  if (v === undefined || !Number.isFinite(v) || v < 0) return undefined;
+  const ceiling = target === "kcal" ? 900 : target === "g" ? 100 : target === "mg" ? 100_000 : 1_000_000;
+  return v > ceiling ? undefined : Math.round(v * 1000) / 1000;
+}
+
+/** The declaration per 100 g or 100 ml. Figures per serving or per another basis are not mixed in. */
+export function nutritionOf(p: RawProduct): Nutrition | undefined {
+  const entries = (p.synkkaData.nutritionalContent ?? []).filter((e) => typeof e.value === "number" && (e.basisQuantity === undefined || e.basisQuantity === 100) && (!e.basisQuantityUnit || e.basisQuantityUnit === "GRM" || e.basisQuantityUnit === "MLT"));
+  const ml = entries.filter((e) => e.basisQuantityUnit === "MLT").length;
+  const per: Nutrition["per"] = ml > entries.length / 2 ? "100ml" : "100g";
+  const values: Nutrition["values"] = {};
+  const lessThan = new Set<Nutrient>();
+  for (const e of entries) {
+    if ((e.basisQuantityUnit === "MLT") !== (per === "100ml") && e.basisQuantityUnit) continue;
+    const n = NUTRIENT_CODES[e.id];
+    if (!n || values[n] !== undefined) continue;
+    const v = nutrientValue(n, e.value!, e.unit);
+    if (v === undefined) continue;
+    values[n] = v;
+    if (e.unitPrecision === "LESS_THAN" || e.unitPrecision === "LESS_THAN_OR_EQUAL") lessThan.add(n);
+  }
+  if (!Object.keys(values).length) return undefined;
+  return { per, values, ...(lessThan.size ? { lessThan: NUTRIENTS.filter((n) => lessThan.has(n)) } : {}) };
+}
+
+/** Whitespace folded; over `max` characters, cut at the last comma, semicolon or full stop past half way, with "…". */
+export function shorten(s: string, max: number): string {
+  const t = s.replace(/\s+/g, " ").trim();
+  if (t.length <= max) return t;
+  const c = t.slice(0, max);
+  const i = Math.max(c.lastIndexOf(", "), c.lastIndexOf("; "), c.lastIndexOf(". "));
+  return `${(i > max / 2 ? c.slice(0, i + 1) : c).trimEnd()}…`;
+}
+
+function lang2(arr: { value: string; language: string }[] | undefined, max: number): Lang2 | undefined {
+  const out: Lang2 = {};
+  for (const lang of ["en", "fi"] as const) {
+    const v = arr?.find((t) => t.language === lang && t.value.trim())?.value;
+    if (v) out[lang] = shorten(v, max);
+  }
+  return out.en || out.fi ? out : undefined;
+}
+
+function textsOf(p: RawProduct): ProductTexts | undefined {
+  const s = p.synkkaData;
+  const usage = lang2(s.usageInstructions, TEXT_CAPS.usage) ?? lang2(s.preparationInstructions, TEXT_CAPS.usage);
+  const t: ProductTexts = {};
+  const put = (k: keyof ProductTexts, v: Lang2 | undefined) => v && (t[k] = v);
+  put("ingredients", lang2(s.keyIngredients, TEXT_CAPS.ingredients));
+  put("storage", lang2(s.storageInstructions, TEXT_CAPS.storage));
+  put("usage", usage);
+  put("disposal", lang2(s.disposalInformations, TEXT_CAPS.disposal));
+  put("about", lang2(s.marketingTexts, TEXT_CAPS.about));
+  return Object.keys(t).length ? t : undefined;
+}
+
+function mainIngredientOf(p: RawProduct): IndexedProduct["mainIngredient"] {
+  const first = [...(p.synkkaData.ingredients ?? [])].sort((a, b) => (a.sequence ?? 99) - (b.sequence ?? 99)).find((i) => i.names.some((n) => n.value.trim()));
+  if (!first) return undefined;
+  const names: { en?: string; fi?: string; sv?: string } = {};
+  for (const n of first.names) if ((n.language === "en" || n.language === "fi" || n.language === "sv") && n.value.trim() && !names[n.language]) names[n.language] = shorten(n.value, 60);
+  const origins = (first.origins ?? [])
+    .map((o) => ({ stage: (o.type ?? "").toUpperCase().replace(/[^A-Z_]/g, ""), country: countryOfNumeric(o.country ?? "") }))
+    .filter((o): o is { stage: string; country: string } => !!o.stage && !!o.country);
+  return { names, ...(typeof first.percentage === "number" ? { pct: first.percentage } : {}), origins };
+}
+
+function fishOf(p: RawProduct): FishReport[] | undefined {
+  const out: FishReport[] = [];
+  for (const r of p.synkkaData.fishingReports ?? []) {
+    const species = (r.id ?? "").trim().toUpperCase();
+    if (!/^[A-Z]{3}$/.test(species)) continue;
+    const prod = (r.catchMethods ?? []).map((m) => (m.productionMethod ?? "").toUpperCase().replace(/\d+$/, "")).find(Boolean);
+    const production = prod === "AQUACULTURE" ? "aquaculture" : prod === "MARINE_FISHERY" ? "marine_fishery" : prod === "INLAND_FISHERY" ? "inland_fishery" : undefined;
+    const clean = (xs: string[]) => [...new Set(xs.map((x) => x.trim()).filter((x) => /^[A-Za-z0-9.]{1,12}$/.test(x)))];
+    const latin = r.name?.trim();
+    out.push({
+      species,
+      ...(latin ? { latin: latin.charAt(0).toUpperCase() + latin.slice(1) } : {}),
+      ...(production ? { production } : {}),
+      methods: clean((r.catchMethods ?? []).flatMap((m) => m.methods)),
+      areas: clean((r.catchMethods ?? []).flatMap((m) => m.areas)),
+    });
+  }
+  return out.length ? out : undefined;
+}
+
+function storageTempOf(p: RawProduct): IndexedProduct["storageTempC"] {
+  const ok = (t: number | undefined) => (typeof t === "number" && Number.isFinite(t) && t >= -60 && t <= 100 ? t : undefined);
+  const min = ok(p.synkkaData.minTemperature);
+  const max = ok(p.synkkaData.maxTemperature);
+  if (min === undefined && max === undefined) return undefined;
+  if (min !== undefined && max !== undefined && min > max) return undefined;
+  return { ...(min !== undefined ? { min } : {}), ...(max !== undefined ? { max } : {}) };
+}
+
+/** The fields read since the data-depth index, each left out when the file says nothing (absent means unknown). */
+function depthOf(p: RawProduct): Partial<IndexedProduct> {
+  const out: Partial<IndexedProduct> = {};
+  const nutrition = nutritionOf(p);
+  if (nutrition) out.nutrition = nutrition;
+  const deposits = (p.deposits ?? []).map((d) => ({ material: d.material.trim(), quantity: d.quantity })).filter((d) => /^[\w-]{1,32}$/.test(d.material));
+  if (deposits.length) out.deposits = deposits;
+  const vat = vatRateOfCode(p.synkkaData.vatCode);
+  if (vat !== undefined) out.vatRatePct = vat;
+  const texts = textsOf(p);
+  if (texts) out.texts = texts;
+  const main = mainIngredientOf(p);
+  if (main) out.mainIngredient = main;
+  const origins = [...new Set((p.synkkaData.countriesOfOrigin ?? []).map(countryOfNumeric).filter((c): c is string => !!c))];
+  if (origins.length) out.origins = origins;
+  const fish = fishOf(p);
+  if (fish) out.fish = fish;
+  const temp = storageTempOf(p);
+  if (temp) out.storageTempC = temp;
+  return out;
+}
+
 export function indexProduct(p: RawProduct, side: { reliability?: Map<string, number>; carbon?: Map<string, number> } = {}): IndexedProduct {
   const names: IndexedProduct["names"] = {};
   for (const n of p.synkkaData.names) {
@@ -348,6 +596,7 @@ export function indexProduct(p: RawProduct, side: { reliability?: Map<string, nu
     fatPct,
     variableWeight: p.synkkaData.variableUnit === true,
     gtins: gtinsOf(p),
+    ...depthOf(p),
   };
 }
 
@@ -405,11 +654,34 @@ export function buildCatalogIndex(rawProducts: unknown, reliabilityCsv: string, 
  * On disk each product is a flat array and lists are joined strings: about a third of the size of plain objects,
  * so the index parses fast in a serverless function. `decodeIndex` restores the objects.
  */
-export type IndexFile = { format: "dock-valio-index"; version: typeof INDEX_VERSION; builtAt: string; stats: CatalogIndex["stats"]; columns: string[]; rows: unknown[][] };
+export type IndexFile = {
+  format: "dock-valio-index";
+  version: typeof INDEX_VERSION;
+  builtAt: string;
+  stats: CatalogIndex["stats"];
+  columns: string[];
+  rows: unknown[][];
+  /** Product texts by column ("ingredients.en", ...), each an array in row order; absent in an index built without them. */
+  texts?: Record<string, (string | null)[]>;
+};
 
-const COLUMNS = ["id", "en", "fi", "sv", "brand", "vendor", "category", "salesUnit", "baseUnit", "units", "lot", "pack", "claims", "allergens", "labels", "temp", "country", "substitutes", "reliability", "carbon", "fat", "variable", "gtins"];
-/** The columns of an index built before GTINs were kept: still read (its products then have no GTINs). */
-const LEGACY_COLUMNS = COLUMNS.slice(0, -1);
+/**
+ * Columns, in file order. Later columns were added at the end, so an index built by older code is a prefix of this
+ * list and still reads (its products then lack what it did not keep): `COLUMN_SETS` are the widths ever written.
+ */
+const COLUMNS = [
+  "id", "en", "fi", "sv", "brand", "vendor", "category", "salesUnit", "baseUnit", "units", "lot", "pack", "claims", "allergens", "labels", "temp", "country", "substitutes", "reliability", "carbon", "fat", "variable",
+  "gtins",
+  "nutrition", "deposits", "vat", "ingredient", "origins", "fish", "storageTemp",
+];
+/** 22: before GTINs were kept; 23: before the data-depth fields; 30: today. */
+const COLUMN_SETS = [22, 23, COLUMNS.length];
+/**
+ * The data-depth parts of the file, for measuring what each costs (scripts/index-build.ts): the row columns, and
+ * "texts", the product texts, kept apart in columns of their own (one array per text and language, in row order),
+ * which compresses to about two thirds of the same texts inside the rows.
+ */
+export const DEPTH_COLUMNS = [...COLUMNS.slice(23), "texts"];
 const SEP = "|";
 const TEMP = { ambient: "a", chilled: "c", frozen: "f" } as const;
 const TEMP_BACK: Record<string, IndexedProduct["temperature"]["class"]> = { a: "ambient", c: "chilled", f: "frozen" };
@@ -417,7 +689,8 @@ const join = (xs: string[]) => xs.join(SEP);
 const split = (s: unknown) => (typeof s === "string" && s ? s.split(SEP) : []);
 const num = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? x : null);
 
-export function encodeIndex(index: CatalogIndex): IndexFile {
+/** `omit`: data-depth columns written empty, to measure what each costs (scripts/index-build.ts). */
+export function encodeIndex(index: CatalogIndex, opts: { omit?: readonly string[] } = {}): IndexFile {
   const rows = index.products.map((p) => {
     const k = p.pack;
     const pack = [k.baseUnitsPerSalesUnit, k.perBaseUnit.L ?? null, k.perBaseUnit.kg ?? null, k.perSalesUnit.L ?? null, k.perSalesUnit.kg ?? null, k.primary, join(k.certainMeasures), join(k.issues), join(k.sources)];
@@ -428,15 +701,118 @@ export function encodeIndex(index: CatalogIndex): IndexFile {
       [a.declared ? 1 : 0, join(a.contains), join(a.mayContain), join(a.freeFrom)], join(p.labels),
       [p.temperature.code, p.temperature.class ? TEMP[p.temperature.class] : null], p.countryOfOrigin, join(p.substitutes),
       p.deliveryReliability, p.carbonGroupAvgKgCo2ePerKg, p.fatPct, p.variableWeight ? 1 : 0, join(p.gtins ?? []),
+      ...encodeDepth(p, opts.omit),
     ];
   });
-  return { format: "dock-valio-index", version: INDEX_VERSION, builtAt: index.builtAt, stats: index.stats, columns: COLUMNS, rows };
+  const file: IndexFile = { format: "dock-valio-index", version: INDEX_VERSION, builtAt: index.builtAt, stats: index.stats, columns: COLUMNS, rows };
+  if (!opts.omit?.includes("texts") && index.products.some((p) => p.texts)) {
+    file.texts = {};
+    for (const k of TEXT_KEYS) for (const lang of ["en", "fi"] as const) {
+      const col = index.products.map((p) => p.texts?.[k]?.[lang] ?? null);
+      if (col.some((x) => x !== null)) file.texts[`${k}.${lang}`] = col;
+    }
+  }
+  return file;
+}
+
+// ---------- the data-depth columns ----------
+
+const trimNulls = <T,>(xs: (T | null)[]): (T | null)[] => {
+  const out = [...xs];
+  while (out.length && out[out.length - 1] === null) out.pop();
+  return out;
+};
+const PRODUCTION = { aquaculture: "A", marine_fishery: "M", inland_fishery: "I" } as const;
+const PRODUCTION_BACK: Record<string, FishReport["production"]> = { A: "aquaculture", M: "marine_fishery", I: "inland_fishery" };
+const TEXT_KEYS = ["ingredients", "storage", "usage", "disposal", "about"] as const;
+
+/** One product's data-depth columns, compact: arrays with trailing nulls dropped, lists joined, null when absent. */
+function encodeDepth(p: IndexedProduct, omit: readonly string[] = []): unknown[] {
+  const n = p.nutrition;
+  const nutrition = n ? [n.per === "100ml" ? "ml" : "g", ...trimNulls(NUTRIENTS.map((k) => n.values[k] ?? null)), (n.lessThan ?? []).reduce((m, k) => m | (1 << NUTRIENTS.indexOf(k)), 0)] : null;
+  const m = p.mainIngredient;
+  const ingredient = m ? [m.names.en ?? null, m.names.fi ?? null, m.names.sv ?? null, m.pct ?? null, join(m.origins.map((o) => `${o.stage}:${o.country}`))] : null;
+  const fish = p.fish ? p.fish.map((f) => [f.species, f.latin ?? null, f.production ? PRODUCTION[f.production] : null, join(f.methods), join(f.areas)]) : null;
+  const cols: Record<string, unknown> = {
+    nutrition,
+    deposits: p.deposits ? join(p.deposits.map((d) => `${d.material}:${d.quantity}`)) : null,
+    vat: p.vatRatePct ?? null,
+    ingredient,
+    origins: p.origins ? join(p.origins) : null,
+    fish,
+    storageTemp: p.storageTempC ? [p.storageTempC.min ?? null, p.storageTempC.max ?? null] : null,
+  };
+  return COLUMNS.slice(23).map((c) => (omit.includes(c) ? null : cols[c]));
+}
+
+/** Restore the data-depth fields from a row's tail; anything malformed is left out (unknown), never guessed. */
+function decodeDepth(tail: unknown[]): Partial<IndexedProduct> {
+  const [nu, dep, vat, ing, org, fish, temp] = tail;
+  const out: Partial<IndexedProduct> = {};
+  if (Array.isArray(nu) && (nu[0] === "g" || nu[0] === "ml")) {
+    const values: Nutrition["values"] = {};
+    const vals = nu.slice(1, -1);
+    NUTRIENTS.forEach((k, i) => {
+      const v = num(vals[i]);
+      if (v !== null && v >= 0) values[k] = v;
+    });
+    const mask = num(nu[nu.length - 1]) ?? 0;
+    const lessThan = NUTRIENTS.filter((k, i) => mask & (1 << i) && values[k] !== undefined);
+    if (Object.keys(values).length) out.nutrition = { per: nu[0] === "ml" ? "100ml" : "100g", values, ...(lessThan.length ? { lessThan } : {}) };
+  }
+  const deposits = split(dep)
+    .map((d) => {
+      const [material, q] = d.split(":");
+      return { material, quantity: Number(q) };
+    })
+    .filter((d) => d.material && Number.isFinite(d.quantity) && d.quantity > 0);
+  if (deposits.length) out.deposits = deposits;
+  if (num(vat) !== null) out.vatRatePct = num(vat)!;
+  if (Array.isArray(ing)) {
+    const [en, fi, sv, pct, origins] = ing;
+    const names: { en?: string; fi?: string; sv?: string } = {};
+    if (typeof en === "string") names.en = en;
+    if (typeof fi === "string") names.fi = fi;
+    if (typeof sv === "string") names.sv = sv;
+    out.mainIngredient = {
+      names,
+      ...(num(pct) !== null ? { pct: num(pct)! } : {}),
+      origins: split(origins)
+        .map((o) => {
+          const [stage, country] = o.split(":");
+          return { stage, country };
+        })
+        .filter((o) => o.stage && o.country),
+    };
+  }
+  if (split(org).length) out.origins = split(org);
+  if (Array.isArray(fish)) {
+    const reports = fish
+      .filter((f): f is unknown[] => Array.isArray(f) && typeof f[0] === "string")
+      .map((f) => ({ species: f[0] as string, ...(typeof f[1] === "string" ? { latin: f[1] } : {}), ...(PRODUCTION_BACK[String(f[2])] ? { production: PRODUCTION_BACK[String(f[2])] } : {}), methods: split(f[3]), areas: split(f[4]) }));
+    if (reports.length) out.fish = reports;
+  }
+  if (Array.isArray(temp) && (num(temp[0]) !== null || num(temp[1]) !== null)) out.storageTempC = { ...(num(temp[0]) !== null ? { min: num(temp[0])! } : {}), ...(num(temp[1]) !== null ? { max: num(temp[1])! } : {}) };
+  return out;
+}
+
+/** One product's texts from the columnar block (row `row`); nothing when it has none. */
+function textsAt(cols: [string, unknown[]][], row: number): { texts?: ProductTexts } {
+  if (!cols.length) return {};
+  const t: ProductTexts = {};
+  for (const [key, col] of cols) {
+    const v = col[row];
+    if (typeof v !== "string" || !v) continue;
+    const [k, lang] = key.split(".") as [keyof ProductTexts, "en" | "fi"];
+    (t[k] ??= {})[lang] = v;
+  }
+  return Object.keys(t).length ? { texts: t } : {};
 }
 
 export function isIndexFile(x: unknown): x is IndexFile {
   if (!x || typeof x !== "object") return false;
   const f = x as Partial<IndexFile>;
-  return f.format === "dock-valio-index" && f.version === INDEX_VERSION && Array.isArray(f.rows) && Array.isArray(f.columns) && (f.columns.join() === COLUMNS.join() || f.columns.join() === LEGACY_COLUMNS.join());
+  return f.format === "dock-valio-index" && f.version === INDEX_VERSION && Array.isArray(f.rows) && Array.isArray(f.columns) && COLUMN_SETS.some((n) => f.columns!.length === n && f.columns!.join() === COLUMNS.slice(0, n).join());
 }
 
 /** Restore products from the file. Rows that do not have the expected shape are dropped. */
@@ -452,8 +828,9 @@ export function impliedClaims(claims: string[], a: IndexedProduct["allergens"]):
 
 export function decodeIndex(file: IndexFile): CatalogIndex {
   const products: IndexedProduct[] = [];
-  const width = file.columns.length === LEGACY_COLUMNS.length ? LEGACY_COLUMNS.length : COLUMNS.length;
-  for (const r of file.rows) {
+  const width = file.columns.length;
+  const textCols = file.texts && typeof file.texts === "object" ? Object.entries(file.texts).filter(([k, v]) => Array.isArray(v) && v.length === file.rows.length && /^(ingredients|storage|usage|disposal|about)\.(en|fi)$/.test(k)) : [];
+  for (const [row, r] of file.rows.entries()) {
     if (!Array.isArray(r) || r.length !== width || typeof r[0] !== "string" || !Array.isArray(r[11]) || !Array.isArray(r[13]) || !Array.isArray(r[15])) continue;
     const [id, en, fi, sv, brand, vendor, category, salesUnit, baseUnit, units, lot, pk, claims, al, labels, temp, country, subs, rel, carbon, fat, variable, gtins] = r as [
       string, string | null, string | null, string | null, string | null, string | null, string, string, string, string, number, unknown[], string, unknown[], string, unknown[], string | null, string, number | null, number | null, number | null, number, string | undefined,
@@ -507,7 +884,9 @@ export function decodeIndex(file: IndexFile): CatalogIndex {
       carbonGroupAvgKgCo2ePerKg: num(carbon),
       fatPct: num(fat),
       variableWeight: variable === 1,
-      ...(width === COLUMNS.length ? { gtins: split(gtins) } : {}),
+      ...(width > 22 ? { gtins: split(gtins) } : {}),
+      ...(width > 23 ? decodeDepth(r.slice(23)) : {}),
+      ...textsAt(textCols, row),
     });
   }
   return { version: INDEX_VERSION, builtAt: file.builtAt, stats: file.stats, products };
