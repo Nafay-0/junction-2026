@@ -1,10 +1,20 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { MailTransport, OutgoingMail } from "@/server/notify/transport";
 import { getRuntime, resetRuntime, type Runtime } from "@/server/runtime";
 import { viewAs } from "./clock";
 import { isSampleOrder, markRows, sampleSets, setOfEntry } from "./marks";
 import { refreshSample, sampleStatus, startSampleActivity } from "./start";
 import { playStory, type SeedReport } from "./story";
+
+// What can be ordered depends on the clock (order cut-offs, delivery days, what the kitchen's history says is left):
+// a fixed weekday morning (Friday 13 Nov, 11.00 in Helsinki), so a run on a Sunday, a Thursday or late in the evening
+// tests the same thing (on those, the seed's two-day lead and passed cut-offs change what the menu can buy).
+beforeAll(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-11-13T09:00:00Z"));
+});
+afterAll(() => vi.useRealTimers());
+
 
 /**
  * The sample week, played once on a fresh in-process runtime (seed catalogue, no network, no model), then read back

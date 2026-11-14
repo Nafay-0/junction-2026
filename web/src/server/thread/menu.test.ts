@@ -1,12 +1,22 @@
 import type { LanguageModelV4StreamPart } from "@ai-sdk/provider";
 import { MockLanguageModelV4 } from "ai/test";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LlmMenuDraft } from "@/server/agent/menu/draft";
 import { setMenuModelForTests } from "@/server/agent/menu/runtime";
 import { getRuntime, resetRuntime } from "@/server/runtime";
 import { setAgentModelForTests } from "./agent";
 import { submitTurn, threadStore } from "./engine";
 import type { Card, MenuCard, SheetCard, ThreadEvent } from "./types";
+
+// What can be ordered depends on the clock (order cut-offs, delivery days, what the kitchen's history says is left):
+// a fixed weekday morning (Friday 13 Nov, 11.00 in Helsinki), so a run on a Sunday, a Thursday or late in the evening
+// tests the same thing (on those, the seed's two-day lead and passed cut-offs change what the menu can buy).
+beforeAll(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-11-13T09:00:00Z"));
+});
+afterAll(() => vi.useRealTimers());
+
 
 const usage = { inputTokens: { total: 900, noCache: 900, cacheRead: undefined, cacheWrite: undefined }, outputTokens: { total: 30, text: 30, reasoning: undefined } };
 
