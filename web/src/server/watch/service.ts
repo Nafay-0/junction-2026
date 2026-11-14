@@ -339,7 +339,12 @@ export function kindWords(p: Product): string {
     .trim() || p.name;
 }
 
-const dietClaims = (p: Product) => p.attributes.filter((a) => isMaterialAttribute(a) && !/^fat_/.test(a));
+/**
+ * The claims every candidate must carry: the diet ones (lactose-free, gluten-free, vegan...). Not fat level and not
+ * organic: a substitute without them is still worth showing, and the ranking says it needs a person ("not organic
+ * like the usual").
+ */
+const dietClaims = (p: Product) => p.attributes.filter((a) => isMaterialAttribute(a) && !/^fat_/.test(a) && a !== "organic");
 
 async function substitutesFor(rt: Runtime, k: WatchKitchen, session: AgentSession, requestId: string, original: Product, key: KeyProduct, usualPerUnitCents: number | null): Promise<{ ranked: RankedSubstitute[]; search: Finding["search"] }> {
   const s = stateOf(rt);
