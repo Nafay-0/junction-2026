@@ -73,6 +73,12 @@ export type TurnRun = {
   multi?: boolean;
   /** A request quoted at once whose quote differs from what was asked (said first by engine.ts, a yes places it). */
   quotedDiffs?: Difference[];
+  /** A dish named for a booking's main that cannot come ("braised pork shoulder instead"): scenario.ts replaceInEvent. */
+  eventReplace?: { planId: string; pending: unknown; words: string };
+  /** The scenario's own reply is this turn's words (a plan that cannot be completed, said by plain code). */
+  scenarioReplyIsLine?: boolean;
+  /** "Only what can be bought" for a scenario's plan that cannot be completed (scenario.ts orderScenarioPartial). */
+  scenarioPartial?: unknown;
   /** The reply already says what of the menu is missing, why, and the one question (engine.ts changeMenuInWords). */
   menuLineSaid?: boolean;
   /** A dish of the plan planned this turn was refused under the kitchen's rule: its refusal is the reply (engine.ts). */
@@ -541,8 +547,8 @@ export async function openNeed(run: TurnRun, need: NeedInput, words: string, opt
     const dropped = [...(it.item.attributes ?? []), ...(it.requiredClaims ?? [])].filter((t) => !checkable(t));
     if (dropped.length) {
       // Each word once, without "brand" itself ("peltolan_brand" adds nothing to "Peltolan churned butter").
-      const words = [...new Set(dropped.flatMap((t) => t.split(/[_\s]+/)))].filter((w) => w.length >= 3 && !/^(brand|merkki|maker|valmistaja|märke|tillverkare)$/i.test(w) && !it.item.text.toLowerCase().includes(w.toLowerCase()));
-      need = { ...need, item: { ...it.item, text: [...words, it.item.text].join(" ").slice(0, 200), attributes: (it.item.attributes ?? []).filter(checkable) }, ...(it.requiredClaims ? { requiredClaims: it.requiredClaims.filter(checkable) } : {}) } as NeedInput;
+      const extra = [...new Set(dropped.flatMap((t) => t.split(/[_\s]+/)))].filter((w) => w.length >= 3 && !/^(brand|merkki|maker|valmistaja|märke|tillverkare)$/i.test(w) && !it.item.text.toLowerCase().includes(w.toLowerCase()) && words.toLowerCase().includes(w.toLowerCase()));
+      need = { ...need, item: { ...it.item, text: [...extra, it.item.text].join(" ").slice(0, 200), attributes: (it.item.attributes ?? []).filter(checkable) }, ...(it.requiredClaims ? { requiredClaims: it.requiredClaims.filter(checkable) } : {}) } as NeedInput;
       record(run, "claims_as_words", `Words read as claims that no product's data carries are kept as words of the product's name: ${dropped.join(", ")}.`, { dropped });
     }
   }

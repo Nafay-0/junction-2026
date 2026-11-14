@@ -296,6 +296,8 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
     if (sc?.type === "scenario" && recent) {
       const { scenarioAnswerOf } = await import("@/server/agent/menu/thread");
       const a = scenarioAnswerOf(body.text, sc.pending as never);
+      // "Braised pork shoulder instead" for a booking's main that cannot come: that dish in its place, in the same plan.
+      if (!a && sc.kind === "event" && /\b(instead|in its place|rather|tilalle|sen sijaan|i stället)\b/i.test(body.text) && body.text.trim().split(/\s+/).length <= 10) run.eventReplace = { planId: sc.planId, pending: sc.pending, words: body.text };
       if (a && (sc.state === "open" || a.kind === "choose")) {
         if (sc.state !== "open") run.store.card(thread, run.turnId, { ...sc, state: "open" });
         body = { ...body, action: { type: "scenario_answer", planId: sc.planId, answer: a }, label: body.text };
@@ -329,7 +331,7 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
   if (ways && !body.action && body.text && body.text.trim().split(/\s+/).length <= 12) {
     const { yesOrNo } = await import("@/server/channels/speech");
     const last = [...thread.turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "");
-    if (last?.role === "agent" && /(plan a dish I can buy completely|plan another dish|suunnittelenko ruuan|suunnittelenko toisen|planera en rätt|planera en annan|Shall I move it to|Siirränkö sen päivälle|Ska jag flytta den till)/i.test(last.line ?? "")) {
+    if (last?.role === "agent" && (last.turnId === ways.turnId || /(plan a dish I can buy completely|plan another dish|suunnittelenko ruuan|suunnittelenko toisen|planera en rätt|planera en annan|Shall I move it to|Siirränkö sen päivälle|Ska jag flytta den till)/i.test(last.line ?? ""))) {
       const t = body.text;
       const yn = yesOrNo(t);
       // "Move it", "Wednesday then", "siirrä": the plan moved to the earliest day every line can come.
@@ -338,7 +340,10 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
         run.dishesFor = { planId: ways.planId, changed: true };
         delete waysOf(run).ways;
       } else if (ways.owner && /\b(owner|ask|add them|add the|omistaj\w*|lisää\w*|pyydä\w*|ägaren|lägg till|be )\b/i.test(t)) run.waysAnswer = "owner";
-      else if (/\b(just|only|those|the rest|what you can|order them|vain|ne|bara|resten)\b/i.test(t) || (yn === "yes" && !ways.owner)) {
+      else if (ways.scenario && (/\b(just|only|those|the rest|what you can|order them|vain|ne|bara|resten)\b/i.test(t) || (yn === "yes" && !ways.owner))) {
+        run.scenarioPartial = ways.scenario;
+        delete waysOf(run).ways;
+      } else if (/\b(just|only|those|the rest|what you can|order them|vain|ne|bara|resten)\b/i.test(t) || (yn === "yes" && !ways.owner)) {
         body = { ...body, action: { type: "menu_to_sheet", planId: ways.planId }, label: body.text };
         run.placedPlan = ways.planId;
         delete waysOf(run).ways;
@@ -456,7 +461,7 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
         }
         // The answer to the ways forward: the owner asked (a drafted change to the kitchen's product groups), or which one.
         if (run.waysAnswer) {
-          const said = run.waysAnswer === "owner" ? await askOwnerToAdd(run, body.lang ?? "en") : { en: "Which one: ask the owner to add them, order just what I can buy, or plan another dish?", fi: "Kumpi: pyydänkö omistajaa lisäämään ne, tilaanko vain sen, minkä voin ostaa, vai suunnittelenko toisen ruuan?", sv: "Vilket: ska jag be ägaren lägga till dem, beställa bara det jag kan köpa, eller planera en annan rätt?" }[body.lang ?? "en"];
+          const said = run.waysAnswer === "owner" ? await askOwnerToAdd(run, body.lang ?? "en") : waysOf(run).ways?.scenario ? { en: "Which one: ask the owner to add them, or order just what I can buy?", fi: "Kumpi: pyydänkö omistajaa lisäämään ne, vai tilaanko vain sen, minkä voin ostaa?", sv: "Vilket: ska jag be ägaren lägga till dem, eller beställa bara det jag kan köpa?" }[body.lang ?? "en"] : { en: "Which one: ask the owner to add them, order just what I can buy, or plan another dish?", fi: "Kumpi: pyydänkö omistajaa lisäämään ne, tilaanko vain sen, minkä voin ostaa, vai suunnittelenko toisen ruuan?", sv: "Vilket: ska jag be ägaren lägga till dem, beställa bara det jag kan köpa, eller planera en annan rätt?" }[body.lang ?? "en"];
           if (run.opening) first.done();
           store.line(thread, run.turnId, said);
           store.mark(thread, run.turnId, "line", Date.now() - run.t0);
@@ -524,6 +529,27 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
         // "Yes" after the kitchen's rules were changed to allow a product: the buy that was refused, now asked again.
         const again = afterRulesWords(run, body.text!);
         if (again) record(run, "after_rules", `The rules now allow it: the earlier request "${again.slice(0, 80)}" is asked again at the buyer's yes.`, {});
+        // A dish named for a booking's main that cannot come: changed in the same plan, then the booking said again.
+        if (run.eventReplace) {
+          if (run.opening) first.done("a dish in its place");
+          const { replaceInEvent } = await import("./scenario");
+          const said = await replaceInEvent(run, run.eventReplace, body.lang ?? "en");
+          if (said) {
+            store.line(thread, run.turnId, said);
+            store.mark(thread, run.turnId, "line", Date.now() - run.t0);
+            await finishTurn(run);
+            return;
+          }
+        }
+        // "Only what can be bought" for a scenario's plan that cannot be completed: its own partial order sheet.
+        if (run.scenarioPartial) {
+          if (run.opening) first.done("only what can be bought");
+          const { orderScenarioPartial } = await import("./scenario");
+          store.line(thread, run.turnId, await orderScenarioPartial(run, run.scenarioPartial, body.lang ?? "en"));
+          store.mark(thread, run.turnId, "line", Date.now() - run.t0);
+          await finishTurn(run);
+          return;
+        }
         // The yes to looking at another day: the request again over the following week, then the agent's words on it.
         if (run.anotherDayFor) {
           if (run.opening) first.done("another day");
@@ -550,7 +576,10 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
   // A tap that left an order waiting for a person: the agent loop takes up the wait (the runtime's approval step).
   // A tap (a choice, the OK, taking an order back) is answered in words too: the agent writes its sentences from
   // what the tap produced (speak.ts facts), in the buyer's language, under the same grounding check.
-  if (!agentResult && body.action && run.store.agentTurn(thread, run.turnId)?.status === "working" && llmRoom()) {
+  if (run.scenarioReplyIsLine && run.scenarioReply) {
+    store.line(thread, run.turnId, run.scenarioReply);
+    store.mark(thread, run.turnId, "line", Date.now() - run.t0);
+  } else if (!agentResult && body.action && run.store.agentTurn(thread, run.turnId)?.status === "working" && llmRoom()) {
     const pending = [...run.orders.values()].find((o) => o.status === "pending_approval");
     const shown = JSON.stringify(speakFacts(run)).slice(0, 5000);
     const lang = body.lang === "fi" ? "Finnish" : body.lang === "sv" ? "Swedish" : "English";
@@ -565,8 +594,8 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
   const lang = body.lang ?? "en";
   if (run.scenarioSaid) {
     const c = store.cards(thread).map((x) => x.card).find((x) => x.type === "scenario" && x.cardId === run.scenarioSaid);
-    if (c?.type === "scenario" && c.state === "open") {
-      store.line(thread, run.turnId, `${c.text[lang].say} ${c.text[lang].ask}`);
+    if (c?.type === "scenario" && (c.state === "open" || store.agentTurn(thread, run.turnId)?.cards.some((x) => x.cardId === c.cardId))) {
+      store.line(thread, run.turnId, `${c.text[lang].say} ${c.text[lang].ask}`.trim());
       store.mark(thread, run.turnId, "line", Date.now() - run.t0);
       line = "";
     }
@@ -774,7 +803,19 @@ async function showDishes(run: TurnRun): Promise<void> {
 
 const toldOf = (run: TurnRun): Record<string, string> => ((run.thread as unknown as { told?: Record<string, string> }).told ??= {});
 /** The ways forward last offered for a dish not fully buyable (the answer is read against them). */
-type WaysForward = { planId: string; categories: string[]; owner: boolean; /** The earliest day every line can come, offered as a way forward. */ later?: string };
+type WaysForward = {
+  planId: string;
+  categories: string[];
+  owner: boolean;
+  /** The earliest day every line can come, offered as a way forward. */
+  later?: string;
+  /** The product groups to add when the owner is asked (a scenario's plan names groups, not categories). */
+  groupIds?: string[];
+  /** A seasonal menu or a booking whose plan cannot be completed: "only what can be bought" is the scenario's own partial order. */
+  scenario?: unknown;
+  /** The reply that offered these ways: an answer to it is read against them. */
+  turnId?: string;
+};
 const waysOf = (run: TurnRun) => run.thread as unknown as { ways?: WaysForward };
 const CLOSING_ASK = /(?:^|\s)[^.!?]*\?\s*$/;
 
@@ -998,8 +1039,9 @@ async function anotherDay(run: TurnRun, a: { requestId: string }): Promise<void>
 async function askOwnerToAdd(run: TurnRun, lang: "en" | "fi" | "sv"): Promise<string> {
   const ways = waysOf(run).ways;
   const { groupIdOf, groupOf } = await import("./refusal");
-  const ids = [...new Set((ways?.categories ?? []).map(groupIdOf).filter((x): x is string => !!x))];
-  const names = [...new Set((ways?.categories ?? []).map((c) => groupOf(c, lang)).filter((x): x is string => !!x))];
+  const ids = [...new Set([...(ways?.groupIds ?? []), ...(ways?.categories ?? []).map(groupIdOf).filter((x): x is string => !!x)])];
+  const { groupNameOf } = await import("./refusal");
+  const names = [...new Set([...(ways?.groupIds ?? []).map((g) => groupNameOf(g, lang)).filter((x): x is string => !!x), ...(ways?.categories ?? []).map((c) => groupOf(c, lang)).filter((x): x is string => !!x)])];
   const { showRules } = await import("./rules");
   const card = ids.length ? await showRules(run, { groupsAdd: ids }).catch(() => undefined) : undefined;
   if (!card?.proposal || card.proposal.state !== "open") return { en: "I couldn't draft that change to your rules here. Shall I order just what I can buy, or plan another dish?", fi: "En pystynyt laatimaan sääntömuutosta täällä. Tilaanko vain sen, minkä voin ostaa, vai suunnittelenko toisen ruuan?", sv: "Jag kunde inte skriva den ändringen här. Ska jag beställa bara det jag kan köpa, eller planera en annan rätt?" }[lang];
@@ -1392,6 +1434,8 @@ async function changeMenuInWords(run: TurnRun, words: string, lang: "en" | "fi" 
   const { changeMenu, menuChecks } = await import("@/server/agent/menu/thread");
   const c = await changeMenu(run.k.info.slug, subj.planId, words, byLine(run), lang);
   if (!c.edits.length) return undefined;
+  // "New total 19,00 € (was 19,00 €)" says nothing: the old total only when it changed.
+  if (c.beforeCents === c.totalCents) c.say = c.say.replace(/\s*\((?:was|oli|var) [^)]*\)/, "");
   const { refreshMenu } = await import("./menu");
   let card = await refreshMenu(run, subj.planId).catch(() => undefined);
   // A line the kitchen's allergen rule still stops (the chocolate with milk in it): one search for the same ingredient

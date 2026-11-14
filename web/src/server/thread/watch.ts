@@ -55,9 +55,12 @@ async function shorten(run: TurnRun, m: WatchMoment, lang: Lang): Promise<string
       return [...new Set([p?.names?.[lang], p?.names?.en, p?.name, fallback].filter((x): x is string => !!x))].sort((a, b) => b.length - a.length);
     };
     const family = f.product.family ?? (ps.find((x) => x.id === f.product.productId)?.category as string | undefined) ?? "";
-    for (const n of namesOf(f.product.productId, f.product.name)) say = say.split(n).join(family ? kitchenName({ name: f.product.name, family }, lang) : shortName(n));
+    const own = (ps.find((x) => x.id === f.product.productId) as { names?: Partial<Record<Lang, string>> } | undefined)?.names?.[lang] ?? f.product.name;
+    for (const n of namesOf(f.product.productId, f.product.name)) say = say.split(n).join(family ? kitchenName({ name: own, family }, lang) : shortName(n));
     for (const s of subs) for (const n of namesOf(s.productId, s.name)) say = say.split(n).join(shortName(n));
   }
+  // A short name can now open the sentence ("voi ei voinut tulla"): its first letter in capitals.
+  say = say.charAt(0).toUpperCase() + say.slice(1);
   return say
     .replace(/\(This is a staged stock-out for the demo\.\)|\(This trend is staged for the demo\.\)/g, "(staged for the demo)")
     .replace(/\((Tämä|Detta)[^)]*(demo|demoa|demon)[^)]*\)/gi, (x) => (/^\(Tämä/.test(x) ? "(lavastettu demoa varten)" : "(iscensatt för demon)"));

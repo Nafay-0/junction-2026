@@ -42,6 +42,19 @@ export function groupOf(category: string, lang: Lang): string | undefined {
   return name.charAt(0).toLowerCase() + name.slice(1);
 }
 
+/** A group (department) id in words, in the buyer's language: "15" is "fresh meat". */
+export function groupNameOf(id: string, lang: Lang): string | undefined {
+  if (!DATA.departments[id]) return undefined;
+  const name = lang === "en" ? DATA.departments[id] : (DEPARTMENT_NAME[lang][id] ?? DATA.departments[id]);
+  return name.charAt(0).toLowerCase() + name.slice(1);
+}
+
+/** The group (department) id a group's English name ("Fresh meat", "Fresh meat: Pork") stands for. */
+export function groupIdByName(name: string): string | undefined {
+  const dept = name.split(":")[0].trim().toLowerCase();
+  return Object.entries(DATA.departments).find(([, n]) => n.toLowerCase() === dept)?.[0];
+}
+
 /** A product family's group id (the department number the kitchen's terms list), when it is one. */
 export function groupIdOf(category: string): string | undefined {
   const dept = categoryCodesFor(category)[0]?.slice(0, 2);

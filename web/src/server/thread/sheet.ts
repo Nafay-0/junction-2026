@@ -379,7 +379,11 @@ export async function placeSheet(run: TurnRun, sheetId: string, version: number)
   if (g.outcome === "refused") {
     const { worded } = await import("./pipeline");
     const { refusalOfRule } = await import("./refusal");
-    const what = order.lines.length === 1 ? order.lines[0].name : run.lang === "fi" ? "tilaus" : "this order";
+    // The products the gate's finding names, by their short names: never "one of the products".
+    const { shortName } = await import("./watch");
+    const named = [...new Set(order.lines.filter((l) => g.reasons.some((r) => r.includes(l.productId))).map((l) => shortName(l.name.replace(/[®™]/g, ""))))];
+    const and = run.lang === "fi" ? " ja " : run.lang === "sv" ? " och " : " and ";
+    const what = named.length ? (named.length === 1 ? named[0] : `${named.slice(0, -1).join(", ")}${and}${named.at(-1)}`) : order.lines.length === 1 ? order.lines[0].name : run.lang === "fi" ? "tilaus" : "this order";
     run.store.card(run.thread, run.turnId, { ...g, said: worded((l) => refusalOfRule(run, g.rule, what, g.rules?.find((x) => x.rule === g.rule)?.details, l)).said });
   } else run.store.card(run.thread, run.turnId, g);
   run.store.card(run.thread, run.turnId, orderCard(order));
