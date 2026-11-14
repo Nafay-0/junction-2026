@@ -230,7 +230,16 @@ function smoke(publicUrl, sha) {
 const svc = (await api("GET", `/service/${SERVICE}?include_secrets=true`)).service;
 const host = svc.components?.find((c) => c.component === "http")?.host;
 if (!host) fail(`${SERVICE} has no http component`);
-const publicUrl = `https://${host}`;
+// DOCK_DEPLOY_CUSTOM_DOMAIN (e.g. aimopilot.zeroanomaly.tech): a subdomain whose CNAME points at the app's own host.
+// The script keeps it on the app's http port (Aiven then issues its certificate) and, once that host answers over HTTPS
+// with this app, makes it the public address: links, QR codes, mail and passkeys (RP ID). Until then the Aiven host
+// stays the public address. Passkeys are bound to the RP ID: switching it orphans passkeys made on the old host.
+// The team's own address since 14 Nov evening; DOCK_DEPLOY_CUSTOM_DOMAIN=none keeps the Aiven host as the public address.
+const customDomainSetting = (env("DOCK_DEPLOY_CUSTOM_DOMAIN") ?? "aimopilot.zeroanomaly.tech").toLowerCase();
+const customDomain = customDomainSetting === "none" ? undefined : customDomainSetting;
+const customReady = customDomain ? await fetch(`https://${customDomain}/api/health`, { signal: AbortSignal.timeout(10_000) }).then((r) => r.ok, () => false) : false;
+if (customDomain) log(`custom domain ${customDomain}: ${customReady ? "answers over HTTPS; it is the public address" : "not answering over HTTPS yet; the Aiven host stays the public address"}`);
+const publicUrl = `https://${customReady ? customDomain : host}`;
 if (svc.plan !== "startup-50-1024") log(`note: ${SERVICE} is on plan ${svc.plan} (this script never changes plans)`);
 log(`${SERVICE}: ${svc.state}, ${publicUrl}`);
 
@@ -276,20 +285,24 @@ if (!has("--config-only")) {
   log(`  deploy commit ${commit.slice(0, 12)} -> branch ${DEPLOY_BRANCH}`);
 }
 const branchChanged = !has("--config-only") && app.source.branch !== DEPLOY_BRANCH;
+const httpPort = (app.ports ?? []).find((p) => p.name === "http") ?? app.ports?.[0];
+const domainsChanged = !!customDomain && !!httpPort && !(httpPort.custom_domains ?? []).includes(customDomain);
+if (customDomain) log(`custom domain on the http port: ${domainsChanged ? "to add" : "already there"}`);
 
 if (dryRun) {
-  log(`\nDry run: ${envChanged ? "environment would change; " : ""}${branchChanged ? `source branch ${app.source.branch} -> ${DEPLOY_BRANCH}; ` : ""}nothing changed.`);
+  log(`\nDry run: ${domainsChanged ? `custom domain ${customDomain} would be added; ` : ""}${envChanged ? "environment would change; " : ""}${branchChanged ? `source branch ${app.source.branch} -> ${DEPLOY_BRANCH}; ` : ""}nothing changed.`);
   process.exit(0);
 }
 
 if (commit) execFileSync("git", ["push", "--quiet", "--force", "origin", `${commit}:refs/heads/${DEPLOY_BRANCH}`], { cwd: repo, stdio: "inherit" });
 
-if (envChanged || branchChanged) {
+if (envChanged || branchChanged || domainsChanged) {
   // The whole application object goes back (deploy key included), or the PUT would drop what it omits.
-  const next = { ...app, source: { ...app.source, ...(branchChanged ? { branch: DEPLOY_BRANCH } : {}) }, environment_variables: desiredEnv };
+  const ports = domainsChanged ? app.ports.map((p) => (p === httpPort ? { ...p, custom_domains: [...(p.custom_domains ?? []), customDomain] } : p)) : app.ports;
+  const next = { ...app, ports, source: { ...app.source, ...(branchChanged ? { branch: DEPLOY_BRANCH } : {}) }, environment_variables: desiredEnv };
   delete next.source.commit_sha;
   await api("PUT", `/service/${SERVICE}`, { user_config: { application: next } });
-  log(`\nUpdated ${SERVICE}: ${[envChanged && "environment", branchChanged && `branch ${DEPLOY_BRANCH}`].filter(Boolean).join(", ")}.`);
+  log(`\nUpdated ${SERVICE}: ${[envChanged && "environment", branchChanged && `branch ${DEPLOY_BRANCH}`, domainsChanged && `custom domain ${customDomain}`].filter(Boolean).join(", ")}.`);
 }
 
 if (!has("--config-only") || envChanged) {
