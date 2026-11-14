@@ -20,6 +20,8 @@ export type HardConstraints = {
   forbiddenAllergens: string[];
   requiredCertificates: string[];
   sources: ConstraintSource[];
+  /** "declared": a forbidden allergen is ruled out only by the maker's data (the mandate's allergenEvidence). */
+  allergenEvidence?: "declared" | "declared_or_nature";
 };
 
 const uniq = <T>(xs: T[]) => [...new Set(xs)];
@@ -32,6 +34,7 @@ export function hardConstraints(mandate: Mandate, need: StructuredNeed, stated: 
     forbiddenAllergens: [...mandate.forbiddenAllergens],
     requiredCertificates: [...mandate.requiredCertificates],
     sources: [],
+    ...(mandate.allergenEvidence ? { allergenEvidence: mandate.allergenEvidence } : {}),
   };
   const add = (text: string, source: ConstraintSource["source"], preferenceId?: string) => c.sources.push({ text, source, preferenceId });
   add(`Mandate: categories ${mandate.allowedCategories.join(", ")}`, "mandate");
@@ -79,7 +82,13 @@ export function violation(p: Product, c: HardConstraints): string | undefined {
   if (unmapped.length) return `cannot be checked for ${unmapped.join(", ")}: no product data speaks of it`;
   const allergens = forbiddenPresent({ present: p.allergens, claims: p.attributes }, c.forbiddenAllergens);
   if (allergens.length) return `contains ${allergens.join(", ")}`;
-  if (c.forbiddenAllergens.length && p.allergenInfo?.declared === false) return `no allergen data from its maker, so it cannot be shown free of ${c.forbiddenAllergens.join(", ")}`;
+  if (c.forbiddenAllergens.length && p.allergenInfo?.declared === false) {
+    // Fresh, whole produce contains what it is itself (catalog/nature.ts), unless declared data only is asked for.
+    const nature = c.allergenEvidence === "declared" ? undefined : p.allergenInfo.byNature;
+    if (!nature) return `no allergen data from its maker, so it cannot be shown free of ${c.forbiddenAllergens.join(", ")}`;
+    const found = forbiddenPresent({ present: nature.allergens, claims: p.attributes }, c.forbiddenAllergens);
+    if (found.length) return `contains ${found.join(", ")} by its nature`;
+  }
   const certs = c.requiredCertificates.filter((x) => !p.certificates.includes(x));
   if (certs.length) return `lacks ${certs.join(", ")}`;
   return undefined;

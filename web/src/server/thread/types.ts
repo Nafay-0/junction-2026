@@ -523,15 +523,47 @@ export type TodayItem =
 /** What needs the kitchen today (the opening); `pending` while it is being gathered. Plain code from records only. */
 export type TodayCard = CardBase & { type: "today"; date: string; items: TodayItem[]; pending?: boolean };
 
-export type ProductTile = { productId: string; name: string; brand?: string; category: string; packSize: number; unit: string; attributes: string[]; allergens: string[] };
+export type ProductTile = {
+  productId: string;
+  name: string;
+  brand?: string;
+  category: string;
+  packSize: number;
+  unit: string;
+  attributes: string[];
+  allergens: string[];
+  /** How it relates to the words (smart search's judge): the kind asked, a variant, or a stand-in shown as "instead". */
+  match?: "exact" | "variant" | "standin";
+};
 
 /** A grid of products from the assortment's master data (no live call until one is added to the order sheet). */
-export type ProductsCard = CardBase & { type: "products"; query: string; category?: string; total: number; products: ProductTile[] };
+export type ProductsCard = CardBase & {
+  type: "products";
+  query: string;
+  category?: string;
+  total: number;
+  products: ProductTile[];
+  /**
+   * What the search made of the words (server/search): `onlyStandins` when nothing is the kind asked and the products
+   * are stand-ins ("no oat drink; instead:"), `notSold` when nothing in the assortment is, `unsure` when the judge was
+   * not sure of its top answer, `notes` for requirements read from the words ("read 'laktositon' as lactose-free").
+   */
+  search?: { path: "judge" | "ranked" | "lexical"; onlyStandins: boolean; notSold: boolean; unsure: boolean; notes: string[] };
+};
 
 /** One product's facts, from master data (prices only once it is on the order sheet). */
 export type ProductCard = CardBase & {
   type: "product";
-  product: ProductTile & { certificates: string[]; allergensDeclared: boolean; origin?: string; co2KgPerUnit: number | null; reliability: number | null; gtin?: string };
+  product: ProductTile & {
+    certificates: string[];
+    allergensDeclared: boolean;
+    /** No allergen data from the maker, but fresh whole produce: what it is, "by its nature, not declared by the maker". */
+    allergensByNature?: string;
+    origin?: string;
+    co2KgPerUnit: number | null;
+    reliability: number | null;
+    gtin?: string;
+  };
 };
 
 /** The kitchen's recurring orders, as the history shows them (no separate store: plain code over the order history). */

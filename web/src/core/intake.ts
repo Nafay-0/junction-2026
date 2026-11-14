@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { MAX_LIVE_IDS_PER_CALL, scheduledOn, type LiveOffer, type MeteredCatalog, type Product } from "./catalog";
 import { facetsOf } from "./catalog/search";
+import type { ProductFinder } from "./catalog/finder";
 import { OPTIMISE_QUESTION_ID, answerSchema, clarify, hardConstraints, kindMismatch, optimiseQuestion, optionLabel, violation, type Answer, type ConstraintSource, type MemoryNote, type Question } from "./clarify";
 import { proposedIds, type AlternativesAnswer, type AlternativesSource } from "./alternatives";
 import { alsoAskedIn, alsoAskedNote, groupsIn, type AlsoAsked } from "./also-asked";
@@ -210,6 +211,13 @@ export type IntakeDeps = {
    * by the kitchen and the buyer's own words. It can only add a question; nothing else here reads it.
    */
   secondReading?: (orgId: string, text: string | undefined) => SecondReadingRecord | undefined;
+  /**
+   * Smart search over the whole assortment (server/search, through the port in catalog/finder.ts), asked for recall
+   * only (no judge, no embedding: the reader already chose the family, and options must not wait): products of the
+   * family a 100-product category list would cut off, and the item's best text matches priced first. A family the
+   * words name no product of is looked up here before the request is refused. Every hard rule below still decides.
+   */
+  finder?: ProductFinder;
 };
 
 /** The family of a request whose words match nothing in the catalogue (refused at once, see open()). */
@@ -254,6 +262,21 @@ export function createIntakeFlow(deps: IntakeDeps) {
     return hits;
   }
 
+  /**
+   * The item's best text matches within the family, from smart recall (no judge): added to the family's products when
+   * the category list cut them off, and priced first. Empty without a finder or on any failure.
+   */
+  async function relevantInFamily(family: string, need: StructuredNeed): Promise<Product[]> {
+    if (!deps.finder) return [];
+    try {
+      const attributes = [...new Set([...need.requiredClaims, ...need.item.attributes])];
+      const r = await deps.finder.find({ text: need.item.text, category: family, ...(attributes.length ? { requiredClaims: attributes } : {}), ...(need.forbiddenAllergens.length ? { forbiddenAllergens: need.forbiddenAllergens } : {}), limit: 30, noJudge: true, noVectors: true });
+      return r.path === "lexical" ? [] : r.hits.map((h) => h.product);
+    } catch {
+      return [];
+    }
+  }
+
   async function resolveFamily(need: StructuredNeed, profile: KitchenProfile, allowedCategories: string[] = []): Promise<string> {
     if (need.item.category) return need.item.category;
     if (need.item.productId) {
@@ -275,6 +298,14 @@ export function createIntakeFlow(deps: IntakeDeps) {
     // No product name carries these words (a Finnish word on an English-named shelf): the family the words name.
     for (const g of named) if ((await catalog.searchProducts({ category: g, limit: 1 })).length) return g;
     if (need.sameAsLastTime && profile.history.length) return profile.history.at(-1)!.family;
+    // Misspelt or inflected words no product name carries: smart recall (typos, kinds, other languages) may know them.
+    if (deps.finder) {
+      const found = await deps.finder.find({ text: need.item.text, limit: 20, noJudge: true, noVectors: true }).catch(() => undefined);
+      const fam = new Map<string, number>();
+      found?.hits.slice(0, 10).forEach((h, i) => fam.set(h.product.category, (fam.get(h.product.category) ?? 0) + 1 / (1 + i)));
+      const best = [...fam.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
+      if (best) return best[0];
+    }
     throw new DockError(422, "family_unknown", `No product family matches "${need.item.text}". Send item.category (for example "milk").`);
   }
 
@@ -340,6 +371,8 @@ export function createIntakeFlow(deps: IntakeDeps) {
     const at = now();
     const profile = await profileOf(session);
     const products = await familyProducts(i.family, i.need);
+    const relevant = await relevantInFamily(i.family, i.need);
+    for (const p of relevant) if (!products.some((x) => x.id === p.id)) products.push(p);
     const ctx: CheckContext = { now: at, profile, family: i.family, candidates: products, suspendedPreferenceIds: i.suspendedPreferenceIds, pending: await pendingOrders(i), ...(i.site ? { site: i.site } : {}) };
     Object.assign(i, { concerns: [], questions: [], openChoices: [], fromMemory: [], notAsked: [], rules: [], options: [], notes: [], excluded: [], preselected: undefined, signOffNotes: undefined, noticed: undefined, refusedOptions: undefined, updatedAt: at.toISOString() });
     if (i.unverified?.length) i.signOffNotes = i.unverified.map(unverifiedNote);
@@ -447,7 +480,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
       }
     }
     // 5. Live prices for a short list only (one call), then the option cards.
-    const prefer = [reference?.productId, ...proposedIds(alternatives, 3), last && primaryLine(last).productId, usual?.kind === "product" ? usual.productId : undefined];
+    const prefer = [reference?.productId, ...proposedIds(alternatives, 3), last && primaryLine(last).productId, usual?.kind === "product" ? usual.productId : undefined, ...relevant.slice(0, 3).map((p) => p.id)];
     const short = shortlist(narrowed, prefer, MAX_LIVE_IDS_PER_CALL, i.amount, span);
     // "On Monday": what is available earlier is delivered that day (orders.ts scheduledOn).
     const offersSeen: LiveOffer[] = [];
