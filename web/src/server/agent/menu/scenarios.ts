@@ -447,13 +447,17 @@ export function createScenarios(deps: ScenarioDeps) {
   }
 
   /** `planId`: the same menu again for another day (no model call: the plan's date moves and its prices are asked again). */
-  async function event(k: MenuKitchen, words: string, by: string, opts: { date?: string; swapDishes?: boolean; planId?: string } = {}): Promise<EventResult> {
+  async function event(k: MenuKitchen, words: string, by: string, opts: { date?: string; swapDishes?: boolean; planId?: string; waitMs?: number } = {}): Promise<EventResult> {
     const first = opts.planId ? await service.get(k, opts.planId) : await service.plan(k, words, by);
     if (first.record.state === "declined") throw new DockError(422, "not_a_menu", first.record.declineReason ?? "This is not a request to plan food.");
     let planned = first;
     if (opts.date && opts.date !== first.record.settings.deliverBy) planned = await service.edit(k, first.record.planId, [{ op: "deliverBy", date: opts.date }], by);
-    await service.settled(first.record.planId);
+    // The planner's own ways out (the model's ideas by the dish) are welcome if they come within 20 s; the options by
+    // role do not wait for them.
+    await Promise.race([service.settled(first.record.planId), new Promise((r) => setTimeout(r, opts.waitMs ?? 20_000))]);
     planned = await service.get(k, first.record.planId);
+    // A line not priced yet is not "cannot arrive": ask the wholesaler for it first (one short batched call).
+    if (planned.view.lines.some((l) => l.doubts.some((d) => !d.accepted && d.kind === "not_priced"))) planned = await service.edit(k, first.record.planId, [{ op: "price" }], by);
     const p = planned.record;
     const view = planned.view;
     const want = p.settings.deliverBy ?? addDaysIso(today(deps.now()), 1);
@@ -537,7 +541,7 @@ export function createScenarios(deps: ScenarioDeps) {
   const g = globalThis as typeof globalThis & { __dockScenarioCache?: Map<string, EventResult> };
   const cache: Map<string, EventResult> = (g.__dockScenarioCache ??= new Map<string, EventResult>());
 
-  async function eventCached(k: MenuKitchen, words: string, by: string, opts: { date?: string; swapDishes?: boolean } = {}) {
+  async function eventCached(k: MenuKitchen, words: string, by: string, opts: { date?: string; swapDishes?: boolean; planId?: string; waitMs?: number } = {}) {
     const r = await event(k, words, by, opts);
     cache.set(r.planId, r);
     if (cache.size > 50) cache.delete(cache.keys().next().value!);

@@ -109,15 +109,15 @@ async function main() {
     const client = new Client({ name: "outside-menu-agent", version: "1.0.0" }, { versionNegotiation: { mode: "auto" } });
     await client.connect(new StreamableHTTPClientTransport(new URL("/api/mcp", "http://dock.local"), { fetch: async (u: string | URL, i?: RequestInit) => mcpRoute(new Request(u, i)), requestInit: { headers: { authorization: `Bearer ${token}`, "dock-agent-id": agentId } } }));
     const call = async (name: string, a: Record<string, unknown>) => {
-      const r = (await client.callTool({ name, arguments: a })) as CallToolResult;
-      return { ok: !r.isError, s: r.structuredContent as Record<string, unknown> & { result?: Record<string, unknown>; error?: { message: string } } };
+      const r = (await client.callTool({ name, arguments: a }, { timeout: 300_000 })) as CallToolResult;
+      return { ok: !r.isError, s: (r.structuredContent ?? { error: { message: JSON.stringify(r.content).slice(0, 400) } }) as Record<string, unknown> & { result?: Record<string, unknown>; error?: { message: string } } };
     };
     const s1 = await call("plan_seasonal_menu", { text: `Something with root vegetables for Friday ${day}, 40 covers`, have: ["butter", "wheat flour"], by: "Outside agent (script)" });
     const r1 = s1.s.result as unknown as import("@/server/agent/menu/scenarios").SeasonalResult;
     if (!s1.ok) console.log(`   plan_seasonal_menu refused: ${s1.s.error?.message}`);
     else {
       console.log(`   plan_seasonal_menu: anchor ${r1.anchor?.label.en ?? "none"}; dishes ${r1.dishes.map((d) => d.name).join(", ")}; ${r1.lines.filter((l) => l.product).length} lines to buy, ${formatEur(r1.totalCents)}`);
-      for (const l of r1.lines) console.log(`     ${l.ingredient}: need ${l.need}; on hand ${l.onHand ? `${l.onHand.amount ?? "enough"} (${l.onHand.source}${l.onHand.estimate ? ", estimate" : ""})` : "none known"}; buy ${l.toBuy ?? "nothing"}${l.product ? ` -> ${l.product.packText} ${l.product.name}` : ""}${l.leftover ? ` [${l.leftover}]` : ""}`);
+      for (const l of r1.lines) console.log(`     ${l.ingredient}: need ${l.need}; on hand ${l.onHand ? `${l.onHand.amount ?? "enough"} (${l.onHand.source}${l.onHand.estimate ? ", estimate" : ""})` : "none known"}; buy ${l.toBuy ?? "nothing"}${l.product ? ` -> ${l.product.packText} ${l.product.name}` : ""}${l.leftover ? ` [${l.leftover}]` : ""}${l.toBuy && !l.product ? ` (not bought: ${l.note})` : ""}`);
       const o1 = await call("order_menu", { planId: r1.planId, by: "Outside agent (script)" });
       console.log(`   order_menu: ${o1.ok ? (o1.s.order as { status: string }).status : `refused: ${o1.s.error?.message}`}; ${o1.s.nextStep ?? ""}`);
     }

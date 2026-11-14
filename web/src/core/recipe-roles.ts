@@ -79,6 +79,8 @@ export type RoleSub = {
   fidelity: number;
 };
 
+/** A plant-based ingredient ("oat whipping cream") is not replaced by a dairy one: the dish chose it for a reason. */
+const PLANT = ["oat", "kaura", "havre", "soy", "soija", "plant", "kasvi", "vegan", "coconut", "kookos"];
 const part = (name: string, searchTerms: string[], ratio: number, form: SubForm = "any", main = true, unit?: "g" | "ml"): SubPart => ({ name, searchTerms, ratio, form, main, ...(unit ? { unit } : {}) });
 
 export const ROLE_SUBS: RoleSub[] = [
@@ -89,8 +91,8 @@ export const ROLE_SUBS: RoleSub[] = [
   { id: "sour_cream_creme_fraiche", match: { words: ["sour cream", "hapankerm", "gräddfil"] }, title: "Crème fraîche instead, same amount", parts: [part("crème fraîche", ["ranskankerma", "creme fraiche"], 1)], tradeoff: { taste: "milder, richer", texture: "thicker; holds when boiled", work: "none" }, fidelity: 0.85 },
   { id: "smetana_creme_fraiche", match: { words: ["smetana"] }, title: "Crème fraîche instead, same amount", parts: [part("crème fraîche", ["ranskankerma", "creme fraiche"], 1)], tradeoff: { taste: "the same mild tang", texture: "a little thicker", work: "none" }, fidelity: 0.88 },
   // ---- cream ----
-  { id: "cream_cooking", match: { words: ["cream", "kerma", "grädde"], not: ["whip", "vispi", "visp", "sour", "hapan", "fraiche", "fraîche", "ranskan", "cheese", "juusto", "ice", "jäätelö", "smetana"] }, title: "Cooking cream instead, same amount", parts: [part("cooking cream", ["ruokakerma", "cooking cream", "matlagningsgrädde"], 1)], tradeoff: { taste: "a little leaner", texture: "holds when boiled; will not whip", work: "none" }, fidelity: 0.85 },
-  { id: "whipping_cream_other", match: { words: ["whipping cream", "vispikerm", "vispgrädde", "kuohukerm"] }, title: "Another whipping cream, same amount", parts: [part("whipping cream", ["vispikerma", "whipping cream", "kuohukerma"], 1)], tradeoff: { taste: "the same", texture: "the same when it is 35 % or more", work: "none" }, fidelity: 0.92 },
+  { id: "cream_cooking", match: { words: ["cream", "kerma", "grädde"], not: ["whip", "vispi", "visp", "sour", "hapan", "fraiche", "fraîche", "ranskan", "cheese", "juusto", "ice", "jäätelö", "smetana", ...PLANT] }, title: "Cooking cream instead, same amount", parts: [part("cooking cream", ["ruokakerma", "cooking cream", "matlagningsgrädde"], 1)], tradeoff: { taste: "a little leaner", texture: "holds when boiled; will not whip", work: "none" }, fidelity: 0.85 },
+  { id: "whipping_cream_other", match: { words: ["whipping cream", "vispikerm", "vispgrädde", "kuohukerm"], not: PLANT }, title: "Another whipping cream, same amount", parts: [part("whipping cream", ["vispikerma", "whipping cream", "kuohukerma"], 1)], tradeoff: { taste: "the same", texture: "the same when it is 35 % or more", work: "none" }, fidelity: 0.92 },
   // ---- herbs ----
   { id: "dill_frozen", match: { words: ["dill", "tilli"], not: ["pickle", "suolakurk", "kurkku"] }, title: "Frozen dill, same amount", parts: [part("frozen dill", ["tilli pakaste", "pakastettu tilli", "frozen dill"], 1, "frozen")], tradeoff: { taste: "the same fresh taste", texture: "limp: in the dish, not as a sprig on top", work: "add it at the end, straight from frozen" }, fidelity: 0.85 },
   { id: "dill_dried", match: { words: ["dill", "tilli"], not: ["pickle", "suolakurk", "kurkku"] }, title: "Dried dill, a third of the amount", parts: [part("dried dill", ["kuivattu tilli", "tilli kuivattu", "dried dill"], 1 / 3, "dried")], tradeoff: { taste: "duller, a hay-like note", texture: "no green leaves to see", work: "cook it in with the liquid, not on top" }, fidelity: 0.6 },
