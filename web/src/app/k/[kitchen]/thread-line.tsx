@@ -186,7 +186,8 @@ function AgentNode({ turn, thread, tap, busy, latest }: { turn: AgentTurn; threa
   const busyNow = turn.status === "working" || !!running;
   // A menu in the reply: the dishes after the words, and the reply's closing question after the dishes and the total.
   const dishes = cards.find((c) => c.type === "dishes");
-  const sentences = text ? text.split(/(?<=[.!?])\s+(?=[^\s])/) : [];
+  // Sentences end at a mark followed by a capital or a mark of ours, never inside "e.g. emmental" or "approx. 2 kg".
+  const sentences = text ? text.split(/(?<!\b(?:e\.g|i\.e|esim|approx|ca|n|etc|vs|mm|ns|bl\.a|t\.ex))(?<=[.!?])\s+(?=[\p{Lu}"“*{\d])/u) : [];
   const ask = dishes && sentences.length > 1 && /\?$/.test(sentences.at(-1)!.trim()) ? sentences.at(-1)! : "";
   const said = ask ? sentences.slice(0, -1).join(" ") : text;
   return (

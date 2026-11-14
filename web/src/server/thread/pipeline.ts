@@ -238,8 +238,12 @@ async function outsideRules(run: TurnRun, what: string): Promise<{ what: string;
   const cats = found.hits.slice(0, 6).map((h: { product: { category: string } }) => h.product.category);
   if (!cats.length) return undefined;
   const allowed = run.session.mandate.allowedCategories;
-  if (cats.some((c: string) => allowed.includes(c))) return undefined;
-  return { what: what.trim(), category: cats[0] };
+  // The kind the words name is the shelf most of the matches are on ("red wine": wines, not the one red wine vinegar).
+  const counts = new Map<string, number>();
+  for (const c of cats) counts.set(c, (counts.get(c) ?? 0) + 1);
+  const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  if (allowed.includes(top) || cats.filter((c: string) => allowed.includes(c)).length * 2 >= cats.length) return undefined;
+  return { what: what.trim(), category: top };
 }
 
 /** A refusal said in each language; `message` is the English one (what the record and the model read). */
@@ -360,7 +364,8 @@ const TYPOS: [RegExp, string][] = [
   [/\b(liters?|litters?|ltrs?)\b/gi, "litres"],
 ];
 export function fixTypos(words: string): string {
-  let w = words;
+  // "A case of red wine": one case, said as a number so the amount is read.
+  let w = words.replace(/\b(a|one|an)\s+(case|box|crate|carton|bottle|pack|sack|bag|tray)\s+of\b/gi, (_m, _a, unit: string) => `1 ${unit} of`);
   for (const [re, to] of TYPOS) w = w.replace(re, to);
   return w;
 }
@@ -714,6 +719,8 @@ export async function afterStep(run: TurnRun, s: IntakeView, words: string): Pro
     }
     if (missing.length) record(run, "not_in_assortment", `The options do not carry "${missing.join(" ")}" (from "${s.need.item.text}")${q.absent.length ? ", and nothing in the assortment does" : ""}: they are shown as stand-ins, not as a match.`, { words: missing, absent: q.absent }, s.requestId);
     run.store.card(run.thread, run.turnId, card);
+    // A pack under a kilo or a litre is also said in grams or millilitres: the fact check knows both.
+    for (const o of card.options) for (const l of o.lines) if (l.packSize && l.packSize < 1 && l.unit !== "pcs") run.facts.push({ packIn: { amount: Math.round(l.packSize * 1000), unit: l.unit === "kg" ? "g" : "ml" } });
     mark(run, "options");
     out.options = card.options.map((o, i) => ({ ref: `o${i + 1}`, optionId: o.optionId, title: o.title, totalCents: o.totalCents, deliveryDate: o.deliveryDate, match: o.match }));
     const routine = missing.length || run.multi ? undefined : await routineChoice(run, s, card.options);
@@ -774,6 +781,8 @@ async function quotedDifferences(run: TurnRun, s: IntakeView): Promise<Differenc
   const [product] = one ? await run.rt.catalog.searchProducts({ ids: [one.productId], limit: 1 }).catch(() => []) : [];
   const lot = one ? (product?.lotSize && product.lotSize > 0.01 ? product.lotSize : 1) : undefined;
   const pack = one && lot ? { count: Math.round(one.quantity / lot), size: Math.round(lot * one.packSize * 1000) / 1000, unit: one.unit } : undefined;
+  // The same pack in the other unit is the same fact ("700 g" for a 0,7 kg lot): the fact check knows both.
+  if (pack) run.facts.push({ pack: { count: pack.count, size: pack.size, unit: pack.unit, ...(pack.size < 1 && pack.unit !== "pcs" ? { smallUnit: Math.round(pack.size * 1000), smallUnitName: pack.unit === "kg" ? "g" : "ml" } : {}) } });
   const on = (s.need as { deliverOn?: string }).deliverOn;
   const day = q.lines.map((l) => l.deliveryDate).sort().at(-1);
   return optionDifferences({ key: s.requestId, name: s.need.item.text, ...(asked ? { amount: asked } : {}), ...((on ?? s.need.deliverBy) ? { day: on ?? s.need.deliverBy } : {}), exact: !!on }, { ...(delivered ? { delivered } : {}), ...(day ? { deliveryDate: day } : {}), ...(pack && pack.size !== 1 ? { pack } : {}) });

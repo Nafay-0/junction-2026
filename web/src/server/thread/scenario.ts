@@ -81,6 +81,9 @@ async function eventShort(run: TurnRun, r: EventResult, lang: Lang, fallback: Th
   } else parts.push(t.noOption(what(first)).replace(/;[^.]*\.$/, "."));
   if (n > 1) parts.push(REST[lang](n - 1));
   // No stand-in for the one that matters most: the question is what to cook in its place (never a side line's pick).
+  const ai = run.thread as unknown as { askInstead?: { planId: string; what: string } };
+  if (!best) ai.askInstead = { planId: r.planId, what: what(first) };
+  else if (ai.askInstead?.planId === r.planId) delete ai.askInstead;
   const instead = { en: `What shall I plan in place of the ${what(first)}?`, fi: `Mitä suunnittelen tilalle (${what(first)})?`, sv: `Vad ska jag planera i stället för ${what(first)}?` }[lang];
   return { say: parts.join(" ").replace(/\.\.(?=\s|$)/g, "."), ask: best ? ASK[lang](optionName(best), n > 1) : instead };
 }
@@ -158,6 +161,12 @@ async function cardOf(run: TurnRun, base: ThreadScenario, lang: Lang): Promise<S
       text[lang] = { say: readable(`${menuPart} ${said}`.trim(), lang), ask: "" };
     }
   }
+  // The day moved before the day asked (the kitchen's lead time): said first, before anything is asked.
+  if (base.kind === "seasonal") {
+    const { leadTimeNote } = await import("./menu");
+    const note = await leadTimeNote(run, base.planId, lang).catch(() => undefined);
+    if (note) text[lang] = { ...text[lang], say: `${note} ${text[lang].say}` };
+  }
   const ev = base.kind === "event" ? (base.facts.event as EventResult) : undefined;
   const others = ev ? ev.cannotArrive.map((x) => `${lower(x.ingredient)}: ${ev.options[x.lineId]?.[0] ? lower(ev.options[x.lineId][0].title) : "-"}`) : undefined;
   const card: ScenarioCard = {
@@ -187,7 +196,8 @@ function incompleteSaid(run: TurnRun, pending: PendingScenario, inc: IncompleteC
   const list = (xs: string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")}${and}${xs.at(-1)}`);
   // Grouped by reason: what the kitchen's product groups do not cover, in one clause; each other one with its own.
   const outside = inc.missing.filter((m) => m.group);
-  const others = inc.missing.filter((m) => !m.group);
+  // Each ingredient once, though two dishes need it (carrot in the soup and in the main).
+  const others = inc.missing.filter((m) => !m.group).filter((m, i, all) => all.findIndex((x) => lower(x.ingredient) === lower(m.ingredient)) === i);
   const groupsOut = [...new Set(outside.map((m) => lower(m.group!.split(":")[0])))];
   const names = (ms: typeof inc.missing) => list([...new Set(ms.map((m) => lower(m.ingredient).replace(/\s*\(.*\)$/, "")))].slice(0, 5)) + (new Set(ms.map((m) => m.ingredient)).size > 5 ? { en: " and more", fi: " ja muita", sv: " med flera" }[lang] : "");
   const parts = [
@@ -197,9 +207,9 @@ function incompleteSaid(run: TurnRun, pending: PendingScenario, inc: IncompleteC
   const missing = parts.join("; ");
   const more = others.length > 4 ? { en: `; and ${others.length - 4} more`, fi: `; ja ${others.length - 4} muuta`, sv: `; och ${others.length - 4} till` }[lang] : "";
   const head = {
-    en: `I can't order this menu as planned: only ${inc.covered} of its ${inc.of} ingredients can be bought. Not covered: ${missing}${more}.`,
-    fi: `En voi tilata tätä menua suunnitellusti: vain ${inc.covered}/${inc.of} raaka-ainetta saa tilattua. Puuttuu: ${missing}${more}.`,
-    sv: `Jag kan inte beställa menyn som den är planerad: bara ${inc.covered} av ${inc.of} ingredienser går att köpa. Saknas: ${missing}${more}.`,
+    en: `I can't order this menu as planned: ${inc.covered} of its ${inc.of} ingredients are covered (bought or already in your kitchen). Not covered: ${missing}${more}.`,
+    fi: `En voi tilata tätä menua suunnitellusti: ${inc.covered}/${inc.of} raaka-aineesta on katettu (tilattavissa tai jo keittiössä). Puuttuu: ${missing}${more}.`,
+    sv: `Jag kan inte beställa menyn som den är planerad: ${inc.covered} av ${inc.of} ingredienser är täckta (köps eller finns redan). Saknas: ${missing}${more}.`,
   }[lang];
   const ownerChoice = inc.choices.find((c) => c.kind === "ask_owner");
   const groupIds = ownerChoice?.kind === "ask_owner" ? [...new Set(ownerChoice.groups.map(groupIdByName).filter((x): x is string => !!x))] : [];
@@ -211,7 +221,7 @@ function incompleteSaid(run: TurnRun, pending: PendingScenario, inc: IncompleteC
   const t = MENU_SAY_TEXT[lang];
   const choices = inc.choices
     .filter((c) => c.kind !== "ask_owner" || (w.ways as { owner: boolean }).owner)
-    .map((c) => (c.kind === "ask_owner" ? t.choiceOwner(list(groupsOut.length ? groupsOut : c.groups.map((g) => lower(g.split(":")[0])))) : c.kind === "order_partial" ? t.choicePartial(c.items.length > 4 ? { en: `${c.items.length} ingredients`, fi: `${c.items.length} raaka-ainetta`, sv: `${c.items.length} ingredienser` }[lang] : list(c.items.map(lower))) : c.words));
+    .map((c) => (c.kind === "ask_owner" ? t.choiceOwner(list(groupsOut.length ? groupsOut : c.groups.map((g) => lower(g.split(":")[0])))) : c.kind === "order_partial" ? t.choicePartial(c.items.length > 4 ? { en: `the ${c.items.length} to buy`, fi: `${c.items.length} tilattavaa`, sv: `de ${c.items.length} att köpa` }[lang] : list(c.items.map(lower))) : c.words));
   const ask = choices.length ? { en: `Shall I ${choices.join(", or ")}?`, fi: `${choices.map((c, i) => (i === 0 ? c.charAt(0).toUpperCase() + c.slice(1) : c)).join(", vai ")}?`, sv: `Ska jag ${choices.join(", eller ")}?` }[lang] : "";
   return readable(`${head} ${ask}`.trim(), lang);
 }

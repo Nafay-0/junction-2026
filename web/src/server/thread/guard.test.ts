@@ -25,6 +25,13 @@ describe("the mistake check, said", () => {
     expect(guardWords(day, "en")).toMatch(/Shall I make it Mon 16 Nov\?$/);
   });
 
+  it("counts pieces into packs, and a yes or the figure again takes that reading", () => {
+    const c = card({ key: "unit_unclear:40:pcs", code: "unit_unclear", message: "x", confirmable: false, corrections: [{ id: "use_3.2_kg", label: "4 packs of 10 pcs (3,2 kg)" }], evidence: { pieces: 40, perPack: 10, packs: 4 } });
+    expect(guardWords(c, "en")).toMatch(/^40 pieces: a pack holds 10, so that is 4 packs \(3,2\s?kg\)\. Shall I order them\?$/);
+    expect(guardAnswerOf(c, "yes")?.action).toMatchObject({ choice: "use_3.2_kg" });
+    expect(guardAnswerOf(c, "40 pcs is right")?.action).toMatchObject({ choice: "use_3.2_kg" });
+  });
+
   it("says a pack reading with the pack's size and the total, never a bare '20 packs'", () => {
     const c = card({ key: "unit_confusion:20:L", code: "unit_confusion", message: "20 L is what you usually order in packs: 20 packs of 20 L = 400 L. Did you mean 20 packs?", confirmable: true, corrections: [{ id: "use_20_pack", label: "Make it 20 packs (400 L)" }], evidence: { usualAmount: 400, unit: "L", basedOnOrders: 6, asked: { amount: 20, unit: "L" }, packSize: 20 } });
     const en = guardWords(c, "en");

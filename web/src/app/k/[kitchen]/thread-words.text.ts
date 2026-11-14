@@ -119,7 +119,7 @@ export const THREAD_WORDS = defineText({
       substitute_price: (p) => `The other product costs more than the ${s(p.maxPriceIncreasePct)} % extra your rules allow.`,
       human_confirmation: () => "Something looks unusual, so a named person checks it.",
       approver_authority: () => "Nobody in your rules may OK this amount.",
-      order_splitting: () => "It looks like one need split into small orders.",
+      order_splitting: (p, f) => (p.combinedCents ? `With ${n(p.earlierCount)} more ${n(p.earlierCount) === 1 ? "order" : "orders"} of the same kind I placed alone today, it comes to ${f.money(n(p.combinedCents))}, over the ${f.money(n(p.limitCents))} I may spend alone.` : "It looks like one need split into small orders."),
     } as Record<string, Say>,
     /** The mistake check, by ConcernCode, from its evidence. */
     concern: {
@@ -306,7 +306,7 @@ export const THREAD_WORDS = defineText({
       substitute_price: (p) => `Toinen tuote maksaa enemmän kuin sääntöjesi sallima ${s(p.maxPriceIncreasePct)} % lisähinta.`,
       human_confirmation: () => "Virhetarkistus löysi jotain, minkä nimetyn henkilön on vahvistettava.",
       approver_authority: () => "Kukaan sääntöjesi mukaan ei saa hyväksyä tätä summaa.",
-      order_splitting: () => "Näyttää siltä, että yksi tarve on pilkottu pieniksi tilauksiksi.",
+      order_splitting: (p, f) => (p.combinedCents ? `Yhdessä ${n(p.earlierCount)} muun tänään yksin tekemäni saman tuotteen tilauksen kanssa summa on ${f.money(n(p.combinedCents))}, yli ${f.money(n(p.limitCents))}, jonka saan käyttää yksin.` : "Näyttää siltä, että yksi tarve on pilkottu pieniksi tilauksiksi."),
     } as Record<string, Say>,
     concern: {
       quantity_tenfold: (p, f) => `${f.measure(n(p.asked), s(p.askedUnit))}, kun tilaat yleensä noin ${f.measure(n(p.usualAmount), s(p.unit))}: tarkoititko ${f.measure(n(p.fix), s(p.fixUnit))}?`,
@@ -488,7 +488,7 @@ export const THREAD_WORDS = defineText({
       substitute_price: (p) => `Den andra produkten kostar mer än de ${s(p.maxPriceIncreasePct)} % extra dina regler tillåter.`,
       human_confirmation: () => "Felkontrollen hittade något som en namngiven person måste bekräfta.",
       approver_authority: () => "Ingen enligt dina regler får godkänna det här beloppet.",
-      order_splitting: () => "Det ser ut som ett behov uppdelat i små beställningar.",
+      order_splitting: (p, f) => (p.combinedCents ? `Tillsammans med ${n(p.earlierCount)} andra beställningar av samma slag som jag lagt själv i dag blir det ${f.money(n(p.combinedCents))}, över de ${f.money(n(p.limitCents))} jag får använda själv.` : "Det ser ut som ett behov uppdelat i små beställningar."),
     } as Record<string, Say>,
     concern: {
       quantity_tenfold: (p, f) => `${f.measure(n(p.asked), s(p.askedUnit))} när du brukar beställa cirka ${f.measure(n(p.usualAmount), s(p.unit))}: menade du ${f.measure(n(p.fix), s(p.fixUnit))}?`,

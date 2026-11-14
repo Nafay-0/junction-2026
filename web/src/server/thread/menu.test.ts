@@ -249,7 +249,9 @@ describe("the menu builder in the thread", () => {
 
     it("covers: every amount and the cost per cover follow", async () => {
       const c = await ready();
-      const before = lines(c).find((l) => l.product)!;
+      // A line nothing is on hand for (the kitchen's history can cover part of another): its amount is per cover alone.
+      const full = (l: ReturnType<typeof lines>[number]) => Math.abs(l.need.amount - (l.perCover.unit === "g" || l.perCover.unit === "ml" ? (l.perCover.amount * (c.covers ?? 0)) / 1000 : l.perCover.amount * (c.covers ?? 0))) < 0.01 * Math.max(1, l.need.amount);
+      const before = lines(c).find((l) => l.product && full(l))!;
       await tap({ type: "menu_covers", planId: c.planId, covers: 150 });
       const now = await menuNow("kaari", c.planId);
       expect(now.covers).toBe(150);

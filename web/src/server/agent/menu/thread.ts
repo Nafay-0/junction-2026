@@ -599,7 +599,7 @@ export async function menuIdeas(slug: KitchenRef, words: string, by: string, lan
 
 /** The idea the buyer picked, planned as the dish (no model call for the recipe; live prices now), with its three groups. */
 export async function pickIdea(slug: KitchenRef, ideasId: string, dishId: string, by: string, lang: Lang = "en", opts: { covers?: number; date?: string } = {}): Promise<DishGroups> {
-  const { service, kitchen } = await kit(slug);
+  const { service, kitchen, scenarios } = await kit(slug);
   const idea = IDEAS.get(ideasId);
   if (!idea || idea.slug !== slugOf(slug)) throw new DockError(404, "ideas_not_found", "Those ideas are no longer open: ask for ideas again.");
   const dish = idea.draft.dishes.find((d) => d.id === dishId);
@@ -607,11 +607,10 @@ export async function pickIdea(slug: KitchenRef, ideasId: string, dishId: string
   const draft = { ...idea.draft, ...(opts.covers ? { covers: opts.covers } : {}), ...(opts.date ? { serviceDate: opts.date } : {}), dishes: [{ ...dish, id: "dish_1" }] };
   const planned = await service.planFromDraft(kitchen, `${dish.name}: ${idea.words}`.slice(0, 2000), by, draft);
   await service.settled(planned.record.planId);
-  // What the buyer said they have is on hand from the start.
-  if (idea.have.length) {
-    const changed = await changeMenu(slug, planned.record.planId, `We have ${idea.have.join(", ")}`, by, lang).catch(() => undefined);
-    void changed;
-  }
+  // What the buyer said they have, and what the kitchen's own order history says is left: on hand from the start
+  // (the same on-hand step as the seasonal menu and a booking).
+  await scenarios.applyOnHand(kitchen, planned.record.planId, by, saidHave(`${idea.words}. ${idea.have.length ? `We have ${idea.have.join(", ")}` : ""}`)).catch(() => undefined);
+  void lang;
   return dishGroups(slug, planned.record.planId, lang);
 }
 

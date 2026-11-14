@@ -68,6 +68,17 @@ export function guardWords(card: AnomalyCard, lang: Lang): string {
   const k = card.concerns[0];
   if (!k) return "";
   const f = fmtFor(lang);
+  // Pieces counted into packs: the count, the packs and the weight, and one yes-or-no question.
+  const pc = k.evidence as { pieces?: number; perPack?: number; packs?: number } | undefined;
+  const fix = k.corrections[0] ? /^use_([\d.]+)_(\w+)$/.exec(k.corrections[0].id) : null;
+  if (k.code === "unit_unclear" && pc?.pieces && pc.perPack && pc.packs && fix) {
+    const w = f.measure(Number(fix[1]), fix[2]);
+    return {
+      en: `${pc.pieces} pieces: a pack holds ${pc.perPack}, so that is ${pc.packs} ${pc.packs === 1 ? "pack" : "packs"} (${w}). Shall I order ${pc.packs === 1 ? "it" : "them"}?`,
+      fi: `${pc.pieces} kappaletta: pakkauksessa on ${pc.perPack}, eli ${pc.packs} pakkausta (${w}). Tilaanko ne?`,
+      sv: `${pc.pieces} stycken: en förpackning har ${pc.perPack}, alltså ${pc.packs} förpackningar (${w}). Ska jag beställa dem?`,
+    }[lang];
+  }
   let reason = reasonOf(k, lang);
   const use = k.corrections.map((x) => /^use_([\d.]+)_(\w+)$/.exec(x.id)).find(Boolean);
   const asked = (k.evidence?.asked as { amount?: number; unit?: string } | undefined) ?? (/^[a-z_]+:([\d.]+):(\w+)/.exec(k.key) ? { amount: Number(/^[a-z_]+:([\d.]+):(\w+)/.exec(k.key)![1]), unit: /^[a-z_]+:([\d.]+):(\w+)/.exec(k.key)![2] } : undefined);
@@ -126,6 +137,9 @@ export function guardAnswerOf(card: AnomalyCard, words: string): { action: Threa
     if (use && nums.includes(Number(use[1])) && (Number(use[1]) !== asked || unitSaid)) return { action: { type: "concern", requestId: card.requestId, key: k.key, choice: x.id } };
   }
   const yes = yesOrNo(w) === "yes" || (Number.isFinite(asked) && nums.includes(asked));
+  // A question with one reading to take (pieces counted into packs): a yes, or the figure said again, takes it.
+  const pc = k.evidence as { pieces?: number } | undefined;
+  if (!k.confirmable && pc?.pieces && k.corrections.length === 1 && (yes || /\b(pcs|pieces|buns|kpl|kappale\w*|st|stycken)\b/i.test(w))) return { action: { type: "concern", requestId: card.requestId, key: k.key, choice: k.corrections[0].id } };
   const reason = REASON_YES.test(w) ? w.slice(0, 200) : undefined;
   if (k.confirmable && (yes || reason)) return { action: { type: "concern", requestId: card.requestId, key: k.key, choice: "confirm" }, ...(reason ? { reason } : {}) };
   if (yesOrNo(w) === "no" && k.corrections.some((x) => /^use_/.test(x.id)) && nums.length === 0) return undefined; // "no" alone: the agent asks what instead

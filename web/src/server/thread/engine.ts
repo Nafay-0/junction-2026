@@ -303,9 +303,16 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
     if (sc?.type === "scenario" && recent) {
       const { scenarioAnswerOf } = await import("@/server/agent/menu/thread");
       const a = scenarioAnswerOf(body.text, sc.pending as never);
+      // "What shall I plan in place of the pork shoulder?" is not answered by "yes": the question again, naming it.
+      const askInstead = (thread as unknown as { askInstead?: { planId: string; what: string } }).askInstead;
+      const { yesOrNo } = await import("@/server/channels/speech");
+      if (askInstead?.planId === sc.planId && yesOrNo(body.text) === "yes" && body.text.trim().split(/\s+/).length <= 3) {
+        const l = body.lang ?? "en";
+        run.sayNow = { en: `Which dish shall I plan in place of the ${askInstead.what}?`, fi: `Minkä ruuan suunnittelen tilalle (${askInstead.what})?`, sv: `Vilken rätt ska jag planera i stället för ${askInstead.what}?` }[l];
+      }
       // "Braised pork shoulder instead" for a booking's main that cannot come: that dish in its place, in the same plan.
       if (!a && sc.kind === "event" && /\b(instead|in its place|rather|tilalle|sen sijaan|i stället)\b/i.test(body.text) && body.text.trim().split(/\s+/).length <= 10) run.eventReplace = { planId: sc.planId, pending: sc.pending, words: body.text };
-      if (a && (sc.state === "open" || a.kind === "choose")) {
+      if (a && !run.sayNow && (sc.state === "open" || a.kind === "choose")) {
         if (sc.state !== "open") run.store.card(thread, run.turnId, { ...sc, state: "open" });
         body = { ...body, action: { type: "scenario_answer", planId: sc.planId, answer: a }, label: body.text };
       }
@@ -921,7 +928,10 @@ async function tellDifferences(run: TurnRun): Promise<void> {
   // What cannot arrive by the day may arrive later: the earliest day every line can come is a way forward of its own.
   const menuCard = run.store.cards(run.thread).map((x) => x.card).filter((c): c is MenuCard => c.type === "menu" && c.planId === d.planId).at(-1);
   const late = pd.diffs.some((x) => x.kind === "left_out" && x.reason.code === "cannot_arrive");
-  const later = late ? (pd.later ?? menuCard?.dayProblem?.earliest) : undefined;
+  // The earliest day the whole plan can arrive: from the planner's own arrival dates, else found by planning the
+  // later delivery days in turn (menu.ts earliestWholeDay), so "move it" is a real way forward with a real day.
+  const { earliestWholeDay } = await import("./menu");
+  const later = late ? (pd.later ?? menuCard?.dayProblem?.earliest ?? (await earliestWholeDay(run, d.planId, { move: false }).catch(() => undefined))) : undefined;
   const ctx = { lang, allowedGroups: groupsOf(pd.allowed, lang), canAskOwner: owner, ...(left ? { dish: { toBuy: pd.toBuy, buyable: [...new Set(pd.buyable.map((b) => b.toLowerCase()))], left: pd.diffs.filter((x) => x.kind === "left_out").length, totalCents: pd.buyableCents, ...(later ? { later } : {}) } } : {}) };
   const words = { ...sayDifferences(fresh, ctx), ask: sayDifferences(pd.diffs, ctx).ask };
   // A dish not fully buyable is said by plain code alone: how much of it can be bought (the total for those only),
@@ -940,7 +950,7 @@ async function tellDifferences(run: TurnRun): Promise<void> {
   // What was said as left off, by plan: after the order, the reply says it again in the same words (never a new reason).
   const lefts = ((run.thread as unknown as { toldLeftOff?: Record<string, string[]> }).toldLeftOff ??= {});
   lefts[d.planId] = [...new Set(pd.diffs.flatMap((x) => (x.kind === "left_out" ? [x.name.toLowerCase()] : [])))];
-  if (left) waysOf(run).ways = { planId: d.planId, categories, owner, ...(later ? { later } : {}) };
+  if (left) waysOf(run).ways = { planId: d.planId, categories, owner, ...(later ? { later } : {}), turnId: run.turnId };
   record(run, "differences_told", `Said before any order: ${fresh.map((x) => `${x.kind} ${x.name}${x.kind === "left_out" ? ` (${x.reason.code})` : ""}`).join("; ") || "the dish is not fully buyable (said before)"}.`, { planId: d.planId, keys: fresh.map(keyOf), complete: !left });
   if (words.unknown.length) record(run, "defect_reason_missing", `The engine had no reason for: ${words.unknown.map((x) => x.name).join(", ")} (said to the buyer as unknown).`, { planId: d.planId, keys: words.unknown.map(keyOf) });
 }
@@ -1159,12 +1169,34 @@ function turnFailed(run: TurnRun, code: TurnFailure): void {
   }
 }
 
+/**
+ * One truth per reply: a total the sentence states for what would be ordered ("New total …", "(… for those)") is the
+ * figure the dishes card shows beside it, never another computation of the plan. Recorded when it had to be set right.
+ */
+function sameFigures(run: TurnRun): void {
+  const here = run.store.agentTurn(run.thread, run.turnId);
+  const card = here?.cards.find((c) => c.type === "dishes");
+  const line = here?.line;
+  if (card?.type !== "dishes" || !line) return;
+  const cents = card.groups?.totalToOrderCents ?? card.totalCents;
+  const eur = `${(cents / 100).toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, " ")} €`;
+  const fixed = line
+    .replace(/((?:New total|Uusi summa|Ny summa)\s+)(\*\*)?[\d\s]+,\d{2} €(\*\*)?/g, (_m, lead: string) => `${lead}${eur}`)
+    .replace(/\((\*\*)?[\d\s]+,\d{2} €(\*\*)? (for those|niistä|för dem|niille)\)/g, (_m, _a, _b, tail: string) => `(${eur} ${tail})`)
+    .replace(/\(niille (\*\*)?[\d\s]+,\d{2} €(\*\*)?\)/g, `(niille ${eur})`);
+  if (fixed !== line) {
+    run.store.line(run.thread, run.turnId, fixed);
+    record(run, "figures_set_right", `A total in the reply was set to the card's own (${eur}).`, { said: line });
+  }
+}
+
 /** The end of an agent turn: what to remember, its status (waiting for the buyer, for a person, or done) and the record. */
 async function finishTurn(run: TurnRun): Promise<void> {
   const { store, thread } = run;
   await showDishes(run);
   sayRulesWaiting(run);
   await tellDifferences(run).catch((err) => console.error("[thread] differences", err));
+  sameFigures(run);
   await tellRequestDifferences(run).catch((err) => console.error("[thread] request differences", err));
   sayLeftOffAfterOrder(run);
   const a = store.agentTurn(thread, run.turnId)!;

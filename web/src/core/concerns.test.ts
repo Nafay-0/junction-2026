@@ -91,6 +91,17 @@ describe("quantity against the kitchen's own pattern", () => {
     expect(checkQuantity(cheese, ctx(kitchen([]), { family: "cheese", candidates: cheeses })).filter((c) => c.code === "unit_unclear")).toEqual([]);
   });
 
+  it("counts pieces of a product whose pack says how many it holds (\"40 burger buns\"): never questioned as a unit", () => {
+    const n = need({ quantity: { amount: 40, unit: "pcs" } });
+    const buns = { ...n, item: { ...n.item, text: "burger buns" } };
+    const products = [{ ...milkProducts[0], id: "b1", name: "Burger bun 10 pcs 800 g", names: { en: "Burger bun 10 pcs 800 g" }, unit: "kg" as const, packSize: 0.8, salesUnit: "PAK", baseUnit: "PAK", packContent: { perSalesUnit: { kg: 0.8 }, baseUnitsPerSalesUnit: 1, certain: true, certainMeasures: ["kg"], issues: [], label: "0,8 kg" } }];
+    const [c] = checkQuantity(buns, ctx(kitchen([]), { family: "bread", candidates: products as never }));
+    expect(c?.code).toBe("unit_unclear");
+    expect(c.message).not.toMatch(/did you mean 40 kg/i);
+    expect(c.corrections).toHaveLength(1);
+    expect(c.corrections[0].patch).toEqual({ quantity: { amount: 3.2, unit: "kg" } });
+  });
+
   it("treats pieces of milk as packs", () => {
     expect(checkQuantity(need({ quantity: { amount: 10, unit: "pcs" } }), ctx())).toEqual([]); // 10 boxes = 100 L, as usual
     expect(checkQuantity(need({ quantity: { amount: 100, unit: "pcs" } }), ctx())[0].code).toBe("unit_confusion");
