@@ -38,6 +38,16 @@ export function Thumb({ art, className = "size-14" }: { art?: string; className?
  */
 export function Stepper({ value, onChange, min = 0, max, step = 1, less, more, label, disabled, children, size = "md" }: { value: number; onChange: (next: number) => void; min?: number; max?: number; step?: number; less: string; more: string; label: string; disabled?: boolean; children?: ReactNode; size?: "md" | "lg" }) {
   const clamp = (n: number) => Math.min(max ?? Number.MAX_SAFE_INTEGER, Math.max(min, n));
+  // A typed number is a draft until the field is left or Enter is pressed: typing "200" is one change, not "2", "20",
+  // "200", and an emptied field does not jump to the minimum under the cook's thumb. Enter only commits the number:
+  // it never submits anything (only a widget's own confirm button orders).
+  const [draft, setDraft] = useState<string | undefined>(undefined);
+  const commit = () => {
+    if (draft === undefined) return;
+    const n = Number(draft.replace(/[^\d]/g, ""));
+    setDraft(undefined);
+    if (draft.trim() !== "" && Number.isFinite(n) && clamp(n) !== value) onChange(clamp(n));
+  };
   const side = `flex shrink-0 items-center justify-center text-ink transition-colors duration-150 hover:bg-petrol-soft disabled:cursor-not-allowed disabled:text-line-strong disabled:hover:bg-transparent ${size === "lg" ? "size-12" : "size-11"}`;
   return (
     <span className="inline-flex items-center gap-3">
@@ -48,11 +58,21 @@ export function Stepper({ value, onChange, min = 0, max, step = 1, less, more, l
         <input
           aria-label={label}
           inputMode="numeric"
+          enterKeyHint="done"
           disabled={disabled}
-          value={value}
-          onChange={(e) => {
-            const n = Number(e.target.value.replace(/[^\d]/g, ""));
-            if (Number.isFinite(n)) onChange(clamp(n));
+          value={draft ?? String(value)}
+          onFocus={(e) => e.currentTarget.select()}
+          onChange={(e) => setDraft(e.target.value.replace(/[^\d]/g, "").slice(0, 5))}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commit();
+              e.currentTarget.blur();
+            } else if (e.key === "Escape") {
+              setDraft(undefined);
+              e.currentTarget.blur();
+            }
           }}
           className={`tabular min-w-0 border-x border-line bg-transparent text-center font-semibold outline-none focus-visible:bg-petrol-soft disabled:text-ink-soft ${size === "lg" ? "w-[4.5rem] text-[1.15rem]" : "w-16 text-[1rem]"}`}
         />
@@ -161,6 +181,10 @@ export type SheetLine = {
   reason?: string;
   /** The product this one replaced, when the buyer or the agent swapped it. */
   swappedFrom?: string;
+  /** Packs per tap of the stepper: 1 for big packs, more for small ones (ten 1 L cartons at a time). The number can be typed. */
+  step?: number;
+  /** The kitchen's usual amounts for this product, one tap each: packs, and what they come to ("100 L"). */
+  quick?: { packs: number; label: string }[];
 };
 
 export type SheetNotice = { key: string; text: string; action?: { label: string; onClick: () => void } };
@@ -256,11 +280,21 @@ export function OrderSheet({ kind, lines, onPacks, onSwap, onRemove, onAdd, days
               {editing && !gone && (
                 <>
                   <div className="mt-3 flex items-center justify-between gap-3">
-                    <Stepper value={l.packs} min={l.minPacks ?? 1} max={l.maxPacks} onChange={(n) => onPacks(l.id, n)} less={tx.sheet.less} more={tx.sheet.more} label={`${tx.sheet.packs}: ${l.name}`}>
+                    <Stepper value={l.packs} min={l.minPacks ?? 1} max={l.maxPacks} step={l.step ?? 1} onChange={(n) => onPacks(l.id, n)} less={(l.step ?? 1) > 1 ? tx.sheet.lessN(l.step!) : tx.sheet.less} more={(l.step ?? 1) > 1 ? tx.sheet.moreN(l.step!) : tx.sheet.more} label={`${tx.sheet.packs}: ${l.name}`}>
                       = {l.amount}
                     </Stepper>
                     {l.state === "updating" ? <span aria-label={tx.sheet.updating} className="skeleton block h-6 w-20 shrink-0" /> : <span className="shrink-0 text-right font-semibold tabular">{l.total}</span>}
                   </div>
+                  {l.quick && l.quick.length > 0 && (
+                    <div role="group" aria-label={`${tx.sheet.usual}: ${l.name}`} className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <span className="text-[0.8rem] text-ink-soft">{tx.sheet.usual}</span>
+                      {l.quick.map((q) => (
+                        <button key={q.packs} type="button" aria-pressed={q.packs === l.packs} onClick={() => onPacks(l.id, q.packs)} className={`inline-flex min-h-9 items-center rounded-full border px-3 text-[0.84rem] font-medium tabular transition-colors duration-150 pointer-coarse:min-h-11 ${q.packs === l.packs ? "border-petrol bg-petrol text-paper" : "border-line-strong bg-paper text-ink hover:border-petrol hover:bg-petrol-soft"}`}>
+                          {q.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   {onSwap && (
                     <button type="button" onClick={() => onSwap(l.id)} className={`${quietAction} -ml-2.5 mt-1.5`}>
                       <ArrowLeftRight aria-hidden size={15} />

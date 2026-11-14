@@ -9,6 +9,7 @@ import { AlternativesPicker, ChoiceAnswer, OrderSheet, type Candidate, type DayC
 import type { AlternativesCard, BuyerTurn, GatePreview, OrderCard, QuestionCard, SheetCard, Thread, ThreadAction } from "@/server/thread/types";
 import { usePortal } from "./portal";
 import { THREAD_SHEET_TEXT } from "./thread-sheet.text";
+import { stepFor } from "./sheet-steps";
 
 type Tap = (action: ThreadAction, label: string) => void;
 type Tx = (typeof THREAD_SHEET_TEXT)["en"];
@@ -152,6 +153,8 @@ export function SheetView({ card, tap, busy }: { card: SheetCard; tap: Tap; busy
       state: blocking ? "unavailable" : "ok",
       ...(blocking ? { reason: blocking.code === "short" ? tx.notice.short(l.maxPacks) : tx.notice.noOffer } : {}),
       ...(l.substituteFor ? { swappedFrom: l.substituteFor.name } : {}),
+      step: stepFor(l.packSize, l.unit, packs),
+      ...(l.usualPacks?.length ? { quick: l.usualPacks.map((n) => ({ packs: n, label: f.measure(Math.round(n * l.packSize * 100) / 100, l.unit) })) } : {}),
     };
   });
   const totalCents = card.lines.reduce((t, l) => t + l.unitPriceCents * (draft[l.lineId] ?? l.packs), 0);

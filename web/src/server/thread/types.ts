@@ -394,6 +394,8 @@ export type SheetCard = CardBase & {
     /** What on this line the gate or the kitchen's rules object to (an allergen, a stated rule, a price cap). */
     issues: { code: string; text: string; blocking: boolean }[];
     stockConfirmed: boolean;
+    /** The kitchen's usual amounts of this product, in packs, from its records (one-tap picks beside the stepper). */
+    usualPacks?: number[];
   }[];
   totalCents: number;
   /** The gate's own preview of the sheet as it stands. */
