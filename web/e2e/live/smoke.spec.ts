@@ -18,10 +18,20 @@ test("health: catalogue, services, ledger, demo caps", async ({ request }) => {
   expect.soft(h.demoLimits?.llm?.usd ?? 0, "model spend today below its cap").toBeLessThan(h.demoLimits?.llm?.maxUsd ?? Infinity);
 });
 
+test("the landing page is at the address, and leads to the agent and the wall", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto("/");
+  await expect(page.getByRole("heading", { level: 1, name: /An AI buyer for every kitchen/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /^Talk to the agent/ }).first()).toHaveAttribute("href", "/k");
+  await expect(page.getByRole("link", { name: "Watch it live at the gate" })).toHaveAttribute("href", "/wall");
+  await expect(page.getByText(/demo on synthetic data/i).first()).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test("the wall renders with its QR code and no script errors", async ({ page }) => {
   const errors = watchErrors(page);
   await page.setViewportSize({ width: 1920, height: 1080 });
-  await page.goto("/");
+  await page.goto("/wall");
   await expect(page.getByRole("heading", { name: "Scan to become the approver" })).toBeVisible();
   await expect(page.locator("figure svg").first()).toBeVisible();
   await expect(page.getByText(/synthetic data/).first()).toBeVisible();

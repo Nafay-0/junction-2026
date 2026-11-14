@@ -138,8 +138,8 @@ node infra/aiven-deploy.mjs                     # ends with its own smoke test
 cd web && E2E_LIVE_URL=https://jolly-wondrous-bunny.eur-1.aiven.app pnpm exec playwright test --project=live
 ```
 
-Expect 5 passed (1 skipped): health ok on the `valio` catalogue with the ledger not diverged, the wall with its QR
-code and no script errors, `/join` served, the shop's sign-in door with the stage kitchens private, the operations
+Expect 6 passed (1 skipped): health ok on the `valio` catalogue with the ledger not diverged, the landing page at `/`,
+the wall (`/wall`) with its QR code and no script errors, `/join` served, the shop's sign-in door with the stage kitchens private, the operations
 desk asking for the passcode. Add `E2E_LIVE_SIGNIN=1` to also sign in to the first public test account and open one
 product page with a live price (a session row and one partner lookup, nothing else).
 

@@ -82,11 +82,11 @@ export async function askForMilkAndWaitForSignOff(page: Page): Promise<string> {
 
 export const approveButton = (page: Page) => page.getByRole("button", { name: /^Approve \d/ });
 
-/** Open the wall (/) in its own context at big-screen size. */
+/** Open the wall (/wall) in its own context at big-screen size. */
 export async function openWall(context: BrowserContext): Promise<Page> {
   const wall = await context.newPage();
   await wall.setViewportSize({ width: 1920, height: 1080 });
-  await wall.goto("/");
+  await wall.goto("/wall");
   await expect(wall.getByRole("heading", { name: "Scan to become the approver" })).toBeVisible();
   return wall;
 }

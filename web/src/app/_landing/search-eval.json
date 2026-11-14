@@ -1,0 +1,84 @@
+{
+  "source": "/docs/smart-search",
+  "measured": "14 Nov 2026",
+  "requests": 189,
+  "products": 17546,
+  "notSoldOf": 11,
+  "note": "Copied from web/docs/smart-search.md (Evaluation, and Common practice on the same 189 requests). Accuracy only: the timings stay in the document. When a row there changes, change it here.",
+  "rows": [
+    {
+      "key": "keyword",
+      "label": "Keyword search",
+      "detail": "IDF-weighted word match",
+      "rightFirst": 40,
+      "top3": 44,
+      "dropped": 4,
+      "standinAsMatch": 1,
+      "notSold": 4,
+      "chart": true,
+      "quiet": true,
+      "docRow": "keywords (before)"
+    },
+    {
+      "key": "bm25",
+      "label": "BM25",
+      "detail": "OpenSearch's default ranking",
+      "rightFirst": 31,
+      "top3": 43,
+      "dropped": 22,
+      "standinAsMatch": 0,
+      "notSold": 4,
+      "chart": true,
+      "docRow": "BM25"
+    },
+    {
+      "key": "knn",
+      "label": "Semantic search",
+      "detail": "k-NN over embeddings",
+      "rightFirst": 72,
+      "top3": 85,
+      "dropped": 18,
+      "standinAsMatch": 5,
+      "notSold": 0,
+      "chart": true,
+      "docRow": "k-NN (semantic search)"
+    },
+    {
+      "key": "hybrid",
+      "label": "Standard hybrid",
+      "detail": "BM25 + k-NN, reciprocal rank fusion",
+      "rightFirst": 58,
+      "top3": 71,
+      "dropped": 21,
+      "standinAsMatch": 3,
+      "notSold": 0,
+      "chart": true,
+      "docRow": "hybrid: BM25 + k-NN, reciprocal rank fusion"
+    },
+    {
+      "key": "hybrid_rules",
+      "label": "Standard hybrid + our rules",
+      "detail": "the same, with our hard rules in code, no judge",
+      "rightFirst": 62,
+      "top3": 72,
+      "dropped": 0,
+      "standinAsMatch": 3,
+      "notSold": 0,
+      "chart": false,
+      "docRow": "hybrid (RRF) + our hard rules"
+    },
+    {
+      "key": "ours",
+      "label": "AimoPilot",
+      "detail": "hybrid recall, hard rules in code, a decision model as judge",
+      "rightFirst": 97,
+      "top3": 97,
+      "dropped": 0,
+      "standinAsMatch": 0,
+      "notSold": 11,
+      "chart": true,
+      "ours": true,
+      "docRow": "hybrid recall + judge, 50 (shipped)"
+    }
+  ]
+}

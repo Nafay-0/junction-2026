@@ -44,7 +44,8 @@ export DOCK_MANDATE=$(pnpm -s dev:mandate)  # dev mandate for the demo buyer
 
 | Path | What |
 |---|---|
-| `/` | The wall, for a big screen: live requests through the gate across all kitchens, totals, recent refusals with their rule, and the join QR code. (`/screen` redirects here.) |
+| `/` | The landing page: what AimoPilot is, every agent with a screenshot, the security model, the measured search and crash-test results, and the ways in (Talk to the agent, sign up, operations, connect your own agent, the wall). Text in `src/app/_landing/landing.text.ts`; screenshots made by `pnpm landing:shots`. |
+| `/wall` | The wall, for a big screen: live requests through the gate across all kitchens, totals, recent refusals with their rule, and the join QR code. (`/screen` redirects here.) |
 | `/k/kaari`, `/k/laakso`, `/k/sbx_…` | The buyer console for one kitchen: request field, then what AimoPilot understood, mistake check, questions, option cards, fixed price, the gate, the signed order and the ledger timeline. |
 
 The console's server side plays the kitchen's agent: `/ui-api/kitchens/[kitchen]/call` forwards a short allow-list of
@@ -55,7 +56,7 @@ fields; when the model is down, the buyer can retry or use the "offline example"
 
 ## Phone approval (passkeys)
 
-The wall at `/` shows a QR code for `/join`. Scanning it creates a demo kitchen (own buyer org key, mandate with a €500
+The wall at `/wall` shows a QR code for `/join`. Scanning it creates a demo kitchen (own buyer org key, mandate with a €500
 per-order limit, agent) and makes the phone its approver with a passkey (one tap, Face ID or fingerprint, no typing).
 `/approver` waits for requests over server-sent events and opens `/approve/[id]` when one arrives. Approving is a
 passkey assertion whose challenge is derived from the order's digest, so it cannot be moved to another or edited order.
