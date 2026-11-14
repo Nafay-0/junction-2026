@@ -27,6 +27,7 @@ export type Refusal =
   | { code: "mandate_ended" }
   | { code: "licence"; signer?: string }
   | { code: "recall"; what: string }
+  | { code: "no_such_kind"; what: string }
   | { code: "nothing_fits"; what: string };
 
 const DATA = generated as { departments: Record<string, string>; categories: Record<string, { label: string }> };
@@ -128,10 +129,14 @@ export function sayRefusal(r: Refusal, lang: Lang): string {
       if (fi) return `${cap(r.what)} on pysäytetty takaisinvedon vuoksi, joten en tilaa sitä. Etsinkö korvaavan?`;
       if (sv) return `${cap(r.what)} är stoppad på grund av en återkallelse, så jag beställer den inte. Ska jag leta efter en ersättare?`;
       return `${cap(r.what)} is held under a recall notice, so I won't order it. Shall I look for a stand-in?`;
+    case "no_such_kind":
+      if (fi) return `Valikoimassa ei ole juuri tätä (${r.what}) sille päivälle; löytämäni ovat muita lajeja. Näytänkö lähimmät?`;
+      if (sv) return `Sortimentet har inte just ${r.what} för den dagen; det jag hittade är andra sorter. Ska jag visa de närmaste?`;
+      return `I couldn't find ${r.what} as such for that day; what the assortment has are other kinds. Shall I show the closest?`;
     case "nothing_fits":
-      if (fi) return `Mikään valikoiman tuote (${r.what}) ei sovi sääntöihinne tälle päivälle. Katsonko toisen päivän tai väljemmän vaihtoehdon?`;
-      if (sv) return `Inget i sortimentet (${r.what}) passar era regler för den dagen. Ska jag titta på en annan dag, eller något mindre strikt?`;
-      return `Nothing in the assortment for ${r.what} fits your rules for that day. Shall I look at another day, or loosen something?`;
+      if (fi) return `En löytänyt tuotetta ${r.what}, jonka voisin tilata sille päivälle. Katsonko toisen päivän?`;
+      if (sv) return `Jag hittade inget ${r.what} som kan beställas för den dagen. Ska jag titta på en annan dag?`;
+      return `I couldn't find ${r.what} that can be ordered for that day. Shall I look at another day?`;
   }
 }
 
@@ -161,6 +166,9 @@ export function refusalOfStep(run: TurnRun, step: IntakeView, lang: Lang): Refus
     const e = step.excluded.find((x) => x.code === "nutrition_rule");
     return { code: "nutrition_rule", what, ...(e ? { detail: plainDetail(e.reason) } : {}) };
   }
+  // Most of what was looked at is another kind of product: say that, never "your rules" (it is not a rule).
+  const kinds = step.excluded.filter((e) => /different kind of product/i.test(e.reason)).length;
+  if (kinds > 0 && kinds >= step.excluded.length / 2) return { code: "no_such_kind", what };
   const allergens = step.excluded.flatMap((e) => /contains ([a-z_, ]+)/i.exec(e.reason)?.[1]?.split(/,\s*/) ?? []).filter((a) => m.forbiddenAllergens.includes(a.trim()));
   if (allergens.length) return { code: "forbidden_allergen", what, allergens: [...new Set(allergens.map((a) => a.trim()))].slice(0, 3) };
   return { code: "nothing_fits", what };

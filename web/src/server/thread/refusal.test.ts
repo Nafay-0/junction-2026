@@ -15,6 +15,7 @@ const ALL: Refusal[] = [
   { code: "licence", signer: "Owner" },
   { code: "recall", what: "smoked salmon" },
   { code: "nothing_fits", what: "milk" },
+  { code: "no_such_kind", what: "grated cheese" },
 ];
 
 describe("refusals in words", () => {
