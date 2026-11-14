@@ -1,3 +1,4 @@
+import { OFFER_TOOLS } from "./mcp/offer-tools";
 import { base64url } from "jose";
 import { beforeEach, describe, expect, it } from "vitest";
 import { GET as catalogGet, HEAD as catalogHead } from "@/app/.well-known/api-catalog/route";
@@ -31,7 +32,7 @@ describe("discovery from the base URL", () => {
     const m = await (await get(manifestGet, "/.well-known/dock.json")).json();
     expect(m.interfaces.mcp).toMatchObject({ url: `${BASE}/api/mcp`, transport: "streamable-http" });
     expect(m.interfaces.mcp.protocolVersions).toContain("2026-07-28");
-    expect(m.interfaces.mcp.tools.map((t: { name: string }) => t.name)).toEqual(TOOLS.map((t) => t.name));
+    expect(m.interfaces.mcp.tools.map((t: { name: string }) => t.name)).toEqual([...TOOLS, ...OFFER_TOOLS].map((t) => t.name));
     expect(m.interfaces.rest.openapi).toBe(`${BASE}/api/v1/openapi.json`);
     expect(m.verification.jwksUri).toBe(`${BASE}/.well-known/jwks.json`);
     expect(m.authentication.headers).toHaveProperty("Dock-Agent-Id");

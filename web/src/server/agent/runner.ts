@@ -1,3 +1,4 @@
+import { TOOLS } from "@/server/mcp/tools";
 import { generateText, jsonSchema, tool, type LanguageModel, type ModelMessage, type ToolSet } from "ai";
 import { localNow } from "@/core/kitchen";
 import { signMandate } from "@/core/mandate";
@@ -145,7 +146,7 @@ export async function runBuyerAgent(opts: RunOptions): Promise<RunResult> {
       cap,
       error,
       caps: { ...caps },
-      tools: conn?.tools().map((t) => t.name) ?? [],
+      tools: conn?.tools().filter((t) => TOOLS.some((x) => x.name === t.name)).map((t) => t.name) ?? [],
       startedAt: startedAt.toISOString(),
       events,
     };
@@ -160,7 +161,10 @@ export async function runBuyerAgent(opts: RunOptions): Promise<RunResult> {
     return finish();
   }
 
-  const dockTools = conn.tools();
+  // Only the ordering table the harness is rated on (src/crash/harness.ts): the offer tools the door also publishes are
+  // not this agent's task, and a tool the digest does not cover would change what the licence is about.
+  const harnessTools = new Set(TOOLS.map((t) => t.name));
+  const dockTools = conn.tools().filter((t) => harnessTools.has(t.name));
   const humanTools = new Map<string, HumanToolKind>();
   const toolset: ToolSet = {};
   for (const t of dockTools) {

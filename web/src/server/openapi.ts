@@ -164,6 +164,33 @@ const DemoOrderStarted = named(
   "DemoOrderStarted",
   z.object({ order: z.object({ orderId: z.string(), status: z.enum(["pending_approval", "committed", "rejected", "declined"]), approvalId: z.string().optional() }) }),
 );
+
+// The wholesaler's offers (server/offers, core/offers.ts).
+const offerIdParam: Param = { name: "offerId", in: "path", schema: z.string(), required: true, description: "offerId from GET /api/v1/offers." };
+const OfferOutSchema = named("SignedOffer", z.looseObject({
+  offerId: z.string(),
+  status: z.enum(["offered", "accepted", "declined", "muted", "expired", "withheld"]),
+  verified: z.boolean().describe("Verified against the wholesaler key and addressed to this organisation."),
+  token: z.string().describe("W3C Verifiable Credential (type DockProductOffer) as a compact JWS (typ vc+jwt, Ed25519), verifiable offline against /.well-known/jwks.json."),
+  offer: z.looseObject({
+    offerId: z.string(),
+    isOrder: z.literal(false),
+    product: z.looseObject({ productId: z.string(), name: z.string(), category: z.string() }),
+    reasons: z.array(z.looseObject({ kind: z.string() })),
+    line: z.string(),
+    price: z.looseObject({ unitPriceCents: z.number().int(), currency: z.literal("EUR") }),
+    suggestedPacks: z.number().int(),
+    validUntil: z.iso.datetime(),
+  }),
+}));
+const OfferPrefsSchema = named("OfferPrefs", z.looseObject({ off: z.looseObject({ by: z.string(), at: z.string() }).optional(), mutes: z.array(z.looseObject({ scope: z.string(), value: z.string() })) }));
+const OfferListOut = named("OfferList", z.object({ offers: z.array(OfferOutSchema), prefs: OfferPrefsSchema, keysUrl: z.string() }).loose());
+const OfferAcceptBody = named("OfferAcceptBody", z.object({ packs: z.number().int().positive().max(10_000).optional(), deliverBy: z.iso.date().optional(), by: z.string().min(1).max(120).optional() }));
+const OfferAnswerBody = named("OfferAnswerBody", z.object({ by: z.string().min(1).max(120).optional() }));
+const OfferMuteBody = named("OfferMuteBody", z.object({ scope: z.enum(["product", "family", "reason", "all"]), offerId: z.string().optional(), value: z.string().min(1).max(60).optional(), undo: z.boolean().optional(), by: z.string().min(1).max(120).optional() }));
+const OfferAccepted = named("OfferAccepted", z.object({ offerId: z.string() }).loose());
+const OfferDeclined = named("OfferDeclined", z.object({ offer: z.looseObject({ offerId: z.string(), status: z.string() }) }).loose());
+const OfferPrefsOut = named("OfferPrefsReply", z.object({ prefs: OfferPrefsSchema }).loose());
 const ApiIndex = named("ApiIndex", z.object({ name: z.string(), version: z.string(), endpoints: z.record(z.string(), z.string()) }));
 const OpenApiDocument = named("OpenApiDocument", z.object({ openapi: z.string() }));
 
@@ -526,6 +553,49 @@ export const API: Operation[] = [
     description: "What AimoPilot remembers about the buyer organisation: order history, usual amounts per product family, rules people stated, and patterns learned from the history.",
     auth: true,
     responses: { 200: { description: "Kitchen memory.", schema: KitchenEnvelope }, ...AUTH_ERRORS },
+  },
+  {
+    method: "get",
+    path: "/api/v1/offers",
+    operationId: "listOffers",
+    summary: "The wholesaler's offers to this kitchen",
+    description:
+      "What the wholesaler's selling agent offered this kitchen: a new, seasonal or cheaper like-for-like product, with the reasons and their figures, the price per pack and until when it holds. Each offer is a signed W3C Verifiable Credential (compact JWS, `typ: vc+jwt`, type `DockProductOffer`, Ed25519) addressed to the buyer organisation: verify `token` offline against /.well-known/jwks.json. An offer is never an order. Open offers only, unless `all=true`.",
+    auth: true,
+    params: [{ name: "all", in: "query", schema: z.enum(["true", "false"]), description: "true: also answered and expired offers." }],
+    responses: { 200: { description: "Offers, newest first, and what the kitchen muted.", schema: OfferListOut }, ...AUTH_ERRORS },
+  },
+  {
+    method: "post",
+    path: "/api/v1/offers/{offerId}/accept",
+    operationId: "acceptOffer",
+    summary: "Accept an offer: start an ordinary order",
+    description: "Buys nothing: it opens an ordinary intake for the offered product (the mistake check, option cards, a fixed-price quote the wholesaler signs, the mandate gate and its sign-off). Continue from the returned step exactly as after POST /api/v1/intake. Only on the buyer's own yes.",
+    auth: true,
+    params: [offerIdParam],
+    body: OfferAcceptBody,
+    responses: { 201: { description: "The ordinary order it started, as an intake step.", schema: OfferAccepted }, 400: err("Invalid body."), 404: err("No such offer for this organisation (code offer_not_found)."), 409: err("The offer is closed, expired, does not verify, or the kitchen's own rules do not allow it (codes offer_closed, offer_invalid, offer_not_for_kitchen)."), ...AUTH_ERRORS },
+  },
+  {
+    method: "post",
+    path: "/api/v1/offers/{offerId}/decline",
+    operationId: "declineOffer",
+    summary: "Decline an offer",
+    description: "Not wanted. The product is not offered to this kitchen again for 30 days.",
+    auth: true,
+    params: [offerIdParam],
+    body: OfferAnswerBody,
+    responses: { 200: { description: "The declined offer.", schema: OfferDeclined }, 404: err("No such offer for this organisation."), 409: err("The offer is no longer open."), ...AUTH_ERRORS },
+  },
+  {
+    method: "post",
+    path: "/api/v1/offers/mute",
+    operationId: "muteOffers",
+    summary: "Stop a kind of offer, or every offer",
+    description: "scope `product`, `family` (a product family), `reason` (new_in_assortment, in_season, cheaper, more_reliable, lower_carbon, new_to_kitchen) or `all` (offers off). With offerId the value comes from that offer; `undo: true` lifts it. The selling agent reads this before it picks anything.",
+    auth: true,
+    body: OfferMuteBody,
+    responses: { 200: { description: "What the kitchen muted now.", schema: OfferPrefsOut }, 400: err("Invalid body, or nothing to mute."), 404: err("No such offer for this organisation."), ...AUTH_ERRORS },
   },
   {
     method: "get",
