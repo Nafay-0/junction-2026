@@ -31,6 +31,51 @@ ledger. That is how "not a chatbot" and "no hallucinated inventory" are both kep
 A card with the same `cardId` sent again **replaces** the earlier one in place (an anomaly card gets `answered`,
 an options card gets `chosen`, a gate card goes from `waiting` to `approved`).
 
+## Widgets: refining in place (agent-thread-3)
+
+The agent is the one place: refining an order or a menu is direct manipulation of a widget in the thread, never a
+sentence the buyer has to type or another page. The design lead builds the widgets as presentational components
+(branch `claude/thread-widgets`); the engine drives them through the card types and actions below. Exact shapes are in
+`server/thread/types.ts`; this section says what each one is for and what its actions do.
+
+**The rules every widget keeps**
+- Every action is a turn (`POST /thread/turns { via: "tap", action, label }`) through the same engine and the same
+  gate. A widget never changes a price, a day or a product on its own: the answer comes back as a new version of the
+  card (same `cardId`).
+- Amounts, prices, days, what is offered and what the gate decides are plain code. An edit re-prices the lines it
+  touched (live, short list only) and re-runs the gate's own preview. What a confirm button says will happen
+  (`gate.outcome`: placed by the agent alone, sent to `gate.approver`, cannot be ordered and why) is that preview,
+  never a guess. Nothing a widget offers is something the preview refuses: a candidate the gate would refuse is not
+  offered, or is shown disabled with its rule only when it explains why the obvious one is missing.
+- A swap goes through the substitution rule: a line that replaces the product first asked for carries
+  `substituteFor`, so the gate judges it (rule and price cap) on every door.
+- Edits are made by the kitchen's signed-in person and recorded as theirs (`portal_session`, or `voice` with the
+  words). A sheet with several lines is one order through the gate.
+- Stale protection: sheet actions carry the `version` the widget showed. An action on an older version is refused
+  with `409 turn_card_stale` and the current card is sent again.
+
+| Card | Widget | Actions |
+|---|---|---|
+| `sheet` | **Order sheet**: lines with an amount stepper in whole packs (`minPacks`..`maxPacks`), the delivery day with the possible `days` and their order-by times, a swap per line (opens the picker), remove, add; total; the gate's preview and one confirm | `sheet_packs`, `sheet_day`, `sheet_swap`, `sheet_remove`, `sheet_add`, `sheet_alternatives`, `sheet_place` |
+| `alternatives` | **Alternatives picker**: candidates side by side (packs, total, per litre or kilo, delivery and order-by, attributes, CO2, reliability, what each differs on, each one's gate preview); chips re-rank by another requirement (price, CO2, reliability, same kind, organic, lactose-free, pack size) | `alt_rerank`, `alt_pick` |
+| `menu` | **Menu builder**: `proposals` to choose from; then dishes with covers (stepper) and service day; each ingredient line with its product, packs, line total, other products (swap), "we have this", amount per cover, and its conflicts (allergen, stated rule, mandate, the planner's doubts) on the line they concern; cost per cover; blockers; the gate's preview; one button to the order sheet | `menu_choose`, `menu_covers`, `menu_day`, `menu_line_swap`, `menu_line_have`, `menu_line_per_cover`, `menu_accept`, `menu_to_sheet` |
+| `question` | **Answer widgets**: `input.kind` chooses chips (`choice`), a day picker (`day`: options carry `date` and `orderBy`) or a stepper (`amount`: `unit`, `min`, `max`, `step`) | `answer` (as before) |
+| `options` | Unchanged, plus "Edit before ordering" on any option: it becomes a sheet | `choose` (order now), `sheet_from_option` |
+| `price`, `order` | **In place, not elsewhere**: the proof of a fixed price (`price.proof`: the signed quote and the signed claims it rests on, verifiable in the browser) and the order's details and signed confirmation open inside the card | none (expansion is presentation) |
+| `memory` | Remember this in the kitchen's own words, then keep or drop each proposal | `remember_this`, `remember` |
+
+**How the engine feeds them**
+- A sheet appears when the buyer edits an option (`sheet_from_option`), adds a second item (words or `sheet_add`), a
+  menu goes to ordering (`menu_to_sheet`), or a product is added from the catalogue or the basket (`sheet_add`: the
+  store's "add" puts it on the thread's current sheet, making one if there is none).
+- The menu card streams: `stage: "proposing"` with the dishes as the planner drafts them, then `resolving` while
+  lines match and price (each line appears with `status: "resolving"` and updates as it resolves), then `ready`.
+- `sheet_place` asks the wholesaler for one signed quote of all lines at the sheet's day, then places it: the gate
+  decides, and the gate and order cards follow as for any order (sign-off from the thread as before).
+
+*(not yet)*: everything in this section is the contract for agent-thread-3; this line goes when the engine for each
+widget lands, and the table says per widget what is live.
+
 ## The thread
 
 ```

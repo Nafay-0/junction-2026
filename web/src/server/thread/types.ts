@@ -40,7 +40,43 @@ export type ThreadAction =
    * Order an earlier order again, rebuilt by plain code (no model): the same product, amount and goal, for the next
    * same weekday. `ref` is the earlier request's id, or the order id for history without a request.
    */
-  | { type: "repeat"; ref: string };
+  | { type: "repeat"; ref: string }
+  // ----- widgets (docs/agent-thread.md "Widgets"): every one a turn through the same engine and gate -----
+  /** Order sheet: set a line's amount in whole packs. `version` is the sheet version the widget showed. */
+  | { type: "sheet_packs"; sheetId: string; version: number; lineId: string; packs: number }
+  /** Order sheet: deliver every line on this day (one of the sheet's `days`). */
+  | { type: "sheet_day"; sheetId: string; version: number; date: string }
+  /** Order sheet: replace a line's product (from its alternatives picker). Judged by the substitution rule. */
+  | { type: "sheet_swap"; sheetId: string; version: number; lineId: string; productId: string }
+  | { type: "sheet_remove"; sheetId: string; version: number; lineId: string }
+  /** Add a product to the thread's current order sheet (a sheet is made if there is none): from the catalogue, the basket, a picker. */
+  | { type: "sheet_add"; sheetId?: string; version?: number; productId: string; packs?: number }
+  /** Open the alternatives picker for one line of a sheet. */
+  | { type: "sheet_alternatives"; sheetId: string; lineId: string }
+  /** Place the sheet as one order through the gate, at the version the buyer saw (a newer version refuses: re-confirm). */
+  | { type: "sheet_place"; sheetId: string; version: number }
+  /** Turn the options card's choice into an editable sheet instead of ordering it at once. */
+  | { type: "sheet_from_option"; requestId: string; optionId: string }
+  /** Alternatives picker: rank again by another requirement (one of the picker's `chips`). */
+  | { type: "alt_rerank"; pickerId: string; chip: string }
+  /** Alternatives picker: take this candidate (for a sheet line, it becomes a sheet_swap). */
+  | { type: "alt_pick"; pickerId: string; productId: string }
+  /** Menu builder: take one of the proposals the planner made. */
+  | { type: "menu_choose"; planId: string; proposalId: string }
+  | { type: "menu_covers"; planId: string; covers: number }
+  | { type: "menu_day"; planId: string; date: string }
+  /** Menu builder: a line's product, from the line's candidates. */
+  | { type: "menu_line_swap"; planId: string; lineId: string; optionId: string }
+  /** Menu builder: "we have this" (the line is not bought) or back on the list. */
+  | { type: "menu_line_have"; planId: string; lineId: string; have: boolean }
+  /** Menu builder: the amount per cover for a line (in the line's own unit, g, ml or pcs). */
+  | { type: "menu_line_per_cover"; planId: string; lineId: string; dishId: string; amount: number }
+  /** Menu builder: accept a doubt the planner raised on a line ("a different form than the recipe asks"). */
+  | { type: "menu_accept"; planId: string; doubtId: string }
+  /** Menu builder: put every bought line on an order sheet, one order. */
+  | { type: "menu_to_sheet"; planId: string }
+  /** Remember this, in the kitchen's own words: goes through the memory writer, confirmed by the person. */
+  | { type: "remember_this"; text: string };
 
 export type BuyerTurn = {
   turnId: string;
@@ -149,7 +185,16 @@ export type AnomalyCard = CardBase & {
 export type QuestionCard = CardBase & {
   type: "question";
   requestId: string;
-  questions: { id: string; text: string; options: { id: string; label: string }[] }[];
+  /**
+   * `input` says which answer widget fits: chips (choice, the default), a day picker (each option a date, with its
+   * order-by time), or a stepper (an amount: options are the suggested amounts, min/max/step bound it).
+   */
+  questions: {
+    id: string;
+    text: string;
+    options: { id: string; label: string; date?: string; orderBy?: string; amount?: number }[];
+    input?: { kind: "choice" } | { kind: "day" } | { kind: "amount"; unit: string; min: number; max: number; step: number };
+  }[];
   answered?: Record<string, string>;
 };
 
@@ -207,6 +252,11 @@ export type PriceCard = CardBase & {
   preview: { outcome: string; reasons: string[] };
   /** The wholesaler's signature over the price: verifiable offline against /.well-known/jwks.json. */
   signed: true;
+  /**
+   * The proof, opened in place: the signed quote token and the signed claims (price, stock, origin) it rests on, each
+   * verifiable in the browser against the published keys (the shop's verify-signed helper).
+   */
+  proof?: { quoteToken: string; claims: { claimId: string; type: string; productId: string; token: string }[]; keysUrl: string };
 };
 
 export type GateCard = CardBase & {
@@ -320,7 +370,149 @@ export type PlanCard = CardBase & {
   declined?: string;
 };
 
-export type Card = UnderstoodCard | AnomalyCard | QuestionCard | OptionsCard | PriceCard | GateCard | OrderCard | MemoryCard | RecordsCard | NoticeCard | PlanCard;
+// ---------- widgets ----------
+
+/** What the gate's own preview says will happen when a widget's confirm is pressed: never a guess. */
+export type GatePreview = {
+  outcome: "auto_approve" | "needs_human_approval" | "reject";
+  /** The deciding rule (escalated or failed), as the gate names it. */
+  rule?: string;
+  /** For needs_human_approval: who signs. */
+  approver?: { name: string; role: string };
+  /** The gate's reasons, as codes and details for words in the buyer's language, with its sentences as a fallback. */
+  rules: { rule: string; outcome: string; details?: Record<string, unknown> }[];
+  reasons: string[];
+};
+
+/**
+ * The order sheet: the thread's current order, editable in place. Every edit is a turn (sheet_* actions) that re-prices
+ * the changed lines live and re-runs the gate's preview; the card comes back with the same cardId and version + 1.
+ * One sheet is one order through the gate, however many lines.
+ */
+export type SheetCard = CardBase & {
+  type: "sheet";
+  sheetId: string;
+  version: number;
+  state: "editing" | "placed" | "stale";
+  /** The delivery day every line is quoted for, and the days the buyer may move to, each with its order-by time. */
+  deliveryDate: string;
+  days: { date: string; orderBy?: string; available: boolean; why?: string }[];
+  lines: {
+    lineId: string;
+    productId: string;
+    name: string;
+    category?: string;
+    packSize: number;
+    unit: string;
+    packs: number;
+    /** Stepper bounds, in whole packs: min 1, max what the wholesaler can deliver (or the gate's line cap). */
+    minPacks: number;
+    maxPacks: number;
+    unitPriceCents: number;
+    lineTotalCents: number;
+    /** Per litre or kilo, for comparison. */
+    perUnitCents?: number;
+    /** When this line stands in for another product: which, and that the substitution rule applies. */
+    substituteFor?: { productId: string; name: string };
+    /** How many alternatives the picker would show (0: no picker). */
+    alternatives: number;
+    /** What on this line the gate or the kitchen's rules object to (an allergen, a stated rule, a price cap). */
+    issues: { code: string; text: string; blocking: boolean }[];
+    stockConfirmed: boolean;
+  }[];
+  totalCents: number;
+  /** The gate's own preview of the sheet as it stands. */
+  gate: GatePreview;
+  /** Shown above the confirm button: what was fixed since the last version ("price changed", "day moved"). */
+  changed?: string[];
+  /** Set once placed. */
+  orderId?: string;
+};
+
+/**
+ * The alternatives picker: candidates side by side for one line (or one need), each with its numbers, its gate
+ * preview and why it ranks where it does. The chips re-rank by another requirement (alt_rerank), in plain code.
+ */
+export type AlternativesCard = CardBase & {
+  type: "alternatives";
+  pickerId: string;
+  /** What the candidates stand in for: a sheet line, or a request. */
+  for: { sheetId?: string; lineId?: string; requestId?: string; productId?: string; name: string; amount: { amount: number; unit: string } };
+  /** Re-ranking requirements; `on` marks the active one. */
+  chips: { id: "price" | "co2" | "reliability" | "same_kind" | "organic" | "lactose_free" | "gluten_free" | "pack_size" | string; label: string; on: boolean }[];
+  candidates: {
+    productId: string;
+    name: string;
+    category?: string;
+    packSize: number;
+    unit: string;
+    packs: number;
+    unitPriceCents: number;
+    totalCents: number;
+    perUnitCents?: number;
+    deliveryDate: string;
+    orderBy?: string;
+    attributes: string[];
+    co2Kg: number | null;
+    reliability: number | null;
+    /** good / better / best by the active chip; the current product is marked. */
+    rank: string;
+    current: boolean;
+    /** What it differs on, as codes for words in the buyer's language ("price_more", "different_kind"). */
+    differs: { code: string; params: Record<string, string | number> }[];
+    /** What happens if picked: the gate's preview of the sheet with this candidate in the line. */
+    gate: GatePreview;
+  }[];
+  picked?: string;
+};
+
+/**
+ * The menu builder: a menu request inside the thread. It forms on screen as the planner works: proposals first (the
+ * dishes it would cook), then each dish's ingredient lines as they resolve. The buyer edits it in place (menu_*
+ * actions); every line obeys the kitchen's mandate, stated rules and memory, as the planner enforces.
+ */
+export type MenuCard = CardBase & {
+  type: "menu";
+  planId: string;
+  /** proposing: dishes are being drafted; resolving: lines are being matched and priced; ready: editable; ordered. */
+  stage: "proposing" | "choose" | "resolving" | "ready" | "ordered" | "declined";
+  /** Menu proposals to choose from, when the words leave the menu open ("lunch for 40 around beetroot"). */
+  proposals: { proposalId: string; title: string; dishes: string[]; costPerCoverCents?: number }[];
+  covers: number | null;
+  serviceDate?: string;
+  /** Days the plan can be delivered on, with order-by times (menu_day). */
+  days: { date: string; orderBy?: string; available: boolean }[];
+  dishes: {
+    dishId: string;
+    name: string;
+    course: string;
+    portion?: string;
+    lines: {
+      lineId: string;
+      ingredient: string;
+      /** Amount per cover, in g, ml or pcs (menu_line_per_cover edits it). */
+      perCover: { amount: number; unit: string };
+      /** What the covers need in total, in the product's unit. */
+      need: { amount: number; unit: string };
+      status: "resolving" | "ready" | "decide" | "have" | "left_out";
+      product?: { productId: string; name: string; packs: number; packSize: number; unit: string; totalCents: number; deliveryDate?: string };
+      /** Other products for this line (menu_line_swap), each with what it differs on. */
+      options: { optionId: string; productId: string; name: string; totalCents: number; differs: { code: string; params: Record<string, string | number> }[] }[];
+      /** Allergen, rule and mandate conflicts and the planner's doubts, on the line they concern. */
+      conflicts: { code: string; text: string; doubtId?: string; blocking: boolean }[];
+    }[];
+  }[];
+  totalCents: number;
+  costPerCoverCents?: number;
+  /** What would stop the order now, in plain words (no covers, a doubt open, nothing can arrive by the day). */
+  blockers: string[];
+  /** The gate's preview of the plan as one order. */
+  gate?: GatePreview;
+  /** Set once it is on a sheet. */
+  sheetId?: string;
+};
+
+export type Card = UnderstoodCard | AnomalyCard | QuestionCard | OptionsCard | PriceCard | GateCard | OrderCard | MemoryCard | RecordsCard | NoticeCard | PlanCard | SheetCard | AlternativesCard | MenuCard;
 export type CardType = Card["type"];
 
 // ---------- the thread and its event stream ----------

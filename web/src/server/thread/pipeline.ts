@@ -396,7 +396,7 @@ export async function placeQuoted(run: TurnRun, s: IntakeView, words: string, pa
 
 /** The card an action answers must still be open: a tap on an old card never acts on a newer request. */
 export async function checkOpen(run: TurnRun, a: ThreadAction): Promise<IntakeView | undefined> {
-  if (a.type === "remember" || a.type === "withdraw" || a.type === "retry" || a.type === "plan_order" || a.type === "repeat") return undefined;
+  if (a.type !== "concern" && a.type !== "answer" && a.type !== "choose" && a.type !== "place") return undefined;
   const s = await run.rt.dock.intake.get(run.session, a.requestId);
   const want = a.type === "concern" ? ["needs_confirmation"] : a.type === "answer" ? ["needs_input", "options_ready"] : a.type === "choose" ? ["options_ready"] : ["quoted"];
   if (!want.includes(s.state)) throw new DockError(409, "turn_card_stale", `That card has moved on: the request is now ${s.state.replace(/_/g, " ")}.`, "intake_sequence", { state: s.state });
@@ -471,6 +471,9 @@ export async function runAction(run: TurnRun, a: ThreadAction, words?: string): 
     }
     case "remember":
     case "retry":
+      return [];
+    default:
+      // Widget actions run in server/thread/widgets.ts (engine.ts routes them there).
       return [];
   }
 }
