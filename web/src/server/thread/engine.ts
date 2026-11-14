@@ -487,7 +487,10 @@ function waitingSentence(order: OrderCard, gate: GateCard, lang: "en" | "fi" | "
   const what = first ? `${first.quantity} × ${first.name.replace(/[®™]/g, "").split(/\s+/).slice(0, 4).join(" ")}${order.lines.length > 1 ? (lang === "fi" ? ` ja ${order.lines.length - 1} muuta` : lang === "sv" ? ` och ${order.lines.length - 1} till` : ` and ${order.lines.length - 1} more`) : ""}` : "";
   const over = gate.rules?.find((r) => r.rule === "per_order_limit" && r.outcome !== "pass");
   const limit = over?.details?.limitCents;
-  const who = gate.approver?.name ?? (lang === "fi" ? "vastuuhenkilö" : lang === "sv" ? "en ansvarig" : "a person");
+  // A signer named by role on the test kitchens ("Kitchen manager") is said in the buyer's language.
+  const ROLES: Record<string, Record<"fi" | "sv", string>> = { "kitchen manager": { fi: "keittiöpäällikkö", sv: "köksansvarig" }, "head chef": { fi: "keittiömestari", sv: "kökschef" }, owner: { fi: "omistaja", sv: "ägare" }, "food service manager": { fi: "ruokapalvelupäällikkö", sv: "måltidschef" } };
+  const raw = gate.approver?.name ?? "";
+  const who = raw ? (lang === "en" ? raw : (ROLES[raw.toLowerCase()]?.[lang] ?? raw)) : lang === "fi" ? "vastuuhenkilö" : lang === "sv" ? "en ansvarig" : "a person";
   const whoEn = /^[A-Z][a-z]+ [a-z]/.test(who) ? `the ${who.toLowerCase()}` : who;
   if (typeof limit === "number") {
     if (lang === "fi") return `${what} hintaan ${eur(order.totalCents)} ylittää ${eur(limit)}, jonka voin käyttää yksin, joten se tarvitsee hyväksynnän: ${who}.`;
