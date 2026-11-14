@@ -173,7 +173,7 @@ function noticeFrom(err: unknown, ref: string, words: string): NoticeCard {
     const id = cardId("notice", ref);
     if (err.code === "need_incomplete") {
       const missing = ((err.details?.missing as string[]) ?? []).map((m) => (m === "item" ? "what to buy" : "how much, with the unit"));
-      return { type: "notice", cardId: id, kind: "incomplete", message: `I understood part of "${words.slice(0, 80)}" but need ${missing.join(" and ")}.`, missing };
+      return { type: "notice", cardId: id, kind: "incomplete", message: `I understood part of "${words.slice(0, 80)}" but need ${missing.join(" and ")}.`, missing, words: words.slice(0, 600) };
     }
     if (err.code === "not_a_purchase_request") return { type: "notice", cardId: id, kind: "not_purchase", message: err.message };
     if (err.code === "family_unknown") return { type: "notice", cardId: id, kind: "not_found", message: `Nothing in the assortment matches "${words.slice(0, 80)}".` };
@@ -185,7 +185,7 @@ function noticeFrom(err: unknown, ref: string, words: string): NoticeCard {
 }
 
 /** "Same as last week but 20 % more" (or less), in the kitchen's languages: a whole earlier order, scaled. */
-const REPEAT_SCALED = /(same|again|like|as)\b[^%]*?\b(last|previous)\b[^%]*?(\d{1,3})\s*%\s*(more|less|extra|fewer)|(sama|samat|samoin|uudestaan|kuin)\b[^%]*?\b(viime|edelli)\w*[^%]*?(\d{1,3})\s*%\s*(enemmän|vähemmän|lisää)|(samma|som)\b[^%]*?\b(förra|senaste)\b[^%]*?(\d{1,3})\s*%\s*(mer|mindre)/i;
+export const REPEAT_SCALED = /(same|again|like|as)\b[^%]*?\b(last|previous)\b[^%]*?(\d{1,3})\s*%\s*(more|less|extra|fewer)|(sama|samat|samoin|uudestaan|kuin)\b[^%]*?\b(viime|edelli)\w*[^%]*?(\d{1,3})\s*%\s*(enemmän|vähemmän|lisää)|(samma|som)\b[^%]*?\b(förra|senaste)\b[^%]*?(\d{1,3})\s*%\s*(mer|mindre)/i;
 
 /**
  * A whole earlier order again, every line scaled by the percentage said: last week's deliveries (or, failing those, the

@@ -350,6 +350,8 @@ export type NoticeCard = CardBase & {
   message: string;
   /** For `incomplete`: what is missing ("how much, with the unit"). */
   missing?: string[];
+  /** For `incomplete`: the words read so far (a follow-up completes them: subject.ts). */
+  words?: string;
   /** For `refused`: the rule that fired. */
   rule?: string;
   retry?: boolean;

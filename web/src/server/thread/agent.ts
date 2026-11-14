@@ -12,7 +12,8 @@ import { callTool } from "@/server/mcp/server";
 import { TOOLS } from "@/server/mcp/tools";
 import { cardId, gateCard, orderCard } from "./cards";
 import { withFallback } from "./fallback";
-import { orderFromWords, record, repeatScaled, runAction, step, type ItemOutcome, type TurnRun } from "./pipeline";
+import { combineItems, orderFromWords, record, REPEAT_SCALED, repeatScaled, runAction, step, type ItemOutcome, type TurnRun } from "./pipeline";
+import { ADDITION, isShort, subjectLine, subjectOf, type Subject } from "./subject";
 import type { RecordsCard, ThreadAction } from "./types";
 import { earlierFor } from "./earlier";
 import { speakFacts } from "./speak";
@@ -42,7 +43,8 @@ How to work each turn:
 - The buyer's newest words answer something open (listed under OPEN DECISIONS): call buyer_reply with the matching ref. "the second one", "the cheaper one", "the soup" pick a choice; "make it 12" or "Monday is fine" change the order to confirm (pass amount or date); "yes, order it", "go ahead" confirm. Only use refs that are listed. A question is never a yes. If their words do not clearly pick one, ask one short question instead.
 - After an order waits for a named person's OK (status pending_approval), write your sentences and call await_sign_off with its orderId in the same reply.
 - The buyer wants to look around without ordering ("show me oat drinks"): find_products. About one product: product_facts. "What do I need to do today?", "our recurring orders", "what's arriving", "what do you remember about us": show_home.
-- A dish or a menu for a number of covers ("lunch for 10 tomorrow", "salmon soup for 300 on Friday"): plan_menu with their words. Open words get up to three menus to pick from.
+- A dish or a menu for a number of covers ("lunch for 10 tomorrow", "salmon soup for 300 on Friday", "chocolate cake"): plan_menu with their words. Open words get up to three menus to pick from.
+- Every message is read in the light of the conversation so far (TALKING ABOUT NOW). A short follow-up fills in or changes that thing: "10 portions" after a dish sets its covers; "200 litres", "for Friday", "no, 200", "make it 40", "the organic one" complete or change the request on the table (call order with their words, code applies them); "and oat drink too" adds to the same order (order). Do it; do not ask them to confirm a change they just said. A new subject starts only when they clearly name a new thing. Never ask for what they already said in this conversation.
 - Past orders: order_history. Rules, limits, who gives the OK, or a change to them ("never nuts", "raise the limit to 800"): rules, with the change when they ask for one; the buyer then confirms it in words ("yes") through buyer_reply. Say "confirm", never "sign" or "mandate". An order's status: get_order or explain.
 - Anything else (a greeting, small talk, something outside buying food): one short sentence, no tool.
 
@@ -147,7 +149,10 @@ export async function openRefs(run: TurnRun): Promise<OpenRef[]> {
   }
   const menu = [...cards].reverse().find((x) => x.card.type === "menu" && !x.card.sheetId && (x.card.stage === "ready" || x.card.stage === "choose"))?.card;
   if (menu?.type === "menu" && menu.stage === "choose") menu.proposals.forEach((p, i) => refs.push({ ref: `menu_p${i + 1}`, label: `cook menu ${i + 1}: ${p.title} (${p.dishes.join(", ")})`, action: { type: "menu_choose", planId: menu.planId, proposalId: p.proposalId } }));
-  else if (menu?.type === "menu" && menu.stage === "ready" && menu.totalCents > 0 && !menu.blockers.length) {
+  if (menu?.type === "menu" && (menu.stage === "ready" || menu.stage === "choose") && !menu.covers) refs.push({ ref: "menu:covers", label: "set how many covers (portions, people) the menu is for; pass amount", action: { type: "menu_covers", planId: menu.planId, covers: 1 }, needs: "amount" });
+  if (menu?.type === "menu" && menu.stage === "choose") {
+    /* the proposals above */
+  } else if (menu?.type === "menu" && menu.stage === "ready" && menu.totalCents > 0 && !menu.blockers.length) {
     refs.push({ ref: "menu", label: `order the menu (${menu.dishes.map((d) => d.name).join(", ")}), €${(menu.totalCents / 100).toFixed(2)}`, action: { type: "menu_to_sheet", planId: menu.planId }, confirm: true });
     if (menu.covers) refs.push({ ref: "menu:covers", label: `change the number of covers (now ${menu.covers}); pass amount`, action: { type: "menu_covers", planId: menu.planId, covers: menu.covers }, needs: "amount" });
     if (menu.days.some((d) => d.available)) refs.push({ ref: "menu:day", label: `move the menu to another day (possible: ${menu.days.filter((d) => d.available).map((d) => d.date).join(", ")}); pass date`, action: { type: "menu_day", planId: menu.planId, date: menu.serviceDate ?? "" }, needs: "date" });
@@ -193,6 +198,7 @@ export function turnContext(run: TurnRun, refs: OpenRef[]): string {
   const waiting = run.store.cards(run.thread).filter((x) => x.card.type === "gate" && x.card.outcome === "waiting").map((x) => (x.card.type === "gate" ? `${x.card.orderId} waits for ${x.card.approver?.name ?? "a person"}` : ""));
   return [
     `Today is ${weekday} ${today} (Helsinki). Kitchen: ${run.k.info.name}. You are ${run.k.info.agentName}. This turn came through the ${run.door === "voice" ? "voice door (spoken)" : "store (typed)"}.`,
+    subjectLine(subjectOf(run)),
     refs.length ? `OPEN DECISIONS (ref: what it does):\n${refs.map((r) => `- ${r.ref}: ${r.label}`).join("\n")}` : "OPEN DECISIONS: none.",
     waiting.length ? `Waiting for sign-off: ${waiting.join("; ")}.` : "",
   ]
@@ -238,18 +244,37 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
       execute: async ({ words: w }) => {
         // The model may only pass on words the buyer said: anything else is read from the buyer's message itself.
         let said = words.includes(w.trim()) ? w.trim() : words;
-        // The answer to "how much?" ("12 litres", "12 cartons"): the request it completes is the buyer's words before it.
-        const turns = run.thread.turns;
-        const prevAgent = [...turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId);
-        const prevBuyer = prevAgent?.role === "agent" ? turns.find((x) => x.turnId === prevAgent.replyTo) : undefined;
-        if (prevAgent?.role === "agent" && prevAgent.cards.some((c) => c.type === "notice" && c.kind === "incomplete") && prevBuyer?.role === "buyer" && prevBuyer.text && said.split(/\s+/).length <= 6) said = `${prevBuyer.text} ${said}`;
+        // What the conversation is about now (subject.ts): a short follow-up completes, changes or adds to it.
+        const subj = subjectOf(run);
+        let followUp = false;
+        let addTo: Extract<Subject, { kind: "need" }> | undefined;
+        if (subj && isShort(said) && !REPEAT_SCALED.test(said)) {
+          if (subj.kind === "incomplete") said = `${subj.words} ${said}`;
+          else if (subj.kind === "need" && ADDITION.test(said)) addTo = subj;
+          else if (subj.kind === "need") followUp = true;
+        }
+        if (subj) record(run, "subject", `Talking about: ${subjectLine(subj).slice(0, 200)}; the buyer's words "${said.slice(0, 120)}" ${subj.kind === "incomplete" ? "complete it" : addTo ? "add to the same order" : followUp ? "change it" : "start a new request"}.`, { subject: subj.kind });
         // "Same as last week but 20 % more": a whole earlier order, scaled by code (the reader reads one item at a time).
         const scaled = await repeatScaled(run, said).catch(() => undefined);
         if (scaled) {
           items.push(...scaled);
           return forModel(scaled);
         }
-        const earlier = await earlierFor(run, said);
+        if (addTo) {
+          // A further item for the order under discussion: the same day, and one order with it when both are ready.
+          const out = await orderFromWords(run, said, [], { quietIfNotPurchase: true, ...(addTo.day ? { deliverBy: addTo.day } : {}) });
+          const s0 = addTo.placed ? undefined : await run.rt.dock.intake.get(run.session, addTo.requestId).catch(() => undefined);
+          if (s0?.state === "options_ready") {
+            run.multi = true;
+            const all = await combineItems(run, said, [{ words: addTo.words, requestId: addTo.requestId, state: s0.state }, ...out]);
+            const sheet = all.filter((x) => x.sheet);
+            items.push(...out, ...sheet);
+            return forModel([...out, ...sheet]);
+          }
+          items.push(...out);
+          return forModel(out);
+        }
+        const earlier = await earlierFor(run, said, { followUp });
         const out = await orderFromWords(run, said, earlier, { quietIfNotPurchase: true });
         items.push(...out);
         return forModel(out);
@@ -326,6 +351,16 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
       inputSchema: z.object({ words: z.string().min(1).max(2000).describe("The buyer's words, copied exactly from their newest message.") }),
       execute: async ({ words: w }) => {
         const said = words.includes(w.trim()) ? w.trim() : words;
+        // "10 portions" while a menu is on the table: its covers, not a new menu (subject.ts).
+        const subj = subjectOf(run);
+        const n = /(?<![\d.,])(\d{1,4})(?![\d.,])/.exec(said);
+        const rest = said.replace(/(?<![\d.,])\d{1,4}(?![\d.,])/, " ").replace(/\b(portions?|people|persons?|covers?|guests?|servings?|for|make it|no|then|instead|annosta|annos|annokselle|hengelle|henkeä|hengen|henkilölle|ihmiselle|vierasta|ei|tee siitä|sitten|portioner|personer|gäster|för|nej)\b/giu, " ").replace(/[\s,.!]+/g, "");
+        if (subj?.kind === "menu" && n && !rest) {
+          const { runWidget } = await import("./widgets");
+          await runWidget(run, { type: "menu_covers", planId: subj.planId, covers: Number(n[1]) }, words);
+          record(run, "subject_covers", `"${said.slice(0, 60)}" sets the covers of the menu on the table to ${n[1]}.`, { planId: subj.planId });
+          return { ok: true, done: "covers set on the menu on the table", covers: Number(n[1]) };
+        }
         const { menuFromWords } = await import("./menu");
         return menuFromWords(run, said);
       },
