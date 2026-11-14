@@ -1,3 +1,5 @@
+import { departmentOf } from "./catalog/partner";
+import { claimEvidence, subjectOfProduct } from "./claim-evidence";
 import { z } from "zod";
 import { MAX_LIVE_IDS_PER_CALL, scheduledOn, type LiveOffer, type MeteredCatalog, type Product } from "./catalog";
 import { facetsOf } from "./catalog/search";
@@ -5,7 +7,7 @@ import type { ProductFinder } from "./catalog/finder";
 import { OPTIMISE_QUESTION_ID, answerSchema, clarify, hardConstraints, kindMismatch, violationOf, optimiseQuestion, optionLabel, violation, type Answer, type ConstraintSource, type MemoryNote, type Question } from "./clarify";
 import { proposedIds, type AlternativesAnswer, type AlternativesSource } from "./alternatives";
 import { alsoAskedIn, alsoAskedNote, groupsIn, type AlsoAsked } from "./also-asked";
-import { qualifiersOf } from "./qualifiers";
+import { qualifiersOf, wordsNotCarried } from "./qualifiers";
 import { baseAmount, checkNeed, noticeNeed, type CheckContext, type Concern, type ConcernCode, type Noticed, type PendingOrderSummary } from "./concerns";
 import { DockError, parse } from "./errors";
 import {
@@ -458,7 +460,10 @@ export function createIntakeFlow(deps: IntakeDeps) {
         await intakes.save(i);
         return i;
       }
-      narrowed = allowed.filter((p) => c.settled.attributes.every((a) => p.attributes.includes(a)) && !c.settled.excludedAttributes.some((a) => p.attributes.includes(a)));
+      // A settled claim (lactose-free, from an answer or the kitchen's memory) is met as the hard rules meet it: by the
+      // claim, or what the maker's data shows (core/claim-evidence.ts), never by the label alone.
+      const strict = session.mandate.allergenEvidence === "declared";
+      narrowed = allowed.filter((p) => c.settled.attributes.every((a) => claimEvidence(subjectOfProduct(p), a, { strict }).met) && !c.settled.excludedAttributes.some((a) => p.attributes.includes(a)));
       i.openChoices = c.spanned;
       const openDims = c.spanned.map((q) => SPEC_DIMENSIONS.find((d) => d.id === q.dimension)!).filter(Boolean);
       if (openDims.length) span = (p) => openDims.map((d) => dimensionValue(d, p.attributes) ?? "?").join("|");
@@ -481,7 +486,12 @@ export function createIntakeFlow(deps: IntakeDeps) {
       }
     }
     // 5. Live prices for a short list only (one call), then the option cards.
-    const prefer = [reference?.productId, ...proposedIds(alternatives, 3), last && primaryLine(last).productId, usual?.kind === "product" ? usual.productId : undefined, ...relevant.slice(0, 3).map((p) => p.id)];
+    // The words that name the kind within the family ("truffle" oil): a product without them stands in, and says so.
+    const q = !i.need.item.productId && !i.need.sameAsLastTime ? await qualifiersOf(catalog, i.family, i.need.item.text).catch(() => undefined) : undefined;
+    const kindWords = q?.words.length ? (p: Product) => wordsNotCarried(q, p.id) : undefined;
+    // Products of the kind the words ask for are priced first, so a cheaper stand-in never crowds them out.
+    const ofKind = kindWords ? narrowed.filter((p) => !kindWords(p).length).slice(0, 3).map((p) => p.id) : [];
+    const prefer = [reference?.productId, ...ofKind, ...proposedIds(alternatives, 3), last && primaryLine(last).productId, usual?.kind === "product" ? usual.productId : undefined, ...relevant.slice(0, 3).map((p) => p.id)];
     const short = shortlist(narrowed, prefer, MAX_LIVE_IDS_PER_CALL, i.amount, span);
     // "On Monday": what is available earlier is delivered that day (orders.ts scheduledOn).
     const offersSeen: LiveOffer[] = [];
@@ -508,6 +518,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
       alternatives,
       declined,
       goal: goalForRank,
+      ...(kindWords ? { wordsNotCarried: kindWords } : {}),
       preferLabels: [...new Set([...(session.mandate.preferredLabels ?? []), ...(i.need.preferredLabels ?? [])])].filter((l) => !constraints.requiredCertificates.includes(l)),
       nutritionFocus: [...new Set((session.mandate.nutritionRules ?? []).map((r) => r.nutrient))],
       span,
@@ -769,12 +780,15 @@ export function createIntakeFlow(deps: IntakeDeps) {
       }
       const allowed = session.mandate.allowedCategories;
       if (!allowed.includes(family)) {
-        const groups = allowed.map((c) => c.replaceAll("_", " "));
+        // Product groups by name, never a category code ("dairy and cheese", not "cat 10418").
+        // Named categories by their words, the rest by their product group ("dairy and cheese", never "cat 10418").
+        const groups = [...new Set(allowed.map((c) => (c.startsWith("cat_") ? departmentOf(c) : c.replaceAll("_", " "))).filter((g): g is string => !!g))];
+        const theirs = family.startsWith("cat_") ? departmentOf(family) : undefined;
         return view(
           await refuseUpFront(
             i,
             "category_allowed",
-            `The kitchen's agent may not buy ${what}: its signed mandate covers ${groups.length > 1 ? `${groups.slice(0, -1).join(", ")} and ${groups.at(-1)}` : groups[0]} only, and ${what} is in another product group${family.startsWith("cat_") ? "" : ` (${family.replaceAll("_", " ")})`}. Whoever signs the kitchen's mandate can add that group; until then nothing is priced or ordered.`,
+            `The kitchen's agent may not buy ${what}: its signed mandate covers ${groups.length > 1 ? `${groups.slice(0, -1).join(", ")} and ${groups.at(-1)}` : groups[0]} only, and ${what} is in another product group${theirs ? ` (${theirs})` : family.startsWith("cat_") ? "" : ` (${family.replaceAll("_", " ")})`}. Whoever signs the kitchen's mandate can add that group; until then nothing is priced or ordered.`,
           ),
         );
       }

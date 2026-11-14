@@ -1,4 +1,4 @@
-import { claimEvidence, type ClaimSubject } from "../claim-evidence";
+import { claimEvidence, wholeIngredients, type ClaimSubject } from "../claim-evidence";
 import { natureOf } from "./nature";
 import { categoryCodesFor, type IndexedProduct } from "./partner";
 import type { Amount, Measure } from "./pack";
@@ -207,7 +207,8 @@ export function allergenEvidence(p: IndexedProduct, allergen: string): AllergenE
 /** An index record as the claim-evidence check reads it (core/claim-evidence.ts), with its by-nature evidence when registered. */
 export function subjectOfIndexed(p: IndexedProduct): ClaimSubject {
   const n = p.allergens.declared ? undefined : natureOf(p);
-  return { claims: p.claims, category: p.categoryCode, declared: p.allergens.declared, present: [...p.allergens.contains, ...p.allergens.mayContain], ...(n ? { byNature: n } : {}) };
+  const ing = p.allergens.declared ? undefined : wholeIngredients(p.texts?.ingredients);
+  return { claims: p.claims, category: p.categoryCode, declared: p.allergens.declared, present: [...p.allergens.contains, ...p.allergens.mayContain], ...(n ? { byNature: n } : {}), ...(ing ? { ingredients: ing } : {}) };
 }
 
 export class LexicalSearch implements SearchBackend {
