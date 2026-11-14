@@ -163,13 +163,14 @@ export function ruleTitleL(rule: string | undefined, lang: Lang): string {
 }
 
 const ROLES: Record<Lang, Record<string, string>> = {
-  en: { head_chef: "head chef", owner: "owner", kitchen_manager: "kitchen manager", finance_director: "finance director", purchasing_manager: "purchasing manager" },
-  fi: { head_chef: "keittiömestari", owner: "omistaja", kitchen_manager: "keittiöpäällikkö", finance_director: "talousjohtaja", purchasing_manager: "hankintapäällikkö" },
-  sv: { head_chef: "köksmästare", owner: "ägare", kitchen_manager: "kökschef", finance_director: "ekonomidirektör", purchasing_manager: "inköpschef" },
+  en: { head_chef: "head chef", owner: "owner", kitchen_manager: "kitchen manager", finance_director: "finance director", purchasing_manager: "purchasing manager", kitchen_signer: "the kitchen's signer", manager: "manager" },
+  fi: { head_chef: "keittiömestari", owner: "omistaja", kitchen_manager: "keittiöpäällikkö", finance_director: "talousjohtaja", purchasing_manager: "hankintapäällikkö", kitchen_signer: "keittiön hyväksyjä", manager: "esihenkilö" },
+  sv: { head_chef: "köksmästare", owner: "ägare", kitchen_manager: "kökschef", finance_director: "ekonomidirektör", purchasing_manager: "inköpschef", kitchen_signer: "kökets godkännare", manager: "chef" },
 };
 
 export function roleLabelL(role: string, lang: Lang): string {
-  return ROLES[lang][role] ?? role.replaceAll("_", " ");
+  // A role the table does not know is said as words, never as a code.
+  return ROLES[lang][role] ?? role.replace(/[_-]+/g, " ").trim();
 }
 
 const ATTRS: Record<Lang, Record<string, string>> = {

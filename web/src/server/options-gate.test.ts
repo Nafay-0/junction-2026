@@ -46,10 +46,10 @@ describe("1. no option is offered that the gate's own preview would refuse", () 
     ["a small order of a named product", { text: "100 L of the 10 L box", item: { text: "lactose-free milk 10 L", category: "milk", productId: BOX }, quantity: { amount: 100, unit: "L" }, deliverBy: day() }],
     ["lowest CO2", { text: "200 L lactose-free milk, lowest CO2", item: { text: "lactose-free milk", category: "milk", attributes: ["lactose_free"] }, quantity: { amount: 200, unit: "L" }, deliverBy: day(), optimise: "co2" }],
   ];
-  // OPEN on main (Sat 14 Nov), for claude/agent-thread-2 to close: asked for 1,000 L of the 10 L box (600 L in stock),
-  // the intake offers "500 x JP-3010 + 50 x VA-1010", and the gate refuses it (substitute_price: +25.6 % per litre
-  // against a 10 % tolerance). Remove `.fails` on the branch that makes options obey the gate's substitution rule.
-  it.fails("a named product that cannot cover the amount", () => offered({ text: "1000 L of the 10 L box", item: { text: "lactose-free milk 10 L", category: "milk", productId: BOX }, quantity: { amount: 1000, unit: "L" }, deliverBy: day() }));
+  // Was open on main (Sat 14 Nov): asked for 1,000 L of the 10 L box (600 L in stock), the intake offered
+  // "500 x JP-3010 + 50 x VA-1010" and the gate refused it (substitute_price: +25.6 % per litre against a 10 %
+  // tolerance). Closed on claude/agent-thread-2: every card goes through the gate's own preview first.
+  it("a named product that cannot cover the amount", () => offered({ text: "1000 L of the 10 L box", item: { text: "lactose-free milk 10 L", category: "milk", productId: BOX }, quantity: { amount: 1000, unit: "L" }, deliverBy: day() }));
 
   it.each(needs)("%s", async (_name, need) => offered(need));
 

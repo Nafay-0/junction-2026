@@ -73,7 +73,11 @@ describe("option cards", () => {
     expect(split.labels).toEqual(["best_price", "lowest_carbon"]);
     expect(split.quoteLines).toEqual([{ productId: "T-BOX", quantity: 60 }, { productId: "U-BOX", quantity: 40, substituteFor: "T-BOX" }]);
     expect(split.totalCents).toBe(132200);
-    expect(split.cons).toContain("Partial stock: only 600 L of T-BOX available, so 400 L comes from U-BOX as a substitute.");
+    // Products by name, never by id, in words a buyer reads; the codes and parameters carry the same for a screen.
+    expect(split.cons.find((x) => x.startsWith("Partial stock"))).toMatch(/^Partial stock: only 600 L of .+ available, so 400 L comes from .+ as a substitute\.$/);
+    expect(split.cons.join(" ")).not.toMatch(/T-BOX|U-BOX/);
+    expect(split.reasons.find((r) => r.code === "partial_stock")).toMatchObject({ tone: "con", params: { have: 600, rest: 400, unit: "L" } });
+    expect(split.reasons.find((r) => r.code === "over_limit")).toMatchObject({ tone: "signoff", params: { limitCents: 100000 } });
     expect(split.signOff).toEqual(["Over the €1,000.00 the agent may spend alone: a person must sign off.", "Includes a substitute: the mandate requires a person to approve it."]);
     expect(split.match).toBe("full"); // nobody asked for one product: two like-for-like products deliver it all
     expect(cards.find((c) => c.labels.includes("most_reliable"))?.lines[0].productId).toBe("T-1L");

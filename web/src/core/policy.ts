@@ -57,7 +57,7 @@ export type OrderDraft = {
   /** The request the order is placed under. A quote buys only for the request it was issued for. */
   requestId?: string;
   /** What the request asked for (orders.ts PurchaseRequest.asked): any other product is a substitute of it. */
-  asked?: { productIds: string[]; category?: string; names?: Record<string, string> };
+  asked?: { productIds: string[]; category?: string; names?: Record<string, string>; /** Lines of the family asked for that are not the kind asked for (core/qualifiers.ts): stand-ins. */ standIns?: string[] };
 };
 
 /** A product the wholesaler holds (a recall notice, a drill): no order may buy it while the hold is in force. */
@@ -103,6 +103,12 @@ export type PolicyContext = {
   recentOrders?: RecentOrder[];
   /** Holds in force on the order's products (orders.ts ProductHolds). Absent: none. */
   holds?: ProductHold[];
+  /**
+   * The kitchen's own person chose this stand-in or substitute themselves, in a channel that identifies them (the
+   * signed-in store, a voice call from their signed-in phone; intake.ts InputChannel): their confirmation of it. A
+   * choice an agent relayed never sets it.
+   */
+  substitutionConfirmedBy?: string;
 };
 
 /**
@@ -228,8 +234,9 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
   const askedIds = draft.asked?.productIds ?? [];
   const askedCategory = draft.asked?.category;
   const askedName = (id: string) => (draft.asked?.names?.[id] ? `${draft.asked.names[id]} (${id})` : id);
+  const standIns = new Set(draft.asked?.standIns ?? []);
   const undeclared = q.lines.filter(
-    (l) => !l.substituteFor && ((askedIds.length > 0 && !askedIds.includes(l.productId)) || (askedCategory !== undefined && l.category !== askedCategory)),
+    (l) => !l.substituteFor && ((askedIds.length > 0 && !askedIds.includes(l.productId)) || (askedCategory !== undefined && l.category !== askedCategory) || standIns.has(l.productId)),
   );
   const subs = q.lines.filter((l) => l.substituteFor);
   const rule = mandate.substitution.rule;
@@ -249,7 +256,7 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
   }
   // Undeclared ones: not what was asked, with no original to compare to. Never decided by the agent alone.
   if (undeclared.length) {
-    const what = undeclared.map((l) => `${l.productId} is not what the request asked for (${askedIds.length ? askedIds.map(askedName).join(", ") : `category ${askedCategory}`})`).join("; ");
+    const what = undeclared.map((l) => `${l.productId} is not what the request asked for (${standIns.has(l.productId) ? `not the kind of ${askedCategory ?? "product"} the words asked for` : askedIds.length ? askedIds.map(askedName).join(", ") : `category ${askedCategory}`})`).join("; ");
     const strict = rule === "none" || rule === "same_attributes";
     const u = strict
       ? { outcome: "fail" as const, reason: `${what}, so it is a substitute, and the mandate allows ${rule === "none" ? "no substitutes" : "only like-for-like substitutes it can compare"}.` }
@@ -257,6 +264,9 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
     const worse = subRule.outcome === "fail" ? subRule : u;
     subRule = { outcome: worse.outcome, reason: subs.length && subRule.outcome !== "pass" && worse !== subRule ? `${u.reason} ${subRule.reason}` : worse === subRule ? `${subRule.reason} ${u.reason}` : u.reason, details: { undeclared: undeclared.map((l) => l.productId) } };
   }
+  // The kitchen's own identified person chose it: their confirmation, where the mandate leaves it to a person.
+  if (subRule.outcome === "escalate" && ctx.substitutionConfirmedBy)
+    subRule = { outcome: "pass", reason: `${subRule.reason} ${ctx.substitutionConfirmedBy} chose it themselves, signed in to the kitchen's store: that is a person's confirmation.`, details: { ...subRule.details, confirmedBy: ctx.substitutionConfirmedBy } };
   add("substitution_rule", subRule.outcome, subRule.reason, subRule.details);
   if (subs.length === 0) add("substitute_price", "pass", undeclared.length ? "No declared substitute to price; undeclared ones are judged by substitution_rule." : "No substitutes.");
   else {

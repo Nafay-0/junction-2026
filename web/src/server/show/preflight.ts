@@ -4,6 +4,7 @@ import { launcherStatus } from "../aiven/showcase/launcher";
 import { opsMode } from "../ops/access";
 import { suspensions } from "../ops/suspensions";
 import { serviceHealth } from "../health";
+import { dailyUsage } from "../limits";
 import type { Runtime } from "../runtime";
 import { sandboxLimits } from "../config";
 import { ShowAgent } from "./agent";
@@ -29,6 +30,22 @@ export async function preflight(rt: Runtime, opts: { sandboxId?: string; model?:
   const pub = process.env.DOCK_PUBLIC_URL?.trim();
   if (pub && pub.startsWith("https://")) add({ id: "url", label: "Address for phones", state: "ok", detail: `${pub}: the QR code and passkeys use it.` });
   else add({ id: "url", label: "Address for phones", state: opts.origin?.startsWith("https://") ? "warn" : "fail", detail: pub ? `${pub} is not https: phones cannot make passkeys there.` : `DOCK_PUBLIC_URL is not set; the QR code uses this page's address (${opts.origin ?? "unknown"}).`, fix: "Set DOCK_PUBLIC_URL to the public https address, or present from the deployed site." });
+
+  // The day's model cap (server/limits.ts): when it runs out, the agent's reading pauses for everyone until midnight UTC.
+  {
+    const m = dailyUsage().llm;
+    const usdLeft = Math.max(0, m.maxUsd - m.usd);
+    const callsLeft = Math.max(0, m.maxCalls - m.calls);
+    const out_ = !m.enabled || usdLeft <= 0 || callsLeft <= 0;
+    const low = usdLeft < m.maxUsd * 0.1 || callsLeft < m.maxCalls * 0.1;
+    add({
+      id: "model_cap",
+      label: "Model cap left today",
+      state: out_ ? "fail" : low ? "warn" : "ok",
+      detail: m.enabled ? `$${usdLeft.toFixed(2)} of $${m.maxUsd} and ${callsLeft.toLocaleString("en-US")} of ${m.maxCalls.toLocaleString("en-US")} calls left (resets at midnight UTC).` : "Model calls are switched off (DOCK_LLM=off).",
+      ...(out_ || low ? { fix: "Raise DOCK_LLM_DAILY_USD / DOCK_LLM_DAILY_CALLS; meanwhile the thread still orders without a model (repeat an order, the basket)." } : {}),
+    });
+  }
 
   // The catalogue and the partner's live service.
   const src = rt.catalogSource;

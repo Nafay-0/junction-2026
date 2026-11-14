@@ -125,6 +125,13 @@ export function reserveLlmCall(now = new Date(), opts: { spare?: boolean } = {})
   c.calls++;
 }
 
+/** Whether a model call would be allowed now, without counting one: the thread degrades before it fails. */
+export function llmRoom(now = new Date()): boolean {
+  if (env("DOCK_LLM") === "off") return false;
+  const c = counter("llm", now);
+  return c.calls < int(env("DOCK_LLM_DAILY_CALLS"), 500) && c.usd < int(env("DOCK_LLM_DAILY_USD"), 5);
+}
+
 /** After a model call: add what it cost (null = unknown price; counted as 1 cent). */
 export function recordLlmSpend(usd: number | null, now = new Date()): void {
   counter("llm", now).usd += usd ?? 0.01;

@@ -39,7 +39,7 @@ async function main() {
       const off = store.subscribe(kitchen, (e) => {
         const ms = Date.now() - t0;
         if (e.type === "step") console.log(`${String(ms).padStart(6)} step  ${e.step.status.padEnd(8)} ${e.step.label}${e.step.detail ? ` (${e.step.detail})` : ""}`);
-        else if (e.type === "card") console.log(`${String(ms).padStart(6)} card  ${e.card.type} ${JSON.stringify(e.card).slice(0, 260)}`);
+        else if (e.type === "card") console.log(`${String(ms).padStart(6)} card  ${e.card.type} ${JSON.stringify(e.card).slice(0, process.env.THREAD_SMOKE_FULL ? undefined : 260)}`);
         else if (e.type === "line") console.log(`${String(ms).padStart(6)} line  ${e.text}`);
         else if (e.type === "status") {
           console.log(`${String(ms).padStart(6)} status ${e.status} ${JSON.stringify(e.marks ?? {})}`);
@@ -50,7 +50,10 @@ async function main() {
         }
       });
     });
-    const reply = await submitTurn(kitchen, text.startsWith("{") ? JSON.parse(text) : { door: "typed", via: "typed", text });
+    // "@plan": tap the open plan card's one confirmation.
+    const plan = text === "@plan" ? store.cards(store.peek(kitchen)!).map((x) => x.card).filter((c) => c.type === "plan" && c.state === "planned").at(-1) : undefined;
+    const body = plan?.type === "plan" ? { door: "typed", via: "tap", action: { type: "plan_order", planId: plan.planId }, label: "Order this plan" } : text.startsWith("{") ? JSON.parse(text) : { door: "typed", via: "typed", text };
+    const reply = await submitTurn(kitchen, body);
     agentTurnId = reply.agentTurnId;
     console.log(`       accepted in ${Date.now() - t0} ms`);
     await finished;

@@ -1,10 +1,11 @@
 import { z } from "zod";
-import { MAX_LIVE_IDS_PER_CALL, scheduledOn, type MeteredCatalog, type Product } from "./catalog";
+import { MAX_LIVE_IDS_PER_CALL, scheduledOn, type LiveOffer, type MeteredCatalog, type Product } from "./catalog";
 import { facetsOf } from "./catalog/search";
 import { OPTIMISE_QUESTION_ID, answerSchema, clarify, hardConstraints, kindMismatch, optimiseQuestion, optionLabel, violation, type Answer, type ConstraintSource, type MemoryNote, type Question } from "./clarify";
 import { proposedIds, type AlternativesAnswer, type AlternativesSource } from "./alternatives";
 import { alsoAskedIn, alsoAskedNote, groupsIn, type AlsoAsked } from "./also-asked";
-import { baseAmount, checkNeed, type CheckContext, type Concern, type ConcernCode, type PendingOrderSummary } from "./concerns";
+import { qualifiersOf } from "./qualifiers";
+import { baseAmount, checkNeed, noticeNeed, type CheckContext, type Concern, type ConcernCode, type Noticed, type PendingOrderSummary } from "./concerns";
 import { DockError, parse } from "./errors";
 import {
   addDaysIso,
@@ -123,6 +124,10 @@ export type Intake = {
   excluded: Exclusion[];
   /** Plausibility warnings not asked of the buyer because a person signs the order off anyway: shown to that person. */
   signOffNotes?: string[];
+  /** Options the gate's own preview refuses: never offered, kept only to say why an obvious choice is missing. */
+  refusedOptions?: OptionCard[];
+  /** Noticed without asking (core/concerns.ts noticeNeed): an amount clearly outside the kitchen's range, a standing order that crept up. Said on the card and to whoever signs off. */
+  noticed?: Noticed[];
   /** Confirmations that matter but were only relayed by the agent: the order needs a person's sign-off (policy human_confirmation). */
   unverified?: UnverifiedConfirmation[];
   /** Items the buyer's own words name that this request does not cover (plain code, see also-asked.ts): said, never dropped. */
@@ -130,8 +135,8 @@ export type Intake = {
   /** The site within the kitchen the request is for, when a door knows it. */
   site?: string;
   /** One line per remembered thing this request used (a rule applied, a habit pre-selected, a check, a product left out). */
-  memoryUsed?: { itemId?: string; text: string }[];
-  chosen?: { optionId: string; labels: OptionLabel[]; by: string; at: string };
+  memoryUsed?: { itemId?: string; text: string; code?: string; params?: Record<string, string | number> }[];
+  chosen?: { optionId: string; labels: OptionLabel[]; by: string; at: string; /** The kitchen's own identified person chose it (their passkey-backed session, their voice on their phone): their confirmation of a stand-in. */ verified?: boolean };
   quote?: { quote: Quote; quoteToken: string; policyPreview: Decision };
   /** The buyer's words read a second time by an independent model (core/second-reading.ts): what it found. */
   secondReading?: SecondReadingRecord;
@@ -179,8 +184,13 @@ export type IntakeDeps = {
   intakes: IntakeRepository;
   ledger: Ledger;
   now: () => Date;
-  openRequest: (session: AgentSession, input: { text: string; neededBy?: string; deliverOn?: string; productIds?: string[]; category?: string }) => Promise<PurchaseRequest>;
+  openRequest: (session: AgentSession, input: { text: string; neededBy?: string; deliverOn?: string; productIds?: string[]; category?: string }, internal?: { askedWords?: string[] }) => Promise<PurchaseRequest>;
   requestQuote: (session: AgentSession, input: { requestId: string; lines: QuoteRequestLine[] }) => Promise<{ quote: Quote; quoteToken: string; policyPreview: Decision }>;
+  /**
+   * The gate's own preview of an option, before anyone taps it: the same rules on the card's lines at the prices the
+   * live lookup gave (no quote is issued, nothing is signed or logged as a quote). Undefined when it cannot be built.
+   */
+  previewDecision?: (session: AgentSession, requestId: string, lines: QuoteRequestLine[], offers: LiveOffer[]) => Promise<Decision | undefined>;
   /** The order flow's way to move a request's need-by date (validated and written to the ledger, see orders.ts). */
   changeNeededBy?: (session: AgentSession, requestId: string, input: { neededBy: string | null; by?: string; reason?: string }) => Promise<unknown>;
   spentThisWeek: (orgId: string) => Promise<number>;
@@ -190,7 +200,7 @@ export type IntakeDeps = {
    * One line per remembered item the intake used, for the request (the server wires the kitchen memory's usage lines,
    * which also mark each item's last use). Called after each step, outside the kitchen's lock.
    */
-  memoryUsage?: (orgId: string, intake: Pick<Intake, "rules" | "fromMemory" | "concerns">) => Promise<{ itemId?: string; text: string }[]>;
+  memoryUsage?: (orgId: string, intake: Pick<Intake, "rules" | "fromMemory" | "concerns">) => Promise<{ itemId?: string; text: string; code?: string; params?: Record<string, string | number> }[]>;
   /** Committed and held spend, with the orders holding money, for the budget's part of a "nothing fits" answer. */
   budgetUse?: (orgId: string) => Promise<{ spentCents: number; heldCents: number; held: { orderId: string; totalCents: number; expiresAt: string }[] }>;
   /** The order flow's live lookup: allowance, delivery date, signed claims and ledger in one place (see orders.ts). */
@@ -331,7 +341,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
     const profile = await profileOf(session);
     const products = await familyProducts(i.family, i.need);
     const ctx: CheckContext = { now: at, profile, family: i.family, candidates: products, suspendedPreferenceIds: i.suspendedPreferenceIds, pending: await pendingOrders(i), ...(i.site ? { site: i.site } : {}) };
-    Object.assign(i, { concerns: [], questions: [], openChoices: [], fromMemory: [], notAsked: [], rules: [], options: [], notes: [], excluded: [], preselected: undefined, signOffNotes: undefined, updatedAt: at.toISOString() });
+    Object.assign(i, { concerns: [], questions: [], openChoices: [], fromMemory: [], notAsked: [], rules: [], options: [], notes: [], excluded: [], preselected: undefined, signOffNotes: undefined, noticed: undefined, refusedOptions: undefined, updatedAt: at.toISOString() });
     if (i.unverified?.length) i.signOffNotes = i.unverified.map(unverifiedNote);
 
     // 1. Likely mistakes block everything else. Plausibility warnings a sign-off would show anyway wait (step 6).
@@ -344,6 +354,12 @@ export function createIntakeFlow(deps: IntakeDeps) {
     const blocking = open.filter((c) => !c.deferrable);
     const deferred = open.filter((c) => c.deferrable);
     if (blocking.length) return needsConfirmation(i, blocking, "before any price lookup");
+    // Not a likely slip: said, not asked. The buyer sees it on the card; a person signing the order off sees it too.
+    i.noticed = noticeNeed(i.need, ctx);
+    if (i.noticed.length) {
+      (i.signOffNotes ??= []).push(...i.noticed.map((n) => `Noticed, not asked: ${n.message}`));
+      log(i, "dock", `AimoPilot noticed, without asking: ${i.noticed.map((n) => n.message).join(" ")}`, { step: "noticed", noticed: i.noticed.map((n) => ({ code: n.code, params: n.params })) });
+    }
     i.amount = baseAmount(i.need, ctx) ?? (i.need.sameAsLastTime ? lastAmount(profile, i.family) : undefined);
     if (!i.amount) throw new DockError(422, "amount_unknown", "Could not work out the amount in litres, kilos or pieces.");
 
@@ -434,7 +450,12 @@ export function createIntakeFlow(deps: IntakeDeps) {
     const prefer = [reference?.productId, ...proposedIds(alternatives, 3), last && primaryLine(last).productId, usual?.kind === "product" ? usual.productId : undefined];
     const short = shortlist(narrowed, prefer, MAX_LIVE_IDS_PER_CALL, i.amount, span);
     // "On Monday": what is available earlier is delivered that day (orders.ts scheduledOn).
-    const on = (l: LiveLookupResult): LiveLookupResult => (i.need.deliverOn ? { ...l, offers: l.offers.map((o) => scheduledOn(o, i.need.deliverOn)), statuses: l.statuses.map((st) => (st.offer ? { ...st, offer: scheduledOn(st.offer, i.need.deliverOn) } : st)) } : l);
+    const offersSeen: LiveOffer[] = [];
+    const on = (raw: LiveLookupResult): LiveLookupResult => {
+      const l = i.need.deliverOn ? { ...raw, offers: raw.offers.map((o) => scheduledOn(o, i.need.deliverOn)), statuses: raw.statuses.map((st) => (st.offer ? { ...st, offer: scheduledOn(st.offer, i.need.deliverOn) } : st)) } : raw;
+      offersSeen.push(...l.offers, ...l.statuses.map((st) => st.offer).filter((o): o is LiveOffer => !!o));
+      return l;
+    };
     const live = on(await deps.liveLookup(session, i.requestId, short.map((p) => p.id), i.need.deliverBy, "AimoPilot checked live price and availability for the shortlist"));
     const goalForRank = goal.optimise && goal.optimise !== "no_preference" ? goal.optimise : undefined;
     const options = (priced: Product[], l: Pick<LiveLookupResult, "offers" | "statuses">) => buildOptions({
@@ -490,6 +511,31 @@ export function createIntakeFlow(deps: IntakeDeps) {
     i.options = result.cards;
     // A confirmation that matters came only as the agent's word: every card says a named person will sign it.
     if (i.unverified?.length) for (const card of i.options) card.signOff.push(`The agent relayed a confirmation nobody verified (${i.unverified.map((u) => u.code).join(", ")}): a person must sign this order off.`);
+    // Every card through the gate's own preview: what will happen when it is tapped. A card the gate would refuse is
+    // never offered as a choice; it stays, last and marked, only to say why the obvious choice is missing.
+    if (deps.previewDecision) {
+      await intakes.save(i); // the preview reads what the intake knows (an unverified confirmation)
+      for (const card of i.options) {
+        const d = await deps.previewDecision(session, i.requestId, quoteLinesOf(card), offersSeen).catch(() => undefined);
+        if (!d) continue;
+        const deciding = d.rules.find((r) => r.outcome === "fail") ?? d.rules.find((r) => r.outcome === "escalate");
+        card.gate = {
+          outcome: d.outcome,
+          ...(deciding ? { rule: deciding.rule } : {}),
+          ...(d.outcome === "needs_human_approval" ? { approver: { name: d.approver.name, role: d.approver.role } } : {}),
+          reasons: d.reasons,
+          escalated: d.rules.filter((r) => r.outcome === "escalate").map((r) => r.rule),
+        };
+      }
+      const refused = i.options.filter((o) => o.gate?.outcome === "reject");
+      if (refused.length) {
+        // Not offered: kept apart, so a screen can say why the obvious choice is missing.
+        i.options = i.options.filter((o) => o.gate?.outcome !== "reject");
+        i.refusedOptions = refused;
+        log(i, "dock", `The gate's preview refuses ${refused.map((o) => `${o.optionId} (${o.gate!.rule})`).join(", ")}: not offered as a choice.`, { step: "preview", refused: refused.map((o) => ({ optionId: o.optionId, rule: o.gate!.rule, reasons: o.gate!.reasons })) });
+        if (i.options.length === 0) return noOptions(i, refused[0].gate!.reasons.join(" "));
+      }
+    }
 
     // 5. Plausibility warnings: if every option goes to a person for sign-off anyway, that person sees the warning
     //    with the order; the buyer is not asked twice. Otherwise ask now, before anything is chosen.
@@ -525,7 +571,8 @@ export function createIntakeFlow(deps: IntakeDeps) {
     }
     // The agent never picks, nor pre-selects, a product the kitchen turned down before: that is the buyer's call.
     const candidatePick = goalForRank ? preselect(i.options, goalForRank, goal.within) : undefined;
-    const pick = candidatePick && i.options.find((o) => o.optionId === candidatePick.optionId)?.lines.some((l) => declined.has(l.productId)) ? undefined : candidatePick;
+    const pickedCard = candidatePick && i.options.find((o) => o.optionId === candidatePick.optionId);
+    const pick = pickedCard && (pickedCard.lines.some((l) => declined.has(l.productId)) || pickedCard.gate?.outcome === "reject") ? undefined : candidatePick;
     if (pick && goal.source) i.preselected = { ...pick, source: goal.source as NonNullable<Intake["preselected"]>["source"] };
     const picked = i.preselected && i.options.find((o) => o.optionId === i.preselected!.optionId);
     log(i, "dock", `AimoPilot offered ${i.options.length} option${i.options.length > 1 ? "s" : ""} for ${formatAmount(i.amount.amount, i.amount.unit)} of ${i.family} (${i.options.every((o) => o.match === "full") ? "all full matches, ranked" : "none meets the whole request; each says what it gives up"})${i.preselected ? `; pre-selected ${i.preselected.optionId} (${i.preselected.reason})` : ""}.`, {
@@ -597,8 +644,12 @@ export function createIntakeFlow(deps: IntakeDeps) {
       relayedBy: session.agentId,
     });
     await intakes.save(i); // the gate's preview reads what the intake knows (an unverified confirmation, say)
-    const quoted = await deps.requestQuote(session, { requestId: i.requestId, lines: card.quoteLines });
-    i.chosen = { optionId: card.optionId, labels: card.labels, by: who, at };
+    // An alternative the product map proposed for the product the request is about is declared as its substitute,
+    // so the gate prices it against that product (substitute_price) and applies the mandate's substitution rule.
+    const lines = quoteLinesOf(card);
+    i.chosen = { optionId: card.optionId, labels: card.labels, by: who, at, ...(!byAgent && verified ? { verified: true } : {}) };
+    await intakes.save(i); // the gate's preview reads who chose it
+    const quoted = await deps.requestQuote(session, { requestId: i.requestId, lines });
     i.quote = quoted;
     i.state = "quoted";
     i.updatedAt = at;
@@ -625,7 +676,12 @@ export function createIntakeFlow(deps: IntakeDeps) {
       }
       // What was asked for, for the gate: the product the buyer named, and the family. Anything else ordered under
       // this request is a substitute of it, whatever the agent declares (policy substitution_rule).
-      const request = await deps.openRequest(session, { text: need.text ?? describeNeed(need), neededBy: need.deliverBy, ...(need.deliverOn ? { deliverOn: need.deliverOn } : {}), ...(need.item.productId ? { productIds: [need.item.productId] } : {}), ...(unmatched ? {} : { category: family }) });
+      // And the words that say which kind of product within the family ("oat" drink): the gate holds a line of the
+      // family that does not carry them as a stand-in, judged by the substitution rule (core/qualifiers.ts).
+      // Not for a repeat or a named product: the product itself is the reference there (the substitution rule names it).
+      const kind = unmatched || need.item.productId || need.sameAsLastTime ? undefined : await qualifiersOf(catalog, family, need.item.text).catch(() => undefined);
+      const askedWords = kind?.words.map((w) => w.word) ?? [];
+      const request = await deps.openRequest(session, { text: need.text ?? describeNeed(need), neededBy: need.deliverBy, ...(need.deliverOn ? { deliverOn: need.deliverOn } : {}), ...(need.item.productId ? { productIds: [need.item.productId] } : {}), ...(unmatched ? {} : { category: family }) }, askedWords.length ? { askedWords } : {});
       const at = now().toISOString();
       const i: Intake = {
         requestId: request.requestId,
@@ -794,6 +850,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
       expectState(i, ["options_ready"], "choose an option");
       const card = i.options.find((o) => o.optionId === optionId);
       if (!card) throw new DockError(404, "option_not_found", `No option ${optionId}; choose one of ${i.options.map((o) => o.optionId).join(", ")}.`);
+      if (card.gate?.outcome === "reject") throw new DockError(422, "option_refused", `The gate would refuse ${optionId}: ${card.gate.reasons.join(" ")}`, card.gate.rule, { optionId });
       if (card.givesUp.some((g) => g.part === "amount")) {
         // Taking the part that fits now is the buyer changing the amount of this request; the rest is said, not lost.
         const before = describeNeed(i.need);
@@ -816,6 +873,16 @@ export function createIntakeFlow(deps: IntakeDeps) {
       return kitchenView(await profileOf(session));
     },
   };
+}
+
+/**
+ * The lines a card is quoted with. An alternative the product map proposed for the product the request is about is
+ * declared as its substitute, so the gate prices it against that product (substitute_price) and applies the
+ * mandate's substitution rule.
+ */
+function quoteLinesOf(card: OptionCard): QuoteRequestLine[] {
+  const alt = card.alternative?.for;
+  return alt ? card.quoteLines.map((l, n) => (n === 0 && !l.substituteFor && l.productId !== alt ? { ...l, substituteFor: alt } : l)) : card.quoteLines;
 }
 
 function howText(via: HumanVia): string {
@@ -974,6 +1041,8 @@ export function view(i: Intake) {
     alsoAsked: i.alsoAsked ?? [],
     memoryUsed: i.memoryUsed ?? [],
     signOffNotes: i.signOffNotes ?? [],
+    noticed: i.noticed ?? [],
+    refusedOptions: i.refusedOptions ?? [],
     acknowledgements: i.acknowledgements,
     chosen: i.chosen,
     quote: i.quote,

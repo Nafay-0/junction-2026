@@ -35,7 +35,7 @@ export function understoodCard(input: {
     ...((n as { deliverOn?: string }).deliverOn ? { deliverOn: (n as { deliverOn?: string }).deliverOn } : {}),
     claims: [...new Set([...n.requiredClaims, ...n.item.attributes])],
     allergens: n.forbiddenAllergens,
-    ...(n.optimise && n.optimise !== "no_preference" ? { optimise: n.optimise } : {}),
+    ...(n.optimise && n.optimise !== "no_preference" && n.optimise !== ("unstated" as string) ? { optimise: n.optimise } : {}),
     ...(input.basedOn ? { basedOn: input.basedOn } : {}),
     memoryUsed: input.memoryUsed ?? [],
     alsoAsked: input.alsoAsked ?? [],
@@ -48,7 +48,7 @@ export function anomalyCard(step: IntakeView): AnomalyCard | undefined {
     type: "anomaly",
     cardId: cardId("anomaly", step.requestId),
     requestId: step.requestId,
-    concerns: step.concerns.map((c) => ({ key: c.key, code: c.code, message: c.message, confirmable: c.confirmable, corrections: c.corrections.map((x) => ({ id: x.id, label: x.label })) })),
+    concerns: step.concerns.map((c) => ({ key: c.key, code: c.code, message: c.message, confirmable: c.confirmable, corrections: c.corrections.map((x) => ({ id: x.id, label: x.label })), ...(c.evidence ? { evidence: c.evidence } : {}) })),
   };
 }
 
@@ -80,6 +80,8 @@ export function optionView(o: OptionCard): OptionView {
     signOff: o.signOff,
     pros: o.pros,
     cons: o.cons,
+    reasons: o.reasons ?? [],
+    ...(o.gate ? { gate: { outcome: o.gate.outcome, ...(o.gate.rule ? { rule: o.gate.rule } : {}), ...(o.gate.approver ? { approver: o.gate.approver } : {}), reasons: o.gate.reasons } } : {}),
     ...(o.alternative ? { alternative: { for: o.alternative.for, tier: o.alternative.tier, reason: o.alternative.reason } } : {}),
   };
 }
@@ -87,14 +89,19 @@ export function optionView(o: OptionCard): OptionView {
 export function optionsCard(step: IntakeView): OptionsCard | undefined {
   if (!step.options.length) return undefined;
   const groups = new Map<string, number>();
-  for (const x of step.excluded) groups.set(x.reason, (groups.get(x.reason) ?? 0) + 1);
+  const codeOf = new Map<string, string>();
+  for (const x of step.excluded) {
+    groups.set(x.reason, (groups.get(x.reason) ?? 0) + 1);
+    if (x.code) codeOf.set(x.reason, x.code);
+  }
   return {
     type: "options",
     cardId: cardId("options", step.requestId),
     requestId: step.requestId,
-    options: step.options.map(optionView),
+    // The gate's preview refused these: shown only to explain a missing obvious choice, never as one to tap.
+    options: [...step.options, ...(step.refusedOptions ?? [])].map((o) => ({ ...optionView(o), category: step.family })),
     ...(step.preselected ? { preselected: { optionId: step.preselected.optionId, reason: step.preselected.reason } } : {}),
-    excluded: [...groups.entries()].map(([reason, count]) => ({ reason, count })).slice(0, 6),
+    excluded: [...groups.entries()].map(([reason, count]) => ({ reason, count, ...(codeOf.has(reason) ? { code: codeOf.get(reason) } : {}) })).slice(0, 12),
     notes: step.notes,
     ...(step.chosen ? { chosen: step.chosen.optionId } : {}),
   };
@@ -126,7 +133,7 @@ export function noOptionsCard(step: IntakeView): NoticeCard {
 
 /** The gate's word on an order: placed alone, waiting for a named person, refused with the rule, or how it ended. */
 export function gateCard(o: PublicOrder): GateCard {
-  const base = { type: "gate" as const, cardId: cardId("gate", o.requestId), requestId: o.requestId, orderId: o.orderId, reasons: o.decision.reasons };
+  const base = { type: "gate" as const, cardId: cardId("gate", o.requestId), requestId: o.requestId, orderId: o.orderId, reasons: o.decision.reasons, rules: o.decision.rules.map((r) => ({ rule: r.rule, outcome: r.outcome, ...(r.details ? { details: r.details } : {}) })) };
   const a = o.approval;
   const approver = a ? { name: a.approver.name, role: a.approver.role } : o.decision.outcome === "needs_human_approval" ? { name: o.decision.approver.name, role: o.decision.approver.role } : undefined;
   const escalated = o.decision.rules.find((r) => r.outcome !== "pass" && r.outcome !== "fail");

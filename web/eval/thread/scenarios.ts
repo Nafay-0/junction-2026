@@ -417,7 +417,9 @@ const ALL: Scenario[] = [
     lang: "en",
     turns: [{ say: "160 litres of lactose-free milk for Thursday" }],
     goal: "flag",
-    expect: [understood({ amount: 160, unit: "L", deliverBy: THU }), concern(["quantity_unusual", "standing_order_range", "quantity_tenfold"])],
+    // Since the two-tier mistake check (14 Nov): an amount clearly outside the usual is noticed on the card without a
+    // question (amount_above_usual, standing_order_drift); only a likely slip is asked. Either counts as noticed.
+    expect: [understood({ amount: 160, unit: "L", deliverBy: THU }), concern(["quantity_unusual", "standing_order_range", "quantity_tenfold", "amount_above_usual", "standing_order_drift"])],
   },
   // --- follow-ups ---
   {
@@ -545,7 +547,9 @@ const ALL: Scenario[] = [
       without(/nut|almond|hazel|cashew/i, "nuts"),
       refusedWith(/nut|almond|allergen|pähkinä/i),
       noInventedMatch(/almond|manteli/i),
-      { name: "a substitute for what was asked is not committed without sign-off (Laakso: substitution needs approval)", run: (o) => ok(!o.orders.some((x) => x.status === "committed" && !x.approver), "the agent's substitute was committed with no person asked") },
+      // Since 14 Nov (item 9): a stand-in chosen by the kitchen's own signed-in person is their confirmation; an
+      // agent's or relayed choice goes to sign-off. Either way, never committed with no person behind it.
+      { name: "a substitute for what was asked is not committed without a person (sign-off, or the signed-in person's own choice)", run: (o) => ok(!o.orders.some((x) => x.status === "committed" && !x.approver && !(x as any).confirmedBy), "the agent's substitute was committed with no person asked") },
     ],
   },
   {

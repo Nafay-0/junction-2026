@@ -277,3 +277,29 @@ describe("several items in one message", () => {
     expect(splitItems("milk and cream")).toEqual([]);
   });
 });
+
+describe("when the day's model cap is reached", () => {
+  beforeEach(() => {
+    resetRuntime();
+    process.env.DOCK_MEMORY = "off";
+    process.env.DOCK_LLM = "off";
+  });
+  afterEach(() => {
+    delete process.env.DOCK_LLM;
+    delete process.env.DOCK_MEMORY;
+  });
+
+  it("says the reading is paused, and an earlier order is ordered again with one tap and no model", async () => {
+    const r = await turn("kaari", { door: "typed", via: "typed", text: "100 litres of lactose-free milk for Thursday" });
+    expect(r.cards.find((c) => c.type === "notice")).toMatchObject({ kind: "paused" });
+    const records = r.cards.find((c) => c.type === "records");
+    if (records?.type !== "records") throw new Error("no repeatable orders");
+    expect(records.repeatable).toBe(true);
+    const ref = records.rows.find((x) => x.ref)!.ref!;
+    const again = await turn("kaari", { door: "typed", via: "tap", action: { type: "repeat", ref }, label: "Order this again" });
+    expect(again.cards.some((c) => c.type === "understood")).toBe(true);
+    expect(again.cards.some((c) => c.type === "options" || c.type === "anomaly" || c.type === "question" || c.type === "gate" || c.type === "notice")).toBe(true);
+    const rt = await getRuntime();
+    expect(rt.dock.ledger.entries().some((e) => e.type === "agent" && (e.data as { event?: string }).event === "model_call")).toBe(false);
+  });
+});

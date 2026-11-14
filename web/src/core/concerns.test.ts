@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkDelivery, checkDuplicate, checkNeed, checkPreferences, checkQuantity, type CheckContext } from "./concerns";
+import { checkDelivery, checkDuplicate, checkNeed, checkPreferences, checkQuantity, noticeDrift, noticeNeed, noticeQuantity, type CheckContext } from "./concerns";
 import { NOW, P, kitchen, past, regularHistory, statedPref } from "./kitchen-fixtures";
 import type { KitchenProfile } from "./kitchen";
 import { NeedSchema, applyNeedPatch, type NeedInput } from "./need";
@@ -12,7 +12,7 @@ const L = (amount: number) => ({ quantity: { amount, unit: "L" as const } });
 describe("quantity against the kitchen's own pattern", () => {
   it("a site of the kitchen (a daycare unit) is compared with its own orders, never called too small against the whole kitchen", () => {
     const history = regularHistory(); // about 100 L a time for the kitchen
-    expect(checkQuantity(need(L(15)), ctx(kitchen(history))).map((c) => c.code)).not.toEqual([]); // the kitchen itself: 15 L is unusual
+    expect(noticeQuantity(need(L(15)), ctx(kitchen(history))).map((c) => c.code)).toEqual(["amount_below_usual"]); // the kitchen itself: 15 L is unusual
     expect(checkQuantity(need(L(15)), ctx(kitchen(history), { site: "Päiväkoti Satu" }))).toEqual([]); // the daycare's first order
     const daycare = [15, 15, 14, 16, 15].map((a, i) => ({ ...history[i], orderId: `ord_dc_${i}`, amount: a, site: "Päiväkoti Satu" }));
     expect(checkQuantity(need(L(150)), ctx(kitchen([...history, ...daycare]), { site: "Päiväkoti Satu" })).map((c) => c.code)).toEqual(["quantity_tenfold"]);
@@ -42,12 +42,29 @@ describe("quantity against the kitchen's own pattern", () => {
     expect(checkQuantity(need(L(400)), ctx(one))).toEqual([]); // 4x, but one order is not a pattern
   });
 
-  it("flags an amount three times the usual once there are three orders", () => {
-    const [c] = checkQuantity(need(L(400)), ctx());
-    expect(c).toMatchObject({ code: "quantity_unusual", confirmable: true });
-    expect(c.message).toBe("400 L is 4x your usual 100 L (median of your last 8 milk orders).");
-    expect(c.corrections[0].patch).toEqual({ quantity: { amount: 100, unit: "L" } });
-    expect(checkQuantity(need(L(30)), ctx())[0].code).toBe("quantity_unusual");
+  it("notes an amount clearly outside the usual on the card, and asks nothing", () => {
+    expect(checkQuantity(need(L(400)), ctx())).toEqual([]); // 4x is not a likely slip: not a question
+    const [n] = noticeQuantity(need(L(400)), ctx());
+    expect(n).toMatchObject({ code: "amount_above_usual", params: { ratio: 4, usual: 100, unit: "L", asked: 400 } });
+    expect(n.message).toBe("400 L is 4 times your usual 100 L (median of your last 8 milk orders).");
+    expect(noticeQuantity(need(L(250)), ctx())[0]).toMatchObject({ code: "amount_above_usual", params: { ratio: 2.5 } });
+    expect(noticeQuantity(need(L(160)), ctx())[0]).toMatchObject({ code: "amount_above_usual", params: { ratio: 1.6 } });
+    expect(noticeQuantity(need(L(30)), ctx())[0]).toMatchObject({ code: "amount_below_usual" });
+    for (const amount of [60, 100, 130]) expect(noticeQuantity(need(L(amount)), ctx())).toEqual([]);
+    // A likely slip is asked (quantity_tenfold), never also noted.
+    expect(noticeQuantity(need(L(1000)), ctx())).toEqual([]);
+    expect(checkQuantity(need(L(1000)), ctx())[0].code).toBe("quantity_tenfold");
+  });
+
+  it("notes a standing order that has crept up, when it is about to be ordered again", () => {
+    const creeping = kitchen([90, 95, 100, 120, 125, 130].map((n, i) => past(P.litre, n, 40 - i * 7)));
+    const [d] = noticeDrift(need(L(135)), ctx(creeping));
+    expect(d).toMatchObject({ code: "standing_order_drift", params: { from: 95, to: 135, unit: "L" } });
+    expect(d.message).toMatch(/^Your milk order has crept up from about 95 L to 135 L over \d+ weeks\.$/);
+    // Steady orders, or going back to the old level, say nothing.
+    expect(noticeDrift(need(L(100)), ctx())).toEqual([]);
+    expect(noticeDrift(need(L(95)), ctx(creeping))).toEqual([]);
+    expect(noticeNeed(need(L(135)), ctx(creeping)).map((n) => n.code)).toContain("standing_order_drift");
   });
 
   it("stays quiet inside the normal range", () => {

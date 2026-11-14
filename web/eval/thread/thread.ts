@@ -216,7 +216,8 @@ export async function runThread(base: string, sc: Scenario): Promise<RunResult> 
     const question = st.ofType("question").filter((c) => !c.answered && !answeredReq.has(c.requestId)).at(-1);
     const options = st.ofType("options").filter((c) => !c.chosen && !answeredReq.has(c.requestId)).at(-1);
     const price = st.ofType("price").filter((c) => !answeredReq.has(c.requestId)).at(-1);
-    return { anomaly, question, options, price };
+    const plan = st.ofType("plan").filter((c) => c.state === "planned" && c.canOrder).at(-1);
+    return { anomaly, question, options, price, plan };
   }
 
   async function toOptions(stopAtFlag: boolean) {
@@ -246,9 +247,10 @@ export async function runThread(base: string, sc: Scenario): Promise<RunResult> 
   if (sc.goal !== "answer") {
     await toOptions(sc.goal === "flag");
     for (let i = 0; i < 3 && sc.goal === "place" && last !== "refused"; i++) {
-      const { options, price, anomaly, question } = open();
+      const { options, price, anomaly, question, plan } = open();
       if (anomaly || question) break;
-      if (options) {
+      if (plan) last = await tap({ type: "plan_order", planId: plan.planId }, "order the plan");
+      else if (options) {
         const pick = options.preselected?.optionId ?? options.options[0]?.optionId;
         if (!pick) break;
         last = await tap({ type: "choose", requestId: options.requestId, optionId: pick }, `choose ${pick}`);
@@ -280,6 +282,8 @@ function collect(st: ThreadState, o: Outcome) {
         const r = { item: c.item, amount: c.amount?.amount, unit: c.amount?.unit, deliverBy: c.deliverBy ?? c.deliverOn, basedOn: c.basedOn?.requestId, alsoAsked: c.alsoAsked ?? [] };
         o.readings.push(r);
         o.understood ??= { ...r, attributes: c.claims ?? [], allergens: c.allergens ?? [] };
+        // Noticed without asking (the mistake check's quiet tier): counted as a flag, with no tap.
+        for (const n of c.notes ?? []) if (!o.concerns.some((x) => x.key === `noted:${n.code}`)) o.concerns.push({ code: n.code, message: `noticed ${JSON.stringify(n.params)}`, key: `noted:${n.code}` });
         if (c.requestId && !o.requests.includes(c.requestId)) o.requests.push(c.requestId);
         break;
       }
@@ -314,7 +318,7 @@ function collect(st: ThreadState, o: Outcome) {
       case "gate":
         if (c.outcome === "refused") o.refusals.push({ rule: c.rule, message: c.reasons.join(" ") });
         if ((c.outcome === "waiting" || c.outcome === "placed_alone") && c.orderId && !o.orders.some((x) => x.orderId === c.orderId))
-          o.orders.push({ orderId: c.orderId, status: c.outcome === "waiting" ? "pending_approval" : "committed", approver: c.approver?.name, rules: c.rule ? [{ rule: c.rule, outcome: "escalate" }] : [], reasons: c.reasons, totalCents: 0, lines: [] });
+          o.orders.push({ orderId: c.orderId, status: c.outcome === "waiting" ? "pending_approval" : "committed", approver: c.approver?.name, rules: c.rule ? [{ rule: c.rule, outcome: "escalate" }] : [], reasons: c.reasons, totalCents: 0, lines: [], ...((c.rules ?? []).some((r) => r.rule === "substitution_rule" && (r.details as { confirmedBy?: string } | undefined)?.confirmedBy) ? { confirmedBy: String((c.rules!.find((r) => r.rule === "substitution_rule")!.details as { confirmedBy: string }).confirmedBy) } : {}) } as any);
         for (const r of c.reasons) if (!o.notes.includes(r)) o.notes.push(r);
         break;
       case "order": {

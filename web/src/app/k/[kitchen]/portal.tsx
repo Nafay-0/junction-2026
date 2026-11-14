@@ -238,8 +238,9 @@ export function Portal({ kitchen, kitchens, account, children }: { kitchen: Kitc
   const send = useCallback(
     (p: Pending) => {
       const t = THREAD_PAGE_TEXT[lang];
-      const text = p.kind === "ask" ? p.text : t.repeatWords(requestLabel(p.request, lang));
-      void submit({ door: "typed", via: "typed", text, lang });
+      // A repeat needs no model: the earlier order is rebuilt by plain code on the server (a `repeat` action).
+      if (p.kind === "repeat") void submit({ door: "typed", via: "tap", action: { type: "repeat", ref: p.request.requestId ?? p.request.key }, label: t.repeatWords(requestLabel(p.request, lang)), lang });
+      else void submit({ door: "typed", via: "typed", text: p.text, lang });
       if (!onOrderPage) setPanelOpen(true);
     },
     [submit, lang, onOrderPage],

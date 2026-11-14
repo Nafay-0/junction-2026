@@ -4,7 +4,7 @@ import { Mic, PhoneOff, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useFormat, useText } from "../../_i18n/provider";
 import { buttonClass, useToast } from "../../_ui/kit";
-import { money, shortProduct } from "../../_ui/plain";
+import { money } from "../../_ui/plain";
 import {
   AgentTurn,
   AnomalyCard,
@@ -13,7 +13,6 @@ import {
   GateCard,
   MemoryCard,
   NoticeCard,
-  OptionsCard,
   OrderCard,
   PriceCard,
   QuestionCard,
@@ -24,13 +23,17 @@ import {
   VoiceStatus,
   type MicState,
   type VoiceState,
-  type ThreadOption,
   type UnderstoodItem,
 } from "../../_ui/thread";
-import type { AgentTurn as AgentTurnT, BuyerTurn as BuyerTurnT, Card, OptionsCard as OptionsCardT, Thread as ThreadT, ThreadAction, ThreadStep } from "@/server/thread/types";
+import type { AgentTurn as AgentTurnT, BuyerTurn as BuyerTurnT, Card, MemoryLine, Thread as ThreadT, ThreadAction, ThreadStep } from "@/server/thread/types";
 import { requestLabel, usePortal } from "./portal";
 import { nameIn } from "./shop";
 import { THREAD_PAGE_TEXT } from "./thread.text";
+import { WaitingGate } from "./thread-signoff";
+import { PlanCardView } from "./thread-plan";
+import { OptionsDecision } from "./thread-options";
+import { THREAD_WORDS } from "./thread-words.text";
+import { concernText, correctionLabel, fmtFor, gateReasons, memoryKey, memoryText, stepLabel } from "./thread-words";
 import { callOn, useVoiceMode } from "../../_channels/voice-mode";
 import { VOICE_MODE_TEXT } from "../../_channels/voice-mode.text";
 
@@ -67,12 +70,13 @@ export function ThreadLog({ className = "" }: { className?: string }) {
     endRef.current?.scrollIntoView({ block: "nearest" });
   }, [lastCards]);
   const gatedRequests = new Set(turns.flatMap((x) => (x.role === "agent" ? x.cards.flatMap((c) => (c.type === "gate" && c.requestId ? [c.requestId] : [])) : [])));
+  const memory = memoryOnce(t);
 
   return (
     <Thread label={tx.log} className={className}>
       {turns.length === 0 && api.pending.length === 0 && <Intro />}
       {turns.map((x) =>
-        x.role === "buyer" ? <Buyer key={x.turnId} turn={x} /> : <Agent key={x.turnId} turn={x} tap={tap} busy={api.posting} gated={gatedRequests} base={base} thread={t!} />,
+        x.role === "buyer" ? <Buyer key={x.turnId} turn={x} /> : <Agent key={x.turnId} turn={x} tap={tap} busy={api.posting} gated={gatedRequests} base={base} thread={t!} memory={memory} />,
       )}
       {api.pending.map((p) => (
         <PendingTurn key={p.turnId} turn={p} />
@@ -135,18 +139,45 @@ function PendingTurn({ turn }: { turn: BuyerTurnT }) {
   );
 }
 
-function stepsOf(steps: ThreadStep[]) {
-  return steps.map((s) => ({ key: s.stepId, text: s.label, state: s.status === "running" ? ("doing" as const) : s.status === "failed" ? ("failed" as const) : ("done" as const), detail: s.ms !== undefined && s.status !== "running" ? `${(s.ms / 1000).toFixed(1)} s` : undefined }));
+/**
+ * What memory used, said once in a thread: each remembered thing on the first card that used it, never again on a
+ * later card or turn (the understood card's lines, then the after-order memory card's).
+ */
+function memoryOnce(t: ThreadT | undefined): Map<string, (MemoryLine | string)[]> {
+  const seen = new Set<string>();
+  const out = new Map<string, (MemoryLine | string)[]>();
+  for (const x of t?.turns ?? []) {
+    if (x.role !== "agent") continue;
+    for (const c of x.cards) {
+      const lines: (MemoryLine | string)[] = c.type === "understood" ? (c.memory?.length ? c.memory : c.memoryUsed) : c.type === "memory" ? c.used : [];
+      const fresh = lines.filter((m) => {
+        const k = memoryKey(m);
+        const text = typeof m === "string" ? m : m.text;
+        if (seen.has(k) || seen.has(text)) return false;
+        seen.add(k);
+        seen.add(text);
+        return true;
+      });
+      out.set(c.cardId, fresh);
+    }
+  }
+  return out;
 }
 
-function Agent({ turn, tap, busy, gated, base, thread }: { turn: AgentTurnT; tap: Tap; busy: boolean; gated: Set<string>; base: string; thread: ThreadT }) {
-  const steps = stepsOf(turn.steps);
+function stepsOf(steps: ThreadStep[], label: (s: ThreadStep) => string) {
+  return steps.map((s) => ({ key: s.stepId, text: label(s), state: s.status === "running" ? ("doing" as const) : s.status === "failed" ? ("failed" as const) : ("done" as const), detail: s.ms !== undefined && s.status !== "running" ? `${(s.ms / 1000).toFixed(1)} s` : undefined }));
+}
+
+function Agent({ turn, tap, busy, gated, base, thread, memory }: { turn: AgentTurnT; tap: Tap; busy: boolean; gated: Set<string>; base: string; thread: ThreadT; memory: Map<string, (MemoryLine | string)[]> }) {
+  const w = useText(THREAD_WORDS);
+  const { lang } = useFormat();
+  const steps = stepsOf(turn.steps, (s) => stepLabel(s, w, lang));
   return (
     <AgentTurn text={turn.line} status={turn.status} pending={turn.status === "working" && turn.cards.length === 0} steps={steps.length ? <StepLines steps={steps} fold={turn.status !== "working"} /> : undefined}>
       {turn.cards.length > 0 && (
         <div className="flex flex-col gap-2.5">
           {turn.cards.map((c) => (
-            <CardView key={c.cardId} card={c} tap={tap} busy={busy} gated={gated} base={base} turn={turn} thread={thread} />
+            <CardView key={c.cardId} card={c} tap={tap} busy={busy} gated={gated} base={base} turn={turn} thread={thread} memory={memory.get(c.cardId) ?? []} />
           ))}
         </div>
       )}
@@ -156,16 +187,19 @@ function Agent({ turn, tap, busy, gated, base, thread }: { turn: AgentTurnT; tap
 
 // ---------- cards ----------
 
-function CardView({ card, tap, busy, gated, base, turn, thread }: { card: Card; tap: Tap; busy: boolean; gated: Set<string>; base: string; turn: AgentTurnT; thread: ThreadT }) {
+function CardView({ card, tap, busy, gated, base, turn, thread, memory }: { card: Card; tap: Tap; busy: boolean; gated: Set<string>; base: string; turn: AgentTurnT; thread: ThreadT; memory: (MemoryLine | string)[] }) {
   const tx = useText(THREAD_PAGE_TEXT);
+  const w = useText(THREAD_WORDS);
   const f = useFormat();
+  const wf = fmtFor(f.lang);
+  const memoryLines = memory.map((m) => memoryText(m, w, wf, f.lang)).filter((x): x is string => !!x);
   const btn = (kind: "go" | "secondary" | "quiet" | "safety" | "ghost-dark", label: string, action: ThreadAction) => (
     <button key={label} type="button" disabled={busy} className={buttonClass(kind, "sm")} onClick={() => tap(action, label)}>
       {label}
     </button>
   );
   const measure = (a: { amount: number; unit: string }) => f.measure(a.amount, a.unit);
-  const lineText = (l: { quantity: number; name: string }) => tx.packs(f.num(l.quantity), shortProduct(l.name));
+  const lineText = (l: { quantity: number; name: string }) => tx.packs(f.num(l.quantity), l.name);
 
   switch (card.type) {
     case "understood": {
@@ -175,31 +209,29 @@ function CardView({ card, tap, busy, gated, base, turn, thread }: { card: Card; 
       else if (card.deliverBy) items.push({ label: tx.field.deliverBy, value: f.day(card.deliverBy), from: card.basedOn?.fields.includes("deliverBy") ? "memory" : "said" });
       if (card.claims.length) items.push({ label: tx.field.claims, value: card.claims.map((c) => f.attr(c)).join(", ") });
       if (card.allergens.length) items.push({ label: tx.field.allergens, value: card.allergens.join(", ") });
-      if (card.optimise) items.push({ label: tx.field.goal, value: tx.goal[card.optimise] ?? card.optimise });
-      const based = card.basedOn ? (card.basedOn.label ? tx.basedOn(`“${card.basedOn.label}”`, card.basedOn.fields.join(", ")) : tx.basedOnPlain(card.basedOn.fields.join(", "))) : undefined;
-      return (
-        <>
-          <UnderstoodCard kind={tx.kind.understood} items={items} basedOn={based} alsoAsked={card.alsoAsked.length ? tx.alsoAsked(card.alsoAsked.join("; ")) : undefined} />
-          {card.memoryUsed.length > 0 && <MemoryCard kind={tx.kind.memory} items={card.memoryUsed.map((m, i) => ({ key: `${i}`, text: m }))} />}
-        </>
-      );
+      if (card.optimise && tx.goal[card.optimise]) items.push({ label: tx.field.goal, value: tx.goal[card.optimise] });
+      const fields = (xs: string[]) => xs.map((x) => tx.fieldWord[x] ?? x).join(", ");
+      const based = card.basedOn ? (card.basedOn.label ? tx.basedOn(`“${card.basedOn.label}”`, fields(card.basedOn.fields)) : tx.basedOnPlain(fields(card.basedOn.fields))) : undefined;
+      const notes = (card.notes ?? []).map((n) => w.note[n.code]?.(n.params, wf)).filter((x): x is string => !!x);
+      return <UnderstoodCard kind={tx.kind.understood} items={items} basedOn={based} alsoAsked={card.alsoAsked.length ? tx.alsoAsked(card.alsoAsked.join("; ")) : undefined} notes={notes} memory={memoryLines} />;
     }
     case "anomaly":
       return (
         <>
           {card.concerns.map((c) => {
-            const answered = card.answered ? (card.answered.choice === "confirm" ? tx.answeredConfirm : tx.answeredChoice(c.corrections.find((x) => x.id === card.answered!.choice)?.label ?? card.answered.choice)) : undefined;
+            const answeredWith = c.corrections.find((x) => x.id === card.answered?.choice);
+            const answered = card.answered ? (card.answered.choice === "confirm" ? tx.answeredConfirm : tx.answeredChoice(answeredWith ? correctionLabel(answeredWith, w, wf, f.lang) : card.answered.choice)) : undefined;
             return (
               <AnomalyCard
                 key={c.key}
                 kind={tx.kind.anomaly}
-                title={c.message}
+                title={concernText(c, w, wf, f.lang)}
                 reason={card.answered && !card.answered.verified && card.answered.choice === "confirm" ? tx.relayedNote : undefined}
                 answered={answered}
                 actions={
                   <>
                     {c.confirmable && btn("go", tx.confirm, { type: "concern", requestId: card.requestId, key: c.key, choice: "confirm" })}
-                    {c.corrections.map((x) => btn("secondary", x.label, { type: "concern", requestId: card.requestId, key: c.key, choice: x.id }))}
+                    {c.corrections.map((x) => btn("secondary", correctionLabel(x, w, wf, f.lang), { type: "concern", requestId: card.requestId, key: c.key, choice: x.id }))}
                   </>
                 }
               />
@@ -223,7 +255,7 @@ function CardView({ card, tap, busy, gated, base, turn, thread }: { card: Card; 
         </>
       );
     case "options":
-      return <Options card={card} tap={tap} busy={busy} />;
+      return <OptionsDecision card={card} tap={tap} busy={busy} />;
     case "price": {
       const placed = gated.has(card.requestId);
       return (
@@ -242,13 +274,16 @@ function CardView({ card, tap, busy, gated, base, turn, thread }: { card: Card; 
       const name = card.approver?.name ?? "";
       const g = tx.gate;
       const title = { waiting: g.waiting(name), approved: g.approved(name), refused: g.refused(f.ruleTitle(card.rule)), placed_alone: g.placed_alone, declined: g.declined, withdrawn: g.withdrawn, expired: g.expired }[card.outcome];
+      const reason = gateReasons(card.rules, card.reasons, w, wf, f.lang).join(" ") || undefined;
+      if (card.outcome === "waiting" && card.approvalId)
+        return <WaitingGate card={card} kind={tx.kind.gate} title={title} reason={reason} role={card.approver ? f.role(card.approver.role) : undefined} withdraw={card.orderId ? btn("ghost-dark", tx.withdraw, { type: "withdraw", orderId: card.orderId }) : undefined} />;
       return (
         <GateCard
           state={card.outcome}
           kind={tx.kind.gate}
           title={title}
-          reason={card.reasons.join(" ")}
-          approver={card.approver ? { name: card.approver.name, role: f.role(card.approver.role), where: tx.onPhone } : undefined}
+          reason={reason}
+          approver={card.approver ? { name: card.approver.name, role: f.role(card.approver.role), where: card.outcome === "waiting" ? tx.onPhone : undefined } : undefined}
           actions={card.outcome === "waiting" && card.orderId ? btn("ghost-dark", tx.withdraw, { type: "withdraw", orderId: card.orderId }) : undefined}
         />
       );
@@ -261,7 +296,7 @@ function CardView({ card, tap, busy, gated, base, turn, thread }: { card: Card; 
           <OrderCard
             kind={tx.kind.order}
             status={{ label: tx.status[card.status] ?? card.status, tone }}
-            lines={card.lines.map((l) => ({ name: shortProduct(l.name), qty: `× ${f.num(l.quantity)}`, price: l.unitPriceCents !== undefined ? money(l.unitPriceCents * l.quantity) : undefined }))}
+            lines={card.lines.map((l) => ({ name: l.name, qty: `× ${f.num(l.quantity)}`, price: l.unitPriceCents !== undefined ? money(l.unitPriceCents * l.quantity) : undefined }))}
             total={money(card.totalCents)}
             totalLabel={tx.total}
             delivery={`${card.deliveryDate ? tx.deliver(f.day(card.deliveryDate)) : ""} ${who}`.trim()}
@@ -281,7 +316,7 @@ function CardView({ card, tap, busy, gated, base, turn, thread }: { card: Card; 
     case "memory":
       return (
         <>
-          {card.used.length > 0 && <MemoryCard kind={tx.kind.memory} items={card.used.map((u, i) => ({ key: `u${i}`, text: u }))} />}
+          {memoryLines.length > 0 && <MemoryCard kind={tx.kind.memory} items={memoryLines.map((u, i) => ({ key: `u${i}`, text: u }))} />}
           {card.proposals.length > 0 && (
             <MemoryCard
               kind={tx.kind.memoryAfter}
@@ -305,16 +340,49 @@ function CardView({ card, tap, busy, gated, base, turn, thread }: { card: Card; 
             kind={tx.kind.records}
             rows={card.rows.length ? card.rows.map((r) => ({ label: r.label, value: r.totalCents !== undefined ? money(r.totalCents) : undefined, sub: [r.date ? f.day(r.date) : "", r.detail ? (tx.status[r.detail] ?? r.detail) : ""].filter(Boolean).join(" · ") })) : [{ label: tx.noRecords }]}
           />
-          {card.repeat && <RepeatButton label={card.repeat.label} />}
+          {card.repeat && !card.repeatable && (
+            <p className="px-1">
+              <RepeatButton refId={card.repeat.ref} label={card.repeat.label} />
+            </p>
+          )}
+          {card.repeatable && (
+            <ul className="space-y-1.5 px-1">
+              {card.rows.filter((r) => r.ref).map((r) => (
+                <li key={r.ref}>
+                  <RepeatButton refId={r.ref!} label={r.label} wide />
+                </li>
+              ))}
+            </ul>
+          )}
         </>
       );
-    case "notice":
+    case "plan":
+      return <PlanCardView card={card} busy={busy} tap={tap} />;
+    case "notice": {
+      const missing = (card.missing ?? []).map((m) => (/what to buy/.test(m) ? w.notice.missingItem : w.notice.missingAmount));
+      const body =
+        f.lang === "en"
+          ? card.message
+          : card.kind === "incomplete"
+            ? w.notice.incomplete(missing.length ? missing : [w.notice.missingAmount])
+            : card.kind === "not_purchase"
+              ? w.notice.not_purchase
+              : card.kind === "unavailable"
+                ? w.notice.unavailable
+                : card.kind === "paused"
+                  ? w.notice.paused
+                : card.kind === "not_found"
+                  ? w.notice.not_found
+                  : card.kind === "error"
+                    ? w.notice.error
+                    : "";
       return (
         <NoticeCard kind={tx.kind.notice} title={tx.notice[card.kind] ?? tx.kind.notice} tone={card.kind === "suspended" ? "gate" : "plain"} actions={card.retry ? btn("secondary", tx.retry, { type: "retry", turnId: turn.turnId }) : undefined}>
-          {card.message}
-          {card.rule ? ` (${f.ruleTitle(card.rule)})` : ""}
+          {body}
+          {card.rule ? `${body ? " " : ""}(${f.ruleTitle(card.rule)})` : ""}
         </NoticeCard>
       );
+    }
   }
 }
 
@@ -323,44 +391,14 @@ function turnClosedFor(thread: ThreadT, requestId: string): boolean {
   return thread.turns.some((x) => x.role === "agent" && x.cards.some((c) => c.type === "gate" && c.requestId === requestId));
 }
 
-function RepeatButton({ label }: { label: string }) {
+/** Order an earlier order again: a `repeat` tap, rebuilt by plain code on the server (no model, the same gate). */
+function RepeatButton({ refId, label, wide = false }: { refId: string; label: string; wide?: boolean }) {
   const { thread } = usePortal();
   const tx = useText(THREAD_PAGE_TEXT);
   return (
-    <p className="px-1">
-      <button type="button" disabled={thread.posting} className={buttonClass("quiet", "sm")} onClick={() => void thread.submit({ door: "typed", via: "typed", text: tx.repeatWords(`“${shortProduct(label)}”`) })}>
-        {tx.repeat}
-      </button>
-    </p>
-  );
-}
-
-function Options({ card, tap, busy }: { card: OptionsCardT; tap: Tap; busy: boolean }) {
-  const tx = useText(THREAD_PAGE_TEXT);
-  const f = useFormat();
-  const options: ThreadOption[] = card.options.map((o) => ({
-    id: o.optionId,
-    rank: o.rank === "best" || o.rank === "better" ? o.rank : "good",
-    name: shortProduct(o.title),
-    detail: o.lines.map((l) => tx.packs(f.num(l.quantity), shortProduct(l.name))).join(" + "),
-    price: money(o.totalCents),
-    per: f.measure(o.delivered.amount, o.delivered.unit),
-    delivery: [tx.deliver(f.day(o.deliveryDate)), o.orderBy ? tx.orderBy(f.clock(o.orderBy)) : "", o.stockConfirmed ? "" : tx.stockUnknown].filter(Boolean).join(", "),
-    keeps: o.pros,
-    givesUp: [...o.givesUp, ...o.cons],
-    preselected: card.preselected?.optionId === o.optionId ? tx.preselected(card.preselected.reason) : undefined,
-    signOff: o.signOff.length ? o.signOff.join(" ") : undefined,
-  }));
-  const left = card.excluded.map((x) => tx.left(x.count, x.reason)).join(" · ");
-  const note = [left, ...card.notes].filter(Boolean).join(" ");
-  return (
-    <OptionsCard
-      kind={tx.kind.options}
-      options={options}
-      chosen={card.chosen}
-      note={note || undefined}
-      onChoose={busy || card.chosen ? undefined : (id) => tap({ type: "choose", requestId: card.requestId, optionId: id }, `${shortProduct(card.options.find((o) => o.optionId === id)?.title ?? id)}`)}
-    />
+    <button type="button" disabled={thread.posting} className={`${buttonClass("quiet", "sm")}${wide ? " w-full justify-start text-left" : ""}`} onClick={() => void thread.submit({ door: "typed", via: "tap", action: { type: "repeat", ref: refId }, label: tx.repeatWords(`“${label}”`) })}>
+      {wide ? `${tx.repeat}: ${label}` : tx.repeat}
+    </button>
   );
 }
 
@@ -483,7 +521,7 @@ export function ThreadComposer({ id = "need", size = "md", standalone = false, p
   const words = (raw: string) => {
     const text = raw.trim();
     if (agent.followUp) return tx.changeWords(requestLabel(agent.followUp, lang), text);
-    if (agent.product) return tx.productWords(shortProduct(lang === "en" ? (agent.product.names?.en ?? agent.product.name) : nameIn(agent.product, lang)), text);
+    if (agent.product) return tx.productWords((lang === "en" ? (agent.product.names?.en ?? agent.product.name) : nameIn(agent.product, lang)), text);
     return text;
   };
   const send = async (raw: string, door: "typed" | "voice" = "typed") => {
@@ -571,7 +609,7 @@ export function ThreadComposer({ id = "need", size = "md", standalone = false, p
           {agent.product && (
             <span className={chip}>
               <span className="shrink-0 font-semibold text-lavender-deep">{tx.product}</span>
-              <span className="truncate">{shortProduct(lang === "en" ? (agent.product.names?.en ?? agent.product.name) : nameIn(agent.product, lang))}</span>
+              <span className="truncate">{(lang === "en" ? (agent.product.names?.en ?? agent.product.name) : nameIn(agent.product, lang))}</span>
               <button type="button" className={drop} aria-label={tx.removeProduct} onClick={() => shared.setProduct(undefined)}>
                 <X aria-hidden size={15} />
               </button>
