@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TraceStep } from "@/server/ops/trace";
 import type { TraceView } from "@/server/ops/views";
-import { Kbd } from "../../../../_ui/kit";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsDownUp, ChevronsUpDown, Circle, CircleX, FileCheck2, History, ListChecks, Lock, MessageCircleQuestion, MessageCircleReply, MessageSquareQuote, MousePointerClick, Pause, Play, Radio, ScanText, Search, ShieldCheck, SkipBack, SkipForward, SlidersHorizontal, Smartphone, type LucideIcon } from "lucide-react";
+import { Avatar, Card, Kbd, buttonClass } from "../../../../_ui/kit";
+import { Target } from "../../../../_ui/target";
 import { ChainCheck } from "../../../_ui/chain";
 import { fi, span, stamp, when, whenSeconds } from "../../../_ui/format";
-import { Button, Details, Empty, KV, Licence, LoadError, Loading, Panel, ViaTag, useOps } from "../../../_ui/kit";
+import { Button, Details, Empty, KV, Licence, LoadError, Loading, ViaTag, useOps } from "../../../_ui/kit";
 import { Funnel, Stamp } from "../../../_ui/parts";
 import type { ChainResult } from "../../../_ui/verify-client";
 import { StreamReplay } from "../../platform/_parts/stream-replay";
@@ -31,7 +33,7 @@ export function TraceScreen({ requestId }: { requestId: string }) {
         <Empty
           title={/not found|no request/i.test(live.error) ? "This request is not on this server" : "Could not read this request just now"}
           action={
-            <Link className="font-semibold text-petrol underline underline-offset-2" href="/ops">
+            <Link className={buttonClass("secondary", "sm")} href="/ops">
               Back to the live view
             </Link>
           }
@@ -165,47 +167,58 @@ function Trace({ t, error }: { t: TraceView; error?: string }) {
 
   return (
     <>
-      <header className="pb-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 text-[0.9rem] text-ink-soft">
-          <nav aria-label="Breadcrumb">
-            <Link href="/ops" className="font-semibold text-petrol underline underline-offset-2">
+      <header className="pb-2">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 text-[0.9rem]">
+          <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-ink-soft">
+            <Link href="/ops" className="font-medium text-petrol hover:underline">
               Live
-            </Link>{" "}
-            / Trace of one request
+            </Link>
+            <ChevronRight aria-hidden size={15} className="text-ink-faint" />
+            <span>Trace of one request</span>
           </nav>
-          <label className="flex items-center gap-2">
-            <span>Open another request</span>
-            <select
-              value={t.requestId}
-              onChange={(e) => router.push(`/ops/trace/${e.target.value}`)}
-              className="min-h-9 max-w-[46ch] border-2 border-line bg-paper px-2 text-[0.9rem] text-ink focus:border-petrol"
-            >
-              {t.others.map((o) => (
-                <option key={o.requestId} value={o.requestId}>
-                  {when(o.at)} {fi(o.label)}
-                </option>
-              ))}
-            </select>
+          <label className="flex min-w-0 max-w-full items-center gap-2.5">
+            <span className="hidden shrink-0 text-ink-soft sm:inline">Open another request</span>
+            <span className="relative min-w-0 flex-1">
+              <select value={t.requestId} onChange={(e) => router.push(`/ops/trace/${e.target.value}`)} aria-label="Open another request" className="field !min-h-10 max-w-[44ch] appearance-none truncate pr-10 !text-[0.9rem]">
+                {t.others.map((o) => (
+                  <option key={o.requestId} value={o.requestId}>
+                    {when(o.at)} {fi(o.label)}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown aria-hidden size={17} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft" />
+            </span>
           </label>
         </div>
-        <div className="mt-4 flex flex-wrap items-start justify-between gap-x-8 gap-y-3">
-          <div className="min-w-0 max-w-[70ch]">
-            <h1 className={`display leading-[1.02] text-ink ${t.asked.length > 70 ? "text-[clamp(1.7rem,2.1vw,2.2rem)]" : "text-[clamp(2rem,2.8vw,2.9rem)]"}`}>“{fi(t.asked) || "A request with no words"}”</h1>
-            <p className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.95rem]">
-              <span className="font-semibold">{t.orgName}</span>
-              <span className="text-ink-soft">{t.agentLabel}</span>
-              <ViaTag via={t.via} />
-              {t.doorText && <span className="text-ink-soft">through {t.doorText}</span>}
-              {t.conversation && (
-                <Link className="text-petrol underline underline-offset-4" href={`/ops/conversation/${t.conversation}`}>
-                  the whole conversation
-                </Link>
-              )}
-              <Licence licence={t.licence} />
-              <span className="text-ink-soft tabular">
-                {stamp(t.startedAt)}, {n} step{n === 1 ? "" : "s"} in {span(Date.parse(t.endedAt) - t0)}
+        <div className="mt-6 flex flex-wrap items-start justify-between gap-x-10 gap-y-5">
+          <div className="min-w-0 max-w-[68ch] flex-1">
+            <h1 className={`display text-ink ${t.asked.length > 70 ? "text-[clamp(1.55rem,2.2vw,2.15rem)] leading-[1.1]" : "text-[clamp(1.9rem,2.8vw,2.75rem)] leading-[1.05]"}`}>“{fi(t.asked) || "A request with no words"}”</h1>
+            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3 text-[0.9rem]">
+              <span className="flex min-w-0 items-center gap-2.5">
+                <Avatar name={t.orgName} size={34} />
+                <span className="min-w-0 leading-tight">
+                  <span className="block font-semibold">{t.orgName}</span>
+                  <span className="block text-[0.84rem] text-ink-soft">{t.agentLabel}</span>
+                </span>
               </span>
-            </p>
+              <span aria-hidden className="hidden h-8 w-px bg-line sm:block" />
+              <span className="leading-tight">
+                <ViaTag via={t.via} />
+                {t.doorText && <span className="block text-[0.84rem] text-ink-soft">through {t.doorText}</span>}
+                {t.conversation && (
+                  <Link className="block text-[0.84rem] text-petrol hover:underline" href={`/ops/conversation/${t.conversation}`}>
+                    the whole conversation
+                  </Link>
+                )}
+              </span>
+              <span aria-hidden className="hidden h-8 w-px bg-line sm:block" />
+              <span className="leading-tight">
+                <Licence licence={t.licence} />
+                <span className="block text-[0.84rem] text-ink-soft tabular">
+                  {stamp(t.startedAt)}, {n} step{n === 1 ? "" : "s"} in {span(Date.parse(t.endedAt) - t0)}
+                </span>
+              </span>
+            </div>
           </div>
           <Stamp kind={t.outcome.kind} label={t.outcome.label} />
         </div>
@@ -214,11 +227,12 @@ function Trace({ t, error }: { t: TraceView; error?: string }) {
 
       <Transport steps={t.steps} shown={shown} playing={playing} onToggle={toggle} go={go} current={current} t0={t0} setPlaying={setPlaying} />
 
-      <div className="mt-5 grid gap-6 xl:grid-cols-[minmax(0,1fr)_330px]">
+      <div className="mt-6 grid gap-x-8 gap-y-10 xl:grid-cols-[minmax(0,1fr)_340px]">
         <section aria-label="The request, station by station">
-          <div className="mb-2 flex items-center justify-between gap-3 text-[0.88rem] text-ink-soft">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[0.88rem] text-ink-soft">
             <p>{replaying ? `Replaying: ${shown} of ${n} stations reached.` : "Every station, as it happened. The last one is open; click any to open it."}</p>
-            <button type="button" onClick={() => setAllOpen((v) => !v)} className="font-semibold text-petrol underline underline-offset-2">
+            <button type="button" onClick={() => setAllOpen((v) => !v)} className="inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 font-medium text-petrol hover:bg-petrol-soft">
+              {allOpen ? <ChevronsDownUp aria-hidden size={16} /> : <ChevronsUpDown aria-hidden size={16} />}
               {allOpen ? "Fold them" : "Open every station"}
             </button>
           </div>
@@ -250,33 +264,35 @@ function Trace({ t, error }: { t: TraceView; error?: string }) {
             })}
           </ol>
           {t.orderIds.length > 0 && (
-            <p className="mt-4 flex flex-wrap gap-4 pl-[3.75rem] text-[0.95rem]">
+            <div className="mt-2 flex flex-wrap gap-2.5 pl-[3rem] sm:pl-[3.75rem]">
               {t.orderIds.map((id, i) => (
-                <Link key={id} href={`/ops/audit/${id}`} className="font-semibold text-petrol underline underline-offset-2">
+                <Link key={id} href={`/ops/audit/${id}`} className={buttonClass("secondary", "sm")}>
+                  <FileCheck2 aria-hidden size={16} />
                   Open the audit record{t.orderIds.length > 1 ? ` of order ${i + 1}` : ""}
                 </Link>
               ))}
               {t.orderIds.map((id, i) => (
-                <Link key={`tm-${id}`} href={`/ops/time-machine?order=${encodeURIComponent(id)}`} className="font-semibold text-petrol underline underline-offset-2">
+                <Link key={`tm-${id}`} href={`/ops/time-machine?order=${encodeURIComponent(id)}`} className={buttonClass("secondary", "sm")}>
+                  <History aria-hidden size={16} />
                   The rules at this moment{t.orderIds.length > 1 ? `, order ${i + 1}` : ""}
                 </Link>
               ))}
-            </p>
+            </div>
           )}
         </section>
 
-        <aside className="space-y-4 xl:sticky xl:top-[9.5rem] xl:max-h-[calc(100dvh-10.5rem)] xl:self-start xl:overflow-y-auto">
-          <Panel rule className="px-4 py-4">
-            <h2 className="display text-[1.3rem]">What the live price service saw</h2>
-            <p className="mt-1 text-[0.88rem] leading-snug text-ink-soft">The partner&apos;s live price service is metered. AimoPilot narrows the catalogue in master data first and asks live prices only for a short list.</p>
-            <div className="mt-3">
-              <Funnel catalogue={t.catalogueSize} considered={!replaying || consideredReached ? t.considered : undefined} priced={replaying ? pricedSoFar : t.priced} />
+        <aside className="grid content-start gap-4 md:grid-cols-2 xl:sticky xl:top-[15.5rem] xl:max-h-[calc(100dvh-16.5rem)] xl:grid-cols-1 xl:self-start xl:overflow-y-auto">
+          <Card className="p-5">
+            <h2 className="display text-[1.2rem]">What the live price service saw</h2>
+            <p className="mt-1 text-[0.86rem] leading-snug text-ink-soft">The partner&apos;s live price service is metered. AimoPilot narrows the catalogue in master data first and asks live prices only for a short list.</p>
+            <div className="mt-4">
+              <Funnel catalogue={t.catalogueSize} considered={!replaying || consideredReached ? t.considered : undefined} priced={replaying ? pricedSoFar : t.priced} compact />
             </div>
-          </Panel>
-          <Panel rule className="px-4 py-4">
-            <h2 className="display text-[1.3rem]">The record</h2>
-            <p className="mt-1 text-[0.88rem] leading-snug text-ink-soft">Each station is one entry in the hash-chained ledger. Check the whole chain in this browser, without taking the server&apos;s word for it.</p>
-            <div className="mt-3">
+          </Card>
+          <Card className="p-5">
+            <h2 className="display text-[1.2rem]">The record</h2>
+            <p className="mt-1 text-[0.86rem] leading-snug text-ink-soft">Each station is one entry in the hash-chained ledger. Check the whole chain in this browser, without taking the server&apos;s word for it.</p>
+            <div className="mt-3.5">
               <ChainCheck compact onResult={(r) => setChain(r)} />
             </div>
             {chain && <p className="mt-2 text-[0.84rem] text-ink-soft">{chain.ok ? "Each station now says how it was checked." : "The stations after the break cannot be trusted."}</p>}
@@ -288,7 +304,7 @@ function Trace({ t, error }: { t: TraceView; error?: string }) {
               ))}
               <KV k="ledger head" v={t.chain.head ? `${t.chain.head.seq} ${t.chain.head.hash.slice(0, 24)}…` : "empty"} />
             </Details>
-          </Panel>
+          </Card>
           <StreamReplay requestId={t.requestId} currentSeq={current?.seq} />
         </aside>
       </div>
@@ -348,11 +364,12 @@ function Transport({
     setPlaying(false);
     f();
   };
+  const ctl = "inline-flex size-10 shrink-0 items-center justify-center rounded-full text-ink-soft transition-colors duration-150 hover:bg-surface hover:text-ink disabled:opacity-35 disabled:hover:bg-transparent pointer-coarse:size-11";
   return (
-    <div className="sticky top-0 z-20 -mx-4 bg-mist/95 px-4 pb-3 pt-2 backdrop-blur-sm sm:-mx-6 sm:px-6 xl:-mx-10 xl:px-10">
-      <div className="bg-paper px-4 pb-3 pt-3 shadow-[0_1px_0_var(--color-line)]">
+    <div className="sticky top-[3.3rem] z-10 -mx-4 bg-mist/90 px-4 py-2.5 backdrop-blur-md sm:-mx-6 sm:px-6 lg:top-14 xl:-mx-10 xl:px-10">
+      <div className="rounded-xl border border-line bg-paper px-4 pb-3 pt-3.5 shadow-xs sm:px-5">
         {/* The station strip: one segment per station, one cell per step. Click a cell to go there. */}
-        <div className="flex gap-1.5" role="group" aria-label="Stations">
+        <div className="flex gap-2 sm:gap-2.5" role="group" aria-label="Stations">
           {segs.map((g) => {
             const reached = shown > g.from;
             const here = shown - 1 >= g.from && shown - 1 <= g.to;
@@ -360,15 +377,15 @@ function Transport({
             const named = segs.length <= 10 || here || g.to - g.from >= 2 || g.tone !== "plain" || g.from === 0;
             return (
               <div key={`${g.station}-${g.from}`} className="min-w-0" style={{ flex: `${g.to - g.from + 1} 1 0%` }}>
-                <p className={`truncate text-[0.82rem] font-semibold leading-tight ${here ? "text-ink" : reached ? "text-petrol" : "text-ink-soft"} ${named ? "" : "invisible"}`} title={g.station}>
+                <p className={`hidden truncate text-[0.78rem] leading-tight sm:block ${here ? "font-semibold text-ink" : reached ? "font-medium text-petrol" : "text-ink-soft"} ${named ? "" : "invisible"}`} title={g.station}>
                   {g.station}
                 </p>
-                <div className="mt-1 flex gap-[3px]">
+                <div className="flex gap-[3px] sm:mt-0.5">
                   {steps.slice(g.from, g.to + 1).map((s, k) => {
                     const i = g.from + k;
                     const on = i < shown;
                     const cur = i === shown - 1;
-                    const fill = !on ? "bg-mist ring-1 ring-inset ring-line" : g.tone === "gate" && (s.tone === "safety" || s.phase === "refused") ? "bg-safety-ink" : g.tone === "person" && s.tone === "safety" ? "hazard-thin" : "bg-petrol";
+                    const fill = !on ? "bg-line" : g.tone === "gate" && (s.tone === "safety" || s.phase === "refused") ? "bg-safety-ink" : g.tone === "person" && s.tone === "safety" ? "hazard-thin" : s.phase === "committed" ? "bg-good" : "bg-petrol";
                     return (
                       <button
                         key={s.seq}
@@ -377,8 +394,10 @@ function Transport({
                         aria-label={`Station ${i + 1}: ${PHASE_WORD[s.phase]}`}
                         aria-current={cur ? "step" : undefined}
                         title={`${i + 1}. ${PHASE_WORD[s.phase]}: ${fi(s.title)}`}
-                        className={`h-4 min-w-[8px] flex-1 ${fill} ${cur ? "outline outline-2 outline-offset-2 outline-ink" : ""}`}
-                      />
+                        className="group flex min-w-[6px] flex-1 items-center rounded-full py-2"
+                      >
+                        <span className={`block w-full rounded-full transition-[height,box-shadow] duration-200 motion-reduce:transition-none ${fill} ${cur ? "h-3 shadow-[0_0_0_2px_var(--color-paper),0_0_0_4px_var(--color-ink)]" : "h-2 group-hover:h-2.5"}`} />
+                      </button>
                     );
                   })}
                 </div>
@@ -387,24 +406,24 @@ function Transport({
           })}
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
-          <Button kind="go" size="md" onClick={onToggle} className="min-w-[8.5rem]" ariaLabel={playing ? "Pause the replay" : "Play the replay"}>
-            {playing ? <PauseGlyph /> : <PlayGlyph />}
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-0.5 gap-y-1 sm:gap-x-1.5">
+          <Button kind="go" size="md" onClick={onToggle} className="mr-auto min-w-[7rem] sm:mr-1.5 sm:min-w-[8.5rem]" ariaLabel={playing ? "Pause the replay" : "Play the replay"}>
+            {playing ? <Pause aria-hidden size={16} fill="currentColor" strokeWidth={0} /> : <Play aria-hidden size={16} fill="currentColor" strokeWidth={0} />}
             {playing ? "Pause" : shown >= n ? "Replay" : shown === 0 ? "Play" : "Continue"}
           </Button>
-          <Button onClick={stop(() => go(0))} disabled={shown === 0} ariaLabel="Back to the start">
-            Start
-          </Button>
-          <Button onClick={stop(() => go(shown - 1))} disabled={shown === 0} ariaLabel="One station back">
-            Back
-          </Button>
-          <Button onClick={stop(() => go(shown + 1))} disabled={shown >= n} ariaLabel="Next station">
-            Next
-          </Button>
-          <Button onClick={stop(() => go(n))} disabled={shown >= n} ariaLabel="Show every station">
-            All
-          </Button>
-          <label className="flex min-w-[12rem] flex-1 items-center gap-3">
+          <button type="button" className={ctl} onClick={stop(() => go(0))} disabled={shown === 0} aria-label="Back to the start" title="Back to the start (Home)">
+            <SkipBack aria-hidden size={18} />
+          </button>
+          <button type="button" className={ctl} onClick={stop(() => go(shown - 1))} disabled={shown === 0} aria-label="One station back" title="One station back (←)">
+            <ChevronLeft aria-hidden size={21} />
+          </button>
+          <button type="button" className={ctl} onClick={stop(() => go(shown + 1))} disabled={shown >= n} aria-label="Next station" title="Next station (→)">
+            <ChevronRight aria-hidden size={21} />
+          </button>
+          <button type="button" className={ctl} onClick={stop(() => go(n))} disabled={shown >= n} aria-label="Show every station" title="Show every station (End)">
+            <SkipForward aria-hidden size={18} />
+          </button>
+          <label className="ml-1 hidden min-w-[12rem] flex-1 items-center gap-3 sm:flex">
             <span className="sr-only">Scrub through the stations</span>
             <input
               type="range"
@@ -417,16 +436,19 @@ function Transport({
                 go(Number(e.target.value));
               }}
               aria-valuetext={shown === 0 ? "Before the first station" : `Station ${shown} of ${n}: ${current ? PHASE_WORD[current.phase] : ""}`}
-              className="h-2 w-full cursor-pointer accent-[var(--color-petrol)]"
+              className="range"
+              style={{ "--fill": `${n ? (shown / n) * 100 : 0}%` } as React.CSSProperties}
             />
+            <span className="shrink-0 text-[0.82rem] font-medium text-ink-soft tabular">
+              {shown}/{n}
+            </span>
           </label>
-          <p className="hidden items-center gap-1.5 text-[0.8rem] text-ink-soft lg:flex">
+          <p className="hidden items-center gap-1.5 pl-3 text-[0.78rem] text-ink-soft xl:flex">
             <Kbd>Space</Kbd> play <Kbd>←</Kbd>
-            <Kbd>→</Kbd> step <Kbd>Home</Kbd>
-            <Kbd>End</Kbd>
+            <Kbd>→</Kbd> step
           </p>
         </div>
-        <p className="mt-2 min-h-[1.5em] truncate text-[0.98rem]" aria-live="polite">
+        <p className="mt-1.5 line-clamp-2 min-h-[1.5em] text-[0.94rem] leading-snug sm:truncate" aria-live="polite">
           {shown === 0 ? (
             <span className="text-ink-soft">
               Ready: {n} stations, about {total} seconds. Press Play, or click any station.
@@ -449,21 +471,6 @@ function Transport({
   );
 }
 
-function PlayGlyph() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
-      <path d="M2 1 L13 7 L2 13 Z" fill="currentColor" />
-    </svg>
-  );
-}
-function PauseGlyph() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
-      <path d="M2 1 H5.5 V13 H2 Z M8.5 1 H12 V13 H8.5 Z" fill="currentColor" />
-    </svg>
-  );
-}
-
 // ---------- one station on the lane ----------
 
 type StationProps = {
@@ -481,66 +488,88 @@ type StationProps = {
   ref?: React.Ref<HTMLLIElement>;
 };
 
+/**
+ * One station: a marker on the line and, when open, a card in the thread's anatomy (a mark and the kind, the title,
+ * the content, the ledger entry). The gate is the climax: when it stopped the order or sent it to a person, the card
+ * is the gate's slab, and its checks arrive one by one on a replay.
+ */
 function Station({ s, index, last, state, open, animate, elapsed, claims, checked, onToggle, onJump, ref }: StationProps) {
   const future = state === "future";
   const stopped = s.phase === "refused" || (s.phase === "gate" && s.checks?.some((c) => c.outcome === "fail"));
-  // A person must decide: yellow. Once they have decided (approved), the station is back to petrol.
-  const person = !stopped && s.tone === "safety" && !(s.phase === "signoff" && / approved it/.test(s.title));
-  const badge = future
-    ? "border-2 border-line bg-mist text-ink-soft"
+  // A person must decide: yellow. Once they have decided (approved), the station is calm again.
+  const approved = s.phase === "signoff" && / approved it/.test(s.title);
+  const person = !stopped && s.tone === "safety" && !approved;
+  const slab = stopped || (person && s.phase === "gate");
+  const done = s.phase === "committed" || approved;
+  const Icon = PHASE_ICON[s.phase] ?? Circle;
+  const marker = future
+    ? "border border-line-strong bg-paper text-ink-soft"
     : stopped
       ? "bg-safety-ink text-safety"
       : person
-        ? "bg-safety text-safety-ink ring-2 ring-inset ring-safety-ink"
-        : s.phase === "committed"
-          ? "bg-petrol text-paper"
+        ? "bg-safety text-safety-ink"
+        : done
+          ? "bg-good text-paper"
           : state === "current"
-            ? "bg-ink text-paper"
-            : "bg-petrol-deep text-paper";
+            ? "bg-petrol text-paper"
+            : "bg-petrol-soft text-petrol";
   return (
-    <li ref={ref} className="relative grid scroll-mt-44 grid-cols-[3rem_minmax(0,1fr)] gap-x-3">
+    <li ref={ref} className="relative grid scroll-mt-[17rem] grid-cols-[2.25rem_minmax(0,1fr)] gap-x-3 sm:grid-cols-[2.75rem_minmax(0,1fr)] sm:gap-x-4">
       <div className="relative flex justify-center">
-        {!last && <span aria-hidden className={`absolute bottom-0 top-9 w-[3px] ${future ? "bg-line" : "bg-petrol"}`} />}
-        <span className={`relative mt-2 flex size-9 items-center justify-center font-display text-[1.15rem] font-extrabold tabular ${badge}`}>
-          {index + 1}
+        {!last && <span aria-hidden className={`absolute bottom-0 top-10 w-0.5 rounded-full ${future || state === "current" ? "bg-line" : "bg-petrol/30"}`} />}
+        <span className={`relative mt-1.5 flex size-8 items-center justify-center rounded-full text-[0.84rem] font-semibold tabular transition-colors duration-200 sm:size-9 ${marker} ${state === "current" && !slab ? "ring-4 ring-petrol/15" : ""} ${state === "current" && slab ? "ring-4 ring-safety/35" : ""}`}>
+          {stopped && !future ? <Target size={18} tone="safety" /> : done && !future ? <Check aria-hidden size={17} strokeWidth={2.8} /> : index + 1}
+          {(stopped || done) && !future && <span className="sr-only">{index + 1}</span>}
         </span>
       </div>
-      <div className="min-w-0 pb-3 pt-1.5">
+      <div className="min-w-0 pb-4">
         {future ? (
-          <button type="button" onClick={onJump} className="flex min-h-9 w-full items-center gap-3 text-left text-[0.98rem] text-ink-soft hover:text-ink">
-            <span className="font-semibold">{PHASE_WORD[s.phase]}</span>
-            <span className="truncate text-[0.88rem]">not reached yet</span>
+          <button type="button" onClick={onJump} className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-ink-soft transition-colors hover:bg-paper hover:text-ink">
+            <span className="font-medium">{PHASE_WORD[s.phase]}</span>
+            <span className="truncate text-[0.86rem] text-ink-faint">not reached yet</span>
           </button>
         ) : !open ? (
-          <button type="button" onClick={onToggle} aria-expanded={false} className="flex min-h-9 w-full items-baseline gap-3 px-1 text-left hover:bg-paper">
-            <span className="shrink-0 font-semibold text-petrol">{PHASE_WORD[s.phase]}</span>
-            <span className="min-w-0 flex-1 truncate text-[0.98rem]">{summaryOf(s)}</span>
-            <span className="hidden shrink-0 text-[0.82rem] text-ink-soft tabular sm:inline">{whenSeconds(s.at)}</span>
+          <button type="button" onClick={onToggle} aria-expanded={false} className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left transition-colors hover:bg-paper">
+            <span className={`shrink-0 font-semibold ${slab ? "text-ink" : "text-petrol"}`}>{PHASE_WORD[s.phase]}</span>
+            <span className="min-w-0 flex-1 truncate text-[0.95rem] text-ink-soft">{summaryOf(s)}</span>
+            <span className="hidden shrink-0 text-[0.8rem] text-ink-soft tabular sm:inline">{whenSeconds(s.at)}</span>
+            <ChevronDown aria-hidden size={16} className="shrink-0 text-ink-faint" />
           </button>
         ) : (
-          <article className={`bg-paper ${state === "current" ? "outline outline-2 outline-ink" : ""} ${animate ? "lane-enter" : ""}`}>
-            <div aria-hidden className={stopped ? "hazard h-3" : person ? "hazard-thin h-1.5" : s.phase === "committed" ? "h-[5px] bg-petrol" : "h-[3px] bg-petrol"} />
-            <div className="px-5 pb-4 pt-3">
-              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                <p className="flex flex-wrap items-baseline gap-x-2 text-[0.85rem] text-ink-soft">
-                  <span className="font-semibold text-petrol">{PHASE_WORD[s.phase]}</span>
-                  <span>by {s.actor}</span>
-                  <span className="tabular">
-                    at {whenSeconds(s.at)}, +{span(elapsed)}
+          <article
+            className={`${slab ? "hazard-frame on-dark text-paper" : `overflow-hidden rounded-xl border bg-paper ${state === "current" ? "border-petrol/45 shadow-sm" : "border-line"}`} ${state === "current" && slab ? "shadow-lg" : ""} ${animate ? "lane-enter" : ""}`}
+          >
+            <header className={`flex items-center gap-2.5 px-4 sm:px-5 ${slab ? "pt-4" : "pt-3.5"}`}>
+              <span className={`flex size-7 shrink-0 items-center justify-center rounded-full ${slab ? "" : done ? "bg-good-soft text-good" : person ? "bg-safety-soft text-safety-ink" : "bg-petrol-soft text-petrol"}`}>
+                {slab ? <Target size={22} tone="safety" /> : <Icon aria-hidden size={15} strokeWidth={2.1} />}
+              </span>
+              <p className={`flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 text-[0.84rem] ${slab ? "text-paper/70" : "text-ink-soft"}`}>
+                <span className={`font-semibold ${slab ? "text-paper" : "text-ink"}`}>{PHASE_WORD[s.phase]}</span>
+                <span>by {s.actor}</span>
+                <span className="tabular sm:hidden">{whenSeconds(s.at)}</span>
+                {checked && (
+                  <span title="Checked in this browser" className={`inline-flex items-center gap-1 ${slab ? "text-lime" : "text-good"}`}>
+                    <ShieldCheck aria-hidden size={13} />
+                    {checked === "recomputed" ? "entry re-hashed in this browser" : "entry checked by link"}
                   </span>
-                  {checked && <span title="Checked in this browser">{checked === "recomputed" ? "entry re-hashed in this browser" : "entry checked by link"}</span>}
-                </p>
-                {state === "past" && (
-                  <button type="button" onClick={onToggle} className="text-[0.85rem] text-ink-soft underline underline-offset-2 hover:text-ink">
-                    Fold
-                  </button>
                 )}
-              </div>
-              <h3 className="display mt-1 text-[1.5rem] leading-[1.08]">{fi(s.title)}</h3>
-              <StationBody s={s} claims={claims} animate={animate} />
+              </p>
+              <span className={`hidden shrink-0 text-right text-[0.8rem] leading-tight tabular sm:block ${slab ? "text-paper/70" : "text-ink-soft"}`}>
+                {whenSeconds(s.at)}
+                <span className="block">+{span(elapsed)}</span>
+              </span>
+              {state === "past" && (
+                <button type="button" onClick={onToggle} aria-label="Fold this station" title="Fold" className={`-mr-2 flex size-9 shrink-0 items-center justify-center rounded-full ${slab ? "text-paper/70 hover:bg-paper/10 hover:text-paper" : "text-ink-soft hover:bg-surface hover:text-ink"}`}>
+                  <ChevronUp aria-hidden size={18} />
+                </button>
+              )}
+            </header>
+            <div className="px-4 pb-4 pt-2 sm:px-5 sm:pb-5">
+              <h3 className={`display text-[1.3rem] leading-[1.12] sm:text-[1.45rem] ${slab ? "text-safety" : ""}`}>{fi(s.title)}</h3>
+              <StationBody s={s} claims={claims} animate={animate} dark={slab} />
             </div>
-            <div className="border-t border-line/70 px-5 py-2">
-              <Details summary={`Ledger entry ${s.ledger.seq}, as written`}>
+            <div className={`border-t px-4 py-1.5 sm:px-5 ${slab ? "border-paper/12" : "border-line/70"}`}>
+              <Details summary={`Ledger entry ${s.ledger.seq}, as written`} dark={slab}>
                 <KV k="type" v={s.ledger.type} />
                 <KV k="actor" v={s.ledger.actor} />
                 <KV k="hash" v={s.ledger.hash} />
@@ -565,3 +594,22 @@ function Station({ s, index, last, state, open, animate, elapsed, claims, checke
     </li>
   );
 }
+
+/** A mark per kind of station, from the same line icons as the rest of the portal. */
+const PHASE_ICON: Partial<Record<TraceStep["phase"], LucideIcon>> = {
+  asked: MessageSquareQuote,
+  understood: ScanText,
+  checked: MessageCircleQuestion,
+  answered: MessageCircleReply,
+  searched: Search,
+  priced: Radio,
+  options: ListChecks,
+  chosen: MousePointerClick,
+  quoted: Lock,
+  gate: ShieldCheck,
+  signoff: Smartphone,
+  committed: FileCheck2,
+  declined: CircleX,
+  refused: CircleX,
+  control: SlidersHorizontal,
+};

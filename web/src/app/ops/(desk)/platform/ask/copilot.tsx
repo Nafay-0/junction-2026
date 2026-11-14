@@ -1,5 +1,7 @@
 "use client";
 
+import { buttonClass } from "../../../../_ui/kit";
+
 import { useEffect, useState } from "react";
 import type { McpStatus } from "@/server/aiven/showcase/aiven-mcp";
 import type { AnswerCard } from "@/server/aiven/showcase/copilot";
@@ -70,7 +72,7 @@ export function Copilot() {
             <label className="sr-only" htmlFor="copilot-q">
               Question
             </label>
-            <input id="copilot-q" value={q} onChange={(e) => setQ(e.target.value)} maxLength={500} placeholder="How many orders were refused in the last hour, and by which rule?" className="min-h-12 min-w-0 flex-1 border-2 border-line bg-paper px-3 text-[1.05rem] placeholder:text-ink-soft focus:border-petrol focus:outline-none" />
+            <input id="copilot-q" value={q} onChange={(e) => setQ(e.target.value)} maxLength={500} placeholder="How many orders were refused in the last hour, and by which rule?" className="field !min-h-12 min-w-0 flex-1 !rounded-full !px-5 !text-[1.02rem]" />
             <Button type="submit" kind="go" size="lg" disabled={busy}>
               {busy ? "Reading…" : "Ask the platform"}
             </Button>
@@ -84,13 +86,13 @@ export function Copilot() {
                   setQ(s);
                   void ask(s);
                 }}
-                className="border-2 border-line bg-paper px-2.5 py-1 text-left text-[0.88rem] hover:border-petrol"
+                className="rounded-full border border-line-strong bg-paper px-3.5 py-1.5 text-left text-[0.86rem] transition-colors hover:border-petrol hover:bg-petrol-soft"
               >
                 {s}
               </button>
             ))}
           </div>
-          {problem && <p role="alert" className="mt-2 border-l-[6px] border-petrol bg-paper px-3 py-2 text-[0.92rem]">{problem}</p>}
+          {problem && <p role="alert" className="mt-2 rounded-lg border border-bad/20 bg-bad-soft px-4 py-3 text-[0.92rem]">{problem}</p>}
           {pinned.length > 0 && (
             <section className="mt-5">
               <h2 className="display text-[1.5rem]">Pinned</h2>
@@ -108,19 +110,19 @@ export function Copilot() {
           </div>
         </div>
         <aside className="space-y-3">
-          <Panel rule className="px-4 py-4 text-[0.92rem] leading-snug">
+          <Panel className="p-5 text-[0.92rem] leading-snug">
             <h2 className="display text-[1.3rem]">Who answers</h2>
             <p className="mt-1.5 flex items-center justify-between gap-2">
               <b>Aiven MCP server</b> <Status ok={m ? (m.orgEnabled === false ? false : m.reachable) : null} label={!m ? "…" : m.orgEnabled === false ? "off" : m.reachable ? `on, ${m.tools} tools` : "not answering"} />
             </p>
             <p className="text-ink-soft">Service state, logs and metrics, with the read-only token. {m?.sql === false && "Its SQL tool needs a PG Editor permission the read-only token lacks, so SQL goes the direct way."}</p>
-            {m?.instruction && <p className="mt-1 border-l-[6px] border-ink bg-mist px-2 py-1 font-semibold">{m.instruction}</p>}
+            {m?.instruction && <p className="mt-1 rounded-md bg-surface px-3 py-2 font-semibold">{m.instruction}</p>}
             <p className="mt-2 flex items-center justify-between gap-2">
               <b>Direct read-only path</b> <Status ok={info.data ? info.data.direct : null} label={info.data?.direct ? "configured" : "not configured"} />
             </p>
             <p className="text-ink-soft">PostgreSQL as dock_copilot. The same limits on both paths.</p>
           </Panel>
-          <Panel rule className="px-4 py-4 text-[0.92rem] leading-snug">
+          <Panel className="p-5 text-[0.92rem] leading-snug">
             <h2 className="display text-[1.3rem]">Hard limits</h2>
             <ul className="mt-1 list-disc space-y-1 pl-4">
               <li>One SELECT at a time; writes, comments, catalogues and file or session functions are refused before anything is sent.</li>
@@ -141,14 +143,14 @@ export function Copilot() {
 
 function Card({ c, pinned, onPin, onAgain }: { c: AnswerCard; pinned: boolean; onPin: () => void; onAgain: () => void }) {
   return (
-    <Panel className={c.refused ? "shadow-[inset_8px_0_0_var(--color-safety-ink)]" : "border-t-[3px] border-petrol"}>
+    <Panel className={c.refused ? "!border-safety-ink/20" : ""}>
       <div className="flex flex-wrap items-start justify-between gap-2 px-4 pt-3">
         <p className="text-[0.92rem] text-ink-soft">&ldquo;{c.question}&rdquo;</p>
         <div className="flex gap-2">
-          <button type="button" onClick={onAgain} className="text-[0.88rem] text-petrol underline underline-offset-2">
+          <button type="button" onClick={onAgain} className={buttonClass("quiet", "sm", "!min-h-8 text-[0.88rem]")}>
             Ask again
           </button>
-          <button type="button" onClick={onPin} className="text-[0.88rem] font-semibold text-petrol underline underline-offset-2" aria-pressed={pinned}>
+          <button type="button" onClick={onPin} className={buttonClass("secondary", "sm")} aria-pressed={pinned}>
             {pinned ? "Unpin" : "Pin"}
           </button>
         </div>
@@ -165,7 +167,7 @@ function Card({ c, pinned, onPin, onAgain }: { c: AnswerCard; pinned: boolean; o
             {s.ms !== undefined ? `, ${s.ms} ms` : ""}
             {s.truncated ? ", cut at the row cap" : ""}
           </p>
-          <pre className="mt-1 overflow-x-auto whitespace-pre-wrap bg-mist px-3 py-2 font-mono text-[0.76rem] leading-snug">{s.query}</pre>
+          <pre className="mt-1.5 overflow-x-auto whitespace-pre-wrap rounded-md bg-surface px-3 py-2.5 font-mono text-[0.76rem] leading-snug">{s.query}</pre>
           {s.error ? <p className="mt-1 text-[0.84rem] font-semibold">{s.error}</p> : <div className="mt-1.5"><Rows columns={s.columns} rows={s.rows} /></div>}
         </div>
       ))}

@@ -10,6 +10,9 @@ import { pick } from "../_i18n/lang";
 import { requestLang } from "../_i18n/server";
 import { Wordmark } from "../_ui/wordmark";
 import { callLink } from "@/server/channels/call-links";
+import { calls, voiceLimits } from "@/server/channels/voice/calls";
+import { fallbackModel, voiceModel } from "@/server/channels/voice/live";
+import { dailyUsage } from "@/server/limits";
 import { getRuntime } from "@/server/runtime";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -47,6 +50,8 @@ async function Body({ searchParams }: PageProps<"/channels">) {
     .filter((e) => e.data.step === "door")
     .slice(-8)
     .reverse();
+  const voice = calls().usage(voiceLimits());
+  const budget = dailyUsage().llm;
   return (
     <LangProvider initial={lang}>
       <div className="mx-auto max-w-7xl space-y-6">
@@ -88,6 +93,13 @@ async function Body({ searchParams }: PageProps<"/channels">) {
             )}
           </section>
         </div>
+        <section className="rounded-xl border-2 border-ink bg-paper p-4 text-[0.98rem]">
+          <h2 className="font-display text-xl font-bold">{tx.voiceToday}</h2>
+          <p className="mt-1">{tx.voiceTodayLine(voice.callsToday, voice.liveNow, voice.usdToday.toFixed(3))}</p>
+          <p>{tx.voiceModelLine(voiceModel(), fallbackModel() ?? null)}</p>
+          <p>{tx.voiceBudgetLine(budget.usd.toFixed(3), budget.maxUsd, budget.calls, budget.maxCalls)}</p>
+          <p className="text-ink-soft">{tx.voiceCapsLine(voice.limits.perHour, voice.limits.perDay, voice.limits.perKitchenHour, voice.limits.callSeconds)}</p>
+        </section>
       </div>
     </LangProvider>
   );

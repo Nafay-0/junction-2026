@@ -4,8 +4,8 @@ import type { IntakeView } from "@/core/intake";
 import { describeNeed, formatAmount, NeedSchema, type NeedInput } from "@/core/need";
 import type { PublicOrder } from "@/core/orders";
 import { answer, asProblem, choose, getOrder, getStep, kitchenAgent, openNeed, place, readNeed, respond, type HeardWords, type KitchenAgent, type Via } from "../flow";
-import { orderForModel, stepForModel, type ForModel } from "../say";
-import { amountInWords, digitsIn, readBackReason, yesOrNo } from "../speech";
+import { orderForModel, spokenDate, stepForModel, type ForModel } from "../say";
+import { amountInWords, LANGUAGE_NAME, languageOf, numbersHeard, readBackReason, yesOrNo } from "../speech";
 import { calls, type Call } from "./calls";
 
 /**
@@ -49,6 +49,19 @@ function str(args: Record<string, unknown>, k: string): string {
 
 /** `req`: the call screen's request; the visitor's session on it makes their spoken or tapped answers theirs (flow.ts). */
 export async function runTool(kitchen: string, input: unknown, req?: Request): Promise<ToolReply> {
+  const reply = await runToolInner(kitchen, input, req);
+  // The caller's language, from their own words: the agent says AimoPilot's English sentence in it.
+  const body = input as { callId?: string; heard?: { text?: string } };
+  const call = body.callId ? calls().get(body.callId) : undefined;
+  const spoken = body.heard?.text ? languageOf(body.heard.text) : undefined;
+  if (call && spoken && (body.heard?.text ?? "").trim().split(/\s+/).length >= 2) call.desk.lang = spoken;
+  const lang = call?.desk.lang;
+  // Only for the voice model: a typed call shows AimoPilot's sentence on screen as it is.
+  if (lang && lang !== "en" && (input as { via?: string }).via !== "typed") reply.forModel = { speakIn: LANGUAGE_NAME[lang], ...reply.forModel, say: `(Say this in ${LANGUAGE_NAME[lang]}:) ${reply.forModel.say}` };
+  return reply;
+}
+
+async function runToolInner(kitchen: string, input: unknown, req?: Request): Promise<ToolReply> {
   const body = parse(ToolBody, input);
   const registry = calls();
   const call = registry.use(body.callId, kitchen, body.via);
@@ -74,7 +87,15 @@ export async function runTool(kitchen: string, input: unknown, req?: Request): P
         const p = call.desk.pending;
         if (!p) return refuse("There is no read-back waiting. If the caller wants something, call submit_request.", "nothing_pending");
         call.desk.pending = undefined;
-        return await open(a, call, p.need, p.words, via, `The caller confirmed the read-back (${p.reason}).`, p.model);
+        const opened = await open(a, call, p.need, p.words, via, `The caller confirmed the read-back${p.reason ? ` (${p.reason})` : ""}.`, p.model);
+        // The read-back already asked about this very amount and the caller said yes: the same check is not asked twice.
+        const s = opened.screen.step;
+        const c = s?.state === "needs_confirmation" ? s.concerns[0] : undefined;
+        const q = (p.need as { quantity?: { amount: number; unit: string } }).quantity;
+        if (s && c && c.confirmable && p.reason && AMOUNT_CONCERNS.has(c.code) && q && c.key.endsWith(`:${q.amount}:${q.unit}`)) {
+          return fromStep(call, await respond(a, s.requestId, c.key, "confirm", "voice", via, heard), heard);
+        }
+        return opened;
       }
       case "respond_to_check":
         return fromStep(call, await respond(a, current(call), str(body.args, "key"), str(body.args, "choice"), "voice", via, heard), heard);
@@ -112,13 +133,21 @@ function pendingView(call: Call): Pending | undefined {
   const p = call.desk.pending;
   if (!p) return undefined;
   const parsed = NeedSchema.safeParse(p.need);
-  const q = parsed.success ? parsed.data.quantity : undefined;
-  return { need: p.need, summary: parsed.success ? describeNeed(parsed.data) : "", reason: p.reason, say: q ? readBackSay(parsed.success ? parsed.data.item.text : "", q, p.reason) : "" };
+  return { need: p.need, summary: parsed.success ? describeNeed(parsed.data) : "", reason: p.reason, say: p.say };
 }
 
-function readBackSay(item: string, q: { amount: number; unit: NonNullable<NeedInput["quantity"]>["unit"] }, reason: string) {
-  return `${formatAmount(q.amount, q.unit)} (${amountInWords(q.amount, q.unit)}) of ${item}: I am checking because ${reason}.`;
+/**
+ * The one sentence every spoken request is read back with before anything is looked up or priced: amount (in
+ * digits and words, so the model says it right in any language), unit, product and day, and the reason when the
+ * amount looks unusual or the two hearings disagree.
+ */
+export function readBackSay(item: string, q: { amount: number; unit: NonNullable<NeedInput["quantity"]>["unit"] }, reason: string | undefined, deliverBy?: string) {
+  const day = deliverBy ? `, for ${spokenDate(deliverBy)}` : "";
+  return `${formatAmount(q.amount, q.unit)} (${amountInWords(q.amount, q.unit)}) of ${item}${day}${reason ? `. I am checking because ${reason}` : ""}.`;
 }
+
+/** Concerns the read-back has already put to the caller: the amount itself was unusual, and they said yes to it. */
+const AMOUNT_CONCERNS = new Set(["quantity_tenfold", "quantity_unusual", "large_first_order"]);
 
 function fromStep(call: Call, step: IntakeView, heard?: HeardWords): ToolReply {
   call.desk.requestId = step.requestId;
@@ -150,15 +179,16 @@ async function submit(a: KitchenAgent, call: Call, request: string, heard: Heard
   const need = NeedSchema.parse(read.need);
   const memory = await a.rt.dock.intake.kitchen(a.session);
   const usual = memory.families.map((f) => ({ family: f.family, amount: f.usual.amount, unit: f.usual.unit }));
-  const reason = readBackReason(need, { usual, heardNumbers: via === "speech" && heard ? digitsIn(heard.text) : undefined, spokenNumbers: via === "speech" && heard ? digitsIn(request) : undefined });
-  if (reason && need.quantity) {
-    const say = readBackSay(need.item.text, need.quantity, reason);
-    call.desk.pending = { need: read.need, words, reason, model: read.model, say };
+  const reason = readBackReason(need, { usual, heardNumbers: via === "speech" && heard ? numbersHeard(heard.text) : undefined, spokenNumbers: via === "speech" && heard && request ? numbersHeard(request) : undefined });
+  // Speech is always read back (a number heard in a loud room is never acted on unconfirmed); typing only when unusual.
+  if ((reason || via === "speech") && need.quantity) {
+    const say = readBackSay(need.item.text, need.quantity, reason, need.deliverBy);
+    call.desk.pending = { need: read.need, words, reason: reason ?? "", model: read.model, say };
     call.desk.requestId = undefined;
     call.desk.orderId = undefined;
     return {
-      forModel: { ok: true, state: "read_back", say, ask: "Is that right? (If the caller corrects it, call submit_request again with their correction.)", amount: formatAmount(need.quantity.amount, need.quantity.unit), item: need.item.text, ...(need.deliverBy ? { deliverBy: need.deliverBy } : {}) },
-      screen: { pending: { need: read.need, summary: describeNeed(need), reason, say }, heard: words },
+      forModel: { ok: true, state: "read_back", say, ask: "Is that right? (Wait for the caller. If they correct it, call submit_request again with their words.)", amount: formatAmount(need.quantity.amount, need.quantity.unit), item: need.item.text, ...(need.deliverBy ? { deliverBy: need.deliverBy } : {}) },
+      screen: { pending: { need: read.need, summary: describeNeed(need), reason: reason ?? "", say }, heard: words },
     };
   }
   return open(a, call, read.need, words, via, undefined, read.model);

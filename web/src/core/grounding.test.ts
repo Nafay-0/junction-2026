@@ -27,9 +27,34 @@ describe("numbersIn", () => {
     expect(numbersIn("tvåhundra liter").map((n) => n.value)).toEqual([200]);
     expect(numbersIn("fifty-five kilos").map((n) => n.value)).toEqual([55]);
   });
+  it("reads teens and tens in Finnish and Swedish, and Swedish compounds", () => {
+    expect(numbersIn("kuusitoista kiloa").map((n) => n.value)).toEqual([16]);
+    expect(numbersIn("sata kaksikymmentä kananmunaa").map((n) => n.value)).toEqual([120]);
+    expect(numbersIn("femton kilo, sextio liter").map((n) => n.value)).toEqual([15, 60]);
+    expect(numbersIn("hundratio liter").map((n) => n.value)).toEqual([110]);
+    expect(numbersIn("trettiofem liter").map((n) => n.value)).toEqual([35]);
+  });
+  it("reads amounts with a half or a decimal point, as people say them", () => {
+    const has = (t: string, v: number) => expect(numbersIn(t).map((n) => n.value)).toContain(v);
+    has("two and a half kilos of parmesan", 2.5);
+    has("2 and 1/2 kilos", 2.5);
+    has("one and a half litres", 1.5);
+    has("kaksi ja puoli kiloa", 2.5);
+    has("puolitoista litraa", 1.5);
+    has("två och ett halvt kilo", 2.5);
+    has("two point five kilos", 2.5);
+    has("2 point 25 kg", 2.25);
+  });
 });
 
 describe("checkSpeech", () => {
+  it("reads a Finnish November date as November (not the Swedish 'mars')", () => {
+    const f = addFacts(emptyFacts(), { say: "60 L of milk, for Friday 20 November.", deliverBy: "2026-11-20" });
+    expect(checkSpeech("60 litraa maitoa perjantaiksi 20. marraskuuta. Onko tämä oikein?", f, { final: true })).toEqual([]);
+    expect(checkSpeech("60 liter mjölk till fredag den 20 november.", f, { final: true })).toEqual([]);
+    expect(checkSpeech("60 litraa maitoa 20. maaliskuuta.", f, { final: true }).map((v) => v.kind)).toContain("date");
+  });
+
   it("passes speech that only repeats the tool result, in any of the three languages", () => {
     const f = facts();
     expect(checkSpeech("Option 1 is 100 packs of 10 litres for 1,570.31 euros, delivered Monday 16 November.", f, { brands: BRANDS, final: true })).toEqual([]);

@@ -5,6 +5,8 @@ import type { AccountRow } from "@/server/accounts/ops-view";
 import { api } from "../../../_client/api";
 import { when } from "../../_ui/format";
 import { Button, Empty, LoadError, Loading, PageHead, Section, useOps } from "../../_ui/kit";
+import { Table } from "../../_ui/parts";
+import { Avatar, Badge } from "../../../_ui/kit";
 
 const KIND: Record<AccountRow["kind"], string> = { own: "Restaurant's own", test: "Shared test account", demo: "Stage kitchen" };
 
@@ -35,13 +37,13 @@ export function AccountsScreen() {
           </Button>
         }
       >
-        <p className="max-w-[80ch] text-[0.95rem] leading-snug">
+        <p className="max-w-[80ch] rounded-xl border border-line bg-paper p-5 text-[0.95rem] leading-relaxed">
           {d
             ? `Anyone can use them, so they are put back to their seed ${d.testAccounts.resetMinutes ? `every ${d.testAccounts.resetMinutes} minutes` : "only from here (the schedule is off)"}. The sign-in page ${d.testAccounts.shown ? "lists them with their passwords" : "does not list them (DOCK_TEST_ACCOUNTS_SHOWN is off)"}.`
             : "…"}
         </p>
         {note && (
-          <p role="status" className="mt-2 border-l-[6px] border-petrol bg-paper px-3 py-2 text-[0.95rem]">
+          <p role="status" className="mt-3 rounded-lg bg-good-soft px-4 py-3 text-[0.95rem]">
             {note}
           </p>
         )}
@@ -51,33 +53,43 @@ export function AccountsScreen() {
       ) : d.accounts.length === 0 ? (
         <Empty title="No accounts yet">A restaurant appears here once it opens an account at /k/signup.</Empty>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[40rem] border-t-[3px] border-petrol bg-paper text-left text-[0.95rem]">
-            <thead className="text-ink-soft">
-              <tr className="border-b border-line">
-                <th className="px-3 py-2 font-medium">Kitchen</th>
-                <th className="px-3 py-2 font-medium">Kind</th>
-                <th className="px-3 py-2 font-medium">Signed up</th>
-                <th className="px-3 py-2 font-medium">Last ordered</th>
-                <th className="px-3 py-2 text-right font-medium">Orders</th>
+        <Section title="Kitchens with an account" aside={`${d.accounts.length}`}>
+          <Table label="Accounts">
+            <thead>
+              <tr>
+                <th>Kitchen</th>
+                <th>Kind</th>
+                <th>Signed up</th>
+                <th>Last ordered</th>
+                <th className="text-right">Orders</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-line">
+            <tbody>
               {d.accounts.map((a) => (
                 <tr key={a.kitchen}>
-                  <td className="px-3 py-2">
-                    <span className="font-semibold">{a.restaurant}</span> <span className="text-ink-soft">/k/{a.kitchen}</span>
-                    {!a.hasKitchen && a.kind !== "demo" && <span className="text-ink-soft">, mandate not signed yet</span>}
+                  <td>
+                    <span className="flex items-center gap-3">
+                      <Avatar name={a.restaurant} size={32} />
+                      <span className="min-w-0">
+                        <span className="block font-semibold">{a.restaurant}</span>
+                        <span className="block text-[0.84rem] text-ink-soft">
+                          /k/{a.kitchen}
+                          {!a.hasKitchen && a.kind !== "demo" && ", mandate not signed yet"}
+                        </span>
+                      </span>
+                    </span>
                   </td>
-                  <td className="px-3 py-2">{KIND[a.kind]}</td>
-                  <td className="px-3 py-2">{when(a.signedUpAt)}</td>
-                  <td className="px-3 py-2">{a.lastOrderAt ? when(a.lastOrderAt) : "Never"}</td>
-                  <td className="px-3 py-2 text-right tabular">{a.orders}</td>
+                  <td>
+                    <Badge tone={a.kind === "own" ? "info" : a.kind === "test" ? "agent" : "neutral"}>{KIND[a.kind]}</Badge>
+                  </td>
+                  <td className="whitespace-nowrap tabular">{when(a.signedUpAt)}</td>
+                  <td className="whitespace-nowrap tabular">{a.lastOrderAt ? when(a.lastOrderAt) : <span className="text-ink-soft">Never</span>}</td>
+                  <td className="text-right font-semibold tabular">{a.orders}</td>
                 </tr>
               ))}
             </tbody>
-          </table>
-        </div>
+          </Table>
+        </Section>
       )}
     </>
   );
