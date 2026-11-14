@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { api } from "../../_client/api";
+import { useText } from "../../_i18n/provider";
+import { CALL_AGENT_TEXT } from "./call-agent.text";
 import { usePortal } from "./portal";
 
 /**
@@ -14,6 +16,7 @@ type Call = { url: string; qrSvg?: string };
 
 export function CallAgent({ compact = false }: { compact?: boolean }) {
   const { kitchen } = usePortal();
+  const tx = useText(CALL_AGENT_TEXT);
   const [call, setCall] = useState<Call | null>();
   const [show, setShow] = useState(false);
   useEffect(() => {
@@ -28,9 +31,9 @@ export function CallAgent({ compact = false }: { compact?: boolean }) {
     return (
       <div className={`flex items-center gap-2 ${compact ? "text-[0.88rem]" : ""}`}>
         <button type="button" disabled aria-disabled className="inline-flex min-h-10 items-center gap-2 border-2 border-line bg-paper px-3 font-semibold text-ink-soft">
-          <PhoneIcon /> Call your agent
+          <PhoneIcon /> {tx.call}
         </button>
-        <span className="text-[0.85rem] text-ink-soft">{call === undefined ? "Checking…" : "Voice is being connected."}</span>
+        <span className="text-[0.85rem] text-ink-soft">{call === undefined ? tx.checking : tx.connecting}</span>
       </div>
     );
   }
@@ -39,17 +42,17 @@ export function CallAgent({ compact = false }: { compact?: boolean }) {
     <div>
       {phone ? (
         <a href={call.url} className="inline-flex min-h-11 items-center gap-2 bg-petrol px-4 font-semibold text-paper">
-          <PhoneIcon /> Call your agent
+          <PhoneIcon /> {tx.call}
         </a>
       ) : (
         <button type="button" aria-expanded={show} onClick={() => setShow((x) => !x)} className="inline-flex min-h-11 items-center gap-2 border-2 border-petrol bg-paper px-3 font-semibold text-petrol hover:bg-petrol-soft">
-          <PhoneIcon /> Call your agent
+          <PhoneIcon /> {tx.call}
         </button>
       )}
       {show && !phone && (
         <figure className="mt-2 w-48">
           {call.qrSvg ? <div className="aspect-square bg-paper p-2 ring-[3px] ring-petrol [&>svg]:size-full" dangerouslySetInnerHTML={{ __html: call.qrSvg }} /> : null}
-          <figcaption className="mt-1 text-[0.85rem] leading-snug">Scan with your phone to talk to {kitchen.agentName}.</figcaption>
+          <figcaption className="mt-1 text-[0.85rem] leading-snug">{tx.scan(kitchen.agentName)}</figcaption>
         </figure>
       )}
     </div>

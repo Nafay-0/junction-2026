@@ -5,7 +5,9 @@ import type { IntakeView } from "@/core/intake";
 import type { PublicOrder } from "@/core/orders";
 import type { CallStart } from "@/server/channels/voice/start";
 import type { Pending, ToolReply } from "@/server/channels/voice/tools";
+import { useLang } from "../_i18n/provider";
 import { CallAudio, MIC_TEXT, micProblem, type MicProblem } from "./audio";
+import { CALL_HOOK_TEXT } from "./call-screen.text";
 import { addFacts, checkSpeech, correctionFor, emptyFacts, type Facts } from "./grounding";
 import { LiveSocket, type FunctionCall } from "./live-socket";
 
@@ -52,7 +54,7 @@ const post: Post = async (path, body) => {
     const data = await res.json().catch(() => ({}));
     return { ok: res.ok && !data.error, status: res.status, data };
   } catch {
-    return { ok: false, status: 0, data: { error: { code: "network", message: "No connection to Dock. Check the network and try again." } } as never };
+    return { ok: false, status: 0, data: { error: { code: "network", message: "No connection to AimoPilot. Check the network and try again." } } as never };
   }
 };
 
@@ -62,6 +64,20 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
   const base = `/ui-api/voice/${encodeURIComponent(kitchen)}`;
   const [v, setV] = useState<CallView>({ phase: "idle", mode: "push_to_talk", lines: [], talking: false, latched: false, agentSpeaking: false, busy: false, costUsd: 0, grounding: { checked: 0, dropped: 0 } });
   const set = useCallback((f: Partial<CallView> | ((x: CallView) => Partial<CallView>)) => setV((x) => ({ ...x, ...(typeof f === "function" ? f(x) : f) })), []);
+  // Words shown on screen follow the caller's language; what goes to the voice model and the server stays English.
+  const { lang } = useLang();
+  const langRef = useRef(lang);
+  useEffect(() => {
+    langRef.current = lang;
+  }, [lang]);
+  const say = useCallback(() => CALL_HOOK_TEXT[langRef.current], []);
+  const micText = useCallback((p: MicProblem) => (langRef.current === "en" ? MIC_TEXT[p] : (CALL_HOOK_TEXT[langRef.current].mic[p] ?? MIC_TEXT[p])), []);
+  /** A failed request's message for the screen: the server's own words, or ours when there are none (or no network). */
+  const shown = useCallback((err: { code: string; message: string } | undefined, fallback: string) => {
+    if (err?.message == null) return fallback;
+    if (err.code === "network" && langRef.current !== "en") return CALL_HOOK_TEXT[langRef.current].network;
+    return err.message;
+  }, []);
 
   const audio = useRef<CallAudio | null>(null);
   const sock = useRef<LiveSocket | null>(null);
@@ -158,8 +174,9 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
         let reply: ToolReply;
         if (r.ok) reply = r.data;
         else {
-          const message = r.data.error?.message ?? "Dock could not be reached.";
-          reply = { forModel: { ok: false, state: "error", say: `Dock could not do that: ${message}` }, screen: { problem: { code: r.data.error?.code ?? "error", message } } };
+          const message = r.data.error?.message ?? "AimoPilot could not be reached.";
+          const onScreen = shown(r.data.error, say().unreachable);
+          reply = { forModel: { ok: false, state: "error", say: `AimoPilot could not do that: ${message}` }, screen: { problem: { code: r.data.error?.code ?? "error", message: onScreen } } };
         }
         screen(reply);
         responses.push({ id: fc.id, name: fc.name, response: reply.forModel });
@@ -169,7 +186,7 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
       sock.current?.toolResponse(responses);
       set({ busy: false });
     },
-    [base, screen, set],
+    [base, screen, set, say, shown],
   );
 
   // ---------- grounding: the agent's words against the facts ----------
@@ -237,7 +254,7 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
         cleanup();
         const p = micProblem(err);
         console.warn("microphone:", (err as Error)?.name, (err as Error)?.message);
-        await startTyped(p, MIC_TEXT[p], carryFrom);
+        await startTyped(p, micText(p), carryFrom);
         return;
       }
       try {
@@ -249,7 +266,7 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
       const r = await post<CallStart>(`${base}/call`, { mode, carryFrom });
       if (!r.ok || !r.data.live) {
         cleanup();
-        await startTyped(undefined, r.data.error?.message ?? "The call could not start.", carryFrom);
+        await startTyped(undefined, shown(r.data.error, say().couldNotStart), carryFrom);
         return;
       }
       const start = r.data;
@@ -300,11 +317,11 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
         onUsage: (u) => {
           tokens.current = { prompt: tokens.current.prompt + u.promptTokens, response: tokens.current.response + u.responseTokens };
         },
-        onGoAway: () => set({ notice: "The voice service is ending this call soon." }),
+        onGoAway: () => set({ notice: say().goAway }),
         onClose: ({ clean, code, reason }) => {
           if (clean) return;
           cleanup();
-          set({ phase: "lost", talking: false, latched: false, agentSpeaking: false, endReason: code === 1008 || /expire|deadline/i.test(reason) ? "The call reached its time limit." : "The connection to the voice service was lost." });
+          set({ phase: "lost", talking: false, latched: false, agentSpeaking: false, endReason: code === 1008 || /expire|deadline/i.test(reason) ? say().timeLimit : say().lost });
           if (callId.current) void post(`${base}/call/${callId.current}`, { op: "end", reason: `lost ${code}` });
         },
       });
@@ -330,11 +347,11 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
         if (sock.current === s && !s.ready) {
           cleanup();
           void post(`${base}/call/${start.callId}`, { op: "end", reason: "connect timeout" });
-          void startTyped(undefined, "The voice connection did not open (the network may block it). Type instead.", start.callId);
+          void startTyped(undefined, say().noVoice, start.callId);
         }
       }, 12_000);
     },
-    [base, cleanup, set, addLine, patchLine, checkSaid, runTools, hangUp, cost, startTyped],
+    [base, cleanup, set, addLine, patchLine, checkSaid, runTools, hangUp, cost, startTyped, micText, shown, say],
   );
 
   /** Type instead of speaking: the same tools, with the typed words as the caller's own. */
@@ -347,14 +364,14 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
       const r = await post<ToolReply>(`${base}/tool`, { callId: callId.current, name, args, heard: text ? { text, turn: turn.current } : undefined, via: "typed" });
       set({ busy: false });
       if (!r.ok) {
-        set({ problem: { code: r.data.error?.code ?? "error", message: r.data.error?.message ?? "Dock could not do that." } });
+        set({ problem: { code: r.data.error?.code ?? "error", message: shown(r.data.error, say().couldNotDo) } });
         return;
       }
       screen(r.data);
       // On screen the cards carry the detail: the transcript gets Dock's first sentence only.
       addLine("dock", r.data.forModel.say.split(/(?<=[.:])\s/)[0]);
     },
-    [addLine, base, screen, set],
+    [addLine, base, screen, set, say, shown],
   );
 
   /** A tap on a card during a call or a typed call: the same step, then the agent is told what happened. */
@@ -362,19 +379,19 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
     async (name: string, args: Record<string, unknown>, label: string) => {
       if (!callId.current) return;
       set({ busy: true });
-      addLine("you", `Tapped: ${label}`);
+      addLine("you", say().tapped(label));
       const live = !!sock.current?.open;
       const r = await post<ToolReply>(`${base}/tool`, { callId: callId.current, name, args, via: live ? "speech" : "typed", tapped: true });
       set({ busy: false });
       if (!r.ok) {
-        set({ problem: { code: r.data.error?.code ?? "error", message: r.data.error?.message ?? "Dock could not do that." } });
+        set({ problem: { code: r.data.error?.code ?? "error", message: shown(r.data.error, say().couldNotDo) } });
         return;
       }
       screen(r.data);
-      if (live) sock.current!.text(`[Dock update] The caller tapped "${label}" on the screen. Dock's reply: ${JSON.stringify(r.data.forModel)}`);
+      if (live) sock.current!.text(`[AimoPilot update] The caller tapped "${label}" on the screen. AimoPilot's reply: ${JSON.stringify(r.data.forModel)}`);
       else addLine("dock", r.data.forModel.say);
     },
-    [addLine, base, screen, set],
+    [addLine, base, screen, set, say, shown],
   );
 
   // ---------- push-to-talk ----------
@@ -432,7 +449,7 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
       onOrder.current?.(o);
       if (r.data.forModel) {
         addFacts(facts.current, r.data.forModel);
-        if (sock.current?.open) sock.current.text(`[Dock update] ${r.data.forModel.say} Tell the caller in one sentence.`);
+        if (sock.current?.open) sock.current.text(`[AimoPilot update] ${r.data.forModel.say} Tell the caller in one sentence.`);
         else addLine("dock", r.data.forModel.say);
       }
     }, 3000);
@@ -465,7 +482,7 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
     cleanup();
   }, [base, cleanup]);
 
-  const typeInstead = useCallback(() => startTyped(undefined, "Typing instead of talking: the same request, the same checks.", callId.current ?? undefined), [startTyped]);
+  const typeInstead = useCallback(() => startTyped(undefined, say().typing, callId.current ?? undefined), [startTyped, say]);
 
   return { view: v, call, hangUp, typeInstead, pressTalk, releaseTalk, typed, tap, callId: () => callId.current, level: () => audio.current?.level ?? 0 };
 }

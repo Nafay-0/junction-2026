@@ -8,7 +8,7 @@ import { wallSnapshot } from "@/server/wall-snapshot";
 import { crashBoard } from "./_wall/crash-board";
 import { Wall } from "./_wall/wall";
 
-export const metadata: Metadata = { title: "Dock: live at the gate" };
+export const metadata: Metadata = { title: "AimoPilot: live at the gate" };
 
 /** The wall: the big screen at the table. Rendered with a live snapshot so it is never empty, then kept live. */
 export default function Home() {

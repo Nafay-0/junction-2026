@@ -1,7 +1,5 @@
 # NVIDIA and Featherless
 
-> **Name: the team must choose.** Replace `{{NAME}}` ("Dock" in the code, "AimoPilot" in the draft submission).
-
 **Short version: Nemotron is now in the live path, as an independent second reader of every typed or spoken request.
 It can only add a question, it was earned on a measured evaluation, and it is off when its variable is empty.**
 

@@ -1,6 +1,6 @@
 {
   "uid": "dock-overview",
-  "title": "Dock overview",
+  "title": "AimoPilot overview",
   "tags": [
     "dock",
     "aiven"
@@ -60,7 +60,7 @@
     {
       "type": "row",
       "id": 1,
-      "title": "Dock (PostgreSQL telemetry.events, written by the app)",
+      "title": "AimoPilot (PostgreSQL telemetry.events, written by the app)",
       "collapsed": false,
       "gridPos": {
         "x": 0,

@@ -293,7 +293,7 @@ export class ValkeyLiveAllowance extends LiveLookupAllowance {
     const { windowMinutes, maxCalls, maxDistinctProducts } = this.limits;
     if (s.calls >= maxCalls) {
       metrics.inc("budget.refused");
-      throw new DockError(429, "live_lookup_budget_exceeded", `This agent already made ${s.calls} live price/availability lookups this hour (all Dock servers together); the limit is ${maxCalls}.`, "live_lookup_limit", { maxCalls, windowMinutes, shared: true });
+      throw new DockError(429, "live_lookup_budget_exceeded", `This agent already made ${s.calls} live price/availability lookups this hour (all AimoPilot servers together); the limit is ${maxCalls}.`, "live_lookup_limit", { maxCalls, windowMinutes, shared: true });
     }
     const after = new Set([...s.products, ...ids]).size;
     if (after > maxDistinctProducts) {
@@ -301,7 +301,7 @@ export class ValkeyLiveAllowance extends LiveLookupAllowance {
       throw new DockError(
         429,
         "live_lookup_budget_exceeded",
-        `Live price/availability is for a short list: at most ${maxDistinctProducts} different products per agent per hour (all Dock servers together). This call would make it ${after}.`,
+        `Live price/availability is for a short list: at most ${maxDistinctProducts} different products per agent per hour (all AimoPilot servers together). This call would make it ${after}.`,
         "live_lookup_limit",
         { maxDistinctProducts, windowMinutes, alreadyPriced: s.products.size, requested: ids.length, shared: true },
       );

@@ -6,7 +6,9 @@ import { api } from "../../_client/api";
 import type { Interpretation } from "../../_client/interpret";
 import type { NeedInput } from "@/core/need";
 import type { Incomplete } from "./console";
-import { attr, clock, day, measure, money, moneyShort, num, roleLabel, ruleTitle, say, shortProduct } from "../../_ui/plain";
+import { money, moneyShort, num, say, shortProduct } from "../../_ui/plain";
+import { useFormat, useText } from "../../_i18n/provider";
+import { STAGES_TEXT } from "./stages.text";
 import { Target } from "../../_ui/target";
 import { Spinner, Tag, Working } from "../../_ui/kit";
 import { Button, Field, MemoryNote, Missing, Paper } from "./ui";
@@ -15,9 +17,6 @@ import { SecondReadingLine } from "./second-reading";
 import type { ApprovalQr, KitchenInfo, Order, Step } from "./types";
 
 type Names = Record<string, string>;
-
-const LABEL: Record<string, string> = { best_price: "Best price", lowest_carbon: "Lowest CO2", most_reliable: "Most reliable", same_as_last_time: "Same as last time" };
-const OPTIMISE: Record<string, string> = { price: "Lowest price", co2: "Lowest CO2", reliability: "Most reliable delivery", no_preference: "No preference", unstated: "Nothing said about price or CO2" };
 
 function useNow(ms = 1000): number {
   const [now, setNow] = useState(() => Date.now());
@@ -47,6 +46,8 @@ export function Understood({
   incomplete?: Incomplete;
   onComplete: (need: NeedInput) => void;
 }) {
+  const tx = useText(STAGES_TEXT);
+  const f = useFormat();
   if (incomplete) return <CompleteNeed text={text} incomplete={incomplete} onComplete={onComplete} />;
   const need = (step?.need ?? interp?.need) as NeedLike | undefined;
   const original = interp?.need;
@@ -61,20 +62,20 @@ export function Understood({
           {!need && busy && <Working className="mt-4">{busy}</Working>}
           {need && (
             <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-line pt-4 sm:grid-cols-3 xl:grid-cols-4">
-              <Field label="Item">{need.item.text}</Field>
-              <Field label="Amount">
-                {need.quantity ? measure(need.quantity.amount, need.quantity.unit) : need.sameAsLastTime ? "Same as last time" : <Missing>Not said</Missing>}
-                {corrected && original?.quantity && <span className="block text-[0.9rem] font-medium text-ink-soft">corrected from {measure(original.quantity.amount, original.quantity.unit)}</span>}
+              <Field label={tx.item}>{need.item.text}</Field>
+              <Field label={tx.amount}>
+                {need.quantity ? f.measure(need.quantity.amount, need.quantity.unit) : need.sameAsLastTime ? tx.sameAsLast : <Missing>{tx.notSaid}</Missing>}
+                {corrected && original?.quantity && <span className="block text-[0.9rem] font-medium text-ink-soft">{tx.correctedFrom(f.measure(original.quantity.amount, original.quantity.unit))}</span>}
               </Field>
-              <Field label="Deliver by">
-                {need.deliverBy ? day(need.deliverBy) : <Missing>Not said</Missing>}
-                {dateChanged && original?.deliverBy && <span className="block text-[0.9rem] font-medium text-ink-soft">changed from {day(original.deliverBy)}</span>}
+              <Field label={tx.deliverBy}>
+                {need.deliverBy ? f.day(need.deliverBy) : <Missing>{tx.notSaid}</Missing>}
+                {dateChanged && original?.deliverBy && <span className="block text-[0.9rem] font-medium text-ink-soft">{tx.changedFrom(f.day(original.deliverBy))}</span>}
               </Field>
-              <Field label="What matters most">{OPTIMISE[need.optimise ?? "unstated"]}</Field>
-              {musts.length > 0 && <Field label="Must be">{musts.map(attr).join(", ")}</Field>}
-              {(need.item.excludedAttributes?.length ?? 0) > 0 && <Field label="Must not be">{need.item.excludedAttributes!.map(attr).join(", ")}</Field>}
-              {(need.forbiddenAllergens?.length ?? 0) > 0 && <Field label="No allergens">{need.forbiddenAllergens!.map(attr).join(", ")}</Field>}
-              {need.sameAsLastTime && need.quantity && <Field label="Same as last time">Yes</Field>}
+              <Field label={tx.mattersMost}>{tx.optimise(need.optimise ?? "unstated")}</Field>
+              {musts.length > 0 && <Field label={tx.mustBe}>{musts.map(f.attr).join(", ")}</Field>}
+              {(need.item.excludedAttributes?.length ?? 0) > 0 && <Field label={tx.mustNotBe}>{need.item.excludedAttributes!.map(f.attr).join(", ")}</Field>}
+              {(need.forbiddenAllergens?.length ?? 0) > 0 && <Field label={tx.noAllergens}>{need.forbiddenAllergens!.map(f.attr).join(", ")}</Field>}
+              {need.sameAsLastTime && need.quantity && <Field label={tx.sameAsLast}>{tx.yes}</Field>}
             </dl>
           )}
         </div>
@@ -86,16 +87,16 @@ export function Understood({
         {interp && (
           <p className="mt-3 flex flex-wrap items-center gap-x-2 text-[0.88rem] text-ink-soft">
             {interp.noModel ? (
-              <>No model read this: it is the earlier request&apos;s own fields. Everything after this line is plain code.</>
+              <>{tx.readNoModel}</>
             ) : interp.offline ? (
               <>
-                <Tag>Offline example</Tag>
-                Read by {interp.model} in {interp.ms} ms, not by the model. Everything after this line is plain code.
+                <Tag>{tx.offlineTag}</Tag>
+                {tx.readOffline(interp.model, interp.ms)}
               </>
             ) : interp.addedByBuyer?.length ? (
-              <>Read by {interp.model}; the buyer added the {interp.addedByBuyer.map((m) => (m === "item" ? "item" : "amount")).join(" and ")}. Everything after this line is plain code.</>
+              <>{tx.readAdded(interp.model, interp.addedByBuyer)}</>
             ) : (
-              <>Read by {interp.model} in {interp.ms} ms. The model only fills these fields; everything after this line is plain code.</>
+              <>{tx.readModel(interp.model, interp.ms)}</>
             )}
           </p>
         )}
@@ -108,6 +109,8 @@ export function Understood({
 
 /** The reader understood part of the request: show that, and ask for exactly what is missing, as fields. */
 function CompleteNeed({ text, incomplete, onComplete }: { text: string; incomplete: Incomplete; onComplete: (need: NeedInput) => void }) {
+  const tx = useText(STAGES_TEXT);
+  const f = useFormat();
   const p = incomplete.partial;
   const needItem = incomplete.missing.includes("item") || !p.item?.text;
   const needQty = incomplete.missing.includes("quantity") || (!p.quantity && !p.sameAsLastTime);
@@ -136,15 +139,17 @@ function CompleteNeed({ text, incomplete, onComplete }: { text: string; incomple
         }}
       >
         <blockquote className="display text-[1.7rem] leading-[1.08] text-petrol-deep sm:text-[2.1rem]">“{text}”</blockquote>
-        <p className="mt-2 text-[1.02rem]">{incomplete.message} Add it here; everything else stays as read.</p>
+        <p className="mt-2 text-[1.02rem]">
+          {incomplete.message} {tx.addHere}
+        </p>
         <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-line pt-3 sm:grid-cols-3">
           <div>
             <dt className="text-[0.8rem] font-medium text-ink-soft">
-              <label htmlFor="fix-item">Item</label>
+              <label htmlFor="fix-item">{tx.item}</label>
             </dt>
             <dd className="mt-0.5">
               {needItem ? (
-                <input id="fix-item" autoFocus value={item} onChange={(e) => setItem(e.target.value)} placeholder="e.g. lactose-free milk" className={`${input} w-full`} />
+                <input id="fix-item" autoFocus value={item} onChange={(e) => setItem(e.target.value)} placeholder={tx.itemPlaceholder} className={`${input} w-full`} />
               ) : (
                 <span className="text-[1.05rem] font-semibold">{p.item?.text}</span>
               )}
@@ -152,30 +157,30 @@ function CompleteNeed({ text, incomplete, onComplete }: { text: string; incomple
           </div>
           <div>
             <dt className="text-[0.8rem] font-medium text-ink-soft">
-              <label htmlFor="fix-qty">Amount</label>
+              <label htmlFor="fix-qty">{tx.amount}</label>
             </dt>
             <dd className="mt-0.5">
               {needQty ? (
                 <span className="flex gap-1">
                   <input id="fix-qty" autoFocus={!needItem} inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="100" className={`${input} w-24 tabular`} />
-                  <select aria-label="Unit" value={unit} onChange={(e) => setUnit(e.target.value as typeof unit)} className={`${input} px-1`}>
-                    <option value="L">litres</option>
-                    <option value="kg">kilos</option>
-                    <option value="pack">packs</option>
-                    <option value="pcs">pieces</option>
+                  <select aria-label={tx.unit} value={unit} onChange={(e) => setUnit(e.target.value as typeof unit)} className={`${input} px-1`}>
+                    <option value="L">{tx.units.L}</option>
+                    <option value="kg">{tx.units.kg}</option>
+                    <option value="pack">{tx.units.pack}</option>
+                    <option value="pcs">{tx.units.pcs}</option>
                   </select>
                 </span>
               ) : (
-                <span className="text-[1.05rem] font-semibold">{p.quantity ? measure(p.quantity.amount, p.quantity.unit) : "Same as last time"}</span>
+                <span className="text-[1.05rem] font-semibold">{p.quantity ? f.measure(p.quantity.amount, p.quantity.unit) : tx.sameAsLast}</span>
               )}
             </dd>
           </div>
-          <Field label="Deliver by">{p.deliverBy ? day(p.deliverBy) : <Missing>Not said</Missing>}</Field>
-          {[...(p.requiredClaims ?? []), ...(p.item?.attributes ?? [])].length > 0 && <Field label="Must be">{[...(p.requiredClaims ?? []), ...(p.item?.attributes ?? [])].map(attr).join(", ")}</Field>}
+          <Field label={tx.deliverBy}>{p.deliverBy ? f.day(p.deliverBy) : <Missing>{tx.notSaid}</Missing>}</Field>
+          {[...(p.requiredClaims ?? []), ...(p.item?.attributes ?? [])].length > 0 && <Field label={tx.mustBe}>{[...(p.requiredClaims ?? []), ...(p.item?.attributes ?? [])].map(f.attr).join(", ")}</Field>}
         </dl>
         <div className="mt-4">
           <Button type="submit" kind="go" disabled={!ready}>
-            Continue with this
+            {tx.continue}
           </Button>
         </div>
       </form>
@@ -186,9 +191,10 @@ function CompleteNeed({ text, incomplete, onComplete }: { text: string; incomple
 // ---------- 2. lookup: the mistake check, and what memory answered ----------
 
 export function Concerns({ step, seen, onRespond, busyKey, names, remembered }: { step: Step; seen: Step["concerns"]; onRespond: (key: string, choice: string) => void; busyKey?: string; names: Names; remembered?: { text: string }[] }) {
+  const tx = useText(STAGES_TEXT);
   const memory = remembered && remembered.length > 0 && (
     <div className="bg-lavender px-4 py-3 sm:px-5">
-      <p className="text-[0.88rem] font-semibold text-lavender-deep">Remembered, so not asked</p>
+      <p className="text-[0.88rem] font-semibold text-lavender-deep">{tx.remembered}</p>
       <ul className="mt-1 space-y-1">
         {remembered.map((l) => (
           <li key={l.text}>
@@ -207,8 +213,7 @@ export function Concerns({ step, seen, onRespond, busyKey, names, remembered }: 
               ✓
             </span>
             <p className="text-[1.05rem] leading-snug">
-              <strong>Nothing looks unusual.</strong>{" "}
-              <span className="text-ink-soft">The amount was compared with what this kitchen usually orders, and the delivery day, the order cut-off, duplicates and the kitchen&apos;s own rules were checked, before any price was asked.</span>
+              <strong>{tx.nothingUnusual}</strong> <span className="text-ink-soft">{tx.nothingUnusualWhy}</span>
             </p>
           </div>
         </Paper>
@@ -223,19 +228,25 @@ export function Concerns({ step, seen, onRespond, busyKey, names, remembered }: 
         const ack = step.acknowledgements.find((a) => a.key === c.key);
         const fix = ack?.correctionId ? c.corrections.find((x) => x.id === ack.correctionId) : undefined;
         const message = say(c.message, names);
+        const title = tx.concernTitle(c.code);
         return (
           <article key={c.key} className={`bg-paper ${open ? "outline-[3px] outline-petrol" : ""}`}>
             <div aria-hidden className={open ? "h-1.5 bg-lime" : "h-[3px] bg-petrol"} />
             <div className="grid gap-4 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_auto]">
               <div className="min-w-0">
-                <p className="text-[0.88rem] font-semibold text-petrol">{open ? (c.severity === "error" ? "This cannot go ahead as it is" : "Did you mean this?") : "Checked"}</p>
-                <p className="mt-1 max-w-[52ch] text-[1.35rem] font-semibold leading-snug sm:text-[1.5rem]">{message}</p>
+                <p className="text-[0.88rem] font-semibold text-petrol">{open ? (c.severity === "error" ? tx.cannotGoAhead : tx.didYouMean) : tx.checked}</p>
+                <p className="mt-1 max-w-[52ch] text-[1.35rem] font-semibold leading-snug sm:text-[1.5rem]">{title ?? message}</p>
+                {title && (
+                  <p lang="en" className="mt-1 max-w-[60ch] text-[1.02rem] leading-snug text-ink-soft">
+                    {message}
+                  </p>
+                )}
                 {!open && (
                   <p className="mt-2 flex items-center gap-2 text-[1.02rem]">
                     <span aria-hidden className="flex size-5 items-center justify-center bg-petrol text-[0.75rem] font-bold text-paper">
                       ✓
                     </span>
-                    {ack?.action === "corrected" ? `${c.code === "readings_differ" ? "Chosen" : "Corrected"}: ${fix?.label ?? "changed"}.` : ack?.action === "confirmed" ? `Confirmed as intended by ${ack.by}.` : ack?.action === "cancelled" ? "Cancelled." : "Settled."}
+                    {ack?.action === "corrected" ? tx.corrected(fix?.label) : ack?.action === "confirmed" ? tx.confirmedBy(ack.by) : ack?.action === "cancelled" ? tx.cancelledAck : tx.settled}
                   </p>
                 )}
               </div>
@@ -248,10 +259,10 @@ export function Concerns({ step, seen, onRespond, busyKey, names, remembered }: 
                   ))}
                   {c.confirmable && (
                     <Button kind="secondary" busy={busyKey === `${c.key}:confirm`} disabled={!!busyKey} onClick={() => onRespond(c.key, "confirm")}>
-                      Yes, I meant that
+                      {tx.yesMeant}
                     </Button>
                   )}
-                  {c.corrections.length === 0 && !c.confirmable && <p className="text-ink-soft">Start a new request with a different day or amount.</p>}
+                  {c.corrections.length === 0 && !c.confirmable && <p className="text-ink-soft">{tx.startNew}</p>}
                 </div>
               )}
             </div>
@@ -282,6 +293,7 @@ export function Questions({
   onAnswer: (questionId: string, optionId: string, label: string, remember: boolean) => void;
   busyKey?: string;
 }) {
+  const tx = useText(STAGES_TEXT);
   const [remember, setRemember] = useState<Record<string, boolean>>({});
   const stated = step.rules.filter((r) => r.source === "stated");
   return (
@@ -313,14 +325,11 @@ export function Questions({
               {open ? (
                 <label className="mt-3 flex min-h-11 items-center gap-2 text-[0.98rem]">
                   <input type="checkbox" className="size-5 accent-[var(--color-lavender-deep)]" checked={!!remember[q.id]} onChange={(e) => setRemember((r) => ({ ...r, [q.id]: e.target.checked }))} />
-                  Remember this answer for the next order
+                  {tx.rememberAnswer}
                 </label>
               ) : (
                 given && (
-                  <p className="mt-2 text-[0.98rem] text-ink-soft">
-                    Answered: {given.label}
-                    {given.remember ? ". The agent keeps it as a rule from now on." : "."}
-                  </p>
+                  <p className="mt-2 text-[0.98rem] text-ink-soft">{tx.answered(given.label, given.remember)}</p>
                 )
               )}
             </fieldset>
@@ -328,13 +337,14 @@ export function Questions({
         })}
         {!hideMemory && (fromMemory.length > 0 || stated.length > 0) && (
           <div className="space-y-1.5 bg-lavender p-4 sm:p-6">
-            <h3 className="font-semibold text-lavender-deep">{asked.length ? "Not asked, because the kitchen's memory answers it" : "Nothing to ask: the kitchen's memory answers it"}</h3>
+            <h3 className="font-semibold text-lavender-deep">{asked.length ? tx.notAskedMemory : tx.nothingToAsk}</h3>
             {stated.map((r) => {
               const m = /^Stated by (.+?): (.*)$/.exec(r.text);
-              const who = m?.[1].replace(/\s*\(.*\)$/, "") ?? "a person";
+              const who = m?.[1].replace(/\s*\(.*\)$/, "") ?? tx.aPerson;
               return (
                 <MemoryNote key={r.text}>
-                  <strong>{m?.[2] ?? r.text}</strong>: a rule {who} stated earlier, always applied.
+                  <strong>{m?.[2] ?? r.text}</strong>
+                  {tx.statedRule(who)}
                 </MemoryNote>
               );
             })}
@@ -342,7 +352,8 @@ export function Questions({
               .filter((m) => m.source === "learned")
               .map((m) => (
                 <MemoryNote key={m.question.id}>
-                  {m.question.text} <strong>{m.label}</strong>, learned from history{evidenceOf(m.text)}. Pre-selected only.
+                  {m.question.text} <strong>{m.label}</strong>
+                  {tx.learned(evidenceOf(m.text, tx.evidence))}
                 </MemoryNote>
               ))}
           </div>
@@ -352,15 +363,14 @@ export function Questions({
   );
 }
 
-/** " (10 of your last 10 milk orders)" out of a learned preference's text. */
-function evidenceOf(text: string): string {
-  const m = /(\d+ of your last \d+ [\w ]+? orders)/.exec(text);
-  return m ? ` (${m[1]})` : "";
+/** " (10 of your last 10 milk orders)" out of a learned preference's text, in the buyer's language. */
+function evidenceOf(text: string, say: (n: number, of: number, what: string) => string): string {
+  const m = /(\d+) of your last (\d+) ([\w ]+?) orders/.exec(text);
+  return m ? say(Number(m[1]), Number(m[2]), m[3]) : "";
 }
 
 // ---------- 4. options ----------
 
-const RANK: Record<string, string> = { best: "Best", better: "Better", good: "Good" };
 const RANK_STEPS: Record<string, number> = { good: 1, better: 2, best: 3 };
 
 /** Good, better, best as three squares: how far up the ladder this option is. */
@@ -378,6 +388,7 @@ function RankMark({ rank }: { rank?: string }) {
 type Card = Step["options"][number];
 
 function co2Text(c: Card) {
+  // "kg CO2e" is the same in all three languages
   return c.co2.kg === null ? null : `${num(c.co2.kg, 1)} kg CO2e`;
 }
 
@@ -396,6 +407,8 @@ export function Options({
   busyKey?: string;
   names: Names;
 }) {
+  const tx = useText(STAGES_TEXT);
+  const f = useFormat();
   const chosen = step.chosen?.optionId;
   const open = step.state === "options_ready";
   const choices = step.openChoices ?? [];
@@ -406,7 +419,7 @@ export function Options({
     <div>
       {open && choices.length > 0 && onNarrow && (
         <div className="mb-3 space-y-2 bg-lavender p-3 sm:p-4">
-          <p className="text-[0.95rem] text-lavender-deep">The request did not say, so the options cover more than one. Narrow it only if it matters:</p>
+          <p className="text-[0.95rem] text-lavender-deep">{tx.narrow}</p>
           {choices.map((q) => (
             <div key={q.id} className="flex flex-wrap items-center gap-2">
               <span className="font-semibold">{q.text}</span>
@@ -422,18 +435,18 @@ export function Options({
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         {step.preselected && open ? (
           <p className="text-[1rem]">
-            <strong>Pre-selected:</strong> {say(step.preselected.reason, names)}
+            <strong>{tx.preselected}</strong> {say(step.preselected.reason, names)}
           </p>
         ) : (
           <span />
         )}
         {options.length > 1 && (
-          <div role="group" aria-label="Show the options as" className="flex">
+          <div role="group" aria-label={tx.showAs} className="flex">
             <button type="button" aria-pressed={!compare} onClick={() => setCompare(false)} className={`min-h-10 border-2 border-petrol px-3 text-[0.92rem] font-semibold ${!compare ? "bg-petrol text-paper" : "bg-paper text-petrol"}`}>
-              Cards
+              {tx.cards}
             </button>
             <button type="button" aria-pressed={compare} onClick={() => setCompare(true)} className={`-ml-[2px] min-h-10 border-2 border-petrol px-3 text-[0.92rem] font-semibold ${compare ? "bg-petrol text-paper" : "bg-paper text-petrol"}`}>
-              Compare side by side
+              {tx.compare}
             </button>
           </div>
         )}
@@ -451,44 +464,44 @@ export function Options({
               <article
                 key={c.optionId}
                 className={`flex flex-col bg-paper ${isChosen || (open && pre) ? "outline-[3px] outline-petrol" : ""} ${c.match === "compromise" ? "border-2 border-dashed border-ink-soft/60" : ""} ${dim ? "opacity-55" : ""}`}
-                aria-label={`${c.rank ? RANK[c.rank] : "Option"}${c.match === "compromise" ? ", a compromise" : ""}${c.labels.length ? `: ${c.labels.map((l) => LABEL[l]).join(" and ")}` : ""}`}
+                aria-label={`${tx.rank(c.rank)}${c.match === "compromise" ? tx.aCompromise : ""}${c.labels.length ? `: ${c.labels.map((l) => tx.label(l)).join(tx.and)}` : ""}`}
               >
                 <div aria-hidden className={c.signOff.length ? "hazard-thin h-2" : top ? "h-1.5 bg-petrol-deep" : "h-[3px] bg-petrol"} />
                 <div className="flex flex-1 flex-col p-4">
                   <div className="flex items-start justify-between gap-2">
-                    <h3 className="display text-[1.6rem] text-ink">{c.rank ? RANK[c.rank] : "Option"}</h3>
+                    <h3 className="display text-[1.6rem] text-ink">{tx.rank(c.rank)}</h3>
                     <RankMark rank={c.rank} />
                   </div>
                   {c.labels.length > 0 && (
                     <p className="mt-1 flex flex-wrap gap-1">
                       {c.labels.map((l) => (
                         <Tag key={l} tone={l === "same_as_last_time" ? "agent" : "plain"}>
-                          {LABEL[l]}
+                          {tx.label(l)}
                         </Tag>
                       ))}
                     </p>
                   )}
-                  {c.match === "compromise" && <p className="mt-2 text-[0.95rem] font-semibold leading-snug">Compromise: {(c.givesUp ?? []).map((g) => say(g.text, names).replace(/\.$/, "")).join("; ") || "does not meet the whole request"}.</p>}
-                  <p className="mt-2 min-h-[2.75em] text-[0.95rem] leading-snug text-ink-soft">{c.lines.map((l) => `${l.packs} × ${shortProduct(l.name)}${l.substituteFor ? " (swap)" : ""}`).join(" + ")}</p>
+                  {c.match === "compromise" && <p className="mt-2 text-[0.95rem] font-semibold leading-snug">{tx.compromise((c.givesUp ?? []).map((g) => say(g.text, names).replace(/\.$/, "")).join("; "))}</p>}
+                  <p className="mt-2 min-h-[2.75em] text-[0.95rem] leading-snug text-ink-soft">{c.lines.map((l) => `${l.packs} × ${shortProduct(l.name)}${l.substituteFor ? tx.swap : ""}`).join(" + ")}</p>
                   <p className="display mt-3 text-[2.6rem] text-ink tabular">{money(c.totalCents)}</p>
                   <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-line pt-3">
-                    <Field label="Arrives">{day(c.deliveryDate)}</Field>
-                    <Field label="Amount">
-                      {measure(c.delivered.amount, c.delivered.unit)}
-                      {c.leftover.amount > 0 && <span className="block text-[0.85rem] font-medium text-ink-soft">+{measure(c.leftover.amount, c.leftover.unit)} over</span>}
+                    <Field label={tx.arrives}>{f.day(c.deliveryDate)}</Field>
+                    <Field label={tx.amount}>
+                      {f.measure(c.delivered.amount, c.delivered.unit)}
+                      {c.leftover.amount > 0 && <span className="block text-[0.85rem] font-medium text-ink-soft">{tx.over(f.measure(c.leftover.amount, c.leftover.unit))}</span>}
                     </Field>
-                    <Field label="Carbon">
-                      {co2Text(c) ? <span className="tabular">{co2Text(c)}</span> : <Missing>No carbon data</Missing>}
-                      {c.co2.kg !== null && <span className="block text-[0.82rem] font-medium leading-tight text-ink-soft">product-group average</span>}
+                    <Field label={tx.carbon}>
+                      {co2Text(c) ? <span className="tabular">{co2Text(c)}</span> : <Missing>{tx.noCarbon}</Missing>}
+                      {c.co2.kg !== null && <span className="block text-[0.82rem] font-medium leading-tight text-ink-soft">{tx.groupAverage}</span>}
                     </Field>
-                    <Field label="Delivered in full">{c.reliability === null ? <Missing>No data</Missing> : <span className="tabular">{Math.round(c.reliability * 100)} % of past deliveries</span>}</Field>
-                    {c.orderBy && <Field label="Order by">{cutoffText(c.orderBy) ?? c.orderBy}</Field>}
-                    {c.stockConfirmed === false && <Field label="Stock">not confirmed by the wholesaler</Field>}
+                    <Field label={tx.deliveredInFull}>{c.reliability === null ? <Missing>{tx.noData}</Missing> : <span className="tabular">{tx.pastDeliveries(Math.round(c.reliability * 100))}</span>}</Field>
+                    {c.orderBy && <Field label={tx.orderBy}>{cutoffText(c.orderBy, f.lang) ?? c.orderBy}</Field>}
+                    {c.stockConfirmed === false && <Field label={tx.stock}>{tx.stockNotConfirmed}</Field>}
                   </dl>
                   <ul className="mt-3 space-y-1 text-[0.95rem] leading-snug">
                     {c.pros.map((p) => (
                       <li key={p} className="grid grid-cols-[1.1rem_1fr]">
-                        <span aria-label="For" className="font-bold text-petrol">
+                        <span aria-label={tx.pro} className="font-bold text-petrol">
                           +
                         </span>
                         {say(p, names)}
@@ -496,25 +509,25 @@ export function Options({
                     ))}
                     {c.cons.map((p) => (
                       <li key={p} className="grid grid-cols-[1.1rem_1fr] text-ink-soft">
-                        <span aria-label="Against" className="font-bold text-ink">
+                        <span aria-label={tx.con} className="font-bold text-ink">
                           –
                         </span>
                         {say(p, names)}
                       </li>
                     ))}
                   </ul>
-                  {c.signOff.length > 0 && <p className="mt-3 border-l-4 border-safety-ink bg-safety/25 px-2 py-1 text-[0.9rem] leading-snug">A person will have to sign this one off.</p>}
+                  {c.signOff.length > 0 && <p className="mt-3 border-l-4 border-safety-ink bg-safety/25 px-2 py-1 text-[0.9rem] leading-snug">{tx.needsSignOff}</p>}
                   <div className="mt-auto pt-4">
                     {open ? (
                       <Button kind={pre ? "go" : "secondary"} className="w-full" busy={busyKey === c.optionId} disabled={!!busyKey} onClick={() => onChoose(c.optionId)}>
-                        Get a fixed price for this
+                        {tx.getPrice}
                       </Button>
                     ) : isChosen ? (
                       <p className="flex min-h-11 items-center gap-2 font-semibold text-petrol">
                         <span aria-hidden className="flex size-6 items-center justify-center bg-petrol text-[0.8rem] text-paper">
                           ✓
                         </span>
-                        Chosen{step.chosen?.by ? ` by ${step.chosen.by.replace(/^agent .*/, "the agent")}` : ""}
+                        {tx.chosenBy(step.chosen?.by)}
                       </p>
                     ) : (
                       <p className="min-h-11" />
@@ -535,7 +548,7 @@ export function Options({
       )}
       {(step.signOffNotes ?? []).length > 0 && (
         <div className="mt-3">
-          <p className="font-semibold">For the person who signs off</p>
+          <p className="font-semibold">{tx.forSigner}</p>
           <ul className="mt-1 space-y-1 text-[0.98rem]">
             {step.signOffNotes!.map((n) => (
               <li key={n}>– {say(n, names)}</li>
@@ -550,6 +563,8 @@ export function Options({
 
 /** The options as columns, one row per fact, with the best value in each row marked. */
 function CompareTable({ options, step, open, chosen, busyKey, onChoose, names }: { options: Card[]; step: Step; open: boolean; chosen?: string; busyKey?: string; onChoose: (id: string) => void; names: Names }) {
+  const tx = useText(STAGES_TEXT);
+  const f = useFormat();
   // The best value in a row is marked only when the options differ on it.
   const min = (xs: (number | null)[]) => {
     const v = xs.filter((x): x is number => x !== null);
@@ -566,20 +581,20 @@ function CompareTable({ options, step, open, chosen, busyKey, onChoose, names }:
   const mark = (on: boolean, text: React.ReactNode) => (
     <span className={on ? "bg-petrol-soft px-1 font-bold text-petrol-deep" : ""}>
       {text}
-      {on && <span className="sr-only"> (the best here)</span>}
+      {on && <span className="sr-only">{tx.bestHere}</span>}
     </span>
   );
   const rows: { label: string; cell: (c: Card) => React.ReactNode }[] = [
-    { label: "Total", cell: (c) => mark(c.totalCents === cheapest, <span className="display text-[1.5rem] tabular">{money(c.totalCents)}</span>) },
-    { label: "What", cell: (c) => c.lines.map((l) => `${l.packs} × ${shortProduct(l.name)}${l.substituteFor ? " (swap)" : ""}`).join(" + ") },
-    { label: "Arrives", cell: (c) => mark(c.deliveryDate === earliest && options.some((o) => o.deliveryDate !== earliest), day(c.deliveryDate)) },
-    { label: "Amount", cell: (c) => `${measure(c.delivered.amount, c.delivered.unit)}${c.leftover.amount > 0 ? `, ${measure(c.leftover.amount, c.leftover.unit)} over` : ""}` },
-    { label: "Carbon", cell: (c) => (co2Text(c) ? mark(c.co2.kg === greenest, co2Text(c)) : <Missing>No data</Missing>) },
-    { label: "Delivered in full", cell: (c) => (c.reliability === null ? <Missing>No data</Missing> : mark(c.reliability === surest, `${Math.round(c.reliability * 100)} %`)) },
-    { label: "Order by", cell: (c) => (c.orderBy ? (cutoffText(c.orderBy) ?? c.orderBy) : "no cut-off stated") },
-    { label: "Sign-off", cell: (c) => (c.signOff.length ? "A person signs off" : "The agent may place it") },
+    { label: tx.total, cell: (c) => mark(c.totalCents === cheapest, <span className="display text-[1.5rem] tabular">{money(c.totalCents)}</span>) },
+    { label: tx.what, cell: (c) => c.lines.map((l) => `${l.packs} × ${shortProduct(l.name)}${l.substituteFor ? tx.swap : ""}`).join(" + ") },
+    { label: tx.arrives, cell: (c) => mark(c.deliveryDate === earliest && options.some((o) => o.deliveryDate !== earliest), f.day(c.deliveryDate)) },
+    { label: tx.amount, cell: (c) => `${f.measure(c.delivered.amount, c.delivered.unit)}${c.leftover.amount > 0 ? tx.overInline(f.measure(c.leftover.amount, c.leftover.unit)) : ""}` },
+    { label: tx.carbon, cell: (c) => (co2Text(c) ? mark(c.co2.kg === greenest, co2Text(c)) : <Missing>{tx.noData}</Missing>) },
+    { label: tx.deliveredInFull, cell: (c) => (c.reliability === null ? <Missing>{tx.noData}</Missing> : mark(c.reliability === surest, `${Math.round(c.reliability * 100)} %`)) },
+    { label: tx.orderBy, cell: (c) => (c.orderBy ? (cutoffText(c.orderBy, f.lang) ?? c.orderBy) : tx.noCutoff) },
+    { label: tx.signOff, cell: (c) => (c.signOff.length ? tx.personSigns : tx.agentMay) },
     {
-      label: "For and against",
+      label: tx.forAgainst,
       cell: (c) => (
         <ul className="space-y-0.5 text-[0.9rem]">
           {c.pros.map((p) => (
@@ -598,17 +613,17 @@ function CompareTable({ options, step, open, chosen, busyKey, onChoose, names }:
     <div className="overflow-x-auto bg-paper">
       <div aria-hidden className="h-[3px] bg-petrol" />
       <table className="w-full min-w-[40rem] text-left text-[0.98rem]">
-        <caption className="sr-only">The options side by side</caption>
+        <caption className="sr-only">{tx.sideBySide}</caption>
         <thead>
           <tr className="border-b border-line">
             <th className="w-40 px-4 py-3" />
             {options.map((c) => (
               <th key={c.optionId} scope="col" className={`px-3 py-3 align-bottom ${chosen === c.optionId ? "bg-petrol-soft" : ""}`}>
                 <span className="flex items-center gap-2">
-                  <span className="display text-[1.5rem]">{c.rank ? RANK[c.rank] : "Option"}</span>
+                  <span className="display text-[1.5rem]">{tx.rank(c.rank)}</span>
                   <RankMark rank={c.rank} />
                 </span>
-                <span className="block text-[0.85rem] font-medium text-ink-soft">{c.labels.map((l) => LABEL[l]).join(", ") || (c.match === "compromise" ? "Compromise" : "")}</span>
+                <span className="block text-[0.85rem] font-medium text-ink-soft">{c.labels.map((l) => tx.label(l)).join(", ") || (c.match === "compromise" ? tx.compromiseShort : "")}</span>
               </th>
             ))}
           </tr>
@@ -632,10 +647,10 @@ function CompareTable({ options, step, open, chosen, busyKey, onChoose, names }:
               <td key={c.optionId} className="px-3 py-3">
                 {open ? (
                   <Button kind={step.preselected?.optionId === c.optionId ? "go" : "secondary"} size="sm" busy={busyKey === c.optionId} disabled={!!busyKey} onClick={() => onChoose(c.optionId)}>
-                    Fix this price
+                    {tx.fixPrice}
                   </Button>
                 ) : chosen === c.optionId ? (
-                  <span className="font-semibold text-petrol">Chosen</span>
+                  <span className="font-semibold text-petrol">{tx.chosen}</span>
                 ) : null}
               </td>
             ))}
@@ -647,16 +662,17 @@ function CompareTable({ options, step, open, chosen, busyKey, onChoose, names }:
 }
 
 function Excluded({ step, names }: { step: Step; names: Names }) {
+  const tx = useText(STAGES_TEXT);
   if (!step.excluded.length) return null;
   return (
     <details className="mt-3 text-[0.95rem]">
       <summary className="min-h-10 cursor-pointer py-2 font-semibold text-petrol underline decoration-2 underline-offset-4">
-        Why {step.excluded.length} other product{step.excluded.length === 1 ? " is" : "s are"} not offered
+        {tx.whyExcluded(step.excluded.length)}
       </summary>
       <ul className="mt-1 space-y-0.5 text-ink-soft">
         {step.excluded.map((e, i) => (
           <li key={`${e.productId}-${i}`}>
-            {names[e.productId] ? shortProduct(names[e.productId]) : "Another product"}: {say(e.reason, names)}
+            {names[e.productId] ? shortProduct(names[e.productId]) : tx.anotherProduct}: {say(e.reason, names)}
           </li>
         ))}
       </ul>
@@ -665,10 +681,11 @@ function Excluded({ step, names }: { step: Step; names: Names }) {
 }
 
 export function NoOptions({ step, names, onNew }: { step: Step; names: Names; onNew: () => void }) {
+  const tx = useText(STAGES_TEXT);
   return (
     <Paper>
       <div className="p-4 sm:p-6">
-        <p className="text-[1.35rem] font-semibold leading-snug">{step.state === "cancelled" ? "The request was cancelled. Nothing was ordered." : say(step.notes[0] ?? "Nothing fits.", names)}</p>
+        <p className="text-[1.35rem] font-semibold leading-snug">{step.state === "cancelled" ? tx.cancelledRequest : say(step.notes[0] ?? tx.nothingFits, names)}</p>
         {step.notes.slice(1).map((n) => (
           <p key={n} className="mt-1 text-ink-soft">
             {say(n, names)}
@@ -677,7 +694,7 @@ export function NoOptions({ step, names, onNew }: { step: Step; names: Names; on
         <Excluded step={step} names={names} />
         <div className="mt-4">
           <Button kind="primary" onClick={onNew}>
-            New request
+            {tx.newRequest}
           </Button>
         </div>
       </div>
@@ -688,6 +705,8 @@ export function NoOptions({ step, names, onNew }: { step: Step; names: Names; on
 // ---------- 5. fixed price ----------
 
 export function Quote({ q, names, decided, busy, onPlace, onNew }: { q: NonNullable<Step["quote"]>; names: Names; decided: boolean; busy: boolean; onPlace: () => void; onNew: () => void }) {
+  const tx = useText(STAGES_TEXT);
+  const f = useFormat();
   const now = useNow();
   const end = Date.parse(q.quote.expiresAt);
   const start = Date.parse(q.quote.issuedAt);
@@ -699,22 +718,22 @@ export function Quote({ q, names, decided, busy, onPlace, onNew }: { q: NonNulla
   const preview = q.policyPreview;
   const lead =
     preview.outcome === "auto_approve"
-      ? "Within the mandate: the agent may place this alone."
+      ? tx.withinMandate
       : preview.outcome === "needs_human_approval"
-        ? `Beyond the mandate: ${preview.approver.name} (${roleLabel(preview.approver.role)}) will have to sign off.`
-        : "The gate would refuse this.";
+        ? tx.beyondMandate(preview.approver.name, f.role(preview.approver.role))
+        : tx.wouldRefuse;
   return (
     <Paper>
       <div className="p-4 sm:p-6">
         <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
           <div>
-            <p className="text-[0.88rem] font-medium text-ink-soft">Total, signed by the wholesaler, VAT 0 %</p>
+            <p className="text-[0.88rem] font-medium text-ink-soft">{tx.totalSigned}</p>
             <p className="display text-[3.4rem] text-ink tabular">{money(q.quote.totalCents)}</p>
           </div>
           <div className="min-w-[12rem] flex-1 sm:max-w-[18rem]" aria-live="off">
             <p className="flex items-baseline justify-between gap-3 text-[0.88rem] font-medium text-ink-soft">
-              <span>{expired ? "Price expired" : decided ? "Price held" : "Price holds for"}</span>
-              <span>until {clock(q.quote.expiresAt)}</span>
+              <span>{expired ? tx.priceExpired : decided ? tx.priceHeld : tx.priceHolds}</span>
+              <span>{tx.until(f.clock(q.quote.expiresAt))}</span>
             </p>
             <p className={`display text-right text-[2.4rem] tabular ${expired ? "text-ink-soft line-through" : share < 0.2 && !decided ? "text-ink" : "text-petrol-deep"}`}>
               {String(mm).padStart(2, "0")}.{String(ss).padStart(2, "0")}
@@ -725,14 +744,14 @@ export function Quote({ q, names, decided, busy, onPlace, onNew }: { q: NonNulla
           </div>
         </div>
         <table className="mt-5 w-full text-left text-[0.98rem]">
-          <caption className="sr-only">Quoted lines</caption>
+          <caption className="sr-only">{tx.quotedLines}</caption>
           <thead className="border-y border-line text-[0.82rem] text-ink-soft">
             <tr>
-              <th className="py-2 pr-2 font-medium">Product</th>
-              <th className="py-2 pr-2 text-right font-medium">Packs</th>
-              <th className="hidden py-2 pr-2 text-right font-medium sm:table-cell">Per pack</th>
-              <th className="py-2 pr-2 text-right font-medium">Line</th>
-              <th className="py-2 text-right font-medium">Arrives</th>
+              <th className="py-2 pr-2 font-medium">{tx.product}</th>
+              <th className="py-2 pr-2 text-right font-medium">{tx.packs}</th>
+              <th className="hidden py-2 pr-2 text-right font-medium sm:table-cell">{tx.perPack}</th>
+              <th className="py-2 pr-2 text-right font-medium">{tx.line}</th>
+              <th className="py-2 text-right font-medium">{tx.arrives}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
@@ -740,12 +759,12 @@ export function Quote({ q, names, decided, busy, onPlace, onNew }: { q: NonNulla
               <tr key={l.productId}>
                 <td className="py-2 pr-2">
                   {shortProduct(l.name)}
-                  {l.substituteFor && <span className="block text-[0.85rem] text-ink-soft">swap for {shortProduct(l.substituteFor.name)}</span>}
+                  {l.substituteFor && <span className="block text-[0.85rem] text-ink-soft">{tx.swapFor(shortProduct(l.substituteFor.name))}</span>}
                 </td>
                 <td className="py-2 pr-2 text-right tabular">{l.quantity}</td>
                 <td className="hidden py-2 pr-2 text-right tabular sm:table-cell">{money(l.unitPriceCents)}</td>
                 <td className="py-2 pr-2 text-right tabular">{money(l.lineTotalCents)}</td>
-                <td className="py-2 text-right">{day(l.deliveryDate)}</td>
+                <td className="py-2 text-right">{f.day(l.deliveryDate)}</td>
               </tr>
             ))}
           </tbody>
@@ -753,7 +772,7 @@ export function Quote({ q, names, decided, busy, onPlace, onNew }: { q: NonNulla
         <div className={`mt-4 flex items-start gap-3 px-3 py-2.5 ${preview.outcome === "auto_approve" ? "bg-mist" : "border-l-[6px] border-safety-ink bg-safety/20"}`}>
           {preview.outcome !== "auto_approve" && <Target size={22} tone="safety" className="mt-0.5 shrink-0" />}
           <div>
-            <p className="font-semibold">The gate&apos;s preview: {lead}</p>
+            <p className="font-semibold">{tx.preview(lead)}</p>
             {preview.outcome !== "auto_approve" && (
               <ul className="mt-1 space-y-0.5 text-[0.95rem] text-ink-soft">
                 {preview.reasons
@@ -768,11 +787,11 @@ export function Quote({ q, names, decided, busy, onPlace, onNew }: { q: NonNulla
         {!decided && (
           <div className="mt-5 flex flex-wrap items-center gap-4">
             <Button kind="go" size="lg" busy={busy} onClick={onPlace}>
-              Place the order
+              {tx.place}
             </Button>
-            {expired && <span className="text-[0.95rem] text-ink-soft">The price has expired: the gate will refuse it. Start again for a new price.</span>}
+            {expired && <span className="text-[0.95rem] text-ink-soft">{tx.expiredHint}</span>}
             <Button kind="quiet" onClick={onNew}>
-              Start again
+              {tx.startAgain}
             </Button>
           </div>
         )}
@@ -783,19 +802,19 @@ export function Quote({ q, names, decided, busy, onPlace, onNew }: { q: NonNulla
 
 // ---------- 6. the gate ----------
 
-const OUTCOME_WORD: Record<string, string> = { pass: "Passed", escalate: "Needs a person", fail: "Failed" };
-
 /**
  * The gate's decision. When it stops an order this is the loudest thing on the customer side: a black slab in a
  * hazard frame, the crash-test mark, the barrier arms closing. When it passes an order it is a quiet white plate.
  * `withSignOff` puts the sign-off (who, the QR code, the stamp) inside the same plate, for pages without a lane.
  */
 export function Gate({ order, refusal, kitchen, names, streaming, byHand = false, withSignOff = true }: { order?: Order; refusal?: ApiError; kitchen: KitchenInfo; names: Names; streaming: boolean; byHand?: boolean; withSignOff?: boolean }) {
+  const tx = useText(STAGES_TEXT);
+  const f = useFormat();
   if (!order) {
     return (
-      <GateSlab title="Refused at the gate" sub={ruleTitle(refusal?.rule)}>
-        <p className="text-[1.1rem] leading-snug text-paper">{say(refusal?.message ?? "The order was refused.", names)}</p>
-        <p className="mt-2 text-[0.95rem] text-paper/70">Nothing was ordered. The refusal and its reason are in the ledger.</p>
+      <GateSlab title={tx.refusedAtGate} sub={f.ruleTitle(refusal?.rule)}>
+        <p className="text-[1.1rem] leading-snug text-paper">{say(refusal?.message ?? tx.orderRefused, names)}</p>
+        <p className="mt-2 text-[0.95rem] text-paper/70">{tx.nothingOrdered}</p>
       </GateSlab>
     );
   }
@@ -807,13 +826,13 @@ export function Gate({ order, refusal, kitchen, names, streaming, byHand = false
   if (order.status === "rejected") {
     const failed = rules.filter((r) => r.outcome === "fail");
     return (
-      <GateSlab title={a ? "Refused at the re-check" : "Refused at the gate"} sub={failed.map((r) => ruleTitle(r.rule)).join(", ") || ruleTitle(refusal?.rule)}>
+      <GateSlab title={a ? tx.refusedRecheck : tx.refusedAtGate} sub={failed.map((r) => f.ruleTitle(r.rule)).join(", ") || f.ruleTitle(refusal?.rule)}>
         <ul className="space-y-1 text-[1.08rem] leading-snug text-paper">
           {failed.map((r) => (
             <li key={r.rule}>{say(r.reason, names)}</li>
           ))}
         </ul>
-        <p className="mt-2 text-[0.95rem] text-paper/70">Nothing was ordered. The refusal and its reason are in the ledger.</p>
+        <p className="mt-2 text-[0.95rem] text-paper/70">{tx.nothingOrdered}</p>
         {checks}
       </GateSlab>
     );
@@ -822,11 +841,11 @@ export function Gate({ order, refusal, kitchen, names, streaming, byHand = false
     const escalated = rules.filter((r) => r.outcome === "escalate");
     return (
       <div className="space-y-3">
-        <GateSlab title="Stopped at the gate" sub={`${a.approver.name}, ${roleLabel(a.approver.role)}, must sign off. The agent cannot approve its own order.`} closed={a.status === "pending"}>
+        <GateSlab title={tx.stoppedAtGate} sub={tx.mustSign(a.approver.name, f.role(a.approver.role))} closed={a.status === "pending"}>
           <ul className="space-y-2 leading-snug">
             {escalated.map((r) => (
               <li key={r.rule} className="text-paper">
-                <strong className="text-safety">{ruleTitle(r.rule)}.</strong> <span className="text-paper/90">{say(r.reason, names)}</span>
+                <strong className="text-safety">{f.ruleTitle(r.rule)}.</strong> <span className="text-paper/90">{say(r.reason, names)}</span>
               </li>
             ))}
           </ul>
@@ -844,10 +863,8 @@ export function Gate({ order, refusal, kitchen, names, streaming, byHand = false
             ✓
           </span>
           <div className="min-w-0">
-            <p className="display text-[2.2rem] text-ink sm:text-[2.6rem]">{byHand ? "Passed: within the kitchen's mandate" : "Passed: the agent may place it alone"}</p>
-            <p className="mt-1 text-[1.05rem] text-ink-soft">
-              All {rules.length} checks passed{byHand ? ", the same checks as an agent's order" : ""}. No sign-off needed.
-            </p>
+            <p className="display text-[2.2rem] text-ink sm:text-[2.6rem]">{byHand ? tx.passedByHand : tx.passedAlone}</p>
+            <p className="mt-1 text-[1.05rem] text-ink-soft">{tx.allPassed(rules.length, byHand)}</p>
           </div>
         </div>
         <p className="mt-3 text-[1.05rem]">{say(d.reasons[0] ?? "", names)}</p>
@@ -879,7 +896,7 @@ function GateSlab({ title, sub, children, closed = true }: { title: string; sub:
           <Target size={84} tone="safety" className="hidden shrink-0 sm:block" />
           <Target size={52} tone="safety" className="shrink-0 sm:hidden" />
           <div className="min-w-0">
-            <p className="display text-[2.4rem] leading-[0.95] text-safety sm:text-[3.6rem]">{title}</p>
+            <p className="display hyphens-auto break-words text-[2.4rem] leading-[0.95] text-safety sm:text-[3.6rem]">{title}</p>
             <p className="mt-2 max-w-[60ch] text-[1.1rem] leading-snug text-paper">{sub}</p>
           </div>
         </div>
@@ -890,17 +907,19 @@ function GateSlab({ title, sub, children, closed = true }: { title: string; sub:
 }
 
 function ChecksList({ rules, names, dark }: { rules: Order["decision"]["rules"]; names: Names; dark: boolean }) {
+  const tx = useText(STAGES_TEXT);
+  const f = useFormat();
   const passed = rules.filter((r) => r.outcome === "pass").length;
   return (
     <details className={`mt-4 text-[0.95rem] ${dark ? "text-paper" : ""}`}>
       <summary className={`min-h-10 cursor-pointer py-2 font-semibold underline decoration-2 underline-offset-4 ${dark ? "text-paper" : "text-petrol"}`}>
-        All {rules.length} checks ({passed} passed)
+        {tx.allChecks(rules.length, passed)}
       </summary>
       <ul className={`mt-1 divide-y ${dark ? "divide-paper/15" : "divide-line"}`}>
         {rules.map((r) => (
           <li key={r.rule} className="grid gap-x-3 py-1.5 sm:grid-cols-[16rem_8rem_1fr]">
-            <span className="font-semibold">{ruleTitle(r.rule)}</span>
-            <span className={r.outcome === "pass" ? (dark ? "text-paper/60" : "text-ink-soft") : dark ? "font-semibold text-safety" : "font-semibold"}>{OUTCOME_WORD[r.outcome]}</span>
+            <span className="font-semibold">{f.ruleTitle(r.rule)}</span>
+            <span className={r.outcome === "pass" ? (dark ? "text-paper/60" : "text-ink-soft") : dark ? "font-semibold text-safety" : "font-semibold"}>{tx.outcome(r.outcome)}</span>
             <span className={dark ? "text-paper/75" : "text-ink-soft"}>{say(r.reason, names)}</span>
           </li>
         ))}
@@ -916,10 +935,12 @@ function ChecksList({ rules, names, dark }: { rules: Order["decision"]["rules"];
  * The phone screen this hands off to opens with the same hazard band and the same words, so it reads as one act.
  */
 export function SignOff({ order, kitchen, streaming }: { order: Order; kitchen: KitchenInfo; streaming: boolean }) {
+  const tx = useText(STAGES_TEXT);
+  const f = useFormat();
   const a = order.approval;
   const now = useNow(1000);
   if (!a) return null;
-  const how = a.signOff?.method === "passkey" ? "with their passkey" : a.signOff?.method === "link_token" ? "with the one-time link sent to their phone" : a.signOff?.method === "demo_tap" ? "with a demo tap, not verified" : "";
+  const how = a.signOff?.method === "passkey" ? tx.howPasskey : a.signOff?.method === "link_token" ? tx.howLink : a.signOff?.method === "demo_tap" ? tx.howDemo : "";
   if (a.status === "pending") {
     const since = Math.max(0, Math.floor((now - Date.parse(a.requestedAt)) / 1000));
     return (
@@ -929,26 +950,24 @@ export function SignOff({ order, kitchen, streaming }: { order: Order; kitchen: 
           <div className="min-w-0">
             <p className="flex items-center gap-2 text-[0.95rem] font-semibold">
               <span aria-hidden className="breathe inline-block size-3 bg-safety-ink" />
-              Waiting for a person
+              {tx.waitingPerson}
             </p>
             <p className="display mt-2 text-[2.6rem] leading-[0.95] text-ink sm:text-[3.2rem]">{a.approver.name}</p>
-            <p className="mt-1 text-[1.1rem]">
-              {roleLabel(a.approver.role)}, may sign up to {moneyShort(a.approver.maxApprovalCents)}
-            </p>
+            <p className="mt-1 text-[1.1rem]">{tx.maySign(f.role(a.approver.role), moneyShort(a.approver.maxApprovalCents))}</p>
             <dl className="mt-5 grid grid-cols-2 gap-4 border-t border-line pt-4 sm:max-w-md">
               <div>
-                <dt className="text-[0.8rem] font-medium text-ink-soft">Asked</dt>
+                <dt className="text-[0.8rem] font-medium text-ink-soft">{tx.asked}</dt>
                 <dd className="display text-[2rem] tabular" aria-live="off">
                   {since < 60 ? `${since} s` : `${Math.floor(since / 60)} min ${String(since % 60).padStart(2, "0")} s`}
-                  <span className="ml-1 font-sans text-[0.9rem] font-medium text-ink-soft">ago</span>
+                  <span className="ml-1 font-sans text-[0.9rem] font-medium text-ink-soft">{tx.ago}</span>
                 </dd>
               </div>
               <div>
-                <dt className="text-[0.8rem] font-medium text-ink-soft">Order</dt>
+                <dt className="text-[0.8rem] font-medium text-ink-soft">{tx.order}</dt>
                 <dd className="display text-[2rem] tabular">{money(order.totalCents)}</dd>
               </div>
             </dl>
-            <p className="mt-4 text-[0.95rem] text-ink-soft">{streaming ? "Live: this page changes the moment they decide on their phone." : "Checking every second for their decision."}</p>
+            <p className="mt-4 text-[0.95rem] text-ink-soft">{streaming ? tx.live : tx.polling}</p>
           </div>
           <ApprovalPanel kitchen={kitchen} approvalId={a.approvalId} />
         </div>
@@ -960,17 +979,13 @@ export function SignOff({ order, kitchen, streaming }: { order: Order; kitchen: 
     <Paper>
       <div className="flex flex-wrap items-center gap-6 p-4 sm:p-6">
         <div className={`stamp inline-block border-[4px] px-5 py-3 ${approved ? "border-petrol text-petrol" : "border-ink text-ink"}`}>
-          <p className="display text-[2.4rem] leading-none">{approved ? "Signed off" : "Declined"}</p>
-          <p className="mt-1 text-[1rem] font-semibold">
-            {a.approver.name}, {clock(a.decidedAt ?? order.updatedAt)}
-          </p>
+          <p className="display text-[2.4rem] leading-none">{approved ? tx.stampSigned : tx.stampDeclined}</p>
+          <p className="mt-1 text-[1rem] font-semibold">{tx.stampLine(a.approver.name, f.clock(a.decidedAt ?? order.updatedAt))}</p>
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[1.1rem] leading-snug">
-            {approved ? "Approved" : "Declined"} by {a.approver.name}, {roleLabel(a.approver.role)}, at {clock(a.decidedAt ?? order.updatedAt)} {how}.
-          </p>
-          {a.note && <p className="mt-1 text-ink-soft">Note: “{a.note}”</p>}
-          {approved && <p className="mt-1 text-ink-soft">The gate checked the order again before it went to the wholesaler.</p>}
+          <p className="text-[1.1rem] leading-snug">{tx.decided(approved, a.approver.name, f.role(a.approver.role), f.clock(a.decidedAt ?? order.updatedAt), how)}</p>
+          {a.note && <p className="mt-1 text-ink-soft">{tx.note(a.note)}</p>}
+          {approved && <p className="mt-1 text-ink-soft">{tx.rechecked}</p>}
         </div>
       </div>
     </Paper>
@@ -979,6 +994,7 @@ export function SignOff({ order, kitchen, streaming }: { order: Order; kitchen: 
 
 /** A phone, drawn: the code to scan sits on its screen, so the hand-off reads as "pick up your phone". */
 export function ApprovalPanel({ kitchen, approvalId }: { kitchen: KitchenInfo; approvalId: string }) {
+  const tx = useText(STAGES_TEXT);
   const [qr, setQr] = useState<ApprovalQr>();
   const [error, setError] = useState<string>();
   useEffect(() => {
@@ -992,7 +1008,7 @@ export function ApprovalPanel({ kitchen, approvalId }: { kitchen: KitchenInfo; a
       live = false;
     };
   }, [kitchen.slug, approvalId]);
-  const name = qr?.approver.name ?? "the approver";
+  const name = qr?.approver.name ?? tx.theApprover;
   return (
     <figure className="mx-auto w-full max-w-[15rem] md:w-56">
       <div className="rounded-[1.6rem] bg-safety-ink p-2.5 pb-4">
@@ -1000,7 +1016,7 @@ export function ApprovalPanel({ kitchen, approvalId }: { kitchen: KitchenInfo; a
         <div className="overflow-hidden rounded-[0.9rem] bg-paper">
           <div aria-hidden className="hazard-thin h-2" />
           <div className="p-2.5">
-            <p className="text-center text-[0.8rem] font-semibold leading-tight">Stopped at the gate</p>
+            <p className="text-center text-[0.8rem] font-semibold leading-tight">{tx.phoneStopped}</p>
             <div className="mt-1.5 aspect-square w-full">
               {qr ? <div className="size-full [&>svg]:size-full" dangerouslySetInnerHTML={{ __html: qr.qrSvg }} /> : <div className={`size-full ${error ? "bg-mist" : "animate-pulse bg-mist"}`} />}
             </div>
@@ -1008,20 +1024,20 @@ export function ApprovalPanel({ kitchen, approvalId }: { kitchen: KitchenInfo; a
         </div>
       </div>
       <figcaption className="mt-3 text-[0.92rem] leading-snug">
-        {error && <span className="text-ink-soft">No code to show: {error}</span>}
-        {qr?.mode === "passkey" && <>Scan with {name}&apos;s phone. Approving needs their passkey.</>}
-        {qr?.mode === "demo_link" && <>{name} is made up for this demo kitchen. Scan to sign off in their place, with the one-time link sent to their phone.</>}
-        {qr?.mode === "view_only" && <>{name} signs off with the link sent to their phone.</>}
-        {qr?.mode === "enrol" && <>{name} is made up for this demo kitchen. A presenter scans this, enters the operations passcode and makes a passkey to sign in their place.</>}
+        {error && <span className="text-ink-soft">{tx.noCode(error)}</span>}
+        {qr?.mode === "passkey" && <>{tx.qrPasskey(name)}</>}
+        {qr?.mode === "demo_link" && <>{tx.qrDemo(name)}</>}
+        {qr?.mode === "view_only" && <>{tx.qrView(name)}</>}
+        {qr?.mode === "enrol" && <>{tx.qrEnrol(name)}</>}
         {qr && (
           <a href={qr.url} target="_blank" rel="noreferrer" className="mt-1 block font-semibold text-petrol underline decoration-2 underline-offset-4">
-            {qr.mode === "enrol" ? "Become the approver" : "Open the sign-off screen"}
+            {qr.mode === "enrol" ? tx.becomeApprover : tx.openSignOff}
           </a>
         )}
         {qr?.orderId && qr.status === "pending" && <WithdrawButton kitchen={kitchen} orderId={qr.orderId} />}
         {!qr && !error && (
           <span className="flex items-center gap-2 text-ink-soft">
-            <Spinner size={14} /> Preparing the code…
+            <Spinner size={14} /> {tx.preparing}
           </span>
         )}
       </figcaption>
@@ -1031,19 +1047,20 @@ export function ApprovalPanel({ kitchen, approvalId }: { kitchen: KitchenInfo; a
 
 /** The buyer takes the waiting order back: it stops holding the weekly budget, and the approver's phone shows it withdrawn. */
 function WithdrawButton({ kitchen, orderId }: { kitchen: KitchenInfo; orderId: string }) {
+  const tx = useText(STAGES_TEXT);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<string>();
   async function withdraw() {
     setBusy(true);
     const r = await api<{ order: Order }>("POST", `/ui-api/kitchens/${encodeURIComponent(kitchen.slug)}/call`, { method: "POST", path: `/api/v1/orders/${orderId}/withdraw`, body: { reason: "withdrawn from the kitchen portal" } });
     setBusy(false);
-    setDone(r.ok ? "Withdrawn. It no longer holds the weekly budget." : r.error.message);
+    setDone(r.ok ? tx.withdrawn : r.error.message);
   }
   if (done) return <span className="mt-2 block text-ink-soft">{done}</span>;
   return (
     <span className="mt-2 block">
       <Button kind="quiet" busy={busy} onClick={() => void withdraw()}>
-        Withdraw this order
+        {tx.withdraw}
       </Button>
     </span>
   );
@@ -1063,14 +1080,16 @@ function ledgerSeq(jws?: string): number | undefined {
 }
 
 export function SignedOrder({ order, names, onNew }: { order: Order; names: Names; onNew: () => void }) {
+  const tx = useText(STAGES_TEXT);
+  const f = useFormat();
   if (order.status === "declined") {
     return (
       <Paper>
         <div className="p-4 sm:p-6">
-          <p className="text-[1.35rem] font-semibold">Nothing was ordered: {order.approval?.approver.name ?? "the approver"} declined.</p>
+          <p className="text-[1.35rem] font-semibold">{tx.declinedNothing(order.approval?.approver.name)}</p>
           <div className="mt-4">
             <Button kind="primary" onClick={onNew}>
-              New request
+              {tx.newRequest}
             </Button>
           </div>
         </div>
@@ -1079,17 +1098,15 @@ export function SignedOrder({ order, names, onNew }: { order: Order; names: Name
   }
   const seq = ledgerSeq(order.confirmation);
   const latest = order.lines.map((l) => l.deliveryDate).sort().at(-1)!;
-  const by = order.approval?.status === "approved" ? `${order.approval.approver.name} (${roleLabel(order.approval.approver.role)})` : "the agent, within its mandate";
+  const by = order.approval?.status === "approved" ? `${order.approval.approver.name} (${f.role(order.approval.approver.role)})` : tx.byAgent;
   return (
     <div className="bg-paper">
       <div aria-hidden className="h-2 bg-petrol-deep" />
       <div className="p-4 sm:p-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="display text-[2.2rem] text-petrol-deep">Order placed with the wholesaler</p>
-            <p className="mt-1 text-ink-soft">
-              Committed at {clock(order.updatedAt)}, at the fixed price. Authorised by {by}.
-            </p>
+            <p className="display text-[2.2rem] text-petrol-deep">{tx.placed}</p>
+            <p className="mt-1 text-ink-soft">{tx.committed(f.clock(order.updatedAt), by)}</p>
           </div>
           <p className="display text-[3rem] text-ink tabular">{money(order.totalCents)}</p>
         </div>
@@ -1098,21 +1115,21 @@ export function SignedOrder({ order, names, onNew }: { order: Order; names: Name
             <li key={l.productId} className="flex justify-between gap-3 py-2">
               <span>
                 {l.quantity} × {shortProduct(l.name)}
-                {l.substituteFor && <span className="text-ink-soft"> (swap for {shortProduct(l.substituteFor.name)})</span>}
+                {l.substituteFor && <span className="text-ink-soft">{tx.swapParen(shortProduct(l.substituteFor.name))}</span>}
               </span>
               <span className="shrink-0 tabular">{money(l.lineTotalCents)}</span>
             </li>
           ))}
         </ul>
         <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
-          <Field label="Delivery">{day(latest)}</Field>
-          <Field label="Confirmation">{order.confirmation ? "Signed by the wholesaler" : <Missing>Not signed</Missing>}</Field>
-          {seq !== undefined && <Field label="In the ledger">at entry {seq}</Field>}
+          <Field label={tx.delivery}>{f.day(latest)}</Field>
+          <Field label={tx.confirmation}>{order.confirmation ? tx.signedByWholesaler : <Missing>{tx.notSigned}</Missing>}</Field>
+          {seq !== undefined && <Field label={tx.inLedger}>{tx.atEntry(seq)}</Field>}
         </dl>
-        <p className="mt-3 text-[0.92rem] text-ink-soft">{say("Anyone can check the confirmation against the wholesaler's published key at /.well-known/jwks.json.", names)}</p>
+        <p className="mt-3 text-[0.92rem] text-ink-soft">{say(tx.jwks, names)}</p>
         <div className="mt-4">
           <Button kind="secondary" onClick={onNew}>
-            New request
+            {tx.newRequest}
           </Button>
         </div>
       </div>

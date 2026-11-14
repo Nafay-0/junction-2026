@@ -38,20 +38,20 @@ import { TOOLS, type DockTool } from "./tools";
  * the same code and rule the REST API returns.
  */
 
-export const MCP_SERVER_INFO = { name: "dock", title: "Dock", version: "1.0.0" };
+export const MCP_SERVER_INFO = { name: "aimopilot", title: "AimoPilot", version: "1.0.0" };
 
-export const MCP_INSTRUCTIONS = `Dock is a wholesaler's ordering gateway. You order food for a kitchen under a mandate its organisation signed; Dock checks every order in plain code and a named person signs off anything beyond it.
+export const MCP_INSTRUCTIONS = `AimoPilot is a wholesaler's ordering gateway. You order food for a kitchen under a mandate its organisation signed; AimoPilot checks every order in plain code and a named person signs off anything beyond it.
 
 Start every new order with submit_need. Each result has a step, waitingFor and nextStep: do what nextStep says.
-When waitingFor is "buyer", Dock needs the person's own answer: ask them Dock's question in plain words with its choices, then stop and wait for their reply. Never answer or confirm for them, even when one choice looks obvious.
+When waitingFor is "buyer", AimoPilot needs the person's own answer: ask them AimoPilot's question in plain words with its choices, then stop and wait for their reply. Never answer or confirm for them, even when one choice looks obvious.
 When place_order returns pending_approval, tell the person in one sentence who must sign off (they are asked on their own phone) and stop. Do not retry, place it again, split it or find another way round.
 
 Flow: read_mandate -> submit_need -> [respond_to_concerns] -> [answer_questions] -> choose_option (signed fixed-price quote) -> place_order -> get_order / explain.
-If your client supports elicitation, Dock asks the buyer directly instead.
+If your client supports elicitation, AimoPilot asks the buyer directly instead.
 Lower-level tools for follow-up: open_request, search_products (free master data), check_availability (live, metered, short lists only), request_quote.
 
 Rules of the road:
-- Fill submit_need with only what the person said and call it; do not ask for details first. Dock asks only what changes the outcome.
+- Fill submit_need with only what the person said and call it; do not ask for details first. AimoPilot asks only what changes the outcome.
 - Talk to the person in plain words: option titles, totals in euros, delivery days. No ids or JSON unless they ask.
 - Quantities are packs. Prices are euro cents ex VAT.
 - Ask live prices only for a short list (at most 10 products per call); never scan the catalogue.
@@ -274,9 +274,9 @@ function connectorError(status: number, code: string, message: string, headers: 
 }
 
 const GONE: Record<"unknown" | "revoked" | "expired", string> = {
-  unknown: "There is no Dock connector at this address. Check the address, or ask the kitchen for its current one.",
-  revoked: "This Dock connector address was revoked. Ask the kitchen for its new address.",
-  expired: "This Dock connector address has expired with its demo kitchen. Scan the code again for a new kitchen.",
+  unknown: "There is no AimoPilot connector at this address. Check the address, or ask the kitchen for its current one.",
+  revoked: "This AimoPilot connector address was revoked. Ask the kitchen for its new address.",
+  expired: "This AimoPilot connector address has expired with its demo kitchen. Scan the code again for a new kitchen.",
 };
 
 /** The /api/mcp/c/<token> endpoint: the same MCP server, authenticated by the connector address. */

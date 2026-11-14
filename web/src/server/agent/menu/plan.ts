@@ -322,7 +322,7 @@ function evaluateLine(spec: LineSpec, input: PlanInput): PlanLineView {
   const conflict = input.draft.conflicts.find((c) => keyWords.some((w) => c.toLowerCase().includes(w)));
   if (conflict && allergenRefused) addDoubt("rule_conflict", `The request clashes with a kitchen rule: ${conflict}`, undefined, "conflict");
   if (spec.uses.some((u) => u.perCover.unit === "pcs")) {
-    addDoubt("amount_check", "Counted in pieces, but the catalogue's packs are not counted in pieces, so Dock will not guess how many packs that is. Give the amount per cover in g or ml, or strike the line.", undefined, "pieces");
+    addDoubt("amount_check", "Counted in pieces, but the catalogue's packs are not counted in pieces, so AimoPilot will not guess how many packs that is. Give the amount per cover in g or ml, or strike the line.", undefined, "pieces");
     return finish(view);
   }
 
@@ -444,7 +444,7 @@ export function computePlan(input: PlanInput): PlanView {
   if (openDoubts) blockers.push(`${openDoubts} item${openDoubts > 1 ? "s" : ""} on the plan need${openDoubts > 1 ? "" : "s"} a decision.`);
   if (chosen.length === 0 && input.settings.covers !== null) blockers.push("Nothing to order: every line is struck.");
   if (productIds.size > MAX_LIVE_IDS_PER_CALL)
-    blockers.push(`${productIds.size} products: the wholesaler fixes a price for at most ${MAX_LIVE_IDS_PER_CALL} products in one quote today. Strike ${productIds.size - MAX_LIVE_IDS_PER_CALL} line${productIds.size - MAX_LIVE_IDS_PER_CALL > 1 ? "s" : ""} the kitchen can cover, or plan fewer dishes; Dock does not split one need into several orders.`);
+    blockers.push(`${productIds.size} products: the wholesaler fixes a price for at most ${MAX_LIVE_IDS_PER_CALL} products in one quote today. Strike ${productIds.size - MAX_LIVE_IDS_PER_CALL} line${productIds.size - MAX_LIVE_IDS_PER_CALL > 1 ? "s" : ""} the kitchen can cover, or plan fewer dishes; AimoPilot does not split one need into several orders.`);
   if (after > m.weeklyBudgetCents) blockers.push(`${formatEur(totalCents)} would take this week's spend to ${formatEur(after)}, over the ${formatEur(m.weeklyBudgetCents)} budget.`);
   if (reasons.length && !approver) blockers.push(`No one in the mandate may sign off ${formatEur(totalCents)}.`);
   // Nothing can come by the date: one message for the plan instead of one per line.

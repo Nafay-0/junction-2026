@@ -56,7 +56,7 @@ function sanna(fields: Record<string, Field>): Content {
 }
 
 function showForm(form: Form, content: Content) {
-  step("buyer", `${BUYER}'s screen (asked by Dock through the MCP client, not by the agent): ${form.message}`);
+  step("buyer", `${BUYER}'s screen (asked by AimoPilot through the MCP client, not by the agent): ${form.message}`);
   for (const [key, f] of Object.entries(form.requestedSchema.properties)) {
     if (!f.oneOf) continue;
     indent([`${f.title}`, ...f.oneOf.map((o) => `  ${o.const === content[key] ? "(x)" : "( )"} ${o.title}${o.const === f.default ? "   <- the agent's suggestion" : ""}`)]);
@@ -104,7 +104,7 @@ async function main() {
   const fromBuyer = async (name: string, a: Record<string, unknown>, relay: () => Record<string, unknown>): Promise<Result> => {
     const r = await call(name, a);
     if (r.error?.code !== "human_answer_required") return r;
-    step("relay", "This client cannot show Dock's form, so the agent asks the buyer and passes on her answer.");
+    step("relay", "This client cannot show AimoPilot's form, so the agent asks the buyer and passes on her answer.");
     return call(name, { ...a, ...relay() });
   };
 
@@ -141,7 +141,7 @@ async function main() {
 
   if (r.step.state !== "options_ready") throw new Error(`expected options, got ${r.step.state}: ${r.nextStep}`);
   type Card = { optionId: string; title: string; labels: string[]; totalCents: number; deliveryDate: string; pros: string[]; cons: string[]; signOff: string[] };
-  step("options", `${r.step.options.length} options (Dock checked live prices for a short list only):`);
+  step("options", `${r.step.options.length} options (AimoPilot checked live prices for a short list only):`);
   for (const o of r.step.options as Card[]) {
     indent([`${o.optionId}  [${o.labels.join(", ")}] ${o.title}: ${eur(o.totalCents)}, delivery ${o.deliveryDate}`]);
     indent([...o.pros.map((p) => `  + ${p}`), ...o.cons.map((c) => `  - ${c}`), ...o.signOff.map((x) => `  ! ${x}`)]);

@@ -1,0 +1,277 @@
+{
+  "model": "gpt-image-2.6-flare",
+  "defaults": {
+    "quality": "medium",
+    "output_format": "png",
+    "sizes": {
+      "tile": "1024x1024",
+      "department": "1536x864",
+      "hero": "1536x864"
+    }
+  },
+  "style": "Style: calm, appetising professional still-life photograph, photorealistic, shot on a medium-format camera with a 90 mm lens. The subject stands on a matte deep petrol-blue surface in front of a seamless deep petrol-blue backdrop (colour around #003646 to #005670, the same continuous tone from floor to wall, no horizon line, no texture, no props beyond the subject). Soft single-source daylight from the upper left, a gentle long soft shadow falling to the lower right, no hard highlights. Camera at the same three-quarter angle slightly above table height across the whole set. Exactly one small fresh lime-green accent (colour family #C0E021) as described in the accent line; it is the only added bright colour, everything else keeps the food's own natural colours. Accent rule for the set: one small sprig of fresh dill by default; one small fresh mint leaf for sweet subjects and drinks; for non-food subjects no herb, only one small folded lime-green cloth or paper corner. Any packaging is completely plain and unbranded: plain white or plain kraft-paper cartons, sacks, tubs, bottles, tins and boxes with smooth blank surfaces. Professional-kitchen honesty: wholesale quantities where natural, functional and real, not retail kitsch, no decoration.",
+  "framing": {
+    "tile": "Square composition: the subject is large in the frame, filling about 60% of the square, centred, with a calm even margin of petrol-blue around it; the accent is small and sits beside the subject.",
+    "department": "Wide banner composition: the left 40% of the frame is quiet, empty petrol-blue surface and backdrop for overlaid type; the subject group is weighted to the right 60% of the frame, arranged in a calm low row with a little space between items. Every item sits fully inside the frame with a clear margin of backdrop on the right edge; nothing is cut off by the frame.",
+    "hero": "Wide banner composition: the left 40% of the frame is quiet, empty petrol-blue surface and backdrop for overlaid type; the subject group is weighted to the right 60% of the frame, generous and calm. Every item sits fully inside the frame with a clear margin of backdrop on the right edge; nothing is cut off by the frame."
+  },
+  "accents": {
+    "dill": "Accent: one small sprig of fresh dill lying on the surface near the subject, the only herb in the image.",
+    "mint": "Accent: one small fresh mint leaf lying on the surface near the subject, the only herb in the image.",
+    "cloth": "Accent: one small neatly folded plain lime-green cotton cloth or paper corner beside the subject; no herbs, no food.",
+    "none": "No accent element."
+  },
+  "negative": "Strictly no text of any kind: no letters, no words, no numbers, no logos, no labels, no stickers, no printed graphics, no barcodes, no brand marks, no embossing, no recognisable real-world brand packaging or pack shapes, no watermark, no signature. No people, no hands, no faces.",
+  "images": {
+    "hero": {
+      "kind": "hero",
+      "accent": "dill",
+      "subject": "A generous wholesale delivery that has just arrived in a professional kitchen: a wooden crate of fresh vegetables (carrots trimmed with short stubby tops, a few cucumbers, a pale cabbage; few leaves, little green), a plain unprinted white gable-top milk carton, a large block of yellow cheese, a crusty rustic loaf of bread, and a heavy, flat-bottomed 10 kg plain kraft paper flour sack with a stitched top seam, standing upright and full."
+    },
+    "home": {
+      "kind": "hero",
+      "accent": "mint",
+      "subject": "A calm close still life of breakfast service for a professional kitchen: a plain unprinted white gable-top milk carton, a plain white tub of yoghurt with the lid off, a shallow tray of fresh blueberries and raspberries, a few dark rye bread slices and a rustic loaf, a white bowl of yoghurt with berries."
+    },
+    "tile-milk-carton": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "Two plain unprinted white 1 litre gable-top milk cartons standing upright, one slightly behind and to the side of the other, completely blank white sides and blank tops."
+    },
+    "tile-cream-carton": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "A small plain unprinted white gable-top carton of cream standing next to a small brushed-steel jug with a little thick white cream poured into it."
+    },
+    "tile-bag-in-box": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "A plain unprinted kraft-brown corrugated 10 litre bag-in-box carton standing upright, with its small white plastic dispensing tap sticking out near the bottom of the front face."
+    },
+    "tile-yoghurt-tub": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "Two large plain unprinted white catering tubs of yoghurt, one closed with a plain white lid, the other open showing thick creamy white yoghurt."
+    },
+    "tile-cheese-block": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "A large rectangular block of yellow cheese and a cut wedge of the same cheese on a pale wooden board."
+    },
+    "tile-butter": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "A large block of butter half unwrapped from plain unprinted greaseproof paper, with one neat curl of butter lying in front of it."
+    },
+    "tile-flour-sack": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "A heavy, flat-bottomed 10 kg plain kraft paper flour sack with a stitched top seam, standing upright and full, with a steel scoop of white flour resting in front of it."
+    },
+    "tile-grain-pasta": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "Two plain white ceramic bowls side by side, one full of dry penne pasta, the other full of uncooked white rice, a few grains scattered on the surface."
+    },
+    "tile-berry-tray": {
+      "kind": "tile",
+      "accent": "mint",
+      "subject": "A shallow plain steel tray of frozen mixed berries (blueberries, raspberries, lingonberries), the berries lightly frosted white at the edges."
+    },
+    "tile-vegetables": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "A wooden crate full of fresh vegetables: carrots trimmed with short tops, cucumbers, and a pale green cabbage."
+    },
+    "tile-frozen-veg": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "A plain steel bowl heaped with frozen green peas, diced carrots and sweetcorn, covered in fine white frost crystals."
+    },
+    "tile-bread": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "A round dark rustic Finnish rye loaf with a floury cracked crust and three soft wheat buns beside it."
+    },
+    "tile-pastry": {
+      "kind": "tile",
+      "accent": "mint",
+      "subject": "A plain steel baking tray of golden cinnamon buns and croissants, with one slice of layered berry cake on a small white plate in front."
+    },
+    "tile-meat": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "Two thick raw beef steaks with fine marbling lying on a sheet of plain unprinted brown butcher paper."
+    },
+    "tile-poultry": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "Several raw skinless chicken breast fillets lying on a sheet of plain unprinted brown butcher paper."
+    },
+    "tile-fish": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "A large fresh raw salmon fillet with bright orange flesh lying on a bed of crushed ice in a plain steel tray."
+    },
+    "tile-cold-cuts": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "Thin slices of cooked ham and salami fanned out in overlapping rows on a pale wooden board."
+    },
+    "tile-ready-meal": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "A steel gastronorm tray of a freshly baked casserole with a golden browned top, a serving spoon resting on the tray edge."
+    },
+    "tile-sauce-stock": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "A large plain unlabelled white plastic catering canister with a screw lid next to a small steel pot of glossy brown stock."
+    },
+    "tile-spices": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "Four small plain steel bowls of whole spices: black peppercorns, star anise, cinnamon sticks, and cardamom pods, a few peppercorns scattered."
+    },
+    "tile-oil": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "A tall plain unlabelled clear glass bottle of golden cooking oil with a simple cork stopper, and a small shallow dish of oil beside it."
+    },
+    "tile-canned": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "A stack of large plain unlabelled brushed steel catering tins with blank sides, one tin in front opened showing whole peeled red tomatoes."
+    },
+    "tile-chocolate": {
+      "kind": "tile",
+      "accent": "mint",
+      "subject": "Rough broken pieces of dark chocolate piled together with a small plain steel bowl of cocoa powder."
+    },
+    "tile-sweets": {
+      "kind": "tile",
+      "accent": "mint",
+      "subject": "A plain white bowl full of unwrapped fruit pastilles and soft candies in natural muted fruit colours."
+    },
+    "tile-ice-cream": {
+      "kind": "tile",
+      "accent": "mint",
+      "subject": "A rectangular brushed-steel catering ice cream container with several round scoops of vanilla and strawberry ice cream."
+    },
+    "tile-coffee-tea": {
+      "kind": "tile",
+      "accent": "mint",
+      "subject": "A plain steel scoop heaped with dark roasted coffee beans next to a small plain bowl of loose black tea leaves."
+    },
+    "tile-drinks": {
+      "kind": "tile",
+      "accent": "mint",
+      "subject": "Three plain unlabelled clear glass bottles with blank surfaces: one of orange juice, one of apple juice, one of still water."
+    },
+    "tile-eggs": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "Thirty brown and white eggs in a plain grey moulded paper-pulp egg tray, seen from a three-quarter angle."
+    },
+    "tile-disposables": {
+      "kind": "tile",
+      "accent": "cloth",
+      "subject": "A tall stack of plain unprinted white paper cups next to a stack of plain kraft-brown takeaway food trays."
+    },
+    "tile-cleaning": {
+      "kind": "tile",
+      "accent": "cloth",
+      "subject": "A plain unlabelled white plastic trigger spray bottle with a blank surface standing next to a neatly folded grey microfibre cloth."
+    },
+    "tile-cookware": {
+      "kind": "tile",
+      "accent": "cloth",
+      "subject": "A heavy brushed stainless-steel saucepan with a long handle and a steel ladle resting beside it."
+    },
+    "dept-10": {
+      "kind": "department",
+      "accent": "dill",
+      "subject": "A wide arrangement for a dairy and cheese department header: two plain unprinted white gable-top cartons, a large block and a wedge of yellow cheese on a pale wooden board, a plain white lidded tub, and a block of butter in plain unprinted greaseproof paper."
+    },
+    "dept-11": {
+      "kind": "department",
+      "accent": "dill",
+      "subject": "Fresh bakery: dark round Finnish rye loaves, a long crusty wheat loaf, a plain steel tray of soft buns, and a scattering of flour on the surface."
+    },
+    "dept-17": {
+      "kind": "department",
+      "accent": "dill",
+      "subject": "Deli, ready meals and produce: a steel gastronorm tray of baked casserole, a pale wooden board of sliced ham and cheese, and a wooden crate of fresh tomatoes, cucumbers and carrots with trimmed tops."
+    },
+    "dept-18": {
+      "kind": "department",
+      "accent": "dill",
+      "subject": "Meat and fish: thick raw beef steaks on plain brown butcher paper, raw chicken fillets beside them, and a whole fresh salmon fillet on crushed ice in a plain steel tray."
+    },
+    "dept-20": {
+      "kind": "department",
+      "accent": "cloth",
+      "subject": "Professional kitchen equipment: a heavy stainless-steel stockpot, a saucepan, a steel ladle, a whisk, and a chef's knife on a pale wooden board, all plain and unbranded."
+    },
+    "dept-21": {
+      "kind": "department",
+      "accent": "dill",
+      "subject": "Dry goods: a heavy flat-bottomed 10 kg plain kraft paper flour sack with a stitched top seam, plain white bowls of dry penne pasta, white rice and rolled oats, and a stack of plain unlabelled steel tins."
+    },
+    "dept-22": {
+      "kind": "department",
+      "accent": "mint",
+      "subject": "Seasonings, coffee and drinks: small plain steel bowls of whole peppercorns and spices, a steel scoop of roasted coffee beans, a bowl of loose tea leaves, and two plain unlabelled glass bottles of juice."
+    },
+    "dept-30": {
+      "kind": "department",
+      "accent": "cloth",
+      "subject": "Household supplies for a professional kitchen: a stack of plain white folded cotton kitchen towels, rolls of plain white paper towel, a plain unlabelled white plastic bucket, and a wooden dish brush."
+    },
+    "dept-41": {
+      "kind": "department",
+      "accent": "dill",
+      "subject": "Frozen foods: plain steel bowls of frozen green peas and mixed vegetables, a tray of frozen berries, and frozen fish fillets, all covered in fine white frost crystals, with a little crushed ice."
+    },
+    "dept-52": {
+      "kind": "department",
+      "accent": "mint",
+      "subject": "Confectionery: rough broken pieces of dark chocolate, a plain white bowl of unwrapped fruit pastilles in muted natural colours, and a small heap of cocoa powder."
+    },
+    "dept-63": {
+      "kind": "department",
+      "accent": "cloth",
+      "subject": "Cleaning and hygiene: plain unlabelled white plastic trigger spray bottles and a large plain unlabelled white canister with blank surfaces, a stack of neatly folded grey microfibre cloths, and a plain steel bucket."
+    },
+    "dept-64": {
+      "kind": "department",
+      "accent": "cloth",
+      "subject": "Disposables and table setting: tall stacks of plain unprinted white paper cups, plain kraft-brown takeaway trays, a stack of plain white paper napkins, and wooden cutlery."
+    },
+    "dept-67": {
+      "kind": "department",
+      "accent": "mint",
+      "subject": "Finnish winter season: a plain steel tray of heart- and star-shaped gingerbread biscuits, a small white bowl of red lingonberries, and one lit plain white pillar candle with a soft warm flame."
+    },
+    "dept-77": {
+      "kind": "department",
+      "accent": "cloth",
+      "subject": "Gases for drinks dispensing: three plain unlabelled brushed-steel CO2 cylinders of different heights with plain steel valves, standing upright, no markings of any kind."
+    },
+    "dept-84": {
+      "kind": "department",
+      "accent": "mint",
+      "subject": "Alcoholic drinks for a restaurant: plain unlabelled dark green and clear glass wine bottles with blank surfaces and plain brown glass beer bottles with blank surfaces, with two empty wine glasses, a calm still life."
+    },
+    "dept-85": {
+      "kind": "department",
+      "accent": "mint",
+      "subject": "Low and non-alcoholic drinks: plain unlabelled clear glass bottles of sparkling water, apple juice and berry juice with blank surfaces, and two glasses of sparkling water with ice."
+    },
+    "dept-90": {
+      "kind": "department",
+      "accent": "cloth",
+      "subject": "Office and packaging supplies: a stack of plain unprinted kraft-brown cardboard boxes, a roll of plain brown packing tape, a ream of plain white paper, and a coil of plain twine."
+    }
+  }
+}

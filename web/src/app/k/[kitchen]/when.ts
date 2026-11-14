@@ -1,4 +1,6 @@
-import { TIME_ZONE, day } from "../../_ui/plain";
+import { TIME_ZONE } from "../../_ui/plain";
+import { dayL } from "../../_i18n/format";
+import type { Lang } from "../../_i18n/lang";
 
 /**
  * The partner states order cut-offs as Helsinki wall-clock times ("2026-11-15T17:00:00", sometimes with an
@@ -27,8 +29,10 @@ export function cutoffMs(s: string | undefined): number | undefined {
   return guess - helsinkiOffsetMs(guess);
 }
 
-/** "Sun 15.11. 17.00" in Helsinki. */
-export function cutoffText(s: string | undefined): string | undefined {
+const CLOCK_PREFIX: Record<Lang, string> = { en: "", fi: "klo ", sv: "kl. " };
+
+/** "Sun 15.11. 17.00", "su 15.11. klo 17.00", "sön 15.11. kl. 17.00" in Helsinki. */
+export function cutoffText(s: string | undefined, lang: Lang = "en"): string | undefined {
   const t = cutoffMs(s);
   if (t === undefined) return undefined;
   const p = Object.fromEntries(
@@ -36,16 +40,37 @@ export function cutoffText(s: string | undefined): string | undefined {
       .formatToParts(new Date(t))
       .map((x) => [x.type, x.value]),
   );
-  return `${day(`${p.year}-${p.month}-${p.day}`)} ${p.hour}.${p.minute}`;
+  return `${dayL(`${p.year}-${p.month}-${p.day}`, lang)} ${CLOCK_PREFIX[lang]}${p.hour}.${p.minute}`;
 }
 
-/** "in 5 h 20 min", "in 3 days", or "passed". */
-export function untilText(ms: number, now = Date.now()): string {
-  const d = ms - now;
-  if (d <= 0) return "passed";
+const UNTIL: Record<Lang, { passed: string; days: (n: number) => string; in: (q: string) => string }> = {
+  en: { passed: "passed", days: (n) => `${n} days`, in: (q) => `in ${q}` },
+  fi: { passed: "ohi", days: (n) => `${n} päivän`, in: (q) => `${q} päästä` },
+  sv: { passed: "har gått ut", days: (n) => `${n} dagar`, in: (q) => `om ${q}` },
+};
+
+function leftParts(d: number, lang: Lang): string {
   const min = Math.round(d / 60_000);
-  if (min < 60) return `in ${min} min`;
+  if (min < 60) return `${min} min`;
   const h = Math.floor(min / 60);
-  if (h < 36) return `in ${h} h${min % 60 ? ` ${min % 60} min` : ""}`;
-  return `in ${Math.round(h / 24)} days`;
+  if (h < 36) return `${h} h${min % 60 ? ` ${min % 60} min` : ""}`;
+  return UNTIL[lang].days(Math.round(h / 24));
+}
+
+/** "in 5 h 20 min", "in 3 days", or "passed" ("5 h 20 min päästä", "om 3 dagar", "ohi"). */
+export function untilText(ms: number, now = Date.now(), lang: Lang = "en"): string {
+  const d = ms - now;
+  if (d <= 0) return UNTIL[lang].passed;
+  return UNTIL[lang].in(leftParts(d, lang));
+}
+
+/**
+ * The time left on its own, without "in": "5 h 20 min", "3 days" / "3 päivää" / "3 dagar", or "passed". For a big
+ * countdown figure, instead of stripping "in " off `untilText`.
+ */
+export function timeLeftText(ms: number, now = Date.now(), lang: Lang = "en"): string {
+  const d = ms - now;
+  if (d <= 0) return UNTIL[lang].passed;
+  const t = leftParts(d, lang);
+  return lang === "fi" ? t.replace(/ päivän$/, " päivää") : t;
 }

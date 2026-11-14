@@ -1,8 +1,5 @@
 # Submission form (final, Sunday 10:00; set the project to FINAL)
 
-> **Name: the team must choose.** The code says "Dock", the draft submission says "AimoPilot". Replace `{{NAME}}`
-> everywhere at once. "Aimo" is part of the partner's brand; check with Valio Aimo before using it in the name.
-
 Fields from `research/05-official-briefs.md`: name, punchline, description, challenge, technologies, video pitch
 (at most 2:00, public on YouTube or Vimeo), demo link, source code link, pitch deck (PDF), team phone numbers,
 Discord username. Submit by 09:00 to leave an hour.
@@ -22,7 +19,7 @@ Discord username. Submit by 09:00 to leave an hour.
 
 ## Name
 
-`{{NAME}}`
+`AimoPilot`
 
 ## Punchline (at most 200 characters)
 
@@ -37,7 +34,7 @@ An open door for AI purchasing agents. The agent can ask for anything, but plain
 ```markdown
 **The agent can ask for anything. It can only buy what the kitchen signed for.**
 
-Soon a kitchen's AI agent will place its food orders. The wholesaler then gets orders from machines: did a person mean 1,000 litres, who allowed this agent to spend that much, and who answers if it is wrong? Valio Aimo's challenge asks for a way for outside purchasing agents to order that both sides can trust. {{NAME}} is that door.
+Soon a kitchen's AI agent will place its food orders. The wholesaler then gets orders from machines: did a person mean 1,000 litres, who allowed this agent to spend that much, and who answers if it is wrong? Valio Aimo's challenge asks for a way for outside purchasing agents to order that both sides can trust. AimoPilot is that door.
 
 ### How it works
 1. **A signed mandate.** The kitchen signs, with its own key, what its agent may buy: product groups, required claims such as lactose-free, forbidden allergens, a per-order limit, a weekly budget, how substitutes are handled, and who signs off above the limit.
@@ -76,7 +73,7 @@ PostgreSQL (orders, ledger, memory), Kafka (every agent action), Valkey (live-pr
 Synthetic kitchens and the partner's test API. The voice door understood 7 of 12 test requests. The crash-test licence is computed but does not yet set limits at the live gate. Consumer assistants connect through a secret address; OAuth is designed, not built. Full list: `docs/pitch/valio-judges.md`.
 ```
 
-(Check the length in the form before submitting; this block is 4,122 characters with `{{NAME}}` as written; a short name keeps it well under 5,000.)
+(Check the length in the form before submitting; this block is 4,122 characters with `AimoPilot` as written; a short name keeps it well under 5,000.)
 
 ## Technologies used
 

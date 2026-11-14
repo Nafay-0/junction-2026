@@ -4,7 +4,7 @@ import { opsMode } from "@/server/ops/access";
 import { connection } from "next/server";
 import { Entry } from "./entry";
 
-export const metadata: Metadata = { title: "Enter operations · Dock" };
+export const metadata: Metadata = { title: "Enter operations · AimoPilot" };
 
 /** One click into the wholesaler's operations portal (or a passcode, when DOCK_OPS_PASSCODE is set). */
 export default function EnterPage() {

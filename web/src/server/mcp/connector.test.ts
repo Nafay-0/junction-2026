@@ -112,7 +112,7 @@ describe("connector address: binding", () => {
       const res = await inProcess(`${BASE}/api/mcp/c/${token}`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) });
       expect(res.status).toBe(404);
       expect(res.headers.get("www-authenticate")).toBeNull();
-      expect(((await res.json()) as { error: { message: string } }).error.message).toMatch(/no Dock connector at this address/);
+      expect(((await res.json()) as { error: { message: string } }).error.message).toMatch(/no AimoPilot connector at this address/);
     }
   });
 });

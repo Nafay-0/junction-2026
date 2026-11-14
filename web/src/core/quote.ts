@@ -227,7 +227,7 @@ export async function verifyQuote(token: string, key: VerifyingKey): Promise<Quo
   try {
     const result = await compactVerify(token, key.publicKey, { algorithms: VERIFY_ALGS });
     if (result.protectedHeader.typ !== QUOTE_TYP || result.protectedHeader.kid !== key.kid) {
-      throw new QuoteError("quote_malformed", "Token is not a Dock quote.");
+      throw new QuoteError("quote_malformed", "Token is not a AimoPilot quote.");
     }
     payload = result.payload;
   } catch (err) {

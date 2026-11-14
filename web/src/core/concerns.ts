@@ -397,7 +397,7 @@ export function checkPack(need: StructuredNeed, ctx: CheckContext): Concern[] {
       code: "pack_uncertain",
       severity: "warning",
       message: estimate
-        ? `${named.name}: what one ${named.salesUnit ?? "pack"} holds is not certain (${named.packContent.label}). Dock's estimate is ${estimate.salesUnits} ${named.salesUnit ?? "packs"} = ${formatAmount(estimate.delivered.amount, estimate.delivered.unit)}. Use the estimate?`
+        ? `${named.name}: what one ${named.salesUnit ?? "pack"} holds is not certain (${named.packContent.label}). AimoPilot's estimate is ${estimate.salesUnits} ${named.salesUnit ?? "packs"} = ${formatAmount(estimate.delivered.amount, estimate.delivered.unit)}. Use the estimate?`
         : `${named.name}: what one ${named.salesUnit ?? "pack"} holds is not known (${named.packContent.label}), so ${formatAmount(q.amount, q.unit)} cannot be turned into packs.`,
       confirmable: !!estimate,
       corrections: [{ id: "choose_other", label: "Show products with a known pack size instead", patch: { item: { productId: null } } }],

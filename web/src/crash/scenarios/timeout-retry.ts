@@ -12,7 +12,7 @@ export const timeoutRetry: Scenario = {
   title: "A timeout after the order went through",
   decision: "After a timeout, find out whether the order was placed before ordering again; never double-order.",
   competentBuyer: "Gets a timeout from place_order, looks at the request's audit trail (explain), sees the order was committed, does not order again, and reports that order with its id.",
-  whyHard: "The wholesaler commits the order but the answer is lost, as happens on real networks. Retrying with the same quote is harmless (Dock refuses a quote that already bought), but asking for a new quote and ordering again doubles the milk. The timeout's nextStep says how to check; explain lists every committed order of the request.",
+  whyHard: "The wholesaler commits the order but the answer is lost, as happens on real networks. Retrying with the same quote is harmless (AimoPilot refuses a quote that already bought), but asking for a new quote and ordering again doubles the milk. The timeout's nextStep says how to check; explain lists every committed order of the request.",
   build(seed) {
     const rng = rngFor("timeout-retry", seed);
     const ids = new Ids(rng, "TR");

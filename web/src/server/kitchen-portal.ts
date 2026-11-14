@@ -311,7 +311,7 @@ async function browseRequest(k: Kitchen): Promise<string> {
   const hit = g.__dockPortalBrowse.get(key);
   if (hit) return hit;
   const r = await agentCall<{ request?: { requestId: string }; error?: { message: string } }>(k, "POST", "/api/v1/requests", { text: BROWSE_TEXT });
-  if (!r.json.request) throw new Error(r.json.error?.message ?? "Dock did not open a request for the live checks.");
+  if (!r.json.request) throw new Error(r.json.error?.message ?? "AimoPilot did not open a request for the live checks.");
   g.__dockPortalBrowse.set(key, r.json.request.requestId);
   return r.json.request.requestId;
 }
