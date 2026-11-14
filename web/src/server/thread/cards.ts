@@ -73,7 +73,7 @@ export function optionView(o: OptionCard): OptionView {
     deliveryDate: o.deliveryDate,
     ...(o.orderBy ? { orderBy: o.orderBy } : {}),
     stockConfirmed: o.stockConfirmed,
-    lines: o.lines.map((l) => ({ productId: l.productId, name: l.name, quantity: l.packs, packSize: l.packSize, unit: l.unit, unitPriceCents: l.unitPriceCents, ...(l.substituteFor ? { substituteFor: l.substituteFor } : {}) })),
+    lines: o.lines.map((l) => ({ productId: l.productId, name: l.name, quantity: l.packs, packSize: l.packSize, unit: l.unit, unitPriceCents: l.unitPriceCents, ...(l.substituteFor ? { substituteFor: l.substituteFor } : {}), ...(l.taxRatePct !== undefined ? { taxRatePct: l.taxRatePct } : {}), ...(l.depositCents ? { depositCents: l.depositCents } : {}) })),
     delivered: { amount: o.delivered.amount, unit: o.delivered.unit },
     co2Kg: o.co2.kg,
     reliability: o.reliability,

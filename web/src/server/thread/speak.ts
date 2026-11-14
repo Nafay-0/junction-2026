@@ -23,6 +23,15 @@ function gateWords(g: Partial<GatePreview> | undefined, totalCents?: number): Re
   };
 }
 
+/** The deposit on an option's packs (refunded on return, no VAT), said as one clause on the total. */
+const deposit = (o: { lines: { quantity: number; depositCents?: number }[] }) => o.lines.reduce((n, l) => n + (l.depositCents ?? 0) * l.quantity, 0);
+
+/** "before VAT, 14 %", once for the options when they share the rate. */
+function vatOf(options: { lines: { taxRatePct?: number }[] }[]): string | undefined {
+  const rates = [...new Set(options.flatMap((o) => o.lines.map((l) => l.taxRatePct)).filter((x): x is number => x !== undefined))];
+  return rates.length === 1 ? `${rates[0]} % VAT on top` : rates.length > 1 ? `VAT on top (${rates.join(" %, ")} %)` : undefined;
+}
+
 function cardFacts(c: Card): Record<string, unknown> | undefined {
   switch (c.type) {
     case "understood":
@@ -47,9 +56,15 @@ function cardFacts(c: Card): Record<string, unknown> | undefined {
             delivery: o.deliveryDate,
             ...(o.match === "compromise" ? { notExactly: o.givesUp.join("; ") } : {}),
             ...(usual ? { insteadOfUsual: usual.params } : {}),
+            ...(deposit(o) ? { plusDepositEur: eur(deposit(o)) } : {}),
+            ...(o.reasons.find((r) => r.code === "nutrition_vs") ? { nutritionAgainstUsual: o.reasons.find((r) => r.code === "nutrition_vs")!.params } : {}),
+            ...(o.reasons.find((r) => r.code === "wholesaler_lists") ? { wholesalerListsItAsSubstitute: true } : {}),
+            ...(o.reasons.find((r) => r.code === "label_missing") ? { lacksPreferredLabel: o.reasons.find((r) => r.code === "label_missing")!.params.labels } : {}),
             ...(o.gate ? { gate: gateWords(o.gate as Partial<GatePreview>) } : {}),
           };
         }),
+        ...(vatOf(can) ? { pricesBeforeVat: vatOf(can) } : {}),
+        ...(c.excluded.some((e) => e.code === "nutrition_rule") ? { leftOutByNutritionRules: c.excluded.filter((e) => e.code === "nutrition_rule").slice(0, 2).map((e) => `${e.count} × ${e.reason}`) } : {}),
         ...(cannot.length ? { cannotOrder: cannot.map((o) => ({ title: o.title, because: o.gate?.reasons?.[0] ?? o.gate?.rule ?? "the kitchen's rules" })) } : {}),
         ...(c.insteadOf ? { askedKindNotOffered: c.insteadOf } : {}),
         ...(c.askedDay ? { askedDay: c.askedDay } : {}),

@@ -313,6 +313,15 @@ export async function orderFromWords(run: TurnRun, words: string, earlier: Earli
     if (!r.basedOn.fields.includes("deliverBy")) r.basedOn = { ...r.basedOn, fields: [...r.basedOn.fields, "deliverBy"] };
   }
   const basedOn = r.basedOn ? { ...r.basedOn, label: earlier.find((e) => e.id === r.basedOn!.requestId)?.text ?? undefined } : undefined;
+  // "If there isn't enough milk, oat drink will do": a fallback, not a second item. Kept as words for the agent (it says
+  // whether it is needed), never opened as a request of its own with holes in it.
+  const FALLBACK = /\b(will do|would do|is fine too|works too|otherwise|instead if|käy myös|kelpaa|käy sitten|duger|går också)\b/i;
+  const fallbacks = (r.alsoAsked ?? []).filter((a) => FALLBACK.test(a.text) && /\b(if|jos|om)\b/i.test(words));
+  if (fallbacks.length) {
+    r = { ...r, alsoAsked: (r.alsoAsked ?? []).filter((a) => !fallbacks.includes(a)) };
+    run.facts.push({ fallbackIfNeeded: fallbacks.map((a) => a.text), say: "only if the main item cannot be had" });
+    record(run, "fallback_item", `A fallback in the words, not a second item: ${fallbacks.map((a) => `"${a.text}"`).join(", ")}.`, {});
+  }
   const alsoAsked = (r.alsoAsked ?? []).map((a) => a.text);
   const parsed = NeedSchema.parse(need) as StructuredNeed;
   // The other items the same message named: read and run in parallel with this one.

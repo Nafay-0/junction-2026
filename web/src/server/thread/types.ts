@@ -232,7 +232,8 @@ export type OptionView = {
   deliveryDate: string;
   orderBy?: string;
   stockConfirmed: boolean;
-  lines: { productId: string; name: string; quantity: number; packSize?: number; unit?: string; unitPriceCents?: number; substituteFor?: string }[];
+  /** `taxRatePct`: the VAT rate (prices are before VAT); `depositCents`: per pack, refunded on return, no VAT. */
+  lines: { productId: string; name: string; quantity: number; packSize?: number; unit?: string; unitPriceCents?: number; substituteFor?: string; taxRatePct?: number; depositCents?: number }[];
   delivered: { amount: number; unit: string };
   co2Kg: number | null;
   reliability: number | null;
