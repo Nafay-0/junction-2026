@@ -1637,6 +1637,19 @@ export function createDock(deps: DockDeps) {
       return out;
     },
     signOffer: (body: OfferBody) => signOffer(body, wholesalerKey),
+    /**
+     * Signed price and availability claims for a live answer the server holds (the kitchen agent's watch,
+     * server/watch): a staged condition is signed with `simulated: true` on the offer, so the claim says so.
+     */
+    async signLiveClaims(audience: string, offer: LiveOffer, at: Date = now()): Promise<IssuedClaim[]> {
+      const out: IssuedClaim[] = [];
+      for (const input of [priceClaimInput(offer, at, audience), availabilityClaimInput(offer, at, audience)]) {
+        const c = await issueClaim(input, wholesalerKey);
+        claimStore.put(c, input.audience);
+        out.push(c);
+      }
+      return out;
+    },
   };
 
   /**
