@@ -95,7 +95,7 @@ export async function preflight(rt: Runtime, opts: { sandboxId?: string; model?:
   const recs = await recordingIndex();
   for (const kind of ["week", "attacks", "outside"] as const) {
     const r = recs.find((x) => x.kind === kind);
-    add(r ? { id: `rec_${kind}`, label: `Recording: ${kind}`, state: "ok", detail: `Captured ${r.capturedAt.slice(0, 16).replace("T", " ")} UTC (${r.where}).` } : { id: `rec_${kind}`, label: `Recording: ${kind}`, state: "warn", detail: "No recording to fall back to.", fix: kind === "week" ? "Play the week once and press W to keep it." : "Run the act once live; it is kept automatically." });
+    add(r ? { id: `rec_${kind}`, label: `Recording: ${kind}`, state: "ok", detail: `Captured ${r.capturedAt.slice(0, 16).replace("T", " ")} UTC (${r.where}).` } : { id: `rec_${kind}`, label: `Recording: ${kind}`, state: "warn", detail: "No recording to fall back to.", fix: kind === "week" ? "Play the week once in presenter mode and press C to keep it." : "Run the act once live; it is kept automatically." });
   }
 
   // Room for visitors and today's caps.

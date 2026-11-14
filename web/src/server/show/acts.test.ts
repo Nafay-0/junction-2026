@@ -111,7 +111,7 @@ describe("the presenter's fallbacks", () => {
     expect(byId.catalogue).toMatchObject({ state: "warn" }); // the seed in tests
     expect(byId.phone).toMatchObject({ state: "fail", fix: expect.stringMatching(/Scan the QR code/) }); // no phone joined
     expect(byId.partner.state).toBe("ok");
-    expect(byId.rec_week).toMatchObject({ state: "warn", fix: expect.stringMatching(/press W|keep/i) });
+    expect(byId.rec_week).toMatchObject({ state: "warn", fix: expect.stringMatching(/press C to keep/) });
     for (const c of checks) if (c.state !== "ok") expect(c.detail.length).toBeGreaterThan(5);
   }, 60_000);
 });

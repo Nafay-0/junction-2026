@@ -133,7 +133,10 @@ test("presenter mode: behind the passcode, keys drive the acts, F plays a labell
   await wall.keyboard.press("ArrowLeft");
   await expect(wall.getByText("The week, through the real gate")).toBeVisible();
   await wall.keyboard.press("f");
-  await expect(wall.getByText(/Recording of a real run|no recording of the week/i).first()).toBeVisible({ timeout: 15_000 });
+  await expect(wall.getByText(/^Recording of a real run/).first()).toBeVisible({ timeout: 15_000 });
+  await expect(wall.getByRole("heading", { name: "Monday" })).toBeVisible({ timeout: 15_000 });
   await wall.screenshot({ path: `${SHOTS}/presenter-week-recording.png` });
+  await wall.keyboard.press("f"); // back to live: the stage invites Enter again
+  await expect(wall.getByText(/Press Enter to play the week|The week, done|Monday/).first()).toBeVisible();
   await ctx.close();
 });
