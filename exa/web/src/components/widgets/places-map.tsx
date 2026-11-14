@@ -645,7 +645,7 @@ function ExpandedMap({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[min(86vh,780px)] w-[calc(100%-1rem)] max-w-[calc(100%-1rem)] flex-col gap-0 overflow-hidden rounded-2xl bg-card p-0 shadow-float sm:max-w-5xl">
+      <DialogContent className="flex h-[min(86dvh,780px)] w-[calc(100%-1rem)] max-w-[calc(100%-1rem)] flex-col gap-0 overflow-hidden rounded-2xl bg-card p-0 shadow-float sm:max-w-5xl">
         <div className="border-b border-border/70 px-4 py-3 pr-12 sm:px-5">
           <DialogTitle className="truncate text-[0.95rem] font-medium tracking-tight">{data.query || "Places"}</DialogTitle>
           <DialogDescription className="truncate text-[0.8rem] text-muted-foreground">

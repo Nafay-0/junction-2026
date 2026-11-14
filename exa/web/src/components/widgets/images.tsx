@@ -401,11 +401,13 @@ function Lightbox({
             go(-1);
           }
         }}
-        className="max-w-[calc(100%-1.5rem)] gap-0 overflow-hidden rounded-2xl bg-popover p-0 shadow-float sm:max-w-3xl"
+        // The viewer fills what the screen allows and no more: header and footer take their own
+        // height, the image takes the rest. Width and height both follow the viewport.
+        className="h-[min(46rem,calc(100dvh-1.5rem))] max-w-[min(56rem,calc(100%-1.5rem))] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden rounded-2xl bg-popover p-0 shadow-float sm:max-w-[min(56rem,calc(100%-3rem))]"
       >
         {image ? (
           <>
-            <div className="flex items-start gap-3 px-4 pt-3.5 pb-3">
+            <div className="flex min-w-0 items-start gap-3 px-4 pt-3.5 pb-3">
               <div className="min-w-0 flex-1">
                 <DialogTitle className="truncate font-sans text-[0.95rem] leading-6 font-medium tracking-tight">
                   {image.title || image.domain}
@@ -431,7 +433,7 @@ function Lightbox({
             </div>
 
             <div
-              className="relative h-[min(58vh,520px)] touch-pan-y overflow-hidden bg-surface select-none"
+              className="relative min-h-0 min-w-0 touch-pan-y overflow-hidden bg-surface select-none"
               onTouchStart={(e) => {
                 const t = e.touches[0];
                 touchStart.current = { x: t.clientX, y: t.clientY };
@@ -458,9 +460,11 @@ function Lightbox({
               ) : null}
             </div>
 
-            <div className="flex flex-col gap-3 border-t border-border/70 px-4 py-3 sm:flex-row sm:items-center">
+            <div className="flex min-w-0 flex-col gap-2.5 border-t border-border/70 px-4 py-3 sm:flex-row sm:items-center sm:gap-3">
               {many ? (
-                <div className="-mx-1 min-w-0 flex-1 overflow-x-auto px-1 py-1 [scrollbar-width:none]">
+                // The strip scrolls inside itself. `min-w-0` matters: without it the row of
+                // thumbnails would set the minimum width of the whole viewer.
+                <div className="-mx-1 max-w-full min-w-0 flex-1 overflow-x-auto overscroll-x-contain px-1 py-1 [scrollbar-width:none]">
                   <div className="flex w-max gap-1.5">
                     {images.map((img, i) => (
                       <button
