@@ -8,7 +8,9 @@ import { api } from "../_client/api";
 import { useLang } from "../_i18n/provider";
 import { passkeyProblemL } from "../_ui/passkey.text";
 import { fiMoney } from "../_ui/plain";
-import { PhoneNotice, PhoneProblem, bigButton } from "../_ui/phone";
+import { Lock, ScanFace, ShieldCheck, Smartphone, Timer, Users, WifiOff } from "lucide-react";
+import { Avatar, Card, IconDisc, Spinner } from "../_ui/kit";
+import { PhoneNotice, PhoneProblem, PhoneSkeleton, bigButton } from "../_ui/phone";
 import { JOIN_TEXT } from "./join-flow.text";
 import { placeNameL } from "../_i18n/kitchen-words";
 
@@ -94,11 +96,19 @@ export function JoinFlow() {
 
   const shown = !problem ? null : problem.key === "passkey" ? passkeyProblemL(problem.err, lang) : { title: tx[problem.key], body: problem.body };
 
-  if (phase === "loading") return <p className="mt-20 text-center text-ink-soft">{tx.loading}</p>;
+  if (phase === "loading") return <PhoneSkeleton label={tx.loading} />;
   if (phase === "full" || phase === "offline")
     return (
-      <PhoneNotice title={shown?.title ?? tx.offline} body={shown?.body ?? ""}>
-        <button className={`mt-6 ${bigButton("dark")}`} onClick={() => void load()}>
+      <PhoneNotice
+        title={shown?.title ?? tx.offline}
+        body={shown?.body ?? ""}
+        mark={
+          <IconDisc tone="muted" size={60}>
+            {phase === "full" ? <Users size={26} /> : <WifiOff size={26} />}
+          </IconDisc>
+        }
+      >
+        <button className={`mt-auto ${bigButton("dark")}`} onClick={() => void load()}>
           {tx.tryAgain}
         </button>
       </PhoneNotice>
@@ -107,48 +117,71 @@ export function JoinFlow() {
 
   if (start.current && !skipCurrent)
     return (
-      <PhoneNotice title={tx.already(start.current.approverName)} body={tx.alreadyBody(placeNameL(start.current.kitchenName, lang))}>
-        <Link href="/approver" className={`mt-6 ${bigButton("go")}`}>
-          {tx.goToMine}
-        </Link>
-        <button className={`mt-3 ${bigButton("secondary")} min-h-14 text-[1.05rem]`} onClick={() => setSkipCurrent(true)}>
-          {tx.startOver}
-        </button>
+      <PhoneNotice title={tx.already(start.current.approverName)} body={tx.alreadyBody(placeNameL(start.current.kitchenName, lang))} mark={<Avatar name={start.current.approverName} size={60} />}>
+        <div className="mt-auto pt-8">
+          <Link href="/approver" className={bigButton("go")}>
+            {tx.goToMine}
+          </Link>
+          <button className={`mt-2.5 ${bigButton("secondary")}`} onClick={() => setSkipCurrent(true)}>
+            {tx.startOver}
+          </button>
+        </div>
       </PhoneNotice>
     );
 
   const id = start.identity;
   const busy = phase === "prompt" || phase === "saving";
   const canPasskey = supported && start.secureOrigin;
+  const icons = [ScanFace, Smartphone, ShieldCheck];
   return (
     <div className="flex flex-1 flex-col">
-      <p className="text-[1rem] font-semibold text-petrol">{tx.eyebrow}</p>
-      <h1 className="display mt-2 text-[2.6rem] leading-[0.98] text-ink hyphens-manual [overflow-wrap:break-word]">{tx.title(placeNameL(id.kitchenName, lang), id.city)}</h1>
-      <div className="mt-5 bg-paper p-4">
-        <p className="leading-snug">{tx.intro(<strong>{id.approverName}</strong>, <strong className="tabular">{fiMoney(start.perOrderLimit)}</strong>)}</p>
-      </div>
-      <ol className="mt-5 space-y-3">
-        {tx.steps.map((t, i) => (
-          <li key={t} className="grid grid-cols-[2rem_1fr] items-baseline gap-2 leading-snug">
-            <span className="display flex size-7 items-center justify-center border-2 border-petrol text-[1rem] text-petrol">{i + 1}</span>
-            {t}
-          </li>
-        ))}
-      </ol>
-      <p className="mt-5 text-[0.95rem] leading-snug text-ink-soft">{tx.privacy}</p>
+      <p className="inline-flex items-center gap-1.5 self-start rounded-full bg-petrol-soft px-3 py-1 text-[0.86rem] font-medium text-petrol-deep">
+        <Timer aria-hidden size={15} />
+        {tx.eyebrow}
+      </p>
+      <h1 className="display mt-4 text-[2.15rem] leading-[1.05] text-ink hyphens-manual [overflow-wrap:break-word]">{tx.title(placeNameL(id.kitchenName, lang), id.city)}</h1>
+      <p className="mt-3 leading-relaxed text-ink-soft [&_strong]:font-semibold [&_strong]:text-ink">{tx.intro(<strong>{id.approverName}</strong>, <strong className="tabular">{fiMoney(start.perOrderLimit)}</strong>)}</p>
 
-      {shown && phase === "failed" && <PhoneProblem title={shown.title} body={shown.body} />}
+      <Card className="mt-6">
+        <ol className="divide-y divide-line">
+          {tx.steps.map((t, i) => {
+            const Icon = icons[i] ?? ShieldCheck;
+            return (
+              <li key={t} className="flex items-start gap-3.5 px-4 py-3.5">
+                <span className="relative shrink-0">
+                  <IconDisc size={40}>
+                    <Icon size={19} />
+                  </IconDisc>
+                  <span aria-hidden className="absolute -bottom-0.5 -right-0.5 flex size-[1.15rem] items-center justify-center rounded-full bg-petrol text-[0.68rem] font-semibold text-paper ring-2 ring-paper tabular">
+                    {i + 1}
+                  </span>
+                </span>
+                <span className="min-w-0 pt-2 leading-snug">{t}</span>
+              </li>
+            );
+          })}
+        </ol>
+      </Card>
+      <p className="mt-4 flex items-start gap-2 text-[0.9rem] leading-snug text-ink-soft">
+        <Lock aria-hidden size={15} className="mt-[0.2em] shrink-0" />
+        {tx.privacy}
+      </p>
+
+      {shown && phase === "failed" && <PhoneProblem title={shown.title} body={shown.body} quiet={problem?.key === "passkey" && passkeyProblemL(problem.err, lang).cancelled} />}
       {!canPasskey && <PhoneProblem quiet title={tx.noPasskeyTitle} body={start.secureOrigin ? tx.noPasskeyBrowser : tx.noPasskeyHttps} />}
 
-      <div className="mt-auto pt-8">
+      <div className="mt-auto pt-6">
+        <div className="sticky bottom-0 -mx-4 bg-mist/95 px-4 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-md">
         <button className={bigButton("go")} onClick={() => void createPasskey()} disabled={busy || !canPasskey}>
+          {busy ? <Spinner size={18} /> : <ScanFace aria-hidden size={22} strokeWidth={2.1} />}
           {phase === "prompt" ? tx.waitingBio : phase === "saving" ? tx.settingUp : tx.create}
         </button>
         {start.demoTapEnabled && (phase === "failed" || !canPasskey) && (
-          <button className={`mt-3 ${bigButton("demo")} min-h-14 text-[1rem]`} disabled={busy} onClick={() => void finish({ fallback: true })}>
+          <button className={`mt-2.5 ${bigButton("demo")}`} disabled={busy} onClick={() => void finish({ fallback: true })}>
             {tx.demoTap}
           </button>
         )}
+        </div>
       </div>
     </div>
   );

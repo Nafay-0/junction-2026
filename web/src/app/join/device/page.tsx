@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { LangProvider } from "../../_i18n/provider";
-import { chosenLang } from "../../_i18n/server";
+import { PhonePage } from "../../_ui/phone-page";
 import { DeviceFlow } from "./device-flow";
 
 export const metadata: Metadata = { title: "Add a signing device" };
@@ -12,18 +11,10 @@ export const metadata: Metadata = { title: "Add a signing device" };
  */
 export default function DevicePage() {
   return (
-    <Suspense fallback={<p className="p-5">…</p>}>
-      <Loaded />
-    </Suspense>
-  );
-}
-
-async function Loaded() {
-  return (
-    <LangProvider initial={await chosenLang()}>
-      <main className="mx-auto flex min-h-dvh max-w-md flex-col px-5 py-8 text-lg">
+    <PhonePage context={{ en: "Signing device", fi: "Laite", sv: "Enhet" }}>
+      <Suspense fallback={<div className="skeleton h-40 !rounded-xl" />}>
         <DeviceFlow />
-      </main>
-    </LangProvider>
+      </Suspense>
+    </PhonePage>
   );
 }

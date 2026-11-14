@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { api } from "../../_client/api";
-import { Button, ErrorPlate, Skeleton, Tag } from "../../_ui/kit";
+import { PenLine, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
+import { Button, Card, ErrorPlate, Input, Panel, Skeleton, Switch, Tag } from "../../_ui/kit";
 import { dayL } from "../../_i18n/format";
 import type { Lang } from "../../_i18n/lang";
 import { useFormat, useText } from "../../_i18n/provider";
@@ -105,7 +106,13 @@ export function MemoryBook({ fallback }: { fallback: ReactNode }) {
     return r.ok;
   };
 
-  if (view === undefined) return <Skeleton className="h-72" label={tx.loading} />;
+  if (view === undefined)
+    return (
+      <div className="space-y-4" role="status" aria-label={tx.loading}>
+        <Skeleton className="h-52 !rounded-[28px]" />
+        <Skeleton className="h-64 !rounded-[20px]" />
+      </div>
+    );
   if (view === null) return <>{fallback}</>;
 
   const active = view.items.filter((i) => i.status === "active" || i.status === "faded");
@@ -115,28 +122,32 @@ export function MemoryBook({ fallback }: { fallback: ReactNode }) {
   const openProposals = view.proposals.filter((p) => p.status === "open");
 
   return (
-    <section aria-labelledby="knows" className="space-y-4">
-      <div className="on-dark bg-lavender-deep p-5 text-paper sm:p-7">
-        <h2 id="knows" className="display text-[2.2rem] sm:text-[2.8rem]">
+    <section aria-labelledby="knows" className="space-y-8">
+      {/* The agent's own colour: what it remembered, in lavender. */}
+      <div className="rounded-2xl bg-lavender p-5 sm:p-7">
+        <p className="flex items-center gap-2 text-[0.9rem] font-medium text-lavender-deep">
+          <Sparkles aria-hidden size={16} />
+          {kitchen.agentName}
+        </p>
+        <h2 id="knows" className="display mt-1.5 max-w-[30ch] break-words text-[1.75rem] leading-[1.1] text-ink hyphens-manual sm:text-[2.1rem]">
           {tx.title(kitchen.agentName, kitchen.name)}
         </h2>
-        <p className="mt-2 max-w-[70ch] text-[1.05rem] leading-snug text-paper/90">
-          {active.length === 0 ? tx.nothing : tx.summary(active.length, groups.map((g) => tx.count[g.id](active.filter((i) => i.strength === g.id).length)).join(", "))}
-        </p>
-        <dl className="mt-5 grid gap-px bg-paper/15 sm:grid-cols-3">
-          <div className="bg-lavender-deep py-2 pr-3">
-            <dt className="text-[0.85rem] text-paper/70">{tx.shared}</dt>
-            <dd className="display text-[2rem] tabular">
-              {shared} <span className="font-sans text-[0.95rem] font-medium text-paper/80">{tx.of(active.length)}</span>
+        <p className="mt-2.5 max-w-[66ch] leading-relaxed text-ink">{active.length === 0 ? tx.nothing : tx.summary(active.length, groups.map((g) => tx.count[g.id](active.filter((i) => i.strength === g.id).length)).join(", "))}</p>
+        <dl className="mt-6 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-lavender-mid pt-5 sm:grid-cols-3">
+          <div className="min-w-0">
+            <dt className="text-[0.85rem] text-lavender-deep">{tx.shared}</dt>
+            <dd className="mt-0.5 flex items-baseline gap-1.5">
+              <span className="display text-[1.9rem] tabular">{shared}</span>
+              <span className="text-[0.95rem] text-ink-soft">{tx.of(active.length)}</span>
             </dd>
           </div>
-          <div className="bg-lavender-deep py-2 sm:px-3">
-            <dt className="text-[0.85rem] text-paper/70">{tx.staffRead}</dt>
-            <dd className="text-[1.05rem] font-semibold leading-snug">{lastRead ? tx.readAt(lastRead.by, when(lastRead.at, lang), clock(lastRead.at)) : tx.notRead}</dd>
+          <div className="min-w-0">
+            <dt className="text-[0.85rem] text-lavender-deep">{tx.staffRead}</dt>
+            <dd className="mt-1 font-semibold leading-snug">{lastRead ? tx.readAt(lastRead.by, when(lastRead.at, lang), clock(lastRead.at)) : tx.notRead}</dd>
           </div>
-          <div className="bg-lavender-deep py-2 sm:px-3">
-            <dt className="text-[0.85rem] text-paper/70">{tx.forgotten}</dt>
-            <dd className="text-[1.05rem] font-semibold leading-snug">{view.forgotten.length ? tx.forgottenN(view.forgotten.length) : tx.nothingForgotten}</dd>
+          <div className="min-w-0">
+            <dt className="text-[0.85rem] text-lavender-deep">{tx.forgotten}</dt>
+            <dd className="mt-1 font-semibold leading-snug">{view.forgotten.length ? tx.forgottenN(view.forgotten.length) : tx.nothingForgotten}</dd>
           </div>
         </dl>
       </div>
@@ -144,11 +155,14 @@ export function MemoryBook({ fallback }: { fallback: ReactNode }) {
       {problem && <ErrorPlate title={tx.changeFailed} message={tx.changeFailedMsg(problem)} />}
 
       {(view.pending.length > 0 || openProposals.length > 0) && (
-        <div className="space-y-2">
+        <ul className="space-y-3">
           {view.pending.map((p) => (
-            <div key={p.itemId} className="flex flex-wrap items-center justify-between gap-3 bg-lavender p-4">
-              <p className="text-[1.1rem] font-semibold">{p.question}</p>
-              <div className="flex gap-2">
+            <li key={p.itemId} className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-lavender-mid bg-paper p-5">
+              <p className="flex min-w-0 flex-1 basis-60 items-start gap-2.5 text-[1.08rem] font-semibold leading-snug">
+                <Sparkles aria-hidden size={17} className="mt-1 shrink-0 text-lavender-deep" />
+                {p.question}
+              </p>
+              <div className="flex flex-wrap gap-2">
                 <Button kind="primary" busy={busy === `c:${p.itemId}`} disabled={!!busy} onClick={() => void act(`c:${p.itemId}`, { action: "confirm", itemId: p.itemId, answer: "yes" })}>
                   {tx.yesRemember}
                 </Button>
@@ -156,17 +170,15 @@ export function MemoryBook({ fallback }: { fallback: ReactNode }) {
                   {tx.no}
                 </Button>
               </div>
-            </div>
+            </li>
           ))}
           {openProposals.map((p) => (
-            <div key={p.id} className="flex flex-wrap items-center justify-between gap-3 bg-lavender p-4">
-              <div>
-                <p className="text-[0.88rem] font-semibold text-lavender-deep">
-                  {tx.suggested(p.by, when(p.at, lang))}
-                </p>
-                <p className="text-[1.1rem] font-semibold">{p.text}</p>
+            <li key={p.id} className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-lavender-mid bg-paper p-5">
+              <div className="min-w-0 flex-1 basis-60">
+                <p className="text-[0.88rem] font-medium text-lavender-deep">{tx.suggested(p.by, when(p.at, lang))}</p>
+                <p className="mt-0.5 text-[1.08rem] font-semibold leading-snug">{p.text}</p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button kind="primary" busy={busy === `p:${p.id}`} disabled={!!busy} onClick={() => void act(`p:${p.id}`, { action: "proposal", proposalId: p.id, accept: true })}>
                   {tx.accept}
                 </Button>
@@ -174,37 +186,39 @@ export function MemoryBook({ fallback }: { fallback: ReactNode }) {
                   {tx.decline}
                 </Button>
               </div>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
 
-      <div className="space-y-6">
-        {groups.map((g) => {
-          const items = active.filter((i) => i.strength === g.id);
-          if (g.id === "one_off" && items.length === 0) return null;
-          return (
-            <div key={g.id}>
-              <div className="mb-2 flex flex-wrap items-baseline gap-x-3">
-                <h3 className="display text-[1.7rem] text-ink">{g.title}</h3>
-                <p className="text-[0.95rem] text-ink-soft">{g.note}</p>
-              </div>
-              {items.length === 0 ? (
-                <p className="bg-paper p-4 leading-snug text-ink-soft">{g.id === "rule" ? tx.noRules : tx.noHabits}</p>
-              ) : (
-                <ul className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 21rem), 1fr))" }}>
+      {groups.map((g) => {
+        const items = active.filter((i) => i.strength === g.id);
+        if (g.id === "one_off" && items.length === 0) return null;
+        return (
+          <div key={g.id}>
+            <div className="mb-3">
+              <h3 className="display text-[1.4rem] text-ink">
+                {g.title} <span className="font-sans text-[1rem] font-medium text-ink-soft tabular">{items.length}</span>
+              </h3>
+              <p className="mt-0.5 max-w-[66ch] text-[0.95rem] leading-snug text-ink-soft">{g.note}</p>
+            </div>
+            {items.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-line-strong bg-paper/60 px-5 py-4 leading-snug text-ink-soft">{g.id === "rule" ? tx.noRules : tx.noHabits}</p>
+            ) : (
+              <Card>
+                <ul className="divide-y divide-line">
                   {items.map((it) => (
-                    <MemoryCard key={it.id} it={it} now={now} busy={busy} act={act} />
+                    <MemoryRow key={it.id} it={it} now={now} busy={busy} act={act} />
                   ))}
                 </ul>
-              )}
-            </div>
-          );
-        })}
-      </div>
+              </Card>
+            )}
+          </div>
+        );
+      })}
 
       <TellIt busy={busy === "note"} onSave={(text) => act("note", { action: "note", text })} />
-      <p className="text-[0.92rem] text-ink-soft">
+      <p className="text-[0.9rem] text-ink-soft">
         {view.deliveryWeekdays?.length ? tx.deliveries(weekdaysText(view.deliveryWeekdays, lang)) : ""}
         {tx.ledger(kitchen.by)}
       </p>
@@ -212,118 +226,116 @@ export function MemoryBook({ fallback }: { fallback: ReactNode }) {
   );
 }
 
-function MemoryCard({ it, now, busy, act }: { it: Item; now: number; busy?: string; act: (key: string, body: Record<string, unknown>) => Promise<boolean> }) {
+function MemoryRow({ it, now, busy, act }: { it: Item; now: number; busy?: string; act: (key: string, body: Record<string, unknown>) => Promise<boolean> }) {
   const tx = useText(MEMORY_BOOK_TEXT);
   const { lang } = useFormat();
   const [mode, setMode] = useState<"view" | "correct" | "forget">("view");
   const [text, setText] = useState(it.text);
   const mine = busy?.endsWith(it.id);
   const faded = it.status === "faded";
+  const pct = Math.round(it.weight * 100);
   return (
-    <li className={`flex flex-col bg-paper ${faded ? "opacity-70" : ""}`}>
-      <div aria-hidden className={it.safety ? "h-1.5 bg-ink" : it.strength === "rule" ? "h-1.5 bg-lavender-deep" : "h-[3px] bg-lavender-deep/50"} />
-      <div className="flex flex-1 flex-col p-4">
-        <p className="flex flex-wrap items-center gap-1.5">
-          <Tag tone="agent">{it.kindLabel}</Tag>
-          {it.safety && <Tag tone="plain">{tx.safety}</Tag>}
-          {it.family && <Tag tone="muted">{familyL(it.family, lang)}</Tag>}
-          {it.scope?.site && <Tag tone="muted">{it.scope.site}</Tag>}
-          {faded && <Tag tone="muted">{tx.faded}</Tag>}
-        </p>
-        {mode === "correct" ? (
-          <form
-            className="mt-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void act(`x:${it.id}`, { action: "correct", itemId: it.id, text: text.trim() }).then((ok) => ok && setMode("view"));
-            }}
-          >
-            <label className="text-[0.88rem] font-semibold" htmlFor={`fix-${it.id}`}>
-              {tx.sayIt}
-            </label>
-            <input id={`fix-${it.id}`} autoFocus value={text} onChange={(e) => setText(e.target.value)} className="mt-1 min-h-11 w-full border-2 border-petrol px-2 text-[1.05rem]" />
-            <div className="mt-2 flex flex-wrap gap-3">
-              <Button type="submit" kind="primary" busy={mine} disabled={!text.trim() || text.trim() === it.text}>
-                {tx.save}
-              </Button>
-              <Button kind="quiet" onClick={() => setMode("view")}>
-                {tx.cancel}
-              </Button>
-            </div>
-            <p className="mt-1 text-[0.85rem] text-ink-soft">{tx.oldKept}</p>
-          </form>
-        ) : (
-          <p className="mt-2 text-[1.2rem] font-semibold leading-snug">{it.text}</p>
+    <li className={`px-5 py-5 sm:px-6 ${faded ? "opacity-70" : ""}`}>
+      <p className="flex flex-wrap items-center gap-1.5">
+        <Tag tone="agent">{it.kindLabel}</Tag>
+        {it.safety && (
+          <Tag tone="petrol">
+            <ShieldCheck aria-hidden size={13} />
+            {tx.safety}
+          </Tag>
         )}
-        <p className="mt-1.5 text-[0.92rem] leading-snug text-ink-soft">{provenance(it, lang)}</p>
+        {it.family && <Tag tone="muted">{familyL(it.family, lang)}</Tag>}
+        {it.scope?.site && <Tag tone="muted">{it.scope.site}</Tag>}
+        {faded && <Tag tone="muted">{tx.faded}</Tag>}
+      </p>
+      {mode === "correct" ? (
+        <form
+          className="mt-3 max-w-xl"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void act(`x:${it.id}`, { action: "correct", itemId: it.id, text: text.trim() }).then((ok) => ok && setMode("view"));
+          }}
+        >
+          <Input id={`fix-${it.id}`} label={tx.sayIt} hint={tx.oldKept} autoFocus value={text} onChange={setText} />
+          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
+            <Button type="submit" kind="primary" busy={mine} disabled={!text.trim() || text.trim() === it.text}>
+              {tx.save}
+            </Button>
+            <Button kind="quiet" onClick={() => setMode("view")}>
+              {tx.cancel}
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <p className="mt-2.5 text-[1.12rem] font-semibold leading-snug">{it.text}</p>
+      )}
+      <p className="mt-1 text-[0.92rem] leading-snug text-ink-soft">{provenance(it, lang)}</p>
+      <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.85rem] text-ink-soft">
         {it.strength === "habit" && (
-          <div className="mt-2 flex items-center gap-2" title={tx.strengthTitle}>
-            <span className="text-[0.82rem] text-ink-soft">{tx.strength}</span>
-            <span aria-hidden className="h-1.5 w-24 bg-lavender">
-              <span className="block h-full bg-lavender-deep" style={{ width: `${Math.round(it.weight * 100)}%` }} />
+          <span className="flex items-center gap-2" title={tx.strengthTitle}>
+            {tx.strength}
+            <span aria-hidden className="h-1.5 w-20 overflow-hidden rounded-full bg-lavender-mid">
+              <span className="block h-full rounded-full bg-lavender-deep" style={{ width: `${pct}%` }} />
             </span>
-            <span className="text-[0.82rem] text-ink-soft tabular">{Math.round(it.weight * 100)} %</span>
-          </div>
+            <span className="tabular">{pct} %</span>
+          </span>
         )}
-        <p className="mt-1 text-[0.85rem] text-ink-soft">{sinceText(it.lastUsedAt, now, lang)}</p>
+        <span>{sinceText(it.lastUsedAt, now, lang)}</span>
+      </p>
 
-        {it.mandate?.status === "offered" && (
-          <div className="mt-3 border-l-4 border-ink bg-mist px-3 py-2">
-            <p className="text-[0.95rem] font-semibold">{tx.addAsk}</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <Button kind="primary" size="sm" busy={busy === `m:${it.id}`} disabled={!!busy} onClick={() => void act(`m:${it.id}`, { action: "mandate", itemId: it.id, decision: "added" })}>
-                {tx.add}
-              </Button>
-              <Button kind="quiet" disabled={!!busy} onClick={() => void act(`m:${it.id}`, { action: "mandate", itemId: it.id, decision: "declined" })}>
-                {tx.keepMemory}
-              </Button>
-            </div>
+      {it.mandate?.status === "offered" && (
+        <Panel className="mt-4 p-4">
+          <p className="text-[0.95rem] font-semibold leading-snug">{tx.addAsk}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
+            <Button kind="primary" size="sm" busy={busy === `m:${it.id}`} disabled={!!busy} onClick={() => void act(`m:${it.id}`, { action: "mandate", itemId: it.id, decision: "added" })}>
+              {tx.add}
+            </Button>
+            <Button kind="quiet" disabled={!!busy} onClick={() => void act(`m:${it.id}`, { action: "mandate", itemId: it.id, decision: "declined" })}>
+              {tx.keepMemory}
+            </Button>
           </div>
-        )}
-        {it.mandate?.status === "added" && <p className="mt-2 text-[0.88rem] font-semibold">{tx.inMandate}</p>}
-        {it.mandate?.status === "intake_only" && <p className="mt-2 text-[0.88rem] text-ink-soft">{tx.intakeOnly}</p>}
+        </Panel>
+      )}
+      {it.mandate?.status === "added" && (
+        <p className="mt-2 flex items-center gap-1.5 text-[0.88rem] font-semibold text-good">
+          <ShieldCheck aria-hidden size={15} />
+          {tx.inMandate}
+        </p>
+      )}
+      {it.mandate?.status === "intake_only" && <p className="mt-2 text-[0.88rem] text-ink-soft">{tx.intakeOnly}</p>}
 
-        {mode === "forget" ? (
-          <div className="mt-3 bg-mist p-3" role="alertdialog" aria-label={tx.forgetLabel(it.text)}>
-            <p className="font-semibold">{tx.forgetAsk}</p>
-            <p className="text-[0.92rem] leading-snug text-ink-soft">{tx.forgetNote}</p>
-            <div className="mt-2 flex flex-wrap gap-3">
-              <Button kind="dark" busy={mine} onClick={() => void act(`f:${it.id}`, { action: "forget", itemId: it.id })}>
-                {tx.forgetIt}
-              </Button>
-              <Button kind="quiet" onClick={() => setMode("view")}>
-                {tx.keepIt}
-              </Button>
-            </div>
+      {mode === "forget" ? (
+        <div className="mt-4 rounded-lg bg-surface p-4" role="alertdialog" aria-label={tx.forgetLabel(it.text)}>
+          <p className="font-semibold">{tx.forgetAsk}</p>
+          <p className="mt-0.5 text-[0.92rem] leading-snug text-ink-soft">{tx.forgetNote}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
+            <Button kind="dark" size="sm" busy={mine} onClick={() => void act(`f:${it.id}`, { action: "forget", itemId: it.id })}>
+              {tx.forgetIt}
+            </Button>
+            <Button kind="quiet" onClick={() => setMode("view")}>
+              {tx.keepIt}
+            </Button>
           </div>
-        ) : (
-          mode === "view" && (
-            <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line pt-3">
-              <button
-                type="button"
-                role="switch"
-                aria-checked={it.audience === "shared"}
-                disabled={!!busy}
-                onClick={() => void act(`a:${it.id}`, { action: "audience", itemId: it.id, audience: it.audience === "shared" ? "private" : "shared" })}
-                className="flex min-h-10 items-center gap-2 text-[0.92rem]"
-              >
-                <span aria-hidden className={`flex h-6 w-11 items-center p-0.5 ${it.audience === "shared" ? "justify-end bg-petrol" : "justify-start bg-line"}`}>
-                  <span className="size-5 bg-paper" />
-                </span>
-                {it.audience === "shared" ? tx.sharedWith : tx.private}
-              </button>
-              <span className="ml-auto flex gap-4">
-                <Button kind="quiet" disabled={!!busy} onClick={() => setMode("correct")}>
-                  {tx.correct}
-                </Button>
-                <Button kind="quiet" disabled={!!busy} onClick={() => setMode("forget")}>
-                  {tx.forget}
-                </Button>
-              </span>
-            </div>
-          )
-        )}
-      </div>
+        </div>
+      ) : (
+        mode === "view" && (
+          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1">
+            <Switch on={it.audience === "shared"} disabled={!!busy} onChange={(on) => void act(`a:${it.id}`, { action: "audience", itemId: it.id, audience: on ? "shared" : "private" })}>
+              {it.audience === "shared" ? tx.sharedWith : tx.private}
+            </Switch>
+            <span className="flex gap-5 sm:ml-auto">
+              <Button kind="quiet" disabled={!!busy} onClick={() => setMode("correct")}>
+                <PenLine aria-hidden size={15} />
+                {tx.correct}
+              </Button>
+              <Button kind="quiet" disabled={!!busy} onClick={() => setMode("forget")}>
+                <Trash2 aria-hidden size={15} />
+                {tx.forget}
+              </Button>
+            </span>
+          </div>
+        )
+      )}
     </li>
   );
 }
@@ -333,22 +345,18 @@ function TellIt({ busy, onSave }: { busy: boolean; onSave: (text: string) => Pro
   const [text, setText] = useState("");
   return (
     <form
-      className="bg-lavender p-4"
+      className="rounded-xl bg-lavender p-5 sm:p-6"
       onSubmit={(e) => {
         e.preventDefault();
         if (text.trim()) void onSave(text.trim()).then((ok) => ok && setText(""));
       }}
     >
-      <label htmlFor="tell" className="font-semibold text-lavender-deep">
-        {tx.tell}
-      </label>
-      <div className="mt-1 flex flex-wrap gap-2">
-        <input id="tell" value={text} onChange={(e) => setText(e.target.value)} placeholder={tx.tellPlaceholder} className="min-h-11 min-w-0 flex-1 border-2 border-lavender-deep bg-paper px-3 text-[1.02rem]" />
-        <Button type="submit" kind="primary" busy={busy} disabled={!text.trim()}>
+      <div className="flex flex-wrap items-start gap-3">
+        <Input id="tell" className="min-w-0 flex-1 basis-64" label={tx.tell} hint={tx.tellNote} value={text} onChange={setText} placeholder={tx.tellPlaceholder} enterKeyHint="done" />
+        <Button type="submit" kind="primary" busy={busy} disabled={!text.trim()} className="sm:mt-[1.85rem]">
           {tx.remember}
         </Button>
       </div>
-      <p className="mt-1 text-[0.85rem] text-ink-soft">{tx.tellNote}</p>
     </form>
   );
 }

@@ -7,7 +7,9 @@ import { useEffect, useState } from "react";
 import { api } from "../../_client/api";
 import { useLang, useText } from "../../_i18n/provider";
 import { passkeyProblemL } from "../../_ui/passkey.text";
-import { PhoneNotice, PhoneProblem, bigButton } from "../../_ui/phone";
+import { QrCode, ScanFace, ShieldCheck, Smartphone } from "lucide-react";
+import { IconDisc, Spinner } from "../../_ui/kit";
+import { PhoneNotice, PhoneProblem, PhoneSkeleton, bigButton } from "../../_ui/phone";
 import { DOOR_TEXT } from "../../k/door.text";
 
 type Begin = { options: PublicKeyCredentialCreationOptionsJSON; restaurant: string; signer?: string };
@@ -45,20 +47,49 @@ export function DeviceFlow() {
   }
   if (done)
     return (
-      <PhoneNotice title={tx.deviceDone(done)}>
-        <Link href="/approver" className={`mt-6 ${bigButton("go")}`}>
+      <PhoneNotice
+        title={tx.deviceDone(done)}
+        mark={
+          <IconDisc tone="good" size={60}>
+            <ShieldCheck size={28} />
+          </IconDisc>
+        }
+      >
+        <Link href="/approver" className={`mt-auto ${bigButton("go")}`}>
           {tx.deviceHome}
         </Link>
       </PhoneNotice>
     );
-  if (!begin) return problem ? <PhoneNotice title={problem.title} body={problem.body} /> : <p className="mt-20 text-center text-ink-soft">…</p>;
+  if (!begin)
+    return problem ? (
+      <div className="mt-2">
+        <IconDisc tone="muted" size={60}>
+          <QrCode size={26} />
+        </IconDisc>
+        <h1 className="mt-5 text-[1.3rem] font-semibold leading-snug">{problem.title}</h1>
+        <p className="mt-2 leading-relaxed text-ink-soft">{problem.body}</p>
+      </div>
+    ) : (
+      <PhoneSkeleton label={tx.deviceButton} />
+    );
   return (
-    <div>
-      <PhoneNotice title={tx.deviceTitle(begin.restaurant)} body={tx.deviceBody(begin.signer ?? "")} />
+    <div className="flex flex-1 flex-col">
+      <PhoneNotice
+        title={tx.deviceTitle(begin.restaurant)}
+        body={tx.deviceBody(begin.signer ?? "")}
+        mark={
+          <IconDisc size={60}>
+            <Smartphone size={27} />
+          </IconDisc>
+        }
+      />
       {problem && <PhoneProblem title={problem.title} body={problem.body} />}
-      <button type="button" onClick={() => void create()} disabled={busy} className={`mt-6 ${bigButton("go")}`}>
-        {tx.deviceButton}
-      </button>
+      <div className="mt-auto pt-8">
+        <button type="button" onClick={() => void create()} disabled={busy} className={bigButton("go")}>
+          {busy ? <Spinner size={18} /> : <ScanFace aria-hidden size={22} strokeWidth={2.1} />}
+          {tx.deviceButton}
+        </button>
+      </div>
     </div>
   );
 }

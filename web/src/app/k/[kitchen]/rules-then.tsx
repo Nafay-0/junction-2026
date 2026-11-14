@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from "react";
 import type { KitchenRulesThen } from "@/server/mariadb/kitchen-view";
-import { clock, day, helsinkiToday, say } from "../../_ui/plain";
+import { ArrowRight, History } from "lucide-react";
+import { useFormat, useText } from "../../_i18n/provider";
+import { Card, Panel } from "../../_ui/kit";
+import { clock, helsinkiToday, say } from "../../_ui/plain";
+import { RULES_THEN_TEXT } from "./rules-then.text";
 import { usePortal } from "./portal";
 
 /**
@@ -12,6 +16,8 @@ import { usePortal } from "./portal";
  */
 export function RulesThen({ orderId }: { orderId: string }) {
   const { ui } = usePortal();
+  const tx = useText(RULES_THEN_TEXT);
+  const f = useFormat();
   const [r, setR] = useState<KitchenRulesThen>();
   const [error, setError] = useState<string>();
   useEffect(() => {
@@ -32,58 +38,62 @@ export function RulesThen({ orderId }: { orderId: string }) {
     return (
       <section aria-labelledby="rules-then" className="text-[0.92rem] text-ink-soft">
         <h2 id="rules-then" className="sr-only">
-          The rules it was judged by
+          {tx.hidden}
         </h2>
         <p>{r.sentence}</p>
       </section>
     );
-  const placed = `${day(helsinkiToday(new Date(r.placedAt)))} ${clock(r.placedAt)}`;
+  const placed = `${f.day(helsinkiToday(new Date(r.placedAt)))} ${clock(r.placedAt)}`;
+  const changed = r.differences.length > 0;
   return (
-    <section aria-labelledby="rules-then" className="bg-paper">
-      <div aria-hidden className="h-[3px] bg-petrol" />
-      <div className="p-4">
-        <h2 id="rules-then" className="display text-[1.5rem]">
-          Would it pass today?
+    <section aria-labelledby="rules-then">
+    <Card pad className="space-y-5">
+      <div>
+        <h2 id="rules-then" className="flex items-center gap-2.5">
+          <History aria-hidden size={20} className="text-petrol" />
+          <span className="display text-[1.35rem]">{tx.title}</span>
         </h2>
-        <p className="mt-1 max-w-[70ch] text-[1.05rem] leading-snug">{say(r.sentence)}</p>
-        <dl className="mt-3 grid gap-3 sm:grid-cols-2">
-          <div className="border-l-4 border-line pl-3">
-            <dt className="text-[0.85rem] text-ink-soft">With the rules of {placed}, when it was placed</dt>
-            <dd className="font-semibold">{r.then.outcome}</dd>
-          </div>
-          <div className={`border-l-4 pl-3 ${r.differences.length ? "border-petrol" : "border-line"}`}>
-            <dt className="text-[0.85rem] text-ink-soft">With today&apos;s rules</dt>
-            <dd className="font-semibold">{r.now.outcome}</dd>
-          </div>
-        </dl>
-        {r.differences.length > 0 && (
-          <ul className="mt-3 space-y-1.5 text-[0.95rem] leading-snug">
-            {r.differences.map((d) => (
-              <li key={d.rule}>
-                <b>{d.title}:</b> {d.then} then, {d.now} today. <span className="text-ink-soft">{say(d.reason)}</span>
+        <p className="mt-2 max-w-[68ch] leading-relaxed">{say(r.sentence)}</p>
+      </div>
+      <dl className="grid gap-3 sm:grid-cols-2">
+        <Panel className="p-4">
+          <dt className="text-[0.86rem] leading-snug text-ink-soft">{tx.then(placed)}</dt>
+          <dd className="mt-1 font-semibold leading-snug">{r.then.outcome}</dd>
+        </Panel>
+        <Panel tone={changed ? "petrol" : "surface"} className="p-4">
+          <dt className="text-[0.86rem] leading-snug text-ink-soft">{tx.now}</dt>
+          <dd className="mt-1 font-semibold leading-snug">{r.now.outcome}</dd>
+        </Panel>
+      </dl>
+      {changed && (
+        <ul className="space-y-2 text-[0.95rem] leading-snug">
+          {r.differences.map((d) => (
+            <li key={d.rule} className="grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-1.5">
+              <ArrowRight aria-hidden size={15} className="mt-[0.2em] text-petrol" />
+              <span>
+                <span className="font-semibold">{tx.diff(d.title, d.then, d.now)}</span> <span className="text-ink-soft">{say(d.reason)}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {r.changes.length > 0 && (
+        <div>
+          <h3 className="text-[0.95rem] font-semibold">{tx.changes}</h3>
+          <ol className="mt-2 divide-y divide-line text-[0.93rem]">
+            {r.changes.map((c, i) => (
+              <li key={i} className="grid gap-x-4 gap-y-0.5 py-2.5 sm:grid-cols-[8.5rem_minmax(0,1fr)]">
+                <span className="text-ink-soft tabular">{c.when}</span>
+                <span>
+                  {say(c.what)} <span className="text-ink-soft">({c.by})</span>
+                </span>
               </li>
             ))}
-          </ul>
-        )}
-        {r.changes.length > 0 && (
-          <>
-            <h3 className="mt-4 font-semibold">What changed since, and who changed it</h3>
-            <ol className="mt-1 divide-y divide-line text-[0.93rem]">
-              {r.changes.map((c, i) => (
-                <li key={i} className="grid gap-x-3 py-1.5 sm:grid-cols-[8.5rem_minmax(0,1fr)]">
-                  <span className="text-ink-soft tabular">{c.when}</span>
-                  <span>
-                    {say(c.what)} <span className="text-ink-soft">({c.by})</span>
-                  </span>
-                </li>
-              ))}
-            </ol>
-          </>
-        )}
-        <p className="mt-3 text-[0.85rem] text-ink-soft">
-          The same check the order went through, run again on the rules as they stood{r.reproduces ? "; against the rules of that moment it gives exactly the answer your order got" : ""}. Kept by the wholesaler in a database that records every earlier version of each rule by itself.
-        </p>
-      </div>
+          </ol>
+        </div>
+      )}
+      <p className="text-[0.85rem] leading-snug text-ink-soft">{tx.note(r.reproduces)}</p>
+    </Card>
     </section>
   );
 }
