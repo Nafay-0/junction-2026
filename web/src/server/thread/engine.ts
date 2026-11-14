@@ -901,11 +901,16 @@ async function changeMenuInWords(run: TurnRun, words: string, lang: "en" | "fi" 
   const c = await changeMenu(run.k.info.slug, subj.planId, words, byLine(run), lang);
   if (!c.edits.length) return undefined;
   const { refreshMenu } = await import("./menu");
-  await refreshMenu(run, subj.planId).catch(() => undefined);
+  const card = await refreshMenu(run, subj.planId).catch(() => undefined);
   record(run, "menu_changed", `The menu on the table was changed in words ("${words.slice(0, 80)}"): ${c.changed.slice(0, 4).join("; ")}.`, { planId: subj.planId, changed: c.changed });
   if (c.checks.refusedDish) {
     const m = await menuChecks(run.k.info.slug, subj.planId, lang).catch(() => undefined);
     if (m?.say) return `${c.say} ${m.say}${m.ask ? ` ${m.ask}` : ""}`.trim();
+  }
+  // The change said, then the question that moves it on: a yes orders the changed menu.
+  if (card?.stage === "ready" && card.totalCents > 0 && !card.blockers.length) {
+    const day = card.serviceDate ? (lang === "en" ? englishDays(fmtFor(lang).day(card.serviceDate)).replace(/\.$/, "") : fmtFor(lang).day(card.serviceDate)) : "";
+    return `${c.say} ${{ en: `Shall I order it${day ? ` for ${day}` : ""}?`, fi: `Tilaanko sen${day ? ` (${day})` : ""}?`, sv: `Ska jag beställa den${day ? ` till ${day}` : ""}?` }[lang]}`;
   }
   return c.say;
 }
