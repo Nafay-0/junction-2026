@@ -57,7 +57,7 @@ function failed(a: Agent): string {
   return (
     [...by.entries()]
       .sort((x, y) => order.get(x[0])! - order.get(y[0])!)
-      .map(([s, e]) => `**${s}** (${e.scores.map((x) => Math.round(x)).join(", ")}${e.scores.length < a.repeats ? `; ${a.repeats - e.scores.length} of ${a.repeats} repeats passed` : ""}): ${e.reason.split(" | ").slice(0, 2).join("; ").replace(/\|/g, "/")}`)
+      .map(([s, e]) => `**${s}** (${e.scores.map((x) => Math.round(x)).join(", ")}${e.scores.length < a.repeats ? `; ${a.repeats - e.scores.length} of ${a.repeats} repeats passed` : ""}): ${e.reason.split(" | ").slice(0, 1).join("").replace(/\|/g, "/")}`)
       .join("<br>") || "none"
   );
 }

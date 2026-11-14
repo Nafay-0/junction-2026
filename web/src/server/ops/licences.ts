@@ -1,4 +1,4 @@
-import { readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 /**
@@ -44,8 +44,16 @@ export interface LicenceSource {
 
 const g = globalThis as typeof globalThis & { __dockLicenceSource?: LicenceSource; __dockLicenceCache?: { file: string; mtime: number; byAgent: Map<string, LicenceRecord> } };
 
+/**
+ * DOCK_LICENCES_FILE, else .data/licences.json (what `pnpm crash:export` writes), else the leaderboard's committed
+ * licences (src/crash/results/licences.json), so a fresh checkout shows the published ratings.
+ */
 function licencesFile(): string {
-  return process.env.DOCK_LICENCES_FILE?.trim() || path.join(process.cwd(), ".data", "licences.json");
+  const set = process.env.DOCK_LICENCES_FILE?.trim();
+  if (set) return set;
+  const local = path.join(process.cwd(), ".data", "licences.json");
+  if (existsSync(/*turbopackIgnore: true*/ local)) return local;
+  return path.join(process.cwd(), "src", "crash", "results", "licences.json");
 }
 
 /** Reads the file again when it changes, so a new crash-test run shows without a restart. */

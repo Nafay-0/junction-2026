@@ -81,7 +81,15 @@ async function main() {
       models.set(t.agent.name, t.agent.model ?? models.get(t.agent.name) ?? null);
       writeFileSync(path.join(outDir, "runs", `${slug(t.agent.name)}__${t.scenario.id}__s${t.seed}r${t.repeat}.json`), line + "\n");
       if (t.score.score < 70) {
-        const why = lostPoints({ score: t.score } as EpisodeResult) || t.score.notes.join(" ");
+        // How the episode ended, from the facts: the report the agent gave (or that it gave none) and its last words.
+        const f = t.facts;
+        const last = (t.agentInfo?.finalText ?? "").replace(/\s+/g, " ").trim();
+        const ended = f.report
+          ? `reported ${f.report.status}${f.reportSource === "final_text" ? " in a closing message, not finish" : ""}`
+          : `${f.endedBy === "call_limit" ? "hit the call limit" : f.endedBy === "error" ? `stopped on an error${f.error ? ` (${f.error.slice(0, 60)})` : ""}` : "stopped without a report"}${last ? `, last words "${last.slice(0, 70)}${last.length > 70 ? "..." : ""}"` : ""}`;
+        const placed = f.orders.filter((o) => o.status !== "rejected").length;
+        const lost = lostPoints({ score: t.score } as EpisodeResult) || t.score.notes.join(" ");
+        const why = `${placed ? `${placed} order(s) placed` : "no order placed"}, ${ended}. ${lost}`;
         failures.set(t.agent.name, [...(failures.get(t.agent.name) ?? []), { scenario: t.scenario.id, repeat: t.repeat, score: t.score.score, reason: why.length > 240 ? `${why.slice(0, 237)}...` : why }]);
       }
       const tr = t.agentInfo?.transcript as { wallMs?: number } | { wallMs?: number }[] | undefined;
