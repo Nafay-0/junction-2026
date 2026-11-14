@@ -6,8 +6,8 @@ import type { ThreadAction } from "./types";
 
 /**
  * The widgets' actions (docs/agent-thread.md "Widgets"), each one a turn: the order sheet, the alternatives picker,
- * the options card's "edit before ordering". Returns false for an action that is not a widget's (the engine's own
- * runAction handles it). The menu builder's and the home's actions are added here as they land.
+ * the options card's "edit before ordering", the menu builder (menu.ts). Returns false for an action that is not a
+ * widget's (the engine's own runAction handles it). The home's actions are added here as they land.
  */
 export async function runWidget(run: TurnRun, a: ThreadAction, words?: string): Promise<boolean> {
   void words;
@@ -63,6 +63,17 @@ export async function runWidget(run: TurnRun, a: ThreadAction, words?: string): 
         ...(s.need.item.productId ? { asked: [s.need.item.productId] } : {}),
       });
       return true;
+    }
+    case "menu_choose":
+    case "menu_covers":
+    case "menu_day":
+    case "menu_line_swap":
+    case "menu_line_have":
+    case "menu_line_per_cover":
+    case "menu_accept":
+    case "menu_to_sheet": {
+      const { runMenuAction } = await import("./menu");
+      return runMenuAction(run, a);
     }
     default:
       return false;

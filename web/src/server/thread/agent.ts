@@ -40,7 +40,7 @@ How to work each turn:
 - The buyer's newest words answer something open (listed under OPEN DECISIONS): call buyer_reply with the matching ref. "the second one" is o2. "yes", "that's right", "the chef said yes" confirm a check. Only use refs that are listed. If their words do not clearly pick one, ask one short question instead.
 - After an order waits for a named person's sign-off (status pending_approval), write your one sentence (who signs, on their phone) and call await_sign_off with its orderId in the same reply. Do not try to place, retry or split it.
 - Questions about past orders: order_history. About rules, limits or who signs off: read_mandate or read_kitchen_memory. About an order's status or why something happened: get_order or explain.
-- A dish or a menu for a number of covers ("salmon soup for 300 on Friday", "plan lunch for 40 around beetroot"): call plan_menu with their words. It works out the ingredients and prices them as one plan card; the buyer orders it with one tap (or "yes, order it": buyer_reply plan).
+- A dish or a menu for a number of covers ("salmon soup for 300 on Friday", "plan lunch for 40 around beetroot"): call plan_menu with their words. The menu card forms as the planner works (open words get two or three menus to pick from); the buyer edits it in place and puts it on the order sheet with one tap (or "yes, put it on the sheet": buyer_reply menu; "the second menu": buyer_reply menu_p2). Do not list its lines or prices.
 - Anything else (a greeting, small talk, something outside buying food): one short sentence, no tool.
 
 Your sentence:
@@ -138,6 +138,9 @@ export async function openRefs(run: TurnRun): Promise<OpenRef[]> {
   }
   const plan = cards.find((x) => x.card.type === "plan" && x.card.state === "planned" && x.card.canOrder)?.card;
   if (plan?.type === "plan") refs.push({ ref: "plan", label: `order the menu plan (${plan.dishes.join(", ")}) as one order, €${(plan.totalCents / 100).toFixed(2)}`, action: { type: "plan_order", planId: plan.planId }, confirm: true });
+  const menu = [...cards].reverse().find((x) => x.card.type === "menu" && !x.card.sheetId && (x.card.stage === "ready" || x.card.stage === "choose"))?.card;
+  if (menu?.type === "menu" && menu.stage === "choose") menu.proposals.forEach((p, i) => refs.push({ ref: `menu_p${i + 1}`, label: `cook menu ${i + 1}: ${p.title} (${p.dishes.join(", ")})`, action: { type: "menu_choose", planId: menu.planId, proposalId: p.proposalId } }));
+  else if (menu?.type === "menu" && menu.stage === "ready" && menu.totalCents > 0) refs.push({ ref: "menu", label: `put the menu (${menu.dishes.map((d) => d.name).join(", ")}) on the order sheet, €${(menu.totalCents / 100).toFixed(2)}`, action: { type: "menu_to_sheet", planId: menu.planId }, confirm: true });
   for (const { card } of cards) {
     if (card.type !== "memory") continue;
     card.proposals.forEach((p, i) => {
@@ -231,6 +234,9 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
           const out = await remember(run, r.action.itemId, r.action.yes, words);
           return out;
         }
+        // A widget's action (the menu card's "put it on the sheet", a menu picked by words): the same handler as a tap.
+        const { runWidget } = await import("./widgets");
+        if (await runWidget(run, r.action, words)) return { ok: true, done: r.action.type };
         const out = await runAction(run, r.action, words);
         items.push(...out);
         return forModel(out);
@@ -238,12 +244,12 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
       toModelOutput: ({ output }) => ({ type: "text", value: compact(output) }),
     }),
     plan_menu: tool({
-      description: "A dish or a menu for a number of covers: the menu planner works out the ingredients, matches each to the assortment, prices them live and shows the plan as one card the buyer orders with one confirmation.",
+      description: "A dish or a menu for a number of covers: the menu planner drafts the dishes, works out the ingredients, matches each to the assortment and prices them live, shown as a menu card that forms as it works; the buyer edits it in place and puts it on the order sheet.",
       inputSchema: z.object({ words: z.string().min(1).max(2000).describe("The buyer's words, copied exactly from their newest message.") }),
       execute: async ({ words: w }) => {
         const said = words.includes(w.trim()) ? w.trim() : words;
-        const { planFromWords } = await import("./plan");
-        return planFromWords(run, said);
+        const { menuFromWords } = await import("./menu");
+        return menuFromWords(run, said);
       },
       toModelOutput: ({ output }) => ({ type: "text", value: compact(output) }),
     }),
@@ -360,7 +366,7 @@ export async function remember(run: TurnRun, itemId: string, yes: boolean, words
     record(run, "memory_write", `${yes ? "Kept" : "Dropped"} a memory proposal (${itemId}): ${r.outcome}.`, { itemId, yes, outcome: r.outcome, ...(words ? { heard: words.slice(0, 300) } : {}) });
     for (const { turnId, card } of run.store.cards(run.thread)) {
       if (card.type === "memory" && card.proposals.some((p) => p.itemId === itemId)) {
-        run.store.card(run.thread, turnId, { ...card, proposals: card.proposals.map((p) => (p.itemId === itemId ? { ...p, decided: yes ? "kept" : "dropped" } : p)) });
+        run.store.card(run.thread, turnId, { ...card, proposals: card.proposals.map((p) => (p.itemId === itemId ? { ...p, decided: yes ? ("kept" as const) : ("dropped" as const) } : p)) });
       }
     }
     return { ok: true, outcome: r.outcome };
