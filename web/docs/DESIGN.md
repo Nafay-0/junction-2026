@@ -78,7 +78,7 @@ All text pairs meet 4.5:1. The older names (`concrete`, `steel`, `chalk`) remain
 | `Button`, `buttonClass` | kinds: `go` (lime, one per view), `primary` (petrol), `secondary`, `quiet` (text), `safety` (gate only), `dark`, `ghost-dark`; sizes sm, md, lg; `busy` |
 | `IconButton` | round, 44 px, always labelled |
 | `Input`, `Select`, `Textarea`, `.field` | label above, hint or error below, icon inside (`suffix` for a unit); native attributes pass through; one field look |
-| `Checkbox`, `Chip` | a checkbox as a whole 44 px row (`card` for a choice in a list); a toggling pill for filters, ticked when on |
+| `Checkbox`, `Chip`, `Switch` | a checkbox as a whole 44 px row (`card` for a choice in a list); a toggling pill for filters, ticked when on; an on/off for a view setting (`role="switch"`) |
 | `PageHeader`, `FactList` | a page's top (back link or context, title, lead, actions; no box); facts as hairline rows, label beside value on a desk and above it on a phone |
 | `Tabs` | segmented pill for a few views or filters, with counts |
 | `Tag`, `Badge` | a chip for a claim; a status with a dot (`waiting` and `refused` are the gate's) |
@@ -207,8 +207,14 @@ the page answers), then `Section`s. Ids, codes and hashes sit behind `Details`. 
 `Num`; the gate's slab and yellow mark only refusals, suspensions and waiting sign-offs. A new section added to `NAV`
 gets an icon in `ICON` (a ring shows until it has one).
 
-**Phone pages** (`_ui/phone.tsx`) and **the wall** (`_wall/`) inherit the tokens and the type; their layouts are on
-the roll-out list.
+**Phone pages** (`_ui/phone.tsx`, `PhoneShell`): a white top bar, one column, the main action held at the bottom
+edge under the thumb. The sign-off (`approve/`) is the product's signature: the gate's slab with the hazard band
+(who asks, the total, delivery), the rule that stopped it, the exact lines in one card, Face ID to approve; once
+decided it ends on a stamp and the band is gone. **The wall** (`_wall/`) inherits the tokens and the type.
+
+**Store pages** follow Home: a `PageHeader` (no box), then sections. The catalogue's tiles are cards with the
+picture full bleed, two to a row on a phone with a round add button; on a phone the departments and the filters are
+sheets and the categories a row of chips. The product page puts the buy box straight after the name on a phone.
 
 ## 9. Do and do not
 

@@ -3,7 +3,7 @@
 import { Package, Search } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { LangSwitch } from "../_i18n/provider";
-import { Avatar, Badge, Button, Card, Checkbox, Chip, Empty, FactList, IconDisc, Input, Kbd, ListRow, PageHeader, Panel, Price, Select, Sheet, Skeleton, Steps, Tabs, Tag, Textarea, Toaster, useToast } from "../_ui/kit";
+import { Avatar, Badge, Button, Card, Checkbox, Chip, Empty, FactList, IconDisc, Input, Kbd, ListRow, PageHeader, Panel, Price, Select, Sheet, Skeleton, Steps, Switch, Tabs, Tag, Textarea, Toaster, useToast } from "../_ui/kit";
 import { AgentTurn, AnomalyCard, BuyerTurn, Composer, GateCard, MemoryCard, NoticeCard, OptionsCard, OrderCard, PriceCard, QuestionCard, RecordsCard, StepLines, Thread, UnderstoodCard, VoiceStatus, type MicState, type VoiceState } from "../_ui/thread";
 import { Wordmark } from "../_ui/wordmark";
 
@@ -262,6 +262,9 @@ function Controls() {
         <div className="space-y-2">
           <Checkbox checked={check} onChange={setCheck} label="Lactose-free only" hint="The agent never proposes anything else." />
           <Checkbox card checked={!check} onChange={(v) => setCheck(!v)} label="Milk and cream" />
+          <Switch on={check} onChange={setCheck}>
+            Show what was left out
+          </Switch>
         </div>
       </div>
       <div className="mt-6 flex flex-wrap items-center gap-2" role="group" aria-label="Must be">
