@@ -1,17 +1,16 @@
 /**
- * The name. A baton is what a relay runner passes on: you pass a task, the agent runs with it and
- * hands it back for the step that is yours (an approval, a sign-in, a payment). It is also what a
- * conductor holds: the agent directs searches, sub-agents and a live browser.
+ * The name. Beryl is a gemstone: emerald and aquamarine are both beryl, and its crystals grow as
+ * six-sided columns. Clear, hard and many-faceted is what the agent should be: it shows its
+ * sources, holds to its rules and turns one request into many sides of an answer.
  * Change it here and it changes everywhere in the interface and in the agent's instructions.
  *
- * Not renamed, on purpose: the storage keys ("hovi.*"), the IndexedDB database ("hovi"), the
- * environment variables (HOVI_*) and the server globals (__hovi*) keep the old working title.
- * Renaming them would lose people's saved conversations, settings and sign-ins.
+ * Not renamed, on purpose: the storage keys in the browser ("hovi.*") keep the first working
+ * title, so people's saved settings survive. It was Hovi, then Baton (until 14 Nov).
  */
-export const APP_NAME = "Baton";
+export const APP_NAME = "Beryl";
 export const APP_TAGLINE = "Your internet butler";
 export const APP_DESCRIPTION =
-  "Pass over a task. Baton searches the live web with Exa, shows what it finds as live maps, charts and cards, works in a live browser you can watch, and hands the task back for the step that is yours.";
+  "Hand over a task. Beryl searches the live web with Exa, shows what it finds as live maps, charts and cards, and in the desktop app works in a live browser you can watch, handing the task back for the step that is yours.";
 
 /**
  * The logo: a baton caught at the moment it changes hands. One short diagonal bar with rounded
