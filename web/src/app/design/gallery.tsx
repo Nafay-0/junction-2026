@@ -6,6 +6,7 @@ import { LangSwitch } from "../_i18n/provider";
 import { Avatar, Badge, Button, Card, Checkbox, Chip, Empty, FactList, IconDisc, Input, Kbd, ListRow, PageHeader, Panel, Price, Select, Sheet, Skeleton, Steps, Switch, Tabs, Tag, Textarea, Toaster, useToast } from "../_ui/kit";
 import { AgentTurn, AnomalyCard, BuyerTurn, Composer, GateCard, MemoryCard, NoticeCard, OptionsCard, OrderCard, PriceCard, QuestionCard, RecordsCard, StepLines, Thread, UnderstoodCard, VoiceStatus, type MicState, type VoiceState } from "../_ui/thread";
 import { Wordmark } from "../_ui/wordmark";
+import { WidgetsDemo } from "./gallery-widgets";
 
 /**
  * Every shared component with its states, on made-up data (web/docs/DESIGN.md points here). Nothing on this page
@@ -24,6 +25,7 @@ export function Gallery() {
         </header>
         <main className="mx-auto max-w-[1200px] space-y-14 px-4 py-10 sm:px-6">
           <ThreadDemo />
+          <WidgetsDemo />
           <Voice />
           <Controls />
           <Surfaces />

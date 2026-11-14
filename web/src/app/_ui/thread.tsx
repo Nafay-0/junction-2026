@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUp, Camera, Check, ChevronDown, ChevronLeft, CircleAlert, Clock, Mic, Minus, ReceiptText, ShieldCheck, Sparkles, X } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { ArrowUp, Camera, Check, ChevronDown, ChevronLeft, CircleAlert, Clock, Maximize2, Mic, Minimize2, Minus, ReceiptText, ShieldCheck, Sparkles, X } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useText } from "../_i18n/provider";
 import { Avatar, Badge, Spinner } from "./kit";
 import { Target } from "./target";
 import { THREAD_TEXT } from "./thread.text";
+import { WIDGET_TEXT } from "./widgets.text";
 
 /**
  * The thread: the buyer's one conversation with their purchasing agent, typed or spoken. It is the heart of the
@@ -24,42 +25,112 @@ import { THREAD_TEXT } from "./thread.text";
 
 // ---------- where the thread lives ----------
 
+export type DockSize = "dock" | "workspace";
+
 /**
- * The thread's place in the shell.
- *   phone     the primary screen: it fills the screen above the tab bar, with the shop one tab away
- *   tablet    a side sheet over the shop
- *   desktop   a column docked beside the shop, open by default (the shell pads the page to make room)
- * `children` is the thread, `footer` the composer, `aside` goes in the header (a call button, a language switch).
+ * The thread's place in the shell, in two sizes the buyer moves between without losing their place.
+ *
+ *   phone        the primary screen: it fills the screen above the tab bar, with the shop one tab away
+ *   dock         from 640 px, a column beside the shop (a side sheet below 1280 px, docked from there): a quick
+ *                order while browsing
+ *   workspace    from 640 px, a large centred popup over the shop: room to compare, to plan a menu, to edit an order
+ *
+ * `children` is the thread, `footer` the composer, `aside` goes in the header (a call button, start over).
+ *
+ * `stage` is the working surface: the widget the buyer is working on now (the alternatives picker, the menu sheet,
+ * a long order sheet). In the workspace on a wide screen it sits beside the conversation; everywhere else it is a
+ * screen pushed over the conversation with a way back. It is one element, placed by CSS, so a widget's state
+ * survives a change of size. When a stage appears on a wide screen while the dock is small, the dock asks to become
+ * the workspace (`onSize`): the room opens by itself when a widget needs it.
  */
-export function ThreadDock({ open, onClose, name, sub, children, footer, aside, banner, id = "assistant", label }: { open: boolean; onClose: () => void; name: string; sub?: ReactNode; children: ReactNode; footer?: ReactNode; aside?: ReactNode; /** A line above the header on a phone, where the dock covers the page's own top strip (the demo note). */ banner?: ReactNode; id?: string; label: string }) {
+export function ThreadDock({ open, onClose, name, sub, children, footer, aside, banner, id = "assistant", label, size = "dock", onSize, stage, stageTitle, onStageClose }: {
+  open: boolean;
+  onClose: () => void;
+  name: string;
+  sub?: ReactNode;
+  children: ReactNode;
+  footer?: ReactNode;
+  aside?: ReactNode;
+  /** A line above the header on a phone, where the dock covers the page's own top strip (the demo note). */
+  banner?: ReactNode;
+  id?: string;
+  label: string;
+  size?: DockSize;
+  /** Given, the header shows the size switch and a stage can ask for the workspace. */
+  onSize?: (size: DockSize) => void;
+  stage?: ReactNode;
+  stageTitle?: string;
+  /** Back to the conversation: the page clears `stage`. */
+  onStageClose?: () => void;
+}) {
   const tx = useText(THREAD_TEXT);
+  const wx = useText(WIDGET_TEXT);
+  const ws = size === "workspace";
+  const hadStage = useRef(false);
+  useEffect(() => {
+    const has = !!stage;
+    if (has && !hadStage.current && !ws && onSize && window.matchMedia("(min-width: 1024px)").matches) onSize("workspace");
+    hadStage.current = has;
+  }, [stage, ws, onSize]);
+
+  const frame = ws
+    ? `sm:inset-3 sm:overflow-hidden sm:rounded-2xl sm:shadow-lg lg:inset-x-[max(1.5rem,calc((100vw-80rem)/2))] lg:inset-y-6 ${stage ? "lg:grid lg:grid-cols-[minmax(22rem,27rem)_minmax(0,1fr)]" : ""}`
+    : "sm:inset-x-auto sm:inset-y-0 sm:right-0 sm:w-[27rem] sm:rounded-l-2xl sm:shadow-lg xl:z-40 xl:rounded-none xl:border-l xl:border-lavender-mid xl:shadow-none 2xl:w-[30rem]";
   return (
     <>
-      {open && <div aria-hidden className="fade-in fixed inset-0 z-40 hidden bg-petrol-deep/45 backdrop-blur-[2px] sm:block xl:hidden" onClick={onClose} />}
-      <aside
-        id={id}
-        aria-label={label}
-        className={`${open ? "flex" : "hidden"} thread-dock fixed inset-x-0 top-0 z-40 flex-col bg-lavender sm:inset-x-auto sm:inset-y-0 sm:right-0 sm:z-50 sm:w-[27rem] sm:rounded-l-2xl sm:shadow-lg xl:z-40 xl:w-[27rem] xl:rounded-none xl:border-l xl:border-lavender-mid xl:shadow-none 2xl:w-[30rem]`}
-      >
-        {banner && <p className="on-dark bg-petrol-deep px-4 pb-1.5 pt-[calc(0.375rem+env(safe-area-inset-top))] text-center text-[0.75rem] leading-snug text-paper/80 sm:hidden">{banner}</p>}
-        <header className={`flex items-center gap-3 px-3 pb-3 sm:px-4 sm:pt-4 ${banner ? "pt-3" : "pt-[calc(0.75rem+env(safe-area-inset-top))]"}`}>
-          <button type="button" onClick={onClose} aria-label={tx.back} className="flex size-11 shrink-0 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-lavender-mid hover:text-ink sm:hidden">
-            <ChevronLeft aria-hidden size={22} />
-          </button>
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-lavender-deep text-paper">
-            <Sparkles aria-hidden size={19} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <h2 className="display truncate text-[1.2rem] leading-tight">{name}</h2>
-            {sub && <p className="line-clamp-2 text-[0.8rem] leading-snug text-ink-soft">{sub}</p>}
+      {open && <div aria-hidden className={`fade-in fixed inset-0 z-40 hidden bg-petrol-deep/45 backdrop-blur-[2px] sm:block ${ws ? "" : "xl:hidden"}`} onClick={ws && onSize ? () => onSize("dock") : onClose} />}
+      <aside id={id} aria-label={label} data-size={size} className={`${open ? "flex" : "hidden"} thread-dock fixed inset-x-0 top-0 z-40 flex-col bg-lavender sm:z-50 ${frame}`}>
+        <div className={`flex min-h-0 min-w-0 flex-1 flex-col ${ws && stage ? "lg:border-r lg:border-lavender-mid" : ""}`}>
+          {banner && <p className="on-dark bg-petrol-deep px-4 pb-1.5 pt-[calc(0.375rem+env(safe-area-inset-top))] text-center text-[0.75rem] leading-snug text-paper/80 sm:hidden">{banner}</p>}
+          <header className={`flex items-center gap-3 px-3 pb-3 sm:px-4 sm:pt-4 ${banner ? "pt-3" : "pt-[calc(0.75rem+env(safe-area-inset-top))]"} ${ws && !stage ? "mx-auto w-full max-w-[46rem]" : ""}`}>
+            <button type="button" onClick={onClose} aria-label={tx.back} className="flex size-11 shrink-0 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-lavender-mid hover:text-ink sm:hidden">
+              <ChevronLeft aria-hidden size={22} />
+            </button>
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-lavender-deep text-paper">
+              <Sparkles aria-hidden size={19} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 className="display truncate text-[1.2rem] leading-tight">{name}</h2>
+              {sub && <p className="line-clamp-2 text-[0.8rem] leading-snug text-ink-soft">{sub}</p>}
+            </div>
+            {aside}
+            {onSize && (
+              <button type="button" onClick={() => onSize(ws ? "dock" : "workspace")} aria-label={ws ? wx.workspace.dock : wx.workspace.expand} title={ws ? wx.workspace.dock : wx.workspace.expand} className="hidden size-11 shrink-0 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-lavender-mid hover:text-ink sm:flex">
+                {ws ? <Minimize2 aria-hidden size={18} /> : <Maximize2 aria-hidden size={18} />}
+              </button>
+            )}
+            <button type="button" onClick={onClose} aria-label={tx.close} className="hidden size-11 shrink-0 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-lavender-mid hover:text-ink sm:flex">
+              <X aria-hidden size={20} />
+            </button>
+          </header>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-4 pt-1 sm:px-4">
+            <div className={ws && !stage ? "mx-auto w-full max-w-[46rem]" : ""}>{children}</div>
           </div>
-          {aside}
-          <button type="button" onClick={onClose} aria-label={tx.close} className="hidden size-11 shrink-0 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-lavender-mid hover:text-ink sm:flex">
-            <X aria-hidden size={20} />
-          </button>
-        </header>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-4 pt-1 sm:px-4">{children}</div>
-        {footer && <div className="border-t border-lavender-mid/70 px-3 pb-3 pt-3 sm:px-4">{footer}</div>}
+          {footer && (
+            <div className="border-t border-lavender-mid/70 px-3 pb-3 pt-3 sm:px-4">
+              <div className={ws && !stage ? "mx-auto w-full max-w-[46rem]" : ""}>{footer}</div>
+            </div>
+          )}
+        </div>
+        {stage && (
+          <section aria-label={stageTitle ?? wx.workspace.stage} className={`absolute inset-0 z-10 flex min-h-0 flex-col bg-mist ${ws ? "lg:static lg:z-auto" : ""}`}>
+            <header className={`flex items-center gap-1.5 border-b border-line bg-paper px-2 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top))] sm:px-3 sm:pt-2 ${ws ? "lg:px-5 lg:py-3" : ""}`}>
+              <button type="button" onClick={onStageClose} aria-label={wx.workspace.back} className={`flex min-h-11 shrink-0 items-center gap-1 rounded-full pl-2 pr-3.5 text-[0.9rem] font-medium text-petrol transition-colors hover:bg-petrol-soft ${ws ? "lg:hidden" : ""}`}>
+                <ChevronLeft aria-hidden size={19} />
+                {wx.workspace.backShort}
+              </button>
+              <h3 className={`display min-w-0 flex-1 truncate text-right text-[1.05rem] leading-tight text-ink-soft ${ws ? "lg:text-left lg:text-[1.25rem] lg:text-ink" : ""}`}>{stageTitle}</h3>
+              {onStageClose && (
+                <button type="button" onClick={onStageClose} aria-label={wx.workspace.back} className={`hidden size-11 shrink-0 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-surface hover:text-ink ${ws ? "lg:flex" : ""}`}>
+                  <X aria-hidden size={19} />
+                </button>
+              )}
+            </header>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-5 lg:py-5">
+              <div className="mx-auto w-full max-w-[56rem]">{stage}</div>
+            </div>
+          </section>
+        )}
       </aside>
     </>
   );
