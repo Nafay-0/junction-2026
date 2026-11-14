@@ -77,7 +77,9 @@ All text pairs meet 4.5:1. The older names (`concrete`, `steel`, `chalk`) remain
 |---|---|
 | `Button`, `buttonClass` | kinds: `go` (lime, one per view), `primary` (petrol), `secondary`, `quiet` (text), `safety` (gate only), `dark`, `ghost-dark`; sizes sm, md, lg; `busy` |
 | `IconButton` | round, 44 px, always labelled |
-| `Input`, `Select`, `.field` | label above, hint or error below, icon inside; one field look |
+| `Input`, `Select`, `Textarea`, `.field` | label above, hint or error below, icon inside (`suffix` for a unit); native attributes pass through; one field look |
+| `Checkbox`, `Chip` | a checkbox as a whole 44 px row (`card` for a choice in a list); a toggling pill for filters, ticked when on |
+| `PageHeader`, `FactList` | a page's top (back link or context, title, lead, actions; no box); facts as hairline rows, label beside value on a desk and above it on a phone |
 | `Tabs` | segmented pill for a few views or filters, with counts |
 | `Tag`, `Badge` | a chip for a claim; a status with a dot (`waiting` and `refused` are the gate's) |
 | `Card`, `Panel`, `Plate` | card; tinted panel; `Plate` is the older name (tone `agent`, `gate`) |

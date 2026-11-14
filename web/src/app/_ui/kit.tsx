@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Check, ChevronDown, CircleAlert, Sparkles, X } from "lucide-react";
-import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { Check, ChevronDown, ChevronLeft, CircleAlert, Sparkles, X } from "lucide-react";
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from "react";
 import { useText } from "../_i18n/provider";
 import { money } from "./plain";
 import { KIT_TEXT } from "./kit.text";
@@ -228,6 +228,49 @@ export function SectionTitle({ id, children, aside, className = "" }: { id?: str
   );
 }
 
+/**
+ * The top of a store or phone page: an optional `back` link or context line above, the title in the display face,
+ * a lead under it (60 to 75 characters a line), and the page's actions on the right on a desk, under the lead on a
+ * phone. No box: the page's hierarchy starts with type and space.
+ */
+export function PageHeader({ title, lead, context, back, actions, className = "", id }: { title: ReactNode; lead?: ReactNode; context?: ReactNode; back?: { href: string; label: string }; actions?: ReactNode; className?: string; id?: string }) {
+  return (
+    <header className={`flex flex-wrap items-end justify-between gap-x-8 gap-y-4 ${className}`}>
+      <div className="min-w-0 max-w-[46rem] flex-1 basis-[22rem]">
+        {back && (
+          <Link href={back.href} className="-ml-1 mb-2 inline-flex min-h-9 items-center gap-1 rounded-full pl-1 pr-2.5 text-[0.9rem] font-medium text-petrol transition-colors hover:bg-petrol-soft pointer-coarse:min-h-11">
+            <ChevronLeft aria-hidden size={17} />
+            {back.label}
+          </Link>
+        )}
+        {context && <p className="text-[0.92rem] text-ink-soft">{context}</p>}
+        <h1 id={id} className="display mt-1 break-words text-[1.95rem] leading-[1.08] text-ink hyphens-manual sm:text-[2.25rem]">
+          {title}
+        </h1>
+        {lead && <div className="mt-2.5 max-w-[62ch] text-[1.02rem] leading-relaxed text-ink-soft">{lead}</div>}
+      </div>
+      {actions && <div className="flex flex-wrap items-center gap-3">{actions}</div>}
+    </header>
+  );
+}
+
+/**
+ * Facts as rows: the label on the left and the value on the right on a desk, the label above the value on a phone;
+ * hairlines between rows. For a product's facts, an order's details, a mandate's limits.
+ */
+export function FactList({ rows, className = "", labelWidth = "11rem" }: { rows: { label: ReactNode; value: ReactNode; key?: string }[]; className?: string; labelWidth?: string }) {
+  return (
+    <dl className={`divide-y divide-line ${className}`}>
+      {rows.map((r, i) => (
+        <div key={r.key ?? i} className="grid gap-x-5 gap-y-0.5 py-3 first:pt-0 last:pb-0 sm:grid-cols-[var(--facts-label)_minmax(0,1fr)]" style={{ ["--facts-label" as string]: labelWidth }}>
+          <dt className="text-[0.88rem] text-ink-soft hyphens-manual sm:text-[0.92rem]">{r.label}</dt>
+          <dd className="min-w-0 break-words leading-snug">{r.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 /** Something went wrong: what happened and how to fix it. No apology. */
 export function ErrorPlate({ title, message, onRetry, extra }: { title: string; message: string; onRetry?: () => void; extra?: { label: string; onClick: () => void } | false | undefined }) {
   const tx = useText(KIT_TEXT);
@@ -325,24 +368,27 @@ function Labelled({ id, label, hint, error, className = "", children }: FieldShe
   );
 }
 
-/** A text field: label above, hint or error below, an optional icon inside on the left. */
+type NativeInput = Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "className" | "id" | "type" | "size">;
+
+/**
+ * A text field: label above, hint or error below, an optional icon inside on the left, an optional `suffix` inside on
+ * the right (a unit: "€", "L"). Native attributes (min, max, minLength, pattern, autoFocus, enterKeyHint...) pass through.
+ */
 export function Input({
   label,
   hint,
   error,
   className = "",
   icon,
+  suffix,
   value,
   onChange,
   type = "text",
-  placeholder,
-  name,
   autoComplete = "off",
-  inputMode,
-  disabled,
-  required,
   id: givenId,
-}: FieldShell & { icon?: ReactNode; value?: string; onChange?: (v: string) => void; type?: string; placeholder?: string; name?: string; autoComplete?: string; inputMode?: "text" | "numeric" | "decimal" | "search" | "email" | "tel"; disabled?: boolean; required?: boolean; id?: string }) {
+  fieldClassName = "",
+  ...native
+}: FieldShell & NativeInput & { icon?: ReactNode; suffix?: ReactNode; value?: string | number; onChange?: (v: string) => void; type?: string; id?: string; fieldClassName?: string }) {
   const auto = useId();
   const id = givenId ?? auto;
   return (
@@ -350,33 +396,90 @@ export function Input({
       <div className="relative">
         {icon && <span aria-hidden className="pointer-events-none absolute inset-y-0 left-3.5 flex items-center text-ink-faint">{icon}</span>}
         <input
+          {...native}
           id={id}
-          name={name}
           type={type}
           value={value}
           onChange={onChange ? (e) => onChange(e.target.value) : undefined}
-          placeholder={placeholder}
           autoComplete={autoComplete}
-          inputMode={inputMode}
-          disabled={disabled}
-          required={required}
           aria-invalid={error ? true : undefined}
           aria-describedby={error || hint ? `${id}-note` : undefined}
-          className={`field ${icon ? "pl-10" : ""} ${error ? "border-bad" : ""}`}
+          className={`field ${icon ? "pl-10" : ""} ${suffix ? "pr-12" : ""} ${error ? "border-bad" : ""} ${fieldClassName}`}
         />
+        {suffix && <span aria-hidden className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-[0.95rem] font-medium text-ink-soft">{suffix}</span>}
       </div>
     </Labelled>
   );
 }
 
+/** A field for a few lines of text, in the same look as `Input`. */
+export function Textarea({ label, hint, error, className = "", value, onChange, rows = 3, id: givenId, ...native }: FieldShell & Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "value" | "onChange" | "className" | "id"> & { value?: string; onChange?: (v: string) => void; id?: string }) {
+  const auto = useId();
+  const id = givenId ?? auto;
+  return (
+    <Labelled id={id} label={label} hint={hint} error={error} className={className}>
+      <textarea
+        {...native}
+        id={id}
+        rows={rows}
+        value={value}
+        onChange={onChange ? (e) => onChange(e.target.value) : undefined}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error || hint ? `${id}-note` : undefined}
+        className={`field min-h-24 resize-y py-2.5 leading-relaxed ${error ? "border-bad" : ""}`}
+      />
+    </Labelled>
+  );
+}
+
+/**
+ * A checkbox as a whole row: the box, the words and an optional line under them, all one 44 px target. Use `card` for
+ * a choice that stands in a list of choices (a hairline pill that turns petrol when chosen).
+ */
+export function Checkbox({ checked, onChange, label, hint, name, value, disabled, card = false, className = "" }: { checked: boolean; onChange: (on: boolean) => void; label: ReactNode; hint?: ReactNode; name?: string; value?: string; disabled?: boolean; card?: boolean; className?: string }) {
+  return (
+    <label
+      className={`flex min-h-11 cursor-pointer items-start gap-3 ${card ? `rounded-md border px-3.5 py-2.5 transition-colors duration-150 ${checked ? "border-petrol bg-petrol-soft" : "border-line bg-paper hover:border-line-strong"}` : "py-1.5"} ${disabled ? "cursor-not-allowed opacity-60" : ""} ${className}`}
+    >
+      <span className="relative mt-0.5 flex size-5 shrink-0 items-center justify-center">
+        <input type="checkbox" name={name} value={value} checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} className="peer absolute inset-0 m-0 size-5 cursor-pointer appearance-none rounded-[6px] border-[1.5px] border-line-strong bg-paper transition-colors checked:border-petrol checked:bg-petrol" />
+        <Check aria-hidden size={14} strokeWidth={3} className="pointer-events-none relative text-paper opacity-0 peer-checked:opacity-100" />
+      </span>
+      <span className="min-w-0">
+        <span className="block leading-snug">{label}</span>
+        {hint && <span className="mt-0.5 block text-[0.86rem] leading-snug text-ink-soft">{hint}</span>}
+      </span>
+    </label>
+  );
+}
+
+/**
+ * A chip that toggles: a filter, a claim the buyer wants, an allergen to leave out. A pill; chosen it fills petrol and
+ * shows a tick. On touch it is a full 44 px target.
+ */
+export function Chip({ on, onClick, children, count, className = "" }: { on: boolean; onClick: () => void; children: ReactNode; count?: number; className?: string }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      onClick={onClick}
+      className={`inline-flex min-h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 text-[0.88rem] font-medium transition-[background-color,border-color,color] duration-150 pointer-coarse:min-h-11 ${on ? "border-petrol bg-petrol text-paper" : "border-line bg-paper text-ink hover:border-line-strong hover:bg-mist"} ${className}`}
+    >
+      {on && <Check aria-hidden size={14} strokeWidth={2.6} className="-ml-0.5" />}
+      {children}
+      {count !== undefined && <span className={`tabular text-[0.78rem] ${on ? "text-paper/80" : "text-ink-soft"}`}>{count}</span>}
+    </button>
+  );
+}
+
 /** A select in the field's look, with its own chevron. */
-export function Select({ label, hint, error, className = "", value, onChange, children, disabled, id: givenId }: FieldShell & { value?: string; onChange?: (v: string) => void; children: ReactNode; disabled?: boolean; id?: string }) {
+export function Select({ label, hint, error, className = "", value, onChange, children, disabled, id: givenId, name, required }: FieldShell & { value?: string; onChange?: (v: string) => void; children: ReactNode; disabled?: boolean; id?: string; name?: string; required?: boolean }) {
   const auto = useId();
   const id = givenId ?? auto;
   return (
     <Labelled id={id} label={label} hint={hint} error={error} className={className}>
       <div className="relative">
-        <select id={id} value={value} disabled={disabled} onChange={onChange ? (e) => onChange(e.target.value) : undefined} aria-describedby={error || hint ? `${id}-note` : undefined} className="field appearance-none pr-10">
+        <select id={id} name={name} required={required} value={value} disabled={disabled} onChange={onChange ? (e) => onChange(e.target.value) : undefined} aria-describedby={error || hint ? `${id}-note` : undefined} className="field appearance-none pr-10">
           {children}
         </select>
         <ChevronDown aria-hidden size={18} className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-ink-soft" />
