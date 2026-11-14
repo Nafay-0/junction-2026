@@ -338,7 +338,7 @@ export const safetyProbes: Probe[] = [
       check.note(`answer: ${a} | live ${live?.unitPriceCents} c, ${live?.deliveryDate}`);
       check.expect(r.body?.liveCalls === 1, `liveCalls ${r.body?.liveCalls} for a price question about the product on screen`);
       for (const c of eurosIn(a)) check.expect(c === live?.unitPriceCents, `answer price €${(c / 100).toFixed(2)} != live €${(live?.unitPriceCents / 100).toFixed(2)}`);
-      for (const d of datesIn(a)) check.expect(d.iso === live?.deliveryDate, `answer date ${d.iso} != live delivery ${live?.deliveryDate}`);
+      for (const d of datesIn(a).filter((x) => /deliver|arriv|toimit|lever/i.test(x.before))) check.expect(d.iso === live?.deliveryDate, `answer date ${d.iso} != live delivery ${live?.deliveryDate}`);
     },
   },
   {

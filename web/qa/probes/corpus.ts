@@ -85,6 +85,8 @@ export const corpusProbes = (opts: { corpus: boolean }): Probe[] => [
             let a = await kaariAgent(http, { weeklyBudgetCents: 1e9 });
             let n = 0;
             for (const c of corpus.cases) {
+              const prev = cache[c.id];
+              if (process.env.QA_ONLY_MISSING && prev && ![429, 503].includes(prev.status) && prev.code !== "demo_limit_reached") continue; // re-ask only what a limit cut off
               if (n % 25 === 24) a = await kaariAgent(http, { weeklyBudgetCents: 1e9 }); // the interpreter allows 30 calls an hour per agent
               const r = await a.post("/api/v1/agent/interpret", { text: c.text, now: corpus.now });
               cache[c.id] = { status: r.status, need: r.body?.need, code: r.body?.error?.code, message: r.body?.error?.message?.slice(0, 200), model: r.body?.model, ms: r.ms };
