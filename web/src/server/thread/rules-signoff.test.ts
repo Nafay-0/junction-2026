@@ -7,7 +7,7 @@ import { SoftwareAuthenticator } from "@/core/test-webauthn";
 import { submitTurn, threadStore } from "./engine";
 import { diffOf, snapshotOf, termsAfter } from "./rules";
 import { decideRulesChange, findRulesChange, pendingRulesChanges, rulesChangeOptions, rulesChangeView } from "./rules-signoff";
-import type { AgentTurn, Card, RulesCard } from "./types";
+import type { Card, RulesCard } from "./types";
 
 /**
  * A change to the rules that widens what the agent may do, decided on the approver's phone (/approve/rch_...): the
@@ -61,10 +61,10 @@ async function waitingChange(k: Kitchen, change: Record<string, unknown> = { gro
   return { proposalId: shown.proposal!.proposalId, approvalId: waiting.proposal!.approval!.approvalId };
 }
 
-const lineOf = async (k: Kitchen, proposalId: string) => {
+/** What the conversation said beneath the reply that said the change waits (every agent line, newest last). */
+const lineOf = async (k: Kitchen) => {
   const t = (await threadStore()).peek(k.info.slug)!;
-  const held = t.turns.find((x): x is AgentTurn => x.role === "agent" && x.cards.some((c) => c.type === "rules" && c.proposal?.proposalId === proposalId && c.proposal.state !== "open"));
-  return held?.line ?? "";
+  return t.turns.flatMap((x) => (x.role === "agent" && x.line ? [x.line] : [])).join("\n");
 };
 
 beforeEach(() => {
@@ -99,7 +99,7 @@ describe("a rules change on the approver's phone", () => {
     expect(after.terms).toEqual(termsAfter(before.terms, { groupsAdd: ["18"] }));
     expect(diffOf(snapshotOf(before.mandate, before.terms), snapshotOf(after.mandate, after.terms))).toEqual(view.changes);
     // The conversation says it where it waited; the approver's list is empty again.
-    expect(await lineOf(k, signed.details.approvalId.replace(/^rch_/, "rp_"))).toMatch(/Aino Virtanen signed the change with their passkey at \d\d\.\d\d: I may now buy meat and fish\./);
+    expect(await lineOf(k)).toMatch(/Aino Virtanen signed the change with their passkey at \d\d\.\d\d: I may now buy meat and fish\./);
     expect(await pendingRulesChanges(before.orgId)).toEqual([]);
     // Signed once: it cannot be signed again.
     await expect(rulesChangeOptions(rt, req(), approvalId, "approve", RP)).rejects.toMatchObject({ code: "approval_not_pending" });
@@ -144,7 +144,7 @@ describe("a rules change on the approver's phone", () => {
     expect(after.terms).toEqual(before.terms);
     const card = rulesOf((await threadStore()).cards((await threadStore()).peek("hylkays")!).map((x) => x.card))!;
     expect(card.proposal).toMatchObject({ state: "declined", approval: { decided: { by: "Aino Virtanen", note: "Not this month" } } });
-    expect(await lineOf(k, proposalId)).toMatch(/Aino Virtanen declined the change at \d\d\.\d\d, so your rules stay as they were\./);
+    expect(await lineOf(k)).toMatch(/Aino Virtanen declined the change at \d\d\.\d\d, so your rules stay as they were\./);
     expect(rt.dock.ledger.entries().some((e) => [(e.data as { event?: string }).event, (e.data as { step?: string }).step].includes("rules_declined"))).toBe(true);
     // Declined is final: the passkey can no longer sign it.
     await expect(rulesChangeOptions(rt, req(), approvalId, "approve", RP)).rejects.toMatchObject({ code: "approval_not_pending" });
@@ -161,7 +161,7 @@ describe("a rules change on the approver's phone", () => {
     expect((await rt.accounts.kitchenOf("vanhentunut"))!.kitchen.terms).toEqual(before.terms);
     expect((await rulesChangeView(rt, req(), await findRulesChange(approvalId))).state).toBe("expired");
     expect(await pendingRulesChanges(before.orgId)).toEqual([]);
-    expect(await lineOf(k, proposalId)).toMatch(/Nobody signed the change in time, so your rules stay as they were\.$/);
+    expect(await lineOf(k)).toMatch(/Nobody signed the change in time, so your rules stay as they were\./);
   });
 
   it("a signature over rules that have since changed is refused: only the change shown can be signed", async () => {

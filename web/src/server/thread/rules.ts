@@ -43,6 +43,8 @@ export type RulesApproval = {
   requestedBy?: string;
   /** The language of the conversation it was asked in (what is said there when it is decided). */
   lang?: "en" | "fi" | "sv";
+  /** The turn that said it waits: what is decided is said beneath it. */
+  turnId?: string;
   /** Exactly what the approver is shown and signs: the field-by-field change at the time it was asked. */
   shown?: RulesCard["diff"];
   /** The approver's answer. */
@@ -394,6 +396,7 @@ export async function signRules(run: TurnRun, proposalId: string, opts: { signOf
         expiresAt: new Date(at.getTime() + RULES_SIGNOFF_MS).toISOString(),
         requestedBy: nameOf(by ?? run.k.info.name),
         ...(run.lang ? { lang: run.lang } : {}),
+        turnId: run.turnId,
         shown: diffNow,
       };
       record(run, "rules_signoff_requested", `A change that widens what the agent may do (${describe(diffNow.filter((d) => d.widens || d.field === "signer"))}) waits for ${approver.name}'s passkey; nothing is changed yet.`, { proposalId, approvalId: p.approval.approvalId, digest, diff: diffNow, approver });

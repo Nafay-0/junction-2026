@@ -1026,11 +1026,12 @@ async function rulesHolderRun(kitchen: Kitchen | string, proposalId: string) {
   const e = await engine(r.rt);
   const thread = e.store.get(r.k.info.slug, r.k.info.orgId);
   const id = cardId("rules", proposalId);
-  const holder = [...thread.turns].reverse().find((x): x is AgentTurn => x.role === "agent" && x.cards.some((c) => c.cardId === id));
+  const p = ((thread as unknown as { rulesProposals?: Record<string, import("./rules").Proposal> }).rulesProposals ?? {})[proposalId];
+  // Said beneath the reply that said it waits (the card itself is updated in place wherever it was first shown).
+  const holder = (p?.approval?.turnId ? e.store.agentTurn(thread, p.approval.turnId) : undefined) ?? [...thread.turns].reverse().find((x): x is AgentTurn => x.role === "agent" && x.cards.some((c) => c.cardId === id));
   if (!holder) throw new DockError(409, "rules_change_not_waiting", "That change is not waiting for a sign-off.");
   const asked = e.store.turn(thread, holder.replyTo);
   const buyer: BuyerTurn = asked?.role === "buyer" ? asked : { turnId: holder.replyTo, role: "buyer", at: holder.at, door: "typed", via: "tap" };
-  const p = ((thread as unknown as { rulesProposals?: Record<string, import("./rules").Proposal> }).rulesProposals ?? {})[proposalId];
   const lang = p?.approval?.lang ?? "en";
   const run: TurnRun = { rt: r.rt, store: e.store, thread, turnId: holder.turnId, buyer, k: r.k, session: r.session, person: r.person, door: "typed", lang, t0: Date.now(), facts: [], requests: new Set(), orders: new Map(), readings: new Map() };
   return { r, e, thread, holder, run, lang };
@@ -1078,7 +1079,7 @@ export async function rulesSignOff(kitchen: Kitchen | string, proposalId: string
   });
   // The buy that waited on this change, asked again now that the rules allow it: a reply of its own, beneath.
   const next = waitingOn(thread, proposalId);
-  if (next.words) void carryOn(h, proposalId, next.words).catch((err) => console.error("[thread] after rules", err));
+  if (next.words) void carryOn(kitchen, h, proposalId, next.words).catch((err) => console.error("[thread] after rules", err));
   return { proposal: card.proposal?.state };
 }
 
@@ -1116,11 +1117,15 @@ export async function rulesLapse(kitchen: Kitchen | string, proposalId: string) 
  * The buy that waited on a change to the rules, asked again once it is signed: a new agent turn answering the same
  * request (no new buyer words appear), through the same engine, queued behind any turn still working.
  */
-async function carryOn(h: Awaited<ReturnType<typeof rulesHolderRun>>, proposalId: string, words: string): Promise<void> {
+async function carryOn(kitchen: Kitchen | string, h: Awaited<ReturnType<typeof rulesHolderRun>>, proposalId: string, words: string): Promise<void> {
   const t = h.thread as unknown as { afterRulesUsed?: string[] };
   if (t.afterRulesUsed?.includes(proposalId)) return;
   t.afterRulesUsed = [...(t.afterRulesUsed ?? []), proposalId];
-  const { e, thread, r, lang } = h;
+  const { e, thread, lang } = h;
+  // The kitchen read again: its agent's session must present the mandate just signed, not the one before it.
+  const fresh = await resolveKitchen(h.r.k.info.slug);
+  if (!fresh) return;
+  const r = await resolve(typeof kitchen === "string" ? fresh : ({ ...fresh, ...(kitchen.console ? { console: kitchen.console } : {}) } as Kitchen), "typed");
   const at = new Date().toISOString();
   const turn: AgentTurn = { turnId: newId("trn"), role: "agent", at, replyTo: h.holder.replyTo, status: "working", steps: [], cards: [] };
   e.store.addTurn(thread, turn);

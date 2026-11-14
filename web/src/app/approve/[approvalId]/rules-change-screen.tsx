@@ -221,7 +221,7 @@ export function RulesChangeScreen({ approvalId }: { approvalId: string }) {
               </button>
               {!showReason && (
                 <button type="button" className={buttonClass("quiet", "md", "shrink-0 px-3")} onClick={() => setShowReason(true)}>
-                  {tx.reasonLabel}
+                  {tx.addReason}
                 </button>
               )}
             </div>
