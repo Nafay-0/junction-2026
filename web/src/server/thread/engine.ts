@@ -25,6 +25,7 @@ import { THREAD_WORDS } from "@/app/k/[kitchen]/thread-words.text";
 import { fixTypos } from "./pipeline";
 import { hasToday, helsinkiToday, postToday, todayCardId } from "./home";
 import { ensureTelemetry } from "./telemetry";
+import { failureOf, turnOutcome, type TurnFailure } from "./outcome";
 import type { AgentTurn, BuyerTurn, Card, GateCard, MemoryCard, OrderCard, RecordsCard, SubmitTurn, SubmitTurnReply, ThreadAction, ThreadDoor } from "./types";
 
 /**
@@ -190,6 +191,7 @@ export async function openToday(k: Kitchen): Promise<string | undefined> {
     }).catch((err) => {
       console.error("[thread] opening", err);
       e.store.status(thread, opening.turnId, "failed", { ms: Date.now() - run.t0 });
+      turnFailed(run, failureOf(err));
     }),
   );
   return opening.turnId;
@@ -249,6 +251,7 @@ export async function submitTurn(kitchen: Kitchen | string, input: unknown): Pro
       console.error("[thread]", err);
       e.store.card(thread, agentTurn.turnId, { type: "notice", cardId: cardId("notice", agentTurn.turnId), kind: "error", message: "Something went wrong on our side. Try again.", retry: true });
       e.store.status(thread, agentTurn.turnId, "failed", { ms: Date.now() - t0 });
+      turnFailed(run, failureOf(err));
     }),
   );
   e.queues.set(thread.threadId, next);
@@ -259,6 +262,8 @@ export async function submitTurn(kitchen: Kitchen | string, input: unknown): Pro
     if (a?.status !== "working") return;
     e.store.card(thread, agentTurn.turnId, { type: "notice", cardId: cardId("notice", `${agentTurn.turnId}:slow`), kind: "unavailable", message: "This is taking too long. Try again in a moment.", retry: true });
     e.store.status(thread, agentTurn.turnId, "failed", { ms: Date.now() - t0 });
+    // Nearly always a model that never answers (tools have their own, shorter limits).
+    turnFailed(run, "model_timeout");
   }, TURN_MAX_MS);
   (watchdog as { unref?: () => void }).unref?.();
   return { threadId: thread.threadId, buyerTurnId: buyer.turnId, agentTurnId: agentTurn.turnId, seq: thread.seq };
@@ -435,6 +440,8 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
   } catch (err) {
     if (!(err instanceof DockError)) throw err;
     if (run.opening) first.done();
+    // The agent's model failed: the buyer gets the notice (and can try again), the scorecard a failed turn.
+    if (err.code === "agent_unavailable") turnFailed(run, failureOf(err));
     store.card(thread, run.turnId, { type: "notice", cardId: cardId("notice", run.turnId), kind: err.code === "turn_card_stale" ? "refused" : err.status === 429 || err.status === 503 ? "unavailable" : "refused", message: err.message, ...(err.rule ? { rule: err.rule } : {}), retry: err.status >= 500 || err.status === 429 });
   }
 
@@ -613,6 +620,16 @@ function waitingSentence(order: OrderCard, gate: GateCard, lang: "en" | "fi" | "
   return `${what} for ${eur(order.totalCents)}${why ? `: ${why.replace(/\.$/, "").replace(/^./, (c) => c.toLowerCase())}` : ""}, so ${whoEn} is asked to OK it.`;
 }
 
+/** A turn that failed or timed out, in the ledger (and so the telemetry): a stable code and the duration, no words. */
+function turnFailed(run: TurnRun, code: TurnFailure): void {
+  const ms = Date.now() - run.t0;
+  try {
+    record(run, "turn_failed", `The agent's turn failed (${code}) after ${ms} ms.`, { code, ms });
+  } catch {
+    // the record is best effort; the buyer already has the notice
+  }
+}
+
 /** The end of an agent turn: what to remember, its status (waiting for the buyer, for a person, or done) and the record. */
 async function finishTurn(run: TurnRun): Promise<void> {
   const { store, thread } = run;
@@ -621,7 +638,11 @@ async function finishTurn(run: TurnRun): Promise<void> {
   const waitingBuyer = !waitingApprover && a.cards.some((c) => (c.type === "anomaly" && !c.answered) || c.type === "question" || (c.type === "options" && !c.chosen) || (c.type === "menu" && !c.sheetId && (c.stage === "choose" || c.stage === "ready")) || (c.type === "price" && !a.cards.some((x) => x.type === "gate" && x.requestId === c.requestId)));
   store.mark(thread, run.turnId, "done", Date.now() - run.t0);
   store.status(thread, run.turnId, waitingApprover ? "waiting_approver" : waitingBuyer ? "waiting_buyer" : "done", { ms: Date.now() - run.t0, marks: a.marks });
-  record(run, "turn_done", `Agent turn finished (${a.status}) in ${Date.now() - run.t0} ms: ${a.cards.map((c) => c.type).join(", ") || "no cards"}.`, { status: a.status, marks: a.marks, cards: a.cards.map((c) => c.type), requests: [...run.requests], orders: [...run.orders.keys()] });
+  // How it ended, as codes the operations scorecard reads (answered, asked, ordered, sent_for_signoff, refused + rule).
+  const ended = turnOutcome(a.status, a.cards);
+  record(run, "turn_done", `Agent turn finished (${a.status}, ${ended.outcome}${ended.rule ? ` by ${ended.rule}` : ""}) in ${Date.now() - run.t0} ms: ${a.cards.map((c) => c.type).join(", ") || "no cards"}.`, { status: a.status, ...ended, ms: Date.now() - run.t0, marks: a.marks, cards: a.cards.map((c) => c.type), requests: [...run.requests], orders: [...run.orders.keys()] });
+  // A turn that ends with nothing for the buyer (no sentence, no card) failed them, whatever its status says.
+  if (!a.line?.trim() && !a.cards.length) turnFailed(run, "empty_reply");
   // What to remember comes after: the memory writer reads the order with a model, and nothing waits for it.
   await proposeMemory(run);
 }
@@ -698,7 +719,9 @@ async function agentTurn(run: TurnRun, words: string | undefined, nudge?: string
   try {
     res = await runAgent(run, [...history, user], { words });
   } catch (err) {
-    throw err instanceof DockError ? err : new DockError(503, "agent_unavailable", "The agent did not answer. Try again in a moment.");
+    if (err instanceof DockError) throw err;
+    // The model's own error is kept as the cause, so the turn's failure is recorded with what really failed.
+    throw Object.assign(new DockError(503, "agent_unavailable", "The agent did not answer. Try again in a moment."), { cause: err });
   }
   run.thread.messages = trim([...history, user, ...res.messages]);
   if (res.approval?.orderId) {
