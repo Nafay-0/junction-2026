@@ -23,7 +23,7 @@ export type WholesalerAuditEntry = {
   type: LedgerEntry["type"];
   requestId?: string;
   orderId?: string;
-  kind: "asked" | "claimed" | "quoted" | "decided" | "signed" | "committed" | "refused" | "control" | "offered" | "watched" | "private";
+  kind: "asked" | "claimed" | "quoted" | "decided" | "signed" | "committed" | "refused" | "control" | "offered" | "watched" | "notified" | "private";
   summary: string;
   data?: Record<string, unknown>;
 };
@@ -88,6 +88,10 @@ export function wholesalerEntry(e: LedgerEntry): WholesalerAuditEntry {
       // or held and why, a condition staff staged for a demo. Both sides read the step and its products; the figures
       // are the kitchen's own orders and the wholesaler's live answers.
       return { ...base, kind: "watched", summary: e.summary, data: pick(d, ["step", "findingId", "renewalId", "productId", "family", "deliveryDate", "staged", "decision", "choice", "by", "requestId", "orderId", "outcome", "claimId"]) };
+    case "mail":
+      // An email to the kitchen (server/notify): which event, the outcome, why it was not sent. The entry never holds
+      // the address or the mail's body, so both sides read it in full.
+      return { ...base, kind: "notified", summary: e.summary, data: pick(d, ["step", "kind", "eventKey", "outcome", "reason", "providerId"]) };
     case "agent":
       // The kitchen's conversation with its own agent: the buyer's words and the agent's work stay with the buyer.
       return { ...base, kind: "private", summary: "Buyer-side conversation step, kept with the buyer." };

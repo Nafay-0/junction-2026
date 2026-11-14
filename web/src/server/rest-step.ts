@@ -19,3 +19,10 @@ export function restStep(req: Request, session: AgentSession, step: IntakeView) 
 export function restOrder(order: PublicOrder) {
   return { order, nextStep: nextStepForOrder(order, "rest") };
 }
+
+/** restOrder, with `receiptEmail` (whether the kitchen's receipt was emailed, and the masked address) on a committed order. */
+export async function restOrderWithMail(order: PublicOrder) {
+  const { receiptEmail } = await import("./notify/outside");
+  const mail = await receiptEmail(order);
+  return { ...restOrder(order), ...(mail ? { receiptEmail: mail } : {}) };
+}

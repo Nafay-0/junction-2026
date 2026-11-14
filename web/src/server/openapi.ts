@@ -91,9 +91,13 @@ const OfferList = named("OfferList", z.object({
   liveCallsSoFar: z.number().int(),
 }));
 const nextStepOut = z.string().describe("What to do next, in one or two sentences: the same guidance an MCP tool result carries.");
-const OrderEnvelope = named("OrderEnvelope", z.object({ order: OrderSchema, nextStep: nextStepOut.optional() }));
-const PlacedEnvelope = named("PlacedEnvelope", z.object({ order: OrderSchema, nextStep: nextStepOut.optional(), replaced: z.object({ orderId: z.string(), status: z.string(), refused: z.object({ code: z.string(), rule: z.string().optional(), message: z.string() }).optional() }).optional().describe("With replaces: the earlier order's new status, or why it still stands.") }));
-const WaitedEnvelope = named("WaitedEnvelope", z.object({ order: OrderSchema, nextStep: nextStepOut.optional(), decided: z.boolean().optional(), waitedSeconds: z.number().optional() }));
+const receiptEmailOut = z
+  .object({ emailed: z.boolean(), to: z.string().optional().describe("The kitchen's address, masked: m•••@example.com."), status: z.enum(["sent", "sending", "failed", "skipped", "no_address", "not_confirmed", "not_configured", "not_committed"]) })
+  .optional()
+  .describe("On a committed order: whether its receipt was emailed to the kitchen (sent after the fact: `sending` right after the order, `sent` once it went). Absent otherwise.");
+const OrderEnvelope = named("OrderEnvelope", z.object({ order: OrderSchema, nextStep: nextStepOut.optional(), receiptEmail: receiptEmailOut }));
+const PlacedEnvelope = named("PlacedEnvelope", z.object({ order: OrderSchema, nextStep: nextStepOut.optional(), receiptEmail: receiptEmailOut, replaced: z.object({ orderId: z.string(), status: z.string(), refused: z.object({ code: z.string(), rule: z.string().optional(), message: z.string() }).optional() }).optional().describe("With replaces: the earlier order's new status, or why it still stands.") }));
+const WaitedEnvelope = named("WaitedEnvelope", z.object({ order: OrderSchema, nextStep: nextStepOut.optional(), receiptEmail: receiptEmailOut, decided: z.boolean().optional(), waitedSeconds: z.number().optional() }));
 const LiveFacts = z.looseObject({
   unitPriceCents: z.number().int().describe("Live price per pack, euro cents ex VAT."),
   perUnit: z.object({ cents: z.number(), unit: z.string() }),
