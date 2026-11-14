@@ -55,7 +55,14 @@ const BUYERS_OR_ENGINES = ["submit_need", "respond_to_concerns", "answer_questio
 /** One secret per process unless configured: an approval signed by another process (after a restart) is refused, and the card still updates from the order itself. */
 const approvalSecret = process.env.DOCK_TOOL_APPROVAL_SECRET || randomBytes(32).toString("base64");
 
+let modelForTests: { model: LanguageModel; id: string } | undefined;
+/** Tests and recorded runs: the agent's model, instead of DOCK_AGENT_MODEL. */
+export function setAgentModelForTests(m: { model: LanguageModel; id: string } | undefined): void {
+  modelForTests = m;
+}
+
 function modelFor(spec: string | undefined, onFallback: (i: { from: string; to: string; reason: string }) => void): { model: LanguageModel; id: string } {
+  if (modelForTests) return modelForTests;
   const primarySpec = spec ?? defaultModel("DOCK_AGENT_MODEL");
   if (!primarySpec) throw new DockError(503, "model_unavailable", "No model is configured for the store agent: set DOCK_AGENT_MODEL or a provider key.");
   const primary = createModel(primarySpec).model as LanguageModelV4;
