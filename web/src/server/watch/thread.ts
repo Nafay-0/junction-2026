@@ -3,7 +3,7 @@ import type { Lang } from "@/app/_i18n/lang";
 import { money, num } from "@/app/_ui/plain";
 import type { Product } from "@/core/catalog";
 import type { AgentSession, PublicOrder } from "@/core/orders";
-import type { RenewalChoice } from "@/core/watch";
+import { measureOf, type RenewalChoice } from "@/core/watch";
 import { yesOrNo } from "../channels/speech";
 import type { Runtime } from "../runtime";
 import { WATCH_SAY_TEXT } from "./say.text";
@@ -120,11 +120,17 @@ export async function watchMomentForThread(rt: Runtime, session: AgentSession, l
     const what = nameIn(ps.get(held.product.productId), held.product.name, lang);
     const day = dayWord(held.deliveryDate, lang);
     const u = held.amounts.unit;
+    // Pieces of a product whose pack content the data states (a case of 20 l boxes): said in litres, with the packs.
+    const m = (() => {
+      const p = ps.get(held.product.productId);
+      return u === "pcs" && p ? measureOf(p) : undefined;
+    })();
+    const amt = (n: number, unit: string) => (m ? `${amountL(n * m.perPack, m.unit)} (${num(n, 2)} × ${amountL(m.perPack, m.unit)})` : amountL(n, unit));
     const sentences: string[] = [];
     const d = held.drift;
-    if (d.portions) sentences.push((d.portions.direction === "up" ? t.crept : t.fell)(day, what, amountL(d.portions.from, u), amountL(d.portions.to, u), d.portions.weeks));
+    if (d.portions) sentences.push((d.portions.direction === "up" ? t.crept : t.fell)(day, what, amt(d.portions.from, u), amt(d.portions.to, u), d.portions.weeks));
     if (d.cost) sentences.push(t.dearer(what, money(Math.round(d.cost.from)), money(Math.round(d.cost.to)), shortDay(d.cost.since, lang)));
-    if (d.basket) sentences.push(t.basket(amountL(d.basket.amount, u), money(d.basket.nowCents), money(d.basket.usualCents)));
+    if (d.basket) sentences.push(t.basket(amt(d.basket.amount, u), money(d.basket.nowCents), money(d.basket.usualCents)));
     // The usual product cannot come for the day either: say so, and what a renewal would order instead.
     const short = held.decision.action === "hold" && held.decision.because.includes("stock") ? w.findings.find((x) => x.need.productId === held.product.productId && x.need.date === held.deliveryDate && x.state !== "resolved") : undefined;
     if (short) sentences.push(sentences.length ? t.cannotToo(backWord(short.shortfall.backOn, lang), !short.staged && short.problems.includes("cutoff_passed")) : t.cannot(day, what, backWord(short.shortfall.backOn, lang), false, !short.staged && short.problems.includes("cutoff_passed")));
@@ -138,7 +144,7 @@ export async function watchMomentForThread(rt: Runtime, session: AgentSession, l
       id: held.renewalId,
       kind: "renewal_held",
       say: cap(`${sentences.join(" ")}${held.staged ? ` ${t.stagedTrend}` : ""}`),
-      ask: choices.includes("renew_new") ? t.askThree(amountL(held.amounts.latest, u), amountL(held.amounts.usual, u)) : t.askTwo(amountL(held.amounts.usual, u)),
+      ask: choices.includes("renew_new") ? t.askThree(amt(held.amounts.latest, u), amt(held.amounts.usual, u)) : t.askTwo(amt(held.amounts.usual, u)),
       answers: choices,
       steps: stepsOfRenewal(held),
       facts: { renewal: held },
