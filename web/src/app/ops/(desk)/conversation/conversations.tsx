@@ -55,7 +55,7 @@ export function ConversationScreen({ threadId }: { threadId: string }) {
       ) : (
         <>
           <p className="text-[0.95rem] text-ink-soft">
-            {v.totals.turns} turns · {v.totals.modelCalls} model calls ({usd(v.totals.costUsd)}) · {v.totals.toolCalls} tool calls · {v.totals.groundingRefusals} sentences held back by the grounding check · ledger {v.chain.ok ? "verifies" : "BROKEN"} ({v.chain.length} entries)
+            {v.totals.turns} turns · {v.totals.modelCalls} model calls ({usd(v.totals.costUsd)}) · {v.totals.toolCalls} tool calls · {v.totals.groundingRefusals} {v.totals.groundingRefusals === 1 ? "sentence" : "sentences"} held back by the grounding check · ledger {v.chain.ok ? "verifies" : "BROKEN"} ({v.chain.length} entries)
           </p>
           <ol className="mt-4 space-y-4">
             {v.turns.map((t, i) => (

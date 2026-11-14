@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Loading } from "../../../_ui/kit";
+import { streamConfigured } from "@/server/aiven/showcase/stream";
 import { TraceScreen } from "./trace";
 
 export const metadata: Metadata = { title: "Trace" };
@@ -16,5 +17,6 @@ export default function TracePage(props: PageProps<"/ops/trace/[requestId]">) {
 
 async function Loaded({ params }: PageProps<"/ops/trace/[requestId]">) {
   const { requestId } = await params;
-  return <TraceScreen requestId={requestId} />;
+  // The replay from Kafka only where Kafka is configured: elsewhere the panel would offer a button that cannot work.
+  return <TraceScreen requestId={requestId} stream={streamConfigured()} />;
 }
