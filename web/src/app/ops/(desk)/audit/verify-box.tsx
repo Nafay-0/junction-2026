@@ -1,6 +1,8 @@
 "use client";
 
+import { Check } from "lucide-react";
 import { useState } from "react";
+import { Target } from "../../../_ui/target";
 import { api } from "../../../_client/api";
 import { country, fi, money, when } from "../../_ui/format";
 import { Button, Details, KV, Panel } from "../../_ui/kit";
@@ -23,9 +25,9 @@ export function VerifyBox({ initial = "", title = "Check a receipt or a signed c
   }
 
   return (
-    <Panel rule className="px-4 py-4">
-      <h2 className="display text-[1.3rem]">{title}</h2>
-      <p className="mt-0.5 text-[0.86rem] text-ink-soft">
+    <Panel className="p-5">
+      <h2 className="display text-[1.2rem]">{title}</h2>
+      <p className="mt-1 text-[0.86rem] leading-snug text-ink-soft">
         An order confirmation, a fixed-price quote, or a claim about price, availability or origin. Checked here against the keys published at /.well-known/jwks.json, not against this server&apos;s word.
       </p>
       <textarea
@@ -38,9 +40,9 @@ export function VerifyBox({ initial = "", title = "Check a receipt or a signed c
         spellCheck={false}
         placeholder="eyJhbGciOiJFZDI1NTE5Ii… or the JSON holding it"
         aria-label="Receipt or signed claim"
-        className="mt-2 w-full resize-y border-2 border-line bg-mist px-2 py-1.5 font-mono text-[0.75rem] leading-snug focus:border-petrol focus:outline-none"
+        className="field mt-3 !min-h-[7rem] resize-y bg-mist !px-3 py-2 font-mono !text-[0.76rem] leading-snug"
       />
-      <Button kind="primary" onClick={run} disabled={busy || !text.trim()} className="mt-2">
+      <Button kind="primary" onClick={run} disabled={busy || !text.trim()} className="mt-3">
         {busy ? "Checking…" : "Check signature"}
       </Button>
       {result && <ResultView r={result} />}
@@ -51,10 +53,12 @@ export function VerifyBox({ initial = "", title = "Check a receipt or a signed c
 function ResultView({ r }: { r: TokenCheck & { checkedAt?: number } }) {
   if (!r.ok) {
     return (
-      <div role="status" className="mt-3 bg-safety-ink text-paper">
-        <div aria-hidden className="hazard h-2" />
-        <p className="display px-3 pt-2 text-[1.3rem] text-safety">Does not verify</p>
-        <p className="px-3 pb-2.5 text-[0.92rem]">{r.problem}</p>
+      <div role="status" className="hazard-frame on-dark lane-enter mt-4 text-paper">
+        <p className="display flex items-center gap-2 px-4 pt-3 text-[1.25rem] text-safety">
+          <Target size={22} tone="safety" />
+          Does not verify
+        </p>
+        <p className="px-4 pb-3.5 pt-1 text-[0.92rem] text-paper/90">{r.problem}</p>
       </div>
     );
   }
@@ -62,15 +66,15 @@ function ResultView({ r }: { r: TokenCheck & { checkedAt?: number } }) {
   const exp = typeof p.exp === "number" ? p.exp * 1000 : typeof p.validUntil === "string" ? Date.parse(p.validUntil) : undefined;
   const expired = exp !== undefined && r.checkedAt !== undefined && exp < r.checkedAt;
   return (
-    <div role="status" className="mt-3 border-2 border-petrol">
-      <p className="flex items-center gap-2 bg-petrol px-3 py-1.5 text-[1.02rem] font-semibold text-paper">
-        <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden className="shrink-0">
-          <path d="M2.5 7.2 L5.6 10.2 L11.6 3.6" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="square" />
-        </svg>
+    <div role="status" className="lane-enter mt-4 overflow-hidden rounded-lg border border-good/25 bg-paper">
+      <p className="flex items-center gap-2.5 bg-good-soft px-4 py-2.5 text-[0.98rem] font-semibold text-good">
+        <span aria-hidden className="flex size-6 shrink-0 items-center justify-center rounded-full bg-good text-paper">
+          <Check size={14} strokeWidth={3} />
+        </span>
         Valid {r.kind.toLowerCase()}, signed by the wholesaler
         {r.by === "server" && <span className="ml-2 font-sans text-[0.78rem] font-normal">(checked by the server: this browser has no Ed25519)</span>}
       </p>
-      <div className="space-y-1 px-3 py-2 text-[0.88rem]">
+      <div className="space-y-1.5 px-4 py-3 text-[0.88rem]">
         {r.typ === "order+jws" && <OrderLines p={p} />}
         {r.typ === "quote+jws" && <QuoteLines p={p} />}
         {r.typ === "vc+jwt" && <ClaimLines p={p} />}
@@ -80,7 +84,7 @@ function ResultView({ r }: { r: TokenCheck & { checkedAt?: number } }) {
             {r.anchor.matches === true
               ? `It anchors the ledger at entry ${r.anchor.seq}, and the ledger still holds that entry with the same hash: nothing before it was rewritten.`
               : r.anchor.matches === false
-                ? <span className="bg-safety-ink px-1.5 font-semibold text-safety">It anchors entry {r.anchor.seq}, but the ledger here no longer matches that hash.</span>
+                ? <span className="rounded-md bg-safety-ink px-2 py-0.5 font-semibold text-safety">It anchors entry {r.anchor.seq}, but the ledger here no longer matches that hash.</span>
                 : `It anchors the ledger at entry ${r.anchor.seq}.`}
           </p>
         )}
