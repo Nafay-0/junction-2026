@@ -150,7 +150,11 @@ export type OptionView = {
   signOff: string[];
   pros: string[];
   cons: string[];
+  /** The pros, cons and sign-off reasons as codes and parameters (core/options.ts OptionReason): say them in the buyer's language, and a reason every option shares once. */
+  reasons: { code: string; tone: "pro" | "con" | "quiet" | "signoff"; params: Record<string, string | number> }[];
   alternative?: { for: string; tier: string; reason: string };
+  /** The catalogue's kind of product (the art by kind), for the option's illustration. */
+  category?: string;
 };
 
 export type OptionsCard = CardBase & {
@@ -187,6 +191,8 @@ export type GateCard = CardBase & {
   /** The rule that decided (refused) or escalated (waiting). */
   rule?: string;
   reasons: string[];
+  /** Every rule the gate checked, as codes and parameters (core/policy.ts RuleResult), for words in the buyer's language. */
+  rules?: { rule: string; outcome: string; details?: Record<string, unknown> }[];
   approver?: { name: string; role: string };
   approvalId?: string;
   /** Plain words: what the buyer can do now ("Nothing: Aino signs on her phone"). */

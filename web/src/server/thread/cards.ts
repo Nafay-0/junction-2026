@@ -80,6 +80,7 @@ export function optionView(o: OptionCard): OptionView {
     signOff: o.signOff,
     pros: o.pros,
     cons: o.cons,
+    reasons: o.reasons ?? [],
     ...(o.alternative ? { alternative: { for: o.alternative.for, tier: o.alternative.tier, reason: o.alternative.reason } } : {}),
   };
 }
@@ -92,7 +93,7 @@ export function optionsCard(step: IntakeView): OptionsCard | undefined {
     type: "options",
     cardId: cardId("options", step.requestId),
     requestId: step.requestId,
-    options: step.options.map(optionView),
+    options: step.options.map((o) => ({ ...optionView(o), category: step.family })),
     ...(step.preselected ? { preselected: { optionId: step.preselected.optionId, reason: step.preselected.reason } } : {}),
     excluded: [...groups.entries()].map(([reason, count]) => ({ reason, count })).slice(0, 6),
     notes: step.notes,
@@ -126,7 +127,7 @@ export function noOptionsCard(step: IntakeView): NoticeCard {
 
 /** The gate's word on an order: placed alone, waiting for a named person, refused with the rule, or how it ended. */
 export function gateCard(o: PublicOrder): GateCard {
-  const base = { type: "gate" as const, cardId: cardId("gate", o.requestId), requestId: o.requestId, orderId: o.orderId, reasons: o.decision.reasons };
+  const base = { type: "gate" as const, cardId: cardId("gate", o.requestId), requestId: o.requestId, orderId: o.orderId, reasons: o.decision.reasons, rules: o.decision.rules.map((r) => ({ rule: r.rule, outcome: r.outcome, ...(r.details ? { details: r.details } : {}) })) };
   const a = o.approval;
   const approver = a ? { name: a.approver.name, role: a.approver.role } : o.decision.outcome === "needs_human_approval" ? { name: o.decision.approver.name, role: o.decision.approver.role } : undefined;
   const escalated = o.decision.rules.find((r) => r.outcome !== "pass" && r.outcome !== "fail");

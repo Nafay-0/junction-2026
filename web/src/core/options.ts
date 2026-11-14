@@ -83,10 +83,24 @@ export type OptionCard = {
   signOff: string[]; // why a person will have to approve this option
   pros: string[];
   cons: string[];
+  /**
+   * The same pros, cons and sign-off reasons as codes and parameters, for a screen that says them in the buyer's
+   * language and says a reason shared by every card once. `quiet`: a fact worth a glance, not a drawback.
+   */
+  reasons: OptionReason[];
   quoteLines: QuoteRequestLine[]; // what to send to POST /api/v1/quotes
   /** When this card stands in for the product the request is about: how the product map ranks it, and why. */
   alternative?: { for: string; tier: AlternativeTier; reason: string; use?: string };
 };
+
+export type ReasonTone = "pro" | "con" | "quiet" | "signoff";
+export type ReasonCode =
+  | "cheapest" | "joint_cheapest" | "more_expensive" | "no_co2" | "lowest_co2" | "more_co2" | "no_reliability" | "most_reliable" | "less_reliable"
+  | "rounds_up" | "exact_amount" | "many_packs" | "partial_stock" | "estimated_pack" | "stock_unconfirmed" | "cutoff_soon" | "instead_of_usual"
+  | "arrives_later" | "arrives_first" | "alternative" | "declined_before" | "same_as_last" | "your_usual" | "gives_up"
+  | "over_limit" | "budget_held" | "substitute_needs_approval" | "not_like_for_like";
+/** One reason, as data: amounts in cents, kilos, base units and fractions; days as ISO dates; products by name. */
+export type OptionReason = { code: ReasonCode; tone: ReasonTone; params: Record<string, string | number> };
 
 /** The product the request is about: one the buyer named, the one ordered last time ("same as last time"), or the kitchen's usual. */
 export type Reference = { productId: string; name: string; source: "named" | "last" | "usual" };
@@ -500,6 +514,7 @@ export function buildOptions(input: OptionsInput): OptionsResult {
       signOff: x.signOff,
       pros: [] as string[],
       cons: [] as string[],
+      reasons: [...x.signOffReasons],
       quoteLines: plan.lines.map((l) => ({ productId: l.productId, quantity: l.packs, ...(l.substituteFor ? { substituteFor: l.substituteFor } : {}) })),
       ...alternativeOf(plan, input),
       _plan: plan,
@@ -536,20 +551,22 @@ function measure(pl: Plan, input: OptionsInput) {
   const co2 = carbon.every((c) => c !== undefined) ? pl.lines.reduce((s, l, i) => s + l.packs * l.packSize * carbon[i]!, 0) : null;
   const rel = rels.every((r) => r !== undefined) ? pl.lines.reduce((s, l, i) => s + l.packs * l.packSize * rels[i]!, 0) / delivered : null;
   const signOff: string[] = [];
+  const signOffReasons: OptionReason[] = [];
+  const so = (code: ReasonCode, params: OptionReason["params"], text: string) => (signOff.push(text), signOffReasons.push({ code, tone: "signoff", params }));
   const { mandate } = input;
-  if (total > mandate.perOrderLimitCents) signOff.push(`Over the ${formatEur(mandate.perOrderLimitCents)} the agent may spend alone: a person must sign off.`);
+  if (total > mandate.perOrderLimitCents) so("over_limit", { limitCents: mandate.perOrderLimitCents }, `Over the ${formatEur(mandate.perOrderLimitCents)} the agent may spend alone: a person must sign off.`);
   const held = heldOf(input);
   if (held > 0 && input.spentThisWeekCents + total > mandate.weeklyBudgetCents)
-    signOff.push(`${formatEur(held)} of this week's budget is held by an order waiting for sign-off; with it, this one would go over the ${formatEur(mandate.weeklyBudgetCents)} budget, so a person decides.`);
+    so("budget_held", { heldCents: held, budgetCents: mandate.weeklyBudgetCents }, `${formatEur(held)} of this week's budget is held by an order waiting for sign-off; with it, this one would go over the ${formatEur(mandate.weeklyBudgetCents)} budget, so a person decides.`);
   const substitutes = pl.lines.filter((l) => l.substituteFor);
-  if (substitutes.length && mandate.substitution.rule === "needs_approval") signOff.push("Includes a substitute: the mandate requires a person to approve it.");
+  if (substitutes.length && mandate.substitution.rule === "needs_approval") so("substitute_needs_approval", {}, "Includes a substitute: the mandate requires a person to approve it.");
   if (substitutes.length && mandate.substitution.rule === "within_preferences") {
     const original = input.candidates.find((p) => p.id === substitutes[0].substituteFor);
     const subProduct = input.candidates.find((p) => p.id === substitutes[0].productId);
-    if (original && subProduct && !likeForLike(original, subProduct)) signOff.push(`The substitute is not like for like with ${original.name}: a person must approve it.`);
+    if (original && subProduct && !likeForLike(original, subProduct)) so("not_like_for_like", { product: original.name }, `The substitute is not like for like with ${original.name}: a person must approve it.`);
   }
   const deliveryDate = pl.lines.map((l) => l.deliveryDate).sort().at(-1)!;
-  return { total, delivered, co2, rel: rel === null ? null : r2(rel), signOff, deliveryDate };
+  return { total, delivered, co2, rel: rel === null ? null : r2(rel), signOff, signOffReasons, deliveryDate };
 }
 
 type Card = OptionCard & { _plan: Plan };
@@ -558,72 +575,78 @@ function explainCard(c: Card, all: Card[], input: OptionsInput): void {
   const others = all.filter((x) => x !== c);
   const unit = input.amount.unit;
   const pct = (a: number, b: number) => Math.round((a / b - 1) * 1000) / 10;
+  /** A pro or con in words (pros, cons) and as data (reasons); `quiet` facts go with the cons in words. */
+  const say = (tone: Exclude<ReasonTone, "signoff">, code: ReasonCode, params: OptionReason["params"], text: string) => {
+    (tone === "pro" ? c.pros : c.cons).push(text);
+    c.reasons.push({ code, tone, params });
+  };
 
-  c.cons.push(...c.givesUp.map((g) => g.text));
+  for (const g of c.givesUp) say("con", "gives_up", { part: g.part, ...(g.code ? { what: g.code } : {}), ...(g.params ?? {}), text: g.text }, g.text);
 
   if (others.length) {
     const cheapestOther = Math.min(...others.map((x) => x.totalCents));
     const cheapest = Math.min(cheapestOther, c.totalCents);
-    if (c.totalCents < cheapestOther) c.pros.push(`Cheapest: ${formatEur(cheapestOther - c.totalCents)} less than the next option.`);
-    else if (c.totalCents > cheapest) c.cons.push(`${formatEur(c.totalCents - cheapest)} (${pct(c.totalCents, cheapest)} %) more than the cheapest option.`);
-    else c.pros.push("Joint cheapest.");
+    if (c.totalCents < cheapestOther) say("pro", "cheapest", { lessCents: cheapestOther - c.totalCents }, `Cheapest: ${formatEur(cheapestOther - c.totalCents)} less than the next option.`);
+    else if (c.totalCents > cheapest) say("con", "more_expensive", { moreCents: c.totalCents - cheapest, pct: pct(c.totalCents, cheapest) }, `${formatEur(c.totalCents - cheapest)} (${pct(c.totalCents, cheapest)} %) more than the cheapest option.`);
+    else say("pro", "joint_cheapest", {}, "Joint cheapest.");
   }
 
-  if (c.co2.kg === null) c.cons.push("No carbon data for this product.");
+  if (c.co2.kg === null) say("quiet", "no_co2", {}, "No carbon data for this product.");
   else {
     const rest = others.map((x) => x.co2.kg).filter((k): k is number => k !== null);
     const min = Math.min(c.co2.kg, ...rest);
-    if (rest.length && c.co2.kg < Math.min(...rest)) c.pros.push(`Lowest carbon: ${r2(Math.min(...rest) - c.co2.kg)} kg CO2e less than the next option (product-group average).`);
-    else if (c.co2.kg > min) c.cons.push(`${r2(c.co2.kg - min)} kg CO2e more than the lowest-carbon option (product-group average).`);
+    if (rest.length && c.co2.kg < Math.min(...rest)) say("pro", "lowest_co2", { lessKg: r2(Math.min(...rest) - c.co2.kg) }, `Lowest carbon: ${r2(Math.min(...rest) - c.co2.kg)} kg CO2e less than the next option (product-group average).`);
+    else if (c.co2.kg > min) say("con", "more_co2", { moreKg: r2(c.co2.kg - min) }, `${r2(c.co2.kg - min)} kg CO2e more than the lowest-carbon option (product-group average).`);
   }
 
-  if (c.reliability === null) c.cons.push("No delivery-reliability data for this product.");
+  if (c.reliability === null) say("quiet", "no_reliability", {}, "No delivery-reliability data for this product.");
   else {
     const rest = others.map((x) => x.reliability).filter((r): r is number => r !== null);
     const max = Math.max(c.reliability, ...rest);
     const pctText = (r: number) => `${Math.round(r * 100)} %`;
-    if (rest.length && c.reliability > Math.max(...rest)) c.pros.push(`Most reliable: ${pctText(c.reliability)} of past deliveries in full, against ${pctText(Math.max(...rest))} for the next.`);
-    else if (max - c.reliability >= RELIABILITY_GAP) c.cons.push(`Delivery reliability ${pctText(c.reliability)}, against ${pctText(max)} for the most reliable option.`);
+    if (rest.length && c.reliability > Math.max(...rest)) say("pro", "most_reliable", { share: c.reliability, next: Math.max(...rest) }, `Most reliable: ${pctText(c.reliability)} of past deliveries in full, against ${pctText(Math.max(...rest))} for the next.`);
+    else if (max - c.reliability >= RELIABILITY_GAP) say("con", "less_reliable", { share: c.reliability, best: max }, `Delivery reliability ${pctText(c.reliability)}, against ${pctText(max)} for the most reliable option.`);
   }
 
   const packs = c.lines.reduce((s, l) => s + l.packs, 0);
-  if (c.leftover.amount > 0) c.cons.push(`Packs of ${formatAmount(c.lines[0].packSize, unit)} round it up to ${formatAmount(c.delivered.amount, unit)}: ${formatAmount(c.leftover.amount, unit)} more than asked.`);
-  else if (!c._plan.partial) c.pros.push(`Exact amount: ${c.lines.map((l) => `${l.packs} x ${formatAmount(l.packSize, unit)}`).join(" + ")}.`);
+  if (c.leftover.amount > 0) say("con", "rounds_up", { packSize: c.lines[0].packSize, unit, delivered: c.delivered.amount, extra: c.leftover.amount }, `Packs of ${formatAmount(c.lines[0].packSize, unit)} round it up to ${formatAmount(c.delivered.amount, unit)}: ${formatAmount(c.leftover.amount, unit)} more than asked.`);
+  else if (!c._plan.partial) say("pro", "exact_amount", { packs: c.lines.map((l) => l.packs).join("+"), packSize: c.lines[0].packSize, unit }, `Exact amount: ${c.lines.map((l) => `${l.packs} x ${formatAmount(l.packSize, unit)}`).join(" + ")}.`);
   if (others.length) {
     const fewest = Math.min(...others.map((x) => x.lines.reduce((s, l) => s + l.packs, 0)));
-    if (packs >= MANY_PACKS && fewest * 2 <= packs) c.cons.push(`${packs} separate packs to handle, against ${fewest} for another option.`);
+    if (packs >= MANY_PACKS && fewest * 2 <= packs) say("con", "many_packs", { packs, fewest }, `${packs} separate packs to handle, against ${fewest} for another option.`);
   }
 
   const split = c._plan.split;
-  if (split) c.cons.push(`Partial stock: only ${formatAmount(r2(split.have), unit)} of ${c._plan.primary.p.id} available, so ${formatAmount(r2(split.rest), unit)} comes from ${split.sub.p.id} as a substitute.`);
-  if (c.lines.some((l) => l.estimated)) c.cons.push("Pack count rests on an estimate of the pack content that you confirmed.");
-  if (!c.stockConfirmed) c.cons.push("Stock not confirmed: the wholesaler does not report a quantity for this product, only that it can deliver.");
+  if (split)
+    say("con", "partial_stock", { have: r2(split.have), rest: r2(split.rest), unit, product: c._plan.primary.p.name, substitute: split.sub.p.name }, `Partial stock: only ${formatAmount(r2(split.have), unit)} of ${c._plan.primary.p.name} available, so ${formatAmount(r2(split.rest), unit)} comes from ${split.sub.p.name} as a substitute.`);
+  if (c.lines.some((l) => l.estimated)) say("con", "estimated_pack", {}, "Pack count rests on an estimate of the pack content that you confirmed.");
+  if (!c.stockConfirmed) say("quiet", "stock_unconfirmed", {}, "Stock not confirmed: the wholesaler does not report a quantity for this product, only that it can deliver.");
   if (c.orderBy) {
     const hours = (Date.parse(c.orderBy.replace(/([+-]\d{2})(\d{2})$/, "$1:$2")) - input.now.getTime()) / 3600_000;
-    if (Number.isFinite(hours) && hours >= 0 && hours <= CUTOFF_SOON_HOURS) c.cons.push(`Order by ${formatCutoff(c.orderBy)}: the cut-off for this date is close.`);
+    if (Number.isFinite(hours) && hours >= 0 && hours <= CUTOFF_SOON_HOURS) say("con", "cutoff_soon", { orderBy: c.orderBy }, `Order by ${formatCutoff(c.orderBy)}: the cut-off for this date is close.`);
   }
   const replaced = c._plan.replaces;
-  if (replaced && input.reference?.source === "usual") c.cons.push(`Instead of your usual ${input.reference.name}.`);
+  if (replaced && input.reference?.source === "usual") say("quiet", "instead_of_usual", { product: input.reference.name }, `Instead of your usual ${input.reference.name}.`);
 
   if (others.length) {
     const earliest = [c, ...others].map((x) => x.deliveryDate).sort()[0];
     if (c.deliveryDate > earliest) {
       const days = Math.round((Date.parse(c.deliveryDate) - Date.parse(earliest)) / 86_400_000);
-      c.cons.push(`Arrives ${formatDay(c.deliveryDate)}, ${days} day${days === 1 ? "" : "s"} after the earliest option.`);
-    } else if (others.every((x) => x.deliveryDate > c.deliveryDate)) c.pros.push(`Arrives first: ${formatDay(c.deliveryDate)}.`);
+      say("con", "arrives_later", { date: c.deliveryDate, days }, `Arrives ${formatDay(c.deliveryDate)}, ${days} day${days === 1 ? "" : "s"} after the earliest option.`);
+    } else if (others.every((x) => x.deliveryDate > c.deliveryDate)) say("pro", "arrives_first", { date: c.deliveryDate }, `Arrives first: ${formatDay(c.deliveryDate)}.`);
   }
 
   if (c.alternative && input.reference) {
     const tier = { best: "Best", better: "Better", good: "Good" }[c.alternative.tier];
-    c.pros.push(`${tier} alternative to ${input.reference.name}${c.alternative.use ? ` for ${c.alternative.use}` : ""}: ${c.alternative.reason}`);
+    say("pro", "alternative", { tier: c.alternative.tier, product: input.reference.name, ...(c.alternative.use ? { use: c.alternative.use } : {}), reason: c.alternative.reason }, `${tier} alternative to ${input.reference.name}${c.alternative.use ? ` for ${c.alternative.use}` : ""}: ${c.alternative.reason}`);
   }
   for (const l of c.lines) {
     const why = input.declined?.get(l.productId);
-    if (why) c.cons.push(`The kitchen turned ${l.name} down before (${why}).`);
+    if (why) say("con", "declined_before", { product: l.name, why }, `The kitchen turned ${l.name} down before (${why}).`);
   }
   c.cons.push(...c.signOff);
-  if (c.labels.includes("same_as_last_time") && input.last) c.pros.push(`Same product as your last order (${formatDay(localDateOf(input.last.placedAt))}).`);
-  if (input.usual && c._plan.primary.p.id === input.usual.productId) c.pros.push(`Your usual product (${input.usual.text.replace(/^Usually [^:]*: /, "")}).`);
+  if (c.labels.includes("same_as_last_time") && input.last) say("pro", "same_as_last", { date: localDateOf(input.last.placedAt) }, `Same product as your last order (${formatDay(localDateOf(input.last.placedAt))}).`);
+  if (input.usual && c._plan.primary.p.id === input.usual.productId) say("pro", "your_usual", { text: input.usual.text.replace(/^Usually [^:]*: /, "") }, `Your usual product (${input.usual.text.replace(/^Usually [^:]*: /, "")}).`);
 }
 
 /** Which card to pre-select for a goal. A goal with a tolerance ("lowest CO2 if within 5 % of the cheapest") falls back to the cheapest. */
