@@ -179,7 +179,13 @@ export class SuspensionRegistry {
   }
 }
 
-const registries = new WeakMap<Dock, SuspensionRegistry>();
+// Process-wide, not per module copy: Next.js loads server modules once per bundle (pages and route handlers are
+// separate graphs), and the runtime's admission hook is built by whichever bundle came first. A WeakMap that lived
+// in this module would give the operations route one registry and the hook another: staff would suspend an agent
+// in one, and the gate would ask the other. (Found by `pnpm demo:all` on a production build; the unit tests, which
+// load each module once, cannot see it.)
+const shared = globalThis as typeof globalThis & { __dockSuspensions?: WeakMap<Dock, SuspensionRegistry> };
+const registries = (shared.__dockSuspensions ??= new WeakMap<Dock, SuspensionRegistry>());
 
 /** The suspension registry of one runtime. */
 export function suspensions(dock: Dock): SuspensionRegistry {
