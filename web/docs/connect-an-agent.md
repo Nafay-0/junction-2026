@@ -7,6 +7,15 @@ AimoPilot speaks two open interfaces with the same operations and the same refus
 
 An agent that knows only the base URL can find both: `/.well-known/api-catalog` (RFC 9727), `/.well-known/dock.json` (AimoPilot's own manifest) and `/llms.txt`.
 
+The kitchen's own agent in the store is one more client of the same tool table and the same gate: what it can look up, an outside agent can look up, as structured data. What we assumed, what is mocked and what a production deployment would need are in [assumptions.md](assumptions.md).
+
+**Which kitchens an outside agent can buy for.** Every kitchen has a mandate and a connector address: the two built-in demo kitchens (`kaari`, `laakso`), a visitor's hotel kitchen made by scanning the wall's QR code (its approver is the visitor's phone), and an account kitchen anyone can open at `/k/signup` (its terms are signed by the account itself). Account and visitor kitchens' keys are held by the server in this demo; in production the kitchen holds its own key (see [assumptions.md](assumptions.md)).
+
+**What can change under an agent.**
+- A kitchen that tightens its rules reissues its mandate; every earlier mandate is refused from that second (rule `mandate_window`).
+- When the wholesaler enforces crash-test licences (`DOCK_LICENCE_ENFORCE=on`), the gate applies the stricter of the mandate and the licence the agent earned on the public crash test; an agent with no licence bound to it sends every order to a person. The result says when the licence, not the mandate, did.
+- A relayed answer ("the chef said yes") is recorded as relayed, not verified. It does not count as a person's: where it matters, the order goes to a named person's sign-off.
+
 The examples use a local server. Replace `http://localhost:3000` with the deployed URL.
 
 ## 0. Connect a consumer assistant with only a URL
@@ -271,7 +280,7 @@ const r = await client.callTool({ name: "read_mandate", arguments: {} });
 console.log(r.structuredContent);
 ```
 
-`pnpm demo:mcp --url http://localhost:3000` does the whole milk order this way, with no LLM and no AimoPilot client code: a returning kitchen asks for 1,000 L, AimoPilot flags it against the usual 100 L, the head chef confirms it on the form AimoPilot sends through the client, answers one question, the agent shows three option cards and chooses one, gets a fixed-price quote, places the order, the owner signs off, and the script verifies the signed receipt.
+`pnpm build && pnpm demo:mcp` (or `pnpm demo:mcp --url http://localhost:3000`) does Valio Aimo's example this way, with no LLM and no AimoPilot client code, as a hotel chain's agent. The hotel's purchasing manager joins with a passkey, and the agent gets the hotel's connector address. It looks up products, prices and availability (`find_products`) and submits the need. It gets good, better and best options, chooses one and places the order. The order is over the agent's €500, so it waits. The manager signs with the passkey, `await_decision` returns the outcome, and the script verifies the signed receipt. Then four exceptions follow: a stock-out with ranked substitutes, a nut drink refused as a substitute, delivery today past the cut-off, and an order placed alone, then taken back.
 
 ### Tools
 
@@ -286,9 +295,14 @@ Start every order with `submit_need`. The lower-level tools below the line stay 
 | `choose_option` | The option card the buyer picks. Returns a signed fixed-price quote and the exact `place_order` arguments. |
 | `get_intake_step` | Where an order stands, and the call to make next. |
 | `read_kitchen_memory` | Order history, usual amounts, rules people stated, patterns learned. |
-| `place_order` | Order against a quote: `committed`, `pending_approval` or refused. |
+| `place_order` | Order against a quote: `committed`, `pending_approval` or refused. Just `requestId` after `choose_option` or `request_quote`. `replaces` changes an earlier order. |
 | `get_order` | Status, decision, approval and the signed confirmation. |
+| `list_orders` | This organisation's orders: which wait for a person's sign-off, who must sign, what can still be taken back. |
+| `await_decision` | Wait (up to 55 s a call) for the person's decision on an order waiting for sign-off. Only reads. |
+| `withdraw_order` | Take back an order waiting for sign-off, or one this agent placed alone, until the wholesaler's order cut-off. What a person signed is theirs to take back. |
 | `explain` | Plain-language audit trail for a request or order, with chain verification. |
+| `find_products` | Products, prices and availability in one call. Filters: words, category, brand, claims, allergens to avoid, pack size, delivery day, quantity. Words go through the store's own product search, and each product says `match`: exact, variant, stand_in or not_the_kind. Live for at most 10. |
+| `find_alternatives` | Good, better, best substitutes for a product that is short, late or not wanted. Each comes with its trade-offs, live price and delivery, and the gate's preview. |
 | `open_request` | Lower level: a bare request with no mistake checks or options. |
 | `search_products` | Lower level: product master data. Free; no live call. |
 | `check_availability` | Lower level: live price, stock and delivery for at most 10 products. Metered. |
@@ -381,6 +395,26 @@ curl -s -X POST $DOCK/api/v1/orders "${H[@]}" \
   -d "$(echo "$Q" | jq -c --arg r "$REQ" '{requestId: $r, quoteToken: .quoteToken, lines: [.quote.lines[] | {productId, quantity, unitPriceCents}]}')" \
   | tee order.json | jq '{status: .order.status, error: .error}'
 ```
+
+Products, prices and availability in one call, and alternatives (the same as `find_products` and `find_alternatives`):
+
+```bash
+curl -s -X POST $DOCK/api/v1/lookup "${H[@]}" \
+  -d '{"text":"lactose-free milk","requiredClaims":["lactose_free"],"quantity":{"amount":1000,"unit":"L"},"deliverOn":"2026-11-16","limit":4}' \
+  | jq '{requestId, products: [.products[] | {name, match, price: .live.unitPriceCents, stock: .live.availablePacks, day: .live.meetsDay, orderBy: .live.orderBy}]}'
+curl -s -X POST $DOCK/api/v1/alternatives "${H[@]}" -d '{"productId":"VA-1010","quantity":{"amount":1000,"unit":"L"}}' | jq '.alternatives[] | {rank, name, tradeOffs, gate: .gate.outcome}'
+```
+
+After the order:
+
+```bash
+curl -s "$DOCK/api/v1/orders?status=pending_approval" "${H[@]}"            # what waits for sign-off
+curl -s "$DOCK/api/v1/orders/$ORDER?wait=25" "${H[@]}"                     # answers once the person decides
+curl -s -X POST $DOCK/api/v1/orders/$ORDER/withdraw "${H[@]}" -d '{"reason":"breakfast cancelled"}'
+# change an order: quote the new lines, then POST /orders { requestId, replaces: "<old orderId>" }
+```
+
+`POST /orders` with only `{ requestId }` also works after `POST /quotes`: Dock places the latest quote it signed for that request.
 
 Errors are always `{ "error": { "code", "rule", "message", "details" } }`.
 
