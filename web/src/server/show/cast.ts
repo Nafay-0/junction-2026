@@ -59,7 +59,7 @@ export async function castWeek(input: { agent: ShowAgent; catalog: CatalogueSear
   const litreMilk = milks.filter((p) => p.unit === "L" && plain(p) && p.attributes.includes("fat_1_5") && !p.attributes.includes("organic"));
   const milkPool = [...boxes, ...litreMilk.filter((p) => !boxes.includes(p))].slice(0, 6);
   const allowed = (p: Product) => mandate.requiredAttributes.every((a) => p.attributes.includes(a)) && mandate.allowedCategories.includes(p.category);
-  const safe = (p: Product) => !p.allergens.some((a) => mandate.forbiddenAllergens.includes(a)) && p.allergensDeclared !== false;
+  const safe = (p: Product) => !p.allergens.some((a) => mandate.forbiddenAllergens.includes(a)) && p.allergenInfo?.declared !== false;
   const plants = mandate.allowedCategories.includes("plant_drink") ? await catalog.searchProducts({ category: "plant_drink", attributes: mandate.requiredAttributes, limit: 100 }) : [];
   const plantPool = plants.filter((p) => allowed(p) && safe(p) && p.unit === "L" && plain(p)).sort((a, b) => a.packSize - b.packSize || a.id.localeCompare(b.id)).slice(0, 5);
   const risky: Product[] = [];

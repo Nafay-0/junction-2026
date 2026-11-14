@@ -147,6 +147,8 @@ export type WeekRun = {
   /** Clean-up done after the week: orders withdrawn, memory restored, simulations cleared. */
   cleanup?: string[];
   error?: string;
+  /** The partner's real catalogue and live prices, or the 12-product seed (tests, offline). */
+  catalogue: "partner" | "seed";
   /** Where this run came from: live, or a recording of an earlier live run. */
   source: "live" | "recording";
   recordedAt?: string;

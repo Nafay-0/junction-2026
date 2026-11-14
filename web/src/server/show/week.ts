@@ -114,6 +114,7 @@ export class WeekDirector {
       tally: emptyTally(),
       simulated: [],
       liveCalls: 0,
+      catalogue: o.rt.catalogSource.kind === "valio" ? "partner" : "seed",
       source: "live",
     };
   }
@@ -473,7 +474,7 @@ export class WeekDirector {
   }
 
   /** From the intake's last state to a decided order: choose when the agent may, quote, place, wait if needed. */
-  private async finishIntake(step: WeekStep, v: Json, signOffTimeoutMs = this.o.sideSignOffTimeoutMs ?? 12_000) {
+  private async finishIntake(step: WeekStep, v: Json, signOffTimeoutMs = this.o.sideSignOffTimeoutMs ?? 12_000): Promise<void> {
     if (v.state === "needs_confirmation" && (v.concerns as Json[]).length) {
       // A check the plan did not expect (live prices moved, say): confirm it as asked, scripted and labelled. A
       // confirmation that matters, relayed by an agent, sends the order to the named person (policy human_confirmation).
@@ -525,7 +526,7 @@ export class WeekDirector {
     if (!step.orderIds.includes(order.orderId)) step.orderIds.push(order.orderId);
     for (const l of order.lines as Json[]) this.products.set(l.productId, l.name);
     const d = order.decision as Json;
-    const rules = (d.rules as Json[]).map((r) => ({ rule: String(r.rule), outcome: r.outcome as "pass" }));
+    const rules = (d.rules as Json[]).map((r) => ({ rule: String(r.rule), outcome: r.outcome as "pass" | "escalate" | "fail" }));
     const deciding = rules.find((r) => r.outcome === "fail") ?? rules.find((r) => r.outcome === "escalate");
     step.gate = { outcome: d.outcome, rule: deciding?.rule, reasons: (d.reasons as string[]).map((r) => say(r, this.names())), checks: rules, totalCents: d.totalCents, limitCents: this.o.kitchen.perOrderLimitCents };
     step.order = orderView(order);
