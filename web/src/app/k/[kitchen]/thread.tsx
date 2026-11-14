@@ -1,6 +1,6 @@
 "use client";
 
-import { Menu, Mic, MicOff, PhoneOff, X } from "lucide-react";
+import { Menu, Mic, MicOff, PhoneOff, X, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { LangSwitch, useText } from "../../_i18n/provider";
@@ -329,9 +329,18 @@ function ShellMenu() {
   );
 }
 
-export function StartOver({ children }: { children?: ReactNode }) {
+export function StartOver({ children, compact }: { children?: ReactNode; /** On a phone: the icon, with its name for screen readers. */ compact?: boolean }) {
   const { thread } = usePortal();
   const tx = useText(THREAD_PAGE_TEXT);
+  if (compact)
+    return (
+      <button type="button" aria-label={tx.startOver} title={tx.startOver} className={buttonClass("quiet", "sm", "shrink-0 whitespace-nowrap px-2 sm:px-3")} onClick={() => void thread.reset()}>
+        <RotateCcw aria-hidden size={16} className="sm:hidden" />
+        <span aria-hidden className="hidden sm:inline">
+          {tx.startOver}
+        </span>
+      </button>
+    );
   return (
     <button type="button" className={buttonClass("quiet", "sm")} onClick={() => void thread.reset()}>
       {children ?? tx.startOver}

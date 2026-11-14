@@ -542,7 +542,7 @@ export type TodayItem =
 
 /** The opening: what needs the kitchen today, posted by the engine when the kitchen opens the agent. Empty: nothing does. */
 /** What needs the kitchen today (the opening); `pending` while it is being gathered. Plain code from records only. */
-export type TodayCard = CardBase & { type: "today"; date: string; items: TodayItem[]; pending?: boolean };
+export type TodayCard = CardBase & { type: "today"; date: string; items: TodayItem[]; pending?: boolean; /** A fresh kitchen (no rules yet): its own opening, in each language, instead of the rules sentence. */ opening?: Record<"en" | "fi" | "sv", string> };
 
 export type ProductTile = {
   productId: string;
@@ -637,6 +637,8 @@ export type WatchCard = CardBase & {
   kind: "stock_out" | "renewal_held" | "renewal_placed" | "substitute_placed";
   text: Record<"en" | "fi" | "sv", { say: string; ask?: string }>;
   steps: string[];
+  /** The same moment for the buyer, in at most four plain lines per language (the steps shown open under the reply). */
+  brief?: Record<"en" | "fi" | "sv", string[]>;
   proof?: { token: string; keysUrl: string; simulated: boolean };
   answers: string[];
   /** The other ranked substitutes, short names (behind Show the list). */

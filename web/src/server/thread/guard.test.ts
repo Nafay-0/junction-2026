@@ -25,6 +25,12 @@ describe("the mistake check, said", () => {
     expect(guardWords(day, "en")).toMatch(/Shall I make it Mon 16 Nov\?$/);
   });
 
+  it("names the pack readings, the first as the one to take, and a plain yes takes it", () => {
+    const c = card({ key: "unit_unclear:2:pack", code: "unit_unclear", message: "x", confirmable: false, corrections: [{ id: "use_2_kg", label: "2 kg in total" }, { id: "use_1_kg", label: "2 packs of 0.5 kg = 1 kg" }, { id: "use_4_kg", label: "2 packs of 2 kg = 4 kg" }] });
+    expect(guardWords(c, "en")).toBe("The packs come in several sizes. Shall I take 2 packs of 0.5 kg (1 kg), or 2 packs of 2 kg (4 kg)?");
+    expect(guardAnswerOf(c, "yes")?.action).toMatchObject({ choice: "use_1_kg" });
+  });
+
   it("counts pieces into packs, and a yes or the figure again takes that reading", () => {
     const c = card({ key: "unit_unclear:40:pcs", code: "unit_unclear", message: "x", confirmable: false, corrections: [{ id: "use_3.2_kg", label: "4 packs of 10 pcs (3,2 kg)" }], evidence: { pieces: 40, perPack: 10, packs: 4 } });
     expect(guardWords(c, "en")).toMatch(/^40 pieces: a pack holds 10, so that is 4 packs \(3,2\s?kg\)\. Shall I order them\?$/);

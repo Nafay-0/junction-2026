@@ -85,7 +85,7 @@ function cardFacts(c: Card, run?: TurnRun): Record<string, unknown> | undefined 
         ...(c.askedDay ? { askedDay: c.askedDay } : {}),
         // A cut-off that has passed is said as passed: its old date is not a fact the reply can be checked against.
         ...(c.notes.length ? { notes: [...new Set(c.notes.map((n) => n.replace(/order cut-off [A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2}(?: \d{1,2}[:.]\d{2})? has passed/g, "its order cut-off has passed").replace(/^Same as last time \(([^)]*)\) is not possible/, "Your usual ($1) cannot do it")))].slice(0, 2) } : {}),
-        ask: can.length > 1 ? `which one: ${can.length} can be ordered (one product per option, each with its own price)` : can.length === 1 ? "only one can be ordered: ask 'Shall I order it?', never 'which one'" : "none can be ordered: say why, and what would make it possible",
+        ask: can.length > 1 ? `${can.length} can be ordered (one product per option, each with its own price): name the first as the one you would take and ask "Shall I order the <first>, or another one?"; a plain yes takes the first` : can.length === 1 ? "only one can be ordered: ask 'Shall I order it?', never 'which one'" : "none can be ordered: say why, and what would make it possible",
       };
     }
     case "price":

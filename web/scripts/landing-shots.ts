@@ -822,13 +822,13 @@ async function reel(browser: Browser) {
  * The store as a kitchen already uses it, with its buying agent docked beside the catalogue: the partner's milk
  * request from the closed panel to the sign-off, at 1440 x 900 (2x), and the same moments on a 390 px phone (2x).
  * The landing page cross-fades these as the reader scrolls. Run on a server with DOCK_SAMPLE_ACTIVITY=off so no
- * sample orders sit in the shot. Desktop frames are written 1600 px wide (the section shows them at most ~800 CSS
- * px wide), phone frames 780 px; each under 150 KB / 80 KB. Listed in src/app/_landing2/webshop.json.
+ * sample orders sit in the shot. Desktop frames are written 1920 px wide (the section shows them up to ~960 CSS px
+ * wide, so 2x), phone frames 780 px; each under 170 KB / 80 KB. Listed in src/app/_landing2/webshop.json.
  */
 async function webshop(browser: Browser) {
   const kitchen = "hotel-lumo";
   const SEARCH = "lactose-free milk";
-  const DESK_O = { width: 1600, max: 150 * 1024, webshop: true };
+  const DESK_O = { width: 1920, max: 170 * 1024, webshop: true };
   const PHONE_O = { width: 780, max: 80 * 1024, webshop: true };
   await resetTestAccounts(browser);
   const desk = await context(browser, "desktop");
