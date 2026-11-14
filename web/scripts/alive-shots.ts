@@ -91,11 +91,15 @@ async function main() {
       ["ops-accounts", "/ops/accounts"],
       ["ops-radar", "/ops/radar"],
       ["ops-trace", "/ops/trace"],
+      ["wall", "/wall"],
     ];
     for (const [name, url] of opsPages) await shoot(page, name, url, results);
     // The same Orders page with the sample hidden: the empty state says what the page is for.
     await ops.addCookies([{ name: "aimopilot-sample", value: "hidden", url: BASE }]);
     await shoot(page, "ops-orders-sample-hidden", "/ops/orders", results);
+    await shoot(page, "ops-offers-sample-hidden", "/ops/offers", results);
+    await shoot(page, "ops-watch-sample-hidden", "/ops/watch", results);
+    await shoot(page, "ops-mail-sample-hidden", "/ops/mail", results);
     await ops.clearCookies({ name: "aimopilot-sample" });
 
     // ---------- the kitchen's store, as the test account hotel-lumo ----------

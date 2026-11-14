@@ -292,9 +292,9 @@ function Lane({ it, now, cols, fresh, hidden }: { it: FeedItem; now: number; col
         {/* The kitchen without its city ("Hotel Kaleva kitchen, Helsinki"): the name fits the lane; the city is in the title. */}
         <p className="truncate text-[max(1.15rem,1.35vw)] font-semibold leading-tight" title={it.kitchen}>
           {it.kitchen.split(", ")[0]}
-          {it.sample && <SamplePill dark className="text-[0.62em]" />}
         </p>
         <p className="truncate text-[max(0.92rem,0.95vw)] leading-tight text-paper/65 [@media(max-height:820px)]:hidden">
+          {it.sample && <SamplePill dark className="ml-0 mr-[0.5em]" />}
           {it.door ? <span className="mr-[0.5em] rounded-full bg-paper/12 px-[0.5em] text-[0.88em] font-medium text-paper/90">{OUTSIDE_DOOR[it.door]}</span> : null}
           {fiMoney(it.what)}
           {it.totalCents !== undefined ? `, ${money(it.totalCents)}` : ""}

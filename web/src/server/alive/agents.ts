@@ -156,13 +156,17 @@ export const sampleApprover: Map<string, SoftwareAuthenticator> = (gs.__dockSamp
 /** The relying party the sample's passkeys belong to: not this site's, so they sign nothing anywhere else. */
 export const SAMPLE_RP = { id: "sample.aimopilot.invalid", name: "AimoPilot sample activity", origins: ["https://sample.aimopilot.invalid"] };
 
+const SAMPLE_NAMES = ["Bistro Kaneli", "Lounas Lähde", "Ravintola Sammal", "Hotelli Kajo"];
+let names = 0;
+
 export async function openSampleKitchens(rt: Runtime, n: number): Promise<`sbx_${string}`[]> {
   const out: `sbx_${string}`[] = [];
   for (let i = 0; i < n; i++) {
     // Joined with a passkey made in this process (a software authenticator, for a relying party of the sample's own):
     // the kitchen's purchasing manager signs through the real passkey ceremony, and nobody else holds the key.
     const auth = new SoftwareAuthenticator(SAMPLE_RP.origins[0]);
-    const { options } = await rt.sandboxes.beginJoin(SAMPLE_RP);
+    // Named as sample, never one a person knows (a test account is Hotel Lumo; a visitor's kitchen is a hotel too).
+    const { options } = await rt.sandboxes.beginJoin(SAMPLE_RP, (id) => ({ ...id, kitchenName: `${SAMPLE_NAMES[(names++) % SAMPLE_NAMES.length]} (sample)`, agentName: `${SAMPLE_NAMES[(names - 1) % SAMPLE_NAMES.length]} buyer agent (sample)` }));
     const { sandbox } = await rt.sandboxes.completeJoin(auth.register(options));
     sampleApprover.set(sandbox.orgId, auth);
     const m = (await rt.sandboxes.mandateOf(sandbox.sandboxId))!;
