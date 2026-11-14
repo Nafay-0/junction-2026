@@ -1,6 +1,6 @@
 import { facetsOf, fold, tokenize } from "./catalog/search";
 import type { Concern, Correction } from "./concerns";
-import { formatAmount, type NeedPatch, type NeedUnit, type StructuredNeed } from "./need";
+import { formatAmount, type NeedPatch, type NeedUnit } from "./need";
 import { isMaterialAttribute, normaliseAllergen, normaliseWantedTag } from "./vocabulary";
 
 /**

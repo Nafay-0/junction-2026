@@ -222,9 +222,9 @@ export type ReadTwice = { first: InterpretResult; second?: SecondReadingRecord }
 export async function readTwice(
   read: (o: InterpretOptions) => Promise<InterpretResult>,
   opts: InterpretOptions,
-  cfg: { model?: ModelChoice; deadlineMs?: number; now?: () => Date } = {},
+  cfg: { model?: ModelChoice; off?: boolean; deadlineMs?: number; now?: () => Date } = {},
 ): Promise<ReadTwice> {
-  const model = cfg.model ?? secondReaderModel();
+  const model = cfg.off ? undefined : (cfg.model ?? secondReaderModel());
   if (!model) return { first: await read(opts) };
   const ctrl = new AbortController();
   const secondP = readSecondTime({ text: opts.text.trim(), now: opts.now, signal: ctrl.signal }, model, cfg.deadlineMs).then((o) => ({ o, at: Date.now() }));

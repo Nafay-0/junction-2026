@@ -242,6 +242,7 @@ export function humanize(text: string, products: Record<string, string> = {}): s
 /** What a mistake check was about, for sentences like "corrected the amount". */
 const CONCERN_WORD: Record<string, string> = {
   quantity_tenfold: "the amount",
+  readings_differ: "the reading",
   quantity_unusual: "the amount",
   unit_confusion: "the unit",
   unit_unclear: "the unit",

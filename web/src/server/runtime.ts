@@ -1,3 +1,4 @@
+import { findSecondReading } from "./agent/second-reading-store";
 import { randomUUID } from "node:crypto";
 import type { JWK } from "jose";
 import { InMemoryOutbox } from "@/core/approval";
@@ -98,6 +99,7 @@ async function buildRuntime(): Promise<Runtime> {
     wholesalerKey,
     notifier: outbox,
     verifier: passkeys.verifier,
+    secondReadings: findSecondReading, // the interpreter's second readings (server/agent/second-reader.ts)
     events,
     kitchens: stores.kitchens,
     intakes: stores.intakes,

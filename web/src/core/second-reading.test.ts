@@ -10,7 +10,7 @@ const base: Reading = {
   forbiddenAllergens: [],
   sameAsLastTime: false,
 };
-const r = (over: Partial<Reading> & { item?: Partial<Reading["item"]> } = {}): Reading => ({ ...base, ...over, item: { ...base.item, ...over.item } });
+const r = (over: Omit<Partial<Reading>, "item"> & { item?: Partial<Reading["item"]> } = {}): Reading => ({ ...base, ...over, item: { ...base.item, ...over.item } });
 const fields = (first: Reading, second: Reading, text = "") => compareReadings(first, second, { text }).differences.map((d) => d.field);
 
 describe("compareReadings: agreement", () => {

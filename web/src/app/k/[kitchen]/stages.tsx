@@ -11,6 +11,7 @@ import { Target } from "../../_ui/target";
 import { Spinner, Tag, Working } from "../../_ui/kit";
 import { Button, Field, MemoryNote, Missing, Paper } from "./ui";
 import { cutoffText } from "./when";
+import { SecondReadingLine } from "./second-reading";
 import type { ApprovalQr, KitchenInfo, Order, Step } from "./types";
 
 type Names = Record<string, string>;
@@ -98,6 +99,7 @@ export function Understood({
             )}
           </p>
         )}
+        {interp && !interp.offline && !interp.noModel && <SecondReadingLine reading={step?.secondReading} />}
         {busy && need && <Working className="mt-2 text-[0.95rem]">{busy}</Working>}
       </div>
     </Paper>
@@ -233,7 +235,7 @@ export function Concerns({ step, seen, onRespond, busyKey, names, remembered }: 
                     <span aria-hidden className="flex size-5 items-center justify-center bg-petrol text-[0.75rem] font-bold text-paper">
                       ✓
                     </span>
-                    {ack?.action === "corrected" ? `Corrected: ${fix?.label ?? "changed"}.` : ack?.action === "confirmed" ? `Confirmed as intended by ${ack.by}.` : ack?.action === "cancelled" ? "Cancelled." : "Settled."}
+                    {ack?.action === "corrected" ? `${c.code === "readings_differ" ? "Chosen" : "Corrected"}: ${fix?.label ?? "changed"}.` : ack?.action === "confirmed" ? `Confirmed as intended by ${ack.by}.` : ack?.action === "cancelled" ? "Cancelled." : "Settled."}
                   </p>
                 )}
               </div>

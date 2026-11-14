@@ -97,6 +97,8 @@ function Body({ s, counts }: { s: Safeguards; counts?: Overview["counters"] }) {
             </div>
           </Section>
 
+          <ReadTwice r={s.secondReading} />
+
           <Section title="Refused attempts" aside="What was tried, and the rule that stopped it">
             {s.refusedFeed.length === 0 ? (
               <Empty title="Nothing refused yet">Ask an agent for more than the weekly budget, or call the API with a changed mandate: the refusal appears here with its rule.</Empty>
@@ -253,6 +255,63 @@ function Rule({ r }: { r: Safeguards["groups"][number]["rules"][number] }) {
         )}
       </div>
     </li>
+  );
+}
+
+const UNAVAILABLE: Record<string, string> = { timeout: "late", at_capacity: "provider at capacity", failed: "failed", unreadable: "unreadable answer", over_limit: "daily model limit", not_a_purchase: "not read as an order", not_configured: "not configured" };
+
+/**
+ * The second reader: every request a model reads is read again, at the same moment, by an independent open-weights
+ * model. Plain code compares the two; a difference that matters becomes one question for the buyer. It never decides.
+ */
+function ReadTwice({ r }: { r: Safeguards["secondReading"] }) {
+  const total = r.agreed + r.differed + r.unavailable;
+  const { first, second } = r.readers;
+  return (
+    <Section title="Read twice" id="read-twice" aside="Two readers, different makers; plain code compares">
+      <div className="bg-paper px-4 py-4">
+        <div aria-hidden className="-mx-4 -mt-4 mb-4 h-[3px] bg-petrol" />
+        {total === 0 ? (
+          <Empty title="No request read twice yet">With DOCK_SECOND_READER_MODEL set, every typed or spoken request is read again by an independent model before any price is fixed.</Empty>
+        ) : (
+          <>
+            <dl className="grid grid-cols-3 gap-x-4 gap-y-3">
+              <Figure n={num(r.agreed)} label="agreed: nothing asked" />
+              <Figure n={num(r.differed)} label="differed: the buyer was asked" />
+              <Figure n={num(r.unavailable)} label="read once: second reader unavailable" />
+            </dl>
+            <p className="mt-3 border-t border-line/70 pt-2 text-[0.9rem] leading-snug">
+              {first.length ? <b>{first.join(", ")}</b> : "The interpreter"} reads first; {second.length ? <b>{second.join(", ")}</b> : "the second reader"} reads again. The second reading can only add a question: the order goes on the first reading, and the gate decides as always.
+              {r.unavailable > 0 && (
+                <span className="text-ink-soft">
+                  {" "}
+                  Unavailable: {Object.entries(r.unavailableBy).map(([k, n]) => `${UNAVAILABLE[k] ?? k} ${n}`).join(", ")}.
+                </span>
+              )}
+            </p>
+            {r.settled.keptFirst + r.settled.tookSecond + r.settled.rewrote > 0 && (
+              <p className="mt-2 text-[0.9rem] text-ink-soft">
+                Buyers kept the first reading {num(r.settled.keptFirst)} times, took the second {num(r.settled.tookSecond)}, wrote it again {num(r.settled.rewrote)}.
+              </p>
+            )}
+            {r.recent.length > 0 && (
+              <ul className="mt-2 space-y-1.5 border-t border-line/70 pt-2 text-[0.88rem]">
+                {r.recent.map((c) => (
+                  <li key={c.seq} className="leading-snug">
+                    <span className="text-ink-soft tabular">{when(c.at)}</span> <b>{c.orgName}</b>: differed on {c.fields.join(", ")}{" "}
+                    {c.requestId && (
+                      <Link href={`/ops/trace/${c.requestId}`} className="font-semibold text-petrol underline underline-offset-2">
+                        Open the trace
+                      </Link>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
+      </div>
+    </Section>
   );
 }
 

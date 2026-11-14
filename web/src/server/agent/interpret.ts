@@ -9,6 +9,8 @@ import { createModel, defaultModel, ModelConfigError, type ModelOptions } from "
 import { costOf, tokensFromUsage, type Price, type Tokens } from "./pricing";
 import { interpretSystem, interpretUser, type Vocabulary } from "./prompts";
 import { describeError, isRetryable, withRetry } from "./retry";
+import { readTwice } from "./second-reader";
+import { rememberSecondReading } from "./second-reading-store";
 
 /**
  * Job 1: a buyer's free text (English, Finnish or Swedish) to the structured need, and nothing more.
@@ -274,17 +276,42 @@ export const InterpretResponse = z.object({
     .object({ requestId: z.string(), fields: z.array(z.enum(EARLIER_FIELDS)) })
     .optional()
     .describe("Present when the text referred to one of the earlier requests: which one, and the fields taken from it."),
+  secondReading: z
+    .object({
+      status: z.enum(["agreed", "differed", "unavailable"]),
+      firstModel: z.string(),
+      secondModel: z.string(),
+      reason: z.string().optional().describe("unavailable: timeout, at_capacity, failed, unreadable, over_limit, not_a_purchase or not_configured."),
+      differences: z.array(z.object({ field: z.enum(["amount", "claims", "allergens", "kind", "date"]), first: z.string(), second: z.string(), why: z.string() })),
+    })
+    .optional()
+    .describe(
+      "The words read a second time by an independent open-weights model (NVIDIA Nemotron), compared by plain code. It never changes the need: when the readings differ on something material, POST /api/v1/intake with this need asks the buyer about exactly that field first.",
+    ),
 });
 
-type Mandateish = { allowedCategories: string[]; requiredAttributes: string[]; forbiddenAllergens: string[] };
+type Mandateish = { allowedCategories: string[]; requiredAttributes: string[]; forbiddenAllergens: string[]; issuer?: { orgId: string } };
 
-/** The route body: vocabulary from the product data and the caller's mandate, then interpretNeed. */
+/**
+ * The route body: vocabulary from the product data and the caller's mandate, then interpretNeed, with the second
+ * reader alongside (server/agent/second-reader.ts) unless `secondReading: false` (the photo door: its words are
+ * written by code from a line the buyer already reviewed) or the text is a follow-up of earlier requests (the second
+ * reader does not see them). The second reading is kept for the intake that opens on this need.
+ */
 export async function interpretRequest(
   body: z.output<typeof InterpretBody>,
-  ctx: { catalog: { searchProducts: (q: { limit: number }) => Promise<Product[]> }; mandate: Mandateish },
+  ctx: { catalog: { searchProducts: (q: { limit: number }) => Promise<Product[]> }; mandate: Mandateish; secondReading?: false },
 ): Promise<z.input<typeof InterpretResponse>> {
   const products = await ctx.catalog.searchProducts({ limit: 100 });
   const vocabulary = vocabularyFrom(products, { categories: ctx.mandate.allowedCategories, attributes: ctx.mandate.requiredAttributes, allergens: ctx.mandate.forbiddenAllergens });
-  const r = await interpretNeed({ text: body.text, now: body.now ? new Date(body.now) : undefined, vocabulary, earlier: body.earlier });
-  return { need: r.need, model: r.model, ms: r.ms, ...(r.basedOn ? { basedOn: r.basedOn } : {}) };
+  const off = ctx.secondReading === false || !!body.earlier?.length || !ctx.mandate.issuer;
+  const { first: r, second } = await readTwice(interpretNeed, { text: body.text, now: body.now ? new Date(body.now) : undefined, vocabulary, earlier: body.earlier }, { off });
+  if (second && ctx.mandate.issuer) rememberSecondReading(ctx.mandate.issuer.orgId, r.need.text ?? body.text, second);
+  return {
+    need: r.need,
+    model: r.model,
+    ms: r.ms,
+    ...(r.basedOn ? { basedOn: r.basedOn } : {}),
+    ...(second ? { secondReading: { status: second.status, firstModel: second.firstModel, secondModel: second.secondModel, ...(second.reason ? { reason: second.reason } : {}), differences: second.differences.map(({ field, first, second: s2, why }) => ({ field, first, second: s2, why })) } } : {}),
+  };
 }
