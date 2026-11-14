@@ -1,6 +1,6 @@
 # The show: the week, presenter mode, table mode
 
-Pages (all behind the operations passcode, the same as `/ops`):
+Pages (all behind the operations passcode; unlike `/ops`, which anyone may open to look, the show acts):
 
 - `/present/table`: the wall at the peer-review table. QR code; each visitor who joins gets their own kitchen's
   week, signed on their own phone. Up to three visitors side by side; back to the QR code 25 s after a week ends.

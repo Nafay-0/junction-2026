@@ -5,11 +5,16 @@ wholesaler (Valio Aimo's challenge) through open standards, MCP among them. It c
 says what it may buy. Plain code checks every order against that mandate, and a named person signs off anything
 beyond it on their phone. Every part of AimoPilot runs on Aiven.
 
-Open **https://jolly-wondrous-bunny.eur-1.aiven.app/ops/platform** (operations portal, then **Platform**).
+Open **https://jolly-wondrous-bunny.eur-1.aiven.app/ops/platform** (operations portal, then **Platform**). No
+passcode is needed to look: without one you are a viewer and every page reads, with the same data the staff see
+(a kitchen's private memory named, never shown; mail addresses masked; the words of other people's own kitchens
+replaced by "the buyer's words are shown to staff only"). Anything that acts, costs money or calls outside on
+demand asks for the staff passcode, which the team at the table has: below, **1** and **2** need it; **3**, **4**
+and **5** are open to look at (suspending an agent from 4 needs it).
 
 ## Five things to click
 
-1. **Send in an Aiven agent.** Pick "Valio's own example" and press *Send it in*. A purchasing agent that runs
+1. **Send in an Aiven agent** (staff: it launches an agent run on Aiven and spends model calls). Pick "Valio's own example" and press *Send it in*. A purchasing agent that runs
    on **Aiven Managed Agents** (its own model, in Aiven's environment, not ours) connects to AimoPilot's MCP endpoint
    on **Aiven Runtime**. Its tool calls come back on the page, and the gate's decisions appear live from **Kafka**
    while it works. About 30 to 60 seconds later it stops: 1,000 litres comes to €1,400, over the €1,000 it may
@@ -17,7 +22,8 @@ Open **https://jolly-wondrous-bunny.eur-1.aiven.app/ops/platform** (operations p
    inside the mandate, and an agent told to pay less than the signed quote, which the gate refuses and names the
    rule (`order_matches_quote`). The agent's mandate is minted on our server for each run, is valid for 20 minutes,
    goes straight into Aiven's credential store, and is never shown.
-2. **Ask the platform.** Press *Is anything unhealthy?* The answer comes from **Aiven's MCP server**
+2. **Ask the platform** (staff: each question runs SQL and calls Aiven's MCP server; open to all, a room would
+   multiply both, so viewers see the questions and the page but not the button). Press *Is anything unhealthy?* The answer comes from **Aiven's MCP server**
    (`aiven_service_list`, called with a read-only token) plus the app's own health probes in **PostgreSQL**. The call
    and the rows sit under the answer. Then try *How many orders were refused in the last hour and by which rule?*,
    or type `delete from telemetry.events` to see the write refused. Answers are computed from rows, never written

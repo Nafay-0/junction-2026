@@ -6,7 +6,7 @@ export const DEMO_SAY_TEXT = defineText({
     next: (title: string, shows: string) => `Next on your list: ${title.charAt(0).toLowerCase()}${title.slice(1)}. ${shows}`,
     tryWords: (words: string) => `Try saying: “${words}”`,
     doThis: (what: string) => what,
-    allDone: (n: number) => `You've tried all ${n} things on the list. The operations portal shows how the wholesaler sees it; its passcode is with the team.`,
+    allDone: (n: number) => `You've tried all ${n} things on the list. The operations portal shows how the wholesaler sees it: open it, no passcode needed to look.`,
     guide: "Everything is listed under Try everything.",
     staged: (summary: string) => `Done, staged for the demo: ${summary}`,
     what: {
@@ -23,7 +23,7 @@ export const DEMO_SAY_TEXT = defineText({
     next: (title: string, shows: string) => `Seuraavaksi listallasi: ${title.charAt(0).toLowerCase()}${title.slice(1)}. ${shows}`,
     tryWords: (words: string) => `Kokeile sanoa: ”${words}”`,
     doThis: (what: string) => what,
-    allDone: (n: number) => `Olet kokeillut kaikki ${n} asiaa listalta. Operatiivinen portaali näyttää, miltä se näyttää tukkurille; tunnuskoodi on tiimillä.`,
+    allDone: (n: number) => `Olet kokeillut kaikki ${n} asiaa listalta. Operatiivinen portaali näyttää, miltä se näyttää tukkurille: avaa se, katseluun ei tarvita tunnuskoodia.`,
     guide: "Kaikki on listattu kohdassa Kokeile kaikkea.",
     staged: (summary: string) => `Valmis, lavastettu demoa varten: ${summary}`,
     what: {
@@ -40,7 +40,7 @@ export const DEMO_SAY_TEXT = defineText({
     next: (title: string, shows: string) => `Nästa på din lista: ${title.charAt(0).toLowerCase()}${title.slice(1)}. ${shows}`,
     tryWords: (words: string) => `Prova att säga: ”${words}”`,
     doThis: (what: string) => what,
-    allDone: (n: number) => `Du har prövat alla ${n} saker på listan. Driftportalen visar hur grossisten ser det; lösenkoden finns hos teamet.`,
+    allDone: (n: number) => `Du har prövat alla ${n} saker på listan. Driftportalen visar hur grossisten ser det: öppna den, ingen lösenkod behövs för att titta.`,
     guide: "Allt finns under Pröva allt.",
     staged: (summary: string) => `Klart, iscensatt för demon: ${summary}`,
     what: {

@@ -47,7 +47,7 @@ export const GUIDE_TEXT = defineText({
     openConnect: "Connect an agent",
     openOps: "The operations portal",
     openOrder: "Your latest order",
-    opsPass: "Its passcode is with the team at the table.",
+    opsPass: "Open it: no passcode needed to look.",
     next: "Next to try",
     landing: "Try everything your agent can do, one step at a time",
     rows: {
@@ -93,7 +93,7 @@ export const GUIDE_TEXT = defineText({
     openConnect: "Yhdistä agentti",
     openOps: "Operatiivinen portaali",
     openOrder: "Viimeisin tilauksesi",
-    opsPass: "Sen tunnuskoodi on tiimillä pöydän ääressä.",
+    opsPass: "Avaa se: katseluun ei tarvita tunnuskoodia.",
     next: "Seuraavaksi",
     landing: "Kokeile kaikkea, mitä agenttisi osaa, askel kerrallaan",
     rows: {
@@ -139,7 +139,7 @@ export const GUIDE_TEXT = defineText({
     openConnect: "Anslut en agent",
     openOps: "Driftportalen",
     openOrder: "Din senaste beställning",
-    opsPass: "Lösenkoden finns hos teamet vid bordet.",
+    opsPass: "Öppna den: ingen lösenkod behövs för att titta.",
     next: "Nästa att pröva",
     landing: "Pröva allt din agent kan, ett steg i taget",
     rows: {
