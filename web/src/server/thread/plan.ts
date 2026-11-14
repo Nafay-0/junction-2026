@@ -26,6 +26,9 @@ async function planner(run: TurnRun) {
 }
 
 /** The doubts the one confirmation settles: those the planner can accept as they are, and lines with nothing to order. */
+/** "21 × ST (600 g per ST)" → "21 × 600 g": the wholesaler's sales-unit code stays off the buyer's card. */
+export const packs = (t: string) => t.replace(/^([\d.,\s]+)\s*×\s*[A-Z]{1,4}\s*\(([^)]*?)\s+per\s+[A-Z]{1,4}\)$/, "$1 × $2").replace(/\s+/g, " ").trim();
+
 /** The planner's sentence without its search log ("(searched: lohifilee, ...)"): the buyer's card has no internal words. */
 const plain = (t: string) => t.replace(/\s*\(searched:[^)]*\)/g, "").trim();
 
@@ -62,7 +65,7 @@ export function planCard({ record: p, view }: Planned, editUrl: string): PlanCar
         ingredient: l.name,
         dishes: forDishes,
         status: open.length ? ("decide" as const) : ("ready" as const),
-        ...(c ? { product: c.products.map((x) => x.name).join(" + "), packs: c.products.map((x) => x.packText).join(" + "), totalCents: c.totalCents } : {}),
+        ...(c ? { product: c.products.map((x) => x.name).join(" + "), packs: c.products.map((x) => packs(x.packText)).join(" + "), totalCents: c.totalCents } : {}),
         ...(open.length ? { point: { kind: open[0].kind, text: plain(open.map((d) => d.text).join(" ")) } } : {}),
       };
     });
@@ -95,6 +98,9 @@ const editUrlOf = (run: TurnRun, planId: string) => `/k/${encodeURIComponent(run
 
 /** The `plan_menu` tool: the planner on the buyer's words, its plan as a card. */
 export async function planFromWords(run: TurnRun, words: string): Promise<{ planId?: string; state: string; dishes?: string[]; covers?: number | null; lines?: number; leftOut?: number; totalEur?: string; deliveryDate?: string; waitsFor?: string; blockers?: string[]; notice?: string }> {
+  // The turn's opening step ("Reading your request") ends here: this is a menu, the planner reads it.
+  run.opening?.done("a dish or menu: the menu planner");
+  run.opening = undefined;
   const st = step(run, "plan", "Planning the dishes and their ingredients");
   let planned: Planned;
   let svc: Awaited<ReturnType<typeof planner>>;

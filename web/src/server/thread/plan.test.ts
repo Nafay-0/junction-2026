@@ -46,6 +46,15 @@ async function turn(kitchen: string, body: Record<string, unknown>): Promise<{ c
 
 const WORDS = "Salmon soup for 300 on Friday"; // a recorded planner draft (server/agent/menu/eval/recorded)
 
+describe("packs on the plan card", () => {
+  it("say the pack, never the sales-unit code", async () => {
+    const { packs } = await import("./plan");
+    expect(packs("21 × ST (600 g per ST)")).toBe("21 × 600 g");
+    expect(packs("5 × ST (2.5 kg per ST)")).toBe("5 × 2.5 kg");
+    expect(packs("3 × 10 L")).toBe("3 × 10 L");
+  });
+});
+
 describe("a recipe request in the thread", () => {
   beforeEach(() => {
     resetRuntime();
