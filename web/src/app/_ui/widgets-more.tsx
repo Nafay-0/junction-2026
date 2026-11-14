@@ -260,6 +260,8 @@ export type RuleRow = {
   value: string;
   /** A second line when it helps: "Above that, Aino OKs it on her phone". */
   detail?: string;
+  /** Not changed from here: the row shows no Change button. */
+  fixed?: boolean;
 };
 
 /**
@@ -279,7 +281,7 @@ export function RulesSheet({ kind, title, rows, onChange, footer }: { kind: Reac
               <dd className="font-semibold leading-snug tabular [overflow-wrap:anywhere]">{r.value}</dd>
               {r.detail && <dd className="text-[0.84rem] leading-snug text-ink-soft">{r.detail}</dd>}
             </div>
-            {onChange && (
+            {onChange && !r.fixed && (
               <button type="button" aria-label={`${tx.show.change}: ${r.label}`} onClick={() => onChange(r.id)} className={`${quiet} -mr-2`}>
                 {tx.show.change}
               </button>
