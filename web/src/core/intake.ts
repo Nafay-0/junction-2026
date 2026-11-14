@@ -691,7 +691,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
             : via.channel === "answer_link"
               ? `Confirmed as intended ${how}, answered as ${who} (the person is not identified: whoever holds the link can answer): ${c.message}${matters ? " Nobody verified who answered, so the order cannot be decided by the agent alone: a named person signs it off, with this shown." : ""}`
               : via.channel === "protocol_elicitation"
-                ? `Relayed by the agent's client, not verified: its form (MCP elicitation) came back answered as ${who}, confirming this as intended: ${c.message}${matters ? " Dock cannot tell whether a person filled the form in, so the order cannot be decided by the agent alone: a named person signs it off, with this shown." : ""}`
+                ? `Relayed by the agent's client, not verified: its form (MCP elicitation) came back answered as ${who}, confirming this as intended: ${c.message}${matters ? " AimoPilot cannot tell whether a person filled the form in, so the order cannot be decided by the agent alone: a named person signs it off, with this shown." : ""}`
               : `Relayed by the agent, not verified: it says ${who} meant it this way: ${c.message}${matters ? " Nobody verified that, so the order cannot be decided by the agent alone: a named person signs it off, with this shown." : ""}`;
           log(i, actor, summary, { step: "confirmation", key: c.key, code: c.code, by: who, relayedBy: session.agentId, channel: via.channel, verified, ...(via.words ? { words: via.words } : {}), ...(matters ? { needsSignOff: true } : {}), suspendedPreferenceIds: c.preferenceIds });
           continue;

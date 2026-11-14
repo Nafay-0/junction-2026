@@ -93,7 +93,7 @@ export type PolicyContext = {
   unverifiedConfirmations?: { code: string; message: string; by: string }[];
   /**
    * What the mistake check finds in this order when nobody was asked: the order did not come through the intake's
-   * questions (orders.ts flaggedOf). Each is a likely mistake that matters; the agent may not decide it alone.
+   * questions (orders.ts mistakeCheckOf). Each is a likely mistake that matters; the agent may not decide it alone.
    */
   unconfirmedConcerns?: { code: string; message: string }[];
   quoteAlreadyUsed: boolean;
@@ -314,7 +314,7 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
     standing_order_range: "an amount outside the kitchen's standing order",
   };
   const unasked = ctx.unconfirmedConcerns ?? [];
-  const kinds = (xs: { code: string }[]) => [...new Set(xs.map((u) => CONFIRMATION_KIND[u.code] ?? "a likely mistake Dock flagged"))].join(" and ");
+  const kinds = (xs: { code: string }[]) => [...new Set(xs.map((u) => CONFIRMATION_KIND[u.code] ?? "a likely mistake AimoPilot flagged"))].join(" and ");
   if (unverified.length === 0 && unasked.length === 0) add("human_confirmation", "pass", "The mistake check found nothing that an identified person has not confirmed.");
   else if (unverified.length === 0)
     // Nobody was asked: the order did not come through the intake's questions. Same privacy rule as below: the kind
