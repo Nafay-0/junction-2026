@@ -6,6 +6,7 @@ import { interpretRequest } from "../agent/interpret";
 import { consoleKitchen } from "../authz";
 import type { ConsolePerson } from "../console-context";
 import { resolveKitchen, type ConsoleKitchenInfo } from "../console-kitchens";
+import { onsiteSession } from "../ops/onsite";
 import { getRuntime, type Runtime } from "../runtime";
 
 /**
@@ -38,7 +39,8 @@ export async function kitchenAgent(slug: string, req?: Request): Promise<Kitchen
   const viaConsole = req ? await consoleKitchen(req, rt, slug) : undefined;
   const k = viaConsole ?? (req ? undefined : await resolveKitchen(slug));
   if (!k) throw new DockError(404, "kitchen_not_found", "This kitchen does not exist or its demo time is over.");
-  const session = await rt.dock.authenticate(k.mandateToken, k.agentId);
+  // The same operations check as a call over HTTP: a suspended agent is refused at this door too (ops/onsite.ts).
+  const session = await onsiteSession(rt.dock, k, "voice or photo door");
   return { rt, info: k.info, session, person: viaConsole?.console.person };
 }
 

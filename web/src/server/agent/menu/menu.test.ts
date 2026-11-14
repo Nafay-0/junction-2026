@@ -397,3 +397,20 @@ describe("menu to order, on the fixture catalogue", () => {
     expect(api.calls).toHaveLength(0);
   });
 });
+
+describe("the menu agent passes the operations check like any other door", () => {
+  it("a plan quoted before its organisation was suspended cannot be ordered", async () => {
+    const { service, kaari, dock } = await setup();
+    const { record } = await service.plan(kaari, "salmon soup for 300 on Friday", "chef");
+    await service.settled(record.planId);
+    await service.edit(kaari, record.planId, [{ op: "accept", doubtId: "salmon_fillet:different_form:800003" }], "Sanna");
+    await service.quote(kaari, record.planId, "Sanna");
+    expect((await service.get(kaari, record.planId)).record.state).toBe("quoted");
+
+    const { suspensions, SUSPENSION_RULE } = await import("../../ops/suspensions");
+    suspensions(dock).suspend({ scope: "org", target: kaari.mandate.issuer.orgId, label: kaari.info.name, reason: "Ordering in a loop", by: "Riikka (ops)" });
+    await expect(service.order(kaari, record.planId)).rejects.toMatchObject({ status: 403, rule: SUSPENSION_RULE });
+    expect((await dock.listOrders()).filter((o) => o.orgId === kaari.mandate.issuer.orgId)).toHaveLength(0);
+    expect(dock.ledger.entries().at(-1)).toMatchObject({ type: "refusal", data: { rule: SUSPENSION_RULE } });
+  });
+});

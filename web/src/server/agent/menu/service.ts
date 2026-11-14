@@ -6,6 +6,7 @@ import type { AgentSession, Dock, PublicOrder } from "@/core/orders";
 import type { Decision } from "@/core/policy";
 import type { Quote } from "@/core/quote";
 import { formatEur, newId } from "@/core/util";
+import { onsiteSession } from "../../ops/onsite";
 import type { CallStats, DraftIngredient, DraftResult, MenuDraft } from "./draft";
 import type { FixResult, FixRequest } from "./fixes";
 import { toFixOptions } from "./fixes";
@@ -141,8 +142,9 @@ function statusesFrom(r: { offers: import("@/core/catalog").LiveOffer[]; unavail
 export function createPlanService(deps: PlanDeps) {
   const { dock, catalog, store } = deps;
 
+  /** The menu agent's session, through the same operations check as a call over HTTP (ops/onsite.ts): suspended, it plans, quotes and orders nothing. */
   async function session(k: MenuKitchen): Promise<AgentSession> {
-    return dock.authenticate(k.mandateToken, k.agentId);
+    return onsiteSession(dock, k, "menu planner");
   }
 
   async function spentThisWeek(orgId: string): Promise<number> {

@@ -4,6 +4,7 @@ import type { HumanVia } from "@/core/intake";
 import { openAnswerLink, spendAnswerLink, ANSWER_LINK_MINUTES } from "@/server/answer-links";
 import { currentApprover } from "@/server/approver-session";
 import { handle, readJson } from "@/server/http";
+import { admit } from "@/server/ops/onsite";
 import type { Runtime } from "@/server/runtime";
 
 /**
@@ -24,6 +25,7 @@ export async function GET(req: Request, ctx: RouteContext<"/ui-api/answer/[token
   return handle(async (rt) => {
     const { token } = await ctx.params;
     const link = openAnswerLink(token);
+    admit(rt.dock, link.session, "answer link"); // an agent suspended since the link was made is refused here too
     const step = await rt.dock.intake.get(link.session, link.requestId);
     link.check(step);
     const person = await personOf(req, rt, link.session.mandate.issuer.orgId);
@@ -53,6 +55,7 @@ export async function POST(req: Request, ctx: RouteContext<"/ui-api/answer/[toke
   return handle(async (rt) => {
     const { token } = await ctx.params;
     const link = openAnswerLink(token);
+    admit(rt.dock, link.session, "answer link");
     const parsed = Body.safeParse(await readJson(req));
     if (!parsed.success) throw new DockError(400, "invalid_request", z.prettifyError(parsed.error));
     const body = parsed.data;
