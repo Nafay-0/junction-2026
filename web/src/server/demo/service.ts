@@ -101,7 +101,8 @@ export async function poorRecordProduct(rt: Runtime, a: Account, opts: { live?: 
   const own = [...new Set((profile?.history ?? []).flatMap((h) => h.lines.map((l) => l.productId)))].slice(0, 100);
   const mine = own.length ? await rt.catalog.searchProducts({ ids: own, limit: 100 }) : [];
   // Its required claims stated on the product itself (not only by its nature), so the agent's own check agrees.
-  const ok = (p: Product) => !!deliveryRecordOf(p, warn)?.poor && k.mandate.requiredAttributes.every((x) => p.attributes.includes(x)) && !forbiddenBy(p, { mandate: k.mandate, profile }, new Date());
+  // Never one whose name reads as a claim its maker does not make ("hand made"): the agent would refuse it as asked.
+  const ok = (p: Product) => !/hand ?made|käsin ?tehty|artisan/i.test(`${p.name} ${p.names?.en ?? ""}`) && !!deliveryRecordOf(p, warn)?.poor && k.mandate.requiredAttributes.every((x) => p.attributes.includes(x)) && !forbiddenBy(p, { mandate: k.mandate, profile }, new Date());
   // A name a person would type: an English name in plain case, and none whose words read as a claim ("hand made").
   const plain = (p: Product) => (p.names?.en ? 2 : 0) + (p.name === p.name.toUpperCase() ? 0 : 1) + (/hand ?made|käsin|artisan/i.test(p.names?.en ?? p.name) ? -3 : 0);
   const rank = (ps: Product[]) => ps.sort((x, y) => plain(y) - plain(x) || y.deliveryReliability - x.deliveryReliability || x.id.localeCompare(y.id));

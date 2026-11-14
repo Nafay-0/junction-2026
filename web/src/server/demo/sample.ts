@@ -106,7 +106,7 @@ export async function sampleHistory(catalog: Catalog, mandate: Mandate, opts: { 
   const warn = opts.warn ?? 0.9;
   const poorFamilies = [...new Set([...WEEKLY.flat(), ...CREEPING, ...VARIETY, ...mandate.allowedCategories.slice(0, 40)])];
   for (const family of poorFamilies) {
-    const ps = (await usable(catalog, mandate, family, now, used)).filter((p) => deliveryRecordOf(p, warn)?.poor);
+    const ps = (await usable(catalog, mandate, family, now, used)).filter((p) => deliveryRecordOf(p, warn)?.poor && !/hand ?made|käsin ?tehty|artisan/i.test(`${p.name} ${p.names?.en ?? ""}`));
     // A name a person would type (an English name, plain case, no words that read as a claim such as "hand made").
     const plain = (x: Product) => (x.names?.en ? 2 : 0) + (x.name === x.name.toUpperCase() ? 0 : 1) + (/hand ?made|käsin|artisan/i.test(x.names?.en ?? x.name) ? -3 : 0);
     const p = ps.sort((a, b) => plain(b) - plain(a) || b.deliveryReliability - a.deliveryReliability)[0];
