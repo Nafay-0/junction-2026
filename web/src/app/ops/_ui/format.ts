@@ -221,9 +221,10 @@ export function decidedWords(d: { kind: string; words: string; rule?: string; pe
  * groups in words: "Only dairy and cheese, frozen food and 4 more groups; butter, milk, cream." Never a code.
  */
 export function categoriesInWords(text: string): string {
-  const m = /^Only (.+?)\.?$/.exec(text.trim());
+  // "Only a, b, c." (Agents) or "Product groups: a, b, c" (Time machine).
+  const m = /^(Only |[^:,]{1,40}: )(.+?)\.?$/.exec(text.trim());
   if (!m || !/\bcat[ _]\d{3,}/.test(text)) return text;
-  const items = m[1].split(/,\s*/);
+  const items = m[2].split(/,\s*/);
   const groups = new Map<string, number>();
   const named: string[] = [];
   for (const it of items) {
@@ -235,7 +236,7 @@ export function categoriesInWords(text: string): string {
   }
   const g = [...groups.entries()].sort((a, b) => b[1] - a[1]).map(([x]) => x);
   const shown = g.slice(0, 4).join(", ") + (g.length > 4 ? ` and ${g.length - 4} more groups` : "");
-  return `Only ${[shown, named.join(", ")].filter(Boolean).join("; ")}.`;
+  return `${m[1]}${[shown, named.join(", ")].filter(Boolean).join("; ")}.`;
 }
 
 const ENV_NAME = /\b(?:DOCK|KAFKA|AIVEN|OPENSEARCH|VALKEY|DATABASE|RADAR|RESEND|OPENAI|ANTHROPIC|GEMINI)_[A-Z0-9_]+\b/g;

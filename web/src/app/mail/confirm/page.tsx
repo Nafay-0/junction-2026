@@ -44,7 +44,7 @@ async function Loaded({ searchParams }: { searchParams: PageProps<"/mail/confirm
             <div className="mt-5">{peek.confirmed ? <p role="status">{tx.already(peek.masked)}</p> : <ConfirmButton token={token!} masked={peek.masked} />}</div>
           </Card>
         ) : (
-          <ErrorPlate title={tx.confirmTitle} message={tx.bad} />
+          <ErrorPlate title={tx.badTitle} message={tx.bad} />
         )}
       </DoorShell>
     </LangProvider>

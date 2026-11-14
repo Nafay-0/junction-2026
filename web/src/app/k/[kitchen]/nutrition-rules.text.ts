@@ -58,6 +58,7 @@ const CATEGORY_LABEL = (generated as { categories: Record<string, { label: strin
 const UNIT: Record<string, string> = { energy_kcal: "kcal" };
 const join = (xs: string[], and: string) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")}${and}${xs.at(-1)}`);
 // Numbers keep the Finnish conventions in all three languages (web/docs/LANGUAGE.md): "1,2 g" in English too.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- the same call shape as the other words in this file
 const numL = (v: number, _lang: Lang) => new Intl.NumberFormat("fi-FI", { maximumFractionDigits: 2 }).format(v);
 
 /** "Buy yoghurt, plant-based yoghurt or quark with more than 12 g sugar per 100 g, or any that does not declare its sugar." */
