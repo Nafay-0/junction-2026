@@ -3,7 +3,7 @@ import path from "node:path";
 import { expect, test, type Locator, type Page, type Route, type TestInfo } from "@playwright/test";
 // The real plain-code line rules of the photo door, run here on a recorded model reading (see stubReading).
 import { toLines, type RawScan } from "../../src/server/channels/scan/lines";
-import { addPasskey, engine, joinAsApprover, watchErrors } from "../support/dock";
+import { addPasskey, engine, joinAsApprover, signInStage, watchErrors } from "../support/dock";
 
 /**
  * The photo door ("Photo or document"): a photo of a handwritten list becomes lines the buyer checks, then each line
@@ -123,12 +123,15 @@ async function expectReviewedList(door: Locator) {
  * /channels previews the doors for the two built-in demo kitchens, which every test and every judge share. Each
  * demo kitchen may read 20 documents an hour (DOCK_SCANS_PER_KITCHEN_HOUR), and failed reads count too, so phone
  * projects use Kaari and desktop projects Laakso (3 reads per project: 9 per kitchen in a full run).
+ * Since main 1d1e7f1 the stage kitchens are private: the browser signs in to the kitchen's account first (as the
+ * kitchen's staff would), otherwise the scan endpoint answers 401 not_signed_in.
  */
 const demoKitchen = (info: TestInfo) => (info.project.name.endsWith("desktop") ? "laakso" : "kaari");
 
 test.describe("photo door on /channels (a built-in demo kitchen)", () => {
   test("model off: the real server says it cannot read now, for a photo and for pasted text; nothing is opened", async ({ page }, testInfo) => {
     const errors = watchErrors(page);
+    await signInStage(page, demoKitchen(testInfo));
     await page.goto(`/channels?k=${demoKitchen(testInfo)}`);
     const door = page.locator("section").filter({ has: page.getByRole("heading", { name: "Photo or document" }) });
     await expect(door).toBeVisible();
@@ -156,6 +159,7 @@ test.describe("photo door on /channels (a built-in demo kitchen)", () => {
   test("recorded reading: lines shown for checking, edited, and the first goes through the real intake to option cards", async ({ page }, testInfo) => {
     const kitchen = demoKitchen(testInfo);
     const stub = await stubReading(page, testInfo);
+    await signInStage(page, kitchen);
     await page.goto(`/channels?k=${kitchen}`);
     const door = page.locator("section").filter({ has: page.getByRole("heading", { name: "Photo or document" }) });
     await fileInput(door).setInputFiles(LIST_PNG);

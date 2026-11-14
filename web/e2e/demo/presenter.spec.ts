@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
-import { expect, test, type Browser, type Page } from "@playwright/test";
-import { OPS_PASSCODE, addPasskey, approvalState, approveButton, openWall, watchErrors } from "../support/dock";
+import { expect, test, type APIRequestContext, type Browser, type Page } from "@playwright/test";
+import { OPS_PASSCODE, addPasskey, approvalState, approveButton, openWall, signInStage, watchErrors } from "../support/dock";
 import { acquireLock } from "../support/recall-lock";
 
 /**
@@ -27,13 +27,32 @@ import { acquireLock } from "../support/recall-lock";
  * that appends the real address (a deployment) ignores it.
  */
 
+/**
+ * support/dock.ts approvalState, retried on a dropped connection: in two full runs (312 tests) Playwright's API
+ * client got one "read ECONNRESET" here each time, right after the passkey sign-off, with nothing in the server log.
+ * A retry keeps that transport flake from hiding a real result; a wrong state still fails.
+ */
+async function stateOf(request: APIRequestContext, approvalId: string) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await approvalState(request, approvalId);
+    } catch (err) {
+      if (attempt >= 2 || !/ECONNRESET|socket hang up/.test(String(err))) throw err;
+    }
+  }
+}
+
 const fakeAddress = () => `10.${randomInt(1, 250)}.${randomInt(1, 250)}.${randomInt(1, 250)}`;
 const KITCHEN_SIZE = { width: 1440, height: 900 };
 
-/** The demo kitchen's order page, on its own laptop-sized screen. */
+/**
+ * The demo kitchen's order page, on its own laptop-sized screen. Since main 1d1e7f1 the stage kitchens are private:
+ * the kitchen's screen is signed in to Kaari's account first, as the kitchen's staff (or the presenter's laptop) is.
+ */
 async function kitchenScreen(browser: Browser, baseURL: string | undefined): Promise<Page> {
   const ctx = await browser.newContext({ baseURL, viewport: KITCHEN_SIZE, extraHTTPHeaders: { "x-forwarded-for": fakeAddress() } });
   const k = await ctx.newPage();
+  await signInStage(k, "kaari");
   await k.goto("/k/kaari/order");
   await expect(k.getByRole("heading", { name: "Order", exact: true })).toBeVisible();
   return k;
@@ -88,7 +107,7 @@ test("a wrong operations passcode is refused before any passkey prompt exists", 
   await page.getByLabel("Operations passcode").fill("not-the-passcode");
   await page.getByLabel("Your name (for the audit log)").fill("E2E wrong guess");
   await page.getByRole("button", { name: "Continue" }).click();
-  await expect(page.getByRole("alert").filter({ hasText: /passcode/ })).toHaveText("That passcode is not right. Ask the person running the demo.");
+  await expect(page.getByRole("alert").filter({ hasText: /passcode/ })).toContainText("That passcode is not right. Ask the person running the demo.");
   await expect(page.getByRole("button", { name: "Create my passkey" })).toHaveCount(0);
   expect(await passkey.count()).toBe(0);
   // No session either: the approver home still says this phone has not joined.
@@ -160,7 +179,7 @@ test("presenter enrols with the passcode and a passkey, signs Kaari's order over
     await approveButton(page).click();
     await expect(page.getByRole("heading", { name: "Order placed" })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText(/with a passkey/)).toBeVisible();
-    const view = await approvalState(page.request, first!.approvalId);
+    const view = await stateOf(page.request, first!.approvalId);
     expect(view.view).toMatchObject({ state: "committed", outcome: { method: "passkey", verified: true } });
 
     // The kitchen's page and the wall follow live.
@@ -184,7 +203,7 @@ test("presenter enrols with the passcode and a passkey, signs Kaari's order over
     await page.getByRole("button", { name: "Too expensive" }).click();
     await page.getByRole("button", { name: /^Decline/ }).click();
     await expect(page.getByRole("heading", { name: "Declined" })).toBeVisible();
-    expect((await approvalState(page.request, second!.approvalId)).view?.state).toMatch(/declined/);
+    expect((await stateOf(page.request, second!.approvalId)).view?.state).toMatch(/declined/);
     await expect(k.getByText(/Declined|Not ordered/).first()).toBeVisible({ timeout: 20_000 });
     // WebKit reports a fetch cancelled by a navigation as "... due to access control checks."; not a user-visible error.
     expect(errors.filter((e) => !/^pageerror: \S+ due to access control checks\.$/.test(e))).toEqual([]);

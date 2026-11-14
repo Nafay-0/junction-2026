@@ -102,7 +102,16 @@ export async function enterOps(page: Page, name = "E2E operator"): Promise<void>
 }
 
 export async function approvalState(request: APIRequestContext, approvalId: string) {
-  const res = await request.get(`/api/v1/approvals/${approvalId}`);
+  // A kept-alive socket the server has just closed shows up as "read ECONNRESET" (seen twice in ~600 runs): retry.
+  let res;
+  for (let i = 0; ; i++) {
+    try {
+      res = await request.get(`/api/v1/approvals/${approvalId}`);
+      break;
+    } catch (e) {
+      if (i >= 2 || !/ECONNRESET|socket hang up/.test(String(e))) throw e;
+    }
+  }
   return (await res.json()) as { view?: { state: string; outcome?: { method?: string; verified?: boolean }; details?: { orderId?: string } } };
 }
 
