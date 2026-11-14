@@ -273,6 +273,7 @@ export async function runThread(base: string, sc: Scenario): Promise<RunResult> 
   const fin = await b.get(root);
   if (fin.status === 200) st.applySnapshot(fin.body?.thread);
   collect(st, o);
+  o.lines = st.lineTurns.map((l) => l.text);
   // A follow-up question answered in words: the agent's grounded line on a later turn is the answer.
   for (const l of st.lineTurns) if (l.turnId !== firstAgentTurn && sc.turns.slice(1).some((t) => /\?\s*$/.test(t.say))) o.answers.push({ text: l.text, kind: "line", citations: [] });
 
