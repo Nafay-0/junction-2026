@@ -123,3 +123,30 @@ export function constraintsOf(q: { claims?: string[]; allergens?: string[] }): B
   if (!q.claims?.length && !q.allergens?.length) return undefined;
   return { requiredClaims: q.claims, forbiddenAllergens: q.allergens };
 }
+
+// ---------- the core's dependency slot (core/alternatives.ts) ----------
+
+/**
+ * The knowledge map as the core's `AlternativesSource`: what can stand in for a product, ranked for the use the
+ * buyer's words name ("milk for coffee" -> coffee; otherwise the product's most typical use), in the kitchen's
+ * constraints. Words the map's vocabulary cannot check are left to the core's own filter, which every proposal
+ * passes anyway. Undefined when there is no map or it does not know the product: the core then keeps its own rule.
+ */
+export function alternativesSource(): import("@/core/alternatives").AlternativesSource {
+  return async (productId, q) => {
+    const map = await getKnowledgeMap();
+    if (!map) return undefined;
+    const requiredClaims = q.requiredClaims.filter((c) => !resolveBuyer({ requiredClaims: [c] }).unknown.length);
+    const forbiddenAllergens = q.forbiddenAllergens.filter((a) => !resolveBuyer({ forbiddenAllergens: [a] }).unknown.length);
+    const buyer = resolveBuyer({ requiredClaims, forbiddenAllergens });
+    const use = q.text ? map.forRole(q.text).uses[0] : undefined;
+    const r = map.alternatives(productId, { ...(use ? { use } : {}), constraints: buyer.constraints });
+    if (!r) return undefined;
+    return {
+      substitutes: r.substitutes.map((s) => ({ productId: s.productId, tier: s.tier, reason: s.reason, otherPacks: s.otherPacks })),
+      packAlternatives: r.packAlternatives.map((p) => p.productId),
+      ...(r.none ? { none: r.none } : {}),
+      ...(r.use ? { use: r.use } : {}),
+    };
+  };
+}

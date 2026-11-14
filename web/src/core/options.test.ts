@@ -237,3 +237,55 @@ describe("shortlist for the live call", () => {
     expect(shortlist(semi, [], 10)).toBe(semi);
   });
 });
+
+describe("alternatives from the product map (only good and meaningful)", () => {
+  const named = { productId: "T-BOX", name: "the box", source: "named" as const };
+  const gone = (p: Product) => offer(p, { availablePacks: 0 });
+
+  it("when the named product cannot be had, offers only what the map ranks, best first, with the map's reason", () => {
+    const r = buildOptions(
+      input({
+        candidates: [P.box, P.box2, P.litre, P.bottle],
+        offers: [gone(P.box), offer(P.box2), offer(P.litre), offer(P.bottle)],
+        reference: named,
+        alternatives: {
+          substitutes: [
+            { productId: "T-1L", tier: "best", reason: "Same kind (milk); pack 10 l -> 1 l.", otherPacks: [] },
+            { productId: "U-BOX", tier: "good", reason: "Same kind (milk); another maker.", otherPacks: [] },
+          ],
+          packAlternatives: [],
+          use: "coffee",
+        },
+      }),
+    );
+    expect(r.cards.map((c) => c.lines[0].productId)).toEqual(["T-1L", "U-BOX"]);
+    expect(r.cards[0].alternative).toEqual({ for: "T-BOX", tier: "best", reason: "Same kind (milk); pack 10 l -> 1 l.", use: "coffee" });
+    expect(r.cards[0].pros).toContain("Best alternative to the box for coffee: Same kind (milk); pack 10 l -> 1 l.");
+    expect(r.excluded).toContainEqual({ productId: P.bottle.id, reason: "not an alternative the product map ranks for the box in coffee", code: "no_substitute" });
+  });
+
+  it("with no good alternative, says the map's reason and pads nothing in", () => {
+    const r = buildOptions(
+      input({
+        candidates: [P.box, P.box2, P.litre],
+        offers: [gone(P.box), offer(P.box2), offer(P.litre)],
+        reference: named,
+        alternatives: { substitutes: [], packAlternatives: [], none: "No substitute for coffee that is also lactose-free: of 3 related products, 3 not lactose-free by data." },
+      }),
+    );
+    expect(r.cards).toEqual([]);
+    expect(r.notes).toContain("No good alternative to the box: No substitute for coffee that is also lactose-free: of 3 related products, 3 not lactose-free by data.");
+  });
+
+  it("the same product in another pack size is not a substitute and stays on offer", () => {
+    const r = buildOptions(input({ candidates: [P.box, P.litre], offers: [gone(P.box), offer(P.litre)], reference: named, alternatives: { substitutes: [], packAlternatives: ["T-1L"] } }));
+    expect(r.cards.map((c) => c.lines[0].productId)).toEqual(["T-1L"]);
+    expect(r.cards[0].alternative).toBeUndefined();
+  });
+
+  it("a product the kitchen turned down before goes last and says so", () => {
+    const r = buildOptions(input({ declined: new Map([["T-BOX", "declined by Sanna Koskinen on 3 Nov"]]) }));
+    expect(r.cards.at(-1)!.lines[0].productId).toBe("T-BOX");
+    expect(r.cards.at(-1)!.cons).toContain("The kitchen turned the box down before (declined by Sanna Koskinen on 3 Nov).".replace("the box", P.box.name));
+  });
+});

@@ -12,6 +12,7 @@ import {
   type ApprovalVerifier,
   type SignOff,
 } from "./approval";
+import type { AlternativesSource } from "./alternatives";
 import type { EventPublisher } from "./events";
 import { CatalogError, ProductQuerySchema, scheduledOn, usableOffer, type LiveOffer, type LiveStatus, type MeteredCatalog, type Product } from "./catalog";
 import { ClaimStore, availabilityClaimInput, issueClaim, originClaimInput, priceClaimInput, refOf, type IssuedClaim } from "./claims";
@@ -272,6 +273,8 @@ export type DockDeps = {
    * on every quote preview, order and re-check at sign-off. The server's recall radar implements it.
    */
   holds?: ProductHolds;
+  /** What can stand in for a product, by kitchen use (the server wires the product knowledge map; see alternatives.ts). */
+  alternatives?: AlternativesSource;
 };
 
 /** The holds in force on some products. Called with the products of one quote; must be cheap (no live call). */
@@ -1254,6 +1257,7 @@ export function createDock(deps: DockDeps) {
     liveLookup: (session, requestId, productIds, deliveryDate, why) => liveLookup(session, requestId, productIds, deliveryDate, why, { batch: true }),
     spentThisWeek: (orgId) => spentThisWeek(orgId),
     budgetUse: (orgId) => budgetUse(orgId),
+    alternatives: deps.alternatives,
   });
   return { ...dock, ...guarded, intake };
 }

@@ -17,6 +17,7 @@ import { selectAdapters, type AivenHandle } from "./aiven";
 import { LiveCacheSlot, liveCacheSlots } from "./aiven/live-slot";
 import { recallLayer } from "./radar/gate";
 import { radar } from "./radar/registry";
+import { alternativesSource } from "./knowledge/service";
 import { SandboxService } from "./sandboxes";
 import { loadCatalogIndex, resolveCatalogIndex } from "./valio/index-store";
 import { ValioLiveClient } from "./valio/live-client";
@@ -104,6 +105,8 @@ async function buildRuntime(): Promise<Runtime> {
     intakes: stores.intakes,
     liveAllowance: stores.liveAllowance,
     // Live answers reused for option cards (not quotes) for this long; each reuse costs the partner nothing.
+    // The product knowledge map proposes alternatives by kitchen use (real catalogue only: the seed's products are not in it).
+    ...(catalogSource.kind === "valio" && envValue("DOCK_KNOWLEDGE") !== "off" ? { alternatives: alternativesSource() } : {}),
     liveCacheTtlMs: Number(envValue("DOCK_LIVE_CACHE_SECONDS") ?? 120) * 1000 || 0,
   });
   recall.attach(dock);

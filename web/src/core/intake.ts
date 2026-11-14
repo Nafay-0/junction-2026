@@ -2,6 +2,7 @@ import { z } from "zod";
 import { MAX_LIVE_IDS_PER_CALL, scheduledOn, type MeteredCatalog, type Product } from "./catalog";
 import { facetsOf } from "./catalog/search";
 import { OPTIMISE_QUESTION_ID, answerSchema, clarify, hardConstraints, kindMismatch, optimiseQuestion, optionLabel, violation, type Answer, type ConstraintSource, type MemoryNote, type Question } from "./clarify";
+import { proposedIds, type AlternativesAnswer, type AlternativesSource } from "./alternatives";
 import { alsoAskedIn, alsoAskedNote, type AlsoAsked } from "./also-asked";
 import { baseAmount, checkNeed, type CheckContext, type Concern, type ConcernCode, type PendingOrderSummary } from "./concerns";
 import { DockError, parse } from "./errors";
@@ -161,6 +162,8 @@ export type IntakeDeps = {
   /** The order flow's way to move a request's need-by date (validated and written to the ledger, see orders.ts). */
   changeNeededBy?: (session: AgentSession, requestId: string, input: { neededBy: string | null; by?: string; reason?: string }) => Promise<unknown>;
   spentThisWeek: (orgId: string) => Promise<number>;
+  /** What can stand in for the product the request is about, ranked by kitchen use (the product map; see alternatives.ts). */
+  alternatives?: AlternativesSource;
   /** Committed and held spend, with the orders holding money, for the budget's part of a "nothing fits" answer. */
   budgetUse?: (orgId: string) => Promise<{ spentCents: number; heldCents: number; held: { orderId: string; totalCents: number; expiresAt: string }[] }>;
   /** The order flow's live lookup: allowance, delivery date, signed claims and ledger in one place (see orders.ts). */
@@ -246,6 +249,16 @@ export function createIntakeFlow(deps: IntakeDeps) {
     if (req) await repo.saveRequest({ ...req, neededBy, ...(deliverOn ? { deliverOn } : {}) });
   }
 
+  /** The product map's answer for a product, in the kitchen's constraints; undefined when there is no map or it does not know the product. */
+  async function alternativesOf(session: AgentSession, i: Intake, productId: string, requiredClaims: string[], forbiddenAllergens: string[]): Promise<AlternativesAnswer | undefined> {
+    if (!deps.alternatives) return undefined;
+    try {
+      return await deps.alternatives(productId, { text: [i.need.text, i.need.item.text].filter(Boolean).join(" "), requiredClaims, forbiddenAllergens });
+    } catch {
+      return undefined; // the map is an aid: without it the category-and-claims rule still holds
+    }
+  }
+
   function log(i: Intake, actor: string, summary: string, data: Record<string, unknown> = {}) {
     ledger.append({ type: "intake", actor, requestId: i.requestId, summary, data });
   }
@@ -322,8 +335,22 @@ export function createIntakeFlow(deps: IntakeDeps) {
     }
     if (narrowed.length === 0) return noOptions(i, allowed.length ? "No product matches the answers given." : "No product in this family meets the mandate, the request and the kitchen's stated rules.");
 
-    // 4. Live prices for a short list only (one call), then the option cards.
-    const prefer = [reference?.productId, last && primaryLine(last).productId, usual?.kind === "product" ? usual.productId : undefined];
+    // 4. The product map's alternatives for the product the request is about (named, or last time's): priced next to it,
+    //    so the cards can offer good, better, best if it cannot be delivered. The map proposes; the hard rules decide.
+    const alternatives = reference && reference.source !== "usual" ? await alternativesOf(session, i, reference.productId, constraints.requiredAttributes, constraints.forbiddenAllergens) : undefined;
+    if (alternatives) {
+      const have = new Set(narrowed.map((p) => p.id));
+      const missing = proposedIds(alternatives, 4).filter((id) => !have.has(id));
+      if (missing.length) {
+        for (const p of await catalog.searchProducts({ ids: missing, limit: missing.length })) {
+          const why = session.mandate.allowedCategories.includes(p.category) ? violation(p, constraints) : "outside the product groups the mandate allows";
+          if (why) i.excluded.push({ productId: p.id, reason: `proposed by the product map, but ${why}` });
+          else narrowed.push(p);
+        }
+      }
+    }
+    // 5. Live prices for a short list only (one call), then the option cards.
+    const prefer = [reference?.productId, ...proposedIds(alternatives, 3), last && primaryLine(last).productId, usual?.kind === "product" ? usual.productId : undefined];
     const short = shortlist(narrowed, prefer, MAX_LIVE_IDS_PER_CALL, i.amount, span);
     // "On Monday": what is available earlier is delivered that day (orders.ts scheduledOn).
     const on = (l: LiveLookupResult): LiveLookupResult => (i.need.deliverOn ? { ...l, offers: l.offers.map((o) => scheduledOn(o, i.need.deliverOn)), statuses: l.statuses.map((st) => (st.offer ? { ...st, offer: scheduledOn(st.offer, i.need.deliverOn) } : st)) } : l);
@@ -342,6 +369,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
       last,
       usual: usual?.kind === "product" ? { productId: usual.productId, text: usual.text } : undefined,
       reference,
+      alternatives,
       goal: goalForRank,
       span,
       estimates: i.acknowledgements.filter((a) => a.code === "pack_uncertain" && a.action === "confirmed").map((a) => a.key.split(":")[1]),
@@ -455,6 +483,8 @@ export function createIntakeFlow(deps: IntakeDeps) {
 
   async function quoteOption(session: AgentSession, i: Intake, card: OptionCard, who: string, reason?: string, via: HumanVia = RELAYED): Promise<Intake> {
     const at = now().toISOString();
+    // Whoever signs off a substitute sees why it stands in: the product map's tier and reason.
+    if (card.alternative) (i.signOffNotes ??= []).push(`Substitute for ${card.alternative.for}, ranked ${card.alternative.tier} by the product map${card.alternative.use ? ` for ${card.alternative.use}` : ""}: ${card.alternative.reason}`);
     const byAgent = who.startsWith("agent ");
     const verified = isVerified(via);
     log(i, byAgent ? agentActor(session) : actorOf(session, via, who), `${who} chose ${card.optionId}${byAgent ? "" : ` (${howText(via)})`} (${card.labels.map((l) => LABEL_TEXT[l]).join(", ")}): ${cardLine(card)}${reason ? ` ${reason}` : ""}`, {

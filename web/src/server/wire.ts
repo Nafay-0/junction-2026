@@ -216,6 +216,10 @@ export const OptionCardSchema = named(
     pros: z.array(z.string()),
     cons: z.array(z.string()),
     quoteLines: z.array(z.looseObject({ productId: z.string(), quantity: z.number().int(), substituteFor: z.string().optional() })),
+    alternative: z
+      .looseObject({ for: z.string(), tier: z.enum(["best", "better", "good"]), reason: z.string(), use: z.string().optional() })
+      .optional()
+      .describe("When this card stands in for the product the request is about: how the product knowledge map ranks it for the kitchen use, and why."),
   }),
 );
 

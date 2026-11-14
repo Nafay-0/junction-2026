@@ -1,3 +1,4 @@
+import { proposalFor, tierRank, type AlternativeTier, type AlternativesAnswer } from "./alternatives";
 import { usableOffer, type LiveOffer, type LiveStatus, type Product } from "./catalog";
 import { packsFor as convertPacks } from "./catalog/product";
 import { formatDay, latestDeliveryDay, localDateOf, primaryLine, type HistoryEntry } from "./kitchen";
@@ -83,6 +84,8 @@ export type OptionCard = {
   pros: string[];
   cons: string[];
   quoteLines: QuoteRequestLine[]; // what to send to POST /api/v1/quotes
+  /** When this card stands in for the product the request is about: how the product map ranks it, and why. */
+  alternative?: { for: string; tier: AlternativeTier; reason: string; use?: string };
 };
 
 /** The product the request is about: one the buyer named, the one ordered last time ("same as last time"), or the kitchen's usual. */
@@ -115,6 +118,15 @@ export type OptionsInput = {
    * each value instead of three of the same kind, and the buyer picks by choosing a card rather than answering first.
    */
   span?: (p: Product) => string | undefined;
+  /**
+   * What the product map proposes for the reference product (see alternatives.ts). When given, a product that
+   * stands in for the reference is offered only if the map ranks it (or it is the reference in another pack), ranked
+   * by the map's tier, with the map's reason on the card; with no good alternative the map's reason is said and
+   * nothing is padded in. Without it (no map, or the map does not know the product) the category-and-claims rule holds.
+   */
+  alternatives?: AlternativesAnswer;
+  /** Products the kitchen turned down before, with why: offered last, and the card says so. */
+  declined?: Map<string, string>;
 };
 
 export type ExclusionCode = "no_offer" | "cutoff_passed" | "out_of_stock" | "too_late" | "pack_uncertain" | "wrong_unit" | "over_budget" | "no_substitute" | "blocked" | "compromise";
@@ -277,7 +289,8 @@ export function buildOptions(input: OptionsInput): OptionsResult {
     }
     const sub = viable
       .filter((q) => q !== v && q.late === v.late && enough(q, rest))
-      .filter((q) => likeForLike(v.p, q.p)) // the rest of the same milk: never 400 L skimmed topped up with semi-skimmed
+      // the rest of the same milk: never 400 L skimmed topped up with semi-skimmed (or a best/better stand-in the map ranks)
+      .filter((q) => likeForLike(v.p, q.p) || (input.reference?.productId === v.p.id && tierRank(proposalFor(input.alternatives, q.p.id)?.tier) <= 1))
       .filter((q) => (perUnit(q) / perUnit(v) - 1) * 100 <= mandate.substitution.maxPriceIncreasePct + 1e-9)
       .sort((a, b) => perUnit(a) - perUnit(b) || a.p.id.localeCompare(b.p.id))[0];
     if (!sub) {
@@ -301,6 +314,17 @@ export function buildOptions(input: OptionsInput): OptionsResult {
       if (refPriced) pl.lines = pl.lines.map((l) => ({ ...l, substituteFor: l.substituteFor ?? ref.productId }));
     }
     if (ref.source !== "last" || !input.last) notes.push(`${ref.source === "usual" ? "Your usual" : ref.source === "last" ? "Same as last time" : "The product you named"} (${ref.name}) cannot do it: ${why}.`);
+    // Only good and meaningful alternatives: what the product map ranks for this use, never a filler of the same category.
+    const alts = input.alternatives;
+    if (alts && ref.source !== "usual") {
+      const own = new Set([ref.productId, ...alts.packAlternatives]);
+      const keep = (pl: Plan) => own.has(pl.primary.p.id) || !!proposalFor(alts, pl.primary.p.id);
+      for (const pl of plans.filter((x) => !keep(x))) {
+        excluded.push({ productId: pl.primary.p.id, reason: `not an alternative the product map ranks for ${ref.name}${alts.use ? ` in ${alts.use}` : ""}`, code: "no_substitute" });
+      }
+      plans.splice(0, plans.length, ...plans.filter(keep));
+      if (!alts.substitutes.length && alts.none) notes.push(`No good alternative to ${ref.name}: ${alts.none}`);
+    }
   }
 
   const total = (pl: Plan) => pl.lines.reduce((s, l) => s + l.lineTotalCents, 0);
@@ -349,9 +373,16 @@ export function buildOptions(input: OptionsInput): OptionsResult {
   const m = (pl: Plan) => metrics.get(pl)!;
   const goal = input.goal ?? "price";
   const goalKey = (pl: Plan) => (goal === "co2" ? (m(pl).co2 ?? Infinity) : goal === "reliability" ? -(m(pl).rel ?? -1) : m(pl).total);
+  // The product map's tier for a plan that stands in for the reference (the reference itself first); a product the
+  // kitchen turned down before goes last.
+  const coreGiveUps = (pl: Plan) => givesUp(pl).filter((g) => g.part !== "pack_size").length;
+  const tierOf = (pl: Plan) => (input.declined?.has(pl.primary.p.id) ? 9 : !ref || pl.primary.p.id === ref.productId ? -1 : tierRank(proposalFor(input.alternatives, pl.primary.p.id)?.tier));
   const ranked = [...pool].sort(
     (a, b) =>
+      // A pack size the map already weighed in its tier does not outrank the map's tier.
+      (input.alternatives && !refFull ? coreGiveUps(a) - coreGiveUps(b) || tierOf(a) - tierOf(b) : 0) ||
       givesUp(a).length - givesUp(b).length ||
+      (input.declined?.has(a.primary.p.id) ? 1 : 0) - (input.declined?.has(b.primary.p.id) ? 1 : 0) ||
       goalKey(a) - goalKey(b) ||
       m(a).total - m(b).total ||
       (m(a).co2 ?? Infinity) - (m(b).co2 ?? Infinity) ||
@@ -439,11 +470,21 @@ export function buildOptions(input: OptionsInput): OptionsResult {
       pros: [] as string[],
       cons: [] as string[],
       quoteLines: plan.lines.map((l) => ({ productId: l.productId, quantity: l.packs, ...(l.substituteFor ? { substituteFor: l.substituteFor } : {}) })),
+      ...alternativeOf(plan, input),
       _plan: plan,
     };
   });
   for (const c of cards) explainCard(c, cards, input);
   return { cards: cards.map(({ _plan, ...c }) => (void _plan, c)), excluded, notes };
+}
+
+/** The map's tier and reason when the plan's product (or its split's substitute) stands in for the reference. */
+function alternativeOf(plan: Plan, input: OptionsInput): { alternative?: NonNullable<OptionCard["alternative"]> } {
+  const ref = input.reference;
+  if (!ref || !input.alternatives) return {};
+  const sub = plan.split?.sub.p.id ?? (plan.primary.p.id !== ref.productId ? plan.primary.p.id : undefined);
+  const prop = sub ? proposalFor(input.alternatives, sub) : undefined;
+  return prop ? { alternative: { for: ref.productId, tier: prop.tier, reason: prop.reason, ...(input.alternatives.use ? { use: input.alternatives.use } : {}) } } : {};
 }
 
 /** Same category and unit, and every material attribute (diet, fat, organic) of the original. */
@@ -541,6 +582,14 @@ function explainCard(c: Card, all: Card[], input: OptionsInput): void {
     } else if (others.every((x) => x.deliveryDate > c.deliveryDate)) c.pros.push(`Arrives first: ${formatDay(c.deliveryDate)}.`);
   }
 
+  if (c.alternative && input.reference) {
+    const tier = { best: "Best", better: "Better", good: "Good" }[c.alternative.tier];
+    c.pros.push(`${tier} alternative to ${input.reference.name}${c.alternative.use ? ` for ${c.alternative.use}` : ""}: ${c.alternative.reason}`);
+  }
+  for (const l of c.lines) {
+    const why = input.declined?.get(l.productId);
+    if (why) c.cons.push(`The kitchen turned ${l.name} down before (${why}).`);
+  }
   c.cons.push(...c.signOff);
   if (c.labels.includes("same_as_last_time") && input.last) c.pros.push(`Same product as your last order (${formatDay(localDateOf(input.last.placedAt))}).`);
   if (input.usual && c._plan.primary.p.id === input.usual.productId) c.pros.push(`Your usual product (${input.usual.text.replace(/^Usually [^:]*: /, "")}).`);

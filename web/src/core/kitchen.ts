@@ -479,3 +479,28 @@ export function earliestDeliveryDay(now: Date, weekdays: number[]): string | und
   }
   return undefined;
 }
+
+/**
+ * The claims and allergens a kitchen's own rules require for a product family: the signed mandate, every rule a
+ * person stated (a dimension rule such as "Always lactose-free" whose choice is a claim counts), and the safety rules
+ * its memory holds. For anything that proposes products (the assistant, the product map): what it may not break.
+ */
+export function kitchenRulesFor(profile: KitchenProfile | undefined, mandate: { requiredAttributes: string[]; forbiddenAllergens: string[] }, family?: string, now = new Date()): { requiredClaims: string[]; forbiddenAllergens: string[]; sources: { text: string; source: string }[] } {
+  const claims = new Set<string>(mandate.requiredAttributes);
+  const allergens = new Set<string>(mandate.forbiddenAllergens);
+  const sources: { text: string; source: string }[] = [];
+  for (const c of mandate.requiredAttributes) sources.push({ text: `Must be ${c.replaceAll("_", "-")}`, source: "mandate" });
+  for (const a of mandate.forbiddenAllergens) sources.push({ text: `No ${a.replaceAll("_", " ")}`, source: "mandate" });
+  for (const p of profile ? (family ? statedFor(profile, family) : profile.stated) : []) {
+    const by = `stated by ${p.statedBy}`;
+    if (p.kind === "require_claim" && !claims.has(p.claim)) { claims.add(p.claim); sources.push({ text: p.text, source: by }); }
+    else if (p.kind === "forbid_allergen" && !allergens.has(p.allergen)) { allergens.add(p.allergen); sources.push({ text: p.text, source: by }); }
+    else if (p.kind === "dimension" && /_free$|^organic$|^vegan$|^vegetarian$/.test(p.choice) && !claims.has(p.choice)) { claims.add(p.choice); sources.push({ text: p.text, source: by }); }
+  }
+  for (const m of profile ? activeMemory(profile, { now }) : []) {
+    if (m.strength !== "rule" || m.scope || (family && m.family && m.family !== family)) continue;
+    if (m.fact.kind === "allergen" && !allergens.has(m.fact.allergen)) { allergens.add(m.fact.allergen); sources.push({ text: m.text, source: "kitchen memory" }); }
+    else if (m.fact.kind === "diet" && !claims.has(m.fact.claim)) { claims.add(m.fact.claim); sources.push({ text: m.text, source: "kitchen memory" }); }
+  }
+  return { requiredClaims: [...claims], forbiddenAllergens: [...allergens], sources };
+}

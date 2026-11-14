@@ -1,3 +1,4 @@
+import type { AlternativesSource } from "@/core/alternatives";
 import { MAX_LIVE_IDS_PER_CALL, type LiveStatus, type Product } from "@/core/catalog";
 import { DockError } from "@/core/errors";
 import { formatDay, localNow } from "@/core/kitchen";
@@ -86,6 +87,8 @@ export type PlanDeps = {
   fix?: (req: FixRequest, ctx: MenuPromptContext) => Promise<FixResult>;
   /** Which found products are the ingredient (a fast model judging names). Absent: the code's ranking stands. */
   pick?: (lines: PickLine[]) => Promise<PickResult>;
+  /** What can stand in for a line's product in the dish's use (the product knowledge map; see core/alternatives.ts). */
+  alternatives?: AlternativesSource;
   store: PlanStore;
 };
 
@@ -197,32 +200,76 @@ export function createPlanService(deps: PlanDeps) {
     return (p: Product) => allowed.has(p.category);
   };
 
-  /** Ways out for lines that cannot be bought as planned: proposed by the model, checked here. */
+  /**
+   * Ways out for lines that cannot be bought as planned, checked here. First what the product knowledge map ranks as
+   * a stand-in for the line's product in the dish's use (good, better, best, with its reason; or its reason why there
+   * is no good alternative), then the model's ideas by the dish's logic. Plain code checks every one the same way.
+   */
   async function proposeFixesFor(p: PlanRecord, k: MenuKitchen, s: AgentSession, view: PlanView): Promise<void> {
-    if (!deps.fix) return;
+    if (!deps.fix && !deps.alternatives) return;
     // When nothing can arrive by the date, the fix is the date, not every recipe: no proposals for lateness then.
     const kinds = view.totals.allLate ? ["no_safe_product", "no_product", "rule_conflict"] : ["cannot_arrive", "no_safe_product", "no_product", "rule_conflict"];
     const stuck = view.lines.filter((l) => l.doubts.some((d) => !d.accepted && kinds.includes(d.kind)) && !p.fixes[l.lineId]);
     if (!stuck.length) return;
     const t0 = Date.now();
     const rules = [...k.info.rules.map((r) => r.text), ...p.draft.requiredClaims.map((c) => `must be ${c.replace(/_/g, "-")}`), ...p.draft.forbiddenAllergens.map((a) => `no ${a}`)];
-    const results = await Promise.allSettled(
-      stuck.slice(0, 6).map(async (line) => {
+    const pending: { lineId: string; fix: FixOption; spec: LineSpec; only?: string[] }[] = [];
+    const lines = stuck.slice(0, 6);
+    for (const line of lines) p.fixes[line.lineId] = [];
+
+    // 1. The product map, by the dish's use. The kitchen's rules go in as constraints; plain code re-checks below.
+    if (deps.alternatives) {
+      const requiredClaims = [...new Set([...k.diet.requiredClaims.map((c) => c.claim), ...p.draft.requiredClaims])];
+      const forbiddenAllergens = [...new Set([...k.diet.forbiddenAllergens.map((f) => f.allergen), ...p.draft.forbiddenAllergens])];
+      for (const line of lines) {
         const spec = p.specs.find((x) => x.lineId === line.lineId)!;
-        const dish = p.draft.dishes.find((d) => d.id === spec.uses[0].dishId)!;
-        const problem = line.doubts.filter((d) => !d.accepted).map((d) => d.text).join(" ");
-        const r = await deps.fix!({ lineKey: spec.key, dish: dish.name, method: dish.method, ingredient: spec.ingredient, problem, rules }, promptContext(k));
-        p.model.calls.push({ step: `fix ${spec.key}`, ms: r.ms, tokens: r.tokens, costUsd: r.costUsd });
-        p.raw.fixes[spec.key] = r.fixes;
-        return { line, spec, proposals: toFixOptions(r.fixes, spec.ingredient) };
-      }),
-    );
+        const dish = p.draft.dishes.find((d) => d.id === spec.uses[0].dishId);
+        const set = p.candidates[line.lineId];
+        const anchor = set?.candidates[0]?.product.id ?? set?.rejected[0]?.productId;
+        if (!anchor) continue;
+        const alt = await deps.alternatives(anchor, { text: `${spec.ingredient.name} for ${dish?.name ?? spec.uses[0].dish} ${spec.uses.map((u) => u.role).join(" ")}`, requiredClaims, forbiddenAllergens }).catch(() => undefined);
+        if (!alt) continue;
+        const found = new Map((alt.substitutes.length ? await catalog.get(alt.substitutes.slice(0, 3).map((x) => x.productId)) : []).map((x) => [x.id, x]));
+        for (const x of alt.substitutes.slice(0, 3)) {
+          const prod = found.get(x.productId);
+          if (!prod) continue;
+          const name = prod.names?.en ?? prod.name;
+          const fix: FixOption = {
+            fixId: `${line.lineId}:map${p.fixes[line.lineId].length + 1}`,
+            kind: "substitute",
+            title: `${name} instead (${x.tier} alternative${alt.use ? ` for ${alt.use}` : ""})`,
+            effect: x.reason,
+            changesDish: false,
+            source: "code",
+            ingredient: { ...spec.ingredient, key: `${spec.ingredient.key}_alt`, name, searchTerms: [prod.names?.fi ?? prod.name, name].filter(Boolean) as string[] },
+          };
+          p.fixes[line.lineId].push(fix);
+          pending.push({ lineId: line.lineId, fix, spec, only: [x.productId, ...x.otherPacks] });
+        }
+        if (!alt.substitutes.length && alt.none) {
+          p.fixes[line.lineId].push({ fixId: `${line.lineId}:map0`, kind: "substitute", title: "No good alternative in the catalogue", effect: alt.none, changesDish: false, source: "code", check: { ok: false, reason: alt.none } });
+        }
+      }
+    }
+
+    // 2. The model's ideas by the dish's logic.
+    const results = deps.fix
+      ? await Promise.allSettled(
+          lines.map(async (line) => {
+            const spec = p.specs.find((x) => x.lineId === line.lineId)!;
+            const dish = p.draft.dishes.find((d) => d.id === spec.uses[0].dishId)!;
+            const problem = line.doubts.filter((d) => !d.accepted).map((d) => d.text).join(" ");
+            const r = await deps.fix!({ lineKey: spec.key, dish: dish.name, method: dish.method, ingredient: spec.ingredient, problem, rules }, promptContext(k));
+            p.model.calls.push({ step: `fix ${spec.key}`, ms: r.ms, tokens: r.tokens, costUsd: r.costUsd });
+            p.raw.fixes[spec.key] = r.fixes;
+            return { line, spec, proposals: toFixOptions(r.fixes, spec.ingredient) };
+          }),
+        )
+      : [];
     // Search for every substitute, then price the best of each in one batched call.
-    const pending: { lineId: string; fix: FixOption; spec: LineSpec }[] = [];
     for (const r of results) {
       if (r.status !== "fulfilled") continue;
       const { line, spec, proposals } = r.value;
-      p.fixes[line.lineId] = [];
       for (const [i, pr] of proposals.entries()) {
         const fix: FixOption = { fixId: `${line.lineId}:fix${i + 1}`, kind: pr.kind, title: pr.title, effect: pr.effect, changesDish: pr.changesDish, source: "model", ...(pr.ingredient ? { ingredient: pr.ingredient } : {}), ...(pr.perCover ? { perCover: pr.perCover } : {}) };
         p.fixes[line.lineId].push(fix);
@@ -231,7 +278,12 @@ export function createPlanService(deps: PlanDeps) {
     }
     const allowed = allowedFor(k);
     const subs = await Promise.all(
-      pending.map(async (x) => (x.fix.ingredient ? { x, set: await findCandidates(catalog, x.fix.ingredient, k.diet, allowed, 3) } : { x, set: undefined })),
+      pending.map(async (x) => {
+        if (!x.fix.ingredient) return { x, set: undefined };
+        const set = await findCandidates(catalog, x.fix.ingredient, k.diet, allowed, x.only ? 12 : 3);
+        // A product the map proposed is checked as itself, not as whatever else its name finds.
+        return { x, set: x.only ? { ...set, candidates: set.candidates.filter((c) => x.only!.includes(c.product.id)) } : set };
+      }),
     );
     for (const { x, set } of subs) if (set) p.candidates[`fix:${x.fix.fixId}`] = set;
     await pick(

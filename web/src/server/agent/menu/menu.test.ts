@@ -264,6 +264,40 @@ describe("menu to order, on the fixture catalogue", () => {
     expect(salmon.chosen!.products[0].productId).toBe("800021");
   });
 
+  it("asks the product map first for a stuck line, by the dish's use, and checks its proposal like any other; with none, says the map's reason", async () => {
+    const { MENU_SCENARIOS } = await import("./eval/fixture-catalog");
+    const { dock, valio } = await menuTestDock({ ...MENU_SCENARIOS, "800003": { ...MENU_SCENARIOS["800003"], salesBlock: true } });
+    const asked: { id: string; text?: string; claims: string[]; allergens: string[] }[] = [];
+    let answer: import("@/core/alternatives").AlternativesAnswer = { substitutes: [{ productId: "800002", tier: "better", reason: "Same kind (salmon fillet); cut as cubes.", otherPacks: [] }], packAlternatives: [], use: "soup" };
+    const make = () =>
+      createPlanService({
+        dock,
+        catalog: menuCatalogOf(valio),
+        now: () => MENU_NOW,
+        store: new InMemoryPlanStore(),
+        draft: async () => ({ draft: sanitiseDraft(SALMON_SOUP), raw: SALMON_SOUP, model: "scripted:menu", ms: 1, tokens: { input: 0, output: 0, cachedInput: 0, reasoning: 0 }, costUsd: 0, calls: [] }),
+        fix: async () => ({ fixes: { options: [] }, ms: 1, tokens: { input: 0, output: 0, cachedInput: 0, reasoning: 0 }, costUsd: 0 }),
+        alternatives: async (id, q) => (asked.push({ id, text: q.text, claims: q.requiredClaims, allergens: q.forbiddenAllergens }), answer),
+      });
+    const kaari = (await resolveMenuKitchen("kaari", { catalog: valio }, MENU_NOW))!;
+    let service = make();
+    let { record } = await service.plan(kaari, "salmon soup", "chef");
+    await service.settled(record.planId);
+    let salmon = (await service.get(kaari, record.planId)).view.lines.find((l) => l.lineId === "salmon_fillet")!;
+    expect(asked[0].text).toMatch(/salmon/i);
+    expect(asked[0].allergens).toContain("nuts"); // the kitchen's own rules go in; plain code checks the proposal again
+    expect(salmon.fixes[0]).toMatchObject({ kind: "substitute", source: "code", effect: "Same kind (salmon fillet); cut as cubes." });
+    expect(salmon.fixes[0].title).toMatch(/instead \(better alternative for soup\)$/);
+    expect(salmon.fixes[0].check).toBeDefined();
+
+    answer = { substitutes: [], packAlternatives: [], none: "No substitute for soup: of 2 related products, 2 cannot be delivered." };
+    service = make();
+    ({ record } = await service.plan(kaari, "salmon soup", "chef"));
+    await service.settled(record.planId);
+    salmon = (await service.get(kaari, record.planId)).view.lines.find((l) => l.lineId === "salmon_fillet")!;
+    expect(salmon.fixes[0]).toMatchObject({ title: "No good alternative in the catalogue", check: { ok: false, reason: "No substitute for soup: of 2 related products, 2 cannot be delivered." } });
+  });
+
   it("in a school kitchen whose own mandate forbids gluten and nuts: no may-contain, no gluten, never a pass for unknown data", async () => {
     const { service, laakso } = await setup();
     // The planner's rules are the kitchen's own: its console mandate (dev-fixtures.ts) forbids gluten and nuts.
