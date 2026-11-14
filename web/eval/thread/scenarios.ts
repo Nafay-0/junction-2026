@@ -1055,7 +1055,8 @@ const nothingExtraBought: Check = {
 
 const BACKUP_TURNS: Record<string, { en: string[]; fi: string[] }> = {
   "hotel-lumo": { en: ["16 kg of Vaasan rye rice pies for Thursday", "yes", "you choose"], fi: ["16 kg Vaasan ruisriisipiirakoita torstaiksi", "kyllä", "valitse sinä"] },
-  "koulu-metsola": { en: ["3 kg of Finnish lollo rosso for Wednesday", "yes", "you choose"], fi: ["3 kg suomalaista lollo rosso -salaattia keskiviikoksi", "kyllä", "valitse sinä"] },
+  // The conversation offers three lettuces and asks which: the buyer names it, then answers the record sentence.
+  "koulu-metsola": { en: ["3 kg of Finnish lollo rosso for Wednesday", "the Lollorosso FI", "you choose"], fi: ["3 kg suomalaista lollo rosso -salaattia keskiviikoksi", "Lollorosso FI", "valitse sinä"] },
   "kahvila-sointu": { en: ["2 kg of the Peltolan churned butter for Tuesday", "yes", "you choose"], fi: ["2 kg Peltolan kirnuvoita tiistaiksi", "kyllä", "valitse sinä"] },
 };
 
