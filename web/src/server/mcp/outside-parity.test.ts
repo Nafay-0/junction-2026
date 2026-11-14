@@ -61,7 +61,7 @@ describe("an outside agent gets what the kitchen's own agent gets", () => {
     }
   });
 
-  it("an order of several lines, placed with just requestId; followed with list_orders and await_decision; withdrawn", async () => {
+  it("an order of several lines, placed with just requestId; followed with list_orders and get_order waiting; withdrawn", async () => {
     const opened = await call("open_request", { text: "milk and oat drink for the hotel breakfast" });
     const requestId = opened.request.requestId;
     const q = await call("request_quote", { requestId, lines: [{ productId: "VA-1010", quantity: 60 }, { productId: "AR-2010", quantity: 40, substituteFor: "VA-1010" }] });
@@ -72,23 +72,24 @@ describe("an outside agent gets what the kitchen's own agent gets", () => {
     const listed = await call("list_orders", { status: "pending_approval" });
     expect(listed.waitingForSignOff).toBe(1);
     expect(listed.orders[0]).toMatchObject({ orderId, signOff: { status: "pending" }, canTakeBack: { how: expect.stringMatching(/withdraw_order/) } });
-    const waited = await call("await_decision", { orderId, seconds: 0 });
+    const waited = await call("get_order", { orderId, waitSeconds: 1 });
     expect(waited).toMatchObject({ ok: true, decided: false });
     expect(waited.nextStep).toMatch(/never place it again/);
     const back = await call("withdraw_order", { orderId, reason: "breakfast moved", by: "Hotel buyer" });
     expect(back).toMatchObject({ ok: true, order: { status: "withdrawn" } });
   });
 
-  it("await_decision returns as soon as the person decides", async () => {
+  it("get_order with waitSeconds returns as soon as the person decides", async () => {
     const opened = await call("open_request", { text: "milk" });
     await call("request_quote", { requestId: opened.request.requestId, lines: [{ productId: "VA-1010", quantity: 60 }, { productId: "AR-2010", quantity: 40 }] });
     const placed = await call("place_order", { requestId: opened.request.requestId });
     const { dock, outbox } = await getRuntime();
     const msg = outbox.messages().find((m) => m.orderId === placed.order.orderId)!;
     setTimeout(() => void dock.decideApproval(msg.approvalId, { decision: "approve", proof: { kind: "link_token", token: new URL(msg.link, BASE).searchParams.get("token")! } }), 300);
-    const r = await call("await_decision", { orderId: placed.order.orderId, seconds: 10 });
+    const t0 = Date.now();
+    const r = await call("get_order", { orderId: placed.order.orderId, waitSeconds: 10 });
     expect(r).toMatchObject({ decided: true, order: { status: "committed" } });
-    expect(r.waitedSeconds).toBeLessThan(5);
+    expect(Date.now() - t0).toBeLessThan(5000);
   });
 
   it("an order the agent placed alone is taken back before the cut-off; place_order replaces changes an order", async () => {

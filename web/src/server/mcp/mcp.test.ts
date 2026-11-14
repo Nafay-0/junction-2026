@@ -52,7 +52,6 @@ describe("MCP server", () => {
       "place_order",
       "get_order",
       "list_orders",
-      "await_decision",
       "withdraw_order",
       "explain",
       "find_products",

@@ -53,10 +53,10 @@ Start every new order with submit_need. Each result has a step, waitingFor and n
 When waitingFor is "buyer", AimoPilot needs the person's own answer: ask them AimoPilot's question in plain words with its choices, then stop and wait for their reply. Never answer or confirm for them, even when one choice looks obvious.
 When place_order returns pending_approval, tell the person in one sentence who must sign off (they are asked on their own phone) and stop. Do not retry, place it again, split it or find another way round.
 
-Flow: read_mandate -> submit_need -> [respond_to_concerns] -> [answer_questions] -> choose_option (signed fixed-price quote) -> place_order -> [await_decision] -> get_order / explain.
+Flow: read_mandate -> submit_need -> [respond_to_concerns] -> [answer_questions] -> choose_option (signed fixed-price quote) -> place_order -> get_order (waitSeconds: learn the sign-off's outcome) / explain.
 If your client supports elicitation, AimoPilot asks the buyer directly instead.
 To look before ordering: find_products (products, prices and availability in one call, with filters) and find_alternatives (good, better, best substitutes with their trade-offs). Several products in one order: request_quote with several lines, then place_order with just requestId.
-After ordering: list_orders (what waits for sign-off), await_decision (wait for the person's decision), withdraw_order (take back an order waiting for sign-off, or one you placed alone before the order cut-off), place_order with replaces (change an order).
+After ordering: list_orders (what waits for sign-off), get_order with waitSeconds (wait for the person's decision), withdraw_order (take back an order waiting for sign-off, or one you placed alone before the order cut-off), place_order with replaces (change an order).
 Lower-level tools: open_request, search_products (free master data), check_availability (live, metered, short lists only).
 
 Rules of the road:

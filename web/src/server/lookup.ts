@@ -18,21 +18,21 @@ const CLAIM = z.string().min(1).max(40);
 const BaseUnit = z.enum(["L", "kg", "pcs"]);
 
 export const LookupInput = z.object({
-  requestId: z.string().min(1).optional().describe("A request this lookup belongs to (from submit_need, open_request or an earlier lookup). Leave it out and AimoPilot opens one, returned as requestId: pass it on to later calls."),
-  text: z.string().min(1).max(120).optional().describe("Words for the product, e.g. 'lactose-free milk' or 'oat drink'."),
-  category: z.string().min(1).max(60).optional().describe("Exact category if known, e.g. 'milk', 'cream', 'plant_drink'."),
-  brand: z.string().min(1).max(60).optional().describe("Only this brand or maker (matched without case)."),
-  productIds: z.array(z.string().min(1).max(60)).min(1).max(20).optional().describe("Specific products to look up, by id."),
-  requiredClaims: z.array(CLAIM).max(8).optional().describe("Dietary or other claims every product must carry, e.g. ['lactose_free'], ['organic'], ['gluten_free']."),
-  forbiddenAllergens: z.array(CLAIM).max(14).optional().describe("Allergens to avoid, e.g. ['milk', 'nuts']. A product without allergen data is left out, not assumed safe."),
+  requestId: z.string().min(1).optional().describe("Your request, if you have one."),
+  text: z.string().min(1).max(120).optional().describe("e.g. 'lactose-free milk'."),
+  category: z.string().min(1).max(60).optional().describe("e.g. milk, cream, plant_drink."),
+  brand: z.string().min(1).max(60).optional(),
+  productIds: z.array(z.string().min(1).max(60)).min(1).max(20).optional(),
+  requiredClaims: z.array(CLAIM).max(8).optional().describe("e.g. ['lactose_free']."),
+  forbiddenAllergens: z.array(CLAIM).max(14).optional().describe("Unknown allergen data counts as unsafe."),
   packSize: z
     .object({ min: z.number().positive().optional(), max: z.number().positive().optional(), unit: BaseUnit.optional() })
     .optional()
-    .describe("Pack size window in the product's unit, e.g. { min: 5, max: 10, unit: 'L' } for 5-10 litre packs."),
-  quantity: z.object({ amount: z.number().positive().max(1_000_000), unit: BaseUnit }).optional().describe("How much the buyer needs, so each result says how many packs that is and whether stock covers it."),
-  deliverOn: z.iso.date().optional().describe("The delivery day the buyer wants, YYYY-MM-DD: each live result says whether it can arrive that day and the order-by time for it."),
-  live: z.boolean().optional().describe("Default true: add live price, stock and delivery for the best few matches (metered: at most 10 products). false: master data only, free."),
-  limit: z.number().int().min(1).max(MAX_LIVE_IDS_PER_CALL).optional().describe("How many products to return, default 5, at most 10."),
+    .describe("Pack size window."),
+  quantity: z.object({ amount: z.number().positive().max(1_000_000), unit: BaseUnit }).optional().describe("Packs needed and whether stock covers it."),
+  deliverOn: z.iso.date().optional().describe("Wanted delivery day."),
+  live: z.boolean().optional().describe("false: master data only (free)."),
+  limit: z.number().int().min(1).max(MAX_LIVE_IDS_PER_CALL).optional().describe("Default 5."),
 });
 export type LookupInput = z.input<typeof LookupInput>;
 
@@ -186,13 +186,13 @@ export async function lookupProducts(dock: Dock, session: AgentSession, raw: unk
 export const RANK_BY = ["same_kind", "price", "co2", "reliability", "pack_size"] as const;
 
 export const AlternativesInput = z.object({
-  requestId: z.string().min(1).optional().describe("The request this is for (from submit_need, open_request or find_products). Leave it out and AimoPilot opens one."),
-  productId: z.string().min(1).max(60).describe("The product the buyer asked for that is short, late or not wanted."),
-  quantity: z.object({ amount: z.number().positive().max(1_000_000), unit: BaseUnit }).optional().describe("How much the buyer needs; default one pack of the product."),
-  deliverOn: z.iso.date().optional().describe("The delivery day the buyer wants, YYYY-MM-DD."),
-  requiredClaims: z.array(CLAIM).max(8).optional().describe("Claims every alternative must keep beyond the product's own dietary claims, e.g. ['organic']."),
-  forbiddenAllergens: z.array(CLAIM).max(14).optional().describe("Allergens no alternative may contain (the mandate's own are always applied)."),
-  rankBy: z.enum(RANK_BY).optional().describe("What matters most: same_kind (closest to what was asked, the default), price, co2, reliability or pack_size."),
+  requestId: z.string().min(1).optional().describe("Your request, if you have one."),
+  productId: z.string().min(1).max(60),
+  quantity: z.object({ amount: z.number().positive().max(1_000_000), unit: BaseUnit }).optional(),
+  deliverOn: z.iso.date().optional(),
+  requiredClaims: z.array(CLAIM).max(8).optional(),
+  forbiddenAllergens: z.array(CLAIM).max(14).optional(),
+  rankBy: z.enum(RANK_BY).optional().describe("Default same_kind."),
 });
 export type AlternativesInput = z.input<typeof AlternativesInput>;
 
@@ -313,8 +313,8 @@ export async function findAlternatives(dock: Dock, session: AgentSession, raw: u
 // ---------- the agent's orders ----------
 
 export const ListOrdersInput = z.object({
-  status: z.enum(["pending_approval", "committed", "declined", "rejected", "withdrawn", "expired"]).optional().describe("Only orders in this state; pending_approval lists the ones waiting for a person's sign-off."),
-  limit: z.number().int().min(1).max(50).optional().describe("Newest first, default 20."),
+  status: z.enum(["pending_approval", "committed", "declined", "rejected", "withdrawn", "expired"]).optional(),
+  limit: z.number().int().min(1).max(50).optional(),
 });
 
 /** One order, short: what an agent needs to follow it. */

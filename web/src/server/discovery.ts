@@ -182,7 +182,7 @@ Start every order with \`submit_need\`: the buyer's need as fields (what, how mu
 ## After the order
 
 - \`list_orders\` (GET /orders): what is committed and what waits for a person's sign-off, and what can still be taken back.
-- \`await_decision\` (GET /orders/{id}?wait=25): wait for the person's decision on their phone; it only reads.
+- \`get_order\` with \`waitSeconds\` (GET /orders/{id}?wait=25): wait for the person's decision on their phone; it only reads.
 - \`withdraw_order\` (POST /orders/{id}/withdraw): take back an order waiting for sign-off, or one you placed alone, until the wholesaler's order cut-off. What a person signed is theirs to take back.
 - \`place_order\` with \`replaces\`: change an order (another amount, day or product); the old one is taken back once the new one is placed.
 - \`explain\` (GET /ledger): the audit trail in plain words, hash-chained; the buyer's side and the wholesaler read the same record.

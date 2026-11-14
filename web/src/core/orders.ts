@@ -98,7 +98,7 @@ export const ChangeNeededByInput = z.object({
 export const PlaceOrderInput = SignedOrderInput.extend({
   quoteToken: SignedOrderInput.shape.quoteToken.optional().describe("The quoteToken from POST /api/v1/quotes, unchanged. Leave it out after the intake's choice: Dock uses the quote it signed for this request."),
   lines: SignedOrderInput.shape.lines.optional().describe("Only with quoteToken: the quote's lines (productId, quantity, unitPriceCents) copied from quote.lines."),
-  replaces: z.string().min(1).max(60).optional().describe("Changing an order: the orderId this one replaces. Once this order is placed (committed or waiting for sign-off), Dock takes that one back if it still can (waiting for sign-off, or placed by this agent alone before the order cut-off), so one order stands; `replaced` says what happened to it."),
+  replaces: z.string().min(1).max(60).optional().describe("The orderId this order changes: Dock takes it back once this one is placed, if it still can."),
 });
 /** What place_order adds when it replaced an earlier order: that order's new status, or why it still stands. */
 export type ReplacedOrder = { orderId: string; status: OrderStatus; refused?: { code: string; rule?: string; message: string } };

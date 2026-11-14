@@ -9,6 +9,28 @@ An agent that knows only the base URL can find both: `/.well-known/api-catalog` 
 
 The kitchen's own agent in the store is one more client of the same tool table and the same gate: what it can look up, an outside agent can look up, as structured data. What we assumed, what is mocked and what a production deployment would need are in [assumptions.md](assumptions.md).
 
+### What the kitchen's own agent can do, and an outside agent
+
+The store's agent and an outside agent call the same core functions through the same gate. Nothing below is a side door: every row passes the same mandate check, admission (suspension, licence) and gate.
+
+| The kitchen's own agent (store thread) | An outside agent: MCP tool | REST |
+|---|---|---|
+| Reads the buyer's words, checks them against memory, asks at most two questions, offers good / better / best | `submit_need`, `respond_to_concerns` *, `answer_questions` *, `choose_option`, `get_intake_step` | `POST /intake`, `/intake/{id}/concerns`, `/answers`, `/choice` |
+| Product grid and product facts (smart search; labels exact, variant, stand-in) | `find_products` (with live price, stock, delivery, cut-off) | `POST /lookup` |
+| Alternatives picker, re-ranked by price, CO2, reliability, kind, pack | `find_alternatives` | `POST /alternatives` |
+| Order sheet: several lines, one order | `request_quote` with several lines, then `place_order { requestId }` | `POST /quotes`, `POST /orders` |
+| "Make it 200": the new order replaces the old one | `place_order` with `replaces` | `POST /orders` with `replaces` |
+| Take back before the cut-off (the kitchen's signed-in person) | `withdraw_order`: an order waiting for sign-off, or one this agent placed alone | `POST /orders/{id}/withdraw` |
+| Waits for the sign-off, then says the outcome | `get_order` with `waitSeconds`, `list_orders` | `GET /orders/{id}?wait=25`, `GET /orders` |
+| Memory, history, the mandate's rules | `read_kitchen_memory`, `read_mandate`, `list_orders` | `GET /kitchen`, `GET /orders` |
+| "Why?": the audit trail | `explain` | `GET /ledger` |
+| Offers from the wholesaler's selling agent | `list_offers`, `accept_offer`, `decline_offer`, `mute_offers` ([offers.md](offers.md)) | `/api/v1/offers` |
+| Menu planning, a last-minute event, stock-out watch, standing-order renewal | being added on `claude/scenarios-menu` and `claude/scenarios-watch` | the same |
+| Changing the kitchen's rules | not offered: only the kitchen's signed-in person signs new terms; an agent reads them (`read_mandate`) | none |
+| Approving an order | never a tool, on either side: the named person's passkey on their own phone | approver operations only (`?audience=agent` leaves them out) |
+
+\* carries the buyer's own answer: asked through the client's form when it can show one; otherwise relayed and recorded as not verified.
+
 **Which kitchens an outside agent can buy for.** Every kitchen has a mandate and a connector address: the two built-in demo kitchens (`kaari`, `laakso`), a visitor's hotel kitchen made by scanning the wall's QR code (its approver is the visitor's phone), and an account kitchen anyone can open at `/k/signup` (its terms are signed by the account itself). Account and visitor kitchens' keys are held by the server in this demo; in production the kitchen holds its own key (see [assumptions.md](assumptions.md)).
 
 **What can change under an agent.**
@@ -280,7 +302,7 @@ const r = await client.callTool({ name: "read_mandate", arguments: {} });
 console.log(r.structuredContent);
 ```
 
-`pnpm build && pnpm demo:mcp` (or `pnpm demo:mcp --url http://localhost:3000`) does Valio Aimo's example this way, with no LLM and no AimoPilot client code, as a hotel chain's agent. The hotel's purchasing manager joins with a passkey, and the agent gets the hotel's connector address. It looks up products, prices and availability (`find_products`) and submits the need. It gets good, better and best options, chooses one and places the order. The order is over the agent's €500, so it waits. The manager signs with the passkey, `await_decision` returns the outcome, and the script verifies the signed receipt. Then four exceptions follow: a stock-out with ranked substitutes, a nut drink refused as a substitute, delivery today past the cut-off, and an order placed alone, then taken back.
+`pnpm build && pnpm demo:mcp` (or `pnpm demo:mcp --url http://localhost:3000`) does Valio Aimo's example this way, with no LLM and no AimoPilot client code, as a hotel chain's agent. The hotel's purchasing manager joins with a passkey, and the agent gets the hotel's connector address. It looks up products, prices and availability (`find_products`) and submits the need. It gets good, better and best options, chooses one and places the order. The order is over the agent's €500, so it waits. The manager signs with the passkey, `get_order` with `waitSeconds` returns the outcome, and the script verifies the signed receipt. Then four exceptions follow: a stock-out with ranked substitutes, a nut drink refused as a substitute, delivery today past the cut-off, and an order placed alone, then taken back.
 
 ### Tools
 
@@ -296,9 +318,8 @@ Start every order with `submit_need`. The lower-level tools below the line stay 
 | `get_intake_step` | Where an order stands, and the call to make next. |
 | `read_kitchen_memory` | Order history, usual amounts, rules people stated, patterns learned. |
 | `place_order` | Order against a quote: `committed`, `pending_approval` or refused. Just `requestId` after `choose_option` or `request_quote`. `replaces` changes an earlier order. |
-| `get_order` | Status, decision, approval and the signed confirmation. |
+| `get_order` | Status, decision, approval and the signed confirmation. With `waitSeconds` (up to 55) it answers once the person decides a waiting order. |
 | `list_orders` | This organisation's orders: which wait for a person's sign-off, who must sign, what can still be taken back. |
-| `await_decision` | Wait (up to 55 s a call) for the person's decision on an order waiting for sign-off. Only reads. |
 | `withdraw_order` | Take back an order waiting for sign-off, or one this agent placed alone, until the wholesaler's order cut-off. What a person signed is theirs to take back. |
 | `explain` | Plain-language audit trail for a request or order, with chain verification. |
 | `find_products` | Products, prices and availability in one call. Filters: words, category, brand, claims, allergens to avoid, pack size, delivery day, quantity. Words go through the store's own product search, and each product says `match`: exact, variant, stand_in or not_the_kind. Live for at most 10. |
