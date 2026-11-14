@@ -98,6 +98,11 @@ function desiredEnvironment(publicUrl) {
   // The independent second reader (NVIDIA Nemotron through Featherless; empty is off) and whether the crash-test
   // licence limits what an agent may place alone (off until the suite has been re-run on the deployed tool table).
   for (const k of ["DOCK_SECOND_READER_MODEL", "DOCK_LICENCE_ENFORCE"]) if (env(k)) vars.push([k, env(k)]);
+  // Smart search's recall on the hosted site: Aiven OpenSearch first, the app's own memory as the fallback. Timed on
+  // the hosted app on 14 Nov with the Platform page's probe: within about 20 ms of memory either way at the median
+  // and faster at the 90th percentile. A deploy-only setting (web/.env.local never sets the backend, so a laptop
+  // never queries the hosted index); DOCK_DEPLOY_SEARCH_RECALL_BACKEND=memory puts memory first again.
+  vars.push(["DOCK_SEARCH_RECALL_BACKEND", env("DOCK_DEPLOY_SEARCH_RECALL_BACKEND") || "opensearch"]);
   // Accounts (web/src/server/accounts): the shared test accounts' panel on /k, how often they reset, the ceiling.
   for (const k of ["DOCK_TEST_ACCOUNTS_SHOWN", "DOCK_TEST_ACCOUNTS_RESET_MINUTES", "DOCK_ACCOUNTS_MAX"]) if (env(k)) vars.push([k, env(k)]);
   // The operations portal's Platform section (web/src/server/aiven/showcase): which project and organisation to read.
