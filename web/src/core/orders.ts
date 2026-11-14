@@ -25,7 +25,7 @@ import { SIGN_ALG, type KeyPair } from "./keys";
 import type { Ledger, LedgerHead } from "./ledger";
 import { LiveLookupAllowance, shareKeyOf } from "./live-allowance";
 import { MAX_LIVE_IDS_PER_CALL } from "./catalog";
-import { MandateError, supersededBy, supersededMessage, verifyMandateToken, type Mandate, type MandateRegister, type TrustRegistry } from "./mandate";
+import { MandateError, supersededBy, supersededMessage, verifyMandateToken, type Mandate, type MandateRegister, type TrustRegistry, lacksRulesMessage, missingAddedRules } from "./mandate";
 import { SPLIT_WINDOW_HOURS, decidingRule, evaluatePolicy, type Decision, type OrderDraftLine, type ProductHold, type RecentOrder, type RuleResult } from "./policy";
 export type { ProductHold } from "./policy";
 import { QuoteError, QuoteRequestLineSchema, buildQuote, signQuote, verifyQuote, type Quote, type QuoteLine } from "./quote";
@@ -692,15 +692,24 @@ export function createDock(deps: DockDeps) {
   }
 
   /** The gate accepts only a kitchen's current mandate: one the kitchen has since reissued is refused at the door. */
+  /** Why this mandate is not the kitchen's current one, in words: replaced by a reissue, or without a rule one added. */
+  function notCurrent(mandate: Mandate, issuedAt: string | undefined): { message: string; at: string } | undefined {
+    const r = supersededBy(mandate, issuedAt, deps.mandates);
+    if (r) return { message: supersededMessage(mandate.issuer.name, r), at: r.at };
+    const missing = missingAddedRules(mandate, deps.mandates);
+    const reissue = missing.length ? deps.mandates?.reissueOf(mandate.issuer.orgId) : undefined;
+    return reissue ? { message: lacksRulesMessage(mandate.issuer.name, reissue, missing), at: reissue.at } : undefined;
+  }
+
   function refuseSuperseded(session: AgentSession, actor: string): void {
-    const r = supersededBy(session.mandate, session.mandateIssuedAt, deps.mandates);
-    if (r) throw refuse(new DockError(401, "mandate_superseded", supersededMessage(session.mandate.issuer.name, r), "mandate_window", { reissuedAt: r.at }), actor);
+    const why = notCurrent(session.mandate, session.mandateIssuedAt);
+    if (why) throw refuse(new DockError(401, "mandate_superseded", why.message, "mandate_window", { reissuedAt: why.at }), actor);
   }
 
   /** The same check for a decision (policy mandate_window): the reason in words when the mandate was replaced. */
   function supersession(mandate: Mandate, issuedAt: string | undefined): { mandateSuperseded?: string } {
-    const r = supersededBy(mandate, issuedAt, deps.mandates);
-    return r ? { mandateSuperseded: supersededMessage(mandate.issuer.name, r) } : {};
+    const why = notCurrent(mandate, issuedAt);
+    return why ? { mandateSuperseded: why.message } : {};
   }
 
   function decisionSummary(orderId: string, d: Decision, prefix = "Gate decision"): string {
