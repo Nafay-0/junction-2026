@@ -39,7 +39,9 @@ export function callCostUsd(c: Pick<Call, "usage" | "startedAt" | "endedAt" | "e
 export type Desk = {
   requestId?: string;
   /** A need read from speech, waiting for the caller to confirm the read-back. */
-  pending?: { need: NeedInput; words: string; reason: string; model: string; say: string; parts?: { need: NeedInput; words: string }[] };
+  pending?: { need: NeedInput; words: string; reason: string; model: string; say: string; parts?: { need: NeedInput; words: string }[]; kind?: { asked: string; why: string; day?: string } };
+  /** The kind the read-back already told the caller it cannot get: the engine's answer after the yes does not say it again. */
+  kindSaid?: string;
   /** Several items confirmed as one order: the engine's order sheet, placed by the caller's "yes, order it". */
   sheet?: { sheetId: string; version: number };
   orderId?: string;

@@ -5,6 +5,7 @@ import { describeNeed, formatAmount, NeedSchema, type NeedInput } from "@/core/n
 import type { PublicOrder } from "@/core/orders";
 import { answer, asProblem, choose, getOrder, getStep, kitchenAgent, openNeed, place, readNeed, respond, type HeardWords, type KitchenAgent, type Via } from "../flow";
 import { orderForModel, spokenDate, stepForModel, type ForModel } from "../say";
+import { kindCheck, kindSay } from "./kind-check";
 import { amountInWords, LANGUAGE_NAME, languageOf, numbersHeard, readBackReason, yesOrNo } from "../speech";
 import { calls, type Call } from "./calls";
 
@@ -223,12 +224,14 @@ async function submit(a: KitchenAgent, call: Call, request: string, heard: Heard
   const reason = readBackReason(need, { usual, heardNumbers: via === "speech" && heard ? numbersHeard(heard.text) : undefined, spokenNumbers: via === "speech" && heard && request ? numbersHeard(request) : undefined });
   // Speech is always read back (a number heard in a loud room is never acted on unconfirmed); typing only when unusual.
   if ((reason || via === "speech") && need.quantity) {
-    const say = readBackSay(need.item.text, need.quantity, reason, need.deliverBy);
-    call.desk.pending = { need: read.need, words, reason: reason ?? "", model: read.model, say };
+    // A kind that cannot be had is said before the yes is asked for, not after (kind-check.ts).
+    const kind = await kindCheck(a, read.need).catch(() => undefined);
+    const say = `${kind ? `${kindSay(kind, spokenDate)} ` : ""}${readBackSay(need.item.text, need.quantity, reason, need.deliverBy)}`;
+    call.desk.pending = { need: read.need, words, reason: reason ?? "", model: read.model, say, ...(kind ? { kind } : {}) };
     call.desk.requestId = undefined;
     call.desk.orderId = undefined;
     return {
-      forModel: { ok: true, state: "read_back", say, ask: "Is that right? (Wait for the caller. If they correct it, call submit_request again with their words.)", amount: formatAmount(need.quantity.amount, need.quantity.unit), item: need.item.text, ...(need.deliverBy ? { deliverBy: need.deliverBy } : {}) },
+      forModel: { ok: true, state: "read_back", say, ask: kind ? "Shall I look at the other products? (Wait for the caller's yes. If they want something else, call submit_request again with their words.)" : "Is that right? (Wait for the caller. If they correct it, call submit_request again with their words.)", amount: formatAmount(need.quantity.amount, need.quantity.unit), item: need.item.text, ...(need.deliverBy ? { deliverBy: need.deliverBy } : {}), ...(kind ? { cannotOffer: kind.asked, why: kind.why } : {}) },
       screen: { pending: { need: read.need, summary: describeNeed(need), reason: reason ?? "", say }, heard: words },
     };
   }

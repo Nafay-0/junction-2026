@@ -115,6 +115,7 @@ export async function confirmThroughEngine(kitchen: string, call: Call, p: Pendi
   const k = req ? await consoleKitchen(req, rt, kitchen) : undefined;
   return doorTurn(k ?? kitchen, { door: "voice", via, ...(heard ? { text: heard.text } : { label: "Yes, that's right" }) }, async (run) => {
     record(run, "read_back_confirmed", `The caller confirmed the read-back${p.reason ? ` (${p.reason})` : ""}: "${p.say.slice(0, 200)}"`, { words: p.words, heard: heard?.text });
+    call.desk.kindSaid = p.kind?.asked;
     const parts = p.parts?.length ? p.parts : [{ need: p.need, words: p.words }];
     run.multi = parts.length > 1;
     const outcomes: ItemOutcome[] = (await Promise.all(parts.map((x, i) => openNeed(run, x.need as NeedInput, parts.length > 1 ? x.words : p.words, { ref: `${run.turnId}:${i}` })))).flat();
@@ -200,7 +201,10 @@ async function spokenReply(run: Parameters<typeof afterStep>[0], call: Call, out
   // A kind it cannot offer is said first, before any option (the options card's insteadOf, as the thread shows it).
   const opts = run.store.cards(run.thread).map((x) => x.card).find((c) => c.type === "options" && c.requestId === step.requestId);
   const instead = opts?.type === "options" ? opts.insteadOf : undefined;
-  if (instead) forModel = { ...forModel, say: `${instead.asked} cannot be offered: ${WHY[instead.why] ?? WHY.other}${instead.why === "day" && instead.day ? ` (${spokenDate(instead.day)})` : ""}. Instead: ${forModel.say}`, insteadOf: instead.asked };
+  // Already said in the read-back, before the caller's yes: only "instead" now.
+  if (instead && call.desk.kindSaid) forModel = { ...forModel, say: `Instead: ${forModel.say}`, insteadOf: instead.asked };
+  else if (instead) forModel = { ...forModel, say: `${instead.asked} cannot be offered: ${WHY[instead.why] ?? WHY.other}${instead.why === "day" && instead.day ? ` (${spokenDate(instead.day)})` : ""}. Instead: ${forModel.say}`, insteadOf: instead.asked };
+  call.desk.kindSaid = undefined;
   // The day asked and the day an option arrives, when they differ (an earlier day only when that day cannot be had).
   if (opts?.type === "options" && opts.askedDay && step.state === "options_ready") {
     const first = step.options[0];
