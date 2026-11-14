@@ -75,8 +75,8 @@ describe("the interview ends in a valid signed mandate with the answers", () => 
     expect(k.mandate.mandateId).toBe(r.mandateId);
     expect(k.mandate.requiredAttributes).toEqual(["lactose_free"]);
     expect(k.mandate.forbiddenAllergens).toEqual(["nuts", "peanuts", "fish"]);
-    expect(k.mandate.perOrderLimitCents).toBe(answers.limitEur! * 100);
-    expect(k.mandate.weeklyBudgetCents).toBe(answers.budgetEur! * 100);
+    expect(k.mandate.perOrderLimitCents).toBe((answers.limitEur as number) * 100);
+    expect(k.mandate.weeklyBudgetCents).toBe((answers.budgetEur as number) * 100);
     expect(k.mandate.approvers[0]?.name).toBe("Maija Laine");
     // A valid signature: the gate accepts the kitchen's own mandate token with the key it registered.
     const session = await rt.dock.authenticate(k.mandateToken, k.agentId);

@@ -13,6 +13,7 @@ import { familyL } from "./family.text";
 import { usePortal, weekdaysText } from "./portal";
 import { MemoryBook } from "./memory-book";
 import { MailPanel } from "./mail-panel";
+import { StartOver } from "./start-over";
 import { ACCOUNT_TEXT } from "./account.text";
 import { DevicePanel, MandateForm } from "../_account/forms";
 import { mandateWords } from "./rules";
@@ -81,6 +82,7 @@ export function AgentRules() {
       <WhoSees />
       <MemoryBook fallback={<Memory memory={memory} loading={!memory && !overview.error} error={overview.error} />} />
       <Connect />
+      {own && account?.demo && <StartOver sample={account.start === "sample"} />}
     </div>
   );
 }

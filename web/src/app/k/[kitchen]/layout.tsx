@@ -57,7 +57,7 @@ async function Loaded({ params, children }: LayoutProps<"/k/[kitchen]">) {
       </LangProvider>
     );
   }
-  const account = me && { username: me.username, restaurant: me.restaurant, kitchen: me.kitchen, shared: me.shared, kind: me.kind };
+  const account = me && { username: me.username, restaurant: me.restaurant, kitchen: me.kitchen, shared: me.shared, kind: me.kind, demo: me.demo, ...(me.start ? { start: me.start } : {}) };
   return (
     <LangProvider initial={lang}>
       <Portal key={k.info.slug} kitchen={k.info} kitchens={kitchens} account={account}>
