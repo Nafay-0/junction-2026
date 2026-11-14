@@ -130,12 +130,18 @@ sentence the buyer has to type or another page. The design lead builds the widge
 - Sending: a busy store (`503 store_unavailable`, `429`) or a dropped connection is tried again by itself with the same
   `clientTurnId`; only then the buyer is told, in words, and their words stay in the box.
 
-### The home: the agent is where the kitchen starts (agent-thread-3, live)
+### The home: the agent is where the kitchen starts (agent-thread-4, live)
 
-The store's "Order" entry, "Add" anywhere and "ask about this product" all lead into the agent; the old Order page
-redirects to the store with the agent open (`?agent=open`, `?agent=product:<id>`). The home's cards are made by plain
+A signed-in kitchen lands on its agent (`/k/<kitchen>`, and `/order` is the same page): the thread full width, the
+day's opening card at its head (the kit's `AgentHome`: at most three things that need the kitchen today, each acted on
+in place, then the starting points: browse products, earlier orders, recurring orders, deliveries, what the agent
+remembers, your rules, plan a menu), the composer under the thumb. There is no other front page: navigation is Agent,
+Catalogue, Orders, Your rules (a phone: Agent, Catalogue, Orders, More); no dock beside the agent's own page. On the
+other pages "Add" and "ask about this product" open the same thread in the dock. The home's cards are made by plain
 code from records (`server/thread/home.ts`); the model never writes one, it can only ask for one to be shown
-(`find_products`, `product_facts`, `show_home` in agent.ts). Everything that buys lands on the order sheet.
+(`find_products`, `product_facts`, `show_home` in agent.ts). Everything that buys lands on the order sheet. They are
+drawn with the kit in `_ui/widgets-more.tsx` (`ProductResults`, `ProductFacts`, `HistoryList`, `StandingOrders`,
+`DeliveryCard`, `MemoryList`); a turn that only shows something keeps no step list once shown.
 
 | Card | What it is | Actions |
 |---|---|---|
@@ -143,16 +149,13 @@ code from records (`server/thread/home.ts`); the model never writes one, it can 
 | `products` | **Product grid** from master data only (no live call until a product goes on the sheet): only what the mandate allows (category, required attributes, no forbidden allergen) | `products_search`, `product_show`, `sheet_add` |
 | `product` | **One product's facts**: pack, allergens (or "not declared"), attributes, certificates, origin, CO2, delivery reliability | `sheet_add` |
 | `records` (history) | Earlier orders; every row can be ordered again | `order_again`: the order's lines on a new sheet for the next same weekday, re-priced and previewed there |
-| `standing` | **Recurring orders**, read from history (`standing()` in kitchen-portal.ts): weekdays, usual amount and packs, next due, drift. There is no separate standing-order store, so they cannot be paused; "change" is a new sheet for the next due day | `standing_change { family, packs? }` |
+| `standing` | **Recurring orders**, read from history (`standing()` in kitchen-portal.ts): weekdays, usual amount and packs, next due, drift, `paused`. A pause is kept in the kitchen's profile (`pausedStanding`): the agent neither reminds of it (today's cut-offs and drift) nor orders it as "the usual" until it runs again; the store places no order by itself either way. "Change" is a new sheet for the next due day | `standing_change { family, packs? }`, `standing_pause { family, paused }` (the kitchen's signed-in person only; recorded) |
 | `deliveries` | Orders committed or waiting, delivered today or later | `order_show` |
 | `memory_list` | What the agent remembers (active or waiting for a yes); `canChange` only for the kitchen's signed-in person | `memory_edit`, `memory_forget` (refused without a signed-in person, `401 kitchen_person_required`; recorded as theirs), `remember_this` |
 | `price`, `order` | The proof (`price.proof`: the signed quote and the signed claims it rests on) and the order's details and signed confirmation open inside the card; "Check the signatures" verifies each in the browser against `/.well-known/jwks.json` (`_client/verify-signed.ts`) | none |
 
 `home_show { what: "today" | "history" | "standing" | "deliveries" | "memory" }` shows one of them. Each is in the
 ledger (`today`, `products`, `order_again`, `memory_write`) and in the operations trace like any turn.
-
-*(not yet)*: the widgets above this subsection are the contract for agent-thread-3; this line goes when the engine for each
-widget lands, and the table says per widget what is live.
 
 ## Set-up interview (agent-thread-4, live)
 
