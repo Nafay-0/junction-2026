@@ -198,10 +198,15 @@ From `web/`: `pnpm aiven:showcase launch valio|within|refused`, `pnpm aiven:show
 
 ## Hosting on Aiven Runtime
 
-dock-app serves AimoPilot at **`https://jolly-wondrous-bunny.eur-1.aiven.app`** (Let's Encrypt certificate,
-HTTP/2 at the edge, TLS terminated by Aiven, plain HTTP to the container on 8080). **Keep this app and
-its host name**: passkeys are bound to the host (RP ID), and recreating dock-app gives a new random name
-and orphans every registered passkey. A custom domain (subdomain + CNAME) is supported if one is wanted.
+AimoPilot's public address is **`https://aimopilot.zeroanomaly.tech`**, a custom domain in front of dock-app,
+whose own host is `https://jolly-wondrous-bunny.eur-1.aiven.app` (Let's Encrypt certificate, HTTP/2 at the edge,
+TLS terminated by Aiven, plain HTTP to the container on 8080). The subdomain is a CNAME to the app's host;
+`infra/aiven-deploy.mjs` keeps it on the app's HTTP port (Aiven then issues its certificate) and, once it answers
+over HTTPS, makes it the public address: `DOCK_PUBLIC_URL`, links, QR codes, mail and the passkeys' RP ID
+(`DOCK_DEPLOY_CUSTOM_DOMAIN`, default `aimopilot.zeroanomaly.tech`; `none` keeps the Aiven host). The Aiven host still
+answers. **Keep this app and the custom domain**: passkeys are bound to the RP ID, so passkeys made on the Aiven host
+before the switch do not work on the custom domain, and recreating dock-app would need the CNAME pointed at its new
+random host.
 For push to phones use SSE, not WebSockets (Runtime documents HTTP only).
 
 ### Deploying (one command)

@@ -125,7 +125,7 @@ Menus move. Check the vendor page if a label differs.
 Copy the kitchen's connector address from the portal ("connect your own agent"), or:
 
 ```bash
-curl -s https://jolly-wondrous-bunny.eur-1.aiven.app/ui-api/connect/kaari | jq -r .connector.url
+curl -s https://aimopilot.zeroanomaly.tech/ui-api/connect/kaari | jq -r .connector.url
 ```
 
 **Claude (claude.ai or Claude Desktop, any plan)**

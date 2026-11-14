@@ -1,12 +1,16 @@
 # AimoPilot weekend runbook
 
-Live site: **https://jolly-wondrous-bunny.eur-1.aiven.app** (Aiven Runtime app `dock-app`). Everything below
-runs from the repository root on a laptop with the shared `web/.env.local`. Background: `infra/aiven.md`.
+Live site: **https://aimopilot.zeroanomaly.tech**, a custom domain in front of the Aiven Runtime app `dock-app`,
+whose own host `https://jolly-wondrous-bunny.eur-1.aiven.app` still answers. Links, QR codes, mail and passkeys
+belong to the custom domain (`infra/aiven-deploy.mjs`, `DOCK_DEPLOY_CUSTOM_DOMAIN`); a passkey made on one host does
+not work on the other. Everything below runs from the project folder, `valio-aimo/` (`cd valio-aimo` from the
+repository root), on a laptop with the shared `web/.env.local`. Background: `infra/aiven.md`.
 
 ## Is it up?
 
 ```bash
-curl -s https://jolly-wondrous-bunny.eur-1.aiven.app/api/health | python3 -m json.tool
+curl -s https://aimopilot.zeroanomaly.tech/api/health | python3 -m json.tool
+curl -s https://jolly-wondrous-bunny.eur-1.aiven.app/api/health | python3 -m json.tool   # the app's own host: if only this answers, the domain is the problem
 node infra/aiven-deploy.mjs --smoke-only        # about 30 s, prints PASS or FAIL
 ```
 
@@ -137,7 +141,7 @@ size, accessibility, visual comparison, failure scenarios), or check the latest 
 
 ```bash
 node infra/aiven-deploy.mjs                     # ends with its own smoke test
-cd web && E2E_LIVE_URL=https://jolly-wondrous-bunny.eur-1.aiven.app pnpm exec playwright test --project=live
+cd web && E2E_LIVE_URL=https://aimopilot.zeroanomaly.tech pnpm exec playwright test --project=live
 ```
 
 Expect 6 passed (1 skipped): health ok on the `valio` catalogue with the ledger not diverged, the landing page at `/`,
