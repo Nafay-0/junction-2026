@@ -24,6 +24,7 @@ const NAV: { href: string; label: string; what: string; key: string }[] = [
   { href: "/ops/time-machine", label: "Time machine", what: "The rules as they stood", key: "m" },
   { href: "/ops/agents", label: "Agents", what: "Licences and records", key: "g" },
   { href: "/ops/customers", label: "Customers", what: "What kitchens share", key: "u" },
+  { href: "/ops/accounts", label: "Accounts", what: "Kitchens with an account", key: "n" },
   { href: "/ops/platform", label: "Platform", what: "What runs on Aiven, live", key: "p" },
 ];
 

@@ -8,7 +8,7 @@ import { CrashMatrix, hazardOf, licenceLine } from "../../../_wall/crash-matrix"
 import { Details, Empty, KV, Licence, LiveMark, LoadError, Loading, PageHead, Section, ViaTag, useOps } from "../../_ui/kit";
 import { FilterBar, useUrlState } from "../../_ui/filters";
 
-const KIND: Record<AgentRow["kind"], string> = { demo: "Demo kitchen", visitor: "Visitor kitchen", outside: "Outside agent" };
+const KIND: Record<AgentRow["kind"], string> = { demo: "Demo kitchen", visitor: "Visitor kitchen", account: "Account kitchen", outside: "Outside agent" };
 
 export function AgentsScreen({ board }: { board?: Board }) {
   const live = useOps<{ at: string; licenceSource: string; agents: AgentRow[] }>("/ops-api/agents", { pollMs: 4000 });
@@ -46,6 +46,7 @@ export function AgentsScreen({ board }: { board?: Board }) {
               { id: "outside", label: "Outside agents", count: n("outside") },
               { id: "demo", label: "Demo kitchens", count: n("demo") },
               { id: "visitor", label: "Visitor kitchens", count: n("visitor") },
+              { id: "account", label: "Account kitchens", count: n("account") },
               { id: "suspended", label: "Suspended", count: n("suspended") },
             ]}
             value={show}

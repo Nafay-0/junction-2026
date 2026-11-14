@@ -17,6 +17,7 @@ import { Target } from "../../_ui/target";
 import { Wordmark } from "../../_ui/wordmark";
 import { RecallNotice } from "../../_radar/recall-notice";
 import { AssistantPanel, type Turn } from "./assistant";
+import { AccountBar, type PortalAccount } from "./account-bar";
 import type { KitchenChoice, KitchenInfo, LiveReply, LiveResult, Overview, PortalRequest, Product } from "./types";
 
 /**
@@ -35,6 +36,8 @@ export type Pending =
 
 type Ctx = {
   kitchen: KitchenInfo;
+  /** The signed-in account in this browser, if any (it owns this kitchen when `account.kitchen === kitchen.slug`). */
+  account?: PortalAccount;
   kitchens: KitchenChoice[];
   base: string;
   call: <T>(method: "GET" | "POST", path: string, body?: unknown) => Promise<ApiResult<T>>;
@@ -117,7 +120,7 @@ function readBasket(slug: string): BasketLine[] {
   }
 }
 
-export function Portal({ kitchen, kitchens, children }: { kitchen: KitchenInfo; kitchens: KitchenChoice[]; children: ReactNode }) {
+export function Portal({ kitchen, kitchens, account, children }: { kitchen: KitchenInfo; kitchens: KitchenChoice[]; account?: PortalAccount; children: ReactNode }) {
   const slug = kitchen.slug;
   const base = `/k/${slug}`;
   const router = useRouter();
@@ -260,8 +263,8 @@ export function Portal({ kitchen, kitchens, children }: { kitchen: KitchenInfo; 
   );
   const shownKitchens = useMemo(() => kitchens.map((k) => ({ ...k, name: placeNameL(k.name, lang) })), [kitchens, lang]);
   const value = useMemo<Ctx>(
-    () => ({ kitchen: shown, kitchens: shownKitchens, base, call, ui, overview, lang, setLang, basket, live, agent, fieldRef: inputRef }),
-    [shown, shownKitchens, base, call, ui, overview, lang, setLang, basket, live, agent],
+    () => ({ kitchen: shown, account, kitchens: shownKitchens, base, call, ui, overview, lang, setLang, basket, live, agent, fieldRef: inputRef }),
+    [shown, account, shownKitchens, base, call, ui, overview, lang, setLang, basket, live, agent],
   );
 
   // ----- the keyboard: the agent from anywhere (Ctrl or Cmd + K), the catalogue search with "/" -----
@@ -289,6 +292,7 @@ export function Portal({ kitchen, kitchens, children }: { kitchen: KitchenInfo; 
           {tx.skip}
         </a>
         <p className="on-dark bg-petrol-deep px-4 py-1 text-center text-[0.8rem] leading-snug text-paper/85 sm:px-6">{DEMO_NOTES[lang]}</p>
+        <AccountBar kitchen={kitchen} account={account} />
         <Header />
         <main id="main" className="mx-auto min-w-0 max-w-[1440px] px-4 pb-24 sm:px-6 xl:px-8">
           <RecallNotice kitchen={slug} />
