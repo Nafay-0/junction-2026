@@ -270,7 +270,26 @@ describe("intake flow", () => {
     await expect(dock.intake.get({ ...session, agentId: "someone_else" }, r.requestId)).rejects.toMatchObject({ status: 404 });
     await expect(dock.intake.open(session, { need: { item: { text: "milk" } } })).rejects.toMatchObject({ status: 400, code: "invalid_request" });
     await expect(dock.intake.answer(session, r.requestId, { by: "Aino", answers: [{ questionId: "optimise", optionId: "cheapest!" }] })).rejects.toMatchObject({ code: "option_unknown" });
-    await expect(dock.intake.open(session, { need: need({ item: { text: "unobtainium" } }) })).rejects.toMatchObject({ code: "family_unknown" });
+  });
+
+  // QA F-BEEF-DEV-ERROR: "Buy 50 kg of beef" was a bare 422 family_unknown, with nothing in the ledger, on the wall
+  // or in the operations trace. Now the request is opened and refused in words a chef understands.
+  it("refuses a product the catalogue does not have as a request, with the reason in the ledger", async () => {
+    const r = await dock.intake.open(session, { need: need({ item: { text: "beef" }, quantity: { amount: 50, unit: "kg" } }) });
+    expect(r.state).toBe("no_options");
+    expect(r.notes[0]).toMatch(/nothing called "beef" in the wholesaler's catalogue/);
+    const entries = ledger.entries({ requestId: r.requestId });
+    expect(entries.some((e) => e.type === "request")).toBe(true);
+    expect(entries.find((e) => e.data.step === "no_options")?.data).toMatchObject({ rule: "family_unknown" });
+    expect(dock.stats().liveCalls).toBe(0);
+  });
+
+  it("refuses a product group outside the mandate before any price lookup, naming the rule category_allowed", async () => {
+    const r = await dock.intake.open(session, { need: need({ item: { text: "whipping cream", category: "cream" }, quantity: { amount: 20, unit: "L" } }) });
+    expect(r.state).toBe("no_options");
+    expect(r.notes[0]).toMatch(/may not buy whipping cream: its signed mandate covers milk and plant drink only/);
+    expect(ledger.entries({ requestId: r.requestId }).find((e) => e.data.step === "no_options")?.data).toMatchObject({ rule: "category_allowed" });
+    expect(dock.stats().liveCalls).toBe(0);
   });
 
   it("shows the kitchen's memory", async () => {

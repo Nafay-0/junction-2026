@@ -448,7 +448,7 @@ export const API: Operation[] = [
     responses: {
       201: { description: "The first step.", schema: IntakeStepEnvelope },
       400: err("Invalid need."),
-      422: err("Dock cannot tell the product family or the amount (codes family_unknown, amount_unknown, nothing_to_repeat)."),
+      422: err("Dock cannot tell the amount (codes amount_unknown, nothing_to_repeat). A product the catalogue does not have, or a product group outside the mandate, is not an error: the step is no_options with the reason in notes."),
       ...AUTH_ERRORS,
     },
   },
