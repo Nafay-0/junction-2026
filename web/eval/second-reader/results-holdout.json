@@ -1,5 +1,5 @@
 {
- "at": "2026-11-14T00:47:50.255Z",
+ "at": "2026-11-14T00:55:20.547Z",
  "set": {
   "cases": 30,
   "byLanguage": {
@@ -64,23 +64,16 @@
    "firstIncomplete": [],
    "falseAlarm": {
     "firstRight": 30,
-    "alarms": 1,
-    "pct": 3.3,
+    "alarms": 0,
+    "pct": 0,
     "byField": {
      "amount": 0,
      "claims": 0,
      "allergens": 0,
      "kind": 0,
-     "date": 1
+     "date": 0
     },
-    "cases": [
-     {
-      "id": "h-en-05",
-      "field": "date",
-      "first": "2026-11-16",
-      "second": "2026-11-18"
-     }
-    ]
+    "cases": []
    },
    "natural": {
     "firstWrong": 0,
@@ -90,13 +83,13 @@
    "injected": {
     "n": 273,
     "withSecond": 273,
-    "caught": 210,
-    "pctOfAll": 76.9,
-    "pctWhenAvailable": 76.9,
+    "caught": 202,
+    "pctOfAll": 74,
+    "pctWhenAvailable": 74,
     "misreadings": {
      "n": 222,
-     "caught": 210,
-     "pct": 94.6
+     "caught": 202,
+     "pct": 91
     },
     "byKind": {
      "amount x10": {
@@ -125,11 +118,11 @@
      },
      "a week later": {
       "n": 27,
-      "caught": 25
+      "caught": 21
      },
      "the day before": {
       "n": 30,
-      "caught": 28
+      "caught": 24
      },
      "date dropped": {
       "n": 30,
@@ -186,23 +179,16 @@
    "firstIncomplete": [],
    "falseAlarm": {
     "firstRight": 30,
-    "alarms": 1,
-    "pct": 3.3,
+    "alarms": 0,
+    "pct": 0,
     "byField": {
      "amount": 0,
      "claims": 0,
      "allergens": 0,
      "kind": 0,
-     "date": 1
+     "date": 0
     },
-    "cases": [
-     {
-      "id": "h-en-05",
-      "field": "date",
-      "first": "2026-11-16",
-      "second": "2026-11-18"
-     }
-    ]
+    "cases": []
    },
    "natural": {
     "firstWrong": 0,
@@ -212,13 +198,13 @@
    "injected": {
     "n": 273,
     "withSecond": 273,
-    "caught": 210,
-    "pctOfAll": 76.9,
-    "pctWhenAvailable": 76.9,
+    "caught": 202,
+    "pctOfAll": 74,
+    "pctWhenAvailable": 74,
     "misreadings": {
      "n": 222,
-     "caught": 210,
-     "pct": 94.6
+     "caught": 202,
+     "pct": 91
     },
     "byKind": {
      "amount x10": {
@@ -247,11 +233,11 @@
      },
      "a week later": {
       "n": 27,
-      "caught": 25
+      "caught": 21
      },
      "the day before": {
       "n": 30,
-      "caught": 28
+      "caught": 24
      },
      "date dropped": {
       "n": 30,
@@ -525,82 +511,82 @@
    "variants": [
     {
      "name": "production",
-     "falseAlarmPct": 3.3,
-     "falseAlarms": 1,
-     "injectedCaughtPct": 76.9,
-     "misreadingsCaughtPct": 94.6,
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 74,
+     "misreadingsCaughtPct": 91,
      "naturalCaught": "0/0"
     },
     {
      "name": "amount factor 1.25",
-     "falseAlarmPct": 3.3,
-     "falseAlarms": 1,
-     "injectedCaughtPct": 76.9,
-     "misreadingsCaughtPct": 94.6,
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 74,
+     "misreadingsCaughtPct": 91,
      "naturalCaught": "0/0"
     },
     {
      "name": "amount factor 1.5",
-     "falseAlarmPct": 3.3,
-     "falseAlarms": 1,
-     "injectedCaughtPct": 76.9,
-     "misreadingsCaughtPct": 94.6,
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 74,
+     "misreadingsCaughtPct": 91,
      "naturalCaught": "0/0"
     },
     {
      "name": "amount factor 5",
-     "falseAlarmPct": 3.3,
-     "falseAlarms": 1,
-     "injectedCaughtPct": 76.9,
-     "misreadingsCaughtPct": 94.6,
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 74,
+     "misreadingsCaughtPct": 91,
      "naturalCaught": "0/0"
     },
     {
      "name": "ask when only the first has a date",
-     "falseAlarmPct": 3.3,
-     "falseAlarms": 1,
-     "injectedCaughtPct": 76.9,
-     "misreadingsCaughtPct": 94.6,
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 74,
+     "misreadingsCaughtPct": 91,
      "naturalCaught": "0/0"
     },
     {
      "name": "no question when only the second has a date",
-     "falseAlarmPct": 3.3,
-     "falseAlarms": 1,
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 65.2,
+     "misreadingsCaughtPct": 80.2,
+     "naturalCaught": "0/0"
+    },
+    {
+     "name": "ask when only the first has a claim",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 74,
+     "misreadingsCaughtPct": 91,
+     "naturalCaught": "0/0"
+    },
+    {
+     "name": "no question when only the second has a claim",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
      "injectedCaughtPct": 68.1,
      "misreadingsCaughtPct": 83.8,
      "naturalCaught": "0/0"
     },
     {
-     "name": "ask when only the first has a claim",
-     "falseAlarmPct": 3.3,
-     "falseAlarms": 1,
-     "injectedCaughtPct": 76.9,
-     "misreadingsCaughtPct": 94.6,
-     "naturalCaught": "0/0"
-    },
-    {
-     "name": "no question when only the second has a claim",
-     "falseAlarmPct": 3.3,
-     "falseAlarms": 1,
-     "injectedCaughtPct": 71.1,
-     "misreadingsCaughtPct": 87.4,
-     "naturalCaught": "0/0"
-    },
-    {
      "name": "kind not compared",
-     "falseAlarmPct": 3.3,
-     "falseAlarms": 1,
-     "injectedCaughtPct": 65.9,
-     "misreadingsCaughtPct": 81.1,
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 63,
+     "misreadingsCaughtPct": 77.5,
      "naturalCaught": "0/0"
     },
     {
      "name": "fat content compared",
-     "falseAlarmPct": 3.3,
-     "falseAlarms": 1,
-     "injectedCaughtPct": 76.9,
-     "misreadingsCaughtPct": 94.6,
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 74,
+     "misreadingsCaughtPct": 91,
      "naturalCaught": "0/0"
     },
     {
@@ -613,10 +599,10 @@
     },
     {
      "name": "ask when one excludes a claim and the other is silent",
-     "falseAlarmPct": 3.3,
-     "falseAlarms": 1,
-     "injectedCaughtPct": 76.9,
-     "misreadingsCaughtPct": 94.6,
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 74,
+     "misreadingsCaughtPct": 91,
      "naturalCaught": "0/0"
     }
    ]
@@ -723,5 +709,5 @@
    ]
   }
  ],
- "spendUsd": 0.5077
+ "spendUsd": 0
 }

@@ -412,8 +412,9 @@ function compareDate(a: Reading, b: Reading, text: string, today: string | undef
       return undefined;
     }
     // A second reading on a day the words rule out (another weekday than the one named, not "tomorrow") misread
-    // them; that is no question for the buyer.
-    if (db && !dayFitsWords(text, db, today) && (!da || dayFitsWords(text, da, today))) {
+    // them; that is no question for the buyer. (The first reading may rightly differ from the words: "before
+    // Wednesday" is a Tuesday.)
+    if (db && !dayFitsWords(text, db, today)) {
       minor.push(`the second reading's day ${db} does not fit the words`);
       return undefined;
     }
