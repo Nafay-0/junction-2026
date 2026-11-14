@@ -24,7 +24,8 @@ import type { Order, QuoteBundle } from "./types";
  * carbon figure; then the wholesaler fixes the price and the order goes through the same gate as an agent's
  * (the same mandate, limits and sign-off), shown with the same cards.
  */
-type Run = { phase: "idle" | "quoting" | "quoted" | "placing" | "done"; requestId?: string; quote?: QuoteBundle; order?: Order; refusal?: ApiError; error?: string };
+/** `concerns`: what the gate's mistake check would ask about this basket, put to the signed-in person before they send it. */
+type Run = { phase: "idle" | "quoting" | "quoted" | "placing" | "done"; requestId?: string; quote?: QuoteBundle; concerns?: { key: string; message: string }[]; order?: Order; refusal?: ApiError; error?: string };
 
 export function BasketPage() {
   const { basket, live, ui, call, kitchen, overview, base, lang, agent } = usePortal();
@@ -83,18 +84,20 @@ export function BasketPage() {
 
   const quote = async () => {
     setRun({ phase: "quoting" });
-    const r = await ui<QuoteBundle & { requestId: string }>("POST", "basket", { lines: basket.lines.map((l) => ({ productId: l.productId, packs: l.packs })), ...(deliverBy ? { deliverBy } : {}) });
-    if (r.ok) setRun({ phase: "quoted", requestId: r.data.requestId, quote: { quote: r.data.quote, quoteToken: r.data.quoteToken, policyPreview: r.data.policyPreview } as QuoteBundle });
+    const r = await ui<QuoteBundle & { requestId: string; concerns?: { key: string; message: string }[] }>("POST", "basket", { lines: basket.lines.map((l) => ({ productId: l.productId, packs: l.packs })), ...(deliverBy ? { deliverBy } : {}) });
+    if (r.ok) setRun({ phase: "quoted", requestId: r.data.requestId, concerns: r.data.concerns, quote: { quote: r.data.quote, quoteToken: r.data.quoteToken, policyPreview: r.data.policyPreview } as QuoteBundle });
     else setRun({ phase: "idle", error: r.error.message });
   };
   const place = async () => {
     if (!run.quote || !run.requestId) return;
     setRun((x) => ({ ...x, phase: "placing", error: undefined }));
-    const r = await call<{ order: Order }>("POST", "/api/v1/orders", {
+    const order = {
       requestId: run.requestId,
       quoteToken: run.quote.quoteToken,
       lines: run.quote.quote.lines.map(({ productId, quantity, unitPriceCents }) => ({ productId, quantity, unitPriceCents })),
-    });
+    };
+    // The person saw the mistake check's question above the button: sending is their own confirmation, recorded as such.
+    const r = run.concerns?.length ? await ui<{ order: Order }>("POST", "basket", { place: { ...order, confirm: run.concerns.map((c) => c.key) } }) : await call<{ order: Order }>("POST", "/api/v1/orders", order);
     overview.refresh();
     if (r.ok) setRun((x) => ({ ...x, phase: "done", order: r.data.order }));
     else if (r.data?.order) setRun((x) => ({ ...x, phase: "done", order: r.data!.order, refusal: r.error }));
@@ -241,6 +244,17 @@ export function BasketPage() {
             )}
           </Card>
           <div id="basket-run" className="scroll-mt-36 space-y-4">
+            {(run.phase === "quoted" || run.phase === "placing") && !!run.concerns?.length && (
+              <div role="note" className="border-l-4 border-notice bg-paper p-4">
+                <p className="font-semibold">{tx.checkTitle}</p>
+                <ul className="mt-1.5 space-y-1 text-[0.95rem] leading-snug">
+                  {run.concerns.map((c) => (
+                    <li key={c.key}>{c.message}</li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-[0.86rem] text-ink-soft">{tx.checkNote}</p>
+              </div>
+            )}
             {(run.phase === "quoted" || run.phase === "placing" || run.phase === "done") && run.quote && <Quote q={run.quote} names={names} decided={run.phase === "done"} busy={run.phase === "placing"} onPlace={() => void place()} onNew={reset} />}
             {run.phase === "done" && (
               <>

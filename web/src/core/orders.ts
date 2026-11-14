@@ -18,8 +18,8 @@ import type { EventPublisher } from "./events";
 import { CatalogError, ProductQuerySchema, scheduledOn, usableOffer, type LiveOffer, type LiveStatus, type MeteredCatalog, type Product } from "./catalog";
 import { ClaimStore, availabilityClaimInput, issueClaim, originClaimInput, priceClaimInput, refOf, type IssuedClaim } from "./claims";
 import { DockError, isDockError, parse } from "./errors";
-import { concernsOfOrder, unaskedNote } from "./order-check";
-import { InMemoryIntakeRepository, createIntakeFlow, recordCommittedOrder, type IntakeDeps, type IntakeRepository } from "./intake";
+import { concernsOfOrder, unaskedNote, type OrderConcern } from "./order-check";
+import { InMemoryIntakeRepository, createIntakeFlow, isVerified, recordCommittedOrder, type HumanVia, type IntakeDeps, type IntakeRepository } from "./intake";
 import { InMemoryKitchenRepository, localNow, type KitchenRepository } from "./kitchen";
 import { SIGN_ALG, type KeyPair } from "./keys";
 import type { Ledger, LedgerHead } from "./ledger";
@@ -149,6 +149,12 @@ export type PurchaseRequest = {
    * (in the request's fields or its text) and the family. The gate treats any other product as a substitute of it.
    */
   asked?: { productIds: string[]; category?: string };
+  /**
+   * What the gate's mistake check flagged in a quote of this request and an identified person confirmed as intended
+   * (confirmConcerns below): by quote and concern, with who and through which channel. An order on that quote is
+   * then not sent to sign-off for it. Only a channel bound to a person can write this (intake.ts isVerified).
+   */
+  confirmed?: { quoteId: string; key: string; code: string; by: string; at: string; channel: string }[];
   /** Which door it came through (server-set; see Door). */
   door?: Door;
   createdAt: string;
@@ -534,11 +540,13 @@ export function createDock(deps: DockDeps) {
    * The intake's own quote is not checked twice: its questions were put to the buyer, and how they were answered
    * is the first list.
    */
-  async function mistakeCheckOf(org: { orgId: string; name: string }, request: PurchaseRequest | undefined, quote: Quote, intakeQuote = false) {
+  async function mistakeCheckOf(org: { orgId: string; name: string }, request: PurchaseRequest | undefined, quote: Quote, intakeQuote = false, assumeConfirmed: string[] = []) {
     const i = request ? await intakes.get(request.requestId) : undefined;
     const u = i?.unverified ?? [];
     const fromIntake = intakeQuote || i?.quote?.quote.quoteId === quote.quoteId;
-    const flagged = fromIntake ? [] : await concernsOfOrder({ catalog, kitchens }, { orgId: org.orgId, orgName: org.name, lines: quote.lines, neededBy: request?.neededBy, now: now() });
+    const found = fromIntake ? [] : await concernsOfOrder({ catalog, kitchens }, { orgId: org.orgId, orgName: org.name, lines: quote.lines, neededBy: request?.neededBy, now: now() });
+    // What an identified person already confirmed for this very quote (the store's basket asks its signed-in person).
+    const flagged = found.filter((c) => !assumeConfirmed.includes(c.key) && !request?.confirmed?.some((x) => x.quoteId === quote.quoteId && x.key === c.key));
     return {
       context: {
         ...(u.length ? { unverifiedConfirmations: u.map(({ code, message, by }) => ({ code, message, by })) } : {}),
@@ -1168,6 +1176,61 @@ export function createDock(deps: DockDeps) {
         });
         return toPublicOrder(order);
       });
+    },
+
+    /**
+     * What the gate's own mistake check finds in a signed quote that nobody was asked about, with the words (the
+     * kitchen's own data): for a door where the kitchen's signed-in person is present and can be asked, the basket.
+     */
+    async orderConcerns(session: AgentSession, input: { requestId: string; quoteToken: string }): Promise<OrderConcern[]> {
+      const request = await ownRequest(session, input.requestId);
+      const quote = await verifyQuote(input.quoteToken, wholesalerKey).catch((err) => {
+        throw err instanceof QuoteError ? new DockError(422, err.code, err.message, "quote_signature") : err;
+      });
+      if (quote.requestId !== request.requestId) throw new DockError(409, "quote_other_request", "That quote was issued for another request.", "quote_binding");
+      const found = await concernsOfOrder({ catalog, kitchens }, { orgId: session.mandate.issuer.orgId, orgName: session.mandate.issuer.name, lines: quote.lines, neededBy: request.neededBy, now: now() });
+      return found.filter((c) => !request.confirmed?.some((x) => x.quoteId === quote.quoteId && x.key === c.key));
+    },
+
+    /**
+     * What the gate will decide on a quote once the person at the screen has confirmed these concerns: a preview
+     * only (nothing is recorded), so the screen that asks them does not announce a sign-off their answer removes.
+     */
+    async previewConfirmed(session: AgentSession, input: { requestId: string; quoteToken: string; keys: string[] }): Promise<Decision> {
+      const request = await ownRequest(session, input.requestId);
+      const quote = await verifyQuote(input.quoteToken, wholesalerKey);
+      return evaluatePolicy(
+        session.mandate,
+        { agentId: session.agentId, quote, lines: quote.lines, neededBy: request.neededBy, deliverOn: request.deliverOn, requestId: request.requestId, asked: await askedOf(request) },
+        { now: now(), ...supersession(session.mandate, session.mandateIssuedAt), ...(await budgetContext(quote.buyerOrgId)), ...(await mistakeCheckOf(session.mandate.issuer, request, quote, false, input.keys)).context, ...(await holdsOf(quote)), quoteAlreadyUsed: await repo.isQuoteUsed(quote.quoteId), recentOrders: await recentOrders(quote.buyerOrgId) },
+      );
+    },
+
+    /**
+     * An identified person confirms, as intended, what the mistake check flagged in a quote. Only through a channel
+     * bound to the person (intake.ts isVerified: the kitchen's signed-in store session, their passkey); a relayed
+     * yes is refused here, and the order then goes to sign-off as before. `via` is set by server code, never taken
+     * from a request. Recorded on the request and in the ledger; an order on that quote is not asked about it again.
+     */
+    async confirmConcerns(session: AgentSession, input: { requestId: string; quoteToken: string; keys: string[] }, via: HumanVia): Promise<{ confirmed: OrderConcern[]; open: OrderConcern[] }> {
+      if (!isVerified(via) || !via.person) throw new DockError(403, "confirmation_needs_person", "Only the kitchen's own signed-in person can confirm a likely mistake. A relayed answer does not count: the order goes to a named person's sign-off instead.", "human_input");
+      const open = await dock.orderConcerns(session, input);
+      const quote = await verifyQuote(input.quoteToken, wholesalerKey);
+      const confirmed = open.filter((c) => input.keys.includes(c.key));
+      if (!confirmed.length) return { confirmed, open };
+      const request = await ownRequest(session, input.requestId);
+      const at = now().toISOString();
+      await repo.saveRequest({ ...request, confirmed: [...(request.confirmed ?? []), ...confirmed.map((c) => ({ quoteId: quote.quoteId, key: c.key, code: c.code, by: via.person!, at, channel: via.channel }))] });
+      for (const c of confirmed) {
+        ledger.append({
+          type: "intake",
+          actor: `buyer:${via.person}`,
+          requestId: request.requestId,
+          summary: `${via.person} confirmed as intended, in the kitchen's signed-in store, before sending the order: ${c.message}`,
+          data: { step: "confirmation", key: c.key, code: c.code, by: via.person, channel: via.channel, verified: true, quoteId: quote.quoteId },
+        });
+      }
+      return { confirmed, open: open.filter((c) => !input.keys.includes(c.key)) };
     },
 
     /** Everything a sign-off screen needs about one approval (no secrets). For the approver's phone, not for agents. */

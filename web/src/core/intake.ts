@@ -75,7 +75,7 @@ export const RELAYED: HumanVia = { channel: "relayed" };
  * (the store screen, a voice call from that phone, the answer page with that session on it). The assumption this
  * rests on, stated once: whoever holds that signed-in session is that person. Nothing a client reports counts.
  */
-const isVerified = (v: HumanVia) => v.channel === "approver_passkey" || ((v.channel === "portal_session" || v.channel === "voice" || v.channel === "answer_link") && !!v.person);
+export const isVerified = (v: HumanVia) => v.channel === "approver_passkey" || ((v.channel === "portal_session" || v.channel === "voice" || v.channel === "answer_link") && !!v.person);
 const CHANNEL_TEXT: Record<InputChannel, string> = {
   portal_session: "in the kitchen's signed-in portal",
   approver_passkey: "with their passkey",
