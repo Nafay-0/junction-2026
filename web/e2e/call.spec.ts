@@ -99,9 +99,10 @@ test.afterEach(async ({ page }) => {
   if (await hang.isVisible().catch(() => false)) await hang.click().catch(() => {});
 });
 
-test.describe("with a microphone", () => {
-  test.use({ permissions: ["microphone"], launchOptions: { args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream", "--autoplay-policy=no-user-gesture-required"] } });
+// Chromium's fake microphone (a tone) and no permission prompt; "refused" below makes the browser refuse instead.
+test.use({ permissions: ["microphone"], launchOptions: { args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream", "--autoplay-policy=no-user-gesture-required"] } });
 
+test.describe("with a microphone", () => {
   test("granted: connects, hears a held turn, reads the amount back before anything is priced", async ({ page }) => {
     const fake: Fake = { sent: [], sockets: 0 };
     await fakeGemini(page, fake);
@@ -113,6 +114,7 @@ test.describe("with a microphone", () => {
     await expect(page.getByText(REQUEST).first()).toBeVisible();
     // The read-back card: the amount as AimoPilot read it, waiting for the caller's yes.
     await expect(page.getByText(/200 L/).first()).toBeVisible({ timeout: 30_000 });
+    if (process.env.E2E_SHOTS) await page.screenshot({ path: `${process.env.E2E_SHOTS}/read-back.png`, fullPage: true });
     const tool = fake.sent.find((m) => m.toolResponse) as { toolResponse: { functionResponses: { response: { state: string } }[] } } | undefined;
     expect(tool?.toolResponse.functionResponses[0].response.state).toBe("read_back");
   });
@@ -122,6 +124,7 @@ test.describe("with a microphone", () => {
     await fakeGemini(page, fake);
     await startCall(page);
     await expect(status(page)).toHaveAttribute("data-status", "recovering", { timeout: 10_000 });
+    if (process.env.E2E_SHOTS) await page.screenshot({ path: `${process.env.E2E_SHOTS}/recovering.png` });
     await expect(page.getByText(/Reconnecting/).first()).toBeVisible();
     await expect(status(page)).toHaveAttribute("data-status", "ready", { timeout: 20_000 });
     expect(fake.sockets).toBe(2);
@@ -155,7 +158,9 @@ test.describe("with a microphone", () => {
     // The read-back is still there; a tap on its yes carries the same request on, without the call.
     await page.getByRole("button", { name: /^Yes/ }).first().click();
     await expect(page.getByText(/Tapped: /)).toBeVisible();
-    await expect(page.locator("section").first()).toBeVisible({ timeout: 30_000 });
+    // The request moved on from the read-back to the intake's next card (a check, a question or the options).
+    await expect(page.getByText("Read back: is this right?")).toHaveCount(0, { timeout: 30_000 });
+    if (process.env.E2E_SHOTS) await page.screenshot({ path: `${process.env.E2E_SHOTS}/after-typing.png`, fullPage: true });
   });
 
   test("provider refuses: a quota error before the session starts moves the call to the other provider", async ({ page }) => {
@@ -171,9 +176,11 @@ test.describe("with a microphone", () => {
 });
 
 test.describe("without a microphone", () => {
-  test.use({ permissions: [], launchOptions: { args: ["--use-fake-device-for-media-stream", "--deny-permission-prompts"] } });
-
   test("refused: the same call continues by typing, and says how to allow the microphone", async ({ page }) => {
+    // As when the visitor taps "Don't allow": the browser refuses getUserMedia with NotAllowedError.
+    await page.addInitScript(() => {
+      navigator.mediaDevices.getUserMedia = () => Promise.reject(new DOMException("Permission denied", "NotAllowedError"));
+    });
     await page.goto("/call?k=kaari");
     await page.getByRole("button", { name: "Call", exact: true }).click();
     await expect(page.getByLabel("What the kitchen needs")).toBeVisible({ timeout: 20_000 });
