@@ -1,3 +1,4 @@
+import { MariaStore } from "@/server/history/maria-store";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { demoMandate } from "../dev-fixtures";
@@ -36,7 +37,7 @@ describe.skipIf(!url)("the audit time machine on a real MariaDB", () => {
     u.pathname = `/${dbName}`;
     db = connectMaria(u.toString(), { connections: 3 });
     await ensureSchema(db);
-    sc = await runScenario(db);
+    sc = await runScenario(new MariaStore(db));
   }, 120_000);
 
   afterAll(async () => {
@@ -53,13 +54,13 @@ describe.skipIf(!url)("the audit time machine on a real MariaDB", () => {
   });
 
   it("the same order gets different verdicts as of two times, for the right reason", async () => {
-    const A = await timeMachineView(db, { orderId: sc.orders.A });
+    const A = await timeMachineView(new MariaStore(db), { orderId: sc.orders.A });
     expect(A.replay!.reproduces.same).toBe(true);
     expect(A.replay!.then.outcome).toBe("auto_approve");
     expect(A.replay!.now.outcome).toBe("reject");
     expect(A.replay!.thenVsNow.map((d) => d.rule)).toEqual(["forbidden_allergens"]);
 
-    const B = await timeMachineView(db, { orderId: sc.orders.B });
+    const B = await timeMachineView(new MariaStore(db), { orderId: sc.orders.B });
     expect(B.replay!.then.outcome).toBe("needs_human_approval");
     expect(B.replay!.thenVsNow.map((d) => d.rule).sort()).toEqual(["per_order_limit", "weekly_budget"]);
     expect(B.replay!.termsDisagree).toEqual([]);
@@ -72,13 +73,13 @@ describe.skipIf(!url)("the audit time machine on a real MariaDB", () => {
   it("slides an order to the recall drill and to the night the agent was suspended", async () => {
     const hold = sc.moments.find((m) => m.label.startsWith("Recall drill"))!.at;
     const sus = sc.moments.find((m) => m.label === "Agent suspended")!.at;
-    const atHold = await timeMachineView(db, { orderId: sc.orders.D, at: new Date(Date.parse(hold) + 3_600_000).toISOString() });
+    const atHold = await timeMachineView(new MariaStore(db), { orderId: sc.orders.D, at: new Date(Date.parse(hold) + 3_600_000).toISOString() });
     expect(atHold.replay!.at.outcome).toBe("reject");
     expect(atHold.replay!.atVsNow.map((d) => d.rule)).toContain("recall_hold");
     // The gate's own rule, not a check beside it: it appears once, in the gate's rule list, with the drill's reason.
     expect(atHold.replay!.at.rules.filter((r) => r.rule === "recall_hold")).toMatchObject([{ outcome: "fail" }]);
     expect(atHold.replay!.at.rules.find((r) => r.rule === "recall_hold")!.reason).toContain("Recall drill");
-    const atSus = await timeMachineView(db, { orderId: sc.orders.D, at: new Date(Date.parse(sus) + 1_800_000).toISOString() });
+    const atSus = await timeMachineView(new MariaStore(db), { orderId: sc.orders.D, at: new Date(Date.parse(sus) + 1_800_000).toISOString() });
     expect(atSus.replay!.at.outcome).toBe("refused_at_door");
     expect(atSus.rulesAt.some((r) => r.area === "suspension")).toBe(true);
   });
@@ -86,7 +87,7 @@ describe.skipIf(!url)("the audit time machine on a real MariaDB", () => {
   it("the live mirror (no session clock) is stamped by the server, and re-signing the same terms makes no version", async () => {
     const m = demoMandate(new Date());
     let current = m;
-    const mirror = new MariaMirror({ db, writer: "live-test", intervalMs: 0, read: async () => ({ now: new Date(), mandates: [current], orders: [], requests: new Map(), unverified: new Map(), kitchens: [], holds: [], suspensions: [] }) });
+    const mirror = new MariaMirror({ store: new MariaStore(db), writer: "live-test", intervalMs: 0, read: async () => ({ now: new Date(), mandates: [current], orders: [], requests: new Map(), unverified: new Map(), kitchens: [], holds: [], suspensions: [] }) });
     await mirror.sync();
     current = demoMandate(new Date(Date.now() + 60_000)); // a new id and window, same terms
     await mirror.sync();
