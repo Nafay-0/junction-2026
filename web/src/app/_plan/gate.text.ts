@@ -68,7 +68,7 @@ export const GATE_TEXT = defineText({
     waitingFor: (name: string | undefined) => (name ? `Odottaa: ${name}` : "Odottaa hyväksyjää"),
     declinedBy: (name: string | undefined) => `${name} hylkäsi tilauksen`,
     refused: "Portti hylkäsi tilauksen",
-    confirmed: ", tukun allekirjoittama tilausvahvistus",
+    confirmed: ", tukun allekirjoittama tilaus­vahvistus",
     allChecks: (n: number) => `Kaikki ${n} tarkistusta`,
     outcome: { pass: "Läpi", escalate: "Vaatii ihmisen", fail: "Hylätty" },
     scanAs: (name: string) => `Skannaa ja hyväksy henkilönä ${name}: kertakäyttölinkki, jonka AimoPilot lähetti hänen puhelimeensa (demokeittiö).`,

@@ -70,7 +70,7 @@ export const ORDER_DETAIL_TEXT = defineText({
     signedQuote: "allekirjoitettuun tarjoukseen",
     who: "Kuka hyväksyi",
     timeline: "Mitä agentti teki ja miksi",
-    entries: (n: number) => `Tällä pyynnöllä on ${n} merkintää tapahtumalokissa, ja jokainen on ketjutettu edelliseen.`,
+    entries: (n: number) => `Tällä pyynnöllä on ${n} merkintää tapahtuma­lokissa, ja jokainen on ketjutettu edelliseen.`,
     verify: "Tarkista",
     verifyIntro: "Tarkistetaan tässä selaimessa tukun julkaisemia avaimia vasten, luottamatta palvelimen omaan vastaukseen.",
     verifyButton: "Tarkista tämä tilaus",
