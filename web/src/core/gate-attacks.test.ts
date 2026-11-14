@@ -145,9 +145,17 @@ describe("racing", () => {
     // Each €894, within the €1,000 the agent may spend alone; the week's budget is €2,000: at most two fit.
     const quotes = await Promise.all(Array.from({ length: 10 }, (_, i) => quoteFor(laakso, "VA-1001", 600, { deliverOn: addDaysIso(localNow(START).date, 1 + (i % 4)) })));
     const orders = await Promise.all(quotes.map((q) => dock.placeOrder(laakso.session, { requestId: q.req.requestId, quoteToken: q.quoteToken, lines: linesOf(q.quote) })));
-    const spent = orders.filter((o) => o.status === "committed" || o.status === "pending_approval").reduce((s, o) => s + o.totalCents, 0);
-    expect(spent).toBeLessThanOrEqual(laakso.mandate.weeklyBudgetCents);
-    expect(orders.filter((o) => o.status === "rejected").length).toBeGreaterThanOrEqual(8);
+    const committed = async () => (await dock.listOrders()).filter((o) => o.status === "committed").reduce((s, o) => s + o.totalCents, 0);
+    // Alone, the agent commits one: the next ones are the same family within the day, so they wait for a person.
+    expect(orders.filter((o) => o.status === "committed")).toHaveLength(1);
+    expect(await committed()).toBeLessThanOrEqual(laakso.mandate.weeklyBudgetCents);
+    // A person who signs every waiting order still cannot take the week past its budget: the later ones are refused.
+    for (const o of orders.filter((x) => x.status === "pending_approval")) {
+      const link = outbox.messages().find((m) => m.orderId === o.orderId)!.link;
+      await dock.decideApproval(o.approval!.approvalId, { decision: "approve", proof: { kind: "link_token", token: tokenFrom(link) } });
+    }
+    expect(await committed()).toBeLessThanOrEqual(laakso.mandate.weeklyBudgetCents);
+    expect(await committed()).toBe(2 * 89_400);
   });
 });
 
@@ -166,8 +174,8 @@ describe("the record", () => {
   });
 });
 
-describe("open finding: splitting one need across delivery days", () => {
-  it("control: two orders under the limit for the same day are read together and go to a person", async () => {
+describe("splitting one need into orders under the limit", () => {
+  it("two orders under the limit for the same day are read together and go to a person", async () => {
     const day = addDaysIso(localNow(START).date, 1);
     const first = await quoteFor(laakso, "VA-1001", 600, { deliverOn: day });
     expect((await dock.placeOrder(laakso.session, { requestId: first.req.requestId, quoteToken: first.quoteToken, lines: linesOf(first.quote) })).status).toBe("committed");
@@ -175,15 +183,44 @@ describe("open finding: splitting one need across delivery days", () => {
     expect((await dock.placeOrder(laakso.session, { requestId: second.req.requestId, quoteToken: second.quoteToken, lines: linesOf(second.quote) })).status).toBe("pending_approval");
   });
 
-  // OPEN (design decision, not patched): order_splitting counts earlier orders only for the same request, or the same
-  // category AND the same delivery day. Asking for the second half a day later is enough to spend €1,788 alone under a
-  // €1,000 per-order limit, minutes apart. The weekly budget still holds. Options: count agent-alone spend per
-  // category over the window whatever the day; or add a daily "alone" ceiling to the mandate; or say plainly that the
-  // per-order limit is per order and the weekly budget is the ceiling.
-  it.fails("two orders under the limit for the same product, a day apart, are read together too", async () => {
+  // Found in the review (Sat 14 Nov): the rule used to read orders together only for the same delivery day, so asking
+  // for the second half a day later spent €1,788 alone under a €1,000 limit. It now goes by when orders are placed.
+  it("the dodge: the second half asked for a day later is read together too, and a substitute of the same family as well", async () => {
     const first = await quoteFor(laakso, "VA-1001", 600, { deliverOn: addDaysIso(localNow(START).date, 1) });
     expect((await dock.placeOrder(laakso.session, { requestId: first.req.requestId, quoteToken: first.quoteToken, lines: linesOf(first.quote) })).status).toBe("committed");
     const second = await quoteFor(laakso, "VA-1001", 600, { deliverOn: addDaysIso(localNow(START).date, 2) });
-    expect((await dock.placeOrder(laakso.session, { requestId: second.req.requestId, quoteToken: second.quoteToken, lines: linesOf(second.quote) })).status).toBe("pending_approval");
+    const o = await dock.placeOrder(laakso.session, { requestId: second.req.requestId, quoteToken: second.quoteToken, lines: linesOf(second.quote) });
+    expect(o.status).toBe("pending_approval");
+    expect(o.decision.rules.find((r) => r.rule === "order_splitting")).toMatchObject({ outcome: "escalate", details: { combinedCents: 178_800 } });
+    // Another product of the same family (a fat-free milk for a third day) does not get around it either.
+    const third = await quoteFor(laakso, "VA-1002", 300, { deliverOn: addDaysIso(localNow(START).date, 3) });
+    expect((await dock.placeOrder(laakso.session, { requestId: third.req.requestId, quoteToken: third.quoteToken, lines: linesOf(third.quote) })).decision.rules.find((r) => r.rule === "order_splitting")?.outcome).toBe("escalate");
+  });
+
+  it("a standing order placed a week after the last one still commits alone", async () => {
+    const order = async () => {
+      const q = await quoteFor(laakso, "VA-1001", 600); // €894 of the same milk, as every week
+      return dock.placeOrder(laakso.session, { requestId: q.req.requestId, quoteToken: q.quoteToken, lines: linesOf(q.quote) });
+    };
+    expect((await order()).status).toBe("committed");
+    now = addMinutes(START, 7 * 24 * 60 + 5);
+    const next = await order();
+    expect(next.status).toBe("committed");
+    expect(next.decision.rules.find((r) => r.rule === "order_splitting")?.outcome).toBe("pass");
+  });
+
+  it("the weekly budget is the ceiling behind the rule: no sign-off lifts it", async () => {
+    const order = async (packs: number) => {
+      const q = await quoteFor(laakso, "VA-1001", packs);
+      return dock.placeOrder(laakso.session, { requestId: q.req.requestId, quoteToken: q.quoteToken, lines: linesOf(q.quote) });
+    };
+    expect((await order(600)).status).toBe("committed"); // €894
+    const second = await order(600); // read together with the first: a person signs
+    expect(second.status).toBe("pending_approval");
+    const link = outbox.messages().find((m) => m.orderId === second.orderId)!.link;
+    expect((await dock.decideApproval(second.approval!.approvalId, { decision: "approve", proof: { kind: "link_token", token: tokenFrom(link) } })).status).toBe("committed");
+    const third = await order(600); // €2,682 in the week against a €2,000 budget
+    expect(third.status).toBe("rejected");
+    expect(third.decision.rules.find((r) => r.rule === "weekly_budget")?.outcome).toBe("fail");
   });
 });

@@ -17,6 +17,7 @@ import type { EventPublisher } from "./events";
 import { CatalogError, ProductQuerySchema, scheduledOn, usableOffer, type LiveOffer, type LiveStatus, type MeteredCatalog, type Product } from "./catalog";
 import { ClaimStore, availabilityClaimInput, issueClaim, originClaimInput, priceClaimInput, refOf, type IssuedClaim } from "./claims";
 import { DockError, isDockError, parse } from "./errors";
+import { concernsOfOrder, unaskedNote } from "./order-check";
 import { InMemoryIntakeRepository, createIntakeFlow, recordCommittedOrder, type IntakeDeps, type IntakeRepository } from "./intake";
 import { InMemoryKitchenRepository, localNow, type KitchenRepository } from "./kitchen";
 import { SIGN_ALG, type KeyPair } from "./keys";
@@ -504,10 +505,27 @@ export function createDock(deps: DockDeps) {
     return { spentThisWeekCents: b.spentCents, heldThisWeekCents: b.heldCents, heldOrders: b.held };
   }
 
-  /** Confirmations of the request's intake that matter but were only relayed by the agent (policy human_confirmation). */
-  async function unverifiedOf(requestId: string) {
-    const u = (await intakes.get(requestId))?.unverified ?? [];
-    return u.length ? { unverifiedConfirmations: u.map(({ code, message, by }) => ({ code, message, by })) } : {};
+  /**
+   * What the mistake check holds against an order (policy human_confirmation), on every door:
+   *   - confirmations of the request's intake that matter but were only relayed by the agent;
+   *   - when the order is not the quote the intake itself made for the buyer's choice (the agent opened a request
+   *     and asked for a quote on its own, or quoted something else under an intake's request): whatever the same
+   *     check finds in the order's own lines. Nobody was asked, so the agent may not decide it alone.
+   * The intake's own quote is not checked twice: its questions were put to the buyer, and how they were answered
+   * is the first list.
+   */
+  async function mistakeCheckOf(org: { orgId: string; name: string }, request: PurchaseRequest | undefined, quote: Quote, intakeQuote = false) {
+    const i = request ? await intakes.get(request.requestId) : undefined;
+    const u = i?.unverified ?? [];
+    const fromIntake = intakeQuote || i?.quote?.quote.quoteId === quote.quoteId;
+    const flagged = fromIntake ? [] : await concernsOfOrder({ catalog, kitchens }, { orgId: org.orgId, orgName: org.name, lines: quote.lines, neededBy: request?.neededBy, now: now() });
+    return {
+      context: {
+        ...(u.length ? { unverifiedConfirmations: u.map(({ code, message, by }) => ({ code, message, by })) } : {}),
+        ...(flagged.length ? { unconfirmedConcerns: flagged.map(({ code, message }) => ({ code, message })) } : {}),
+      },
+      notes: [...(i?.signOffNotes ?? []), ...flagged.map(unaskedNote)],
+    };
   }
 
   /** Orders of this organisation in the splitting window, for the order_splitting rule. */
@@ -840,7 +858,7 @@ export function createDock(deps: DockDeps) {
     },
 
     /** Ask the wholesaler for a fixed-price quote. Returns the signed quote and what the gate would decide on it now. */
-    async requestQuote(session: AgentSession, input: z.input<typeof QuoteInput>) {
+    async requestQuote(session: AgentSession, input: z.input<typeof QuoteInput>, internal: { intakeQuote?: boolean } = {}) {
       const parsed = parse(QuoteInput, input);
       const { requestId } = parsed;
       const request = await ownRequest(session, requestId);
@@ -907,7 +925,7 @@ export function createDock(deps: DockDeps) {
       const policyPreview = evaluatePolicy(
         session.mandate,
         { agentId: session.agentId, quote, lines: quote.lines, neededBy: request.neededBy, deliverOn: request.deliverOn, requestId, asked: await askedOf(request) },
-        { now: now(), ...(await budgetContext(quote.buyerOrgId)), ...(await unverifiedOf(requestId)), ...(await holdsOf(quote)), quoteAlreadyUsed: false, recentOrders: await recentOrders(quote.buyerOrgId) },
+        { now: now(), ...(await budgetContext(quote.buyerOrgId)), ...(await mistakeCheckOf(session.mandate.issuer, request, quote, internal.intakeQuote)).context, ...(await holdsOf(quote)), quoteAlreadyUsed: false, recentOrders: await recentOrders(quote.buyerOrgId) },
       );
       return { quote, quoteToken, policyPreview, claims };
     },
@@ -926,7 +944,8 @@ export function createDock(deps: DockDeps) {
       const orgId = session.mandate.issuer.orgId;
       return serialize(orgId, async () => {
         const draft = { agentId: session.agentId, quote, lines, neededBy: request.neededBy, deliverOn: request.deliverOn, requestId, asked: await askedOf(request) };
-        const ctx = { now: now(), ...(await budgetContext(orgId)), ...(await unverifiedOf(requestId)), ...(await holdsOf(quote)), quoteAlreadyUsed: await repo.isQuoteUsed(quote.quoteId), recentOrders: await recentOrders(orgId) };
+        const check = await mistakeCheckOf(session.mandate.issuer, request, quote);
+        const ctx = { now: now(), ...(await budgetContext(orgId)), ...check.context, ...(await holdsOf(quote)), quoteAlreadyUsed: await repo.isQuoteUsed(quote.quoteId), recentOrders: await recentOrders(orgId) };
         let decision = evaluatePolicy(session.mandate, draft, ctx);
         if (decision.outcome !== "reject" && !(await repo.claimQuote(quote.quoteId))) {
           decision = evaluatePolicy(session.mandate, draft, { ...ctx, quoteAlreadyUsed: true });
@@ -950,8 +969,8 @@ export function createDock(deps: DockDeps) {
           draftLines: lines,
           mandate: session.mandate,
         };
-        const carried = (await intakes.get(requestId))?.signOffNotes ?? [];
-        if (carried.length) order.notes = carried;
+        // What the person signing off must see: the intake's relayed confirmations, and what nobody was asked about.
+        if (check.notes.length) order.notes = check.notes;
         ledger.append({
           type: "decision",
           actor: "dock",
@@ -1073,7 +1092,7 @@ export function createDock(deps: DockDeps) {
         const recheck = evaluatePolicy(
           order.mandate,
           { agentId: order.agentId, quote: order.quote, lines: order.draftLines, neededBy: request?.neededBy, deliverOn: request?.deliverOn, requestId: order.requestId, asked: await askedOf(request) },
-          { now: now(), ...(await budgetContext(order.orgId, order.orderId)), ...(await unverifiedOf(order.requestId)), ...(await holdsOf(order.quote)), quoteAlreadyUsed: false, recentOrders: await recentOrders(order.orgId, order.orderId) },
+          { now: now(), ...(await budgetContext(order.orgId, order.orderId)), ...(await mistakeCheckOf({ orgId: order.orgId, name: order.orgName }, request, order.quote)).context, ...(await holdsOf(order.quote)), quoteAlreadyUsed: false, recentOrders: await recentOrders(order.orgId, order.orderId) },
         );
         if (recheck.outcome === "reject") {
           order.status = "rejected";
@@ -1278,7 +1297,7 @@ export function createDock(deps: DockDeps) {
     now,
     openRequest: dock.openRequest,
     changeNeededBy: dock.changeNeededBy,
-    requestQuote: dock.requestQuote,
+    requestQuote: (session, input) => dock.requestQuote(session, input, { intakeQuote: true }),
     liveLookup: (session, requestId, productIds, deliveryDate, why) => liveLookup(session, requestId, productIds, deliveryDate, why, { batch: true }),
     spentThisWeek: (orgId) => spentThisWeek(orgId),
     budgetUse: (orgId) => budgetUse(orgId),

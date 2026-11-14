@@ -12,7 +12,7 @@ import { allergenOf, forbiddenPresent, isMaterialAttribute } from "./vocabulary"
  *   pass      the rule is satisfied
  *   escalate  allowed only with a human sign-off (over the per-order limit, a substitute under "needs_approval" or one
  *             that differs from the original under "within_preferences", a need split into orders under the limit,
- *             money held by orders waiting for sign-off, or a confirmation that matters resting on the agent's word)
+ *             money held by orders waiting for sign-off, or a likely mistake no identified person confirmed)
  *   fail      not allowed at all; the order is rejected
  *
  * Decision: any fail -> reject; else any escalate -> needs_human_approval (to the least senior approver
@@ -35,8 +35,8 @@ export const RULES = [
   "substitute_price", // substitute's price per unit within the tolerated increase
   "weekly_budget", // committed spend over 7 days stays within budget (hard); money held by orders waiting for sign-off is a person's call
   "per_order_limit", // above it, a human must sign off
-  "order_splitting", // several orders the agent placed alone for the same need may not add up to more than it may spend alone
-  "human_confirmation", // a likely mistake that matters was confirmed only by the agent's word: a person signs off
+  "order_splitting", // orders the agent placed alone within a day for the same product family may not add up to more than it may spend alone, whatever their delivery days; the weekly budget is the ceiling behind it
+  "human_confirmation", // the mistake check flagged the order and no identified person confirmed it (nobody was asked, or the yes was only relayed): a person signs off
   "approver_authority", // someone named in the mandate can sign off this amount
 ] as const;
 
@@ -91,6 +91,11 @@ export type PolicyContext = {
    * Dock only as the agent's word, not through a channel that identifies a person (intake.ts InputChannel).
    */
   unverifiedConfirmations?: { code: string; message: string; by: string }[];
+  /**
+   * What the mistake check finds in this order when nobody was asked: the order did not come through the intake's
+   * questions (orders.ts flaggedOf). Each is a likely mistake that matters; the agent may not decide it alone.
+   */
+  unconfirmedConcerns?: { code: string; message: string }[];
   quoteAlreadyUsed: boolean;
   /** Orders of this organisation in the last SPLIT_WINDOW_HOURS, for the order_splitting check. Absent: none. */
   recentOrders?: RecentOrder[];
@@ -99,8 +104,9 @@ export type PolicyContext = {
 };
 
 /**
- * Orders for the same need within this window are read together. A day covers "three orders in a row before
- * lunch" and the evening top-up for the next morning, without tying together unrelated orders of a busy week.
+ * Orders placed within this window are read together, by when they were placed, not by when they deliver. A day
+ * covers "three orders in a row before lunch" and the evening top-up, and asking for the second half a day later
+ * no longer slips past. A standing order placed a week after the last one is outside it and stands alone.
  */
 export const SPLIT_WINDOW_HOURS = 24;
 
@@ -304,7 +310,13 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
     breaks_remembered_rule: "a request against a rule the kitchen's memory holds",
     standing_order_range: "an amount outside the kitchen's standing order",
   };
-  if (unverified.length === 0) add("human_confirmation", "pass", "No confirmation rests on the agent's word alone.");
+  const unasked = ctx.unconfirmedConcerns ?? [];
+  const kinds = (xs: { code: string }[]) => [...new Set(xs.map((u) => CONFIRMATION_KIND[u.code] ?? "a likely mistake Dock flagged"))].join(" and ");
+  if (unverified.length === 0 && unasked.length === 0) add("human_confirmation", "pass", "The mistake check found nothing that an identified person has not confirmed.");
+  else if (unverified.length === 0)
+    // Nobody was asked: the order did not come through the intake's questions. Same privacy rule as below: the kind
+    // of check, never its words.
+    add("human_confirmation", "escalate", `The mistake check flagged ${kinds(unasked)}, and no person was asked. A named person must sign it off, with the check shown to them.`, { flagged: unasked.map((u) => u.code) });
   else
     add(
       "human_confirmation",
@@ -312,8 +324,8 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
       // The decision is the shared record the wholesaler reads: it names what kind of check was confirmed, never the
       // check's words, which quote the kitchen's memory (its usual amounts, its own rules). The person signing off
       // sees the words with the order (Order.notes).
-      `The agent relayed that ${[...new Set(unverified.map((u) => u.by))].join(", ")} confirmed ${[...new Set(unverified.map((u) => CONFIRMATION_KIND[u.code] ?? "a likely mistake Dock flagged"))].join(" and ")} as intended, but nobody verified it. A named person must sign it off, with the check shown to them.`,
-      { confirmations: unverified.map((u) => ({ code: u.code, by: u.by })) },
+      `The agent relayed that ${[...new Set(unverified.map((u) => u.by))].join(", ")} confirmed ${kinds(unverified)} as intended, but nobody verified it.${unasked.length ? ` The mistake check also flagged ${kinds(unasked)}, and no person was asked.` : ""} A named person must sign it off, with the check shown to them.`,
+      { confirmations: unverified.map((u) => ({ code: u.code, by: u.by })), ...(unasked.length ? { flagged: unasked.map((u) => u.code) } : {}) },
     );
 
   const heldBudget = results.find((r) => r.rule === "weekly_budget" && r.details?.held === true);
@@ -411,31 +423,27 @@ function originalName(l: QuoteLine): string {
 /**
  * Order splitting: an agent that places several orders below its per-order limit for one need has spent more
  * alone than the mandate lets it. Orders count together when the agent placed them alone (no person signed
- * them) within SPLIT_WINDOW_HOURS, and they are for the same request, or for the same product category
- * delivered on the same day. Over the limit together: a person signs off, with the earlier orders named.
+ * them) within SPLIT_WINDOW_HOURS, and they are for the same request or the same product family (the category
+ * substitutes are judged in), whatever days they deliver on. Over the limit together: a person signs off, with
+ * the earlier orders named. Judged by when orders are placed: one need spread over several days of ordering is
+ * not caught here, and the weekly budget, which no sign-off lifts, is the ceiling behind this rule.
  */
 function splitCheck(mandate: Mandate, draft: OrderDraft, ctx: PolicyContext): { outcome: RuleOutcome; reason: string; combinedCents: number; details?: Record<string, unknown> } {
   const q = draft.quote;
   const since = ctx.now.getTime() - SPLIT_WINDOW_HOURS * 3600_000;
   const categories = new Set(q.lines.map((l) => l.category));
-  const dates = new Set(q.lines.map((l) => l.deliveryDate));
-  const related = (ctx.recentOrders ?? []).filter(
-    (o) =>
-      o.authorisedBy === "mandate" &&
-      Date.parse(o.placedAt) > since &&
-      (o.requestId === q.requestId || (o.categories.some((c) => categories.has(c)) && o.deliveryDates.some((d) => dates.has(d)))),
-  );
+  const related = (ctx.recentOrders ?? []).filter((o) => o.authorisedBy === "mandate" && Date.parse(o.placedAt) > since && (o.requestId === q.requestId || o.categories.some((c) => categories.has(c))));
   const earlier = related.reduce((s, o) => s + o.totalCents, 0);
   const combinedCents = earlier + q.totalCents;
-  if (related.length === 0) return { outcome: "pass", reason: "No earlier order the agent placed alone for the same need in the last day.", combinedCents };
+  if (related.length === 0) return { outcome: "pass", reason: "No earlier order the agent placed alone for the same product family in the last day.", combinedCents };
   const details = { windowHours: SPLIT_WINDOW_HOURS, limitCents: mandate.perOrderLimitCents, combinedCents, earlier: related.map((o) => ({ orderId: o.orderId, totalCents: o.totalCents, placedAt: o.placedAt })) };
-  const what = `${[...categories].join(", ")} for ${[...dates].sort().join(", ")}`;
+  const what = [...categories].join(", ");
   if (q.totalCents > mandate.perOrderLimitCents || combinedCents <= mandate.perOrderLimitCents) {
     return { outcome: "pass", reason: `With ${related.length} earlier order${related.length > 1 ? "s" : ""} the agent placed alone for ${what}, the total is ${formatEur(combinedCents)}${q.totalCents > mandate.perOrderLimitCents ? "; this order goes to a person anyway" : `, within the ${formatEur(mandate.perOrderLimitCents)} it may spend alone`}.`, combinedCents, details };
   }
   return {
     outcome: "escalate",
-    reason: `Looks like one need split into smaller orders: with ${related.map((o) => `${o.orderId} (${formatEur(o.totalCents)})`).join(", ")} placed alone in the last ${SPLIT_WINDOW_HOURS} h for ${what}, this ${formatEur(q.totalCents)} order makes ${formatEur(combinedCents)}, over the ${formatEur(mandate.perOrderLimitCents)} the agent may spend alone. Splitting does not lift the limit, so a person must sign off.`,
+    reason: `Looks like one need split into smaller orders: with ${related.map((o) => `${o.orderId} (${formatEur(o.totalCents)})`).join(", ")} placed alone in the last ${SPLIT_WINDOW_HOURS} h for ${what}, whatever the delivery days, this ${formatEur(q.totalCents)} order makes ${formatEur(combinedCents)}, over the ${formatEur(mandate.perOrderLimitCents)} the agent may spend alone. Splitting does not lift the limit, so a person must sign off.`,
     combinedCents,
     details,
   };

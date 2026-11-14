@@ -48,29 +48,35 @@ import { formatEur, newId } from "./util";
 export type IntakeState = "needs_confirmation" | "needs_input" | "options_ready" | "quoted" | "no_options" | "cancelled";
 
 /**
- * How a person's answer reached Dock. Only a channel that identifies the person makes it theirs:
+ * How a person's answer reached Dock. Only a channel bound to the person makes it theirs:
  *   portal_session        the kitchen's signed-in portal session (a visitor's passkey-backed phone)
  *   approver_passkey      the approver's passkey on the sign-off screen
- *   protocol_elicitation  the protocol's own human-input mechanism (MCP elicitation: the client asked the user)
  *   voice                 the caller's own words on a voice call tied to their signed-in session
- *   answer_link           Dock's own answer page, opened through a one-time link Dock handed out for this request
- *                         (on paths without the protocol's human-input mechanism). The words are Dock's fixed choices,
- *                         not an agent's paraphrase, but whoever holds the link can answer: the person is named only
- *                         when their kitchen's signed-in session is present; without it, a confirmation that matters
- *                         still goes to a named person's sign-off, as a relayed one does
- *   relayed               anything an agent merely passes on (the default): recorded as "relayed by the agent, not
- *                         verified"; where the concern matters, the order then goes to a named person's sign-off
+ *   answer_link           Dock's own answer page, opened through a one-time link Dock handed out for this request.
+ *                         The words are Dock's fixed choices, not an agent's paraphrase, but whoever holds the link
+ *                         can answer: it is the person's own answer only when their kitchen's signed-in session is
+ *                         present on that page; without it, it is relayed
+ *   protocol_elicitation  a form the agent's client showed (MCP elicitation). The client returns the answer, and Dock
+ *                         cannot tell a client that asked its user from one that filled the form in itself: relayed
+ *   relayed               anything an agent merely passes on (the default)
+ * A relayed answer is recorded as relayed by the agent's client, never as the buyer's own. It may settle a
+ * preference inside the mandate (which option, what matters most); it never satisfies a confirmation that matters:
+ * the order then goes to a named person's sign-off.
  * Set only by server code in this process (see server/console-context.ts), never from a request field.
  */
 export type InputChannel = "portal_session" | "approver_passkey" | "protocol_elicitation" | "voice" | "answer_link" | "relayed";
 export type HumanVia = { channel: InputChannel; /** The identified person's name, when the channel names one. */ person?: string; /** What the person said, for the ledger (voice). */ words?: string };
 export const RELAYED: HumanVia = { channel: "relayed" };
-/** A person identified by the channel. An answer link names one only with the kitchen's signed-in session. */
-const isVerified = (v: HumanVia) => v.channel !== "relayed" && (v.channel !== "answer_link" || !!v.person);
+/**
+ * A person identified by the channel: their passkey, or a session of the kitchen's own store that a passkey opened
+ * (the store screen, a voice call from that phone, the answer page with that session on it). The assumption this
+ * rests on, stated once: whoever holds that signed-in session is that person. Nothing a client reports counts.
+ */
+const isVerified = (v: HumanVia) => v.channel === "approver_passkey" || ((v.channel === "portal_session" || v.channel === "voice" || v.channel === "answer_link") && !!v.person);
 const CHANNEL_TEXT: Record<InputChannel, string> = {
   portal_session: "in the kitchen's signed-in portal",
   approver_passkey: "with their passkey",
-  protocol_elicitation: "through the client's own prompt to the user (MCP elicitation)",
+  protocol_elicitation: "through a form the agent's client showed (MCP elicitation), not verified",
   voice: "on a voice call from their signed-in phone",
   answer_link: "on Dock's own answer page through a one-time link",
   relayed: "relayed by the agent, not verified",
@@ -658,6 +664,8 @@ export function createIntakeFlow(deps: IntakeDeps) {
             ? `${who} confirmed as intended, ${how}: ${c.message}`
             : via.channel === "answer_link"
               ? `Confirmed as intended ${how}, answered as ${who} (the person is not identified: whoever holds the link can answer): ${c.message}${matters ? " Nobody verified who answered, so the order cannot be decided by the agent alone: a named person signs it off, with this shown." : ""}`
+              : via.channel === "protocol_elicitation"
+                ? `Relayed by the agent's client, not verified: its form (MCP elicitation) came back answered as ${who}, confirming this as intended: ${c.message}${matters ? " Dock cannot tell whether a person filled the form in, so the order cannot be decided by the agent alone: a named person signs it off, with this shown." : ""}`
               : `Relayed by the agent, not verified: it says ${who} meant it this way: ${c.message}${matters ? " Nobody verified that, so the order cannot be decided by the agent alone: a named person signs it off, with this shown." : ""}`;
           log(i, actor, summary, { step: "confirmation", key: c.key, code: c.code, by: who, relayedBy: session.agentId, channel: via.channel, verified, ...(via.words ? { words: via.words } : {}), ...(matters ? { needsSignOff: true } : {}), suspendedPreferenceIds: c.preferenceIds });
           continue;

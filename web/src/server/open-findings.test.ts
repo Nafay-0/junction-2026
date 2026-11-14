@@ -9,13 +9,10 @@ import { getMemoryService, resetMemoryService } from "./memory/runtime";
 import { getRuntime, resetRuntime } from "./runtime";
 
 /**
- * Open findings of the end-to-end review (Sat 14 Nov), kept as tests. Each `it.fails` states what should happen and
- * fails today; none was patched, because closing it is a decision about how the product behaves, not a bug fix. The
- * options are written above each. When one is closed its test starts passing, the suite turns red, and the mark
- * comes off. The `control` tests pass today and show the scenario is the right one.
- *
- * All three are about the same boundary. The gate enforces the signed mandate on every door. The mistake check and
- * the kitchen's remembered rules are enforced by the intake, which a caller may skip or answer for itself.
+ * Findings of the end-to-end review (Sat 14 Nov), each closed and kept here as the test that failed before. In all
+ * three an order committed that the product's own words said would not. They sit on one boundary: what the gate
+ * enforces on every door (the signed mandate, and now the mistake check), and what a caller could skip or answer
+ * for itself.
  */
 const BASE = "http://dock.test";
 const day = () => nextDeliveryDay(nextDeliveryDay(localNow(new Date()).date, [1, 2, 3, 4, 5])!, [1, 2, 3, 4, 5])!;
@@ -66,22 +63,55 @@ describe("open finding 1: 'In the signed mandate: the gate enforces it'", () => 
   });
 });
 
-describe("open finding 2: the mistake check is a step of the intake, not a rule of the gate", () => {
-  // "Any agent the kitchen trusts ... meets the same gate: the same limits, the same mistake checks"
-  // (src/app/k/[kitchen]/agent-rules.tsx). True through submit_need / POST /api/v1/intake. An agent that calls
-  // open_request, get_quote and place_order instead is never asked: an order against a rule a person stated for the
-  // kitchen, or ten times its usual amount, commits alone whenever it fits the mandate's limits.
-  // Options: (a) run the same concerns (core/concerns.ts is plain code on the kitchen's own history) inside
-  // placeOrder for every order, and send one that matters and nobody verified to a person, as human_confirmation
-  // does today; (b) refuse the lower-level order calls for kitchens that have history or stated rules, pointing to
-  // the intake; (c) keep it and correct the sentence: the gate enforces the mandate, the mistake check is the intake's.
-  it.fails("an order against the kitchen's stated rule, placed without the intake, does not commit on the agent's word", async () => {
+describe("finding 2: the mistake check is a rule of the gate, on every door", () => {
+  // Before: "the same mistake checks" (src/app/k/[kitchen]/agent-rules.tsx) was true only through the intake. An
+  // agent that called open_request, get_quote and place_order was never asked, and an order against a rule a person
+  // stated for the kitchen committed alone whenever it fit the mandate's limits. Now the gate runs the same check
+  // on the order itself (core/order-check.ts), and what it flags goes to a named person.
+  it("an order against the kitchen's stated rule, placed without the intake, goes to a named person with the check shown", async () => {
     const order = await orderDirectly(ORDINARY_MILK, 2);
-    expect(order.status).not.toBe("committed");
+    expect(order.status).toBe("pending_approval");
+    expect(order.decision.rules.find((r) => r.rule === "human_confirmation")).toMatchObject({ outcome: "escalate", details: { flagged: expect.arrayContaining(["contradicts_preference"]) } });
+    // The decision names the kind of check; the words, which quote the kitchen's own rule, go to the person signing.
+    expect(order.decision.reasons.join(" ")).toMatch(/The mistake check flagged .*a request against one of the kitchen's own rules.*and no person was asked/);
+    expect(order.notes?.join(" ")).toMatch(/Nobody was asked: .*contains lactose.*Always lactose-free/);
+  });
+
+  it("quoting something else under an intake's request does not borrow the intake's answers", async () => {
+    const { dock } = await getRuntime();
+    const k = (await resolveKitchen("kaari"))!;
+    const session = await dock.authenticate(k.mandateToken, k.agentId);
+    // A harmless need through the intake (nothing to confirm), then a lower-level quote for ordinary milk on the same request.
+    const step = await dock.intake.open(session, { need: { text: "100 L milk", item: { text: "milk", category: "milk" }, quantity: { amount: 100, unit: "L" }, deliverBy: day(), optimise: "price" }, by: "Sanna" });
+    expect(step.state).not.toBe("needs_confirmation");
+    const { quote, quoteToken, policyPreview } = await dock.requestQuote(session, { requestId: step.requestId, lines: [{ productId: ORDINARY_MILK, quantity: 2 }] });
+    expect(policyPreview.rules.find((r) => r.rule === "human_confirmation")?.outcome).toBe("escalate");
+    const order = await dock.placeOrder(session, { requestId: step.requestId, quoteToken, lines: quote.lines.map(({ productId, quantity, unitPriceCents }) => ({ productId, quantity, unitPriceCents })) });
+    expect(order.status).toBe("pending_approval");
+  });
+
+  it("no second question: what the kitchen's signed-in person confirmed on the store's own intake commits alone", async () => {
+    const { dock } = await getRuntime();
+    const k = (await resolveKitchen("kaari"))!;
+    const session = await dock.authenticate(k.mandateToken, k.agentId);
+    const person = { channel: "portal_session" as const, person: "Sanna Koskinen" };
+    let step = await dock.intake.open(session, { need: { text: "20 litres of ordinary milk", item: { text: "ordinary milk", category: "milk", excludedAttributes: ["lactose_free"] }, quantity: { amount: 20, unit: "L" }, deliverBy: day() }, by: "Sanna Koskinen" });
+    expect(step.concerns.map((c) => c.code)).toContain("contradicts_preference");
+    for (let i = 0; i < 6 && step.state !== "quoted"; i++) {
+      if (step.state === "needs_confirmation") step = await dock.intake.respondToConcerns(session, step.requestId, { by: "Sanna Koskinen", responses: step.concerns.map((c) => ({ key: c.key, choice: "confirm" })) }, person);
+      else if (step.state === "needs_input") step = await dock.intake.answer(session, step.requestId, { by: "Sanna Koskinen", answers: step.questions.map((q) => ({ questionId: q.id, optionId: q.options[0].id })) }, person);
+      else if (step.state === "options_ready") step = await dock.intake.choose(session, step.requestId, { by: "Sanna Koskinen", optionId: (step.options.find((o) => o.lines.some((l) => l.productId === ORDINARY_MILK)) ?? step.options[0]).optionId }, person);
+      else break;
+    }
+    expect(step.state).toBe("quoted");
+    const order = await dock.placeOrder(session, { requestId: step.requestId });
+    expect(order.decision.rules.find((r) => r.rule === "human_confirmation")?.outcome).toBe("pass");
+    expect(order.status).toBe(order.totalCents <= k.info.mandate.perOrderLimitCents ? "committed" : "pending_approval");
+    expect(order.totalCents).toBeLessThanOrEqual(k.info.mandate.perOrderLimitCents);
   });
 });
 
-describe("open finding 3: a client's elicitation answer is taken as the buyer's own", () => {
+describe("finding 3: what a client says its user answered is relayed, not the buyer's own", () => {
   type Elicit = { requestedSchema: { properties: Record<string, { oneOf?: { const: string }[] }> } };
   type Structured = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -132,16 +162,18 @@ describe("open finding 3: a client's elicitation answer is taken as the buyer's 
     expect(order.decision.rules.find((r: { rule: string }) => r.rule === "human_confirmation").outcome).toBe("escalate");
   });
 
-  // The same agent, with one more line in its client: it declares the elicitation capability and answers Dock's form
-  // itself. Dock records "Sanna Koskinen confirmed as intended, through the client's own prompt to the user", treats
-  // it as verified, and the order commits with no person involved. Dock cannot tell a client that asked its user from
-  // one that did not.
-  // Options: (a) count protocol_elicitation as unverified where the concern matters (one line in core/intake.ts
-  // isVerified), so such an order goes to a named person, at the cost of a second confirmation for honest clients;
-  // (b) trust elicitation only from clients the kitchen enrolled (a connector address its signed-in person issued);
-  // (c) use URL-mode elicitation to Dock's own answer page, where the kitchen's signed-in session names the person.
-  it.fails("answered by the client itself through elicitation, the same confirmation still goes to a named person", async () => {
+  // Before: the same agent, with one more line in its client (it declares the elicitation capability and answers
+  // Dock's form itself), was recorded as "Sanna Koskinen confirmed as intended, through the client's own prompt to the
+  // user", treated as verified, and the order committed with no person involved. A relayed yes is not a yes: an
+  // elicitation form comes back from the agent's client, so it is recorded as relayed by the client and never
+  // satisfies a confirmation that matters (core/intake.ts isVerified).
+  it("answered by the client itself through elicitation, the same confirmation still goes to a named person", async () => {
     const order = await ordinaryMilkConfirmedBy(true);
     expect(order.status).toBe("pending_approval");
+    expect(order.decision.rules.find((r: { rule: string }) => r.rule === "human_confirmation").outcome).toBe("escalate");
+    const { dock } = await getRuntime();
+    const said = dock.ledger.entries({ requestId: order.requestId }).find((e) => e.data.step === "confirmation")!;
+    expect(said.summary).toMatch(/^Relayed by the agent's client, not verified/);
+    expect(said.data).toMatchObject({ channel: "protocol_elicitation", verified: false });
   });
 });
