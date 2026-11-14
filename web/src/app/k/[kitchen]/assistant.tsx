@@ -2,11 +2,12 @@
 
 import { usePathname } from "next/navigation";
 import { useText } from "../../_i18n/provider";
-import { ThreadDock } from "../../_ui/thread";
-import { CallAgent } from "./call-agent";
+import { X } from "lucide-react";
 import { AgentIcon, usePortal } from "./portal";
 import { PORTAL_TEXT } from "./portal.text";
-import { StartOver, ThreadComposer, ThreadLog } from "./thread";
+import { StartOver, ThreadComposer } from "./thread";
+import { ThreadLine } from "./thread-line";
+import { THREAD_LINE_TEXT } from "./thread-line.text";
 import { THREAD_PAGE_TEXT } from "./thread.text";
 
 /**
@@ -18,6 +19,7 @@ export function AssistantPanel() {
   const { agent, base, kitchen, thread } = usePortal();
   const tx = useText(THREAD_PAGE_TEXT);
   const ptx = useText(PORTAL_TEXT);
+  const tl = useText(THREAD_LINE_TEXT);
   const pathname = usePathname() ?? base;
   // The agent's own page (the landing screen, and /order) shows the thread full width: no dock beside it.
   if (pathname === base || pathname === `${base}/order`) return null;
@@ -35,25 +37,25 @@ export function AssistantPanel() {
           {tx.open}
         </button>
       )}
-      <ThreadDock
-        open={open}
-        onClose={() => agent.setPanelOpen(false)}
-        name={kitchen.agentName}
-        sub={tx.buysFor(kitchen.name)}
-        label={tx.panel}
-        banner={ptx.demoShort}
-        aside={(thread.thread?.turns.length ?? 0) > 0 ? <StartOver /> : undefined}
-        footer={
-          <>
-            <ThreadComposer />
-            <div className="mt-2.5 border-t border-lavender-mid/70 pt-2.5">
-              <CallAgent compact />
-            </div>
-          </>
-        }
-      >
-        <ThreadLog />
-      </ThreadDock>
+      {/* The Thread design, docked: the agent's line beside the store, its composer at the foot. */}
+      <aside id="assistant" aria-label={tx.panel} className={`${open ? "flex" : "hidden"} thread-dock fixed inset-x-0 top-0 z-40 flex-col bg-mist sm:inset-x-auto sm:right-0 sm:z-50 sm:w-[min(32rem,92vw)] sm:shadow-lg xl:z-40 xl:w-[34rem] xl:border-l xl:border-line xl:shadow-none 2xl:w-[38rem]`}>
+        <p className="on-dark bg-petrol-deep px-4 pb-1.5 pt-[calc(0.375rem+env(safe-area-inset-top))] text-center text-[0.75rem] leading-snug text-paper/80 sm:hidden">{ptx.demoShort}</p>
+        <header className="flex items-center gap-2.5 px-5 pb-2 pt-3.5 text-ink-soft">
+          <span aria-hidden className="size-2.5 rounded-full bg-petrol" />
+          <h2 className="text-[0.86rem] font-medium">{tl.name}</h2>
+          <span className="ml-auto truncate text-[0.76rem]">{kitchen.name}</span>
+          {(thread.thread?.turns.length ?? 0) > 1 && <StartOver />}
+          <button type="button" onClick={() => agent.setPanelOpen(false)} aria-label={tl.close} className="flex size-9 shrink-0 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-paper hover:text-ink">
+            <X aria-hidden size={18} />
+          </button>
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4 pt-3">
+          <ThreadLine landing className="flex min-h-full flex-col justify-end" />
+        </div>
+        <footer className="px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2">
+          <ThreadComposer hint={false} placeholder={tl.placeholder} />
+        </footer>
+      </aside>
     </>
   );
 }

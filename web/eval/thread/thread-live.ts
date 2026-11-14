@@ -76,7 +76,8 @@ async function idle(page: Page, buyers: number, ms = 120_000): Promise<Thread> {
 }
 
 async function say(page: Page, words: string) {
-  const field = page.getByRole("textbox").last();
+  // In the panel: the docked agent's own field, not the store's search.
+  const field = panel ? page.locator("#assistant").getByRole("textbox").last() : page.getByRole("textbox").last();
   await field.fill(words);
   await field.press("Enter");
 }
@@ -94,9 +95,9 @@ async function run(id: keyof typeof W & ("milk" | "lunch" | "oat" | "reorder")):
   // The panel: a store page with the agent docked beside it; the phone: the agent's own page.
   await page.goto(panel ? `${base}/k/${account.username}/catalogue` : `${base}/k/${account.username}`);
   await page.waitForTimeout(3000);
-  if (panel) {
-    const open = page.getByRole("button", { name: /^(Agent|Agentti)$/ }).first();
-    if (await open.isVisible().catch(() => false)) await open.click();
+  if (panel && !(await page.locator("#assistant").isVisible().catch(() => false))) {
+    // Docked and open on a desk by default; opened with the header's button when it is not.
+    await page.getByRole("button", { name: /^(Agent|Agentti)/ }).first().click();
     await page.waitForTimeout(800);
   }
   const shot = (name: string) => page.screenshot({ path: path.join(out, `${lang}-${panel ? "panel" : "390"}-${id}-${name}.png`), fullPage: false });

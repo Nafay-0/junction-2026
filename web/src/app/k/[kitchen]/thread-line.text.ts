@@ -11,6 +11,7 @@ export const THREAD_LINE_TEXT = defineText({
     orWords: "or just tell me",
     list: (n: number) => `Show the list (${n} item${n === 1 ? "" : "s"})`,
     hideList: "Hide the list",
+    close: "Close the agent",
     total: "Total",
     working: "Working on it",
     placeholder: "Tell me what the kitchen needs",
@@ -63,6 +64,7 @@ export const THREAD_LINE_TEXT = defineText({
       cheapest: (price: string) => `The cheapest is ${price}.`,
       allBy: (day: string) => `All can arrive ${day}.`,
       insideRules: "Inside your rules: I may order it alone.",
+      offer: "Asked the wholesaler's selling agent",
     },
     fallback: {
       options: (n: number) => `${n} option${n === 1 ? "" : "s"}. Which one?`,
@@ -83,6 +85,7 @@ export const THREAD_LINE_TEXT = defineText({
     orWords: "tai kerro omin sanoin",
     list: (n: number) => `Näytä lista (${n} riviä)`,
     hideList: "Piilota lista",
+    close: "Sulje agentti",
     total: "Yhteensä",
     working: "Työn alla",
     placeholder: "Kerro, mitä keittiö tarvitsee",
@@ -131,6 +134,7 @@ export const THREAD_LINE_TEXT = defineText({
       cheapest: (price: string) => `Edullisin on ${price}.`,
       allBy: (day: string) => `Kaikki ehtivät ${day}.`,
       insideRules: "Sääntöjesi sisällä: voin tilata yksin.",
+      offer: "Kysyin tukun myyntiagentilta",
     },
     fallback: {
       options: (n: number) => `${n} vaihtoehtoa. Mikä niistä?`,
@@ -151,6 +155,7 @@ export const THREAD_LINE_TEXT = defineText({
     orWords: "eller säg det bara",
     list: (n: number) => `Visa listan (${n} rader)`,
     hideList: "Dölj listan",
+    close: "Stäng agenten",
     total: "Totalt",
     working: "Arbetar på det",
     placeholder: "Berätta vad köket behöver",
@@ -199,6 +204,7 @@ export const THREAD_LINE_TEXT = defineText({
       cheapest: (price: string) => `Billigast är ${price}.`,
       allBy: (day: string) => `Alla hinner fram ${day}.`,
       insideRules: "Inom dina regler: jag får beställa själv.",
+      offer: "Frågade grossistens säljagent",
     },
     fallback: {
       options: (n: number) => `${n} alternativ. Vilket?`,

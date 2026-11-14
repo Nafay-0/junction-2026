@@ -97,6 +97,7 @@ const ActionSchema: z.ZodType<ThreadAction> = z.discriminatedUnion("type", [
   z.object({ type: z.literal("menu_line_have"), planId: z.string().min(1).max(80), lineId: z.string().min(1).max(80), have: z.boolean() }),
   z.object({ type: z.literal("menu_line_per_cover"), planId: z.string().min(1).max(80), lineId: z.string().min(1).max(80), dishId: z.string().min(1).max(80), amount: z.number().positive().max(100000) }),
   z.object({ type: z.literal("menu_accept"), planId: z.string().min(1).max(80), doubtId: z.string().min(1).max(80) }),
+  z.object({ type: z.literal("offer_answer"), offerId: z.string().min(1).max(80), answer: z.enum(["yes", "no", "mute", "off"]) }),
   z.object({ type: z.literal("menu_to_sheet"), planId: z.string().min(1).max(80) }),
   z.object({ type: z.literal("remember_this"), text: z.string().trim().min(2).max(500) }),
   z.object({ type: z.literal("products_search"), query: z.string().max(120), category: z.string().min(1).max(40).optional() }),
@@ -220,7 +221,7 @@ export async function submitTurn(kitchen: Kitchen | string, input: unknown): Pro
   e.store.status(thread, agentTurn.turnId, "working");
   if (body.clientTurnId) thread.seen[body.clientTurnId] = { buyerTurnId: buyer.turnId, agentTurnId: agentTurn.turnId };
   const t0 = Date.now();
-  const run: TurnRun = { rt: r.rt, store: e.store, thread, turnId: agentTurn.turnId, buyer, k: r.k, session: r.session, person: r.person, door, t0, facts: [], requests: new Set(), orders: new Map(), readings: new Map() };
+  const run: TurnRun = { rt: r.rt, store: e.store, thread, turnId: agentTurn.turnId, buyer, k: r.k, session: r.session, person: r.person, door, ...(body.lang ? { lang: body.lang } : {}), t0, facts: [], requests: new Set(), orders: new Map(), readings: new Map() };
   // The first visible sign of work, before any model call.
   const usage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, costUsd: 0, fallbacks: 0, toolCalls: 0 };
   const turnCtx = () => ({ threadId: thread.threadId, turnId: agentTurn.turnId, door, kitchen: slug, orgId: r.k.info.orgId, agentId: r.session.agentId, usage });
@@ -320,7 +321,23 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
     line = agentResult?.text ?? "";
   }
 
+  // The wholesaler's offer the buyer asked for: its own words (plain code, from the signed offer) are the reply.
+  const lang = body.lang ?? "en";
+  if (run.offerAsked) {
+    const c = store.cards(thread).map((x) => x.card).find((x) => x.type === "offer" && x.offerId === run.offerAsked);
+    if (c?.type === "offer") {
+      store.line(thread, run.turnId, `${c.text[lang].say} ${c.text[lang].ask}`);
+      store.mark(thread, run.turnId, "line", Date.now() - run.t0);
+      line = "";
+    }
+  }
   if (line) await showLine(run, line);
+  // An order finished in this turn (placed, nothing waiting): the moment for the wholesaler's one offer, if any.
+  const mine = store.agentTurn(thread, run.turnId);
+  if (!run.offerAsked && mine?.cards.some((c) => c.type === "order" && c.status === "committed") && !mine.cards.some((c) => c.type === "gate" && c.outcome === "waiting")) {
+    const { sayOffer } = await import("./offer");
+    await sayOffer(run).catch(() => undefined);
+  }
   await finishTurn(run);
 }
 

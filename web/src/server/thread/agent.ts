@@ -46,6 +46,7 @@ How to work each turn:
 - A dish or a menu for a number of covers ("lunch for 10 tomorrow", "salmon soup for 300 on Friday", "chocolate cake"): plan_menu with their words. Open words get up to three menus to pick from.
 - Every message is read in the light of the conversation so far (TALKING ABOUT NOW). A short follow-up fills in or changes that thing: "10 portions" after a dish sets its covers; "200 litres", "for Friday", "no, 200", "make it 40", "the organic one" complete or change the request on the table (call order with their words, code applies them); "and oat drink too" adds to the same order (order). Do it; do not ask them to confirm a change they just said. A new subject starts only when they clearly name a new thing. Never ask for what they already said in this conversation.
 - Past orders: order_history. Rules, limits, who gives the OK, or a change to them ("never nuts", "raise the limit to 800"): rules, with the change when they ask for one; the buyer then confirms it with a yes, through buyer_reply. Say "confirm", never "sign" or "mandate". An order's status: get_order or explain.
+- "Anything new or worth trying?", "what's in season?": wholesaler_offer. After the store said an offer, the buyer's yes, no, "don't suggest this kind again" or "no offers at all" is buyer_reply (offer:yes, offer:no, offer:mute, offer:off); a no or a mute is acknowledged in one short sentence and never raised again.
 - Anything else (a greeting, small talk, something outside buying food): one short sentence, no tool.
 
 Your reply (the store shows it under the buyer's words, with your work folded away beneath it):
@@ -54,7 +55,7 @@ Your reply (the store shows it under the buyer's words, with your work folded aw
 - Mark a figure the eye should find (a price, an amount) like **1 010,00 €** or **1 000 L**, and a day or a time like {{Monday 16.11.}} or {{17.00}}. Nothing else is marked. No lists, no headings, no links, no ids, no codes.
 - When something is open, end on it in a few words, one thing only: "Which one?" only when two or more can be ordered (the store lists them under your words); with one, "Shall I order it?" (with the day when it matters: "Shall I order it for Monday 16.11.?"); a rules change, "Shall I change it?". If it needs a person's OK, say so and whose, and why in a few words ("It's over your 500 € limit, so it needs your OK"): the store shows the OK button.
 - Never tell the buyer what to type or say (no "say ...", no "send the product name with the amount"): ask a question a plain yes or a few words answer. If you asked something last turn and the answer did not settle it, do not ask it again in other words: offer your best reading from what is on the table ("12 litres of the cream for the sauce?").
-- One product per option, each with its own price: never two options in one phrase ("Oatly Semi or Whole, 16,80 €"). When the buyer counts in another unit than the product (cartons, packs, boxes), say the amount in theirs too ("12 cartons of 1 L"). When the usual product cannot be had, say what changes for them: how it comes now (1 000 one-litre cartons instead of 100 boxes of 10 L) and the price difference when a result gives it.
+- Name the options in their order (n = 1 first, as the store lists them), so "the first one" is the one you named first. One product per option, each with its own price: never two options in one phrase ("Oatly Semi or Whole, 16,80 €"). When the buyer counts in another unit than the product (cartons, packs, boxes), say the amount in theirs too ("12 cartons of 1 L"). When the usual product cannot be had, say what changes for them: how it comes now (1 000 one-litre cartons instead of 100 boxes of 10 L) and the price difference when a result gives it.
 - Exceptions come first, one clear sentence each: nothing can arrive in time (and the earliest day that can), the kind asked for cannot be had (and what stands in, and what differs), an amount looks unusual, it needs a person's OK (whose). Then the question that moves it on. Which products and order times stay in the steps.
 - A day written like 16.11. already ends with its full stop: never add a second.
 - Use only figures, products, days, times and claims that this turn's results state (the \`shown\` facts and the tool results). Euros with a comma for cents ("41,00 €"). Never say an order is placed, OK'd or delivered unless a result says so; a waiting order is waiting. An earlier delivery than the day asked is said as earlier.
@@ -172,6 +173,19 @@ export async function openRefs(run: TurnRun): Promise<OpenRef[]> {
   }
   // The order sheet open now (several items, the usual, a menu or an option changed): ordered, or changed, in words.
   const { currentSheet } = await import("./sheet");
+  // The wholesaler's offer said last turn (or on the opening): answered in words.
+  const { openOffer } = await import("./offer");
+  const offer = openOffer(run);
+  if (offer) {
+    const holder = run.thread.turns.find((x) => x.role === "agent" && x.cards.some((c) => c.cardId === offer.cardId));
+    const after = holder ? run.thread.turns.slice(run.thread.turns.indexOf(holder) + 1).filter((x) => x.role === "agent" && x.turnId !== run.turnId) : [];
+    if (holder && after.length === 0) {
+      refs.push({ ref: "offer:yes", label: `yes to the wholesaler's offer of ${offer.name}: put it on an order to confirm`, action: { type: "offer_answer", offerId: offer.offerId, answer: "yes" }, confirm: true });
+      refs.push({ ref: "offer:no", label: "no to the offer", action: { type: "offer_answer", offerId: offer.offerId, answer: "no" } });
+      refs.push({ ref: "offer:mute", label: "don't suggest this kind again", action: { type: "offer_answer", offerId: offer.offerId, answer: "mute" } });
+      refs.push({ ref: "offer:off", label: "no offers at all", action: { type: "offer_answer", offerId: offer.offerId, answer: "off" } });
+    }
+  }
   const sh = currentSheet(run);
   const sheetCard = sh ? run.store.cards(run.thread).map((x) => x.card).find((c) => c.type === "sheet" && c.sheetId === sh.sheetId) : undefined;
   if (sh && sheetCard?.type === "sheet" && sheetCard.state === "editing") {
@@ -351,6 +365,13 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
         // A widget's action (a menu picked, the order sheet changed or ordered, the rules confirmed): the same handler as a tap.
         const { runWidget } = await import("./widgets");
         if (await runWidget(run, r.action, words)) {
+          if (r.action.type === "offer_answer") {
+            const offerId = r.action.offerId;
+            const c = run.store.cards(run.thread).map((x) => x.card).find((x) => x.type === "offer" && x.offerId === offerId);
+            const { currentSheet } = await import("./sheet");
+            const sheet = currentSheet(run);
+            return { ok: true, done: `offer ${c?.type === "offer" ? c.state : "answered"}`, say: c?.type === "offer" ? c.reply : undefined, ...(c?.type === "offer" && c.state === "yes" && sheet ? { orderToConfirm: { sheetId: sheet.sheetId, deliveryDate: sheet.deliveryDate } } : {}) };
+          }
           // "Go ahead" on a menu orders it: onto one order sheet, then that sheet through the gate, as its yes says.
           if (r.action.type === "menu_to_sheet") {
             const { currentSheet, placeSheet } = await import("./sheet");
@@ -389,6 +410,18 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
         }
         const { menuFromWords } = await import("./menu");
         return menuFromWords(run, said);
+      },
+      toModelOutput: ({ output }) => ({ type: "text", value: compact(output) }),
+    }),
+    wholesaler_offer: tool({
+      description: "The buyer asks what is new, in season or worth trying from the wholesaler: its selling agent's one offer for this kitchen, if it has one worth saying (signed, checked against the kitchen's rules). The store says the offer in its own words; nothing is ordered.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const { sayOffer } = await import("./offer");
+        const c = await sayOffer(run, { asked: true });
+        if (!c) return { offer: "none: the wholesaler has nothing worth suggesting to this kitchen now. Say so in one sentence." };
+        run.offerAsked = c.offerId;
+        return { offer: c.name, said: "the store shows the offer's own sentence and question as your reply; write one short sentence only" };
       },
       toModelOutput: ({ output }) => ({ type: "text", value: compact(output) }),
     }),
@@ -519,7 +552,7 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
       { role: "system", content: context },
     ],
     tools,
-    activeTools: [...PUBLISHED_FOR_MODEL, "order", "plan_menu", "buyer_reply", "order_history", "find_products", "product_facts", "show_home", "rules", "await_sign_off"],
+    activeTools: [...PUBLISHED_FOR_MODEL, "order", "plan_menu", "buyer_reply", "order_history", "find_products", "product_facts", "show_home", "rules", "await_sign_off", "wholesaler_offer"],
     toolApproval: {
       ...Object.fromEntries(BUYERS_OR_ENGINES.map((n) => [n, deny(`${n} is the buyer's decision or the engine's step in the store: use buyer_reply or order.`)])),
       // The pause for a person's sign-off. Only the server answers it, when the passkey sign-off is recorded.
@@ -543,7 +576,7 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
 
   const result = await agent.stream({ messages, timeout: { totalMs: 90_000, toolMs: 60_000 } });
   for await (const part of result.fullStream) {
-    if (part.type === "tool-call" && !["order", "plan_menu", "buyer_reply", "order_history", "find_products", "product_facts", "show_home", "await_sign_off"].includes(part.toolName)) {
+    if (part.type === "tool-call" && !["order", "plan_menu", "buyer_reply", "order_history", "find_products", "product_facts", "show_home", "await_sign_off", "wholesaler_offer"].includes(part.toolName)) {
       const st = step(run, `tool:${part.toolName}`, LABELS[part.toolName] ?? `Looking up ${part.toolName.replace(/_/g, " ")}`);
       void result.steps.then(() => st.done(), () => st.fail());
     }

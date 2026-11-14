@@ -80,6 +80,8 @@ function cardFacts(c: Card): Record<string, unknown> | undefined {
       return { records: c.rows.slice(0, 5).map((r) => ({ what: r.label, ...(r.date ? { date: r.date } : {}), ...(r.totalCents !== undefined ? { totalEur: eur(r.totalCents) } : {}) })) };
     case "rules":
       return c.proposal ? { rulesChange: { changes: c.diff.map((d) => `${d.field}: ${d.before || "none"} → ${d.after || "none"}`), state: c.proposal.state, canConfirmHere: c.proposal.canSign, ...(c.proposal.why ? { whyNot: c.proposal.why } : {}) }, ask: c.proposal.state === "open" && c.proposal.canSign ? "shall I change it?" : undefined } : { rules: { perOrderLimitEur: eur(c.current.perOrderLimitCents), weeklyBudgetEur: eur(c.current.weeklyBudgetCents) } };
+    case "offer":
+      return c.state === "open" ? { wholesalerOffer: { product: c.name, said: c.text.en.say, ask: "yes (put it on an order), no, or don't suggest this kind again" } } : { wholesalerOffer: { product: c.name, answered: c.state, ...(c.reply ? { reply: c.reply } : {}) } };
     case "notice":
       return { notice: c.message, ...(c.kind === "incomplete" ? { missing: c.missing } : {}) };
     case "today":

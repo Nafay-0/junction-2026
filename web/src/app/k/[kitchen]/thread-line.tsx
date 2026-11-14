@@ -4,7 +4,7 @@ import { Check, ChevronDown, ScanFace, Sparkles } from "lucide-react";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useFormat, useText } from "../../_i18n/provider";
 import { clock, money } from "../../_ui/plain";
-import type { AgentTurn, BuyerTurn, GateCard as GateCardT, OptionView, OrderCard, Thread, ThreadAction, ThreadStep, TodayCard } from "@/server/thread/types";
+import type { AgentTurn, BuyerTurn, GateCard as GateCardT, OfferCard, OptionView, OrderCard, Thread, ThreadAction, ThreadStep, TodayCard } from "@/server/thread/types";
 import { usePortal } from "./portal";
 import { THREAD_LINE_TEXT } from "./thread-line.text";
 import { useSignOff } from "./thread-signoff";
@@ -85,11 +85,11 @@ export function ThreadLine({ className = "", landing = false }: { className?: st
       <ol role="log" aria-live="polite" aria-label="Conversation with the purchasing agent" className={`relative flex flex-col gap-7 pl-9 ${onlyOpening && landing ? "min-h-[50dvh] justify-end" : ""}`}>
         {onlyOpening && landing ? (
           <li>
-            <Landing today={opening?.cards.find((c): c is TodayCard => c.type === "today")} thread={t} />
+            <Landing today={opening?.cards.find((c): c is TodayCard => c.type === "today")} offer={opening?.cards.find((c): c is OfferCard => c.type === "offer")} thread={t} />
           </li>
         ) : (
           turns.map((x) =>
-            x.role === "agent" && x === opening && !onlyOpening && !x.cards.some((c) => c.type === "today" && c.items.length > 0) ? null : x.role === "buyer" ? (
+            x.role === "agent" && x === opening && !onlyOpening && !x.cards.some((c) => (c.type === "today" && c.items.length > 0) || c.type === "offer") ? null : x.role === "buyer" ? (
               <BuyerLine key={x.turnId} turn={x} />
             ) : (
               <AgentNode key={x.turnId} turn={x} thread={t!} tap={tap} busy={api.posting} latest={x === lastAgent} />
@@ -158,6 +158,7 @@ function AgentNode({ turn, thread, tap, busy, latest }: { turn: AgentTurn; threa
         </p>
       )}
       {turn.status === "working" && running && <p className="tl-sheen mt-1 text-[0.9rem] font-medium text-petrol">{stepLabel(running, w, f.lang)}</p>}
+      {cards.map((c) => (c.type === "offer" && c.state === "open" && !(turn.line ?? "").includes(c.text[f.lang].say.slice(0, 24)) ? <OfferWords key={c.cardId} card={c} lang={f.lang} /> : null))}
       {latest && <Choices turn={turn} thread={thread} tap={tap} busy={busy} />}
       <Lists turn={turn} thread={thread} />
       <Memory turn={turn} />
@@ -435,6 +436,9 @@ function thinking(turn: AgentTurn, thread: Thread, tx: Tx, w: (typeof THREAD_WOR
   const wf = fmtFor(f.lang);
   for (const c of turn.cards) {
     switch (c.type) {
+      case "offer":
+        out.push({ label: tx.step.offer, detail: c.steps.join(" "), tone: "live" });
+        break;
       case "understood": {
         const bits = [c.amount ? f.measure(c.amount.amount, c.amount.unit) : "", c.item, c.claims.map((x) => f.attr(x)).join(", "), c.deliverOn ? f.day(c.deliverOn) : c.deliverBy ? f.day(c.deliverBy) : ""].filter(Boolean);
         out.push({ label: tx.step.read, detail: bits.join(", ") });
@@ -521,7 +525,17 @@ function todaySentence(card: TodayCard, tx: Tx, f: ReturnType<typeof useFormat>)
   return parts.length ? parts.join(" ") : tx.today.none;
 }
 
-function Landing({ today, thread }: { today?: TodayCard; thread?: Thread }) {
+/** The wholesaler's offer, in the words plain code wrote from the signed offer: its sentence and its question. */
+function OfferWords({ card, lang, big }: { card: OfferCard; lang: "en" | "fi" | "sv"; big?: boolean }) {
+  const t = card.text[lang] ?? card.text.en;
+  return (
+    <p data-offer={card.offerId} className={`mt-3 max-w-[38ch] leading-[1.6] text-ink [text-wrap:pretty] ${big ? "text-[1.1rem]" : "text-[1.02rem]"}`}>
+      <Rich text={`${t.say} ${t.ask}`} />
+    </p>
+  );
+}
+
+function Landing({ today, offer, thread }: { today?: TodayCard; offer?: OfferCard; thread?: Thread }) {
   const tx = useText(THREAD_LINE_TEXT);
   const f = useFormat();
   const { kitchen, thread: api, lang } = usePortal();
@@ -537,6 +551,7 @@ function Landing({ today, thread }: { today?: TodayCard; thread?: Thread }) {
           <Rich text={todaySentence(today, tx, f)} />
         </p>
       )}
+      {offer?.state === "open" && <OfferWords card={offer} lang={f.lang} big />}
       {today?.items.filter((i) => i.kind === "sign_off").map((i) =>
         i.kind === "sign_off" && thread ? <SignOffSlab key={i.approvalId} card={{ type: "gate", cardId: `gate:${i.orderId}`, requestId: i.requestId ?? "", orderId: i.orderId, approvalId: i.approvalId, outcome: "waiting", approver: i.approver, reasons: [], rules: [] } as GateCardT} thread={thread} tap={(action, label) => void api.submit({ door: "typed", via: "tap", action, label, lang })} total={i.totalCents} what={i.lines.map((l) => `${f.num(l.quantity)} × ${l.name}`).join(", ")} /> : null,
       )}

@@ -7,6 +7,7 @@ import { LangSwitch, useText } from "../../_i18n/provider";
 import { Sheet, buttonClass, useToast } from "../../_ui/kit";
 import { Composer, VoiceStatus, type MicState, type VoiceState } from "../../_ui/thread";
 import { AccountBar } from "./account-bar";
+import { CallAgent } from "./call-agent";
 import { requestLabel, usePortal } from "./portal";
 import { nameIn } from "./shop";
 import { ThreadLine } from "./thread-line";
@@ -326,7 +327,8 @@ function ShellMenu() {
           <p className="text-[0.92rem] font-medium">{tl.sections.language}</p>
           <LangSwitch />
         </div>
-        <div className="mt-4">
+        <div className="mt-4 flex flex-col gap-3">
+          <CallAgent compact />
           <StartOver />
         </div>
       </Sheet>

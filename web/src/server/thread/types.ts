@@ -71,6 +71,8 @@ export type ThreadAction =
   | { type: "menu_line_per_cover"; planId: string; lineId: string; dishId: string; amount: number }
   /** Menu builder: accept a doubt the planner raised on a line ("a different form than the recipe asks"). */
   | { type: "menu_accept"; planId: string; doubtId: string }
+  /** The buyer's answer to the wholesaler's offer the agent said (server/offers/thread.ts). */
+  | { type: "offer_answer"; offerId: string; answer: "yes" | "no" | "mute" | "off" }
   /** Menu builder: put every bought line on an order sheet, one order. */
   | { type: "menu_to_sheet"; planId: string }
   /** Remember this, in the kitchen's own words: goes through the memory writer, confirmed by the person. */
@@ -590,7 +592,26 @@ export type MemoryListCard = CardBase & {
   canChange: boolean;
 };
 
-export type Card = UnderstoodCard | AnomalyCard | QuestionCard | OptionsCard | PriceCard | GateCard | OrderCard | MemoryCard | RecordsCard | NoticeCard | SheetCard | AlternativesCard | MenuCard | TodayCard | ProductsCard | ProductCard | StandingCard | DeliveriesCard | MemoryListCard | RulesCard;
+/**
+ * The wholesaler's one offer, said by the agent in the conversation (server/offers): its sentence and question in each
+ * language (plain code wrote them from the signed offer), the steps and proof for the closed steps view, and the answer.
+ */
+export type OfferCard = CardBase & {
+  type: "offer";
+  offerId: string;
+  productId: string;
+  name: string;
+  text: Record<"en" | "fi" | "sv", { say: string; ask: string }>;
+  steps: string[];
+  proof: { token: string; keysUrl: string; verified: boolean };
+  validUntil: string;
+  state: "open" | "yes" | "no" | "mute" | "off";
+  /** The agent's line back after the answer, in the language it was given in. */
+  reply?: string;
+  requestId?: string;
+};
+
+export type Card = OfferCard | UnderstoodCard | AnomalyCard | QuestionCard | OptionsCard | PriceCard | GateCard | OrderCard | MemoryCard | RecordsCard | NoticeCard | SheetCard | AlternativesCard | MenuCard | TodayCard | ProductsCard | ProductCard | StandingCard | DeliveriesCard | MemoryListCard | RulesCard;
 // ---------- the kitchen's rules (docs/agent-thread.md "Widgets": rules) ----------
 
 /** The mandate as the rules card shows it: plain values. `groups` only where the kitchen has terms (an account). */

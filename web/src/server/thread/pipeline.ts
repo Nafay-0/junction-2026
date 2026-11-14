@@ -34,6 +34,10 @@ export type TurnRun = {
   session: AgentSession;
   person?: ConsolePerson;
   door: ThreadDoor;
+  /** The wholesaler's offer the buyer asked for this turn: its own words are the reply (offer.ts). */
+  offerAsked?: string;
+  /** The buyer's language as the store sent it (en when not said). */
+  lang?: "en" | "fi" | "sv";
   t0: number;
   /** Everything the agent turn's cards were built from: the facts the model's line is checked against. */
   facts: unknown[];
