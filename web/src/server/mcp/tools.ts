@@ -20,6 +20,7 @@ import {
 import { AskHuman, answersFromBuyer, concernsFromBuyer, type HumanChannel } from "./ask-human";
 import type { LiveBudget } from "@/server/aiven/valkey";
 import { nextStepForIntake, nextStepForOrder, nextStepForQuote, waitingFor } from "./next-step";
+import { AlternativesInput, ListOrdersInput, LookupInput, awaitDecision, findAlternatives, listOrders, lookupProducts } from "../lookup";
 
 /**
  * Dock's operations as MCP tools: one table, one entry per tool. Each entry is a name, a description for a
@@ -133,9 +134,15 @@ const INTAKE_TOOLS = [
     title: "Start an order from the buyer's need",
     description:
       "START HERE for any new purchase. Send the buyer's need as structured fields (what, how much, by when, must-haves). AimoPilot checks it against the kitchen's own order history for likely mistakes (for example 1,000 L where they usually order 100 L, or a delivery day it cannot make), asks at most two short questions its memory cannot answer, then offers option cards with pros and cons. Returns a step whose `state` is needs_confirmation, needs_input, options_ready, quoted, no_options or cancelled; `nextStep` says exactly which tool to call next and `waitingFor` says whether you must wait for the human buyer.",
-    input: z.object({ need: NeedArg, by: by.optional().describe("The name of the person asking, if you know it.") }),
+    // Loose: some models put quantity or deliverBy next to `need` instead of inside it (Gemini 3.1 Flash-Lite through
+    // Google ADK, five times in a row on 14 Nov). Those fields are folded into the need, never invented.
+    input: z.looseObject({ need: NeedArg, by: by.optional().describe("The name of the person asking, if you know it.") }),
     output: intakeOut,
-    run: async ({ dock, session, defaultBy }, args) => intakeResult(await dock.intake.open(session, { ...args, by: args.by ?? defaultBy })),
+    run: async ({ dock, session, defaultBy }, args) => {
+      const { need, by: who, ...stray } = args as typeof args & Record<string, unknown>;
+      const folded = { ...Object.fromEntries(Object.entries(stray).filter(([k]) => k in NeedArg.shape)), ...need };
+      return intakeResult(await dock.intake.open(session, { need: folded as typeof need, by: who ?? defaultBy }));
+    },
   }),
   tool({
     name: "respond_to_concerns",
@@ -194,8 +201,8 @@ const INTAKE_TOOLS = [
     input: z.object({ requestId: intakeId, optionId: ChoiceInput.shape.optionId.describe("An optionId from step.options."), by: by.optional().describe("Who chose: the buyer's name if they told you, or yours if they asked you to decide.") }),
     output: intakeOut,
     run: async ({ dock, session, defaultBy }, { requestId, optionId, by: chooser }) => {
-      const who = chooser ?? defaultBy;
-      if (!who) throw new DockError(400, "invalid_request", "Say who chose: send by with the buyer's name, or yours if they asked you to decide.");
+      // Choosing is the agent's own step (not the buyer's answer), so without a name the record says the agent chose.
+      const who = chooser ?? defaultBy ?? `the agent ${session.agentId}`;
       return intakeResult(await dock.intake.choose(session, requestId, { optionId, by: who }));
     },
   }),
@@ -322,7 +329,7 @@ const CORE_TOOLS = [
     name: "place_order",
     title: "Place an order against a quote",
     description:
-      "Order exactly what a quote offers, at the quoted prices. After choose_option, pass only requestId: Dock places the quote it signed for that request (no need to copy the long quoteToken). After request_quote, pass requestId, quoteToken and lines unchanged. Dock's gate checks the order against your mandate in plain code. Three outcomes: committed (within the mandate; the result carries the wholesaler-signed confirmation), pending_approval (a person named in the mandate must sign off on their own phone; tell the buyer who, in one sentence, and stop: you must NOT retry, re-place or split it), or refused (the error names the rule, e.g. weekly_budget). A quote buys once.",
+      "Order exactly what a quote offers, at the quoted prices. After choose_option or request_quote, pass only requestId: Dock places the latest quote it signed for it (no token to copy). To change a placed order, quote the new one and pass replaces: the old orderId. Dock's gate checks the order against your mandate in plain code. Three outcomes: committed (within the mandate; the result carries the wholesaler-signed confirmation), pending_approval (a person named in the mandate must sign off on their own phone; tell the buyer who, in one sentence, and stop: you must NOT retry, re-place or split it), or refused (the error names the rule, e.g. weekly_budget). A quote buys once.",
     input: PlaceOrderInput.extend({
       requestId,
       quoteToken: z.string().min(1).optional().describe("Only after request_quote: its quoteToken, unchanged. Leave it out after choose_option."),
@@ -331,29 +338,98 @@ const CORE_TOOLS = [
         .optional()
         .describe("Only with quoteToken: the quote's lines (productId, quantity, unitPriceCents) copied from quote.lines."),
     }),
-    output: z.object({ order: OrderSchema, nextStep }),
-    run: async ({ dock, session }, { requestId, quoteToken, lines }) => {
-      // Without a quoteToken the core places the quote it signed for this request at choose_option (no_current_quote if none).
-      const args: z.input<typeof PlaceOrderInput> = { requestId, ...(quoteToken ? { quoteToken } : {}), ...(lines ? { lines } : {}) };
+    output: z.object({ order: OrderSchema, replaced: z.looseObject({ orderId: z.string(), status: z.string() }).optional().describe("With replaces: what happened to the order this one replaces."), nextStep }),
+    run: async ({ dock, session }, { requestId, quoteToken, lines, replaces }) => {
+      // Without a quoteToken the core places the quote it signed for this request (at choose_option, or the latest
+      // request_quote outside the intake); no_current_quote if none.
+      const args: z.input<typeof PlaceOrderInput> = { requestId, ...(quoteToken ? { quoteToken } : {}), ...(lines ? { lines } : {}), ...(replaces ? { replaces } : {}) };
       const order = await dock.placeOrder(session, args);
       if (order.status === "rejected") {
         const rule = decidingRule(order.decision);
         throw new DockError(422, "policy_rejected", order.decision.reasons.join(" "), rule?.rule, { order });
       }
-      return { order, nextStep: nextStepForOrder(order) };
+      const { replaced, ...placed } = order;
+      const also = replaced ? (replaced.refused ? ` The order it was to replace (${replaced.orderId}) still stands: ${replaced.refused.message} Tell the buyer both orders stand.` : ` Order ${replaced.orderId} was taken back: one order stands.`) : "";
+      return { order: placed, ...(replaced ? { replaced } : {}), nextStep: nextStepForOrder(order) + also };
     },
   }),
   tool({
     name: "get_order",
     title: "Read an order",
     description:
-      "Read an order's current status (pending_approval, committed, declined, rejected), the gate's decision with every rule's result, the approval state and, once committed, the wholesaler-signed confirmation. Use it to follow an order that waits for sign-off.",
-    input: z.object({ orderId: z.string().min(1).describe("orderId returned by place_order.") }),
-    output: z.object({ order: OrderSchema, nextStep }),
+      "An order's status (pending_approval, committed, declined, rejected, withdrawn, expired), the gate's decision with every rule's result, the sign-off and, once committed, the wholesaler-signed confirmation. With waitSeconds (at most 55) it answers as soon as the person decides an order waiting for sign-off: the way to learn the outcome. It only reads; no tool can approve.",
+    input: z.object({ orderId: z.string().min(1).describe("orderId returned by place_order."), waitSeconds: z.number().int().min(0).max(55).optional().describe("Wait up to this long for a sign-off decision.") }),
+    output: z.object({ order: OrderSchema, decided: z.boolean().optional(), nextStep }),
     readOnly: true,
-    run: async ({ dock, session }, { orderId }) => {
-      const order = await dock.getOrder(session, orderId);
-      return { order, nextStep: nextStepForOrder(order) };
+    run: async ({ dock, session }, { orderId, waitSeconds }) => {
+      if (!waitSeconds) {
+        const order = await dock.getOrder(session, orderId);
+        return { order, nextStep: nextStepForOrder(order) };
+      }
+      const r = await awaitDecision(dock, session, orderId, waitSeconds);
+      return { order: r.order, decided: r.decided, nextStep: r.decided ? nextStepForOrder(r.order) : `Still waiting for ${r.order.approval?.approver.name ?? "the approver"} to decide on their phone. Wait again, or stop and tell the buyer; never place it again.` };
+    },
+  }),
+  tool({
+    name: "list_orders",
+    title: "List this organisation's orders",
+    description:
+      "This organisation's orders, newest first: status, total, delivery day, lines, who must sign off and whether they have, and canTakeBack. For 'what waits for sign-off?' or 'what did we order?'.",
+    input: ListOrdersInput,
+    output: z.object({ orders: z.array(z.looseObject({ orderId: z.string(), status: z.string() })), waitingForSignOff: z.number(), nextStep }),
+    readOnly: true,
+    run: async ({ dock, session }, args) => {
+      const r = await listOrders(dock, session, args);
+      return { ...r, nextStep: r.waitingForSignOff ? "The named person decides those on their own phone; get_order with waitSeconds waits for one. Do not place them again." : "Nothing waits for a sign-off." };
+    },
+  }),
+  tool({
+    name: "withdraw_order",
+    title: "Take back an order",
+    description:
+      "Only when the buyer asks: take back an order waiting for sign-off, or one this agent placed alone, until the wholesaler's order cut-off (list_orders: canTakeBack). What a person signed is theirs to take back. `by` is recorded as relayed, not verified. To change an order, use place_order with replaces.",
+    input: z.object({ orderId: z.string().min(1), reason: z.string().max(300).optional().describe("Why, in the buyer's words."), by: z.string().min(1).max(120).optional() }),
+    output: z.object({ order: z.looseObject({ orderId: z.string(), status: z.string() }), nextStep }),
+    run: async ({ dock, session, defaultBy }, { orderId, reason, by: who }) => {
+      const order = await dock.withdrawOrder(session, orderId, { ...(reason ? { reason } : {}), ...((who ?? defaultBy) ? { by: who ?? defaultBy } : {}) }, { agentTakeBack: true });
+      return { order, nextStep: "Taken back: it no longer counts against the weekly budget. Tell the buyer in one sentence; start a new request only if they ask." };
+    },
+  }),
+  tool({
+    name: "find_products",
+    title: "Look up products, prices and availability",
+    description:
+      `What is available and at what price, in one call: up to ${MAX_LIVE_IDS_PER_CALL} products the mandate allows, filtered by words, category, brand, claims, allergens, pack size and day. Each has match (exact, variant, stand_in, not_the_kind), pack, claims, labels, allergens, origin, reliability, carbon, and live price, stock, delivery and cut-off. Opens a request if you pass none. To order: submit_need, or request_quote.`,
+    input: LookupInput,
+    output: z.looseObject({ requestId: z.string(), products: z.array(z.looseObject({ productId: z.string() })), nextStep }),
+    readOnly: true,
+    run: async ({ dock, session, guard, agentKey }, args) => {
+      const r = await lookupProducts(dock, session, args, { budget: guard, agentKey });
+      const short = r.products.some((p) => "live" in p && p.live && (p.live.coversQuantity === false || p.live.meetsDay === false));
+      return {
+        ...r,
+        nextStep: !r.products.length
+          ? "Nothing in the assortment matches inside the mandate. Tell the buyer what was looked for; loosen a filter only if they agree."
+          : `To order, call submit_need with the buyer's need (AimoPilot checks it and offers option cards), or request_quote with requestId ${r.requestId} and lines in packs, then place_order with just requestId.${short ? " Some products do not cover the amount or the day: find_alternatives ranks what can stand in." : ""}`,
+      };
+    },
+  }),
+  tool({
+    name: "find_alternatives",
+    title: "Rank alternatives: good, better, best",
+    description:
+      "A product is short, late or not wanted: what can stand in inside the mandate, ranked best, better, good, each with trade-offs, live price and delivery, and the gate's preview. Keeps its dietary claims; never an allergen the mandate or buyer forbids.",
+    input: AlternativesInput,
+    output: z.looseObject({ requestId: z.string(), requested: z.looseObject({ productId: z.string() }), alternatives: z.array(z.looseObject({ productId: z.string() })), nextStep }),
+    readOnly: true,
+    run: async ({ dock, session, guard, agentKey }, args) => {
+      const r = await findAlternatives(dock, session, args, { budget: guard, agentKey });
+      return {
+        ...r,
+        nextStep: r.alternatives.length
+          ? `Show the buyer the alternatives with their trade-offs and let them choose (a substitute outside their stated preferences needs their word). Then request_quote with requestId ${r.requestId}, a line for what the asked product still covers and a line for the substitute with substituteFor ${r.requested.productId}, and place_order with just requestId.`
+          : "Nothing can stand in inside the mandate. Tell the buyer, with the reasons in leftOut; do not order around it.",
+      };
     },
   }),
   tool({
@@ -384,7 +460,7 @@ const core = (name: string) => CORE_TOOLS.find((t) => t.name === name)!;
 export const TOOLS = [
   core("read_mandate"),
   ...INTAKE_TOOLS,
-  ...["place_order", "get_order", "explain", "open_request", "search_products", "check_availability", "request_quote"].map(core),
+  ...["place_order", "get_order", "list_orders", "withdraw_order", "explain", "find_products", "find_alternatives", "open_request", "search_products", "check_availability", "request_quote"].map(core),
 ];
 
 export type DockTool = (typeof TOOLS)[number];

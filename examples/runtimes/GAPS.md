@@ -10,6 +10,34 @@ relayed answers stay "relayed, unverified"); 2 fixed in the core, so REST too (`
 order reply; examples hold placeholders, never a pre-filled answer); 5 fixed (`need.deliverOn`, an exact day held by
 the gate); 6 fixed (output schemas published shallow: tools/list 129 KB -> 30 KB, output schemas 109 KB -> 11 KB).
 
+## Re-run on 14 Nov afternoon (branch `claude/open-interface`, 22 tools, partner catalogue, production build)
+
+All seven reached `pending_approval` with **no refusal met**, about $0.12 in model cost; transcripts are in
+[transcripts/](transcripts/). Since Friday the tool table gained `find_products`, `find_alternatives`, `list_orders`,
+`withdraw_order` and the selling agent's four offer tools; `get_order` gained `waitSeconds`. No runtime needed a
+change for them. What the earlier runs today showed, and what was fixed on our side:
+
+- **The runs disturbed each other.** Every runtime buys for the same demo kitchen, so the sixth (LangGraph) met five
+  1,000 L orders still waiting for sign-off and AimoPilot asked "order again?". The scripted buyer could not answer
+  it, and Claude Haiku 5.5 rightly placed nothing (it also offered the one-time answer page). **Fix:** the runner takes
+  each run's waiting order back through the published withdraw before the next runtime starts.
+- **The model must use the same key as the server.** `mint-mandate.ts` did not read `web/.env.local`, so with
+  `DOCK_DEMO_KITCHEN_JWK` set every mandate would have been refused. **Fix:** it now loads it, like the demo scripts.
+- **Google ADK + gemini-3.1-flash-lite put `quantity` next to `need`** instead of inside it, five times. Our refusal said
+  only "quantity is required", so it fell back to the lower-level tools. **Fix:** `submit_need` folds a need's own fields
+  sent beside it into the need. Next run: four calls, the intake path.
+- **OpenAI Agents SDK + gpt-6-luna called `choose_option` without `by`** and was refused. **Fix:** choosing is the
+  agent's own step, so without a name the record says the agent chose. (Buyer answers still require the buyer.)
+- **Semantic Kernel no longer names any AimoPilot operation.** It reads the human-input operations from the
+  document's `x-dock-human-input`, from the agent view (`?audience=agent`).
+
+**Which needed nothing but the published documents:** all seven run on the address, the mandate and what
+`tools/list` or `/api/v1/openapi.json?audience=agent` says. Six read the published human-input marker
+(`_meta["dock/humanInput"]` or `x-dock-human-input`) to route the buyer's answers through their own approval step. Pydantic
+AI needs not even that: elicitation lets AimoPilot ask the person directly. Each example's runtime-specific
+settings are its runtime's own (Pydantic AI's `tool_error_behavior`; Semantic Kernel's four workarounds, listed in
+RESULTS.md), not AimoPilot's.
+
 ## 1. On clients that cannot elicit, the gate cannot tell a buyer's answer from the model's
 
 **Seen with:** OpenAI Agents SDK (no elicitation support at all), Google ADK (2025-11-25 handshake), LangGraph

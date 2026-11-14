@@ -11,8 +11,9 @@
 The REST door: the agent fetches /api/v1/openapi.json, keeps the operations that take the credential it holds
 (the document's own `security` requirements), and calls them with the mandate as `Authorization: Bearer` plus
 `Dock-Agent-Id`. The buyer is a scripted person, Sanna, never the model: a Semantic Kernel auto-function-invocation
-filter stops any operation that carries a person's answer until she has reviewed it. The OpenAPI document does not
-mark which operations those are, so this file names them (HUMAN_INPUT_OPERATIONS): the one line that knows AimoPilot.
+filter stops any operation that carries a person's answer until she has reviewed it. Which operations those are, it
+reads from the document itself (`x-dock-human-input`), from the agent's view of it (`?audience=agent`, no approver
+operations): nothing in this file names an AimoPilot operation.
 """
 
 import asyncio
@@ -37,7 +38,12 @@ BASE = os.environ.get("DOCK_URL", "http://localhost:3000").rstrip("/")
 MODEL = os.environ.get("MODEL", "gpt-6-luna")
 PRICES = {"gpt-6-luna": (0.10, 0.50), "gpt-5-mini": (0.25, 2.00), "gpt-5-nano": (0.05, 0.40)}  # USD per million tokens, in/out
 HEADERS = {"Authorization": f"Bearer {os.environ['DOCK_MANDATE']}", "Dock-Agent-Id": os.environ["DOCK_AGENT_ID"]}
-HUMAN_INPUT_OPERATIONS = {"respondToConcerns", "answerQuestions"}  # not marked in the OpenAPI document (see RESULTS.md)
+HUMAN_INPUT_OPERATIONS: set[str] = set()  # read from the document: operations marked x-dock-human-input
+
+
+def human_input_operations(spec: dict) -> set[str]:
+    """Operations the OpenAPI document marks as carrying the human buyer's own answer (x-dock-human-input)."""
+    return {op["operationId"] for ops in spec["paths"].values() for m, op in ops.items() if isinstance(op, dict) and (op.get("x-dock-human-input") or {}).get("required")}
 
 TASK = "Order 1,000 litres of lactose-free milk for delivery on Monday for this kitchen; ask me if something needs my decision."
 INSTRUCTIONS = (
@@ -116,8 +122,9 @@ def operations_for_my_credential(spec: dict) -> set[str]:
 
 async def main() -> None:
     t0 = time.time()
-    spec = httpx.get(f"{BASE}/api/v1/openapi.json").json()
+    spec = httpx.get(f"{BASE}/api/v1/openapi.json", params={"audience": "agent"}).json()  # the agent's view: no approver operations
     allowed = operations_for_my_credential(spec)
+    HUMAN_INPUT_OPERATIONS.update(human_input_operations(spec))
     kernel = Kernel()
     kernel.add_plugin_from_openapi(
         "dock",

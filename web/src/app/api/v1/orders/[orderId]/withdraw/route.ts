@@ -4,8 +4,9 @@ import { restOrder } from "@/server/rest-step";
 
 /**
  * POST /api/v1/orders/{orderId}/withdraw  { reason?, by? }
- * Take back an order that waits for sign-off. It stops holding the weekly budget at once and the approver's phone
- * shows it as withdrawn. 409 order_not_pending once anyone has decided it (or its price expired).
+ * Take back an order that waits for sign-off (it stops holding the weekly budget at once and the approver's phone
+ * shows it as withdrawn), or a committed one this agent placed alone, until the wholesaler's order cut-off. 409
+ * take_back_needs_person when a person signed it, past_cutoff after the cut-off, order_not_pending otherwise.
  */
 export async function POST(req: Request, ctx: { params: Promise<{ orderId: string }> }) {
   return handle(async ({ dock }) => {
@@ -18,6 +19,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ orderId: strin
     } catch {
       throw new DockError(400, "invalid_json", "Request body must be JSON (or empty).");
     }
-    return Response.json(restOrder(await dock.withdrawOrder(session, orderId, body as never)));
+    return Response.json(restOrder(await dock.withdrawOrder(session, orderId, body as never, { agentTakeBack: true })));
   });
 }

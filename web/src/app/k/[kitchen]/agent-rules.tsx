@@ -16,6 +16,7 @@ import { ACCOUNT_TEXT } from "./account.text";
 import { DevicePanel, MandateForm } from "../_account/forms";
 import { mandateWords } from "./rules";
 import type { ConnectReply, KitchenMemory } from "./types";
+import type { ConnectorSetup } from "@/server/mcp/connector-setup";
 
 /**
  * Agent and rules, the transparency page: the kitchen's signed mandate in plain words, the approvers, everything
@@ -328,7 +329,8 @@ function WhoSees() {
   );
 }
 
-type Connector = { url?: string; address?: string; steps?: string[]; [k: string]: unknown };
+/** GET /ui-api/connect/{kitchen}: the kitchen's connector address for assistants that take only a URL, and setup steps per assistant. */
+type ConnectorView = { connector: { url: string; connectorId: string; expiresAt?: string } | null; canManage: boolean; setup: ConnectorSetup | null };
 
 /** A block of code or an address to paste elsewhere: readable, scrolls sideways inside itself, one tap copies it. */
 function CodeBlock({ title, text, copied, onCopy, wrap = false }: { title: string; text: string; copied: boolean; onCopy: () => void; wrap?: boolean }) {
@@ -351,13 +353,13 @@ function Connect() {
   const { ui, kitchen } = usePortal();
   const tx = useText(AGENT_RULES_TEXT);
   const [c, setC] = useState<ConnectReply>();
-  const [connector, setConnector] = useState<Connector | null>();
+  const [connector, setConnector] = useState<ConnectorView | null>();
   const [show, setShow] = useState(false);
   const [copied, setCopied] = useState<string>();
   useEffect(() => {
     void ui<ConnectReply>("GET", "connect").then((r) => r.ok && setC(r.data));
-    // Per-kitchen connector addresses for consumer assistants, when that service is deployed.
-    void api<Connector>("GET", `/ui-api/connect/${encodeURIComponent(kitchen.slug)}`).then((r) => setConnector(r.ok ? r.data : null));
+    // The kitchen's connector address for consumer assistants (one URL, no headers); null when this session may not see it.
+    void api<ConnectorView>("GET", `/ui-api/connect/${encodeURIComponent(kitchen.slug)}`).then((r) => setConnector(r.ok ? r.data : null));
   }, [ui, kitchen.slug]);
   const copy = async (key: string, text: string) => {
     try {
@@ -432,23 +434,86 @@ function Connect() {
             <h4 className="font-semibold">{tx.assistant}</h4>
             {connector === undefined ? (
               <p className="mt-1 text-[0.95rem] text-ink-soft">{tx.checking}</p>
-            ) : connector ? (
-              <div className="mt-1 text-[0.95rem]">
-                {(connector.address ?? connector.url) && <p className="break-all font-mono text-[0.85rem]">{String(connector.address ?? connector.url)}</p>}
-                {Array.isArray(connector.steps) && (
-                  <ol className="mt-1 list-decimal space-y-0.5 pl-5">
-                    {connector.steps.map((s) => (
-                      <li key={String(s)}>{String(s)}</li>
-                    ))}
-                  </ol>
-                )}
-              </div>
             ) : (
-              <p className="mt-1 text-[0.92rem] leading-relaxed text-ink-soft">{tx.noConnector}</p>
+              <ConnectorBlock view={connector} slug={kitchen.slug} onChange={setConnector} copied={copied} copy={copy} />
             )}
           </div>
         </Panel>
       </div>
     </section>
+  );
+}
+
+/**
+ * The kitchen's connector address: what a person pastes into Claude or ChatGPT (no headers, no sign-in), the request
+ * to type, and each assistant's steps (written by the server from the vendors' own pages, in English). Whoever may
+ * manage the address can issue a new one; the old one stops at once.
+ */
+function ConnectorBlock({ view, slug, onChange, copied, copy }: { view: ConnectorView | null; slug: string; onChange: (v: ConnectorView | null) => void; copied?: string; copy: (key: string, text: string) => Promise<void> }) {
+  const tx = useText(AGENT_RULES_TEXT);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState<string>();
+  const reissue = async () => {
+    setBusy(true);
+    setFailed(undefined);
+    const r = await api<ConnectorView>("POST", `/ui-api/connect/${encodeURIComponent(slug)}`);
+    setBusy(false);
+    if (r.ok) onChange(r.data);
+    else setFailed(r.error.message);
+  };
+  if (!view) return <p className="mt-1 text-[0.92rem] leading-relaxed text-ink-soft">{tx.noConnectorHere}</p>;
+  const url = view.connector?.url;
+  return (
+    <div className="mt-1 space-y-3 text-[0.95rem]">
+      <p className="leading-relaxed text-ink-soft">{tx.connectorIntro}</p>
+      {url && view.setup ? (
+        <>
+          <div className="flex items-start justify-between gap-2 rounded-lg bg-paper p-3">
+            <span className="min-w-0 break-all font-mono text-[0.82rem]">{url}</span>
+            <IconButton label={copied === "connector" ? tx.copied : tx.copyWhat(tx.connectorAddress)} onClick={() => void copy("connector", url)} className="-my-2 -mr-1.5">
+              {copied === "connector" ? <Check aria-hidden size={17} strokeWidth={2.5} className="text-good" /> : <Copy aria-hidden size={17} />}
+            </IconButton>
+          </div>
+          <p className="leading-relaxed">
+            <span className="text-ink-soft">{tx.thenType}</span> <q>{view.setup.prompt}</q>
+          </p>
+          <ul className="divide-y divide-line-strong/50">
+            {view.setup.assistants
+              .filter((a) => a.works !== "no")
+              .map((a) => (
+                <li key={a.id}>
+                  <details className="group py-2">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-semibold">
+                      <span className="min-w-0">{a.name}</span>
+                      <span className="shrink-0 text-[0.82rem] font-medium text-ink-soft">{a.works === "yes" ? tx.worksYes : tx.worksLimited}</span>
+                    </summary>
+                    <p className="mt-1 text-[0.88rem] leading-snug text-ink-soft">{a.needs}</p>
+                    {a.steps.length > 0 && (
+                      <ol className="mt-1.5 list-decimal space-y-0.5 pl-5 text-[0.9rem] leading-snug">
+                        {a.steps.map((step) => (
+                          <li key={step}>{step}</li>
+                        ))}
+                      </ol>
+                    )}
+                    {a.paste && a.paste !== url && <pre className="mt-2 overflow-x-auto rounded-md bg-paper p-2.5 font-mono text-[0.78rem]">{a.paste}</pre>}
+                  </details>
+                </li>
+              ))}
+          </ul>
+          <p className="text-[0.85rem] leading-snug text-ink-soft">{tx.connectorLimits}</p>
+        </>
+      ) : (
+        <p className="leading-relaxed text-ink-soft">{tx.noConnector}</p>
+      )}
+      {view.canManage && (
+        <div>
+          <Button kind="secondary" size="sm" busy={busy} onClick={() => void reissue()}>
+            {url ? tx.reissue : tx.issue}
+          </Button>
+          {url && <p className="mt-1.5 text-[0.82rem] leading-snug text-ink-soft">{tx.reissueNote}</p>}
+          {failed && <p className="mt-1.5 text-[0.85rem] text-bad">{failed}</p>}
+        </div>
+      )}
+    </div>
   );
 }
