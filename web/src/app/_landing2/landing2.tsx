@@ -373,12 +373,18 @@ export function Landing2() {
           </div>
         </Section>
 
-        {/* The agent inside the shop the kitchen already uses: real captures, cross-faded by the scroll */}
-        <Section id="webshop" title={w.title} line={w.line}>
-          <div className="l2-shop">
-            <div className="l2-shop-track" data-shop-track>
-              <div className="l2-shop-sticky">
-                <figure className="l2-shop-stage" aria-label={w.label}>
+        {/* The agent inside the shop the kitchen already uses: real captures, cross-faded by the scroll. The heading sits
+            in the sticky part, so it stays in view with the stage while the scroll plays it. */}
+        <section id="webshop" aria-labelledby="webshop-t" className="l2-section l2-shop">
+          <span className="l2-node" data-node aria-hidden />
+          <div className="l2-shop-track" data-shop-track>
+            <div className="l2-shop-sticky">
+              <h2 id="webshop-t" className="display l2-h2 l2-shop-h2">
+                {w.title}
+              </h2>
+              <p className="l2-line l2-shop-line">{w.line}</p>
+              <figure className="l2-shop-stage" aria-label={w.label}>
+                <div className="l2-shop-deskwrap">
                   <Browser url="aimopilot / k / hotel-lumo / catalogue" className="l2-shop-desk">
                     <div className="l2-shop-frames">
                       {(["shop-1-catalogue", "shop-2-asked", "slide", "shop-3-substitute", "shop-4-signoff"] as const).map((k) => {
@@ -392,7 +398,7 @@ export function Landing2() {
                             height={f.h}
                             alt={rest ? w.deskAlt : ""}
                             aria-hidden={rest ? undefined : true}
-                            sizes="(min-width: 1024px) 680px, 86vw"
+                            sizes="(min-width: 1200px) 960px, 86vw"
                             unoptimized
                             loading="lazy"
                             className={`l2-shop-f l2-shop-${LAYER[k]}`}
@@ -404,45 +410,45 @@ export function Landing2() {
                   <div className="l2-shop-phone">
                     <Phone>
                       <div className="l2-shop-pframes">
-                        <Image src={SHOP["shop-phone-substitute"].src} width={SHOP["shop-phone-substitute"].w} height={SHOP["shop-phone-substitute"].h} alt={w.phoneAlt} sizes="(min-width: 1024px) 160px, 30vw" unoptimized loading="lazy" className="l2-shop-p l2-shop-p1" />
-                        <Image src={SHOP["shop-phone-signoff"].src} width={SHOP["shop-phone-signoff"].w} height={SHOP["shop-phone-signoff"].h} alt="" aria-hidden sizes="(min-width: 1024px) 160px, 30vw" unoptimized loading="lazy" className="l2-shop-p l2-shop-p2" />
+                        <Image src={SHOP["shop-phone-substitute"].src} width={SHOP["shop-phone-substitute"].w} height={SHOP["shop-phone-substitute"].h} alt={w.phoneAlt} sizes="(min-width: 1200px) 230px, 30vw" unoptimized loading="lazy" className="l2-shop-p l2-shop-p1" />
+                        <Image src={SHOP["shop-phone-signoff"].src} width={SHOP["shop-phone-signoff"].w} height={SHOP["shop-phone-signoff"].h} alt="" aria-hidden sizes="(min-width: 1200px) 230px, 30vw" unoptimized loading="lazy" className="l2-shop-p l2-shop-p2" />
                       </div>
                     </Phone>
                   </div>
-                </figure>
-                <ol className="l2-shop-steps">
-                  {w.steps.map((s, i) => (
-                    <li key={s} style={{ "--at": [0, 14, 52, 76][i] } as CSSProperties}>
-                      <span className="l2-shop-n tabular" aria-hidden>
-                        {i + 1}
-                      </span>
-                      {s}
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            </div>
-            <div className="l2-shop-side">
-              <ul className="l2-shop-points">
-                {w.points.map((p) => (
-                  <li key={p.head}>
-                    <p className="l2-shop-head">{p.head}</p>
-                    <p className="l2-shop-text">{p.text}</p>
+                </div>
+              </figure>
+              <ol className="l2-shop-steps">
+                {w.steps.map((s, i) => (
+                  <li key={s} style={{ "--at": [0, 14, 53, 77][i] } as CSSProperties}>
+                    <span className="l2-shop-n tabular" aria-hidden>
+                      {i + 1}
+                    </span>
+                    {s}
                   </li>
                 ))}
-              </ul>
-              <div className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-3">
-                <Link href="/k" className={`${GO} ${LG}`}>
-                  {w.cta} <ArrowRight size={18} aria-hidden />
-                </Link>
-                <Link href="/try" className={`${QUIET} text-[0.92rem]`}>
-                  {w.connect}
-                </Link>
-              </div>
-              <p className="l2-shop-note">{w.note}</p>
+              </ol>
             </div>
           </div>
-        </Section>
+          <div className="l2-shop-side">
+            <ul className="l2-shop-points">
+              {w.points.map((p) => (
+                <li key={p.head}>
+                  <p className="l2-shop-head">{p.head}</p>
+                  <p className="l2-shop-text">{p.text}</p>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-3">
+              <Link href="/k" className={`${GO} ${LG}`}>
+                {w.cta} <ArrowRight size={18} aria-hidden />
+              </Link>
+              <Link href="/try" className={`${QUIET} text-[0.92rem]`}>
+                {w.connect}
+              </Link>
+            </div>
+            <p className="l2-shop-note">{w.note}</p>
+          </div>
+        </section>
 
         {/* The comparison that feels like winning */}
         <Section id="search" title={t.search.title} line={t.search.line}>

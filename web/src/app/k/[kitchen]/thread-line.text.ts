@@ -43,6 +43,7 @@ export const THREAD_LINE_TEXT = defineText({
     toPhoneOf: (who: string) => (who ? `Send to the ${who.toLowerCase()}'s phone` : "Send to the approver's phone"),
     hidePhone: "Hide the code",
     asWholesaler: "See this order as the wholesaler sees it",
+    moreSteps: (n: number) => `${n} more`,
     takeBack: "Take it back",
     // memory
     remembered: "Remembered",
@@ -144,6 +145,7 @@ export const THREAD_LINE_TEXT = defineText({
     toPhoneOf: (who: string) => (who ? `Lähetä hyväksyjän puhelimeen (${who})` : "Lähetä hyväksyjän puhelimeen"),
     hidePhone: "Piilota koodi",
     asWholesaler: "Katso tilausta tukun silmin",
+    moreSteps: (n: number) => `${n} lisää`,
     takeBack: "Peru tilaus",
     remembered: "Muistan",
     canRemember: "Voin muistaa tämän",
@@ -242,6 +244,7 @@ export const THREAD_LINE_TEXT = defineText({
     toPhoneOf: (who: string) => (who ? `Skicka till telefonen hos ${who}` : "Skicka till godkännarens telefon"),
     hidePhone: "Dölj koden",
     asWholesaler: "Se beställningen som grossisten ser den",
+    moreSteps: (n: number) => `${n} till`,
     takeBack: "Ta tillbaka",
     remembered: "Jag minns",
     canRemember: "Jag kan minnas det här",

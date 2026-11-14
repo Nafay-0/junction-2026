@@ -22,8 +22,10 @@ const MARK = /\{\{|\}\}|\*\*/;
 
 async function signIn(page: Page, slug: string): Promise<void> {
   await page.goto(`${url}/k`);
-  const card = page.locator("li").filter({ hasText: slug }).filter({ has: page.getByRole("button", { name: /^Sign in as / }) }).first();
-  await card.getByRole("button", { name: /^Sign in as / }).click();
+  const NAMES: Record<string, string> = { "hotel-lumo": "Hotel Lumo kitchen", "koulu-metsola": "Metsola school kitchen", "kahvila-sointu": "Kahvila Sointu" };
+  const named = NAMES[slug] ? page.getByRole("button", { name: `Sign in as ${NAMES[slug]}` }) : undefined;
+  if (named) await named.click();
+  else await page.locator("li").filter({ hasText: slug }).getByRole("button", { name: /^Sign in as / }).first().click();
   await page.waitForURL(`**/k/${slug}**`, { timeout: 30_000 });
 }
 
