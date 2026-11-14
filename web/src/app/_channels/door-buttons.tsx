@@ -30,7 +30,7 @@ export function DoorButtons({
     return () => window.removeEventListener("keydown", esc);
   }, [open]);
   const btn =
-    "inline-flex size-12 shrink-0 items-center justify-center border-l-2 border-ink/20 text-ink hover:bg-concrete disabled:opacity-50";
+    "inline-flex size-11 shrink-0 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-surface hover:text-ink disabled:opacity-50";
   return (
     <>
       <button
