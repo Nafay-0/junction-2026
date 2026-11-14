@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { useSyncExternalStore } from "react";
 import { api } from "../../_client/api";
 import { Glyph, TempGlyph, type GlyphKind } from "../../_ui/glyphs";
+import { Art, artKeyFor } from "../../_ui/art";
+import { ART_TEXT } from "../../_ui/art.text";
 import { Spinner, Tag, Working } from "../../_ui/kit";
 import { attr, clock, helsinkiToday, money, num } from "../../_ui/plain";
 import { useFormat, useLang, useText } from "../../_i18n/provider";
@@ -66,20 +68,41 @@ export function packGlyph(p: Product): GlyphKind {
 /** The pack is the picture: the drawn pack, and what one sales unit holds, set large. */
 export function PackPlate({ p, size = "md" }: { p: Product; size?: "md" | "lg" }) {
   const tx = useText(SHOP_TEXT);
+  const ax = useText(ART_TEXT);
   const { lang } = useLang();
-  const t = TEMP[p.temperatureClass ?? ""];
   const m = contentOf(p, 1);
   const big = m ? (m.unit === "pcs" ? tx.pcs(num(m.amount)) : `${num(m.amount)} ${m.unit}`) : unitWord(p, 1, lang);
+  const per = `${tx.per(unitWord(p, 1, lang))}${m && !m.certain ? tx.about : ""}`;
   const lg = size === "lg";
+  const key = artKeyFor(p, packGlyph(p) === "bib");
+  const drawn = <DrawnPlate p={p} big={big} per={per} lg={lg} />;
+  if (!key) return drawn;
+  // The picture is an illustration of the kind of product, never this product: it says so, and the pack's real
+  // content stays in type on a paper badge, readable before the name.
+  return (
+    <div className={`relative ${lg ? "aspect-[4/3]" : "aspect-[16/11]"}`}>
+      <Art k={key} cover sizes={lg ? "(min-width: 1024px) 34rem, 92vw" : "(min-width: 1280px) 16rem, (min-width: 640px) 30vw, 92vw"} position="50% 58%" fallback={drawn} />
+      <p className={`absolute bottom-0 left-0 bg-paper ${lg ? "px-5 py-3" : "px-2.5 pb-1.5 pt-1"}`}>
+        <span className={`display block text-petrol-deep tabular ${lg ? "text-[3.4rem]" : "text-[1.75rem]"}`}>{big}</span>
+        <span className={`block text-ink-soft ${lg ? "text-[1rem]" : "text-[0.78rem]"}`}>{per}</span>
+      </p>
+      <span title={ax.illustrationLong} className={`absolute right-0 top-0 bg-petrol-deep/75 text-paper ${lg ? "px-2.5 py-1 text-[0.85rem]" : "px-1.5 py-0.5 text-[0.7rem]"}`}>
+        {ax.illustration}
+        <span className="sr-only">: {ax.illustrationLong}</span>
+      </span>
+    </div>
+  );
+}
+
+/** The drawn pack: the fallback when there is no picture for the kind of product, or it fails to load. */
+function DrawnPlate({ p, big, per, lg }: { p: Product; big: string; per: string; lg: boolean }) {
+  const t = TEMP[p.temperatureClass ?? ""];
   return (
     <div className={`flex items-center gap-3 ${lg ? "px-6 py-8" : "px-3 py-3"}`} style={{ background: t?.tint ?? "var(--color-mist)" }}>
       <Glyph kind={packGlyph(p)} size={lg ? 96 : 44} className="shrink-0 text-petrol-deep" strokeWidth={lg ? 2 : 2.5} />
       <div className="min-w-0">
         <p className={`display text-petrol-deep tabular ${lg ? "text-[4.2rem]" : "text-[2rem]"}`}>{big}</p>
-        <p className={`text-ink-soft ${lg ? "mt-1 text-[1.05rem]" : "text-[0.82rem]"}`}>
-          {tx.per(unitWord(p, 1, lang))}
-          {m && !m.certain ? tx.about : ""}
-        </p>
+        <p className={`text-ink-soft ${lg ? "mt-1 text-[1.05rem]" : "text-[0.82rem]"}`}>{per}</p>
       </div>
     </div>
   );

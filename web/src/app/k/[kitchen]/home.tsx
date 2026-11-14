@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Empty, Plate, SectionTitle, Skeleton, Tag, buttonClass } from "../../_ui/kit";
 import { Glyph } from "../../_ui/glyphs";
+import { Art } from "../../_ui/art";
 import { useFormat, useText } from "../../_i18n/provider";
 import { money, num, say, shortProduct } from "../../_ui/plain";
 import { Target } from "../../_ui/target";
@@ -114,8 +115,8 @@ function Hero({ o, cutoffs, now }: { o: Overview; cutoffs?: CutoffReply; now: nu
   const usual = o.requests.find((r) => r.family === o.standing[0]?.family && r.order && (r.order.status === "committed" || r.order.status === "history"));
   return (
     <section aria-label={tx.yourKitchen} className="on-dark relative overflow-hidden bg-petrol-deep text-paper">
-      <div className="relative grid gap-6 p-6 sm:p-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="min-w-0">
+      <div className="relative grid lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+        <div className="min-w-0 p-6 sm:p-8">
           <p className="text-[1rem] text-paper/75">{tx.buysFor(kitchen.agentName)}</p>
           <h1 className="display mt-2 text-[2.8rem] text-paper sm:text-[3.8rem]">{kitchen.name}</h1>
           <p className="mt-3 max-w-[56ch] text-[1.1rem] leading-snug text-paper/90">
@@ -142,7 +143,12 @@ function Hero({ o, cutoffs, now }: { o: Overview; cutoffs?: CutoffReply; now: nu
             <CallAgent />
           </div>
         </div>
-        <div className="self-end border-l-0 border-paper/20 lg:border-l lg:pl-6">
+        {/* The picture is a generated illustration (DESIGN.md §6); the next cut-off sits on it as a solid plate. */}
+        <div className="relative flex min-h-[15rem] items-end sm:min-h-[18rem]">
+          <div className="absolute inset-0">
+            <Art k="home" cover priority sizes="(min-width: 1024px) 34rem, 100vw" position="62% 50%" />
+          </div>
+          <div className="relative w-full bg-petrol-deep p-5 sm:m-6 sm:w-auto sm:max-w-[22rem] lg:ml-auto">
           {next ? (
             <>
               <p className="text-[0.95rem] text-paper/75">{tx.nextCutoff}</p>
@@ -159,6 +165,7 @@ function Hero({ o, cutoffs, now }: { o: Overview; cutoffs?: CutoffReply; now: nu
           ) : (
             <p className="text-paper/70">{tx.checkingCutoffs}</p>
           )}
+          </div>
         </div>
       </div>
     </section>

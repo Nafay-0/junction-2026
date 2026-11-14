@@ -76,8 +76,9 @@ collapse to one line each and can be reopened.
   ○  7 Order
 ```
 
-**A product tile (no photographs in the data).** The pack is the picture: a pale plate with a drawn pack glyph
-(carton, tub, sack, bottle, box) and the pack content set large, so "10 L" or "2,5 kg" reads before the name.
+**A product tile (no photographs in the data).** A generated illustration of the kind of product (marked
+"Illustration"), with the pack content set large on a paper badge, so "10 L" or "2,5 kg" reads before the name.
+Where there is no picture, the drawn pack glyph on a pale plate (see §6).
 
 ```
  ┌───────────────────────────┐
@@ -111,9 +112,8 @@ collapse to one line each and can be reopened.
 - *Tracked capitals, middle-dot meta strings, mono labels, arrows on links*: removed from the phone pages ("DOCK
   DEMO" eyebrow) and the gate (mono rule codes); meta text uses commas.
 - *Numbered markers*: kept only on the order lane, which is a true sequence.
-- First plan used one generated photograph per department. The Gemini key on this machine is on the free tier,
-  where image models have a quota of zero, so no image was generated (spend: 0). Departments use a drawn pack
-  glyph on a petrol-deep plate instead; see §6.
+- First plan used one generated photograph per department; the Gemini key had no image quota. The images were later
+  made with OpenAI's image model instead; see §6.
 
 ## 3. Tokens (`src/app/globals.css`, Tailwind 4 `@theme`)
 
@@ -179,13 +179,49 @@ on the main surface; put them behind "Show details".
 
 ## 6. Images
 
-None are generated. The brief allowed a small set of original images from Google's image model (department headers,
-hero and empty states, in the manner of food photography on a dark petrol ground). The Gemini key on this machine is
-on the free tier, where every image model (`gemini-nano-banana-2.1`, `gemini-3.1-flash-image`,
-`gemini-3.1-flash-lite-image`, `gemini-2.5-flash-image`) has a quota of zero; spend was 0. Instead the pack is the
-picture: drawn line glyphs on a tinted plate, with the pack content set large, and department plates in petrol-deep.
-If images are added later: original only, no brand packaging or logos, compressed WebP under 120 kB, on a petrol
-ground, and say here that they are generated.
+**The pictures are generated, not photographs of the products.** The partner's data has no product photographs, so a
+small set of original images was made with OpenAI's image model (`gpt-image-2.6-flare`, medium quality, November
+2026; 55 generations, $2.15 in all, logged in `scripts/art/spend.json`):
+
+- `hero` (the kitchen picker) and `home` (the Home hero): 1536 x 864.
+- One header per catalogue department, `dept-<id>` (17; Household 30 and 32 share one): 1536 x 864, subject weighted
+  right so the department's name sits on the quiet left.
+- 31 tiles by kind of product, `tile-<kind>` (milk carton, cream carton, bag-in-box, yoghurt tub, cheese block,
+  butter, flour sack, grain and pasta, berry tray, vegetables, frozen vegetables, bread, pastry, meat, poultry, fish,
+  cold cuts, ready meal, sauce and stock, spices, oil, canned, chocolate, sweets, ice cream, coffee and tea, drinks,
+  eggs, disposables, cleaning, cookware): 1024 x 1024.
+
+**One art direction for all of them** (`scripts/art/prompts.json`, the shared `style` and `negative` clauses):
+calm still life on a deep petrol ground and backdrop, soft daylight from the upper left, one accent only (a sprig of
+dill; mint for sweet things; a small lime-green cloth for non-food), plain unprinted packaging, no text, no logos, no
+labels, no people. No real brand's packaging appears; every image was checked by eye for text and marks.
+
+**Never implies it is the product.** A tile's picture is chosen by the kind of product (the partner's category code,
+`scripts/art/map-categories.ts` writes `src/app/_ui/art-map.json`; 16 625 of 17 546 products have one, a 10 L+ liquid
+pack is a bag-in-box), carries an "Illustration" / "Kuvitus" / "Illustration" mark (with "not a photograph of this
+product" for screen readers and on hover), and the pack's real content stays in type on a paper badge over it.
+Brand, name, origin, claims and allergens stay in type below.
+
+**Fallback.** Categories without a fitting picture (nuts and seeds, office supplies, gases, candles, the seasonal
+department's tiles) and any picture that fails to load show the drawn pack (`DrawnPlate` in `k/[kitchen]/shop.tsx`,
+glyphs in `_ui/glyphs.tsx`). Departments without a header keep the glyph watermark.
+
+**Delivery.** `scripts/art/compress.ts` writes AVIF and WebP at fixed widths into `public/art/` (tiles 240/480/720,
+headers and heroes 768/1152/1536; a 480 px tile is under 35 kB, a 1536 px header under 140 kB, 6.9 MB in all) and
+`src/app/_ui/art-manifest.json` (widths, aspect, average colour). `<Art>` in `_ui/art.tsx` renders a `<picture>` with
+`srcset`/`sizes`, the box sized by aspect so nothing shifts, the average colour as placeholder, `loading="lazy"`
+except the heroes and department headers (`priority`), and the fallback on error.
+
+**To regenerate** (needs `OPENAI_API_KEY` in `.env.local`; raw output goes to the git-ignored `.art-raw/`):
+
+```
+pnpm tsx scripts/art/generate.ts --only tile-eggs,dept-41   # skips keys already generated unless --force
+pnpm tsx scripts/art/compress.ts                            # public/art/ and art-manifest.json
+pnpm tsx scripts/art/map-categories.ts                      # after adding a tile kind
+```
+
+To add a picture: add a key to `prompts.json` (subject only; style and negative are shared), generate, look at it,
+compress, and map it. Keep to the art direction above and the "illustration" mark on tiles.
 
 ## 7. Do and do not
 
@@ -201,7 +237,8 @@ Do not
 - Use yellow, hazard stripes or the crash-test mark anywhere but the gate and sign-off. Not for warnings, not for
   "new", not for low confidence (use lavender), not for decoration.
 - Round corners (the phone drawing around a QR code is the one exception: it depicts a phone).
-- Add drop shadows, gradients or decorative images that carry no information.
+- Add drop shadows, gradients or decorative images that carry no information. The generated pictures (§6) say what
+  kind of product or department this is, and are marked as illustrations.
 - Write all caps labels, middle-dot meta strings, arrows on links, or numbered markers on things that are not a
   sequence.
 - Copy the partner's logo, wordmark, artwork, photographs or page layouts.

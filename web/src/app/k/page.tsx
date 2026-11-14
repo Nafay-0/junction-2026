@@ -6,6 +6,7 @@ import { Suspense } from "react";
 import { DEMO_NOTES } from "../_ui/brand";
 import { Wordmark } from "../_ui/wordmark";
 import { moneyShort } from "../_ui/plain";
+import { Art } from "../_ui/art";
 import { Glyph } from "../_ui/glyphs";
 import { SESSION_COOKIE } from "@/server/approver-session";
 import { listConsoleKitchens, resolveKitchen } from "@/server/console-kitchens";
@@ -39,17 +40,24 @@ async function Entry() {
   return (
     <LangProvider initial={chosen}>
       <p className="bg-petrol-deep px-4 py-1 text-center text-[0.8rem] text-paper/85">{DEMO_NOTES[lang]}</p>
-      <header className="on-dark relative overflow-hidden bg-petrol text-paper">
-        <Glyph kind="case" size={320} strokeWidth={0.9} className="pointer-events-none absolute -right-10 -top-16 text-paper/10" />
-        <div className="relative mx-auto max-w-[1100px] px-4 pb-12 pt-6 sm:px-8">
+      <header className="on-dark relative overflow-hidden bg-petrol-deep text-paper">
+        <div className="relative mx-auto max-w-[1100px] px-4 pt-6 sm:px-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p>
               <Wordmark tone="paper" size={36} />
             </p>
             <EntryLangSwitch rendered={lang} />
           </div>
-          <h1 className="display mt-10 break-words text-[3rem] sm:text-[4.2rem]">{tx.heading}</h1>
-          <p className="mt-3 max-w-[60ch] text-[1.15rem] leading-snug text-paper/90">{tx.intro}</p>
+        </div>
+        <div className="relative mx-auto grid max-w-[1100px] items-end gap-6 px-4 pb-10 pt-8 sm:px-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:pb-12">
+          <div className="min-w-0">
+            <h1 className="display break-words text-[3rem] sm:text-[4.2rem]">{tx.heading}</h1>
+            <p className="mt-3 max-w-[60ch] text-[1.15rem] leading-snug text-paper/90">{tx.intro}</p>
+          </div>
+          {/* A generated illustration of a delivery (DESIGN.md §6), framed as a picture, not behind the type. */}
+          <div className="-mx-4 aspect-[16/9] sm:mx-0">
+            <Art k="hero" cover priority sizes="(min-width: 1024px) 34rem, 100vw" position="72% 50%" />
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-[1100px] px-4 pb-14 sm:px-8">

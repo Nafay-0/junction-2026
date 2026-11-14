@@ -11,6 +11,7 @@ import { TEMP, Tile, allergenText } from "./shop";
 import { Button, ErrorPlate } from "./ui";
 import { Empty, Skeleton } from "../../_ui/kit";
 import { DEPARTMENT_GLYPH, Glyph, TempGlyph } from "../../_ui/glyphs";
+import { Art, departmentArt } from "../../_ui/art";
 import type { CatalogReply, ShopDepartment } from "./types";
 
 /**
@@ -96,6 +97,7 @@ export function Catalogue() {
   const title = applied ? tx.quoted(applied) : current ? current.cat.label : category ? f.attr(category) : tx.allProducts;
 
   const glyph = current ? DEPARTMENT_GLYPH[current.dept.id] : undefined;
+  const art = current && !applied ? departmentArt(current.dept.id) : undefined;
   const filtered = applied || category !== (defaultCat ?? "") || claims.length > 0 || free.length > 0;
 
   return (
@@ -146,8 +148,21 @@ export function Catalogue() {
       </nav>
 
       <section aria-labelledby="shop-title" className="min-w-0">
-        <header className="on-dark relative overflow-hidden bg-petrol-deep px-5 py-6 text-paper sm:px-7 sm:py-8">
-          {glyph && !applied && <Glyph kind={glyph} size={220} strokeWidth={1.2} className="pointer-events-none absolute -right-6 -top-6 text-paper/10 sm:right-6" />}
+        <header className={`on-dark relative overflow-hidden bg-petrol-deep px-5 py-6 text-paper sm:px-7 sm:py-8 ${art ? "sm:min-h-[15rem] sm:pr-[54%]" : ""}`}>
+          {art ? (
+            <>
+              {/* The department's picture: a band on phones, the whole ground on wider screens (its left side is
+                  quiet petrol, so the type sits on it). Generated illustration, see DESIGN.md §6. */}
+              <div className="-mx-5 -mt-6 mb-4 h-32 sm:hidden">
+                <Art k={art} cover sizes="100vw" priority position="70% 50%" />
+              </div>
+              <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[52%] sm:block">
+                <Art k={art} cover sizes="(min-width: 1280px) 32rem, 50vw" priority position="78% 50%" />
+              </div>
+            </>
+          ) : (
+            glyph && !applied && <Glyph kind={glyph} size={220} strokeWidth={1.2} className="pointer-events-none absolute -right-6 -top-6 text-paper/10 sm:right-6" />
+          )}
           <p className="relative text-[0.95rem] text-paper/75">{applied ? tx.search : current ? departmentName(current.dept, lang) : tx.catalogue}</p>
           <h1 id="shop-title" className="display relative mt-1 break-words text-[2.6rem] text-paper sm:text-[3.4rem]">
             {title}
