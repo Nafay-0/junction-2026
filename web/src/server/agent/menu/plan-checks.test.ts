@@ -49,6 +49,9 @@ describe("defect 1: a dish made of what the kitchen forbids is refused with its 
     expect(view.totals.refusedDish).toEqual({ name: "Kalapuikot ja perunamuusi", ingredient: "kalapuikot", allergen: "fish", rule: { text: "No fish", source: "mandate" } });
     // Not planned under its name with the fish taken out: nothing of the dish is bought.
     expect(view.lines).toEqual([]);
+    // The draft left the fish out of the lines; the refused dish still counts, by what it is made of.
+    expect(view.totals.coverage).toEqual(expect.arrayContaining([expect.objectContaining({ dish: "Kalapuikot ja perunamuusi", code: "refused_dish", defining: true })]));
+    expect(view.totals.definingMissing).toBe(true);
     expect(view.totals.canQuote).toBe(false);
     expect(view.totals.blockers[0]).toBe('Kalapuikot ja perunamuusi cannot be made under the kitchen\'s rule "No fish" (mandate): its kalapuikot is fish. Instead: Chicken and rice; Chicken with mash.');
     // Instead: of the same kind, every ingredient checked against the rules; the salmon soup is not offered.

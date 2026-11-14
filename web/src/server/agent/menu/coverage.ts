@@ -137,6 +137,11 @@ export function completeness(dishes: readonly DraftDish[], specs: readonly LineS
   const coverage: Coverage[] = [];
   for (const dish of dishes) {
     const r = refused.find((x) => x.dishId === dish.id);
+    // A refused dish the model drafted with no lines (it left the forbidden fish out) still counts: its defining ingredient.
+    if (r && !dish.ingredients.length) {
+      coverage.push({ dishId: dish.id, dish: dish.name, ingredient: r.ingredient, ingredientFi: null, defining: true, lineId: null, need: null, status: "not_covered", code: "refused_dish", words: `${dish.name} cannot be made under the rule "${r.rule.text}" (${r.rule.source}): its ${r.ingredient} is ${r.allergen.replace(/_/g, " ")}`, detail: { rule: r.rule } });
+      continue;
+    }
     for (const ing of dish.ingredients) {
       const base = { dishId: dish.id, dish: dish.name, ingredient: ing.name, ingredientFi: ing.searchTerms[0] && ing.searchTerms[0] !== ing.name ? ing.searchTerms[0] : null, defining: isDefining(ing, [dish.name, dish.nameFi ?? ""].join(" | ")) };
       if (r) {
