@@ -15,6 +15,10 @@ import { defineConfig, devices, type Project } from "@playwright/test";
  * on E2E_PORT + 1, for the crowd tests in e2e/room. Both from the existing `.next` build.
  * Needs the browsers once: `pnpm exec playwright install chromium webkit firefox`.
  */
+// E2E_NOW (opt-in, e2e/README.md "A fixed clock"): one offset from the real clock for the whole run, computed once
+// here (the workers inherit it): the servers run on it (start-server.mjs), and the tests that compare a time with the
+// server's use it (support/thread.ts minutesUntil). The test runner's own clock stays real (its file locks need it).
+if (process.env.E2E_NOW && !process.env.E2E_NOW_OFFSET_MS) process.env.E2E_NOW_OFFSET_MS = String(Date.parse(process.env.E2E_NOW) - Date.now());
 const port = Number(process.env.E2E_PORT ?? 4601);
 const limitsPort = port + 1;
 const remote = process.env.E2E_BASE_URL?.replace(/\/$/, "");

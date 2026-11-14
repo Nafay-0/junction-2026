@@ -112,8 +112,8 @@ export async function stageThread(page: Page, kitchen: "kaari" | "laakso", baseU
   }
 }
 
-/** Minutes from now (the page's clock, Helsinki) to an "HH.MM" or "HH:MM" time later today. */
-export function minutesUntil(hhmm: string, now = new Date()): number {
+/** Minutes from now (the server's clock, Helsinki: E2E_NOW's offset when the run is on a fixed clock) to an "HH.MM" or "HH:MM" time later today. */
+export function minutesUntil(hhmm: string, now = new Date(Date.now() + (Number(process.env.E2E_NOW_OFFSET_MS) || 0))): number {
   const [h, m] = hhmm.split(/[.:]/).map(Number);
   const local = new Date(now.toLocaleString("en-US", { timeZone: "Europe/Helsinki" }));
   let d = h * 60 + m - (local.getHours() * 60 + local.getMinutes());

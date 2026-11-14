@@ -99,7 +99,7 @@ function summary(m: Mandate): ConsoleKitchenInfo["mandate"] {
 
 const EXAMPLES: Record<DemoSlug, string[]> = {
   kaari: ["1,000 litres of lactose-free milk by Monday", "100 litres of milk for Thursday", "Same as last time, for Friday", "100 L milk for Wednesday, lowest CO2"],
-  laakso: ["I need 1,000 litres of lactose-free milk by Monday. Find an option that meets our requirements based on price and availability.", "200 litres of lactose-free milk for Wednesday, cheapest", "60 litres of oat drink for Tuesday"],
+  laakso: ["I need 1,000 litres of lactose-free milk by Monday.", "200 litres of lactose-free milk for Wednesday, cheapest", "60 litres of oat drink for Tuesday"],
 };
 
 export async function resolveKitchen(slug: string): Promise<Resolved | undefined> {

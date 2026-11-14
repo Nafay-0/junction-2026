@@ -67,14 +67,14 @@ describe("supplier stock-out: the agent notices before the kitchen does", () => 
     await runWatch(rt, { kitchens: ["kaari"], fresh: true });
     const en = (await watchMomentForThread(rt, session, "en"))!;
     expect(en.kind).toBe("stock_out");
-    expect(en.say).toMatch(/can't come this week/);
+    expect(en.say).toMatch(/can't come: /);
     expect(en.say).toMatch(/The closest is .+: .*(more|less|same price) per litre/);
     expect(en.say).toMatch(/staged stock-out/);
-    expect(en.ask).toBe("Shall I switch this week's order?");
+    expect(en.ask).toBe("Shall I switch that day's order to it?");
     expect(en.steps.join(" ")).toMatch(/one live availability call/);
     expect(en.proof?.simulated).toBe(true);
     const fi = (await watchMomentForThread(rt, session, "fi"))!;
-    expect(fi.say).toMatch(/ei tule tällä viikolla/);
+    expect(fi.say).toMatch(/ei tule: /);
     expect(fi.ask).toMatch(/Vaihdanko/);
     expect(watchAnswerOf(en, "yes please")).toBe("switch");
     expect(watchAnswerOf(en, "kyllä, vaihda")).toBe("switch");

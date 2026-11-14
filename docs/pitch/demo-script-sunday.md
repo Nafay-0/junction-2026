@@ -60,6 +60,22 @@ carton options; *yes*: the slab, "it needs Jari Mäkelä's OK" (over 100,00 €)
 - Valio's second sentence (above).
 - After 17:00 the cartons miss Monday too: then ask for **Tuesday**.
 
+## If something goes wrong at the table
+
+- **"I couldn't get prices … Shall I try again?"** The partner's mock API allows 5 calls a second and 200 a minute; after
+  a 429 it needs about 30 seconds. Say "the wholesaler's live price service asks us to wait half a minute: that is a
+  real rate limit, and the agent tells you instead of guessing a price". Wait 30 s and answer *yes* (or type the
+  request again). If it was the full two-sentence request, type only the first sentence.
+- **The phone will not join.** It does not need the same network: open the address under the QR code by hand on the
+  phone (the link under "Send to my phone"), or the site's address plus `/join`. A phone without Face ID or a fingerprint
+  can use its PIN. Last resort: **OK with Face ID** on the laptop (the shared test accounts sign in this browser).
+- **A kitchen has leftovers from a previous reviewer** (an order waiting at the top, "You already ordered 1,000 L … on
+  top of it?"). Under the kitchen's name menu, **Start over** gives a clean conversation; a waiting order still shows
+  once at the top (it is real): tap **Take it back** on it, or answer the repeat check with *yes, as I said*. For a
+  completely clean slate, **Start a fresh kitchen** on `/k` (no rules: nothing needs a sign-off there).
+- **After 17:00** the 1 l cartons miss Monday's cut-off too: ask for **Tuesday** ("I need 1,000 litres of lactose-free
+  milk by Tuesday."); the path is the same.
+
 ## How the clock was set
 
 There is no setting for "now" in the app. The check ran the production server with a small preload that starts the
