@@ -313,14 +313,37 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
       run.dishesFor = { planId: leaveOut.planId, changed: true };
     }
   }
+  // An answer to the ways forward for a dish not fully buyable: ask the owner to add the groups, order just what can be
+  // bought (each left-off ingredient was said before), or anything else (another dish) for the agent.
+  const ways = waysOf(run).ways;
+  if (ways && !body.action && body.text && body.text.trim().split(/\s+/).length <= 12) {
+    const { yesOrNo } = await import("@/server/channels/speech");
+    const last = [...thread.turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "");
+    if (last?.role === "agent" && /(plan a dish I can buy completely|plan another dish|suunnittelenko ruuan|suunnittelenko toisen|planera en rätt|planera en annan)/i.test(last.line ?? "")) {
+      const t = body.text;
+      const yn = yesOrNo(t);
+      if (ways.owner && /\b(owner|ask|add them|add the|omistaj\w*|lisää\w*|pyydä\w*|ägaren|lägg till|be )\b/i.test(t)) run.waysAnswer = "owner";
+      else if (/\b(just|only|those|the rest|what you can|order them|vain|ne|bara|resten)\b/i.test(t) || (yn === "yes" && !ways.owner)) {
+        body = { ...body, action: { type: "menu_to_sheet", planId: ways.planId }, label: body.text };
+        run.placedPlan = ways.planId;
+        delete waysOf(run).ways;
+      } else if (yn === "yes") run.waysAnswer = "which";
+    }
+  }
   // "Yes" to "Shall I order it?" for the menu on the table: ordered (the same as its order button, then the gate).
-  if (!body.action && body.text && body.text.trim().split(/\s+/).length <= 6) {
+  if (!body.action && !run.waysAnswer && body.text && body.text.trim().split(/\s+/).length <= 6) {
     const { yesOrNo } = await import("@/server/channels/speech");
     const last = [...thread.turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "");
     const asked = last?.role === "agent" && /(shall i order|tilaanko|ska jag beställa)/i.test(last.line ?? "");
     const { openMenu } = await import("./menu");
     const m = openMenu(run);
-    if (asked && yesOrNo(body.text) === "yes" && m?.stage === "ready" && m.totalCents > 0 && !m.blockers.length) body = { ...body, action: { type: "menu_to_sheet", planId: m.planId }, label: body.text };
+    if (asked && yesOrNo(body.text) === "yes" && m?.stage === "ready" && m.totalCents > 0 && !m.blockers.length) {
+      body = { ...body, action: { type: "menu_to_sheet", planId: m.planId }, label: body.text };
+      run.placedPlan = m.planId;
+      // The day agreed is the day ordered: the day the question named, not another one.
+      const day = dayIn((last?.role === "agent" ? (last.line ?? "") : "").split(/(?<=[.!?])\s+/).filter((x) => /\?\s*$/.test(x)).at(-1) ?? "");
+      if (day) run.orderDay = day;
+    }
   }
   // An answer in words to the mistake check just said ("yes, 1 000", "100", "it's for an event"): the same as the tap,
   // and a reason the buyer gives is recorded as theirs.
@@ -354,8 +377,10 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
         } else if (body.action.type === "menu_to_sheet" && body.via !== "tap") {
           // "Yes" to "Shall I order it?" for the menu on the table: onto one order sheet, and that sheet through the gate.
           const { currentSheet, placeSheet } = await import("./sheet");
+          // Only the sheet this yes just made: a menu held back (a difference not yet said) places nothing.
           const sh = currentSheet(run);
-          if (sh) await placeSheet(run, sh.sheetId, sh.version);
+          const made = sh && store.agentTurn(thread, run.turnId)?.cards.some((c) => c.type === "sheet" && c.sheetId === sh.sheetId);
+          if (sh && made) await placeSheet(run, sh.sheetId, sh.version);
         }
       }
     } else if (!llmRoom()) {
@@ -389,6 +414,15 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
           const { mailFactAfterOrder } = await import("@/server/notify/thread");
           const mailFact = ord?.type === "order" ? await mailFactAfterOrder(run.rt, run.k, { orderId: ord.orderId, status: ord.status }, { lang: body.lang ?? "en", threadId: thread.threadId }).catch(() => undefined) : undefined;
           store.line(thread, run.turnId, mailFact ? `${backedUp} ${mailFact}` : backedUp);
+          store.mark(thread, run.turnId, "line", Date.now() - run.t0);
+          await finishTurn(run);
+          return;
+        }
+        // The answer to the ways forward: the owner asked (a drafted change to the kitchen's product groups), or which one.
+        if (run.waysAnswer) {
+          const said = run.waysAnswer === "owner" ? await askOwnerToAdd(run, body.lang ?? "en") : { en: "Which one: ask the owner to add them, order just what I can buy, or plan another dish?", fi: "Kumpi: pyydänkö omistajaa lisäämään ne, tilaanko vain sen, minkä voin ostaa, vai suunnittelenko toisen ruuan?", sv: "Vilket: ska jag be ägaren lägga till dem, beställa bara det jag kan köpa, eller planera en annan rätt?" }[body.lang ?? "en"];
+          if (run.opening) first.done();
+          store.line(thread, run.turnId, said);
           store.mark(thread, run.turnId, "line", Date.now() - run.t0);
           await finishTurn(run);
           return;
@@ -651,6 +685,154 @@ async function showDishes(run: TurnRun): Promise<void> {
   if (card?.dishes.length) run.store.card(run.thread, run.turnId, card);
 }
 
+const toldOf = (run: TurnRun): Record<string, string> => ((run.thread as unknown as { told?: Record<string, string> }).told ??= {});
+/** The ways forward last offered for a dish not fully buyable (the answer is read against them). */
+type WaysForward = { planId: string; categories: string[]; owner: boolean };
+const waysOf = (run: TurnRun) => run.thread as unknown as { ways?: WaysForward };
+const CLOSING_ASK = /(?:^|\s)[^.!?]*\?\s*$/;
+
+/**
+ * Nothing left out, swapped or moved silently (differences.ts): the plan shown or changed in this turn, against what it
+ * would buy. Each difference not yet said is said now, with its reason and the way forward; a dish not fully buyable
+ * never closes on "Shall I order it?" but on the choice between the ways forward. Recorded, and a difference whose
+ * reason the engine lacks is recorded as a defect.
+ */
+async function tellDifferences(run: TurnRun): Promise<void> {
+  const d = run.dishesFor;
+  if (!d) return;
+  const here = run.store.agentTurn(run.thread, run.turnId);
+  if (!here || here.cards.some((c) => c.type === "sheet" || c.type === "order")) return;
+  const { planDifferences } = await import("./menu");
+  const lang = run.lang ?? "en";
+  const pd = await planDifferences(run, d.planId, lang);
+  const covers = run.store.cards(run.thread).map((x) => x.card).filter((c): c is MenuCard => c.type === "menu" && c.planId === d.planId).at(-1)?.covers;
+  if (!pd.diffs.length || !covers) return;
+  const told = toldOf(run);
+  const { keyOf, sayDifferences } = await import("./differences");
+  const fresh = pd.diffs.filter((x) => !told[keyOf(x)]);
+  const left = pd.diffs.some((x) => x.kind === "left_out");
+  if (!fresh.length && !left) return;
+  const { groupsOf, canDraft } = await import("./refusal");
+  const categories = [...new Set(pd.diffs.flatMap((x) => (x.kind === "left_out" && x.reason.code === "rules_groups" ? x.reason.categories : [])))];
+  const owner = categories.length > 0 && canDraft(run);
+  const ctx = { lang, allowedGroups: groupsOf(pd.allowed, lang), canAskOwner: owner, ...(left ? { dish: { toBuy: pd.toBuy, buyable: [...new Set(pd.buyable.map((b) => b.toLowerCase()))], left: pd.diffs.filter((x) => x.kind === "left_out").length, totalCents: pd.buyableCents } } : {}) };
+  const words = { ...sayDifferences(fresh, ctx), ask: sayDifferences(pd.diffs, ctx).ask };
+  // A dish not fully buyable is said by plain code alone: how much of it can be bought (the total for those only),
+  // what cannot and why, and the ways forward. The dishes are shown with it. Otherwise the agent's words stay, with
+  // the differences added and the closing question replaced.
+  const line = here.line ?? "";
+  const body = left ? "" : line.replace(CLOSING_ASK, "").trim();
+  const said = left && !fresh.some((x) => x.kind === "left_out") ? sayDifferences(pd.diffs.filter((x) => x.kind === "left_out"), ctx).said.split(/(?<=\.)\s/)[0] : words.said;
+  run.store.line(run.thread, run.turnId, [body, said, words.ask].filter(Boolean).join(" ").replace(/\s+/g, " ").trim());
+  for (const x of fresh) told[keyOf(x)] = run.turnId;
+  // What was said as left off, by plan: after the order, the reply says it again in the same words (never a new reason).
+  const lefts = ((run.thread as unknown as { toldLeftOff?: Record<string, string[]> }).toldLeftOff ??= {});
+  lefts[d.planId] = [...new Set(pd.diffs.flatMap((x) => (x.kind === "left_out" ? [x.name.toLowerCase()] : [])))];
+  if (left) waysOf(run).ways = { planId: d.planId, categories, owner };
+  record(run, "differences_told", `Said before any order: ${fresh.map((x) => `${x.kind} ${x.name}${x.kind === "left_out" ? ` (${x.reason.code})` : ""}`).join("; ") || "the dish is not fully buyable (said before)"}.`, { planId: d.planId, keys: fresh.map(keyOf), complete: !left });
+  if (words.unknown.length) record(run, "defect_reason_missing", `The engine had no reason for: ${words.unknown.map((x) => x.name).join(", ")} (said to the buyer as unknown).`, { planId: d.planId, keys: words.unknown.map(keyOf) });
+}
+
+/**
+ * The same rule for requests (one item or several): each item read in this turn against the option that would be
+ * ordered for it (the lead option, or the one put on the order sheet), and an item left out of a several-item order.
+ * Said before the yes, never after; nothing here when the turn placed nothing new and asks nothing.
+ */
+async function tellRequestDifferences(run: TurnRun): Promise<void> {
+  const here = run.store.agentTurn(run.thread, run.turnId);
+  if (!here) return;
+  const lang = run.lang ?? "en";
+  const { optionDifferences, keyOf, sayDifferences } = await import("./differences");
+  const told = toldOf(run);
+  const all = run.store.cards(run.thread).map((x) => x.card);
+  const sheet = here.cards.find((c) => c.type === "sheet");
+  const fresh: import("./differences").Difference[] = [];
+  const extra: string[] = [];
+  const line = here.line ?? "";
+  const fold = (t: string) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const understood = here.cards.filter((c): c is Extract<Card, { type: "understood" }> => c.type === "understood" && !!c.requestId);
+  for (const u of understood) {
+    const opts = all.filter((c): c is Extract<Card, { type: "options" }> => c.type === "options" && c.requestId === u.requestId).at(-1);
+    const notice = here.cards.find((c) => c.type === "notice" && c.requestId === u.requestId);
+    if (opts && !opts.chosen) {
+      const id = opts.adjusted ?? opts.preselected?.optionId;
+      const o = opts.options.find((x) => x.optionId === id) ?? opts.options.find((x) => x.gate?.outcome !== "reject");
+      if (!o) continue;
+      const sub = o.lines.find((l) => l.substituteFor);
+      const day = u.deliverOn ?? u.deliverBy;
+      const diffs = optionDifferences({ key: u.requestId!, name: u.item, ...(u.amount ? { amount: u.amount } : {}), ...(day ? { day } : {}), exact: !!u.deliverOn }, { delivered: o.delivered, deliveryDate: sheet?.type === "sheet" ? sheet.deliveryDate : o.deliveryDate, ...(sub ? { substituteFor: sub.substituteFor, title: o.title } : {}) });
+      fresh.push(...diffs.filter((d) => !told[keyOf(d)]));
+    } else if (understood.length > 1 && notice?.type === "notice" && (notice.kind === "refused" || notice.kind === "not_found" || notice.kind === "unavailable")) {
+      // An item of a several-item order that will not be on it: its own refusal (the rule, the reason, the next step).
+      const k = `left_out:${u.requestId}:notice`;
+      if (told[k] || fold(line).includes(fold(u.item).split(/\s+/)[0] ?? "")) continue;
+      extra.push(notice.said?.[lang] ?? { en: `${u.item} won't be on the order: ${notice.message}`, fi: `${u.item} ei tule tilaukseen: ${notice.message}`, sv: `${u.item} kommer inte med i beställningen: ${notice.message}` }[lang]);
+      told[k] = run.turnId;
+    }
+  }
+  if (!fresh.length && !extra.length) return;
+  const words = fresh.length ? sayDifferences(fresh, { lang, allowedGroups: [] }) : { said: "", ask: "", unknown: [] };
+  const body = line.replace(CLOSING_ASK, "").trim();
+  const closing = CLOSING_ASK.exec(line)?.[0]?.trim() ?? "";
+  // The item's own question stays when only a left-out item was added; a difference asks whether to order it like that.
+  run.store.line(run.thread, run.turnId, [body, ...extra, words.said, fresh.length && sheet ? words.ask : closing].filter(Boolean).join(" ").replace(/\s+/g, " ").trim());
+  for (const d of fresh) told[keyOf(d)] = run.turnId;
+  record(run, "differences_told", `Said before any order: ${[...fresh.map((d) => `${d.kind} ${d.name}`), ...extra.map(() => "an item left out of the order")].join("; ")}.`, { keys: fresh.map(keyOf) });
+}
+
+/**
+ * After an order from a plan with ingredients left off: the reply says which, as they were said before the yes; a
+ * sentence of the agent's that gives another reason for them ("still waiting for your choice") is not shown.
+ */
+function sayLeftOffAfterOrder(run: TurnRun): void {
+  const planId = run.placedPlan;
+  const here = run.store.agentTurn(run.thread, run.turnId);
+  if (!planId || !here?.cards.some((c) => c.type === "order")) return;
+  const names = (run.thread as unknown as { toldLeftOff?: Record<string, string[]> }).toldLeftOff?.[planId] ?? [];
+  if (!names.length) return;
+  const lang = run.lang ?? "en";
+  const and = lang === "fi" ? "ja" : lang === "sv" ? "och" : "and";
+  const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} ${and} ${names.at(-1)}`;
+  const kept = (here.line ?? "").split(/(?<=[.!?])\s+/).filter((x) => !/(aren't|isn't|are not|is not|not) (on|in) (this|the) order|eivät ole tässä tilauksessa|ei ole tilauksessa|eivät ole tilauksessa|finns inte med|inte med i beställningen|left (off|out) (of )?(this|the) order|jäi(vät)? pois|blev kvar utanför/i.test(x));
+  const said = { en: `As I said, ${list} ${names.length > 1 ? "aren't" : "isn't"} on it.`, fi: `Kuten sanoin, ${list} ${names.length > 1 ? "eivät ole" : "ei ole"} tilauksessa.`, sv: `Som jag sa finns ${list} inte med.` }[lang];
+  kept.splice(Math.min(1, kept.length), 0, said);
+  run.store.line(run.thread, run.turnId, kept.join(" "));
+}
+
+/** A day named in a sentence: "{{Tuesday 17 Nov}}", "Tue 17 Nov", "ti 17.11.", as an ISO date in the coming months. */
+function dayIn(text: string): string | undefined {
+  const MON = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+  const t = text.replace(/\{\{|\}\}|\*\*/g, "");
+  const en = /\b(\d{1,2}) (jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b/i.exec(t);
+  const fi = /\b(\d{1,2})\.(\d{1,2})\./.exec(t);
+  const d = en ? Number(en[1]) : fi ? Number(fi[1]) : 0;
+  const m = en ? MON.indexOf(en[2].toLowerCase()) + 1 : fi ? Number(fi[2]) : 0;
+  if (!d || !m || m > 12) return undefined;
+  const today = helsinkiToday();
+  let y = Number(today.slice(0, 4));
+  if (m < Number(today.slice(5, 7)) - 6) y++;
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+/** "Ask the owner to add them": the kitchen's product groups the dish needs, drafted as a change to its rules. */
+async function askOwnerToAdd(run: TurnRun, lang: "en" | "fi" | "sv"): Promise<string> {
+  const ways = waysOf(run).ways;
+  const { groupIdOf, groupOf } = await import("./refusal");
+  const ids = [...new Set((ways?.categories ?? []).map(groupIdOf).filter((x): x is string => !!x))];
+  const names = [...new Set((ways?.categories ?? []).map((c) => groupOf(c, lang)).filter((x): x is string => !!x))];
+  const { showRules } = await import("./rules");
+  const card = ids.length ? await showRules(run, { groupsAdd: ids }).catch(() => undefined) : undefined;
+  if (!card?.proposal || card.proposal.state !== "open") return { en: "I couldn't draft that change to your rules here. Shall I order just what I can buy, or plan another dish?", fi: "En pystynyt laatimaan sääntömuutosta täällä. Tilaanko vain sen, minkä voin ostaa, vai suunnittelenko toisen ruuan?", sv: "Jag kunde inte skriva den ändringen här. Ska jag beställa bara det jag kan köpa, eller planera en annan rätt?" }[lang];
+  const menu = run.store.cards(run.thread).map((x) => x.card).filter((c): c is MenuCard => c.type === "menu" && c.planId === ways?.planId).at(-1);
+  const again = menu ? `${menu.dishes.map((d) => d.name).join(", ")} for ${menu.covers ?? ""}${menu.serviceDate ? ` on ${menu.serviceDate}` : ""}` : "";
+  if (again) (run.thread as unknown as { afterRules?: Record<string, string> }).afterRules = { ...((run.thread as unknown as { afterRules?: Record<string, string> }).afterRules ?? {}), [card.proposal.proposalId]: again };
+  delete waysOf(run).ways;
+  const { list } = { list: (xs: string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} ${lang === "fi" ? "ja" : lang === "sv" ? "och" : "and"} ${xs.at(-1)}`) };
+  record(run, "rules_drafted", `A change to the kitchen's rules was drafted at the buyer's word, for a dish it could not buy completely: add ${ids.join(", ")}.`, { proposalId: card.proposal.proposalId });
+  if (!card.proposal.canSign) return { en: `I've drafted it: ${list(names)} added to what I may buy. Only the kitchen's own account can confirm it, under Your rules.`, fi: `Laadin muutoksen: ${list(names)} lisätään ostettaviin. Sen voi vahvistaa vain keittiön oma tili kohdassa Sääntösi.`, sv: `Jag har skrivit ändringen: ${list(names)} läggs till. Bara kökets eget konto kan bekräfta den, under Dina regler.` }[lang];
+  return { en: `I've drafted it: ${list(names)} added to what I may buy. Shall I confirm it now? Then I'll plan the dish again.`, fi: `Laadin muutoksen: ${list(names)} lisätään ostettaviin. Vahvistanko sen nyt? Sitten suunnittelen ruuan uudelleen.`, sv: `Jag har skrivit ändringen: ${list(names)} läggs till. Ska jag bekräfta den nu? Sedan planerar jag rätten igen.` }[lang];
+}
+
 /** A turn that failed or timed out, in the ledger (and so the telemetry): a stable code and the duration, no words. */
 function turnFailed(run: TurnRun, code: TurnFailure): void {
   const ms = Date.now() - run.t0;
@@ -665,6 +847,9 @@ function turnFailed(run: TurnRun, code: TurnFailure): void {
 async function finishTurn(run: TurnRun): Promise<void> {
   const { store, thread } = run;
   await showDishes(run);
+  await tellDifferences(run).catch((err) => console.error("[thread] differences", err));
+  await tellRequestDifferences(run).catch((err) => console.error("[thread] request differences", err));
+  sayLeftOffAfterOrder(run);
   const a = store.agentTurn(thread, run.turnId)!;
   const waitingApprover = a.cards.some((c) => c.type === "gate" && c.outcome === "waiting");
   const waitingBuyer = !waitingApprover && a.cards.some((c) => (c.type === "anomaly" && !c.answered) || c.type === "question" || (c.type === "options" && !c.chosen) || (c.type === "menu" && !c.sheetId && (c.stage === "choose" || c.stage === "ready")) || (c.type === "price" && !a.cards.some((x) => x.type === "gate" && x.requestId === c.requestId)));
