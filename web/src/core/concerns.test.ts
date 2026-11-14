@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkDelivery, checkDuplicate, checkNeed, checkPreferences, checkQuantity, noticeDrift, noticeNeed, noticeQuantity, type CheckContext } from "./concerns";
+import { baseAmount, checkDelivery, checkDuplicate, checkNeed, checkPreferences, checkQuantity, noticeDrift, noticeNeed, noticeQuantity, type CheckContext } from "./concerns";
 import { NOW, P, kitchen, past, regularHistory, statedPref } from "./kitchen-fixtures";
 import type { KitchenProfile } from "./kitchen";
 import { NeedSchema, applyNeedPatch, type NeedInput } from "./need";
@@ -87,7 +87,9 @@ describe("quantity against the kitchen's own pattern", () => {
     const n = need({ quantity: { amount: 5, unit: "pack" } });
     const cheese = { ...n, item: { ...n.item, text: "Peltolan blue cheese 400 g" } };
     const cheeses = [{ ...milkProducts[0], id: "c1", unit: "kg" as const, packSize: 0.4 }, { ...milkProducts[0], id: "c2", unit: "kg" as const, packSize: 1 }];
-    expect(checkQuantity(n, ctx(kitchen([]), { family: "cheese", candidates: cheeses })).map((c) => c.code)).toContain("unit_unclear"); // without the size: unclear
+    // Without the size: the count of packs is kept (the product's own pack, once one is chosen), never a weight asked.
+    expect(checkQuantity(n, ctx(kitchen([]), { family: "cheese", candidates: cheeses })).map((c) => c.code)).not.toContain("unit_unclear");
+    expect(baseAmount(n, ctx(kitchen([]), { family: "cheese", candidates: cheeses }))?.packs).toBe(5);
     expect(checkQuantity(cheese, ctx(kitchen([]), { family: "cheese", candidates: cheeses })).filter((c) => c.code === "unit_unclear")).toEqual([]);
   });
 
@@ -107,10 +109,36 @@ describe("quantity against the kitchen's own pattern", () => {
     expect(checkQuantity(need({ quantity: { amount: 100, unit: "pcs" } }), ctx())[0].code).toBe("unit_confusion");
   });
 
-  it("cannot read a pack count without knowing the pack, and offers each reading", () => {
-    const [c] = checkQuantity(need({ quantity: { amount: 10, unit: "pack" } }), ctx(kitchen()));
-    expect(c).toMatchObject({ code: "unit_unclear", severity: "error", confirmable: false });
-    expect(c.corrections.map((x) => x.label)).toEqual(["10 L in total", "10 packs of 1 L = 10 L", "10 packs of 10 L = 100 L"]);
+  it("keeps a count of packs when the pack is not known: 10 of the chosen product's sales unit, no weight asked", () => {
+    expect(checkQuantity(need({ quantity: { amount: 10, unit: "pack" } }), ctx(kitchen())).filter((c) => c.code === "unit_unclear")).toEqual([]);
+    expect(baseAmount(need({ quantity: { amount: 10, unit: "pack" } }), ctx(kitchen()))).toMatchObject({ packs: 10 });
+  });
+
+  it("napkins (non-food, a small weight per pack): 2 packs stay 2 packs, never 0,22 kg", () => {
+    const n = need({ quantity: { amount: 2, unit: "pack" } });
+    const napkins = { ...n, item: { ...n.item, text: "paper napkins" } };
+    const products = [0.11, 0.12, 0.25].map((size, i) => ({ ...milkProducts[0], id: `n${i}`, name: `Napkins ${i}`, category: "napkins", unit: "kg" as const, packSize: size }));
+    const c = ctx(kitchen([]), { family: "napkins", candidates: products });
+    expect(checkQuantity(napkins, c)).toEqual([]);
+    expect(baseAmount(napkins, c)).toMatchObject({ unit: "kg", packs: 2 });
+  });
+
+  it("3 cases of oat drink: three cases of the chosen product", () => {
+    const n = need({ quantity: { amount: 3, unit: "pack" } });
+    const oat = { ...n, item: { ...n.item, text: "oat drink" } };
+    const products = [1, 6, 12].map((size, i) => ({ ...milkProducts[0], id: `o${i}`, name: `Oat drink ${i}`, category: "plant_drink", packSize: size }));
+    const c = ctx(kitchen([]), { family: "plant_drink", candidates: products });
+    expect(checkQuantity(oat, c)).toEqual([]);
+    expect(baseAmount(oat, c)?.packs).toBe(3);
+  });
+
+  it("2 boxes of the usual milk: the usual box, so the amount is known (2 × 10 L)", () => {
+    expect(baseAmount(need({ quantity: { amount: 2, unit: "pack" } }), ctx())).toEqual({ amount: 20, unit: "L" });
+  });
+
+  it("a weight-sold product with a weight given is that weight, not packs", () => {
+    const products = [0.5, 1].map((size, i) => ({ ...milkProducts[0], id: `c${i}`, category: "cheese", unit: "kg" as const, packSize: size }));
+    expect(baseAmount(need({ quantity: { amount: 3, unit: "kg" } }), ctx(kitchen([]), { family: "cheese", candidates: products }))).toEqual({ amount: 3, unit: "kg" });
   });
 
   it("takes litres of a family the kitchen counts in boxes, when some of its products are sold by the litre", () => {

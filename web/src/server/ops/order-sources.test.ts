@@ -1,7 +1,17 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { buildOrderTimeline, type OrderSource } from "./order-timeline";
 import { ordersPage } from "./orders-view";
 import { placeOneOfEach, SOURCES, type SourceName } from "./order-sources.test-support";
+
+// What can be ordered depends on the clock (order cut-offs, delivery days, what the kitchen's history says is left):
+// a fixed weekday morning (Friday 13 Nov, 11.00 in Helsinki), so a run on a Sunday, a Thursday or late in the evening
+// tests the same thing (on those, the seed's two-day lead and passed cut-offs change what the menu can buy).
+beforeAll(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-11-13T09:00:00Z"));
+});
+afterAll(() => vi.useRealTimers());
+
 
 /**
  * Nothing missing: one order from every source on one test dock (no network, no model), each in the operations list
