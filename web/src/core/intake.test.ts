@@ -48,7 +48,8 @@ describe("intake flow", () => {
     expect(first.state).toBe("needs_confirmation");
     expect(first.concerns.map((c) => c.code)).toEqual(["quantity_tenfold"]);
     expect(dock.stats().liveCalls).toBe(0); // no live lookup before the buyer has answered
-    expect(first.next).toEqual({ method: "POST", path: `/api/v1/intake/${first.requestId}/concerns`, example: { by: "<person>", responses: [{ key: "quantity_tenfold:1000:L", choice: "use_100_L" }] } });
+    // The example names the choices and pre-fills none of them: the answer is the buyer's.
+    expect(first.next).toEqual({ method: "POST", path: `/api/v1/intake/${first.requestId}/concerns`, example: { by: "<the buyer's name>", responses: [{ key: "quantity_tenfold:1000:L", choice: "<the buyer's choice: confirm or use_100_L>" }] } });
 
     const fixed = await dock.intake.respondToConcerns(session, first.requestId, { by: "Aino Virtanen", responses: [{ key: first.concerns[0].key, choice: "use_100_L" }] }, { channel: "portal_session", person: "Aino Virtanen" });
     expect(fixed.need.quantity).toEqual({ amount: 100, unit: "L" });
@@ -217,6 +218,21 @@ describe("intake flow", () => {
     await expect(dock.intake.choose(session, dup.requestId, { by: "Aino", optionId: "opt_1" })).rejects.toMatchObject({ status: 409, code: "intake_wrong_state" });
   });
 
+  it("catches a repeat of an order still waiting for sign-off, not only of committed ones", async () => {
+    const big = await dock.intake.open(session, { need: need({ quantity: { amount: 1000, unit: "L" }, optimise: "price" }) });
+    const ok = await dock.intake.respondToConcerns(session, big.requestId, { by: "ignored", responses: [{ key: big.concerns[0].key, choice: "confirm" }] }, { channel: "portal_session", person: "Aino Virtanen" });
+    const q = ok.quote!;
+    const order = await dock.placeOrder(session, { requestId: big.requestId, quoteToken: q.quoteToken, lines: q.quote.lines.map(({ productId, quantity, unitPriceCents }) => ({ productId, quantity, unitPriceCents })) });
+    expect(order.status).toBe("pending_approval");
+    const again = await dock.intake.open(session, { need: need({ quantity: { amount: 1000, unit: "L" }, optimise: "price" }) });
+    const dup = again.concerns.find((c) => c.code === "duplicate_recent");
+    expect(dup).toMatchObject({ key: `duplicate_recent:${order.orderId}`, evidence: { status: "pending_approval" } });
+    expect(dup!.message).toMatch(/still waiting for sign-off/);
+    // Another day is not a repeat.
+    const other = await dock.intake.open(session, { need: need({ quantity: { amount: 1000, unit: "L" }, optimise: "price", deliverBy: "2026-11-19" }) });
+    expect(other.concerns.map((c) => c.code)).not.toContain("duplicate_recent");
+  });
+
   it("sets a stated rule aside only for this request when the buyer confirms 'just this once'", async () => {
     const r = await dock.intake.open(session, { need: need({ item: { text: "ordinary milk", category: "milk", excludedAttributes: ["lactose_free"] }, optimise: "price" }) });
     expect(r.concerns.map((c) => c.code)).toEqual(["contradicts_preference"]);
@@ -224,6 +240,20 @@ describe("intake flow", () => {
     expect(once.options.flatMap((o) => o.lines.map((l) => l.productId))).toEqual(["T-REG"]);
     const next = await dock.intake.open(session, { need: need({ optimise: "price", deliverBy: "2026-11-19" }) });
     expect(next.options.flatMap((o) => o.lines.map((l) => l.productId))).not.toContain("T-REG");
+  });
+
+  it("the wholesaler's audit of an order that set a kitchen rule aside never shows the rule's words (only that a rule was confirmed)", async () => {
+    const r = await dock.intake.open(session, { need: need({ item: { text: "ordinary milk", category: "milk", excludedAttributes: ["lactose_free"] }, optimise: "price" }) });
+    const once = await dock.intake.respondToConcerns(session, r.requestId, { by: "Aino", responses: [{ key: r.concerns[0].key, choice: "confirm" }] });
+    const quoted = once.state === "quoted" ? once : await dock.intake.choose(session, r.requestId, { by: "Aino", optionId: once.options[0].optionId });
+    const order = await dock.placeOrder(session, { requestId: r.requestId, quoteToken: quoted.quote!.quoteToken, lines: quoted.quote!.quote.lines.map(({ productId, quantity, unitPriceCents }) => ({ productId, quantity, unitPriceCents })) });
+    expect(order.decision.rules.find((x) => x.rule === "human_confirmation")).toMatchObject({ outcome: "escalate" });
+    const { auditFor } = await import("./audit");
+    const shared = JSON.stringify(auditFor("wholesaler", ledger.entries({ requestId: r.requestId })).entries);
+    expect(shared).not.toContain("Always lactose-free");
+    expect(shared).toContain("a request against one of the kitchen's own rules");
+    // The person signing off still sees the check's words with the order.
+    expect(order.notes?.join(" ")).toContain("Always lactose-free");
   });
 
   it("reports no options with the reasons when nothing fits", async () => {
@@ -243,6 +273,10 @@ describe("intake flow", () => {
     expect(text).toMatch(/^Nothing fits\. The blocker is the weekly budget: 2 options that fit would cost more than the €678\.00 left of €2,000\.00 this week \(€1,322\.00 already committed\)/);
     expect(text).toContain("A: earliest delivery");
     expect(noOptionReason([{ productId: "A", reason: "x", code: "cutoff_passed" }], "2026-11-16")).toMatch(/^Nothing fits\. The blocker is the order cut-off has passed for A/);
+    // With names, a person reads the product, not only its code.
+    expect(noOptionReason([{ productId: "A", reason: "x", code: "cutoff_passed" }, { productId: "B", reason: "no valid price right now", code: "no_offer" }], "2026-11-16", undefined, { A: "Milk 10 l", B: "Oat drink 1 l" })).toMatch(
+      /order cut-off has passed for Milk 10 l \(A\).*Oat drink 1 l \(B\): no valid price/,
+    );
   });
 
   it("keeps intakes private to the agent and validates input", async () => {
@@ -250,12 +284,106 @@ describe("intake flow", () => {
     await expect(dock.intake.get({ ...session, agentId: "someone_else" }, r.requestId)).rejects.toMatchObject({ status: 404 });
     await expect(dock.intake.open(session, { need: { item: { text: "milk" } } })).rejects.toMatchObject({ status: 400, code: "invalid_request" });
     await expect(dock.intake.answer(session, r.requestId, { by: "Aino", answers: [{ questionId: "optimise", optionId: "cheapest!" }] })).rejects.toMatchObject({ code: "option_unknown" });
-    await expect(dock.intake.open(session, { need: need({ item: { text: "unobtainium" } }) })).rejects.toMatchObject({ code: "family_unknown" });
+  });
+
+  // QA F-BEEF-DEV-ERROR: "Buy 50 kg of beef" was a bare 422 family_unknown, with nothing in the ledger, on the wall
+  // or in the operations trace. Now the request is opened and refused in words a chef understands.
+  it("refuses a product the catalogue does not have as a request, with the reason in the ledger", async () => {
+    const r = await dock.intake.open(session, { need: need({ item: { text: "beef" }, quantity: { amount: 50, unit: "kg" } }) });
+    expect(r.state).toBe("no_options");
+    expect(r.notes[0]).toMatch(/nothing called "beef" in the wholesaler's catalogue/);
+    const entries = ledger.entries({ requestId: r.requestId });
+    expect(entries.some((e) => e.type === "request")).toBe(true);
+    expect(entries.find((e) => e.data.step === "no_options")?.data).toMatchObject({ rule: "family_unknown" });
+    expect(dock.stats().liveCalls).toBe(0);
+  });
+
+  it("refuses a product group outside the mandate before any price lookup, naming the rule category_allowed", async () => {
+    const r = await dock.intake.open(session, { need: need({ item: { text: "whipping cream", category: "cream" }, quantity: { amount: 20, unit: "L" } }) });
+    expect(r.state).toBe("no_options");
+    expect(r.notes[0]).toMatch(/may not buy whipping cream: its signed mandate covers milk and plant drink only/);
+    expect(ledger.entries({ requestId: r.requestId }).find((e) => e.data.step === "no_options")?.data).toMatchObject({ rule: "category_allowed" });
+    expect(dock.stats().liveCalls).toBe(0);
   });
 
   it("shows the kitchen's memory", async () => {
     const k = await dock.intake.kitchen(session);
     expect(k.families[0]).toMatchObject({ family: "milk", orders: 10 });
     expect(k.stated.map((p) => p.text)).toEqual(["Always lactose-free"]);
+  });
+});
+
+describe("deliver on an exact day (not merely by it)", () => {
+  it("delivers every option on the day asked, quotes that day, and the gate holds the order to it", async () => {
+    const day = "2026-11-18"; // a few days out: the seed could deliver sooner
+    let step = await dock.intake.open(session, { need: need({ deliverBy: undefined, deliverOn: day, optimise: "price" }) });
+    expect(step.need).toMatchObject({ deliverOn: day, deliverBy: day });
+    if (step.state === "options_ready") step = await dock.intake.choose(session, step.requestId, { by: "Sanna", optionId: step.options[0].optionId });
+    expect(step.state).toBe("quoted");
+    expect(step.quote!.quote.lines.every((l) => l.deliveryDate === day)).toBe(true);
+    expect(step.quote!.policyPreview.rules.find((r) => r.rule === "delivery_deadline")).toMatchObject({ outcome: "pass", reason: `Every line arrives on ${day}, the day asked.` });
+    const order = await dock.placeOrder(session, { requestId: step.requestId });
+    expect(order.lines.every((l) => l.deliveryDate === day)).toBe(true);
+  });
+
+  it("without deliverOn nothing changes: the earliest day the wholesaler can", async () => {
+    const step = await dock.intake.open(session, { need: need({ optimise: "price" }) });
+    const lines = step.quote?.quote.lines ?? step.options[0].lines;
+    expect(lines.every((l) => l.deliveryDate < "2026-11-18")).toBe(true);
+  });
+});
+
+describe("a message that names more than one item", () => {
+  it("says on the step, the ledger and every later state what else was asked, and orders nothing for it", async () => {
+    const step = await dock.intake.open(session, { need: need({ text: "Need 100 L milk plus 20 kg yoghurt by Wednesday please." }) });
+    expect(step.alsoAsked).toEqual([{ text: "20 kg yoghurt by Wednesday please.", group: "yoghurt", amount: { amount: 20, unit: "kg" } }]);
+    expect(step.notes.at(-1)).toMatch(/You also asked for "20 kg yoghurt/);
+    expect(ledger.entries({ requestId: step.requestId }).some((e) => e.data.step === "also_asked")).toBe(true);
+    expect(step.options.every((o) => o.lines.every((l) => l.unit === "L"))).toBe(true);
+    const again = await dock.intake.get(session, step.requestId);
+    expect(again.notes.at(-1)).toMatch(/You also asked for/);
+  });
+
+  it("a one-item message gets no such note", async () => {
+    const step = await dock.intake.open(session, { need: need({ text: "100 L lactose-free milk for Wednesday" }) });
+    expect(step.alsoAsked).toEqual([]);
+    expect(step.notes.join(" ")).not.toMatch(/also asked/);
+  });
+});
+
+describe("a substitute the kitchen turned down before", () => {
+  const declinedItem = (forProductId: string | undefined, productId: string) => ({
+    id: `mem_decl_${productId}`,
+    fact: { kind: "substitute" as const, forProductId, forName: forProductId ? "the box" : undefined, productId, name: productId, accepted: false, reason: "too sweet" },
+    text: `Declined ${productId}`,
+    family: "milk",
+    strength: "habit" as const,
+    origin: "stated" as const,
+    status: "active" as const,
+    audience: "private" as const,
+    safety: false,
+    weight: 1,
+    confirmations: 1,
+    contradictions: 0,
+    sources: [{ door: "approval" as never, at: "2026-11-03T09:00:00.000Z", by: "Sanna Koskinen" }],
+    createdAt: "2026-11-03T09:00:00.000Z",
+    updatedAt: "2026-11-03T09:00:00.000Z",
+    history: [],
+  });
+
+  it("ranks last with the reason when it was declined for another product, and is left out when declined for this one", async () => {
+    const base = returning();
+    const withMemory = (items: ReturnType<typeof declinedItem>[]) => ({ ...base, memory: { items, forgotten: [], staffReads: [], proposals: [] } }) as KitchenProfile;
+    await setup(withMemory([declinedItem(undefined, "T-BOX")]));
+    const r = await dock.intake.open(session, { need: need({ optimise: "price" }) });
+    const cards = r.state === "quoted" ? [] : r.options;
+    if (cards.length > 1) {
+      expect(cards.at(-1)!.lines[0].productId).toBe("T-BOX");
+      expect(cards.at(-1)!.cons.join(" ")).toMatch(/turned .* down before \(Sanna Koskinen turned it down as a substitute on .*: "too sweet"\)/);
+    } else expect(r.quote?.quote.lines[0].productId).not.toBe("T-BOX");
+    await setup(withMemory([declinedItem("T-1L", "T-BOX")]));
+    const named = await dock.intake.open(session, { need: need({ item: { text: "milk", category: "milk", productId: "T-1L" }, optimise: "price" }) });
+    expect(named.excluded.find((e) => e.productId === "T-BOX")?.reason).toMatch(/^the kitchen does not want it: Sanna Koskinen turned it down as a substitute for the box/);
+    expect([...named.options.flatMap((o) => o.lines), ...(named.quote?.quote.lines ?? [])].some((l) => l.productId === "T-BOX")).toBe(false);
   });
 });

@@ -12,6 +12,7 @@ export async function GET(req: Request) {
   const q = AlternativesQuery.safeParse(Object.fromEntries(new URL(req.url).searchParams));
   if (!q.success) return Response.json(errorBody("invalid_query", q.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")), { status: 400 });
   const r = await alternativesFor(q.data.product, { use: q.data.use, constraints: constraintsOf(q.data), max: q.data.max, debug: !!q.data.debug });
+  if ("unknownConstraints" in r) return Response.json(errorBody("constraint_unknown", r.reason, undefined, { unknown: r.unknownConstraints }), { status: 400 });
   if (!r.available) return Response.json(errorBody("knowledge_unavailable", r.reason), { status: 503 });
   if ("unknownProduct" in r) return Response.json(errorBody("product_not_found", `${r.unknownProduct} is not in the catalogue.`), { status: 404 });
   return Response.json(r, { headers: { "cache-control": "no-store" } });

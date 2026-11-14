@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { DockError } from "@/core/errors";
-import { consoleKitchen } from "@/server/authz";
+import { consoleKitchen, requireKitchenPerson } from "@/server/authz";
 import type { resolveKitchen } from "@/server/console-kitchens";
 import { handle, readJson } from "@/server/http";
 import { getMemoryService } from "./runtime";
@@ -20,11 +20,13 @@ const noStore = { "cache-control": "no-store" };
  * console, or a visitor's kitchen only from their own phone. `k.info.by` is replaced by who actually answered: the
  * visitor's name when their passkey-backed session is present, else the console's relayed name marked unverified.
  */
-export function kitchenMemoryRoute(req: Request, params: Promise<{ kitchen: string }>, fn: (k: ResolvedKitchen, memory: MemoryService) => Promise<unknown>): Promise<Response> {
+export function kitchenMemoryRoute(req: Request, params: Promise<{ kitchen: string }>, fn: (k: ResolvedKitchen, memory: MemoryService) => Promise<unknown>, opts: { change?: string } = {}): Promise<Response> {
   return handle(async (rt) => {
     const { kitchen } = await params;
     const found = await consoleKitchen(req, rt, kitchen);
     if (!found) throw new DockError(404, "kitchen_not_found", "This kitchen does not exist or its demo time is over.");
+    // A change to what the kitchen remembers is the kitchen's own signed-in person's (server/authz.ts).
+    if (opts.change) requireKitchenPerson(found, opts.change);
     const person = found.console.person;
     const k: ResolvedKitchen = { ...found, info: { ...found.info, by: person ? `${person.name} (signed in)` : `${found.info.by} (open demo console, not verified)` } };
     return Response.json(await fn(k, await getMemoryService()), { headers: noStore });

@@ -134,8 +134,10 @@ describe("MCP server", () => {
     expect(r.s.nextStep).toMatch(/allergen/);
     expect(JSON.parse(r.text)).toEqual(r.s); // same content for clients that only read text
 
-    const budget = await call(client, "request_quote", { requestId, lines: [{ productId: "VA-1001", quantity: 1500 }] });
-    const big = await call(client, "place_order", {
+    // The demo kitchens' weekly budget is sized for a day of demos; a mandate with a €2,000 week shows the refusal.
+    const tight = await connect(auth(await signMandate(demoMandate(new Date(), { weeklyBudgetCents: 200_000 }), await demoOrgKeyPair())));
+    const budget = await call(tight, "request_quote", { requestId, lines: [{ productId: "VA-1001", quantity: 1500 }] });
+    const big = await call(tight, "place_order", {
       requestId,
       quoteToken: budget.s.quoteToken,
       lines: [{ productId: "VA-1001", quantity: 1500, unitPriceCents: (budget.s.quote as { lines: { unitPriceCents: number }[] }).lines[0].unitPriceCents }],

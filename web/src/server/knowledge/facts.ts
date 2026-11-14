@@ -1,4 +1,5 @@
 import type { IndexedProduct } from "@/core/catalog/partner";
+import { forbiddenPresent, resolveConstraints } from "@/core/vocabulary";
 
 /**
  * Hard facts, checked by code against the partner's data fields only. A relation the map serves has passed
@@ -31,6 +32,17 @@ export type BuyerConstraints = {
   /** Allergens that must not be present or possible (milk, gluten, nuts, ...). */
   forbiddenAllergens?: string[];
 };
+
+/**
+ * The buyer's words in the catalogue's terms (one vocabulary with the gate, core/vocabulary.ts): English, Finnish,
+ * Swedish and GS1 forms. A word the data cannot speak about is returned in `unknown`: callers refuse it, because a
+ * constraint nobody can check must never pass as "verified".
+ */
+export function resolveBuyer(buyer: BuyerConstraints | undefined): { constraints?: BuyerConstraints; unknown: { word: string; as: "claim" | "allergen" }[] } {
+  if (!buyer) return { unknown: [] };
+  const r = resolveConstraints(buyer);
+  return { constraints: { requiredClaims: r.requiredClaims, forbiddenAllergens: r.forbiddenAllergens }, unknown: r.unknown };
+}
 
 export type AllergenEvidence = "verified" | "unknown";
 
@@ -76,7 +88,7 @@ export function hardCheck(original: IndexedProduct, candidate: IndexedProduct, b
   const forbidden = buyer.forbiddenAllergens ?? [];
   if (forbidden.length) {
     if (!candidate.allergens.declared) return { ok: false, code: "allergen_unknown", reason: "has no allergen data, so a forbidden allergen cannot be ruled out" };
-    const hit = forbidden.filter((a) => present(candidate).has(a));
+    const hit = forbiddenPresent({ present: [...present(candidate)], claims: candidate.claims }, forbidden);
     if (hit.length) return { ok: false, code: "allergen_forbidden", reason: `contains or may contain ${hit.map(pretty).join(", ")}` };
   }
 

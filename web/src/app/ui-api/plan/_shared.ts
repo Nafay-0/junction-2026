@@ -1,6 +1,7 @@
 import { DockError } from "@/core/errors";
 import { menuKitchen } from "@/server/agent/menu/runtime";
 import { planWire } from "@/server/agent/menu/wire";
+import { catalogBrands } from "@/server/grounding";
 import type { PlanRecord } from "@/server/agent/menu/service";
 import type { PlanView } from "@/server/agent/menu/plan";
 
@@ -12,6 +13,7 @@ import type { PlanView } from "@/server/agent/menu/plan";
 export async function withKitchen(slug: string) {
   const { rt, service, kitchen } = await menuKitchen(slug);
   if (!kitchen) throw new DockError(404, "kitchen_not_found", `No menu kitchen "${slug}". Try /ui-api/plan/kaari or /ui-api/plan/laakso.`);
-  const reply = ({ record, view }: { record: PlanRecord; view: PlanView }, status = 200) => Response.json(planWire(record, view, kitchen, rt.dock), { status, headers: { "cache-control": "no-store" } });
+  const brands = await catalogBrands(rt.catalog, kitchen.mandate.allowedCategories); // for the grounding check of the model's words
+  const reply = ({ record, view }: { record: PlanRecord; view: PlanView }, status = 200) => Response.json(planWire(record, view, kitchen, rt.dock, brands), { status, headers: { "cache-control": "no-store" } });
   return { rt, service, kitchen, reply };
 }
