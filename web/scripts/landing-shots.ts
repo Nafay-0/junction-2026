@@ -559,7 +559,251 @@ async function wall(browser: Browser) {
   await ctx.close();
 }
 
-const STAGES: Record<string, (b: Browser) => Promise<void>> = { milk, signoff, refused, ops, watch, seller, voice, menu, outside, mail, wall };
+// ------------------------------------------------------------------ the hero reel (landing v2)
+
+const REEL_DIR = path.join(OUT, "reel");
+const REEL_MANIFEST = path.join(WEB, "src/app/_landing2/reel.json");
+const REEL_THREAD = path.join(WEB, "src/app/_landing2/reel-thread.json");
+const REEL_MAX = 60 * 1024;
+type ReelFrame = { key: string; src: string; w: number; h: number; caption: string };
+const reelFrames: ReelFrame[] = [];
+fs.mkdirSync(path.dirname(REEL_MANIFEST), { recursive: true });
+
+/** One frame of the reel as the phone shows it at that instant: motion left running, 600 px wide, under 60 KB. */
+async function snap(page: Page, key: string, caption: string) {
+  try {
+    fs.mkdirSync(REEL_DIR, { recursive: true });
+    const png = path.join(TMP, `${key}.png`);
+    await page.screenshot({ path: png, caret: "hide" });
+    const out = path.join(REEL_DIR, `${key}.webp`);
+    let bytes = 0;
+    for (const q of [80, 74, 68, 62, 56, 50, 44, 38, 32]) {
+      execFileSync(CWEBP, ["-quiet", "-q", String(q), "-m", "6", "-sharp_yuv", "-resize", "600", "0", png, "-o", out]);
+      bytes = fs.statSync(out).size;
+      if (bytes <= REEL_MAX) break;
+    }
+    const buf = fs.readFileSync(out);
+    const fourcc = buf.toString("ascii", 12, 16);
+    let w = 0;
+    let h = 0;
+    if (fourcc === "VP8X") {
+      w = 1 + buf.readUIntLE(24, 3);
+      h = 1 + buf.readUIntLE(27, 3);
+    } else if (fourcc === "VP8 ") {
+      w = buf.readUInt16LE(26) & 0x3fff;
+      h = buf.readUInt16LE(28) & 0x3fff;
+    }
+    const i = reelFrames.findIndex((f) => f.key === key);
+    const f = { key, src: `/landing/reel/${key}.webp`, w, h, caption };
+    if (i >= 0) reelFrames[i] = f;
+    else reelFrames.push(f);
+    fs.writeFileSync(REEL_MANIFEST, JSON.stringify({ frames: reelFrames }, null, 2) + "\n");
+    done.push(`reel/${key} ${w}x${h} ${(bytes / 1024).toFixed(0)} KB`);
+    console.log(`  frame ${key} (${w}x${h}, ${(bytes / 1024).toFixed(1)} KB)`);
+  } catch (e) {
+    failed.push(`reel/${key}: ${(e as Error).message.split("\n")[0]}`);
+    console.log(`  FAILED reel/${key}: ${(e as Error).message.split("\n")[0]}`);
+  }
+}
+
+/** The thread as the product wrote it, without ids, tokens or signatures: the words the landing page may quote. */
+function threadForPage(t: Thread, seen: { at: number; label: string; detail?: string; status: string }[], shown: { after: string; steps: string[] }[]) {
+  return {
+    note: "Written by scripts/landing-shots.ts (stage reel) from GET /ui-api/kitchens/hotel-lumo/thread, the product's own words, unedited. Ids, signatures and approval ids removed.",
+    capturedAt: new Date().toISOString(),
+    kitchen: "hotel-lumo",
+    turns: t.turns.map((x) =>
+      x.role === "buyer"
+        ? { role: "buyer", text: x.text, label: x.label, via: x.via }
+        : {
+            role: "agent",
+            status: x.status,
+            line: x.line,
+            steps: x.steps.map((st) => ({ kind: st.kind, label: st.label, detail: st.detail, status: st.status })),
+            cards: x.cards.map((c) => {
+              if (c.type === "options")
+                return {
+                  type: "options",
+                  options: c.options.map((o) => ({ rank: o.rank, title: o.title, totalCents: o.totalCents, deliveryDate: o.deliveryDate, signOff: o.signOff, pros: o.pros, cons: o.cons, lines: o.lines.map((l) => ({ name: l.name, quantity: l.quantity, unitPriceCents: l.unitPriceCents, substituteForName: l.substituteForName })) })),
+                  preselected: c.preselected?.reason,
+                  excluded: c.excluded,
+                  notes: c.notes,
+                };
+              if (c.type === "gate") return { type: "gate", outcome: c.outcome, rule: c.rule, reasons: c.reasons, said: c.said?.en, approver: c.approver, rules: c.rules?.map((r) => ({ rule: r.rule, outcome: r.outcome })) };
+              if (c.type === "order") return { type: "order", status: c.status, totalCents: c.totalCents, deliveryDate: c.deliveryDate, lines: c.lines.map((l) => ({ name: l.name })), authorised: c.authorised, signedConfirmation: Boolean(c.confirmation) };
+              return { type: c.type };
+            }),
+          },
+    ),
+    stepsAsTheyAppeared: seen,
+    stepsViewAsShown: shown,
+  };
+}
+
+/** The words of an opened "N steps" view, as the buyer reads them (the store's view, built from the turn's cards). */
+async function stepsShown(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const b = [...document.querySelectorAll('button[aria-expanded="true"]')].filter((x) => /^\s*\d+ steps?\s*$/.test((x as HTMLElement).innerText)).at(-1);
+    if (!b) return [];
+    let box: Element | null = b.parentElement;
+    for (let i = 0; i < 4 && box && !box.querySelector("li"); i++) box = box.parentElement;
+    return box ? [...box.querySelectorAll("li")].map((li) => (li as HTMLElement).innerText.replace(/\s+/g, " ").trim()).filter(Boolean) : [];
+  });
+}
+
+/** The partner's example once, on a phone, frame by frame: what the hero reel and the scroll story show. */
+async function reel(browser: Browser) {
+  const kitchen = "hotel-lumo";
+  // Motion on: the frames must show the line drawing and the steps turning, as a buyer sees them.
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "en-GB", timezoneId: "Europe/Helsinki", baseURL: base });
+  await ctx.addCookies([{ name: "aimopilot-lang", value: "en", url: base! }]);
+  const page = await ctx.newPage();
+  await passkey(page);
+  await resetTestAccounts(browser);
+  await signInKitchen(ctx, kitchen);
+  await resetThread(ctx, kitchen);
+  await page.goto(`/k/${kitchen}`);
+  await page.waitForTimeout(3000);
+  await quiet(page);
+
+  const field = page.getByRole("textbox").last();
+  await field.click();
+  await field.pressSequentially(MILK, { delay: 12 });
+  // The field scrolls with the caret; back to the start so the request reads from its first word.
+  await field.evaluate((el) => {
+    const f = el as HTMLInputElement | HTMLTextAreaElement;
+    f.setSelectionRange(0, 0);
+    f.scrollLeft = 0;
+    f.scrollTop = 0;
+  });
+  await page.waitForTimeout(400);
+  await snap(page, "r01-typed", "The buyer's request typed into the agent's composer on a phone, not yet sent.");
+
+  // Watch the steps as the product writes them while the frames are taken.
+  const seen: { at: number; label: string; detail?: string; status: string }[] = [];
+  const shown: { after: string; steps: string[] }[] = [];
+  const t0 = Date.now();
+  let watching = true;
+  const watcher = (async () => {
+    while (watching) {
+      const t = await threadOf(ctx, kitchen).catch(() => undefined);
+      const a = t && lastAgent(t);
+      for (const st of a?.steps ?? []) {
+        const k = `${st.label}|${st.status}`;
+        if (!seen.some((x) => `${x.label}|${x.status}` === k)) seen.push({ at: Date.now() - t0, label: st.label, detail: st.detail, status: st.status });
+      }
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  })();
+
+  await field.press("Enter");
+  await page.waitForTimeout(900);
+  await snap(page, "r02-reading", "Sent: the buyer's words in the thread and the agent's first step line turning.");
+  await page.waitForTimeout(2600);
+  await snap(page, "r03-working", "The agent at work: step lines ticking off as the thread's line draws down.");
+  await page.waitForTimeout(2600);
+  const stillWorking = await threadOf(ctx, kitchen).then((t) => lastAgent(t)?.status === "working").catch(() => false);
+  if (stillWorking) await snap(page, "r03b-working", "Further on: more steps done, the agent still working.");
+
+  let t = await idle(ctx, kitchen, 1);
+  await page.waitForTimeout(1800);
+  await quiet(page);
+  const reply = page.locator("li, article, section").filter({ hasText: /cut-off|can't arrive|cannot arrive|in time/i }).last();
+  if (await reply.count()) await topAlign(page, reply, 40).catch(() => undefined);
+  await snap(page, "r04-reply", "The reply: the usual 10 l boxes can't arrive in time, so it would come as one-litre cartons; which one?");
+
+  if (await openSteps(page)) {
+    const steps = page.getByRole("button", { name: /^\d+ steps?$/ }).last();
+    await topAlign(page, steps, 120).catch(() => undefined);
+    await page.waitForTimeout(500);
+    await snap(page, "r05-steps", "The same reply with its steps opened: request read, history, the assortment searched, live price for a few, the rest left out and why.");
+    shown.push({ after: MILK, steps: await stepsShown(page) });
+    await steps.click().catch(() => undefined);
+    await page.waitForTimeout(500);
+  }
+  const opts = cardsOf(t).filter((c) => c.type === "options").at(-1);
+  const firstName = opts?.type === "options" ? opts.options[0]?.lines[0]?.name : undefined;
+  if (firstName) await topAlign(page, page.getByText(firstName, { exact: false }).last(), 140).catch(() => undefined);
+  await page.waitForTimeout(500);
+  await snap(page, "r06-options", "The three options in one-litre cartons, each with its fixed total, price per litre and Monday delivery.");
+
+  // The buyer picks, as a person would type it.
+  const f2 = page.getByRole("textbox").last();
+  await f2.click();
+  await f2.pressSequentially("the first one", { delay: 15 });
+  await f2.press("Enter");
+  await page.waitForTimeout(1500);
+  await snap(page, "r07-choice", "\"the first one\" sent; the agent takes the order to the gate.");
+  let buyers = 2;
+  let approvalId: string | undefined;
+  for (let i = 0; i < 3 && !approvalId; i++) {
+    t = await idle(ctx, kitchen, buyers);
+    const waiting = cardsOf(t).find((c) => c.type === "gate" && c.outcome === "waiting" && c.approvalId);
+    if (waiting?.type === "gate") approvalId = waiting.approvalId;
+    else {
+      const a = lastAgent(t)!;
+      const q = a.cards.find((c) => c.type === "question");
+      await say(page, q?.type === "question" ? (q.questions[0]?.options[0]?.label ?? "yes") : "yes, order it");
+      buyers++;
+    }
+  }
+  if (!approvalId) throw new Error("no sign-off was asked for");
+  await page.waitForTimeout(1500);
+  await quiet(page);
+  const slab = page.locator('[data-slab="waiting"]').last();
+  if (await slab.count()) await topAlign(page, slab, 160).catch(() => undefined);
+  await page.waitForTimeout(400);
+  await snap(page, "r08-gate", "Over the 500 € the agent may spend alone: the dark slab, needs your OK, with OK with Face ID.");
+
+  // The sign-off page for this same order, on this phone; the virtual authenticator answers the passkey.
+  const ap = await ctx.newPage();
+  await ap.goto(`/approve/${approvalId}`);
+  const approve = ap.getByRole("button", { name: /^Approve \d/ });
+  let approvedOnPage = false;
+  if (await approve.waitFor({ timeout: 15_000 }).then(() => true).catch(() => false)) {
+    await ap.waitForTimeout(1200);
+    await snap(ap, "r09-approve", "The sign-off page on the phone: stopped at the gate, the total, why you are asked, Approve with a passkey.");
+    await approve.click();
+    approvedOnPage = await ap.getByText(/Signed off|Order placed/).first().waitFor({ timeout: 30_000 }).then(() => true).catch(() => false);
+    if (approvedOnPage) {
+      await ap.waitForTimeout(2200);
+      await ap.evaluate(() => window.scrollTo(0, 0));
+      await snap(ap, "r10-signed", "Signed off with a passkey: the stamp with the signer's name, and the order placed.");
+    }
+  } else console.log("  the sign-off page did not offer Approve on this session; signing in the thread instead");
+  await ap.close();
+  if (!approvedOnPage) {
+    // The test account's own phone is the kitchen's signer (the slab says so): the passkey is asked in the thread.
+    // A virtual authenticator answers at once and shows nothing, so the frame is the card just after the passkey signed.
+    await page.getByRole("button", { name: /^OK with Face ID$/ }).last().click({ timeout: 20_000 });
+    await page.waitForTimeout(1600);
+    await snap(page, "r09-ok-given", "OK with Face ID tapped and signed with this phone's passkey: the card turns to OK given, OK'd by the kitchen manager.");
+  }
+  const end = Date.now() + 60_000;
+  while (Date.now() < end) {
+    t = await threadOf(ctx, kitchen);
+    if (cardsOf(t).some((c) => c.type === "order" && c.status === "committed")) break;
+    await page.waitForTimeout(800);
+  }
+  await page.waitForTimeout(2500);
+  await page.reload();
+  await page.waitForTimeout(3000);
+  await quiet(page);
+  const okd = page.getByText(/OK'd by/).last();
+  if (await okd.count()) await topAlign(page, okd, 420).catch(() => undefined);
+  await page.waitForTimeout(400);
+  await snap(page, "r11-thread-signed", "Back in the thread: OK'd by the kitchen manager, the order placed at the quoted price for Monday.");
+
+  if (await openSteps(page)) shown.push({ after: "the first one", steps: await stepsShown(page) });
+  watching = false;
+  await watcher;
+  t = await threadOf(ctx, kitchen);
+  fs.writeFileSync(REEL_THREAD, JSON.stringify(threadForPage(t, seen, shown), null, 2) + "\n");
+  console.log(`  thread written (${t.turns.length} turns; approved ${approvedOnPage ? "on the sign-off page" : "in the thread"})`);
+  await ctx.close();
+}
+
+const STAGES: Record<string, (b: Browser) => Promise<void>> = { milk, signoff, refused, ops, watch, seller, voice, menu, outside, mail, wall, reel };
 
 (async () => {
   const browser = await chromium.launch({ args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] });
