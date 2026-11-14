@@ -6,7 +6,8 @@ import { Suspense } from "react";
 import { DEMO_NOTES } from "../_ui/brand";
 import { Wordmark } from "../_ui/wordmark";
 import { moneyShort } from "../_ui/plain";
-import { buttonClass, Plate } from "../_ui/kit";
+import { Plate } from "../_ui/kit";
+import { LINK_GO, LINK_PRIMARY } from "./_account/links";
 import { SESSION_COOKIE } from "@/server/approver-session";
 import { ACCOUNT_COOKIE } from "@/server/accounts/http";
 import { testAccountsShown, testResetMinutes } from "@/server/accounts/schedule";
@@ -30,17 +31,17 @@ export async function generateMetadata(): Promise<Metadata> {
  * The door to the shop (/k): sign in, open an account, use a shared test account, or scan to try without one; and
  * the two stage kitchens, open to look around. Built from the shared kit with plain markup (design-v2 restyles it).
  */
-export default function KitchenEntry() {
+export default function KitchenEntry({ searchParams }: PageProps<"/k">) {
   return (
     <div className="min-h-dvh bg-mist text-ink">
       <Suspense fallback={<p className="h-6 bg-petrol-deep" />}>
-        <Entry />
+        <Entry searchParams={searchParams} />
       </Suspense>
     </div>
   );
 }
 
-async function Entry() {
+async function Entry({ searchParams }: { searchParams: PageProps<"/k">["searchParams"] }) {
   const chosen = await chosenLang();
   const lang = chosen ?? DEFAULT_LANG;
   const tx = DOOR_TEXT[lang];
@@ -61,14 +62,14 @@ async function Entry() {
       </header>
       <main className="mx-auto max-w-[1100px] space-y-8 px-4 py-8 sm:px-8">
         <Suspense fallback={<div className="h-64 animate-pulse bg-concrete-deep/60" />}>
-          <Door lang={lang} />
+          <Door lang={lang} searchParams={searchParams} />
         </Suspense>
       </main>
     </LangProvider>
   );
 }
 
-async function Door({ lang }: { lang: Lang }) {
+async function Door({ lang, searchParams }: { lang: Lang; searchParams: PageProps<"/k">["searchParams"] }) {
   const tx = DOOR_TEXT[lang];
   const etx = ENTRY_TEXT[lang];
   await connection();
@@ -80,6 +81,8 @@ async function Door({ lang }: { lang: Lang }) {
   const demos = await Promise.all(["kaari", "laakso"].map((slug) => resolveKitchen(slug)));
   const join = await joinLink(hdrs);
   const shown = testAccountsShown();
+  const as = (await searchParams).as; // "Sign in to this account" from a private kitchen's page
+  const prefill = typeof as === "string" && /^[a-z0-9][a-z0-9_-]{2,31}$/.test(as) ? as : undefined;
   return (
     <>
       <div className="grid items-start gap-6 lg:grid-cols-2">
@@ -90,14 +93,14 @@ async function Door({ lang }: { lang: Lang }) {
               <>
                 <p className="leading-snug">{tx.signedInAs(me.username, me.restaurant)}</p>
                 <div className="flex flex-wrap items-center gap-3">
-                  <Link href={me.kitchen ? `/k/${me.kitchen}` : "/k/signup?step=rules"} className={buttonClass("go")}>
+                  <Link href={me.kitchen ? `/k/${me.kitchen}` : "/k/signup?step=rules"} className={LINK_GO}>
                     {me.kitchen ? tx.openShop : tx.finishSignUp}
                   </Link>
                   <SignOutButton kind="secondary" />
                 </div>
               </>
             ) : (
-              <SignInForm />
+              <SignInForm prefill={prefill} />
             )}
           </div>
         </Plate>
@@ -106,7 +109,7 @@ async function Door({ lang }: { lang: Lang }) {
             {tx.newTitle}
           </h2>
           <p className="max-w-[60ch] leading-snug">{tx.newBody}</p>
-          <Link href="/k/signup" className={buttonClass("primary")}>
+          <Link href="/k/signup" className={LINK_PRIMARY}>
             {tx.newButton}
           </Link>
         </section>

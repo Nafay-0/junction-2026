@@ -1,0 +1,120 @@
+import { expect, test, type Page } from "@playwright/test";
+
+/**
+ * Accounts, end to end in a browser: a new restaurant signs up, signs its mandate, orders within its limit through
+ * the basket, signs out, signs in again and finds its order and memory; a second account sees none of it, and an
+ * anonymous visitor gets the private page. Screenshots go to E2E_SHOTS when set.
+ */
+const shots = process.env.E2E_SHOTS;
+const shot = async (page: Page, name: string) => {
+  if (shots) await page.screenshot({ path: `${shots}/${name}.png`, fullPage: true });
+};
+const stamp = Date.now().toString(36).slice(-6);
+const PASSWORD = "e2e-password-123";
+
+async function signUp(page: Page, username: string, restaurant: string) {
+  await page.goto("/k");
+  await expect(page.getByRole("heading", { name: "Your kitchen's shop" })).toBeVisible();
+  await shot(page, "01-door");
+  await page.getByRole("link", { name: "Open an account" }).click();
+  await page.waitForURL("**/k/signup");
+  const form = page.getByRole("form", { name: "Your restaurant" });
+  await form.getByLabel("Restaurant or buyer name").fill(restaurant);
+  await form.getByLabel("Username", { exact: true }).fill(username);
+  await form.getByLabel("Password", { exact: true }).fill(PASSWORD);
+  await shot(page, "02-signup-step1");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.getByLabel("The agent may spend alone, per order (€)")).toHaveValue("300");
+  await page.getByRole("checkbox", { name: "nuts", exact: true }).check();
+  await shot(page, "03-signup-mandate");
+  await page.getByRole("button", { name: "Sign the mandate and open the shop" }).click();
+  await expect(page.getByRole("heading", { name: "Add a signing device now?" })).toBeVisible();
+  await shot(page, "04-signup-device-offer");
+  await page.getByRole("link", { name: "Open my shop" }).click();
+  await page.waitForURL(`**/k/${username}`);
+  await expect(page.getByTestId("signed-in-as")).toContainText(`Signed in as ${username}, for ${restaurant}.`);
+}
+
+async function signOut(page: Page) {
+  await page.getByRole("button", { name: "Sign out" }).first().click();
+  await page.waitForURL("**/k");
+  await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
+}
+
+async function signIn(page: Page, username: string) {
+  await page.goto("/k");
+  const form = page.getByRole("form", { name: "Sign in" });
+  await form.getByLabel("Username", { exact: true }).fill(username);
+  await form.getByLabel("Password", { exact: true }).fill(PASSWORD);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.waitForURL(`**/k/${username}`);
+}
+
+test("a restaurant signs up, orders within its limit, comes back to its order and memory; nobody else sees them", async ({ page, browser }) => {
+  test.setTimeout(180_000);
+  // The order step needs a product that can be ordered for the next delivery right now. On the partner's live test
+  // catalogue that depends on the hour (order cut-offs, unknown stock), so this runs on the seed: DOCK_CATALOG=seed.
+  const health = (await (await page.request.get("/api/health")).json()) as { catalog?: { source?: string } };
+  test.skip(health.catalog?.source === "valio", "run with DOCK_CATALOG=seed: the live catalogue's cut-offs decide whether anything is orderable now");
+  const a = `e2e-a-${stamp}`;
+  await signUp(page, a, `Ravintola E2E ${stamp}`);
+  await shot(page, "05-shop-home");
+
+  // An order within the €300 limit through the basket: a live price, then the same gate as the agent.
+  await page.goto(`/k/${a}/catalogue?q=milk`);
+  const add = page.getByRole("button", { name: /^Add a / }).first();
+  await expect(add).toBeVisible({ timeout: 30_000 });
+  await add.click();
+  await page.goto(`/k/${a}/basket`);
+  await page.getByRole("button", { name: "Get a fixed price" }).click();
+  const place = page.getByRole("button", { name: "Place the order" });
+  await expect(place).toBeVisible({ timeout: 30_000 });
+  await place.click();
+  await expect(page.getByText("Order placed with the wholesaler")).toBeVisible({ timeout: 30_000 });
+  await shot(page, "06-order-placed");
+
+  // Memory: a stated rule, through the kitchen's own memory page.
+  const rule = await page.request.post(`/ui-api/kitchens/${a}/memory`, { data: { action: "rule", family: "milk", dimension: "lactose", choice: "lactose_free" } });
+  expect(rule.status()).toBe(200);
+
+  await page.goto(`/k/${a}/orders`);
+  const orderRow = page.getByRole("main").getByText(/Ordered|Placed|committed|Order of/i).first();
+  await expect(orderRow).toBeVisible();
+  const ordersHtml = await page.content();
+  await signOut(page);
+
+  // Signed out: the kitchen is private.
+  await page.goto(`/k/${a}`);
+  await expect(page.getByRole("heading", { name: "This kitchen is private" })).toBeVisible();
+  await shot(page, "07-private-anonymous");
+  expect((await page.request.get(`/ui-api/kitchens/${a}/portal`)).status()).toBe(401);
+
+  // Back again: the order and the rule are there.
+  await signIn(page, a);
+  const portal = await (await page.request.get(`/ui-api/kitchens/${a}/portal`)).json();
+  expect(portal.orders.filter((o: { status: string }) => o.status === "committed").length).toBeGreaterThan(0);
+  expect(JSON.stringify(portal.memory)).toMatch(/lactose/i);
+  await page.goto(`/k/${a}/agent`);
+  await expect(page.getByRole("heading", { name: "Signing devices" })).toBeVisible();
+  await expect(page.getByText(/lactose/i).first()).toBeVisible();
+  await shot(page, "08-agent-and-rules");
+  void ordersHtml;
+
+  // A second account, in another browser: none of it.
+  const other = await browser.newContext();
+  const b = await other.newPage();
+  const bName = `e2e-b-${stamp}`;
+  await signUp(b, bName, `Bistro E2E ${stamp}`);
+  await b.goto(`/k/${a}`);
+  await expect(b.getByRole("heading", { name: "This kitchen is private" })).toBeVisible();
+  await expect(b.getByText(`You are signed in as ${bName}`)).toBeVisible();
+  await shot(b, "09-private-other-account");
+  expect((await b.request.get(`/ui-api/kitchens/${a}/portal`)).status()).toBe(403);
+  expect((await b.request.get(`/ui-api/memory/kitchens/${a}`)).status()).toBe(403);
+  expect((await b.request.post(`/ui-api/kitchens/${a}/memory`, { data: { action: "rule", family: "milk", dimension: "lactose", choice: "none" } })).status()).toBe(403);
+  const bPortal = await (await b.request.get(`/ui-api/kitchens/${bName}/portal`)).json();
+  expect(bPortal.orders.filter((o: { status: string }) => o.status === "committed")).toEqual([]);
+  const ledger = await (await b.request.get(`/api/v1/ledger`)).json();
+  expect(JSON.stringify(ledger.entries)).not.toContain(`org_acct_${a.replaceAll("-", "_")}`);
+  await other.close();
+});

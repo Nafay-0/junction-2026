@@ -15,7 +15,7 @@ import { chosenLang, requestLang } from "../../_i18n/server";
 import { LAYOUT_TEXT } from "./layout.text";
 import { ACCOUNT_TEXT } from "./account.text";
 import { ACCOUNT_COOKIE } from "@/server/accounts/http";
-import { buttonClass } from "../../_ui/kit";
+import { LINK_GO, LINK_PRIMARY } from "../_account/links";
 
 export async function generateMetadata(): Promise<Metadata> {
   return { title: LAYOUT_TEXT[await requestLang()].title.shop };
@@ -72,12 +72,12 @@ function Private({ lang, slug, me }: { lang: Lang; slug: string; me?: { username
       {me && <p className="mt-2 max-w-prose text-[1.1rem]">{tx.privateOther(me.username)}</p>}
       <div className="mt-5 flex flex-wrap gap-3">
         {me?.kitchen && (
-          <Link className={buttonClass("primary")} href={`/k/${me.kitchen}`}>
+          <Link className={LINK_PRIMARY} href={`/k/${me.kitchen}`}>
             {tx.toMine}
           </Link>
         )}
         {!me && (
-          <Link className={buttonClass("go")} href={`/k?as=${encodeURIComponent(slug)}`}>
+          <Link className={LINK_GO} href={`/k?as=${encodeURIComponent(slug)}`}>
             {tx.toSignIn}
           </Link>
         )}

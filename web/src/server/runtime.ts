@@ -145,7 +145,9 @@ async function buildRuntime(): Promise<Runtime> {
     maxAccounts: () => Number(envValue("DOCK_ACCOUNTS_MAX") ?? 1000) || 1000,
     mandates,
   });
-  await accounts.restore();
+  // Not while the build prerenders pages: restoring hashes passwords (real work off the main thread), which would end
+  // prerendering early; a running server restores at its first request.
+  if (process.env.NEXT_PHASE !== "phase-production-build") await accounts.restore();
   const rt: Runtime = { dock, outbox, catalog, catalogSource, events, passkeys, sandboxes, aiven, kitchens: stores.kitchens, mandates, accounts };
   scheduleTestAccountResets(accounts); // not under tests or during a build; DOCK_TEST_ACCOUNTS_RESET_MINUTES=0 turns it off
   radar(rt); // starts the recall radar's schedule (not under tests, during a build, or with RADAR_POLL=off)
