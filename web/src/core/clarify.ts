@@ -98,7 +98,7 @@ export function violationOf(p: Product, c: HardConstraints): { reason: string; c
   if (!c.categories.includes(p.category)) return { reason: `category ${p.category} is not in the mandate`, code: "category_rule" };
   // A dietary claim is met by the maker's claim, or by what its allergen declaration shows (no milk: lactose-free),
   // by its nature for whole fresh produce, or because it is not food at all. Each way is its own evidence kind.
-  const short = claimsEvidence(subjectOfProduct(p), c.requiredAttributes, { strict: c.allergenEvidence === "declared" }).find((e): e is Extract<typeof e, { met: false }> => !e.met);
+  const short = claimsEvidence(subjectOfProduct(p), c.requiredAttributes, { strict: c.allergenEvidence === "declared", rule: true }).find((e): e is Extract<typeof e, { met: false }> => !e.met);
   if (short) return { reason: shortfallText(short), code: `claim:${short.claim}`, params: { claim: short.claim, why: short.why, ...(short.allergens?.length ? { allergens: short.allergens.join(",") } : {}) } };
   const excluded = c.excludedAttributes.filter((a) => p.attributes.includes(a));
   if (excluded.length) return { reason: `is ${excluded.map(claimWord).join(", ")}, which the request does not want`, code: "excluded_claim", params: { claims: excluded.join(",") } };

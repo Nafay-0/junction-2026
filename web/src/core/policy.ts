@@ -192,7 +192,7 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
   // nature for whole fresh produce, or because it is not food (core/claim-evidence.ts); each way named in the record.
   {
     const strict = mandate.allergenEvidence === "declared";
-    const ev = q.lines.flatMap((l) => claimsEvidence(subjectOfLine(l), mandate.requiredAttributes, { strict }).map((e) => ({ l, e })));
+    const ev = q.lines.flatMap((l) => claimsEvidence(subjectOfLine(l), mandate.requiredAttributes, { strict, rule: true }).map((e) => ({ l, e })));
     const short = ev.filter((x) => !x.e.met);
     const evidence = ev.map(({ l, e }) => ({ productId: l.productId, claim: e.claim, ...(e.met ? { kind: e.kind } : { shortfall: e.why, ...(e.allergens ? { allergens: e.allergens } : {}) }) }));
     if (short.length) add("required_attributes", "fail", short.map(({ l, e }) => `${l.productId} is ${shortfallText(e as Extract<ClaimEvidence, { met: false }>)}.`).join(" "), { evidence });

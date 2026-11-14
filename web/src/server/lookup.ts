@@ -52,7 +52,7 @@ export function mandateMisfit(m: Mandate, p: Product): string[] {
 export function mandateMisfits(m: Mandate, p: Product): { rule: string; reason: string; details?: Record<string, unknown> }[] {
   const out: { rule: string; reason: string; details?: Record<string, unknown> }[] = [];
   if (!m.allowedCategories.includes(p.category)) out.push({ rule: "category_allowed", reason: `category ${p.category} is outside the mandate` });
-  for (const e of claimsEvidence(subjectOfProduct(p), m.requiredAttributes, { strict: m.allergenEvidence === "declared" }))
+  for (const e of claimsEvidence(subjectOfProduct(p), m.requiredAttributes, { strict: m.allergenEvidence === "declared", rule: true }))
     if (!e.met) out.push({ rule: "required_attributes", reason: `${shortfallText(e)}, which the mandate requires`, details: { claim: e.claim, shortfall: e.why } });
   for (const a of m.forbiddenAllergens) if (p.allergens.includes(a)) out.push({ rule: "forbidden_allergens", reason: `contains ${a}, which the mandate forbids`, details: { allergen: a } });
   for (const f of nutritionFindings(m.nutritionRules ?? [], { productId: p.id, category: p.category, nutrition: p.nutrition }))

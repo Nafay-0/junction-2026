@@ -463,7 +463,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
       // A settled claim (lactose-free, from an answer or the kitchen's memory) is met as the hard rules meet it: by the
       // claim, or what the maker's data shows (core/claim-evidence.ts), never by the label alone.
       const strict = session.mandate.allergenEvidence === "declared";
-      narrowed = allowed.filter((p) => c.settled.attributes.every((a) => claimEvidence(subjectOfProduct(p), a, { strict }).met) && !c.settled.excludedAttributes.some((a) => p.attributes.includes(a)));
+      narrowed = allowed.filter((p) => c.settled.attributes.every((a) => claimEvidence(subjectOfProduct(p), a, { strict, rule: true }).met) && !c.settled.excludedAttributes.some((a) => p.attributes.includes(a)));
       i.openChoices = c.spanned;
       const openDims = c.spanned.map((q) => SPEC_DIMENSIONS.find((d) => d.id === q.dimension)!).filter(Boolean);
       if (openDims.length) span = (p) => openDims.map((d) => dimensionValue(d, p.attributes) ?? "?").join("|");

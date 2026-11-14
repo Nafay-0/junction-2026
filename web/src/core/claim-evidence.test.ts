@@ -42,8 +42,10 @@ describe("claim evidence: lactose comes only from milk", () => {
   });
 
   it("not food at all: cleaning, hygiene, disposables", () => {
-    expect(claimEvidence(detergent, "lactose_free")).toEqual({ claim: "lactose_free", met: true, kind: "not_food" });
-    expect(claimEvidence(detergent, "lactose_free", { strict: true }).met).toBe(true);
+    expect(claimEvidence(detergent, "lactose_free", { rule: true })).toEqual({ claim: "lactose_free", met: true, kind: "not_food" });
+    expect(claimEvidence(detergent, "lactose_free", { strict: true, rule: true }).met).toBe(true);
+    // The buyer's own words describe food: a lasagne spatula is not "gluten-free lasagne sheets".
+    expect(claimEvidence(detergent, "gluten_free").met).toBe(false);
     expect(isNonFood("cat_64100")).toBe(true);
     expect(isNonFood("10400")).toBe(false);
     expect(isNonFood("milk")).toBe(false);

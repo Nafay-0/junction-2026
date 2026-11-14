@@ -17,7 +17,8 @@ import { hasAllergen } from "./vocabulary";
  *                aroma"). Lactose is an intolerance, not an allergy: it comes from the milk a recipe lists, not from
  *                traces, so the list settles it. Egg, soy, wheat and gluten are allergies, where an undeclared trace
  *                matters, so for them an ingredient list is not enough and only a declaration counts.
- *   not_food     a cleaning, hygiene, disposable or equipment product: a dietary rule does not speak of it
+ *   not_food     a cleaning, hygiene, disposable or equipment product: a kitchen's dietary rule does not speak of it
+ *                (only for a standing rule, `rule: true`; never for the buyer's own words in a search)
  * It is not met when the declaration lists the allergen (milk, without a lactose-free claim), and it is unknown, so
  * not met, when a food product has neither the claim nor a declaration.
  *
@@ -73,9 +74,14 @@ function found(present: readonly string[], claims: readonly string[], allergens:
 }
 
 /** Whether, and how, a product meets one required claim. */
-export function claimEvidence(p: ClaimSubject, claim: string, opts: { strict?: boolean } = {}): ClaimEvidence {
+/**
+ * `rule`: the claim is a kitchen's standing rule (its mandate, its stated rules), which does not speak of products
+ * that are not food: a detergent meets "always lactose-free". A claim in the buyer's own words describes the thing
+ * they want ("gluten-free lasagne sheets"), so a lasagne spatula never meets it.
+ */
+export function claimEvidence(p: ClaimSubject, claim: string, opts: { strict?: boolean; rule?: boolean } = {}): ClaimEvidence {
   if (p.claims.includes(claim)) return { claim, met: true, kind: "claim" };
-  if (isNonFood(p.category)) return { claim, met: true, kind: "not_food" };
+  if (isNonFood(p.category)) return opts.rule ? { claim, met: true, kind: "not_food" } : { claim, met: false, why: "claim_only" };
   const from = DERIVABLE[claim];
   if (!from) return { claim, met: false, why: "claim_only" };
   if (p.declared !== false) {
@@ -111,7 +117,7 @@ const MILK_WORDS = new RegExp(
 );
 
 /** Every required claim, the unmet ones first. */
-export function claimsEvidence(p: ClaimSubject, claims: readonly string[], opts: { strict?: boolean } = {}): ClaimEvidence[] {
+export function claimsEvidence(p: ClaimSubject, claims: readonly string[], opts: { strict?: boolean; rule?: boolean } = {}): ClaimEvidence[] {
   return claims.map((c) => claimEvidence(p, c, opts)).sort((a, b) => Number(a.met) - Number(b.met));
 }
 
