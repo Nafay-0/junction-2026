@@ -894,6 +894,16 @@ export async function liftStage(rt: Runtime, stageId: string, by: string, now = 
 
 // ---------- operations ----------
 
+/** The kitchens staff may stage conditions for (demo and visitor kitchens), with what each buys every week. */
+export async function stageableKitchens(rt: Runtime): Promise<{ slug: string; name: string; kind: KitchenKind; standing: { family: string; productId: string; name: string; weekdays: number[] }[] }[]> {
+  const out = [];
+  for (const k of (await watchKitchens(rt)).filter((x) => STAGEABLE.includes(x.kind))) {
+    const { patterns } = await patternsOf(rt, k.orgId);
+    out.push({ slug: k.slug, name: k.name, kind: k.kind, standing: patterns.map((p) => ({ family: p.family, productId: p.product.productId, name: p.product.name, weekdays: p.slots.map((x) => x.weekday) })) });
+  }
+  return out;
+}
+
 export type WatchView = {
   stats: { findingsOpen: number; findings: number; decided: number; placedAlone: number; sentForSignOff: number; held: number; skipped: number; autoRenewOn: number; staged: number; liveCalls: number };
   findings: Finding[];
