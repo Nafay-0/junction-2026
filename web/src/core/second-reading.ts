@@ -14,16 +14,19 @@ import { isMaterialAttribute, normaliseAllergen, normaliseWantedTag } from "./vo
  * hands over its need.
  *
  * What counts as material (tuned on the evaluation in web/eval/second-reader/, numbers in web/docs/second-reader.md):
- *   amount     the amounts differ by READING_RULES.amountFactor or more, or one reads packs and the other litres or
- *              kilos and no pack size written in the text reconciles them ("100 x 10 l" = 100 packs = 1,000 L)
- *   claims     a dietary claim (lactose-free, gluten-free, vegan, organic, ...) wanted in one reading and missing or
- *              excluded in the other ("not lactose-free"), or two different fat contents
- *   allergens  an allergen to avoid in one reading and not the other ("no gluten" counts the same as gluten-free)
+ *   amount     the amounts differ by READING_RULES.amountFactor (2x) or more, or one reads packs and the other
+ *              litres or kilos and no pack size written in the text reconciles them ("100 x 10 l" = 100 packs = 1,000 L)
+ *   claims     a dietary claim the words name (lactose-free, organic, vegan, ...) that the second reading requires and
+ *              the first does not, or that one reading requires and the other excludes ("not lactose-free")
+ *   allergens  an allergen the words name that the second reading avoids and the first does not ("no gluten" counts
+ *              the same as gluten-free)
  *   kind       a different kind of product: the item words share no word stem, or name a different kind (coffee
  *              milk, cream), or two different product codes
- *   date       two different delivery days
- * Not material: the wording of the item, optimise goals, a missing field in the second reading (it read less, so
- * it found nothing to compare), "by" against "on" the same day, and non-dietary attributes.
+ *   date       two different delivery days, or a day only the second reading has, when the words name a day and the
+ *              second reading's day fits them (the weekday named, "tomorrow")
+ * Not material: anything the words do not name (a claim, an allergen or a day one reading invented: the grounding
+ * check's business), the wording of the item, optimise goals, a field the second reading left empty, a claim one
+ * reading excludes and the other leaves unsaid, "by" against "on" the same day, fat content and other attributes.
  */
 
 export type ReadField = "amount" | "claims" | "allergens" | "kind" | "date";
@@ -46,6 +49,8 @@ export type ReadingComparison = { agreed: boolean; differences: ReadingDifferenc
 export type Reading = {
   item: { text: string; attributes: string[]; excludedAttributes: string[]; productId?: string };
   quantity?: { amount: number; unit: NeedUnit };
+  /** One pack's size, when the words give it ("100 x 10 l"): reconciles a count of packs with litres or kilos. */
+  packSize?: { amount: number; unit: "L" | "kg" | "pcs" };
   deliverBy?: string;
   deliverOn?: string;
   requiredClaims: string[];
@@ -62,21 +67,130 @@ export type ReadingRules = {
   askWhenOnlySecondHasDate: boolean;
   /** The second reading has a claim or allergen the first does not: material? */
   askWhenOnlySecondHasClaim: boolean;
-  /** The first reading has a claim or allergen the second does not: material? */
+  /**
+   * The first reading has a claim or allergen the second does not: material? (Off: the second reader missed it, or
+   * the first invented it, and an invented claim is the grounding check's to remove; asking cost questions and caught
+   * nothing on the evaluation.)
+   */
   askWhenOnlyFirstHasClaim: boolean;
+  /** One reading excludes a claim ("not lactose-free") and the other says nothing of it: material? (Neither requires it.) */
+  askExcludedAgainstUnstated: boolean;
   /** Compare the kind of product at all. */
   compareKind: boolean;
+  /** Compare fat content (two different fat contents stated). Not a dietary or allergen claim. */
+  compareFat: boolean;
+  /**
+   * A difference counts only on something the buyer's words say: a claim or allergen the text names, a day when the
+   * text names one, and not a day that contradicts the weekday the text names. A reading that adds what nobody said
+   * is the grounding check's business, not a question for the buyer.
+   */
+  onlyWhatTheWordsSay: boolean;
 };
 
 /** The rules the product runs with. The evaluation script sweeps them; see web/docs/second-reader.md for why these. */
 export const READING_RULES: ReadingRules = {
-  amountFactor: 1.5,
+  amountFactor: 2,
   askWhenOnlyFirstHasDate: false,
   askWhenOnlySecondHasDate: true,
   askWhenOnlySecondHasClaim: true,
-  askWhenOnlyFirstHasClaim: true,
+  askWhenOnlyFirstHasClaim: false,
+  askExcludedAgainstUnstated: false,
   compareKind: true,
+  compareFat: false,
+  onlyWhatTheWordsSay: true,
 };
+
+// ---------- what the buyer's words say ----------
+
+/** Words (folded: no accents, ä as a) that name a claim or an allergen, in English, Finnish and Swedish. */
+const CLAIM_WORDS: Record<string, RegExp> = {
+  lactose_free: /lact|lakto|laktos|hyla/,
+  low_lactose: /lact|lakto|laktos|hyla/,
+  organic: /organic|luomu|ekolog|\bbio\b|\beko\b/,
+  vegan: /vegan|vegaan|plant[ -]?based|kasvipohj|vaxtbas/,
+  vegetarian: /vegetar|kasvis/,
+};
+const ALLERGEN_WORDS: Record<string, RegExp> = {
+  gluten: /glut/,
+  eggs: /\beggs?\b|egg[ -]?free|kananmun|munaton|munat|\bagg/,
+  nuts: /\bnuts?\b|nut[ -]?free|(?<!maa)pahkin|(?<!jord)notter|(?<!jord)notfri/,
+  peanuts: /peanut|maapahkin|jordnot/,
+  soy: /\bsoy|soija|\bsoja/,
+  milk: /dairy|maidoton|maidottom|mjolkfri|milk[ -]?free|no milk|without milk|ilman maitoa|utan mjolk|milk allerg|maitoallerg|mjolkallerg/,
+  wheat: /wheat|vehna|\bvete/,
+  fish: /\bfish|\bkala|\bfisk/,
+  crustaceans: /shellfish|crustacean|ayriai|skaldjur/,
+  molluscs: /mollus|nilvi|blotdjur/,
+  sesame: /sesam|seesam/,
+  mustard: /mustard|sinap|senap/,
+  celery: /celery|selleri/,
+  lupin: /lupin|lupiini/,
+  sulphites: /sulph|sulfi|sulfit/,
+  oats: /\boats?\b|kaura|havre/,
+};
+const WEEKDAY_WORDS: RegExp[] = [
+  /monday|maanantai|mandag/,
+  /tuesday|tiistai|tisdag/,
+  /wednesday|keskiviik|onsdag/,
+  /thursday|torstai|torsdag/,
+  /friday|perjantai|fredag/,
+  /saturday|lauantai|lordag/,
+  /sunday|sunnuntai|sondag/,
+];
+const DAY_WORDS = /today|tonight|tomorrow|tanaan|huome|ylihuome|idag|i ?morgon|overmorgon|week|viiko|vecka|\d{1,2}\s*[./]\s*\d{1,2}|\d{1,2}(st|nd|rd|th|:e)\b|\d{1,2}\.\s*(paiva|pv)|\bden \d{1,2}/;
+
+/** Does the text name this claim (in any polarity)? A tag with no word list counts as named, so it is still compared. */
+export function claimNamed(text: string, tag: string): boolean {
+  const re = CLAIM_WORDS[tag];
+  return !re || re.test(fold(text));
+}
+
+export function allergenNamed(text: string, allergen: string): boolean {
+  const re = ALLERGEN_WORDS[allergen];
+  return !re || re.test(fold(text));
+}
+
+/** Does the text name a delivery day at all? */
+export function dayNamed(text: string): boolean {
+  const t = fold(text);
+  return DAY_WORDS.test(t) || WEEKDAY_WORDS.some((re) => re.test(t));
+}
+
+/** The ISO weekday the text names, when it names exactly one. */
+export function weekdayNamed(text: string): number | undefined {
+  const t = fold(text);
+  const hits = WEEKDAY_WORDS.map((re, i) => (re.test(t) ? i + 1 : 0)).filter(Boolean);
+  return hits.length === 1 ? hits[0] : undefined;
+}
+
+const RELATIVE_WORDS: [RegExp, number][] = [
+  [/day after tomorrow|ylihuom|overmorgon/, 2],
+  [/tomorrow|huomen|huomis|i ?morgon/, 1],
+  [/\btoday\b|tanaan|\bidag\b/, 0],
+];
+
+/**
+ * Does a day fit what the words say? A named weekday must be that weekday; "tomorrow", "ylihuomenna" or "idag" (with no
+ * weekday or date written) must be that day from `today`. Words that pin nothing ("next week", a written date) fit any day.
+ */
+export function dayFitsWords(text: string, day: string, today?: string): boolean {
+  const named = weekdayNamed(text);
+  if (named) return weekdayOf(day) === named;
+  const t = fold(text);
+  if (today && !/\d{1,2}\s*[./]\s*\d{1,2}|\d{1,2}(st|nd|rd|th|:e)\b/.test(t)) {
+    // "day after tomorrow" also contains "tomorrow": the first pattern that matches wins.
+    for (const [re, plus] of RELATIVE_WORDS) if (re.test(t)) return day === addDays(today, plus);
+  }
+  return true;
+}
+
+const addDays = (d: string, n: number) => {
+  const t = new Date(`${d}T12:00:00Z`);
+  t.setUTCDate(t.getUTCDate() + n);
+  return t.toISOString().slice(0, 10);
+};
+
+const weekdayOf = (iso: string) => new Date(`${iso}T12:00:00Z`).getUTCDay() || 7;
 
 // ---------- reading the fields ----------
 
@@ -85,6 +199,12 @@ const CLAIM_AS_ALLERGEN: Record<string, string> = { gluten_free: "gluten", egg_f
 const isFat = (t: string) => t === "fat_free" || /^fat_\d+(_\d+)?$/.test(t);
 
 type Claims = { wanted: Set<string>; excluded: Set<string>; fat: Set<string>; avoid: Set<string> };
+
+/** A reading's dietary claims (wanted and excluded), fat content and allergens to avoid, in the catalogue's words. */
+export function readingFacts(r: Reading): { wanted: string[]; excluded: string[]; fat: string[]; avoid: string[] } {
+  const c = claimsOf(r);
+  return { wanted: [...c.wanted].sort(), excluded: [...c.excluded].sort(), fat: [...c.fat].sort(), avoid: [...c.avoid].sort() };
+}
 
 function claimsOf(r: Reading): Claims {
   const wanted = new Set<string>();
@@ -157,8 +277,10 @@ function compareAmount(a: Reading, b: Reading, text: string, rules: ReadingRules
   if (isCount(x.unit) !== isCount(y.unit)) {
     // Packs against litres or kilos: the same order only when a pack size written in the text reconciles them.
     const [count, base] = isCount(x.unit) ? [x.amount, y.amount] : [y.amount, x.amount];
-    const sizes = numbersInText(text);
-    if (sizes.some((k) => close(count * k, base))) {
+    const sizes = [...numbersInText(text), ...[a.packSize?.amount, b.packSize?.amount].filter((n): n is number => !!n)];
+    // A count equal to the litres, from a reading that also wrote a pack size, is that reading writing the total.
+    const wroteTotal = close(count, base) && !!(isCount(x.unit) ? a.packSize : b.packSize);
+    if (wroteTotal || sizes.some((k) => close(count * k, base))) {
       minor.push(`${show(x, a)} and ${show(y, b)} are the same order (a pack size in the text)`);
       return undefined;
     }
@@ -170,7 +292,7 @@ function compareAmount(a: Reading, b: Reading, text: string, rules: ReadingRules
   return undefined;
 }
 
-function compareClaims(a: Reading, b: Reading, rules: ReadingRules): ReadingDifference | undefined {
+function compareClaims(a: Reading, b: Reading, text: string, rules: ReadingRules, minor: string[]): ReadingDifference | undefined {
   const ca = claimsOf(a);
   const cb = claimsOf(b);
   const tags = [...new Set([...ca.wanted, ...ca.excluded, ...cb.wanted, ...cb.excluded])].sort();
@@ -181,6 +303,14 @@ function compareClaims(a: Reading, b: Reading, rules: ReadingRules): ReadingDiff
     const sa = claimState(ca, t);
     const sb = claimState(cb, t);
     if (sa === sb) continue;
+    if (rules.onlyWhatTheWordsSay && text && !claimNamed(text, t)) {
+      minor.push(`${words(t)} in one reading, but the words do not name it`);
+      continue;
+    }
+    if (!rules.askExcludedAgainstUnstated && sa !== "wanted" && sb !== "wanted") {
+      minor.push(`${words(t)}: ${stateWords(sa, t)} against ${stateWords(sb, t)}, and neither requires it`);
+      continue;
+    }
     if (sb === "unstated" && !rules.askWhenOnlyFirstHasClaim) continue;
     if (sa === "unstated" && !rules.askWhenOnlySecondHasClaim) continue;
     firstWords.push(stateWords(sa, t));
@@ -188,7 +318,7 @@ function compareClaims(a: Reading, b: Reading, rules: ReadingRules): ReadingDiff
     whys.push(sa !== "unstated" && sb !== "unstated" ? `${words(t)} negated in one reading` : `${words(t)} in one reading only`);
   }
   // Fat content: material only when both readings state one and they differ.
-  if (ca.fat.size && cb.fat.size && [...ca.fat].sort().join() !== [...cb.fat].sort().join()) {
+  if (rules.compareFat && ca.fat.size && cb.fat.size && [...ca.fat].sort().join() !== [...cb.fat].sort().join()) {
     firstWords.push([...ca.fat].map(words).join(", "));
     secondWords.push([...cb.fat].map(words).join(", "));
     whys.push("a different fat content");
@@ -209,11 +339,16 @@ function claimsPatch(a: Reading, b: Reading): NeedPatch {
   return { item: { attributes, excludedAttributes }, requiredClaims: keep(a.requiredClaims) };
 }
 
-function compareAllergens(a: Reading, b: Reading, rules: ReadingRules): ReadingDifference | undefined {
+function compareAllergens(a: Reading, b: Reading, text: string, rules: ReadingRules, minor: string[]): ReadingDifference | undefined {
   const xa = claimsOf(a).avoid;
   const xb = claimsOf(b).avoid;
-  const onlyA = [...xa].filter((x) => !xb.has(x)).sort();
-  const onlyB = [...xb].filter((x) => !xa.has(x)).sort();
+  const named = (x: string) => {
+    if (!rules.onlyWhatTheWordsSay || !text || allergenNamed(text, x)) return true;
+    minor.push(`${x} avoided in one reading, but the words do not name it`);
+    return false;
+  };
+  const onlyA = [...xa].filter((x) => !xb.has(x) && named(x)).sort();
+  const onlyB = [...xb].filter((x) => !xa.has(x) && named(x)).sort();
   if (!rules.askWhenOnlyFirstHasClaim) onlyA.length = 0;
   if (!rules.askWhenOnlySecondHasClaim) onlyB.length = 0;
   if (!onlyA.length && !onlyB.length) return undefined;
@@ -264,12 +399,24 @@ function compareKind(a: Reading, b: Reading): ReadingDifference | undefined {
   return { field: "kind", first: ta, second: tb, why: "the item words share nothing" };
 }
 
-function compareDate(a: Reading, b: Reading, rules: ReadingRules, minor: string[]): ReadingDifference | undefined {
+function compareDate(a: Reading, b: Reading, text: string, today: string | undefined, rules: ReadingRules, minor: string[]): ReadingDifference | undefined {
   const da = a.deliverOn ?? a.deliverBy;
   const db = b.deliverOn ?? b.deliverBy;
   if (da === db) {
     if (da && !!a.deliverOn !== !!b.deliverOn) minor.push(`"by" against "on" ${da}`);
     return undefined;
+  }
+  if (rules.onlyWhatTheWordsSay && text) {
+    if (!dayNamed(text)) {
+      minor.push(`a delivery day in one reading (${da ?? db}), but the words name none`);
+      return undefined;
+    }
+    // A second reading on a day the words rule out (another weekday than the one named, not "tomorrow") misread
+    // them; that is no question for the buyer.
+    if (db && !dayFitsWords(text, db, today) && (!da || dayFitsWords(text, da, today))) {
+      minor.push(`the second reading's day ${db} does not fit the words`);
+      return undefined;
+    }
   }
   if (da && !db) {
     if (!rules.askWhenOnlyFirstHasDate) {
@@ -290,17 +437,18 @@ function compareDate(a: Reading, b: Reading, rules: ReadingRules, minor: string[
 
 /**
  * Compare two readings of the same words. `first` is the reading the order goes on; `second` is the independent one.
- * `text`: the buyer's words, for pack sizes written in them.
+ * `text`: the buyer's words: pack sizes written in them, and what they name (READING_RULES.onlyWhatTheWordsSay). Without
+ * a text every difference is compared.
  */
-export function compareReadings(first: Reading, second: Reading, opts: { text?: string; rules?: Partial<ReadingRules> } = {}): ReadingComparison {
+export function compareReadings(first: Reading, second: Reading, opts: { text?: string; /** Today in Helsinki, for "tomorrow". */ today?: string; rules?: Partial<ReadingRules> } = {}): ReadingComparison {
   const rules = { ...READING_RULES, ...opts.rules };
   const minor: string[] = [];
   const differences = [
     compareAmount(first, second, opts.text ?? "", rules, minor),
-    compareClaims(first, second, rules),
-    compareAllergens(first, second, rules),
+    compareClaims(first, second, opts.text ?? "", rules, minor),
+    compareAllergens(first, second, opts.text ?? "", rules, minor),
     rules.compareKind ? compareKind(first, second) : undefined,
-    compareDate(first, second, rules, minor),
+    compareDate(first, second, opts.text ?? "", opts.today, rules, minor),
   ].filter((d): d is ReadingDifference => !!d);
   return { agreed: differences.length === 0, differences, minor };
 }

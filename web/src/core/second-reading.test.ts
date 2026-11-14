@@ -46,7 +46,7 @@ describe("compareReadings: agreement", () => {
   });
 
   it("small amount differences are not material, and 'by' against 'on' the same day is not", () => {
-    const c = compareReadings(r({ quantity: { amount: 100, unit: "L" } }), r({ quantity: { amount: 120, unit: "L" }, deliverOn: "2026-11-16" }));
+    const c = compareReadings(r({ quantity: { amount: 100, unit: "L" } }), r({ quantity: { amount: 150, unit: "L" }, deliverOn: "2026-11-16" }));
     expect(c.agreed).toBe(true);
     expect(c.minor.length).toBeGreaterThan(0);
   });
@@ -73,6 +73,7 @@ describe("compareReadings: material differences", () => {
     const f = READING_RULES.amountFactor;
     expect(fields(r({ quantity: { amount: 100, unit: "L" } }), r({ quantity: { amount: 100 * f, unit: "L" } }))).toEqual(["amount"]);
     expect(fields(r({ quantity: { amount: 100, unit: "L" } }), r({ quantity: { amount: 100 * f * 0.99, unit: "L" } }))).toEqual([]);
+    expect(f).toBe(2);
   });
 
   it("the unit: packs against litres with no pack size in the text", () => {
@@ -89,9 +90,14 @@ describe("compareReadings: material differences", () => {
     expect(fields(r({ quantity: undefined, sameAsLastTime: true }), r({ quantity: { amount: 200, unit: "L" } }))).toEqual(["amount"]);
   });
 
-  it("a dietary claim present in one reading and missing in the other, either way", () => {
-    expect(compareReadings(base, r({ item: { attributes: [] } })).differences).toMatchObject([{ field: "claims", first: "lactose-free", second: "not stated" }]);
+  it("a dietary claim the second reading requires and the first does not; the other way round only when asked for", () => {
     expect(compareReadings(r({ item: { attributes: [] } }), base).differences).toMatchObject([{ field: "claims", first: "not stated", second: "lactose-free" }]);
+    expect(compareReadings(base, r({ item: { attributes: [] } })).agreed).toBe(true);
+    expect(compareReadings(base, r({ item: { attributes: [] } }), { rules: { askWhenOnlyFirstHasClaim: true } }).differences).toMatchObject([{ field: "claims", first: "lactose-free", second: "not stated" }]);
+  });
+
+  it("one reading excludes a claim and the other is silent: neither requires it, so no question", () => {
+    expect(compareReadings(r({ item: { attributes: [] } }), r({ item: { attributes: [], excludedAttributes: ["lactose_free"] } })).agreed).toBe(true);
   });
 
   it("a negated claim: 'not lactose-free' read as lactose-free", () => {
@@ -99,13 +105,15 @@ describe("compareReadings: material differences", () => {
     expect(c.differences).toMatchObject([{ field: "claims", first: "not lactose-free", second: "lactose-free", why: "lactose-free negated in one reading" }]);
   });
 
-  it("two different fat contents", () => {
-    expect(fields(r({ item: { attributes: ["fat_1_5"] } }), r({ item: { attributes: ["fat_3_5"] } }))).toEqual(["claims"]);
+  it("two different fat contents, when fat is compared (it is not by default: not a dietary or allergen claim)", () => {
+    expect(fields(r({ item: { attributes: ["fat_1_5"] } }), r({ item: { attributes: ["fat_3_5"] } }))).toEqual([]);
+    expect(compareReadings(r({ item: { attributes: ["fat_1_5"] } }), r({ item: { attributes: ["fat_3_5"] } }), { rules: { compareFat: true } }).differences[0].field).toBe("claims");
   });
 
-  it("an allergen to avoid in one reading only (mentioned as a thing to avoid)", () => {
-    const c = compareReadings(r({ forbiddenAllergens: ["nuts"] }), r());
-    expect(c.differences).toMatchObject([{ field: "allergens", first: "no nuts", second: "not stated", patch: { forbiddenAllergens: [] } }]);
+  it("an allergen to avoid that only the second reading has (mentioned as a thing to avoid)", () => {
+    const c = compareReadings(r(), r({ forbiddenAllergens: ["nuts"] }), { text: "We have a nut allergy: 20 kg of vanilla yoghurt without nuts" });
+    expect(c.differences).toMatchObject([{ field: "allergens", first: "not stated", second: "no nuts", patch: { forbiddenAllergens: ["nuts"] } }]);
+    expect(compareReadings(r({ forbiddenAllergens: ["nuts"] }), r()).agreed).toBe(true);
   });
 
   it("a different kind of product: cream for milk, coffee milk for milk, two product codes", () => {
@@ -122,8 +130,40 @@ describe("compareReadings: material differences", () => {
   it("the rules can be relaxed field by field", () => {
     expect(compareReadings(r({ deliverBy: undefined }), base, { rules: { askWhenOnlySecondHasDate: false } }).agreed).toBe(true);
     expect(compareReadings(base, r({ deliverBy: undefined }), { rules: { askWhenOnlyFirstHasDate: true } }).differences[0].field).toBe("date");
-    expect(compareReadings(base, r({ item: { attributes: [] } }), { rules: { askWhenOnlyFirstHasClaim: false } }).agreed).toBe(true);
+    expect(compareReadings(r({ item: { attributes: [] } }), base, { rules: { askWhenOnlySecondHasClaim: false } }).agreed).toBe(true);
     expect(compareReadings(r({ item: { text: "maitoa" } }), r({ item: { text: "kermaa" } }), { rules: { compareKind: false } }).agreed).toBe(true);
+  });
+});
+
+describe("only what the words say", () => {
+  it("a claim or allergen the words do not name is no question: the reading that has it invented it", () => {
+    const text = "200 L milk for Thursday";
+    expect(compareReadings(r({ item: { attributes: [] } }), r({ item: { attributes: ["lactose_free"], excludedAttributes: ["organic", "vegan"] } }), { text }).agreed).toBe(true);
+    expect(compareReadings(r({ item: { attributes: [] } }), r({ item: { attributes: [] }, forbiddenAllergens: ["milk"] }), { text }).agreed).toBe(true);
+  });
+
+  it("a claim the words name is compared in either polarity: 'not lactose-free' read as lactose-free", () => {
+    const text = "Ordinary milk, not lactose-free, 150 litres for Thursday";
+    expect(fields(r({ item: { attributes: ["lactose_free"] } }), r({ item: { attributes: [], excludedAttributes: ["lactose_free"] } }), text)).toEqual(["claims"]);
+  });
+
+  it("nuts and peanuts are told apart in all three languages", () => {
+    const sv = "Allergi i köket: inga jordnötter. 15 kg kvarg till måndag";
+    expect(compareReadings(r({ forbiddenAllergens: ["peanuts"] }), r({ forbiddenAllergens: ["peanuts", "nuts"] }), { text: sv }).agreed).toBe(true);
+    const fi = "Ei pähkinöitä eikä maapähkinöitä: 15 kg rahkaa";
+    expect(fields(r({ forbiddenAllergens: ["peanuts"] }), r({ forbiddenAllergens: ["peanuts", "nuts"] }), fi)).toEqual(["allergens"]);
+  });
+
+  it("no day in the words: a day in one reading is no question", () => {
+    expect(compareReadings(r({ deliverBy: undefined }), r({ deliverBy: "2026-11-15" }), { text: "300 liter mjölk, ingen brådska" }).agreed).toBe(true);
+  });
+
+  it("the words name Friday: a second reading on a Monday misread it, no question; a first reading on a Monday is asked", () => {
+    const text = "a dozen cases of butter for Friday";
+    expect(compareReadings(r({ deliverBy: "2026-11-20" }), r({ deliverBy: "2026-11-16" }), { text }).agreed).toBe(true);
+    expect(fields(r({ deliverBy: "2026-11-16" }), r({ deliverBy: "2026-11-20" }), text)).toEqual(["date"]);
+    // "next Tuesday": both readings are Tuesdays, a week apart, and that is asked.
+    expect(fields(r({ deliverBy: "2026-11-17" }), r({ deliverBy: "2026-11-24" }), "50 litres of milk for next Tuesday")).toEqual(["date"]);
   });
 });
 

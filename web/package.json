@@ -40,6 +40,7 @@
     "categories:build": "tsx scripts/category-labels.ts",
     "qa": "tsx qa/run.ts",
     "menu:eval": "tsx scripts/menu-eval.ts",
+    "eval:second-reader": "tsx scripts/eval/eval-second-reader.ts",
     "knowledge:build": "tsx scripts/knowledge-build.ts",
     "knowledge:eval": "tsx scripts/knowledge-eval.ts",
     "knowledge:publish": "tsx scripts/knowledge-publish.ts",
