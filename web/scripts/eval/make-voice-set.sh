@@ -44,18 +44,18 @@ clean 12-en-us-cases-loud Samantha "Six cases of semi-skimmed milk."; noisy 12-e
 
 cat > "$OUT/truth.json" <<'JSON'
 {
-  "01-en-gb-1000l.wav": { "lang": "en", "accent": "British", "noise": "none", "said": "I need one thousand litres of lactose-free milk by Monday.", "item": "milk", "amount": 1000, "unit": "L", "readBack": true },
-  "02-en-in-oat.wav": { "lang": "en", "accent": "Indian", "noise": "none", "said": "Can you get us two hundred litres of oat drink for Wednesday?", "item": "oat", "amount": 200, "unit": "L" },
-  "03-en-us-fifteen.wav": { "lang": "en", "accent": "American", "noise": "none", "said": "Fifteen kilos of butter, please, for Friday.", "item": "butter", "amount": 15, "unit": "kg" },
-  "04-en-za-cream-noise.wav": { "lang": "en", "accent": "South African", "noise": "kitchen, moderate", "said": "Fifty litres of cream for tomorrow.", "item": "cream", "amount": 50, "unit": "L" },
-  "05-fi-maito.wav": { "lang": "fi", "accent": "Finnish", "noise": "none", "said": "Tarvitsen sata litraa laktoositonta maitoa torstaiksi.", "item": "maito", "amount": 100, "unit": "L" },
-  "06-fi-voi-noise.wav": { "lang": "fi", "accent": "Finnish", "noise": "kitchen, moderate", "said": "Kaksi laatikkoa voita perjantaiksi.", "item": "voi", "amount": 2, "unit": "pack" },
-  "07-sv-gradde.wav": { "lang": "sv", "accent": "Swedish", "noise": "none", "said": "Vi behöver trettio liter grädde till fredag.", "item": "grädde", "amount": 30, "unit": "L" },
-  "08-sv-yoghurt-noise.wav": { "lang": "sv", "accent": "Swedish", "noise": "kitchen, moderate", "said": "Tolv kilo yoghurt, tack.", "item": "yoghurt", "amount": 12, "unit": "kg" },
-  "09-en-au-last-time.wav": { "lang": "en", "accent": "Australian", "noise": "none", "said": "Same milk as last time, but eighty litres.", "item": "milk", "amount": 80, "unit": "L" },
-  "10-en-ie-decimal.wav": { "lang": "en", "accent": "Irish", "noise": "none", "said": "Two and a half kilos of parmesan for Thursday.", "item": "parmesan", "amount": 2.5, "unit": "kg" },
-  "11-en-in-eggs-loud.wav": { "lang": "en", "accent": "Indian", "noise": "kitchen, loud (speech and noise equal)", "said": "Three hundred eggs for Saturday.", "item": "egg", "amount": 300, "unit": "pcs" },
-  "12-en-us-cases-loud.wav": { "lang": "en", "accent": "American", "noise": "kitchen, loud (speech and noise equal)", "said": "Six cases of semi-skimmed milk.", "item": "milk", "amount": 6, "unit": "pack" }
+  "01-en-gb-1000l.wav": {"lang": "en", "accent": "British", "noise": "none", "said": "I need one thousand litres of lactose-free milk by Monday.", "item": ["milk", "maito"], "amount": 1000, "unit": "L", "readBack": true, "expect": "order", "weekday": "Monday"},
+  "02-en-in-oat.wav": {"lang": "en", "accent": "Indian", "noise": "none", "said": "Can you get us two hundred litres of oat drink for Wednesday?", "item": ["oat"], "amount": 200, "unit": "L", "expect": "order", "weekday": "Wednesday"},
+  "03-en-us-fifteen.wav": {"lang": "en", "accent": "American", "noise": "none", "said": "Fifteen kilos of butter, please, for Friday.", "item": ["butter", "voi"], "amount": 15, "unit": "kg", "expect": "order", "weekday": "Friday"},
+  "04-en-za-cream-noise.wav": {"lang": "en", "accent": "South African", "noise": "kitchen, moderate", "said": "Fifty litres of cream for tomorrow.", "item": ["cream"], "amount": 50, "unit": "L", "expect": "order", "weekday": null, "when": "tomorrow"},
+  "05-fi-maito.wav": {"lang": "fi", "accent": "Finnish", "noise": "none", "said": "Tarvitsen sata litraa laktoositonta maitoa torstaiksi.", "item": ["maito", "milk"], "amount": 100, "unit": "L", "expect": "order", "weekday": "Thursday"},
+  "06-fi-voi-noise.wav": {"lang": "fi", "accent": "Finnish", "noise": "kitchen, moderate", "said": "Kaksi laatikkoa voita perjantaiksi.", "item": ["voi", "butter"], "amount": 2, "unit": "pack", "expect": "order", "weekday": "Friday"},
+  "07-sv-gradde.wav": {"lang": "sv", "accent": "Swedish", "noise": "none", "said": "Vi behöver trettio liter grädde till fredag.", "item": ["grädde", "cream", "kerma"], "amount": 30, "unit": "L", "expect": "order", "weekday": "Friday"},
+  "08-sv-yoghurt-noise.wav": {"lang": "sv", "accent": "Swedish", "noise": "kitchen, moderate", "said": "Tolv kilo yoghurt, tack.", "item": ["yoghurt", "yogurt", "jogurt"], "amount": 12, "unit": "kg", "expect": "order", "weekday": null},
+  "09-en-au-last-time.wav": {"lang": "en", "accent": "Australian", "noise": "none", "said": "Same milk as last time, but eighty litres.", "item": ["milk", "maito"], "amount": 80, "unit": "L", "expect": "order", "weekday": null},
+  "10-en-ie-decimal.wav": {"lang": "en", "accent": "Irish", "noise": "none", "said": "Two and a half kilos of parmesan for Thursday.", "item": ["parmesa"], "amount": 2.5, "unit": "kg", "expect": "order", "weekday": "Thursday"},
+  "11-en-in-eggs-loud.wav": {"lang": "en", "accent": "Indian", "noise": "kitchen, loud (speech and noise equal)", "said": "Three hundred eggs for Saturday.", "item": ["egg", "muna"], "amount": 300, "unit": "pcs", "expect": "order", "weekday": "Saturday"},
+  "12-en-us-cases-loud.wav": {"lang": "en", "accent": "American", "noise": "kitchen, loud (speech and noise equal)", "said": "Six cases of semi-skimmed milk.", "item": ["milk", "maito"], "amount": 6, "unit": "pack", "expect": "order", "weekday": null}
 }
 JSON
 ls -la "$OUT"

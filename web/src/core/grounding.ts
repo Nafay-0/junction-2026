@@ -127,12 +127,16 @@ const FI: Record<string, number> = {
   nolla: 0, yksi: 1, yhden: 1, kaksi: 2, kahden: 2, kolme: 3, neljä: 4, viisi: 5, kuusi: 6, seitsemän: 7, kahdeksan: 8, yhdeksän: 9, kymmenen: 10,
   sata: 100, sataa: 100, tuhat: 1000, tuhatta: 1000, kymmentä: 10,
 };
-const SV: Record<string, number> = { noll: 0, en: 1, ett: 1, två: 2, tre: 3, fyra: 4, fem: 5, sex: 6, sju: 7, åtta: 8, nio: 9, tio: 10, tjugo: 20, trettio: 30, fyrtio: 40, femtio: 50, hundra: 100, tusen: 1000 };
+const SV: Record<string, number> = {
+  noll: 0, en: 1, ett: 1, två: 2, tre: 3, fyra: 4, fem: 5, sex: 6, sju: 7, åtta: 8, nio: 9, tio: 10,
+  elva: 11, tolv: 12, tretton: 13, fjorton: 14, femton: 15, sexton: 16, sjutton: 17, arton: 18, nitton: 19,
+  tjugo: 20, trettio: 30, fyrtio: 40, femtio: 50, sextio: 60, sjuttio: 70, åttio: 80, nittio: 90, hundra: 100, tusen: 1000,
+};
 const SCALE: Record<string, number> = { hundred: 100, thousand: 1000, million: 1_000_000, sata: 100, sataa: 100, tuhat: 1000, tuhatta: 1000, hundra: 100, tusen: 1000, miljoona: 1_000_000, miljon: 1_000_000 };
 
 /** A Finnish compound like "kaksisataa" or "viisikymmentä" as one number, or undefined. */
 function finnishCompound(w: string): number | undefined {
-  const parts = ["kymmentä", "sataa", "tuhatta", "sata", "tuhat", ...Object.keys(FI).sort((a, b) => b.length - a.length)];
+  const parts = ["kymmentä", "toista", "sataa", "tuhatta", "sata", "tuhat", ...Object.keys(FI).sort((a, b) => b.length - a.length)];
   let rest = w;
   let total = 0;
   let cur = 0;
@@ -143,7 +147,8 @@ function finnishCompound(w: string): number | undefined {
     rest = rest.slice(p.length);
     matched = true;
     const v = FI[p];
-    if (p.startsWith("kymmen") && p !== "kymmenen") cur = (cur || 1) * 10;
+    if (p === "toista") cur += 10; // "kuusitoista": six-over-ten, 16
+    else if (p.startsWith("kymmen") && p !== "kymmenen") cur = (cur || 1) * 10;
     else if (v === 100) cur = (cur || 1) * 100;
     else if (v === 1000) {
       total += (cur || 1) * 1000;
@@ -177,6 +182,7 @@ export function numbersIn(text: string): Found[] {
     let cur = 0;
     let j = i;
     let any = false;
+    let lastNum = i; // the run's last number word: trailing glue ("two and") is not part of the number
     while (j < words.length) {
       const w = words[j][0].replace(/-/g, "");
       const parts = words[j][0].split("-");
@@ -186,7 +192,9 @@ export function numbersIn(text: string): Found[] {
       if (v !== undefined && !SCALE[w]) {
         cur += v;
         any = true;
+        lastNum = j;
       } else if (SCALE[w]) {
+        lastNum = j;
         const s = SCALE[w];
         if (s === 100) cur = (cur || 1) * 100;
         else {
@@ -194,28 +202,78 @@ export function numbersIn(text: string): Found[] {
           cur = 0;
         }
         any = true;
-      } else if (any && (w === "and" || w === "ja" || w === "och")) {
+      } else if (any && (w === "and" || w === "ja" || w === "och") && !halfFollows(words, j)) {
         // glue
       } else break;
       j++;
     }
     if (any) {
+      j = lastNum + 1;
       const first = words[i];
       const last = words[j - 1];
       const value = total + cur;
       // "en"/"ett" alone are Swedish articles, "one" alone is often a pronoun: only count them with a unit after.
       const lone = j - i === 1 && ["en", "ett", "one", "a"].includes(first[0]);
-      if (!lone || unitAfter(text, last.index! + last[0].length)) out.push({ value, text: text.slice(first.index!, last.index! + last[0].length), index: first.index!, end: last.index! + last[0].length });
+      const endsAt = last.index! + last[0].length;
+      if (!lone || unitAfter(text, endsAt) || HALF_AFTER.test(text.slice(endsAt))) out.push({ value, text: text.slice(first.index!, last.index! + last[0].length), index: first.index!, end: last.index! + last[0].length });
       i = j;
     } else i++;
   }
-  return out;
+  return [...out, ...fractions(text, out)];
 }
 
+/** A Swedish compound like "tvåhundra", "hundratio" or "trettiofem" as one number, or undefined. */
 function swedishCompound(w: string): number | undefined {
-  const m = /^(en|ett|två|tre|fyra|fem|sex|sju|åtta|nio|tio)?(hundra|tusen)$/.exec(w);
-  if (!m) return undefined;
-  return (m[1] ? SV[m[1]] : 1) * SCALE[m[2]];
+  const parts = Object.keys(SV).filter((k) => k !== "noll").sort((a, b) => b.length - a.length);
+  let rest = w;
+  let total = 0;
+  let cur = 0;
+  let pieces = 0;
+  while (rest) {
+    const p = parts.find((x) => rest.startsWith(x));
+    if (!p) return undefined;
+    rest = rest.slice(p.length);
+    pieces++;
+    const v = SV[p];
+    if (v === 100) cur = (cur || 1) * 100;
+    else if (v === 1000) {
+      total += (cur || 1) * 1000;
+      cur = 0;
+    } else cur += v;
+  }
+  return pieces > 1 ? total + cur : undefined;
+}
+
+const HALVES = new Set(["half", "halv", "halvt", "puoli"]);
+/** "and a half" / "och ett halvt" / "ja puoli" starts at the glue word `j`: the number ends before it. */
+function halfFollows(words: RegExpMatchArray[], j: number): boolean {
+  const a = words[j + 1]?.[0];
+  const b = words[j + 2]?.[0];
+  return HALVES.has(a ?? "") || (["a", "an", "one", "en", "ett"].includes(a ?? "") && HALVES.has(b ?? ""));
+}
+
+const HALF_AFTER = /^\s+(?:and|ja|och)\s+(?:a\s+|one\s+|an?\s+|en\s+|ett\s+)?(?:half|halv|halvt|puoli)\b/i;
+const SLASH_HALF_AFTER = /^\s*(?:and\s+|ja\s+|och\s+)?(?:1\/2|½)/i;
+const POINT_AFTER = /^\s+(?:point|pilkku|komma)\s+/i;
+
+/**
+ * Amounts with a fraction, as people say them: "two and a half", "2 and 1/2", "kaksi ja puoli", "två och ett
+ * halvt", "puolitoista" (one and a half), "two point five". Added to the whole numbers already found.
+ */
+function fractions(text: string, found: Found[]): Found[] {
+  const out: Found[] = [];
+  for (const n of found) {
+    const after = text.slice(n.end);
+    const half = HALF_AFTER.exec(after) ?? SLASH_HALF_AFTER.exec(after);
+    if (half) out.push({ value: n.value + 0.5, text: text.slice(n.index, n.end + half[0].length), index: n.index, end: n.end + half[0].length });
+    const point = POINT_AFTER.exec(after);
+    if (point) {
+      const next = found.find((m) => m.index === n.end + point[0].length && m.value < 100 && Number.isInteger(m.value));
+      if (next) out.push({ value: n.value + next.value / 10 ** String(next.value).length, text: text.slice(n.index, next.end), index: n.index, end: next.end });
+    }
+  }
+  for (const m of text.matchAll(/(?<![\p{L}])(puolitoista|halvannan)(?![\p{L}])/giu)) out.push({ value: 1.5, text: m[0], index: m.index!, end: m.index! + m[0].length });
+  return out;
 }
 
 const UNIT_AFTER = /^\s*(l\b|ltr|lit|liter|litre|litra|kg\b|kilo|pack|box|boks|case|laatik|låd|back|kpl|st\b|pcs|piece|pala|kappale|kartong|purk|tölk|bag|säck|pussi|€|eur|e\b)/i;

@@ -17,7 +17,7 @@ import { recordGrounding } from "@/server/grounding";
 const Body = z.discriminatedUnion("op", [
   z.object({
     op: z.literal("beat"),
-    usage: z.object({ audioInSeconds: z.number().min(0), audioOutSeconds: z.number().min(0), promptTokens: z.number().min(0), responseTokens: z.number().min(0) }).optional(),
+    usage: z.object({ audioInSeconds: z.number().min(0), audioOutSeconds: z.number().min(0), promptTokens: z.number().min(0), responseTokens: z.number().min(0), costUsd: z.number().min(0).max(50).optional() }).optional(),
     grounding: z.object({ checked: z.number().int().min(0), dropped: z.number().int().min(0) }).optional(),
   }),
   z.object({ op: z.literal("end"), reason: z.string().max(80).default("hung up") }),

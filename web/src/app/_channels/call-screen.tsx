@@ -81,6 +81,11 @@ export function CallScreen({ kitchen, signOffHref, renderSignOff, onStep, onOrde
   }, [v.lines]);
 
   const live = v.phase === "connected";
+  const recovering = v.phase === "recovering";
+  const [ios, setIos] = useState(false);
+  useEffect(() => setIos(/iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)), []);
+  const approver = v.order?.status === "pending_approval" ? v.order.approval?.approver?.name : undefined;
+  const statusText = recovering ? tx.status.recovering : c.status === "waiting" && approver ? tx.waitingFor(approver) : tx.status[c.status];
   const typing = v.phase === "typed";
   const act: Act = (name, args, label) => void c.tap(name, args, label);
   const signOffLink = v.order && v.order.status === "pending_approval" && v.order.approval ? signOffHref?.(v.order) : undefined;
@@ -147,6 +152,7 @@ export function CallScreen({ kitchen, signOffHref, renderSignOff, onStep, onOrde
             ))}
           </fieldset>
           <p className="max-w-sm text-center text-sm text-ink-soft">{mode === "push_to_talk" ? tx.pushHint : tx.freeHint}</p>
+          <p className="max-w-sm text-center text-sm text-ink-soft">{tx.languages}</p>
           <button type="button" onClick={() => void c.call(mode)} className="flex h-40 w-full max-w-sm flex-col items-center justify-center gap-2 bg-lime text-ink active:translate-y-px" aria-label={tx.call}>
             <PhoneIcon size={56} />
             <span className="display text-[2rem]">{tx.call}</span>
@@ -164,7 +170,14 @@ export function CallScreen({ kitchen, signOffHref, renderSignOff, onStep, onOrde
         </div>
       )}
 
-      {(live || typing || v.phase === "lost" || v.phase === "ended") && (
+      {(live || recovering) && (
+        <p className={`mt-3 px-3 py-2 text-center text-[1.2rem] font-bold ${c.status === "paused" || recovering ? "bg-safety text-safety-ink" : c.status === "listening" ? "bg-lime text-ink" : c.status === "speaking" ? "bg-lavender text-lavender-deep" : "bg-paper text-ink"}`} role="status" aria-live="polite" data-status={recovering ? "recovering" : c.status} onClick={c.status === "paused" ? c.resume : undefined}>
+          {statusText}
+        </p>
+      )}
+      {live && ios && <p className="mt-1 text-center text-sm text-ink-soft">{tx.silentHint}</p>}
+
+      {(live || recovering || typing || v.phase === "lost" || v.phase === "ended") && (
         <div className="mt-3 grid flex-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <div className="flex min-h-0 flex-col">
             <div ref={scroller} className="max-h-[46dvh] min-h-40 flex-1 space-y-2 overflow-y-auto bg-paper p-2.5 md:max-h-[60dvh]" aria-live="polite" aria-label={tx.transcript}>
@@ -188,6 +201,15 @@ export function CallScreen({ kitchen, signOffHref, renderSignOff, onStep, onOrde
             {v.notice && <p className="mt-2 text-[1rem] text-ink-soft">{v.notice}</p>}
           </div>
           <div>{cards}</div>
+        </div>
+      )}
+
+      {recovering && (
+        <div className="sticky bottom-0 mt-4 flex items-stretch gap-3 bg-mist pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2">
+          <button type="button" onClick={() => void c.typeInstead()} className="min-h-20 flex-1 border-2 border-ink bg-paper px-4 text-[1.1rem] font-semibold">
+            {tx.typeInstead}
+          </button>
+          <HangUp onClick={() => c.hangUp()} />
         </div>
       )}
 
@@ -222,11 +244,16 @@ export function CallScreen({ kitchen, signOffHref, renderSignOff, onStep, onOrde
           ) : (
             <div className={`flex h-32 min-w-0 flex-1 flex-col items-center justify-center font-bold ${v.agentSpeaking ? "bg-lavender text-lavender-deep" : "bg-lime text-ink"}`} aria-live="polite">
               <MicIcon />
-              <span className="display mt-1 text-[1.6rem]">{v.agentSpeaking ? tx.agentSpeaking : v.busy ? tx.checking : tx.listening}</span>
+              <span className="display mt-1 text-[1.6rem]">{v.agentSpeaking ? tx.agentSpeaking : v.busy || v.thinking ? tx.checking : tx.listening}</span>
             </div>
           )}
           <HangUp onClick={() => c.hangUp()} />
         </div>
+      )}
+      {live && (
+        <button type="button" onClick={() => void c.typeInstead()} className="mx-auto mt-1 min-h-11 px-3 text-[1rem] font-semibold text-petrol underline">
+          {tx.typeInstead}
+        </button>
       )}
 
       {typing && (
@@ -265,7 +292,7 @@ export function CallScreen({ kitchen, signOffHref, renderSignOff, onStep, onOrde
               {v.phase === "lost" ? tx.callBack : tx.callAgain}
             </button>
             <button type="button" onClick={() => void c.typeInstead()} className="min-h-12 border-2 border-ink bg-paper px-6 font-semibold">
-              {tx.typeInstead}
+              {v.phase === "ended" ? tx.continueTyping : tx.typeInstead}
             </button>
           </div>
         </div>

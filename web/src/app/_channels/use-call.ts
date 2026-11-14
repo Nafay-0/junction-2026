@@ -9,19 +9,26 @@ import { useLang } from "../_i18n/provider";
 import { CallAudio, MIC_TEXT, micProblem, type MicProblem } from "./audio";
 import { CALL_HOOK_TEXT } from "./call-screen.text";
 import { addFacts, checkSpeech, correctionFor, emptyFacts, type Facts } from "./grounding";
-import { LiveSocket, type FunctionCall } from "./live-socket";
+import { LiveSocket, type FunctionCall, type SocketEvents, type VoiceSocket } from "./live-socket";
+import { RealtimeSocket } from "./realtime-socket";
 
 /**
  * One call with a kitchen's purchasing agent, from the tap on "Call" to hang-up.
  *
- * The voice model runs in Google's cloud; its tool calls arrive here and are relayed to this app's server,
- * which runs Dock's intake and composes what the agent may say. This hook attaches what the caller said
- * (the live transcript of their last turn) to each tool call, keeps every tool result as the call's facts,
- * and checks the agent's own transcript against them while it speaks.
+ * The voice model runs in the provider's cloud (Gemini Live or OpenAI Realtime, chosen on the server); its tool
+ * calls arrive here and are relayed to this app's server, which runs AimoPilot's intake and composes what the
+ * agent may say. This hook attaches what the caller said (the transcript of their last turn) to each tool call,
+ * keeps every tool result as the call's facts, and checks the agent's own transcript against them while it speaks.
+ *
+ * Failures, each with a way forward: the provider refusing the session (quota) moves the call to the other
+ * provider; a connection lost mid-call reconnects up to twice with the same request on the desk; the microphone
+ * refused or revoked, or nothing reconnecting, continues the same call by typing.
  */
 
 export type Mode = "push_to_talk" | "hands_free";
-export type Phase = "idle" | "ringing" | "connected" | "lost" | "ended" | "typed";
+export type Phase = "idle" | "ringing" | "connected" | "recovering" | "lost" | "ended" | "typed";
+/** What the caller sees the call doing right now. */
+export type Status = "listening" | "thinking" | "speaking" | "waiting" | "ready" | "paused";
 export type Line = { id: number; who: "you" | "agent" | "dock"; text: string; dropped?: string[]; final: boolean };
 
 export type CallView = {
@@ -33,6 +40,10 @@ export type CallView = {
   talking: boolean;
   latched: boolean;
   agentSpeaking: boolean;
+  /** Between the end of the caller's turn and the agent's answer. */
+  thinking: boolean;
+  /** The system suspended audio (a phone call, the page in the background): a tap resumes it. */
+  paused: boolean;
   busy: boolean;
   step?: IntakeView;
   order?: PublicOrder;
@@ -46,6 +57,15 @@ export type CallView = {
   grounding: { checked: number; dropped: number };
 };
 
+export function statusOf(v: CallView): Status {
+  if (v.paused) return "paused";
+  if (v.talking) return "listening";
+  if (v.agentSpeaking) return "speaking";
+  if (v.thinking || v.busy) return "thinking";
+  if (v.order?.status === "pending_approval") return "waiting";
+  return v.mode === "hands_free" ? "listening" : "ready";
+}
+
 type Post = <T>(path: string, body: unknown) => Promise<{ ok: boolean; status: number; data: T & { error?: { code: string; message: string } } }>;
 
 const post: Post = async (path, body) => {
@@ -58,11 +78,13 @@ const post: Post = async (path, body) => {
   }
 };
 
-const PRICE = { inPerMin: 0.005, outPerMin: 0.018, textInPerM: 0.75, textOutPerM: 4.5 };
+const GEMINI_PRICE = { inPerMin: 0.005 };
+/** A close before the session is ready whose reason names a quota: try the other provider. */
+const QUOTA = /quota|exhaust|rate|limit|429|billing|insufficient/i;
 
 export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => void; onOrder?: (o: PublicOrder) => void } = {}) {
   const base = `/ui-api/voice/${encodeURIComponent(kitchen)}`;
-  const [v, setV] = useState<CallView>({ phase: "idle", mode: "push_to_talk", lines: [], talking: false, latched: false, agentSpeaking: false, busy: false, costUsd: 0, grounding: { checked: 0, dropped: 0 } });
+  const [v, setV] = useState<CallView>({ phase: "idle", mode: "push_to_talk", lines: [], talking: false, latched: false, agentSpeaking: false, thinking: false, paused: false, busy: false, costUsd: 0, grounding: { checked: 0, dropped: 0 } });
   const set = useCallback((f: Partial<CallView> | ((x: CallView) => Partial<CallView>)) => setV((x) => ({ ...x, ...(typeof f === "function" ? f(x) : f) })), []);
   // Words shown on screen follow the caller's language; what goes to the voice model and the server stays English.
   const { lang } = useLang();
@@ -80,7 +102,7 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
   }, []);
 
   const audio = useRef<CallAudio | null>(null);
-  const sock = useRef<LiveSocket | null>(null);
+  const sock = useRef<VoiceSocket | null>(null);
   const callId = useRef<string | null>(null);
   const facts = useRef<Facts>(emptyFacts());
   const brands = useRef<string[]>([]);
@@ -88,9 +110,11 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
   const turn = useRef(0);
   const heardOpen = useRef(false);
   const heard = useRef("");
+  /** The provider's final transcript of the caller's current turn, when it sends one (OpenAI). */
+  const heardFinal = useRef<string | undefined>(undefined);
   const lastHeardAt = useRef(0);
   const said = useRef({ id: -1, text: "", flagged: new Set<string>() });
-  const tokens = useRef({ prompt: 0, response: 0 });
+  const tokens = useRef({ prompt: 0, response: 0, usd: 0 });
   const grounding = useRef({ checked: 0, dropped: 0 });
   const pressAt = useRef(0);
   const latched = useRef(false);
@@ -98,6 +122,8 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
   const timers = useRef<number[]>([]);
   const wake = useRef<{ release: () => Promise<void> } | null>(null);
   const stopRing = useRef<(() => void) | null>(null);
+  const reconnects = useRef(0);
+  const warned = useRef(false);
   const onStep = useRef(opts.onStep);
   const onOrder = useRef(opts.onOrder);
   useEffect(() => {
@@ -130,20 +156,24 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
     [set],
   );
 
-  // List prices: every prompt token at the text rate (the whole context is re-read each turn), audio input on
-  // top at its per-minute rate, response tokens at the audio-out rate (the replies are audio). Errs high.
+  // OpenAI: the socket adds up each response's usage at list prices. Gemini: every prompt token at the text rate
+  // (the whole context is re-read each turn), audio input on top at its per-minute rate, response tokens at the
+  // audio-out rate (the replies are audio). Errs high.
   const cost = useCallback(() => {
     const a = audio.current;
-    return tokens.current.prompt * 0.75e-6 + tokens.current.response * 12e-6 + (a ? (a.seconds.in / 60) * PRICE.inPerMin : 0);
+    if (tokens.current.usd > 0) return tokens.current.usd;
+    return tokens.current.prompt * 0.75e-6 + tokens.current.response * 12e-6 + (a ? (a.seconds.in / 60) * GEMINI_PRICE.inPerMin : 0);
   }, []);
 
-  const cleanup = useCallback(() => {
+  /** Close the voice session; `keepAudio` keeps the microphone and speaker for a reconnect. */
+  const cleanup = useCallback((keepAudio = false) => {
     for (const t of timers.current) window.clearInterval(t);
     timers.current = [];
     stopRing.current?.();
     stopRing.current = null;
     sock.current?.close();
     sock.current = null;
+    if (keepAudio) return;
     audio.current?.close();
     audio.current = null;
     void wake.current?.release().catch(() => {});
@@ -155,7 +185,7 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
       const id = callId.current;
       if (id) void post(`${base}/call/${id}`, { op: "end", reason });
       cleanup();
-      set({ phase, talking: false, latched: false, agentSpeaking: false, endReason: reason, costUsd: cost() });
+      set({ phase, talking: false, latched: false, agentSpeaking: false, thinking: false, paused: false, endReason: reason, costUsd: cost() });
     },
     [base, cleanup, cost, set],
   );
@@ -164,12 +194,18 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
 
   const runTools = useCallback(
     async (fcs: FunctionCall[]) => {
-      set({ busy: true });
-      // The caller's last words may still be arriving as transcript: wait until it has been quiet for 400 ms.
-      for (let i = 0; i < 10 && Date.now() - lastHeardAt.current < 400; i++) await new Promise((r) => setTimeout(r, 100));
+      set({ busy: true, thinking: true });
+      // The caller's last words may still be arriving as transcript: wait for the final transcript when the
+      // provider sends one, otherwise until it has been quiet for 400 ms (at most 3 s either way).
+      const s0 = sock.current;
+      for (let i = 0; i < 30; i++) {
+        const settled = s0?.finalTranscripts ? heardFinal.current !== undefined && Date.now() - lastHeardAt.current > 100 : Date.now() - lastHeardAt.current > 400;
+        if (settled) break;
+        await new Promise((r) => setTimeout(r, 100));
+      }
       const responses: { id: string; name: string; response: unknown }[] = [];
       for (const fc of fcs) {
-        const words = heard.current.trim();
+        const words = (heardFinal.current ?? heard.current).trim();
         const r = await post<ToolReply>(`${base}/tool`, { callId: callId.current, name: fc.name, args: fc.args ?? {}, heard: words ? { text: words, turn: turn.current } : undefined, via: "speech" });
         let reply: ToolReply;
         if (r.ok) reply = r.data;
@@ -181,7 +217,6 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
         screen(reply);
         responses.push({ id: fc.id, name: fc.name, response: reply.forModel });
       }
-      heard.current = "";
       heardOpen.current = false;
       sock.current?.toolResponse(responses);
       set({ busy: false });
@@ -217,12 +252,180 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
         return;
       }
       callId.current = r.data.callId;
-      set({ phase: "typed", start: r.data, micProblem: mic, notice: message, talking: false, latched: false });
+      set({ phase: "typed", start: r.data, micProblem: mic, notice: message, talking: false, latched: false, thinking: false, paused: false });
     },
     [base, set],
   );
 
-  // ---------- starting a call ----------
+  // ---------- the voice session ----------
+
+  /** The socket's events, wired to this call. `s` is read lazily: events only arrive after construction. */
+  const events = useCallback(
+    (start: CallStart, a: CallAudio, self: () => VoiceSocket | null, onLost: (info: { code: number; reason: string }) => void, greeting: string): SocketEvents => ({
+      onReady: () => {
+        stopRing.current?.();
+        stopRing.current = null;
+        set({ phase: "connected", notice: undefined });
+        self()?.text(greeting);
+        if (modeRef.current === "hands_free") a.setSending(true);
+      },
+      onAudio: (b64) => {
+        set((x) => (x.thinking ? { thinking: false } : {}));
+        a.play(b64);
+      },
+      onHeard: (t) => {
+        lastHeardAt.current = Date.now();
+        if (!heardOpen.current && modeRef.current === "hands_free") {
+          turn.current += 1;
+          heard.current = "";
+          heardFinal.current = undefined;
+        }
+        heardOpen.current = true;
+        heard.current = `${heard.current}${t}`;
+        const text = heard.current.trim();
+        set((x) => {
+          const last = x.lines.at(-1);
+          if (last && last.who === "you" && !last.final) return { lines: x.lines.map((l) => (l.id === last.id ? { ...l, text } : l)) };
+          return { lines: [...x.lines.slice(-60), { id: ++lineId.current, who: "you", text, final: false }] };
+        });
+      },
+      onHeardFinal: (t) => {
+        lastHeardAt.current = Date.now();
+        heardFinal.current = t;
+        const text = t.trim();
+        if (!text) return;
+        set((x) => {
+          const last = [...x.lines].reverse().find((l) => l.who === "you");
+          if (last && !last.final) return { lines: x.lines.map((l) => (l.id === last.id ? { ...l, text } : l)) };
+          return { lines: [...x.lines.slice(-60), { id: ++lineId.current, who: "you", text, final: false }] };
+        });
+      },
+      onSaid: (t) => {
+        heardOpen.current = false;
+        if (said.current.id < 0) said.current = { id: addLine("agent", "", false), text: "", flagged: new Set() };
+        said.current.text += t.replace(/<\/?[a-z_]{2,20}>/gi, ""); // control tokens the transcript sometimes carries ("<stop>")
+        const text = said.current.text;
+        patchLine(said.current.id, (l) => ({ ...l, text }));
+        checkSaid(false);
+      },
+      onTurnComplete: () => {
+        if (said.current.id >= 0) {
+          checkSaid(true);
+          patchLine(said.current.id, (l) => ({ ...l, final: true }));
+        }
+        said.current = { id: -1, text: "", flagged: new Set() };
+        set((x) => ({ lines: x.lines.map((l) => (l.who === "you" ? { ...l, final: true } : l)), costUsd: cost(), thinking: x.busy }));
+      },
+      onInterrupted: () => a.stopPlayback(),
+      onToolCall: (fcs) => void runTools(fcs),
+      onCancelled: () => {},
+      onUsage: (u) => {
+        tokens.current = { prompt: tokens.current.prompt + u.promptTokens, response: tokens.current.response + u.responseTokens, usd: tokens.current.usd + (u.costUsd ?? 0) };
+      },
+      onGoAway: () => set({ notice: say().goAway }),
+      onError: (code) => {
+        if (/rate_limit/.test(code)) set({ notice: say().rateLimited });
+      },
+      onClose: ({ clean, code, reason }) => {
+        if (clean || self() === null) return;
+        onLost({ code, reason });
+      },
+    }),
+    [set, addLine, patchLine, checkSaid, cost, runTools, say],
+  );
+
+  /** Open the voice session for a started call. Resolves once the socket is made (not yet ready). */
+  const connect = useCallback(
+    (start: CallStart, a: CallAudio, greeting: string, onLost: (info: { code: number; reason: string; ready: boolean }) => void) => {
+      const live = start.live!;
+      a.rate = live.inputRate;
+      let s: VoiceSocket | null = null;
+      let everReady = false;
+      const ev = events(start, a, () => s, (info) => onLost({ ...info, ready: everReady }), greeting);
+      const onReady = ev.onReady;
+      ev.onReady = () => {
+        everReady = true;
+        reconnects.current = 0;
+        onReady();
+      };
+      s = live.provider === "openai" ? new RealtimeSocket(live.wsUrl, live.token, live.model, ev) : new LiveSocket(live.wsUrl, live.token, live.model, ev);
+      sock.current = s;
+      const ends = Date.parse(start.expiresAt);
+      timers.current.push(
+        window.setInterval(() => {
+          const left = Math.max(0, Math.round((ends - Date.now()) / 1000));
+          set({ secondsLeft: left, costUsd: cost() });
+          if (left <= 30 && left > 0 && !warned.current) {
+            warned.current = true;
+            set({ notice: say().thirtySeconds });
+          }
+          if (left <= 0) hangUp("time limit");
+        }, 1000),
+        window.setInterval(() => {
+          const id = callId.current;
+          if (!id) return;
+          const au = audio.current;
+          void post(`${base}/call/${id}`, { op: "beat", usage: { audioInSeconds: au?.seconds.in ?? 0, audioOutSeconds: au?.seconds.out ?? 0, promptTokens: tokens.current.prompt, responseTokens: tokens.current.response, ...(tokens.current.usd ? { costUsd: tokens.current.usd } : {}) }, grounding: grounding.current }).then((res) => {
+            if (res.status === 404 || res.status === 410) hangUp("ended by the server");
+          });
+        }, 10_000),
+      );
+      return s;
+    },
+    [base, events, set, cost, hangUp, say],
+  );
+
+  /** Start a call (or a reconnect: `again` keeps the microphone open and the desk's request). */
+  const dial = useCallback(
+    async (mode: Mode, carryFrom: string | undefined, a: CallAudio, why: { avoid?: string; reconnect?: boolean }) => {
+      const r = await post<CallStart>(`${base}/call`, { mode, carryFrom, ...(why.avoid ? { avoid: why.avoid } : {}) });
+      if (!r.ok || !r.data.live) {
+        cleanup();
+        await startTyped(undefined, shown(r.data.error, say().couldNotStart), carryFrom);
+        return;
+      }
+      const start = r.data;
+      callId.current = start.callId;
+      brands.current = start.brands;
+      addFacts(facts.current, start.context);
+      set({ start, secondsLeft: start.maxSeconds });
+      const greeting = why.reconnect
+        ? `[call reconnected] The connection dropped and is back. The caller is ${start.kitchen.name}. Say in one short sentence that you are back, then call check_order and say where things stand.`
+        : `[call connected] The caller is ${start.kitchen.name}.`;
+      const s = connect(start, a, greeting, ({ code, reason, ready }) => {
+        if (sock.current !== s) return;
+        // The provider refused the session before it started (free-tier quota, outage): the other provider.
+        if (!ready && QUOTA.test(reason) && !why.avoid) {
+          cleanup(true);
+          void post(`${base}/call/${start.callId}`, { op: "end", reason: `refused ${code}` });
+          set({ notice: say().switching });
+          void dial(mode, start.callId, a, { avoid: start.live!.provider, reconnect: why.reconnect });
+          return;
+        }
+        void post(`${base}/call/${start.callId}`, { op: "end", reason: `lost ${code}` });
+        const timeUp = code === 1008 || /expire|deadline/i.test(reason);
+        if (!timeUp && reconnects.current < 2) {
+          // Lost mid-call: reconnect with the same request on the desk.
+          reconnects.current += 1;
+          cleanup(true);
+          set({ phase: "recovering", talking: false, latched: false, agentSpeaking: false, thinking: false, notice: say().recovering });
+          window.setTimeout(() => void dial(mode, start.callId, a, { reconnect: true }), 800 * reconnects.current);
+          return;
+        }
+        cleanup();
+        set({ phase: "lost", talking: false, latched: false, agentSpeaking: false, thinking: false, endReason: timeUp ? say().timeLimit : say().lost });
+      });
+      // If nothing connects in 12 s (blocked WebSocket, captive portal), fall back to typing.
+      window.setTimeout(() => {
+        if (sock.current === s && !s.ready) {
+          cleanup();
+          void post(`${base}/call/${start.callId}`, { op: "end", reason: "connect timeout" });
+          void startTyped(undefined, say().noVoice, start.callId);
+        }
+      }, 12_000);
+    },
+    [base, cleanup, connect, set, shown, say, startTyped],
+  );
 
   /** Must run inside the tap on "Call": iOS opens the microphone and plays audio only from a user gesture. */
   const call = useCallback(
@@ -232,8 +435,12 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
       facts.current = emptyFacts();
       turn.current = 0;
       heard.current = "";
+      heardFinal.current = undefined;
+      reconnects.current = 0;
+      warned.current = false;
+      tokens.current = { prompt: 0, response: 0, usd: 0 };
       grounding.current = { checked: 0, dropped: 0 };
-      set({ phase: "ringing", mode, lines: [], notice: undefined, problem: undefined, micProblem: undefined, endReason: undefined, talking: false, latched: false, grounding: { checked: 0, dropped: 0 } });
+      set({ phase: "ringing", mode, lines: [], notice: undefined, problem: undefined, micProblem: undefined, endReason: undefined, talking: false, latched: false, thinking: false, paused: false, grounding: { checked: 0, dropped: 0 } });
       let a: CallAudio;
       try {
         a = new CallAudio(
@@ -257,101 +464,25 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
         await startTyped(p, micText(p), carryFrom);
         return;
       }
+      // The microphone taken away mid-call (permission revoked in settings, another app): the same call by typing.
+      a.onMicEnded = () => {
+        if (audio.current !== a) return;
+        const id = callId.current ?? undefined;
+        if (id) void post(`${base}/call/${id}`, { op: "end", reason: "microphone ended" });
+        cleanup();
+        void startTyped("failed", say().micEnded, id);
+      };
+      // A phone call or Siri suspends the page's audio; show it and resume on the next tap.
+      a.onAudioState = (state) => set({ paused: state === "interrupted" || (state === "suspended" && document.visibilityState === "visible") });
       try {
         const nav = navigator as unknown as { wakeLock?: { request: (t: "screen") => Promise<{ release: () => Promise<void> }> } };
         wake.current = (await nav.wakeLock?.request("screen")) ?? null;
       } catch {
         /* no wake lock: the screen may dim; the call survives a short lock on most phones */
       }
-      const r = await post<CallStart>(`${base}/call`, { mode, carryFrom });
-      if (!r.ok || !r.data.live) {
-        cleanup();
-        await startTyped(undefined, shown(r.data.error, say().couldNotStart), carryFrom);
-        return;
-      }
-      const start = r.data;
-      callId.current = start.callId;
-      brands.current = start.brands;
-      addFacts(facts.current, start.context);
-      set({ start, secondsLeft: start.maxSeconds });
-      const s = new LiveSocket(start.live!.wsUrl, start.live!.token, start.live!.model, {
-        onReady: () => {
-          stopRing.current?.();
-          stopRing.current = null;
-          set({ phase: "connected" });
-          s.text(`[call connected] The caller is ${start.kitchen.name}.`);
-          if (modeRef.current === "hands_free") a.setSending(true);
-        },
-        onAudio: (b64) => a.play(b64),
-        onHeard: (t) => {
-          lastHeardAt.current = Date.now();
-          if (!heardOpen.current && modeRef.current === "hands_free") turn.current += 1;
-          heardOpen.current = true;
-          heard.current = `${heard.current}${t}`;
-          const text = heard.current.trim();
-          set((x) => {
-            const last = x.lines.at(-1);
-            if (last && last.who === "you" && !last.final) return { lines: x.lines.map((l) => (l.id === last.id ? { ...l, text } : l)) };
-            return { lines: [...x.lines.slice(-60), { id: ++lineId.current, who: "you", text, final: false }] };
-          });
-        },
-        onSaid: (t) => {
-          heardOpen.current = false;
-          if (said.current.id < 0) said.current = { id: addLine("agent", "", false), text: "", flagged: new Set() };
-          said.current.text += t.replace(/<\/?[a-z_]{2,20}>/gi, ""); // control tokens the transcript sometimes carries ("<stop>")
-          const text = said.current.text;
-          patchLine(said.current.id, (l) => ({ ...l, text }));
-          checkSaid(false);
-        },
-        onTurnComplete: () => {
-          if (said.current.id >= 0) {
-            checkSaid(true);
-            patchLine(said.current.id, (l) => ({ ...l, final: true }));
-          }
-          said.current = { id: -1, text: "", flagged: new Set() };
-          set((x) => ({ lines: x.lines.map((l) => (l.who === "you" ? { ...l, final: true } : l)), costUsd: cost() }));
-        },
-        onInterrupted: () => a.stopPlayback(),
-        onToolCall: (fcs) => void runTools(fcs),
-        onCancelled: () => {},
-        onUsage: (u) => {
-          tokens.current = { prompt: tokens.current.prompt + u.promptTokens, response: tokens.current.response + u.responseTokens };
-        },
-        onGoAway: () => set({ notice: say().goAway }),
-        onClose: ({ clean, code, reason }) => {
-          if (clean) return;
-          cleanup();
-          set({ phase: "lost", talking: false, latched: false, agentSpeaking: false, endReason: code === 1008 || /expire|deadline/i.test(reason) ? say().timeLimit : say().lost });
-          if (callId.current) void post(`${base}/call/${callId.current}`, { op: "end", reason: `lost ${code}` });
-        },
-      });
-      sock.current = s;
-      const ends = Date.parse(start.expiresAt);
-      timers.current.push(
-        window.setInterval(() => {
-          const left = Math.max(0, Math.round((ends - Date.now()) / 1000));
-          set({ secondsLeft: left, costUsd: cost() });
-          if (left <= 0) hangUp("time limit");
-        }, 1000),
-        window.setInterval(() => {
-          const id = callId.current;
-          if (!id) return;
-          const au = audio.current;
-          void post(`${base}/call/${id}`, { op: "beat", usage: { audioInSeconds: au?.seconds.in ?? 0, audioOutSeconds: au?.seconds.out ?? 0, promptTokens: tokens.current.prompt, responseTokens: tokens.current.response }, grounding: grounding.current }).then((res) => {
-            if (res.status === 404 || res.status === 410) hangUp("ended by the server");
-          });
-        }, 10_000),
-      );
-      // If nothing connects in 12 s (blocked WebSocket, captive portal), fall back to typing.
-      window.setTimeout(() => {
-        if (sock.current === s && !s.ready) {
-          cleanup();
-          void post(`${base}/call/${start.callId}`, { op: "end", reason: "connect timeout" });
-          void startTyped(undefined, say().noVoice, start.callId);
-        }
-      }, 12_000);
+      await dial(mode, carryFrom, a, {});
     },
-    [base, cleanup, set, addLine, patchLine, checkSaid, runTools, hangUp, cost, startTyped, micText, shown, say],
+    [base, cleanup, set, startTyped, micText, dial, say],
   );
 
   /** Type instead of speaking: the same tools, with the typed words as the caller's own. */
@@ -368,7 +499,7 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
         return;
       }
       screen(r.data);
-      // On screen the cards carry the detail: the transcript gets Dock's first sentence only.
+      // On screen the cards carry the detail: the transcript gets AimoPilot's first sentence only.
       addLine("dock", r.data.forModel.say.split(/(?<=[.:])\s/)[0]);
     },
     [addLine, base, screen, set, say, shown],
@@ -378,6 +509,7 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
   const tap = useCallback(
     async (name: string, args: Record<string, unknown>, label: string) => {
       if (!callId.current) return;
+      audio.current?.resume();
       set({ busy: true });
       addLine("you", say().tapped(label));
       const live = !!sock.current?.open;
@@ -401,21 +533,23 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
     const s = sock.current;
     if (!a || !s?.ready) return;
     a.resume();
+    set((x) => (x.paused ? { paused: false } : {}));
     if (latched.current) {
       // A second tap ends a tapped (latched) turn.
       latched.current = false;
       a.setSending(false);
       s.activityEnd();
-      set({ talking: false, latched: false });
+      set({ talking: false, latched: false, thinking: true });
       return;
     }
     pressAt.current = Date.now();
     a.stopPlayback();
     turn.current += 1;
     heard.current = "";
+    heardFinal.current = undefined;
     s.activityStart();
     a.setSending(true);
-    set({ talking: true });
+    set({ talking: true, thinking: false });
   }, [set]);
 
   const releaseTalk = useCallback(() => {
@@ -430,7 +564,13 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
     }
     a.setSending(false);
     s.activityEnd();
-    set({ talking: false });
+    set({ talking: false, thinking: true });
+  }, [set]);
+
+  /** A tap anywhere while the system has paused audio (after a phone call): resume it. */
+  const resume = useCallback(() => {
+    audio.current?.resume();
+    set({ paused: false });
   }, [set]);
 
   // ---------- waiting for sign-off ----------
@@ -476,13 +616,21 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
     return () => document.removeEventListener("visibilitychange", vis);
   }, [set]);
 
-  useEffect(() => () => {
-    const id = callId.current;
-    if (id && sock.current) void navigator.sendBeacon?.(`${base}/call/${id}`, new Blob([JSON.stringify({ op: "end", reason: "page closed" })], { type: "application/json" }));
+  useEffect(
+    () => () => {
+      const id = callId.current;
+      if (id && sock.current) void navigator.sendBeacon?.(`${base}/call/${id}`, new Blob([JSON.stringify({ op: "end", reason: "page closed" })], { type: "application/json" }));
+      cleanup();
+    },
+    [base, cleanup],
+  );
+
+  const typeInstead = useCallback(() => {
+    const id = callId.current ?? undefined;
+    if (sock.current && id) void post(`${base}/call/${id}`, { op: "end", reason: "typing instead" });
     cleanup();
-  }, [base, cleanup]);
+    return startTyped(undefined, say().typing, id);
+  }, [base, cleanup, startTyped, say]);
 
-  const typeInstead = useCallback(() => startTyped(undefined, say().typing, callId.current ?? undefined), [startTyped, say]);
-
-  return { view: v, call, hangUp, typeInstead, pressTalk, releaseTalk, typed, tap, callId: () => callId.current, level: () => audio.current?.level ?? 0 };
+  return { view: v, status: statusOf(v), call, hangUp, typeInstead, pressTalk, releaseTalk, resume, typed, tap, callId: () => callId.current, level: () => audio.current?.level ?? 0 };
 }

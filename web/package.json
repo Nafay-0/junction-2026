@@ -27,6 +27,7 @@
     "crash:modal": "uv run --quiet --python 3.12 --with modal==1.6.4 python ../modal/crash_modal.py",
     "crash:modal:secrets": "uv run --quiet --python 3.12 --with modal==1.6.4 python ../modal/make_secrets.py",
     "interpret": "tsx scripts/interpret.ts",
+    "eval:voice": "tsx scripts/eval/eval-voice.ts",
     "verify:receipt": "tsx scripts/verify-receipt.ts",
     "dev:mandate": "tsx scripts/dev-mandate.ts",
     "e2e": "next build && playwright test",

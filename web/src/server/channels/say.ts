@@ -63,13 +63,17 @@ function stepCore(step: IntakeView): ForModel {
         tradeOff: (o.match === "full" ? (o.cons[0] ?? "meets the whole request") : `gives up: ${o.givesUp.map((g) => g.text).join("; ")}`).replace(/\.+$/, ""),
         needsSignOff: o.signOff.length > 0,
       }));
-      const lines = options.map((o) => `Option ${o.number}${o.labels.length ? ` (${o.labels.join(", ")})` : ""}: ${o.products.join(" plus ")}, ${o.total}, delivered ${o.delivery}; ${o.tradeOff}.`);
+      // Spoken: how many, and the suggested (or first) one in a sentence. The list itself is on the screen.
       const pre = step.preselected && options.find((o) => o.optionId === step.preselected!.optionId);
+      const lead = pre ?? options[0];
+      const first = step.options.find((o) => o.optionId === lead.optionId)!;
+      const what = `${first.lines.map((l) => l.name).join(" plus ")}${first.lines.some((l) => l.substituteFor) ? " (a substitute)" : ""}`;
+      const count = options.length === 1 ? "AimoPilot found one option; it is on the screen." : `AimoPilot found ${options.length} options; they are on the screen.`;
       return {
         ok: true,
         state: step.state,
-        say: `AimoPilot found ${options.length} option${options.length > 1 ? "s" : ""}, shown on the screen. ${lines.join(" ")}${pre ? ` AimoPilot suggests option ${pre.number}: ${step.preselected!.reason}` : ""}`,
-        ask: "Ask which option the caller wants.",
+        say: `${count} ${pre ? `It suggests option ${lead.number}` : options.length === 1 ? "It is" : "Option 1 is"}: ${what}, ${lead.total}, delivered ${lead.delivery}.${first.match === "full" ? "" : ` It ${lead.tradeOff}.`}`,
+        ask: options.length === 1 ? "Ask whether to take it." : "Ask which option the caller wants. Do not read the others aloud unless asked.",
         options,
       };
     }
@@ -78,14 +82,14 @@ function stepCore(step: IntakeView): ForModel {
       const d = q.policyPreview;
       const gate =
         d.outcome === "auto_approve"
-          ? "It is within what the agent may spend alone, so the gate would place it straight away."
+          ? "That is within the agent's limit, so it can be placed now."
           : d.outcome === "needs_human_approval"
-            ? `It is beyond what the agent may spend alone, so it would wait for ${d.approver.name}, ${d.approver.role}, to sign off on their phone.`
+            ? `That is over the agent's limit, so ${d.approver.name}, ${d.approver.role}, must sign it on their phone.`
             : `AimoPilot's gate would refuse it: ${d.reasons.join(" ")}`;
       return {
         ok: true,
         state: step.state,
-        say: `The wholesaler fixed the price: ${formatEur(q.quote.totalCents)}, valid until ${localNow(new Date(q.quote.expiresAt)).time} Helsinki time. ${gate}`,
+        say: `The price is fixed at ${formatEur(q.quote.totalCents)}, valid until ${localNow(new Date(q.quote.expiresAt)).time} Helsinki time. ${gate}`,
         ask: d.outcome === "reject" ? undefined : "Ask whether to place the order.",
         total: formatEur(q.quote.totalCents),
         lines: q.quote.lines.map((l) => ({ product: l.name, packs: l.quantity, delivery: spokenDate(l.deliveryDate) })),

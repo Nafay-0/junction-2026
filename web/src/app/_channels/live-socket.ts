@@ -17,12 +17,34 @@ export type SocketEvents = {
   onInterrupted: () => void;
   onToolCall: (calls: FunctionCall[]) => void;
   onCancelled: (ids: string[]) => void;
-  onUsage: (u: { promptTokens: number; responseTokens: number }) => void;
+  onUsage: (u: { promptTokens: number; responseTokens: number; costUsd?: number }) => void;
   onGoAway: (secondsLeft: number) => void;
   onClose: (info: { code: number; reason: string; clean: boolean }) => void;
+  /** The finished transcript of the caller's last turn, when the provider sends one (OpenAI). Replaces the deltas. */
+  onHeardFinal?: (text: string) => void;
+  /** A provider error that did not close the socket (rate limit, bad event). */
+  onError?: (code: string, message: string) => void;
 };
 
-export class LiveSocket {
+/** What the call hook needs from a voice provider's socket (Gemini Live here, OpenAI Realtime in realtime-socket.ts). */
+export interface VoiceSocket {
+  readonly ready: boolean;
+  readonly open: boolean;
+  /** Sample rate the provider takes microphone audio at. */
+  readonly inputRate: number;
+  /** True when the provider sends a final transcript per turn (wait for it before acting on the caller's words). */
+  readonly finalTranscripts: boolean;
+  audio(b64: string): void;
+  activityStart(): void;
+  activityEnd(): void;
+  text(t: string): void;
+  toolResponse(responses: { id: string; name: string; response: unknown }[]): void;
+  close(): void;
+}
+
+export class LiveSocket implements VoiceSocket {
+  readonly inputRate = 16000;
+  readonly finalTranscripts = false;
   private ws: WebSocket;
   private closedByUs = false;
   ready = false;

@@ -1,3 +1,4 @@
+import { numbersIn } from "@/core/grounding";
 import { formatAmount, type NeedUnit, type StructuredNeed } from "@/core/need";
 
 /**
@@ -58,10 +59,13 @@ const ALWAYS_READ_BACK_FROM = 1000;
 export function readBackReason(need: StructuredNeed, ctx: { usual: UsualAmount[]; heardNumbers?: number[]; spokenNumbers?: number[] }): string | undefined {
   const q = need.quantity;
   if (!q) return undefined;
-  if (ctx.heardNumbers && ctx.spokenNumbers && ctx.heardNumbers.length && ctx.spokenNumbers.length) {
-    const a = [...ctx.heardNumbers].sort((x, y) => x - y).join(",");
-    const b = [...ctx.spokenNumbers].sort((x, y) => x - y).join(",");
-    if (a !== b) return `the transcript heard ${ctx.heardNumbers.join(", ")} but the voice model heard ${ctx.spokenNumbers.join(", ")}`;
+  // Two hearings of the same words: the transcript (what AimoPilot reads) and the voice model's own rendering. When
+  // one has the amount and the other does not, the room was loud enough to matter: say both.
+  const h = ctx.heardNumbers ?? [];
+  const s = ctx.spokenNumbers ?? [];
+  if (h.length && s.length) {
+    const near = (xs: number[]) => xs.some((x) => Math.abs(x - q.amount) < 1e-6 * Math.max(1, q.amount));
+    if (near(h) !== near(s)) return `the transcript heard ${[...new Set(h)].join(", ")} but the voice model heard ${[...new Set(s)].join(", ")}`;
   }
   if (q.unit === "pack") return "a number of packs depends on the pack size, so the amount is confirmed";
   if (q.amount >= ALWAYS_READ_BACK_FROM) return `${formatAmount(q.amount, q.unit)} is a large amount`;
@@ -75,6 +79,11 @@ export function readBackReason(need: StructuredNeed, ctx: { usual: UsualAmount[]
   }
   if (q.amount > FIRST_TIME_LIMIT[q.unit]) return `there is no earlier order to compare ${formatAmount(q.amount, q.unit)} with`;
   return undefined;
+}
+
+/** Numbers in a transcript, as digits or words in the three languages, with halves ("two and a half" -> 2, 2.5). */
+export function numbersHeard(text: string): number[] {
+  return numbersIn(text).map((n) => n.value);
 }
 
 /** Numbers written as digits in a transcript: "1,000 L" -> [1000], "2,5 kg" -> [2.5]. Number words are not parsed. */

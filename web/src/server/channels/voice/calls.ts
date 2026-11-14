@@ -4,12 +4,16 @@ import type { NeedInput } from "@/core/need";
 import { recordGroundingChecks } from "../../grounding";
 import { recordLlmSpend } from "../../limits";
 import { LIVE_PRICE, type CallMode } from "./live";
+import { REALTIME_PRICE } from "./realtime";
 
 /** What a call cost at list prices, from the screen's usage report; at least one minute of each way when unknown. */
-export function callCostUsd(c: Pick<Call, "usage" | "startedAt" | "endedAt" | "expiresAt">): number {
+export function callCostUsd(c: Pick<Call, "usage" | "startedAt" | "endedAt" | "expiresAt" | "model">): number {
   const u = c.usage;
-  if (!u) return LIVE_PRICE.audioInPerMin + LIVE_PRICE.audioOutPerMin;
-  return (u.promptTokens * LIVE_PRICE.textInPerM + u.responseTokens * 12) / 1e6 + (u.audioInSeconds / 60) * LIVE_PRICE.audioInPerMin;
+  const openai = c.model ? REALTIME_PRICE[c.model] : undefined;
+  if (!u) return openai ? (600 * openai.audioIn + 1200 * openai.audioOut) / 1e6 : LIVE_PRICE.audioInPerMin + LIVE_PRICE.audioOutPerMin;
+  // OpenAI: the screen adds up each response's own usage at list prices (costUsd); never below the audio's own cost.
+  if (openai) return Math.max(u.costUsd ?? 0, (u.audioInSeconds * 10 * openai.audioIn + u.audioOutSeconds * 20 * openai.audioOut) / 1e6);
+  return Math.max(u.costUsd ?? 0, (u.promptTokens * LIVE_PRICE.textInPerM + u.responseTokens * 12) / 1e6 + (u.audioInSeconds / 60) * LIVE_PRICE.audioInPerMin);
 }
 
 /**
@@ -52,7 +56,9 @@ export type Call = {
   endReason?: string;
   toolCalls: number;
   interprets: number;
-  usage?: { audioInSeconds: number; audioOutSeconds: number; promptTokens: number; responseTokens: number };
+  usage?: { audioInSeconds: number; audioOutSeconds: number; promptTokens: number; responseTokens: number; costUsd?: number };
+  /** The voice model this call runs on (set when its session is minted). */
+  model?: string;
   grounding: { checked: number; dropped: number };
   desk: Desk;
 };
