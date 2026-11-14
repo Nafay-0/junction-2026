@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- eval harness: reads untyped JSON replies. */
 /**
  * A conversation driven over HTTP as a signed-in test account (the kitchen's own person), printing each reply:
  *
