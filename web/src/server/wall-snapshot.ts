@@ -4,6 +4,7 @@ import { KITCHEN_ORG } from "./demo-kitchen";
 import { DEMO_ORG } from "./dev-fixtures";
 import { BROWSE_TEXT } from "./portal-requests";
 import type { Runtime } from "./runtime";
+import { isSampleRequest, setOfEntry } from "./alive/marks";
 
 /**
  * What the wall shows, read from the ledger, the orders and the catalogue meter of this server.
@@ -22,9 +23,11 @@ export type FeedItem = {
   /** The door the request came through when it was an outside agent's (mcp, connector, rest); absent for the store's own doors. */
   door?: "mcp" | "connector" | "rest";
   at: string;
+  /** Played by the sample activity (server/alive): the wall shows the same small "sample" mark. */
+  sample?: boolean;
 };
 
-export type RefusalItem = { key: string; kitchen: string; rule: string; reason: string; at: string };
+export type RefusalItem = { key: string; kitchen: string; rule: string; reason: string; at: string; sample?: boolean };
 
 export type WallSnapshot = {
   at: string;
@@ -127,13 +130,13 @@ export async function wallSnapshot(rt: Runtime): Promise<WallSnapshot> {
     } else if (e.type === "refusal") {
       st.refused++;
       const rule = typeof e.data.rule === "string" ? e.data.rule : undefined;
-      st.refusals.push({ key: `r${e.seq}`, kitchen: kitchenOf(e.requestId, e.actor), rule: ruleTitle(rule), reason: e.summary.replace(/^Refused: /, ""), at: e.at });
+      st.refusals.push({ key: `r${e.seq}`, kitchen: kitchenOf(e.requestId, e.actor), rule: ruleTitle(rule), reason: e.summary.replace(/^Refused: /, ""), at: e.at, ...(setOfEntry(dock.ledger, e) ? { sample: true } : {}) });
     } else if (e.type === "decision" && e.data.outcome === "reject") {
       st.refused++;
       const rules = (e.data.rules as { rule: string; outcome: string }[] | undefined) ?? [];
       const failed = rules.find((r) => r.outcome === "fail");
       const reasons = (e.data.reasons as string[] | undefined) ?? [];
-      st.refusals.push({ key: `r${e.seq}`, kitchen: kitchenOf(e.requestId, e.actor), rule: ruleTitle(failed?.rule), reason: reasons[0] ?? e.summary, at: e.at });
+      st.refusals.push({ key: `r${e.seq}`, kitchen: kitchenOf(e.requestId, e.actor), rule: ruleTitle(failed?.rule), reason: reasons[0] ?? e.summary, at: e.at, ...(setOfEntry(dock.ledger, e) ? { sample: true } : {}) });
     }
     if (st.refusals.length > REFUSALS_KEPT * 2) st.refusals.splice(0, st.refusals.length - REFUSALS_KEPT);
   }
@@ -152,7 +155,7 @@ export async function wallSnapshot(rt: Runtime): Promise<WallSnapshot> {
     const d = list.find((e) => e.type === "request")?.data.door;
     return d === "mcp" || d === "connector" || d === "rest" ? { door: d as "mcp" | "connector" | "rest" } : {};
   };
-  const feed: FeedItem[] = lists.map(({ requestId, list, first }) => ({ key: requestId, kitchen: kitchenOf(requestId, first.actor), ...progress(list, now), ...outside(list), at: list.at(-1)!.at }));
+  const feed: FeedItem[] = lists.map(({ requestId, list, first }) => ({ key: requestId, kitchen: kitchenOf(requestId, first.actor), ...progress(list, now), ...outside(list), at: list.at(-1)!.at, ...(isSampleRequest(dock.ledger, requestId) ? { sample: true } : {}) }));
   feed.sort((a, b) => b.at.localeCompare(a.at));
   const refusals = st.refusals
     .slice(-REFUSALS_KEPT)

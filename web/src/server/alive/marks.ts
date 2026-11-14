@@ -37,6 +37,8 @@ type Index = {
   threads: Map<string, string>;
   /** Other record ids a sample entry names (an offer, a watch finding or renewal, a backup, a mail's event), and the set. */
   keys: Map<string, string>;
+  /** The sample's own kitchens' organisations (agents.ts openSampleKitchens), from each play's last entry. */
+  orgs: Set<string>;
 };
 
 const KEY_FIELDS = ["offerId", "findingId", "renewalId", "backupId", "eventKey", "mailId", "campaignId", "stageId", "approvalId"] as const;
@@ -45,7 +47,7 @@ const indexes = new WeakMap<Ledger, Index>();
 
 function indexOf(ledger: Ledger): Index {
   let ix = indexes.get(ledger);
-  if (!ix) indexes.set(ledger, (ix = { n: 0, sets: new Map(), requests: new Map(), orders: new Map(), threads: new Map(), keys: new Map() }));
+  if (!ix) indexes.set(ledger, (ix = { n: 0, sets: new Map(), requests: new Map(), orders: new Map(), threads: new Map(), keys: new Map(), orgs: new Set() }));
   if (ix.n === ledger.length) return ix;
   const all = ledger.unfiltered();
   for (let i = ix.n; i < all.length; i++) {
@@ -69,6 +71,8 @@ function indexOf(ledger: Ledger): Index {
     const thread = (d.thread as { threadId?: string } | undefined)?.threadId;
     if (thread) ix.threads.set(thread, tag.set);
     for (const k of KEY_FIELDS) if (typeof d[k] === "string") ix.keys.set(d[k] as string, tag.set);
+    const kitchens = (d.ids as { sampleKitchens?: string } | undefined)?.sampleKitchens;
+    if (d.step === SAMPLE_STEP_PLAYED && kitchens) for (const id of kitchens.split(",")) if (id) ix.orgs.add(`org_${id}`);
   }
   ix.n = all.length;
   return ix;
@@ -178,4 +182,11 @@ export function markRows(ledger: Ledger, body: unknown, hide: boolean): unknown 
     if (inner) return { ...o, sample: true };
   }
   return out;
+}
+
+/** For a viewer who hid the sample: whether a record (named by its ids, or its organisation) is sample and so left out. */
+export function hiddenSample(ledger: Ledger, ...ids: (string | undefined | null)[]): boolean {
+  if (!viewingNow()?.hideSample) return false;
+  const ix = indexOf(ledger);
+  return isSampleId(ledger, ...ids) || ids.some((id) => !!id && ix.orgs.has(id));
 }

@@ -532,6 +532,12 @@ export type DockDeps = {
    * server narrows them for a page that hides the sample activity (server/alive). Undefined: all of them.
    */
   visibleOrder?: () => ((o: { orderId: string; requestId: string }) => boolean) | undefined;
+  /**
+   * True while the live answers do not come from the partner (the server's sample activity, server/alive): such
+   * lookups use none of the live-lookup allowance a person's agent needs, and their answers are cached apart, so a
+   * person's request never gets an answer made for the sample (nor the reverse).
+   */
+  offPartner?: () => boolean;
 };
 
 /** The holds in force on some products. Called with the products of one quote; must be cheap (no live call). */
@@ -812,7 +818,8 @@ export function createDock(deps: DockDeps) {
     const ids = [...new Set(productIds)];
     // Prices are the kitchen's own: asked for its customer number, and an answer reused only for the same customer.
     const customer = (deps.customerOf ?? demoCustomerNumber)(session.mandate.issuer.orgId);
-    const cacheKey = (id: string) => `${id}|${deliveryDate ?? ""}|${customer}`;
+    const off = deps.offPartner?.() ?? false;
+    const cacheKey = (id: string) => `${id}|${deliveryDate ?? ""}|${customer}${off ? "|sample" : ""}`;
     const t0 = now().getTime();
     // Answers the partner gave a moment ago are reused for option cards: they cost the partner nothing and are not
     // counted. A quote fixes a price, so it always asks afresh.
@@ -835,7 +842,7 @@ export function createDock(deps: DockDeps) {
     const fetchedAt = new Map<string, number>();
     for (const chunk of chunks) {
       try {
-        liveAllowance.reserve(shareKey, chunk);
+        if (!off) liveAllowance.reserve(shareKey, chunk);
       } catch (err) {
         if (err instanceof DockError) throw refuse(err, actor, { requestId });
         throw err;

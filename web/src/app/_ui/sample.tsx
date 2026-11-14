@@ -2,10 +2,10 @@ import type { Lang } from "../_i18n/lang";
 import { SAMPLE_TEXT } from "./sample.text";
 
 /** The quiet "sample" mark: the same small pill on every page that shows sample activity (server/alive). */
-export function SamplePill({ lang = "en", className = "" }: { lang?: Lang; className?: string }) {
+export function SamplePill({ lang = "en", className = "", dark = false }: { lang?: Lang; className?: string; /** On a dark surface (the wall). */ dark?: boolean }) {
   const t = SAMPLE_TEXT[lang];
   return (
-    <span title={t.title} className={`ml-1.5 inline-flex items-center rounded-full border border-dashed border-ink-faint px-1.5 align-middle text-[0.7rem] font-medium uppercase leading-5 tracking-wide text-ink-soft ${className}`}>
+    <span title={t.title} className={`ml-1.5 inline-flex items-center rounded-full border border-dashed px-1.5 align-middle text-[0.7rem] font-medium uppercase leading-5 tracking-wide ${dark ? "border-paper/40 text-paper/75" : "border-ink-faint text-ink-soft"} ${className}`}>
       {t.pill}
     </span>
   );
