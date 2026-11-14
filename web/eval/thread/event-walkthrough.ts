@@ -72,7 +72,8 @@ async function main() {
 
   // 1: every ingredient with a stand-in on the card is on the sheet; the final reply names no left-off ingredient that had one.
   const others: string[] = card?.others ?? [];
-  const withSwap = others.filter((x) => !/:\s*-$/.test(x)).map((x) => x.split(":")[0].trim().toLowerCase());
+  // A stand-in that buys something (not "leave it off", a change of technique the reply then names as left off).
+  const withSwap = others.filter((x) => !/:\s*-$/.test(x) && !/:\s*(leave|reduce)\b/i.test(x)).map((x) => x.split(":")[0].trim().toLowerCase());
   const final = turns.at(-1)!.reply.toLowerCase();
   const leftOffNamed = withSwap.filter((w) => new RegExp(`left off[^.]*${w.split(/[ (]/)[0]}`).test(final) || new RegExp(`jäi pois[^.]*${w.split(/[ (]/)[0]}`).test(final));
   check("1 every ingredient that cannot arrive has its best swap on the sheet", !!sheet && leftOffNamed.length === 0 && (withSwap.length === 0 || sheet.lines.some((l: any) => l.substituteFor) || others.length > 0), `sheet ${sheet ? `${sheet.lines.length} lines` : "none"}; stand-ins ${withSwap.length}; left off although it had one: ${leftOffNamed.join(", ") || "none"}`);
