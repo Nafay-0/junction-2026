@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, Field } from "../../_ui/kit";
-import { PhoneNotice, PhoneProblem } from "../../_ui/phone";
+import { Check, Link2Off, Sparkles } from "lucide-react";
+import { Card, IconDisc, Input, Panel, Spinner } from "../../_ui/kit";
+import { PhoneNotice, PhoneProblem, PhoneSkeleton, bigButton } from "../../_ui/phone";
 
 type Ask = {
   kitchenName: string;
@@ -32,9 +33,28 @@ export function AnswerScreen({ token }: { token: string }) {
       .catch(() => setProblem("Dock could not be reached. Try again in a moment."));
   }, [url]);
 
-  if (problem) return <PhoneProblem title="This link cannot be used" body={problem} />;
-  if (done) return <PhoneNotice title="Answer sent" body={done} />;
-  if (!ask) return <p className="mt-20 text-center text-ink-soft">Opening the question…</p>;
+  if (problem)
+    return (
+      <div className="mt-2">
+        <IconDisc tone="muted" size={56}>
+          <Link2Off size={25} />
+        </IconDisc>
+        <PhoneProblem title="This link cannot be used" body={problem} />
+      </div>
+    );
+  if (done)
+    return (
+      <PhoneNotice
+        title="Answer sent"
+        body={done}
+        mark={
+          <IconDisc tone="good" size={60}>
+            <Check size={28} strokeWidth={2.4} />
+          </IconDisc>
+        }
+      />
+    );
+  if (!ask) return <PhoneSkeleton label="Opening the question…" />;
 
   const items = ask.concerns.length
     ? ask.concerns.map((c) => ({ id: c.key, text: c.message, choices: [...(c.confirmable ? [{ id: "confirm", label: "Yes, as I asked" }] : []), ...c.corrections] }))
@@ -53,31 +73,56 @@ export function AnswerScreen({ token }: { token: string }) {
   }
 
   return (
-    <div className="flex flex-col gap-5">
-      <p>
-        {ask.kitchenName}&apos;s purchasing agent asked Dock for {ask.need ? <q>{ask.need}</q> : "an order"}. Dock needs your own answer before it goes on.
-      </p>
+    <div className="flex flex-1 flex-col">
+      <Panel tone="agent" className="flex gap-3.5 p-4">
+        <span aria-hidden className="flex size-10 shrink-0 items-center justify-center rounded-full bg-paper text-lavender-deep">
+          <Sparkles size={19} />
+        </span>
+        <p className="min-w-0 leading-snug">
+          {ask.kitchenName}&apos;s purchasing agent asked Dock for {ask.need ? <q className="font-semibold">{ask.need}</q> : "an order"}. Dock needs your own answer before it goes on.
+        </p>
+      </Panel>
       {items.map((i) => (
-        <section key={i.id} className="flex flex-col gap-2">
-          <p className="font-semibold">{i.text}</p>
-          {i.choices.map((c) => (
-            <Button key={c.id} kind={picked[i.id] === c.id ? "primary" : "secondary"} pressed={picked[i.id] === c.id} onClick={() => setPicked((p) => ({ ...p, [i.id]: c.id }))}>
-              {c.label}
-            </Button>
-          ))}
+        <section key={i.id} className="mt-7">
+          <h2 className="text-[1.1rem] font-semibold leading-snug">{i.text}</h2>
+          <Card className="mt-3">
+            <ul className="divide-y divide-line">
+              {i.choices.map((c) => {
+                const on = picked[i.id] === c.id;
+                return (
+                  <li key={c.id}>
+                    <button
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => setPicked((p) => ({ ...p, [i.id]: c.id }))}
+                      className={`flex min-h-14 w-full items-center gap-3.5 rounded-none px-4 py-3 text-left transition-colors duration-150 ${on ? "bg-petrol-soft font-semibold text-petrol-deep" : "hover:bg-mist"}`}
+                    >
+                      <span aria-hidden className={`flex size-6 shrink-0 items-center justify-center rounded-full border-[1.5px] ${on ? "border-petrol bg-petrol text-paper" : "border-line-strong bg-paper"}`}>
+                        {on && <Check size={14} strokeWidth={3} />}
+                      </span>
+                      <span className="min-w-0 leading-snug">{c.label}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </Card>
         </section>
       ))}
-      {ask.signedInAs ? (
-        <p className="text-ink-soft">Answering as {ask.signedInAs} (signed in on this phone).</p>
-      ) : (
-        <Field label="Your name">
-          <input className="h-12 w-full rounded-xl border border-neutral-300 px-3" value={name} onChange={(e) => setName(e.target.value)} maxLength={120} autoComplete="name" />
-        </Field>
-      )}
-      <Button kind="primary" busy={busy} disabled={!ready} onClick={send}>
-        Send my answer
-      </Button>
-      <p className="text-[0.85rem] text-ink-soft">This link works once. Your answer is written to the order&apos;s audit trail as given on this page.</p>
+      <div className="mt-7">
+        {ask.signedInAs ? (
+          <p className="text-ink-soft">Answering as {ask.signedInAs} (signed in on this phone).</p>
+        ) : (
+          <Input label="Your name" value={name} onChange={setName} maxLength={120} autoComplete="name" />
+        )}
+      </div>
+      <div className="mt-auto pt-8">
+        <button type="button" className={bigButton("go")} disabled={!ready || busy} onClick={() => void send()} aria-busy={busy || undefined}>
+          {busy && <Spinner size={18} />}
+          Send my answer
+        </button>
+        <p className="mt-3 text-center text-[0.84rem] leading-snug text-ink-soft">This link works once. Your answer is written to the order&apos;s audit trail as given on this page.</p>
+      </div>
     </div>
   );
 }

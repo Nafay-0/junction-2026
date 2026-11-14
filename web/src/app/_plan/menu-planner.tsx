@@ -8,7 +8,8 @@ import type { PlanWire } from "@/server/agent/menu/wire";
 import { api, type ApiError } from "../_client/api";
 import { GateStage, Totals } from "./gate";
 import { Lines, NeedsYou, PlanHeader } from "./sheet";
-import { Btn, Sheet, Spinner } from "./ui";
+import { Btn, Spinner } from "./ui";
+import { Empty, ErrorPlate, Skeleton, Tag, Textarea } from "../_ui/kit";
 import { useText } from "../_i18n/provider";
 import { MENU_PLANNER_TEXT } from "./menu-planner.text";
 import { exampleL } from "../_i18n/kitchen-words";
@@ -132,72 +133,84 @@ export function MenuPlanner({ kitchen, base = "/ui-api/plan", initialText = "", 
   const stepText = tx.steps[stepAt < 0 ? 0 : stepAt];
 
   return (
-    <div className="space-y-5">
-      <Sheet>
+    <div className="space-y-8">
+      <section className="rounded-2xl border border-line bg-paper shadow-sm">
         <form
-          className="p-4 sm:p-5"
+          className="p-5 sm:p-7"
           onSubmit={(e) => {
             e.preventDefault();
             void submit();
           }}
         >
-          <label htmlFor="menu-request" className="display text-[1.6rem]">
+          <label htmlFor="menu-request" className="display block text-[1.5rem] sm:text-[1.7rem]">
             {tx.question}
           </label>
-          <p className="text-[0.95rem] text-ink-soft">{tx.hint}</p>
-          <textarea
+          <p className="mt-1 max-w-[62ch] text-[0.95rem] text-ink-soft">{tx.hint}</p>
+          <Textarea
             id="menu-request"
+            className="mt-4 [&_textarea]:min-h-28 [&_textarea]:text-[1.08rem]"
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={setText}
             rows={3}
             maxLength={4000}
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void submit();
             }}
-            className="mt-2 w-full border-2 border-petrol bg-paper px-3 py-2 text-[1.1rem] leading-snug"
             placeholder={tx.placeholder}
           />
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Btn type="submit" kind="go" busy={busy === "plan"} disabled={text.trim().length < 3} className="min-h-12 px-5 text-[1.1rem]">
+          <div className="mt-4 flex flex-col-reverse gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex min-w-0 gap-2 max-sm:-mx-5 max-sm:overflow-x-auto max-sm:px-5 max-sm:pb-1 sm:flex-wrap">
+              {info?.kitchen.examples.map((ex) => (
+                // Shown in the buyer's language; without a model the recorded drafts answer only the original words.
+                <button
+                  key={ex}
+                  type="button"
+                  onClick={() => setText(info.mode === "recorded" ? ex : exampleL(ex, lang))}
+                  className="inline-flex min-h-10 shrink-0 items-center rounded-full border border-line bg-mist px-4 py-1.5 text-left max-sm:whitespace-nowrap sm:max-w-full sm:shrink text-[0.9rem] leading-snug text-ink transition-colors duration-150 hover:border-line-strong hover:bg-surface pointer-coarse:min-h-11"
+                >
+                  “{exampleL(ex, lang)}”
+                </button>
+              ))}
+              {!info && !error && (
+                <>
+                  <Skeleton className="h-10 w-56 !rounded-full" />
+                  <Skeleton className="h-10 w-72 !rounded-full" />
+                </>
+              )}
+            </div>
+            <Btn type="submit" kind="go" size="lg" busy={busy === "plan"} disabled={text.trim().length < 3} className="w-full shrink-0 sm:w-auto">
               {tx.planIt}
             </Btn>
-            {info?.kitchen.examples.map((ex) => (
-              // Shown in the buyer's language; without a model the recorded drafts answer only the original words.
-              <button key={ex} type="button" onClick={() => setText(info.mode === "recorded" ? ex : exampleL(ex, lang))} className="min-h-10 bg-mist px-3 py-1 text-left text-[0.92rem] hover:outline-2 hover:outline-petrol">
-                {exampleL(ex, lang)}
-              </button>
-            ))}
           </div>
           {info?.mode === "recorded" && (
-            <p className="mt-2 text-[0.9rem] text-ink-soft">
-              <span className="mr-1.5 border border-petrol px-1.5 py-px font-semibold text-petrol">{tx.noModel}</span>
+            <p className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.88rem] leading-snug text-ink-soft">
+              <Tag tone="muted">{tx.noModel}</Tag>
               {tx.recorded}
             </p>
           )}
           {busy === "plan" && (
-            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-lg bg-lavender px-4 py-3" role="status">
               <Spinner label={stepText} />
-              <span className="text-[0.95rem] text-ink-soft tabular">{tx.seconds(seconds)}</span>
+              <span className="text-[0.9rem] text-lavender-deep tabular">{tx.seconds(seconds)}</span>
             </div>
           )}
         </form>
-      </Sheet>
+      </section>
 
-      {error && (
-        <div role="alert" className="border-l-[6px] border-petrol bg-paper px-4 py-3">
-          <p className="font-semibold">{error.code === "model_unavailable" ? tx.errModel : error.code === "plan_not_ready" ? tx.errNotReady : tx.errOther}</p>
-          <p className="text-ink-soft">{error.message}</p>
+      {error && <ErrorPlate title={error.code === "model_unavailable" ? tx.errModel : error.code === "plan_not_ready" ? tx.errNotReady : tx.errOther} message={error.message} />}
+
+      {busy === "plan" && !plan && (
+        <div className="space-y-5" aria-hidden>
+          <Skeleton className="h-40 !rounded-[20px]" />
+          <Skeleton className="h-72 !rounded-[20px]" />
         </div>
       )}
 
       {plan?.state === "declined" && (
-        <Sheet>
-          <div className="p-4 sm:p-5">
-            <h2 className="display text-[1.6rem]">{tx.declined}</h2>
-            <p className="mt-1">{plan.declineReason}</p>
-            <p className="mt-1 text-[0.95rem] text-ink-soft">{tx.nothingDone}</p>
-          </div>
-        </Sheet>
+        <Empty title={tx.declined}>
+          <p>{plan.declineReason}</p>
+          <p className="mt-1">{tx.nothingDone}</p>
+        </Empty>
       )}
 
       {plan && plan.state !== "declined" && (

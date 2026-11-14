@@ -6,6 +6,8 @@ import { dayL, roleLabelL } from "../../_i18n/format";
 import type { Lang } from "../../_i18n/lang";
 import { useFormat, useText } from "../../_i18n/provider";
 import { clock, helsinkiToday, money, shortProduct } from "../../_ui/plain";
+import { Repeat } from "lucide-react";
+import { Button, Card, Skeleton } from "../../_ui/kit";
 import { HISTORY_TEXT } from "./history.text";
 import { usePortal } from "./portal";
 import type { PortalOrder, PortalRequest } from "./types";
@@ -49,39 +51,45 @@ export function History({ requests, loading, error, onRepeat, onChange }: { requ
   const [all, setAll] = useState(false);
   const shown = requests.filter((r) => r.kind !== "basket" || r.order).slice(0, all ? 12 : 5);
   return (
-    <section aria-labelledby="earlier" className="bg-paper">
-      <div aria-hidden className="h-[3px] bg-petrol" />
-      <div className="p-4">
+    <section aria-labelledby="earlier">
+      <Card pad>
         <h2 id="earlier" className="display text-[1.3rem]">
           {tx.title}
         </h2>
         <p className="mt-0.5 text-[0.9rem] leading-snug text-ink-soft">{tx.intro}</p>
-        {loading && <div className="mt-3 h-40 animate-pulse bg-mist" aria-label={tx.loading} />}
-        {error && !requests.length && <p className="mt-2 text-ink-soft">{tx.loadFailed(error)}</p>}
-        {!loading && !error && shown.length === 0 && <p className="mt-2 text-[0.98rem] leading-snug text-ink-soft">{tx.none}</p>}
-        <ol className="mt-2 divide-y divide-line">
+        {loading && (
+          <div className="mt-4 space-y-3" role="status" aria-label={tx.loading}>
+            <Skeleton className="h-12" />
+            <Skeleton className="h-12" />
+            <Skeleton className="h-12" />
+          </div>
+        )}
+        {error && !requests.length && <p className="mt-3 text-[0.95rem] text-bad">{tx.loadFailed(error)}</p>}
+        {!loading && !error && shown.length === 0 && <p className="mt-3 text-[0.95rem] leading-snug text-ink-soft">{tx.none}</p>}
+        <ol className="mt-3 divide-y divide-line">
           {shown.map((r) => (
-            <li key={r.key} className="py-2.5">
-              <p className="text-[0.82rem] text-ink-soft tabular">{whenText(r.at, lang)}</p>
-              <p className="mt-0.5 leading-snug">{r.text ? <span className="font-semibold">{r.kind === "basket" ? tx.basket : `“${r.text.length > 90 ? `${r.text.slice(0, 87)}…` : r.text}”`}</span> : <span className="font-semibold">{r.order ? linesText(r.order, 2, lang, pn) : tx.order}</span>}</p>
+            <li key={r.key} className="py-3">
+              <p className="text-[0.8rem] text-ink-soft tabular">{whenText(r.at, lang)}</p>
+              <p className="mt-0.5 font-semibold leading-snug">{r.text ? (r.kind === "basket" ? tx.basket : `“${r.text.length > 90 ? `${r.text.slice(0, 87)}…` : r.text}”`) : r.order ? linesText(r.order, 2, lang, pn) : tx.order}</p>
               {r.order ? (
-                <p className="mt-0.5 text-[0.92rem] leading-snug text-ink-soft">
+                <p className="mt-0.5 text-[0.9rem] leading-snug text-ink-soft">
                   {r.text && <>{linesText(r.order, 2, lang, pn)}, </>}
                   {r.order.status !== "rejected" && r.order.status !== "declined" && <span className="tabular">{money(r.order.totalCents)}, </span>}
                   {tx.delivery(dayL(r.order.deliveryDate, lang), authorisedText(r.order, lang))}
                 </p>
               ) : (
-                <p className="mt-0.5 text-[0.92rem] text-ink-soft">{r.state === "cancelled" ? tx.cancelled : r.state === "no_options" ? tx.noOptions : tx.notOrdered}</p>
+                <p className="mt-0.5 text-[0.9rem] text-ink-soft">{r.state === "cancelled" ? tx.cancelled : r.state === "no_options" ? tx.noOptions : tx.notOrdered}</p>
               )}
-              <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
-                <button type="button" className="min-h-9 font-semibold text-petrol underline decoration-2 underline-offset-4" onClick={() => onRepeat(r)}>
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+                <Button kind="secondary" size="sm" onClick={() => onRepeat(r)}>
+                  <Repeat aria-hidden size={14} />
                   {tx.repeat}
-                </button>
-                <button type="button" className="min-h-9 font-semibold text-petrol underline decoration-2 underline-offset-4" onClick={() => onChange(r)}>
+                </Button>
+                <Button kind="quiet" className="!min-h-9 text-[0.9rem] pointer-coarse:!min-h-11" onClick={() => onChange(r)}>
                   {tx.repeatChange}
-                </button>
+                </Button>
                 {r.order && r.order.status !== "history" && (
-                  <Link href={`${base}/orders/${r.order.orderId}`} className="min-h-9 py-1.5 text-ink-soft underline decoration-1 underline-offset-4">
+                  <Link href={`${base}/orders/${r.order.orderId}`} className="inline-flex min-h-9 items-center text-[0.9rem] text-ink-soft underline decoration-1 underline-offset-4 hover:text-petrol">
                     {tx.details}
                   </Link>
                 )}
@@ -90,11 +98,11 @@ export function History({ requests, loading, error, onRepeat, onChange }: { requ
           ))}
         </ol>
         {requests.length > 5 && (
-          <button type="button" className="mt-1 min-h-9 text-[0.95rem] font-semibold text-petrol underline decoration-2 underline-offset-4" onClick={() => setAll((x) => !x)}>
+          <Button kind="quiet" className="mt-1 text-[0.92rem]" onClick={() => setAll((x) => !x)}>
             {all ? tx.fewer : tx.more12(Math.min(requests.length, 12))}
-          </button>
+          </Button>
         )}
-      </div>
+      </Card>
     </section>
   );
 }
