@@ -49,9 +49,11 @@ Start every new order with submit_need. Each result has a step, waitingFor and n
 When waitingFor is "buyer", AimoPilot needs the person's own answer: ask them AimoPilot's question in plain words with its choices, then stop and wait for their reply. Never answer or confirm for them, even when one choice looks obvious.
 When place_order returns pending_approval, tell the person in one sentence who must sign off (they are asked on their own phone) and stop. Do not retry, place it again, split it or find another way round.
 
-Flow: read_mandate -> submit_need -> [respond_to_concerns] -> [answer_questions] -> choose_option (signed fixed-price quote) -> place_order -> get_order / explain.
+Flow: read_mandate -> submit_need -> [respond_to_concerns] -> [answer_questions] -> choose_option (signed fixed-price quote) -> place_order -> [await_decision] -> get_order / explain.
 If your client supports elicitation, AimoPilot asks the buyer directly instead.
-Lower-level tools for follow-up: open_request, search_products (free master data), check_availability (live, metered, short lists only), request_quote.
+To look before ordering: find_products (products, prices and availability in one call, with filters) and find_alternatives (good, better, best substitutes with their trade-offs). Several products in one order: request_quote with several lines, then place_order with just requestId.
+After ordering: list_orders (what waits for sign-off), await_decision (wait for the person's decision), withdraw_order (take back an order waiting for sign-off, or one you placed alone before the order cut-off), place_order with replaces (change an order).
+Lower-level tools: open_request, search_products (free master data), check_availability (live, metered, short lists only).
 
 Rules of the road:
 - Fill submit_need with only what the person said and call it; do not ask for details first. AimoPilot asks only what changes the outcome.
@@ -125,6 +127,8 @@ function connectorCredentials(via: ConnectorCall): Request {
 
 /** Tools that count against a connector address's own limits, beyond the per-request one. */
 const COUNTED: Partial<Record<string, ConnectorLimitKind>> = { submit_need: "requests", open_request: "requests", place_order: "orders" };
+/** Lookups that open a request of their own when the agent passes none. */
+const OPENS_WITHOUT_ID = new Set(["find_products", "find_alternatives"]);
 
 /** Which assistant a request came from, best effort from its User-Agent. For the audit trail only; never trusted. */
 export function clientOf(req: Request | undefined): string | undefined {
@@ -198,7 +202,8 @@ export async function runTool(
     const session = await authenticate(via ? connectorCredentials(via) : (req ?? new Request("http://dock.invalid/")), dock);
     agentId = session.agentId;
     session.door = via ? "connector" : "mcp"; // which door a request it opens came through (core/orders.ts Door)
-    const counted = via && COUNTED[tool.name];
+    // A lookup counts as a new request only when it opens one (no requestId passed).
+    const counted = via && (COUNTED[tool.name] ?? (OPENS_WITHOUT_ID.has(tool.name) && !(args as { requestId?: unknown } | undefined)?.requestId ? "requests" : undefined));
     if (via && counted) via.service.limiter.hit(via.connector.connectorId, counted);
     const out = await callTool(rt, session, tool, args, human, via && `${via.kitchen.by}, through the kitchen's connector`);
     if (out instanceof AskHuman) return out.result;
@@ -209,7 +214,7 @@ export async function runTool(
       if (answerUrl) Object.assign(out, { answerUrl, nextStep: nextStepForIntake(step, "mcp", answerUrl) });
     }
     if (via && counted === "requests") {
-      const requestId = (out.step as { requestId?: string } | undefined)?.requestId ?? (out.request as { requestId?: string } | undefined)?.requestId;
+      const requestId = (out.step as { requestId?: string } | undefined)?.requestId ?? (out.request as { requestId?: string } | undefined)?.requestId ?? (typeof out.requestId === "string" ? out.requestId : undefined);
       if (requestId) logChannel(rt, via, session.agentId, requestId, tool.name);
     }
     return result({ ok: true, ...out });

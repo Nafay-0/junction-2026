@@ -20,6 +20,7 @@ import {
 import { AskHuman, answersFromBuyer, concernsFromBuyer, type HumanChannel } from "./ask-human";
 import type { LiveBudget } from "@/server/aiven/valkey";
 import { nextStepForIntake, nextStepForOrder, nextStepForQuote, waitingFor } from "./next-step";
+import { AlternativesInput, ListOrdersInput, LookupInput, awaitDecision, findAlternatives, listOrders, lookupProducts } from "../lookup";
 
 /**
  * Dock's operations as MCP tools: one table, one entry per tool. Each entry is a name, a description for a
@@ -322,7 +323,7 @@ const CORE_TOOLS = [
     name: "place_order",
     title: "Place an order against a quote",
     description:
-      "Order exactly what a quote offers, at the quoted prices. After choose_option, pass only requestId: Dock places the quote it signed for that request (no need to copy the long quoteToken). After request_quote, pass requestId, quoteToken and lines unchanged. Dock's gate checks the order against your mandate in plain code. Three outcomes: committed (within the mandate; the result carries the wholesaler-signed confirmation), pending_approval (a person named in the mandate must sign off on their own phone; tell the buyer who, in one sentence, and stop: you must NOT retry, re-place or split it), or refused (the error names the rule, e.g. weekly_budget). A quote buys once.",
+      "Order exactly what a quote offers, at the quoted prices. After choose_option or request_quote, pass only requestId: Dock places the latest quote it signed for that request (no need to copy the long quoteToken; quoteToken and lines unchanged also work). To change an order already placed (another amount, day or product), get a new quote and pass replaces with the old orderId: once the new one is placed, Dock takes the old one back if it still can. Dock's gate checks the order against your mandate in plain code. Three outcomes: committed (within the mandate; the result carries the wholesaler-signed confirmation), pending_approval (a person named in the mandate must sign off on their own phone; tell the buyer who, in one sentence, and stop: you must NOT retry, re-place or split it), or refused (the error names the rule, e.g. weekly_budget). A quote buys once.",
     input: PlaceOrderInput.extend({
       requestId,
       quoteToken: z.string().min(1).optional().describe("Only after request_quote: its quoteToken, unchanged. Leave it out after choose_option."),
@@ -331,16 +332,19 @@ const CORE_TOOLS = [
         .optional()
         .describe("Only with quoteToken: the quote's lines (productId, quantity, unitPriceCents) copied from quote.lines."),
     }),
-    output: z.object({ order: OrderSchema, nextStep }),
-    run: async ({ dock, session }, { requestId, quoteToken, lines }) => {
-      // Without a quoteToken the core places the quote it signed for this request at choose_option (no_current_quote if none).
-      const args: z.input<typeof PlaceOrderInput> = { requestId, ...(quoteToken ? { quoteToken } : {}), ...(lines ? { lines } : {}) };
+    output: z.object({ order: OrderSchema, replaced: z.looseObject({ orderId: z.string(), status: z.string() }).optional().describe("With replaces: what happened to the order this one replaces."), nextStep }),
+    run: async ({ dock, session }, { requestId, quoteToken, lines, replaces }) => {
+      // Without a quoteToken the core places the quote it signed for this request (at choose_option, or the latest
+      // request_quote outside the intake); no_current_quote if none.
+      const args: z.input<typeof PlaceOrderInput> = { requestId, ...(quoteToken ? { quoteToken } : {}), ...(lines ? { lines } : {}), ...(replaces ? { replaces } : {}) };
       const order = await dock.placeOrder(session, args);
       if (order.status === "rejected") {
         const rule = decidingRule(order.decision);
         throw new DockError(422, "policy_rejected", order.decision.reasons.join(" "), rule?.rule, { order });
       }
-      return { order, nextStep: nextStepForOrder(order) };
+      const { replaced, ...placed } = order;
+      const also = replaced ? (replaced.refused ? ` The order it was to replace (${replaced.orderId}) still stands: ${replaced.refused.message} Tell the buyer both orders stand.` : ` Order ${replaced.orderId} was taken back: one order stands.`) : "";
+      return { order: placed, ...(replaced ? { replaced } : {}), nextStep: nextStepForOrder(order) + also };
     },
   }),
   tool({
@@ -354,6 +358,81 @@ const CORE_TOOLS = [
     run: async ({ dock, session }, { orderId }) => {
       const order = await dock.getOrder(session, orderId);
       return { order, nextStep: nextStepForOrder(order) };
+    },
+  }),
+  tool({
+    name: "list_orders",
+    title: "List this organisation's orders",
+    description:
+      "This buyer organisation's orders, newest first: status (pending_approval = waiting for a person's sign-off, committed, declined, rejected, withdrawn, expired), total, delivery day, lines, who must sign and whether they have, and whether it can still be taken back (canTakeBack). Use it to answer 'what is waiting for sign-off?' or 'what did we order?'.",
+    input: ListOrdersInput,
+    output: z.object({ orders: z.array(z.looseObject({ orderId: z.string(), status: z.string(), totalCents: z.number() })), waitingForSignOff: z.number(), nextStep }),
+    readOnly: true,
+    run: async ({ dock, session }, args) => {
+      const r = await listOrders(dock, session, args);
+      return { ...r, nextStep: r.waitingForSignOff ? "Orders waiting for sign-off are decided by the named person on their own phone; await_decision waits for one, get_order reads it. Do not place them again." : "Nothing waits for a sign-off." };
+    },
+  }),
+  tool({
+    name: "await_decision",
+    title: "Wait for a person's sign-off decision",
+    description:
+      "After place_order returned pending_approval and you have told the buyer who must sign: wait for that person's decision on their own phone. Returns as soon as the order is committed, declined, withdrawn or expired, or after `seconds` (default 25, at most 55) with it still waiting; then you may call it again, or stop and let the buyer ask later. It only reads the order: no tool can approve one.",
+    input: z.object({ orderId: z.string().min(1).describe("orderId returned by place_order."), seconds: z.number().int().min(0).max(55).optional().describe("How long to wait at most, default 25.") }),
+    output: z.object({ order: OrderSchema, decided: z.boolean().describe("false: still waiting for the person."), waitedSeconds: z.number(), nextStep }),
+    readOnly: true,
+    run: async ({ dock, session }, { orderId, seconds }) => {
+      const r = await awaitDecision(dock, session, orderId, seconds ?? 25);
+      return { ...r, nextStep: r.decided ? nextStepForOrder(r.order) : `Still waiting for ${r.order.approval ? r.order.approval.approver.name : "the approver"} to decide on their phone. Wait again with await_decision, or stop and tell the buyer it is still waiting; never place it again.` };
+    },
+  }),
+  tool({
+    name: "withdraw_order",
+    title: "Take back an order",
+    description:
+      "Take back an order: one that waits for a person's sign-off (it stops holding the weekly budget and the approver's phone shows it withdrawn), or a committed one this agent placed alone inside its mandate, until the wholesaler's order cut-off (list_orders shows canTakeBack). An order a person signed off is theirs to take back in the kitchen's store; after the cut-off nothing can be taken back. Only when the buyer asks for it: pass their words as reason and their name as by if they told you (recorded as relayed, not verified). To change an order instead, use place_order with replaces.",
+    input: z.object({ orderId: z.string().min(1).describe("orderId to take back."), reason: z.string().max(300).optional().describe("Why, in the buyer's words."), by: by.optional() }),
+    output: z.object({ order: OrderSchema, nextStep }),
+    run: async ({ dock, session, defaultBy }, { orderId, reason, by: who }) => {
+      const order = await dock.withdrawOrder(session, orderId, { ...(reason ? { reason } : {}), ...((who ?? defaultBy) ? { by: who ?? defaultBy } : {}) });
+      return { order, nextStep: "Taken back: it no longer counts against the weekly budget. Tell the buyer in one sentence; start a new request only if they ask." };
+    },
+  }),
+  tool({
+    name: "find_products",
+    title: "Look up products, prices and availability",
+    description:
+      `Structured lookup in the wholesaler's assortment: what is available and at what price. Filter by words, category, brand, dietary claims (requiredClaims, e.g. lactose_free, organic, gluten_free), allergens to avoid, pack size and the delivery day; give the quantity to see packs needed and whether stock covers it. Returns at most ${MAX_LIVE_IDS_PER_CALL} products the mandate allows, each with pack, claims, labels, allergens, origin, delivery reliability and carbon (product-group average), plus live price per pack and per litre or kilo, stock, earliest delivery, order-by cut-off and whether it meets the day (live: metered, short lists only). Opens a request when you pass none: pass its requestId on. Use it to answer 'what is there and what does it cost?'; to order, start with submit_need (AimoPilot's own checks and option cards) or quote these products with request_quote.`,
+    input: LookupInput,
+    output: z.object({ requestId: z.string(), products: z.array(z.looseObject({ productId: z.string(), name: z.string() })), matched: z.number(), outsideMandate: z.looseObject({ count: z.number() }), liveChecked: z.number(), liveLookupBudget: budget.optional(), nextStep }),
+    readOnly: true,
+    run: async ({ dock, session, guard, agentKey }, args) => {
+      const r = await lookupProducts(dock, session, args, { budget: guard, agentKey });
+      const short = r.products.some((p) => "live" in p && p.live && (p.live.coversQuantity === false || p.live.meetsDay === false));
+      return {
+        ...r,
+        nextStep: !r.products.length
+          ? "Nothing in the assortment matches inside the mandate. Tell the buyer what was looked for; loosen a filter only if they agree."
+          : `To order, call submit_need with the buyer's need (AimoPilot checks it and offers option cards), or request_quote with requestId ${r.requestId} and lines in packs, then place_order with just requestId.${short ? " Some products do not cover the amount or the day: find_alternatives ranks what can stand in." : ""}`,
+      };
+    },
+  }),
+  tool({
+    name: "find_alternatives",
+    title: "Rank alternatives: good, better, best",
+    description:
+      "When a product the buyer wants is short, late, discontinued or not wanted: what can stand in for it inside the mandate, ranked best, better, good, each with its trade-offs (price per unit, pack size, brand, claims, delivery day, stock), live price and delivery, and what the gate would decide if it were ordered (placed alone, a named person signs, or left out with the rule). Keeps the product's dietary claims (a lactose-free milk stays lactose-free) and never offers an allergen the mandate or the buyer forbids. rankBy changes what counts most.",
+    input: AlternativesInput,
+    output: z.object({ requestId: z.string(), requested: z.looseObject({ productId: z.string() }), rankedBy: z.string(), alternatives: z.array(z.looseObject({ productId: z.string(), rank: z.string() })), leftOut: z.array(z.looseObject({ productId: z.string() })), none: z.string().optional(), liveLookupBudget: budget.optional(), nextStep }),
+    readOnly: true,
+    run: async ({ dock, session, guard, agentKey }, args) => {
+      const r = await findAlternatives(dock, session, args, { budget: guard, agentKey });
+      return {
+        ...r,
+        nextStep: r.alternatives.length
+          ? `Show the buyer the alternatives with their trade-offs and let them choose (a substitute outside their stated preferences needs their word). Then request_quote with requestId ${r.requestId}, a line for what the asked product still covers and a line for the substitute with substituteFor ${r.requested.productId}, and place_order with just requestId.`
+          : "Nothing can stand in inside the mandate. Tell the buyer, with the reasons in leftOut; do not order around it.",
+      };
     },
   }),
   tool({
@@ -384,7 +463,7 @@ const core = (name: string) => CORE_TOOLS.find((t) => t.name === name)!;
 export const TOOLS = [
   core("read_mandate"),
   ...INTAKE_TOOLS,
-  ...["place_order", "get_order", "explain", "open_request", "search_products", "check_availability", "request_quote"].map(core),
+  ...["place_order", "get_order", "list_orders", "await_decision", "withdraw_order", "explain", "find_products", "find_alternatives", "open_request", "search_products", "check_availability", "request_quote"].map(core),
 ];
 
 export type DockTool = (typeof TOOLS)[number];
