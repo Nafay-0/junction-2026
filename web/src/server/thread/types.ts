@@ -237,7 +237,7 @@ export type OptionView = {
   orderBy?: string;
   stockConfirmed: boolean;
   /** `taxRatePct`: the VAT rate (prices are before VAT); `depositCents`: per pack, refunded on return, no VAT. */
-  lines: { productId: string; name: string; quantity: number; packSize?: number; unit?: string; unitPriceCents?: number; substituteFor?: string; taxRatePct?: number; depositCents?: number }[];
+  lines: { productId: string; name: string; quantity: number; packSize?: number; unit?: string; unitPriceCents?: number; substituteFor?: string; substituteForName?: string; taxRatePct?: number; depositCents?: number }[];
   delivered: { amount: number; unit: string };
   co2Kg: number | null;
   reliability: number | null;
@@ -299,6 +299,8 @@ export type PriceCard = CardBase & {
 
 export type GateCard = CardBase & {
   type: "gate";
+  /** The buyer pressed to skip the limit or said the approver already agreed: the OK goes to the approver's own device. */
+  pressured?: boolean;
   /** Why it was refused or stopped, in words, in each language (refusal.ts). */
   said?: Record<"en" | "fi" | "sv", string>;
   requestId: string;
@@ -363,6 +365,8 @@ export type NoticeCard = CardBase & {
   words?: string;
   /** For `incomplete` with only the amount missing: the kitchen's usual amount of that kind ("12 L"), offered as the answer. */
   usual?: string;
+  /** Out of the kitchen's rules, and the change can be drafted here: the group to add, and the words to order after. */
+  addGroup?: { id: string; what: string; words: string };
   /** A refusal in words, first person, in each language (refusal.ts): what the store shows when the agent says nothing. */
   said?: Record<"en" | "fi" | "sv", string>;
   /** For `refused`: the rule that fired. */

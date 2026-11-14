@@ -169,7 +169,7 @@ export function orderCard(o: PublicOrder, passedOver: OrderCard["passedOver"] = 
     status: o.status,
     totalCents: o.totalCents,
     deliveryDate: o.lines[0]?.deliveryDate ?? "",
-    lines: o.lines.map((l) => ({ productId: l.productId, name: l.name, quantity: l.quantity, packSize: l.packSize, unit: l.unit, unitPriceCents: l.unitPriceCents, ...(l.substituteFor ? { substituteFor: l.substituteFor.productId } : {}) })),
+    lines: o.lines.map((l) => ({ productId: l.productId, name: l.name, quantity: l.quantity, packSize: l.packSize, unit: l.unit, unitPriceCents: l.unitPriceCents, ...(l.substituteFor ? { substituteFor: l.substituteFor.productId, substituteForName: l.substituteFor.name } : {}) })),
     authorised,
     ...(o.confirmation ? { confirmation: o.confirmation } : {}),
     ...((() => {
