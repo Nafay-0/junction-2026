@@ -235,7 +235,7 @@ export async function submitTurn(kitchen: Kitchen | string, input: unknown): Pro
   if (!body.action) run.opening = first;
 
   // A speculative reading of new words, in parallel with the agent's first step (agent.ts asks for the same reading).
-  if (body.text && !body.action && worthReading(body.text) && llmRoom()) {
+  if (body.text && !body.action && worthReading(body.text) && llmRoom() && !/@/.test(body.text)) {
     const fixed = fixTypos(body.text);
     void withTurn(turnCtx(), () => earlierFor(run, fixed).then((earlier) => read(run, fixed, earlier))).catch(() => undefined);
   }
@@ -274,7 +274,9 @@ function worthReading(text: string): boolean {
 
 async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof step>): Promise<void> {
   const { store, thread } = run;
-  record(run, "turn", body.action ? `The buyer tapped "${body.label ?? body.action.type}" (${run.door}).` : `The buyer said (${run.door}): "${(body.text ?? "").slice(0, 300)}"`, { via: body.via, ...(body.text ? { words: body.text.slice(0, 2000) } : {}), ...(body.action ? { action: body.action } : {}) });
+  // An email address the buyer types never goes into the record (or the steps, or telemetry): masked.
+  const masked = (body.text ?? "").replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, (m) => `${m[0]}•••@${m.split("@")[1]}`);
+  record(run, "turn", body.action ? `The buyer tapped "${body.label ?? body.action.type}" (${run.door}).` : `The buyer said (${run.door}): "${masked.slice(0, 300)}"`, { via: body.via, ...(body.text ? { words: masked.slice(0, 2000) } : {}), ...(body.action ? { action: body.action } : {}) });
   let line = "";
   let agentResult: AgentRunResult | undefined;
   // An answer in words to the menu scenario on the table ("Monday is fine", "sounds good", "use the beef cubes"): read by
@@ -330,6 +332,18 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
       await paused(run);
     } else {
       try {
+        // Words about the order emails ("email receipts to chef@…", "stop the emails", "which address?"): plain code,
+        // never the model, never the reader (server/notify/thread.ts).
+        const { mailWordsOf, answerMailWords } = await import("@/server/notify/thread");
+        const mail = mailWordsOf(body.text!);
+        if (mail) {
+          const r = await answerMailWords(run.rt, run.k, mail, { person: run.person, via: "thread", lang: body.lang ?? "en" });
+          if (run.opening) first.done("email");
+          store.line(thread, run.turnId, r.reply);
+          store.mark(thread, run.turnId, "line", Date.now() - run.t0);
+          await finishTurn(run);
+          return;
+        }
         // A short answer to the backup question just said ("you choose", "the second one", "no"): recorded, nothing bought.
         const backedUp = await (await import("./backup")).answerBackupIn(run, body.text!, body.lang ?? "en").catch((err) => {
           console.error("[thread] backup answer", err);
@@ -337,7 +351,12 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
         });
         if (backedUp) {
           if (run.opening) first.done("answered the backup");
-          store.line(thread, run.turnId, backedUp);
+          // The mail clause that waited behind the backup question follows the answer.
+          const bk = [...thread.turns].reverse().flatMap((x) => (x.role === "agent" ? x.cards : [])).find((c) => c.type === "backup" && c.orderId);
+          const ord = bk?.type === "backup" && bk.orderId ? store.cards(thread).map((x) => x.card).find((c) => c.type === "order" && c.orderId === bk.orderId) : undefined;
+          const { mailFactAfterOrder } = await import("@/server/notify/thread");
+          const mailFact = ord?.type === "order" ? await mailFactAfterOrder(run.rt, run.k, { orderId: ord.orderId, status: ord.status }, { lang: body.lang ?? "en", threadId: thread.threadId }).catch(() => undefined) : undefined;
+          store.line(thread, run.turnId, mailFact ? `${backedUp} ${mailFact}` : backedUp);
           store.mark(thread, run.turnId, "line", Date.now() - run.t0);
           await finishTurn(run);
           return;
@@ -486,6 +505,13 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
     const b = await sayBackup(run, { orderId: ordered.orderId }, body.lang ?? "en").catch(() => undefined);
     const now = store.agentTurn(thread, run.turnId)?.line ?? "";
     if (b && !now.includes(b.text.slice(0, 30))) store.line(thread, run.turnId, now ? `${now}\n${b.text}` : b.text);
+    // The order emails: one clause after the order's own reply; when the backup question was asked, after its answer.
+    if (!b) {
+      const { mailFactAfterOrder } = await import("@/server/notify/thread");
+      const mailFact = await mailFactAfterOrder(run.rt, run.k, { orderId: ordered.orderId, status: ordered.status }, { lang: body.lang ?? "en", threadId: thread.threadId }).catch(() => undefined);
+      const line = store.agentTurn(thread, run.turnId)?.line ?? "";
+      if (mailFact && !line.includes(mailFact)) store.line(thread, run.turnId, line ? `${line} ${mailFact}` : mailFact);
+    }
   }
   // Never an empty reply: when the agent's words did not come (or none were backed), plain words from what the engine knows.
   const after = store.agentTurn(thread, run.turnId);

@@ -666,6 +666,8 @@ export type ScenarioCard = CardBase & {
 export type BackupCard = CardBase & {
   type: "backup";
   momentId: string;
+  /** The order it was said for (the mail clause follows the answer). */
+  orderId?: string;
   /** Its sentence and question, in the buyer's language. */
   text: string;
   answers: string[];
