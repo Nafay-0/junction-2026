@@ -330,6 +330,18 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
       await paused(run);
     } else {
       try {
+        // A short answer to the backup question just said ("you choose", "the second one", "no"): recorded, nothing bought.
+        const backedUp = await (await import("./backup")).answerBackupIn(run, body.text!, body.lang ?? "en").catch((err) => {
+          console.error("[thread] backup answer", err);
+          return undefined;
+        });
+        if (backedUp) {
+          if (run.opening) first.done("answered the backup");
+          store.line(thread, run.turnId, backedUp);
+          store.mark(thread, run.turnId, "line", Date.now() - run.t0);
+          await finishTurn(run);
+          return;
+        }
         // A change in words to the menu on the table ("make it lactose-free", "no nuts", "for 20", "drop the soup"):
         // the menu adapter changes the plan and says what changed and the new total (server/agent/menu/thread.ts).
         const changed = await changeMenuInWords(run, body.text!, body.lang ?? "en").catch((err) => {
@@ -465,6 +477,15 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
   if (sent && !sent.line && gateHere?.type === "gate") {
     const order = sent.cards.find((c) => c.type === "order" && c.orderId === gateHere.orderId);
     if (order?.type === "order") store.line(thread, run.turnId, waitingSentence(order, gateHere, body.lang ?? "en", store.cards(thread).map((x) => x.card)) + (pressed ? { en: ` Only their own OK, on their own device, places it.`, fi: " Vain hänen oma hyväksyntänsä omalla laitteellaan tekee tilauksen.", sv: " Bara deras eget godkännande, på deras egen enhet, lägger den." }[body.lang ?? "en"] : ""));
+  }
+  // An order placed or waiting in this turn with a product whose delivery record is poor: one sentence beneath the
+  // order's own reply (server/reliability), a backup offered in case it is not delivered. Most orders say nothing.
+  const ordered = store.agentTurn(thread, run.turnId)?.cards.find((c) => c.type === "order" && (c.status === "committed" || c.status === "pending_approval"));
+  if (ordered?.type === "order") {
+    const { sayBackup } = await import("./backup");
+    const b = await sayBackup(run, { orderId: ordered.orderId }, body.lang ?? "en").catch(() => undefined);
+    const now = store.agentTurn(thread, run.turnId)?.line ?? "";
+    if (b && !now.includes(b.text.slice(0, 30))) store.line(thread, run.turnId, now ? `${now}\n${b.text}` : b.text);
   }
   // Never an empty reply: when the agent's words did not come (or none were backed), plain words from what the engine knows.
   const after = store.agentTurn(thread, run.turnId);

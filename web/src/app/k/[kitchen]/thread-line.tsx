@@ -280,6 +280,7 @@ function Lists({ turn, thread, latest }: { turn: AgentTurn; thread: Thread; late
     else if (c.type === "products") lists.push({ key: c.cardId, rows: c.products.map((p) => ({ item: p.name, amount: f.measure(p.packSize, p.unit) })) });
     else if (c.type === "standing") lists.push({ key: c.cardId, rows: c.items.map((i) => ({ item: i.name, amount: `${f.measure(i.usual.amount, i.usual.unit)} · ${f.weekdays(i.weekdays)}` })) });
     else if (c.type === "deliveries") lists.push({ key: c.cardId, rows: c.items.map((d) => ({ item: d.lines.map((l) => l.name).join(", "), amount: f.day(d.deliveryDate), total: money(d.totalCents) })) });
+    else if (c.type === "backup" && c.others.length) lists.push({ key: c.cardId, rows: c.others.map((o) => ({ item: o })) });
     else if (c.type === "memory_list") lists.push({ key: c.cardId, rows: c.items.map((m) => ({ item: m.text })) });
     else if (c.type === "rules") lists.push({ key: c.cardId, rows: c.proposal ? c.diff.map((d) => ({ item: d.field.replaceAll("_", " "), amount: `${d.before || "—"} → ${d.after || "—"}` })) : [{ item: tx.rulesAlone, amount: money(c.current.perOrderLimitCents) }, { item: tx.rulesWeek, amount: money(c.current.weeklyBudgetCents) }, ...c.stated.map((s) => ({ item: tx.statedRule(s.text) }))] });
   }
@@ -517,6 +518,9 @@ function thinking(turn: AgentTurn, thread: Thread, tx: Tx, w: (typeof THREAD_WOR
         break;
       case "scenario":
         out.push({ label: c.kind === "event" ? tx.step.event : tx.step.season, detail: c.steps.slice(0, 12).join(" "), tone: "live" });
+        break;
+      case "backup":
+        out.push({ label: tx.step.backup, detail: c.steps.join(" "), tone: "live" });
         break;
       case "watch":
         out.push({ label: tx.step.watch, detail: [...c.steps, ...(c.others?.length ? [c.others.join(" · ")] : [])].join(" "), tone: "live" });
