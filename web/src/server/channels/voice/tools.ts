@@ -56,7 +56,8 @@ export async function runTool(kitchen: string, input: unknown, req?: Request): P
   const spoken = body.heard?.text ? languageOf(body.heard.text) : undefined;
   if (call && spoken && (body.heard?.text ?? "").trim().split(/\s+/).length >= 2) call.desk.lang = spoken;
   const lang = call?.desk.lang;
-  if (lang && lang !== "en") reply.forModel = { ...reply.forModel, speakIn: LANGUAGE_NAME[lang], say: reply.forModel.say, note: `The caller speaks ${LANGUAGE_NAME[lang]}: say this in ${LANGUAGE_NAME[lang]}, not in English.` };
+  // Only for the voice model: a typed call shows AimoPilot's sentence on screen as it is.
+  if (lang && lang !== "en" && (input as { via?: string }).via !== "typed") reply.forModel = { speakIn: LANGUAGE_NAME[lang], ...reply.forModel, say: `(Say this in ${LANGUAGE_NAME[lang]}:) ${reply.forModel.say}` };
   return reply;
 }
 

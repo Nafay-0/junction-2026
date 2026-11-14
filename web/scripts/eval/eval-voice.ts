@@ -265,7 +265,11 @@ async function main() {
       calls().heartbeat(start.callId, KITCHEN);
     }
 
-    const connectTimeout = sleep(12_000).then(() => (closed ??= "connect timeout"));
+    let started = false;
+    void readyP.then(() => (started = true));
+    const connectTimeout = sleep(12_000).then(() => {
+      if (!started) closed ??= "connect timeout";
+    });
     await Promise.race([readyP, connectTimeout]);
     const row: Row = { file, outcome: "infra", provider: live.provider };
     if (closed) {
