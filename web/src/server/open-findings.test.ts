@@ -5,6 +5,7 @@ import { localNow, nextDeliveryDay } from "@/core/kitchen";
 import type { PublicOrder } from "@/core/orders";
 import { resolveKitchen } from "./console-kitchens";
 import { KITCHEN_ORG } from "./demo-kitchen";
+import { reissueKitchenMandate } from "./mandate-reissue";
 import { getMemoryService, resetMemoryService } from "./memory/runtime";
 import { getRuntime, resetRuntime } from "./runtime";
 
@@ -21,6 +22,8 @@ const ORDINARY_MILK = "VA-1110"; // 10 L bag-in-box, not lactose-free: Kaari's h
 beforeEach(() => {
   resetRuntime();
   resetMemoryService();
+  (globalThis as { __dockConsoleTokens?: unknown; __dockMenuTokens?: unknown }).__dockConsoleTokens = undefined;
+  (globalThis as { __dockMenuTokens?: unknown }).__dockMenuTokens = undefined;
 });
 
 /** Kaari's agent using the lower-level calls (open a request, ask for a quote, place the order), not the intake. */
@@ -33,17 +36,14 @@ async function orderDirectly(productId: string, packs: number): Promise<PublicOr
   return dock.placeOrder(session, { requestId: req.requestId, quoteToken, lines: quote.lines.map(({ productId: id, quantity, unitPriceCents }) => ({ productId: id, quantity, unitPriceCents })) });
 }
 
-describe("open finding 1: 'In the signed mandate: the gate enforces it'", () => {
-  // The memory page offers a remembered safety rule for the mandate ("Add this to the signed mandate, so the gate
-  // enforces it and not only memory?"). Accepting it records the decision, writes "added ... to the kitchen's
-  // mandate" to the ledger, and the page then says "In the signed mandate: the gate enforces it."
-  // (src/app/k/[kitchen]/memory-book.tsx). Nothing changes the mandate the gate checks.
-  // Options: (a) the gate applies the restrictions a kitchen's signed-in person accepted on top of the presented
-  // mandate (they only narrow it, so no signature is weakened), for every door; (b) the kitchen's console re-signs
-  // its mandate with the rule (possible for the demo kitchens, whose keys the server holds; visitor kitchens' keys
-  // are discarded by design); (c) change the page and the ledger line to say what is true: recorded, enforced by
-  // the intake, not by the gate until the kitchen signs a new mandate.
-  it.fails("a rule the kitchen added to its mandate on the memory page stops an order that breaks it", async () => {
+describe("finding 1: 'In the signed mandate: the gate enforces it' is now true", () => {
+  // Before: accepting "Add this to the signed mandate, so the gate enforces it and not only memory?" recorded the
+  // decision, wrote "added ... to the kitchen's mandate" to the ledger and showed "In the signed mandate: the gate
+  // enforces it", while nothing changed the mandate the gate checks: ordinary milk for Kaari still committed.
+  // Now the kitchen's mandate is signed again with the rule and its earlier mandates stop working
+  // (server/mandate-reissue.ts; the rest of it is tested in mandate-reissue.test.ts).
+  it("a rule the kitchen added to its mandate on the memory page stops an order that breaks it", async () => {
+    const rt = await getRuntime();
     const memory = await getMemoryService();
     const k = (await resolveKitchen("kaari"))!;
     const by = "Sanna Koskinen (signed in)";
@@ -53,9 +53,9 @@ describe("open finding 1: 'In the signed mandate: the gate enforces it'", () => 
       offers = await memory.mandateOffers(k.info.orgId, k.info.mandate);
     }
     const offer = offers.find((o) => o.patch.requiredAttributes?.includes("lactose_free"))!;
-    expect(offer.line).toMatch(/Add it to the signed mandate so the gate refuses any order that breaks it/);
-    const after = await memory.decideMandate(k.info.orgId, offer.itemId, "added", by);
-    expect(after.items.find((i: { id: string }) => i.id === offer.itemId)).toMatchObject({ mandate: { status: "added" } }); // the page now says the gate enforces it
+    const reissued = await reissueKitchenMandate(rt, k.info, offer.patch, by);
+    const after = await memory.decideMandate(k.info.orgId, offer.itemId, "added", by, reissued);
+    expect(after.items.find((i: { id: string }) => i.id === offer.itemId)).toMatchObject({ mandate: { status: "added", mandateId: reissued.mandateId } }); // the page now says the gate enforces it
 
     const order = await orderDirectly(ORDINARY_MILK, 2); // €23, within the €100 the agent may spend alone
     expect(order.status).toBe("rejected");

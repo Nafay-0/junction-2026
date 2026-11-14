@@ -213,6 +213,25 @@ export class SandboxService {
     return s && { mandateToken: s.mandateToken, agentId: s.agentId };
   }
 
+  /**
+   * Reissue a visitor kitchen's mandate with new terms (server/mandates.ts decides them). The organisation's first
+   * private key was used once and never stored, so the kitchen signs with a fresh key: Dock trusts its public half
+   * from now on, the private half is used for this one signature and discarded again. The kitchen's agent, console
+   * and connector address present the new mandate from the next call.
+   */
+  async reissue(sandboxId: string, mandate: Mandate): Promise<void> {
+    const s = await this.sandboxes.get(sandboxId);
+    if (!s) throw new DockError(404, "sandbox_not_found", "This demo kitchen does not exist or has closed.");
+    const key = await generateEd25519KeyPair(`${s.orgId}-key-${newId("k").slice(2, 10)}`);
+    this.deps.registry.add({ kid: key.kid, orgId: s.orgId, publicKey: key.publicKey });
+    await this.sandboxes.put({ ...s, mandate, mandateToken: await signMandate(mandate, key), publicJwk: key.publicJwk });
+  }
+
+  /** The mandate a kitchen's agent presents now. */
+  async mandateOf(sandboxId: string): Promise<Mandate | undefined> {
+    return (await this.sandboxes.get(sandboxId))?.mandate;
+  }
+
   /** Run the scripted buyer for this kitchen: the 1,000 L milk order, which needs the visitor's sign-off. */
   async runDemoOrder(sandboxId: string): Promise<PublicOrder> {
     const creds = await this.agentCredentials(sandboxId);

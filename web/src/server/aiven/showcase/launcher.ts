@@ -9,6 +9,7 @@ import { redact } from "./redact";
 import refusedRecording from "./recordings/refused.json";
 import valioRecording from "./recordings/valio.json";
 import { AIVEN_BUYER } from "./buyer";
+import { getRuntime } from "../../runtime";
 import withinRecording from "./recordings/within.json";
 
 /**
@@ -238,7 +239,8 @@ export async function mintMandate(now = new Date()): Promise<string> {
     validUntil: new Date(now.getTime() + AIVEN_BUYER.mandateMinutes * 60_000).toISOString(),
     weeklyBudgetCents: 2_000_000, // the demo org's other agents' pending orders must not use up this buyer's week
   });
-  return signMandate(m, await demoOrgKeyPair());
+  // Never wider than the kitchen's current mandate: with what it added by reissuing it (server/mandates.ts).
+  return signMandate((await getRuntime()).mandates.restrict(m), await demoOrgKeyPair());
 }
 
 export type LauncherStatus = {

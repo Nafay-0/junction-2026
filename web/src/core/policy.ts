@@ -20,7 +20,7 @@ import { allergenOf, forbiddenPresent, isMaterialAttribute } from "./vocabulary"
  */
 export const RULES = [
   "mandate_agent", // the agent presenting the order is the one the mandate names
-  "mandate_window", // the mandate is in force at decision time
+  "mandate_window", // the mandate is in force at decision time: inside its dates, and not replaced by a reissue
   "quote_binding", // the quote was issued to this organisation, agent, mandate and request
   "quote_expiry", // the quote's fixed price still holds
   "quote_replay", // the quote has not been used for another order
@@ -97,6 +97,8 @@ export type PolicyContext = {
    */
   unconfirmedConcerns?: { code: string; message: string }[];
   quoteAlreadyUsed: boolean;
+  /** Set when the kitchen reissued its mandate after this one was signed (mandate.ts supersededBy): the reason, in words. */
+  mandateSuperseded?: string;
   /** Orders of this organisation in the last SPLIT_WINDOW_HOURS, for the order_splitting check. Absent: none. */
   recentOrders?: RecentOrder[];
   /** Holds in force on the order's products (orders.ts ProductHolds). Absent: none. */
@@ -133,7 +135,8 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
   else add("mandate_agent", "fail", `Mandate is for agent ${mandate.agentId}, but agent ${draft.agentId} presented it.`, { expected: mandate.agentId, actual: draft.agentId });
 
   const t = ctx.now.getTime();
-  if (t >= Date.parse(mandate.validFrom) && t < Date.parse(mandate.validUntil)) add("mandate_window", "pass", "Mandate is in force.");
+  if (ctx.mandateSuperseded) add("mandate_window", "fail", ctx.mandateSuperseded, { superseded: true });
+  else if (t >= Date.parse(mandate.validFrom) && t < Date.parse(mandate.validUntil)) add("mandate_window", "pass", "Mandate is in force.");
   else add("mandate_window", "fail", `Mandate is only valid from ${mandate.validFrom} until ${mandate.validUntil}.`);
 
   // Quote integrity

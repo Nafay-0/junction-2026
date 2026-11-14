@@ -1,12 +1,10 @@
-import { createPrivateKey } from "node:crypto";
-import type { JWK } from "jose";
 import type { Product } from "@/core/catalog";
 import { addDaysIso, emptyProfile, isoWeekday, localNow, type HistoryEntry, type KitchenProfile } from "@/core/kitchen";
-import { importEd25519KeyPair, type KeyPair } from "@/core/keys";
+import type { KeyPair } from "@/core/keys";
 import type { Mandate } from "@/core/mandate";
 import { SEED_PRODUCTS, SEED_STOCK } from "@/core/seed";
 import { known } from "@/core/options";
-import { addDays, sha256Hex } from "@/core/util";
+import { addDays } from "@/core/util";
 import { DEMO_WEEKLY_BUDGET_CENTS, demoKey } from "./dev-fixtures";
 
 /**

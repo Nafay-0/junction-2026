@@ -33,7 +33,7 @@ type Item = {
   createdAt: string;
   lastUsedAt?: string;
   confirmedBy?: { by: string; at: string };
-  mandate?: { status: "offered" | "added" | "declined"; at: string; by?: string };
+  mandate?: { status: "offered" | "added" | "declined" | "intake_only"; at: string; by?: string; mandateId?: string };
 };
 type View = {
   items: Item[];
@@ -287,6 +287,7 @@ function MemoryCard({ it, now, busy, act }: { it: Item; now: number; busy?: stri
           </div>
         )}
         {it.mandate?.status === "added" && <p className="mt-2 text-[0.88rem] font-semibold">In the signed mandate: the gate enforces it.</p>}
+        {it.mandate?.status === "intake_only" && <p className="mt-2 text-[0.88rem] text-ink-soft">A preference the intake uses. The mandate cannot state it, so the gate does not enforce it.</p>}
 
         {mode === "forget" ? (
           <div className="mt-3 bg-mist p-3" role="alertdialog" aria-label={`Forget: ${it.text}`}>
