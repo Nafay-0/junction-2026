@@ -216,6 +216,10 @@ export const OptionCardSchema = named(
     pros: z.array(z.string()),
     cons: z.array(z.string()),
     quoteLines: z.array(z.looseObject({ productId: z.string(), quantity: z.number().int(), substituteFor: z.string().optional() })),
+    alternative: z
+      .looseObject({ for: z.string(), tier: z.enum(["best", "better", "good"]), reason: z.string(), use: z.string().optional() })
+      .optional()
+      .describe("When this card stands in for the product the request is about: how the product knowledge map ranks it for the kitchen use, and why."),
   }),
 );
 
@@ -230,6 +234,14 @@ export const IntakeStepSchema = named(
     concerns: z.array(ConcernSchema).describe("needs_confirmation: likely mistakes the buyer must confirm or correct."),
     questions: z.array(QuestionSchema).describe("needs_input: at most two questions for the buyer."),
     fromMemory: z.array(MemoryNoteSchema).describe("Answers AimoPilot took from the kitchen's memory instead of asking."),
+    memoryUsed: z
+      .array(z.looseObject({ itemId: z.string().optional(), text: z.string() }))
+      .optional()
+      .describe("One line per remembered item of the kitchen's memory this request used without asking: a rule applied, a habit pre-selected, a check made, a product left out."),
+    alsoAsked: z
+      .array(z.looseObject({ text: z.string(), group: z.string(), amount: z.looseObject({ amount: z.number(), unit: z.string() }).optional() }))
+      .optional()
+      .describe("Items the buyer's own words name that this request does not cover (found by plain code in the text). Nothing is ordered for them here: submit each as its own need next."),
     rules: z.array(z.looseObject({ text: z.string(), source: z.enum(["mandate", "request", "stated"]), preferenceId: z.string().optional() })),
     options: z.array(OptionCardSchema).describe("options_ready: the choices, with pros and cons."),
     preselected: z.looseObject({ optionId: z.string(), reason: z.string(), source: z.enum(["request", "answer", "stated", "learned"]) }).optional(),

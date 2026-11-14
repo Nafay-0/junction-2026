@@ -2,6 +2,7 @@ import type { LedgerEntry } from "@/core/ledger";
 import { amount, eur, humanize, ruleTitle } from "@/app/_ui/plain";
 import { KITCHEN_ORG } from "./demo-kitchen";
 import { DEMO_ORG } from "./dev-fixtures";
+import { BROWSE_TEXT } from "./portal-requests";
 import type { Runtime } from "./runtime";
 
 /**
@@ -65,6 +66,7 @@ export async function wallSnapshot(rt: Runtime): Promise<WallSnapshot> {
   const orders = await dock.listOrders();
   const kitchens = await sandboxes.list();
   const chain = dock.ledger.verify();
+  const now = new Date();
   await learnNames(rt, entries.slice(-300));
 
   const agentOrg = new Map<string, string>([
@@ -96,8 +98,9 @@ export async function wallSnapshot(rt: Runtime): Promise<WallSnapshot> {
   const feed: FeedItem[] = [];
   for (const [requestId, list] of byRequest) {
     const first = list.find((e) => e.type === "request");
-    if (!first) continue;
-    feed.push({ key: requestId, kitchen: kitchenOf(requestId, first.actor), ...progress(list), at: list.at(-1)!.at });
+    // A portal's catalogue browsing (live prices of products opened in the shop) is not a purchase request.
+    if (!first || first.data.text === BROWSE_TEXT) continue;
+    feed.push({ key: requestId, kitchen: kitchenOf(requestId, first.actor), ...progress(list, now), at: list.at(-1)!.at });
   }
   feed.sort((a, b) => b.at.localeCompare(a.at));
 
@@ -139,15 +142,18 @@ export async function wallSnapshot(rt: Runtime): Promise<WallSnapshot> {
 }
 
 /** Where one request is, in a few words. Reads its ledger entries in order; the last word wins. */
-function progress(list: LedgerEntry[]): Pick<FeedItem, "what" | "reached" | "status" | "tone" | "totalCents"> {
+export function progress(list: LedgerEntry[], now = new Date()): Pick<FeedItem, "what" | "reached" | "status" | "tone" | "totalCents"> {
   const request = list.find((e) => e.type === "request")!;
   let what = String(request.data.text ?? "").trim();
   let reached = 1;
   let status = "Reading the request";
   let tone: FeedItem["tone"] = "plain";
   let totalCents: number | undefined;
+  /** When the last quote's fixed price runs out, while nothing has been decided on it. */
+  let priceUntil: string | undefined;
 
   for (const e of list) {
+    if (e.type === "decision" || e.type === "order" || e.type === "refusal") priceUntil = undefined;
     const d = e.data;
     if (e.type === "intake") {
       const step = d.step;
@@ -165,6 +171,7 @@ function progress(list: LedgerEntry[]): Pick<FeedItem, "what" | "reached" | "sta
     } else if (e.type === "lookup" && d.source === "live") [reached, status] = [Math.max(reached, 2), "Checking live prices"];
     else if (e.type === "quote") {
       totalCents = d.totalCents as number;
+      priceUntil = typeof d.expiresAt === "string" ? d.expiresAt : undefined;
       [reached, status] = [3, `Price fixed at ${eur(totalCents)}`];
     } else if (e.type === "decision") {
       totalCents = d.totalCents as number;
@@ -187,6 +194,8 @@ function progress(list: LedgerEntry[]): Pick<FeedItem, "what" | "reached" | "sta
       [reached, status, tone] = [Math.max(reached, 3), `Refused: ${ruleTitle(rule).toLowerCase()}`, "safety"];
     }
   }
+  // A fixed price nobody ordered on stops holding when it runs out: the row says so instead of "Price fixed" forever.
+  if (priceUntil && reached === 3 && Date.parse(priceUntil) <= now.getTime()) [status, tone] = ["Price ran out; not ordered", "plain"];
   if (what.length > 80) what = `${what.slice(0, 77).trimEnd()}…`;
   return { what: say(what), reached, status: say(status), tone, totalCents };
 }

@@ -138,3 +138,18 @@ describe("Helsinki calendar days (F-GATE-UTC-DATE)", () => {
     expect(localDateOf("2026-11-13T22:30:00.000Z")).toBe("2026-11-14");
   });
 });
+
+describe("one change at a time per kitchen (the intake's saves and memory writes never overwrite each other)", () => {
+  it("two writers that read, wait and save both keep their change", async () => {
+    const { InMemoryKitchenRepository, updateKitchenProfile, withKitchenLock, emptyProfile } = await import("./kitchen");
+    const repo = new InMemoryKitchenRepository([emptyProfile("org_x", "X")]);
+    const slow = async (tag: string) =>
+      withKitchenLock(repo, "org_x", async () => {
+        const p = (await repo.getProfile("org_x"))!;
+        await new Promise((r) => setTimeout(r, 5));
+        await repo.saveProfile({ ...p, name: `${p.name}+${tag}` });
+      });
+    await Promise.all([slow("memory"), updateKitchenProfile(repo, "org_x", (p) => ({ ...p!, name: `${p!.name}+intake` })), slow("order")]);
+    expect((await repo.getProfile("org_x"))!.name).toBe("X+memory+intake+order");
+  });
+});

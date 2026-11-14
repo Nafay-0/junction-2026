@@ -1,3 +1,5 @@
+import type { AlternativesSource } from "@/core/alternatives";
+import type { Door } from "@/core/orders";
 import { MAX_LIVE_IDS_PER_CALL, type LiveStatus, type Product } from "@/core/catalog";
 import { DockError } from "@/core/errors";
 import { formatDay, localNow } from "@/core/kitchen";
@@ -6,11 +8,13 @@ import type { AgentSession, Dock, PublicOrder } from "@/core/orders";
 import type { Decision } from "@/core/policy";
 import type { Quote } from "@/core/quote";
 import { formatEur, newId } from "@/core/util";
+import { onsiteSession } from "../../ops/onsite";
 import type { CallStats, DraftIngredient, DraftResult, MenuDraft } from "./draft";
 import type { FixResult, FixRequest } from "./fixes";
 import { toFixOptions } from "./fixes";
 import type { MenuKitchen } from "./kitchens";
-import { findCandidates, type MenuCatalog } from "./match";
+import { findCandidates, type CandidateSet, type MenuCatalog } from "./match";
+import { checkSafety, withRequestRules, type DietRules } from "./safety";
 import {
   buildSpecs,
   computePlan,
@@ -85,6 +89,8 @@ export type PlanDeps = {
   fix?: (req: FixRequest, ctx: MenuPromptContext) => Promise<FixResult>;
   /** Which found products are the ingredient (a fast model judging names). Absent: the code's ranking stands. */
   pick?: (lines: PickLine[]) => Promise<PickResult>;
+  /** What can stand in for a line's product in the dish's use (the product knowledge map; see core/alternatives.ts). */
+  alternatives?: AlternativesSource;
   store: PlanStore;
 };
 
@@ -113,6 +119,23 @@ export function promptContext(k: MenuKitchen): MenuPromptContext {
   return { kitchenName: k.info.name, kitchenKind: k.info.kind, rules: k.info.rules.map((r) => r.text), pantry: k.info.pantry };
 }
 
+/** Candidate sets with each product's safety judged again under `diet`; blocked products move to `rejected`. */
+export function recheck(sets: PlanInput["candidates"], diet: DietRules): PlanInput["candidates"] {
+  const out: PlanInput["candidates"] = {};
+  for (const [id, set] of Object.entries(sets)) {
+    if (!set) continue;
+    const kept: CandidateSet["candidates"] = [];
+    const rejected = [...set.rejected];
+    for (const c of set.candidates) {
+      const safety = checkSafety(c.product, diet);
+      if (safety.verdict === "block") rejected.push({ productId: c.product.id, name: c.product.name, reason: safety.checks.filter((x) => x.verdict === "block").map((x) => x.reason).join("; ") });
+      else kept.push({ ...c, safety });
+    }
+    out[id] = { ...set, candidates: kept, rejected };
+  }
+  return out;
+}
+
 function statusesFrom(r: { offers: import("@/core/catalog").LiveOffer[]; unavailable: { productId: string; problems: LiveStatus["problems"]; message: string }[] }): LiveStatus[] {
   return [
     ...r.offers.map((o) => ({ productId: o.productId, orderable: true, problems: [], offer: o, message: "" }) as LiveStatus),
@@ -123,8 +146,9 @@ function statusesFrom(r: { offers: import("@/core/catalog").LiveOffer[]; unavail
 export function createPlanService(deps: PlanDeps) {
   const { dock, catalog, store } = deps;
 
-  async function session(k: MenuKitchen): Promise<AgentSession> {
-    return dock.authenticate(k.mandateToken, k.agentId);
+  /** The menu agent's session, through the same operations check as a call over HTTP (ops/onsite.ts): suspended, it plans, quotes and orders nothing. Its requests carry the door. */
+  async function session(k: MenuKitchen, door: Door = "menu"): Promise<AgentSession> {
+    return { ...(await onsiteSession(dock, k, door === "menu" ? "menu planner" : `${door} door`)), door };
   }
 
   async function spentThisWeek(orgId: string): Promise<number> {
@@ -167,7 +191,11 @@ export function createPlanService(deps: PlanDeps) {
   }
 
   function input(p: PlanRecord, k: MenuKitchen, spent: number): PlanInput {
-    return { draft: p.draft, specs: p.specs, candidates: p.candidates, live: p.live, edits: p.edits, acceptances: p.acceptances, fixes: p.fixes, settings: p.settings, mandate: k.mandate, diet: k.diet, now: deps.now(), spentThisWeekCents: spent };
+    // Every line passes the kitchen's rules and the request's own ("nut-free"), checked again here on the data,
+    // whatever the draft or an edit put on the plan; a product that breaks one is moved to the rejected list.
+    const diet = withRequestRules(k.diet, p.draft ?? {});
+    const candidates = diet === k.diet ? p.candidates : recheck(p.candidates, diet);
+    return { draft: p.draft, specs: p.specs, candidates, live: p.live, edits: p.edits, acceptances: p.acceptances, fixes: p.fixes, settings: p.settings, mandate: k.mandate, diet, now: deps.now(), spentThisWeekCents: spent };
   }
 
   const allowedFor = (k: MenuKitchen) => {
@@ -175,32 +203,76 @@ export function createPlanService(deps: PlanDeps) {
     return (p: Product) => allowed.has(p.category);
   };
 
-  /** Ways out for lines that cannot be bought as planned: proposed by the model, checked here. */
+  /**
+   * Ways out for lines that cannot be bought as planned, checked here. First what the product knowledge map ranks as
+   * a stand-in for the line's product in the dish's use (good, better, best, with its reason; or its reason why there
+   * is no good alternative), then the model's ideas by the dish's logic. Plain code checks every one the same way.
+   */
   async function proposeFixesFor(p: PlanRecord, k: MenuKitchen, s: AgentSession, view: PlanView): Promise<void> {
-    if (!deps.fix) return;
+    if (!deps.fix && !deps.alternatives) return;
     // When nothing can arrive by the date, the fix is the date, not every recipe: no proposals for lateness then.
     const kinds = view.totals.allLate ? ["no_safe_product", "no_product", "rule_conflict"] : ["cannot_arrive", "no_safe_product", "no_product", "rule_conflict"];
     const stuck = view.lines.filter((l) => l.doubts.some((d) => !d.accepted && kinds.includes(d.kind)) && !p.fixes[l.lineId]);
     if (!stuck.length) return;
     const t0 = Date.now();
     const rules = [...k.info.rules.map((r) => r.text), ...p.draft.requiredClaims.map((c) => `must be ${c.replace(/_/g, "-")}`), ...p.draft.forbiddenAllergens.map((a) => `no ${a}`)];
-    const results = await Promise.allSettled(
-      stuck.slice(0, 6).map(async (line) => {
+    const pending: { lineId: string; fix: FixOption; spec: LineSpec; only?: string[] }[] = [];
+    const lines = stuck.slice(0, 6);
+    for (const line of lines) p.fixes[line.lineId] = [];
+
+    // 1. The product map, by the dish's use. The kitchen's rules go in as constraints; plain code re-checks below.
+    if (deps.alternatives) {
+      const requiredClaims = [...new Set([...k.diet.requiredClaims.map((c) => c.claim), ...p.draft.requiredClaims])];
+      const forbiddenAllergens = [...new Set([...k.diet.forbiddenAllergens.map((f) => f.allergen), ...p.draft.forbiddenAllergens])];
+      for (const line of lines) {
         const spec = p.specs.find((x) => x.lineId === line.lineId)!;
-        const dish = p.draft.dishes.find((d) => d.id === spec.uses[0].dishId)!;
-        const problem = line.doubts.filter((d) => !d.accepted).map((d) => d.text).join(" ");
-        const r = await deps.fix!({ lineKey: spec.key, dish: dish.name, method: dish.method, ingredient: spec.ingredient, problem, rules }, promptContext(k));
-        p.model.calls.push({ step: `fix ${spec.key}`, ms: r.ms, tokens: r.tokens, costUsd: r.costUsd });
-        p.raw.fixes[spec.key] = r.fixes;
-        return { line, spec, proposals: toFixOptions(r.fixes, spec.ingredient) };
-      }),
-    );
+        const dish = p.draft.dishes.find((d) => d.id === spec.uses[0].dishId);
+        const set = p.candidates[line.lineId];
+        const anchor = set?.candidates[0]?.product.id ?? set?.rejected[0]?.productId;
+        if (!anchor) continue;
+        const alt = await deps.alternatives(anchor, { text: `${spec.ingredient.name} for ${dish?.name ?? spec.uses[0].dish} ${spec.uses.map((u) => u.role).join(" ")}`, requiredClaims, forbiddenAllergens }).catch(() => undefined);
+        if (!alt) continue;
+        const found = new Map((alt.substitutes.length ? await catalog.get(alt.substitutes.slice(0, 3).map((x) => x.productId)) : []).map((x) => [x.id, x]));
+        for (const x of alt.substitutes.slice(0, 3)) {
+          const prod = found.get(x.productId);
+          if (!prod) continue;
+          const name = prod.names?.en ?? prod.name;
+          const fix: FixOption = {
+            fixId: `${line.lineId}:map${p.fixes[line.lineId].length + 1}`,
+            kind: "substitute",
+            title: `${name} instead (${x.tier} alternative${alt.use ? ` for ${alt.use}` : ""})`,
+            effect: x.reason,
+            changesDish: false,
+            source: "code",
+            ingredient: { ...spec.ingredient, key: `${spec.ingredient.key}_alt`, name, searchTerms: [prod.names?.fi ?? prod.name, name].filter(Boolean) as string[] },
+          };
+          p.fixes[line.lineId].push(fix);
+          pending.push({ lineId: line.lineId, fix, spec, only: [x.productId, ...x.otherPacks] });
+        }
+        if (!alt.substitutes.length && alt.none) {
+          p.fixes[line.lineId].push({ fixId: `${line.lineId}:map0`, kind: "substitute", title: "No good alternative in the catalogue", effect: alt.none, changesDish: false, source: "code", check: { ok: false, reason: alt.none } });
+        }
+      }
+    }
+
+    // 2. The model's ideas by the dish's logic.
+    const results = deps.fix
+      ? await Promise.allSettled(
+          lines.map(async (line) => {
+            const spec = p.specs.find((x) => x.lineId === line.lineId)!;
+            const dish = p.draft.dishes.find((d) => d.id === spec.uses[0].dishId)!;
+            const problem = line.doubts.filter((d) => !d.accepted).map((d) => d.text).join(" ");
+            const r = await deps.fix!({ lineKey: spec.key, dish: dish.name, method: dish.method, ingredient: spec.ingredient, problem, rules }, promptContext(k));
+            p.model.calls.push({ step: `fix ${spec.key}`, ms: r.ms, tokens: r.tokens, costUsd: r.costUsd });
+            p.raw.fixes[spec.key] = r.fixes;
+            return { line, spec, proposals: toFixOptions(r.fixes, spec.ingredient) };
+          }),
+        )
+      : [];
     // Search for every substitute, then price the best of each in one batched call.
-    const pending: { lineId: string; fix: FixOption; spec: LineSpec }[] = [];
     for (const r of results) {
       if (r.status !== "fulfilled") continue;
       const { line, spec, proposals } = r.value;
-      p.fixes[line.lineId] = [];
       for (const [i, pr] of proposals.entries()) {
         const fix: FixOption = { fixId: `${line.lineId}:fix${i + 1}`, kind: pr.kind, title: pr.title, effect: pr.effect, changesDish: pr.changesDish, source: "model", ...(pr.ingredient ? { ingredient: pr.ingredient } : {}), ...(pr.perCover ? { perCover: pr.perCover } : {}) };
         p.fixes[line.lineId].push(fix);
@@ -209,7 +281,12 @@ export function createPlanService(deps: PlanDeps) {
     }
     const allowed = allowedFor(k);
     const subs = await Promise.all(
-      pending.map(async (x) => (x.fix.ingredient ? { x, set: await findCandidates(catalog, x.fix.ingredient, k.diet, allowed, 3) } : { x, set: undefined })),
+      pending.map(async (x) => {
+        if (!x.fix.ingredient) return { x, set: undefined };
+        const set = await findCandidates(catalog, x.fix.ingredient, k.diet, allowed, x.only ? 12 : 3);
+        // A product the map proposed is checked as itself, not as whatever else its name finds.
+        return { x, set: x.only ? { ...set, candidates: set.candidates.filter((c) => x.only!.includes(c.product.id)) } : set };
+      }),
     );
     for (const { x, set } of subs) if (set) p.candidates[`fix:${x.fix.fixId}`] = set;
     await pick(
@@ -299,6 +376,22 @@ export function createPlanService(deps: PlanDeps) {
   }
 
   async function plan(k: MenuKitchen, text: string, by: string): Promise<{ record: PlanRecord; view: PlanView }> {
+    return planFrom(k, text, by, deps.draft, { door: "menu", pantry: k.info.pantry });
+  }
+
+  /**
+   * A list of plain items (a photo of a whiteboard, an emailed order) as one plan, one quote, one order: the same
+   * candidates, safety rules, batched live lookups, options per line and gate as a menu, with no model at all. Every
+   * amount is the one written on the list (no covers, no yield, nothing added), so quantities are never invented.
+   */
+  async function planItems(k: MenuKitchen, items: ListItem[], by: string, opts: { deliverBy?: string; door?: Door; source?: string } = {}): Promise<{ record: PlanRecord; view: PlanView; notPlanned: { item: string; reason: string }[] }> {
+    const { draft, notPlanned } = listDraft(items, opts.deliverBy);
+    const text = `${opts.source === "text" ? "Pasted list" : opts.source === "pdf" ? "List from a PDF" : "List from a photo"}: ${items.map((x) => `${x.amount} ${x.unit} ${x.item}`).join(", ")}`.slice(0, 2000);
+    const r = await planFrom(k, text, by, async () => ({ draft, raw: draft as unknown as DraftResult["raw"], model: "none: read as written on the list", ms: 0, tokens: { input: 0, output: 0, cachedInput: 0, reasoning: 0 }, costUsd: 0, calls: [] }), { door: opts.door ?? "photo", pantry: [] });
+    return { ...r, notPlanned };
+  }
+
+  async function planFrom(k: MenuKitchen, text: string, by: string, drafter: PlanDeps["draft"], opts: { door: Door; pantry: string[] }): Promise<{ record: PlanRecord; view: PlanView }> {
     const t0 = Date.now();
     const now = deps.now();
     // Each dish's ingredients are searched (master data) and judged by name while the other dishes are still written.
@@ -316,7 +409,7 @@ export function createPlanService(deps: PlanDeps) {
       })();
       for (const [i, ing] of fresh.entries()) early.set(ing.key, job.then((r) => ({ set: r.sets[ing.key], calls: i === 0 ? r.calls : [], notes: i === 0 ? r.notes : [] })));
     };
-    const d = await deps.draft(text, promptContext(k), now, prepare);
+    const d = await drafter(text, promptContext(k), now, prepare);
     const at = now.toISOString();
     const p: PlanRecord = {
       planId: newId("plan"),
@@ -361,8 +454,8 @@ export function createPlanService(deps: PlanDeps) {
     p.live.deliverBy = deliverBy;
     if (p.settings.covers === null) p.notes.push("The request does not say how many covers: give the number and every amount follows.");
 
-    const s = await session(k);
-    const req = await dock.openRequest(s, { text: `Menu plan: ${text}`.slice(0, 2000), ...(deliverBy ? { neededBy: deliverBy } : {}) });
+    const s = await session(k, opts.door);
+    const req = await dock.openRequest(s, { text: (opts.door === "menu" ? `Menu plan: ${text}` : text).slice(0, 2000), ...(deliverBy ? { neededBy: deliverBy } : {}) });
     p.requestId = req.requestId;
     p.requestNeededBy = deliverBy;
     log(p, k, `agent:${k.agentId}`, `The model (${d.model}${d.recorded ? ", recorded output" : ""}) drafted ${d.draft.dishes.length} dish${d.draft.dishes.length === 1 ? "" : "es"} for ${d.draft.covers ?? "an unstated number of"} covers: ${d.draft.dishes.map((x) => x.name).join(", ")}. Plain code checks everything after this.`, {
@@ -376,7 +469,7 @@ export function createPlanService(deps: PlanDeps) {
 
     // Master data: candidates for every line, in parallel. No live call.
     const m0 = Date.now();
-    p.specs = buildSpecs(d.draft, k.info.pantry);
+    p.specs = buildSpecs(d.draft, opts.pantry);
     const late: LineSpec[] = [];
     for (const spec of p.specs) {
       const e = early.get(spec.key);
@@ -486,6 +579,10 @@ export function createPlanService(deps: PlanDeps) {
           if (!/^\d{4}-\d{2}-\d{2}$/.test(e.date) || e.date < localNow(deps.now()).date) throw new DockError(400, "invalid_date", "The delivery date must be today or later, as YYYY-MM-DD.");
           if (e.date !== p.settings.deliverBy) {
             p.settings.deliverBy = e.date;
+            if (p.requestId) {
+              await dock.changeNeededBy(s, p.requestId, { neededBy: e.date, by, reason: "the chef changed the plan's delivery date" });
+              p.requestNeededBy = e.date;
+            }
             // Cut-offs depend on the date: what was priced for the old one is asked again, in batches.
             const ids = Object.keys(p.live.statuses);
             p.live = { statuses: {}, deliverBy: e.date, calls: p.live.calls, at };
@@ -575,11 +672,9 @@ export function createPlanService(deps: PlanDeps) {
     const spent = await spentThisWeek(k.mandate.issuer.orgId);
     const view = computePlan(input(p, k, spent));
     if (!view.totals.canQuote) throw new DockError(409, "plan_not_ready", view.totals.blockers.join(" "), "human_input", { blockers: view.totals.blockers });
-    // The request's need-by date must be the plan's: open a new one if the chef changed it.
+    // The request's need-by date must be the plan's: move it if the chef changed it (same request, one ledger line).
     if (p.requestNeededBy !== p.settings.deliverBy) {
-      const req = await dock.openRequest(s, { text: `Menu plan: ${p.text}`.slice(0, 2000), ...(p.settings.deliverBy ? { neededBy: p.settings.deliverBy } : {}) });
-      log(p, k, `agent:${k.agentId}`, `The delivery date changed to ${p.settings.deliverBy ? formatDay(p.settings.deliverBy) : "the earliest"}; the plan continues as request ${req.requestId}.`, { newRequestId: req.requestId });
-      p.requestId = req.requestId;
+      await dock.changeNeededBy(s, p.requestId!, { neededBy: p.settings.deliverBy, by, reason: "the chef changed the plan's delivery date" });
       p.requestNeededBy = p.settings.deliverBy;
     }
     const buying = view.lines.filter((l) => l.chosen && (l.status === "ready" || l.status === "needs_decision"));
@@ -633,7 +728,50 @@ export function createPlanService(deps: PlanDeps) {
     return finishView(p, k);
   }
 
-  return { plan, get, edit, quote, order, settled };
+  return { plan, planItems, get, edit, quote, order, settled };
+}
+
+/** One line of a list, as a person reviewed it (the photo door's reviewed lines). */
+export type ListItem = { item: string; amount: number; unit: string };
+
+const LIST_UNITS: Record<string, { unit: "g" | "ml" | "pcs"; factor: number }> = {
+  l: { unit: "ml", factor: 1000 }, litre: { unit: "ml", factor: 1000 }, liter: { unit: "ml", factor: 1000 }, dl: { unit: "ml", factor: 100 }, cl: { unit: "ml", factor: 10 }, ml: { unit: "ml", factor: 1 },
+  kg: { unit: "g", factor: 1000 }, g: { unit: "g", factor: 1 },
+  pcs: { unit: "pcs", factor: 1 }, kpl: { unit: "pcs", factor: 1 }, st: { unit: "pcs", factor: 1 }, pieces: { unit: "pcs", factor: 1 },
+};
+
+/** The list as a plan draft, by plain code: one dish ("the list"), one cover, every amount as written. */
+export function listDraft(items: ListItem[], deliverBy?: string): { draft: MenuDraft; notPlanned: { item: string; reason: string }[] } {
+  const notPlanned: { item: string; reason: string }[] = [];
+  const used = new Set<string>();
+  const ingredients: DraftIngredient[] = [];
+  for (const x of items) {
+    const u = LIST_UNITS[x.unit.trim().toLowerCase()];
+    if (!u || !(x.amount > 0)) {
+      notPlanned.push({ item: x.item, reason: u ? "no amount" : `"${x.unit}" is a pack count, which depends on the product's pack: send it as its own request` });
+      continue;
+    }
+    let key = x.item.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 40) || "item";
+    while (used.has(key)) key = `${key}_2`;
+    used.add(key);
+    ingredients.push({ key, name: x.item, searchTerms: [x.item], role: "on the list", perCover: { amount: Math.round(x.amount * u.factor * 1000) / 1000, unit: u.unit }, yieldPct: 100, amountBasis: "as written on the list", pantry: false, form: "any", avoid: [] });
+  }
+  return {
+    notPlanned,
+    draft: {
+      isFoodOrderRequest: ingredients.length > 0,
+      declineReason: ingredients.length ? null : "No line of the list has an amount Dock can plan by.",
+      covers: 1,
+      serviceDate: deliverBy ?? null,
+      occasion: null,
+      requiredClaims: [],
+      forbiddenAllergens: [],
+      assumptions: ["Read as written on the list: one line per item, the amount given, nothing scaled, added or left out."],
+      conflicts: [],
+      corrections: [],
+      dishes: [{ id: "list", name: "The list", nameFi: null, course: "other", serviceDate: deliverBy ?? null, portion: "as written", method: "a list of items to buy", ingredients }],
+    },
+  };
 }
 
 export type PlanEdit =

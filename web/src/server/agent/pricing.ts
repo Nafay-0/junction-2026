@@ -4,6 +4,8 @@
  *   Anthropic  claude-api model table (platform.claude.com pricing), Haiku 5.5 rate for prompts up to 100K tokens
  *   OpenAI     https://developers.openai.com/api/docs/pricing
  *   Google     https://aistudio.google.com/docs/pricing (paid tier, text)
+ * Added 2026-11-14 for the crash-test leaderboard (same sources): Fable 5.2, GPT-6 Astra / 6.1 Sol / 6 Sol,
+ * Gemini 4 Carbon / Argon / Hydrogen, Gemini 3.6 Flash. Gemini 4 Carbon and Argon double on 2026-12-01.
  * Reasoning/thinking tokens are billed as output by all three. Cached input falls back to the input price
  * when a provider publishes none. A model missing here gets `costUsd: null`; add it here or set
  * DOCK_MODEL_PRICES='{"verda:some-model":[0.2,0.6]}' (input, output per million).
@@ -16,9 +18,13 @@ const PRICES: Record<string, Price> = {
   "anthropic:claude-sonnet-5-5": { inputPerM: 2, outputPerM: 10, cachedInputPerM: 0.1 },
   "anthropic:claude-sonnet-5": { inputPerM: 2, outputPerM: 10 },
   "anthropic:claude-opus-5-5": { inputPerM: 4, outputPerM: 20, cachedInputPerM: 0.2 },
+  "anthropic:claude-fable-5-2": { inputPerM: 8, outputPerM: 40, cachedInputPerM: 0.2 },
   "openai:gpt-6-luna": { inputPerM: 0.1, outputPerM: 0.5, cachedInputPerM: 0.01 },
   "openai:gpt-5.6-luna": { inputPerM: 0.2, outputPerM: 1.2, cachedInputPerM: 0.02 },
   "openai:gpt-6.1-terra": { inputPerM: 1, outputPerM: 5, cachedInputPerM: 0.05 },
+  "openai:gpt-6-astra": { inputPerM: 10, outputPerM: 50, cachedInputPerM: 1 },
+  "openai:gpt-6.1-sol": { inputPerM: 2, outputPerM: 10, cachedInputPerM: 0.1 },
+  "openai:gpt-6-sol": { inputPerM: 2, outputPerM: 10, cachedInputPerM: 0.2 },
   "openai:gpt-5-nano": { inputPerM: 0.05, outputPerM: 0.4, cachedInputPerM: 0.005 },
   "openai:gpt-5-mini": { inputPerM: 0.25, outputPerM: 2, cachedInputPerM: 0.025 },
   "openai:gpt-5.4-nano": { inputPerM: 0.2, outputPerM: 1.25, cachedInputPerM: 0.02 },
@@ -30,6 +36,10 @@ const PRICES: Record<string, Price> = {
   "google:gemini-3.8-flash": { inputPerM: 0.75, outputPerM: 3.75 },
   // Featherless reports a cost per call; these rates reproduce it exactly (read from responses on 2026-11-14).
   "featherless:nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16": { inputPerM: 0.05, outputPerM: 0.2 },
+  "google:gemini-3.6-flash": { inputPerM: 0.75, outputPerM: 3.75 },
+  "google:gemini-4-carbon": { inputPerM: 2, outputPerM: 10 },
+  "google:gemini-4-argon": { inputPerM: 2, outputPerM: 10 },
+  "google:gemini-4-hydrogen": { inputPerM: 1.5, outputPerM: 7.5 },
 };
 
 export function priceOf(modelId: string, env: Record<string, string | undefined> = process.env): Price | undefined {

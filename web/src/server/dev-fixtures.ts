@@ -32,6 +32,17 @@ export async function demoOrgKeyPair(): Promise<KeyPair> {
   return importEd25519KeyPair(DEMO_ORG.kid, jwk);
 }
 
+/**
+ * The weekly budget of the built-in demo kitchens (Laakso, Kaari, and their menu agents: the budget counts every
+ * order of the organisation, so all four mandates carry the same figure). Sized for a full day of demonstrations
+ * on one deployment without a reset: about 40 runs of the 1,000-litre example (EUR 1,400 to 1,600 each on the
+ * partner's prices and the seed) and about 40 menu orders (EUR 300 to 2,500), roughly EUR 125,000, plus headroom.
+ * The per-order limits are what make the 1,000-litre order go to a person, and they stay low (EUR 1,000 for Laakso,
+ * EUR 100 for Kaari). Visitor kitchens are fresh organisations and keep their own EUR 10,000 cap.
+ * To start a demo day with an empty week anyway, see infra/RUNBOOK.md ("Reset the demo kitchens").
+ */
+export const DEMO_WEEKLY_BUDGET_CENTS = 15_000_000;
+
 /** The demo mandate: lactose-free milk and plant drinks for a catering kitchen. */
 export function demoMandate(now: Date, overrides: Partial<Mandate> = {}): Mandate {
   return {
@@ -42,7 +53,7 @@ export function demoMandate(now: Date, overrides: Partial<Mandate> = {}): Mandat
     validUntil: addDays(now, 7).toISOString(),
     currency: "EUR",
     perOrderLimitCents: 100_000, // €1,000 alone
-    weeklyBudgetCents: 200_000, // €2,000 hard cap per 7 days
+    weeklyBudgetCents: DEMO_WEEKLY_BUDGET_CENTS, // hard cap per 7 days, sized for a day of demos (see above)
     allowedCategories: ["milk", "plant_drink"],
     requiredAttributes: ["lactose_free"],
     forbiddenAllergens: ["gluten", "nuts"],

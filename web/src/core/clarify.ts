@@ -1,3 +1,4 @@
+import { allergenOf, forbiddenPresent } from "./vocabulary";
 import { z } from "zod";
 import type { Product } from "./catalog";
 import { memoryItemIdOf, type Evidence, type LearnedPreference, type StatedPreference } from "./kitchen";
@@ -74,7 +75,9 @@ export function violation(p: Product, c: HardConstraints): string | undefined {
   if (missing.length) return `not ${missing.join(", ")}`;
   const excluded = c.excludedAttributes.filter((a) => p.attributes.includes(a));
   if (excluded.length) return `is ${excluded.join(", ")}`;
-  const allergens = p.allergens.filter((a) => c.forbiddenAllergens.includes(a));
+  const unmapped = c.forbiddenAllergens.filter((a) => !allergenOf(a));
+  if (unmapped.length) return `cannot be checked for ${unmapped.join(", ")}: no product data speaks of it`;
+  const allergens = forbiddenPresent({ present: p.allergens, claims: p.attributes }, c.forbiddenAllergens);
   if (allergens.length) return `contains ${allergens.join(", ")}`;
   if (c.forbiddenAllergens.length && p.allergenInfo?.declared === false) return `no allergen data from its maker, so it cannot be shown free of ${c.forbiddenAllergens.join(", ")}`;
   const certs = c.requiredCertificates.filter((x) => !p.certificates.includes(x));

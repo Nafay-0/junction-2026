@@ -2,7 +2,7 @@ import type { Approver, Mandate } from "./mandate";
 import type { Quote, QuoteLine } from "./quote";
 import { latestDeliveryDay } from "./kitchen";
 import { formatEur } from "./util";
-import { isMaterialAttribute } from "./vocabulary";
+import { allergenOf, forbiddenPresent, isMaterialAttribute } from "./vocabulary";
 
 /**
  * The gate. A pure function: same mandate, draft and context in, same decision out. No I/O, no clock,
@@ -29,6 +29,7 @@ export const RULES = [
   "required_attributes",
   "forbidden_allergens",
   "required_certificates",
+  "recall_hold", // no product is held by the wholesaler under a recall notice (or a recall drill)
   "delivery_deadline", // every line arrives by the need-by date and within the mandate's max lead time
   "substitution_rule", // substitutes allowed per the mandate's rule (none / same_attributes / needs_approval)
   "substitute_price", // substitute's price per unit within the tolerated increase
@@ -51,11 +52,16 @@ export type OrderDraft = {
   quote: Quote; // signature already verified
   lines: OrderDraftLine[];
   neededBy?: string; // YYYY-MM-DD, from the purchase request
+  /** Delivered exactly on this day (YYYY-MM-DD), when the request asked for a day rather than a deadline. */
+  deliverOn?: string;
   /** The request the order is placed under. A quote buys only for the request it was issued for. */
   requestId?: string;
   /** What the request asked for (orders.ts PurchaseRequest.asked): any other product is a substitute of it. */
-  asked?: { productIds: string[]; category?: string };
+  asked?: { productIds: string[]; category?: string; names?: Record<string, string> };
 };
+
+/** A product the wholesaler holds (a recall notice, a drill): no order may buy it while the hold is in force. */
+export type ProductHold = { productId: string; name?: string; reason: string; url?: string; drill?: boolean };
 
 /** An earlier order of the same organisation, as the splitting check needs it. */
 export type RecentOrder = {
@@ -88,6 +94,8 @@ export type PolicyContext = {
   quoteAlreadyUsed: boolean;
   /** Orders of this organisation in the last SPLIT_WINDOW_HOURS, for the order_splitting check. Absent: none. */
   recentOrders?: RecentOrder[];
+  /** Holds in force on the order's products (orders.ts ProductHolds). Absent: none. */
+  holds?: ProductHold[];
 };
 
 /**
@@ -162,7 +170,11 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
   lineCheck(
     "forbidden_allergens",
     (l) => {
-      const found = l.allergens.filter((a) => mandate.forbiddenAllergens.includes(a));
+      // One vocabulary with the intake and the knowledge map (core/vocabulary.ts): "tree nuts", "pähkinä" and a
+      // hazelnut are all nuts; milk without a lactose-free claim carries lactose; a word nobody can map is refused.
+      const unmapped = mandate.forbiddenAllergens.filter((a) => !allergenOf(a));
+      if (unmapped.length) return `the mandate forbids ${unmapped.join(", ")}, which Dock cannot check against product data, so nothing shows ${l.productId} is free of it.`;
+      const found = forbiddenPresent({ present: l.allergens, claims: l.attributes }, mandate.forbiddenAllergens);
       if (found.length) return `${l.productId} contains forbidden allergen(s): ${found.join(", ")}.`;
       if (mandate.forbiddenAllergens.length && l.allergensDeclared === false)
         return `${l.productId} has no allergen data from its maker, so nothing shows it is free of ${mandate.forbiddenAllergens.join(", ")}. Unknown is not safe: choose a product with declared allergens.`;
@@ -179,18 +191,34 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
     mandate.requiredCertificates.length ? `Every product carries ${mandate.requiredCertificates.join(", ")}.` : "No certificates required.",
   );
 
+  const holds = (ctx.holds ?? []).filter((h) => q.lines.some((l) => l.productId === h.productId));
+  if (holds.length)
+    add(
+      "recall_hold",
+      "fail",
+      holds.map((h) => `${h.drill ? "DRILL, not a real recall: " : ""}${h.name ?? q.lines.find((l) => l.productId === h.productId)?.name ?? h.productId} (${h.productId}) is held by the wholesaler: ${h.reason}${h.url ? ` Notice: ${h.url}` : ""}`).join(" "),
+      { holds: holds.map((h) => ({ productId: h.productId, url: h.url, drill: h.drill ?? false })) },
+    );
+  else add("recall_hold", "pass", "No product is on a recall hold.");
+
   const leadLimit = latestDeliveryDay(ctx.now, mandate.delivery.maxLeadDays); // Helsinki days, as the intake counts them
   const latest = draft.neededBy && draft.neededBy < leadLimit ? draft.neededBy : leadLimit;
   lineCheck(
     "delivery_deadline",
-    (l) => (l.deliveryDate <= latest ? null : `${l.productId} arrives ${l.deliveryDate}, after the latest acceptable date ${latest}.`),
-    `Every line arrives by ${latest}.`,
+    (l) =>
+      l.deliveryDate > latest
+        ? `${l.productId} arrives ${l.deliveryDate}, after the latest acceptable date ${latest}.`
+        : draft.deliverOn && l.deliveryDate !== draft.deliverOn
+          ? `${l.productId} arrives ${l.deliveryDate}, not on ${draft.deliverOn}, the day the request asked for.`
+          : null,
+    draft.deliverOn ? `Every line arrives on ${draft.deliverOn}, the day asked.` : `Every line arrives by ${latest}.`,
   );
 
   // Substitution. The gate works out for itself what is a substitute: a declared one, or any line that is not what
   // the request asked for (another product than the one named, or another family), declared or not.
   const askedIds = draft.asked?.productIds ?? [];
   const askedCategory = draft.asked?.category;
+  const askedName = (id: string) => (draft.asked?.names?.[id] ? `${draft.asked.names[id]} (${id})` : id);
   const undeclared = q.lines.filter(
     (l) => !l.substituteFor && ((askedIds.length > 0 && !askedIds.includes(l.productId)) || (askedCategory !== undefined && l.category !== askedCategory)),
   );
@@ -199,7 +227,7 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
   // Declared substitutes: judged against the original they name (Dock names it from the request, see orders.ts).
   let subRule: { outcome: RuleOutcome; reason: string; details?: Record<string, unknown> } = { outcome: "pass", reason: "No substitutes." };
   if (subs.length) {
-    const describe = (l: QuoteLine) => `${l.productId} substitutes for ${l.substituteFor!.productId}`;
+    const describe = (l: QuoteLine) => `${l.productId} substitutes for ${originalName(l)}`;
     const differences = subs.map((l) => attributeDifference(l)).filter((x): x is string => x !== null);
     if (rule === "none") subRule = { outcome: "fail", reason: `${subs.map(describe).join("; ")}, but the mandate allows no substitutes.` };
     else if (rule === "same_attributes")
@@ -212,7 +240,7 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
   }
   // Undeclared ones: not what was asked, with no original to compare to. Never decided by the agent alone.
   if (undeclared.length) {
-    const what = undeclared.map((l) => `${l.productId} is not what the request asked for (${askedIds.length ? askedIds.join(", ") : `category ${askedCategory}`})`).join("; ");
+    const what = undeclared.map((l) => `${l.productId} is not what the request asked for (${askedIds.length ? askedIds.map(askedName).join(", ") : `category ${askedCategory}`})`).join("; ");
     const strict = rule === "none" || rule === "same_attributes";
     const u = strict
       ? { outcome: "fail" as const, reason: `${what}, so it is a substitute, and the mandate allows ${rule === "none" ? "no substitutes" : "only like-for-like substitutes it can compare"}.` }
@@ -231,7 +259,7 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
       add(
         "substitute_price",
         "fail",
-        over.map(({ l, pct }) => `${l.productId} costs ${pct.toFixed(1)} % more per ${l.unit} than ${l.substituteFor!.productId}; the mandate tolerates ${limit} %.`).join(" "),
+        over.map(({ l, pct }) => `${l.productId} costs ${pct.toFixed(1)} % more per ${l.unit} than ${originalName(l)}; the mandate tolerates ${limit} %.`).join(" "),
         { maxPriceIncreasePct: limit, increases: over.map(({ l, pct }) => ({ productId: l.productId, pct: round1(pct) })) },
       );
     } else {
@@ -266,12 +294,25 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
   add("order_splitting", split.outcome, split.reason, split.details);
 
   const unverified = ctx.unverifiedConfirmations ?? [];
+  const CONFIRMATION_KIND: Record<string, string> = {
+    quantity_tenfold: "an amount about ten times the usual",
+    quantity_unusual: "an unusual amount",
+    unit_confusion: "a unit that may be mixed up",
+    contradicts_preference: "a request against one of the kitchen's own rules",
+    duplicate_recent: "a possible repeat of a recent order",
+    declined_before: "a product the kitchen turned down before",
+    breaks_remembered_rule: "a request against a rule the kitchen's memory holds",
+    standing_order_range: "an amount outside the kitchen's standing order",
+  };
   if (unverified.length === 0) add("human_confirmation", "pass", "No confirmation rests on the agent's word alone.");
   else
     add(
       "human_confirmation",
       "escalate",
-      `The agent relayed that ${[...new Set(unverified.map((u) => u.by))].join(", ")} confirmed ${unverified.length > 1 ? "these" : "this"} as intended, but nobody verified it: ${unverified.map((u) => u.message).join(" ")} A named person must sign it off.`,
+      // The decision is the shared record the wholesaler reads: it names what kind of check was confirmed, never the
+      // check's words, which quote the kitchen's memory (its usual amounts, its own rules). The person signing off
+      // sees the words with the order (Order.notes).
+      `The agent relayed that ${[...new Set(unverified.map((u) => u.by))].join(", ")} confirmed ${[...new Set(unverified.map((u) => CONFIRMATION_KIND[u.code] ?? "a likely mistake Dock flagged"))].join(" and ")} as intended, but nobody verified it. A named person must sign it off, with the check shown to them.`,
       { confirmations: unverified.map((u) => ({ code: u.code, by: u.by })) },
     );
 
@@ -355,7 +396,16 @@ function attributeDifference(l: QuoteLine): string | null {
   if (missing.length) parts.push(`lacks ${missing.join(", ")}`);
   const extra = l.attributes.filter((a) => /^fat_/.test(a) && isMaterialAttribute(a) && !o.attributes.includes(a));
   if (extra.length && missing.some((a) => /^fat_/.test(a))) parts.push(`has ${extra.join(", ")}`);
-  return parts.length ? `${l.productId} differs from ${o.productId}: ${parts.join("; ")}.` : null;
+  return parts.length ? `${l.productId} differs from ${originalName(l)}: ${parts.join("; ")}.` : null;
+}
+
+/**
+ * The product a substitute replaces, by name and code. Its name travels in the quote (a person reading a refusal
+ * may have only the order's own lines loaded, so a bare code for the original would be all they see).
+ */
+function originalName(l: QuoteLine): string {
+  const o = l.substituteFor!;
+  return o.name && o.name !== o.productId ? `${o.name} (${o.productId})` : o.productId;
 }
 
 /**

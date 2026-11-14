@@ -46,6 +46,7 @@ function main() {
   console.log(`Indexed ${s.products} products (${s.skipped} skipped) in ${ms} ms -> ${path.relative(process.cwd(), out)}`);
   console.log(`  file ${mb(statSync(out).size)} (${mb(json.length)} uncompressed JSON); load and decode ${loaded.loadMs} ms`);
   console.log(`  pack content certain for ${s.packCertain} (${Math.round((s.packCertain / s.products) * 100)} %); delivery reliability for ${s.withReliability}; carbon (group average) for ${s.withCarbon}`);
+  console.log(`  GTINs for ${index.products.filter((p) => p.gtins?.length).length} products (the recall radar matches EANs on them; index:publish carries them)`);
 }
 
 main();

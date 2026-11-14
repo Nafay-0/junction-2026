@@ -1,4 +1,5 @@
 import type { Product } from "@/core/catalog";
+import { allergenOf, hasAllergen } from "@/core/vocabulary";
 
 /**
  * Is a product safe for a kitchen's dietary rules? Plain code over the partner's allergen and claim data, with
@@ -55,8 +56,9 @@ export function checkSafety(p: Product, rules: DietRules): Safety {
   const checks: SafetyCheck[] = [];
   for (const { allergen, source } of rules.forbiddenAllergens) {
     const rule = `no ${text(allergen)} (${source})`;
-    if (a.contains.includes(allergen)) checks.push({ rule, verdict: "block", reason: `contains ${text(allergen)}` });
-    else if (a.mayContain.includes(allergen)) checks.push({ rule, verdict: "block", reason: `may contain ${text(allergen)}` });
+    // One vocabulary with the gate (core/vocabulary.ts): a hazelnut is a nut, milk without the claim carries lactose.
+    if (hasAllergen({ present: a.contains, claims: p.attributes }, allergen)) checks.push({ rule, verdict: "block", reason: `contains ${text(allergen)}` });
+    else if (hasAllergen({ present: a.mayContain, claims: p.attributes }, allergen)) checks.push({ rule, verdict: "block", reason: `may contain ${text(allergen)}` });
     else if (!a.declared) {
       const gate = rules.mandateAllergens.includes(allergen);
       checks.push({
@@ -106,4 +108,20 @@ export function checkSafety(p: Product, rules: DietRules): Safety {
 export function safetyProblem(s: Safety): string {
   const bad = s.checks.filter((c) => c.verdict === s.verdict);
   return bad.map((c) => `${c.reason} (rule: ${c.rule})`).join("; ");
+}
+
+/**
+ * The kitchen's rules plus what one request adds ("nut-free", "gluten-free" in the chef's words), never fewer: a
+ * request can tighten the rules, not loosen them.
+ */
+export function withRequestRules(base: DietRules, request: { forbiddenAllergens?: readonly string[]; requiredClaims?: readonly string[] }): DietRules {
+  const forbidden = [...base.forbiddenAllergens];
+  for (const w of request.forbiddenAllergens ?? []) {
+    const allergen = allergenOf(w) ?? w;
+    if (!forbidden.some((f) => f.allergen === allergen)) forbidden.push({ allergen, source: "this request" });
+  }
+  const claims = [...base.requiredClaims];
+  for (const c of request.requiredClaims ?? []) if (!claims.some((x) => x.claim === c)) claims.push({ claim: c, source: "this request" });
+  if (forbidden.length === base.forbiddenAllergens.length && claims.length === base.requiredClaims.length) return base;
+  return { ...base, forbiddenAllergens: forbidden, requiredClaims: claims };
 }

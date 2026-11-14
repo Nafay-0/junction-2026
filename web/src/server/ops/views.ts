@@ -14,6 +14,7 @@ import type { Via } from "./door";
 import { licenceSource, type LicenceRecord } from "./licences";
 import { disclose, isPrivate, type DisclosedEntry } from "./privacy";
 import { GROUPS, RULE_INFO, allRules, ruleInfo, ruleTitleOf, type RuleGroup } from "./rules";
+import { groundingStats, type GroundingStats } from "@/server/grounding";
 import { SUSPENSION_RULE, type Suspension } from "./suspensions";
 import { buildTrace, type Trace, type TraceOutcome } from "./trace";
 
@@ -32,6 +33,7 @@ function traceFor(ctx: OpsContext, requestId: string): Trace {
     catalogueSize: ctx.catalogueSize,
     orgName: ctx.orgOfRequest(requestId),
     via: ctx.viaOfRequest(requestId),
+    door: ctx.doorOfRequest(requestId),
   });
 }
 
@@ -331,6 +333,12 @@ export type Safeguards = {
   totals: { decisions: number; refused: number; sentToPerson: number };
   /** Requests read twice (server/agent/second-reader.ts): how often the readers agreed, differed, or the second was unavailable. */
   secondReading: SecondReadingStats;
+  /**
+   * The grounding check (server/grounding.ts): how often model text was checked and how often something in it had to
+   * be removed, per surface, since this server started. Also the `grounding_check` rule's row: refused = texts in which
+   * it removed something, passed = texts it let through unchanged.
+   */
+  grounding: GroundingStats;
 };
 
 export type SecondReadingStats = {
@@ -381,6 +389,7 @@ export function secondReadingStats(entries: LedgerEntry[], orgOf: (requestId: st
 
 export async function safeguards(rt: Runtime): Promise<Safeguards> {
   const ctx = await opsContext(rt);
+  const grounding = groundingStats();
   const cases = refusalCases(ctx);
   const escalations: Case[] = [];
   const passes = new Map<string, number>();
@@ -395,6 +404,10 @@ export async function safeguards(rt: Runtime): Promise<Safeguards> {
   const rows = allRules(seen).map((rule): RuleRow & { group: RuleGroup } => {
     const info = ruleInfo(rule);
     const mine = [...cases, ...escalations].filter((c) => c.rule === rule).sort((a, b) => b.seq - a.seq);
+    if (rule === "grounding_check") {
+      const t = grounding.totals;
+      return { rule, group: info.group, title: ruleTitleOf(rule), does: info.does, where: info.where, refused: t.fired, sentToPerson: 0, passed: t.checked - t.fired, recent: groundingCases(grounding) };
+    }
     return {
       rule,
       group: info.group,
@@ -446,7 +459,15 @@ export async function safeguards(rt: Runtime): Promise<Safeguards> {
     },
     totals: { decisions, refused: cases.length, sentToPerson: escalations.length },
     secondReading: secondReadingStats(ctx.entries, ctx.orgOfRequest),
+    grounding,
   };
+}
+
+const SURFACE_LABEL: Record<GroundingStats["recent"][number]["surface"], string> = { assistant: "Shop assistant", voice: "Voice agent", menu: "Menu planner", interpret: "Request reader", memory: "Kitchen memory", aiven: "Aiven agent" };
+
+/** The latest fires of the grounding check as the rule row's recent cases: what was removed, never the rest of the text. */
+function groundingCases(g: GroundingStats): Case[] {
+  return g.recent.slice(0, 3).map((f, i) => ({ at: f.at, seq: -1 - i, rule: "grounding_check", outcome: "fail" as const, orgName: SURFACE_LABEL[f.surface], agentLabel: SURFACE_LABEL[f.surface], reason: `Removed before display: ${f.said.map((x) => `"${x}"`).join(", ")} (${f.kinds.join(", ")}), not in the data.`, tried: f.said.join(", ") }));
 }
 
 // ---------- control ----------

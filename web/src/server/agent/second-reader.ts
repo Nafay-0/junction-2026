@@ -4,7 +4,8 @@ import { DockError } from "@/core/errors";
 import { fold } from "@/core/catalog/search";
 import { addDaysIso, isoWeekday, localNow } from "@/core/kitchen";
 import { NEED_UNITS, type NeedUnit } from "@/core/need";
-import { compareReadings, fieldValues, type Reading, type SecondReadingRecord, type UnavailableReason } from "@/core/second-reading";
+import { alsoAskedIn } from "@/core/also-asked";
+import { compareReadings, fieldValues, sameKind, type Reading, type ReadingRules, type SecondReadingRecord, type UnavailableReason } from "@/core/second-reading";
 import { recordLlmSpend, reserveLlmCall } from "@/server/limits";
 import type { InterpretOptions, InterpretResult } from "./interpret";
 import { createModel, ModelConfigError } from "./models";
@@ -49,8 +50,7 @@ export const SECOND_CLAIMS = ["lactose_free", "low_lactose", "organic", "vegan",
 export const SECOND_ALLERGENS = ["milk", "eggs", "gluten", "wheat", "nuts", "peanuts", "soy", "fish", "crustaceans", "molluscs", "sesame", "mustard", "celery", "lupin", "sulphites", "oats"] as const;
 const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
 
-export const SecondRead = z.object({
-  isPurchaseRequest: z.boolean(),
+const SecondItem = z.object({
   item: z.string().nullable(),
   amount: z.number().nullable(),
   unit: z.enum(NEED_UNITS).nullable(),
@@ -58,6 +58,13 @@ export const SecondRead = z.object({
   wanted: z.array(z.enum(SECOND_CLAIMS)),
   notWanted: z.array(z.enum(SECOND_CLAIMS)),
   avoid: z.array(z.enum(SECOND_ALLERGENS)),
+});
+export type SecondItem = z.infer<typeof SecondItem>;
+
+/** One entry in `items` per product the words ask for (usually one); the day is the request's. */
+export const SecondRead = z.object({
+  isPurchaseRequest: z.boolean(),
+  items: z.array(SecondItem),
   deliveryDate: z.object({ day: z.number().int(), month: z.number().int().nullable() }).nullable(),
   deliveryWeekday: z.enum(WEEKDAYS).nullable(),
   deliveryRelative: z.enum(["today", "tomorrow", "day_after_tomorrow"]).nullable(),
@@ -108,12 +115,17 @@ const ITEM_CLAIMS: [RegExp, (typeof SECOND_CLAIMS)[number]][] = [
   [/vegan|vegaan/, "vegan"],
 ];
 
-export function toReading(raw: SecondRead, now: Date): Reading {
+/** Every item of the transcription as a reading, with the request's day. */
+export function toReadings(raw: SecondRead, now: Date): Reading[] {
+  const day = deliveryDay(raw, now);
+  return raw.items.map((it) => itemReading(it, day));
+}
+
+function itemReading(raw: SecondItem, day: string | undefined): Reading {
   const folded = fold(raw.item ?? "");
   const fromItem = /\b(not|ei|inte)\b/.test(folded) ? [] : ITEM_CLAIMS.filter(([re]) => re.test(folded)).map(([, c]) => c);
   raw = { ...raw, wanted: [...raw.wanted, ...fromItem.filter((c) => !raw.notWanted.includes(c))] };
   const amount = raw.amount && raw.amount > 0 && raw.amount <= 1_000_000 && raw.unit ? { amount: raw.amount, unit: raw.unit } : undefined;
-  const day = deliveryDay(raw, now);
   const notWanted = [...new Set(raw.notWanted)];
   return {
     item: { text: raw.item?.trim() ?? "", attributes: [...new Set(raw.wanted)].filter((c) => !notWanted.includes(c)), excludedAttributes: notWanted },
@@ -145,7 +157,7 @@ export function readingOf(n: unknown): Reading | undefined {
 
 // ---------- the call ----------
 
-export type SecondOutcome = { ok: true; reading: Reading; raw: SecondRead; model: string; ms: number; costUsd: number | null } | { ok: false; reason: UnavailableReason; detail: string; model: string; ms: number };
+export type SecondOutcome = { ok: true; readings: Reading[]; raw: SecondRead; model: string; ms: number; costUsd: number | null } | { ok: false; reason: UnavailableReason; detail: string; model: string; ms: number };
 
 type ModelChoice = string | { model: LanguageModel; id: string; price?: Price };
 const idOf = (m: ModelChoice) => (typeof m === "string" ? m.replace(/#think$/, "") : m.id);
@@ -210,7 +222,8 @@ export async function readSecondTime(opts: { text: string; now?: Date; signal?: 
   const parsed = SecondRead.safeParse(res.output);
   if (!parsed.success) return { ok: false, reason: "unreadable", detail: "The second reader's answer did not fit its fields.", model: id, ms: Date.now() - t0 };
   if (!parsed.data.isPurchaseRequest) return { ok: false, reason: "not_a_purchase", detail: "The second reader did not read this as an order.", model: id, ms: Date.now() - t0 };
-  return { ok: true, reading: toReading(parsed.data, now), raw: parsed.data, model: id, ms: Date.now() - t0, costUsd };
+  if (!parsed.data.items.length) return { ok: false, reason: "unreadable", detail: "The second reader named no item.", model: id, ms: Date.now() - t0 };
+  return { ok: true, readings: toReadings(parsed.data, now), raw: parsed.data, model: id, ms: Date.now() - t0, costUsd };
 }
 
 export type ReadTwice = { first: InterpretResult; second?: SecondReadingRecord };
@@ -240,10 +253,33 @@ export async function readTwice(
   return { first, second: recordOf(first, o, opts.text, Math.max(0, at - firstAt), (cfg.now ?? (() => new Date()))()) };
 }
 
+/**
+ * The record of the two readings. The first reading is one need, for one item; the second reader transcribes every
+ * item the words name, and the one compared is the item of the same kind (core/second-reading.ts sameKind). Plain code
+ * (core/also-asked.ts) says what else the words ask for: when the second reader read only other items, nothing is
+ * compared (no question; recorded as "other_item"), and when the words ask for the same again on another day, the day
+ * is not compared.
+ */
 export function recordOf(first: Pick<InterpretResult, "need" | "model">, o: SecondOutcome, text: string, waitedMs: number, at: Date): SecondReadingRecord {
   const firstReading = readingOf(first.need)!;
   const common = { firstModel: first.model, secondModel: o.model, waitedMs, firstValues: fieldValues(firstReading), at: at.toISOString() };
   if (!o.ok) return { ...common, status: "unavailable", reason: o.reason, detail: o.detail, secondMs: o.ms, differences: [], minor: [] };
-  const c = compareReadings(firstReading, o.reading, { text, today: localNow(at).date });
-  return { ...common, status: c.agreed ? "agreed" : "differed", secondMs: o.ms, differences: c.differences, minor: c.minor };
+  const pick = secondFor(first.need, o.readings, text);
+  if (!pick.reading) return { ...common, status: "unavailable", reason: "other_item", detail: "The words name several items, and the second reader read only others than this request's.", secondMs: o.ms, differences: [], minor: pick.minor };
+  const c = compareReadings(firstReading, pick.reading, { text, today: localNow(at).date, rules: pick.rules });
+  return { ...common, status: c.agreed ? "agreed" : "differed", secondMs: o.ms, differences: c.differences, minor: [...pick.minor, ...c.minor] };
+}
+
+/** Which of the second reader's items to compare with the first reading, and with which rules (see recordOf). */
+export function secondFor(firstNeed: unknown, readings: Reading[], text: string): { reading?: Reading; rules: Partial<ReadingRules>; minor: string[] } {
+  const firstReading = readingOf(firstNeed)!;
+  const also = alsoAskedIn(text, firstReading);
+  const several = also.length > 0 || readings.length > 1;
+  const reading = several ? readings.find((r) => sameKind(firstReading, r)) : readings[0];
+  const repeat = also.some((x) => x.group === "repeat");
+  return {
+    reading,
+    rules: repeat ? { compareDate: false } : {},
+    minor: [...(several ? [`the words name ${Math.max(also.length + 1, readings.length)} items; only the same item is compared`] : []), ...(repeat ? ["the words ask for a second delivery: the day is not compared"] : [])],
+  };
 }

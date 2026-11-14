@@ -5,7 +5,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DockError } from "@/core/errors";
 import { dailyUsage, reserveLlmCall, resetDailyUsage } from "../limits";
 import { interpretNeed, type LlmNeed } from "./interpret";
-import { deliveryDay, extraBodyFor, readTwice, secondReaderModel, toReading, unavailableReason, type SecondRead } from "./second-reader";
+import { deliveryDay, extraBodyFor, readTwice, secondReaderModel, toReadings, unavailableReason, type SecondItem, type SecondRead } from "./second-reader";
+
+/** The transcription with its one item changed. */
+const item = (over: Partial<SecondItem>): SecondRead => ({ ...READ, items: [{ ...ITEM, ...over }] });
 
 /**
  * The second reader with scripted models: the comparison when it answers, and every way it can fail open. The first
@@ -24,15 +27,10 @@ const MILK: LlmNeed = {
   optimise: "unstated",
   sameAsLastTime: false,
 };
+const ITEM: SecondItem = { item: "lactose-free milk", amount: 1000, unit: "L", packSize: null, wanted: ["lactose_free"], notWanted: [], avoid: [] };
 const READ: SecondRead = {
   isPurchaseRequest: true,
-  item: "lactose-free milk",
-  amount: 1000,
-  unit: "L",
-  packSize: null,
-  wanted: ["lactose_free"],
-  notWanted: [],
-  avoid: [],
+  items: [ITEM],
   deliveryDate: null,
   deliveryWeekday: "monday",
   deliveryRelative: null,
@@ -85,7 +83,7 @@ describe("readTwice", () => {
   });
 
   it("they differ on the amount: the record names the field and both readings; the need is untouched", async () => {
-    const r = await run(answers({ ...READ, amount: 1 }));
+    const r = await run(answers(item({ amount: 1 })));
     expect(r.first.need.quantity).toEqual({ amount: 1000, unit: "L" });
     expect(r.second).toMatchObject({ status: "differed", differences: [{ field: "amount", first: "1,000 L", second: "1 L" }] });
   });
@@ -115,7 +113,7 @@ describe("readTwice", () => {
 
   it("returns something unreadable: unavailable, unreadable", async () => {
     expect((await run(async () => "I think the buyer wants milk.")).second).toMatchObject({ status: "unavailable", reason: "unreadable" });
-    expect((await run(answers({ ...READ, unit: "litres" }))).second).toMatchObject({ status: "unavailable", reason: "unreadable" });
+    expect((await run(answers(item({ unit: "litres" as never })))).second).toMatchObject({ status: "unavailable", reason: "unreadable" });
   });
 
   it("reads it as not a purchase: no question, recorded as unavailable", async () => {
@@ -123,7 +121,7 @@ describe("readTwice", () => {
   });
 
   it("finds no amount: a missing amount in the second reading is not a difference", async () => {
-    const r = await run(answers({ ...READ, amount: null, unit: null }));
+    const r = await run(answers(item({ amount: null, unit: null })));
     expect(r.second).toMatchObject({ status: "agreed" });
   });
 
@@ -140,6 +138,25 @@ describe("readTwice", () => {
     const seen: LanguageModelV4CallOptions[] = [];
     await expect(run(hangs, { firstGen: throws(400, "Bad request"), seen })).rejects.toMatchObject({ code: "interpret_failed" });
     expect(seen[0].abortSignal?.aborted).toBe(true);
+  });
+
+  it("several items: the second reading of the same item is compared, and the others are no disagreement", async () => {
+    const text = "I need 1,000 litres of lactose-free milk and 20 kg of butter by Monday.";
+    const both: SecondRead = { ...READ, items: [{ ...ITEM, item: "butter", amount: 20, unit: "kg", wanted: [] }, ITEM] };
+    const r = await readTwice(interpretNeed, { text, now: NOW, model: scripted("first", answers(MILK)) }, { model: scripted(NEMO, answers(both)), deadlineMs: 2000 });
+    expect(r.second).toMatchObject({ status: "agreed" });
+    expect(r.second!.minor[0]).toMatch(/only the same item is compared/);
+    // The second reader read only the butter: nothing to compare, and no question.
+    const butter: SecondRead = { ...READ, items: [{ ...ITEM, item: "butter", amount: 20, unit: "kg", wanted: [] }] };
+    const r2 = await readTwice(interpretNeed, { text, now: NOW, model: scripted("first", answers(MILK)) }, { model: scripted(NEMO, answers(butter)), deadlineMs: 2000 });
+    expect(r2.second).toMatchObject({ status: "unavailable", reason: "other_item", differences: [] });
+  });
+
+  it("the same again on another day: the day is not compared", async () => {
+    const text = "I need 1,000 litres of lactose-free milk by Monday, and the same again on Thursday.";
+    const thursday: SecondRead = { ...READ, deliveryWeekday: "thursday" };
+    const r = await readTwice(interpretNeed, { text, now: NOW, model: scripted("first", answers(MILK)) }, { model: scripted(NEMO, answers(thursday)), deadlineMs: 2000 });
+    expect(r.second).toMatchObject({ status: "agreed" });
   });
 
   it("off without a model: the first reading alone, no record", async () => {
@@ -168,12 +185,12 @@ describe("the transcription, by plain code", () => {
   });
 
   it("packs with a written pack size keep the size, for the comparison", () => {
-    const r = toReading({ ...READ, amount: 100, unit: "pack", packSize: { amount: 10, unit: "L" } }, NOW);
+    const [r] = toReadings(item({ amount: 100, unit: "pack", packSize: { amount: 10, unit: "L" } }), NOW);
     expect(r).toMatchObject({ quantity: { amount: 100, unit: "pack" }, packSize: { amount: 10, unit: "L" } });
   });
 
   it("a claim both wanted and not wanted counts as not wanted", () => {
-    expect(toReading({ ...READ, wanted: ["lactose_free"], notWanted: ["lactose_free"] }, NOW).item).toMatchObject({ attributes: [], excludedAttributes: ["lactose_free"] });
+    expect(toReadings(item({ wanted: ["lactose_free"], notWanted: ["lactose_free"] }), NOW)[0].item).toMatchObject({ attributes: [], excludedAttributes: ["lactose_free"] });
   });
 });
 

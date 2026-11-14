@@ -14,7 +14,8 @@ export type LedgerEntryType =
   | "approval_requested" // a human was asked to sign off
   | "approval" // a human approved or declined
   | "order" // an order was committed at the quoted price
-  | "refusal"; // a call was refused before reaching the policy (bad mandate, forged quote, bad approval proof)
+  | "refusal" // a call was refused before reaching the policy (bad mandate, forged quote, bad approval proof)
+  | "control"; // the wholesaler's operations staff suspended or resumed an agent or a kitchen
 
 export type LedgerInput = {
   type: LedgerEntryType;

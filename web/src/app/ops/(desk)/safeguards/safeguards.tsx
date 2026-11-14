@@ -258,7 +258,7 @@ function Rule({ r }: { r: Safeguards["groups"][number]["rules"][number] }) {
   );
 }
 
-const UNAVAILABLE: Record<string, string> = { timeout: "late", at_capacity: "provider at capacity", failed: "failed", unreadable: "unreadable answer", over_limit: "daily model limit", not_a_purchase: "not read as an order", not_configured: "not configured" };
+const UNAVAILABLE: Record<string, string> = { timeout: "late", at_capacity: "provider at capacity", failed: "failed", unreadable: "unreadable answer", over_limit: "daily model limit", not_a_purchase: "not read as an order", not_configured: "not configured", other_item: "read another of several items" };
 
 /**
  * The second reader: every request a model reads is read again, at the same moment, by an independent open-weights

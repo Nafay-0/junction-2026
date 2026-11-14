@@ -31,7 +31,7 @@ import { fold } from "@/core/catalog/search";
 import { localNow } from "@/core/kitchen";
 import { compareReadings, readingFacts, READING_RULES, type ReadField, type Reading, type ReadingRules } from "@/core/second-reading";
 import { interpretNeed, vocabularyFrom } from "@/server/agent/interpret";
-import { readingOf, readSecondTime, SECOND_READER_DEADLINE_MS, NEMOTRON_NO_THINKING, toReading, unavailableReason, type SecondRead } from "@/server/agent/second-reader";
+import { readingOf, readSecondTime, SECOND_READER_DEADLINE_MS, NEMOTRON_NO_THINKING, secondFor, toReadings, unavailableReason, type SecondRead } from "@/server/agent/second-reader";
 import { DockError } from "@/core/errors";
 import { buildCatalog } from "@/server/runtime";
 import { demoMandate } from "@/server/dev-fixtures";
@@ -179,20 +179,28 @@ const quantile = (xs: number[], q: number) => {
   return s[Math.min(s.length - 1, Math.floor(q * s.length))];
 };
 
-function asReading(rec: Recorded, now: Date): Reading | undefined {
-  if (!rec.ok) return undefined;
-  if (!rec.raw) return readingOf(rec.need);
-  // Readings of the first transcription design (~transcribe-v1, -v2) kept the day in one "delivery" object.
-  const old = (rec.raw as unknown as { delivery?: { kind: string; weekday: string | null; day: number | null; month: number | null } }).delivery;
-  const raw = old
-    ? {
-        ...rec.raw,
-        deliveryDate: old.kind === "date" && old.day ? { day: old.day, month: old.month } : null,
-        deliveryWeekday: old.kind === "weekday" ? (old.weekday as SecondRead["deliveryWeekday"]) : null,
-        deliveryRelative: ["today", "tomorrow", "day_after_tomorrow"].includes(old.kind) ? (old.kind as SecondRead["deliveryRelative"]) : null,
-      }
-    : rec.raw;
-  return toReading(raw, now);
+/** The second reading to compare, as production picks it (secondFor), and the rules it is compared with. */
+function asSecond(rec: Recorded, first: unknown, text: string, now: Date): { reading?: Reading; rules: Partial<ReadingRules> } {
+  if (!rec.ok) return { rules: {} };
+  if (!rec.raw) return { reading: readingOf(rec.need), rules: {} };
+  // Readings of earlier designs kept one item flat, and (~transcribe-v1, -v2) the day in one "delivery" object.
+  const raw0 = rec.raw as unknown as Record<string, unknown> & { delivery?: { kind: string; weekday: string | null; day: number | null; month: number | null } };
+  const old = raw0.delivery;
+  const raw = {
+    ...raw0,
+    ...(old
+      ? {
+          deliveryDate: old.kind === "date" && old.day ? { day: old.day, month: old.month } : null,
+          deliveryWeekday: old.kind === "weekday" ? old.weekday : null,
+          deliveryRelative: ["today", "tomorrow", "day_after_tomorrow"].includes(old.kind) ? old.kind : null,
+        }
+      : {}),
+    items: Array.isArray(raw0.items) ? raw0.items : [{ item: raw0.item, amount: raw0.amount, unit: raw0.unit, packSize: raw0.packSize, wanted: raw0.wanted, notWanted: raw0.notWanted, avoid: raw0.avoid }],
+  } as unknown as SecondRead;
+  const readings = toReadings(raw, now);
+  if (!first) return { reading: readings[0], rules: {} };
+  const pick = secondFor(first, readings, text);
+  return { reading: pick.reading, rules: pick.rules };
 }
 
 function score(set: Case[], readings: Readings, second: string, rules: ReadingRules, deadlineMs: number, now: Date) {
@@ -222,7 +230,9 @@ function score(set: Case[], readings: Readings, second: string, rules: ReadingRu
     const f = firsts[c.id];
     const s = seconds[c.id];
     const fr = f?.ok ? readingOf(f.need) : undefined;
-    let sr = s?.ok ? asReading(s, now) : undefined;
+    const picked = s?.ok ? asSecond(s, f?.ok ? f.need : undefined, c.text, now) : { rules: {} };
+    let sr = picked.reading;
+    const rulesHere = { ...rules, ...picked.rules };
     if (s) {
       ms.push(s.ms);
       if (f) waited.push(Math.max(0, Math.min(s.ms, deadlineMs) - f.ms));
@@ -243,7 +253,7 @@ function score(set: Case[], readings: Readings, second: string, rules: ReadingRu
       continue;
     }
     const fWrong = fieldsWrong(fr, c.expect);
-    const cmp = sr ? compareReadings(fr, sr, { text: c.text, today, rules }) : undefined;
+    const cmp = sr ? compareReadings(fr, sr, { text: c.text, today, rules: rulesHere }) : undefined;
     if (!fWrong.length) {
       firstRight++;
       if (cmp && !cmp.agreed) {
@@ -269,7 +279,7 @@ function score(set: Case[], readings: Readings, second: string, rules: ReadingRu
         b.n++;
         if (!sr) continue;
         injectedWithSecond++;
-        const got = compareReadings(bad, sr, { text: c.text, today, rules }).differences.some((d) => d.field === inj.field);
+        const got = compareReadings(bad, sr, { text: c.text, today, rules: rulesHere }).differences.some((d) => d.field === inj.field);
         if (got) {
           injectedCaught++;
           b.caught++;

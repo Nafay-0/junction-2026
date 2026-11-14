@@ -29,6 +29,8 @@ export const NeedSchema = z
     }),
     quantity: z.object({ amount: z.number().positive().max(1_000_000), unit: z.enum(NEED_UNITS) }).optional(),
     deliverBy: z.iso.date().optional(), // latest acceptable delivery date
+    /** Exactly this day ("on Monday", not "by Monday"): every line is delivered that day. Sets deliverBy to the same day. */
+    deliverOn: z.iso.date().optional(),
     requiredClaims: z.array(tag).max(10).default([]), // "lactose_free", "organic"
     requiredLabels: z.array(tag).max(10).optional(), // certificates and labels: "hyvaa_suomesta", "msc"
     forbiddenAllergens: z.array(tag).max(10).default([]),
@@ -73,6 +75,11 @@ export function normaliseNeed(need: StructuredNeed): { need: StructuredNeed; cha
   if (labels.size) n.requiredLabels = [...labels];
   else delete n.requiredLabels;
   n.forbiddenAllergens = [...forbidden];
+  // "On Monday" is also "by Monday": every deadline check reads deliverBy, and the delivery day is pinned to deliverOn.
+  if (n.deliverOn && n.deliverBy !== n.deliverOn) {
+    if (n.deliverBy) changes.push(`deliver by ${n.deliverBy} read as deliver on ${n.deliverOn}, the exact day asked`);
+    n.deliverBy = n.deliverOn;
+  }
   return { need: NeedSchema.parse(n), changes };
 }
 
@@ -89,8 +96,13 @@ export type NeedPatch = {
 export function applyNeedPatch(need: StructuredNeed, patch: NeedPatch): StructuredNeed {
   const next = structuredClone(need);
   if (patch.quantity) next.quantity = { ...patch.quantity };
-  if (patch.deliverBy === null) delete next.deliverBy;
-  else if (patch.deliverBy) next.deliverBy = patch.deliverBy;
+  if (patch.deliverBy === null) {
+    delete next.deliverBy;
+    delete next.deliverOn;
+  } else if (patch.deliverBy) {
+    next.deliverBy = patch.deliverBy;
+    if (next.deliverOn) next.deliverOn = patch.deliverBy; // a corrected day moves an exact day with it
+  }
   if (patch.item) {
     if (patch.item.productId === null) delete next.item.productId;
     else if (patch.item.productId) next.item.productId = patch.item.productId;
@@ -156,7 +168,8 @@ export function describeNeed(n: StructuredNeed): string {
   if (n.item.excludedAttributes.length) parts.push(`not ${n.item.excludedAttributes.join(", ")}`);
   if (n.item.productId) parts.push(`product ${n.item.productId}`);
   if (n.forbiddenAllergens.length) parts.push(`no ${n.forbiddenAllergens.join(", ")}`);
-  if (n.deliverBy) parts.push(`deliver by ${n.deliverBy}`);
+  if (n.deliverOn) parts.push(`deliver on ${n.deliverOn}`);
+  else if (n.deliverBy) parts.push(`deliver by ${n.deliverBy}`);
   if (n.sameAsLastTime) parts.push("same as last time");
   parts.push(n.optimise === "unstated" ? "nothing said about price or CO2" : `optimise: ${n.optimise.replace("_", " ")}`);
   return parts.join("; ");

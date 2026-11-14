@@ -77,6 +77,8 @@ export type ReadingRules = {
   askExcludedAgainstUnstated: boolean;
   /** Compare the kind of product at all. */
   compareKind: boolean;
+  /** Compare the delivery day (off when the words ask for a second delivery on another day). */
+  compareDate: boolean;
   /** Compare fat content (two different fat contents stated). Not a dietary or allergen claim. */
   compareFat: boolean;
   /**
@@ -96,6 +98,7 @@ export const READING_RULES: ReadingRules = {
   askWhenOnlyFirstHasClaim: false,
   askExcludedAgainstUnstated: false,
   compareKind: true,
+  compareDate: true,
   compareFat: false,
   onlyWhatTheWordsSay: true,
 };
@@ -414,6 +417,11 @@ function sameStem(x: string, y: string): boolean {
   return n >= 4 && x.slice(0, n) === y.slice(0, n);
 }
 
+/** Are two readings about the same kind of product (the item words and product codes agree)? */
+export function sameKind(a: Reading, b: Reading): boolean {
+  return !compareKind(a, b);
+}
+
 function compareKind(a: Reading, b: Reading): ReadingDifference | undefined {
   const pa = a.item.productId?.trim();
   const pb = b.item.productId?.trim();
@@ -482,7 +490,7 @@ export function compareReadings(first: Reading, second: Reading, opts: { text?: 
     compareClaims(first, second, opts.text ?? "", rules, minor),
     compareAllergens(first, second, opts.text ?? "", rules, minor),
     rules.compareKind ? compareKind(first, second) : undefined,
-    compareDate(first, second, opts.text ?? "", opts.today, rules, minor),
+    rules.compareDate ? compareDate(first, second, opts.text ?? "", opts.today, rules, minor) : undefined,
   ].filter((d): d is ReadingDifference => !!d);
   return { agreed: differences.length === 0, differences, minor };
 }
@@ -492,7 +500,7 @@ export function compareReadings(first: Reading, second: Reading, opts: { text?: 
 export type SecondReadingStatus = "agreed" | "differed" | "unavailable";
 
 /** Why the second reader gave nothing to compare. */
-export type UnavailableReason = "timeout" | "at_capacity" | "failed" | "unreadable" | "over_limit" | "not_a_purchase" | "not_configured";
+export type UnavailableReason = "timeout" | "at_capacity" | "failed" | "unreadable" | "over_limit" | "not_a_purchase" | "not_configured" | "other_item";
 
 /** What the intake keeps of the two readings: shown in the lane, written to the ledger, counted on the safeguards page. */
 export type SecondReadingRecord = {

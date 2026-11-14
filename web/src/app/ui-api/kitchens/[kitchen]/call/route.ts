@@ -1,5 +1,6 @@
 import * as interpret from "@/app/api/v1/agent/interpret/route";
 import { consoleKitchen, refusalResponse } from "@/server/authz";
+import { storeDoorFor } from "@/server/assistant-handoff";
 import { attachConsoleContext } from "@/server/console-context";
 import { errorBody } from "@/server/http";
 import { getRuntime } from "@/server/runtime";
@@ -52,7 +53,9 @@ export async function POST(req: Request, ctx: RouteContext<"/ui-api/kitchens/[ki
 
   // In-process: the same route handlers, no network hop and no assumption about this server's own address.
   const forwarded = new Request(new URL(path, "http://dock.local"), init);
-  attachConsoleContext(forwarded, k.console);
+  // Which part of the store a request came from: the assistant panel when its words are what the assistant just handed over.
+  const door = path === "/api/v1/intake" ? storeDoorFor(k.info.slug, k.console.session, (call.body as { need?: { text?: unknown } } | undefined)?.need?.text) : "typed";
+  attachConsoleContext(forwarded, { ...k.console, door });
   const res = path === "/api/v1/agent/interpret" ? await interpret.POST(forwarded) : await localFetch(forwarded);
   const text = await res.text();
   const out: Record<string, string> = { "content-type": res.headers.get("content-type") ?? "application/json", "cache-control": "no-store" };

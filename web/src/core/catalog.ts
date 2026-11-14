@@ -158,6 +158,8 @@ export class CatalogError extends Error {
   constructor(
     readonly code: CatalogErrorCode,
     message: string,
+    /** live_unavailable: when the wholesaler's service says (or Dock judges) it is worth trying again, in seconds. */
+    readonly retryAfterSeconds?: number,
   ) {
     super(message);
     this.name = "CatalogError";
@@ -294,4 +296,12 @@ export class InMemoryCatalog implements CatalogPort {
 
 function normalize(text: string): string {
   return text.toLowerCase().replace(/[-_]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * An offer for a request that asked for an exact day: available earlier, it is delivered on that day (the wholesaler
+ * delivers on the day asked, never before it can). Available only later, it stays later, and the day is missed.
+ */
+export function scheduledOn<T extends { deliveryDate: string }>(offer: T, day: string | undefined): T {
+  return day && offer.deliveryDate < day ? { ...offer, deliveryDate: day } : offer;
 }
