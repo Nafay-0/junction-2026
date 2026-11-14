@@ -4,7 +4,7 @@ import { Check, ChevronDown, ScanFace, Sparkles } from "lucide-react";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useFormat, useText } from "../../_i18n/provider";
 import { clock, money } from "../../_ui/plain";
-import type { AgentTurn, BuyerTurn, GateCard as GateCardT, OfferCard, OptionView, OrderCard, Thread, ThreadAction, ThreadStep, TodayCard } from "@/server/thread/types";
+import type { AgentTurn, BuyerTurn, GateCard as GateCardT, OfferCard, ScenarioCard, WatchCard, OptionView, OrderCard, Thread, ThreadAction, ThreadStep, TodayCard } from "@/server/thread/types";
 import { usePortal } from "./portal";
 import { THREAD_LINE_TEXT } from "./thread-line.text";
 import { useSignOff } from "./thread-signoff";
@@ -51,7 +51,8 @@ export function Rich({ text }: { text: string }) {
             {p.slice(2, -2)}
           </span>
         ) : (
-          <Fragment key={i}>{p}</Fragment>
+          // An unmarked amount never wraps mid-number ("1 010,00 €").
+          <Fragment key={i}>{p.replace(/(\d) (?=\d{3}\b)/g, "$1\u00a0").replace(/(\d) (€|%|L|l|kg)(?![\p{L}])/gu, "$1\u00a0$2")}</Fragment>
         ),
       )}
     </>
@@ -88,11 +89,11 @@ export function ThreadLine({ className = "", landing = false }: { className?: st
       <ol role="log" aria-live="polite" aria-label="Conversation with the purchasing agent" className={`relative flex flex-col gap-7 pl-9 ${onlyOpening && landing ? "min-h-[50dvh] justify-end" : ""}`}>
         {onlyOpening && landing ? (
           <li>
-            <Landing today={opening?.cards.find((c): c is TodayCard => c.type === "today")} offer={opening?.cards.find((c): c is OfferCard => c.type === "offer")} thread={t} />
+            <Landing today={opening?.cards.find((c): c is TodayCard => c.type === "today")} offer={opening?.cards.find((c): c is OfferCard => c.type === "offer")} watch={opening?.cards.find((c): c is WatchCard => c.type === "watch")} thread={t} />
           </li>
         ) : (
           turns.map((x) =>
-            x.role === "agent" && x === opening && !onlyOpening && !x.cards.some((c) => (c.type === "today" && c.items.length > 0) || c.type === "offer") ? null : x.role === "buyer" ? (
+            x.role === "agent" && x === opening && !onlyOpening && !x.cards.some((c) => (c.type === "today" && c.items.length > 0) || c.type === "offer" || c.type === "watch") ? null : x.role === "buyer" ? (
               <BuyerLine key={x.turnId} turn={x} />
             ) : queued.has(x.turnId) ? (
               <QueuedNode key={x.turnId} />
@@ -151,17 +152,27 @@ function QueuedNode() {
   );
 }
 
+/** The store's formats, with English days as people write them ("Mon 16 Nov"); Finnish and Swedish keep "ma 16.11.". */
+function useThreadFormat() {
+  const f = useFormat();
+  if (f.lang !== "en") return f;
+  const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  return { ...f, day: (iso: string) => { const d = new Date(`${iso.slice(0, 10)}T12:00:00Z`); return `${WD[d.getUTCDay()]} ${d.getUTCDate()} ${MON[d.getUTCMonth()]}`; } };
+}
+
 // ---------- one reply of the agent ----------
 
 function AgentNode({ turn, thread, tap, busy, latest }: { turn: AgentTurn; thread: Thread; tap: Tap; busy: boolean; latest: boolean }) {
   const tx = useText(THREAD_LINE_TEXT);
   const w = useText(THREAD_WORDS);
-  const f = useFormat();
+  const f = useThreadFormat();
   const cards = turn.cards;
   const today = cards.find((c): c is TodayCard => c.type === "today");
   const running = turn.steps.findLast((s) => s.status === "running");
   if (turn.status === "working" && !turn.line && !cards.some((c) => c.type !== "understood")) return <WorkingNode label={running ? stepLabel(running, w, f.lang) : undefined} />;
-  const text = turn.line || (today ? todaySentence(today, tx, f) : fallbackLine(turn, thread, tx, f));
+  // While it works, the agent's own words are still coming: no stand-in text from the cards until it has finished.
+  const text = turn.line || (today ? todaySentence(today, tx, f) : turn.status === "working" ? "" : fallbackLine(turn, thread, tx, f));
   const thinks = thinking(turn, thread, tx, w, f);
   return (
     <li className="tl-in relative">
@@ -173,7 +184,9 @@ function AgentNode({ turn, thread, tap, busy, latest }: { turn: AgentTurn; threa
           <Rich text={text} />
         </p>
       )}
-      {turn.status === "working" && running && <p className="tl-sheen mt-1 text-[0.9rem] font-medium text-petrol">{stepLabel(running, w, f.lang)}</p>}
+      {turn.status === "working" && (running || !text) && <p className="tl-sheen mt-1 text-[0.9rem] font-medium text-petrol">{running ? stepLabel(running, w, f.lang) : tx.working}</p>}
+      {cards.map((c) => (c.type === "scenario" && c.state === "open" && !(turn.line ?? "").includes(c.text[f.lang].say.slice(0, 24)) ? <ScenarioWords key={c.cardId} card={c} lang={f.lang} /> : null))}
+      {cards.map((c) => (c.type === "watch" && c.state !== "answered" && !(turn.line ?? "").includes(c.text[f.lang].say.slice(0, 24)) ? <WatchWords key={c.cardId} card={c} lang={f.lang} /> : null))}
       {cards.map((c) => (c.type === "offer" && c.state === "open" && !(turn.line ?? "").includes(c.text[f.lang].say.slice(0, 24)) ? <OfferWords key={c.cardId} card={c} lang={f.lang} /> : null))}
       {latest && <Choices turn={turn} thread={thread} tap={tap} busy={busy} />}
       <Lists turn={turn} thread={thread} />
@@ -190,7 +203,7 @@ function AgentNode({ turn, thread, tap, busy, latest }: { turn: AgentTurn; threa
 function Choices({ turn, thread, tap, busy }: { turn: AgentTurn; thread: Thread; tap: Tap; busy: boolean }) {
   const tx = useText(THREAD_LINE_TEXT);
   const w = useText(THREAD_WORDS);
-  const f = useFormat();
+  const f = useThreadFormat();
   const wf = fmtFor(f.lang);
   const rows: { key: string; title: string; price?: string; differs?: string; action: ThreadAction }[] = [];
   for (const c of turn.cards) {
@@ -207,9 +220,13 @@ function Choices({ turn, thread, tap, busy }: { turn: AgentTurn; thread: Thread;
       if (q) for (const o of q.options.slice(0, 3)) rows.push({ key: o.id, title: o.label, action: { type: "answer", requestId: c.requestId, questionId: q.id, optionId: o.id } });
     } else if (c.type === "anomaly" && !c.answered) {
       const k = c.concerns[0];
+      // Several items in one message: a choice names its item, so a chip is never without context.
+      const several = turn.cards.filter((x) => x.type === "understood").length > 1;
+      const item = several ? turn.cards.find((x) => x.type === "understood" && x.requestId === c.requestId) : undefined;
+      const of = item?.type === "understood" ? `${item.item}: ` : "";
       if (k) {
-        if (k.confirmable) rows.push({ key: "confirm", title: tx.asSaid, action: { type: "concern", requestId: c.requestId, key: k.key, choice: "confirm" } });
-        for (const x of k.corrections.slice(0, 2)) rows.push({ key: x.id, title: correctionLabel(x, w, wf, f.lang), action: { type: "concern", requestId: c.requestId, key: k.key, choice: x.id } });
+        if (k.confirmable) rows.push({ key: "confirm", title: `${of}${tx.asSaid}`, action: { type: "concern", requestId: c.requestId, key: k.key, choice: "confirm" } });
+        for (const x of k.corrections.slice(0, 2)) rows.push({ key: x.id, title: `${of}${correctionLabel(x, w, wf, f.lang)}`, action: { type: "concern", requestId: c.requestId, key: k.key, choice: x.id } });
       }
     }
   }
@@ -248,7 +265,7 @@ function perUnitOf(o: OptionView, f: ReturnType<typeof useFormat>): string | und
 
 function Lists({ turn, thread }: { turn: AgentTurn; thread: Thread }) {
   const tx = useText(THREAD_LINE_TEXT);
-  const f = useFormat();
+  const f = useThreadFormat();
   const lists: { key: string; rows: { item: string; amount?: string; total?: string }[]; total?: string }[] = [];
   const fromSheet = new Set(thread.turns.flatMap((x) => (x.role === "agent" ? x.cards.flatMap((c) => (c.type === "sheet" && c.orderId ? [c.orderId] : [])) : [])));
   for (const c of turn.cards) {
@@ -341,9 +358,23 @@ function orderOf(thread: Thread, orderId?: string): OrderCard | undefined {
   return found;
 }
 
+/** A signer named by role on the test kitchens ("Kitchen manager"), in the buyer's language; a person's name as it is. */
+function roleL(name: string, lang: "en" | "fi" | "sv"): string {
+  const ROLES: Record<string, Record<"fi" | "sv", string>> = {
+    "kitchen manager": { fi: "keittiöpäällikkö", sv: "köksansvarig" },
+    "head chef": { fi: "keittiömestari", sv: "kökschef" },
+    owner: { fi: "omistaja", sv: "ägare" },
+    "food service manager": { fi: "ruokapalvelupäällikkö", sv: "måltidschef" },
+    "purchasing manager": { fi: "hankintapäällikkö", sv: "inköpschef" },
+  };
+  const r = ROLES[name.trim().toLowerCase()];
+  return lang === "en" || !r ? name : r[lang];
+}
+
 function SignOffSlab({ card, thread, tap, total, what }: { card: GateCardT; thread: Thread; tap: Tap; total?: number; what?: string }) {
+  const { account } = usePortal();
   const tx = useText(THREAD_LINE_TEXT);
-  const f = useFormat();
+  const f = useThreadFormat();
   const w = useText(THREAD_WORDS);
   const s = useSignOff(card);
   const order = orderOf(thread, card.orderId);
@@ -362,6 +393,9 @@ function SignOffSlab({ card, thread, tap, total, what }: { card: GateCardT; thre
         <p className="text-[0.86rem] leading-snug text-paper/55">
           {[order?.deliveryDate ? f.day(order.deliveryDate).replace(/\.$/, "") : "", why].filter(Boolean).join(". ")}
         </p>
+        {s.canSignHere && s.phase !== "signed" && account?.shared && card.approver && (
+          <p className="mt-3 text-[0.8rem] leading-snug text-paper/65">{tx.testSigner(roleL(card.approver.name, f.lang))}</p>
+        )}
         {s.canSignHere && s.phase !== "signed" ? (
           <button type="button" disabled={s.busy} onClick={() => void s.sign()} className="mt-4 flex min-h-13 w-full items-center justify-center gap-2.5 rounded-full bg-lime text-[1rem] font-semibold text-ink transition-transform active:scale-[0.98] disabled:opacity-70">
             <ScanFace aria-hidden size={21} />
@@ -372,7 +406,7 @@ function SignOffSlab({ card, thread, tap, total, what }: { card: GateCardT; thre
             <Check aria-hidden size={18} strokeWidth={2.6} /> {tx.okDone(clock(new Date()))}
           </p>
         ) : (
-          <p className="mt-4 text-[0.9rem] text-paper/75">{card.approver ? tx.waitsFor(card.approver.name) : s.where}</p>
+          <p className="mt-4 text-[0.9rem] text-paper/75">{card.approver ? tx.waitsFor(roleL(card.approver.name, f.lang)) : s.where}</p>
         )}
         <div className="mt-2 flex flex-wrap gap-x-4">
           {s.offerPhone && s.phase !== "signed" && (
@@ -402,16 +436,16 @@ function SignOffSlab({ card, thread, tap, total, what }: { card: GateCardT; thre
 
 function SignedSlab({ card, thread }: { card: GateCardT; thread: Thread }) {
   const tx = useText(THREAD_LINE_TEXT);
-  const f = useFormat();
+  const f = useThreadFormat();
   const order = orderOf(thread, card.orderId);
   return (
     <section aria-label={tx.okd} data-slab="signed" className="tl-in mt-4 overflow-hidden rounded-[1.4rem] bg-safety-ink text-paper">
       <div className="p-4">
-        <p className="text-[0.78rem] font-medium tracking-wide text-paper/55">{tx.needsOk}</p>
+        <p className="text-[0.78rem] font-medium tracking-wide text-paper/55">{tx.okd}</p>
         {order && <p className="display mt-1.5 text-[2.1rem] leading-none tabular">{money(order.totalCents)}</p>}
         {order && <p className="mt-2 text-[0.92rem] leading-snug text-paper/85">{order.lines.length > 3 ? tx.many(order.lines.length, order.lines.slice(0, 2).map((l) => l.name).join(", ")) : order.lines.map((l) => `${f.num(l.quantity)} × ${l.name}`).join(", ")}</p>}
         <p className="mt-4 flex min-h-12 items-center justify-center gap-2 rounded-full bg-paper/10 text-[0.95rem] font-semibold text-lime">
-          <Check aria-hidden size={18} strokeWidth={2.6} /> {card.approver ? tx.okBy(card.approver.name) : tx.okDone("")}
+          <Check aria-hidden size={18} strokeWidth={2.6} /> {card.approver ? tx.okBy(roleL(card.approver.name, f.lang)) : tx.okDone("")}
         </p>
       </div>
     </section>
@@ -454,6 +488,12 @@ function thinking(turn: AgentTurn, thread: Thread, tx: Tx, w: (typeof THREAD_WOR
     switch (c.type) {
       case "offer":
         out.push({ label: tx.step.offer, detail: c.steps.join(" "), tone: "live" });
+        break;
+      case "scenario":
+        out.push({ label: c.kind === "event" ? tx.step.event : tx.step.season, detail: c.steps.slice(0, 12).join(" "), tone: "live" });
+        break;
+      case "watch":
+        out.push({ label: tx.step.watch, detail: [...c.steps, ...(c.others?.length ? [c.others.join(" · ")] : [])].join(" "), tone: "live" });
         break;
       case "understood": {
         const bits = [c.amount ? f.measure(c.amount.amount, c.amount.unit) : "", c.item, c.claims.map((x) => f.attr(x)).filter((a) => !c.item.toLowerCase().includes(a.toLowerCase())).join(", "), c.deliverOn ? f.day(c.deliverOn) : c.deliverBy ? f.day(c.deliverBy) : ""].filter(Boolean);
@@ -511,7 +551,7 @@ function thinking(turn: AgentTurn, thread: Thread, tx: Tx, w: (typeof THREAD_WOR
 
 function fallbackLine(turn: AgentTurn, thread: Thread, tx: Tx, f: ReturnType<typeof useFormat>): string {
   for (const c of [...turn.cards].reverse()) {
-    if (c.type === "gate" && c.outcome === "waiting") return tx.fallback.waiting(c.approver?.name ?? "");
+    if (c.type === "gate" && c.outcome === "waiting") return tx.fallback.waiting(roleL(c.approver?.name ?? "", f.lang));
     if (c.type === "order" && c.status === "committed") return tx.fallback.ordered(f.day(c.deliveryDate));
     if (c.type === "sheet" && c.state === "editing") return tx.fallback.sheet(money(c.totalCents), f.day(c.deliveryDate));
     if (c.type === "options" && !c.chosen) {
@@ -522,6 +562,8 @@ function fallbackLine(turn: AgentTurn, thread: Thread, tx: Tx, f: ReturnType<typ
     if (c.type === "records") return tx.fallback.records;
     if (c.type === "rules") return tx.fallback.rules;
     if (c.type === "products") return tx.fallback.products;
+    if (c.type === "gate" && c.said) return c.said[f.lang];
+    if (c.type === "notice" && c.said) return c.said[f.lang];
     // The engine's own notice, short: its first two sentences, without product codes.
     if (c.type === "notice") return c.message.replace(/\s*\([A-Z]{2}-\d{3,}\)/g, "").split(/(?<=[.!?])\s+/).slice(0, 2).join(" ").slice(0, 280);
   }
@@ -555,9 +597,29 @@ function OfferWords({ card, lang, big }: { card: OfferCard; lang: "en" | "fi" | 
   );
 }
 
-function Landing({ today, offer, thread }: { today?: TodayCard; offer?: OfferCard; thread?: Thread }) {
+/** A menu scenario's words (a seasonal menu, a booking at short notice): its sentences and its question. */
+function ScenarioWords({ card, lang }: { card: ScenarioCard; lang: "en" | "fi" | "sv" }) {
+  const t = card.text[lang] ?? card.text.en;
+  return (
+    <p data-scenario={card.planId} className="mt-3 max-w-[38ch] text-[1.02rem] leading-[1.6] text-ink [text-wrap:pretty]">
+      <Rich text={`${t.say} ${t.ask}`} />
+    </p>
+  );
+}
+
+/** The watch's moment, in the kitchen's short names: its sentence and its question. */
+function WatchWords({ card, lang, big }: { card: WatchCard; lang: "en" | "fi" | "sv"; big?: boolean }) {
+  const t = card.text[lang] ?? card.text.en;
+  return (
+    <p data-watch={card.momentId} className={`mt-3 max-w-[38ch] leading-[1.6] text-ink [text-wrap:pretty] ${big ? "text-[1.1rem]" : "text-[1.02rem]"}`}>
+      <Rich text={`${t.say}${t.ask ? ` ${t.ask}` : ""}`} />
+    </p>
+  );
+}
+
+function Landing({ today, offer, watch, thread }: { today?: TodayCard; offer?: OfferCard; watch?: WatchCard; thread?: Thread }) {
   const tx = useText(THREAD_LINE_TEXT);
-  const f = useFormat();
+  const f = useThreadFormat();
   const { kitchen, thread: api, lang } = usePortal();
   const h = Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hour12: false, timeZone: "Europe/Helsinki" }).format(new Date()));
   const part = h < 11 ? "morning" : h < 18 ? "day" : "evening";
@@ -571,6 +633,7 @@ function Landing({ today, offer, thread }: { today?: TodayCard; offer?: OfferCar
           <Rich text={todaySentence(today, tx, f)} />
         </p>
       )}
+      {watch && watch.state !== "answered" && <WatchWords card={watch} lang={f.lang} big />}
       {offer?.state === "open" && <OfferWords card={offer} lang={f.lang} big />}
       {today?.items.filter((i) => i.kind === "sign_off").map((i) =>
         i.kind === "sign_off" && thread ? <SignOffSlab key={i.approvalId} card={{ type: "gate", cardId: `gate:${i.orderId}`, requestId: i.requestId ?? "", orderId: i.orderId, approvalId: i.approvalId, outcome: "waiting", approver: i.approver, reasons: [], rules: [] } as GateCardT} thread={thread} tap={(action, label) => void api.submit({ door: "typed", via: "tap", action, label, lang })} total={i.totalCents} what={i.lines.map((l) => `${f.num(l.quantity)} × ${l.name}`).join(", ")} /> : null,

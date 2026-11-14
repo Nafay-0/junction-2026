@@ -90,10 +90,20 @@ export async function postToday(run: TurnRun, opening = false): Promise<TodayCar
   run.store.card(run.thread, run.turnId, card);
   run.facts.push(card);
   record(run, "today", `The opening: ${items.length ? items.map((i) => i.kind).join(", ") : "nothing needs the kitchen today"}.`, { items: items.map((i) => i.kind) });
-  // The day's opening is a moment for the wholesaler's one offer (said after what needs the kitchen).
+  // The day's opening is the moment for the watch (a stock-out, a held renewal: what needs the kitchen first) and,
+  // when there is none, for the wholesaler's one offer.
   if (opening) {
-    const { sayOffer } = await import("./offer");
-    await sayOffer(run).catch(() => undefined);
+    const { sayWatch } = await import("./watch");
+    const w = await sayWatch(run).catch(() => undefined);
+    if (w?.family && w.kind === "renewal_held") {
+      // The held renewal says the drift with its figures: the opening's own drift line for that family goes.
+      const items = card.items.filter((i) => !(i.kind === "drift" && i.family === w.family));
+      if (items.length !== card.items.length) run.store.card(run.thread, run.turnId, { ...card, items });
+    }
+    if (!w) {
+      const { sayOffer } = await import("./offer");
+      await sayOffer(run).catch(() => undefined);
+    }
   }
   return card;
 }

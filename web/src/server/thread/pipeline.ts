@@ -11,6 +11,7 @@ import { callTool } from "@/server/mcp/server";
 import { qualifiersOf, wordsNotCarried } from "@/core/qualifiers";
 import { TOOLS } from "@/server/mcp/tools";
 import type { Runtime } from "@/server/runtime";
+import { groupOf, groupsOf, refusalOfError, refusalOfRule, refusalOfStep, sayRefusal, type Refusal } from "./refusal";
 import { anomalyCard, cardId, gateCard, noOptionsCard, optionsCard, orderCard, passedOver, priceCard, questionCard, understoodCard } from "./cards";
 import { threadTag } from "./context";
 import type { StoredThread, ThreadStore } from "./store";
@@ -34,6 +35,12 @@ export type TurnRun = {
   session: AgentSession;
   person?: ConsolePerson;
   door: ThreadDoor;
+  /** The menu scenario's reply to the buyer's answer (scenario.ts). */
+  scenarioReply?: string;
+  /** A menu scenario said this turn: its words are the reply (scenario.ts). */
+  scenarioSaid?: string;
+  /** The watch's moment the buyer asked about this turn: its words are the reply (watch.ts). */
+  watchAsked?: string;
   /** The wholesaler's offer the buyer asked for this turn: its own words are the reply (offer.ts). */
   offerAsked?: string;
   /** The buyer's language as the store sent it (en when not said). */
@@ -124,11 +131,13 @@ export function read(run: TurnRun, words: string, earlier: EarlierRequest[]): Pr
 
 // ---------- several items in one message ----------
 
-const DAY_PHRASE = /\b(for|by|on|until|before|till|to|ennen|mennessä|torstaiksi|maanantaiksi|på|senast|innan)\b[^,;\n]*$/i;
+const DAY_PHRASE = /\b(for|by|on|until|before|till|to|ennen|mennessä|maanantaiksi|tiistaiksi|keskiviikoksi|torstaiksi|perjantaiksi|lauantaiksi|sunnuntaiksi|huomiseksi|ylihuomiseksi|på|senast|innan|tomorrow)\b[^,;\n]*$/i;
 
 /** Item parts of a message, split where a new amount starts after "and", a comma or a new line; the day said at the end goes to each. */
 export function splitItems(text: string): string[] {
-  const raw = text.split(/\s*(?:,|;|\n|\band\b|\bja\b|\bsekä\b|\boch\b|\bsamt\b|\bplus\b)\s*(?=\d)/i).map((x) => x.trim()).filter(Boolean);
+  let raw = text.split(/\s*(?:,|;|\n|\band\b|\bja\b|\bsekä\b|\boch\b|\bsamt\b|\bplus\b)\s*(?=\d)/i).map((x) => x.trim()).filter(Boolean);
+  // "maitoa 30 l ja kermaa 5 l torstaiksi": the amount after the item; split at "and" when every part has its own amount.
+  if (raw.length < 2 || raw.some((x) => !/\d/.test(x))) raw = text.split(/\s*(?:;|\n|\band\b|\bja\b|\bsekä\b|\boch\b|\bsamt\b|\bplus\b)\s*/i).map((x) => x.trim()).filter(Boolean);
   if (raw.length < 2 || raw.some((x) => !/\d/.test(x))) return [];
   const day = DAY_PHRASE.exec(raw.at(-1)!)?.[0];
   return raw.map((x) => (day && !DAY_PHRASE.test(x) ? `${x} ${day}` : x)).slice(0, 5);
@@ -172,17 +181,59 @@ export type ItemOutcome = {
   sheet?: { sheetId: string; deliveryDate: string; lines: { name: string; packs: number }[]; totalCents: number };
 };
 
+/** An open stock-out the watch found for this request's product family and day: said from the watch, or undefined. */
+async function watchAnswersFor(run: TurnRun, step: IntakeView): Promise<NoticeCard | undefined> {
+  if (step.state !== "options_ready" && step.state !== "needs_input") return undefined;
+  const { watchForOrg } = await import("@/server/watch/service");
+  const w = await watchForOrg(run.rt, run.session.mandate.issuer.orgId);
+  const day = step.need?.deliverBy;
+  const f = w.findings.find((x) => x.state === "open" && x.product.family === step.family && (!day || x.need.date <= day));
+  if (!f) return undefined;
+  const { sayWatch, openWatch, shortName } = await import("./watch");
+  const card = openWatch(run) ?? (await sayWatch(run, { family: step.family }));
+  if (card && card.momentId === f.findingId) {
+    run.watchAsked = card.momentId;
+    record(run, "watch_answers_request", `The request is for ${f.product.name}, which the watch found cannot come (${f.findingId}): answered from the watch, not from the intake's options.`, { findingId: f.findingId }, step.requestId);
+    return { type: "notice", cardId: cardId("notice", `${step.requestId}:watch`), requestId: step.requestId, kind: "not_found", message: card.text.en.say, said: { en: card.text.en.say, fi: card.text.fi.say, sv: card.text.sv.say } };
+  }
+  // Said in an earlier conversation: the same answer in short, from the finding.
+  const sub = f.substitutes[0];
+  const what = shortName(f.product.name);
+  record(run, "watch_answers_request", `The request is for ${f.product.name}, which the watch found cannot come (${f.findingId}).`, { findingId: f.findingId }, step.requestId);
+  return { type: "notice", cardId: cardId("notice", `${step.requestId}:watch`), requestId: step.requestId, kind: "not_found", ...worded(() => ({ code: "out_of_stock", what, ...(day ? { day } : {}) })), ...(sub ? { message: `${what} can't come${f.shortfall.backOn ? `: the supplier is out until ${f.shortfall.backOn}` : ""}. The closest is ${shortName(sub.name)}. Shall I order that instead?` } : {}) };
+}
+
+/** The kind of product the words name, when none of it is in the kitchen's allowed groups (master data, no live call). */
+async function outsideRules(run: TurnRun, what: string): Promise<{ what: string; category: string } | undefined> {
+  if (!what.trim()) return undefined;
+  const { findProducts } = await import("@/server/search/service");
+  const found = await findProducts(run.rt.catalog, { text: what, limit: 8, noJudge: true } as never);
+  const cats = found.hits.slice(0, 6).map((h: { product: { category: string } }) => h.product.category);
+  if (!cats.length) return undefined;
+  const allowed = run.session.mandate.allowedCategories;
+  if (cats.some((c: string) => allowed.includes(c))) return undefined;
+  return { what: what.trim(), category: cats[0] };
+}
+
+/** A refusal said in each language; `message` is the English one (what the record and the model read). */
+export function worded(r: (lang: "en" | "fi" | "sv") => Refusal): { message: string; said: Record<"en" | "fi" | "sv", string> } {
+  const said = { en: sayRefusal(r("en"), "en"), fi: sayRefusal(r("fi"), "fi"), sv: sayRefusal(r("sv"), "sv") };
+  return { message: said.en, said };
+}
+
 function noticeFrom(err: unknown, ref: string, words: string): NoticeCard {
   if (err instanceof DockError) {
     const id = cardId("notice", ref);
+    const r = refusalOfError(err);
+    if (r) return { type: "notice", cardId: id, kind: r.code === "suspended" ? "suspended" : "refused", ...worded(() => r), ...(err.rule ? { rule: err.rule } : {}) };
     if (err.code === "need_incomplete") {
       const missing = ((err.details?.missing as string[]) ?? []).map((m) => (m === "item" ? "what to buy" : "how much, with the unit"));
       return { type: "notice", cardId: id, kind: "incomplete", message: `I understood part of "${words.slice(0, 80)}" but need ${missing.join(" and ")}.`, missing, words: words.slice(0, 600) };
     }
     if (err.code === "not_a_purchase_request") return { type: "notice", cardId: id, kind: "not_purchase", message: err.message };
-    if (err.code === "family_unknown") return { type: "notice", cardId: id, kind: "not_found", message: `Nothing in the assortment matches "${words.slice(0, 80)}".` };
+    if (err.code === "family_unknown") return { type: "notice", cardId: id, kind: "not_found", ...worded(() => ({ code: "not_sold", what: words.slice(0, 80) })) };
     if (["model_unavailable", "interpret_timeout", "interpret_failed", "llm_disabled", "demo_limit_reached"].includes(err.code)) return { type: "notice", cardId: id, kind: "unavailable", message: err.message, retry: true };
-    if (err.code === "agent_suspended" || err.rule === "suspended") return { type: "notice", cardId: id, kind: "suspended", message: err.message };
+    if (err.code === "agent_suspended" || err.rule === "suspended") return { type: "notice", cardId: id, kind: "suspended", ...worded(() => ({ code: "suspended" })) };
     return { type: "notice", cardId: id, kind: "refused", message: err.message, ...(err.rule ? { rule: err.rule } : {}) };
   }
   return { type: "notice", cardId: cardId("notice", ref), kind: "error", message: "Something went wrong on our side. Try again.", retry: true };
@@ -261,7 +312,34 @@ async function usualSheet(run: TurnRun, words: string): Promise<{ requestId: str
  * question, options), then, for a routine request, the order placed alone. Several items in one message each come
  * through here, in parallel.
  */
+/**
+ * Typing slips a chef makes that two readers would read differently ("laktose free", "tomorow", "wednsday"): set
+ * right by plain code before the words are read, so a slip is never a question back. Only unambiguous misspellings.
+ */
+const TYPOS: [RegExp, string][] = [
+  [/\blaktose\b/gi, "lactose"],
+  [/\blactos\b/gi, "lactose"],
+  [/\blactoce\b/gi, "lactose"],
+  [/\b(tomorow|tommorow|tommorrow|tomorrrow|tmrw)\b/gi, "tomorrow"],
+  [/\b(wednsday|wensday|wedensday|wendsday)\b/gi, "Wednesday"],
+  [/\b(thursady|thrusday|thursdy|thurday)\b/gi, "Thursday"],
+  [/\b(tuseday|tuesay|teusday)\b/gi, "Tuesday"],
+  [/\b(firday|fridy|friady)\b/gi, "Friday"],
+  [/\b(saturady|satruday)\b/gi, "Saturday"],
+  [/\b(mondy|monady)\b/gi, "Monday"],
+  [/\bskimed\b/gi, "skimmed"],
+  [/\b(yogurt|yougurt|yoghurth)\b/gi, "yoghurt"],
+  [/\b(whiping|wipping)\b/gi, "whipping"],
+  [/\b(liters?|litters?|ltrs?)\b/gi, "litres"],
+];
+export function fixTypos(words: string): string {
+  let w = words;
+  for (const [re, to] of TYPOS) w = w.replace(re, to);
+  return w;
+}
+
 export async function orderFromWords(run: TurnRun, words: string, earlier: EarlierRequest[], opts: { deliverBy?: string; item?: number; quietIfNotPurchase?: boolean } = {}): Promise<ItemOutcome[]> {
+  words = fixTypos(words);
   const ref = `${run.turnId}:${opts.item ?? 0}`;
   const reading = !opts.item && run.opening ? run.opening : step(run, "read", opts.item ? `Reading "${words.slice(0, 40)}"` : "Reading your request");
   if (!opts.item) run.opening = undefined;
@@ -294,6 +372,19 @@ export async function orderFromWords(run: TurnRun, words: string, earlier: Earli
       if (usual) {
         reading.done("the usual, from your recurring orders");
         return [{ words, requestId: usual.requestId, sheet: usual }];
+      }
+    }
+    // Only the amount is missing, but the kind of product is clear: if the kitchen's rules do not let it buy that kind
+    // at all, that is the answer (asking how much first would ask a question whose answer changes nothing).
+    if (notice.kind === "incomplete" && !notice.missing?.includes("what to buy") && err instanceof DockError) {
+      const outside = await outsideRules(run, String((err.details?.partial as { item?: { text?: string } } | undefined)?.item?.text ?? "")).catch(() => undefined);
+      if (outside) {
+        reading.done("outside the kitchen's rules");
+        const refusal: NoticeCard = { type: "notice", cardId: notice.cardId, kind: "refused", ...worded((l) => ({ code: "out_of_mandate", what: outside.what, ...(groupOf(outside.category, l) ? { group: groupOf(outside.category, l) } : {}), groups: groupsOf(run.session.mandate.allowedCategories, l), ...(run.session.mandate.approvers?.[0]?.name ? { signer: run.session.mandate.approvers[0].name } : {}) })) };
+        run.store.card(run.thread, run.turnId, refusal);
+        run.facts.push(refusal);
+        record(run, "rules_first", `"${words.slice(0, 80)}": ${outside.what} is outside the kitchen's rules (${outside.category}); said before asking how much.`, {});
+        return [{ words, notice: refusal }];
       }
     }
     reading.fail(err instanceof DockError ? err.code : undefined);
@@ -350,6 +441,21 @@ export async function combineItems(run: TurnRun, words: string, items: ItemOutco
     if (lead) ready.push({ s, optionId: lead.optionId });
   }
   if (ready.length < 2) return items;
+  // Every item asked for is on the order or said as left out, with why: never dropped without a word.
+  const onSheet = new Set(ready.map((r) => r.s.requestId));
+  const leftOut = items
+    .filter((it) => it.requestId && !onSheet.has(it.requestId) && !it.placed)
+    .map((it) => {
+      const u = run.store.cards(run.thread).map((x) => x.card).find((c) => c.type === "understood" && c.requestId === it.requestId);
+      const what = u?.type === "understood" ? `${u.amount ? `${u.amount.amount} ${u.amount.unit} ` : ""}${u.item}` : it.words;
+      const why = it.notice?.message ?? it.concerns?.[0]?.message ?? it.questions?.[0]?.text ?? (it.state === "options_ready" ? "only stand-ins the rules refuse" : "needs an answer first");
+      return { what, why: why.slice(0, 200), ...(it.concerns?.[0] ? { ask: it.concerns[0].choices.slice(0, 3) } : {}) };
+    })
+    .concat(items.filter((it) => !it.requestId && it.notice).map((it) => ({ what: it.words, why: it.notice!.message.slice(0, 200) })));
+  if (leftOut.length) {
+    run.facts.push({ notOnTheOrder: leftOut, say: "name each one and why, in one sentence, before the question" });
+    record(run, "left_out", `Not on the order sheet: ${leftOut.map((l) => `${l.what} (${l.why})`).join("; ")}.`, {});
+  }
   const { createSheet } = await import("./sheet");
   const lines = ready.flatMap(({ s, optionId }) => {
     const o = s.options.find((x) => x.optionId === optionId)!;
@@ -374,8 +480,8 @@ export async function openNeed(run: TurnRun, need: NeedInput, words: string, opt
   // "For coffee" is a use, not a claim any product carries: it becomes the barista kind in the words searched for.
   const nn = need as { requiredClaims?: string[]; item: { text: string; attributes?: string[] } };
   const COFFEE = /coffee|barista|foam|kahvi|kaffe/i;
-  if (nn.requiredClaims?.some((c) => COFFEE.test(c)) || nn.item.attributes?.some((c) => COFFEE.test(c)) || /\b(for|to|in)\s+(the\s+)?coffee\b|kahviin|till kaffe/i.test(nn.item.text)) {
-    const text = /barista/i.test(nn.item.text) ? nn.item.text : `${nn.item.text.replace(/\s+(for|to|in)\s+(the\s+)?coffee|\s+kahviin|\s+till kaffe/i, "")} barista`;
+  if (nn.requiredClaims?.some((c) => COFFEE.test(c)) || nn.item.attributes?.some((c) => COFFEE.test(c)) || /\b(for|to|in)\s+(the\s+)?coffee\b|kahviin|kahvikoneeseen|till kaffe/i.test(nn.item.text)) {
+    const text = /barista/i.test(nn.item.text) ? nn.item.text : `${nn.item.text.replace(/\s+(for|to|in)\s+(the\s+)?coffee(\s+(machine|maker|bar|machines))?|\s+(kahviin|kahvikoneeseen)|\s+till kaffe(maskinen)?/i, "")} barista`;
     need = { ...need, ...(nn.requiredClaims ? { requiredClaims: nn.requiredClaims.filter((c) => !COFFEE.test(c)) } : {}), item: { ...need.item, text, ...(nn.item.attributes ? { attributes: nn.item.attributes.filter((c) => !COFFEE.test(c)) } : {}) } } as NeedInput;
   }
   const n = need as { deliverBy?: string; deliverOn?: string };
@@ -392,6 +498,14 @@ export async function openNeed(run: TurnRun, need: NeedInput, words: string, opt
     const res = await published<{ step: IntakeView }>(run, "submit_need", { need, by: byLine(run) });
     intake.done(res.step.state);
     run.requests.add(res.step.requestId);
+    // The watch knows this product cannot come (a stock-out it found, staged or real): the answer is the watch's (it
+    // cannot come, here is the closest substitute), not the intake's options, which do not see a staged stock-out.
+    const fromWatch = await watchAnswersFor(run, res.step).catch(() => undefined);
+    if (fromWatch) {
+      if (!run.watchAsked) run.store.card(run.thread, run.turnId, fromWatch);
+      run.facts.push(fromWatch);
+      return [{ words, requestId: res.step.requestId, notice: fromWatch }];
+    }
     let step0 = res.step;
     if (opts.basedOn && (await noteReplacement(run, res.step.requestId, opts.basedOn.requestId))) {
       // "Make it 200" is a repeat of the order it replaces by design: the repeat check's only question is answered by
@@ -401,6 +515,13 @@ export async function openNeed(run: TurnRun, need: NeedInput, words: string, opt
         step0 = await run.rt.dock.intake.respondToConcerns(run.session, step0.requestId, { by: byLine(run), responses: step0.concerns.map((c) => ({ key: c.key, choice: "confirm" })) }, humanVia(run, words));
         record(run, "replaces_repeat", `The repeat check on ${res.step.requestId} is the order it replaces: answered by the buyer's change "${words.slice(0, 80)}".`, {}, res.step.requestId);
       }
+    }
+    // "Maitoa niinkuin yleensä": the buyer's own words say "as usual", so two readers differing on whether that means
+    // the usual amount or one pack is settled by the words (recorded as theirs); never a question back.
+    const asUsual = /\b(as usual|the usual|usual amount|same as (last|before|always)|like last time|niin ?kuin (yleensä|aina|viimeksi|tavallisesti)|kuten (yleensä|aina|viimeksi|tavallisesti)|tavalliseen tapaan|tavallinen määrä|som vanligt|samma som (förra|sist))(?![\p{L}])/iu;
+    if (step0.state === "needs_confirmation" && step0.concerns.length > 0 && asUsual.test(words) && step0.concerns.every((c) => c.code === "readings_differ" && /same as last|usual/i.test(String((c as { evidence?: { first?: unknown } }).evidence?.first ?? "")) && c.corrections.some((x) => x.id === "keep_first"))) {
+      step0 = await run.rt.dock.intake.respondToConcerns(run.session, step0.requestId, { by: byLine(run), responses: step0.concerns.map((c) => ({ key: c.key, choice: "keep_first" })) }, humanVia(run, words));
+      record(run, "as_usual", `The readers differed on the amount; the buyer's words "${words.slice(0, 80)}" say as usual: the usual amount.`, {}, res.step.requestId);
     }
     run.store.card(run.thread, run.turnId, { ...understood, requestId: res.step.requestId, memoryUsed: [...(opts.memoryLine ? [opts.memoryLine] : []), ...res.step.memoryUsed.map((m) => m.text)], memory: res.step.memoryUsed, ...(res.step.noticed?.length ? { notes: res.step.noticed.map((n) => ({ code: n.code, params: n.params })) } : {}) });
     if (res.step.memoryUsed.length) record(run, "memory_read", `Memory answered for this request: ${res.step.memoryUsed.map((m) => m.text).join("; ")}`, { lines: res.step.memoryUsed }, res.step.requestId);
@@ -434,6 +555,8 @@ export async function afterStep(run: TurnRun, s: IntakeView, words: string): Pro
   if (s.state === "no_options" || s.state === "cancelled") {
     const n = noOptionsCard(s);
     if (s.state === "cancelled") Object.assign(n, { kind: "refused", message: s.notes.join(" ") || "The request was cancelled." });
+    // In words, from the step's own codes (refusal.ts): never the lower layer's sentence with its category codes.
+    else Object.assign(n, worded((l) => refusalOfStep(run, s, l)));
     run.store.card(run.thread, run.turnId, n);
     out.notice = n;
     return out;
@@ -549,7 +672,9 @@ export async function placeQuoted(run: TurnRun, s: IntakeView, words: string, pa
     const refused = err instanceof DockError ? (err.details?.order as PublicOrder | undefined) : undefined;
     gate.fail(err instanceof DockError ? (err.rule ?? err.code) : undefined);
     if (refused) {
-      run.store.card(run.thread, run.turnId, gateCard(refused));
+      const g = gateCard(refused);
+      const what = s.need?.item?.text ?? "this";
+      run.store.card(run.thread, run.turnId, { ...g, said: worded((l) => refusalOfRule(run, g.rule, what, g.rules?.find((x) => x.rule === g.rule)?.details, l)).said });
       run.facts.push(refused);
       out.placed = { orderId: refused.orderId, status: refused.status, totalCents: refused.totalCents };
       run.orders.set(refused.orderId, refused);
