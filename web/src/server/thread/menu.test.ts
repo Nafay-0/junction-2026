@@ -288,8 +288,24 @@ describe("the menu builder in the thread", () => {
       expect(after.need.amount).toBeCloseTo(l.need.amount * 2, 2);
     });
 
-    it("swap: only the planner's own options, each one the gate would take", async () => {
+    it("stock: what the kitchen's own deliveries probably left is counted as in stock, said on the line, bought after all with one tap", async () => {
       const c = await ready();
+      // Kaari takes about 100 L of lactose-free milk on Mondays and Thursdays: a lunch's milk is probably still there.
+      const l = lines(c).find((x) => x.stock);
+      expect(l).toBeTruthy();
+      expect(l!.status).toBe("have");
+      expect(l!.stock!.amount).toBeGreaterThanOrEqual(l!.need.amount);
+      await tap({ type: "menu_line_have", planId: c.planId, lineId: l!.lineId, have: false });
+      const now = lines(await menuNow("kaari", c.planId)).find((x) => x.lineId === l!.lineId)!;
+      expect(now.status).not.toBe("have");
+      expect(now.stock).toBeUndefined();
+    });
+
+    it("swap: only the planner's own options, each one the gate would take", async () => {
+      let c = await ready();
+      // What the agent counted as in stock is bought after all first, so its products are on offer.
+      for (const x of lines(c).filter((y) => y.stock)) await tap({ type: "menu_line_have", planId: c.planId, lineId: x.lineId, have: false });
+      c = await menuNow("kaari", c.planId);
       const l = lines(c).find((x) => x.options.some((o) => !o.optionId.startsWith("fix:")));
       expect(l).toBeTruthy(); // lactose-free milk: several products priced
       const o = l!.options.find((x) => !x.optionId.startsWith("fix:"))!;
