@@ -1,0 +1,188 @@
+import { describe, expect, it } from "vitest";
+import { applyNeedPatch, NeedSchema } from "./need";
+import { compareReadings, describeSecondReading, fieldValues, numbersInText, readerName, readingConcerns, READING_RULES, type Reading, type SecondReadingRecord } from "./second-reading";
+
+const base: Reading = {
+  item: { text: "lactose-free milk", attributes: ["lactose_free"], excludedAttributes: [] },
+  quantity: { amount: 1000, unit: "L" },
+  deliverBy: "2026-11-16",
+  requiredClaims: [],
+  forbiddenAllergens: [],
+  sameAsLastTime: false,
+};
+const r = (over: Partial<Reading> & { item?: Partial<Reading["item"]> } = {}): Reading => ({ ...base, ...over, item: { ...base.item, ...over.item } });
+const fields = (first: Reading, second: Reading, text = "") => compareReadings(first, second, { text }).differences.map((d) => d.field);
+
+describe("compareReadings: agreement", () => {
+  it("the same reading agrees", () => {
+    expect(compareReadings(base, r())).toMatchObject({ agreed: true, differences: [] });
+  });
+
+  it("equivalent forms agree: 1000 l and 1 000 litres are both 1000 L; pcs and packs both count packs", () => {
+    expect(compareReadings(r({ quantity: { amount: 1000, unit: "L" } }), r({ quantity: { amount: 1000, unit: "L" } }), { text: "1 000 litres" }).agreed).toBe(true);
+    expect(compareReadings(r({ quantity: { amount: 30, unit: "pack" } }), r({ quantity: { amount: 30, unit: "pcs" } })).agreed).toBe(true);
+  });
+
+  it("100 x 10 l agrees as 100 packs or 1,000 L, because the pack size is written in the text", () => {
+    const text = "100 x 10 l laktoositonta maitoa";
+    expect(compareReadings(r({ quantity: { amount: 100, unit: "pack" } }), r({ quantity: { amount: 1000, unit: "L" } }), { text }).agreed).toBe(true);
+    expect(compareReadings(r({ quantity: { amount: 1000, unit: "L" } }), r({ quantity: { amount: 100, unit: "pack" } }), { text }).agreed).toBe(true);
+  });
+
+  it("claim spellings and the catalogue's words agree: lactose-free, LACTOSE_FREE, laktoositon", () => {
+    expect(compareReadings(base, r({ item: { attributes: ["laktoositon"] } })).agreed).toBe(true);
+    expect(compareReadings(base, r({ item: { attributes: [] }, requiredClaims: ["LACTOSE_FREE"] })).agreed).toBe(true);
+  });
+
+  it("gluten-free as a claim and gluten as an allergen to avoid agree", () => {
+    expect(compareReadings(r({ requiredClaims: ["gluten_free"] }), r({ forbiddenAllergens: ["gluten"] })).agreed).toBe(true);
+    expect(compareReadings(r({ forbiddenAllergens: ["nut"] }), r({ forbiddenAllergens: ["nuts"] })).agreed).toBe(true);
+  });
+
+  it("the item in other words of the same kind agrees: maitoa and laktoositonta maitoa, maito and maitoa", () => {
+    expect(compareReadings(r({ item: { text: "maitoa" } }), r({ item: { text: "laktoositonta maitoa" } })).agreed).toBe(true);
+    expect(compareReadings(r({ item: { text: "maito" } }), r({ item: { text: "maitoa" } })).agreed).toBe(true);
+    expect(compareReadings(r({ item: { text: "kermaa" } }), r({ item: { text: "ruokakermaa" } })).agreed).toBe(true);
+  });
+
+  it("small amount differences are not material, and 'by' against 'on' the same day is not", () => {
+    const c = compareReadings(r({ quantity: { amount: 100, unit: "L" } }), r({ quantity: { amount: 120, unit: "L" }, deliverOn: "2026-11-16" }));
+    expect(c.agreed).toBe(true);
+    expect(c.minor.length).toBeGreaterThan(0);
+  });
+
+  it("a second reading that read less finds nothing to compare: no amount, no date, are minor", () => {
+    const c = compareReadings(base, r({ quantity: undefined, deliverBy: undefined }));
+    expect(c.agreed).toBe(true);
+    expect(c.minor).toEqual(expect.arrayContaining([expect.stringContaining("no amount"), expect.stringContaining("no delivery day")]));
+  });
+
+  it("marketing attributes and a fat content only one reading states are not material", () => {
+    expect(compareReadings(base, r({ item: { attributes: ["lactose_free", "low_salt", "fat_1_5"] } })).agreed).toBe(true);
+  });
+});
+
+describe("compareReadings: material differences", () => {
+  it("the amount by a large factor: 1.000 read as 1 and as 1000", () => {
+    const c = compareReadings(r({ quantity: { amount: 1, unit: "L" } }), r({ quantity: { amount: 1000, unit: "L" } }));
+    expect(c.differences).toMatchObject([{ field: "amount", first: "1 L", second: "1,000 L", patch: { quantity: { amount: 1000, unit: "L" } } }]);
+  });
+
+  it("10x is named, and the threshold is READING_RULES.amountFactor", () => {
+    expect(compareReadings(r({ quantity: { amount: 100, unit: "L" } }), base).differences[0].why).toBe("10x the amount");
+    const f = READING_RULES.amountFactor;
+    expect(fields(r({ quantity: { amount: 100, unit: "L" } }), r({ quantity: { amount: 100 * f, unit: "L" } }))).toEqual(["amount"]);
+    expect(fields(r({ quantity: { amount: 100, unit: "L" } }), r({ quantity: { amount: 100 * f * 0.99, unit: "L" } }))).toEqual([]);
+  });
+
+  it("the unit: packs against litres with no pack size in the text", () => {
+    const c = compareReadings(r({ quantity: { amount: 20, unit: "pack" } }), r({ quantity: { amount: 20, unit: "L" } }), { text: "20 laatikkoa maitoa" });
+    expect(c.differences).toMatchObject([{ field: "amount", why: "packs against L" }]);
+  });
+
+  it("litres against kilos with a different amount; the same amount is minor", () => {
+    expect(fields(r({ quantity: { amount: 10, unit: "kg" } }), r({ quantity: { amount: 100, unit: "L" } }))).toEqual(["amount"]);
+    expect(fields(r({ quantity: { amount: 10, unit: "kg" } }), r({ quantity: { amount: 10, unit: "L" } }))).toEqual([]);
+  });
+
+  it("only the second reading has an amount (the first read 'same as last time')", () => {
+    expect(fields(r({ quantity: undefined, sameAsLastTime: true }), r({ quantity: { amount: 200, unit: "L" } }))).toEqual(["amount"]);
+  });
+
+  it("a dietary claim present in one reading and missing in the other, either way", () => {
+    expect(compareReadings(base, r({ item: { attributes: [] } })).differences).toMatchObject([{ field: "claims", first: "lactose-free", second: "not stated" }]);
+    expect(compareReadings(r({ item: { attributes: [] } }), base).differences).toMatchObject([{ field: "claims", first: "not stated", second: "lactose-free" }]);
+  });
+
+  it("a negated claim: 'not lactose-free' read as lactose-free", () => {
+    const c = compareReadings(r({ item: { attributes: [], excludedAttributes: ["lactose_free"] } }), base);
+    expect(c.differences).toMatchObject([{ field: "claims", first: "not lactose-free", second: "lactose-free", why: "lactose-free negated in one reading" }]);
+  });
+
+  it("two different fat contents", () => {
+    expect(fields(r({ item: { attributes: ["fat_1_5"] } }), r({ item: { attributes: ["fat_3_5"] } }))).toEqual(["claims"]);
+  });
+
+  it("an allergen to avoid in one reading only (mentioned as a thing to avoid)", () => {
+    const c = compareReadings(r({ forbiddenAllergens: ["nuts"] }), r());
+    expect(c.differences).toMatchObject([{ field: "allergens", first: "no nuts", second: "not stated", patch: { forbiddenAllergens: [] } }]);
+  });
+
+  it("a different kind of product: cream for milk, coffee milk for milk, two product codes", () => {
+    expect(fields(r({ item: { text: "maitoa" } }), r({ item: { text: "kermaa" } }))).toEqual(["kind"]);
+    expect(fields(r({ item: { text: "milk" } }), r({ item: { text: "coffee milk" } }))).toEqual(["kind"]);
+    expect(fields(r({ item: { productId: "6408430000123" } }), r({ item: { productId: "6408430000999" } }))).toEqual(["kind"]);
+  });
+
+  it("the delivery day: two different days, and a day only the second reading has", () => {
+    expect(compareReadings(base, r({ deliverBy: "2026-11-23" })).differences).toMatchObject([{ field: "date", first: "2026-11-16", second: "2026-11-23", patch: { deliverBy: "2026-11-23" } }]);
+    expect(fields(r({ deliverBy: undefined }), base)).toEqual(["date"]);
+  });
+
+  it("the rules can be relaxed field by field", () => {
+    expect(compareReadings(r({ deliverBy: undefined }), base, { rules: { askWhenOnlySecondHasDate: false } }).agreed).toBe(true);
+    expect(compareReadings(base, r({ deliverBy: undefined }), { rules: { askWhenOnlyFirstHasDate: true } }).differences[0].field).toBe("date");
+    expect(compareReadings(base, r({ item: { attributes: [] } }), { rules: { askWhenOnlyFirstHasClaim: false } }).agreed).toBe(true);
+    expect(compareReadings(r({ item: { text: "maitoa" } }), r({ item: { text: "kermaa" } }), { rules: { compareKind: false } }).agreed).toBe(true);
+  });
+});
+
+describe("numbersInText", () => {
+  it("reads digit grouping both ways", () => {
+    expect(numbersInText("1.000 litraa")).toEqual(expect.arrayContaining([1000, 1]));
+    expect(numbersInText("1,000 litres")).toEqual(expect.arrayContaining([1000, 1]));
+    expect(numbersInText("1 000 l")).toEqual(expect.arrayContaining([1000]));
+    expect(numbersInText("100 x 10 l")).toEqual(expect.arrayContaining([100, 10]));
+    expect(numbersInText("2,5 kg")).toEqual(expect.arrayContaining([2.5]));
+  });
+});
+
+describe("readingConcerns", () => {
+  const record = (first: Reading, second: Reading): SecondReadingRecord => {
+    const c = compareReadings(first, second);
+    return { status: c.agreed ? "agreed" : "differed", firstModel: "anthropic:claude-opus-5-5", secondModel: "featherless:nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16", differences: c.differences, minor: c.minor, firstValues: fieldValues(first), at: "2026-11-14T10:00:00Z" };
+  };
+  const need = NeedSchema.parse({ text: "I need 1,000 litres of lactose-free milk by Monday", ...base });
+
+  it("one precise question per differing field, showing both readings, with no default and a way out", () => {
+    const rec = record(base, r({ quantity: { amount: 100, unit: "L" } }));
+    const [c] = readingConcerns(need, rec);
+    expect(c).toMatchObject({ code: "readings_differ", severity: "warning", confirmable: false });
+    expect(c.message).toBe("Two independent readers read the amount differently: Claude Opus 5.5 read 1,000 L, NVIDIA Nemotron 3 Nano read 100 L. Which did you mean?");
+    expect(c.corrections.map((x) => [x.id, x.label])).toEqual([
+      ["keep_first", "1,000 L"],
+      ["use_second", "100 L"],
+      ["rewrite", "Neither: I will write it again"],
+    ]);
+    expect(applyNeedPatch(need, c.corrections[1].patch!).quantity).toEqual({ amount: 100, unit: "L" });
+    expect(applyNeedPatch(need, c.corrections[0].patch!)).toEqual(need);
+  });
+
+  it("no question when the readings agree, when the reader was unavailable, or once the field was changed", () => {
+    expect(readingConcerns(need, record(base, r()))).toEqual([]);
+    expect(readingConcerns(need, { ...record(base, r({ quantity: { amount: 100, unit: "L" } })), status: "unavailable" })).toEqual([]);
+    expect(readingConcerns(need, undefined)).toEqual([]);
+    const changed = applyNeedPatch(need, { quantity: { amount: 500, unit: "L" } });
+    expect(readingConcerns(changed, record(base, r({ quantity: { amount: 100, unit: "L" } })))).toEqual([]);
+  });
+
+  it("taking the second reading's claims or allergens rewrites only those", () => {
+    const negated = record(base, r({ item: { attributes: [], excludedAttributes: ["lactose_free"] } }));
+    const [c] = readingConcerns(need, negated);
+    const after = applyNeedPatch(need, c.corrections.find((x) => x.id === "use_second")!.patch!);
+    expect(after.item).toMatchObject({ attributes: [], excludedAttributes: ["lactose_free"] });
+    const nuts = record(base, r({ forbiddenAllergens: ["nuts"] }));
+    const [a] = readingConcerns(need, nuts);
+    expect(applyNeedPatch(need, a.corrections.find((x) => x.id === "use_second")!.patch!).forbiddenAllergens).toEqual(["nuts"]);
+  });
+
+  it("the ledger line names both readers and what happened", () => {
+    expect(describeSecondReading(record(base, r()))).toMatch(/^Read twice, by Claude Opus 5.5 and NVIDIA Nemotron 3 Nano: the two readings agree/);
+    expect(describeSecondReading({ ...record(base, r()), status: "unavailable", reason: "timeout" })).toMatch(/unavailable \(timeout\)\. Dock carried on with the first reading\./);
+  });
+
+  it("names readers in words", () => {
+    expect(readerName("anthropic:claude-opus-5-5")).toBe("Claude Opus 5.5");
+    expect(readerName("featherless:nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16")).toBe("NVIDIA Nemotron 3 Super");
+  });
+});

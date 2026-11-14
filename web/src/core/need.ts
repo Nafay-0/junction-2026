@@ -82,6 +82,7 @@ export type NeedPatch = {
   deliverBy?: string | null;
   item?: { productId?: string | null; attributes?: string[]; excludedAttributes?: string[] };
   requiredClaims?: string[];
+  forbiddenAllergens?: string[];
   sameAsLastTime?: boolean;
 };
 
@@ -97,6 +98,7 @@ export function applyNeedPatch(need: StructuredNeed, patch: NeedPatch): Structur
     if (patch.item.excludedAttributes) next.item.excludedAttributes = [...patch.item.excludedAttributes];
   }
   if (patch.requiredClaims) next.requiredClaims = [...patch.requiredClaims];
+  if (patch.forbiddenAllergens) next.forbiddenAllergens = [...patch.forbiddenAllergens];
   if (patch.sameAsLastTime !== undefined) next.sameAsLastTime = patch.sameAsLastTime;
   return NeedSchema.parse(next);
 }

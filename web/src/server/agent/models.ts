@@ -14,13 +14,14 @@ import { priceOf, type Price } from "./pricing";
  *   compat:<model-id>                 any OpenAI-compatible endpoint: OPENAI_COMPATIBLE_BASE_URL, OPENAI_COMPATIBLE_API_KEY
  *   verda:<model-id>                  VERDA_BASE_URL, VERDA_API_KEY            (OpenAI-compatible)
  *   nvidia:<model-id>                 NVIDIA_BASE_URL (default NVIDIA's hosted API), NVIDIA_API_KEY (OpenAI-compatible)
+ *   featherless:<org/model-id>        FEATHERLESS_API_KEY (OpenAI-compatible, https://api.featherless.ai/v1): open-weights models
  *
  * A base URL and key passed in code win over the environment. Model ids are passed through unchanged, so a
  * new model needs no code change; only its price (pricing.ts) is needed for the cost estimate.
  */
 
-export type Provider = "anthropic" | "openai" | "google" | "compat" | "verda" | "nvidia";
-const PROVIDERS: Provider[] = ["anthropic", "openai", "google", "compat", "verda", "nvidia"];
+export type Provider = "anthropic" | "openai" | "google" | "compat" | "verda" | "nvidia" | "featherless";
+const PROVIDERS: Provider[] = ["anthropic", "openai", "google", "compat", "verda", "nvidia", "featherless"];
 
 /** Cheapest suitable model per provider, checked against each provider's model list and pricing page on 2026-11-13. */
 export const CHEAP_DEFAULTS: Record<"anthropic" | "openai" | "google", string> = {
@@ -31,7 +32,11 @@ export const CHEAP_DEFAULTS: Record<"anthropic" | "openai" | "google", string> =
 
 export type ModelSpec = { provider: Provider; modelId: string; id: string };
 
-export type ModelOptions = { baseURL?: string; apiKey?: string; env?: Record<string, string | undefined> };
+/**
+ * `extraBody`: fields added to an OpenAI-compatible request body as they are, for a setting the AI SDK has no name
+ * for (Nemotron's `chat_template_kwargs: { enable_thinking: false }`, say). Ignored by the other providers.
+ */
+export type ModelOptions = { baseURL?: string; apiKey?: string; env?: Record<string, string | undefined>; extraBody?: Record<string, unknown> };
 
 export class ModelConfigError extends Error {
   constructor(
@@ -60,6 +65,7 @@ const ENDPOINTS: Record<Provider, Endpoint> = {
   compat: { keyVars: ["OPENAI_COMPATIBLE_API_KEY"], baseVar: "OPENAI_COMPATIBLE_BASE_URL" },
   verda: { keyVars: ["VERDA_API_KEY"], baseVar: "VERDA_BASE_URL" },
   nvidia: { keyVars: ["NVIDIA_API_KEY"], baseVar: "NVIDIA_BASE_URL", defaultBase: "https://integrate.api.nvidia.com/v1" },
+  featherless: { keyVars: ["FEATHERLESS_API_KEY"], baseVar: "FEATHERLESS_BASE_URL", defaultBase: "https://api.featherless.ai/v1" },
 };
 
 function keyFor(provider: Provider, env: Record<string, string | undefined>): string | undefined {
@@ -93,7 +99,14 @@ export function createModel(spec: string | ModelSpec, opts: ModelOptions = {}): 
       break;
     default:
       if (!baseURL) throw new ModelConfigError(`No base URL for ${s.provider}: set ${e.baseVar}.`, "model_key_missing");
-      model = createOpenAICompatible({ name: s.provider, baseURL, apiKey, includeUsage: true, supportsStructuredOutputs: true })(s.modelId);
+      model = createOpenAICompatible({
+        name: s.provider,
+        baseURL,
+        apiKey,
+        includeUsage: true,
+        supportsStructuredOutputs: true,
+        ...(opts.extraBody ? { transformRequestBody: (args: Record<string, unknown>) => ({ ...args, ...opts.extraBody }) } : {}),
+      })(s.modelId);
   }
   return { model, spec: s, price: priceOf(s.id, env) };
 }

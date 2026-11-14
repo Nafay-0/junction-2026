@@ -77,6 +77,10 @@ export type InterpretOptions = {
   timeoutMs?: number;
   /** The kitchen's earlier requests, newest first, for follow-ups that refer to one. */
   earlier?: EarlierRequest[];
+  /** A call that may be skipped (the second reader): refused near the daily caps, so first readings keep their room. */
+  spare?: boolean;
+  /** Cancels the call (the second reader, when the first reading failed). */
+  signal?: AbortSignal;
 };
 
 const WEEKDAYS: [string, string, string][] = [
@@ -199,7 +203,7 @@ export async function interpretNeed(opts: InterpretOptions): Promise<InterpretRe
     }
   }
 
-  reserveLlmCall(); // public-demo caps: daily calls and spend, and the DOCK_LLM=off switch (server/limits.ts)
+  reserveLlmCall(undefined, { spare: opts.spare }); // public-demo caps: daily calls and spend, and the DOCK_LLM=off switch (server/limits.ts)
   const now = opts.now ?? new Date();
   const earlier = (opts.earlier ?? []).slice(0, MAX_EARLIER);
   const schema = earlier.length ? LlmFollowUp : LlmNeed;
@@ -217,7 +221,7 @@ export async function interpretNeed(opts: InterpretOptions): Promise<InterpretRe
           output: Output.object({ schema, name: "structured_need", description: "The buyer's need, with unstated fields left empty." }),
           maxOutputTokens: 4000,
           maxRetries: 0,
-          abortSignal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
+          abortSignal: opts.signal ? AbortSignal.any([opts.signal, AbortSignal.timeout(Math.max(1, deadline - Date.now()))]) : AbortSignal.timeout(Math.max(1, deadline - Date.now())),
         }),
       { deadline, policy: { maxRetries: 2, baseMs: 500, maxMs: 4000 } },
     );
