@@ -24,7 +24,7 @@ export function shortName(name: string): string {
   for (const w of words) {
     if (/\d/.test(w) || /^(x|l|kg|g|ml|dl|cl)$/i.test(w) || out.length >= 4) break;
     // Marketing words a chef does not say ("Peltolan hand made churned butter" is the Peltolan churned butter).
-    if (/^(hand|made|handmade|käsintehty|gourmet)$/i.test(w) && out.length) continue;
+    if (/^(hand|made|handmade|käsintehty|gourmet|hyvä|suomalainen)$/i.test(w) && out.length) continue;
     out.push(w);
   }
   return out.join(" ") || name;
