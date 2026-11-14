@@ -65,7 +65,7 @@ export const WIDGET_TEXT = defineText({
     },
     answer: { why: "Why I ask", yes: "Yes", no: "No", usual: (v: string) => `Usual: ${v}`, less: "Less", more: "More", answered: "Answered" },
     home: { today: "Needs you today", start: "Start here", quietMark: "All clear", more: (n: number) => `Show ${n} more`, fewer: "Show fewer" },
-    show: { add: "Add", added: "Added", again: "Order again", pause: "Paused", running: "Running", change: "Change", forget: "Forget", edit: "Edit", before: "Now", after: "After your change", sign: "Sign the new rules", step: (n: number, of: number) => `Step ${n} of ${of}`, back: "Back", skip: "Skip for now" },
+    show: { add: "Add", added: "Added", again: "Order again", pause: "Paused", running: "Running", change: "Change", forget: "Forget", edit: "Edit", before: "Now", was: "Before", after: "After", step: (n: number, of: number) => `${n} of ${of}`, back: "Back", more: (n: number) => `Show ${n} more`, cancel: "Leave as it is", next: "Next" },
     more: {
       show: "Show",
       hide: "Hide",
@@ -135,7 +135,7 @@ export const WIDGET_TEXT = defineText({
     },
     answer: { why: "Miksi kysyn", yes: "Kyllä", no: "Ei", usual: (v: string) => `Tavallisesti: ${v}`, less: "Vähemmän", more: "Enemmän", answered: "Vastattu" },
     home: { today: "Vaatii huomiotasi tänään", start: "Aloita tästä", quietMark: "Kaikki kunnossa", more: (n: number) => `Näytä ${n} lisää`, fewer: "Näytä vähemmän" },
-    show: { add: "Lisää", added: "Lisätty", again: "Tilaa uudelleen", pause: "Tauolla", running: "Käynnissä", change: "Muuta", forget: "Unohda", edit: "Muokkaa", before: "Nyt", after: "Muutoksesi jälkeen", sign: "Allekirjoita uudet säännöt", step: (n: number, of: number) => `Vaihe ${n}/${of}`, back: "Takaisin", skip: "Ohita toistaiseksi" },
+    show: { add: "Lisää", added: "Lisätty", again: "Tilaa uudelleen", pause: "Tauolla", running: "Käynnissä", change: "Muuta", forget: "Unohda", edit: "Muokkaa", before: "Nyt", was: "Ennen", after: "Jälkeen", step: (n: number, of: number) => `${n}/${of}`, back: "Takaisin", more: (n: number) => `Näytä ${n} lisää`, cancel: "Jätä ennalleen", next: "Seuraava" },
     more: {
       show: "Näytä",
       hide: "Piilota",
@@ -205,7 +205,7 @@ export const WIDGET_TEXT = defineText({
     },
     answer: { why: "Varför jag frågar", yes: "Ja", no: "Nej", usual: (v: string) => `Vanligtvis: ${v}`, less: "Mindre", more: "Mer", answered: "Besvarad" },
     home: { today: "Behöver dig i dag", start: "Börja här", quietMark: "Allt klart", more: (n: number) => `Visa ${n} till`, fewer: "Visa färre" },
-    show: { add: "Lägg till", added: "Tillagd", again: "Beställ igen", pause: "Pausad", running: "Aktiv", change: "Ändra", forget: "Glöm", edit: "Redigera", before: "Nu", after: "Efter din ändring", sign: "Signera de nya reglerna", step: (n: number, of: number) => `Steg ${n} av ${of}`, back: "Tillbaka", skip: "Hoppa över tills vidare" },
+    show: { add: "Lägg till", added: "Tillagd", again: "Beställ igen", pause: "Pausad", running: "Aktiv", change: "Ändra", forget: "Glöm", edit: "Redigera", before: "Nu", was: "Före", after: "Efter", step: (n: number, of: number) => `${n} av ${of}`, back: "Tillbaka", more: (n: number) => `Visa ${n} till`, cancel: "Låt det vara", next: "Nästa" },
     more: {
       show: "Visa",
       hide: "Dölj",
