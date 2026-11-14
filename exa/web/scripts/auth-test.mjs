@@ -85,8 +85,12 @@ try {
   const nobody = new Client();
   let r = await nobody.get("/api/auth/me");
   check("signed out: the API says so", r.status === 401, say(r));
+  // On the web the front page is the landing page for someone who is not signed in. The desktop
+  // app, which names itself in its User-Agent, never shows it: there the same request goes to sign in.
   r = await nobody.get("/");
-  check("signed out: the app sends you to the sign-in page", r.status >= 300 && r.status < 400 && /\/login/.test(r.location ?? ""), `${r.status} ${r.location}`);
+  check("signed out on the web: the front page is the landing page", r.status === 200, `${r.status} ${r.location}`);
+  const fromApp = await fetch(base + "/", { redirect: "manual", headers: { "user-agent": "Mozilla/5.0 BerylDesktop/0.1.0" } });
+  check("signed out in the desktop app: it sends you to the sign-in page", fromApp.status >= 300 && fromApp.status < 400 && /\/login/.test(fromApp.headers.get("location") ?? ""), `${fromApp.status} ${fromApp.headers.get("location")}`);
   r = await nobody.get("/admin");
   check("signed out: so does the admin area, and it remembers where you were going", /\/login\?next=%2Fadmin/.test(r.location ?? ""), `${r.status} ${r.location}`);
   r = await nobody.get("/api/conversations");

@@ -21,10 +21,10 @@ export type ModeInfo = {
 
 /** From the quickest to the most capable. */
 export const MODES: ModeInfo[] = [
-  { id: "ultrafast", label: "Ultra fast", blurb: "The quickest answers, for everyday tasks.", rank: 0 },
-  { id: "fast", label: "Fast", blurb: "Quick, with more care over the details.", rank: 1 },
-  { id: "smart", label: "Smart", blurb: "Thinks things through. Best for most tasks.", rank: 2 },
-  { id: "expert", label: "Expert", blurb: "The deepest reasoning, for hard questions.", rank: 3 },
+  { id: "ultrafast", label: "Ultra fast", blurb: "Quick answers for everyday things.", rank: 0 },
+  { id: "fast", label: "Fast", blurb: "Fast, with a bit more care.", rank: 1 },
+  { id: "smart", label: "Smart", blurb: "Thinks it through. Best for most tasks.", rank: 2 },
+  { id: "expert", label: "Expert", blurb: "For the hard questions. Takes longer.", rank: 3 },
 ];
 
 export const MODE_IDS = MODES.map((m) => m.id);
@@ -64,9 +64,9 @@ export type Effort = 1 | 2 | 3 | 4;
 
 export const EFFORTS: Array<{ value: Effort; label: string; blurb: string }> = [
   { value: 1, label: "Quick", blurb: "Answers as soon as it can." },
-  { value: 2, label: "Balanced", blurb: "Takes a moment to think before it acts." },
-  { value: 3, label: "Thorough", blurb: "Thinks carefully and checks more sources." },
-  { value: 4, label: "Max", blurb: "Takes its time: the deepest thinking and the widest research." },
+  { value: 2, label: "Balanced", blurb: "Thinks a little first." },
+  { value: 3, label: "Thorough", blurb: "Thinks carefully, checks more sources." },
+  { value: 4, label: "Max", blurb: "Takes its time. Deepest thinking, widest research." },
 ];
 
 export const DEFAULT_EFFORT: Effort = 1;

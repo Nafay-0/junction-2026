@@ -82,7 +82,7 @@ export function ModePicker({
               </button>
             );
           })}
-          {offered.length < MODES.length ? <p className="px-2 pt-1.5 pb-1 text-[0.72rem] leading-snug text-subtle">Your administrator chooses which modes this account can use.</p> : null}
+          {offered.length < MODES.length ? <p className="px-2 pt-1.5 pb-1 text-[0.72rem] leading-snug text-subtle">Your admin picks which modes you get.</p> : null}
         </div>
 
         <div className="border-t border-border px-3.5 pt-3 pb-3.5">

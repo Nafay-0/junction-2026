@@ -15,7 +15,7 @@ const EASE = [0.2, 0.8, 0.2, 1] as const;
 const POINTS = [
   { icon: <Globe />, text: "Searches the live web with Exa" },
   { icon: <LayoutGrid />, text: "Answers as maps, charts and cards" },
-  { icon: <MousePointerClick />, text: "Acts in a live browser, in the desktop app" },
+  { icon: <MousePointerClick />, text: "Books and buys for you in the desktop app" },
 ];
 
 /**
@@ -76,7 +76,7 @@ export function LoginScreen({
             <h1 className="font-display mt-3 text-[2rem] leading-[1.12] text-balance sm:text-[2.5rem]">
               Welcome back.
               <br />
-              <span className="text-muted-foreground">Sign in to carry on.</span>
+              <span className="text-muted-foreground">Sign in to continue.</span>
             </h1>
           </motion.div>
 
@@ -134,7 +134,7 @@ export function LoginScreen({
               {busy ? null : <ArrowRight className="size-4 transition-transform duration-200 group-hover/go:translate-x-0.5" />}
             </button>
 
-            <p className="text-center text-[0.78rem] leading-snug text-muted-foreground">Accounts are made by your administrator. If you do not have one, ask them for it.</p>
+            <p className="text-center text-[0.78rem] leading-snug text-muted-foreground">Accounts are by invitation. Ask your admin for one.</p>
           </motion.form>
 
           <motion.ul

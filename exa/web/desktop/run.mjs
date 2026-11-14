@@ -4,6 +4,10 @@
 // it. With nothing set, that is a server on this computer (started here if it is not up yet,
 // BERYL_PORT picks the port, default 3000). BERYL_URL points the app at a server that is already
 // running anywhere: `BERYL_URL=https://beryl.example.com pnpm desktop`.
+//
+// Only one copy of the app runs per profile: started while Beryl is already open, this brings
+// that window forward and stops. To run a second copy beside it, give it a profile of its own:
+// `BERYL_PROFILE=/tmp/beryl-dev pnpm desktop`.
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import path from "node:path";

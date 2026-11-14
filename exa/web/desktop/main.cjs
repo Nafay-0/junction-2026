@@ -19,6 +19,22 @@ const { createEngine } = require("./dist/engine.cjs");
 
 app.setName("Beryl");
 
+// A profile of its own, when asked for: BERYL_PROFILE=<folder> keeps this copy's settings and
+// sign-ins there, so a second copy can run beside the first (development, testing a new build).
+if (process.env.BERYL_PROFILE) app.setPath("userData", path.resolve(process.env.BERYL_PROFILE));
+
+// One copy at a time per profile. Two would share the same settings and website sign-ins and
+// overwrite each other's, so a second one brings the first to the front and leaves.
+const onlyCopy = app.requestSingleInstanceLock();
+if (!onlyCopy) app.quit();
+app.on("second-instance", () => {
+  const [open] = BrowserWindow.getAllWindows();
+  if (!open) return;
+  if (open.isMinimized()) open.restore();
+  open.show();
+  open.focus();
+});
+
 /* ───────────── Where the server is ───────────── */
 
 const settingsFile = () => path.join(app.getPath("userData"), "settings.json");
@@ -30,8 +46,11 @@ function readJson(file) {
   }
 }
 const asAddress = (value) => {
+  // Nothing given is nothing: without this, an unset variable would read as the address "undefined".
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text) return null;
   try {
-    const url = new URL(/^https?:\/\//i.test(String(value)) ? String(value) : `https://${value}`);
+    const url = new URL(/^https?:\/\//i.test(text) ? text : `https://${text}`);
     return url.protocol === "http:" || url.protocol === "https:" ? url.origin : null;
   } catch {
     return null;
@@ -178,6 +197,8 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Another copy is already open with this profile: it has been brought forward, and this one is on its way out.
+  if (!onlyCopy) return;
   const icon = path.join(__dirname, "icon.png");
   if (process.platform === "darwin" && app.dock && fs.existsSync(icon)) app.dock.setIcon(nativeImage.createFromPath(icon));
 

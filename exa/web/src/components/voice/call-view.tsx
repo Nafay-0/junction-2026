@@ -110,7 +110,7 @@ export function CallView({
       : call.status === "reconnecting"
         ? "Reconnecting"
         : call.muted
-          ? "You are muted"
+          ? "You're muted"
           : working
             ? working
             : STATUS[call.status];
@@ -188,7 +188,7 @@ export function CallView({
               {caption ? (
                 <p className="animate-fade text-[1.15rem] leading-relaxed text-balance text-foreground @min-[440px]/chat:text-[1.3rem]">{tail(caption)}</p>
               ) : !call.heard && call.status === "listening" && !call.muted ? (
-                <p className="animate-fade text-[0.95rem] leading-relaxed text-subtle">Go ahead, I am listening. Speak in any language.</p>
+                <p className="animate-fade text-[0.95rem] leading-relaxed text-subtle">Go ahead, I&apos;m listening.</p>
               ) : null}
             </div>
           </div>

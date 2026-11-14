@@ -366,7 +366,7 @@ function safeTimeZone(tz: string | undefined): string {
 
 function friendlyError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
-  if (/rate limit|429/i.test(message)) return "It is busy right now. Give it a few seconds and try again.";
+  if (/rate limit|429/i.test(message)) return "Busy right now. Try again in a few seconds.";
   if (/credit|402|billing/i.test(message)) return "The account behind this demo has run out of credit.";
   if (/context|too long|maximum/i.test(message)) return "This conversation got too long. Start a new task to continue.";
   if (/abort/i.test(message)) return "Stopped.";

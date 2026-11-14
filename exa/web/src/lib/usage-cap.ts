@@ -6,7 +6,7 @@
 
 export const USAGE_CAP_CODE = "usage_cap";
 
-export const USAGE_CAP_SENTENCE = "You have reached the usage limit set for your account. Contact your administrator to carry on.";
+export const USAGE_CAP_SENTENCE = "You've hit your usage limit. Ask your admin to raise it.";
 
 /** What `/api/usage` answers. The amounts are only sent to an account that may see its usage. */
 export type CapStatus = {

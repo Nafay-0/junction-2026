@@ -3,12 +3,42 @@
 //   public/icon-192.png     the installed web app's icons
 //   public/icon-512.png
 //   public/icon-maskable.png  the same on a full square, for phones that cut their own shape
+//   desktop/icon.ico        the Windows app's icon, made from public/icon-512.png (no margin: Windows icons fill their square)
 // Run after changing the logo: pnpm icons   (it uses Electron to draw them)
-const { app, BrowserWindow } = require("electron");
+// `pnpm icons ico` only remakes desktop/icon.ico from the picture that is already there.
+const { app, BrowserWindow, nativeImage } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
 
 const web = path.join(__dirname, "..");
+
+/**
+ * A Windows icon file. It is a small table of sizes followed by the pictures themselves, and each
+ * picture may simply be a PNG, so nothing but the sizes has to be worked out here.
+ */
+function writeIco() {
+  const source = nativeImage.createFromPath(path.join(web, "public/icon-512.png"));
+  if (source.isEmpty()) throw new Error("public/icon-512.png is missing: draw the icons first (pnpm icons).");
+  const pictures = [16, 24, 32, 48, 64, 128, 256].map((size) => ({ size, png: source.resize({ width: size, height: size, quality: "best" }).toPNG() }));
+  const header = Buffer.alloc(6);
+  header.writeUInt16LE(1, 2); // an icon, not a cursor
+  header.writeUInt16LE(pictures.length, 4);
+  let offset = header.length + 16 * pictures.length;
+  const table = pictures.map(({ size, png }) => {
+    const entry = Buffer.alloc(16);
+    // One byte each for width and height, where 0 stands for 256.
+    entry.writeUInt8(size >= 256 ? 0 : size, 0);
+    entry.writeUInt8(size >= 256 ? 0 : size, 1);
+    entry.writeUInt16LE(1, 4); // colour planes
+    entry.writeUInt16LE(32, 6); // bits per pixel
+    entry.writeUInt32LE(png.length, 8);
+    entry.writeUInt32LE(offset, 12);
+    offset += png.length;
+    return entry;
+  });
+  fs.writeFileSync(path.join(web, "desktop/icon.ico"), Buffer.concat([header, ...table, ...pictures.map((p) => p.png)]));
+  console.log("made", "desktop/icon.ico", pictures.map((p) => p.size).join(", "), "px");
+}
 const brand = fs.readFileSync(path.join(web, "src/lib/brand.ts"), "utf8");
 const facets = [...brand.matchAll(/\{ d: "([^"]+)", opacity: ([\d.]+) \}/g)].map((m) => ({ d: m[1], opacity: Number(m[2]) }));
 const table = brand.match(/table: "([^"]+)"/)[1];
@@ -32,6 +62,11 @@ const ICONS = [
 ];
 
 app.whenReady().then(async () => {
+  if (process.argv.includes("ico")) {
+    writeIco();
+    app.exit(0);
+    return;
+  }
   // Every icon is drawn large in one hidden window and scaled down to its size.
   const os = require("node:os");
   const sheet = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "beryl-icons-")), "icon.html");
@@ -45,5 +80,6 @@ app.whenReady().then(async () => {
     console.log("drew", icon.file, `${icon.size} px`);
   }
   fs.rmSync(path.dirname(sheet), { recursive: true, force: true });
+  writeIco();
   app.exit(0);
 });

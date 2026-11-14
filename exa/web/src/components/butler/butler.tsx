@@ -1029,7 +1029,7 @@ function ChatView({
             autoFocus
           />
           )}
-          <p className="mt-2 hidden text-center text-[0.7rem] text-subtle @min-[520px]/chat:block">Searches the live web with Exa. Check important details at the source before you act.</p>
+          <p className="mt-2 hidden text-center text-[0.7rem] text-subtle @min-[520px]/chat:block">Answers come from the live web. Double-check anything important.</p>
         </div>
       </div>
       </>
@@ -1049,8 +1049,8 @@ function ReadOnlyNote({ startedIn, onNewTask }: { startedIn: ClientKind; onNewTa
         <p className="text-[0.9rem] leading-5 font-medium">Read-only here</p>
         <p className="mt-0.5 text-[0.8rem] leading-snug text-muted-foreground">
           {startedIn === "desktop"
-            ? `This conversation was started in the ${APP_NAME} desktop app, where the agent works in a live browser. Open it there to carry on.`
-            : `This conversation was started in ${APP_NAME} on the web. Open it there to carry on, or start a new task here.`}
+            ? `This chat started in the ${APP_NAME} desktop app. Open it there to continue.`
+            : `This chat started on the web. Open it there to continue, or start a new one here.`}
         </p>
       </div>
       <button

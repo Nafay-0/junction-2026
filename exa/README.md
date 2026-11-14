@@ -77,6 +77,25 @@ The model can also show a comparison table, key facts, a plan, clarifying questi
 
 Every widget shows its sources. Every answer shows the mode it ran in and the time. An account the admin lets see usage also gets the number of Exa calls and the cost, split by kind, and the bar above the conversation adds them up; the bar also carries the conversation's name.
 
+## The website and the downloads
+
+**Landing page.** Someone who is not signed in sees the landing page at `/` on the web (`web/src/components/landing/`): what Beryl does, a place for the demo video, the same product on web, desktop and phone, and the downloads. Signed in, `/` is the app. The desktop app never shows it: a signed-out window there goes straight to sign-in (the app's window names itself in its User-Agent). `/about` shows the page to anyone. The pictures on it are real screenshots of the app (`web/public/landing/`), in both themes. Set `BERYL_DEMO_VIDEO` to a YouTube link or a video file to fill the demo section.
+
+**Desktop downloads.** `pnpm desktop:release` builds what the site offers, from a Mac, in under two minutes:
+
+| File | For | Size |
+|---|---|---|
+| `Beryl-mac-apple-silicon.dmg` | Mac, M1 or newer, macOS 13 or later | 118 MB |
+| `Beryl-mac-intel.dmg` | Mac, Intel, macOS 13 or later | 125 MB |
+| `Beryl-windows.zip` | Windows 10 and 11, 64-bit | 154 MB |
+
+They land in `web/desktop/release/downloads/` with a `manifest.json` (version, size, SHA-256). The site's buttons link to `/download/<id>`, which sends the file from that folder, or redirects to `BERYL_DOWNLOADS_URL` when the files are hosted in a bucket. The list of downloads and the first-launch steps live in `web/src/lib/downloads.ts`.
+
+- **The server address** is baked in when packaging: `BERYL_SERVER_URL=https://your.domain pnpm desktop:release`. Without it the app looks for a server on the same computer, and anyone can change the address on the app's "cannot reach the server" page.
+- **Not signed yet.** The Mac builds are not notarised and the Windows build is not signed, so each system asks the user to confirm once. The landing page shows the steps. An Apple Developer ID and a Windows certificate would remove them.
+- **Not run on Windows yet.** The Windows build is made on a Mac and its contents are checked, but nobody has started it on a Windows machine. The Intel Mac build has not been run either.
+- `pnpm desktop:pack` still builds only for the computer you are on, into `web/desktop/release/build/`.
+
 ## Tasks keep running
 
 A task belongs to the server once it has started, not to the page that started it. Reloading, closing the window or opening another conversation only stops someone watching.

@@ -43,9 +43,9 @@ export function CapDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
             <Lock className="size-5" />
           </span>
           <DialogHeader className="mt-4 gap-2 text-left">
-            <DialogTitle className="text-[1.15rem] leading-tight font-semibold tracking-tight">You have reached your usage limit</DialogTitle>
+            <DialogTitle className="text-[1.15rem] leading-tight font-semibold tracking-tight">You&apos;ve hit your usage limit</DialogTitle>
             <DialogDescription className="text-[0.88rem] leading-relaxed text-muted-foreground">
-              Your administrator set a limit on how much this account can use, and it has been reached{amounts}. Whatever was running has stopped, and nothing more can run until they raise it. Your conversations are still here to read.
+              Your admin set a limit for this account and you&apos;ve reached it{amounts}. Nothing new will run until they raise it. Your chats are still here.
             </DialogDescription>
           </DialogHeader>
         </div>
@@ -66,7 +66,7 @@ export function CapDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
               className="flex h-10 items-center justify-center gap-2 rounded-full bg-primary px-4 text-[0.85rem] font-medium text-primary-foreground transition-opacity hover:opacity-90"
             >
               <Mail className="size-4" />
-              Contact your administrator
+              Email your admin
             </a>
           ) : (
             <button type="button" onClick={() => onOpenChange(false)} className="flex h-10 items-center justify-center rounded-full bg-primary px-5 text-[0.85rem] font-medium text-primary-foreground transition-opacity hover:opacity-90">
@@ -89,7 +89,7 @@ export function CapNote({ onDetails }: { onDetails: () => void }) {
       </span>
       <div className="min-w-[12rem] flex-1">
         <p className="text-[0.9rem] leading-5 font-medium">Usage limit reached</p>
-        <p className="mt-0.5 text-[0.8rem] leading-snug text-muted-foreground">Nothing more can run on this account until your administrator raises its limit.</p>
+        <p className="mt-0.5 text-[0.8rem] leading-snug text-muted-foreground">Ask your admin to raise it to keep going.</p>
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <button
@@ -103,7 +103,7 @@ export function CapNote({ onDetails }: { onDetails: () => void }) {
           {checking ? <LoaderCircle className="size-4 animate-spin" /> : <RotateCw className="size-4" />}
         </button>
         <button type="button" onClick={onDetails} className="flex h-9 items-center rounded-full bg-primary px-4 text-[0.85rem] font-medium text-primary-foreground transition-[transform,opacity] hover:opacity-90 active:scale-[0.98]">
-          What now
+          Details
         </button>
       </div>
     </div>

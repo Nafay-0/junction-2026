@@ -22,7 +22,8 @@
     "test:background": "node desktop/build.mjs && electron scripts/background-test.cjs",
     "desktop": "node desktop/run.mjs",
     "desktop:build": "node desktop/build.mjs",
-    "desktop:pack": "node desktop/pack.mjs",
+    "desktop:pack": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON desktop/pack.mjs",
+    "desktop:release": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON desktop/pack.mjs --all",
     "icons": "electron scripts/make-icons.cjs"
   },
   "dependencies": {

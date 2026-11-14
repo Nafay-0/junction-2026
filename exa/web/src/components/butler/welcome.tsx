@@ -17,37 +17,37 @@ const PRESETS: Preset[] = [
   {
     icon: <UtensilsCrossed />,
     title: "Plan a dinner",
-    hint: "Places on a map, hours, the weather, a booking link",
+    hint: "Restaurants, opening hours, the weather",
     prompt: (p) => `Find a cosy restaurant with good vegan options in central ${city(p)} for an anniversary dinner this Saturday evening, and check the weather for the walk there.`,
   },
   {
     icon: <Plane />,
     title: "Book a trip",
-    hint: "Live fares and hotel rates, side by side",
+    hint: "Flights and hotels at live prices",
     prompt: (p) => `Find flights from ${city(p)} to London for 5 to 8 December for one adult, and a well-rated hotel near Soho under 220 euros a night.`,
   },
   {
     icon: <ShoppingBag />,
     title: "Pick a product",
-    hint: "Prices, specs and a verdict",
+    hint: "Compare a few and choose",
     prompt: () => "Which noise-cancelling over-ear headphones should I buy for under 300 euros? Compare the best three or four.",
   },
   {
     icon: <ChartCandlestick />,
     title: "Follow a market",
-    hint: "Live prices and odds that keep updating",
+    hint: "Stocks and odds, live",
     prompt: () => "How is NVIDIA trading today, and what do prediction markets say about who wins the 2028 US presidential election?",
   },
   {
     icon: <Microscope />,
     title: "Research a decision",
-    hint: "A team of sub-agents, a sourced report",
+    hint: "A full report with sources",
     prompt: () => "I moved to Finland as a non-EU master's student in August 2024 and work part-time. Which rule changes since then affect me, and what should I do about each?",
   },
   {
     icon: <MousePointerClick />,
     title: "Do it for me",
-    hint: "Watch it work in a live browser, up to the step that is yours",
+    hint: "It shops, you check out",
     prompt: () => "Put a Bialetti Moka Express for 6 cups in the basket at a Finnish online shop that has it in stock, and take me to the checkout.",
   },
 ];
@@ -56,7 +56,7 @@ const PRESETS: Preset[] = [
 const SHOW_ME: Preset = {
   icon: <Images />,
   title: "Show me",
-  hint: "Pictures, a map and the facts behind them",
+  hint: "Photos, a map and the facts",
   prompt: () => "Show me the best places to see the northern lights near Rovaniemi, and tell me when to go.",
 };
 
@@ -88,8 +88,8 @@ export function Welcome({ place, onPick, onTalk }: { place: string; onPick: (pro
         </h1>
         <p className="mt-4 max-w-[34rem] text-[0.9rem] leading-relaxed text-muted-foreground @min-[440px]/chat:mt-5 @min-[440px]/chat:text-[0.95rem]">
           {desktop
-            ? "Pass me a task. I search the live web with Exa, show what I find as maps, charts and cards you can use, and do the work in a live browser you can watch. The last step comes back to you."
-            : `Pass me a task. I search the live web with Exa and show what I find as maps, charts and cards you can use. To have it done for you on a site, in a live browser you can watch, open the ${APP_NAME} desktop app.`}
+            ? "Ask for anything. I search the web, show you what I find, and do the clicking for you. The final call is always yours."
+            : `Ask for anything. I search the web and show you what I find. Want me to book or buy for you? That happens in the ${APP_NAME} desktop app.`}
         </p>
         {canTalk ? (
           <button

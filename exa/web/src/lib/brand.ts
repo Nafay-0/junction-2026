@@ -10,7 +10,7 @@
 export const APP_NAME = "Beryl";
 export const APP_TAGLINE = "Your internet butler";
 export const APP_DESCRIPTION =
-  "Hand over a task. Beryl searches the live web with Exa, shows what it finds as live maps, charts and cards, and in the desktop app works in a live browser you can watch, handing the task back for the step that is yours.";
+  "Tell Beryl what you need. It searches the live web, shows you the answer, and can finish the job in a browser while you watch.";
 
 /**
  * The logo: a cut beryl seen from above. Beryl crystals are six-sided, so the stone is a hexagon:
