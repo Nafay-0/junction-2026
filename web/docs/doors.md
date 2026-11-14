@@ -3,17 +3,18 @@
 One gate, every door. A kitchen reaches its purchasing agent however the moment allows; whatever the door, the
 request lands in the same structured need, the same intake (mistake check, at most a couple of typed questions,
 option cards, a choice, a fixed-price quote) and the same gate, and anything beyond the mandate is signed off by a
-named person on their phone with their passkey. These two doors add nothing to the core (`src/core/` is untouched):
-they call `dock.intake` and `dock.placeOrder` as the kitchen's own agent, exactly as the typed console does.
+named person on their phone with their passkey. These two doors add nothing to the intake or the gate: they call
+`dock.intake` and `dock.placeOrder` as the kitchen's own agent, exactly as the typed console does. (The voice work
+did fix the shared number and date reader in `core/grounding.ts`; see the evaluation.)
 
 | | Voice: "Call your agent" | Photo or document |
 |---|---|---|
 | For | hands full, a loud kitchen | whiteboards, handwritten lists, emailed orders, PDFs |
 | Components (`src/app/_channels/`) | `<CallAgent kitchen>` (button + overlay), `<CallScreen kitchen>` | `<ScanDoor kitchen>` |
-| Routes | `/ui-api/voice/{kitchen}/call`, `/call/{callId}`, `/tool` | `/ui-api/scan/{kitchen}`, `/step` |
-| Server (`src/server/channels/`) | `voice/` (tokens, calls, tools), `speech.ts`, `say.ts`, `prompts.ts` | `scan/` (reader, line rules, upload guard) |
+| Routes | `/ui-api/voice/{kitchen}/call`, `/call/{callId}`, `/tool`, `/ui-api/voice/usage` | `/ui-api/scan/{kitchen}`, `/step` |
+| Server (`src/server/channels/`) | `voice/` (`live.ts` Gemini, `realtime.ts` OpenAI, calls, tools), `speech.ts`, `say.ts`, `prompts.ts` | `scan/` (reader, line rules, upload guard) |
 | Pages | `/call` (what the call QR code opens), `/channels` (preview of both doors) | `/channels` |
-| Model | Gemini Live `gemini-3.8-live` (Google DeepMind) | Claude Haiku 5.5 (`DOCK_SCAN_MODEL`), after the evaluation below |
+| Model | Gemini Live `gemini-3.8-live`, OpenAI `gpt-realtime-2.1` as the fallback, after the evaluation below | Claude Haiku 5.5 (`DOCK_SCAN_MODEL`), after the evaluation below |
 
 ## How the portal mounts them
 
@@ -30,63 +31,87 @@ they call `dock.intake` and `dock.placeOrder` as the kitchen's own agent, exactl
 
 1. **Entry.** `/call` on a phone: a visitor who has joined (the approver cookie from `/join`) calls their own kitchen;
    one who has not gets the one-step passkey join first (same `/api/v1/join` API), then lands in the call. The
-   approver home now has a "Call your agent" button. `/call?k=kaari` and `?k=laakso` call the demo kitchens.
-2. **Ringing.** One tap: the AudioContext and the microphone are opened inside the tap (iOS needs a gesture for
-   both), a ring tone plays, the server reserves the kitchen's line and mints a token, the browser connects to Google.
-3. **Connected.** The agent greets the kitchen by name. It already holds, in its locked instructions, the kitchen's
-   standing rules and usual orders read through `dock.intake.kitchen()` (the kitchen repository, so whatever the
-   memory work adds there is picked up). Timer, time left, live transcript of both sides, hang-up.
-4. **The same process by voice.** `submit_request` (the caller's transcribed words go to the same interpret step as
-   typing) → **read-back** of an unusual amount with the reason ("1,000 L (one thousand litres) of lactose-free milk:
-   I am checking because that is a large amount" / "this kitchen usually orders about 100 L of milk") → the intake's
-   own checks and questions → the options read briefly with their trade-offs → the caller's choice → the fixed price
-   and what the gate will do → `place_order` → "waiting for Sanna Koskinen, head chef, to sign off on their phone".
-   The cards appear on screen throughout and can be tapped instead of spoken.
+   approver home has a "Call your agent" button. `/call?k=kaari` and `?k=laakso` call the demo kitchens.
+2. **One tap.** The AudioContext and the microphone are opened inside the tap (iOS needs a gesture for both), the
+   server reserves the kitchen's line and mints a session for the voice model (`DOCK_VOICE_MODEL`), the browser
+   connects to the provider directly. If the provider refuses the session (a quota close) or does not start it in
+   6 s, the call moves to the other provider (`DOCK_VOICE_FALLBACK_MODEL`) without the caller doing anything.
+3. **Connected.** The agent greets the kitchen by name. It already holds the kitchen's standing rules and usual
+   orders (`dock.intake.kitchen()`), and the recogniser is biased with the kitchen's own product words and about a
+   hundred kitchen words in the three languages (`VOICE_VOCABULARY` in `prompts.ts`). The screen is built from the
+   design kit (`_ui/thread.tsx`): the call's state at the centre (`VoiceStatus`: listening, thinking, speaking,
+   waiting for sign-off, reconnecting, paused), then the call as a thread: what the caller said (the live
+   transcript, as it arrives), the agent's one line, and AimoPilot's cards.
+4. **Every spoken request is read back before anything is priced.** `submit_request` sends the transcript (not the
+   model's own rendering) through the same interpreter as typing (and the second reader where it is on), then the
+   door reads it back in one sentence and on a card: amount, unit, product, day ("200 L (two hundred litres) of oat
+   drink, for Wednesday 18 November."), with the reason when there is one: the amount is unusual for this kitchen,
+   or **the two hearings disagree** (the transcript heard 15, the voice model heard 50: both are said, and the
+   caller decides). The caller says yes (or taps it), or says it again. Only then the intake runs: its mistake check
+   (an amount check the read-back already asked is not asked twice), questions, the options (spoken: how many, and
+   the suggested one in a sentence; never the list), the fixed price and what the gate will do, then "yes, place
+   it" → the gate → placed, or "Sanna Koskinen, head chef, must sign it on her phone".
 5. **End state.** An order waiting for sign-off shows "Sign off on this phone" (the visitor's own `/approve/{id}`);
-   the screen polls the order and the agent says when it is signed or declined.
+   the screen polls the order and the agent says when it is signed or declined. Hanging up keeps the call's desk:
+   "Continue by typing" carries on with the same request and its cards, a read-back still waiting included.
 
 ### The agent decides nothing
 
 - It has seven tools; each runs plain code on the server. Each tool result carries a `say` sentence composed by
-  plain code (`say.ts`); the agent is instructed to say only that, in the caller's language.
+  plain code (`say.ts`); the agent is instructed to say only that, in the caller's language, without a preamble.
 - **The caller's own words.** Every decision (read-back, check, question, option, placing the order) runs only with
-  the transcript of a new caller turn attached; yes/no decisions only when those words are a yes (`yesOrNo`, en/fi/sv).
-  A spoken request needs words the caller said in this turn (the model once submitted its own greeting as a request;
-  the door refuses it). The words are written to the ledger right before the decision (`data.step = "heard"`).
-- **Grounding check** (`_channels/grounding.ts`, tested): while the agent speaks, its transcript is checked against
-  every figure in this call's tool results: amounts, prices, dates and weekdays, clock times, and catalogue brand
-  names. Small bare numbers ("option 2") pass; money said rounded passes. On a mismatch the screen cuts the agent's
-  audio (it plays 250 ms behind, so most of a wrong sentence is never heard), strikes the line through with "did not
-  come from AimoPilot", sends the agent `[AimoPilot check] ... take it back`, and the ledger records `grounding_check`.
-- **No order from speech alone:** an order needs the option cards shown and one chosen, then a spoken (or tapped)
-  yes to place it; the gate decides; sign-off stays on the approver's phone with a passkey.
+  the transcript of a new caller turn attached; yes/no decisions only when those words are a yes (`yesOrNo`,
+  en/fi/sv). A spoken request needs words the caller said in this turn (the model has submitted its own greeting as a
+  request; the door refuses it). The words are written to the ledger right before the decision (`data.step = "heard"`).
+- **No amount the model alone heard.** The interpreter reads the transcript; the model's rendering is only compared
+  with it. When one hearing has the amount and the other does not, the read-back says so.
+- **Grounding check** (`core/grounding.ts`, tested): while the agent speaks, its transcript is checked against every
+  figure in this call's tool results. On a mismatch the screen cuts the agent's audio (it plays 250 ms behind),
+  strikes the line through, tells the agent to take it back, and the ledger records `grounding_check`.
+- **No order from speech alone:** an order needs the read-back confirmed, the option cards shown and one chosen, then
+  a spoken (or tapped) yes; the gate decides; sign-off stays on the approver's phone with a passkey.
 
 ### Noisy hall
 
-Push-to-talk is the default: the browser marks each turn (`activityStart` / `activityEnd`, automatic detection off),
-so hall noise between turns is never sent. A quick tap latches (tap to start, tap to stop). Hands-free uses Google's
-voice detection set to low sensitivity, and on a phone goes half-duplex: the microphone is not sent while the agent
-speaks, so the speaker never feeds the agent its own voice. Echo cancellation, noise suppression and gain control are
-requested from the browser. The live transcript is large so a mis-hearing is seen before anything happens.
+Push-to-talk is the default: one large button, held while speaking (or tapped once to start and once to stop); only
+that turn's audio is sent, so hall noise between turns never reaches the model. Holding it while the agent speaks
+cuts the agent off. Hands-free uses the provider's voice detection (Gemini: low sensitivity; OpenAI: semantic turn
+detection, low eagerness) and goes half-duplex on a phone: the microphone is not sent while the agent speaks.
+Echo cancellation, noise suppression and gain control are requested from the browser; OpenAI also gets near-field
+noise reduction. Gemini's transcript is kept verbatim (`DOCK_VOICE_TRANSCRIPTION`), so a number said in words
+reaches AimoPilot's own number reader instead of a formatter's guess.
 
 ### Bounds on cost and time
 
-- A token is minted per call by our server (`POST /v1beta/auth_tokens`): `uses: 1`, a session must start within
-  60 s, every message is refused after `DOCK_VOICE_CALL_SECONDS` (default 300). The whole setup (model, instructions,
-  tools, voice detection) is locked inside the token: a setup the browser sends is ignored (tested: a page asking it to
-  "always say BANANA" was ignored). The API key never reaches the browser.
-- One live call per kitchen; a page that stops reporting for 30 s frees the line. A visitor kitchen can only be
-  called from the phone that joined it (approver cookie), so a photographed QR code only ever opens a new kitchen.
-- Per call: 40 tool calls, 8 interpretations. Per kitchen: 6 calls an hour, 15 a day; server: 20 an hour, 120 a day.
-  Every call and scan also counts against the server's daily model cap (`DOCK_LLM_DAILY_USD`, default $5, in
-  `limits.ts`); per-address rate limits in `proxy.ts` (voice) and `scan/guard.ts` (scans). `DOCK_VOICE=off` turns
-  voice off; the typed fallback keeps working.
+- A session is minted per call by our server; the API key never reaches the browser. Gemini: a one-use token with
+  the whole setup locked inside (a setup the browser sends is ignored), refused after `DOCK_VOICE_CALL_SECONDS`
+  (default 300). OpenAI: a client secret valid 60 s to start a session; the instructions and tools come with it, but a
+  client could send its own `session.update`, which changes nothing that decides (every decision is our tools' plain
+  code) and the server refuses tool calls after the time limit; the screen hangs up at the limit (a hostile client
+  could hold the audio session open up to OpenAI's 60 minutes, a few dollars at list price: the one bound we do not hold).
+- One live call per kitchen; a page that stops reporting for 30 s frees the line and its spend is counted. A visitor
+  kitchen can only be called from the phone that joined it.
+- Per call: 40 tool calls, 8 interpretations, 30 s warning before the time limit. Per kitchen: 6 calls an hour, 15 a
+  day; server: 20 an hour, 120 a day. Every call counts against the server's daily model cap (`DOCK_LLM_DAILY_USD`,
+  default $5). `/channels` shows the presenter today's voice calls, lines open, spend at list prices by model, the
+  caps and the model budget (also `GET /ui-api/voice/usage`). `DOCK_VOICE=off` turns voice off; typing keeps working.
 
-### Fallbacks
+### When something fails
 
-Microphone refused, missing or on plain http, a token that cannot be minted, a WebSocket that does not open in 12 s,
-or a connection lost mid-call: the screen says which, and the same call continues by typing (same desk, same
-request), or "Call back" carries the request on screen into a new call.
+| What happens | What the caller sees | Way forward |
+|---|---|---|
+| Microphone refused | "The microphone is blocked for this page", how to allow it | the same call by typing; Call again after allowing |
+| Microphone taken away mid-call (permission revoked, another app) | "The microphone stopped" | the same call by typing, same request |
+| No microphone, or plain http | says which | typing |
+| Provider refuses the session (quota), or does not start it in 6 s | "Trying the other one…" | the other provider, automatically |
+| Provider rate limit mid-call | "The voice service is busy" | wait, or type instead |
+| Connection lost mid-call (network, provider) | "Reconnecting…", the status turns | up to two reconnects with the desk as it was; the agent says where things stand; then Call back / Type instead |
+| Nothing connects in 12 s (blocked WebSocket, captive portal) | "The voice connection did not open" | typing |
+| A phone call or Siri suspends the page's audio (iOS) | "Paused: tap to resume" | one tap |
+| Screen locked, page in the background | a held turn is released | back on the page: resumes, or reconnects |
+| No sound on an iPhone | "Turn the volume up and switch silent mode off" | |
+| 30 s before the time limit | a notice | continue by typing after it ends, same request |
+| Daily caps or model budget used up | the server's message | typing (the typed flow has its own caps) |
 
 ## The photo door
 
@@ -106,22 +131,91 @@ request), or "Call back" carries the request on screen into a new call.
 
 ## Evaluation (fixed sets, live runs on 14 Nov 2026)
 
-**Voice** (`eval/voice/`, `scripts/eval/eval-voice.ts`): twelve requests synthesised with macOS voices (British,
-Indian ×2, American ×2, South African, Australian, Irish, Finnish ×2, Swedish ×2), five with generated kitchen noise
-(pink noise, three other voices talking, pan clatter; three at speech −6 dB, two at equal level).
+**Voice** (`eval/voice/`, `scripts/eval/eval-voice.ts`, results in `eval/voice/results/`). The harness drives the
+same session the call screen gets (the server's setup, the browser's socket classes, push-to-talk at real-time pace)
+and runs every tool call through the real server tools against the demo kitchen in process. It scores what AimoPilot
+put to the caller, not what the model said: **right** (the read-back is the request as said; for a request with no
+amount, AimoPilot asked for it; for silence, nothing was submitted), **asked** (it asked again or flagged that the two
+hearings disagree, without reading back a guess), **wrong** (a read-back with a wrong amount, unit, product or day:
+the caller still has to say yes to it, so it is not an order, but it is the number to keep at zero).
 
-| Run | Structured need right (amount, unit, item) | Called the tool | Reply grounded | Reply in caller's language | Median end of speech → tool call |
-|---|---|---|---|---|---|
-| 1 | 7/12 | 10/12 | 11/12 | 9/12 | 1.4 s |
-| 2 | 7/12 | 11/12 | 11/12 | 10/12 | 1.4 s |
+    pnpm eval:voice --set orig|dev|held [--model gemini-3.8-live|gpt-realtime-2.1] [--only d01,d02] [--flow]
 
-What failed: background voices transcribed instead of the caller at equal loudness ("two plates of salad", "sauce de
-yaourt"); "butter" heard as "powder"; once nothing heard in moderate noise; once a session returned nothing; once the
-model submitted its own greeting as the request (now refused). The one ungrounded reply was the Live model emitting
-an unrelated essay with document ids into its transcript after a correct read-back; the grounding check flagged it
-(that would cut the audio). No case produced a wrong order silently: each miss is visible in the transcript and the
-read-back, and an order still needs a chosen card. In the browser test (below) a hands-free call went from greeting
-to a read-back to three spoken options with the right prices.
+Three sets: **orig**, the twelve clips of 13 Nov (macOS voices, five with a kitchen bed of pink noise, clatter and three
+intelligible talkers at −6 and 0 dB); **dev**, 36 new clips I tuned on; **held**, 36 more I did not tune on (only run
+at the end, once per model). Dev and held (`scripts/eval/make-voice-set-2.py`) share no sentence, voice or noise
+seed: OpenAI TTS voices with accents (Finnish, Swedish, Indian, Nigerian, Scottish, Southern US, Spanish, hurried,
+tired) and macOS voices; 22 English, 7 Finnish, 7 Swedish each; noise of hall chatter (six or more talkers,
+reverberant), a near competing talker, kitchen clatter, music, hum, at +10, +5 and 0 dB; numbers easy to mishear
+(fifteen/fifty, thirteen/thirty, "a hundred and ten", "two point five", "twelve hundred"), self-corrections ("a
+hundred litres, no, make that two hundred"), Finnish product words in English sentences ("twenty litres of maitoa"),
+packs, dates, "same as last time", requests with no amount, and silence.
+
+| Set | Model | Right | Asked | Wrong | Reply in caller's language | End of speech → tool call | → read-back heard (median / p90) | Cost per request turn |
+|---|---|---|---|---|---|---|---|---|
+| orig (13 Nov) | Gemini 3.8 Live, before | 7/12 | | | 10/12 | 1.4 s | | |
+| orig | **Gemini 3.8 Live, now** | **11/12** | 1 | **0** | | 0.49 s | 3.4 / 4.3 s | free tier (list ≈ $0.005) |
+| orig | OpenAI gpt-realtime-2.1 | 8/12 | 2 | 2 | 8/12 | 1.5 s | 4.5 / 6.8 s | $0.029 |
+| dev | Gemini 3.8 Live, first run | 31/36 | 1 | 3 | | 0.46 s | 3.3 s | free |
+| dev | **Gemini 3.8 Live, now** | **32/36** | 2 | 2 | | 0.48 s | 3.6 / 4.1 s | free |
+| dev | OpenAI gpt-realtime-2.1 | 28/36 | 7 | 1 | | 1.7 s | | $0.032 |
+| **held** | **Gemini 3.8 Live** | **33/36 (92 %)** | 1 | 2 | 30/34 | 0.48 s | 3.4 / 4.5 s | free |
+| **held** | OpenAI gpt-realtime-2.1 | 26/36 (72 %) | 9 | 1 | | 0.76 s | 4.0 / 6.0 s | $0.028 |
+
+By language on held, Gemini: English 22/22, Finnish 6/7, Swedish 5/7. Grounding: every reply on every set passed
+after the date fix below (36/36, 36/36, 12/12).
+
+**Why the five original clips failed, and what changed (causes, not clips):**
+- *01, nothing heard*: the session returned nothing (no usage at all). The old harness did not record close codes;
+  the new one does, and the free tier does refuse sessions (below). In the app a refused or silent session now moves
+  to the other provider in 6 s.
+- *03, "butter" heard as "powder"*: the recogniser had no idea what a kitchen orders. It is now biased with about a
+  hundred kitchen words in three languages plus the kitchen's own products (Gemini `customVocabulary`, OpenAI
+  `keywords`). Right in every run since.
+- *05, Finnish, nothing heard*: the model called `submit_request` with its own greeting on connect; the old harness
+  took that as the request and never played the clip. The door already refused it in the app; the harness now does
+  what the app does, and the agent is told never to pass a greeting on.
+- *08 and 11, the background talker transcribed instead of the caller*: 11 is now right; 08 (Swedish under three
+  louder talkers) is heard as "Täysmaito jogurtti" with no amount, so AimoPilot asks. Not fixed: at that level the
+  remedy is push-to-talk with the phone near the mouth.
+- A sixth found on the way: *10, "two and a half kilos"* had started failing since the interpreter's grounding check
+  arrived, because the shared number reader (`core/grounding.ts`) knew no halves, no Finnish teens ("kuusitoista")
+  and no Swedish tens ("sextio", "hundratio"), so a correctly heard amount was removed and the buyer asked again. It
+  reads them now (tested). The same file read the Finnish "20. marraskuuta" as March (the Swedish "mars" prefix), so
+  a correct Finnish read-back was struck through as ungrounded; fixed and tested.
+
+**What is still wrong, and why it is not an order:** the four wrong read-backs on dev and held are a Finnish or
+Swedish number the model itself mis-heard and the transcript agreed with ("hundratio" as 100, "kuusi" as 1, "tjugo
+kilo, nej, trettio" as "200 g, no, 30 g") and one 0 dB competing talker. Each was read back in one sentence and shown
+on the card, and needs the caller's spoken or tapped yes before anything is looked up; a disagreement between the
+two hearings (transcript 5, model 50) is said out loud instead of guessed. No clip in any run placed an order.
+
+**To a placed order** (`--flow`, Gemini, six original clips, synthesised replies "yes", "the first one", "yes, place
+it"): four reached the gate (all sent to a named person for sign-off, as relayed answers on a demo kitchen must be),
+median **67 s from the end of the request to the order** (42 to 70 s, three or four spoken answers each); the other
+two correctly ended "AimoPilot found nothing it can offer" (no product in that kitchen's mandate), with nothing
+invented.
+
+**Choice: Gemini 3.8 Live**, OpenAI gpt-realtime-2.1 as the automatic fallback (`DOCK_VOICE_FALLBACK_MODEL`). Gemini is
+more accurate in noise (its transcript follows the near speaker; OpenAI's transcriber wrote down background talkers
+and once answered in Japanese script), faster to the tool call and to the spoken read-back, answers in Finnish and Swedish more often, and costs
+nothing on the free tier (about a fifth of OpenAI at list price). OpenAI is the fallback because it is a different
+provider: a Google quota refusal or outage does not take voice down.
+
+**The free tier** (measured 14 Nov; Google does not publish Live limits for this model): 9 of 12 sessions opened at
+the same moment started, 3 were closed "1011 You exceeded your current quota"; during about 250 evaluation sessions
+in a day, two were refused mid-run with "Resource has been exhausted" while two sessions overlapped, and no daily
+cap was hit. A queue of judges calling one after another is fine; several at once will see some refusals, which the
+call screen moves to OpenAI in a second or two (about $0.03 a request turn, $0.10 to $0.15 a whole ordering call at
+list price; voice's daily caps and the server's model budget bound it). To remove the doubt: turn on billing for the
+Google project (paid Tier 1), about $0.01 to $0.03 per ordering call.
+
+**Languages, by these measurements:** English fully (22/22 on held). Finnish understood (6/7 on held) and, after the
+door started telling the agent the caller's language (`speakIn`, from the caller's own words), answered in Finnish
+7/7 on the dev clips. Swedish understood (5/7 on held) but answered in Swedish only 4/7 on the same dev rerun. So the
+call screen says exactly that: "Speak English, Finnish or Swedish. The agent answers in English or Finnish; in Swedish
+it understands you but may answer in English. Every amount is also on the screen." Numbers said in Finnish and
+Swedish are the weakest point; the read-back is what catches them.
 
 **Photo** (`eval/scan/`, `scripts/eval/make-scan-set.py`, `scripts/eval/eval-scan.ts`): twelve lists: whiteboard
 (marker), Finnish note, Swedish note, mixed Finnish/English on a chalkboard, a rotated phone photo with noise and
@@ -147,7 +241,7 @@ smudged amount as "cream 1 L"; Haiku never guessed it. The plain-code rules caug
 
 ## Mobile browsers
 
-Verified in Chromium with a Pixel 7 viewport (`scripts/eval/browser-call.ts`, against `pnpm build && pnpm start -p
+On 13 Nov, verified in Chromium with a Pixel 7 viewport (`scripts/eval/browser-call.ts`, against `pnpm build && pnpm start -p
 3100`): the call QR path (passkey join with a virtual authenticator, then the call screen of the visitor's own
 kitchen), a microphone refused (typed fallback, the same cards), the voice connection cut after 9 s ("The call
 dropped", Call back, Type instead), a full hands-free call fed by a synthesised voice (the request heard, the
@@ -156,16 +250,42 @@ door (the embedded instruction shown as not acted on, two lines queued, the firs
 kitchen portal's assistant panel at `/k/kaari` (both door buttons, the photo overlay, a call with the microphone
 refused falling back to typing).
 
-Still needs a person with a real **iPhone (Safari)** and a real **Android phone (Chrome)** on the public HTTPS
-address and on mobile data:
-- the microphone prompt and "Don't allow", then allowing it in site settings;
-- whether the agent's voice plays through the earpiece or the speaker while the microphone is open (Safari's
-  `navigator.audioSession = "play-and-record"` is set; routing cannot be chosen from a web page);
-- push-to-talk with the phone's own speaker next to the microphone (echo), and hands-free half-duplex;
-- locking the screen mid-call (a held turn is released; the call may drop and offers Call back / Type instead); a
-  screen wake lock is requested while connected;
-- a call over mobile data (about 45 KB/s up while talking, 65 KB/s down while the agent speaks);
-- a loud room: hold the phone close and use push-to-talk.
+Browser tests for the call's states (`e2e/call.spec.ts`, Chromium with a Pixel 7 viewport and a fake microphone;
+Playwright answers the provider's WebSocket itself, so no voice session is paid for, while the server is real):
+granted (a held turn heard, the read-back card), refused (the browser's own NotAllowedError: typing, same call),
+lost and recovered (the provider drops the line: "Reconnecting", a second session, the agent told where things
+stand), interrupted (holding the button while the agent speaks), hang-up then typing (the waiting read-back is
+answered by a tap), and a provider's quota refusal moving the call to the other provider. All six pass against a
+production build: `pnpm build && E2E_PORT=3107 pnpm exec playwright test e2e/call.spec.ts`.
+
+### Five minutes with a real phone (iPhone with Safari, Android with Chrome)
+
+No automated test replaces this. Use the public HTTPS address, on mobile data for at least one run, in a room with
+people talking. Tick each line; anything that fails goes to the voice engineer with the phone model and OS version.
+
+1. **Scan and join (30 s).** Scan the call QR code from `/channels`. The join page asks for a passkey once; after
+   it, the call screen opens for your own kitchen. The language switch shows EN / FI / SV.
+2. **Microphone refused (30 s).** Tap Call, then "Don't allow". The screen says the microphone is blocked, how to
+   allow it, and offers typing in the same call. Type "100 litres of milk for Friday": the read-back card appears.
+   Then allow the microphone (iPhone: aA in the address bar, Website settings; Android: the lock icon, Permissions)
+   and tap Call again: it connects.
+3. **Sound (30 s).** With the silent switch on (iPhone) and then off: does the greeting play? The screen's hint
+   says to turn silent mode off. Note whether the voice comes from the earpiece or the loudspeaker.
+4. **Push-to-talk in noise (1 min).** Hold the big button, say "Two hundred litres of oat drink for Wednesday",
+   release. The transcript shows your words while you hold; within about 2 s the status goes Thinking, then the
+   agent reads it back in one sentence and the read-back card shows 200 L, oat drink, Wednesday. Say "yes".
+   Repeat once with a quick tap to start and a tap to stop.
+5. **Interrupt (20 s).** While the agent is speaking, hold the button: it stops at once and the status is Listening.
+6. **To an order (1 min).** Say "the first one", then "yes, place it". An order over the limit says who must sign;
+   the gate card shows them, and "Sign off on this phone" opens the passkey sign-off. Sign. The call screen says it
+   is signed within about 3 s.
+7. **Background and back (30 s).** Lock the screen for 10 s, unlock. A held turn was released; the call is either
+   still there or says "Reconnecting" and comes back with the request as it was. On iPhone, receive a phone call
+   (or start Siri) mid-call: the status says Paused; tap it to resume.
+8. **Bluetooth (optional, 30 s).** With earbuds connected: the agent is heard in the earbuds and does not hear itself.
+9. **Hang up and type (20 s).** Hang up. "Continue by typing" opens the same request with its cards; tap a card.
+10. **Weak network (optional).** Turn on airplane mode for 5 s mid-call, then off: "Reconnecting", then back, or
+    after two tries "The call dropped" with Call back and Type instead.
 
 ## A real telephone number
 
@@ -187,15 +307,26 @@ somewhat worse recognition than the browser call.
 
 ## Settings
 
-`DOCK_VOICE` (off), `DOCK_VOICE_MODEL` (default `gemini-3.8-live`), `DOCK_VOICE_CALL_SECONDS`,
+`DOCK_VOICE` (off), `DOCK_VOICE_MODEL` (default `gemini-3.8-live`; `gpt-realtime-2.1` or `gpt-realtime-2.1-mini` for
+OpenAI), `DOCK_VOICE_FALLBACK_MODEL` (default: the other provider; `off` for none), `DOCK_VOICE_TRANSCRIPTION`
+(Gemini: `verbatim` default, `smart`), `DOCK_VOICE_OPENAI_TRANSCRIBE` and `DOCK_VOICE_OPENAI_DELAY` (OpenAI's
+transcriber for push-to-talk: `gpt-live-transcribe` default, or `gpt-transcribe`), `DOCK_VOICE_CALL_SECONDS`,
 `DOCK_VOICE_CALLS_PER_KITCHEN_HOUR`, `DOCK_VOICE_CALLS_PER_HOUR`, `DOCK_VOICE_CALLS_PER_KITCHEN_DAY`,
 `DOCK_VOICE_CALLS_PER_DAY`, `DOCK_SCAN_MODEL` (default `anthropic:claude-haiku-5-5`; `featherless:<id>` uses
 `FEATHERLESS_API_KEY`), `DOCK_SCAN_TIMEOUT_MS`, `DOCK_SCANS_PER_KITCHEN_HOUR`, `DOCK_SCANS_PER_HOUR`. Keys:
-`GEMINI_API_KEY` (voice), `ANTHROPIC_API_KEY` (reader).
+`GEMINI_API_KEY` and `OPENAI_API_KEY` (voice), `ANTHROPIC_API_KEY` (reader). Capacity of a voice key:
+`pnpm tsx scripts/eval/voice-capacity.ts --model <id> --n <sessions>`.
 
 ## Sources read (13 to 14 Nov 2026)
 
-Gemini Live API: aistudio.google.com/docs/live-api (overview, audio formats), …/get-started-websocket (endpoints,
+OpenAI Realtime API (14 Nov): developers.openai.com/api/docs/guides/realtime, …/realtime-websocket (browser auth by
+subprotocol), …/realtime-conversations (events, function calls, 60 min sessions), …/realtime-transcription
+(`gpt-live-transcribe`, `keywords`, `languages`), reference client_secrets/create, …/models and …/pricing
+(gpt-realtime-2.1 $32/M audio in, $64/M out; mini $10/$20).
+
+
+Gemini Live API: aistudio.google.com/docs/live-api (overview, audio formats), …/capabilities (model ids,
+`customVocabulary`, proactive audio always on for 3.8), api-reference/live (`AudioTranscriptionConfig`: `mode`, `customVocabulary`), …/get-started-websocket (endpoints,
 messages), …/ephemeral-tokens, …/capabilities (model ids, VAD, transcription), …/tools (function calling),
 …/session-management (15 min audio sessions, ~10 min connections), aistudio.google.com/api-reference/live
 (BidiGenerateContentSetup, AuthToken), aistudio.google.com/docs/pricing; `@google/genai` 3.2.0 source for how a
