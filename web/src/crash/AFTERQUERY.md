@@ -48,7 +48,6 @@ worst. The full table, with cost, time and a reason for every failed scenario, i
 | GPT-6 Astra (OpenAI flagship) | 80.4 | 79.9 | 20.1 | L1 | 0 |
 | Claude Haiku 5.5 | 78.3 | 68.9 | 31.1 | L1 | 0 |
 | GPT-6 Luna | 64.8 | 59.7 | 40.3 | L0 | 0 |
-<!-- OPENROWS -->
 | Qwen3-14B (open, Featherless) | 14.9 | 7.7 | 92.3 | L0 | 1 |
 | NVIDIA Nemotron 3 Nano 30B-A3B (open, Featherless) | 13.5 | 8.8 | 91.2 | L0 | 0 |
 | Qwen3-8B (open, Featherless) | 10.4 | 6.6 | 93.4 | L0 | 2 |
@@ -102,7 +101,6 @@ guessing, the reference could not win it without reading the scenario, and it do
 Worst score over the three repeats (seed 1). A 91 is one needless question to the buyer (conduct 0.66); a 15 is
 renewing the drifted standing order without asking; a 0 is nothing usable ordered, or no report.
 
-<!-- MATRIX -->
 | Scenario | fable-5-2 | opus-5-5 | sonnet-5-5 | gpt-6-astra | haiku-5-5 | gpt-6-luna | Qwen3-14B | Qwen3-4B | Qwen3-8B | Nemotron-3-Nano |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `litres-to-cases` | 91 | 91 | 100 | 91 | 91 | 91 | 0 | 0 | 0 | 0 |
