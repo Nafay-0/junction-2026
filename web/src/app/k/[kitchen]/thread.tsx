@@ -52,7 +52,7 @@ function VoiceBar({ onEnded }: { onEnded: () => void }) {
   const label = { starting: tx.calling, listening: tx.listening, hearing: tx.hearing, working: tx.working, speaking: tx.speaking, waiting: v.waitingFor ? tx.waitingFor(v.waitingFor) : tx.working, reconnecting: tx.reconnecting, muted: tx.muted, paused: tx.paused }[st];
   const caption = v.heard || v.saying;
   return (
-    <div className="mb-2 space-y-1.5 rounded-[1.25rem] bg-paper/90 p-2 ring-1 ring-lavender-mid" data-voice-mode="hands_free" data-voice-status={st}>
+    <div className="mb-2 space-y-1.5 rounded-[1.25rem] bg-paper p-2 shadow-sm ring-1 ring-lavender-mid" data-voice-mode="hands_free" data-voice-status={st}>
       <div className="flex items-center justify-between gap-2">
         <span className="flex min-w-0 items-center gap-2" onClick={st === "paused" ? voice.resume : undefined}>
           <VoiceStatus state={state} label={label} />
