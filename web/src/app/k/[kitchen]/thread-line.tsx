@@ -279,7 +279,7 @@ function Lists({ turn, thread }: { turn: AgentTurn; thread: Thread }) {
     else if (c.type === "standing") lists.push({ key: c.cardId, rows: c.items.map((i) => ({ item: i.name, amount: `${f.measure(i.usual.amount, i.usual.unit)} · ${f.weekdays(i.weekdays)}` })) });
     else if (c.type === "deliveries") lists.push({ key: c.cardId, rows: c.items.map((d) => ({ item: d.lines.map((l) => l.name).join(", "), amount: f.day(d.deliveryDate), total: money(d.totalCents) })) });
     else if (c.type === "memory_list") lists.push({ key: c.cardId, rows: c.items.map((m) => ({ item: m.text })) });
-    else if (c.type === "rules") lists.push({ key: c.cardId, rows: c.proposal ? c.diff.map((d) => ({ item: d.field.replaceAll("_", " "), amount: `${d.before || "—"} → ${d.after || "—"}` })) : [{ item: tx.sections.rules, amount: `${money(c.current.perOrderLimitCents)} / ${money(c.current.weeklyBudgetCents)}` }, ...c.stated.map((s) => ({ item: s.text }))] });
+    else if (c.type === "rules") lists.push({ key: c.cardId, rows: c.proposal ? c.diff.map((d) => ({ item: d.field.replaceAll("_", " "), amount: `${d.before || "—"} → ${d.after || "—"}` })) : [{ item: tx.rulesAlone, amount: money(c.current.perOrderLimitCents) }, { item: tx.rulesWeek, amount: money(c.current.weeklyBudgetCents) }, ...c.stated.map((s) => ({ item: tx.statedRule(s.text) }))] });
   }
   return (
     <>

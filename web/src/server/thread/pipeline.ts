@@ -181,27 +181,6 @@ export type ItemOutcome = {
   sheet?: { sheetId: string; deliveryDate: string; lines: { name: string; packs: number }[]; totalCents: number };
 };
 
-/** An open stock-out the watch found for this request's product family and day: said from the watch, or undefined. */
-async function watchAnswersFor(run: TurnRun, step: IntakeView): Promise<NoticeCard | undefined> {
-  if (step.state !== "options_ready" && step.state !== "needs_input") return undefined;
-  const { watchForOrg } = await import("@/server/watch/service");
-  const w = await watchForOrg(run.rt, run.session.mandate.issuer.orgId);
-  const day = step.need?.deliverBy;
-  const f = w.findings.find((x) => x.state === "open" && x.product.family === step.family && (!day || x.need.date <= day));
-  if (!f) return undefined;
-  const { sayWatch, openWatch, shortName } = await import("./watch");
-  const card = openWatch(run) ?? (await sayWatch(run, { family: step.family }));
-  if (card && card.momentId === f.findingId) {
-    run.watchAsked = card.momentId;
-    record(run, "watch_answers_request", `The request is for ${f.product.name}, which the watch found cannot come (${f.findingId}): answered from the watch, not from the intake's options.`, { findingId: f.findingId }, step.requestId);
-    return { type: "notice", cardId: cardId("notice", `${step.requestId}:watch`), requestId: step.requestId, kind: "not_found", message: card.text.en.say, said: { en: card.text.en.say, fi: card.text.fi.say, sv: card.text.sv.say } };
-  }
-  // Said in an earlier conversation: the same answer in short, from the finding.
-  const sub = f.substitutes[0];
-  const what = shortName(f.product.name);
-  record(run, "watch_answers_request", `The request is for ${f.product.name}, which the watch found cannot come (${f.findingId}).`, { findingId: f.findingId }, step.requestId);
-  return { type: "notice", cardId: cardId("notice", `${step.requestId}:watch`), requestId: step.requestId, kind: "not_found", ...worded(() => ({ code: "out_of_stock", what, ...(day ? { day } : {}) })), ...(sub ? { message: `${what} can't come${f.shortfall.backOn ? `: the supplier is out until ${f.shortfall.backOn}` : ""}. The closest is ${shortName(sub.name)}. Shall I order that instead?` } : {}) };
-}
 
 /** The kitchen's usual amount of the kind of product the words name ("12 L"), from its recurring orders. */
 async function usualAmountOf(run: TurnRun, what: string): Promise<string | undefined> {
@@ -531,14 +510,8 @@ export async function openNeed(run: TurnRun, need: NeedInput, words: string, opt
     const res = await published<{ step: IntakeView }>(run, "submit_need", { need, by: byLine(run) });
     intake.done(res.step.state);
     run.requests.add(res.step.requestId);
-    // The watch knows this product cannot come (a stock-out it found, staged or real): the answer is the watch's (it
-    // cannot come, here is the closest substitute), not the intake's options, which do not see a staged stock-out.
-    const fromWatch = await watchAnswersFor(run, res.step).catch(() => undefined);
-    if (fromWatch) {
-      if (!run.watchAsked) run.store.card(run.thread, run.turnId, fromWatch);
-      run.facts.push(fromWatch);
-      return [{ words, requestId: res.step.requestId, notice: fromWatch }];
-    }
+    // A stock-out the watch found (staged or real) is seen by the intake itself (main 568a579): the request is answered
+    // from its options, at the amount asked, never replaced by the watch's own question about the usual order.
     let step0 = res.step;
     if (opts.basedOn && (await noteReplacement(run, res.step.requestId, opts.basedOn.requestId))) {
       // "Make it 200" is a repeat of the order it replaces by design: the repeat check's only question is answered by
