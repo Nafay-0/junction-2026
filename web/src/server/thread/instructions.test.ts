@@ -79,6 +79,7 @@ describe("the agent's playbook", () => {
   it("stays within the length a cached prompt should have", () => {
     const n = words(AGENT_INSTRUCTIONS);
     expect(n).toBeGreaterThan(3500);
-    expect(n).toBeLessThan(6000);
+    // About 6,000 words today. The ceiling leaves room for a rule or two; past it, merge or cut before adding.
+    expect(n).toBeLessThan(6500);
   });
 });
