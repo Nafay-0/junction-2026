@@ -65,7 +65,12 @@ export async function runWidget(run: TurnRun, a: ThreadAction, words?: string): 
         deliveryDate: o.deliveryDate,
         text: s.need.text ?? o.title,
         category: s.family,
-        ...(s.need.item.productId ? { asked: [s.need.item.productId] } : {}),
+        // What the buyer asked for, as the options' own request judged it: a line the option marks as standing in for
+        // another product, or the very product named. A product the intake only guessed from words is not "asked".
+        ...((() => {
+          const asked = [...new Set(o.quoteLines.flatMap((l) => (l.substituteFor ? [l.substituteFor] : l.productId === s.need.item.productId ? [l.productId] : [])).concat(o.alternative?.for ? [o.alternative.for] : []))];
+          return asked.length ? { asked } : {};
+        })()),
       });
       return true;
     }

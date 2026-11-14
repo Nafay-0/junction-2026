@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { useFormat, useText } from "../../_i18n/provider";
 import { artFor } from "../../_ui/art";
 import { clock, money } from "../../_ui/plain";
-import { AlternativesPicker, OrderSheet, type Candidate, type DayChoice, type Outcome, type PickerCell, type SheetLine } from "../../_ui/widgets";
-import type { AlternativesCard, BuyerTurn, GatePreview, OrderCard, SheetCard, Thread, ThreadAction } from "@/server/thread/types";
+import { AlternativesPicker, ChoiceAnswer, OrderSheet, type Candidate, type DayChoice, type Outcome, type PickerCell, type SheetLine } from "../../_ui/widgets";
+import type { AlternativesCard, BuyerTurn, GatePreview, OrderCard, QuestionCard, SheetCard, Thread, ThreadAction } from "@/server/thread/types";
 import { usePortal } from "./portal";
 import { THREAD_SHEET_TEXT } from "./thread-sheet.text";
 
@@ -273,5 +273,40 @@ export function PickerView({ card, tap, busy, thread }: { card: AlternativesCard
       busy={busy}
       onClose={() => setClosed(true)}
     />
+  );
+}
+
+// ---------- a question ----------
+
+const NO_PREFERENCE = "no_preference";
+
+/**
+ * The intake's questions, one at a time (never two at once): the first unanswered one as the kit's ChoiceAnswer, with
+ * why it is asked and "no preference" as the safe default to skip it. Answered ones fold to what was chosen.
+ */
+export function QuestionView({ card, tap, busy }: { card: QuestionCard; tap: Tap; busy: boolean }) {
+  const tx = useText(THREAD_SHEET_TEXT);
+  const answered = card.answered ?? {};
+  const open = card.questions.find((q) => !answered[q.id]);
+  const label = (q: QuestionCard["questions"][number], id: string) => (id === "none" ? tx.ask.none[q.id] : tx.ask.o[id]) ?? q.options.find((o) => o.id === id)?.label ?? id;
+  const answer = (q: QuestionCard["questions"][number], id: string) => !busy && tap({ type: "answer", requestId: card.requestId, questionId: q.id, optionId: id }, `${tx.ask.q[q.id] ?? q.text} ${label(q, id)}`);
+  return (
+    <>
+      {card.questions.filter((q) => answered[q.id]).map((q) => (
+        <p key={q.id} className="px-1 text-[0.86rem] leading-snug text-ink-soft">
+          {tx.ask.q[q.id] ?? q.text} <span className="font-medium text-ink">{answered[q.id] === NO_PREFERENCE ? tx.ask.skip : label(q, answered[q.id])}</span>
+        </p>
+      ))}
+      {open && (
+        <ChoiceAnswer
+          kind={tx.ask.kind}
+          question={tx.ask.q[open.id] ?? open.text}
+          why={open.id === "optimise" ? tx.ask.why.optimise : tx.ask.why.dim}
+          choices={open.options.filter((o) => o.id !== NO_PREFERENCE).map((o) => ({ id: o.id, label: label(open, o.id) }))}
+          onChoose={(id) => answer(open, id)}
+          {...(open.options.some((o) => o.id === NO_PREFERENCE) ? { skip: { label: tx.ask.skip, onClick: () => answer(open, NO_PREFERENCE) } } : {})}
+        />
+      )}
+    </>
   );
 }

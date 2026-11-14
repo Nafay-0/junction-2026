@@ -15,7 +15,6 @@ import {
   NoticeCard,
   OrderCard,
   PriceCard,
-  QuestionCard,
   RecordsCard,
   StepLines,
   Thread,
@@ -34,7 +33,7 @@ import { MenuCardView } from "./thread-menu";
 import { HomeCardView, OrderInPlace, PriceProof } from "./thread-home";
 import { RulesCardView } from "./thread-rules";
 import { OptionsDecision } from "./thread-options";
-import { PickerView, SheetView, isQuiet, sheetOrders, whenText } from "./thread-sheet";
+import { PickerView, QuestionView, SheetView, isQuiet, sheetOrders, whenText } from "./thread-sheet";
 import { THREAD_SHEET_TEXT } from "./thread-sheet.text";
 import { THREAD_WORDS } from "./thread-words.text";
 import { concernText, correctionLabel, fmtFor, gateReasons, memoryKey, memoryText, stepLabel } from "./thread-words";
@@ -248,20 +247,7 @@ function CardView({ card, tap, busy, gated, base, turn, thread, memory }: { card
         </>
       );
     case "question":
-      return (
-        <>
-          {card.questions.map((q) => (
-            <QuestionCard
-              key={q.id}
-              kind={tx.kind.question}
-              question={q.text}
-              choices={q.options.map((o) => ({ id: o.id, label: o.label }))}
-              chosen={card.answered?.[q.id]}
-              onChoose={busy || card.answered?.[q.id] ? undefined : (id) => tap({ type: "answer", requestId: card.requestId, questionId: q.id, optionId: id }, q.options.find((o) => o.id === id)?.label ?? id)}
-            />
-          ))}
-        </>
-      );
+      return <QuestionView card={card} tap={tap} busy={busy} />;
     case "options":
       return <OptionsDecision card={card} tap={tap} busy={busy} />;
     case "price": {

@@ -1104,15 +1104,24 @@ export function createDock(deps: DockDeps) {
      * same rules and context as a quote's preview (orders.ts requestQuote), on an unsigned quote that is never issued,
      * stored or logged. Undefined when the lines cannot be priced from the offers given.
      */
-    async previewDecision(session: AgentSession, requestId: string, input: QuoteRequestLine[], offers: LiveOffer[], internal: { confirmedBy?: string } = {}): Promise<Decision | undefined> {
+    async previewDecision(session: AgentSession, requestId: string, input: QuoteRequestLine[], offers: LiveOffer[], internal: { confirmedBy?: string; referencePrices?: boolean } = {}): Promise<Decision | undefined> {
       const request = await ownRequest(session, requestId);
       const lines = await substitutesOf(request, input);
       const ids = [...new Set(lines.flatMap((l) => (l.substituteFor ? [l.productId, l.substituteFor] : [l.productId])))];
       const products = await catalog.searchProducts({ ids, limit: 100 });
       const priced = offers.map((o) => scheduledOn(o, request.deliverOn));
+      // A substitute is compared with the price of the product it replaces, which is often the one not on offer
+      // now: its last price from the wholesaler's status will do, as in requestQuote (one short live call; the order
+      // sheet asks for it, the intake's previews keep to the offers they were given).
+      let reference = priced;
+      const unpriced = [...new Set(lines.flatMap((l) => (l.substituteFor && !priced.some((o) => o.productId === l.substituteFor) ? [l.substituteFor] : [])))];
+      if (unpriced.length && internal.referencePrices) {
+        const live = await liveLookup(session, requestId, unpriced, request.neededBy, "AimoPilot asked the price of a product a substitute replaces, for a preview", { batch: true }).catch(() => undefined);
+        reference = [...priced, ...(live?.statuses ?? []).map((x) => x.offer).filter((o): o is LiveOffer => !!o).map((o) => scheduledOn(o, request.deliverOn))];
+      }
       let quote: Quote;
       try {
-        quote = buildQuote({ quoteId: "preview", buyerOrgId: session.mandate.issuer.orgId, agentId: session.agentId, mandateId: session.mandate.mandateId, requestId, lines, products, offers: priced, referenceOffers: priced, now: now(), ttlMinutes: quoteTtlMinutes });
+        quote = buildQuote({ quoteId: "preview", buyerOrgId: session.mandate.issuer.orgId, agentId: session.agentId, mandateId: session.mandate.mandateId, requestId, lines, products, offers: priced, referenceOffers: reference, now: now(), ttlMinutes: quoteTtlMinutes });
       } catch {
         return undefined;
       }

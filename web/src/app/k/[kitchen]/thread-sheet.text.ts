@@ -7,6 +7,14 @@ import { defineText } from "../../_i18n/lang";
  */
 export const THREAD_SHEET_TEXT = defineText({
   en: {
+    ask: {
+      kind: "One question",
+      q: { optimise: "What matters most for this order?", "dim:lactose": "Lactose-free or regular?", "dim:fat": "Which fat content?", "dim:organic": "Organic?" } as Record<string, string>,
+      why: { optimise: "It decides which option I put first.", dim: "The products differ in this, and the price with it." } as Record<string, string>,
+      o: { price: "Lowest price", co2: "Lowest CO₂", reliability: "Most reliable delivery", lactose_free: "Lactose-free", fat_free: "Fat-free (0.1 %)", fat_1_5: "Semi-skimmed (1.5 %)", fat_3_5: "Whole (3.5 %)", organic: "Organic" } as Record<string, string>,
+      none: { "dim:lactose": "Regular (contains lactose)", "dim:organic": "Not organic" } as Record<string, string>,
+      skip: "No preference: show me the options",
+    },
     kind: "Your order",
     adjust: "Change amount, day or product",
     adjustWords: "Change it before ordering",
@@ -70,6 +78,14 @@ export const THREAD_SHEET_TEXT = defineText({
     onTime: (pct: string) => `${pct} %`,
   },
   fi: {
+    ask: {
+      kind: "Yksi kysymys",
+      q: { optimise: "Mikä on tässä tilauksessa tärkeintä?", "dim:lactose": "Laktoositon vai tavallinen?", "dim:fat": "Mikä rasvapitoisuus?", "dim:organic": "Luomu?" } as Record<string, string>,
+      why: { optimise: "Sen mukaan valitsen, minkä vaihtoehdon näytän ensin.", dim: "Tuotteet eroavat tässä, ja hinta sen mukana." } as Record<string, string>,
+      o: { price: "Halvin hinta", co2: "Pienin CO₂", reliability: "Luotettavin toimitus", lactose_free: "Laktoositon", fat_free: "Rasvaton (0,1 %)", fat_1_5: "Kevyt (1,5 %)", fat_3_5: "Täysmaito (3,5 %)", organic: "Luomu" } as Record<string, string>,
+      none: { "dim:lactose": "Tavallinen (sisältää laktoosia)", "dim:organic": "Ei luomu" } as Record<string, string>,
+      skip: "Ei väliä: näytä vaihtoehdot",
+    },
     kind: "Tilauksesi",
     adjust: "Muuta määrää, päivää tai tuotetta",
     adjustWords: "Muutan ennen tilaamista",
@@ -133,6 +149,14 @@ export const THREAD_SHEET_TEXT = defineText({
     onTime: (pct: string) => `${pct} %`,
   },
   sv: {
+    ask: {
+      kind: "En fråga",
+      q: { optimise: "Vad är viktigast för den här beställningen?", "dim:lactose": "Laktosfri eller vanlig?", "dim:fat": "Vilken fetthalt?", "dim:organic": "Ekologisk?" } as Record<string, string>,
+      why: { optimise: "Det avgör vilket alternativ jag visar först.", dim: "Produkterna skiljer sig i detta, och priset med." } as Record<string, string>,
+      o: { price: "Lägsta pris", co2: "Lägst CO₂", reliability: "Pålitligast leverans", lactose_free: "Laktosfri", fat_free: "Fettfri (0,1 %)", fat_1_5: "Lätt (1,5 %)", fat_3_5: "Standard (3,5 %)", organic: "Ekologisk" } as Record<string, string>,
+      none: { "dim:lactose": "Vanlig (innehåller laktos)", "dim:organic": "Inte ekologisk" } as Record<string, string>,
+      skip: "Spelar ingen roll: visa alternativen",
+    },
     kind: "Din beställning",
     adjust: "Ändra mängd, dag eller produkt",
     adjustWords: "Ändra innan jag beställer",

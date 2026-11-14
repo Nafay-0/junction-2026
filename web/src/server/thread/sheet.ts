@@ -94,7 +94,7 @@ const confirmedBy = (run: TurnRun) => run.person?.name;
 /** The card as it stands: prices from the last lookup, and the gate's own preview of exactly these lines. */
 async function render(run: TurnRun, s: SheetRecord, changed?: string[]): Promise<SheetCard> {
   const products = await productsOf(run, [...s.lines.flatMap((l) => [l.productId, ...(l.substituteFor ? [l.substituteFor] : [])]), ...(s.removed ? [s.removed.productId] : [])]);
-  const decision = await run.rt.dock.previewDecision(run.session, s.requestId, s.lines.map(({ productId, packs, substituteFor }) => ({ productId, quantity: packs, ...(substituteFor ? { substituteFor } : {}) })), Object.values(s.offers), confirmedBy(run) ? { confirmedBy: confirmedBy(run) } : {}).catch(() => undefined);
+  const decision = await run.rt.dock.previewDecision(run.session, s.requestId, s.lines.map(({ productId, packs, substituteFor }) => ({ productId, quantity: packs, ...(substituteFor ? { substituteFor } : {}) })), Object.values(s.offers), { referencePrices: true, ...(confirmedBy(run) ? { confirmedBy: confirmedBy(run) } : {}) }).catch(() => undefined);
   const gate = gateOf(decision);
   const lines = s.lines.map((l) => {
     const p = products.get(l.productId);
@@ -173,7 +173,7 @@ export async function createSheet(run: TurnRun, input: { lines: SheetLineInput[]
   if (!input.lines.length) throw new DockError(400, "sheet_empty", "A sheet needs at least one line.");
   run = on(run, input);
   const day = input.deliveryDate ?? (await daysFor(run, { lines: [], offers: {}, deliveryDate: addDaysIso(localNow(new Date()).date, 1) } as unknown as SheetRecord)).find((d) => d.available)?.date ?? addDaysIso(localNow(new Date()).date, 1);
-  const request = await run.rt.dock.openRequest(run.session, { text: input.text.slice(0, 2000), neededBy: day, ...(input.asked?.length ? { productIds: input.asked } : {}), ...(input.category ? { category: input.category } : {}) });
+  const request = await run.rt.dock.openRequest(run.session, { text: input.text.slice(0, 2000), deliverOn: day, ...(input.asked?.length ? { productIds: input.asked } : {}), ...(input.category ? { category: input.category } : {}) });
   const s: SheetRecord = { sheetId: `sh_${request.requestId.slice(4)}`, requestId: request.requestId, version: 1, turnId: run.turnId, deliveryDate: day, lines: input.lines.map((l) => ({ ...l, lineId: newLineId() })), offers: {}, ...(input.session ? { session: input.session } : {}) };
   sheetsOf(run)[s.sheetId] = s;
   run.requests.add(s.requestId);
@@ -214,7 +214,8 @@ export async function editSheet(run: TurnRun, sheetId: string, version: number |
     case "day": {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(edit.date)) throw new DockError(400, "sheet_day", "A day as YYYY-MM-DD.");
       s.deliveryDate = edit.date;
-      await run.rt.dock.changeNeededBy(run.session, s.requestId, { neededBy: edit.date, by: run.person?.name ?? run.k.info.by, reason: "moved on the order sheet" }).catch(() => undefined);
+      // The sheet's day is the day it arrives (deliverOn), not a latest date: the wholesaler's earliest offer is moved to it.
+      await run.rt.dock.changeNeededBy(run.session, s.requestId, { neededBy: edit.date, deliverOn: edit.date, by: run.person?.name ?? run.k.info.by, reason: "moved on the order sheet" }).catch(() => undefined);
       reprice = true;
       changed.push("day");
       break;
@@ -332,7 +333,7 @@ export async function openAlternatives(run: TurnRun, sheetId: string, lineId: st
     if (!o) continue;
     const packs = Math.max(1, Math.ceil(amount / p.packSize - 1e-9));
     const lines = s.lines.map((x) => (x.lineId === lineId ? { productId: p.id, quantity: packs, ...(p.id !== original ? { substituteFor: original } : {}) } : { productId: x.productId, quantity: x.packs, ...(x.substituteFor ? { substituteFor: x.substituteFor } : {}) }));
-    const d = await run.rt.dock.previewDecision(run.session, s.requestId, lines, Object.values(s.offers), confirmedBy(run) ? { confirmedBy: confirmedBy(run) } : {}).catch(() => undefined);
+    const d = await run.rt.dock.previewDecision(run.session, s.requestId, lines, Object.values(s.offers), { referencePrices: true, ...(confirmedBy(run) ? { confirmedBy: confirmedBy(run) } : {}) }).catch(() => undefined);
     const gate = gateOf(d);
     // Nothing the gate would refuse is offered (the current product is always shown, as what is there now).
     if (gate.outcome === "reject" && p.id !== l.productId) continue;
