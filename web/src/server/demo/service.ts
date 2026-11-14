@@ -331,8 +331,9 @@ export async function guideFor(rt: Runtime, a: Account, now = new Date()): Promi
     {
       id: "stockout",
       ...(() => {
-        const f = w?.findings[0];
-        return f ? { done: true, at: f.at } : { done: false };
+        // Ticked once the agent told the kitchen (or the kitchen answered), not merely when the watch found it.
+        const f = w?.findings.find((x) => x.saidAt || x.state === "decided");
+        return f ? { done: true, at: f.saidAt ?? f.at } : { done: false };
       })(),
       staged: stagedAny("stock_out"),
       setup: { action: "stock_out", ready: demo && recurringReady, ...(!demo ? { why: "not_demo" as const } : recurringReady ? {} : { why: "no_recurring" as const }) },
