@@ -1102,11 +1102,12 @@ export function createDock(deps: DockDeps) {
      * checkAvailability with everything around it: the products that cannot be quoted and why (a passed order
      * cut-off, a sales block, no price), and, with includeClaims, the signed claims as tokens.
      */
-    async lookupAvailability(session: AgentSession, input: z.input<typeof AvailabilityInput>): Promise<{ offers: LiveOffer[]; unavailable: LiveLookupResult["unavailable"]; claims?: IssuedClaim[] }> {
+    async lookupAvailability(session: AgentSession, input: z.input<typeof AvailabilityInput>): Promise<{ offers: LiveOffer[]; unavailable: LiveLookupResult["unavailable"]; statuses: LiveStatus[]; claims?: IssuedClaim[] }> {
       const { requestId, productIds, deliveryDate, includeClaims } = parse(AvailabilityInput, input);
       const request = await ownRequest(session, requestId);
       const r = await liveLookup(session, requestId, productIds, deliveryDate ?? request.neededBy, "Agent checked live price and availability");
-      return { offers: r.offers, unavailable: r.unavailable, ...(includeClaims ? { claims: r.claims } : {}) };
+      // `statuses` keep the offer of a product that cannot be quoted (its passed cut-off and the day it names).
+      return { offers: r.offers, unavailable: r.unavailable, statuses: r.statuses, ...(includeClaims ? { claims: r.claims } : {}) };
     },
 
     /** Signed claims Dock issued to this organisation, by id (the ids on offers and in a quote's evidence). */

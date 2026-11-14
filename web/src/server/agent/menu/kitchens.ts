@@ -1,4 +1,5 @@
 import { signMandate, type Mandate } from "@/core/mandate";
+import type { AgentSession } from "@/core/orders";
 import { activeMemory, type KitchenProfile } from "@/core/kitchen";
 import { allergenOf, claimOf } from "@/core/vocabulary";
 import { categorySlug } from "@/core/catalog/partner";
@@ -39,7 +40,8 @@ export type MenuKitchenInfo = {
   examples: string[];
 };
 
-export type MenuKitchen = { info: MenuKitchenInfo; mandateToken: string; agentId: string; mandate: Mandate; diet: DietRules };
+/** `session`: an outside agent's own verified session (MCP, REST), used instead of signing in with `mandateToken`. */
+export type MenuKitchen = { info: MenuKitchenInfo; mandateToken: string; agentId: string; mandate: Mandate; diet: DietRules; session?: AgentSession };
 
 /** Partner category families that are not food: kitchenware, cleaning, packaging, office, newspapers, gases. */
 const NON_FOOD_FAMILIES = new Set(["200", "300", "329", "630", "631", "632", "633", "639", "640", "641", "643", "645", "677", "678", "777", "900"]);
