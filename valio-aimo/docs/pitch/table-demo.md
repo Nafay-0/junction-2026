@@ -25,17 +25,19 @@ with the server's clock at 10:30 and again at 00:30 with the real clock.
 
 ## What to type
 
-Type exactly Valio Aimo's first sentence:
+Either form of Valio Aimo's example works (checked on the hosted site on Sunday 15 Nov, after the fix was deployed):
 
 > I need 1,000 litres of lactose-free milk by Monday.
 
-Do not add the second sentence today. With it, the agent picks the cheapest option by itself and the quote fails on
-the usual product whose cut-off has passed ("I couldn't get prices for 1 000 l … Shall I try again?"). If a reviewer
-types the full sentence and that happens, say "let me ask it the way a chef would" and type the first sentence.
+or the partner's full two sentences:
 
-**[[CONFIRM-FULL-SENTENCE]]** Use the full two-sentence form ("I need 1,000 litres of lactose-free milk by Monday.
-Find an option that meets our requirements based on price and availability.") only once the fix is confirmed
-deployed.
+> I need 1,000 litres of lactose-free milk by Monday. Find an option that meets our requirements based on price and
+> availability.
+
+With the full form the agent shows the ranked options with the cheapest first and asks; it does not order by itself
+when the pick replaces the kitchen's usual product. For the three-minute pitch the first sentence is shorter to type.
+If a reply ever says it could not get prices, wait half a minute (the partner's interface pauses for 30 seconds after
+too many calls) and type the first sentence again.
 
 ## The path, Hotel Lumo kitchen (about two minutes)
 

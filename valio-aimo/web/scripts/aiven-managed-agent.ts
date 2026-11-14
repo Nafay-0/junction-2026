@@ -18,7 +18,7 @@ import { env, loadLocalEnv } from "./lib/env";
 loadLocalEnv();
 const args = process.argv.slice(2);
 const flag = (n: string) => (args.includes(n) ? args[args.indexOf(n) + 1] : undefined);
-const DOCK_URL = (flag("--url") ?? "https://jolly-wondrous-bunny.eur-1.aiven.app").replace(/\/$/, "");
+const DOCK_URL = (flag("--url") ?? "https://aimopilot.zeroanomaly.tech").replace(/\/$/, "");
 const INTEGRATION = "dock";
 const AGENT_NAME = "Laakso Catering purchasing agent";
 const MODEL = flag("--model") ?? "gemini-3.8-flash";

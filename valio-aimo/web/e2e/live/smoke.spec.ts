@@ -4,7 +4,7 @@ import { watchErrors } from "../support/dock";
 /**
  * Read-only smoke of a deployed site in a phone-sized browser: GET pages and JSON only; no join, no order, no
  * sign-in, at most one live price lookup (one product page). Safe during the event.
- *   E2E_LIVE_URL=https://jolly-wondrous-bunny.eur-1.aiven.app pnpm exec playwright test --project=live
+ *   E2E_LIVE_URL=https://aimopilot.zeroanomaly.tech pnpm exec playwright test --project=live
  */
 test.skip(!process.env.E2E_LIVE_URL, "set E2E_LIVE_URL to the deployed site");
 

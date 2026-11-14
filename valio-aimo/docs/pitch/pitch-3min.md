@@ -28,7 +28,7 @@ Say it at 0:40 and again as the last line.
 - Deck open on the slide before the demo; the two-minute film's flow scene on the next slide as the fallback.
 - Timing: the 1 l cartons can make Monday until their **17:00** cut-off today (`demo-script-sunday.md`). If the
   ceremony is after 17:00, say "by Tuesday" instead and rehearse it.
-- Type only Valio's first sentence (`table-demo.md`, "What to type").
+- Type Valio's first sentence: it is the shortest to type on stage; the full two-sentence form works too (`table-demo.md`, "What to type").
 
 ## The script, word for word (about 410 words)
 
