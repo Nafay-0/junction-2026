@@ -107,7 +107,7 @@ function Body({ v, now, refresh }: { v: OffersView; now: number; refresh: () => 
           </Section>
           <Section title="Held back, and why" aside={held.length ? `${held.length}` : undefined}>
             {held.length === 0 ? (
-              <Empty title="Nothing held back yet">When a guardrail stops a product (the kitchen's rules, a mute, offers off, the weekly cap, a claim the data does not back), it is listed here with the rule.</Empty>
+              <Empty title="Nothing held back yet">When a guardrail stops a product (the kitchen&apos;s rules, a mute, offers off, the weekly cap, a claim the data does not back), it is listed here with the rule.</Empty>
             ) : (
               <ul className="space-y-2">
                 {held.slice(0, 30).map((o) => (

@@ -73,7 +73,18 @@ export type AvailabilityStatement = {
   stock: { known: boolean; packs: number | null; per: string };
   logisticModel?: string;
 };
-export type OriginStatement = { countryOfOrigin: string | null; brand: string | null; vendor: string | null; labels: string[] };
+export type OriginStatement = {
+  countryOfOrigin: string | null;
+  brand: string | null;
+  vendor: string | null;
+  labels: string[];
+  /** Every country of origin the product data states, when it states more than the main one (alpha-2). */
+  countriesOfOrigin?: string[];
+  /** Where the characterising ingredient comes from, by production stage ("MILKING: fi"), with its share. */
+  mainIngredient?: { name: string | null; pct?: number; origins: { stage: string; country: string }[] };
+  /** Fish: species, how it was produced, fishing gear and FAO area, as the maker's catch report states them. */
+  catch?: { species: string; latin?: string; production?: string; methods: string[]; areas: string[] }[];
+};
 
 type Subject =
   | { type: "price"; statement: PriceStatement }
@@ -244,7 +255,15 @@ export function originClaimInput(p: Product, now: Date): ClaimInput {
   return {
     type: "origin",
     productId: p.id,
-    statement: { countryOfOrigin: p.countryOfOrigin ?? null, brand: p.brand === "unknown" ? null : p.brand, vendor: p.vendor ?? null, labels: [...p.certificates] },
+    statement: {
+      countryOfOrigin: p.countryOfOrigin ?? null,
+      brand: p.brand === "unknown" ? null : p.brand,
+      vendor: p.vendor ?? null,
+      labels: [...p.certificates],
+      ...(p.origins && (p.origins.length > 1 || p.origins[0] !== p.countryOfOrigin) ? { countriesOfOrigin: [...p.origins] } : {}),
+      ...(p.mainIngredient?.origins.length ? { mainIngredient: { name: p.mainIngredient.names.en ?? p.mainIngredient.names.fi ?? null, ...(p.mainIngredient.pct !== undefined ? { pct: p.mainIngredient.pct } : {}), origins: p.mainIngredient.origins.map((o) => ({ ...o })) } } : {}),
+      ...(p.fish?.length ? { catch: p.fish.map((f) => ({ species: f.species, ...(f.latin ? { latin: f.latin } : {}), ...(f.production ? { production: f.production } : {}), methods: [...f.methods], areas: [...f.areas] })) } : {}),
+    },
     source: p.source === "valio" ? "partner-product-master" : "dock-seed-catalogue",
     observedAt: now,
     validUntil: new Date(now.getTime() + ORIGIN_CLAIM_DAYS * 86_400_000),

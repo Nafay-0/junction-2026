@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- eval harness: drivers read untyped JSON replies. */
+import type { Nutrition } from "@/core/nutrition";
+import { TEST_ACCOUNTS } from "@/server/accounts/test-accounts";
 /**
  * Shared pieces of the buyer-experience eval: a cookie-keeping browser with timing, the driver-independent
  * outcome a scenario is checked against, product lookups for catalogue checks, and statistics.
@@ -168,13 +170,14 @@ export const noActions = (): Actions => ({ taps: 0, typed: 0, extraTyped: 0, lis
  * accounts needs none.
  */
 export async function signInAs(b: Browser, kitchen: string): Promise<void> {
-  const pw = process.env[`DOCK_${kitchen.toUpperCase()}_PASSWORD`];
+  // The public test accounts' passwords are published with them (server/accounts/test-accounts.ts).
+  const pw = TEST_ACCOUNTS.find((t) => t.username === kitchen)?.password ?? process.env[`DOCK_${kitchen.toUpperCase()}_PASSWORD`];
   if (pw) await b.post("/ui-api/account/signin", { username: kitchen, password: pw });
 }
 
 // ---------- the catalogue, for checks ----------
 
-export type ProductInfo = { id: string; name: string; category?: string; attributes: string[]; allergens: string[] } | null;
+export type ProductInfo = { id: string; name: string; category?: string; attributes: string[]; allergens: string[]; nutrition?: Nutrition } | null;
 
 export class Catalogue {
   private cache = new Map<string, Promise<ProductInfo>>();
@@ -184,7 +187,7 @@ export class Catalogue {
     if (!p) {
       p = this.b.get(`/ui-api/kitchens/${this.kitchen}/catalog/product/${encodeURIComponent(id)}`).then((r) => {
         const x = r.body?.product;
-        return r.status === 200 && x ? { id: x.id, name: x.name, category: x.category, attributes: x.attributes ?? [], allergens: x.allergens ?? [] } : null;
+        return r.status === 200 && x ? { id: x.id, name: x.name, category: x.category, attributes: x.attributes ?? [], allergens: x.allergens ?? [], ...(x.nutrition ? { nutrition: x.nutrition } : {}) } : null;
       });
       this.cache.set(id, p);
     }

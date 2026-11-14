@@ -135,6 +135,7 @@ describe("an outside buyer's agent over MCP", () => {
   }
   const call = async (c: Client, name: string, args: Record<string, unknown> = {}) => {
     const r = (await c.callTool({ name, arguments: args })) as CallToolResult;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return { isError: !!r.isError, s: r.structuredContent as Record<string, any> };
   };
 

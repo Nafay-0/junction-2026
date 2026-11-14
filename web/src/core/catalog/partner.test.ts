@@ -1,5 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- test fixtures build raw partner records. */
 import { describe, expect, it } from "vitest";
-import { buildCatalogIndex, categoryCodesFor, categorySlug, decodeIndex, encodeIndex, isIndexFile, parseNumberCsv } from "./partner";
+import { buildCatalogIndex, shorten, categoryCodesFor, categorySlug, decodeIndex, encodeIndex, isIndexFile, parseNumberCsv } from "./partner";
 import { FIXTURE_CARBON_CSV, FIXTURE_PRODUCTS, FIXTURE_RELIABILITY_CSV, rawProduct } from "./test-data";
 
 const NOW = new Date("2026-11-13T10:00:00.000Z");
@@ -79,11 +80,66 @@ describe("catalogue index", () => {
     const file = JSON.parse(JSON.stringify(encodeIndex(idx)));
     expect(decodeIndex(file).products.find((p) => p.id === "G1")!.gtins).toEqual(["6408430000135", "06408430000142"]);
     // An index built before GTINs were kept still loads; its products simply have none.
-    const legacy = { ...file, columns: file.columns.slice(0, -1), rows: file.rows.map((r: unknown[]) => r.slice(0, -1)) };
+    const legacy = { ...file, columns: file.columns.slice(0, 22), rows: file.rows.map((r: unknown[]) => r.slice(0, 22)) };
     expect(isIndexFile(legacy)).toBe(true);
     const old = decodeIndex(legacy).products;
     expect(old).toHaveLength(2);
     expect(old[0].gtins).toBeUndefined();
+    // An index built before the data-depth fields (23 columns) loads too: GTINs kept, nothing else invented.
+    const before = { ...file, columns: file.columns.slice(0, 23), rows: file.rows.map((r: unknown[]) => r.slice(0, 23)) };
+    expect(isIndexFile(before)).toBe(true);
+    expect(decodeIndex(before).products.find((p) => p.id === "G1")!.gtins).toEqual(["6408430000135", "06408430000142"]);
+    expect(isIndexFile({ ...file, columns: file.columns.slice(0, 25), rows: file.rows.map((r: unknown[]) => r.slice(0, 25)) })).toBe(false);
+  });
+
+  it("reads nutrition per 100 g or ml, deposits, VAT, texts, origins, the main ingredient and catch reports; absent stays absent", () => {
+    const raw = rawProduct({ id: "D1", names: { en: "Test yoghurt 1 kg" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]] }) as Record<string, any>;
+    raw.deposits = [{ material: "4", quantity: 24, unit: "ST" }];
+    Object.assign(raw.synkkaData, {
+      vatCode: "MEDIUM",
+      minTemperature: 2,
+      maxTemperature: 6,
+      countriesOfOrigin: ["246", "752"],
+      keyIngredients: [{ value: "milk, sugar 8 %, strawberry", language: "en" }, { value: "maito, sokeri 8 %, mansikka", language: "fi" }],
+      storageInstructions: [{ value: "Keep   at +2...+6 °C", language: "en" }],
+      marketingTexts: [{ value: "x".repeat(500), language: "en" }],
+      ingredients: [{ sequence: 1, percentage: 80, names: [{ value: "milk", language: "en" }], origins: [{ type: "MILKING", country: "246" }] }],
+      fishingReports: [{ id: "sal", name: "salmo salar", catchMethods: [{ methods: ["TM"], areas: ["27.3.d"], productionMethod: "AQUACULTURE1" }] }],
+      nutritionalContent: [
+        { id: "SALTEQ", value: 0.1, unit: "GRM", basisQuantity: 100, basisQuantityUnit: "GRM", unitPrecision: "APPROXIMATELY" },
+        { id: "SUGAR-", value: 11.5, unit: "GRM", basisQuantity: 100, basisQuantityUnit: "GRM" },
+        { id: "FASAT", value: 0.5, unit: "GRM", basisQuantity: 100, basisQuantityUnit: "GRM", unitPrecision: "LESS_THAN" },
+        { id: "CA", value: 0.12, unit: "GRM", basisQuantity: 100, basisQuantityUnit: "GRM" },
+        { id: "PRO-", value: 3.1, unit: "GRM", basisQuantity: 30, basisQuantityUnit: "GRM" }, // per serving: not mixed in
+        { id: "ENER-E14", value: 9999, unit: "E14", basisQuantity: 100, basisQuantityUnit: "GRM" }, // implausible: dropped
+      ],
+    });
+    const bare = rawProduct({ id: "D2", names: { en: "Plain" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]] });
+    const idx = buildCatalogIndex([raw, bare], "", "", NOW);
+    const p = idx.products.find((x) => x.id === "D1")!;
+    expect(p.nutrition).toEqual({ per: "100g", values: { saturated_fat: 0.5, sugar: 11.5, salt: 0.1, calcium: 120 }, lessThan: ["saturated_fat"] });
+    expect(p.deposits).toEqual([{ material: "4", quantity: 24 }]);
+    expect(p.vatRatePct).toBe(13.5);
+    expect(p.texts?.ingredients).toEqual({ en: "milk, sugar 8 %, strawberry", fi: "maito, sokeri 8 %, mansikka" });
+    expect(p.texts?.storage).toEqual({ en: "Keep at +2...+6 °C" });
+    expect(p.texts?.about?.en?.length).toBeLessThanOrEqual(81);
+    expect(p.origins).toEqual(["fi", "se"]);
+    expect(p.mainIngredient).toEqual({ names: { en: "milk" }, pct: 80, origins: [{ stage: "MILKING", country: "fi" }] });
+    expect(p.fish).toEqual([{ species: "SAL", latin: "Salmo salar", production: "aquaculture", methods: ["TM"], areas: ["27.3.d"] }]);
+    expect(p.storageTempC).toEqual({ min: 2, max: 6 });
+    const q = idx.products.find((x) => x.id === "D2")!;
+    for (const k of ["nutrition", "deposits", "vatRatePct", "texts", "mainIngredient", "origins", "fish", "storageTempC"] as const) expect(q[k]).toBeUndefined();
+    // Through the file and back, texts included; and without texts when the build leaves them out.
+    const file = JSON.parse(JSON.stringify(encodeIndex(idx)));
+    expect(decodeIndex(file)).toEqual(idx);
+    const lean = decodeIndex(JSON.parse(JSON.stringify(encodeIndex(idx, { omit: ["texts"] }))));
+    expect(lean.products.find((x) => x.id === "D1")!.texts).toBeUndefined();
+    expect(lean.products.find((x) => x.id === "D1")!.nutrition).toEqual(p.nutrition);
+  });
+
+  it("shortens long texts at a comma, never mid-word when it can help it", () => {
+    expect(shorten("a, b, c, d", 100)).toBe("a, b, c, d");
+    expect(shorten("alpha beta, gamma delta, epsilon zeta", 26)).toBe("alpha beta, gamma delta,…");
   });
 
   it("names a few categories and keeps the code for the rest", () => {

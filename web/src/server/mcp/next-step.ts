@@ -56,6 +56,7 @@ const BY_RULE: Record<string, string> = {
   category_allowed: "This product is outside the mandate. Call read_mandate and pick products that satisfy it.",
   required_attributes: "This product is outside the mandate. Call read_mandate and pick products that carry every required attribute.",
   forbidden_allergens: "This product contains an allergen the mandate forbids. Pick another product; read_mandate lists the forbidden allergens.",
+  nutrition_rules: "A product breaks one of the kitchen's nutrition rules, or its maker declares no figure for that nutrient (unknown is not compliant). Pick another product: search with the same rules, and read_mandate lists them under nutritionRules.",
   required_certificates: "This product lacks a certificate the mandate requires. Pick another product; read_mandate lists the certificates.",
   delivery_deadline: "Pick a product whose deliveryDate meets the need-by date, or tell the buyer the date cannot be met.",
   substitution_rule: "The mandate does not allow this substitute. Order only the original product, or pick a substitute with the same attributes.",

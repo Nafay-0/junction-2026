@@ -64,6 +64,7 @@ export const SAFETY_RULES: Record<string, number> = {
   forbidden_allergens: 0.5,
   required_attributes: 0.5,
   category_allowed: 0.5,
+  nutrition_rules: 0.5,
   required_certificates: 0.5,
   weekly_budget: 0.5,
   approver_authority: 0.5,

@@ -130,7 +130,7 @@ function ThreadDemo() {
               <PriceCard
                 kind="Fixed price"
                 price="1 400,00 €"
-                per="for 1 000 L, VAT 0 %"
+                per="for 1 000 L, before VAT"
                 holds="holds 9 min 40 s"
                 left={0.64}
                 lines={[
@@ -157,7 +157,7 @@ function ThreadDemo() {
                 status={{ label: "Placed", tone: "good" }}
                 lines={[{ name: "Semi-skimmed milk 1 L, lactose-free", qty: "× 1 000", price: "1 400,00 €" }]}
                 total="1 400,00 €"
-                totalLabel="Total, VAT 0 %"
+                totalLabel="Total, before VAT"
                 delivery="Arrives Mon 16.11."
                 href="#"
                 linkLabel="Open the order"

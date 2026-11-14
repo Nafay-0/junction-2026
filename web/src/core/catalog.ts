@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { addDaysIso, localNow } from "./kitchen";
+import { NutritionSchema } from "./nutrition";
 
 /** Product master data: what the partner ships as files. Local, cheap to query. */
 export const ProductSchema = z.object({
@@ -57,6 +58,21 @@ export const ProductSchema = z.object({
   substitutes: z.array(z.string()).optional(), // substitutes the partner lists for this product
   /** What kind of product the name makes it beyond its category ("coffee", "fermented", "portion"); empty when plain. */
   kinds: z.array(z.string()).optional(),
+
+  // ----- Partner detail read since the data-depth index. Absent always means unknown, never "none" or "safe". -----
+  /** The maker's nutrition declaration per 100 g or 100 ml (core/nutrition.ts). */
+  nutrition: NutritionSchema.optional(),
+  /** Deposits charged with one pack: material code and how many items (core/pricing.ts prices them). */
+  deposits: z.array(z.object({ material: z.string(), quantity: z.number().positive() })).optional(),
+  /** VAT rate from the product file's VAT class; the price service's rate, when asked, is the one that counts. */
+  vatRatePct: z.number().nonnegative().optional(),
+  /** What the maker writes about it, in English and Finnish where given, shortened in the index. */
+  texts: z.partialRecord(z.enum(["ingredients", "storage", "usage", "disposal", "about"]), z.object({ en: z.string().optional(), fi: z.string().optional() })).optional(),
+  mainIngredient: z.object({ names: z.object({ en: z.string().optional(), fi: z.string().optional(), sv: z.string().optional() }), pct: z.number().optional(), origins: z.array(z.object({ stage: z.string(), country: z.string() })) }).optional(),
+  /** Every country of origin the data states (alpha-2). */
+  origins: z.array(z.string()).optional(),
+  fish: z.array(z.object({ species: z.string(), latin: z.string().optional(), production: z.enum(["aquaculture", "marine_fishery", "inland_fishery"]).optional(), methods: z.array(z.string()), areas: z.array(z.string()) })).optional(),
+  storageTempC: z.object({ min: z.number().optional(), max: z.number().optional() }).optional(),
 });
 export type Product = z.infer<typeof ProductSchema>;
 
@@ -132,6 +148,11 @@ export type LiveStatus = {
 export type LiveOptions = {
   /** YYYY-MM-DD the buyer wants delivery on. Default: the earliest possible. */
   deliveryDate?: string;
+  /**
+   * The buying kitchen's customer number at the wholesaler, sent as the price service's `customer`: prices and
+   * availability are customer-specific (the challenge's service ignores it). Catalogues without customers ignore it.
+   */
+  customer?: string;
 };
 
 export const ProductQuerySchema = z.object({

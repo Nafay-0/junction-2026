@@ -61,6 +61,14 @@ export function toDockProduct(p: IndexedProduct): Product {
     countryOfOrigin: p.countryOfOrigin,
     substitutes: [...p.substitutes],
     kinds: productFacets(p),
+    ...(p.nutrition ? { nutrition: structuredClone(p.nutrition) } : {}),
+    ...(p.deposits ? { deposits: p.deposits.map((d) => ({ ...d })) } : {}),
+    ...(p.vatRatePct !== undefined ? { vatRatePct: p.vatRatePct } : {}),
+    ...(p.texts ? { texts: structuredClone(p.texts) } : {}),
+    ...(p.mainIngredient ? { mainIngredient: structuredClone(p.mainIngredient) } : {}),
+    ...(p.origins ? { origins: [...p.origins] } : {}),
+    ...(p.fish ? { fish: structuredClone(p.fish) } : {}),
+    ...(p.storageTempC ? { storageTempC: { ...p.storageTempC } } : {}),
   };
 }
 

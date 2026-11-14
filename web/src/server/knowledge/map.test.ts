@@ -155,3 +155,15 @@ describe("file format", () => {
     expect(profileFromAnswer({ ...ok, uses: ["bogus"] }, "80401", new Set(["whipping_cream"]))).toBeUndefined();
   });
 });
+
+describe("the wholesaler's own substitute list", () => {
+  it("ranks a product the wholesaler lists first, says so, and still applies every hard check", () => {
+    const listing = products.map((p) => (p.id === "800001" ? { ...p, substitutes: ["800007", "800004"] } : p));
+    const m = new KnowledgeMap(listing, testKnowledge());
+    const r = m.alternatives("800001", { use: "sauce" })!;
+    // 800007 (vanilla cooking cream) is listed: first, as the wholesaler's word. 800004 is listed but adds lactose: refused.
+    expect(r.substitutes[0]).toMatchObject({ productId: "800007", partnerListed: true });
+    expect(r.substitutes[0].reason).toMatch(/Listed by the wholesaler/);
+    expect(ids(r.substitutes)).not.toContain("800004");
+  });
+});

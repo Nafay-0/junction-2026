@@ -1,4 +1,5 @@
-import { allergenOf, forbiddenPresent } from "./vocabulary";
+import { nutritionFindings, ruleText, type NutritionRule } from "./nutrition";
+import { allergenOf, forbiddenPresent, holdsLabel } from "./vocabulary";
 import { z } from "zod";
 import type { Product } from "./catalog";
 import { memoryItemIdOf, type Evidence, type LearnedPreference, type StatedPreference } from "./kitchen";
@@ -19,6 +20,8 @@ export type HardConstraints = {
   excludedAttributes: string[];
   forbiddenAllergens: string[];
   requiredCertificates: string[];
+  /** The mandate's nutrition rules (core/nutrition.ts): a product that breaks one, or does not declare the figure, is not offered. */
+  nutritionRules: NutritionRule[];
   sources: ConstraintSource[];
   /** "declared": a forbidden allergen is ruled out only by the maker's data (the mandate's allergenEvidence). */
   allergenEvidence?: "declared" | "declared_or_nature";
@@ -33,6 +36,7 @@ export function hardConstraints(mandate: Mandate, need: StructuredNeed, stated: 
     excludedAttributes: [],
     forbiddenAllergens: [...mandate.forbiddenAllergens],
     requiredCertificates: [...mandate.requiredCertificates],
+    nutritionRules: [...(mandate.nutritionRules ?? [])],
     sources: [],
     ...(mandate.allergenEvidence ? { allergenEvidence: mandate.allergenEvidence } : {}),
   };
@@ -41,6 +45,7 @@ export function hardConstraints(mandate: Mandate, need: StructuredNeed, stated: 
   if (mandate.requiredAttributes.length) add(`Mandate: must be ${mandate.requiredAttributes.join(", ")}`, "mandate");
   if (mandate.forbiddenAllergens.length) add(`Mandate: never ${mandate.forbiddenAllergens.join(", ")}`, "mandate");
   if (mandate.requiredCertificates.length) add(`Mandate: must carry ${mandate.requiredCertificates.join(", ")}`, "mandate");
+  for (const r of c.nutritionRules) add(`Mandate: ${ruleText(r)}`, "mandate");
 
   const wanted = [...need.requiredClaims, ...need.item.attributes];
   if (wanted.length) add(`Request: must be ${wanted.join(", ")}`, "request");
@@ -71,6 +76,13 @@ export function hardConstraints(mandate: Mandate, need: StructuredNeed, stated: 
   return c;
 }
 
+/** The first nutrition rule a product breaks (or cannot be shown to keep), as an exclusion's code and parameters. */
+export function nutritionExclusion(p: Product, c: HardConstraints): { code: "nutrition_rule"; reason: string; params: Record<string, string | number> } | undefined {
+  const f = nutritionFindings(c.nutritionRules ?? [], { productId: p.id, category: p.category, nutrition: p.nutrition })[0];
+  if (!f) return undefined;
+  return { code: "nutrition_rule", reason: f.reason.replace(new RegExp(`^${p.id} `), ""), params: { nutrient: f.rule.nutrient, problem: f.problem, ...(f.value !== undefined ? { value: f.value } : {}), ...(f.rule.max !== undefined ? { max: f.rule.max } : {}), ...(f.rule.min !== undefined ? { min: f.rule.min } : {}), per: p.nutrition?.per ?? "100g" } };
+}
+
 /** Why a product may not be offered, or undefined if it may. */
 export function violation(p: Product, c: HardConstraints): string | undefined {
   if (!c.categories.includes(p.category)) return `category ${p.category} is not in the mandate`;
@@ -89,7 +101,10 @@ export function violation(p: Product, c: HardConstraints): string | undefined {
     const found = forbiddenPresent({ present: nature.allergens, claims: p.attributes }, c.forbiddenAllergens);
     if (found.length) return `contains ${found.join(", ")} by its nature`;
   }
-  const certs = c.requiredCertificates.filter((x) => !p.certificates.includes(x));
+  // Nutrition has no "by nature" shortcut: a figure the maker did not declare is unknown, never compliant.
+  const nutrition = nutritionFindings(c.nutritionRules ?? [], { productId: p.id, category: p.category, nutrition: p.nutrition });
+  if (nutrition.length) return nutrition[0].reason.replace(new RegExp(`^${p.id} `), "");
+  const certs = c.requiredCertificates.filter((x) => !holdsLabel(p, x));
   if (certs.length) return `lacks ${certs.join(", ")}`;
   return undefined;
 }
