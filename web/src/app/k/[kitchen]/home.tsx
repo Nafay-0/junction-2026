@@ -498,7 +498,7 @@ function Ledger({ o }: { o: Overview }) {
 // ---------- standing orders ----------
 
 function StandingOrders({ o, cutoffs, cutoffError, now }: { o: Overview; cutoffs?: CutoffReply; cutoffError?: string; now: number }) {
-  const { base } = usePortal();
+  const { agent } = usePortal();
   const tx = useText(HOME_TEXT);
   const rows = o.standing;
   return (
@@ -515,9 +515,9 @@ function StandingOrders({ o, cutoffs, cutoffError, now }: { o: Overview; cutoffs
             </IconDisc>
           }
           action={
-            <Link href={`${base}/order`} className={buttonClass("primary", "sm")}>
+            <button type="button" onClick={agent.open} className={buttonClass("primary", "sm")}>
               {tx.placeOrder}
-            </Link>
+            </button>
           }
         >
           {tx.noStandingNote}

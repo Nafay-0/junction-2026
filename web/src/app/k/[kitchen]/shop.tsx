@@ -436,7 +436,7 @@ export function Facts({ p, lang }: { p: Product; lang: Lang }) {
  * facts, so the action is a thumb's reach from the top.
  */
 export function BuyBox({ p }: { p: Product }) {
-  const { live, basket, agent, lang } = usePortal();
+  const { live, basket, agent, lang, thread } = usePortal();
   const tx = useText(SHOP_TEXT);
   const [n, setN] = useState(stepOf(p));
   const check = live.check;
@@ -467,6 +467,8 @@ export function BuyBox({ p }: { p: Product }) {
           onClick={() => {
             agent.setProduct(p);
             agent.setFollowUp(undefined);
+            // The agent opens on this product's facts card (a `product_show` turn); the composer keeps the product.
+            void thread.submit({ door: "typed", via: "tap", action: { type: "product_show", productId: p.id }, label: `${tx.orderWithAgent}: ${p.name}`, lang });
             agent.open();
           }}
         >
