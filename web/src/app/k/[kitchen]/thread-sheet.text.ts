@@ -67,7 +67,7 @@ export const THREAD_SHEET_TEXT = defineText({
       rank: (label: string) => `Rank by: ${label}`,
     },
     addHint: "Type what to add below, or tap Add in the catalogue.",
-    notice: { short: (n: number) => `Only ${n} packs can be delivered for that day.`, noOffer: "No price for this day: pick another day or swap the product." },
+    notice: { short: (n: number) => `Only ${n} packs can be delivered for that day.`, noOffer: "The wholesaler cannot deliver it now. Swap it for another product." },
     day: { noEarlier: "too early for every product", why: "not possible" },
     chips: { price: "Cheapest", same_kind: "Closest to what you asked", co2: "Lowest CO₂", reliability: "Most reliable", organic: "Organic", lactose_free: "Lactose-free", pack_size: "Same pack size" } as Record<string, string>,
     headline: {
@@ -142,7 +142,7 @@ export const THREAD_SHEET_TEXT = defineText({
       rank: (label: string) => `Järjestä: ${label}`,
     },
     addHint: "Kirjoita alle, mitä lisätään, tai napauta Lisää valikoimassa.",
-    notice: { short: (n: number) => `Sille päivälle voidaan toimittaa vain ${n} pakkausta.`, noOffer: "Tälle päivälle ei ole hintaa: valitse toinen päivä tai vaihda tuote." },
+    notice: { short: (n: number) => `Sille päivälle voidaan toimittaa vain ${n} pakkausta.`, noOffer: "Tukku ei voi toimittaa sitä nyt. Vaihda se toiseen tuotteeseen." },
     day: { noEarlier: "liian aikaisin kaikille tuotteille", why: "ei mahdollinen" },
     chips: { price: "Halvin", same_kind: "Lähinnä pyydettyä", co2: "Pienin CO₂", reliability: "Luotettavin", organic: "Luomu", lactose_free: "Laktoositon", pack_size: "Sama pakkauskoko" } as Record<string, string>,
     headline: {
@@ -217,7 +217,7 @@ export const THREAD_SHEET_TEXT = defineText({
       rank: (label: string) => `Rangordna: ${label}`,
     },
     addHint: "Skriv nedan vad som ska läggas till, eller tryck Lägg till i sortimentet.",
-    notice: { short: (n: number) => `Bara ${n} förpackningar kan levereras den dagen.`, noOffer: "Inget pris för den dagen: välj en annan dag eller byt produkt." },
+    notice: { short: (n: number) => `Bara ${n} förpackningar kan levereras den dagen.`, noOffer: "Grossisten kan inte leverera den nu. Byt till en annan produkt." },
     day: { noEarlier: "för tidigt för alla produkter", why: "inte möjligt" },
     chips: { price: "Billigast", same_kind: "Närmast det du bad om", co2: "Lägst CO₂", reliability: "Pålitligast", organic: "Ekologiskt", lactose_free: "Laktosfritt", pack_size: "Samma förpackning" } as Record<string, string>,
     headline: {

@@ -50,6 +50,8 @@ const L = {
     sign: /^(Add this device and sign|Sign with this device)$/,
     takeBack: /^Take it back/,
     thursday: /^Thu /,
+    swap: /^Swap$/,
+    choose: /^Choose this$/,
   },
   fi: {
     usual: "Tilaa tavalliset",
@@ -70,6 +72,8 @@ const L = {
     sign: /^(Lisää tämä laite ja hyväksy|Hyväksy tällä laitteella)$/,
     takeBack: /^Peru tilaus/,
     thursday: /^to /,
+    swap: /^Vaihda$/,
+    choose: /^Valitse tämä$/,
   },
 }[lang];
 
@@ -163,6 +167,13 @@ async function task(name: string, n: number, body: (r: Run) => Promise<string | 
   }
   await page.waitForTimeout(1500);
   if (out) await page.screenshot({ path: path.join(out, `${lang}-${n}-${result.ok ? "done" : "failed"}.png`), fullPage: false });
+  // A first-timer has no orders from the task before: take back what this task placed, so the next one starts clean
+  // (otherwise the mistake check rightly asks "you ordered the same a moment ago").
+  for (const c of cardsOf(await r.thread())) {
+    if (c.type === "order" && (c.status === "pending_approval" || c.status === "committed"))
+      await page.request.post(`${base}/ui-api/kitchens/${account.username}/thread/turns`, { data: { door: "typed", via: "tap", action: { type: "withdraw", orderId: c.orderId }, label: "clean-up", clientTurnId: `cleanup-${c.orderId}` } }).catch(() => undefined);
+  }
+  await page.waitForTimeout(1500);
   await browser.close();
   return result;
 }
@@ -177,10 +188,20 @@ const TASKS: [string, (r: Run) => Promise<string | void>][] = [
       const end = Date.now() + 90_000;
       while (Date.now() < end) {
         if (done((await r.thread())!)) return "placed without a tap";
-        if (await lead.isVisible().catch(() => false)) {
+        if (await lead.isVisible().catch(() => false) && (await lead.isEnabled().catch(() => false))) {
           await r.tap(lead);
           await r.until(done);
           return;
+        }
+        // The usual product is not on offer: swap it on the sheet for one the picker offers, then order.
+        const swap = r.log.getByRole("button", { name: L.swap }).first();
+        if (await swap.isVisible().catch(() => false)) {
+          await r.tap(swap);
+          const choose = r.log.getByRole("button", { name: L.choose }).first();
+          await choose.waitFor({ timeout: 30_000 });
+          await r.tap(choose);
+          await r.page.waitForTimeout(1500);
+          continue;
         }
         await r.page.waitForTimeout(400);
       }
@@ -206,9 +227,10 @@ const TASKS: [string, (r: Run) => Promise<string | void>][] = [
       const end = Date.now() + 90_000;
       let placedFirst = false;
       while (Date.now() < end) {
-        if (await lead.isVisible().catch(() => false)) break;
-        if (ordered(["committed", "pending_approval"])((await r.thread())!)) {
-          placedFirst = true;
+        const t = (await r.thread())!;
+        const last = t.turns.at(-1);
+        if (last?.role === "agent" && last.status !== "working") {
+          placedFirst = ordered(["committed", "pending_approval"])(t);
           break;
         }
         await r.page.waitForTimeout(400);
@@ -227,6 +249,7 @@ const TASKS: [string, (r: Run) => Promise<string | void>][] = [
       }
       // The new options (or the sheet) for 200 L: the first-timer checks the amount on the button's card and orders.
       await r.page.waitForTimeout(1500);
+      await r.until((t) => t.turns.at(-1)?.role === "agent" && (t.turns.at(-1) as { status: string }).status !== "working");
       const again = r.log.getByRole("button", { name: L.order }).last();
       await r.waitFor(again);
       await r.tap(again);
