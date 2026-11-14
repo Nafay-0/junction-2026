@@ -87,6 +87,6 @@ export async function orderAudit(v: Visitor, expected: string[]): Promise<{ ledg
 
 export function approverSees(a?: ApproverView): string {
   if (!a) return "no sign-off asked";
-  const listed = a.listed ? "listed" : `not listed (${a.listStatus})`;
-  return `${listed}, page ${a.pageStatus}, view ${a.viewStatus}${a.decideStatus !== undefined ? `, sign-off ${a.decideStatus}${a.decideCode ? `(${a.decideCode})` : ""} -> ${a.orderStatus ?? "?"}` : ""}`;
+  const listed = a.listed ? "listed" : `not listed (${a.listStatus}${a.listCode ? ` ${a.listCode}` : ""}${a.listMs !== undefined ? ` in ${(a.listMs / 1000).toFixed(1)} s` : ""})`;
+  return `${listed}, page ${a.pageStatus}, view ${a.viewStatus}${a.viewStatus >= 400 && a.viewCode ? `(${a.viewCode})` : ""}${a.decideStatus !== undefined ? `, sign-off ${a.decideStatus}${a.decideCode ? `(${a.decideCode})` : ""} -> ${a.orderStatus ?? "?"}` : ""}`;
 }
