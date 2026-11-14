@@ -237,3 +237,34 @@ describe("the agent proposes a rule from what the kitchen orders, and never appl
     expect(questions[0].question).toMatch(/standing rule/);
   });
 });
+
+describe("the conversation's adapter (server/demo/thread.ts)", () => {
+  it("reads what the buyer asks of the guide", async () => {
+    const { demoAskOf } = await import("./thread");
+    expect(demoAskOf("What can I try?")).toBe("next");
+    expect(demoAskOf("what else can you do")).toBe("next");
+    expect(demoAskOf("Mitä voin kokeilla?")).toBe("next");
+    expect(demoAskOf("Vad kan jag prova?")).toBe("next");
+    expect(demoAskOf("Show me a stock-out")).toBe("stock_out");
+    expect(demoAskOf("stage a drift on my weekly order")).toBe("drift");
+    expect(demoAskOf("send me an offer")).toBe("offer");
+    expect(demoAskOf("100 litres of milk for Friday")).toBeUndefined();
+  });
+
+  it("the next thing to try with its words, and a staging said in one sentence", async () => {
+    const { rt, a } = await account("keskustelu", { diet: [], skipRest: true });
+    await chooseStart(rt, await a(), "sample");
+    const { demoNextForThread, demoStageForThread } = await import("./thread");
+    const next = await demoNextForThread(rt, "keskustelu", "en");
+    expect(next).toMatchObject({ rowId: "flow", done: 0 });
+    expect(next!.say).toMatch(/1,000 litres of lactose-free milk/);
+    const fi = await demoNextForThread(rt, "keskustelu", "fi");
+    expect(fi!.say).toMatch(/laktoositonta/);
+    const s = await demoStageForThread(rt, "keskustelu", "stock_out", "en");
+    expect(s.ok).toBe(true);
+    expect(s.say).toMatch(/staged for the demo/);
+    // Not a demo account's kitchen: nothing.
+    expect(await demoNextForThread(rt, "kaari", "en")).toBeUndefined();
+    expect((await demoStageForThread(rt, "kaari", "stock_out", "en")).ok).toBe(false);
+  });
+});

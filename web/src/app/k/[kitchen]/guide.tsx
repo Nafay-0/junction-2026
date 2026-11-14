@@ -5,11 +5,10 @@ import { useCallback, useEffect, useState } from "react";
 import { ArrowUpRight, Check, Copy, MessageSquareText, Sparkles } from "lucide-react";
 import { api } from "../../_client/api";
 import { useFormat, useText } from "../../_i18n/provider";
-import { WEEKDAY_LONG } from "../../_i18n/format";
-import { moneyShort } from "../../_ui/plain";
 import { Badge, Button, Card, ErrorPlate, PageHeader, Skeleton } from "../../_ui/kit";
 import { usePortal } from "./portal";
-import { GUIDE_TEXT, type GuideWords } from "./guide.text";
+import { GUIDE_TEXT } from "./guide.text";
+import { guideWords } from "@/server/demo/words";
 import type { Guide, GuideRow, Staged } from "@/server/demo/service";
 
 /**
@@ -68,19 +67,7 @@ export function TryEverything() {
   if (!g) return <div className="mt-8 space-y-3">{error ? <ErrorPlate title={tx.title} message={error} onRetry={() => void load()} /> : <><Skeleton className="h-24" /><Skeleton className="h-40" /><Skeleton className="h-40" /></>}</div>;
 
   const fx = g.facts;
-  const weekday = (iso: string) => WEEKDAY_LONG[f.lang][new Date(`${iso}T12:00:00Z`).getUTCDay()];
-  const unit = (u: string) => (u === "L" ? (f.lang === "en" ? "litres" : f.lang === "fi" ? "litraa" : "liter") : u === "kg" ? "kg" : f.lang === "en" ? "packs" : f.lang === "fi" ? "pakkausta" : "förpackningar");
-  const words: GuideWords = {
-    limit: moneyShort(fx.limitEur * 100),
-    signer: fx.signer,
-    over: { amount: f.num(fx.overAmount.amount), unit: unit(fx.overAmount.unit), name: fx.overAmount.name },
-    ...(fx.usual ? { usual: { tenTimes: f.num(fx.usual.tenTimes), unit: unit(fx.usual.unit), name: fx.usual.name } } : {}),
-    ...(fx.weekly ? { weeklyFamily: fx.weekly.name } : {}),
-    ...(fx.creeping ? { creepingFamily: fx.creeping.name } : {}),
-    ...(fx.poor || staged.backup?.productName ? { poor: { name: staged.backup?.productName ?? fx.poor!.name, packs: staged.backup?.packs ?? fx.poor!.packs } } : {}),
-    day: weekday(fx.day),
-    raiseTo: moneyShort(Math.max(fx.limitEur * 3, fx.limitEur + 500) * 100),
-  };
+  const words = guideWords(fx, f.lang, staged.backup);
   const links: Partial<Record<GuideRow["id"], { href: string; label: string; external?: boolean }[]>> = {
     signoff: [{ href: `${base}/agent#devices`, label: tx.openPhone }],
     email: [{ href: `${base}/agent#mail`, label: tx.openRules }],
