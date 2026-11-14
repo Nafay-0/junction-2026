@@ -713,6 +713,24 @@ export function decideFinding(rt: Runtime, f: Finding, d: FindingDecision) {
   });
 }
 
+/**
+ * An order the watch placed or proposed was decided by a person (OK'd, declined, expired, taken back): the finding and
+ * the renewal say what became of it, so "sent for sign-off" never outlives the OK (the operations page and its counts
+ * read these). Called by the conversation on every order event.
+ */
+export function orderSettled(rt: Runtime, orderId: string, status: PublicOrder["status"]): void {
+  if (status === "pending_approval") return;
+  const s = stateOf(rt);
+  for (const f of s.findings.values()) {
+    if (f.decision?.orderId !== orderId || f.decision.action !== "sent_for_sign_off") continue;
+    saveFinding(s, { ...f, decision: { ...f.decision, status, action: status === "committed" ? "switched" : "refused", ...(status === "committed" ? {} : { note: `The order was ${status === "declined" ? "declined by the person asked" : status === "withdrawn" ? "taken back" : status}.` }) } });
+  }
+  for (const r of s.renewals.values()) {
+    if (r.outcome?.orderId !== orderId || r.outcome.status !== "pending_approval") continue;
+    saveRenewal(s, { ...r, outcome: { ...r.outcome, status } });
+  }
+}
+
 // ---------- answers (the conversation, an outside agent) ----------
 
 export type Who = { by: string; via: string; signedIn?: boolean; now?: Date };

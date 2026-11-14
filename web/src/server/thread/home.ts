@@ -136,7 +136,7 @@ function allowed(run: TurnRun, p: Product): boolean {
 export async function productsCard(run: TurnRun, query: string, category?: string): Promise<ProductsCard> {
   const q = query.trim().slice(0, 120);
   const m = run.session.mandate;
-  const found = q ? await findProducts(run.rt.catalog, { text: q, ...(category ? { category } : {}), requiredClaims: m.requiredAttributes, forbiddenAllergens: m.forbiddenAllergens, ...(m.allergenEvidence === "declared" ? { declaredAllergensOnly: true } : {}), limit: 100 }) : undefined;
+  const found = q ? await findProducts(run.rt.catalog, { text: q, ...(category ? { category } : {}), requiredClaims: m.requiredAttributes, forbiddenAllergens: m.forbiddenAllergens, ...(m.allergenEvidence === "declared" ? { declaredAllergensOnly: true } : {}), ...(m.nutritionRules?.length ? { nutritionRules: m.nutritionRules } : {}), limit: 100 }) : undefined;
   const hits = found ? found.hits.map((h) => h.product) : await run.rt.catalog.searchProducts({ ...(category ? { category } : {}), limit: 100 });
   const match = new Map((found?.hits ?? []).flatMap((h) => (h.label && h.label !== "other" ? [[h.product.id, h.label] as const] : [])));
   const ok = hits.filter((p) => allowed(run, p));

@@ -14,7 +14,7 @@ import { getRuntime, type Runtime } from "@/server/runtime";
 import { runAgent, remember, type AgentRunResult } from "./agent";
 import { cardId, gateCard, orderCard } from "./cards";
 import { withTurn } from "./context";
-import { checkOpen, read, record, runAction, step, type ItemOutcome, type TurnRun } from "./pipeline";
+import { byLine, checkOpen, read, record, runAction, step, type ItemOutcome, type TurnRun } from "./pipeline";
 import { earlierFor } from "./earlier";
 import { ThreadStore, type StoredThread } from "./store";
 import { runWidget } from "./widgets";
@@ -277,6 +277,22 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
   record(run, "turn", body.action ? `The buyer tapped "${body.label ?? body.action.type}" (${run.door}).` : `The buyer said (${run.door}): "${(body.text ?? "").slice(0, 300)}"`, { via: body.via, ...(body.text ? { words: body.text.slice(0, 2000) } : {}), ...(body.action ? { action: body.action } : {}) });
   let line = "";
   let agentResult: AgentRunResult | undefined;
+  // An answer in words to the menu scenario on the table ("Monday is fine", "sounds good", "use the beef cubes"): read by
+  // the adapter (scenarioAnswerOf), the same as the tap. Its plan stays the subject after the first answer, so naming
+  // another verified option still reaches it.
+  if (!body.action && body.text) {
+    const sc = run.store.cards(thread).map((x) => x.card).filter((c) => c.type === "scenario").at(-1);
+    const lastReply = [...thread.turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "");
+    const recent = sc && lastReply?.role === "agent" && (lastReply.cards.some((c) => c.cardId === sc.cardId) || thread.turns.slice(thread.turns.findIndex((x) => x.role === "agent" && x.cards.some((c) => c.cardId === sc.cardId))).filter((x) => x.role === "buyer").length <= 3);
+    if (sc?.type === "scenario" && recent) {
+      const { scenarioAnswerOf } = await import("@/server/agent/menu/thread");
+      const a = scenarioAnswerOf(body.text, sc.pending as never);
+      if (a && (sc.state === "open" || a.kind === "choose")) {
+        if (sc.state !== "open") run.store.card(thread, run.turnId, { ...sc, state: "open" });
+        body = { ...body, action: { type: "scenario_answer", planId: sc.planId, answer: a }, label: body.text };
+      }
+    }
+  }
   // An answer in words to the mistake check just said ("yes, 1 000", "100", "it's for an event"): the same as the tap,
   // and a reason the buyer gives is recorded as theirs.
   if (!body.action && body.text) {
@@ -314,6 +330,31 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
       await paused(run);
     } else {
       try {
+        // A short answer to the backup question just said ("you choose", "the second one", "no"): recorded, nothing bought.
+        const backedUp = await (await import("./backup")).answerBackupIn(run, body.text!, body.lang ?? "en").catch((err) => {
+          console.error("[thread] backup answer", err);
+          return undefined;
+        });
+        if (backedUp) {
+          if (run.opening) first.done("answered the backup");
+          store.line(thread, run.turnId, backedUp);
+          store.mark(thread, run.turnId, "line", Date.now() - run.t0);
+          await finishTurn(run);
+          return;
+        }
+        // A change in words to the menu on the table ("make it lactose-free", "no nuts", "for 20", "drop the soup"):
+        // the menu adapter changes the plan and says what changed and the new total (server/agent/menu/thread.ts).
+        const changed = await changeMenuInWords(run, body.text!, body.lang ?? "en").catch((err) => {
+          console.error("[thread] change menu", err);
+          return undefined;
+        });
+        if (changed) {
+          if (run.opening) first.done("changed the menu");
+          store.line(thread, run.turnId, changed);
+          store.mark(thread, run.turnId, "line", Date.now() - run.t0);
+          await finishTurn(run);
+          return;
+        }
         // "Yes" to drafting a change to the kitchen's rules (a refusal that offered it): the change drafted as a proposal
         // the kitchen's own person confirms with a yes (rules.ts, the account's own terms), then the buy is offered again.
         const drafted = await draftRulesChange(run, body.text!, body.lang ?? "en").catch((err) => {
@@ -405,6 +446,17 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
     }
   }
   if (line) await showLine(run, line);
+  // A menu planned this turn with a dish the kitchen's rules refuse: the planner's own checks say it, by name, with
+  // what can be made instead and the question (server/agent/menu/thread.ts menuChecks), never the model's guess.
+  const menuHere = store.agentTurn(thread, run.turnId)?.cards.find((c) => c.type === "menu" && c.planId);
+  if (menuHere?.type === "menu" && menuHere.stage !== "declined") {
+    const { menuChecks } = await import("@/server/agent/menu/thread");
+    const m = await menuChecks(run.k.info.slug, menuHere.planId, body.lang ?? "en").catch(() => undefined);
+    if (m?.refusedDish && m.say) {
+      store.line(thread, run.turnId, `${m.say}${m.ask ? ` ${m.ask}` : ""}`);
+      record(run, "dish_refused", `The planner refused a dish under the kitchen's rule: ${m.say.slice(0, 160)}`, { planId: menuHere.planId });
+    }
+  }
   // The mistake check paused this request: the sentence is the finding's own comparison, both figures, and one question.
   const guardCard = store.agentTurn(thread, run.turnId)?.cards.find((c) => c.type === "anomaly" && !c.answered);
   if (guardCard?.type === "anomaly") {
@@ -425,6 +477,15 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
   if (sent && !sent.line && gateHere?.type === "gate") {
     const order = sent.cards.find((c) => c.type === "order" && c.orderId === gateHere.orderId);
     if (order?.type === "order") store.line(thread, run.turnId, waitingSentence(order, gateHere, body.lang ?? "en", store.cards(thread).map((x) => x.card)) + (pressed ? { en: ` Only their own OK, on their own device, places it.`, fi: " Vain hänen oma hyväksyntänsä omalla laitteellaan tekee tilauksen.", sv: " Bara deras eget godkännande, på deras egen enhet, lägger den." }[body.lang ?? "en"] : ""));
+  }
+  // An order placed or waiting in this turn with a product whose delivery record is poor: one sentence beneath the
+  // order's own reply (server/reliability), a backup offered in case it is not delivered. Most orders say nothing.
+  const ordered = store.agentTurn(thread, run.turnId)?.cards.find((c) => c.type === "order" && (c.status === "committed" || c.status === "pending_approval"));
+  if (ordered?.type === "order") {
+    const { sayBackup } = await import("./backup");
+    const b = await sayBackup(run, { orderId: ordered.orderId }, body.lang ?? "en").catch(() => undefined);
+    const now = store.agentTurn(thread, run.turnId)?.line ?? "";
+    if (b && !now.includes(b.text.slice(0, 30))) store.line(thread, run.turnId, now ? `${now}\n${b.text}` : b.text);
   }
   // Never an empty reply: when the agent's words did not come (or none were backed), plain words from what the engine knows.
   const after = store.agentTurn(thread, run.turnId);
@@ -766,6 +827,8 @@ async function onOrderEvent(rt: Runtime, orgId: string, orderId: string): Promis
     if (!holder) continue;
     const r = await resolve(kitchen, "typed");
     const order: PublicOrder = await rt.dock.getOrder(r.session, orderId);
+    // The watch's record of an order it switched or renewed follows the decision (its "sent for sign-off" ends).
+    void import("@/server/watch/service").then((w) => w.orderSettled(rt, orderId, order.status)).catch(() => undefined);
     e.store.card(t, holder.turnId, gateCard(order));
     const prevOrder = e.store.cards(t).find((x) => x.card.type === "order" && x.card.orderId === orderId);
     e.store.card(t, holder.turnId, orderCard(order, prevOrder?.card.type === "order" ? prevOrder.card.passedOver : []));
@@ -795,6 +858,30 @@ function afterRulesWords(run: TurnRun, words: string): string | undefined {
   if (!pid || !store.afterRules?.[pid] || store.afterRulesUsed?.includes(pid)) return undefined;
   store.afterRulesUsed = [...(store.afterRulesUsed ?? []), pid];
   return store.afterRules[pid];
+}
+
+/** Words that change a menu already planned, rather than start a new one. */
+const MENU_CHANGE = /\b(make it|make them|no\s+\w+|without|lactose|gluten|nut-?free|vegan|vegetarian|instead|swap|replace|drop|remove|leave out|add|more|less|fewer|portions?|people|servings|ilman|tee siitä|laktoositon|gluteeniton|lisää|poista|vaihda|jätä pois|annosta|hengelle|utan|byt|ta bort|lägg till)\b/i;
+
+/** "Make it lactose-free" while a menu is the subject: changed by the menu adapter, its sentence said; else undefined. */
+async function changeMenuInWords(run: TurnRun, words: string, lang: "en" | "fi" | "sv"): Promise<string | undefined> {
+  if (words.trim().split(/\s+/).length > 14 || !MENU_CHANGE.test(words)) return undefined;
+  const { subjectOf } = await import("./subject");
+  const subj = subjectOf(run);
+  if (subj?.kind !== "menu" || !subj.planId) return undefined;
+  // A plain number of portions is the covers widget's (menu:covers); words beyond it are a change to the plan.
+  if (/^\s*\d+\s*(portions?|people|annosta|hengelle|portioner)?\s*$/i.test(words)) return undefined;
+  const { changeMenu, menuChecks } = await import("@/server/agent/menu/thread");
+  const c = await changeMenu(run.k.info.slug, subj.planId, words, byLine(run), lang);
+  if (!c.edits.length) return undefined;
+  const { refreshMenu } = await import("./menu");
+  await refreshMenu(run, subj.planId).catch(() => undefined);
+  record(run, "menu_changed", `The menu on the table was changed in words ("${words.slice(0, 80)}"): ${c.changed.slice(0, 4).join("; ")}.`, { planId: subj.planId, changed: c.changed });
+  if (c.checks.refusedDish) {
+    const m = await menuChecks(run.k.info.slug, subj.planId, lang).catch(() => undefined);
+    if (m?.say) return `${c.say} ${m.say}${m.ask ? ` ${m.ask}` : ""}`.trim();
+  }
+  return c.say;
 }
 
 /** A yes to "Shall I draft that change for you to confirm?": the proposal, said in one sentence, or undefined. */

@@ -568,6 +568,17 @@ export async function runMenuAction(run: TurnRun, a: { type: string } & Record<s
 }
 
 /** A menu card still open (ready, not yet on a sheet), for the agent's open decisions. */
+/** The menu card shown again from the planner's record, after a change made outside the card (a change in words). */
+export async function refreshMenu(run: TurnRun, planId: string): Promise<MenuCard | undefined> {
+  const m = Object.values(menusOf(run)).find((x) => x.planId === planId);
+  if (!m) return undefined;
+  const svc = await planner(run);
+  const planned = await svc.service.get(svc.kitchen, planId);
+  const card = await fullCard(run, svc, m, planned);
+  show(run, card);
+  return card;
+}
+
 export function openMenu(run: TurnRun): MenuCard | undefined {
   return run.store
     .cards(run.thread)

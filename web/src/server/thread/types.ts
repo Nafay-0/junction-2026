@@ -656,13 +656,26 @@ export type ScenarioCard = CardBase & {
   text: Record<"en" | "fi" | "sv", { say: string; ask: string }>;
   steps: string[];
   /** What the answer is read against (server/agent/menu/thread.ts PendingScenario). */
-  pending: { kind: "seasonal" | "event"; planId: string; options: { optionId: string; lineId: string; words: string[] }[]; earliest?: string; words: string };
+  pending: { kind: "seasonal" | "event"; planId: string; options: { optionId: string; lineId: string; words: string[] }[]; more?: { optionId: string; lineId: string; words: string[] }[]; earliest?: string; words: string };
   /** Each ingredient that cannot arrive, with its best stand-in (behind Show the list). */
   others?: string[];
   state: "open" | "answered";
 };
 
-export type Card = ScenarioCard | WatchCard | OfferCard | UnderstoodCard | AnomalyCard | QuestionCard | OptionsCard | PriceCard | GateCard | OrderCard | MemoryCard | RecordsCard | NoticeCard | SheetCard | AlternativesCard | MenuCard | TodayCard | ProductsCard | ProductCard | StandingCard | DeliveriesCard | MemoryListCard | RulesCard;
+/** A backup in case a product with a poor delivery record does not come (server/reliability), said after the order. */
+export type BackupCard = CardBase & {
+  type: "backup";
+  momentId: string;
+  /** Its sentence and question, in the buyer's language. */
+  text: string;
+  answers: string[];
+  /** The alternatives and the other poor-record products (behind Show the list). */
+  others: string[];
+  steps: string[];
+  state: "open" | "set" | "declined";
+};
+
+export type Card = BackupCard | ScenarioCard | WatchCard | OfferCard | UnderstoodCard | AnomalyCard | QuestionCard | OptionsCard | PriceCard | GateCard | OrderCard | MemoryCard | RecordsCard | NoticeCard | SheetCard | AlternativesCard | MenuCard | TodayCard | ProductsCard | ProductCard | StandingCard | DeliveriesCard | MemoryListCard | RulesCard;
 // ---------- the kitchen's rules (docs/agent-thread.md "Widgets": rules) ----------
 
 /** The mandate as the rules card shows it: plain values. `groups` only where the kitchen has terms (an account). */

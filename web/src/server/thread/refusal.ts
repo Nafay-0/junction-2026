@@ -180,8 +180,8 @@ export function refusalOfStep(run: TurnRun, step: IntakeView, lang: Lang): Refus
   if (top === "out_of_stock") return { code: "out_of_stock", what, ...(day ? { day } : {}) };
   if (top === "over_budget") return { code: "over_budget", ...(signerOf(run) ? { signer: signerOf(run) } : {}) };
   if (top === "nutrition_rule") {
-    const e = step.excluded.find((x) => x.code === "nutrition_rule");
-    return { code: "nutrition_rule", what, ...(e ? { detail: plainDetail(e.reason) } : {}) };
+    const e = step.excluded.find((x) => x.code === "nutrition_rule") as { reason: string; params?: Record<string, string | number> } | undefined;
+    return { code: "nutrition_rule", what, ...(e ? { detail: nutritionDetail(e.params, lang) ?? plainDetail(e.reason) } : {}) };
   }
   // Most of what was looked at is another kind of product: say that, never "your rules" (it is not a rule).
   const kinds = step.excluded.filter((e) => /different kind of product/i.test(e.reason)).length;
@@ -223,6 +223,19 @@ export function refusalOfError(err: DockError): Refusal | undefined {
   if (/suspend/i.test(err.code) || err.rule === "operator_suspension") return { code: "suspended" };
   if (/mandate_(expired|ended|replaced|window)/.test(err.code) || err.rule === "mandate_window") return { code: "mandate_ended" };
   return undefined;
+}
+
+/** "the cherry yoghurt has 13 g sugar per 100 g; your rule is at most 12 g", from the finding's own figures. */
+export function nutritionDetail(p: Record<string, string | number> | undefined, lang: Lang): string | undefined {
+  if (!p?.nutrient) return undefined;
+  const NUT: Record<string, Record<Lang, string>> = { sugar: { en: "sugar", fi: "sokeria", sv: "socker" }, salt: { en: "salt", fi: "suolaa", sv: "salt" }, protein: { en: "protein", fi: "proteiinia", sv: "protein" }, fibre: { en: "fibre", fi: "kuitua", sv: "fiber" }, fat: { en: "fat", fi: "rasvaa", sv: "fett" }, saturated_fat: { en: "saturated fat", fi: "tyydyttynyttä rasvaa", sv: "mättat fett" } };
+  const n = NUT[String(p.nutrient)]?.[lang] ?? String(p.nutrient).replaceAll("_", " ");
+  const per = String(p.per ?? "100g").replace(/^100/, "100 ");
+  const product = p.product ? String(p.product).replace(/[®™]/g, "").split(/\s+/).filter((w) => !/\d/.test(w) && !/^(kg|g|l|ml|dl|cl|x)$/i.test(w)).slice(0, 4).join(" ") : "";
+  const bound = p.max !== undefined ? { en: `at most ${p.max} g`, fi: `enintään ${p.max} g`, sv: `högst ${p.max} g` }[lang] : p.min !== undefined ? { en: `at least ${p.min} g`, fi: `vähintään ${p.min} g`, sv: `minst ${p.min} g` }[lang] : "";
+  if (p.problem === "unknown") return { en: `${product} does not declare its ${n}, and your rule asks for ${bound} per ${per}`, fi: `${product} ei ilmoita ${n}, ja sääntönne vaatii ${bound} / ${per}`, sv: `${product} anger inte ${n}, och er regel kräver ${bound} per ${per}` }[lang];
+  const v = p.value !== undefined ? `${String(p.value).replace(".", lang === "en" ? "." : ",")} g` : "";
+  return { en: `${product} has ${v} ${n} per ${per}; your rule is ${bound}`, fi: `${product}: ${v} ${n} / ${per}; sääntönne on ${bound}`, sv: `${product} har ${v} ${n} per ${per}; er regel är ${bound}` }[lang];
 }
 
 /** A lower layer's sentence made fit to say: product codes and ids out, snake_case words as words. */
@@ -283,7 +296,7 @@ export function englishDays(text: string): string {
     const rest = all.slice(offset + m.length);
     const mark = /^(\}\}|\*\*)/.exec(rest)?.[0] ?? "";
     const after = rest.slice(mark.length);
-    const ends = dot === "." && (/^\s*$/.test(after) || /^\s+[\p{Lu}"“*{]/u.test(after));
+    const ends = dot === "." && (/^\s*$/.test(after) || /^\s+[\p{Lu}"“]/u.test(after));
     return `${w}${sp}${Number(d)} ${MON[Number(mo) - 1]}${ends && !mark ? "." : ""}${ends && mark ? "" : ""}`;
-  }).replace(/(\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec))(\}\}|\*\*)(?=\s+[\p{Lu}"“*{]|\s*$)/gu, "$1$2.");
+  }).replace(/(\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec))(\}\}|\*\*)(?=\s+[\p{Lu}"“]|\s*$)/gu, "$1$2.");
 }

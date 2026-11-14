@@ -83,5 +83,13 @@ describe("englishDays", () => {
     expect(englishDays("the earliest delivery is Mon 16.11. Plan it for Mon 16.11. instead?")).toBe("the earliest delivery is Mon 16 Nov. Plan it for Mon 16 Nov instead?");
     expect(englishDays("It arrives {{Monday 16.11.}} Shall I order it?")).toBe("It arrives {{Monday 16 Nov}}. Shall I order it?");
     expect(englishDays("on Tue 17.11., then")).toBe("on Tue 17 Nov, then");
+    expect(englishDays("cancel until {{Sunday 15.11.}} {{17.00}}.")).toBe("cancel until {{Sunday 15 Nov}} {{17.00}}.");
+  });
+});
+
+describe("nutritionDetail", () => {
+  it("says the product's figure and the rule's bound", async () => {
+    const { nutritionDetail } = await import("./refusal");
+    expect(nutritionDetail({ nutrient: "sugar", problem: "over", value: 13, max: 12, per: "100g", product: "Valio cherry yoghurt 1 kg" }, "en")).toBe("Valio cherry yoghurt has 13 g sugar per 100 g; your rule is at most 12 g");
   });
 });

@@ -958,6 +958,50 @@ for (const slug of ["hotel-lumo", "koulu-metsola", "kahvila-sointu"] as const) {
     ALL.push({ id: `drift-renewal-${lang}@${slug}`, title: `Standing-order drift on the test kitchen ${slug}: the creeping order is held before auto-renewing (${lang})`, tag: "standing-order drift", kitchen: slug, lang, before: driftFor(slug), turns: [{ say: say[lang].drift }], goal: "answer", expect: [renewalHeld, renewalSaid, noOrder], limitation: WATCH_WIRING });
 }
 
+// ---------- the school's oat yoghurt: the plant-yoghurt family, the rule named for one left out ----------
+
+const oatYoghurtOffered: Check = {
+  name: "an oat yoghurt within the school's rules is offered, and a left-out one is said with its rule",
+  run: (o) => {
+    const opts = o.options.map((x) => String(x.title ?? "")).join(" | ").toLowerCase();
+    const said = [...o.answers.map((a) => a.text), ...o.notes].join(" ").toLowerCase();
+    return ok(/oat|kaura|havre/.test(opts) && /(sugar|sokeri|rule|sääntö|at most|enintään)/.test(said), `options: ${opts.slice(0, 160)}; said: ${said.slice(0, 160)}`);
+  },
+};
+
+ALL.push({
+  id: "school-oat-yoghurt-en",
+  title: "School: the usual yoghurt did not arrive; 'what about an oat-based one?' offers oat yoghurts within the rules",
+  tag: "allergen-safe substitution (nutrition rules)",
+  kitchen: "koulu-metsola",
+  lang: "en",
+  turns: [{ say: "Our usual yoghurt didn't arrive. I need 30 kg of something for tomorrow's breakfast" }, { say: "what about an oat-based one?" }],
+  goal: "options",
+  expect: [oatYoghurtOffered],
+});
+
+// ---------- the repeat-order guard: the same order twice, said with both figures ----------
+
+const repeatSaid: Check = {
+  name: "the second identical order is paused by the repeat check (the mistake check's duplicate_recent), never placed twice",
+  run: (o) => ok(o.concerns.some((c) => c.code === "duplicate_recent") && o.orders.filter((x) => x.status === "committed" || x.status === "pending_approval").length <= 1, `concerns: ${o.concerns.map((c) => c.code).join(", ") || "none"}; orders: ${o.orders.length}`),
+};
+for (const [slug, words] of [
+  ["hotel-lumo", "30 litres of lactose-free milk for Tuesday"],
+  ["koulu-metsola", "20 litres of semi skimmed milk for Tuesday"],
+  ["kahvila-sointu", "10 litres of oat drink for Tuesday"],
+] as const)
+  ALL.push({
+    id: `repeat-order-guard@${slug}`,
+    title: `The same order twice (${slug}): paused, with the earlier order's amount and day`,
+    tag: "mistake check",
+    kitchen: slug,
+    lang: "en",
+    turns: [{ say: words }, { say: "yes, order it" }, { say: words }],
+    goal: "answer",
+    expect: [repeatSaid],
+  });
+
 // ---------- a backup in case it is not delivered (server/reliability) ----------
 
 /** The kitchen's own view of its backups after the conversation, for the checks (per run). */
