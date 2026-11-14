@@ -114,7 +114,9 @@ describe("intake flow", () => {
     expect(ledger.entries({ requestId: sat.requestId })[0].data.neededBy).toBe("2026-11-21");
     expect(fixed.state).toBe("options_ready");
     const quoted = await dock.intake.choose(session, sat.requestId, { by: "Aino", optionId: fixed.options[0].optionId });
-    expect(quoted.quote!.policyPreview.rules.find((r) => r.rule === "delivery_deadline")!.reason).toBe("Every line arrives by 2026-11-20.");
+    // The corrected day is a delivery day the kitchen chose: delivered that day, not an earlier one it cannot receive.
+    expect(fixed.need.deliverOn).toBe("2026-11-20");
+    expect(quoted.quote!.policyPreview.rules.find((r) => r.rule === "delivery_deadline")!.reason).toBe("Every line arrives on 2026-11-20, the day asked.");
   });
 
   it("(b) asks nothing memory answers, ranks three options with pros and cons, and quotes the chosen one", async () => {

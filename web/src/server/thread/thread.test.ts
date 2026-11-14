@@ -273,6 +273,7 @@ describe("several items in one message", () => {
     const { splitItems } = await import("./pipeline");
     expect(splitItems("30 litres of lactose-free milk and 6 litres of lactose-free cream for Thursday")).toEqual(["30 litres of lactose-free milk for Thursday", "6 litres of lactose-free cream for Thursday"]);
     expect(splitItems("20 kg voita ja 10 litraa kermaa torstaiksi")).toEqual(["20 kg voita torstaiksi", "10 litraa kermaa torstaiksi"]);
+    expect(splitItems("maitoa 30 l ja kermaa 5 l torstaiksi")).toEqual(["maitoa 30 l torstaiksi", "kermaa 5 l torstaiksi"]);
     expect(splitItems("100 litres of milk for Thursday")).toEqual([]);
     expect(splitItems("milk and cream")).toEqual([]);
   });

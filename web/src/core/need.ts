@@ -94,6 +94,8 @@ export function normaliseNeed(need: StructuredNeed): { need: StructuredNeed; cha
 export type NeedPatch = {
   quantity?: { amount: number; unit: NeedUnit };
   deliverBy?: string | null;
+  /** The exact day (a kitchen that receives only on its delivery days): the delivery is that day, not any day before. */
+  deliverOn?: string;
   item?: { productId?: string | null; attributes?: string[]; excludedAttributes?: string[] };
   requiredClaims?: string[];
   forbiddenAllergens?: string[];
@@ -110,6 +112,7 @@ export function applyNeedPatch(need: StructuredNeed, patch: NeedPatch): Structur
     next.deliverBy = patch.deliverBy;
     if (next.deliverOn) next.deliverOn = patch.deliverBy; // a corrected day moves an exact day with it
   }
+  if (patch.deliverOn) next.deliverOn = patch.deliverOn;
   if (patch.item) {
     if (patch.item.productId === null) delete next.item.productId;
     else if (patch.item.productId) next.item.productId = patch.item.productId;

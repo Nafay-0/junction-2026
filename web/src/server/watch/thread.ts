@@ -104,12 +104,14 @@ type FindingWithRule = Finding & { approver?: string; mandateRule?: string };
  * At most one moment for the conversation now: a held renewal first (it waits for an answer before the cut-off),
  * then an open stock-out, then one report of what the agent did alone. Moments already said are not repeated.
  */
-export async function watchMomentForThread(rt: Runtime, session: AgentSession, lang: Lang = "en"): Promise<WatchMoment | undefined> {
+export async function watchMomentForThread(rt: Runtime, session: AgentSession, lang: Lang = "en", opts: { asked?: boolean } = {}): Promise<WatchMoment | undefined> {
+  // Asked ("anything I should know about this week's orders?"): an open question is said again, even if said before.
+  const unsaid = (x: { saidAt?: string | null }) => opts.asked || !x.saidAt;
   const orgId = session.mandate.issuer.orgId;
   const w = await watchForOrg(rt, orgId);
   const t = WATCH_SAY_TEXT[lang];
   const approver = session.mandate.approvers[0]?.name;
-  const held = w.renewals.find((r) => r.state === "held" && !r.saidAt);
+  const held = w.renewals.find((r) => r.state === "held" && unsaid(r));
   if (held) {
     const ps = await productsOf(rt, [held.product.productId]);
     const what = nameIn(ps.get(held.product.productId), held.product.name, lang);
@@ -140,7 +142,7 @@ export async function watchMomentForThread(rt: Runtime, session: AgentSession, l
       staged: held.staged,
     };
   }
-  const open = w.findings.find((f) => f.state === "open" && !f.saidAt) as FindingWithRule | undefined;
+  const open = (w.findings.find((f) => f.state === "open" && f.staged && unsaid(f)) ?? w.findings.find((f) => f.state === "open" && unsaid(f))) as FindingWithRule | undefined;
   if (open) {
     const f: FindingWithRule = { ...open, ...(approver ? { approver } : {}), mandateRule: session.mandate.substitution.rule };
     const ps = await productsOf(rt, [f.product.productId, ...f.substitutes.map((s) => s.productId)]);
