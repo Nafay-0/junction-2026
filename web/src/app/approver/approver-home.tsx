@@ -69,8 +69,17 @@ export function ApproverHome() {
     } else if (r.error.code === "store_unavailable") {
       setStoreDown(true);
       setState((s) => (s === "ready" ? s : "store_down"));
-    } else setState(r.status === 401 ? "not_joined" : "offline");
+    } else if (r.status === 401) setState("not_joined");
+    // A blip on the venue's network must not strand the phone on an error screen: a page that has already loaded
+    // keeps what it shows and keeps asking; only one that never loaded shows "can't reach", and that retries too.
+    else setState((s) => (s === "ready" ? s : "offline"));
   }, []);
+
+  useEffect(() => {
+    if (state !== "offline") return;
+    const t = setInterval(() => void refresh(), 3000);
+    return () => clearInterval(t);
+  }, [state, refresh]);
 
   useEffect(() => {
     if (state !== "store_down") return;
