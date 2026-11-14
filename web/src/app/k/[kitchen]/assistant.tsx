@@ -42,9 +42,11 @@ export function AssistantPanel() {
         <p className="on-dark bg-petrol-deep px-4 pb-1.5 pt-[calc(0.375rem+env(safe-area-inset-top))] text-center text-[0.75rem] leading-snug text-paper/80 sm:hidden">{ptx.demoShort}</p>
         <header className="flex items-center gap-2.5 px-5 pb-2 pt-3.5 text-ink-soft">
           <span aria-hidden className="size-2.5 rounded-full bg-petrol" />
-          <h2 className="text-[0.86rem] font-medium">{tl.name}</h2>
-          <span className="ml-auto truncate text-[0.76rem]">{kitchen.name}</span>
-          {(thread.thread?.turns.length ?? 0) > 1 && <StartOver />}
+          {/* One line on a phone: the label is for screen readers there, the kitchen's name stays readable, and
+              "Start over" is its icon (with its name). */}
+          <h2 className="sr-only whitespace-nowrap text-[0.86rem] font-medium sm:not-sr-only">{tl.name}</h2>
+          <span className="ml-auto min-w-0 truncate text-[0.82rem] font-medium text-ink sm:text-[0.76rem] sm:font-normal sm:text-ink-soft">{kitchen.name}</span>
+          {(thread.thread?.turns.length ?? 0) > 1 && <StartOver compact />}
           <button type="button" onClick={() => agent.setPanelOpen(false)} aria-label={tl.close} className="flex size-9 shrink-0 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-paper hover:text-ink">
             <X aria-hidden size={18} />
           </button>

@@ -1,3 +1,4 @@
+import * as DAY from "@/app/k/[kitchen]/buyer-steps";
 import { familyL } from "@/app/k/[kitchen]/family.text";
 import { answerWatchMoment, markWatchSaid, watchAnswerOf, watchMomentForThread, type WatchMoment } from "@/server/watch/thread";
 import { cardId } from "./cards";
@@ -111,6 +112,7 @@ export async function sayWatch(run: TurnRun, opts: { asked?: boolean; family?: s
       kind: en.kind,
       text,
       steps: en.steps,
+      brief: { en: briefOf(en, "en"), fi: briefOf(en, "fi"), sv: briefOf(en, "sv") },
       ...(en.proof ? { proof: { token: en.proof.token, keysUrl: en.proof.keysUrl, simulated: en.proof.simulated } } : {}),
       answers: en.answers,
       ...(subs.length > 1 ? { others: subs.slice(1, 4) } : {}),
@@ -222,3 +224,44 @@ async function autoRenewStatus(run: TurnRun, words: string): Promise<string | un
     })
     .join(" ");
 }
+
+// ---------- the steps a buyer reads ----------
+
+const PROBLEM: Record<string, Record<Lang, string>> = {
+  cutoff_passed: { en: "the order cut-off has passed", fi: "tilausaika on mennyt", sv: "sista beställningstid har passerat" },
+  out_of_stock: { en: "out of stock", fi: "loppu varastosta", sv: "slut i lager" },
+  sales_block: { en: "the wholesaler is not selling it now", fi: "tukku ei myy sitä nyt", sv: "grossisten säljer den inte nu" },
+  not_deliverable: { en: "it cannot be delivered", fi: "sitä ei voi toimittaa", sv: "den kan inte levereras" },
+  later_than_requested: { en: "it comes later than needed", fi: "se tulee myöhemmin kuin tarvitaan", sv: "den kommer senare än behövs" },
+  no_price: { en: "no price today", fi: "ei hintaa tänään", sv: "inget pris i dag" },
+  price_not_valid: { en: "no valid price today", fi: "ei voimassa olevaa hintaa tänään", sv: "inget giltigt pris i dag" },
+};
+
+/**
+ * The watch's moment in at most three plain lines for the buyer, in their language (the card's `steps` stay as the
+ * Trace's detail): what was checked, what was found with its day, and what stands in.
+ */
+export function briefOf(m: WatchMoment, lang: Lang): string[] {
+  const { dayL } = DAY;
+  const out: string[] = [];
+  const f = m.facts.finding as { product?: { name: string }; need?: { date: string }; problems?: string[]; shortfall?: { backOn?: string | null }; substitutes?: { name: string }[] } | undefined;
+  const r = m.facts.renewal as { product?: { name: string }; basedOn?: { orders: number; weeks: unknown[] }; amounts?: { usual: number; unit: string }; drift?: { portions?: { pct: number; since: string }; cost?: { pct: number; since: string } }; autoRenew?: { on: boolean } } | undefined;
+  if (f?.product && f.need) {
+    const why = (f.problems ?? []).map((p) => PROBLEM[p]?.[lang]).filter(Boolean).slice(0, 2).join(", ") || { en: "it cannot come", fi: "se ei ehdi", sv: "den kan inte komma" }[lang];
+    const back = f.shortfall?.backOn && f.shortfall.backOn.slice(0, 10) > f.need.date.slice(0, 10) ? { en: `, back ${dayL(f.shortfall.backOn, lang)}`, fi: `, taas saatavilla ${dayL(f.shortfall.backOn, lang)}`, sv: `, tillbaka ${dayL(f.shortfall.backOn, lang)}` }[lang] : "";
+    out.push(`${shortName(f.product.name)}, ${dayL(f.need.date, lang)}: ${why}${back}.`);
+    const subs = f.substitutes ?? [];
+    if (subs[0]) out.push({ en: `Compared ${subs.length} stand-in${subs.length === 1 ? "" : "s"}; the closest is ${shortName(subs[0].name)}.`, fi: `Vertasin ${subs.length} korvaavaa; lähin on ${shortName(subs[0].name)}.`, sv: `Jämförde ${subs.length} ersättare; närmast är ${shortName(subs[0].name)}.` }[lang]);
+  } else if (r?.product && r.amounts) {
+    const u = r.amounts.unit === "L" ? "l" : r.amounts.unit;
+    out.push({ en: `Learned from ${r.basedOn?.orders ?? 0} orders: usually ${r.amounts.usual} ${u} of ${shortName(r.product.name)}.`, fi: `Opin ${r.basedOn?.orders ?? 0} tilauksesta: tavallisesti ${r.amounts.usual} ${u} (${shortName(r.product.name)}).`, sv: `Lärde mig av ${r.basedOn?.orders ?? 0} beställningar: vanligen ${r.amounts.usual} ${u} ${shortName(r.product.name)}.` }[lang]);
+    const p = r.drift?.portions;
+    const c = r.drift?.cost;
+    if (p) out.push({ en: `${p.pct > 0 ? "Up" : "Down"} ${Math.abs(p.pct)} % since ${dayL(p.since, lang)}.`, fi: `${p.pct > 0 ? "Kasvanut" : "Pienentynyt"} ${Math.abs(p.pct)} % ${dayL(p.since, lang)} jälkeen.`, sv: `${p.pct > 0 ? "Upp" : "Ner"} ${Math.abs(p.pct)} % sedan ${dayL(p.since, lang)}.` }[lang]);
+    else if (c) out.push({ en: `The price is ${c.pct > 0 ? "up" : "down"} ${Math.abs(c.pct)} % since ${dayL(c.since, lang)}.`, fi: `Hinta on ${c.pct > 0 ? "noussut" : "laskenut"} ${Math.abs(c.pct)} % ${dayL(c.since, lang)} jälkeen.`, sv: `Priset har ${c.pct > 0 ? "stigit" : "sjunkit"} ${Math.abs(c.pct)} % sedan ${dayL(c.since, lang)}.` }[lang]);
+    if (m.kind === "renewal_held") out.push({ en: "Auto-renew is on, so I held this one for your answer.", fi: "Automaattinen uusinta on päällä, joten pidätin tämän vastaustasi varten.", sv: "Automatisk förnyelse är på, så jag höll den här för ditt svar." }[lang]);
+  }
+  if (m.staged) out.push({ en: "Staged for the demo.", fi: "Lavastettu demoa varten.", sv: "Iscensatt för demon." }[lang]);
+  return out.slice(0, 4);
+}
+

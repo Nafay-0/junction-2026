@@ -637,6 +637,8 @@ export type WatchCard = CardBase & {
   kind: "stock_out" | "renewal_held" | "renewal_placed" | "substitute_placed";
   text: Record<"en" | "fi" | "sv", { say: string; ask?: string }>;
   steps: string[];
+  /** The same moment for the buyer, in at most four plain lines per language (the steps shown open under the reply). */
+  brief?: Record<"en" | "fi" | "sv", string[]>;
   proof?: { token: string; keysUrl: string; simulated: boolean };
   answers: string[];
   /** The other ranked substitutes, short names (behind Show the list). */
