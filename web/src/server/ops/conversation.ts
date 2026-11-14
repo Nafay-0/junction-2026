@@ -41,7 +41,7 @@ function entryOf(e: LedgerEntry): ConversationEntry {
 }
 
 export async function conversationView(rt: Runtime, threadId: string): Promise<ConversationView> {
-  const all = rt.dock.ledger.entries();
+  const all = rt.dock.ledger.readonly();
   const own = all.filter((e) => e.type === "agent" && tagOf(e).threadId === threadId);
   if (!own.length) throw new DockError(404, "conversation_not_found", `No conversation ${threadId} on this server.`);
   const turns = new Map<string, ConversationTurn>();
@@ -118,7 +118,7 @@ export async function conversationView(rt: Runtime, threadId: string): Promise<C
 /** The latest conversations, newest first. */
 export function conversationList(rt: Runtime, max = 30): ConversationSummary[] {
   const by = new Map<string, ConversationSummary & { turnIds: Set<string> }>();
-  for (const e of rt.dock.ledger.entries()) {
+  for (const e of rt.dock.ledger.readonly()) {
     if (e.type !== "agent") continue;
     const tag = tagOf(e);
     if (!tag.threadId) continue;

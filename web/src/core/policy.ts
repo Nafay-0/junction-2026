@@ -75,6 +75,15 @@ export type RecentOrder = {
   authorisedBy: "mandate" | "approver" | "pending";
 };
 
+/**
+ * The orders that count together with this one for order_splitting, counted by the store: those the agent placed
+ * alone in the window, for the same request or product family. `latest`: the newest few of them, to name.
+ */
+export type SplitWindow = { count: number; totalCents: number; latest: RecentOrder[] };
+
+/** How many earlier orders a splitting reason or its details name; the rest are counted. */
+export const SPLIT_NAMED_MAX = 10;
+
 export type PolicyContext = {
   now: Date;
   spentThisWeekCents: number; // committed + pending orders of this organisation over the last 7 days
@@ -101,6 +110,11 @@ export type PolicyContext = {
   mandateSuperseded?: string;
   /** Orders of this organisation in the last SPLIT_WINDOW_HOURS, for the order_splitting check. Absent: none. */
   recentOrders?: RecentOrder[];
+  /**
+   * The same check's earlier orders as the store counted them (orders.ts DockRepository.splitWindow): used instead
+   * of recentOrders when present, so a busy day costs a sum, not a list of every order placed that day.
+   */
+  splitWindow?: SplitWindow;
   /** Holds in force on the order's products (orders.ts ProductHolds). Absent: none. */
   holds?: ProductHold[];
 };
@@ -435,18 +449,34 @@ function splitCheck(mandate: Mandate, draft: OrderDraft, ctx: PolicyContext): { 
   const q = draft.quote;
   const since = ctx.now.getTime() - SPLIT_WINDOW_HOURS * 3600_000;
   const categories = new Set(q.lines.map((l) => l.category));
-  const related = (ctx.recentOrders ?? []).filter((o) => o.authorisedBy === "mandate" && Date.parse(o.placedAt) > since && (o.requestId === q.requestId || o.categories.some((c) => categories.has(c))));
-  const earlier = related.reduce((s, o) => s + o.totalCents, 0);
+  // Oldest first, as they are named.
+  const related = ctx.splitWindow
+    ? [...ctx.splitWindow.latest].reverse()
+    : (ctx.recentOrders ?? []).filter((o) => o.authorisedBy === "mandate" && Date.parse(o.placedAt) > since && (o.requestId === q.requestId || o.categories.some((c) => categories.has(c))));
+  const count = ctx.splitWindow ? ctx.splitWindow.count : related.length;
+  const earlier = ctx.splitWindow ? ctx.splitWindow.totalCents : related.reduce((s, o) => s + o.totalCents, 0);
   const combinedCents = earlier + q.totalCents;
-  if (related.length === 0) return { outcome: "pass", reason: "No earlier order the agent placed alone for the same product family in the last day.", combinedCents };
-  const details = { windowHours: SPLIT_WINDOW_HOURS, limitCents: mandate.perOrderLimitCents, combinedCents, earlier: related.map((o) => ({ orderId: o.orderId, totalCents: o.totalCents, placedAt: o.placedAt })) };
+  if (count === 0) return { outcome: "pass", reason: "No earlier order the agent placed alone for the same product family in the last day.", combinedCents };
+  // Name the newest few; a busy day is counted, not listed (each order keeps its decision, so a list of every
+  // earlier order would make the store grow with the square of the day's orders).
+  const named = related.slice(-SPLIT_NAMED_MAX);
+  const more = count - named.length;
+  const details = {
+    windowHours: SPLIT_WINDOW_HOURS,
+    limitCents: mandate.perOrderLimitCents,
+    combinedCents,
+    earlierCount: count,
+    earlierCents: earlier,
+    earlier: named.map((o) => ({ orderId: o.orderId, totalCents: o.totalCents, placedAt: o.placedAt })),
+  };
   const what = [...categories].join(", ");
   if (q.totalCents > mandate.perOrderLimitCents || combinedCents <= mandate.perOrderLimitCents) {
-    return { outcome: "pass", reason: `With ${related.length} earlier order${related.length > 1 ? "s" : ""} the agent placed alone for ${what}, the total is ${formatEur(combinedCents)}${q.totalCents > mandate.perOrderLimitCents ? "; this order goes to a person anyway" : `, within the ${formatEur(mandate.perOrderLimitCents)} it may spend alone`}.`, combinedCents, details };
+    return { outcome: "pass", reason: `With ${count} earlier order${count > 1 ? "s" : ""} the agent placed alone for ${what}, the total is ${formatEur(combinedCents)}${q.totalCents > mandate.perOrderLimitCents ? "; this order goes to a person anyway" : `, within the ${formatEur(mandate.perOrderLimitCents)} it may spend alone`}.`, combinedCents, details };
   }
+  const list = (more > 0 ? `${more} earlier order${more > 1 ? "s" : ""} (${formatEur(earlier - named.reduce((s, o) => s + o.totalCents, 0))}), ` : "") + named.map((o) => `${o.orderId} (${formatEur(o.totalCents)})`).join(", ");
   return {
     outcome: "escalate",
-    reason: `Looks like one need split into smaller orders: with ${related.map((o) => `${o.orderId} (${formatEur(o.totalCents)})`).join(", ")} placed alone in the last ${SPLIT_WINDOW_HOURS} h for ${what}, whatever the delivery days, this ${formatEur(q.totalCents)} order makes ${formatEur(combinedCents)}, over the ${formatEur(mandate.perOrderLimitCents)} the agent may spend alone. Splitting does not lift the limit, so a person must sign off.`,
+    reason: `Looks like one need split into smaller orders: with ${list} placed alone in the last ${SPLIT_WINDOW_HOURS} h for ${what}, whatever the delivery days, this ${formatEur(q.totalCents)} order makes ${formatEur(combinedCents)}, over the ${formatEur(mandate.perOrderLimitCents)} the agent may spend alone. Splitting does not lift the limit, so a person must sign off.`,
     combinedCents,
     details,
   };

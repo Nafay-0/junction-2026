@@ -6,8 +6,9 @@
  *    by status, gate refusals by rule, the server's memory and CPU. With --fresh-port the harness starts a fresh
  *    server for every step (its own, on that port), so every step starts from an empty store and the steps compare
  *    concurrency alone; without it the steps run against --url and the store grows from step to step.
- * 2. growth (--growth N): two buyers (one per organisation) closed loop until N orders are decided on one fresh server,
- *    reporting throughput and latency per window of --window orders: how the gate slows as the store fills.
+ * 2. growth (--growth N): two buyers (one per organisation; --buyers for more) closed loop until N orders are decided
+ *    on one fresh server, reporting throughput and latency per window of --window orders: how the gate slows as the
+ *    store fills.
  *
  *   cd web
  *   pnpm exec tsx tests-live/load/load.ts --fresh-port 4652 [--steps 1,2,4,8,16,32,64] [--step-seconds 60]
@@ -27,6 +28,7 @@ const steps = (arg("steps", "1,2,4,8,16,32,64") ?? "").split(",").map(Number).fi
 const stepSeconds = Number(arg("step-seconds", "60"));
 const growth = arg("growth") ? Number(arg("growth")) : undefined;
 const windowSize = Number(arg("window", "500"));
+const growthBuyers = Number(arg("buyers", "2"));
 const orgs = (arg("orgs", "laakso,kaari") ?? "").split(",") as OrgName[];
 const tag = arg("tag", Date.now().toString(36))!;
 const section = arg("section");
@@ -114,8 +116,8 @@ async function runSteps() {
 async function runGrowth(target: number) {
   const srv = await server();
   const health = await checkSeed(srv.url);
-  const buyers: Buyer[] = await makeBuyers(2, tag, orgs);
-  console.log(`growth: ${target} orders on ${srv.url} (pid ${srv.pid}), 2 buyers closed loop, windows of ${windowSize}`);
+  const buyers: Buyer[] = await makeBuyers(growthBuyers, tag, orgs);
+  console.log(`growth: ${target} orders on ${srv.url} (pid ${srv.pid}), ${growthBuyers} buyers closed loop, windows of ${windowSize}`);
   const windows: unknown[] = [];
   let total = 0;
   const t00 = performance.now();
@@ -131,7 +133,7 @@ async function runGrowth(target: number) {
     total += s.decided;
     const proc = procStats(srv.pid);
     windows.push({ ordersInStoreAfter: total, elapsedS: Math.round((performance.now() - t00) / 1000), decisionsPerMin: s.decisionsPerMin, latencyMs: s.latencyMs, errors: s.errors, other4xx: s.other4xx, unexpectedOutcomes: s.unexpectedOutcomes, server: proc, loadAvg: loadAvg() });
-    merge(section ?? "growth", { at: new Date().toISOString(), version: health.version, settings: { target, windowSize, buyers: 2, mix: Object.fromEntries(MIX) }, complete: total >= target, windows });
+    merge(section ?? "growth", { at: new Date().toISOString(), version: health.version, settings: { target, windowSize, buyers: growthBuyers, mix: Object.fromEntries(MIX) }, complete: total >= target, windows });
     console.log(`store ${String(total).padStart(6)}  ${String(s.decisionsPerMin).padStart(7)} decided/min  p50/p95 ms quote ${s.latencyMs.quote.p50}/${s.latencyMs.quote.p95} order ${s.latencyMs.order.p50}/${s.latencyMs.order.p95}  errors ${s.errors.total}  rss ${proc.rssMb} MB  cpu ${proc.cpuPct}%  load ${loadAvg()[0]}`);
   }
   if (srv.owned) await stopServer(srv.pid!);

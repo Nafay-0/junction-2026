@@ -226,7 +226,7 @@ export async function radarView(rt: Runtime, now = new Date()): Promise<RadarVie
 /** Products worth a drill: what a demo kitchen is about to order (an open quote), is waiting on, or regularly orders. */
 async function drillCandidates(rt: Runtime, orders: PublicOrder[]): Promise<RadarView["drill"]["candidates"]> {
   const out = new Map<string, { productId: string; name: string; why: string }>();
-  const ledger = rt.dock.ledger.entries();
+  const ledger = rt.dock.ledger.readonly();
   const ordered = new Set(orders.map((o) => o.quoteId));
   for (const e of [...ledger].reverse()) {
     if (e.type !== "quote") continue;
@@ -276,9 +276,9 @@ export async function kitchenNotices(rt: Runtime, k: { orgId: string; agentId: s
   const today = day(now);
   const live = s.matches.filter((m) => m.status === "confirmed" || m.status === "confirmed_by_staff");
   if (!live.length) return [];
-  const orders = (await rt.dock.listOrders()).filter((o) => o.orgId === k.orgId);
+  const orders = await rt.dock.listOrders({ orgId: k.orgId });
   const profile = await rt.kitchens.getProfile(k.orgId).catch(() => undefined);
-  const ledger = rt.dock.ledger.entries();
+  const ledger = rt.dock.ledger.readonly();
   const myRequests = new Set(ledger.filter((e) => e.type === "request" && e.actor === `agent:${k.agentId}`).map((e) => e.requestId));
   const ordered = new Set(orders.map((o) => o.quoteId));
   const quoted = new Set<string>();
