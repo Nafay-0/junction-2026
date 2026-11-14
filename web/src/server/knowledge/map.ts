@@ -288,6 +288,13 @@ export class KnowledgeMap {
 
     const pool = new Set<Node>(this.byFamily.get(o.kind.family) ?? []);
     for (const b of FAMILY_BRIDGES) if (b.families.includes(o.kind.family) && b.uses.includes(use)) for (const f of b.families) for (const n of this.byFamily.get(f) ?? []) pool.add(n);
+    // The wholesaler's own substitute list (the product file's `substitutions`): considered whatever the map links,
+    // still through every hard check, and ranked first.
+    const listedIds = new Set(o.p.substitutes);
+    for (const id of listedIds) {
+      const n = this.nodes.get(id);
+      if (n) pool.add(n);
+    }
     pool.delete(o);
 
     const scored: (Alternative & { _content: Node["content"]; _line: string })[] = [];
@@ -300,15 +307,19 @@ export class KnowledgeMap {
     let linked = 0;
 
     for (const c of pool) {
+      const listed = listedIds.has(c.p.id);
       const link = this.link(o, c, use);
-      if (!link.ok) continue; // not related for this use at all: not even counted
+      if (!link.ok && !listed) continue; // not related for this use at all: not even counted
       linked++;
       const check = hardCheck(o.p, c.p, opts.constraints, ctxOf(o.kind.family));
       if (!check.ok) {
         drop(c, check.reason, null, check.code === "claim_missing" ? `not ${readableClaims(check.reason.replace(/^not /, "").replace(/ by its data$/, "").split(", ").map((x) => x.replace(/ /g, "_"))).join(", ")} by data` : check.code === "allergen_new" ? "add an allergen" : "lack allergen data");
         continue;
       }
-      const s = this.score(o, c, use, link.how, check, opts.comparisonPrices);
+      const scoredBy = this.score(o, c, use, link.ok ? link.how : "family", check, opts.comparisonPrices);
+      // A product the wholesaler lists that the map would not serve on its own: offered as the wholesaler's word, tier good.
+      const vouched = listed && (!link.ok || !!scoredBy.blocked || scoredBy.confidence < SERVE_THRESHOLD);
+      const s = vouched ? { ...scoredBy, blocked: undefined, confidence: Math.max(scoredBy.blocked ? 0 : scoredBy.confidence, SERVE_THRESHOLD), reason: "Listed by the wholesaler as a substitute for this product.", conditions: scoredBy.blocked ? [] : scoredBy.conditions } : scoredBy;
       if (s.blocked) {
         drop(c, s.blocked, null, s.blocked);
         continue;
@@ -325,10 +336,10 @@ export class KnowledgeMap {
         kind: c.kind.key,
         kindLabel: c.kind.label,
         relation: isPack ? "pack_alternative" : "substitute",
-        tier: tierOf(s.confidence, s.conditions.length, link.how === "kind"),
+        tier: vouched ? "good" : tierOf(s.confidence, s.conditions.length, link.ok && link.how === "kind"),
         confidence: Math.round(s.confidence * 100) / 100,
-        sameKind: link.how === "kind",
-        reason: s.reason,
+        sameKind: link.ok && link.how === "kind",
+        reason: listed && !vouched ? `Listed by the wholesaler as a substitute. ${s.reason}` : s.reason,
         changes: s.changes,
         conditions: s.conditions,
         checks: { claimsKept: check.claimsKept, allergens: check.allergens },
@@ -339,8 +350,8 @@ export class KnowledgeMap {
       });
     }
 
-    const order = (a: { confidence: number; _content: Node["content"] }, b: { confidence: number; _content: Node["content"] }) =>
-      b.confidence - a.confidence || packDistance(o.content, a._content) - packDistance(o.content, b._content);
+    const order = (a: { confidence: number; partnerListed: boolean; _content: Node["content"] }, b: { confidence: number; partnerListed: boolean; _content: Node["content"] }) =>
+      Number(b.partnerListed) - Number(a.partnerListed) || b.confidence - a.confidence || packDistance(o.content, a._content) - packDistance(o.content, b._content);
     scored.sort(order);
 
     // One entry per product line: the other pack sizes of the same line ride along.
