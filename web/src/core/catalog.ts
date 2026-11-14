@@ -23,7 +23,7 @@ export const ProductSchema = z.object({
   categoryCode: z.string().optional(), // the partner's numeric category; `category` is Dock's slug for it
   salesUnit: z.string().optional(), // the partner's unit code a pack is: KI (case), ST (piece), KG, ...
   baseUnit: z.string().optional(),
-  lotSize: z.number().positive().optional(), // order quantity must be a multiple of this, in packs (0.01 = any)
+  lotSize: z.number().positive().optional(), // order quantity must be a multiple of this, in packs (1 unless the data gives a fractional lot)
   /** What one pack holds and how sure that is. When `certain` is false, `unit` is "pcs" and packSize counts base units. */
   packContent: z
     .object({

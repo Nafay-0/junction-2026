@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- test fixtures build raw partner records. */
 import { describe, expect, it } from "vitest";
-import { buildCatalogIndex, shorten, categoryCodesFor, categorySlug, decodeIndex, encodeIndex, isIndexFile, parseNumberCsv } from "./partner";
+import { buildCatalogIndex, lotOf, shorten, categoryCodesFor, categorySlug, decodeIndex, encodeIndex, isIndexFile, parseNumberCsv } from "./partner";
 import { FIXTURE_CARBON_CSV, FIXTURE_PRODUCTS, FIXTURE_RELIABILITY_CSV, rawProduct } from "./test-data";
 
 const NOW = new Date("2026-11-13T10:00:00.000Z");
@@ -11,7 +11,7 @@ describe("catalogue index", () => {
   it("keeps names in three languages, units, lot size, vendor and substitutes", () => {
     const p = get("900001");
     expect(Object.keys(p.names)).toEqual(["en", "fi", "sv"]);
-    expect(p).toMatchObject({ brand: "Tunturi", vendor: "TESTIMEIJERI OY", categoryCode: "10400", salesUnit: "KI", baseUnit: "ST", lotSize: 0.01, substitutes: ["900002"], countryOfOrigin: "fi" });
+    expect(p).toMatchObject({ brand: "Tunturi", vendor: "TESTIMEIJERI OY", categoryCode: "10400", salesUnit: "KI", baseUnit: "ST", lotSize: 1, substitutes: ["900002"], countryOfOrigin: "fi" });
     expect(p.units).toEqual([{ unit: "KI", baseUnits: 2 }, { unit: "ST", baseUnits: 1 }]);
   });
 
@@ -140,6 +140,13 @@ describe("catalogue index", () => {
   it("shortens long texts at a comma, never mid-word when it can help it", () => {
     expect(shorten("a, b, c, d", 100)).toBe("a, b, c, d");
     expect(shorten("alpha beta, gamma delta, epsilon zeta", 26)).toBe("alpha beta, gamma delta,…");
+  });
+
+  it("reads the partner's lot size as they mean it: 0.01 and none are 1, a real fractional lot is kept", () => {
+    expect([0.01, undefined, null, 0, 1, 1.5, 2.5, 3].map((x) => lotOf(x as number | undefined))).toEqual([1, 1, 1, 1, 1, 1.5, 2.5, 3]);
+    const old = JSON.parse(JSON.stringify(encodeIndex(build())));
+    for (const r of old.rows) r[10] = 0.01; // an index built before the rule
+    expect(decodeIndex(old).products.every((p) => p.lotSize === 1)).toBe(true);
   });
 
   it("names a few categories and keeps the code for the rest", () => {

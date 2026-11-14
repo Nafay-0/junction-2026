@@ -6,7 +6,7 @@ import type { Mandate } from "./mandate";
 import { formatAmount, type BaseUnit, type OptimiseGoal } from "./need";
 import { compareNutrition, comparisonText, encodeComparison, type Nutrient } from "./nutrition";
 import { ownPrice, packDeposit, vatRateOf } from "./pricing";
-import type { QuoteRequestLine } from "./quote";
+import { lineCents, type QuoteRequestLine } from "./quote";
 import { formatEur } from "./util";
 import { holdsLabel, isMaterialAttribute } from "./vocabulary";
 
@@ -309,14 +309,14 @@ export function buildOptions(input: OptionsInput): OptionsResult {
     packSize: v.size.perPack,
     unit: v.size.unit,
     unitPriceCents: v.o.unitPriceCents,
-    lineTotalCents: packs * v.o.unitPriceCents,
+    lineTotalCents: lineCents(packs, v.o.unitPriceCents),
     deliveryDate: v.o.deliveryDate,
     ...(substituteFor ? { substituteFor } : {}),
     ...(v.o.orderBy ? { orderBy: v.o.orderBy } : {}),
     ...(v.stockKnown ? {} : { stockKnown: false }),
     ...(v.size.estimated ? { estimated: true } : {}),
     ...(v.o.claims ? { claims: v.o.claims } : {}),
-    ...(depositOf(v) ? { depositCents: depositOf(v), lineDepositCents: depositOf(v) * packs } : {}),
+    ...(depositOf(v) ? { depositCents: depositOf(v), lineDepositCents: lineCents(packs, depositOf(v)) } : {}),
     ...(vatRateOf(v.o, v.p) ? { taxRatePct: vatRateOf(v.o, v.p)!.pct } : {}),
     ...(ownPrice(v.o) ? { listUnitPriceCents: ownPrice(v.o)!.listCents } : {}),
   });

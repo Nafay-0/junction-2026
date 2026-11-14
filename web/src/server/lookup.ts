@@ -95,7 +95,9 @@ export function productFacts(p: Product) {
 
 /** Live price, stock and delivery for one product, against the day and amount asked. */
 export function liveFacts(o: LiveOffer, p: Product, ask: { deliverOn?: string; quantity?: { amount: number; unit: string } }) {
-  const packs = ask.quantity && ask.quantity.unit === p.unit ? Math.max(1, Math.ceil(ask.quantity.amount / p.packSize - 1e-9)) : undefined;
+  // In order steps: whole packs, or the product's real fractional lot (1.5 kg); the partner's 0.01 is 1 (partner.ts lotOf).
+  const lot = p.lotSize && p.lotSize > 0.01 + 1e-9 ? p.lotSize : 1;
+  const packs = ask.quantity && ask.quantity.unit === p.unit ? Math.round(Math.max(1, Math.ceil(ask.quantity.amount / p.packSize / lot - 1e-9)) * lot * 1000) / 1000 : undefined;
   const stockKnown = o.stockKnown !== false;
   return {
     unitPriceCents: o.unitPriceCents,
@@ -111,7 +113,7 @@ export function liveFacts(o: LiveOffer, p: Product, ask: { deliverOn?: string; q
     ...(o.orderBy ? { orderBy: o.orderBy } : {}),
     ...(o.cutoffPassed ? { cutoffPassed: true } : {}),
     ...(ask.deliverOn ? { meetsDay: o.deliveryDate <= ask.deliverOn && !o.laterThanRequested && !o.cutoffPassed } : {}),
-    ...(packs !== undefined ? { packsForQuantity: packs, coversQuantity: stockKnown ? o.availablePacks >= packs : null, lineTotalCents: packs * o.unitPriceCents } : {}),
+    ...(packs !== undefined ? { packsForQuantity: packs, coversQuantity: stockKnown ? o.availablePacks >= packs : null, lineTotalCents: Math.round(packs * o.unitPriceCents) } : {}),
     ...(o.claims ? { signedClaims: o.claims } : {}),
     ...(o.simulated ? { simulated: true } : {}),
   };
