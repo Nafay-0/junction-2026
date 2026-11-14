@@ -35,7 +35,7 @@ export function understoodCard(input: {
     ...((n as { deliverOn?: string }).deliverOn ? { deliverOn: (n as { deliverOn?: string }).deliverOn } : {}),
     claims: [...new Set([...n.requiredClaims, ...n.item.attributes])],
     allergens: n.forbiddenAllergens,
-    ...(n.optimise && n.optimise !== "no_preference" ? { optimise: n.optimise } : {}),
+    ...(n.optimise && n.optimise !== "no_preference" && n.optimise !== ("unstated" as string) ? { optimise: n.optimise } : {}),
     ...(input.basedOn ? { basedOn: input.basedOn } : {}),
     memoryUsed: input.memoryUsed ?? [],
     alsoAsked: input.alsoAsked ?? [],
@@ -48,7 +48,7 @@ export function anomalyCard(step: IntakeView): AnomalyCard | undefined {
     type: "anomaly",
     cardId: cardId("anomaly", step.requestId),
     requestId: step.requestId,
-    concerns: step.concerns.map((c) => ({ key: c.key, code: c.code, message: c.message, confirmable: c.confirmable, corrections: c.corrections.map((x) => ({ id: x.id, label: x.label })) })),
+    concerns: step.concerns.map((c) => ({ key: c.key, code: c.code, message: c.message, confirmable: c.confirmable, corrections: c.corrections.map((x) => ({ id: x.id, label: x.label })), ...(c.evidence ? { evidence: c.evidence } : {}) })),
   };
 }
 
@@ -88,14 +88,18 @@ export function optionView(o: OptionCard): OptionView {
 export function optionsCard(step: IntakeView): OptionsCard | undefined {
   if (!step.options.length) return undefined;
   const groups = new Map<string, number>();
-  for (const x of step.excluded) groups.set(x.reason, (groups.get(x.reason) ?? 0) + 1);
+  const codeOf = new Map<string, string>();
+  for (const x of step.excluded) {
+    groups.set(x.reason, (groups.get(x.reason) ?? 0) + 1);
+    if (x.code) codeOf.set(x.reason, x.code);
+  }
   return {
     type: "options",
     cardId: cardId("options", step.requestId),
     requestId: step.requestId,
     options: step.options.map((o) => ({ ...optionView(o), category: step.family })),
     ...(step.preselected ? { preselected: { optionId: step.preselected.optionId, reason: step.preselected.reason } } : {}),
-    excluded: [...groups.entries()].map(([reason, count]) => ({ reason, count })).slice(0, 6),
+    excluded: [...groups.entries()].map(([reason, count]) => ({ reason, count, ...(codeOf.has(reason) ? { code: codeOf.get(reason) } : {}) })).slice(0, 12),
     notes: step.notes,
     ...(step.chosen ? { chosen: step.chosen.optionId } : {}),
   };

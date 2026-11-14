@@ -178,10 +178,10 @@ The buyer's one conversation with their agent, typed or spoken. Names and states
 
 | Card | Component | States and notes |
 |---|---|---|
-| `understood` | `UnderstoodCard` | the need as fields; a value from memory carries the lavender "from memory" chip; `basedOn`, `alsoAsked` |
+| `understood` | `UnderstoodCard` | the need as fields; a value from memory carries the lavender "from memory" chip; `basedOn`, `alsoAsked`; `notes` (quiet lines for what was noticed but does not stop the order) and `memory` (one lavender line per thing memory answered, said once in a thread) |
 | `anomaly` | `AnomalyCard` | **warm and calm** (`notice`), never the gate's yellow: the reason as numbers (usual against asked bars); `answered` replaces the actions |
 | `question` | `QuestionCard` | one question, choices as pills; chosen, others dimmed |
-| `options` | `OptionsCard` | best, better, good; keeps (tick) and gives up (dash); `preselected` and why; `signOff` when choosing it needs a person; chosen |
+| `options` | `OptionsCard` | best, better, good; keeps (tick) and gives up (dash); `preselected` and why; `signOff` when choosing it needs a person; chosen. The store's thread composes its own compact form from `ThreadCard` (`k/[kitchen]/thread-options.tsx`): the lead option as one decision (art, full name, packs, total and price per litre, delivery, two reasons, a button that says what happens), the others as rows with the one thing that differs, expandable |
 | `price` | `PriceCard` | the figure, lines, how long it holds (a draining bar, warm under 20 %), signed by the wholesaler |
 | `gate` | `GateCard` | **the signature**. `checking` (mark turning), `placed_alone` (quiet, good), `waiting` (the dark slab, hazard band, who must sign, countdown), `approved` (a stamp with the signer's name), `refused` (the slab, the rule and its reason), `declined` / `withdrawn` / `expired` (plain) |
 | `order` | `OrderCard` | lines, total, delivery, status badge, link |

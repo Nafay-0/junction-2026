@@ -108,6 +108,11 @@ export type UnderstoodCard = CardBase & {
   basedOn?: { requestId: string; fields: string[]; label?: string };
   /** One line per remembered thing used instead of asking ("Lactose-free: your stated rule, 3 Nov"). */
   memoryUsed: string[];
+  /**
+   * The same lines as data, for words in the buyer's language (server/memory/recall.ts usageLines): `code` is
+   * applied | preselected | checked, `params` names the remembered fact and where it came from.
+   */
+  memory?: MemoryLine[];
   /** Other items the same message named; each gets its own cards in the same agent turn. */
   alsoAsked: string[];
   /**
@@ -116,6 +121,9 @@ export type UnderstoodCard = CardBase & {
    */
   notes?: { code: string; params: Record<string, string | number> }[];
 };
+
+/** A line of what memory used, as text and as data (server/memory/recall.ts usageLines). */
+export type MemoryLine = { itemId?: string; text: string; code?: string; params?: Record<string, string | number> };
 
 export type AnomalyCard = CardBase & {
   type: "anomaly";
@@ -126,6 +134,8 @@ export type AnomalyCard = CardBase & {
     message: string;
     confirmable: boolean;
     corrections: { id: string; label: string }[];
+    /** The figures the message rests on (core/concerns.ts Concern.evidence), for the message in the buyer's language. */
+    evidence?: Record<string, unknown>;
   }[];
   /** Set once answered: what the buyer chose, and whether it counted as the person's own (verified) or relayed. */
   answered?: { choice: string; by: string; verified: boolean };
@@ -169,7 +179,8 @@ export type OptionsCard = CardBase & {
   /** The card the agent would pick, and why (the buyer's goal, a stated rule, a habit). */
   preselected?: { optionId: string; reason: string };
   /** Why products were left out, grouped ("12 not lactose-free"). */
-  excluded: { reason: string; count: number }[];
+  /** Why products were left out, grouped; `code` (core/options.ts ExclusionCode) for words in the buyer's language. */
+  excluded: { reason: string; count: number; code?: string }[];
   notes: string[];
   chosen?: string;
 };
