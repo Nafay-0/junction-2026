@@ -157,6 +157,40 @@ at `/ops/conversation/<threadId>` (`GET /ops-api/conversation/<threadId>`): the 
 steps, tool calls, model calls and the requests and orders it touched, each linking to that request's trace.
 Model and tool calls also go to the action stream (Aiven) as `agent.model` and `agent.tool` events.
 
-## Status
+## For a door built on the engine (voice, photo, a kiosk)
 
-Kept true as the engine lands. Anything listed here and not yet built is marked *(not yet)*.
+- **In process:** `submitTurn(kitchen, body)` from `server/thread/engine.ts` (a `Kitchen` the route resolved, or
+  the slug), then `threadStore().subscribe(slug, fn)` for the events. Over HTTP: the three routes above.
+- **Voice:** send each final transcript as `{ door: "voice", via: "speech", text }`. The agent maps a spoken
+  answer onto the open card itself (`buyer_reply`), with the words recorded; if your own realtime model already
+  knows which card was answered, send `{ door: "voice", via: "speech", text, action }` and the engine runs the
+  action with the words as the heard evidence (no model call). Speak the agent's `line` when it comes, then the
+  newest card (`server/channels/say.ts` has spoken renderings of steps and orders). Never speak a number, product
+  or date that is not on a card.
+- **Photo:** read the image with the scan door (`/ui-api/scan/<kitchen>`), then send the text it read as
+  `{ door: "photo", via: "photo", text }`; several lines are several items, split by code.
+- A door that is not a browser (a phone call) passes the kitchen slug: the turn then has no signed-in person and
+  every answer is recorded as relayed.
+
+## What runs where (as built)
+
+| Piece | File |
+|---|---|
+| Contract types | `server/thread/types.ts` |
+| Turn lifecycle, queue (one agent turn at a time per kitchen), speculative reading, sign-off resume, memory proposals, the grounded line | `server/thread/engine.ts` |
+| The agent loop: `ToolLoopAgent`, tool table, open decisions, approvals, prompt caching | `server/thread/agent.ts` |
+| Plain-code engine: reading, intake, cards, autonomy, the buyer's actions | `server/thread/pipeline.ts`, `cards.ts` |
+| Earlier requests for follow-ups | `server/thread/earlier.ts` |
+| Fallback model (first model silent for `DOCK_AGENT_FIRST_TOKEN_MS`, default 6 s, or erroring) | `server/thread/fallback.ts` |
+| Telemetry integration (every AI SDK call: ledger `agent` entries inside a conversation, `agent.model` / `agent.tool` action events) | `server/thread/telemetry.ts`, `context.ts` |
+| Thread store and event log (PostgreSQL `docs` collection `agent_thread` with `DOCK_STORE=postgres`) | `server/thread/store.ts` |
+| Routes | `app/ui-api/kitchens/[kitchen]/thread/**` |
+| The store's view (dock, Order page, Home's composer) | `app/k/[kitchen]/thread.tsx`, `thread-state.ts` |
+| Operations view | `server/ops/conversation.ts`, `app/ops/(desk)/conversation/**`, `/ops-api/conversation[/<threadId>]` |
+| In-process smoke run with real models | `pnpm tsx scripts/thread-smoke.ts <kitchen> "<words>" ["<words>" | "@approve" ...]` |
+| Evaluation through the store's HTTP path | `pnpm tsx eval/thread/run.ts --url <server> --driver thread|legacy` |
+
+Environment: `DOCK_AGENT_MODEL` (the agent; Fable 5.2 here), `DOCK_AGENT_FALLBACK_MODEL` (default
+`DOCK_INTERPRET_MODEL`), `DOCK_AGENT_REASONING` (default `low`), `DOCK_AGENT_FIRST_TOKEN_MS`,
+`DOCK_TOOL_APPROVAL_SECRET` (signs the runtime's approval requests; random per process when unset, so a sign-off
+after a restart updates the cards but does not resume the paused loop).
