@@ -8,7 +8,7 @@ const FRIDAY = "2026-11-13";
 
 export const impossibleDeadline: Scenario = {
   id: "impossible-deadline",
-  version: 1,
+  version: 2,
   title: "This cannot be done by then",
   decision: "When nothing that meets the need can arrive in time, order nothing and tell the buyer, with the earliest date it could arrive, instead of placing a late or wrong order.",
   competentBuyer: "Finds that every fresh salmon fillet missed its cut-off for Friday (the earliest is Monday), does not buy the frozen portions that could come tomorrow, and tells the chef by the afternoon so the menu can change.",
@@ -40,7 +40,7 @@ export const impossibleDeadline: Scenario = {
         allowedTopics: ["delivery", "product"],
         intakeRefuses: ["delivery"],
         answers: {
-          delivery: { text: "No, the lunch is tomorrow. A later delivery is no use: if it can't come tomorrow, don't order. I'll change the menu.", facts: { acceptLaterDelivery: false } },
+          delivery: { text: "No, the lunch is tomorrow, so a later delivery is no use for it: don't order for another day. I'll change the menu. Just tell me the earliest you could have got it, so I can plan.", facts: { acceptLaterDelivery: false } },
           product: { text: "It has to be fresh fillet. Frozen portions won't thaw in time and the dish needs fresh fish.", facts: { acceptFrozen: false } },
         },
       }),

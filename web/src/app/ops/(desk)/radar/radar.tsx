@@ -142,11 +142,11 @@ function DrillSection({ v, now, refresh }: { v: RadarView; now: number; refresh:
       <div className="bg-paper">
         <div className="flex items-center gap-2 bg-petrol-deep px-4 py-2 text-[0.92rem] font-semibold text-paper">
           <span aria-hidden className="size-2.5 border-2 border-paper" />
-          A drill: a test notice on Dock&apos;s own page, never a real recall
+          A drill: a test notice on AimoPilot&apos;s own page, never a real recall
         </div>
         <div className="px-4 py-3">
           <p className="text-[0.92rem] leading-snug text-ink-soft">
-            Publishes a notice marked “Harjoitus / Drill” on <a className="underline" href={v.partners.drillUrl} target="_blank" rel="noreferrer">Dock&apos;s drill page</a>, in the authority&apos;s layout. The radar picks it up through the same reader and matching as a real notice ({v.partners.drillReadVia === "context.dev" ? "read by Context.dev from the public address" : "read directly: Context.dev cannot reach this server's own address; set RADAR_PUBLIC_URL to a public one"}), and holds the product. Then try to order it.
+            Publishes a notice marked “Harjoitus / Drill” on <a className="underline" href={v.partners.drillUrl} target="_blank" rel="noreferrer">AimoPilot&apos;s drill page</a>, in the authority&apos;s layout. The radar picks it up through the same reader and matching as a real notice ({v.partners.drillReadVia === "context.dev" ? "read by Context.dev from the public address" : "read directly: Context.dev cannot reach this server's own address; set RADAR_PUBLIC_URL to a public one"}), and holds the product. Then try to order it.
           </p>
           {v.drill.active.length === 0 && (
             <div className="mt-2 flex flex-wrap items-end gap-2">

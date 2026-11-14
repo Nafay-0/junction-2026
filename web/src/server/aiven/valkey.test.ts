@@ -128,7 +128,7 @@ describe("live lookup allowance shared through Valkey", () => {
     data.set(`dock:v1:allowance:dock:${encodeURIComponent("org:agent-2")}:${bucket}:calls`, "2"); // two calls made elsewhere
     expect(allowance.remaining("org:agent-2").callsLeft).toBe(2); // not known yet
     await expect(allowance.asBudget().reserve("org:agent-2", ["a"])).rejects.toMatchObject({ rule: "live_lookup_limit" });
-    expect(() => allowance.check("org:agent-2", ["a"])).toThrow(/all Dock servers together/); // REST path, after the refresh
+    expect(() => allowance.check("org:agent-2", ["a"])).toThrow(/all AimoPilot servers together/); // REST path, after the refresh
     expect(allowance.remaining("org:agent-2").callsLeft).toBe(0);
   });
 });

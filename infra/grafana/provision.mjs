@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Provision Grafana (dock-grafana on Aiven): two data sources and the "Dock overview" dashboard.
+ * Provision Grafana (dock-grafana on Aiven): two data sources and the "AimoPilot overview" dashboard.
  *
  *   node infra/grafana/provision.mjs            create or update data sources and the dashboard
  *   node infra/grafana/provision.mjs --print    print the dashboard JSON (project name blanked) and exit
@@ -130,8 +130,8 @@ function metricPanel(title, metric, services, { unit = "percent", w = 8 } = {}) 
 function buildDashboard() {
   const panels = [];
 
-  // Row 1: Dock, from PostgreSQL
-  panels.push(row("Dock (PostgreSQL telemetry.events, written by the app)"));
+  // Row 1: AimoPilot, from PostgreSQL
+  panels.push(row("AimoPilot (PostgreSQL telemetry.events, written by the app)"));
   panels.push(
     stat("Orders committed", [sql("A", `SELECT count(*) AS "orders" FROM telemetry.events WHERE kind = 'order.committed' AND $__timeFilter(ts)`)]),
     stat("Committed value", [sql("A", `SELECT coalesce(sum(value), 0) AS "EUR" FROM telemetry.events WHERE kind = 'order.committed' AND $__timeFilter(ts)`)], { unit: "currencyEUR", decimals: 0 }),
@@ -289,7 +289,7 @@ FROM telemetry.events WHERE kind IN ('partner_api.call', 'partner_api.cache_hit'
 
   return {
     uid: "dock-overview",
-    title: "Dock overview",
+    title: "AimoPilot overview",
     tags: ["dock", "aiven"],
     timezone: "browser",
     editable: true,
@@ -363,7 +363,7 @@ async function upsertDatasource(ds) {
 
 const p = pgsvc.service_uri_params;
 await upsertDatasource({
-  name: "Dock PostgreSQL",
+  name: "AimoPilot PostgreSQL",
   uid: "dock-pg",
   type: "grafana-postgresql-datasource",
   access: "proxy",

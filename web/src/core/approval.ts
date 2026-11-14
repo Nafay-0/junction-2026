@@ -182,7 +182,7 @@ export function checkLinkToken(approval: Approval, token: string): boolean {
 export const linkTokenVerifier: ApprovalVerifier = {
   async verify(ctx, proof) {
     if (proof.kind !== "link_token" || typeof proof.token !== "string") {
-      return { ok: false, reason: "proof_kind_unsupported", message: `This Dock accepts only the approval link token, not "${proof.kind}".` };
+      return { ok: false, reason: "proof_kind_unsupported", message: `This AimoPilot accepts only the approval link token, not "${proof.kind}".` };
     }
     if (!checkLinkToken(ctx.approval, proof.token)) return { ok: false, reason: "token_mismatch", message: "The approval proof does not match this approval." };
     return { ok: true, signOff: { method: "link_token", verified: true, decision: ctx.decision, at: ctx.now.toISOString(), orderDigest: ctx.orderDigest } };

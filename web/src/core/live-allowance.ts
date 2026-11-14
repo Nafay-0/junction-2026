@@ -131,7 +131,7 @@ export class LiveLookupAllowance {
     const session = agentKey.includes("#");
     const who = session ? "This console session" : "This agent";
     if (this.today().calls >= maxCallsPerDay) {
-      throw new DockError(429, "live_lookup_daily_limit", `Dock has made its ${maxCallsPerDay} live price/availability lookups for today, the ceiling that protects the wholesaler's service. Prices and stock come back after midnight UTC; option cards already shown still hold until their quotes expire.`, "live_lookup_limit", { maxCallsPerDay, scope: "day" });
+      throw new DockError(429, "live_lookup_daily_limit", `AimoPilot has made its ${maxCallsPerDay} live price/availability lookups for today, the ceiling that protects the wholesaler's service. Prices and stock come back after midnight UTC; option cards already shown still hold until their quotes expire.`, "live_lookup_limit", { maxCallsPerDay, scope: "day" });
     }
     if (recent.length >= maxCalls) {
       const wait = this.minutesUntilFree(agentKey);

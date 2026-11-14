@@ -53,3 +53,6 @@ next-env.d.ts
 # test infrastructure outputs
 /tests-live/results/
 /e2e/.auth/
+
+# raw image-model output (scripts/art/generate.ts); only compressed files in public/art/ ship
+.art-raw/

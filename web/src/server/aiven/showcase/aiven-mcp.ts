@@ -141,7 +141,7 @@ export async function mcpStatus(force = false): Promise<McpStatus> {
     }
   }
   if (out.reachable && cfg.project) {
-    const probe = await mcpCall("aiven_pg_read", { project: cfg.project, service_name: "dock-pg", query: "select 1 as ok", reasoning: "Dock operations copilot: capability check" }, 8_000);
+    const probe = await mcpCall("aiven_pg_read", { project: cfg.project, service_name: "dock-pg", query: "select 1 as ok", reasoning: "AimoPilot operations copilot: capability check" }, 8_000);
     out.sql = probe.ok;
     if (!probe.ok) out.sqlDetail = probe.denied ? "Aiven MCP is on, but its read-only SQL tool runs through the PG Editor API, which the read-only token may not use." : probe.error;
   }

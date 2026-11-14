@@ -1,6 +1,6 @@
 # Menu to order
 
-A chef states a dish or a menu and covers; Dock returns one checked, fixed-price order that needs at most one
+A chef states a dish or a menu and covers; AimoPilot returns one checked, fixed-price order that needs at most one
 sign-off. The model drafts (outline, then each dish in parallel; a name check of found products; ways out for lines
 that cannot be bought); plain code does everything that touches safety, money or authority.
 

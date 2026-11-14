@@ -175,7 +175,7 @@ export function LoadError({ message }: { message?: string }) {
   if (!message) return null;
   return (
     <p role="status" className="mt-3 border-l-[6px] border-petrol bg-paper px-4 py-2.5 text-[0.95rem]">
-      <b>Could not refresh from Dock.</b> {message} The view shows the last data it had and keeps trying.
+      <b>Could not refresh from AimoPilot.</b> {message} The view shows the last data it had and keeps trying.
     </p>
   );
 }

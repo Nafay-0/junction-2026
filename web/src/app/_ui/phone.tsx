@@ -1,27 +1,44 @@
+"use client";
+
 import type { ReactNode } from "react";
-import { DEMO_NOTE, PRODUCT_NAME } from "./brand";
+import { LangSwitch, useLang } from "../_i18n/provider";
+import type { Lang } from "../_i18n/lang";
+import { DEMO_NOTES } from "./brand";
 import { Target } from "./target";
+import { Wordmark } from "./wordmark";
 
 /**
  * The phone pages (/join, /approver, /approve/<id>, /call): one column, one large control at the bottom, the demo
  * note at the foot. The sign-off screen opens with the same hazard band, the same mark and the same words as the
  * gate on the kitchen's screen, so scanning the code reads as one continuous act.
+ *
+ * `context` is a short word for the page ("Sign-off"), given in all three languages by a server page. On a narrow
+ * phone it moves under the word mark, so the language switch keeps its full tap size beside the mark.
  */
-export function PhoneShell({ children, context, tone = "plain" }: { children: ReactNode; context?: string; tone?: "plain" | "gate" }) {
+export function PhoneShell({ children, context, tone = "plain" }: { children: ReactNode; context?: string | Record<Lang, string>; tone?: "plain" | "gate" }) {
+  const { lang } = useLang();
+  const ctx = typeof context === "string" ? context : context?.[lang];
   return (
     <div className={`flex min-h-dvh flex-col ${tone === "gate" ? "bg-paper" : "bg-mist"}`}>
       {tone === "gate" && <div aria-hidden className="hazard h-3 shrink-0" />}
-      <header className="flex items-center justify-between gap-3 bg-paper px-5 py-3">
-        <span className="flex items-baseline gap-2">
-          <span aria-hidden className="size-2.5 bg-lime" />
-          <span className="display text-[1.5rem] text-petrol">{PRODUCT_NAME}</span>
-        </span>
-        {context && <span className="truncate text-[0.95rem] text-ink-soft">{context}</span>}
+      <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 bg-paper px-5 py-3">
+        <Wordmark size={26} />
+        {ctx && (
+          <span className="order-last w-full truncate text-[0.95rem] text-ink-soft min-[440px]:order-none min-[440px]:w-auto min-[440px]:min-w-0 min-[440px]:flex-1 min-[440px]:text-right">
+            {ctx}
+          </span>
+        )}
+        <LangSwitch />
       </header>
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col px-5 pb-6 pt-5 text-[1.08rem] text-ink">{children}</main>
-      <p className="px-5 pb-4 text-center text-[0.78rem] leading-snug text-ink-soft">{DEMO_NOTE}</p>
+      <p className="px-5 pb-4 text-center text-[0.78rem] leading-snug text-ink-soft">{DEMO_NOTES[lang]}</p>
     </div>
   );
+}
+
+/** A fixed text from a server page, in the buyer's language: `<LangText t={{ en: "…", fi: "…", sv: "…" }} />`. */
+export function LangText({ t }: { t: Record<Lang, string> }) {
+  return <>{t[useLang().lang]}</>;
 }
 
 /** The gate, as the phone shows it: the black slab, the mark, the words the kitchen's screen used. */
@@ -30,7 +47,7 @@ export function GateHead({ title, sub, children }: { title: string; sub?: string
     <section className="on-dark -mx-5 -mt-5 bg-safety-ink px-5 pb-6 pt-5 text-paper">
       <div className="flex items-center gap-3">
         <Target size={44} tone="safety" />
-        <p className="display text-[2.2rem] leading-[0.95] text-safety">{title}</p>
+        <p className="display min-w-0 text-[2.2rem] leading-[0.95] text-safety [overflow-wrap:anywhere] hyphens-auto">{title}</p>
       </div>
       {sub && <p className="mt-2 text-[1.08rem] leading-snug text-paper/90">{sub}</p>}
       {children}
@@ -55,7 +72,7 @@ export function bigButton(kind: "go" | "secondary" | "dark" | "demo" = "go"): st
 export function PhoneNotice({ title, body, children }: { title: string; body?: string; children?: ReactNode }) {
   return (
     <div className="mt-10">
-      <h1 className="display text-[2.4rem] text-ink">{title}</h1>
+      <h1 className="display text-[2.4rem] text-ink hyphens-auto [overflow-wrap:anywhere]">{title}</h1>
       {body && <p className="mt-3 leading-snug">{body}</p>}
       {children}
     </div>

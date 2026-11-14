@@ -1,8 +1,5 @@
 # Claims ledger
 
-> **Name: the team must choose.** Replace `{{NAME}}` everywhere ("Dock" in the code, "AimoPilot" in the draft
-> submission).
-
 Every claim and number used in `docs/pitch/`, with where it comes from. Checked on Saturday 14 Nov 2026 between about
 00:30 and 02:00 EET, on `main` at `ec88340` (the worktree was fast-forwarded from `d7611f0` during the work), plus
 `origin/claude/qa` at `68eac2b` for the QA report. No build, test run or server was started for this; tests were read,
@@ -21,7 +18,7 @@ VJ = `valio-judges.md`, Pa = `partners/`.
 
 | # | Claim | Used in | Source | Status |
 |---|---|---|---|---|
-| 1 | The agent carries a mandate signed by the buyer organisation's own Ed25519 key; Dock holds only the public key | T P Q S VJ | `web/src/core/mandate.ts`, `mandate.test.ts`; `web/docs/connect-an-agent.md` §1 | V |
+| 1 | The agent carries a mandate signed by the buyer organisation's own Ed25519 key; AimoPilot holds only the public key | T P Q S VJ | `web/src/core/mandate.ts`, `mandate.test.ts`; `web/docs/connect-an-agent.md` §1 | V |
 | 2 | Plain code, not the model, checks every order; nothing in `web/src/core/` calls a model | T P Q S VJ | grep of `web/src/core` (no model SDK or server import); rule in `CLAUDE.md` | V |
 | 3 | 17,546 real product records, served on the live site | T P Q S VJ Pa | `GET /api/health`: `catalog.source: valio, products: 17546`, OpenSearch "17546 products in dock-products" | V |
 | 4 | Live price and availability asked for a short list only; going over the allowance is refused (`live_lookup_limit`) | P S VJ | `web/src/core/live-allowance.ts`, `live-allowance.test.ts`; `web/docs/connect-an-agent.md` | V |
@@ -85,7 +82,7 @@ VJ = `valio-judges.md`, Pa = `partners/`.
 | 47 | Three of the seven elicit through MCP; four relay; Semantic Kernel needed four workarounds | T VJ | `examples/runtimes/RESULTS.md`, `GAPS.md` | D |
 | 48 | Each run cost about 1 to 10 US cents in model fees ($0.0081 to $0.1010) | Q | `examples/runtimes/RESULTS.md` | D |
 | 49 | Claude Code and Gemini CLI ordered through a URL-only connector; the Claude and ChatGPT apps were not tested | VJ | `web/docs/connect-an-agent.md`, "What was proven, and with which client" | D |
-| 50 | OAuth for consumer assistants is designed, not built | Q S VJ | `web/docs/connect-an-agent.md` ("Dock does not implement OAuth"; "The production version") | V |
+| 50 | OAuth for consumer assistants is designed, not built | Q S VJ | `web/docs/connect-an-agent.md` ("AimoPilot does not implement OAuth"; "The production version") | V |
 
 ## Testing and the crash test
 

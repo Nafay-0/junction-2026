@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { PRODUCT_NAME } from "../../../../_ui/brand";
 import { ProductPage } from "../../product";
+import { requestLang } from "../../../../_i18n/server";
+import { LAYOUT_TEXT } from "../../layout.text";
 
-export const metadata: Metadata = { title: `${PRODUCT_NAME}: product` };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: LAYOUT_TEXT[await requestLang()].title.product };
+}
 
 export default function Product({ params }: PageProps<"/k/[kitchen]/catalogue/[productId]">) {
   return (

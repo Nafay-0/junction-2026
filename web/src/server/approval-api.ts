@@ -43,7 +43,7 @@ export async function requireApprovalReader(rt: Runtime, req: Request, approvalI
   if (token && (await rt.dock.approvalTokenMatches(approvalId, token))) return;
   const who = await principalOf(req, rt);
   if (canRead(who, c.order.orgId)) return;
-  throw new DockError(404, "approval_not_found", `No approval ${approvalId} for you. Open it on the approver's phone, or with the link Dock sent them.`, "data_access");
+  throw new DockError(404, "approval_not_found", `No approval ${approvalId} for you. Open it on the approver's phone, or with the link AimoPilot sent them.`, "data_access");
 }
 
 /** Pending approvals of one organisation, newest first. */

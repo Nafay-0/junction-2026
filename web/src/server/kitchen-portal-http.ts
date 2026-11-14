@@ -29,7 +29,7 @@ export async function portalRoute(req: Request, params: Promise<{ kitchen: strin
     const e = err as { status?: number; code?: string; message?: string };
     if (typeof e?.status === "number") return Response.json(errorBody(e.code ?? "portal_error", e.message ?? "The request failed."), { status: e.status });
     console.error(err);
-    return Response.json(errorBody("internal_error", "Something went wrong inside Dock."), { status: 500 });
+    return Response.json(errorBody("internal_error", "Something went wrong inside AimoPilot."), { status: 500 });
   }
 }
 

@@ -1,7 +1,5 @@
 # NVIDIA and Featherless
 
-> **Name: the team must choose.** Replace `{{NAME}}` ("Dock" in the code, "AimoPilot" in the draft submission).
-
 **Short version: both were evaluated, neither is in the product's live path. This is a thin use; say so.**
 
 ## What they do in the project, in plain words

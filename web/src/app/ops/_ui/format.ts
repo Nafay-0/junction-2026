@@ -133,7 +133,7 @@ export function since(iso: string | undefined, nowMs: number): string {
 
 export type Via = "onsite" | "mcp" | "rest";
 export const VIA: Record<Via, { label: string; short: string; how: string }> = {
-  onsite: { label: "On-site agent", short: "On-site", how: "The kitchen portal's own agent, inside Dock" },
+  onsite: { label: "On-site agent", short: "On-site", how: "The kitchen portal's own agent, inside AimoPilot" },
   mcp: { label: "Outside agent over MCP", short: "MCP", how: "Any company's agent, over the Model Context Protocol" },
   rest: { label: "Outside agent over REST", short: "REST", how: "Any program, over the documented HTTP API" },
 };

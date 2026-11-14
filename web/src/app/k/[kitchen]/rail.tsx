@@ -1,6 +1,9 @@
 "use client";
 
-import { attr, day, measure, moneyShort, roleLabel, shortProduct } from "../../_ui/plain";
+import { useFormat, useText } from "../../_i18n/provider";
+import { moneyShort, shortProduct } from "../../_ui/plain";
+import { familyL } from "./family.text";
+import { RAIL_TEXT } from "./rail.text";
 import type { Entry, KitchenInfo, KitchenMemory } from "./types";
 
 /** How many times this request touched the partner's live price and availability service, from the ledger. */
@@ -21,19 +24,16 @@ export function liveCallsOf(entries: Entry[]): { calls: number; products: number
 
 export function LiveCalls({ entries, active }: { entries: Entry[]; active: boolean }) {
   const { calls, products } = liveCallsOf(entries);
+  const tx = useText(RAIL_TEXT);
   return (
     <section aria-labelledby="calls" className="bg-paper p-4">
       <h2 id="calls" className="text-[0.95rem] font-semibold">
-        Live price checks for this request
+        {tx.callsTitle}
       </h2>
       <p className="mt-1 flex items-baseline gap-3">
         <span className="display text-[3.6rem] text-petrol-deep tabular">{calls}</span>
         <span className="text-[0.98rem] leading-snug text-ink-soft">
-          {!active
-            ? "Nothing asked yet."
-            : calls === 0
-              ? "None so far: mistakes and questions are settled from local data first."
-              : `call${calls === 1 ? "" : "s"} to the wholesaler's live service, covering ${products} product price${products === 1 ? "" : "s"}. The rest came from master data.`}
+          {!active ? tx.notAsked : calls === 0 ? tx.noCalls : tx.calls(calls, products)}
         </span>
       </p>
     </section>
@@ -42,33 +42,35 @@ export function LiveCalls({ entries, active }: { entries: Entry[]; active: boole
 
 export function MandateBox({ k }: { k: KitchenInfo }) {
   const m = k.mandate;
+  const tx = useText(RAIL_TEXT);
+  const f = useFormat();
   return (
     <section aria-labelledby="mandate" className="bg-paper p-4">
       <h2 id="mandate" className="text-[0.95rem] font-semibold">
-        What the agent may do alone
+        {tx.mandateTitle}
       </h2>
-      <p className="mt-1 display text-[2rem] tabular">{moneyShort(m.perOrderLimitCents)} per order</p>
+      <p className="mt-1 display text-[2rem] tabular">{tx.perOrder(moneyShort(m.perOrderLimitCents))}</p>
       <ul className="mt-2 space-y-1 text-[0.98rem] leading-snug">
-        <li>Weekly budget {moneyShort(m.weeklyBudgetCents)}, never more.</li>
-        <li>Only {m.allowedCategories.map(attr).join(", ")}.</li>
-        {m.requiredAttributes.length > 0 && <li>Always {m.requiredAttributes.map(attr).join(", ")}.</li>}
-        {m.forbiddenAllergens.length > 0 && <li>Never {m.forbiddenAllergens.map(attr).join(" or ")}.</li>}
+        <li>{tx.weekly(moneyShort(m.weeklyBudgetCents))}</li>
+        <li>{tx.only(m.allowedCategories.map((c) => familyL(c, f.lang)).join(", "))}</li>
+        {m.requiredAttributes.length > 0 && <li>{tx.always(m.requiredAttributes.map(f.attr).join(", "))}</li>}
+        {m.forbiddenAllergens.length > 0 && <li>{tx.never(m.forbiddenAllergens.map(f.attr).join(tx.or))}</li>}
         <li>
           {m.substitution.rule === "none"
-            ? "No substitutes."
+            ? tx.noSubs
             : m.substitution.rule === "needs_approval"
-              ? `Substitutes need a person, and at most ${m.substitution.maxPriceIncreasePct} % dearer.`
+              ? tx.subsPerson(m.substitution.maxPriceIncreasePct)
               : m.substitution.rule === "within_preferences"
-                ? `Like-for-like substitutes within the kitchen's preferences alone; others need a person.`
-                : "Only like-for-like substitutes."}
+                ? tx.subsPrefs
+                : tx.subsLike}
         </li>
-        <li>No splitting one need into smaller orders.</li>
+        <li>{tx.noSplit}</li>
       </ul>
-      <h3 className="mt-3 text-[0.95rem] font-semibold">Above that, a person signs off</h3>
+      <h3 className="mt-3 text-[0.95rem] font-semibold">{tx.above}</h3>
       <ul className="mt-1 space-y-1 text-[0.98rem]">
         {m.approvers.map((a) => (
           <li key={a.role}>
-            {a.name}, {roleLabel(a.role)}: up to {moneyShort(a.maxApprovalCents)}
+            {tx.approver(a.name, f.role(a.role), moneyShort(a.maxApprovalCents))}
           </li>
         ))}
       </ul>
@@ -79,54 +81,56 @@ export function MandateBox({ k }: { k: KitchenInfo }) {
 export function Memory({ memory, error, family }: { memory: KitchenMemory | undefined; error?: string; family?: string }) {
   // The family this request is about first, then the ones the kitchen orders most.
   const families = [...(memory?.families ?? [])].sort((a, b) => Number(b.family === family) - Number(a.family === family) || b.orders - a.orders);
+  const tx = useText(RAIL_TEXT);
+  const f = useFormat();
   return (
     <section aria-labelledby="memory" className="bg-lavender p-4">
       <h2 id="memory" className="text-[0.95rem] font-semibold">
-        What Dock remembers about this kitchen
+        {tx.memoryTitle}
       </h2>
-      {!memory && !error && <div className="mt-2 h-24 animate-pulse bg-mist" aria-label="Loading the kitchen's memory" />}
-      {error && !memory && <p className="mt-1 text-ink-soft">Could not load the kitchen&apos;s memory: {error}</p>}
+      {!memory && !error && <div className="mt-2 h-24 animate-pulse bg-mist" aria-label={tx.memoryLoading} />}
+      {error && !memory && <p className="mt-1 text-ink-soft">{tx.memoryFailed(error)}</p>}
       {memory && memory.families.length === 0 && memory.stated.length === 0 && (
         <p className="mt-1 text-[0.98rem] leading-snug text-ink-soft">
-          Nothing yet. Dock learns usual amounts and habits from the orders this kitchen places, and keeps any rule a person states.
+          {tx.memoryNone}
         </p>
       )}
       {memory && memory.stated.length > 0 && (
         <div className="mt-2">
-          <h3 className="text-[0.85rem] font-medium text-ink-soft">Rules a person stated (always applied)</h3>
+          <h3 className="text-[0.85rem] font-medium text-ink-soft">{tx.stated}</h3>
           <ul className="mt-1 space-y-1">
             {memory.stated.map((p) => (
               <li key={p.id} className="text-[0.98rem] leading-snug">
-                <span className="font-semibold">{p.text}</span> <span className="text-ink-soft">({p.statedBy.replace(/\s*\(.*\)$/, "")}, {day(p.statedAt.slice(0, 10))})</span>
+                <span className="font-semibold">{p.text}</span> <span className="text-ink-soft">({p.statedBy.replace(/\s*\(.*\)$/, "")}, {f.day(p.statedAt.slice(0, 10))})</span>
               </li>
             ))}
           </ul>
         </div>
       )}
-      {families.map((f) => {
-        const last = f.lastOrder;
+      {families.map((fam) => {
+        const last = fam.lastOrder;
         return (
-          <div key={f.family} className="mt-3 border-t border-line pt-2">
-            <h3 className="display text-[1.4rem] capitalize">{attr(f.family)}</h3>
+          <div key={fam.family} className="mt-3 border-t border-line pt-2">
+            <h3 className="display text-[1.4rem] capitalize">{familyL(fam.family, f.lang)}</h3>
             <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[0.98rem] leading-snug">
-              <dt className="text-ink-soft">Usual</dt>
+              <dt className="text-ink-soft">{tx.usual}</dt>
               <dd className="font-semibold tabular">
-                about {measure(f.usual.amount, f.usual.unit)} <span className="font-normal text-ink-soft">({f.orders} orders)</span>
+                {tx.about(f.measure(fam.usual.amount, fam.usual.unit))} <span className="font-normal text-ink-soft">{tx.orders(fam.orders)}</span>
               </dd>
-              <dt className="text-ink-soft">Last order</dt>
+              <dt className="text-ink-soft">{tx.lastOrder}</dt>
               <dd>
-                {last.lines.map((l) => `${l.packs} × ${shortProduct(l.name)}`).join(" + ")}, {day(last.placedAt.slice(0, 10))}
+                {last.lines.map((l) => `${l.packs} × ${shortProduct(l.name)}`).join(" + ")}, {f.day(last.placedAt.slice(0, 10))}
               </dd>
-              {f.learned.length > 0 && (
+              {fam.learned.length > 0 && (
                 <>
-                  <dt className="text-ink-soft">Learned</dt>
+                  <dt className="text-ink-soft">{tx.learned}</dt>
                   <dd>
                     <ul className="space-y-0.5">
-                      {f.learned.map((l) => (
+                      {fam.learned.map((l) => (
                         <li key={l.text}>{shortenLearned(l.text)}</li>
                       ))}
                     </ul>
-                    <p className="mt-1 text-[0.85rem] text-ink-soft">Learned habits only pre-select an answer; the buyer can change it.</p>
+                    <p className="mt-1 text-[0.85rem] text-ink-soft">{tx.learnedNote}</p>
                   </dd>
                 </>
               )}

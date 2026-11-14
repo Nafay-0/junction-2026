@@ -106,7 +106,7 @@ export const SOURCES: SourceConfig[] = [
   {
     id: "drill",
     name: "Drill notices (this project's own page)",
-    publisher: "Dock recall drill: NOT A REAL RECALL",
+    publisher: "AimoPilot recall drill: NOT A REAL RECALL",
     kind: "authority_listing",
     language: "fi",
     homeUrl: "/ui-api/radar/drill",
@@ -115,7 +115,7 @@ export const SOURCES: SourceConfig[] = [
     maxReadsPerCheck: 3,
     independent: true,
     drill: true,
-    about: "A page Dock hosts in the authority's layout. Staff publish a test notice there; the radar picks it up through the same reader and matching as a real one.",
+    about: "A page AimoPilot hosts in the authority's layout. Staff publish a test notice there; the radar picks it up through the same reader and matching as a real one.",
   },
 ];
 
