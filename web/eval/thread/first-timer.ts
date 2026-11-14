@@ -53,6 +53,7 @@ const L = {
     swap: /^Swap$/,
     choose: /^Choose this$/,
     skip: /^No preference: show me the options$/,
+    takeOff: /^Take it off this order$/,
   },
   fi: {
     usual: "Tilaa tavalliset",
@@ -76,6 +77,7 @@ const L = {
     swap: /^Vaihda$/,
     choose: /^Valitse tämä$/,
     skip: /^Ei väliä: näytä vaihtoehdot$/,
+    takeOff: /^Poista se tästä tilauksesta$/,
   },
 }[lang];
 
@@ -125,8 +127,10 @@ class Run {
       if (await swap.isVisible().catch(() => false)) {
         await this.tap(swap);
         const choose = this.log.getByRole("button", { name: L.choose }).first();
-        await choose.waitFor({ timeout: 30_000 });
-        await this.tap(choose);
+        const takeOff = this.log.getByRole("button", { name: L.takeOff }).first();
+        // Another product, or, when the kitchen's rules allow nothing else, the line taken off the order.
+        await choose.or(takeOff).first().waitFor({ timeout: 30_000 });
+        await this.tap((await choose.isVisible().catch(() => false)) ? choose : takeOff);
         await this.page.waitForTimeout(1500);
         continue;
       }

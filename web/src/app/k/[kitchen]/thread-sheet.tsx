@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useFormat, useText } from "../../_i18n/provider";
 import { artFor } from "../../_ui/art";
+import { buttonClass } from "../../_ui/kit";
 import { clock, money } from "../../_ui/plain";
 import { AlternativesPicker, ChoiceAnswer, OrderSheet, type Candidate, type DayChoice, type Outcome, type PickerCell, type SheetLine } from "../../_ui/widgets";
 import type { AlternativesCard, BuyerTurn, GatePreview, OrderCard, QuestionCard, SheetCard, Thread, ThreadAction } from "@/server/thread/types";
@@ -219,7 +220,7 @@ export function PickerView({ card, tap, busy, thread }: { card: AlternativesCard
   const sheet = card.for.sheetId ? thread.turns.flatMap((x) => (x.role === "agent" ? x.cards : [])).find((c): c is SheetCard => c.type === "sheet" && c.sheetId === card.for.sheetId) : undefined;
   // A later picker for the same line, a pick, or the order sent: this one is history.
   const newer = thread.turns.flatMap((x) => (x.role === "agent" ? x.cards : [])).some((c) => c.type === "alternatives" && c.cardId !== card.cardId && c.for.lineId === card.for.lineId && c.for.sheetId === card.for.sheetId && thread.turns.findIndex((t) => t.role === "agent" && t.cards.includes(c)) > thread.turns.findIndex((t) => t.role === "agent" && t.cards.includes(card)));
-  const done = closed || !!card.picked || newer || sheet?.state === "placed";
+  const done = closed || !!card.picked || newer || sheet?.state === "placed" || (!!sheet && !sheet.lines.some((l) => l.lineId === card.for.lineId));
   const current = card.candidates.find((c) => c.current);
   if (done) {
     const took = card.candidates.find((c) => c.productId === card.picked && !c.current);
@@ -250,7 +251,10 @@ export function PickerView({ card, tap, busy, thread }: { card: AlternativesCard
       },
     };
   });
+  // Nothing else the kitchen's rules allow: the way on is to take the line off (the order keeps its other lines).
+  const nothingElse = !card.candidates.some((c) => !c.current) && !!sheet && sheet.state !== "placed" && sheet.lines.length > 1 && sheet.lines.some((l) => l.lineId === card.for.lineId);
   return (
+    <>
     <AlternativesPicker
       kind={tx.pickerKind}
       insteadOf={card.for.name}
@@ -273,6 +277,14 @@ export function PickerView({ card, tap, busy, thread }: { card: AlternativesCard
       busy={busy}
       onClose={() => setClosed(true)}
     />
+    {nothingElse && sheet && (
+      <p className="px-1">
+        <button type="button" disabled={busy} className={buttonClass("secondary", "sm")} onClick={() => tap({ type: "sheet_remove", sheetId: sheet.sheetId, version: sheet.version, lineId: card.for.lineId! }, tx.words.remove(card.for.name))}>
+          {tx.removeLine}
+        </button>
+      </p>
+    )}
+    </>
   );
 }
 
