@@ -157,7 +157,7 @@ describe("no codes, and the buyer's language", () => {
   it("says what memory used in one line, in the buyer's language", () => {
     const applied = { itemId: "mem_1", text: "Lactose-free applied: stated by Kitchen manager on 27 Oct", code: "applied", params: { kind: "diet", claim: "lactose_free", label: "Lactose-free", how: "stated", by: "Kitchen manager", at: "2026-10-27" } };
     expect(plain(memoryText(applied, en.w, en.f, "en"))).toBe("Lactose-free, as always (Kitchen manager, Tue 27.10.)");
-    expect(plain(memoryText(applied, fi.w, fi.f, "fi"))).toBe("Laktoositon, kuten aina (Kitchen manager, ti 27.10.)");
+    expect(plain(memoryText(applied, fi.w, fi.f, "fi"))).toBe("Laktoositon, kuten aina (Keittiöpäällikkö, ti 27.10.)");
     const learned = { text: "Semi-skimmed (1.5 %) pre-selected: Semi-skimmed (1.5 %): 10 of your last 10 milk orders", code: "preselected", params: { kind: "learned", label: "Semi-skimmed (1.5 %)", dimension: "fat", choice: "fat_1_5" } };
     expect(plain(memoryText(learned, sv.w, sv.f, "sv"))).toBe("Lätt 1,5 %, som vanligt");
     // A line with no data is shown only in English, never as English inside a Finnish thread.
