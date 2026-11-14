@@ -43,7 +43,7 @@ export type Rule = { text: string; source: string };
 export type DefiningConflict = { allergen: string; ingredient: string; rule: Rule };
 
 /** "main protein", "the fish", or the ingredient named in the dish's own name: what the dish is. */
-function defining(ing: DishLike["ingredients"][number], dishName: string): boolean {
+export function isDefining(ing: DishLike["ingredients"][number], dishName: string): boolean {
   if (/\b(main|protein|defining|star|the fish|the meat|centre|keskeinen|pää)/i.test(ing.role ?? "")) return true;
   const dish = lowered(dishName);
   return [ing.name, ...ing.searchTerms].flatMap((t) => t.toLowerCase().split(/[^a-zåäö]+/u)).some((w) => w.length >= 4 && dish.includes(w.slice(0, Math.max(4, w.length - 2))));
@@ -60,7 +60,7 @@ export function definingConflict(dish: DishLike, forbidden: readonly string[], r
   let ingredient = allergen ? (dish.ingredients.find((i) => allergenInName([i.name, ...i.searchTerms].join(" "), [allergen!]))?.name ?? wordFor(names, allergen)) : undefined;
   if (!allergen) {
     for (const ing of dish.ingredients) {
-      if (!defining(ing, names)) continue;
+      if (!isDefining(ing, names)) continue;
       const a = allergenInName([ing.name, ...ing.searchTerms].join(" "), forbidden);
       if (a) {
         allergen = a;

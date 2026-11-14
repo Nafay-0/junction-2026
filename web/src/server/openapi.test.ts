@@ -211,6 +211,8 @@ describe("real responses match the documented status codes and schemas", () => {
       expect((await agent("POST", "/api/v1/menus/seasonal", {})).status).toBe(400);
       const seasonal = (await agent("POST", "/api/v1/menus/seasonal", { text: "Lunch for 40, something in season", have: ["butter"] })).body.result;
       await agent("POST", "/api/v1/menus/event", { text: "Unexpected booking for 40, milk with lunch" });
+      const ideas = (await agent("POST", "/api/v1/menus/ideas", { text: "Something for lunch for 40" })).body.result;
+      await agent("POST", "/api/v1/menus/dish", { ideasId: ideas.ideasId, dishId: ideas.ideas[0].dishId, covers: 40 });
       expect((await agent("POST", "/api/v1/menus/plan_nope/order", {})).status).toBe(404);
       expect((await agent("POST", `/api/v1/menus/${seasonal.planId}/order`, { by: "Aino" })).status).toBe(201);
     } finally {

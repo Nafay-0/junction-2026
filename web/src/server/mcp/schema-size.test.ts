@@ -23,8 +23,9 @@ describe("tools/list size", () => {
     // the three menu-scenario tools (plan_seasonal_menu, plan_event_menu, order_menu) add about 4.3 KB.
     // 53,175 on 14 Nov 2026 with line_up_backup (a backup for a product with a poor delivery record), kept short.
     // 53,523 with receiptEmail on place_order and get_order (whether the kitchen's receipt was emailed, server/notify).
-    // 54,608 with get_order_timeline (an order's whole timeline, the same the wholesaler reads; the partner's shared audit trail).
-    expect(all).toBeLessThan(54_800);
+    // 56,234 with menu_ideas and plan_dish (ideas checked before they are offered; a dish in three groups), kept short.
+    // About 1.1 KB more with get_order_timeline (an order's whole timeline, the same the wholesaler reads: the partner's shared audit trail).
+    expect(all).toBeLessThan(57_600);
     // Still a usable shape: the intake tools say a step has a state, and an order a status.
     const submit = tools.find((t) => t.name === "submit_need")!.outputSchema as { properties: Record<string, { properties?: Record<string, { enum?: string[] }> }> };
     expect(submit.properties.step.properties?.state.enum).toContain("quoted");

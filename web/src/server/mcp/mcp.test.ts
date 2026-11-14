@@ -69,6 +69,8 @@ describe("MCP server", () => {
       "answer_watch",
       "set_auto_renew",
       "line_up_backup",
+      "menu_ideas",
+      "plan_dish",
       "plan_seasonal_menu",
       "plan_event_menu",
       "order_menu",
