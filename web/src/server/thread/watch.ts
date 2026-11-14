@@ -165,10 +165,22 @@ export async function autoRenewFromWords(run: TurnRun, words: string): Promise<s
     const names = rows.map((r) => familyL(r.family, lang).toLowerCase());
     return { en: `Which recurring order: ${names.join(" or ")}?`, fi: `Mikä vakiotilaus: ${names.join(" vai ")}?`, sv: `Vilken stående beställning: ${names.join(" eller ")}?` }[lang];
   }
+  // Switching auto-renew ON widens what the agent may do (it orders without asking each time): never from words in
+  // the chat, whoever types them. Switching it off narrows and is done at once.
+  if (intent === "on") {
+    const signer = run.session.mandate.approvers[0]?.name ?? (lang === "fi" ? "hyväksyjä" : lang === "sv" ? "den som signerar" : "the signer");
+    const what = familyL(row.family, lang).toLowerCase();
+    record(run, "auto_renew_refused", `Auto-renew on for ${row.family} was asked in the chat and not switched on: it widens what the agent may do and needs ${signer}'s sign-off.`, { family: row.family });
+    return {
+      en: `Renewing the ${what} by itself would let me order it without asking each time, so it needs ${signer}'s OK; I haven't switched it on. Until then I'll remind you before each order.`,
+      fi: `Automaattinen uusinta (${what}) antaisi minun tilata kysymättä joka kerta, joten se tarvitsee hyväksynnän: ${signer}. En laittanut sitä päälle; siihen asti muistutan ennen jokaista tilausta.`,
+      sv: `Att förnya ${what} automatiskt skulle låta mig beställa utan att fråga varje gång, så det behöver ${signer}s godkännande; jag har inte slagit på det. Tills dess påminner jag före varje beställning.`,
+    }[lang];
+  }
   // A person's name, never a username or an id in a sentence ("Hotel Lumo kitchen (hotel-lumo)" says "Hotel Lumo kitchen").
   const who = (run.person?.name ?? run.k.info.name).replace(/\s*\([^)]*\)/g, "").trim();
-  const r = await setAutoRenewFromThread(run.rt, run.session, row.family, intent === "on", { by: who, via: `${run.door}: ${byLine(run)}`, lang, what: familyL(row.family, lang).toLowerCase() });
-  record(run, "auto_renew", `Auto-renew ${intent} for ${row.family}, in the buyer's words "${words.slice(0, 80)}".`, { family: row.family, on: intent === "on" });
+  const r = await setAutoRenewFromThread(run.rt, run.session, row.family, false, { by: who, via: `${run.door}: ${byLine(run)}`, lang, what: familyL(row.family, lang).toLowerCase() });
+  record(run, "auto_renew", `Auto-renew ${intent} for ${row.family}, in the buyer's words "${words.slice(0, 80)}".`, { family: row.family, on: false });
   return r.reply;
 }
 

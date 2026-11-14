@@ -39,6 +39,16 @@ export type TurnRun = {
   scenarioReply?: string;
   /** A menu scenario said this turn: its words are the reply (scenario.ts). */
   scenarioSaid?: string;
+  /** A menu plan shown or changed in this turn: its dishes and ingredients are shown in the reply (menu.ts dishesCard). */
+  dishesFor?: { planId: string; standIns?: Record<string, string>; changed?: boolean };
+  /** The day the buyer agreed to in words ("Shall I order it for Tuesday 17 Nov?" "yes"): the day ordered. */
+  orderDay?: string;
+  /** The answer to the ways forward for a dish not fully buyable that needs words of its own. */
+  waysAnswer?: "owner" | "which";
+  /** The plan an order in this turn was placed from (its left-off ingredients are said again after it). */
+  placedPlan?: string;
+  /** A change to the rules sent in this turn to the signer's passkey (said by plain code, never as done). */
+  rulesWaiting?: import("./types").RulesCard;
   /** The watch's moment the buyer asked about this turn: its words are the reply (watch.ts). */
   watchAsked?: string;
   /** The wholesaler's offer the buyer asked for this turn: its own words are the reply (offer.ts). */
@@ -629,6 +639,17 @@ export async function afterStep(run: TurnRun, s: IntakeView, words: string): Pro
     out.options = card.options.map((o, i) => ({ ref: `o${i + 1}`, optionId: o.optionId, title: o.title, totalCents: o.totalCents, deliveryDate: o.deliveryDate, match: o.match }));
     const routine = missing.length || run.multi ? undefined : await routineChoice(run, s, card.options);
     if (!routine) return out;
+    // Nothing changed silently: an amount rounded to packs, a later day or a stand-in is said first, so the agent does
+    // not order alone; the buyer's word on the options places it (engine.ts tellRequestDifferences says it).
+    const { optionDifferences } = await import("./differences");
+    const on = (s.need as { deliverOn?: string }).deliverOn;
+    const howMuch = (s.need as { quantity?: { amount: number; unit: string } }).quantity;
+    const sub = routine.option.lines.find((l) => l.substituteFor);
+    const diffs = optionDifferences({ key: s.requestId, name: s.need.item.text, ...(howMuch ? { amount: howMuch } : {}), ...((on ?? s.need.deliverBy) ? { day: on ?? s.need.deliverBy } : {}), exact: !!on }, { delivered: routine.option.delivered, deliveryDate: routine.option.deliveryDate, ...(sub ? { substituteFor: sub.substituteFor, title: routine.option.title } : {}) });
+    if (diffs.length) {
+      record(run, "alone_held", `Not ordered alone: the option differs from the request (${diffs.map((d) => d.kind).join(", ")}), said to the buyer first.`, { kinds: diffs.map((d) => d.kind) }, s.requestId);
+      return out;
+    }
     record(run, "autonomy", `Routine request inside the mandate: the agent chooses "${routine.option.title}" alone (${routine.why}).`, { optionId: routine.option.optionId, why: routine.why }, s.requestId);
     const chose = step(run, "quote", "Fixing the price with the wholesaler");
     let quoted: IntakeView;
@@ -679,6 +700,12 @@ export async function placeQuoted(run: TurnRun, s: IntakeView, words: string, pa
   }
   // Only an order inside the mandate goes alone. A quote the gate would send to a person waits for the buyer's word.
   if (alone && s.quote?.policyPreview.outcome !== "auto_approve") return out;
+  // Several items in one message: nothing is placed before every item's outcome is said (one is left out, one needs
+  // an answer); the fixed price waits for the buyer's yes.
+  if (run.multi && run.buyer.via !== "tap") {
+    record(run, "held_for_the_rest", `Not placed yet: the message named several items, and each one's outcome is said before any is ordered.`, {}, s.requestId);
+    return out;
+  }
   const gate = step(run, "gate", "Checking the order against your rules");
   let order: PublicOrder;
   try {

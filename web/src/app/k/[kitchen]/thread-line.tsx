@@ -6,6 +6,8 @@ import { useFormat, useText } from "../../_i18n/provider";
 import { clock, money } from "../../_ui/plain";
 import type { AgentTurn, BuyerTurn, GateCard as GateCardT, OfferCard, ScenarioCard, WatchCard, OptionView, OrderCard, Thread, ThreadAction, ThreadStep, TodayCard } from "@/server/thread/types";
 import { usePortal } from "./portal";
+import { Dishes } from "./thread-dishes";
+import { RulesSignOffSlab } from "./thread-rules-signoff";
 import { THREAD_LINE_TEXT } from "./thread-line.text";
 import { useSignOff } from "./thread-signoff";
 import { THREAD_WORDS } from "./thread-words.text";
@@ -177,15 +179,26 @@ function AgentNode({ turn, thread, tap, busy, latest }: { turn: AgentTurn; threa
   const text = turn.line || (today ? (quietToday ? "" : todaySentence(today, tx, f)) : turn.status === "working" ? "" : fallbackLine(turn, thread, tx, f));
   const thinks = thinking(turn, thread, tx, w, f);
   const busyNow = turn.status === "working" || !!running;
+  // A menu in the reply: the dishes after the words, and the reply's closing question after the dishes and the total.
+  const dishes = cards.find((c) => c.type === "dishes");
+  const sentences = text ? text.split(/(?<=[.!?])\s+(?=[^\s])/) : [];
+  const ask = dishes && sentences.length > 1 && /\?$/.test(sentences.at(-1)!.trim()) ? sentences.at(-1)! : "";
+  const said = ask ? sentences.slice(0, -1).join(" ") : text;
   return (
     <li className="tl-in relative">
       {/* The busy mark and the working words change together: busy while any step still runs. */}
       <span aria-hidden className={`absolute -left-[2.35rem] top-[0.3em] flex size-[1.15rem] items-center justify-center rounded-full ${busyNow ? "tl-pulse bg-lime" : "bg-petrol"}`}>
         {!busyNow && <span className="size-1.5 rounded-full bg-lime" />}
       </span>
-      {text && (
+      {said && (
         <p data-agent-words={wordsOf(text)} className="max-w-[38ch] whitespace-pre-line text-[1.02rem] leading-[1.6] text-ink [text-wrap:pretty]">
-          <Rich text={text} />
+          <Rich text={said} />
+        </p>
+      )}
+      {dishes?.type === "dishes" && <Dishes card={dishes} lang={f.lang} day={f.day} said={text} />}
+      {ask && (
+        <p className="mt-2.5 max-w-[38ch] text-[1.02rem] leading-[1.6] text-ink [text-wrap:pretty]">
+          <Rich text={ask} />
         </p>
       )}
       {busyNow && (running || !text) && <p aria-busy className="tl-sheen mt-1 text-[0.9rem] font-medium text-petrol">{running ? stepLabel(running, w, f.lang) : tx.working}</p>}
@@ -197,6 +210,7 @@ function AgentNode({ turn, thread, tap, busy, latest }: { turn: AgentTurn; threa
       <Memory turn={turn} />
       {cards.map((c) => (c.type === "gate" && c.outcome === "waiting" && c.approvalId ? <SignOffSlab key={c.cardId} card={c} thread={thread} tap={tap} /> : c.type === "gate" && c.outcome === "approved" && c.orderId ? <SignedSlab key={c.cardId} card={c} thread={thread} /> : null))}
       {today?.items.filter((i) => i.kind === "sign_off").map((i) => (i.kind === "sign_off" ? <SignOffSlab key={i.approvalId} card={{ type: "gate", cardId: `gate:${i.orderId}`, requestId: i.requestId ?? "", orderId: i.orderId, approvalId: i.approvalId, outcome: "waiting", approver: i.approver, reasons: [], rules: [] } as GateCardT} thread={thread} tap={tap} total={i.totalCents} what={i.lines.map((l) => `${f.num(l.quantity)} × ${l.name}`).join(", ")} /> : null))}
+      {cards.map((c) => (c.type === "rules" && c.proposal?.state === "waiting" ? <RulesSignOffSlab key={c.cardId} card={c} /> : null))}
       {thinks.length > 0 && <Steps steps={thinks} />}
     </li>
   );
@@ -531,6 +545,15 @@ function thinking(turn: AgentTurn, thread: Thread, tx: Tx, w: (typeof THREAD_WOR
         const mem = (c.memory?.length ? c.memory : c.memoryUsed).map((m) => memoryText(m, w, wf, f.lang)).filter((x): x is string => !!x);
         const notes = (c.notes ?? []).map((n) => w.note[n.code]?.(n.params, wf)).filter((x): x is string => !!x);
         if (mem.length || notes.length) out.push({ label: tx.step.history, detail: [...mem, ...notes].slice(0, 2).join(" "), tone: "memory" });
+        break;
+      }
+      case "dishes": {
+        // Why an ingredient is taken as already in the kitchen: the basis, in the steps (the reply only says "already in your kitchen").
+        const have = c.dishes.flatMap((d) => d.items).filter((i) => i.note?.code === "have");
+        for (const basis of ["staple", "on_hand", "chef"] as const) {
+          const names = have.filter((i) => i.note?.basis === basis).map((i) => i.name[f.lang].toLowerCase());
+          if (names.length) out.push({ label: tx.step.have[basis], detail: names.join(", "), tone: "kept" });
+        }
         break;
       }
       case "anomaly":

@@ -154,6 +154,8 @@ async function cardOf(run: TurnRun, base: ThreadScenario, lang: Lang): Promise<S
   run.store.card(run.thread, run.turnId, card);
   run.facts.push(card, base.facts);
   run.scenarioSaid = card.cardId;
+  // The menu itself is content: its dishes and ingredients are shown in the reply, each late line with its best stand-in.
+  run.dishesFor = { planId: base.planId, ...(ev ? { standIns: Object.fromEntries(ev.cannotArrive.flatMap((x) => (ev.options[x.lineId]?.[0] ? [[x.lineId, lower(ev.options[x.lineId][0].title)]] : []))) } : {}) };
   record(run, "scenario_said", `The ${base.kind === "event" ? "short-notice booking" : "seasonal menu"} ${base.planId} was said in the conversation.`, { planId: base.planId, kind: base.kind });
   return card;
 }
