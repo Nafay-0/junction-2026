@@ -143,6 +143,7 @@ test("five wrong passcodes from one address lock out the right one too", async (
 });
 
 test("presenter enrols with the passcode and a passkey, signs Kaari's order over the limit, signed order on the wall; the next one opens from the console's code", async ({ page, browser, baseURL }) => {
+  test.fixme(true, "main b9f934e replaced the order lane and the agent panel with one conversation thread: rewrite against the thread once it settles");
   test.setTimeout(240_000);
   const errors = watchErrors(page);
   await page.context().setExtraHTTPHeaders({ "x-forwarded-for": fakeAddress() });
@@ -221,6 +222,7 @@ test("presenter enrols with the passcode and a passkey, signs Kaari's order over
  * itself. Now the presenter's home shows the role they took and the next request opens by itself.
  */
 test("a presenter who enrols ahead of the demo sees their sign-offs and gets the next one by itself", async ({ page, browser, baseURL }) => {
+  test.fixme(true, "main b9f934e replaced the order lane and the agent panel with one conversation thread: rewrite against the thread once it settles");
   test.setTimeout(240_000);
   await page.context().setExtraHTTPHeaders({ "x-forwarded-for": fakeAddress() });
   await addPasskey(page);

@@ -2,7 +2,7 @@
 
 Everything here runs against production builds started by the tests themselves, with a hermetic environment
 (`e2e/support/start-server.mjs`: seed catalogue, model off, partner off, Aiven off, no value from `.env.local`,
-operations passcode `e2e-ops`). Nothing touches the public deployment. Defects found are in [FINDINGS.md](FINDINGS.md).
+operations passcode `e2e-ops`). Nothing touches the public deployment. Defects found are written as `test.fail` tests in the specs (each with steps, cause and file) and in the test-infra report on branch `claude/test-infra`.
 
 ## Commands (from `web/`)
 
@@ -26,7 +26,11 @@ the known-defect tests as ordinary tests, to confirm a fix), `E2E_CROWD_MAX=20,3
 (software passkey on Chromium too). A failed test keeps its trace: `pnpm exec playwright show-trace test-results/<test>/trace.zip`.
 Run two suites at once only with different `E2E_PORT` and `--output` (each run clears `test-results/`).
 
-Known-defect tests are written as `test.fail(...)`: the suite stays green while the defect is there and turns red
+Tests marked `test.fixme(...)` drive screens that main replaced while this suite was written (the order lane and
+agent panel became one conversation thread in b9f934e; the call moved into it in acb274e; the operations desk was
+redesigned): each says so and is to be rewritten once those screens settle. Visual baselines are not committed
+yet: take them with `pnpm e2e:visual:update` once the interface settles (CI writes missing Linux ones and uploads
+them as an artifact). Known-defect tests are written as `test.fail(...)`: the suite stays green while the defect is there and turns red
 ("expected to fail, but passed") when it is fixed, so whoever fixes it flips the test.
 
 ## Projects
@@ -85,15 +89,16 @@ both on the venue Wi-Fi, not on mobile data. Reset the demo first if the runbook
    then "Waiting for requests" within 3 s. If the sheet says "no screen lock", that phone cannot take part: use another.
 3. **Request**: tap "Demo: ask my agent for 1,000 L of milk". Expect: the sign-off page opens **by itself** within
    3 s, with the total, "Over this agent's 500 € per-order limit", the swap explained, and minutes left (about 29).
-   If it does not open by itself within 10 s, the venue network is blocking the live stream (known defect 2 in
-   FINDINGS.md): reload the page and tap the request under "Waiting for you"; tell the presenter.
+   If it does not open by itself within 10 s, the venue network is blocking the live stream (a known defect: the waiting screen has
+   no fallback when the event stream is blocked): reload the page and tap the request under "Waiting for you"; tell the presenter.
 4. **Lock and come back**: before signing, lock the phone for 10 s, unlock. Expect: still the same request, minutes
    left still sensible, Approve still there.
 5. **Sign**: tap Approve. Expect: the system sheet again, then "Order placed", "with a passkey". On the wall within
    3 s: "Signed order" with the person's name.
 6. **Decline path** (second phone): request again, Add reason, "Too expensive", Decline. Expect "Declined" with the reason.
-7. **Store on the phone**: tap "Open my kitchen's shop", tap a suggested request, then the "Best" option, "Get a
-   fixed price", watch the countdown move, "Place the order". Expect the phone's sign-off page to open; approve.
+7. **Store on the phone**: tap "Open my kitchen's shop", tell the agent "1,000 litres of lactose-free milk by
+   Monday" in the conversation, follow its cards to a fixed price (watch the countdown move) and place the order.
+   Expect the phone's sign-off page to open; approve.
 8. **Look** while doing it: nothing cut off at the right edge, text readable without zooming, buttons reachable by
    thumb above the browser's own toolbar, the language buttons (FI SV EN) switch the page, no "undefined" or raw
    codes anywhere, the demo note visible.

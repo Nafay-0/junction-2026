@@ -32,6 +32,7 @@ async function tabTo(page: Page, re: RegExp, nth = 1, max = 120): Promise<number
 }
 
 test("order lane: request to gate with the keyboard only", async ({ page }) => {
+  test.fixme(true, "main b9f934e replaced the order lane and the agent panel with one conversation thread: rewrite against the thread once it settles");
   await openStage(page, "/k/kaari/order");
   await expect(page.getByRole("button", { name: "Write a request" })).toBeVisible();
   await settle(page);

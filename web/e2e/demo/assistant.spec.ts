@@ -1,6 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 import { signInStage } from "../support/dock";
 
+// The order lane and agent panel these tests drive were replaced on main (b9f934e).
+test.fixme(true, "main b9f934e replaced the order lane and the agent panel with one conversation thread: rewrite against the thread once it settles");
+
 /**
  * The agent panel answering a question from the shop's records. This server has the model off, so the panel must
  * say so plainly and show records, never an invented answer; with E2E_MODEL=1 (start-server.mjs copies the model

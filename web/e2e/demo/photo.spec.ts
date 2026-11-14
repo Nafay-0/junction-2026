@@ -195,6 +195,7 @@ test.describe("photo door on /channels (a built-in demo kitchen)", () => {
 
 test.describe("photo door in the kitchen's agent panel (own visitor kitchen)", () => {
   test("Add a photo or document: model off, then a recorded reading goes line by line through intake, gate and order", async ({ page }, testInfo) => {
+    test.fixme(true, "main b9f934e replaced the order lane and the agent panel with one conversation thread: rewrite against the thread once it settles");
     const errors = watchErrors(page);
     await addPasskey(page);
     await joinAsApprover(page);

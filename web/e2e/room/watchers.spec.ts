@@ -1,6 +1,9 @@
 import { expect, test, type Browser, type Page, devices } from "@playwright/test";
 import { STAGE_PASSWORDS } from "../support/dock";
 
+// The order lane and agent panel these tests drive were replaced on main (b9f934e).
+test.fixme(true, "main b9f934e replaced the order lane and the agent panel with one conversation thread: rewrite against the thread once it settles");
+
 /**
  * Order pages watching a request that waits for sign-off, from one venue address, with the public limits on.
  * QA found that two such pages exceed the console's per-address limit within a minute. Each page here is a real

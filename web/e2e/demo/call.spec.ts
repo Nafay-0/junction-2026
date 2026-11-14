@@ -125,6 +125,7 @@ test("the call endpoint cannot be reached (request aborted): 'No connection to A
 });
 
 test("the voice connection never opens (socket accepted, no answer): after 12 s 'did not open', then typing", async ({ page }, info) => {
+  test.fixme(true, "main acb274e moved the call into the conversation thread: rewrite against the thread once it settles");
   const errors = watchErrors(page);
   // Stubbed: the voice token (the real server opens a typed call behind it) and Google's socket, which stays silent.
   const ids = await stubVoiceToken(page);
@@ -147,6 +148,7 @@ for (const [why, code, reason, words] of [
   ["the voice service ends it at the time limit", 1008, "deadline expired", "The call reached its time limit."],
 ] as const) {
   test(`connected, then ${why}: 'The call dropped' with the reason, Call back and Type instead`, async ({ page }, info) => {
+    test.fixme(true, "main acb274e moved the call into the conversation thread: rewrite against the thread once it settles");
     const errors = watchErrors(page);
     // page.routeWebSocket patches the page's WebSocket from an init script: set up before the first navigation.
     const ids = await stubVoiceToken(page);
@@ -172,6 +174,7 @@ for (const [why, code, reason, words] of [
 }
 
 test("connected, then the phone goes offline: the call drops, typing says there is no connection, and works again once back online", async ({ page, context }, info) => {
+  test.fixme(true, "main acb274e moved the call into the conversation thread: rewrite against the thread once it settles");
   const errors = watchErrors(page);
   const ids = await stubVoiceToken(page);
   const live = await stubLiveService(page, "answer");

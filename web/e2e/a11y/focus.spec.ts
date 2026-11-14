@@ -40,6 +40,7 @@ test("/approve/<id>: tab order follows the page and focus is visible", async ({ 
 });
 
 test("/k/kaari/order: tab order follows the page and focus is visible", async ({ page }) => {
+  test.fixme(true, "main b9f934e replaced the order lane and the agent panel with one conversation thread: rewrite against the thread once it settles");
   await target("order").open(page);
   await checkOrder(page, "order", [/Skip to the page/, /Write a request/, /1,000 litres of lactose-free milk/]);
 });

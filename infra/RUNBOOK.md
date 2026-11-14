@@ -114,7 +114,7 @@ as a bearer token.
 
 ## Release checklist (before each presentation)
 
-Full details and the test map: `web/e2e/README.md`; open defects: `web/e2e/FINDINGS.md`. All local runs use their
+Full details and the test map: `web/e2e/README.md`; open defects: the `test.fail` tests in `web/e2e/` and the test-infra report. All local runs use their
 own hermetic servers (seed catalogue, no model, no secrets) and never touch the deployment.
 
 **On the commit you are about to deploy** (from `web/`, about 10 minutes):
@@ -156,4 +156,4 @@ live stream: tell the presenter to have visitors reload and tap the request unde
 - Order pages: five `/k/<kitchen>/order` pages watching waiting orders from one address got no 429 in 75 s
   (QA's finding of 429s at two pages no longer reproduces on this build).
 - `demoLimits` in `/api/health`: at the model cap, free text and the assistant stop until midnight UTC with no
-  offline fallback (FINDINGS.md); raise the cap before the session rather than during it.
+  offline fallback; raise the cap before the session rather than during it.

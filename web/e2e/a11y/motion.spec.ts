@@ -25,6 +25,7 @@ async function sample(pages: Record<string, Page>, into: Map<string, Running & {
 }
 
 test("wall and order lane run no motion longer than 0.1 s when reduced motion is on", async ({ page, browser, baseURL }) => {
+  test.fixme(true, "main b9f934e replaced the order lane and the agent panel with one conversation thread: rewrite against the thread once it settles");
   const wallContext = await browser.newContext({ baseURL, reducedMotion: "reduce", viewport: WALL });
   const wall = await wallContext.newPage();
   await wall.goto("/");

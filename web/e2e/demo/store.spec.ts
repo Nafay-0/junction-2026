@@ -1,6 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 import { addPasskey, approvalState, approveButton, joinAsApprover, watchErrors, signInStage } from "../support/dock";
 
+// The order lane and agent panel these tests drive were replaced on main (b9f934e).
+test.fixme(true, "main b9f934e replaced the order lane and the agent panel with one conversation thread: rewrite against the thread once it settles");
+
 /**
  * The store's order lane, every stage, in the visitor's own kitchen (so parallel runs never share a budget):
  * request -> what the agent understood -> mistake check -> options -> fixed price with its countdown -> gate ->

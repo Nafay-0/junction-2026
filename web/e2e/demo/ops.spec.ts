@@ -64,6 +64,7 @@ test("the desk is closed without the passcode; a wrong passcode is refused", asy
 });
 
 test("suspend a visitor's agent: its next call is refused naming the suspension; resume and it works again", async ({ page, browser, baseURL }) => {
+  test.fixme(true, "main b9f934e replaced the order lane and the agent panel with one conversation thread: rewrite against the thread once it settles");
   test.setTimeout(180_000);
   const errors = watchErrors(page);
   const v = await visitorPhone(browser, baseURL);
@@ -170,6 +171,7 @@ test("suspend a visitor's agent: its next call is refused naming the suspension;
 });
 
 test("overview, then a trace of the visitor's own request replays station by station", async ({ page, browser, baseURL }) => {
+  test.fixme(true, "main redesigned the operations desk (0a1c3db): rewrite against the new trace screen once it settles");
   test.setTimeout(150_000);
   const errors = watchErrors(page);
   const v = await visitorPhone(browser, baseURL);
