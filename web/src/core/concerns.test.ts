@@ -122,6 +122,8 @@ describe("delivery date", () => {
     const [c] = checkDelivery(need({ deliverBy: "2026-11-21" }), ctx()); // Saturday
     expect(c.code).toBe("delivery_not_delivery_day");
     expect(c.corrections.map((x) => x.patch?.deliverBy)).toEqual(["2026-11-20", "2026-11-23"]);
+    // The day chosen is the day delivered: a kitchen that cannot receive on other days never gets an earlier one.
+    expect(c.corrections.map((x) => x.patch?.deliverOn)).toEqual(["2026-11-20", "2026-11-23"]);
   });
 
   it("does not offer a day before that is already past the cut-off", () => {

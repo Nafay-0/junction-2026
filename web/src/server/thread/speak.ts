@@ -54,6 +54,7 @@ function cardFacts(c: Card): Record<string, unknown> | undefined {
             packs: o.lines.map((l) => `${l.quantity} × ${l.packSize ?? 1} ${l.unit ?? ""}`.trim()).join(" + "),
             totalEur: eur(o.totalCents),
             delivery: o.deliveryDate,
+            ...(o.orderBy ? { orderBy: o.orderBy } : {}),
             ...(o.match === "compromise" ? { notExactly: o.givesUp.join("; ") } : {}),
             ...(usual ? { insteadOfUsual: usual.params } : {}),
             ...(deposit(o) ? { plusDepositEur: eur(deposit(o)) } : {}),
@@ -75,7 +76,7 @@ function cardFacts(c: Card): Record<string, unknown> | undefined {
     case "price":
       return { fixedPrice: { totalEur: eur(c.totalCents), heldUntil: c.expiresAt, delivery: c.deliveryDate } };
     case "gate":
-      return { decided: { outcome: c.outcome, ...(c.approver ? { who: c.approver.name } : {}), ...(c.reasons.length ? { because: c.reasons[0] } : {}) } };
+      return { decided: { outcome: c.outcome, ...(c.approver ? { who: c.approver.name } : {}), ...(c.said ? { sayThis: c.said.en } : c.reasons.length ? { because: c.reasons[0] } : {}) } };
     case "order":
       return { order: { status: c.status, totalEur: eur(c.totalCents), delivery: c.deliveryDate, lines: c.lines.slice(0, 4).map((l) => `${l.quantity} × ${l.name}`), ...(c.authorised.by !== "agent" ? { who: c.authorised.name } : {}), ...(c.takeBackUntil ? { canTakeBackUntil: c.takeBackUntil } : {}) } };
     case "sheet":
@@ -87,6 +88,9 @@ function cardFacts(c: Card): Record<string, unknown> | undefined {
       const day = c.dayProblem ? { sayFirst: `nothing can arrive on ${c.dayProblem.asked}${c.dayProblem.earliest ? `; the earliest is ${c.dayProblem.earliest}` : ""}` } : {};
       if (c.stage === "choose") return { menus: c.proposals.slice(0, 3).map((p, i) => ({ n: i + 1, title: p.title, dishes: p.dishes, ...(p.costPerCoverCents ? { perCoverEur: eur(p.costPerCoverCents) } : {}) })), ...(c.serviceDate ? { dayAsked: c.serviceDate } : {}), ...day, ...(c.covers ? { covers: c.covers } : {}), ask: c.dayProblem?.earliest ? `which menu: the one chosen is planned for ${c.dayProblem.earliest}` : "which menu" };
       // No promise about a person's OK here: the order the menu becomes is judged when it is placed, and said then.
+      // The kitchen's rules stop the menu as it stands: said by name the first time, with the next step.
+      const stop = c.gate?.outcome === "reject" ? (c.gate.rules ?? []).find((r) => r.outcome === "fail") : undefined;
+      if (c.stage === "ready" && !c.sheetId && stop) return { menu: { dishes: c.dishes.map((d) => d.name), covers: c.covers, day: c.serviceDate }, rulesStopIt: { rule: stop.rule.replaceAll("_", " "), why: c.gate?.reasons?.[0] ?? stop.rule }, ...day, ask: "say which rule stops it and why, then offer the dish without what breaks it, or another day" };
       if (c.stage === "ready" && !c.sheetId) return { menu: { dishes: c.dishes.map((d) => d.name), covers: c.covers, day: c.serviceDate, ...(c.days.length ? { deliveryDaysPossible: c.days.filter((d) => d.available).map((d) => d.date).slice(0, 3) } : {}), totalEur: eur(c.totalCents), ...(c.costPerCoverCents ? { perCoverEur: eur(c.costPerCoverCents) } : {}), ...(c.blockers.length ? { cannotOrderYet: c.blockers } : {}) }, ...day, ask: !c.covers ? "how many covers" : c.dayProblem?.earliest ? `shall I plan it for ${c.dayProblem.earliest}?` : "shall I order it?" };
       if (c.stage === "declined") return { menu: { cannot: c.blockers } };
       return undefined;
@@ -94,11 +98,15 @@ function cardFacts(c: Card): Record<string, unknown> | undefined {
     case "records":
       return { records: c.rows.slice(0, 5).map((r) => ({ what: r.label, ...(r.date ? { date: r.date } : {}), ...(r.totalCents !== undefined ? { totalEur: eur(r.totalCents) } : {}) })) };
     case "rules":
-      return c.proposal ? { rulesChange: { changes: c.diff.map((d) => `${d.field}: ${d.before || "none"} → ${d.after || "none"}`), state: c.proposal.state, canConfirmHere: c.proposal.canSign, ...(c.proposal.why ? { whyNot: c.proposal.why } : {}) }, ask: c.proposal.state === "open" && c.proposal.canSign ? "shall I change it?" : undefined } : { rules: { perOrderLimitEur: eur(c.current.perOrderLimitCents), weeklyBudgetEur: eur(c.current.weeklyBudgetCents) } };
+      return c.proposal ? { rulesChange: { changes: c.diff.map((d) => `${d.field}: ${d.before || "none"} → ${d.after || "none"}`), state: c.proposal.state, canConfirmHere: c.proposal.canSign, ...(c.proposal.why ? { whyNot: c.proposal.why } : {}) }, ask: c.proposal.state === "open" && c.proposal.canSign ? "shall I change it?" : undefined } : { rules: { perOrderLimitEur: eur(c.current.perOrderLimitCents), weeklyBudgetEur: eur(c.current.weeklyBudgetCents), ...(c.week ? { thisWeek: { spentEur: eur(c.week.spentCents), ...(c.week.heldCents ? { heldWaitingForOkEur: eur(c.week.heldCents) } : {}), leftEur: eur(c.week.leftCents) } } : {}), whoGivesTheOk: c.current.approvers.map((a) => `${a.name} (${a.role.replaceAll("_", " ")}), up to ${eur(a.maxApprovalCents)}`), groups: (c.current.groups ?? []).map((g) => g.name).slice(0, 6) } };
+    case "scenario":
+      return c.state === "open" ? { scenarioSaid: c.text.en.say, ask: c.text.en.ask } : { scenario: c.kind, answered: true };
+    case "watch":
+      return c.state === "open" ? { watchSaid: c.text.en.say, ask: c.text.en.ask } : { watch: c.kind, ...(c.reply ? { reply: c.reply } : {}) };
     case "offer":
       return c.state === "open" ? { wholesalerOffer: { product: c.name, said: c.text.en.say, ask: "yes (put it on an order), no, or don't suggest this kind again" } } : { wholesalerOffer: { product: c.name, answered: c.state, ...(c.reply ? { reply: c.reply } : {}) } };
     case "notice":
-      return { notice: c.message, ...(c.kind === "incomplete" ? { missing: c.missing } : {}) };
+      return { notice: c.message, ...(c.said ? { sayItLikeThis: "first person, the groups in words, ending on the next step, as in notice" } : {}), ...(c.kind === "incomplete" ? { missing: c.missing } : {}) };
     case "today":
       return { today: c.items.slice(0, 3).map((i) => i.kind) };
     default:
@@ -118,7 +126,9 @@ export function speakFacts(run: TurnRun): Record<string, unknown>[] {
     const now = run.store.cards(run.thread).find((x) => x.card.cardId === c.cardId)?.card ?? c;
     cards.push(now);
   }
-  const out = cards.map(cardFacts).filter((x): x is Record<string, unknown> => !!x);
+  const out = cards.map(cardFacts).filter((x): x is Record<string, unknown> => !!x).map((x) => plainFacts(x) as Record<string, unknown>);
+  // Items of the same message that are not on the order (each with why): said, never dropped.
+  for (const f of run.facts) if (f && typeof f === "object" && "notOnTheOrder" in f) out.push(plainFacts(f) as Record<string, unknown>);
   // A clarification asked once already and not settled by the answer: not asked again in other words; the best
   // reading from what is on the table, as a question a yes answers.
   const incomplete = cards.find((c) => c.type === "notice" && c.kind === "incomplete");
@@ -134,4 +144,16 @@ export function speakFacts(run: TurnRun): Record<string, unknown>[] {
     }
   }
   return out;
+}
+
+/** Facts the reply is written from carry no codes: category codes, product ids and snake_case words come out as words. */
+function plainFacts(v: unknown): unknown {
+  if (typeof v === "string")
+    return v
+      .replace(/\s*\((?:[A-Z]{2}-\d{3,}|\d{6})\)/g, "")
+      .replace(/\bcat[ _]\d{3,}\b,?\s*/gi, "")
+      .replace(/\b([a-z]+)_([a-z_]+)\b/g, (m) => (/^\d{4}-\d{2}-\d{2}/.test(m) ? m : m.replaceAll("_", " ")));
+  if (Array.isArray(v)) return v.map(plainFacts);
+  if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, plainFacts(x)]));
+  return v;
 }

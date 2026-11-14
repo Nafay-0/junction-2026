@@ -12,9 +12,9 @@ import { callTool } from "@/server/mcp/server";
 import { TOOLS } from "@/server/mcp/tools";
 import { cardId, gateCard, orderCard } from "./cards";
 import { withFallback } from "./fallback";
-import { combineItems, orderFromWords, record, REPEAT_SCALED, repeatScaled, runAction, step, type ItemOutcome, type TurnRun } from "./pipeline";
+import { byLine, combineItems, orderFromWords, record, REPEAT_SCALED, repeatScaled, runAction, step, type ItemOutcome, type TurnRun } from "./pipeline";
 import { ADDITION, isShort, subjectLine, subjectOf, type Subject } from "./subject";
-import type { RecordsCard, ThreadAction } from "./types";
+import type { Card, RecordsCard, ThreadAction } from "./types";
 import { earlierFor } from "./earlier";
 import { speakFacts } from "./speak";
 
@@ -43,21 +43,27 @@ How to work each turn:
 - The buyer's newest words answer something open (listed under OPEN DECISIONS): call buyer_reply with the matching ref. "the second one", "the cheaper one", "the soup" pick a choice; "make it 12" or "Monday is fine" change the order to confirm (pass amount or date); "yes, order it", "go ahead" confirm. Only use refs that are listed. A question is never a yes. If their words do not clearly pick one, ask one short question instead.
 - After an order waits for a named person's OK (status pending_approval), write your sentences and call await_sign_off with its orderId in the same reply.
 - The buyer wants to look around without ordering ("show me oat drinks"): find_products. About one product: product_facts. "What do I need to do today?", "our recurring orders", "what's arriving", "what do you remember about us": show_home.
-- A dish or a menu for a number of covers ("lunch for 10 tomorrow", "salmon soup for 300 on Friday", "chocolate cake"): plan_menu with their words. Open words get up to three menus to pick from.
+- A dish or a menu for a number of covers ("lunch for 10 tomorrow", "salmon soup for 300 on Friday", "chocolate cake"), a booking at short notice ("unexpected booking for 40 tomorrow") or a menu around what is in season: plan_menu with their words. Open words get up to three menus to pick from.
 - Every message is read in the light of the conversation so far (TALKING ABOUT NOW). A short follow-up fills in or changes that thing: "10 portions" after a dish sets its covers; "200 litres", "for Friday", "no, 200", "make it 40", "the organic one" complete or change the request on the table (call order with their words, code applies them); "and oat drink too" adds to the same order (order). Do it; do not ask them to confirm a change they just said. A new subject starts only when they clearly name a new thing. Never ask for what they already said in this conversation.
 - Past orders: order_history. Rules, limits, who gives the OK, or a change to them ("never nuts", "raise the limit to 800"): rules, with the change when they ask for one; the buyer then confirms it with a yes, through buyer_reply. Say "confirm", never "sign" or "mandate". An order's status: get_order or explain.
+- "Anything I should know about this week's orders?", "is this week's milk sorted?", "what's coming this week?": this_week. After the store said a watch moment (a product that cannot come, a held renewal), "yes", "switch", "the second one", "keep it", "the usual", "the new amount", "skip it" are buyer_reply with its watch: ref.
 - "Anything new or worth trying?", "what's in season?": wholesaler_offer. After the store said an offer, the buyer's yes, no, "don't suggest this kind again" or "no offers at all" is buyer_reply (offer:yes, offer:no, offer:mute, offer:off); a no or a mute is acknowledged in one short sentence and never raised again.
 - Anything else (a greeting, small talk, something outside buying food): one short sentence, no tool.
 
 Your reply (the store shows it under the buyer's words, with your work folded away beneath it):
 - Two to four plain sentences (never five), under 50 words in all, in the buyer's language (English, Finnish or Swedish: the language they wrote in).
 - The most important thing first: what you can do, how much, for how much, on which day. Prices and days sit inside the sentence. If nothing can arrive in time, or the kind they asked for cannot be had, that is your first sentence, said once, with the reason.
-- Mark a figure the eye should find (a price, an amount) like **1 010,00 €** or **1 000 L**, and a day or a time like {{Monday 16.11.}} or {{17.00}}. Nothing else is marked. No lists, no headings, no links, no ids, no codes.
+- Mark a figure the eye should find (a price, an amount) like **1 010,00 €** or **1 000 L**, and a day or a time like {{Monday 16 Nov}} (in Finnish {{maanantaina 16.11.}}) or {{17.00}}. Nothing else is marked. No lists, no headings, no links, no ids, no codes.
 - When something is open, end on it in a few words, one thing only: "Which one?" only when two or more can be ordered (the store lists them under your words); with one, "Shall I order it?" (with the day when it matters: "Shall I order it for Monday 16.11.?"); a rules change, "Shall I change it?". If it needs a person's OK, say so and whose, and why in a few words ("It's over your 500 € limit, so it needs your OK"): the store shows the OK button.
 - Never tell the buyer what to type or say (no "say ...", no "send the product name with the amount"): ask a question a plain yes or a few words answer. If you asked something last turn and the answer did not settle it, do not ask it again in other words: offer your best reading from what is on the table ("12 litres of the cream for the sauce?").
 - Name the options in their order (n = 1 first, as the store lists them), so "the first one" is the one you named first. One product per option, each with its own price: never two options in one phrase ("Oatly Semi or Whole, 16,80 €"). When the buyer counts in another unit than the product (cartons, packs, boxes), say the amount in theirs too ("12 cartons of 1 L"). When the usual product cannot be had, say what changes for them: how it comes now (1 000 one-litre cartons instead of 100 boxes of 10 L) and the price difference when a result gives it.
 - Exceptions come first, one clear sentence each: nothing can arrive in time (and the earliest day that can), the kind asked for cannot be had (and what stands in, and what differs), an amount looks unusual, it needs a person's OK (whose). Then the question that moves it on. Which products and order times stay in the steps.
-- A day written like 16.11. already ends with its full stop: never add a second.
+- Never describe how you work inside ("the store treated your message", "the results", "my tools"): say what you found, what you did and what you need, as a person would.
+- In Finnish, packs are said with their size: "1 000 yhden litran tölkkiä" (never "1 000 litran tölkkeinä"), "10 litran laatikko"; in English "10 l box", never "novobox".
+- Every item the buyer asked for is on the order or named as left out, with why, in one sentence (notOnTheOrder). Never drop one without a word.
+- Never call a product or a menu nut-free, gluten-free or lactose-free unless a result states it; "without nuts, as you asked" only when the result says the plan left them out.
+- In English a day is "Monday 16 Nov"; in Finnish and Swedish "16.11.", whose own dot is never followed by another mark: end the sentence before the date or rephrase.
+- When something cannot be done, say it in the first person ("I can't buy burger buns for this kitchen"), the kitchen's product groups in words (at most three), never a code, an id or a rule name, and end on the next step when there is one ("The owner can add bread under Your rules; shall I ask them?"). A refusal in the results already says it that way: keep its sense.
 - Prices are before VAT: when a result gives the rate, say it once ("before 14 % VAT"), never on every price. A deposit is one clause on the total ("plus 4,80 € deposit"). A product left out by the kitchen's nutrition rules (a school's milk protein, sugar, salt) is one sentence with the figure ("Oat drink has 1 g protein per 100 ml, under the 3 g your rules ask for").
 - Use only figures, products, days, times and claims that this turn's results state (the \`shown\` facts and the tool results). Euros with a comma for cents ("41,00 €"). Never say an order is placed, OK'd or delivered unless a result says so; a waiting order is waiting. An earlier delivery than the day asked is said as earlier.
 - Do not describe how you searched or checked (the store shows those steps), and do not repeat what you said in an earlier turn. If memory answered something, a few words ("lactose-free, as always").
@@ -174,6 +180,25 @@ export async function openRefs(run: TurnRun): Promise<OpenRef[]> {
   }
   // The order sheet open now (several items, the usual, a menu or an option changed): ordered, or changed, in words.
   const { currentSheet } = await import("./sheet");
+  // A menu scenario's question (a booking at short notice, a seasonal menu): answered in words.
+  const { openScenario } = await import("./scenario");
+  const sc = openScenario(run);
+  if (sc) {
+    refs.push({ ref: "scenario:yes", label: sc.pending.earliest ? `yes: plan it for ${sc.pending.earliest}` : "yes: the best stand-ins, onto the order sheet", action: { type: "scenario_answer", planId: sc.planId, answer: sc.pending.earliest ? { kind: "day", date: sc.pending.earliest } : { kind: "yes" } }, confirm: true });
+    refs.push({ ref: "scenario:no", label: "no: order nothing for it", action: { type: "scenario_answer", planId: sc.planId, answer: { kind: "no" } } });
+    sc.pending.options.slice(0, 4).forEach((o, i) => refs.push({ ref: `scenario:o${i + 1}`, label: `use stand-in ${i + 1} (${o.words.slice(0, 3).join(" ")})`, action: { type: "scenario_answer", planId: sc.planId, answer: { kind: "choose", optionId: o.optionId } } }));
+  }
+  // The watch's moment (a stock-out, a held renewal) said last turn or on the opening: answered in words.
+  const { openWatch } = await import("./watch");
+  const wc = openWatch(run);
+  if (wc) {
+    const holder = run.thread.turns.find((x) => x.role === "agent" && x.cards.some((c) => c.cardId === wc.cardId));
+    const after = holder ? run.thread.turns.slice(run.thread.turns.indexOf(holder) + 1).filter((x) => x.role === "agent" && x.turnId !== run.turnId) : [];
+    if (holder && after.length === 0) {
+      const label: Record<string, string> = { switch: "yes, switch to the closest substitute", keep: "no, keep it as it is", renew_new: "renew at the new amount", usual: "renew at the usual amount", skip: "skip this week" };
+      for (const a of wc.answers) refs.push({ ref: `watch:${a.startsWith("switch:") ? `alt${wc.answers.filter((x) => x.startsWith("switch:")).indexOf(a) + 2}` : a}`, label: a.startsWith("switch:") ? `switch to substitute ${wc.answers.filter((x) => x.startsWith("switch:")).indexOf(a) + 2} instead` : (label[a] ?? a), action: { type: "watch_answer", momentId: wc.momentId, answer: a }, ...(a === "switch" || a === "renew_new" || a === "usual" ? { confirm: a === "switch" } : {}) });
+    }
+  }
   // The wholesaler's offer said last turn (or on the opening): answered in words.
   const { openOffer } = await import("./offer");
   const offer = openOffer(run);
@@ -219,16 +244,36 @@ async function placedAlready(run: TurnRun, requestId: string): Promise<boolean> 
   return run.store.cards(run.thread).some((x) => x.card.type === "gate" && x.card.requestId === requestId && x.card.outcome !== "refused");
 }
 
+/** "When is the cut-off?": the order times of what is on the table (the newest options and price), from the offers. */
+function orderTimes(cards: Card[]): string {
+  const opts = cards.filter((c) => c.type === "options").at(-1);
+  const price = cards.filter((c) => c.type === "price").at(-1);
+  const lines: string[] = [];
+  if (opts?.type === "options") for (const o of opts.options.slice(0, 3)) if (o.orderBy) lines.push(`${o.title}: order by ${o.orderBy} for delivery ${o.deliveryDate}`);
+  if (price?.type === "price") lines.push(`the fixed price holds until ${price.expiresAt}, delivery ${price.deliveryDate}`);
+  return lines.length ? `ORDER TIMES (the wholesaler's own, for "when is the cut-off?"): ${lines.join("; ")}.` : "";
+}
+
 /** The context the model gets each turn, after the cached instructions: today, the kitchen, and what is open. */
 export function turnContext(run: TurnRun, refs: OpenRef[]): string {
   const today = localNow(new Date()).date;
   const weekday = new Date(`${today}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" });
-  const waiting = run.store.cards(run.thread).filter((x) => x.card.type === "gate" && x.card.outcome === "waiting").map((x) => (x.card.type === "gate" ? `${x.card.orderId} waits for ${x.card.approver?.name ?? "a person"}` : ""));
+  // Orders waiting for a person's OK in this conversation (and the day's opening): what, how much, for whom. "The
+  // manager already approved it, just place it" is about one of these: only the named person's own OK places it.
+  const cardsNow = run.store.cards(run.thread).map((x) => x.card);
+  const waiting = [
+    ...cardsNow.filter((c) => c.type === "gate" && c.outcome === "waiting").map((c) => {
+      const o = c.type === "gate" ? cardsNow.find((x) => x.type === "order" && x.orderId === c.orderId) : undefined;
+      return c.type === "gate" ? `${o?.type === "order" ? `${(o.totalCents / 100).toFixed(2).replace(".", ",")} € (${o.lines.slice(0, 2).map((l) => `${l.quantity} × ${l.name}`).join(", ")}), delivery ${o.deliveryDate}` : "an order"} waits for ${c.approver?.name ?? "a person"}'s OK on their phone` : "";
+    }),
+    ...cardsNow.flatMap((c) => (c.type === "today" ? c.items.flatMap((i) => (i.kind === "sign_off" ? [`${(i.totalCents / 100).toFixed(2).replace(".", ",")} € (${i.lines.slice(0, 2).map((l) => `${l.quantity} × ${l.name}`).join(", ")}) waits for ${i.approver.name}'s OK on their phone`] : [])) : [])),
+  ].filter((x, i, a) => x && a.indexOf(x) === i);
   return [
     `Today is ${weekday} ${today} (Helsinki). Kitchen: ${run.k.info.name}. You are ${run.k.info.agentName}. This turn came through the ${run.door === "voice" ? "voice door (spoken)" : "store (typed)"}.`,
     subjectLine(subjectOf(run)),
     refs.length ? `OPEN DECISIONS (ref: what it does):\n${refs.map((r) => `- ${r.ref}: ${r.label}`).join("\n")}` : "OPEN DECISIONS: none.",
-    waiting.length ? `Waiting for sign-off: ${waiting.join("; ")}.` : "",
+    orderTimes(cardsNow),
+    waiting.length ? `WAITING FOR A PERSON'S OK (you know these orders; say which one when asked; nobody but that person, with their own passkey, can place it): ${waiting.join("; ")}.` : "",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -272,6 +317,10 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
       execute: async ({ words: w }) => {
         // The model may only pass on words the buyer said: anything else is read from the buyer's message itself.
         let said = words.includes(w.trim()) ? w.trim() : words;
+        // "Switch auto-renew on for the weekly milk order": the kitchen's own choice for a recurring order (server/watch).
+        const { autoRenewFromWords } = await import("./watch");
+        const auto = await autoRenewFromWords(run, said);
+        if (auto) return { done: "auto-renew", say: auto };
         // What the conversation is about now (subject.ts): a short follow-up completes, changes or adds to it.
         const subj = subjectOf(run);
         let followUp = false;
@@ -366,6 +415,16 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
         // A widget's action (a menu picked, the order sheet changed or ordered, the rules confirmed): the same handler as a tap.
         const { runWidget } = await import("./widgets");
         if (await runWidget(run, r.action, words)) {
+          if (r.action.type === "scenario_answer") {
+            const { currentSheet } = await import("./sheet");
+            const sheet = currentSheet(run);
+            return { ok: true, done: "answered", say: run.scenarioReply, ...(sheet ? { orderToConfirm: { sheetId: sheet.sheetId, deliveryDate: sheet.deliveryDate } } : {}) };
+          }
+          if (r.action.type === "watch_answer") {
+            const id = r.action.momentId;
+            const c = run.store.cards(run.thread).map((x) => x.card).find((x) => x.type === "watch" && x.momentId === id);
+            return { ok: true, done: "answered", say: c?.type === "watch" ? c.reply : undefined, ...([...run.orders.values()].at(-1) ? { order: { status: [...run.orders.values()].at(-1)!.status, totalEur: ([...run.orders.values()].at(-1)!.totalCents / 100).toFixed(2) } } : {}) };
+          }
           if (r.action.type === "offer_answer") {
             const offerId = r.action.offerId;
             const c = run.store.cards(run.thread).map((x) => x.card).find((x) => x.type === "offer" && x.offerId === offerId);
@@ -409,8 +468,33 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
           record(run, "subject_covers", `"${said.slice(0, 60)}" sets the covers of the menu on the table to ${n[1]}.`, { planId: subj.planId });
           return { ok: true, done: "covers set on the menu on the table", covers: Number(n[1]) };
         }
+        // Valio's two menu scenarios: a booking at short notice, or a menu around what is in season (scenario.ts).
+        const { scenarioOf } = await import("@/server/agent/menu/thread");
+        const kind = scenarioOf(said);
+        if (kind) {
+          const { sayScenario } = await import("./scenario");
+          const c = await sayScenario(run, kind, said, run.lang ?? (/[äö]|huomen|lounas|varaus/i.test(said) ? "fi" : "en")).catch((err) => {
+            console.error("[thread] scenario", err);
+            return undefined;
+          });
+          if (c) return { said: c.kind, note: "the store shows the scenario's own words as your reply; write one short sentence only" };
+        }
+        // A follow-up about the menu on the table keeps what the conversation already said: its covers and its day.
+        const onTable = subj?.kind === "menu" && subj.covers && !/\d/.test(said) ? ` (for ${subj.covers} covers${subj.day ? ` on ${subj.day}` : ""})` : "";
         const { menuFromWords } = await import("./menu");
-        return menuFromWords(run, said);
+        return menuFromWords(run, `${said}${onTable}`);
+      },
+      toModelOutput: ({ output }) => ({ type: "text", value: compact(output) }),
+    }),
+    this_week: tool({
+      description: "The buyer asks about this week's orders or deliveries, whether something is sorted, or what they should know ('anything I should know about this week's orders?', 'is the milk sorted?'): the wholesaler's watch over the kitchen's key products (a product that cannot come and its closest substitute, a standing order held because it drifted, what was renewed). The store says the watch's own words; nothing is ordered.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const { sayWatch } = await import("./watch");
+        const c = await sayWatch(run, { asked: true });
+        if (!c) return { watch: "nothing: every key product this week can come as ordered. Say so in one sentence, or look at the orders with order_history." };
+        run.watchAsked = c.momentId;
+        return { watch: c.kind, said: "the store shows the watch's own sentence and question as your reply; write one short sentence only" };
       },
       toModelOutput: ({ output }) => ({ type: "text", value: compact(output) }),
     }),
@@ -553,7 +637,7 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
       { role: "system", content: context },
     ],
     tools,
-    activeTools: [...PUBLISHED_FOR_MODEL, "order", "plan_menu", "buyer_reply", "order_history", "find_products", "product_facts", "show_home", "rules", "await_sign_off", "wholesaler_offer"],
+    activeTools: [...PUBLISHED_FOR_MODEL, "order", "plan_menu", "buyer_reply", "order_history", "find_products", "product_facts", "show_home", "rules", "await_sign_off", "wholesaler_offer", "this_week"],
     toolApproval: {
       ...Object.fromEntries(BUYERS_OR_ENGINES.map((n) => [n, deny(`${n} is the buyer's decision or the engine's step in the store: use buyer_reply or order.`)])),
       // The pause for a person's sign-off. Only the server answers it, when the passkey sign-off is recorded.
@@ -577,7 +661,7 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
 
   const result = await agent.stream({ messages, timeout: { totalMs: 90_000, toolMs: 60_000 } });
   for await (const part of result.fullStream) {
-    if (part.type === "tool-call" && !["order", "plan_menu", "buyer_reply", "order_history", "find_products", "product_facts", "show_home", "await_sign_off", "wholesaler_offer"].includes(part.toolName)) {
+    if (part.type === "tool-call" && !["order", "plan_menu", "buyer_reply", "order_history", "find_products", "product_facts", "show_home", "await_sign_off", "wholesaler_offer", "this_week"].includes(part.toolName)) {
       const st = step(run, `tool:${part.toolName}`, LABELS[part.toolName] ?? `Looking up ${part.toolName.replace(/_/g, " ")}`);
       void result.steps.then(() => st.done(), () => st.fail());
     }

@@ -236,7 +236,9 @@ export async function showRules(run: TurnRun, raw?: RulesChange): Promise<RulesC
     run.store.save(run.thread);
   }
   st.done();
-  const card = cardFor(run, extra.proposal?.proposalId ?? run.turnId, mandate, before, await statedOf(run), extra);
+  // This week's spend (committed, and held by orders waiting for an OK): "how much budget is left?" is answered from it.
+  const b = await run.rt.dock.budget(run.session).catch(() => undefined);
+  const card = { ...cardFor(run, extra.proposal?.proposalId ?? run.turnId, mandate, before, await statedOf(run), extra), ...(b ? { week: { spentCents: b.spentCents, heldCents: b.heldCents, leftCents: Math.max(0, b.leftCents) } } : {}) };
   run.store.card(run.thread, run.turnId, card);
   run.facts.push(card);
   return card;

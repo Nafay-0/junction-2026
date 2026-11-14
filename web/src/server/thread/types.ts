@@ -71,6 +71,10 @@ export type ThreadAction =
   | { type: "menu_line_per_cover"; planId: string; lineId: string; dishId: string; amount: number }
   /** Menu builder: accept a doubt the planner raised on a line ("a different form than the recipe asks"). */
   | { type: "menu_accept"; planId: string; doubtId: string }
+  /** The buyer's answer to a menu scenario's question (server/agent/menu/thread.ts ScenarioAnswer). */
+  | { type: "scenario_answer"; planId: string; answer: { kind: "yes" } | { kind: "no" } | { kind: "choose"; optionId: string } | { kind: "day"; date: string } }
+  /** The buyer's answer to the watch's moment (server/watch/thread.ts): switch, switch:<id>, keep, renew_new, usual, skip. */
+  | { type: "watch_answer"; momentId: string; answer: string }
   /** The buyer's answer to the wholesaler's offer the agent said (server/offers/thread.ts). */
   | { type: "offer_answer"; offerId: string; answer: "yes" | "no" | "mute" | "off" }
   /** Menu builder: put every bought line on an order sheet, one order. */
@@ -295,6 +299,8 @@ export type PriceCard = CardBase & {
 
 export type GateCard = CardBase & {
   type: "gate";
+  /** Why it was refused or stopped, in words, in each language (refusal.ts). */
+  said?: Record<"en" | "fi" | "sv", string>;
   requestId: string;
   orderId?: string;
   outcome: "placed_alone" | "waiting" | "refused" | "approved" | "declined" | "withdrawn" | "expired";
@@ -355,6 +361,8 @@ export type NoticeCard = CardBase & {
   missing?: string[];
   /** For `incomplete`: the words read so far (a follow-up completes them: subject.ts). */
   words?: string;
+  /** A refusal in words, first person, in each language (refusal.ts): what the store shows when the agent says nothing. */
+  said?: Record<"en" | "fi" | "sv", string>;
   /** For `refused`: the rule that fired. */
   rule?: string;
   retry?: boolean;
@@ -612,7 +620,43 @@ export type OfferCard = CardBase & {
   requestId?: string;
 };
 
-export type Card = OfferCard | UnderstoodCard | AnomalyCard | QuestionCard | OptionsCard | PriceCard | GateCard | OrderCard | MemoryCard | RecordsCard | NoticeCard | SheetCard | AlternativesCard | MenuCard | TodayCard | ProductsCard | ProductCard | StandingCard | DeliveriesCard | MemoryListCard | RulesCard;
+/**
+ * The wholesaler's watch over the kitchen's key products, said in the conversation (server/watch): a stock-out with its
+ * closest substitute, a standing order held because it drifted, or what was renewed. Its words in each language (the
+ * kitchen's short names), the steps and proof for the closed view, the answers it takes, and the answer given.
+ */
+export type WatchCard = CardBase & {
+  type: "watch";
+  momentId: string;
+  kind: "stock_out" | "renewal_held" | "renewal_placed" | "substitute_placed";
+  text: Record<"en" | "fi" | "sv", { say: string; ask?: string }>;
+  steps: string[];
+  proof?: { token: string; keysUrl: string; simulated: boolean };
+  answers: string[];
+  /** The other ranked substitutes, short names (behind Show the list). */
+  others?: string[];
+  /** The product family it is about (the day's opening drops its own drift line for it). */
+  family?: string;
+  staged: boolean;
+  state: "open" | "answered" | "reported";
+  reply?: string;
+};
+
+/** One of Valio's menu scenarios (a seasonal menu, a booking at short notice), said in the conversation. */
+export type ScenarioCard = CardBase & {
+  type: "scenario";
+  kind: "seasonal" | "event";
+  planId: string;
+  text: Record<"en" | "fi" | "sv", { say: string; ask: string }>;
+  steps: string[];
+  /** What the answer is read against (server/agent/menu/thread.ts PendingScenario). */
+  pending: { kind: "seasonal" | "event"; planId: string; options: { optionId: string; lineId: string; words: string[] }[]; earliest?: string; words: string };
+  /** Each ingredient that cannot arrive, with its best stand-in (behind Show the list). */
+  others?: string[];
+  state: "open" | "answered";
+};
+
+export type Card = ScenarioCard | WatchCard | OfferCard | UnderstoodCard | AnomalyCard | QuestionCard | OptionsCard | PriceCard | GateCard | OrderCard | MemoryCard | RecordsCard | NoticeCard | SheetCard | AlternativesCard | MenuCard | TodayCard | ProductsCard | ProductCard | StandingCard | DeliveriesCard | MemoryListCard | RulesCard;
 // ---------- the kitchen's rules (docs/agent-thread.md "Widgets": rules) ----------
 
 /** The mandate as the rules card shows it: plain values. `groups` only where the kitchen has terms (an account). */
@@ -654,6 +698,8 @@ export type RulesCard = CardBase & {
   current: RulesSnapshot;
   /** Rules the kitchen's people stated (memory), applied on every order. */
   stated: { id: string; text: string }[];
+  /** This week's spend against the weekly budget (committed and held by orders waiting for an OK), in cents. */
+  week?: { spentCents: number; heldCents: number; leftCents: number };
   /** What this browser may sign here; `why` is a code the widget words (not_signed_in, not_this_account, demo_terms_fixed, visitor_terms_fixed). */
   editable: { narrow: boolean; terms: boolean; why?: string; /** The signed-in person who would sign. */ as?: string };
   /** The values the widget may offer (the mandate's vocabulary). */

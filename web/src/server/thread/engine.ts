@@ -19,6 +19,8 @@ import { earlierFor } from "./earlier";
 import { ThreadStore, type StoredThread } from "./store";
 import { runWidget } from "./widgets";
 import { speakFacts } from "./speak";
+import { codeLeaks, insideOrTell } from "./refusal";
+import { fixTypos } from "./pipeline";
 import { hasToday, helsinkiToday, postToday, todayCardId } from "./home";
 import { ensureTelemetry } from "./telemetry";
 import type { AgentTurn, BuyerTurn, MemoryCard, RecordsCard, SubmitTurn, SubmitTurnReply, ThreadAction, ThreadDoor } from "./types";
@@ -97,6 +99,8 @@ const ActionSchema: z.ZodType<ThreadAction> = z.discriminatedUnion("type", [
   z.object({ type: z.literal("menu_line_have"), planId: z.string().min(1).max(80), lineId: z.string().min(1).max(80), have: z.boolean() }),
   z.object({ type: z.literal("menu_line_per_cover"), planId: z.string().min(1).max(80), lineId: z.string().min(1).max(80), dishId: z.string().min(1).max(80), amount: z.number().positive().max(100000) }),
   z.object({ type: z.literal("menu_accept"), planId: z.string().min(1).max(80), doubtId: z.string().min(1).max(80) }),
+  z.object({ type: z.literal("scenario_answer"), planId: z.string().min(1).max(80), answer: z.union([z.object({ kind: z.literal("yes") }), z.object({ kind: z.literal("no") }), z.object({ kind: z.literal("choose"), optionId: z.string().min(1).max(80) }), z.object({ kind: z.literal("day"), date: z.iso.date() })]) }),
+  z.object({ type: z.literal("watch_answer"), momentId: z.string().min(1).max(80), answer: z.string().min(1).max(80) }),
   z.object({ type: z.literal("offer_answer"), offerId: z.string().min(1).max(80), answer: z.enum(["yes", "no", "mute", "off"]) }),
   z.object({ type: z.literal("menu_to_sheet"), planId: z.string().min(1).max(80) }),
   z.object({ type: z.literal("remember_this"), text: z.string().trim().min(2).max(500) }),
@@ -230,7 +234,8 @@ export async function submitTurn(kitchen: Kitchen | string, input: unknown): Pro
 
   // A speculative reading of new words, in parallel with the agent's first step (agent.ts asks for the same reading).
   if (body.text && !body.action && worthReading(body.text) && llmRoom()) {
-    void withTurn(turnCtx(), () => earlierFor(run, body.text!).then((earlier) => read(run, body.text!, earlier))).catch(() => undefined);
+    const fixed = fixTypos(body.text);
+    void withTurn(turnCtx(), () => earlierFor(run, fixed).then((earlier) => read(run, fixed, earlier))).catch(() => undefined);
   }
 
   // One agent turn at a time per thread: a turn sent while one works is answered next.
@@ -293,6 +298,16 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
       await paused(run);
     } else {
       try {
+        // "Switch auto-renew on for the milk": done by plain code (server/watch), said in the store's own words.
+        const { autoRenewFromWords } = await import("./watch");
+        const auto = await autoRenewFromWords(run, body.text!).catch(() => undefined);
+        if (auto) {
+          if (run.opening) first.done("auto-renew");
+          store.line(thread, run.turnId, auto);
+          store.mark(thread, run.turnId, "line", Date.now() - run.t0);
+          await finishTurn(run);
+          return;
+        }
         agentResult = await agentTurn(run, body.text!);
       } catch (err) {
         if (!(err instanceof DockError) || !PAUSED_CODES.has(err.code)) throw err;
@@ -323,6 +338,22 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
 
   // The wholesaler's offer the buyer asked for: its own words (plain code, from the signed offer) are the reply.
   const lang = body.lang ?? "en";
+  if (run.scenarioSaid) {
+    const c = store.cards(thread).map((x) => x.card).find((x) => x.type === "scenario" && x.cardId === run.scenarioSaid);
+    if (c?.type === "scenario" && c.state === "open") {
+      store.line(thread, run.turnId, `${c.text[lang].say} ${c.text[lang].ask}`);
+      store.mark(thread, run.turnId, "line", Date.now() - run.t0);
+      line = "";
+    }
+  }
+  if (run.watchAsked) {
+    const c = store.cards(thread).map((x) => x.card).find((x) => x.type === "watch" && x.momentId === run.watchAsked);
+    if (c?.type === "watch") {
+      store.line(thread, run.turnId, `${c.text[lang].say}${c.text[lang].ask ? ` ${c.text[lang].ask}` : ""}`);
+      store.mark(thread, run.turnId, "line", Date.now() - run.t0);
+      line = "";
+    }
+  }
   if (run.offerAsked) {
     const c = store.cards(thread).map((x) => x.card).find((x) => x.type === "offer" && x.offerId === run.offerAsked);
     if (c?.type === "offer") {
@@ -332,6 +363,18 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
     }
   }
   if (line) await showLine(run, line);
+  // Never an empty reply: when the agent's words did not come (or none were backed), plain words from what the engine knows.
+  const after = store.agentTurn(thread, run.turnId);
+  if (after && !after.line && !after.cards.some((c) => c.type !== "understood")) {
+    const l = body.lang ?? "en";
+    const waitingCard = store.cards(thread).map((x) => x.card).find((c) => c.type === "gate" && c.outcome === "waiting");
+    const who = waitingCard?.type === "gate" ? (waitingCard.approver?.name ?? "") : "";
+    const text = waitingCard
+      ? { en: `Your order still waits for ${who || "a person"}'s OK on their phone; only their own OK places it. Anything else I can do?`, fi: `Tilauksesi odottaa yhä hyväksyntää${who ? ` (${who})` : ""} puhelimella; vain se hyväksyntä tekee tilauksen. Voinko auttaa muuten?`, sv: `Din beställning väntar fortfarande på godkännande${who ? ` av ${who}` : ""} i telefonen; bara det godkännandet lägger den. Något annat jag kan göra?` }[l]
+      : { en: "I didn't manage to act on that. Could you say it another way?", fi: "En saanut tästä kiinni. Voisitko sanoa sen toisin?", sv: "Jag fick inte grepp om det. Kan du säga det på ett annat sätt?" }[l];
+    store.line(thread, run.turnId, text);
+    record(run, "empty_reply", "The agent's turn had no words: the engine's plain sentence was said instead.", {});
+  }
   // An order finished in this turn (placed, nothing waiting): the moment for the wholesaler's one offer, if any.
   const mine = store.agentTurn(thread, run.turnId);
   if (!run.offerAsked && mine?.cards.some((c) => c.type === "order" && c.status === "committed") && !mine.cards.some((c) => c.type === "gate" && c.outcome === "waiting")) {
@@ -339,6 +382,38 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
     await sayOffer(run).catch(() => undefined);
   }
   await finishTurn(run);
+}
+
+/**
+ * The reply as the buyer reads it: English days as people write them ("Monday 16 Nov"); a date's own dot never followed
+ * by the sentence's punctuation; and no code (a category code, a product id, a rule or reason code, a snake_case word)
+ * in any sentence: a sentence carrying one is dropped, and if none is left, the refusal's own words (refusal.ts) stand.
+ */
+function plainLine(run: TurnRun, text: string): string {
+  const lang = /\b(maanantai|tiistai|keskiviikko|torstai|perjantai|lauantai|sunnuntai)\w*|[äö]/i.test(text) ? "fi" : /\b(måndag|tisdag|onsdag|torsdag|fredag|lördag|söndag)\b|å/i.test(text) ? "sv" : "en";
+  let t = text.replace(/(\d{1,2}\.\d{1,2}\.)(\}\}|\*\*)?\./g, "$1$2");
+  if (lang === "en") {
+    const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    t = t.replace(/\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Mon|Tue|Wed|Thu|Fri|Sat|Sun)( |\u00a0)(\d{1,2})\.(\d{1,2})\.?/g, (m, w: string, sp: string, d: string, mo: string) => (Number(mo) >= 1 && Number(mo) <= 12 && Number(d) <= 31 ? `${w}${sp}${Number(d)} ${MON[Number(mo) - 1]}` : m));
+    t = t.replace(/\{\{(\d{1,2})\.(\d{1,2})\.?\}\}/g, (m, d: string, mo: string) => (Number(mo) >= 1 && Number(mo) <= 12 ? `{{${Number(d)} ${MON[Number(mo) - 1]}}}` : m));
+  }
+  // Catalogue jargon: a "novobox" is a 10 l box to a person.
+  t = t.replace(/\bnovobox(?:ia|in|issa|eja|ista|ille|eihin)?\b/gi, (m) => (lang === "fi" ? (/ia$/i.test(m) ? "laatikkoa" : "laatikko") : lang === "sv" ? "låda" : "box"));
+  // "16.11.?" reads badly: the sentence's own mark replaces the date's dot.
+  t = t.replace(/(\d{1,2}\.\d{1,2})\.(\}\}|\*\*)?(?=[?;:,!])/g, "$1$2");
+  // Never a set phrase for the buyer to type, never how the system works inside: such a sentence is dropped.
+  const plainOnes = t.split(/(?<=[.!?])\s+/).filter((x) => !insideOrTell(x));
+  if (plainOnes.length && plainOnes.length < t.split(/(?<=[.!?])\s+/).length) {
+    record(run, "inside_words", "Sentences that told the buyer what to type, or how the system works inside, were not shown.", { said: t });
+    t = plainOnes.join(" ");
+  }
+  const leaks = codeLeaks(t.replace(/\*\*|\{\{|\}\}/g, ""));
+  if (!leaks.length) return t;
+  const kept = t.split(/(?<=[.!?])\s+/).filter((x) => !codeLeaks(x.replace(/\*\*|\{\{|\}\}/g, "")).length);
+  record(run, "code_in_reply", `Sentences of the agent's reply were not shown: they carried ${leaks.slice(0, 5).join(", ")}.`, { leaks });
+  if (kept.length) return kept.join(" ");
+  const said = run.store.agentTurn(run.thread, run.turnId)?.cards.flatMap((c) => ((c.type === "notice" || c.type === "gate") && c.said ? [c.said] : [])).at(-1);
+  return said ? said[lang] : "";
 }
 
 /** The end of an agent turn: what to remember, its status (waiting for the buyer, for a person, or done) and the record. */
@@ -497,9 +572,17 @@ export function settled(messages: ModelMessage[]): ModelMessage[] {
  */
 async function showLine(run: TurnRun, text: string): Promise<void> {
   // Two to four sentences, with the agent's two marks (**figure**, {{day}}) kept for display and stripped for the check.
-  // A date written "16.11." carries its own full stop: a sentence ending on it gets no second one ("16.11..", "16.11.}}.").
+  // Checked as the model wrote it (its dates as "16.11."); worded for the buyer after (plainLine: English days, no codes).
   const one = text.replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n").trim().slice(0, 600).replace(/(\d{1,2}\.\d{1,2}\.)(\}\}|\*\*)?\./g, "$1$2");
-  const plain = one.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\{\{([^}]+)\}\}/g, "$1");
+  if (!one) return;
+  // For the check, an English day "18 Nov" is read as the date it is ("18.11.").
+  const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+  const plain = one
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\{\{([^}]+)\}\}/g, "$1")
+    .replace(/\b(\d{1,2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\b/g, (_m, d: string, mo: string) => `${d}.${MONTHS.indexOf(mo.toLowerCase()) + 1}.`)
+    // A time "17.00" (no month 00 or above 12) at a sentence's end is a time, not a date "17.00.".
+    .replace(/\b([01]?\d|2[0-3])\.([0-5]\d)(?=\.?(?:\s|$|[,;?!]))/g, (m, h: string, mm: string) => (mm === "00" || Number(mm) > 12 ? `${h}:${mm}` : m));
   // Under 60 words: whole sentences from the start while they fit, and a closing question kept (it is what is open).
   const words = (x: string) => x.replace(/\*\*|\{\{|\}\}/g, "").split(/\s+/).filter(Boolean).length;
   if (words(one) > 60) {
@@ -517,15 +600,19 @@ async function showLine(run: TurnRun, text: string): Promise<void> {
   if (g.violations.length) {
     record(run, "grounding_refusal", `A sentence of the agent's reply was not shown: it said ${g.violations.map((v) => `"${v.said}" (${v.kind})`).join(", ")}, which the data does not back.`, { said: one, violations: g.violations });
     // Only the sentences the data backs are shown (without marks); none at all when none is backed.
-    const kept = g.text.replace(/\s+/g, " ").trim();
+    const kept = plainLine(run, g.text.replace(/\s+/g, " ").trim());
     if (!kept || g.replaced >= g.sentences) return;
     run.store.line(run.thread, run.turnId, kept);
     run.store.mark(run.thread, run.turnId, "line", Date.now() - run.t0);
     return;
   }
-  run.store.line(run.thread, run.turnId, one);
+  const shown = plainLine(run, one);
+  if (!shown) return;
+  run.store.line(run.thread, run.turnId, shown);
   run.store.mark(run.thread, run.turnId, "line", Date.now() - run.t0);
 }
+
+
 
 /** How long the turn shows the memory step as working before it lets the writer finish out of sight. */
 const MEMORY_STEP_WAIT_MS = 6_000;
