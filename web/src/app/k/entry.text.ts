@@ -30,7 +30,7 @@ export const ENTRY_TEXT = defineText({
     intro: "Tukun verkkokauppa ammattikeittiöille. Jokaisella keittiöllä on siinä oma ostoagentti: omat allekirjoitetut säännöt, oma muisti ja ihminen, joka hyväksyy tilauksen, kun se menee sääntöjen yli. Valitse keittiö; salasanaa ei tarvita, tämä on demo.",
     about: {
       kaari: "Ravintola, joka on tilannut täältä kuusi viikkoa: maitoa kahdesti viikossa, kermaa torstaisin. Agentti tuntee tavalliset määrät ja keittiömestarin säännön.",
-      laakso: "Kumppanin oma esimerkki: ruokapalveluyritys, jolla ei vielä ole tilaushistoriaa. Kokeile: ”1 000 litraa laktoositonta maitoa maanantaiksi”.",
+      laakso: "Kumppanin oma esimerkki: ruokapalveluyritys, jolla ei vielä ole tilaus­historiaa. Kokeile: ”1 000 litraa laktoosi­tonta maitoa maanantaiksi”.",
     },
     aDemoKitchen: "Demokeittiö.",
     yourKitchen: "Oma keittiösi tämän puhelimen QR-koodista",

@@ -33,8 +33,8 @@ VJ = `valio-judges.md`, Pa = `partners/`.
 | 13 | A plain-language account per request, in two views: buyer and wholesaler (without the buyer's private memory) | P S VJ | `web/src/core/audit.ts`; `real-flow.test.ts` ("gives the wholesaler the chain without the buyer's private memory") | V |
 | 14 | Refusals name their rule; plain titles such as "Only product groups the kitchen allows" | T Vd VJ | `web/src/app/_ui/plain.ts` (`RULE_TITLE`), `web/src/core/policy.ts` | V |
 | 15 | The basket by hand goes through the same gate as the agent | T Vd | `web/src/app/k/[kitchen]/basket.tsx` (posts to `/api/v1/orders` with the signed quote; on-screen text says so) | V (code). The click path with a forbidden product was **not** exercised in a browser (*) |
-| 16 | A relayed answer is logged "relayed by the agent, not verified" and the order goes to a person (rule `human_confirmation`) | Q VJ | `web/src/core/intake.ts` (about lines 475 to 497), `policy.ts` (about 268 to 276), `intake.test.ts` ("a confirmation the agent only relays is not the person's…"); QA wave 2 re-test of finding 5 | V |
-| 17 | Weekly budget is a hard cap; per-order limit sends to a person; split orders escalate (`order_splitting`) | Q VJ | `web/src/core/policy.ts`, `orders.test.ts`; QA "Splitting a need under the limit escalates" | V |
+| 16 | A relayed answer (passed on by the agent, returned by its client's elicitation form, or given through an answer link without the kitchen's signed-in session) is logged as relayed, not verified, and never satisfies a confirmation that matters: the order goes to a person (rule `human_confirmation`). The same holds on every door: an order placed without the intake is checked by the gate itself | Q VJ | `web/src/core/intake.ts` (`isVerified`), `web/src/core/order-check.ts`, `policy.ts`; `web/src/server/open-findings.test.ts` (findings 2 and 3), `intake-tools.test.ts` | V |
+| 17 | Weekly budget is a hard cap; per-order limit sends to a person; orders placed alone within 24 hours for the same product family escalate together whatever their delivery days (`order_splitting`), with the weekly budget as the ceiling behind it | Q VJ | `web/src/core/policy.ts`; `web/src/core/gate-attacks.test.ts` ("the dodge…", "a standing order placed a week after…", "the weekly budget is the ceiling…") | V |
 | 18 | A quote holds 30 minutes by default, never past the cut-off; a price statement is vouched for at most 24 hours | VJ | `web/src/core/orders.ts`, `quote.ts`; `web/src/core/claims.ts` (`PRICE_CLAIM_MAX_HOURS = 24`) | V |
 | 19 | Stock amounts of 999999 and above are treated as unknown, not as stock | VJ | `web/src/server/valio/valio-catalog.ts` (`TERMINAL_PLACEHOLDER_AMOUNT`), `web/src/core/catalog.ts` line 65 | V |
 | 20 | Price, availability and origin can be signed W3C Verifiable Credentials (compact JWS, Ed25519), checkable offline; a quote names the claims it rests on by hash | Q S VJ | `web/src/core/claims.ts`; `real-flow.test.ts` ("hands out signed claims an outside agent can verify offline…") | V. `pnpm verify:receipt` checks orders and quotes, not claims; claims are checked on `/ops/audit` or in the browser |
@@ -69,7 +69,7 @@ VJ = `valio-judges.md`, Pa = `partners/`.
 | # | Claim | Used in | Source | Status |
 |---|---|---|---|---|
 | 41 | Operations desk: every agent at the door, any request replayed step by step, safeguards with counts, suspend an agent | T P Vd S VJ | `web/src/app/ops/_ui/rail.tsx` (Live, Trace, Safeguards, Recall radar, Control, Audit, Agents, Customers, Platform), `web/src/server/ops/views.ts`, `trace.test.ts` | V |
-| 42 | A suspended agent is refused on its next call over REST, MCP and the on-site console | T VJ | `web/src/server/http.ts`, `web/src/server/ops/suspensions.ts` (rule `operator_suspension`), `suspension.test.ts` | V. Unclear for the menu planner path, which authenticates separately (*) |
+| 42 | A suspended agent is refused on its next call through every door (REST, MCP, the on-site console, voice call, photo door, menu planner, answer links), and stays suspended across a restart | T VJ | `web/src/core/orders.ts` (`DockDeps.admit`, called by `authenticate`), `web/src/server/ops/onsite.ts`, `ops/suspensions.ts` (rule `operator_suspension`); `suspension.test.ts`, `suspension-doors.test.ts` | V |
 | 43 | Recall radar holds a product named in a notice, refused at quote, order and sign-off with `recall_hold`; a drill goes through the same path | S VJ Pa | `web/src/server/radar/gate.ts`, `radar.test.ts` (drill tests; readers on recorded Context.dev responses) | V |
 | 44 | The radar reads the Finnish Food Authority's list (Context.dev) and producers' notices found by Exa; Exa spend capped at $3 per process start | Pa | `web/src/server/radar/sources.ts` (line 135), `web/README.md` "Recall radar" | V (code). Real-notice matches: **not verified** |
 
@@ -113,6 +113,23 @@ VJ = `valio-judges.md`, Pa = `partners/`.
 | 68 | The two of us won Valio Aimo's challenge at Junction 2025; no code from that project was reused | Q S | `CLAUDE.md` ("the shape this team won Valio Aimo's challenge with last year (Omni-Valio)"); `research/02-challenges.md` | T. Nothing from it was found in the repository, which is all this check can show |
 | 69 | Valio Aimo set this challenge expecting outside agent buyers | Q | `research/05-official-briefs.md`, `research/07-valio-challenge-detail.md` | V (their brief) |
 | 70 | Jurors' stated interests | Q Pa | `research/01-event-intel.md`, quoted from the 2026 site | D |
+| 71 | "Add to signed mandate" on the kitchen's memory page signs the kitchen's mandate again with the rule; the gate then enforces it on every door, and mandates the kitchen signed before stop working (also for an order waiting for sign-off). Only the kitchen's own signed-in person can do it; only rules in the mandate's vocabulary are offered; it survives a restart | VJ | `web/src/core/mandate.ts` (`supersededBy`), `web/src/server/mandates.ts`, `mandate-reissue.ts`; `mandate-reissue.test.ts`, `open-findings.test.ts` (finding 1) | V. Built-in kitchens sign with the key the server is configured with; a visitor kitchen signs with a new key each time (its private key is never stored). A mandate the kitchen's key signs after a reissue is accepted as the kitchen's current word |
+| 72 | On a public site, a mandate signed with the demo organisations' public development key (derivable from this repository) is refused | VJ | `web/src/server/dev-fixtures.ts` (`demoKey`); `dev-key.test.ts`; `/api/health` `settings.demoOrgKey` | V. Local runs and tests still use that key |
+
+## MariaDB time machine (added Sat 14 Nov, about 03.15, on `claude/mariadb`; reproduction run, tests run)
+
+| # | Claim | Used in | Source | Status |
+|---|---|---|---|---|
+| 71 | The rules the gate reads (mandate terms, kitchen rules and habits, recall holds, suspensions, weekly spend, order status) are mirrored into MariaDB tables `WITH SYSTEM VERSIONING`; the app only inserts, updates and deletes, MariaDB keeps the history | Pa | `web/src/server/mariadb/schema.ts`, `mirror.ts`; `mariadb.live.test.ts` ("keeps the history itself", "stamped by the server") | V |
+| 72 | MariaDB is never in the path of an order: a write never waits for it, and with it down ordering is unaffected | Pa | `web/src/server/mariadb/attach.ts` (taps call `poke()`, which returns at once); `rows.test.ts` ("a poke with MariaDB unreachable returns at once") | V |
+| 73 | "The rules as they stood" is one `FOR SYSTEM_TIME AS OF` statement on one view over five versioned tables | Pa | `schema.ts` (`gate_rules`), `history.ts` (`SQL_RULES_AS_OF`) | V |
+| 74 | "Would it pass today?" re-runs the real gate (`evaluatePolicy`), unchanged, with the rules as of then and as of now | Pa | `web/src/server/mariadb/replay.ts`; `replay.test.ts` | V |
+| 75 | Seeded scenario: oat drink placed alone then, refused today (gluten now forbidden); €645 of milk to a person then, refused today (weekly budget) although the limit now allows it | Pa | `infra/mariadb/results-2026-11-14.txt`; `mariadb.live.test.ts` | V (synthetic scenario) |
+| 76 | Replayed against the rules the instant before, each checked order gets exactly the decision the gate recorded | Pa | `results-2026-11-14.txt` (A, B, D: "reproduces it: yes") | V (three orders, plus the live test) |
+| 77 | Rules as of a moment: 0.96 ms median; changes between two moments: 1.34 ms; combined vector + `FOR SYSTEM_TIME` query: 4.00 ms; one lookup in a table with 100,000 history versions: 1.78 ms | Pa | `infra/mariadb/README.md`, `results-2026-11-14.txt` | V (one run on a shared laptop, after the integration merge; the 100,000-version lookup ranged 0.45 to 2.4 ms over four runs) |
+| 78 | Decisions like this one: vector search found the right decisions in 44% of top-five slots on 10 questions over 78 templated decisions, against 20% for MariaDB `FULLTEXT` (best possible 72%) | Pa | `results-2026-11-14.txt` | Partly: small sample written by us; 62% before the integration reworded the gate's reasons, 46% on a second run after |
+| 79 | The kitchen sees the same answer in its words on its order page | Pa | `web/src/app/k/[kitchen]/rules-then.tsx`, `web/src/server/mariadb/kitchen-view.ts`; screenshot `dock-shots/mariadb/03-…` | V (local build) |
+| 80 | The public site has no MariaDB; the page says so | Pa | `web/src/app/ops-api/time-machine/route.ts` (`attached: false`) | V |
 
 ## Described by the team, not verified (kept out of the scripts, or stated with the limit)
 
@@ -138,7 +155,7 @@ VJ = `valio-judges.md`, Pa = `partners/`.
 9. **"18 of 20 acceptable to a cook"** (map manual sample): who judged is not stated. Not used.
 10. **Crash-test scores on Aiven's Observe tab**: only after an export to the production database. Not used.
 11. **Proactive selling agent** and a **hospital kitchen**: not built. Stated as such in `valio-judges.md`.
-12. **Suspension of the menu planner's agent**: not confirmed either way. Not claimed.
+12. **Suspension of the menu planner's agent**: confirmed and fixed on Sat 14 Nov. The planner, the voice call, the photo door and answer links used to skip the operations check; admission now runs inside the core's `authenticate` (claim 42).
 13. **SBOM on CRACI**: not checked. Not claimed beyond "the workflow file says so".
 14. **Market size, error rates, customer interest**: none sourced. No such figure appears anywhere in these files.
 15. **Who did what**: left for the team to write in `qa-prep.md`.

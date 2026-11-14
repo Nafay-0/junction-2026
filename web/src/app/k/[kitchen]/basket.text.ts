@@ -37,7 +37,7 @@ export const BASKET_TEXT = defineText({
   fi: {
     litres: "Litraa",
     kilograms: "Kiloa",
-    carbon: "Hiilijalanjälki",
+    carbon: "Hiili­jalanjälki",
     noData: "ei tietoa",
     linesOf: (a: number, b: number) => `${a}/${b} riviä`,
     title: "Ostoskori",
@@ -56,7 +56,7 @@ export const BASKET_TEXT = defineText({
     totalsLabel: "Yhteensä ja tilaus",
     estimate: "Arvio, alv 0 %",
     unpriced: (a: number, b: number) => `${a}/${b} rivillä ei ole vielä hintaa tukusta.`,
-    carbonNote: "Hiilijalanjälki on tuoteryhmän keskiarvo kiloa kohden (litra lasketaan kilona), ei näiden tuotteiden mittaus.",
+    carbonNote: "Hiili­jalanjälki on tuoteryhmän keskiarvo kiloa kohden (litra lasketaan kilona), ei näiden tuotteiden mittaus.",
     deliverBy: "Toimitus viimeistään",
     optional: "(valinnainen)",
     getPrice: "Pyydä kiinteä hinta",

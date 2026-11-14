@@ -1,35 +1,58 @@
 import { isDockError } from "@/core/errors";
 import type { AgentSession, Dock } from "@/core/orders";
-import { doorLog } from "./door";
-import { suspensions } from "./suspensions";
+import { doorLog, type DoorCall } from "./door";
+import { SUSPENSION_RULE, suspensions } from "./suspensions";
 
 /**
- * The way in for doors that call Dock in-process, with no HTTP request to authenticate: the voice call, the photo
- * door, the menu planner, the buyer's answer link.
+ * Admission: the operations layer's check on every agent session, run by the core itself.
  *
- * A call over REST, MCP or the on-site console passes `authenticate` in server/http.ts, which verifies the mandate
- * and then asks the operations layer whether staff suspended the agent. A door that calls `dock.authenticate`
- * itself skips that second step, and a suspended agent could go on ordering through it. So a door that acts for an
- * agent without an HTTP request takes its session from here: the same mandate check in the core, the same
- * operations check (rule `operator_suspension`, refusal written to the ledger), the same door log.
- * `server/one-way-in.test.ts` keeps it that way.
+ * The core calls `admission` from `authenticate`, right after a mandate verified and before a session exists
+ * (core/orders.ts DockDeps.admit; wired in server/runtime.ts). So a door cannot verify a mandate and forget to
+ * ask whether staff suspended the agent: REST, MCP, the on-site console, the voice call, the photo door, the menu
+ * planner and the scripted buyer all get their session from the same function, and a suspended agent gets none.
+ * A refusal carries the rule `operator_suspension` and is written to the ledger (ops/suspensions.ts).
+ *
+ * What a caller passes as the entrance only says where the call came from, for the door log and the refusal's
+ * record. One entrance is let through while suspended, and it has to say so: STORE_PAGE_READ, the kitchen's own
+ * people reading their records in the store, whose pages show the suspension instead of failing. Nothing is
+ * opened, quoted or ordered with it: those calls go through the agent's HTTP door, which is refused.
  */
+export type Entrance = Pick<DoorCall, "via" | "transport" | "path"> & { method?: string; readOnly?: true };
 
-/** A session the core already verified, about to act through an in-process door. Throws the refusal if suspended. */
-export function admit(dock: Dock, session: AgentSession, path: string): AgentSession {
-  const call = { via: "onsite" as const, transport: "direct" as const, path };
-  const record = { at: new Date().toISOString(), agentId: session.agentId, orgId: session.mandate.issuer.orgId, orgName: session.mandate.issuer.name, ...call };
-  try {
-    suspensions(dock).enforce(session, call);
-  } catch (err) {
-    if (isDockError(err)) doorLog(dock).record({ ...record, ok: false, code: err.code, rule: err.rule });
-    throw err;
-  }
-  doorLog(dock).record({ ...record, ok: true }, session.mandate);
-  return session;
+const IN_PROCESS: Entrance = { via: "onsite", transport: "direct", path: "in-process" };
+
+/** The kitchen's own people reading their records in the store (never the agent acting). */
+export const STORE_PAGE_READ: Entrance = { via: "onsite", transport: "direct", path: "store page (read only)", readOnly: true };
+
+const isEntrance = (e: unknown): e is Entrance => typeof e === "object" && e !== null && typeof (e as Entrance).path === "string" && typeof (e as Entrance).via === "string";
+
+/** The function the runtime hands to createDock as `admit`. `dock` is read when a call arrives. */
+export function admission(dock: () => Dock): (session: AgentSession, entrance?: unknown) => void {
+  return (session, given) => {
+    const entrance = isEntrance(given) ? given : IN_PROCESS;
+    if (entrance.readOnly) return;
+    const d = dock();
+    const { via, transport, path } = entrance;
+    const record = { at: new Date().toISOString(), agentId: session.agentId, orgId: session.mandate.issuer.orgId, orgName: session.mandate.issuer.name, via, transport, path };
+    try {
+      suspensions(d).enforce(session, { via, path, method: entrance.method });
+    } catch (err) {
+      if (isDockError(err)) doorLog(d).record({ ...record, ok: false, code: err.code, rule: err.rule });
+      throw err;
+    }
+    doorLog(d).record({ ...record, ok: true }, session.mandate);
+  };
 }
 
-/** Verify a kitchen agent's mandate (in the core) and admit it through an in-process door. */
-export async function onsiteSession(dock: Dock, creds: { mandateToken: string; agentId: string }, path: string): Promise<AgentSession> {
-  return admit(dock, await dock.authenticate(creds.mandateToken, creds.agentId), path);
+/** True for the refusal admission throws: the door log already has it. */
+export const isAdmissionRefusal = (err: unknown): boolean => isDockError(err) && err.rule === SUSPENSION_RULE;
+
+/** A kitchen agent's session for a door that calls Dock in-process, named for the door log. */
+export function onsiteSession(dock: Dock, creds: { mandateToken: string; agentId: string }, path: string): Promise<AgentSession> {
+  return dock.authenticate(creds.mandateToken, creds.agentId, { via: "onsite", transport: "direct", path } satisfies Entrance);
+}
+
+/** Admission again for a session verified earlier and used later (the buyer's answer link). */
+export function admit(dock: Dock, session: AgentSession, path: string): Promise<AgentSession> {
+  return dock.admit(session, { via: "onsite", transport: "direct", path } satisfies Entrance);
 }

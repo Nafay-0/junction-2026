@@ -173,7 +173,7 @@ export class CrashEnv implements AgentEnv {
       kitchens: new InMemoryKitchenRepository([world.kitchen]),
       liveAllowance: allowance,
     });
-    const token = await signMandate(m, orgKey);
+    const token = await signMandate(m, orgKey, this.clock.now());
     this.session = await this.dock.authenticate(token, m.agentId);
     const guard = new LiveLookupGuard(allowance);
     // No elicitation channel: intake answers that must come from the buyer arrive as arguments, relayed by the runner.

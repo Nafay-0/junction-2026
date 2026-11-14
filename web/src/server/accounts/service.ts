@@ -17,7 +17,8 @@ import type { SandboxService } from "../sandboxes";
 import { cleanRestaurantName, normaliseUsername, usernameProblem } from "./names";
 import { dummyHash, hashPassword, passwordProblem, verifyPassword, PASSWORD_MIN } from "./password";
 import type { Account, AccountKitchen, AccountSession, AccountStore } from "./store";
-import { MANDATE_DAYS, SIGNER_ROLE, mandateFromTerms, termsFromMandate, type MandateTerms } from "./terms";
+import { FORBID_ALLERGENS, MANDATE_DAYS, REQUIRE_CLAIMS, SIGNER_ROLE, mandateFromTerms, termsFromMandate, type MandateTerms } from "./terms";
+import type { MandateBook } from "../mandates";
 import { TEST_ACCOUNTS, testAccountProducts, type TestAccountSeed } from "./test-accounts";
 
 /**
@@ -75,6 +76,8 @@ export type AccountDeps = {
   now?: () => Date;
   limiter?: RateLimiter;
   maxAccounts?: () => number;
+  /** The gate's register of reissued mandates (server/mandates.ts): an account's new mandate retires the old there. */
+  mandates?: MandateBook;
 };
 
 const signInFailed = () => new DockError(401, "sign_in_failed", "That username and password do not match an account here. Check both and try again.", "account");
@@ -241,7 +244,8 @@ export class AccountService {
 
   /**
    * Sign the kitchen's mandate: the first time this makes the kitchen (key, mandate, agent, memory, signer); after
-   * that it reissues the mandate under a new key and retires the old key, so the old mandate stops verifying at once.
+   * that it reissues the mandate through the gate's register (server/mandates.ts), so the old one is refused at once,
+   * and moves to a new key.
    */
   async signKitchen(username: string, terms: MandateTerms, opts: { profile?: TestAccountSeed["profile"] } = {}): Promise<Account> {
     const a = await this.deps.store.get(username);
@@ -277,8 +281,11 @@ export class AccountService {
     } else {
       const k = a.kitchen;
       const n = k.retired.length + 2;
-      const mandate = mandateFromTerms(terms, { orgId: k.orgId, orgName: a.restaurant, agentId: k.agentId, now, seq: n });
+      const mandate = this.restrict(mandateFromTerms(terms, { orgId: k.orgId, orgName: a.restaurant, agentId: k.agentId, now, seq: n }));
       const { key, mandateToken } = await openKitchenOrg({ registry: this.deps.registry, kid: `${k.orgId}-k${n}`, mandate });
+      // The gate's register of reissued mandates (server/mandates.ts) refuses the earlier ones from this second on,
+      // with the same refusal as any reissue; the old key is also no longer trusted.
+      await this.deps.mandates?.supersede(mandate, `${a.restaurant} (signed in as ${username})`, k.mandate.mandateId, now);
       this.deps.registry.remove(k.key.kid);
       const signer = await this.deps.passkeys.store.findApprover(k.orgId, k.approverRole);
       if (signer && signer.name !== terms.signer) await this.deps.passkeys.store.putAccount({ ...signer, name: terms.signer });
@@ -313,11 +320,32 @@ export class AccountService {
     const now = this.now();
     if (Date.parse(k.mandate.validUntil) - now.getTime() < RENEW_BEFORE_MS) {
       const key = await importEd25519KeyPair(k.key.kid, k.key.privateJwk);
-      const mandate = mandateFromTerms(k.terms, { orgId: k.orgId, orgName: a.restaurant, agentId: k.agentId, now, seq: k.retired.length + 1 });
+      const mandate = this.restrict(mandateFromTerms(k.terms, { orgId: k.orgId, orgName: a.restaurant, agentId: k.agentId, now, seq: k.retired.length + 1 }));
       a.kitchen = { ...k, mandate, mandateToken: await signMandate(mandate, key) };
       await this.deps.store.put(a);
     }
     return { account: a, kitchen: a.kitchen };
+  }
+
+  /** What the kitchen added to its mandate from its memory page ("Add to signed mandate") stays in every mandate signed for it. */
+  private restrict(m: Mandate): Mandate {
+    return this.deps.mandates?.restrict(m) ?? m;
+  }
+
+  /**
+   * "Add to signed mandate" for an account's kitchen (server/mandate-reissue.ts, through the gate's register): sign
+   * the narrowed mandate with the key held for the kitchen and keep it, with the rule folded into the terms the form
+   * shows where the form has a word for it.
+   */
+  async applyReissue(username: string, mandate: Mandate): Promise<void> {
+    const a = await this.deps.store.get(username);
+    if (!a?.kitchen) throw new DockError(404, "kitchen_not_found", "This account has no kitchen yet.", "account");
+    const k = a.kitchen;
+    const key = await importEd25519KeyPair(k.key.kid, k.key.privateJwk);
+    const forbid = [...new Set([...k.terms.forbid, ...mandate.forbiddenAllergens.filter((x): x is MandateTerms["forbid"][number] => (FORBID_ALLERGENS as readonly string[]).includes(x))])];
+    const require = [...new Set([...k.terms.require, ...mandate.requiredAttributes.filter((x): x is MandateTerms["require"][number] => (REQUIRE_CLAIMS as readonly string[]).includes(x))])];
+    a.kitchen = { ...k, terms: { ...k.terms, forbid, require }, mandate, mandateToken: await signMandate(mandate, key), signedAt: this.now().toISOString(), retired: [...k.retired, { mandateId: k.mandate.mandateId, kid: k.key.kid, at: this.now().toISOString() }].slice(-50) };
+    await this.deps.store.put(a);
   }
 
   private historyProducts(): Promise<Product[]> {
@@ -372,8 +400,9 @@ export class AccountService {
     const signed = await this.signUp({ restaurant, username: input.username, password: input.password }, address);
     const terms = termsFromMandate(old);
     const now = this.now();
-    const mandate = mandateFromTerms(terms, { orgId: s.orgId, orgName: restaurant, agentId: s.agentId, now, seq: 1 });
+    const mandate = this.restrict(mandateFromTerms(terms, { orgId: s.orgId, orgName: restaurant, agentId: s.agentId, now, seq: 1 }));
     const { key, mandateToken } = await openKitchenOrg({ registry: this.deps.registry, kid: `${s.orgId}-k1`, mandate });
+    await this.deps.mandates?.supersede(mandate, `${restaurant} (kept as ${signed.account.username})`, old.mandateId, now);
     const signer = await this.deps.passkeys.store.getAccount(s.approverId);
     // The visitor stays the signer, now in the account kitchens' signer role and without the 90-minute end.
     if (signer) await this.deps.passkeys.store.putAccount({ ...signer, role: SIGNER_ROLE, expiresAt: undefined });

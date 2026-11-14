@@ -129,6 +129,24 @@ describe("accounts: the kitchen and its mandate", () => {
     expect(second.retired.map((r) => r.mandateId)).toEqual([first.mandate.mandateId]);
   });
 
+  it("\"Add to signed mandate\" on an account's kitchen goes through the gate's register and keeps the rule in its terms", async () => {
+    const { reissueKitchenMandate } = await import("../mandate-reissue");
+    const rt = await getRuntime();
+    await rt.accounts.signUp({ restaurant: "Bistro", username: "bistro", password: "a-long-password" }, ADDR);
+    const before = (await rt.accounts.signKitchen("bistro", DEFAULT_TERMS)).kitchen!;
+    const out = await reissueKitchenMandate(rt, { slug: "bistro", kind: "account", orgId: before.orgId, name: "Bistro" }, { forbiddenAllergens: ["sesame"] }, "Bistro (signed in)");
+    expect(out.signedWith).toMatch(/held for it/);
+    const after = (await rt.accounts.kitchenOf("bistro"))!.kitchen;
+    expect(after.mandate.forbiddenAllergens).toContain("sesame");
+    expect(after.terms.forbid).toContain("sesame");
+    await expect(rt.dock.authenticate(before.mandateToken, before.agentId)).rejects.toMatchObject({ status: 401 });
+    expect((await rt.dock.authenticate(after.mandateToken, after.agentId)).mandate.mandateId).toBe(out.mandateId);
+    // A later change of the terms keeps what was added from memory.
+    const again = (await rt.accounts.signKitchen("bistro", { ...DEFAULT_TERMS, perOrderLimitEur: 80 })).kitchen!;
+    expect(again.mandate.forbiddenAllergens).toContain("sesame");
+    await expect(rt.dock.authenticate(after.mandateToken, after.agentId)).rejects.toMatchObject({ status: 401 });
+  });
+
   it("the built-in demo kitchens' mandates cannot be changed through an account", async () => {
     const rt = await getRuntime();
     expect(await code(rt.accounts.signKitchen("kaari", DEFAULT_TERMS))).toBe("409 demo_mandate_fixed");

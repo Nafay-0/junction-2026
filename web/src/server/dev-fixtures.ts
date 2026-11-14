@@ -1,15 +1,15 @@
 import { createPrivateKey } from "node:crypto";
 import type { JWK } from "jose";
-import { importEd25519KeyPair, type KeyPair } from "@/core/keys";
+import { generateEd25519KeyPair, importEd25519KeyPair, type KeyPair } from "@/core/keys";
 import type { Mandate } from "@/core/mandate";
 import { addDays, sha256Hex } from "@/core/util";
 
 /**
  * DEV ONLY. A fictional buyer organisation for demos and local runs.
  *
- * Its signing key is derived from a public string, so anyone with this repo can sign mandates for it.
- * That is fine for a keyless local demo and wrong for anything public: set DOCK_DEMO_ORG_JWK
- * (a private Ed25519 JWK) on a deployed instance, and give the same value to the demo script.
+ * Without DOCK_DEMO_ORG_JWK its signing key is derived from a public string, so anyone with this repo can sign
+ * mandates for it. That is fine for a keyless local demo and never trusted on a public site (see demoKey below):
+ * set DOCK_DEMO_ORG_JWK (a private Ed25519 JWK) on a deployed instance, and give the same value to the demo script.
  */
 export const DEMO_ORG = {
   orgId: "org_laakso_catering",
@@ -27,9 +27,55 @@ function devJwkFromSeed(seedText: string): JWK {
 }
 
 export async function demoOrgKeyPair(): Promise<KeyPair> {
-  const fromEnv = process.env.DOCK_DEMO_ORG_JWK;
-  const jwk = fromEnv ? (JSON.parse(fromEnv) as JWK) : devJwkFromSeed(PUBLIC_DEV_SEED);
-  return importEd25519KeyPair(DEMO_ORG.kid, jwk);
+  return demoKey("DOCK_DEMO_ORG_JWK", DEMO_ORG.kid, PUBLIC_DEV_SEED);
+}
+
+/**
+ * Does this process serve a public address? DOCK_PUBLIC_URL names a host other than this machine (the deployed
+ * site sets it, for links and passkeys; local runs and the test servers leave it empty or on localhost).
+ */
+export function servesPublicSite(): boolean {
+  const url = process.env.DOCK_PUBLIC_URL?.trim();
+  if (!url) return false;
+  try {
+    return !/^(localhost|127\.0\.0\.1|\[::1\]|.*\.localhost)$/i.test(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+}
+
+export type DemoKeySource = "fixed" | "public dev key" | "process key";
+
+/** Where a demo organisation's key comes from in this process (shown on /api/health). */
+export function demoKeySource(envName: string): DemoKeySource {
+  return process.env[envName]?.trim() ? "fixed" : servesPublicSite() ? "process key" : "public dev key";
+}
+
+const g = globalThis as typeof globalThis & { __dockProcessKeys?: Map<string, Promise<KeyPair>> };
+
+/**
+ * A demo organisation's signing key:
+ *   fixed            the private JWK in the environment (what a deployment sets, and gives to its own scripts)
+ *   public dev key   derived from a string in this repository, so anyone can sign mandates with it: for keyless
+ *                    local runs and tests only
+ *   process key      on a public site with no JWK configured, the repository's key is NOT trusted: the
+ *                    organisation gets a random key that lives in this process. Its own store keeps working (the
+ *                    server signs its mandates); nobody outside can mint a mandate for it.
+ * So nothing on a public site can be ordered with a mandate signed by a key that sits in a public repository.
+ */
+export async function demoKey(envName: string, kid: string, publicSeed: string): Promise<KeyPair> {
+  const fromEnv = process.env[envName]?.trim();
+  if (fromEnv) return importEd25519KeyPair(kid, JSON.parse(fromEnv) as JWK);
+  if (!servesPublicSite()) return importEd25519KeyPair(kid, devJwkFromSeed(publicSeed));
+  const keys = (g.__dockProcessKeys ??= new Map());
+  let key = keys.get(kid);
+  if (!key) keys.set(kid, (key = generateEd25519KeyPair(kid)));
+  return key;
+}
+
+/** The key anyone can derive from this repository, for tests of the rule above. */
+export function publicDevKeyPair(kid: string, publicSeed: string = PUBLIC_DEV_SEED): Promise<KeyPair> {
+  return importEd25519KeyPair(kid, devJwkFromSeed(publicSeed));
 }
 
 /**

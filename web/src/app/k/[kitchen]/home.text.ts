@@ -130,7 +130,7 @@ export const HOME_TEXT = defineText({
     repeatChange: "Toista muutoksin",
     ordered: "Mitä keittiö on tilannut",
     noOrders: "Ei vielä tilauksia",
-    noOrdersNote: "Tällä keittiöllä ei ole täällä tilaushistoriaa. Ensimmäinen tilaus, agentin tai ostoskorin kautta, aloittaa sen kirjanpidon: määrät, eurot ja tavalliset päivät.",
+    noOrdersNote: "Tällä keittiöllä ei ole täällä tilaus­historiaa. Ensimmäinen tilaus, agentin tai ostoskorin kautta, aloittaa sen kirjanpidon: määrät, eurot ja tavalliset päivät.",
     last4: (from: string, to: string) => `Viimeiset 4 viikkoa, ${from}–${to}`,
     inOrders: (n: number, perWeek: string) => `${n} tilauksessa, noin ${perWeek} viikossa`,
     eurosWeek: "Euroa viikossa, kuusi viimeistä viikkoa",
@@ -144,7 +144,7 @@ export const HOME_TEXT = defineText({
     placedAlone: " tilattu itse",
     sentForSignOff: " lähetetty hyväksyttäväksi",
     nWaiting: (n: number) => `, ${n} odottaa`,
-    corrected: " korjattu virhetarkistuksessa",
+    corrected: " korjattu virhe­tarkistuksessa",
     refused: " torjuttu portilla",
     versus: (money: string, less: boolean, co2: string | null, co2Less: boolean, n: number) =>
       `${money} ${less ? "vähemmän" : "enemmän"}${co2 !== null ? ` ja ${co2} kg CO2e ${co2Less ? "vähemmän" : "enemmän"}` : ""} kuin halvin tarjottu, valitsematta jäänyt vaihtoehto, ${n} tilauksessa.`,

@@ -51,18 +51,28 @@ export type ConsoleKitchenInfo = {
 
 type Resolved = { info: ConsoleKitchenInfo; mandateToken: string; agentId: string };
 
-type DemoSlug = "kaari" | "laakso";
+export type DemoSlug = "kaari" | "laakso";
 
 const TOKEN_TTL_MS = 60 * 60 * 1000; // re-sign the demo mandates hourly; they are valid for a week
-const g = globalThis as typeof globalThis & { __dockConsoleTokens?: Map<DemoSlug, { token: string; at: number }> };
+const g = globalThis as typeof globalThis & { __dockConsoleTokens?: Map<DemoSlug, { token: string; at: number; mandateId: string }> };
+
+/**
+ * A built-in demo kitchen's current mandate: today's terms, with everything the kitchen added through a reissue
+ * and that reissue's id (server/mandates.ts). Before any reissue it is the template.
+ */
+export async function currentDemoMandate(slug: DemoSlug, now = new Date()): Promise<Mandate> {
+  const { mandates } = await getRuntime();
+  return mandates.restrict(slug === "kaari" ? demoKitchenMandate(now) : demoMandate(now), { current: true });
+}
 
 async function demoToken(slug: DemoSlug): Promise<string> {
   g.__dockConsoleTokens ??= new Map();
+  const mandate = await currentDemoMandate(slug);
   const hit = g.__dockConsoleTokens.get(slug);
-  if (hit && Date.now() - hit.at < TOKEN_TTL_MS) return hit.token;
-  const now = new Date();
-  const token = slug === "kaari" ? await signMandate(demoKitchenMandate(now), await demoKitchenKeyPair()) : await signMandate(demoMandate(now), await demoOrgKeyPair());
-  g.__dockConsoleTokens.set(slug, { token, at: Date.now() });
+  // A reissue changes the mandate's id: the token signed before it is not presented again.
+  if (hit && Date.now() - hit.at < TOKEN_TTL_MS && hit.mandateId === mandate.mandateId) return hit.token;
+  const token = await signMandate(mandate, slug === "kaari" ? await demoKitchenKeyPair() : await demoOrgKeyPair());
+  g.__dockConsoleTokens.set(slug, { token, at: Date.now(), mandateId: mandate.mandateId });
   return token;
 }
 
@@ -87,7 +97,7 @@ const EXAMPLES: Record<DemoSlug, string[]> = {
 
 export async function resolveKitchen(slug: string): Promise<Resolved | undefined> {
   if (slug === "kaari") {
-    const m = demoKitchenMandate(new Date());
+    const m = await currentDemoMandate("kaari");
     return {
       mandateToken: await demoToken("kaari"),
       agentId: KITCHEN_ORG.agentId,
@@ -95,7 +105,7 @@ export async function resolveKitchen(slug: string): Promise<Resolved | undefined
     };
   }
   if (slug === "laakso") {
-    const m = demoMandate(new Date());
+    const m = await currentDemoMandate("laakso");
     return {
       mandateToken: await demoToken("laakso"),
       agentId: DEMO_ORG.agentId,
