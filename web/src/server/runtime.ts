@@ -82,8 +82,22 @@ export function getRuntime(): Promise<Runtime> {
   // database it could be ready before a route was test-rendered, the route then read `req.url` or the headers inside
   // the test render, and the build failed ("needs to bail out of prerendering at this point"): a race that broke the
   // hosted build on 14 Nov. `connection()` says "request-time" first: in a test render it never resolves, so the
-  // route is left for request time; in a request, at server start, in a timer, a script or a test it resolves at once.
-  return connection().then(() => runtime);
+  // route is left for request time; in a request it resolves at once. Outside Next's request handling (server start,
+  // a timer, a script, a unit test) there is nothing to declare, and `connection()` refuses to be called: carry on.
+  return requestTime().then(() => runtime);
+}
+
+const outsideRequest = (err: unknown) => err instanceof Error && /outside a request scope/.test(err.message);
+
+function requestTime(): Promise<void> {
+  try {
+    return connection().catch((err: unknown) => {
+      if (!outsideRequest(err)) throw err; // Next's own control-flow errors must pass through
+    });
+  } catch (err) {
+    if (!outsideRequest(err)) throw err;
+    return Promise.resolve();
+  }
 }
 
 /** For tests and the in-process demo: start over with an empty store. */
