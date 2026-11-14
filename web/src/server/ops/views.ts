@@ -463,7 +463,7 @@ export async function safeguards(rt: Runtime): Promise<Safeguards> {
   };
 }
 
-const SURFACE_LABEL: Record<GroundingStats["recent"][number]["surface"], string> = { assistant: "Shop assistant", voice: "Voice agent", menu: "Menu planner", interpret: "Request reader", memory: "Kitchen memory", aiven: "Aiven agent" };
+const SURFACE_LABEL: Record<GroundingStats["recent"][number]["surface"], string> = { assistant: "Shop assistant", voice: "Voice agent", menu: "Menu planner", interpret: "Request reader", memory: "Kitchen memory", aiven: "Aiven agent", thread: "Store agent (conversation)" };
 
 /** The latest fires of the grounding check as the rule row's recent cases: what was removed, never the rest of the text. */
 function groundingCases(g: GroundingStats): Case[] {
