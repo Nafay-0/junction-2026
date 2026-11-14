@@ -292,7 +292,7 @@ describe("connector address: rate limits", () => {
     expect(Number(res.headers.get("retry-after"))).toBeGreaterThan(0);
     // Another kitchen's address is unaffected.
     expect((await connect(await addressOf("laakso"))) instanceof Client).toBe(true);
-  });
+  }, 30_000); // a few hundred in-process MCP calls: slow when the whole suite runs in parallel
 
   it("limiter: a sliding window per address and kind", () => {
     let t = Date.parse("2026-11-15T10:00:00Z");

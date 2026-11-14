@@ -3,12 +3,14 @@ import { MAX_LIVE_IDS_PER_CALL, scheduledOn, type MeteredCatalog, type Product }
 import { facetsOf } from "./catalog/search";
 import { OPTIMISE_QUESTION_ID, answerSchema, clarify, hardConstraints, kindMismatch, optimiseQuestion, optionLabel, violation, type Answer, type ConstraintSource, type MemoryNote, type Question } from "./clarify";
 import { proposedIds, type AlternativesAnswer, type AlternativesSource } from "./alternatives";
-import { alsoAskedIn, alsoAskedNote, type AlsoAsked } from "./also-asked";
+import { alsoAskedIn, alsoAskedNote, groupsIn, type AlsoAsked } from "./also-asked";
 import { baseAmount, checkNeed, type CheckContext, type Concern, type ConcernCode, type PendingOrderSummary } from "./concerns";
 import { DockError, parse } from "./errors";
 import {
+  addDaysIso,
   addStatedPreference,
   declinedProducts,
+  latestDeliveryDay,
   updateKitchenProfile,
   emptyProfile,
   kitchenView,
@@ -228,7 +230,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
     return hits;
   }
 
-  async function resolveFamily(need: StructuredNeed, profile: KitchenProfile): Promise<string> {
+  async function resolveFamily(need: StructuredNeed, profile: KitchenProfile, allowedCategories: string[] = []): Promise<string> {
     if (need.item.category) return need.item.category;
     if (need.item.productId) {
       const [p] = await catalog.searchProducts({ ids: [need.item.productId], limit: 1 });
@@ -237,8 +239,17 @@ export function createIntakeFlow(deps: IntakeDeps) {
     const hits = await catalog.searchProducts({ text: need.item.text, limit: 100 });
     const counts = new Map<string, number>();
     for (const p of hits) counts.set(p.category, (counts.get(p.category) ?? 0) + 1);
-    const top = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
+    // The words' own family first ("laktoositonta maitoa" is milk, though more coffee drinks than milks carry those
+    // words), then a product group the kitchen's mandate allows, then the most matches.
+    const named = new Set(groupsIn(need.item.text).map((g) => g.replace(/ /g, "_")));
+    const allowed = new Set(allowedCategories);
+    const most = Math.max(0, ...counts.values());
+    // A group the mandate allows counts only when it holds a good share of the matches: a stray hit never turns "beef" into milk.
+    const score = (c: string, n: number) => n + (named.has(c) ? 10_000 : 0) + (allowed.has(c) && n * 2 >= most ? 1_000 : 0);
+    const top = [...counts.entries()].sort((a, b) => score(b[0], b[1]) - score(a[0], a[1]) || a[0].localeCompare(b[0]))[0];
     if (top) return top[0];
+    // No product name carries these words (a Finnish word on an English-named shelf): the family the words name.
+    for (const g of named) if ((await catalog.searchProducts({ category: g, limit: 1 })).length) return g;
     if (need.sameAsLastTime && profile.history.length) return profile.history.at(-1)!.family;
     throw new DockError(422, "family_unknown", `No product family matches "${need.item.text}". Send item.category (for example "milk").`);
   }
@@ -427,6 +438,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
       span,
       estimates: i.acknowledgements.filter((a) => a.code === "pack_uncertain" && a.action === "confirmed").map((a) => a.key.split(":")[1]),
     });
+    let seen: Pick<LiveLookupResult, "offers" | "statuses"> = live;
     let result = options(short, live);
     // One second chance, never more: when the short list leaves gaps (cut-offs passed, stock short, a kind the buyer
     // left open with no card), price the next few products once rather than offer less than the catalogue has.
@@ -438,7 +450,21 @@ export function createIntakeFlow(deps: IntakeDeps) {
       const pool = shortlist(wanted.length ? wanted : rest, [], MAX_LIVE_IDS_PER_CALL, i.amount, span);
       const second = on(await deps.liveLookup(session, i.requestId, pool.map((p) => p.id), i.need.deliverBy, "The first short list left gaps; Dock checked the next few products once"));
       short.push(...pool);
-      result = options(short, { offers: [...live.offers, ...second.offers], statuses: [...live.statuses, ...second.statuses] });
+      seen = { offers: [...live.offers, ...second.offers], statuses: [...live.statuses, ...second.statuses] };
+      result = options(short, seen);
+    }
+    // The order cut-off for the day asked has passed for everything: ask once for a later day (two days on, or the
+    // latest the mandate allows), so the buyer is offered the earliest day that works rather than nothing.
+    const cutOff = [...new Set(result.excluded.filter((e) => e.code === "cutoff_passed").map((e) => e.productId))].slice(0, MAX_LIVE_IDS_PER_CALL);
+    if (!result.cards.length && cutOff.length && i.need.deliverBy && !i.need.deliverOn) {
+      const limit = latestDeliveryDay(at, session.mandate.delivery.maxLeadDays);
+      const day = [addDaysIso(i.need.deliverBy, 2), limit].sort()[0];
+      if (day > i.need.deliverBy) {
+        const later = on(await deps.liveLookup(session, i.requestId, cutOff, day, `The order cut-off for ${i.need.deliverBy} has passed; Dock asked once about ${day} instead`));
+        const keep = <T extends { productId: string }>(xs: T[]) => xs.filter((x) => !cutOff.includes(x.productId));
+        result = options(short, { offers: [...keep(seen.offers), ...later.offers], statuses: [...keep(seen.statuses), ...later.statuses] });
+        if (result.cards.length) result.notes.unshift(`The order cut-off for ${formatDay(i.need.deliverBy)} has passed, so these come later: the earliest day Dock found is on each option.`);
+      }
     }
     i.notes.push(...result.notes, ...i.notAsked);
     i.excluded.push(...result.excluded);
@@ -571,7 +597,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
       // Nothing in the catalogue answers to the words: the request is still opened and refused in words a chef
       // understands, so it shows on the wall, in the ledger and in the operations trace (never a bare 422).
       let unmatched = false;
-      const family = await resolveFamily(need, profile).catch((err) => {
+      const family = await resolveFamily(need, profile, session.mandate.allowedCategories).catch((err) => {
         if (!(err instanceof DockError) || err.code !== "family_unknown") throw err;
         unmatched = true;
         return UNMATCHED_FAMILY;
@@ -733,6 +759,14 @@ export function createIntakeFlow(deps: IntakeDeps) {
       expectState(i, ["options_ready"], "choose an option");
       const card = i.options.find((o) => o.optionId === optionId);
       if (!card) throw new DockError(404, "option_not_found", `No option ${optionId}; choose one of ${i.options.map((o) => o.optionId).join(", ")}.`);
+      if (card.givesUp.some((g) => g.part === "amount")) {
+        // Taking the part that fits now is the buyer changing the amount of this request; the rest is said, not lost.
+        const before = describeNeed(i.need);
+        i.need = applyNeedPatch(i.need, { quantity: { amount: card.delivered.amount, unit: card.delivered.unit } });
+        const rest = card.givesUp.find((g) => g.part === "amount")!;
+        log(i, actorOf(session, via, who), `${who} took the part that fits now (${howText(via)}): ${describeNeed(i.need)} instead of ${before}. ${rest.text}`, { step: "compromise", optionId, givesUp: card.givesUp, by: who, relayedBy: session.agentId, channel: via.channel, verified });
+        i.notes.push(rest.text);
+      }
       if (card.givesUp.some((g) => g.part === "delivery_date")) {
         // Choosing a later day is the buyer moving their own deadline: the request and the gate follow it.
         const before = i.need.deliverBy;
