@@ -22,6 +22,7 @@ import type { MandateBook } from "../mandates";
 import { kitchenUnreadable } from "./sealed";
 import { TEST_ACCOUNTS, testAccountProducts, type TestAccountSeed } from "./test-accounts";
 import { demoAccountsOn } from "../demo/mark";
+import { businessEmail } from "./email";
 
 /**
  * Restaurant and buyer accounts. One account, one kitchen: a restaurant signs up with its name, a username and a
@@ -72,7 +73,12 @@ export type AccountView = {
   demo: boolean;
   /** What it chose at the end of onboarding; undefined until it chose. */
   start?: "sample" | "empty";
+  /** A fresh kitchen (store.ts `free`): when it expires without use, unless kept with a sign-in name. */
+  free?: { expiresAt: string; kept: boolean; login?: string };
 };
+
+/** A fresh kitchen not used for this long is deleted (its ledger entries stay). */
+export const FREE_KITCHEN_HOURS = 24;
 
 export type SignedIn = { account: AccountView; token: string; expiresAt: string };
 
@@ -167,7 +173,12 @@ export class AccountService {
 
   // ---------- sign-up, sign-in, sessions ----------
 
-  async signUp(input: { restaurant?: unknown; username?: unknown; password?: unknown }, address: string): Promise<SignedIn> {
+  /**
+   * `email`: the business email for order confirmations, receipts and alerts (accounts/email.ts), required when
+   * `requireEmail` (the ordinary sign-up), optional otherwise (a fresh kitchen, a kept visitor kitchen). Checked here;
+   * kept on the account only until its kitchen exists.
+   */
+  async signUp(input: { restaurant?: unknown; username?: unknown; password?: unknown; email?: unknown; lang?: "en" | "fi" | "sv" }, address: string, opts: { requireEmail?: boolean } = {}): Promise<SignedIn> {
     const restaurant = cleanRestaurantName(input.restaurant);
     if (!restaurant) throw invalid("restaurant_invalid");
     const username = normaliseUsername(input.username);
@@ -175,6 +186,8 @@ export class AccountService {
     if (up) throw invalid(up);
     const pp = passwordProblem(input.password);
     if (pp) throw invalid(pp);
+    const email = businessEmail(input.email);
+    if (!email && opts.requireEmail) throw new DockError(400, "email_missing", "Give the business email for order confirmations and receipts.", "account");
     if (this.limiter.hit(SIGN_UPS_PER_ADDRESS, address, this.now().getTime()) !== null) {
       throw new DockError(429, "sign_up_limit", "Too many new accounts from this address in the last hour. Try again later, or use a test account.", "account");
     }
@@ -182,7 +195,7 @@ export class AccountService {
     if ((await this.deps.store.list()).filter((a) => a.kind === "own").length >= max) {
       throw new DockError(503, "accounts_full", "This demo server has as many accounts as it takes. Use a test account, or scan the QR code to try without one.", "account");
     }
-    const account: Account = { username, restaurant, kind: "own", passwordHash: await hashPassword(input.password as string), createdAt: this.now().toISOString(), ...(demoAccountsOn() ? { demo: { at: this.now().toISOString() } } : {}) };
+    const account: Account = { username, restaurant, kind: "own", passwordHash: await hashPassword(input.password as string), createdAt: this.now().toISOString(), ...(demoAccountsOn() ? { demo: { at: this.now().toISOString() } } : {}), ...(email ? { mailPending: { address: email, ...(input.lang ? { lang: input.lang } : {}) } } : {}) };
     if (!(await this.deps.store.create(account))) throw new DockError(409, "username_taken", "That username is taken. Choose another.", "account");
     return this.openSession(account);
   }
@@ -202,13 +215,19 @@ export class AccountService {
         throw new DockError(429, "sign_in_attempts_exceeded", `Too many failed sign-ins. Try again in ${wait} min.`, "account", { retryAfterSeconds: this.limiter.retryAfter(rule, key, t) });
       }
     }
-    const account = username && password.length <= 200 ? await this.deps.store.get(username) : undefined;
+    // A kept fresh kitchen signs in with the name its person chose; its username (the kitchen's address) stays generated.
+    const account = username && password.length <= 200 ? ((await this.deps.store.get(username)) ?? (await this.byLogin(username))) : undefined;
     const ok = await verifyPassword(password, account?.passwordHash && account.passwordHash !== "-" ? account.passwordHash : await dummyHash());
     if (!account || !ok) {
       for (const [rule, key] of blocked) this.limiter.hit(rule, key, t);
       throw signInFailed();
     }
     return this.openSession(account);
+  }
+
+  /** The account a kept fresh kitchen's chosen sign-in name names. */
+  async byLogin(login: string): Promise<Account | undefined> {
+    return (await this.deps.store.list()).find((a) => a.login === login);
   }
 
   private async openSession(a: Account, scope?: AccountSession["scope"]): Promise<SignedIn> {
@@ -230,6 +249,11 @@ export class AccountService {
       return undefined;
     }
     const account = await this.deps.store.get(s.username);
+    // A fresh kitchen lives while it is used: its last use is noted (at most every ten minutes).
+    if (account?.free && !account.free.kept && this.now().getTime() - Date.parse(account.free.lastUsedAt) > 10 * 60_000) {
+      account.free = { ...account.free, lastUsedAt: this.now().toISOString() };
+      await this.deps.store.put(account);
+    }
     return account ? { account, session: s } : undefined;
   }
 
@@ -251,6 +275,7 @@ export class AccountService {
       shared: a.kind === "test",
       demo: !!a.demo,
       ...(a.demo?.start ? { start: a.demo.start } : {}),
+      ...(a.free ? { free: { expiresAt: new Date(Date.parse(a.free.lastUsedAt) + FREE_KITCHEN_HOURS * 3_600_000).toISOString(), kept: !!a.free.kept, ...(a.login ? { login: a.login } : {}) } } : {}),
     };
   }
 

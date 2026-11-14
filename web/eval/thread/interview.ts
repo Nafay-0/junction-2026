@@ -56,7 +56,7 @@ async function run(s: Script) {
   const b = new Browser(base);
   const stamp = Date.now().toString(36).slice(-6);
   const username = `eval-${s.lang}-${stamp}`;
-  const up = await b.post("/ui-api/account/signup", { restaurant: s.restaurant, username, password: `eval-password-${stamp}` });
+  const up = await b.post("/ui-api/account/signup", { restaurant: s.restaurant, username, password: `eval-password-${stamp}`, email: "delivered@resend.dev" });
   if (up.status !== 201) throw new Error(`signup ${up.status}: ${up.text.slice(0, 200)}`);
   const t0 = performance.now();
   const answers: Record<string, unknown> = {};

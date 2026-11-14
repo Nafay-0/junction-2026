@@ -53,7 +53,7 @@ export async function writeSetupMemory(rt: Runtime, x: { orgId: string; restaura
   }
 }
 
-export async function finishInterview(rt: Runtime, a: Account, raw: unknown, ms?: number): Promise<{ next: string; first: boolean; mandateId: string; remembered: number }> {
+export async function finishInterview(rt: Runtime, a: Account, raw: unknown, ms?: number, opts: { lang?: "en" | "fi" | "sv"; clientAddress?: string } = {}): Promise<{ next: string; first: boolean; mandateId: string; remembered: number; mail: import("./email").SignupMail }> {
   if (a.kind === "demo") throw new DockError(409, "demo_mandate_fixed", `${a.restaurant} is a built-in demo kitchen: its mandate is fixed for the stage.`, "account");
   if (a.kitchen) throw new DockError(409, "interview_done", "This kitchen's mandate is already signed; change its rules from the agent or Agent and rules.", "account");
   const known = knownFrom(a.restaurant);
@@ -88,5 +88,8 @@ export async function finishInterview(rt: Runtime, a: Account, raw: unknown, ms?
       ...(ms !== undefined ? { ms } : {}),
     },
   });
-  return { next: `/k/${a.username}`, first: true, mandateId: k.mandate.mandateId, remembered };
+  // The business email from sign-up: now the kitchen's pending contact, and its one confirmation mail is sent.
+  const { contactFromSignup } = await import("./email");
+  const mail = await contactFromSignup(rt, (await rt.accounts.store.get(a.username)) ?? signed, { lang: opts.lang ?? "en", ...(opts.clientAddress ? { clientAddress: opts.clientAddress } : {}) });
+  return { next: `/k/${a.username}`, first: true, mandateId: k.mandate.mandateId, remembered, mail };
 }

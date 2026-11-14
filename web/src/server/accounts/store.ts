@@ -49,6 +49,19 @@ export type Account = {
    * (server/demo). Absent: a restaurant's own account; nothing is staged for it, ever.
    */
   demo?: DemoMark;
+  /**
+   * A FRESH KITCHEN: started with one click from /k (server/demo/fresh.ts), no form, free-play rules. The session
+   * cookie is its key; it expires after 24 hours without use unless kept (`kept`: a sign-in name and password set).
+   */
+  free?: { at: string; lastUsedAt: string; kept?: string };
+  /**
+   * The business email given at sign-up, kept only until the kitchen exists (accounts/email.ts); then it is the
+   * kitchen's pending notification contact in the mail module and is deleted here. Personal data: never shown but to
+   * the account itself.
+   */
+  mailPending?: { address: string; lang?: "en" | "fi" | "sv" };
+  /** A sign-in name chosen when a fresh kitchen was kept (its username, the kitchen's address, stays as generated). */
+  login?: string;
 };
 
 /** What a demo account chose at the end of onboarding, and what it staged (capped per account, server/demo). */

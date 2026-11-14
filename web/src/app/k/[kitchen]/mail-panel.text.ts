@@ -18,6 +18,9 @@ export const MAIL_PANEL_TEXT = defineText({
     testSender: "Demo note: this store sends from the mail service's shared test sender, which only delivers to the service account's own inbox.",
     onlyOwn: "Only the kitchen's signed-in account can change this.",
     private: "Kept with your kitchen and shown masked to the wholesaler's staff. Never in the order log.",
+    resend: "Send the confirmation again",
+    notSent: "We couldn't send the confirmation yet: the address is kept, and nothing else is sent. Send it again, or try another address.",
+    resent: "Sent again: check your inbox.",
   },
   fi: {
     title: "Tilausviestit",
@@ -35,6 +38,9 @@ export const MAIL_PANEL_TEXT = defineText({
     testSender: "Demohuomio: verkkokauppa lähettää postipalvelun yhteisellä testilähettäjällä, joka toimittaa vain palvelutilin omaan postilaatikkoon.",
     onlyOwn: "Vain keittiön kirjautunut tili voi muuttaa tätä.",
     private: "Säilytetään keittiösi tiedoissa, ja tukun henkilökunta näkee sen peitettynä. Ei koskaan tapahtumalokissa.",
+    resend: "Lähetä vahvistus uudelleen",
+    notSent: "Emme saaneet vahvistusta vielä lähetettyä: osoite on tallessa, eikä muuta lähetetä. Lähetä se uudelleen tai kokeile toista osoitetta.",
+    resent: "Lähetetty uudelleen: katso postilaatikkosi.",
   },
   sv: {
     title: "Beställningsmejl",
@@ -52,5 +58,8 @@ export const MAIL_PANEL_TEXT = defineText({
     testSender: "Demonotis: webbutiken skickar från e-posttjänstens delade testavsändare, som bara levererar till tjänstekontots egen inkorg.",
     onlyOwn: "Bara kökets inloggade konto kan ändra det här.",
     private: "Sparas hos ditt kök och visas maskerad för grossistens personal. Aldrig i händelseloggen.",
+    resend: "Skicka bekräftelsen igen",
+    notSent: "Vi kunde inte skicka bekräftelsen än: adressen sparas och inget annat skickas. Skicka den igen eller prova en annan adress.",
+    resent: "Skickat igen: titta i din inkorg.",
   },
 });

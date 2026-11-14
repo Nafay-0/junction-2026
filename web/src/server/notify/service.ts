@@ -176,6 +176,8 @@ export type AddressView = {
   confirmedAt?: string;
   configured: boolean;
   testSenderOnly: boolean;
+  /** While pending: how the latest confirmation mail went ("failed"/"skipped": it did not reach the address yet). */
+  confirmation?: { outcome: MailOutcome; at: string };
 };
 
 export async function addressOf(rt: Runtime, orgId: string, opts: { own: boolean }): Promise<AddressView> {
@@ -183,7 +185,8 @@ export async function addressOf(rt: Runtime, orgId: string, opts: { own: boolean
   const c = s.contacts.get(orgId);
   const base = { configured: !!transportOf(rt), testSenderOnly: senderIsTestOnly() };
   if (!c || c.state === "removed") return { state: "none", ...base };
-  return { state: c.state, masked: c.masked, lang: c.lang, ...(c.confirmedAt ? { confirmedAt: c.confirmedAt } : {}), ...(opts.own && c.address ? { address: c.address } : {}), ...base };
+  const last = c.state === "pending" ? [...s.log.values()].filter((r) => r.orgId === orgId && r.kind === "confirm" && r.contactId === c.contactId).sort((a, b) => b.at.localeCompare(a.at))[0] : undefined;
+  return { state: c.state, masked: c.masked, lang: c.lang, ...(c.confirmedAt ? { confirmedAt: c.confirmedAt } : {}), ...(opts.own && c.address ? { address: c.address } : {}), ...base, ...(last ? { confirmation: { outcome: last.outcome, at: last.at } } : {}) };
 }
 
 /**

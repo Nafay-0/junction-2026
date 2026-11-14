@@ -34,7 +34,9 @@ async function setUpInterview(page: Page, restaurant: string): Promise<number> {
     await tap("Restaurant", "radio");
   }
   await ask("Must every product be one of these?");
-  await tap("None of these");
+  // "None" is one of the alternatives each rules question offers, said in one line ("No diet rule: …").
+  await page.getByRole("button", { name: /^None\b/ }).last().click();
+  taps++;
   await ask("Anything your agent must never buy?");
   await tap("Nuts");
   await tap("Next");
@@ -77,6 +79,7 @@ async function signUp(page: Page, username: string, restaurant: string) {
   await page.waitForURL("**/k/signup");
   const form = page.getByRole("form", { name: "Your restaurant" });
   await form.getByLabel("Restaurant or buyer name").fill(restaurant);
+  await form.getByLabel("Business email", { exact: true }).fill("delivered@resend.dev");
   await form.getByLabel("Username", { exact: true }).fill(username);
   await form.getByLabel("Password", { exact: true }).fill(PASSWORD);
   await shot(page, "02-signup-step1");
@@ -85,8 +88,11 @@ async function signUp(page: Page, username: string, restaurant: string) {
   await expect(page.getByRole("heading", { name: "Done. Your agent is ready." })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("This device OKs orders with Face ID or a fingerprint.")).toBeVisible();
   await shot(page, "04-signup-done");
-  await page.getByRole("button", { name: "Make your first order" }).click();
+  // A demo account chooses its starting point; any other account goes straight to its first order.
+  await page.locator('[data-start="empty"]').or(page.getByRole("button", { name: "Make your first order" })).first().click();
   await page.waitForURL(`**/k/${username}`);
+  // The agent's own page is the agent alone; the account line shows on the store's other pages.
+  await page.goto(`/k/${username}/agent`);
   await expect(page.getByTestId("signed-in-as")).toContainText(`Signed in as ${username}, for ${restaurant}.`);
 }
 

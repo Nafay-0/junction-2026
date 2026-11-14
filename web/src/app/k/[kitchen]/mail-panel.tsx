@@ -24,6 +24,7 @@ export function MailPanel({ own }: { own: boolean }) {
   const [address, setAddress] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const [note, setNote] = useState<string>();
   useEffect(() => {
     void api<AddressView>("GET", path).then((r) => r.ok && setV(r.data));
   }, [path]);
@@ -37,6 +38,23 @@ export function MailPanel({ own }: { own: boolean }) {
     setV(r.data);
     setEditing(false);
     setAddress("");
+    setTimeout(() => void api<AddressView>("GET", path).then((g) => g.ok && setV(g.data)), 3000);
+  }
+  /** The same address again: a new confirmation mail (capped per kitchen and per client address on the server). */
+  async function resend() {
+    if (!v?.address) return;
+    setBusy(true);
+    setError(undefined);
+    const r = await api<AddressView & { confirmation?: { outcome: string } }>("POST", path, { action: "set", address: v.address, lang });
+    setBusy(false);
+    if (!r.ok) return setError(r.error.message);
+    setV(r.data);
+    // The send happens just after: read the outcome a moment later, so a refused send is said, not hidden.
+    setTimeout(() => void api<AddressView>("GET", path).then((g) => {
+      if (!g.ok) return;
+      setV(g.data);
+      setNote(g.data.confirmation?.outcome === "sent" ? tx.resent : undefined);
+    }), 3000);
   }
   async function remove() {
     setBusy(true);
@@ -64,6 +82,12 @@ export function MailPanel({ own }: { own: boolean }) {
             {status}
           </p>
         )}
+        {v?.state === "pending" && (v.confirmation?.outcome === "failed" || v.confirmation?.outcome === "skipped") && (
+          <p role="alert" className="mt-2 text-[0.92rem] font-medium leading-snug text-bad">
+            {tx.notSent}
+          </p>
+        )}
+        {note && <p className="mt-2 text-[0.9rem] text-good">{note}</p>}
         {v && !v.configured && <p className="mt-2 text-[0.9rem] text-ink-soft">{tx.notConfigured}</p>}
         {v?.configured && v.testSenderOnly && <p className="mt-2 text-[0.85rem] text-ink-soft">{tx.testSender}</p>}
         <p className="mt-2 text-[0.85rem] text-ink-soft">{tx.private}</p>
@@ -79,6 +103,11 @@ export function MailPanel({ own }: { own: boolean }) {
             ) : (
               live && (
                 <div className="flex flex-wrap gap-3">
+                  {v?.state === "pending" && v.address && (
+                    <Button kind="primary" busy={busy} disabled={!v.configured} onClick={() => void resend()}>
+                      {tx.resend}
+                    </Button>
+                  )}
                   <Button kind="secondary" onClick={() => setEditing(true)}>
                     {tx.change}
                   </Button>

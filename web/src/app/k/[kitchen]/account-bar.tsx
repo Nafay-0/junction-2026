@@ -7,7 +7,7 @@ import { SignOutButton } from "../_account/forms";
 import { ACCOUNT_TEXT } from "./account.text";
 import type { KitchenInfo } from "./types";
 
-export type PortalAccount = { username: string; restaurant: string; kitchen?: string; shared: boolean; kind: string; /** A demo account (server/demo): its store has the "Try everything" guide. */ demo?: boolean; /** Its starting point after onboarding. */ start?: "sample" | "empty" };
+export type PortalAccount = { username: string; restaurant: string; kitchen?: string; shared: boolean; kind: string; /** A demo account (server/demo): its store has the "Try everything" guide. */ demo?: boolean; /** Its starting point after onboarding. */ start?: "sample" | "empty"; /** A fresh kitchen (server/demo/fresh.ts). */ free?: { expiresAt: string; kept: boolean; login?: string } };
 
 const LINK = "inline-flex min-h-10 shrink-0 items-center font-semibold text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol pointer-coarse:min-h-11";
 

@@ -41,6 +41,8 @@ export const TermsSchema = z
     signer: z.string().trim().min(2).max(60),
     substitution: z.enum(SUBSTITUTION_RULES),
     maxLeadDays: z.number().int().min(1).max(30),
+    /** How much dearer a substitute may be and still be taken without asking (default 10 %); a fresh kitchen's free play sets it high. */
+    substituteMaxIncreasePct: z.number().int().min(0).max(1000).optional(),
     /** Nutrition rules, checked by the gate beside the allergen rules (core/nutrition.ts). Absent: none. */
     nutrition: z.array(NutritionRuleSchema).max(20).optional(),
     /** Labels every product must carry, and labels the agent should prefer (ranked first, the price of them said). */
@@ -105,7 +107,7 @@ export function mandateFromTerms(t: MandateTerms, o: { orgId: string; orgName: s
     ...(t.nutrition?.length ? { nutritionRules: t.nutrition.map((r) => ({ ...r })) } : {}),
     ...(t.labels?.prefer.length ? { preferredLabels: [...t.labels.prefer] } : {}),
     delivery: { maxLeadDays: t.maxLeadDays },
-    substitution: { rule: t.substitution, maxPriceIncreasePct: 10 },
+    substitution: { rule: t.substitution, maxPriceIncreasePct: t.substituteMaxIncreasePct ?? 10 },
     approvers: [{ role: SIGNER_ROLE, name: t.signer, maxApprovalCents: t.weeklyBudgetEur * 100 }],
   };
 }
@@ -122,6 +124,7 @@ export function termsFromMandate(m: Mandate): MandateTerms {
     signer: m.approvers[0]?.name ?? DEFAULT_TERMS.signer,
     substitution: (SUBSTITUTION_RULES as readonly string[]).includes(m.substitution.rule) ? (m.substitution.rule as MandateTerms["substitution"]) : "within_preferences",
     maxLeadDays: Math.min(30, m.delivery.maxLeadDays),
+    ...(m.substitution.maxPriceIncreasePct !== 10 ? { substituteMaxIncreasePct: Math.min(1000, Math.max(0, Math.round(m.substitution.maxPriceIncreasePct))) } : {}),
     ...(m.nutritionRules?.length ? { nutrition: m.nutritionRules.map((r) => ({ ...r })) } : {}),
     ...(m.requiredCertificates.length || m.preferredLabels?.length
       ? { labels: { require: m.requiredCertificates.filter((l) => (KNOWN_LABELS as readonly string[]).includes(l)), prefer: (m.preferredLabels ?? []).filter((l) => (KNOWN_LABELS as readonly string[]).includes(l)) } }
