@@ -548,12 +548,11 @@ async function mail(browser: Browser) {
   await ctx.close();
 }
 
-/** The wall, at its address (/wall once the landing page is at /). */
+/** The wall, at its address (/wall; the landing page is at /). */
 async function wall(browser: Browser) {
   const ctx = await context(browser, "desktop");
   const page = await ctx.newPage();
-  const r = await page.goto("/wall");
-  if (!r || r.status() >= 400) await page.goto("/");
+  await page.goto("/wall");
   await page.getByRole("heading", { name: "Scan to become the approver" }).waitFor({ timeout: 20_000 });
   await page.waitForTimeout(3000);
   await shoot(page, "wall", "desktop", "The wall: live requests passing the gate, the totals, and the code a visitor scans to become the approver.", { quiet: false });
