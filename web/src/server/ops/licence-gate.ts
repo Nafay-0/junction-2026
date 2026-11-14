@@ -15,7 +15,7 @@ import { CONTROL_ENTRY } from "./suspensions";
  * the same named person who signs off orders over the mandate's limit.
  *
  * Where: the server layer in front of the core, like suspensions (./suspensions.ts) and recall holds
- * (../radar/gate.ts). `authenticate` (src/server/http.ts) hands every verified session to `apply`, which swaps in the
+ * (../radar/gate.ts). The core's admission hook (./onsite.ts, run by `authenticate` for every door) hands every verified session to `apply`, which swaps in the
  * licensed mandate (per-order limit = min(mandate, licence); substitutes need sign-off below L3), so every core call
  * (intake options, quotes, the gate's rules, the re-check at sign-off) works with the same, tighter terms. `placeOrder`
  * is wrapped so that when the licence, not the mandate, is what sends an order to a person, the answer and the ledger
@@ -138,7 +138,8 @@ export function resolveLicence(
 // ---------- the gate ----------
 
 export class LicenceGate {
-  private readonly applied = new WeakMap<AgentSession, AppliedLicence>();
+  /** By the licensed mandate object, which a door keeps when it copies the session to add its own fields. */
+  private readonly applied = new WeakMap<object, AppliedLicence>();
   private enforced: boolean | undefined;
 
   constructor(
@@ -148,7 +149,7 @@ export class LicenceGate {
     const placeOrder = dock.placeOrder;
     dock.placeOrder = async (session, input) => {
       const order = await placeOrder(session, input);
-      const lic = this.applied.get(session);
+      const lic = this.applied.get(session.mandate);
       return lic ? this.annotate(session, order, lic) : order;
     };
   }
@@ -183,19 +184,19 @@ export class LicenceGate {
     };
   }
 
-  /** Called for every verified session after suspensions. Returns the session the core should see. */
+  /** Called by admission (ops/onsite.ts) for every verified session, on every door. Returns the session the core should see. */
   apply(session: AgentSession): AgentSession {
     if (!this.enabled) return session;
     const lic = this.assess(session);
     const level = LICENCE_LEVELS.find((l) => l.level === lic.level)!;
     const licensed: AgentSession = { ...session, mandate: licensedMandate(session.mandate, level) };
-    this.applied.set(licensed, lic);
+    this.applied.set(licensed.mandate, lic);
     return licensed;
   }
 
   /** The licence applied to a session `apply` returned, if any. */
   of(session: AgentSession): AppliedLicence | undefined {
-    return this.applied.get(session);
+    return this.applied.get(session.mandate);
   }
 
   private annotate(session: AgentSession, order: PublicOrder, lic: AppliedLicence): PublicOrder & { licence: AppliedLicence & { decisive: boolean } } {
@@ -221,7 +222,9 @@ export class LicenceGate {
   }
 }
 
-const gates = new WeakMap<Dock, LicenceGate>();
+// Process-wide (see ops/suspensions.ts): one gate per Dock, so placeOrder is wrapped once whichever bundle asks.
+const sharedGates = globalThis as typeof globalThis & { __dockLicenceGates?: WeakMap<Dock, LicenceGate> };
+const gates = (sharedGates.__dockLicenceGates ??= new WeakMap<Dock, LicenceGate>());
 
 /** The licence gate of one runtime (created on first use; it wraps placeOrder once). */
 export function licenceGate(dock: Dock): LicenceGate {

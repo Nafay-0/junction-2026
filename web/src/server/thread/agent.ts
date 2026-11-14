@@ -95,6 +95,9 @@ const forModel = (items: ItemOutcome[]) =>
 
 export type OpenRef = { ref: string; label: string; action: ThreadAction; confirm?: boolean };
 
+/** The buyer asking for the quoted order in so many words (English, Finnish, Swedish). */
+const ASKS_TO_ORDER = /(?<![\p{L}\p{N}])(order|buy|purchase|send it|tilaa|tilataan|osta|ostetaan|beställ|köp)(?![\p{L}\p{N}])/iu;
+
 /** Every decision open in the thread right now, newest request first, with the ref the model may name. */
 export async function openRefs(run: TurnRun): Promise<OpenRef[]> {
   const refs: OpenRef[] = [];
@@ -215,7 +218,12 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
         const r = refs.find((x) => x.ref === ref);
         if (!r) return { ok: false, refused: "not_open", say: "That is not one of the open decisions. Ask the buyer which one they mean." };
         if (usedReply) return { ok: false, refused: "one_decision_per_message", say: "One decision per message." };
-        if (r.confirm && yesOrNo(words) === "no") return { ok: false, refused: "not_a_yes", say: `The buyer's words ("${words.slice(0, 80)}") are not a yes. Ask again.` };
+        // A confirmation is the buyer's only when their own newest words say so: a clear yes (for placing a quoted
+        // order, also a word that asks for it). Not merely the absence of a no: with the kitchen's signed-in person at
+        // the screen the answer is recorded as theirs, verified, so the model must not be able to give it for them
+        // after "hmm", a question, an unrelated sentence, or text it was fed.
+        const said = yesOrNo(words);
+        if (r.confirm && said !== "yes" && !(said === "unclear" && r.action.type === "place" && ASKS_TO_ORDER.test(words))) return { ok: false, refused: "not_a_yes", say: `The buyer's words ("${words.slice(0, 80)}") are not a clear yes. Ask again; do not answer for them.` };
         usedReply = true;
         if (r.action.type === "remember") {
           const out = await remember(run, r.action.itemId, r.action.yes, words);

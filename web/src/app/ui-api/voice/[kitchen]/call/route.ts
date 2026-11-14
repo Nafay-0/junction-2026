@@ -24,6 +24,8 @@ export async function GET(req: Request, ctx: RouteContext<"/ui-api/voice/[kitche
     // An account's kitchen (a stage kitchen's too): only its signed-in account gets the code, and the code signs the
     // phone in to that account once (a one-time link, 10 minutes), then opens the call.
     const own = await consoleKitchen(req, rt, kitchen);
+    // Not from a phone that itself came in by a call code: a code is minted by the account's own sign-in only.
+    if (own?.console.person?.callOnly) throw new DockError(403, "phone_session_limited", "A new call code needs the account's own sign-in. This phone was signed in by a call code.", "account");
     const signedIn = own?.console.person?.account;
     if (!signedIn) throw new DockError(403, "call_not_yours", "Only the kitchen's own signed-in account can call its agent from a phone.", "data_access");
     const { token } = await rt.accounts.oneTimeLink(signedIn, "session");
