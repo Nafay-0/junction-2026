@@ -1,3 +1,4 @@
+import { isRole, signerL } from "../../_i18n/signer";
 import { attrL, dayL, measureL, roleLabelL, ruleTitleL, weekdayL, weekdaysL } from "../../_i18n/format";
 import type { Lang } from "../../_i18n/lang";
 import { clock, money, num } from "../../_ui/plain";
@@ -284,7 +285,7 @@ export function memoryText(m: MemoryLine | string, w: ThreadWords, f: Fmt, lang:
   if (!what) return lang === "en" ? m.text : undefined;
   const from =
     p.how === "stated" || p.how === "confirmed" || p.how === "said"
-      ? w.memory.stated(String(p.by ?? ""), p.at ? f.day(String(p.at)) : "")
+      ? w.memory.stated(byL(String(p.by ?? ""), lang), p.at ? f.day(String(p.at)) : "")
       : p.how === "learned_orders"
         ? w.memory.learned_orders(Number(p.n))
         : p.how === "learned_choices"
@@ -306,3 +307,11 @@ export function stepLabel(s: Pick<ThreadStep, "kind" | "label">, w: ThreadWords,
   const kind = s.kind.startsWith("tool:") ? "model" : s.kind;
   return w.step[kind] ?? w.step.model;
 }
+
+/** Who said it, in the reader's language when it is a role ("Kitchen manager" in a Finnish step says "keittiöpäällikkö"). */
+function byL(by: string, lang: Lang): string {
+  if (lang === "en" || !isRole(by)) return by;
+  const r = signerL(by, lang);
+  return r.charAt(0).toUpperCase() + r.slice(1);
+}
+
