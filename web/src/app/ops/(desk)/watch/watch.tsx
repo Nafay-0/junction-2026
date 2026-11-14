@@ -9,6 +9,7 @@ import { Badge } from "../../../_ui/kit";
 import { num, when } from "../../_ui/format";
 import { Button, Details, Empty, LoadError, Loading, Num, PageHead, Panel, Section, useNow, useOps } from "../../_ui/kit";
 import { Table } from "../../_ui/parts";
+import { WATCH_TEXT } from "./watch.text";
 
 type Kitchens = { slug: string; name: string; kind: string; standing: { family: string; productId: string; name: string; weekdays: number[] }[] }[];
 type View = WatchView & { kitchens: Kitchens };
@@ -31,8 +32,8 @@ export function WatchScreen() {
   return (
     <>
       <PageHead
-        title="Kitchen watch"
-        purpose="Each kitchen's own agent watches what it buys every week and what is still to come: one live availability call for its key products, a finding when one cannot come for its day, with good, better, best substitutes. It learns each recurring order from the kitchen's own orders and, where the kitchen switched auto-renew on, renews it before the cut-off, or holds it and asks when the amount or the price has drifted. Every order goes through the gate."
+        title={WATCH_TEXT.en.title}
+        purpose={WATCH_TEXT.en.purpose}
         right={v ? <span className="tabular">{num(v.stats.liveCalls)} live calls this process{v.schedule.minutes ? ` · runs every ${v.schedule.minutes} min` : ` · schedule off (${v.schedule.reason})`}</span> : undefined}
       />
       <LoadError message={live.error} />
@@ -74,7 +75,7 @@ function Body({ v, now, refresh }: { v: View; now: number; refresh: () => void }
       <div className="grid grid-cols-1 gap-x-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <div>
           <Section title="What the watch found, and what was decided" aside={v.findings.length ? `${v.findings.length}` : undefined}>
-            {v.findings.length === 0 ? <Empty title="Nothing found yet">When a product a kitchen buys every week, or has on its way, cannot come for its day, it is listed here with the substitutes the agent proposed.</Empty> : v.findings.map((f) => <FindingCard key={f.findingId} f={f} now={now} />)}
+            {v.findings.length === 0 ? <Empty title={WATCH_TEXT.en.emptyTitle}>{WATCH_TEXT.en.empty}</Empty> : v.findings.map((f) => <FindingCard key={f.findingId} f={f} now={now} />)}
           </Section>
           <Section title="Recurring orders renewed or held" aside={v.renewals.length ? `${v.renewals.length}` : undefined}>
             {v.renewals.length === 0 ? (

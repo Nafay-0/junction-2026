@@ -83,7 +83,12 @@ export function OrderDetail({ orderId }: { orderId: string }) {
           </span>
         }
         title={<span className="mt-1.5 block">{o.lines.map((l) => `${l.quantity} × ${shortProduct(pn(l.productId, l.name))}`).join(" + ")}</span>}
-        lead={asked ? <p>{asked.startsWith("Basket") ? askedText(asked, f.lang) : tx.asked(asked)}</p> : undefined}
+        lead={
+          <>
+            {asked && <p>{asked.startsWith("Basket") ? askedText(asked, f.lang) : tx.asked(asked)}</p>}
+            <p className={asked ? "mt-1 text-[0.92rem]" : undefined}>{tx.intro}</p>
+          </>
+        }
         actions={
           <div className="hidden text-right sm:block">
             <p className="text-[0.86rem] text-ink-soft">{tx.total}</p>

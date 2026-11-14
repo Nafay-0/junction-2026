@@ -9,6 +9,7 @@ import { fi, num, pct, when, whenSeconds } from "../../_ui/format";
 import { Details, Empty, KV, LiveMark, LoadError, Loading, PageHead, Section, ViaTag, useOps } from "../../_ui/kit";
 import { FilterBar, useUrlState } from "../../_ui/filters";
 import { Funnel } from "../../_ui/parts";
+import { SAFEGUARDS_TEXT } from "./safeguards.text";
 
 const WHERE: Record<string, string> = { gate: "At the gate", door: "At the door", quote: "When quoting", intake: "During the intake", operations: "By operations staff" };
 
@@ -22,8 +23,8 @@ export function SafeguardsView() {
   return (
     <>
       <PageHead
-        title="Safeguards"
-        purpose="What an agent may decide alone, what needs a person, and what is refused outright: the rule book exactly as the code runs it, grouped by what each rule protects, with how often it fired and its latest cases."
+        title={SAFEGUARDS_TEXT.en.title}
+        purpose={SAFEGUARDS_TEXT.en.purpose}
         right={s && <LiveMark at={whenSeconds(s.at)} error={live.error} />}
       />
       <LoadError message={live.error} />
@@ -103,7 +104,7 @@ function Body({ s, counts }: { s: Safeguards; counts?: Overview["counters"] }) {
 
           <Section title="Refused attempts" aside="What was tried, and the rule that stopped it">
             {s.refusedFeed.length === 0 ? (
-              <Empty title="Nothing refused yet">Ask an agent for more than the weekly budget, or call the API with a changed mandate: the refusal appears here with its rule.</Empty>
+              <Empty title={SAFEGUARDS_TEXT.en.emptyTitle}>{SAFEGUARDS_TEXT.en.empty}</Empty>
             ) : (
               <ol className="max-h-[70vh] divide-y divide-line overflow-y-auto rounded-xl border border-line bg-paper">
                 {s.refusedFeed.map((c) => (

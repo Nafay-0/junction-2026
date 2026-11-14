@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { ConversationSummary, ConversationView } from "@/server/ops/conversation";
 import { Details, Empty, KV, LoadError, Loading, PageHead, Section, useOps } from "../../_ui/kit";
+import { CONVERSATIONS_TEXT } from "./conversations.text";
 
 const DOOR: Record<string, string> = { typed: "typed in the store", voice: "voice", photo: "photo" };
 const ms = (n?: number) => (n === undefined ? "–" : n < 1000 ? `${n} ms` : `${(n / 1000).toFixed(1)} s`);
@@ -13,13 +14,13 @@ export function Conversations() {
   const live = useOps<{ conversations: ConversationSummary[] }>("/ops-api/conversation", { pollMs: 3000 });
   return (
     <>
-      <PageHead title="Conversations" purpose="Each kitchen's conversation with its own agent, typed or spoken, as one record: every turn, model call, tool call and gate decision." />
+      <PageHead title={CONVERSATIONS_TEXT.en.title} purpose={CONVERSATIONS_TEXT.en.purpose} />
       <LoadError message={live.error} />
       {!live.data ? (
         <Loading />
       ) : live.data.conversations.length === 0 ? (
-        <Empty title="No conversation yet">
-          When a buyer talks to their agent in the store, the conversation appears here. Try{" "}
+        <Empty title={CONVERSATIONS_TEXT.en.emptyTitle}>
+          {CONVERSATIONS_TEXT.en.empty} Try{" "}
           <Link className="underline" href="/k/kaari?agent=open">
             /k/kaari/order
           </Link>

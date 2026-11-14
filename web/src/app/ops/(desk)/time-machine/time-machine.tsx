@@ -14,6 +14,7 @@ import { fi, money, when, whenSeconds } from "../../_ui/format";
 import { Button, Details, Empty, LoadError, Loading, PageHead, Section, useOps } from "../../_ui/kit";
 import { Stamp, Table } from "../../_ui/parts";
 import { useUrlState } from "../../_ui/filters";
+import { TIME_MACHINE_TEXT } from "./time-machine.text";
 
 type Reply =
   | { attached: false; env: string; sentence: string }
@@ -44,8 +45,8 @@ export function TimeMachineScreen() {
   return (
     <>
       <PageHead
-        title="Time machine"
-        purpose="The rules an order was judged by, exactly as they stood at that second, beside the rules now: what changed in between, who changed it, and whether the order would pass today. Every answer is one query on MariaDB's own history."
+        title={TIME_MACHINE_TEXT.en.title}
+        purpose={TIME_MACHINE_TEXT.en.purpose}
         right={r?.attached ? <MirrorMark r={r} /> : undefined}
       />
       <LoadError message={live.error} />
@@ -55,6 +56,8 @@ export function TimeMachineScreen() {
         <NotAttached env={r.env} sentence={r.sentence} />
       ) : r.reachable === false || !r.view ? (
         <Empty title="MariaDB did not answer">{r.sentence ?? r.health.sentence}</Empty>
+      ) : r.view.kitchens.length === 0 ? (
+        <Empty title={TIME_MACHINE_TEXT.en.emptyTitle}>{TIME_MACHINE_TEXT.en.empty}</Empty>
       ) : (
         <Machine
           v={r.view}

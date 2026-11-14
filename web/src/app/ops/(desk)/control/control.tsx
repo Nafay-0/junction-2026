@@ -11,6 +11,7 @@ import { fi, money, num, since, until, when, whenSeconds } from "../../_ui/forma
 import { Button, Details, Empty, KV, LiveMark, LoadError, Loading, PageHead, Section, useNow, useOps } from "../../_ui/kit";
 import { Table } from "../../_ui/parts";
 import { Target } from "../../../_ui/target";
+import { CONTROL_TEXT } from "./control.text";
 
 type Suspension = ControlView["active"][number];
 
@@ -21,8 +22,8 @@ export function ControlScreen() {
   return (
     <>
       <PageHead
-        title="Control"
-        purpose="Stop an agent, or a whole organisation, with a reason: its next call over any door is refused, and the suspension is written to the ledger. Nothing is deleted; resume it here at any time."
+        title={CONTROL_TEXT.en.title}
+        purpose={CONTROL_TEXT.en.purpose}
         right={c && <LiveMark at={whenSeconds(c.at)} error={live.error} />}
       />
       <LoadError message={live.error} />
@@ -45,7 +46,7 @@ function Body({ c, now, refresh }: { c: ControlView; now: number; refresh: () =>
 
         <Section title="In force" aside={c.active.length ? `${c.active.length} suspension${c.active.length > 1 ? "s" : ""}` : undefined}>
           {c.active.length === 0 ? (
-            <Empty title="No agent is suspended">Every agent with a valid mandate can call the gate. The gate still checks every order.</Empty>
+            <Empty title={CONTROL_TEXT.en.suspendedTitle}>{CONTROL_TEXT.en.suspended}</Empty>
           ) : (
             <ul className="space-y-3">
               {c.active.map((s) => (
@@ -93,7 +94,7 @@ function Body({ c, now, refresh }: { c: ControlView; now: number; refresh: () =>
             </div>
           </div>
           {c.waiting.length === 0 ? (
-            <Empty title="Nothing waiting">Orders over an agent&apos;s own limit, or with a substitute, wait here until the named person signs off.</Empty>
+            <Empty title={CONTROL_TEXT.en.emptyTitle}>{CONTROL_TEXT.en.empty}</Empty>
           ) : (
             <Table label="Orders waiting for a sign-off">
                 <thead>

@@ -7,6 +7,7 @@ import { when } from "../../_ui/format";
 import { Button, Empty, LoadError, Loading, PageHead, Section, useOps } from "../../_ui/kit";
 import { Table } from "../../_ui/parts";
 import { Avatar, Badge } from "../../../_ui/kit";
+import { ACCOUNTS_TEXT } from "./accounts.text";
 
 const KIND: Record<AccountRow["kind"], string> = { own: "Restaurant's own", test: "Shared test account", demo: "Stage kitchen" };
 
@@ -25,8 +26,8 @@ export function AccountsScreen() {
   return (
     <>
       <PageHead
-        title="Accounts"
-        purpose="Every restaurant or buyer with an account, as a kitchen: its store address, when it signed up and when it last ordered. Accounts hold nothing else about a person: no email address, no name."
+        title={ACCOUNTS_TEXT.en.title}
+        purpose={ACCOUNTS_TEXT.en.purpose}
       />
       <LoadError message={live.error} />
       <Section
@@ -51,7 +52,7 @@ export function AccountsScreen() {
       {!d ? (
         <Loading label="Reading the accounts…" />
       ) : d.accounts.length === 0 ? (
-        <Empty title="No accounts yet">A restaurant appears here once it opens an account at /k/signup.</Empty>
+        <Empty title={ACCOUNTS_TEXT.en.emptyTitle}>{ACCOUNTS_TEXT.en.empty}</Empty>
       ) : (
         <Section title="Kitchens with an account" aside={`${d.accounts.length}`}>
           <Table label="Accounts">

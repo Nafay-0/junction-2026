@@ -8,6 +8,7 @@ import { Button, Details, Empty, LoadError, Loading, PageHead, Panel, Section, u
 import { Check, CircleAlert, ExternalLink, FlaskConical } from "lucide-react";
 import { Badge, Select, Tag, buttonClass } from "../../../_ui/kit";
 import { Target } from "../../../_ui/target";
+import { RADAR_TEXT } from "./radar.text";
 
 type Evidence = { value: string; sentence?: string; verified: boolean; english?: string };
 
@@ -28,8 +29,8 @@ export function RadarScreen() {
   return (
     <>
       <PageHead
-        title="Recall radar"
-        purpose="Is anything we sell being recalled? The radar reads food authorities' recall notices on the open web, keeps each fact with the sentence it came from, matches them against the assortment in code, and holds a product an authority names before any agent can order it. Doubtful matches wait for a person."
+        title={RADAR_TEXT.en.title}
+        purpose={RADAR_TEXT.en.purpose}
         right={v && now && fi1?.lastCheckAt ? <span className="tabular">Ruokavirasto checked {since(fi1.lastCheckAt, now)}</span> : undefined}
       />
       <LoadError message={live.error} />
@@ -397,8 +398,8 @@ function NoticesSection({ v, now }: { v: RadarView; now: number }) {
         ))}
       </div>
       {shown.length === 0 ? (
-        <Empty title={filter === "matched" ? "No notice matched the assortment" : "No notices yet"}>
-          {filter === "matched" ? "The catalogue is synthetic and inspired by the real world, so most real notices concern nothing it sells. Nothing is forced: see All real notices." : "The radar has not read this source yet."}
+        <Empty title={filter === "matched" ? "No notice matched the assortment" : RADAR_TEXT.en.emptyTitle}>
+          {filter === "matched" ? "The catalogue is synthetic and inspired by the real world, so most real notices concern nothing it sells. Nothing is forced: see All real notices." : RADAR_TEXT.en.empty}
         </Empty>
       ) : (
         <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">

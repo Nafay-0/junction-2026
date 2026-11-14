@@ -10,6 +10,7 @@ import { VIA, fi, money, num, since, when, whenSeconds, type Via } from "../_ui/
 import { DoorGlyph, Empty, Licence, LiveMark, LoadError, Loading, Outcome, PageHead, Section, ViaTag, useNow, useOps } from "../_ui/kit";
 import { Table } from "../_ui/parts";
 import { FilterBar, useUrlState } from "../_ui/filters";
+import { LIVE_TEXT } from "./live.text";
 
 const DOORS: Via[] = ["onsite", "mcp", "rest"];
 
@@ -20,8 +21,8 @@ export function LiveView() {
   return (
     <>
       <PageHead
-        title="Live at the gate"
-        purpose="Who is at the door right now, and what happened to what they asked for. Three doors, one gate: every agent meets the same mandate check, the same rules in plain code and the same ledger."
+        title={LIVE_TEXT.en.title}
+        purpose={LIVE_TEXT.en.purpose}
         right={o && <LiveMark at={whenSeconds(o.at)} error={live.error} />}
       />
       <LoadError message={live.error} />
@@ -39,7 +40,7 @@ function Body({ o, now }: { o: Overview; now: number }) {
       <Section title="At the door now" aside={`Agents seen in the last 30 minutes${c.suspended ? `; ${c.suspended} suspension${c.suspended > 1 ? "s" : ""} in force` : ""}`}>
         {o.atDoor.length === 0 ? (
           <Empty
-            title="No agent at the door"
+            title={LIVE_TEXT.en.emptyTitle}
             action={
               <>
                 <Link className="font-semibold text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol" href="/k/kaari">
@@ -51,7 +52,7 @@ function Body({ o, now }: { o: Overview; now: number }) {
               </>
             }
           >
-            Nothing has called in the last 30 minutes. An agent appears here the moment it connects, whether it is a kitchen&apos;s own agent, an outside agent over MCP at <code>/api/mcp</code> (or a consumer assistant through a kitchen&apos;s connector address, which is the same door), or a program over REST. To send one in, see <Link href="/try">Try it as an outside agent</Link>.
+            {LIVE_TEXT.en.empty} To send one in, see <Link href="/try">Try it as an outside agent</Link>.
           </Empty>
         ) : (
           <Table label="Agents at the door">
@@ -113,7 +114,7 @@ function Body({ o, now }: { o: Overview; now: number }) {
 
       <Section title="Requests" aside="Newest first. Open one to replay it station by station.">
         {o.sessions.length === 0 ? (
-          <Empty title="No request yet">When an agent asks for something, it appears here with where it is and how it ended.</Empty>
+          <Empty title={LIVE_TEXT.en.requestsEmptyTitle}>{LIVE_TEXT.en.requestsEmpty}</Empty>
         ) : (
           <Sessions rows={o.sessions} now={now} />
         )}

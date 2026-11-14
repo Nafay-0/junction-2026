@@ -8,6 +8,7 @@ import { money, since, whenSeconds } from "../../_ui/format";
 import { Button, Empty, LiveMark, LoadError, Loading, PageHead, useNow, useOps } from "../../_ui/kit";
 import { useUrlState } from "../../_ui/filters";
 import { Table } from "../../_ui/parts";
+import { OPS_ORDERS_TEXT } from "./orders.text";
 
 const STATUS_TONE: Record<OrderRow["status"], "waiting" | "good" | "refused" | "neutral"> = { pending_approval: "waiting", committed: "good", rejected: "refused", declined: "neutral", withdrawn: "neutral", expired: "neutral", replaced: "neutral" };
 /** The source in a few words, for the list (the order's page says it in full). */
@@ -35,8 +36,8 @@ export function OrdersScreen() {
   return (
     <>
       <PageHead
-        title="Orders"
-        purpose="Every order from every source, newest first: the kitchen's own agent typed or spoken, from a photo, an outside agent over MCP or REST, the Aiven agent, the watch, an accepted offer, a backup, the presenter show. Who placed it and through which door, how it was decided and where it stands now. Open one for its whole life."
+        title={OPS_ORDERS_TEXT.en.title}
+        purpose={OPS_ORDERS_TEXT.en.purpose}
         right={d && <LiveMark at={whenSeconds(d.at)} error={live.error} />}
       />
       <form
@@ -83,7 +84,11 @@ export function OrdersScreen() {
       {!d ? (
         <Loading label="Reading the orders…" />
       ) : d.rows.length === 0 ? (
-        <Empty title="No order matches">Clear the filters, or place an order from the store or an agent.</Empty>
+        (q || kitchen || agent || source || status || day) ? (
+          <Empty title={OPS_ORDERS_TEXT.en.noMatchTitle}>{OPS_ORDERS_TEXT.en.noMatch}</Empty>
+        ) : (
+          <Empty title={OPS_ORDERS_TEXT.en.emptyTitle}>{OPS_ORDERS_TEXT.en.empty}</Empty>
+        )
       ) : (
         <>
           <p className="mb-2 text-[0.88rem] text-ink-soft">

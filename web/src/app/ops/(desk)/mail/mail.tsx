@@ -7,6 +7,7 @@ import { Badge } from "../../../_ui/kit";
 import { num, when } from "../../_ui/format";
 import { Button, Empty, LoadError, Loading, Num, PageHead, Panel, Section, useNow, useOps } from "../../_ui/kit";
 import { Table } from "../../_ui/parts";
+import { MAIL_TEXT } from "./mail.text";
 
 type Mail = MailView["mails"][number];
 
@@ -27,8 +28,8 @@ export function MailScreen() {
   return (
     <>
       <PageHead
-        title="Mail"
-        purpose="Receipts and alerts emailed to kitchens, after the fact and never in the path of an order. Only a kitchen that gave an address and confirmed it gets mail; one mail per event; every mail sent, skipped or failed is in the ledger without the address. Addresses are shown masked: staff never see them."
+        title={MAIL_TEXT.en.title}
+        purpose={MAIL_TEXT.en.purpose}
         right={v ? <span>{v.configured ? `${v.transport}, from ${v.from}` : "No mail service configured"}</span> : undefined}
       />
       <LoadError message={live.error} />
@@ -65,7 +66,7 @@ function Body({ v, now }: { v: MailView; now: number }) {
         <div>
           <Section title="What was emailed, to whom, and what happened" aside={v.mails.length ? `${v.mails.length}` : undefined}>
             {v.mails.length === 0 ? (
-              <Empty title="No mail yet">A kitchen gives its address in the store (Agent and rules) or in words to its agent; after it confirms, receipts and alerts appear here.</Empty>
+              <Empty title={MAIL_TEXT.en.emptyTitle}>{MAIL_TEXT.en.empty}</Empty>
             ) : (
               <Table label="Mails">
                 <thead>

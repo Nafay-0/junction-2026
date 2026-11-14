@@ -9,6 +9,7 @@ import { Badge } from "../../../_ui/kit";
 import { num, when } from "../../_ui/format";
 import { Button, Empty, LoadError, Loading, Num, PageHead, Panel, Section, useNow, useOps } from "../../_ui/kit";
 import { Table } from "../../_ui/parts";
+import { OFFERS_TEXT } from "./offers.text";
 
 type Offer = OffersView["offers"][number];
 type Found = { productId: string; name: string; category: string; packSize: number; unit: string };
@@ -45,8 +46,8 @@ export function OffersScreen() {
   return (
     <>
       <PageHead
-        title="Selling agent"
-        purpose="Our own agent, offering the buyers' agents what is genuinely worth it: new in the assortment, in season in Finland, or a like-for-like cheaper per litre, more reliable or lower in carbon than what a kitchen buys every week. Plain code picks from data and checks every guardrail; each offer is signed, open and never an order. Kitchens can mute it or turn it off."
+        title={OFFERS_TEXT.en.title}
+        purpose={OFFERS_TEXT.en.purpose}
         right={v ? <span className="tabular">{num(v.stats.liveCalls)} live price calls this process</span> : undefined}
       />
       <LoadError message={live.error} />
@@ -88,7 +89,7 @@ function Body({ v, now, refresh }: { v: OffersView; now: number; refresh: () => 
         <div>
           <Section title="What it offered, to whom, and what happened" aside={sent.length ? `${sent.length}` : undefined}>
             {sent.length === 0 ? (
-              <Empty title="No offers yet">Run the selling agent, or start a campaign for a product. Only products the data supports reach a kitchen.</Empty>
+              <Empty title={OFFERS_TEXT.en.emptyTitle}>{OFFERS_TEXT.en.empty}</Empty>
             ) : (
               <Table label="Offers">
                 <thead>

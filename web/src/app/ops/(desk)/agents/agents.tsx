@@ -10,6 +10,7 @@ import { CrashMatrix, hazardOf, licenceLine } from "../../../_wall/crash-matrix"
 import { Details, Empty, KV, Licence, LiveMark, LoadError, Loading, PageHead, Section, ViaTag, useOps } from "../../_ui/kit";
 import { FilterBar, useUrlState } from "../../_ui/filters";
 import { AgentWatch } from "./watch";
+import { AGENTS_TEXT } from "./agents.text";
 
 const KIND: Record<AgentRow["kind"], string> = { demo: "Demo kitchen", visitor: "Visitor kitchen", account: "Account kitchen", outside: "Outside agent" };
 
@@ -24,8 +25,8 @@ export function AgentsScreen({ board }: { board?: Board }) {
   return (
     <>
       <PageHead
-        title="Agents and licences"
-        purpose="Every agent that has come to this gate: its crash-test licence when it has one, its record here, and what it may do alone right now, which is the kitchen's mandate capped by the licence."
+        title={AGENTS_TEXT.en.title}
+        purpose={AGENTS_TEXT.en.purpose}
         right={d && <LiveMark at={whenSeconds(d.at)} error={live.error} />}
       />
       <LoadError message={live.error} />
@@ -39,7 +40,7 @@ export function AgentsScreen({ board }: { board?: Board }) {
       {!d ? (
         <Loading label="Reading the agents…" />
       ) : d.agents.length === 0 ? (
-        <Empty title="No agent has come to the gate yet">An agent appears here once it presents a mandate at the door, whichever door it uses.</Empty>
+        <Empty title={AGENTS_TEXT.en.emptyTitle}>{AGENTS_TEXT.en.empty}</Empty>
       ) : (
         <>
           <FilterBar

@@ -35,6 +35,10 @@ import { loadCatalogIndex, resolveCatalogIndex } from "./valio/index-store";
 import { ValioLiveClient } from "./valio/live-client";
 import { ValioCatalog } from "./valio/valio-catalog";
 import { attachMail } from "./notify/service";
+import { sampleNow } from "./alive/clock";
+import { SampleAwareLive, sampleLiveLabel } from "./alive/live";
+import { ledgerVisibility, orderVisibility, stampSample } from "./alive/marks";
+import { toDockProduct } from "@/core/catalog/product";
 
 /**
  * The one Dock instance of this server process, with in-memory storage.
@@ -115,6 +119,10 @@ async function buildRuntime(): Promise<Runtime> {
   // earlier mandates stay refused after a restart.
   const mandates = new MandateBook();
   await mandates.restore(stores.records("mandate_reissue"));
+  // SAMPLE ACTIVITY (src/server/alive): the ledger's and the gate's clock is the real time except while a sample beat
+  // plays (then the beat's moment); a beat's entries are stamped as sample; a page that hides the sample reads without them.
+  let ledgerRef: Ledger | undefined;
+  const ledger = (ledgerRef = new Ledger(stores.ledgerStore, sampleNow, { stamp: stampSample, visible: ledgerVisibility(() => ledgerRef) }));
   const dock = createDock({
     catalog: new MeteredCatalog(recall.catalog),
     holds: recall.holds,
@@ -123,7 +131,9 @@ async function buildRuntime(): Promise<Runtime> {
     admit: admission(() => dock),
     mandates,
     repo: stores.repo,
-    ledger: new Ledger(stores.ledgerStore),
+    ledger,
+    now: sampleNow,
+    visibleOrder: orderVisibility(() => ledgerRef),
     trustedIssuers,
     wholesalerKey,
     notifier: outbox,
@@ -180,7 +190,12 @@ async function buildRuntime(): Promise<Runtime> {
     maxAccounts: () => Number(envValue("DOCK_ACCOUNTS_MAX") ?? 1000) || 1000,
     mandates,
     // A test account reset also lifts what staff staged for it and switches its auto-renew off (server/watch).
-    afterTestReset: async (orgIds, by) => (rtRef ? (await import("./watch/service")).clearForOrgs(rtRef, orgIds, `test account reset, ${by}`) : undefined),
+    afterTestReset: async (orgIds, by) => {
+      if (!rtRef) return;
+      await (await import("./watch/service")).clearForOrgs(rtRef, orgIds, `test account reset, ${by}`);
+      // The kitchens' side of the sample activity again, for the fresh organisations (server/alive/start.ts).
+      (await import("./alive/start")).afterTestReset(rtRef);
+    },
   });
   // Not while the build prerenders pages: restoring hashes passwords (real work off the main thread), which would end
   // prerendering early; a running server restores at its first request.
@@ -217,7 +232,13 @@ export function buildCatalog(indexFile?: string): { catalog: InMemoryCatalog | V
       const client = new ValioLiveClient({ baseUrl: envValue("VALIO_API_BASE") ?? "https://junction26.valioaimo.fi", apiKey, customer: envValue("VALIO_CUSTOMER") });
       // AIVEN HOOK: a slot in front of the partner API where the Valkey live cache plugs in (src/server/aiven/live-slot.ts).
       const live = new LiveCacheSlot(client);
-      const valio = new ValioCatalog(loaded.index, live);
+      // The sample activity never calls the partner (src/server/alive/live.ts); every other call goes to the slot.
+      let ref: ValioCatalog | undefined;
+      const sampleAware = new SampleAwareLive(live, (id) => {
+        const p = ref?.getProduct(id);
+        return p ? toDockProduct(p) : undefined;
+      });
+      const valio = (ref = new ValioCatalog(loaded.index, sampleAware, { now: sampleNow, marked: sampleLiveLabel }));
       liveCacheSlots.set(valio, live);
       return {
         catalog: valio,
@@ -225,5 +246,5 @@ export function buildCatalog(indexFile?: string): { catalog: InMemoryCatalog | V
       };
     }
   }
-  return { catalog: new InMemoryCatalog(SEED_PRODUCTS, SEED_STOCK), catalogSource: { kind: "seed" } };
+  return { catalog: new InMemoryCatalog(SEED_PRODUCTS, SEED_STOCK, sampleNow), catalogSource: { kind: "seed" } };
 }

@@ -87,6 +87,12 @@ export class Ledger {
   constructor(
     private readonly store: LedgerStore = new InMemoryLedgerStore(),
     private readonly now: () => Date = () => new Date(),
+    /**
+     * Optional, from the server: `stamp` may add to an entry's input before it is hashed (the sample activity's flag,
+     * server/alive), and `visible` may narrow what the reads below return for the current caller (a page that hides
+     * the sample). Verification, the head and the length always see the whole chain.
+     */
+    private readonly hooks: { stamp?: (input: LedgerInput) => LedgerInput; visible?: () => ((e: LedgerEntry) => boolean) | undefined } = {},
   ) {}
 
   static hashOf(e: Omit<LedgerEntry, "hash">): string {
@@ -94,7 +100,8 @@ export class Ledger {
     return sha256Hex(canonicalJson({ seq, at, type, actor, summary, requestId, orderId, data, prevHash }));
   }
 
-  append(input: LedgerInput): LedgerEntry {
+  append(raw: LedgerInput): LedgerEntry {
+    const input = this.hooks.stamp ? this.hooks.stamp(raw) : raw;
     const all = this.store.all();
     const last = all[all.length - 1];
     const body = {
@@ -134,6 +141,13 @@ export class Ledger {
 
   /** The stored entries themselves (frozen, never copied), in order, in an array of the caller's own. For readers that only look. */
   readonly(filter: LedgerFilter = {}): readonly LedgerEntry[] {
+    const all = this.unfiltered(filter);
+    const keep = this.hooks.visible?.();
+    return keep ? all.filter(keep) : all;
+  }
+
+  /** As readonly(), never narrowed by the caller's view: for code that must see every entry (indexes of the sample). */
+  unfiltered(filter: LedgerFilter = {}): readonly LedgerEntry[] {
     this.catchUp();
     if (!filter.requestId && !filter.orderId) return this.store.all().slice();
     const a = filter.requestId ? (this.byRequest.get(filter.requestId) ?? []) : undefined;
@@ -149,8 +163,9 @@ export class Ledger {
     // seq equals the position in a verified chain; fall back to a scan if it does not.
     const i = Math.max(0, seq + 1);
     if (i >= all.length) return [];
-    if (all[i].seq === i) return all.slice(i);
-    return all.filter((e) => e.seq > seq);
+    const out = all[i].seq === i ? all.slice(i) : all.filter((e) => e.seq > seq);
+    const keep = this.hooks.visible?.();
+    return keep ? out.filter(keep) : out;
   }
 
   get length(): number {

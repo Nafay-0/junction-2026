@@ -6,6 +6,7 @@ import type { AgentRow } from "@/server/ops/views";
 import { fi, when } from "../../_ui/format";
 import { Button, Empty, LoadError, Loading, PageHead, Section, useOps } from "../../_ui/kit";
 import { Table } from "../../_ui/parts";
+import { CUSTOMERS_TEXT } from "./customers.text";
 import { Check, Eye, Search, Sparkles } from "lucide-react";
 import { Avatar, Tag, buttonClass } from "../../../_ui/kit";
 import { groupOf, proposeCorrection, readMemory, type MemoryItem, type MemoryState } from "../../_ui/memory";
@@ -28,14 +29,14 @@ export function CustomersScreen({ orgId }: { orgId?: string }) {
   return (
     <>
       <PageHead
-        title="Customers"
-        purpose="What do we know about this kitchen, and where did we learn it? Only what the kitchen shares, each item with who stated it or which orders taught it, and when it was last used. Corrections go to the kitchen to confirm."
+        title={CUSTOMERS_TEXT.en.title}
+        purpose={CUSTOMERS_TEXT.en.purpose}
       />
       <LoadError message={agents.error} />
       {!agents.data ? (
         <Loading label="Reading the kitchens…" />
       ) : orgs.length === 0 ? (
-        <Empty title="No kitchen has come to the gate yet">A kitchen appears here once its agent presents a signed mandate at the door.</Empty>
+        <Empty title={CUSTOMERS_TEXT.en.emptyTitle}>{CUSTOMERS_TEXT.en.empty}</Empty>
       ) : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[17rem_minmax(0,1fr)]">
           <nav aria-label="Kitchens" className="lg:sticky lg:top-[4.5rem] lg:self-start">
