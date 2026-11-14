@@ -136,7 +136,7 @@ async function main() {
     let modelBusy = false;
     let lastAudioAt = 0;
     const queue: string[] = [];
-    type T = { said: string; heard: string; wer: number; relayMs?: number; firstSoundMs?: number; replySoundMs?: number; replyDoneMs?: number; reply?: string; state?: string };
+    type T = { said: string; heard: string; wer: number; modelSaid?: string[]; relayMs?: number; firstSoundMs?: number; replySoundMs?: number; replyDoneMs?: number; reply?: string; state?: string };
     const turns: T[] = [];
     let cur: T | undefined;
     let replyGiven = false;
@@ -185,6 +185,7 @@ async function main() {
         const t = saidNow.replace(/<\/?[a-z_]{2,20}>/gi, "").trim();
         saidNow = "";
         if (t && !given.slice(-4).some((g) => overlapOf(t, g) >= 0.5)) own.push(t.slice(0, 160));
+        if (t && cur) (cur.modelSaid ??= []).push(t.slice(0, 400));
         if (cur && replyGiven && cur.replySoundMs !== undefined && cur.replyDoneMs === undefined) {
           cur.replyDoneMs = Date.now() - endAt;
           replySpoken = true;
