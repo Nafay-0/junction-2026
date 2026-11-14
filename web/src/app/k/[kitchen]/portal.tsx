@@ -19,6 +19,7 @@ import { Wordmark } from "../../_ui/wordmark";
 import { RecallNotice } from "../../_radar/recall-notice";
 import { AssistantPanel } from "./assistant";
 import { useThreadState, type ThreadApi } from "./thread-state";
+import { VoiceModeProvider } from "../../_channels/voice-mode";
 import { THREAD_PAGE_TEXT } from "./thread.text";
 import { AccountBar, type PortalAccount } from "./account-bar";
 import type { KitchenChoice, KitchenInfo, LiveReply, LiveResult, Overview, PortalRequest, Product } from "./types";
@@ -280,6 +281,7 @@ export function Portal({ kitchen, kitchens, account, children }: { kitchen: Kitc
 
   return (
     <PortalContext.Provider value={value}>
+      <VoiceModeProvider kitchen={slug}>
       <Toaster>
         <div className={`relative min-h-dvh overflow-x-clip bg-mist text-ink ${panelOpen && !onOrderPage ? "xl:pr-[27rem] 2xl:pr-[30rem]" : ""}`}>
           <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded-full focus:bg-paper focus:px-4 focus:py-2 focus:shadow-md">
@@ -308,6 +310,7 @@ export function Portal({ kitchen, kitchens, account, children }: { kitchen: Kitc
           <AssistantPanel />
         </div>
       </Toaster>
+      </VoiceModeProvider>
     </PortalContext.Provider>
   );
 }

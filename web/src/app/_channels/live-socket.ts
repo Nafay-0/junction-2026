@@ -24,6 +24,8 @@ export type SocketEvents = {
   onHeardFinal?: (text: string) => void;
   /** A provider error that did not close the socket (rate limit, bad event). */
   onError?: (code: string, message: string) => void;
+  /** The agent's voice started or stopped, when the provider plays it itself (OpenAI over WebRTC). */
+  onSpeaking?: (speaking: boolean) => void;
 };
 
 /** What the call hook needs from a voice provider's socket (Gemini Live here, OpenAI Realtime in realtime-socket.ts). */
@@ -40,6 +42,10 @@ export interface VoiceSocket {
   text(t: string): void;
   toolResponse(responses: { id: string; name: string; response: unknown }[]): void;
   close(): void;
+  /** WebRTC only: the microphone track on or off. */
+  setSending?(on: boolean): void;
+  /** WebRTC only: stop the agent's voice, which the provider plays. */
+  stopSpeaking?(): void;
 }
 
 export class LiveSocket implements VoiceSocket {

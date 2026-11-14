@@ -180,8 +180,10 @@ The call keeps its realtime model, its recogniser primed with the kitchen's word
 `voice`), the read-back is the `understood` card with the read-back sentence as the agent's line, and the intake's
 answer is the same cards the typed store shows. When the intake's options come back for a routine request, the
 engine's rule places it alone and the voice model is told what was placed, so a routine spoken order is the
-request, the read-back and one "yes". The store's microphone opens the call (`/call?k=<kitchen>`, or `/call` for a
-visitor's kitchen): there is no browser speech recognition. `DOCK_THREAD_VOICE=off` stops the mirroring.
+request, the read-back and one "yes"; otherwise a spoken choice orders it, as a tap does. Speaking is a mode of the
+thread itself (`_channels/voice-mode.tsx`): the composer's microphone starts the call, the voice bar over the
+composer holds to talk or listens, the log shows the words being heard, and hanging up leaves the buyer typing in
+the same composer. There is no browser speech recognition. `DOCK_THREAD_VOICE=off` stops the mirroring.
 
 ## What runs where (as built)
 

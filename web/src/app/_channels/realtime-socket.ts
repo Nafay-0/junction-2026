@@ -37,33 +37,104 @@ export function realtimeCost(model: string, u: Usage): number {
   return (audioIn * p.audioIn + cachedAudio * p.audioCached + textIn * p.textIn + cachedText * p.textCached + (o.audio_tokens ?? 0) * p.audioOut + (o.text_tokens ?? 0) * p.textOut) / 1e6;
 }
 
+/** How events travel: a WebSocket (the evaluation, in Node) or a WebRTC data channel (the browser). */
+type Transport = { send: (obj: unknown) => void; close: () => void; readonly open: boolean };
+
 export class RealtimeSocket implements VoiceSocket {
   readonly inputRate = 24000;
   readonly finalTranscripts = true;
-  private ws: WebSocket;
+  private transport: Transport = { send: () => {}, close: () => {}, open: false };
   private closedByUs = false;
+  private closed = false;
   private responding = false;
   /** Messages (text turns, a response request) waiting for the current response to finish. */
   private queue: unknown[][] = [];
   private calls: FunctionCall[] = [];
   private appended = false;
+  /** WebRTC: the microphone track (on only while the caller holds the button, or always in hands-free). */
+  private track?: MediaStreamTrack;
+  private pc?: RTCPeerConnection;
   ready = false;
 
+  /** WebSocket with a short-lived client secret (in-process callers; Node has no WebRTC). */
   constructor(
     url: string,
     token: string,
     private readonly model: string,
     private readonly ev: SocketEvents,
+    rtc?: { offer: (sdp: string) => Promise<string>; stream: MediaStream; play: (remote: MediaStream) => void; handsFree: boolean },
   ) {
-    this.ws = new WebSocket(`${url}?model=${encodeURIComponent(model)}`, ["realtime", `openai-insecure-api-key.${token}`]);
-    this.ws.onmessage = (e) => void this.message(e.data);
-    this.ws.onclose = (e) => {
-      this.ready = false;
-      ev.onClose({ code: e.code, reason: e.reason, clean: this.closedByUs });
-    };
-    this.ws.onerror = () => {
+    if (rtc) {
+      void this.connectRtc(rtc);
+      return;
+    }
+    const ws = new WebSocket(`${url}?model=${encodeURIComponent(model)}`, ["realtime", `openai-insecure-api-key.${token}`]);
+    ws.onmessage = (e) => void this.message(e.data);
+    ws.onclose = (e) => this.lost(e.code, e.reason);
+    ws.onerror = () => {
       /* onclose follows with the code */
     };
+    this.transport = {
+      send: (obj) => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify(obj)),
+      close: () => ws.close(1000, "hung up"),
+      get open() {
+        return ws.readyState === WebSocket.OPEN;
+      },
+    };
+  }
+
+  /**
+   * WebRTC set up through this app's server (/ui-api/voice/{kitchen}/call/{callId} op "rtc"): the offer goes to the
+   * server, which answers it through OpenAI with the call's session and keeps the call id, so it can hang the
+   * session up at the time limit. The microphone is the track; the agent's voice is the remote track.
+   */
+  private async connectRtc(rtc: { offer: (sdp: string) => Promise<string>; stream: MediaStream; play: (remote: MediaStream) => void; handsFree: boolean }) {
+    try {
+      const pc = new RTCPeerConnection();
+      this.pc = pc;
+      pc.ontrack = (e) => rtc.play(e.streams[0] ?? new MediaStream([e.track]));
+      this.track = rtc.stream.getAudioTracks()[0];
+      if (this.track) {
+        this.track.enabled = rtc.handsFree;
+        pc.addTrack(this.track, rtc.stream);
+      }
+      const dc = pc.createDataChannel("oai-events");
+      dc.onmessage = (e) => void this.message(e.data);
+      dc.onopen = () => this.markReady();
+      dc.onclose = () => this.lost(1006, "data channel closed");
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === "failed" || pc.connectionState === "closed") this.lost(1006, `connection ${pc.connectionState}`);
+      };
+      this.transport = {
+        send: (obj) => dc.readyState === "open" && dc.send(JSON.stringify(obj)),
+        close: () => {
+          dc.close();
+          pc.close();
+        },
+        get open() {
+          return dc.readyState === "open";
+        },
+      };
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      const answer = await rtc.offer(offer.sdp ?? "");
+      await pc.setRemoteDescription({ type: "answer", sdp: answer });
+    } catch (err) {
+      this.lost(1011, (err as Error).message || "webrtc failed");
+    }
+  }
+
+  private markReady() {
+    if (this.ready) return;
+    this.ready = true;
+    this.ev.onReady();
+  }
+
+  private lost(code: number, reason: string) {
+    if (this.closed) return;
+    this.closed = true;
+    this.ready = false;
+    this.ev.onClose({ code, reason, clean: this.closedByUs });
   }
 
   private async message(data: unknown) {
@@ -76,8 +147,7 @@ export class RealtimeSocket implements VoiceSocket {
     }
     switch (m.type) {
       case "session.created":
-        this.ready = true;
-        this.ev.onReady();
+        this.markReady();
         break;
       case "response.created":
         this.responding = true;
@@ -97,6 +167,13 @@ export class RealtimeSocket implements VoiceSocket {
         break;
       case "conversation.item.input_audio_transcription.failed":
         this.ev.onHeardFinal?.("");
+        break;
+      case "output_audio_buffer.started":
+        this.ev.onSpeaking?.(true);
+        break;
+      case "output_audio_buffer.stopped":
+      case "output_audio_buffer.cleared":
+        this.ev.onSpeaking?.(false);
         break;
       case "input_audio_buffer.speech_started":
         // Hands-free barge-in: the caller started talking over the agent.
@@ -134,8 +211,8 @@ export class RealtimeSocket implements VoiceSocket {
   }
 
   private send(...events: unknown[]) {
-    if (this.ws.readyState !== WebSocket.OPEN) return;
-    for (const e of events) this.ws.send(JSON.stringify(e));
+    if (!this.transport.open) return;
+    for (const e of events) this.transport.send(e);
   }
 
   /** Send now, or after the current response if it would start a second one. */
@@ -153,19 +230,38 @@ export class RealtimeSocket implements VoiceSocket {
   }
 
   audio(b64: string) {
+    if (this.pc) return; // WebRTC: the microphone track carries the audio
     this.appended = true;
     this.send({ type: "input_audio_buffer.append", audio: b64 });
   }
+  /** WebRTC: the microphone track on or off (push-to-talk, hands-free half-duplex). */
+  setSending(on: boolean) {
+    if (this.track) this.track.enabled = on;
+  }
+  /** Stop the agent's voice now (barge-in, or a sentence the grounding check refused). */
+  stopSpeaking() {
+    if (this.responding) this.send({ type: "response.cancel" });
+    if (this.pc) this.send({ type: "output_audio_buffer.clear" });
+  }
   activityStart() {
     // Barge-in by push-to-talk: stop the agent's current answer, start a fresh turn.
-    if (this.responding) this.send({ type: "response.cancel" });
+    this.stopSpeaking();
     this.queue = [];
-    this.appended = false;
+    this.appended = !!this.pc;
     this.send({ type: "input_audio_buffer.clear" });
+    this.setSending(true);
   }
   activityEnd() {
     if (!this.appended) return;
     this.appended = false;
+    if (this.pc) {
+      // The last 200 ms of speech are still on their way over the track.
+      window.setTimeout(() => {
+        this.setSending(false);
+        this.sendOrQueue([{ type: "input_audio_buffer.commit" }, { type: "response.create" }]);
+      }, 200);
+      return;
+    }
     this.sendOrQueue([{ type: "input_audio_buffer.commit" }, { type: "response.create" }]);
   }
   text(t: string) {
@@ -175,12 +271,12 @@ export class RealtimeSocket implements VoiceSocket {
     this.sendOrQueue([...responses.map((r) => ({ type: "conversation.item.create", item: { type: "function_call_output", call_id: r.id, output: JSON.stringify(r.response) } })), { type: "response.create" }]);
   }
   get open() {
-    return this.ws.readyState === WebSocket.OPEN;
+    return this.transport.open;
   }
   close() {
     this.closedByUs = true;
     try {
-      this.ws.close(1000, "hung up");
+      this.transport.close();
     } catch {
       /* closed */
     }

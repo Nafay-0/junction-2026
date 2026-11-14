@@ -136,6 +136,26 @@ export class CallAudio {
     this.node.connect(mute).connect(this.ctx.destination);
   }
 
+  /** The open microphone, for a provider that takes it as a WebRTC track. */
+  get micStream(): MediaStream | undefined {
+    return this.stream;
+  }
+
+  /**
+   * Play the agent's voice from a WebRTC remote stream through this call's speaker path, so stopPlayback can cut it.
+   * Chrome only starts a remote WebRTC stream's audio once a media element holds it, so a muted one does.
+   */
+  playStream(remote: MediaStream) {
+    const holder = new Audio();
+    holder.muted = true;
+    holder.srcObject = remote;
+    void holder.play().catch(() => {});
+    this.remote?.disconnect();
+    this.remote = this.ctx.createMediaStreamSource(remote);
+    this.remote.connect(this.gain);
+  }
+  private remote?: MediaStreamAudioSourceNode;
+
   get micOpen(): boolean {
     return !!this.stream?.getAudioTracks().some((t) => t.readyState === "live");
   }
@@ -218,6 +238,12 @@ export class CallAudio {
 
   /** Cut the agent off now: barge-in, or a sentence the grounding check refused. */
   stopPlayback() {
+    if (this.remote) {
+      // WebRTC: the provider is told to stop (stopSpeaking); mute what is already on its way for a moment.
+      const t = this.ctx.currentTime;
+      this.gain.gain.setValueAtTime(0, t);
+      this.gain.gain.setValueAtTime(1, t + 0.6);
+    }
     for (const s of this.playing) {
       s.onended = null;
       try {
