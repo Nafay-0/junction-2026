@@ -5,15 +5,16 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { api } from "../../_client/api";
 import { useLang, useText } from "../../_i18n/provider";
-import { Button, ErrorPlate } from "../../_ui/kit";
+import { ArrowRight, CircleAlert, Check, KeyRound, QrCode } from "lucide-react";
+import { Button, Card, Checkbox, ErrorPlate, IconDisc, Input, Panel, Select, Skeleton } from "../../_ui/kit";
 import { passkeyProblemL } from "../../_ui/passkey.text";
 import { DEPARTMENT_NAME } from "../[kitchen]/catalogue.text";
 import { ACCOUNT_TEXT } from "../[kitchen]/account.text";
 import { DOOR_TEXT } from "../door.text";
 
 /**
- * The account's forms, built from the shared kit with plain, semantic markup (the visual system is being redone on
- * claude/design-v2; these move into it). Every text is in door.text.ts or account.text.ts.
+ * The account's forms, built from the shared kit (web/docs/DESIGN.md). Every text is in door.text.ts or
+ * account.text.ts.
  */
 
 export type AccountView = { username: string; restaurant: string; kind: "own" | "demo" | "test"; kitchen?: string; shared: boolean; terms?: Terms };
@@ -35,24 +36,18 @@ type MandateInfo = {
   editable: boolean;
 };
 
-const input = "min-h-11 w-full border-2 border-line bg-paper px-3 text-[1rem] focus:border-petrol focus:outline-none";
-const label = "block text-[0.95rem] font-semibold";
-const hint = "mt-0.5 block text-[0.85rem] text-ink-soft";
+/** A form's own error: what went wrong, in the field's colours, under the fields. */
+function FormError({ children }: { children: ReactNode }) {
+  return (
+    <p role="alert" className="flex items-start gap-2 rounded-md border border-bad/20 bg-bad-soft px-3.5 py-2.5 text-[0.95rem] leading-snug">
+      <CircleAlert aria-hidden size={18} className="mt-0.5 shrink-0 text-bad" />
+      <span>{children}</span>
+    </p>
+  );
+}
 
 export function TextField({ id, name, labelText, hintText, type = "text", autoComplete, value, onChange, minLength, maxLength, required = true }: { id: string; name: string; labelText: string; hintText?: string; type?: string; autoComplete?: string; value: string; onChange: (v: string) => void; minLength?: number; maxLength?: number; required?: boolean }) {
-  return (
-    <div>
-      <label htmlFor={id} className={label}>
-        {labelText}
-      </label>
-      <input id={id} name={name} type={type} autoComplete={autoComplete} value={value} onChange={(e) => onChange(e.target.value)} minLength={minLength} maxLength={maxLength} required={required} className={`mt-1 ${input}`} aria-describedby={hintText ? `${id}-hint` : undefined} autoCapitalize="none" spellCheck={false} />
-      {hintText && (
-        <span id={`${id}-hint`} className={hint}>
-          {hintText}
-        </span>
-      )}
-    </div>
-  );
+  return <Input id={id} name={name} label={labelText} hint={hintText} type={type} autoComplete={autoComplete} value={value} onChange={onChange} minLength={minLength} maxLength={maxLength} required={required} autoCapitalize="none" spellCheck={false} />;
 }
 
 /** Sign in with a username and password; on success go where the server says (the shop, or step 2 of sign-up). */
@@ -74,11 +69,11 @@ export function SignInForm({ prefill }: { prefill?: string }) {
     router.refresh();
   }
   return (
-    <form onSubmit={(e) => void submit(e)} className="space-y-3" aria-label={tx.signInTitle}>
+    <form onSubmit={(e) => void submit(e)} className="space-y-4" aria-label={tx.signInTitle}>
       <TextField id="signin-username" name="username" labelText={tx.username} autoComplete="username" value={username} onChange={setUsername} maxLength={64} />
       <TextField id="signin-password" name="password" labelText={tx.password} type="password" autoComplete="current-password" value={password} onChange={setPassword} maxLength={200} />
-      {error && <p role="alert" className="border-l-4 border-ink bg-mist px-3 py-2 text-[0.95rem]">{error}</p>}
-      <Button kind="go" type="submit" busy={busy} className="w-full sm:w-auto">
+      {error && <FormError>{error}</FormError>}
+      <Button kind="go" type="submit" size="lg" busy={busy} className="mt-1 w-full">
         {busy ? tx.signingIn : tx.signInButton}
       </Button>
     </form>
@@ -102,11 +97,12 @@ export function TestSignIn({ username, password, name }: { username: string; pas
   }
   return (
     <div>
-      <Button kind="primary" busy={busy} onClick={() => void go()}>
-        {tx.testUse(name)}
+      <Button kind="primary" busy={busy} onClick={() => void go()} className="w-full">
+        <span className="min-w-0 text-balance">{tx.testUse(name)}</span>
+        {!busy && <ArrowRight aria-hidden size={17} className="shrink-0" />}
       </Button>
       {error && (
-        <p role="alert" className="mt-1 text-[0.9rem] text-ink-soft">
+        <p role="alert" className="mt-2 text-[0.9rem] leading-snug text-bad">
           {error}
         </p>
       )}
@@ -161,11 +157,14 @@ export function SignUpForm({ onDone }: { onDone: () => void }) {
       <TextField id="su-restaurant" name="restaurant" labelText={tx.restaurant} hintText={tx.restaurantHint} autoComplete="organization" value={restaurant} onChange={setRestaurant} minLength={2} maxLength={80} />
       <TextField id="su-username" name="username" labelText={tx.username} hintText={tx.usernameHint} autoComplete="username" value={username} onChange={(v) => setUsername(v.toLowerCase())} minLength={3} maxLength={32} />
       <TextField id="su-password" name="password" labelText={tx.password} hintText={tx.passwordHint} type="password" autoComplete="new-password" value={password} onChange={setPassword} minLength={10} maxLength={200} />
-      <p className="text-[0.85rem] text-ink-soft">{tx.noEmail}</p>
-      {error && <p role="alert" className="border-l-4 border-ink bg-mist px-3 py-2 text-[0.95rem]">{error}</p>}
-      <Button kind="go" type="submit" busy={busy}>
-        {busy ? tx.creating : tx.continue}
-      </Button>
+      <p className="text-[0.86rem] leading-snug text-ink-soft">{tx.noEmail}</p>
+      {error && <FormError>{error}</FormError>}
+      <ThumbBar>
+        <Button kind="go" type="submit" size="lg" busy={busy} className="w-full sm:w-auto sm:min-w-[12rem]">
+          {busy ? tx.creating : tx.continue}
+          {!busy && <ArrowRight aria-hidden size={18} />}
+        </Button>
+      </ThumbBar>
     </form>
   );
 }
@@ -187,7 +186,17 @@ export function MandateForm({ onSigned, change = false }: { onSigned: (r: { next
     });
   }, []);
   if (error && !info) return <ErrorPlate title={tx.failed} message={error} />;
-  if (!info || !t) return <div className="h-64 animate-pulse bg-mist" />;
+  if (!info || !t)
+    return (
+      <div className="space-y-4" aria-busy>
+        <Skeleton className="h-5 w-3/4" />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Skeleton className="h-20" />
+          <Skeleton className="h-20" />
+        </div>
+        <Skeleton className="h-40" />
+      </div>
+    );
   if (!info.editable) return <p className="text-ink-soft">{atx.mandateFixed}</p>;
   const toggle = (k: "groups" | "require" | "forbid", v: string) => setT({ ...t, [k]: t[k].includes(v) ? t[k].filter((x) => x !== v) : [...t[k], v] });
   const groupName = (g: { id: string; name: string }) => (lang === "en" ? g.name : (DEPARTMENT_NAME[lang][g.id] ?? g.name));
@@ -201,70 +210,68 @@ export function MandateForm({ onSigned, change = false }: { onSigned: (r: { next
     onSigned(r.data);
   }
   return (
-    <form onSubmit={(e) => void submit(e)} className="space-y-6" aria-label={tx.step2}>
-      {!change && <p className="max-w-[70ch] leading-snug">{tx.mandateIntro(info.account.restaurant)}</p>}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <NumberField id="m-per-order" labelText={tx.perOrder} hintText={tx.perOrderHint} value={t.perOrderLimitEur} min={0} max={50000} onChange={(v) => setT({ ...t, perOrderLimitEur: v })} />
-        <NumberField id="m-weekly" labelText={tx.weekly} hintText={tx.weeklyHint} value={t.weeklyBudgetEur} min={10} max={200000} onChange={(v) => setT({ ...t, weeklyBudgetEur: v })} />
+    <form onSubmit={(e) => void submit(e)} className="space-y-8" aria-label={tx.step2}>
+      {!change && <p className="max-w-[64ch] text-[1.02rem] leading-relaxed text-ink-soft">{tx.mandateIntro(info.account.restaurant)}</p>}
+      <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">
+        <NumberField id="m-per-order" labelText={tx.perOrder} hintText={tx.perOrderHint} value={t.perOrderLimitEur} min={0} max={50000} suffix="€" onChange={(v) => setT({ ...t, perOrderLimitEur: v })} />
+        <NumberField id="m-weekly" labelText={tx.weekly} hintText={tx.weeklyHint} value={t.weeklyBudgetEur} min={10} max={200000} suffix="€" onChange={(v) => setT({ ...t, weeklyBudgetEur: v })} />
       </div>
       <Checks legend={tx.groups} items={info.vocabulary.groups.map((g) => ({ id: g.id, label: groupName(g) }))} chosen={t.groups} onToggle={(v) => toggle("groups", v)} name="groups" />
-      <fieldset className="space-y-4">
-        <legend className="display text-[1.4rem]">{tx.rulesTitle}</legend>
-        <Checks legend={tx.require} items={info.vocabulary.require.map((id) => ({ id, label: tx.claims[id] ?? id }))} chosen={t.require} onToggle={(v) => toggle("require", v)} name="require" />
-        <Checks legend={tx.forbid} items={info.vocabulary.forbid.map((id) => ({ id, label: tx.allergens[id] ?? id }))} chosen={t.forbid} onToggle={(v) => toggle("forbid", v)} name="forbid" />
+      <fieldset className="space-y-6">
+        <legend className="display mb-4 text-[1.35rem]">{tx.rulesTitle}</legend>
+        <Checks legend={tx.require} items={info.vocabulary.require.map((id) => ({ id, label: tx.claims[id] ?? id }))} chosen={t.require} onToggle={(v) => toggle("require", v)} name="require" short />
+        <Checks legend={tx.forbid} items={info.vocabulary.forbid.map((id) => ({ id, label: tx.allergens[id] ?? id }))} chosen={t.forbid} onToggle={(v) => toggle("forbid", v)} name="forbid" short />
       </fieldset>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">
         <TextField id="m-signer" name="signer" labelText={tx.signer} hintText={tx.signerHint} value={t.signer} onChange={(v) => setT({ ...t, signer: v })} minLength={2} maxLength={60} />
         <NumberField id="m-lead" labelText={tx.leadDays} value={t.maxLeadDays} min={1} max={30} onChange={(v) => setT({ ...t, maxLeadDays: v })} />
-      </div>
-      <div>
-        <label htmlFor="m-subs" className={label}>
-          {tx.substitution}
-        </label>
-        <select id="m-subs" value={t.substitution} onChange={(e) => setT({ ...t, substitution: e.target.value })} className={`mt-1 ${input}`}>
+        <Select id="m-subs" label={tx.substitution} className="sm:col-span-2" value={t.substitution} onChange={(v) => setT({ ...t, substitution: v })}>
           {info.vocabulary.substitution.map((s) => (
             <option key={s} value={s}>
               {tx.subs[s] ?? s}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
-      <p className="border-l-4 border-lavender-deep bg-lavender px-3 py-2 text-[0.95rem] leading-snug">{tx.keyNote}</p>
-      {error && <p role="alert" className="border-l-4 border-ink bg-mist px-3 py-2 text-[0.95rem]">{error}</p>}
-      <Button kind="go" type="submit" busy={busy}>
-        {busy ? tx.signing : change ? tx.saveChanges : tx.sign}
-      </Button>
+      <Panel className="flex items-start gap-3 p-4">
+        <KeyRound aria-hidden size={18} className="mt-0.5 shrink-0 text-petrol" />
+        <p className="text-[0.92rem] leading-snug text-ink-soft">{tx.keyNote}</p>
+      </Panel>
+      {error && <FormError>{error}</FormError>}
+      <ThumbBar sticky={!change}>
+        <Button kind="go" type="submit" size="lg" busy={busy} className="w-full sm:w-auto">
+          {busy ? tx.signing : change ? tx.saveChanges : tx.sign}
+        </Button>
+      </ThumbBar>
     </form>
   );
 }
 
-function NumberField({ id, labelText, hintText, value, min, max, onChange }: { id: string; labelText: string; hintText?: string; value: number; min: number; max: number; onChange: (v: number) => void }) {
-  return (
-    <div>
-      <label htmlFor={id} className={label}>
-        {labelText}
-      </label>
-      <input id={id} type="number" inputMode="numeric" min={min} max={max} step={1} required value={Number.isFinite(value) ? value : ""} onChange={(e) => onChange(Math.round(Number(e.target.value)))} className={`mt-1 tabular ${input}`} aria-describedby={hintText ? `${id}-hint` : undefined} />
-      {hintText && (
-        <span id={`${id}-hint`} className={hint}>
-          {hintText}
-        </span>
-      )}
-    </div>
-  );
+/**
+ * Where a form's main action sits: full width under the fields on a phone (and, with `sticky`, held at the bottom
+ * edge under the thumb while the form scrolls), an ordinary button on a desk.
+ */
+function ThumbBar({ children, sticky = false }: { children: ReactNode; sticky?: boolean }) {
+  return <div className={sticky ? "sticky bottom-0 z-10 -mx-5 border-t border-line bg-paper/95 px-5 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-md sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none" : "pt-1"}>{children}</div>;
 }
 
-function Checks({ legend, items, chosen, onToggle, name }: { legend: string; items: { id: string; label: string }[]; chosen: string[]; onToggle: (id: string) => void; name: string }) {
+function NumberField({ id, labelText, hintText, value, min, max, suffix, onChange }: { id: string; labelText: string; hintText?: string; value: number; min: number; max: number; suffix?: string; onChange: (v: number) => void }) {
+  return <Input id={id} type="number" inputMode="numeric" min={min} max={max} step={1} required label={labelText} hint={hintText} suffix={suffix} fieldClassName="tabular" value={Number.isFinite(value) ? value : ""} onChange={(v) => onChange(Math.round(Number(v)))} />;
+}
+
+function Checks({ legend, items, chosen, onToggle, name, short = false }: { legend: string; items: { id: string; label: string }[]; chosen: string[]; onToggle: (id: string) => void; name: string; short?: boolean }) {
   return (
     <fieldset>
-      <legend className={label}>{legend}</legend>
-      <ul className="mt-1.5 grid gap-x-4 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
+      <legend className="flex w-full items-baseline justify-between gap-3 text-[0.95rem] font-semibold">
+        {legend}
+        <span className="text-[0.82rem] font-normal text-ink-soft tabular">
+          {items.filter((i) => chosen.includes(i.id)).length}/{items.length}
+        </span>
+      </legend>
+      <ul className={`mt-2.5 grid gap-2 ${short ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4" : "sm:grid-cols-2 lg:grid-cols-3"}`}>
         {items.map((i) => (
           <li key={i.id}>
-            <label className="flex min-h-10 cursor-pointer items-center gap-2">
-              <input type="checkbox" name={name} value={i.id} checked={chosen.includes(i.id)} onChange={() => onToggle(i.id)} className="size-5 accent-petrol" />
-              <span>{i.label}</span>
-            </label>
+            <Checkbox card name={name} value={i.id} checked={chosen.includes(i.id)} onChange={() => onToggle(i.id)} label={<span className="hyphens-auto">{i.label}</span>} className="h-full" />
           </li>
         ))}
       </ul>
@@ -319,44 +326,68 @@ export function DevicePanel({ heading, intro }: { heading?: ReactNode; intro?: b
     setPhone(r.data);
   }
   const n = d?.devices.length ?? 0;
+  const when = (iso: string) => new Date(iso).toLocaleString(lang === "sv" ? "sv-FI" : lang === "fi" ? "fi-FI" : "en-GB", { timeZone: "Europe/Helsinki", dateStyle: "short", timeStyle: "short" });
   return (
-    <section id="devices" aria-labelledby="devices-title" className="space-y-3 bg-paper p-5">
-      <h2 id="devices-title" className="display text-[1.6rem]">
-        {heading ?? atx.devicesTitle}
-      </h2>
-      {intro !== false && d?.signer && <p className="max-w-[72ch] leading-snug">{atx.devicesIntro(d.signer.name)}</p>}
-      {d && <p className="text-ink-soft">{n === 0 ? atx.devicesNone : atx.devicesList(n)}</p>}
-      {d && n > 0 && (
-        <ul className="space-y-0.5 text-[0.92rem] text-ink-soft">
-          {d.devices.map((x) => (
-            <li key={x.createdAt}>
-              {atx.deviceAdded(new Date(x.createdAt).toLocaleString(lang === "sv" ? "sv-FI" : lang === "fi" ? "fi-FI" : "en-GB", { timeZone: "Europe/Helsinki", dateStyle: "short", timeStyle: "short" }))}
-              {x.lastUsedAt ? atx.deviceUsed(new Date(x.lastUsedAt).toLocaleString("fi-FI", { timeZone: "Europe/Helsinki", dateStyle: "short", timeStyle: "short" })) : ""}
-            </li>
-          ))}
-        </ul>
-      )}
-      {added && <p role="status" className="border-l-4 border-petrol bg-petrol-soft px-3 py-2">{atx.added}</p>}
-      {error && <ErrorPlate title={error.title} message={error.body} />}
-      <div className="flex flex-wrap gap-2">
-        <Button kind="primary" busy={busy === "this"} disabled={!!busy} onClick={() => void addThis()}>
-          {atx.addThis}
-        </Button>
-        <Button kind="secondary" busy={busy === "phone"} disabled={!!busy} onClick={() => void addPhone()}>
-          {atx.addPhone}
-        </Button>
-      </div>
-      {phone && (
-        <figure className="max-w-[16rem]">
-          <div className="aspect-square w-full bg-paper [&>svg]:size-full" dangerouslySetInnerHTML={{ __html: phone.qrSvg }} />
-          <figcaption className="mt-2 text-[0.92rem] leading-snug">
-            {atx.phoneScan}{" "}
-            <a href={phone.url} className="break-all font-semibold text-petrol underline decoration-2 underline-offset-4">
-              {atx.phoneOpen}
-            </a>
-          </figcaption>
-        </figure>
-      )}
+    <section id="devices" aria-labelledby="devices-title" className="scroll-mt-28">
+      <Card pad className="space-y-4">
+        <div className="flex items-start gap-4">
+          <IconDisc tone={n > 0 ? "good" : "petrol"}>{n > 0 ? <Check size={21} strokeWidth={2.4} /> : <KeyRound size={20} />}</IconDisc>
+          <div className="min-w-0">
+            <h2 id="devices-title" className="display text-[1.45rem] leading-tight">
+              {heading ?? atx.devicesTitle}
+            </h2>
+            {intro !== false && d?.signer && <p className="mt-1.5 max-w-[64ch] leading-relaxed text-ink-soft">{atx.devicesIntro(d.signer.name)}</p>}
+          </div>
+        </div>
+        {!d ? (
+          <Skeleton className="h-12" />
+        ) : (
+          <div className="rounded-lg bg-surface px-4 py-3">
+            <p className={n === 0 ? "text-[0.95rem] leading-snug text-ink-soft" : "font-semibold"}>{n === 0 ? atx.devicesNone : atx.devicesList(n)}</p>
+            {n > 0 && (
+              <ul className="mt-1.5 space-y-1 text-[0.9rem] text-ink-soft">
+                {d.devices.map((x) => (
+                  <li key={x.createdAt} className="flex items-center gap-2">
+                    <KeyRound aria-hidden size={15} className="shrink-0" />
+                    <span className="tabular">
+                      {atx.deviceAdded(when(x.createdAt))}
+                      {x.lastUsedAt ? atx.deviceUsed(when(x.lastUsedAt)) : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+        {added && (
+          <p role="status" className="flex items-start gap-2 rounded-md bg-good-soft px-3.5 py-2.5 text-[0.95rem] leading-snug text-good">
+            <Check aria-hidden size={18} strokeWidth={2.4} className="mt-0.5 shrink-0" />
+            <span>{atx.added}</span>
+          </p>
+        )}
+        {error && <ErrorPlate title={error.title} message={error.body} />}
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap">
+          <Button kind="primary" busy={busy === "this"} disabled={!!busy} onClick={() => void addThis()}>
+            {busy !== "this" && <KeyRound aria-hidden size={17} />}
+            {atx.addThis}
+          </Button>
+          <Button kind="secondary" busy={busy === "phone"} disabled={!!busy} onClick={() => void addPhone()}>
+            {busy !== "phone" && <QrCode aria-hidden size={17} />}
+            {atx.addPhone}
+          </Button>
+        </div>
+        {phone && (
+          <figure className="sheet-up flex flex-col gap-4 rounded-lg border border-line p-4 sm:flex-row sm:items-center">
+            <div className="aspect-square w-full max-w-[13rem] shrink-0 rounded-md bg-paper p-1 [&>svg]:size-full" dangerouslySetInnerHTML={{ __html: phone.qrSvg }} />
+            <figcaption className="text-[0.95rem] leading-relaxed">
+              {atx.phoneScan}{" "}
+              <a href={phone.url} className="mt-1 block break-all font-semibold text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol">
+                {atx.phoneOpen}
+              </a>
+            </figcaption>
+          </figure>
+        )}
+      </Card>
     </section>
   );
 }
