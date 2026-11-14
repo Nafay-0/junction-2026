@@ -10,6 +10,16 @@ const ctx = (profile: KitchenProfile = kitchen(regularHistory()), over: Partial<
 const L = (amount: number) => ({ quantity: { amount, unit: "L" as const } });
 
 describe("quantity against the kitchen's own pattern", () => {
+  it("a site of the kitchen (a daycare unit) is compared with its own orders, never called too small against the whole kitchen", () => {
+    const history = regularHistory(); // about 100 L a time for the kitchen
+    expect(checkQuantity(need(L(15)), ctx(kitchen(history))).map((c) => c.code)).not.toEqual([]); // the kitchen itself: 15 L is unusual
+    expect(checkQuantity(need(L(15)), ctx(kitchen(history), { site: "Päiväkoti Satu" }))).toEqual([]); // the daycare's first order
+    const daycare = [15, 15, 14, 16, 15].map((a, i) => ({ ...history[i], orderId: `ord_dc_${i}`, amount: a, site: "Päiväkoti Satu" }));
+    expect(checkQuantity(need(L(150)), ctx(kitchen([...history, ...daycare]), { site: "Päiväkoti Satu" })).map((c) => c.code)).toEqual(["quantity_tenfold"]);
+    // The daycare's orders do not move the kitchen's own usual amount.
+    expect(checkQuantity(need(L(100)), ctx(kitchen([...history, ...daycare])))).toEqual([]);
+  });
+
   it("catches a factor-of-ten slip upwards and offers the usual amount in one tap", () => {
     const [c, ...rest] = checkQuantity(need(L(1000)), ctx());
     expect(rest).toHaveLength(0);

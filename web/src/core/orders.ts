@@ -17,7 +17,7 @@ import type { EventPublisher } from "./events";
 import { CatalogError, ProductQuerySchema, scheduledOn, usableOffer, type LiveOffer, type LiveStatus, type MeteredCatalog, type Product } from "./catalog";
 import { ClaimStore, availabilityClaimInput, issueClaim, originClaimInput, priceClaimInput, refOf, type IssuedClaim } from "./claims";
 import { DockError, isDockError, parse } from "./errors";
-import { InMemoryIntakeRepository, createIntakeFlow, recordCommittedOrder, type IntakeRepository } from "./intake";
+import { InMemoryIntakeRepository, createIntakeFlow, recordCommittedOrder, type IntakeDeps, type IntakeRepository } from "./intake";
 import { InMemoryKitchenRepository, localNow, type KitchenRepository } from "./kitchen";
 import { SIGN_ALG, type KeyPair } from "./keys";
 import type { Ledger, LedgerHead } from "./ledger";
@@ -275,6 +275,8 @@ export type DockDeps = {
   holds?: ProductHolds;
   /** What can stand in for a product, by kitchen use (the server wires the product knowledge map; see alternatives.ts). */
   alternatives?: AlternativesSource;
+  /** One line per remembered item an intake used (the server wires the kitchen memory; see intake.ts). */
+  memoryUsage?: IntakeDeps["memoryUsage"];
 };
 
 /** The holds in force on some products. Called with the products of one quote; must be cheap (no live call). */
@@ -1258,6 +1260,7 @@ export function createDock(deps: DockDeps) {
     spentThisWeek: (orgId) => spentThisWeek(orgId),
     budgetUse: (orgId) => budgetUse(orgId),
     alternatives: deps.alternatives,
+    memoryUsage: deps.memoryUsage,
   });
   return { ...dock, ...guarded, intake };
 }

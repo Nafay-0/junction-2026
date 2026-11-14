@@ -294,12 +294,25 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
   add("order_splitting", split.outcome, split.reason, split.details);
 
   const unverified = ctx.unverifiedConfirmations ?? [];
+  const CONFIRMATION_KIND: Record<string, string> = {
+    quantity_tenfold: "an amount about ten times the usual",
+    quantity_unusual: "an unusual amount",
+    unit_confusion: "a unit that may be mixed up",
+    contradicts_preference: "a request against one of the kitchen's own rules",
+    duplicate_recent: "a possible repeat of a recent order",
+    declined_before: "a product the kitchen turned down before",
+    breaks_remembered_rule: "a request against a rule the kitchen's memory holds",
+    standing_order_range: "an amount outside the kitchen's standing order",
+  };
   if (unverified.length === 0) add("human_confirmation", "pass", "No confirmation rests on the agent's word alone.");
   else
     add(
       "human_confirmation",
       "escalate",
-      `The agent relayed that ${[...new Set(unverified.map((u) => u.by))].join(", ")} confirmed ${unverified.length > 1 ? "these" : "this"} as intended, but nobody verified it: ${unverified.map((u) => u.message).join(" ")} A named person must sign it off.`,
+      // The decision is the shared record the wholesaler reads: it names what kind of check was confirmed, never the
+      // check's words, which quote the kitchen's memory (its usual amounts, its own rules). The person signing off
+      // sees the words with the order (Order.notes).
+      `The agent relayed that ${[...new Set(unverified.map((u) => u.by))].join(", ")} confirmed ${[...new Set(unverified.map((u) => CONFIRMATION_KIND[u.code] ?? "a likely mistake Dock flagged"))].join(" and ")} as intended, but nobody verified it. A named person must sign it off, with the check shown to them.`,
       { confirmations: unverified.map((u) => ({ code: u.code, by: u.by })) },
     );
 

@@ -234,6 +234,10 @@ export const IntakeStepSchema = named(
     concerns: z.array(ConcernSchema).describe("needs_confirmation: likely mistakes the buyer must confirm or correct."),
     questions: z.array(QuestionSchema).describe("needs_input: at most two questions for the buyer."),
     fromMemory: z.array(MemoryNoteSchema).describe("Answers Dock took from the kitchen's memory instead of asking."),
+    memoryUsed: z
+      .array(z.looseObject({ itemId: z.string().optional(), text: z.string() }))
+      .optional()
+      .describe("One line per remembered item of the kitchen's memory this request used without asking: a rule applied, a habit pre-selected, a check made, a product left out."),
     alsoAsked: z
       .array(z.looseObject({ text: z.string(), group: z.string(), amount: z.looseObject({ amount: z.number(), unit: z.string() }).optional() }))
       .optional()

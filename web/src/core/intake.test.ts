@@ -242,6 +242,20 @@ describe("intake flow", () => {
     expect(next.options.flatMap((o) => o.lines.map((l) => l.productId))).not.toContain("T-REG");
   });
 
+  it("the wholesaler's audit of an order that set a kitchen rule aside never shows the rule's words (only that a rule was confirmed)", async () => {
+    const r = await dock.intake.open(session, { need: need({ item: { text: "ordinary milk", category: "milk", excludedAttributes: ["lactose_free"] }, optimise: "price" }) });
+    const once = await dock.intake.respondToConcerns(session, r.requestId, { by: "Aino", responses: [{ key: r.concerns[0].key, choice: "confirm" }] });
+    const quoted = once.state === "quoted" ? once : await dock.intake.choose(session, r.requestId, { by: "Aino", optionId: once.options[0].optionId });
+    const order = await dock.placeOrder(session, { requestId: r.requestId, quoteToken: quoted.quote!.quoteToken, lines: quoted.quote!.quote.lines.map(({ productId, quantity, unitPriceCents }) => ({ productId, quantity, unitPriceCents })) });
+    expect(order.decision.rules.find((x) => x.rule === "human_confirmation")).toMatchObject({ outcome: "escalate" });
+    const { auditFor } = await import("./audit");
+    const shared = JSON.stringify(auditFor("wholesaler", ledger.entries({ requestId: r.requestId })).entries);
+    expect(shared).not.toContain("Always lactose-free");
+    expect(shared).toContain("a request against one of the kitchen's own rules");
+    // The person signing off still sees the check's words with the order.
+    expect(order.notes?.join(" ")).toContain("Always lactose-free");
+  });
+
   it("reports no options with the reasons when nothing fits", async () => {
     const r = await dock.intake.open(session, { need: need({ item: { text: "milk", category: "milk", attributes: ["vegan"] }, optimise: "price" }) });
     expect(r.state).toBe("no_options");
@@ -334,5 +348,42 @@ describe("a message that names more than one item", () => {
     const step = await dock.intake.open(session, { need: need({ text: "100 L lactose-free milk for Wednesday" }) });
     expect(step.alsoAsked).toEqual([]);
     expect(step.notes.join(" ")).not.toMatch(/also asked/);
+  });
+});
+
+describe("a substitute the kitchen turned down before", () => {
+  const declinedItem = (forProductId: string | undefined, productId: string) => ({
+    id: `mem_decl_${productId}`,
+    fact: { kind: "substitute" as const, forProductId, forName: forProductId ? "the box" : undefined, productId, name: productId, accepted: false, reason: "too sweet" },
+    text: `Declined ${productId}`,
+    family: "milk",
+    strength: "habit" as const,
+    origin: "stated" as const,
+    status: "active" as const,
+    audience: "private" as const,
+    safety: false,
+    weight: 1,
+    confirmations: 1,
+    contradictions: 0,
+    sources: [{ door: "approval" as never, at: "2026-11-03T09:00:00.000Z", by: "Sanna Koskinen" }],
+    createdAt: "2026-11-03T09:00:00.000Z",
+    updatedAt: "2026-11-03T09:00:00.000Z",
+    history: [],
+  });
+
+  it("ranks last with the reason when it was declined for another product, and is left out when declined for this one", async () => {
+    const base = returning();
+    const withMemory = (items: ReturnType<typeof declinedItem>[]) => ({ ...base, memory: { items, forgotten: [], staffReads: [], proposals: [] } }) as KitchenProfile;
+    await setup(withMemory([declinedItem(undefined, "T-BOX")]));
+    const r = await dock.intake.open(session, { need: need({ optimise: "price" }) });
+    const cards = r.state === "quoted" ? [] : r.options;
+    if (cards.length > 1) {
+      expect(cards.at(-1)!.lines[0].productId).toBe("T-BOX");
+      expect(cards.at(-1)!.cons.join(" ")).toMatch(/turned .* down before \(Sanna Koskinen turned it down as a substitute on .*: "too sweet"\)/);
+    } else expect(r.quote?.quote.lines[0].productId).not.toBe("T-BOX");
+    await setup(withMemory([declinedItem("T-1L", "T-BOX")]));
+    const named = await dock.intake.open(session, { need: need({ item: { text: "milk", category: "milk", productId: "T-1L" }, optimise: "price" }) });
+    expect(named.excluded.find((e) => e.productId === "T-BOX")?.reason).toMatch(/^the kitchen does not want it: Sanna Koskinen turned it down as a substitute for the box/);
+    expect([...named.options.flatMap((o) => o.lines), ...(named.quote?.quote.lines ?? [])].some((l) => l.productId === "T-BOX")).toBe(false);
   });
 });

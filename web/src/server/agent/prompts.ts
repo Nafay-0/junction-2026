@@ -72,8 +72,11 @@ const EARLIER_RULES = `Earlier requests of this kitchen are listed below the cal
 
 `;
 
-export function interpretUser(text: string, calendar: string, earlier?: string): string {
-  return `${calendar}${earlier ? `\n\nEarlier requests of this kitchen (newest first):\n${earlier}` : ""}\n\nBuyer's request:\n"""\n${text}\n"""`;
+export function interpretUser(text: string, calendar: string, earlier?: string, memory?: string): string {
+  const mem = memory
+    ? `\n\nThe kitchen's memory, for context only (to understand words such as "the usual", a site's name or a product the kitchen means). Do NOT copy its rules or habits into the need: Dock applies them itself, and the need holds only what the buyer said.\n${memory}`
+    : "";
+  return `${calendar}${earlier ? `\n\nEarlier requests of this kitchen (newest first):\n${earlier}` : ""}${mem}\n\nBuyer's request:\n"""\n${text}\n"""`;
 }
 
 // ---------- the shop assistant: grounded answers ----------

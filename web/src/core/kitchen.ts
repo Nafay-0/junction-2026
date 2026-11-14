@@ -22,6 +22,8 @@ export type HistoryLine = {
 
 export type HistoryEntry = {
   orderId: string;
+  /** The site within the kitchen the order was for ("Päiväkoti Satu"), when the request came from one. */
+  site?: string;
   requestId?: string;
   placedAt: string; // ISO timestamp the order was committed
   neededBy?: string; // what the buyer asked for
@@ -265,8 +267,9 @@ export function primaryLine(entry: HistoryEntry): HistoryLine {
   return [...entry.lines].sort((a, b) => b.packs * b.packSize - a.packs * a.packSize)[0];
 }
 
-export function usualAmount(profile: KitchenProfile, family: string): { amount: number; unit: BaseUnit; orders: number } | undefined {
-  const recent = familyHistory(profile, family).slice(-QUANTITY_WINDOW);
+export function usualAmount(profile: KitchenProfile, family: string, site?: string): { amount: number; unit: BaseUnit; orders: number } | undefined {
+  // A site's own orders are its pattern (a daycare unit's 30 L is not the school kitchen's 200 L).
+  const recent = familyHistory(profile, family).filter((h) => (site ? h.site === site : !h.site)).slice(-QUANTITY_WINDOW);
   if (recent.length === 0) return undefined;
   const unit = recent.at(-1)!.unit;
   const amounts = recent.filter((h) => h.unit === unit).map((h) => h.amount).sort((a, b) => a - b);
@@ -503,4 +506,59 @@ export function kitchenRulesFor(profile: KitchenProfile | undefined, mandate: { 
     else if (m.fact.kind === "diet" && !claims.has(m.fact.claim)) { claims.add(m.fact.claim); sources.push({ text: m.text, source: "kitchen memory" }); }
   }
   return { requiredClaims: [...claims], forbiddenAllergens: [...allergens], sources };
+}
+
+/**
+ * What the kitchen's memory says it turned down, for the option cards: a substitute a person declined, a product
+ * it avoids. `leaveOut`: a rule ("never order this"), or a substitute declined for the very product the request is
+ * about: not offered at all. The rest rank last and say why. Reasons name who said it and when.
+ */
+export function declinedProducts(profile: KitchenProfile, family: string, opts: { now?: Date; referenceId?: string } = {}): Map<string, { reason: string; leaveOut: boolean; itemId: string }> {
+  const out = new Map<string, { reason: string; leaveOut: boolean; itemId: string }>();
+  for (const m of activeMemory(profile, { family, now: opts.now })) {
+    if (m.scope) continue;
+    const f = m.fact;
+    const s = m.sources.at(-1);
+    const who = m.confirmedBy?.by ?? s?.by;
+    const when = s ? ` on ${formatDay(localDateOf(s.at))}` : "";
+    if (f.kind === "substitute" && !f.accepted && f.productId) {
+      const forRef = !!opts.referenceId && f.forProductId === opts.referenceId;
+      out.set(f.productId, { reason: `${who ?? "the kitchen"} turned it down as a substitute${f.forName ? ` for ${f.forName}` : ""}${when}${f.reason ? `: "${f.reason}"` : ""}`, leaveOut: forRef || m.strength === "rule", itemId: m.id });
+    } else if (f.kind === "product" && f.stance === "avoid" && (m.strength === "rule" || m.weight >= 0.5)) {
+      out.set(f.productId, { reason: `${m.text}${who ? ` (${m.origin === "learned" ? "learned" : `said by ${who}`}${when})` : ""}`, leaveOut: m.strength === "rule", itemId: m.id });
+    }
+  }
+  return out;
+}
+
+// ---------- one change at a time per kitchen ----------
+
+const profileLocks = new WeakMap<KitchenRepository, Map<string, Promise<unknown>>>();
+
+/**
+ * Read, change and save a kitchen's profile without losing a concurrent change: every writer of a profile (the
+ * intake's remembered answers, the order history at commit, the memory service, the portal's rule changes) goes
+ * through this, so they queue per kitchen instead of overwriting each other. In process; a shared store would hold
+ * the same lock in the database.
+ */
+export function withKitchenLock<T>(repo: KitchenRepository, orgId: string, fn: () => Promise<T>): Promise<T> {
+  let locks = profileLocks.get(repo);
+  if (!locks) profileLocks.set(repo, (locks = new Map()));
+  const prev = locks.get(orgId) ?? Promise.resolve();
+  const run = prev.then(fn, fn);
+  const tail = run.catch(() => undefined);
+  locks.set(orgId, tail);
+  void tail.then(() => {
+    if (locks!.get(orgId) === tail) locks!.delete(orgId);
+  });
+  return run;
+}
+
+/** `fn` gets the latest profile (or undefined) and returns the profile to save, or undefined to save nothing. */
+export function updateKitchenProfile(repo: KitchenRepository, orgId: string, fn: (p: KitchenProfile | undefined) => KitchenProfile | undefined | Promise<KitchenProfile | undefined>): Promise<KitchenProfile | undefined> {
+  return withKitchenLock(repo, orgId, async () => {
+    const next = await fn(await repo.getProfile(orgId));
+    if (next) await repo.saveProfile(next);
+    return next;
+  });
 }

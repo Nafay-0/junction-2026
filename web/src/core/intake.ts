@@ -8,6 +8,8 @@ import { baseAmount, checkNeed, type CheckContext, type Concern, type ConcernCod
 import { DockError, parse } from "./errors";
 import {
   addStatedPreference,
+  declinedProducts,
+  updateKitchenProfile,
   emptyProfile,
   kitchenView,
   lastOrder,
@@ -116,6 +118,10 @@ export type Intake = {
   unverified?: UnverifiedConfirmation[];
   /** Items the buyer's own words name that this request does not cover (plain code, see also-asked.ts): said, never dropped. */
   alsoAsked?: AlsoAsked[];
+  /** The site within the kitchen the request is for, when a door knows it. */
+  site?: string;
+  /** One line per remembered thing this request used (a rule applied, a habit pre-selected, a check, a product left out). */
+  memoryUsed?: { itemId?: string; text: string }[];
   chosen?: { optionId: string; labels: OptionLabel[]; by: string; at: string };
   quote?: { quote: Quote; quoteToken: string; policyPreview: Decision };
   createdAt: string;
@@ -142,7 +148,12 @@ export class InMemoryIntakeRepository implements IntakeRepository {
 
 /** `by` names the person the agent is relaying for; it goes into the ledger with every answer and confirmation. */
 const by = z.string().min(1).max(120);
-export const OpenIntakeInput = z.object({ need: z.unknown(), by: by.optional() });
+export const OpenIntakeInput = z.object({
+  need: z.unknown(),
+  by: by.optional(),
+  /** The site within the kitchen the request is for (a daycare unit, a second restaurant): its amounts are compared with its own orders. */
+  site: z.string().min(1).max(80).optional(),
+});
 export const ConcernResponseInput = z.object({
   by,
   responses: z.array(z.object({ key: z.string().min(1), choice: z.string().min(1) })).min(1).max(20), // "confirm" or a correction id
@@ -164,6 +175,11 @@ export type IntakeDeps = {
   spentThisWeek: (orgId: string) => Promise<number>;
   /** What can stand in for the product the request is about, ranked by kitchen use (the product map; see alternatives.ts). */
   alternatives?: AlternativesSource;
+  /**
+   * One line per remembered item the intake used, for the request (the server wires the kitchen memory's usage lines,
+   * which also mark each item's last use). Called after each step, outside the kitchen's lock.
+   */
+  memoryUsage?: (orgId: string, intake: Pick<Intake, "rules" | "fromMemory" | "concerns">) => Promise<{ itemId?: string; text: string }[]>;
   /** Committed and held spend, with the orders holding money, for the budget's part of a "nothing fits" answer. */
   budgetUse?: (orgId: string) => Promise<{ spentCents: number; heldCents: number; held: { orderId: string; totalCents: number; expiresAt: string }[] }>;
   /** The order flow's live lookup: allowance, delivery date, signed claims and ledger in one place (see orders.ts). */
@@ -263,12 +279,33 @@ export function createIntakeFlow(deps: IntakeDeps) {
     ledger.append({ type: "intake", actor, requestId: i.requestId, summary, data });
   }
 
-  /** Run the checks and move the intake to its next state. */
+  /** Run the checks and move the intake to its next state; then say, one line each, what memory it used. */
   async function advance(session: AgentSession, i: Intake): Promise<Intake> {
+    const next = await advanceSteps(session, i);
+    const before = JSON.stringify(next.memoryUsed ?? []);
+    const lines: { itemId?: string; text: string }[] = [];
+    if (deps.memoryUsage) {
+      try {
+        lines.push(...(await deps.memoryUsage(next.orgId, next)));
+      } catch {
+        // the lines are an account of what was used; the rules were applied either way
+      }
+    }
+    for (const e of next.excluded) if (e.reason.startsWith("the kitchen does not want it: ")) lines.push({ text: `Left out ${e.productId}: ${e.reason.slice("the kitchen does not want it: ".length)}` });
+    for (const o of next.options) for (const c of o.cons) if (/^The kitchen turned .* down before/.test(c) && !lines.some((l) => l.text === c)) lines.push({ text: c });
+    next.memoryUsed = lines;
+    if (JSON.stringify(lines) !== before) {
+      if (lines.length) log(next, "dock", `Dock applied ${lines.length} remembered item${lines.length > 1 ? "s" : ""} of the kitchen's memory to this request, without asking.`, { step: "memory_used", count: lines.length, itemIds: lines.flatMap((l) => (l.itemId ? [l.itemId] : [])) });
+      await intakes.save(next);
+    }
+    return next;
+  }
+
+  async function advanceSteps(session: AgentSession, i: Intake): Promise<Intake> {
     const at = now();
     const profile = await profileOf(session);
     const products = await familyProducts(i.family, i.need);
-    const ctx: CheckContext = { now: at, profile, family: i.family, candidates: products, suspendedPreferenceIds: i.suspendedPreferenceIds, pending: await pendingOrders(i) };
+    const ctx: CheckContext = { now: at, profile, family: i.family, candidates: products, suspendedPreferenceIds: i.suspendedPreferenceIds, pending: await pendingOrders(i), ...(i.site ? { site: i.site } : {}) };
     Object.assign(i, { concerns: [], questions: [], openChoices: [], fromMemory: [], notAsked: [], rules: [], options: [], notes: [], excluded: [], preselected: undefined, signOffNotes: undefined, updatedAt: at.toISOString() });
     if (i.unverified?.length) i.signOffNotes = i.unverified.map(unverifiedNote);
 
@@ -297,6 +334,21 @@ export function createIntakeFlow(deps: IntakeDeps) {
     const budget = deps.budgetUse ? await deps.budgetUse(i.orgId) : { spentCents: await deps.spentThisWeek(i.orgId), heldCents: 0, held: [] };
     const spent = budget.spentCents;
     const reference = referenceFor(i.need, allowed, last, usual);
+    // What the kitchen turned down before (memory): a rule, or a substitute declined for this very product, is left
+    // out with the reason; anything else it declined ranks last and says why. A product the buyer named is theirs
+    // to ask for (the mistake check asks about it), so it is never removed here.
+    const declinedAll = declinedProducts(profile, i.family, { now: at, referenceId: reference?.productId });
+    const declined = new Map<string, string>();
+    for (const [id, d] of declinedAll) {
+      if (id === i.need.item.productId) continue;
+      if (d.leaveOut) {
+        const idx = allowed.findIndex((p) => p.id === id);
+        if (idx >= 0) {
+          allowed.splice(idx, 1);
+          i.excluded.push({ productId: id, reason: `the kitchen does not want it: ${d.reason}` });
+        }
+      } else declined.set(id, d.reason);
+    }
 
     // 3. "Same as last time" settles every choice from the last order; otherwise ask only what matters and memory
     //    does not answer.
@@ -343,7 +395,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
       const missing = proposedIds(alternatives, 4).filter((id) => !have.has(id));
       if (missing.length) {
         for (const p of await catalog.searchProducts({ ids: missing, limit: missing.length })) {
-          const why = session.mandate.allowedCategories.includes(p.category) ? violation(p, constraints) : "outside the product groups the mandate allows";
+          const why = declinedAll.get(p.id)?.leaveOut ? `the kitchen does not want it: ${declinedAll.get(p.id)!.reason}` : session.mandate.allowedCategories.includes(p.category) ? violation(p, constraints) : "outside the product groups the mandate allows";
           if (why) i.excluded.push({ productId: p.id, reason: `proposed by the product map, but ${why}` });
           else narrowed.push(p);
         }
@@ -370,6 +422,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
       usual: usual?.kind === "product" ? { productId: usual.productId, text: usual.text } : undefined,
       reference,
       alternatives,
+      declined,
       goal: goalForRank,
       span,
       estimates: i.acknowledgements.filter((a) => a.code === "pack_uncertain" && a.action === "confirmed").map((a) => a.key.split(":")[1]),
@@ -426,7 +479,9 @@ export function createIntakeFlow(deps: IntakeDeps) {
       i.notes.unshift(`Repeats your order of ${formatAmount(last!.amount, last!.unit)} from ${formatDay(localDateOf(last!.placedAt))}.`);
       return quoteOption(session, i, { ...repeatCard, labels: ["same_as_last_time"] }, `agent ${session.agentId}`, "Same as last time, as asked.");
     }
-    const pick = goalForRank ? preselect(i.options, goalForRank, goal.within) : undefined;
+    // The agent never picks, nor pre-selects, a product the kitchen turned down before: that is the buyer's call.
+    const candidatePick = goalForRank ? preselect(i.options, goalForRank, goal.within) : undefined;
+    const pick = candidatePick && i.options.find((o) => o.optionId === candidatePick.optionId)?.lines.some((l) => declined.has(l.productId)) ? undefined : candidatePick;
     if (pick && goal.source) i.preselected = { ...pick, source: goal.source as NonNullable<Intake["preselected"]>["source"] };
     const picked = i.preselected && i.options.find((o) => o.optionId === i.preselected!.optionId);
     log(i, "dock", `Dock offered ${i.options.length} option${i.options.length > 1 ? "s" : ""} for ${formatAmount(i.amount.amount, i.amount.unit)} of ${i.family} (${i.options.every((o) => o.match === "full") ? "all full matches, ranked" : "none meets the whole request; each says what it gives up"})${i.preselected ? `; pre-selected ${i.preselected.optionId} (${i.preselected.reason})` : ""}.`, {
@@ -549,6 +604,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
         excluded: [],
         createdAt: at,
         updatedAt: at,
+        ...(body.site ? { site: body.site } : {}),
       };
       log(i, agentActor(session), `Structured need (${unmatched ? "no product family found" : family}): ${describeNeed(need)}.`, { step: "need", need, by: body.by, ...(changes.length ? { reasons: changes.map((c) => `In the catalogue's words: ${c}`) } : {}) });
       const also = alsoAskedIn(need.text, need);
@@ -637,7 +693,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
       // The goal can always be given (or changed): it is never asked up front, the cards answer it.
       const askable = [...i.questions, ...(i.openChoices ?? []), ...i.fromMemory.map((m) => m.question), ...(i.fromMemory.some((m) => m.question.id === OPTIMISE_QUESTION_ID) ? [] : [optimiseQuestion()])];
       const at = now().toISOString();
-      let profile = await profileOf(session);
+      const toRemember: StatedPreference[] = [];
       const notRemembered: string[] = [];
       for (const a of answers) {
         const q = askable.find((x) => x.id === a.questionId);
@@ -647,7 +703,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
         let remembered = "";
         if (a.remember && verified) {
           const pref = rememberAnswer(q, a.optionId, i, who, at);
-          profile = addStatedPreference(profile, pref);
+          toRemember.push(pref);
           remembered = ` Remembered for next time as "${pref.text}".`;
         } else if (a.remember) {
           // A rule of the kitchen is a person's word. An answer only relayed by an agent applies to this request.
@@ -656,7 +712,10 @@ export function createIntakeFlow(deps: IntakeDeps) {
         }
         log(i, actorOf(session, via, who), `${who} answered "${q.text}" (${how}): ${optionLabel(q, a.optionId)}.${remembered}`, { step: "answer", questionId: q.id, optionId: a.optionId, remember: !!a.remember && verified, by: who, relayedBy: session.agentId, channel: via.channel, verified, ...(via.words ? { words: via.words } : {}) });
       }
-      await kitchens.saveProfile(profile);
+      // Under the kitchen's lock, on the latest profile: a memory write in between is not lost.
+      if (toRemember.length) {
+        await updateKitchenProfile(kitchens, session.mandate.issuer.orgId, (p) => toRemember.reduce((acc, pref) => addStatedPreference(acc, pref), p ?? emptyProfile(session.mandate.issuer.orgId, session.mandate.issuer.name)));
+      }
       const next = await advance(session, i);
       if (notRemembered.length) {
         next.notes.push(...notRemembered);
@@ -783,12 +842,12 @@ function rememberAnswer(q: Question, optionId: string, i: Intake, who: string, a
 
 /** Add a committed order to the kitchen's history. Called by the order flow at commit. */
 export async function recordCommittedOrder(deps: { kitchens: KitchenRepository; intakes: IntakeRepository }, order: Order, neededBy?: string): Promise<void> {
-  const profile = (await deps.kitchens.getProfile(order.orgId)) ?? emptyProfile(order.orgId, order.orgName);
   const intake = await deps.intakes.get(order.requestId);
   const lines = order.lines.map((l) => ({ productId: l.productId, name: l.name, category: l.category, attributes: l.attributes, packs: l.quantity, packSize: l.packSize, unit: l.unit, unitPriceCents: l.unitPriceCents }));
   const main = [...lines].sort((a, b) => b.packs * b.packSize - a.packs * a.packSize)[0];
   const entry: HistoryEntry = {
     orderId: order.orderId,
+    ...(intake?.site ? { site: intake.site } : {}),
     requestId: order.requestId,
     placedAt: order.updatedAt,
     neededBy,
@@ -800,7 +859,7 @@ export async function recordCommittedOrder(deps: { kitchens: KitchenRepository; 
     lines,
     chosenLabels: intake?.chosen?.labels,
   };
-  await deps.kitchens.saveProfile(recordOrder(profile, entry));
+  await updateKitchenProfile(deps.kitchens, order.orgId, (p) => recordOrder(p ?? emptyProfile(order.orgId, order.orgName), entry));
 }
 
 /** The step's notes, ending with what else the buyer asked for, so nothing they named vanishes without a word. */
@@ -844,6 +903,7 @@ export function view(i: Intake) {
     notes: withAlsoAsked(i),
     excluded: i.excluded,
     alsoAsked: i.alsoAsked ?? [],
+    memoryUsed: i.memoryUsed ?? [],
     signOffNotes: i.signOffNotes ?? [],
     acknowledgements: i.acknowledgements,
     chosen: i.chosen,
