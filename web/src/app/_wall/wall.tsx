@@ -406,6 +406,13 @@ function JoinPanel({ join, kitchens }: { join: { url: string; qrSvg: string }; k
             </li>
           ))}
         </ol>
+        <p className="mt-[1.4vh] text-[max(0.92rem,0.9vw)] leading-snug text-paper/80">
+          Or bring your own agent:{" "}
+          <Link href="/try" className="font-semibold text-paper underline underline-offset-2">
+            try it as an outside agent
+          </Link>
+          .
+        </p>
       </div>
       {kitchens.length > 0 && (
         <div className="mt-[2vh] px-[1.6vw] max-lg:px-5">

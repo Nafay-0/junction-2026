@@ -13,7 +13,7 @@ import {
   type ApprovalVerifier,
   type SignOff,
 } from "./approval";
-import type { AlternativesSource } from "./alternatives";
+import type { AlternativesAnswer, AlternativesSource } from "./alternatives";
 import type { EventPublisher } from "./events";
 import { CatalogError, ProductQuerySchema, scheduledOn, usableOffer, type LiveOffer, type LiveStatus, type MeteredCatalog, type Product } from "./catalog";
 import { ClaimStore, availabilityClaimInput, cutoffMs, issueClaim, originClaimInput, priceClaimInput, refOf, type IssuedClaim } from "./claims";
@@ -55,7 +55,7 @@ export const OpenRequestInput = z.object({
   /** The product family asked for, when known (the intake sets it). */
   category: z.string().min(1).max(60).optional(),
 });
-export const SearchInput = ProductQuerySchema.omit({ ids: true }).extend({ requestId: z.string().min(1) });
+export const SearchInput = ProductQuerySchema.omit({ ids: true }).extend({ requestId: z.string().min(1), ids: z.array(z.string().min(1).max(60)).max(20).optional() });
 export const AvailabilityInput = z.object({
   requestId: z.string().min(1),
   productIds: z.array(z.string().min(1)).min(1),
@@ -95,7 +95,10 @@ export const ChangeNeededByInput = z.object({
 export const PlaceOrderInput = SignedOrderInput.extend({
   quoteToken: SignedOrderInput.shape.quoteToken.optional().describe("The quoteToken from POST /api/v1/quotes, unchanged. Leave it out after the intake's choice: Dock uses the quote it signed for this request."),
   lines: SignedOrderInput.shape.lines.optional().describe("Only with quoteToken: the quote's lines (productId, quantity, unitPriceCents) copied from quote.lines."),
+  replaces: z.string().min(1).max(60).optional().describe("Changing an order: the orderId this one replaces. Once this order is placed (committed or waiting for sign-off), Dock takes that one back if it still can (waiting for sign-off, or placed by this agent alone before the order cut-off), so one order stands; `replaced` says what happened to it."),
 });
+/** What place_order adds when it replaced an earlier order: that order's new status, or why it still stands. */
+export type ReplacedOrder = { orderId: string; status: OrderStatus; refused?: { code: string; rule?: string; message: string } };
 export const WithdrawInput = z.object({
   /** Why, in the buyer's words; written to the ledger. */
   reason: z.string().max(300).optional(),
@@ -227,6 +230,13 @@ export type ApprovalContext = {
  * globalThis: a bundler may load this module once per route, and the thread reads what the API side wrote.
  */
 const quoteCutoffs: Map<string, string> = ((globalThis as typeof globalThis & { __dockQuoteCutoffs?: Map<string, string> }).__dockQuoteCutoffs ??= new Map());
+
+/**
+ * The latest quote Dock signed for a request opened outside the intake (open_request, a lookup, several lines), kept
+ * in this process only, so `place_order { requestId }` needs no copied token there either. The intake keeps its own
+ * quote (intake.ts); after a restart a request simply has no current quote and the agent asks for a new one.
+ */
+const lastQuotes: Map<string, { agentId: string; orgId: string; quoteToken: string; quote: Quote }> = ((globalThis as typeof globalThis & { __dockLastQuotes?: Map<string, { agentId: string; orgId: string; quoteToken: string; quote: Quote }> }).__dockLastQuotes ??= new Map());
 
 /** Until when the kitchen may still take back this committed order, if the wholesaler's cut-off is known. */
 export function takeBackUntil(o: Pick<Order, "quoteId" | "status">, at: Date = new Date()): string | undefined {
@@ -1193,6 +1203,10 @@ export function createDock(deps: DockDeps) {
       }
       const quoteToken = await signQuote(quote, wholesalerKey);
       if (cutoff !== undefined) quoteCutoffs.set(quote.quoteId, new Date(cutoff).toISOString());
+      if (!internal.intakeQuote) {
+        lastQuotes.set(requestId, { agentId: session.agentId, orgId: session.mandate.issuer.orgId, quoteToken, quote });
+        if (lastQuotes.size > 5000) lastQuotes.delete(lastQuotes.keys().next().value!);
+      }
       const subs = quote.lines.filter((l) => l.substituteFor).length;
       ledger.append({
         type: "quote",
@@ -1566,8 +1580,39 @@ export function createDock(deps: DockDeps) {
           publish({ type: "order_withdrawn", at, orgId, orderId, totalCents: order.totalCents, summary: `${order.orgName}: a ${formatEur(order.totalCents)} order was taken back before the cut-off.` });
           return toPublicOrder(order);
         }
+        // An agent may undo its own decision: an order it placed alone, inside its mandate (no person signed it), until
+        // the wholesaler's order cut-off. An order a person signed off is theirs to take back, in the kitchen's store.
+        if (order.status === "committed" && !internal.takeBack) {
+          const until = takeBackUntil(order, now());
+          const actor = agentActor(session);
+          const ids = { requestId: order.requestId, orderId };
+          if (order.approval) {
+            throw refuse(new DockError(409, "take_back_needs_person", `Order ${orderId} was signed off by ${order.approval.approver.name} (${order.approval.approver.role}); an agent cannot take back what a person signed. The kitchen's own signed-in person can, in its store${until ? `, until the order cut-off ${until.slice(0, 16).replace("T", " ")} UTC` : ""}.`, "human_input", { status: order.status, ...(until ? { takeBackUntil: until } : {}) }), actor, ids);
+          }
+          if (order.agentId !== session.agentId) {
+            throw refuse(new DockError(409, "take_back_not_own", `Order ${orderId} was placed by another agent of this organisation; only the agent that placed it, or the kitchen's own signed-in person, can take it back.`, "mandate_agent", { status: order.status }), actor, ids);
+          }
+          if (!until) {
+            throw refuse(new DockError(409, "past_cutoff", `Order ${orderId} can no longer be taken back: the wholesaler's order cut-off has passed (or is not known to this server), so it is being picked. Tell the buyer; a change now is a new order.`, "delivery_deadline", { status: order.status }), actor, ids);
+          }
+          const at = now().toISOString();
+          order.status = "withdrawn";
+          order.updatedAt = at;
+          await repo.saveOrder(order);
+          await updateKitchenProfile(kitchens, orgId, (p) => (p ? { ...p, history: p.history.filter((h) => h.orderId !== orderId) } : p));
+          ledger.append({
+            type: "order",
+            actor,
+            requestId: order.requestId,
+            orderId,
+            summary: `Committed order ${orderId} (${formatEur(order.totalCents)}), which the agent had placed alone inside its mandate, taken back by that agent before the order cut-off ${until.slice(0, 16).replace("T", " ")} UTC${by ? `, at the request of ${by} (relayed by the agent, not verified)` : ""}${reason ? `: "${reason}"` : ""}. The wholesaler's confirmation no longer holds and it no longer counts against the weekly budget.`,
+            data: { decision: "taken_back", by, verified: false, relayedBy: session.agentId, cutoff: until, reason },
+          });
+          publish({ type: "order_withdrawn", at, orgId, orderId, totalCents: order.totalCents, summary: `${order.orgName}: the agent took back a ${formatEur(order.totalCents)} order it had placed, before the cut-off.` });
+          return toPublicOrder(order);
+        }
         if (order.status !== "pending_approval") {
-          throw refuse(new DockError(409, "order_not_pending", `Order ${orderId} is ${order.status}; only an order waiting for sign-off can be withdrawn.`, "intake_sequence", { status: order.status }), agentActor(session), { requestId: order.requestId, orderId });
+          throw refuse(new DockError(409, "order_not_pending", `Order ${orderId} is ${order.status}; only an order waiting for sign-off, or one the agent placed alone before the order cut-off, can be withdrawn.`, "intake_sequence", { status: order.status }), agentActor(session), { requestId: order.requestId, orderId });
         }
         const at = now().toISOString();
         order.status = "withdrawn";
@@ -1612,6 +1657,14 @@ export function createDock(deps: DockDeps) {
       return { budgetCents: session.mandate.weeklyBudgetCents, ...b, leftCents: session.mandate.weeklyBudgetCents - b.spentCents };
     },
 
+    /**
+     * What the product knowledge map proposes in place of a product, ranked best, better, good with a reason (the same
+     * source the intake's option cards use). Undefined when the map is not loaded or does not know the product.
+     */
+    async alternativesFor(productId: string, q: Parameters<AlternativesSource>[1]): Promise<AlternativesAnswer | undefined> {
+      return deps.alternatives ? deps.alternatives(productId, q).catch(() => undefined) : undefined;
+    },
+
     stats: () => catalog.stats(),
     /** The per-agent hourly allowance of live lookups, shared by every transport (REST, MCP, intake). */
     liveAllowance,
@@ -1634,7 +1687,15 @@ export function createDock(deps: DockDeps) {
     const none = (message: string, rule: string, details: Record<string, unknown> = {}) => refuse(new DockError(409, "no_current_quote", message, rule, { requestId, ...details }), actor, { requestId });
     if (!i || i.orgId !== session.mandate.issuer.orgId || i.agentId !== session.agentId) {
       if (!(await repo.getRequest(requestId))) throw new DockError(404, "request_not_found", `No open request ${requestId} for this agent.`);
-      throw none(`Request ${requestId} has no quote Dock signed through the intake: send quoteToken and lines from POST /api/v1/quotes, or start with POST /api/v1/intake.`, "intake_sequence");
+      // Outside the intake: the latest quote Dock signed for this request, to this agent (request_quote, several lines).
+      const last = !i ? lastQuotes.get(requestId) : undefined;
+      if (last && last.agentId === session.agentId && last.orgId === session.mandate.issuer.orgId) {
+        const q = last.quote;
+        if (Date.parse(q.expiresAt) <= now().getTime()) throw none(`The quote for request ${requestId} expired at ${q.expiresAt}: its fixed price no longer holds. Ask for a new quote.`, "quote_expiry", { quoteId: q.quoteId, expiresAt: q.expiresAt });
+        if (await repo.isQuoteUsed(q.quoteId)) throw none(`The quote for request ${requestId} already bought an order; a quote buys once. Ask for a new quote only if the buyer needs more.`, "quote_replay", { quoteId: q.quoteId });
+        return { requestId, quoteToken: last.quoteToken, lines: q.lines.map(({ productId, quantity, unitPriceCents }) => ({ productId, quantity, unitPriceCents })) };
+      }
+      throw none(`Request ${requestId} has no current quote: ask for one first (request_quote, POST /api/v1/quotes) and then place it with just requestId, or start with the intake (submit_need, POST /api/v1/intake).`, "intake_sequence");
     }
     if (i.state !== "quoted" || !i.quote) throw none(`Request ${requestId} has no current quote: it is ${i.state}. Choose an option first; the quote comes with the choice.`, "intake_sequence", { state: i.state });
     const q = i.quote.quote;
@@ -1660,14 +1721,31 @@ export function createDock(deps: DockDeps) {
       return dock.requestQuote(session, input);
     },
     /** `internal`: server code in this process only (the thread's order sheet), never a request body. */
-    placeOrder: async (session: AgentSession, input: z.input<typeof PlaceOrderInput>, internal: { confirmedBy?: string } = {}) => {
+    placeOrder: async (session: AgentSession, input: z.input<typeof PlaceOrderInput>, internal: { confirmedBy?: string } = {}): Promise<PublicOrder & { replaced?: ReplacedOrder }> => {
       const body = parse(PlaceOrderInput, input);
       await intakeGate(session, body.requestId);
-      if (body.quoteToken) {
-        if (!body.lines) throw new DockError(400, "invalid_request", "Send lines with quoteToken (copied from quote.lines), or leave both out after the intake's choice.");
-        return dock.placeOrder(session, { requestId: body.requestId, quoteToken: body.quoteToken, lines: body.lines }, internal);
+      // A change replaces an order that can still be taken back: checked before anything is placed.
+      if (body.replaces) {
+        const old = await dock.getOrder(session, body.replaces);
+        if (old.status !== "pending_approval" && old.status !== "committed") {
+          throw refuse(new DockError(409, "nothing_to_replace", `Order ${old.orderId} is ${old.status}: there is nothing to replace. Place the new order without replaces.`, "intake_sequence", { status: old.status }), agentActor(session), { requestId: body.requestId, orderId: old.orderId });
+        }
       }
-      return dock.placeOrder(session, await currentQuoteOrder(session, body.requestId), internal);
+      if (body.quoteToken && !body.lines) throw new DockError(400, "invalid_request", "Send lines with quoteToken (copied from quote.lines), or leave both out after the intake's choice.");
+      const signed = body.quoteToken ? { requestId: body.requestId, quoteToken: body.quoteToken, lines: body.lines! } : await currentQuoteOrder(session, body.requestId);
+      const order: PublicOrder & { replaced?: ReplacedOrder } = await dock.placeOrder(session, signed, internal);
+      if (body.replaces && (order.status === "committed" || order.status === "pending_approval")) {
+        try {
+          const back = await dock.withdrawOrder(session, body.replaces, { reason: `replaced by order ${order.orderId}` });
+          order.replaced = { orderId: back.orderId, status: back.status };
+          ledger.append({ type: "order", actor: agentActor(session), requestId: body.requestId, orderId: order.orderId, summary: `Order ${order.orderId} replaces order ${back.orderId}, which was taken back; one order stands.`, data: { replaces: back.orderId } });
+        } catch (err) {
+          if (!isDockError(err)) throw err;
+          const still = await dock.getOrder(session, body.replaces);
+          order.replaced = { orderId: still.orderId, status: still.status, refused: { code: err.code, rule: err.rule, message: err.message } };
+        }
+      }
+      return order;
     },
   };
 
