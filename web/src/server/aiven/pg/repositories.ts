@@ -62,6 +62,7 @@ export class PgDockRepository implements DockRepository {
     const row = r.rows[0];
     return { committedCents: Number(row?.committed ?? 0), held: (row?.held ?? []).map((h) => ({ orderId: h.orderId, totalCents: Number(h.totalCents), expiresAt: h.expiresAt })) };
   }
+  /** Counted and summed on the row's own columns; only the newest `latest` documents are opened (for their delivery days). */
   async splitWindow(orgId: string, q: SplitQuery): Promise<SplitWindow> {
     const r = await this.docs.pool.query<{ n: number; total: string; latest: { id: string; request_id: string; created_iso: string; total_cents: number | string; categories: string[]; dates: string[] }[] }>(
       `with w as (
@@ -73,9 +74,9 @@ export class PgDockRepository implements DockRepository {
        select (select count(*) from w)::int as n,
               (select coalesce(sum(total_cents), 0) from w)::text as total,
               coalesce((select jsonb_agg(x order by x.created_iso desc, x.id desc)
-                          from (select w.*, jsonb_path_query_array(d.doc, '$.lines[*].deliveryDate') as dates
-                                  from w join ${this.t} d on d.collection = 'order' and d.id = w.id
-                                 order by w.created_iso desc, w.id desc limit $6) x), '[]'::jsonb) as latest`,
+                          from (select l.*, jsonb_path_query_array(d.doc, '$.lines[*].deliveryDate') as dates
+                                  from (select * from w order by created_iso desc, id desc limit $6) l
+                                  join ${this.t} d on d.collection = 'order' and d.id = l.id) x), '[]'::jsonb) as latest`,
       [orgId, q.since, q.excludeOrderId ?? "", q.requestId, q.categories, q.latest ?? 10],
     );
     const row = r.rows[0];
