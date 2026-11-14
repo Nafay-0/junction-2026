@@ -475,6 +475,11 @@ function mergeShared(lines: PlanLineView[], specs: LineSpec[], input: PlanInput)
     first.chosen = { ...toChosen(card, products), safety: first.chosen!.safety, fitNotes: [...first.chosen!.fitNotes, `combined with ${v.name}: ${formatAmt(first.gross!)} + ${formatAmt(v.gross)} = ${formatAmt(amount)}`] };
     first.gross = amount;
     first.working = `${first.working}; with ${v.name} (${v.working}): ${formatAmt(amount)} in all`;
+    // What is left over is said for the amounts together, not for the first line alone.
+    const left = card.lines.length === 1 && amount.unit !== "pcs" ? leftoverNote(amount.amount, card.lines[0].packSize, amount.unit, (a, u) => formatAmt({ amount: a, unit: u as BaseUnit })) : undefined;
+    first.chosen.fitNotes = first.chosen.fitNotes.filter((n) => n !== first.leftover);
+    if (left) first.chosen.fitNotes.push(left);
+    first.leftover = left;
     first.statusText = first.status === "ready" ? first.chosen.products.map((p) => p.packText).join(" + ") : first.statusText;
     first.doubts.push(...v.doubts);
     v.status = "merged";

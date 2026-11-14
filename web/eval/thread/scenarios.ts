@@ -12,6 +12,7 @@
 import { nutritionFindings } from "@/core/nutrition";
 import { SCHOOL_NUTRITION } from "@/server/accounts/test-accounts";
 import type { Catalogue, Json, Outcome, ProductInfo } from "./lib";
+import { MENU_SCENARIO_CASES } from "./menu-scenarios";
 
 export type Goal =
   /** The buyer wants the order placed (committed, or waiting for a named person's sign-off). */
@@ -768,5 +769,7 @@ ALL.push({
  * that history ("same as last Thursday" must be read against the kitchen's real Thursday, not a request this run
  * made a minute ago). Every server restart starts the kitchens over (the stores are in memory).
  */
+ALL.push(...MENU_SCENARIO_CASES);
+
 const FIRST = ["lastweek-en", "lastweek-fi", "followup-double"];
 export const SCENARIOS: Scenario[] = [...ALL.filter((s) => FIRST.includes(s.id)), ...ALL.filter((s) => !FIRST.includes(s.id))];
