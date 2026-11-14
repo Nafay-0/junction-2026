@@ -178,7 +178,9 @@ async function run(id: keyof typeof W & ("milk" | "lunch" | "oat" | "reorder")):
     const leaks = t.turns.flatMap((x) => (x.role === "agent" && x.line ? codeLeaks(x.line) : []));
     // What the last reply says agrees with what happened: an order placed is never "waiting", one waiting is never "ordered".
     const lastOrder = cardsOf(t).filter((c) => c.type === "order").at(-1);
-    const lastLine = (lastAgent(t)?.line ?? "").toLowerCase();
+    // The turn that holds the order says what became of it (a later turn may have said, truly then, that it waited).
+    const holder = t.turns.find((x): x is AgentTurn => x.role === "agent" && lastOrder?.type === "order" && x.cards.some((c) => c.type === "order" && c.orderId === lastOrder.orderId));
+    const lastLine = (holder?.line ?? lastAgent(t)?.line ?? "").toLowerCase();
     const disagrees = lastOrder?.type === "order" && ((lastOrder.status === "committed" && /\bwaiting for|odottaa hyväksyn/.test(lastLine) && !/ok'd|hyväksyi/.test(lastLine)) || (lastOrder.status === "pending_approval" && /\b(i've ordered|ordered:|it's ordered|tilattu)\b/.test(lastLine)));
     if (disagrees) misbehaveNote ||= `the last reply disagrees with the order (${lastOrder.status}): "${lastLine.slice(0, 120)}"`;
     const ok = !!done(t) && !leaks.length && !misbehaveNote;
