@@ -7,12 +7,16 @@
  *   4. the product is staged out of stock; the watch orders the backup by itself and reports it in one sentence
  *   5. the same order as an outside agent sees it over MCP: deliveryRecords on get_order, line_up_backup
  *
- *   pnpm backups [--kitchen kahvila-sointu] [--product 468720] [--packs 4]
+ *   pnpm backups [--kitchen hotel-lumo|koulu-metsola|kahvila-sointu] [--product <id>] [--packs <n>]
+ *
+ * By default each test kitchen's seeded poor-record product (server/accounts/test-accounts.ts POOR_RECORD), for the
+ * next day of the week it usually has it delivered.
  *
  * Live calls: the quote, one for the alternatives' prices, the watch's look and the backup's quote.
  */
 import { Client, StreamableHTTPClientTransport, type CallToolResult } from "@modelcontextprotocol/client";
-import { addDaysIso, localNow } from "@/core/kitchen";
+import { addDaysIso, isoWeekday, localNow } from "@/core/kitchen";
+import { POOR_RECORD } from "@/server/accounts/test-accounts";
 import { POST as mcpRoute } from "@/app/api/mcp/route";
 import { resolveKitchen } from "@/server/console-kitchens";
 import { getRuntime } from "@/server/runtime";
@@ -27,8 +31,9 @@ process.env.DOCK_WATCH_MINUTES = "0";
 const args = process.argv.slice(2);
 const opt = (n: string) => (args.includes(`--${n}`) ? args[args.indexOf(`--${n}`) + 1] : undefined);
 const slug = opt("kitchen") ?? "kahvila-sointu";
-const productId = opt("product") ?? "468720"; // Juustoportti Halla grilling cheese, lactose-free: 0.767 in the partner's file
-const packs = Number(opt("packs") ?? 4);
+const SEEDED: Record<string, { id: string; packs: number; weekday: number }> = { "hotel-lumo": { id: POOR_RECORD.lumo, packs: 2, weekday: 6 }, "koulu-metsola": { id: POOR_RECORD.metsola, packs: 3, weekday: 3 }, "kahvila-sointu": { id: POOR_RECORD.sointu, packs: 2, weekday: 5 } };
+const productId = opt("product") ?? SEEDED[slug]?.id ?? POOR_RECORD.sointu;
+const packs = Number(opt("packs") ?? SEEDED[slug]?.packs ?? 2);
 
 async function main() {
   const rt = await getRuntime();
@@ -37,7 +42,8 @@ async function main() {
   const session = await rt.dock.authenticate(k.mandateToken, k.agentId, { via: "onsite", path: "/script", method: "POST" } as never);
   const [p] = await rt.catalog.searchProducts({ ids: [productId], limit: 1 });
   console.log(`1. ${k.info.name} orders ${packs} × ${p.name} (deliveryReliability ${p.deliveryReliability})`);
-  const day = addDaysIso(localNow(new Date()).date, 4);
+  let day = addDaysIso(localNow(new Date()).date, 1);
+  for (let i = 0; i < 7 && SEEDED[slug] && isoWeekday(day) !== SEEDED[slug].weekday; i++) day = addDaysIso(day, 1);
   const req = await rt.dock.openRequest(session, { text: `${packs} × ${p.name}`, neededBy: day, productIds: [productId] });
   const q = await rt.dock.requestQuote(session, { requestId: req.requestId, lines: [{ productId, quantity: packs }] });
   const o = await rt.dock.placeOrder(session, { requestId: req.requestId, quoteToken: q.quoteToken, lines: q.quote.lines.map(({ productId: id, quantity, unitPriceCents }) => ({ productId: id, quantity, unitPriceCents })) });

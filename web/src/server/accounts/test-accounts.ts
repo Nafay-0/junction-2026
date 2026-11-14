@@ -46,6 +46,8 @@ export const TEST_ACCOUNTS: TestAccountSeed[] = [
         ...series(boxes[0], pastDays(now, [1, 4], 10), [400, 380, 420, 400, 440, 400, 380, 400, 420, 400], `ord_t_lumo_m`),
         // The breakfast cream creeps up week by week: the watch's standing-order drift has something real to hold.
         ...creeping(cream, pastDays(now, [4], 5), 16, `ord_t_lumo_c`),
+        // Breakfast rye rice pies every Saturday: a product whose delivery record is poor (a backup can be lined up).
+        ...series(byId(products, POOR_RECORD.lumo), pastDays(now, [6], 5), [16.2, 16.2, 16.2, 16.2, 16.2], `ord_t_lumo_p`),
       ];
       return {
         ...emptyProfile(orgId, name),
@@ -79,6 +81,8 @@ export const TEST_ACCOUNTS: TestAccountSeed[] = [
         ...series(milk, pastDays(now, [1, 3, 5], 12), [60, 60, 55, 60, 65, 60, 60, 55, 60, 60, 65, 60], `ord_t_metsola_m`),
         // Yoghurt for Tuesday lunch creeps up week by week (the watch's standing-order drift).
         ...creeping(yoghurt, pastDays(now, [2], 5), 24, `ord_t_metsola_y`),
+        // Lollo rosso for Wednesday's salad bar: a product whose delivery record is poor (a backup can be lined up).
+        ...series(byId(products, POOR_RECORD.metsola), pastDays(now, [3], 5), [3, 3, 4, 3, 3], `ord_t_metsola_l`),
       ];
       return {
         ...emptyProfile(orgId, name),
@@ -102,7 +106,9 @@ export const TEST_ACCOUNTS: TestAccountSeed[] = [
       const milk = pick(products, (p) => p.category === "milk" && p.packSize <= 2 && !p.attributes.includes("lactose_free")) ?? pick(products, (p) => p.category === "milk");
       // The milk creeps up on both delivery days (the watch's standing-order drift); the oat drink stays as usual.
       const milkDays = pastDays(now, [2, 5], 10);
-      const history = [...series(oat, pastDays(now, [2, 5], 10), [12, 12, 10, 12, 14, 12, 12, 10, 12, 12], `ord_t_sointu_o`), ...creeping(milk, milkDays.filter((_, i) => i % 2 === 0), 8, `ord_t_sointu_ma`), ...creeping(milk, milkDays.filter((_, i) => i % 2 === 1), 8, `ord_t_sointu_mb`)];
+      const history = [...series(oat, pastDays(now, [2, 5], 10), [12, 12, 10, 12, 14, 12, 12, 10, 12, 12], `ord_t_sointu_o`), ...creeping(milk, milkDays.filter((_, i) => i % 2 === 0), 8, `ord_t_sointu_ma`), ...creeping(milk, milkDays.filter((_, i) => i % 2 === 1), 8, `ord_t_sointu_mb`),
+        // Churned butter for the Friday baking: a product whose delivery record is poor (a backup can be lined up).
+        ...series(byId(products, POOR_RECORD.sointu), pastDays(now, [5], 5), [2, 2, 2, 2, 2], `ord_t_sointu_b`)];
       return {
         ...emptyProfile(orgId, name),
         deliveryWeekdays: [2, 5],
@@ -118,6 +124,8 @@ export const TEST_USERNAMES = new Set(TEST_ACCOUNTS.map((t) => t.username));
 // ---------- made-up history ----------
 
 const CENTS_PER_UNIT: Record<string, number> = { milk: 150, cream: 450, plant_drink: 210, yoghurt: 320 };
+
+const byId = (products: Product[], id: string) => products.find((p) => p.id === id);
 
 function pick(products: Product[], ok: (p: Product) => boolean): Product | undefined {
   return products.filter(ok).sort((a, b) => a.id.localeCompare(b.id))[0];
@@ -175,8 +183,22 @@ function stated(now: Date, id: string, body: Body, text: string, by: string, day
 }
 
 /** The catalogue products the test histories are drawn from: a few local master-data searches, never a live call. */
-export async function testAccountProducts(catalog: { searchProducts(q: { category: string; limit: number }): Promise<Product[]> }): Promise<Product[]> {
+export async function testAccountProducts(catalog: { searchProducts(q: { category?: string; ids?: string[]; limit: number }): Promise<Product[]> }): Promise<Product[]> {
   const found = await Promise.all(["milk", "cream", "plant_drink", "yoghurt"].map((category) => catalog.searchProducts({ category, limit: 100 }).catch(() => [] as Product[])));
-  const all = found.flat();
+  const listed = await catalog.searchProducts({ ids: Object.values(POOR_RECORD), limit: 10 }).catch(() => [] as Product[]);
+  const all = [...found.flat(), ...listed];
   return all.length ? all : SEED_PRODUCTS;
 }
+
+/**
+ * One product each test kitchen buys every week whose delivery record is poor (below the 0.90 line,
+ * core/reliability.ts), so the backup "in case it is not delivered" can be shown on all three. Picked on 14 Nov 2026
+ * from the partner's data: on sale and deliverable from stock (the mock API's Terminal products have a passed cut-off),
+ * inside each kitchen's product groups and rules, found by the search under a chef's words, and each with at least one
+ * alternative the gate accepts for that kitchen:
+ *   Hotel Lumo       Vaasan Rye rice pie 90x90g ("rye rice pies"), lactose-free, 0.50; backup Vaasan Rice pie 70x90g
+ *   Metsola school   LOLLOROSSO FI ("lollo rosso", "lollo rosso -salaatti"), 0.744; backup oak leaf salad
+ *   Kahvila Sointu   Peltolan hand made churned butter 700 g ("churned butter", "kirnuvoi"), 0.855; backup Valio butter
+ * Absent from the catalogue (the seed catalogue under tests), the kitchen simply has no such order.
+ */
+export const POOR_RECORD = { lumo: "461319", metsola: "460324", sointu: "475594" } as const;
