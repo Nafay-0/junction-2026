@@ -32,6 +32,7 @@ function traceFor(ctx: OpsContext, requestId: string): Trace {
     catalogueSize: ctx.catalogueSize,
     orgName: ctx.orgOfRequest(requestId),
     via: ctx.viaOfRequest(requestId),
+    door: ctx.doorOfRequest(requestId),
   });
 }
 

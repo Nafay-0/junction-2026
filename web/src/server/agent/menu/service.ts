@@ -1,4 +1,5 @@
 import type { AlternativesSource } from "@/core/alternatives";
+import type { Door } from "@/core/orders";
 import { MAX_LIVE_IDS_PER_CALL, type LiveStatus, type Product } from "@/core/catalog";
 import { DockError } from "@/core/errors";
 import { formatDay, localNow } from "@/core/kitchen";
@@ -145,9 +146,9 @@ function statusesFrom(r: { offers: import("@/core/catalog").LiveOffer[]; unavail
 export function createPlanService(deps: PlanDeps) {
   const { dock, catalog, store } = deps;
 
-  /** The menu agent's session, through the same operations check as a call over HTTP (ops/onsite.ts): suspended, it plans, quotes and orders nothing. */
-  async function session(k: MenuKitchen): Promise<AgentSession> {
-    return onsiteSession(dock, k, "menu planner");
+  /** The menu agent's session, through the same operations check as a call over HTTP (ops/onsite.ts): suspended, it plans, quotes and orders nothing. Its requests carry the door. */
+  async function session(k: MenuKitchen, door: Door = "menu"): Promise<AgentSession> {
+    return { ...(await onsiteSession(dock, k, door === "menu" ? "menu planner" : `${door} door`)), door };
   }
 
   async function spentThisWeek(orgId: string): Promise<number> {
@@ -375,6 +376,22 @@ export function createPlanService(deps: PlanDeps) {
   }
 
   async function plan(k: MenuKitchen, text: string, by: string): Promise<{ record: PlanRecord; view: PlanView }> {
+    return planFrom(k, text, by, deps.draft, { door: "menu", pantry: k.info.pantry });
+  }
+
+  /**
+   * A list of plain items (a photo of a whiteboard, an emailed order) as one plan, one quote, one order: the same
+   * candidates, safety rules, batched live lookups, options per line and gate as a menu, with no model at all. Every
+   * amount is the one written on the list (no covers, no yield, nothing added), so quantities are never invented.
+   */
+  async function planItems(k: MenuKitchen, items: ListItem[], by: string, opts: { deliverBy?: string; door?: Door; source?: string } = {}): Promise<{ record: PlanRecord; view: PlanView; notPlanned: { item: string; reason: string }[] }> {
+    const { draft, notPlanned } = listDraft(items, opts.deliverBy);
+    const text = `${opts.source === "text" ? "Pasted list" : opts.source === "pdf" ? "List from a PDF" : "List from a photo"}: ${items.map((x) => `${x.amount} ${x.unit} ${x.item}`).join(", ")}`.slice(0, 2000);
+    const r = await planFrom(k, text, by, async () => ({ draft, raw: draft as unknown as DraftResult["raw"], model: "none: read as written on the list", ms: 0, tokens: { input: 0, output: 0, cachedInput: 0, reasoning: 0 }, costUsd: 0, calls: [] }), { door: opts.door ?? "photo", pantry: [] });
+    return { ...r, notPlanned };
+  }
+
+  async function planFrom(k: MenuKitchen, text: string, by: string, drafter: PlanDeps["draft"], opts: { door: Door; pantry: string[] }): Promise<{ record: PlanRecord; view: PlanView }> {
     const t0 = Date.now();
     const now = deps.now();
     // Each dish's ingredients are searched (master data) and judged by name while the other dishes are still written.
@@ -392,7 +409,7 @@ export function createPlanService(deps: PlanDeps) {
       })();
       for (const [i, ing] of fresh.entries()) early.set(ing.key, job.then((r) => ({ set: r.sets[ing.key], calls: i === 0 ? r.calls : [], notes: i === 0 ? r.notes : [] })));
     };
-    const d = await deps.draft(text, promptContext(k), now, prepare);
+    const d = await drafter(text, promptContext(k), now, prepare);
     const at = now.toISOString();
     const p: PlanRecord = {
       planId: newId("plan"),
@@ -437,8 +454,8 @@ export function createPlanService(deps: PlanDeps) {
     p.live.deliverBy = deliverBy;
     if (p.settings.covers === null) p.notes.push("The request does not say how many covers: give the number and every amount follows.");
 
-    const s = await session(k);
-    const req = await dock.openRequest(s, { text: `Menu plan: ${text}`.slice(0, 2000), ...(deliverBy ? { neededBy: deliverBy } : {}) });
+    const s = await session(k, opts.door);
+    const req = await dock.openRequest(s, { text: (opts.door === "menu" ? `Menu plan: ${text}` : text).slice(0, 2000), ...(deliverBy ? { neededBy: deliverBy } : {}) });
     p.requestId = req.requestId;
     p.requestNeededBy = deliverBy;
     log(p, k, `agent:${k.agentId}`, `The model (${d.model}${d.recorded ? ", recorded output" : ""}) drafted ${d.draft.dishes.length} dish${d.draft.dishes.length === 1 ? "" : "es"} for ${d.draft.covers ?? "an unstated number of"} covers: ${d.draft.dishes.map((x) => x.name).join(", ")}. Plain code checks everything after this.`, {
@@ -452,7 +469,7 @@ export function createPlanService(deps: PlanDeps) {
 
     // Master data: candidates for every line, in parallel. No live call.
     const m0 = Date.now();
-    p.specs = buildSpecs(d.draft, k.info.pantry);
+    p.specs = buildSpecs(d.draft, opts.pantry);
     const late: LineSpec[] = [];
     for (const spec of p.specs) {
       const e = early.get(spec.key);
@@ -711,7 +728,50 @@ export function createPlanService(deps: PlanDeps) {
     return finishView(p, k);
   }
 
-  return { plan, get, edit, quote, order, settled };
+  return { plan, planItems, get, edit, quote, order, settled };
+}
+
+/** One line of a list, as a person reviewed it (the photo door's reviewed lines). */
+export type ListItem = { item: string; amount: number; unit: string };
+
+const LIST_UNITS: Record<string, { unit: "g" | "ml" | "pcs"; factor: number }> = {
+  l: { unit: "ml", factor: 1000 }, litre: { unit: "ml", factor: 1000 }, liter: { unit: "ml", factor: 1000 }, dl: { unit: "ml", factor: 100 }, cl: { unit: "ml", factor: 10 }, ml: { unit: "ml", factor: 1 },
+  kg: { unit: "g", factor: 1000 }, g: { unit: "g", factor: 1 },
+  pcs: { unit: "pcs", factor: 1 }, kpl: { unit: "pcs", factor: 1 }, st: { unit: "pcs", factor: 1 }, pieces: { unit: "pcs", factor: 1 },
+};
+
+/** The list as a plan draft, by plain code: one dish ("the list"), one cover, every amount as written. */
+export function listDraft(items: ListItem[], deliverBy?: string): { draft: MenuDraft; notPlanned: { item: string; reason: string }[] } {
+  const notPlanned: { item: string; reason: string }[] = [];
+  const used = new Set<string>();
+  const ingredients: DraftIngredient[] = [];
+  for (const x of items) {
+    const u = LIST_UNITS[x.unit.trim().toLowerCase()];
+    if (!u || !(x.amount > 0)) {
+      notPlanned.push({ item: x.item, reason: u ? "no amount" : `"${x.unit}" is a pack count, which depends on the product's pack: send it as its own request` });
+      continue;
+    }
+    let key = x.item.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 40) || "item";
+    while (used.has(key)) key = `${key}_2`;
+    used.add(key);
+    ingredients.push({ key, name: x.item, searchTerms: [x.item], role: "on the list", perCover: { amount: Math.round(x.amount * u.factor * 1000) / 1000, unit: u.unit }, yieldPct: 100, amountBasis: "as written on the list", pantry: false, form: "any", avoid: [] });
+  }
+  return {
+    notPlanned,
+    draft: {
+      isFoodOrderRequest: ingredients.length > 0,
+      declineReason: ingredients.length ? null : "No line of the list has an amount Dock can plan by.",
+      covers: 1,
+      serviceDate: deliverBy ?? null,
+      occasion: null,
+      requiredClaims: [],
+      forbiddenAllergens: [],
+      assumptions: ["Read as written on the list: one line per item, the amount given, nothing scaled, added or left out."],
+      conflicts: [],
+      corrections: [],
+      dishes: [{ id: "list", name: "The list", nameFi: null, course: "other", serviceDate: deliverBy ?? null, portion: "as written", method: "a list of items to buy", ingredients }],
+    },
+  };
 }
 
 export type PlanEdit =

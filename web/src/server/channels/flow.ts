@@ -34,13 +34,13 @@ export type KitchenAgent = { rt: Runtime; info: ConsoleKitchenInfo; session: Age
  * The kitchen's purchasing agent, as the console's server side holds it: the browser never sees the mandate. With the
  * request, the console rule applies (a visitor's kitchen only from their own phone) and the signed-in person is known.
  */
-export async function kitchenAgent(slug: string, req?: Request): Promise<KitchenAgent> {
+export async function kitchenAgent(slug: string, req?: Request, door: Door = "voice"): Promise<KitchenAgent> {
   const rt = await getRuntime();
   const viaConsole = req ? await consoleKitchen(req, rt, slug) : undefined;
   const k = viaConsole ?? (req ? undefined : await resolveKitchen(slug));
   if (!k) throw new DockError(404, "kitchen_not_found", "This kitchen does not exist or its demo time is over.");
   // The same operations check as a call over HTTP: a suspended agent is refused at this door too (ops/onsite.ts).
-  const session = await onsiteSession(rt.dock, k, "voice or photo door");
+  const session = { ...(await onsiteSession(rt.dock, k, `${door} door`)), door };
   return { rt, info: k.info, session, person: viaConsole?.console.person };
 }
 
@@ -86,7 +86,7 @@ export async function openNeed(
   via: Via,
   detail: { words?: string; summary: string; data?: Record<string, unknown> },
 ): Promise<IntakeView> {
-  const step = await a.rt.dock.intake.open(a.session, { need, by: byLine(a.info, door, via) });
+  const step = await a.rt.dock.intake.open({ ...a.session, door }, { need, by: byLine(a.info, door, via) });
   a.rt.dock.ledger.append({
     type: "intake",
     actor: `door:${door}`,

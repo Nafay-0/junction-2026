@@ -61,6 +61,8 @@ export async function authenticate(req: Request, dock: Dock): Promise<AgentSessi
   // The on-site console's browser session gets its own share of the live-lookup allowance (set in-process only).
   const consoleCtx = consoleContextOf(req);
   if (consoleCtx) session.share = `console:${consoleCtx.session}`;
+  // Which door a request it opens came through (core/orders.ts Door): set here, never from a request field.
+  session.door = consoleCtx ? (consoleCtx.door ?? "typed") : door.via === "mcp" ? "mcp" : door.via === "onsite" ? "store" : "rest";
   return session;
 }
 

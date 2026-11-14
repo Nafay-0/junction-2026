@@ -220,6 +220,28 @@ describe("menu to order, on the fixture catalogue", () => {
     expect(entries.some((s) => /Not ordered: Salt/.test(s))).toBe(true);
   });
 
+  it("a list from the photo door becomes one plan, one quote and one order, every amount as written, no model, marked as the photo door", async () => {
+    const { service, kaari, dock } = await setup();
+    const { record, view, notPlanned } = await service.planItems(
+      kaari,
+      [
+        { item: "salmon fillet", amount: 4, unit: "kg" },
+        { item: "carrot", amount: 3, unit: "kg" },
+        { item: "cooking cream", amount: 5, unit: "L" },
+        { item: "butter", amount: 4, unit: "pack" },
+      ],
+      "chef",
+      { source: "image" },
+    );
+    expect(notPlanned).toEqual([{ item: "butter", reason: expect.stringMatching(/pack count/) }]);
+    expect(record.model.id).toMatch(/^none/);
+    expect(record.model.calls).toEqual([]);
+    expect(view.lines.map((l) => l.name)).toEqual(expect.arrayContaining(["salmon fillet", "carrot", "cooking cream"]));
+    await service.settled(record.planId);
+    const need = dock.ledger.entries({ requestId: record.requestId! }).find((e) => e.type === "request")!;
+    expect(need.data.door).toBe("photo");
+  });
+
   it("a changed delivery date moves the same request's need-by date, not a new request", async () => {
     const { service, kaari, dock } = await setup();
     const { record } = await service.plan(kaari, "salmon soup for 300 on Friday", "chef");

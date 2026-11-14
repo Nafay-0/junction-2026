@@ -606,7 +606,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
         updatedAt: at,
         ...(body.site ? { site: body.site } : {}),
       };
-      log(i, agentActor(session), `Structured need (${unmatched ? "no product family found" : family}): ${describeNeed(need)}.`, { step: "need", need, by: body.by, ...(changes.length ? { reasons: changes.map((c) => `In the catalogue's words: ${c}`) } : {}) });
+      log(i, agentActor(session), `Structured need (${unmatched ? "no product family found" : family}): ${describeNeed(need)}.`, { step: "need", need, by: body.by, ...(session.door ? { door: session.door } : {}), ...(changes.length ? { reasons: changes.map((c) => `In the catalogue's words: ${c}`) } : {}) });
       const also = alsoAskedIn(need.text, need);
       if (also.length) {
         i.alsoAsked = also;

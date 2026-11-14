@@ -186,6 +186,7 @@ export async function runTool(
   try {
     const session = await authenticate(via ? connectorCredentials(via) : (req ?? new Request("http://dock.invalid/")), dock);
     agentId = session.agentId;
+    session.door = via ? "connector" : "mcp"; // which door a request it opens came through (core/orders.ts Door)
     const agentKey = `${session.mandate.issuer.orgId}:${session.agentId}`;
     const counted = via && COUNTED[tool.name];
     if (via && counted) via.service.limiter.hit(via.connector.connectorId, counted);

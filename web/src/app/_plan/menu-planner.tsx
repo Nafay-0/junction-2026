@@ -23,6 +23,8 @@ export type MenuPlannerProps = {
   base?: string;
   initialText?: string;
   onOrdered?: (orderId: string) => void;
+  /** A list of plain items (the photo door's reviewed lines): planned at once, as written, with no model. */
+  items?: { list: { item: string; amount: number; unit: string }[]; deliverBy?: string; source?: "image" | "pdf" | "text" };
 };
 
 const STEPS = [
@@ -32,7 +34,7 @@ const STEPS = [
   { at: 17, text: "One batched live lookup of price and delivery for the short list" },
 ];
 
-export function MenuPlanner({ kitchen, base = "/ui-api/plan", initialText = "", onOrdered }: MenuPlannerProps) {
+export function MenuPlanner({ kitchen, base = "/ui-api/plan", initialText = "", onOrdered, items }: MenuPlannerProps) {
   const [info, setInfo] = useState<{ kitchen: MenuKitchenInfo; mode: "model" | "recorded" }>();
   const [text, setText] = useState(initialText);
   const [plan, setPlan] = useState<PlanWire>();
@@ -80,6 +82,23 @@ export function MenuPlanner({ kitchen, base = "/ui-api/plan", initialText = "", 
     }, 1500);
     return () => clearInterval(t);
   }, [pendingId, base, k, accept]);
+
+  // A list from the photo door: one plan, one quote, one order.
+  const listed = items ? JSON.stringify(items) : undefined;
+  useEffect(() => {
+    if (!listed) return;
+    let gone = false;
+    queueMicrotask(() => !gone && setBusy("plan"));
+    const x = JSON.parse(listed) as NonNullable<MenuPlannerProps["items"]>;
+    void api<PlanWire>("POST", `${base}/${k}/list`, { items: x.list, deliverBy: x.deliverBy, source: x.source }).then((r) => {
+      if (gone) return;
+      accept(r);
+      setBusy(undefined);
+    });
+    return () => {
+      gone = true;
+    };
+  }, [listed, base, k, accept]);
 
   async function submit() {
     if (text.trim().length < 3) return;

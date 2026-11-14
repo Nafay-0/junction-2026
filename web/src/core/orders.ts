@@ -111,7 +111,27 @@ export const ApprovalDecisionInput = z.object({
  * `share`: an on-site console's browser session, set by the server only (never from a header an outside caller can
  * send). It gives that session its own share of the agent's live-lookup allowance (see live-allowance.ts).
  */
-export type AgentSession = { mandate: Mandate; agentId: string; share?: string };
+export type AgentSession = { mandate: Mandate; agentId: string; share?: string; door?: Door };
+
+/**
+ * Which door a request came through, set by server code only (never from a request field): the store's typed field,
+ * its assistant panel, a voice call, a photo, the menu planner, the store's hand-placed basket or other in-process
+ * calls, an outside agent over MCP, a consumer assistant over a connector address, or plain REST. Every door ends in
+ * the same intake, memory, alternatives, gate and ledger; this only says which one it used.
+ */
+export const DOORS = ["typed", "assistant", "voice", "photo", "menu", "store", "mcp", "connector", "rest"] as const;
+export type Door = (typeof DOORS)[number];
+export const DOOR_TEXT: Record<Door, string> = {
+  typed: "typed in the kitchen store",
+  assistant: "the store's assistant panel",
+  voice: "a voice call",
+  photo: "a photo or document",
+  menu: "the menu planner",
+  store: "the kitchen store",
+  mcp: "an outside agent over MCP",
+  connector: "a consumer assistant over the kitchen's connector address",
+  rest: "an outside agent over REST",
+};
 
 export type PurchaseRequest = {
   requestId: string;
@@ -127,6 +147,8 @@ export type PurchaseRequest = {
    * (in the request's fields or its text) and the family. The gate treats any other product as a substitute of it.
    */
   asked?: { productIds: string[]; category?: string };
+  /** Which door it came through (server-set; see Door). */
+  door?: Door;
   createdAt: string;
 };
 
@@ -738,6 +760,7 @@ export function createDock(deps: DockDeps) {
         neededBy,
         ...(deliverOn ? { deliverOn } : {}),
         ...(named.length || category ? { asked: { productIds: named, ...(category ? { category } : {}) } } : {}),
+        ...(session.door ? { door: session.door } : {}),
         createdAt: now().toISOString(),
       };
       await repo.saveRequest(r);
@@ -745,8 +768,8 @@ export function createDock(deps: DockDeps) {
         type: "request",
         actor: agentActor(session),
         requestId: r.requestId,
-        summary: `Agent ${session.agentId} of ${session.mandate.issuer.name} opened a request: "${text}"${neededBy ? `, needed by ${neededBy}` : ""}.`,
-        data: { text, neededBy, mandateId: r.mandateId, ...(r.asked ? { asked: r.asked } : {}) },
+        summary: `Agent ${session.agentId} of ${session.mandate.issuer.name} opened a request${session.door ? ` through ${DOOR_TEXT[session.door]}` : ""}: "${text}"${neededBy ? `, needed by ${neededBy}` : ""}.`,
+        data: { text, neededBy, mandateId: r.mandateId, ...(r.asked ? { asked: r.asked } : {}), ...(session.door ? { door: session.door } : {}) },
       });
       return r;
     },
