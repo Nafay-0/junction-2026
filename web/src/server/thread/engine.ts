@@ -325,6 +325,20 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
     const open = last?.role === "agent" ? last.cards.find((c) => c.type === "rules" && c.proposal?.state === "open") : undefined;
     if (open?.type === "rules" && open.proposal && /(shall I send it to them\?|lähetänkö sen\?|ska jag skicka den\?)/i.test(last?.role === "agent" ? (last.line ?? "") : "") && yesOrNo(body.text) === "yes") body = { ...body, action: { type: "rules_sign", proposalId: open.proposal.proposalId }, label: body.text };
   }
+  // "Yes" to the opening's own question about a recurring order that drifted ("Shall I set up the next one, for Tue
+  // 17 Nov, at the usual 20 l?"): that recurring order at its usual amount on an order sheet for its next day, by plain
+  // code. Only right after the opening, and only for the drift the opening asked about (thread-line.tsx todaySentence).
+  if (!body.action && body.text && body.text.trim().split(/\s+/).length <= 8) {
+    const before = thread.turns.filter((x) => x.turnId !== run.turnId && x.turnId !== run.buyer.turnId);
+    const lastAgent = [...before].reverse().find((x) => x.role === "agent");
+    const today = lastAgent?.role === "agent" && lastAgent.replyTo === "" ? lastAgent.cards.find((c) => c.type === "today") : undefined;
+    const drift = today?.type === "today" && !today.items.some((i) => i.kind === "sign_off") ? today.items.slice(0, 3).find((i) => i.kind === "drift" && !!i.nextDue) : undefined;
+    const { yesOrNo } = await import("@/server/channels/speech");
+    if (drift?.kind === "drift" && yesOrNo(body.text) === "yes") {
+      body = { ...body, action: { type: "standing_change", family: drift.family }, label: body.text };
+      record(run, "opening_answered", `The buyer said yes to the opening's question: the recurring ${drift.family} order at its usual amount for ${drift.nextDue}.`, { family: drift.family });
+    }
+  }
   // An answer to the ways forward for a dish not fully buyable: ask the owner to add the groups, order just what can be
   // bought (each left-off ingredient was said before), or anything else (another dish) for the agent.
   const ways = waysOf(run).ways;

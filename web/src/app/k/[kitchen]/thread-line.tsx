@@ -9,6 +9,7 @@ import { usePortal } from "./portal";
 import { Dishes } from "./thread-dishes";
 import { RulesSignOffSlab } from "./thread-rules-signoff";
 import { groupNameL } from "./rules-change";
+import { familyL } from "./family.text";
 import { THREAD_RULES_TEXT } from "./thread-rules.text";
 import { attrL } from "../../_i18n/format";
 import { THREAD_LINE_TEXT } from "./thread-line.text";
@@ -89,9 +90,10 @@ export function ThreadLine({ className = "", landing = false }: { className?: st
   const queued = new Set(firstWorking < 0 ? [] : turns.slice(firstWorking + 1).flatMap((x) => (x.role === "agent" && x.status === "working" && !x.steps.length && !x.cards.length && !x.line ? [x.turnId] : [])));
 
   return (
-    <div className={`relative ${className}`}>
+    // The landing (nothing said yet) sits in the upper part of the screen, not under a screen of empty space.
+    <div className={`relative ${onlyOpening && landing ? className.replace("justify-end", "justify-start pt-[6dvh]") : className}`}>
       <span aria-hidden className={`absolute bottom-0 left-[0.6rem] top-0 w-px origin-top transition-colors ${working ? "tl-draw bg-gradient-to-b from-petrol via-petrol to-lime" : "bg-petrol/30"}`} />
-      <ol role="log" aria-live="polite" aria-label="Conversation with the purchasing agent" className={`relative flex flex-col gap-7 pl-9 ${onlyOpening && landing ? "min-h-[50dvh] justify-end" : ""}`}>
+      <ol role="log" aria-live="polite" aria-label="Conversation with the purchasing agent" className="relative flex flex-col gap-7 pl-9">
         {onlyOpening && landing ? (
           <li>
             <Landing today={opening?.cards.find((c): c is TodayCard => c.type === "today")} offer={opening?.cards.find((c): c is OfferCard => c.type === "offer")} watch={opening?.cards.find((c): c is WatchCard => c.type === "watch")} thread={t} />
@@ -662,10 +664,17 @@ function fallbackLine(turn: AgentTurn, thread: Thread, tx: Tx, f: ReturnType<typ
 function todaySentence(card: TodayCard, tx: Tx, f: ReturnType<typeof useFormat>): string {
   if (card.pending) return "";
   const parts: string[] = [];
+  let asked = false;
   for (const i of card.items.slice(0, 3)) {
     if (i.kind === "sign_off") parts.push(tx.today.signOff(money(i.totalCents), ""));
     else if (i.kind === "cutoff") parts.push(tx.today.cutoff(i.name, clock(i.orderBy)));
-    else if (i.kind === "drift") parts.push(tx.today.drift(i.name));
+    else if (i.kind === "drift") {
+      // What changed, with its figures, and the one question a yes answers (the next one at the usual amount): only
+      // for the first drift, and only when nothing waits for a person's OK.
+      const ask = !asked && !card.items.some((x) => x.kind === "sign_off") && !!i.nextDue;
+      if (ask) asked = true;
+      parts.push(tx.today.drift({ what: familyL(i.family, f.lang).toLowerCase(), usual: f.measure(i.usual.amount, i.usual.unit as never), amountPct: i.amountPct, pricePct: i.pricePct, ...(ask && i.nextDue ? { day: f.day(i.nextDue).replace(/\.$/, "") } : {}) }));
+    }
     else if (i.kind === "recall") parts.push(tx.today.recall(i.productName));
     else if (i.kind === "delivery") parts.push(tx.today.delivery(f.day(i.deliveryDate)));
   }
@@ -706,7 +715,8 @@ function WatchWords({ card, lang, big }: { card: WatchCard; lang: "en" | "fi" | 
 function Landing({ today, offer, watch, thread }: { today?: TodayCard; offer?: OfferCard; watch?: WatchCard; thread?: Thread }) {
   const tx = useText(THREAD_LINE_TEXT);
   const f = useThreadFormat();
-  const { kitchen, thread: api, lang } = usePortal();
+  const { kitchen, thread: api, lang, account } = usePortal();
+  const demoOwn = !!account?.demo && account.kitchen === kitchen.slug;
   const h = Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hour12: false, timeZone: "Europe/Helsinki" }).format(new Date()));
   const part = h < 11 ? "morning" : h < 18 ? "day" : "evening";
   const who = kitchen.mandate.approvers[0]?.name ?? "";
@@ -717,7 +727,8 @@ function Landing({ today, offer, watch, thread }: { today?: TodayCard; offer?: O
       {today?.pending && <p aria-busy className="tl-sheen mt-3 text-[0.98rem] font-medium text-petrol">{tx.lookingToday}</p>}
       {today && !today.pending && !(today.items.length === 0 && (watch || offer)) && (
         <p className="mt-3 max-w-[34ch] text-[1.1rem] leading-[1.6] text-ink">
-          <Rich text={todaySentence(today, tx, f)} />
+          {/* A demo account with nothing yet: what the agent is, in one sentence (the guide's link sits above). */}
+          <Rich text={today.items.length === 0 && demoOwn ? tx.today.intro : todaySentence(today, tx, f)} />
         </p>
       )}
       {watch && watch.state !== "answered" && <WatchWords card={watch} lang={f.lang} big />}
