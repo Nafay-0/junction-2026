@@ -15,7 +15,8 @@ import { useEffect } from "react";
  *     every browser plays the same motion;
  *   - plays the hero's frames and the facts as short reels that stop when out of view, on hover, focus or a tap;
  *   - runs the agent's story by the step in the middle of the screen (scrolling back reverses it);
- *   - plays the comparison once when it comes into view, the figures counting up to their exact values.
+ *   - plays the comparison once when it comes into view, the figures counting up to their exact values;
+ *   - feeds the webshop section its track progress where scroll timelines are missing (the CSS does the rest).
  * Only transform and opacity change, and nothing plays twice.
  */
 export function Motion() {
@@ -186,7 +187,7 @@ export function Motion() {
     const spine = root.querySelector<HTMLElement>(".l2-spine");
     const fill = root.querySelector<HTMLElement>("[data-spine]");
     const header = root.querySelector<HTMLElement>("[data-header]");
-    const linked = sdt ? [] : [...root.querySelectorAll<HTMLElement>("[data-run], [data-morph], [data-track], [data-map]")];
+    const linked = sdt ? [] : [...root.querySelectorAll<HTMLElement>("[data-run], [data-morph], [data-track], [data-map], [data-shop-track]")];
     let queued = false;
     const frame = () => {
       queued = false;
@@ -199,8 +200,8 @@ export function Motion() {
       header?.classList.toggle("l2-slim", window.scrollY > 24);
       for (const el of linked) {
         const r = el.getBoundingClientRect();
-        // "contain" for the tall track (progress while it fills the screen); "cover" for the rest.
-        const p = el.hasAttribute("data-track") ? -r.top / Math.max(1, r.height - vh) : (vh - r.top) / (vh + r.height);
+        // "contain" for the tall tracks (progress while they fill the screen); "cover" for the rest.
+        const p = el.hasAttribute("data-track") || el.hasAttribute("data-shop-track") ? -r.top / Math.max(1, r.height - vh) : (vh - r.top) / (vh + r.height);
         el.style.setProperty("--p", Math.max(0, Math.min(1, p)).toFixed(4));
       }
     };

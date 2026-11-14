@@ -4,6 +4,7 @@ import search from "../_landing/search-eval.json";
 import { CRASH, crashRows } from "../_landing/crash";
 import reel from "./reel.json";
 import thread from "./reel-thread.json";
+import webshop from "./webshop.json";
 
 /**
  * Everything the second landing page shows as a figure or as the product's own words, read at build time from
@@ -61,7 +62,11 @@ export const FRAMES = (reel.frames as { key: string; src: string; w: number; h: 
 );
 export const REEL = reel.frames as { key: string; src: string; w: number; h: number; caption: string }[];
 
-export const COUNTS = { priced, products: search.products, rules: RULES.length };
+/** The agent docked in the store, captured by scripts/landing-shots.ts (stage "webshop"): keys to file, size, caption. */
+export type Frame = { src: string; w: number; h: number; caption: string };
+export const SHOP = webshop as Record<"shop-1-catalogue" | "shop-2-asked" | "shop-3-substitute" | "shop-4-signoff" | "shop-phone-substitute" | "shop-phone-signoff", Frame>;
+
+export const COUNTS ={ priced, products: search.products, rules: RULES.length };
 
 /** The presenter's "Now try to break it", as recorded through the real gate (the last frame holds every result). */
 type Attack = { id: string; title: string; held: boolean; how: string; rule?: string };

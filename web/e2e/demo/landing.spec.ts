@@ -25,6 +25,7 @@ test("/ is the landing page: the ways in, no sideways scroll, every picture desc
   const h2 = await page.getByRole("heading", { level: 2 }).allTextContents();
   expect(h2).toEqual([
     "Watch the agent work",
+    "How it looks on your webshop",
     "Search that reads the requirement",
     "Never trust the model",
     "Six agents, one gate",
@@ -36,6 +37,16 @@ test("/ is the landing page: the ways in, no sideways scroll, every picture desc
     "Honest about what it is",
     "Talk to the agent",
   ]);
+  // The agent inside the shop: the captured store on a desk and a phone, the three points, one way into the live shop,
+  // and the synthetic-data note beside it.
+  const shop = page.locator("#webshop");
+  await expect(shop.getByRole("heading", { level: 2, name: "How it looks on your webshop" })).toBeVisible();
+  await expect(shop.getByRole("link", { name: /^Open the live shop/ })).toHaveAttribute("href", "/k");
+  await expect(shop.getByText("Demo on synthetic data. Not the wholesaler's own shop.")).toBeVisible();
+  await expect(shop.locator(".l2-shop-points li")).toHaveCount(3);
+  await expect(shop.locator('img[src="/landing/shop-4-signoff.webp"]')).toHaveCount(1);
+  await expect(shop.locator('img[src="/landing/shop-phone-substitute.webp"]')).toHaveCount(1);
+
   // The four facts and the comparison carry the measured figures.
   await expect(page.getByText("97 % right first.")).toBeAttached();
   await expect(page.getByText(/attacks on the gate\. \d+ held\./)).toBeAttached();
@@ -76,6 +87,13 @@ test("with reduced motion every step of the story and every figure is on the pag
   await expect(page.locator("[data-step]")).toHaveCount(11);
   for (const step of await page.locator("[data-step]").all()) await expect(step).toHaveCSS("opacity", "1");
   await expect(page.locator(".l2-bar-ours [data-count-to]")).toHaveText("97");
+  // The webshop section at rest: one finished moment (the desk at the sign-off), every step listed, its button.
+  await page.locator("#webshop").scrollIntoViewIfNeeded();
+  await expect(page.locator("#webshop .l2-shop-f4")).toBeVisible();
+  await expect(page.locator("#webshop .l2-shop-f1")).toBeHidden();
+  await expect(page.locator("#webshop .l2-shop-steps li")).toHaveCount(4);
+  for (const li of await page.locator("#webshop .l2-shop-steps li").all()) await expect(li).toHaveCSS("opacity", "1");
+  await expect(page.locator("#webshop").getByRole("link", { name: /^Open the live shop/ })).toBeVisible();
   expect(await page.evaluate(() => document.querySelector(".l2")?.classList.contains("l2-js"))).toBe(false);
   await ctx.close();
 });
