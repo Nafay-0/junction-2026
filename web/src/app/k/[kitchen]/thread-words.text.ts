@@ -117,7 +117,7 @@ export const THREAD_WORDS = defineText({
       weekly_budget: (p, f) => `This week's spending would go over the ${f.money(n(p.budgetCents))} budget.`,
       substitution_rule: () => "It includes a product other than the one asked for, and your rules want a person to OK that.",
       substitute_price: (p) => `The other product costs more than the ${s(p.maxPriceIncreasePct)} % extra your rules allow.`,
-      human_confirmation: () => "The mistake check found something that a named person must confirm.",
+      human_confirmation: () => "Something looks unusual, so a named person checks it.",
       approver_authority: () => "Nobody in your rules may OK this amount.",
       order_splitting: () => "It looks like one need split into small orders.",
     } as Record<string, Say>,

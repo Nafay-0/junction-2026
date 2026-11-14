@@ -114,7 +114,7 @@ test("mistake check on a demo kitchen: 1,000 L where it usually orders 100 L, co
   const release = await stageThread(page, "kaari", baseURL);
   try {
     await page.goto("/k/kaari/order");
-    await threadLog(page).getByRole("button", { name: MILK }).click();
+    await say(page, MILK);
     const check = card(page, "anomaly");
     await expect(check).toContainText(/1\D?000\s?L where you usually\s+order about 100\s?L: did you mean 100\s?L\?/, { timeout: 20_000 });
     await expect(check.getByRole("button", { name: "Yes, that is right" })).toBeVisible();
@@ -228,7 +228,7 @@ test("the understood card says what matters in words, never a code", async ({ pa
 });
 
 /**
- * DEFECT (test.fail until fixed; would lose the demo). Once the agent has sent an order for sign-off, the next request
+ * Regression (fixed on claude/agent-thread-3, engine.ts `settled`). Once the agent had sent an order for sign-off, the next request
  * in the same thread fails, while the order waits and after the person signs it on their phone: "The agent did not answer. Try again in a moment." (and "Try again" fails
  * the same way; only "Start over" clears it). Cause: src/server/thread/agent.ts:334 keeps `result.response.messages`,
  * which in AI SDK 7 is the final step's messages only (ai/dist/index.js:10870), not `result.responseMessages`
@@ -239,7 +239,6 @@ test("the understood card says what matters in words, never a code", async ({ pa
  * same thread right after signing.
  */
 test("after the phone signs, the same thread answers the next request", async ({ page: phone }) => {
-  test.fail(!process.env.E2E_EXPECT_FIXED, "the thread's history loses the signed-off tool result: the next turn is refused");
   test.setTimeout(120_000);
   const { page } = await phoneAndStore(phone);
   await say(page, MILK);
@@ -255,9 +254,8 @@ test("after the phone signs, the same thread answers the next request", async ({
   await expect(card(page, "understood")).toContainText(/How much\s*200\sL/);
 });
 
-/** Same defect, before the sign-off: the order is still waiting for the person when the buyer asks for something else. */
+/** The same, before the sign-off: the order is still waiting for the person when the buyer asks for something else. */
 test("while an order waits for sign-off, the same thread answers the next request", async ({ page: phone }) => {
-  test.fail(!process.env.E2E_EXPECT_FIXED, "the waiting await_sign_off call has no tool result in the thread's history: the next turn is refused");
   test.setTimeout(120_000);
   const { page } = await phoneAndStore(phone);
   await say(page, MILK);

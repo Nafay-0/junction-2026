@@ -4,7 +4,7 @@ import type { LiveOffer, Product } from "@/core/catalog";
 import type { Decision } from "@/core/policy";
 import type { AgentSession, PublicOrder } from "@/core/orders";
 import { cardId, gateCard, orderCard } from "./cards";
-import { record, step, type TurnRun } from "./pipeline";
+import { humanVia, record, step, type TurnRun } from "./pipeline";
 import type { AlternativesCard, GatePreview, SheetCard } from "./types";
 
 /**
@@ -28,6 +28,8 @@ type SheetRecord = {
   deliveryDate: string;
   lines: (SheetLineInput & { lineId: string })[];
   placed?: string;
+  /** What the mistake check flagged on the sheet as it stands (codes), shown to the signed-in person: their confirm confirms it. */
+  check?: string[];
   /** What the last edit removed (cleared by the next edit), for the one-tap undo. */
   removed?: { productId: string; packs: number };
   /** The last live offers, by product: prices, stock, days, cut-offs. */
@@ -94,7 +96,20 @@ const confirmedBy = (run: TurnRun) => run.person?.name;
 /** The card as it stands: prices from the last lookup, and the gate's own preview of exactly these lines. */
 async function render(run: TurnRun, s: SheetRecord, changed?: string[]): Promise<SheetCard> {
   const products = await productsOf(run, [...s.lines.flatMap((l) => [l.productId, ...(l.substituteFor ? [l.substituteFor] : [])]), ...(s.removed ? [s.removed.productId] : [])]);
-  const decision = await run.rt.dock.previewDecision(run.session, s.requestId, s.lines.map(({ productId, packs, substituteFor }) => ({ productId, quantity: packs, ...(substituteFor ? { substituteFor } : {}) })), Object.values(s.offers), { referencePrices: true, ...(confirmedBy(run) ? { confirmedBy: confirmedBy(run) } : {}) }).catch(() => undefined);
+  const preview = (asPlaced: boolean) => run.rt.dock.previewDecision(run.session, s.requestId, s.lines.map(({ productId, packs, substituteFor }) => ({ productId, quantity: packs, ...(substituteFor ? { substituteFor } : {}) })), Object.values(s.offers), { referencePrices: true, asPlaced, ...(confirmedBy(run) ? { confirmedBy: confirmedBy(run) } : {}) }).catch(() => undefined);
+  // The gate as the order will be judged once placed, mistake check included. What the check flags is shown to the
+  // kitchen's signed-in person on the sheet; their confirm is their "yes, this is what I mean" (core confirmConcerns),
+  // so the sheet says what happens then. Without a signed-in person a flag goes to a named person, as the gate says.
+  let decision = await preview(true);
+  const flagged = decision?.rules.find((r) => r.rule === "human_confirmation" && r.outcome === "escalate")?.details?.flagged as string[] | undefined;
+  s.check = undefined;
+  if (run.person && flagged?.length) {
+    const ifConfirmed = await preview(false);
+    if (ifConfirmed) {
+      decision = ifConfirmed;
+      s.check = flagged;
+    }
+  }
   const gate = gateOf(decision);
   const lines = s.lines.map((l) => {
     const p = products.get(l.productId);
@@ -140,6 +155,7 @@ async function render(run: TurnRun, s: SheetRecord, changed?: string[]): Promise
     ...(changed?.length ? { changed } : {}),
     ...(s.placed ? { orderId: s.placed } : {}),
     ...(s.removed && !s.placed ? { removed: { ...s.removed, name: products.get(s.removed.productId)?.name ?? s.removed.productId } } : {}),
+    ...(s.check?.length && !s.placed ? { check: s.check } : {}),
   };
   run.store.card(run.thread, s.turnId === run.turnId ? run.turnId : s.turnId, card);
   run.facts.push(card);
@@ -173,7 +189,11 @@ export async function createSheet(run: TurnRun, input: { lines: SheetLineInput[]
   if (!input.lines.length) throw new DockError(400, "sheet_empty", "A sheet needs at least one line.");
   run = on(run, input);
   const day = input.deliveryDate ?? (await daysFor(run, { lines: [], offers: {}, deliveryDate: addDaysIso(localNow(new Date()).date, 1) } as unknown as SheetRecord)).find((d) => d.available)?.date ?? addDaysIso(localNow(new Date()).date, 1);
-  const request = await run.rt.dock.openRequest(run.session, { text: input.text.slice(0, 2000), deliverOn: day, ...(input.asked?.length ? { productIds: input.asked } : {}), ...(input.category ? { category: input.category } : {}) });
+  // No "asked" products on the sheet's request: a sheet holds several products the buyer chose, and the core would read
+  // every product but the first as standing in for it. What stands in for what is said line by line (`substituteFor`,
+  // set by a swap or carried from an option), and the gate judges exactly that.
+  void input.asked;
+  const request = await run.rt.dock.openRequest(run.session, { text: input.text.slice(0, 2000), deliverOn: day, ...(input.category ? { category: input.category } : {}) });
   const s: SheetRecord = { sheetId: `sh_${request.requestId.slice(4)}`, requestId: request.requestId, version: 1, turnId: run.turnId, deliveryDate: day, lines: input.lines.map((l) => ({ ...l, lineId: newLineId() })), offers: {}, ...(input.session ? { session: input.session } : {}) };
   sheetsOf(run)[s.sheetId] = s;
   run.requests.add(s.requestId);
@@ -203,6 +223,7 @@ export async function editSheet(run: TurnRun, sheetId: string, version: number |
   run = on(run, s);
   const changed: string[] = [];
   let reprice = false;
+  const before = structuredClone({ lines: s.lines, deliveryDate: s.deliveryDate, removed: s.removed });
   s.removed = undefined;
   switch (edit.kind) {
     case "packs": {
@@ -252,8 +273,16 @@ export async function editSheet(run: TurnRun, sheetId: string, version: number |
       break;
     }
   }
+  if (reprice) {
+    try {
+      await price(run, s);
+    } catch (err) {
+      // The wholesaler did not answer: the sheet stays exactly as it was, at its version, and the turn says so.
+      Object.assign(s, before);
+      throw err;
+    }
+  }
   s.version++;
-  if (reprice) await price(run, s);
   record(run, "sheet_edit", `The order sheet was changed (${edit.kind}) by ${run.person?.name ?? "the kitchen (relayed)"}.`, { sheetId, edit, version: s.version, by: run.person?.name, verified: !!run.person }, s.requestId);
   run.store.save(run.thread);
   return render(run, s, changed);
@@ -272,7 +301,13 @@ export async function placeSheet(run: TurnRun, sheetId: string, version: number)
     q.fail(err instanceof DockError ? err.code : undefined);
     throw err;
   }
-  const gate = step(run, "gate", "The gate checks the order against your mandate");
+  // The flags the sheet showed this person, confirmed by their tap on it (only those, only a signed-in person).
+  if (s.check?.length && run.person) {
+    const open = await run.rt.dock.orderConcerns(run.session, { requestId: s.requestId, quoteToken: quoted.quoteToken }).catch(() => []);
+    const keys = open.filter((c) => s.check!.includes(c.code)).map((c) => c.key);
+    if (keys.length) await run.rt.dock.confirmConcerns(run.session, { requestId: s.requestId, quoteToken: quoted.quoteToken, keys }, humanVia(run)).catch(() => undefined);
+  }
+  const gate = step(run, "gate", "Checking the order against your rules");
   let order: PublicOrder;
   try {
     order = await run.rt.dock.placeOrder(
@@ -333,7 +368,7 @@ export async function openAlternatives(run: TurnRun, sheetId: string, lineId: st
     if (!o) continue;
     const packs = Math.max(1, Math.ceil(amount / p.packSize - 1e-9));
     const lines = s.lines.map((x) => (x.lineId === lineId ? { productId: p.id, quantity: packs, ...(p.id !== original ? { substituteFor: original } : {}) } : { productId: x.productId, quantity: x.packs, ...(x.substituteFor ? { substituteFor: x.substituteFor } : {}) }));
-    const d = await run.rt.dock.previewDecision(run.session, s.requestId, lines, Object.values(s.offers), { referencePrices: true, ...(confirmedBy(run) ? { confirmedBy: confirmedBy(run) } : {}) }).catch(() => undefined);
+    const d = await run.rt.dock.previewDecision(run.session, s.requestId, lines, Object.values(s.offers), { referencePrices: true, asPlaced: true, ...(confirmedBy(run) ? { confirmedBy: confirmedBy(run) } : {}) }).catch(() => undefined);
     const gate = gateOf(d);
     // Nothing the gate would refuse is offered (the current product is always shown, as what is there now).
     if (gate.outcome === "reject" && p.id !== l.productId) continue;

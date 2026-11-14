@@ -1,10 +1,15 @@
-import { redirect } from "next/navigation";
+import type { Metadata } from "next";
+import { PRODUCT_NAME } from "../../../_ui/brand";
+import { pick } from "../../../_i18n/lang";
+import { requestLang } from "../../../_i18n/server";
+import { ThreadPage } from "../thread";
 
-/**
- * The Order page is gone: ordering is the agent's (docs/agent-thread.md "The home"). An old link or bookmark opens the
- * kitchen's store with the agent open on its thread.
- */
-export default async function OrderPage({ params }: { params: Promise<{ kitchen: string }> }) {
-  const { kitchen } = await params;
-  redirect(`/k/${encodeURIComponent(kitchen)}?agent=open`);
+export async function generateMetadata(): Promise<Metadata> {
+  const lang = await requestLang();
+  return { title: `${PRODUCT_NAME}: ${pick(lang, { en: "order", fi: "tilaa", sv: "beställ" })}` };
+}
+
+/** The agent, full page: the same conversation the dock shows on every other page (one thread, one engine). */
+export default function OrderPage() {
+  return <ThreadPage />;
 }

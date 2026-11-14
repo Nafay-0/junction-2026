@@ -402,6 +402,9 @@ export type SheetCard = CardBase & {
   changed?: string[];
   /** Set once placed. */
   orderId?: string;
+  /** What the mistake check flagged (codes: quantity_unusual, large_first_order, ...), shown to the signed-in person
+   * as a notice; confirming the sheet confirms it is what they mean, and `gate` is the preview with it confirmed. */
+  check?: string[];
   /** The line the last edit removed, so one tap puts it back (a `sheet_add` of the same product and packs). */
   removed?: { productId: string; name: string; packs: number };
 };

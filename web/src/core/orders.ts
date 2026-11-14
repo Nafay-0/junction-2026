@@ -1105,7 +1105,7 @@ export function createDock(deps: DockDeps) {
      * same rules and context as a quote's preview (orders.ts requestQuote), on an unsigned quote that is never issued,
      * stored or logged. Undefined when the lines cannot be priced from the offers given.
      */
-    async previewDecision(session: AgentSession, requestId: string, input: QuoteRequestLine[], offers: LiveOffer[], internal: { confirmedBy?: string; referencePrices?: boolean } = {}): Promise<Decision | undefined> {
+    async previewDecision(session: AgentSession, requestId: string, input: QuoteRequestLine[], offers: LiveOffer[], internal: { confirmedBy?: string; referencePrices?: boolean; asPlaced?: boolean } = {}): Promise<Decision | undefined> {
       const request = await ownRequest(session, requestId);
       const lines = await substitutesOf(request, input);
       const ids = [...new Set(lines.flatMap((l) => (l.substituteFor ? [l.productId, l.substituteFor] : [l.productId])))];
@@ -1129,7 +1129,7 @@ export function createDock(deps: DockDeps) {
       return evaluatePolicy(
         session.mandate,
         { agentId: session.agentId, quote, lines: quote.lines.map(({ productId, quantity, unitPriceCents }) => ({ productId, quantity, unitPriceCents })), neededBy: request.neededBy, deliverOn: request.deliverOn, requestId, asked: await askedOf(request, quote) },
-        { now: now(), ...supersession(session.mandate, session.mandateIssuedAt), ...(await budgetContext(quote.buyerOrgId)), ...(await mistakeCheckOf(session.mandate.issuer, request, quote, true)).context, ...(await holdsOf(quote)), quoteAlreadyUsed: false, ...(await splitWindowOf(quote)), ...(internal.confirmedBy ? { substitutionConfirmedBy: internal.confirmedBy } : {}) },
+        { now: now(), ...supersession(session.mandate, session.mandateIssuedAt), ...(await budgetContext(quote.buyerOrgId)), ...(await mistakeCheckOf(session.mandate.issuer, request, quote, !internal.asPlaced)).context, ...(await holdsOf(quote)), quoteAlreadyUsed: false, ...(await splitWindowOf(quote)), ...(internal.confirmedBy ? { substitutionConfirmedBy: internal.confirmedBy } : {}) },
       );
     },
 

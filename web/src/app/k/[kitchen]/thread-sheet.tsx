@@ -198,6 +198,7 @@ export function SheetView({ card, tap, busy }: { card: SheetCard; tap: Tap; busy
       onDay={(date) => !lock && date !== card.deliveryDate && tap({ type: "sheet_day", sheetId: card.sheetId, version: card.version, date }, tx.words.day(f.day(date)))}
       total={money(totalCents)}
       outcome={outcome}
+      {...(card.check?.length ? { notices: [{ key: "check", text: tx.check.say([...new Set(card.check.map((c) => tx.check.code[c] ?? tx.check.other))].join(tx.check.and)) }] } : {})}
       confirm={confirm}
       onConfirm={() => !lock && !drafting && tap({ type: "sheet_place", sheetId: card.sheetId, version: card.version }, confirm)}
       busy={working || drafting}

@@ -7,6 +7,12 @@ import { defineText } from "../../_i18n/lang";
  */
 export const THREAD_SHEET_TEXT = defineText({
   en: {
+    check: {
+      say: (what: string) => `Your agent noticed ${what}. Ordering confirms it is what you mean.`,
+      and: " and ",
+      code: { quantity_tenfold: "about ten times your usual amount", quantity_unusual: "an unusual amount", unit_confusion: "a unit that may be mixed up", contradicts_preference: "something against your own rules", duplicate_recent: "a repeat of a recent order", declined_before: "a product you turned down before", breaks_remembered_rule: "something against a rule you gave earlier", standing_order_range: "an amount outside your recurring order", large_first_order: "a large first order", unrelated_first_order: "a kind of product you have not ordered before" } as Record<string, string>,
+      other: "something unusual",
+    },
     sendProblem: {
       busy: { words: "The shop is busy right now. Your words are kept below: send them again in a moment.", tap: "The shop is busy right now. Nothing changed: tap again in a moment." },
       offline: { words: "No connection. Your words are kept below: send them again when you are back online.", tap: "No connection. Nothing changed: tap again when you are back online." },
@@ -83,6 +89,12 @@ export const THREAD_SHEET_TEXT = defineText({
     onTime: (pct: string) => `${pct} %`,
   },
   fi: {
+    check: {
+      say: (what: string) => `Agenttisi huomasi: ${what}. Tilaamalla vahvistat, että tarkoitit tätä.`,
+      and: " ja ",
+      code: { quantity_tenfold: "noin kymmenkertainen määrä tavalliseen verrattuna", quantity_unusual: "tavallisesta poikkeava määrä", unit_confusion: "yksikkö voi olla väärä", contradicts_preference: "jotain omia sääntöjäsi vastaan", duplicate_recent: "toisto äskettäisestä tilauksesta", declined_before: "tuote, jonka hylkäsit aiemmin", breaks_remembered_rule: "jotain aiemmin antamaasi sääntöä vastaan", standing_order_range: "määrä vakiotilauksesi ulkopuolella", large_first_order: "suuri ensimmäinen tilaus", unrelated_first_order: "tuotelaji, jota et ole ennen tilannut" } as Record<string, string>,
+      other: "jotain tavallisesta poikkeavaa",
+    },
     sendProblem: {
       busy: { words: "Kauppa on juuri nyt ruuhkainen. Sanasi ovat tallessa alla: lähetä ne hetken päästä uudelleen.", tap: "Kauppa on juuri nyt ruuhkainen. Mikään ei muuttunut: napauta hetken päästä uudelleen." },
       offline: { words: "Ei yhteyttä. Sanasi ovat tallessa alla: lähetä ne uudelleen, kun yhteys palaa.", tap: "Ei yhteyttä. Mikään ei muuttunut: napauta uudelleen, kun yhteys palaa." },
@@ -159,6 +171,12 @@ export const THREAD_SHEET_TEXT = defineText({
     onTime: (pct: string) => `${pct} %`,
   },
   sv: {
+    check: {
+      say: (what: string) => `Din agent märkte ${what}. Att beställa bekräftar att det är vad du menar.`,
+      and: " och ",
+      code: { quantity_tenfold: "ungefär tio gånger din vanliga mängd", quantity_unusual: "en ovanlig mängd", unit_confusion: "en enhet som kan vara fel", contradicts_preference: "något mot dina egna regler", duplicate_recent: "en upprepning av en nyss lagd beställning", declined_before: "en produkt du tackat nej till förut", breaks_remembered_rule: "något mot en regel du gett tidigare", standing_order_range: "en mängd utanför din återkommande beställning", large_first_order: "en stor första beställning", unrelated_first_order: "en sorts produkt du inte beställt förut" } as Record<string, string>,
+      other: "något ovanligt",
+    },
     sendProblem: {
       busy: { words: "Butiken har mycket att göra just nu. Dina ord finns kvar nedan: skicka dem igen om en stund.", tap: "Butiken har mycket att göra just nu. Inget ändrades: tryck igen om en stund." },
       offline: { words: "Ingen anslutning. Dina ord finns kvar nedan: skicka dem igen när du är online.", tap: "Ingen anslutning. Inget ändrades: tryck igen när du är online." },

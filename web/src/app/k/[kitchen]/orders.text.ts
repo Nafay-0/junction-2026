@@ -3,7 +3,7 @@ import { defineText } from "../../_i18n/lang";
 /** The Orders page: every order the kitchen placed or tried to. */
 export const ORDERS_TEXT = defineText({
   en: {
-    tabs: { all: "All", waiting: "Waiting for sign-off", placed: "Placed", not: "Not placed", history: "Earlier history" } as Record<string, string>,
+    tabs: { all: "All", waiting: "Waiting for an OK", placed: "Placed", not: "Not placed", history: "Earlier history" } as Record<string, string>,
     title: "Orders",
     intro: "Every order the kitchen placed or tried to place: by its agent, from the basket, or by an outside agent with the same mandate.",
     show: "Show",
@@ -17,7 +17,7 @@ export const ORDERS_TEXT = defineText({
     asked: (text: string) => `Asked: “${text}”`,
     repeat: "Repeat",
     withChange: "With a change",
-    status: { committed: "Placed", pending_approval: "Waiting for sign-off", rejected: "Refused by the gate", declined: "Declined", withdrawn: "Withdrawn", expired: "Price ran out", history: "From history" } as Record<string, string>,
+    status: { committed: "Placed", pending_approval: "Waiting for an OK", rejected: "Not allowed by your rules", declined: "Declined", withdrawn: "Withdrawn", expired: "Price ran out", history: "From history" } as Record<string, string>,
     emptyTitle: "Nothing in this view",
     emptyWaitingTitle: "Nothing is waiting for a sign-off",
     orderNow: "Ask the agent for an order",
@@ -38,7 +38,7 @@ export const ORDERS_TEXT = defineText({
     asked: (text: string) => `Pyyntö: ”${text}”`,
     repeat: "Toista",
     withChange: "Muutoksin",
-    status: { committed: "Lähetetty", pending_approval: "Odottaa hyväksyntää", rejected: "Portti hylkäsi", declined: "Hylätty", withdrawn: "Peruttu", expired: "Hinta vanheni", history: "Historiasta" } as Record<string, string>,
+    status: { committed: "Lähetetty", pending_approval: "Odottaa hyväksyntää", rejected: "Sääntösi eivät sallineet", declined: "Hylätty", withdrawn: "Peruttu", expired: "Hinta vanheni", history: "Historiasta" } as Record<string, string>,
     emptyTitle: "Ei tilauksia tässä näkymässä",
     emptyWaitingTitle: "Mikään ei odota hyväksyntää",
     orderNow: "Pyydä agentilta tilaus",
@@ -59,7 +59,7 @@ export const ORDERS_TEXT = defineText({
     asked: (text: string) => `Förfrågan: ”${text}”`,
     repeat: "Upprepa",
     withChange: "Med en ändring",
-    status: { committed: "Skickad", pending_approval: "Väntar på godkännande", rejected: "Stoppad av grinden", declined: "Avböjd", withdrawn: "Återtagen", expired: "Priset gick ut", history: "Från historiken" } as Record<string, string>,
+    status: { committed: "Skickad", pending_approval: "Väntar på godkännande", rejected: "Dina regler tillät det inte", declined: "Avböjd", withdrawn: "Återtagen", expired: "Priset gick ut", history: "Från historiken" } as Record<string, string>,
     emptyTitle: "Inget i den här vyn",
     emptyWaitingTitle: "Inget väntar på godkännande",
     orderNow: "Be agenten om en beställning",

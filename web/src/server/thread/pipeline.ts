@@ -412,7 +412,7 @@ export async function placeQuoted(run: TurnRun, s: IntakeView, words: string, pa
   }
   // Only an order inside the mandate goes alone. A quote the gate would send to a person waits for the buyer's word.
   if (alone && s.quote?.policyPreview.outcome !== "auto_approve") return out;
-  const gate = step(run, "gate", "The gate checks the order against your mandate");
+  const gate = step(run, "gate", "Checking the order against your rules");
   let order: PublicOrder;
   try {
     order = (await published<{ order: PublicOrder }>(run, "place_order", { requestId: s.requestId })).order;

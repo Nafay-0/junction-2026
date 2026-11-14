@@ -141,7 +141,7 @@ describe("no codes, and the buyer's language", () => {
       { rule: "human_confirmation", outcome: "escalate", details: { flagged: ["quantity_tenfold"] } },
       { rule: "weekly_budget", outcome: "pass", details: { budgetCents: 200000 } },
     ];
-    expect(plain(gateReasons(rules, [], en.w, en.f, "en"))).toEqual(["1 010,00 € is over the 500,00 € the agent may spend alone.", "The mistake check found something that a named person must confirm."]);
+    expect(plain(gateReasons(rules, [], en.w, en.f, "en"))).toEqual(["1 010,00 € is over the 500,00 € the agent may spend alone.", "Something looks unusual, so a named person checks it."]);
     expect(plain(gateReasons(rules, [], fi.w, fi.f, "fi")[0])).toBe("1 010,00 € on yli 500,00 €, jonka agentti saa käyttää yksin.");
     expect(plain(gateReasons(undefined, ["Total €1,010.00 is over the limit (kitchen_signer)."], fi.w, fi.f, "fi"))).toEqual([]);
   });

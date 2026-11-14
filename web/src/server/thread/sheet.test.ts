@@ -69,6 +69,19 @@ describe("the order sheet", () => {
     expect(s.removed).toBeUndefined();
   });
 
+  it("what the mistake check flags is shown on the sheet, and the signed-in person's confirm confirms it: placed alone", async () => {
+    const k = await kitchen("kaari", "Mikael Laine");
+    (await threadStore()).reset(k.info.slug, k.info.orgId); // a fresh conversation: the first test's sheet stays there
+    const sheet = (await tap(k, { type: "sheet_add", productId: "VA-1010", packs: 1 })).find((c): c is SheetCard => c.type === "sheet");
+    const s = sheet!;
+    // Kaari usually orders about 100 L: one 10 L pack is flagged, shown on the sheet, and the preview is the gate's
+    // answer once the signed-in person confirms it.
+    expect(s.check?.length).toBeGreaterThan(0);
+    expect(s.gate.outcome).toBe("auto_approve");
+    const placed = await tap(k, { type: "sheet_place", sheetId: s.sheetId, version: s.version });
+    expect(placed.find((c): c is OrderCard => c.type === "order")?.status).toBe("committed");
+  });
+
   it("a placed order is taken back before the cut-off by the signed-in person, and never by a relayed tap", async () => {
     const k = await kitchen("laakso", "Aino Virtanen");
     const rt = await getRuntime();
