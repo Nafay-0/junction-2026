@@ -24,9 +24,10 @@ import { answerLinkFor, needsBuyer } from "../answer-links";
 import { publicBaseUrl } from "../config";
 import { TOOLS, type DockTool } from "./tools";
 import { OFFER_TOOLS } from "./offer-tools";
+import { WATCH_TOOLS } from "./watch-tools";
 
 /** What the MCP door publishes: the ordering tools, then the answers to the wholesaler's offers (offer-tools.ts). */
-export const publishedTools = (): DockTool[] => [...TOOLS, ...OFFER_TOOLS] as unknown as DockTool[];
+export const publishedTools = (): DockTool[] => [...TOOLS, ...OFFER_TOOLS, ...WATCH_TOOLS] as unknown as DockTool[];
 
 /**
  * Dock over the Model Context Protocol, Streamable HTTP, served statelessly: every HTTP request gets a

@@ -64,6 +64,9 @@ describe("MCP server", () => {
       "accept_offer",
       "decline_offer",
       "mute_offers",
+      "watch_orders",
+      "answer_watch",
+      "set_auto_renew",
     ]);
     expect(tools.some((t) => /approv|sign.?off|decide/i.test(t.name))).toBe(false); // an agent can never sign off its own order
     for (const t of tools) {

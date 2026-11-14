@@ -31,6 +31,7 @@
     "verify:receipt": "tsx scripts/verify-receipt.ts",
     "verify:offer": "tsx scripts/verify-offer.ts",
     "offers": "tsx scripts/offers.ts",
+    "scenarios": "tsx scripts/scenarios.ts",
     "dev:mandate": "tsx scripts/dev-mandate.ts",
     "e2e": "next build && playwright test",
     "e2e:quick": "playwright test --project=chromium-phone --project=webkit-phone e2e/demo/approval.spec.ts e2e/demo/store.spec.ts",
