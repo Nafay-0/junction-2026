@@ -700,13 +700,29 @@ async function onOrderEvent(rt: Runtime, orgId: string, orderId: string): Promis
     if (order.status === "pending_approval") return;
     const wait = t.waits[orderId];
     if (!wait) {
+      // No agent loop waits for this order (a watch switch, an offer, a sheet placed by a tap): the turn still says what
+      // happened, beneath what it said before, in plain words from the order itself.
       const a = e.store.agentTurn(t, holder.turnId);
+      const said = afterSignOff(order, (a?.line ?? "").match(/[äöå]/i) ? "fi" : "en");
+      if (a && said && !(a.line ?? "").includes(said)) e.store.line(t, holder.turnId, a.line ? `${a.line}\n${said}` : said);
       if (a?.status === "waiting_approver") e.store.status(t, holder.turnId, "done", { ms: a.ms });
       return;
     }
     delete t.waits[orderId];
     await resumeAfterSignOff(rt, kitchen, t, wait, order);
   }
+}
+
+/** What happened when the person decided, in one sentence: OK'd and arriving, declined, or the price ran out. */
+function afterSignOff(order: PublicOrder, lang: "en" | "fi"): string {
+  const who = order.approval?.approver.name ?? (lang === "fi" ? "hyväksyjä" : "the approver");
+  const date = order.lines[0]?.deliveryDate ?? "";
+  const day = englishDays(`${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][new Date(`${date}T12:00:00Z`).getUTCDay()]} ${Number(date.slice(8, 10))}.${Number(date.slice(5, 7))}.`);
+  if (order.status === "committed") return lang === "fi" ? `${who} hyväksyi tilauksen; se tulee ${Number(date.slice(8, 10))}.${Number(date.slice(5, 7))}.` : `${who} OK'd it: it arrives ${day}`;
+  if (order.status === "declined") return lang === "fi" ? `${who} hylkäsi tilauksen, joten mitään ei tilattu.` : `${who} declined it, so nothing is ordered.`;
+  if (order.status === "expired") return lang === "fi" ? "Hinta umpeutui ennen hyväksyntää, joten mitään ei tilattu." : "The price ran out before the OK, so nothing is ordered.";
+  if (order.status === "withdrawn") return lang === "fi" ? "Tilaus peruttiin, joten mitään ei tilattu." : "It was taken back, so nothing is ordered.";
+  return "";
 }
 
 /** The approver decided: the runtime's approval answered (approved only when the gate committed it), and the loop goes on. */
