@@ -706,3 +706,20 @@ export function Avatar({ name, size = 36, tone = "petrol", className = "" }: { n
     </span>
   );
 }
+
+// ---------- on or off ----------
+
+/**
+ * A switch for a setting that takes effect at once (shared or private, on or off): a pill track with a round knob,
+ * the words beside it, one 44 px target. `role="switch"`; the words say the current state.
+ */
+export function Switch({ on, onChange, children, disabled, className = "" }: { on: boolean; onChange: (on: boolean) => void; children: ReactNode; disabled?: boolean; className?: string }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} disabled={disabled} onClick={() => onChange(!on)} className={`inline-flex min-h-11 items-center gap-2.5 rounded-full text-left text-[0.92rem] disabled:cursor-not-allowed disabled:opacity-60 ${className}`}>
+      <span aria-hidden className={`flex h-6 w-10 shrink-0 items-center rounded-full p-0.5 transition-colors duration-150 ${on ? "bg-petrol" : "bg-line-strong"}`}>
+        <span className={`size-5 rounded-full bg-paper shadow-xs transition-transform duration-150 motion-reduce:transition-none ${on ? "translate-x-4" : ""}`} />
+      </span>
+      <span className="min-w-0">{children}</span>
+    </button>
+  );
+}

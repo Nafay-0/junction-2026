@@ -5,6 +5,13 @@ type Dim = { label: string; options: { id: string; label: string }[] };
 /** Agent and rules: the mandate in plain words, the fallback memory view, who sees what, and Connect. */
 export const AGENT_RULES_TEXT = defineText({
   en: {
+    figAlone: "The agent alone, per order",
+    figWeek: "Spending in seven days, at most",
+    figLead: "Delivery booked ahead",
+    figLeadValue: (n: number) => `${n} days`,
+    figValid: "Signed rules valid until",
+    signsUpTo: (role: string, limit: string) => `${role}, signs orders up to ${limit}`,
+    copyWhat: (what: string) => `Copy the ${what}`,
     dimensions: {
       lactose: { label: "Lactose", options: [{ id: "lactose_free", label: "Lactose-free" }, { id: "none", label: "Regular (contains lactose)" }, { id: "no_preference", label: "No preference" }] },
       fat: { label: "Fat content", options: [{ id: "fat_free", label: "Fat-free" }, { id: "fat_1_5", label: "Semi-skimmed 1.5 %" }, { id: "fat_3_5", label: "Whole 3.5 %" }, { id: "no_preference", label: "No preference" }] },
@@ -72,6 +79,13 @@ export const AGENT_RULES_TEXT = defineText({
     noConnector: "A per-kitchen connector address for consumer assistants (with setup steps, revoke and reissue) is being added; until then, use the MCP address and mandate above.",
   },
   fi: {
+    figAlone: "Agentti itse, tilausta kohden",
+    figWeek: "Kulut seitsemässä päivässä enintään",
+    figLead: "Toimitus varataan enintään",
+    figLeadValue: (n: number) => `${n} pv etukäteen`,
+    figValid: "Allekirjoitetut säännöt voimassa",
+    signsUpTo: (role: string, limit: string) => `${role}, hyväksyntäraja ${limit}`,
+    copyWhat: (what: string) => `Kopioi: ${what}`,
     dimensions: {
       lactose: { label: "Laktoosi", options: [{ id: "lactose_free", label: "Laktoositon" }, { id: "none", label: "Tavallinen (sisältää laktoosia)" }, { id: "no_preference", label: "Ei väliä" }] },
       fat: { label: "Rasvapitoisuus", options: [{ id: "fat_free", label: "Rasvaton" }, { id: "fat_1_5", label: "Kevyt 1,5 %" }, { id: "fat_3_5", label: "Täysi 3,5 %" }, { id: "no_preference", label: "Ei väliä" }] },
@@ -139,6 +153,13 @@ export const AGENT_RULES_TEXT = defineText({
     noConnector: "Keittiökohtainen liitännän osoite kuluttaja-avustajille (käyttöönoton ohjeineen, mitätöinteineen ja uudelleen myöntämisineen) on tulossa; siihen asti käytä yllä olevaa MCP-osoitetta ja valtakirjaa.",
   },
   sv: {
+    figAlone: "Agenten på egen hand, per beställning",
+    figWeek: "Utgifter på sju dagar, högst",
+    figLead: "Leverans bokas högst",
+    figLeadValue: (n: number) => `${n} dagar framåt`,
+    figValid: "Undertecknade regler gäller till",
+    signsUpTo: (role: string, limit: string) => `${role}, godkänner beställningar upp till ${limit}`,
+    copyWhat: (what: string) => `Kopiera: ${what}`,
     dimensions: {
       lactose: { label: "Laktos", options: [{ id: "lactose_free", label: "Laktosfri" }, { id: "none", label: "Vanlig (innehåller laktos)" }, { id: "no_preference", label: "Ingen preferens" }] },
       fat: { label: "Fetthalt", options: [{ id: "fat_free", label: "Fettfri" }, { id: "fat_1_5", label: "Lätt 1,5 %" }, { id: "fat_3_5", label: "Hel 3,5 %" }, { id: "no_preference", label: "Ingen preferens" }] },
