@@ -166,12 +166,16 @@ function Sheet({
   const [blocked, setBlocked] = useState<RowId | undefined>(undefined);
   const rows = [
     ...rowsOf(card, card.current, w),
+    // A rule the kitchen stated is its own memory: one that came through the memory (pref_mem_<item>) is changed or
+    // forgotten there by the signed-in person; any other has no Change button rather than one that cannot change it.
     ...card.stated.map((r) => ({
       id: `said:${r.id}`,
       label: tx.kit.saidRow,
       value: r.text,
+      ...(memoryItemOf(r.id) && card.editable.narrow ? {} : { fixed: true }),
     })),
   ];
+  const [saying, setSaying] = useState<{ id: string; text: string } | undefined>(undefined);
   const canEdit = (id: RowId) =>
     id === "never" || id === "always"
       ? card.editable.narrow
@@ -187,6 +191,14 @@ function Sheet({
         {...(anyEditable
           ? {
               onChange: (id: string) => {
+                if (id.startsWith("said:")) {
+                  const r = card.stated.find((x) => `said:${x.id}` === id);
+                  if (r) setSaying({ id: r.id, text: r.text });
+                  setEditing(undefined);
+                  setBlocked(undefined);
+                  return;
+                }
+                setSaying(undefined);
                 const r = id as RowId;
                 if (canEdit(r)) {
                   setEditing(r);
@@ -212,6 +224,7 @@ function Sheet({
           {(card.editable.why && tx.why[card.editable.why]) || tx.kit.notHere}
         </p>
       )}
+      {saying && <StatedEditor key={saying.id} rule={saying} busy={busy} tap={tap} onDone={() => setSaying(undefined)} />}
       {editing && (
         <Editor
           key={editing}
@@ -222,6 +235,56 @@ function Sheet({
           onCancel={() => setEditing(undefined)}
         />
       )}
+    </>
+  );
+}
+
+/** The memory item behind a stated rule (`pref_mem_<itemId>`), or undefined for one that did not come through it. */
+const memoryItemOf = (id: string) => (id.startsWith("pref_mem_") ? id.slice("pref_mem_".length) : undefined);
+
+/**
+ * A rule the kitchen stated, changed in its own words or forgotten: through the memory, by the kitchen's signed-in
+ * person, recorded as theirs (memory_edit, memory_forget). The intake applies the new wording from the next request.
+ */
+function StatedEditor({ rule, busy, tap, onDone }: { rule: { id: string; text: string }; busy: boolean; tap: Tap; onDone: () => void }) {
+  const { tx } = useWords();
+  const [text, setText] = useState(rule.text);
+  const itemId = memoryItemOf(rule.id)!;
+  const next = text.trim();
+  return (
+    <>
+      <RuleChange
+        kind={tx.kind}
+        title={tx.kit.saidRow}
+        before={rule.text}
+        after={next}
+        changed={next.length >= 2 && next !== rule.text}
+        confirm={tx.kit.saidSave}
+        onConfirm={() => {
+          if (busy) return;
+          tap({ type: "memory_edit", itemId, text: next }, `${tx.kit.saidSave}: ${next}`);
+          onDone();
+        }}
+        onCancel={onDone}
+      >
+        <label className="block text-[0.82rem] text-ink-soft">
+          {tx.kit.saidLabel}
+          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} maxLength={500} className="mt-1 w-full rounded-lg border border-line-strong bg-paper px-3 py-2 text-[0.92rem] text-ink" />
+        </label>
+      </RuleChange>
+      <p className="px-1">
+        <button
+          type="button"
+          disabled={busy}
+          className={buttonClass("secondary", "sm")}
+          onClick={() => {
+            tap({ type: "memory_forget", itemId }, `${tx.kit.saidForget}: ${rule.text}`);
+            onDone();
+          }}
+        >
+          {tx.kit.saidForget}
+        </button>
+      </p>
     </>
   );
 }
