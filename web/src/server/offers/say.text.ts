@@ -35,7 +35,7 @@ export const OFFER_SAY_TEXT = defineText({
     carbon: (who: string, name: string, pct: string, pack: string) => `${who} ehdottaa tuotetta ${name}: ${pct} vähemmän hiilidioksidia kuin nykyinen. ${pack} / pakkaus.`,
     other: (who: string, name: string, pack: string) => `${who} ehdottaa tuotetta ${name}, ${pack} / pakkaus.`,
     newToYou: "Ette ole tilanneet sitä aiemmin.",
-    askDay: (packs: string, day: string) => `Lisätäänkö ${packs} tilaukseen ${day}?`,
+    askDay: (packs: string, day: string) => `Lisätäänkö ${packs} ${day}n tilaukseen?`,
     ask: (packs: string) => `Lisätäänkö ${packs} tilauslistalle?`,
     holds: (until: string) => `Hinta on voimassa ${until} asti.`,
     perL: "litre",
