@@ -162,3 +162,36 @@ test("an order above the limit waits for a signing device, then is signed with t
   const view = await (await page.request.get(`/api/v1/approvals/${waiting.authorised.approvalId}`)).json();
   expect(view.view).toMatchObject({ state: "committed", outcome: { method: "passkey", verified: true } });
 });
+
+test("a phone adds itself as the kitchen's signing device from the QR code's one-time link", async ({ page, browser }) => {
+  test.setTimeout(120_000);
+  const user = `e2e-p-${stamp}`;
+  await signUp(page, user, `Phone E2E ${stamp}`);
+  await page.goto(`/k/${user}/agent`);
+  await page.getByRole("button", { name: "Add a phone" }).click();
+  const link = page.getByRole("link", { name: "Or open this address on the phone" });
+  await expect(link).toBeVisible();
+  await shot(page, "13-add-a-phone");
+  const href = new URL((await link.getAttribute("href"))!);
+
+  const phoneContext = await browser.newContext(); // no account cookie: only the link
+  const phone = await phoneContext.newPage();
+  const cdp = await phoneContext.newCDPSession(phone);
+  await cdp.send("WebAuthn.enable");
+  await cdp.send("WebAuthn.addVirtualAuthenticator", {
+    options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true },
+  });
+  await phone.goto(`${href.pathname}${href.search}`);
+  await expect(phone.getByRole("heading", { name: `Sign for Phone E2E ${stamp} on this phone` })).toBeVisible();
+  await phone.getByRole("button", { name: "Create the passkey on this phone" }).click();
+  await expect(phone.getByRole("heading", { name: `Done. This phone signs for Phone E2E ${stamp}.` })).toBeVisible({ timeout: 30_000 });
+  await shot(phone, "14-phone-device-added");
+  // The link is used up, and the phone got no access to the kitchen's shop.
+  await phone.goto(`${href.pathname}${href.search}`);
+  await expect(phone.getByText(/expired or was used/).first()).toBeVisible();
+  expect((await phone.request.get(`/ui-api/kitchens/${user}/portal`)).status()).toBe(401);
+  await phoneContext.close();
+
+  const devices = await (await page.request.get("/ui-api/account/device")).json();
+  expect(devices.devices).toHaveLength(1);
+});
