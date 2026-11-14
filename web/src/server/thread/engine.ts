@@ -445,6 +445,18 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
           await finishTurn(run);
           return;
         }
+        // Planning a dish: one question for an open request, the ideas, the pick (dish.ts), by plain code and the planner.
+        const dish = await import("./dish").then((d) => d.dishTurn(run, body.text!, body.lang ?? "en")).catch((err) => {
+          console.error("[thread] dish", err);
+          return undefined;
+        });
+        if (dish) {
+          if (run.opening) first.done("planning a dish");
+          store.line(thread, run.turnId, dish);
+          store.mark(thread, run.turnId, "line", Date.now() - run.t0);
+          await finishTurn(run);
+          return;
+        }
         // A change in words to the menu on the table ("make it lactose-free", "no nuts", "for 20", "drop the soup"):
         // the menu adapter changes the plan and says what changed and the new total (server/agent/menu/thread.ts).
         const changed = await changeMenuInWords(run, body.text!, body.lang ?? "en").catch((err) => {
@@ -761,7 +773,9 @@ async function tellDifferences(run: TurnRun): Promise<void> {
   // the differences added and the closing question replaced.
   const line = here.line ?? "";
   const body = left ? "" : line.replace(CLOSING_ASK, "").trim();
-  const said = left && !fresh.some((x) => x.kind === "left_out") ? sayDifferences(pd.diffs.filter((x) => x.kind === "left_out"), ctx).said.split(/(?<=\.)\s/)[0] : words.said;
+  // The dish in three groups says each missing ingredient with its reason on screen: the sentence is the count alone.
+  const grouped = here.cards.some((c) => c.type === "dishes" && !!c.groups);
+  const said = left && (grouped || !fresh.some((x) => x.kind === "left_out")) ? sayDifferences(pd.diffs.filter((x) => x.kind === "left_out"), ctx).said.split(/(?<=\.)\s/)[0] : words.said;
   run.store.line(run.thread, run.turnId, [body, said, words.ask].filter(Boolean).join(" ").replace(/\s+/g, " ").trim());
   for (const x of fresh) told[keyOf(x)] = run.turnId;
   // What was said as left off, by plan: after the order, the reply says it again in the same words (never a new reason).
@@ -1256,7 +1270,7 @@ function afterRulesWords(run: TurnRun, words: string): string | undefined {
 }
 
 /** Words that change a menu already planned, rather than start a new one. */
-const MENU_CHANGE = /\b(make it|make them|no\s+\w+|without|lactose|gluten|nut-?free|vegan|vegetarian|instead|swap|replace|drop|remove|leave out|add|more|less|fewer|portions?|people|servings|ilman|tee siitä|laktoositon|gluteeniton|lisää|poista|vaihda|jätä pois|annosta|hengelle|utan|byt|ta bort|lägg till)\b/i;
+const MENU_CHANGE = /\b(we have|we've got|we got|we're out of|we are out of|out of|no more|meillä on|meiltä puuttuu|loppu|vi har|slut på|make it|make them|no\s+\w+|without|lactose|gluten|nut-?free|vegan|vegetarian|instead|swap|replace|drop|remove|leave out|add|more|less|fewer|portions?|people|servings|ilman|tee siitä|laktoositon|gluteeniton|lisää|poista|vaihda|jätä pois|annosta|hengelle|utan|byt|ta bort|lägg till)\b/i;
 
 /** "Make it lactose-free" while a menu is the subject: changed by the menu adapter, its sentence said; else undefined. */
 async function changeMenuInWords(run: TurnRun, words: string, lang: "en" | "fi" | "sv"): Promise<string | undefined> {

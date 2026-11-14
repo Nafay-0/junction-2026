@@ -135,7 +135,7 @@ export function sayDifferences(diffs: Difference[], c: Context): { said: string;
   }
   let ask: string;
   if (c.dish && left.length) {
-    const just = c.dish.buyable.length ? list(c.dish.buyable.slice(0, 4).map(low), lang) + (c.dish.buyable.length > 4 ? (fi ? " ja loput" : sv ? " och resten" : " and the rest") : "") : "";
+    const just = c.dish.buyable.length ? (c.dish.buyable.length <= 6 ? list(c.dish.buyable.map(low), lang) : fi ? `ne ${c.dish.buyable.length}, jotka voin ostaa` : sv ? `de ${c.dish.buyable.length} jag kan köpa` : `${c.dish.buyable.length} I can buy`) : "";
     const owner = rules.length > 0 && !!c.canAskOwner;
     if (fi) ask = `${owner ? "Pyydänkö omistajaa lisäämään ne, " : ""}${just ? `${owner ? "tilaanko" : "Tilaanko"} vain ${just}` : ""}${owner || just ? " vai " : ""}${owner || just ? "suunnittelenko" : "Suunnittelenko"} ruuan, jonka voin ostaa kokonaan?`;
     else if (sv) ask = `Ska jag ${owner ? "be ägaren lägga till dem, " : ""}${just ? `beställa bara ${just}, ` : ""}${owner || just ? "eller " : ""}planera en rätt jag kan köpa helt?`;
