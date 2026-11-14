@@ -75,7 +75,8 @@ export async function demoStageForThread(rt: Runtime, kitchen: string, kind: Sta
     const g = await guideFor(rt, (await rt.accounts.get(kitchen))!);
     const rowId: GuideId = kind === "stock_out" ? "stockout" : kind === "drift" ? "drift" : kind === "offer" ? "offer" : "backup";
     const words = GUIDE_TEXT[lang].rows[rowId].say?.(guideWords(g.facts, lang, staged))[0];
-    return { ok: true, say: [t.staged(staged.summary), words ? t.stagedThen(words) : ""].filter(Boolean).join(" "), staged };
+    const what = t.what[kind]?.(staged.productName ?? staged.family ?? "", staged.until ?? "") ?? staged.summary;
+    return { ok: true, say: [t.staged(what), words ? t.stagedThen(words) : ""].filter(Boolean).join(" "), staged };
   } catch (err) {
     return { ok: false, say: t.failed(isDockError(err) ? err.message : "something went wrong") };
   }

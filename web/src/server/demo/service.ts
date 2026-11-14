@@ -323,7 +323,7 @@ export async function guideFor(rt: Runtime, a: Account, now = new Date()): Promi
       })(),
       setup: { action: "phone", ready: true },
     },
-    { id: "mistake", ...at(has(es, (e) => /quantity_unusual|order_check|unusual amount/i.test(text(e)) && (e.type === "intake" || e.type === "agent" || e.type === "decision"))), ...(milkish ? {} : { needs: "history" as const }) },
+    { id: "mistake", ...at(has(es, (e, d) => (e.type === "agent" && d.event === "anomaly" && /quantity_|amount_above_usual|amount_below_usual/.test(JSON.stringify(d.codes ?? ""))) || (e.type === "intake" && /quantity_tenfold|quantity_unusual|amount_above_usual/.test(text(e))))), ...(milkish ? {} : { needs: "history" as const }) },
     { id: "refusal", ...at(has(es, (e, d) => e.type === "refusal" || (e.type === "decision" && /refus/i.test(String(d.outcome ?? d.decision ?? ""))) || (e.type === "agent" && ["pressured", "rules_refused", "dish_refused", "grounding_refusal"].includes(String(d.event))))) },
     { id: "widen", ...at(has(es, (e, d) => e.type === "agent" && d.event === "rules_signed" && (!!d.signOff || d.mechanism === "account_terms"))) },
     { id: "learn", ...at(has(es, (e) => /standing rule/i.test(e.summary) && /confirm|kept|yes/i.test(e.summary))) },
