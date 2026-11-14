@@ -484,6 +484,8 @@ export type DockDeps = {
   holds?: ProductHolds;
   /** What can stand in for a product, by kitchen use (the server wires the product knowledge map; see alternatives.ts). */
   alternatives?: AlternativesSource;
+  /** Ranked candidates from smart search (the server wires server/search; see catalog/finder.ts). The core's own rules still decide. */
+  finder?: IntakeDeps["finder"];
   /** One line per remembered item an intake used (the server wires the kitchen memory; see intake.ts). */
   memoryUsage?: IntakeDeps["memoryUsage"];
   /**
@@ -554,6 +556,7 @@ export function masterDataRefusal(mandate: Mandate, lines: { productId: string; 
       attributes: p.attributes,
       allergens: p.allergens,
       ...(p.allergenInfo ? { allergensDeclared: p.allergenInfo.declared } : {}),
+      ...(p.allergenInfo?.byNature ? { allergensByNature: p.allergenInfo.byNature } : {}),
       certificates: p.certificates,
       quantity: Math.max(1, Math.round(l.quantity)),
       unitPriceCents: 0,
@@ -1706,6 +1709,7 @@ export function createDock(deps: DockDeps) {
     secondReading: deps.secondReadings,
     alternatives: deps.alternatives,
     memoryUsage: deps.memoryUsage,
+    ...(deps.finder ? { finder: deps.finder } : {}),
   });
   return { ...dock, ...guarded, intake };
 }

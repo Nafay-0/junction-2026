@@ -69,7 +69,10 @@
     "radar:gtins": "tsx scripts/radar-gtins.ts",
     "radar:check": "tsx scripts/radar-check.ts",
     "demo:all": "tsx scripts/demo-all.ts",
-    "mariadb:reproduce": "tsx scripts/mariadb-reproduce.ts"
+    "mariadb:reproduce": "tsx scripts/mariadb-reproduce.ts",
+    "search:vectors": "tsx scripts/search-vectors.ts",
+    "search:publish": "tsx scripts/search-publish.ts",
+    "search:eval": "tsx eval/search/run.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.102",
@@ -91,6 +94,7 @@
     "qrcode": "1.5.4",
     "react": "19.3.0",
     "react-dom": "19.3.0",
+    "undici": "7.30.2",
     "zod": "4.6.7"
   },
   "devDependencies": {

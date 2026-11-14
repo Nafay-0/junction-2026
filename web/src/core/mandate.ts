@@ -38,6 +38,11 @@ export const MandateSchema = z
     /** Every product ordered must carry all of these attributes (e.g. "lactose_free"). */
     requiredAttributes: z.array(z.string().min(1)),
     forbiddenAllergens: z.array(z.string().min(1)),
+    /**
+     * "declared": a forbidden allergen is ruled out only by the maker's allergen data. Absent: a fresh, whole,
+     * single-ingredient vegetable, fruit or herb without that data counts by its nature (core/catalog/nature.ts).
+     */
+    allergenEvidence: z.enum(["declared", "declared_or_nature"]).optional(),
     /** Every product ordered must carry all of these certificates or labels. */
     requiredCertificates: z.array(z.string().min(1)),
     /** Latest acceptable delivery: no later than `maxLeadDays` after the order, and no later than the request's need-by date. */

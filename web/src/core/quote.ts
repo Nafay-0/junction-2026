@@ -24,6 +24,8 @@ export const QuoteLineSchema = z.object({
   allergens: z.array(z.string()),
   /** False when the maker sent no allergen data: `allergens` is then empty because nothing is known. Absent: declared. */
   allergensDeclared: z.boolean().optional(),
+  /** When the maker sent no allergen data but the product is fresh, whole produce: what it contains by its nature (never a declaration). */
+  allergensByNature: z.object({ allergens: z.array(z.string()), basis: z.string() }).optional(),
   certificates: z.array(z.string()),
   quantity: z.number().int().positive(), // packs
   unitPriceCents: z.number().int().nonnegative(), // per pack
@@ -186,6 +188,7 @@ export function buildQuote(input: QuoteInput): Quote {
       attributes: p.attributes,
       allergens: p.allergens,
       ...(p.allergenInfo ? { allergensDeclared: p.allergenInfo.declared } : {}),
+      ...(p.allergenInfo?.byNature ? { allergensByNature: p.allergenInfo.byNature } : {}),
       certificates: p.certificates,
       quantity: req.quantity,
       unitPriceCents: o.unitPriceCents,

@@ -357,7 +357,7 @@ export function createPlanService(deps: PlanDeps) {
     if (!deps.pick) return;
     const lines: PickLine[] = specs
       .map((spec) => ({ lineId: key(spec), ingredient: spec.ingredient.name, role: spec.uses.map((u) => `${u.role} in ${u.dish}`).join("; "), form: spec.ingredient.form, candidates: (p.candidates[key(spec)]?.candidates ?? []).map((c) => ({ id: c.product.id, name: [c.product.names?.en, c.product.names?.fi].filter(Boolean).join(" / ") || c.product.name })) }))
-      .filter((l) => l.candidates.length > 0);
+      .filter((l) => l.candidates.length > 0 && !p.candidates[l.lineId]?.judged); // smart search's judge already checked these
     if (!lines.length) return;
     // One small call per ingredient, all at once: the answer for the last dish comes back in about two seconds.
     const results = await Promise.allSettled(lines.map((l) => deps.pick!([l])));
