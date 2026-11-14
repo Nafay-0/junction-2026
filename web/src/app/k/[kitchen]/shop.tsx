@@ -188,6 +188,12 @@ export function readable(name: string): string {
   return lower.charAt(0).toUpperCase() + lower.slice(1);
 }
 
+/** A company the partner writes in capitals ("MILK IN OY", "VALIO OY TUORE") as a name is written: "Milk In Oy". */
+export function companyName(name: string): string {
+  if (name !== name.toUpperCase() || !/[A-ZÅÄÖ]{2}/.test(name)) return name;
+  return name.toLowerCase().replace(/(^|[\s\-/&(])(\p{L})/gu, (_m, b: string, c: string) => b + c.toUpperCase());
+}
+
 export function labelText(l: string): string {
   const t = l.replaceAll("_", " ");
   return t.charAt(0).toUpperCase() + t.slice(1);
@@ -217,7 +223,7 @@ export function Tile({ p }: { p: Product }) {
   const prof = useProfile(p.id);
   const origin = originText(p.countryOfOrigin, lang);
   const claims = claimsOf(p);
-  const brand = p.brand !== "unknown" ? p.brand : (p.vendor ?? "");
+  const brand = companyName(p.brand !== "unknown" ? p.brand : (p.vendor ?? ""));
   const addLabel = stepOf(p) > 1 || p.salesUnit === "KG" ? tx.addN(stepOf(p), unitWord(p, stepOf(p), lang)) : tx.addOne(unitWord(p, 1, lang));
   return (
     <li className="lift group @container relative flex flex-col overflow-hidden rounded-xl border border-line bg-paper">
@@ -414,8 +420,8 @@ export function Facts({ p, lang }: { p: Product; lang: Lang }) {
         ),
     },
     { key: "claims", label: t.claims, value: claimsOf(p).length ? claimsOf(p).map((c) => tx.claim[c]).join(", ") : <span className="text-ink-soft">{t.noneStated}</span> },
-    { key: "brand", label: t.brand, value: p.brand !== "unknown" ? p.brand : <Missing>{tx.noData}</Missing> },
-    { key: "supplier", label: t.supplier, value: p.vendor ?? <Missing>{tx.noData}</Missing> },
+    { key: "brand", label: t.brand, value: p.brand !== "unknown" ? companyName(p.brand) : <Missing>{tx.noData}</Missing> },
+    { key: "supplier", label: t.supplier, value: p.vendor ? companyName(p.vendor) : <Missing>{tx.noData}</Missing> },
     { key: "origin", label: t.origin, value: originText(p.countryOfOrigin, lang) ?? <Missing>{tx.noData}</Missing> },
     { key: "storage", label: t.storage, value: tempLabel(p.temperatureClass, lang) ?? <Missing>{tx.noData}</Missing> },
     { key: "labels", label: t.labels, value: p.certificates.length ? p.certificates.map(labelText).join(", ") : <span className="text-ink-soft">{t.noneStated}</span> },

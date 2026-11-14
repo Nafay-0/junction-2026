@@ -11,11 +11,12 @@ describe("fi: core sentences fit for the operations surface", () => {
     expect(fi("costs 12.5 % more")).toBe("costs 12,5 % more");
   });
 
-  it("turns ISO timestamps and dates into Helsinki words", () => {
-    expect(fi("Quote holds its prices until 2026-11-13T23:24:25.606Z.")).toBe("Quote holds its prices until Sat 14.11. 01.24.");
-    expect(fi("cut-off 2026-11-12T15:00:00+0200")).toBe("cut-off Thu 12.11. 15.00");
-    expect(fi("order by 2026-11-15 17:00")).toBe("order by Sun 15.11. 17.00");
-    expect(fi("delivery 2026-11-16")).toBe("delivery Mon 16.11.");
+  it("turns ISO timestamps and dates into Helsinki words, in the product's one English form of a day", () => {
+    expect(fi("arrives Mon 16.11. if ordered by Sun 15.11. 17.00")).toBe("arrives Mon 16 Nov if ordered by Sun 15 Nov 17.00");
+    expect(fi("Quote holds its prices until 2026-11-13T23:24:25.606Z.")).toBe("Quote holds its prices until Sat 14 Nov 01.24.");
+    expect(fi("cut-off 2026-11-12T15:00:00+0200")).toBe("cut-off Thu 12 Nov 15.00");
+    expect(fi("order by 2026-11-15 17:00")).toBe("order by Sun 15 Nov 17.00");
+    expect(fi("delivery 2026-11-16")).toBe("delivery Mon 16 Nov");
   });
 
   it("names units in words and never prints a placeholder amount", () => {
@@ -33,6 +34,6 @@ describe("fi: core sentences fit for the operations surface", () => {
 
   it("formats money and stamps", () => {
     expect(money(128040)).toBe("1 280,40 €");
-    expect(stamp("2026-11-13T21:54:00Z")).toBe("Fri 13.11. 23.54");
+    expect(stamp("2026-11-13T21:54:00Z")).toBe("Fri 13 Nov 23.54");
   });
 });

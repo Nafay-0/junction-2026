@@ -6,7 +6,7 @@ import { Check, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { Overview } from "@/server/ops/views";
 import { Target } from "../../_ui/target";
-import { VIA, fi, money, num, since, when, whenSeconds, type Via } from "../_ui/format";
+import { VIA, askedWords, fi, money, num, since, when, whenSeconds, type Via } from "../_ui/format";
 import { DoorGlyph, Empty, Licence, LiveMark, LoadError, Loading, Outcome, PageHead, Section, ViaTag, useNow, useOps } from "../_ui/kit";
 import { Table } from "../_ui/parts";
 import { FilterBar, useUrlState } from "../_ui/filters";
@@ -306,7 +306,9 @@ function Sessions({ rows, now }: { rows: Overview["sessions"]; now: number }) {
                   <ViaTag via={r.via} short />
                 </td>
                 <td className="max-w-[32ch]">
-                  <span className="line-clamp-3" title={fi(r.asked)}>“{fi(r.asked)}”</span>
+                  <span className={`line-clamp-3 ${askedWords(r.asked).system ? "text-ink-soft" : ""}`} title={fi(r.asked)}>
+                    {askedWords(r.asked).system ? askedWords(r.asked).words : `“${fi(r.asked)}”`}
+                  </span>
                 </td>
                 <td className="max-w-[34ch] text-ink-soft">
                   <span className="line-clamp-3" title={fi(r.doing)}>{fi(r.doing)}</span>

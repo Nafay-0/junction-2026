@@ -17,7 +17,7 @@ export const ORDERS_TEXT = defineText({
     asked: (text: string) => `Asked: “${text}”`,
     repeat: "Repeat",
     withChange: "With a change",
-    status: { committed: "Placed", pending_approval: "Waiting for an OK", rejected: "Not allowed by your rules", declined: "Declined", withdrawn: "Withdrawn", expired: "Price ran out", history: "From history" } as Record<string, string>,
+    status: { committed: "Placed", pending_approval: "Waiting for an OK", rejected: "Not allowed by your rules", declined: "Declined", withdrawn: "Taken back", expired: "Price ran out", history: "From history" } as Record<string, string>,
     sample: "Sample, made up for the demo",
     emptyTitle: "Nothing in this view",
     emptyWaitingTitle: "Nothing is waiting for a sign-off",

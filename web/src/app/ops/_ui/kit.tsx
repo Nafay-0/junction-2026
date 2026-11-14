@@ -7,7 +7,7 @@ import { useLive } from "../../_client/use-live";
 import { Check, ChevronRight } from "lucide-react";
 import { buttonClass } from "../../_ui/kit";
 import { Target } from "../../_ui/target";
-import { VIA, type Via } from "./format";
+import { VIA, envOut, type Via } from "./format";
 
 /**
  * The operations portal's building blocks, in the shared system's language (web/docs/DESIGN.md): white cards with
@@ -56,7 +56,7 @@ export function PageHead({ title, purpose, about, right }: { title: string; purp
         <p className="mt-2 text-[1rem] leading-relaxed text-ink-soft">{purpose}</p>
         {about && (
           <details className="group mt-1 text-[0.92rem]">
-            <summary className="inline-flex min-h-9 cursor-pointer select-none list-none items-center gap-1 rounded-full pr-2 font-medium text-petrol hover:underline [&::-webkit-details-marker]:hidden">
+            <summary className="inline-flex min-h-9 max-sm:min-h-11 cursor-pointer select-none list-none items-center gap-1 rounded-full pr-2 font-medium text-petrol hover:underline [&::-webkit-details-marker]:hidden">
               <ChevronRight aria-hidden size={15} className="transition-transform duration-150 group-open:rotate-90 motion-reduce:transition-none" />
               How this page works
             </summary>
@@ -161,7 +161,7 @@ export function Licence({ licence }: { licence: { level: string; name: string; r
 export function Details({ summary = "Details", children, className = "", dark = false }: { summary?: string; children: ReactNode; className?: string; dark?: boolean }) {
   return (
     <details className={`group text-[0.82rem] ${className}`}>
-      <summary className={`inline-flex min-h-8 cursor-pointer select-none list-none items-center gap-1 rounded-full pr-2 [&::-webkit-details-marker]:hidden ${dark ? "text-paper/70 hover:text-paper" : "text-ink-soft hover:text-ink"}`}>
+      <summary className={`inline-flex min-h-8 max-sm:min-h-11 cursor-pointer select-none list-none items-center gap-1 rounded-full pr-2 [&::-webkit-details-marker]:hidden ${dark ? "text-paper/70 hover:text-paper" : "text-ink-soft hover:text-ink"}`}>
         <ChevronRight aria-hidden size={14} className="transition-transform duration-150 group-open:rotate-90 motion-reduce:transition-none" />
         <span>{summary}</span>
       </summary>
@@ -192,10 +192,35 @@ export function Empty({ title, children, action }: { title: string; children?: R
 
 export function LoadError({ message }: { message?: string }) {
   if (!message) return null;
+  const said = envOut(message);
+  // A service this server does not have is not a failure: say so calmly, the setting's name behind a detail.
+  if (said.names.length)
+    return (
+      <div role="status" className="mb-4 rounded-lg border border-line bg-surface px-4 py-3 text-[0.95rem]">
+        <Said text={message} />
+      </div>
+    );
   return (
     <p role="status" className="mb-4 rounded-lg border border-bad/20 bg-bad-soft px-4 py-3 text-[0.95rem]">
       <b className="font-semibold">Could not refresh from AimoPilot.</b> {message} The view shows the last data it had and keeps trying.
     </p>
+  );
+}
+
+/** A server note in words; environment variable names it carries wait behind "Setting". */
+export function Said({ text, className = "" }: { text?: string | null; className?: string }) {
+  const said = envOut(text);
+  return (
+    <span className={className}>
+      {said.text}
+      {said.names.length > 0 && (
+        <Details summary="Setting" className="mt-0.5">
+          {said.names.map((n) => (
+            <p key={n}>{n}</p>
+          ))}
+        </Details>
+      )}
+    </span>
   );
 }
 

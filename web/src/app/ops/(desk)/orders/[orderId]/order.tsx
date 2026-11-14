@@ -6,7 +6,7 @@ import { ChevronDown } from "lucide-react";
 import type { OrderTimelineView } from "@/server/ops/orders-view";
 import type { TimelineStep } from "@/server/ops/order-timeline";
 import { Badge } from "../../../../_ui/kit";
-import { clockSeconds, day, timelineFact } from "../../../../_ui/plain";
+import { clockSeconds, dayEn as day, timelineFact } from "../../../../_ui/plain";
 import { lookupsTitle, shownSteps } from "../../../../_ui/timeline-steps";
 import { STATUS_WORD, decidedWords, fi, money, since, statusTone, whenSeconds } from "../../../_ui/format";
 import { Details, KV, LiveMark, LoadError, Loading, PageHead, Panel, useNow, useOps } from "../../../_ui/kit";

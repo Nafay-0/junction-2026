@@ -1,5 +1,6 @@
 "use client";
 
+import { sentenceCase } from "../../../_ui/plain";
 import Link from "next/link";
 import { useState } from "react";
 import type { Campaign, OffersView } from "@/server/offers/service";
@@ -116,7 +117,7 @@ function Body({ v, now, refresh }: { v: OffersView; now: number; refresh: () => 
                 {held.slice(0, 30).map((o) => (
                   <li key={o.offerId} className="rounded-lg border border-line bg-paper px-3 py-2 text-[0.9rem]">
                     <p>
-                      <span className="font-semibold">{o.kitchenName}</span> · {o.productName}
+                      <span className="font-semibold">{o.kitchenName}</span> · {sentenceCase(o.productName)}
                     </p>
                     <p className="text-ink-soft">
                       <Badge tone="refused">{RULE[o.rule ?? ""] ?? fi(o.rule)}</Badge> {fi(o.reason)} <span className="tabular">({when(o.at, new Date(now))})</span>
@@ -159,7 +160,7 @@ function OfferRow({ o, now }: { o: Offer; now: number }) {
       <td className="tabular whitespace-nowrap">{when(o.at, new Date(now))}</td>
       <td className="min-w-[9rem]">{o.kitchenName}</td>
       <td>
-        <p className="font-semibold">{o.productName}</p>
+        <p className="font-semibold">{sentenceCase(o.productName)}</p>
         <p className="text-[0.86rem] text-ink-soft">{o.reasons.map((r) => REASON[r.kind] ?? r.kind).join(" · ")}</p>
         <p className="text-[0.86rem]">{fi(o.line)}</p>
         {o.lineBy === "model" && <p className="text-[0.78rem] text-ink-soft">Line by a model, checked against the figures</p>}

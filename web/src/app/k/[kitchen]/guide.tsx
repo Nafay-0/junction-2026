@@ -113,7 +113,7 @@ export function TryEverything() {
                       <span>{t.title}</span>
                       {row.done && <Badge tone="good">{tx.done}</Badge>}
                       {!row.done && isNext && <Badge tone="info">{tx.next}</Badge>}
-                      {(row.staged || result) && <Badge tone="waiting">{tx.staged}</Badge>}
+                      {(row.staged || result) && <Badge tone="staged">{tx.staged}</Badge>}
                     </h2>
                     <p className="mt-0.5 text-[0.95rem] leading-snug text-ink-soft">{t.shows(words)}</p>
                   </div>

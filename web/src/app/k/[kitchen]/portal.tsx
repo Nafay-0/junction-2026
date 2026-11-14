@@ -388,7 +388,7 @@ function Header() {
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-paper/90 backdrop-blur-md supports-[not(backdrop-filter:blur(0))]:bg-paper">
       <div className="mx-auto flex max-w-[1320px] flex-wrap items-center gap-x-3 gap-y-2.5 px-4 py-2.5 sm:px-6 lg:flex-nowrap lg:gap-x-5 lg:py-3 xl:px-8">
-        <Link href="/k" className="flex shrink-0 items-center rounded-md" aria-label={`${PRODUCT_NAME}: ${tx.allKitchens}`}>
+        <Link href="/k" className="flex min-h-11 shrink-0 items-center rounded-md" aria-label={`${PRODUCT_NAME}: ${tx.allKitchens}`}>
           <span className="lg:hidden">
             <Wordmark size={25} />
           </span>
