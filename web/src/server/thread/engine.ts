@@ -474,14 +474,29 @@ async function showLine(run: TurnRun, text: string): Promise<void> {
   run.store.mark(run.thread, run.turnId, "line", Date.now() - run.t0);
 }
 
+/** How long the turn shows the memory step as working before it lets the writer finish out of sight. */
+const MEMORY_STEP_WAIT_MS = 6_000;
+
 /** After an order: what the memory writer proposes to remember, for the kitchen's person to keep or drop. */
 async function proposeMemory(run: TurnRun): Promise<void> {
   const orders = [...run.orders.values()].filter((o) => o.status === "committed" || o.status === "pending_approval");
   if (!orders.length || process.env.DOCK_MEMORY === "off") return;
-  try {
+  // Memory is a help, never a blocker, and must never look like one. Its step is always closed: when the writer
+  // finishes, when it fails, and after a few seconds if it is still reading (it then finishes behind the scenes
+  // and its card appears when it is ready). A buyer once saw "Noting what to remember" spin for ever, because a
+  // slow or failed model call left the step open.
+  let st: ReturnType<typeof step> | undefined;
+  let closed = false;
+  const close = (how: "done" | "skip", detail?: string) => {
+    if (closed || !st) return;
+    closed = true;
+    if (how === "done") st.done(detail);
+    else st.skip(detail);
+  };
+  const work = (async () => {
     const { getMemoryService } = await import("@/server/memory/runtime");
     const memory = await getMemoryService();
-    const st = step(run, "memory", "Noting what to remember");
+    st = step(run, "memory", "Noting what to remember");
     const proposals: MemoryCard["proposals"] = [];
     const used: string[] = [];
     for (const o of orders) {
@@ -493,11 +508,11 @@ async function proposeMemory(run: TurnRun): Promise<void> {
       proposals.push(...report.questions.map((q) => ({ itemId: q.itemId, question: q.question })));
       record(run, "memory_write", `The memory writer read this order: ${report.outcomes.length} outcome(s), ${report.questions.length} to confirm.`, { orderId: o.orderId, outcomes: report.outcomes.length, questions: report.questions }, o.requestId);
     }
-    st.done(`${proposals.length}`);
+    close("done", `${proposals.length}`);
     if (proposals.length || used.length) run.store.card(run.thread, run.turnId, { type: "memory", cardId: cardId("memory", run.turnId), used: [...new Set(used)], proposals: proposals.slice(0, 3) });
-  } catch {
-    // memory is a help, never a blocker
-  }
+  })().catch(() => close("skip"));
+  await Promise.race([work, new Promise<void>((resolve) => setTimeout(resolve, MEMORY_STEP_WAIT_MS))]);
+  close("skip");
 }
 
 // ---------- sign-off on the approver's phone ----------

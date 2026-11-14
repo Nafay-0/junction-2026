@@ -178,7 +178,8 @@ function memoryOnce(t: ThreadT | undefined): Map<string, (MemoryLine | string)[]
 }
 
 function stepsOf(steps: ThreadStep[], label: (s: ThreadStep) => string) {
-  return steps.map((s) => ({ key: s.stepId, text: label(s), state: s.status === "running" ? ("doing" as const) : s.status === "failed" ? ("failed" as const) : ("done" as const), detail: s.ms !== undefined && s.status !== "running" ? `${(s.ms / 1000).toFixed(1)} s` : undefined }));
+  // A skipped step (the memory note, when its writer is slow or unavailable) is not shown as work that was done.
+  return steps.filter((s) => s.status !== "skipped").map((s) => ({ key: s.stepId, text: label(s), state: s.status === "running" ? ("doing" as const) : s.status === "failed" ? ("failed" as const) : ("done" as const), detail: s.ms !== undefined && s.status !== "running" ? `${(s.ms / 1000).toFixed(1)} s` : undefined }));
 }
 
 function Agent({ turn, tap, busy, gated, base, thread, memory }: { turn: AgentTurnT; tap: Tap; busy: boolean; gated: Set<string>; base: string; thread: ThreadT; memory: Map<string, (MemoryLine | string)[]> }) {
