@@ -31,7 +31,7 @@ const LIVE: Record<string, FakeScenario> = {
   ...MENU_SCENARIOS,
   "810001": { price: 1.4, amount: 500, date: "2026-11-16", closingTime: "2026-11-15T17:00:00", unit: "KG" },
   // The crème fraîche is shipped from the supplier: its cut-off for Monday passed on Thursday.
-  "810002": { price: 6.9, amount: 500, date: "2026-11-16", closingTime: "2026-11-12T15:00:00", unit: "ST", logisticModel: "Terminal" },
+  "810002": { price: 6.9, amount: 500, date: "2026-11-16", closingTime: "2026-11-12T15:00:00+02:00", unit: "ST", logisticModel: "Terminal" },
   "810003": { price: 6.5, amount: 500, date: "2026-11-16", closingTime: "2026-11-15T17:00:00", unit: "ST" },
   "810004": { price: 30.0, amount: 500, date: "2026-11-16", closingTime: "2026-11-15T17:00:00", unit: "ST" },
   "810005": { price: 8.4, amount: 500, date: "2026-11-16", closingTime: "2026-11-15T17:00:00", unit: "ST" },

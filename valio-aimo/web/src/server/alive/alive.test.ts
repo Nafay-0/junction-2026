@@ -36,7 +36,6 @@ beforeAll(async () => {
   (await import("@/server/notify/service")).setMailTransport(rt, spy);
   firstSeq = rt.dock.ledger.length;
   report = await playStory(rt, { slowTurnMs: 0 });
-  (await import("node:fs")).writeFileSync("/private/tmp/claude-502/alive/beats2.txt", report.beats.map((b) => `${b.ok ? "OK  " : "FAIL"} ${b.name}: ${b.detail}`).join("\n"));
 }, 120_000);
 
 const views = async () => {
