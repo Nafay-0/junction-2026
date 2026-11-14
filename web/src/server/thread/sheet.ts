@@ -219,7 +219,8 @@ async function daysFor(run: TurnRun, s: SheetRecord): Promise<SheetCard["days"]>
 export async function createSheet(run: TurnRun, input: { lines: SheetLineInput[]; deliveryDate?: string; text: string; category?: string; asked?: string[]; session?: AgentSession }): Promise<SheetCard> {
   if (!input.lines.length) throw new DockError(400, "sheet_empty", "A sheet needs at least one line.");
   run = on(run, input);
-  const day = input.deliveryDate ?? (await daysFor(run, { lines: [], offers: {}, deliveryDate: addDaysIso(localNow(new Date()).date, 1) } as unknown as SheetRecord)).find((d) => d.available)?.date ?? addDaysIso(localNow(new Date()).date, 1);
+  // No day given: the earliest day every line can arrive, from the wholesaler's own offers (set after the first price).
+  const day = input.deliveryDate ?? addDaysIso(localNow(new Date()).date, 1);
   // No "asked" products on the sheet's request: a sheet holds several products the buyer chose, and the core would read
   // every product but the first as standing in for it. What stands in for what is said line by line (`substituteFor`,
   // set by a swap or carried from an option), and the gate judges exactly that.
@@ -229,6 +230,14 @@ export async function createSheet(run: TurnRun, input: { lines: SheetLineInput[]
   sheetsOf(run)[s.sheetId] = s;
   run.requests.add(s.requestId);
   await price(run, s);
+  if (!input.deliveryDate) {
+    const earliest = s.lines.map((l) => s.offers[l.productId]?.deliveryDate).filter((x): x is string => !!x).sort().at(-1);
+    if (earliest && earliest !== s.deliveryDate) {
+      s.deliveryDate = earliest;
+      await run.rt.dock.changeNeededBy(run.session, s.requestId, { neededBy: earliest, deliverOn: earliest, by: run.person?.name ?? run.k.info.by, reason: "the earliest day every line can arrive" }).catch(() => undefined);
+      await price(run, s);
+    }
+  }
   record(run, "sheet", `An order sheet was opened with ${s.lines.length} line${s.lines.length > 1 ? "s" : ""} for ${day}.`, { sheetId: s.sheetId, lines: s.lines }, s.requestId);
   run.store.save(run.thread);
   return render(run, s);

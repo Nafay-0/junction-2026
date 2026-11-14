@@ -115,8 +115,20 @@ export function termsAfter(t: MandateTerms, c: RulesChange): MandateTerms {
  * Without terms (a demo or visitor kitchen) only the narrowing part can be shown: the rest cannot be signed there.
  */
 export function snapshotAfter(before: RulesSnapshot, c: RulesChange, terms?: MandateTerms): RulesSnapshot {
-  if (isNarrowing(c) || !terms) {
+  if (isNarrowing(c)) {
     return { ...before, forbiddenAllergens: uniq([...before.forbiddenAllergens, ...(c.forbidAdd ?? [])]), requiredAttributes: uniq([...before.requiredAttributes, ...(c.requireAdd ?? [])]) };
+  }
+  if (!terms) {
+    // A kitchen without terms (a demo or a visitor's): the change asked for is shown as asked, so the answer can say
+    // exactly what cannot be changed here and why (the proposal's canSign and why), never a bare "not changed".
+    return {
+      ...before,
+      ...(c.perOrderLimitEur !== undefined ? { perOrderLimitCents: Math.round(c.perOrderLimitEur * 100) } : {}),
+      ...(c.weeklyBudgetEur !== undefined ? { weeklyBudgetCents: Math.round(c.weeklyBudgetEur * 100) } : {}),
+      ...(c.maxLeadDays !== undefined ? { maxLeadDays: c.maxLeadDays } : {}),
+      forbiddenAllergens: uniq([...before.forbiddenAllergens.filter((x) => !(c.forbidRemove ?? []).includes(x)), ...(c.forbidAdd ?? [])]),
+      requiredAttributes: uniq([...before.requiredAttributes.filter((x) => !(c.requireRemove ?? []).includes(x)), ...(c.requireAdd ?? [])]),
+    };
   }
   const t = termsAfter(terms, c);
   return {

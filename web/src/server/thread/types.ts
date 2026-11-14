@@ -71,6 +71,8 @@ export type ThreadAction =
   | { type: "menu_line_per_cover"; planId: string; lineId: string; dishId: string; amount: number }
   /** Menu builder: accept a doubt the planner raised on a line ("a different form than the recipe asks"). */
   | { type: "menu_accept"; planId: string; doubtId: string }
+  /** The buyer's answer to the wholesaler's offer the agent said (server/offers/thread.ts). */
+  | { type: "offer_answer"; offerId: string; answer: "yes" | "no" | "mute" | "off" }
   /** Menu builder: put every bought line on an order sheet, one order. */
   | { type: "menu_to_sheet"; planId: string }
   /** Remember this, in the kitchen's own words: goes through the memory writer, confirmed by the person. */
@@ -230,7 +232,8 @@ export type OptionView = {
   deliveryDate: string;
   orderBy?: string;
   stockConfirmed: boolean;
-  lines: { productId: string; name: string; quantity: number; packSize?: number; unit?: string; unitPriceCents?: number; substituteFor?: string }[];
+  /** `taxRatePct`: the VAT rate (prices are before VAT); `depositCents`: per pack, refunded on return, no VAT. */
+  lines: { productId: string; name: string; quantity: number; packSize?: number; unit?: string; unitPriceCents?: number; substituteFor?: string; taxRatePct?: number; depositCents?: number }[];
   delivered: { amount: number; unit: string };
   co2Kg: number | null;
   reliability: number | null;
@@ -350,6 +353,8 @@ export type NoticeCard = CardBase & {
   message: string;
   /** For `incomplete`: what is missing ("how much, with the unit"). */
   missing?: string[];
+  /** For `incomplete`: the words read so far (a follow-up completes them: subject.ts). */
+  words?: string;
   /** For `refused`: the rule that fired. */
   rule?: string;
   retry?: boolean;
@@ -474,6 +479,8 @@ export type MenuCard = CardBase & {
   serviceDate?: string;
   /** Days the plan can be delivered on, with order-by times (menu_day). */
   days: { date: string; orderBy?: string; available: boolean }[];
+  /** The day asked for cannot be had (no deliveries that day, or every order time has passed): the earliest that can. */
+  dayProblem?: { asked: string; earliest?: string };
   dishes: {
     dishId: string;
     name: string;
@@ -586,7 +593,26 @@ export type MemoryListCard = CardBase & {
   canChange: boolean;
 };
 
-export type Card = UnderstoodCard | AnomalyCard | QuestionCard | OptionsCard | PriceCard | GateCard | OrderCard | MemoryCard | RecordsCard | NoticeCard | SheetCard | AlternativesCard | MenuCard | TodayCard | ProductsCard | ProductCard | StandingCard | DeliveriesCard | MemoryListCard | RulesCard;
+/**
+ * The wholesaler's one offer, said by the agent in the conversation (server/offers): its sentence and question in each
+ * language (plain code wrote them from the signed offer), the steps and proof for the closed steps view, and the answer.
+ */
+export type OfferCard = CardBase & {
+  type: "offer";
+  offerId: string;
+  productId: string;
+  name: string;
+  text: Record<"en" | "fi" | "sv", { say: string; ask: string }>;
+  steps: string[];
+  proof: { token: string; keysUrl: string; verified: boolean };
+  validUntil: string;
+  state: "open" | "yes" | "no" | "mute" | "off";
+  /** The agent's line back after the answer, in the language it was given in. */
+  reply?: string;
+  requestId?: string;
+};
+
+export type Card = OfferCard | UnderstoodCard | AnomalyCard | QuestionCard | OptionsCard | PriceCard | GateCard | OrderCard | MemoryCard | RecordsCard | NoticeCard | SheetCard | AlternativesCard | MenuCard | TodayCard | ProductsCard | ProductCard | StandingCard | DeliveriesCard | MemoryListCard | RulesCard;
 // ---------- the kitchen's rules (docs/agent-thread.md "Widgets": rules) ----------
 
 /** The mandate as the rules card shows it: plain values. `groups` only where the kitchen has terms (an account). */

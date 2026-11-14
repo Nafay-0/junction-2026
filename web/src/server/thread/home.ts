@@ -90,6 +90,11 @@ export async function postToday(run: TurnRun, opening = false): Promise<TodayCar
   run.store.card(run.thread, run.turnId, card);
   run.facts.push(card);
   record(run, "today", `The opening: ${items.length ? items.map((i) => i.kind).join(", ") : "nothing needs the kitchen today"}.`, { items: items.map((i) => i.kind) });
+  // The day's opening is a moment for the wholesaler's one offer (said after what needs the kitchen).
+  if (opening) {
+    const { sayOffer } = await import("./offer");
+    await sayOffer(run).catch(() => undefined);
+  }
   return card;
 }
 

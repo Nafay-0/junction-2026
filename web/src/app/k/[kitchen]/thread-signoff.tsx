@@ -32,7 +32,8 @@ type Devices = { signer?: { name: string; role: string }; devices: unknown[] };
 type View = { state: string; signIn: "passkey" | "demo_tap" | "link_token"; viewerIsApprover: boolean };
 type Phase = "idle" | "registering" | "registered" | "signing" | "signed";
 
-export function WaitingGate({ card, kind, title, reason, role, withdraw }: { card: GateCardT; kind: ReactNode; title: ReactNode; reason: ReactNode; role?: ReactNode; withdraw?: ReactNode }) {
+/** The sign-off's state and actions, for any way of drawing it (the gate card, the thread's slab). */
+export function useSignOff(card: GateCardT) {
   const tx = useText(THREAD_SIGNOFF_TEXT);
   const { lang } = useLang();
   const { kitchen, account } = usePortal();
@@ -132,6 +133,11 @@ export function WaitingGate({ card, kind, title, reason, role, withdraw }: { car
 
   const busy = phase === "registering" || phase === "signing";
   const offerPhone = (own && signerMatches) || (!!qr?.qrSvg && qr.mode !== "no_device");
+  return { tx, canSignHere, approverHere, where, phase, busy, sign, toPhone, phone, problem, offerPhone };
+}
+
+export function WaitingGate({ card, kind, title, reason, role, withdraw }: { card: GateCardT; kind: ReactNode; title: ReactNode; reason: ReactNode; role?: ReactNode; withdraw?: ReactNode }) {
+  const { tx, canSignHere, approverHere, where, phase, busy, sign, toPhone, phone, problem, offerPhone } = useSignOff(card);
   const actions = (
     <>
       {canSignHere && phase !== "signed" && (
