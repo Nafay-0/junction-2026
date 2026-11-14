@@ -58,7 +58,7 @@ export async function mirrorVoiceTool(kitchen: string, body: Pick<ToolBody, "cal
       if (!step) return reply;
       run.requests.add(step.requestId);
       if (body.name === "submit_request" || body.name === "confirm_read_back") {
-        run.store.card(run.thread, run.turnId, { ...understoodCard({ ref: step.requestId, words: s.heard ?? words ?? step.need.text ?? "", need: step.need }), requestId: step.requestId, memoryUsed: step.memoryUsed.map((m) => m.text) });
+        run.store.card(run.thread, run.turnId, { ...understoodCard({ ref: step.requestId, words: s.heard ?? words ?? step.need.text ?? "", need: step.need }), requestId: step.requestId, memoryUsed: step.memoryUsed.map((m) => m.text), memory: step.memoryUsed });
         run.store.mark(run.thread, run.turnId, "understood", Date.now() - run.t0);
       }
       if (step.state === "quoted") {

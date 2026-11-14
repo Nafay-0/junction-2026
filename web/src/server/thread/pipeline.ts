@@ -267,7 +267,7 @@ export async function orderFromWords(run: TurnRun, words: string, earlier: Earli
     const res = await published<{ step: IntakeView }>(run, "submit_need", { need, by: byLine(run) });
     intake.done(res.step.state);
     run.requests.add(res.step.requestId);
-    run.store.card(run.thread, run.turnId, { ...understood, requestId: res.step.requestId, memoryUsed: res.step.memoryUsed.map((m) => m.text) });
+    run.store.card(run.thread, run.turnId, { ...understood, requestId: res.step.requestId, memoryUsed: res.step.memoryUsed.map((m) => m.text), memory: res.step.memoryUsed });
     if (res.step.memoryUsed.length) record(run, "memory_read", `Memory answered for this request: ${res.step.memoryUsed.map((m) => m.text).join("; ")}`, { lines: res.step.memoryUsed }, res.step.requestId);
     first = [await afterStep(run, res.step, words)];
   } catch (err) {

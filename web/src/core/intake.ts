@@ -130,7 +130,7 @@ export type Intake = {
   /** The site within the kitchen the request is for, when a door knows it. */
   site?: string;
   /** One line per remembered thing this request used (a rule applied, a habit pre-selected, a check, a product left out). */
-  memoryUsed?: { itemId?: string; text: string }[];
+  memoryUsed?: { itemId?: string; text: string; code?: string; params?: Record<string, string | number> }[];
   chosen?: { optionId: string; labels: OptionLabel[]; by: string; at: string };
   quote?: { quote: Quote; quoteToken: string; policyPreview: Decision };
   /** The buyer's words read a second time by an independent model (core/second-reading.ts): what it found. */
@@ -190,7 +190,7 @@ export type IntakeDeps = {
    * One line per remembered item the intake used, for the request (the server wires the kitchen memory's usage lines,
    * which also mark each item's last use). Called after each step, outside the kitchen's lock.
    */
-  memoryUsage?: (orgId: string, intake: Pick<Intake, "rules" | "fromMemory" | "concerns">) => Promise<{ itemId?: string; text: string }[]>;
+  memoryUsage?: (orgId: string, intake: Pick<Intake, "rules" | "fromMemory" | "concerns">) => Promise<{ itemId?: string; text: string; code?: string; params?: Record<string, string | number> }[]>;
   /** Committed and held spend, with the orders holding money, for the budget's part of a "nothing fits" answer. */
   budgetUse?: (orgId: string) => Promise<{ spentCents: number; heldCents: number; held: { orderId: string; totalCents: number; expiresAt: string }[] }>;
   /** The order flow's live lookup: allowance, delivery date, signed claims and ledger in one place (see orders.ts). */
