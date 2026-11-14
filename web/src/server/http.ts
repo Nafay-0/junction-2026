@@ -4,7 +4,7 @@ import type { AgentSession, Dock } from "@/core/orders";
 import { consoleContextOf } from "./console-context";
 import { doorLog, interfaceOf } from "./ops/door";
 import { licenceGate } from "./ops/licence-gate";
-import { suspensions } from "./ops/suspensions";
+import { isAdmissionRefusal } from "./ops/onsite";
 import { getRuntime, type Runtime } from "./runtime";
 
 /** Error body for every failure: `{ error: { code, rule?, message, details? } }`. `rule` names the check that refused. */
@@ -46,19 +46,13 @@ export async function authenticate(req: Request, dock: Dock): Promise<AgentSessi
   const agentId = req.headers.get("dock-agent-id") ?? agentIdFromUrl(req) ?? undefined;
   let session: AgentSession;
   try {
-    session = await dock.authenticate(match?.[1], agentId);
+    // The core verifies the mandate and then asks the operations layer (ops/onsite.ts admission): a suspended agent
+    // gets no session. Admission writes its own door-log line; a mandate that does not verify is logged here.
+    session = await dock.authenticate(match?.[1], agentId, { ...door, method: req.method });
   } catch (err) {
-    if (isDockError(err)) doorLog(dock).record({ at: new Date().toISOString(), agentId: agentId ?? "unknown", ...door, ok: false, code: err.code, rule: err.rule });
+    if (isDockError(err) && !isAdmissionRefusal(err)) doorLog(dock).record({ at: new Date().toISOString(), agentId: agentId ?? "unknown", ...door, ok: false, code: err.code, rule: err.rule });
     throw err;
   }
-  const call = { at: new Date().toISOString(), agentId: session.agentId, orgId: session.mandate.issuer.orgId, orgName: session.mandate.issuer.name, ...door };
-  try {
-    suspensions(dock).enforce(session, { ...door, method: req.method });
-  } catch (err) {
-    if (isDockError(err)) doorLog(dock).record({ ...call, ok: false, code: err.code, rule: err.rule });
-    throw err;
-  }
-  doorLog(dock).record({ ...call, ok: true }, session.mandate);
   // The crash-test licence (DOCK_LICENCE_ENFORCE=on): the core sees the stricter of the mandate and the licence.
   session = licenceGate(dock).apply(session);
   // The on-site console's browser session gets its own share of the live-lookup allowance (set in-process only).

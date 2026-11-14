@@ -1,3 +1,4 @@
+import { STORE_PAGE_READ } from "@/server/ops/onsite";
 import { getRuntime } from "@/server/runtime";
 import { noStore, portalRoute } from "@/server/kitchen-portal-http";
 
@@ -10,7 +11,7 @@ export async function GET(req: Request, ctx: RouteContext<"/ui-api/kitchens/[kit
   return portalRoute(req, ctx.params, async (k) => {
     const ids = new URL(req.url).searchParams.getAll("id").filter((x) => x.length > 0 && x.length < 80).slice(0, 30);
     const { dock } = await getRuntime();
-    const session = await dock.authenticate(k.mandateToken, k.agentId);
+    const session = await dock.authenticate(k.mandateToken, k.agentId, STORE_PAGE_READ);
     const claims = ids.length ? await dock.getClaims(session, ids) : [];
     return Response.json({ claims: claims.map(({ claimId, type, productId, sha256, token, validUntil }) => ({ claimId, type, productId, sha256, token, validUntil })) }, noStore);
   });

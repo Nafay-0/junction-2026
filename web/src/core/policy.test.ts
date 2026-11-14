@@ -400,10 +400,14 @@ describe("policy: real-data gaps", () => {
     expect(rule(d, "order_splitting")).toMatchObject({ outcome: "escalate", details: { combinedCents: 134_500 } });
     expect(rule(d, "order_splitting").reason).toMatch(/^Looks like one need split into smaller orders: with ord_a \(€600.00\)/);
     expect(d.outcome).toBe("needs_human_approval");
-    // Not when a person signed the earlier one, when it was long ago, for another day, or when together it is within the limit.
-    for (const other of [{ ...earlier, authorisedBy: "approver" as const }, { ...earlier, placedAt: addMinutes(NOW, -60 * 25).toISOString() }, { ...earlier, deliveryDates: ["2026-12-01"] }, { ...earlier, totalCents: 10_000 }]) {
+    // Not when a person signed the earlier one, when it was placed more than a day ago, for another family, or when together it is within the limit.
+    for (const other of [{ ...earlier, authorisedBy: "approver" as const }, { ...earlier, placedAt: addMinutes(NOW, -60 * 25).toISOString() }, { ...earlier, categories: ["cream"] }, { ...earlier, totalCents: 10_000 }]) {
       expect(rule(evaluatePolicy(mandate(), draft(q), ctx({ recentOrders: [other] })), "order_splitting").outcome).toBe("pass");
     }
+    // Judged by when the orders were placed, not when they deliver: the second half asked for another day is the same need.
+    const otherDay = evaluatePolicy(mandate(), draft(q), ctx({ recentOrders: [{ ...earlier, deliveryDates: ["2026-12-01"] }] }));
+    expect(rule(otherDay, "order_splitting")).toMatchObject({ outcome: "escalate", details: { combinedCents: 134_500 } });
+    expect(rule(otherDay, "order_splitting").reason).toMatch(/whatever the delivery days/);
     // The same request counts whatever the category or day.
     expect(rule(evaluatePolicy(mandate(), draft(q), ctx({ recentOrders: [{ ...earlier, requestId: "req_1", categories: ["cream"], deliveryDates: ["2026-12-01"] }] })), "order_splitting").outcome).toBe("escalate");
   });
