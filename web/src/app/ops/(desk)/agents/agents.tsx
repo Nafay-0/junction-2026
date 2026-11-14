@@ -9,6 +9,7 @@ import type { Board } from "../../../_wall/crash-board";
 import { CrashMatrix, hazardOf, licenceLine } from "../../../_wall/crash-matrix";
 import { Details, Empty, KV, Licence, LiveMark, LoadError, Loading, PageHead, Section, ViaTag, useOps } from "../../_ui/kit";
 import { FilterBar, useUrlState } from "../../_ui/filters";
+import { AgentWatch } from "./watch";
 
 const KIND: Record<AgentRow["kind"], string> = { demo: "Demo kitchen", visitor: "Visitor kitchen", account: "Account kitchen", outside: "Outside agent" };
 
@@ -28,6 +29,7 @@ export function AgentsScreen({ board }: { board?: Board }) {
         right={d && <LiveMark at={whenSeconds(d.at)} error={live.error} />}
       />
       <LoadError message={live.error} />
+      <AgentWatch />
       {d && d.licenceSource === "none" && (
         <p className="mb-5 flex gap-2.5 rounded-lg bg-petrol-soft px-4 py-3 text-[0.92rem] leading-snug text-ink">
           <Info aria-hidden size={17} className="mt-0.5 shrink-0 text-petrol" />

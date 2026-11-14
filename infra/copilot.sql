@@ -21,7 +21,13 @@ select
   attrs->>'method'                                       as method,
   attrs->>'detail'                                       as detail,
   (attrs->>'products')::int                              as products,
-  attrs->>'run'                                          as run
+  attrs->>'run'                                          as run,
+  -- Added 14 Nov (appended, so earlier queries keep working): the counts, codes and milliseconds of a search or a
+  -- conversation turn (attrs.facts, never words; server/search/telemetry.ts, server/aiven/actions.ts), a model
+  -- call's cost, and the conversation turn an event belongs to.
+  attrs->'facts'                                         as facts,
+  case when jsonb_typeof(attrs->'costUsd') = 'number' then (attrs->>'costUsd')::double precision end as cost_usd,
+  attrs->>'turnId'                                       as turn_id
 from telemetry.events;
 
 comment on view telemetry.ops_events is

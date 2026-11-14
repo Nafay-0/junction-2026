@@ -510,7 +510,7 @@
     {
       "type": "row",
       "id": 10,
-      "title": "Aiven services (Aiven API, read-only token)",
+      "title": "Agents at the door: performing, escalating, failing",
       "collapsed": false,
       "gridPos": {
         "x": 0,
@@ -523,6 +523,280 @@
     {
       "type": "table",
       "id": 11,
+      "title": "Agent status",
+      "description": "Failing: a third of its decisions refused (at least 3). Escalating: half its decisions sent to a person (at least 2), or two orders over its own limit. The portal's Agents page shows the same with the reason in words and what a person might do.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "dock-pg"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "dock-pg"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH e AS (SELECT * FROM telemetry.events WHERE agent_id IS NOT NULL AND $__timeFilter(ts)),\nk AS (\n  SELECT agent_id,\n    count(*) FILTER (WHERE kind = 'request.opened') AS requests,\n    count(*) FILTER (WHERE kind = 'gate.allowed') AS alone,\n    count(*) FILTER (WHERE kind = 'gate.escalated') AS to_a_person,\n    count(*) FILTER (WHERE kind = 'gate.escalated' AND rule = 'per_order_limit') AS over_limit,\n    count(*) FILTER (WHERE kind = 'gate.refused') AS refused,\n    count(*) FILTER (WHERE kind = 'order.committed') AS committed,\n    count(*) FILTER (WHERE kind = 'turn.correction') AS corrections,\n    count(*) FILTER (WHERE kind = 'quote.issued') AS proposals,\n    coalesce(sum((attrs->>'costUsd')::float8) FILTER (WHERE kind = 'agent.model'), 0)\n      + coalesce(sum((attrs->'facts'->>'cost_usd')::float8) FILTER (WHERE kind = 'search.done'), 0) AS spend_usd,\n    count(*) FILTER (WHERE kind = 'lookup.live') AS live_calls\n  FROM e GROUP BY 1)\nSELECT agent_id AS \"agent\",\n  CASE WHEN refused >= 3 AND refused >= 0.3 * nullif(alone + to_a_person + refused, 0) THEN 'failing'\n       WHEN (to_a_person >= 2 AND to_a_person >= 0.5 * nullif(alone + to_a_person + refused, 0)) OR over_limit >= 2 THEN 'escalating'\n       WHEN requests + alone + to_a_person + refused = 0 THEN 'quiet' ELSE 'performing' END AS \"status\",\n  requests, alone, to_a_person AS \"to a person\", refused,\n  round(100.0 * to_a_person / nullif(alone + to_a_person + refused, 0), 0) AS \"escalation %\",\n  corrections AS \"corrected\", proposals AS \"quotes\",\n  round((spend_usd / nullif(committed, 0))::numeric, 4) AS \"USD per order\",\n  round(live_calls::numeric / nullif(committed, 0), 1) AS \"live calls per order\"\nFROM k ORDER BY 2, 3 DESC"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    },
+    {
+      "type": "bargauge",
+      "id": 12,
+      "title": "Escalation rate by agent",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "dock-pg"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 23,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "dock-pg"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT agent_id AS \"agent\", round(100.0 * count(*) FILTER (WHERE kind = 'gate.escalated') / nullif(count(*), 0), 0) AS \"to a person %\" FROM telemetry.events WHERE kind IN ('gate.allowed', 'gate.escalated', 'gate.refused') AND agent_id IS NOT NULL AND $__timeFilter(ts) GROUP BY 1 ORDER BY 2 DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": {
+            "mode": "continuous-BlYlRd"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "namePlacement": "left"
+      }
+    },
+    {
+      "type": "bargauge",
+      "id": 13,
+      "title": "Refusals by agent and rule",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "dock-pg"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 23,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "dock-pg"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT agent_id || ' · ' || coalesce(rule, '?') AS \"agent · rule\", count(*) AS \"refusals\" FROM telemetry.events WHERE kind = 'gate.refused' AND agent_id IS NOT NULL AND $__timeFilter(ts) GROUP BY 1 ORDER BY 2 DESC LIMIT 15"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-BlYlRd"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "namePlacement": "left"
+      }
+    },
+    {
+      "type": "table",
+      "id": 14,
+      "title": "Time to a decision",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "dock-pg"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 23,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "dock-pg"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH r AS (SELECT agent_id, attrs->>'request_id' AS request_id,\n    extract(epoch FROM min(ts) FILTER (WHERE kind IN ('gate.allowed', 'gate.escalated', 'gate.refused')) - min(ts) FILTER (WHERE kind = 'request.opened')) AS s\n  FROM telemetry.events WHERE agent_id IS NOT NULL AND attrs ? 'request_id' AND $__timeFilter(ts) GROUP BY 1, 2)\nSELECT agent_id AS \"agent\", count(*) AS \"decisions\",\n  round(percentile_cont(0.5) WITHIN GROUP (ORDER BY s)::numeric, 1) AS \"p50 s\",\n  round(percentile_cont(0.9) WITHIN GROUP (ORDER BY s)::numeric, 1) AS \"p90 s\"\nFROM r WHERE s IS NOT NULL GROUP BY 1 ORDER BY 4 DESC"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    },
+    {
+      "type": "row",
+      "id": 15,
+      "title": "Search and the conversation",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 31,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "table",
+      "id": 16,
+      "title": "Search by stage (ms)",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "dock-pg"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 12,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "dock-pg"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(*) AS \"searches\",\n  round(percentile_cont(0.5) WITHIN GROUP (ORDER BY (attrs->'facts'->>'embed_ms')::float8)::numeric) AS \"embed p50\",\n  round(percentile_cont(0.9) WITHIN GROUP (ORDER BY (attrs->'facts'->>'recall_ms')::float8)::numeric) AS \"recall p90\",\n  round(percentile_cont(0.5) WITHIN GROUP (ORDER BY (attrs->'facts'->>'judge_ms')::float8)::numeric) AS \"judge p50\",\n  round(percentile_cont(0.5) WITHIN GROUP (ORDER BY (attrs->'facts'->>'total_ms')::float8)::numeric) AS \"total p50\",\n  round(percentile_cont(0.9) WITHIN GROUP (ORDER BY (attrs->'facts'->>'total_ms')::float8)::numeric) AS \"total p90\",\n  round(100.0 * count(*) FILTER (WHERE attrs->'facts'->>'backend' = 'opensearch') / nullif(count(*), 0)) AS \"on OpenSearch %\",\n  count(*) FILTER (WHERE (attrs->'facts'->>'fallback')::boolean) AS \"fallbacks\",\n  round((1000 * avg((attrs->'facts'->>'cost_usd')::float8))::numeric, 3) AS \"USD per 1000\",\n  count(*) FILTER (WHERE (attrs->'facts'->>'not_sold')::boolean) AS \"not sold\"\nFROM telemetry.events WHERE kind = 'search.done' AND $__timeFilter(ts)"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    },
+    {
+      "type": "table",
+      "id": 17,
+      "title": "Conversation turns",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "dock-pg"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 32,
+        "w": 12,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "dock-pg"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH t AS (SELECT attrs->>'turnId' AS turn, min(ts) FILTER (WHERE kind = 'turn.started') AS s, min(ts) FILTER (WHERE kind = 'turn.done') AS d,\n    max(attrs->'facts'->>'outcome') FILTER (WHERE kind = 'turn.done') AS outcome\n  FROM telemetry.events WHERE kind IN ('turn.started', 'turn.done') AND attrs ? 'turnId' AND $__timeFilter(ts) GROUP BY 1)\nSELECT count(*) AS \"turns\",\n  round(percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM d - s))::numeric, 1) AS \"p50 s\",\n  round(percentile_cont(0.9) WITHIN GROUP (ORDER BY extract(epoch FROM d - s))::numeric, 1) AS \"p90 s\",\n  count(*) FILTER (WHERE d IS NULL AND s < now() - interval '150 seconds') AS \"failed or timed out\",\n  count(*) FILTER (WHERE outcome = 'ordered') AS \"ordered\",\n  count(*) FILTER (WHERE outcome = 'sign_off') AS \"sent for sign-off\",\n  count(*) FILTER (WHERE outcome = 'refused') AS \"refused\",\n  count(*) FILTER (WHERE outcome = 'asked') AS \"asked\"\nFROM t WHERE s IS NOT NULL"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    },
+    {
+      "type": "row",
+      "id": 18,
+      "title": "Aiven services (Aiven API, read-only token)",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 37,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "table",
+      "id": 19,
       "title": "Services",
       "datasource": {
         "type": "yesoreyeram-infinity-datasource",
@@ -530,7 +804,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 15,
+        "y": 38,
         "w": 8,
         "h": 8
       },
@@ -627,7 +901,7 @@
     },
     {
       "type": "timeseries",
-      "id": 12,
+      "id": 20,
       "title": "CPU",
       "datasource": {
         "type": "yesoreyeram-infinity-datasource",
@@ -635,7 +909,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 15,
+        "y": 38,
         "w": 8,
         "h": 8
       },
@@ -854,7 +1128,7 @@
     },
     {
       "type": "timeseries",
-      "id": 13,
+      "id": 21,
       "title": "Memory",
       "datasource": {
         "type": "yesoreyeram-infinity-datasource",
@@ -862,7 +1136,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 15,
+        "y": 38,
         "w": 8,
         "h": 8
       },
@@ -1050,7 +1324,7 @@
     },
     {
       "type": "timeseries",
-      "id": 14,
+      "id": 22,
       "title": "Disk used",
       "datasource": {
         "type": "yesoreyeram-infinity-datasource",
@@ -1058,7 +1332,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 23,
+        "y": 46,
         "w": 12,
         "h": 8
       },
@@ -1215,7 +1489,7 @@
     },
     {
       "type": "table",
-      "id": 15,
+      "id": 23,
       "title": "Latest pnpm infra:check (pnpm infra:check --record)",
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -1223,7 +1497,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 23,
+        "y": 46,
         "w": 12,
         "h": 8
       },
@@ -1286,12 +1560,12 @@
     },
     {
       "type": "row",
-      "id": 16,
+      "id": 24,
       "title": "Runtime app logs (dock-app, last 24 h are kept by Runtime)",
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 31,
+        "y": 54,
         "w": 24,
         "h": 1
       },
@@ -1299,7 +1573,7 @@
     },
     {
       "type": "table",
-      "id": 17,
+      "id": 25,
       "title": "Runtime log",
       "datasource": {
         "type": "yesoreyeram-infinity-datasource",
@@ -1307,7 +1581,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 32,
+        "y": 55,
         "w": 12,
         "h": 12
       },
@@ -1368,7 +1642,7 @@
     },
     {
       "type": "table",
-      "id": 18,
+      "id": 26,
       "title": "Build log",
       "datasource": {
         "type": "yesoreyeram-infinity-datasource",
@@ -1376,7 +1650,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 32,
+        "y": 55,
         "w": 12,
         "h": 12
       },

@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import type { PlatformOverview, ServiceCard } from "@/server/aiven/showcase/platform";
+import type { AlertState } from "@/server/ops/alerts";
+import type { RecallRouterStats } from "@/server/search/recall-router";
 import { whenSeconds } from "../../_ui/format";
 import { buttonClass } from "../../../_ui/kit";
 import { Details, LiveMark, LoadError, Loading, PageHead, Panel, Section, useOps } from "../../_ui/kit";
@@ -12,7 +14,7 @@ import { PlatformTabs, Status } from "./_parts/parts";
  * how fast, what each did in the last hour, and what it all costs, read from the API.
  */
 export function Story() {
-  const live = useOps<PlatformOverview>("/ops-api/platform/overview", { pollMs: 10_000 });
+  const live = useOps<Overview>("/ops-api/platform/overview", { pollMs: 10_000 });
   const o = live.data;
   return (
     <>
@@ -25,6 +27,59 @@ export function Story() {
       <LoadError message={live.error} />
       {!o ? <Loading /> : <Body o={o} />}
     </>
+  );
+}
+
+type Overview = PlatformOverview & { alerts?: AlertState; recall?: (RecallRouterStats & { index?: string }) | null };
+
+/** The app's own alert table and how smart search's recall was answered: what is breaching and since when. */
+function Watch({ o }: { o: Overview }) {
+  const a = o.alerts;
+  const r = o.recall;
+  const answered = r ? r.answered.memory + r.answered.opensearch + r.answered["memory-no-vectors"] : 0;
+  return (
+    <div className="mb-5 grid gap-3 lg:grid-cols-2">
+      {a && (
+        <Panel className={`px-5 py-4 ${a.quiet ? "" : "ring-1 ring-inset ring-safety/60"}`}>
+          <p className="text-[0.84rem] font-medium text-ink-soft">Alerts, checked every {a.evaluatedEveryS} s by the app ({a.rules.length} rules)</p>
+          {a.quiet ? (
+            <p className="mt-1 text-[1.05rem]">
+              <b>All quiet.</b> <span className="text-ink-soft">Last checked {whenSeconds(a.at)}.</span>
+            </p>
+          ) : (
+            <ul className="mt-1 space-y-1">
+              {a.breaches.map((b) => (
+                <li key={b.id}>
+                  <b>{b.title}</b>: {b.detail}, since {whenSeconds(b.since)}.
+                </li>
+              ))}
+            </ul>
+          )}
+          <Link href="/ops/agents#scorecard" className="mt-1 inline-block text-[0.88rem] font-medium text-petrol underline decoration-petrol/30 underline-offset-4">
+            The agents&apos; scorecard and the sign-off queue
+          </Link>
+        </Panel>
+      )}
+      <Panel className="px-5 py-4">
+        <p className="text-[0.84rem] font-medium text-ink-soft">Smart search&apos;s recall: who answered since this server started</p>
+        {r ? (
+          <p className="mt-1 text-[0.95rem]">
+            {r.order.length > 1 ? (
+              <>
+                <b>{r.order[0] === "opensearch" ? "OpenSearch" : "Memory"}</b> first, {r.order[1] === "opensearch" ? "OpenSearch" : "memory"} as the fallback ({r.timeoutMs} ms deadline{r.index ? `, index ${r.index}` : ""}).
+              </>
+            ) : (
+              <>Memory only (OpenSearch is not configured for recall).</>
+            )}{" "}
+            {answered} searches: {r.answered.opensearch} by OpenSearch, {r.answered.memory} in memory{r.answered["memory-no-vectors"] ? `, ${r.answered["memory-no-vectors"]} without vectors` : ""}; <b>{r.fallbacks}</b> fallback{r.fallbacks === 1 ? "" : "s"}
+            {r.breakerOpenUntil ? `, breaker open until ${whenSeconds(new Date(r.breakerOpenUntil).toISOString())}` : ""}
+            {r.lastError ? `; last: ${r.lastError}` : ""}.
+          </p>
+        ) : (
+          <p className="mt-1 text-[0.95rem] text-ink-soft">No smart search has run on this server yet.</p>
+        )}
+      </Panel>
+    </div>
   );
 }
 
@@ -43,13 +98,14 @@ const CLOUD: Record<string, string> = {
 const planWord = (p?: string | null) => (p ? `${p.split("-")[0].replace(/^./, (c) => c.toUpperCase())} plan` : "");
 const where = (c: ServiceCard) => [planWord(c.plan), c.cloud ? (CLOUD[c.cloud] ?? c.cloud) : ""].filter(Boolean).join(", ");
 
-function Body({ o }: { o: PlatformOverview }) {
+function Body({ o }: { o: Overview }) {
   const s = (k: string) => o.services.find((x) => x.key === k);
   const up = o.services.filter((c) => c.reachable === true).length;
   const down = o.services.filter((c) => c.reachable === false);
   return (
     <>
       {o.missing.length > 0 && <p className="mb-5 rounded-lg bg-surface px-4 py-3 text-[0.92rem]">Not configured on this server: {o.missing.join("; ")}.</p>}
+      <Watch o={o} />
 
       {/* The one thing to press, beside what it all costs. */}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">

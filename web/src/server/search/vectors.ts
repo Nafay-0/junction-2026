@@ -50,6 +50,17 @@ export class ProductVectors {
     return this.row.has(id);
   }
 
+  /** One product's vector as floats (int8 / scale: about unit length), for indexing it elsewhere (OpenSearch). */
+  vectorOf(id: string): Float32Array | undefined {
+    const i = this.row.get(id);
+    if (i === undefined) return undefined;
+    const dim = this.meta.dim;
+    const out = new Float32Array(dim);
+    const s = this.scale[i];
+    for (let j = 0; j < dim; j++) out[j] = this.data[i * dim + j] / s;
+    return out;
+  }
+
   /**
    * The `k` products closest to a unit query vector (cosine), optionally only among `allow`. About 15 ms for the
    * whole assortment at 768 dimensions.
