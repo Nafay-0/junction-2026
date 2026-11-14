@@ -3,31 +3,49 @@
 **AimoPilot** is an open loading dock for AI purchasing agents. Any company's buying agent can order food from a
 wholesaler (Valio Aimo's challenge) through open standards, MCP among them. It carries a signed mandate that
 says what it may buy. Plain code checks every order against that mandate, and a named person signs off anything
-beyond it on their phone. Every part of AimoPilot runs on Aiven.
+beyond it on their phone. Everything in AimoPilot that keeps state or serves requests runs on Aiven; the language
+models and the partner's price API run elsewhere.
 
-Open **https://jolly-wondrous-bunny.eur-1.aiven.app/ops/platform** (operations portal, then **Platform**). No
-passcode is needed to look: without one you are a viewer and every page reads, with the same data the staff see
-(a kitchen's private memory named, never shown; mail addresses masked; the words of other people's own kitchens
-replaced by "the buyer's words are shown to staff only"). Anything that acts, costs money or calls outside on
-demand asks for the staff passcode, which the team at the table has: below, **1** and **2** need it; **3**, **4**
-and **5** are open to look at (suspending an agent from 4 needs it).
+Open **https://aimopilot.zeroanomaly.tech/ops/platform**. That address is a custom domain in front of the app on
+Aiven Runtime (`dock-app`, whose own host `jolly-wondrous-bunny.eur-1.aiven.app` still answers); the deploy script
+adds the domain to the app's HTTP port and makes it the public address once it answers over HTTPS
+(`valio-aimo/infra/aiven-deploy.mjs`, `DOCK_DEPLOY_CUSTOM_DOMAIN`). No passcode is needed to look: without one you
+are a viewer and every page reads, with the same data the staff see (a kitchen's private memory named, never shown;
+mail addresses masked; the words of other people's own kitchens replaced by "the buyer's words are shown to staff
+only"). Three actions are open to visitors too, each capped (`valio-aimo/web/src/server/ops/try-caps.ts`): sending in
+the Aiven agent (3 an hour per address, within the server's 12 runs a day), asking the platform (20 questions an
+hour per address, 400 a day for all visitors) and timing the search backends (once per 10 minutes per address, 60 a
+day). Anything else that acts, such as suspending an agent, needs the staff passcode.
+
+## The eight services in one minute
+
+| Service | Its job here | Where to see it live |
+|---|---|---|
+| **Runtime** | Hosts AimoPilot: the gate, its MCP door and REST API, the portals | `/ops/platform` (**The platform** tab): the diagram and each service's state; `/api/health` names the deployed commit |
+| **PostgreSQL** | System of record: orders, approvals, the hash-chained ledger, kitchen memory (pgvector), telemetry; the agent scorecard is SQL over it; the Time machine's history (schema `dock_prod_history`) | `/ops/agents` (scorecard, each figure with its query); `/ops/time-machine` ("History kept in Aiven PostgreSQL") |
+| **Kafka** | Every agent action, gate decision, search and conversation turn, in order (topic `dock.actions`) | **The stream** tab: the live tail, offsets and lag; in **Trace**, "Read from the stream" |
+| **Valkey** | Live-price cache, each agent's lookup budget, the event bus | **The platform** tab: cache hits in the last hour; **Observe**: live-price calls the cache saved |
+| **OpenSearch** | Product search over 17,546 products in Finnish, Swedish and English; the agent's smart-search recall (keyword lists and nearest vectors, HNSW, one `_msearch`); the audit trail in words (`dock-events`) | **The platform** tab: which backend answered first and "Time both search backends"; `/ops/agents`: "Search the audit trail" |
+| **Grafana** | The full dashboard (behind Aiven's login) and its alert rules | **Observe** tab: the same panels inside the portal, each with its SQL; the dashboard link on **The platform** |
+| **Managed Agents** | An outside purchasing agent that runs on Aiven and buys through AimoPilot's MCP door | **Send in an Aiven agent** tab |
+| **Aiven MCP server** | The operations copilot's way to service state, logs and metrics, with a read-only token | **Ask the platform** tab: the call and its rows under each answer |
 
 ## Five things to click
 
-1. **Send in an Aiven agent** (staff: it launches an agent run on Aiven and spends model calls). Pick "Valio's own example" and press *Send it in*. A purchasing agent that runs
-   on **Aiven Managed Agents** (its own model, in Aiven's environment, not ours) connects to AimoPilot's MCP endpoint
-   on **Aiven Runtime**. Its tool calls come back on the page, and the gate's decisions appear live from **Kafka**
-   while it works. About 30 to 60 seconds later it stops: 1,000 litres comes to €1,400, over the €1,000 it may
-   spend alone, so the order waits for a named person's sign-off. The other two tasks show an order committed
-   inside the mandate, and an agent told to pay less than the signed quote, which the gate refuses and names the
-   rule (`order_matches_quote`). The agent's mandate is minted on our server for each run, is valid for 20 minutes,
-   goes straight into Aiven's credential store, and is never shown.
-2. **Ask the platform** (staff: each question runs SQL and calls Aiven's MCP server; open to all, a room would
-   multiply both, so viewers see the questions and the page but not the button). Press *Is anything unhealthy?* The answer comes from **Aiven's MCP server**
-   (`aiven_service_list`, called with a read-only token) plus the app's own health probes in **PostgreSQL**. The call
-   and the rows sit under the answer. Then try *How many orders were refused in the last hour and by which rule?*,
-   or type `delete from telemetry.events` to see the write refused. Answers are computed from rows, never written
-   by a model. A question the data cannot answer gets "The data does not say."
+1. **Send in an Aiven agent** (open to visitors, capped). Pick "Valio's own example" and press *Send it in*. A
+   purchasing agent that runs on **Aiven Managed Agents** (its own model, in Aiven's environment, not ours) connects
+   to AimoPilot's MCP endpoint on **Aiven Runtime**. Its tool calls come back on the page, and the gate's decisions
+   appear live from **Kafka** while it works. When it stops, 1,000 litres is over the €1,000 it may spend alone, so
+   the order waits for a named person's sign-off. The other two tasks show an order committed inside the mandate,
+   and an agent told to pay less than the signed quote, which the gate refuses and names the rule
+   (`order_matches_quote`). The agent's mandate is minted on our server for each run, is valid for 20 minutes, goes
+   straight into Aiven's credential store, and is never shown. When the day's runs are used up, a labelled recording
+   plays and nothing is counted.
+2. **Ask the platform** (open to visitors, capped). Press *Is anything unhealthy?* The answer comes from **Aiven's
+   MCP server** (`aiven_service_list`, called with a read-only token) plus the app's own health probes in
+   **PostgreSQL**. The call and the rows sit under the answer. Then try *How many orders were refused in the last
+   hour and by which rule?*, or type `delete from telemetry.events` to see the write refused. Answers are computed
+   from rows, never written by a model. A question the data cannot answer gets "The data does not say."
 3. **The stream.** A live tail of the Kafka topic `dock.actions`, read by the server, with the consumer group's
    committed offsets and lag per partition. You can watch the gate produce events and the sink write them into
    PostgreSQL. In **Trace**, *Read from the stream* replays one request from Kafka in order, and each message's
@@ -57,8 +75,8 @@ and **5** are open to look at (suspending an agent from 4 needs it).
 | PostgreSQL (free) | Orders, approvals, hash-chained ledger, kitchen memory (pgvector), telemetry; the agent scorecard is SQL over it; the Time machine's history as ranges | "Commit at a fixed price" is a transaction. Constraints and pgcrypto check the ledger's hash chain. Embeddings live next to their rows. Every scorecard figure is a query staff can read. Every version of a rule the gate reads (mandate, kitchen rules, recall holds, suspensions, the week's spend) carries the `tstzrange` it was in force, an exclusion constraint forbids overlap, and "the rules as they stood" is `during @> t`: the Time machine replays any order against them, built from the ledger on first start |
 | Kafka (free) | Every agent action, gate decision, product search and conversation turn, keyed by order | Ordered and replayable. The dashboard's table is just a consumer group, and its lag is one of the app's alerts |
 | Valkey (free) | Live-price cache, per-agent lookup budget, event bus | `SET … EX` matches "this price is valid for N minutes". `INCR` is a budget |
-| OpenSearch (free) | Search over 17,546 products in Finnish, Swedish and English: the store's keyword search, and a recall index for the agent's smart search (names in three languages plus one 768-dimension vector per product, HNSW); the audit trail (`dock-events`) | Narrows the choice in master data first, so the partner's price API is asked about a short list only. Keyword lists and nearest vectors come back in one `_msearch`; smart search uses them when this server's in-memory copy is not loaded yet (the first searches after a deploy) or fails, and one setting makes OpenSearch answer first. On 189 test requests both give the same answers (97 % right first) |
-| Grafana | The full dashboard (behind its login), with an agents row (status, escalation rate, refusals by agent and rule, time to a decision, spend per order) and search and conversation panels | Free plans allow no metrics integration, so Grafana reads PostgreSQL as a read-only user and the Aiven API with a read-only token |
+| OpenSearch (free) | Search over 17,546 products in Finnish, Swedish and English: the store's keyword search, and a recall index for the agent's smart search (names in three languages plus one 768-dimension vector per product, HNSW); the audit trail (`dock-events`) | Narrows the choice in master data first, so the partner's price API is asked about a short list only. Keyword lists and nearest vectors come back in one `_msearch`. On the hosted site OpenSearch answers first, with the server's in-memory copy as the fallback (`DOCK_SEARCH_RECALL_BACKEND=opensearch`, set by the deploy script; `/api/health` `dataPlane.recall.order`). On 189 test requests both backends give the same accuracy (97 % right product first) |
+| Grafana | The full dashboard (behind its login), with an agents row (status, escalation rate, refusals by agent and rule, time to a decision, spend per order) and search and conversation panels; alert rules provisioned into Grafana when its API allows (`infra/grafana/provision.mjs`) | Free plans allow no metrics integration, so Grafana reads PostgreSQL as a read-only user and the Aiven API with a read-only token |
 | Managed Agents (free tier) | An outside buyer that AimoPilot does not run | Shows the door is open, and the gate holds an agent that AimoPilot does not control |
 | Aiven MCP server | The operations copilot's view of service state, logs and metrics | Read-only token and read-only tools. Nobody holds admin credentials to ask "is anything down?" |
 

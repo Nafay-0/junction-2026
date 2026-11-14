@@ -27,7 +27,7 @@ const int = (name: string, fallback: number, min = 0, max = Number.MAX_SAFE_INTE
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
 };
 
-export const DEPLOYED_DOCK_URL = "https://jolly-wondrous-bunny.eur-1.aiven.app";
+export const DEPLOYED_DOCK_URL = "https://aimopilot.zeroanomaly.tech";
 
 export const showcaseConfig = () => ({
   project: value("AIVEN_PROJECT"),

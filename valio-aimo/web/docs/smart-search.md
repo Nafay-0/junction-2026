@@ -170,5 +170,7 @@ candidate lists overlap 86 % on average (the keyword lists differ: OpenSearch's 
 index; on a local copy the vector lists alone overlapped 99 % with the exact in-memory ones). One OpenSearch call of 189 missed the 400 ms
 deadline and memory answered it. The difference in time is the round trip from the laptop (about 80 ms warm, 600 to
 900 ms for the first calls on a cold connection and graph: an earlier run that was not warmed up fell back to memory
-on every search after the breaker opened). So memory stays first and OpenSearch is the fallback; on Aiven Runtime,
-next to the service, the round trip is shorter but was not measured.
+on every search after the breaker opened). So memory is the default order in the code; on Aiven Runtime,
+next to the service, the round trip is shorter but was not measured. The hosted site runs the other way round:
+`infra/aiven-deploy.mjs` sets `DOCK_SEARCH_RECALL_BACKEND=opensearch`, so OpenSearch answers first and memory is the
+fallback (`/api/health`, `dataPlane.recall.order`, on 15 Nov: `opensearch`, `memory`).

@@ -3,6 +3,13 @@
 Google DeepMind is a featured partner, not a challenge; Umar Noor (Developer Experience / GTM, Google DeepMind) is
 on the main jury, with a focus on "first prototype to real-world impact" (`research/01-event-intel.md`).
 
+> **Out of date (checked 15 Nov).** The page below describes the push-to-talk voice door of 14 Nov, with seven
+> tools and its own read-back. Voice is now one hands-free mode inside the conversation: Gemini 3.8 Live (OpenAI
+> gpt-realtime-2.1 as the fallback) is only the ears and the mouth, with one tool, `relay`, and spoken words go
+> through the same engine as typed ones. The "7 of 12" below is that earlier door; on the same twelve clips it is now
+> 11 of 12, and 33 of 36 on held-out clips. Current design and figures: `web/docs/doors.md`; claims rows 33, 34, 91
+> and 92 in `claims.md`.
+
 ## What it does in the product, in plain words
 
 A chef with full hands can call their purchasing agent from the phone. The voice is Gemini Live
