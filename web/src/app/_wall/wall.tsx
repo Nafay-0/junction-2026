@@ -247,8 +247,8 @@ function GateLanes({ feed, now, justRefused, lastAt, error }: { feed: FeedItem[]
 
         {rows.length === 0 && (
           <div className="pointer-events-none absolute left-0 top-[8%] z-10 max-w-[44%] max-lg:static max-lg:max-w-none">
-            <p className="display text-[max(2rem,3vw)] leading-[1.02]">No request has pulled up yet.</p>
-            <p className="mt-[1.2vh] max-w-[40ch] text-[max(1.05rem,1.3vw)] leading-snug text-paper/80">
+            <p className="display text-[max(2rem,3vw)] leading-[1.02] lg:[@media(max-height:820px)]:text-[max(1.5rem,2.1vw)]">No request has pulled up yet.</p>
+            <p className="mt-[1.2vh] max-w-[40ch] text-[max(1.05rem,1.3vw)] leading-snug text-paper/80 lg:[@media(max-height:820px)]:hidden">
               Scan the code to become an approver, then let an agent try to buy. Inside its mandate it buys alone; above it, you sign off; outside it, the gate says no and names the rule.
             </p>
           </div>

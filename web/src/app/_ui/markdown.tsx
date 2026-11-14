@@ -173,7 +173,7 @@ export function blocks(lines: string[], link: LinkFn, key = "b"): ReactNode[] {
               {rows.map((r, ri) => (
                 <tr key={ri} className="border-b border-ink/5 last:border-0">
                   {head.map((_, j) => (
-                    <td key={j} className="px-3 py-2 align-top leading-relaxed">
+                    <td key={j} className="px-3 py-2 align-top leading-relaxed [&_code]:whitespace-nowrap">
                       {inline(r[j] ?? "", link, `${k}r${ri}c${j}`)}
                     </td>
                   ))}
