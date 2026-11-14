@@ -227,6 +227,46 @@ The 18.5 s is mostly the conversation itself: about 3.5 s to the read-back start
 4 s), the caller's "yes" (2 s), then the intake with live prices and the gate. Nothing is looked up or priced before
 the yes, by design.
 
+**On the paid Google key (14 Nov, later; results in `eval/voice/results/paid/`).** The same harness, the same clips.
+
+| | Free tier | Paid key |
+|---|---|---|
+| Sessions opened at the same moment that started | 9 of 12 (3 refused, "exceeded your current quota") | 100 of 100 (median 0.9 s, slowest 1.6 s) |
+| Sessions refused during the evaluation runs | 2 of about 250 | 0 of about 150 (up to four runs at once) |
+| Original 12 | 11 right, 0 wrong | 11 right, 0 wrong |
+| Held-out 36 | 33 right, 2 wrong | 33 right, 3 wrong |
+| Dev 36 | 32 right, 2 wrong | 32 right, 2 wrong |
+| End of speech to the read-back heard (median, held) | 3.4 s | 3.4 s |
+
+The key changes capacity, not understanding: the same recogniser hears the same words. Google publishes no Live
+limits per tier; its rate-limit page gives Tier 1 a spend limit of $10 per rolling 10 minutes (about 200 ordering
+calls at list price) and points to AI Studio for the rest. So the voice caps are now sized for a queue of judges on
+the first provider: 10 calls an hour and 30 a day per kitchen (a judge's phone is its own kitchen), 150 an hour and
+600 a day in all. The switch to the fallback stays at 6 s without a started session (four times the slowest start
+measured) or a quota refusal; on this key neither happened.
+
+**Extended thinking** (`gemini-3.8-live-extended-thinking`, thinking level low, which it requires; the 28 Finnish and
+Swedish clips of dev and held): 21 right and 7 wrong read-backs, against 21 right, 5 wrong and 2 asked for the
+default, and the read-back starts at 6.9 to 7.9 s instead of 3.4 to 3.8 s. Its mistakes are the same misheard
+numbers (the transcript is the same). Not better, only slower: the default stays.
+
+**The spoken path and the engine's rules** (`eval/voice/engine`, five clips, `--flow`). The confirmed read-back now
+goes to the engine exactly as it was read back (`voice-bridge.ts confirmThroughEngine`, the engine's `openNeed`,
+never read a second time), so speech follows the same rules as typing:
+- *Several items in one sentence* ("ten litres of cream and twenty litres of lactose-free milk for Friday", and the
+  same in Finnish): read back together in one sentence, "as one order"; confirmed, the ready items become the
+  engine's one order sheet, and "yes, order it" places the sheet (one order, one gate decision). Items that cannot
+  join it are said one clause each. Before: "AimoPilot understood part of it but needs how much".
+- *A named day* ("delivered on Thursday"): delivered on that Thursday. Before: offered for the Monday before it.
+  "By Monday" stays a latest day, and that routine request was placed alone after one "yes" in 19.3 s.
+- *A kind it cannot offer* (oat drink, outside the mandate): said first, with the mandate's reason, before any option;
+  a kind the assortment has but cannot offer that day leads with "cannot be offered: why. Instead: ...".
+
+Routine spoken orders on the joined path: placed alone after the read-back and one "yes" in 19.7 and 20.1 s (the
+two routine clips; 18.5 s before the join, the difference is within run-to-run spread); with options 41 to 44 s;
+with a check 50 to 66 s. Two "for Friday" requests now end "nothing fits: the order cut-off has passed" because a
+named Friday is now the exact delivery day, as the thread does for typed words.
+
 **Choice: Gemini 3.8 Live**, OpenAI gpt-realtime-2.1 as the automatic fallback (`DOCK_VOICE_FALLBACK_MODEL`). Gemini is
 more accurate in noise (its transcript follows the near speaker; OpenAI's transcriber wrote down background talkers
 and once answered in Japanese script), faster to the tool call and to the spoken read-back, answers in Finnish and Swedish more often, and costs
@@ -340,7 +380,7 @@ somewhat worse recognition than the browser call.
 
 `DOCK_VOICE` (off), `DOCK_VOICE_MODEL` (default `gemini-3.8-live`; `gpt-realtime-2.1` or `gpt-realtime-2.1-mini` for
 OpenAI), `DOCK_VOICE_FALLBACK_MODEL` (default: the other provider; `off` for none), `DOCK_VOICE_TRANSCRIPTION`
-(Gemini: `verbatim` default, `smart`), `DOCK_VOICE_OPENAI_TRANSCRIBE` and `DOCK_VOICE_OPENAI_DELAY` (OpenAI's
+(Gemini: `verbatim` default, `smart`), `DOCK_VOICE_THINKING` (the extended-thinking model's level, default low), `DOCK_VOICE_OPENAI_TRANSCRIBE` and `DOCK_VOICE_OPENAI_DELAY` (OpenAI's
 transcriber for push-to-talk: `gpt-live-transcribe` default, or `gpt-transcribe`), `DOCK_VOICE_CALL_SECONDS`,
 `DOCK_VOICE_CALLS_PER_KITCHEN_HOUR`, `DOCK_VOICE_CALLS_PER_HOUR`, `DOCK_VOICE_CALLS_PER_KITCHEN_DAY`,
 `DOCK_VOICE_CALLS_PER_DAY`, `DOCK_SCAN_MODEL` (default `anthropic:claude-haiku-5-5`; `featherless:<id>` uses

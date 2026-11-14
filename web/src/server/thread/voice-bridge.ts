@@ -163,6 +163,21 @@ async function spokenReply(run: Parameters<typeof afterStep>[0], call: Call, out
     run.facts.push(forModel);
     return { forModel, screen: { heard: heard?.text, problem: { code: "sheet", message: `${forModel.say} ${lines}.` } } };
   }
+  // Several items that did not all become one order sheet: one short clause per item, then the first that waits.
+  const items = outcomes.filter((x) => !x.sheet);
+  if (run.multi && items.length > 1) {
+    const clause = (x: ItemOutcome) =>
+      x.placed ? `placed (${x.placed.status === "committed" ? "ordered" : "waiting for sign-off"})` : x.notice ? x.notice.message.split(/(?<=[.:])\s/)[0].replace(/[.:]$/, "") : x.state === "options_ready" ? "options are on the screen" : x.state === "needs_confirmation" ? "a check is on the screen" : x.state === "needs_input" ? "a question is on the screen" : "on the screen";
+    const open = items.find((x) => x.requestId && !x.placed && !x.notice);
+    if (open?.requestId) {
+      call.desk.requestId = open.requestId;
+      call.desk.orderId = undefined;
+    }
+    const say = items.map((x) => `${x.words.replace(/\s+(for|by|on)\s.*$/i, "")}: ${clause(x)}`).join(". ") + ".";
+    const forModel: ForModel = { ok: true, state: "several_items", say, ask: open ? "Ask the caller about the first item that waits, as the screen shows it." : undefined, items: items.map((x) => ({ words: x.words, state: x.placed ? "placed" : (x.notice?.kind ?? x.state) })) };
+    run.facts.push(forModel);
+    return { forModel, screen: { heard: heard?.text, ...(open?.requestId ? { step: await rt.dock.intake.get(run.session, open.requestId) } : {}), problem: { code: "several_items", message: say } } };
+  }
   const o = outcomes[0];
   if (!o) return { forModel: { ok: false, state: "error", say: "AimoPilot could not do that." }, screen: {} };
   if (o.notice) {
