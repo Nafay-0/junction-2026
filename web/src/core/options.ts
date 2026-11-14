@@ -89,6 +89,11 @@ export type OptionCard = {
    */
   reasons: OptionReason[];
   quoteLines: QuoteRequestLine[]; // what to send to POST /api/v1/quotes
+  /**
+   * What the gate would decide if this card were ordered now, from its own preview (core/policy.ts on the card's
+   * lines and prices, set by the intake): placed by the agent alone, sent to a named person, or refused with the rule.
+   */
+  gate?: { outcome: "auto_approve" | "needs_human_approval" | "reject"; rule?: string; approver?: { name: string; role: string }; reasons: string[]; escalated: string[] };
   /** When this card stands in for the product the request is about: how the product map ranks it, and why. */
   alternative?: { for: string; tier: AlternativeTier; reason: string; use?: string };
 };

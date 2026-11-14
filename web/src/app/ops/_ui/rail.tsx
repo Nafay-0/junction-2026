@@ -14,7 +14,9 @@ import { Wordmark } from "../../_ui/wordmark";
 import { num } from "./format";
 import { useNow } from "./kit";
 
-type Session = { signedIn: boolean; name?: string; mode: "demo" | "passcode"; chain?: { ok: boolean; length: number }; waiting?: number; suspended?: number };
+type Models = { calls: number; usd: number; maxCalls: number; maxUsd: number; enabled: boolean };
+type Session = { signedIn: boolean; name?: string; mode: "demo" | "passcode"; chain?: { ok: boolean; length: number }; waiting?: number; suspended?: number; models?: Models };
+const modelsLow = (m: Models) => !m.enabled || m.maxUsd - m.usd < m.maxUsd * 0.1 || m.maxCalls - m.calls < m.maxCalls * 0.1;
 
 const NAV: { href: string; label: string; what: string; key: string }[] = [
   { href: "/ops", label: "Live", what: "Agents at the door", key: "l" },
@@ -131,6 +133,15 @@ export function Rail() {
         </Link>
       ) : (
         !compact && <span className="whitespace-nowrap text-[0.82rem] text-ink-soft">No sign-off waiting</span>
+      )}
+      {s?.models && (
+        <span
+          title="The day's model cap on this server (resets at midnight UTC). When it is used up, the agent's reading pauses and the thread offers ordering without a model."
+          className={`inline-flex min-h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[0.82rem] font-medium ${modelsLow(s.models) ? "bg-safety-soft text-safety-ink ring-1 ring-inset ring-safety/60" : "bg-surface text-ink-soft"}`}
+        >
+          {compact ? `$${Math.max(0, s.models.maxUsd - s.models.usd).toFixed(0)}` : `Models: $${Math.max(0, s.models.maxUsd - s.models.usd).toFixed(2)} of $${s.models.maxUsd} left, ${num(Math.max(0, s.models.maxCalls - s.models.calls))} calls`}
+          {compact && <span className="sr-only"> of the day&apos;s model cap left</span>}
+        </span>
       )}
       {suspended > 0 && (
         <Link href="/ops/control" className="inline-flex min-h-8 items-center gap-1.5 whitespace-nowrap rounded-full bg-safety-soft px-3 text-[0.82rem] font-semibold text-safety-ink ring-1 ring-inset ring-safety/60">

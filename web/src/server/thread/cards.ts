@@ -81,6 +81,7 @@ export function optionView(o: OptionCard): OptionView {
     pros: o.pros,
     cons: o.cons,
     reasons: o.reasons ?? [],
+    ...(o.gate ? { gate: { outcome: o.gate.outcome, ...(o.gate.rule ? { rule: o.gate.rule } : {}), ...(o.gate.approver ? { approver: o.gate.approver } : {}), reasons: o.gate.reasons } } : {}),
     ...(o.alternative ? { alternative: { for: o.alternative.for, tier: o.alternative.tier, reason: o.alternative.reason } } : {}),
   };
 }

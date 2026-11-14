@@ -35,7 +35,12 @@ export type ThreadAction =
   /** Run the last failed step of an agent turn again. */
   | { type: "retry"; turnId: string }
   /** Order a menu plan as it stands: one fixed-price quote for every line, then the gate (the plan card's one confirmation). */
-  | { type: "plan_order"; planId: string };
+  | { type: "plan_order"; planId: string }
+  /**
+   * Order an earlier order again, rebuilt by plain code (no model): the same product, amount and goal, for the next
+   * same weekday. `ref` is the earlier request's id, or the order id for history without a request.
+   */
+  | { type: "repeat"; ref: string };
 
 export type BuyerTurn = {
   turnId: string;
@@ -170,6 +175,11 @@ export type OptionView = {
   alternative?: { for: string; tier: string; reason: string };
   /** The catalogue's kind of product (the art by kind), for the option's illustration. */
   category?: string;
+  /**
+   * What happens when it is tapped, from the gate's own preview (core/intake.ts): placed by the agent alone, sent to
+   * the named person, or refused with the rule (then it is not a choice, only shown to say why it is missing).
+   */
+  gate?: { outcome: "auto_approve" | "needs_human_approval" | "reject"; rule?: string; approver?: { name: string; role: string }; reasons: string[] };
 };
 
 export type OptionsCard = CardBase & {
@@ -246,11 +256,14 @@ export type RecordsCard = CardBase & {
   rows: { kind: "order" | "request" | "product" | "memory" | "mandate"; label: string; detail?: string; totalCents?: number; date?: string; ref?: string }[];
   /** "same as last Thursday": the buyer can repeat one row as a new request. */
   repeat?: { ref: string; label: string };
+  /** Every row with a `ref` can be ordered again with one tap (a `repeat` action, no model). */
+  repeatable?: boolean;
 };
 
 export type NoticeCard = CardBase & {
   type: "notice";
-  kind: "not_found" | "not_purchase" | "incomplete" | "unavailable" | "refused" | "error" | "suspended";
+  /** `paused`: the agent's reading is paused for today (the server's daily model cap); ordering without a model still works. */
+  kind: "not_found" | "not_purchase" | "incomplete" | "unavailable" | "refused" | "error" | "suspended" | "paused";
   message: string;
   /** For `incomplete`: what is missing ("how much, with the unit"). */
   missing?: string[];

@@ -223,34 +223,40 @@ export async function orderFromWords(run: TurnRun, words: string, earlier: Earli
     need.deliverBy = baseDay;
     if (!r.basedOn.fields.includes("deliverBy")) r.basedOn = { ...r.basedOn, fields: [...r.basedOn.fields, "deliverBy"] };
   }
-  const parsed = NeedSchema.parse(need) as StructuredNeed;
   const basedOn = r.basedOn ? { ...r.basedOn, label: earlier.find((e) => e.id === r.basedOn!.requestId)?.text ?? undefined } : undefined;
   const alsoAsked = (r.alsoAsked ?? []).map((a) => a.text);
-  const understood = understoodCard({ ref, words, need: parsed, basedOn: basedOn && { requestId: basedOn.requestId, fields: basedOn.fields, ...(basedOn.label ? { label: basedOn.label } : {}) }, alsoAsked: opts.item ? [] : alsoAsked });
+  const parsed = NeedSchema.parse(need) as StructuredNeed;
+  // The other items the same message named: read and run in parallel with this one.
+  const others = opts.item ? [] : (r.alsoAsked ?? []).slice(0, 4).map((a, i) => orderFromWords(run, a.text, [], { deliverBy: parsed.deliverBy, item: i + 1 }));
+  const first = await openNeed(run, need, words, { ref, ...(basedOn ? { basedOn: { requestId: basedOn.requestId, fields: basedOn.fields, ...(basedOn.label ? { label: basedOn.label } : {}) } } : {}), alsoAsked: opts.item ? [] : alsoAsked });
+  return [...first, ...(await Promise.all(others)).flat()];
+}
+
+/**
+ * A need, however it was made (read from words, or rebuilt by plain code from an earlier order), through the
+ * intake: the understood card, then whatever the intake says, then a routine order placed alone.
+ */
+export async function openNeed(run: TurnRun, need: NeedInput, words: string, opts: { ref: string; basedOn?: { requestId: string; fields: string[]; label?: string }; alsoAsked?: string[]; memoryLine?: string }): Promise<ItemOutcome[]> {
+  const parsed = NeedSchema.parse(need) as StructuredNeed;
+  const understood = understoodCard({ ref: opts.ref, words, need: parsed, ...(opts.basedOn ? { basedOn: opts.basedOn } : {}), alsoAsked: opts.alsoAsked ?? [], ...(opts.memoryLine ? { memoryUsed: [opts.memoryLine] } : {}) });
   run.store.card(run.thread, run.turnId, understood);
   run.facts.push(understood, { words });
   mark(run, "understood");
-
-  // The other items the same message named: read and run in parallel with this one.
-  const others = opts.item ? [] : (r.alsoAsked ?? []).slice(0, 4).map((a, i) => orderFromWords(run, a.text, [], { deliverBy: parsed.deliverBy, item: i + 1 }));
-
   const intake = step(run, "intake", "Checking against your history and the assortment");
-  let first: ItemOutcome[];
   try {
     const res = await published<{ step: IntakeView }>(run, "submit_need", { need, by: byLine(run) });
     intake.done(res.step.state);
     run.requests.add(res.step.requestId);
-    run.store.card(run.thread, run.turnId, { ...understood, requestId: res.step.requestId, memoryUsed: res.step.memoryUsed.map((m) => m.text), memory: res.step.memoryUsed, ...(res.step.noticed?.length ? { notes: res.step.noticed.map((n) => ({ code: n.code, params: n.params })) } : {}) });
+    run.store.card(run.thread, run.turnId, { ...understood, requestId: res.step.requestId, memoryUsed: [...(opts.memoryLine ? [opts.memoryLine] : []), ...res.step.memoryUsed.map((m) => m.text)], memory: res.step.memoryUsed, ...(res.step.noticed?.length ? { notes: res.step.noticed.map((n) => ({ code: n.code, params: n.params })) } : {}) });
     if (res.step.memoryUsed.length) record(run, "memory_read", `Memory answered for this request: ${res.step.memoryUsed.map((m) => m.text).join("; ")}`, { lines: res.step.memoryUsed }, res.step.requestId);
-    first = [await afterStep(run, res.step, words)];
+    return [await afterStep(run, res.step, words)];
   } catch (err) {
     intake.fail(err instanceof DockError ? err.code : undefined);
-    const notice = noticeFrom(err, ref, words);
+    const notice = noticeFrom(err, opts.ref, words);
     run.store.card(run.thread, run.turnId, notice);
     run.facts.push(notice);
-    first = [{ words, notice }];
+    return [{ words, notice }];
   }
-  return [...first, ...(await Promise.all(others)).flat()];
 }
 
 /** Show a step as cards; place a routine order alone. */
@@ -279,6 +285,14 @@ export async function afterStep(run: TurnRun, s: IntakeView, words: string): Pro
   }
   if (s.state === "options_ready") {
     const card = optionsCard(s)!;
+    // In the store, the tap is the kitchen's own signed-in person: their choice of a stand-in is their confirmation
+    // (core/policy.ts substitutionConfirmedBy), so a card held only by the substitution rule is placed alone.
+    if (run.person) {
+      for (const o of card.options) {
+        const g = s.options.find((x) => x.optionId === o.optionId)?.gate;
+        if (g && g.outcome === "needs_human_approval" && g.escalated.length && g.escalated.every((r) => r === "substitution_rule")) o.gate = { outcome: "auto_approve", reasons: g.reasons };
+      }
+    }
     // A word of the request no product in the assortment carries ("camel" in "camel milk"): the options are the
     // closest products, never shown as the thing asked for, and the agent does not choose one alone.
     const q = await qualifierCheck(run, s.family, s.need.item.text, card.options);
@@ -325,7 +339,7 @@ export async function afterStep(run: TurnRun, s: IntakeView, words: string): Pro
  */
 async function routineChoice(run: TurnRun, s: IntakeView, options: OptionView[]): Promise<{ option: OptionView; why: string } | undefined> {
   if (s.acknowledgements.length || s.concerns.length || (s.alsoAsked ?? []).length) return undefined;
-  const clean = options.filter((o) => o.match === "full" && o.signOff.length === 0);
+  const clean = options.filter((o) => o.match === "full" && o.signOff.length === 0 && (!o.gate || o.gate.outcome === "auto_approve"));
   if (!clean.length) return undefined;
   const profile = (await run.rt.kitchens.getProfile(run.session.mandate.issuer.orgId)) as KitchenProfile | undefined;
   const recent = (profile?.history ?? []).filter((h) => h.family === s.family).slice(-4);
@@ -382,7 +396,7 @@ export async function placeQuoted(run: TurnRun, s: IntakeView, words: string, pa
 
 /** The card an action answers must still be open: a tap on an old card never acts on a newer request. */
 export async function checkOpen(run: TurnRun, a: ThreadAction): Promise<IntakeView | undefined> {
-  if (a.type === "remember" || a.type === "withdraw" || a.type === "retry" || a.type === "plan_order") return undefined;
+  if (a.type === "remember" || a.type === "withdraw" || a.type === "retry" || a.type === "plan_order" || a.type === "repeat") return undefined;
   const s = await run.rt.dock.intake.get(run.session, a.requestId);
   const want = a.type === "concern" ? ["needs_confirmation"] : a.type === "answer" ? ["needs_input", "options_ready"] : a.type === "choose" ? ["options_ready"] : ["quoted"];
   if (!want.includes(s.state)) throw new DockError(409, "turn_card_stale", `That card has moved on: the request is now ${s.state.replace(/_/g, " ")}.`, "intake_sequence", { state: s.state });
@@ -443,6 +457,17 @@ export async function runAction(run: TurnRun, a: ThreadAction, words?: string): 
     case "plan_order": {
       const { orderPlan } = await import("./plan");
       return orderPlan(run, a.planId, words);
+    }
+    case "repeat": {
+      // The earlier order rebuilt by plain code: no model, and the same intake and gate as anything else.
+      const { overview } = await import("@/server/kitchen-portal");
+      const { repeatNeed } = await import("@/app/k/[kitchen]/memory");
+      const ov = await overview(run.k);
+      const r = ov.requests.find((x) => (x.requestId ?? x.key) === a.ref || x.key === a.ref || x.order?.orderId === a.ref);
+      const rep = r && repeatNeed(r);
+      if (!r || !rep) throw new DockError(404, "nothing_to_repeat", "That earlier order cannot be repeated from here: nothing to rebuild it from.");
+      record(run, "repeat", `The buyer asked to order ${a.ref} again; rebuilt by plain code, no model.`, { ref: a.ref });
+      return openNeed(run, rep.need, words ?? r.text ?? rep.memoryLine, { ref: `${run.turnId}:repeat`, memoryLine: rep.memoryLine });
     }
     case "remember":
     case "retry":

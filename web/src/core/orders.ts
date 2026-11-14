@@ -29,7 +29,7 @@ import { MAX_LIVE_IDS_PER_CALL } from "./catalog";
 import { MandateError, supersededBy, supersededMessage, verifyMandateToken, type Mandate, type MandateRegister, type TrustRegistry } from "./mandate";
 import { SPLIT_WINDOW_HOURS, decidingRule, evaluatePolicy, type Decision, type OrderDraftLine, type ProductHold, type RecentOrder, type RuleResult } from "./policy";
 export type { ProductHold } from "./policy";
-import { QuoteError, QuoteRequestLineSchema, buildQuote, signQuote, verifyQuote, type Quote, type QuoteLine } from "./quote";
+import { QuoteError, QuoteRequestLineSchema, buildQuote, signQuote, verifyQuote, type Quote, type QuoteLine, type QuoteRequestLine } from "./quote";
 import { addDays, canonicalJson, formatEur, newId } from "./util";
 
 /**
@@ -916,6 +916,30 @@ export function createDock(deps: DockDeps) {
       return claimStore.get(claimIds.slice(0, 100), session.mandate.issuer.orgId);
     },
 
+    /**
+     * What the gate would decide on these lines at these live prices, for an option card before anyone taps it: the
+     * same rules and context as a quote's preview (orders.ts requestQuote), on an unsigned quote that is never issued,
+     * stored or logged. Undefined when the lines cannot be priced from the offers given.
+     */
+    async previewDecision(session: AgentSession, requestId: string, input: QuoteRequestLine[], offers: LiveOffer[]): Promise<Decision | undefined> {
+      const request = await ownRequest(session, requestId);
+      const lines = await substitutesOf(request, input);
+      const ids = [...new Set(lines.flatMap((l) => (l.substituteFor ? [l.productId, l.substituteFor] : [l.productId])))];
+      const products = await catalog.searchProducts({ ids, limit: 100 });
+      const priced = offers.map((o) => scheduledOn(o, request.deliverOn));
+      let quote: Quote;
+      try {
+        quote = buildQuote({ quoteId: "preview", buyerOrgId: session.mandate.issuer.orgId, agentId: session.agentId, mandateId: session.mandate.mandateId, requestId, lines, products, offers: priced, referenceOffers: priced, now: now(), ttlMinutes: quoteTtlMinutes });
+      } catch {
+        return undefined;
+      }
+      return evaluatePolicy(
+        session.mandate,
+        { agentId: session.agentId, quote, lines: quote.lines.map(({ productId, quantity, unitPriceCents }) => ({ productId, quantity, unitPriceCents })), neededBy: request.neededBy, deliverOn: request.deliverOn, requestId, asked: await askedOf(request, quote) },
+        { now: now(), ...supersession(session.mandate, session.mandateIssuedAt), ...(await budgetContext(quote.buyerOrgId)), ...(await mistakeCheckOf(session.mandate.issuer, request, quote, true)).context, ...(await holdsOf(quote)), quoteAlreadyUsed: false, recentOrders: await recentOrders(quote.buyerOrgId) },
+      );
+    },
+
     /** Ask the wholesaler for a fixed-price quote. Returns the signed quote and what the gate would decide on it now. */
     async requestQuote(session: AgentSession, input: z.input<typeof QuoteInput>, internal: { intakeQuote?: boolean } = {}) {
       const parsed = parse(QuoteInput, input);
@@ -1358,6 +1382,7 @@ export function createDock(deps: DockDeps) {
     openRequest: dock.openRequest,
     changeNeededBy: dock.changeNeededBy,
     requestQuote: (session, input) => dock.requestQuote(session, input, { intakeQuote: true }),
+    previewDecision: (session, requestId, lines, offers) => dock.previewDecision(session, requestId, lines, offers),
     liveLookup: (session, requestId, productIds, deliveryDate, why) => liveLookup(session, requestId, productIds, deliveryDate, why, { batch: true }),
     spentThisWeek: (orgId) => spentThisWeek(orgId),
     budgetUse: (orgId) => budgetUse(orgId),

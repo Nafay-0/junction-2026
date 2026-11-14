@@ -340,7 +340,20 @@ function CardView({ card, tap, busy, gated, base, turn, thread, memory }: { card
             kind={tx.kind.records}
             rows={card.rows.length ? card.rows.map((r) => ({ label: r.label, value: r.totalCents !== undefined ? money(r.totalCents) : undefined, sub: [r.date ? f.day(r.date) : "", r.detail ? (tx.status[r.detail] ?? r.detail) : ""].filter(Boolean).join(" · ") })) : [{ label: tx.noRecords }]}
           />
-          {card.repeat && <RepeatButton label={card.repeat.label} />}
+          {card.repeat && !card.repeatable && (
+            <p className="px-1">
+              <RepeatButton refId={card.repeat.ref} label={card.repeat.label} />
+            </p>
+          )}
+          {card.repeatable && (
+            <ul className="space-y-1.5 px-1">
+              {card.rows.filter((r) => r.ref).map((r) => (
+                <li key={r.ref}>
+                  <RepeatButton refId={r.ref!} label={r.label} wide />
+                </li>
+              ))}
+            </ul>
+          )}
         </>
       );
     case "plan":
@@ -356,6 +369,8 @@ function CardView({ card, tap, busy, gated, base, turn, thread, memory }: { card
               ? w.notice.not_purchase
               : card.kind === "unavailable"
                 ? w.notice.unavailable
+                : card.kind === "paused"
+                  ? w.notice.paused
                 : card.kind === "not_found"
                   ? w.notice.not_found
                   : card.kind === "error"
@@ -376,15 +391,14 @@ function turnClosedFor(thread: ThreadT, requestId: string): boolean {
   return thread.turns.some((x) => x.role === "agent" && x.cards.some((c) => c.type === "gate" && c.requestId === requestId));
 }
 
-function RepeatButton({ label }: { label: string }) {
+/** Order an earlier order again: a `repeat` tap, rebuilt by plain code on the server (no model, the same gate). */
+function RepeatButton({ refId, label, wide = false }: { refId: string; label: string; wide?: boolean }) {
   const { thread } = usePortal();
   const tx = useText(THREAD_PAGE_TEXT);
   return (
-    <p className="px-1">
-      <button type="button" disabled={thread.posting} className={buttonClass("quiet", "sm")} onClick={() => void thread.submit({ door: "typed", via: "typed", text: tx.repeatWords(`“${label}”`) })}>
-        {tx.repeat}
-      </button>
-    </p>
+    <button type="button" disabled={thread.posting} className={`${buttonClass("quiet", "sm")}${wide ? " w-full justify-start text-left" : ""}`} onClick={() => void thread.submit({ door: "typed", via: "tap", action: { type: "repeat", ref: refId }, label: tx.repeatWords(`“${label}”`) })}>
+      {wide ? `${tx.repeat}: ${label}` : tx.repeat}
+    </button>
   );
 }
 

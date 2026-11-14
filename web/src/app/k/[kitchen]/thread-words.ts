@@ -45,7 +45,8 @@ export function shortText(r: Reason, w: ThreadWords, f: Fmt): string | undefined
 
 /** The option the card leads with: the agent's pick when it made one, else the first (ranked best). */
 export function leadOption(card: Pick<OptionsCard, "options" | "preselected" | "chosen">): OptionView {
-  return card.options.find((o) => o.optionId === card.chosen) ?? card.options.find((o) => o.optionId === card.preselected?.optionId) ?? card.options[0];
+  const open = card.options.filter((o) => o.gate?.outcome !== "reject");
+  return card.options.find((o) => o.optionId === card.chosen) ?? open.find((o) => o.optionId === card.preselected?.optionId) ?? open[0] ?? card.options[0];
 }
 
 /** Sign-off reasons every option shares: said once for the card. */

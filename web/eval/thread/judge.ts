@@ -31,10 +31,12 @@ async function shot(page: Page, name: string) {
   if (out) await page.screenshot({ path: path.join(out, `${name}.png`), fullPage: true });
 }
 
+let current: Page | undefined;
 async function once(n: number) {
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width, height: 844 }, deviceScaleFactor: 2, isMobile: width < 600, hasTouch: width < 600, locale: lang === "fi" ? "fi-FI" : "en-GB" });
   const page = await ctx.newPage();
+  current = page;
   const cdp = await ctx.newCDPSession(page);
   await cdp.send("WebAuthn.enable");
   await cdp.send("WebAuthn.addVirtualAuthenticator", { options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true } });
@@ -81,7 +83,8 @@ async function once(n: number) {
       runs.push(r);
       console.log(`run ${i}: options ${(r.marks.options / 1000).toFixed(1)} s, waiting ${(r.marks.waiting / 1000).toFixed(1)} s, signed ${(r.marks.signed / 1000).toFixed(1)} s, ${r.taps} taps after the words, page ${r.screens} screens`);
     } catch (err) {
-      console.log(`run ${i}: FAILED ${(err as Error).message.split("\n")[0]}`);
+      if (current && out) await current.screenshot({ path: path.join(out, `${String(i).padStart(2, "0")}-${lang}-${width}-failed.png`), fullPage: true }).catch(() => undefined);
+      console.log(`run ${i}: FAILED ${(err as Error).message.split("\n").slice(0, 3).join(" ")}`);
     }
   }
   console.log(`${runs.length}/${repeat} finished alone${runs.length ? `; signed median ${(runs.map((r) => r.marks.signed).sort((a, b) => a - b)[Math.floor((runs.length - 1) / 2)] / 1000).toFixed(1)} s` : ""}`);

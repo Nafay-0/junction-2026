@@ -31,7 +31,10 @@ export function OptionsDecision({ card, tap, busy }: { card: OptionsCardT; tap: 
   const f = fmtFor(fmt.lang);
   if (!card.options.length) return null;
   const lead = leadOption(card);
-  const others = card.options.filter((o) => o.optionId !== lead.optionId);
+  // A card the gate would refuse is not a choice: shown greyed, with why, only when it was the obvious one (ranked
+  // best, or the kitchen's usual product), so the buyer sees why it is missing; otherwise left out.
+  const refused = (o: OptionView) => o.gate?.outcome === "reject";
+  const others = card.options.filter((o) => o.optionId !== lead.optionId && (!refused(o) || o.rank === "best" || o.reasons.some((r) => r.code === "your_usual")));
   const shared = sharedSignoff(card.options);
   const quiet = sharedQuiet(card.options).filter((r) => r.code !== "instead_of_usual");
   const usual = usualNote(card, w, fmt.lang);
@@ -42,6 +45,8 @@ export function OptionsDecision({ card, tap, busy }: { card: OptionsCardT; tap: 
   const rank = (o: OptionView) => w.rank[o.rank] ?? o.rank;
 
   const buttonLabel = (o: OptionView) => {
+    // The gate's own preview says what happens on the tap; the reasons are the fallback for an older engine.
+    if (o.gate) return o.gate.outcome === "needs_human_approval" && o.gate.approver ? w.sendToSign(o.gate.approver.name, f.money(o.totalCents)) : w.orderThis(f.money(o.totalCents));
     const signs = o.reasons.some((r) => r.tone === "signoff") || o.signOff.length > 0;
     const who = signs ? approverFor(o.totalCents, kitchen.mandate.approvers) : undefined;
     return who ? w.sendToSign(who.name, f.money(o.totalCents)) : w.orderThis(f.money(o.totalCents));
@@ -81,6 +86,13 @@ export function OptionsDecision({ card, tap, busy }: { card: OptionsCardT; tap: 
             {others.map((o) => {
               const t = tradeOffs(o, shared, w, f);
               const isChosen = card.chosen === o.optionId;
+              if (refused(o))
+                return (
+                  <li key={o.optionId} className="py-2.5 opacity-70">
+                    <span className="block text-[0.9rem] font-semibold leading-snug text-ink-soft [overflow-wrap:anywhere]">{titleOf(o, w)}</span>
+                    <span className="block text-[0.82rem] leading-snug text-ink-soft">{w.cannotOrder(o.gate?.rule ? fmt.ruleTitle(o.gate.rule) : "")}</span>
+                  </li>
+                );
               return (
                 <li key={o.optionId}>
                   <details className="group">
@@ -119,7 +131,7 @@ export function OptionsDecision({ card, tap, busy }: { card: OptionsCardT; tap: 
                           </li>
                         ))}
                       </ul>
-                      {open && (
+                      {open && !refused(o) && (
                         <button type="button" onClick={() => choose(o)} className="mt-2.5 inline-flex min-h-10 w-full items-center justify-center rounded-full border border-line-strong bg-paper px-4 text-center text-[0.88rem] font-semibold leading-snug text-ink hover:border-ink-soft hover:bg-mist">
                           {buttonLabel(o)}
                         </button>

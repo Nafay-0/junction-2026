@@ -387,3 +387,20 @@ describe("a substitute the kitchen turned down before", () => {
     expect([...named.options.flatMap((o) => o.lines), ...(named.quote?.quote.lines ?? [])].some((l) => l.productId === "T-BOX")).toBe(false);
   });
 });
+
+describe("every option has been through the gate's own preview", () => {
+  it("says on each card what the tap will do, and the quote's preview after the tap agrees", async () => {
+    await setup(undefined);
+    const step = await dock.intake.open(session, { need: need({ quantity: { amount: 100, unit: "L" } }) });
+    const ready = step.state === "needs_confirmation" ? await dock.intake.respondToConcerns(session, step.requestId, { by: "Aino Virtanen", responses: step.concerns.map((c) => ({ key: c.key, choice: "confirm" })) }) : step;
+    expect(ready.state).toBe("options_ready");
+    for (const o of ready.options) expect(["auto_approve", "needs_human_approval", "reject"]).toContain(o.gate?.outcome);
+    // Nothing the gate would refuse leads, is pre-selected, or can be chosen.
+    expect(ready.options[0].gate?.outcome).not.toBe("reject");
+    const first = ready.options[0];
+    const quoted = await dock.intake.choose(session, ready.requestId, { by: "Aino Virtanen", optionId: first.optionId });
+    expect(quoted.quote?.policyPreview.outcome).toBe(first.gate?.outcome);
+    // The preview issued no quote: the ledger has exactly the one the choice made.
+    expect(ledger.entries({ requestId: ready.requestId }).filter((e) => e.type === "quote")).toHaveLength(1);
+  });
+});
