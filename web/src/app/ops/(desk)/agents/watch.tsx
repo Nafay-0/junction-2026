@@ -207,13 +207,13 @@ function Proposal({ r, onDone }: { r: ScoreRow; onDone: () => void }) {
       {p.action === "suspend" &&
         (confirm ? (
           <span className="flex flex-wrap gap-1.5">
-            <Button kind="stop" onClick={suspend} disabled={busy}>
+            <Button staff kind="stop" onClick={suspend} disabled={busy}>
               Suspend, with this evidence
             </Button>
             <Button onClick={() => setConfirm(false)}>Not now</Button>
           </span>
         ) : (
-          <Button kind="stop" onClick={() => setConfirm(true)}>
+          <Button staff kind="stop" onClick={() => setConfirm(true)}>
             Suspend…
           </Button>
         ))}

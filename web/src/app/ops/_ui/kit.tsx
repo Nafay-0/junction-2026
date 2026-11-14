@@ -1,5 +1,6 @@
 "use client";
 
+import { STAFF_ONLY, useViewer } from "./role";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { api } from "../../_client/api";
@@ -265,6 +266,7 @@ export function Button({
   title,
   ariaLabel,
   size = "sm",
+  staff = false,
 }: {
   children: ReactNode;
   onClick?: () => void;
@@ -275,11 +277,45 @@ export function Button({
   title?: string;
   ariaLabel?: string;
   size?: "sm" | "md" | "lg";
+  /** An action (it changes something, costs money or calls outside): disabled for a viewer, with "Staff only". */
+  staff?: boolean;
 }) {
+  const viewer = useViewer();
   const k = kind === "primary" ? "primary" : kind === "stop" ? "safety" : kind === "go" ? "go" : kind === "quiet" ? "quiet" : "secondary";
-  return (
-    <button type={type} onClick={onClick} disabled={disabled} title={title} aria-label={ariaLabel} className={`${buttonClass(k, size, className)} disabled:opacity-45`}>
+  const off = staff && viewer;
+  const button = (
+    <button type={type} onClick={off ? undefined : onClick} disabled={disabled || off} title={off ? `${STAFF_ONLY}: sign in with the passcode to act` : title} aria-label={ariaLabel} className={`${buttonClass(k, size, className)} disabled:opacity-45`}>
       {children}
     </button>
   );
+  if (!off) return button;
+  return (
+    <span className="inline-flex flex-col items-start gap-0.5">
+      {button}
+      <StaffOnlyNote />
+    </span>
+  );
+}
+
+/** A plain button that acts (a link-styled one, a pill): disabled for a viewer, with "Staff only". */
+export function StaffButton({ children, onClick, disabled, className, title, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  const viewer = useViewer();
+  const button = (
+    <button {...rest} type="button" onClick={viewer ? undefined : onClick} disabled={disabled || viewer} title={viewer ? `${STAFF_ONLY}: sign in with the passcode to act` : title} className={`${className ?? ""} disabled:opacity-45`}>
+      {children}
+    </button>
+  );
+  return viewer ? (
+    <span className="inline-flex flex-wrap items-baseline gap-x-1.5">
+      {button}
+      <StaffOnlyNote />
+    </span>
+  ) : (
+    button
+  );
+}
+
+/** The one line beside an action a viewer may not take. */
+export function StaffOnlyNote({ className = "" }: { className?: string }) {
+  return <span className={`text-[0.78rem] font-medium text-ink-soft ${className}`}>{STAFF_ONLY}</span>;
 }

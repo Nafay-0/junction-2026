@@ -1,13 +1,13 @@
 import { DockError } from "@/core/errors";
 import { readJson } from "@/server/http";
-import { opsRoute } from "@/server/ops/handler";
+import { opsRead, opsRoute } from "@/server/ops/handler";
 import { launch, launcherStatus, type PresetId } from "@/server/aiven/showcase/launcher";
 import { platformRoute } from "@/server/aiven/showcase/routes";
 import { runsTodayFrom, telemetryWriter } from "@/server/aiven/showcase/writer";
 
 /** GET /ops-api/platform/agent: presets, runs left today, recent runs. */
 export async function GET(req: Request) {
-  return opsRoute(req, async (rt, staff) => {
+  return opsRead(req, async (rt, staff) => {
     platformRoute(rt, staff);
     return Response.json(launcherStatus());
   });

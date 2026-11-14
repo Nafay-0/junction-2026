@@ -34,7 +34,7 @@ export function AccountsScreen() {
       <Section
         title="Shared test accounts"
         aside={
-          <Button kind="primary" onClick={() => void reset()} disabled={busy}>
+          <Button staff kind="primary" onClick={() => void reset()} disabled={busy}>
             {busy ? "Resetting…" : "Reset test accounts"}
           </Button>
         }

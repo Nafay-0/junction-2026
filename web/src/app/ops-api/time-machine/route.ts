@@ -1,5 +1,5 @@
 import { DockError } from "@/core/orders";
-import { opsRoute } from "@/server/ops/handler";
+import { opsRead } from "@/server/ops/handler";
 import { timeMachineOf } from "@/server/mariadb/attach";
 import { MARIADB_ENV } from "@/server/mariadb/config";
 import { mirrorHealth, timeMachineView } from "@/server/mariadb/service";
@@ -12,7 +12,7 @@ import { embeddingOfOrder, similarTo } from "@/server/mariadb/vector";
  * The history comes from MariaDB, PostgreSQL or this server's memory (mariadb/attach.ts); `backend` and `label` say which.
  */
 export async function GET(req: Request) {
-  return opsRoute(req, async (rt) => {
+  return opsRead(req, async (rt) => {
     const p = new URL(req.url).searchParams;
     const h = timeMachineOf(rt.dock);
     if (!h) {

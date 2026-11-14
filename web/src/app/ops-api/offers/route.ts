@@ -1,7 +1,7 @@
 import { DockError } from "@/core/orders";
 import { REASON_KINDS, type OfferReasonKind } from "@/core/offers";
 import { readJson } from "@/server/http";
-import { opsRoute } from "@/server/ops/handler";
+import { opsRead, opsRoute } from "@/server/ops/handler";
 import { offerToken, offersView, resetKitchenOffers, runSellingAgent, startCampaign, testKitchens } from "@/server/offers/service";
 
 /**
@@ -18,7 +18,7 @@ import { offerToken, offersView, resetKitchenOffers, runSellingAgent, startCampa
  * Everything is written to the ledger with the staff member's name.
  */
 export async function GET(req: Request) {
-  return opsRoute(req, async (rt) => Response.json(await offersView(rt)));
+  return opsRead(req, async (rt) => Response.json(await offersView(rt)));
 }
 
 export async function POST(req: Request) {

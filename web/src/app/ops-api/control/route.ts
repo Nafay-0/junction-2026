@@ -1,7 +1,7 @@
 import { DockError } from "@/core/orders";
 import { readJson } from "@/server/http";
 import { opsMode } from "@/server/ops/access";
-import { opsRoute } from "@/server/ops/handler";
+import { opsRead, opsRoute } from "@/server/ops/handler";
 import { suspensions } from "@/server/ops/suspensions";
 import { controlView, suspendTarget } from "@/server/ops/views";
 
@@ -12,7 +12,7 @@ import { controlView, suspendTarget } from "@/server/ops/views";
  * There is no action to approve or decline an order: that belongs to the person the kitchen's mandate names.
  */
 export async function GET(req: Request) {
-  return opsRoute(req, async (rt) => Response.json(await controlView(rt, opsMode())));
+  return opsRead(req, async (rt) => Response.json(await controlView(rt, opsMode())));
 }
 
 export async function POST(req: Request) {
