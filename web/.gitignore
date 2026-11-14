@@ -49,3 +49,7 @@ next-env.d.ts
 
 # crash test output (pnpm crash)
 /crash-results/
+
+# test infrastructure outputs
+/tests-live/results/
+/e2e/.auth/
