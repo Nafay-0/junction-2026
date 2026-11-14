@@ -118,3 +118,47 @@ test("a restaurant signs up, orders within its limit, comes back to its order an
   expect(JSON.stringify(ledger.entries)).not.toContain(`org_acct_${a.replaceAll("-", "_")}`);
   await other.close();
 });
+
+test("an order above the limit waits for a signing device, then is signed with this device's passkey", async ({ page }) => {
+  test.setTimeout(180_000);
+  const health = (await (await page.request.get("/api/health")).json()) as { catalog?: { source?: string } };
+  test.skip(health.catalog?.source === "valio", "run with DOCK_CATALOG=seed");
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("WebAuthn.enable");
+  await cdp.send("WebAuthn.addVirtualAuthenticator", {
+    options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true },
+  });
+  const user = `e2e-s-${stamp}`;
+  await signUp(page, user, `Signer E2E ${stamp}`);
+
+  // 30 packs is over the €300 limit: the gate holds it for the signer, and there is no device yet.
+  await page.goto(`/k/${user}/catalogue?q=milk`);
+  await page.getByRole("button", { name: /^Add a / }).first().click();
+  await page.goto(`/k/${user}/basket`);
+  await page.getByRole("textbox", { name: /^Quantity in / }).fill("30");
+  await page.getByRole("button", { name: "Get a fixed price" }).click();
+  await page.getByRole("button", { name: "Place the order" }).click();
+  await expect(page.getByText(/no signing device yet/).first()).toBeVisible({ timeout: 30_000 });
+  await shot(page, "10-waits-no-device");
+
+  // Add this device's passkey from Agent and rules.
+  await page.getByRole("link", { name: "Add a signing device" }).first().click();
+  await page.waitForURL(`**/k/${user}/agent*`);
+  await page.getByRole("button", { name: "Add this device's passkey" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Signing device added." }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("1 signing device added.")).toBeVisible();
+  await shot(page, "11-device-added");
+
+  // Sign it: the sign-off screen, the passkey bound to this exact order.
+  const portal = await (await page.request.get(`/ui-api/kitchens/${user}/portal`)).json();
+  const waiting = portal.orders.find((o: { status: string }) => o.status === "pending_approval");
+  expect(waiting?.authorised?.approvalId).toBeTruthy();
+  await page.goto(`/approve/${waiting.authorised.approvalId}`);
+  const approve = page.getByRole("button", { name: /^Approve \d/ });
+  await expect(approve).toBeEnabled({ timeout: 30_000 });
+  await approve.click();
+  await expect(page.getByRole("heading", { name: "Order placed" })).toBeVisible({ timeout: 30_000 });
+  await shot(page, "12-signed-with-passkey");
+  const view = await (await page.request.get(`/api/v1/approvals/${waiting.authorised.approvalId}`)).json();
+  expect(view.view).toMatchObject({ state: "committed", outcome: { method: "passkey", verified: true } });
+});
