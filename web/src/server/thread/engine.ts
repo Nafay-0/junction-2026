@@ -827,6 +827,8 @@ async function onOrderEvent(rt: Runtime, orgId: string, orderId: string): Promis
     if (!holder) continue;
     const r = await resolve(kitchen, "typed");
     const order: PublicOrder = await rt.dock.getOrder(r.session, orderId);
+    // The watch's record of an order it switched or renewed follows the decision (its "sent for sign-off" ends).
+    void import("@/server/watch/service").then((w) => w.orderSettled(rt, orderId, order.status)).catch(() => undefined);
     e.store.card(t, holder.turnId, gateCard(order));
     const prevOrder = e.store.cards(t).find((x) => x.card.type === "order" && x.card.orderId === orderId);
     e.store.card(t, holder.turnId, orderCard(order, prevOrder?.card.type === "order" ? prevOrder.card.passedOver : []));
