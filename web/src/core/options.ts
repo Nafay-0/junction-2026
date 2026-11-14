@@ -452,8 +452,9 @@ export function buildOptions(input: OptionsInput): OptionsResult {
     (a, b) =>
       // A pack size the map already weighed in its tier does not outrank the map's tier.
       (input.alternatives && !refFull ? coreGiveUps(a) - coreGiveUps(b) || tierOf(a) - tierOf(b) : 0) ||
+      // The wholesaler's listed substitute before others giving up as much (a pack size aside).
+      (ref && !refFull ? coreGiveUps(a) - coreGiveUps(b) || Number(!listed(a)) - Number(!listed(b)) : 0) ||
       givesUp(a).length - givesUp(b).length ||
-      (ref && !refFull ? Number(!listed(a)) - Number(!listed(b)) : 0) ||
       (input.declined?.has(a.primary.p.id) ? 1 : 0) - (input.declined?.has(b.primary.p.id) ? 1 : 0) ||
       lacksPreferred(a) - lacksPreferred(b) ||
       goalKey(a) - goalKey(b) ||

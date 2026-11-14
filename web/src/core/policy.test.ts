@@ -503,3 +503,35 @@ describe("policy: deliverOn, an exact day", () => {
     expect(rule(d, "delivery_deadline").reason).toContain(`not on ${later}, the day the request asked for`);
   });
 });
+
+describe("policy: nutrition rules and label rules (data depth)", () => {
+  const withRules = (rules: NonNullable<Mandate["nutritionRules"]>) => mandate({ nutritionRules: rules });
+
+  it("passes a product whose signed declaration keeps the kitchen's rules", () => {
+    const d = evaluatePolicy(withRules([{ nutrient: "protein", min: 3, categories: ["milk"] }, { nutrient: "sugar", max: 12, categories: ["yoghurt"] }]), draft(small()), ctx());
+    expect(d.outcome).toBe("auto_approve");
+    expect(rule(d, "nutrition_rules").reason).toMatch(/at least 3 g protein/);
+  });
+
+  it("refuses a substitute that breaks a nutrition rule, naming the figure", () => {
+    const q = quote([{ productId: "PK-4001", quantity: 20 }]); // oat drink: 1 g protein per 100 ml
+    const d = evaluatePolicy(withRules([{ nutrient: "protein", min: 3, categories: ["milk", "plant_drink"] }]), draft(q), ctx());
+    expectRejectedBy(d, "nutrition_rules");
+    expect(rule(d, "nutrition_rules").reason).toMatch(/PK-4001 has 1 g protein per 100 ml, under the 3 g the kitchen requires/);
+  });
+
+  it("refuses a product whose maker declares no figure: unknown is not compliant, and no sign-off can lift it", () => {
+    const q = quote([{ productId: "VA-1001", quantity: 20 }]);
+    const stripped = { ...q, lines: q.lines.map(({ nutrition: _n, ...l }) => (void _n, l)) };
+    const d = evaluatePolicy(withRules([{ nutrient: "salt", max: 1 }]), draft(stripped), ctx());
+    expectRejectedBy(d, "nutrition_rules");
+    expect(rule(d, "nutrition_rules").reason).toMatch(/no salt figure.*Unknown is not compliant/);
+  });
+
+  it("checks a required Finnish origin against the stated country of origin", () => {
+    const q = quote([{ productId: "VA-1001", quantity: 20 }]);
+    expectRejectedBy(evaluatePolicy(mandate({ requiredCertificates: ["origin_fi"] }), draft(q), ctx()), "required_certificates");
+    const fi = { ...q, lines: q.lines.map((l) => ({ ...l, countryOfOrigin: "fi" })) };
+    expect(rule(evaluatePolicy(mandate({ requiredCertificates: ["origin_fi"] }), draft(fi), ctx()), "required_certificates").outcome).toBe("pass");
+  });
+});
