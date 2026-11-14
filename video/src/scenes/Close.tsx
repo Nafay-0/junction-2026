@@ -24,9 +24,6 @@ export const Close = () => {
               </BrowserFrame>
             </div>
           </div>
-          <Rise at={T.agent - 20} x={40} y={0} style={{ position: "absolute", left: 1330, top: 380, width: 520, ...display, fontSize: 92, color: C.paper }}>
-            The wholesaler sees it all.
-          </Rise>
           <Rise at={T.stop} x={40} y={0} style={{ position: "absolute", left: 1330, top: 720, ...sans, display: "inline-flex", alignItems: "center", height: 76, padding: "0 34px", borderRadius: 38, background: C.safety, color: C.slab, fontSize: 36, fontWeight: 800 }}>
             Suspend any agent
           </Rise>
@@ -44,13 +41,6 @@ export const Close = () => {
           </Rise>
           <Rise at={T.foot} style={{ marginTop: 56, height: 84, padding: "0 46px", borderRadius: 42, background: C.lime, color: C.ink, display: "flex", alignItems: "center", ...sans, fontSize: 44, fontWeight: 700 }}>
             aimopilot.zeroanomaly.tech
-          </Rise>
-          <Rise at={T.foot + 8} style={{ display: "flex", gap: 14, marginTop: 46 }}>
-            {["MCP", "OpenAPI", "WebAuthn passkeys", "Signed JWS mandates", "W3C verifiable credentials"].map((x) => (
-              <span key={x} style={{ ...sans, height: 52, padding: "0 24px", borderRadius: 26, border: "1.5px solid rgb(255 255 255 / 0.3)", color: "rgb(255 255 255 / 0.86)", display: "flex", alignItems: "center", fontSize: 26, fontWeight: 600 }}>
-                {x}
-              </span>
-            ))}
           </Rise>
           <Rise at={T.foot + 16} style={{ ...sans, fontSize: 28, color: "rgb(255 255 255 / 0.66)", marginTop: 30 }}>
             Built for Valio Aimo at Junction 2026. Demo on synthetic data.

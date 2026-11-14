@@ -1,7 +1,7 @@
 [
   {
     "id": "problem",
-    "text": "AI agents are starting to do the buying. But the webshop was built for people. So who signs for a machine that can order?"
+    "text": "AI agents are starting to do the buying. But the webshop was built for people. So who signs for the machine?"
   },
   {
     "id": "title",
@@ -9,7 +9,7 @@
   },
   {
     "id": "flow",
-    "text": "A kitchen asks for a thousand litres of lactose-free milk by Monday. The agent searches seventeen thousand products, and asks a live price for just three. The usual boxes can't make Monday, so it offers three ranked options. It's over the limit, so a person signs on their phone. One passkey, and it's placed at a fixed price."
+    "text": "A kitchen asks for a thousand litres of lactose-free milk by Monday. The agent searches seventeen thousand products, and prices just three. The usual boxes can't make Monday, so it offers three ranked options. It's over the limit, so a person signs on their phone. One passkey, and it's placed at a fixed price."
   },
   {
     "id": "gate",

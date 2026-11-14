@@ -20,17 +20,19 @@ export type Move = { kind: "through" } | { kind: "pan"; dx: number; dy: number; 
 
 /** The camera's easing: a firm start and a long settle, the way a heavy camera head moves. */
 export const CAM = Easing.bezier(0.55, 0, 0.18, 1);
-const speed = (p: number) => (CAM(Math.min(1, p + 0.01)) - CAM(Math.max(0, p - 0.01))) / 0.02;
+/** A pan travels a whole screen: an even sine in and out keeps its fastest frame gentle. */
+export const PAN = Easing.bezier(0.37, 0, 0.63, 1);
+const speed = (p: number) => (PAN(Math.min(1, p + 0.01)) - PAN(Math.max(0, p - 0.01))) / 0.02;
 
 type PanProps = { dx: number; dy: number; floor?: boolean };
 const Pan = ({ children, presentationDirection, presentationProgress, passedProps }: TransitionPresentationComponentProps<PanProps>) => {
-  const e = CAM(presentationProgress);
+  const e = PAN(presentationProgress);
   const { dx, dy, floor } = passedProps;
   const entering = presentationDirection === "entering";
   const x = entering ? dx * (1 - e) : -dx * e;
   const y = entering ? dy * (1 - e) : -dy * e;
   // A touch of blur only at the fastest frames of the move, along with it: the eye reads it as speed, not softness.
-  const blur = Math.max(0, speed(presentationProgress) - 1.2) * 2.2;
+  const blur = Math.max(0, speed(presentationProgress) - 1) * 4;
   return (
     <AbsoluteFill style={{ transform: `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px)`, filter: blur > 0.3 ? `blur(${blur.toFixed(2)}px)` : undefined }}>
       {children}
@@ -99,7 +101,7 @@ export const worldCamera = (frame: number, moves: { at: number; dur: number; mov
   let s = 1;
   for (const { at, dur, move } of moves) {
     if (frame <= at) break;
-    const e = CAM(Math.min(1, (frame - at) / dur));
+    const e = (move.kind === "pan" ? PAN : CAM)(Math.min(1, (frame - at) / dur));
     if (move.kind === "pan") {
       x -= move.dx * e;
       y -= move.dy * e;

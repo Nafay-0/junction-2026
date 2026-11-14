@@ -58,9 +58,6 @@ export const Aiven = () => {
         <Rise at={6} style={{ position: "absolute", left: 80, top: 56, ...display, fontSize: 104, color: C.paper }}>
           Built on Aiven.
         </Rise>
-        <Rise at={T.all} style={{ position: "absolute", left: 80, top: 196, ...sans, fontSize: 38, color: C.lime, fontWeight: 600 }}>
-          Eight Aiven services. One platform.
-        </Rise>
 
         <svg width={1920} height={1080} style={{ position: "absolute", inset: 0 }}>
           <Wire pts={W.pg} at={T.pg} every={66} />

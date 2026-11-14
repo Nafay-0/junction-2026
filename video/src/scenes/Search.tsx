@@ -1,5 +1,5 @@
 import { AbsoluteFill, interpolate, useCurrentFrame } from "remotion";
-import { clamp, EASE, EASE_IO, L, M, prog, Q, Rise } from "../anim";
+import { clamp, Count, EASE, EASE_IO, fi, L, M, prog, Q, Rise } from "../anim";
 import { C, display, sans, SHADOW } from "../theme";
 import { Ground } from "../ui";
 import { cue } from "../vo";
@@ -51,9 +51,10 @@ const Machine = () => {
         or: &quot;not sold here&quot;
       </div>
       <div style={{ position: "absolute", left: 60, top: 916, display: "flex", alignItems: "baseline", gap: 22, opacity: appear }}>
-        <span style={{ ...display, fontSize: 120, color: C.lime, fontVariantNumeric: "tabular-nums" }}>17 546</span>
-        <span style={{ ...display, fontSize: 68, color: C.paper }}>products.</span>
-        <span style={{ ...display, fontSize: 68, color: C.paper, opacity: prog(frame, T.fifty, M) }}>Fifty recalled.</span>
+        <span style={{ ...display, fontSize: 120, color: C.lime, fontVariantNumeric: "tabular-nums" }}>
+          <Count to={17546} at={4} dur={40} format={fi} />
+        </span>
+        <span style={{ ...display, fontSize: 68, color: C.paper }}>products</span>
       </div>
     </>
   );
@@ -78,9 +79,6 @@ export const Search = () => {
   return (
     <AbsoluteFill>
       <Ground>
-        <Rise at={8} style={{ position: "absolute", left: 60, top: 70, ...display, fontSize: 104, color: C.paper }}>
-          The right product, first.
-        </Rise>
 
         <div style={{ position: "absolute", left: 0, top: 0, width: 1920, height: 1080, transformOrigin: "50% 50%", scale: String(1 + 0.05 * up), opacity: 1 - up, willChange: "transform" }}>
           <Machine />

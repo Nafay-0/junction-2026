@@ -68,12 +68,12 @@ export const T = {
     c("The agent", 2),
     c("The agent", 12),
     c("searches", 6),
-    c("asks a live"),
+    c("prices just"),
     c("just three", 14),
   ],
   funnel: c("Monday", 28),
   count: c("seventeen", -16),
-  narrow: c("and asks", -4),
+  narrow: c("and prices", -4),
   three: c("just three", -6),
   reply: c("The usual boxes", -2),
   options: [c("offers"), c("offers", 11), c("offers", 22)],
@@ -1250,21 +1250,18 @@ export const Flow = () => {
           <Funnel />
         </Side>
         <Side at={T.reply + 4} exit={T.options[0] - Q}>
-          <div style={{ ...display, fontSize: 96, color: C.paper }}>
-            It says the exception first.
-          </div>
           <div
             style={{
               ...sans,
               display: "inline-flex",
               alignItems: "center",
-              height: 60,
-              padding: "0 26px",
-              borderRadius: 30,
-              marginTop: 34,
+              height: 88,
+              padding: "0 40px",
+              borderRadius: 44,
+              marginTop: 0,
               background: C.safety,
               color: C.slab,
-              fontSize: 30,
+              fontSize: 44,
               fontWeight: 700,
             }}
           >
@@ -1294,47 +1291,6 @@ export const Flow = () => {
             </PhoneFrame>
           </div>
         </div>
-        <Rise
-          at={T.phone + 14}
-          exit={T.ok}
-          x={30}
-          y={0}
-          style={{ position: "absolute", left: 1570, top: 380, width: 300 }}
-        >
-          <div style={{ ...display, fontSize: 60, color: C.paper }}>
-            A named person signs.
-          </div>
-          <div
-            style={{
-              ...sans,
-              fontSize: 32,
-              lineHeight: 1.3,
-              color: "rgb(255 255 255 / 0.8)",
-              marginTop: 20,
-            }}
-          >
-            Their phone. Their passkey.
-          </div>
-        </Rise>
-        <Rise
-          at={T.ok + 30}
-          style={{ position: "absolute", left: 1062, top: 400, width: 320 }}
-        >
-          <div style={{ ...display, fontSize: 64, color: C.lime }}>
-            Signed and placed.
-          </div>
-          <div
-            style={{
-              ...sans,
-              fontSize: 32,
-              lineHeight: 1.3,
-              color: "rgb(255 255 255 / 0.8)",
-              marginTop: 18,
-            }}
-          >
-            At the quoted price.
-          </div>
-        </Rise>
       </Ground>
     </AbsoluteFill>
   );

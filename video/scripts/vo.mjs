@@ -21,8 +21,8 @@ if (!key && !postOnly) throw new Error("ELEVENLABS_API_KEY is not set (web/.env.
 const TEMPO = Number(process.env.VO_TEMPO ?? 1.1);
 
 export const MODEL = process.env.VO_MODEL ?? "eleven_v4_turbo";
-export const VOICE = process.env.VO_VOICE ?? "JBFqnCBsd6RMkjVDRZzb"; // George - Warm, Captivating Storyteller
-const SETTINGS = { stability: Number(process.env.VO_STABILITY ?? 0.5), similarity_boost: 0.8, style: Number(process.env.VO_STYLE ?? 0.3), speed: Number(process.env.VO_SPEED ?? 1), use_speaker_boost: true };
+export const VOICE = process.env.VO_VOICE ?? "pFZP5JQG7iQjIQuC4Bku"; // Lily - Velvety Actress (British), the user's choice
+const SETTINGS = { stability: Number(process.env.VO_STABILITY ?? 0.35), similarity_boost: 0.8, style: Number(process.env.VO_STYLE ?? 0.6), speed: Number(process.env.VO_SPEED ?? 1), use_speaker_boost: true };
 const tryout = !!process.env.VO_OUT;
 const outDir = join(root, "public/vo", process.env.VO_OUT ?? "raw");
 mkdirSync(outDir, { recursive: true });

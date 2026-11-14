@@ -1,6 +1,6 @@
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import { clamp, EASE, EASE_IO, prog } from "../anim";
-import { CAM } from "../camera";
+import { PAN } from "../camera";
 import { C, display, sans, SHADOW } from "../theme";
 import { cue } from "../vo";
 import { AGENT_W, AgentNode } from "../world";
@@ -69,8 +69,8 @@ export const Memory = () => {
   const inP = interpolate(t, [T.req, T.wobble], [0, 1], { ...clamp, easing: EASE });
   const pass = interpolate(t, [T.pass, T.pass + 40], [0, 1], { ...clamp, easing: EASE_IO });
   // As the camera moves on to the search, the corrected order rides with it and dissolves into the catalogue.
-  const exit = interpolate(frame, [durationInFrames - 18, durationInFrames], [0, 1], clamp);
-  const ride = CAM(exit);
+  const exit = interpolate(frame, [durationInFrames - 30, durationInFrames], [0, 1], clamp);
+  const ride = PAN(exit);
   const wob = t >= T.wobble && t < T.wobble + 26 ? Math.sin((t - T.wobble) * 1.3) * 5 * (1 - (t - T.wobble) / 26) : 0;
   const fixed = prog(t, T.fix, 12);
   const cardX = -540 + (470 + 540) * inP + 560 * pass + 2260 * ride;
