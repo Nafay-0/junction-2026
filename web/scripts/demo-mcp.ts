@@ -8,7 +8,7 @@
  *   pnpm demo:mcp --headline                 the headline only, without the four exception scenarios
  *
  * The story:
- *   1  the hotel's purchasing manager joins on her phone (a passkey): AimoPilot makes the hotel's kitchen, with her as
+ *   1  the hotel's purchasing manager joins on their phone (a passkey): AimoPilot makes the hotel's kitchen, with them as
  *      the person who signs above the agent's limit, and hands the hotel's agent one address (the connector)
  *   2  the agent discovers the open interface (RFC 9727 catalogue), connects over MCP, lists the tools, reads its mandate
  *   3  "I need 1,000 litres of lactose-free milk by Monday. Find an option that meets our requirements based on price
@@ -16,7 +16,7 @@
  *   4  submit_need: AimoPilot's checks, at most two questions (asked through the client's form), good/better/best options
  *   5  choose_option (a signed fixed price) and place_order: over the agent's €500 limit, so it waits for their sign-off
  *   6  the agent tries to misbehave (order again, scan the catalogue live): the gate refuses each with its rule
- *   7  she signs on their phone with their passkey; await_decision lets the agent learn the outcome the moment they do
+ *   7  they sign on their phone with their passkey; await_decision lets the agent learn the outcome the moment they do
  *   8  the receipt verifies with the wholesaler's published keys; explain is the audit trail both sides read
  * Then the partner's exception scenarios, as the same outside agent (a second hotel, so the first's allowance is its own):
  *   A  a stock-out with a substitute (find_alternatives: good, better, best with trade-offs and the gate's preview)
