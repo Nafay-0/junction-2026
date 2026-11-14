@@ -62,10 +62,11 @@ BERYL_SERVER_URL=https://beryl.zeroanomaly.tech pnpm desktop:release
 gcloud storage cp desktop/release/downloads/* gs://beryl-exa-downloads/ --cache-control="no-cache, max-age=0"
 ```
 
-The address is baked into the app. The installers in the bucket open `https://beryl.zeroanomaly.tech` (last built and uploaded 14 Nov, 19:48, with the fix for the approval ring). The upload does not restart the server. The app's browser engine is inside the installer, so a change under `web/src/lib/browser/` or `web/desktop/` reaches people only through a new installer; the interface comes from the server and is new with every deploy.
+The address is baked into the app. The installers in the bucket open `https://beryl.zeroanomaly.tech` (last built and uploaded 14 Nov, 20:03, with the fix for the approval ring). The upload does not restart the server. The app's browser engine is inside the installer, so a change under `web/src/lib/browser/` or `web/desktop/` reaches people only through a new installer; the interface comes from the server and is new with every deploy.
 
 ## Email and scheduled jobs
 
+- Deployed on 14 Nov at 20:10 (revision `beryl-00003-fg6`, image `web:live-1114-2005`, commit `565fc23`): jobs, notifications, chat addresses, the new landing page. The service now has the secret `RESEND_API_KEY` and `BERYL_SITE_URL=https://beryl.zeroanomaly.tech`; migration 0002 was applied on start.
 - Emails (notifications, job results) go out through Resend from `notifications@beryl.zeroanomaly.tech`; the domain is verified there. The server needs `RESEND_API_KEY` as a secret, and `BERYL_SITE_URL=https://beryl.zeroanomaly.tech` so links in emails point at the site. `/api/health` says `"email": true` when the key is there.
 - Jobs are started by a clock inside the server, so they run only while the one instance is up. That is already how the service is set (always on, exactly one instance). A job that came due during a deploy runs once the new revision is up; a run that was in progress when the server stopped is marked failed.
 - Migration `0002_jobs_and_notifications` adds the tables. It is applied by the server when it starts, like the others.
