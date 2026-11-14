@@ -23,7 +23,8 @@ import { admission } from "./ops/onsite";
 import { suspensions } from "./ops/suspensions";
 import { recallLayer } from "./radar/gate";
 import { radar } from "./radar/registry";
-import { alternativesSource } from "./knowledge/service";
+import { alternativesSource, getKnowledgeMap } from "./knowledge/service";
+import { registerNatureProfiles } from "@/core/catalog/nature";
 import { finderFor, warmSmartSearch } from "./search/service";
 import { SandboxService } from "./sandboxes";
 import { AccountService } from "./accounts/service";
@@ -141,6 +142,15 @@ async function buildRuntime(): Promise<Runtime> {
   });
   recall.attach(dock);
   if (catalogSource.kind === "valio") warmSmartSearch(catalog); // smart search's index, built in the background (server/search)
+  // Fresh, whole produce without allergen data counts by its nature (core/catalog/nature.ts), once the map is loaded.
+  if (catalogSource.kind === "valio" && envValue("DOCK_KNOWLEDGE") !== "off" && !process.env.VITEST) {
+    void getKnowledgeMap()
+      .then((map) => map && registerNatureProfiles((id) => {
+        const pr = map.profile(id);
+        return pr ? { family: pr.family, form: pr.form, state: pr.state, kindLabel: pr.kindLabel } : undefined;
+      }))
+      .catch(() => {});
+  }
   // Suspensions outlive a restart: an agent staff stopped before this process started is still stopped.
   await suspensions(dock).restore(stores.records("suspension"));
   const sandboxes = new SandboxService({ dock, registry: trustedIssuers, passkeys, limits: sandboxLimits, kitchens: stores.kitchens, products: async () => products, store: stores.sandboxStore });

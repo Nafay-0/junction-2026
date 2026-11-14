@@ -1,3 +1,5 @@
+import { Pool } from "undici";
+
 /**
  * The two Google calls smart search makes, over plain fetch with a deadline: one query embedding
  * (gemini-embedding-2) and one Decisions request (gemini-decision-1). Both read GEMINI_API_KEY from the environment
@@ -10,7 +12,7 @@ export const DECISION_MODEL = "gemini-decision-1";
 export const EMBED_USD_PER_M = 0.2;
 export const DECISION_USD_PER_M = 0.1;
 
-const BASE = "https://generativelanguage.googleapis.com/v1beta";
+const BASE = "/v1beta";
 
 export class GeminiError extends Error {
   constructor(
@@ -28,25 +30,49 @@ export function geminiKey(): string | undefined {
   return v && v.trim() ? v.trim() : undefined;
 }
 
-async function post<T>(url: string, body: unknown, timeoutMs: number, signal?: AbortSignal): Promise<T> {
+// ---------- transport: a warm connection pool ----------
+
+/**
+ * Measured on 14 Nov (scratch experiment, 10 rounds each): the Decisions API's own time varies from about 230 to
+ * over 800 ms for the same request; on top of that a request on a fresh connection pays the TLS handshake (fetch's
+ * default pool drops sockets idle for 4 s), and splitting 50 questions into 2 or 4 parallel requests made the median
+ * no better and the 90th percentile worse (the slowest of several requests decides). HTTP/2 multiplexing was slower
+ * still for parallel requests. So: one request per judgement, over a pool that keeps its sockets for five minutes
+ * and is opened at boot (warmGemini), and one hedged duplicate for a request that is slow (judge.ts).
+ */
+const ORIGIN = "https://generativelanguage.googleapis.com";
+const gs = globalThis as typeof globalThis & { __dockGeminiPool?: Pool };
+const pool = () => (gs.__dockGeminiPool ??= new Pool(ORIGIN, { connections: 48, keepAliveTimeout: 300_000, keepAliveMaxTimeout: 600_000, pipelining: 1 }));
+
+/** Open a connection now (at boot), so the first search does not pay the TLS handshake. Never throws. */
+export function warmGemini(): void {
+  const key = geminiKey();
+  if (!key) return;
+  void pool()
+    .request({ path: `/v1beta/models/${DECISION_MODEL}`, method: "GET", headers: { "x-goog-api-key": key } })
+    .then((r) => r.body.dump())
+    .catch(() => {});
+}
+
+async function post<T>(path: string, body: unknown, timeoutMs: number, signal?: AbortSignal): Promise<T> {
   const key = geminiKey();
   if (!key) throw new GeminiError("no_key", "GEMINI_API_KEY is not set");
   const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(new GeminiError("timeout", `no answer within ${timeoutMs} ms`)), timeoutMs);
-  const onAbort = () => ctl.abort(signal?.reason);
+  const timer = setTimeout(() => ctl.abort(new GeminiError("timeout", `no answer within ${Math.round(timeoutMs)} ms`)), timeoutMs);
+  const onAbort = () => ctl.abort(new GeminiError("timeout", "abandoned"));
   signal?.addEventListener("abort", onAbort, { once: true });
   try {
-    const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": key }, body: JSON.stringify(body), signal: ctl.signal });
-    const text = await res.text();
-    if (!res.ok) {
+    const res = await pool().request({ path, method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": key }, body: JSON.stringify(body), signal: ctl.signal });
+    const text = await res.body.text();
+    if (res.statusCode < 200 || res.statusCode >= 300) {
       let msg = text.slice(0, 300);
       try {
         msg = (JSON.parse(text) as { error?: { message?: string } }).error?.message?.slice(0, 300) ?? msg;
       } catch {
         // not JSON
       }
-      const code = res.status === 429 ? "quota" : res.status === 400 && /safety|blocked|prohibited/i.test(msg) ? "refused" : "http";
-      throw new GeminiError(code, `HTTP ${res.status}: ${msg}`, res.status);
+      const code = res.statusCode === 429 ? "quota" : res.statusCode === 400 && /safety|blocked|prohibited/i.test(msg) ? "refused" : "http";
+      throw new GeminiError(code, `HTTP ${res.statusCode}: ${msg}`, res.statusCode);
     }
     return JSON.parse(text) as T;
   } catch (err) {

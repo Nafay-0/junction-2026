@@ -9,6 +9,7 @@
  * Prints ids and counts only, never product names: product text is partner data.
  */
 import type { IndexedProduct } from "@/core/catalog/partner";
+import { registerNatureProfiles } from "@/core/catalog/nature";
 import { allergenEvidence } from "@/core/catalog/search";
 import { loadKnowledgeFile, resolveKnowledgeFile } from "@/server/knowledge/store";
 import { loadCatalogIndex } from "@/server/valio/index-store";
@@ -66,6 +67,14 @@ export async function loadTruth() {
   const src = await resolveKnowledgeFile();
   if (src.from === "none") throw new Error(`no knowledge map: ${src.reason}`);
   const data = loadKnowledgeFile(src.file);
+  // As the server does: fresh, whole produce without allergen data counts by its nature (core/catalog/nature.ts).
+  const kindOf = new Map(data.kinds.map((k) => [k.key, k]));
+  const prof = new Map(data.profiles.map((p) => [p.id, p]));
+  registerNatureProfiles((id) => {
+    const p = prof.get(id);
+    const k = p && kindOf.get(p.kind);
+    return p && k ? { family: k.family, form: p.form, state: p.state, kindLabel: k.label } : undefined;
+  });
   const slugOfKind = new Map(data.kinds.map((k) => [k.key, k.slug]));
   const slugById = new Map<string, string>();
   for (const pr of data.profiles) {

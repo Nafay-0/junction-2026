@@ -24,17 +24,43 @@ the crash world's own catalogue and every test, it is the catalogue's own lexica
    - `vectors`: the query's embedding (gemini-embedding-2, 768 dimensions) against one vector per product built
      once from its names, shelf and knowledge-map facts (`pnpm search:vectors`);
    - `code`: a product id said outright (then it is a lookup: no embedding, no judge).
-4. **The judge** (`judge.ts`): one Decisions API call (gemini-decision-1) over the 50 survivors, split into two
-   parallel requests of 25 (questions are independent), a slow request sent once more after 550 ms (hedged), all
-   within 800 ms. Each product is `exact`, `variant`, `standin` or `no`, with a confidence. Late, refused, over
+4. **The judge** (`judge.ts`): one Decisions API call (gemini-decision-1) over the 50 survivors, over a connection
+   pool kept warm (a fresh TLS connection cost 100 to 250 ms; splitting into parallel requests made the tail worse),
+   a request still unanswered at 450 ms sent once more (hedged), all within 800 ms. Each product is `exact`, `variant`, `standin` or `no`, with a confidence. Late, refused, over
    quota or switched off: the fused ranking answers, and the result says which path did (`path`, `reason`).
-5. **Order** in code: matches (exact and variant), then stand-ins, never "no". Among matches, the judge's score plus
+5. **Code checks the judge**: a product the judge calls the thing itself is relabelled a stand-in when it belongs to
+   another family than the words name but can do its job (a vegetable spread for "vegan butter"), or names another
+   animal or fish than the words do (chicken for "turkey mince").
+6. **Order** in code: matches (exact and variant), then stand-ins, never "no". Among matches, the judge's score plus
    the brand and the pack size the words named (checked from data). `onlyStandins` when nothing is the kind asked
    (the thread says "instead"), `notSold` when nothing in the assortment is, `unsure` when the top answer is weak.
 
 The intake asks for recall only (no embedding, no judge): the request reader already chose the family, and options
 must not wait. It adds the family's best text matches that a 100-product category list cuts off, prices the top
 three first, and looks a family up by recall before refusing words no product name carries.
+
+## Fresh produce and allergens
+
+"Unknown is never safe" stays the rule, with one narrow exception (`core/catalog/nature.ts`): a product the partner
+files under fresh produce (174xx), that the knowledge map profiles as a vegetable, fruit, herb or potato, whole and
+fresh, not frozen, with nothing in its names about cutting, peeling, mixing, cooking or coating, contains what it
+is itself (celeriac is celery) and nothing else. Its evidence reads "by its nature, not declared by the maker" on
+the product card, in the gate's record and in the signed quote line (`allergensByNature`). A mandate with
+`allergenEvidence: "declared"` keeps the strict rule. Plain lexical search, OpenSearch, alternatives and the crash
+world stay strict.
+
+## Evaluation (14 Nov, 189 requests, fresh)
+
+| configuration | right first | in top 3 | recall | dropped | stand-in as match | "not sold" | p50 ms | p90 ms | US cents |
+|---|---|---|---|---|---|---|---|---|---|
+| keywords (before) | 40% | 44% | 61% | 4 | 1 | 4/11 | 28 | 54 | 0 |
+| semantic only | 75% | 87% | 98% | 0 | 4 | 0/11 | 342 | 409 | 0.0002 |
+| hybrid recall, no judge | 67% | 74% | 100% | 0 | 1 | 0/11 | 341 | 407 | 0.0002 |
+| keyword recall + judge | 80% | 81% | 81% | 0 | 0 | 11/11 | 358 | 632 | 0.046 |
+| semantic recall + judge | 97% | 98% | 100% | 0 | 0 | 11/11 | 678 | 884 | 0.064 |
+| **hybrid recall + judge, 50 (shipped)** | **97%** | **97%** | **100%** | **0** | **0** | **11/11** | **680** | **796** | **0.063** |
+
+Times are end to end, including the query embedding. The judge missed its deadline once in 185 searches.
 
 ## Cost, limits, telemetry
 

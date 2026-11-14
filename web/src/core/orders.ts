@@ -555,6 +555,7 @@ export function masterDataRefusal(mandate: Mandate, lines: { productId: string; 
       attributes: p.attributes,
       allergens: p.allergens,
       ...(p.allergenInfo ? { allergensDeclared: p.allergenInfo.declared } : {}),
+      ...(p.allergenInfo?.byNature ? { allergensByNature: p.allergenInfo.byNature } : {}),
       certificates: p.certificates,
       quantity: Math.max(1, Math.round(l.quantity)),
       unitPriceCents: 0,

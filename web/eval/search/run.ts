@@ -29,7 +29,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { generateText, Output } from "ai";
 import { z } from "zod";
-import { LexicalSearch } from "@/core/catalog/search";
+import { LexicalSearch, allergenEvidence } from "@/core/catalog/search";
 import type { IndexedProduct } from "@/core/catalog/partner";
 import { createModel } from "@/server/agent/models";
 import { costOf, tokensFromUsage, priceOf } from "@/server/agent/pricing";
@@ -44,7 +44,7 @@ import { loadVectorsFile, resolveVectorsFile } from "@/server/search/vectors";
 import { loadCatalogIndex } from "@/server/valio/index-store";
 import { loadLocalEnv } from "../../scripts/lib/env";
 import { SEARCH_CASES, type SearchCase } from "./cases";
-import { isRight, isStandin } from "./check-cases";
+import { isRight, isStandin, loadTruth } from "./check-cases";
 
 const argv = process.argv.slice(2);
 const flag = (n: string) => argv.includes(`--${n}`);
@@ -92,6 +92,7 @@ async function main() {
   const vsrc = await resolveVectorsFile();
   if (vsrc.from === "none") throw new Error(vsrc.reason);
   const vectors = loadVectorsFile(vsrc.file);
+  await loadTruth(); // registers the map's profiles for allergens by nature, as the server does
   const index = new SearchIndex(products, map, vectors);
   const slugOfKind = new Map(kdata.kinds.map((k) => [k.key, k.slug]));
   const slugById = new Map(kdata.profiles.map((p) => [p.id, slugOfKind.get(p.kind)]));
@@ -235,7 +236,9 @@ async function main() {
   // ---------- score ----------
   const right = (c: SearchCase, id: string) => isRight(c, byId.get(id)!, kindSlugOf);
   const stand = (c: SearchCase, id: string) => isStandin(c, byId.get(id)!, kindSlugOf);
-  const violates = (c: SearchCase, p: IndexedProduct) => (c.claims ?? []).some((x) => !p.claims.includes(x)) || (c.allergenFree ?? []).some((a) => p.allergens.contains.includes(a) || p.allergens.mayContain.includes(a) || !p.allergens.declared);
+  // A stated claim missing, or a forbidden allergen not ruled out (contains, may contain, or no data and not fresh
+  // whole produce by its nature: core/catalog/nature.ts, the server's rule).
+  const violates = (c: SearchCase, p: IndexedProduct) => (c.claims ?? []).some((x) => !p.claims.includes(x)) || (c.allergenFree ?? []).some((a) => ["contains", "may_contain", "unknown"].includes(allergenEvidence(p, a)));
   type Score = { n: number; top1: number; top3: number; recall: number; dropped: number; standinAsMatch: number; notSold: number; notSoldN: number; ms: number[]; cost: number[]; judged: number; fallback: number };
   const score = (rs: Row[]): Score => {
     const s: Score = { n: 0, top1: 0, top3: 0, recall: 0, dropped: 0, standinAsMatch: 0, notSold: 0, notSoldN: 0, ms: [], cost: [], judged: 0, fallback: 0 };

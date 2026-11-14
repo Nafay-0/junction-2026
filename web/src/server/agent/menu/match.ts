@@ -40,7 +40,9 @@ export function menuCatalogOf(c: InMemoryCatalog | ValioCatalog): MenuCatalog {
         const smart = await smartSearchFor(v);
         if (!smart) return undefined;
         const terms = [...new Set(ing.searchTerms.slice(0, 3).filter((t) => fold(t) !== fold(ing.name)))];
-        const r = await smart.find({ text: [ing.name, ...terms].join(" / "), need: { itemText: `${ing.name}${ing.form && ing.form !== "any" ? ` (${ing.form.replace(/_/g, " ")})` : ""}, ${ing.role}` }, limit });
+        // Recall by the ingredient's name and its other-language terms; the name is the item; the form and the role
+        // tell the judge what it is for (they are not searched for: "salmon soup" would find soups).
+        const r = await smart.find({ text: [ing.name, ...terms].join(" / "), need: { itemText: ing.name, context: `${ing.form && ing.form !== "any" ? `${ing.form.replace(/_/g, " ")}, ` : ""}${ing.role}` }, limit });
         const hits = r.hits.map((h, i) => ({ product: h.product, score: h.label ? Math.round(LABEL_SCORE[h.label] * (0.7 + 0.3 * (h.confidence ?? 0.5)) * 1000) / 1000 : Math.round((1 / (1 + i * 0.1)) * 1000) / 1000, ...(h.label ? { label: h.label } : {}) }));
         return { hits, judged: r.path === "judge" };
       },

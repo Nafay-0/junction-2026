@@ -20,11 +20,13 @@ export type MatchLabel = "exact" | "variant" | "standin" | "other";
 export type FindRequest = {
   /** The buyer's own words. */
   text: string;
-  /** What the request reader made of them, when there was a reader: the item's words, the family, claims. */
-  need?: { itemText?: string; category?: string };
+  /** What the request reader made of them, when there was a reader: the item's words, the family; `context` (a dish, a role, a form) is for the relevance judge only, not for recall. */
+  need?: { itemText?: string; category?: string; context?: string };
   /** Claims every hit must carry (from the structured need or the page's filters). Added to what the words say. */
   requiredClaims?: string[];
   forbiddenAllergens?: string[];
+  /** Rule out a forbidden allergen by the maker's data only (the mandate's allergenEvidence "declared"): no fresh produce by its nature. */
+  declaredAllergensOnly?: boolean;
   /** A Dock category slug or partner code: only this family. */
   category?: string;
   /** Only among these products (a family already narrowed by the core's rules). */

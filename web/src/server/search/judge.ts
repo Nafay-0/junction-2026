@@ -18,7 +18,7 @@ export type JudgeInput = {
 
 export type Verdict = { label: MatchLabel; confidence: number; score: number };
 
-export type JudgeOutput = { verdicts: Map<string, Verdict>; tokens: number; costUsd: number; ms: number; model: string };
+export type JudgeOutput = { verdicts: Map<string, Verdict>; tokens: number; costUsd: number; ms: number; model: string; hedged?: number };
 
 export interface RelevanceJudge {
   readonly name: string;
@@ -58,16 +58,16 @@ export function judgeContext(input: JudgeInput): string {
 const key = (id: string) => `p_${id.replace(/[^A-Za-z0-9_-]/g, "_")}`;
 
 export type DecisionsJudgeOptions = {
-  /** Candidates per request: more than this are judged in parallel requests (default 25; questions are independent). */
+  /** Candidates per request: more than this are split into parallel requests (default 60: one request; splitting made the tail worse, gemini.ts). */
   perRequest?: number;
-  /** A request still unanswered after this long is sent again, and the first answer wins (default 550 ms; 0 = never). */
+  /** A request still unanswered after this long is sent again, and the first answer wins (default 450 ms; 0 = never). */
   hedgeMs?: number;
 };
 
 /**
- * gemini-decision-1 through the Decisions API. The candidates are split into parallel requests of about 25 (each
- * question is answered on its own, so a split changes no answer and roughly halves the time), and a request that is
- * slow is sent a second time (hedged): the first answer wins, the other is abandoned and its tokens are counted.
+ * gemini-decision-1 through the Decisions API: one request for all candidates (each question is answered on its own),
+ * and a request still unanswered at 450 ms is sent a second time (hedged): the first answer wins, the other is
+ * abandoned (its tokens are billed but not reported back, so the cost shown can be under the bill for hedged calls).
  */
 export class DecisionsJudge implements RelevanceJudge {
   readonly name = "gemini-decision-1";
@@ -76,11 +76,12 @@ export class DecisionsJudge implements RelevanceJudge {
   async judge(input: JudgeInput, timeoutMs: number, signal?: AbortSignal): Promise<JudgeOutput> {
     const t0 = performance.now();
     const ctx = judgeContext(input);
-    const per = Math.max(5, this.opts.perRequest ?? 25);
+    const per = Math.max(5, this.opts.perRequest ?? 60);
     const n = Math.max(1, Math.round(input.candidates.length / per));
     const parts: JudgeInput["candidates"][] = Array.from({ length: n }, (_, i) => input.candidates.slice(Math.floor((i * input.candidates.length) / n), Math.floor(((i + 1) * input.candidates.length) / n)));
-    const hedge = this.opts.hedgeMs ?? 550;
+    const hedge = this.opts.hedgeMs ?? 450;
     let tokens = 0;
+    let hedges = 0;
     const ask = (part: JudgeInput["candidates"]) => {
       const questions: Record<string, DecisionQuestion> = {};
       for (const c of part) questions[key(c.id)] = { type: "score", instructions: `Product: ${c.line}`, criteria: LEVEL_NAMES };
@@ -90,9 +91,11 @@ export class DecisionsJudge implements RelevanceJudge {
       signal?.addEventListener("abort", onAbort, { once: true });
       const one = () => decide(ctx, questions, left(), ctl.signal).then((r) => ((tokens += r.tokens), r));
       const first = one();
-      const raced = hedge > 0 && hedge < timeoutMs ? Promise.any([first, new Promise<void>((res) => setTimeout(res, hedge)).then(() => (ctl.signal.aborted ? first : one()))]) : first;
+      let hedged = false;
+      const raced = hedge > 0 && hedge < timeoutMs ? Promise.any([first, new Promise<void>((res) => setTimeout(res, hedge)).then(() => (ctl.signal.aborted ? first : ((hedged = true), one())))]) : first;
       return raced.then(
-        (r) => (ctl.abort(), signal?.removeEventListener("abort", onAbort), r),
+        // A hedged duplicate is billed too: counted at the winner's size.
+        (r) => (ctl.abort(), signal?.removeEventListener("abort", onAbort), hedged && (tokens += r.tokens), (hedges += hedged ? 1 : 0), r),
         (e: unknown) => {
           ctl.abort();
           signal?.removeEventListener("abort", onAbort);
@@ -110,7 +113,7 @@ export class DecisionsJudge implements RelevanceJudge {
       for (let i = 1; i < LEVELS.length; i++) if ((probs[String(i)] ?? 0) > (probs[String(best)] ?? 0)) best = i;
       verdicts.set(c.id, { label: LEVELS[best], confidence: Math.round((a.confidence ?? probs[String(best)] ?? 0) * 1000) / 1000, score: Math.round((a.score ?? best) * 1000) / 1000 });
     }
-    return { verdicts, tokens, costUsd: (tokens * DECISION_USD_PER_M) / 1e6, ms: Math.round(performance.now() - t0), model: this.name };
+    return { verdicts, tokens, costUsd: (tokens * DECISION_USD_PER_M) / 1e6, ms: Math.round(performance.now() - t0), model: this.name, hedged: hedges };
   }
 }
 

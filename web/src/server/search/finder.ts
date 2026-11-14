@@ -83,7 +83,7 @@ export class SmartSearch implements ProductFinder {
     const cfg: SmartConfig = { ...this.config, ...(override ?? {}), signals: { ...this.config.signals, ...(override?.signals ?? {}) } };
     if (req.noJudge) cfg.judge = false;
     if (req.noVectors) cfg.signals = { ...cfg.signals, vectors: false };
-    const k = JSON.stringify([req.text, req.need?.itemText, req.requiredClaims, req.forbiddenAllergens, req.category, req.ids?.length ? req.ids.slice().sort().join(",") : "", req.limit, cfg]);
+    const k = JSON.stringify([req.text, req.need?.itemText, req.need?.context, req.requiredClaims, req.forbiddenAllergens, req.declaredAllergensOnly, req.category, req.ids?.length ? req.ids.slice().sort().join(",") : "", req.limit, cfg]);
     const now = (this.deps.now ?? Date.now)();
     const hit = this.cache.get(k);
     if (hit && now - hit.at < 120_000) return hit.p;
@@ -99,7 +99,7 @@ export class SmartSearch implements ProductFinder {
     const ix = this.index;
     const u = ix.understand(req.text, { claims: req.requiredClaims, forbiddenAllergens: req.forbiddenAllergens, itemText: req.need?.itemText });
     const category = req.category ?? req.need?.category;
-    const filter = ix.hardFilter(u, { ...(category ? { category } : {}), ...(req.ids ? { ids: req.ids } : {}) });
+    const filter = ix.hardFilter(u, { ...(category ? { category } : {}), ...(req.ids ? { ids: req.ids } : {}), ...(req.declaredAllergensOnly ? { declaredOnly: true } : {}) });
     const notes = [...u.notes];
     let tokens = 0;
     let costUsd = 0;
@@ -146,13 +146,24 @@ export class SmartSearch implements ProductFinder {
         const out = await this.deps.judge.judge(
           {
             text: req.text,
-            ...(req.need?.itemText ? { itemText: req.need.itemText } : {}),
+            ...(req.need?.itemText || req.need?.context ? { itemText: [req.need?.itemText ?? req.text, req.need?.context].filter(Boolean).join(", ") } : {}),
             enforced: [...u.claims.map((c) => c.replace(/_/g, "-")), ...u.forbiddenAllergens.map((a) => `no ${a}`)],
             candidates: candidates.map((c) => ({ id: c.id, line: judgeLine(products.get(c.id)!, ix.map) })),
           },
           cfg.judgeTimeoutMs,
         );
         verdicts = out.verdicts;
+        // A product of another family than the words name, or of another animal, that the judge called the thing itself
+        // (a vegetable spread for "vegan butter", chicken for "turkey mince"): a stand-in by code, never the match.
+        const named = ix.namedFamilies(req.need?.itemText ? ix.understand(req.need.itemText) : u);
+        let relabelled = 0;
+        for (const [id, v] of verdicts) {
+          if ((v.label === "exact" || v.label === "variant") && (ix.isStandinFamily(id, named, u) || ix.isOtherSpecies(id, u))) {
+            verdicts.set(id, { ...v, label: "standin" });
+            relabelled++;
+          }
+        }
+        if (relabelled) notes.push(`${relabelled} product${relabelled > 1 ? "s" : ""} of another kind than the words name shown as stand-ins`);
         judgeMs = out.ms;
         tokens += out.tokens;
         costUsd += out.costUsd;

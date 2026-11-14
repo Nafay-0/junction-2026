@@ -554,7 +554,16 @@ export type ProductsCard = CardBase & {
 /** One product's facts, from master data (prices only once it is on the order sheet). */
 export type ProductCard = CardBase & {
   type: "product";
-  product: ProductTile & { certificates: string[]; allergensDeclared: boolean; origin?: string; co2KgPerUnit: number | null; reliability: number | null; gtin?: string };
+  product: ProductTile & {
+    certificates: string[];
+    allergensDeclared: boolean;
+    /** No allergen data from the maker, but fresh whole produce: what it is, "by its nature, not declared by the maker". */
+    allergensByNature?: string;
+    origin?: string;
+    co2KgPerUnit: number | null;
+    reliability: number | null;
+    gtin?: string;
+  };
 };
 
 /** The kitchen's recurring orders, as the history shows them (no separate store: plain code over the order history). */

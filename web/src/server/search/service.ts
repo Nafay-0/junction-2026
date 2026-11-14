@@ -4,7 +4,7 @@ import type { IndexedProduct } from "@/core/catalog/partner";
 import { admitSearchCall, recordLlmSpend } from "@/server/limits";
 import { getKnowledgeMap } from "@/server/knowledge/service";
 import { SmartSearch, type SearchCall, type SmartConfig } from "./finder";
-import { EMBED_MODEL, embedTexts, geminiKey, queryPrompt } from "./gemini";
+import { EMBED_MODEL, embedTexts, geminiKey, queryPrompt, warmGemini } from "./gemini";
 import { DecisionsJudge, type RelevanceJudge } from "./judge";
 import { SearchIndex } from "./recall";
 import { loadVectorsFile, resolveVectorsFile, type ProductVectors } from "./vectors";
@@ -88,6 +88,7 @@ async function build(products: IndexedProduct[]): Promise<Holder> {
   const keyed = !testing && !!geminiKey();
   const judgeOn = keyed && envValue("DOCK_SEARCH_JUDGE") !== "off";
   const judge: RelevanceJudge | undefined = judgeOn ? new DecisionsJudge() : undefined;
+  if (keyed) warmGemini(); // a warm connection before the first search
   const config: Partial<SmartConfig> = { recallSize: num("DOCK_SEARCH_RECALL", 50), judgeTimeoutMs: num("DOCK_SEARCH_JUDGE_TIMEOUT_MS", 800), embedTimeoutMs: num("DOCK_SEARCH_EMBED_TIMEOUT_MS", 700), judge: judgeOn };
   const search = new SmartSearch({ index, ...(judge ? { judge } : {}), ...(keyed && vectors ? { embed: embedder(vectors.meta.dim) } : {}), config, admit: () => admitSearchCall(), observe });
   return {

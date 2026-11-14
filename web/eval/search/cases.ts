@@ -308,4 +308,15 @@ export const SEARCH_CASES: SearchCase[] = [
   { id: "mx-describe-04", lang: "mixed", kind: "describe", tags: ["mixed_language", "use"], text: "frying oil rasvakeittimeen", right: DEEP_FRY, standins: RAPESEED },
   { id: "mx-describe-05", lang: "mixed", kind: "describe", tags: ["mixed_language", "use", "dietary"], text: "dessert ilman pähkinöitä for the kids", right: DESSERTS, allergenFree: NUTS_FREE },
   { id: "mx-describe-06", lang: "mixed", kind: "describe", tags: ["mixed_language", "not_sold"], text: "kangaroo liha", right: [] },
+  // ===== school and hospital kitchens: a nut or celery rule on fresh produce whose makers sent no allergen data =====
+  // Fresh, whole produce counts by its nature (core/catalog/nature.ts); anything processed must still have declared data.
+  { id: "en-school-01", lang: "en", kind: "exact", tags: ["plain", "dietary"], text: "yellow onions for the school kitchen, we are nut-free", right: ONION, allergenFree: ["nuts"] },
+  { id: "en-school-02", lang: "en", kind: "exact", tags: ["plain", "dietary"], text: "parsnips for the hospital ward, no nuts", right: ["parsnip", "peeled_parsnip"], allergenFree: ["nuts"] },
+  { id: "en-school-03", lang: "en", kind: "exact", tags: ["plain", "dietary"], text: "fresh dill for a nut-free daycare", right: DILL, alsoRight: DILL_MISFILED, allergenFree: ["nuts"] },
+  { id: "fi-school-01", lang: "fi", kind: "exact", tags: ["plain", "dietary", "inflected"], text: "porkkanoita koulukeittiöön, pähkinätön", right: CARROT, allergenFree: ["nuts"] },
+  { id: "fi-school-02", lang: "fi", kind: "exact", tags: ["plain", "dietary", "inflected"], text: "perunoita sairaalaan, ei pähkinöitä", right: POTATOES, allergenFree: ["nuts"] },
+  { id: "sv-school-01", lang: "sv", kind: "exact", tags: ["plain", "dietary"], text: "gul lök till skolköket, nötfritt", right: ONION, allergenFree: ["nuts"] },
+  { id: "en-school-04", lang: "en", kind: "exact", tags: ["plain", "dietary"], text: "courgettes for the school, nut and peanut free", right: ["courgette", "zucchini"], allergenFree: ["nuts", "peanuts"] },
+  { id: "en-school-05", lang: "en", kind: "describe", tags: ["dietary"], text: "root vegetables for a hospital soup, patient has a celery allergy", right: [...CARROT, "parsnip", "peeled_parsnip", ...FRESH_BEETROOT, "other_root_vegetables"], allergenFree: ["celery"] },
+
 ];

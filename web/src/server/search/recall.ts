@@ -2,7 +2,7 @@ import type { IndexedProduct } from "@/core/catalog/partner";
 import { categoryCodesFor } from "@/core/catalog/partner";
 import { allergenEvidence, fold, parseQueryText, tokenize } from "@/core/catalog/search";
 import type { KnowledgeMap } from "@/server/knowledge/map";
-import { DISH_USES, USES, type Use } from "@/server/knowledge/vocab";
+import { DISH_USES, FAMILIES, FAMILY_BRIDGES, USES, type Family, type Use } from "@/server/knowledge/vocab";
 import type { ProductVectors } from "./vectors";
 
 /**
@@ -137,7 +137,8 @@ function exclusionsFromWords(text: string): { allergens: string[]; words: string
     const a = allergenFromWord(w);
     if (a) found.push({ a, w: also ?? w });
   };
-  for (const m of s.matchAll(/ (?:without|no|ilman|utan|inga|ingen) ([a-z]+)(?: (?:or|and|tai|ja|eller|och) ([a-z]+))?/g)) {
+  for (const m of s.matchAll(/ ([a-z]+) (?:and|or|ja|tai|och|eller) ([a-z]+) ?(?:free|allergy|allergies) /g)) take(m[1], m[0].trim());
+  for (const m of s.matchAll(/ (?:without|no|ilman|utan|inga|ingen|ei) ([a-z]+)(?: (?:or|and|tai|ja|eller|och) ([a-z]+))?/g)) {
     take(m[1], `${m[0].trim()}`);
     take(m[2]);
   }
@@ -149,9 +150,39 @@ function exclusionsFromWords(text: string): { allergens: string[]; words: string
   return { allergens, words: found.filter((f) => allergens.includes(f.a)).map((f) => f.w) };
 }
 
+/** Animals and fish a cook names, English, Finnish, Swedish (stems; a compound or inflection starts with one). */
+const SPECIES: [string, string[]][] = [
+  ["turkey", ["turkey", "kalkkuna", "kalkon"]],
+  ["chicken", ["chicken", "kana", "broiler", "broileri", "kyckling", "hen"]],
+  ["duck", ["duck", "ankka", "anka"]],
+  ["goose", ["goose", "hanhi", "hanhen"]],
+  ["beef", ["beef", "nauta", "naudan", "harka", "oxkott"]],
+  ["pork", ["pork", "sika", "sian", "porsas", "possu", "flask", "gris"]],
+  ["lamb", ["lamb", "lammas", "lampaan", "lamm"]],
+  ["reindeer", ["reindeer", "poro", "poron"]],
+  ["moose", ["moose", "elk", "hirvi", "hirven", "alg"]],
+  ["salmon", ["salmon", "lohi", "lohen", "lax"]],
+  ["cod", ["cod", "turska", "torsk"]],
+  ["goat", ["goat", "vuohi", "vuohen"]],
+  ["cow", ["cow", "lehma"]],
+  ["quail", ["quail", "viiriainen", "vaktel"]],
+];
+function speciesOf(tokens: Iterable<string>): Set<string> {
+  const out = new Set<string>();
+  for (const t of tokens) for (const [id, stems] of SPECIES) if (stems.some((s) => t === s || (s.length >= 4 && t.startsWith(s)))) out.add(id);
+  return out;
+}
+
+const PLANT_VERSION: Partial<Record<Family, Family>> = { cheese: "plant_cheese", milk: "plant_drink", cream: "plant_cream" };
+const PLANT_WORDS = /(?<![a-z])(plant|kasvi|vaxt|oat|kaura|havre|soy|soya|soija|soja|almond|manteli|mandel|rice|riisi|ris|coconut|kookos|kokos|pea|herne|art)/;
+
+/** Words that start what a product is for ("milk for coffee"), English, Finnish, Swedish. */
+const FOR_WORDS = new Set(["for", "to", "varten", "till", "at", "fur"]);
+
 /** Words a cook says that name no product: dropped before the per-word and kind searches. */
 const GENERIC = new Set(
   (
+    "school schools koulu koulun kouluun koulukeittio koulukeittioon skola skolan skolkoket skolkok hospital sairaala sairaalaan sairaalalle sjukhus sjukhuset ward wards osasto osastolle avdelning daycare paivakoti paivakotiin forskola patient patients potilas potilaalle has have on " +
     "kitchen kitchens keittio keittioon keittiolle keittiossa kok koket koket koksbruk restaurant ravintola ravintolaan ravintolalle restaurang restaurangen " +
     "something anything stuff thing things some any kind sort good nice fresh new usual normal regular kids kid children child school daycare without with what which our us we me my need needed want wanted " +
     "ingredients ingredient everything all make making cook cooking recipe for the of and or to in on a an please send get order buy tomorrow week weeks " +
@@ -336,7 +367,7 @@ export class SearchIndex {
   }
 
   /** The hard rules, from product data only: claims carried, no forbidden allergen (unknown is not safe), the family, an id list. */
-  hardFilter(u: Pick<Understood, "claims" | "forbiddenAllergens">, opts: { category?: string; ids?: string[] } = {}): (p: IndexedProduct) => boolean {
+  hardFilter(u: Pick<Understood, "claims" | "forbiddenAllergens">, opts: { category?: string; ids?: string[]; declaredOnly?: boolean } = {}): (p: IndexedProduct) => boolean {
     const codes = opts.category ? new Set(categoryCodesFor(opts.category)) : null;
     const ids = opts.ids ? new Set(opts.ids) : null;
     return (p) => {
@@ -346,6 +377,7 @@ export class SearchIndex {
       for (const a of u.forbiddenAllergens) {
         const e = allergenEvidence(p, a);
         if (e === "contains" || e === "may_contain" || e === "unknown") return false;
+        if (e === "by_nature" && opts.declaredOnly) return false; // fresh produce by its nature, unless declared data only
       }
       return true;
     };
@@ -429,6 +461,83 @@ export class SearchIndex {
     scored.sort((a, b) => b.score - a.score || a.key.localeCompare(b.key));
     const top = scored[0]?.score ?? 0;
     return scored.filter((x) => x.score >= Math.max(0.45, top * 0.7)).slice(0, max);
+  }
+
+  /**
+   * The product families the words name outright: the families of kinds whose label or aliases carry every content
+   * word as a whole word ("butter" names butter; "vegan butter" names butter unless a kind is called that). Empty
+   * when no kind carries them all (a dish, a job, a description).
+   */
+  namedFamilies(u: Understood): Set<Family> {
+    const out = new Set<Family>();
+    if (!this.map) return out;
+    // The words themselves, not the reader's restatement of them (itemText).
+    const own = new Set(tokenize(u.text));
+    const terms = u.terms.filter((t) => !GENERIC.has(t) && own.has(t)).map((t) => u.corrections[t] ?? t);
+    if (!terms.length) return out;
+    if (terms.length >= 2) {
+      const byFamily = new Map<Family, number>();
+      for (const k of this.kinds) {
+        if (!k.size) continue;
+        if (terms.every((t) => k.tokens.includes(t) || (t.endsWith("s") && k.tokens.includes(t.slice(0, -1))))) {
+          const f = this.map.kinds.get(k.key)!.family;
+          byFamily.set(f, (byFamily.get(f) ?? 0) + k.size);
+        }
+      }
+      const total = [...byFamily.values()].reduce((a, b) => a + b, 0);
+      for (const [f, n] of byFamily) if (n >= 0.3 * total) out.add(f);
+      if (out.size) return out;
+    }
+    // No kind carries all the words: the family most products named with the last word belong to, in any language
+    // ("vegan butter", "veganskt smör" -> butter), when it is a clear majority.
+    // The head word: the last one before "for" ("milk for coffee"), else the last one.
+    const words = tokenize(u.text);
+    const cut = words.findIndex((w) => FOR_WORDS.has(w));
+    const before = cut > 0 ? terms.filter((t) => words.slice(0, cut).includes(t)) : [];
+    const head = (before.length ? before : terms).at(-1)!;
+    // A word that is a family's own name ("cream", "cheese", "butter", "eggs") names that family.
+    const named = FAMILIES.find((f) => f === head || `${f}s` === head || f === `${head}s`);
+    if (named) return new Set([named]);
+    const count = new Map<Family, number>();
+    let n = 0;
+    // Kinds that carry the word as their label's last word name the thing ("salted butter"); else product names.
+    for (const k of this.kinds) {
+      if (!k.size) continue;
+      const label = tokenize(this.map.kinds.get(k.key)!.label);
+      if (label.at(-1) !== head && label.at(-1) !== `${head}s`) continue;
+      const f = this.map.kinds.get(k.key)!.family;
+      count.set(f, (count.get(f) ?? 0) + k.size);
+      n += k.size;
+    }
+    if (!n) {
+      for (const id of this.postings.get(head) ?? []) {
+        const f = this.map.profile(id)?.family;
+        if (!f) continue;
+        count.set(f, (count.get(f) ?? 0) + 1);
+        n++;
+      }
+    }
+    const [best, second] = [...count.entries()].sort((a, b) => b[1] - a[1]);
+    if (best && n >= 3 && best[1] >= 0.35 * n && best[1] >= 1.5 * (second?.[1] ?? 0)) out.add(best[0]);
+    return out;
+  }
+
+  /** The words name an animal or fish, and the product's names name only others: not the kind asked (chicken for "turkey mince"). */
+  isOtherSpecies(id: string, u: Understood): boolean {
+    const asked = speciesOf(tokenize(u.text).map((t) => u.corrections[t] ?? t));
+    if (!asked.size) return false;
+    const has = speciesOf(this.nameTokens.get(id) ?? []);
+    return has.size > 0 && ![...has].some((x) => asked.has(x));
+  }
+
+  /** A product of another family than the words name, but one that can do its job (a bridge for some use): a stand-in. */
+  isStandinFamily(id: string, named0: Set<Family>, u?: Understood): boolean {
+    // A plant-based request names the plant version too: vegan cheese is plant cheese, oat milk is a plant drink.
+    const named = new Set(named0);
+    if (u && (u.claims.includes("vegan") || PLANT_WORDS.test(fold(u.text)))) for (const f of named0) if (PLANT_VERSION[f]) named.add(PLANT_VERSION[f]);
+    const f = this.map?.profile(id)?.family;
+    if (!f || !named.size || named.has(f)) return false;
+    return FAMILY_BRIDGES.some((b) => b.families.includes(f) && b.families.some((x) => x !== f && named.has(x)));
   }
 
   /** Every source at once, each under the hard filter, fused. `queryVector`: the request's embedding, when there is one. */
