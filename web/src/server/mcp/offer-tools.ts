@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { REASON_KINDS } from "@/core/offers";
-import { getRuntime } from "../runtime";
-import { acceptOffer, acceptedInto, declineOffer, muteOffers, offersForOrg, prefsOf, unmuteOffers } from "../offers/service";
+
+/** Loaded on first call: the offer service reaches the runtime, which must not load while this table is defined. */
+const svc = async () => ({ ...(await import("../offers/service")), getRuntime: (await import("../runtime")).getRuntime });
 import { intakeOut, intakeResult, tool, type ToolContext } from "./tools";
 
 /**
@@ -40,6 +41,7 @@ export const OFFER_TOOLS = [
     output: z.object({ offers: z.array(OfferOut), prefs: z.looseObject({}).describe("What this kitchen muted, and whether it turned offers off."), keysUrl: z.string(), nextStep }),
     readOnly: true,
     run: async (ctx, { all }) => {
+      const { getRuntime, offersForOrg, prefsOf } = await svc();
       const rt = await getRuntime();
       const orgId = ctx.session.mandate.issuer.orgId;
       const offers = await offersForOrg(rt, orgId, { open: !all });
@@ -64,6 +66,7 @@ export const OFFER_TOOLS = [
     }),
     output: intakeOut.extend({ offerId: z.string() }),
     run: async (ctx, { offerId: id, packs, deliverBy, by: given }) => {
+      const { getRuntime, acceptOffer, acceptedInto } = await svc();
       const rt = await getRuntime();
       const a = { by: who(ctx, given), via: via(ctx), name: ctx.session.mandate.issuer.name };
       const { offer, record } = await acceptOffer(rt, ctx.session, id, a);
@@ -83,6 +86,7 @@ export const OFFER_TOOLS = [
     input: z.object({ offerId, by }),
     output: z.object({ offer: z.looseObject({}), nextStep }),
     run: async (ctx, { offerId: id, by: given }) => {
+      const { getRuntime, declineOffer } = await svc();
       const rt = await getRuntime();
       const r = await declineOffer(rt, ctx.session, id, { by: who(ctx, given), via: via(ctx) });
       return { offer: { offerId: r.offerId, status: r.status, productId: r.productId }, nextStep: "Done. Tell the buyer in a few words, if at all." };
@@ -101,6 +105,7 @@ export const OFFER_TOOLS = [
     }),
     output: z.object({ prefs: z.looseObject({}), nextStep }),
     run: async (ctx, { scope, offerId: id, value, undo, by: given }) => {
+      const { getRuntime, muteOffers, unmuteOffers } = await svc();
       const rt = await getRuntime();
       const a = { by: who(ctx, given), via: via(ctx) };
       const prefs = undo ? await unmuteOffers(rt, ctx.session, { scope, value }, a) : await muteOffers(rt, ctx.session, { scope, ...(id ? { offerId: id } : {}), ...(value ? { value } : {}) }, a);
