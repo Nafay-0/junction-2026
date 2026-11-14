@@ -26,6 +26,7 @@ beforeAll(async () => {
   (await import("@/server/notify/service")).setMailTransport(rt, spy);
   firstSeq = rt.dock.ledger.length;
   report = await playStory(rt, { slowTurnMs: 0 });
+  (await import("node:fs")).writeFileSync("/private/tmp/claude-502/alive/beats2.txt", report.beats.map((b) => `${b.ok ? "OK  " : "FAIL"} ${b.name}: ${b.detail}`).join("\n"));
 }, 120_000);
 
 const views = async () => {
@@ -129,12 +130,18 @@ describe("the sample activity", () => {
     expect(sampleStatus(rt).ids.approved).toBe(report.ids.approved);
   });
 
-  it("the kitchen's own store shows its orders, marked", async () => {
+  it("touches a test kitchen only with what changes nothing for the next person: a refusal, marked", async () => {
     const { resolveKitchen } = await import("@/server/console-kitchens");
     const { overview } = await import("@/server/kitchen-portal");
-    const k = (await resolveKitchen("hotel-lumo"))!;
-    const o = await overview(k as never);
-    expect(o.orders.filter((x) => x.sample).map((x) => x.status)).toEqual(expect.arrayContaining(["committed", "pending_approval"]));
+    for (const slug of ["hotel-lumo", "koulu-metsola", "kahvila-sointu"]) {
+      const o = await overview((await resolveKitchen(slug)) as never);
+      // No order of the sample was placed there: no spend against the week, nothing in the kitchen's memory.
+      expect(o.orders.filter((x) => x.sample && x.status !== "rejected" && x.status !== "withdrawn"), slug).toEqual([]);
+    }
+    const m = await overview((await resolveKitchen("koulu-metsola")) as never);
+    expect(m.orders.filter((x) => x.sample).map((x) => x.status)).toEqual(["rejected"]);
+    // Nor in the demo kitchens: Kaari's and Laakso's books and memory are their own.
+    for (const orgId of ["org_ravintola_kaari", "org_laakso_catering"]) expect((await rt.dock.listOrders({ orgId })).filter((o) => isSampleOrder(rt.dock.ledger, o) && (o.status === "committed" || o.status === "pending_approval")), orgId).toEqual([]);
   });
 
   it("hides all of it for a viewer who hides the sample", async () => {
@@ -150,10 +157,62 @@ describe("the sample activity", () => {
 
   it("sends no mail and calls no model", () => {
     expect(sent).toEqual([]);
-    const models = rt.dock.ledger.unfiltered().filter((e) => e.type === "agent" && e.data.event === "model_call").map((e) => String(e.data.model));
-    expect(models.length).toBeGreaterThan(0);
-    expect(models.every((m) => m.startsWith("sample:"))).toBe(true);
+    const sample = rt.dock.ledger.unfiltered().slice(firstSeq);
+    expect(sample.filter((e) => e.type === "agent" && e.data.event === "model_call")).toEqual([]);
+    // Conversations are records: their turns are in the ledger, under threads of their own.
+    expect(sample.filter((e) => e.type === "agent" && e.data.event === "turn").length).toBeGreaterThanOrEqual(9);
   });
+
+  it("leaves nothing open in a kitchen a person can sign into", async () => {
+    const { threadStore, submitTurn } = await import("@/server/thread/engine");
+    const { setAgentModelForTests } = await import("@/server/thread/agent");
+    const { watchView } = await import("@/server/watch/service");
+    const store = await threadStore();
+    const stages = (await watchView(rt)).stages.filter((g) => !g.liftedAt);
+    for (const slug of ["hotel-lumo", "koulu-metsola", "kahvila-sointu", "kaari"]) {
+      const orgId = slug === "kaari" ? "org_ravintola_kaari" : (await rt.accounts.kitchenOf(slug))!.kitchen!.orgId;
+      // No live conversation was written to: no turn, card, question or draft for a person's words to be read against.
+      expect(store.peek(slug)?.turns.length ?? 0, slug).toBe(0);
+      // Nothing of the sample waits there for a sign-off, and nothing is staged there.
+      expect((await rt.dock.pendingOrders(orgId)).filter((o) => isSampleOrder(rt.dock.ledger, o)), slug).toEqual([]);
+      expect(stages.filter((g) => g.orgId === orgId), slug).toEqual([]);
+    }
+    // A person signs in to each test kitchen and says "Monday is fine": a new message, with nothing pending.
+    for (const slug of ["hotel-lumo", "koulu-metsola", "kahvila-sointu"]) {
+      const prompts: string[] = [];
+      const model = {
+        specificationVersion: "v4", provider: "test", modelId: "capture", supportedUrls: {},
+        async doGenerate() { throw new Error("streamed only"); },
+        async doStream(o: { prompt: { role: string; content: unknown }[] }) {
+          prompts.push(o.prompt.filter((m) => m.role === "system").map((m) => (typeof m.content === "string" ? m.content : JSON.stringify(m.content))).join("\n"));
+          const parts = [{ type: "stream-start", warnings: [] }, { type: "text-start", id: "t" }, { type: "text-delta", id: "t", delta: "What would you like for Monday?" }, { type: "text-end", id: "t" }, { type: "finish", finishReason: { unified: "stop", raw: undefined }, usage: { inputTokens: { total: 0, noCache: 0, cacheRead: undefined, cacheWrite: undefined }, outputTokens: { total: 0, text: 0, reasoning: undefined } } }];
+          return { stream: new ReadableStream({ start: (c) => (parts.forEach((p) => c.enqueue(p)), c.close()) }) };
+        },
+      };
+      setAgentModelForTests({ model: model as never, id: "test:capture" });
+      const before = rt.dock.ledger.length;
+      const orders = (await rt.dock.listOrders()).length;
+      let id = "";
+      const done = new Promise<void>((resolve) => {
+        const off = store.subscribe(slug, (e) => {
+          if (e.type === "status" && e.turnId === id && e.status !== "working") {
+            off();
+            resolve();
+          }
+        });
+      });
+      id = (await submitTurn(slug, { door: "typed", via: "typed", text: "Monday is fine" })).agentTurnId;
+      await done;
+      setAgentModelForTests(undefined);
+      expect(prompts.length, slug).toBeGreaterThan(0);
+      expect(prompts[0], slug).toContain("OPEN DECISIONS: none.");
+      // Nothing of the sample was touched or placed by it.
+      const after = rt.dock.ledger.unfiltered().slice(before);
+      expect(after.filter((e) => (e.requestId && isSampleOrder(rt.dock.ledger, { orderId: e.orderId ?? "", requestId: e.requestId })) || (e.orderId && isSampleOrder(rt.dock.ledger, { orderId: e.orderId }))), slug).toEqual([]);
+      expect((await rt.dock.listOrders()).length, slug).toBe(orders);
+      store.reset(slug, (await rt.accounts.kitchenOf(slug))!.kitchen!.orgId);
+    }
+  }, 60_000);
 
   it("is idempotent at start, and a refresh supersedes the older set without removing anything", async () => {
     process.env.DOCK_SAMPLE_ACTIVITY = "once";

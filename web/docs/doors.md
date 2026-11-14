@@ -1,99 +1,115 @@
 # Two more doors: a voice call and a photo of the list
 
 One gate, every door. A kitchen reaches its purchasing agent however the moment allows; whatever the door, the
-request lands in the same structured need, the same intake (mistake check, at most a couple of typed questions,
-option cards, a choice, a fixed-price quote) and the same gate, and anything beyond the mandate is signed off by a
-named person on their phone with their passkey. These two doors add nothing to the intake or the gate: they call
-`dock.intake` and `dock.placeOrder` as the kitchen's own agent, exactly as the typed console does. (The voice work
-did fix the shared number and date reader in `core/grounding.ts`; see the evaluation.)
+request lands in the same conversation and the same engine (docs/agent-thread.md), and anything beyond the mandate is
+signed off by a named person on their phone with their passkey.
 
-| | Voice: "Call your agent" | Photo or document |
+| | Voice: hands-free, in the conversation | Photo or document |
 |---|---|---|
 | For | hands full, a loud kitchen | whiteboards, handwritten lists, emailed orders, PDFs |
-| Components (`src/app/_channels/`) | `<CallAgent kitchen>` (button + overlay), `<CallScreen kitchen>` | `<ScanDoor kitchen>` |
-| Routes | `/ui-api/voice/{kitchen}/call`, `/call/{callId}`, `/tool`, `/ui-api/voice/usage` | `/ui-api/scan/{kitchen}`, `/step` |
-| Server (`src/server/channels/`) | `voice/` (`live.ts` Gemini, `realtime.ts` OpenAI, calls, tools), `speech.ts`, `say.ts`, `prompts.ts` | `scan/` (reader, line rules, upload guard) |
-| Pages | `/call` (what the call QR code opens), `/channels` (preview of both doors) | `/channels` |
-| Model | Gemini Live `gemini-3.8-live`, OpenAI `gpt-realtime-2.1` as the fallback, after the evaluation below | Claude Haiku 5.5 (`DOCK_SCAN_MODEL`), after the evaluation below |
+| Where | the composer's microphone (`k/[kitchen]/thread.tsx`), `_channels/use-call.ts`, `_channels/voice-mode.tsx` | `<ScanDoor kitchen>` |
+| Routes | `POST /ui-api/voice/{kitchen}/call` (start), `/call/{callId}` (`heard`, `next`, `standing`, `beat`, `end`, `dropped`, `rtc`), `GET /ui-api/voice/{kitchen}/call` (the phone code), `/ui-api/voice/usage` | `/ui-api/scan/{kitchen}`, `/step` |
+| Server | `server/thread/voice-bridge.ts` (the door), `voice-spoken.ts` (what is said), `voice-brief.ts` (the live model's brief); `server/channels/voice/` (`live.ts` Gemini, `realtime.ts` OpenAI, `calls.ts`, `start.ts`) | `scan/` (reader, line rules, upload guard) |
+| Pages | `/call` leads to the kitchen's own conversation (after the one-step join), `/channels` (preview) | `/channels` |
+| Model | Gemini Live `gemini-3.8-live` (paid key), OpenAI `gpt-realtime-2.1` as the fallback: the ears and the mouth only. The agent is the thread engine (Claude and plain code). | Claude Haiku 5.5 (`DOCK_SCAN_MODEL`) |
 
-## How the portal mounts them
+## Voice: one mode, hands-free, the ears and the mouth of the one conversation
 
-- **Speaking is a mode of the agent thread** (`k/[kitchen]/thread.tsx`, `_channels/voice-mode.tsx`, docs/agent-thread.md).
-  A tap on the composer's microphone starts a call on the voice door's own recogniser (no browser speech
-  recognition anywhere). While it is on, a voice bar sits over the composer: the kit's voice state (listening,
-  thinking, speaking, waiting for sign-off, reconnecting), a large "Hold to talk" button (the composer's microphone
-  does the same), "Open microphone" to switch to hands-free, and "End call". The log shows the words being heard and
-  what the agent is saying as they happen; each step of the call lands in the thread itself as the buyer's turn
-  (door `voice`) and the same cards the typed thread shows (`server/thread/voice-bridge.ts`). A card tapped during
-  the call goes to the engine like any tap, and the agent is told so it does not ask again. Hanging up leaves the
-  buyer in the same composer: a read-back that was never confirmed puts its words back in the field to send. The
-  photo button reads the image through the scan door and sends the text it read as a photo turn.
-- **`/call`** stays as the judge's phone entry (what the call QR code opens): a passkey join for a visitor's kitchen,
-  or a signed-in account's kitchen at `/call?k=<username>`, then the full-screen call.
-- **"Call your agent" control:** `GET /ui-api/voice/{kitchen}/call` returns `{ url, qrSvg }` (on a phone the control
-  links to `url`, on a laptop it shows the QR code). Server-side helper: `callLink(req, { kitchen? })` in
-  `src/server/channels/call-links.ts`, shaped like `approvalLink`.
-- **Callbacks:** every component takes `onStep(intakeView)` and `onOrder(order)` so a screen can mirror the state in
-  its own cards, and `renderSignOff(order)` / `signOffHref(order)` for the hand-over to sign-off.
+**What a person does.** Taps the microphone in the composer once (on the agent's page, the dock, or a phone that
+scanned "Talk on your phone"). The microphone is asked for once; refused, the composer says so in a sentence with how
+to allow it, and typing carries on. Connected, the agent says hello and listens; the buyer just talks, the agent
+answers out loud, and talking over it stops it at once (barge-in). The bar over the composer says what the call is
+doing (listening, hearing you, working on it, agent speaking, waiting for Sanna's OK, reconnecting, muted), shows the
+live level of the microphone, and has Mute and End. The field stays: typing or tapping a card during the call works,
+and its reply is said too. Every utterance lands in the thread as an ordinary buyer turn marked as spoken (a
+microphone mark and "said out loud" for a screen reader); the agent's replies are the thread's own turns. End (or a
+second tap on the microphone) leaves the buyer in the same composer, the conversation as it was.
 
-## The call
+**How it works (parity by construction).** The live voice model has one tool, `relay`, and a short strict brief
+(`server/thread/voice-brief.ts`: it relays, it decides nothing, it says exactly what it is given, it never invents a
+product, a price, an amount, a day or a rule, one thing at a time; `voice-brief.test.ts` checks it names no other tool).
+On every utterance it calls `relay`; the page sends the **live transcript** (never the model's rendering) to
+`POST /call/{callId} { op: "heard", text, turn }`, and `voice-bridge.ts heardTurn` puts the words into the same turn
+function as typed words, `engine.ts submitTurn({ door: "voice", via: "speech", text })`: the same reading, the same
+plain-code checks and handlers, the same tools, the same subject across turns, the same "nothing left out silently"
+check, the same refusals, the same gate. There is no second agent and no voice tool list. What comes back is made
+speakable by plain code (`voice-spoken.ts`) and given to the voice model to say word for word:
+1. at once, a short **true acknowledgement** from the engine's running step ("Checking live prices and the day.",
+   "Planning that; it takes about half a minute.");
+2. while long work runs, **milestones** at real steps, at most every 8 s ("The dishes are in: … Pricing them now.");
+3. the **reply**: the turn's line, shorter (whole sentences, about 45 words, the rest named as written on screen);
+   money, days and units as said ("1010 euros", "Monday the sixteenth of November", "12 litres"); no marks, codes,
+   ids or addresses; open options as one yes/no question about the first option with its total and day, and the
+   cheapest named when it is another; a sign-off said with who and where ("it needs Sanna Koskinen's OK: it's on
+   their phone now"); a passkey or a code said as what it is;
+4. when a sign-off lands, "Sanna Koskinen signed it: it's ordered" (or declined).
 
-1. **Entry.** `/call` on a phone: a visitor who has joined (the approver cookie from `/join`) calls their own kitchen;
-   one who has not gets the one-step passkey join first (same `/api/v1/join` API), then lands in the call. The
-   approver home has a "Call your agent" button. `/call?k=kaari` and `?k=laakso` call the demo kitchens.
-2. **One tap.** The AudioContext and the microphone are opened inside the tap (iOS needs a gesture for both), the
-   server reserves the kitchen's line and mints a session for the voice model (`DOCK_VOICE_MODEL`), the browser
-   connects to the provider directly. If the provider refuses the session (a quota close) or does not start it in
-   6 s, the call moves to the other provider (`DOCK_VOICE_FALLBACK_MODEL`) without the caller doing anything.
-3. **Connected.** The agent greets the kitchen by name. It already holds the kitchen's standing rules and usual
-   orders (`dock.intake.kitchen()`), and the recogniser is biased with the kitchen's own product words and about a
-   hundred kitchen words in the three languages (`VOICE_VOCABULARY` in `prompts.ts`). The screen is built from the
-   design kit (`_ui/thread.tsx`): the call's state at the centre (`VoiceStatus`: listening, thinking, speaking,
-   waiting for sign-off, reconnecting, paused), then the call as a thread: what the caller said (the live
-   transcript, as it arrives), the agent's one line, and AimoPilot's cards.
-4. **Every spoken request is read back before anything is priced.** `submit_request` sends the transcript (not the
-   model's own rendering) through the same interpreter as typing (and the second reader where it is on), then the
-   door reads it back in one sentence and on a card: amount, unit, product, day ("200 L (two hundred litres) of oat
-   drink, for Wednesday 18 November."), with the reason when there is one: the amount is unusual for this kitchen,
-   or **the two hearings disagree** (the transcript heard 15, the voice model heard 50: both are said, and the
-   caller decides). The caller says yes (or taps it), or says it again. Only then the intake runs: its mistake check
-   (an amount check the read-back already asked is not asked twice), questions, the options (spoken: how many, and
-   the suggested one in a sentence; never the list), the fixed price and what the gate will do, then "yes, place
-   it" → the gate → placed, or "Sanna Koskinen, head chef, must sign it on her phone".
-5. **End state.** An order waiting for sign-off shows "Sign off on this phone" (the visitor's own `/approve/{id}`);
-   the screen polls the order and the agent says when it is signed or declined. Hanging up keeps the call's desk:
-   "Continue by typing" carries on with the same request and its cards, a read-back still waiting included.
-6. **The engine's rule, spoken.** After the read-back's "yes", the intake runs; when its answer is routine (inside
-   the mandate, no check raised, the kitchen's usual product ranked first) the engine places it alone and the agent
-   says what was placed (`voice-bridge.ts`): request, read-back, one "yes". Otherwise a spoken choice ("the first
-   one") orders it, as a tapped choice does in the thread: the price is fixed and the order goes to the gate in the
-   same step, with no second "place it?".
+**Read-back.** Where the agent would order alone on spoken words (a routine order inside the mandate), it holds
+instead (`pipeline.ts spokenHold`) and the door reads the order back: "10 Valio Eila lactose-free whipping cream,
+that's 10 litres, for Thursday the nineteenth of November: 52 euros. Shall I order it?" The buyer's own yes in the
+next turn orders exactly that option (`engine.ts`, the same action as its tap). The yes to the options question is
+the same mechanism. Typed words are unchanged.
 
-### The agent decides nothing
+**Guards (plain code, `voice-bridge.ts`).** The same words never act twice (a number per utterance); the door's own
+words heard back through the speaker while the agent talks are ignored (the browser's echo cancellation first); a
+short yes that began while the door's own question was still playing is asked again; a number the transcript and the
+voice model heard differently is asked about and nothing is sent; "stop" or "never mind" stops the speaking about work
+in progress; "bye" says goodbye and hangs up. The voice model can never place, approve or change anything: it has no
+tool that does, and the engine acts only on the transcript, recorded with the turn (ledger `heard`, door `voice`).
 
-- It has seven tools; each runs plain code on the server. Each tool result carries a `say` sentence composed by
-  plain code (`say.ts`); the agent is instructed to say only that, in the caller's language, without a preamble.
-- **The caller's own words.** Every decision (read-back, check, question, option, placing the order) runs only with
-  the transcript of a new caller turn attached; yes/no decisions only when those words are a yes (`yesOrNo`,
-  en/fi/sv). A spoken request needs words the caller said in this turn (the model has submitted its own greeting as a
-  request; the door refuses it). The words are written to the ledger right before the decision (`data.step = "heard"`).
-- **No amount the model alone heard.** The interpreter reads the transcript; the model's rendering is only compared
-  with it. When one hearing has the amount and the other does not, the read-back says so.
-- **Grounding check** (`core/grounding.ts`, tested): while the agent speaks, its transcript is checked against every
-  figure in this call's tool results. On a mismatch the screen cuts the agent's audio (it plays 250 ms behind),
-  strikes the line through, tells the agent to take it back, and the ledger records `grounding_check`.
-- **No order from speech alone:** an order needs the read-back confirmed, the option cards shown and one chosen, then
-  a spoken (or tapped) yes; the gate decides; sign-off stays on the approver's phone with a passkey.
+**When something fails.** The line lost mid-call: "Reconnecting…", once to the same provider, then once to the other;
+then "Voice is not available right now", and the typed conversation is exactly where it was. A session that never
+starts in 6 s moves to the other provider. The screen locked or the page in the background: the call ends and says
+so ("The call ended because the screen locked or the page went to the background"). The microphone taken away:
+said. The time limit and the server's caps: the server's own sentence.
 
-### Noisy hall
+**The phone code.** On a laptop, "Talk on your phone" (the agent page's menu) shows a code; the phone it opens is
+signed in once (a one-time link) and lands in the same conversation (`/k/<kitchen>?talk=1`), where its microphone
+starts the same hands-free mode. `/call` (the visitor QR at `/channels` and the approver home) joins a visitor kitchen
+if needed and goes to its conversation. There is no separate call screen and no call transcript of its own.
 
-Push-to-talk is the default: one large button, held while speaking (or tapped once to start and once to stop); only
-that turn's audio is sent, so hall noise between turns never reaches the model. Holding it while the agent speaks
-cuts the agent off. Hands-free uses the provider's voice detection (Gemini: low sensitivity; OpenAI: semantic turn
-detection, low eagerness) and goes half-duplex on a phone: the microphone is not sent while the agent speaks.
-Echo cancellation, noise suppression and gain control are requested from the browser; OpenAI also gets near-field
-noise reduction. Gemini's transcript is kept verbatim (`DOCK_VOICE_TRANSCRIPTION`), so a number said in words
-reaches AimoPilot's own number reader instead of a formatter's guess.
+**Parity, proved.** `server/thread/voice-parity.test.ts` runs the same conversations typed and spoken (heard words fed
+where audio would have produced them) through the same engine with the same scripted agent and reader, and fails on
+any difference in orders, gate decisions, cards shown or the ledger's records apart from the door. The browser states
+are `e2e/demo/call.spec.ts` (the Live socket answered by the test).
+
+**Parity with the real models** (`scripts/eval/voice-parity.ts`, 14 Nov late, Claude Opus 5.5 as the agent, reader and
+planner, the seed catalogue, kitchen Kaari; each conversation typed and then spoken on a fresh runtime; results in
+`eval/voice/results/parity.json`, about $4.29 US dollars of model calls). "End; orders; gate" is where the
+conversation ended. The last column is the voice door's own time on the spoken run, the slowest utterance: from the
+words reaching the door to its first words back (the acknowledgement; this run waited 600 ms for a quicker reply, now
+250 ms) and to the full reply being ready to say. Audio time (the provider's turn detection, the model's relay call,
+its speech) comes on top and is measured by `scripts/eval/eval-voice-caps.ts`.
+
+| Capability | Typed | Spoken | Same | First words / reply ready |
+|---|---|---|---|---|
+| a plain order | done; 1 order; placed_alone | done; 1 order; placed_alone | same | 604 ms / 3.9 s |
+| several items | waiting_approver; 1 order; waiting:per_order_limit | waiting_approver; 1 order; waiting:per_order_limit | same | 604 ms / 8.3 s |
+| a repeat (same as last week plus twenty percent) | waiting_approver; 1 order; waiting:per_order_limit | waiting_approver; 1 order; waiting:per_order_limit | same | 617 ms / 8.3 s |
+| a change of amount and day | done; 0 orders; no gate | done; 0 orders; no gate | same | 603 ms / 4.2 s |
+| a variant | waiting_buyer; 0 orders; no gate | waiting_buyer; 0 orders; no gate | same | 619 ms / 9.0 s |
+| the mistake check (reason, both figures) | waiting_approver; 1 order; waiting:per_order_limit | waiting_approver; 1 order; waiting:per_order_limit | same | 606 ms / 3.9 s |
+| over the limit to sign-off | waiting_approver; 1 order; waiting:per_order_limit | waiting_approver; 1 order; waiting:per_order_limit | same | 614 ms / 3.4 s |
+| a refusal with its rule | done; 0 orders; no gate | done; 0 orders; no gate | same | 602 ms / 4.0 s |
+| a rules change that needs the approver's passkey | done; 0 orders; no gate | done; 0 orders; no gate | same | 621 ms / 2.8 s |
+| planning a dish (question, ideas, have / order / can't get, we have butter) | done; 0 orders; no gate | done; 0 orders; no gate | same | 623 ms / 28.9 s |
+| a seasonal menu | done; 0 orders; no gate | done; 0 orders; no gate | same | 605 ms / 43.0 s |
+| a booking at short notice | done; 0 orders; no gate | done; 0 orders; no gate | same | 607 ms / 41.2 s |
+| changing a dish | waiting_buyer; 0 orders; no gate | waiting_buyer; 0 orders; no gate | same | 624 ms / 12.0 s |
+| a product that cannot come, and its substitute | waiting_buyer; 0 orders; no gate | waiting_buyer; 0 orders; no gate | same | 613 ms / 4.1 s |
+| auto-renew | done; 0 orders; no gate | done; 0 orders; no gate | same | 79 ms / 0.1 s |
+| an offer (no; don't suggest again) | done; 0 orders; no gate | done; 0 orders; no gate | same | 605 ms / 2.7 s |
+| the receipt by email | done; 0 orders; no gate | done; 0 orders; no gate | same | 604 ms / 4.6 s |
+| the demo guide | done; 0 orders; no gate | done; 0 orders; no gate | same | 604 ms / 3.3 s |
+| a question about orders | done; 0 orders; no gate | done; 0 orders; no gate | same | 604 ms / 3.8 s |
+| a question about cut-offs | done; 0 orders; no gate | done; 0 orders; no gate | same | 616 ms / 4.3 s |
+| a question about the budget | done; 0 orders; no gate | done; 0 orders; no gate | same | 617 ms / 4.7 s |
+| attempts to make it misbehave | done; 1 order; waiting:per_order_limit | done; 1 order; waiting:per_order_limit | same | 776 ms / 5.7 s |
+| Finnish: a plain order | done; 1 order; placed_alone | done; 1 order; placed_alone | same | 608 ms / 5.7 s |
+
+Every conversation reached the same end, the same orders and the same gate decisions typed and spoken; the agent's
+own words differ run to run on both doors. No conversation needed the spoken read-back here: none of these orders was
+one the agent places alone on this kitchen (Kaari may spend 100 € alone); the scripted test covers it (10 L of cream).
 
 ### Bounds on cost and time
 
@@ -106,27 +122,10 @@ reaches AimoPilot's own number reader instead of a formatter's guess.
   an OpenAI client secret's session could be held open for 60 minutes (measured: the session outlives its secret).
 - One live call per kitchen; a page that stops reporting for 30 s frees the line and its spend is counted. A visitor
   kitchen can only be called from the phone that joined it.
-- Per call: 40 tool calls, 8 interpretations, 30 s warning before the time limit. Per kitchen: 6 calls an hour, 15 a
-  day; server: 20 an hour, 120 a day. Every call counts against the server's daily model cap (`DOCK_LLM_DAILY_USD`,
+- Per call: 40 utterances, 30 s warning before the time limit; the engine's own caps on every turn. Per kitchen: 10
+  calls an hour, 30 a day; server: 150 an hour, 600 a day (`DOCK_VOICE_CALLS_*`); a reconnect counts as a call. Every call counts against the server's daily model cap (`DOCK_LLM_DAILY_USD`,
   default $5). `/channels` shows the presenter today's voice calls, lines open, spend at list prices by model, the
   caps and the model budget (also `GET /ui-api/voice/usage`). `DOCK_VOICE=off` turns voice off; typing keeps working.
-
-### When something fails
-
-| What happens | What the caller sees | Way forward |
-|---|---|---|
-| Microphone refused | "The microphone is blocked for this page", how to allow it | the same call by typing; Call again after allowing |
-| Microphone taken away mid-call (permission revoked, another app) | "The microphone stopped" | the same call by typing, same request |
-| No microphone, or plain http | says which | typing |
-| Provider refuses the session (quota), or does not start it in 6 s | "Trying the other one…" | the other provider, automatically (OpenAI over WebRTC, bounded by this server) |
-| Provider rate limit mid-call | "The voice service is busy" | wait, or type instead |
-| Connection lost mid-call (network, provider) | "Reconnecting…", the status turns | up to two reconnects with the desk as it was; the agent says where things stand; then Call back / Type instead |
-| Nothing connects in 12 s (blocked WebSocket, captive portal) | "The voice connection did not open" | typing |
-| A phone call or Siri suspends the page's audio (iOS) | "Paused: tap to resume" | one tap |
-| Screen locked, page in the background | a held turn is released | back on the page: resumes, or reconnects |
-| No sound on an iPhone | "Turn the volume up and switch silent mode off" | |
-| 30 s before the time limit | a notice | continue by typing after it ends, same request |
-| Daily caps or model budget used up | the server's message | typing (the typed flow has its own caps) |
 
 ## The photo door
 
@@ -146,7 +145,8 @@ reaches AimoPilot's own number reader instead of a formatter's guess.
 
 ## Evaluation (fixed sets, live runs on 14 Nov 2026)
 
-**Voice** (`eval/voice/`, `scripts/eval/eval-voice.ts`, results in `eval/voice/results/`). The harness drives the
+**Voice, before 14 Nov evening** (the push-to-talk door with its own read-back before the engine; the hands-free relay
+design above is measured by the same harness, now driving the relay door, see the end of this section). The harness drives the
 same session the call screen gets (the server's setup, the browser's socket classes, push-to-talk at real-time pace)
 and runs every tool call through the real server tools against the demo kitchen in process. It scores what AimoPilot
 put to the caller, not what the model said: **right** (the read-back is the request as said; for a request with no
@@ -312,51 +312,43 @@ smudged amount as "cream 1 L"; Haiku never guessed it. The plain-code rules caug
 
 ## Mobile browsers
 
-On 13 Nov, verified in Chromium with a Pixel 7 viewport (`scripts/eval/browser-call.ts`, against `pnpm build && pnpm start -p
-3100`): the call QR path (passkey join with a virtual authenticator, then the call screen of the visitor's own
-kitchen), a microphone refused (typed fallback, the same cards), the voice connection cut after 9 s ("The call
-dropped", Call back, Type instead), a full hands-free call fed by a synthesised voice (the request heard, the
-read-back with its reason, "yes", three options read with their prices, all within the grounding check), the photo
-door (the embedded instruction shown as not acted on, two lines queued, the first line's option cards), and the
-kitchen portal's assistant panel at `/k/kaari` (both door buttons, the photo overlay, a call with the microphone
-refused falling back to typing).
-
-Browser tests for the call's states (`e2e/call.spec.ts`, Chromium with a Pixel 7 viewport and a fake microphone;
-Playwright answers the provider's WebSocket itself, so no voice session is paid for, while the server is real):
-granted (a held turn heard, the read-back card), refused (the browser's own NotAllowedError: typing, same call),
-lost and recovered (the provider drops the line: "Reconnecting", a second session, the agent told where things
-stand), interrupted (holding the button while the agent speaks), hang-up then typing (the waiting read-back is
-answered by a tap), and a provider's quota refusal moving the call to the other provider. All six pass against a
-production build: `pnpm build && E2E_PORT=3107 pnpm exec playwright test e2e/call.spec.ts`.
+Browser tests for the hands-free states (`e2e/demo/call.spec.ts`, Chromium phone and desktop, WebKit phone; the test
+answers the Gemini Live socket as the API does: the buyer's words as input transcription, a relay call, audio and a
+transcript for whatever the page gives the agent to say; the server, the voice door, the engine and its scripted
+models are real): one tap starts it, listening with the live level, mute and end; the words land in the thread as a
+spoken turn; the acknowledgement and the engine's reply are given to the voice model; mute and unmute; end leaves the
+composer; barge-in stops the agent at once; the line dropped mid-call reconnects and says where things stand; the
+microphone refused says so in one sentence and asks for no voice session; `/call` leads to the conversation's
+microphone. `pnpm build && E2E_PORT=4891 pnpm exec playwright test --project=chromium-phone --project=webkit-phone
+--project=chromium-desktop e2e/demo/call.spec.ts`.
 
 ### Five minutes with a real phone (iPhone with Safari, Android with Chrome)
 
 No automated test replaces this. Use the public HTTPS address, on mobile data for at least one run, in a room with
 people talking. Tick each line; anything that fails goes to the voice engineer with the phone model and OS version.
 
-1. **Scan and join (30 s).** Scan the call QR code from `/channels`. The join page asks for a passkey once; after
-   it, the call screen opens for your own kitchen. The language switch shows EN / FI / SV.
-2. **Microphone refused (30 s).** Tap Call, then "Don't allow". The screen says the microphone is blocked, how to
-   allow it, and offers typing in the same call. Type "100 litres of milk for Friday": the read-back card appears.
-   Then allow the microphone (iPhone: aA in the address bar, Website settings; Android: the lock icon, Permissions)
-   and tap Call again: it connects.
-3. **Sound (30 s).** With the silent switch on (iPhone) and then off: does the greeting play? The screen's hint
-   says to turn silent mode off. Note whether the voice comes from the earpiece or the loudspeaker.
-4. **Push-to-talk in noise (1 min).** Hold the big button, say "Two hundred litres of oat drink for Wednesday",
-   release. The transcript shows your words while you hold; within about 2 s the status goes Thinking, then the
-   agent reads it back in one sentence and the read-back card shows 200 L, oat drink, Wednesday. Say "yes".
-   Repeat once with a quick tap to start and a tap to stop.
-5. **Interrupt (20 s).** While the agent is speaking, hold the button: it stops at once and the status is Listening.
-6. **To an order (1 min).** Say "the first one", then "yes, place it". An order over the limit says who must sign;
-   the gate card shows them, and "Sign off on this phone" opens the passkey sign-off. Sign. The call screen says it
-   is signed within about 3 s.
-7. **Background and back (30 s).** Lock the screen for 10 s, unlock. A held turn was released; the call is either
-   still there or says "Reconnecting" and comes back with the request as it was. On iPhone, receive a phone call
-   (or start Siri) mid-call: the status says Paused; tap it to resume.
-8. **Bluetooth (optional, 30 s).** With earbuds connected: the agent is heard in the earbuds and does not hear itself.
-9. **Hang up and type (20 s).** Hang up. "Continue by typing" opens the same request with its cards; tap a card.
-10. **Weak network (optional).** Turn on airplane mode for 5 s mid-call, then off: "Reconnecting", then back, or
-    after two tries "The call dropped" with Call back and Type instead.
+1. **Scan and join (30 s).** Scan the "Talk to your agent" code from `/channels` (or "Talk on your phone" in a signed-in
+   kitchen's menu on a laptop). After the passkey join (visitor) or the one-time sign-in (account), the kitchen's own
+   conversation opens with "Tap the microphone and talk".
+2. **Microphone refused (30 s).** Tap the microphone, then "Don't allow". One sentence says it is blocked and how to
+   allow it; the composer still types. Allow it (iPhone: aA in the address bar, Website settings; Android: the lock
+   icon, Permissions) and tap the microphone again: it connects.
+3. **Sound (30 s).** With the silent switch on (iPhone) and then off: does the greeting play? Earpiece or loudspeaker?
+4. **Hands-free in noise (1 min).** Say "Two hundred litres of lactose-free milk for Wednesday". Your words show on the
+   bar as you speak, then as a turn in the thread with a microphone mark. Within about a second and a half of you
+   finishing, the agent says what it is doing; then the reply (options as one question about the first one).
+5. **Interrupt (20 s).** While the agent is speaking, start talking: it stops at once.
+6. **Echo (20 s).** On the loudspeaker, no headset: let the agent ask "Shall I order the first one?" and stay silent.
+   Nothing is ordered by the agent's own voice. Then say "yes": it orders, or says who must OK it.
+7. **To a sign-off (1 min).** An order over the limit says who must OK it and that it is on their phone; sign it there
+   with the passkey; the agent says it is signed within a few seconds.
+8. **Mute and end (20 s).** Mute: the level stops, nothing you say is heard. Unmute. End: you are in the same composer,
+   the conversation as it was; type a word and send it.
+9. **Background (30 s).** Lock the screen for 10 s, unlock: either the call is still there, or the composer says the
+   call ended because the screen locked. On iPhone, a phone call or Siri mid-call: Paused; tap to resume.
+10. **Weak network (optional).** Airplane mode for 5 s mid-call, then off: "Reconnecting", then back with "I'm back",
+    or "Voice is not available right now" and the typed conversation as it was.
+11. **Finnish (30 s).** Say "Tarvitsen sata litraa laktoositonta maitoa keskiviikoksi": the reply is in Finnish.
 
 ## A real telephone number
 

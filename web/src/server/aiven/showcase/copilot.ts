@@ -416,7 +416,7 @@ function pathOf(steps: Step[]): AnswerCard["path"] {
 }
 
 function pathNote(path: AnswerCard["path"], st: McpStatus): string {
-  const mcp = st.orgEnabled === false ? "Aiven MCP is off for this organisation" : st.reachable ? (st.sql ? "Aiven MCP answered SQL read-only" : "Aiven MCP is on; its SQL tool needs a PG Editor permission the read-only token does not have, so SQL goes the direct read-only way") : "Aiven MCP did not answer";
+  const mcp = st.orgEnabled === false ? "Aiven MCP is off for this organisation" : st.reachable ? (st.sql ? "Aiven MCP answered SQL read-only" : "Aiven MCP answers service state and logs; SQL goes the direct read-only way, because MCP's SQL tool needs a PG Editor permission a read-only token does not carry") : "Aiven MCP did not answer";
   if (path === "aiven-mcp") return `Answered through Aiven's MCP server with the read-only token. ${mcp}.`;
   if (path === "mixed") return `Service state through Aiven's MCP server; numbers from PostgreSQL as the read-only user dock_copilot. ${mcp}.`;
   if (path === "direct") return `Answered directly from Aiven: PostgreSQL as the read-only user dock_copilot (one view, read-only, 3 s, 200 rows) or the Aiven API with the read-only token. ${mcp}.`;

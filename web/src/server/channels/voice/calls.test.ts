@@ -10,13 +10,13 @@ describe("CallRegistry", () => {
   it("holds one live call per kitchen, and frees the line on hang-up or when the page goes quiet", () => {
     let t = 1_000_000;
     const r = new CallRegistry(() => t);
-    const a = r.open("kaari", "push_to_talk", limits);
+    const a = r.open("kaari", "hands_free", limits);
     expect(() => r.open("kaari", "hands_free", limits)).toThrow(/already on a call/);
-    r.open("laakso", "push_to_talk", limits);
+    r.open("laakso", "hands_free", limits);
     r.end(a.callId, "kaari", "hung up");
-    const b = r.open("kaari", "push_to_talk", limits);
+    const b = r.open("kaari", "hands_free", limits);
     t += 31_000; // no heartbeat for 31 s
-    r.open("kaari", "push_to_talk", limits);
+    r.open("kaari", "hands_free", limits);
     expect(() => r.use(b.callId, "kaari", "speech")).toThrow(/ended/);
   });
 
@@ -24,23 +24,23 @@ describe("CallRegistry", () => {
     let t = 0;
     const r = new CallRegistry(() => t);
     for (let i = 0; i < 3; i++) {
-      r.end(r.open("kaari", "push_to_talk", limits).callId, "kaari", "x");
+      r.end(r.open("kaari", "hands_free", limits).callId, "kaari", "x");
     }
-    expect(() => r.open("kaari", "push_to_talk", limits)).toThrow(/3 calls for this hour/);
-    r.end(r.open("laakso", "push_to_talk", limits).callId, "laakso", "x");
-    expect(() => r.open("laakso", "push_to_talk", limits)).toThrow(/4 calls this hour/);
+    expect(() => r.open("kaari", "hands_free", limits)).toThrow(/3 calls for this hour/);
+    r.end(r.open("laakso", "hands_free", limits).callId, "laakso", "x");
+    expect(() => r.open("laakso", "hands_free", limits)).toThrow(/4 calls this hour/);
     t += 3_700_000;
-    r.end(r.open("kaari", "push_to_talk", limits).callId, "kaari", "x");
-    r.end(r.open("kaari", "push_to_talk", limits).callId, "kaari", "x");
-    expect(() => r.open("kaari", "push_to_talk", limits)).toThrow(/5 calls for today/);
+    r.end(r.open("kaari", "hands_free", limits).callId, "kaari", "x");
+    r.end(r.open("kaari", "hands_free", limits).callId, "kaari", "x");
+    expect(() => r.open("kaari", "hands_free", limits)).toThrow(/5 calls for today/);
   });
 
   it("a typed call holds no line and is not counted, and carries the desk of the call it replaces", () => {
     const r = new CallRegistry(() => 0);
-    const live = r.open("kaari", "push_to_talk", limits);
-    live.desk.requestId = "req_1";
+    const live = r.open("kaari", "hands_free", limits);
+    live.desk.turns = ["trn_1"];
     const typed = r.open("kaari", "typed", limits, live.callId);
-    expect(typed.desk.requestId).toBe("req_1");
+    expect(typed.desk.turns).toEqual(["trn_1"]);
     expect(() => r.use(typed.callId, "laakso", "typed")).toThrow(/No such call/);
   });
 
@@ -52,7 +52,7 @@ describe("CallRegistry", () => {
   });
 
   it("can be switched off", () => {
-    expect(() => new CallRegistry().open("kaari", "push_to_talk", voiceLimits({ DOCK_VOICE: "off" }))).toThrow(/switched off/);
+    expect(() => new CallRegistry().open("kaari", "hands_free", voiceLimits({ DOCK_VOICE: "off" }))).toThrow(/switched off/);
   });
 
   it("an OpenAI call over WebRTC is hung up by the server at the time limit, whatever the browser does", async () => {
@@ -60,7 +60,7 @@ describe("CallRegistry", () => {
     try {
       hangups.length = 0;
       const r = new CallRegistry(() => Date.now());
-      const c = r.open("kaari", "push_to_talk", voiceLimits({ DOCK_VOICE_CALL_SECONDS: "120" }));
+      const c = r.open("kaari", "hands_free", voiceLimits({ DOCK_VOICE_CALL_SECONDS: "120" }));
       c.rtc = { session: { type: "realtime" } };
       const answer = await r.connectRtc(c.callId, "kaari", "v=0 offer", async () => ({ answer: "v=0 answer", callId: "rtc_abc123" }));
       expect(answer).toBe("v=0 answer");
@@ -78,7 +78,7 @@ describe("CallRegistry", () => {
   it("hanging up an OpenAI call ends the provider's session too", async () => {
     hangups.length = 0;
     const r = new CallRegistry();
-    const c = r.open("laakso", "push_to_talk", limits);
+    const c = r.open("laakso", "hands_free", limits);
     c.rtc = { session: {} };
     await r.connectRtc(c.callId, "laakso", "v=0 offer", async () => ({ answer: "v=0", callId: "rtc_xyz" }));
     r.end(c.callId, "laakso", "hung up");
@@ -87,9 +87,9 @@ describe("CallRegistry", () => {
 
   it("a call carried on from another (a switch of provider, a reconnect) replaces it instead of finding the line busy", () => {
     const r = new CallRegistry();
-    const first = r.open("kaari", "push_to_talk", limits);
-    expect(() => r.open("kaari", "push_to_talk", limits)).toThrow(/already on a call/);
-    const second = r.open("kaari", "push_to_talk", limits, first.callId);
+    const first = r.open("kaari", "hands_free", limits);
+    expect(() => r.open("kaari", "hands_free", limits)).toThrow(/already on a call/);
+    const second = r.open("kaari", "hands_free", limits, first.callId);
     expect(r.get(first.callId)?.endReason).toBe("replaced");
     expect(second.callId).not.toBe(first.callId);
   });

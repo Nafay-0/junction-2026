@@ -128,16 +128,9 @@ export function touchSample(rt: Runtime): void {
     s.lastFresh = now;
     if (needSlow) s.lastSlow = now;
     if (needToday) s.todayPlayed = today;
-    await run(rt, { setId: cur.set, parts: needToday ? ["today"] : [], fresh: { waiting: needWaiting && !needToday, slow: needSlow } });
+    await run(rt, { setId: cur.set, sampleKitchens: sampleStatus(rt).ids.sampleKitchens?.split(","), parts: needToday ? ["today"] : [], fresh: { waiting: needWaiting && !needToday, slow: needSlow } });
   }).catch((err: Error) => console.error("[sample] top-up failed:", err.message));
 }
 
-/** After the test accounts' timed reset (a fresh organisation each): their side of the sample again, as now. */
-export function afterTestReset(rt: Runtime): void {
-  const cur = currentSet(rt);
-  if (!cur || sampleSetting(rt) === "off") return;
-  const t = setTimeout(() => void run(rt, { setId: cur.set, parts: ["kitchens"] }).catch((err: Error) => console.error("[sample] after the reset:", err.message)), 3000);
-  t.unref?.();
-}
 
 export { play };

@@ -4,8 +4,8 @@ import { defineText } from "../_i18n/lang";
 export const THREAD_TEXT = defineText({
   en: {
     send: "Send",
-    talk: "Hold to talk",
-    release: "Release to send",
+    talk: "Talk to your agent (hands-free)",
+    endTalk: "End the call",
     photo: "Add a photo or document",
     close: "Close",
     back: "Back to the shop",
@@ -24,8 +24,8 @@ export const THREAD_TEXT = defineText({
   },
   fi: {
     send: "Lähetä",
-    talk: "Pidä pohjassa ja puhu",
-    release: "Päästä irti, niin viesti lähtee",
+    talk: "Puhu agentillesi (kädet vapaina)",
+    endTalk: "Lopeta puhelu",
     photo: "Lisää kuva tai asiakirja",
     close: "Sulje",
     back: "Takaisin kauppaan",
@@ -44,8 +44,8 @@ export const THREAD_TEXT = defineText({
   },
   sv: {
     send: "Skicka",
-    talk: "Håll in och tala",
-    release: "Släpp för att skicka",
+    talk: "Prata med din agent (handsfree)",
+    endTalk: "Avsluta samtalet",
     photo: "Lägg till ett foto eller dokument",
     close: "Stäng",
     back: "Tillbaka till butiken",

@@ -6,15 +6,22 @@ import { currentOps, type OpsSession } from "./access";
 import { scrubWords, viewerScope, type ViewerScope } from "./viewer";
 import { hidesSample, viewAs } from "../alive/clock";
 import { markRows } from "../alive/marks";
+import { scrubMail, tryCaps, type TryDoorId, type TryRoom } from "./try-caps";
 
 /**
- * Every /ops-api route goes through one of two doors, and nothing else decides who may use it:
+ * Every /ops-api route goes through one of three doors, and nothing else decides who may use it:
  *
  *   opsRoute   staff only (the passcode's session). The default: anything that changes something, costs money or
  *              calls outside, and every new route unless it is marked readable on purpose. Anyone else: 403 staff_only.
  *   opsRead    a read anyone may make: staff as before; without the passcode, a viewer, on GET only, from a shared
  *              answer (one computation per page and moment, however many viewers poll it) with other people's words
  *              replaced (viewer.ts). A viewer's POST to a readable route is still 403 staff_only.
+ *   opsTry     an action a visitor may try, named on purpose: staff as before; without the passcode, a viewer, on POST
+ *              only, for the doors listed in try-caps.ts (sending in the Aiven agent, a copilot question, timing the
+ *              search backends). Each try counts against a limit per client address and, where it costs something
+ *              shared, a daily limit for all visitors; over it: 429 try_limit, saying when it frees up. A try that
+ *              turns out free or fails is given back. The answer has other people's words replaced as for a read,
+ *              and mail addresses withheld. Every other action stays opsRoute.
  *
  * The body runs against the shared runtime (without the sample activity when this browser hid it, server/alive);
  * any DockError becomes `{ error: { code, message } }`. Never cached by the browser.
@@ -87,5 +94,47 @@ export function opsRead(req: Request, fn: (rt: Runtime, who: OpsActor, scope?: V
     shared.set(key, { at: Date.now(), status: res.status, body, type });
     if (shared.size > 500) for (const k of [...shared.keys()].slice(0, 100)) shared.delete(k);
     return new Response(body, { status: res.status, headers: { "content-type": type, "cache-control": "no-store", "x-dock-viewer": "fresh" } });
+  });
+}
+
+/** Set on a try's answer when it cost nothing (a recording played): the try is given back. */
+export const TRY_FREE = "x-dock-try-free";
+
+/**
+ * The third door: an action a visitor may try (see the header). `door` names the cap it counts against; `freeNow`
+ * says the action costs nothing at the moment, so it is not counted. For a viewer the answer carries `visitor`, this
+ * address's room at the door after the try.
+ */
+export function opsTry(req: Request, door: TryDoorId, fn: (rt: Runtime, who: OpsActor) => Promise<Response>, opts: { freeNow?: () => boolean } = {}): Promise<Response> {
+  return handle(async (rt) => {
+    const staff = currentOps(req);
+    if (staff) {
+      const res = await withSample(rt, req, () => fn(rt, staff));
+      touchSample(rt);
+      res.headers.set("cache-control", "no-store");
+      return res;
+    }
+    if (req.method !== "POST") throw staffOnly();
+    const addr = clientAddress(req.headers);
+    // Free right now (the launcher can only play a recording): not counted, so a used-up address may still watch one.
+    const ticket = opts.freeNow?.() ? { giveBack: () => undefined } : tryCaps().take(door, addr);
+    let res: Response;
+    try {
+      const scope = await viewerScope(rt, req);
+      res = await withSample(rt, req, () => fn(rt, viewerOf(req)));
+      if (res.status >= 300 || res.headers.get(TRY_FREE)) ticket.giveBack();
+      const type = res.headers.get("content-type") ?? "";
+      if (!type.includes("application/json")) {
+        res.headers.set("cache-control", "no-store");
+        return res;
+      }
+      const body = scrubMail(scrubWords(await res.json(), scope)) as Record<string, unknown>;
+      const visitor: TryRoom = tryCaps().room(door, addr);
+      const out = body && typeof body === "object" && !Array.isArray(body) ? { ...body, visitor } : body;
+      return new Response(JSON.stringify(out), { status: res.status, headers: { "content-type": type, "cache-control": "no-store" } });
+    } catch (err) {
+      ticket.giveBack();
+      throw err;
+    }
   });
 }

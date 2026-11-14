@@ -5,6 +5,7 @@ import type { ProbeRun } from "@/server/search/probe-run";
 import { api } from "../../../../_client/api";
 import { whenSeconds } from "../../../_ui/format";
 import { Button, useOps } from "../../../_ui/kit";
+import { TryNote, tryBlocked, useTry } from "./try";
 
 const ms = (v: number) => `${v.toLocaleString("fi-FI", { maximumFractionDigits: 1 })} ms`;
 
@@ -14,12 +15,15 @@ export function RecallProbe() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string>();
   const [run, setRun] = useState<ProbeRun>();
+  const t = useTry("search-timing");
+  const off = tryBlocked(t);
   const last = run ?? live.data?.last ?? undefined;
   async function go() {
     setBusy(true);
     setErr(undefined);
     const r = await api<{ last: ProbeRun }>("POST", "/ops-api/platform/recall-probe");
     setBusy(false);
+    t.refresh();
     if (r.ok) setRun(r.data.last);
     else setErr(r.error.message);
   }
@@ -28,11 +32,12 @@ export function RecallProbe() {
     <div className="mt-3 border-t border-line pt-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[0.84rem] font-medium text-ink-soft">About 30 queries from the evaluation, through both, here; query embeddings only, no judge</p>
-        <Button staff onClick={go} disabled={busy}>
+        <Button onClick={go} disabled={busy || off}>
           {busy ? "Timing…" : "Time both search backends"}
         </Button>
       </div>
-      {err && <p className="mt-1 text-[0.88rem] font-semibold">{err}</p>}
+      <TryNote t={t} className="mt-1" />
+      {err && <p className="mt-1 text-[0.88rem] font-semibold" role="alert">{err}</p>}
       {x ? (
         <div className="mt-2 text-[0.9rem]">
           <p>

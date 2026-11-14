@@ -8,7 +8,7 @@ import { menuKitchen } from "../agent/menu/runtime";
 import { kitchenAgent } from "../channels/flow";
 import { scanStep } from "../channels/scan/door";
 import { calls, voiceLimits } from "../channels/voice/calls";
-import { runTool } from "../channels/voice/tools";
+import { heardTurn, nextSpoken } from "../thread/voice-bridge";
 import { KITCHEN_ORG } from "../demo-kitchen";
 import { getRuntime, resetRuntime } from "../runtime";
 import { resolveKitchen } from "../console-kitchens";
@@ -55,17 +55,20 @@ beforeEach(() => {
 
 describe("a suspended agent is refused at every in-process door", () => {
   it("voice call: no request is opened for a suspended agent", async () => {
-    const callId = calls().open("kaari", "push_to_talk", voiceLimits({})).callId;
-    const said = { callId, name: "submit_request", args: { request: "120 litres of lactose-free milk" }, heard: { text: "120 litres of lactose-free milk", turn: 1 } };
-    // Not suspended: the same words, read back and confirmed, open a request (the control for this test).
-    expect((await runTool("kaari", said)).forModel.state).toBe("read_back");
-    expect((await runTool("kaari", { callId, name: "confirm_read_back", heard: { text: "yes", turn: 2 } })).screen.step?.requestId).toMatch(/^req_/);
+    // The voice door is the conversation's own turn function (thread/voice-bridge.ts): what applies to typed words
+    // applies to heard ones. The agent's model is not reached either way: the turn is refused before any reading.
+    const call = calls().open("kaari", "hands_free", voiceLimits({}));
     const before = await requestsOpened();
-
     await suspend("agent");
-    await expect(runTool("kaari", { ...said, heard: { text: "120 litres of lactose-free milk", turn: 3 } })).rejects.toMatchObject(refusal);
+    const heard = await heardTurn("kaari", call, { text: "120 litres of lactose-free milk", turn: 1 }).catch((err: unknown) => err);
+    if (heard && typeof heard === "object" && "agentTurnId" in heard && typeof heard.agentTurnId === "string") {
+      // Accepted as a turn: it must end refused, with nothing opened.
+      let s = await nextSpoken("kaari", call, heard.agentTurnId, 20_000);
+      while (s.state === "working") s = await nextSpoken("kaari", call, heard.agentTurnId, 20_000);
+      expect(s.say).toMatch(/suspend|paused|stopped|not available|cannot/i);
+    } else expect(heard).toMatchObject(refusal);
     expect(await requestsOpened()).toBe(before);
-  });
+  }, 30_000);
 
   it("photo door: a reviewed line opens nothing for a suspended agent", async () => {
     const own = await sessionCookieFor(await getRuntime(), "kaari"); // the stage kitchen's own signed-in account

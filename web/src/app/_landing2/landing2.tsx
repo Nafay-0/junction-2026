@@ -7,8 +7,8 @@ import { ArrowRight, Menu, Pause, Play, RotateCcw } from "lucide-react";
 import { PilotLight, Wordmark } from "../_ui/wordmark";
 import { Target } from "../_ui/target";
 import shots from "../_landing/shots.json";
-import { ATTACKS, ATTACKS_HELD, COUNTS, CRASH, FRAMES, REEL, RULES, SEARCH, STORY, crashRows, searchRow } from "./data";
-import { L2 } from "./landing2.text";
+import { ATTACKS, ATTACKS_HELD, COUNTS, CRASH, FRAMES, REEL, RULES, SEARCH, SHOP, STORY, crashRows, searchRow } from "./data";
+import { L2, WEBSHOP } from "./landing2.text";
 import { AgentMap } from "./map";
 import { Motion } from "./motion";
 import "./landing2.css";
@@ -24,6 +24,9 @@ const LG = "min-h-13 px-6 text-[1.05rem]";
 const QUIET = "font-semibold text-petrol underline decoration-petrol/30 underline-offset-4 hover:text-petrol-deep hover:decoration-petrol";
 
 const n = (x: number) => x.toLocaleString("en-US");
+
+/** The webshop section's desktop layers, bottom to top; "slide" is the asked frame's agent panel, sliding in. */
+const LAYER = { "shop-1-catalogue": "f1", "shop-2-asked": "f2", slide: "slide", "shop-3-substitute": "f3", "shop-4-signoff": "f4" } as const;
 
 function filmFiles() {
   const dir = path.join(process.cwd(), "public", "landing");
@@ -104,6 +107,8 @@ function More({ summary, children }: { summary: string; children: ReactNode }) {
 
 export function Landing2() {
   const t = L2;
+  // The landing page is English for now; the section's Finnish and Swedish words are kept beside it.
+  const w = WEBSHOP.en;
   const film = filmFiles();
   const hybrid = searchRow("hybrid");
   const ours = searchRow("ours");
@@ -364,6 +369,77 @@ export function Landing2() {
                   </div>
                 </dl>
               </div>
+            </div>
+          </div>
+        </Section>
+
+        {/* The agent inside the shop the kitchen already uses: real captures, cross-faded by the scroll */}
+        <Section id="webshop" title={w.title} line={w.line}>
+          <div className="l2-shop">
+            <div className="l2-shop-track" data-shop-track>
+              <div className="l2-shop-sticky">
+                <figure className="l2-shop-stage" aria-label={w.label}>
+                  <Browser url="aimopilot / k / hotel-lumo / catalogue" className="l2-shop-desk">
+                    <div className="l2-shop-frames">
+                      {(["shop-1-catalogue", "shop-2-asked", "slide", "shop-3-substitute", "shop-4-signoff"] as const).map((k) => {
+                        const f = SHOP[k === "slide" ? "shop-2-asked" : k];
+                        const rest = k === "shop-4-signoff";
+                        return (
+                          <Image
+                            key={k}
+                            src={f.src}
+                            width={f.w}
+                            height={f.h}
+                            alt={rest ? w.deskAlt : ""}
+                            aria-hidden={rest ? undefined : true}
+                            sizes="(min-width: 1024px) 680px, 86vw"
+                            unoptimized
+                            loading="lazy"
+                            className={`l2-shop-f l2-shop-${LAYER[k]}`}
+                          />
+                        );
+                      })}
+                    </div>
+                  </Browser>
+                  <div className="l2-shop-phone">
+                    <Phone>
+                      <div className="l2-shop-pframes">
+                        <Image src={SHOP["shop-phone-substitute"].src} width={SHOP["shop-phone-substitute"].w} height={SHOP["shop-phone-substitute"].h} alt={w.phoneAlt} sizes="(min-width: 1024px) 160px, 30vw" unoptimized loading="lazy" className="l2-shop-p l2-shop-p1" />
+                        <Image src={SHOP["shop-phone-signoff"].src} width={SHOP["shop-phone-signoff"].w} height={SHOP["shop-phone-signoff"].h} alt="" aria-hidden sizes="(min-width: 1024px) 160px, 30vw" unoptimized loading="lazy" className="l2-shop-p l2-shop-p2" />
+                      </div>
+                    </Phone>
+                  </div>
+                </figure>
+                <ol className="l2-shop-steps">
+                  {w.steps.map((s, i) => (
+                    <li key={s} style={{ "--at": [0, 14, 52, 76][i] } as CSSProperties}>
+                      <span className="l2-shop-n tabular" aria-hidden>
+                        {i + 1}
+                      </span>
+                      {s}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+            <div className="l2-shop-side">
+              <ul className="l2-shop-points">
+                {w.points.map((p) => (
+                  <li key={p.head}>
+                    <p className="l2-shop-head">{p.head}</p>
+                    <p className="l2-shop-text">{p.text}</p>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-3">
+                <Link href="/k" className={`${GO} ${LG}`}>
+                  {w.cta} <ArrowRight size={18} aria-hidden />
+                </Link>
+                <Link href="/try" className={`${QUIET} text-[0.92rem]`}>
+                  {w.connect}
+                </Link>
+              </div>
+              <p className="l2-shop-note">{w.note}</p>
             </div>
           </div>
         </Section>

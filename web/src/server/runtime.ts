@@ -156,6 +156,7 @@ async function buildRuntime(): Promise<Runtime> {
     ledger,
     now: sampleNow,
     visibleOrder: orderVisibility(() => ledgerRef),
+    offPartner: () => !!playingNow(),
     trustedIssuers,
     wholesalerKey,
     notifier: outbox,
@@ -215,8 +216,6 @@ async function buildRuntime(): Promise<Runtime> {
     afterTestReset: async (orgIds, by) => {
       if (!rtRef) return;
       await (await import("./watch/service")).clearForOrgs(rtRef, orgIds, `test account reset, ${by}`);
-      // The kitchens' side of the sample activity again, for the fresh organisations (server/alive/start.ts).
-      (await import("./alive/start")).afterTestReset(rtRef);
     },
   });
   // Not while the build prerenders pages: restoring hashes passwords (real work off the main thread), which would end

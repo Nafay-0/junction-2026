@@ -615,7 +615,9 @@ export async function mailView(rt: Runtime, now = new Date()): Promise<MailView>
   const s = await ready(rt);
   const caps = mailCaps();
   const t = transportOf(rt);
-  const all = [...s.log.values()].sort((a, b) => b.at.localeCompare(a.at));
+  // A viewer who hid the sample activity (server/alive) sees none of it, in the list or the counts.
+  const { hiddenSample } = await import("../alive/marks");
+  const all = [...s.log.values()].filter((r) => !hiddenSample(rt.dock.ledger, r.mailId, r.eventKey, r.orderId)).sort((a, b) => b.at.localeCompare(a.at));
   const usedToday = counts(s, "", now).daily;
   return {
     configured: !!t,

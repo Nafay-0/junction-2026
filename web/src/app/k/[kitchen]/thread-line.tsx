@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, ScanFace, Sparkles } from "lucide-react";
+import { Check, ChevronDown, Mic, ScanFace, Sparkles } from "lucide-react";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useFormat, useText } from "../../_i18n/provider";
 import { clock, money } from "../../_ui/plain";
@@ -131,10 +131,17 @@ export function ThreadLine({ className = "", landing = false }: { className?: st
 
 function BuyerLine({ turn }: { turn: BuyerTurn }) {
   const text = turn.text ?? turn.label ?? "";
+  // Words heard by the voice door are marked as spoken (the transcript is the evidence the turn was acted on).
+  const spoken = turn.door === "voice" && turn.via === "speech";
+  const tx = useText(THREAD_LINE_TEXT);
   return (
-    <li className="tl-in relative">
+    <li className="tl-in relative" {...(spoken ? { "data-spoken": "" } : {})}>
       <span aria-hidden className="absolute -left-[2.05rem] top-[0.45em] z-10 size-2.5 rounded-full border-2 border-petrol bg-mist" />
-      <p className="display whitespace-pre-line text-[1.2rem] leading-tight text-petrol-deep [overflow-wrap:anywhere]">{text}</p>
+      <p className="display whitespace-pre-line text-[1.2rem] leading-tight text-petrol-deep [overflow-wrap:anywhere]">
+        {spoken && <Mic aria-hidden size={16} className="mr-1.5 inline-block align-[-0.1em] text-lavender-deep" />}
+        {text}
+        {spoken && <span className="sr-only"> ({tx.spoken})</span>}
+      </p>
     </li>
   );
 }

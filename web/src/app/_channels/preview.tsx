@@ -3,7 +3,6 @@
 import { useState } from "react";
 import type { PublicOrder } from "@/core/orders";
 import { useText } from "../_i18n/provider";
-import { CallAgent } from "./call-screen";
 import { DOORS_TEXT } from "./doors.text";
 import { ScanDoor } from "./scan-door";
 
@@ -44,7 +43,10 @@ export function DoorsPreview({ kitchen }: { kitchen: string }) {
         <h2 className="font-display text-2xl font-bold">{tx.voiceTitle}</h2>
         <p className="mt-1 text-[1.02rem] text-ink-soft">{tx.voiceIntro}</p>
         <div className="mt-4">
-          <CallAgent kitchen={kitchen} renderSignOff={signOff} />
+          {/* One way to talk to the agent: the microphone in the kitchen's own conversation, hands-free. */}
+          <a href={`/k/${encodeURIComponent(kitchen)}?talk=1`} className="inline-flex min-h-11 items-center rounded-full bg-petrol px-5 text-[0.95rem] font-semibold text-paper">
+            {tx.voiceOpen}
+          </a>
         </div>
       </section>
       <section className="rounded-xl border-[3px] border-ink bg-paper p-4">

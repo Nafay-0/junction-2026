@@ -19,5 +19,5 @@ import { safetyProbes } from "./safety";
 export async function allProbes(opts: { corpus: boolean; regen: boolean }): Promise<Probe[]> {
   if (opts.regen) await generateCorpus();
   const [laakso, kaari] = demoProbes;
-  return [laakso, ...coreDateProbes, ...gateProbes, ...intakeProbes, ...exposureProbes, ...portalProbes, ...safetyProbes, ...mcpProbes, ...corpusProbes(opts), ...dependencyProbes, ...limitsProbes, kaari];
+  return [laakso, ...coreDateProbes, ...safetyProbes, ...gateProbes, ...intakeProbes, ...exposureProbes, ...portalProbes, ...mcpProbes, ...corpusProbes(opts), ...dependencyProbes, ...limitsProbes, kaari];
 }

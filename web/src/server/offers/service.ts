@@ -628,12 +628,14 @@ export async function offersView(rt: Runtime, now = new Date()): Promise<OffersV
   // The same check the conversation makes, so this page and the kitchen's agent agree on what is open.
   for (const k of kitchens) await reconcileOpen(rt, k, now).catch(() => []);
   for (const o of s.offers.values()) expire(s, o, now);
-  const all = [...s.offers.values()].filter((o) => !o.cleared).sort((a, b) => b.at.localeCompare(a.at));
+  // A viewer who hid the sample activity (server/alive) sees none of it, in the lists or the counts.
+  const { hiddenSample } = await import("../alive/marks");
+  const all = [...s.offers.values()].filter((o) => !o.cleared && !hiddenSample(rt.dock.ledger, o.offerId, o.orgId)).sort((a, b) => b.at.localeCompare(a.at));
   const count = (st: OfferStatus) => all.filter((o) => o.status === st).length;
   const nameOf = (orgId: string) => kitchens.find((k) => k.orgId === orgId)?.name ?? [...s.offers.values()].find((o) => o.orgId === orgId)?.kitchenName ?? "A kitchen no longer open";
   const productOf = (id: string) => [...s.offers.values()].find((o) => o.productId === id)?.productName ?? `product ${id}`;
   const prefs: KitchenPrefsView[] = [...s.prefs.values()]
-    .filter((p) => p.off || p.mutes.length)
+    .filter((p) => (p.off || p.mutes.length) && !hiddenSample(rt.dock.ledger, p.orgId))
     .map((p) => ({
       orgId: p.orgId,
       name: nameOf(p.orgId),
@@ -648,7 +650,7 @@ export async function offersView(rt: Runtime, now = new Date()): Promise<OffersV
   return {
     stats: { offered: all.filter((o) => o.status !== "withheld").length, accepted: count("accepted"), declined: count("declined"), muted: count("muted"), expired: count("expired"), withheld: count("withheld"), open: count("offered"), kitchensOff: prefs.filter((p) => p.off).length, liveCalls: s.liveCalls, weeklyCap: OFFER_WEEKLY_CAP, cleared: [...s.offers.values()].filter((o) => o.cleared).length },
     offers: all.slice(0, 200).map(({ token: _t, body: _b, ...o }) => (void _t, void _b, o)),
-    campaigns: [...s.campaigns.values()].sort((a, b) => b.at.localeCompare(a.at)),
+    campaigns: [...s.campaigns.values()].filter((c) => !hiddenSample(rt.dock.ledger, c.campaignId)).sort((a, b) => b.at.localeCompare(a.at)),
     listings: [...s.listings.values()],
     prefs,
     testKitchens: kitchens.filter((k) => tests.includes(k.slug)).map((k) => ({ slug: k.slug, name: k.name, thisWeek: sentThisWeek(all.filter((o) => o.orgId === k.orgId).map((o) => ({ offerId: o.offerId, productId: o.productId, family: o.family, at: o.at, status: o.status })), now) })),
