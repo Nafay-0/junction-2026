@@ -176,22 +176,24 @@ function AgentNode({ turn, thread, tap, busy, latest }: { turn: AgentTurn; threa
   const quietToday = today && !today.items.length && cards.some((c) => c.type === "watch" || c.type === "offer");
   const text = turn.line || (today ? (quietToday ? "" : todaySentence(today, tx, f)) : turn.status === "working" ? "" : fallbackLine(turn, thread, tx, f));
   const thinks = thinking(turn, thread, tx, w, f);
+  const busyNow = turn.status === "working" || !!running;
   return (
     <li className="tl-in relative">
-      <span aria-hidden className={`absolute -left-[2.35rem] top-[0.3em] flex size-[1.15rem] items-center justify-center rounded-full ${turn.status === "working" ? "tl-pulse bg-lime" : "bg-petrol"}`}>
-        {turn.status !== "working" && <span className="size-1.5 rounded-full bg-lime" />}
+      {/* The busy mark and the working words change together: busy while any step still runs. */}
+      <span aria-hidden className={`absolute -left-[2.35rem] top-[0.3em] flex size-[1.15rem] items-center justify-center rounded-full ${busyNow ? "tl-pulse bg-lime" : "bg-petrol"}`}>
+        {!busyNow && <span className="size-1.5 rounded-full bg-lime" />}
       </span>
       {text && (
         <p data-agent-words={wordsOf(text)} className="max-w-[38ch] whitespace-pre-line text-[1.02rem] leading-[1.6] text-ink [text-wrap:pretty]">
           <Rich text={text} />
         </p>
       )}
-      {turn.status === "working" && (running || !text) && <p className="tl-sheen mt-1 text-[0.9rem] font-medium text-petrol">{running ? stepLabel(running, w, f.lang) : tx.working}</p>}
+      {busyNow && (running || !text) && <p aria-busy className="tl-sheen mt-1 text-[0.9rem] font-medium text-petrol">{running ? stepLabel(running, w, f.lang) : tx.working}</p>}
       {cards.map((c) => (c.type === "scenario" && c.state === "open" && !(turn.line ?? "").includes(c.text[f.lang].say.slice(0, 24)) ? <ScenarioWords key={c.cardId} card={c} lang={f.lang} /> : null))}
       {cards.map((c) => (c.type === "watch" && c.state !== "answered" && !(turn.line ?? "").includes(c.text[f.lang].say.slice(0, 24)) ? <WatchWords key={c.cardId} card={c} lang={f.lang} /> : null))}
       {cards.map((c) => (c.type === "offer" && c.state === "open" && !(turn.line ?? "").includes(c.text[f.lang].say.slice(0, 24)) ? <OfferWords key={c.cardId} card={c} lang={f.lang} /> : null))}
       {latest && <Choices turn={turn} thread={thread} tap={tap} busy={busy} />}
-      <Lists turn={turn} thread={thread} />
+      <Lists turn={turn} thread={thread} latest={latest} />
       <Memory turn={turn} />
       {cards.map((c) => (c.type === "gate" && c.outcome === "waiting" && c.approvalId ? <SignOffSlab key={c.cardId} card={c} thread={thread} tap={tap} /> : c.type === "gate" && c.outcome === "approved" && c.orderId ? <SignedSlab key={c.cardId} card={c} thread={thread} /> : null))}
       {today?.items.filter((i) => i.kind === "sign_off").map((i) => (i.kind === "sign_off" ? <SignOffSlab key={i.approvalId} card={{ type: "gate", cardId: `gate:${i.orderId}`, requestId: i.requestId ?? "", orderId: i.orderId, approvalId: i.approvalId, outcome: "waiting", approver: i.approver, reasons: [], rules: [] } as GateCardT} thread={thread} tap={tap} total={i.totalCents} what={i.lines.map((l) => `${f.num(l.quantity)} × ${l.name}`).join(", ")} /> : null))}
@@ -265,7 +267,7 @@ function perUnitOf(o: OptionView, f: ReturnType<typeof useFormat>): string | und
 
 // ---------- the order's lines, behind "Show the list" ----------
 
-function Lists({ turn, thread }: { turn: AgentTurn; thread: Thread }) {
+function Lists({ turn, thread, latest }: { turn: AgentTurn; thread: Thread; latest?: boolean }) {
   const tx = useText(THREAD_LINE_TEXT);
   const f = useThreadFormat();
   const lists: { key: string; rows: { item: string; amount?: string; total?: string }[]; total?: string }[] = [];
@@ -280,6 +282,13 @@ function Lists({ turn, thread }: { turn: AgentTurn; thread: Thread }) {
     else if (c.type === "deliveries") lists.push({ key: c.cardId, rows: c.items.map((d) => ({ item: d.lines.map((l) => l.name).join(", "), amount: f.day(d.deliveryDate), total: money(d.totalCents) })) });
     else if (c.type === "memory_list") lists.push({ key: c.cardId, rows: c.items.map((m) => ({ item: m.text })) });
     else if (c.type === "rules") lists.push({ key: c.cardId, rows: c.proposal ? c.diff.map((d) => ({ item: d.field.replaceAll("_", " "), amount: `${d.before || "—"} → ${d.after || "—"}` })) : [{ item: tx.rulesAlone, amount: money(c.current.perOrderLimitCents) }, { item: tx.rulesWeek, amount: money(c.current.weeklyBudgetCents) }, ...c.stated.map((s) => ({ item: tx.statedRule(s.text) }))] });
+  }
+  // A reply that gives a total for the menu or the order on the table ("comes to 23,48 €") always has its lines one tap
+  // away, even when the card it changed sits in an earlier turn.
+  if (latest && !lists.length && /\d,\d\d\s?€/.test(turn.line ?? "")) {
+    const c = thread.turns.flatMap((x) => (x.role === "agent" ? x.cards : [])).filter((x) => (x.type === "menu" && (x.stage === "ready" || x.stage === "ordered")) || (x.type === "sheet" && x.state === "editing")).at(-1);
+    if (c?.type === "menu") lists.push({ key: `${c.cardId}:here`, rows: c.dishes.flatMap((d) => d.lines.filter((l) => l.product).map((l) => ({ item: `${l.product!.name}`, amount: f.num(l.product!.packs), total: money(l.product!.totalCents) }))), total: money(c.totalCents) });
+    else if (c?.type === "sheet") lists.push({ key: `${c.cardId}:here`, rows: c.lines.map((l) => ({ item: l.name, amount: `${f.num(l.packs)} × ${f.measure(l.packSize, l.unit)}`, total: money(l.lineTotalCents) })), total: money(c.totalCents) });
   }
   return (
     <>
@@ -634,6 +643,7 @@ function Landing({ today, offer, watch, thread }: { today?: TodayCard; offer?: O
   return (
     <div className="tl-in">
       <h1 className="display text-[2.2rem] leading-[1.05] text-ink">{tx.greeting(part, first)}</h1>
+      {today?.pending && <p aria-busy className="tl-sheen mt-3 text-[0.98rem] font-medium text-petrol">{tx.lookingToday}</p>}
       {today && !today.pending && !(today.items.length === 0 && (watch || offer)) && (
         <p className="mt-3 max-w-[34ch] text-[1.1rem] leading-[1.6] text-ink">
           <Rich text={todaySentence(today, tx, f)} />
