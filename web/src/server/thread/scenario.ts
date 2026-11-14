@@ -58,7 +58,14 @@ async function eventShort(run: TurnRun, r: EventResult, lang: Lang, fallback: Th
   const order = [...r.cannotArrive].sort((a, b) => score(b, r) - score(a, r));
   const first = order[0];
   const n = r.cannotArrive.length;
-  const parts = [n === 1 ? t.cannot(cap(what(first)), day, why(first)) : t.cannotMany(n, day, `${what(first)} (${why(first)}) ${t.more(n - 1)}`)];
+  // The menu first, by its dishes (the buyer must know what is being planned), then what cannot come.
+  const DISHES: Record<Lang, (names: string) => string> = { en: (x) => `The menu: ${x}.`, fi: (x) => `Menu: ${x}.`, sv: (x) => `Menyn: ${x}.` };
+  const and = lang === "fi" ? " ja " : lang === "sv" ? " och " : " and ";
+  const names = r.dishes.map((d) => d.name);
+  const parts = [
+    ...(names.length ? [DISHES[lang](names.length > 1 ? `${names.slice(0, -1).join(", ")}${and}${names.at(-1)}` : names[0])] : []),
+    n === 1 ? t.cannot(cap(what(first)), day, why(first)) : t.cannotMany(n, day, `${what(first)} (${why(first)}) ${t.more(n - 1)}`),
+  ];
   const best: SubOption | undefined = r.options[first.lineId]?.[0];
   if (best) {
     const label = optionName(best);
