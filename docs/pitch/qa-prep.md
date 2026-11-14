@@ -11,8 +11,9 @@ answer in the first section.
 > under our direction. We decided together: the challenge, the pitch and the demo path were written down on Friday
 > evening in `CLAUDE.md`, and everything after was checked against Valio Aimo's five criteria."
 >
-> If a juror looks at Git: almost every commit is under one account (258 of 259 on Saturday 01:30), and about four
-> in five carry an AI co-author line. That matches the answer above; say so if asked.
+> If a juror looks at Git: almost every commit is under one account, and most carry an AI co-author line. That
+> matches the answer above; say so if asked. (Recount on Sunday morning before giving a figure; the Saturday 01:30
+> count is stale.)
 
 **2. "Was all of this built this weekend?"**
 > "Yes. The first line of app code was committed on Friday at 21:41, after hacking started at 19:30. Before that we
@@ -26,10 +27,10 @@ answer in the first section.
 > Claude to the wholesaler."
 
 **4. "What would you do with the next 48 hours?"**
-> "First, close the problems our own testing found: the menu planner does not yet carry a kitchen's allergen rules,
-> and the alternatives map accepts allergen words it does not know. Second, make the crash-test licence set the
-> agent's limit at the live gate; today it is computed but not applied. Third, ask Valio Aimo for a test account on
-> the real webshop and test sign-off on real phones."
+> "First, close what our own testing found: the stand-alone menu planner's mandate does not yet carry a kitchen's
+> allergen rules, and real email needs a verified sending domain. Second, switch on the crash-test licence at the
+> live gate: the gate can already enforce it, but the hosted site has no licences published to it. Third, ask Valio
+> Aimo for a test account on the real webshop and try the sign-off and the voice on real phones in a real kitchen."
 
 ## The questions this brief invites
 
@@ -37,19 +38,21 @@ answer in the first section.
 > "An MCP server in front of a webshop lets an agent click 'buy'. Here the agent cannot buy anything its kitchen did
 > not sign for: every order is checked in plain code against a signed mandate, a fixed price signed by the
 > wholesaler, and the kitchen's budget, and anything beyond it waits for a named person's passkey. MCP is only one of
-> the doors; the same gate sits behind REST, the store, a voice call and a photo of a list."
+> the doors; the same gate sits behind REST, the store's conversation, hands-free voice, a photo of a list and the
+> basket."
 
 **"The brief says it is not a chatbot. So what is the assistant?"**
-> "The ordering itself is a fixed sequence of steps shown as cards: what was understood, a mistake check, at most a
-> couple of questions, the options, a fixed price, the gate, the signed order. A language model only turns the
-> chef's words into a structured request; it does not decide or approve anything. There is also an assistant panel
-> in the store for questions like 'what did we order last week', and its answers point to the records."
+> "It is a conversation, but the model only writes one short line per turn. Prices, stock, amounts and dates appear
+> only in cards built from data: the options, the order sheet, the sign-off. The agent's steps are shown open, in
+> plain words, and it asks only when the answer changes the order. The model reads the chef's words into a
+> structured request; it does not decide or approve anything."
 
 **"What stops the model from making things up?"**
 > "Nothing it says can become an order on its own. The price must be the wholesaler's signed quote, the order must
 > match that quote exactly, and the rules are code, not a prompt. Where a person's answer matters and the agent only
-> relays it, the record says 'relayed by the agent, not verified' and the order goes to a person anyway. On the voice
-> line, every number the voice says is checked against the tool results, and a mismatch cuts the audio."
+> relays it, the record says 'relayed by the agent, not verified' and the order goes to a person anyway. In voice,
+> the voice model only relays: it has one tool, it is given the words to say, and it cannot place or approve
+> anything."
 
 **"What happens when the agent is wrong?"**
 > "Three things. If it breaks a rule, the gate refuses it and names the rule. If it is unusual, such as ten times the
@@ -71,9 +74,10 @@ answer in the first section.
 ## Other likely questions
 
 **"Is any of the data real?"**
-> "The product records are the partner's: 17,546 products, served live on our site. Prices and stock come from the
-> partner's test API, queried for a short list only. The kitchens, people and order histories are made up, and the
-> screens say 'demo on synthetic data'."
+> "The product records are the partner's synthetic ones: 17,546 products, served live on our site. Prices and stock
+> come from the partner's test API, queried for a short list only. The kitchens, people and order histories are made
+> up, the screens say 'demo on synthetic data', and no order reaches a real order system. The operations pages also
+> show a sample week, each item marked, which you can hide."
 
 **"What exactly is in the mandate?"**
 > "Which product groups the agent may buy, required claims such as lactose-free, forbidden allergens, how far ahead
@@ -86,15 +90,22 @@ answer in the first section.
 > that nothing was changed; it does not make the underlying data true, which still depends on the wholesaler's own
 > systems."
 
-**"How good is the voice call?"**
-> "Honestly, it's the weakest door. In our test of twelve spoken requests with different accents and kitchen noise,
-> it got the amount, unit and item right in seven. Every miss was visible on screen before anything was priced, and no
-> order can come from speech alone: a person still picks a card and signs."
+**"How good is the voice?"**
+> "On 36 recorded clips we did not tune on, with accents, hall noise and three languages, it heard the request right
+> in 33. In 27 hands-free conversations with real audio, every utterance went through the same engine as typed words,
+> and 25 ended exactly as the typed run did. A misheard number is read back or shown on a card before anything is
+> priced. We have not recorded a test on a real phone in a real kitchen yet."
 
 **"How good is the photo of a handwritten list?"**
 > "On our set of twelve lists with 37 item lines, the reader we chose got 33 lines right in the first run and all 37
 > in the second, after a prompt fix. It never invented a quantity, and the five traps we planted, such as a smudged
 > amount and a written instruction to the AI, never came out ready to order."
+
+**"How good is the search?"**
+> "We measured it on 189 test requests over the same 17,546 products. The right product came first for standard
+> BM25 in 31 % of them, keyword search 40 %, a standard hybrid 58 %, semantic search 72 %, ours 97 %. The difference
+> is the kitchen's hard rules in code and a decision model judging the candidates, with code checking the judge.
+> These are set-ups we built and ran ourselves, not other companies' products."
 
 **"How good are your substitutes?"**
 > "We built a map of alternatives by kitchen use over all 17,546 products, with hard rules in code for dietary claims
@@ -104,12 +115,20 @@ answer in the first section.
 
 **"Is it secure? Can anyone read the orders?"**
 > "Our QA agent found that the ledger and pending sign-offs were readable by anyone on Friday; that is fixed and
-> re-tested. A stranger can open the two demo kitchens, which is deliberate for the demo, but cannot approve anything,
-> mint a mandate, or act as a visitor's kitchen. The full re-test ran 911 cases with no server errors."
+> re-tested. Every kitchen is now an account: the three test kitchens are shared on purpose, a fresh kitchen is
+> private to its browser, and the operations portal shows viewers no one's own words. Nobody but the named person can
+> approve. Our QA agent's final run had 907 cases with no server errors."
+
+**"Why eight Aiven services? Isn't that a lot?"**
+> "Each one has one job: Runtime hosts the app, PostgreSQL is the system of record and the Time machine's history,
+> Kafka carries every action in order, Valkey caches live prices, OpenSearch does product search and the agent's
+> recall, Grafana is the dashboard and its alert rules, Managed Agents runs an outside buyer we do not run, and
+> Aiven's MCP server feeds the operations copilot. It is all on `/ops/platform`, with what we considered and did not
+> use."
 
 **"What does it cost to run?"**
 > "On Aiven, about nine US cents an hour for the whole system, about four dollars for the weekend. Each test buyer on
-> the seven frameworks cost between one and ten cents in model fees for Valio's example."
+> the seven frameworks cost between about one and five cents in model fees for Valio's example."
 
 **"What if your service is down?"**
 > "Then no agent can order through it, which is the safe failure. The records, passkeys and orders are in PostgreSQL
@@ -132,10 +151,11 @@ someone tries to break it")
 - Q: "Your reference is a script that beats every model. Your colleague's StoreBench already showed scripted
   operators beat frontier models. What is new, and did your reward survive attack?"
 > "Each of our thirteen scenarios isolates one decision a careless buyer gets wrong, like 'by Monday' when the
-> cheapest milk's cut-off has passed. The score comes from the gate's own records, never from the agent's report. We
-> ran nine scripted agents against our own scoring, three baselines and six exploits; two found real holes, always
-> picking the first product and scanning every price, and we fixed both. What we have not done yet: three repeats per model, and a full run of a frontier
-> model."
+> cheapest milk's cut-off has passed. The score comes from the gate's own records, never from the agent's report.
+> Every model ran three times through the same harness, and the licence is set by its worst run. We ran scripted
+> agents against our own scoring, baselines and exploits; two found real holes, always picking the first product and
+> scanning every price, and we fixed both. The suite has thirteen scenarios, so it says nothing about situations
+> outside them."
 
 **Otto Söderlund** (Supercell: "a real user problem, something people want to come back to")
 - Q: "Why would a chef come back to this tomorrow?"
@@ -151,9 +171,9 @@ someone tries to break it")
 
 **Umar Noor** (Google DeepMind; "first prototype to real-world impact")
 - Q: "What does Gemini actually do here, and what would it take to reach a real kitchen?"
-> "Gemini Live is the voice door: a chef calls their agent with their hands full, and every number it says is
-> checked against our tools. It understood seven of twelve test requests, so it needs work before a noisy kitchen.
-> To reach a real phone line we documented the Twilio route, but did not build it."
+> "Gemini Live is the ears and the mouth of hands-free voice, with OpenAI's realtime model as the fallback: it relays
+> the chef's words to the same engine as typed ones and says what it is given. On 36 held-out clips it heard 33
+> right. To reach a real phone line we documented the Twilio route, but did not build it."
 
 **Hubertus van der Drift** (Context.dev: "that one unique insight that solves a problem 10x faster or better")
 - Q: "What is the one insight? Everyone is building agent guardrails."
