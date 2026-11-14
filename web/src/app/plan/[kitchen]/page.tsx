@@ -27,7 +27,7 @@ export function generateStaticParams() {
 
 export default function PlanPage(props: PageProps<"/plan/[kitchen]">) {
   return (
-    <Suspense fallback={<main className="min-h-dvh bg-concrete" />}>
+    <Suspense fallback={<main className="min-h-dvh bg-mist" />}>
       <Loaded {...props} />
     </Suspense>
   );
@@ -40,7 +40,7 @@ async function Loaded({ params }: PageProps<"/plan/[kitchen]">) {
     <LangProvider initial={await chosenLang()}>
       <main className="min-h-dvh bg-mist text-ink">
         <StandaloneHeader kitchen={kitchen} kitchens={MENU_KITCHENS} names={NAMES} />
-        <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6">
+        <div className="mx-auto max-w-6xl px-4 pb-16 pt-6 sm:px-6 sm:pt-8">
           <StandaloneNote />
           <MenuPlanner key={kitchen} kitchen={kitchen} />
         </div>

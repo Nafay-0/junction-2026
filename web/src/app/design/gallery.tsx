@@ -3,7 +3,7 @@
 import { Package, Search } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { LangSwitch } from "../_i18n/provider";
-import { Avatar, Badge, Button, Card, Empty, IconDisc, Input, Kbd, ListRow, Panel, Price, Select, Sheet, Skeleton, Steps, Tabs, Tag, Toaster, useToast } from "../_ui/kit";
+import { Avatar, Badge, Button, Card, Checkbox, Chip, Empty, FactList, IconDisc, Input, Kbd, ListRow, PageHeader, Panel, Price, Select, Sheet, Skeleton, Steps, Switch, Tabs, Tag, Textarea, Toaster, useToast } from "../_ui/kit";
 import { AgentTurn, AnomalyCard, BuyerTurn, Composer, GateCard, MemoryCard, NoticeCard, OptionsCard, OrderCard, PriceCard, QuestionCard, RecordsCard, StepLines, Thread, UnderstoodCard, VoiceStatus, type MicState, type VoiceState } from "../_ui/thread";
 import { Wordmark } from "../_ui/wordmark";
 
@@ -219,6 +219,8 @@ function Controls() {
   const toast = useToast();
   const [tab, setTab] = useState("all");
   const [sheet, setSheet] = useState(false);
+  const [check, setCheck] = useState(true);
+  const [chips, setChips] = useState<string[]>(["Lactose-free"]);
   return (
     <Block title="Controls" note="Buttons and chips are pills; fields are 12. Lime is the one main action in view.">
       <div className="flex flex-wrap items-center gap-3">
@@ -255,6 +257,36 @@ function Controls() {
           <option>Tue 17.11.</option>
         </Select>
         <Input label="Per-order limit" value="abc" error="Give a number of euros." onChange={() => {}} />
+        <Input label="Weekly budget" value="400" suffix="€" inputMode="numeric" onChange={() => {}} />
+        <Textarea label="Note for the driver" placeholder="Back door, ring twice" />
+        <div className="space-y-2">
+          <Checkbox checked={check} onChange={setCheck} label="Lactose-free only" hint="The agent never proposes anything else." />
+          <Checkbox card checked={!check} onChange={(v) => setCheck(!v)} label="Milk and cream" />
+          <Switch on={check} onChange={setCheck}>
+            Show what was left out
+          </Switch>
+        </div>
+      </div>
+      <div className="mt-6 flex flex-wrap items-center gap-2" role="group" aria-label="Must be">
+        {["Lactose-free", "Gluten-free", "Vegan", "Organic"].map((c) => (
+          <Chip key={c} on={chips.includes(c)} onClick={() => setChips((x) => (x.includes(c) ? x.filter((y) => y !== c) : [...x, c]))}>
+            {c}
+          </Chip>
+        ))}
+        <Chip on={false} onClick={() => {}} count={91}>
+          Milk
+        </Chip>
+      </div>
+      <div className="mt-8 rounded-xl bg-paper p-5">
+        <PageHeader back={{ href: "#", label: "Orders" }} title="Order of Mon 16.11." lead="Placed by the agent alone at 9.42, within the kitchen's signed rules." actions={<Button kind="go">Repeat this order</Button>} />
+        <FactList
+          className="mt-6 max-w-xl"
+          rows={[
+            { label: "Sold per", value: "case: 6 × 1 L" },
+            { label: "Origin", value: "Finland" },
+            { label: "Allergens", value: "Contains milk" },
+          ]}
+        />
       </div>
       <div className="mt-6 flex flex-wrap items-center gap-4">
         <Tabs label="Show" value={tab} onChange={setTab} options={[{ id: "all", label: "All", count: 24 }, { id: "waiting", label: "Waiting", count: 2 }, { id: "refused", label: "Refused", count: 3 }]} />

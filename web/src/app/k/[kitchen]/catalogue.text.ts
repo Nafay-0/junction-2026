@@ -25,6 +25,11 @@ export const CATALOGUE_TEXT = defineText({
     nothingHelp: "Remove a filter, or search in another language: “maito”, “mjölk”. Or ask the agent: it finds products by what they are for.",
     showMore: "Show more",
     liveFailed: "The live check failed",
+    filters: "Filters",
+    filtersTitle: "Must be, and leave out",
+    showResults: "Show the products",
+    categoriesIn: (d: string) => `Categories in ${d}`,
+    allDepartments: "All departments",
   },
   fi: {
     departments: "Osastot",
@@ -49,6 +54,11 @@ export const CATALOGUE_TEXT = defineText({
     nothingHelp: "Poista jokin suodatin tai hae toisella kielellä: ”milk”, ”mjölk”. Voit myös kysyä agentilta: se löytää tuotteet käyttötarkoituksen mukaan.",
     showMore: "Näytä lisää",
     liveFailed: "Tarkistus tukusta epäonnistui",
+    filters: "Suodattimet",
+    filtersTitle: "Oltava ja ilman",
+    showResults: "Näytä tuotteet",
+    categoriesIn: (d: string) => `Ryhmät: ${d}`,
+    allDepartments: "Kaikki osastot",
   },
   sv: {
     departments: "Avdelningar",
@@ -73,6 +83,11 @@ export const CATALOGUE_TEXT = defineText({
     nothingHelp: "Ta bort ett filter, eller sök på ett annat språk: ”maito”, ”milk”. Eller fråga agenten: den hittar produkter efter vad de används till.",
     showMore: "Visa fler",
     liveFailed: "Kontrollen hos grossisten misslyckades",
+    filters: "Filter",
+    filtersTitle: "Måste vara, och utan",
+    showResults: "Visa produkterna",
+    categoriesIn: (d: string) => `Kategorier i ${d}`,
+    allDepartments: "Alla avdelningar",
   },
 });
 
