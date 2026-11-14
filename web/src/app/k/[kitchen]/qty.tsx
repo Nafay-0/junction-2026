@@ -1,5 +1,6 @@
 "use client";
 
+import { Minus, Plus } from "lucide-react";
 import { useLang, useText } from "../../_i18n/provider";
 import { QTY_TEXT } from "./qty.text";
 import { contentOf, measureText, stepOf, unitWord } from "./units";
@@ -16,13 +17,13 @@ export function Quantity({ p, value, onChange, id, disabled, compact = false }: 
   const set = (n: number) => onChange(Math.max(step, Math.min(9999, Math.round(n / step) * step || step)));
   const m = contentOf(p, value);
   const showMeaning = m && !(p.salesUnit === "KG" && m.unit === "kg");
-  const btn = "flex min-h-11 w-11 items-center justify-center border-2 border-petrol bg-paper text-[1.3rem] font-bold text-petrol hover:bg-petrol-soft disabled:border-line disabled:text-ink-soft disabled:hover:bg-paper";
+  const btn = "flex size-11 items-center justify-center rounded-full text-ink transition-colors duration-150 hover:bg-surface active:bg-petrol-soft disabled:text-ink-faint disabled:hover:bg-transparent";
   return (
     <div>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <div className="flex items-stretch">
+        <div className="inline-flex items-center rounded-full border border-line-strong bg-paper focus-within:border-petrol focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-petrol)_22%,transparent)]">
           <button type="button" aria-label={tx.less(unitWord(p, 1, lang))} disabled={disabled || value <= step} onClick={() => set(value - step)} className={btn}>
-            −
+            <Minus aria-hidden size={18} />
           </button>
           <label htmlFor={id} className="sr-only">
             {tx.quantityIn(unitWord(p, 1, lang), unitWord(p, 2, lang))}
@@ -37,10 +38,10 @@ export function Quantity({ p, value, onChange, id, disabled, compact = false }: 
               if (Number.isFinite(n) && n > 0) onChange(Math.min(9999, n));
             }}
             onBlur={() => set(value)}
-            className="min-h-11 w-16 border-y-2 border-petrol bg-paper text-center text-[1.1rem] font-semibold tabular disabled:border-line"
+            className="min-h-11 w-12 rounded-none bg-transparent text-center text-[1.05rem] font-semibold tabular focus:outline-none disabled:text-ink-soft"
           />
           <button type="button" aria-label={tx.more(unitWord(p, 1, lang))} disabled={disabled} onClick={() => set(value + step)} className={btn}>
-            +
+            <Plus aria-hidden size={18} />
           </button>
         </div>
         <p className="flex items-baseline gap-1.5" aria-live="polite">
@@ -48,7 +49,7 @@ export function Quantity({ p, value, onChange, id, disabled, compact = false }: 
           {showMeaning && (
             <>
               <span className="text-ink-soft">=</span>
-              <span key={value} className={`changed px-0.5 ${compact ? "text-[1.05rem] font-semibold" : "display text-[1.6rem]"} text-petrol-deep tabular`}>
+              <span key={value} className={`changed rounded-xs px-1 ${compact ? "text-[1.05rem] font-semibold" : "display text-[1.5rem]"} text-petrol-deep tabular`}>
                 {measureText(m, lang)}
               </span>
             </>

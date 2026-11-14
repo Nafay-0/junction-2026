@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Search } from "lucide-react";
 import { Kbd } from "../../_ui/kit";
 
 /**
@@ -56,12 +57,9 @@ export function FilterBar({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-      <label className="flex min-h-11 min-w-[18rem] flex-1 items-center gap-2 border-2 border-line bg-paper px-3 focus-within:border-petrol sm:max-w-[30rem]">
-        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden className="shrink-0 text-ink-soft">
-          <circle cx="6.5" cy="6.5" r="5" fill="none" stroke="currentColor" strokeWidth="2" />
-          <path d="M10.5 10.5 L15 15" stroke="currentColor" strokeWidth="2" />
-        </svg>
+    <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-3">
+      <label className="flex min-h-11 min-w-0 flex-1 basis-full items-center gap-2.5 rounded-full border border-line-strong bg-paper pl-4 pr-3 transition-[border-color,box-shadow] duration-150 focus-within:border-petrol focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-petrol)_22%,transparent)] sm:max-w-[26rem] sm:basis-[16rem]">
+        <Search aria-hidden size={17} className="shrink-0 text-ink-soft" />
         <span className="sr-only">Search</span>
         <input
           ref={input}
@@ -75,12 +73,14 @@ export function FilterBar({
             }
           }}
           placeholder={placeholder}
-          className="min-w-0 flex-1 bg-transparent text-[0.98rem] outline-none placeholder:text-ink-soft"
+          className="min-w-0 flex-1 rounded-none bg-transparent text-[0.95rem] outline-none placeholder:text-ink-soft"
         />
-        <Kbd>/</Kbd>
+        <span className="hidden sm:block">
+          <Kbd>/</Kbd>
+        </span>
       </label>
       {options && setValue && (
-        <div role="group" aria-label={label} className="flex flex-wrap gap-1">
+        <div role="group" aria-label={label} className="flex max-w-full gap-1 overflow-x-auto rounded-full bg-surface p-1">
           {options.map((o) => {
             const on = value === o.id;
             return (
@@ -89,17 +89,17 @@ export function FilterBar({
                 type="button"
                 aria-pressed={on}
                 onClick={() => setValue(o.id)}
-                className={`min-h-9 px-3 text-[0.9rem] font-semibold ${on ? "bg-petrol text-paper" : "border-2 border-line bg-paper text-ink hover:border-petrol"}`}
+                className={`inline-flex min-h-9 shrink-0 items-center whitespace-nowrap rounded-full px-3.5 text-[0.86rem] font-medium transition-[background-color,color,box-shadow] duration-150 pointer-coarse:min-h-10 ${on ? "bg-paper text-ink shadow-xs" : "text-ink-soft hover:text-ink"}`}
               >
                 {o.label}
-                {o.count !== undefined && <span className={`ml-1.5 tabular ${on ? "text-paper/80" : "text-ink-soft"}`}>{o.count}</span>}
+                {o.count !== undefined && <span className={`ml-1.5 text-[0.78rem] tabular ${on ? "text-ink-soft" : "text-ink-faint"}`}>{o.count}</span>}
               </button>
             );
           })}
         </div>
       )}
       {result && (
-        <p className="ml-auto text-[0.88rem] text-ink-soft tabular" role="status">
+        <p className="ml-auto text-[0.84rem] text-ink-soft tabular" role="status">
           {result}
         </p>
       )}
