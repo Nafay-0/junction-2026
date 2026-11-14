@@ -17,6 +17,7 @@ export type LedgerEntryType =
   | "refusal" // a call was refused before reaching the policy (bad mandate, forged quote, bad approval proof)
   | "control" // the wholesaler's operations staff suspended or resumed an agent or a kitchen
   | "offer" // the wholesaler's selling agent offered a product to a kitchen (or held one back, and why), and the kitchen's answer
+  | "watch" // the kitchen agent's watch: a key product that cannot come (and the substitutes), a recurring order renewed or held, a staged condition
   | "agent"; // the kitchen's own agent conversation: a turn, a model call, a tool call, a grounding refusal, a memory read or write
 
 export type LedgerInput = {
