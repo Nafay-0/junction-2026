@@ -403,9 +403,13 @@ export function createScenarios(deps: ScenarioDeps) {
       findCandidates(catalog, { ...spec.ingredient, form: spec.ingredient.form === "frozen" ? "frozen" : "any", avoid: [] }, k.diet, allowed, 12),
       spec.ingredient.form === "frozen" ? Promise.resolve(undefined) : findCandidates(catalog, { ...spec.ingredient, key: `${spec.key}_frozen`, searchTerms: [...spec.ingredient.searchTerms.slice(0, 2).map((t) => `${t} pakaste`), `frozen ${spec.ingredient.name}`], form: "frozen", avoid: [] }, k.diet, allowed, 8),
     ]);
-    const other = (xs: Product[]) => xs.filter((x) => x.id !== st.product?.productId && !knownLate(p, x.id, want));
-    const fresh = other(same[0].candidates.map((c) => c.product)).filter((x) => x.temperatureClass !== "frozen");
-    const frozen = other([...(same[1]?.candidates ?? []), ...same[0].candidates].map((c) => c.product)).filter((x) => x.temperatureClass === "frozen");
+    // "The same ingredient" means the thing itself: never a stand-in the search judged as one (pork cheek for beef cheek),
+    // and every word of one of its names in the product's name ("naudan poski", "beef cheek").
+    const terms = [spec.name, ...spec.ingredient.searchTerms].map((t) => t.toLowerCase().split(/[^a-zåäö]+/u).filter((w) => w.length >= 3 && !/^(fresh|frozen|tuore|pakaste|raw)$/.test(w)).map((w) => w.slice(0, Math.max(3, w.length - 2)))).filter((ws) => ws.length);
+    const isIt = (c: { product: Product; why: string[] }) => !c.why.some((w) => /stand-in/.test(w)) && terms.some((ws) => { const n = [c.product.name, c.product.names?.fi, c.product.names?.en].filter(Boolean).join(" ").toLowerCase(); return ws.every((w) => n.includes(w)); });
+    const other = (xs: { product: Product; why: string[] }[]) => xs.filter(isIt).map((c) => c.product).filter((x) => x.id !== st.product?.productId && !knownLate(p, x.id, want));
+    const fresh = other(same[0].candidates).filter((x) => x.temperatureClass !== "frozen");
+    const frozen = other([...(same[1]?.candidates ?? []), ...same[0].candidates]).filter((x) => x.temperatureClass === "frozen");
     if (fresh.length) raw.push({ o: { optionId: `${st.lineId}:same`, kind: "ingredient", title: `${spec.name}, another product`, tradeoff: { taste: "the same ingredient", texture: "the same", work: "none" }, fidelity: 0.95, source: "rules" }, parts: [{ ing: { ...spec.ingredient, avoid: [] }, main: true, cands: fresh.slice(0, 4) }] });
     if (frozen.length) raw.push({ o: { optionId: `${st.lineId}:same_frozen`, kind: "ingredient", title: `${spec.name}, frozen`, tradeoff: { taste: "the same ingredient", texture: "frozen: a little softer", work: "thaw it in the cold room overnight" }, fidelity: 0.88, source: "rules" }, parts: [{ ing: { ...spec.ingredient, form: "frozen", avoid: [] }, main: true, cands: [...new Map(frozen.map((x) => [x.id, x])).values()].slice(0, 4) }] });
     // 1. The rules of the kitchen: another ingredient that does the same job, the amount adjusted.
@@ -449,6 +453,8 @@ export function createScenarios(deps: ScenarioDeps) {
       const checks = await Promise.all(x.parts.map((pt) => partCheck(k, p, pt.ing, pt.main, covers, () => p.live.statuses, pt.cands)));
       const total = checks.reduce((s, c) => s + (c.product?.totalCents ?? 0), 0);
       const main = checks.find((c) => c.main)?.product;
+      // The same ingredient in another product is said by that product's name: "HK beef cheek slow-cooked frozen 2 kg".
+      if (main && /:same(_frozen)?$/.test(x.o.optionId)) x.o = { ...x.o, title: main.name };
       if (x.o.source !== "rules" && st.role === "protein" && main && !kindWords.some((w) => main.name.toLowerCase().includes(w))) {
         x.o = { ...x.o, fidelity: Math.min(x.o.fidelity, 0.45), tradeoff: { ...x.o.tradeoff, texture: "another kind of protein: the dish changes" } };
       }

@@ -190,7 +190,7 @@ describe("scenario 2: a booking at short notice, substitutes by the ingredient's
     // One truth per product per day: it is this product that cannot come, named, and the other one that can is offered.
     expect(st.product?.productId).toBe("810007");
     expect(st.arrival.code).toBe("not_deliverable");
-    expect(r.options.beef_cheek[0]).toMatchObject({ rank: "best", optionId: "beef_cheek:same_frozen", title: "Beef cheek, frozen" });
+    expect(r.options.beef_cheek[0]).toMatchObject({ rank: "best", optionId: "beef_cheek:same_frozen", title: "HK beef cheek slow-cooked frozen 2 kg" });
     expect(r.options.beef_cheek[0].checks[0].product).toMatchObject({ productId: "810008", packs: 4 });
     const sheet = await scenarios.sheetOf(kaari, r.planId, r.cannotArrive.map((x) => ({ lineId: x.lineId, optionId: r.options[x.lineId][0].optionId })), { by: "Sanna Koskinen (test)" });
     expect(sheet.lines.find((x) => x.productId === "810008")).toMatchObject({ packs: 4 });
