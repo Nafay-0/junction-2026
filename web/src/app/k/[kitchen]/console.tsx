@@ -298,17 +298,26 @@ export function Console() {
 
   // ---------- the run survives a reload (this browser tab only) ----------
 
+  // Read before the first save: the save below would otherwise remove the saved run (the fresh page's empty run)
+  // before the restore reads it, and a reload would drop a live fixed price.
+  const restored = useRef(false);
   useEffect(() => {
+    const saved = restored.current ? undefined : readSession<Run>(`dock-run:${slug}`);
+    restored.current = true;
     queueMicrotask(() => {
-      if (runN.current !== 0) return;
-      const saved = readSession<Run>(`dock-run:${slug}`);
-      if (!saved?.text) return;
+      if (runN.current !== 0 || !saved?.text) return;
       runN.current = saved.n;
       setRun({ ...saved, busy: undefined, busyKey: undefined, failure: undefined });
+      // The step may have moved on while the page was away (a price ran out, an order placed from another screen).
+      const id = saved.step?.requestId;
+      if (id && !saved.order)
+        void call<{ step: Step }>("GET", `/api/v1/intake/${id}`).then((res) => {
+          if (res.ok) setRun((r) => (r.n === saved.n ? { ...r, step: res.data.step, options: res.data.step.options.length ? res.data.step.options : r.options } : r));
+        });
     });
-  }, [slug]);
+  }, [slug, call]);
   useEffect(() => {
-    if (run.busy) return;
+    if (run.busy || !restored.current) return;
     try {
       if (run.text) sessionStorage.setItem(`dock-run:${slug}`, JSON.stringify({ ...run, failure: undefined }));
       else sessionStorage.removeItem(`dock-run:${slug}`);

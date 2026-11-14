@@ -9,6 +9,8 @@ import { auditFor } from "@/core/audit";
 import { signMandate } from "@/core/mandate";
 import { DEMO_ORG, demoMandate, demoOrgKeyPair } from "../dev-fixtures";
 import { KITCHEN_ORG } from "../demo-kitchen";
+import { resolveKitchen } from "../console-kitchens";
+import { overview } from "../kitchen-portal";
 import { localFetch } from "../local-transport";
 import { getRuntime, resetRuntime } from "../runtime";
 import { doorLog } from "./door";
@@ -137,6 +139,11 @@ describe("suspension", () => {
     const listed = await controlGet(new Request(`${BASE}/ops-api/control`, { headers: { cookie } }));
     const body = (await listed.json()) as { suspensions?: { refusals: number }[]; active?: { refusals: number }[] };
     expect(JSON.stringify(body)).toContain('"refusals":28');
+    // The kitchen's own home page is told, instead of looking normal.
+    const k = await resolveKitchen("kaari");
+    expect((await overview(k!)).suspension).toMatchObject({ scope: "agent", reason: "Stop for a check", message: expect.stringContaining("Stop for a check") });
+    await control({ action: "resume", suspensionId: s.body.suspension.suspensionId });
+    expect((await overview(k!)).suspension).toBeUndefined();
   });
 
   it("suspends a whole organisation, including the on-site console and its scripted buyer", async () => {

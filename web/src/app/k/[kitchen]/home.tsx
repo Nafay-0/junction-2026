@@ -60,6 +60,12 @@ export function Home() {
 
   return (
     <div className="mt-5 space-y-10">
+      {o.suspension && (
+        <div role="alert" className="border-l-[6px] border-petrol bg-paper p-4">
+          <p className="font-semibold">The purchasing agent is suspended</p>
+          <p className="text-ink-soft">{say(o.suspension.message)}</p>
+        </div>
+      )}
       <Hero o={o} cutoffs={cutoffs} now={now} />
       <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
         <Attention o={o} cutoffs={cutoffs} now={now} />
