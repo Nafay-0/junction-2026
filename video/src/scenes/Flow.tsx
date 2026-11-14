@@ -21,7 +21,7 @@ import {
   Shrink,
   Typed,
 } from "../anim";
-import { C, display, sans } from "../theme";
+import { C, display, sans, SHADOW } from "../theme";
 import { cue } from "../vo";
 import {
   Agent,
@@ -585,6 +585,33 @@ const Funnel = () => {
         })}
       </div>
     </>
+  );
+};
+
+/** The exception, said first: the usual boxes miss the cut-off; one-litre cartons still arrive on Monday. */
+const Exception = () => {
+  const frame = useCurrentFrame();
+  const miss = prog(frame, T.reply + 12, M);
+  const ok = prog(frame, T.reply + 24, M);
+  const row = (p: number, name: string, note: string, good: boolean) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 20, padding: "22px 0", borderTop: `1.5px solid ${C.line}`, opacity: p, translate: `${(1 - p) * 24}px 0px` }}>
+      <span style={{ width: 44, height: 44, borderRadius: "50%", flexShrink: 0, background: good ? C.lime : C.safety, display: "flex", alignItems: "center", justifyContent: "center", ...display, fontSize: 28, color: C.slab }}>{good ? "✓" : "!"}</span>
+      <div>
+        <div style={{ fontSize: 34, fontWeight: 650, color: C.ink }}>{name}</div>
+        <div style={{ fontSize: 26, color: good ? C.good : C.notice, marginTop: 2 }}>{note}</div>
+      </div>
+    </div>
+  );
+  return (
+    <div style={{ marginTop: 110, width: 700, boxSizing: "border-box", borderRadius: 32, background: C.paper, boxShadow: SHADOW.xl, borderTop: `10px solid ${C.safety}`, padding: "30px 38px 14px", ...sans }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 26, color: C.inkSoft }}>
+        <IconTruck size={30} />
+        Delivery Monday 16 Nov
+      </div>
+      <div style={{ ...display, fontSize: 52, color: C.ink, margin: "10px 0 18px" }}>Cut-off passed</div>
+      {row(miss, "Usual 10 l boxes", "can't arrive in time", false)}
+      {row(ok, "1 000 one-litre cartons", "arrive Monday", true)}
+    </div>
   );
 };
 
@@ -1250,23 +1277,7 @@ export const Flow = () => {
           <Funnel />
         </Side>
         <Side at={T.reply + 4} exit={T.options[0] - Q}>
-          <div
-            style={{
-              ...sans,
-              display: "inline-flex",
-              alignItems: "center",
-              height: 88,
-              padding: "0 40px",
-              borderRadius: 44,
-              marginTop: 0,
-              background: C.safety,
-              color: C.slab,
-              fontSize: 44,
-              fontWeight: 700,
-            }}
-          >
-            Cut-off passed: Thu 12 Nov, 15.00
-          </div>
+          <Exception />
         </Side>
         <Side at={T.options[0]} exit={T.send2 - Q}>
           <Ranks />
