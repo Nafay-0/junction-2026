@@ -8,6 +8,7 @@ import { Button, Details, Empty, LoadError, Loading, PageHead, Panel, Section, u
 import { Check, CircleAlert, ExternalLink, FlaskConical } from "lucide-react";
 import { Badge, Select, Tag, buttonClass } from "../../../_ui/kit";
 import { Target } from "../../../_ui/target";
+import { RADAR_TEXT } from "./radar.text";
 
 type Evidence = { value: string; sentence?: string; verified: boolean; english?: string };
 
@@ -28,8 +29,8 @@ export function RadarScreen() {
   return (
     <>
       <PageHead
-        title="Recall radar"
-        purpose="Is anything we sell being recalled?"
+        title={RADAR_TEXT.en.title}
+        purpose={RADAR_TEXT.en.purpose}
         about="Is anything we sell being recalled? The radar reads food authorities' recall notices on the open web, keeps each fact with the sentence it came from, matches them against the assortment in code, and holds a product an authority names before any agent can order it. Doubtful matches wait for a person."
         right={v && now && fi1?.lastCheckAt ? <span className="tabular">Ruokavirasto checked {since(fi1.lastCheckAt, now)}</span> : undefined}
       />

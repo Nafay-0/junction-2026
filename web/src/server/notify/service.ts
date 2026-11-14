@@ -14,6 +14,7 @@ import { CONFIRM_HOURS, readLink, signLink } from "./links";
 import type { ChangeKind, ChangedModel, MailKind, MailKitchen, MailModel, ReceiptModel, SignOffModel } from "./model";
 import { renderMail } from "./render";
 import { ResendTransport, type Delivery, type MailTransport } from "./transport";
+import { playingNow } from "../alive/clock";
 
 /**
  * Email to the kitchen (web/docs/mail.md). After the fact and never in the path of an order: the order flow publishes
@@ -300,6 +301,8 @@ export async function deliver(rt: Runtime, input: DeliverInput, now = new Date()
     ledger(rt, { orderId: input.orderId, summary: `${what(r)} to ${c.kitchenName}: not sent: ${reason}.`, data: { step, kind: r.kind, eventKey: r.eventKey, outcome: "skipped", reason } });
     return r;
   };
+  // The sample activity (server/alive): recorded with its preview, never sent, never counted against the caps.
+  if (playingNow()) return skip("sample activity: recorded with its preview, not sent");
   if (c.state === "stopped") return skip("the kitchen stopped these emails");
   if (c.state === "bounced") return skip("the kitchen's address bounced; it has to give one again");
   if (c.state === "pending" && !input.allowPending) return skip("the kitchen's address is not confirmed yet");

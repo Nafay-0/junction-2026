@@ -219,9 +219,12 @@ export class MeteredCatalog implements CatalogPort {
   constructor(
     private readonly inner: CatalogPort,
     private readonly maxIdsPerCall = MAX_LIVE_IDS_PER_CALL,
+    /** True while a call must not count as live traffic (the server's sample activity answers it without the partner). */
+    private readonly uncounted: () => boolean = () => false,
   ) {}
 
   async searchProducts(query: ProductQuery): Promise<Product[]> {
+    if (this.uncounted()) return this.inner.searchProducts(query);
     this.counters.searches += 1;
     return this.inner.searchProducts(query);
   }
@@ -250,6 +253,7 @@ export class MeteredCatalog implements CatalogPort {
         `Live price/availability is limited to ${this.maxIdsPerCall} products per call; got ${ids.length}. Narrow the search first.`,
       );
     }
+    if (this.uncounted()) return ids;
     this.counters.liveCalls += 1;
     this.counters.productsPriced += ids.length;
     return ids;

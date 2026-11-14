@@ -11,6 +11,7 @@ import { Details, Empty, KV, LoadError, Loading, Outcome, PageHead, Section, use
 import { FilterBar, useUrlState } from "../../_ui/filters";
 import { CheckGrid, Stamp, Table } from "../../_ui/parts";
 import { VerifyBox } from "./verify-box";
+import { AUDIT_TEXT } from "./audit.text";
 
 const STATUS: Record<string, { label: string; kind: string }> = {
   committed: { label: "Signed order", kind: "committed" },
@@ -32,8 +33,8 @@ export function AuditIndex() {
   return (
     <>
       <PageHead
-        title="Audit"
-        purpose="Who approved an order, for exactly what, and the proof."
+        title={AUDIT_TEXT.en.title}
+        purpose={AUDIT_TEXT.en.purpose}
         about="Who approved an order, for exactly what, and the proof: for any order, what was asked, what the wholesaler stated, what was committed and who signed, checkable against the published keys. A kitchen's private memory is not part of it."
       />
       <LoadError message={live.error} />
@@ -42,7 +43,7 @@ export function AuditIndex() {
           {!rows ? (
             <Loading label="Reading the orders…" />
           ) : rows.length === 0 ? (
-            <Empty title="No order yet">Orders appear here once an agent places one, whether signed, waiting, refused or declined.</Empty>
+            <Empty title={AUDIT_TEXT.en.emptyTitle}>{AUDIT_TEXT.en.empty}</Empty>
           ) : (
             <>
               <FilterBar

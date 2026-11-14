@@ -9,6 +9,8 @@ import { STATUS_WORD, decidedWords, fi, money, since, statusTone, when, whenSeco
 import { Button, Empty, LiveMark, LoadError, Loading, PageHead, useNow, useOps } from "../../_ui/kit";
 import { useUrlState } from "../../_ui/filters";
 import { Table } from "../../_ui/parts";
+import { OPS_ORDERS_TEXT } from "./orders.text";
+import { SamplePill, isSample } from "../../../_ui/sample";
 
 /** The source in a few words, for the list (the order's page says it in full). */
 const SOURCE_SHORT: Record<string, string> = { conversation: "typed, in the conversation", voice: "by voice", photo: "from a photo", menu: "menu planner", assistant: "store assistant", store: "the store", mcp: "outside agent, MCP", rest: "outside agent, REST", connector: "connector address", aiven_agent: "Aiven Managed Agent", watch_renewal: "watch: renewal", watch_substitute: "watch: substitute", backup: "watch: backup used", offer: "accepted offer", presenter: "presenter show" };
@@ -34,8 +36,8 @@ export function OrdersScreen() {
   return (
     <>
       <PageHead
-        title="Orders"
-        purpose="Every order an agent placed, from every door, newest first. Open one for its whole timeline."
+        title={OPS_ORDERS_TEXT.en.title}
+        purpose={OPS_ORDERS_TEXT.en.purpose}
         right={d && <LiveMark at={whenSeconds(d.at)} error={live.error} />}
       />
       <form
@@ -91,7 +93,11 @@ export function OrdersScreen() {
       {!d ? (
         <Loading label="Reading the orders…" />
       ) : d.rows.length === 0 ? (
-        <Empty title="No order matches">Clear the filters, or place an order from the store or an agent.</Empty>
+        q || kitchen || agent || source || status || day ? (
+        <Empty title={OPS_ORDERS_TEXT.en.noMatchTitle}>{OPS_ORDERS_TEXT.en.noMatch}</Empty>
+      ) : (
+        <Empty title={OPS_ORDERS_TEXT.en.emptyTitle}>{OPS_ORDERS_TEXT.en.empty}</Empty>
+      )
       ) : (
         <>
           <p className="mb-2 text-[0.88rem] text-ink-soft">
@@ -118,6 +124,7 @@ export function OrdersScreen() {
                       <Link href={`/ops/orders/${r.orderId}`} title={r.orderId} className="font-semibold text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol">
                         {when(r.at)}
                       </Link>
+                      {isSample(r) && <SamplePill />}
                     </td>
                     <td className="min-w-[9rem] max-w-[14rem]">
                       <span className="block leading-snug">{r.orgName}</span>

@@ -173,6 +173,7 @@ export function Catalogue() {
             <h1 id="shop-title" className="display mt-0.5 break-words text-[1.95rem] leading-[1.05] text-paper hyphens-manual sm:mt-1 sm:text-[2.7rem]">
               {title}
             </h1>
+            {!applied && <p className="mt-1.5 max-w-[44ch] text-[0.9rem] leading-snug text-paper/85 sm:mt-2">{tx.intro}</p>}
             <p className="mt-1.5 max-w-[44ch] text-[0.9rem] leading-snug text-paper/85 sm:mt-2" aria-live="polite">
               {loading ? tx.searching : data ? tx.count(data.products.length, data.products.length === limit) : ""}
             </p>

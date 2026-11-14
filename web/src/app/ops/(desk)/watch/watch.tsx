@@ -9,6 +9,8 @@ import { Badge } from "../../../_ui/kit";
 import { fi, num, when } from "../../_ui/format";
 import { Button, Details, Empty, LoadError, Loading, Num, PageHead, Panel, Section, useNow, useOps } from "../../_ui/kit";
 import { Table } from "../../_ui/parts";
+import { WATCH_TEXT } from "./watch.text";
+import { SamplePill, isSample } from "../../../_ui/sample";
 
 type Kitchens = { slug: string; name: string; kind: string; standing: { family: string; productId: string; name: string; weekdays: number[] }[] }[];
 type View = WatchView & { kitchens: Kitchens };
@@ -31,8 +33,8 @@ export function WatchScreen() {
   return (
     <>
       <PageHead
-        title="Kitchen watch"
-        purpose="Products a kitchen buys every week that cannot come, with good, better and best substitutes."
+        title={WATCH_TEXT.en.title}
+        purpose={WATCH_TEXT.en.purpose}
         about="Each kitchen's own agent watches what it buys every week and what is still to come: one live availability call for its key products, a finding when one cannot come for its day, with good, better, best substitutes. It learns each recurring order from the kitchen's own orders and, where the kitchen switched auto-renew on, renews it before the cut-off, or holds it and asks when the amount or the price has drifted. Every order goes through the gate."
         right={v ? <span className="tabular" title={v.schedule.minutes ? undefined : v.schedule.reason}>{num(v.stats.liveCalls)} live calls since start{v.schedule.minutes ? ` · runs every ${v.schedule.minutes} min` : " · runs when asked"}</span> : undefined}
       />
@@ -75,7 +77,7 @@ function Body({ v, now, refresh }: { v: View; now: number; refresh: () => void }
       <div className="grid grid-cols-1 gap-x-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <div>
           <Section title="What the watch found, and what was decided" aside={v.findings.length ? `${v.findings.length}` : undefined}>
-            {v.findings.length === 0 ? <Empty title="Nothing found yet">When a product a kitchen buys every week, or has on its way, cannot come for its day, it is listed here with the substitutes the agent proposed.</Empty> : v.findings.map((f) => <FindingCard key={f.findingId} f={f} now={now} />)}
+            {v.findings.length === 0 ? <Empty title={WATCH_TEXT.en.emptyTitle}>{WATCH_TEXT.en.empty}</Empty> : v.findings.map((f) => <FindingCard key={f.findingId} f={f} now={now} />)}
           </Section>
           <Section title="Recurring orders renewed or held" aside={v.renewals.length ? `${v.renewals.length}` : undefined}>
             {v.renewals.length === 0 ? (
@@ -146,6 +148,7 @@ function FindingCard({ f, now }: { f: Finding; now: number }) {
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="font-semibold">
           {f.kitchenName} · {f.product.name}
+          {isSample(f) && <SamplePill />}
         </p>
         <span className="tabular text-[0.84rem] text-ink-soft">{when(f.at, new Date(now))}</span>
       </div>
@@ -229,6 +232,7 @@ function RenewalRow({ r, now }: { r: Renewal; now: number }) {
       <td>
         <p className="font-semibold">
           {r.product.name}, {r.deliveryDate}
+          {isSample(r) && <SamplePill />}
         </p>
         <p className="text-[0.84rem] text-ink-soft">
           Usually {r.amounts.usual} {r.amounts.unit}; learned from {r.basedOn.orders} orders over {r.basedOn.weeks.length} weeks

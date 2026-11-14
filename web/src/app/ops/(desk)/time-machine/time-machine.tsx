@@ -14,6 +14,7 @@ import { fi, money, when, whenSeconds } from "../../_ui/format";
 import { Button, Details, Empty, LoadError, Loading, PageHead, Section, useOps } from "../../_ui/kit";
 import { Stamp, Table } from "../../_ui/parts";
 import { useUrlState } from "../../_ui/filters";
+import { TIME_MACHINE_TEXT } from "./time-machine.text";
 
 type Reply =
   | { attached: false; env: string; sentence: string }
@@ -58,8 +59,8 @@ export function TimeMachineScreen() {
   return (
     <>
       <PageHead
-        title="Time machine"
-        purpose="The rules an order was judged by, as they stood at that second, beside the rules now."
+        title={TIME_MACHINE_TEXT.en.title}
+        purpose={TIME_MACHINE_TEXT.en.purpose}
         about={`What changed in between, who changed it, and whether the order would pass today. Every answer is one query on the history${r?.attached ? ` in ${WHERE[r.backend]}` : ""}, shown under the page.`}
         right={r?.attached ? <MirrorMark r={r} /> : undefined}
       />

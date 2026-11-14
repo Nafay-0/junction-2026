@@ -9,6 +9,7 @@ import { fi, num, pct, when, whenSeconds } from "../../_ui/format";
 import { Details, Empty, KV, LiveMark, LoadError, Loading, PageHead, Section, ViaTag, useOps } from "../../_ui/kit";
 import { FilterBar, useUrlState } from "../../_ui/filters";
 import { Funnel } from "../../_ui/parts";
+import { SAFEGUARDS_TEXT } from "./safeguards.text";
 
 const WHERE: Record<string, string> = { gate: "At the gate", door: "At the door", quote: "When quoting", intake: "During the intake", operations: "By operations staff" };
 
@@ -22,8 +23,8 @@ export function SafeguardsView() {
   return (
     <>
       <PageHead
-        title="Safeguards"
-        purpose="What an agent may do alone, what needs a person, and what is refused, as the code runs it."
+        title={SAFEGUARDS_TEXT.en.title}
+        purpose={SAFEGUARDS_TEXT.en.purpose}
         about="What an agent may decide alone, what needs a person, and what is refused outright: the rule book exactly as the code runs it, grouped by what each rule protects, with how often it fired and its latest cases."
         right={s && <LiveMark at={whenSeconds(s.at)} error={live.error} />}
       />
