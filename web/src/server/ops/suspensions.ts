@@ -42,8 +42,13 @@ export type Suspension = {
   lastRefusalAt?: string;
 };
 
+/** A suspended agent's repeated call (a page polling its order) is written to the ledger at most this often. */
+export const SUSPENSION_LOG_EVERY_MS = 60_000;
+
 export class SuspensionRegistry {
   private readonly items: Suspension[] = [];
+  /** When each (suspension, method, call) was last written to the ledger. */
+  private readonly logged = new Map<string, number>();
 
   constructor(
     private readonly dock: Dock,
@@ -110,11 +115,12 @@ export class SuspensionRegistry {
    * Called for every agent call after its mandate verified. Throws the refusal (and writes it to the ledger) when
    * the agent or its organisation is suspended.
    */
-  enforce(session: AgentSession, call: { via: Via; path: string }): void {
+  enforce(session: AgentSession, call: { via: Via; path: string; method?: string }): void {
     const s = this.find(session.agentId, session.mandate.issuer.orgId);
     if (!s) return;
     s.refusals += 1;
-    s.lastRefusalAt = this.now().toISOString();
+    const at = this.now();
+    s.lastRefusalAt = at.toISOString();
     const whom = s.scope === "agent" ? "this agent" : `every agent of ${session.mandate.issuer.name}`;
     const err = new DockError(
       403,
@@ -123,12 +129,20 @@ export class SuspensionRegistry {
       SUSPENSION_RULE,
       { suspensionId: s.suspensionId, scope: s.scope, since: s.at },
     );
-    this.dock.ledger.append({
-      type: "refusal",
-      actor: `agent:${session.agentId}`,
-      summary: `Refused: ${err.message}`,
-      data: { code: err.code, rule: err.rule, status: err.status, suspensionId: s.suspensionId, orgId: session.mandate.issuer.orgId, via: call.via, path: call.path },
-    });
+    // A page left open polls every few seconds: the first refusal of each call is written, then at most one a
+    // minute per call, so the ledger and the wall show that the agent was stopped, not every poll it made.
+    // `refusals` still counts every call.
+    const key = `${s.suspensionId} ${call.method ?? ""} ${call.path.replace(/\/(req|ord|apr|quo)_[a-z0-9]+/gi, "/$1_*")}`;
+    const last = this.logged.get(key);
+    if (last === undefined || at.getTime() - last >= SUSPENSION_LOG_EVERY_MS) {
+      this.logged.set(key, at.getTime());
+      this.dock.ledger.append({
+        type: "refusal",
+        actor: `agent:${session.agentId}`,
+        summary: `Refused: ${err.message}`,
+        data: { code: err.code, rule: err.rule, status: err.status, suspensionId: s.suspensionId, orgId: session.mandate.issuer.orgId, via: call.via, path: call.path, refusalsSoFar: s.refusals },
+      });
+    }
     throw err;
   }
 }

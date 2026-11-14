@@ -9,6 +9,8 @@ import { auditFor } from "@/core/audit";
 import { signMandate } from "@/core/mandate";
 import { DEMO_ORG, demoMandate, demoOrgKeyPair } from "../dev-fixtures";
 import { KITCHEN_ORG } from "../demo-kitchen";
+import { resolveKitchen } from "../console-kitchens";
+import { overview } from "../kitchen-portal";
 import { localFetch } from "../local-transport";
 import { getRuntime, resetRuntime } from "../runtime";
 import { doorLog } from "./door";
@@ -98,7 +100,8 @@ describe("suspension", () => {
     // The suspension, every refusal and the resumption are on the ledger, and the chain holds.
     const rt = await getRuntime();
     const refusals = rt.dock.ledger.entries().filter((e) => e.type === "refusal" && e.data.rule === "operator_suspension");
-    expect(refusals.length).toBe(7);
+    // Two MCP tool calls are the same call at the door (POST /api/mcp) within a minute: one ledger line.
+    expect(refusals.length).toBe(6);
     expect(new Set(refusals.map((e) => e.data.via))).toEqual(new Set(["rest", "mcp"]));
 
     const resumed = await control({ action: "resume", suspensionId, note: "Fixed" });
@@ -120,6 +123,27 @@ describe("suspension", () => {
     expect(controlled).toHaveLength(2);
     expect(audit.explanation.some((l) => l.includes("[control]"))).toBe(true);
     await client.close();
+  });
+
+  it("a page polling a suspended agent's order writes one refusal, not one per poll, and every call is still refused and counted", async () => {
+    const s = await control({ action: "suspend", scope: "agent", target: KITCHEN_ORG.agentId, reason: "Stop for a check" });
+    expect(s.status).toBe(201);
+    const poll = (path: string) => consoleCall(new Request(`${BASE}/ui-api/kitchens/kaari/call`, { method: "POST", body: JSON.stringify({ method: "GET", path }) }), { params: Promise.resolve({ kitchen: "kaari" }) });
+    for (let i = 0; i < 14; i++) {
+      expect((await poll(`/api/v1/orders/ord_abc${i}`)).status).toBe(403);
+      expect((await poll(`/api/v1/ledger?requestId=req_abc${i}`)).status).toBe(403);
+    }
+    const rt = await getRuntime();
+    const refusals = rt.dock.ledger.entries().filter((e) => e.type === "refusal" && e.data.rule === "operator_suspension");
+    expect(refusals.map((e) => e.data.path)).toEqual(["/api/v1/orders/ord_abc0", "/api/v1/ledger"]);
+    const listed = await controlGet(new Request(`${BASE}/ops-api/control`, { headers: { cookie } }));
+    const body = (await listed.json()) as { suspensions?: { refusals: number }[]; active?: { refusals: number }[] };
+    expect(JSON.stringify(body)).toContain('"refusals":28');
+    // The kitchen's own home page is told, instead of looking normal.
+    const k = await resolveKitchen("kaari");
+    expect((await overview(k!)).suspension).toMatchObject({ scope: "agent", reason: "Stop for a check", message: expect.stringContaining("Stop for a check") });
+    await control({ action: "resume", suspensionId: s.body.suspension.suspensionId });
+    expect((await overview(k!)).suspension).toBeUndefined();
   });
 
   it("suspends a whole organisation, including the on-site console and its scripted buyer", async () => {

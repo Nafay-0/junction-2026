@@ -100,7 +100,7 @@ export function repeatNeed(r: PortalRequest, today = helsinkiToday()): { need: N
   const was = (need.deliverBy as string | undefined) ?? r.order?.deliveryDate;
   const deliverBy = was ? nextSameWeekday(was, today) : undefined;
   const qty = need.quantity ? amount(need.quantity.amount, need.quantity.unit) : "the same amount";
-  const text = r.text ? `Repeat: ${r.text}` : `Repeat of the order of ${day(helsinkiToday(new Date(r.at)))}: ${r.order ? r.order.lines.map((l) => `${l.quantity} × ${shortProduct(l.name)}`).join(" + ") : qty}`;
+  const text = r.text ? `Repeat: ${r.text.replace(/^(Repeat: )+/, "")}` : `Repeat of the order of ${day(helsinkiToday(new Date(r.at)))}: ${r.order ? r.order.lines.map((l) => `${l.quantity} × ${shortProduct(l.name)}`).join(" + ") : qty}`;
   const next: NeedInput = { ...need, text: text.slice(0, 2000), sameAsLastTime: false };
   if (deliverBy) next.deliverBy = deliverBy;
   else delete next.deliverBy;

@@ -7,6 +7,7 @@ import type { AgentSession, PublicOrder } from "@/core/orders";
 import { newId } from "@/core/util";
 import { resolveKitchen } from "./console-kitchens";
 import { localFetch } from "./local-transport";
+import { suspensions } from "./ops/suspensions";
 import { getRuntime, type Runtime } from "./runtime";
 
 /**
@@ -39,8 +40,8 @@ async function sessionOf(rt: Runtime, k: Kitchen): Promise<AgentSession> {
 // ---------- requests the portal opens for itself ----------
 
 /** Request texts the portal writes; the request history shows them as what they are. */
-export const BROWSE_TEXT = "Kitchen portal: live price checks for products the buyer opened in the catalogue";
-export const BASKET_PREFIX = "Basket from the catalogue:";
+import { BASKET_PREFIX, BROWSE_TEXT } from "./portal-requests";
+export { BASKET_PREFIX, BROWSE_TEXT };
 
 // ---------- the overview ----------
 
@@ -106,6 +107,8 @@ export type Overview = {
   week: WeekNumbers;
   standing: Standing[];
   liveCalls: number;
+  /** Set while the wholesaler's operations staff have stopped this kitchen's agent: it can do nothing until resumed. */
+  suspension?: { scope: "agent" | "org"; since: string; reason: string; message: string };
 };
 
 function portalOrder(o: PublicOrder): PortalOrder {
@@ -205,7 +208,14 @@ export async function overview(k: Kitchen): Promise<Overview> {
   requests.sort((a, b) => b.at.localeCompare(a.at));
   orders.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
-  return { now: now.toISOString(), today, memory, requests, orders, week: weekNumbers(all, intakes, [...correctedThisWeek].filter((id) => requests.some((r) => r.requestId === id)).length, now), standing: standing(profile, today), liveCalls: dock.stats().liveCalls };
+  const stopped = suspensions(dock).find(k.agentId, k.info.orgId);
+  const suspension = stopped && {
+    scope: stopped.scope,
+    since: stopped.at,
+    reason: stopped.reason,
+    message: `The wholesaler's operations staff stopped ${stopped.scope === "agent" ? "this kitchen's purchasing agent" : "every agent of this kitchen"}: "${stopped.reason}". It cannot look up prices, quote or order until they resume it; orders already waiting for sign-off stay with their signer.`,
+  };
+  return { ...(suspension ? { suspension } : {}), now: now.toISOString(), today, memory, requests, orders, week: weekNumbers(all, intakes, [...correctedThisWeek].filter((id) => requests.some((r) => r.requestId === id)).length, now), standing: standing(profile, today), liveCalls: dock.stats().liveCalls };
 }
 
 function weekNumbers(orders: PublicOrder[], intakes: Map<string, IntakeView>, corrected: number, now: Date): WeekNumbers {

@@ -476,8 +476,9 @@ export const safetyProbes: Probe[] = [
       check.note(`say: ${qf.say} | expiresAt ${quote.expiresAt}`);
       check.expect(qf.say.includes((quote.totalCents / 100).toFixed(2)), `quoted sentence lacks the quote total ${quote.totalCents}`);
       const exp = new Date(quote.expiresAt);
-      const hhmm = `${String(exp.getUTCHours()).padStart(2, "0")}:${String(exp.getUTCMinutes()).padStart(2, "0")}`;
-      check.expect(qf.say.includes(`${hhmm} UTC`), `the sentence says the quote is valid until "${/valid until ([^.]+\.[^.]*\.[^.]*)/.exec(qf.say)?.[1]}", but expiresAt ${quote.expiresAt} is ${hhmm} UTC`);
+      // The caller hears Helsinki time (the kitchen's clock), as every other screen shows it.
+      const hhmm = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Helsinki", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(exp);
+      check.expect(qf.say.includes(`${hhmm} Helsinki time`) && !/UTC/.test(qf.say), `the sentence says the quote is valid until "${/valid until ([^.]+\.[^.]*\.[^.]*)/.exec(qf.say)?.[1]}", but expiresAt ${quote.expiresAt} is ${hhmm} Helsinki time`);
       await http.post(`/ui-api/voice/laakso/call/${callId}`, { op: "end", reason: "qa done" });
     },
   },
