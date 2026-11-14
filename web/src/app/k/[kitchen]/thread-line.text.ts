@@ -130,7 +130,7 @@ export const THREAD_LINE_TEXT = defineText({
     inPlaceOf: (usual: string) => `Tavallisen tuotteen (${usual}) tilalle, koska se ei ehdi.`,
     many: (n: number, names: string) => `${n} tuotetta: ${names}…`,
     ok: "Hyväksy Face ID:llä",
-    testSigner: (who: string) => `Tällä testitilillä hyväksyt roolissa ${who}.`,
+    testSigner: (who: string) => `Tällä testitilillä tämä selain hyväksyy hyväksyjän (${who}) puolesta.`,
     okWorking: "Odottaa kasvojasi tai sormenjälkeäsi",
     okDone: (time: string) => `Hyväksytty klo ${time}`,
     okBy: (name: string) => `Hyväksyjä: ${name}`,

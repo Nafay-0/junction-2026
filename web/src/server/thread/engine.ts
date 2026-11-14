@@ -332,6 +332,16 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
     const open = last?.role === "agent" ? last.cards.find((c) => c.type === "rules" && c.proposal?.state === "open") : undefined;
     if (open?.type === "rules" && open.proposal && /(shall I send it to them\?|lähetänkö sen\?|ska jag skicka den\?)/i.test(last?.role === "agent" ? (last.line ?? "") : "") && yesOrNo(body.text) === "yes") body = { ...body, action: { type: "rules_sign", proposalId: open.proposal.proposalId }, label: body.text };
   }
+  // A plain answer to the watch's question said just before (a stock-out: "yes" / "keep it"; a held renewal: "go back to
+  // the usual", "skip this week", "the new amount"): acted on at once by plain code, never explained and asked again.
+  if (!body.action && body.text && body.text.trim().split(/\s+/).length <= 10) {
+    const { openWatch, watchAnswerIn } = await import("./watch");
+    const wc = openWatch(run);
+    const holder = wc ? thread.turns.find((x) => x.role === "agent" && x.cards.some((c) => c.cardId === wc.cardId)) : undefined;
+    const later = holder ? thread.turns.slice(thread.turns.indexOf(holder) + 1).filter((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "") : [];
+    const answer = wc && holder && later.length === 0 ? watchAnswerIn(wc, body.text) : undefined;
+    if (wc && answer && wc.answers.includes(answer)) body = { ...body, action: { type: "watch_answer", momentId: wc.momentId, answer }, label: body.text };
+  }
   // "Yes" to the opening's own question about a recurring order that drifted ("Shall I set up the next one, for Tue
   // 17 Nov, at the usual 20 l?"): that recurring order at its usual amount on an order sheet for its next day, by plain
   // code. Only right after the opening, and only for the drift the opening asked about (thread-line.tsx todaySentence).
@@ -623,6 +633,10 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
   // what the tap produced (speak.ts facts), in the buyer's language, under the same grounding check.
   if (run.scenarioReplyIsLine && run.scenarioReply) {
     store.line(thread, run.turnId, run.scenarioReply);
+    store.mark(thread, run.turnId, "line", Date.now() - run.t0);
+  } else if (run.saidByCode && ![...run.orders.values()].some((o) => o.status === "pending_approval")) {
+    // Plain code's own reply (the watch's answer: what was ordered, skipped or kept), as it is.
+    store.line(thread, run.turnId, run.saidByCode);
     store.mark(thread, run.turnId, "line", Date.now() - run.t0);
   } else if (!agentResult && body.action && run.store.agentTurn(thread, run.turnId)?.status === "working" && llmRoom()) {
     const pending = [...run.orders.values()].find((o) => o.status === "pending_approval");
@@ -1558,7 +1572,7 @@ async function proposeMemory(run: TurnRun): Promise<void> {
       const { segments, events } = interactionFromIntake(profile, intake as never);
       const report = await memory.write(run.k.info.orgId, { door: run.door === "voice" ? "voice" : "typed", by: run.person?.name ?? run.k.info.by, requestId: o.requestId, orderId: o.orderId, segments, events }, run.k.info.name);
       proposals.push(...report.questions.map((q) => ({ itemId: q.itemId, question: q.question })));
-      record(run, "memory_write", `The memory writer read this order: ${report.outcomes.length} outcome(s), ${report.questions.length} to confirm.`, { orderId: o.orderId, outcomes: report.outcomes.length, questions: report.questions }, o.requestId);
+      record(run, "memory_write", `AimoPilot noted what to remember from this order: ${report.outcomes.length === 1 ? "one thing" : `${report.outcomes.length} things`}${report.questions.length ? `, ${report.questions.length} for the kitchen to confirm` : ", nothing to confirm"}.`, { orderId: o.orderId, outcomes: report.outcomes.length, questions: report.questions }, o.requestId);
     }
     close("done", `${proposals.length}`);
     if (proposals.length || used.length) run.store.card(run.thread, run.turnId, { type: "memory", cardId: cardId("memory", run.turnId), used: [...new Set(used)], proposals: proposals.slice(0, 3) });
