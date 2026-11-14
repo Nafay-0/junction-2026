@@ -16,7 +16,7 @@ import {
 import type { AlternativesAnswer, AlternativesSource } from "./alternatives";
 import type { FindRequest, FindResult } from "./catalog/finder";
 import type { EventPublisher } from "./events";
-import { CatalogError, ProductQuerySchema, scheduledOn, usableOffer, type LiveOffer, type LiveStatus, type MeteredCatalog, type Product } from "./catalog";
+import { CatalogError, NO_OFFER_PROBLEMS, ProductQuerySchema, scheduledOn, usableOffer, type LiveOffer, type LiveStatus, type MeteredCatalog, type Product } from "./catalog";
 import { signOffer, type OfferBody } from "./offers";
 import { ClaimStore, availabilityClaimInput, cutoffMs, issueClaim, originClaimInput, priceClaimInput, refOf, type IssuedClaim } from "./claims";
 import { DockError, isDockError, parse } from "./errors";
@@ -889,7 +889,7 @@ export function createDock(deps: DockDeps) {
       type: "lookup",
       actor,
       requestId,
-      summary: `${why} for ${ids.length} product(s)${deliveryDate ? ` for delivery by ${deliveryDate}` : ""} (${chunks.length ? `${chunks.length} live call${chunks.length > 1 ? "s" : ""}, #${catalog.stats().liveCalls} so far` : "no live call"}${fromCache.size ? `; ${fromCache.size} answer${fromCache.size > 1 ? "s" : ""} reused from the last ${Math.round(liveCacheTtlMs / 1000)} s, not counted` : ""}): ${[...offers.map(describeOffer), ...unavailable.map((u) => `${u.productId} not quotable: ${u.problems.join(", ")}`)].join("; ")}. ${claims.length} signed claims issued.`,
+      summary: `${why} for ${ids.length} product(s)${deliveryDate ? ` for delivery by ${deliveryDate}` : ""} (${chunks.length ? `${chunks.length} live call${chunks.length > 1 ? "s" : ""}, #${catalog.stats().liveCalls} so far` : "no live call"}${fromCache.size ? `; ${fromCache.size} answer${fromCache.size > 1 ? "s" : ""} reused from the last ${Math.round(liveCacheTtlMs / 1000)} s, not counted` : ""}): ${[...offers.map(describeOffer), ...unavailable.map((u) => `${u.productId} not quotable: ${u.problems.filter((p) => NO_OFFER_PROBLEMS.has(p)).join(", ") || u.problems.join(", ")}`)].join("; ")}. ${claims.length} signed claims issued.`,
       data: { source: "live", productIds: ids, deliveryDate, offers, unavailable, claimIds: claims.map((c) => c.claimId), liveCalls: chunks.length, cached: [...fromCache.keys()] },
     });
     return { offers, statuses, unavailable, claims };

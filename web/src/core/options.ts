@@ -6,7 +6,7 @@ import type { Mandate } from "./mandate";
 import { formatAmount, type BaseUnit, type OptimiseGoal } from "./need";
 import { compareNutrition, comparisonText, encodeComparison, type Nutrient } from "./nutrition";
 import { ownPrice, packDeposit, vatRateOf } from "./pricing";
-import type { QuoteRequestLine } from "./quote";
+import { lineCents, type QuoteRequestLine } from "./quote";
 import { formatEur } from "./util";
 import { holdsLabel, isMaterialAttribute } from "./vocabulary";
 
@@ -50,8 +50,9 @@ export type PlanLine = {
   lineTotalCents: number;
   deliveryDate: string;
   substituteFor?: string;
-  /** The order cut-off for this delivery date, when the wholesaler states one. */
+  /** The order cut-off, when the wholesaler states one, and the day it is for (its answer row's date). */
   orderBy?: string;
+  orderByFor?: string;
   /** False when the wholesaler reports no real stock figure for the product. */
   stockKnown?: boolean;
   /** True when packs come from an estimate of the pack content the buyer confirmed. */
@@ -256,7 +257,8 @@ function whyNoOffer(st: LiveStatus | undefined, neededBy: string | undefined): {
   if (!st) return { reason: "no live offer right now", code: "no_offer" };
   if (st.problems.includes("cutoff_passed")) {
     const by = st.offer?.orderBy;
-    const date = st.offer?.deliveryDate ?? neededBy;
+    // The cut-off is for its own answer row's date (orderByFor), not for the day the request asked.
+    const date = st.offer?.orderByFor ?? st.offer?.deliveryDate ?? neededBy;
     return {
       reason: `order cut-off${by ? ` ${formatCutoff(by)}` : ""} has passed, so it cannot arrive${date ? ` ${formatDay(date)}` : " on the date asked"}; the wholesaler's service names no later date yet`,
       code: "cutoff_passed",
@@ -309,14 +311,14 @@ export function buildOptions(input: OptionsInput): OptionsResult {
     packSize: v.size.perPack,
     unit: v.size.unit,
     unitPriceCents: v.o.unitPriceCents,
-    lineTotalCents: packs * v.o.unitPriceCents,
+    lineTotalCents: lineCents(packs, v.o.unitPriceCents),
     deliveryDate: v.o.deliveryDate,
     ...(substituteFor ? { substituteFor } : {}),
-    ...(v.o.orderBy ? { orderBy: v.o.orderBy } : {}),
+    ...(v.o.orderBy ? { orderBy: v.o.orderBy, ...(v.o.orderByFor ? { orderByFor: v.o.orderByFor } : {}) } : {}),
     ...(v.stockKnown ? {} : { stockKnown: false }),
     ...(v.size.estimated ? { estimated: true } : {}),
     ...(v.o.claims ? { claims: v.o.claims } : {}),
-    ...(depositOf(v) ? { depositCents: depositOf(v), lineDepositCents: depositOf(v) * packs } : {}),
+    ...(depositOf(v) ? { depositCents: depositOf(v), lineDepositCents: lineCents(packs, depositOf(v)) } : {}),
     ...(vatRateOf(v.o, v.p) ? { taxRatePct: vatRateOf(v.o, v.p)!.pct } : {}),
     ...(ownPrice(v.o) ? { listUnitPriceCents: ownPrice(v.o)!.listCents } : {}),
   });
@@ -677,10 +679,12 @@ function explainCard(c: Card, all: Card[], input: OptionsInput): void {
   if (split)
     say("con", "partial_stock", { have: r2(split.have), rest: r2(split.rest), unit, product: c._plan.primary.p.name, substitute: split.sub.p.name }, `Partial stock: only ${formatAmount(r2(split.have), unit)} of ${c._plan.primary.p.name} available, so ${formatAmount(r2(split.rest), unit)} comes from ${split.sub.p.name} as a substitute.`);
   if (c.lines.some((l) => l.estimated)) say("con", "estimated_pack", {}, "Pack count rests on an estimate of the pack content that you confirmed.");
-  if (!c.stockConfirmed) say("quiet", "stock_unconfirmed", {}, "Stock not confirmed: the wholesaler does not report a quantity for this product, only that it can deliver.");
+  // Said only when it matters: another option's stock is reported. The wholesaler takes the order either way.
+  if (!c.stockConfirmed && others.some((x) => x.stockConfirmed)) say("quiet", "stock_unconfirmed", {}, "Stock isn't reported for this one; the wholesaler takes the order.");
   if (c.orderBy) {
     const hours = (Date.parse(c.orderBy.replace(/([+-]\d{2})(\d{2})$/, "$1:$2")) - input.now.getTime()) / 3600_000;
-    if (Number.isFinite(hours) && hours >= 0 && hours <= CUTOFF_SOON_HOURS) say("con", "cutoff_soon", { orderBy: c.orderBy }, `Order by ${formatCutoff(c.orderBy)}: the cut-off for this date is close.`);
+    const forDay = c.lines.find((l) => l.orderBy === c.orderBy)?.orderByFor;
+    if (Number.isFinite(hours) && hours >= 0 && hours <= CUTOFF_SOON_HOURS) say("con", "cutoff_soon", { orderBy: c.orderBy, ...(forDay ? { forDay } : {}) }, `Order by ${formatCutoff(c.orderBy)}: the cut-off for ${forDay ? formatDay(forDay) : "this date"} is close.`);
   }
   const replaced = c._plan.replaces;
   if (replaced && input.reference?.source === "usual") say("quiet", "instead_of_usual", { product: input.reference.name }, `Instead of your usual ${input.reference.name}.`);

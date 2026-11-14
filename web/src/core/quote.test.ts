@@ -180,3 +180,24 @@ describe("quote: deposits, VAT and the customer's own price (data depth)", () =>
     expect(build().lines[0].nutrition?.values.protein).toBe(3.6);
   });
 });
+
+describe("quote: order steps from the partner's lot size", () => {
+  const NOW3 = new Date("2026-11-13T10:00:00.000Z");
+  const base = SEED_PRODUCTS.find((p) => p.id === "VA-3101")!; // yoghurt by the kilo
+  const offer = { productId: "VA-3101", unitPriceCents: 349, availablePacks: 500, deliveryDate: "2026-11-16" };
+  const q = (lotSize: number | undefined, quantity: number) =>
+    buildQuote({ quoteId: "q", buyerOrgId: "o", agentId: "a", mandateId: "m", requestId: "r", lines: [{ productId: "VA-3101", quantity }], products: [{ ...base, ...(lotSize !== undefined ? { lotSize } : {}), salesUnit: "KG" }], offers: [offer], now: NOW3, ttlMinutes: 30 });
+
+  it("0.01 (the partner's default), 1 and none mean whole sales units", () => {
+    for (const lot of [0.01, 1, undefined]) {
+      expect(q(lot, 3).lines[0]).toMatchObject({ quantity: 3, lineTotalCents: 1047 });
+      expect(() => q(lot, 2.5)).toThrow(/whole number of packs/);
+    }
+  });
+
+  it("a real fractional lot (1.5 kg) takes its multiples, priced to the cent", () => {
+    const l = q(1.5, 4.5).lines[0];
+    expect(l).toMatchObject({ quantity: 4.5, lineTotalCents: 1571 }); // 4.5 x 3.49 = 15.705 -> 15.71
+    expect(() => q(1.5, 4)).toThrow(/multiple of its order step 1.5 KG/);
+  });
+});
