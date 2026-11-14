@@ -126,7 +126,8 @@ export function judgeAgent(f: AgentFigures, info: { label: string; orgName: stri
         : { action: "trace", title: "Open its latest request", why: "See why the gate sent it to a person." },
     };
   }
-  return { ...base, status: "performing", reason: `Performing: ${f.alone} placed alone, ${f.escalated} sent to a person, ${f.refused} refused, within its thresholds.` };
+  const held = f.refused ? `; ${f.refused} refused${topRule ? ` (${f.refusedRules.slice(0, 2).map((r) => r.rule).join(", ")})` : ""}: the gate holding, below the ${T.refusal_rate.min} refusals and ${pct(T.refusal_rate.limit)} that make a pattern` : "";
+  return { ...base, status: "performing", reason: `Performing: ${f.alone} placed alone, ${f.escalated} sent to a person${held}.`, ...(f.lastRefusedRequest ? { proposal: { action: "trace" as const, title: "Nothing to decide", why: "Its refusal is in the trace.", requestId: f.lastRefusedRequest } } : {}) };
 }
 
 // ---------- the figures from PostgreSQL ----------

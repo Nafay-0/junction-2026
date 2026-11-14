@@ -63,12 +63,14 @@ export async function agentScorecard(rt: Runtime, window: ScoreWindow = "today",
   figures ??= figuresFromEvents(localEvents(rt), WINDOWS[window].since(now), now);
   const ctx = await opsContext(rt);
   const seen = new Set(figures.map((f) => f.agentId));
+  const viaDoor = new Set(ctx.door.all().filter((c) => c.via === "mcp" || c.via === "rest").map((c) => c.agentId));
   const empty = (agentId: string): AgentFigures => ({ agentId, requests: 0, alone: 0, escalated: 0, overLimit: 0, refused: 0, committed: 0, granted: 0, denied: 0, proposals: 0, corrections: 0, turns: 0, failedTurns: 0, modelFallbacks: 0, liveLookups: 0, productsPriced: 0, spendUsd: 0, decideP50S: null, decideP90S: null, turnP50S: null, turnP90S: null, refusedRules: [], lastRefusedRequest: null, lastAt: null });
   const all = [...figures, ...[...ctx.agents.keys()].filter((id) => !seen.has(id)).map(empty)];
   const rows = all.map((f) => {
     const a = ctx.agents.get(f.agentId);
     const suspended = a ? !!ctx.suspensions.find(a.agentId, a.orgId) : false;
-    return judgeAgent(f, { label: a?.label ?? f.agentId, orgName: a?.orgName ?? "unknown", kind: a?.kind ?? (f.agentId.startsWith("crash") ? "crash-test" : "outside"), suspended });
+    const outside = a && a.kind !== "outside" && viaDoor.has(a.agentId);
+    return judgeAgent(f, { label: a?.label ?? f.agentId, orgName: a?.orgName ?? "unknown", kind: outside ? `outside (${a!.kind})` : (a?.kind ?? (f.agentId.startsWith("crash") ? "crash-test" : "outside")), suspended });
   });
   const order: Record<ScoreRow["status"], number> = { failing: 0, escalating: 1, performing: 2, quiet: 3 };
   rows.sort((x, y) => order[x.status] - order[y.status] || (y.lastAt ?? "").localeCompare(x.lastAt ?? ""));

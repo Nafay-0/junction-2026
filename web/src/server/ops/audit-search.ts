@@ -53,11 +53,14 @@ export async function auditSearch(rt: Runtime, question: string): Promise<AuditA
   const p = parseAuditQuery(question, now);
   const ctx = await opsContext(rt);
   const label = (id?: string) => (id ? (ctx.agents.get(id)?.label ?? id) : undefined);
-  const agentIds = p.who === "outside" ? [...ctx.agents.values()].filter((a) => a.kind === "outside").map((a) => a.agentId) : p.who === "kitchen" ? [...ctx.agents.values()].filter((a) => a.kind !== "outside").map((a) => a.agentId) : undefined;
+  // Outside: an agent AimoPilot does not run, at the open door (MCP or REST), whatever kitchen it buys for.
+  const viaDoor = new Set(ctx.door.all().filter((c) => c.via === "mcp" || c.via === "rest").map((c) => c.agentId));
+  const isOutside = (a: { agentId: string; kind: string }) => a.kind === "outside" || viaDoor.has(a.agentId);
+  const agentIds = p.who === "outside" ? [...ctx.agents.values()].filter(isOutside).map((a) => a.agentId) : p.who === "kitchen" ? [...ctx.agents.values()].filter((a) => !isOutside(a)).map((a) => a.agentId) : undefined;
   const read = {
     kinds: p.kinds,
     rules: p.ruleWords,
-    who: p.who === "outside" ? `outside agents (${agentIds?.length ?? 0})` : p.who === "kitchen" ? `kitchens' own agents (${agentIds?.length ?? 0})` : p.who ? p.who.agentId : "any agent",
+    who: p.who === "outside" ? `outside agents at the MCP or REST door (${agentIds?.length ?? 0})` : p.who === "kitchen" ? `kitchens' own agents (${agentIds?.length ?? 0})` : p.who ? p.who.agentId : "any agent",
     when: p.since.words,
     text: p.rest,
   };

@@ -101,6 +101,64 @@ order by rule, ts desc`,
   coalesce(sum(e.value) filter (where e.kind = 'metric.events.consumed'), 0) as consumed,
   coalesce(sum(e.value) filter (where e.kind = 'metric.events.dropped'), 0) as dropped`, "('metric.events.published', 'metric.events.consumed', 'metric.events.dropped')"),
   },
+  search: {
+    title: "Search right now",
+    sql: `select count(*) as searches,
+  round(percentile_cont(0.5) within group (order by (facts->>'embed_ms')::float8)::numeric) as embed_p50,
+  round(percentile_cont(0.9) within group (order by (facts->>'embed_ms')::float8)::numeric) as embed_p90,
+  round(percentile_cont(0.5) within group (order by (facts->>'recall_ms')::float8)::numeric) as recall_p50,
+  round(percentile_cont(0.9) within group (order by (facts->>'recall_ms')::float8)::numeric) as recall_p90,
+  round(percentile_cont(0.5) within group (order by (facts->>'judge_ms')::float8)::numeric) as judge_p50,
+  round(percentile_cont(0.9) within group (order by (facts->>'judge_ms')::float8)::numeric) as judge_p90,
+  round(percentile_cont(0.5) within group (order by (facts->>'total_ms')::float8)::numeric) as total_p50,
+  round(percentile_cont(0.9) within group (order by (facts->>'total_ms')::float8)::numeric) as total_p90,
+  count(*) filter (where facts->>'backend' = 'opensearch') as on_opensearch,
+  count(*) filter (where facts->>'backend' like 'memory%') as in_memory,
+  count(*) filter (where (facts->>'fallback')::boolean) as fallbacks,
+  count(*) filter (where (facts->>'judge_missed')::boolean) as judge_missed,
+  round((1000 * coalesce(avg((facts->>'cost_usd')::float8), 0))::numeric, 3) as usd_per_1000,
+  count(*) filter (where (facts->>'not_sold')::boolean) as not_sold
+from telemetry.ops_events where kind = 'search.done' and ts > ${r.since}`,
+  },
+  conversation: {
+    title: "The conversation",
+    sql: `with t as (
+  select turn_id,
+    min(ts) filter (where kind = 'turn.started') as started,
+    min(ts) filter (where kind = 'turn.done') as done,
+    max(facts->>'outcome') filter (where kind = 'turn.done') as outcome,
+    max(facts->>'input') filter (where kind = 'turn.started') as input
+  from telemetry.ops_events where kind in ('turn.started', 'turn.done') and ts > ${r.since} and turn_id is not null group by 1
+), m as (
+  select turn_id, count(*) as calls, sum(cost_usd) as usd from telemetry.ops_events where kind = 'agent.model' and ts > ${r.since} and turn_id is not null group by 1
+)
+select count(*) as turns,
+  round(percentile_cont(0.5) within group (order by extract(epoch from done - started))::numeric, 1) as turn_p50_s,
+  round(percentile_cont(0.9) within group (order by extract(epoch from done - started))::numeric, 1) as turn_p90_s,
+  count(*) filter (where done is null and started < now() - interval '150 seconds') as failed,
+  count(*) filter (where outcome = 'ordered') as ordered,
+  count(*) filter (where outcome = 'sign_off') as sign_off,
+  count(*) filter (where outcome = 'refused') as refused,
+  count(*) filter (where outcome = 'asked') as asked,
+  count(*) filter (where outcome = 'answered') as answered,
+  count(*) filter (where input = 'spoken') as spoken,
+  count(*) filter (where input = 'typed') as typed,
+  round(avg(m.calls)::numeric, 1) as model_calls_per_turn,
+  round(coalesce(sum(m.usd), 0)::numeric, 4) as model_usd
+from t left join m using (turn_id) where started is not null`,
+  },
+  decidedBy: {
+    title: "Orders by who decided",
+    sql: series(r, `count(e.id) filter (where e.kind = 'gate.allowed') as agent_alone,
+  count(e.id) filter (where e.kind = 'approval.granted') as person_approved,
+  count(e.id) filter (where e.kind = 'approval.denied') as person_declined`, "('gate.allowed', 'approval.granted', 'approval.denied')"),
+  },
+  counters: {
+    title: "Watch, offers and corrections",
+    sql: `select kind, count(*) as n from telemetry.ops_events
+where kind in ('ledger.watch', 'ledger.watch_answer', 'ledger.offer', 'ledger.offer_answer', 'turn.correction', 'turn.model_fallback', 'turn.grounding_refusal', 'turn.paused') and ts > ${r.since}
+group by 1 order by 2 desc`,
+  },
   crash: {
     title: "Crash-test scores",
     sql: `select ts, agent_id, value as score, run from telemetry.ops_events where kind = 'crashtest.score' order by ts desc`,

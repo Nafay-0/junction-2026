@@ -21,7 +21,7 @@ const STATUS: Record<ScoreRow["status"], { label: string; tone: "good" | "waitin
   performing: { label: "Performing", tone: "good" },
   quiet: { label: "Quiet", tone: "neutral" },
 };
-const KIND: Record<string, string> = { demo: "demo kitchen", visitor: "visitor kitchen", account: "account kitchen", outside: "outside agent", "crash-test": "crash-test model" };
+const KIND: Record<string, string> = { demo: "demo kitchen", visitor: "visitor kitchen", account: "account kitchen", outside: "outside agent", "crash-test": "crash-test model", "outside (visitor)": "outside agent over MCP, visitor kitchen", "outside (account)": "outside agent over MCP, account kitchen", "outside (demo)": "outside agent over MCP, demo kitchen" };
 const pctOf = (x: number | null) => (x === null ? "–" : `${Math.round(x * 100)} %`);
 const secs = (x: number | null) => (x === null ? "–" : `${x.toLocaleString("fi-FI", { maximumFractionDigits: 1 })} s`);
 
@@ -63,7 +63,7 @@ export function AgentWatch() {
                 {d.scorecard.sourceNote} Read {whenSeconds(d.scorecard.at)}.
               </span>
             </p>
-            <Scores rows={d.scorecard.rows.filter((r) => r.status !== "quiet" || window !== "1h")} onDone={live.refresh} />
+            <Scores rows={d.scorecard.rows} onDone={live.refresh} />
             <div className="mt-2 grid gap-2 lg:grid-cols-2">
               <Details summary="The thresholds and why">
                 <ul className="space-y-1.5 text-[0.88rem]">
@@ -103,39 +103,40 @@ function Alerts({ a }: { a: AlertState }) {
   );
 }
 
-function Scores({ rows, onDone }: { rows: ScoreRow[]; onDone: () => void }) {
-  if (!rows.length) return <p className="text-[0.92rem] text-ink-soft">No agent has come to the gate in this window.</p>;
+function Scores({ rows: all, onDone }: { rows: ScoreRow[]; onDone: () => void }) {
+  const rows = all.filter((r) => r.status !== "quiet");
+  const quiet = all.filter((r) => r.status === "quiet");
+  if (!rows.length) return <p className="text-[0.92rem] text-ink-soft">No agent has come to the gate in this window{quiet.length ? ` (${quiet.length} known agents quiet)` : ""}.</p>;
   return (
+    <>
     <Table label="Agent scorecard">
       <thead>
         <tr>
-          <th>Agent</th>
-          <th>Status</th>
+          <th>Agent and status</th>
           <th className="text-right">Requests</th>
           <th className="text-right">Alone</th>
           <th className="text-right">To a person</th>
           <th className="text-right">Refused</th>
-          <th className="text-right">Failed turns</th>
-          <th className="text-right">Decision p50 / p90</th>
+          <th className="text-right">Failed</th>
+          <th className="text-right">Decided p50 / p90</th>
           <th className="text-right">Corrected</th>
-          <th className="text-right">Spend / order</th>
-          <th className="text-right">Live calls / order</th>
+          <th className="text-right">Per order</th>
           <th>What a person might do</th>
         </tr>
       </thead>
       <tbody>
         {rows.map((r) => (
           <tr key={r.agentId}>
-            <td>
-              <b>{r.label}</b>
+            <td className="min-w-[19rem] max-w-[26rem]">
+              <span className="flex flex-wrap items-baseline gap-x-2">
+                <b>{r.label}</b>
+                <Badge tone={STATUS[r.status].tone}>{STATUS[r.status].label}</Badge>
+              </span>
               <span className="block text-[0.82rem] text-ink-soft">
                 {r.orgName}, {KIND[r.kind] ?? r.kind}
                 {r.suspended ? ", suspended" : ""}
               </span>
-            </td>
-            <td className="max-w-[22rem]">
-              <Badge tone={STATUS[r.status].tone}>{STATUS[r.status].label}</Badge>
-              <span className="mt-1 block text-[0.84rem] leading-snug">{r.reason}</span>
+              <span className="mt-1 block text-[0.86rem] leading-snug">{r.reason.replace(/^(Failing|Escalating|Performing): /, "")}</span>
               {r.notes.length > 0 && <span className="block text-[0.8rem] text-ink-soft">{r.notes.join("; ")}</span>}
             </td>
             <td className="text-right tabular">{num(r.requests)}</td>
@@ -150,24 +151,28 @@ function Scores({ rows, onDone }: { rows: ScoreRow[]; onDone: () => void }) {
             </td>
             <td className="text-right tabular">
               {num(r.failedTurns)}
-              <span className="block text-[0.8rem] text-ink-soft">of {num(r.turns)}</span>
+              <span className="block text-[0.8rem] text-ink-soft">of {num(r.turns)} turns</span>
             </td>
             <td className="text-right tabular">
               {secs(r.decideP50S)} / {secs(r.decideP90S)}
             </td>
             <td className="text-right tabular">
               {num(r.corrections)}
-              <span className="block text-[0.8rem] text-ink-soft">of {num(r.proposals)} quotes</span>
+              <span className="block text-[0.8rem] text-ink-soft">of {num(r.proposals)}</span>
             </td>
-            <td className="text-right tabular">{r.perOrder.spendUsd === null ? (r.spendUsd ? `$${r.spendUsd.toFixed(4)} in all` : "–") : `$${r.perOrder.spendUsd.toFixed(4)}`}</td>
-            <td className="text-right tabular">{r.perOrder.liveLookups === null ? (r.liveLookups ? `${r.liveLookups} in all` : "–") : r.perOrder.liveLookups.toFixed(1)}</td>
-            <td className="min-w-[13rem]">
+            <td className="text-right tabular">
+              {r.perOrder.spendUsd === null ? (r.spendUsd ? `$${r.spendUsd.toFixed(3)} in all` : "–") : `$${r.perOrder.spendUsd.toFixed(3)} models`}
+              <span className="block text-[0.8rem] text-ink-soft">{r.perOrder.liveLookups === null ? (r.liveLookups ? `${r.liveLookups} live calls in all` : "no live calls") : `${r.perOrder.liveLookups.toFixed(1)} live calls`}</span>
+            </td>
+            <td className="min-w-[11rem]">
               <Proposal r={r} onDone={onDone} />
             </td>
           </tr>
         ))}
       </tbody>
     </Table>
+    {quiet.length > 0 && <p className="mt-1.5 text-[0.84rem] text-ink-soft">Quiet in this window: {quiet.map((r) => r.label).join(", ")}.</p>}
+    </>
   );
 }
 
@@ -240,7 +245,7 @@ function Queue({ q, now }: { q: EscalationQueue; now: number | undefined }) {
             {q.items.map((w) => (
               <tr key={w.approvalId}>
                 <td className="tabular">
-                  {w.overThreshold ? <Badge tone="waiting">{since(w.requestedAt, now ?? Date.now())}</Badge> : since(w.requestedAt, now ?? Date.now())}
+                  {now === undefined ? `${w.waitingMin} min` : w.overThreshold ? <Badge tone="waiting">{since(w.requestedAt, now)}</Badge> : since(w.requestedAt, now)}
                 </td>
                 <td>{w.orgName}</td>
                 <td>
