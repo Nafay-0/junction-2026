@@ -13,9 +13,10 @@ import { Target } from "../../_ui/target";
 import { Wordmark } from "../../_ui/wordmark";
 import { num } from "./format";
 import { useNow } from "./kit";
+import { setOpsRole } from "./role";
 
 type Models = { calls: number; usd: number; maxCalls: number; maxUsd: number; enabled: boolean };
-type Session = { signedIn: boolean; name?: string; mode: "demo" | "passcode"; chain?: { ok: boolean; length: number }; waiting?: number; suspended?: number; models?: Models };
+type Session = { signedIn: boolean; viewer?: boolean; name?: string; mode: "demo" | "passcode"; chain?: { ok: boolean; length: number }; waiting?: number; suspended?: number; models?: Models };
 const modelsLow = (m: Models) => !m.enabled || m.maxUsd - m.usd < m.maxUsd * 0.1 || m.maxCalls - m.calls < m.maxCalls * 0.1;
 
 const NAV: { href: string; label: string; what: string; key: string }[] = [
@@ -77,7 +78,8 @@ export function Rail() {
     async () => {
       const r = await api<Session>("GET", "/ops-api/session");
       if (!r.ok) throw new Error(r.error.message);
-      if (!r.data.signedIn) router.replace(`/ops/enter?next=${encodeURIComponent(location.pathname)}`);
+      // Without the passcode a visitor is a viewer: every page reads, every action answers "staff only".
+      setOpsRole(r.data.signedIn ? "staff" : "viewer");
       return r.data;
     },
     // Polling only: the page beside it holds the one event stream, so several open tabs stay within the
@@ -214,6 +216,14 @@ export function Rail() {
           {now ? clockSeconds(new Date(now)) : "–"}
         </span>
         <span className="mx-1 h-5 w-px bg-line-strong" aria-hidden />
+        {s && !s.signedIn ? (
+          <span className="flex items-center gap-3 text-[0.86rem]">
+            <span className="text-ink-soft">You are looking, not operating. Staff sign in to act.</span>
+            <Link href={`/ops/enter?next=${encodeURIComponent(path)}`} className="inline-flex min-h-8 items-center rounded-full bg-paper px-3 font-semibold text-petrol ring-1 ring-inset ring-line hover:ring-petrol/40">
+              Staff sign-in
+            </Link>
+          </span>
+        ) : (
         <span className="flex items-center gap-2 text-[0.86rem]">
           <Avatar name={s?.name ?? "Operations"} size={30} />
           <span className="hidden font-medium xl:inline">{s?.name ?? "…"}</span>
@@ -221,6 +231,7 @@ export function Rail() {
             <LogOut aria-hidden size={17} />
           </button>
         </span>
+        )}
       </div>
 
       {/* ----- a phone: a top bar with the status, and the sections under the thumb ----- */}
@@ -230,6 +241,14 @@ export function Rail() {
         </Link>
         {status(true)}
       </header>
+      {s && !s.signedIn && (
+        <p className="flex items-center justify-between gap-3 border-b border-line bg-surface px-4 py-1.5 text-[0.82rem] text-ink-soft lg:hidden">
+          <span>You are looking, not operating. Staff sign in to act.</span>
+          <Link href={`/ops/enter?next=${encodeURIComponent(path)}`} className="shrink-0 font-semibold text-petrol underline decoration-petrol/30 underline-offset-4">
+            Staff sign-in
+          </Link>
+        </p>
+      )}
       <nav aria-label="Operations" className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-paper/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden">
         <div className="mx-auto grid max-w-md grid-cols-5 px-2">
           {NAV.filter((n) => PRIMARY.includes(n.href)).map((n) => {

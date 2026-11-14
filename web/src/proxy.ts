@@ -44,6 +44,9 @@ const KITCHEN_WRITE_KITCHEN = rule("kitchen-write-kitchen", 120);
 const THREAD = rule("thread", 300); // 60 x 5
 const THREAD_KITCHEN = rule("thread-kitchen", 30); // one kitchen: a turn every 2 s, sustained
 const OPS_ENTER = rule("ops-enter", 10);
+// Viewers of the operations portal (no passcode): its pages poll a few reads every few seconds; a room of 60 on
+// one address, each with a page open, stays within it. Reads are shared answers on the server (ops/handler.ts).
+const OPS_VIEW = rule("ops-view", 2400);
 // Accounts: sign-in, sign-up, sign-out, the mandate, signing devices. Failed sign-ins are limited again per account
 // and per address in server/accounts/service.ts, which holds even with DOCK_RATE_LIMITS=off.
 const ACCOUNT = rule("account", 300); // 60 x 5
@@ -107,6 +110,7 @@ export function rulesFor(method: string, path: string, cookie?: string | null): 
   if (post && (m = /^\/ui-api\/plan\/([^/]+)\/[^/]+\/(quote|order)$/.exec(path))) out.push([KITCHEN_WRITE], [KITCHEN_WRITE_KITCHEN, `k:${m[1]}`]);
   // The operations desk: entering takes the passcode, so guessing is slowed down.
   if (post && path === "/ops-api/session") out.push([OPS_ENTER]);
+  if (path.startsWith("/ops-api/") && !/(?:^|;\s*)dock_ops=/.test(cookie ?? "")) out.push([OPS_VIEW]);
   if (post && path.startsWith("/ui-api/account/")) out.push([ACCOUNT]);
   // Reissuing or revoking a connector takes the operator secret (or the visitor's own session).
   if ((post || method === "DELETE") && path.startsWith("/ui-api/connect/")) out.push([OPS_ENTER]);

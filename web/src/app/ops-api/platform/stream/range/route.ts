@@ -1,11 +1,11 @@
 import { DockError } from "@/core/errors";
-import { opsRoute } from "@/server/ops/handler";
+import { opsRead } from "@/server/ops/handler";
 import { needKafka, platformRoute } from "@/server/aiven/showcase/routes";
 import { MAX_RANGE, readRanges, streamConfigured } from "@/server/aiven/showcase/stream";
 
 /** GET /ops-api/platform/stream/range?partition=0&from=100&to=150: messages of one partition by offset, at most 500. */
 export async function GET(req: Request) {
-  return opsRoute(req, async (rt, staff) => {
+  return opsRead(req, async (rt, staff) => {
     platformRoute(rt, staff, { name: "stream range", limit: 12, windowMs: 60_000 });
     needKafka(streamConfigured());
     const q = new URL(req.url).searchParams;

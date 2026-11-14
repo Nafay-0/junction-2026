@@ -1,6 +1,6 @@
 import { DockError } from "@/core/orders";
 import { readJson } from "@/server/http";
-import { opsRoute } from "@/server/ops/handler";
+import { opsRead, opsRoute } from "@/server/ops/handler";
 import { findingClaim, liftStage, runWatch, stageDrift, stageStockOut, stageableKitchens, watchView } from "@/server/watch/service";
 
 /**
@@ -17,7 +17,7 @@ import { findingClaim, liftStage, runWatch, stageDrift, stageStockOut, stageable
  * Everything is written to the ledger with the staff member's name.
  */
 export async function GET(req: Request) {
-  return opsRoute(req, async (rt) => Response.json({ ...(await watchView(rt)), kitchens: await stageableKitchens(rt) }));
+  return opsRead(req, async (rt) => Response.json({ ...(await watchView(rt)), kitchens: await stageableKitchens(rt) }));
 }
 
 export async function POST(req: Request) {

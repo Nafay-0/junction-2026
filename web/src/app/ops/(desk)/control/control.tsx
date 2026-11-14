@@ -8,7 +8,7 @@ import { Check, ChevronRight, CircleAlert, CirclePlay, ShieldCheck } from "lucid
 import { Badge, Select, buttonClass } from "../../../_ui/kit";
 import { clock } from "../../../_ui/plain";
 import { fi, money, num, since, until, when, whenSeconds } from "../../_ui/format";
-import { Button, Details, Empty, KV, LiveMark, LoadError, Loading, PageHead, Section, useNow, useOps } from "../../_ui/kit";
+import { Button, Details, Empty, KV, LiveMark, LoadError, Loading, PageHead, Section, useNow, useOps, StaffButton } from "../../_ui/kit";
 import { Table } from "../../_ui/parts";
 import { Target } from "../../../_ui/target";
 
@@ -270,7 +270,7 @@ function SuspendForm({ agents, orgs, onDone }: { agents: { id: string; label: st
           </div>
         )}
         {options.length > 0 && !confirming && (
-          <Button type="submit" kind="primary" size="md" disabled={!reason.trim()} className="mt-4">
+          <Button staff type="submit" kind="primary" size="md" disabled={!reason.trim()} className="mt-4">
             Review the suspension
           </Button>
         )}
@@ -288,7 +288,7 @@ function SuspendForm({ agents, orgs, onDone }: { agents: { id: string; label: st
             <li>Nothing is deleted. Resume it from this page at any time; both acts are written to the ledger.</li>
           </ul>
           <div className="mt-4 flex flex-wrap gap-3">
-            <Button kind="stop" size="md" onClick={suspend} disabled={busy}>
+            <Button staff kind="stop" size="md" onClick={suspend} disabled={busy}>
               {busy ? "Suspending…" : scope === "agent" ? "Suspend the agent" : "Suspend the organisation"}
             </Button>
             <button type="button" onClick={() => setConfirming(false)} className={buttonClass("ghost-dark", "md")}>
@@ -349,9 +349,9 @@ function ActiveRow({ s, now, onDone }: { s: Suspension; now: number; onDone: () 
             aria-label="Note for the record"
             className="min-h-11 min-w-0 flex-[2_1_14rem] rounded-md border border-paper/25 bg-paper/[0.06] px-3.5 text-[0.92rem] text-paper placeholder:text-paper/55 focus:border-lime focus:shadow-[0_0_0_3px_rgb(192_224_33/0.25)] focus:outline-none"
           />
-          <button type="button" onClick={resume} disabled={busy} className={buttonClass("ghost-dark", "md", "flex-[1_1_7rem] disabled:opacity-50")}>
+          <StaffButton onClick={resume} disabled={busy} className={buttonClass("ghost-dark", "md", "flex-[1_1_7rem] disabled:opacity-50")}>
             {busy ? "Resuming…" : "Resume"}
-          </button>
+          </StaffButton>
           {err && <p className="text-[0.85rem]">{err}</p>}
         </div>
       </div>

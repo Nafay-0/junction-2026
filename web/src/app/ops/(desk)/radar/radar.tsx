@@ -4,7 +4,7 @@ import { useState, type ReactNode } from "react";
 import type { HoldCard, NoticeCard, RadarView } from "@/server/radar/views";
 import { api } from "../../../_client/api";
 import { fi, num, since, span, when } from "../../_ui/format";
-import { Button, Details, Empty, LoadError, Loading, PageHead, Panel, Section, useNow, useOps } from "../../_ui/kit";
+import { Button, Details, Empty, LoadError, Loading, PageHead, Panel, Section, useNow, useOps, StaffButton } from "../../_ui/kit";
 import { Check, CircleAlert, ExternalLink, FlaskConical } from "lucide-react";
 import { Badge, Select, Tag, buttonClass } from "../../../_ui/kit";
 import { Target } from "../../../_ui/target";
@@ -165,7 +165,7 @@ function DrillSection({ v, now, refresh }: { v: RadarView; now: number; refresh:
                   </option>
                 ))}
               </Select>
-              <Button kind="primary" size="md" onClick={publish} disabled={busy || !chosen}>
+              <Button staff kind="primary" size="md" onClick={publish} disabled={busy || !chosen}>
                 {busy ? "Publishing…" : "Publish drill notice"}
               </Button>
             </div>
@@ -193,9 +193,9 @@ function DrillSection({ v, now, refresh }: { v: RadarView; now: number; refresh:
                   <ExternalLink aria-hidden size={15} />
                   Open the drill notice
                 </a>
-                <button type="button" className={buttonClass("secondary", "sm")} onClick={() => void end(d.drillId)}>
+                <StaffButton className={buttonClass("secondary", "sm")} onClick={() => void end(d.drillId)}>
                   End drill and lift its hold
-                </button>
+                </StaffButton>
               </p>
             </div>
           ))}
@@ -259,7 +259,7 @@ function HoldRow({ h, now, refresh }: { h: HoldCard; now: number; refresh: () =>
         )}
         <form onSubmit={lift} className="mt-3.5 flex flex-wrap gap-2.5">
           <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why lift it (stock checked: other batch…)" aria-label="Why lift the hold" className="field min-w-0 flex-1 basis-[14rem] !text-[0.92rem]" />
-          <Button type="submit" size="md" disabled={!reason.trim()}>
+          <Button staff type="submit" size="md" disabled={!reason.trim()}>
             Lift hold
           </Button>
         </form>
@@ -295,10 +295,10 @@ function ReviewRow({ m, refresh }: { m: RadarView["review"][number]; refresh: ()
       {m.reviewReason && <p className="text-[0.85rem] text-ink-soft">{m.reviewReason}</p>}
       <div className="mt-3.5 flex flex-wrap gap-2.5">
         <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (written to the ledger)" aria-label="Reason" className="field min-w-0 flex-1 basis-[14rem] !text-[0.92rem]" />
-        <Button kind="stop" size="md" disabled={!reason.trim()} onClick={() => void decide("confirm")}>
+        <Button staff kind="stop" size="md" disabled={!reason.trim()} onClick={() => void decide("confirm")}>
           Confirm and hold
         </Button>
-        <Button size="md" disabled={!reason.trim()} onClick={() => void decide("dismiss")}>
+        <Button staff size="md" disabled={!reason.trim()} onClick={() => void decide("dismiss")}>
           Dismiss
         </Button>
       </div>
@@ -357,9 +357,9 @@ function SourcesSection({ v, now, refresh }: { v: RadarView; now: number; refres
               )}
               {s.lastError && <p className="mt-1 text-[0.82rem]">{s.lastError}</p>}
               <p className="mt-1 text-[0.8rem] text-ink-soft">{s.about}</p>
-              <button type="button" disabled={busy === s.id} onClick={() => void check(s.id)} className={buttonClass("secondary", "sm", "mt-2.5 disabled:opacity-50")}>
+              <StaffButton disabled={busy === s.id} onClick={() => void check(s.id)} className={buttonClass("secondary", "sm", "mt-2.5 disabled:opacity-50")}>
                 {busy === s.id ? "Checking…" : "Check now"}
-              </button>
+              </StaffButton>
             </li>
           ))}
         </ul>

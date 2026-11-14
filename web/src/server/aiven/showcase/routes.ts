@@ -7,8 +7,9 @@ import { ensureUsageFlusher } from "./writer";
 /** Shared by the /ops-api/platform routes: start the usage snapshots, and a per-session rate limit. */
 const limiter = new RateLimiter(2_000);
 
-export function platformRoute(rt: Runtime, staff: OpsSession, rule?: { name: string; limit: number; windowMs: number }): void {
-  ensureUsageFlusher(rt.aiven.pool);
+export function platformRoute(rt: Runtime, staff: OpsSession & { viewer?: true }, rule?: { name: string; limit: number; windowMs: number }): void {
+  // A viewer's read starts nothing: the usage snapshots begin with the first staff visit (or the copilot).
+  if (!staff.viewer) ensureUsageFlusher(rt.aiven.pool);
   if (!rule) return;
   const wait = limiter.hit(rule, staff.token);
   if (wait !== null) throw new DockError(429, "rate_limited", `Too many ${rule.name} requests from this desk; try again in ${wait} s.`);

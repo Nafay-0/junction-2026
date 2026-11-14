@@ -7,7 +7,7 @@ import { api } from "../../../_client/api";
 import { verifySigned, type KeySet } from "../../../_client/verify-signed";
 import { Badge } from "../../../_ui/kit";
 import { num, when } from "../../_ui/format";
-import { Button, Details, Empty, LoadError, Loading, Num, PageHead, Panel, Section, useNow, useOps } from "../../_ui/kit";
+import { Button, Details, Empty, LoadError, Loading, Num, PageHead, Panel, Section, useNow, useOps, StaffButton } from "../../_ui/kit";
 import { Table } from "../../_ui/parts";
 
 type Kitchens = { slug: string; name: string; kind: string; standing: { family: string; productId: string; name: string; weekdays: number[] }[] }[];
@@ -62,7 +62,7 @@ function Body({ v, now, refresh }: { v: View; now: number; refresh: () => void }
         <Num n={num(v.stats.staged)} label="staged now" sub="demo and test kitchens only" />
       </Panel>
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        <Button kind="primary" onClick={() => void run()} disabled={running}>
+        <Button staff kind="primary" onClick={() => void run()} disabled={running}>
           {running ? "Watching…" : "Run the watch now"}
         </Button>
         {note && (
@@ -208,9 +208,9 @@ function ClaimCheck({ findingId, claimId, simulated }: { findingId: string; clai
     <p className="font-sans text-[0.84rem]">
       Availability claim {claimId}
       {simulated ? " (simulated: staged)" : ""}.{" "}
-      <button type="button" className="text-petrol underline underline-offset-2" onClick={() => void check()}>
+      <StaffButton className="text-petrol underline underline-offset-2" onClick={() => void check()}>
         Check the signature
-      </button>
+      </StaffButton>
       {out && <span className="ml-2 text-ink-soft">{out}</span>}
     </p>
   );
@@ -359,7 +359,7 @@ function StageForm({ kitchens, refresh }: { kitchens: Kitchens; refresh: () => v
                 <span className="text-ink-soft">Out of stock until</span>
                 <input type="date" value={until} onChange={(e) => setUntil(e.target.value)} className="mt-1 block min-h-11 rounded-lg border border-line-strong bg-paper px-3" />
               </label>
-              <Button kind="primary" disabled={busy || !pick} onClick={() => void stage("stage_stock_out")}>
+              <Button staff kind="primary" disabled={busy || !pick} onClick={() => void stage("stage_stock_out")}>
                 Stage a stock-out of this product
               </Button>
             </div>
@@ -367,7 +367,7 @@ function StageForm({ kitchens, refresh }: { kitchens: Kitchens; refresh: () => v
               <label className="flex items-center gap-2">
                 <input type="checkbox" checked={cost} onChange={(e) => setCost(e.target.checked)} /> and the price creeping up
               </label>
-              <Button disabled={busy || !pick} onClick={() => void stage("stage_drift")}>
+              <Button staff disabled={busy || !pick} onClick={() => void stage("stage_drift")}>
                 Stage creeping portions (80, 90, 100, 110 %)
               </Button>
             </div>
@@ -391,9 +391,9 @@ function Stages({ stages, refresh, now }: { stages: Stage[]; refresh: () => void
           </p>
           <p className="text-ink-soft">
             {g.by}, <span className="tabular">{when(g.at, new Date(now))}</span>{" "}
-            <button type="button" className="text-petrol underline underline-offset-2" onClick={() => void post({ action: "lift", stageId: g.stageId }).then(refresh)}>
+            <StaffButton className="text-petrol underline underline-offset-2" onClick={() => void post({ action: "lift", stageId: g.stageId }).then(refresh)}>
               Lift it
-            </button>
+            </StaffButton>
           </p>
         </li>
       ))}

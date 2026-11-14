@@ -1,6 +1,6 @@
 import { DockError } from "@/core/errors";
 import { readJson } from "@/server/http";
-import { opsRoute } from "@/server/ops/handler";
+import { opsRead, opsRoute } from "@/server/ops/handler";
 import { mcpStatus } from "@/server/aiven/showcase/aiven-mcp";
 import { SUGGESTIONS, ask } from "@/server/aiven/showcase/copilot";
 import { readOnlyDbConfigured } from "@/server/aiven/showcase/readonly-db";
@@ -8,9 +8,9 @@ import { platformRoute } from "@/server/aiven/showcase/routes";
 
 /** GET /ops-api/platform/copilot: which paths can answer (Aiven MCP, the direct read-only path) and suggested questions. */
 export async function GET(req: Request) {
-  return opsRoute(req, async (rt, staff) => {
+  return opsRead(req, async (rt, staff) => {
     platformRoute(rt, staff);
-    return Response.json({ mcp: await mcpStatus(new URL(req.url).searchParams.has("recheck")), direct: readOnlyDbConfigured(), suggestions: SUGGESTIONS });
+    return Response.json({ mcp: await mcpStatus(!staff.viewer && new URL(req.url).searchParams.has("recheck")), direct: readOnlyDbConfigured(), suggestions: SUGGESTIONS });
   });
 }
 

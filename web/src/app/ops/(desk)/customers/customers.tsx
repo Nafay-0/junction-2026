@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import type { AgentRow } from "@/server/ops/views";
 import { fi, when } from "../../_ui/format";
 import { Button, Empty, LoadError, Loading, PageHead, Section, useOps } from "../../_ui/kit";
+import { useViewer } from "../../_ui/role";
 import { Table } from "../../_ui/parts";
 import { Check, Eye, Search, Sparkles } from "lucide-react";
 import { Avatar, Tag, buttonClass } from "../../../_ui/kit";
@@ -72,6 +73,7 @@ export function CustomersScreen({ orgId }: { orgId?: string }) {
 const KIND_WORD: Record<string, string> = { visitor: "Visitor kitchen", demo: "Demo kitchen", account: "Account kitchen", outside: "Outside organisation" };
 
 function Kitchen({ orgId, name, kind, agents }: { orgId: string; name: string; kind: string; agents: AgentRow[] }) {
+  const viewer = useViewer();
   const [m, setM] = useState<MemoryState>();
   useEffect(() => {
     let live = true;
@@ -139,7 +141,11 @@ function Kitchen({ orgId, name, kind, agents }: { orgId: string; name: string; k
           </Empty>
         </div>
       ) : m.state === "error" ? (
-        <LoadError message={m.message} />
+        viewer ? (
+          <p className="mt-4 rounded-lg bg-surface px-4 py-3 text-[0.92rem]">What {name} shares with the wholesaler is shown to staff only: sign in with the passcode to read it.</p>
+        ) : (
+          <LoadError message={m.message} />
+        )
       ) : (
         <>
           <Section title="What we know, and where we learned it" aside={items.length ? `${stated} stated by the kitchen, ${learned} learned from its orders` : undefined}>
@@ -256,7 +262,7 @@ function Item({ orgId, it }: { orgId: string; it: MemoryItem }) {
             <form onSubmit={send} className="grid gap-2.5 md:grid-cols-[1fr_1fr_auto]">
               <input required value={text} onChange={(e) => setText(e.target.value)} placeholder="What it should say" aria-label="Proposed text" className="field !text-[0.92rem]" />
               <input required value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why (the kitchen sees this)" aria-label="Reason" className="field !text-[0.92rem]" />
-              <Button type="submit" kind="primary" size="md">
+              <Button staff type="submit" kind="primary" size="md">
                 Send to the kitchen
               </Button>
               {msg && <p className={`text-[0.88rem] md:col-span-3 ${msg.ok ? "" : "font-semibold"}`}>{msg.message}</p>}

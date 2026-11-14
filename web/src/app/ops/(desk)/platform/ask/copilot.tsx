@@ -7,7 +7,7 @@ import type { McpStatus } from "@/server/aiven/showcase/aiven-mcp";
 import type { AnswerCard } from "@/server/aiven/showcase/copilot";
 import { api } from "../../../../_client/api";
 import { fi, whenSeconds } from "../../../_ui/format";
-import { Button, LoadError, PageHead, Panel, useOps } from "../../../_ui/kit";
+import { Button, LoadError, PageHead, Panel, useOps, StaffButton } from "../../../_ui/kit";
 import { Mono, PlatformTabs, Rows, Status } from "../_parts/parts";
 
 type Info = { mcp: McpStatus; direct: boolean; suggestions: string[] };
@@ -73,15 +73,14 @@ export function Copilot() {
               Question
             </label>
             <input id="copilot-q" value={q} onChange={(e) => setQ(e.target.value)} maxLength={500} placeholder="How many orders were refused in the last hour, and by which rule?" className="field !min-h-12 min-w-0 flex-1 !rounded-full !px-5 !text-[1.02rem]" />
-            <Button type="submit" kind="go" size="lg" disabled={busy}>
+            <Button staff type="submit" kind="go" size="lg" disabled={busy}>
               {busy ? "Reading…" : "Ask the platform"}
             </Button>
           </form>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {(info.data?.suggestions ?? []).map((s) => (
-              <button
+              <StaffButton
                 key={s}
-                type="button"
                 onClick={() => {
                   setQ(s);
                   void ask(s);
@@ -89,7 +88,7 @@ export function Copilot() {
                 className="rounded-full border border-line-strong bg-paper px-3.5 py-1.5 text-left text-[0.86rem] transition-colors hover:border-petrol hover:bg-petrol-soft"
               >
                 {s}
-              </button>
+              </StaffButton>
             ))}
           </div>
           {problem && <p role="alert" className="mt-2 rounded-lg border border-bad/20 bg-bad-soft px-4 py-3 text-[0.92rem]">{problem}</p>}
@@ -147,9 +146,9 @@ function Card({ c, pinned, onPin, onAgain }: { c: AnswerCard; pinned: boolean; o
       <div className="flex flex-wrap items-start justify-between gap-2 px-4 pt-3">
         <p className="text-[0.92rem] text-ink-soft">&ldquo;{c.question}&rdquo;</p>
         <div className="flex gap-2">
-          <button type="button" onClick={onAgain} className={buttonClass("quiet", "sm", "!min-h-8 text-[0.88rem]")}>
+          <StaffButton onClick={onAgain} className={buttonClass("quiet", "sm", "!min-h-8 text-[0.88rem]")}>
             Ask again
-          </button>
+          </StaffButton>
           <button type="button" onClick={onPin} className={buttonClass("secondary", "sm")} aria-pressed={pinned}>
             {pinned ? "Unpin" : "Pin"}
           </button>

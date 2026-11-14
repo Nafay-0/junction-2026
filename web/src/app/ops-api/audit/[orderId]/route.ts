@@ -1,4 +1,4 @@
-import { opsRoute } from "@/server/ops/handler";
+import { opsRead } from "@/server/ops/handler";
 import { auditRecord } from "@/server/ops/views";
 
 /**
@@ -7,7 +7,7 @@ import { auditRecord } from "@/server/ops/views";
  */
 export async function GET(req: Request, ctx: RouteContext<"/ops-api/audit/[orderId]">) {
   const { orderId } = await ctx.params;
-  return opsRoute(req, async (rt) => {
+  return opsRead(req, async (rt) => {
     const record = await auditRecord(rt, orderId);
     const download = new URL(req.url).searchParams.get("download") === "1";
     return new Response(JSON.stringify(record, null, 2) + "\n", {

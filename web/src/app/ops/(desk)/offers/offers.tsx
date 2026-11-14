@@ -7,7 +7,7 @@ import { api } from "../../../_client/api";
 import { verifySigned, type KeySet } from "../../../_client/verify-signed";
 import { Badge } from "../../../_ui/kit";
 import { num, when } from "../../_ui/format";
-import { Button, Empty, LoadError, Loading, Num, PageHead, Panel, Section, useNow, useOps } from "../../_ui/kit";
+import { Button, Empty, LoadError, Loading, Num, PageHead, Panel, Section, useNow, useOps, StaffButton } from "../../_ui/kit";
 import { Table } from "../../_ui/parts";
 
 type Offer = OffersView["offers"][number];
@@ -78,7 +78,7 @@ function Body({ v, now, refresh }: { v: OffersView; now: number; refresh: () => 
         <Num n={num(v.stats.kitchensOff)} label="kitchens with offers off" />
       </Panel>
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        <Button kind="primary" onClick={() => void run()} disabled={running}>
+        <Button staff kind="primary" onClick={() => void run()} disabled={running}>
           {running ? "Running…" : "Run the selling agent now"}
         </Button>
         {note && <p className="text-[0.9rem] text-ink-soft" role="status">{note}</p>}
@@ -197,9 +197,9 @@ function Proof({ offerId }: { offerId: string }) {
   };
   return (
     <p className="mt-1 text-[0.8rem]">
-      <button type="button" className="text-petrol underline underline-offset-2" onClick={() => void check()}>
+      <StaffButton className="text-petrol underline underline-offset-2" onClick={() => void check()}>
         Check the signature
-      </button>
+      </StaffButton>
       {out && <span className="ml-2 text-ink-soft">{out}</span>}
     </p>
   );
@@ -237,7 +237,7 @@ function DemoReset({ v, refresh }: { v: OffersView; refresh: () => void }) {
           ))}
         </ul>
         <div className="flex flex-wrap items-center gap-3">
-          <Button kind="primary" onClick={() => void go()} disabled={busy}>
+          <Button staff kind="primary" onClick={() => void go()} disabled={busy}>
             {busy ? "Resetting and running…" : "Reset the test kitchens' offers and run"}
           </Button>
           {msg && <p className="text-[0.86rem] text-ink-soft" role="status">{msg}</p>}
@@ -285,7 +285,7 @@ function CampaignForm({ refresh }: { refresh: () => void }) {
             Product
           </label>
           <input id="campaign-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a product: oat drink, whipping cream…" className="min-h-11 w-full rounded-lg border border-line-strong bg-paper px-3 text-[0.95rem]" />
-          <Button type="submit">Find</Button>
+          <Button staff type="submit">Find</Button>
         </form>
         {found.length > 0 && (
           <ul className="space-y-1">
@@ -318,7 +318,7 @@ function CampaignForm({ refresh }: { refresh: () => void }) {
           </div>
         </fieldset>
         <div className="flex items-center gap-3">
-          <Button kind="primary" disabled={!pick || busy} onClick={() => void start()}>
+          <Button staff kind="primary" disabled={!pick || busy} onClick={() => void start()}>
             {busy ? "The selling agent is deciding…" : "Start: let the agent choose the kitchens"}
           </Button>
           {msg && <p className="text-[0.88rem] text-ink-soft" role="status">{msg}</p>}

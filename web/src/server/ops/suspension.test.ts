@@ -179,10 +179,10 @@ describe("suspension", () => {
 });
 
 describe("operations access", () => {
-  it("refuses every /ops-api call without the session cookie", async () => {
-    expect((await control({ action: "suspend", scope: "agent", target: DEMO_ORG.agentId, reason: "x" }, false)).status).toBe(401);
+  it("refuses every action without the session cookie; a viewer may read", async () => {
+    expect((await control({ action: "suspend", scope: "agent", target: DEMO_ORG.agentId, reason: "x" }, false)).status).toBe(403);
     const res = await overviewGet(new Request(`${BASE}/ops-api/overview`));
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(200);
     const ok = await controlGet(new Request(`${BASE}/ops-api/control`, { headers: { cookie } }));
     expect(ok.status).toBe(200);
   });
