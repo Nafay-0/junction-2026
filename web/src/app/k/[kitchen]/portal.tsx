@@ -360,7 +360,7 @@ function isActive(pathname: string, base: string, sub: string): boolean {
  * keeps the mark, the kitchen and the search, and the sections move to the tab bar under the thumb.
  */
 function Header() {
-  const { kitchen, kitchens, base, overview, basket, live, agent, lang } = usePortal();
+  const { kitchen, kitchens, base, overview, agent, lang } = usePortal();
   const tx = useText(PORTAL_TEXT);
   const router = useRouter();
   const pathname = usePathname() ?? base;
@@ -368,8 +368,6 @@ function Header() {
   const waiting = (overview.data?.orders ?? []).filter((o) => o.status === "pending_approval");
   const approver = kitchen.mandate.approvers[0];
   const days = overview.data?.memory.deliveryWeekdays;
-  const basketTotal = basket.lines.reduce((s, l) => s + (live.results[l.productId]?.offer?.unitPriceCents ?? 0) * l.packs, 0);
-  const priced = basket.lines.length > 0 && basket.lines.every((l) => live.results[l.productId]?.offer);
   const onCatalogue = pathname.startsWith(`${base}/catalogue`);
   const [q, setQ] = useState(onCatalogue ? (params.get("q") ?? "") : "");
   const [forPath, setForPath] = useState(pathname);
@@ -401,7 +399,7 @@ function Header() {
               <span className="truncate">{kitchen.name}</span>
               <ChevronDown aria-hidden size={15} className="shrink-0 text-ink-soft" />
             </p>
-            <p className="hidden truncate text-[0.78rem] leading-snug text-ink-soft lg:block">
+            <p className={`hidden truncate text-[0.78rem] leading-snug text-ink-soft ${agent.panelOpen ? "2xl:block" : "lg:block"}`}>
               {days ? tx.deliveries(weekdaysText(days, lang)) : ""}
               {approver ? tx.signsOff(approver.name) : ""}
               {kitchen.kind === "visitor" && kitchen.expiresAt ? tx.visitor : ""}
@@ -451,7 +449,8 @@ function Header() {
         </form>
 
         <div className="flex shrink-0 items-center gap-1.5 lg:gap-2">
-          <div className="hidden lg:block">
+          {/* With the agent docked beside the page the header has less room: the language moves under More. */}
+          <div className={agent.panelOpen ? "hidden 2xl:block" : "hidden lg:block"}>
             <LangSwitch />
           </div>
           <IconButton label={tx.searchLabel} onClick={() => { setSearchOpen((x) => !x); setTimeout(() => document.getElementById("shop-search")?.focus(), 30); }} expanded={showSearch} className="lg:hidden">
@@ -471,18 +470,6 @@ function Header() {
               <Kbd dark={agent.panelOpen}>Ctrl K</Kbd>
             </span>
           </button>
-          <Link
-            href={`${base}/basket`}
-            aria-current={pathname === `${base}/basket` ? "page" : undefined}
-            className="hidden min-h-11 items-center gap-2 rounded-full border border-line-strong bg-paper pl-3.5 pr-1.5 text-[0.92rem] font-semibold text-ink transition-colors duration-150 hover:border-ink-soft hover:bg-mist lg:inline-flex"
-            aria-label={tx.basketLabel(basket.lines.length, priced ? money(basketTotal) : undefined)}
-          >
-            <ShoppingBasket aria-hidden size={19} />
-            {basket.lines.length > 0 && <span className="tabular">{priced ? money(basketTotal) : tx.notPriced}</span>}
-            <span key={basket.lines.length} className={`changed flex h-8 min-w-8 items-center justify-center rounded-full px-2 tabular ${basket.lines.length > 0 ? "bg-lime text-ink" : "bg-surface text-ink-soft"}`}>
-              {basket.lines.length}
-            </span>
-          </Link>
         </div>
       </div>
 

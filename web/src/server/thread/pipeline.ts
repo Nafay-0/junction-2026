@@ -44,6 +44,8 @@ export type TurnRun = {
   readings: Map<string, Promise<Reading>>;
   /** The turn's first visible step ("Reading your request"), finished by the first reading instead of a second step. */
   opening?: ReturnType<typeof step>;
+  /** Several items in one message: none is placed alone; the ones ready become one order sheet (combineItems). */
+  multi?: boolean;
 };
 
 export type Reading = Awaited<ReturnType<typeof interpretRequest>> & { earlier: EarlierRequest[] };
@@ -233,7 +235,8 @@ export async function orderFromWords(run: TurnRun, words: string, earlier: Earli
     if (parts.length >= 2) {
       reading.done("several items: read one by one");
       record(run, "split_items", `The message names ${parts.length} items; each is read on its own: ${parts.map((x) => `"${x}"`).join(", ")}.`, { parts });
-      return (await Promise.all(parts.map((x, i) => orderFromWords(run, x, [], { ...opts, item: i + 1 })))).flat();
+      run.multi = true;
+      return combineItems(run, words, (await Promise.all(parts.map((x, i) => orderFromWords(run, x, [], { ...opts, item: i + 1 })))).flat());
     }
     // "The usual" with no product named: the kitchen's own records say what that is (its recurring orders due
     // next, at their usual amounts), on the order sheet to confirm. Plain code, nothing guessed.
@@ -264,9 +267,43 @@ export async function orderFromWords(run: TurnRun, words: string, earlier: Earli
   const alsoAsked = (r.alsoAsked ?? []).map((a) => a.text);
   const parsed = NeedSchema.parse(need) as StructuredNeed;
   // The other items the same message named: read and run in parallel with this one.
+  if (!opts.item && (r.alsoAsked ?? []).length) run.multi = true;
   const others = opts.item ? [] : (r.alsoAsked ?? []).slice(0, 4).map((a, i) => orderFromWords(run, a.text, [], { deliverBy: parsed.deliverBy, item: i + 1 }));
   const first = await openNeed(run, need, words, { ref, ...(basedOn ? { basedOn: { requestId: basedOn.requestId, fields: basedOn.fields, ...(basedOn.label ? { label: basedOn.label } : {}) } } : {}), alsoAsked: opts.item ? [] : alsoAsked });
-  return [...first, ...(await Promise.all(others)).flat()];
+  const all = [...first, ...(await Promise.all(others)).flat()];
+  return opts.item ? all : combineItems(run, words, all);
+}
+
+/**
+ * Several items in one message are one order: each item's lead option (the one its card would order) goes on one
+ * order sheet, priced and previewed by the gate once, confirmed once. Items still waiting on a question or a check
+ * keep their own card and join by "Add" when answered. The options cards say they were handed to the sheet.
+ */
+async function combineItems(run: TurnRun, words: string, items: ItemOutcome[]): Promise<ItemOutcome[]> {
+  if (!run.multi) return items;
+  const ready: { s: IntakeView; optionId: string }[] = [];
+  for (const it of items) {
+    if (it.state !== "options_ready" || !it.requestId || it.placed) continue;
+    const s = await run.rt.dock.intake.get(run.session, it.requestId).catch(() => undefined);
+    if (!s || s.state !== "options_ready") continue;
+    const card = run.store.cards(run.thread).map((x) => x.card).find((c) => c.type === "options" && c.requestId === it.requestId);
+    const views = card?.type === "options" ? card.options : [];
+    const lead = (card?.type === "options" && card.preselected && views.find((o) => o.optionId === card.preselected!.optionId && o.gate?.outcome !== "reject")) || views.find((o) => o.gate?.outcome !== "reject");
+    if (lead) ready.push({ s, optionId: lead.optionId });
+  }
+  if (ready.length < 2) return items;
+  const { createSheet } = await import("./sheet");
+  const lines = ready.flatMap(({ s, optionId }) => {
+    const o = s.options.find((x) => x.optionId === optionId)!;
+    return o.quoteLines.map((l, n) => ({ productId: l.productId, packs: l.quantity, ...(l.substituteFor ? { substituteFor: l.substituteFor } : n === 0 && o.alternative?.for && o.alternative.for !== l.productId ? { substituteFor: o.alternative.for } : {}) }));
+  });
+  const day = ready.map(({ s, optionId }) => s.options.find((x) => x.optionId === optionId)!.deliveryDate).sort().at(-1);
+  record(run, "combined", `The message named ${ready.length} items: their options go on one order sheet, one order through the gate.`, { items: ready.map((r) => ({ requestId: r.s.requestId, optionId: r.optionId })) });
+  const sheet = await createSheet(run, { lines, ...(day ? { deliveryDate: day } : {}), text: words });
+  for (const { s, optionId } of ready)
+    for (const x of run.thread.turns)
+      if (x.role === "agent") for (const c of x.cards) if (c.type === "options" && c.requestId === s.requestId) run.store.card(run.thread, x.turnId, { ...c, adjusted: optionId });
+  return [...items, { words, requestId: sheet.requestId, sheet: { sheetId: sheet.sheetId, deliveryDate: sheet.deliveryDate, lines: sheet.lines.map((l) => ({ name: l.name, packs: l.packs })), totalCents: sheet.totalCents } }];
 }
 
 /**
@@ -274,6 +311,10 @@ export async function orderFromWords(run: TurnRun, words: string, earlier: Earli
  * intake: the understood card, then whatever the intake says, then a routine order placed alone.
  */
 export async function openNeed(run: TurnRun, need: NeedInput, words: string, opts: { ref: string; basedOn?: { requestId: string; fields: string[]; label?: string }; alsoAsked?: string[]; memoryLine?: string }): Promise<ItemOutcome[]> {
+  // A kitchen's day ("for Thursday", "torstaiksi") is the day it wants the goods, not a latest date: delivered that day
+  // when it can be (the intake moves the wholesaler's earliest offer to it). Earlier only when that day cannot be had.
+  const n = need as { deliverBy?: string; deliverOn?: string };
+  if (n.deliverBy && !n.deliverOn && n.deliverBy > new Date().toISOString().slice(0, 10)) need = { ...need, deliverOn: n.deliverBy } as NeedInput;
   const parsed = NeedSchema.parse(need) as StructuredNeed;
   const understood = understoodCard({ ref: opts.ref, words, need: parsed, ...(opts.basedOn ? { basedOn: opts.basedOn } : {}), alsoAsked: opts.alsoAsked ?? [], ...(opts.memoryLine ? { memoryUsed: [opts.memoryLine] } : {}) });
   run.store.card(run.thread, run.turnId, understood);
@@ -332,6 +373,8 @@ export async function afterStep(run: TurnRun, s: IntakeView, words: string): Pro
   }
   if (s.state === "options_ready") {
     const card = optionsCard(s)!;
+    // Several items in one message are read and joined here, so the intake's "you also asked for" note does not apply.
+    if (run.multi) card.notes = card.notes.filter((n) => !/^You also asked for /.test(n));
     // In the store, the tap is the kitchen's own signed-in person: their choice of a stand-in is their confirmation
     // (core/policy.ts substitutionConfirmedBy), so a card held only by the substitution rule is placed alone.
     if (run.person) {
@@ -356,11 +399,29 @@ export async function afterStep(run: TurnRun, s: IntakeView, words: string): Pro
       run.facts.push(notice);
       out.notice = notice;
     }
+    const asked = (s.need as { deliverOn?: string }).deliverOn ?? s.need.deliverBy;
+    if (asked) card.askedDay = asked;
+    // The kind asked for exists but none of it can be offered: say why, first, from the products left out that carry it.
+    if (missing.length && !q.absent.length && card.options.every((o) => q.notCarried.has(o.optionId))) {
+      const ids = [...new Set(s.excluded.map((e) => e.productId))].slice(0, 100);
+      const named = ids.length ? await run.rt.catalog.searchProducts({ ids, limit: 100 }).catch(() => []) : [];
+      const words = missing.map((m) => m.toLowerCase());
+      const kindIds = new Set(named.filter((p) => words.every((w) => `${p.name} ${Object.values(p.names ?? {}).join(" ")}`.toLowerCase().includes(w))).map((p) => p.id));
+      const why = s.excluded.filter((e) => kindIds.has(e.productId));
+      const count = (test: (e: (typeof why)[number]) => boolean) => why.filter(test).length;
+      const rules = count((e) => /^not |category|contains|allergen|the kitchen does not want/.test(e.reason));
+      const day = count((e) => e.code === "cutoff_passed" || e.code === "too_late");
+      const stock = count((e) => e.code === "out_of_stock" || e.code === "no_substitute" || e.code === "no_offer");
+      const top = Math.max(rules, day, stock);
+      const kind: NonNullable<typeof card.insteadOf>["why"] = !why.length || top === 0 ? "other" : top === rules ? "rules" : top === day ? "day" : "stock";
+      const attr = kind === "rules" ? /^not ([a-z_]+)/.exec(why.find((e) => /^not [a-z_]+$/.test(e.reason))?.reason ?? "")?.[1] : undefined;
+      card.insteadOf = { asked: s.need.item.text, why: kind, ...(attr ? { attr } : {}), ...(kind === "day" && s.need.deliverBy ? { day: s.need.deliverBy } : {}) };
+    }
     if (missing.length) record(run, "not_in_assortment", `The options do not carry "${missing.join(" ")}" (from "${s.need.item.text}")${q.absent.length ? ", and nothing in the assortment does" : ""}: they are shown as stand-ins, not as a match.`, { words: missing, absent: q.absent }, s.requestId);
     run.store.card(run.thread, run.turnId, card);
     mark(run, "options");
     out.options = card.options.map((o, i) => ({ ref: `o${i + 1}`, optionId: o.optionId, title: o.title, totalCents: o.totalCents, deliveryDate: o.deliveryDate, match: o.match }));
-    const routine = missing.length ? undefined : await routineChoice(run, s, card.options);
+    const routine = missing.length || run.multi ? undefined : await routineChoice(run, s, card.options);
     if (!routine) return out;
     record(run, "autonomy", `Routine request inside the mandate: the agent chooses "${routine.option.title}" alone (${routine.why}).`, { optionId: routine.option.optionId, why: routine.why }, s.requestId);
     const chose = step(run, "quote", "Fixing the price with the wholesaler");

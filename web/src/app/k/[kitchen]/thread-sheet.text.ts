@@ -7,6 +7,14 @@ import { defineText } from "../../_i18n/lang";
  */
 export const THREAD_SHEET_TEXT = defineText({
   en: {
+    instead: {
+      rules: (asked: string, attr: string) => `No ${asked} meets your rules${attr ? ` (${attr})` : ""}. These are other products instead.`,
+      day: (asked: string, day: string) => `No ${asked} can arrive by ${day}. These are other products instead.`,
+      stock: (asked: string) => `No ${asked} is in stock now. These are other products instead.`,
+      other: (asked: string) => `No ${asked} can be offered now. These are other products instead.`,
+      chip: "Instead",
+    },
+    earlier: (day: string, asked: string) => `Arrives ${day}, earlier than the ${asked} you asked for`,
     check: {
       say: (what: string) => `Your agent noticed ${what}. Ordering confirms it is what you mean.`,
       and: " and ",
@@ -90,6 +98,14 @@ export const THREAD_SHEET_TEXT = defineText({
     onTime: (pct: string) => `${pct} %`,
   },
   fi: {
+    instead: {
+      rules: (asked: string, attr: string) => `Mikään ${asked} ei täytä sääntöjäsi${attr ? ` (${attr})` : ""}. Nämä ovat muita tuotteita sen tilalle.`,
+      day: (asked: string, day: string) => `Mikään ${asked} ei ehdi perille ${day} mennessä. Nämä ovat muita tuotteita sen tilalle.`,
+      stock: (asked: string) => `Yhtään ${asked} ei ole nyt varastossa. Nämä ovat muita tuotteita sen tilalle.`,
+      other: (asked: string) => `Mitään ${asked} ei voi nyt tarjota. Nämä ovat muita tuotteita sen tilalle.`,
+      chip: "Tilalle",
+    },
+    earlier: (day: string, asked: string) => `Saapuu ${day}, aiemmin kuin pyytämäsi ${asked}`,
     check: {
       say: (what: string) => `Agenttisi huomasi: ${what}. Tilaamalla vahvistat, että tarkoitit tätä.`,
       and: " ja ",
@@ -173,6 +189,14 @@ export const THREAD_SHEET_TEXT = defineText({
     onTime: (pct: string) => `${pct} %`,
   },
   sv: {
+    instead: {
+      rules: (asked: string, attr: string) => `Ingen ${asked} uppfyller dina regler${attr ? ` (${attr})` : ""}. Det här är andra produkter i stället.`,
+      day: (asked: string, day: string) => `Ingen ${asked} hinner fram till ${day}. Det här är andra produkter i stället.`,
+      stock: (asked: string) => `Ingen ${asked} finns i lager nu. Det här är andra produkter i stället.`,
+      other: (asked: string) => `Ingen ${asked} kan erbjudas nu. Det här är andra produkter i stället.`,
+      chip: "I stället",
+    },
+    earlier: (day: string, asked: string) => `Levereras ${day}, tidigare än ${asked} som du bad om`,
     check: {
       say: (what: string) => `Din agent märkte ${what}. Att beställa bekräftar att det är vad du menar.`,
       and: " och ",

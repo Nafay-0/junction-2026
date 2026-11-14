@@ -262,6 +262,13 @@ export type OptionsCard = CardBase & {
   chosen?: string;
   /** The buyer took this option to the order sheet to change it: the card no longer orders by itself. */
   adjusted?: string;
+  /**
+   * The kind asked for cannot be offered (oat drink), though the assortment has it: why (the kitchen's rules, the day,
+   * stock), said first, and every option is shown as something else instead, never as the best match.
+   */
+  insteadOf?: { asked: string; why: "rules" | "day" | "stock" | "other"; attr?: string; day?: string };
+  /** The day the buyer asked for, so an option arriving earlier says so ("arrives Monday, earlier than the Thursday you asked for"). */
+  askedDay?: string;
 };
 
 export type PriceCard = CardBase & {

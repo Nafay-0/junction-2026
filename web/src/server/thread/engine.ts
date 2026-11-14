@@ -243,6 +243,15 @@ export async function submitTurn(kitchen: Kitchen | string, input: unknown): Pro
     }),
   );
   e.queues.set(thread.threadId, next);
+  // A watchdog: a turn still working after TURN_MAX_MS (a model or a service that never answers) ends as failed, says
+  // what to do, and closes its steps (store.status). If the work finishes later, its own status and cards replace this.
+  const watchdog = setTimeout(() => {
+    const a = e.store.agentTurn(thread, agentTurn.turnId);
+    if (a?.status !== "working") return;
+    e.store.card(thread, agentTurn.turnId, { type: "notice", cardId: cardId("notice", `${agentTurn.turnId}:slow`), kind: "unavailable", message: "This is taking too long. Try again in a moment.", retry: true });
+    e.store.status(thread, agentTurn.turnId, "failed", { ms: Date.now() - t0 });
+  }, TURN_MAX_MS);
+  (watchdog as { unref?: () => void }).unref?.();
   return { threadId: thread.threadId, buyerTurnId: buyer.turnId, agentTurnId: agentTurn.turnId, seq: thread.seq };
 }
 
@@ -477,6 +486,8 @@ async function showLine(run: TurnRun, text: string): Promise<void> {
 
 /** How long the turn shows the memory step as working before it lets the writer finish out of sight. */
 const MEMORY_STEP_WAIT_MS = 6_000;
+/** Longer than the slowest real turn (a menu planned from words, about 40 s; a model fallback adds a few). */
+const TURN_MAX_MS = 150_000;
 
 /** After an order: what the memory writer proposes to remember, for the kitchen's person to keep or drop. */
 async function proposeMemory(run: TurnRun): Promise<void> {
