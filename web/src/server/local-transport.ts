@@ -22,6 +22,8 @@ import * as sandboxes from "@/app/api/v1/sandboxes/route";
 import * as sandboxDemoOrder from "@/app/api/v1/sandboxes/[sandboxId]/demo-order/route";
 import * as approvals from "@/app/api/v1/approvals/route";
 import * as availability from "@/app/api/v1/availability/route";
+import * as lookup from "@/app/api/v1/lookup/route";
+import * as alternatives from "@/app/api/v1/alternatives/route";
 import * as outbox from "@/app/api/v1/dev/outbox/route";
 import * as keys from "@/app/api/v1/keys/route";
 import * as ledger from "@/app/api/v1/ledger/route";
@@ -40,6 +42,8 @@ const routes: [RegExp, string[], RouteModule][] = [
   [/^\/api\/v1\/requests$/, [], requests],
   [/^\/api\/v1\/products$/, [], products],
   [/^\/api\/v1\/availability$/, [], availability],
+  [/^\/api\/v1\/lookup$/, [], lookup],
+  [/^\/api\/v1\/alternatives$/, [], alternatives],
   [/^\/api\/v1\/quotes$/, [], quotes],
   [/^\/api\/v1\/orders$/, [], orders],
   [/^\/api\/v1\/orders\/([^/]+)$/, ["orderId"], order as RouteModule],

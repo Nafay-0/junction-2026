@@ -33,6 +33,7 @@ export const DOOR_TEXT = defineText({
     scanTitle: "Try it without an account",
     scanBody: "Scan with your phone: you get a kitchen of your own for 90 minutes and become the person who signs its orders. No typing.",
     scanOpen: "Open on this device instead",
+    tryOutside: "Or bring your own agent: try it as an outside agent",
     // errors
     failed: "Not signed in",
     // sign-up, step 1
@@ -109,6 +110,7 @@ export const DOOR_TEXT = defineText({
     scanTitle: "Kokeile ilman tiliä",
     scanBody: "Skannaa puhelimella: saat oman keittiön 90 minuutiksi ja olet sen tilausten hyväksyjä. Ei kirjoittamista.",
     scanOpen: "Avaa tällä laitteella",
+    tryOutside: "Tai tuo oma agenttisi: kokeile ulkopuolisena agenttina",
     failed: "Kirjautuminen ei onnistunut",
     signupTitle: "Avaa tili",
     step1: "Ravintolasi",
@@ -180,6 +182,7 @@ export const DOOR_TEXT = defineText({
     scanTitle: "Prova utan konto",
     scanBody: "Skanna med telefonen: du får ett eget kök i 90 minuter och blir den som godkänner dess beställningar. Inget att skriva.",
     scanOpen: "Öppna på den här enheten",
+    tryOutside: "Eller ta med din egen agent: prova som utomstående agent",
     failed: "Inte inloggad",
     signupTitle: "Öppna ett konto",
     step1: "Din restaurang",

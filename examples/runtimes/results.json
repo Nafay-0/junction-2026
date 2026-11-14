@@ -1,14 +1,14 @@
 {
   "date": "2026-11-14",
-  "commit": "9a8221d",
-  "baseUrl": "http://localhost:4517",
+  "commit": "3cd29e2",
+  "baseUrl": "http://localhost:4733",
   "results": [
     {
       "runtime": "pydantic-ai",
       "version": "2.68.0",
       "model": "anthropic:claude-haiku-5-5",
       "outcome": "pending_approval",
-      "orderId": "ord_05c6dca80ce5484a",
+      "orderId": "ord_33ea7155404245b1",
       "steps": 7,
       "toolCalls": 5,
       "tools": [
@@ -22,12 +22,12 @@
       "humanInput": "elicitation",
       "humanTurns": 1,
       "retriedAfterPending": false,
-      "seconds": 43.3,
+      "seconds": 13.9,
       "tokens": {
-        "input": 114614,
-        "output": 4883
+        "input": 151450,
+        "output": 1631
       },
-      "costUsd": 0.0139,
+      "costUsd": 0.01596,
       "date": "2026-11-14",
       "slug": "pydantic-ai",
       "name": "Pydantic AI",
@@ -35,43 +35,36 @@
       "interface": "MCP",
       "agentId": "agent_kaari_buyer_pydantic_ai",
       "exitCode": 0,
-      "wallSeconds": 44.9,
-      "notes": "MCP 2026-07-28: the gate asks the buyer through the client (elicitation_handler). Set tool_error_behavior='failed' (the default 'retry' turns the gate's refusals into retry prompts and stops the run after one retry) and include_instructions=True (the server's instructions are dropped by default). Pydantic AI warns that the elicitation handler 'will never be called' on a 2026-07-28 session; it is called."
+      "wallSeconds": 15.3,
+      "notes": "MCP 2026-07-28: the gate asks the buyer through the client (elicitation_handler). Set tool_error_behavior='failed' (the default 'retry' turns the gate's refusals into retry prompts and stops the run after one retry) and include_instructions=True (the server's instructions are dropped by default). Pydantic AI warns that the elicitation handler 'will never be called' on a 2026-07-28 session; it is called.",
+      "withdrawnAfterRun": true
     },
     {
       "runtime": "openai-agents",
       "version": "0.24.0",
       "model": "openai:gpt-6-luna",
       "outcome": "pending_approval",
-      "orderId": "ord_df06987de21a4c80",
-      "steps": 9,
-      "toolCalls": 7,
+      "orderId": "ord_d2aa5cee0e04459e",
+      "steps": 7,
+      "toolCalls": 5,
       "tools": [
         "read_mandate",
         "submit_need",
         "respond_to_concerns",
         "choose_option",
-        "place_order",
-        "get_intake_step",
         "place_order"
       ],
-      "refusals": [
-        {
-          "tool": "place_order",
-          "code": "quote_signature_invalid",
-          "rule": "quote_signature"
-        }
-      ],
+      "refusals": [],
       "humanInput": "relay+approval",
       "humanTurns": 1,
       "selfAnswerAttempts": 0,
       "retriedAfterPending": false,
-      "seconds": 95.9,
+      "seconds": 18.0,
       "tokens": {
-        "input": 140411,
-        "output": 5562
+        "input": 84469,
+        "output": 547
       },
-      "costUsd": 0.01682,
+      "costUsd": 0.00872,
       "notes": "No MCP elicitation in the SDK, so the model relays the buyer's answer; a require_approval callable that reads _meta['dock/humanInput'] sends those calls through the SDK's approval step (interruptions, state.approve/reject) to the scripted buyer.",
       "date": "2026-11-14",
       "slug": "openai-agents",
@@ -80,14 +73,15 @@
       "interface": "MCP",
       "agentId": "agent_kaari_buyer_openai_agents",
       "exitCode": 0,
-      "wallSeconds": 96.9
+      "wallSeconds": 19.1,
+      "withdrawnAfterRun": true
     },
     {
       "runtime": "google-adk",
       "version": "2.14.1",
       "model": "google:gemini-3.1-flash-lite",
       "outcome": "pending_approval",
-      "orderId": "ord_47e4691e62f54dcb",
+      "orderId": "ord_0a8d7061a0c94cb6",
       "steps": 6,
       "toolCalls": 4,
       "tools": [
@@ -101,12 +95,12 @@
       "humanTurns": 1,
       "selfAnswerAttempts": 0,
       "retriedAfterPending": false,
-      "seconds": 104.5,
+      "seconds": 7.1,
       "tokens": {
-        "input": 389549,
-        "output": 2423
+        "input": 184686,
+        "output": 620
       },
-      "costUsd": 0.10102,
+      "costUsd": 0.0471,
       "date": "2026-11-14",
       "slug": "google-adk",
       "name": "Google ADK",
@@ -114,20 +108,21 @@
       "interface": "MCP",
       "agentId": "agent_kaari_buyer_google_adk",
       "exitCode": 0,
-      "wallSeconds": 105.6,
-      "notes": "Connects with the 2025-11-25 handshake, so no elicitation; human-input tools go through ADK's require_confirmation (a second McpToolset filtered to them). ADK's experimental ADK_ENABLE_MCP_MODERN_PROTOCOL=1 negotiates 2026-07-28 but then fails on the gate's input_required result. Gemini 429/503 on the shared key: google-genai retry options set."
+      "wallSeconds": 8.4,
+      "notes": "Connects with the 2025-11-25 handshake, so no elicitation; human-input tools go through ADK's require_confirmation (a second McpToolset filtered to them). ADK's experimental ADK_ENABLE_MCP_MODERN_PROTOCOL=1 negotiates 2026-07-28 but then fails on the gate's input_required result. Gemini 429/503 on the shared key: google-genai retry options set. On 14 Nov gemini-3.1-flash-lite sent quantity next to need instead of inside it, five times; submit_need now folds such fields into the need.",
+      "withdrawnAfterRun": true
     },
     {
       "runtime": "claude-agent-sdk",
       "version": "0.3.325",
       "model": "anthropic:claude-haiku-5-5",
       "outcome": "pending_approval",
-      "orderId": "ord_16c1fb25742e4bdc",
+      "orderId": "ord_c8700e7d1db24265",
       "steps": 9,
       "toolCalls": 7,
       "tools": [
         "read_mandate",
-        "read_kitchen_memory",
+        "submit_need",
         "submit_need",
         "submit_need",
         "respond_to_concerns",
@@ -139,12 +134,12 @@
       "humanTurns": 1,
       "selfAnswerAttempts": 0,
       "retriedAfterPending": false,
-      "seconds": 35.9,
+      "seconds": 18,
       "tokens": {
-        "input": 181027,
-        "output": 5136
+        "input": 180132,
+        "output": 1719
       },
-      "costUsd": 0.01468,
+      "costUsd": 0.0151,
       "date": "2026-11-14",
       "slug": "claude-agent-sdk",
       "name": "Claude Agent SDK",
@@ -152,15 +147,16 @@
       "interface": "MCP",
       "agentId": "agent_kaari_buyer_claude_agent_sdk",
       "exitCode": 0,
-      "wallSeconds": 36.0,
-      "notes": "MCP 2026-07-28 through the bundled Claude Code: onElicitation answers the gate's form. canUseTool reviews human-input tools (the SDK does not expose tool _meta, so the example reads it with one plain tools/list request). Built-in tools off, user settings not loaded."
+      "wallSeconds": 18.2,
+      "notes": "MCP 2026-07-28 through the bundled Claude Code: onElicitation answers the gate's form. canUseTool reviews human-input tools (the SDK does not expose tool _meta, so the example reads it with one plain tools/list request). Built-in tools off, user settings not loaded.",
+      "withdrawnAfterRun": true
     },
     {
       "runtime": "vercel-ai-sdk",
       "version": "7.0.172",
       "model": "openai:gpt-6-luna",
       "outcome": "pending_approval",
-      "orderId": "ord_1ab5ea49fb5044db",
+      "orderId": "ord_f93d240e2b024deb",
       "steps": 7,
       "toolCalls": 5,
       "tools": [
@@ -175,12 +171,12 @@
       "humanTurns": 1,
       "selfAnswerAttempts": 0,
       "retriedAfterPending": false,
-      "seconds": 38.9,
+      "seconds": 18.6,
       "tokens": {
-        "input": 66441,
-        "output": 2831
+        "input": 84495,
+        "output": 676
       },
-      "costUsd": 0.00806,
+      "costUsd": 0.00879,
       "date": "2026-11-14",
       "slug": "vercel-ai-sdk",
       "name": "Vercel AI SDK",
@@ -188,19 +184,21 @@
       "interface": "MCP",
       "agentId": "agent_kaari_buyer_vercel_ai_sdk",
       "exitCode": 0,
-      "wallSeconds": 39.1,
-      "notes": "ToolLoopAgent + @ai-sdk/mcp, MCP 2026-07-28 with onElicitationRequest; toolApproval on human-input tools. Standalone, not the project's own runner. MCP results reach the model as text (structuredContent only with an outputSchema)."
+      "wallSeconds": 18.7,
+      "notes": "ToolLoopAgent + @ai-sdk/mcp, MCP 2026-07-28 with onElicitationRequest; toolApproval on human-input tools. Standalone, not the project's own runner. MCP results reach the model as text (structuredContent only with an outputSchema).",
+      "withdrawnAfterRun": true
     },
     {
       "runtime": "langgraph",
       "version": "1.2.21",
       "model": "anthropic:claude-haiku-5-5",
       "outcome": "pending_approval",
-      "orderId": "ord_bde29a2eaf50423c",
-      "steps": 6,
-      "toolCalls": 5,
+      "orderId": "ord_8a7461ccdb8244d0",
+      "steps": 7,
+      "toolCalls": 6,
       "tools": [
         "read_mandate",
+        "submit_need",
         "submit_need",
         "respond_to_concerns",
         "choose_option",
@@ -211,12 +209,12 @@
       "humanTurns": 1,
       "selfAnswerAttempts": 0,
       "retriedAfterPending": false,
-      "seconds": 23.7,
+      "seconds": 16.0,
       "tokens": {
-        "input": 107204,
-        "output": 5017
+        "input": 147209,
+        "output": 2215
       },
-      "costUsd": 0.01323,
+      "costUsd": 0.01583,
       "date": "2026-11-14",
       "slug": "langgraph",
       "name": "LangGraph",
@@ -224,48 +222,36 @@
       "interface": "MCP",
       "agentId": "agent_kaari_buyer_langgraph",
       "exitCode": 0,
-      "wallSeconds": 25.1,
-      "notes": "langchain-mcp-adapters 0.3.2 pins mcp<2 (2025-11-25), so no elicitation; HumanInTheLoopMiddleware interrupts human-input tools and the graph resumes from its checkpoint with Command(resume=...)."
+      "wallSeconds": 17.1,
+      "notes": "langchain-mcp-adapters 0.3.2 pins mcp<2 (2025-11-25), so no elicitation; HumanInTheLoopMiddleware interrupts human-input tools and the graph resumes from its checkpoint with Command(resume=...).",
+      "withdrawnAfterRun": true
     },
     {
       "runtime": "semantic-kernel (OpenAPI)",
       "version": "1.47.0",
       "model": "openai:gpt-6-luna",
       "outcome": "pending_approval",
-      "orderId": "ord_ebc716afede84911",
-      "steps": 16,
-      "toolCalls": 12,
+      "orderId": "ord_812cdb8e2c874fd8",
+      "steps": 8,
+      "toolCalls": 5,
       "tools": [
-        "getKitchen",
         "openIntake",
         "respondToConcerns",
         "getIntake",
-        "respondToConcerns",
         "chooseOption",
-        "getIntake",
-        "openRequest",
-        "searchProducts",
-        "openIntake",
-        "respondToConcerns",
         "placeOrder"
       ],
-      "refusals": [
-        {
-          "tool": "respondToConcerns",
-          "code": "correction_unknown",
-          "rule": null
-        }
-      ],
+      "refusals": [],
       "humanInput": "relay+filter",
-      "humanTurns": 3,
+      "humanTurns": 2,
       "selfAnswerAttempts": 0,
       "retriedAfterPending": false,
-      "seconds": 53.5,
+      "seconds": 16.1,
       "tokens": {
-        "input": 359439,
-        "output": 3052
+        "input": 98664,
+        "output": 574
       },
-      "costUsd": 0.03747,
+      "costUsd": 0.01015,
       "interface": "OpenAPI 3.1",
       "date": "2026-11-14",
       "slug": "semantic-kernel-openapi",
@@ -273,8 +259,9 @@
       "language": "Python",
       "agentId": "agent_kaari_buyer_semantic_kernel_openapi",
       "exitCode": 0,
-      "wallSeconds": 55.2,
-      "notes": "The REST door: tools generated from /api/v1/openapi.json, filtered to operations whose security is the mandate. Four workarounds for Semantic Kernel 1.47: inline $refs (it builds no body parameters from $ref request bodies), pass 4xx bodies through (it hides them behind 'Error running OpenAPI operation'), allow the http base URL, send reasoning_effort 'none' as extra_body for gpt-6-luna. Human-input operations are named by operationId: the OpenAPI document does not mark them."
+      "wallSeconds": 18.0,
+      "notes": "The REST door: tools generated from /api/v1/openapi.json, filtered to operations whose security is the mandate. Four workarounds for Semantic Kernel 1.47: inline $refs (it builds no body parameters from $ref request bodies), pass 4xx bodies through (it hides them behind 'Error running OpenAPI operation'), allow the http base URL, send reasoning_effort 'none' as extra_body for gpt-6-luna. Human-input operations are read from the document's x-dock-human-input, from its agent view (?audience=agent).",
+      "withdrawnAfterRun": true
     }
   ]
 }

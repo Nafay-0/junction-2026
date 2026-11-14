@@ -51,7 +51,7 @@ function Body({ o, now }: { o: Overview; now: number }) {
               </>
             }
           >
-            Nothing has called in the last 30 minutes. An agent appears here the moment it connects, whether it is a kitchen&apos;s own agent, an outside agent over MCP at <code>/api/mcp</code>, or a program over REST.
+            Nothing has called in the last 30 minutes. An agent appears here the moment it connects, whether it is a kitchen&apos;s own agent, an outside agent over MCP at <code>/api/mcp</code> (or a consumer assistant through a kitchen&apos;s connector address, which is the same door), or a program over REST. To send one in, see <Link href="/try">Try it as an outside agent</Link>.
           </Empty>
         ) : (
           <Table label="Agents at the door">

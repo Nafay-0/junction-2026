@@ -37,7 +37,7 @@ RUNTIMES = [
     {"slug": "openai-agents", "name": "OpenAI Agents SDK", "language": "Python", "package": "openai-agents", "interface": "MCP", "cmd": ["uv", "run", "-q", "buyer.py"],
      "notes": "No MCP elicitation in the SDK, so the model relays the buyer's answer; a require_approval callable that reads _meta['dock/humanInput'] sends those calls through the SDK's approval step (interruptions, state.approve/reject) to the scripted buyer."},
     {"slug": "google-adk", "name": "Google ADK", "language": "Python", "package": "google-adk", "interface": "MCP", "cmd": ["uv", "run", "-q", "buyer.py"], "gemini": True,
-     "notes": "Connects with the 2025-11-25 handshake, so no elicitation; human-input tools go through ADK's require_confirmation (a second McpToolset filtered to them). ADK's experimental ADK_ENABLE_MCP_MODERN_PROTOCOL=1 negotiates 2026-07-28 but then fails on the gate's input_required result. Gemini 429/503 on the shared key: google-genai retry options set."},
+     "notes": "Connects with the 2025-11-25 handshake, so no elicitation; human-input tools go through ADK's require_confirmation (a second McpToolset filtered to them). ADK's experimental ADK_ENABLE_MCP_MODERN_PROTOCOL=1 negotiates 2026-07-28 but then fails on the gate's input_required result. Gemini 429/503 on the shared key: google-genai retry options set. On 14 Nov gemini-3.1-flash-lite sent quantity next to need instead of inside it, five times; submit_need now folds such fields into the need."},
     {"slug": "claude-agent-sdk", "name": "Claude Agent SDK", "language": "TypeScript", "package": "@anthropic-ai/claude-agent-sdk", "interface": "MCP", "cmd": ["node", "buyer.ts"], "npm": True,
      "notes": "MCP 2026-07-28 through the bundled Claude Code: onElicitation answers the gate's form. canUseTool reviews human-input tools (the SDK does not expose tool _meta, so the example reads it with one plain tools/list request). Built-in tools off, user settings not loaded."},
     {"slug": "vercel-ai-sdk", "name": "Vercel AI SDK", "language": "TypeScript", "package": "ai", "interface": "MCP", "cmd": ["node", "buyer.ts"], "npm": True,
@@ -45,7 +45,7 @@ RUNTIMES = [
     {"slug": "langgraph", "name": "LangGraph", "language": "Python", "package": "langgraph", "interface": "MCP", "cmd": ["uv", "run", "-q", "buyer.py"],
      "notes": "langchain-mcp-adapters 0.3.2 pins mcp<2 (2025-11-25), so no elicitation; HumanInTheLoopMiddleware interrupts human-input tools and the graph resumes from its checkpoint with Command(resume=...)."},
     {"slug": "semantic-kernel-openapi", "name": "Semantic Kernel (OpenAPI, no MCP)", "language": "Python", "package": "semantic-kernel", "interface": "OpenAPI 3.1", "cmd": ["uv", "run", "-q", "buyer.py"],
-     "notes": "The REST door: tools generated from /api/v1/openapi.json, filtered to operations whose security is the mandate. Four workarounds for Semantic Kernel 1.47: inline $refs (it builds no body parameters from $ref request bodies), pass 4xx bodies through (it hides them behind 'Error running OpenAPI operation'), allow the http base URL, send reasoning_effort 'none' as extra_body for gpt-6-luna. Human-input operations are named by operationId: the OpenAPI document does not mark them."},
+     "notes": "The REST door: tools generated from /api/v1/openapi.json, filtered to operations whose security is the mandate. Four workarounds for Semantic Kernel 1.47: inline $refs (it builds no body parameters from $ref request bodies), pass 4xx bodies through (it hides them behind 'Error running OpenAPI operation'), allow the http base URL, send reasoning_effort 'none' as extra_body for gpt-6-luna. Human-input operations are read from the document's x-dock-human-input, from its agent view (?audience=agent)."},
 ]
 
 JWS = re.compile(r"eyJ[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]*){0,2}…?")  # whole or truncated JWS
@@ -108,7 +108,22 @@ def run_one(rt: dict, base: str, keys: dict, timeout: int) -> dict:
               f"# command: (cd examples/runtimes/{rt['slug']} && {shlex.join(rt['cmd'])}), agent id {agent_id}\n\n")
     warnings = "\n".join(l for l in stderr.splitlines() if l.strip())[-4000:]
     transcript.write_text(header + stdout + (f"\n--- stderr (last lines) ---\n{warnings}\n" if warnings else ""))
+    # Every runtime buys for the same demo kitchen: an order left waiting would make the next runtime's request look
+    # like a repeat (AimoPilot asks "order again?"). Take it back, as the same agent, through the published withdraw.
+    if result.get("outcome") == "pending_approval" and result.get("orderId"):
+        withdraw(base, token, agent_id, result["orderId"])
+        result["withdrawnAfterRun"] = True
     return result
+
+
+def withdraw(base: str, token: str, agent_id: str, order_id: str) -> None:
+    import urllib.request
+    req = urllib.request.Request(f"{base}/api/v1/orders/{order_id}/withdraw", method="POST", data=b'{"reason":"runtime test run finished"}',
+                                 headers={"Authorization": f"Bearer {token}", "Dock-Agent-Id": agent_id, "content-type": "application/json"})
+    try:
+        urllib.request.urlopen(req, timeout=20).read()
+    except Exception as e:  # noqa: BLE001 - a cleanup step; the run's result stands either way
+        print(f"   (could not withdraw {order_id}: {e})")
 
 
 def fmt_refusals(r: dict) -> str:
