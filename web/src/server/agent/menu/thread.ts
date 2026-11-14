@@ -399,7 +399,9 @@ export async function changeMenu(slug: KitchenRef, planId: string, words: string
   const { service, kitchen } = await kit(slug);
   const before = await service.get(kitchen, planId);
   const p = before.record;
-  const edits = changeEditsOf(words, p);
+  // The dish a "… instead" replaces: a refused one, else the one whose defining ingredient cannot be had.
+  const target = before.view.totals.missing.find((m) => m.defining)?.dishId;
+  const edits = changeEditsOf(words, p, target ? { target } : {});
   const t = MENU_SAY_TEXT[lang];
   if (!edits.length) {
     const { checksOf } = await import("./scenarios");
@@ -414,18 +416,36 @@ export async function changeMenu(slug: KitchenRef, planId: string, words: string
     const b = was?.chosen?.products.map((x) => `${x.packs} × ${x.name}`).join(" + ") ?? (was?.status === "struck" ? "not bought" : "nothing found");
     if (a !== b || l.name !== was?.name) changed.push(`${was?.name ?? l.name}${l.name !== was?.name ? ` → ${l.name}` : ""}: ${b} → ${a}`);
   }
-  const what = edits.map((e) => (e.op === "rules" ? t.changedRules([...(e.requiredClaims ?? []).map((c) => t.claim[c] ?? c), ...(e.forbiddenAllergens ?? []).map((x) => t.noAllergen(t.allergen[x] ?? x))].join(", ")) : e.op === "covers" ? t.changedCovers(e.covers) : e.op === "ingredient" ? t.changedIngredient(e.name) : e.op === "dropDish" ? t.changedDrop(dishL(p.draft.dishes.find((d) => d.id === e.dishId)!, lang)) : "")).filter(Boolean);
+  // An event plan's ways out are worked out again for the changed plan (no model call), so a yes acts on this plan.
+  const { scenarios } = await kit(slug);
+  if (scenarios.cached(planId)) await scenarios.event(kitchen, p.text, by, { planId }).catch(() => undefined);
+  const what = edits.map((e) => (e.op === "replaceDish" ? t.changedDish(e.name, dishL(p.draft.dishes.find((d) => d.id === e.dishId) ?? { name: "the dish" }, lang)) : e.op === "rules" ? t.changedRules([...(e.requiredClaims ?? []).map((c) => t.claim[c] ?? c), ...(e.forbiddenAllergens ?? []).map((x) => t.noAllergen(t.allergen[x] ?? x))].join(", ")) : e.op === "covers" ? t.changedCovers(e.covers) : e.op === "ingredient" ? t.changedIngredient(e.name) : e.op === "dropDish" ? t.changedDrop(dishL(p.draft.dishes.find((d) => d.id === e.dishId)!, lang)) : "")).filter(Boolean);
   const checks = checksOf(after.view);
   const lines = changed.length ? t.changedLines(changed.length) : t.nothingElse;
   const refused = checks.refusedDish ? ` ${t.refused(checks.refusedDish.name, "", t.allergen[checks.refusedDish.allergen] ?? checks.refusedDish.allergen, checks.refusedDish.rule.text)}` : "";
-  const say = upper(`${what.join(" ")} ${lines} ${t.newTotal(money(after.view.totals.totalCents), money(before.view.totals.totalCents))}${refused}`.replace(/\s+/g, " ").trim());
+  // What still cannot be made to pass, named with its product and reason: never "one of the products".
+  const failing = checks.missing.filter((m) => m.code === "rule" || m.code === "outside_groups" || m.code === "not_sold" || m.code === "cannot_arrive");
+  const still = failing.length ? ` ${t.stillMissing(checks.covered, checks.ingredients, list(failing.slice(0, 4).map((m) => `${lower(m.ingredient)} (${m.words})`), lang))}` : "";
+  const total = checks.complete ? t.newTotal(money(after.view.totals.totalCents), money(before.view.totals.totalCents)) : t.partialTotal(checks.covered, checks.ingredients, money(after.view.totals.totalCents), list(checks.missing.slice(0, 4).map((m) => lower(m.ingredient)), lang));
+  const say = upper(`${what.join(" ")} ${lines} ${total}${refused}${still}`.replace(/\s+/g, " ").trim());
   return { planId, edits, changed, beforeCents: before.view.totals.totalCents, totalCents: after.view.totals.totalCents, say, checks };
 }
 
 
 /** The buyer's words as the planner's edits on this plan (plain code): a constraint, the portions, a swap, a dish dropped. */
-export function changeEditsOf(words: string, p: Pick<import("./service").PlanRecord, "settings" | "specs" | "draft">): import("./service").PlanEdit[] {
+export function changeEditsOf(words: string, p: Pick<import("./service").PlanRecord, "settings" | "specs" | "draft"> & Partial<Pick<import("./service").PlanRecord, "refused" | "instead">>, opts: { target?: string } = {}): import("./service").PlanEdit[] {
   const edits: import("./service").PlanEdit[] = [];
+  // A dish offered instead of a refused one, named ("the chicken strips"): it takes the refused dish's place in this plan.
+  const refusedId = p.refused?.[0]?.dishId;
+  const ordinal = /\b(first|1st|ensimmäi|första)\b/i.test(words) ? 0 : /\b(second|2nd|toinen|toista|andra)\b/i.test(words) ? 1 : /\b(third|3rd|kolmas|tredje)\b/i.test(words) ? 2 : -1;
+  const offered = refusedId ? (ordinal >= 0 ? p.instead?.[ordinal] : undefined) ?? p.instead?.find((x) => stemsMatch(x.name, words) || (x.nameFi ? stemsMatch(x.nameFi, words) : false) || stemsMatch(words, x.name.split(/\s+/).slice(0, 2).join(" "))) : undefined;
+  if (refusedId && offered) return [{ op: "replaceDish", dishId: refusedId, name: offered.name }];
+  // "Braised pork shoulder instead": a dish the buyer names for the one that cannot be made or bought.
+  const named = /^(?:use|make it|let's do|do|serve|then)?\s*(.+?)\s+instead\.?\s*$/i.exec(words.trim()) ?? /^(?:tehdään|käytä)?\s*(.+?)\s+(?:tilalle|sen sijaan)\.?\s*$/i.exec(words.trim());
+  if (named && !/\binstead of\b/i.test(words)) {
+    const dishId = refusedId ?? opts.target ?? p.draft.dishes.find((d) => /main/.test(d.course))?.id ?? p.draft.dishes[0]?.id;
+    if (dishId && !matchLine(p, named[1])) return [{ op: "replaceDish", dishId, name: named[1] }];
+  }
   const claims = CLAIM_WORDS.filter(([re]) => re.test(words)).map(([, c]) => c);
   const allergens = ALLERGEN_WORDS_SAID.filter(([re]) => re.test(words)).map(([, a]) => a);
   if (claims.length || allergens.length) edits.push({ op: "rules", ...(claims.length ? { requiredClaims: claims } : {}), ...(allergens.length ? { forbiddenAllergens: allergens } : {}) });
@@ -606,6 +626,8 @@ export type DishGroups = {
   definingMissing: boolean;
   say: string;
   ask: string;
+  /** What the gate would object to on the order, each finding with the lines it names ("the whole order" when none). */
+  gate: { outcome: string; findings: import("./scenarios").GateFinding[] } | null;
 };
 
 /**
@@ -616,7 +638,9 @@ export type DishGroups = {
 export async function dishGroups(slug: KitchenRef, planId: string, lang: Lang = "en"): Promise<DishGroups> {
   const { service, kitchen } = await kit(slug);
   const { record, view } = await service.get(kitchen, planId);
-  return groupsOf(record, view, lang);
+  const d = await service.preview(kitchen, planId, { view }).catch(() => undefined);
+  const { gateFindings } = await import("./scenarios");
+  return { ...groupsOf(record, view, lang), gate: d ? { outcome: d.outcome, findings: gateFindings(d, view) } : null };
 }
 
 /** The three groups of a plan, plain code over its coverage (dishGroups without the runtime, for tests and other doors). */
@@ -644,5 +668,5 @@ export function groupsOf(record: Pick<import("./service").PlanRecord, "planId" |
       .join(" "),
   );
   const ask = upper(tt.complete ? t.askSheet : t.askIncomplete);
-  return { planId, dishes, covers, day, onHand, toOrder, cannotGet, totalToOrderCents: tt.totalCents, perCoverCents: perCover, complete: tt.complete, covered: tt.covered, of: tt.ingredients, definingMissing: tt.definingMissing, say, ask };
+  return { planId, dishes, covers, day, onHand, toOrder, cannotGet, totalToOrderCents: tt.totalCents, perCoverCents: perCover, complete: tt.complete, covered: tt.covered, of: tt.ingredients, definingMissing: tt.definingMissing, say, ask, gate: null };
 }

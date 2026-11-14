@@ -88,7 +88,24 @@ export type SeasonalResult = {
 export type PlanChecks = Pick<PlanView["totals"], "refusedDish" | "instead" | "ruleRefusals" | "day" | "coverage" | "complete" | "ingredients" | "covered" | "missing" | "definingMissing">;
 export const checksOf = (v: PlanView): PlanChecks => ({ refusedDish: v.totals.refusedDish, instead: v.totals.instead, ruleRefusals: v.totals.ruleRefusals, day: v.totals.day, coverage: v.totals.coverage, complete: v.totals.complete, ingredients: v.totals.ingredients, covered: v.totals.covered, missing: v.totals.missing, definingMissing: v.totals.definingMissing });
 
-export type GatePreview = { outcome: Decision["outcome"]; reasons: string[]; approver: { name: string; role: string } | null };
+export type GatePreview = { outcome: Decision["outcome"]; reasons: string[]; approver: { name: string; role: string } | null; findings: GateFinding[] };
+
+/** What the gate objects to, each tied to the plan's lines it names (by product id or name), else to the order as a whole. */
+export type GateFinding = { rule: string; outcome: "escalate" | "fail"; reason: string; lines: { lineId: string; ingredient: string; product: string }[] };
+export function gateFindings(d: Decision | undefined, view: PlanView): GateFinding[] {
+  if (!d) return [];
+  const bought = view.lines.filter((l) => l.chosen && l.status !== "struck" && l.status !== "merged");
+  return d.rules
+    .filter((r) => r.outcome !== "pass")
+    .map((r) => {
+      const ids = new Set<string>(JSON.stringify(r.details ?? {}).match(/"(?:productId|product)":"([^"]+)"/g)?.map((x) => x.split(":")[1].replace(/"/g, "")) ?? []);
+      for (const k of ["flagged", "productIds", "undeclared", "held"]) for (const x of ((r.details as Record<string, unknown> | undefined)?.[k] as unknown[] | undefined) ?? []) if (typeof x === "string") ids.add(x);
+      const lines = bought
+        .filter((l) => l.chosen!.products.some((x) => ids.has(x.productId) || r.reason.includes(x.productId) || r.reason.includes(x.name)))
+        .map((l) => ({ lineId: l.lineId, ingredient: l.name, product: l.chosen!.products.map((x) => x.name).join(" + ") }));
+      return { rule: r.rule, outcome: r.outcome as "escalate" | "fail", reason: r.reason, lines };
+    });
+}
 
 export type Stuck = {
   lineId: string;
@@ -142,8 +159,8 @@ const PREPARED_NAME = /salad|salaat|hummus|sose|puree|pikkel|marinoi|pickled|eti
 const fold = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");
 const amt = (a: Amount | null | undefined) => (a ? formatAmt(a) : null);
 const today = (now: Date) => localNow(now).date;
-const preview = (d: Decision | undefined): GatePreview | null =>
-  d ? { outcome: d.outcome, reasons: d.reasons, approver: d.outcome === "needs_human_approval" ? { name: d.approver.name, role: d.approver.role } : null } : null;
+const preview = (d: Decision | undefined, view?: PlanView): GatePreview | null =>
+  d ? { outcome: d.outcome, reasons: d.reasons, approver: d.outcome === "needs_human_approval" ? { name: d.approver.name, role: d.approver.role } : null, findings: view ? gateFindings(d, view) : [] } : null;
 
 function lineFacts(l: PlanLineView, roleOfLine: (l: PlanLineView) => Role): LineFacts {
   const c = l.chosen;
@@ -311,7 +328,7 @@ export function createScenarios(deps: ScenarioDeps) {
       lines,
       said,
       totalCents: view.totals.totalCents,
-      gate: preview(gate),
+      gate: preview(gate, view),
       blockers: view.totals.blockers,
       notes: [...p.notes, ...(p.declineReason ? [p.declineReason] : [])],
       ...checksOf(view),
@@ -597,7 +614,7 @@ export function createScenarios(deps: ScenarioDeps) {
       options,
       unresolved,
       totalCents: view.totals.totalCents,
-      gate: preview(gate),
+      gate: preview(gate, view),
       notes: p.notes,
       ...checksOf(view),
     };

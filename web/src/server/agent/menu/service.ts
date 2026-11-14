@@ -824,6 +824,49 @@ export function createPlanService(deps: PlanDeps) {
           reprice = true;
           break;
         }
+        case "replaceDish": {
+          // A dish the buyer names in place of one on the plan ("braised pork shoulder instead", or one of the dishes
+          // offered instead of a refused one): drafted as exactly that dish, in the same slot; its lines join this plan,
+          // so a main and its side stay one plan and one order.
+          const old = p.draft.dishes.find((x) => x.id === e.dishId);
+          if (!old) throw new DockError(404, "dish_not_found", `No dish ${e.dishId} on this plan.`);
+          const text = `${e.name} for ${p.settings.covers ?? "the same number of"} covers${p.settings.deliverBy ? ` on ${p.settings.deliverBy}` : ""}: exactly this one dish, as the ${old.course} in place of ${old.name}.`;
+          const d = await deps.draft(text, promptContext(k), deps.now());
+          p.model.calls.push(...d.calls.map((c) => ({ ...c, step: `replace ${c.step}` })));
+          const drafted = d.draft.dishes[0];
+          if (!drafted) throw new DockError(422, "dish_not_planned", `${e.name} could not be planned as a dish.`);
+          const dish = { ...drafted, id: old.id, course: old.course };
+          for (const m of missingEssentials(dish)) dish.ingredients.push({ ...m.add, yieldPct: 100, amountBasis: `added by plain code: a ${m.kind} cannot be made without ${m.what}; a standard share per cover, check it`, pantry: k.info.pantry.some((w) => w.toLowerCase() === m.add.name.toLowerCase()), avoid: [] });
+          p.draft = { ...p.draft, dishes: p.draft.dishes.map((x) => (x.id === old.id ? dish : x)) };
+          p.refused = (p.refused ?? []).filter((r) => r.dishId !== old.id);
+          const forbidden = [...new Set([...k.diet.forbiddenAllergens.map((f) => f.allergen), ...p.draft.forbiddenAllergens])];
+          const conflict = definingConflict(dish, forbidden, k.info.rules);
+          // The old dish's uses leave the plan; lines only it used go.
+          for (const spec of p.specs) spec.uses = spec.uses.filter((u) => u.dishId !== old.id);
+          for (const spec of p.specs.filter((x) => !x.uses.length)) {
+            delete p.candidates[spec.lineId];
+            delete p.edits[spec.lineId];
+          }
+          p.specs = p.specs.filter((x) => x.uses.length);
+          if (conflict) (p.refused ??= []).push({ dishId: dish.id, name: dish.name, ingredient: conflict.ingredient, allergen: conflict.allergen, rule: conflict.rule });
+          else {
+            const diet = withRequestRules(k.diet, p.draft);
+            for (const ns of buildSpecs({ ...p.draft, dishes: [dish] }, k.info.pantry)) {
+              const same = p.specs.find((x) => x.key === ns.key && x.ingredient.perCover.unit === ns.ingredient.perCover.unit);
+              if (same) {
+                same.uses.push(...ns.uses);
+                continue;
+              }
+              let id = ns.lineId;
+              while (p.specs.some((x) => x.lineId === id)) id = `${id}_2`;
+              p.specs.push({ ...ns, lineId: id });
+              p.candidates[id] = await findCandidates(catalog, ns.ingredient, diet, allowedFor(k), 8);
+            }
+          }
+          log(p, k, `buyer:${by}`, `${by} put ${dish.name} in place of ${old.name} on the plan${conflict ? `; it cannot be made either: "${conflict.rule.text}"` : ""}.`, { dishId: old.id, from: old.name, to: dish.name });
+          reprice = true;
+          break;
+        }
         case "ingredient": {
           // One ingredient swapped in words ("use lingonberry jam instead of fresh lingonberries"): the same amount and
           // role, the new ingredient searched under the kitchen's and the plan's rules.
@@ -1104,6 +1147,8 @@ export type PlanEdit =
   | { op: "onHand"; lineId: string; onHand: OnHand | null; by?: string }
   /** A constraint on the whole plan in words ("make it lactose-free", "no nuts"): added to the request's rules. */
   | { op: "rules"; requiredClaims?: string[]; forbiddenAllergens?: string[] }
+  /** A dish the buyer named in place of one on the plan: drafted as that dish, its lines join this plan. */
+  | { op: "replaceDish"; dishId: string; name: string }
   /** One ingredient replaced by another the buyer named, same amount and role. */
   | { op: "ingredient"; lineId: string; name: string; searchTerms?: string[] }
   /** A dish taken off the plan: every line only it uses is struck. */

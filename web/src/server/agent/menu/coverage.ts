@@ -98,6 +98,10 @@ function lineCoverage(l: PlanLineView | undefined, owner: PlanLineView | undefin
     const swappedFrom = outside.find((slug) => { const c = ctx.codeOf(slug); return !!c && !!chosenCode && c.slice(0, 2) !== chosenCode.slice(0, 2); });
     if (swappedFrom) return { status: "swapped", words: `${product} instead: ${spec.name} itself is in ${groupName(swappedFrom, ctx.codeOf)}, which your product groups do not cover`, detail: { ...detail, insteadOf: spec.name, group: groupName(swappedFrom, ctx.codeOf), kitchenGroups: ctx.kitchenGroups } };
     if (otherForm) return { status: "swapped", words: plain(otherForm.text), detail: { ...detail, insteadOf: spec.name } };
+    // A product whose data cannot show the kitchen's rule is met (no allergen data under "always lactose-free"): the
+    // gate would refuse it, so it is not covered, named with the product and the rule.
+    const unknown = open.find((d) => d.kind === "allergen_unknown");
+    if (unknown) return { status: "not_covered", code: "rule", words: plain(unknown.text).replace(/ A person must check the product before it is ordered\.$/, ""), detail: { ...detail, ...(ctx.ruleOf(v) ? { rule: ctx.ruleOf(v)! } : {}) } };
     if (open.some((d) => !d.acceptLabel)) return { status: "not_covered", code: "needs_decision", words: plain(open.find((d) => !d.acceptLabel)!.text), detail };
     return { status: "ordered", words: v.chosen.products.map((x) => `${x.packText} ${x.name}`).join(" + "), detail };
   }

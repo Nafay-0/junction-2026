@@ -14,6 +14,8 @@ const DRAFTS: [RegExp, LlmMenuDraft][] = [
   // The model wrote the fish fingers into the name and the fish away from the lines: the name alone refuses it.
   [/^kalapuikot/, draft({ dishes: [dish("Kalapuikot ja perunamuusi", [ing("potato", "Potato", ["peruna", "potato"], 150, "g"), ing("butter", "Butter", ["voi"], 8, "g")])] })],
   [/^Three main dishes/, draft({ dishes: [dish("Chicken and rice", [ing("chicken", "Chicken breast", ["broilerin rintafilee", "chicken breast"], 90, "g", { role: "main protein" }), ing("rice", "Rice", ["riisi", "rice"], 60, "g")]), dish("Salmon soup", [ing("salmon", "Salmon fillet", ["lohifilee"], 80, "g", { role: "main protein" })]), dish("Chicken with mash", [ing("chicken", "Chicken breast", ["broilerin rintafilee"], 90, "g"), ing("potato", "Potato", ["peruna"], 150, "g")])] })],
+  [/^fish fingers and mash/, draft({ dishes: [dish("Fish fingers", [ing("fish_fingers", "Fish fingers", ["kalapuikot", "fish fingers"], 120, "g", { role: "main protein" })]), dish("Mashed potatoes", [ing("potato", "Potato", ["peruna", "potato"], 150, "g")], { course: "side" })] })],
+  [/^Chicken and rice for/, draft({ dishes: [dish("Chicken and rice", [ing("chicken", "Chicken breast", ["broilerin rintafilee", "chicken breast"], 90, "g", { role: "main protein" }), ing("rice", "Rice", ["riisi", "rice"], 60, "g")])] })],
   [/^cream sauce/, draft({ covers: 10, serviceDate: "2026-11-16", dishes: [dish("Cream sauce", [ing("cooking_cream", "Cooking cream", ["ruokakerma", "cooking cream"], 50, "ml"), ing("leek", "Leek", ["purjo", "leek"], 30, "g")]), dish("Rye bread", [ing("rye_bread", "Rye bread", ["ruisleipä", "rye bread"], 40, "g")], { course: "bread" })] })],
   [/^chocolate cake/, draft({ covers: 10, serviceDate: "2026-11-16", dishes: [dish("Chocolate cake", [ing("dark_chocolate", "Dark baking chocolate", ["tumma leivontasuklaa"], 20, "g"), ing("butter", "Butter", ["voi"], 15, "g"), ing("egg", "Egg", ["kananmuna"], 0.5, "pcs"), ing("cocoa", "Cocoa powder", ["kaakaojauhe"], 5, "g"), ing("baking_powder", "Baking powder", ["leivinjauhe"], 1, "g")], { course: "dessert" })] })],
 ];
@@ -100,5 +102,22 @@ describe("a change to the plan on the table: a constraint, the portions, a swap,
     const { view: swapped } = await service.edit(free, record.planId, [{ op: "ingredient", lineId: "leek", name: "Onion", searchTerms: ["sipuli", "onion"] }], "chef");
     expect(swapped.lines.find((l) => l.lineId === "leek")!.name).toBe("Onion");
     expect(swapped.lines.find((l) => l.lineId === "leek")!.chosen!.products[0].productId).toBe("800023");
+  });
+});
+
+describe("a dish chosen in place of a refused one joins the same plan: a main and its side are one order", () => {
+  it("fish fingers refused, chicken and rice chosen: one plan with the chicken and the mash", async () => {
+    const { service, metsola } = await setup();
+    const { record, view } = await service.plan(metsola, "fish fingers and mash for 120", "Food service manager");
+    expect(view.totals.refusedDish?.name).toBe("Fish fingers");
+    expect(view.totals.instead.map((x) => x.name)).toContain("Chicken and rice");
+    const { changeEditsOf } = await import("./thread");
+    const edits = changeEditsOf("the chicken and rice", (await service.get(metsola, record.planId)).record);
+    expect(edits).toEqual([{ op: "replaceDish", dishId: "dish_1", name: "Chicken and rice" }]);
+    const { record: after, view: v } = await service.edit(metsola, record.planId, edits, "Food service manager");
+    expect(after.draft.dishes.map((d) => d.name)).toEqual(["Chicken and rice", "Mashed potatoes"]);
+    expect(v.totals.refusedDish).toBeNull();
+    expect(v.lines.map((l) => l.lineId).sort()).toEqual(["chicken", "potato", "rice"]);
+    expect(v.totals.coverage.map((c) => c.dish)).toEqual(["Chicken and rice", "Chicken and rice", "Mashed potatoes"]);
   });
 });
