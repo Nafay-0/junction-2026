@@ -63,25 +63,20 @@ export function PlanCardView({ card, busy, tap }: { card: PlanCardT; busy: boole
                   <span className="block text-[0.8rem] text-ink-soft">
                     {[l.packs, l.product ? l.ingredient : "", card.dishes.length > 1 && l.dishes.length ? l.dishes.join(", ") : ""].filter(Boolean).join(" · ")}
                   </span>
-                  {l.status === "decide" && l.note && <span className="block text-[0.8rem] text-notice">{l.note}</span>}
+                  {l.status === "decide" && l.point && <span className="block text-[0.8rem] text-notice">{tx.point[l.point.kind] ?? l.point.text}</span>}
                 </span>
                 {l.totalCents !== undefined && <span className="shrink-0 font-medium tabular">{money(l.totalCents)}</span>}
               </li>
             ))}
           </ul>
-          {left.length > 0 && (
+          {(open ? card.onOrder.leavesOut.length > 0 : left.length > 0) && (
             <p className="mt-2 text-[0.82rem] leading-snug text-ink-soft">
-              <b className="font-medium text-ink">{tx.leftOut}:</b> {left.map((l) => l.ingredient).join(", ")}
+              <b className="font-medium text-ink">{open ? tx.leavesOut : tx.leftOut}:</b> {(open ? card.onOrder.leavesOut : left.map((l) => ({ ingredient: l.ingredient, kind: l.point?.kind ?? "struck", text: l.point?.text ?? "" }))).map((x) => `${x.ingredient} (${tx.point[x.kind] ?? x.text})`).join(", ")}
             </p>
           )}
           {open && card.onOrder.accepts.length > 0 && (
             <p className="mt-1.5 text-[0.82rem] leading-snug text-ink-soft">
-              <b className="font-medium text-ink">{tx.accepts}:</b> {card.onOrder.accepts.join("; ")}
-            </p>
-          )}
-          {open && card.onOrder.leavesOut.length > 0 && (
-            <p className="mt-1.5 text-[0.82rem] leading-snug text-ink-soft">
-              <b className="font-medium text-ink">{tx.leavesOut}:</b> {card.onOrder.leavesOut.join("; ")}
+              <b className="font-medium text-ink">{tx.accepts}:</b> {card.onOrder.accepts.map((x) => `${x.ingredient} (${tx.point[x.kind] ?? x.text})`).join(", ")}
             </p>
           )}
           <div className="mt-2.5 flex items-baseline justify-between gap-3 border-t border-line pt-2">

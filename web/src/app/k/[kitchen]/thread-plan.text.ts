@@ -3,6 +3,17 @@ import { defineText } from "../../_i18n/lang";
 /** The menu plan card in the agent thread: labels and buttons only; dishes, products, packs and prices come from the plan. */
 export const THREAD_PLAN_TEXT = defineText({
   en: {
+    point: {
+      no_product: "nothing in the assortment fits",
+      no_safe_product: "nothing that fits the kitchen's rules",
+      cannot_arrive: "cannot arrive by the day",
+      not_priced: "no live price today",
+      allergen_unknown: "allergens not declared by the maker",
+      different_form: "a different form than the recipe asks",
+      amount_check: "an unusual amount, as planned",
+      rule_conflict: "against a kitchen rule",
+      struck: "the kitchen has it",
+    } as Record<string, string>,
     kind: "Menu plan",
     covers: (n: string) => `${n} covers`,
     noCovers: "Covers not given",
@@ -24,6 +35,17 @@ export const THREAD_PLAN_TEXT = defineText({
     declined: "Not planned",
   },
   fi: {
+    point: {
+      no_product: "valikoimassa ei ole sopivaa",
+      no_safe_product: "ei keittiön sääntöihin sopivaa",
+      cannot_arrive: "ei ehdi päiväksi",
+      not_priced: "ei hintaa tänään",
+      allergen_unknown: "valmistaja ei ilmoita allergeeneja",
+      different_form: "eri muoto kuin reseptissä",
+      amount_check: "tavallisesta poikkeava määrä, kuten suunniteltu",
+      rule_conflict: "keittiön säännön vastainen",
+      struck: "keittiössä on jo",
+    } as Record<string, string>,
     kind: "Menusuunnitelma",
     covers: (n: string) => `${n} annosta`,
     noCovers: "Annosmäärää ei annettu",
@@ -45,6 +67,17 @@ export const THREAD_PLAN_TEXT = defineText({
     declined: "Ei suunniteltu",
   },
   sv: {
+    point: {
+      no_product: "inget i sortimentet passar",
+      no_safe_product: "inget som följer köksreglerna",
+      cannot_arrive: "hinner inte fram till dagen",
+      not_priced: "inget livepris i dag",
+      allergen_unknown: "tillverkaren anger inga allergener",
+      different_form: "en annan form än receptet",
+      amount_check: "en ovanlig mängd, som planerat",
+      rule_conflict: "strider mot en köksregel",
+      struck: "köket har det redan",
+    } as Record<string, string>,
     kind: "Menyplan",
     covers: (n: string) => `${n} portioner`,
     noCovers: "Antal portioner saknas",

@@ -4,7 +4,7 @@ import type { PlanView } from "@/server/agent/menu/plan";
 import type { PlanEdit, PlanRecord } from "@/server/agent/menu/service";
 import { cardId, gateCard, orderCard } from "./cards";
 import { byLine, record, step, type ItemOutcome, type TurnRun } from "./pipeline";
-import type { NoticeCard, PlanCard } from "./types";
+import type { NoticeCard, PlanCard, PlanPoint } from "./types";
 
 /**
  * Recipe requests in the thread ("salmon soup for 300 on Friday", "plan lunch for 40 around beetroot"): the menu
@@ -26,15 +26,21 @@ async function planner(run: TurnRun) {
 }
 
 /** The doubts the one confirmation settles: those the planner can accept as they are, and lines with nothing to order. */
-function settlement(view: PlanView): { accept: { doubtId: string; text: string }[]; strike: { lineId: string; name: string; why: string }[] } {
-  const accept: { doubtId: string; text: string }[] = [];
-  const strike: { lineId: string; name: string; why: string }[] = [];
+/** The planner's sentence without its search log ("(searched: lohifilee, ...)"): the buyer's card has no internal words. */
+const plain = (t: string) => t.replace(/\s*\(searched:[^)]*\)/g, "").trim();
+
+function settlement(view: PlanView): { accept: { doubtId: string; point: PlanPoint }[]; strike: { lineId: string; point: PlanPoint }[] } {
+  const accept: { doubtId: string; point: PlanPoint }[] = [];
+  const strike: { lineId: string; point: PlanPoint }[] = [];
   for (const l of view.lines) {
     if (l.status === "struck" || l.status === "merged") continue;
     const open = l.doubts.filter((d) => !d.accepted);
     if (!open.length) continue;
-    if (open.every((d) => d.acceptLabel)) for (const d of open) accept.push({ doubtId: d.doubtId, text: `${l.name}: ${d.acceptLabel!.toLowerCase()} (${d.text})` });
-    else strike.push({ lineId: l.lineId, name: l.name, why: open.find((d) => !d.acceptLabel)?.text ?? "nothing fits" });
+    if (open.every((d) => d.acceptLabel)) for (const d of open) accept.push({ doubtId: d.doubtId, point: { ingredient: l.name, kind: d.kind, text: plain(d.text) } });
+    else {
+      const d = open.find((x) => !x.acceptLabel)!;
+      strike.push({ lineId: l.lineId, point: { ingredient: l.name, kind: d.kind, text: plain(d.text) } });
+    }
   }
   return { accept, strike };
 }
@@ -48,7 +54,7 @@ export function planCard({ record: p, view }: Planned, editUrl: string): PlanCar
     .map((l) => {
       const forDishes = [...new Set(l.uses.map((u) => u.dish).filter(Boolean))];
       const left = s.strike.find((x) => x.lineId === l.lineId);
-      if (l.status === "struck" || left) return { lineId: l.lineId, ingredient: l.name, dishes: forDishes, status: "left_out" as const, note: left?.why ?? l.struckReason ?? "left out" };
+      if (l.status === "struck" || left) return { lineId: l.lineId, ingredient: l.name, dishes: forDishes, status: "left_out" as const, point: left ? { kind: left.point.kind, text: left.point.text } : { kind: "struck", text: l.struckReason ?? "" } };
       const c = l.chosen;
       const open = l.doubts.filter((d) => !d.accepted);
       return {
@@ -57,7 +63,7 @@ export function planCard({ record: p, view }: Planned, editUrl: string): PlanCar
         dishes: forDishes,
         status: open.length ? ("decide" as const) : ("ready" as const),
         ...(c ? { product: c.products.map((x) => x.name).join(" + "), packs: c.products.map((x) => x.packText).join(" + "), totalCents: c.totalCents } : {}),
-        ...(open.length ? { note: open.map((d) => d.text).join(" ") } : {}),
+        ...(open.length ? { point: { kind: open[0].kind, text: plain(open.map((d) => d.text).join(" ")) } } : {}),
       };
     });
   const t = view.totals;
@@ -73,7 +79,7 @@ export function planCard({ record: p, view }: Planned, editUrl: string): PlanCar
     ...(p.settings.deliverBy ? { serviceDate: p.settings.deliverBy } : {}),
     dishes,
     lines,
-    onOrder: { accepts: s.accept.map((a) => a.text), leavesOut: s.strike.map((x) => `${x.name}: ${x.why}`) },
+    onOrder: { accepts: s.accept.map((a) => a.point), leavesOut: s.strike.map((x) => x.point) },
     blockers,
     totalCents: t.totalCents,
     ...(t.deliveryDate ? { deliveryDate: t.deliveryDate } : {}),

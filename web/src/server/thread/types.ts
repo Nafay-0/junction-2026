@@ -237,6 +237,9 @@ export type NoticeCard = CardBase & {
   retry?: boolean;
 };
 
+/** One point of a plan, by the planner's code: cannot_arrive, no_safe_product, no_product, not_priced, allergen_unknown, different_form, amount_check, rule_conflict. */
+export type PlanPoint = { ingredient: string; kind: string; text: string };
+
 /**
  * A dish or a menu for a number of covers, planned by the menu planner (server/agent/menu): the ingredients it worked
  * out, the product chosen for each with the amount in packs and the line's price, and what ordering it means. One
@@ -262,11 +265,14 @@ export type PlanCard = CardBase & {
     /** Packs as the wholesaler sells them ("12 × 1 kg"). */
     packs?: string;
     totalCents?: number;
-    /** Why a line is left out, or what ordering accepts for it, in plain words. */
-    note?: string;
+    /** Why a line is left out, or what ordering accepts for it: the planner's code and its sentence. */
+    point?: { kind: string; text: string };
   }[];
-  /** What the one confirmation also does: doubts it accepts, lines it leaves out because nothing fits. */
-  onOrder: { accepts: string[]; leavesOut: string[] };
+  /**
+   * What the one confirmation also does: points it accepts as they are, and lines it leaves out because nothing fits.
+   * `kind` is the planner's reason code (translated at the edge); `text` its own sentence, for detail.
+   */
+  onOrder: { accepts: PlanPoint[]; leavesOut: PlanPoint[] };
   /** Why it cannot be ordered yet (no number of covers, nothing can arrive by the day): the button stays off. */
   blockers: string[];
   totalCents: number;
