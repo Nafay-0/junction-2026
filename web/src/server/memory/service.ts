@@ -1,5 +1,5 @@
 import { DockError } from "@/core/errors";
-import { emptyMemory, emptyProfile, isSafetyFact, type KitchenProfile, type KitchenRepository, type MemoryFact, type MemoryItem, type MemoryStrength } from "@/core/kitchen";
+import { emptyMemory, emptyProfile, withKitchenLock, isSafetyFact, type KitchenProfile, type KitchenRepository, type MemoryFact, type MemoryItem, type MemoryStrength } from "@/core/kitchen";
 import type { Ledger } from "@/core/ledger";
 import type { Mandate } from "@/core/mandate";
 import { newId } from "@/core/util";
@@ -37,18 +37,15 @@ const MAX_STAFF_READS = 100;
 
 export function createMemoryService(deps: MemoryServiceDeps) {
   const now = deps.now ?? (() => new Date());
-  const locks = new Map<string, Promise<unknown>>();
   const indexed = new Map<string, Map<string, string>>(); // org -> item -> text in the index
 
-  /** One change at a time per kitchen: read, change, save, without losing a concurrent change. */
+  /**
+   * One change at a time per kitchen: read, change, save, without losing a concurrent change. The same lock the
+   * intake and the order flow take (core/kitchen.ts withKitchenLock), so a remembered answer or an order's history
+   * written by the intake never races a memory write.
+   */
   function withOrg<T>(orgId: string, fn: () => Promise<T>): Promise<T> {
-    const prev = locks.get(orgId) ?? Promise.resolve();
-    const run = prev.then(fn, fn);
-    locks.set(
-      orgId,
-      run.catch(() => undefined),
-    );
-    return run;
+    return withKitchenLock(deps.kitchens, orgId, fn);
   }
 
   async function load(orgId: string, name?: string): Promise<KitchenProfile> {

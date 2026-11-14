@@ -1,0 +1,115 @@
+name: Crash-test model suite
+
+# A small model suite on a schedule or by hand, published as an artifact (summary, trajectories, licences,
+# leaderboard). Model keys come from repository secrets (ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY,
+# FEATHERLESS_API_KEY); an agent whose key is not configured is skipped and named in the job summary. With no key at
+# all the job still runs the scripted reference so the artifact and the pipeline stay exercised.
+# The large fan-out (every model, three repeats) runs on Modal: `pnpm crash:modal` (modal/crash_modal.py).
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+    inputs:
+      agents:
+        description: Comma-separated crash agents
+        default: model:anthropic:claude-haiku-5-5,model:openai:gpt-6-luna,featherless:nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16
+      repeats:
+        description: Repeats per agent
+        default: "1"
+  push:
+    paths:
+      - .github/workflows/crash-models.yml
+
+concurrency:
+  group: crash-models
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  suite:
+    name: Model suite
+    runs-on: craci
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: cracicorp/setup@v1
+        with:
+          size: "4"
+          # Install from GitHub and npm; reach only the model providers' API hosts.
+          network: |
+            default: deny
+            presets: [github, npm]
+            connections:
+              - tls:
+                  serverNamePatterns: [api.anthropic.com, api.openai.com, generativelanguage.googleapis.com, api.featherless.ai]
+                  ports: [443]
+
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Run the suite
+        env:
+          AGENTS: ${{ inputs.agents || 'model:anthropic:claude-haiku-5-5,model:openai:gpt-6-luna,featherless:nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16' }}
+          REPEATS: ${{ inputs.repeats || '1' }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          FEATHERLESS_API_KEY: ${{ secrets.FEATHERLESS_API_KEY }}
+        run: |
+          mkdir -p crash-results/ci
+          ran=0
+          IFS=',' read -ra list <<< "$AGENTS"
+          for a in "${list[@]}"; do
+            case "$a" in
+              model:anthropic:*) key="$ANTHROPIC_API_KEY" ;;
+              model:openai:*) key="$OPENAI_API_KEY" ;;
+              model:google:*) key="$GEMINI_API_KEY" ;;
+              featherless:*) key="$FEATHERLESS_API_KEY" ;;
+              *) key="scripted" ;;
+            esac
+            if [ -z "$key" ]; then
+              echo "- skipped \`$a\`: no key configured" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            slug=$(echo "$a" | tr -c 'A-Za-z0-9._-' '_')
+            pnpm -s crash --agent "$a" --repeat "$REPEATS" --concurrency 6 --out "crash-results/ci/$slug" || echo "- \`$a\` failed" >> "$GITHUB_STEP_SUMMARY"
+            ran=$((ran+1))
+          done
+          if [ "$ran" = "0" ]; then
+            echo "- no model key configured: ran the scripted reference instead" >> "$GITHUB_STEP_SUMMARY"
+            pnpm -s crash --agent reference --repeat "$REPEATS" --out crash-results/ci/reference
+          fi
+
+      - name: Export, licences and leaderboard
+        env:
+          DOCK_LICENCES_FILE: crash-results/ci-export/licences.json
+        run: |
+          pnpm -s crash:export crash-results/ci/* --out crash-results/ci-export --no-db
+          pnpm -s crash:leaderboard crash-results/ci-export/summary.json --out crash-results/ci-export/LEADERBOARD.md
+          cat crash-results/ci-export/LEADERBOARD.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crash-model-suite
+          path: |
+            web/crash-results/ci
+            web/crash-results/ci-export/summary.json
+            web/crash-results/ci-export/licences.json
+            web/crash-results/ci-export/LEADERBOARD.md
+          retention-days: 30

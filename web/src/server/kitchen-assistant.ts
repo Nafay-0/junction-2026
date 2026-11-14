@@ -3,8 +3,11 @@ import { DockError } from "@/core/errors";
 import { askAssistant, type AssistantRecord } from "./agent/assistant";
 import { categoryIdOf, categoryLabel } from "./kitchen-catalog";
 import { liveCheck, overview, type Kitchen, type PortalOrder } from "./kitchen-portal";
+import { noteAssistantHandoff } from "./assistant-handoff";
+import { alternativesSource } from "./knowledge/service";
 import { getRuntime } from "./runtime";
-import { addDaysIso, localNow } from "@/core/kitchen";
+import { catalogBrands } from "./grounding";
+import { addDaysIso, kitchenRulesFor, localNow } from "@/core/kitchen";
 
 /**
  * Retrieval for the shop assistant, in plain code: the product on screen, products the question names, the
@@ -26,7 +29,21 @@ export type AskReply = {
   looked: { products: number; orders: number; memory: number };
 };
 
-const LIVE_WORDS = /\b(price|prices|cost|costs|cheap|expensive|euro|€|stock|in stock|available|availability|deliver|delivery|cut-?off|order by|when can|hinta|maksaa|saatavilla|varasto|toimitus|pris|kostar|lager|leverans)\b/i;
+/**
+ * Questions only a live lookup can answer: price, stock, and when it can arrive (dates, weekdays, "tomorrow"), in
+ * English, Finnish and Swedish. Stems match inflected forms ("huomiseksi", "maanantaina", "leveransen").
+ */
+export const LIVE_WORDS = new RegExp(
+  [
+    "pric\\w*", "costs?", "cheap\\w*", "expensive", "euros?", "stock", "availab\\w*", "deliver\\w*", "cut-?off", "order by", "when", "arriv\\w*", "ship\\w*", "dates?", "earliest", "soon\\w*", "today", "tonight", "tomorrow", "next week",
+    "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+    "hin\\w*", "maksa\\w*", "saatavil\\w*", "varast\\w*", "toimit\\w*", "milloin", "ehti\\w*", "perill\\w*", "huomen\\w*", "huomis\\w*", "tänään", "ylihuomen\\w*",
+    "maanantai\\w*", "tiistai\\w*", "keskiviikko\\w*", "torstai\\w*", "perjantai\\w*", "lauantai\\w*", "sunnuntai\\w*",
+    "pris\\w*", "kostar", "lager\\w*", "leverans\\w*", "levereras", "när", "imorgon", "i morgon", "idag", "i dag", "anländ\\w*", "kommer fram",
+    "måndag\\w*", "tisdag\\w*", "onsdag\\w*", "torsdag\\w*", "fredag\\w*", "lördag\\w*", "söndag\\w*",
+  ].map((w) => `(?<![\\p{L}])${w}(?![\\p{L}])`).join("|") + "|€",
+  "iu",
+);
 const ALT_WORDS = /\b(alternative|alternatives|instead|substitute|replace|similar|other|korvaava|korvaa|vaihtoehto|ersätt|alternativ|istället)\b/i;
 const THIS_WORDS = /\b(this|it|that one|tämä|tätä|se|sitä|den|det|denna)\b/i;
 const CLAIM_WORDS: [RegExp, string][] = [
@@ -101,10 +118,29 @@ export async function ask(k: Kitchen, body: AskBody): Promise<AskReply> {
   if (!focus || !THIS_WORDS.test(question)) named = await rt.catalog.searchProducts({ text: question, limit: 5 });
   for (const p of named) add(productRecord(p));
   if (focus && ALT_WORDS.test(question)) {
-    const subs = focus.substitutes?.length ? await rt.catalog.searchProducts({ ids: focus.substitutes.slice(0, 5), limit: 5 }) : [];
     const claims = CLAIM_WORDS.filter(([re]) => re.test(question)).map(([, c]) => c);
-    const same = await rt.catalog.searchProducts({ category: categoryIdOf(focus), attributes: claims.length ? claims : undefined, limit: 6 });
-    for (const p of [...subs, ...same].filter((p) => p.id !== focus.id).slice(0, 8)) add(productRecord(p));
+    // The product map ranks what can stand in, for the use the question names, within the kitchen's own rules
+    // (mandate, stated rules, memory's safety rules). Only good and meaningful alternatives; with none, its reason.
+    const rules = kitchenRulesFor(await rt.kitchens.getProfile(k.info.orgId), k.info.mandate, focus.category);
+    const alt = await alternativesSource()(focus.id, { text: question, requiredClaims: [...new Set([...rules.requiredClaims, ...claims])], forbiddenAllergens: rules.forbiddenAllergens });
+    if (alt) {
+      const ids = alt.substitutes.map((x) => x.productId);
+      const found = new Map((ids.length ? await rt.catalog.searchProducts({ ids, limit: ids.length }) : []).map((p) => [p.id, p]));
+      const allowed = k.info.mandate.allowedCategories;
+      for (const x of alt.substitutes) {
+        const p = found.get(x.productId);
+        if (!p || (allowed.length && !allowed.includes(p.category))) continue;
+        const r = productRecord(p);
+        add({ ...r, data: { ...r.data, alternativeTo: focus.id, rankedByProductMap: x.tier, whyItFits: x.reason, forUse: alt.use ?? "its most typical use", withinTheKitchensRules: rules.sources.map((s) => s.text) } });
+      }
+      if (!records.some((r) => r.data.alternativeTo === focus.id)) {
+        add({ id: `alternatives:${focus.id}`, kind: "product", label: `No good alternative to ${short(focus)}`, data: { noGoodAlternative: alt.none ?? "The product map ranks no substitute for it that the kitchen's rules and mandate allow.", kitchenRules: rules.sources.map((s) => s.text) } });
+      }
+    } else {
+      const subs = focus.substitutes?.length ? await rt.catalog.searchProducts({ ids: focus.substitutes.slice(0, 5), limit: 5 }) : [];
+      const same = await rt.catalog.searchProducts({ category: categoryIdOf(focus), attributes: claims.length ? claims : undefined, limit: 6 });
+      for (const p of [...subs, ...same].filter((p) => p.id !== focus.id).slice(0, 8)) add(productRecord(p));
+    }
   }
 
   // The kitchen's own records: orders, memory, mandate.
@@ -122,7 +158,8 @@ export async function ask(k: Kitchen, body: AskBody): Promise<AskReply> {
 
   // One live check, only for the one product a price or stock question is about.
   let liveCalls = 0;
-  const liveTarget = LIVE_WORDS.test(question) ? (focus ?? (named.length === 1 || THIS_WORDS.test(question) ? undefined : named[0])) : undefined;
+  // The product on screen, else the product the question names (a "this" with nothing on screen names nothing).
+  const liveTarget = LIVE_WORDS.test(question) ? (focus ?? (named.length && !THIS_WORDS.test(question) ? named[0] : undefined)) : undefined;
   if (liveTarget) {
     try {
       const live = await liveCheck(k, [liveTarget.id]);
@@ -148,7 +185,8 @@ export async function ask(k: Kitchen, body: AskBody): Promise<AskReply> {
     const now = localNow(new Date());
     const weekday = new Date(`${now.date}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" });
     const today = `Today is ${weekday} ${now.date}, ${now.time} Helsinki time; "last week" means ${addDaysIso(now.date, -7)} to ${addDaysIso(now.date, -1)}.`;
-    const a = await askAssistant({ question, records, screen: `${body.screen ?? "the shop"}. ${today}`, history: body.history });
+    const a = await askAssistant({ question, records, screen: `${body.screen ?? "the shop"}. ${today}`, history: body.history, brands: await catalogBrands(rt.catalog, k.info.mandate.allowedCategories) });
+    if (a.kind === "order_request") noteAssistantHandoff(k.info.slug, k.console?.session, question);
     return { kind: a.kind, answer: a.answer, citations: cite(a.citations), dataMissing: a.dataMissing, model: a.model, ms: a.ms, liveCalls, looked };
   } catch (err) {
     if (err instanceof DockError && (err.status === 503 || err.status === 504 || err.status === 502)) {

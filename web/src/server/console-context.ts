@@ -14,7 +14,7 @@ import { requestOrigin } from "./config";
  *             are then that person's, verified
  */
 export type ConsolePerson = { channel: "portal_session"; name: string; approverId?: string; account?: string };
-export type ConsoleContext = { kitchen: string; session: string; person?: ConsolePerson };
+export type ConsoleContext = { kitchen: string; session: string; person?: ConsolePerson; /** typed or assistant: which part of the store the request came from. */ door?: "typed" | "assistant" };
 
 const contexts = new WeakMap<Request, ConsoleContext>();
 

@@ -47,6 +47,12 @@ export type IndexedProduct = {
   /** Fat per 100 g / 100 ml from the nutrition declaration, if given. */
   fatPct: number | null;
   variableWeight: boolean;
+  /**
+   * Every GTIN (EAN) the partner lists for the product, its sales unit's and each packaging level's, digits only,
+   * each with a valid GS1 check digit. The recall radar matches notices on them. Absent in an index built before
+   * GTINs were kept.
+   */
+  gtins?: string[];
 };
 
 export type CatalogIndex = {
@@ -72,7 +78,8 @@ export const RawProductSchema = z.object({
   temperatureCondition: z.number().nullable().optional().catch(null),
   vendorName: text(120).nullable().optional().catch(null),
   countryOfOrigin: z.string().max(8).nullable().optional().catch(null),
-  units: z.array(z.object({ unitId: z.string().max(8), sizeInBaseUnits: z.number().positive() })).catch([]),
+  units: z.array(z.object({ unitId: z.string().max(8), sizeInBaseUnits: z.number().positive(), gtin: z.string().max(20).optional().catch(undefined) })).catch([]),
+  salesUnitGtin: z.string().max(20).optional().catch(undefined),
   substitutions: z.array(z.object({ product: z.string().max(32).optional(), substituteProduct: z.string().max(32) })).optional().catch([]),
   synkkaData: z
     .object({
@@ -340,7 +347,24 @@ export function indexProduct(p: RawProduct, side: { reliability?: Map<string, nu
     carbonGroupAvgKgCo2ePerKg: side.carbon?.get(p.id) ?? null,
     fatPct,
     variableWeight: p.synkkaData.variableUnit === true,
+    gtins: gtinsOf(p),
   };
+}
+
+/** GS1 check digit for GTIN-8, -12, -13 and -14. */
+export function validGtin(code: string): boolean {
+  if (!/^\d+$/.test(code) || ![8, 12, 13, 14].includes(code.length)) return false;
+  const digits = code.split("").map(Number);
+  const check = digits.pop()!;
+  let sum = 0;
+  for (let i = digits.length - 1, w = 3; i >= 0; i--, w = w === 3 ? 1 : 3) sum += digits[i] * w;
+  return (10 - (sum % 10)) % 10 === check;
+}
+
+/** The product's GTINs: sales unit first, then each packaging level; invalid and all-zero codes dropped. */
+function gtinsOf(p: RawProduct): string[] {
+  const all = [p.salesUnitGtin, ...p.units.map((u) => u.gtin)].filter((g): g is string => typeof g === "string").map((g) => g.trim());
+  return [...new Set(all.filter((g) => validGtin(g) && !/^0+$/.test(g)))];
 }
 
 /** Build the index from the parsed product file and the two CSV texts. */
@@ -383,7 +407,9 @@ export function buildCatalogIndex(rawProducts: unknown, reliabilityCsv: string, 
  */
 export type IndexFile = { format: "dock-valio-index"; version: typeof INDEX_VERSION; builtAt: string; stats: CatalogIndex["stats"]; columns: string[]; rows: unknown[][] };
 
-const COLUMNS = ["id", "en", "fi", "sv", "brand", "vendor", "category", "salesUnit", "baseUnit", "units", "lot", "pack", "claims", "allergens", "labels", "temp", "country", "substitutes", "reliability", "carbon", "fat", "variable"];
+const COLUMNS = ["id", "en", "fi", "sv", "brand", "vendor", "category", "salesUnit", "baseUnit", "units", "lot", "pack", "claims", "allergens", "labels", "temp", "country", "substitutes", "reliability", "carbon", "fat", "variable", "gtins"];
+/** The columns of an index built before GTINs were kept: still read (its products then have no GTINs). */
+const LEGACY_COLUMNS = COLUMNS.slice(0, -1);
 const SEP = "|";
 const TEMP = { ambient: "a", chilled: "c", frozen: "f" } as const;
 const TEMP_BACK: Record<string, IndexedProduct["temperature"]["class"]> = { a: "ambient", c: "chilled", f: "frozen" };
@@ -401,7 +427,7 @@ export function encodeIndex(index: CatalogIndex): IndexFile {
       join(p.units.map((u) => `${u.unit}:${u.baseUnits}`)), p.lotSize, pack, join(p.claims),
       [a.declared ? 1 : 0, join(a.contains), join(a.mayContain), join(a.freeFrom)], join(p.labels),
       [p.temperature.code, p.temperature.class ? TEMP[p.temperature.class] : null], p.countryOfOrigin, join(p.substitutes),
-      p.deliveryReliability, p.carbonGroupAvgKgCo2ePerKg, p.fatPct, p.variableWeight ? 1 : 0,
+      p.deliveryReliability, p.carbonGroupAvgKgCo2ePerKg, p.fatPct, p.variableWeight ? 1 : 0, join(p.gtins ?? []),
     ];
   });
   return { format: "dock-valio-index", version: INDEX_VERSION, builtAt: index.builtAt, stats: index.stats, columns: COLUMNS, rows };
@@ -410,16 +436,17 @@ export function encodeIndex(index: CatalogIndex): IndexFile {
 export function isIndexFile(x: unknown): x is IndexFile {
   if (!x || typeof x !== "object") return false;
   const f = x as Partial<IndexFile>;
-  return f.format === "dock-valio-index" && f.version === INDEX_VERSION && Array.isArray(f.rows) && Array.isArray(f.columns) && f.columns.join() === COLUMNS.join();
+  return f.format === "dock-valio-index" && f.version === INDEX_VERSION && Array.isArray(f.rows) && Array.isArray(f.columns) && (f.columns.join() === COLUMNS.join() || f.columns.join() === LEGACY_COLUMNS.join());
 }
 
 /** Restore products from the file. Rows that do not have the expected shape are dropped. */
 export function decodeIndex(file: IndexFile): CatalogIndex {
   const products: IndexedProduct[] = [];
+  const width = file.columns.length === LEGACY_COLUMNS.length ? LEGACY_COLUMNS.length : COLUMNS.length;
   for (const r of file.rows) {
-    if (!Array.isArray(r) || r.length !== COLUMNS.length || typeof r[0] !== "string" || !Array.isArray(r[11]) || !Array.isArray(r[13]) || !Array.isArray(r[15])) continue;
-    const [id, en, fi, sv, brand, vendor, category, salesUnit, baseUnit, units, lot, pk, claims, al, labels, temp, country, subs, rel, carbon, fat, variable] = r as [
-      string, string | null, string | null, string | null, string | null, string | null, string, string, string, string, number, unknown[], string, unknown[], string, unknown[], string | null, string, number | null, number | null, number | null, number,
+    if (!Array.isArray(r) || r.length !== width || typeof r[0] !== "string" || !Array.isArray(r[11]) || !Array.isArray(r[13]) || !Array.isArray(r[15])) continue;
+    const [id, en, fi, sv, brand, vendor, category, salesUnit, baseUnit, units, lot, pk, claims, al, labels, temp, country, subs, rel, carbon, fat, variable, gtins] = r as [
+      string, string | null, string | null, string | null, string | null, string | null, string, string, string, string, number, unknown[], string, unknown[], string, unknown[], string | null, string, number | null, number | null, number | null, number, string | undefined,
     ];
     const perBaseUnit: Partial<Record<Measure, number>> = {};
     const perSalesUnit: Partial<Record<Measure, number>> = {};
@@ -470,6 +497,7 @@ export function decodeIndex(file: IndexFile): CatalogIndex {
       carbonGroupAvgKgCo2ePerKg: num(carbon),
       fatPct: num(fat),
       variableWeight: variable === 1,
+      ...(width === COLUMNS.length ? { gtins: split(gtins) } : {}),
     });
   }
   return { version: INDEX_VERSION, builtAt: file.builtAt, stats: file.stats, products };

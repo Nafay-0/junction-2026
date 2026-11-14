@@ -19,7 +19,7 @@ import {
 } from "../wire";
 import { AskHuman, answersFromBuyer, concernsFromBuyer, type HumanChannel } from "./ask-human";
 import type { LiveBudget } from "@/server/aiven/valkey";
-import { nextStepForIntake, nextStepForOrder, waitingFor } from "./next-step";
+import { nextStepForIntake, nextStepForOrder, nextStepForQuote, waitingFor } from "./next-step";
 
 /**
  * Dock's operations as MCP tools: one table, one entry per tool. Each entry is a name, a description for a
@@ -315,14 +315,7 @@ const CORE_TOOLS = [
     run: async ({ dock, session, guard, agentKey }, args) => {
       await guard.reserve(agentKey, args.lines.flatMap((l) => (l.substituteFor ? [l.productId, l.substituteFor] : [l.productId])));
       const result = await dock.requestQuote(session, args);
-      const preview = result.policyPreview;
-      const hint =
-        preview.outcome === "reject"
-          ? `The gate would refuse this quote (rule ${decidingRule(preview)?.rule}). Change the lines rather than placing it.`
-          : preview.outcome === "needs_human_approval"
-            ? `Placing it will ask ${preview.approver.name} (${preview.approver.role}) to sign off. Call place_order with quoteToken and quote.lines.`
-            : "Within the mandate: call place_order with quoteToken and the quote's lines (productId, quantity, unitPriceCents).";
-      return { ...result, nextStep: hint };
+      return { ...result, nextStep: nextStepForQuote(result.policyPreview) };
     },
   }),
   tool({
@@ -340,21 +333,8 @@ const CORE_TOOLS = [
     }),
     output: z.object({ order: OrderSchema, nextStep }),
     run: async ({ dock, session }, { requestId, quoteToken, lines }) => {
-      let args: z.input<typeof PlaceOrderInput>;
-      if (quoteToken) {
-        if (!lines) throw new DockError(400, "invalid_request", "Send lines with quoteToken (copied from quote.lines), or leave both out after choose_option.");
-        args = { requestId, quoteToken, lines };
-      } else {
-        // The quote Dock signed for this request at choose_option. The core verifies it exactly as if the agent had sent it.
-        const step = await dock.intake.get(session, requestId).catch((err: unknown) => {
-          if (err instanceof DockError && err.code === "intake_not_found") {
-            throw new DockError(400, "invalid_request", "No chosen quote for this request: pass quoteToken and lines from request_quote, or start with submit_need.");
-          }
-          throw err;
-        });
-        if (step.state !== "quoted" || !step.quote) throw wrongState(step, "place an order without a quoteToken");
-        args = { requestId, quoteToken: step.quote.quoteToken, lines: step.quote.quote.lines.map(({ productId, quantity, unitPriceCents }) => ({ productId, quantity, unitPriceCents })) };
-      }
+      // Without a quoteToken the core places the quote it signed for this request at choose_option (no_current_quote if none).
+      const args: z.input<typeof PlaceOrderInput> = { requestId, ...(quoteToken ? { quoteToken } : {}), ...(lines ? { lines } : {}) };
       const order = await dock.placeOrder(session, args);
       if (order.status === "rejected") {
         const rule = decidingRule(order.decision);

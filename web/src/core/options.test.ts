@@ -120,7 +120,9 @@ describe("option cards", () => {
     const slow = buildOptions(input({ offers: semi.map((p) => offer(p, { deliveryDate: "2026-11-30" })), neededBy: undefined }));
     expect(slow.cards).toEqual([]);
     const broke = buildOptions(input({ spentThisWeekCents: 195_000 }));
-    expect(broke.cards).toEqual([]);
+    // Never a dead end: the most that fits the €50 left now, the rest later; the budget itself is not loosened.
+    expect(broke.cards.map((c) => [c.match, c.givesUp.map((g) => g.code), c.totalCents <= 5_000, c.delivered.amount < 100])).toEqual([["compromise", ["partial_weekly_budget"], true, true]]);
+    expect(broke.notes.join(" ")).toMatch(/The weekly budget is the blocker: €50\.00 is left of €2,000\.00 this week, and it is a hard cap that no one can sign past/);
     expect(broke.excluded[0].reason).toBe("€129.00 would go over the weekly budget (€50.00 left of €2,000.00 after the €1,950.00 already committed this week)");
     // Money held by an order waiting for sign-off does not remove a card: it says a person decides (F-PENDING-HOLDS-BUDGET).
     // ...when a person signs the card anyway (over the agent's own limit). Within it, the agent may not spend held money.
@@ -129,7 +131,7 @@ describe("option cards", () => {
     expect(held.excluded.filter((e) => e.code === "over_budget")).toEqual([]);
     expect(held.cards[0].signOff.join(" ")).toMatch(/held by an order waiting for sign-off/);
     const alone = buildOptions(input({ spentThisWeekCents: 195_000, heldThisWeekCents: 195_000 }));
-    expect(alone.cards).toEqual([]);
+    expect(alone.cards.every((c) => c.givesUp.some((g) => g.part === "amount") && c.totalCents <= 5_000)).toBe(true);
     expect(alone.excluded).toContainEqual(expect.objectContaining({ code: "over_budget", reason: expect.stringMatching(/held by an order waiting for sign-off is not signed; withdraw or decide that order first/) }));
     expect(slow.excluded[0]).toMatchObject({ code: "too_late", reason: "earliest delivery Mon 30 Nov is after Sat 21 Nov, the latest the mandate allows" });
   });
@@ -235,5 +237,57 @@ describe("shortlist for the live call", () => {
     const big = shortlist([...many, { ...P.box, id: "BIG" }], [], 3, { amount: 1000, unit: "L" });
     expect(big[0].id).toBe("BIG"); // a large order prices the big packs too
     expect(shortlist(semi, [], 10)).toBe(semi);
+  });
+});
+
+describe("alternatives from the product map (only good and meaningful)", () => {
+  const named = { productId: "T-BOX", name: "the box", source: "named" as const };
+  const gone = (p: Product) => offer(p, { availablePacks: 0 });
+
+  it("when the named product cannot be had, offers only what the map ranks, best first, with the map's reason", () => {
+    const r = buildOptions(
+      input({
+        candidates: [P.box, P.box2, P.litre, P.bottle],
+        offers: [gone(P.box), offer(P.box2), offer(P.litre), offer(P.bottle)],
+        reference: named,
+        alternatives: {
+          substitutes: [
+            { productId: "T-1L", tier: "best", reason: "Same kind (milk); pack 10 l -> 1 l.", otherPacks: [] },
+            { productId: "U-BOX", tier: "good", reason: "Same kind (milk); another maker.", otherPacks: [] },
+          ],
+          packAlternatives: [],
+          use: "coffee",
+        },
+      }),
+    );
+    expect(r.cards.map((c) => c.lines[0].productId)).toEqual(["T-1L", "U-BOX"]);
+    expect(r.cards[0].alternative).toEqual({ for: "T-BOX", tier: "best", reason: "Same kind (milk); pack 10 l -> 1 l.", use: "coffee" });
+    expect(r.cards[0].pros).toContain("Best alternative to the box for coffee: Same kind (milk); pack 10 l -> 1 l.");
+    expect(r.excluded).toContainEqual({ productId: P.bottle.id, reason: "not an alternative the product map ranks for the box in coffee", code: "no_substitute" });
+  });
+
+  it("with no good alternative, says the map's reason and pads nothing in", () => {
+    const r = buildOptions(
+      input({
+        candidates: [P.box, P.box2, P.litre],
+        offers: [gone(P.box), offer(P.box2), offer(P.litre)],
+        reference: named,
+        alternatives: { substitutes: [], packAlternatives: [], none: "No substitute for coffee that is also lactose-free: of 3 related products, 3 not lactose-free by data." },
+      }),
+    );
+    expect(r.cards).toEqual([]);
+    expect(r.notes).toContain("No good alternative to the box: No substitute for coffee that is also lactose-free: of 3 related products, 3 not lactose-free by data.");
+  });
+
+  it("the same product in another pack size is not a substitute and stays on offer", () => {
+    const r = buildOptions(input({ candidates: [P.box, P.litre], offers: [gone(P.box), offer(P.litre)], reference: named, alternatives: { substitutes: [], packAlternatives: ["T-1L"] } }));
+    expect(r.cards.map((c) => c.lines[0].productId)).toEqual(["T-1L"]);
+    expect(r.cards[0].alternative).toBeUndefined();
+  });
+
+  it("a product the kitchen turned down before goes last and says so", () => {
+    const r = buildOptions(input({ declined: new Map([["T-BOX", "declined by Sanna Koskinen on 3 Nov"]]) }));
+    expect(r.cards.at(-1)!.lines[0].productId).toBe("T-BOX");
+    expect(r.cards.at(-1)!.cons).toContain("The kitchen turned the box down before (declined by Sanna Koskinen on 3 Nov).".replace("the box", P.box.name));
   });
 });

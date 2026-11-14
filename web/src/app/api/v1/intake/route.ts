@@ -1,4 +1,5 @@
 import { authenticate, handle, readJson } from "@/server/http";
+import { restStep } from "@/server/rest-step";
 
 /**
  * POST /api/v1/intake  { need: StructuredNeed, by? }
@@ -9,6 +10,6 @@ export async function POST(req: Request) {
   return handle(async ({ dock }) => {
     const session = await authenticate(req, dock);
     const step = await dock.intake.open(session, (await readJson(req)) as never);
-    return Response.json({ step }, { status: 201 });
+    return Response.json(restStep(req, session, step), { status: 201 });
   });
 }

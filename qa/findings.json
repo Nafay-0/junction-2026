@@ -1,8 +1,12 @@
 {
   "schema": "dock-qa-findings/1",
-  "generated": "2026-11-13",
-  "build": "main @ b513f44",
-  "severityScale": ["lose_demo", "lose_points", "cosmetic"],
+  "generated": "2026-11-14",
+  "build": "main @ d7611f0 (includes fix1, b155a58)",
+  "severityScale": [
+    "lose_demo",
+    "lose_points",
+    "cosmetic"
+  ],
   "criteria": {
     "demo": "Working end-to-end demo (30%)",
     "need": "Solving the problem and user need (20%)",
@@ -12,11 +16,267 @@
   },
   "findings": [
     {
+      "id": "F-PLAN-MANDATE-DRIFT",
+      "title": "The menu planner ignores the kitchen's forbidden allergens: hazelnuts quoted and auto-approved for Kaari (nuts forbidden), a gluten oat drink for Laakso",
+      "severity": "lose_demo",
+      "criteria": [
+        "controls",
+        "need"
+      ],
+      "probe": "safety.plan_mandates_match_kitchens, safety.plan_kaari_nuts_and_scaling, safety.plan_laakso_gluten_oat_drink",
+      "reproduce": "pnpm qa --url http://localhost:4317 --real-url http://localhost:4316 --only safety.plan",
+      "steps": [
+        "POST /ui-api/plan/kaari {text:'Beetroot salad topped with toasted hazelnuts, 15 g per cover, for 40 covers next Wednesday'}, then /quote.",
+        "GET /ui-api/plan/kaari: forbiddenAllergens []; the console's Kaari mandate forbids ['nuts']."
+      ],
+      "expected": "The nut line is blocked (or the gate refuses it) because Kaari forbids nuts.",
+      "actual": "Line chose 476774 'Salliselta Hazelnut 800g' (contains nuts by its data); quote €34.62, policy preview auto_approve. Laakso: PK-4001 (contains gluten) chosen, status ready.",
+      "cause": "web/src/server/agent/menu/kitchens.ts:85,94 (Kaari's planner mandate has no forbidden allergens) and :127,137 (Laakso's lacks gluten): the planner signs a second mandate for the same organisation with every food category allowed; findCandidates (service.ts:311,547) never gets the draft's own allergens.",
+      "fix": "Derive the planner's mandate from the kitchen's console mandate (forbidden allergens, required attributes) and pass the request's own allergens into product matching.",
+      "observed": true,
+      "reproducedTimes": 3,
+      "status": "open",
+      "firstSeen": "wave 2",
+      "rank": 1
+    },
+    {
+      "id": "F-DEMO-BUDGET-ONE-SHOT",
+      "title": "After one signed 1,000 L order a demo kitchen cannot take Valio's example again for seven days",
+      "severity": "lose_demo",
+      "criteria": [
+        "demo",
+        "robustness"
+      ],
+      "probe": "(manual; see steps)",
+      "reproduce": "fresh server; commit one 1,000 L Laakso order (EUR 1,322); then /k/laakso: 1,000 L lactose-free milk",
+      "steps": [
+        "Fresh server. A presenter signs one 1,000 L order on /k/laakso (EUR 1,322 of the EUR 2,000 weekly budget).",
+        "The next judge asks the same."
+      ],
+      "expected": "The headline example works for every judge on demo day.",
+      "actual": "no_options: 'Nothing fits. The blocker is the weekly budget: 4 options ... more than the €678.00 left of €2,000.00 this week (€1,322.00 already committed)'. Rehearsing it once on the deployment uses it up for the week.",
+      "cause": "web/src/server/dev-fixtures.ts demoMandate weeklyBudgetCents 200_000 against a EUR 1,322 headline order; spend counts over 7 days.",
+      "fix": "Give the demo kitchens a weekly budget that fits a day of judging (e.g. EUR 50,000) or reset demo spend at a set time, and keep Valio's example far inside it.",
+      "observed": true,
+      "reproducedTimes": 2,
+      "status": "open",
+      "firstSeen": "wave 2",
+      "rank": 2
+    },
+    {
+      "id": "F-KM-UNKNOWN-ALLERGEN",
+      "title": "The knowledge map accepts allergen words it does not know: 'tree_nuts' returns nut pestos and 'peanut' a peanut granola, all marked 'verified'",
+      "severity": "lose_points",
+      "criteria": [
+        "controls",
+        "need"
+      ],
+      "probe": "safety.knowledge_unknown_allergen_word",
+      "reproduce": "GET /ui-api/knowledge/role?q=pesto%20for%20pasta&allergens=tree_nuts (real catalogue)",
+      "steps": [
+        "Ask the knowledge map for a role with a common allergen synonym."
+      ],
+      "expected": "400 for an unknown allergen word, or the synonym mapped (tree_nuts -> nuts, peanut -> peanuts).",
+      "actual": "200; 9 pestos containing nuts and granolas containing or possibly containing peanuts, each 'allergens verified'.",
+      "cause": "web/src/server/knowledge/service.ts:81-89 checks only the slug's format, not the vocabulary.",
+      "fix": "Map synonyms and refuse unknown allergen words with 400.",
+      "observed": true,
+      "reproducedTimes": 3,
+      "status": "open",
+      "firstSeen": "wave 2",
+      "rank": 3
+    },
+    {
+      "id": "F-KM-LACTOSE-ALLERGEN",
+      "title": "Forbidding 'lactose' on the knowledge map still serves ordinary milk as verified",
+      "severity": "lose_points",
+      "criteria": [
+        "controls",
+        "need"
+      ],
+      "probe": "safety.knowledge_lactose_as_allergen",
+      "reproduce": "GET /ui-api/knowledge/role?q=milk%20for%20coffee&allergens=lactose",
+      "steps": [
+        "As above."
+      ],
+      "expected": "Only lactose-free products.",
+      "actual": "460396, 463149, 463938, 465058, 475665 (contain milk, no lactose_free claim) served as verified.",
+      "cause": "web/src/server/knowledge/facts.ts:79 and map.ts:570 compare raw allergen tags; milk does not imply lactose for candidates.",
+      "fix": "Treat 'contains milk and no lactose_free claim' as containing lactose for candidates as for the original.",
+      "observed": true,
+      "reproducedTimes": 3,
+      "status": "open",
+      "firstSeen": "wave 2",
+      "rank": 4
+    },
+    {
+      "id": "F-OFF-CATALOGUE-RAW",
+      "title": "'Buy 50 kg of beef' shows a developer error and leaves no refusal on the wall or in the ledger",
+      "severity": "lose_points",
+      "criteria": [
+        "need",
+        "controls"
+      ],
+      "probe": "(browser and API)",
+      "reproduce": "POST /ui-api/kitchens/laakso/call {method:POST,path:/api/v1/intake,body:{need:{item:{text:'beef'},quantity:{amount:50,unit:'kg'}}}}",
+      "steps": [
+        "Ask for something outside the mandate's categories in plain words."
+      ],
+      "expected": "'Your mandate allows milk and plant drinks; beef is not something this agent may buy', logged as a refusal with a rule.",
+      "actual": "422 family_unknown: 'No product family matches \"beef\". Send item.category (for example \"milk\").' Nothing on the wall or in the ledger.",
+      "cause": "web/src/core/intake.ts:169 throws before a request is opened.",
+      "fix": "Open the request and refuse it with category_allowed (and log it) when the family is outside the mandate or unknown.",
+      "observed": true,
+      "reproducedTimes": 3,
+      "status": "open",
+      "firstSeen": "wave 2",
+      "rank": 5
+    },
+    {
+      "id": "F-DUP-PENDING",
+      "title": "The duplicate check misses an identical order still waiting for sign-off",
+      "severity": "lose_points",
+      "criteria": [
+        "need",
+        "controls"
+      ],
+      "probe": "(manual and browser)",
+      "reproduce": "as Kaari: place 100 L milk for Thursday so it waits for sign-off, then submit the same need again",
+      "steps": [
+        "Order waits for sign-off.",
+        "Same need again (second tab or repeat)."
+      ],
+      "expected": "duplicate_recent concern.",
+      "actual": "options_ready with no concern; two identical orders wait for the same approver. Order_splitting does not tie them either (it counts only orders the agent placed alone).",
+      "cause": "web/src/core/concerns.ts:379 reads the kitchen history, which holds committed orders only.",
+      "fix": "Include pending orders of the organisation in the duplicate check.",
+      "observed": true,
+      "reproducedTimes": 2,
+      "status": "open",
+      "firstSeen": "wave 2",
+      "rank": 6
+    },
+    {
+      "id": "F-POLLING-VS-LIMITS",
+      "title": "Two open order pages behind one venue address exceed the console's 60-calls-a-minute address limit",
+      "severity": "lose_points",
+      "criteria": [
+        "demo",
+        "robustness"
+      ],
+      "probe": "limits.two_waiting_pages_block_kitchen",
+      "reproduce": "LIMITS=on qa/bin/fresh-server.sh 4314; pnpm qa --limits-url http://localhost:4314 --only limits.two",
+      "steps": [
+        "Two console pages each watching a waiting order (order every 3 s, ledger every 4 s, as console.tsx:239-258 does with the event stream up) for 75 s from one address."
+      ],
+      "expected": "A table of several phones on venue wifi keeps working.",
+      "actual": "92 calls in 75 s; 10 refused 429 'Too many requests from your address'. One waiting page costs ~35 console calls a minute, so only one such page fits per venue address.",
+      "cause": "web/src/proxy.ts:18 (console-call 60/min per address) against the polling in web/src/app/k/[kitchen]/console.tsx:245,258.",
+      "fix": "Do not poll when the event stream is up (refetch on events only), or count console GETs per session rather than per address.",
+      "observed": true,
+      "reproducedTimes": 2,
+      "status": "open",
+      "firstSeen": "wave 2",
+      "rank": 7
+    },
+    {
+      "id": "F-PORTAL-MEMORY-OPEN",
+      "title": "A stranger can make a demo kitchen forget its stated rules",
+      "severity": "lose_points",
+      "criteria": [
+        "controls"
+      ],
+      "probe": "portal.memory_rule_forgotten_by_stranger",
+      "reproduce": "curl -XPOST localhost:4312/ui-api/kitchens/kaari/memory -H 'content-type: application/json' -d '{\"action\":\"forget\",\"preferenceId\":\"pref_kaari_lactose\"}'",
+      "steps": [
+        "Anonymous POST as above."
+      ],
+      "expected": "Changing a kitchen's stated rules needs that kitchen's signed-in person.",
+      "actual": "200; 'Always lactose-free' is gone for every visitor of /k/kaari (its effect is partly masked by a learned habit).",
+      "cause": "web/src/app/ui-api/kitchens/[kitchen]/memory/route.ts via portalRoute with no session check for demo kitchens.",
+      "fix": "Make memory writes on demo kitchens per console session (or reset them), never global.",
+      "observed": true,
+      "reproducedTimes": 3,
+      "status": "open",
+      "firstSeen": "wave 2",
+      "rank": 8
+    },
+    {
+      "id": "F-ASSIST-NO-SUBSTITUTE",
+      "title": "The assistant finds no substitute that meets Kaari's lactose-free rule; the knowledge map has five",
+      "severity": "lose_points",
+      "criteria": [
+        "need",
+        "robustness"
+      ],
+      "probe": "safety.assistant_substitute_respects_rules",
+      "reproduce": "POST /ui-api/kitchens/kaari/assistant {question:'Suggest a substitute for this cream for whipping desserts.', productId:'469050'} (real catalogue)",
+      "steps": [
+        "As above."
+      ],
+      "expected": "Ranked substitutes within the kitchen's rules.",
+      "actual": "'cannot suggest a substitute'.",
+      "cause": "web/src/server/kitchen-assistant.ts:106 searches the category with only the claims the question names.",
+      "fix": "Use alternativesFor with the mandate and stated rules.",
+      "observed": true,
+      "reproducedTimes": 3,
+      "status": "open",
+      "firstSeen": "wave 2",
+      "rank": 9
+    },
+    {
+      "id": "F-ASSIST-ARRIVE-NO-LIVE",
+      "title": "Asked 'Can it arrive tomorrow?', the assistant makes no live lookup and says there is no delivery data",
+      "severity": "lose_points",
+      "criteria": [
+        "need"
+      ],
+      "probe": "safety.assistant_arrival_question_looked_up",
+      "reproduce": "POST /ui-api/kitchens/kaari/assistant {question:'Can it arrive tomorrow?', productId:'VA-2301'}",
+      "steps": [
+        "As above."
+      ],
+      "expected": "A live lookup and the delivery date.",
+      "actual": "liveCalls 0, 'no delivery data'.",
+      "cause": "web/src/server/kitchen-assistant.ts:29 LIVE_WORDS lacks arrive/tomorrow/when.",
+      "fix": "Always look up the product on screen for date and stock questions.",
+      "observed": true,
+      "reproducedTimes": 3,
+      "status": "open",
+      "firstSeen": "wave 2",
+      "rank": 10
+    },
+    {
+      "id": "F-SLOW-PARTNER-WAIT",
+      "title": "When the partner's API rate-limits or hangs, the buyer waits 30-36 s before hearing so",
+      "severity": "lose_points",
+      "criteria": [
+        "robustness"
+      ],
+      "probe": "dependency.partner_failures",
+      "reproduce": "pnpm tsx qa/bin/fake-partner.ts 4399 & VALIO_API_BASE=http://localhost:4399 qa/bin/fresh-server.sh 4315 real; pnpm qa --dep-url http://localhost:4315 --fake-url http://localhost:4399 --only dependency",
+      "steps": [
+        "Partner answers 429 with Retry-After: 30, or answers after 20 s."
+      ],
+      "expected": "A clear 'the wholesaler's service is busy' within a few seconds, with retry.",
+      "actual": "429: 30 s (the client waits out Retry-After); slow: 36 s (8 s timeout on several calls). Down, garbage and hostile values answer fast and correctly.",
+      "cause": "web/src/server/valio/live-client.ts retry/backoff honours Retry-After inside the buyer's request.",
+      "fix": "Cap the total wait per buyer request (e.g. 8 s) and report busy with the retry time instead of sleeping on it.",
+      "observed": true,
+      "reproducedTimes": 2,
+      "status": "open",
+      "firstSeen": "wave 2",
+      "rank": 11
+    },
+    {
       "id": "F-PENDING-HOLDS-BUDGET",
-      "rank": 1,
+      "rank": 12,
       "title": "A sign-off nobody can give holds the kitchen's weekly budget for seven days; the next judge's milk order has no options",
       "severity": "lose_demo",
-      "criteria": ["demo", "robustness"],
+      "criteria": [
+        "demo",
+        "robustness"
+      ],
       "probe": "demo.headline_twice_laakso",
       "reproduce": "qa/bin/fresh-server.sh 4312 && pnpm qa --url http://localhost:4312 --only demo.headline",
       "steps": [
@@ -29,14 +289,19 @@
       "cause": "web/src/core/orders.ts:266-273 spentThisWeek counts every pending_approval order created in the last 7 days, with no check of the quote's expiry; nothing moves a pending approval out of pending when its quote expires.",
       "fix": "Count a pending order only until its quote expires (or expire the approval with the quote and log it), and add a cancel/withdraw call for the buyer and the agent.",
       "observed": true,
-      "reproducedTimes": 2
+      "reproducedTimes": 2,
+      "status": "closed",
+      "retest": "b155a58: a waiting order no longer blocks a new one (the clash is settled at sign-off), orders can be withdrawn (POST /api/v1/orders/{id}/withdraw -> withdrawn), and the reply names the held amount. Probe demo.headline_twice_laakso passes; three attempts in a row each reach sign-off."
     },
     {
       "id": "F-DEMO-KITCHEN-UNSIGNABLE",
-      "rank": 2,
+      "rank": 13,
       "title": "On a production build the demo kitchens' sign-offs cannot be given at all",
       "severity": "lose_demo",
-      "criteria": ["demo", "controls"],
+      "criteria": [
+        "demo",
+        "controls"
+      ],
       "probe": "demo.headline_twice_laakso",
       "reproduce": "qa/bin/fresh-server.sh 4312 && pnpm qa --url http://localhost:4312 --only demo.headline",
       "steps": [
@@ -50,46 +315,66 @@
       "fix": "Set DOCK_DEMO_TAP_APPROVAL=1 on the demo deployment, or give the demo kitchens a real approver path (join their approver role with a passkey from the wall), and say on screen who can sign.",
       "observed": true,
       "reproducedTimes": 2,
-      "note": "Whether the public deployment sets DOCK_DEMO_TAP_APPROVAL was not checked (out of scope); the visitor-kitchen path (scan the QR code) is not affected."
+      "note": "Whether the public deployment sets DOCK_DEMO_TAP_APPROVAL was not checked (out of scope); the visitor-kitchen path (scan the QR code) is not affected.",
+      "status": "closed (not verified end to end)",
+      "retest": "b155a58: the console now answers mode 'enrol' (presenter enrolment at /join/presenter behind the ops passcode). Not signed end to end here: that needs the ops passcode, which QA did not use."
     },
     {
       "id": "F-SHARED-LIVE-ALLOWANCE",
-      "rank": 3,
+      "rank": 14,
       "title": "Every visitor of /k/kaari or /k/laakso is the same agent: the 31st request in an hour gets 429 for everyone",
       "severity": "lose_demo",
-      "criteria": ["demo", "robustness"],
+      "criteria": [
+        "demo",
+        "robustness"
+      ],
       "probe": "demo.shared_live_allowance_kaari",
       "reproduce": "qa/bin/fresh-server.sh 4312 && pnpm qa --url http://localhost:4312 --only demo.shared",
-      "steps": ["On a fresh server make 31 requests on /k/kaari within an hour (any amounts)."],
+      "steps": [
+        "On a fresh server make 31 requests on /k/kaari within an hour (any amounts)."
+      ],
       "expected": "Each visitor's request is answered; the partner API is protected per visitor or per session, not per demo kitchen.",
       "actual": "Request 31 returns 429 live_lookup_budget_exceeded: 'This agent already made 30 live price/availability lookups in the last 60 minutes'. Each intake costs 1-2 live lookups and each quote one more, so on a busy stand the shared demo kitchen goes dark after roughly 10-15 visitors and stays dark for the rest of the hour.",
       "cause": "web/src/core/live-allowance.ts:17-21 (30 calls, 60 min, per org:agent) with web/src/server/console-kitchens.ts giving every console visitor the kitchen's one agent id.",
       "fix": "Key the allowance by console session for the demo kitchens (or raise it there and cache live answers for a few minutes per product and date), and show the visitor a plain 'busy, try in N minutes' message.",
       "observed": true,
-      "reproducedTimes": 2
+      "reproducedTimes": 2,
+      "status": "closed",
+      "retest": "b155a58: 31 visitors on /k/kaari within the hour all get answers; 30 anonymous catalogue live checks no longer starve a visitor kitchen."
     },
     {
       "id": "F-LEDGER-OPEN",
-      "rank": 4,
+      "rank": 15,
       "title": "Anyone can read every kitchen's ledger, including request texts and kitchen memory, with no credentials",
       "severity": "lose_points",
-      "criteria": ["controls", "openness"],
+      "criteria": [
+        "controls",
+        "openness"
+      ],
       "probe": "exposure.ledger_public, exposure.console_ledger_cross_kitchen",
       "reproduce": "curl -s http://localhost:4311/api/v1/ledger | head -c 2000",
-      "steps": ["Kaari opens a request with a private text.", "With no Authorization header, GET /api/v1/ledger; or POST /ui-api/kitchens/kaari/call {method:GET,path:/api/v1/ledger} to read Laakso's."],
+      "steps": [
+        "Kaari opens a request with a private text.",
+        "With no Authorization header, GET /api/v1/ledger; or POST /ui-api/kitchens/kaari/call {method:GET,path:/api/v1/ledger} to read Laakso's."
+      ],
       "expected": "A buyer sees its own organisation's entries; the wholesaler view needs wholesaler credentials; strangers see the chain head and verification only.",
       "actual": "200 with every entry of every organisation (request texts, quotes, prices, decisions, approver names), 480+ entries across 58 actors on one run.",
       "cause": "web/src/app/api/v1/ledger/route.ts has no authenticate(); the console allow-list (web/src/app/ui-api/kitchens/[kitchen]/call/route.ts:22) forwards it and the route ignores the mandate.",
       "fix": "Authenticate the ledger route and filter entries to the mandate's orgId (keep verify() over the whole chain and return only the head to others).",
       "observed": true,
-      "reproducedTimes": 3
+      "reproducedTimes": 3,
+      "status": "closed",
+      "retest": "b155a58: anonymous GET /api/v1/ledger returns the verification and head with 0 entries; Kaari's console no longer returns Laakso's entries."
     },
     {
       "id": "F-HUMAN-INPUT-BY-AGENT",
-      "rank": 5,
+      "rank": 16,
       "title": "The agent can 'confirm' a likely mistake itself, and the ledger records it as the head chef's confirmation",
       "severity": "lose_points",
-      "criteria": ["controls", "need"],
+      "criteria": [
+        "controls",
+        "need"
+      ],
       "probe": "intake.tenfold_confirmed_by_agent",
       "reproduce": "pnpm qa --only intake.tenfold",
       "steps": [
@@ -101,14 +386,18 @@
       "cause": "web/src/core/intake.ts:96-104 (by is z.string), respondToConcerns/answer/choose authorise with the agent's mandate only; the actor is built from 'by' (intake.ts:438).",
       "fix": "Record these as 'relayed by agent X for <name>, unverified' and, for a confirmed tenfold or unusual quantity, carry it to sign-off (escalate) unless the confirmation carries a human proof.",
       "observed": true,
-      "reproducedTimes": 3
+      "reproducedTimes": 3,
+      "status": "closed",
+      "retest": "b155a58: the agent can still pass on an answer (REST and MCP without elicitation), but the ledger records 'Relayed by the agent, not verified' and the order escalates by the new rule human_confirmation, also under the per-order limit (tested at 9, 10 and 1,100 L)."
     },
     {
       "id": "F-SUBST-SELF-DECLARED",
-      "rank": 6,
+      "rank": 17,
       "title": "Substitution rules only apply when the agent declares a substitute; 'no substitutes' and the price cap can be walked around",
       "severity": "lose_points",
-      "criteria": ["controls"],
+      "criteria": [
+        "controls"
+      ],
       "probe": "gate.substitution_undeclared, gate.substitute_price_reference",
       "reproduce": "pnpm qa --only gate.substitut",
       "steps": [
@@ -121,120 +410,173 @@
       "cause": "web/src/core/policy.ts:169-211 looks only at lines with substituteFor; web/src/core/quote.ts:157-170 takes req.substituteFor from the agent; the request (orders.ts PurchaseRequest) carries only free text, no product reference.",
       "fix": "Store the requested product(s) (or the intake's card) on the request, have the quote mark every line not in it as a substitute for it, and compare prices against the requested product.",
       "observed": true,
-      "reproducedTimes": 3
+      "reproducedTimes": 3,
+      "status": "closed",
+      "retest": "b155a58: quoting AR-2010 on a request for VA-1010 without substituteFor now fails substitution_rule and substitute_price; the masked 'original' no longer passes. Only applies when the request names a product."
     },
     {
       "id": "F-APPROVALS-OPEN",
-      "rank": 7,
+      "rank": 18,
       "title": "Pending sign-offs, the sign-off screen and the live event stream of every kitchen are open to anyone",
       "severity": "lose_points",
-      "criteria": ["controls"],
+      "criteria": [
+        "controls"
+      ],
       "probe": "exposure.approvals_public, exposure.events_public",
       "reproduce": "curl -s http://localhost:4311/api/v1/approvals; curl -sN 'http://localhost:4311/api/v1/events?since=0' | head",
-      "steps": ["Any kitchen's order goes to sign-off.", "With no credentials: GET /api/v1/approvals, GET /api/v1/approvals/<id>, GET /api/v1/events?since=0."],
+      "steps": [
+        "Any kitchen's order goes to sign-off.",
+        "With no credentials: GET /api/v1/approvals, GET /api/v1/approvals/<id>, GET /api/v1/events?since=0."
+      ],
       "expected": "Only the approver's phone (session cookie) and the kitchen's own console see a pending sign-off; the wall gets anonymised events.",
       "actual": "All pending approvals of all organisations (org, agent, lines, total, reasons); the full sign-off view (kitchen, approver name, items, why); and an event stream replaying every organisation's events.",
       "cause": "web/src/app/api/v1/approvals/route.ts ('APPROVER-AUTH SEAM: open today'), approvals/[approvalId]/route.ts GET, events/route.ts with no scope.",
       "fix": "Require the approver session for /approvals and /approvals/{id}; give the wall its own event feed without org ids and amounts per kitchen, or with per-sandbox opt-in.",
       "observed": true,
-      "reproducedTimes": 3
+      "reproducedTimes": 3,
+      "status": "closed",
+      "retest": "b155a58: anonymous /api/v1/approvals -> 401 not_signed_in; the event stream to a stranger carries one organisation at most."
     },
     {
       "id": "F-SANDBOX-OPEN",
-      "rank": 8,
+      "rank": 19,
       "title": "A stranger can list visitors' kitchens and make their agents order, sending sign-off requests to other people's phones",
       "severity": "lose_points",
-      "criteria": ["controls", "demo"],
+      "criteria": [
+        "controls",
+        "demo"
+      ],
       "probe": "sandbox.stranger_triggers_demo_order",
       "reproduce": "curl -s http://localhost:4311/api/v1/sandboxes; curl -s -XPOST http://localhost:4311/api/v1/sandboxes/<sbx_id>/demo-order",
-      "steps": ["A visitor joins by QR code.", "Anyone: GET /api/v1/sandboxes (lists every sbx_ id), POST /api/v1/sandboxes/<id>/demo-order."],
+      "steps": [
+        "A visitor joins by QR code.",
+        "Anyone: GET /api/v1/sandboxes (lists every sbx_ id), POST /api/v1/sandboxes/<id>/demo-order."
+      ],
       "expected": "Only the wall (or the visitor themselves) starts a visitor kitchen's demo order.",
       "actual": "201 with a new approval on the visitor's kitchen; repeated calls each create another sign-off request on that phone (and spend partner API lookups).",
       "cause": "web/src/app/api/v1/sandboxes/[sandboxId]/demo-order/route.ts has no check; web/src/app/api/v1/sandboxes/route.ts lists all ids.",
       "fix": "Require the visitor's session (or a wall token) for demo-order and drop sandbox ids from the public list (the wall can show names only).",
       "observed": true,
-      "reproducedTimes": 3
+      "reproducedTimes": 3,
+      "status": "closed",
+      "retest": "b155a58: a stranger's POST /api/v1/sandboxes/<id>/demo-order is refused."
     },
     {
       "id": "F-CONSOLE-OPEN",
-      "rank": 9,
+      "rank": 20,
       "title": "Anyone who knows a kitchen's slug acts as its agent through the console back end, including visitors' kitchens",
       "severity": "lose_points",
-      "criteria": ["controls"],
+      "criteria": [
+        "controls"
+      ],
       "probe": "sandbox.stranger_spends_visitor_budget",
       "reproduce": "pnpm qa --only sandbox.stranger_spends",
-      "steps": ["Take any sbx_ id from GET /api/v1/sandboxes.", "POST /ui-api/kitchens/<sbx_id>/call with intake, choice and order calls."],
+      "steps": [
+        "Take any sbx_ id from GET /api/v1/sandboxes.",
+        "POST /ui-api/kitchens/<sbx_id>/call with intake, choice and order calls."
+      ],
       "expected": "A visitor's kitchen console is usable from the visitor's phone/session (or read-only for others).",
       "actual": "The stranger opens an intake, confirms, chooses and commits an order within the visitor's EUR 500 limit, spending the visitor's weekly budget.",
       "cause": "web/src/app/ui-api/kitchens/[kitchen]/call/route.ts attaches the kitchen's mandate to any caller (documented DEMO NOTE in console-kitchens.ts).",
       "fix": "For sbx_ kitchens require the visitor's approver session cookie; keep the two demo kitchens open but rate-limited.",
       "observed": true,
-      "reproducedTimes": 2
+      "reproducedTimes": 2,
+      "status": "closed for visitor kitchens",
+      "retest": "b155a58: a stranger driving /ui-api/kitchens/<sbx>/call gets 401. The two demo kitchens stay open by design."
     },
     {
       "id": "F-MODEL-SPEND",
-      "rank": 10,
+      "rank": 21,
       "title": "The paid model interpreter is reachable anonymously through the console, with no rate limit or quota",
       "severity": "lose_points",
-      "criteria": ["robustness", "openness"],
+      "criteria": [
+        "robustness",
+        "openness"
+      ],
       "probe": "exposure.interpret_unmetered",
       "reproduce": "curl -s -XPOST http://localhost:4311/ui-api/kitchens/kaari/call -H 'content-type: application/json' -d '{\"method\":\"POST\",\"path\":\"/api/v1/agent/interpret\",\"body\":{\"text\":\"10 L milk for Tuesday\"}}'",
-      "steps": ["Repeat the call above in a loop."],
+      "steps": [
+        "Repeat the call above in a loop."
+      ],
       "expected": "A per-session and global cap on model calls (and a cache for identical text), with 429 beyond it.",
       "actual": "Every call is a paid model call (about 1.2 s each); no limit, no quota header.",
       "cause": "web/src/app/ui-api/kitchens/[kitchen]/call/route.ts:22 allows /api/v1/agent/interpret; web/src/server/agent/interpret.ts has no limiter.",
       "fix": "Add a small token bucket per client and a global daily cap on interpret, and cache by (text, day).",
       "observed": true,
-      "reproducedTimes": 3
+      "reproducedTimes": 3,
+      "status": "mostly closed",
+      "retest": "b155a58: interpreter 30 calls an hour per console session or agent, a daily cap that also counts the assistant (cap of 3: 4th interpret and every assistant call refused). Left: the daily cap is one counter for the whole server, so whoever spends it switches free text off for everyone until midnight UTC."
     },
     {
       "id": "F-NO-OPTION-REASON",
-      "rank": 11,
+      "rank": 22,
       "title": "'No options' leads with stock and delivery reasons when the budget is what blocked it",
       "severity": "lose_points",
-      "criteria": ["need", "robustness"],
+      "criteria": [
+        "need",
+        "robustness"
+      ],
       "probe": "demo.headline_twice_laakso",
       "reproduce": "as F-PENDING-HOLDS-BUDGET",
-      "steps": ["As F-PENDING-HOLDS-BUDGET step 3."],
+      "steps": [
+        "As F-PENDING-HOLDS-BUDGET step 3."
+      ],
       "expected": "'Your weekly budget has EUR 678 left; this needs about EUR 1,322' first, with what to do.",
       "actual": "'Nothing on the short list can be delivered in time within the mandate: earliest delivery Thu 19 Nov is after Wed 18 Nov...; only 400 L in stock...' The four over_budget exclusions are cut off.",
       "cause": "web/src/core/intake.ts:539-544 noOptionReason takes the first three distinct reasons in list order.",
       "fix": "Order exclusion reasons by how many products they removed and lead with budget and cut-off, which the buyer can act on.",
       "observed": true,
-      "reproducedTimes": 2
+      "reproducedTimes": 2,
+      "status": "closed",
+      "retest": "b155a58: 'Nothing fits. The blocker is the weekly budget: ... €678.00 left of €2,000.00 ...' leads the reply."
     },
     {
       "id": "F-QUOTE-REQUEST",
-      "rank": 12,
+      "rank": 23,
       "title": "A quote issued for one request can be placed as an order on another request",
       "severity": "lose_points",
-      "criteria": ["controls", "openness"],
+      "criteria": [
+        "controls",
+        "openness"
+      ],
       "probe": "gate.quote_other_request",
       "reproduce": "pnpm qa --only gate.quote_other_request",
-      "steps": ["Open requests A and B.", "Quote 3 x VA-1001 on A.", "POST /api/v1/orders {requestId: B, quoteToken: <A's quote>}."],
+      "steps": [
+        "Open requests A and B.",
+        "Quote 3 x VA-1001 on A.",
+        "POST /api/v1/orders {requestId: B, quoteToken: <A's quote>}."
+      ],
       "expected": "Refused by quote_binding: the quote names request A.",
       "actual": "Committed under B. The ledger shows the quote under A and the order under B; B's need-by date, intake state and kitchen memory are the ones applied.",
       "cause": "web/src/core/policy.ts:106-111 quote_binding checks organisation, agent and mandate but not quote.requestId; web/src/core/orders.ts:583-597 never compares it with input.requestId.",
       "fix": "Add requestId to quote_binding (one line in policy.ts) and a test.",
       "observed": true,
-      "reproducedTimes": 3
+      "reproducedTimes": 3,
+      "status": "closed",
+      "retest": "b155a58: a quote for request A placed on request B is refused."
     },
     {
       "id": "F-GATE-UTC-DATE",
-      "rank": 13,
+      "rank": 24,
       "title": "Between 00:00 and 02:00 Helsinki (03:00 in summer) the gate's latest delivery day is one day short",
       "severity": "lose_points",
-      "criteria": ["robustness"],
+      "criteria": [
+        "robustness"
+      ],
       "probe": "dates.gate_latest_day_helsinki",
       "reproduce": "pnpm qa --only dates.gate",
-      "steps": ["In process: evaluatePolicy at 2026-11-13T22:00Z (Sat 00:00 Helsinki) with maxLeadDays 5 and a line delivered Thu 19 Nov."],
+      "steps": [
+        "In process: evaluatePolicy at 2026-11-13T22:00Z (Sat 00:00 Helsinki) with maxLeadDays 5 and a line delivered Thu 19 Nov."
+      ],
       "expected": "Pass: Thursday is five Helsinki days ahead, as the intake counts it.",
       "actual": "delivery_deadline fails: 'after the latest acceptable date 2026-11-18'. 14 of 144 sampled hours (every night, both DST sides).",
       "cause": "web/src/core/policy.ts:160 and web/src/core/options.ts:213 use isoDate(addDays(now, n)), a UTC date; the intake uses localNow() in Europe/Helsinki.",
       "fix": "addDaysIso(localNow(now).date, maxLeadDays) in both places.",
       "observed": true,
       "reproducedTimes": 2,
-      "note": "Rare on stage (night only), but an order the cards offer can then be refused by the gate."
+      "note": "Rare on stage (night only), but an order the cards offer can then be refused by the gate.",
+      "status": "closed",
+      "retest": "b155a58: 0 of 144 sampled hours refuse a delivery maxLeadDays Helsinki days ahead."
     }
   ]
 }

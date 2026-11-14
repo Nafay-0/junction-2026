@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { compactVerify } from "jose";
 import { InMemoryOutbox } from "./approval";
-import { InMemoryCatalog, MeteredCatalog } from "./catalog";
+import { CatalogError, InMemoryCatalog, MeteredCatalog } from "./catalog";
 import { generateEd25519KeyPair, type KeyPair } from "./keys";
 import { Ledger } from "./ledger";
 import { createTrustRegistry, signMandate, type Mandate } from "./mandate";
@@ -284,6 +284,18 @@ describe("orders", () => {
     expect((await dock.requestQuote(loose, { requestId: r3.requestId, lines: [{ productId: "VA-1001", quantity: 2 }] })).quote.lines[0].substituteFor).toBeUndefined();
   });
 
+  it("moves a request's need-by date in one place: validated, logged, and refused once an order stands on it", async () => {
+    const req = await dock.openRequest(session, { text: "milk for Friday", neededBy: "2026-11-20" });
+    const moved = await dock.changeNeededBy(session, req.requestId, { neededBy: "2026-11-23", by: "Sanna", reason: "the event moved" });
+    expect(moved.neededBy).toBe("2026-11-23");
+    expect(ledger.entries({ requestId: req.requestId }).at(-1)).toMatchObject({ type: "intake", data: { step: "needed_by", from: "2026-11-20", to: "2026-11-23" } });
+    expect((await dock.changeNeededBy(session, req.requestId, { neededBy: null })).neededBy).toBeUndefined();
+    await expect(dock.changeNeededBy(session, req.requestId, { neededBy: "2026-11-01" })).rejects.toMatchObject({ status: 400, code: "needed_by_in_past" });
+    await expect(dock.changeNeededBy(session, "req_nope", { neededBy: "2026-11-23" })).rejects.toMatchObject({ status: 404 });
+    const { req: ordered } = await smallOrder();
+    await expect(dock.changeNeededBy(session, ordered.requestId, { neededBy: "2026-11-23" })).rejects.toMatchObject({ status: 409, code: "request_has_order" });
+  });
+
   it("refuses a request id that belongs to someone else", async () => {
     await expect(dock.searchProducts(session, { requestId: "req_nope", text: "milk" })).rejects.toMatchObject({ status: 404, code: "request_not_found" });
   });
@@ -340,5 +352,64 @@ describe("approvals", () => {
 
   it("returns 404 for an unknown approval", async () => {
     await expect(dock.decideApproval("apr_nope", { decision: "approve", proof: { kind: "link_token", token: "x" } })).rejects.toBeInstanceOf(DockError);
+  });
+});
+
+describe("ProductHolds: the gate checks a hold as the named rule recall_hold", () => {
+  it("previews, refuses and keeps an order with a held product; the re-check at sign-off refuses one held after it waited", async () => {
+    const held = new Set<string>();
+    const d = createDock({
+      catalog,
+      repo: new InMemoryDockRepository(),
+      ledger,
+      trustedIssuers: createTrustRegistry([{ kid: buyer.kid, orgId: "org_laakso", publicKey: buyer.publicKey }]),
+      wholesalerKey: wholesaler,
+      notifier: outbox,
+      now: () => now,
+      holds: { holdsFor: (ids) => ids.filter((id) => held.has(id)).map((productId) => ({ productId, reason: "Recall notice 7.", url: "https://notice.test/7" })) },
+    });
+    const s = await d.authenticate(token, mandate.agentId);
+    held.add("VA-1001");
+    const req = await d.openRequest(s, { text: "20 L lactose-free milk" });
+    const q = await d.requestQuote(s, { requestId: req.requestId, lines: [{ productId: "VA-1001", quantity: 20 }] });
+    expect(q.policyPreview.outcome).toBe("reject");
+    const o = await d.placeOrder(s, { requestId: req.requestId, quoteToken: q.quoteToken, lines: linesOf(q.quote) });
+    expect(o.status).toBe("rejected");
+    expect(o.decision.rules.find((r) => r.rule === "recall_hold")).toMatchObject({ outcome: "fail", reason: expect.stringContaining("Notice: https://notice.test/7") });
+
+    held.clear();
+    const big = await d.openRequest(s, { text: "1000 L lactose-free milk" });
+    const bq = await d.requestQuote(s, { requestId: big.requestId, lines: [{ productId: "VA-1001", quantity: 700 }] });
+    const waiting = await d.placeOrder(s, { requestId: big.requestId, quoteToken: bq.quoteToken, lines: linesOf(bq.quote) });
+    expect(waiting.status).toBe("pending_approval");
+    held.add("VA-1001");
+    const msg = outbox.messages().at(-1)!;
+    const after = await d.decideApproval(msg.approvalId, { decision: "approve", proof: { kind: "link_token", token: tokenFrom(msg.link) } });
+    expect(after.status).toBe("rejected");
+    expect(after.decision.rules.find((r) => r.rule === "recall_hold")?.outcome).toBe("fail");
+  });
+});
+
+// QA F-SLOW-PARTNER-WAIT: when the wholesaler's live service fails, a refusal that needs no price is still given.
+describe("the gate when the wholesaler's live service does not answer", () => {
+  beforeEach(() => {
+    Object.assign(inner, {
+      getLiveStatus: async () => {
+        throw new CatalogError("live_unavailable", "The wholesaler's live price and availability service is slow or busy right now (timeout).", 20);
+      },
+    });
+  });
+
+  it("refuses a product the mandate forbids on its master data, naming the rule, without a live answer", async () => {
+    const req = await dock.openRequest(session, { text: "oat drink" });
+    await expect(dock.requestQuote(session, { requestId: req.requestId, lines: [{ productId: "PK-4001", quantity: 10 }] })).rejects.toMatchObject({ status: 422, code: "policy_rejected", rule: "forbidden_allergens" });
+    const refusal = ledger.entries({ requestId: req.requestId }).find((e) => e.type === "refusal");
+    expect(refusal?.data).toMatchObject({ rule: "forbidden_allergens" });
+    expect(refusal?.summary).toMatch(/product data alone/);
+  });
+
+  it("says a product the mandate allows cannot be priced now, with when to try again", async () => {
+    const req = await dock.openRequest(session, { text: "milk" });
+    await expect(dock.requestQuote(session, { requestId: req.requestId, lines: [{ productId: "VA-1001", quantity: 10 }] })).rejects.toMatchObject({ status: 503, code: "live_unavailable", details: { retryable: true, retryAfterSeconds: 20 } });
   });
 });
