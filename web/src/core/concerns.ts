@@ -163,12 +163,21 @@ export function isPackCount(unit: NeedUnit, base: BaseUnit | undefined): boolean
 }
 
 /** The need's amount in the family's base unit, or undefined if it cannot be known. */
-export function baseAmount(need: StructuredNeed, ctx: CheckContext): { amount: number; unit: BaseUnit } | undefined {
+export function baseAmount(need: StructuredNeed, ctx: CheckContext): { amount: number; unit: BaseUnit; packs?: number } | undefined {
   if (!need.quantity) return undefined;
   const unit = familyUnit(ctx);
   if (isPackCount(need.quantity.unit, unit)) {
     const pack = referencePackSize(need, ctx);
-    return pack && unit ? { amount: need.quantity.amount * pack, unit } : undefined;
+    if (pack && unit) return { amount: need.quantity.amount * pack, unit };
+    // A count of packs, cases or boxes of products in several sizes: kept as that count through the choice of product
+    // (2 packs of napkins are 2 of whichever napkins are chosen), never turned into a weight the buyer did not say.
+    // The amount beside it is for ranking only: the count of packs times the middle pack size.
+    if (need.quantity.unit === "pack" && ctx.candidates.length) {
+      const sizes = ctx.candidates.map((p) => p.packSize).filter((x) => x > 0).sort((a, b) => a - b);
+      const mid = sizes[Math.floor(sizes.length / 2)] ?? 1;
+      return { amount: Math.round(need.quantity.amount * mid * 1000) / 1000, unit: unit ?? ctx.candidates[0].unit, packs: need.quantity.amount };
+    }
+    return undefined;
   }
   return { amount: need.quantity.amount, unit: need.quantity.unit as BaseUnit };
 }
@@ -315,6 +324,8 @@ export function checkQuantity(need: StructuredNeed, ctx: CheckContext): Concern[
       ];
     }
   }
+  // A count of packs, cases or boxes: kept as a count (baseAmount), the product chosen among the options.
+  if (packCount && (!pack || !unit) && q.unit === "pack" && ctx.candidates.length) return [];
   if (packCount && (!pack || !unit)) {
     const sizes = [...new Set(ctx.candidates.map((p) => p.packSize))].sort((a, b) => a - b).slice(0, 3);
     const base = unit ?? "L";

@@ -27,7 +27,7 @@ describe("the mistake check, said", () => {
 
   it("names the pack readings, the first as the one to take, and a plain yes takes it", () => {
     const c = card({ key: "unit_unclear:2:pack", code: "unit_unclear", message: "x", confirmable: false, corrections: [{ id: "use_2_kg", label: "2 kg in total" }, { id: "use_1_kg", label: "2 packs of 0.5 kg = 1 kg" }, { id: "use_4_kg", label: "2 packs of 2 kg = 4 kg" }] });
-    expect(guardWords(c, "en")).toBe("The packs come in several sizes. Shall I take 2 packs of 0.5 kg (1 kg), or 2 packs of 2 kg (4 kg)?");
+    expect(guardWords(c, "en")).toBe("The packs come in several sizes. Shall I take 2 packs of 0,5 kg (1 kg), or 2 packs of 2 kg (4 kg)?");
     expect(guardAnswerOf(c, "yes")?.action).toMatchObject({ choice: "use_1_kg" });
   });
 

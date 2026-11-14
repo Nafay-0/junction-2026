@@ -83,7 +83,8 @@ export function guardWords(card: AnomalyCard, lang: Lang): string {
   // plain yes settles it ("Shall I take 2 packs of 0,5 kg (1 kg), or 2 packs of 1 kg (2 kg)?").
   const packReadings = packReadingsOf(k);
   if (packReadings.length >= 2) {
-    const r = packReadings.slice(0, 3).map((x) => x.label.replace(/ = /, " (").replace(/$/, ")"));
+    // Amounts with a decimal comma, as every amount in the thread ("0,11 kg").
+    const r = packReadings.slice(0, 3).map((x) => x.label.replace(/(\d)\.(\d)/g, "$1,$2").replace(/ = /, " (").replace(/$/, ")"));
     const or = { en: ", or ", fi: ", vai ", sv: ", eller " }[lang];
     return { en: `The packs come in several sizes. Shall I take ${r.join(or)}?`, fi: `Pakkauksia on eri kokoisia. Otanko ${r.join(or)}?`, sv: `Förpackningarna finns i olika storlekar. Ska jag ta ${r.join(or)}?` }[lang];
   }

@@ -802,7 +802,7 @@ function Landing({ today, offer, watch, thread }: { today?: TodayCard; offer?: O
       {today && !today.pending && !(today.items.length === 0 && (watch || offer)) && (
         <p className="mt-3 max-w-[34ch] text-[1.1rem] leading-[1.6] text-ink">
           {/* A demo account with nothing yet: what the agent is, in one sentence (the guide's link sits above). */}
-          <Rich text={today.items.length === 0 && today.opening ? today.opening[f.lang] : today.items.length === 0 && demoOwn ? tx.today.intro : todaySentence(today, tx, f)} />
+          <Rich text={today.items.length === 0 && today.opening ? (account?.free ? "" : today.opening[f.lang]) : today.items.length === 0 && demoOwn ? tx.today.intro : todaySentence(today, tx, f)} />
         </p>
       )}
       {watch && watch.state !== "answered" && <WatchWords card={watch} lang={f.lang} big />}
