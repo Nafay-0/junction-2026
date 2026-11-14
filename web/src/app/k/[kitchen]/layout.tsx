@@ -15,6 +15,7 @@ import { chosenLang, requestLang } from "../../_i18n/server";
 import { LAYOUT_TEXT } from "./layout.text";
 import { ACCOUNT_TEXT } from "./account.text";
 import { ACCOUNT_COOKIE } from "@/server/accounts/http";
+import { currentOps } from "@/server/ops/access";
 import { LINK_GO, LINK_PRIMARY } from "../_account/links";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -42,8 +43,11 @@ async function Loaded({ params, children }: LayoutProps<"/k/[kitchen]">) {
   const me = signedIn ? rt.accounts.view(signedIn.account) : undefined;
   const [k, kitchens] = await Promise.all([resolveKitchen(kitchen), listConsoleKitchens(viewer?.orgId, me)]);
   if (!k) return <Closed kitchens={kitchens} lang={lang ?? DEFAULT_LANG} />;
-  // An account's kitchen is private to it: nothing of it (not even its mandate) reaches another browser.
-  if (k.info.kind === "account" && me?.username !== k.info.account?.username) {
+  // An account's kitchen, and each stage kitchen, is private to its account: nothing of it (not even its mandate)
+  // reaches another browser. The operations desk reads kitchens through its own portal.
+  const owner = k.info.kind === "account" ? k.info.account?.username : k.info.kind === "demo" ? k.info.slug : undefined;
+  const ops = currentOps(new Request("http://dock.local/", { headers: { cookie: jar.toString() } }));
+  if (owner && me?.username !== owner && !ops) {
     return (
       <LangProvider initial={lang}>
         <Private lang={lang ?? DEFAULT_LANG} slug={k.info.slug} me={me && { username: me.username, kitchen: me.kitchen }} />

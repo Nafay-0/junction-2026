@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as connectorRoute from "@/app/api/mcp/c/[token]/route";
 import * as approvalRoute from "@/app/api/v1/approvals/[approvalId]/route";
 import * as connectRoute from "@/app/ui-api/connect/[kitchen]/route";
+import { sessionCookieFor } from "@/server/accounts/test-session";
 import { localNow, nextDeliveryDay } from "@/core/kitchen";
 import { signMandate } from "@/core/mandate";
 import { LIVE_LOOKUP_LIMITS } from "@/core/live-allowance";
@@ -41,8 +42,11 @@ async function call(client: Client, name: string, args: Record<string, unknown> 
   return { isError: r.isError ?? false, s: r.structuredContent as Structured };
 }
 
-const connect$ = (slug: string, method: "GET" | "POST" | "DELETE" = "GET", headers: Record<string, string> = {}) =>
-  connectRoute[method](new Request(`${BASE}/ui-api/connect/${slug}`, { method, headers }), { params: Promise.resolve({ kitchen: slug }) } as never);
+/** The stage kitchens' addresses are shown to their own signed-in account (pass `anonymous` to call as a stranger). */
+const connect$ = async (slug: string, method: "GET" | "POST" | "DELETE" = "GET", headers: Record<string, string> = {}, anonymous = false) => {
+  const own = !anonymous && !headers.cookie && !headers.authorization && (slug === "kaari" || slug === "laakso") ? { cookie: await sessionCookieFor(await getRuntime(), slug) } : ({} as Record<string, string>);
+  return connectRoute[method](new Request(`${BASE}/ui-api/connect/${slug}`, { method, headers: { ...own, ...headers } }), { params: Promise.resolve({ kitchen: slug }) } as never);
+};
 
 async function addressOf(slug = "kaari"): Promise<string> {
   const r = await connect$(slug);
@@ -250,9 +254,11 @@ describe("connector address: revocation and expiry", () => {
     expect(await addressOf("kaari")).toBe(first);
     expect(await addressOf("laakso")).not.toBe(first);
 
-    // With a secret configured, only the operator may change a demo kitchen's address.
+    // With a secret configured, only the operator may change a demo kitchen's address: not its signed-in account, and
+    // a stranger does not even see it.
     expect((await connect$("kaari", "POST")).status).toBe(403);
     expect((await connect$("kaari", "DELETE")).status).toBe(403);
+    expect((await connect$("kaari", "GET", {}, true)).status).toBe(401);
     const op = await connect$("kaari", "POST", { authorization: "Bearer a-test-secret-that-is-long-enough" });
     expect(op.status).toBe(200);
     expect(((await op.json()) as { connector: { url: string } }).connector.url).not.toBe(first);

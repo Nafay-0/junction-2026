@@ -10,16 +10,16 @@ import { withKitchen } from "../_shared";
  */
 const Body = z.object({ text: z.string().trim().min(3).max(4000) });
 
-export async function GET(_req: Request, ctx: RouteContext<"/ui-api/plan/[kitchen]">) {
+export async function GET(req: Request, ctx: RouteContext<"/ui-api/plan/[kitchen]">) {
   return handle(async () => {
-    const { kitchen } = await withKitchen((await ctx.params).kitchen);
+    const { kitchen } = await withKitchen((await ctx.params).kitchen, req);
     return Response.json({ kitchen: kitchen.info, mode: menuMode() }, { headers: { "cache-control": "no-store" } });
   });
 }
 
 export async function POST(req: Request, ctx: RouteContext<"/ui-api/plan/[kitchen]">) {
   return handle(async () => {
-    const { service, kitchen, reply } = await withKitchen((await ctx.params).kitchen);
+    const { service, kitchen, reply } = await withKitchen((await ctx.params).kitchen, req);
     const { text } = parse(Body, await readJson(req));
     return reply(await service.plan(kitchen, text, kitchen.info.by), 201);
   });

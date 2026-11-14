@@ -5,8 +5,6 @@ import { currentApprover } from "./approver-session";
 import { currentAccount, requireSameOrigin } from "./accounts/http";
 import { consoleSession, type ConsoleContext } from "./console-context";
 import { resolveKitchen } from "./console-kitchens";
-import { KITCHEN_ORG } from "./demo-kitchen";
-import { DEMO_ORG } from "./dev-fixtures";
 import { authenticate } from "./http";
 import { currentOps, type OpsSession } from "./ops/access";
 import type { Runtime } from "./runtime";
@@ -22,15 +20,13 @@ import type { SandboxSummary } from "./sandboxes";
  *                                  screen, their kitchen's events); the one-time link token for its one approval
  *   the wholesaler's views         the operations session (every kitchen's ledger, sign-offs and events)
  *   the public wall                an aggregated feed: counts and anonymous event pings, no private detail
- *   the built-in demo kitchens     their consoles stay open to anyone at the table (rate-limited at the edge,
- *                                  src/proxy.ts), and only ever act for that one demo kitchen; signed in as its
- *                                  account (password from the environment), a presenter is its own person
+ *   the built-in demo kitchens     accounts like any other (passwords from the environment): closed to strangers,
+ *                                  so nobody can spend their budget or stack sign-offs before a pitch
  *
  * The ledger's integrity (verification and head) is public: anyone can check the chain, no one sees entries
  * that are not theirs.
  */
 
-export const DEMO_ORG_IDS: readonly string[] = [KITCHEN_ORG.orgId, DEMO_ORG.orgId];
 
 export type Principal = {
   ops?: OpsSession;
@@ -73,8 +69,8 @@ export function requireSomeone(p: Principal, what: string): void {
 
 /**
  * A kitchen console's back end (/ui-api/kitchens/{kitchen}/...): the kitchen, with the browser's console session.
- * Demo kitchens: open. An account's kitchen: only its signed-in account (or operations). A visitor's sandbox kitchen:
- * only from the phone/browser that joined it (or operations).
+ * An account's kitchen, and each stage kitchen (kaari, laakso), only its signed-in account (or operations). A visitor's
+ * sandbox kitchen only from the phone/browser that joined it (or operations).
  * Undefined when the kitchen does not exist; throws 401/403 when it does but the caller may not act for it.
  */
 export async function consoleKitchen(req: Request, rt: Runtime, slug: string) {
@@ -82,11 +78,13 @@ export async function consoleKitchen(req: Request, rt: Runtime, slug: string) {
   if (!k) return undefined;
   const session = consoleSession(req);
   const console: ConsoleContext = { kitchen: slug, session: session.id };
-  if (k.info.kind === "account") {
-    // A restaurant's own kitchen: only its signed-in account (or the operations desk, which sees every kitchen).
+  if (k.info.kind === "account" || k.info.kind === "demo") {
+    // A restaurant's own kitchen, and the two stage kitchens alike (their accounts' passwords come from the
+    // environment): only the kitchen's signed-in account, or the operations desk, which sees every kitchen.
+    const owner = k.info.kind === "account" ? k.info.account?.username : slug;
     const signedIn = await currentAccount(req, rt);
     const ops = currentOps(req);
-    const mine = signedIn?.account.username === k.info.account?.username;
+    const mine = !!signedIn && signedIn.account.username === owner;
     if (!mine && !ops) {
       throw signedIn
         ? new DockError(403, "not_your_kitchen", "This is another restaurant's kitchen. You are signed in to a different account.", "data_access")
@@ -104,28 +102,14 @@ export async function consoleKitchen(req: Request, rt: Runtime, slug: string) {
     if (!ops && me?.account.orgId !== k.info.orgId) throw new DockError(403, "not_your_kitchen", "This is another visitor's kitchen; it can only be used from the phone that joined it.", "data_access");
     // The visitor is the person behind this kitchen: answers given here are theirs, by a passkey-backed session.
     if (me && me.account.orgId === k.info.orgId) console.person = { channel: "portal_session", name: me.account.name, approverId: me.account.approverId };
-  } else {
-    // A built-in demo kitchen stays open to anyone at the table. Its own signed-in person is whoever is signed in to
-    // its account (password from the environment, accounts/service.ts), or a presenter enrolled as its approver (a
-    // passkey behind the operations passcode, server/presenter.ts).
-    const signedIn = await currentAccount(req, rt);
-    const me = await currentApprover(req, rt);
-    if (signedIn && signedIn.account.kind === "demo" && signedIn.account.username === slug) {
-      requireSameOrigin(req, { json: false });
-      console.person = { channel: "portal_session", name: `${signedIn.account.restaurant} (signed in)`, account: signedIn.account.username };
-    } else if (me && me.account.orgId === k.info.orgId) {
-      const { presenterKitchenOf } = await import("./presenter"); // presenter.ts imports this module's readers
-      if (presenterKitchenOf(me.account)) console.person = { channel: "portal_session", name: me.account.name, approverId: me.account.approverId };
-    }
   }
   return { ...k, console, setCookie: session.setCookie };
 }
 
 /**
  * Changing what a kitchen remembers (forgetting or correcting a rule, stating one, sharing it, adding it to the
- * mandate) is the kitchen's own call: it needs the kitchen's signed-in person, a visitor's own phone for their
- * kitchen, or for a built-in demo kitchen the presenter enrolled as its approver. An open demo console, a relayed
- * name or the operations desk can read memory, never change it.
+ * mandate) is the kitchen's own call: it needs the kitchen's signed-in account (a stage kitchen's too), or a
+ * visitor's own phone for their kitchen. A relayed name or the operations desk can read memory, never change it.
  */
 export function requireKitchenPerson(k: { info: { kind: string; name: string }; console?: ConsoleContext }, what = "Changing this kitchen's rules"): void {
   if (k.console?.person) return;
@@ -136,7 +120,7 @@ export function requireKitchenPerson(k: { info: { kind: string; name: string }; 
       ? `${what} needs the kitchen's own signed-in person: open it on the phone that joined it.`
       : k.info.kind === "account"
         ? `${what} needs ${k.info.name}'s own signed-in account. Sign in to it at /k.`
-        : `${what} needs ${k.info.name}'s own signed-in person: whoever is signed in to its account, or the presenter enrolled as its approver. Anyone else can read the rules, not change them.`,
+        : `${what} needs ${k.info.name}'s own signed-in account. Sign in to it at /k.`,
     "data_access",
   );
 }

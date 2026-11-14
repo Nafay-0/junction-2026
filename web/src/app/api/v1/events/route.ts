@@ -2,7 +2,7 @@ import type { DockEvent } from "@/core/events";
 import { DockError } from "@/core/orders";
 import { requireApprovalReader } from "@/server/approval-api";
 import { currentApprover, handleApprover } from "@/server/approver-session";
-import { DEMO_ORG_IDS, canRead, principalOf } from "@/server/authz";
+import { canRead, principalOf } from "@/server/authz";
 
 /**
  * Live events as server-sent events: approval_requested, approval_approved, approval_declined, order_committed,
@@ -53,8 +53,8 @@ export async function GET(req: Request) {
     }
     const orgId = url.searchParams.get("orgId");
     if (orgId) {
-      // A kitchen's own events: its agent, its approver, operations; the built-in demo kitchens' consoles are open.
-      if (!canRead(who, orgId) && !DEMO_ORG_IDS.includes(orgId)) throw new DockError(403, "not_your_kitchen", "These are another kitchen's events.", "data_access");
+      // A kitchen's own events: its agent, its signed-in account, its approver, operations.
+      if (!canRead(who, orgId)) throw new DockError(403, "not_your_kitchen", "These are another kitchen's events.", "data_access");
       filters.push((e) => e.orgId === orgId);
       scoped = true;
     }

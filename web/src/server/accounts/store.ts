@@ -46,6 +46,13 @@ export type Account = {
 
 export type AccountSession = { username: string; createdAt: string; expiresAt: string };
 
+/**
+ * A one-time link an account shows as a QR code: a phone adds itself as a signing device ("device"), or continues
+ * the signed-in session on the phone ("session", e.g. to call the kitchen's agent). Stored only as the SHA-256 of
+ * its token, so a restart mid-enrolment strands nobody, and taken (deleted) on use.
+ */
+export type AccountLink = { username: string; purpose: "device" | "session"; createdAt: string; expiresAt: string };
+
 export interface AccountStore {
   /** Insert a new account. False when the username is taken (atomic: two sign-ups cannot both win). */
   create(a: Account): Promise<boolean>;
@@ -58,11 +65,16 @@ export interface AccountStore {
   deleteSession(tokenHash: string): Promise<void>;
   deleteSessionsOf(username: string): Promise<void>;
   sweepSessions(now: Date): Promise<void>;
+  putLink(tokenHash: string, l: AccountLink): Promise<void>;
+  getLink(tokenHash: string): Promise<AccountLink | undefined>;
+  /** Get and delete in one step: the second caller with the same token gets nothing. */
+  takeLink(tokenHash: string): Promise<AccountLink | undefined>;
 }
 
 export class InMemoryAccountStore implements AccountStore {
   private readonly accounts = new Map<string, Account>();
   private readonly sessions = new Map<string, AccountSession>();
+  private readonly links = new Map<string, AccountLink>();
 
   async create(a: Account) {
     if (this.accounts.has(a.username)) return false;
@@ -82,6 +94,7 @@ export class InMemoryAccountStore implements AccountStore {
   async delete(username: string) {
     this.accounts.delete(username);
     await this.deleteSessionsOf(username);
+    for (const [h, l] of this.links) if (l.username === username) this.links.delete(h);
   }
   async putSession(h: string, s: AccountSession) {
     this.sessions.set(h, { ...s });
@@ -98,5 +111,18 @@ export class InMemoryAccountStore implements AccountStore {
   }
   async sweepSessions(now: Date) {
     for (const [h, s] of this.sessions) if (Date.parse(s.expiresAt) <= now.getTime()) this.sessions.delete(h);
+    for (const [h, l] of this.links) if (Date.parse(l.expiresAt) <= now.getTime()) this.links.delete(h);
+  }
+  async putLink(h: string, l: AccountLink) {
+    this.links.set(h, { ...l });
+  }
+  async getLink(h: string) {
+    const l = this.links.get(h);
+    return l && { ...l };
+  }
+  async takeLink(h: string) {
+    const l = this.links.get(h);
+    this.links.delete(h);
+    return l && { ...l };
   }
 }

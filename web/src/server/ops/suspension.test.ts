@@ -1,3 +1,4 @@
+import { sessionCookieFor } from "../accounts/test-session";
 import { Client, StreamableHTTPClientTransport, type CallToolResult } from "@modelcontextprotocol/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { POST as mcpRoute } from "@/app/api/mcp/route";
@@ -94,7 +95,7 @@ describe("suspension", () => {
     expect(mandateCall.isError).toBe(true);
 
     // Other agents keep working.
-    const kaari = await consoleCall(new Request(`${BASE}/ui-api/kitchens/kaari/call`, { method: "POST", body: JSON.stringify({ method: "GET", path: "/api/v1/kitchen" }) }), { params: Promise.resolve({ kitchen: "kaari" }) });
+    const kaari = await consoleCall(new Request(`${BASE}/ui-api/kitchens/kaari/call`, { method: "POST", headers: { cookie: await sessionCookieFor(await getRuntime(), "kaari") }, body: JSON.stringify({ method: "GET", path: "/api/v1/kitchen" }) }), { params: Promise.resolve({ kitchen: "kaari" }) });
     expect(kaari.status).toBe(200);
 
     // The suspension, every refusal and the resumption are on the ledger, and the chain holds.
@@ -128,7 +129,8 @@ describe("suspension", () => {
   it("a page polling a suspended agent's order writes one refusal, not one per poll, and every call is still refused and counted", async () => {
     const s = await control({ action: "suspend", scope: "agent", target: KITCHEN_ORG.agentId, reason: "Stop for a check" });
     expect(s.status).toBe(201);
-    const poll = (path: string) => consoleCall(new Request(`${BASE}/ui-api/kitchens/kaari/call`, { method: "POST", body: JSON.stringify({ method: "GET", path }) }), { params: Promise.resolve({ kitchen: "kaari" }) });
+    const own = await sessionCookieFor(await getRuntime(), "kaari");
+    const poll = (path: string) => consoleCall(new Request(`${BASE}/ui-api/kitchens/kaari/call`, { method: "POST", headers: { cookie: own }, body: JSON.stringify({ method: "GET", path }) }), { params: Promise.resolve({ kitchen: "kaari" }) });
     for (let i = 0; i < 14; i++) {
       expect((await poll(`/api/v1/orders/ord_abc${i}`)).status).toBe(403);
       expect((await poll(`/api/v1/ledger?requestId=req_abc${i}`)).status).toBe(403);

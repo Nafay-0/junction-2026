@@ -12,6 +12,7 @@ import { SoftwareAuthenticator } from "@/core/test-webauthn";
 import { DEMO_ORG, demoMandate, demoOrgKeyPair } from "./dev-fixtures";
 import { resetPresenterFailures } from "./presenter";
 import { getRuntime, resetRuntime } from "./runtime";
+import { sessionCookieFor } from "./accounts/test-session";
 
 /**
  * F-DEMO-KITCHEN-UNSIGNABLE: on a production build nobody could sign a built-in demo kitchen's orders. A presenter
@@ -52,7 +53,10 @@ describe("presenter enrolment for the built-in demo kitchens", () => {
     const order = await laaksoBigOrder();
     expect(order.status).toBe("pending_approval");
     const approvalId = order.approval!.approvalId;
-    const before = await json(consoleApproval.GET(req("GET", `/ui-api/kitchens/laakso/approval/${approvalId}`), params({ kitchen: "laakso", approvalId }) as never));
+    // The store's QR code is shown on the stage kitchen's own signed-in screen (its account); a stranger gets none.
+    const own = { cookie: await sessionCookieFor(await getRuntime(), "laakso") };
+    expect((await json(consoleApproval.GET(req("GET", `/ui-api/kitchens/laakso/approval/${approvalId}`), params({ kitchen: "laakso", approvalId }) as never))).status).toBe(401);
+    const before = await json(consoleApproval.GET(req("GET", `/ui-api/kitchens/laakso/approval/${approvalId}`, undefined, own), params({ kitchen: "laakso", approvalId }) as never));
     expect(before.body.mode).not.toBe("view_only");
     if (process.env.NODE_ENV === "production") expect(before.body.mode).toBe("enrol");
 
@@ -66,7 +70,7 @@ describe("presenter enrolment for the built-in demo kitchens", () => {
     expect(done.status).toBe(201);
     const cookie = done.headers.get("set-cookie")!.split(";")[0];
 
-    const after = await json(consoleApproval.GET(req("GET", `/ui-api/kitchens/laakso/approval/${approvalId}`), params({ kitchen: "laakso", approvalId }) as never));
+    const after = await json(consoleApproval.GET(req("GET", `/ui-api/kitchens/laakso/approval/${approvalId}`, undefined, own), params({ kitchen: "laakso", approvalId }) as never));
     expect(after.body.mode).toBe("passkey");
 
     // The link token Dock "sent to Aino's phone" no longer signs: this role has a passkey now.
