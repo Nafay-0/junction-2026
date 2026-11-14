@@ -412,6 +412,15 @@ export function checkPack(need: StructuredNeed, ctx: CheckContext): Concern[] {
   ];
 }
 
+/** "a moment ago", "12 minutes ago", "3 hours ago" (QA: "ordered 1 hour ago" was said for an order 3 minutes old). */
+export function agoText(ms: number): string {
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 1) return "a moment ago";
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+  const hours = Math.round(minutes / 60);
+  return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+}
+
 export function checkDuplicate(need: StructuredNeed, ctx: CheckContext): Concern[] {
   const since = ctx.now.getTime() - DUPLICATE_WINDOW_HOURS * 3600_000;
   const today = localNow(ctx.now).date;
@@ -424,10 +433,10 @@ export function checkDuplicate(need: StructuredNeed, ctx: CheckContext): Concern
   const waiting = (ctx.pending ?? []).filter((o) => o.family === ctx.family).sort((a, b) => b.placedAt.localeCompare(a.placedAt)).find(matches);
   const dup = waiting ?? familyHistory(ctx.profile, ctx.family).reverse().find(matches);
   if (!dup) return [];
-  const hours = Math.max(1, Math.round((ctx.now.getTime() - Date.parse(dup.placedAt)) / 3600_000));
+  const ago = agoText(ctx.now.getTime() - Date.parse(dup.placedAt));
   const message = waiting
-    ? `You already asked for ${formatAmount(dup.amount, dup.unit)} of ${dup.family} ${hours} hour${hours === 1 ? "" : "s"} ago for ${formatDay(dup.neededBy ?? dup.deliveryDate)} (order ${dup.orderId}), and that order is still waiting for sign-off. Order again?`
-    : `You already ordered ${formatAmount(dup.amount, dup.unit)} of ${dup.family} ${hours} hour${hours === 1 ? "" : "s"} ago for ${formatDay(dup.neededBy ?? dup.deliveryDate)} (order ${dup.orderId}). Order again?`;
+    ? `You already asked for ${formatAmount(dup.amount, dup.unit)} of ${dup.family} ${ago} for ${formatDay(dup.neededBy ?? dup.deliveryDate)} (order ${dup.orderId}), and that order is still waiting for sign-off. Order again?`
+    : `You already ordered ${formatAmount(dup.amount, dup.unit)} of ${dup.family} ${ago} for ${formatDay(dup.neededBy ?? dup.deliveryDate)} (order ${dup.orderId}). Order again?`;
   return [
     {
       key: `duplicate_recent:${dup.orderId}`,

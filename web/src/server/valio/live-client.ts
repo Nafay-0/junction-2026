@@ -348,7 +348,7 @@ export class ValioLiveClient {
       } catch (err) {
         const name = (err as { name?: string })?.name;
         const timedOut = name === "TimeoutError" || name === "AbortError";
-        failure = new ValioApiError(timedOut ? "timeout" : "network", `Valio API ${path}: ${timedOut ? `no answer within ${Math.round(Math.min(this.cfg.timeoutMs, left))} ms` : "network error"}.`, undefined, timedOut ? 30 : undefined);
+        failure = new ValioApiError(timedOut ? "timeout" : "network", `Valio API ${path}: ${timedOut ? (left < this.cfg.timeoutMs ? `no usable answer within ${Math.round(this.cfg.deadlineMs / 1000)} s` : `no answer within ${this.cfg.timeoutMs} ms`) : "network error"}.`, undefined, timedOut ? 30 : undefined);
       }
       const retryable = failure !== undefined || (res !== undefined && (res.status === 429 || res.status >= 500));
       if (!retryable) return res!;

@@ -141,6 +141,9 @@ describe("duplicates", () => {
     const [c] = checkDuplicate(need({ deliverBy: "2026-11-18" }), ctx(kitchen(regularHistory()), { pending }));
     expect(c).toMatchObject({ key: "duplicate_recent:ord_wait", evidence: { status: "pending_approval" } });
     expect(c.message).toBe("You already asked for 1,000 L of milk 2 hours ago for Wed 18 Nov (order ord_wait), and that order is still waiting for sign-off. Order again?");
+    // Minutes, not "1 hour ago", for an order placed a few minutes earlier (QA wording note).
+    const [soon] = checkDuplicate(need({ deliverBy: "2026-11-18" }), ctx(kitchen(regularHistory()), { pending: pending.map((p) => ({ ...p, placedAt: new Date(NOW.getTime() - 3 * 60_000).toISOString() })) }));
+    expect(soon.message).toMatch(/1,000 L of milk 3 minutes ago for Wed 18 Nov/);
     expect(checkDuplicate(need({ deliverBy: "2026-11-18" }), ctx(kitchen(regularHistory()), { pending: pending.map((p) => ({ ...p, family: "cream" })) }))).toEqual([]);
   });
 

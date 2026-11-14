@@ -529,7 +529,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
           await refuseUpFront(
             i,
             "category_allowed",
-            `The kitchen's agent may not buy ${what}: its signed mandate covers ${groups.length > 1 ? `${groups.slice(0, -1).join(", ")} and ${groups.at(-1)}` : groups[0]} only, and ${what} is in another product group (${family.replaceAll("_", " ")}). Whoever signs the kitchen's mandate can add that group; until then nothing is priced or ordered.`,
+            `The kitchen's agent may not buy ${what}: its signed mandate covers ${groups.length > 1 ? `${groups.slice(0, -1).join(", ")} and ${groups.at(-1)}` : groups[0]} only, and ${what} is in another product group${family.startsWith("cat_") ? "" : ` (${family.replaceAll("_", " ")})`}. Whoever signs the kitchen's mandate can add that group; until then nothing is priced or ordered.`,
           ),
         );
       }
