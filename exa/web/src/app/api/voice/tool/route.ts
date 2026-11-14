@@ -10,7 +10,7 @@ import { conversationOrigin, validConversationId } from "@/lib/db/conversations"
 import { readOnlyReason } from "@/lib/db/origin";
 import { recordUsage } from "@/lib/db/usage";
 import { LIVE_MODEL, type VoiceToolEvent } from "@/lib/voice/models";
-import { runsOnServer, spokenResult } from "@/lib/voice/server";
+import { runsOnServer, spokenToolResult } from "@/lib/voice/server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -89,7 +89,7 @@ export async function POST(req: Request) {
           }
         } else output = await running;
         const { exaCostUsd, workerCostUsd, exaCalls } = meter.snapshot();
-        say({ type: "result", output, text: await spokenResult(tool, toolCallId, input, output), spent: { exaCostUsd, workerCostUsd, exaCalls } });
+        say({ type: "result", output, text: await spokenToolResult(name, tool, toolCallId, input, output), spent: { exaCostUsd, workerCostUsd, exaCalls } });
       } catch (err) {
         say({ type: "error", error: err instanceof Error && err.name !== "AbortError" ? err.message.slice(0, 300) : "The tool was stopped." });
       } finally {

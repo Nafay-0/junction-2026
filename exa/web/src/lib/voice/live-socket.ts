@@ -187,9 +187,13 @@ export class LiveSocket {
     this.send({ realtimeInput: { text } });
   }
 
-  /** What a tool returned. `whenIdle` lets the agent finish its sentence before it speaks about the result. */
-  sendToolResult(call: Pick<FunctionCall, "id" | "name">, response: Record<string, unknown>, whenIdle = true) {
-    this.send({ toolResponse: { functionResponses: [{ id: call.id, name: call.name, response, ...(whenIdle ? { scheduling: "WHEN_IDLE" } : {}) }] } });
+  /**
+   * What a tool returned. "WHEN_IDLE" asks the agent to speak about it once it has finished its
+   * sentence. "SILENT" only hands it the result: for a result that is one of several still on
+   * their way, so that the agent answers once, with everything, instead of once per result.
+   */
+  sendToolResult(call: Pick<FunctionCall, "id" | "name">, response: Record<string, unknown>, scheduling: "WHEN_IDLE" | "SILENT" = "WHEN_IDLE") {
+    this.send({ toolResponse: { functionResponses: [{ id: call.id, name: call.name, response, scheduling }] } });
   }
 
   close() {

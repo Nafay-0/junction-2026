@@ -69,7 +69,10 @@ export function Comparison({ data, loading }: WidgetProps<ComparisonData>) {
 
   const [wrapRef, width] = useWidth<HTMLDivElement>();
   const narrow = width > 0 && width < 480;
-  const canStack = narrow && columns.length >= 3;
+  // A table needs room for the criteria and every option side by side. A narrow column (a phone,
+  // or the chat beside the live browser) has it for neither three options nor two: there the
+  // options are stacked as cards, and the table is one tap away.
+  const canStack = narrow && columns.length >= 2;
   const [viewChoice, setViewChoice] = React.useState<"table" | "cards" | null>(null);
   const view = canStack ? (viewChoice ?? "cards") : "table";
 

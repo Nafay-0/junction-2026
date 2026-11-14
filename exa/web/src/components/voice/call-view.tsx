@@ -91,15 +91,17 @@ export function CallView({
     () => messages.filter((m) => m.role === "assistant" && m.metadata?.modelId === LIVE_MODEL.id && (m.metadata?.startedAt ?? 0) >= call.startedAt - 1000 && m.parts.some((p) => p.type.startsWith("tool-"))),
     [messages, call.startedAt],
   );
-  const hasResults = shown.length > 0;
+  // The stone keeps the stage while the agent is only searching or reading: a line that says
+  // "searching" is not something to look at. It steps aside when there is something to see.
+  const hasResults = shown.some((m) => m.parts.some((p) => p.type.startsWith("tool-") && p.type !== "tool-webSearch" && p.type !== "tool-readPages"));
 
-  // The newest result is what the agent is talking about: keep it in view as results arrive.
-  const scroller = React.useRef<HTMLDivElement>(null);
-  const count = shown.reduce((n, m) => n + m.parts.length, 0);
+  // The newest result is what the agent is talking about: bring its top into view when it arrives.
+  const results = React.useRef<HTMLDivElement>(null);
+  const count = shown.reduce((n, m) => n + m.parts.filter((p) => p.type.startsWith("tool-")).length, 0);
   React.useEffect(() => {
-    const el = scroller.current;
-    if (el && hasResults) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [count, hasResults]);
+    const newest = results.current?.lastElementChild?.lastElementChild;
+    if (newest) newest.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, [count]);
 
   const working = call.working[0];
   const line =
@@ -122,56 +124,76 @@ export function CallView({
     setTyping(false);
   };
 
+  const status = (
+    <p className="flex min-w-0 items-center gap-2 text-[0.8rem] font-medium text-muted-foreground" aria-live="polite">
+      <span className={cn("size-1.5 shrink-0 rounded-full", call.status === "listening" && !call.muted ? "bg-up" : speaking ? "bg-brand" : "animate-pulse-dot bg-brass")} />
+      <span className={cn("truncate", (call.status === "thinking" || call.status === "connecting" || call.status === "reconnecting") && "text-shimmer")}>{line}</span>
+      <span className="nums shrink-0 text-subtle">· {elapsed}</span>
+    </p>
+  );
+  const stone = (size: "large" | "small") => (
+    <button
+      type="button"
+      onClick={() => liveCall.interrupt()}
+      aria-label={speaking ? `Stop ${APP_NAME} speaking` : `${APP_NAME} is ${line.toLowerCase()}`}
+      className="shrink-0 rounded-full outline-none focus-visible:ring-4 focus-visible:ring-ring/30"
+    >
+      <Orb status={call.status} muted={call.muted} size={size} />
+    </button>
+  );
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div ref={scroller} className={cn("relative min-h-0 flex-1 overflow-y-auto overscroll-contain", !hasResults && "backdrop-room")}>
-        <div className={cn("mx-auto flex w-full max-w-[760px] flex-col items-center px-4", hasResults ? "pt-3 pb-6" : "min-h-full justify-center pt-6 pb-10")}>
-          {/* The stone. Large while there is nothing else to look at; small and out of the way once results arrive. */}
-          <motion.div layout transition={{ duration: 0.45, ease: EASE }} className={cn("flex items-center", hasResults ? "sticky top-0 z-10 w-full gap-3 rounded-2xl bg-background/85 py-2 backdrop-blur-xl" : "flex-col")}>
-            <button
-              type="button"
-              onClick={() => liveCall.interrupt()}
-              aria-label={speaking ? `Stop ${APP_NAME} speaking` : `${APP_NAME} is ${line.toLowerCase()}`}
-              className="rounded-full outline-none focus-visible:ring-4 focus-visible:ring-ring/30"
-            >
-              <Orb status={call.status} muted={call.muted} size={hasResults ? "small" : "large"} />
-            </button>
-            <div className={cn("min-w-0", hasResults ? "flex-1" : "mt-7 flex flex-col items-center text-center")}>
-              <p className={cn("flex items-center gap-2 text-[0.8rem] font-medium text-muted-foreground", !hasResults && "justify-center")} aria-live="polite">
-                <span className={cn("size-1.5 rounded-full", call.status === "listening" && !call.muted ? "bg-up" : speaking ? "bg-brand" : "animate-pulse-dot bg-brass")} />
-                <span className={cn((call.status === "thinking" || call.status === "connecting" || call.status === "reconnecting") && "text-shimmer")}>{line}</span>
-                <span className="nums text-subtle">· {elapsed}</span>
-              </p>
-              {hasResults ? <p className="mt-0.5 line-clamp-2 text-[0.92rem] leading-snug text-foreground">{caption ? tail(caption, 140) : call.heard ? <span className="text-muted-foreground">“{tail(call.heard, 120)}”</span> : null}</p> : null}
+      {hasResults ? (
+        <>
+          {/*
+           * There is something to look at. The stone and the words move into a strip of their own
+           * at the top, and what was found scrolls in its own space underneath: the two never
+           * share a place on the screen, so neither can cover the other, whatever the width.
+           */}
+          <div className="shrink-0 border-b border-border/70 bg-background px-4">
+            <div className="mx-auto flex w-full max-w-[760px] items-center gap-3.5 py-2.5">
+              {stone("small")}
+              <div className="min-w-0 flex-1">
+                {status}
+                {/*
+                  * Two lines, always: the strip keeps its height while the words change, so nothing
+                  * below it jumps. The text sits on the bottom edge, so the newest words are the
+                  * ones in view and older ones leave by the top, as captions do.
+                  */}
+                <div className="mt-0.5 flex h-[2.6em] flex-col justify-end overflow-hidden text-[0.92rem] leading-[1.3] text-foreground" aria-live="polite">
+                  <p>{caption ? tail(caption, 240) : call.heard ? <span className="text-muted-foreground">“{tail(call.heard, 130)}”</span> : null}</p>
+                </div>
+              </div>
             </div>
-          </motion.div>
-
-          {/* The words: what the user said, small, and under it what the agent is saying, as it says it. */}
-          {!hasResults ? (
-            <div className="mt-5 flex min-h-[8rem] w-full max-w-[34rem] flex-col items-center gap-2.5 text-center" aria-live="polite">
-              {call.heard ? (
-                <p key={`heard-${call.heard.length > 0}`} className="animate-fade line-clamp-2 text-[0.92rem] leading-relaxed text-muted-foreground">
-                  “{tail(call.heard, 160)}”
-                </p>
-              ) : null}
+          </div>
+          <div className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
+            <div ref={results} className="mx-auto flex w-full max-w-[760px] min-w-0 flex-col gap-5 px-4 pt-4 pb-10">
+              {shown.map((message) => (
+                <div key={message.id} className="min-w-0 scroll-mt-3 [&>div>*]:scroll-mt-3">
+                  <AssistantMessage message={message} active={false} handlers={handlers} spoken />
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      ) : (
+        /* Nothing to look at yet: the stone has the stage, with the words under it. */
+        <div className="backdrop-room min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <div className="mx-auto flex min-h-full w-full max-w-[760px] flex-col items-center justify-center px-5 py-8">
+            {stone("large")}
+            <div className="mt-10 flex justify-center">{status}</div>
+            <div className="mt-4 flex min-h-[8rem] w-full max-w-[34rem] flex-col items-center gap-2.5 text-center" aria-live="polite">
+              {call.heard ? <p className="animate-fade line-clamp-2 text-[0.92rem] leading-relaxed text-muted-foreground">“{tail(call.heard, 160)}”</p> : null}
               {caption ? (
                 <p className="animate-fade text-[1.15rem] leading-relaxed text-balance text-foreground @min-[440px]/chat:text-[1.3rem]">{tail(caption)}</p>
               ) : !call.heard && call.status === "listening" && !call.muted ? (
                 <p className="animate-fade text-[0.95rem] leading-relaxed text-subtle">Go ahead, I am listening. Speak in any language.</p>
               ) : null}
             </div>
-          ) : null}
-
-          {/* What the agent found, as it finds it. */}
-          {hasResults ? (
-            <div className="mt-3 flex w-full flex-col gap-5">
-              {shown.map((message) => (
-                <AssistantMessage key={message.id} message={message} active={false} handlers={handlers} spoken />
-              ))}
-            </div>
-          ) : null}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* The controls: large, at the bottom, where a thumb is. */}
       <div className="relative shrink-0">
@@ -208,7 +230,7 @@ export function CallView({
             ) : null}
           </AnimatePresence>
 
-          <div className="flex items-end justify-center gap-5 @min-[440px]/chat:gap-7">
+          <div className="flex items-end justify-center gap-4 @min-[380px]/chat:gap-5 @min-[440px]/chat:gap-7">
             <CallButton label="Chat" onClick={onShowConversation}>
               <MessagesSquare />
             </CallButton>

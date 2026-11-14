@@ -40,6 +40,7 @@ export function Orb({ status, muted, size = "large", className }: { status: Call
     <div
       ref={root}
       data-status={muted ? "muted" : status}
+      data-size={size}
       className={cn("orb relative shrink-0", small ? "size-11" : "size-[9.5rem] @min-[440px]/chat:size-[11.5rem]", className)}
       style={{ "--mic": 0, "--voice": 0 } as React.CSSProperties}
       aria-hidden

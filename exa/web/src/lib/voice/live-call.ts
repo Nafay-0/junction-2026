@@ -609,8 +609,12 @@ export class LiveCall {
     this.settle();
 
     const answer = (response: Record<string, unknown>) => {
+      // Several tools asked for together are answered together: while others of the same round are
+      // still running, this result is only handed over, and the last one is what the agent speaks to.
+      // (Each result that asks for speech gets an answer of its own, so two would make it say things twice.)
+      const othersRunning = round.ids.some((id) => id !== call.id && this.running.has(id));
       // The line may have been replaced while the tool ran: the answer goes down whichever is up now.
-      (this.socket ?? socket).sendToolResult(call, response);
+      (this.socket ?? socket).sendToolResult(call, response, othersRunning ? "SILENT" : "WHEN_IDLE");
       round.answered = true;
     };
     const done = (output: unknown, text: string) => {
