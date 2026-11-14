@@ -318,3 +318,21 @@ describe("deliver on an exact day (not merely by it)", () => {
     expect(lines.every((l) => l.deliveryDate < "2026-11-18")).toBe(true);
   });
 });
+
+describe("a message that names more than one item", () => {
+  it("says on the step, the ledger and every later state what else was asked, and orders nothing for it", async () => {
+    const step = await dock.intake.open(session, { need: need({ text: "Need 100 L milk plus 20 kg yoghurt by Wednesday please." }) });
+    expect(step.alsoAsked).toEqual([{ text: "20 kg yoghurt by Wednesday please.", group: "yoghurt", amount: { amount: 20, unit: "kg" } }]);
+    expect(step.notes.at(-1)).toMatch(/You also asked for "20 kg yoghurt/);
+    expect(ledger.entries({ requestId: step.requestId }).some((e) => e.data.step === "also_asked")).toBe(true);
+    expect(step.options.every((o) => o.lines.every((l) => l.unit === "L"))).toBe(true);
+    const again = await dock.intake.get(session, step.requestId);
+    expect(again.notes.at(-1)).toMatch(/You also asked for/);
+  });
+
+  it("a one-item message gets no such note", async () => {
+    const step = await dock.intake.open(session, { need: need({ text: "100 L lactose-free milk for Wednesday" }) });
+    expect(step.alsoAsked).toEqual([]);
+    expect(step.notes.join(" ")).not.toMatch(/also asked/);
+  });
+});

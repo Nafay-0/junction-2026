@@ -115,6 +115,7 @@ export function nextStepForOrder(order: OrderLike, via: Transport = "mcp"): stri
 
 type StepLike = {
   requestId: string;
+  alsoAsked?: { text: string }[];
   state: string;
   concerns: { key: string; message: string; confirmable: boolean; corrections: { id: string; label: string }[] }[];
   questions: { id: string; text: string; options: { id: string; label: string }[] }[];
@@ -142,6 +143,11 @@ export function nextStepForQuote(preview: { outcome: string; approver?: { name: 
 
 /** Exactly which call comes next for an intake step, written for the agent. `answerUrl`: the buyer's one-time answer page. */
 export function nextStepForIntake(step: StepLike, via: Transport = "mcp", answerUrl?: string): string {
+  const also = step.alsoAsked?.length ? ` The buyer also asked for ${step.alsoAsked.map((x) => `"${x.text}"`).join(", ")}, which this request does not cover: tell them, and after this request submit each as its own need with ${callName("submit_need", via, { id: step.requestId })}.` : "";
+  return nextStepCore(step, via, answerUrl) + also;
+}
+
+function nextStepCore(step: StepLike, via: Transport, answerUrl?: string): string {
   const id = `requestId ${step.requestId}`;
   const c = (name: string) => callName(name, via, { id: step.requestId });
   const link = answerUrl ? ` Or give the buyer this one-time link to answer on Dock's own page, and then call ${c("get_intake_step")}: ${answerUrl}` : "";

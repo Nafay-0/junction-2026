@@ -2,6 +2,7 @@ import { z } from "zod";
 import { MAX_LIVE_IDS_PER_CALL, scheduledOn, type MeteredCatalog, type Product } from "./catalog";
 import { facetsOf } from "./catalog/search";
 import { OPTIMISE_QUESTION_ID, answerSchema, clarify, hardConstraints, kindMismatch, optimiseQuestion, optionLabel, violation, type Answer, type ConstraintSource, type MemoryNote, type Question } from "./clarify";
+import { alsoAskedIn, alsoAskedNote, type AlsoAsked } from "./also-asked";
 import { baseAmount, checkNeed, type CheckContext, type Concern, type ConcernCode, type PendingOrderSummary } from "./concerns";
 import { DockError, parse } from "./errors";
 import {
@@ -112,6 +113,8 @@ export type Intake = {
   signOffNotes?: string[];
   /** Confirmations that matter but were only relayed by the agent: the order needs a person's sign-off (policy human_confirmation). */
   unverified?: UnverifiedConfirmation[];
+  /** Items the buyer's own words name that this request does not cover (plain code, see also-asked.ts): said, never dropped. */
+  alsoAsked?: AlsoAsked[];
   chosen?: { optionId: string; labels: OptionLabel[]; by: string; at: string };
   quote?: { quote: Quote; quoteToken: string; policyPreview: Decision };
   createdAt: string;
@@ -518,6 +521,11 @@ export function createIntakeFlow(deps: IntakeDeps) {
         updatedAt: at,
       };
       log(i, agentActor(session), `Structured need (${unmatched ? "no product family found" : family}): ${describeNeed(need)}.`, { step: "need", need, by: body.by, ...(changes.length ? { reasons: changes.map((c) => `In the catalogue's words: ${c}`) } : {}) });
+      const also = alsoAskedIn(need.text, need);
+      if (also.length) {
+        i.alsoAsked = also;
+        log(i, "dock", `The buyer's words name more than this request covers: ${also.map((x) => `"${x.text}"`).join(", ")}. Dock says so on the step and orders nothing for ${also.length === 1 ? "it" : "them"} here.`, { step: "also_asked", alsoAsked: also, reasons: [alsoAskedNote(also)!] });
+      }
       const what = need.item.text.trim() || "this";
       if (unmatched) {
         return view(await refuseUpFront(i, "family_unknown", `Dock found nothing called "${what}" in the wholesaler's catalogue (it searched product names in English, Finnish and Swedish). Try another word for it, or name the product.`));
@@ -765,6 +773,12 @@ export async function recordCommittedOrder(deps: { kitchens: KitchenRepository; 
   await deps.kitchens.saveProfile(recordOrder(profile, entry));
 }
 
+/** The step's notes, ending with what else the buyer asked for, so nothing they named vanishes without a word. */
+function withAlsoAsked(i: Intake): string[] {
+  const note = alsoAskedNote(i.alsoAsked ?? []);
+  return note && !i.notes.includes(note) ? [...i.notes, note] : i.notes;
+}
+
 /**
  * What leaves Dock for an intake: the state, what to show, and the next call to make. The example body of a step
  * that waits for the buyer never holds an answer: only placeholders a person's own choice replaces (an agent that
@@ -797,8 +811,9 @@ export function view(i: Intake) {
     rules: i.rules,
     options: i.options,
     preselected: i.preselected,
-    notes: i.notes,
+    notes: withAlsoAsked(i),
     excluded: i.excluded,
+    alsoAsked: i.alsoAsked ?? [],
     signOffNotes: i.signOffNotes ?? [],
     acknowledgements: i.acknowledgements,
     chosen: i.chosen,

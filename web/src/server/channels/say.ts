@@ -23,6 +23,13 @@ export function spokenDate(iso: string): string {
 export type ForModel = { ok: boolean; state: string; say: string; ask?: string; [k: string]: unknown };
 
 export function stepForModel(step: IntakeView): ForModel {
+  const out = stepCore(step);
+  if (!step.alsoAsked?.length) return out;
+  const also = `The caller also asked for ${step.alsoAsked.map((x) => x.text).join(", and ")}; this request is only the first, so say that nothing is ordered for the rest yet and offer to take ${step.alsoAsked.length === 1 ? "it" : "them"} next.`;
+  return { ...out, say: `${out.say} ${also}`, alsoAsked: step.alsoAsked.map((x) => x.text) };
+}
+
+function stepCore(step: IntakeView): ForModel {
   switch (step.state) {
     case "needs_confirmation": {
       const checks = step.concerns.map((c) => ({

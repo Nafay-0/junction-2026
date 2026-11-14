@@ -1,6 +1,7 @@
 import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
 import type { Product } from "@/core/catalog";
+import { alsoAskedIn } from "@/core/also-asked";
 import { DockError } from "@/core/errors";
 import { recordLlmSpend, reserveLlmCall } from "@/server/limits";
 import { addDaysIso, isoWeekday, localNow } from "@/core/kitchen";
@@ -285,6 +286,10 @@ export const InterpretResponse = z.object({
   model: z.string().describe("provider:model-id that interpreted the text."),
   ms: z.number().int().describe("Time the model took, in milliseconds."),
   cached: z.boolean().optional().describe("True when the same text for the same kitchen was already interpreted today: no model call."),
+  alsoAsked: z
+    .array(z.object({ text: z.string(), group: z.string(), amount: z.object({ amount: z.number(), unit: z.string() }).optional() }))
+    .optional()
+    .describe("Other items the buyer's text names that this need does not cover, found by plain code in the text (never the model's word). Interpret or submit each next; the intake step repeats them."),
   basedOn: z
     .object({ requestId: z.string(), fields: z.array(z.enum(EARLIER_FIELDS)) })
     .optional()
@@ -301,5 +306,7 @@ export async function interpretRequest(
   const products = await ctx.catalog.searchProducts({ limit: 100 });
   const vocabulary = vocabularyFrom(products, { categories: ctx.mandate.allowedCategories, attributes: ctx.mandate.requiredAttributes, allergens: ctx.mandate.forbiddenAllergens });
   const r = await interpretNeed({ text: body.text, now: body.now ? new Date(body.now) : undefined, vocabulary, earlier: body.earlier });
-  return { need: r.need, model: r.model, ms: r.ms, ...(r.basedOn ? { basedOn: r.basedOn } : {}) };
+  // Plain code, not the model's word: whatever else the buyer's text names is returned, so it can be offered next.
+  const alsoAsked = alsoAskedIn(body.text, r.need);
+  return { need: r.need, model: r.model, ms: r.ms, ...(r.basedOn ? { basedOn: r.basedOn } : {}), ...(alsoAsked.length ? { alsoAsked } : {}) };
 }

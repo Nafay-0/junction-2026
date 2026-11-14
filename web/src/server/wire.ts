@@ -230,6 +230,10 @@ export const IntakeStepSchema = named(
     concerns: z.array(ConcernSchema).describe("needs_confirmation: likely mistakes the buyer must confirm or correct."),
     questions: z.array(QuestionSchema).describe("needs_input: at most two questions for the buyer."),
     fromMemory: z.array(MemoryNoteSchema).describe("Answers Dock took from the kitchen's memory instead of asking."),
+    alsoAsked: z
+      .array(z.looseObject({ text: z.string(), group: z.string(), amount: z.looseObject({ amount: z.number(), unit: z.string() }).optional() }))
+      .optional()
+      .describe("Items the buyer's own words name that this request does not cover (found by plain code in the text). Nothing is ordered for them here: submit each as its own need next."),
     rules: z.array(z.looseObject({ text: z.string(), source: z.enum(["mandate", "request", "stated"]), preferenceId: z.string().optional() })),
     options: z.array(OptionCardSchema).describe("options_ready: the choices, with pros and cons."),
     preselected: z.looseObject({ optionId: z.string(), reason: z.string(), source: z.enum(["request", "answer", "stated", "learned"]) }).optional(),
