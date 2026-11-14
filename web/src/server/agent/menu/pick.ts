@@ -10,11 +10,11 @@ import { PICK_SYSTEM, pickUser } from "./prompts";
 /**
  * Between master-data search and the live price check: which found products ARE the ingredient (onions, not onion
  * crackers; frozen berries, not frozen fish). The model judges names only (Haiku 5.5 was as fast but threw out
- * good rye breads; Sonnet 5.5 at low effort answers in about 3.5 s); plain code has already removed
+ * good rye breads; the project floor is Opus 5.5, at low effort); plain code has already removed
  * everything unsafe or outside the mandate, and only reorders and narrows by this answer. On any failure the
  * code's own ranking stands.
  */
-export const PICK_MODEL_DEFAULT = "anthropic:claude-sonnet-5-5";
+export const PICK_MODEL_DEFAULT = "anthropic:claude-opus-5-5";
 
 export const LlmPick = z.object({ lines: z.array(z.object({ lineId: z.string(), fits: z.array(z.string()), note: z.string().nullable() })) });
 export type LlmPick = z.infer<typeof LlmPick>;

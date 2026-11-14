@@ -32,6 +32,7 @@ Your job in this step: read the chef's request and decide the dishes, without in
 - covers: the number of portions the chef gave, else null (code will ask; do not guess). serviceDate: the day the food is served, YYYY-MM-DD from the calendar, else null. For a week menu give each dish its own serviceDate.
 - requiredClaims and forbiddenAllergens: only what the request itself states (lactose_free, gluten_free, vegan; nuts, peanuts, gluten, milk, eggs, fish).
 - Dietary rules from the request and the kitchen's rules apply to every dish: choose dishes that can meet them. If the chef explicitly asks for something that breaks a rule, keep it as asked and describe the clash in conflicts; plain code will hold it for a person.
+- alternatives: when the chef leaves the menu open (only an occasion or a key ingredient, "plan lunch for 40 around beetroot"), up to two other menus a chef could choose instead, each a short title and its dish names, different from the dishes you listed and from each other. Empty when the chef names the dishes ("salmon soup for 300").
 - isFoodOrderRequest is false when the text does not ask to plan or buy food for a kitchen (a table booking, a question about an existing order, small talk, non-food goods). Then give declineReason in one sentence and no dishes.
 
 ${kitchenLines(ctx)}`;
