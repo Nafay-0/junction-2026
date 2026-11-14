@@ -79,6 +79,14 @@ export function guardWords(card: AnomalyCard, lang: Lang): string {
       sv: `${pc.pieces} stycken: en förpackning har ${pc.perPack}, alltså ${pc.packs} förpackningar (${w}). Ska jag beställa dem?`,
     }[lang];
   }
+  // A count of packs whose size is not known: the readings by pack, the first one named as the one to take, so a
+  // plain yes settles it ("Shall I take 2 packs of 0,5 kg (1 kg), or 2 packs of 1 kg (2 kg)?").
+  const packReadings = packReadingsOf(k);
+  if (packReadings.length >= 2) {
+    const r = packReadings.slice(0, 3).map((x) => x.label.replace(/ = /, " (").replace(/$/, ")"));
+    const or = { en: ", or ", fi: ", vai ", sv: ", eller " }[lang];
+    return { en: `The packs come in several sizes. Shall I take ${r.join(or)}?`, fi: `Pakkauksia on eri kokoisia. Otanko ${r.join(or)}?`, sv: `Förpackningarna finns i olika storlekar. Ska jag ta ${r.join(or)}?` }[lang];
+  }
   let reason = reasonOf(k, lang);
   const use = k.corrections.map((x) => /^use_([\d.]+)_(\w+)$/.exec(x.id)).find(Boolean);
   const asked = (k.evidence?.asked as { amount?: number; unit?: string } | undefined) ?? (/^[a-z_]+:([\d.]+):(\w+)/.exec(k.key) ? { amount: Number(/^[a-z_]+:([\d.]+):(\w+)/.exec(k.key)![1]), unit: /^[a-z_]+:([\d.]+):(\w+)/.exec(k.key)![2] } : undefined);
@@ -102,6 +110,12 @@ export function guardWords(card: AnomalyCard, lang: Lang): string {
   if (/\?\s*$/.test(reason)) return lang === "en" ? englishDays(reason) : reason;
   const text = `${reason.replace(/\s*$/, "")}${/[.!]$/.test(reason) ? "" : "."} ${question}`;
   return lang === "en" ? englishDays(text) : text;
+}
+
+/** The readings of a pack count by pack size ("2 packs of 0.5 kg = 1 kg"), in the concern's own order. */
+function packReadingsOf(k: AnomalyCard["concerns"][number]): { id: string; label: string }[] {
+  if (k.code !== "unit_unclear" || k.confirmable) return [];
+  return k.corrections.filter((x) => / of .+ = /.test(x.label));
 }
 
 /** "it's for an event", "we have a party", "that's right": a yes that gives its reason. */
@@ -137,6 +151,9 @@ export function guardAnswerOf(card: AnomalyCard, words: string): { action: Threa
     if (use && nums.includes(Number(use[1])) && (Number(use[1]) !== asked || unitSaid)) return { action: { type: "concern", requestId: card.requestId, key: k.key, choice: x.id } };
   }
   const yes = yesOrNo(w) === "yes" || (Number.isFinite(asked) && nums.includes(asked));
+  // The pack readings offered, the first named as the one to take: a plain yes takes it.
+  const readings = packReadingsOf(k);
+  if (readings.length >= 2 && yesOrNo(w) === "yes" && !nums.some((n) => n !== asked)) return { action: { type: "concern", requestId: card.requestId, key: k.key, choice: readings[0].id } };
   // A question with one reading to take (pieces counted into packs): a yes, or the figure said again, takes it.
   const pc = k.evidence as { pieces?: number } | undefined;
   if (!k.confirmable && pc?.pieces && k.corrections.length === 1 && (yes || /\b(pcs|pieces|buns|kpl|kappale\w*|st|stycken)\b/i.test(w))) return { action: { type: "concern", requestId: card.requestId, key: k.key, choice: k.corrections[0].id } };

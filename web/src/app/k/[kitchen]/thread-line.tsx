@@ -13,6 +13,7 @@ import { familyL } from "./family.text";
 import { THREAD_RULES_TEXT } from "./thread-rules.text";
 import { attrL } from "../../_i18n/format";
 import { THREAD_LINE_TEXT } from "./thread-line.text";
+import { FRESH_TEXT } from "./fresh.text";
 import { useSignOff } from "./thread-signoff";
 import { THREAD_WORDS } from "./thread-words.text";
 import { concernText, correctionLabel, fmtFor, gateReasons, leadOption, leftOutGroups, memoryText, oneThing, stepLabel, titleOf } from "./thread-words";
@@ -486,9 +487,11 @@ function SignOffSlab({ card, thread, tap, total, what }: { card: GateCardT; thre
         <p className="text-[0.86rem] leading-snug text-paper/55">
           {[order?.deliveryDate ? f.day(order.deliveryDate).replace(/\.$/, "") : "", why].filter(Boolean).join(". ")}
         </p>
-        {s.canSignHere && s.phase !== "signed" && account?.shared && card.approver && !card.pressured && (
+        {s.canSignHere && s.phase !== "signed" && account?.free && !card.pressured ? (
+          <p className="mt-3 text-[0.8rem] leading-snug text-paper/65">{FRESH_TEXT[f.lang].signerLine}</p>
+        ) : s.canSignHere && s.phase !== "signed" && account?.shared && card.approver && !card.pressured ? (
           <p className="mt-3 text-[0.8rem] leading-snug text-paper/65">{tx.testSigner(roleL(card.approver.name, f.lang))}</p>
-        )}
+        ) : null}
         {card.pressured && s.phase !== "signed" && s.offerPhone ? (
           // The buyer asked to skip the limit or said the manager already agreed: the OK is the manager's own, on the
           // manager's own device, so the first action sends it there; the same-screen OK is not offered.
@@ -775,7 +778,7 @@ function Landing({ today, offer, watch, thread }: { today?: TodayCard; offer?: O
       {today && !today.pending && !(today.items.length === 0 && (watch || offer)) && (
         <p className="mt-3 max-w-[34ch] text-[1.1rem] leading-[1.6] text-ink">
           {/* A demo account with nothing yet: what the agent is, in one sentence (the guide's link sits above). */}
-          <Rich text={today.items.length === 0 && demoOwn ? tx.today.intro : todaySentence(today, tx, f)} />
+          <Rich text={today.items.length === 0 && today.opening ? today.opening[f.lang] : today.items.length === 0 && demoOwn ? tx.today.intro : todaySentence(today, tx, f)} />
         </p>
       )}
       {watch && watch.state !== "answered" && <WatchWords card={watch} lang={f.lang} big />}

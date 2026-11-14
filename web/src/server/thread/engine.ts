@@ -388,6 +388,34 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
       } else if (yn === "yes") run.waysAnswer = "which";
     }
   }
+  // A plain "yes" to the order sheet just shown orders it, as its question asks (the same as its confirm).
+  if (!body.action && body.text && body.text.trim().split(/\s+/).length <= 4) {
+    const { yesOrNo } = await import("@/server/channels/speech");
+    const last = [...thread.turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "");
+    // The sheet open now (shown in an earlier reply and edited in place since), when nothing else is open after it.
+    const { currentSheet } = await import("./sheet");
+    const cur = currentSheet(run);
+    const sheet = cur ? run.store.cards(thread).map((x) => x.card).find((c) => c.type === "sheet" && c.sheetId === cur.sheetId && c.state === "editing") : undefined;
+    const busy = last?.role === "agent" && last.cards.some((c) => (c.type === "anomaly" && !c.answered) || c.type === "question" || (c.type === "options" && !c.chosen && !c.adjusted) || (c.type === "menu" && !c.sheetId));
+    if (sheet?.type === "sheet" && !busy && yesOrNo(body.text) === "yes") {
+      const now = run.store.cards(thread).map((x) => x.card).find((c) => c.type === "sheet" && c.sheetId === sheet.sheetId);
+      if (now?.type === "sheet" && now.state === "editing") body = { ...body, action: { type: "sheet_place", sheetId: now.sheetId, version: now.version }, label: body.text };
+    }
+  }
+  // A plain "yes" to the options just shown takes the one named first (the one recommended), as the question says.
+  if (!body.action && body.text && body.text.trim().split(/\s+/).length <= 4) {
+    const { yesOrNo } = await import("@/server/channels/speech");
+    const last = [...thread.turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "");
+    const opts = last?.role === "agent" ? last.cards.find((c) => c.type === "options" && !c.chosen && !c.adjusted) : undefined;
+    const busy = last?.role === "agent" && last.cards.some((c) => (c.type === "anomaly" && !c.answered) || c.type === "question" || c.type === "sheet" || (c.type === "menu" && !c.sheetId));
+    if (opts?.type === "options" && !busy && yesOrNo(body.text) === "yes") {
+      const lead = (opts.preselected && opts.options.find((o) => o.optionId === opts.preselected!.optionId && o.gate?.outcome !== "reject")) || opts.options.find((o) => o.gate?.outcome !== "reject");
+      if (lead && opts.requestId) {
+        body = { ...body, action: { type: "choose", requestId: opts.requestId, optionId: lead.optionId }, label: body.text };
+        record(run, "yes_takes_first", `"${body.text}" to the options: the one named first, ${lead.title}.`, { optionId: lead.optionId }, opts.requestId);
+      }
+    }
+  }
   // "Yes" to "Shall I look at another day?" (a request nothing could be offered for on the day asked): the same request
   // looked at again over the week after that day, by plain code; the options (or the reason there are none) follow.
   const another = (thread as unknown as { anotherDay?: { requestId: string; turnId: string } }).anotherDay;
@@ -751,7 +779,8 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
   }
   // Never an empty reply: when the agent's words did not come (or none were backed), plain words from what the engine knows.
   const after = store.agentTurn(thread, run.turnId);
-  if (after && !after.line && !after.cards.some((c) => c.type !== "understood")) {
+  // A tap that changed a card in place (an amount on the sheet, a day) needs no words: the card is the answer.
+  if (after && !after.line && !after.cards.some((c) => c.type !== "understood") && body.via !== "tap") {
     const l = body.lang ?? "en";
     const waitingCard = store.cards(thread).map((x) => x.card).find((c) => c.type === "gate" && c.outcome === "waiting");
     const who = waitingCard?.type === "gate" ? (waitingCard.approver?.name ?? "") : "";
