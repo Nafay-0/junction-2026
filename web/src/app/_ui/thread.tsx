@@ -77,8 +77,8 @@ export function ThreadDock({ open, onClose, name, sub, children, footer, aside, 
   }, [stage, ws, onSize]);
 
   const frame = ws
-    ? `sm:inset-3 sm:overflow-hidden sm:rounded-2xl sm:shadow-lg lg:inset-x-[max(1.5rem,calc((100vw-80rem)/2))] lg:inset-y-6 ${stage ? "lg:grid lg:grid-cols-[minmax(22rem,27rem)_minmax(0,1fr)]" : ""}`
-    : "sm:inset-x-auto sm:inset-y-0 sm:right-0 sm:w-[27rem] sm:rounded-l-2xl sm:shadow-lg xl:z-40 xl:rounded-none xl:border-l xl:border-lavender-mid xl:shadow-none 2xl:w-[30rem]";
+    ? `sm:inset-3 sm:overflow-hidden sm:rounded-2xl sm:shadow-lg lg:inset-x-[max(1.5rem,calc((100vw-90rem)/2))] lg:inset-y-6 ${stage ? "lg:grid lg:grid-cols-[minmax(22rem,28rem)_minmax(0,1fr)]" : ""}`
+    : "sm:inset-x-auto sm:inset-y-0 sm:right-0 sm:w-[min(32rem,92vw)] sm:rounded-l-2xl sm:shadow-lg xl:z-40 xl:rounded-none xl:border-l xl:border-lavender-mid xl:w-[34rem] xl:shadow-none 2xl:w-[38rem]";
   return (
     <>
       {open && <div aria-hidden className={`fade-in fixed inset-0 z-40 hidden bg-petrol-deep/45 backdrop-blur-[2px] sm:block ${ws ? "" : "xl:hidden"}`} onClick={ws && onSize ? () => onSize("dock") : onClose} />}

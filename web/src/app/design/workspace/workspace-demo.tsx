@@ -39,7 +39,7 @@ export function WorkspaceDemo() {
   const stageTitle = view === "menu" && !order.swapping ? (f ? "Lounas 40 hengelle" : "Lunch for 40") : f ? "Vertaa vaihtoehtoja" : "Compare alternatives";
 
   return (
-    <div className="min-h-dvh bg-mist xl:pr-[27rem] 2xl:pr-[30rem]">
+    <div className="min-h-dvh bg-mist xl:pr-[34rem] 2xl:pr-[38rem]">
       <div className="flex justify-end px-4 pt-3">
         <LangSwitch />
       </div>
