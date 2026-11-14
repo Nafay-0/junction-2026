@@ -6,13 +6,14 @@ import { useEffect, useState } from "react";
 import { KeyRound, ScanFace } from "lucide-react";
 import { api, passkeyProblem } from "../../_client/api";
 import { Card, IconDisc, Input, Select, Skeleton, Spinner } from "../../_ui/kit";
+import { moneyShort } from "../../_ui/plain";
 import { PhoneProblem, bigButton } from "../../_ui/phone";
 import { JOIN_TEXT } from "../join-flow.text";
 
 type Role = { slug: string; kitchenName: string; role: string; name: string; maxApprovalCents: number; enrolled: boolean };
 type Begin = { options: PublicKeyCredentialCreationOptionsJSON; approver: Role; replaces?: string };
 
-const eur = (c: number) => `€${(c / 100).toLocaleString("en-GB")}`;
+const eur = (c: number) => moneyShort(c);
 
 export function PresenterFlow() {
   const router = useRouter();

@@ -6,7 +6,7 @@ import type { Finding, Renewal, Stage, WatchView } from "@/server/watch/service"
 import { api } from "../../../_client/api";
 import { verifySigned, type KeySet } from "../../../_client/verify-signed";
 import { Badge } from "../../../_ui/kit";
-import { num, when } from "../../_ui/format";
+import { fi, num, when } from "../../_ui/format";
 import { Button, Details, Empty, LoadError, Loading, Num, PageHead, Panel, Section, useNow, useOps } from "../../_ui/kit";
 import { Table } from "../../_ui/parts";
 
@@ -33,7 +33,7 @@ export function WatchScreen() {
       <PageHead
         title="Kitchen watch"
         purpose="Each kitchen's own agent watches what it buys every week and what is still to come: one live availability call for its key products, a finding when one cannot come for its day, with good, better, best substitutes. It learns each recurring order from the kitchen's own orders and, where the kitchen switched auto-renew on, renews it before the cut-off, or holds it and asks when the amount or the price has drifted. Every order goes through the gate."
-        right={v ? <span className="tabular">{num(v.stats.liveCalls)} live calls this process{v.schedule.minutes ? ` · runs every ${v.schedule.minutes} min` : ` · schedule off (${v.schedule.reason})`}</span> : undefined}
+        right={v ? <span className="tabular" title={v.schedule.minutes ? undefined : v.schedule.reason}>{num(v.stats.liveCalls)} live calls since start{v.schedule.minutes ? ` · runs every ${v.schedule.minutes} min` : " · runs when asked"}</span> : undefined}
       />
       <LoadError message={live.error} />
       {!v || !now ? <Loading label="Reading the watch…" /> : <Body v={v} now={now} refresh={live.refresh} />}
@@ -108,7 +108,7 @@ function Body({ v, now, refresh }: { v: View; now: number; refresh: () => void }
           </Section>
           <Section title="Auto-renew, as kitchens chose it">
             {v.auto.length === 0 ? (
-              <Empty title="Off everywhere">Off by default. A kitchen switches it on for a recurring order in its conversation or through its agent (set_auto_renew); who chose it is recorded.</Empty>
+              <Empty title="Off everywhere">Off by default. A kitchen switches it on for a recurring order in its conversation or through its agent; who chose it is recorded.</Empty>
             ) : (
               <ul className="space-y-1 text-[0.9rem]">
                 {v.auto.map((a) => (
@@ -149,8 +149,8 @@ function FindingCard({ f, now }: { f: Finding; now: number }) {
         <span className="tabular text-[0.84rem] text-ink-soft">{when(f.at, new Date(now))}</span>
       </div>
       <p className="mt-1 text-[0.9rem]">
-        {f.staged && <Badge tone="bad">Staged for the demo</Badge>} Needed {f.need.date} for {f.need.source === "order" && f.need.orderId ? <Link href={`/ops/orders/${f.need.orderId}`} className="text-petrol underline decoration-petrol/30 underline-offset-4">order {f.need.orderId}</Link> : "the recurring order"} ({f.need.amount} {f.need.unit}): {f.shortfall.reason === "later" ? `earliest ${f.shortfall.backOn}` : f.problems.join(", ").replaceAll("_", " ")}
-        {f.shortfall.backOn ? `, back ${f.shortfall.backOn}` : ""}.
+        {f.staged && <Badge tone="bad">Staged for the demo</Badge>} Needed {fi(f.need.date)} for {f.need.source === "order" && f.need.orderId ? <Link href={`/ops/orders/${f.need.orderId}`} title={f.need.orderId} className="text-petrol underline decoration-petrol/30 underline-offset-4">an order</Link> : "the recurring order"} ({fi(`${f.need.amount} ${f.need.unit}`)}): {f.shortfall.reason === "later" ? `earliest ${fi(f.shortfall.backOn)}` : fi(f.problems.join(", "))}
+        {f.shortfall.backOn ? `, back ${fi(f.shortfall.backOn)}` : ""}.
       </p>
       {f.substitutes.length === 0 ? (
         <p className="mt-2 text-[0.9rem] text-ink-soft">No substitute can come by that day.</p>
@@ -158,8 +158,8 @@ function FindingCard({ f, now }: { f: Finding; now: number }) {
         <ol className="mt-2 space-y-1.5 text-[0.88rem]">
           {f.substitutes.map((s) => (
             <li key={s.productId}>
-              <span className="font-semibold capitalize">{s.rank}</span>: {s.name} <span className="text-ink-soft">({s.why})</span> <Badge tone={s.insidePreferences ? "good" : "info"}>{s.insidePreferences ? "the agent may order it alone" : "needs a person"}</Badge>
-              {!s.insidePreferences && <span className="text-[0.82rem] text-ink-soft"> {s.outside.join("; ")}</span>}
+              <span className="font-semibold capitalize">{s.rank}</span>: {s.name} <span className="text-ink-soft">({fi(s.why)})</span> <Badge tone={s.insidePreferences ? "good" : "info"}>{s.insidePreferences ? "the agent may order it alone" : "needs a person"}</Badge>
+              {!s.insidePreferences && <span className="text-[0.82rem] text-ink-soft"> {fi(s.outside.join("; "))}</span>}
             </li>
           ))}
         </ol>
@@ -174,8 +174,8 @@ function FindingCard({ f, now }: { f: Finding; now: number }) {
             {f.decision.orderId && (
               <>
                 {" · "}
-                <Link href={`/ops/orders/${f.decision.orderId}`} className="text-petrol underline decoration-petrol/30 underline-offset-4">
-                  {f.decision.orderId}
+                <Link href={`/ops/orders/${f.decision.orderId}`} title={f.decision.orderId} className="text-petrol underline decoration-petrol/30 underline-offset-4">
+                  the order
                 </Link>
               </>
             )}
@@ -253,7 +253,7 @@ function RenewalRow({ r, now }: { r: Renewal; now: number }) {
       </td>
       <td>
         {r.staged && <Badge tone="bad">Staged</Badge>} <Badge tone={tone}>{label}</Badge>
-        <p className="mt-1 text-[0.82rem] text-ink-soft">{r.decision.reason}</p>
+        <p className="mt-1 text-[0.82rem] text-ink-soft">{fi(r.decision.reason)}</p>
         {o?.substitute && <p className="text-[0.82rem]">Substitute: {o.substitute.name} ({o.substitute.insidePreferences ? "inside the kitchen's preferences" : "needs a person"})</p>}
         {o?.orderId && (
           <p className="text-[0.82rem] text-ink-soft">
