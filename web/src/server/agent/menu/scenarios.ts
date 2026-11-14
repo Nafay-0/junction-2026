@@ -403,10 +403,10 @@ export function createScenarios(deps: ScenarioDeps) {
       findCandidates(catalog, { ...spec.ingredient, form: spec.ingredient.form === "frozen" ? "frozen" : "any", avoid: [] }, k.diet, allowed, 12),
       spec.ingredient.form === "frozen" ? Promise.resolve(undefined) : findCandidates(catalog, { ...spec.ingredient, key: `${spec.key}_frozen`, searchTerms: [...spec.ingredient.searchTerms.slice(0, 2).map((t) => `${t} pakaste`), `frozen ${spec.ingredient.name}`], form: "frozen", avoid: [] }, k.diet, allowed, 8),
     ]);
-    // "The same ingredient" means the thing itself: never a stand-in the search judged as one (pork cheek for beef cheek),
-    // and every word of one of its names in the product's name ("naudan poski", "beef cheek").
+    // "The same ingredient" means the thing itself: every word of one of its names in the product's name ("naudan poski",
+    // "beef cheek"), so pork cheek is not beef cheek, whatever a search ranked it.
     const terms = [spec.name, ...spec.ingredient.searchTerms].map((t) => t.toLowerCase().split(/[^a-zåäö]+/u).filter((w) => w.length >= 3 && !/^(fresh|frozen|tuore|pakaste|raw)$/.test(w)).map((w) => w.slice(0, Math.max(3, w.length - 2)))).filter((ws) => ws.length);
-    const isIt = (c: { product: Product; why: string[] }) => !c.why.some((w) => /stand-in/.test(w)) && terms.some((ws) => { const n = [c.product.name, c.product.names?.fi, c.product.names?.en].filter(Boolean).join(" ").toLowerCase(); return ws.every((w) => n.includes(w)); });
+    const isIt = (c: { product: Product; why: string[] }) => terms.some((ws) => { const n = [c.product.name, c.product.names?.fi, c.product.names?.en].filter(Boolean).join(" ").toLowerCase(); return ws.every((w) => n.includes(w)); });
     const other = (xs: { product: Product; why: string[] }[]) => xs.filter(isIt).map((c) => c.product).filter((x) => x.id !== st.product?.productId && !knownLate(p, x.id, want));
     const fresh = other(same[0].candidates).filter((x) => x.temperatureClass !== "frozen");
     const frozen = other([...(same[1]?.candidates ?? []), ...same[0].candidates]).filter((x) => x.temperatureClass === "frozen");
