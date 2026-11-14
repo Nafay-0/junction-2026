@@ -19,6 +19,7 @@ import { dummyHash, hashPassword, passwordProblem, verifyPassword, PASSWORD_MIN 
 import type { Account, AccountKitchen, AccountLink, AccountSession, AccountStore } from "./store";
 import { FORBID_ALLERGENS, MANDATE_DAYS, REQUIRE_CLAIMS, SIGNER_ROLE, mandateFromTerms, termsFromMandate, type MandateTerms } from "./terms";
 import type { MandateBook } from "../mandates";
+import { kitchenUnreadable } from "./sealed";
 import { TEST_ACCOUNTS, testAccountProducts, type TestAccountSeed } from "./test-accounts";
 
 /**
@@ -134,7 +135,11 @@ export class AccountService {
       });
       if (existing) await this.deps.store.deleteSessionsOf(d.username); // the password changed: sessions end
     }
-    for (const seed of TEST_ACCOUNTS) if (!(await this.deps.store.get(seed.username))) await this.seedTestAccount(seed, 0);
+    for (const seed of TEST_ACCOUNTS) {
+      if (await this.deps.store.get(seed.username)) continue;
+      // Not a reason to stop the server (e.g. DOCK_ACCOUNT_KEY_SECRET missing on a public host): said, and skipped.
+      await this.seedTestAccount(seed, 0).catch((err: Error) => console.error(`test account ${seed.username} not seeded: ${err.message}`));
+    }
     for (const a of await this.deps.store.list()) if (a.kitchen) await this.trust(a.kitchen.key.publicJwk, a.kitchen.orgId);
     await this.deps.store.sweepSessions(now);
   }
@@ -315,6 +320,7 @@ export class AccountService {
   async kitchenOf(username: string): Promise<{ account: Account; kitchen: AccountKitchen } | undefined> {
     const a = await this.deps.store.get(username);
     if (!a?.kitchen) return undefined;
+    if (kitchenUnreadable(a.kitchen)) throw new DockError(503, "account_key_unreadable", `${a.restaurant}'s kitchen key cannot be read with this server's DOCK_ACCOUNT_KEY_SECRET. Its orders and memory are safe; ask the operator.`, "account");
     const k = a.kitchen;
     const now = this.now();
     if (Date.parse(k.mandate.validUntil) - now.getTime() < RENEW_BEFORE_MS) {

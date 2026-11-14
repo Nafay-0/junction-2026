@@ -25,6 +25,7 @@ import { radar } from "./radar/registry";
 import { alternativesSource } from "./knowledge/service";
 import { SandboxService } from "./sandboxes";
 import { AccountService } from "./accounts/service";
+import { SealingAccountStore, accountKeySecret, publicHost } from "./accounts/sealed";
 import { scheduleTestAccountResets } from "./accounts/schedule";
 import { loadCatalogIndex, resolveCatalogIndex } from "./valio/index-store";
 import { ValioLiveClient } from "./valio/live-client";
@@ -136,8 +137,16 @@ async function buildRuntime(): Promise<Runtime> {
   await suspensions(dock).restore(stores.records("suspension"));
   const sandboxes = new SandboxService({ dock, registry: trustedIssuers, passkeys, limits: sandboxLimits, kitchens: stores.kitchens, products: async () => products, store: stores.sandboxStore });
   await sandboxes.restore();
+  // The kitchens' signing keys and mandate tokens are sealed at rest under DOCK_ACCOUNT_KEY_SECRET
+  // (accounts/sealed.ts); kitchens stored in plain form before it was set are sealed now.
+  const accountStore = new SealingAccountStore(stores.accountStore);
+  if (process.env.NEXT_PHASE !== "phase-production-build") {
+    if (publicHost() && !accountKeySecret()) console.error("DOCK_ACCOUNT_KEY_SECRET is not set: account kitchens cannot be created or changed on this public host until it is.");
+    const sealed = await accountStore.migrate().catch((err: Error) => (console.error(`sealing account kitchens failed: ${err.message}`), 0));
+    if (sealed) console.log(`sealed ${sealed} account kitchen key(s) stored in plain form`);
+  }
   const accounts = new AccountService({
-    store: stores.accountStore,
+    store: accountStore,
     registry: trustedIssuers,
     passkeys,
     kitchens: stores.kitchens,
