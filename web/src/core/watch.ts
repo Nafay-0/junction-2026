@@ -3,6 +3,7 @@ import type { MatchLabel } from "./catalog/finder";
 import { addDaysIso, isoWeekday, primaryLine, type HistoryEntry, type KitchenProfile, type StatedPreference } from "./kitchen";
 import type { Mandate } from "./mandate";
 import type { BaseUnit } from "./need";
+import { compareNutrition, comparisonText, type NutritionComparison } from "./nutrition";
 import { isMaterialAttribute } from "./vocabulary";
 
 /**
@@ -299,6 +300,11 @@ export type TradeOff = {
   claimsLost: string[];
   claimsGained: string[];
   fat: { from: string | null; to: string | null } | null;
+  /** The maker's nutrition declarations compared (core/nutrition.ts): per 100 g or ml, unknown said as unknown. */
+  nutrition?: NutritionComparison;
+  nutritionText?: string;
+  /** The wholesaler's own product file lists it as a substitute for the original. */
+  wholesalerLists: boolean;
   reliability: { pct: number; usualPct: number } | null;
   carbon: { kgPerUnit: number; usualKgPerUnit: number } | null;
   deliveryDate: string | null;
@@ -323,6 +329,12 @@ const fatOf = (attrs: string[]) => attrs.find((a) => /^fat_\d/.test(a)) ?? null;
 const fatText = (a: string | null) => (a ? `${a.slice(4).replace("_", ",")} %` : "unknown");
 const perUnit = (p: Product, packCents: number) => (p.unit === "pcs" ? null : r1(packCents / p.packSize));
 const declaredAllergens = (p: Product) => p.allergenInfo?.declared !== false;
+
+function nutritionOf(original: Product, p: Product): { nutrition?: NutritionComparison; nutritionText?: string } {
+  const cmp = original.nutrition ? compareNutrition(original.nutrition, p.nutrition) : undefined;
+  const text = comparisonText(cmp);
+  return { ...(cmp ? { nutrition: cmp } : {}), ...(text ? { nutritionText: text } : {}) };
+}
 
 /** The figures of a substitute against the product it replaces, for `amount` of the base unit by `date`. */
 export function tradeOffOf(original: Product, usualPerUnitCents: number | null, c: SubstituteCandidate, need: { amount: number; date: string }): TradeOff {
@@ -357,6 +369,8 @@ export function tradeOffOf(original: Product, usualPerUnitCents: number | null, 
     claimsLost: omat.filter((a) => !pmat.includes(a) && !/^fat_/.test(a)),
     claimsGained: pmat.filter((a) => !omat.includes(a) && !/^fat_/.test(a)),
     fat: fo !== fp ? { from: fo, to: fp } : null,
+    ...nutritionOf(original, p),
+    wholesalerLists: !!original.substitutes?.includes(p.id),
     reliability: known(p) && known(original) ? { pct: r1(p.deliveryReliability * 100), usualPct: r1(original.deliveryReliability * 100) } : null,
     carbon: carbonKnown(p) && carbonKnown(original) ? { kgPerUnit: r2(p.carbonKgPerUnit), usualKgPerUnit: r2(original.carbonKgPerUnit) } : null,
     deliveryDate: o?.deliveryDate ?? null,
@@ -419,6 +433,8 @@ function whyLine(t: TradeOff): string {
   if (t.claimsLost.length) parts.push(`not ${t.claimsLost.join(", ").replaceAll("_", " ")}`);
   if (t.allergensAdded.length) parts.push(`contains ${t.allergensAdded.join(", ")}`);
   if (t.allergenDataMissing) parts.push("no allergen data");
+  if (t.nutritionText) parts.push(t.nutritionText);
+  if (t.wholesalerLists) parts.push("the wholesaler lists it as a substitute");
   if (t.reliability) parts.push(`on time ${t.reliability.pct} % (usual ${t.reliability.usualPct} %)`);
   if (t.carbon) parts.push(`${t.carbon.kgPerUnit} kg CO2e per ${u} (usual ${t.carbon.usualKgPerUnit})`);
   if (t.deliveryDate) parts.push(`can come ${t.deliveryDate}`);
@@ -427,7 +443,7 @@ function whyLine(t: TradeOff): string {
 
 /**
  * Good, better, best: the substitutes that can come by the day, ranked by whether the agent may order them alone
- * (inside the kitchen's preferences), then how close they are (exact, variant, stand-in; the knowledge map's tier),
+ * (inside the kitchen's preferences), then the wholesaler's own substitute list, then how close they are (exact, variant, stand-in; the knowledge map's tier),
  * then price per litre or kilo. Products the mandate refuses outright, "not the kind" and the original are left out.
  * At most three; never padded.
  */
@@ -445,6 +461,7 @@ export function rankSubstitutes(original: Product, usualPerUnitCents: number | n
   rows.sort(
     (a, b) =>
       Number(b.pref.inside) - Number(a.pref.inside) ||
+      Number(b.t.wholesalerLists) - Number(a.t.wholesalerLists) ||
       (LABEL_ORDER[a.c.label ?? ""] ?? (a.c.map?.sameKind ? 1 : 2)) - (LABEL_ORDER[b.c.label ?? ""] ?? (b.c.map?.sameKind ? 1 : 2)) ||
       (TIER_ORDER[a.c.map?.tier ?? ""] ?? 3) - (TIER_ORDER[b.c.map?.tier ?? ""] ?? 3) ||
       Number(b.t.sameMaker) - Number(a.t.sameMaker) ||

@@ -166,6 +166,15 @@ describe("substitutes: good, better, best, and who decides", () => {
     expect(ranked[0].why).toMatch(/0\.09 € more per litre; 100 × 1 l; same maker/);
   });
 
+  it("the wholesaler's own substitute list ranks first among equals; nutrition compared from the declarations", () => {
+    const listed: Product = { ...P.box, substitutes: ["U-BOX"], nutrition: { per: "100ml", values: { protein: 3.4, fat: 1.5 } } as never };
+    const u: Product = { ...P.box2, nutrition: { per: "100ml", values: { protein: 3.1, fat: 1.5 } } as never };
+    const ranked = rankSubstitutes(listed, 129, [c(P.litre, 138), c(u, 137)], need, { mandate });
+    expect(ranked[0]).toMatchObject({ productId: "U-BOX", tradeOff: { wholesalerLists: true } });
+    expect(ranked[0].tradeOff.nutritionText).toMatch(/less protein/);
+    expect(ranked[0].why).toMatch(/the wholesaler lists it as a substitute/);
+  });
+
   it("never offers what the mandate refuses outright, nor pads the list", () => {
     const nutty: Product = { ...P.litre, id: "N-1L", allergens: ["milk", "nuts"] };
     expect(rankSubstitutes(P.box, 129, [c(nutty, 130), c(P.regular, 110, { label: "other" })], need, { mandate })).toEqual([]);

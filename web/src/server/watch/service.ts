@@ -348,6 +348,10 @@ async function substitutesFor(rt: Runtime, k: WatchKitchen, session: AgentSessio
   } catch {
     // the knowledge map is optional; the search follows
   }
+  // The wholesaler's own substitute list for the product (its product file): always a candidate, ranked first among equals.
+  if (original.substitutes?.length) {
+    for (const p of await rt.catalog.searchProducts({ ids: original.substitutes.slice(0, 6), limit: 6 })) if (!candidates.has(p.id)) candidates.set(p.id, { product: p });
+  }
   let path: string | undefined;
   let searchCount = 0;
   try {
@@ -364,7 +368,7 @@ async function substitutesFor(rt: Runtime, k: WatchKitchen, session: AgentSessio
     // no search: the map's candidates stand
   }
   // One live call for the closest few: the map's first, then the search's matches before its stand-ins.
-  const order = [...candidates.values()].sort((a, b) => Number(!!b.map) - Number(!!a.map) || (a.label === "exact" ? 0 : a.label === "variant" ? 1 : 2) - (b.label === "exact" ? 0 : b.label === "variant" ? 1 : 2));
+  const order = [...candidates.values()].sort((a, b) => Number(!!original.substitutes?.includes(b.product.id)) - Number(!!original.substitutes?.includes(a.product.id)) || Number(!!b.map) - Number(!!a.map) || (a.label === "exact" ? 0 : a.label === "variant" ? 1 : 2) - (b.label === "exact" ? 0 : b.label === "variant" ? 1 : 2));
   const ids = order.map((c) => c.product.id).filter((id) => id !== original.id).slice(0, MAX_LIVE_IDS_PER_CALL);
   if (ids.length) {
     const live = await rt.dock.lookupAvailability(session, { requestId, productIds: ids, deliveryDate: key.date }).catch(() => undefined);
