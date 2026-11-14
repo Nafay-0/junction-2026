@@ -1,7 +1,7 @@
 /**
  * Publish crash-test results where the rest of Dock reads them.
  *
- *   pnpm crash:export [result dirs...] [--out crash-results/export] [--no-db]
+ *   pnpm crash:export [result dirs...] [--out crash-results/export] [--no-db] [--own-agent model:<provider:id>]
  *
  * Reads every <dir>/summary.json + trajectories.jsonl (default: every directory under crash-results/ that has them)
  * and writes:
@@ -44,7 +44,7 @@ const flag = (n: string) => argv.includes(`--${n}`);
 const opt = (n: string) => (argv.indexOf(`--${n}`) >= 0 ? argv[argv.indexOf(`--${n}`) + 1] : undefined);
 
 function resultDirs(): string[] {
-  const given = argv.filter((a, i) => !a.startsWith("--") && argv[i - 1] !== "--out");
+  const given = argv.filter((a, i) => !a.startsWith("--") && argv[i - 1] !== "--out" && argv[i - 1] !== "--own-agent");
   if (given.length) return given;
   const out: string[] = [];
   const walk = (d: string, depth: number) => {
@@ -135,7 +135,11 @@ async function main() {
     }
   }
 
-  writeFileSync(path.join(outDir, "summary.json"), JSON.stringify({ schema: "dock-crash-export/1", suite: SUITE_VERSION, generatedAt: ratedAt, agents }, null, 2) + "\n");
+  // Dock's own buyer agent is the runner with DOCK_AGENT_MODEL (or --own-agent): name its row and licence.
+  const ownModel = opt("own-agent") ?? (process.env.DOCK_AGENT_MODEL?.trim() ? `model:${process.env.DOCK_AGENT_MODEL.trim()}` : undefined);
+  const own = ownModel ? (agents.find((a) => a.agent === ownModel) as { agent: string; harness?: string; licence?: unknown; worstRepeat?: number; ratingMean?: number } | undefined) : undefined;
+  const ownAgent = own ? { crashAgent: own.agent, harness: own.harness, licence: own.licence, worstRepeat: own.worstRepeat, ratingMean: own.ratingMean, note: "Dock's own buyer agent: the runner (src/server/agent/runner.ts) with this model" } : null;
+  writeFileSync(path.join(outDir, "summary.json"), JSON.stringify({ schema: "dock-crash-export/1", suite: SUITE_VERSION, generatedAt: ratedAt, ownAgent, agents }, null, 2) + "\n");
   const licencesFile = process.env.DOCK_LICENCES_FILE?.trim() || path.join(".data", "licences.json");
   mkdirSync(path.dirname(licencesFile), { recursive: true });
   writeFileSync(licencesFile, JSON.stringify({ licences }, null, 2) + "\n");

@@ -32,7 +32,7 @@ type Agent = {
 const argv = process.argv.slice(2);
 const opt = (n: string) => (argv.indexOf(`--${n}`) >= 0 ? argv[argv.indexOf(`--${n}`) + 1] : undefined);
 const file = argv.find((a, i) => !a.startsWith("--") && !argv[i - 1]?.startsWith("--")) ?? "crash-results/export/summary.json";
-const summary = JSON.parse(readFileSync(file, "utf8")) as { suite: string; generatedAt: string; agents: Agent[] };
+const summary = JSON.parse(readFileSync(file, "utf8")) as { suite: string; generatedAt: string; agents: Agent[]; ownAgent?: { crashAgent: string } | null };
 const commit = (() => {
   try {
     return execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim();
@@ -66,7 +66,7 @@ const rows = [...summary.agents].sort((a, b) => Number(complete(b)) - Number(com
 const table = [
   "| Agent | Rating (mean) | Worst repeat | Licence | Unsafe attempts | Questions / suite | Seconds / episode | Model spend (all repeats) | Scenarios under 70, with the reason from the trajectory |",
   "|---|---|---|---|---|---|---|---|---|",
-  ...rows.map((a) => `| \`${a.agent}\`${a.repeats !== 3 ? ` (${a.repeats} repeat${a.repeats === 1 ? "" : "s"})` : ""} | ${n1(a.ratingMean ?? a.overall)} | ${n1(a.worstRepeat)} | ${a.licence ? `${a.licence.level} ${a.licence.name}` : `none${a.invalid ? ` (${a.invalid} episode(s) unscored: provider failure)` : " (incomplete)"}`} | ${a.unsafeAttempts} | ${n1(a.questionsPerSuite)} | ${n1(a.secondsPerEpisode)} | ${isModel(a) ? (a.agent.startsWith("featherless:") ? "flat subscription" : usd(a.costUsd)) : "-"} | ${failed(a)} |`),
+  ...rows.map((a) => `| \`${a.agent}\`${summary.ownAgent?.crashAgent === a.agent ? " **= Dock's own agent**" : ""}${a.repeats !== 3 ? ` (${a.repeats} repeat${a.repeats === 1 ? "" : "s"})` : ""} | ${n1(a.ratingMean ?? a.overall)} | ${n1(a.worstRepeat)} | ${a.licence ? `${a.licence.level} ${a.licence.name}` : `none${a.invalid ? ` (${a.invalid} episode(s) unscored: provider failure)` : " (incomplete)"}`} | ${a.unsafeAttempts} | ${n1(a.questionsPerSuite)} | ${n1(a.secondsPerEpisode)} | ${isModel(a) ? (a.agent.startsWith("featherless:") ? "flat subscription" : usd(a.costUsd)) : "-"} | ${failed(a)} |`),
 ];
 
 const candidates = rows.filter((a) => isModel(a) && complete(a) && a.unsafeAttempts === 0);
