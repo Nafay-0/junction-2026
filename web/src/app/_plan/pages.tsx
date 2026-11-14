@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { ChefHat } from "lucide-react";
+import { Empty, IconDisc, PageHeader, buttonClass } from "../_ui/kit";
 import { Wordmark } from "../_ui/wordmark";
 import { LangSwitch, useText } from "../_i18n/provider";
 import { PLAN_PAGES_TEXT } from "./pages.text";
@@ -14,10 +16,7 @@ import { PLAN_PAGES_TEXT } from "./pages.text";
 export function StorePlanIntro() {
   const tx = useText(PLAN_PAGES_TEXT);
   return (
-    <div>
-      <h1 className="display text-[2.6rem] text-ink sm:text-[3rem]">{tx.heading}</h1>
-      <p className="max-w-[64ch] text-[1.02rem] leading-snug text-ink-soft">{tx.intro}</p>
-    </div>
+    <PageHeader title={tx.heading} lead={tx.intro} />
   );
 }
 
@@ -25,17 +24,21 @@ export function StorePlanIntro() {
 export function StorePlanUnavailable({ kitchens }: { kitchens: readonly string[] }) {
   const tx = useText(PLAN_PAGES_TEXT);
   return (
-    <div className="bg-paper p-5">
-      <p className="text-[1.08rem] font-semibold">{tx.onlyDemoTitle}</p>
-      <p className="mt-1 max-w-[62ch] leading-snug text-ink-soft">{tx.onlyDemoBody}</p>
-      <div className="mt-3 flex flex-wrap gap-3">
-        {kitchens.map((k) => (
-          <Link key={k} href={`/k/${k}/menu`} className="inline-flex min-h-11 items-center bg-petrol px-4 font-semibold text-paper hover:bg-petrol-deep">
-            {tx.kitchenLink[k] ?? k}
-          </Link>
-        ))}
-      </div>
-    </div>
+    <Empty
+      title={tx.onlyDemoTitle}
+      glyph={
+        <IconDisc tone="muted">
+          <ChefHat size={21} />
+        </IconDisc>
+      }
+      action={kitchens.map((k) => (
+        <Link key={k} href={`/k/${k}/menu`} className={buttonClass("primary", "sm")}>
+          {tx.kitchenLink[k] ?? k}
+        </Link>
+      ))}
+    >
+      {tx.onlyDemoBody}
+    </Empty>
   );
 }
 
@@ -43,20 +46,26 @@ export function StorePlanUnavailable({ kitchens }: { kitchens: readonly string[]
 export function StandaloneHeader({ kitchen, kitchens, names }: { kitchen: string; kitchens: readonly string[]; names: Record<string, string> }) {
   const tx = useText(PLAN_PAGES_TEXT);
   return (
-    <header className="border-b-4 border-petrol bg-paper">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
-        <div className="flex items-center gap-3">
-          <Link href={`/k/${kitchen}/menu`} className="flex items-center">
-            <Wordmark size={32} />
+    <header className="sticky top-0 z-30 border-b border-line bg-paper/90 backdrop-blur-md">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-3 px-4 py-3 sm:px-6">
+        <div className="flex min-w-0 items-center gap-3">
+          <Link href={`/k/${kitchen}/menu`} className="flex shrink-0 items-center rounded-md">
+            <Wordmark size={28} />
           </Link>
-          <span className="display text-[1.5rem]">{tx.heading}</span>
+          <span className="truncate border-l border-line pl-3 font-semibold">{tx.heading}</span>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <nav className="flex flex-wrap gap-2" aria-label={tx.kitchensNav}>
+        <div className="flex flex-wrap items-center gap-3">
+          <nav className="flex max-w-full gap-1 overflow-x-auto rounded-full bg-surface p-1" aria-label={tx.kitchensNav}>
             {kitchens.map((k) => (
-              <Link key={k} href={`/plan/${k}`} aria-current={k === kitchen ? "page" : undefined} className={`border-2 px-3 py-1.5 text-[0.95rem] font-semibold ${k === kitchen ? "border-petrol bg-petrol text-paper" : "border-line hover:border-petrol"}`}>
+              <Link
+                key={k}
+                href={`/plan/${k}`}
+                aria-current={k === kitchen ? "page" : undefined}
+                title={tx.kitchenKind[k]}
+                className={`inline-flex min-h-9 shrink-0 items-center whitespace-nowrap rounded-full px-4 text-[0.9rem] font-medium transition-colors pointer-coarse:min-h-10 ${k === kitchen ? "bg-paper text-ink shadow-xs" : "text-ink-soft hover:text-ink"}`}
+              >
                 {names[k]}
-                <span className={`block text-[0.75rem] font-medium ${k === kitchen ? "text-paper/80" : "text-ink-soft"}`}>{tx.kitchenKind[k]}</span>
+                <span className="sr-only">: {tx.kitchenKind[k]}</span>
               </Link>
             ))}
           </nav>
@@ -70,5 +79,5 @@ export function StandaloneHeader({ kitchen, kitchens, names }: { kitchen: string
 /** /plan/<kitchen>: the note above the planner. */
 export function StandaloneNote() {
   const tx = useText(PLAN_PAGES_TEXT);
-  return <p className="mb-4 text-[0.85rem] text-ink-soft">{tx.standaloneNote}</p>;
+  return <p className="mb-6 max-w-[75ch] text-[0.86rem] leading-relaxed text-ink-soft">{tx.standaloneNote}</p>;
 }
