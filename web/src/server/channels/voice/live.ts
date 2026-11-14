@@ -65,7 +65,7 @@ export function liveSetup(opts: { model: string; system: string; mode: CallMode;
     systemInstruction: { parts: [{ text: opts.system }] },
     tools: [{ functionDeclarations: LIVE_TOOLS }],
     // Hands-free: the provider's voice activity detection, set to need clear speech to start and a short pause to end
-    // (DOCK_VOICE_SILENCE_MS, default 600 ms); speech that starts while the agent talks interrupts it (barge-in).
+    // (DOCK_VOICE_SILENCE_MS, default 500 ms); speech that starts while the agent talks interrupts it (barge-in).
     realtimeInputConfig: { automaticActivityDetection: { disabled: false, startOfSpeechSensitivity: "START_SENSITIVITY_LOW", endOfSpeechSensitivity: "END_SENSITIVITY_LOW", prefixPaddingMs: 200, silenceDurationMs: silenceMs() } },
     // The words a kitchen orders with, so "butter" is not heard as "powder" (customVocabulary biases recognition).
     // VERBATIM keeps number words as said ("kuusitoista"), which AimoPilot's own number reader understands; the
@@ -78,7 +78,7 @@ export function liveSetup(opts: { model: string; system: string; mode: CallMode;
 /** The pause that ends the buyer's turn, in milliseconds. */
 function silenceMs(): number {
   const v = Number(process.env.DOCK_VOICE_SILENCE_MS);
-  return Number.isFinite(v) && v >= 300 && v <= 2000 ? v : 600;
+  return Number.isFinite(v) && v >= 300 && v <= 2000 ? v : 500;
 }
 
 /** Gemini's transcript formatting: VERBATIM (default) or SMART (DOCK_VOICE_TRANSCRIPTION=smart), "" for the service default. */

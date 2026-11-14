@@ -1,0 +1,80 @@
+{
+  "at": "2026-11-14T22:08:09.865Z",
+  "model": "gemini-3.8-live",
+  "engineUsd": 0.077,
+  "voiceUsd": 0.009,
+  "rows": [
+    {
+      "id": "plain",
+      "relayed": 2,
+      "ownWords": [],
+      "capability": "a plain order",
+      "lang": "en",
+      "noise": "none",
+      "rate": "normal",
+      "heardRight": 2,
+      "turns": 2,
+      "outcomeSame": true,
+      "typed": {
+        "orders": [
+          "committed 25.80 VA-1010x2 2026-11-19"
+        ],
+        "gates": [
+          "placed_alone"
+        ],
+        "shown": [
+          "gate",
+          "options",
+          "order",
+          "price"
+        ],
+        "end": "done",
+        "lines": [
+          "I can get **20 l** of lactose-free milk for {{Thursday 19 Nov}}, before 13,5 % VAT. You can have the Valio Eila 10 l bag-in-box at **25,80 €**, the Arla 10 l bag-in-box at **27,40 €**, or the Valio Eila in 1 l cartons at **29,80 €**. Which one?",
+          "I've ordered **20 l** of the Valio Eila lactose-free milk for **25,80 €**. It arrives {{Thursday 19 Nov}}. Shall I email the receipt? I'd need an address."
+        ]
+      },
+      "spoken": {
+        "orders": [
+          "committed 25.80 VA-1010x2 2026-11-19"
+        ],
+        "gates": [
+          "placed_alone"
+        ],
+        "end": "done"
+      },
+      "detail": [
+        {
+          "said": "Twenty litres of lactose-free milk for Thursday.",
+          "heard": "20 litres of lactose-free milk for Thursday.",
+          "wer": 0,
+          "relayMs": 1070,
+          "state": "reply",
+          "firstSoundMs": 1774,
+          "modelSaid": [
+            "Reading that.",
+            "3 options. The first: Valio Eila lactose-free semi-skimmed, 25 euros 80, for Thursday the nineteenth of November. Shall I order the first one?"
+          ],
+          "reply": "3 options. The first: Valio Eila lactose-free semi-skimmed, 25 euros 80, for Thursday the nineteenth of November. Shall I order the first one?",
+          "replySoundMs": 6452,
+          "replyDoneMs": 17602
+        },
+        {
+          "said": "The first one.",
+          "heard": "The first one.",
+          "wer": 0,
+          "relayMs": 624,
+          "state": "reply",
+          "firstSoundMs": 1406,
+          "modelSaid": [
+            "Reading that.",
+            "I've ordered 20 litres of the Valio Eila lactose-free milk for 25 euros 80. It arrives on Thursday the nineteenth of November. Shall I email the receipt? I'd need an address."
+          ],
+          "reply": "I've ordered 20 litres of the Valio Eila lactose-free milk for 25 euros 80. It arrives on Thursday the nineteenth of November. Shall I email the receipt? I'd need an address.",
+          "replySoundMs": 5406,
+          "replyDoneMs": 17096
+        }
+      ]
+    }
+  ]
+}
