@@ -192,7 +192,7 @@ function WishBar({
                 on ? "bg-brand-soft text-brand" : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
-              <span className="line-clamp-2">{wish.label}</span>
+              <span className="line-clamp-2 [overflow-wrap:anywhere]">{breakable(wish.label)}</span>
             </button>
           );
         })}
@@ -396,5 +396,8 @@ function Skeleton({ wide, template, count }: { wide: boolean; template: string; 
     </ul>
   );
 }
+
+/** "Evening/weekend" may break after the slash: a narrow column heading needs somewhere to turn. */
+const breakable = (label: string) => label.replace(/([/\-–])(?=\S)/g, "$1\u200b");
 
 const capital = (text: string) => (text ? text.charAt(0).toUpperCase() + text.slice(1) : text);
