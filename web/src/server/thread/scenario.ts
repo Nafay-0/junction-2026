@@ -38,7 +38,7 @@ const ASK: Record<Lang, (best: string, rest: boolean) => string> = {
 };
 
 /** An option's name as said: no "instead of …" (the sentence says what it replaces). */
-const optionName = (o: SubOption) => (o.kind === "dish" && o.dish ? o.dish.name : lower(o.title.replace(/\s+instead of .*$/i, "").replace(/\s+\(.*\)$/, "")));
+const optionName = (o: SubOption) => (o.kind === "dish" && o.dish ? o.dish.name : lower(o.title.replace(/\s+instead( of .*)?$/i, "").replace(/\s+\(.*\)$/, "")));
 
 /** The event said short, from its figures: the count, the one that matters most and why, the best swap, the rest listed. */
 async function eventShort(run: TurnRun, r: EventResult, lang: Lang, fallback: ThreadScenario): Promise<{ say: string; ask: string }> {
@@ -62,7 +62,8 @@ async function eventShort(run: TurnRun, r: EventResult, lang: Lang, fallback: Th
   const best: SubOption | undefined = r.options[first.lineId]?.[0];
   if (best) {
     const label = optionName(best);
-    const trade = lang === "en" ? best.tradeoff.taste : "";
+    // The one trade-off that matters, its first clause ("fat 4 % → 2.8 %" and the brand stay in the steps).
+    const trade = lang === "en" ? lower(best.tradeoff.taste.split(/;\s*/)[0].replace(/\.$/, "")) : "";
     parts.push(t.instead(what(first), label, trade).replace(/:\s*\.$/, "."));
     if (best.signOff.needed && best.signOff.approver) parts.push(t.needsOk(best.signOff.approver.name));
   } else parts.push(t.noOption(what(first)));

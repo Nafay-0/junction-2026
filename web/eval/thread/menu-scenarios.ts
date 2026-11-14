@@ -131,7 +131,19 @@ const said = (what: () => string[]): Check => ({
   },
 });
 const saidSeason = said(() => [facts.seasonal?.anchor?.label?.en, facts.seasonal?.anchor?.label?.fi].filter(Boolean));
-const saidEvent = said(() => (facts.event?.cannotArrive ?? []).slice(0, 2).map((x: Json) => x.ingredient.split(/[ ,(]/)[0]).concat(facts.event?.allLate ? ["earliest", "aikaisin"] : []));
+/**
+ * The conversation plans the booking itself (its own plan, not the one `before` made through REST, so the ingredients
+ * can differ): it said what cannot arrive by the day and the stand-in, or that nothing can and the earliest day.
+ */
+const saidEvent: Check = {
+  name: "the kitchen's agent said it in the conversation: what cannot arrive, and the stand-in (or the earliest day)",
+  run: (o) => {
+    const text = [...o.answers.map((a) => a.text), ...o.notes, ...o.notices.map((n) => n.message)].join(" ").toLowerCase();
+    const cannot = /cannot arrive|can't arrive|can't come|ei ehdi|hinner inte|nothing for this menu/.test(text);
+    const way = /instead of|tilalle|i stället|earliest|aikaisin|tidigast|everything can arrive|kaikki ehtii/.test(text);
+    return ok(cannot && way, `said: ${text.slice(0, 200) || "nothing"}`);
+  },
+};
 
 const WIRING = "The conversation says these once the thread calls server/agent/menu/thread.ts (seasonalForThread, eventForThread, scenarioAnswerOf, actOnScenario); until then 'the agent said it' fails and the other checks (run through REST /api/v1/menus, the same code) pass.";
 
