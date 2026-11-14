@@ -11,6 +11,7 @@ import { callTool } from "@/server/mcp/server";
 import { qualifiersOf, wordsNotCarried } from "@/core/qualifiers";
 import { TOOLS } from "@/server/mcp/tools";
 import type { Runtime } from "@/server/runtime";
+import { refusalOfError, refusalOfRule, refusalOfStep, sayRefusal, type Refusal } from "./refusal";
 import { anomalyCard, cardId, gateCard, noOptionsCard, optionsCard, orderCard, passedOver, priceCard, questionCard, understoodCard } from "./cards";
 import { threadTag } from "./context";
 import type { StoredThread, ThreadStore } from "./store";
@@ -172,17 +173,25 @@ export type ItemOutcome = {
   sheet?: { sheetId: string; deliveryDate: string; lines: { name: string; packs: number }[]; totalCents: number };
 };
 
+/** A refusal said in each language; `message` is the English one (what the record and the model read). */
+export function worded(r: (lang: "en" | "fi" | "sv") => Refusal): { message: string; said: Record<"en" | "fi" | "sv", string> } {
+  const said = { en: sayRefusal(r("en"), "en"), fi: sayRefusal(r("fi"), "fi"), sv: sayRefusal(r("sv"), "sv") };
+  return { message: said.en, said };
+}
+
 function noticeFrom(err: unknown, ref: string, words: string): NoticeCard {
   if (err instanceof DockError) {
     const id = cardId("notice", ref);
+    const r = refusalOfError(err);
+    if (r) return { type: "notice", cardId: id, kind: r.code === "suspended" ? "suspended" : "refused", ...worded(() => r), ...(err.rule ? { rule: err.rule } : {}) };
     if (err.code === "need_incomplete") {
       const missing = ((err.details?.missing as string[]) ?? []).map((m) => (m === "item" ? "what to buy" : "how much, with the unit"));
       return { type: "notice", cardId: id, kind: "incomplete", message: `I understood part of "${words.slice(0, 80)}" but need ${missing.join(" and ")}.`, missing, words: words.slice(0, 600) };
     }
     if (err.code === "not_a_purchase_request") return { type: "notice", cardId: id, kind: "not_purchase", message: err.message };
-    if (err.code === "family_unknown") return { type: "notice", cardId: id, kind: "not_found", message: `Nothing in the assortment matches "${words.slice(0, 80)}".` };
+    if (err.code === "family_unknown") return { type: "notice", cardId: id, kind: "not_found", ...worded(() => ({ code: "not_sold", what: words.slice(0, 80) })) };
     if (["model_unavailable", "interpret_timeout", "interpret_failed", "llm_disabled", "demo_limit_reached"].includes(err.code)) return { type: "notice", cardId: id, kind: "unavailable", message: err.message, retry: true };
-    if (err.code === "agent_suspended" || err.rule === "suspended") return { type: "notice", cardId: id, kind: "suspended", message: err.message };
+    if (err.code === "agent_suspended" || err.rule === "suspended") return { type: "notice", cardId: id, kind: "suspended", ...worded(() => ({ code: "suspended" })) };
     return { type: "notice", cardId: id, kind: "refused", message: err.message, ...(err.rule ? { rule: err.rule } : {}) };
   }
   return { type: "notice", cardId: cardId("notice", ref), kind: "error", message: "Something went wrong on our side. Try again.", retry: true };
@@ -434,6 +443,8 @@ export async function afterStep(run: TurnRun, s: IntakeView, words: string): Pro
   if (s.state === "no_options" || s.state === "cancelled") {
     const n = noOptionsCard(s);
     if (s.state === "cancelled") Object.assign(n, { kind: "refused", message: s.notes.join(" ") || "The request was cancelled." });
+    // In words, from the step's own codes (refusal.ts): never the lower layer's sentence with its category codes.
+    else Object.assign(n, worded((l) => refusalOfStep(run, s, l)));
     run.store.card(run.thread, run.turnId, n);
     out.notice = n;
     return out;
@@ -549,7 +560,9 @@ export async function placeQuoted(run: TurnRun, s: IntakeView, words: string, pa
     const refused = err instanceof DockError ? (err.details?.order as PublicOrder | undefined) : undefined;
     gate.fail(err instanceof DockError ? (err.rule ?? err.code) : undefined);
     if (refused) {
-      run.store.card(run.thread, run.turnId, gateCard(refused));
+      const g = gateCard(refused);
+      const what = s.need?.item?.text ?? "this";
+      run.store.card(run.thread, run.turnId, { ...g, said: worded((l) => refusalOfRule(run, g.rule, what, g.rules?.find((x) => x.rule === g.rule)?.details, l)).said });
       run.facts.push(refused);
       out.placed = { orderId: refused.orderId, status: refused.status, totalCents: refused.totalCents };
       run.orders.set(refused.orderId, refused);

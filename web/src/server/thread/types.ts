@@ -295,6 +295,8 @@ export type PriceCard = CardBase & {
 
 export type GateCard = CardBase & {
   type: "gate";
+  /** Why it was refused or stopped, in words, in each language (refusal.ts). */
+  said?: Record<"en" | "fi" | "sv", string>;
   requestId: string;
   orderId?: string;
   outcome: "placed_alone" | "waiting" | "refused" | "approved" | "declined" | "withdrawn" | "expired";
@@ -355,6 +357,8 @@ export type NoticeCard = CardBase & {
   missing?: string[];
   /** For `incomplete`: the words read so far (a follow-up completes them: subject.ts). */
   words?: string;
+  /** A refusal in words, first person, in each language (refusal.ts): what the store shows when the agent says nothing. */
+  said?: Record<"en" | "fi" | "sv", string>;
   /** For `refused`: the rule that fired. */
   rule?: string;
   retry?: boolean;

@@ -75,7 +75,7 @@ function cardFacts(c: Card): Record<string, unknown> | undefined {
     case "price":
       return { fixedPrice: { totalEur: eur(c.totalCents), heldUntil: c.expiresAt, delivery: c.deliveryDate } };
     case "gate":
-      return { decided: { outcome: c.outcome, ...(c.approver ? { who: c.approver.name } : {}), ...(c.reasons.length ? { because: c.reasons[0] } : {}) } };
+      return { decided: { outcome: c.outcome, ...(c.approver ? { who: c.approver.name } : {}), ...(c.said ? { sayThis: c.said.en } : c.reasons.length ? { because: c.reasons[0] } : {}) } };
     case "order":
       return { order: { status: c.status, totalEur: eur(c.totalCents), delivery: c.deliveryDate, lines: c.lines.slice(0, 4).map((l) => `${l.quantity} × ${l.name}`), ...(c.authorised.by !== "agent" ? { who: c.authorised.name } : {}), ...(c.takeBackUntil ? { canTakeBackUntil: c.takeBackUntil } : {}) } };
     case "sheet":
@@ -98,7 +98,7 @@ function cardFacts(c: Card): Record<string, unknown> | undefined {
     case "offer":
       return c.state === "open" ? { wholesalerOffer: { product: c.name, said: c.text.en.say, ask: "yes (put it on an order), no, or don't suggest this kind again" } } : { wholesalerOffer: { product: c.name, answered: c.state, ...(c.reply ? { reply: c.reply } : {}) } };
     case "notice":
-      return { notice: c.message, ...(c.kind === "incomplete" ? { missing: c.missing } : {}) };
+      return { notice: c.message, ...(c.said ? { sayItLikeThis: "first person, the groups in words, ending on the next step, as in notice" } : {}), ...(c.kind === "incomplete" ? { missing: c.missing } : {}) };
     case "today":
       return { today: c.items.slice(0, 3).map((i) => i.kind) };
     default:
@@ -118,7 +118,7 @@ export function speakFacts(run: TurnRun): Record<string, unknown>[] {
     const now = run.store.cards(run.thread).find((x) => x.card.cardId === c.cardId)?.card ?? c;
     cards.push(now);
   }
-  const out = cards.map(cardFacts).filter((x): x is Record<string, unknown> => !!x);
+  const out = cards.map(cardFacts).filter((x): x is Record<string, unknown> => !!x).map((x) => plainFacts(x) as Record<string, unknown>);
   // A clarification asked once already and not settled by the answer: not asked again in other words; the best
   // reading from what is on the table, as a question a yes answers.
   const incomplete = cards.find((c) => c.type === "notice" && c.kind === "incomplete");
@@ -134,4 +134,16 @@ export function speakFacts(run: TurnRun): Record<string, unknown>[] {
     }
   }
   return out;
+}
+
+/** Facts the reply is written from carry no codes: category codes, product ids and snake_case words come out as words. */
+function plainFacts(v: unknown): unknown {
+  if (typeof v === "string")
+    return v
+      .replace(/\s*\((?:[A-Z]{2}-\d{3,}|\d{6})\)/g, "")
+      .replace(/\bcat[ _]\d{3,}\b,?\s*/gi, "")
+      .replace(/\b([a-z]+)_([a-z_]+)\b/g, (m) => (/^\d{4}-\d{2}-\d{2}/.test(m) ? m : m.replaceAll("_", " ")));
+  if (Array.isArray(v)) return v.map(plainFacts);
+  if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, plainFacts(x)]));
+  return v;
 }

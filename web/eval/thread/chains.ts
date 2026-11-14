@@ -49,6 +49,7 @@ const ASKS: Record<Said, RegExp> = {
 
 async function main() {
   const { submitTurn, threadStore, resetThread } = await import("@/server/thread/engine");
+  const { codeLeaks } = await import("@/server/thread/refusal");
   const { resolveKitchen } = await import("@/server/console-kitchens");
   const k = (await resolveKitchen(kitchen))!;
   const store = await threadStore();
@@ -58,6 +59,7 @@ async function main() {
     await resetThread(k as never);
     const said = new Set<Said>();
     let repeated = 0;
+    let codes = 0;
     let lastAsked = "";
     const log: string[] = [];
     for (const turn of chain.turns) {
@@ -84,6 +86,9 @@ async function main() {
       lastAsked = askedNow;
       if (again) missedSaid.push(`the same as last turn (${askedNow})`);
       if (asks.length || missedSaid.length) repeated++;
+      // No code ever reaches a sentence (a category code, a product id, a rule or reason code, a snake_case word).
+      const leaks = codeLeaks(line);
+      if (leaks.length) codes += leaks.length;
       const u = a.cards.filter((c) => c.type === "understood").at(-1);
       const menu = store.cards(store.peek(kitchen)!).map((x) => x.card).filter((c) => c.type === "menu").at(-1);
       log.push(
@@ -103,8 +108,8 @@ async function main() {
     const okAmount = chain.expect.amount === undefined || amount === chain.expect.amount || covers === chain.expect.amount;
     const okDay = !chain.expect.day || !!day || !!(sheet?.type === "sheet" && sheet.deliveryDate);
     const ok = okItem && okAmount && okDay;
-    console.log(`\n${lang}/${door} ${chain.id}: ${ok ? "right" : "WRONG"} after ${chain.turns.length} turns, ${repeated} repeated question${repeated === 1 ? "" : "s"}${ok ? "" : ` (item ${okItem}, amount ${okAmount}, day ${okDay})`}\n${log.join("\n")}`);
-    summary.push(`${chain.id}: ${ok ? "right" : "WRONG"}, ${chain.turns.length} turns, ${repeated} repeated`);
+    console.log(`\n${lang}/${door} ${chain.id}: ${ok ? "right" : "WRONG"} after ${chain.turns.length} turns, ${repeated} repeated question${repeated === 1 ? "" : "s"}, ${codes} code${codes === 1 ? "" : "s"} in replies${ok ? "" : ` (item ${okItem}, amount ${okAmount}, day ${okDay})`}\n${log.join("\n")}`);
+    summary.push(`${chain.id}: ${ok && !codes ? "right" : "WRONG"}, ${chain.turns.length} turns, ${repeated} repeated, ${codes} codes`);
   }
   console.log(`\n${lang}/${door}: ${summary.join("; ")}`);
   process.exit(0);

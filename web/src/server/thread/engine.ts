@@ -19,6 +19,7 @@ import { earlierFor } from "./earlier";
 import { ThreadStore, type StoredThread } from "./store";
 import { runWidget } from "./widgets";
 import { speakFacts } from "./speak";
+import { codeLeaks } from "./refusal";
 import { hasToday, helsinkiToday, postToday, todayCardId } from "./home";
 import { ensureTelemetry } from "./telemetry";
 import type { AgentTurn, BuyerTurn, MemoryCard, RecordsCard, SubmitTurn, SubmitTurnReply, ThreadAction, ThreadDoor } from "./types";
@@ -341,6 +342,30 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
   await finishTurn(run);
 }
 
+/**
+ * The reply as the buyer reads it: English days as people write them ("Monday 16 Nov"); a date's own dot never followed
+ * by the sentence's punctuation; and no code (a category code, a product id, a rule or reason code, a snake_case word)
+ * in any sentence: a sentence carrying one is dropped, and if none is left, the refusal's own words (refusal.ts) stand.
+ */
+function plainLine(run: TurnRun, text: string): string {
+  const lang = /\b(maanantai|tiistai|keskiviikko|torstai|perjantai|lauantai|sunnuntai)\w*|[äö]/i.test(text) ? "fi" : /\b(måndag|tisdag|onsdag|torsdag|fredag|lördag|söndag)\b|å/i.test(text) ? "sv" : "en";
+  let t = text.replace(/(\d{1,2}\.\d{1,2}\.)(\}\}|\*\*)?\./g, "$1$2");
+  if (lang === "en") {
+    const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    t = t.replace(/\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Mon|Tue|Wed|Thu|Fri|Sat|Sun)( |\u00a0)(\d{1,2})\.(\d{1,2})\.?/g, (m, w: string, sp: string, d: string, mo: string) => (Number(mo) >= 1 && Number(mo) <= 12 && Number(d) <= 31 ? `${w}${sp}${Number(d)} ${MON[Number(mo) - 1]}` : m));
+    t = t.replace(/\{\{(\d{1,2})\.(\d{1,2})\.?\}\}/g, (m, d: string, mo: string) => (Number(mo) >= 1 && Number(mo) <= 12 ? `{{${Number(d)} ${MON[Number(mo) - 1]}}}` : m));
+  }
+  // "16.11.?" reads badly: the sentence's own mark replaces the date's dot.
+  t = t.replace(/(\d{1,2}\.\d{1,2})\.(\}\}|\*\*)?(?=[?;:,!])/g, "$1$2");
+  const leaks = codeLeaks(t.replace(/\*\*|\{\{|\}\}/g, ""));
+  if (!leaks.length) return t;
+  const kept = t.split(/(?<=[.!?])\s+/).filter((x) => !codeLeaks(x.replace(/\*\*|\{\{|\}\}/g, "")).length);
+  record(run, "code_in_reply", `Sentences of the agent's reply were not shown: they carried ${leaks.slice(0, 5).join(", ")}.`, { leaks });
+  if (kept.length) return kept.join(" ");
+  const said = run.store.agentTurn(run.thread, run.turnId)?.cards.flatMap((c) => ((c.type === "notice" || c.type === "gate") && c.said ? [c.said] : [])).at(-1);
+  return said ? said[lang] : "";
+}
+
 /** The end of an agent turn: what to remember, its status (waiting for the buyer, for a person, or done) and the record. */
 async function finishTurn(run: TurnRun): Promise<void> {
   const { store, thread } = run;
@@ -497,8 +522,8 @@ export function settled(messages: ModelMessage[]): ModelMessage[] {
  */
 async function showLine(run: TurnRun, text: string): Promise<void> {
   // Two to four sentences, with the agent's two marks (**figure**, {{day}}) kept for display and stripped for the check.
-  // A date written "16.11." carries its own full stop: a sentence ending on it gets no second one ("16.11..", "16.11.}}.").
-  const one = text.replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n").trim().slice(0, 600).replace(/(\d{1,2}\.\d{1,2}\.)(\}\}|\*\*)?\./g, "$1$2");
+  const one = plainLine(run, text.replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n").trim().slice(0, 600));
+  if (!one) return;
   const plain = one.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\{\{([^}]+)\}\}/g, "$1");
   // Under 60 words: whole sentences from the start while they fit, and a closing question kept (it is what is open).
   const words = (x: string) => x.replace(/\*\*|\{\{|\}\}/g, "").split(/\s+/).filter(Boolean).length;

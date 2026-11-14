@@ -151,17 +151,27 @@ function QueuedNode() {
   );
 }
 
+/** The store's formats, with English days as people write them ("Mon 16 Nov"); Finnish and Swedish keep "ma 16.11.". */
+function useThreadFormat() {
+  const f = useFormat();
+  if (f.lang !== "en") return f;
+  const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  return { ...f, day: (iso: string) => { const d = new Date(`${iso.slice(0, 10)}T12:00:00Z`); return `${WD[d.getUTCDay()]} ${d.getUTCDate()} ${MON[d.getUTCMonth()]}`; } };
+}
+
 // ---------- one reply of the agent ----------
 
 function AgentNode({ turn, thread, tap, busy, latest }: { turn: AgentTurn; thread: Thread; tap: Tap; busy: boolean; latest: boolean }) {
   const tx = useText(THREAD_LINE_TEXT);
   const w = useText(THREAD_WORDS);
-  const f = useFormat();
+  const f = useThreadFormat();
   const cards = turn.cards;
   const today = cards.find((c): c is TodayCard => c.type === "today");
   const running = turn.steps.findLast((s) => s.status === "running");
   if (turn.status === "working" && !turn.line && !cards.some((c) => c.type !== "understood")) return <WorkingNode label={running ? stepLabel(running, w, f.lang) : undefined} />;
-  const text = turn.line || (today ? todaySentence(today, tx, f) : fallbackLine(turn, thread, tx, f));
+  // While it works, the agent's own words are still coming: no stand-in text from the cards until it has finished.
+  const text = turn.line || (today ? todaySentence(today, tx, f) : turn.status === "working" ? "" : fallbackLine(turn, thread, tx, f));
   const thinks = thinking(turn, thread, tx, w, f);
   return (
     <li className="tl-in relative">
@@ -173,7 +183,7 @@ function AgentNode({ turn, thread, tap, busy, latest }: { turn: AgentTurn; threa
           <Rich text={text} />
         </p>
       )}
-      {turn.status === "working" && running && <p className="tl-sheen mt-1 text-[0.9rem] font-medium text-petrol">{stepLabel(running, w, f.lang)}</p>}
+      {turn.status === "working" && (running || !text) && <p className="tl-sheen mt-1 text-[0.9rem] font-medium text-petrol">{running ? stepLabel(running, w, f.lang) : tx.working}</p>}
       {cards.map((c) => (c.type === "offer" && c.state === "open" && !(turn.line ?? "").includes(c.text[f.lang].say.slice(0, 24)) ? <OfferWords key={c.cardId} card={c} lang={f.lang} /> : null))}
       {latest && <Choices turn={turn} thread={thread} tap={tap} busy={busy} />}
       <Lists turn={turn} thread={thread} />
@@ -190,7 +200,7 @@ function AgentNode({ turn, thread, tap, busy, latest }: { turn: AgentTurn; threa
 function Choices({ turn, thread, tap, busy }: { turn: AgentTurn; thread: Thread; tap: Tap; busy: boolean }) {
   const tx = useText(THREAD_LINE_TEXT);
   const w = useText(THREAD_WORDS);
-  const f = useFormat();
+  const f = useThreadFormat();
   const wf = fmtFor(f.lang);
   const rows: { key: string; title: string; price?: string; differs?: string; action: ThreadAction }[] = [];
   for (const c of turn.cards) {
@@ -248,7 +258,7 @@ function perUnitOf(o: OptionView, f: ReturnType<typeof useFormat>): string | und
 
 function Lists({ turn, thread }: { turn: AgentTurn; thread: Thread }) {
   const tx = useText(THREAD_LINE_TEXT);
-  const f = useFormat();
+  const f = useThreadFormat();
   const lists: { key: string; rows: { item: string; amount?: string; total?: string }[]; total?: string }[] = [];
   const fromSheet = new Set(thread.turns.flatMap((x) => (x.role === "agent" ? x.cards.flatMap((c) => (c.type === "sheet" && c.orderId ? [c.orderId] : [])) : [])));
   for (const c of turn.cards) {
@@ -343,7 +353,7 @@ function orderOf(thread: Thread, orderId?: string): OrderCard | undefined {
 
 function SignOffSlab({ card, thread, tap, total, what }: { card: GateCardT; thread: Thread; tap: Tap; total?: number; what?: string }) {
   const tx = useText(THREAD_LINE_TEXT);
-  const f = useFormat();
+  const f = useThreadFormat();
   const w = useText(THREAD_WORDS);
   const s = useSignOff(card);
   const order = orderOf(thread, card.orderId);
@@ -402,7 +412,7 @@ function SignOffSlab({ card, thread, tap, total, what }: { card: GateCardT; thre
 
 function SignedSlab({ card, thread }: { card: GateCardT; thread: Thread }) {
   const tx = useText(THREAD_LINE_TEXT);
-  const f = useFormat();
+  const f = useThreadFormat();
   const order = orderOf(thread, card.orderId);
   return (
     <section aria-label={tx.okd} data-slab="signed" className="tl-in mt-4 overflow-hidden rounded-[1.4rem] bg-safety-ink text-paper">
@@ -522,6 +532,8 @@ function fallbackLine(turn: AgentTurn, thread: Thread, tx: Tx, f: ReturnType<typ
     if (c.type === "records") return tx.fallback.records;
     if (c.type === "rules") return tx.fallback.rules;
     if (c.type === "products") return tx.fallback.products;
+    if (c.type === "gate" && c.said) return c.said[f.lang];
+    if (c.type === "notice" && c.said) return c.said[f.lang];
     // The engine's own notice, short: its first two sentences, without product codes.
     if (c.type === "notice") return c.message.replace(/\s*\([A-Z]{2}-\d{3,}\)/g, "").split(/(?<=[.!?])\s+/).slice(0, 2).join(" ").slice(0, 280);
   }
@@ -557,7 +569,7 @@ function OfferWords({ card, lang, big }: { card: OfferCard; lang: "en" | "fi" | 
 
 function Landing({ today, offer, thread }: { today?: TodayCard; offer?: OfferCard; thread?: Thread }) {
   const tx = useText(THREAD_LINE_TEXT);
-  const f = useFormat();
+  const f = useThreadFormat();
   const { kitchen, thread: api, lang } = usePortal();
   const h = Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hour12: false, timeZone: "Europe/Helsinki" }).format(new Date()));
   const part = h < 11 ? "morning" : h < 18 ? "day" : "evening";

@@ -11,6 +11,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { chromium, type Page } from "@playwright/test";
 import { TEST_ACCOUNTS } from "@/server/accounts/test-accounts";
+import { codeLeaks } from "@/server/thread/refusal";
 import type { AgentTurn, Card, Thread } from "@/server/thread/types";
 
 const args = process.argv.slice(2);
@@ -156,9 +157,11 @@ async function run(id: keyof typeof W & ("milk" | "lunch" | "oat" | "reorder")):
     const t = await thread(page);
     await shot("9-end");
     const words = t.turns.flatMap((x) => (x.role === "agent" && x.line ? [x.line.replace(/\*\*|\{\{|\}\}/g, "").split(/\s+/).filter(Boolean).length] : []));
-    const ok = !!done(t);
+    // No code ever reaches a sentence the buyer reads.
+    const leaks = t.turns.flatMap((x) => (x.role === "agent" && x.line ? codeLeaks(x.line) : []));
+    const ok = !!done(t) && !leaks.length;
     await browser.close();
-    return { id, ok, seconds: Math.round((Date.now() - t0) / 100) / 10, typed, words, taps, ...(ok ? {} : { note: "no placed order" }) };
+    return { id, ok, seconds: Math.round((Date.now() - t0) / 100) / 10, typed, words, taps, ...(ok ? {} : { note: leaks.length ? `codes in replies: ${leaks.join(", ")}` : "no placed order" }) };
   } catch (e) {
     await shot("9-failed").catch(() => undefined);
     await browser.close();
