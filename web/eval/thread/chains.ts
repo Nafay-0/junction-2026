@@ -18,7 +18,7 @@ const kitchen = opt("--kitchen", "hotel-lumo")!;
 const only = opt("--only")?.split(",");
 
 type Said = "item" | "amount" | "day";
-type Chain = { id: string; kitchen?: string; turns: { text: string; says: Said[] }[]; expect: { item: RegExp; amount?: number; day?: boolean; weekday?: number } };
+type Chain = { id: string; kitchen?: string; turns: { text: string; says: Said[] }[]; expect: { item: RegExp; amount?: number; day?: boolean; weekday?: number; lastSaysTime?: boolean } };
 
 const CHAINS: Record<"en" | "fi", Chain[]> = {
   en: [
@@ -30,6 +30,8 @@ const CHAINS: Record<"en" | "fi", Chain[]> = {
     { id: "again", turns: [{ text: "salmon soup for 10 on Monday", says: ["amount", "day"] }, { text: "12 litres", says: [] }, { text: "12 litres", says: [] }], expect: { item: /./ } },
     // A kitchen that receives on Tuesdays and Fridays: told Monday is not a delivery day, the yes to Tuesday is the day ordered.
     { id: "agreed-day", kitchen: "kahvila-sointu", turns: [{ text: "I need 30 litres of lactose-free milk by Monday", says: ["item", "amount", "day"] }, { text: "yes", says: [] }], expect: { item: /milk/i, day: true, weekday: 2 } },
+    // "When is the cut-off?" is answered with the wholesaler's own order time.
+    { id: "cutoff", turns: [{ text: "200 litres of lactose-free milk for Wednesday", says: ["item", "amount", "day"] }, { text: "when is the cut-off?", says: [] }], expect: { item: /milk/i, amount: 200, day: true, lastSaysTime: true } },
     { id: "back", turns: [{ text: "30 litres of lactose-free milk for Friday", says: ["item", "amount", "day"] }, { text: "what did we spend this week?", says: [] }, { text: "make it 40", says: ["amount"] }], expect: { item: /milk/i, amount: 40, day: true } },
   ],
   fi: [
@@ -116,7 +118,9 @@ async function main() {
     const dayOf = orderDay?.type === "order" ? orderDay.deliveryDate : offered?.type === "options" ? offered.options[0]?.deliveryDate : day;
     const weekdayOk = chain.expect.weekday === undefined || (!!dayOf && ((new Date(`${dayOf}T12:00:00Z`).getUTCDay() + 6) % 7) + 1 === chain.expect.weekday);
     const okDay = (!chain.expect.day || !!day || !!(sheet?.type === "sheet" && sheet.deliveryDate)) && weekdayOk;
-    const ok = okItem && okAmount && okDay;
+    const lastLine = (store.agentTurn(store.peek(slug)!, [...store.peek(slug)!.turns].reverse().find((x) => x.role === "agent")!.turnId)?.line ?? "").replace(/\*\*|\{\{|\}\}/g, "");
+    const okTime = !chain.expect.lastSaysTime || /\b\d{1,2}[.:]\d{2}\b/.test(lastLine);
+    const ok = okItem && okAmount && okDay && okTime;
     console.log(`\n${lang}/${door} ${chain.id}: ${ok ? "right" : "WRONG"} after ${chain.turns.length} turns, ${repeated} repeated question${repeated === 1 ? "" : "s"}, ${codes} code${codes === 1 ? "" : "s"} in replies${ok ? "" : ` (item ${okItem}, amount ${okAmount}, day ${okDay})`}\n${log.join("\n")}`);
     summary.push(`${chain.id}: ${ok && !codes ? "right" : "WRONG"}, ${chain.turns.length} turns, ${repeated} repeated, ${codes} codes`);
   }

@@ -14,7 +14,7 @@ import { cardId, gateCard, orderCard } from "./cards";
 import { withFallback } from "./fallback";
 import { combineItems, orderFromWords, record, REPEAT_SCALED, repeatScaled, runAction, step, type ItemOutcome, type TurnRun } from "./pipeline";
 import { ADDITION, isShort, subjectLine, subjectOf, type Subject } from "./subject";
-import type { RecordsCard, ThreadAction } from "./types";
+import type { Card, RecordsCard, ThreadAction } from "./types";
 import { earlierFor } from "./earlier";
 import { speakFacts } from "./speak";
 
@@ -244,6 +244,16 @@ async function placedAlready(run: TurnRun, requestId: string): Promise<boolean> 
   return run.store.cards(run.thread).some((x) => x.card.type === "gate" && x.card.requestId === requestId && x.card.outcome !== "refused");
 }
 
+/** "When is the cut-off?": the order times of what is on the table (the newest options and price), from the offers. */
+function orderTimes(cards: Card[]): string {
+  const opts = cards.filter((c) => c.type === "options").at(-1);
+  const price = cards.filter((c) => c.type === "price").at(-1);
+  const lines: string[] = [];
+  if (opts?.type === "options") for (const o of opts.options.slice(0, 3)) if (o.orderBy) lines.push(`${o.title}: order by ${o.orderBy} for delivery ${o.deliveryDate}`);
+  if (price?.type === "price") lines.push(`the fixed price holds until ${price.expiresAt}, delivery ${price.deliveryDate}`);
+  return lines.length ? `ORDER TIMES (the wholesaler's own, for "when is the cut-off?"): ${lines.join("; ")}.` : "";
+}
+
 /** The context the model gets each turn, after the cached instructions: today, the kitchen, and what is open. */
 export function turnContext(run: TurnRun, refs: OpenRef[]): string {
   const today = localNow(new Date()).date;
@@ -262,6 +272,7 @@ export function turnContext(run: TurnRun, refs: OpenRef[]): string {
     `Today is ${weekday} ${today} (Helsinki). Kitchen: ${run.k.info.name}. You are ${run.k.info.agentName}. This turn came through the ${run.door === "voice" ? "voice door (spoken)" : "store (typed)"}.`,
     subjectLine(subjectOf(run)),
     refs.length ? `OPEN DECISIONS (ref: what it does):\n${refs.map((r) => `- ${r.ref}: ${r.label}`).join("\n")}` : "OPEN DECISIONS: none.",
+    orderTimes(cardsNow),
     waiting.length ? `WAITING FOR A PERSON'S OK (you know these orders; say which one when asked; nobody but that person, with their own passkey, can place it): ${waiting.join("; ")}.` : "",
   ]
     .filter(Boolean)

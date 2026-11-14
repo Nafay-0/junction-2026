@@ -570,7 +570,9 @@ async function showLine(run: TurnRun, text: string): Promise<void> {
   const plain = one
     .replace(/\*\*([^*]+)\*\*/g, "$1")
     .replace(/\{\{([^}]+)\}\}/g, "$1")
-    .replace(/\b(\d{1,2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\b/g, (_m, d: string, mo: string) => `${d}.${MONTHS.indexOf(mo.toLowerCase()) + 1}.`);
+    .replace(/\b(\d{1,2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\b/g, (_m, d: string, mo: string) => `${d}.${MONTHS.indexOf(mo.toLowerCase()) + 1}.`)
+    // A time "17.00" (no month 00 or above 12) at a sentence's end is a time, not a date "17.00.".
+    .replace(/\b([01]?\d|2[0-3])\.([0-5]\d)(?=\.?(?:\s|$|[,;?!]))/g, (m, h: string, mm: string) => (mm === "00" || Number(mm) > 12 ? `${h}:${mm}` : m));
   // Under 60 words: whole sentences from the start while they fit, and a closing question kept (it is what is open).
   const words = (x: string) => x.replace(/\*\*|\{\{|\}\}/g, "").split(/\s+/).filter(Boolean).length;
   if (words(one) > 60) {

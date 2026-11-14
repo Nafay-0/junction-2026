@@ -54,6 +54,7 @@ function cardFacts(c: Card): Record<string, unknown> | undefined {
             packs: o.lines.map((l) => `${l.quantity} × ${l.packSize ?? 1} ${l.unit ?? ""}`.trim()).join(" + "),
             totalEur: eur(o.totalCents),
             delivery: o.deliveryDate,
+            ...(o.orderBy ? { orderBy: o.orderBy } : {}),
             ...(o.match === "compromise" ? { notExactly: o.givesUp.join("; ") } : {}),
             ...(usual ? { insteadOfUsual: usual.params } : {}),
             ...(deposit(o) ? { plusDepositEur: eur(deposit(o)) } : {}),
