@@ -111,3 +111,47 @@ as a bearer token.
 - Change `DOCK_WHOLESALER_JWK`, `DOCK_DEMO_ORG_JWK`, `DOCK_CONNECTOR_SECRET`, `DOCK_OPS_PASSCODE` or
   `DOCK_ACCOUNT_KEY_SECRET` (it seals every kitchen's key in the database; a new value locks them all).
 - Merge or push to branch `deploy/aiven` by hand.
+
+## Release checklist (before each presentation)
+
+Full details and the test map: `web/e2e/README.md`; open defects: `web/e2e/FINDINGS.md`. All local runs use their
+own hermetic servers (seed catalogue, no model, no secrets) and never touch the deployment.
+
+**On the commit you are about to deploy** (from `web/`, about 10 minutes):
+
+```bash
+git fetch origin && git checkout origin/main
+pnpm install --frozen-lockfile
+pnpm test:predeploy        # typecheck, unit, build, pnpm demo, QA harness, sign-off + order lane on Chromium and WebKit phones
+```
+
+Every line must say PASS. If one fails, read `web/test-results/run-<step>.log` and do not deploy that commit. The
+night before (or when a large change lands), run `pnpm test:full` instead (about 45 minutes; every browser and
+size, accessibility, visual comparison, failure scenarios), or check the latest **Demo suite** run on CRACI
+(`.github/workflows/demo-suite.yml`, on every push to main and every three hours).
+
+**Deploy, then check the live site read-only** (no join, no order; one live price lookup):
+
+```bash
+node infra/aiven-deploy.mjs                     # ends with its own smoke test
+cd web && E2E_LIVE_URL=https://jolly-wondrous-bunny.eur-1.aiven.app pnpm exec playwright test --project=live
+```
+
+Expect 5 passed: health ok on the `valio` catalogue with the ledger not diverged, the wall with its QR code and no
+script errors, the shop with a live price, the operations desk asking for the passcode.
+
+**Then, with two real phones on the venue Wi-Fi (5 minutes)**: the checklist in `web/e2e/README.md`, "Five-minute
+manual check": scan, passkey, the request opens by itself, lock and unlock, approve, signed order on the wall,
+decline on the second phone, the store's lane on a phone, layout and language buttons, the call screen if voice is
+shown. If the request does not open by itself on a phone within 10 seconds, the venue network is blocking the
+live stream: tell the presenter to have visitors reload and tap the request under "Waiting for you".
+
+**Limits to keep in mind on stage** (measured on a local build with the public limits on):
+
+- One venue address: about 15 visitors can join per minute (rule `join`), and 12 "ask my agent" taps per minute
+  (rule `demo-order`); the 16th joiner within a minute sees "Too many requests from your address; try again in N s".
+  Ten visitors at once all complete. Stagger larger groups by a minute.
+- One order page (`/k/<kitchen>/order`) watching a request per address is fine; a second one from the same address
+  starts getting 429s within a minute (rule `console-call`). Keep one store page open per table, not one per phone.
+- `demoLimits` in `/api/health`: at the model cap, free text and the assistant stop until midnight UTC with no
+  offline fallback (FINDINGS.md); raise the cap before the session rather than during it.

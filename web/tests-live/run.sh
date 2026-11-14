@@ -6,7 +6,8 @@
 #                                 partner failure scenarios, a 2-minute load step. About 35-45 minutes on a laptop.
 #   tests-live/run.sh predeploy   typecheck, unit tests, build, pnpm demo, the QA harness's core run, the browser
 #                                 demo paths on Chromium phone + WebKit phone. About 8-10 minutes.
-#   tests-live/run.sh ci          what .github/workflows/demo-suite.yml runs (full minus the load step).
+#   tests-live/run.sh checks      everything but the browser suite and the load step (the CI "checks" job).
+#   tests-live/run.sh ci          full minus the load step.
 #
 # Every server is hermetic (seed catalogue, no model, no partner, no Aiven, no .env.local) and started on its own
 # port (E2E_PORT, default 4601, and +1, +5); nothing touches the public deployment. NO_BUILD=1 reuses .next.
@@ -56,7 +57,7 @@ case "$MODE" in
     step qa with_qa_server pnpm qa --url "http://localhost:${QA_PORT}"
     step browser e2e --project=chromium-phone --project=webkit-phone e2e/demo/approval.spec.ts e2e/demo/store.spec.ts e2e/demo/catalogue.spec.ts e2e/demo/presenter.spec.ts
     ;;
-  full | ci)
+  full | ci | checks)
     step lint pnpm lint
     step typecheck pnpm typecheck
     step unit pnpm test
@@ -66,7 +67,7 @@ case "$MODE" in
     step demo-all pnpm demo:all --seed
     step crash pnpm crash:reproduce
     step qa with_qa_server pnpm qa --url "http://localhost:${QA_PORT}"
-    step browser e2e
+    [ "$MODE" = checks ] || step browser e2e
     step deps pnpm exec tsx tests-live/deps/run.ts --only model,partner
     if [ "$MODE" = full ]; then
       step load pnpm exec tsx tests-live/load/load.ts --fresh-port $((PORT + 6)) --steps 1,4 --step-seconds 60

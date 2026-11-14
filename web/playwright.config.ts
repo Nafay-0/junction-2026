@@ -64,11 +64,13 @@ export default defineConfig({
     { name: "room", testDir: "e2e/room", use: { ...devices["Pixel 7"], launchOptions: chromiumMedia } },
     { name: "a11y", testDir: "e2e/a11y", use: { ...devices["Desktop Chrome"], viewport: DESKTOP } },
     { name: "visual", testDir: "e2e/visual", use: { ...devices["Desktop Chrome"], viewport: DESKTOP } },
+    // Read-only smoke of a deployed site (E2E_LIVE_URL): GETs only, no join, no order. Never part of a default run.
+    ...(process.env.E2E_LIVE_URL ? [{ name: "live", testDir: "e2e/live", use: { ...devices["Pixel 7"], baseURL: process.env.E2E_LIVE_URL } }] : []),
     // The single-file specs other branches keep at e2e/*.spec.ts (portal, accounts). The restart proof and the
     // table show need a server you run (E2E_BASE_URL); they skip or are ignored here.
     { name: "legacy", testDir: "e2e", testMatch: /\/e2e\/[^/]+\.spec\.ts$/, testIgnore: process.env.E2E_BASE_URL ? [] : [/show\.spec\.ts$/], use: { ...devices["Pixel 7"] } },
   ],
-  webServer: remote
+  webServer: remote || process.env.E2E_LIVE_URL
     ? undefined
     : [
         { command: `node e2e/support/start-server.mjs ${port}`, url: `http://localhost:${port}/api/v1`, reuseExistingServer: !!process.env.E2E_REUSE, timeout: 90_000 },
