@@ -85,15 +85,12 @@ export function Home() {
   return (
     <div className="mt-5 space-y-10">
       <Hero o={o} cutoffs={cutoffs} now={now} />
-      {/* What needs the buyer and what is coming sit beside the kitchen's own book, so neither column runs empty. */}
       <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
-        <div className="min-w-0 space-y-10">
-          <Attention o={o} cutoffs={cutoffs} now={now} />
-          <Deliveries o={o} />
-        </div>
+        <Attention o={o} cutoffs={cutoffs} now={now} />
         <Ledger o={o} />
       </div>
       <StandingOrders o={o} cutoffs={cutoffs} cutoffError={cutoffError} now={now} />
+      <Deliveries o={o} />
     </div>
   );
 }
