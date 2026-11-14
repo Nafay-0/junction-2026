@@ -27,6 +27,7 @@ import {
   type SubstituteCandidate,
 } from "@/core/watch";
 import { WATCH_TEXT } from "../portal-requests";
+import { STAGED_PREFIX, setStaged } from "./overlay";
 import type { KitchenKind } from "../console-kitchens";
 import type { RecordStore } from "../records";
 import type { Runtime } from "../runtime";
@@ -155,7 +156,9 @@ type State = {
   liveCalls: number;
   runs: { at: string; by: string; kitchens: number; findings: number; placed: number; held: number; liveCalls: number }[];
 };
-const states = new WeakMap<Runtime, State>();
+// On globalThis: the bundler may load this module once per route; every route must see the same watch.
+const gw = globalThis as typeof globalThis & { __dockWatchStates?: WeakMap<Runtime, State> };
+const states = (gw.__dockWatchStates ??= new WeakMap<Runtime, State>());
 
 function stateOf(rt: Runtime): State {
   let s = states.get(rt);
@@ -167,6 +170,7 @@ function stateOf(rt: Runtime): State {
     for (const r of await stores.renewals.list()) st.renewals.set(r.renewalId, r);
     for (const a of await stores.auto.list()) st.auto.set(`${a.orgId}:${a.family}`, a);
     for (const g of await stores.stages.list()) st.stages.set(g.stageId, g);
+    for (const orgId of new Set([...st.stages.values()].map((g) => g.orgId))) syncOverlay(rt, st, orgId);
   })().catch((err) => console.error("[watch] restore", err));
   states.set(rt, (s = st));
   return s;
@@ -196,7 +200,7 @@ const unitWord = (u: string) => (u === "kg" ? "kg" : u === "L" ? "L" : u);
 
 // ---------- the kitchens it watches ----------
 
-export type WatchKitchen = { slug: string; kind: KitchenKind; orgId: string; name: string; mandate: Mandate; mandateToken: string; agentId: string; by: string };
+export type WatchKitchen = { slug: string; kind: KitchenKind; orgId: string; name: string; mandate: Mandate; mandateToken: string; agentId: string; by: string; /** A shared public test account (reset on a timer). */ shared?: boolean };
 
 /** The kitchens with an agent: the two demo kitchens, visitors' kitchens, account kitchens. */
 export async function watchKitchens(rt: Runtime, only?: string[]): Promise<WatchKitchen[]> {
@@ -206,7 +210,7 @@ export async function watchKitchens(rt: Runtime, only?: string[]): Promise<Watch
   for (const slug of [...new Set(slugs)]) {
     const k = await resolveKitchen(slug).catch(() => undefined);
     if (!k) continue;
-    out.push({ slug, kind: k.info.kind, orgId: k.info.orgId, name: k.info.name, mandate: (decodeJwt(k.mandateToken) as { mandate: Mandate }).mandate, mandateToken: k.mandateToken, agentId: k.agentId, by: k.info.by });
+    out.push({ slug, kind: k.info.kind, orgId: k.info.orgId, name: k.info.name, mandate: (decodeJwt(k.mandateToken) as { mandate: Mandate }).mandate, mandateToken: k.mandateToken, agentId: k.agentId, by: k.info.by, ...(k.info.account?.shared ? { shared: true } : {}) });
   }
   return out;
 }
@@ -218,13 +222,13 @@ export async function watchKitchen(rt: Runtime, slug: string): Promise<WatchKitc
 }
 
 /** The kitchen's agent, in-process, on its own share of the live allowance (the watch does not use up the store's). */
-async function sessionOf(rt: Runtime, k: WatchKitchen): Promise<AgentSession> {
+export async function sessionOf(rt: Runtime, k: WatchKitchen): Promise<AgentSession> {
   const s = await rt.dock.authenticate(k.mandateToken, k.agentId, { via: "onsite", transport: "direct", path: "kitchen agent's watch" });
   return { ...s, share: "watch" };
 }
 
 /** The kitchen whose session this is (an outside agent's or the conversation's). */
-async function kitchenOfSession(rt: Runtime, session: AgentSession): Promise<WatchKitchen> {
+export async function kitchenOfSession(rt: Runtime, session: AgentSession): Promise<WatchKitchen> {
   const orgId = session.mandate.issuer.orgId;
   const known = (await watchKitchens(rt)).find((k) => k.orgId === orgId);
   if (known) return { ...known, mandate: session.mandate };
@@ -277,22 +281,20 @@ async function watchRequest(rt: Runtime, s: State, session: AgentSession, now: D
 
 const activeStockOuts = (s: State, orgId: string) => [...s.stages.values()].filter((g) => g.kind === "stock_out" && g.orgId === orgId && !g.liftedAt);
 
-/** A staged stock-out over the live answer: out of stock until the staged day, signed as simulated. */
-function staged(st: WatchStatus, g: Stage): WatchStatus {
-  const base: LiveOffer = st.offer ?? { productId: st.productId, unitPriceCents: 0, availablePacks: 0, deliveryDate: g.until! };
-  const offer: LiveOffer = { ...base, availablePacks: 0, stockKnown: true, deliveryDate: g.until!, laterThanRequested: true, simulated: true };
-  return { productId: st.productId, offer, problems: ["out_of_stock"], orderable: false, message: `STAGED for the demo by ${g.by}: out of stock until ${g.until}. The partner's live answer was ${st.orderable ? "available" : `not orderable (${st.problems.join(", ")})`}.`, staged: true };
+/** The staged stock-outs of an organisation, laid over every live answer it gets (overlay.ts, the core's liveOverlay). */
+function syncOverlay(rt: Runtime, s: State, orgId: string) {
+  setStaged(rt.dock, orgId, activeStockOuts(s, orgId).map((g) => ({ stageId: g.stageId, productId: g.productId!, until: g.until!, by: g.by })));
 }
 
 /**
- * The watch's live answer for the kitchen's key products: one call, cached ten minutes. Statuses carry every offer
- * the wholesaler gave (usable or not) and the staged conditions over them.
+ * The watch's live answer for the kitchen's key products: one call, cached ten minutes. A staged stock-out arrives
+ * already in it (the core's overlay, so the intake sees the same), marked by its message and `simulated` offer.
  */
 async function liveOf(rt: Runtime, k: WatchKitchen, keys: KeyProduct[], now: Date, fresh: boolean): Promise<Cached> {
   const s = await ready(rt);
   const hit = s.cache.get(k.orgId);
   const ids = keys.map((x) => x.productId);
-  if (!fresh && hit && Date.now() - hit.at < CACHE_MS && ids.every((id) => hit.statuses.has(id))) return { ...hit, liveCalls: 0, statuses: overlay(s, k.orgId, hit.statuses) };
+  if (!fresh && hit && Date.now() - hit.at < CACHE_MS && ids.every((id) => hit.statuses.has(id))) return { ...hit, liveCalls: 0 };
   const session = await sessionOf(rt, k);
   const requestId = await watchRequest(rt, s, session, now);
   const statuses = new Map<string, WatchStatus>();
@@ -301,26 +303,26 @@ async function liveOf(rt: Runtime, k: WatchKitchen, keys: KeyProduct[], now: Dat
     const r = await rt.dock.lookupAvailability(session, { requestId, productIds: ids, includeClaims: true });
     s.liveCalls += 1;
     claims = r.claims ?? [];
-    for (const o of r.offers) statuses.set(o.productId, { productId: o.productId, offer: o, problems: [], orderable: true, message: "" });
+    for (const o of r.offers) {
+      // A real stock figure of zero is offered by the core (it may come later); for the watch it cannot come.
+      const empty = o.availablePacks <= 0 && o.stockKnown !== false;
+      statuses.set(o.productId, { productId: o.productId, offer: o, problems: empty ? ["out_of_stock"] : [], orderable: !empty, message: empty ? "Out of stock (the wholesaler's live figure is 0)." : "" });
+    }
     for (const u of r.unavailable) {
       // The offer of a product that cannot be quoted, as the wholesaler stated it: from its signed availability claim.
       const c = claims.find((x) => x.productId === u.productId && x.type === "availability");
       const st = c ? (claimStatement(c.token) as { deliveryDate?: string }) : undefined;
-      statuses.set(u.productId, { productId: u.productId, problems: u.problems, orderable: false, message: u.message, ...(st?.deliveryDate ? { offer: { productId: u.productId, unitPriceCents: 0, availablePacks: 0, deliveryDate: st.deliveryDate } } : {}) });
+      statuses.set(u.productId, { productId: u.productId, problems: u.problems, orderable: false, message: u.message, ...(u.message.startsWith(STAGED_PREFIX) ? { staged: true } : {}), ...(st?.deliveryDate ? { offer: { productId: u.productId, unitPriceCents: 0, availablePacks: 0, deliveryDate: st.deliveryDate } } : {}) });
     }
   }
   const value: Cached = { at: Date.now(), keys, statuses, claims, requestId, liveCalls: ids.length ? 1 : 0 };
   s.cache.set(k.orgId, value);
-  return { ...value, statuses: overlay(s, k.orgId, statuses) };
+  return value;
 }
 
-function overlay(s: State, orgId: string, statuses: Map<string, WatchStatus>): Map<string, WatchStatus> {
-  const out = new Map(statuses);
-  for (const g of activeStockOuts(s, orgId)) {
-    const st = out.get(g.productId!);
-    if (st) out.set(g.productId!, staged(st, g));
-  }
-  return out;
+/** When this kitchen's key products were last looked at (the cache's age), for the conversation's "is it fresh". */
+export async function watchedAt(rt: Runtime, orgId: string): Promise<number | undefined> {
+  return (await ready(rt)).cache.get(orgId)?.at;
 }
 
 // ---------- substitutes ----------
@@ -337,9 +339,14 @@ export function kindWords(p: Product): string {
     .trim() || p.name;
 }
 
-const dietClaims = (p: Product) => p.attributes.filter((a) => isMaterialAttribute(a) && !/^fat_/.test(a));
+/**
+ * The claims every candidate must carry: the diet ones (lactose-free, gluten-free, vegan...). Not fat level and not
+ * organic: a substitute without them is still worth showing, and the ranking says it needs a person ("not organic
+ * like the usual").
+ */
+const dietClaims = (p: Product) => p.attributes.filter((a) => isMaterialAttribute(a) && !/^fat_/.test(a) && a !== "organic");
 
-async function substitutesFor(rt: Runtime, k: WatchKitchen, session: AgentSession, requestId: string, original: Product, key: KeyProduct, usualPerUnitCents: number | null): Promise<{ ranked: RankedSubstitute[]; search: Finding["search"] }> {
+export async function substitutesFor(rt: Runtime, k: WatchKitchen, session: AgentSession, requestId: string, original: Product, key: KeyProduct, usualPerUnitCents: number | null): Promise<{ ranked: RankedSubstitute[]; search: Finding["search"]; offers: Map<string, LiveOffer> }> {
   const s = stateOf(rt);
   const claims = [...new Set([...k.mandate.requiredAttributes, ...dietClaims(original)])];
   const forbidden = k.mandate.forbiddenAllergens;
@@ -382,7 +389,9 @@ async function substitutesFor(rt: Runtime, k: WatchKitchen, session: AgentSessio
   }
   // The family at large, with the same diet claims (master data): what the search's words did not reach.
   for (const p of await rt.catalog.searchProducts({ category: original.category, attributes: claims, ...(forbidden.length ? { forbiddenAllergens: forbidden } : {}), limit: 30 }).catch(() => [] as Product[])) {
-    if (p.id !== original.id && !candidates.has(p.id)) candidates.set(p.id, { product: p, ...(p.attributes.filter(isMaterialAttribute).join() === original.attributes.filter(isMaterialAttribute).join() ? {} : { label: "variant" as const }) });
+    // Not judged: only the same kind by its words counts as close (a cucumber is no butternut squash, though both are vegetables).
+    const sameWords = kindWords(original).toLowerCase().split(/\s+/).filter((w) => w.length > 3).some((w) => p.name.toLowerCase().includes(w));
+    if (p.id !== original.id && !candidates.has(p.id)) candidates.set(p.id, { product: p, label: !sameWords ? ("standin" as const) : p.attributes.filter(isMaterialAttribute).join() === original.attributes.filter(isMaterialAttribute).join() ? ("exact" as const) : ("variant" as const) });
   }
   // One live call for the closest few: the map's first, then the search's matches before its stand-ins.
   const close = (c: SubstituteCandidate) => (c.label === "exact" ? 0 : c.label === "variant" ? 2 : c.label ? 3 : likeForLike(original, c.product) ? 1 : 2);
@@ -398,7 +407,8 @@ async function substitutesFor(rt: Runtime, k: WatchKitchen, session: AgentSessio
   }
   const stated = (await rt.kitchens.getProfile(k.orgId))?.stated ?? [];
   const ranked = rankSubstitutes(original, usualPerUnitCents, ids.map((id) => candidates.get(id)!), { amount: key.amount, date: key.date }, { mandate: k.mandate, stated });
-  return { ranked, search: { mapCandidates: mapCount, searchCandidates: searchCount, priced: ids.length, ...(path ? { path } : {}) } };
+  const offers = new Map(ids.flatMap((id) => (candidates.get(id)?.offer ? [[id, candidates.get(id)!.offer!] as const] : [])));
+  return { ranked, search: { mapCandidates: mapCount, searchCandidates: searchCount, priced: ids.length, ...(path ? { path } : {}) }, offers };
 }
 
 // ---------- the watch's run ----------
@@ -409,7 +419,24 @@ export type WatchReport = { kitchen: string; name: string; keys: KeyProduct[]; f
  * One look over one kitchen: its key products (one live call, cached), a finding for each that cannot come for its
  * day (with substitutes), then the recurring orders it may renew. `fresh`: ask the wholesaler again now.
  */
-export async function runWatchFor(rt: Runtime, k: WatchKitchen, opts: { now?: Date; fresh?: boolean; by?: string; renew?: "due" | "now" } = {}): Promise<WatchReport> {
+export type WatchRunOptions = { now?: Date; fresh?: boolean; by?: string; renew?: "due" | "now" | "none"; families?: string[]; holdOnly?: boolean };
+
+/** One run per kitchen at a time (the schedule, staff, the conversation's look and a switch-on may meet): no renewal twice. */
+const gl = globalThis as typeof globalThis & { __dockWatchLocks?: Map<string, Promise<unknown>> };
+const locks = (gl.__dockWatchLocks ??= new Map());
+
+export async function runWatchFor(rt: Runtime, k: WatchKitchen, opts: WatchRunOptions = {}): Promise<WatchReport> {
+  const prev = locks.get(k.orgId) ?? Promise.resolve();
+  const run = prev.catch(() => undefined).then(() => runWatchLocked(rt, k, opts));
+  locks.set(k.orgId, run);
+  try {
+    return await run;
+  } finally {
+    if (locks.get(k.orgId) === run) locks.delete(k.orgId);
+  }
+}
+
+async function runWatchLocked(rt: Runtime, k: WatchKitchen, opts: WatchRunOptions): Promise<WatchReport> {
   const s = await ready(rt);
   const now = opts.now ?? new Date();
   const { keys, patterns } = await keyProducts(rt, k.orgId, now);
@@ -428,13 +455,24 @@ export async function runWatchFor(rt: Runtime, k: WatchKitchen, opts: { now?: Da
       if (open && open.state === "open") resolve(rt, open, "The product can come for the day again.");
       continue;
     }
-    if (open) {
-      report.findings.push(open);
+    if (open && open.staged === !!st.staged) {
+      // A backup lined up since the finding was made: ordered now.
+      const used = open.state === "open" ? await (await import("../reliability/service")).useBackup(rt, open).catch(() => undefined) : undefined;
+      report.findings.push(used ? s.findings.get(open.findingId)! : open);
       continue;
     }
-    report.findings.push(await addFinding(rt, k, key, original, st, short, live, patterns, now));
+    // Staged (or lifted) since: the earlier finding is closed and the new one says what holds now.
+    if (open) resolve(rt, open, st.staged ? "A stock-out was staged for the demo over it." : "The staged stock-out was lifted.");
+    const f = await addFinding(rt, k, key, original, st, short, live, patterns, now);
+    // A backup the kitchen lined up in advance for this product (server/reliability): ordered now, no second question.
+    const used = await (await import("../reliability/service")).useBackup(rt, f).catch((err: Error) => (console.warn("[watch] backup", err.message), undefined));
+    report.findings.push(used ? s.findings.get(f.findingId)! : f);
   }
-  report.renewals = await renewDue(rt, k, { now, window: opts.renew ?? "due", live, patterns });
+  if (opts.renew === "none") {
+    report.liveCalls = s.liveCalls - before;
+    return report;
+  }
+  report.renewals = await renewDue(rt, k, { now, window: opts.renew ?? "due", holdOnly: !!opts.holdOnly, live, patterns: opts.families ? patterns.filter((p) => opts.families!.includes(p.family)) : patterns });
   report.liveCalls = s.liveCalls - before;
   return report;
 }
@@ -445,14 +483,10 @@ async function addFinding(rt: Runtime, k: WatchKitchen, key: KeyProduct, origina
   const pattern = patterns.find((p) => p.family === key.family && p.product.productId === key.productId);
   const usual = pattern?.usualPerUnitCents ?? null;
   const subs = await substitutesFor(rt, k, session, live.requestId, original, key, usual);
+  // The availability claim the core signed for this kitchen's lookup (simulated when staged: the overlay marks it).
   let claim: Finding["claim"];
-  if (st.staged && st.offer) {
-    const [, availability] = await rt.dock.signLiveClaims(k.orgId, st.offer, now);
-    claim = { claimId: availability.claimId, token: availability.token, simulated: true, statement: claimStatement(availability.token) };
-  } else {
-    const c = live.claims.find((x) => x.productId === key.productId && x.type === "availability");
-    if (c) claim = { claimId: c.claimId, token: c.token, simulated: false, statement: claimStatement(c.token) };
-  }
+  const c = live.claims.find((x) => x.productId === key.productId && x.type === "availability");
+  if (c) claim = { claimId: c.claimId, token: c.token, simulated: !!(decodeJwt(c.token) as { evidence?: { simulated?: boolean }[] }).evidence?.some((e) => e.simulated), statement: claimStatement(c.token) };
   const f: Finding = {
     findingId: newId("wf"),
     orgId: k.orgId,
@@ -504,10 +538,10 @@ export async function runWatch(rt: Runtime, opts: { kitchens?: string[]; now?: D
 
 // ---------- placing an order through the gate ----------
 
-type Placed = { requestId?: string; order?: PublicOrder; refused?: { code: string; rule?: string; message: string } };
+export type Placed = { requestId?: string; order?: PublicOrder; refused?: { code: string; rule?: string; message: string } };
 
 /** openRequest -> requestQuote -> placeOrder with the kitchen's mandate: the one path to an order. */
-async function placeThroughGate(rt: Runtime, session: AgentSession, input: { text: string; date: string; productId: string; packs: number; substituteFor?: string }): Promise<Placed> {
+export async function placeThroughGate(rt: Runtime, session: AgentSession, input: { text: string; date: string; productId: string; packs: number; substituteFor?: string }): Promise<Placed> {
   let requestId: string | undefined;
   try {
     const req = await rt.dock.openRequest(session, { text: input.text.slice(0, 2000), deliverOn: input.date, productIds: [input.substituteFor ?? input.productId] });
@@ -536,7 +570,7 @@ export function autoRenewOf(s: State, orgId: string, family: string): AutoRenew 
 }
 
 /** The kitchen's explicit choice, recorded with who made it and through which door. Off by default. */
-export async function setAutoRenew(rt: Runtime, session: AgentSession, input: { family: string; on: boolean; by: string; via: string; now?: Date }): Promise<AutoRenew> {
+export async function setAutoRenew(rt: Runtime, session: AgentSession, input: { family: string; on: boolean; by: string; via: string; now?: Date; renewNow?: boolean }): Promise<AutoRenew & { renewal?: Renewal }> {
   const s = await ready(rt);
   const orgId = session.mandate.issuer.orgId;
   const { patterns } = await patternsOf(rt, orgId);
@@ -546,6 +580,15 @@ export async function setAutoRenew(rt: Runtime, session: AgentSession, input: { 
   s.auto.set(`${orgId}:${input.family}`, a);
   await s.stores.auto.put(`${orgId}:${input.family}`, a);
   ledger(rt, { actor: `buyer:${orgId}`, summary: `${input.by} switched auto-renew ${input.on ? "on" : "off"} for the recurring ${input.family.replaceAll("_", " ")} order (${p.product.name}, usually ${p.slots.map((x) => `${WEEKDAY[x.weekday]} ${x.usualAmount} ${unitWord(p.unit)}`).join(", ")}), via ${input.via}. ${input.on ? "The agent renews it before the cut-off when nothing has drifted, within the mandate and through the gate; when something drifted it holds it and asks." : "The agent only reminds."}`, data: { step: "auto_renew", family: input.family, on: input.on, by: input.by, via: input.via } });
+  // Switched on: if the next one has drifted it is held and asked now; placing it waits for its cut-off window.
+  if (input.on && input.renewNow !== false) {
+    const k = await kitchenOfSession(rt, session);
+    if (k.mandateToken) {
+      const r = await runWatchFor(rt, k, { now: input.now, renew: "now", families: [input.family], holdOnly: true }).catch(() => undefined);
+      const renewal = r?.renewals.find((x) => x.family === input.family);
+      if (renewal) return { ...a, renewal };
+    }
+  }
   return a;
 }
 
@@ -556,7 +599,7 @@ function due(next: { date: string }, st: WatchStatus | undefined, now: Date): bo
   return addDaysIso(today(now), 2) >= next.date;
 }
 
-async function renewDue(rt: Runtime, k: WatchKitchen, ctx: { now: Date; window: "due" | "now"; live: Cached; patterns: Pattern[] }): Promise<Renewal[]> {
+async function renewDue(rt: Runtime, k: WatchKitchen, ctx: { now: Date; window: "due" | "now"; holdOnly?: boolean; live: Cached; patterns: Pattern[] }): Promise<Renewal[]> {
   const s = stateOf(rt);
   const out: Renewal[] = [];
   const profile = await rt.kitchens.getProfile(k.orgId);
@@ -579,6 +622,8 @@ async function renewDue(rt: Runtime, k: WatchKitchen, ctx: { now: Date; window: 
     const drift = driftOf(p, next.slot, { perUnitCents: livePerUnit, staged: !!st?.offer?.simulated });
     const decision = decideRenewal({ autoRenew: true, paused: !!profile?.pausedStanding?.includes(p.family), drift, available: st ? !short : undefined, handled, cutoffPassed: !!st?.problems.includes("cutoff_passed") && !short });
     if (decision.action === "none" || decision.action === "remind") continue;
+    // Just switched on: ask now about a drift; placing (or a substitute for a stock-out) waits for its cut-off window.
+    if (ctx.holdOnly && (decision.action !== "hold" || decision.because.every((b) => b === "stock"))) continue;
     out.push(await renew(rt, k, p, next, drift, decision, auto, ctx.now));
   }
   return out;
@@ -654,9 +699,9 @@ export function renewalSummary(r: Renewal): string {
   return `${st}The agent renewed ${r.kitchenName}'s recurring ${r.family.replaceAll("_", " ")} order for ${day} by itself: ${what}, ${formatEur(o.totalCents ?? 0)}; ${o.status === "committed" ? "within the mandate, committed" : `over what it may do alone, sent to ${o.approver ?? "a person"} for sign-off`} (auto-renew on since ${r.autoRenew.at.slice(0, 10)}, by ${r.autoRenew.by}).`;
 }
 
-const findingOutcome = (p: Placed) => ({ ...(p.requestId ? { requestId: p.requestId } : {}), ...(p.order ? { orderId: p.order.orderId, status: p.order.status, totalCents: p.order.totalCents, reasons: p.order.decision.reasons, ...(p.order.approval ? { approver: `${p.order.approval.approver.name} (${p.order.approval.approver.role.replaceAll("_", " ")})` } : {}) } : {}), ...(p.refused ? { note: `Refused by the gate (${p.refused.rule ?? p.refused.code}): ${p.refused.message}` } : {}) });
+export const findingOutcome = (p: Placed) => ({ ...(p.requestId ? { requestId: p.requestId } : {}), ...(p.order ? { orderId: p.order.orderId, status: p.order.status, totalCents: p.order.totalCents, reasons: p.order.decision.reasons, ...(p.order.approval ? { approver: `${p.order.approval.approver.name} (${p.order.approval.approver.role.replaceAll("_", " ")})` } : {}) } : {}), ...(p.refused ? { note: `Refused by the gate (${p.refused.rule ?? p.refused.code}): ${p.refused.message}` } : {}) });
 
-function decideFinding(rt: Runtime, f: Finding, d: FindingDecision) {
+export function decideFinding(rt: Runtime, f: Finding, d: FindingDecision) {
   const s = stateOf(rt);
   saveFinding(s, { ...f, state: "decided", decision: d });
   ledger(rt, {
@@ -736,7 +781,9 @@ export async function answerRenewal(rt: Runtime, session: AgentSession, renewalI
   // The usual product cannot come for the day (a watch finding): the amount chosen, of the best substitute.
   const f = [...s.findings.values()].find((x) => x.orgId === r.orgId && x.need.productId === r.product.productId && x.need.date === r.deliveryDate && x.state !== "resolved");
   const sub = f?.substitutes[0];
-  const subPacks = sub ? packsFor(amount, sub.tradeOff.packSize) : 0;
+  // The amount in the substitute's measure: the finding's need says how many litres or kilos one unit of the usual is.
+  const perUsualUnit = sub && f && sub.tradeOff.need && f.need.amount > 0 ? sub.tradeOff.need.amount / f.need.amount : 1;
+  const subPacks = sub ? packsFor(amount * perUsualUnit, sub.tradeOff.packSize) : 0;
   const placed = await placeThroughGate(rt, session, { text: `Recurring ${r.family.replaceAll("_", " ")} for ${dayName(r.deliveryDate)}: ${who.by} chose ${choice === "renew_new" ? "the new amount" : "the usual amount"}, ${amount} ${unitWord(r.amounts.unit)}, after the agent held it (${r.decision.reason})${sub ? `; ${r.product.name} cannot come, so ${sub.name}` : ""}`, date: r.deliveryDate, ...(sub ? { productId: sub.productId, packs: subPacks, substituteFor: r.product.productId } : { productId: r.product.productId, packs: packsFor(amount, r.product.packSize) }) });
   if (f && sub && f.state === "open") decideFinding(rt, f, { at: now.toISOString(), by: who.by, via: who.via, action: placed.order ? (placed.order.status === "committed" ? "switched" : placed.order.status === "pending_approval" ? "sent_for_sign_off" : "refused") : "refused", productId: sub.productId, ...findingOutcome(placed) });
   const done: Renewal = { ...r, state: placed.order ? "answered" : "failed", answer, outcome: { ...outcomeOf(placed), ...(f && sub ? { substitute: { productId: sub.productId, name: sub.name, insidePreferences: sub.insidePreferences, findingId: f.findingId } } : {}) } };
@@ -799,10 +846,22 @@ export async function watchForOrg(rt: Runtime, orgId: string, opts: { all?: bool
 }
 
 /** Run the watch now for the kitchen of this session (an outside agent's "check again"). */
-export async function watchNowFor(rt: Runtime, session: AgentSession, opts: { fresh?: boolean; now?: Date } = {}): Promise<WatchReport> {
+export async function watchNowFor(rt: Runtime, session: AgentSession, opts: { fresh?: boolean; now?: Date; renew?: "due" | "none" } = {}): Promise<WatchReport> {
   const k = await kitchenOfSession(rt, session);
   if (!k.mandateToken) return { kitchen: k.slug, name: k.name, keys: [], findings: [], renewals: [], liveCalls: 0, note: "This organisation has no kitchen the watch runs for." };
-  return runWatchFor(rt, k, { ...opts, renew: "due" });
+  return runWatchFor(rt, k, { ...opts, renew: opts.renew ?? "due" });
+}
+
+/**
+ * Before the conversation says what the watch has: when this kitchen's key products have not been looked at in the
+ * last ten minutes (after a restart, a test account reset, or before the first scheduled run), look now. At most
+ * one live call per kitchen per ten minutes; never throws.
+ */
+export async function watchIfStale(rt: Runtime, session: AgentSession, now = new Date()): Promise<void> {
+  const at = await watchedAt(rt, session.mandate.issuer.orgId);
+  if (at && Date.now() - at < CACHE_MS) return;
+  // Only looks: renewing is the schedule's and staff's run, never a side effect of opening the conversation.
+  await watchNowFor(rt, session, { now, renew: "none" }).catch((err: Error) => console.warn("[watch] look before the conversation", err.message));
 }
 
 /** Marks a moment as said in the conversation, so it is not said again. */
@@ -816,10 +875,11 @@ export async function markSaid(rt: Runtime, id: string, now = new Date()): Promi
 
 // ---------- staging (operations, demo kitchens only) ----------
 
-const STAGEABLE: KitchenKind[] = ["demo", "visitor"];
+/** Demo kitchens, visitors' QR kitchens and the shared public test accounts: never a restaurant's own account. */
+export const isStageable = (k: Pick<WatchKitchen, "kind" | "shared">) => k.kind === "demo" || k.kind === "visitor" || (k.kind === "account" && !!k.shared);
 
 function stageable(k: WatchKitchen) {
-  if (!STAGEABLE.includes(k.kind)) throw new DockError(403, "stage_not_allowed", `${k.name} is a restaurant's own kitchen: conditions are staged only for the demo and visitor kitchens.`);
+  if (!isStageable(k)) throw new DockError(403, "stage_not_allowed", `${k.name} is a restaurant's own kitchen: conditions are staged only for the demo kitchens and the shared test accounts.`);
 }
 
 /** Stage a stock-out of one product for one demo kitchen: the watch reads it as out of stock until `until`. */
@@ -830,12 +890,14 @@ export async function stageStockOut(rt: Runtime, input: { kitchen: string; produ
   const [p] = await rt.catalog.searchProducts({ ids: [input.productId], limit: 1 });
   if (!p) throw new DockError(404, "product_not_found", `No product ${input.productId} in the assortment.`);
   const now = input.now ?? new Date();
-  const until = input.until && /^\d{4}-\d{2}-\d{2}$/.test(input.until) ? input.until : addDaysIso(today(now), 5);
+  const until = input.until && /^\d{4}-\d{2}-\d{2}$/.test(input.until) ? input.until : addDaysIso(today(now), 7);
+  if (until <= today(now)) throw new DockError(400, "invalid_request", "The day it can come again must be after today.");
   for (const old of activeStockOuts(s, k.orgId).filter((g) => g.productId === p.id)) saveStage(s, { ...old, liftedAt: now.toISOString(), liftedBy: input.by });
   const g: Stage = { stageId: newId("stg"), kind: "stock_out", orgId: k.orgId, kitchen: k.slug, kitchenName: k.name, productId: p.id, productName: p.name, until, by: input.by, at: now.toISOString() };
   saveStage(s, g);
+  syncOverlay(rt, s, k.orgId);
   s.cache.delete(k.orgId);
-  ledger(rt, { actor: `staff:${input.by}`, summary: `STAGED for the demo by ${input.by}: ${p.name} (${p.id}) is out of stock for ${k.name} until ${until}, for the kitchen agent's watch only. The partner's live figures are unchanged; every claim signed from it says simulated.`, data: { step: "staged", stageId: g.stageId, kind: g.kind, productId: p.id, until, staged: true, by: input.by } });
+  ledger(rt, { actor: `staff:${input.by}`, summary: `STAGED for the demo by ${input.by}: ${p.name} (${p.id}) is out of stock for ${k.name} until ${until}, in every live answer that kitchen gets (its intake, quotes, the watch; no other kitchen). The partner's live figures are unchanged; every claim signed from it says simulated.`, data: { step: "staged", stageId: g.stageId, kind: g.kind, productId: p.id, until, staged: true, by: input.by } });
   return g;
 }
 
@@ -897,9 +959,33 @@ export async function liftStage(rt: Runtime, stageId: string, by: string, now = 
   }
   const done: Stage = { ...g, liftedAt: now.toISOString(), liftedBy: by };
   saveStage(s, done);
+  syncOverlay(rt, s, g.orgId);
   s.cache.delete(g.orgId);
   ledger(rt, { actor: `staff:${by}`, summary: `Staged condition lifted by ${by}: ${g.kind === "stock_out" ? `${g.productName} for ${g.kitchenName} is back to the partner's live figures` : `${g.kitchenName}'s ${g.family} orders are the real ones again`}.`, data: { step: "unstaged", stageId, kind: g.kind, staged: true, by } });
   return done;
+}
+
+/**
+ * A shared test account was reset to its seed (accounts/service.ts resetTestAccounts): what was staged for its old
+ * organisation is lifted and its auto-renew switched off, so the next person finds the kitchen as the seed has it.
+ */
+export async function clearForOrgs(rt: Runtime, orgIds: string[], by: string, now = new Date()): Promise<{ lifted: number; autoOff: number }> {
+  const s = await ready(rt);
+  let lifted = 0;
+  let autoOff = 0;
+  for (const g of [...s.stages.values()].filter((x) => orgIds.includes(x.orgId) && !x.liftedAt)) {
+    await liftStage(rt, g.stageId, by, now);
+    lifted += 1;
+  }
+  for (const [key, a] of [...s.auto.entries()].filter(([, x]) => orgIds.includes(x.orgId) && x.on)) {
+    const off: AutoRenew = { ...a, on: false, by, via: "test account reset", at: now.toISOString() };
+    s.auto.set(key, off);
+    await s.stores.auto.put(key, off);
+    autoOff += 1;
+  }
+  for (const orgId of orgIds) s.cache.delete(orgId);
+  if (lifted || autoOff) ledger(rt, { actor: "dock", summary: `Test account reset (${by}): ${lifted} staged condition${lifted === 1 ? "" : "s"} lifted and auto-renew switched off for ${autoOff} recurring order${autoOff === 1 ? "" : "s"}.`, data: { step: "reset", orgIds, lifted, autoOff, staged: lifted > 0 } });
+  return { lifted, autoOff };
 }
 
 // ---------- operations ----------
@@ -907,7 +993,7 @@ export async function liftStage(rt: Runtime, stageId: string, by: string, now = 
 /** The kitchens staff may stage conditions for (demo and visitor kitchens), with what each buys every week. */
 export async function stageableKitchens(rt: Runtime): Promise<{ slug: string; name: string; kind: KitchenKind; standing: { family: string; productId: string; name: string; weekdays: number[] }[] }[]> {
   const out = [];
-  for (const k of (await watchKitchens(rt)).filter((x) => STAGEABLE.includes(x.kind))) {
+  for (const k of (await watchKitchens(rt)).filter(isStageable)) {
     const { patterns } = await patternsOf(rt, k.orgId);
     out.push({ slug: k.slug, name: k.name, kind: k.kind, standing: patterns.map((p) => ({ family: p.family, productId: p.product.productId, name: p.product.name, weekdays: p.slots.map((x) => x.weekday) })) });
   }
@@ -918,10 +1004,12 @@ export type WatchView = {
   stats: { findingsOpen: number; findings: number; decided: number; placedAlone: number; sentForSignOff: number; held: number; skipped: number; autoRenewOn: number; staged: number; liveCalls: number };
   findings: Finding[];
   renewals: Renewal[];
-  auto: AutoRenew[];
+  auto: (AutoRenew & { kitchenName?: string })[];
   stages: Stage[];
   runs: State["runs"];
   schedule: { minutes: number | null; reason?: string };
+  /** Backups lined up for products with a poor delivery record (server/reliability), and when one was used. */
+  backups: import("../reliability/service").Backup[];
 };
 
 export async function watchView(rt: Runtime): Promise<WatchView> {
@@ -944,10 +1032,17 @@ export async function watchView(rt: Runtime): Promise<WatchView> {
     },
     findings: findings.slice(0, 100),
     renewals: renewals.slice(0, 100),
-    auto: [...s.auto.values()].sort((a, b) => b.at.localeCompare(a.at)),
+    // Staff read kitchens by name, not by organisation id.
+    auto: await (async () => {
+      const names = new Map<string, string>([...findings, ...renewals, ...s.stages.values()].map((x) => [x.orgId, x.kitchenName]));
+      const missing = [...s.auto.values()].some((a) => !names.has(a.orgId));
+      if (missing) for (const k of await (await import("../offers/service")).allKitchens(rt).catch(() => [])) names.set(k.orgId, k.name);
+      return [...s.auto.values()].sort((a, b) => b.at.localeCompare(a.at)).map((a) => ({ ...a, ...(names.get(a.orgId) ? { kitchenName: names.get(a.orgId) } : {}) }));
+    })(),
     stages: [...s.stages.values()].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 50),
     runs: s.runs,
     schedule: scheduleInfo(),
+    backups: (await (await import("../reliability/service")).allBackups(rt)).slice(0, 100),
   };
 }
 

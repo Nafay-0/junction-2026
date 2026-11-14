@@ -6,14 +6,14 @@ import { api } from "../../../_client/api";
 import { verifySigned, type KeySet } from "../../../_client/verify-signed";
 import { Badge } from "../../../_ui/kit";
 import { num, when } from "../../_ui/format";
-import { Button, Details, Empty, LoadError, Loading, Num, PageHead, Panel, Section, useNow, useOps } from "../../_ui/kit";
+import { Button, Empty, LoadError, Loading, Num, PageHead, Panel, Section, useNow, useOps } from "../../_ui/kit";
 import { Table } from "../../_ui/parts";
 
 type Offer = OffersView["offers"][number];
 type Found = { productId: string; name: string; category: string; packSize: number; unit: string };
 
 const STATUS: Record<string, { label: string; tone: "good" | "info" | "neutral" | "refused" | "bad" }> = {
-  offered: { label: "Open", tone: "info" },
+  offered: { label: "Open: the kitchen's agent says it", tone: "info" },
   accepted: { label: "Accepted: an ordinary order started", tone: "good" },
   declined: { label: "Declined", tone: "neutral" },
   muted: { label: "Muted by the kitchen", tone: "neutral" },
@@ -30,6 +30,7 @@ const RULE: Record<string, string> = {
   not_available: "No live price or delivery",
   unsupported_claim: "The data does not back the claim",
   recall_hold: "Held by the recall radar",
+  kitchen_check: "The kitchen's own agent does not show it",
 };
 const REASON: Record<string, string> = { cheaper: "Cheaper like-for-like", new_in_assortment: "New in the assortment", in_season: "In season", more_reliable: "More reliable", lower_carbon: "Lower carbon", new_to_kitchen: "New to the kitchen" };
 const CLAIMS = ["new_in_assortment", "in_season", "cheaper"] as const;
@@ -125,6 +126,7 @@ function Body({ v, now, refresh }: { v: OffersView; now: number; refresh: () => 
           </Section>
         </div>
         <div>
+          <DemoReset v={v} refresh={refresh} />
           <CampaignForm refresh={refresh} />
           <Section title="Campaigns" aside={v.campaigns.length ? `${v.campaigns.length}` : undefined}>
             {v.campaigns.length === 0 ? <Empty title="No campaigns yet">A campaign names one product; the selling agent decides kitchen by kitchen whether it is relevant, and says why not.</Empty> : v.campaigns.map((c) => <CampaignCard key={c.campaignId} c={c} now={now} />)}
@@ -133,11 +135,10 @@ function Body({ v, now, refresh }: { v: OffersView; now: number; refresh: () => 
             {v.prefs.length === 0 ? (
               <Empty title="No mutes">A kitchen can say no, ask not to be offered a kind of thing again, or turn offers off. The selling agent reads it before it picks anything.</Empty>
             ) : (
-              <ul className="space-y-1 text-[0.9rem]">
+              <ul className="space-y-1.5 text-[0.9rem]">
                 {v.prefs.map((p) => (
                   <li key={p.orgId}>
-                    <span className="font-semibold">{p.orgId}</span>: {p.off ? `offers off (${p.off.by})` : "offers on"}
-                    {p.mutes.length ? `; muted ${p.mutes.map((m) => `${m.scope} ${m.value.replaceAll("_", " ")}`).join(", ")}` : ""}
+                    <span className="font-semibold">{p.name}</span>: {p.said.join("; ")}.
                   </li>
                 ))}
               </ul>
@@ -196,11 +197,55 @@ function Proof({ offerId }: { offerId: string }) {
   );
 }
 
+/**
+ * DEMO ONLY, for the shared test kitchens: their earlier offers stop counting (the weekly cap, "already offered",
+ * "declined"), open ones are withdrawn and their mutes cleared, then the selling agent runs for them. Recorded in the
+ * ledger. Real kitchens are never touched.
+ */
+function DemoReset({ v, refresh }: { v: OffersView; refresh: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string>();
+  if (!v.testKitchens.length) return null;
+  const go = async () => {
+    setBusy(true);
+    const r = await post<{ reset: { cleared: number }; run?: { name: string; offered: { productName: string }[]; withheld: { rule?: string }[]; notRelevant?: string }[] }>({ action: "reset_test", run: true });
+    setBusy(false);
+    if (!r.ok) return setMsg(r.error.message);
+    const lines = (r.data.run ?? []).map((k) => `${k.name}: ${k.offered.length ? k.offered.map((o) => o.productName).join(", ") : "nothing worth offering now"}`);
+    setMsg(`${r.data.reset.cleared} earlier offers cleared. ${lines.join(" · ")}`);
+    refresh();
+  };
+  return (
+    <Section title="Demo: the test kitchens">
+      <Panel className="space-y-2 p-4 text-[0.9rem]">
+        <p>
+          <Badge tone="info">Demo only</Badge> Start the shared test kitchens afresh: their earlier offers stop counting against the weekly cap of {v.stats.weeklyCap}, open ones are withdrawn and their mutes cleared, then the selling agent runs for them. {"Recorded in the ledger. Real kitchens are not touched; the test accounts' own reset does the same."}
+        </p>
+        <ul className="text-ink-soft">
+          {v.testKitchens.map((k) => (
+            <li key={k.slug}>
+              {k.name}: {k.thisWeek} of {v.stats.weeklyCap} offers this week
+            </li>
+          ))}
+        </ul>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button kind="primary" onClick={() => void go()} disabled={busy}>
+            {busy ? "Resetting and running…" : "Reset the test kitchens' offers and run"}
+          </Button>
+          {msg && <p className="text-[0.86rem] text-ink-soft" role="status">{msg}</p>}
+        </div>
+        <p className="text-[0.84rem] text-ink-soft">{"Then, in a test kitchen's conversation, ask \u201cdoes the wholesaler have anything for us?\u201d: its agent says the offer, and the kitchen answers yes, no, or \u201cdon't suggest this kind again\u201d."}</p>
+      </Panel>
+    </Section>
+  );
+}
+
 function CampaignForm({ refresh }: { refresh: () => void }) {
   const [q, setQ] = useState("");
   const [found, setFound] = useState<Found[]>([]);
   const [pick, setPick] = useState<Found>();
   const [isNew, setNew] = useState(true);
+  const [reach, setReach] = useState(false);
   const [claims, setClaims] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string>();
@@ -211,7 +256,7 @@ function CampaignForm({ refresh }: { refresh: () => void }) {
   const start = async () => {
     if (!pick) return;
     setBusy(true);
-    const r = await post<{ campaign: Campaign }>({ action: "campaign", productId: pick.productId, listAsNew: isNew, claims });
+    const r = await post<{ campaign: Campaign }>({ action: "campaign", productId: pick.productId, listAsNew: isNew, reachAllowed: reach, claims });
     setBusy(false);
     if (!r.ok) return setMsg(r.error.message);
     const c = r.data.campaign;
@@ -251,6 +296,9 @@ function CampaignForm({ refresh }: { refresh: () => void }) {
         <label className="flex items-center gap-2 text-[0.9rem]">
           <input type="checkbox" checked={isNew} onChange={(e) => setNew(e.target.checked)} /> It is new in our assortment (listed today)
         </label>
+        <label className="flex items-center gap-2 text-[0.9rem]">
+          <input type="checkbox" checked={reach} onChange={(e) => setReach(e.target.checked)} /> Also kitchens that have not bought this kind yet (their rules allow it)
+        </label>
         <fieldset className="text-[0.9rem]">
           <legend className="text-ink-soft">We want to say (each must be backed by the data for that kitchen, or it is not sent):</legend>
           <div className="mt-1 flex flex-wrap gap-3">
@@ -283,17 +331,20 @@ function CampaignCard({ c, now }: { c: Campaign; now: number }) {
         {c.claims.length ? ` · wants to say: ${c.claims.map((x) => REASON[x] ?? x).join(", ")}` : ""}
       </p>
       <p className="mt-1 text-[0.9rem]">
-        Relevant to {offered.length} of {c.results.length} kitchens.
+        {offered.length ? `Relevant to ${offered.length} of ${c.results.length} kitchens.` : `Relevant to none of the ${c.results.length} kitchens. Why, kitchen by kitchen, and what would change it:`}
+        {c.reachAllowed ? " Kitchens that have not bought this kind yet were included." : ""}
       </p>
-      <Details summary="Kitchen by kitchen" className="mt-1">
-        <ul className="space-y-1 font-sans">
+      <details className="mt-1 text-[0.88rem]" open={offered.length === 0}>
+        <summary className="cursor-pointer text-ink-soft hover:text-ink">Kitchen by kitchen</summary>
+        <ul className="mt-2 space-y-2">
           {c.results.map((r) => (
             <li key={r.kitchen}>
-              <Badge tone={r.outcome === "offered" ? "good" : r.outcome === "withheld" ? "refused" : "neutral"}>{r.outcome === "offered" ? "Offered" : r.outcome === "withheld" ? (RULE[r.rule ?? ""] ?? "Held back") : "Not relevant"}</Badge> <span className="font-semibold">{r.name}</span>: {r.reason}
+              <Badge tone={r.outcome === "offered" ? "good" : r.outcome === "withheld" ? "refused" : "neutral"}>{r.outcome === "offered" ? "Offered" : r.outcome === "withheld" ? (RULE[r.rule ?? ""] ?? "Held back") : "Not relevant"}</Badge> <span className="font-semibold">{r.name}</span>: {r.why ?? r.reason}
+              {r.wouldHelp && <p className="mt-0.5 text-[0.86rem] text-ink-soft">What would change it: {r.wouldHelp}</p>}
             </li>
           ))}
         </ul>
-      </Details>
+      </details>
     </Panel>
   );
 }

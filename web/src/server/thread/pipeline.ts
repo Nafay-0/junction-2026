@@ -203,6 +203,21 @@ async function watchAnswersFor(run: TurnRun, step: IntakeView): Promise<NoticeCa
   return { type: "notice", cardId: cardId("notice", `${step.requestId}:watch`), requestId: step.requestId, kind: "not_found", ...worded(() => ({ code: "out_of_stock", what, ...(day ? { day } : {}) })), ...(sub ? { message: `${what} can't come${f.shortfall.backOn ? `: the supplier is out until ${f.shortfall.backOn}` : ""}. The closest is ${shortName(sub.name)}. Shall I order that instead?` } : {}) };
 }
 
+/** The kitchen's usual amount of the kind of product the words name ("12 L"), from its recurring orders. */
+async function usualAmountOf(run: TurnRun, what: string): Promise<string | undefined> {
+  if (!what.trim()) return undefined;
+  const { findProducts } = await import("@/server/search/service");
+  const found = await findProducts(run.rt.catalog, { text: what, limit: 6, noJudge: true } as never);
+  const cat = found.hits[0]?.product.category as string | undefined;
+  if (!cat) return undefined;
+  const { standing } = await import("@/server/kitchen-portal");
+  const profile = await run.rt.kitchens.getProfile(run.session.mandate.issuer.orgId).catch(() => undefined);
+  const row = standing(profile, new Date().toISOString().slice(0, 10)).find((r) => r.family === cat);
+  if (!row || !(row.usual.amount > 0)) return undefined;
+  const n = Math.round(row.usual.amount * 10) / 10;
+  return `${n} ${row.usual.unit}`;
+}
+
 /** The kind of product the words name, when none of it is in the kitchen's allowed groups (master data, no live call). */
 async function outsideRules(run: TurnRun, what: string): Promise<{ what: string; category: string } | undefined> {
   if (!what.trim()) return undefined;
@@ -387,6 +402,11 @@ export async function orderFromWords(run: TurnRun, words: string, earlier: Earli
         return [{ words, notice: refusal }];
       }
     }
+    // Only the amount is missing: the kitchen's usual amount of that kind is offered (a yes takes it), never a bare "how much?".
+    if (notice.kind === "incomplete" && !notice.missing?.includes("what to buy") && err instanceof DockError) {
+      const usual = await usualAmountOf(run, String((err.details?.partial as { item?: { text?: string } } | undefined)?.item?.text ?? "")).catch(() => undefined);
+      if (usual) Object.assign(notice, { usual });
+    }
     reading.fail(err instanceof DockError ? err.code : undefined);
     run.store.card(run.thread, run.turnId, notice);
     run.facts.push(notice);
@@ -485,6 +505,17 @@ export async function openNeed(run: TurnRun, need: NeedInput, words: string, opt
     need = { ...need, ...(nn.requiredClaims ? { requiredClaims: nn.requiredClaims.filter((c) => !COFFEE.test(c)) } : {}), item: { ...need.item, text, ...(nn.item.attributes ? { attributes: nn.item.attributes.filter((c) => !COFFEE.test(c)) } : {}) } } as NeedInput;
   }
   const n = need as { deliverBy?: string; deliverOn?: string };
+  // No day said, and the kitchen receives only on some days (a café on Tuesdays and Fridays): its next delivery day,
+  // so nothing is offered for a day it cannot take in.
+  if (!n.deliverBy && !n.deliverOn) {
+    const profile = await run.rt.kitchens.getProfile(run.session.mandate.issuer.orgId).catch(() => undefined);
+    const days = profile?.deliveryWeekdays ?? [];
+    if (days.length > 0 && days.length <= 5) {
+      const { nextDeliveryDay, localNow: now } = await import("@/core/kitchen");
+      const next = nextDeliveryDay(now(new Date()).date, days, 1);
+      if (next) need = { ...need, deliverBy: next, deliverOn: next } as NeedInput;
+    }
+  }
   // Words that set a latest day ("by Monday", "mennessä", "senast") keep it a latest day.
   const latest = /\b(by|before|at the latest|no later than|mennessä|viimeistään|ennen|senast|innan|före)\b/i.test(words);
   if (n.deliverBy && !n.deliverOn && !latest && n.deliverBy > new Date().toISOString().slice(0, 10)) need = { ...need, deliverOn: n.deliverBy } as NeedInput;

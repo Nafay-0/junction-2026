@@ -1,6 +1,10 @@
 # NVIDIA and Featherless
 
-**Short version: Nemotron is now in the live path, as an independent second reader of every typed or spoken request.
+**Status, 14 Nov 2026: we are not entering this partner challenge, and the second reader is switched off in the
+deployed demo.** What follows is kept as the record of what was built and measured: the second reader still works
+with one setting (`DOCK_SECOND_READER_MODEL`), with Nemotron or any other model.
+
+**Short version of what was built: Nemotron as an independent second reader of every typed or spoken request.
 It can only add a question, it was earned on a measured evaluation, and it is off when its variable is empty.**
 
 ## What it does, in plain words

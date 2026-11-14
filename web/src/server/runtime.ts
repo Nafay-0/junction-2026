@@ -26,6 +26,7 @@ import { radar } from "./radar/registry";
 import { alternativesSource, getKnowledgeMap } from "./knowledge/service";
 import { registerNatureProfiles } from "@/core/catalog/nature";
 import { finderFor, warmSmartSearch } from "./search/service";
+import { liveOverlay as stagedOverlay } from "./watch/overlay";
 import { SandboxService } from "./sandboxes";
 import { AccountService } from "./accounts/service";
 import { SealingAccountStore, accountKeySecret, publicHost } from "./accounts/sealed";
@@ -83,6 +84,7 @@ export function resetRuntime(): void {
 }
 
 async function buildRuntime(): Promise<Runtime> {
+  let rtRef: Runtime | undefined;
   // Without DOCK_WHOLESALER_JWK the wholesaler key lives only as long as the process; quotes die with it.
   const wholesalerKey = process.env.DOCK_WHOLESALER_JWK
     ? await importEd25519KeyPair("dock-wholesaler", JSON.parse(process.env.DOCK_WHOLESALER_JWK) as JWK)
@@ -140,6 +142,9 @@ async function buildRuntime(): Promise<Runtime> {
     // Kitchen memory: one line per remembered item each request used (lazy: the memory service is built on this runtime).
     ...(envValue("DOCK_MEMORY") !== "off" ? { memoryUsage: async (orgId: string, intake: Parameters<NonNullable<Parameters<typeof createDock>[0]["memoryUsage"]>>[1]) => (await (await import("./memory/runtime")).getMemoryService()).usage(orgId, intake) } : {}),
     liveCacheTtlMs: Number(envValue("DOCK_LIVE_CACHE_SECONDS") ?? 120) * 1000 || 0,
+    // STAGED STOCK-OUTS (server/watch/overlay.ts): a stock-out staff staged for one demo or test kitchen, over every
+    // live answer that kitchen gets (intake, quotes, the watch), marked simulated in every claim. Nothing for others.
+    liveOverlay: (orgId, statuses) => stagedOverlay(dock)(orgId, statuses),
   });
   recall.attach(dock);
   if (catalogSource.kind === "valio") warmSmartSearch(catalog); // smart search's index, built in the background (server/search)
@@ -174,11 +179,13 @@ async function buildRuntime(): Promise<Runtime> {
     catalog,
     maxAccounts: () => Number(envValue("DOCK_ACCOUNTS_MAX") ?? 1000) || 1000,
     mandates,
+    // A test account reset also lifts what staff staged for it and switches its auto-renew off (server/watch).
+    afterTestReset: async (orgIds, by) => (rtRef ? (await import("./watch/service")).clearForOrgs(rtRef, orgIds, `test account reset, ${by}`) : undefined),
   });
   // Not while the build prerenders pages: restoring hashes passwords (real work off the main thread), which would end
   // prerendering early; a running server restores at its first request.
   if (process.env.NEXT_PHASE !== "phase-production-build") await accounts.restore();
-  const rt: Runtime = { dock, outbox, catalog, catalogSource, events, passkeys, sandboxes, aiven, kitchens: stores.kitchens, mandates, accounts, records: stores.records };
+  const rt: Runtime = (rtRef = { dock, outbox, catalog, catalogSource, events, passkeys, sandboxes, aiven, kitchens: stores.kitchens, mandates, accounts, records: stores.records });
   scheduleTestAccountResets(accounts); // not under tests or during a build; DOCK_TEST_ACCOUNTS_RESET_MINUTES=0 turns it off
   radar(rt); // starts the recall radar's schedule (not under tests, during a build, or with RADAR_POLL=off)
   void import("./watch/schedule").then((m) => m.scheduleWatch(rt)); // the kitchen agent's watch (DOCK_WATCH_MINUTES, default 30; not under tests or a build)

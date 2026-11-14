@@ -58,7 +58,7 @@ function Body({ v, now, refresh }: { v: View; now: number; refresh: () => void }
         <Num n={num(v.stats.sentForSignOff)} label="sent for sign-off" />
         <Num n={num(v.stats.held)} label="renewals held" sub="drifted: the kitchen is asked" />
         <Num n={num(v.stats.autoRenewOn)} label="auto-renew on" sub="off by default" />
-        <Num n={num(v.stats.staged)} label="staged now" sub="demo kitchens only" />
+        <Num n={num(v.stats.staged)} label="staged now" sub="demo and test kitchens only" />
       </Panel>
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <Button kind="primary" onClick={() => void run()} disabled={running}>
@@ -102,6 +102,9 @@ function Body({ v, now, refresh }: { v: View; now: number; refresh: () => void }
           <Section title="Staged now" aside={v.stages.filter((g) => !g.liftedAt).length || undefined}>
             <Stages stages={v.stages} refresh={refresh} now={now} />
           </Section>
+          <Section title="Backups lined up" aside={v.backups.filter((b) => b.state === "set" || b.state === "used").length || undefined}>
+            <Backups backups={v.backups} now={now} />
+          </Section>
           <Section title="Auto-renew, as kitchens chose it">
             {v.auto.length === 0 ? (
               <Empty title="Off everywhere">Off by default. A kitchen switches it on for a recurring order in its conversation or through its agent (set_auto_renew); who chose it is recorded.</Empty>
@@ -109,7 +112,7 @@ function Body({ v, now, refresh }: { v: View; now: number; refresh: () => void }
               <ul className="space-y-1 text-[0.9rem]">
                 {v.auto.map((a) => (
                   <li key={`${a.orgId}:${a.family}`}>
-                    <Badge tone={a.on ? "good" : "neutral"}>{a.on ? "On" : "Off"}</Badge> <span className="font-semibold">{a.orgId}</span> · {a.family.replaceAll("_", " ")}: {a.by}, {a.via}, <span className="tabular">{when(a.at, new Date(now))}</span>
+                    <Badge tone={a.on ? "good" : "neutral"}>{a.on ? "On" : "Off"}</Badge> <span className="font-semibold" title={a.orgId}>{a.kitchenName ?? "A kitchen no longer here"}</span> · {a.family.replaceAll("_", " ")}: {a.by}, {a.via}, <span className="tabular">{when(a.at, new Date(now))}</span>
                   </li>
                 ))}
               </ul>
@@ -264,6 +267,32 @@ function RenewalRow({ r, now }: { r: Renewal; now: number }) {
   );
 }
 
+function Backups({ backups, now }: { backups: View["backups"]; now: number }) {
+  const shown = backups.filter((b) => b.state !== "offered" || b.alternatives.length).slice(0, 30);
+  if (shown.length === 0) return <Empty title="None yet">Only for a product with a poor delivery record (the wholesaler&apos;s history, below 9 in 10): the kitchen can line up a backup at order time. Nothing is bought unless the product then cannot come.</Empty>;
+  const label: Record<string, { text: string; tone: "good" | "info" | "neutral" | "refused" | "bad" }> = { offered: { text: "Offered", tone: "neutral" }, set: { text: "Lined up", tone: "info" }, declined: { text: "No backup wanted", tone: "neutral" }, used: { text: "Used", tone: "good" } };
+  return (
+    <ul className="space-y-2 text-[0.9rem]">
+      {shown.map((b) => (
+        <li key={b.backupId} className="rounded-lg border border-line bg-paper px-3 py-2">
+          <p>
+            <Badge tone={label[b.state].tone}>{label[b.state].text}</Badge> <span className="font-semibold">{b.kitchenName}</span> · {b.product.name}, {b.need.date}
+          </p>
+          <p className="text-ink-soft">
+            {b.record.words} ({Math.round(b.record.share * 100)} %).{" "}
+            {b.chosen ? `Backup: ${b.chosen.name}, chosen by ${b.chosen.by}${b.chosen.how === "you_choose" ? " (\"you choose\")" : ""}.` : b.alternatives.length ? `${b.alternatives.length} alternatives offered.` : "No alternative with a better record."}
+          </p>
+          {b.used && (
+            <p className="text-[0.84rem]">
+              {b.used.staged && <Badge tone="bad">Staged</Badge>} Used {when(b.used.at, new Date(now))}: {b.used.orderId ? `${b.used.orderId}, ${b.used.status}${b.used.totalCents ? `, ${eur(b.used.totalCents)}` : ""}${b.used.approver ? `, signer ${b.used.approver}` : ""}` : `refused: ${b.used.refused?.message ?? ""}`}
+            </p>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function StageForm({ kitchens, refresh }: { kitchens: Kitchens; refresh: () => void }) {
   const [slug, setSlug] = useState(kitchens[0]?.slug ?? "");
   const k = kitchens.find((x) => x.slug === slug);
@@ -282,9 +311,9 @@ function StageForm({ kitchens, refresh }: { kitchens: Kitchens; refresh: () => v
     refresh();
   };
   return (
-    <Section title="Stage a condition (demo kitchens only)">
+    <Section title="Stage a condition (demo and test kitchens)">
       <Panel className="space-y-3 p-4 text-[0.9rem]">
-        <p className="text-ink-soft">The partner&apos;s live data will not run out on cue. A staged condition applies only to the kitchen agent&apos;s watch for this kitchen, is marked staged wherever it shows, and is signed as simulated.</p>
+        <p className="text-ink-soft">The partner&apos;s live data will not run out on cue. A staged stock-out applies to every live answer this one kitchen gets (its agent, its orders, the watch), never to another kitchen; it is marked staged wherever it shows, signed as simulated, and lifted by a test account reset.</p>
         {kitchens.length === 0 ? (
           <p>No demo kitchen with a recurring order.</p>
         ) : (
@@ -294,7 +323,7 @@ function StageForm({ kitchens, refresh }: { kitchens: Kitchens; refresh: () => v
               <select value={slug} onChange={(e) => (setSlug(e.target.value), setFamily(""))} className="mt-1 min-h-11 w-full rounded-lg border border-line-strong bg-paper px-3">
                 {kitchens.map((x) => (
                   <option key={x.slug} value={x.slug}>
-                    {x.name} ({x.kind})
+                    {x.name} ({x.kind === "account" ? "test account" : x.kind})
                   </option>
                 ))}
               </select>

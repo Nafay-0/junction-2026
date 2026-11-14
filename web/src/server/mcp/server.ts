@@ -134,6 +134,7 @@ function connectorCredentials(via: ConnectorCall): Request {
 /** Tools that count against a connector address's own limits, beyond the per-request one. */
 const COUNTED: Partial<Record<string, ConnectorLimitKind>> = { submit_need: "requests", open_request: "requests", place_order: "orders" };
 /** Lookups that open a request of their own when the agent passes none. */
+const DELIVERY_RECORDS = new Set(["request_quote", "place_order", "get_order"]);
 const OPENS_WITHOUT_ID = new Set(["find_products", "find_alternatives"]);
 
 /** Which assistant a request came from, best effort from its User-Agent. For the audit trail only; never trusted. */
@@ -211,7 +212,9 @@ export async function runTool(
     // A lookup counts as a new request only when it opens one (no requestId passed).
     const counted = via && (COUNTED[tool.name] ?? (OPENS_WITHOUT_ID.has(tool.name) && !(args as { requestId?: unknown } | undefined)?.requestId ? "requests" : undefined));
     if (via && counted) via.service.limiter.hit(via.connector.connectorId, counted);
-    const out = await callTool(rt, session, tool, args, human, via && `${via.kitchen.by}, through the kitchen's connector`);
+    let out = await callTool(rt, session, tool, args, human, via && `${via.kitchen.by}, through the kitchen's connector`);
+    // A line whose product has a poor delivery record carries it, with the backup lined up (server/reliability).
+    if (!(out instanceof AskHuman) && DELIVERY_RECORDS.has(tool.name)) out = await (await import("../reliability/service")).withDeliveryRecords(rt, session.mandate.issuer.orgId, out);
     if (out instanceof AskHuman) return out.result;
     // A client that cannot ask the buyer itself: hand the buyer Dock's own one-time answer page (server/answer-links.ts).
     const step = out.step as IntakeView | undefined;

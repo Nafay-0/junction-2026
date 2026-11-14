@@ -150,7 +150,10 @@ export async function answerWatchIn(run: TurnRun, card: WatchCard, answer: strin
  */
 export async function autoRenewFromWords(run: TurnRun, words: string): Promise<string | undefined> {
   const { autoRenewIntentOf, setAutoRenewFromThread } = await import("@/server/watch/thread");
-  const intent = autoRenewIntentOf(words);
+  // A question ("is the milk going to renew by itself this week?") is answered with what is set, never set again.
+  const asking = /\?\s*$/.test(words.trim()) || /^(is|will|does|do|are|has|have|onko|uusiutuuko|tuleeko|kommer|är|förnyas)\b/i.test(words.trim());
+  const intent = asking ? undefined : autoRenewIntentOf(words);
+  if (asking && /renew|uusi|förny|automatic|automaatti|automatisk/i.test(words)) return autoRenewStatus(run, words);
   if (!intent) return undefined;
   const { standing } = await import("@/server/kitchen-portal");
   const profile = await run.rt.kitchens.getProfile(run.session.mandate.issuer.orgId).catch(() => undefined);
@@ -162,7 +165,31 @@ export async function autoRenewFromWords(run: TurnRun, words: string): Promise<s
     const names = rows.map((r) => familyL(r.family, lang).toLowerCase());
     return { en: `Which recurring order: ${names.join(" or ")}?`, fi: `Mikä vakiotilaus: ${names.join(" vai ")}?`, sv: `Vilken stående beställning: ${names.join(" eller ")}?` }[lang];
   }
-  const r = await setAutoRenewFromThread(run.rt, run.session, row.family, intent === "on", { by: run.person?.name ?? run.k.info.name, via: `${run.door}: ${byLine(run)}`, lang, what: familyL(row.family, lang).toLowerCase() });
+  // A person's name, never a username or an id in a sentence ("Hotel Lumo kitchen (hotel-lumo)" says "Hotel Lumo kitchen").
+  const who = (run.person?.name ?? run.k.info.name).replace(/\s*\([^)]*\)/g, "").trim();
+  const r = await setAutoRenewFromThread(run.rt, run.session, row.family, intent === "on", { by: who, via: `${run.door}: ${byLine(run)}`, lang, what: familyL(row.family, lang).toLowerCase() });
   record(run, "auto_renew", `Auto-renew ${intent} for ${row.family}, in the buyer's words "${words.slice(0, 80)}".`, { family: row.family, on: intent === "on" });
   return r.reply;
+}
+
+/** "Is the milk going to renew by itself this week?": what is set for each recurring order, and what happens next. */
+async function autoRenewStatus(run: TurnRun, words: string): Promise<string | undefined> {
+  const { standingFor } = await import("@/server/watch/service");
+  const rows = await standingFor(run.rt, run.session.mandate.issuer.orgId).catch(() => []);
+  if (!rows.length) return undefined;
+  const lang = run.lang ?? "en";
+  const w = words.toLowerCase();
+  const named = rows.filter((r) => [r.family, familyL(r.family, "en"), familyL(r.family, "fi"), familyL(r.family, "sv")].some((x) => x && w.includes(x.toLowerCase())));
+  const pick = named.length ? named : rows;
+  const { dayWords } = await import("./refusal");
+  return pick
+    .slice(0, 2)
+    .map((r) => {
+      const what = familyL(r.family, lang).toLowerCase();
+      const day = r.next ? dayWords(r.next.date, lang) : "";
+      if (lang === "fi") return r.autoRenew.on ? `Kyllä: ${what} uusitaan automaattisesti${day ? ` (${day})` : ""}, ellei mikään ole muuttunut; muutoksesta kysyn ensin.` : `Ei: ${what} ei uusiudu automaattisesti; muistutan sinua. Laitanko automaattisen uusinnan päälle?`;
+      if (lang === "sv") return r.autoRenew.on ? `Ja: ${what} förnyas automatiskt${day ? ` (${day})` : ""} om inget har ändrats; har något ändrats frågar jag först.` : `Nej: ${what} förnyas inte automatiskt; jag påminner dig. Ska jag slå på automatisk förnyelse?`;
+      return r.autoRenew.on ? `Yes: the ${what} renews by itself${day ? ` for ${day}` : ""} if nothing has changed; if something has, I ask you first.` : `No: the ${what} doesn't renew by itself; I remind you. Shall I switch auto-renew on?`;
+    })
+    .join(" ");
 }

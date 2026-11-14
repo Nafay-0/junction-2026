@@ -49,7 +49,7 @@ export type Scenario = {
   /** Which of Valio's example scenarios or wish-list items this stands for. */
   tag: string;
   /** koulu-metsola: the public school test account (server/accounts/test-accounts.ts): nutrition rules, no nuts or fish. */
-  kitchen: "kaari" | "laakso" | "koulu-metsola";
+  kitchen: "kaari" | "laakso" | "koulu-metsola" | "hotel-lumo" | "kahvila-sointu";
   lang: "en" | "fi";
   turns: BuyerTurn[];
   goal: Goal;
@@ -803,6 +803,40 @@ async function driftForKaari(url: string): Promise<void> {
   watched.renewal = ((await b.req("GET", "/ops-api/watch")).body?.renewals ?? []).find((r: Json) => r.kitchen === "kaari" && r.family === "milk");
 }
 
+/**
+ * The same two scenarios on a public test kitchen (the kitchens judges sign in to), with no preparation beyond what a
+ * person would do: staff stage a stock-out of the kitchen's usual product; for drift, the seed already creeps, and the
+ * kitchen's own signed-in account switches auto-renew on (/ui-api/kitchens/{kitchen}/watch), which looks at the next
+ * one at once.
+ */
+function stockOutFor(slug: string) {
+  return async (url: string): Promise<void> => {
+    const b = await opsBrowser(url);
+    const v = (await b.req("GET", "/ops-api/watch")).body;
+    const usual = (v?.kitchens ?? []).find((k: Json) => k.slug === slug)?.standing[0];
+    Object.assign(watched, { finding: undefined, renewal: undefined, product: usual?.name });
+    if (!usual) return;
+    await b.req("POST", "/ops-api/watch", { action: "stage_stock_out", kitchen: slug, productId: usual.productId });
+    await b.req("POST", "/ops-api/watch", { action: "run", kitchens: [slug], fresh: true });
+    watched.finding = ((await b.req("GET", "/ops-api/watch")).body?.findings ?? []).find((f: Json) => f.kitchen === slug && f.state === "open" && f.product.productId === usual.productId);
+  };
+}
+
+function driftFor(slug: string) {
+  return async (url: string): Promise<void> => {
+    await opsBrowser(url);
+    const { Browser, signInAs } = await import("./lib");
+    const k = new Browser(url);
+    await signInAs(k, slug);
+    Object.assign(watched, { finding: undefined, renewal: undefined });
+    const w = (await k.req("GET", `/ui-api/kitchens/${slug}/watch`)).body;
+    const crept = (w?.standing ?? []).find((s: Json) => s.drifted && s.drift?.portions);
+    if (!crept) return;
+    const r = await k.req("POST", `/ui-api/kitchens/${slug}/watch`, { action: "auto_renew", family: crept.family, on: true });
+    watched.renewal = r.body?.autoRenew?.renewal ?? ((await k.req("GET", `/ui-api/kitchens/${slug}/watch`)).body?.renewals ?? []).find((x: Json) => x.family === crept.family);
+  };
+}
+
 const stockOutFound: Check = {
   name: "the watch noticed the staged stock-out first: ranked substitutes, a signed (simulated) claim, marked staged",
   run: () => ok(!!watched.finding && watched.finding.staged === true && watched.finding.substitutes.length > 0 && watched.finding.claim?.simulated === true, `finding: ${JSON.stringify(watched.finding ?? null).slice(0, 200)}`),
@@ -817,8 +851,8 @@ const stockOutSaid: Check = {
   },
 };
 const renewalHeld: Check = {
-  name: "the watch held the auto-renewal of the drifted milk (portions trend, staged) instead of placing it",
-  run: () => ok(!!watched.renewal && watched.renewal.state === "held" && !!watched.renewal.drift?.portions && watched.renewal.staged === true, `renewal: ${JSON.stringify(watched.renewal ?? null).slice(0, 200)}`),
+  name: "the watch held the auto-renewal of the creeping order (portions trend) instead of placing it",
+  run: () => ok(!!watched.renewal && watched.renewal.state === "held" && !!watched.renewal.drift?.portions, `renewal: ${JSON.stringify(watched.renewal ?? null).slice(0, 200)}`),
 };
 const renewalSaid: Check = {
   name: "the kitchen's agent said the drift with its figures and asked: new amount, the usual, or skip",
@@ -879,6 +913,79 @@ ALL.push(
     goal: "answer",
     expect: [renewalHeld, renewalSaid, noOrder],
     limitation: WATCH_WIRING,
+  },
+);
+
+// Per kitchen: both stock-out cases first (the conversation says one moment at a time, and a held renewal goes first).
+for (const slug of ["hotel-lumo", "koulu-metsola", "kahvila-sointu"] as const) {
+  const say = { en: { stock: "Anything I should know about this week's orders?", drift: "Is this week's recurring order sorted?" }, fi: { stock: "Onko tämän viikon tilauksissa jotain, mitä minun pitää tietää?", drift: "Onko tämän viikon vakiotilaus kunnossa?" } };
+  for (const lang of ["en", "fi"] as const)
+    ALL.push({ id: `stock-out-${lang}@${slug}`, title: `Supplier stock-out on the test kitchen ${slug}: the agent notices first and proposes a substitute (${lang})`, tag: "supplier stock-out", kitchen: slug, lang, before: stockOutFor(slug), turns: [{ say: say[lang].stock }], goal: "answer", expect: [stockOutFound, stockOutSaid, noOrder], limitation: WATCH_WIRING });
+  for (const lang of ["en", "fi"] as const)
+    ALL.push({ id: `drift-renewal-${lang}@${slug}`, title: `Standing-order drift on the test kitchen ${slug}: the creeping order is held before auto-renewing (${lang})`, tag: "standing-order drift", kitchen: slug, lang, before: driftFor(slug), turns: [{ say: say[lang].drift }], goal: "answer", expect: [renewalHeld, renewalSaid, noOrder], limitation: WATCH_WIRING });
+}
+
+// ---------- a backup in case it is not delivered (server/reliability) ----------
+
+/** The kitchen's own view of its backups after the conversation, for the checks (per run). */
+const backupSeen: { url?: string } = {};
+async function rememberUrl(url: string): Promise<void> {
+  backupSeen.url = url;
+}
+async function kitchenBackups(slug: string): Promise<Json[]> {
+  if (!backupSeen.url) return [];
+  const { Browser, signInAs } = await import("./lib");
+  const k = new Browser(backupSeen.url);
+  await signInAs(k, slug);
+  return (await k.req("GET", `/ui-api/kitchens/${slug}/watch`)).body?.backups ?? [];
+}
+const recordSaid: Check = {
+  name: "the agent said the product's delivery record in words (history, not a forecast) and offered a backup",
+  run: (o) => {
+    const t = o.answers.map((a) => a.text).join(" | ");
+    return ok(/arrived as ordered about \d+ times in (10|20)|tilatusti noin \d+ kertaa (10|20):stä/i.test(t) && !/will (probably )?not arrive|ei todennäköisesti tule/i.test(t), `said: ${t.slice(0, 200) || "nothing"}`);
+  },
+};
+const backupLinedUp: Check = {
+  name: "\"you choose\" lined up a backup, recorded with who chose it",
+  run: async (_o, c) => {
+    const b = (await kitchenBackups(c.kitchen)).find((x) => x.state === "set" || x.state === "used");
+    return ok(!!b?.chosen?.by, `backups: ${JSON.stringify((await kitchenBackups(c.kitchen)).map((x) => ({ product: x.product?.name, state: x.state }))).slice(0, 200)}`);
+  },
+};
+const nothingExtraBought: Check = {
+  name: "nothing extra bought for the backup",
+  run: async (o, c) => {
+    const chosen = (await kitchenBackups(c.kitchen)).find((x) => x.chosen)?.chosen?.productId;
+    return ok(!chosen || !o.orders.some((x) => x.lines.some((l) => l.productId === chosen)), `an order holds the backup ${chosen}`);
+  },
+};
+const BACKUP_WIRING = "The conversation says it once the thread calls server/reliability/thread.ts backupMomentForThread after a quote or an order, and backupAnswerOf / answerBackup on the answer; until then 'the agent said the record' and 'a backup lined up' fail and 'nothing extra bought' passes.";
+
+ALL.push(
+  {
+    id: "reliability-backup-en",
+    title: "A product with a poor delivery record: the agent says its record and lines up a backup on 'you choose'",
+    tag: "partial availability: a backup in case it is not delivered",
+    kitchen: "kahvila-sointu",
+    lang: "en",
+    before: rememberUrl,
+    turns: [{ say: "2 packs of the Peltolan blue cheese 400 g for Tuesday" }, { say: "you choose" }],
+    goal: "answer",
+    expect: [recordSaid, backupLinedUp, nothingExtraBought],
+    limitation: BACKUP_WIRING,
+  },
+  {
+    id: "reliability-backup-fi",
+    title: "Heikosti toimitettu tuote: agentti kertoo toimitushistorian ja laittaa varavaihtoehdon, kun ostaja sanoo 'valitse sinä'",
+    tag: "partial availability: a backup in case it is not delivered",
+    kitchen: "kahvila-sointu",
+    lang: "fi",
+    before: rememberUrl,
+    turns: [{ say: "2 pakkausta Peltolan sinihomejuustoa 400 g tiistaiksi" }, { say: "valitse sinä" }],
+    goal: "answer",
+    expect: [recordSaid, backupLinedUp, nothingExtraBought],
+    limitation: BACKUP_WIRING,
   },
 );
 

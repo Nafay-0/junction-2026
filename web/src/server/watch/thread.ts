@@ -3,11 +3,11 @@ import type { Lang } from "@/app/_i18n/lang";
 import { money, num } from "@/app/_ui/plain";
 import type { Product } from "@/core/catalog";
 import type { AgentSession, PublicOrder } from "@/core/orders";
-import type { RenewalChoice } from "@/core/watch";
+import { measureOf, type RenewalChoice } from "@/core/watch";
 import { yesOrNo } from "../channels/speech";
 import type { Runtime } from "../runtime";
 import { WATCH_SAY_TEXT } from "./say.text";
-import { answerFinding, answerRenewal, markSaid, setAutoRenew, watchForOrg, type Finding, type Renewal, type Who } from "./service";
+import { answerFinding, answerRenewal, markSaid, setAutoRenew, watchForOrg, watchIfStale, type Finding, type Renewal, type Who } from "./service";
 
 /**
  * The watch as the kitchen's own conversation uses it: data and actions, no card. The thread (owned by the
@@ -64,7 +64,9 @@ function figures(f: FindingWithRule, lang: Lang): string {
   const per = to.unit === "kg" ? t.kilo : t.litre;
   const parts: string[] = [];
   if (to.perUnitDiffCents !== null) parts.push(to.perUnitDiffCents === 0 ? `${t.same} ${per}` : `${(to.perUnitDiffCents > 0 ? t.more : t.less)(money(Math.abs(Math.round(to.perUnitDiffCents))))} ${per}`);
-  parts.push(t.packs(String(to.packs), amountL(to.packSize, to.unit)));
+  // The same quantity as the usual, in litres or kilos, and how many packs make it: "400 l as 400 × 1 l".
+  const need = to.need ?? { amount: to.delivered, unit: to.unit }; // a finding recorded before `need` existed
+  parts.push(t.packs(amountL(need.amount, need.unit), String(to.packs), amountL(to.packSize, to.unit)));
   if (to.sameMaker) parts.push(t.sameMaker);
   else if (to.maker) parts.push(t.otherMaker(to.maker));
   if (!s.insidePreferences) parts.push(t.signOff(f.approver ?? "a person"));
@@ -108,6 +110,7 @@ export async function watchMomentForThread(rt: Runtime, session: AgentSession, l
   // Asked ("anything I should know about this week's orders?"): an open question is said again, even if said before.
   const unsaid = (x: { saidAt?: string | null }) => opts.asked || !x.saidAt;
   const orgId = session.mandate.issuer.orgId;
+  await watchIfStale(rt, session);
   const w = await watchForOrg(rt, orgId);
   const t = WATCH_SAY_TEXT[lang];
   const approver = session.mandate.approvers[0]?.name;
@@ -117,14 +120,20 @@ export async function watchMomentForThread(rt: Runtime, session: AgentSession, l
     const what = nameIn(ps.get(held.product.productId), held.product.name, lang);
     const day = dayWord(held.deliveryDate, lang);
     const u = held.amounts.unit;
+    // Pieces of a product whose pack content the data states (a case of 20 l boxes): said in litres, with the packs.
+    const m = (() => {
+      const p = ps.get(held.product.productId);
+      return u === "pcs" && p ? measureOf(p) : undefined;
+    })();
+    const amt = (n: number, unit: string) => (m ? `${amountL(n * m.perPack, m.unit)} (${num(n, 2)} × ${amountL(m.perPack, m.unit)})` : amountL(n, unit));
     const sentences: string[] = [];
     const d = held.drift;
-    if (d.portions) sentences.push((d.portions.direction === "up" ? t.crept : t.fell)(day, what, amountL(d.portions.from, u), amountL(d.portions.to, u), d.portions.weeks));
+    if (d.portions) sentences.push((d.portions.direction === "up" ? t.crept : t.fell)(day, what, amt(d.portions.from, u), amt(d.portions.to, u), d.portions.weeks));
     if (d.cost) sentences.push(t.dearer(what, money(Math.round(d.cost.from)), money(Math.round(d.cost.to)), shortDay(d.cost.since, lang)));
-    if (d.basket) sentences.push(t.basket(amountL(d.basket.amount, u), money(d.basket.nowCents), money(d.basket.usualCents)));
+    if (d.basket) sentences.push(t.basket(amt(d.basket.amount, u), money(d.basket.nowCents), money(d.basket.usualCents)));
     // The usual product cannot come for the day either: say so, and what a renewal would order instead.
     const short = held.decision.action === "hold" && held.decision.because.includes("stock") ? w.findings.find((x) => x.need.productId === held.product.productId && x.need.date === held.deliveryDate && x.state !== "resolved") : undefined;
-    if (short) sentences.push(sentences.length ? t.cannotToo(backWord(short.shortfall.backOn, lang)) : t.cannot(day, what, backWord(short.shortfall.backOn, lang), false));
+    if (short) sentences.push(sentences.length ? t.cannotToo(backWord(short.shortfall.backOn, lang), !short.staged && short.problems.includes("cutoff_passed")) : t.cannot(day, what, backWord(short.shortfall.backOn, lang), false, !short.staged && short.problems.includes("cutoff_passed")));
     sentences.push(t.held);
     if (short?.substitutes[0]) {
       const sp = await productsOf(rt, [short.substitutes[0].productId]);
@@ -135,7 +144,7 @@ export async function watchMomentForThread(rt: Runtime, session: AgentSession, l
       id: held.renewalId,
       kind: "renewal_held",
       say: cap(`${sentences.join(" ")}${held.staged ? ` ${t.stagedTrend}` : ""}`),
-      ask: choices.includes("renew_new") ? t.askThree(amountL(held.amounts.latest, u), amountL(held.amounts.usual, u)) : t.askTwo(amountL(held.amounts.usual, u)),
+      ask: choices.includes("renew_new") ? t.askThree(amt(held.amounts.latest, u), amt(held.amounts.usual, u)) : t.askTwo(amt(held.amounts.usual, u)),
       answers: choices,
       steps: stepsOfRenewal(held),
       facts: { renewal: held },
@@ -150,7 +159,7 @@ export async function watchMomentForThread(rt: Runtime, session: AgentSession, l
     const back = backWord(f.shortfall.backOn, lang);
     const order = f.need.source === "order";
     const best = f.substitutes[0];
-    const say = [t.cannot(dayWord(f.need.date, lang), what, back, order), best ? t.closest(nameIn(ps.get(best.productId), best.name, lang), figures(f, lang)) : t.noneCloser, f.staged ? t.staged : ""].filter(Boolean).join(" ");
+    const say = [t.cannot(dayWord(f.need.date, lang), what, back, order, !f.staged && f.problems.includes("cutoff_passed")), best ? t.closest(nameIn(ps.get(best.productId), best.name, lang), figures(f, lang)) : t.noneCloser, f.staged ? t.staged : ""].filter(Boolean).join(" ");
     return {
       id: f.findingId,
       kind: "stock_out",
@@ -162,6 +171,17 @@ export async function watchMomentForThread(rt: Runtime, session: AgentSession, l
       facts: { finding: { ...f, claim: f.claim ? { claimId: f.claim.claimId, statement: f.claim.statement, simulated: f.claim.simulated } : undefined } },
       staged: f.staged,
     };
+  }
+  // A backup the kitchen lined up was ordered by itself (server/reliability): one sentence, no question.
+  const backed = w.findings.find((f) => f.decision?.via === "backup" && !f.saidAt && f.decision.orderId);
+  if (backed) {
+    const d = backed.decision!;
+    const ps = await productsOf(rt, [backed.product.productId, d.productId ?? ""]);
+    const what = nameIn(ps.get(backed.product.productId), backed.product.name, lang);
+    const sub = nameIn(ps.get(d.productId ?? ""), d.productId ?? "", lang);
+    const say = d.status === "committed" ? t.backupUsed(what, sub, money(d.totalCents ?? 0), backed.staged) : t.backupUsedSignOff(what, sub, d.approver?.replace(/\s*\(.*\)$/, "") ?? approver ?? "a person", backed.staged);
+    // Said as a substitute placed (the conversation's card knows that kind); facts.backup says it was the kitchen's backup.
+    return { id: backed.findingId, kind: "substitute_placed", say: cap(say), answers: [], steps: [...stepsOfFinding({ ...backed, mandateRule: session.mandate.substitution.rule }), `The kitchen had lined up ${sub} as the backup (${d.by}); ordered through the gate: ${d.status}.`], facts: { finding: backed, backup: true }, staged: backed.staged };
   }
   const placed = w.renewals.find((r) => (r.state === "placed" || r.state === "failed") && !r.saidAt && r.outcome?.orderId);
   if (placed) {
@@ -272,5 +292,7 @@ export async function setAutoRenewFromThread(rt: Runtime, session: AgentSession,
   const a = await setAutoRenew(rt, session, { family, on, by: who.by, via: who.via });
   const t = WATCH_SAY_TEXT[who.lang ?? "en"];
   const what = who.what ?? family.replaceAll("_", " ");
-  return { reply: a.on ? t.autoOn(what, who.by) : t.autoOff(what) };
+  // The person as people say them: "Hotel Lumo kitchen (hotel-lumo)" -> "Hotel Lumo kitchen".
+  const by = who.by.replace(/\s*\([^)]*\)\s*$/, "");
+  return { reply: a.on ? t.autoOn(what, by) : t.autoOff(what) };
 }

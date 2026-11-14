@@ -297,6 +297,8 @@ export type TradeOff = {
   totalCents: number | null;
   /** What `packs` packs hold, against the amount needed. */
   delivered: number;
+  /** The amount needed in the base measure (litres or kilos when both products state one; else the usual's unit). `estimated`: a pack content the data is not sure of. */
+  need: { amount: number; unit: string; estimated: boolean };
   sameMaker: boolean;
   maker: string | null;
   usualMaker: string | null;
@@ -336,7 +338,19 @@ export const attrWord = (a: string) => (/^fat_\d/.test(a) ? `fat ${a.slice(4).re
 const fatOf = (attrs: string[]) => attrs.find((a) => /^fat_\d/.test(a)) ?? null;
 const fatText = (a: string | null) => (a ? `${a.slice(4).replace("_", ",")} %` : "unknown");
 const perUnit = (p: Product, packCents: number) => (p.unit === "pcs" ? null : r1(packCents / p.packSize));
-const declaredAllergens = (p: Product) => p.allergenInfo?.declared !== false;
+/** Allergen data the gate accepts: declared by the maker, or (fresh, whole produce) by the product's nature. */
+const declaredAllergens = (p: Product) => p.allergenInfo?.declared !== false || !!p.allergenInfo?.byNature;
+
+export type Measure = { unit: "L" | "kg"; perPack: number; certain: boolean };
+
+/** What one pack holds in litres or kilos: the product's own unit, or the pack content its data states for a piece. */
+export function measureOf(p: Product): Measure | undefined {
+  if (p.unit === "L" || p.unit === "kg") return { unit: p.unit, perPack: p.packSize, certain: true };
+  const c = p.packContent;
+  if (c?.perSalesUnit.L) return { unit: "L", perPack: c.perSalesUnit.L, certain: c.certain || c.certainMeasures.includes("L") };
+  if (c?.perSalesUnit.kg) return { unit: "kg", perPack: c.perSalesUnit.kg, certain: c.certain || c.certainMeasures.includes("kg") };
+  return undefined;
+}
 
 function nutritionOf(original: Product, p: Product): { nutrition?: NutritionComparison; nutritionText?: string } {
   const cmp = original.nutrition ? compareNutrition(original.nutrition, p.nutrition) : undefined;
@@ -348,8 +362,16 @@ function nutritionOf(original: Product, p: Product): { nutrition?: NutritionComp
 export function tradeOffOf(original: Product, usualPerUnitCents: number | null, c: SubstituteCandidate, need: { amount: number; date: string }): TradeOff {
   const o = c.offer;
   const p = c.product;
-  const packs = Math.max(1, Math.ceil(need.amount / p.packSize - 1e-9));
-  const unitCents = o ? perUnit(p, o.unitPriceCents) : null;
+  // The same quantity in litres or kilos: a case of 20 l boxes counted in pieces is 20 l a piece, not 1.
+  const om = measureOf(original);
+  const pm = measureOf(p);
+  const same = !!om && !!pm && om.unit === pm.unit;
+  const needBase = same && original.unit === "pcs" ? need.amount * om!.perPack : need.amount;
+  const packSize = same ? pm!.perPack : p.packSize;
+  const unit = same ? pm!.unit : p.unit;
+  if (same && original.unit === "pcs" && usualPerUnitCents !== null) usualPerUnitCents = r1(usualPerUnitCents / om!.perPack);
+  const packs = Math.max(1, Math.ceil(needBase / packSize - 1e-9));
+  const unitCents = o ? (same ? r1(o.unitPriceCents / pm!.perPack) : perUnit(p, o.unitPriceCents)) : null;
   const diff = unitCents !== null && usualPerUnitCents ? r1(unitCents - usualPerUnitCents) : null;
   const omat = original.attributes.filter(isMaterialAttribute);
   const pmat = p.attributes.filter(isMaterialAttribute);
@@ -362,17 +384,19 @@ export function tradeOffOf(original: Product, usualPerUnitCents: number | null, 
     usualPerUnitCents,
     perUnitDiffCents: diff,
     perUnitDiffPct: diff !== null && usualPerUnitCents ? r1((diff / usualPerUnitCents) * 100) : null,
-    packSize: p.packSize,
-    unit: p.unit,
+    packSize,
+    unit,
     packs,
     packCents: o?.unitPriceCents ?? null,
     totalCents: o ? packs * o.unitPriceCents : null,
-    delivered: r2(packs * p.packSize),
+    delivered: r2(packs * packSize),
+    need: { amount: r2(needBase), unit: same ? om!.unit : original.unit, estimated: same && (!om!.certain || !pm!.certain) },
     sameMaker: !!p.brand && p.brand !== "unknown" && p.brand === original.brand,
     maker: p.brand && p.brand !== "unknown" ? p.brand : null,
     usualMaker: original.brand && original.brand !== "unknown" ? original.brand : null,
-    allergensAdded: p.allergens.filter((a) => !original.allergens.includes(a)),
-    allergensRemoved: original.allergens.filter((a) => !p.allergens.includes(a)),
+    // Compared only when the usual's allergens are known: "contains milk, which the usual does not" from a usual with no data is untrue.
+    allergensAdded: declaredAllergens(original) ? p.allergens.filter((a) => !original.allergens.includes(a)) : [],
+    allergensRemoved: declaredAllergens(original) ? original.allergens.filter((a) => !p.allergens.includes(a)) : [],
     allergenDataMissing: !declaredAllergens(p),
     claimsLost: omat.filter((a) => !pmat.includes(a) && !/^fat_/.test(a)),
     claimsGained: pmat.filter((a) => !omat.includes(a) && !/^fat_/.test(a)),
@@ -396,7 +420,9 @@ export function tradeOffOf(original: Product, usualPerUnitCents: number | null, 
 export function insidePreferences(original: Product, c: SubstituteCandidate, t: TradeOff, mandate: Pick<Mandate, "allowedCategories" | "requiredAttributes" | "forbiddenAllergens" | "requiredCertificates" | "substitution">, stated: StatedPreference[] = []): { inside: boolean; outside: string[] } {
   const p = c.product;
   const why: string[] = [];
-  if (p.category !== original.category || p.unit !== original.unit) why.push(`another kind of product (${p.category.replaceAll("_", " ")})`);
+  const om = measureOf(original);
+  const pm = measureOf(p);
+  if (p.category !== original.category || (om && pm ? om.unit !== pm.unit : p.unit !== original.unit)) why.push(`another kind of product (${p.category.replaceAll("_", " ")})`);
   else if (c.label === "standin" || c.label === "other" || (c.map && !c.map.sameKind)) why.push("a stand-in of another kind, not the same product kind");
   const lost = original.attributes.filter(isMaterialAttribute).filter((a) => !p.attributes.includes(a));
   if (lost.length) why.push(`not ${lost.map(attrWord).join(", ")} like the usual`);
@@ -434,7 +460,8 @@ function whyLine(t: TradeOff): string {
   const parts: string[] = [];
   const u = t.unit === "kg" ? "kilo" : "litre";
   if (t.perUnitDiffCents !== null) parts.push(t.perUnitDiffCents === 0 ? `same price per ${u}` : `${Math.abs(t.perUnitDiffCents / 100).toFixed(2)} € ${t.perUnitDiffCents > 0 ? "more" : "less"} per ${u}`);
-  parts.push(`${t.packs} × ${t.packSize} ${t.unit === "L" ? "l" : t.unit}`);
+  const u1 = t.unit === "L" ? "l" : t.unit;
+  parts.push(`${t.need.amount} ${t.need.unit === "L" ? "l" : t.need.unit} as ${t.packs} × ${t.packSize} ${u1}${t.need.estimated ? " (pack content estimated)" : ""}`);
   if (t.sameMaker) parts.push("same maker");
   else if (t.maker) parts.push(`made by ${t.maker}`);
   if (t.fat) parts.push(`fat ${fatText(t.fat.from)} → ${fatText(t.fat.to)}`);

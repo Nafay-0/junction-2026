@@ -120,6 +120,7 @@ describe("real responses match the documented status codes and schemas", () => {
     const sub = await agent("POST", "/api/v1/quotes", { requestId, lines: [{ productId: "VA-1010", quantity: 60 }, { productId: "AR-2010", quantity: 40, substituteFor: "VA-1010" }] });
     const pick = (q: { quote: { lines: { productId: string; quantity: number; unitPriceCents: number }[] } }) => q.quote.lines.map(({ productId, quantity, unitPriceCents }) => ({ productId, quantity, unitPriceCents }));
     const pending = await agent("POST", "/api/v1/orders", { requestId, quoteToken: sub.body.quoteToken, lines: pick(sub.body) });
+    expect((await agent("POST", "/api/v1/watch/backup", { orderId: pending.body.order.orderId })).status).toBe(200); // no poor-record product: no backups
     expect(pending.status).toBe(202);
     expect((await agent("POST", "/api/v1/orders", { requestId, quoteToken: "a.b.c", lines: [] })).status).toBe(422);
 
@@ -195,6 +196,8 @@ describe("real responses match the documented status codes and schemas", () => {
     await kitchen("POST", "/api/v1/watch/answer", { findingId: watched.findings[0].findingId, choice: "keep", by: "Sanna" });
     expect((await kitchen("POST", "/api/v1/watch/auto-renew", { family: "nothing", on: true, by: "Sanna" })).status).toBe(404);
     await kitchen("POST", "/api/v1/watch/auto-renew", { family: "milk", on: false, by: "Sanna" });
+    expect((await kitchen("POST", "/api/v1/watch/backup", { orderId: "ord_nope" })).status).toBe(404);
+
 
     // The menu scenarios, with a scripted planner (no provider is called).
     const { setMenuModelForTests } = await import("./agent/menu/runtime");
