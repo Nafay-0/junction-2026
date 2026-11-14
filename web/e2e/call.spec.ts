@@ -265,14 +265,14 @@ test.describe("a judge's phone", () => {
     await expect(page.getByText(/100 L/).first()).toBeVisible({ timeout: 30_000 });
     // "Yes", then whatever the intake asks, then the first option: each a held turn.
     for (let i = 0; i < 3; i++) {
-      if (await page.getByText(/Sign off on this phone|Order placed|placed/i).first().isVisible().catch(() => false)) break;
+      if (await page.getByText(/OK it on this phone|Order placed|placed/i).first().isVisible().catch(() => false)) break;
       await expect(status(page)).toHaveAttribute("data-status", /ready|speaking/, { timeout: 30_000 });
       await hold(page);
       await page.waitForTimeout(2500);
     }
     const order = fake.sent.map((m) => m.toolResponse?.functionResponses?.[0]?.response).find((r) => r && ["committed", "pending_approval"].includes(r.state));
     expect(order, JSON.stringify(fake.sent.filter((m) => m.toolResponse).map((m) => m.toolResponse.functionResponses[0].response.state))).toBeTruthy();
-    if (order.state === "pending_approval") await expect(page.getByRole("link", { name: "Sign off on this phone" })).toBeVisible();
+    if (order.state === "pending_approval") await expect(page.getByRole("link", { name: "OK it on this phone" })).toBeVisible();
   });
 });
 
