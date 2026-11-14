@@ -26,7 +26,7 @@ import type { Ledger, LedgerHead } from "./ledger";
 import { LiveLookupAllowance, shareKeyOf } from "./live-allowance";
 import { MAX_LIVE_IDS_PER_CALL } from "./catalog";
 import { MandateError, supersededBy, supersededMessage, verifyMandateToken, type Mandate, type MandateRegister, type TrustRegistry } from "./mandate";
-import { SPLIT_WINDOW_HOURS, decidingRule, evaluatePolicy, type Decision, type OrderDraftLine, type ProductHold, type RecentOrder, type RuleResult } from "./policy";
+import { SPLIT_NAMED_MAX, SPLIT_WINDOW_HOURS, decidingRule, evaluatePolicy, type Decision, type OrderDraftLine, type ProductHold, type RecentOrder, type RuleResult, type SplitWindow } from "./policy";
 export type { ProductHold } from "./policy";
 import { QuoteError, QuoteRequestLineSchema, buildQuote, signQuote, verifyQuote, type Quote, type QuoteLine } from "./quote";
 import { addDays, canonicalJson, formatEur, newId } from "./util";
@@ -214,35 +214,95 @@ export type ApprovalContext = {
 };
 
 export function toPublicOrder(o: Order): PublicOrder {
+  return structuredClone(stripOrder(o));
+}
+
+/** toPublicOrder without the copy, for an order nobody else holds (a copy the store just handed out). */
+function stripOrder(o: Order): PublicOrder {
   const { approval, quote: _q, draftLines: _d, mandate: _m, ...rest } = o;
   void _q;
   void _d;
   void _m;
-  if (!approval) return structuredClone(rest);
+  if (!approval) return rest;
   const { tokenHash: _t, ...publicApproval } = approval;
   void _t;
-  return structuredClone({ ...rest, approval: publicApproval });
+  return { ...rest, approval: publicApproval };
 }
 
 // ---------- storage ----------
 
-/** Async on purpose, so a database can replace the in-memory version without touching callers. */
+/** The weekly-budget sums of one organisation (orders.ts budgetUse): committed spend, and the orders still holding money. */
+export type OrderSpend = { committedCents: number; held: { orderId: string; totalCents: number; expiresAt: string }[] };
+
+/** What a SplitWindow query asks: the window start, and what makes an earlier order related to this one. */
+export type SplitQuery = { since: string; requestId: string; categories: string[]; excludeOrderId?: string; latest?: number };
+
+/**
+ * Async on purpose, so a database can replace the in-memory version without touching callers.
+ *
+ * The queries below exist so the gate never reads every stored order to decide one: each reads only one
+ * organisation's orders in a time window, the few orders waiting for sign-off, or one request's orders, and the
+ * budget and splitting checks get sums rather than lists (the in-memory store from its indexes, PostgreSQL in SQL).
+ */
 export interface DockRepository {
   saveRequest(r: PurchaseRequest): Promise<void>;
   getRequest(id: string): Promise<PurchaseRequest | undefined>;
   saveOrder(o: Order): Promise<void>;
   getOrder(id: string): Promise<Order | undefined>;
   getOrderByApprovalId(approvalId: string): Promise<Order | undefined>;
+  /** Every order, oldest first. For views and exports; the gate itself uses the queries below. */
   listOrders(): Promise<Order[]>;
+  /** One organisation's orders, oldest first; with `since` (ISO), only those created after it. */
+  ordersOf(orgId: string, since?: string): Promise<Order[]>;
+  /** The orders placed for one request. */
+  ordersOfRequest(requestId: string): Promise<Order[]>;
+  /** Orders waiting for sign-off (status pending_approval), of one organisation or all, oldest first. */
+  pendingOrders(orgId?: string): Promise<Order[]>;
+  /** Orders waiting for sign-off whose quote expired at or before `at` (ISO), of one organisation or all. */
+  pendingExpired(at: string, orgId?: string): Promise<Order[]>;
+  /**
+   * The weekly budget's sums over one organisation's orders created after `since`: the committed total, and the
+   * orders waiting for sign-off whose quote is still valid at `at` (they hold their total).
+   */
+  spendOf(orgId: string, q: { since: string; at: string; excludeOrderId?: string }): Promise<OrderSpend>;
+  /**
+   * The order_splitting check's earlier orders (policy.ts splitCheck), counted and summed by the store: orders of the
+   * organisation created after `since` that the agent placed alone (committed with no sign-off) for the same request
+   * or a category in `categories`; and the latest `latest` (default 10) of them, newest first, to name.
+   */
+  splitWindow(orgId: string, q: SplitQuery): Promise<SplitWindow>;
   /** Atomically mark a quote as used. Returns false if it already was. */
   claimQuote(quoteId: string): Promise<boolean>;
   isQuoteUsed(quoteId: string): Promise<boolean>;
 }
 
+/** As the splitting check reads an order: placed by the agent alone or not, when, for what. */
+export function recentOrderOf(o: Order): RecentOrder {
+  return {
+    orderId: o.orderId,
+    requestId: o.requestId,
+    placedAt: o.createdAt,
+    totalCents: o.totalCents,
+    categories: [...new Set(o.lines.map((l) => l.category))],
+    deliveryDates: [...new Set(o.lines.map((l) => l.deliveryDate))],
+    authorisedBy: o.status === "pending_approval" ? "pending" : o.approval ? "approver" : "mandate",
+  };
+}
+
+/**
+ * Orders and requests in memory, with the indexes the queries need: per organisation (by creation time), per
+ * request, by approval id, and the set waiting for sign-off. What leaves is a copy; what the sums read is not
+ * copied at all.
+ */
 export class InMemoryDockRepository implements DockRepository {
   private requests = new Map<string, PurchaseRequest>();
   private orders = new Map<string, Order>();
   private usedQuotes = new Set<string>();
+  /** Order ids per organisation, sorted by createdAt (orders are created in time order, so this is an append). */
+  private byOrg = new Map<string, string[]>();
+  private byRequest = new Map<string, string[]>();
+  private byApproval = new Map<string, string>();
+  private pending = new Set<string>();
 
   async saveRequest(r: PurchaseRequest) {
     this.requests.set(r.requestId, structuredClone(r));
@@ -252,18 +312,83 @@ export class InMemoryDockRepository implements DockRepository {
     return r && structuredClone(r);
   }
   async saveOrder(o: Order) {
-    this.orders.set(o.orderId, structuredClone(o));
+    const copy = structuredClone(o);
+    const before = this.orders.get(o.orderId);
+    this.orders.set(o.orderId, copy);
+    if (!before) {
+      const ids = this.byOrg.get(o.orgId) ?? [];
+      // binary insert by createdAt; almost always the end
+      let lo = 0;
+      let hi = ids.length;
+      if (!ids.length || this.orders.get(ids[ids.length - 1])!.createdAt <= o.createdAt) lo = hi;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (this.orders.get(ids[mid])!.createdAt <= o.createdAt) lo = mid + 1;
+        else hi = mid;
+      }
+      ids.splice(lo, 0, o.orderId);
+      this.byOrg.set(o.orgId, ids);
+      const r = this.byRequest.get(o.requestId);
+      if (r) r.push(o.orderId);
+      else this.byRequest.set(o.requestId, [o.orderId]);
+    }
+    if (o.approval) this.byApproval.set(o.approval.approvalId, o.orderId);
+    if (o.status === "pending_approval") this.pending.add(o.orderId);
+    else this.pending.delete(o.orderId);
   }
   async getOrder(id: string) {
     const o = this.orders.get(id);
     return o && structuredClone(o);
   }
   async getOrderByApprovalId(approvalId: string) {
-    const o = [...this.orders.values()].find((x) => x.approval?.approvalId === approvalId);
+    const id = this.byApproval.get(approvalId);
+    const o = id ? this.orders.get(id) : undefined;
     return o && structuredClone(o);
   }
   async listOrders() {
     return structuredClone([...this.orders.values()]);
+  }
+  async ordersOf(orgId: string, since?: string) {
+    const ids = this.byOrg.get(orgId) ?? [];
+    return structuredClone(ids.slice(since ? this.firstAfter(ids, since) : 0).map((id) => this.orders.get(id)!));
+  }
+  async ordersOfRequest(requestId: string) {
+    return structuredClone((this.byRequest.get(requestId) ?? []).map((id) => this.orders.get(id)!));
+  }
+  async pendingOrders(orgId?: string) {
+    return structuredClone(this.pendingRefs(orgId));
+  }
+  async pendingExpired(at: string, orgId?: string) {
+    const t = Date.parse(at);
+    return structuredClone(this.pendingRefs(orgId).filter((o) => Date.parse(o.quote.expiresAt) <= t));
+  }
+  async spendOf(orgId: string, q: { since: string; at: string; excludeOrderId?: string }): Promise<OrderSpend> {
+    const t = Date.parse(q.at);
+    let committedCents = 0;
+    const held: OrderSpend["held"] = [];
+    for (const o of this.window(orgId, q.since)) {
+      if (o.orderId === q.excludeOrderId) continue;
+      if (o.status === "committed") committedCents += o.totalCents;
+      else if (o.status === "pending_approval" && Date.parse(o.quote.expiresAt) > t) held.push({ orderId: o.orderId, totalCents: o.totalCents, expiresAt: o.quote.expiresAt });
+    }
+    return { committedCents, held };
+  }
+  async splitWindow(orgId: string, q: SplitQuery): Promise<SplitWindow> {
+    const want = new Set(q.categories);
+    const latest: RecentOrder[] = [];
+    const max = q.latest ?? 10;
+    let count = 0;
+    let totalCents = 0;
+    const w = this.window(orgId, q.since);
+    for (let i = w.length - 1; i >= 0; i--) {
+      const o = w[i];
+      if (o.orderId === q.excludeOrderId || o.status !== "committed" || o.approval) continue;
+      if (o.requestId !== q.requestId && !o.lines.some((l) => want.has(l.category))) continue;
+      count++;
+      totalCents += o.totalCents;
+      if (latest.length < max) latest.push(recentOrderOf(o));
+    }
+    return { count, totalCents, latest };
   }
   async claimQuote(quoteId: string) {
     if (this.usedQuotes.has(quoteId)) return false;
@@ -272,6 +397,31 @@ export class InMemoryDockRepository implements DockRepository {
   }
   async isQuoteUsed(quoteId: string) {
     return this.usedQuotes.has(quoteId);
+  }
+
+  private pendingRefs(orgId?: string): Order[] {
+    const out: Order[] = [];
+    for (const id of this.pending) {
+      const o = this.orders.get(id)!;
+      if (!orgId || o.orgId === orgId) out.push(o);
+    }
+    return out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+  /** The organisation's stored orders created after `since`, oldest first (references: never hand them out). */
+  private window(orgId: string, since: string): Order[] {
+    const ids = this.byOrg.get(orgId) ?? [];
+    return ids.slice(this.firstAfter(ids, since)).map((id) => this.orders.get(id)!);
+  }
+  private firstAfter(ids: string[], since: string): number {
+    const t = Date.parse(since);
+    let lo = 0;
+    let hi = ids.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (Date.parse(this.orders.get(ids[mid])!.createdAt) <= t) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
   }
 }
 
@@ -475,9 +625,8 @@ export function createDock(deps: DockDeps) {
    */
   const expiring = new Set<string>();
   async function expireStale(orgId?: string): Promise<void> {
-    const t = now().getTime();
-    for (const o of await repo.listOrders()) {
-      if ((orgId && o.orgId !== orgId) || o.status !== "pending_approval" || Date.parse(o.quote.expiresAt) > t || expiring.has(o.orderId)) continue;
+    for (const o of await repo.pendingExpired(now().toISOString(), orgId)) {
+      if (o.status !== "pending_approval" || expiring.has(o.orderId)) continue;
       expiring.add(o.orderId);
       try {
         const at = now().toISOString();
@@ -506,13 +655,9 @@ export function createDock(deps: DockDeps) {
   /** The organisation's spend over the last 7 days: committed, and held by orders still waiting for sign-off. */
   async function budgetUse(orgId: string, excludeOrderId?: string): Promise<{ spentCents: number; heldCents: number; held: { orderId: string; totalCents: number; expiresAt: string }[] }> {
     await expireStale(orgId);
-    const since = addDays(now(), -7).getTime();
-    const t = now().getTime();
-    const recent = (await repo.listOrders()).filter((o) => o.orgId === orgId && o.orderId !== excludeOrderId && Date.parse(o.createdAt) > since);
-    const committed = recent.filter((o) => o.status === "committed");
-    const held = recent.filter((o) => o.status === "pending_approval" && Date.parse(o.quote.expiresAt) > t);
-    const sum = (xs: Order[]) => xs.reduce((s, o) => s + o.totalCents, 0);
-    return { spentCents: sum(committed) + sum(held), heldCents: sum(held), held: held.map((o) => ({ orderId: o.orderId, totalCents: o.totalCents, expiresAt: o.quote.expiresAt })) };
+    const { committedCents, held } = await repo.spendOf(orgId, { since: addDays(now(), -7).toISOString(), at: now().toISOString(), excludeOrderId });
+    const heldCents = held.reduce((s, o) => s + o.totalCents, 0);
+    return { spentCents: committedCents + heldCents, heldCents, held };
   }
 
   async function spentThisWeek(orgId: string, excludeOrderId?: string): Promise<number> {
@@ -547,21 +692,19 @@ export function createDock(deps: DockDeps) {
     };
   }
 
-  /** Orders of this organisation in the splitting window, for the order_splitting rule. */
-  async function recentOrders(orgId: string, excludeOrderId?: string): Promise<RecentOrder[]> {
-    const since = now().getTime() - SPLIT_WINDOW_HOURS * 3600_000;
-    return (await repo.listOrders())
-      .filter((o) => o.orgId === orgId && o.orderId !== excludeOrderId && Date.parse(o.createdAt) > since)
-      .filter((o) => o.status === "committed" || o.status === "pending_approval")
-      .map((o) => ({
-        orderId: o.orderId,
-        requestId: o.requestId,
-        placedAt: o.createdAt,
-        totalCents: o.totalCents,
-        categories: [...new Set(o.lines.map((l) => l.category))],
-        deliveryDates: [...new Set(o.lines.map((l) => l.deliveryDate))],
-        authorisedBy: o.status === "pending_approval" ? "pending" : o.approval ? "approver" : "mandate",
-      }));
+  /** The earlier orders the order_splitting rule reads for this quote, counted by the store over the splitting window. */
+  async function splitWindowOf(quote: Quote, excludeOrderId?: string): Promise<{ splitWindow: SplitWindow }> {
+    const since = new Date(now().getTime() - SPLIT_WINDOW_HOURS * 3600_000).toISOString();
+    const categories = [...new Set(quote.lines.map((l) => l.category))];
+    return { splitWindow: await repo.splitWindow(quote.buyerOrgId, { since, requestId: quote.requestId, categories, excludeOrderId, latest: SPLIT_NAMED_MAX }) };
+  }
+
+  /** Which organisation a request belongs to never changes: remembered (bounded) so ledger reads do not ask the store per entry. */
+  const requestOrgs = new Map<string, string>();
+  const REQUEST_ORGS_MAX = 50_000;
+  function rememberRequestOrg(requestId: string, orgId: string): void {
+    requestOrgs.set(requestId, orgId);
+    if (requestOrgs.size > REQUEST_ORGS_MAX) requestOrgs.delete(requestOrgs.keys().next().value!);
   }
 
   /**
@@ -824,6 +967,7 @@ export function createDock(deps: DockDeps) {
         createdAt: now().toISOString(),
       };
       await repo.saveRequest(r);
+      rememberRequestOrg(r.requestId, r.orgId);
       ledger.append({
         type: "request",
         actor: agentActor(session),
@@ -846,7 +990,7 @@ export function createDock(deps: DockDeps) {
       if (was === neededBy && (deliverOn === undefined || (r.deliverOn ?? null) === deliverOn)) return r;
       const today = localNow(now()).date;
       if (neededBy && neededBy < today) throw new DockError(400, "needed_by_in_past", `${neededBy} is before today (${today}).`, "delivery_deadline");
-      const placed = (await repo.listOrders()).find((o) => o.requestId === requestId && (o.status === "pending_approval" || o.status === "committed"));
+      const placed = (await repo.ordersOfRequest(requestId)).find((o) => o.status === "pending_approval" || o.status === "committed");
       if (placed) throw new DockError(409, "request_has_order", `Order ${placed.orderId} for request ${requestId} is ${placed.status.replace("_", " ")}; it was decided against ${was ?? "the earliest date"}. Open a new request for another date.`, "intake_sequence", { orderId: placed.orderId });
       const next: PurchaseRequest = { ...r, neededBy: neededBy ?? undefined, ...(deliverOn !== undefined ? { deliverOn: deliverOn ?? undefined } : {}) };
       await repo.saveRequest(next);
@@ -967,7 +1111,7 @@ export function createDock(deps: DockDeps) {
       const policyPreview = evaluatePolicy(
         session.mandate,
         { agentId: session.agentId, quote, lines: quote.lines, neededBy: request.neededBy, deliverOn: request.deliverOn, requestId, asked: await askedOf(request) },
-        { now: now(), ...supersession(session.mandate, session.mandateIssuedAt), ...(await budgetContext(quote.buyerOrgId)), ...(await mistakeCheckOf(session.mandate.issuer, request, quote, internal.intakeQuote)).context, ...(await holdsOf(quote)), quoteAlreadyUsed: false, recentOrders: await recentOrders(quote.buyerOrgId) },
+        { now: now(), ...supersession(session.mandate, session.mandateIssuedAt), ...(await budgetContext(quote.buyerOrgId)), ...(await mistakeCheckOf(session.mandate.issuer, request, quote, internal.intakeQuote)).context, ...(await holdsOf(quote)), quoteAlreadyUsed: false, ...(await splitWindowOf(quote)) },
       );
       return { quote, quoteToken, policyPreview, claims };
     },
@@ -987,7 +1131,7 @@ export function createDock(deps: DockDeps) {
       return serialize(orgId, async () => {
         const draft = { agentId: session.agentId, quote, lines, neededBy: request.neededBy, deliverOn: request.deliverOn, requestId, asked: await askedOf(request) };
         const check = await mistakeCheckOf(session.mandate.issuer, request, quote);
-        const ctx = { now: now(), ...supersession(session.mandate, session.mandateIssuedAt), ...(await budgetContext(orgId)), ...check.context, ...(await holdsOf(quote)), quoteAlreadyUsed: await repo.isQuoteUsed(quote.quoteId), recentOrders: await recentOrders(orgId) };
+        const ctx = { now: now(), ...supersession(session.mandate, session.mandateIssuedAt), ...(await budgetContext(orgId)), ...check.context, ...(await holdsOf(quote)), quoteAlreadyUsed: await repo.isQuoteUsed(quote.quoteId), ...(await splitWindowOf(quote)) };
         let decision = evaluatePolicy(session.mandate, draft, ctx);
         if (decision.outcome !== "reject" && !(await repo.claimQuote(quote.quoteId))) {
           decision = evaluatePolicy(session.mandate, draft, { ...ctx, quoteAlreadyUsed: true });
@@ -1135,7 +1279,7 @@ export function createDock(deps: DockDeps) {
         const recheck = evaluatePolicy(
           order.mandate,
           { agentId: order.agentId, quote: order.quote, lines: order.draftLines, neededBy: request?.neededBy, deliverOn: request?.deliverOn, requestId: order.requestId, asked: await askedOf(request) },
-          { now: now(), ...supersession(order.mandate, order.mandateIssuedAt), ...(await budgetContext(order.orgId, order.orderId)), ...(await mistakeCheckOf({ orgId: order.orgId, name: order.orgName }, request, order.quote)).context, ...(await holdsOf(order.quote)), quoteAlreadyUsed: false, recentOrders: await recentOrders(order.orgId, order.orderId) },
+          { now: now(), ...supersession(order.mandate, order.mandateIssuedAt), ...(await budgetContext(order.orgId, order.orderId)), ...(await mistakeCheckOf({ orgId: order.orgId, name: order.orgName }, request, order.quote)).context, ...(await holdsOf(order.quote)), quoteAlreadyUsed: false, ...(await splitWindowOf(order.quote, order.orderId)) },
         );
         if (recheck.outcome === "reject") {
           order.status = "rejected";
@@ -1195,9 +1339,9 @@ export function createDock(deps: DockDeps) {
     },
 
     /** Every organisation's pending sign-offs. Callers decide who may see which (see server/authz.ts). */
-    async listPendingApprovals(): Promise<PendingApproval[]> {
-      await expireStale();
-      return (await repo.listOrders())
+    async listPendingApprovals(orgId?: string): Promise<PendingApproval[]> {
+      await expireStale(orgId);
+      return (await repo.pendingOrders(orgId))
         .filter((o) => o.status === "pending_approval" && o.approval?.status === "pending")
         .map((o) => ({
           approvalId: o.approval!.approvalId,
@@ -1212,9 +1356,21 @@ export function createDock(deps: DockDeps) {
         }));
     },
 
-    async listOrders(): Promise<PublicOrder[]> {
-      await expireStale();
-      return (await repo.listOrders()).map(toPublicOrder);
+    /** Every order, or one organisation's (oldest first). The store's copies, stripped of what never leaves Dock. */
+    async listOrders(filter: { orgId?: string } = {}): Promise<PublicOrder[]> {
+      await expireStale(filter.orgId);
+      return (filter.orgId ? await repo.ordersOf(filter.orgId) : await repo.listOrders()).map(stripOrder);
+    },
+
+    /** Orders waiting for sign-off, of one organisation or all (oldest first). */
+    async pendingOrders(orgId?: string): Promise<PublicOrder[]> {
+      await expireStale(orgId);
+      return (await repo.pendingOrders(orgId)).map(stripOrder);
+    },
+
+    /** The organisation an order belongs to (for deciding who may read its ledger entries); undefined when unknown. */
+    async orgOfOrder(orderId: string): Promise<string | undefined> {
+      return (await repo.getOrder(orderId))?.orgId;
     },
 
     /**
@@ -1257,7 +1413,11 @@ export function createDock(deps: DockDeps) {
 
     /** The organisation a request belongs to, for deciding who may read its ledger entries. */
     async orgOfRequest(requestId: string): Promise<string | undefined> {
-      return (await repo.getRequest(requestId))?.orgId;
+      const known = requestOrgs.get(requestId);
+      if (known) return known;
+      const orgId = (await repo.getRequest(requestId))?.orgId;
+      if (orgId) rememberRequestOrg(requestId, orgId);
+      return orgId;
     },
 
     /** Does this one-time link token belong to this approval? (The link proves only who received the message.) */

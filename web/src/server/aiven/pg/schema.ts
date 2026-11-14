@@ -38,6 +38,18 @@ create index if not exists docs_approval_idx on ${S}.docs (approval_id) where ap
 create index if not exists docs_expiry_idx   on ${S}.docs (collection, expires_at) where expires_at is not null;
 create index if not exists docs_approver_idx on ${S}.docs (collection, (doc->>'approverId'));
 create index if not exists docs_role_idx     on ${S}.docs (collection, org_id, (doc->>'role'));
+-- What the gate's order queries filter and sum on (pg/repositories.ts PgDockRepository), as stored columns: read
+-- from the row itself, never from the (TOASTed) document, so a budget sum over a busy week reads no documents.
+-- Added in place on an existing table (a rewrite of docs, once).
+alter table ${S}.docs add column if not exists status        text    generated always as (doc->>'status') stored;
+alter table ${S}.docs add column if not exists request_id    text    generated always as (doc->>'requestId') stored;
+alter table ${S}.docs add column if not exists created_iso   text collate "C" generated always as (doc->>'createdAt') stored;
+alter table ${S}.docs add column if not exists quote_expires text collate "C" generated always as (doc->'quote'->>'expiresAt') stored;
+alter table ${S}.docs add column if not exists total_cents   numeric generated always as (case when collection = 'order' then (doc->>'totalCents')::numeric end) stored;
+alter table ${S}.docs add column if not exists categories    jsonb   generated always as (case when collection = 'order' then jsonb_path_query_array(doc, '$.lines[*].category') end) stored;
+create index if not exists docs_order_org_time_idx on ${S}.docs (org_id, created_iso) where collection = 'order';
+create index if not exists docs_order_request_idx  on ${S}.docs (request_id) where collection = 'order';
+create index if not exists docs_order_pending_idx  on ${S}.docs (org_id, created_iso) where collection = 'order' and status = 'pending_approval';
 comment on table ${S}.docs is 'Dock records as jsonb documents. collections: request, order, kitchen, intake, approver, credential, session, ceremony, sandbox.';
 
 create table if not exists ${S}.used_quotes (
