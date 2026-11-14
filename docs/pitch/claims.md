@@ -98,6 +98,22 @@ VJ = `valio-judges.md`, Pa = `partners/`.
 | 58 | CI on CRACI runners runs lint, typecheck, tests, build and the scripted attacks on every push | Pa | `.github/workflows/ci.yml` (`runs-on: craci`); `gh run list` showed successful `main` runs | V |
 | 59 | About 71 test files and about 690 test cases | (not used in scripts) | static count: `find web/src -name '*.test.ts'`, grep of `it(` / `test(` | V (count only) |
 
+## The second reader (NVIDIA Nemotron)
+
+Checked on Saturday 14 Nov 2026 between about 02:00 and 03:30 EET on `claude/second-reader`, by running the evaluation
+and a production build; numbers from `web/eval/second-reader/results.json` and `results-holdout.json`.
+
+| # | Claim | Used in | Source | Status |
+|---|---|---|---|---|
+| 71 | Every typed or spoken request (and an outside agent's `POST /api/v1/agent/interpret`) is read twice: by Claude Opus 5.5 and, at the same moment, by NVIDIA Nemotron 3 Nano (open weights, via Featherless) | Pa | `web/src/server/agent/interpret.ts` (`interpretRequest` calls `readTwice`), `web/src/server/agent/second-reader.ts`; needs `DOCK_SECOND_READER_MODEL` set | V on a local production build (*) on the live site until the variable is deployed |
+| 72 | Plain code compares the two readings; the second can only add a question, never changes the need, chooses or approves | Pa | `web/src/core/second-reading.ts` (no model import), `second-reading.test.ts`, `second-reading-intake.test.ts` | V |
+| 73 | No needless question in 252 compared requests (tuning 76, held-out 30, fresh 20; two runs each) | Pa | `web/docs/second-reader.md`, `web/eval/second-reader/results*.json` | Partly: the rules were tuned on the 77 and on ten live probes (3 of 10 got a needless question before the last fixes); the fresh 20 are the untouched number |
+| 74 | Catches about 9 in 10 known misreadings (x10, "1.000" as 1, a dropped or negated claim, a dropped allergen, another product, another day): 91 % of 1,800; 94 % on the fresh set | Pa | same | V. Injected errors: the first reader made no real misreading in the 127 requests, so no real catch is shown |
+| 75 | Adds no wait at the 90th percentile; Nemotron takes 1.4 s at the median; when it is late, down or at capacity the request is read once and goes on | Pa | `results*.json` `latencyMs`; `second-reader.test.ts` (timeout, 429, 500, unreadable, over the daily cap) | V |
+| 76 | Nemotron alone is right on every compared field only about 60 % of the time; it works as a second reader because only what the buyer's words name is compared | Pa | `web/docs/second-reader.md` ("How it got there"): 53 % needless questions when every difference was asked | V |
+| 77 | Nemotron 3 Super 120B could not be evaluated: HTTP 429 "at capacity" on all 291 calls | Pa | `web/eval/second-reader/readings*.json` | V |
+| 78 | Shown in the order lane, the ledger (`second_reading` step), the operations trace and `/ops/safeguards` ("Read twice") | Pa | `web/src/app/k/[kitchen]/second-reading.tsx`, `web/src/server/ops/trace.ts`, `views.ts` (`secondReadingStats`), `web/src/server/second-reading-flow.test.ts` | V |
+
 ## Platform and team
 
 | # | Claim | Used in | Source | Status |

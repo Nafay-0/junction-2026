@@ -1,0 +1,1466 @@
+{
+ "at": "2026-11-14T01:30:58.577Z",
+ "set": {
+  "cases": 30,
+  "byLanguage": {
+   "en": 10,
+   "fi": 10,
+   "sv": 10
+  },
+  "tags": [
+   "digit grouping",
+   "relative date",
+   "mixed units",
+   "number word",
+   "negated claim"
+  ]
+ },
+ "deadlineMs": 8000,
+ "rules": {
+  "amountFactor": 2,
+  "askWhenOnlyFirstHasDate": false,
+  "askWhenOnlySecondHasDate": true,
+  "askWhenOnlySecondHasClaim": true,
+  "askWhenOnlyFirstHasClaim": false,
+  "askExcludedAgainstUnstated": false,
+  "compareKind": true,
+  "compareDate": true,
+  "compareFat": false,
+  "onlyWhatTheWordsSay": true
+ },
+ "first": {
+  "model": "anthropic:claude-opus-5-5",
+  "right": 27,
+  "of": 30,
+  "pct": 90,
+  "wrong": [
+   {
+    "id": "h-fi-02",
+    "wrong": [
+     "date"
+    ]
+   },
+   {
+    "id": "h-fi-10",
+    "wrong": [
+     "date"
+    ]
+   },
+   {
+    "id": "h-sv-07",
+    "wrong": [
+     "date"
+    ]
+   }
+  ],
+  "latencyMs": {
+   "p50": 2844,
+   "p90": 4347
+  },
+  "costUsd": 0.497
+ },
+ "second": [
+  {
+   "second": "anthropic:claude-opus-5-5~pre-merge",
+   "cases": 30,
+   "alone": {
+    "right": 30,
+    "of": 30,
+    "pct": 100,
+    "byField": {
+     "amount": 100,
+     "claims": 100,
+     "allergens": 100,
+     "kind": 100,
+     "date": 100
+    }
+   },
+   "unavailable": {
+    "failed": {},
+    "lateBeyondDeadline": 0,
+    "total": 0,
+    "pct": 0
+   },
+   "firstIncomplete": [],
+   "falseAlarm": {
+    "firstRight": 27,
+    "alarms": 0,
+    "pct": 0,
+    "byField": {
+     "amount": 0,
+     "claims": 0,
+     "allergens": 0,
+     "kind": 0,
+     "date": 0
+    },
+    "cases": []
+   },
+   "natural": {
+    "firstWrong": 3,
+    "caught": 3,
+    "cases": [
+     {
+      "id": "h-fi-02",
+      "wrong": [
+       "date"
+      ],
+      "caught": [
+       "date"
+      ]
+     },
+     {
+      "id": "h-fi-10",
+      "wrong": [
+       "date"
+      ],
+      "caught": [
+       "date"
+      ]
+     },
+     {
+      "id": "h-sv-07",
+      "wrong": [
+       "date"
+      ],
+      "caught": [
+       "date"
+      ]
+     }
+    ]
+   },
+   "injected": {
+    "n": 248,
+    "withSecond": 248,
+    "caught": 197,
+    "pctOfAll": 79.4,
+    "pctWhenAvailable": 79.4,
+    "misreadings": {
+     "n": 202,
+     "caught": 197,
+     "pct": 97.5
+    },
+    "byKind": {
+     "amount x10": {
+      "n": 27,
+      "caught": 27
+     },
+     "amount /10": {
+      "n": 23,
+      "caught": 23
+     },
+     "litres read as packs": {
+      "n": 17,
+      "caught": 17
+     },
+     "lactose-free added": {
+      "n": 19,
+      "caught": 0
+     },
+     "nuts added": {
+      "n": 27,
+      "caught": 0
+     },
+     "another kind of product": {
+      "n": 27,
+      "caught": 27
+     },
+     "a week later": {
+      "n": 24,
+      "caught": 23
+     },
+     "the day before": {
+      "n": 27,
+      "caught": 26
+     },
+     "date dropped": {
+      "n": 27,
+      "caught": 26
+     },
+     "claim dropped": {
+      "n": 11,
+      "caught": 11
+     },
+     "claim negated": {
+      "n": 8,
+      "caught": 8
+     },
+     "1.000 read as 1": {
+      "n": 6,
+      "caught": 6
+     },
+     "allergen dropped": {
+      "n": 5,
+      "caught": 3
+     }
+    }
+   },
+   "latencyMs": {
+    "p50": 3231,
+    "p90": 4618,
+    "max": 5043,
+    "waitedP50": 135,
+    "waitedP90": 1367,
+    "waitedMax": 2452
+   }
+  },
+  {
+   "second": "featherless:nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16~transcribe-v3",
+   "cases": 30,
+   "alone": {
+    "right": 21,
+    "of": 30,
+    "pct": 70,
+    "byField": {
+     "amount": 100,
+     "claims": 73.3,
+     "allergens": 100,
+     "kind": 100,
+     "date": 96.7
+    }
+   },
+   "unavailable": {
+    "failed": {},
+    "lateBeyondDeadline": 0,
+    "total": 0,
+    "pct": 0
+   },
+   "firstIncomplete": [],
+   "falseAlarm": {
+    "firstRight": 27,
+    "alarms": 0,
+    "pct": 0,
+    "byField": {
+     "amount": 0,
+     "claims": 0,
+     "allergens": 0,
+     "kind": 0,
+     "date": 0
+    },
+    "cases": []
+   },
+   "natural": {
+    "firstWrong": 3,
+    "caught": 3,
+    "cases": [
+     {
+      "id": "h-fi-02",
+      "wrong": [
+       "date"
+      ],
+      "caught": [
+       "date"
+      ]
+     },
+     {
+      "id": "h-fi-10",
+      "wrong": [
+       "date"
+      ],
+      "caught": [
+       "date"
+      ]
+     },
+     {
+      "id": "h-sv-07",
+      "wrong": [
+       "date"
+      ],
+      "caught": [
+       "date"
+      ]
+     }
+    ]
+   },
+   "injected": {
+    "n": 248,
+    "withSecond": 248,
+    "caught": 197,
+    "pctOfAll": 79.4,
+    "pctWhenAvailable": 79.4,
+    "misreadings": {
+     "n": 202,
+     "caught": 197,
+     "pct": 97.5
+    },
+    "byKind": {
+     "amount x10": {
+      "n": 27,
+      "caught": 27
+     },
+     "amount /10": {
+      "n": 23,
+      "caught": 23
+     },
+     "litres read as packs": {
+      "n": 17,
+      "caught": 17
+     },
+     "lactose-free added": {
+      "n": 19,
+      "caught": 0
+     },
+     "nuts added": {
+      "n": 27,
+      "caught": 0
+     },
+     "another kind of product": {
+      "n": 27,
+      "caught": 27
+     },
+     "a week later": {
+      "n": 24,
+      "caught": 23
+     },
+     "the day before": {
+      "n": 27,
+      "caught": 26
+     },
+     "date dropped": {
+      "n": 27,
+      "caught": 26
+     },
+     "claim dropped": {
+      "n": 11,
+      "caught": 11
+     },
+     "claim negated": {
+      "n": 8,
+      "caught": 8
+     },
+     "1.000 read as 1": {
+      "n": 6,
+      "caught": 6
+     },
+     "allergen dropped": {
+      "n": 5,
+      "caught": 3
+     }
+    }
+   },
+   "latencyMs": {
+    "p50": 1396,
+    "p90": 2377,
+    "max": 3301,
+    "waitedP50": 0,
+    "waitedP90": 0,
+    "waitedMax": 1778
+   }
+  },
+  {
+   "second": "featherless:nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16~transcribe-v3@2",
+   "cases": 30,
+   "alone": {
+    "right": 23,
+    "of": 30,
+    "pct": 76.7,
+    "byField": {
+     "amount": 100,
+     "claims": 80,
+     "allergens": 100,
+     "kind": 100,
+     "date": 96.7
+    }
+   },
+   "unavailable": {
+    "failed": {},
+    "lateBeyondDeadline": 0,
+    "total": 0,
+    "pct": 0
+   },
+   "firstIncomplete": [],
+   "falseAlarm": {
+    "firstRight": 27,
+    "alarms": 0,
+    "pct": 0,
+    "byField": {
+     "amount": 0,
+     "claims": 0,
+     "allergens": 0,
+     "kind": 0,
+     "date": 0
+    },
+    "cases": []
+   },
+   "natural": {
+    "firstWrong": 3,
+    "caught": 3,
+    "cases": [
+     {
+      "id": "h-fi-02",
+      "wrong": [
+       "date"
+      ],
+      "caught": [
+       "date"
+      ]
+     },
+     {
+      "id": "h-fi-10",
+      "wrong": [
+       "date"
+      ],
+      "caught": [
+       "date"
+      ]
+     },
+     {
+      "id": "h-sv-07",
+      "wrong": [
+       "date"
+      ],
+      "caught": [
+       "date"
+      ]
+     }
+    ]
+   },
+   "injected": {
+    "n": 248,
+    "withSecond": 248,
+    "caught": 197,
+    "pctOfAll": 79.4,
+    "pctWhenAvailable": 79.4,
+    "misreadings": {
+     "n": 202,
+     "caught": 197,
+     "pct": 97.5
+    },
+    "byKind": {
+     "amount x10": {
+      "n": 27,
+      "caught": 27
+     },
+     "amount /10": {
+      "n": 23,
+      "caught": 23
+     },
+     "litres read as packs": {
+      "n": 17,
+      "caught": 17
+     },
+     "lactose-free added": {
+      "n": 19,
+      "caught": 0
+     },
+     "nuts added": {
+      "n": 27,
+      "caught": 0
+     },
+     "another kind of product": {
+      "n": 27,
+      "caught": 27
+     },
+     "a week later": {
+      "n": 24,
+      "caught": 23
+     },
+     "the day before": {
+      "n": 27,
+      "caught": 26
+     },
+     "date dropped": {
+      "n": 27,
+      "caught": 26
+     },
+     "claim dropped": {
+      "n": 11,
+      "caught": 11
+     },
+     "claim negated": {
+      "n": 8,
+      "caught": 8
+     },
+     "1.000 read as 1": {
+      "n": 6,
+      "caught": 6
+     },
+     "allergen dropped": {
+      "n": 5,
+      "caught": 3
+     }
+    }
+   },
+   "latencyMs": {
+    "p50": 1356,
+    "p90": 1793,
+    "max": 2144,
+    "waitedP50": 0,
+    "waitedP90": 0,
+    "waitedMax": 0
+   }
+  },
+  {
+   "second": "featherless:nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16",
+   "cases": 30,
+   "alone": {
+    "right": 0,
+    "of": 30,
+    "pct": 0,
+    "byField": {
+     "amount": 0,
+     "claims": 0,
+     "allergens": 0,
+     "kind": 0,
+     "date": 0
+    }
+   },
+   "unavailable": {
+    "failed": {
+     "at_capacity": 30
+    },
+    "lateBeyondDeadline": 0,
+    "total": 30,
+    "pct": 100
+   },
+   "firstIncomplete": [],
+   "falseAlarm": {
+    "firstRight": 27,
+    "alarms": 0,
+    "pct": 0,
+    "byField": {
+     "amount": 0,
+     "claims": 0,
+     "allergens": 0,
+     "kind": 0,
+     "date": 0
+    },
+    "cases": []
+   },
+   "natural": {
+    "firstWrong": 3,
+    "caught": 0,
+    "cases": [
+     {
+      "id": "h-fi-02",
+      "wrong": [
+       "date"
+      ],
+      "caught": []
+     },
+     {
+      "id": "h-fi-10",
+      "wrong": [
+       "date"
+      ],
+      "caught": []
+     },
+     {
+      "id": "h-sv-07",
+      "wrong": [
+       "date"
+      ],
+      "caught": []
+     }
+    ]
+   },
+   "injected": {
+    "n": 248,
+    "withSecond": 0,
+    "caught": 0,
+    "pctOfAll": 0,
+    "pctWhenAvailable": null,
+    "misreadings": {
+     "n": 202,
+     "caught": 0,
+     "pct": 0
+    },
+    "byKind": {
+     "amount x10": {
+      "n": 27,
+      "caught": 0
+     },
+     "amount /10": {
+      "n": 23,
+      "caught": 0
+     },
+     "litres read as packs": {
+      "n": 17,
+      "caught": 0
+     },
+     "lactose-free added": {
+      "n": 19,
+      "caught": 0
+     },
+     "nuts added": {
+      "n": 27,
+      "caught": 0
+     },
+     "another kind of product": {
+      "n": 27,
+      "caught": 0
+     },
+     "a week later": {
+      "n": 24,
+      "caught": 0
+     },
+     "the day before": {
+      "n": 27,
+      "caught": 0
+     },
+     "date dropped": {
+      "n": 27,
+      "caught": 0
+     },
+     "claim dropped": {
+      "n": 11,
+      "caught": 0
+     },
+     "claim negated": {
+      "n": 8,
+      "caught": 0
+     },
+     "1.000 read as 1": {
+      "n": 6,
+      "caught": 0
+     },
+     "allergen dropped": {
+      "n": 5,
+      "caught": 0
+     }
+    }
+   },
+   "latencyMs": {
+    "p50": 1161,
+    "p90": 1618,
+    "max": 2309,
+    "waitedP50": 0,
+    "waitedP90": 0,
+    "waitedMax": 736
+   }
+  },
+  {
+   "second": "featherless:nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16@2",
+   "cases": 30,
+   "alone": {
+    "right": 0,
+    "of": 30,
+    "pct": 0,
+    "byField": {
+     "amount": 0,
+     "claims": 0,
+     "allergens": 0,
+     "kind": 0,
+     "date": 0
+    }
+   },
+   "unavailable": {
+    "failed": {
+     "at_capacity": 30
+    },
+    "lateBeyondDeadline": 0,
+    "total": 30,
+    "pct": 100
+   },
+   "firstIncomplete": [],
+   "falseAlarm": {
+    "firstRight": 27,
+    "alarms": 0,
+    "pct": 0,
+    "byField": {
+     "amount": 0,
+     "claims": 0,
+     "allergens": 0,
+     "kind": 0,
+     "date": 0
+    },
+    "cases": []
+   },
+   "natural": {
+    "firstWrong": 3,
+    "caught": 0,
+    "cases": [
+     {
+      "id": "h-fi-02",
+      "wrong": [
+       "date"
+      ],
+      "caught": []
+     },
+     {
+      "id": "h-fi-10",
+      "wrong": [
+       "date"
+      ],
+      "caught": []
+     },
+     {
+      "id": "h-sv-07",
+      "wrong": [
+       "date"
+      ],
+      "caught": []
+     }
+    ]
+   },
+   "injected": {
+    "n": 248,
+    "withSecond": 0,
+    "caught": 0,
+    "pctOfAll": 0,
+    "pctWhenAvailable": null,
+    "misreadings": {
+     "n": 202,
+     "caught": 0,
+     "pct": 0
+    },
+    "byKind": {
+     "amount x10": {
+      "n": 27,
+      "caught": 0
+     },
+     "amount /10": {
+      "n": 23,
+      "caught": 0
+     },
+     "litres read as packs": {
+      "n": 17,
+      "caught": 0
+     },
+     "lactose-free added": {
+      "n": 19,
+      "caught": 0
+     },
+     "nuts added": {
+      "n": 27,
+      "caught": 0
+     },
+     "another kind of product": {
+      "n": 27,
+      "caught": 0
+     },
+     "a week later": {
+      "n": 24,
+      "caught": 0
+     },
+     "the day before": {
+      "n": 27,
+      "caught": 0
+     },
+     "date dropped": {
+      "n": 27,
+      "caught": 0
+     },
+     "claim dropped": {
+      "n": 11,
+      "caught": 0
+     },
+     "claim negated": {
+      "n": 8,
+      "caught": 0
+     },
+     "1.000 read as 1": {
+      "n": 6,
+      "caught": 0
+     },
+     "allergen dropped": {
+      "n": 5,
+      "caught": 0
+     }
+    }
+   },
+   "latencyMs": {
+    "p50": 1149,
+    "p90": 2184,
+    "max": 2286,
+    "waitedP50": 0,
+    "waitedP90": 99,
+    "waitedMax": 611
+   }
+  },
+  {
+   "second": "featherless:nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16",
+   "cases": 30,
+   "alone": {
+    "right": 26,
+    "of": 30,
+    "pct": 86.7,
+    "byField": {
+     "amount": 100,
+     "claims": 93.3,
+     "allergens": 96.7,
+     "kind": 100,
+     "date": 93.3
+    }
+   },
+   "unavailable": {
+    "failed": {},
+    "lateBeyondDeadline": 0,
+    "total": 0,
+    "pct": 0
+   },
+   "firstIncomplete": [],
+   "falseAlarm": {
+    "firstRight": 27,
+    "alarms": 0,
+    "pct": 0,
+    "byField": {
+     "amount": 0,
+     "claims": 0,
+     "allergens": 0,
+     "kind": 0,
+     "date": 0
+    },
+    "cases": []
+   },
+   "natural": {
+    "firstWrong": 3,
+    "caught": 3,
+    "cases": [
+     {
+      "id": "h-fi-02",
+      "wrong": [
+       "date"
+      ],
+      "caught": [
+       "date"
+      ]
+     },
+     {
+      "id": "h-fi-10",
+      "wrong": [
+       "date"
+      ],
+      "caught": [
+       "date"
+      ]
+     },
+     {
+      "id": "h-sv-07",
+      "wrong": [
+       "date"
+      ],
+      "caught": [
+       "date"
+      ]
+     }
+    ]
+   },
+   "injected": {
+    "n": 248,
+    "withSecond": 248,
+    "caught": 194,
+    "pctOfAll": 78.2,
+    "pctWhenAvailable": 78.2,
+    "misreadings": {
+     "n": 202,
+     "caught": 194,
+     "pct": 96
+    },
+    "byKind": {
+     "amount x10": {
+      "n": 27,
+      "caught": 27
+     },
+     "amount /10": {
+      "n": 23,
+      "caught": 23
+     },
+     "litres read as packs": {
+      "n": 17,
+      "caught": 17
+     },
+     "lactose-free added": {
+      "n": 19,
+      "caught": 0
+     },
+     "nuts added": {
+      "n": 27,
+      "caught": 0
+     },
+     "another kind of product": {
+      "n": 27,
+      "caught": 27
+     },
+     "a week later": {
+      "n": 24,
+      "caught": 22
+     },
+     "the day before": {
+      "n": 27,
+      "caught": 25
+     },
+     "date dropped": {
+      "n": 27,
+      "caught": 25
+     },
+     "claim dropped": {
+      "n": 11,
+      "caught": 11
+     },
+     "claim negated": {
+      "n": 8,
+      "caught": 8
+     },
+     "1.000 read as 1": {
+      "n": 6,
+      "caught": 6
+     },
+     "allergen dropped": {
+      "n": 5,
+      "caught": 3
+     }
+    }
+   },
+   "latencyMs": {
+    "p50": 1362,
+    "p90": 2095,
+    "max": 2418,
+    "waitedP50": 0,
+    "waitedP90": 318,
+    "waitedMax": 536
+   }
+  },
+  {
+   "second": "featherless:nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16@2",
+   "cases": 30,
+   "alone": {
+    "right": 26,
+    "of": 30,
+    "pct": 86.7,
+    "byField": {
+     "amount": 96.7,
+     "claims": 90,
+     "allergens": 93.3,
+     "kind": 96.7,
+     "date": 93.3
+    }
+   },
+   "unavailable": {
+    "failed": {
+     "unreadable": 1
+    },
+    "lateBeyondDeadline": 0,
+    "total": 1,
+    "pct": 3.3
+   },
+   "firstIncomplete": [],
+   "falseAlarm": {
+    "firstRight": 27,
+    "alarms": 0,
+    "pct": 0,
+    "byField": {
+     "amount": 0,
+     "claims": 0,
+     "allergens": 0,
+     "kind": 0,
+     "date": 0
+    },
+    "cases": []
+   },
+   "natural": {
+    "firstWrong": 3,
+    "caught": 3,
+    "cases": [
+     {
+      "id": "h-fi-02",
+      "wrong": [
+       "date"
+      ],
+      "caught": [
+       "date"
+      ]
+     },
+     {
+      "id": "h-fi-10",
+      "wrong": [
+       "date"
+      ],
+      "caught": [
+       "date"
+      ]
+     },
+     {
+      "id": "h-sv-07",
+      "wrong": [
+       "date"
+      ],
+      "caught": [
+       "date"
+      ]
+     }
+    ]
+   },
+   "injected": {
+    "n": 248,
+    "withSecond": 239,
+    "caught": 189,
+    "pctOfAll": 76.2,
+    "pctWhenAvailable": 79.1,
+    "misreadings": {
+     "n": 202,
+     "caught": 189,
+     "pct": 93.6
+    },
+    "byKind": {
+     "amount x10": {
+      "n": 27,
+      "caught": 26
+     },
+     "amount /10": {
+      "n": 23,
+      "caught": 22
+     },
+     "litres read as packs": {
+      "n": 17,
+      "caught": 17
+     },
+     "lactose-free added": {
+      "n": 19,
+      "caught": 0
+     },
+     "nuts added": {
+      "n": 27,
+      "caught": 0
+     },
+     "another kind of product": {
+      "n": 27,
+      "caught": 26
+     },
+     "a week later": {
+      "n": 24,
+      "caught": 22
+     },
+     "the day before": {
+      "n": 27,
+      "caught": 25
+     },
+     "date dropped": {
+      "n": 27,
+      "caught": 25
+     },
+     "claim dropped": {
+      "n": 11,
+      "caught": 10
+     },
+     "claim negated": {
+      "n": 8,
+      "caught": 7
+     },
+     "1.000 read as 1": {
+      "n": 6,
+      "caught": 6
+     },
+     "allergen dropped": {
+      "n": 5,
+      "caught": 3
+     }
+    }
+   },
+   "latencyMs": {
+    "p50": 1368,
+    "p90": 2344,
+    "max": 6890,
+    "waitedP50": 0,
+    "waitedP90": 221,
+    "waitedMax": 3813
+   }
+  }
+ ],
+ "sweep": [
+  {
+   "second": "anthropic:claude-opus-5-5~pre-merge",
+   "variants": [
+    {
+     "name": "production",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 79.4,
+     "misreadingsCaughtPct": 97.5,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "amount factor 1.25",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 79.4,
+     "misreadingsCaughtPct": 97.5,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "amount factor 1.5",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 79.4,
+     "misreadingsCaughtPct": 97.5,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "amount factor 5",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 79.4,
+     "misreadingsCaughtPct": 97.5,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "ask when only the first has a date",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 79.4,
+     "misreadingsCaughtPct": 97.5,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "no question when only the second has a date",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 69,
+     "misreadingsCaughtPct": 84.7,
+     "naturalCaught": "0/3"
+    },
+    {
+     "name": "ask when only the first has a claim",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 79.4,
+     "misreadingsCaughtPct": 97.5,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "no question when only the second has a claim",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 73.8,
+     "misreadingsCaughtPct": 90.6,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "kind not compared",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 68.5,
+     "misreadingsCaughtPct": 84.2,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "fat content compared",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 79.4,
+     "misreadingsCaughtPct": 97.5,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "every difference, not only what the words say",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 81.5,
+     "misreadingsCaughtPct": 100,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "ask when one excludes a claim and the other is silent",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 79.4,
+     "misreadingsCaughtPct": 97.5,
+     "naturalCaught": "3/3"
+    }
+   ]
+  },
+  {
+   "second": "featherless:nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16~transcribe-v3",
+   "variants": [
+    {
+     "name": "production",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 79.4,
+     "misreadingsCaughtPct": 97.5,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "amount factor 1.25",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 79.4,
+     "misreadingsCaughtPct": 97.5,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "amount factor 1.5",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 79.4,
+     "misreadingsCaughtPct": 97.5,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "amount factor 5",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 79.4,
+     "misreadingsCaughtPct": 97.5,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "ask when only the first has a date",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 79.4,
+     "misreadingsCaughtPct": 97.5,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "no question when only the second has a date",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 69,
+     "misreadingsCaughtPct": 84.7,
+     "naturalCaught": "0/3"
+    },
+    {
+     "name": "ask when only the first has a claim",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 79.4,
+     "misreadingsCaughtPct": 97.5,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "no question when only the second has a claim",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 73.8,
+     "misreadingsCaughtPct": 90.6,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "kind not compared",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 68.5,
+     "misreadingsCaughtPct": 84.2,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "fat content compared",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 79.4,
+     "misreadingsCaughtPct": 97.5,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "every difference, not only what the words say",
+     "falseAlarmPct": 14.8,
+     "falseAlarms": 4,
+     "injectedCaughtPct": 83.5,
+     "misreadingsCaughtPct": 100,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "ask when one excludes a claim and the other is silent",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 79.4,
+     "misreadingsCaughtPct": 97.5,
+     "naturalCaught": "3/3"
+    }
+   ]
+  },
+  {
+   "second": "featherless:nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16",
+   "variants": [
+    {
+     "name": "production",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": null,
+     "misreadingsCaughtPct": 0,
+     "naturalCaught": "0/3"
+    },
+    {
+     "name": "amount factor 1.25",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": null,
+     "misreadingsCaughtPct": 0,
+     "naturalCaught": "0/3"
+    },
+    {
+     "name": "amount factor 1.5",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": null,
+     "misreadingsCaughtPct": 0,
+     "naturalCaught": "0/3"
+    },
+    {
+     "name": "amount factor 5",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": null,
+     "misreadingsCaughtPct": 0,
+     "naturalCaught": "0/3"
+    },
+    {
+     "name": "ask when only the first has a date",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": null,
+     "misreadingsCaughtPct": 0,
+     "naturalCaught": "0/3"
+    },
+    {
+     "name": "no question when only the second has a date",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": null,
+     "misreadingsCaughtPct": 0,
+     "naturalCaught": "0/3"
+    },
+    {
+     "name": "ask when only the first has a claim",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": null,
+     "misreadingsCaughtPct": 0,
+     "naturalCaught": "0/3"
+    },
+    {
+     "name": "no question when only the second has a claim",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": null,
+     "misreadingsCaughtPct": 0,
+     "naturalCaught": "0/3"
+    },
+    {
+     "name": "kind not compared",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": null,
+     "misreadingsCaughtPct": 0,
+     "naturalCaught": "0/3"
+    },
+    {
+     "name": "fat content compared",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": null,
+     "misreadingsCaughtPct": 0,
+     "naturalCaught": "0/3"
+    },
+    {
+     "name": "every difference, not only what the words say",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": null,
+     "misreadingsCaughtPct": 0,
+     "naturalCaught": "0/3"
+    },
+    {
+     "name": "ask when one excludes a claim and the other is silent",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": null,
+     "misreadingsCaughtPct": 0,
+     "naturalCaught": "0/3"
+    }
+   ]
+  },
+  {
+   "second": "featherless:nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16",
+   "variants": [
+    {
+     "name": "production",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 78.2,
+     "misreadingsCaughtPct": 96,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "amount factor 1.25",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 78.2,
+     "misreadingsCaughtPct": 96,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "amount factor 1.5",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 78.2,
+     "misreadingsCaughtPct": 96,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "amount factor 5",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 78.2,
+     "misreadingsCaughtPct": 96,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "ask when only the first has a date",
+     "falseAlarmPct": 3.7,
+     "falseAlarms": 1,
+     "injectedCaughtPct": 79,
+     "misreadingsCaughtPct": 97,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "no question when only the second has a date",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 68.1,
+     "misreadingsCaughtPct": 83.7,
+     "naturalCaught": "0/3"
+    },
+    {
+     "name": "ask when only the first has a claim",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 78.2,
+     "misreadingsCaughtPct": 96,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "no question when only the second has a claim",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 72.6,
+     "misreadingsCaughtPct": 89.1,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "kind not compared",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 67.3,
+     "misreadingsCaughtPct": 82.7,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "fat content compared",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 78.2,
+     "misreadingsCaughtPct": 96,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "every difference, not only what the words say",
+     "falseAlarmPct": 11.1,
+     "falseAlarms": 3,
+     "injectedCaughtPct": 81.5,
+     "misreadingsCaughtPct": 98.5,
+     "naturalCaught": "3/3"
+    },
+    {
+     "name": "ask when one excludes a claim and the other is silent",
+     "falseAlarmPct": 0,
+     "falseAlarms": 0,
+     "injectedCaughtPct": 78.2,
+     "misreadingsCaughtPct": 96,
+     "naturalCaught": "3/3"
+    }
+   ]
+  }
+ ],
+ "spendUsd": 0
+}

@@ -23,7 +23,8 @@ type Concern =
   | "breaks_remembered_rule"
   | "standing_order_range"
   | "delivery_unusual_day"
-  | "unrelated_first_order";
+  | "unrelated_first_order"
+  | "readings_differ";
 
 /** Short Finnish and Swedish headings per concern code, above the server's English sentence. English shows none. */
 const CONCERN_FI: Record<Concern, string> = {
@@ -44,6 +45,7 @@ const CONCERN_FI: Record<Concern, string> = {
   standing_order_range: "Poikkeaa vakiotilauksesta",
   delivery_unusual_day: "Epätavallinen toimituspäivä",
   unrelated_first_order: "Uusi tuoteryhmä tälle keittiölle",
+  readings_differ: "Kaksi riippumatonta lukijaa luki tämän eri tavalla",
 };
 
 const CONCERN_SV: Record<Concern, string> = {
@@ -64,6 +66,7 @@ const CONCERN_SV: Record<Concern, string> = {
   standing_order_range: "Avviker från den stående beställningen",
   delivery_unusual_day: "Ovanlig leveransdag",
   unrelated_first_order: "Ny produktgrupp för köket",
+  readings_differ: "Två oberoende läsare läste det här olika",
 };
 
 const NO_TITLE: Record<string, string> = {};

@@ -23,6 +23,7 @@ export function moneyShort(cents: number | undefined | null): string {
 /** Codes the core still writes into sentences (mistake checks, attributes), in words. Rule codes use RULE_TITLE. */
 const CODE_WORD: Record<string, string> = {
   quantity_tenfold: "an amount ten times the usual",
+  readings_differ: "two readings that differ",
   quantity_unusual: "an unusual amount",
   unit_confusion: "a possible unit mix-up",
   unit_unclear: "an unclear unit",

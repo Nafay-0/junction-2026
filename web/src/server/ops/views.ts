@@ -1,6 +1,7 @@
 import { auditFor, type WholesalerAuditEntry } from "@/core/audit";
 import type { IssuedClaim } from "@/core/claims";
 import type { LedgerEntry } from "@/core/ledger";
+import { readerName } from "@/core/second-reading";
 import type { Mandate } from "@/core/mandate";
 import { DockError, type AgentSession } from "@/core/orders";
 import { RULES } from "@/core/policy";
@@ -330,6 +331,8 @@ export type Safeguards = {
     refusedLookups: number;
   };
   totals: { decisions: number; refused: number; sentToPerson: number };
+  /** Requests read twice (server/agent/second-reader.ts): how often the readers agreed, differed, or the second was unavailable. */
+  secondReading: SecondReadingStats;
   /**
    * The grounding check (server/grounding.ts): how often model text was checked and how often something in it had to
    * be removed, per surface, since this server started. Also the `grounding_check` rule's row: refused = texts in which
@@ -337,6 +340,52 @@ export type Safeguards = {
    */
   grounding: GroundingStats;
 };
+
+export type SecondReadingStats = {
+  agreed: number;
+  differed: number;
+  unavailable: number;
+  /** Why the second reader was unavailable, by reason. */
+  unavailableBy: Record<string, number>;
+  /** How the buyer settled a difference: kept the first reading, took the second, or wrote it again. */
+  settled: { keptFirst: number; tookSecond: number; rewrote: number };
+  /** The readers, in words ("Claude Opus 5.5", "NVIDIA Nemotron 3 Nano"). */
+  readers: { first: string[]; second: string[] };
+  recent: { at: string; seq: number; requestId?: string; orgName: string; fields: string[]; line: string }[];
+};
+
+/** The second reader's record, from the ledger alone. */
+export function secondReadingStats(entries: LedgerEntry[], orgOf: (requestId: string) => string | undefined = () => undefined): SecondReadingStats {
+  const out: SecondReadingStats = { agreed: 0, differed: 0, unavailable: 0, unavailableBy: {}, settled: { keptFirst: 0, tookSecond: 0, rewrote: 0 }, readers: { first: [], second: [] }, recent: [] };
+  const firsts = new Set<string>();
+  const seconds = new Set<string>();
+  for (const e of entries) {
+    if (e.type !== "intake") continue;
+    const d = e.data as Record<string, unknown>;
+    if (d.step === "second_reading") {
+      const status = d.status;
+      if (status === "agreed") out.agreed++;
+      else if (status === "differed") {
+        out.differed++;
+        const diffs = (Array.isArray(d.differences) ? d.differences : []) as { field?: string }[];
+        out.recent.push({ at: e.at, seq: e.seq, requestId: e.requestId, orgName: (e.requestId && orgOf(e.requestId)) || "A kitchen", fields: diffs.map((x) => String(x.field ?? "")), line: e.summary });
+      } else if (status === "unavailable") {
+        out.unavailable++;
+        const why = String(d.reason ?? "failed");
+        out.unavailableBy[why] = (out.unavailableBy[why] ?? 0) + 1;
+      }
+      if (typeof d.firstModel === "string") firsts.add(readerName(d.firstModel));
+      if (typeof d.secondModel === "string") seconds.add(readerName(d.secondModel));
+    } else if ((d.step === "correction" || d.step === "cancelled") && d.code === "readings_differ") {
+      if (d.step === "cancelled" || d.correctionId === "rewrite") out.settled.rewrote++;
+      else if (d.correctionId === "use_second") out.settled.tookSecond++;
+      else out.settled.keptFirst++;
+    }
+  }
+  out.readers = { first: [...firsts], second: [...seconds] };
+  out.recent = out.recent.sort((a, b) => b.seq - a.seq).slice(0, 5);
+  return out;
+}
 
 export async function safeguards(rt: Runtime): Promise<Safeguards> {
   const ctx = await opsContext(rt);
@@ -409,6 +458,7 @@ export async function safeguards(rt: Runtime): Promise<Safeguards> {
       refusedLookups: cases.filter((c) => c.rule === "live_lookup_limit").length,
     },
     totals: { decisions, refused: cases.length, sentToPerson: escalations.length },
+    secondReading: secondReadingStats(ctx.entries, ctx.orgOfRequest),
     grounding,
   };
 }
