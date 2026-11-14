@@ -82,6 +82,7 @@
     "search:vectors": "tsx scripts/search-vectors.ts",
     "search:publish": "tsx scripts/search-publish.ts",
     "search:publish:opensearch": "tsx scripts/search-publish-opensearch.ts",
+    "history:migrate": "tsx scripts/history-migrate.ts",
     "search:eval": "tsx eval/search/run.ts",
     "ui:shots": "node scripts/ui-shots.mjs"
   },

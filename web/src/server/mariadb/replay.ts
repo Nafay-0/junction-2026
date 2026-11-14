@@ -104,7 +104,7 @@ export function judge(body: OrderBody, state: StateAt, recentOrders: RecentOrder
   const rules: RuleVerdict[] = decision.rules.map((r) => ({ rule: r.rule, outcome: r.outcome, reason: r.reason }));
   let outcome: Verdict["outcome"] = decision.outcome;
   if (!door.open) outcome = "refused_at_door";
-  const approver = decision.outcome === "needs_human_approval" ? `${decision.approver.name} (${decision.approver.role})` : undefined;
+  const approver = decision.outcome === "needs_human_approval" ? `${decision.approver.name} (${decision.approver.role.replaceAll("_", " ")})` : undefined;
   return { at: state.at, outcome, headline: headline(outcome, decision, rules, door, approver), door, rules, approver, read };
 }
 
