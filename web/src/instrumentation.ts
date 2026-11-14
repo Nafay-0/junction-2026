@@ -10,7 +10,11 @@ export async function register() {
   const { getRuntime } = await import("./server/runtime");
   const t0 = Date.now();
   getRuntime().then(
-    (rt) => console.log(JSON.stringify({ level: "info", at: new Date().toISOString(), component: "startup", msg: "runtime ready", catalog: rt.catalogSource.kind, ms: Date.now() - t0 })),
+    (rt) => {
+      console.log(JSON.stringify({ level: "info", at: new Date().toISOString(), component: "startup", msg: "runtime ready", catalog: rt.catalogSource.kind, ms: Date.now() - t0 }));
+      // The sample activity (server/alive): played in the background when the store is empty of recent activity.
+      void import("./server/alive/start").then((m) => m.startSampleActivity(rt)).catch((err) => console.error(JSON.stringify({ level: "error", component: "sample", msg: String(err) })));
+    },
     (err) => console.error(JSON.stringify({ level: "error", at: new Date().toISOString(), component: "startup", msg: "runtime failed to start", error: String(err) })),
   );
 }

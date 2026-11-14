@@ -7,6 +7,7 @@ import { useFormat, useText } from "../../_i18n/provider";
 import { Card, Panel } from "../../_ui/kit";
 import { clock, helsinkiToday, say } from "../../_ui/plain";
 import { RULES_THEN_TEXT } from "./rules-then.text";
+import { categoryCodesL } from "./groups";
 import { usePortal } from "./portal";
 
 /**
@@ -87,7 +88,7 @@ export function RulesThen({ orderId }: { orderId: string }) {
               <li key={i} className="grid gap-x-4 gap-y-0.5 py-2.5 sm:grid-cols-[8.5rem_minmax(0,1fr)]">
                 <span className="text-ink-soft tabular">{c.when}</span>
                 <span>
-                  {say(c.what)} <span className="text-ink-soft">({c.by})</span>
+                  {categoryCodesL(say(c.what), f.lang)} <span className="text-ink-soft">({c.by})</span>
                 </span>
               </li>
             ))}

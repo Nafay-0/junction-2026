@@ -1,5 +1,6 @@
 "use client";
 
+import { sentenceCase } from "../../../_ui/plain";
 import Link from "next/link";
 import { useState } from "react";
 import type { Campaign, OffersView } from "@/server/offers/service";
@@ -9,6 +10,8 @@ import { Badge } from "../../../_ui/kit";
 import { fi, num, when } from "../../_ui/format";
 import { Button, Empty, LoadError, Loading, Num, PageHead, Panel, Section, useNow, useOps } from "../../_ui/kit";
 import { Table } from "../../_ui/parts";
+import { OFFERS_TEXT } from "./offers.text";
+import { SamplePill, isSample } from "../../../_ui/sample";
 
 type Offer = OffersView["offers"][number];
 type Found = { productId: string; name: string; category: string; packSize: number; unit: string };
@@ -45,8 +48,8 @@ export function OffersScreen() {
   return (
     <>
       <PageHead
-        title="Selling agent"
-        purpose="Our own agent's offers to the buyers' agents: what, to whom, why, and what happened."
+        title={OFFERS_TEXT.en.title}
+        purpose={OFFERS_TEXT.en.purpose}
         about="Our own agent, offering the buyers' agents what is genuinely worth it: new in the assortment, in season in Finland, or a like-for-like cheaper per litre, more reliable or lower in carbon than what a kitchen buys every week. Plain code picks from data and checks every guardrail; each offer is signed, open and never an order. Kitchens can mute it or turn it off."
         right={v ? <span className="tabular">{num(v.stats.liveCalls)} live price calls this process</span> : undefined}
       />
@@ -89,7 +92,7 @@ function Body({ v, now, refresh }: { v: OffersView; now: number; refresh: () => 
         <div>
           <Section title="What it offered, to whom, and what happened" aside={sent.length ? `${sent.length}` : undefined}>
             {sent.length === 0 ? (
-              <Empty title="No offers yet">Run the selling agent, or start a campaign for a product. Only products the data supports reach a kitchen.</Empty>
+              <Empty title={OFFERS_TEXT.en.emptyTitle}>{OFFERS_TEXT.en.empty}</Empty>
             ) : (
               <Table label="Offers">
                 <thead>
@@ -116,7 +119,8 @@ function Body({ v, now, refresh }: { v: OffersView; now: number; refresh: () => 
                 {held.slice(0, 30).map((o) => (
                   <li key={o.offerId} className="rounded-lg border border-line bg-paper px-3 py-2 text-[0.9rem]">
                     <p>
-                      <span className="font-semibold">{o.kitchenName}</span> · {o.productName}
+                      <span className="font-semibold">{o.kitchenName}</span> · {sentenceCase(o.productName)}
+                      {isSample(o) && <SamplePill />}
                     </p>
                     <p className="text-ink-soft">
                       <Badge tone="refused">{RULE[o.rule ?? ""] ?? fi(o.rule)}</Badge> {fi(o.reason)} <span className="tabular">({when(o.at, new Date(now))})</span>
@@ -159,7 +163,7 @@ function OfferRow({ o, now }: { o: Offer; now: number }) {
       <td className="tabular whitespace-nowrap">{when(o.at, new Date(now))}</td>
       <td className="min-w-[9rem]">{o.kitchenName}</td>
       <td>
-        <p className="font-semibold">{o.productName}</p>
+        <p className="font-semibold">{sentenceCase(o.productName)}</p>
         <p className="text-[0.86rem] text-ink-soft">{o.reasons.map((r) => REASON[r.kind] ?? r.kind).join(" · ")}</p>
         <p className="text-[0.86rem]">{fi(o.line)}</p>
         {o.lineBy === "model" && <p className="text-[0.78rem] text-ink-soft">Line by a model, checked against the figures</p>}

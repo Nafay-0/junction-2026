@@ -1,0 +1,62 @@
+import { defineText } from "../../_i18n/lang";
+
+/** The operations portal's line about sample activity, and the "Start here" list (rendered in English, like the portal). */
+export const SAMPLE_BAR_TEXT = defineText({
+  en: {
+    showing: "Showing sample activity alongside live activity.",
+    showingMore: "Every sample item carries the small sample mark; it went through the real gate with scripted inputs, and nothing was ordered from anyone or mailed.",
+    hidden: "Sample activity is hidden: only live activity is shown.",
+    hide: "Hide the sample",
+    show: "Show the sample",
+    refresh: "Refresh the sample activity",
+    refreshing: "Playing a new sample week…",
+    refreshed: (ms: number) => `A new sample week was played in ${(ms / 1000).toFixed(1)} s; the earlier one is superseded (it stays in the ledger).`,
+    startTitle: "Start here",
+    startLead: "Five things worth opening first, each a sample item that shows it.",
+    start: {
+      timeline: ["An order's whole timeline", "From the head chef's words to the signed order: every check, the sign-off on the phone and the wholesaler's signature."],
+      waiting: ["An order waiting for a person", "Over what the agent may spend alone: it waits for the named person's OK, and its fixed price holds for 30 minutes."],
+      refusal: ["A refusal and its rule", "An outside agent keeps sending a drink with an allergen the kitchen forbids; the allergen rule refused it, with the reason in words."],
+      failing: ["The agent that is failing", "The scorecard: one agent keeps hitting the same rule, one escalates because its limit is too tight."],
+      cannotCome: ["A product that cannot come", "The kitchen's agent saw the usual milk will not come (a staged stock-out) and ranked substitutes, good, better, best."],
+    } as Record<string, [string, string]>,
+  },
+  fi: {
+    showing: "Näytetään esimerkkitoimintaa todellisen toiminnan rinnalla.",
+    showingMore: "Jokaisessa esimerkissä on pieni esimerkki-merkki; se kulki oikean portin läpi käsikirjoitetuin syöttein, eikä mitään tilattu keneltäkään tai lähetetty sähköpostilla.",
+    hidden: "Esimerkkitoiminta on piilotettu: näytetään vain todellinen toiminta.",
+    hide: "Piilota esimerkit",
+    show: "Näytä esimerkit",
+    refresh: "Päivitä esimerkkitoiminta",
+    refreshing: "Ajetaan uusi esimerkkiviikko…",
+    refreshed: (ms: number) => `Uusi esimerkkiviikko ajettiin ${(ms / 1000).toFixed(1)} sekunnissa; aiempi on korvattu (se jää lokiin).`,
+    startTitle: "Aloita tästä",
+    startLead: "Viisi asiaa, jotka kannattaa avata ensin, kukin esimerkki, joka näyttää sen.",
+    start: {
+      timeline: ["Tilauksen koko aikajana", "Keittiöpäällikön sanoista allekirjoitettuun tilaukseen: jokainen tarkistus, hyväksyntä puhelimella ja tukkurin allekirjoitus."],
+      waiting: ["Tilaus, joka odottaa ihmistä", "Yli sen, mitä agentti saa käyttää yksin: se odottaa nimetyn henkilön hyväksyntää, ja kiinteä hinta pysyy 30 minuuttia."],
+      refusal: ["Hylkäys ja sen sääntö", "Ulkopuolinen agentti lähettää yhä juomaa, jossa on keittiön kieltämä allergeeni; allergeenisääntö hylkäsi sen, ja syy on sanoin."],
+      failing: ["Agentti, joka epäonnistuu", "Tuloskortti: yksi agentti törmää yhä samaan sääntöön, toinen eskaloi, koska sen raja on liian tiukka."],
+      cannotCome: ["Tuote, joka ei voi tulla", "Keittiön agentti näki, ettei tavallinen maito tule (lavastettu loppuminen), ja asetti korvaavat järjestykseen: hyvä, parempi, paras."],
+    } as Record<string, [string, string]>,
+  },
+  sv: {
+    showing: "Exempelaktivitet visas bredvid verklig aktivitet.",
+    showingMore: "Varje exempel har det lilla exempelmärket; det gick genom den riktiga grinden med manusskrivna indata, och inget beställdes från någon eller skickades per e-post.",
+    hidden: "Exempelaktiviteten är dold: bara verklig aktivitet visas.",
+    hide: "Dölj exemplen",
+    show: "Visa exemplen",
+    refresh: "Förnya exempelaktiviteten",
+    refreshing: "En ny exempelvecka spelas…",
+    refreshed: (ms: number) => `En ny exempelvecka spelades på ${(ms / 1000).toFixed(1)} s; den tidigare är ersatt (den finns kvar i loggen).`,
+    startTitle: "Börja här",
+    startLead: "Fem saker som är värda att öppna först, var och en ett exempel som visar det.",
+    start: {
+      timeline: ["En beställnings hela tidslinje", "Från köksmästarens ord till den signerade beställningen: varje kontroll, godkännandet i telefonen och grossistens signatur."],
+      waiting: ["En beställning som väntar på en person", "Över vad agenten får spendera ensam: den väntar på den namngivna personens godkännande, och det fasta priset gäller i 30 minuter."],
+      refusal: ["Ett avslag och dess regel", "En utomstående agent skickar hela tiden en dryck med ett allergen som köket förbjuder; allergenregeln avslog den, och skälet står i ord."],
+      failing: ["Agenten som misslyckas", "Resultatkortet: en agent stöter hela tiden på samma regel, en annan eskalerar eftersom dess gräns är för snäv."],
+      cannotCome: ["En produkt som inte kan komma", "Kökets agent såg att den vanliga mjölken inte kommer (ett iscensatt slut i lager) och rangordnade ersättare: bra, bättre, bäst."],
+    } as Record<string, [string, string]>,
+  },
+});

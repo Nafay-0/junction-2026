@@ -210,10 +210,11 @@ function Alternatives({ productId }: { productId: string }) {
           )}
           {a && a.substitutes.length > 0 && (
             <ol className="divide-y divide-line">
-              {a.substitutes.map((s) => (
+              {a.substitutes.map((s, i) => (
                 <li key={s.productId} className="relative flex gap-4 px-5 py-4 transition-colors hover:bg-mist">
                   <span className="w-[4.5rem] shrink-0 pt-0.5">
-                    <span className="block text-[0.9rem] font-semibold text-petrol-deep">{tx.tier[s.tier]}</span>
+                    {/* The tier names its group once (a list of equal fits does not say "Best" five times). */}
+                    <span className={`block text-[0.9rem] font-semibold text-petrol-deep ${i > 0 && a.substitutes[i - 1].tier === s.tier ? "sr-only" : ""}`}>{tx.tier[s.tier]}</span>
                     <span aria-hidden className="mt-1 flex items-end gap-0.5">
                       {[1, 2, 3].map((i) => (
                         <span key={i} className={`w-2 rounded-[2px] ${i <= (TIER[s.tier]?.n ?? 0) ? "bg-petrol" : "bg-line"}`} style={{ height: 4 + i * 4 }} />

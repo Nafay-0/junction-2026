@@ -1,4 +1,5 @@
 import { DockError } from "@/core/errors";
+import { playingNow } from "./alive/clock";
 
 /**
  * Limits for a public demo server, all in memory (one process; a restart resets them):
@@ -140,6 +141,8 @@ export const SPARE_RESERVE = 0.1;
  * use up the calls an order needs.
  */
 export function reserveLlmCall(now = new Date(), opts: { spare?: boolean } = {}): void {
+  // The sample activity's scripted models (server/alive) are not model calls: they cost nothing and use no cap.
+  if (playingNow()) return;
   if (env("DOCK_LLM") === "off") throw new DockError(503, "llm_disabled", "Model calls are switched off on this server.", "demo_budget");
   const c = counter("llm", now);
   const room = opts.spare ? 1 - SPARE_RESERVE : 1;
@@ -157,6 +160,7 @@ export function llmRoom(now = new Date()): boolean {
 
 /** After a model call: add what it cost (null = unknown price; counted as 1 cent). */
 export function recordLlmSpend(usd: number | null, now = new Date()): void {
+  if (playingNow()) return;
   counter("llm", now).usd += usd ?? 0.01;
 }
 

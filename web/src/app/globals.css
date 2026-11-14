@@ -182,6 +182,10 @@
   }
 
   /* A field: the one look for text inputs and selects (the kit's Input and Select use it). */
+  /* A long option in a native select ends in an ellipsis, never cut mid-letter. */
+  select.field {
+    text-overflow: ellipsis;
+  }
   .field {
     min-height: 2.75rem;
     width: 100%;
@@ -298,6 +302,12 @@
   .on-dark :focus-visible,
   .on-steel :focus-visible {
     outline-color: var(--color-lime);
+  }
+  /* A disclosure is a control: at least 44 px to tap on a phone (utilities can still refine it). */
+  @media (max-width: 639px) {
+    summary {
+      min-height: 2.75rem;
+    }
   }
 }
 

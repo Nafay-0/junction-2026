@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { buttonClass } from "../../../_ui/kit";
 import { Empty, LoadError, Loading, PageHead, useOps } from "../../_ui/kit";
+import { TRACE_TEXT } from "./trace.text";
 
 export function Latest() {
   const router = useRouter();
@@ -15,19 +16,19 @@ export function Latest() {
   }, [id, router]);
   return (
     <>
-      <PageHead title="Trace" purpose="Any request as a path through the gate, step by step, replayable." />
+      <PageHead title={TRACE_TEXT.en.title} purpose={TRACE_TEXT.en.purpose} />
       <LoadError message={live.error} />
       {live.data && !id ? (
         <div className="mt-4">
           <Empty
-            title="No request to trace yet"
+            title={TRACE_TEXT.en.emptyTitle}
             action={
               <Link className={buttonClass("secondary", "sm")} href="/k/kaari">
                 Open Ravintola Kaari&apos;s shop
               </Link>
             }
           >
-            When an agent asks for something, its trace appears here, station by station. The returning kitchen at /k/kaari is the quickest way to make one.
+            {TRACE_TEXT.en.empty}
           </Empty>
         </div>
       ) : (

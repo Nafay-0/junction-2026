@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { isStepCount, ToolLoopAgent, tool, type LanguageModel, type ModelMessage, type ToolSet } from "ai";
 import type { LanguageModelV4 } from "@ai-sdk/provider";
 import { z } from "zod";
+import { DEMO_STAGE_NAMES } from "@/server/demo/thread";
 import { DockError } from "@/core/errors";
 import { localNow } from "@/core/kitchen";
 import { createModel, defaultModel } from "@/server/agent/models";
@@ -532,6 +533,18 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
       },
       toModelOutput: ({ output }) => ({ type: "text", value: compact(output) }),
     }),
+    demo_guide: tool({
+      description: "The demo's 'Try everything' guide, on a demo account's own kitchen: 'next' says the next thing to try with the words to say ('what can I try?', 'what else can you do?'); a staging name sets up that condition for the demo ('show me a stock-out', 'stage a drift', 'send me an offer', 'a product with a poor delivery record'), always said as staged. The store says the guide's own words as your reply.",
+      inputSchema: z.object({ ask: z.enum(["next", ...DEMO_STAGE_NAMES] as [string, ...string[]]) }),
+      execute: async ({ ask }) => {
+        const { demoWords } = await import("./engine");
+        const said = await demoWords(run, words, run.lang ?? "en", ask);
+        if (!said) return { guide: "none: this kitchen has no demo guide, or nobody is signed in. Answer the buyer's words as usual." };
+        run.demoSaid = said;
+        return { guide: ask, said: "the store shows the guide's own words as your reply; write one short sentence only" };
+      },
+      toModelOutput: ({ output }) => ({ type: "text", value: compact(output) }),
+    }),
     order_history: tool({
       description: "The kitchen's orders between two dates (inclusive), optionally one product family, for questions like 'what did we order last week?'. Shows them as a records card.",
       inputSchema: z.object({ from: z.iso.date().describe("YYYY-MM-DD"), to: z.iso.date().describe("YYYY-MM-DD"), family: z.string().max(40).optional().describe("e.g. milk, cream, butter") }),
@@ -659,7 +672,7 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
       { role: "system", content: context },
     ],
     tools,
-    activeTools: [...PUBLISHED_FOR_MODEL, "order", "plan_menu", "buyer_reply", "order_history", "find_products", "product_facts", "show_home", "rules", "await_sign_off", "wholesaler_offer", "this_week"],
+    activeTools: [...PUBLISHED_FOR_MODEL, "order", "plan_menu", "buyer_reply", "order_history", "find_products", "product_facts", "show_home", "rules", "await_sign_off", "wholesaler_offer", "this_week", "demo_guide"],
     toolApproval: {
       ...Object.fromEntries(BUYERS_OR_ENGINES.map((n) => [n, deny(`${n} is the buyer's decision or the engine's step in the store: use buyer_reply or order.`)])),
       // The pause for a person's sign-off. Only the server answers it, when the passkey sign-off is recorded.
@@ -683,7 +696,7 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
 
   const result = await agent.stream({ messages, timeout: { totalMs: 90_000, toolMs: 60_000 } });
   for await (const part of result.fullStream) {
-    if (part.type === "tool-call" && !["order", "plan_menu", "buyer_reply", "order_history", "find_products", "product_facts", "show_home", "await_sign_off", "wholesaler_offer", "this_week"].includes(part.toolName)) {
+    if (part.type === "tool-call" && !["order", "plan_menu", "buyer_reply", "order_history", "find_products", "product_facts", "show_home", "await_sign_off", "wholesaler_offer", "this_week", "demo_guide"].includes(part.toolName)) {
       const st = step(run, `tool:${part.toolName}`, LABELS[part.toolName] ?? `Looking up ${part.toolName.replace(/_/g, " ")}`);
       void result.steps.then(() => st.done(), () => st.fail());
     }

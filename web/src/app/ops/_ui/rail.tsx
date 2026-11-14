@@ -157,14 +157,14 @@ export function Rail() {
   const status = (compact: boolean) => (
     <>
       {s?.chain && (
-        <span title="Every ledger entry hashes the one before it" className={`inline-flex min-h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[0.82rem] font-medium ${s.chain.ok ? "bg-good-soft text-good" : "bg-safety-ink text-safety"}`}>
+        <span title="Every ledger entry hashes the one before it" className={`inline-flex min-h-8 max-lg:min-h-11 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[0.82rem] font-medium ${s.chain.ok ? "bg-good-soft text-good" : "bg-safety-ink text-safety"}`}>
           {s.chain.ok ? <ShieldCheck aria-hidden size={15} /> : <Target size={14} tone="safety" />}
           {s.chain.ok ? (compact ? `${num(s.chain.length)}` : `Ledger intact, ${num(s.chain.length)} entries`) : "Ledger chain broken"}
           {compact && s.chain.ok && <span className="sr-only"> ledger entries, chain intact</span>}
         </span>
       )}
       {waiting > 0 ? (
-        <Link href="/ops/control#waiting" className="inline-flex min-h-8 items-center gap-1.5 whitespace-nowrap rounded-full bg-safety px-3 text-[0.82rem] font-semibold text-safety-ink transition-[filter] hover:brightness-95">
+        <Link href="/ops/control#waiting" className="inline-flex min-h-8 max-lg:min-h-11 items-center gap-1.5 whitespace-nowrap rounded-full bg-safety px-3 text-[0.82rem] font-semibold text-safety-ink transition-[filter] hover:brightness-95">
           <Target size={14} tone="safety" />
           {compact ? waiting : `${waiting} sign-off${waiting === 1 ? "" : "s"} waiting`}
           {compact && <span className="sr-only"> sign-offs waiting</span>}
@@ -175,14 +175,14 @@ export function Rail() {
       {s?.models && (
         <span
           title="The day's model cap on this server (resets at midnight UTC). When it is used up, the agent's reading pauses and the thread offers ordering without a model."
-          className={`inline-flex min-h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[0.82rem] font-medium ${modelsLow(s.models) ? "bg-safety-soft text-safety-ink ring-1 ring-inset ring-safety/60" : "bg-surface text-ink-soft"}`}
+          className={`inline-flex min-h-8 max-lg:min-h-11 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[0.82rem] font-medium ${modelsLow(s.models) ? "bg-safety-soft text-safety-ink ring-1 ring-inset ring-safety/60" : "bg-surface text-ink-soft"}`}
         >
           {compact ? `$${Math.max(0, s.models.maxUsd - s.models.usd).toFixed(0)}` : `Models: $${Math.max(0, s.models.maxUsd - s.models.usd).toFixed(2)} of $${s.models.maxUsd} left, ${num(Math.max(0, s.models.maxCalls - s.models.calls))} calls`}
           {compact && <span className="sr-only"> of the day&apos;s model cap left</span>}
         </span>
       )}
       {suspended > 0 && (
-        <Link href="/ops/control" className="inline-flex min-h-8 items-center gap-1.5 whitespace-nowrap rounded-full bg-safety-soft px-3 text-[0.82rem] font-semibold text-safety-ink ring-1 ring-inset ring-safety/60">
+        <Link href="/ops/control" className="inline-flex min-h-8 max-lg:min-h-11 items-center gap-1.5 whitespace-nowrap rounded-full bg-safety-soft px-3 text-[0.82rem] font-semibold text-safety-ink ring-1 ring-inset ring-safety/60">
           <CirclePause aria-hidden size={15} />
           {suspended}
           {!compact && " suspended"}
@@ -257,7 +257,7 @@ export function Rail() {
 
       {/* ----- a phone: a top bar with the status, and the sections under the thumb ----- */}
       <header className="sticky top-0 z-20 flex items-center gap-2 border-b border-line bg-paper/90 px-4 py-2.5 backdrop-blur-md lg:hidden">
-        <Link href="/ops" className="mr-auto flex min-w-0 items-center" aria-label={`${PRODUCT_NAME}, wholesaler operations`}>
+        <Link href="/ops" className="mr-auto flex min-h-11 min-w-0 items-center" aria-label={`${PRODUCT_NAME}, wholesaler operations`}>
           <Wordmark size={24} />
         </Link>
         {status(true)}
@@ -299,7 +299,7 @@ export function Rail() {
             Signed in as <span className="font-semibold text-ink">{s?.name ?? "…"}</span>
             {s?.mode === "demo" && ", demo entry"}
           </span>
-          <button type="button" onClick={leave} className="inline-flex min-h-10 items-center gap-2 rounded-full border border-line-strong px-4 font-semibold">
+          <button type="button" onClick={leave} className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line-strong px-4 font-semibold">
             <LogOut aria-hidden size={16} />
             Leave
           </button>

@@ -43,12 +43,15 @@ export class ValioCatalog implements CatalogPort, UpstreamMetered {
   private readonly searchBackend: SearchBackend;
   private readonly now: () => Date;
   private readonly overrides = new Map<string, StockOverride>();
+  private readonly marked?: () => string | undefined;
 
   constructor(
     index: CatalogIndex,
     private readonly live: LiveLookup,
-    opts: { search?: SearchBackend; now?: () => Date } = {},
+    /** `marked`: a label while the live answers are not the partner's (the sample activity, server/alive): offers then say `simulated: true`. */
+    opts: { search?: SearchBackend; now?: () => Date; marked?: () => string | undefined } = {},
   ) {
+    this.marked = opts.marked;
     this.index = index;
     this.byId = new Map(index.products.map((p) => [p.id, p]));
     this.searchBackend = opts.search ?? new LexicalSearch(index.products);
@@ -109,11 +112,12 @@ export class ValioCatalog implements CatalogPort, UpstreamMetered {
         throw err;
       }
     }
+    const label = this.marked?.();
     return ids.map((id) => {
       const product = this.byId.get(id);
       if (!product) return { productId: id, requestedDate: requested, orderable: false, problems: ["unknown_product"], message: `${id} is not in the catalogue.` };
-      const status = interpret(product, results.find((r) => r.productId === id), requested, now);
-      return this.applyOverride(status, now);
+      const status = this.applyOverride(interpret(product, results.find((r) => r.productId === id), requested, now), now);
+      return label && status.offer ? { ...status, offer: { ...status.offer, simulated: true }, message: `${status.message} (${label})` } : status;
     });
   }
 

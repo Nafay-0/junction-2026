@@ -4,6 +4,8 @@ import Link from "next/link";
 import type { ConversationSummary, ConversationView } from "@/server/ops/conversation";
 import { fi, when } from "../../_ui/format";
 import { Details, Empty, KV, LoadError, Loading, PageHead, Section, useOps } from "../../_ui/kit";
+import { CONVERSATIONS_TEXT } from "./conversations.text";
+import { SamplePill, isSample } from "../../../_ui/sample";
 
 const DOOR: Record<string, string> = { typed: "typed in the store", voice: "voice", photo: "photo" };
 const ms = (n?: number) => (n === undefined ? "–" : n < 1000 ? `${n} ms` : `${(n / 1000).toFixed(1)} s`);
@@ -16,7 +18,7 @@ export function Conversations() {
   const live = useOps<{ conversations: ConversationSummary[] }>("/ops-api/conversation", { pollMs: 3000 });
   return (
     <>
-      <PageHead title="Conversations" purpose="Each kitchen's conversation with its own agent, as one record."
+      <PageHead title={CONVERSATIONS_TEXT.en.title} purpose={CONVERSATIONS_TEXT.en.purpose}
         about="Each kitchen's conversation with its own agent, typed or spoken, as one record: every turn, model call, tool call and gate decision." />
       <LoadError message={live.error} />
       {!live.data ? (
@@ -36,6 +38,7 @@ export function Conversations() {
               <Link className="font-semibold underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol" href={`/ops/conversation/${c.threadId}`} title={c.threadId}>
                 {c.orgName ?? c.kitchen ?? "A kitchen"}
               </Link>
+              {isSample(c) && <SamplePill />}
               {c.lastWords && <p className="mt-0.5 line-clamp-2 leading-snug">“{c.lastWords}”</p>}
               <p className="mt-0.5 text-[0.86rem] text-ink-soft">
                 {c.turns} {c.turns === 1 ? "turn" : "turns"} · {c.doors.map((d) => DOOR[d] ?? d).join(", ")} · last {time(c.lastAt)}

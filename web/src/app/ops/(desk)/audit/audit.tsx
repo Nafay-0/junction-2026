@@ -5,12 +5,14 @@ import { useRouter } from "next/navigation";
 import type { AuditListRow, AuditRecord } from "@/server/ops/views";
 import { ChevronRight, Download, FileCheck2, Lock, Quote, ReceiptText, Route, UserCheck } from "lucide-react";
 import { Avatar, Badge, buttonClass } from "../../../_ui/kit";
+import { clockSeconds } from "../../../_ui/plain";
 import { ChainCheck } from "../../_ui/chain";
 import { country, fi, money, stamp, when } from "../../_ui/format";
 import { Details, Empty, KV, LoadError, Loading, Outcome, PageHead, Section, useOps } from "../../_ui/kit";
 import { FilterBar, useUrlState } from "../../_ui/filters";
 import { CheckGrid, Stamp, Table } from "../../_ui/parts";
 import { VerifyBox } from "./verify-box";
+import { AUDIT_TEXT } from "./audit.text";
 
 const STATUS: Record<string, { label: string; kind: string }> = {
   committed: { label: "Signed order", kind: "committed" },
@@ -32,8 +34,8 @@ export function AuditIndex() {
   return (
     <>
       <PageHead
-        title="Audit"
-        purpose="Who approved an order, for exactly what, and the proof."
+        title={AUDIT_TEXT.en.title}
+        purpose={AUDIT_TEXT.en.purpose}
         about="Who approved an order, for exactly what, and the proof: for any order, what was asked, what the wholesaler stated, what was committed and who signed, checkable against the published keys. A kitchen's private memory is not part of it."
       />
       <LoadError message={live.error} />
@@ -42,7 +44,7 @@ export function AuditIndex() {
           {!rows ? (
             <Loading label="Reading the orders…" />
           ) : rows.length === 0 ? (
-            <Empty title="No order yet">Orders appear here once an agent places one, whether signed, waiting, refused or declined.</Empty>
+            <Empty title={AUDIT_TEXT.en.emptyTitle}>{AUDIT_TEXT.en.empty}</Empty>
           ) : (
             <>
               <FilterBar
@@ -304,7 +306,7 @@ export function AuditOrder({ orderId }: { orderId: string }) {
                 {a.ledger.explanation.map((line, i) => (
                   <li key={i} className="grid grid-cols-[1.75rem_minmax(0,1fr)] gap-x-3">
                     <span className="flex size-6 items-center justify-center rounded-full bg-petrol-soft text-[0.75rem] font-semibold text-petrol tabular">{i + 1}</span>
-                    <span className="pt-0.5">{fi(line)}</span>
+                    <span className="pt-0.5">{fi(auditLine(line, a.order.createdAt))}</span>
                   </li>
                 ))}
               </ol>
@@ -353,4 +355,12 @@ export function AuditOrder({ orderId }: { orderId: string }) {
       </div>
     </>
   );
+}
+
+/**
+ * A line of the core's audit explanation ("18:37:24  [intake] Understood…", the time in UTC) as the desk reads it:
+ * Helsinki time with a dot, and the entry's kind left to the record's details.
+ */
+function auditLine(line: string, dayOf: string): string {
+  return line.replace(/^(\d{2}):(\d{2}):(\d{2})\s+(?:\[[a-z_]+\]\s+)?/, (_m, h: string, mi: string, se: string) => `${clockSeconds(`${dayOf.slice(0, 10)}T${h}:${mi}:${se}Z`)}  `);
 }

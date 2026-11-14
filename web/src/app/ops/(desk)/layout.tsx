@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Rail } from "../_ui/rail";
+import { SampleBar } from "../_ui/sample-bar";
 
 export const metadata: Metadata = { title: { template: "%s, AimoPilot operations", default: "AimoPilot operations" } };
 
@@ -12,7 +13,10 @@ export default function DeskLayout({ children }: LayoutProps<"/ops">) {
         <Rail />
       </Suspense>
       <main id="main" className="pb-tabbar min-w-0 flex-1 px-4 pt-5 sm:px-6 lg:pt-[5.25rem] xl:px-10">
-        <div className="mx-auto max-w-[1500px]">{children}</div>
+        <div className="mx-auto max-w-[1500px]">
+          <SampleBar />
+          {children}
+        </div>
       </main>
     </div>
   );
