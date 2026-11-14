@@ -172,7 +172,9 @@ function AgentNode({ turn, thread, tap, busy, latest }: { turn: AgentTurn; threa
   const running = turn.steps.findLast((s) => s.status === "running");
   if (turn.status === "working" && !turn.line && !cards.some((c) => c.type !== "understood")) return <WorkingNode label={running ? stepLabel(running, w, f.lang) : undefined} />;
   // While it works, the agent's own words are still coming: no stand-in text from the cards until it has finished.
-  const text = turn.line || (today ? todaySentence(today, tx, f) : turn.status === "working" ? "" : fallbackLine(turn, thread, tx, f));
+  // "Nothing needs you today" is not said above a stock-out or an offer that the same opening says.
+  const quietToday = today && !today.items.length && cards.some((c) => c.type === "watch" || c.type === "offer");
+  const text = turn.line || (today ? (quietToday ? "" : todaySentence(today, tx, f)) : turn.status === "working" ? "" : fallbackLine(turn, thread, tx, f));
   const thinks = thinking(turn, thread, tx, w, f);
   return (
     <li className="tl-in relative">
@@ -212,7 +214,7 @@ function Choices({ turn, thread, tap, busy }: { turn: AgentTurn; thread: Thread;
       const lead = leadOption(c);
       const usable = c.options.filter((o) => o.gate?.outcome !== "reject");
       const ordered = [lead, ...usable.filter((o) => o.optionId !== lead.optionId)].slice(0, 3);
-      if (ordered.length > 1) for (const o of ordered) rows.push({ key: o.optionId, title: titleOf(o, w), price: money(o.totalCents), differs: o.optionId === lead.optionId ? perUnitOf(o, f) : oneThing(o, lead, w, wf), action: { type: "choose", requestId: c.requestId, optionId: o.optionId } });
+      if (ordered.length > 1) for (const o of ordered) rows.push({ key: o.optionId, title: titleOf(o, w), price: money(o.totalCents), differs: [perUnitOf(o, f), o.optionId === lead.optionId ? "" : oneThing(o, lead, w, wf)].filter(Boolean).join(" · "), action: { type: "choose", requestId: c.requestId, optionId: o.optionId } });
     } else if (c.type === "menu" && c.stage === "choose" && !c.sheetId) {
       for (const p of c.proposals.slice(0, 3)) rows.push({ key: p.proposalId, title: p.title, ...(p.costPerCoverCents ? { price: `${money(p.costPerCoverCents)}` } : {}), differs: p.dishes.join(", "), action: { type: "menu_choose", planId: c.planId, proposalId: p.proposalId } });
     } else if (c.type === "question") {
@@ -513,7 +515,11 @@ function thinking(turn: AgentTurn, thread: Thread, tx: Tx, w: (typeof THREAD_WOR
         out.push({ label: tx.step.live(c.options.length), detail: [days.length === 1 ? tx.step.allBy(f.day(days[0]).replace(/\.$/, "")) : "", prices.length ? tx.step.cheapest(money(Math.min(...prices))) : ""].filter(Boolean).join(" "), tone: "live" });
         const left = leftOutGroups(c, w, f.lang);
         const n = left.reduce((s, g) => s + g.count, 0);
-        if (n) out.push({ label: tx.step.leftOut(n), detail: left.slice(0, 2).map((g) => `${g.label} (${g.count})`).join("; "), tone: "left" });
+        // Each reason with its count, and the rest counted, so the figures add up; a sentence, capitalised.
+        const shown = left.slice(0, 3);
+        const rest = n - shown.reduce((x, g) => x + g.count, 0);
+        const detail = [...shown.map((g) => `${g.label} (${g.count})`), ...(rest > 0 ? [tx.step.otherReasons(rest)] : [])].join("; ");
+        if (n) out.push({ label: tx.step.leftOut(n), detail: detail.charAt(0).toUpperCase() + detail.slice(1), tone: "left" });
         break;
       }
       case "price":
@@ -628,7 +634,7 @@ function Landing({ today, offer, watch, thread }: { today?: TodayCard; offer?: O
   return (
     <div className="tl-in">
       <h1 className="display text-[2.2rem] leading-[1.05] text-ink">{tx.greeting(part, first)}</h1>
-      {today && !today.pending && (
+      {today && !today.pending && !(today.items.length === 0 && (watch || offer)) && (
         <p className="mt-3 max-w-[34ch] text-[1.1rem] leading-[1.6] text-ink">
           <Rich text={todaySentence(today, tx, f)} />
         </p>

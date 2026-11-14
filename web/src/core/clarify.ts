@@ -218,8 +218,12 @@ export function clarify(input: {
     else settled.attributes.push(choice);
   };
 
+  // "Regular (contains lactose)" means nothing for a plant drink: it never contains lactose, tagged or not. Without this,
+  // a café that has bought untagged coconut drinks "learns" regular, and every lactose-free oat drink is left out.
+  const valueOf = (dim: SpecDimension, p: { attributes: string[]; category?: string }) =>
+    dim.id === "lactose" && (p.category === "plant_drink" || p.attributes.includes("vegan") || p.attributes.includes("plant_drink")) ? undefined : dimensionValue(dim, p.attributes);
   for (const dim of SPEC_DIMENSIONS) {
-    const values = [...new Set(candidates.map((p) => dimensionValue(dim, p.attributes)).filter((v): v is string => v !== undefined))];
+    const values = [...new Set(candidates.map((p) => valueOf(dim, p)).filter((v): v is string => v !== undefined))];
     values.sort((a, b) => order(dim, a) - order(dim, b));
     if (values.length < 2) continue;
     const valueAttrs = dim.values.map((v) => v.attribute);

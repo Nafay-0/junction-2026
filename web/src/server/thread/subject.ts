@@ -8,7 +8,7 @@ import type { Card } from "./types";
  * ("what did we spend this week?") does not change the subject: its turn is passed over. Plain code, from the cards.
  */
 export type Subject =
-  | { kind: "incomplete"; turnId: string; words: string; missing: string[] }
+  | { kind: "incomplete"; turnId: string; words: string; missing: string[]; usual?: string }
   | { kind: "need"; turnId: string; words: string; requestId: string; item: string; amount?: { amount: number; unit: string }; day?: string; placed: boolean }
   | { kind: "menu"; turnId: string; planId: string; stage: string; covers: number | null; day?: string; dishes: string[] };
 
@@ -37,7 +37,7 @@ export function subjectOf(run: TurnRun): Subject | undefined {
     if (inc?.type === "notice") {
       const buyer = turns.find((x) => x.turnId === t.replyTo);
       const words = inc.words ?? (buyer?.role === "buyer" ? buyer.text : undefined);
-      if (words) return { kind: "incomplete", turnId: t.turnId, words, missing: inc.missing ?? [] };
+      if (words) return { kind: "incomplete", turnId: t.turnId, words, missing: inc.missing ?? [], ...(inc.usual ? { usual: inc.usual } : {}) };
     }
     // A sheet or an order of its own ends the subject; a look-up only turn is passed over.
     if (cards.some((c) => c.type === "sheet" || c.type === "order")) return undefined;
@@ -57,7 +57,7 @@ export const isShort = (words: string) => words.trim().split(/\s+/).length <= 8;
 /** How the subject reads for the model, in one line (the turn context). */
 export function subjectLine(s: Subject | undefined): string {
   if (!s) return "";
-  if (s.kind === "incomplete") return `TALKING ABOUT NOW: the request "${s.words.slice(0, 120)}", still missing ${s.missing.join(" and ") || "a detail"}. A short answer completes it: call order with the buyer's words (code joins them to the request).`;
+  if (s.kind === "incomplete") return `TALKING ABOUT NOW: the request "${s.words.slice(0, 120)}", still missing ${s.missing.join(" and ") || "a detail"}${s.usual ? ` (the kitchen's usual is ${s.usual}: a yes takes it)` : ""}. A short answer, or a yes, completes it: call order with the buyer's words (code joins them to the request).`;
   if (s.kind === "need")
     return `TALKING ABOUT NOW: ${s.item}${s.amount ? `, ${s.amount.amount} ${s.amount.unit}` : ""}${s.day ? `, for ${s.day}` : ""}${s.placed ? " (ordered)" : ""}. A short follow-up changes it ("for Friday", "no, 200", "the organic one") or adds to the same order ("and oat drink too"): call order with the buyer's words; code applies them to this request. Never ask again for what the buyer already said.`;
   return `TALKING ABOUT NOW: the menu${s.dishes.length ? ` (${s.dishes.join(", ")})` : ""}${s.covers ? ` for ${s.covers} covers` : ", covers not given yet"}${s.day ? `, for ${s.day}` : ""}. A number of covers or portions sets its covers (buyer_reply menu:covers with the amount); a day moves it (menu:day).`;
