@@ -6,17 +6,21 @@ test("enter a kitchen's shop, browse the catalogue, read the rules", async ({ pa
   await expect(page.getByRole("heading", { name: "Enter a kitchen's shop" })).toBeVisible();
   await page.getByRole("link", { name: /Ravintola Kaari/ }).first().click();
   await expect(page.getByRole("heading", { name: "Needs you now" })).toBeVisible();
-  await expect(page.getByText(/demo built for the Junction 2026/).first()).toBeVisible();
+  // The demo note: the full sentence on a desk, its short form in the phone's top strip.
+  await expect(page.locator("text=/demo built for the Junction 2026|Demo on synthetic data/ >> visible=true").first()).toBeVisible();
 
   await page.getByRole("navigation", { name: "Shop" }).getByRole("link", { name: "Catalogue" }).click();
   await expect(page.getByText(/products from the product files/)).toBeVisible();
   await expect(page.locator("main ul li").first()).toBeVisible();
 
-  await page.getByRole("navigation", { name: "Shop" }).getByRole("link", { name: "Agent and rules" }).click();
+  // On a phone the sections sit in the tab bar; "Agent and rules" is one tap further, under More.
+  await page.getByRole("navigation", { name: "Shop" }).getByRole("button", { name: "More" }).click();
+  await page.getByRole("dialog").getByRole("link", { name: "Agent and rules" }).click();
   await expect(page.getByRole("heading", { name: "Who can see what" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "The agent may, alone" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Ask the purchasing agent" }).click();
+  // The agent is the middle of the tab bar: one tap opens the thread.
+  await page.getByRole("navigation", { name: "Shop" }).getByRole("button", { name: "Agent" }).click();
   await expect(page.getByLabel("Ask, or say what the kitchen needs")).toBeVisible();
 });
 

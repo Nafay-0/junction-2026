@@ -4,7 +4,7 @@ import { Package, Search } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { LangSwitch } from "../_i18n/provider";
 import { Avatar, Badge, Button, Card, Empty, IconDisc, Input, Kbd, ListRow, Panel, Price, Select, Sheet, Skeleton, Steps, Tabs, Tag, Toaster, useToast } from "../_ui/kit";
-import { AgentTurn, AnomalyCard, BuyerTurn, Composer, GateCard, MemoryCard, OptionsCard, OrderCard, PriceCard, QuestionCard, StepLines, Thread, UnderstoodCard, VoiceStatus, type MicState, type VoiceState } from "../_ui/thread";
+import { AgentTurn, AnomalyCard, BuyerTurn, Composer, GateCard, MemoryCard, NoticeCard, OptionsCard, OrderCard, PriceCard, QuestionCard, RecordsCard, StepLines, Thread, UnderstoodCard, VoiceStatus, type MicState, type VoiceState } from "../_ui/thread";
 import { Wordmark } from "../_ui/wordmark";
 
 /**
@@ -104,7 +104,7 @@ function ThreadDemo() {
                 chosen={answer}
                 onChoose={setAnswer}
               />
-              <MemoryCard kind="Remembered for next time" items={[{ text: "Conference breakfasts: lactose-free milk, about 3 L per 10 guests.", source: "from today" }]} />
+              <MemoryCard kind="Remember this?" items={[{ text: "Conference breakfasts: lactose-free milk, about 3 L per 10 guests.", onKeep: () => {}, onDrop: () => {}, keepLabel: "Keep", dropLabel: "Drop" }, { text: "Cartons are fine when boxes cannot make the day.", state: "kept" }]} />
             </AgentTurn>
             <AgentTurn text="Looking for what can still make Monday." steps={<StepLines fold={false} steps={[{ key: "a", text: "Checking the live price of 3 products", state: "doing" }]} />} pending />
           </Thread>
@@ -117,8 +117,8 @@ function ThreadDemo() {
                 chosen={option}
                 onChoose={setOption}
                 options={[
-                  { id: "a", rank: "best", name: "Semi-skimmed milk 1 L, lactose-free", detail: "1 000 cartons", price: "1 400,00 €", per: "1,40 € / L", delivery: "Mon 16.11.", keeps: ["The day you asked for", "Your usual fat content"], givesUp: ["Cartons, not boxes: more to open"] },
-                  { id: "b", rank: "better", name: "Semi-skimmed milk 10 L box, lactose-free", detail: "100 boxes", price: "1 565,50 €", per: "1,57 € / L", delivery: "Wed 18.11.", keeps: ["Boxes, as you usually buy"], givesUp: ["Two days late"] },
+                  { id: "a", rank: "best", name: "Semi-skimmed milk 1 L, lactose-free", detail: "1 000 cartons", price: "1 400,00 €", per: "1,40 € / L", delivery: "Mon 16.11.", keeps: ["The day you asked for", "Your usual fat content"], givesUp: ["Cartons, not boxes: more to open"], preselected: "The agent would take this: the only one that makes Monday in full." },
+                  { id: "b", rank: "better", name: "Semi-skimmed milk 10 L box, lactose-free", detail: "100 boxes", price: "1 565,50 €", per: "1,57 € / L", delivery: "Wed 18.11.", keeps: ["Boxes, as you usually buy"], givesUp: ["Two days late"], signOff: "Over 1 000 €: Aino Virtanen signs" },
                   { id: "c", rank: "good", name: "Skimmed milk 1 L, lactose-free", detail: "600 cartons now, the rest Wednesday", price: "780,00 €", per: "1,30 € / L", delivery: "Mon 16.11.", keeps: ["Inside this week's budget"], givesUp: ["Only 600 L on Monday", "Skimmed, not semi-skimmed"] },
                 ]}
                 note="Ranked for the cheapest that can make Monday. Prices are from the wholesaler's live service, checked 14.03."
@@ -147,7 +147,7 @@ function ThreadDemo() {
                   ...Array.from({ length: 16 }, (_, i) => ({ title: `Rule ${i}`, ok: true })),
                 ]}
               />
-              <GateCard state="signed" kind="The gate" title="Signed by a person" reason="The sign-off is bound to this exact order." approver={{ name: "Aino Virtanen", role: "14.05" }} rules={Array.from({ length: 17 }, (_, i) => ({ title: `Rule ${i}`, ok: true }))} />
+              <GateCard state="approved" kind="The gate" title="Signed by a person" reason="The sign-off is bound to this exact order." approver={{ name: "Aino Virtanen", role: "14.05" }} rules={Array.from({ length: 17 }, (_, i) => ({ title: `Rule ${i}`, ok: true }))} />
               <OrderCard
                 kind="Order"
                 status={{ label: "Placed", tone: "good" }}
@@ -160,8 +160,23 @@ function ThreadDemo() {
               />
             </AgentTurn>
             <AgentTurn>
+              <RecordsCard
+                kind="From your records"
+                rows={[
+                  { label: "Mon 9.11.", sub: "100 L milk, 10 L cream, placed by the agent", value: "168,10 €", href: "#" },
+                  { label: "Thu 12.11.", sub: "100 L milk, signed by Sanna Koskinen", value: "124,80 €", href: "#" },
+                ]}
+                note="2 orders last week, from the kitchen's order history."
+              />
+              <NoticeCard kind="Not in the catalogue" title="The wholesaler does not sell beef here.">
+                The agent may buy milk and plant drinks for this kitchen. Ask for something in those groups, or change the rules under Agent and rules.
+              </NoticeCard>
+              <NoticeCard tone="gate" kind="Suspended" title="The wholesaler has suspended this agent.">
+                Nothing can be ordered until operations resume it. The reason given: three refused orders in a minute.
+              </NoticeCard>
+              <GateCard state="declined" kind="The gate" title="Declined by Aino Virtanen" reason="Nothing was ordered. The price is released." />
               <GateCard state="refused" kind="The gate" title="Refused" reason="Almond drink contains tree nuts. This kitchen's signed rules say never nuts." rules={[{ title: "Forbidden allergen: tree nuts", ok: false }, { title: "x", ok: true }, { title: "y", ok: true }]} />
-              <GateCard state="passed" kind="The gate" title="Inside the mandate" reason="Placed by the agent alone." rules={Array.from({ length: 17 }, (_, i) => ({ title: `Rule ${i}`, ok: true }))} />
+              <GateCard state="placed_alone" kind="The gate" title="Inside the mandate" reason="Placed by the agent alone." rules={Array.from({ length: 17 }, (_, i) => ({ title: `Rule ${i}`, ok: true }))} />
             </AgentTurn>
           </Thread>
           <div className="mt-4">
@@ -293,7 +308,7 @@ function Surfaces() {
             <p className="mt-1 font-medium">Usual 100 L, Mondays and Thursdays</p>
           </Panel>
           <Panel tone="agent" className="p-4">
-            <p className="text-[0.86rem] text-lavender-deep">The agent's tint</p>
+            <p className="text-[0.86rem] text-lavender-deep">The agent&apos;s tint</p>
             <p className="mt-1 font-medium">Always lactose-free for this kitchen</p>
           </Panel>
         </div>

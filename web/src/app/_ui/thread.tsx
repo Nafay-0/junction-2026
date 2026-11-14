@@ -13,6 +13,9 @@ import { THREAD_TEXT } from "./thread.text";
  * store (web/docs/DESIGN.md, "The thread"). The buyer's turns are short bubbles; the agent's turns are one line of
  * text at most and then cards built from data, streamed as they happen.
  *
+ * The card names and states follow the thread's contract, web/docs/agent-thread.md: understood, anomaly, question,
+ * options, price, gate, order, memory, records, notice.
+ *
  * Everything here is presentational: a page passes the words and the data, the kit gives the look and the states.
  * The cards are one family: the same anatomy (a mark, what kind of card it is, the content, the actions), the same
  * radius and hairline. Two stand apart on purpose: the anomaly card is warm and calm (something looks off, nothing
@@ -93,13 +96,18 @@ export function BuyerTurn({ children, via = "typed", time }: { children: ReactNo
  * An agent turn: one line of text at most, then its cards. While it is still working, `steps` show what it is doing
  * and a skeleton holds the place of the card that is coming.
  */
-export function AgentTurn({ text, children, steps, pending = false }: { text?: ReactNode; children?: ReactNode; steps?: ReactNode; pending?: boolean }) {
+export function AgentTurn({ text, children, steps, pending = false, status }: { text?: ReactNode; children?: ReactNode; steps?: ReactNode; pending?: boolean; /** The contract's turn status; "waiting_approver" shows the sign-off wait under the cards. */ status?: "working" | "waiting_buyer" | "waiting_approver" | "done" | "failed" }) {
   return (
     <li className="lane-enter flex flex-col gap-2.5">
       {text && <p className="max-w-[60ch] px-1 text-[0.98rem] leading-relaxed text-ink">{text}</p>}
       {steps}
       {children}
-      {pending && <CardSkeleton />}
+      {(pending || (status === "working" && !children)) && <CardSkeleton />}
+      {status === "waiting_approver" && (
+        <p className="px-1">
+          <VoiceStatus state="waiting" />
+        </p>
+      )}
     </li>
   );
 }
@@ -183,7 +191,7 @@ export function ThreadCard({ mark, kind, aside, children, actions, tone = "plain
 export type UnderstoodItem = { label: string; value: ReactNode; from?: "said" | "memory" };
 
 /** What the agent understood: the need as fields. A value that came from memory, not from the buyer's words, says so. */
-export function UnderstoodCard({ kind, summary, items, actions }: { kind: ReactNode; summary?: ReactNode; items: UnderstoodItem[]; actions?: ReactNode }) {
+export function UnderstoodCard({ kind, summary, items, basedOn, alsoAsked, actions }: { kind: ReactNode; summary?: ReactNode; items: UnderstoodItem[]; basedOn?: ReactNode; alsoAsked?: ReactNode; actions?: ReactNode }) {
   const tx = useText(THREAD_TEXT);
   return (
     <ThreadCard kind={kind} mark={<Check aria-hidden size={15} strokeWidth={2.6} />} actions={actions}>
@@ -204,6 +212,8 @@ export function UnderstoodCard({ kind, summary, items, actions }: { kind: ReactN
           </div>
         ))}
       </dl>
+      {basedOn && <p className="mt-3.5 text-[0.84rem] leading-snug text-ink-soft">{basedOn}</p>}
+      {alsoAsked && <p className="mt-3 rounded-md bg-surface px-3 py-2 text-[0.86rem] leading-snug">{alsoAsked}</p>}
     </ThreadCard>
   );
 }
@@ -212,12 +222,12 @@ export function UnderstoodCard({ kind, summary, items, actions }: { kind: ReactN
  * Something looks like a slip: the amount is ten times the usual, the day is a holiday. Warm and calm, never the
  * gate's yellow: nothing is refused, the agent is asking before a price is fixed. It shows the reason as numbers.
  */
-export function AnomalyCard({ kind, title, reason, usual, asked, actions }: { kind: ReactNode; title: ReactNode; reason?: ReactNode; usual?: { value: ReactNode; amount: number }; asked?: { value: ReactNode; amount: number }; actions?: ReactNode }) {
+export function AnomalyCard({ kind, title, reason, usual, asked, answered, actions }: { kind: ReactNode; title: ReactNode; reason?: ReactNode; usual?: { value: ReactNode; amount: number }; asked?: { value: ReactNode; amount: number }; answered?: ReactNode; actions?: ReactNode }) {
   const tx = useText(THREAD_TEXT);
   const max = Math.max(usual?.amount ?? 0, asked?.amount ?? 0, 1);
   const bar = (amount: number) => `${Math.max(3, Math.round((amount / max) * 100))}%`;
   return (
-    <ThreadCard kind={kind} tone="notice" mark={<CircleAlert aria-hidden size={16} />} actions={actions}>
+    <ThreadCard kind={kind} tone="notice" mark={<CircleAlert aria-hidden size={16} />} actions={answered ? undefined : actions} aside={answered ? <Answered>{answered}</Answered> : undefined}>
       <p className="display text-[1.3rem] leading-tight">{title}</p>
       {reason && <p className="mt-1.5 text-[0.95rem] leading-relaxed text-ink">{reason}</p>}
       {usual && asked && (
@@ -284,6 +294,10 @@ export type ThreadOption = {
   givesUp?: ReactNode[];
   image?: ReactNode;
   disabled?: boolean;
+  /** The agent would take this one; `why` says so in a line. */
+  preselected?: ReactNode;
+  /** Choosing it sends the order to a person: the reason, with the gate's mark. */
+  signOff?: ReactNode;
 };
 
 /**
@@ -337,6 +351,18 @@ export function OptionsCard({ kind, intro, options, onChoose, chosen, note }: { 
                     </li>
                   ))}
                 </ul>
+              )}
+              {o.preselected && !chosen && (
+                <p className="mt-2.5 flex items-start gap-2 text-[0.84rem] leading-snug text-lavender-deep">
+                  <Sparkles aria-hidden size={14} className="mt-[0.15em] shrink-0" />
+                  {o.preselected}
+                </p>
+              )}
+              {o.signOff && (
+                <p className="mt-2.5 flex items-start gap-2 rounded-md bg-safety-soft px-2.5 py-1.5 text-[0.84rem] leading-snug">
+                  <Target size={14} tone="safety" className="mt-[0.15em] shrink-0" />
+                  {o.signOff}
+                </p>
               )}
               {onChoose && (!chosen || on) && (
                 <button
@@ -394,33 +420,36 @@ export function PriceCard({ kind, price, per, lines, holds, left, signed, action
   );
 }
 
-export type GateState = "checking" | "passed" | "waiting" | "signed" | "refused";
+/** The contract's gate outcomes (web/docs/agent-thread.md), plus "checking" while the rules are being read. */
+export type GateState = "checking" | "placed_alone" | "waiting" | "approved" | "refused" | "declined" | "withdrawn" | "expired";
 
 /**
  * The gate: the signature moment. Plain code has checked the order against what the kitchen signed.
- *   checking  the rules are being read (a quiet card, the mark turning)
- *   passed    inside the mandate: placed by the agent alone (quiet, good)
- *   waiting   beyond the mandate: the dark slab, the hazard band, who must sign and where it is waiting
- *   signed    the person signed: the slab settles to a stamp with their name
- *   refused   a rule refused it: the slab, the rule's name and its reason
+ *   checking      the rules are being read (a quiet card, the mark turning)
+ *   placed_alone  inside the mandate: placed by the agent alone (quiet, good)
+ *   waiting       beyond the mandate: the dark slab, the hazard band, who must sign and where it is waiting
+ *   approved      the person signed: the slab settles to a stamp with their name
+ *   refused       a rule refused it: the slab, the rule's name and its reason
+ *   declined, withdrawn, expired   it ended without an order: quiet and plain, with who or why
  * Yellow, the hazard band and the gate's mark appear here and nowhere else in the thread.
  */
 export function GateCard({ state, kind, title, reason, facts, rules, approver, countdown, actions }: { state: GateState; kind: ReactNode; title: ReactNode; reason?: ReactNode; facts?: { label: ReactNode; value: ReactNode }[]; rules?: { title: ReactNode; ok: boolean }[]; approver?: { name: string; role?: ReactNode; where?: ReactNode }; countdown?: ReactNode; actions?: ReactNode }) {
   const tx = useText(THREAD_TEXT);
   const passedRules = rules?.filter((r) => r.ok).length ?? 0;
   const failed = rules?.filter((r) => !r.ok) ?? [];
-  if (state === "checking" || state === "passed" || state === "signed") {
+  if (state !== "waiting" && state !== "refused") {
+    const good = state === "placed_alone" || state === "approved";
     return (
       <ThreadCard
         kind={kind}
-        tone={state === "checking" ? "plain" : "good"}
-        mark={state === "checking" ? <Target size={15} tone="hollow" spin /> : <ShieldCheck aria-hidden size={15} />}
-        aside={rules && state !== "checking" ? tx.passed(passedRules) : undefined}
+        tone={good ? "good" : "plain"}
+        mark={state === "checking" ? <Target size={15} tone="hollow" spin /> : good ? <ShieldCheck aria-hidden size={15} /> : <Target size={15} tone="ink" />}
+        aside={rules && good ? tx.passed(passedRules) : undefined}
         actions={actions}
       >
         <p className="display text-[1.3rem] leading-tight">{title}</p>
         {reason && <p className="mt-1.5 text-[0.93rem] leading-relaxed text-ink-soft">{reason}</p>}
-        {state === "signed" && approver && (
+        {state === "approved" && approver && (
           <p className="stamp mt-3.5 inline-flex items-center gap-2.5 rounded-full border border-good/30 bg-good-soft py-1 pl-1 pr-3.5 text-[0.9rem] font-semibold text-good">
             <Avatar name={approver.name} size={28} className="!bg-good !text-paper" />
             {approver.name}
@@ -520,24 +549,112 @@ export function OrderCard({ kind, status, lines, total, totalLabel, delivery, hr
   );
 }
 
-/** What the agent remembered or used from memory: the lavender card. Each line can say where it came from. */
-export function MemoryCard({ kind, items, actions }: { kind: ReactNode; items: { text: ReactNode; source?: ReactNode }[]; actions?: ReactNode }) {
+/**
+ * Memory, the lavender card: what memory answered instead of asking, or, after an order, what the agent proposes to
+ * remember. A proposal has keep and drop on its line; once answered the line shows which.
+ */
+export function MemoryCard({ kind, items, actions }: { kind: ReactNode; items: { key?: string; text: ReactNode; source?: ReactNode; state?: "kept" | "dropped"; onKeep?: () => void; onDrop?: () => void; keepLabel?: string; dropLabel?: string }[]; actions?: ReactNode }) {
   return (
     <article className="rounded-xl bg-lavender-mid/55 px-4 py-3.5">
       <p className="flex items-center gap-2 text-[0.82rem] font-medium text-lavender-deep">
         <Sparkles aria-hidden size={14} />
         {kind}
       </p>
-      <ul className="mt-2 space-y-1.5 text-[0.93rem] leading-snug">
+      <ul className="mt-2 space-y-2 text-[0.93rem] leading-snug">
         {items.map((it, i) => (
-          <li key={i}>
-            {it.text}
-            {it.source && <span className="ml-1.5 text-[0.8rem] text-lavender-deep/80">{it.source}</span>}
+          <li key={it.key ?? i} className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 ${it.state === "dropped" ? "text-ink-soft line-through decoration-1" : ""}`}>
+            <span className="min-w-0 flex-1">
+              {it.text}
+              {it.source && <span className="ml-1.5 text-[0.8rem] text-lavender-deep/80">{it.source}</span>}
+            </span>
+            {it.state === "kept" && <Check aria-hidden size={16} strokeWidth={2.6} className="shrink-0 text-lavender-deep" />}
+            {!it.state && (it.onKeep || it.onDrop) && (
+              <span className="flex shrink-0 gap-1.5">
+                {it.onKeep && (
+                  <button type="button" onClick={it.onKeep} className="inline-flex min-h-9 items-center rounded-full bg-lavender-deep px-3.5 text-[0.84rem] font-semibold text-paper pointer-coarse:min-h-11">
+                    {it.keepLabel}
+                  </button>
+                )}
+                {it.onDrop && (
+                  <button type="button" onClick={it.onDrop} className="inline-flex min-h-9 items-center rounded-full px-3 text-[0.84rem] font-medium text-lavender-deep hover:bg-lavender pointer-coarse:min-h-11">
+                    {it.dropLabel}
+                  </button>
+                )}
+              </span>
+            )}
           </li>
         ))}
       </ul>
       {actions && <div className="mt-2.5 flex flex-wrap gap-2.5">{actions}</div>}
     </article>
+  );
+}
+
+/** Records: the answer to "what did we order last week?", as rows from the kitchen's own records, each with its source. */
+export function RecordsCard({ kind, rows, note }: { kind: ReactNode; rows: { label: ReactNode; value?: ReactNode; sub?: ReactNode; href?: string }[]; note?: ReactNode }) {
+  return (
+    <ThreadCard kind={kind} mark={<ReceiptText aria-hidden size={14} />}>
+      <ul className="divide-y divide-line/70 text-[0.92rem]">
+        {rows.map((r, i) => {
+          const inner = (
+            <>
+              <span className="min-w-0">
+                <span className="block font-medium leading-snug">{r.label}</span>
+                {r.sub && <span className="block text-[0.82rem] text-ink-soft">{r.sub}</span>}
+              </span>
+              {r.value && <span className="shrink-0 font-medium tabular">{r.value}</span>}
+            </>
+          );
+          return (
+            <li key={i}>
+              {r.href ? (
+                <Link href={r.href} className="-mx-2 flex items-baseline justify-between gap-4 rounded-md px-2 py-2 transition-colors hover:bg-mist">
+                  {inner}
+                </Link>
+              ) : (
+                <div className="flex items-baseline justify-between gap-4 py-2">{inner}</div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {note && <p className="mt-2.5 text-[0.8rem] leading-snug text-ink-soft">{note}</p>}
+    </ThreadCard>
+  );
+}
+
+/**
+ * A notice: the agent could not do it, in plain words and with what to do next (not found, not a purchase, something
+ * missing, the model is unavailable). Calm and plain. `gate` is for a suspension: an operator stopped the agent.
+ */
+export function NoticeCard({ kind, title, children, tone = "plain", actions }: { kind: ReactNode; title: ReactNode; children?: ReactNode; tone?: "plain" | "gate"; actions?: ReactNode }) {
+  if (tone === "gate")
+    return (
+      <article className="rounded-xl bg-safety-soft px-4 py-3.5 ring-1 ring-inset ring-safety/60">
+        <p className="flex items-center gap-2 text-[0.82rem] font-medium">
+          <Target size={15} tone="safety" />
+          {kind}
+        </p>
+        <p className="mt-1.5 font-semibold leading-snug">{title}</p>
+        {children && <div className="mt-1 text-[0.92rem] leading-relaxed text-ink-soft">{children}</div>}
+        {actions && <div className="mt-3 flex flex-wrap gap-2.5">{actions}</div>}
+      </article>
+    );
+  return (
+    <ThreadCard kind={kind} mark={<CircleAlert aria-hidden size={15} />} actions={actions} className="!border-line-strong !bg-mist">
+      <p className="font-semibold leading-snug">{title}</p>
+      {children && <div className="mt-1 text-[0.92rem] leading-relaxed text-ink-soft">{children}</div>}
+    </ThreadCard>
+  );
+}
+
+/** A card that has been answered says how, where its actions were. */
+function Answered({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 font-medium text-ink">
+      <Check aria-hidden size={14} strokeWidth={2.6} className="text-good" />
+      {children}
+    </span>
   );
 }
 
@@ -613,7 +730,7 @@ export function Composer({
             autoComplete="off"
             enterKeyHint="send"
             disabled={disabled || mic?.state === "processing"}
-            className={`min-w-0 flex-1 rounded-full bg-transparent pl-4 pr-1 placeholder:text-ink-soft focus:outline-none disabled:text-ink-soft ${tall ? "min-h-13 text-[1rem] sm:text-[1.08rem]" : "min-h-11 text-[1rem]"}`}
+            className={`min-w-0 flex-1 rounded-full bg-transparent pl-4 pr-1 placeholder:text-ink-soft focus:outline-none focus-visible:outline-none disabled:text-ink-soft ${tall ? "min-h-12 text-[0.95rem] sm:min-h-13 sm:text-[1.08rem]" : "min-h-11 text-[1rem]"}`}
           />
         )}
         {tools ?? (
@@ -647,7 +764,7 @@ export function Composer({
           </>
         )}
         {!listening && (
-          <button type="submit" disabled={disabled || busy} aria-busy={busy || undefined} aria-label={tx.send} title={tx.send} className={`flex shrink-0 items-center justify-center rounded-full bg-lime text-ink transition-[background-color,transform] duration-150 hover:bg-lime-hover active:scale-95 disabled:opacity-60 motion-reduce:active:scale-100 ${tall ? "size-13" : "size-11"}`}>
+          <button type="submit" disabled={disabled || busy} aria-busy={busy || undefined} aria-label={tx.send} title={tx.send} className={`flex shrink-0 items-center justify-center rounded-full bg-lime text-ink transition-[background-color,transform] duration-150 hover:bg-lime-hover active:scale-95 disabled:opacity-60 motion-reduce:active:scale-100 ${tall ? "size-12 sm:size-13" : "size-11"}`}>
             {busy ? <Spinner size={18} /> : <ArrowUp aria-hidden size={tall ? 24 : 21} strokeWidth={2.4} />}
           </button>
         )}

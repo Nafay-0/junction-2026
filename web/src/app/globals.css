@@ -244,13 +244,16 @@
 
 /* ---------- focus ---------- */
 
-:focus-visible {
-  outline: 2px solid var(--color-petrol);
-  outline-offset: 2px;
-}
-.on-dark :focus-visible,
-.on-steel :focus-visible {
-  outline-color: var(--color-lime);
+/* In the base layer, so a control that draws its own focus (a field's ring, the composer) can switch this off. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-petrol);
+    outline-offset: 2px;
+  }
+  .on-dark :focus-visible,
+  .on-steel :focus-visible {
+    outline-color: var(--color-lime);
+  }
 }
 
 @layer components {

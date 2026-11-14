@@ -149,7 +149,7 @@ function Hero({ o, cutoffs, now }: { o: Overview; cutoffs?: CutoffReply; now: nu
         <Art k="home" cover priority sizes="(min-width: 1024px) 34rem, 100vw" position="62% 50%" />
         <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-petrol-deep via-petrol-deep/20 to-transparent lg:bg-gradient-to-r lg:via-petrol-deep/35" />
       </div>
-      <div className="relative grid gap-6 p-5 pt-3 sm:p-8 sm:pt-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:gap-10 lg:p-10">
+      <div className="relative grid gap-6 p-4 pt-3 sm:p-8 sm:pt-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:gap-10 lg:p-10">
         <div className="min-w-0">
           <p className="text-[0.92rem] text-paper/70">{tx.buysFor(kitchen.agentName)}</p>
           <h1 className="display mt-1.5 text-[2.1rem] text-paper sm:text-[2.9rem] lg:text-[3.3rem]">{kitchen.name}</h1>
