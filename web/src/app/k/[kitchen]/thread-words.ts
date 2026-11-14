@@ -116,6 +116,11 @@ export function tradeOffs(o: OptionView, shared: Reason[], w: ThreadWords, f: Fm
   return { pros: clean(pros), cons: [...extra, ...clean(cons)], signoff: clean(signoff) };
 }
 
+/** An option's title in the buyer's language: the engine marks a split's second product "(substitute)". */
+export function titleOf(o: Pick<OptionView, "title">, w: ThreadWords): string {
+  return o.title.replace(/\s*\(substitute\)\s*$/, ` (${w.substituteWord})`);
+}
+
 /** Price per litre or kilo, when the option is sold by volume or weight. */
 export function perUnitPrice(o: OptionView, w: ThreadWords, f: Fmt): string | undefined {
   const unit = o.delivered.unit;

@@ -95,6 +95,12 @@ describe("the options as one decision", () => {
     expect(plain(oneThing(good, best, fi.w, fi.f))).toBe("Pienin hiilijalanjälki, 564,48 € kalliimpi");
   });
 
+  it("says a split's substitute in the buyer's language", async () => {
+    const { titleOf } = await import("./thread-words");
+    expect(titleOf(good, fi.w)).toMatch(/\(korvaava\)$/);
+    expect(titleOf(best, fi.w)).toBe(best.title);
+  });
+
   it("shows packs and the price per litre", () => {
     expect(plain(packsText(best, en.w, en.f))).toBe("1 000 × 1 L");
     expect(plain(perUnitPrice(best, en.w, en.f))).toBe("1,01 €/l");

@@ -9,7 +9,7 @@ import type { OptionView, OptionsCard as OptionsCardT, ThreadAction } from "@/se
 import { usePortal } from "./portal";
 import { THREAD_PAGE_TEXT } from "./thread.text";
 import { THREAD_WORDS } from "./thread-words.text";
-import { approverFor, fmtFor, leadOption, leadReasons, leftOutGroups, oneThing, otherNotes, packsText, perUnitPrice, reasonText, sharedQuiet, sharedSignoff, tradeOffs, usualNote } from "./thread-words";
+import { approverFor, titleOf, fmtFor, leadOption, leadReasons, leftOutGroups, oneThing, otherNotes, packsText, perUnitPrice, reasonText, sharedQuiet, sharedSignoff, tradeOffs, usualNote } from "./thread-words";
 
 /**
  * The options as one decision: the option the agent leads with, as one compact card (its picture by kind, its full
@@ -46,7 +46,7 @@ export function OptionsDecision({ card, tap, busy }: { card: OptionsCardT; tap: 
     const who = signs ? approverFor(o.totalCents, kitchen.mandate.approvers) : undefined;
     return who ? w.sendToSign(who.name, f.money(o.totalCents)) : w.orderThis(f.money(o.totalCents));
   };
-  const choose = (o: OptionView) => tap({ type: "choose", requestId: card.requestId, optionId: o.optionId }, `${o.title}, ${f.money(o.totalCents)}`);
+  const choose = (o: OptionView) => tap({ type: "choose", requestId: card.requestId, optionId: o.optionId }, `${titleOf(o, w)}, ${f.money(o.totalCents)}`);
 
   return (
     <ThreadCard kind={tx.kind.options} mark={<ReceiptText aria-hidden size={14} />}>
@@ -74,7 +74,7 @@ export function OptionsDecision({ card, tap, busy }: { card: OptionsCardT; tap: 
         </button>
       ) : null}
 
-      {others.length > 0 && (
+      {others.length > 0 && !card.chosen && (
         <div className="mt-3.5 border-t border-line/70 pt-2.5">
           <p className="text-[0.76rem] font-medium uppercase tracking-wide text-ink-soft">{w.others}</p>
           <ul className="mt-1 divide-y divide-line/60">
@@ -87,7 +87,7 @@ export function OptionsDecision({ card, tap, busy }: { card: OptionsCardT; tap: 
                     <summary className="flex cursor-pointer list-none items-start gap-2.5 py-2.5 [&::-webkit-details-marker]:hidden">
                       <span className={`${RANK_CHIP} mt-0.5 shrink-0 ${isChosen ? "bg-petrol-soft text-petrol-deep" : "bg-surface text-ink-soft"}`}>{isChosen ? w.chosen : rank(o)}</span>
                       <span className="min-w-0 flex-1">
-                        <span className="block text-[0.9rem] font-semibold leading-snug [overflow-wrap:anywhere]">{o.title}</span>
+                        <span className="block text-[0.9rem] font-semibold leading-snug [overflow-wrap:anywhere]">{titleOf(o, w)}</span>
                         <span className="block text-[0.82rem] leading-snug text-ink-soft">{oneThing(o, lead, w, f)}</span>
                       </span>
                       <span className="shrink-0 text-right">
@@ -133,7 +133,7 @@ export function OptionsDecision({ card, tap, busy }: { card: OptionsCardT; tap: 
         </div>
       )}
 
-      {leftCount > 0 && (
+      {leftCount > 0 && !card.chosen && (
         <details className="group mt-2 text-[0.82rem]">
           <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-ink-soft hover:text-ink [&::-webkit-details-marker]:hidden">
             <ChevronDown aria-hidden size={14} className="-rotate-90 transition-transform duration-150 group-open:rotate-0 motion-reduce:transition-none" />
@@ -179,7 +179,7 @@ function Lead({ o, rank, picked, chosen }: { o: OptionView; rank: string; picked
               </span>
             )}
           </p>
-          <p className="mt-1 text-[0.98rem] font-semibold leading-snug [overflow-wrap:anywhere]">{o.title}</p>
+          <p className="mt-1 text-[0.98rem] font-semibold leading-snug [overflow-wrap:anywhere]">{titleOf(o, w)}</p>
           <p className="text-[0.84rem] leading-snug text-ink-soft">{[packsText(o, w, f), per].filter(Boolean).join(" · ")}</p>
         </div>
       </div>
