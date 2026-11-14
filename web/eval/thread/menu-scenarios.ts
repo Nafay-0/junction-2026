@@ -43,9 +43,18 @@ async function seasonalBefore(url: string, lang: string): Promise<void> {
   if (facts.seasonal?.planId) facts.seasonalOrder = (await asOutsideAgent(url, `/api/v1/menus/${facts.seasonal.planId}/order`, { by: "Eval head chef" })).body;
 }
 
+/** The next Tuesday after today (Helsinki), as YYYY-MM-DD. */
+function nextTuesday(): string {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Helsinki" }).format(new Date());
+  const d = new Date(`${today}T12:00:00Z`);
+  do d.setUTCDate(d.getUTCDate() + 1);
+  while (d.getUTCDay() !== 2);
+  return d.toISOString().slice(0, 10);
+}
+
 async function eventBefore(url: string, lang: string): Promise<void> {
   const text = lang === "fi" ? "Yllättävä 40 hengen varaus tiistaiksi, kolmen ruokalajin illallinen." : "Unexpected booking for 40 on Tuesday, a three-course dinner.";
-  const r = await asOutsideAgent(url, "/api/v1/menus/event", { text, by: "Eval head chef" });
+  const r = await asOutsideAgent(url, "/api/v1/menus/event", { text, deliverBy: nextTuesday(), by: "Eval head chef" });
   facts.event = r.body.result;
   if (r.status !== 200) facts.error = `event ${r.status}: ${r.body?.error?.message ?? ""}`;
   const ev = facts.event;
@@ -115,7 +124,9 @@ const byRole: Check = {
     const all = Object.values(ev.options ?? {}).flat() as Json[];
     const verified = all.every((o) => o.kind === "technique" || o.checks.every((c: Json) => c.product && c.arrival.ok && c.rules.ok));
     const ranked = Object.values(ev.options ?? {}).every((os: any) => os.every((o: Json, i: number) => o.rank === ["best", "better", "good"][i] && o.tradeoff?.taste));
-    return ok(all.length > 0 && verified && ranked && (ev.cannotArrive ?? []).every((x: Json) => x.role), `${all.length} options; verified ${verified}; ranked ${ranked}`);
+    // Each ingredient that cannot come has verified options, or says why none can stand in (never silence).
+    const accounted = (ev.cannotArrive ?? []).every((x: Json) => (ev.options?.[x.lineId] ?? []).length > 0 || (ev.unresolved?.[x.lineId] ?? []).length > 0);
+    return ok(accounted && verified && ranked && (ev.cannotArrive ?? []).every((x: Json) => x.role), `${all.length} options; every ingredient accounted for ${accounted}; verified ${verified}; ranked ${ranked}`);
   },
 };
 const eventOrdered: Check = {
