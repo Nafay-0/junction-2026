@@ -22,19 +22,57 @@ export class Recorder {
   expectRateLimit = false;
 }
 
+/**
+ * The stage kitchens (kaari, laakso) are closed to their own accounts (main since 14 Nov): the harness signs in to
+ * each as the browser suite does, and sends that kitchen's session with every call to its routes. A probe that means
+ * to be anonymous uses `http.anonymous()`; one that sets its own cookie (a visitor's phone) keeps it.
+ */
+const STAGE_ROUTE = /^\/(?:ui-api\/(?:kitchens|scan|voice|plan|radar\/kitchens)|k)\/(kaari|laakso)(?:[/?]|$)/;
+const stageCookies = new Map<string, string>();
+
+/** Passwords tried in order: the environment's (a deployment), then the hermetic test server's (e2e/support/start-server.mjs). */
+const STAGE_PASSWORDS: Record<string, string[]> = {
+  kaari: [process.env.QA_KAARI_PASSWORD ?? "", "e2e-stage-kaari", process.env.DOCK_KAARI_PASSWORD ?? ""],
+  laakso: [process.env.QA_LAAKSO_PASSWORD ?? "", "e2e-stage-laakso", process.env.DOCK_LAAKSO_PASSWORD ?? ""],
+};
+
+export async function signInStageKitchens(http: Http): Promise<string[]> {
+  const done: string[] = [];
+  for (const [kitchen, passwords] of Object.entries(STAGE_PASSWORDS)) {
+    for (const password of passwords.filter(Boolean)) {
+      const r = await http.anonymous().raw("POST", "/ui-api/account/signin", { body: JSON.stringify({ username: kitchen, password }), headers: { "content-type": "application/json" } });
+      const cookie = r.status === 200 ? (r.headers.get("set-cookie") ?? "").split(";")[0] : "";
+      if (cookie) {
+        stageCookies.set(kitchen, cookie);
+        done.push(kitchen);
+        break;
+      }
+    }
+  }
+  return done;
+}
+
 export class Http {
   constructor(
     readonly base: string,
     readonly rec: Recorder,
     private readonly defaults: Record<string, string> = {},
+    private readonly anon = false,
   ) {}
 
   with(headers: Record<string, string>): Http {
-    return new Http(this.base, this.rec, { ...this.defaults, ...headers });
+    return new Http(this.base, this.rec, { ...this.defaults, ...headers }, this.anon);
+  }
+
+  /** The same client without the stage kitchens' sessions: what someone who is not signed in gets. */
+  anonymous(): Http {
+    return new Http(this.base, this.rec, this.defaults, true);
   }
 
   async raw(method: string, path: string, init: { body?: BodyInit | null; headers?: Record<string, string> } = {}): Promise<Reply> {
-    const headers = { accept: "application/json", ...this.defaults, ...(init.headers ?? {}) };
+    const headers: Record<string, string> = { accept: "application/json", ...this.defaults, ...(init.headers ?? {}) };
+    const stage = !this.anon && !headers.cookie ? STAGE_ROUTE.exec(path)?.[1] : undefined;
+    if (stage && stageCookies.has(stage)) headers.cookie = stageCookies.get(stage)!;
     const t0 = Date.now();
     let res: Response;
     try {

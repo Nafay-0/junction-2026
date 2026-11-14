@@ -9,7 +9,7 @@ export const THREAD_TEXT = defineText({
     photo: "Add a photo or document",
     close: "Close",
     back: "Back to the shop",
-    voice: { idle: "Ready", listening: "Listening", thinking: "Thinking", speaking: "Speaking", waiting: "Waiting for sign-off", reconnecting: "Reconnecting" },
+    voice: { idle: "Ready", listening: "Listening", thinking: "Thinking", speaking: "Speaking", waiting: "Waiting for an OK", reconnecting: "Reconnecting" },
     rank: { best: "Best", better: "Better", good: "Good" },
     keeps: "Keeps",
     givesUp: "Gives up",

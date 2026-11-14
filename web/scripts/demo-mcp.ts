@@ -20,6 +20,7 @@ import { localNow, nextDeliveryDay } from "@/core/kitchen";
 import { signMandate } from "@/core/mandate";
 import { KITCHEN_ORG, demoKitchenKeyPair, demoKitchenMandate } from "@/server/demo-kitchen";
 import { loadLocalEnv } from "./lib/env";
+import { matchServerKeys } from "./lib/server-keys";
 import { verifySigned } from "./lib/verify-receipt";
 
 // The server reads .env.local; so must this script, or it signs with the public dev key the server no longer trusts.
@@ -68,6 +69,12 @@ type Result = { ok: boolean; nextStep: string; error?: { code: string; rule?: st
 
 async function main() {
   say(`Generic MCP agent against ${base}`);
+  // Sign the kitchen's mandate the way this server trusts (its health says which key source it uses).
+  const keys = await matchServerKeys(base);
+  if (keys.kitchen === "process key") {
+    say("This server is a public site with no demo kitchen key configured: nothing outside it can sign Kaari's mandate. Set DOCK_DEMO_KITCHEN_JWK on both sides to run this demo against it.");
+    process.exit(2);
+  }
 
   const catalog = await fetch(new URL("/.well-known/api-catalog", base));
   const { linkset } = (await catalog.json()) as { linkset: { anchor: string; "service-desc"?: { href: string }[] }[] };

@@ -19,10 +19,11 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { loadLocalEnv } from "../scripts/lib/env";
+import { matchServerKeys } from "../scripts/lib/server-keys";
 loadLocalEnv();
 
 import { Checks } from "./lib/invariants";
-import { Http, Recorder } from "./lib/http";
+import { Http, Recorder, signInStageKitchens } from "./lib/http";
 import { AREAS, KINDS, rngFrom, type ProbeCtx } from "./lib/probe";
 import { laaksoAgent } from "./lib/actors";
 import { allProbes } from "./probes";
@@ -56,7 +57,11 @@ async function main() {
     console.error(`No AimoPilot at ${url} (GET /api/v1 -> ${ping.status}). Start one: DOCK_CATALOG=seed pnpm start -p 4311`);
     process.exit(2);
   }
-  // Do locally minted mandates verify here (same demo org keys)?
+  // Sign as this server trusts (its health names the key source), sign in to the closed stage kitchens, then check
+  // that locally minted mandates verify here.
+  await matchServerKeys(url);
+  const stage = await signInStageKitchens(http);
+  if (stage.length) console.log(`Signed in to the stage kitchens: ${stage.join(", ")}`);
   const probeAgent = await laaksoAgent(http);
   const keysMatch = (await probeAgent.post("/api/v1/requests", { text: "qa: key check" })).status === 201;
   const realHttp = realUrl ? new Http(realUrl, rec) : undefined;

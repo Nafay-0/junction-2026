@@ -82,6 +82,15 @@ describe("the order sheet", () => {
     expect(placed.find((c): c is OrderCard => c.type === "order")?.status).toBe("committed");
   });
 
+  it("each line carries the kitchen's usual amounts of that product, from its records, as one-tap picks", async () => {
+    const k = await kitchen("kaari", "Mikael Laine");
+    (await threadStore()).reset(k.info.slug, k.info.orgId);
+    const sheet = (await tap(k, { type: "sheet_add", productId: "VA-1010", packs: 1 })).find((c): c is SheetCard => c.type === "sheet")!;
+    const line = sheet.lines.find((l) => l.productId === "VA-1010")!;
+    expect(line.usualPacks?.length).toBeGreaterThan(0);
+    expect(line.usualPacks!.every((n) => Number.isInteger(n) && n >= 1 && n <= line.maxPacks)).toBe(true);
+  });
+
   it("a placed order is taken back before the cut-off by the signed-in person, and never by a relayed tap", async () => {
     const k = await kitchen("laakso", "Aino Virtanen");
     const rt = await getRuntime();
