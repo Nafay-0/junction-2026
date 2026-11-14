@@ -94,7 +94,9 @@ export async function postToday(run: TurnRun, opening = false): Promise<TodayCar
   // when there is none, for the wholesaler's one offer.
   if (opening) {
     const { sayWatch } = await import("./watch");
-    const w = await sayWatch(run).catch(() => undefined);
+    // What still needs the kitchen is said on every opening (a new day, or after "Start over"), even if an earlier
+    // conversation said it already: an open stock-out or a held renewal is still open.
+    const w = await sayWatch(run, { asked: true }).catch(() => undefined);
     if (w?.family && w.kind === "renewal_held") {
       // The held renewal says the drift with its figures: the opening's own drift line for that family goes.
       const items = card.items.filter((i) => !(i.kind === "drift" && i.family === w.family));

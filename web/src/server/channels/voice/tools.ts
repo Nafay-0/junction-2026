@@ -70,6 +70,10 @@ export async function runTool(kitchen: string, input: unknown, req?: Request): P
   // Finnish is answered in Finnish; Swedish is understood but answered in English (measured: the model answered a
   // Swedish caller in Swedish only 4 times in 7, so the screen promises English and the agent is told so).
   if (lang === "fi" && (input as { via?: string }).via !== "typed") reply.forModel = { speakIn: LANGUAGE_NAME[lang], ...reply.forModel, say: `(Say this in ${LANGUAGE_NAME[lang]}:) ${reply.forModel.say}` };
+  // What the voice says and the call's transcript shows: never the store's marks, never a screen-only instruction.
+  const { spokenForModel } = await import("@/server/channels/say");
+  reply.forModel = spokenForModel(reply.forModel);
+  if (reply.screen.problem?.message) reply.screen = { ...reply.screen, problem: { ...reply.screen.problem, message: spokenForModel(reply.screen.problem.message) } };
   return reply;
 }
 

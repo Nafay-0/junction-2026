@@ -126,3 +126,22 @@ describe("the call is a door of the kitchen's thread", () => {
     expect(dock.ledger.entries().filter((e) => e.type === "agent" && (e.data as { thread?: { door?: string } }).thread?.door === "voice").length).toBeGreaterThan(2);
   });
 });
+
+describe("what the voice says", () => {
+  it("never carries the store's marks or a screen-only instruction", async () => {
+    const { spokenOf, spokenForModel } = await import("../say");
+    expect(spokenOf("I've ordered **30 l** for {{Wednesday 18 Nov}}, until {{17.00}}.")).toBe("I've ordered 30 l for Wednesday 18 Nov, until 17.00.");
+    expect(spokenOf("It waits for the owner. Scan the QR code with their phone. Nothing changes until they sign.")).toBe("It waits for the owner. Nothing changes until they sign.");
+    expect(spokenForModel({ say: "**1 010,00 €**", lines: ["{{Mon 16 Nov}}"], n: 3 })).toEqual({ say: "1 010,00 €", lines: ["Mon 16 Nov"], n: 3 });
+    // A whole call, read back, checked and taken to the gate: no mark anywhere in what the voice model gets.
+    const callId = open();
+    reading = { amount: 120, unit: "L" };
+    const said: string[] = [];
+    let r = await runTool("kaari", { callId, name: "submit_request", args: { request: "120 l milk" }, heard: { text: "120 litres of lactose-free milk", turn: 1 } });
+    said.push(JSON.stringify(r.forModel), r.screen.problem?.message ?? "");
+    r = await runTool("kaari", { callId, name: "confirm_read_back", heard: { text: "yes", turn: 2 } });
+    said.push(JSON.stringify(r.forModel), r.screen.problem?.message ?? "");
+    expect(said.join(" ")).not.toMatch(/\*\*|\{\{|\}\}/);
+  });
+});
+

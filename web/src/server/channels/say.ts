@@ -130,3 +130,27 @@ export function orderForModel(o: PublicOrder): ForModel {
       return { ok: true, state: "expired", say: "Nobody signed the order before its fixed price ran out; nothing was ordered. Ask for a new quote if it is still needed.", total };
   }
 }
+
+/**
+ * A sentence as it is spoken (and shown in the call's transcript): the store's marks never reach a voice ("**1 010,00 €**"
+ * says the figure, "{{Monday 16 Nov}}" the day), and what only a screen can do is said as what happened ("scan the
+ * code" is not something a caller can do; "I've sent it to their phone" is).
+ */
+export function spokenOf(text: string): string {
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\{\{([^}]+)\}\}/g, "$1")
+    .replace(/\*\*|\{\{|\}\}/g, "")
+    .replace(/\b(scan (this|the) (QR )?code|the QR code)\b[^.?!]*[.?!]?/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+/** Every sentence in a tool's answer to the voice model, as spoken. */
+export function spokenForModel<T>(v: T): T {
+  if (typeof v === "string") return spokenOf(v) as T;
+  if (Array.isArray(v)) return v.map((x) => spokenForModel(x)) as T;
+  if (v && typeof v === "object") return Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([k, x]) => [k, spokenForModel(x)])) as T;
+  return v;
+}
+

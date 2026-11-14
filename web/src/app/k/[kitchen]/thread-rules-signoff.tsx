@@ -9,6 +9,7 @@ import { passkeyProblemL } from "../../_ui/passkey.text";
 import { clock } from "../../_ui/plain";
 import type { RulesCard } from "@/server/thread/types";
 import { usePortal } from "./portal";
+import { signerL } from "../../_i18n/signer";
 import { changeLines } from "./rules-change";
 import { RULES_SIGNOFF_TEXT } from "./thread-rules-signoff.text";
 
@@ -28,7 +29,9 @@ export function RulesSignOffSlab({ card }: { card: RulesCard }) {
   const [phone, setPhone] = useState<{ url: string; qrSvg: string; adds: boolean }>();
   const p = card.proposal;
   if (!p?.approval) return null;
-  const who = p.approval.approver.name;
+  // A role is said as a role ("the owner"), a person by name.
+  const who = signerL(p.approval.approver.name, lang);
+  const Who = who.charAt(0).toUpperCase() + who.slice(1);
   const own = !!account && account.kitchen === kitchen.slug;
   const base = `/ui-api/kitchens/${encodeURIComponent(kitchen.slug)}/rules/${encodeURIComponent(p.proposalId)}`;
   const lines = changeLines(card.diff, lang);
@@ -46,7 +49,7 @@ export function RulesSignOffSlab({ card }: { card: RulesCard }) {
           ))}
           <p className={`mt-3 flex items-center gap-2 text-[0.92rem] font-semibold ${p.state === "signed" ? "text-lime" : "text-paper/75"}`}>
             {p.state === "signed" ? <Check aria-hidden size={17} strokeWidth={2.6} /> : <X aria-hidden size={17} strokeWidth={2.6} />}
-            {p.state === "signed" ? tx.signedBy(decided?.by ?? who, decided ? clock(decided.at) : "") : p.state === "declined" ? tx.declinedBy(decided?.by ?? who, decided ? clock(decided.at) : "") : tx.lapsed}
+            {p.state === "signed" ? tx.signedBy(decided?.by ? signerL(decided.by, lang) : who, decided ? clock(decided.at) : "") : p.state === "declined" ? tx.declinedBy(decided?.by ? signerL(decided.by, lang) : who, decided ? clock(decided.at) : "") : tx.lapsed}
           </p>
           {decided?.note && <p className="mt-1.5 text-[0.86rem] text-paper/60">“{decided.note}”</p>}
         </div>
@@ -132,7 +135,7 @@ export function RulesSignOffSlab({ card }: { card: RulesCard }) {
           <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl bg-paper p-3 text-ink">
             <span aria-hidden className="block size-32 shrink-0 [&>svg]:size-full" dangerouslySetInnerHTML={{ __html: phone.qrSvg }} />
             <p className="min-w-0 flex-1 basis-40 text-[0.88rem] leading-snug">
-              {phone.adds ? tx.phoneAddHint(who) : tx.phoneHint(who)}{" "}
+              {phone.adds ? tx.phoneAddHint(who) : tx.phoneHint(Who)}{" "}
               <a className="font-semibold text-petrol underline underline-offset-4" href={phone.url}>
                 {tx.openLink}
               </a>
