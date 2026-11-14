@@ -46,9 +46,13 @@ export function outsideSpend(): { used: number; usd: number } {
 /** The models this server can run the reference buyer on (a key is set), cheapest first. */
 export function availableModels(env: Record<string, string | undefined> = process.env): string[] {
   const out = new Set<string>();
-  const preferred = defaultModel("DOCK_AGENT_MODEL", env);
-  if (preferred) out.add(preferred);
+  // The show's own choice first (DOCK_SHOW_AGENT_MODEL), then the cheapest model of each provider with a key: a run is
+  // capped at a few cents, which a large model would hit before it finishes. DOCK_AGENT_MODEL (the CLI's) comes last.
+  const own = env.DOCK_SHOW_AGENT_MODEL?.trim();
+  if (own) out.add(own);
   for (const p of ["anthropic", "openai", "google"] as const) if (hasCredentials(p, env)) out.add(CHEAP_DEFAULTS[p]);
+  const cli = defaultModel("DOCK_AGENT_MODEL", env);
+  if (cli) out.add(cli);
   return [...out];
 }
 

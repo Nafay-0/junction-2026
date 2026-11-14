@@ -5,6 +5,7 @@ import * as joinRoute from "@/app/api/v1/join/route";
 import * as joinVerifyRoute from "@/app/api/v1/join/verify/route";
 import type { DockEvent } from "@/core/events";
 import { SoftwareAuthenticator } from "@/core/test-webauthn";
+import { suspensions } from "../ops/suspensions";
 import { getRuntime, resetRuntime } from "../runtime";
 import { forgetCast } from "./cast";
 import { catalogueLock } from "./lock";
@@ -188,6 +189,19 @@ describe("a week in a kitchen", () => {
     expect(step(run, "standing").order?.status).toBe("committed");
     expect(activeWeekFor(sandbox.sandboxId)?.runId).toBe(second.runId);
     expect(await stopWeek("week_nope")).toBeUndefined();
+  }, 60_000);
+
+  it("goes through the same door as any agent: a suspended agent's week is refused at its first call", async () => {
+    const { sandbox } = await join();
+    const rt = await getRuntime();
+    suspensions(rt.dock).suspend({ scope: "agent", target: sandbox.agentId, label: "test", reason: "Stopped by operations in a test.", by: "Test" });
+    const started = await startWeek(rt, { sandboxId: sandbox.sandboxId, pace: TEST_PACE, signOffTimeoutMs: 200 });
+    const run = (await weekDone(started.runId))!;
+    expect(run.state).toBe("failed");
+    expect(run.error).toMatch(/suspended/i);
+    expect(run.steps.every((s) => s.orderIds.length === 0)).toBe(true);
+    const refusals = rt.dock.ledger.entries().filter((e) => e.type === "refusal" && (e.data as { rule?: string }).rule === "operator_suspension");
+    expect(refusals.length).toBeGreaterThan(0);
   }, 60_000);
 
   it("runs in the house kitchen when no phone joined, and its sign-off times out honestly", async () => {

@@ -26,6 +26,10 @@ import type { ExcludedView, GateView, KitchenRef, OptionView, OrderView, StepKin
  * the agent, not verified). The sign-off is never scripted: it waits for the real person, and after a timeout the
  * agent withdraws the order, so nothing is bought without them and the show never hangs. When the week ends (or is
  * stopped), the kitchen is put back: waiting orders withdrawn, its own past restored, simulations cleared.
+ *
+ * One way in: the agent's calls go through Dock's REST routes in-process (agent.ts), so each is authenticated by
+ * the same `authenticate` as every outside call, including the operations suspension check. The show never
+ * verifies a mandate by itself.
  */
 
 export type Pace = { introMs: number; beatMs: number; dwellMs: number; gateDwellMs: number };
@@ -523,6 +527,9 @@ export class WeekDirector {
     }
     this.readOrder(step, order);
     step.decisions += 1;
+    if (order.status === "pending_approval" && step.gate?.rule === "order_splitting") {
+      step.note = "The gate counted this together with the orders this agent placed alone in the last day (no splitting one need into small orders): combined, they are over what it may spend alone, so a person must sign. A kitchen that already played a week today shows this; a fresh kitchen (scan again) plays the week as designed.";
+    }
     if (order.status === "pending_approval") await this.waitForPerson(step, order, signOffTimeoutMs);
     if (order.status === "rejected") step.refused += 1;
   }

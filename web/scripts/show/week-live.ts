@@ -3,8 +3,8 @@
  * VALIO_API_KEY are present), printing each day as it lands. A passkey made by a software authenticator plays the
  * visitor's phone, so the sign-off is a real WebAuthn assertion bound to the order.
  *
- *   pnpm show:week            sign Thursday's order
- *   pnpm show:week --nobody   let the sign-off time out (the agent withdraws the order)
+ *   pnpm exec tsx scripts/show/week-live.ts            sign Thursday's order
+ *   pnpm exec tsx scripts/show/week-live.ts --nobody   let the sign-off time out (the agent withdraws the order)
  */
 import * as approvalRoute from "@/app/api/v1/approvals/[approvalId]/route";
 import * as challengeRoute from "@/app/api/v1/approvals/[approvalId]/challenge/route";
