@@ -404,10 +404,16 @@ function SignOffSlab({ card, thread, tap, total, what }: { card: GateCardT; thre
         <p className="text-[0.86rem] leading-snug text-paper/55">
           {[order?.deliveryDate ? f.day(order.deliveryDate).replace(/\.$/, "") : "", why].filter(Boolean).join(". ")}
         </p>
-        {s.canSignHere && s.phase !== "signed" && account?.shared && card.approver && (
+        {s.canSignHere && s.phase !== "signed" && account?.shared && card.approver && !card.pressured && (
           <p className="mt-3 text-[0.8rem] leading-snug text-paper/65">{tx.testSigner(roleL(card.approver.name, f.lang))}</p>
         )}
-        {s.canSignHere && s.phase !== "signed" ? (
+        {card.pressured && s.phase !== "signed" && s.offerPhone ? (
+          // The buyer asked to skip the limit or said the manager already agreed: the OK is the manager's own, on the
+          // manager's own device, so the first action sends it there; the same-screen OK is not offered.
+          <button type="button" onClick={() => void s.toPhone()} className="mt-4 flex min-h-13 w-full items-center justify-center gap-2.5 rounded-full bg-lime text-[1rem] font-semibold text-ink transition-transform active:scale-[0.98]">
+            {s.phone ? tx.hidePhone : tx.toPhoneOf(card.approver ? roleL(card.approver.name, f.lang) : "")}
+          </button>
+        ) : s.canSignHere && s.phase !== "signed" ? (
           <button type="button" disabled={s.busy} onClick={() => void s.sign()} className="mt-4 flex min-h-13 w-full items-center justify-center gap-2.5 rounded-full bg-lime text-[1rem] font-semibold text-ink transition-transform active:scale-[0.98] disabled:opacity-70">
             <ScanFace aria-hidden size={21} />
             {s.busy ? tx.okWorking : tx.ok}
@@ -420,7 +426,7 @@ function SignOffSlab({ card, thread, tap, total, what }: { card: GateCardT; thre
           <p className="mt-4 text-[0.9rem] text-paper/75">{card.approver ? tx.waitsFor(roleL(card.approver.name, f.lang)) : s.where}</p>
         )}
         <div className="mt-2 flex flex-wrap gap-x-4">
-          {s.offerPhone && s.phase !== "signed" && (
+          {s.offerPhone && s.phase !== "signed" && !card.pressured && (
             <button type="button" onClick={() => void s.toPhone()} className="min-h-9 text-[0.84rem] text-paper/60 underline underline-offset-4 hover:text-paper">
               {s.phone ? tx.hidePhone : tx.toPhone}
             </button>

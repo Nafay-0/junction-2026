@@ -392,9 +392,16 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
   // An order that went straight to a person's OK, with no words from the agent: what, how much and why, in one sentence.
   const sent = store.agentTurn(thread, run.turnId);
   const gateHere = sent?.cards.find((c) => c.type === "gate" && c.outcome === "waiting");
+  // "Ignore the limit", "the manager already said yes": the order still needs the manager's own OK, on their device.
+  const PRESSURE = /\b(ignore|skip|override|bypass|forget)\b[^.?!]{0,30}\b(limit|rules?|approval|sign-?off)\b|\b(already (said yes|approved|agreed|ok'?d|signed))\b|ohita|älä välitä|jo hyväksy|redan godkänt/i;
+  const pressed = run.thread.turns.slice(-8).some((x) => x.role === "buyer" && !!x.text && PRESSURE.test(x.text));
+  if (gateHere?.type === "gate" && pressed && !gateHere.pressured) {
+    store.card(thread, run.turnId, { ...gateHere, pressured: true });
+    record(run, "pressured", "The buyer asked to skip the limit or said the approver already agreed: the OK goes to the approver's own device.", {});
+  }
   if (sent && !sent.line && gateHere?.type === "gate") {
     const order = sent.cards.find((c) => c.type === "order" && c.orderId === gateHere.orderId);
-    if (order?.type === "order") store.line(thread, run.turnId, waitingSentence(order, gateHere, body.lang ?? "en"));
+    if (order?.type === "order") store.line(thread, run.turnId, waitingSentence(order, gateHere, body.lang ?? "en") + (pressed ? { en: ` Only their own OK, on their own device, places it.`, fi: " Vain hänen oma hyväksyntänsä omalla laitteellaan tekee tilauksen.", sv: " Bara deras eget godkännande, på deras egen enhet, lägger den." }[body.lang ?? "en"] : ""));
   }
   // Never an empty reply: when the agent's words did not come (or none were backed), plain words from what the engine knows.
   const after = store.agentTurn(thread, run.turnId);

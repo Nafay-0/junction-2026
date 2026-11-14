@@ -299,6 +299,8 @@ export type PriceCard = CardBase & {
 
 export type GateCard = CardBase & {
   type: "gate";
+  /** The buyer pressed to skip the limit or said the approver already agreed: the OK goes to the approver's own device. */
+  pressured?: boolean;
   /** Why it was refused or stopped, in words, in each language (refusal.ts). */
   said?: Record<"en" | "fi" | "sv", string>;
   requestId: string;

@@ -37,6 +37,7 @@ export const THREAD_LINE_TEXT = defineText({
     okBy: (name: string) => `OK'd by ${name}`,
     waitsFor: (name: string) => `Waiting for ${name}'s OK on their phone`,
     toPhone: "Send to my phone",
+    toPhoneOf: (who: string) => (who ? `Send to the ${who.toLowerCase()}'s phone` : "Send to the approver's phone"),
     hidePhone: "Hide the code",
     takeBack: "Take it back",
     // memory
@@ -124,6 +125,7 @@ export const THREAD_LINE_TEXT = defineText({
     okBy: (name: string) => `Hyväksyjä: ${name}`,
     waitsFor: (name: string) => `Odottaa hyväksyntää: ${name}, puhelimella`,
     toPhone: "Lähetä puhelimeeni",
+    toPhoneOf: (who: string) => (who ? `Lähetä hyväksyjän puhelimeen (${who})` : "Lähetä hyväksyjän puhelimeen"),
     hidePhone: "Piilota koodi",
     takeBack: "Peru tilaus",
     remembered: "Muistan",
@@ -208,6 +210,7 @@ export const THREAD_LINE_TEXT = defineText({
     okBy: (name: string) => `Godkänd av ${name}`,
     waitsFor: (name: string) => `Väntar på godkännande av ${name} i telefonen`,
     toPhone: "Skicka till min telefon",
+    toPhoneOf: (who: string) => (who ? `Skicka till telefonen hos ${who}` : "Skicka till godkännarens telefon"),
     hidePhone: "Dölj koden",
     takeBack: "Ta tillbaka",
     remembered: "Jag minns",
