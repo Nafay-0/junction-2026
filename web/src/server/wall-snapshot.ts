@@ -19,6 +19,8 @@ export type FeedItem = {
   status: string;
   tone: "plain" | "safety" | "done";
   totalCents?: number;
+  /** The door the request came through when it was an outside agent's (mcp, connector, rest); absent for the store's own doors. */
+  door?: "mcp" | "connector" | "rest";
   at: string;
 };
 
@@ -146,7 +148,11 @@ export async function wallSnapshot(rt: Runtime): Promise<WallSnapshot> {
     if (first) lists.push({ requestId: recent[i], list, first });
   }
   await learnNames(rt, [...lists.flatMap((x) => x.list), ...fresh.slice(-300)]);
-  const feed: FeedItem[] = lists.map(({ requestId, list, first }) => ({ key: requestId, kitchen: kitchenOf(requestId, first.actor), ...progress(list, now), at: list.at(-1)!.at }));
+  const outside = (list: readonly LedgerEntry[]) => {
+    const d = list.find((e) => e.type === "request")?.data.door;
+    return d === "mcp" || d === "connector" || d === "rest" ? { door: d as "mcp" | "connector" | "rest" } : {};
+  };
+  const feed: FeedItem[] = lists.map(({ requestId, list, first }) => ({ key: requestId, kitchen: kitchenOf(requestId, first.actor), ...progress(list, now), ...outside(list), at: list.at(-1)!.at }));
   feed.sort((a, b) => b.at.localeCompare(a.at));
   const refusals = st.refusals
     .slice(-REFUSALS_KEPT)

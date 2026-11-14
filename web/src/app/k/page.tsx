@@ -206,6 +206,12 @@ async function Door({ lang, searchParams }: { lang: Lang; searchParams: PageProp
           <Link href="/join" className={`${LINK_SECONDARY} mt-4`}>
             {tx.scanOpen}
           </Link>
+          <p className="mt-4">
+            <Link href="/try" className="inline-flex items-center gap-1.5 font-semibold text-petrol underline underline-offset-2">
+              {tx.tryOutside}
+              <ArrowRight aria-hidden size={16} />
+            </Link>
+          </p>
         </div>
       </section>
 

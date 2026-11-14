@@ -15,6 +15,16 @@ Live demo: <https://jolly-wondrous-bunny.eur-1.aiven.app>
 3. The kitchen's agent runs Valio Aimo's own example, "1,000 litres of lactose-free milk by Monday". The order is over the limit, so it arrives on your phone. Sign it and it appears on the wall.
 4. Then try to make the agent misbehave. The gate refuses and names the rule.
 
+### As an outside agent, in one command
+
+The partner's brief is about agents that are not the wholesaler's. This runs Valio Aimo's example as a hotel chain's purchasing agent: the stock MCP client, no language model, nothing AimoPilot-specific but one address.
+
+```bash
+cd web && pnpm install && pnpm build && pnpm demo:mcp
+```
+
+It starts a production build on a free port. The hotel's purchasing manager joins with a passkey. The hotel's agent finds the open interface and asks for "1,000 litres of lactose-free milk by Monday". It gets products, prices, stock, delivery days and order cut-offs as structured data, and good, better and best options. It places the order within its authority. The order is over €500, so a person signs with a passkey and the agent learns the outcome. The receipt is then checked against the wholesaler's published keys. Then four exceptions: a stock-out with a substitute, an allergen rule on a substitution, a delivery that cannot be met in time, and an order taken back before the cut-off. `pnpm demo:mcp --url <address>` runs the same against any server. Without a terminal, `/try` on the live demo shows how to connect Claude or ChatGPT with one address.
+
 ## How it works
 
 1. **A signed mandate.** The kitchen signs, with its own key, what its agent may buy: product groups, required claims such as lactose-free, forbidden allergens, a per-order limit, a weekly budget, how substitutes are handled, and who signs off above the limit.
@@ -43,7 +53,7 @@ Live demo: <https://jolly-wondrous-bunny.eur-1.aiven.app>
 | Solving the user's need (20%) | The order lane asks only when the answer changes the order; memory answers the rest | `web/src/core/need.ts`, `clarify.ts`, `options.ts`, `web/src/server/memory/` |
 | Autonomy and controls (20%) | The gate, the phone sign-off, the ledger, the operations portal | `web/src/core/policy.ts`, `mandate.ts`, `approval.ts`, `ledger.ts` |
 | Robustness to exceptions (15%) | Partial stock, passed order cut-offs, substitutes that keep the kitchen's dietary rules | `web/src/core/options.ts`, `web/src/server/knowledge/`, `web/src/crash/` |
-| Openness and path to production (15%) | Connect your own agent from the store's "Agent and rules" page | [web/docs/connect-an-agent.md](web/docs/connect-an-agent.md), [examples/runtimes/RESULTS.md](examples/runtimes/RESULTS.md), [docs/pitch/valio-judges.md](docs/pitch/valio-judges.md) |
+| Openness and path to production (15%) | `/try`; connect your own agent from the store's "Agent and rules" page; `pnpm demo:mcp` | [web/docs/connect-an-agent.md](web/docs/connect-an-agent.md), [web/docs/assumptions.md](web/docs/assumptions.md) (assumptions, production needs, next steps, agentic payments), [examples/runtimes/RESULTS.md](examples/runtimes/RESULTS.md), [docs/pitch/valio-judges.md](docs/pitch/valio-judges.md) |
 
 [docs/pitch/valio-judges.md](docs/pitch/valio-judges.md) goes through the brief line by line, including what is not built.
 

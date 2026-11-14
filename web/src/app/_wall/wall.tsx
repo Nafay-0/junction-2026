@@ -240,6 +240,9 @@ function GateLanes({ feed, now, justRefused, lastAt, error }: { feed: FeedItem[]
   );
 }
 
+/** An outside agent's door, said on its lane: the store's own doors carry no label. */
+const OUTSIDE_DOOR: Record<NonNullable<FeedItem["door"]>, string> = { mcp: "outside agent · MCP", connector: "assistant · connector", rest: "outside agent · REST" };
+
 function Lane({ it, now, cols, fresh }: { it: FeedItem; now: number; cols: string; fresh: boolean }) {
   const at = markerAt(it.reached);
   const stopped = it.tone === "safety" && /^(Refused|Declined)/.test(it.status);
@@ -249,7 +252,10 @@ function Lane({ it, now, cols, fresh }: { it: FeedItem; now: number; cols: strin
   return (
     <li className={`${fresh ? "wall-moved" : ""} grid min-h-0 flex-1 grid-cols-1 items-center gap-x-[1.2vw] gap-y-1.5 rounded-[max(10px,0.7vw)] border-t border-paper/10 py-[0.7vh] max-lg:py-3 [@media(max-height:820px)]:[&:nth-child(n+5)]:hidden ${cols}`} key={`${it.key}-${it.status}`}>
       <div className="min-w-0">
-        <p className="truncate text-[max(1.15rem,1.35vw)] font-semibold leading-tight">{it.kitchen}</p>
+        <p className="truncate text-[max(1.15rem,1.35vw)] font-semibold leading-tight">
+          {it.kitchen}
+          {it.door ? <span className="ml-2 rounded-full border border-paper/30 px-2 py-0.5 align-middle text-[max(0.75rem,0.75vw)] font-medium text-paper/80">{OUTSIDE_DOOR[it.door]}</span> : null}
+        </p>
         <p className="truncate text-[max(0.92rem,0.95vw)] leading-tight text-paper/65 [@media(max-height:820px)]:hidden">
           {fiMoney(it.what)}
           {it.totalCents !== undefined ? `, ${money(it.totalCents)}` : ""}
@@ -406,6 +412,13 @@ function JoinPanel({ join, kitchens }: { join: { url: string; qrSvg: string }; k
             </li>
           ))}
         </ol>
+        <p className="mt-[1.4vh] text-[max(0.92rem,0.9vw)] leading-snug text-paper/80">
+          Or bring your own agent:{" "}
+          <Link href="/try" className="font-semibold text-paper underline underline-offset-2">
+            try it as an outside agent
+          </Link>
+          .
+        </p>
       </div>
       {kitchens.length > 0 && (
         <div className="mt-[2vh] px-[1.6vw] max-lg:px-5">

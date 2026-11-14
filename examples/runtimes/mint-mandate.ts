@@ -10,6 +10,11 @@
  */
 import { signMandate } from "@/core/mandate";
 import { KITCHEN_ORG, demoKitchenKeyPair, demoKitchenMandate } from "@/server/demo-kitchen";
+import { loadLocalEnv } from "../../web/scripts/lib/env";
+
+// The server reads web/.env.local (DOCK_DEMO_KITCHEN_JWK among it); so must this, or it signs with the public dev key
+// the server no longer trusts and every runtime is refused at the door (mandate_unknown_issuer).
+loadLocalEnv();
 
 const runtime = (process.argv[2] ?? "generic").toLowerCase().replace(/[^a-z0-9]+/g, "_");
 const now = new Date();
