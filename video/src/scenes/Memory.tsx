@@ -75,7 +75,7 @@ export const Memory = () => {
   const fixed = prog(t, T.fix, 12);
   const cardX = -540 + (470 + 540) * inP + 560 * pass + 2260 * ride;
   const cardY = 640;
-  const cardFade = 1 - interpolate(exit, [0.55, 1], [0, 1], clamp);
+  const cardFade = 1 - interpolate(exit, [0.6, 0.95], [0, 1], clamp);
   const ask = prog(t, T.ask, 14) * (1 - prog(t, T.fix + 4, 12));
   const tap = interpolate(t, [T.tap - 2, T.tap + 2, T.tap + 14], [0, 1, 0], clamp);
   const cursor = interpolate(t, [T.ask + 6, T.tap - 2], [0, 1], { ...clamp, easing: EASE_IO });
@@ -105,6 +105,13 @@ export const Memory = () => {
 
   return (
     <AbsoluteFill style={{ filter: rewinding > 0.02 ? `saturate(${1 - 0.5 * rewinding}) hue-rotate(${-12 * rewinding}deg)` : undefined }}>
+      {/* the line from the remembered "about 400 L" to the request it catches */}
+      {caught > 0.02 && (
+        <svg width={1920} height={1080} style={{ position: "absolute", inset: 0 }}>
+          <path d={`M ${usual.x} ${usual.y} Q ${Math.max(usual.x, cardX + 240) + 420} ${(usual.y + cardY) / 2 + 60} ${cardX + 240} ${cardY}`} fill="none" stroke={C.safety} strokeWidth={3} strokeDasharray="8 10" opacity={caught} />
+        </svg>
+      )}
+
       {/* the notes at the back of their orbit, then the node, then those in front */}
       {notes.filter((o) => o.depth < 0.5).map((o) => (
         <Note key={o.n} o={o} />
@@ -114,15 +121,8 @@ export const Memory = () => {
         <Note key={o.n} o={o} />
       ))}
 
-      {/* the line from the remembered "about 400 L" to the request it catches */}
-      {caught > 0.02 && (
-        <svg width={1920} height={1080} style={{ position: "absolute", inset: 0 }}>
-          <path d={`M ${usual.x} ${usual.y} Q ${(usual.x + cardX + 240) / 2} ${(usual.y + cardY) / 2 - 80} ${cardX + 240} ${cardY}`} fill="none" stroke={C.safety} strokeWidth={3} strokeDasharray="8 10" opacity={caught} />
-        </svg>
-      )}
-
       {/* the request */}
-      <div style={{ position: "absolute", left: cardX, top: cardY, width: 480, rotate: `${wob}deg`, translate: `${wob * 3}px 0px`, opacity: cardFade, scale: String(1 - 0.5 * ride) }}>
+      <div style={{ position: "absolute", left: cardX, top: cardY, width: 480, rotate: `${wob}deg`, translate: `${wob * 3}px 0px`, opacity: cardFade, scale: String(1 - 0.9 * interpolate(exit, [0.35, 0.95], [0, 1], { ...clamp, easing: EASE_IO })) }}>
         <div style={{ boxSizing: "border-box", borderRadius: 26, background: C.paper, padding: "22px 30px", ...sans, boxShadow: `${SHADOW.xl}, 0 0 0 ${4 * Math.max(caught * (1 - fixed), fixed)}px ${fixed > 0.5 ? C.lime : C.safety}` }}>
           <div style={{ fontSize: 27, color: C.inkSoft }}>Lactose-free milk, for Friday</div>
           <div style={{ position: "relative", height: 88, overflow: "hidden", marginTop: 4 }}>

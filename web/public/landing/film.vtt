@@ -1,0 +1,95 @@
+WEBVTT
+
+00:00:00.400 --> 00:00:02.842
+AI agents are starting to do the buying.
+
+00:00:02.872 --> 00:00:05.031
+But the webshop was built for people.
+
+00:00:05.061 --> 00:00:07.325
+So who signs for the machine?
+
+00:00:08.033 --> 00:00:09.838
+This is AimoPilot.
+
+00:00:09.868 --> 00:00:12.984
+Let AI do the buying, and keep the last word.
+
+00:00:13.014 --> 00:00:16.805
+Built for Valio Aimo, at Junction 2026.
+
+00:00:17.633 --> 00:00:21.810
+A kitchen asks for a thousand litres of lactose-free milk by Monday.
+
+00:00:21.840 --> 00:00:26.227
+The agent searches seventeen thousand products, and prices just three.
+
+00:00:26.257 --> 00:00:30.701
+The usual boxes can't make Monday, so it offers three ranked options.
+
+00:00:30.731 --> 00:00:33.897
+It's over the limit, so a person signs on their phone.
+
+00:00:33.927 --> 00:00:36.803
+One passkey, and it's placed at a fixed price.
+
+00:00:36.833 --> 00:00:38.548
+The model is never trusted.
+
+00:00:38.578 --> 00:00:41.770
+Twenty rules in plain code check every order.
+
+00:00:41.800 --> 00:00:46.530
+We tried a forged mandate, a replayed quote, an agent approving itself.
+
+00:00:46.560 --> 00:00:50.133
+All stopped, and all on a tamper-evident ledger.
+
+00:00:50.433 --> 00:00:54.589
+Six agents, built on the AI SDK and MCP:
+
+00:00:54.619 --> 00:01:03.947
+the buyer, by text or voice, a menu planner, a stock-out watch, the wholesaler's seller, any outside agent, and an operations copilot.
+
+00:01:03.977 --> 00:01:06.095
+None can order past the gate.
+
+00:01:06.333 --> 00:01:08.728
+It remembers how each kitchen buys.
+
+00:01:08.758 --> 00:01:14.511
+So it catches four thousand litres instead of four hundred, and asks only when it matters.
+
+00:01:15.233 --> 00:01:20.019
+Vector and keyword search recall fifty candidates, inside the kitchen's rules.
+
+00:01:20.049 --> 00:01:23.405
+A decision model judges them, and code checks the judge.
+
+00:01:23.435 --> 00:01:27.410
+Standard search is right first time seventy-two percent at best.
+
+00:01:27.440 --> 00:01:28.450
+AimoPilot?
+
+00:01:28.480 --> 00:01:29.603
+Ninety-seven.
+
+00:01:29.633 --> 00:01:31.288
+All of it runs on Aiven:
+
+00:01:31.318 --> 00:01:43.331
+Runtime hosts the app, Postgres holds the ledger and memory, Kafka carries every action, Valkey caches live prices, OpenSearch runs keyword and vector search, and Grafana watches it all.
+
+00:01:43.361 --> 00:01:49.103
+A Managed Agent buys through our MCP door, and Aiven's MCP server feeds our copilot.
+
+00:01:49.133 --> 00:01:54.056
+The wholesaler sees every agent and every decision, and can stop any of them.
+
+00:01:54.086 --> 00:01:55.090
+AimoPilot.
+
+00:01:55.120 --> 00:01:56.948
+Keep the last word.
+

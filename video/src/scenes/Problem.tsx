@@ -62,7 +62,8 @@ const Field = ({
 /** The problem as a picture: an agent's order arrives at a checkout built for a person, and nobody is there to say yes. */
 export const Problem = () => {
   const frame = useCurrentFrame();
-  const card = prog(frame, 0, 20);
+  // The film opens already moving: the checkout comes out of the depth, sharpening as it lands.
+  const card = prog(frame, -6, 26);
   const room = interpolate(frame, [T.l3 - 16, T.l3 + 10], [0, 1], {
     ...clamp,
     easing: EASE_IO,
@@ -127,8 +128,9 @@ export const Problem = () => {
               background: C.paper,
               boxShadow: SHADOW.xl,
               padding: "40px 44px 44px",
-              opacity: card,
-              translate: `0px ${(1 - card) * 60}px`,
+              opacity: Math.min(1, card * 1.6),
+              scale: String(1 + 0.14 * (1 - card)),
+              filter: card < 0.98 ? `blur(${((1 - card) * 12).toFixed(2)}px)` : undefined,
               rotate: "1.2deg",
             }}
           >

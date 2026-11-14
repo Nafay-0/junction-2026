@@ -21,5 +21,7 @@ for (const [i, id] of ids.entries()) {
   start += cfg.lead + Math.ceil(vo[id].seconds * 30) + cfg.tail + cfg.extra[id] - (cfg.into[ids[i + 1]] ?? 0);
 }
 const out = ["WEBVTT", ""];
-cues.forEach((c, i) => out.push(`${ts(c.a)} --> ${ts(Math.min(c.b, (cues[i + 1]?.a ?? Infinity) - 0.03))}`, c.text, ""));
+// Spelled for the voice, written for the eye.
+const eye = (t) => t.replace(/twenty twenty-six/gi, "2026");
+cues.forEach((c, i) => out.push(`${ts(c.a)} --> ${ts(Math.min(c.b, (cues[i + 1]?.a ?? Infinity) - 0.03))}`, eye(c.text), ""));
 console.log(out.join("\n"));

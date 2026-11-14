@@ -9,7 +9,7 @@ export const EASE_IO = Easing.bezier(0.65, 0, 0.35, 1);
 /** 0 → 1 from `at` over `dur` frames, eased out. */
 export const prog = (frame: number, at: number, dur = 18) => interpolate(frame, [at, at + dur], [0, 1], { ...clamp, easing: EASE });
 /** 1 → 0 from `at` over `dur` frames. */
-export const fall = (frame: number, at: number, dur = 10) => interpolate(frame, [at, at + dur], [1, 0], clamp);
+export const fall = (frame: number, at: number, dur = 10) => interpolate(frame, [at, at + dur], [1, 0], { ...clamp, easing: EASE_IO });
 
 /** The film's three durations, in frames. */
 export const Q = 12;
