@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../_client/api";
 import { DEMO_NOTE, PRODUCT_NAME } from "../_ui/brand";
-import { Target } from "../_ui/target";
+import { PilotLight } from "../_ui/wordmark";
 import type { KitchenRef, Spend, WeekRun } from "@/server/show/types";
 import { css } from "./css";
 import { useLiveWeek } from "./use-week";
@@ -82,7 +82,7 @@ export function Table({ joinUrl, qrSvg }: { joinUrl: string; qrSvg: string }) {
       {shown.length === 0 ? (
         <Attract joinUrl={joinUrl} qrSvg={qrSvg} />
       ) : (
-        <div className={`grid min-h-0 flex-1 gap-[3px] bg-paper/10 ${shown.length === 1 ? "grid-cols-1" : shown.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
+        <div className={`grid min-h-0 flex-1 gap-px bg-paper/10 ${shown.length === 1 ? "grid-cols-1" : shown.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
           {shown.map((s) => (
             <SlotView key={s.sandboxId} slot={s} compact={shown.length > 1} onEnded={ended} aside={s === shown.at(-1) ? <NextVisitor qrSvg={qrSvg} /> : undefined} />
           ))}
@@ -106,7 +106,7 @@ function Qr({ svg, className }: { svg: string; className: string }) {
 /** The join code stays on the wall while a week plays, so the next visitor can scan. */
 function NextVisitor({ qrSvg }: { qrSvg: string }) {
   return (
-    <aside className="flex shrink-0 items-center gap-2 bg-paper p-1.5 text-ink">
+    <aside className="flex shrink-0 items-center gap-[0.7em] rounded-[clamp(12px,1vw,20px)] bg-paper p-[0.5em] pr-[0.9em] text-ink">
       <Qr svg={qrSvg} className="w-[clamp(4rem,5.5vw,6.5rem)]" />
       <span className={`max-w-[10ch] font-semibold ${css.small}`}>Next visitor: scan</span>
     </aside>
@@ -137,18 +137,23 @@ function Attract({ joinUrl, qrSvg }: { joinUrl: string; qrSvg: string }) {
   return (
     <div className="grid min-h-0 flex-1 items-center gap-[4vw] px-[5vw] lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
       <div>
-        <div className="flex items-center gap-3">
-          <Target size={64} tone="chalk" />
-          <span className="display text-[clamp(2.4rem,4vw,5rem)]">{PRODUCT_NAME}</span>
+        <div className="flex items-center gap-[0.9vw]">
+          <PilotLight size="clamp(2.2rem,3.4vw,4.4rem)" onDark />
+          <span className="display text-[clamp(2.4rem,4vw,5rem)] leading-none" style={{ fontWeight: 700, letterSpacing: "-0.03em" }}>
+            {PRODUCT_NAME}
+          </span>
         </div>
         <h1 className={`display mt-[2vw] max-w-[15ch] leading-[0.92] ${css.day}`}>Scan, and a hotel kitchen is yours.</h1>
         <p className={`mt-[1.6vw] max-w-[44ch] text-paper/90 ${css.lead}`}>Its AI agent orders a week of food from the wholesaler. It may spend 500 € alone. Anything more lands on your phone, and only your face or finger can sign it.</p>
         <p className={`mt-[1vw] max-w-[50ch] text-paper/70 ${css.body}`}>No name, no email: a passkey on your phone. The kitchen closes by itself after 90 minutes.</p>
         <p className={`mt-[2vw] text-paper/55 ${css.small}`}>{DEMO_NOTE}</p>
       </div>
-      <figure className="justify-self-center bg-paper p-[1.4vw] text-ink">
+      <figure className="justify-self-center rounded-[clamp(20px,2vw,40px)] bg-paper p-[1.6vw] text-ink shadow-[0_40px_100px_-40px_rgb(0_0_0/0.7)]">
         <Qr svg={qrSvg} className="w-[min(34vw,56vh)]" />
-        <figcaption className={`mt-2 text-center font-semibold ${css.body}`}>{joinUrl.replace(/^https?:\/\//, "")}</figcaption>
+        <figcaption className={`mt-[0.6em] flex items-center justify-center gap-[0.5em] font-semibold ${css.body}`}>
+          <span aria-hidden className="size-[0.55em] rounded-full bg-lime ring-2 ring-lime/30" />
+          {joinUrl.replace(/^https?:\/\//, "")}
+        </figcaption>
       </figure>
     </div>
   );

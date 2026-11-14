@@ -49,13 +49,13 @@ function Body({ o }: { o: PlatformOverview }) {
   const down = o.services.filter((c) => c.reachable === false);
   return (
     <>
-      {o.missing.length > 0 && <p className="mb-4 border-l-[6px] border-petrol bg-paper px-4 py-2.5 text-[0.92rem]">Not configured on this server: {o.missing.join("; ")}.</p>}
+      {o.missing.length > 0 && <p className="mb-5 rounded-lg bg-surface px-4 py-3 text-[0.92rem]">Not configured on this server: {o.missing.join("; ")}.</p>}
 
       {/* The one thing to press, beside what it all costs. */}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
-        <section aria-labelledby="send" className="on-dark flex flex-col justify-between gap-4 bg-petrol-deep px-6 py-5 text-paper">
+        <section aria-labelledby="send" className="on-dark flex flex-col justify-between gap-5 rounded-2xl bg-petrol-deep p-6 text-paper sm:p-7">
           <div>
-            <h2 id="send" className="display text-[2rem] leading-[1.02]">
+            <h2 id="send" className="display text-[1.75rem] leading-[1.08] sm:text-[2rem]">
               An agent AimoPilot does not run, on Aiven, buying through the open door
             </h2>
             <p className="mt-2 max-w-[62ch] text-[1rem] leading-snug text-paper/85">
@@ -66,10 +66,10 @@ function Body({ o }: { o: PlatformOverview }) {
             <Link href="/ops/platform/agent" className={buttonClass("go", "lg")}>
               Send in an Aiven agent
             </Link>
-            <Link href="/ops/platform/ask" className="font-semibold underline underline-offset-4 hover:text-lime">
+            <Link href="/ops/platform/ask" className={buttonClass("ghost-dark", "md")}>
               Ask the platform
             </Link>
-            <Link href="/ops/platform/stream" className="font-semibold underline underline-offset-4 hover:text-lime">
+            <Link href="/ops/platform/stream" className={buttonClass("ghost-dark", "md")}>
               Watch the stream
             </Link>
           </div>
@@ -86,11 +86,11 @@ function Body({ o }: { o: PlatformOverview }) {
         }
       >
         <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-          <div className="bg-paper px-3 py-3">
+          <div className="rounded-xl border border-line bg-paper p-4">
             <Diagram s={s} />
-            <p className="mt-1 px-1 text-[0.85rem] text-ink-soft">A filled square answers now; a crossed one does not; an outline is not configured. Times are one round trip from this server.</p>
+            <p className="mt-1 px-1 text-[0.85rem] text-ink-soft">A filled dot answers now; a crossed one does not; an outline is not configured. Times are one round trip from this server.</p>
           </div>
-          <ul className="divide-y divide-line/70 bg-paper">
+          <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-paper">
             {o.services.map((c) => (
               <ServiceRow key={c.key} c={c} />
             ))}
@@ -103,9 +103,9 @@ function Body({ o }: { o: PlatformOverview }) {
       </Section>
 
       <Section title="Considered and not used" aside="and why">
-        <ul className="divide-y divide-line/70 bg-paper">
+        <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-paper">
           {o.notUsed.map((n) => (
-            <li key={n.what} className="grid gap-x-4 px-4 py-2.5 text-[0.92rem] md:grid-cols-[17rem_minmax(0,1fr)]">
+            <li key={n.what} className="grid gap-x-4 px-5 py-3 text-[0.92rem] md:grid-cols-[17rem_minmax(0,1fr)]">
               <span className="font-semibold">{n.what}</span>
               <span className="text-ink-soft">{n.why}</span>
             </li>
@@ -114,11 +114,11 @@ function Body({ o }: { o: PlatformOverview }) {
         {o.grafanaUrl && (
           <p className="mt-3 text-[0.92rem]">
             The full Grafana dashboard (Aiven login):{" "}
-            <a href={o.grafanaUrl} target="_blank" rel="noreferrer" className="font-semibold text-petrol underline underline-offset-2">
+            <a href={o.grafanaUrl} target="_blank" rel="noreferrer" className="font-medium text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol">
               AimoPilot overview
             </a>
             . The same questions, drawn inside the portal:{" "}
-            <Link href="/ops/platform/observe" className="font-semibold text-petrol underline underline-offset-2">
+            <Link href="/ops/platform/observe" className="font-medium text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol">
               Observe
             </Link>
             .
@@ -132,10 +132,10 @@ function Body({ o }: { o: PlatformOverview }) {
 /** One service: alive or not and how fast, its job, the number that proves it worked in the last hour. */
 function ServiceRow({ c }: { c: ServiceCard }) {
   return (
-    <li className="grid gap-x-4 gap-y-1 px-4 py-3 md:grid-cols-[minmax(0,1fr)_minmax(0,13rem)]">
+    <li className="grid gap-x-4 gap-y-2 px-5 py-4 md:grid-cols-[minmax(0,1fr)_minmax(0,13rem)]">
       <div className="min-w-0">
         <p className="flex flex-wrap items-baseline gap-x-3">
-          <span className="display text-[1.3rem] leading-tight">{c.name}</span>
+          <span className="display text-[1.2rem] leading-tight">{c.name}</span>
           <Status ok={c.reachable} label={c.reachable === null ? "not configured" : c.ms !== null ? `answers in ${c.ms} ms` : c.reachable ? "answers" : "not answering"} />
         </p>
         <p className="mt-0.5 text-[0.95rem] font-semibold leading-snug">{c.job}</p>
@@ -151,10 +151,10 @@ function ServiceRow({ c }: { c: ServiceCard }) {
         </Details>
       </div>
       {c.lastHour.length > 0 && (
-        <dl className="grid grid-cols-2 content-start gap-x-3 gap-y-1.5 md:border-l md:border-line/70 md:pl-4">
+        <dl className="grid grid-cols-2 content-start gap-x-3 gap-y-2 rounded-lg bg-surface p-3">
           {c.lastHour.map((x) => (
             <div key={x.label}>
-              <dd className="display text-[1.5rem] leading-none tabular">{x.value === null ? "–" : typeof x.value === "number" ? x.value.toLocaleString("fi-FI") : x.value}</dd>
+              <dd className="display text-[1.35rem] leading-none tabular">{x.value === null ? "–" : typeof x.value === "number" ? x.value.toLocaleString("fi-FI") : x.value}</dd>
               <dt className="text-[0.8rem] leading-tight text-ink-soft">{x.label}</dt>
             </div>
           ))}
@@ -166,12 +166,12 @@ function ServiceRow({ c }: { c: ServiceCard }) {
 
 function Cost({ o }: { o: PlatformOverview }) {
   const c = o.cost;
-  if (!c) return <Panel rule className="px-4 py-4 text-[0.95rem]">What it costs appears here once AIVEN_READONLY_TOKEN lets this server read plans and the balance from Aiven&apos;s API.</Panel>;
+  if (!c) return <Panel className="p-5 text-[0.95rem]">What it costs appears here once AIVEN_READONLY_TOKEN lets this server read plans and the balance from Aiven&apos;s API.</Panel>;
   const share = c.creditShareUsed ?? 0;
   return (
-    <Panel rule className="px-5 py-4">
-      <h2 className="display text-[1.5rem]">What it costs</h2>
-      <div className="mt-2 grid grid-cols-3 gap-3">
+    <Panel className="p-5 sm:p-6">
+      <h2 className="display text-[1.35rem]">What it costs</h2>
+      <div className="mt-4 grid grid-cols-3 gap-3">
         <div>
           <p className="display text-[2rem] leading-none tabular">{usd(c.runRateUsdPerHour, 4)}</p>
           <p className="mt-1 text-[0.84rem] leading-snug text-ink-soft">an hour now ({usd(c.perDay)} a day)</p>
@@ -185,10 +185,10 @@ function Cost({ o }: { o: PlatformOverview }) {
           <p className="mt-1 text-[0.84rem] leading-snug text-ink-soft">by Sunday 18.00 at this rate</p>
         </div>
       </div>
-      <div className="mt-3 h-3 bg-mist" role="img" aria-label={`${(share * 100).toFixed(1)} % of the credit used`}>
-        <span className="block h-full bg-petrol" style={{ width: `${Math.min(100, Math.max(0.5, share * 100))}%` }} />
+      <div className="mt-5 h-2 overflow-hidden rounded-full bg-surface" role="img" aria-label={`${(share * 100).toFixed(1)} % of the credit used`}>
+        <span className="block h-full rounded-full bg-petrol" style={{ width: `${Math.min(100, Math.max(1, share * 100))}%` }} />
       </div>
-      <p className="mt-1.5 text-[0.84rem] leading-snug text-ink-soft">
+      <p className="mt-2 text-[0.84rem] leading-snug text-ink-soft">
         {(share * 100).toFixed(1).replace(".", ",")} % of the credit used. {c.note}
       </p>
     </Panel>
@@ -198,12 +198,12 @@ function Cost({ o }: { o: PlatformOverview }) {
 function McpLine({ o }: { o: PlatformOverview }) {
   const m = o.mcp;
   return (
-    <Panel rule className="px-5 py-4 text-[0.95rem]">
+    <Panel className="p-5 text-[0.95rem]">
       <p className="flex flex-wrap items-center gap-3">
-        <span className="display text-[1.3rem]">Aiven MCP server</span>
+        <span className="display text-[1.2rem]">Aiven MCP server</span>
         <Status ok={m.orgEnabled === false ? false : m.reachable} label={m.orgEnabled === false ? "switched off" : m.reachable ? `on, ${m.tools} tools` : "not answering"} />
       </p>
-      {m.instruction ? <p className="mt-2 border-l-[6px] border-ink bg-mist px-3 py-2 font-semibold">{m.instruction}</p> : <p className="mt-1 text-ink-soft">Allowed for this organisation{m.orgReadOnly ? " (read-only)" : ""}; the copilot calls it with the read-only token. {m.sql === false ? m.sqlDetail : ""}</p>}
+      {m.instruction ? <p className="mt-3 rounded-lg bg-surface px-4 py-3 font-semibold">{m.instruction}</p> : <p className="mt-1 text-ink-soft">Allowed for this organisation{m.orgReadOnly ? " (read-only)" : ""}; the copilot calls it with the read-only token. {m.sql === false ? m.sqlDetail : ""}</p>}
     </Panel>
   );
 }
@@ -217,13 +217,13 @@ function Diagram({ s }: { s: (k: string) => ServiceCard | undefined }) {
     const soft = big ? "rgb(255 255 255 / 0.75)" : "var(--color-ink-soft)";
     return (
       <g key={k}>
-        <rect x={x} y={y} width={w} height={h} fill={big ? "var(--color-petrol-deep)" : "var(--color-paper)"} stroke={big ? "var(--color-petrol-deep)" : "var(--color-petrol)"} strokeWidth={big ? 2 : 1.5} />
-        <rect x={x + w - 15} y={y + 7} width="9" height="9" fill={big && c?.reachable ? "var(--color-paper)" : tone} stroke={big ? "var(--color-paper)" : "var(--color-petrol)"} strokeWidth="1" />
-        {c?.reachable === false && <path d={`M${x + w - 13} ${y + 9} l5 5 M${x + w - 8} ${y + 9} l-5 5`} stroke="white" strokeWidth="1.3" />}
-        <text x={x + 9} y={y + 19} fontSize={big ? 15 : 13} fontWeight="700" fill={ink}>
+        <rect x={x} y={y} width={w} height={h} rx="12" fill={big ? "var(--color-petrol-deep)" : "var(--color-paper)"} stroke={big ? "var(--color-petrol-deep)" : "var(--color-line-strong)"} strokeWidth={big ? 2 : 1.25} />
+        <circle cx={x + w - 12} cy={y + 13} r="4.5" fill={big && c?.reachable ? "var(--color-lime)" : c?.reachable === true ? "var(--color-good)" : tone} stroke={big ? "var(--color-paper)" : c?.reachable === true ? "var(--color-good)" : "var(--color-ink-soft)"} strokeWidth="1" />
+        {c?.reachable === false && <path d={`M${x + w - 14.2} ${y + 10.8} l4.4 4.4 M${x + w - 9.8} ${y + 10.8} l-4.4 4.4`} stroke="white" strokeWidth="1.3" />}
+        <text x={x + 12} y={y + 20} fontSize={big ? 15 : 13} fontWeight="650" fill={ink}>
           {title}
         </text>
-        <text x={x + 9} y={y + 35} fontSize="10.5" fill={soft}>
+        <text x={x + 12} y={y + 36} fontSize="10.5" fill={soft}>
           {sub}
         </text>
         {c?.ms !== null && c?.ms !== undefined && (
@@ -254,7 +254,7 @@ function Diagram({ s }: { s: (k: string) => ServiceCard | undefined }) {
       {/* outside */}
       {node("managed-agents", 10, 20, 190, 52, "Managed Agent", "outside buyer, runs on Aiven")}
       <g>
-        <rect x="10" y="92" width="190" height="44" fill="none" stroke="var(--color-ink-soft)" strokeDasharray="3 3" />
+        <rect x="10" y="92" width="190" height="44" rx="12" fill="none" stroke="var(--color-ink-soft)" strokeDasharray="3 3" />
         <text x="19" y="111" fontSize="12.5" fontWeight="700" fill="var(--color-ink)">
           Kitchens, phones
         </text>
@@ -291,7 +291,7 @@ function Diagram({ s }: { s: (k: string) => ServiceCard | undefined }) {
       {node("aiven-mcp", 10, 330, 230, 52, "Aiven MCP server", "copilot: state, logs, metrics")}
       {arrow("M515 352 C 600 352, 640 120, 660 64", "reads as grafana_reader", 540, 320, true)}
       <g>
-        <rect x="10" y="190" width="230" height="80" fill="var(--color-paper)" stroke="var(--color-petrol)" strokeWidth="1.5" />
+        <rect x="10" y="190" width="230" height="80" rx="12" fill="var(--color-lavender)" stroke="var(--color-lavender-mid)" strokeWidth="1.25" />
         <text x="19" y="209" fontSize="12.5" fontWeight="700" fill="var(--color-ink)">
           Operations copilot
         </text>

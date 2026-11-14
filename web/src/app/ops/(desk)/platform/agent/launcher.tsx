@@ -45,14 +45,14 @@ export function Launcher() {
             {s.presets.map((p, i) => (
               <Panel key={p.id} rule className="px-4 py-4">
                 <p className="display text-[1.4rem] leading-tight">{p.title}</p>
-                <p className="mt-2 border-l-[6px] border-petrol bg-mist px-3 py-2 text-[0.98rem] leading-snug">&ldquo;{p.message}&rdquo;</p>
+                <p className="mt-2 rounded-lg bg-surface px-4 py-3 text-[0.98rem] leading-snug">&ldquo;{p.message}&rdquo;</p>
                 <p className="mt-2 text-[0.88rem] text-ink-soft">What should happen: {fi(p.expect)}</p>
                 <Button kind={i === 0 ? "go" : "primary"} size="md" className="mt-3" disabled={busy || Boolean(s.running)} onClick={() => start(p.id)}>
                   {busy ? "Starting on Aiven…" : s.blocked?.recording ? "Play the recording" : "Send in the agent"}
                 </Button>
               </Panel>
             ))}
-            {problem && <p role="alert" className="border-l-[6px] border-petrol bg-paper px-3 py-2 text-[0.92rem]">{problem}</p>}
+            {problem && <p role="alert" className="rounded-lg border border-bad/20 bg-bad-soft px-4 py-3 text-[0.92rem]">{problem}</p>}
             <Panel className="px-4 py-3 text-[0.9rem] leading-snug">
               <p>
                 <b>{s.left}</b> of {s.perDay} runs left today on this server; one at a time, {s.gapS} s apart.
@@ -74,7 +74,7 @@ export function Launcher() {
 
 function EmptyRun() {
   return (
-    <Panel rule className="px-5 py-6">
+    <Panel className="p-6">
       <p className="display text-[1.5rem]">No run yet</p>
       <p className="mt-1 max-w-[60ch] text-[0.98rem] text-ink-soft">Pick a task on the left. Each step the agent takes on Aiven appears here as it happens: its tool calls into AimoPilot and AimoPilot&apos;s answers. About 30 seconds.</p>
     </Panel>
@@ -98,7 +98,7 @@ function RunView({ runId, dockUrl }: { runId: string; dockUrl: string }) {
   const ended = run.status === "done" || run.status === "failed";
   return (
     <Panel>
-      <div className={`border-b border-line/70 px-4 py-3 ${run.recorded ? "bg-mist" : "border-t-[3px] border-t-petrol"}`}>
+      <div className={`border-b border-line px-5 py-4 ${run.recorded ? "bg-surface/60" : ""}`}>
         <div className="flex flex-wrap items-center gap-2">
           {run.recorded ? <span className="border border-ink px-1.5 py-0.5 text-[0.82rem] font-semibold">Recording of a real run, {stamp(run.recordedAt!)}</span> : <OnAiven />}
           <span className="display text-[1.4rem]">{run.title}</span>
@@ -108,8 +108,8 @@ function RunView({ runId, dockUrl }: { runId: string; dockUrl: string }) {
           {run.recorded ? "Played back" : run.status === "starting" ? "Starting on Aiven…" : run.status === "running" ? "Running on Aiven…" : run.status === "done" ? "Done" : run.status === "failed" ? "Failed" : run.status}, model {run.model}
           {run.environment ? `, ${run.environment}` : ""}, started {whenSeconds(run.startedAt)}
         </p>
-        <p className="mt-2 border-l-[6px] border-petrol bg-mist px-3 py-2 text-[0.98rem]">&ldquo;{run.question}&rdquo;</p>
-        {run.error && <p className={`mt-2 text-[0.92rem] ${run.recorded ? "" : "border-l-[6px] border-ink bg-mist px-3 py-1.5 font-semibold"}`}>{run.error}</p>}
+        <p className="mt-2 rounded-lg bg-surface px-4 py-3 text-[0.98rem]">&ldquo;{run.question}&rdquo;</p>
+        {run.error && <p className={`mt-2 text-[0.92rem] ${run.recorded ? "" : "rounded-lg bg-surface px-4 py-2.5 font-semibold"}`}>{run.error}</p>}
       </div>
       <ol className="divide-y divide-line/60" aria-live="polite">
         {messages.map((m, i) => (
@@ -118,7 +118,7 @@ function RunView({ runId, dockUrl }: { runId: string; dockUrl: string }) {
         {!ended && !run.recorded && <li className="px-4 py-2 text-[0.85rem] text-ink-soft">The agent is working on Aiven; its own transcript arrives when it replies. Meanwhile, what the gate sees:</li>}
       </ol>
       {!run.recorded && (
-        <div className="border-t border-line/70 bg-mist px-4 py-3">
+        <div className="border-t border-line bg-surface/60 px-5 py-4">
           <p className="text-[0.88rem] font-semibold">At AimoPilot&apos;s gate, live from Kafka (dock.actions, agent {run.gate === undefined ? "…" : "agent_laakso_aiven_01"})</p>
           {run.gate && run.gate.length ? (
             <ol className="mt-1.5 space-y-0.5 text-[0.88rem]">
@@ -147,15 +147,15 @@ function RunView({ runId, dockUrl }: { runId: string; dockUrl: string }) {
           </p>
           {run.requestId && (
             <p className="mt-1 flex flex-wrap gap-x-4">
-              <a href={traceHref} className="font-semibold text-petrol underline underline-offset-2">
+              <a href={traceHref} className="font-medium text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol">
                 Replay its trace
               </a>
               {!run.recorded && (
                 <>
-                  <Link href="/ops" className="text-petrol underline underline-offset-2">
+                  <Link href="/ops" className="text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol">
                     Live view
                   </Link>
-                  <Link href="/ops/platform/stream" className="text-petrol underline underline-offset-2">
+                  <Link href="/ops/platform/stream" className="text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol">
                     Its events on Kafka
                   </Link>
                 </>

@@ -6,6 +6,8 @@ import type { AgentRow } from "@/server/ops/views";
 import { fi, when } from "../../_ui/format";
 import { Button, Empty, LoadError, Loading, PageHead, Section, useOps } from "../../_ui/kit";
 import { Table } from "../../_ui/parts";
+import { Check, Eye, Search, Sparkles } from "lucide-react";
+import { Avatar, Tag, buttonClass } from "../../../_ui/kit";
 import { groupOf, proposeCorrection, readMemory, type MemoryItem, type MemoryState } from "../../_ui/memory";
 
 const SOURCE: Record<string, string> = { stated: "stated by", confirmed: "confirmed by", learned: "learned from orders" };
@@ -36,20 +38,23 @@ export function CustomersScreen({ orgId }: { orgId?: string }) {
         <Empty title="No kitchen has come to the gate yet">A kitchen appears here once its agent presents a signed mandate at the door.</Empty>
       ) : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[17rem_minmax(0,1fr)]">
-          <nav aria-label="Kitchens" className="lg:sticky lg:top-4 lg:self-start">
-            <label className="flex min-h-10 items-center gap-2 border-2 border-line bg-paper px-2.5 focus-within:border-petrol">
+          <nav aria-label="Kitchens" className="lg:sticky lg:top-[4.5rem] lg:self-start">
+            <label className="relative block">
               <span className="sr-only">Find a kitchen</span>
-              <input value={q} onChange={(e) => setQ(e.target.value)} type="search" placeholder="Find a kitchen" className="min-w-0 flex-1 bg-transparent text-[0.95rem] outline-none placeholder:text-ink-soft" />
+              <Search aria-hidden size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint" />
+              <input value={q} onChange={(e) => setQ(e.target.value)} type="search" placeholder="Find a kitchen" className="field !rounded-full pl-10 !text-[0.95rem]" />
             </label>
-            <ul className="mt-2 bg-paper">
+            <ul className="mt-3 space-y-0.5 overflow-hidden rounded-xl border border-line bg-paper p-1.5">
               {listed.map((o) => {
                 const on = o.orgId === current?.orgId;
                 return (
                   <li key={o.orgId}>
-                    <Link href={`/ops/customers/${o.orgId}`} aria-current={on ? "page" : undefined} className={`relative block px-3 py-2.5 ${on ? "bg-petrol text-paper" : "hover:bg-petrol-soft"}`}>
-                      {on && <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-lime" />}
-                      <span className="block font-semibold leading-tight">{o.orgName}</span>
-                      <span className={`block text-[0.82rem] ${on ? "text-paper/80" : "text-ink-soft"}`}>{KIND_WORD[o.kind]}</span>
+                    <Link href={`/ops/customers/${o.orgId}`} aria-current={on ? "page" : undefined} className={`flex items-center gap-3 rounded-md px-2.5 py-2 transition-colors ${on ? "bg-petrol-soft" : "hover:bg-mist"}`}>
+                      <Avatar name={o.orgName} size={32} tone={on ? "dark" : "petrol"} className={on ? "!bg-petrol !text-paper" : ""} />
+                      <span className="min-w-0">
+                        <span className={`block truncate font-semibold leading-tight ${on ? "text-petrol-deep" : ""}`}>{o.orgName}</span>
+                        <span className="block text-[0.8rem] text-ink-soft">{KIND_WORD[o.kind]}</span>
+                      </span>
                     </Link>
                   </li>
                 );
@@ -64,7 +69,7 @@ export function CustomersScreen({ orgId }: { orgId?: string }) {
   );
 }
 
-const KIND_WORD: Record<string, string> = { visitor: "Visitor kitchen", demo: "Demo kitchen", outside: "Outside organisation" };
+const KIND_WORD: Record<string, string> = { visitor: "Visitor kitchen", demo: "Demo kitchen", account: "Account kitchen", outside: "Outside organisation" };
 
 function Kitchen({ orgId, name, kind, agents }: { orgId: string; name: string; kind: string; agents: AgentRow[] }) {
   const [m, setM] = useState<MemoryState>();
@@ -81,16 +86,15 @@ function Kitchen({ orgId, name, kind, agents }: { orgId: string; name: string; k
   const record = agents.reduce((acc, a) => ({ requests: acc.requests + a.record.requests, committed: acc.committed + a.record.committed, signOffs: acc.signOffs + a.record.signOffs }), { requests: 0, committed: 0, signOffs: 0 });
   return (
     <div className="min-w-0">
-      <header className="bg-paper">
-        <div aria-hidden className="h-[3px] bg-petrol" />
-        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 px-5 py-4">
+      <header className="overflow-hidden rounded-xl border border-line bg-paper">
+        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 px-5 py-5 sm:px-6">
           <div>
-            <h2 className="display text-[2rem] leading-none">{(m?.state === "ok" && m.data.name) || name}</h2>
+            <h2 className="display text-[1.8rem] leading-none">{(m?.state === "ok" && m.data.name) || name}</h2>
             <p className="mt-1 text-[0.92rem] text-ink-soft">
               {KIND_WORD[kind]}; {agents.length} agent{agents.length === 1 ? "" : "s"} at the gate: {agents.map((a) => a.label).join(", ") || "none yet"}
             </p>
           </div>
-          <dl className="flex gap-6 text-right">
+          <dl className="flex flex-wrap gap-x-6 gap-y-2 sm:text-right">
             {(
               [
                 [items.length, "shared with us"],
@@ -100,25 +104,29 @@ function Kitchen({ orgId, name, kind, agents }: { orgId: string; name: string; k
               ] as const
             ).map(([n, l]) => (
               <div key={l}>
-                <dd className="display text-[1.7rem] leading-none tabular">{n}</dd>
+                <dd className="display text-[1.6rem] leading-none tabular">{n}</dd>
                 <dt className="text-[0.8rem] text-ink-soft">{l}</dt>
               </div>
             ))}
           </dl>
         </div>
         {agents[0] && (
-          <div className="border-t border-line/70 px-5 py-3">
-            <p className="text-[0.85rem] font-semibold text-ink-soft">What its agent may do alone, from the mandate it signed</p>
-            <ul className="mt-1 grid gap-x-6 gap-y-0.5 text-[0.92rem] leading-snug md:grid-cols-2">
+          <div className="border-t border-line bg-surface/60 px-5 py-4 sm:px-6">
+            <p className="text-[0.84rem] font-medium text-ink-soft">What its agent may do alone, from the mandate it signed</p>
+            <ul className="mt-2 grid gap-x-6 gap-y-1 text-[0.92rem] leading-snug md:grid-cols-2">
               {agents[0].allows.map((x, i) => (
-                <li key={i}>{fi(x.line)}</li>
+                <li key={i} className="flex gap-2">
+                  <Check aria-hidden size={14} strokeWidth={2.6} className="mt-[0.25em] shrink-0 text-good" />
+                  {fi(x.line)}
+                </li>
               ))}
             </ul>
           </div>
         )}
       </header>
 
-      <p className="mt-3 border-l-[6px] border-petrol bg-paper px-4 py-2.5 text-[0.9rem] leading-snug text-ink-soft">
+      <p className="mt-4 flex gap-2.5 rounded-lg bg-lavender px-4 py-3 text-[0.9rem] leading-snug text-lavender-deep">
+        <Eye aria-hidden size={17} className="mt-0.5 shrink-0" />
         Opening a kitchen here is recorded, and the kitchen sees who looked and when. Staff cannot change a kitchen&apos;s rules, and what the kitchen keeps private never reaches this page.
       </p>
 
@@ -145,9 +153,9 @@ function Kitchen({ orgId, name, kind, agents }: { orgId: string; name: string; k
             {m.data.views.length === 0 ? (
               <p className="text-[0.92rem] text-ink-soft">This view is the first one recorded.</p>
             ) : (
-              <ol className="divide-y divide-line/70 bg-paper text-[0.92rem]">
+              <ol className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-paper text-[0.92rem]">
                 {m.data.views.slice(0, 12).map((v, i) => (
-                  <li key={i} className="flex justify-between gap-4 px-4 py-2">
+                  <li key={i} className="flex items-center justify-between gap-4 px-5 py-2.5">
                     <span className="font-semibold">{v.by}</span>
                     <span className="text-ink-soft tabular">{when(v.at)}</span>
                   </li>
@@ -177,7 +185,7 @@ function MemoryTable({ orgId, items }: { orgId: string; items: MemoryItem[] }) {
       {[...groups.entries()].map(([title, list]) => (
         <tbody key={title}>
           <tr>
-            <td colSpan={4} className="bg-mist !py-1.5 text-[0.85rem] font-semibold text-petrol">
+            <td colSpan={4} className="bg-surface !py-2 text-[0.84rem] font-semibold text-petrol-deep">
               {title}
             </td>
           </tr>
@@ -206,13 +214,13 @@ function Item({ orgId, it }: { orgId: string; it: MemoryItem }) {
       <tr>
         <td className="font-semibold">
           <span className="flex gap-2">
-            <span aria-hidden className={`mt-[0.45em] size-2 shrink-0 rotate-45 ${learned ? "bg-lavender-deep" : "bg-petrol"}`} />
+            {learned ? <Sparkles aria-hidden size={14} className="mt-[0.25em] shrink-0 text-lavender-deep" /> : <span aria-hidden className="mt-[0.5em] size-2 shrink-0 rounded-full bg-petrol" />}
             {fi(it.text)}
           </span>
         </td>
         <td className="text-[0.9rem]">
           {learned ? (
-            <span className="bg-lavender px-1.5 py-px text-lavender-deep">Learned from its orders</span>
+            <Tag tone="agent">Learned from its orders</Tag>
           ) : (
             <span>
               {SOURCE[src.kind] ? SOURCE[src.kind].replace(/^./, (c) => c.toUpperCase()) : "From"} <b>{src.by ?? "the kitchen"}</b>
@@ -226,7 +234,7 @@ function Item({ orgId, it }: { orgId: string; it: MemoryItem }) {
         <td className="whitespace-nowrap text-[0.9rem]">
           {it.lastUsedAt ? (
             it.lastUsedRequestId ? (
-              <Link className="text-petrol underline underline-offset-2" href={`/ops/trace/${it.lastUsedRequestId}`}>
+              <Link className="text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol" href={`/ops/trace/${it.lastUsedRequestId}`}>
                 {when(it.lastUsedAt)}
               </Link>
             ) : (
@@ -237,7 +245,7 @@ function Item({ orgId, it }: { orgId: string; it: MemoryItem }) {
           )}
         </td>
         <td className="text-right">
-          <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="whitespace-nowrap text-[0.88rem] font-semibold text-petrol underline underline-offset-2">
+          <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className={buttonClass("secondary", "sm", "whitespace-nowrap")}>
             {open ? "Cancel" : "Propose a correction"}
           </button>
         </td>
@@ -245,10 +253,10 @@ function Item({ orgId, it }: { orgId: string; it: MemoryItem }) {
       {open && (
         <tr>
           <td colSpan={4} className="bg-mist">
-            <form onSubmit={send} className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
-              <input required value={text} onChange={(e) => setText(e.target.value)} placeholder="What it should say" aria-label="Proposed text" className="min-h-10 border-2 border-line bg-paper px-2 text-[0.92rem] focus:border-petrol focus:outline-none" />
-              <input required value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why (the kitchen sees this)" aria-label="Reason" className="min-h-10 border-2 border-line bg-paper px-2 text-[0.92rem] focus:border-petrol focus:outline-none" />
-              <Button type="submit" kind="primary">
+            <form onSubmit={send} className="grid gap-2.5 md:grid-cols-[1fr_1fr_auto]">
+              <input required value={text} onChange={(e) => setText(e.target.value)} placeholder="What it should say" aria-label="Proposed text" className="field !text-[0.92rem]" />
+              <input required value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why (the kitchen sees this)" aria-label="Reason" className="field !text-[0.92rem]" />
+              <Button type="submit" kind="primary" size="md">
                 Send to the kitchen
               </Button>
               {msg && <p className={`text-[0.88rem] md:col-span-3 ${msg.ok ? "" : "font-semibold"}`}>{msg.message}</p>}

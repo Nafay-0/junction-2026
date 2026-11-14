@@ -57,14 +57,14 @@ export function KitchenWeek({ kitchen, visitor }: { kitchen: string; visitor: bo
           </Button>
         )}
       </div>
-      {!visitor && <p className="mt-4 bg-paper p-4 text-[1.05rem]">The week plays in a visitor&apos;s own kitchen. Scan the QR code at the table to get one; your phone signs what the agent may not.</p>}
+      {!visitor && <p className="mt-4 rounded-xl border border-line bg-paper p-5 text-[1.02rem] leading-relaxed">The week plays in a visitor&apos;s own kitchen. Scan the QR code at the table to get one; your phone signs what the agent may not.</p>}
       {error && (
-        <p role="alert" className="mt-4 bg-paper p-4 font-semibold text-ink">
+        <p role="alert" className="mt-4 rounded-lg border border-bad/20 bg-bad-soft px-4 py-3.5 font-semibold text-ink">
           {error}
         </p>
       )}
       {shown && (
-        <div className="mt-5 h-[min(78vh,820px)] min-h-[560px]">
+        <div className="mt-5 h-[min(78vh,820px)] min-h-[560px] overflow-hidden rounded-2xl">
           <WeekBoard run={shown} compact />
         </div>
       )}

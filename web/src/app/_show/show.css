@@ -73,37 +73,46 @@
 }
 .show-station {
   position: relative;
-  padding-top: 1.6em;
+  padding-top: 1.7em;
   font-size: var(--s-small);
+  font-weight: 500;
   color: rgb(255 255 255 / 0.55);
 }
+/* The track: a rounded rail, filled once the request has passed this station. */
 .show-station::before {
   content: "";
   position: absolute;
   left: 0;
   right: 0;
-  top: 0.55em;
-  height: 3px;
-  background: rgb(255 255 255 / 0.22);
+  top: 0.6em;
+  height: 4px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.14);
 }
 .show-station-on {
   color: var(--color-paper);
 }
 .show-station-on::before {
-  background: var(--color-paper);
+  background: rgb(255 255 255 / 0.7);
 }
+/* The gate on the lane: a short striped post. */
 .show-station-gate::after {
   content: "";
   position: absolute;
-  left: 0;
-  top: -0.2em;
-  width: 6px;
-  height: 1.6em;
-  background: var(--color-safety);
+  left: -3px;
+  top: -0.15em;
+  width: 8px;
+  height: 1.55em;
+  border-radius: 999px;
+  background-image: repeating-linear-gradient(-45deg, var(--color-safety) 0 4px, var(--color-safety-ink) 4px 8px);
+  box-shadow: 0 0 0 2px var(--color-safety-ink);
+}
+.show-station-gate {
+  color: var(--color-safety);
 }
 .show-puck {
   position: absolute;
-  top: -0.35em;
+  top: -0.3em;
   left: 0;
   width: 20%;
   display: flex;
@@ -112,12 +121,15 @@
   will-change: transform;
 }
 .show-puck-dot {
-  width: 1.3em;
+  width: 2.1em;
   height: 1.3em;
   font-size: var(--s-small);
   border-radius: 999px;
   background: var(--color-lime);
-  box-shadow: 0 0 0 4px var(--color-petrol-deep);
+  box-shadow:
+    0 0 0 4px var(--color-petrol-deep),
+    0 4px 14px rgb(0 0 0 / 0.35);
+  transform: translateX(-0.4em);
 }
 .show-puck-held {
   background: var(--color-safety);
@@ -176,15 +188,15 @@
   }
   60% {
     opacity: 1;
-    transform: scale(0.96) rotate(-3deg);
+    transform: scale(0.96) rotate(-2deg);
   }
   100% {
-    transform: scale(1) rotate(-3deg);
+    transform: scale(1) rotate(-2deg);
   }
 }
 .show-land {
   animation: show-kf-land 560ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-  transform: rotate(-3deg);
+  transform: rotate(-2deg);
 }
 
 /* A day arrives in the bay. */
@@ -256,6 +268,6 @@
     transform: translateX(88%);
   }
   .show-land {
-    transform: rotate(-3deg);
+    transform: rotate(-2deg);
   }
 }

@@ -51,12 +51,12 @@ export function licenceLine(r: BoardRow): string {
 /** One cell: clear, part-way, crashed, or not run. */
 function Cell({ s, dark, big }: { s?: BoardScenario; dark: boolean; big: boolean }) {
   const box = big ? "size-[max(1.3rem,1.45vw)]" : "size-6";
-  if (!s || s.score === null) return <span title="Not run" className={`${box} block border-2 border-dashed ${dark ? "border-paper/30" : "border-line"}`} />;
-  if (s.score >= 90) return <span title={`${Math.round(s.score)}`} className={`${box} block ${dark ? "bg-paper" : "bg-petrol"}`} />;
+  if (!s || s.score === null) return <span title="Not run" className={`${box} block rounded-[30%] border-2 border-dashed ${dark ? "border-paper/25" : "border-line-strong"}`} />;
+  if (s.score >= 90) return <span title={`${Math.round(s.score)}`} className={`${box} block rounded-[30%] ${dark ? "bg-paper/85" : "bg-petrol"}`} />;
   if (s.score >= 40)
     return (
-      <span title={`${Math.round(s.score)}: ${s.reason ?? ""}`} className={`${box} relative block border-2 ${dark ? "border-paper" : "border-petrol"}`}>
-        <span className={`absolute inset-x-0 bottom-0 ${dark ? "bg-paper" : "bg-petrol"}`} style={{ height: `${s.score}%` }} />
+      <span title={`${Math.round(s.score)}: ${s.reason ?? ""}`} className={`${box} relative block overflow-hidden rounded-[30%] ${dark ? "bg-paper/12 ring-2 ring-inset ring-paper/70" : "bg-petrol-soft ring-2 ring-inset ring-petrol"}`}>
+        <span className={`absolute inset-x-0 bottom-0 ${dark ? "bg-paper/85" : "bg-petrol"}`} style={{ height: `${s.score}%` }} />
       </span>
     );
   return (
@@ -119,7 +119,7 @@ export function CrashMatrix({ board, dark = false, big = false, maxRows = 8, yar
                 <span className="font-bold" title={`${r.name}, ${r.scripted ? "scripted" : r.maker}`}>{r.name}</span>{!big && <span className={soft}> {r.scripted ? "scripted" : r.maker}</span>}
               </th>
               {cols.map((h) => (
-                <td key={h.id} className={`p-[2px] ${story?.agent === r.agent && story.id === h.id ? (dark ? "outline outline-2 -outline-offset-1 outline-paper/80" : "outline outline-2 -outline-offset-1 outline-ink") : ""}`}>
+                <td key={h.id} className={`p-[2px] ${story?.agent === r.agent && story.id === h.id ? (dark ? "rounded-md outline outline-2 -outline-offset-1 outline-lime" : "rounded-md outline outline-2 -outline-offset-1 outline-ink") : ""}`}>
                   <span className="flex justify-center">
                     <Cell s={scoreOf(r, h.id)} dark={dark} big={big} />
                   </span>
@@ -129,11 +129,11 @@ export function CrashMatrix({ board, dark = false, big = false, maxRows = 8, yar
               <td className="truncate whitespace-nowrap pl-[0.8vw]">
                 {big ? (
                   <>
-                    <span className={`inline-block px-1 font-semibold ${r.level === "L2" || r.level === "L3" ? "bg-paper text-petrol-deep" : r.level === "L1" ? "border border-paper/60" : soft}`}>{r.level ? `${r.level} ${r.levelName}` : "None"}</span>{" "}
+                    <span className={`inline-block rounded-full px-[0.6em] font-semibold ${r.level === "L2" || r.level === "L3" ? "bg-lime text-ink" : r.level === "L1" ? "bg-paper/12 text-paper" : soft}`}>{r.level ? `${r.level} ${r.levelName}` : "None"}</span>{" "}
                     <span className="tabular">{r.level ? (r.limitCents ? moneyShort(r.limitCents) : "0 €") : ""}</span>
                   </>
                 ) : (
-                  <span className={`inline-block px-1.5 font-semibold ${r.level === "L2" || r.level === "L3" ? "bg-petrol text-paper" : r.level === "L1" ? "border border-petrol text-petrol" : soft}`}>{licenceLine(r)}</span>
+                  <span className={`inline-block rounded-full px-2.5 text-[0.9em] font-semibold leading-6 ${r.level === "L2" || r.level === "L3" ? "bg-petrol text-paper" : r.level === "L1" ? "bg-petrol-soft text-petrol-deep" : `bg-surface ${soft}`}`}>{licenceLine(r)}</span>
                 )}
               </td>
             </tr>
@@ -143,11 +143,11 @@ export function CrashMatrix({ board, dark = false, big = false, maxRows = 8, yar
       {legend && (
       <div className={`mt-[0.8vh] flex flex-wrap items-center gap-x-[1.2vw] gap-y-1 ${soft} text-[0.88em]`}>
         <span className="inline-flex items-center gap-1.5">
-          <span className={`inline-block size-[0.9em] ${dark ? "bg-paper" : "bg-petrol"}`} /> got through
+          <span className={`inline-block size-[0.9em] rounded-[30%] ${dark ? "bg-paper/85" : "bg-petrol"}`} /> got through
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className={`relative inline-block size-[0.9em] border-2 ${dark ? "border-paper" : "border-petrol"}`}>
-            <span className={`absolute inset-x-0 bottom-0 h-1/2 ${dark ? "bg-paper" : "bg-petrol"}`} />
+          <span className={`relative inline-block size-[0.9em] overflow-hidden rounded-[30%] ${dark ? "ring-2 ring-inset ring-paper/70" : "bg-petrol-soft ring-2 ring-inset ring-petrol"}`}>
+            <span className={`absolute inset-x-0 bottom-0 h-1/2 ${dark ? "bg-paper/85" : "bg-petrol"}`} />
           </span>{" "}
           lost points
         </span>
