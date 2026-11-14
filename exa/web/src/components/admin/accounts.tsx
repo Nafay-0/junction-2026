@@ -109,19 +109,22 @@ export function AccountsScreen({ accounts, renderedAt }: { accounts: Account[]; 
               <table className="w-full border-separate border-spacing-0 text-[0.86rem]">
                 <thead>
                   <tr className="text-left text-[0.7rem] font-medium tracking-wider text-subtle uppercase">
-                    <th className="pb-2.5 pl-1 font-medium">Account</th>
+                    {/* The one column that takes whatever room the others leave, and cuts long names short instead of pushing them out. */}
+                    <th className="w-full pb-2.5 pl-1 font-medium">Account</th>
                     <th className="px-3 pb-2.5 font-medium">Status</th>
                     <th className="px-3 pb-2.5 font-medium">Added</th>
-                    <th className="px-3 pb-2.5 font-medium">Last sign-in</th>
+                    <th className="px-3 pb-2.5 font-medium whitespace-nowrap">Last sign-in</th>
                     <th className="px-3 pb-2.5 text-right font-medium">Conversations</th>
                     <th className="px-3 pb-2.5 text-right font-medium">Cost</th>
-                    <th className="w-10 pb-2.5" />
+                    <th className="pb-2.5">
+                      <span className="sr-only">Options</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {shown.map((a) => (
                     <tr key={a.id} className={cn("transition-colors hover:bg-muted/40", a.status === "blocked" && "text-muted-foreground")}>
-                      <td className="max-w-0 border-t border-border py-3 pl-1">
+                      <td className="w-full max-w-0 border-t border-border py-3 pr-3 pl-1">
                         <Who account={a} />
                       </td>
                       <td className="border-t border-border px-3 py-3">
@@ -306,7 +309,7 @@ function NewPasswordField({ value, onChange, invalid }: { value: string; onChang
       value={value}
       onChange={(e) => onChange(e.target.value)}
       aria-invalid={invalid || undefined}
-      className="font-mono"
+      inputClassName="pr-28 font-mono text-[0.9rem]"
       hint={`At least ${MIN_PASSWORD} characters. You pass it on yourself: it is not sent to them.`}
       trailing={
         <button
@@ -404,7 +407,7 @@ function AddDialog({ open, onClose, onDone }: { open: boolean; onClose: () => vo
 
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? undefined : close())}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="font-display text-[1.5rem] leading-tight font-normal">{made ? "Account added" : "Add an account"}</DialogTitle>
           <DialogDescription>{made ? "They can sign in on the web and in the desktop app." : "An ordinary account: it can chat and hand over tasks, and sees only its own conversations."}</DialogDescription>
@@ -477,7 +480,7 @@ function PasswordDialog({ account, onClose }: { account: Account | null; onClose
 
   return (
     <Dialog open={account !== null} onOpenChange={(next) => (next ? undefined : close())}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="font-display text-[1.5rem] leading-tight font-normal">{done ? "Password changed" : `A new password for ${shown?.name ?? "this account"}`}</DialogTitle>
           <DialogDescription>{done ? `${shown?.name ?? "The account"} has been signed out everywhere and signs in with the new one.` : "The old password stops working at once, and the account is signed out everywhere."}</DialogDescription>
@@ -539,12 +542,13 @@ function DeleteDialog({ account, onClose, onDone }: { account: Account | null; o
   const n = shown?.conversations ?? 0;
   return (
     <Dialog open={account !== null} onOpenChange={(next) => (next ? undefined : close())}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="font-display text-[1.5rem] leading-tight font-normal">Delete {shown?.name ?? "this account"}?</DialogTitle>
           <DialogDescription>
-            {shown?.email} is signed out everywhere and can no longer sign in. {n === 0 ? "It has no saved conversations." : n === 1 ? "Its one saved conversation is deleted too." : `Its ${n} saved conversations are deleted too.`} This cannot be undone. What
-            the account cost stays in the totals.
+            Deleting signs {shown?.email} out everywhere, and it can no longer sign in.{" "}
+            {n === 0 ? "It has no saved conversations." : n === 1 ? "Its one saved conversation is deleted with it." : `Its ${n} saved conversations are deleted with it.`} This cannot be undone. What the account cost stays in
+            the totals.
           </DialogDescription>
         </DialogHeader>
         {error ? (
