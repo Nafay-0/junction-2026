@@ -267,3 +267,13 @@ describe("words that pass on someone else's answer", () => {
     expect(passedOn("our chef loves this milk")).toBe(false);
   });
 });
+
+describe("several items in one message", () => {
+  it("are split where a new amount starts, the day given to each", async () => {
+    const { splitItems } = await import("./pipeline");
+    expect(splitItems("30 litres of lactose-free milk and 6 litres of lactose-free cream for Thursday")).toEqual(["30 litres of lactose-free milk for Thursday", "6 litres of lactose-free cream for Thursday"]);
+    expect(splitItems("20 kg voita ja 10 litraa kermaa torstaiksi")).toEqual(["20 kg voita torstaiksi", "10 litraa kermaa torstaiksi"]);
+    expect(splitItems("100 litres of milk for Thursday")).toEqual([]);
+    expect(splitItems("milk and cream")).toEqual([]);
+  });
+});

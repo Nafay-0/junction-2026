@@ -114,6 +114,18 @@ export function read(run: TurnRun, words: string, earlier: EarlierRequest[]): Pr
   return p;
 }
 
+// ---------- several items in one message ----------
+
+const DAY_PHRASE = /\b(for|by|on|until|before|till|to|ennen|mennessä|torstaiksi|maanantaiksi|på|senast|innan)\b[^,;\n]*$/i;
+
+/** Item parts of a message, split where a new amount starts after "and", a comma or a new line; the day said at the end goes to each. */
+export function splitItems(text: string): string[] {
+  const raw = text.split(/\s*(?:,|;|\n|\band\b|\bja\b|\bsekä\b|\boch\b|\bsamt\b|\bplus\b)\s*(?=\d)/i).map((x) => x.trim()).filter(Boolean);
+  if (raw.length < 2 || raw.some((x) => !/\d/.test(x))) return [];
+  const day = DAY_PHRASE.exec(raw.at(-1)!)?.[0];
+  return raw.map((x) => (day && !DAY_PHRASE.test(x) ? `${x} ${day}` : x)).slice(0, 5);
+}
+
 // ---------- words the assortment does not carry ----------
 
 /** Words of a request that say nothing about the product itself, or are said in another way in product data. */
@@ -213,6 +225,14 @@ export async function orderFromWords(run: TurnRun, words: string, earlier: Earli
       reading.skip("not a purchase request");
       record(run, "read_not_purchase", `The reader found no purchase in "${words.slice(0, 200)}"; the agent answers it instead.`, {});
       return [{ words, notice }];
+    }
+    // Several items the reader could not hold together ("30 litres of milk and 6 litres of cream for Thursday"):
+    // split by plain code at the item boundaries, the day said once given to each, and read each part.
+    const parts = notice.kind === "incomplete" && !opts.item ? splitItems(words) : [];
+    if (parts.length >= 2) {
+      reading.done("several items: read one by one");
+      record(run, "split_items", `The message names ${parts.length} items; each is read on its own: ${parts.map((x) => `"${x}"`).join(", ")}.`, { parts });
+      return (await Promise.all(parts.map((x, i) => orderFromWords(run, x, [], { ...opts, item: i + 1 })))).flat();
     }
     reading.fail(err instanceof DockError ? err.code : undefined);
     run.store.card(run.thread, run.turnId, notice);
