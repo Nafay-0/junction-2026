@@ -64,7 +64,9 @@ function figures(f: FindingWithRule, lang: Lang): string {
   const per = to.unit === "kg" ? t.kilo : t.litre;
   const parts: string[] = [];
   if (to.perUnitDiffCents !== null) parts.push(to.perUnitDiffCents === 0 ? `${t.same} ${per}` : `${(to.perUnitDiffCents > 0 ? t.more : t.less)(money(Math.abs(Math.round(to.perUnitDiffCents))))} ${per}`);
-  parts.push(t.packs(String(to.packs), amountL(to.packSize, to.unit)));
+  // The same quantity as the usual, in litres or kilos, and how many packs make it: "400 l as 400 × 1 l".
+  const need = to.need ?? { amount: to.delivered, unit: to.unit }; // a finding recorded before `need` existed
+  parts.push(t.packs(amountL(need.amount, need.unit), String(to.packs), amountL(to.packSize, to.unit)));
   if (to.sameMaker) parts.push(t.sameMaker);
   else if (to.maker) parts.push(t.otherMaker(to.maker));
   if (!s.insidePreferences) parts.push(t.signOff(f.approver ?? "a person"));
@@ -273,5 +275,7 @@ export async function setAutoRenewFromThread(rt: Runtime, session: AgentSession,
   const a = await setAutoRenew(rt, session, { family, on, by: who.by, via: who.via });
   const t = WATCH_SAY_TEXT[who.lang ?? "en"];
   const what = who.what ?? family.replaceAll("_", " ");
-  return { reply: a.on ? t.autoOn(what, who.by) : t.autoOff(what) };
+  // The person as people say them: "Hotel Lumo kitchen (hotel-lumo)" -> "Hotel Lumo kitchen".
+  const by = who.by.replace(/\s*\([^)]*\)\s*$/, "");
+  return { reply: a.on ? t.autoOn(what, by) : t.autoOff(what) };
 }

@@ -416,7 +416,7 @@ export type WatchReport = { kitchen: string; name: string; keys: KeyProduct[]; f
  * One look over one kitchen: its key products (one live call, cached), a finding for each that cannot come for its
  * day (with substitutes), then the recurring orders it may renew. `fresh`: ask the wholesaler again now.
  */
-export async function runWatchFor(rt: Runtime, k: WatchKitchen, opts: { now?: Date; fresh?: boolean; by?: string; renew?: "due" | "now"; families?: string[] } = {}): Promise<WatchReport> {
+export async function runWatchFor(rt: Runtime, k: WatchKitchen, opts: { now?: Date; fresh?: boolean; by?: string; renew?: "due" | "now"; families?: string[]; holdOnly?: boolean } = {}): Promise<WatchReport> {
   const s = await ready(rt);
   const now = opts.now ?? new Date();
   const { keys, patterns } = await keyProducts(rt, k.orgId, now);
@@ -443,7 +443,7 @@ export async function runWatchFor(rt: Runtime, k: WatchKitchen, opts: { now?: Da
     if (open) resolve(rt, open, st.staged ? "A stock-out was staged for the demo over it." : "The staged stock-out was lifted.");
     report.findings.push(await addFinding(rt, k, key, original, st, short, live, patterns, now));
   }
-  report.renewals = await renewDue(rt, k, { now, window: opts.renew ?? "due", live, patterns: opts.families ? patterns.filter((p) => opts.families!.includes(p.family)) : patterns });
+  report.renewals = await renewDue(rt, k, { now, window: opts.renew ?? "due", holdOnly: !!opts.holdOnly, live, patterns: opts.families ? patterns.filter((p) => opts.families!.includes(p.family)) : patterns });
   report.liveCalls = s.liveCalls - before;
   return report;
 }
@@ -551,11 +551,11 @@ export async function setAutoRenew(rt: Runtime, session: AgentSession, input: { 
   s.auto.set(`${orgId}:${input.family}`, a);
   await s.stores.auto.put(`${orgId}:${input.family}`, a);
   ledger(rt, { actor: `buyer:${orgId}`, summary: `${input.by} switched auto-renew ${input.on ? "on" : "off"} for the recurring ${input.family.replaceAll("_", " ")} order (${p.product.name}, usually ${p.slots.map((x) => `${WEEKDAY[x.weekday]} ${x.usualAmount} ${unitWord(p.unit)}`).join(", ")}), via ${input.via}. ${input.on ? "The agent renews it before the cut-off when nothing has drifted, within the mandate and through the gate; when something drifted it holds it and asks." : "The agent only reminds."}`, data: { step: "auto_renew", family: input.family, on: input.on, by: input.by, via: input.via } });
-  // Switched on: the next one is looked at now (placed, or held and asked), not only at the next scheduled run.
+  // Switched on: if the next one has drifted it is held and asked now; placing it waits for its cut-off window.
   if (input.on && input.renewNow !== false) {
     const k = await kitchenOfSession(rt, session);
     if (k.mandateToken) {
-      const r = await runWatchFor(rt, k, { now: input.now, renew: "now", families: [input.family] }).catch(() => undefined);
+      const r = await runWatchFor(rt, k, { now: input.now, renew: "now", families: [input.family], holdOnly: true }).catch(() => undefined);
       const renewal = r?.renewals.find((x) => x.family === input.family);
       if (renewal) return { ...a, renewal };
     }
@@ -570,7 +570,7 @@ function due(next: { date: string }, st: WatchStatus | undefined, now: Date): bo
   return addDaysIso(today(now), 2) >= next.date;
 }
 
-async function renewDue(rt: Runtime, k: WatchKitchen, ctx: { now: Date; window: "due" | "now"; live: Cached; patterns: Pattern[] }): Promise<Renewal[]> {
+async function renewDue(rt: Runtime, k: WatchKitchen, ctx: { now: Date; window: "due" | "now"; holdOnly?: boolean; live: Cached; patterns: Pattern[] }): Promise<Renewal[]> {
   const s = stateOf(rt);
   const out: Renewal[] = [];
   const profile = await rt.kitchens.getProfile(k.orgId);
@@ -593,6 +593,8 @@ async function renewDue(rt: Runtime, k: WatchKitchen, ctx: { now: Date; window: 
     const drift = driftOf(p, next.slot, { perUnitCents: livePerUnit, staged: !!st?.offer?.simulated });
     const decision = decideRenewal({ autoRenew: true, paused: !!profile?.pausedStanding?.includes(p.family), drift, available: st ? !short : undefined, handled, cutoffPassed: !!st?.problems.includes("cutoff_passed") && !short });
     if (decision.action === "none" || decision.action === "remind") continue;
+    // Just switched on: ask now about a drift; placing (or a substitute for a stock-out) waits for its cut-off window.
+    if (ctx.holdOnly && (decision.action !== "hold" || decision.because.every((b) => b === "stock"))) continue;
     out.push(await renew(rt, k, p, next, drift, decision, auto, ctx.now));
   }
   return out;
@@ -750,7 +752,9 @@ export async function answerRenewal(rt: Runtime, session: AgentSession, renewalI
   // The usual product cannot come for the day (a watch finding): the amount chosen, of the best substitute.
   const f = [...s.findings.values()].find((x) => x.orgId === r.orgId && x.need.productId === r.product.productId && x.need.date === r.deliveryDate && x.state !== "resolved");
   const sub = f?.substitutes[0];
-  const subPacks = sub ? packsFor(amount, sub.tradeOff.packSize) : 0;
+  // The amount in the substitute's measure: the finding's need says how many litres or kilos one unit of the usual is.
+  const perUsualUnit = sub && f && sub.tradeOff.need && f.need.amount > 0 ? sub.tradeOff.need.amount / f.need.amount : 1;
+  const subPacks = sub ? packsFor(amount * perUsualUnit, sub.tradeOff.packSize) : 0;
   const placed = await placeThroughGate(rt, session, { text: `Recurring ${r.family.replaceAll("_", " ")} for ${dayName(r.deliveryDate)}: ${who.by} chose ${choice === "renew_new" ? "the new amount" : "the usual amount"}, ${amount} ${unitWord(r.amounts.unit)}, after the agent held it (${r.decision.reason})${sub ? `; ${r.product.name} cannot come, so ${sub.name}` : ""}`, date: r.deliveryDate, ...(sub ? { productId: sub.productId, packs: subPacks, substituteFor: r.product.productId } : { productId: r.product.productId, packs: packsFor(amount, r.product.packSize) }) });
   if (f && sub && f.state === "open") decideFinding(rt, f, { at: now.toISOString(), by: who.by, via: who.via, action: placed.order ? (placed.order.status === "committed" ? "switched" : placed.order.status === "pending_approval" ? "sent_for_sign_off" : "refused") : "refused", productId: sub.productId, ...findingOutcome(placed) });
   const done: Renewal = { ...r, state: placed.order ? "answered" : "failed", answer, outcome: { ...outcomeOf(placed), ...(f && sub ? { substitute: { productId: sub.productId, name: sub.name, insidePreferences: sub.insidePreferences, findingId: f.findingId } } : {}) } };
