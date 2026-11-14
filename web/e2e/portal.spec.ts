@@ -24,13 +24,22 @@ test("enter a kitchen's shop, browse the catalogue, read the rules", async ({ pa
   await expect(page.getByLabel("Ask, or say what the kitchen needs")).toBeVisible();
 });
 
-/** The order page keeps the request in progress across a reload (QA: a reload discarded a live fixed price). */
-test("a reload of the order page keeps the request in progress", async ({ page }) => {
+/**
+ * The thread lives on the server: a reload of the Order page (the full-width thread) shows the same turns again.
+ * No model: the turn is a tap on a card for an order that does not exist, which the engine refuses with a notice.
+ */
+test("a reload of the order page keeps the conversation", async ({ page }) => {
   await page.goto("/k/kaari/order");
-  const run = { n: 1, text: "Reload check: 100 L lactose-free milk for Thursday", concernsSeen: [], asked: [], answers: {}, fromMemory: [], options: [] };
-  await page.evaluate((r) => sessionStorage.setItem("dock-run:kaari", JSON.stringify(r)), run);
+  await expect(page.getByRole("heading", { name: "Order with your agent" })).toBeVisible();
+  await expect(page.getByLabel("Ask, or say what the kitchen needs")).toBeVisible();
+  const label = `Reload check ${Date.now()}`;
+  const sent = await page.request.post("/ui-api/kitchens/kaari/thread/turns", { data: { door: "typed", via: "tap", action: { type: "withdraw", orderId: "ord_e2e_none" }, label } });
+  expect(sent.status()).toBe(202);
+  // The turn arrives on the open page through the event stream, then the engine's answer: a notice card.
+  const log = page.getByRole("log", { name: "Conversation with the purchasing agent" });
+  await expect(log.getByText(label)).toBeVisible();
+  await expect(log.getByText("Not allowed").last()).toBeVisible();
   await page.reload();
-  await expect(page.getByText(run.text).first()).toBeVisible();
-  await page.reload();
-  await expect(page.getByText(run.text).first()).toBeVisible();
+  await expect(log.getByText(label)).toBeVisible();
+  await expect(log.getByText("Not allowed").last()).toBeVisible();
 });

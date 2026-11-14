@@ -31,7 +31,7 @@ import { THREAD_TEXT } from "./thread.text";
  *   desktop   a column docked beside the shop, open by default (the shell pads the page to make room)
  * `children` is the thread, `footer` the composer, `aside` goes in the header (a call button, a language switch).
  */
-export function ThreadDock({ open, onClose, name, sub, children, footer, aside, id = "assistant", label }: { open: boolean; onClose: () => void; name: string; sub?: ReactNode; children: ReactNode; footer?: ReactNode; aside?: ReactNode; id?: string; label: string }) {
+export function ThreadDock({ open, onClose, name, sub, children, footer, aside, banner, id = "assistant", label }: { open: boolean; onClose: () => void; name: string; sub?: ReactNode; children: ReactNode; footer?: ReactNode; aside?: ReactNode; /** A line above the header on a phone, where the dock covers the page's own top strip (the demo note). */ banner?: ReactNode; id?: string; label: string }) {
   const tx = useText(THREAD_TEXT);
   return (
     <>
@@ -41,7 +41,8 @@ export function ThreadDock({ open, onClose, name, sub, children, footer, aside, 
         aria-label={label}
         className={`${open ? "flex" : "hidden"} thread-dock fixed inset-x-0 top-0 z-40 flex-col bg-lavender sm:inset-x-auto sm:inset-y-0 sm:right-0 sm:z-50 sm:w-[27rem] sm:rounded-l-2xl sm:shadow-lg xl:z-40 xl:w-[27rem] xl:rounded-none xl:border-l xl:border-lavender-mid xl:shadow-none 2xl:w-[30rem]`}
       >
-        <header className="flex items-center gap-3 px-3 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:px-4 sm:pt-4">
+        {banner && <p className="on-dark bg-petrol-deep px-4 pb-1.5 pt-[calc(0.375rem+env(safe-area-inset-top))] text-center text-[0.75rem] leading-snug text-paper/80 sm:hidden">{banner}</p>}
+        <header className={`flex items-center gap-3 px-3 pb-3 sm:px-4 sm:pt-4 ${banner ? "pt-3" : "pt-[calc(0.75rem+env(safe-area-inset-top))]"}`}>
           <button type="button" onClick={onClose} aria-label={tx.back} className="flex size-11 shrink-0 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-lavender-mid hover:text-ink sm:hidden">
             <ChevronLeft aria-hidden size={22} />
           </button>
