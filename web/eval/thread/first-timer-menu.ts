@@ -202,7 +202,12 @@ const TASKS: [string, (r: Run) => Promise<string | void>][] = [
     async (r) => {
       await r.say(L.lastMinute);
       await r.menuReady();
-      const m = menuOf(await r.thread());
+      // The way out by the dish's logic arrives a few seconds after the flag (the planner's own step for stuck lines).
+      const t1 = await r.until((t) => {
+        const mm = menuOf(t);
+        return mm?.type === "menu" && mm.dishes.flatMap((d) => d.lines).some((l) => l.late?.way);
+      }, 60_000).catch(() => undefined);
+      const m = menuOf(t1 ?? (await r.thread()));
       if (m?.type !== "menu") throw new Error("no menu card");
       const late = m.dishes.flatMap((d) => d.lines).filter((l) => l.late?.way);
       if (!late.length) throw new Error(`no line flagged with a way out (late lines: ${m.dishes.flatMap((d) => d.lines).filter((l) => l.conflicts.some((c) => c.code === "cannot_arrive")).length})`);

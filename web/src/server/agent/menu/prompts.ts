@@ -83,6 +83,7 @@ Your job in this step: one ingredient of a dish cannot be bought as planned (it 
 - substitute: another ingredient that does the same job in THIS dish, judged by how it is cooked (cooking cream works in a soup but will not whip for a dessert; frozen salmon works in a soup, not for gravlax; dried dill can replace fresh in a soup at about a third of the amount). Give the full ingredient with per-cover amount.
 - change_amount: use less or more of this ingredient (perCover), when the dish still works.
 - change_dish: change the dish so the ingredient is not needed or another one takes its place (salmon soup becomes white-fish soup). Give the ingredient that comes in, if any.
+- When the problem is that it cannot arrive in time, products of the same kind usually cannot either (the same supplier and cut-off): prefer an ingredient of another kind that does the same job (shelf-stable, frozen or dried; rye crispbread for fresh rye bread at a lunch table), and include one change_dish.
 For each option: title (a few words), effect (what changes on the plate, one short sentence), changesDish (true when a guest would notice a different dish). Write title and effect in the language of the chef's request${ctx.requestText ? ` ("${ctx.requestText.slice(0, 80)}")` : ""}. Rules of the kitchen and the menu still apply to every option. Plain code checks each option against the catalogue, the rules, prices and delivery, and drops what fails.
 
 ${kitchenLines(ctx)}`;
