@@ -18,6 +18,7 @@ import { checkOpen, read, record, runAction, step, type ItemOutcome, type TurnRu
 import { earlierFor } from "./earlier";
 import { ThreadStore, type StoredThread } from "./store";
 import { runWidget } from "./widgets";
+import { speakFacts } from "./speak";
 import { hasToday, helsinkiToday, postToday, todayCardId } from "./home";
 import { ensureTelemetry } from "./telemetry";
 import type { AgentTurn, BuyerTurn, MemoryCard, RecordsCard, SubmitTurn, SubmitTurnReply, ThreadAction, ThreadDoor } from "./types";
@@ -306,9 +307,16 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
   }
 
   // A tap that left an order waiting for a person: the agent loop takes up the wait (the runtime's approval step).
-  if (!agentResult) {
+  // A tap (a choice, the OK, taking an order back) is answered in words too: the agent writes its sentences from
+  // what the tap produced (speak.ts facts), in the buyer's language, under the same grounding check.
+  if (!agentResult && body.action && run.store.agentTurn(thread, run.turnId)?.status === "working" && llmRoom()) {
     const pending = [...run.orders.values()].find((o) => o.status === "pending_approval");
-    if (pending) agentResult = await agentTurn(run, undefined, `[The order ${pending.orderId} now waits for ${pending.approval?.approver.name ?? "a person"}'s sign-off. Call await_sign_off for it, then write your one sentence.]`).catch(() => undefined);
+    const shown = JSON.stringify(speakFacts(run)).slice(0, 5000);
+    const lang = body.lang === "fi" ? "Finnish" : body.lang === "sv" ? "Swedish" : "English";
+    const nudge = pending
+      ? `[The buyer tapped "${(body.label ?? body.action.type).slice(0, 120)}". The order ${pending.orderId} now waits for ${pending.approval?.approver.name ?? "a person"}'s OK. What the store shows now: ${shown}. Call await_sign_off for it, then write your sentences in ${lang}.]`
+      : `[The buyer tapped "${(body.label ?? body.action.type).slice(0, 120)}". What the store shows now: ${shown}. Write your two to four sentences about it in ${lang}; call no tool.]`;
+    agentResult = await agentTurn(run, undefined, nudge).catch(() => undefined);
     line = agentResult?.text ?? "";
   }
 
@@ -471,13 +479,30 @@ export function settled(messages: ModelMessage[]): ModelMessage[] {
  * question about the options shown a turn ago is answered from those options).
  */
 async function showLine(run: TurnRun, text: string): Promise<void> {
-  const one = text.replace(/\s+/g, " ").trim().slice(0, 280);
+  // Two to four sentences, with the agent's two marks (**figure**, {{day}}) kept for display and stripped for the check.
+  const one = text.replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n").trim().slice(0, 600);
+  const plain = one.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\{\{([^}]+)\}\}/g, "$1");
+  // Under 60 words: whole sentences from the start while they fit, and a closing question kept (it is what is open).
+  const words = (x: string) => x.replace(/\*\*|\{\{|\}\}/g, "").split(/\s+/).filter(Boolean).length;
+  if (words(one) > 60) {
+    const parts = one.split(/(?<=[.!?])\s+(?=[\p{Lu}"“*{])/u);
+    const last = parts.at(-1)!.trim().endsWith("?") ? parts.at(-1)! : undefined;
+    const keep: string[] = [];
+    for (const p of parts.slice(0, last ? -1 : undefined)) if (words([...keep, p, last ?? ""].join(" ")) <= 60) keep.push(p);
+    const short = [...keep, ...(last ? [last] : [])].join(" ").replace(/\s+/g, " ").trim();
+    if (short) return showLine(run, short);
+  }
   const onScreen = [...new Set(run.store.cards(run.thread).flatMap((x) => ("requestId" in x.card && x.card.requestId ? [x.card.requestId] : [])))].slice(-3);
   const steps = await Promise.all(onScreen.map((id) => run.rt.dock.intake.get(run.session, id).catch(() => undefined)));
   const facts = addWords(factsFrom(...run.facts, ...steps.filter(Boolean), run.store.cards(run.thread).slice(-12).map((x) => x.card)), run.buyer.text ?? "");
-  const g = groundForDisplay("thread", one, facts, { where: `thread ${run.thread.threadId}` });
+  const g = groundForDisplay("thread", plain, facts, { where: `thread ${run.thread.threadId}`, replacement: "" });
   if (g.violations.length) {
-    record(run, "grounding_refusal", `The agent's sentence was not shown: it said ${g.violations.map((v) => `"${v.said}" (${v.kind})`).join(", ")}, which the data does not back.`, { said: one, violations: g.violations });
+    record(run, "grounding_refusal", `A sentence of the agent's reply was not shown: it said ${g.violations.map((v) => `"${v.said}" (${v.kind})`).join(", ")}, which the data does not back.`, { said: one, violations: g.violations });
+    // Only the sentences the data backs are shown (without marks); none at all when none is backed.
+    const kept = g.text.replace(/\s+/g, " ").trim();
+    if (!kept || g.replaced >= g.sentences) return;
+    run.store.line(run.thread, run.turnId, kept);
+    run.store.mark(run.thread, run.turnId, "line", Date.now() - run.t0);
     return;
   }
   run.store.line(run.thread, run.turnId, one);

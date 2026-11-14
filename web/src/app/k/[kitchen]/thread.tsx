@@ -1,44 +1,17 @@
 "use client";
 
-import { Mic, PhoneOff, X } from "lucide-react";
+import { Menu, Mic, PhoneOff, X } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useFormat, useText } from "../../_i18n/provider";
-import { buttonClass, useToast } from "../../_ui/kit";
-import { money } from "../../_ui/plain";
-import {
-  AgentTurn,
-  AnomalyCard,
-  BuyerTurn,
-  Composer,
-  GateCard,
-  MemoryCard,
-  NoticeCard,
-  OrderCard,
-  PriceCard,
-  RecordsCard,
-  StepLines,
-  Thread,
-  UnderstoodCard,
-  VoiceStatus,
-  type MicState,
-  type VoiceState,
-  type UnderstoodItem,
-} from "../../_ui/thread";
-import type { AgentTurn as AgentTurnT, BuyerTurn as BuyerTurnT, Card, MemoryLine, Thread as ThreadT, ThreadAction, ThreadStep } from "@/server/thread/types";
+import { LangSwitch, useText } from "../../_i18n/provider";
+import { Sheet, buttonClass, useToast } from "../../_ui/kit";
+import { Composer, VoiceStatus, type MicState, type VoiceState } from "../../_ui/thread";
+import { AccountBar } from "./account-bar";
 import { requestLabel, usePortal } from "./portal";
 import { nameIn } from "./shop";
+import { ThreadLine } from "./thread-line";
+import { THREAD_LINE_TEXT } from "./thread-line.text";
 import { THREAD_PAGE_TEXT } from "./thread.text";
-import { WaitingGate } from "./thread-signoff";
-import { MenuCardView } from "./thread-menu";
-import { HomeCardView, OrderInPlace, PriceProof } from "./thread-home";
-import { RulesCardView } from "./thread-rules";
-import { OptionsDecision } from "./thread-options";
-import { HistoryList } from "../../_ui/widgets-more";
-import { PickerView, QuestionView, SheetView, isQuiet, sheetOrders, whenText } from "./thread-sheet";
-import { THREAD_SHEET_TEXT } from "./thread-sheet.text";
-import { SEND_PROBLEM } from "./thread-state";
-import { THREAD_WORDS } from "./thread-words.text";
-import { concernText, correctionLabel, fmtFor, gateReasons, memoryKey, memoryText, stepLabel } from "./thread-words";
 import { callOn, useVoiceMode } from "../../_channels/voice-mode";
 import { VOICE_MODE_TEXT } from "../../_channels/voice-mode.text";
 
@@ -50,397 +23,12 @@ import { VOICE_MODE_TEXT } from "../../_channels/voice-mode.text";
  */
 
 
-type Tap = (action: ThreadAction, label: string) => void;
 
 // ---------- the log ----------
 
+/** The conversation, drawn as "Thread" (thread-line.tsx): the dock on every store page and the agent's own page. */
 export function ThreadLog({ className = "" }: { className?: string }) {
-  const { thread: api, base } = usePortal();
-  const tx = useText(THREAD_PAGE_TEXT);
-  const sx = useText(THREAD_SHEET_TEXT);
-  const endRef = useRef<HTMLLIElement>(null);
-  const t = api.thread;
-  const voice = useVoiceMode();
-  const onCall = callOn(voice);
-  const tap: Tap = (action, label) => {
-    void api.submit({ door: "typed", via: "tap", action, label });
-    // On a call, the agent hears what was tapped, so it does not ask for it again.
-    if (onCall) voice?.note(`The caller tapped "${label}" on the screen; the screen handles it. Do not act on it, and say nothing about it unless asked.`);
-  };
-  // What is being heard, and what the agent is saying, before the call's step reaches the thread.
-  const liveYou = onCall ? voice?.view.lines.findLast((l) => l.who === "you" && !l.final) : undefined;
-  const liveAgent = onCall ? voice?.view.lines.findLast((l) => l.who === "agent" && !l.final && l.text.trim()) : undefined;
-  const turns = t?.turns ?? [];
-  const lastCards = turns.reduce((n, x) => n + (x.role === "agent" ? x.cards.length + x.steps.length : 1), 0) + api.pending.length + (voice?.view.lines.length ?? 0);
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ block: "nearest" });
-  }, [lastCards]);
-  const gatedRequests = new Set(turns.flatMap((x) => (x.role === "agent" ? x.cards.flatMap((c) => (c.type === "gate" && c.requestId ? [c.requestId] : [])) : [])));
-  const memory = memoryOnce(t);
-  // Edits made in place on a card (a stepper, a day, a swap) change the card; they are not bubbles of their own.
-  const quiet = new Set(turns.flatMap((x) => (x.role === "buyer" && isQuiet(x) ? [x.turnId] : [])));
-  const shown = turns.filter((x) => (x.role === "buyer" ? !quiet.has(x.turnId) : !(quiet.has(x.replyTo) && x.cards.length === 0 && x.status !== "failed")));
-
-  return (
-    <Thread label={tx.log} className={className}>
-      {turns.length === 0 && api.pending.length === 0 && <Intro />}
-      {shown.map((x) =>
-        x.role === "buyer" ? <Buyer key={x.turnId} turn={x} /> : <Agent key={x.turnId} turn={x} tap={tap} busy={api.posting} gated={gatedRequests} base={base} thread={t!} memory={memory} />,
-      )}
-      {api.pending.filter((p) => !isQuiet(p)).map((p) => (
-        <PendingTurn key={p.turnId} turn={p} />
-      ))}
-      {liveYou && (
-        <BuyerTurn via="voice">
-          <span className="opacity-75">{liveYou.text}</span>
-        </BuyerTurn>
-      )}
-      {liveAgent && <AgentTurn pending text={liveAgent.text} />}
-      {api.error && (
-        <li>
-          <p role="alert" className="rounded-xl bg-bad-soft px-4 py-3 text-[0.92rem]">
-            {api.error.startsWith(SEND_PROBLEM)
-              ? (() => {
-                  const [kind, what] = api.error.slice(SEND_PROBLEM.length).split(":") as ["busy" | "offline", "words" | "tap"];
-                  return sx.sendProblem[kind]?.[what] ?? tx.sendFailed(api.error);
-                })()
-              : tx.sendFailed(api.error)}
-          </p>
-        </li>
-      )}
-      <li ref={endRef} aria-hidden />
-    </Thread>
-  );
-}
-
-function Intro() {
-  const { thread, kitchen } = usePortal();
-  const tx = useText(THREAD_PAGE_TEXT);
-  const suggestions = [...tx.suggestions, kitchen.examples[0]].filter(Boolean) as string[];
-  return (
-    <li className="space-y-3">
-      <p className="px-1 text-[0.95rem] leading-relaxed text-ink">{tx.intro}</p>
-      <div className="flex flex-col items-stretch gap-2">
-        {suggestions.map((s) => (
-          <button key={s} type="button" onClick={() => void thread.submit({ door: "typed", via: "typed", text: s })} className="flex min-h-11 items-center rounded-xl bg-paper px-3.5 py-2 text-left text-[0.92rem] shadow-xs ring-1 ring-lavender-mid/70 transition-shadow duration-150 hover:shadow-sm hover:ring-lavender-deep/40">
-            {s}
-          </button>
-        ))}
-      </div>
-    </li>
-  );
-}
-
-const via = (t: BuyerTurnT) => (t.door === "voice" || t.via === "speech" ? "voice" : t.door === "photo" ? "photo" : "typed");
-
-function Buyer({ turn }: { turn: BuyerTurnT }) {
-  const f = useFormat();
-  return (
-    <BuyerTurn via={via(turn)} time={f.clock(turn.at)}>
-      <span className="whitespace-pre-line">{turn.text ?? turn.label ?? ""}</span>
-    </BuyerTurn>
-  );
-}
-
-function PendingTurn({ turn }: { turn: BuyerTurnT }) {
-  return (
-    <>
-      <BuyerTurn via={via(turn)}>
-        <span className="whitespace-pre-line">{turn.text ?? turn.label ?? ""}</span>
-      </BuyerTurn>
-      <AgentTurn pending status="working" />
-    </>
-  );
-}
-
-/**
- * What memory used, said once in a thread: each remembered thing on the first card that used it, never again on a
- * later card or turn (the understood card's lines, then the after-order memory card's).
- */
-function memoryOnce(t: ThreadT | undefined): Map<string, (MemoryLine | string)[]> {
-  const seen = new Set<string>();
-  const out = new Map<string, (MemoryLine | string)[]>();
-  for (const x of t?.turns ?? []) {
-    if (x.role !== "agent") continue;
-    for (const c of x.cards) {
-      const lines: (MemoryLine | string)[] = c.type === "understood" ? (c.memory?.length ? c.memory : c.memoryUsed) : c.type === "memory" ? c.used : [];
-      const fresh = lines.filter((m) => {
-        const k = memoryKey(m);
-        const text = typeof m === "string" ? m : m.text;
-        if (seen.has(k) || seen.has(text)) return false;
-        seen.add(k);
-        seen.add(text);
-        return true;
-      });
-      out.set(c.cardId, fresh);
-    }
-  }
-  return out;
-}
-
-function stepsOf(steps: ThreadStep[], label: (s: ThreadStep) => string) {
-  // A skipped step (the memory note, when its writer is slow or unavailable) is not shown as work that was done.
-  return steps.filter((s) => s.status !== "skipped").map((s) => ({ key: s.stepId, text: label(s), state: s.status === "running" ? ("doing" as const) : s.status === "failed" ? ("failed" as const) : ("done" as const), detail: s.ms !== undefined && s.status !== "running" ? `${(s.ms / 1000).toFixed(1)} s` : undefined }));
-}
-
-const SHOWING = new Set<Card["type"]>(["today", "products", "product", "standing", "deliveries", "memory_list", "records", "rules"]);
-
-function Agent({ turn, tap, busy, gated, base, thread, memory }: { turn: AgentTurnT; tap: Tap; busy: boolean; gated: Set<string>; base: string; thread: ThreadT; memory: Map<string, (MemoryLine | string)[]> }) {
-  const w = useText(THREAD_WORDS);
-  const { lang } = useFormat();
-  // Showing something (the day's opening, a list, a product, the rules) has nothing to explain once it is there: its
-  // steps are drawn only while it works or if one failed. Ordering keeps its steps (how the order was checked).
-  const showing = turn.status !== "working" && turn.cards.length > 0 && turn.cards.every((c) => SHOWING.has(c.type)) && !turn.steps.some((s) => s.status === "failed");
-  const steps = showing ? [] : stepsOf(turn.steps, (s) => stepLabel(s, w, lang));
-  return (
-    <AgentTurn text={turn.line} status={turn.status} pending={turn.status === "working" && turn.cards.length === 0} steps={steps.length ? <StepLines steps={steps} fold={turn.status !== "working"} /> : undefined}>
-      {turn.cards.length > 0 && (
-        <div className="flex flex-col gap-2.5">
-          {turn.cards.map((c) => (
-            <CardView key={c.cardId} card={c} tap={tap} busy={busy} gated={gated} base={base} turn={turn} thread={thread} memory={memory.get(c.cardId) ?? []} />
-          ))}
-        </div>
-      )}
-    </AgentTurn>
-  );
-}
-
-// ---------- cards ----------
-
-function CardView({ card, tap, busy, gated, base, turn, thread, memory }: { card: Card; tap: Tap; busy: boolean; gated: Set<string>; base: string; turn: AgentTurnT; thread: ThreadT; memory: (MemoryLine | string)[] }) {
-  const tx = useText(THREAD_PAGE_TEXT);
-  const sx = useText(THREAD_SHEET_TEXT);
-  const w = useText(THREAD_WORDS);
-  const f = useFormat();
-  const wf = fmtFor(f.lang);
-  const memoryLines = memory.map((m) => memoryText(m, w, wf, f.lang)).filter((x): x is string => !!x);
-  const btn = (kind: "go" | "secondary" | "quiet" | "safety" | "ghost-dark", label: string, action: ThreadAction) => (
-    <button key={label} type="button" disabled={busy} className={buttonClass(kind, "sm")} onClick={() => tap(action, label)}>
-      {label}
-    </button>
-  );
-  const measure = (a: { amount: number; unit: string }) => f.measure(a.amount, a.unit);
-  const lineText = (l: { quantity: number; name: string }) => tx.packs(f.num(l.quantity), l.name);
-
-  switch (card.type) {
-    case "understood": {
-      const items: UnderstoodItem[] = [{ label: tx.field.item, value: card.item }];
-      if (card.amount) items.push({ label: tx.field.amount, value: measure(card.amount), from: card.basedOn?.fields.includes("quantity") ? "memory" : "said" });
-      if (card.deliverOn) items.push({ label: tx.field.deliverOn, value: f.day(card.deliverOn) });
-      else if (card.deliverBy) items.push({ label: tx.field.deliverBy, value: f.day(card.deliverBy), from: card.basedOn?.fields.includes("deliverBy") ? "memory" : "said" });
-      if (card.claims.length) items.push({ label: tx.field.claims, value: card.claims.map((c) => f.attr(c)).join(", ") });
-      if (card.allergens.length) items.push({ label: tx.field.allergens, value: card.allergens.join(", ") });
-      if (card.optimise && tx.goal[card.optimise]) items.push({ label: tx.field.goal, value: tx.goal[card.optimise] });
-      const fields = (xs: string[]) => xs.map((x) => tx.fieldWord[x] ?? x).join(", ");
-      const based = card.basedOn ? (card.basedOn.label ? tx.basedOn(`“${card.basedOn.label}”`, fields(card.basedOn.fields)) : tx.basedOnPlain(fields(card.basedOn.fields))) : undefined;
-      const notes = (card.notes ?? []).map((n) => w.note[n.code]?.(n.params, wf)).filter((x): x is string => !!x);
-      return <UnderstoodCard kind={tx.kind.understood} items={items} basedOn={based} alsoAsked={card.alsoAsked.length ? tx.alsoAsked(card.alsoAsked.join("; ")) : undefined} notes={notes} memory={memoryLines} />;
-    }
-    case "anomaly":
-      return (
-        <>
-          {card.concerns.map((c) => {
-            const answeredWith = c.corrections.find((x) => x.id === card.answered?.choice);
-            const answered = card.answered ? (card.answered.choice === "confirm" ? tx.answeredConfirm : tx.answeredChoice(answeredWith ? correctionLabel(answeredWith, w, wf, f.lang) : card.answered.choice)) : undefined;
-            return (
-              <AnomalyCard
-                key={c.key}
-                kind={tx.kind.anomaly}
-                title={concernText(c, w, wf, f.lang)}
-                reason={card.answered && !card.answered.verified && card.answered.choice === "confirm" ? tx.relayedNote : undefined}
-                answered={answered}
-                actions={
-                  <>
-                    {c.confirmable && btn("go", tx.confirm, { type: "concern", requestId: card.requestId, key: c.key, choice: "confirm" })}
-                    {c.corrections.map((x) => btn("secondary", correctionLabel(x, w, wf, f.lang), { type: "concern", requestId: card.requestId, key: c.key, choice: x.id }))}
-                  </>
-                }
-              />
-            );
-          })}
-        </>
-      );
-    case "question":
-      return <QuestionView card={card} tap={tap} busy={busy} />;
-    case "options":
-      return <OptionsDecision card={card} tap={tap} busy={busy} />;
-    case "price": {
-      const placed = gated.has(card.requestId);
-      return (
-        <>
-        <PriceCard
-          kind={tx.kind.price}
-          price={money(card.totalCents)}
-          per={tx.preview[card.preview.outcome] ?? undefined}
-          holds={tx.holds(f.clock(card.expiresAt))}
-          lines={[...card.lines.map((l) => ({ label: lineText(l), value: l.unitPriceCents !== undefined ? money(l.unitPriceCents * l.quantity) : "" })), { label: tx.deliver(f.day(card.deliveryDate)), value: "" }]}
-          signed={tx.signed}
-          actions={!placed && !turnClosedFor(thread, card.requestId) ? btn("go", tx.place, { type: "place", requestId: card.requestId }) : undefined}
-        />
-        <PriceProof card={card} />
-        </>
-      );
-    }
-    case "gate": {
-      if (card.orderId && card.outcome === "placed_alone" && sheetOrders(thread).has(card.orderId)) return null;
-      const name = card.approver?.name ?? "";
-      const g = tx.gate;
-      const title = { waiting: g.waiting(name), approved: g.approved(name), refused: g.refused(f.ruleTitle(card.rule)), placed_alone: g.placed_alone, declined: g.declined, withdrawn: g.withdrawn, expired: g.expired }[card.outcome];
-      const reason = gateReasons(card.rules, card.reasons, w, wf, f.lang).join(" ") || undefined;
-      if (card.outcome === "waiting" && card.approvalId)
-        return <WaitingGate card={card} kind={tx.kind.gate} title={title} reason={reason} role={card.approver ? f.role(card.approver.role) : undefined} withdraw={card.orderId ? btn("ghost-dark", tx.withdraw, { type: "withdraw", orderId: card.orderId }) : undefined} />;
-      return (
-        <GateCard
-          state={card.outcome}
-          kind={tx.kind.gate}
-          title={title}
-          reason={reason}
-          approver={card.approver ? { name: card.approver.name, role: f.role(card.approver.role), where: card.outcome === "waiting" ? tx.onPhone : undefined } : undefined}
-          actions={card.outcome === "waiting" && card.orderId ? btn("ghost-dark", tx.withdraw, { type: "withdraw", orderId: card.orderId }) : undefined}
-        />
-      );
-    }
-    case "order": {
-      // An order from the order sheet: the sheet already shows its lines, total and what happened; only the details stay.
-      if (sheetOrders(thread).has(card.orderId)) return <OrderInPlace card={card} />;
-      const tone = card.status === "committed" ? "good" : card.status === "pending_approval" ? "waiting" : card.status === "rejected" ? "refused" : "neutral";
-      const who = card.authorised.by === "agent" ? tx.byAgent : card.authorised.by === "person" ? tx.byPerson(card.authorised.name) : tx.waitingFor(card.authorised.name);
-      return (
-        <>
-          <OrderCard
-            kind={tx.kind.order}
-            status={{ label: tx.status[card.status] ?? card.status, tone }}
-            lines={card.lines.map((l) => ({ name: l.name, qty: `× ${f.num(l.quantity)}`, price: l.unitPriceCents !== undefined ? money(l.unitPriceCents * l.quantity) : undefined }))}
-            total={money(card.totalCents)}
-            totalLabel={tx.total}
-            delivery={`${card.deliveryDate ? tx.deliver(f.day(card.deliveryDate)) : ""} ${who}`.trim()}
-            href={`${base}/orders/${card.orderId}`}
-            linkLabel={tx.seeOrder}
-          />
-          {card.status === "committed" && card.takeBackUntil && (
-            <p className="px-1">
-              <button type="button" disabled={busy} className={buttonClass("secondary", "sm")} onClick={() => tap({ type: "withdraw", orderId: card.orderId }, sx.takeBackWords)}>
-                {sx.takeBack(whenText(card.takeBackUntil, f.day))}
-              </button>
-            </p>
-          )}
-          <OrderInPlace card={card} />
-          {card.passedOver.length > 0 && (
-            <ul className="space-y-1 px-1 text-[0.84rem] leading-snug text-ink-soft">
-              {card.passedOver.map((p, i) => (
-                <li key={i}>{tx.passedOver(p.title, money(p.totalCents), p.why)}</li>
-              ))}
-            </ul>
-          )}
-        </>
-      );
-    }
-    case "memory":
-      return (
-        <>
-          {memoryLines.length > 0 && <MemoryCard kind={tx.kind.memory} items={memoryLines.map((u, i) => ({ key: `u${i}`, text: u }))} />}
-          {card.proposals.length > 0 && (
-            <MemoryCard
-              kind={tx.kind.memoryAfter}
-              items={card.proposals.map((p) => ({
-                key: p.itemId,
-                text: p.question,
-                state: p.decided,
-                keepLabel: tx.keep,
-                dropLabel: tx.drop,
-                onKeep: busy ? undefined : () => tap({ type: "remember", itemId: p.itemId, yes: true }, `${tx.keep}: ${p.question}`),
-                onDrop: busy ? undefined : () => tap({ type: "remember", itemId: p.itemId, yes: false }, `${tx.drop}: ${p.question}`),
-              }))}
-            />
-          )}
-        </>
-      );
-    case "records":
-      // Earlier orders: the kit's history list, each with "order again" onto the order sheet (it never orders by itself).
-      if (card.repeatable && card.rows.length && card.rows.every((r) => r.kind === "order" && r.ref))
-        return (
-          <HistoryList
-            kind={tx.kind.records}
-            orders={card.rows.map((r) => ({ id: r.ref!, when: r.date ? f.day(r.date) : "", summary: r.label, total: r.totalCents !== undefined ? money(r.totalCents) : "", ...(r.detail && tx.status[r.detail] && r.detail !== "committed" ? { note: tx.status[r.detail] } : {}) }))}
-            onAgain={(ref) => !busy && tap({ type: "order_again", ref }, tx.repeatWords(`“${card.rows.find((r) => r.ref === ref)?.label ?? ""}”`))}
-          />
-        );
-      return (
-        <>
-          <RecordsCard
-            kind={tx.kind.records}
-            rows={card.rows.length ? card.rows.map((r) => ({ label: r.label, value: r.totalCents !== undefined ? money(r.totalCents) : undefined, sub: [r.date ? f.day(r.date) : "", r.detail ? (tx.status[r.detail] ?? r.detail) : ""].filter(Boolean).join(" · ") })) : [{ label: tx.noRecords }]}
-          />
-          {card.repeat && !card.repeatable && (
-            <p className="px-1">
-              <RepeatButton refId={card.repeat.ref} label={card.repeat.label} />
-            </p>
-          )}
-          {card.repeatable && (
-            <ul className="space-y-1.5 px-1">
-              {card.rows.filter((r) => r.ref).map((r) => (
-                <li key={r.ref}>
-                  <RepeatButton refId={r.ref!} label={r.label} wide />
-                </li>
-              ))}
-            </ul>
-          )}
-        </>
-      );
-    case "menu":
-      return <MenuCardView card={card} busy={busy} tap={tap} />;
-    case "sheet":
-      return <SheetView card={card} tap={tap} busy={busy} />;
-    case "alternatives":
-      return <PickerView card={card} tap={tap} busy={busy} thread={thread} />;
-    case "rules":
-      return <RulesCardView card={card} busy={busy} tap={tap} />;
-    case "notice": {
-      // A tap on a card that has moved on (another tap, a newer version): said plainly, never as a rule.
-      if (card.rule === "intake_sequence") return <NoticeCard kind={tx.kind.notice} title={sx.stale.title} tone="plain">{sx.stale.body}</NoticeCard>;
-      const missing = (card.missing ?? []).map((m) => (/what to buy/.test(m) ? w.notice.missingItem : w.notice.missingAmount));
-      const body =
-        f.lang === "en"
-          ? card.message
-          : card.kind === "incomplete"
-            ? w.notice.incomplete(missing.length ? missing : [w.notice.missingAmount])
-            : card.kind === "not_purchase"
-              ? w.notice.not_purchase
-              : card.kind === "unavailable"
-                ? w.notice.unavailable
-                : card.kind === "paused"
-                  ? w.notice.paused
-                : card.kind === "not_found"
-                  ? w.notice.not_found
-                  : card.kind === "error"
-                    ? w.notice.error
-                    : "";
-      return (
-        <NoticeCard kind={tx.kind.notice} title={tx.notice[card.kind] ?? tx.kind.notice} tone={card.kind === "suspended" ? "gate" : "plain"} actions={card.retry ? btn("secondary", tx.retry, { type: "retry", turnId: turn.turnId }) : undefined}>
-          {body}
-          {card.rule ? `${body ? " " : ""}(${f.ruleTitle(card.rule)})` : ""}
-        </NoticeCard>
-      );
-    }
-    default:
-      return <HomeCardView card={card} tap={tap} busy={busy} />;
-  }
-}
-
-/** A price whose request already moved on (a gate card, or a newer reading) offers nothing to tap. */
-function turnClosedFor(thread: ThreadT, requestId: string): boolean {
-  return thread.turns.some((x) => x.role === "agent" && x.cards.some((c) => c.type === "gate" && c.requestId === requestId));
-}
-
-/** Order an earlier order again: its lines on the order sheet (an `order_again` tap, plain code, no model), confirmed there. */
-function RepeatButton({ refId, label, wide = false }: { refId: string; label: string; wide?: boolean }) {
-  const { thread } = usePortal();
-  const tx = useText(THREAD_PAGE_TEXT);
-  return (
-    <button type="button" disabled={thread.posting} className={`${buttonClass("quiet", "sm")}${wide ? " w-full justify-start text-left" : ""}`} onClick={() => void thread.submit({ door: "typed", via: "tap", action: { type: "order_again", ref: refId }, label: tx.repeatWords(`“${label}”`) })}>
-      {wide ? `${tx.repeat}: ${label}` : tx.repeat}
-    </button>
-  );
+  return <ThreadLine className={className} />;
 }
 
 // ---------- the composer: words, the microphone, a photo ----------
@@ -679,27 +267,70 @@ export function ThreadComposer({ id = "need", size = "md", standalone = false, p
 }
 
 /**
- * The agent, full page: where a signed-in kitchen lands (and the Order page, the same thread). The day's opening card
- * (AgentHome: what needs the kitchen today, then the starting points) is the page's header; the composer stays under
- * the thumb above the tab bar.
+ * The agent, full page: where a signed-in kitchen lands (and the Order page, the same thread), drawn as the design
+ * lead's "Thread": the agent's name and the kitchen at the top, the conversation on its line, the composer under the
+ * thumb. The store's sections are one tap away under the kitchen's name.
  */
 export function ThreadPage() {
-  const { thread } = usePortal();
+  const tl = useText(THREAD_LINE_TEXT);
   const tx = useText(THREAD_PAGE_TEXT);
   return (
-    <section aria-labelledby="thread-title" className="mx-auto max-w-[46rem] py-4 sm:py-6">
-      <header className="mb-2 flex items-center justify-end gap-3">
-        <h1 id="thread-title" className="sr-only">
-          {tx.pageTitle}
+    <section aria-labelledby="thread-title" className="mx-auto flex min-h-[calc(100dvh-2rem)] w-full max-w-[40rem] flex-col">
+      <header className="flex items-center gap-2.5 px-5 pb-2 pt-4 text-ink-soft">
+        <span aria-hidden className="size-2.5 rounded-full bg-petrol" />
+        <h1 id="thread-title" className="text-[0.86rem] font-medium">
+          {tl.name}
+          <span className="sr-only"> · {tx.pageTitle}</span>
         </h1>
-        {(thread.thread?.turns.length ?? 0) > 1 && <StartOver />}
+        <ShellMenu />
       </header>
-      <ThreadLog />
-      {/* On the agent's own page the composer is all that stays under the thumb: what the rules mean is in the cards. */}
-      <div className="sticky bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-20 mt-6 rounded-[2rem] bg-mist/95 py-2 backdrop-blur-sm lg:bottom-4">
-        <ThreadComposer hint={false} />
+      <div className="relative flex flex-1 flex-col px-5 pb-5 pt-4">
+        <ThreadLine landing className="flex flex-1 flex-col justify-end" />
       </div>
+      <footer className="sticky bottom-0 z-20 bg-gradient-to-t from-mist via-mist to-transparent px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2">
+        <ThreadComposer hint={false} placeholder={tl.placeholder} />
+      </footer>
     </section>
+  );
+}
+
+/** The kitchen's name, top right: the store's sections, the language and starting over, one tap away. */
+function ShellMenu() {
+  const { kitchen, base, account } = usePortal();
+  const tl = useText(THREAD_LINE_TEXT);
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-expanded={open} className="ml-auto inline-flex min-h-9 max-w-[55%] items-center gap-1 truncate text-[0.76rem] text-ink-soft hover:text-petrol">
+        <span className="truncate">{kitchen.name}</span>
+        <Menu aria-hidden size={15} className="shrink-0" />
+      </button>
+      <Sheet open={open} onClose={() => setOpen(false)} title={tl.menu}>
+        <AccountBar kitchen={kitchen} account={account} />
+        <ul className="-mx-5 mt-2 divide-y divide-line border-y border-line">
+          {(
+            [
+              ["/catalogue", tl.sections.catalogue],
+              ["/orders", tl.sections.orders],
+              ["/agent", tl.sections.rules],
+            ] as const
+          ).map(([href, label]) => (
+            <li key={href}>
+              <Link href={`${base}${href}`} className="flex min-h-12 items-center px-5 text-[0.98rem] font-medium hover:bg-surface">
+                {label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+        <div className="mt-5 flex items-center justify-between gap-4">
+          <p className="text-[0.92rem] font-medium">{tl.sections.language}</p>
+          <LangSwitch />
+        </div>
+        <div className="mt-4">
+          <StartOver />
+        </div>
+      </Sheet>
+    </>
   );
 }
 
