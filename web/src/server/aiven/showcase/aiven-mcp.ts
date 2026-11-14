@@ -143,7 +143,7 @@ export async function mcpStatus(force = false): Promise<McpStatus> {
   if (out.reachable && cfg.project) {
     const probe = await mcpCall("aiven_pg_read", { project: cfg.project, service_name: "dock-pg", query: "select 1 as ok", reasoning: "AimoPilot operations copilot: capability check" }, 8_000);
     out.sql = probe.ok;
-    if (!probe.ok) out.sqlDetail = probe.denied ? "Aiven MCP is on, but its read-only SQL tool runs through the PG Editor API, which the read-only token may not use." : probe.error;
+    if (!probe.ok) out.sqlDetail = probe.denied ? "SQL questions go the direct read-only way (PostgreSQL as dock_copilot): Aiven MCP's SQL tool needs a PG Editor permission that a read-only token does not carry." : probe.error;
   }
   if (out.orgEnabled === false) out.instruction = "An organisation admin must switch on Admin > Authentication > Allow MCP connections in the Aiven Console.";
   else if (!cfg.readToken) out.instruction = "Set AIVEN_READONLY_TOKEN on this server so it can call the Aiven MCP server.";

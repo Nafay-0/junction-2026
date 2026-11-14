@@ -12,7 +12,7 @@ export function platformRoute(rt: Runtime, staff: OpsSession & { viewer?: true }
   if (!staff.viewer) ensureUsageFlusher(rt.aiven.pool);
   if (!rule) return;
   const wait = limiter.hit(rule, staff.token);
-  if (wait !== null) throw new DockError(429, "rate_limited", `Too many ${rule.name} requests from this desk; try again in ${wait} s.`);
+  if (wait !== null) throw new DockError(429, "rate_limited", `Too many ${rule.name} requests from this ${staff.viewer ? "address" : "desk"}; try again in ${wait} s.`, undefined, { retryInS: wait });
 }
 
 export function needKafka(configured: boolean): void {

@@ -7,8 +7,9 @@ import type { McpStatus } from "@/server/aiven/showcase/aiven-mcp";
 import type { AnswerCard } from "@/server/aiven/showcase/copilot";
 import { api } from "../../../../_client/api";
 import { fi, whenSeconds } from "../../../_ui/format";
-import { Button, LoadError, PageHead, Panel, Said, useOps, StaffButton } from "../../../_ui/kit";
+import { Button, LoadError, PageHead, Panel, Said, useOps } from "../../../_ui/kit";
 import { Mono, PlatformTabs, Rows, Status } from "../_parts/parts";
+import { TryNote, tryBlocked, useTry } from "../_parts/try";
 
 type Info = { mcp: McpStatus; direct: boolean; suggestions: string[] };
 const PIN_KEY = "dock.ops.platform.pinned";
@@ -21,6 +22,8 @@ const PATH_WORD: Record<AnswerCard["path"], string> = { "aiven-mcp": "Aiven MCP 
  */
 export function Copilot() {
   const info = useOps<Info>("/ops-api/platform/copilot", { pollMs: 60_000 });
+  const t = useTry("copilot");
+  const off = tryBlocked(t);
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
   const [cards, setCards] = useState<AnswerCard[]>([]);
@@ -45,11 +48,12 @@ export function Copilot() {
   };
 
   async function ask(question: string) {
-    if (!question.trim()) return;
+    if (!question.trim() || off) return;
     setBusy(true);
     setProblem(undefined);
     const r = await api<AnswerCard>("POST", "/ops-api/platform/copilot", { question });
     setBusy(false);
+    t.refresh();
     if (!r.ok) return setProblem(r.error.message);
     setCards((c) => [r.data, ...c].slice(0, 10));
   }
@@ -74,22 +78,25 @@ export function Copilot() {
               Question
             </label>
             <input id="copilot-q" value={q} onChange={(e) => setQ(e.target.value)} maxLength={500} placeholder="How many orders were refused in the last hour, and by which rule?" className="field !min-h-12 min-w-0 flex-1 !rounded-full !px-5 !text-[1.02rem]" />
-            <Button staff type="submit" kind="go" size="lg" disabled={busy}>
+            <Button type="submit" kind="go" size="lg" disabled={busy || off}>
               {busy ? "Reading…" : "Ask the platform"}
             </Button>
           </form>
+          <TryNote t={t} className="mt-2" />
           <div className="mt-2 flex flex-wrap gap-1.5">
             {(info.data?.suggestions ?? []).map((s) => (
-              <StaffButton
+              <button
+                type="button"
                 key={s}
+                disabled={busy || off}
                 onClick={() => {
                   setQ(s);
                   void ask(s);
                 }}
-                className="rounded-full border border-line-strong bg-paper px-3.5 py-1.5 text-left text-[0.86rem] transition-colors hover:border-petrol hover:bg-petrol-soft"
+                className="rounded-full border border-line-strong bg-paper px-3.5 py-1.5 text-left text-[0.86rem] transition-colors hover:border-petrol hover:bg-petrol-soft disabled:opacity-45"
               >
                 {s}
-              </StaffButton>
+              </button>
             ))}
           </div>
           {problem && <p role="alert" className="mt-2 rounded-lg border border-bad/20 bg-bad-soft px-4 py-3 text-[0.92rem]">{problem}</p>}
@@ -98,14 +105,14 @@ export function Copilot() {
               <h2 className="display text-[1.5rem]">Pinned</h2>
               <div className="mt-2 space-y-3">
                 {pinned.map((c) => (
-                  <Card key={c.id} c={c} pinned onPin={() => savePins(pinned.filter((p) => p.id !== c.id))} onAgain={() => void ask(c.question)} />
+                  <Card key={c.id} c={c} pinned off={off} onPin={() => savePins(pinned.filter((p) => p.id !== c.id))} onAgain={() => void ask(c.question)} />
                 ))}
               </div>
             </section>
           )}
           <div className="mt-5 space-y-3">
             {cards.map((c) => (
-              <Card key={c.id} c={c} pinned={pinned.some((p) => p.id === c.id)} onPin={() => (pinned.some((p) => p.id === c.id) ? savePins(pinned.filter((p) => p.id !== c.id)) : savePins([c, ...pinned]))} onAgain={() => void ask(c.question)} />
+              <Card key={c.id} c={c} off={off} pinned={pinned.some((p) => p.id === c.id)} onPin={() => (pinned.some((p) => p.id === c.id) ? savePins(pinned.filter((p) => p.id !== c.id)) : savePins([c, ...pinned]))} onAgain={() => void ask(c.question)} />
             ))}
           </div>
         </div>
@@ -115,12 +122,13 @@ export function Copilot() {
             <p className="mt-1.5 flex items-center justify-between gap-2">
               <b>Aiven MCP server</b> <Status ok={m ? (m.orgEnabled === false ? false : m.reachable) : null} label={!m ? "…" : m.orgEnabled === false ? "off" : m.reachable ? `on, ${m.tools} tools` : "not answering"} />
             </p>
-            <p className="text-ink-soft">Service state, logs and metrics, with the read-only token. {m?.sql === false && "Its SQL tool needs a PG Editor permission the read-only token lacks, so SQL goes the direct way."}</p>
+            <p className="text-ink-soft">Service state, logs and metrics, with the read-only token. {m?.sql === false && "SQL questions take the direct read-only path below (MCP's SQL tool needs a PG Editor permission a read-only token does not carry)."}</p>
             {m?.instruction && <p className="mt-1 rounded-md bg-surface px-3 py-2 font-semibold">{m.instruction}</p>}
             <p className="mt-2 flex items-center justify-between gap-2">
               <b>Direct read-only path</b> <Status ok={info.data ? info.data.direct : null} label={info.data?.direct ? "configured" : "not configured"} />
             </p>
             <p className="text-ink-soft">PostgreSQL as dock_copilot. The same limits on both paths.</p>
+            {info.data && !info.data.direct && !m?.reachable && <p className="mt-2 rounded-md bg-surface px-3 py-2 font-semibold">Neither path is configured on this server, so every question here gets &ldquo;The data does not say&rdquo;. On the hosted site both answer.</p>}
           </Panel>
           <Panel className="p-5 text-[0.92rem] leading-snug">
             <h2 className="display text-[1.3rem]">Hard limits</h2>
@@ -141,15 +149,15 @@ export function Copilot() {
   );
 }
 
-function Card({ c, pinned, onPin, onAgain }: { c: AnswerCard; pinned: boolean; onPin: () => void; onAgain: () => void }) {
+function Card({ c, pinned, off, onPin, onAgain }: { c: AnswerCard; pinned: boolean; off: boolean; onPin: () => void; onAgain: () => void }) {
   return (
     <Panel className={c.refused ? "!border-safety-ink/20" : ""}>
       <div className="flex flex-wrap items-start justify-between gap-2 px-4 pt-3">
         <p className="text-[0.92rem] text-ink-soft">&ldquo;{c.question}&rdquo;</p>
         <div className="flex gap-2">
-          <StaffButton onClick={onAgain} className={buttonClass("quiet", "sm", "!min-h-8 text-[0.88rem]")}>
+          <button type="button" onClick={onAgain} disabled={off} title={off ? "Your questions for now are used; see the line under the question box." : undefined} className={`${buttonClass("quiet", "sm", "!min-h-8 text-[0.88rem]")} disabled:opacity-45`}>
             Ask again
-          </StaffButton>
+          </button>
           <button type="button" onClick={onPin} className={buttonClass("secondary", "sm")} aria-pressed={pinned}>
             {pinned ? "Unpin" : "Pin"}
           </button>

@@ -6,12 +6,14 @@ import { DEFAULT_TERMS } from "../accounts/terms";
 import { dailyUsage } from "../limits";
 import { getRuntime, resetRuntime } from "../runtime";
 import { OPS_COOKIE, enterOps } from "./access";
+import { tryCaps } from "./try-caps";
 import { WORDS_HIDDEN } from "./viewer";
 
 /**
  * Looking without the passcode. Every operations API route is walked with a viewer (no session): a GET reads and
  * leaves nothing behind (no ledger entry, no model call, no live price call), every other method is refused with 403
- * staff_only. Every route file is either explicitly readable (opsRead, GET only) or staff only (opsRoute): the
+ * staff_only, except the few actions a visitor may try on purpose (opsTry, listed in TRY_ROUTES below). Every route
+ * file is either explicitly readable (opsRead, GET only), a named try (opsTry, POST) or staff only (opsRoute): the
  * default for a new route is staff only. Then two own accounts and a viewer: the viewer sees that their orders exist
  * and how they went, never their words; the same browser signed in to one of them sees that one's words in full.
  */
@@ -21,7 +23,13 @@ const files = Object.keys(routes).sort();
 const params = { orderId: "ord_nope", requestId: "req_nope", threadId: "thr_nope", runId: "run_nope" };
 type Handler = (req: Request, ctx: { params: Promise<typeof params> }) => Promise<Response>;
 
-beforeEach(() => resetRuntime());
+beforeEach(() => {
+  resetRuntime();
+  tryCaps().reset();
+});
+
+/** The only actions a visitor may try without the passcode (server/ops/try-caps.ts). Adding one is a decision. */
+const TRY_ROUTES = ["/src/app/ops-api/platform/agent/route.ts POST", "/src/app/ops-api/platform/copilot/route.ts POST", "/src/app/ops-api/platform/recall-probe/route.ts POST"];
 
 const urlOf = (file: string, query = "") => `${BASE}${file.replace("/src/app", "").replace("/route.ts", "").replace(/\[(\w+)\]/g, (_, n: keyof typeof params) => params[n] ?? "x")}${query}`;
 
@@ -33,9 +41,10 @@ describe("the operations API with no passcode", () => {
       const src = readFileSync(path.join(process.cwd(), f.replace(/^\//, "")), "utf8");
       for (const m of src.matchAll(/export async function (GET|POST|PUT|PATCH|DELETE)\b([\s\S]*?)(?=\nexport |\n*$)/g)) {
         const [, method, body] = m;
-        const door = /opsRead\(/.test(body) ? "read" : /opsRoute\(|platformRoute|showRoute\(/.test(body) ? "staff" : "none";
-        expect(door, `${f} ${method} goes through opsRead or opsRoute`).not.toBe("none");
-        if (method !== "GET") expect(door, `${f} ${method} is staff only`).toBe("staff");
+        const door = /opsRead\(/.test(body) ? "read" : /opsTry\(/.test(body) ? "try" : /opsRoute\(|platformRoute|showRoute\(/.test(body) ? "staff" : "none";
+        expect(door, `${f} ${method} goes through opsRead, opsTry or opsRoute`).not.toBe("none");
+        if (door === "try") expect(TRY_ROUTES, `${f} ${method} is a named try`).toContain(`${f} ${method}`);
+        else if (method !== "GET") expect(door, `${f} ${method} is staff only`).toBe("staff");
       }
     }
   });
@@ -56,6 +65,10 @@ describe("the operations API with no passcode", () => {
           // A read: answered, or "not here" for an id that does not exist, or a service this test server does not run.
           expect([200, 400, 404, 409, 503], `${f} GET`).toContain(res.status);
           if (res.status === 200) reads.push(f);
+        } else if (TRY_ROUTES.includes(`${f} ${method}`)) {
+          // A named try: answered (here: a recording, a "not configured" card, "not available on this server"), never staff_only.
+          expect([200, 409, 429, 503], `${f} ${method}`).toContain(res.status);
+          if (res.status !== 200) expect(((await res.json()) as { error: { code: string } }).error.code).not.toBe("staff_only");
         } else {
           expect(res.status, `${f} ${method}`).toBe(403);
           expect(((await res.json()) as { error: { code: string } }).error.code).toBe("staff_only");
