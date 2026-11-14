@@ -548,7 +548,7 @@ type ScanReply = { lines: { read: string; status: string }[]; deliverByAsWritten
  * `standalone`: a composer of its own (Home's hero), with its own field, that opens the thread once it has sent;
  * otherwise the thread's composer, sharing the field (and what it is set to change) with the rest of the store.
  */
-export function ThreadComposer({ id = "need", size = "md", standalone = false, placeholder, label }: { id?: string; size?: "md" | "lg"; standalone?: boolean; placeholder?: string; label?: string }) {
+export function ThreadComposer({ id = "need", size = "md", standalone = false, placeholder, label, hint = true }: { id?: string; size?: "md" | "lg"; standalone?: boolean; placeholder?: string; label?: string; hint?: boolean }) {
   const { thread, agent: shared, kitchen, lang, fieldRef } = usePortal();
   const [ownDraft, setOwnDraft] = useState("");
   const agent = standalone ? { ...shared, draft: ownDraft, setDraft: setOwnDraft, followUp: undefined, product: undefined } : shared;
@@ -670,7 +670,7 @@ export function ThreadComposer({ id = "need", size = "md", standalone = false, p
         placeholder={placeholder ?? (agent.followUp ? tx.phChange : agent.product ? tx.phProduct : tx.phAsk)}
         mic={{ state: mic.state, onDown: mic.onDown, onUp: mic.onUp, heard: mic.heard }}
         onPhoto={() => file.current?.click()}
-        hint={standalone ? undefined : tx.hint}
+        hint={standalone || !hint ? undefined : tx.hint}
       />
       <input ref={file} type="file" accept="image/*,application/pdf" capture="environment" className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => void onFile(e.target.files?.[0])} />
     </div>
@@ -694,8 +694,9 @@ export function ThreadPage() {
         {(thread.thread?.turns.length ?? 0) > 1 && <StartOver />}
       </header>
       <ThreadLog />
+      {/* On the agent's own page the composer is all that stays under the thumb: what the rules mean is in the cards. */}
       <div className="sticky bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-20 mt-6 rounded-[2rem] bg-mist/95 py-2 backdrop-blur-sm lg:bottom-4">
-        <ThreadComposer />
+        <ThreadComposer hint={false} />
       </div>
     </section>
   );
