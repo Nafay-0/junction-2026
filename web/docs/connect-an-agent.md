@@ -25,7 +25,9 @@ The store's agent and an outside agent call the same core functions through the 
 | Memory, history, the mandate's rules | `read_kitchen_memory`, `read_mandate`, `list_orders` | `GET /kitchen`, `GET /orders` |
 | "Why?": the audit trail | `explain` | `GET /ledger` |
 | Offers from the wholesaler's selling agent | `list_offers`, `accept_offer`, `decline_offer`, `mute_offers` ([offers.md](offers.md)) | `/api/v1/offers` |
-| Menu planning, a last-minute event, stock-out watch, standing-order renewal | being added on `claude/scenarios-menu` and `claude/scenarios-watch` | the same |
+| Menu planning, a last-minute event | being added on `claude/scenarios-menu` | the same |
+| Stock-out watch: a key product that cannot come for its day, good / better / best substitutes with trade-offs, the signed availability claim; "shall I switch?" | `watch_orders` (`fresh: true` checks live now), `answer_watch { findingId, switch \| keep }`; more substitutes `find_alternatives`, take back `withdraw_order` | `GET /watch`, `POST /watch/answer` |
+| Standing orders: the learned weekly pattern, drift (portions, cost), auto-renew placed or held and asked | `watch_orders` (`standing`, `renewals`), `answer_watch { renewalId, renew_new \| usual \| skip }`, `set_auto_renew` | `GET /watch`, `POST /watch/answer`, `POST /watch/auto-renew` |
 | Changing the kitchen's rules | not offered: only the kitchen's signed-in person signs new terms; an agent reads them (`read_mandate`) | none |
 | Approving an order | never a tool, on either side: the named person's passkey on their own phone | approver operations only (`?audience=agent` leaves them out) |
 
