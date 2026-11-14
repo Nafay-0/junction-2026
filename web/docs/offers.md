@@ -36,9 +36,12 @@ when the data backs it:
 | `lower_carbon` | like for like, at least 10 % less CO2e per litre or kilo (both known; product-group averages are said to be averages) |
 | `new_to_kitchen` | never bought, in a family the kitchen buys. Only ever a second reason |
 
-A model may write the one-line reason (`DOCK_OFFER_MODEL`, off with `DOCK_OFFER_LLM=off` and under tests). The
-grounding check (`core/grounding.ts`, surface `offer`) holds it to the offer's own figures, and a line that says
-anything else is replaced by the one plain code writes from the reasons. The model chooses nothing.
+Plain code writes the one-line reason from the reasons. A model may write it instead, opt-in (`DOCK_OFFER_LLM=on`,
+`DOCK_OFFER_MODEL`): the grounding check (`core/grounding.ts`, surface `offer`) holds it to the offer's own figures, and
+a line that fails is replaced by the plain-code one. The model chooses nothing. It is off by default because of what we
+measured on 14 November on the real catalogue: a cheap model's lines passed the check (every number was in the data)
+while saying what the data does not ("has not ordered milk before" to a kitchen that orders milk weekly; "10 kitchens"
+made from the count of its own orders). The grounding check holds figures, products, dates and allergens, not meaning.
 
 ## Guardrails
 
