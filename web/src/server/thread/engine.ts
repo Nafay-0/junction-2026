@@ -54,6 +54,21 @@ export async function threadStore(): Promise<ThreadStore> {
   return (await engine(await getRuntime())).store;
 }
 
+const words = z.array(z.string().min(1).max(40)).max(14).optional();
+const RulesChangeSchema = z.object({
+  forbidAdd: words,
+  forbidRemove: words,
+  requireAdd: words,
+  requireRemove: words,
+  groupsAdd: words,
+  groupsRemove: words,
+  perOrderLimitEur: z.number().min(0).max(200000).optional(),
+  weeklyBudgetEur: z.number().min(0).max(200000).optional(),
+  maxLeadDays: z.number().int().min(1).max(30).optional(),
+  signer: z.string().trim().min(2).max(60).optional(),
+  substitution: z.enum(["within_preferences", "needs_approval", "none"]).optional(),
+});
+
 const ActionSchema: z.ZodType<ThreadAction> = z.discriminatedUnion("type", [
   z.object({ type: z.literal("concern"), requestId: z.string().min(1).max(80), key: z.string().min(1).max(200), choice: z.string().min(1).max(80) }),
   z.object({ type: z.literal("answer"), requestId: z.string().min(1).max(80), questionId: z.string().min(1).max(80), optionId: z.string().min(1).max(80), remember: z.boolean().optional() }),
@@ -83,6 +98,10 @@ const ActionSchema: z.ZodType<ThreadAction> = z.discriminatedUnion("type", [
   z.object({ type: z.literal("menu_accept"), planId: z.string().min(1).max(80), doubtId: z.string().min(1).max(80) }),
   z.object({ type: z.literal("menu_to_sheet"), planId: z.string().min(1).max(80) }),
   z.object({ type: z.literal("remember_this"), text: z.string().trim().min(2).max(500) }),
+  z.object({ type: z.literal("rules_show") }),
+  z.object({ type: z.literal("rules_propose"), change: RulesChangeSchema }),
+  z.object({ type: z.literal("rules_sign"), proposalId: z.string().min(1).max(80) }),
+  z.object({ type: z.literal("rules_cancel"), proposalId: z.string().min(1).max(80) }),
 ]);
 
 export const SubmitTurnSchema = z

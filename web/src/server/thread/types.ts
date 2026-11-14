@@ -76,7 +76,12 @@ export type ThreadAction =
   /** Menu builder: put every bought line on an order sheet, one order. */
   | { type: "menu_to_sheet"; planId: string }
   /** Remember this, in the kitchen's own words: goes through the memory writer, confirmed by the person. */
-  | { type: "remember_this"; text: string };
+  | { type: "remember_this"; text: string }
+  /** The rules card: propose a change (before and after shown, nothing signed), sign it as the kitchen's person, or drop it. */
+  | { type: "rules_show" }
+  | { type: "rules_propose"; change: RulesChange }
+  | { type: "rules_sign"; proposalId: string }
+  | { type: "rules_cancel"; proposalId: string };
 
 export type BuyerTurn = {
   turnId: string;
@@ -512,7 +517,59 @@ export type MenuCard = CardBase & {
   sheetId?: string;
 };
 
-export type Card = UnderstoodCard | AnomalyCard | QuestionCard | OptionsCard | PriceCard | GateCard | OrderCard | MemoryCard | RecordsCard | NoticeCard | PlanCard | SheetCard | AlternativesCard | MenuCard;
+// ---------- the kitchen's rules (docs/agent-thread.md "Widgets": rules) ----------
+
+/** The mandate as the rules card shows it: plain values. `groups` only where the kitchen has terms (an account). */
+export type RulesSnapshot = {
+  perOrderLimitCents: number;
+  weeklyBudgetCents: number;
+  categories: string[];
+  groups?: { id: string; name: string }[];
+  requiredAttributes: string[];
+  forbiddenAllergens: string[];
+  approvers: { name: string; role: string; maxApprovalCents: number }[];
+  maxLeadDays: number;
+  substitution: string;
+};
+
+/**
+ * One change to the rules, in the mandate's own vocabulary. Only `forbidAdd` and `requireAdd` narrow the mandate
+ * (any kitchen, its signed-in person); everything else is a change of terms (an account's own session only).
+ */
+export type RulesChange = {
+  forbidAdd?: string[];
+  forbidRemove?: string[];
+  requireAdd?: string[];
+  requireRemove?: string[];
+  groupsAdd?: string[];
+  groupsRemove?: string[];
+  perOrderLimitEur?: number;
+  weeklyBudgetEur?: number;
+  maxLeadDays?: number;
+  signer?: string;
+  substitution?: "within_preferences" | "needs_approval" | "none";
+};
+
+export type RulesCard = CardBase & {
+  type: "rules";
+  kitchenKind: "demo" | "visitor" | "account";
+  mandateId: string;
+  validUntil: string;
+  current: RulesSnapshot;
+  /** Rules the kitchen's people stated (memory), applied on every order. */
+  stated: { id: string; text: string }[];
+  /** What this browser may sign here; `why` is a code the widget words (not_signed_in, not_this_account, demo_terms_fixed, visitor_terms_fixed). */
+  editable: { narrow: boolean; terms: boolean; why?: string };
+  /** The values the widget may offer (the mandate's vocabulary). */
+  vocabulary: { forbid: string[]; require: string[]; substitution: string[]; groups: { id: string; name: string }[] };
+  /** A proposed change: nothing is signed until `rules_sign`. */
+  proposal?: { proposalId: string; change: RulesChange; kind: "narrow" | "terms"; state: "open" | "signed" | "cancelled"; canSign: boolean; why?: string; signedAs?: string };
+  after?: RulesSnapshot;
+  /** Before and after, field by field; `widens` marks a change that lets the agent do more. */
+  diff: { field: string; before: string; after: string; widens: boolean }[];
+};
+
+export type Card = UnderstoodCard | AnomalyCard | QuestionCard | OptionsCard | PriceCard | GateCard | OrderCard | MemoryCard | RecordsCard | NoticeCard | PlanCard | SheetCard | AlternativesCard | MenuCard | RulesCard;
 export type CardType = Card["type"];
 
 // ---------- the thread and its event stream ----------
