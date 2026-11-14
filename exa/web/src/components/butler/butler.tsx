@@ -199,6 +199,37 @@ const BROWSER_BUSY = {
 const browserTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
 const ACTIVE_KEY = "hovi.active";
 
+/*
+ * A chat has its own address, /chat/<id>, and the front door (/) is a new chat. The address is
+ * kept in step with the browser's own history calls, not by loading a page: moving between
+ * chats must not take down the ones that are still working out of sight. Back and Forward then
+ * move between chats, a reload stays on the chat, and the address can be shared or put in an email.
+ */
+const CHAT_PATH = /^\/chat\/([A-Za-z0-9_-]{6,80})\/?$/;
+const chatInAddress = (): string | null => CHAT_PATH.exec(window.location.pathname)?.[1] ?? null;
+
+function showInAddress(id: string | null, how: "push" | "replace") {
+  const path = id ? `/chat/${id}` : "/";
+  const now = window.location.pathname;
+  // Only where the app is the page, and only when it is not already there.
+  if ((now !== "/" && !CHAT_PATH.test(now)) || (now === path && !window.location.search)) return;
+  try {
+    if (how === "push") window.history.pushState(null, "", path);
+    else window.history.replaceState(null, "", path);
+  } catch {
+    /* the address stays as it was; the chat is open all the same */
+  }
+}
+
+/** The chat on screen, for code outside the shell that needs to know whether a chat is the one being looked at. */
+let onScreen: string | null = null;
+
+/** The user did something in this chat: it is the one to come back to, and if it is on screen the address says so. */
+function rememberHere(id: string) {
+  remember(id);
+  if (onScreen === id) showInAddress(id, "replace");
+}
+
 function remember(id: string) {
   try {
     window.localStorage.setItem(ACTIVE_KEY, id);
@@ -340,6 +371,7 @@ export function Butler() {
   const keptIds = React.useRef<string[]>([]);
   React.useEffect(() => {
     activeId.current = active?.id ?? null;
+    onScreen = active?.id ?? null;
     keptIds.current = kept;
   }, [active, kept]);
 
@@ -399,6 +431,12 @@ export function Butler() {
     else handovers.current.delete(id);
   }, []);
 
+  /* Opening a chat means fetching it, which takes a moment. Each move (open this chat, start a
+     new one) is numbered, and a chat that arrives after the user has moved on is not shown: the
+     latest move wins. Without this, a chat pressed just before "New chat" would turn up on top
+     of the new one. */
+  const moves = React.useRef(0);
+
   // On first load, reopen the conversation that was open last, so a refresh loses nothing: if a
   // task was running in it, it still is, and the chat joins it.
   React.useEffect(() => {
@@ -409,19 +447,20 @@ export function Butler() {
     } catch {
       /* ignore */
     }
-    // An address that names a chat (/?chat=<id>, which is what an email links to) opens that one.
-    // The address is then tidied, so a reload goes by what is open and not by what the link said.
-    const linked = new URLSearchParams(window.location.search).get("chat");
-    if (linked !== null) {
-      if (/^[A-Za-z0-9_-]{6,80}$/.test(linked)) {
-        lastId = linked;
-        remember(linked);
-      }
-      window.history.replaceState(null, "", window.location.pathname + window.location.hash);
+    // An address that names a chat (/chat/<id>, which is what an email links to) opens that one.
+    const linked = chatInAddress();
+    if (linked) {
+      lastId = linked;
+      remember(linked);
     }
+    const turn = ++moves.current;
     void (lastId ? openConversation(lastId) : Promise.resolve(null)).then((found) => {
-      if (cancelled) return;
+      // The user has already gone somewhere else: that is where they are.
+      if (cancelled || moves.current !== turn) return;
       setActive(found ?? { id: newConversationId(), messages: [] });
+      // The address says what is on screen: the chat that was opened, or the front door for a new one.
+      showInAddress(found ? found.id : null, "replace");
+      if (linked && !found) toast("That chat isn\u2019t here", { description: "It may have been deleted, or it belongs to another account." });
     });
     return () => {
       cancelled = true;
@@ -461,19 +500,30 @@ export function Butler() {
     if (browserState().status !== "ready") setSidebarPref("open");
   }, [setSidebarPref]);
 
-  const newTask = React.useCallback(() => {
-    leave(activeId.current);
-    const id = newConversationId();
-    remember(id);
-    setActive({ id, messages: [] });
-    setDrawerOpen(false);
-  }, [leave]);
+  /* Starting a new chat and opening one. `how` says what happens to the address: a step the
+     user took adds to the history ("push"), so Back returns to where they were; a move that came
+     from Back or Forward itself changes nothing there (null). */
+  const startNew = React.useCallback(
+    (how: "push" | null) => {
+      moves.current += 1;
+      leave(activeId.current);
+      const id = newConversationId();
+      remember(id);
+      setActive({ id, messages: [] });
+      setDrawerOpen(false);
+      if (how) showInAddress(null, how);
+    },
+    [leave],
+  );
+  const newTask = React.useCallback(() => startNew("push"), [startNew]);
 
-  const open = React.useCallback(
-    (id: string) => {
+  const openChat = React.useCallback(
+    (id: string, how: "push" | null) => {
       setDrawerOpen(false);
       const from = activeId.current;
       if (id === from) return;
+      const turn = ++moves.current;
+      if (how) showInAddress(id, how);
       // Still alive in the background: show it as it stands, mid-task.
       if (keptIds.current.includes(id)) {
         leave(from);
@@ -482,6 +532,7 @@ export function Butler() {
         return;
       }
       void openConversation(id).then((found) => {
+        if (moves.current !== turn) return;
         leave(from);
         remember(id);
         liveMessages.delete(id);
@@ -490,6 +541,18 @@ export function Butler() {
     },
     [leave],
   );
+  const open = React.useCallback((id: string) => openChat(id, "push"), [openChat]);
+
+  // Back and Forward move between chats: the address has already changed, the chat follows it.
+  React.useEffect(() => {
+    const follow = () => {
+      const id = chatInAddress();
+      if (id) openChat(id, null);
+      else if (window.location.pathname === "/") startNew(null);
+    };
+    window.addEventListener("popstate", follow);
+    return () => window.removeEventListener("popstate", follow);
+  }, [openChat, startNew]);
 
   /* A notification that arrives while the page is open is announced once. One about the chat the
      user is looking at needs no announcing: it is marked read. When the window is not the one in
@@ -957,7 +1020,7 @@ function ChatView({
       setStopped(false);
       retried.current = 0;
       clearError();
-      remember(conversationId);
+      rememberHere(conversationId);
       followLatest();
       void sendMessage(files.length ? { text: text || "What is this? Find out more about it.", files } : { text });
     },
@@ -973,7 +1036,7 @@ function ChatView({
       if (before.find((m) => m.role === "user")?.id === message.id) retitleAfterEdit(conversationId, before, text);
       halted.current = false;
       clearError();
-      remember(conversationId);
+      rememberHere(conversationId);
       followLatest();
       void sendMessage(files.length ? { text: text || "What is this? Find out more about it.", files, messageId: message.id } : { text, messageId: message.id });
     },
@@ -985,7 +1048,7 @@ function ChatView({
     (messageId: string) => {
       halted.current = false;
       clearError();
-      remember(conversationId);
+      rememberHere(conversationId);
       followLatest();
       void regenerate({ messageId });
     },
@@ -1037,7 +1100,7 @@ function ChatView({
     void stopRunOnServer(conversationId);
     void stop();
     clearError();
-    remember(conversationId);
+    rememberHere(conversationId);
     setCallView("live");
     void liveCall.start({
       conversationId,

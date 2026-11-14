@@ -36,7 +36,7 @@ const LABEL: Record<NotifyKind, string> = { chat_done: "Chat finished", needs_yo
 export function linkFor(item: { conversationId?: string; jobId?: string; runId?: string }): string {
   const site = siteUrl();
   if (item.jobId) return `${site}/jobs?job=${encodeURIComponent(item.jobId)}${item.runId ? `&run=${encodeURIComponent(item.runId)}` : ""}`;
-  if (item.conversationId) return `${site}/?chat=${encodeURIComponent(item.conversationId)}`;
+  if (item.conversationId) return `${site}/chat/${encodeURIComponent(item.conversationId)}`;
   return site;
 }
 

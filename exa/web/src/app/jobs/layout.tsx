@@ -15,9 +15,11 @@ export const dynamic = "force-dynamic";
  */
 export default async function JobsLayout({ children }: { children: React.ReactNode }) {
   const user = await currentUser();
-  if (!user) redirect("/login?next=/jobs");
+  const asked = await headers();
+  // Back to the very job or run that was asked for, once signed in.
+  if (!user) redirect(`/login?next=${encodeURIComponent(asked.get("x-beryl-path") ?? "/jobs")}`);
   // The desktop app says so in its user agent: there the page sits beside the app's live browser.
-  const inApp = /BerylDesktop\//.test((await headers()).get("user-agent") ?? "");
+  const inApp = /BerylDesktop\//.test(asked.get("user-agent") ?? "");
   return (
     <SessionProvider user={user}>
       <JobsShell inApp={inApp}>{children}</JobsShell>

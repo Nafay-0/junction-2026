@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Bell, CalendarClock, ChevronsUpDown, LayoutDashboard, LogOut, MessagesSquare, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { initialsOf, signOut, useUser } from "@/lib/auth/client";
@@ -38,6 +39,7 @@ export function AccountMenu({
   toChat?: boolean;
 }) {
   const user = useUser();
+  const pathname = usePathname() ?? "/";
   const [confirming, setConfirming] = React.useState(false);
   const [leaving, setLeaving] = React.useState(false);
   const [notifications, setNotifications] = React.useState(false);
@@ -78,7 +80,9 @@ export function AccountMenu({
                 Back to the chat
               </Link>
             </DropdownMenuItem>
-          ) : user.role === "admin" ? (
+          ) : null}
+          {/* The same entries on every page, each left out on the page it leads to. */}
+          {user.role === "admin" && !pathname.startsWith("/admin") ? (
             <DropdownMenuItem asChild>
               <Link href="/admin">
                 <LayoutDashboard className="size-4" />
@@ -86,12 +90,14 @@ export function AccountMenu({
               </Link>
             </DropdownMenuItem>
           ) : null}
-          <DropdownMenuItem asChild>
-            <Link href="/jobs">
-              <CalendarClock className="size-4" />
-              Jobs
-            </Link>
-          </DropdownMenuItem>
+          {pathname.startsWith("/jobs") ? null : (
+            <DropdownMenuItem asChild>
+              <Link href="/jobs">
+                <CalendarClock className="size-4" />
+                Jobs
+              </Link>
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onSelect={() => setNotifications(true)}>
             <Bell className="size-4" />
             Notifications

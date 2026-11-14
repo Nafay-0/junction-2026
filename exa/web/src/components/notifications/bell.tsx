@@ -47,7 +47,7 @@ export function useOpenNotification(onOpenChat?: (conversationId: string) => voi
       if (item.jobId) router.push(`/jobs?job=${encodeURIComponent(item.jobId)}${item.runId ? `&run=${encodeURIComponent(item.runId)}` : ""}`);
       else if (item.conversationId) {
         if (onOpenChat) onOpenChat(item.conversationId);
-        else router.push(`/?chat=${encodeURIComponent(item.conversationId)}`);
+        else router.push(`/chat/${encodeURIComponent(item.conversationId)}`);
       }
     },
     [router, onOpenChat],
