@@ -63,6 +63,16 @@ pnpm e2e           # the phone sign-off in a browser with a virtual passkey
 
 Free-text requests, the voice call and photo reading need model keys; the names are in `web/.env.example`. Copy it to `web/.env.local` and fill in what you have. More in [web/README.md](web/README.md).
 
+### The audit time machine on MariaDB (one command)
+
+```bash
+cd web && pnpm mariadb:reproduce   # needs Docker; starts MariaDB 12.3.3, seeds three weeks of rule changes, prints answers and timings
+```
+
+It keeps every version of the rules the gate judges by in MariaDB's system-versioned tables, and puts past orders
+through the real gate again as of then and as of now. Set `DOCK_MARIADB_URL` to see it in the app at
+`/ops/time-machine`. Method and measured numbers: [infra/mariadb/README.md](infra/mariadb/README.md).
+
 ## Repository map
 
 | Path | Contents |
@@ -72,7 +82,7 @@ Free-text requests, the voice call and photo reading need model keys; the names 
 | `web/src/app/` | Screens and HTTP routes (Next.js) |
 | `web/src/crash/` | A crash test for AI buyers: hard purchasing situations scored from the gate's own records. `pnpm crash:reproduce` |
 | `examples/runtimes/` | Buyers built on seven agent frameworks ordering through the open interface |
-| `infra/` | Deployment on Aiven, the runbook, and a brief for Aiven's judges ([infra/AIVEN-JUDGES.md](infra/AIVEN-JUDGES.md)) |
+| `infra/` | Deployment on Aiven, the runbook, and a brief for Aiven's judges ([infra/AIVEN-JUDGES.md](infra/AIVEN-JUDGES.md)); the MariaDB time machine's container and measurements ([infra/mariadb/](infra/mariadb/README.md)) |
 | `qa/` | Findings from the QA agent whose job was to break the product, and what was fixed |
 | `docs/pitch/` | Pitch, table demo, the claims we make and the evidence for each ([docs/pitch/claims.md](docs/pitch/claims.md)) |
 | `research/` | Notes on the event, the challenges and the partner's API |

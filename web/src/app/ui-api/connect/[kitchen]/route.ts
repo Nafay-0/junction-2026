@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { currentApprover } from "@/server/approver-session";
+import { currentAccount } from "@/server/accounts/http";
 import { publicBaseUrl } from "@/server/config";
 import { errorBody, handle } from "@/server/http";
 import { connectorSetup } from "@/server/mcp/connector-setup";
@@ -21,6 +22,7 @@ import { WORKS_WITH } from "@/server/works-with";
  *
  * Who may see it: whoever can open the kitchen's console may also see its address, since it grants no more
  * than the console (both act as the kitchen's agent; neither can approve). Who may change it:
+ *   account kitchens  the signed-in account itself
  *   visitor kitchens  the visitor themselves (their approver session cookie from joining), or the operator
  *   demo kitchens     the operator, with `Authorization: Bearer <DOCK_CONNECTOR_SECRET>`; outside production with no
  *                     secret configured, anyone (local dev). So a passer-by cannot revoke the stage demo's address.
@@ -28,7 +30,7 @@ import { WORKS_WITH } from "@/server/works-with";
 
 const notFound = () => Response.json(errorBody("kitchen_not_found", "This kitchen does not exist or its demo time is over."), { status: 404 });
 
-function view(req: Request, kitchen: { slug: string; name: string; kind: "demo" | "visitor"; expiresAt?: string }, c: Connector | null, canManage: boolean) {
+function view(req: Request, kitchen: { slug: string; name: string; kind: "demo" | "visitor" | "account"; expiresAt?: string }, c: Connector | null, canManage: boolean) {
   const url = c && `${publicBaseUrl(req)}/api/mcp/c/${c.token}`;
   return Response.json(
     {
@@ -50,9 +52,10 @@ function isOperator(req: Request): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-async function canManage(req: Request, rt: Runtime, slug: string, kind: "demo" | "visitor"): Promise<boolean> {
+async function canManage(req: Request, rt: Runtime, slug: string, kind: "demo" | "visitor" | "account"): Promise<boolean> {
   if (isOperator(req)) return true;
   if (kind === "visitor") return (await currentApprover(req, rt))?.sandbox?.sandboxId === slug;
+  if (kind === "account") return (await currentAccount(req, rt))?.account.username === slug;
   return !connectorSecret() && process.env.NODE_ENV !== "production";
 }
 
@@ -74,11 +77,11 @@ export async function GET(req: Request, ctx: RouteContext<"/ui-api/connect/[kitc
   });
 }
 
-const forbidden = (kind: "demo" | "visitor") =>
+const forbidden = (kind: "demo" | "visitor" | "account") =>
   Response.json(
     errorBody(
       "connector_manage_forbidden",
-      kind === "visitor" ? "Only the person who joined this kitchen can change its connector address, from the phone they joined on." : "This demo kitchen's connector address is set by the operator.",
+      kind === "account" ? "Only this kitchen's own signed-in account can change its connector address." : kind === "visitor" ? "Only the person who joined this kitchen can change its connector address, from the phone they joined on." : "This demo kitchen's connector address is set by the operator.",
     ),
     { status: 403 },
   );

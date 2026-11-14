@@ -1,4 +1,4 @@
-import { allergensMentioned, claimsIn, mentionsDay, numbersIn, type Violation } from "@/core/grounding";
+import { allergensMentioned, claimsIn, dayStated, numbersIn, type Violation } from "@/core/grounding";
 import { recordGrounding } from "@/server/grounding";
 import type { LlmNeed } from "./interpret";
 
@@ -9,7 +9,13 @@ import type { LlmNeed } from "./interpret";
  * id, an amount or a date nobody said is removed, never kept: a missing amount then comes back as need_incomplete
  * and the buyer gives it, and a removed claim is still enforced where it belongs (the mandate, the kitchen's rules).
  */
-export type InterpretEvidence = { text: string; earlier?: unknown[]; extra?: string[] };
+export type InterpretEvidence = {
+  text: string;
+  earlier?: unknown[];
+  extra?: string[];
+  /** Today in Helsinki (YYYY-MM-DD): a delivery day must then be one the words name (core/grounding.ts dayStated). */
+  today?: string;
+};
 
 export function groundInterpretation<T extends Pick<LlmNeed, "item" | "quantity" | "deliverBy" | "requiredClaims" | "forbiddenAllergens" | "sameAsLastTime">>(raw: T, ev: InterpretEvidence): { raw: T; removed: Violation[] } {
   const words = [ev.text, ...(ev.extra ?? [])].join("\n");
@@ -60,7 +66,9 @@ export function groundInterpretation<T extends Pick<LlmNeed, "item" | "quantity"
       out.quantity = null;
     }
   }
-  if (out.deliverBy && !mentionsDay(all)) {
+  // The day must be one the buyer's own words name ("huomiseksi", "den 19:e", "ensi maanantaiksi"); never one copied
+  // from an earlier request or the kitchen's memory.
+  if (out.deliverBy && !dayStated(words, out.deliverBy, ev.today)) {
     removed.push({ kind: "date", said: out.deliverBy });
     out.deliverBy = null;
   }

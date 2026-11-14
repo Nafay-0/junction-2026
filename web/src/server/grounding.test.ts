@@ -71,6 +71,20 @@ describe("interpreter", () => {
     const f = groundInterpretation(raw({ requiredClaims: [], forbiddenAllergens: [], item: { text: "lactose-free milk", category: "milk", attributes: ["lactose_free"], excludedAttributes: [], productId: null }, quantity: { amount: 200, unit: "L" } }), { text: "same again but 200 litres for Monday", earlier: [{ need: { item: { attributes: ["lactose_free"] } } }] });
     expect(f.removed).toEqual([]);
   });
+  it("keeps a day and an amount stated the way people say them (second reader's evaluation cases), and still removes invented ones", () => {
+    const keep = (text: string, quantity: LlmNeed["quantity"], deliverBy: string) =>
+      groundInterpretation(raw({ requiredClaims: [], forbiddenAllergens: [], item: { text: "x", category: null, attributes: [], excludedAttributes: [], productId: null }, quantity, deliverBy }), { text, today: "2026-11-14" });
+    expect(keep("Huomiseksi 50 kiloa maustamatonta jogurttia", { amount: 50, unit: "kg" }, "2026-11-15").removed).toEqual([]);
+    expect(keep("Kaksi tusinaa purkkia kermaa ylihuomiseksi", { amount: 24, unit: "pack" }, "2026-11-16").removed).toEqual([]);
+    expect(keep("5 kg glutenfri riven mozzarella till den 19:e", { amount: 5, unit: "kg" }, "2026-11-19").removed).toEqual([]);
+    expect(keep("Två dussin paket laktosfri grädde till måndag", { amount: 24, unit: "pack" }, "2026-11-16").removed).toEqual([]);
+    expect(keep("We usually take 100 litres a week; this week we need double, lactose-free, by Monday", { amount: 200, unit: "L" }, "2026-11-16").removed).toEqual([]);
+    // The other direction: a day the words do not name, the wrong day for "huomiseksi", an amount nobody said.
+    expect(keep("Huomiseksi 50 kiloa maustamatonta jogurttia", { amount: 50, unit: "kg" }, "2026-11-16").removed.map((v) => v.kind)).toEqual(["date"]);
+    expect(keep("Tarvitaan 300 l maitoa, ei kiirettä", { amount: 300, unit: "L" }, "2026-11-15").removed.map((v) => v.kind)).toEqual(["date"]);
+    expect(keep("Tusina laatikkoa voita perjantaiksi", { amount: 13, unit: "pack" }, "2026-11-20").removed.map((v) => v.kind)).toEqual(["number"]);
+  });
+
   it("through interpretNeed: an amount nobody said comes back as need_incomplete, so the buyer gives it", async () => {
     await expect(interpretNeed({ text: "Milk for Monday please", now: new Date("2026-11-13T12:00:00+02:00"), model: { ...scriptedModel([{ text: JSON.stringify(raw({ requiredClaims: [], forbiddenAllergens: [], item: { text: "milk", category: "milk", attributes: [], excludedAttributes: [], productId: null } })) }]), id: "scripted" } })).rejects.toMatchObject({ code: "need_incomplete" });
     expect(fired("interpret").fired).toBe(1);

@@ -102,3 +102,32 @@ export function assistantUser(o: { question: string; records: { id: string; kind
   const hist = o.history.map((h) => `Buyer: ${h.q}\nYou: ${h.a}`).join("\n");
   return `${o.screen ? `The buyer is looking at: ${o.screen}\n\n` : ""}${hist ? `Earlier in this conversation:\n${hist}\n\n` : ""}Records:\n${lines.join("\n\n") || "(none)"}\n\nBuyer's question:\n"""\n${o.question}\n"""`;
 }
+
+// ---------- the second reader: a transcription, checked against the first reading ----------
+
+/**
+ * The second reader (server/agent/second-reader.ts) answers a narrower question than the interpreter: what do the
+ * words say, field by field, from closed lists. The calendar is left to plain code (a weekday or "tomorrow" is
+ * resolved there), because a small model looks dates up less reliably than it copies a weekday.
+ */
+export function secondReaderSystem(claims: readonly string[], allergens: readonly string[]): string {
+  return `You transcribe a food-service buyer's purchase request into fields. The request may be in English, Finnish or Swedish. Record only what the words say; anything not said stays empty (null or []). Never add a claim, an allergen, an amount or a day the buyer did not give.
+
+- isPurchaseRequest: false only when the text does not ask to buy or order anything.
+- items: one entry per product the buyer asks for, in the order named; most requests name one. Each entry has the fields below, read from that product's own words only.
+- item: the product, in the buyer's own words and language, without the amount or the day ("lactose-free milk", "laktoositonta maitoa", "laktosfri mjölk").
+- amount, unit: how much to order. unit is L for litres, kg for kilos, pcs for pieces, pack for cases, boxes, cartons, crates or packs. "1,000", "1.000" and "1 000" are one thousand; "2,5" and "2.5" are two and a half; "a dozen" is 12 and "two dozen" 24; "tusina" and "dussin" are 12. When the buyer corrects themselves ("1,000, no, 100"), take the final amount. When the buyer works it out ("double the usual 100 litres"), give the result.
+- packSize: when the buyer counts packs of a stated size ("100 x 10 l", "six 10-litre boxes", "kuusi 10 litran laatikkoa"), amount is the number of packs, unit is pack, and packSize is one pack's size. Otherwise null.
+- wanted, notWanted and avoid are empty for most requests. Put a value in them only when the buyer's words name it; never list a value just because it is in the list.
+- wanted: dietary claims the product must have, only from this list: ${claims.join(", ")}.
+- notWanted: claims from the same list that the buyer says the product must not have or need not have ("not lactose-free", "ei laktoositonta", "inte laktosfri", "lactose-free is not needed").
+- avoid: allergens the buyer says must not be in it ("no nuts", "without eggs", "gluten-free", "pähkinätön", "utan nötter"), only from this list: ${allergens.join(", ")}. Gluten-free gives gluten; egg-free gives eggs.
+- The delivery fields are for the request as a whole (the first day named).
+- deliveryWeekday: the day of the week the buyer names, as its English name in lower case ("by Friday", "perjantaiksi" and "till fredag" give friday); null when no weekday is named.
+- deliveryDate: a calendar date the buyer writes, as numbers ("16.11." gives day 16, month 11; "the 20th" gives day 20, month null); null when none is written.
+- deliveryRelative: "today", "tomorrow" ("huomenna", "huomiseksi", "i morgon") or "day_after_tomorrow" ("ylihuomenna", "i övermorgon"); null otherwise.`;
+}
+
+export function secondReaderUser(text: string): string {
+  return `Buyer's request:\n"""\n${text}\n"""`;
+}

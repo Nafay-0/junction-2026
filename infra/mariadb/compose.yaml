@@ -1,0 +1,37 @@
+# The audit time machine's MariaDB: one small container, pinned to the 12.3 LTS release (system-versioned tables
+# since 10.3, the VECTOR type and VECTOR INDEX since 11.7/11.8). Synthetic data only; nothing here is production.
+#
+#   docker compose -f infra/mariadb/compose.yaml up -d --wait
+#   DOCK_MARIADB_URL=mariadb://dock:dock@127.0.0.1:3407/dock_audit
+#
+# Kept small on purpose (a laptop shared with other containers): 64 MB buffer pool, 512 MB memory cap.
+name: dock-mariadb
+services:
+  mariadb:
+    image: mariadb:12.3.3
+    environment:
+      MARIADB_ROOT_PASSWORD: dock-root
+      MARIADB_DATABASE: dock_audit
+      MARIADB_USER: dock
+      MARIADB_PASSWORD: dock
+    command:
+      - --innodb-buffer-pool-size=64M
+      - --max-connections=40
+      - --performance-schema=OFF
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_uca1400_ai_ci
+      # Hold every timestamp in UTC so FOR SYSTEM_TIME AS OF '2026-11-14 10:00:00' means the same moment everywhere.
+      - --default-time-zone=+00:00
+    ports:
+      - "127.0.0.1:${DOCK_MARIADB_PORT:-3407}:3306"
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - dock-mariadb:/var/lib/mysql
+      - ./init:/docker-entrypoint-initdb.d:ro
+volumes:
+  dock-mariadb:

@@ -1,42 +1,72 @@
 # NVIDIA and Featherless
 
-**Short version: both were evaluated, neither is in the product's live path. This is a thin use; say so.**
+**Short version: Nemotron is now in the live path, as an independent second reader of every typed or spoken request.
+It can only add a question, it was earned on a measured evaluation, and it is off when its variable is empty.**
 
-## What they do in the project, in plain words
+## What it does, in plain words
 
-Featherless hosts open models behind one API. We used it to try open models in two places: as AI buyers in the
-crash test, and as readers of photographed order lists. NVIDIA's models came through Featherless: Nemotron as a
-buyer, Cosmos-Reason2 as a reader. Any Featherless model can be set as the list reader with
-`DOCK_SCAN_MODEL=featherless:<id>`, but the default is Claude Haiku 5.5.
+A kitchen writes or says "I need 1,000 litres of lactose-free milk by Monday". Claude Opus 5.5 reads that into fields
+(amount, unit, claims, allergens, product, day). At the same moment NVIDIA's open-weights **Nemotron 3 Nano**, through
+Featherless, reads the same words again in its own way. Plain code compares the two readings on the fields that change
+the order:
 
-## Results
+- **They agree**: nothing is asked; the request card says it was read twice, by which models.
+- **They differ on something the words name** (the amount by 2x or more, packs against litres, a dietary claim or an
+  allergen, another kind of product, the delivery day): the buyer gets one question about exactly that field, showing
+  both readings, before any price is fixed. "Two independent readers read the amount differently: Claude Opus 5.5 read
+  1,000 L, NVIDIA Nemotron 3 Nano read 100 L. Which did you mean?"
+- **Nemotron is late, down or at capacity**: the request is recorded as read once and goes on. It never slows an order:
+  it has 8 s from the shared start, and at the 90th percentile it added no wait.
 
-**Crash test** (one run each, seed 1; `web/README.md`, "Model results"):
+The argument: two readers from different model families rarely make the same mistake, and plain code decides which
+differences matter. Nemotron never changes the need, never chooses a product, never approves anything. Because the
+model is open weights, a wholesaler can run this check on its own hardware.
 
-| Model (via Featherless) | Overall, out of 100 | Licence |
-|---|---|---|
-| NVIDIA-Nemotron-3-Nano-30B-A3B | 37.0 | L0 |
-| Qwen3-8B | 26.1 | L0 |
-| Qwen3-4B | 24.7 | L0 |
-| NVIDIA-Nemotron-3-Super-120B-A12B | not scored: provider at capacity (HTTP 429) on 12 of 13 episodes | |
+## Results (`web/docs/second-reader.md`; `pnpm eval:second-reader`)
 
-**Reading order lists** (37 item lines; `web/docs/doors.md`, "Evaluation"):
+127 requests in English, Finnish and Swedish (77 for tuning, 30 held out, 20 fresh: written after the last change),
+many written to be easy to misread: "1.000" against "1,000", "a dozen cases", "100 x 10 l", "not lactose-free",
+"no nuts", "tomorrow". Two runs of Nemotron each.
 
-| Model (via Featherless) | Items right, run 1 / run 2 | Notes |
-|---|---|---|
-| NVIDIA Cosmos-Reason2-32B | 25 / 11 | No PDF input; timeouts; dropped whole notes |
-| Qwen3-VL-32B | 32 / 29 | No PDF input |
+| | Tuning set | Held-out set | Fresh set |
+|---|---|---|---|
+| Needless questions (first reading right, asked anyway) | 0 and 0 of 76 | 0 and 0 of 30 | 0 and 0 of 20 |
+| Known misreadings caught (x10, "1.000" as 1, a dropped or negated claim, a dropped allergen, another product, another day) | 91 %, 90 % of 536 | 91 % of 222 | 94 % of 142 |
+| Nemotron alone right on every compared field | 65 %, 60 % | 53 %, 60 % | 60 % |
+| Nemotron time, median / 90th percentile | 1.4 s / 1.9 s | 1.4 s / 2.4 s | 1.3 s / 2.0 s |
+| Unavailable | 0 of 154 | 0 of 60 | 0 of 40 |
 
-For comparison, Claude Haiku 5.5 read 33 / 37, and it is the one we chose. Featherless offers no Nemotron
-vision-language model, so NVIDIA's own vision model there, Cosmos-Reason2, was evaluated instead.
+The rules were tuned on the first set and on ten tricky live requests (three of which got a needless question before
+the last fixes); the fresh set is the fair number, and it is small. Claude Opus 5.5 made no real misreading in the
+127, so every catch is of an injected error: the second reader is insurance, not a fix for an observed failure.
+
+What it took: Nemotron filling the interpreter's own schema asked a needless question on 53 % of requests (wrong
+weekday dates, invented claims). With thinking on it took 9.5 s at the median. The version that works transcribes into
+closed lists at temperature 0, leaves the calendar to plain code, and the comparison asks only about what the buyer's
+words name. **Nemotron 3 Super 120B** answered HTTP 429 "temporarily at capacity" to all 291 calls over three hours,
+so it is not scored.
 
 ## Where to see it
 
-`web/src/crash/` (`pnpm crash --agent featherless:Qwen/Qwen3-4B`, needs `FEATHERLESS_API_KEY`),
-`web/src/server/channels/scan/read.ts`, `web/docs/doors.md`.
+- The order lane, `/k/<kitchen>`: the line under the request card; the question with the other checks on a difference.
+- `/ops/safeguards`, "Read twice": agreed, differed, read once, and how buyers settled differences. `/ops/trace/<id>`:
+  the "Read twice" step with both readers.
+- Code: `web/src/core/second-reading.ts` (the comparison, no model), `web/src/server/agent/second-reader.ts` (the
+  call), `web/scripts/eval/eval-second-reader.ts`, `web/eval/second-reader/` (sets, recorded readings, results).
+- Configuration: `DOCK_SECOND_READER_MODEL=featherless:nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16` and
+  `FEATHERLESS_API_KEY`.
+
+Also, as before: the crash test runs open models through Featherless (Nemotron-3-Nano scored 37.0 of 100 as a
+buyer, one run), and NVIDIA's Cosmos-Reason2 was evaluated as a reader of photographed order lists (25 and 11 of 37
+lines; Claude Haiku 5.5, 33, is the one in use).
 
 ## What is true and what is not
 
-- True: the crash test runs open models through Featherless, and the results above are recorded in the README.
-- Not: no open model is used by default anywhere in the product. The bigger Nemotron model could not be scored
-  because the provider was at capacity. NVIDIA's "best use of Nemotron" tech challenge would be a weak entry.
+- True: every request typed in the order lane, spoken at the voice door, or sent by an outside agent to
+  `POST /api/v1/agent/interpret` is read twice when the variable is set, and the result is in the ledger.
+- True: the comparison is plain code with tests; nothing under `web/src/core/` calls a model.
+- Not: the photo door and follow-ups of earlier requests are read once (by choice; see `web/docs/second-reader.md`).
+- Not: proof that it catches real mistakes in use. The catch rate is on injected misreadings; the first reader made none.
+- Not: hosted on the wholesaler's hardware today. It runs on Featherless; "a wholesaler could run it" is about the open
+  weights, not something we did.
+- Check before saying it is live: the deployed site needs `DOCK_SECOND_READER_MODEL` set (*).

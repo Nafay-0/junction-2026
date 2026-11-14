@@ -81,6 +81,27 @@ export class MandateBook implements MandateRegister {
   }
 
   /**
+   * A kitchen re-signed its mandate on terms of its own (an account changing what its agent may do, from Agent and
+   * rules): from this second on its earlier mandates are refused, as after any reissue. Nothing is added here; what
+   * the kitchen added before stays in force through `restrict`. The caller has already signed `next`.
+   */
+  async supersede(next: Mandate, by: string, replaced: string, now = new Date()): Promise<ReissueRecord> {
+    const prev = this.byOrg.get(next.issuer.orgId);
+    const at = new Date(Math.floor(now.getTime() / 1000) * 1000).toISOString();
+    const record: ReissueRecord = {
+      orgId: next.issuer.orgId,
+      at,
+      by,
+      mandateIds: [next.mandateId],
+      added: prev?.added ?? { forbiddenAllergens: [], requiredAttributes: [] },
+      history: [...(prev?.history ?? []), { at, by, added: {}, mandateId: next.mandateId, replaced }],
+    };
+    await this.store?.put(record.orgId, record);
+    this.byOrg.set(record.orgId, record);
+    return structuredClone(record);
+  }
+
+  /**
    * Record a reissue: from this second on, the gate refuses the organisation's earlier mandates. Returns the terms
    * to sign (the mandate given, with the rule and a new id) and the record. The caller signs and stores the token.
    */

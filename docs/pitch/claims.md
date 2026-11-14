@@ -98,6 +98,22 @@ VJ = `valio-judges.md`, Pa = `partners/`.
 | 58 | CI on CRACI runners runs lint, typecheck, tests, build and the scripted attacks on every push | Pa | `.github/workflows/ci.yml` (`runs-on: craci`); `gh run list` showed successful `main` runs | V |
 | 59 | About 71 test files and about 690 test cases | (not used in scripts) | static count: `find web/src -name '*.test.ts'`, grep of `it(` / `test(` | V (count only) |
 
+## The second reader (NVIDIA Nemotron)
+
+Checked on Saturday 14 Nov 2026 between about 02:00 and 03:30 EET on `claude/second-reader`, by running the evaluation
+and a production build; numbers from `web/eval/second-reader/results.json` and `results-holdout.json`.
+
+| # | Claim | Used in | Source | Status |
+|---|---|---|---|---|
+| 71 | Every typed or spoken request (and an outside agent's `POST /api/v1/agent/interpret`) is read twice: by Claude Opus 5.5 and, at the same moment, by NVIDIA Nemotron 3 Nano (open weights, via Featherless) | Pa | `web/src/server/agent/interpret.ts` (`interpretRequest` calls `readTwice`), `web/src/server/agent/second-reader.ts`; needs `DOCK_SECOND_READER_MODEL` set | V on a local production build (*) on the live site until the variable is deployed |
+| 72 | Plain code compares the two readings; the second can only add a question, never changes the need, chooses or approves | Pa | `web/src/core/second-reading.ts` (no model import), `second-reading.test.ts`, `second-reading-intake.test.ts` | V |
+| 73 | No needless question in 252 compared requests (tuning 76, held-out 30, fresh 20; two runs each) | Pa | `web/docs/second-reader.md`, `web/eval/second-reader/results*.json` | Partly: the rules were tuned on the 77 and on ten live probes (3 of 10 got a needless question before the last fixes); the fresh 20 are the untouched number |
+| 74 | Catches about 9 in 10 known misreadings (x10, "1.000" as 1, a dropped or negated claim, a dropped allergen, another product, another day): 91 % of 1,800; 94 % on the fresh set | Pa | same | V. Injected errors: the first reader made no real misreading in the 127 requests, so no real catch is shown |
+| 75 | Adds no wait at the 90th percentile; Nemotron takes 1.4 s at the median; when it is late, down or at capacity the request is read once and goes on | Pa | `results*.json` `latencyMs`; `second-reader.test.ts` (timeout, 429, 500, unreadable, over the daily cap) | V |
+| 76 | Nemotron alone is right on every compared field only about 60 % of the time; it works as a second reader because only what the buyer's words name is compared | Pa | `web/docs/second-reader.md` ("How it got there"): 53 % needless questions when every difference was asked | V |
+| 77 | Nemotron 3 Super 120B could not be evaluated: HTTP 429 "at capacity" on all 291 calls | Pa | `web/eval/second-reader/readings*.json` | V |
+| 78 | Shown in the order lane, the ledger (`second_reading` step), the operations trace and `/ops/safeguards` ("Read twice") | Pa | `web/src/app/k/[kitchen]/second-reading.tsx`, `web/src/server/ops/trace.ts`, `views.ts` (`secondReadingStats`), `web/src/server/second-reading-flow.test.ts` | V |
+
 ## Platform and team
 
 | # | Claim | Used in | Source | Status |
@@ -115,6 +131,21 @@ VJ = `valio-judges.md`, Pa = `partners/`.
 | 70 | Jurors' stated interests | Q Pa | `research/01-event-intel.md`, quoted from the 2026 site | D |
 | 71 | "Add to signed mandate" on the kitchen's memory page signs the kitchen's mandate again with the rule; the gate then enforces it on every door, and mandates the kitchen signed before stop working (also for an order waiting for sign-off). Only the kitchen's own signed-in person can do it; only rules in the mandate's vocabulary are offered; it survives a restart | VJ | `web/src/core/mandate.ts` (`supersededBy`), `web/src/server/mandates.ts`, `mandate-reissue.ts`; `mandate-reissue.test.ts`, `open-findings.test.ts` (finding 1) | V. Built-in kitchens sign with the key the server is configured with; a visitor kitchen signs with a new key each time (its private key is never stored). A mandate the kitchen's key signs after a reissue is accepted as the kitchen's current word |
 | 72 | On a public site, a mandate signed with the demo organisations' public development key (derivable from this repository) is refused | VJ | `web/src/server/dev-fixtures.ts` (`demoKey`); `dev-key.test.ts`; `/api/health` `settings.demoOrgKey` | V. Local runs and tests still use that key |
+
+## MariaDB time machine (added Sat 14 Nov, about 03.15, on `claude/mariadb`; reproduction run, tests run)
+
+| # | Claim | Used in | Source | Status |
+|---|---|---|---|---|
+| 71 | The rules the gate reads (mandate terms, kitchen rules and habits, recall holds, suspensions, weekly spend, order status) are mirrored into MariaDB tables `WITH SYSTEM VERSIONING`; the app only inserts, updates and deletes, MariaDB keeps the history | Pa | `web/src/server/mariadb/schema.ts`, `mirror.ts`; `mariadb.live.test.ts` ("keeps the history itself", "stamped by the server") | V |
+| 72 | MariaDB is never in the path of an order: a write never waits for it, and with it down ordering is unaffected | Pa | `web/src/server/mariadb/attach.ts` (taps call `poke()`, which returns at once); `rows.test.ts` ("a poke with MariaDB unreachable returns at once") | V |
+| 73 | "The rules as they stood" is one `FOR SYSTEM_TIME AS OF` statement on one view over five versioned tables | Pa | `schema.ts` (`gate_rules`), `history.ts` (`SQL_RULES_AS_OF`) | V |
+| 74 | "Would it pass today?" re-runs the real gate (`evaluatePolicy`), unchanged, with the rules as of then and as of now | Pa | `web/src/server/mariadb/replay.ts`; `replay.test.ts` | V |
+| 75 | Seeded scenario: oat drink placed alone then, refused today (gluten now forbidden); €645 of milk to a person then, refused today (weekly budget) although the limit now allows it | Pa | `infra/mariadb/results-2026-11-14.txt`; `mariadb.live.test.ts` | V (synthetic scenario) |
+| 76 | Replayed against the rules the instant before, each checked order gets exactly the decision the gate recorded | Pa | `results-2026-11-14.txt` (A, B, D: "reproduces it: yes") | V (three orders, plus the live test) |
+| 77 | Rules as of a moment: 0.96 ms median; changes between two moments: 1.34 ms; combined vector + `FOR SYSTEM_TIME` query: 4.00 ms; one lookup in a table with 100,000 history versions: 1.78 ms | Pa | `infra/mariadb/README.md`, `results-2026-11-14.txt` | V (one run on a shared laptop, after the integration merge; the 100,000-version lookup ranged 0.45 to 2.4 ms over four runs) |
+| 78 | Decisions like this one: vector search found the right decisions in 44% of top-five slots on 10 questions over 78 templated decisions, against 20% for MariaDB `FULLTEXT` (best possible 72%) | Pa | `results-2026-11-14.txt` | Partly: small sample written by us; 62% before the integration reworded the gate's reasons, 46% on a second run after |
+| 79 | The kitchen sees the same answer in its words on its order page | Pa | `web/src/app/k/[kitchen]/rules-then.tsx`, `web/src/server/mariadb/kitchen-view.ts`; screenshot `dock-shots/mariadb/03-…` | V (local build) |
+| 80 | The public site has no MariaDB; the page says so | Pa | `web/src/app/ops-api/time-machine/route.ts` (`attached: false`) | V |
 
 ## Described by the team, not verified (kept out of the scripts, or stated with the limit)
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { Phone } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../../_client/api";
 import { useText } from "../../_i18n/provider";
@@ -30,7 +31,7 @@ export function CallAgent({ compact = false }: { compact?: boolean }) {
   if (!call) {
     return (
       <div className={`flex items-center gap-2 ${compact ? "text-[0.88rem]" : ""}`}>
-        <button type="button" disabled aria-disabled className="inline-flex min-h-10 items-center gap-2 border-2 border-line bg-paper px-3 font-semibold text-ink-soft">
+        <button type="button" disabled aria-disabled className="inline-flex min-h-10 items-center gap-2 rounded-full border border-line bg-paper px-4 text-[0.92rem] font-semibold text-ink-soft">
           <PhoneIcon /> {tx.call}
         </button>
         <span className="text-[0.85rem] text-ink-soft">{call === undefined ? tx.checking : tx.connecting}</span>
@@ -41,17 +42,17 @@ export function CallAgent({ compact = false }: { compact?: boolean }) {
   return (
     <div>
       {phone ? (
-        <a href={call.url} className="inline-flex min-h-11 items-center gap-2 bg-petrol px-4 font-semibold text-paper">
+        <a href={call.url} className="inline-flex min-h-11 items-center gap-2 rounded-full bg-petrol px-5 text-[0.95rem] font-semibold text-paper">
           <PhoneIcon /> {tx.call}
         </a>
       ) : (
-        <button type="button" aria-expanded={show} onClick={() => setShow((x) => !x)} className="inline-flex min-h-11 items-center gap-2 border-2 border-petrol bg-paper px-3 font-semibold text-petrol hover:bg-petrol-soft">
+        <button type="button" aria-expanded={show} onClick={() => setShow((x) => !x)} className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line-strong bg-paper px-4 text-[0.95rem] font-semibold text-ink transition-colors hover:border-ink-soft hover:bg-mist">
           <PhoneIcon /> {tx.call}
         </button>
       )}
       {show && !phone && (
         <figure className="mt-2 w-48">
-          {call.qrSvg ? <div className="aspect-square bg-paper p-2 ring-[3px] ring-petrol [&>svg]:size-full" dangerouslySetInnerHTML={{ __html: call.qrSvg }} /> : null}
+          {call.qrSvg ? <div className="aspect-square rounded-lg border border-line bg-paper p-3 shadow-sm [&>svg]:size-full" dangerouslySetInnerHTML={{ __html: call.qrSvg }} /> : null}
           <figcaption className="mt-1 text-[0.85rem] leading-snug">{tx.scan(kitchen.agentName)}</figcaption>
         </figure>
       )}
@@ -60,9 +61,5 @@ export function CallAgent({ compact = false }: { compact?: boolean }) {
 }
 
 function PhoneIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round">
-      <path d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2Z" />
-    </svg>
-  );
+  return <Phone aria-hidden size={17} />;
 }

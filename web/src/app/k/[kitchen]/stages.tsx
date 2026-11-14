@@ -13,6 +13,7 @@ import { Target } from "../../_ui/target";
 import { Spinner, Tag, Working } from "../../_ui/kit";
 import { Button, Field, MemoryNote, Missing, Paper } from "./ui";
 import { cutoffText } from "./when";
+import { SecondReadingLine } from "./second-reading";
 import type { ApprovalQr, KitchenInfo, Order, Step } from "./types";
 import { useProductName } from "./names";
 
@@ -100,6 +101,7 @@ export function Understood({
             )}
           </p>
         )}
+        {interp && !interp.offline && !interp.noModel && <SecondReadingLine reading={step?.secondReading} />}
         {busy && need && <Working className="mt-2 text-[0.95rem]">{busy}</Working>}
       </div>
     </Paper>
@@ -1031,7 +1033,15 @@ export function ApprovalPanel({ kitchen, approvalId }: { kitchen: KitchenInfo; a
         {qr?.mode === "demo_link" && <>{tx.qrDemo(name)}</>}
         {qr?.mode === "view_only" && <>{tx.qrView(name)}</>}
         {qr?.mode === "enrol" && <>{tx.qrEnrol(name)}</>}
-        {qr && (
+        {qr?.mode === "no_device" && (
+          <>
+            {tx.qrNoDevice(name)}
+            <a href={`/k/${encodeURIComponent(kitchen.slug)}/agent#devices`} className="mt-1 block font-semibold text-petrol underline decoration-2 underline-offset-4">
+              {tx.addDevice}
+            </a>
+          </>
+        )}
+        {qr && qr.mode !== "no_device" && (
           <a href={qr.url} target="_blank" rel="noreferrer" className="mt-1 block font-semibold text-petrol underline decoration-2 underline-offset-4">
             {qr.mode === "enrol" ? tx.becomeApprover : tx.openSignOff}
           </a>
