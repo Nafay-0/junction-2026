@@ -456,6 +456,21 @@ const CORE_TOOLS = [
       return { verification: dock.ledger.verify(), explanation: explain(entries), entries, nextStep: "Share the explanation with the buyer if they ask why." };
     },
   }),
+  tool({
+    name: "get_order_timeline",
+    title: "An order's whole timeline",
+    description:
+      "One of your orders from the buyer's words to now, a step per row: how it was read, lookups, options, the signed quote, the gate's rules, the sign-off (who, how, after how long), the receipt and its signature check, and after (taken back, a substitute, a backup). Each step names who acted and its ledger entry. The same timeline the wholesaler reads.",
+    input: z.object({ orderId: z.string().min(1).describe("orderId returned by place_order or list_orders.") }),
+    output: z.object({ timeline: z.looseObject({ orderId: z.string(), status: z.string(), steps: z.array(z.looseObject({ seq: z.number(), title: z.string() })) }), nextStep }),
+    readOnly: true,
+    run: async ({ dock, session }, { orderId }) => {
+      const order = await dock.getOrder(session, orderId); // 404 unless the order belongs to this organisation
+      const { buildOrderTimeline } = await import("@/server/ops/order-timeline");
+      const timeline = buildOrderTimeline({ order, ledger: dock.ledger.readonly(), viewer: "agent" });
+      return { timeline, nextStep: "Tell the buyer what they asked about in a sentence or two; the steps are theirs to read." };
+    },
+  }),
 ];
 
 const core = (name: string) => CORE_TOOLS.find((t) => t.name === name)!;
@@ -464,7 +479,7 @@ const core = (name: string) => CORE_TOOLS.find((t) => t.name === name)!;
 export const TOOLS = [
   core("read_mandate"),
   ...INTAKE_TOOLS,
-  ...["place_order", "get_order", "list_orders", "withdraw_order", "explain", "find_products", "find_alternatives", "open_request", "search_products", "check_availability", "request_quote"].map(core),
+  ...["place_order", "get_order", "list_orders", "withdraw_order", "explain", "get_order_timeline", "find_products", "find_alternatives", "open_request", "search_products", "check_availability", "request_quote"].map(core),
 ];
 
 export type DockTool = (typeof TOOLS)[number];

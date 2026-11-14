@@ -16,6 +16,8 @@ import { usePortal } from "./portal";
 import { Gate } from "./stages";
 import { RulesThen } from "./rules-then";
 import { Timeline } from "./timeline";
+import { OrderTimelineList } from "./order-timeline";
+import type { OrderTimeline } from "@/server/ops/order-timeline";
 import { Button, ErrorPlate } from "./ui";
 import type { LedgerReply, Order } from "./types";
 import { useProductName } from "./names";
@@ -25,7 +27,7 @@ import { useProductName } from "./names";
  * what the agent did and why, and a Verify control that checks in this browser the wholesaler's signature on
  * the order, the signed claims its price rested on, and the whole ledger chain.
  */
-type Detail = { order: Order; entries: LedgerReply["entries"] };
+type Detail = { order: Order; entries: LedgerReply["entries"]; timeline?: OrderTimeline };
 
 export function OrderDetail({ orderId }: { orderId: string }) {
   const pn = useProductName();
@@ -37,8 +39,9 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     async () => {
       const o = await call<{ order: Order }>("GET", `/api/v1/orders/${orderId}`);
       if (!o.ok) throw new Error(o.error.message);
-      const l = await call<LedgerReply>("GET", `/api/v1/ledger?requestId=${o.data.order.requestId}`);
-      return { order: o.data.order, entries: l.ok ? l.data.entries : [] };
+      // The order's whole timeline: the same steps the wholesaler's operations read (server/ops/order-timeline.ts).
+      const [l, t] = await Promise.all([call<LedgerReply>("GET", `/api/v1/ledger?requestId=${o.data.order.requestId}`), call<{ timeline: OrderTimeline }>("GET", `/api/v1/orders/${orderId}/timeline`)]);
+      return { order: o.data.order, entries: l.ok ? l.data.entries : [], ...(t.ok ? { timeline: t.data.timeline } : {}) };
     },
     { events, pollMs: 3000, pollMsStreaming: 8000 },
   );
@@ -149,14 +152,12 @@ export function OrderDetail({ orderId }: { orderId: string }) {
 
       <RulesThen orderId={o.orderId} />
 
-      {d.entries.length > 0 && (
+      {(d.timeline?.steps.length ?? d.entries.length) > 0 && (
         <section aria-labelledby="timeline">
-          <SectionTitle id="timeline" aside={tx.entries(d.entries.length)}>
+          <SectionTitle id="timeline" aside={tx.entries(d.timeline?.steps.length ?? d.entries.length)}>
             {tx.timeline}
           </SectionTitle>
-          <Card pad>
-            <Timeline entries={d.entries} names={names} agentName={kitchen.agentName} kitchen={kitchen.slug} check={false} />
-          </Card>
+          <Card pad>{d.timeline ? <OrderTimelineList t={d.timeline} agentName={kitchen.agentName} /> : <Timeline entries={d.entries} names={names} agentName={kitchen.agentName} kitchen={kitchen.slug} check={false} />}</Card>
         </section>
       )}
     </div>

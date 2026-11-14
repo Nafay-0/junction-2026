@@ -47,6 +47,8 @@ export type TurnRun = {
   waysAnswer?: "owner" | "which";
   /** The plan an order in this turn was placed from (its left-off ingredients are said again after it). */
   placedPlan?: string;
+  /** A sentence plain code has for the buyer's words: said as the reply, with no model call. */
+  sayNow?: string;
   /** A change to the rules sent in this turn to the signer's passkey (said by plain code, never as done). */
   rulesWaiting?: import("./types").RulesCard;
   /** The watch's moment the buyer asked about this turn: its words are the reply (watch.ts). */

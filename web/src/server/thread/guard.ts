@@ -101,6 +101,20 @@ export function guardAnswerOf(card: AnomalyCard, words: string): { action: Threa
   const w = words.trim();
   const nums = [...w.matchAll(/\d[\d\s.,]*/g)].map((m) => Number(m[0].replace(/\s/g, "").replace(",", "."))).filter((n) => Number.isFinite(n));
   const asked = (k.evidence?.asked as { amount?: number } | undefined)?.amount ?? Number(/^[a-z_]+:([\d.]+)/.exec(k.key)?.[1] ?? NaN);
+  // "5 packs of 400 g", "2 x 2,5 kg": the total names one of the readings offered (5 × 0,4 kg = 2 kg).
+  const packs = /(\d+(?:[.,]\d+)?)\s*(?:packs?|pakkaus\w*|förpackning\w*|x|×|kpl|st)\s*(?:of|à|á)?\s*(\d+(?:[.,]\d+)?)\s*(kg|g|l|dl|ml)\b/i.exec(w);
+  if (packs) {
+    const n = Number(packs[1].replace(",", "."));
+    const size = Number(packs[2].replace(",", "."));
+    const u = packs[3].toLowerCase();
+    const total = u === "g" ? (n * size) / 1000 : u === "ml" ? (n * size) / 1000 : u === "dl" ? (n * size) / 10 : n * size;
+    const unit = u === "g" || u === "kg" ? "kg" : "L";
+    const hit = k.corrections.find((x) => {
+      const m = /^use_([\d.]+)_(\w+)$/.exec(x.id);
+      return m && m[2].toLowerCase() === unit.toLowerCase() && Math.abs(Number(m[1]) - total) < 1e-6 + total * 0.01;
+    });
+    if (hit) return { action: { type: "concern", requestId: card.requestId, key: k.key, choice: hit.id } };
+  }
   for (const x of k.corrections) {
     const use = /^use_([\d.]+)_(\w+)$/.exec(x.id);
     const unitSaid = use && (use[2] === "L" ? /\d\s*(l|litr|liter|litre)/i : use[2] === "kg" ? /\d\s*(kg|kilo)/i : /\d\s*(pcs|kpl|st|pieces?|packs?)/i).test(w);
