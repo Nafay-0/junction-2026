@@ -1,3 +1,4 @@
+import { priceProof } from "./home";
 import { DockError } from "@/core/errors";
 import { RELAYED, type HumanVia, type IntakeView } from "@/core/intake";
 import { primaryLine, type KitchenProfile } from "@/core/kitchen";
@@ -358,6 +359,8 @@ export async function placeQuoted(run: TurnRun, s: IntakeView, words: string, pa
   const out: ItemOutcome = { words, requestId: s.requestId, state: s.state };
   const price = priceCard(s);
   if (price) {
+    // The proof opens in place: the signed quote and the signed claims it rests on, checked in the browser.
+    if (s.quote) price.proof = await priceProof(run, s.quote.quoteToken, s.quote.quote.evidence).catch(() => undefined);
     run.store.card(run.thread, run.turnId, price);
     run.facts.push(price);
   }

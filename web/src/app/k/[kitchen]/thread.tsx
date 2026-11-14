@@ -31,6 +31,7 @@ import { nameIn } from "./shop";
 import { THREAD_PAGE_TEXT } from "./thread.text";
 import { WaitingGate } from "./thread-signoff";
 import { MenuCardView } from "./thread-menu";
+import { HomeCardView, OrderInPlace, PriceProof } from "./thread-home";
 import { OptionsDecision } from "./thread-options";
 import { THREAD_WORDS } from "./thread-words.text";
 import { concernText, correctionLabel, fmtFor, gateReasons, memoryKey, memoryText, stepLabel } from "./thread-words";
@@ -259,6 +260,7 @@ function CardView({ card, tap, busy, gated, base, turn, thread, memory }: { card
     case "price": {
       const placed = gated.has(card.requestId);
       return (
+        <>
         <PriceCard
           kind={tx.kind.price}
           price={money(card.totalCents)}
@@ -268,6 +270,8 @@ function CardView({ card, tap, busy, gated, base, turn, thread, memory }: { card
           signed={tx.signed}
           actions={!placed && !turnClosedFor(thread, card.requestId) ? btn("go", tx.place, { type: "place", requestId: card.requestId }) : undefined}
         />
+        <PriceProof card={card} />
+        </>
       );
     }
     case "gate": {
@@ -303,6 +307,7 @@ function CardView({ card, tap, busy, gated, base, turn, thread, memory }: { card
             href={`${base}/orders/${card.orderId}`}
             linkLabel={tx.seeOrder}
           />
+          <OrderInPlace card={card} />
           {card.passedOver.length > 0 && (
             <ul className="space-y-1 px-1 text-[0.84rem] leading-snug text-ink-soft">
               {card.passedOver.map((p, i) => (
@@ -383,6 +388,8 @@ function CardView({ card, tap, busy, gated, base, turn, thread, memory }: { card
         </NoticeCard>
       );
     }
+    default:
+      return <HomeCardView card={card} tap={tap} busy={busy} />;
   }
 }
 
@@ -391,12 +398,12 @@ function turnClosedFor(thread: ThreadT, requestId: string): boolean {
   return thread.turns.some((x) => x.role === "agent" && x.cards.some((c) => c.type === "gate" && c.requestId === requestId));
 }
 
-/** Order an earlier order again: a `repeat` tap, rebuilt by plain code on the server (no model, the same gate). */
+/** Order an earlier order again: its lines on the order sheet (an `order_again` tap, plain code, no model), confirmed there. */
 function RepeatButton({ refId, label, wide = false }: { refId: string; label: string; wide?: boolean }) {
   const { thread } = usePortal();
   const tx = useText(THREAD_PAGE_TEXT);
   return (
-    <button type="button" disabled={thread.posting} className={`${buttonClass("quiet", "sm")}${wide ? " w-full justify-start text-left" : ""}`} onClick={() => void thread.submit({ door: "typed", via: "tap", action: { type: "repeat", ref: refId }, label: tx.repeatWords(`“${label}”`) })}>
+    <button type="button" disabled={thread.posting} className={`${buttonClass("quiet", "sm")}${wide ? " w-full justify-start text-left" : ""}`} onClick={() => void thread.submit({ door: "typed", via: "tap", action: { type: "order_again", ref: refId }, label: tx.repeatWords(`“${label}”`) })}>
       {wide ? `${tx.repeat}: ${label}` : tx.repeat}
     </button>
   );

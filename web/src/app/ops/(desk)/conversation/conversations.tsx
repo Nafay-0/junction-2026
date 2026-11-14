@@ -20,7 +20,7 @@ export function Conversations() {
       ) : live.data.conversations.length === 0 ? (
         <Empty title="No conversation yet">
           When a buyer talks to their agent in the store, the conversation appears here. Try{" "}
-          <Link className="underline" href="/k/kaari/order">
+          <Link className="underline" href="/k/kaari?agent=open">
             /k/kaari/order
           </Link>
           .

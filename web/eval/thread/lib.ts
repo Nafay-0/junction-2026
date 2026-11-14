@@ -106,6 +106,10 @@ export type Outcome = {
   /** How each concern was settled: confirmed as said, and whether it counted as the person's own. */
   acknowledgements: { code: string; action?: string; channel?: string; verified?: boolean }[];
   notices: { kind: string; message: string; rule?: string }[];
+  /** The day's opening and any later "what needs me today" card (thread driver only): `opening` for the one posted unasked. */
+  today: { opening: boolean; pending: boolean; date: string; items: Json[] }[];
+  /** The home's other cards seen (products, product, standing, deliveries, memory_list). */
+  home: string[];
   /** A menu plan (need → recipe → order on the store's menu page). */
   plan?: { lines: number; struck: number; doubts: number; unsourced: string[] };
   /** Free-form trace of what the driver did. */
@@ -126,6 +130,8 @@ export const emptyOutcome = (): Outcome => ({
   answers: [],
   acknowledgements: [],
   notices: [],
+  today: [],
+  home: [],
   log: [],
 });
 

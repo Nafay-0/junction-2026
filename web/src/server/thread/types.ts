@@ -74,7 +74,23 @@ export type ThreadAction =
   /** Menu builder: put every bought line on an order sheet, one order. */
   | { type: "menu_to_sheet"; planId: string }
   /** Remember this, in the kitchen's own words: goes through the memory writer, confirmed by the person. */
-  | { type: "remember_this"; text: string };
+  | { type: "remember_this"; text: string }
+  // ----- the agent as the kitchen's home (docs/agent-thread.md "The home") -----
+  /** Search the assortment's master data (no live call): results as a grid that adds to the order sheet. */
+  | { type: "products_search"; query: string; category?: string }
+  /** One product's facts, in place. */
+  | { type: "product_show"; productId: string }
+  /** An earlier order's lines on the order sheet, for the next same weekday (the sheet then re-prices and previews). */
+  | { type: "order_again"; ref: string }
+  /** An order's details and its signed confirmation, in place. */
+  | { type: "order_show"; orderId: string }
+  /** The kitchen's order history, recurring orders, upcoming deliveries, or what the agent remembers, as a card. */
+  | { type: "home_show"; what: "history" | "standing" | "deliveries" | "memory" | "today" }
+  /** A recurring order changed: its product at a new amount on the order sheet for its next day. */
+  | { type: "standing_change"; family: string; packs?: number }
+  /** What the agent remembers: change the words of an item, or forget it (the kitchen's signed-in person only). */
+  | { type: "memory_edit"; itemId: string; text: string }
+  | { type: "memory_forget"; itemId: string };
 
 export type BuyerTurn = {
   turnId: string;
@@ -462,7 +478,57 @@ export type MenuCard = CardBase & {
   sheetId?: string;
 };
 
-export type Card = UnderstoodCard | AnomalyCard | QuestionCard | OptionsCard | PriceCard | GateCard | OrderCard | MemoryCard | RecordsCard | NoticeCard | SheetCard | AlternativesCard | MenuCard;
+// ---------- the home: what the kitchen sees and does in the agent (docs/agent-thread.md "The home") ----------
+
+/** One thing that needs the kitchen today, from records and plain code (never the model). */
+export type TodayItem =
+  /** An order waiting for a named person's sign-off: signed in place (the gate card's sign-off widget). */
+  | { kind: "sign_off"; orderId: string; requestId?: string; approvalId: string; totalCents: number; approver: { name: string; role: string }; requestedAt: string; lines: { name: string; quantity: number }[] }
+  /** The order cut-off for something the kitchen usually buys closes today: order the usual now (onto the sheet). */
+  | { kind: "cutoff"; family: string; productId: string; name: string; orderBy: string; deliveryDate: string; usual: { amount: number; unit: string }; packs: number }
+  /** A recurring order whose amount or price has drifted from the usual. */
+  | { kind: "drift"; family: string; warning: string; productId: string; name: string; usual: { amount: number; unit: string }; recent: number; amountPct: number | null; pricePct: number | null; nextDue?: string }
+  /** A recall hold on a product the kitchen has bought. */
+  | { kind: "recall"; productId: string; productName: string; reason: string; noticeTitle: string; noticeUrl: string; publisher: string; drill: boolean; lastOrdered?: string }
+  /** An order arriving today or tomorrow. */
+  | { kind: "delivery"; orderId: string; deliveryDate: string; totalCents: number; lines: { name: string; quantity: number }[] };
+
+/** The opening: what needs the kitchen today, posted by the engine when the kitchen opens the agent. Empty: nothing does. */
+/** What needs the kitchen today (the opening); `pending` while it is being gathered. Plain code from records only. */
+export type TodayCard = CardBase & { type: "today"; date: string; items: TodayItem[]; pending?: boolean };
+
+export type ProductTile = { productId: string; name: string; brand?: string; category: string; packSize: number; unit: string; attributes: string[]; allergens: string[] };
+
+/** A grid of products from the assortment's master data (no live call until one is added to the order sheet). */
+export type ProductsCard = CardBase & { type: "products"; query: string; category?: string; total: number; products: ProductTile[] };
+
+/** One product's facts, from master data (prices only once it is on the order sheet). */
+export type ProductCard = CardBase & {
+  type: "product";
+  product: ProductTile & { certificates: string[]; allergensDeclared: boolean; origin?: string; co2KgPerUnit: number | null; reliability: number | null; gtin?: string };
+};
+
+/** The kitchen's recurring orders, as the history shows them (no separate store: plain code over the order history). */
+export type StandingCard = CardBase & {
+  type: "standing";
+  items: { family: string; productId: string; name: string; weekdays: number[]; usual: { amount: number; unit: string }; usualPacks: number; lastAmount: number; nextDue?: string; drift: { amountPct: number | null; pricePct: number | null } }[];
+};
+
+/** Orders on their way: committed or waiting for sign-off, by delivery day. */
+export type DeliveriesCard = CardBase & {
+  type: "deliveries";
+  items: { orderId: string; status: string; deliveryDate: string; totalCents: number; lines: { name: string; quantity: number }[] }[];
+};
+
+/** What the agent remembers about the kitchen, each item editable or forgettable by the kitchen's signed-in person. */
+export type MemoryListCard = CardBase & {
+  type: "memory_list";
+  items: { itemId: string; text: string; kind: string; strength: string; origin: string; status: string; family?: string }[];
+  /** False when nobody is signed in for the kitchen: the items can be read, not changed. */
+  canChange: boolean;
+};
+
+export type Card = UnderstoodCard | AnomalyCard | QuestionCard | OptionsCard | PriceCard | GateCard | OrderCard | MemoryCard | RecordsCard | NoticeCard | SheetCard | AlternativesCard | MenuCard | TodayCard | ProductsCard | ProductCard | StandingCard | DeliveriesCard | MemoryListCard;
 export type CardType = Card["type"];
 
 // ---------- the thread and its event stream ----------
