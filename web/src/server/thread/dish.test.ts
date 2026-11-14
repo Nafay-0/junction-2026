@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { coversIn, dishRequestOf } from "./dish";
+import { coversIn, dishRequestOf, shortReason } from "./dish";
 
 describe("a request for a dish", () => {
   it("open: one question first; with preferences: straight to ideas; a named dish or an item: neither", () => {
@@ -14,5 +14,14 @@ describe("a request for a dish", () => {
     expect(coversIn("a dish for 20 people")).toBe(20);
     expect(coversIn("ruoka 40 hengelle")).toBe(40);
     expect(coversIn("middag för 12 personer")).toBe(12);
+  });
+});
+
+describe("an idea's reason", () => {
+  it("is at most about six words, cut at a clause, or left out; never cut mid-phrase", () => {
+    expect(shortReason("Uses your usual cream and butter.")).toBe("Uses your usual cream and butter");
+    expect(shortReason("Seasonal: root vegetables are cheap now, and they keep well.")).toBe("root vegetables are cheap now");
+    expect(shortReason("Root vegetables are at their best in November, and cheap.")).toBe("");
+    expect(shortReason("A warming dish that the whole school eats without complaint every single week.")).toBe("");
   });
 });

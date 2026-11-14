@@ -347,3 +347,8 @@ export function englishDays(text: string): string {
     return `${w}${sp}${Number(d)} ${MON[Number(mo) - 1]}${ends && !mark ? "." : ""}${ends && mark ? "" : ""}`;
   }).replace(/(\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec))(\}\}|\*\*)(?=\s+[\p{Lu}"“]|\s*$)/gu, "$1$2.");
 }
+
+/** "For Friday 20 Nov. I can get …": a day said as a fragment of its own joins the sentence after it (English). */
+export function joinDayFragment(t: string): string {
+  return t.replace(/(^|[.!?]\s+)((?:For|By|On|From)\s+\{\{[^}]+\}\}|(?:For|By|On|From)\s+(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s+\d{1,2}\s+[A-Z][a-z]{2})[.:]\s+([A-Z][a-z']*)/g, (_m, lead: string, day: string, next: string) => `${lead}${day}, ${/^(I|I'[a-z]+)$/.test(next) ? next : /^(The|There|It|We|You|Your|That|This|These|Those|Both|All|Each|Every)$/.test(next) ? next.toLowerCase() : next}`);
+}

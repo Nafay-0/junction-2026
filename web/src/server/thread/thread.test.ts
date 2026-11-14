@@ -414,3 +414,31 @@ describe("history sent with a new turn", () => {
     expect(out[2]).toMatchObject({ role: "tool", content: [{ type: "tool-result", toolCallId: "c1" }] });
   });
 });
+
+describe("a mistake check answered with the usual amount", () => {
+  beforeEach(() => {
+    resetRuntime();
+    process.env.DOCK_MEMORY = "off";
+  });
+  afterEach(() => {
+    setAgentModelForTests(undefined);
+    setInterpretModelForTests(undefined);
+    delete process.env.DOCK_MEMORY;
+  });
+
+  it("is no reduction: 100 L delivered after 'make it 100 L' is never 'only 100 L of the 1 000 L you asked for'", async () => {
+    setInterpretModelForTests(reader(1000));
+    setAgentModelForTests(agentScript([{ calls: [{ name: "order", args: { words: "1000 litres of lactose-free milk for Monday" } }] }, { text: "Options below." }]));
+    const first = await turn("kaari", { door: "typed", via: "typed", text: "1000 litres of lactose-free milk for Monday" });
+    const a = first.cards.find((c) => c.type === "anomaly");
+    if (a?.type !== "anomaly") throw new Error("no mistake check on 1000 L where Kaari usually orders 100 L");
+    const fix = a.concerns.flatMap((k) => k.corrections.map((x) => ({ key: k.key, id: x.id }))).find((x) => /^use_100_l$/i.test(x.id));
+    if (!fix) throw new Error(`no 100 L correction: ${JSON.stringify(a.concerns.map((k) => k.corrections.map((x) => x.id)))}`);
+    setAgentModelForTests(agentScript([{ text: "Options below." }]));
+    const r = await turn("kaari", { door: "typed", via: "tap", action: { type: "concern", requestId: a.requestId, key: fix.key, choice: fix.id } });
+    const options = r.cards.find((c) => c.type === "options");
+    expect(options?.type === "options" && options.options.length).toBeTruthy();
+    expect(r.line ?? "").not.toMatch(/you asked for|only 100/i);
+    expect(r.line ?? "").not.toMatch(/1[\s ]?000/);
+  });
+});

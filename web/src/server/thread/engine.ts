@@ -21,7 +21,7 @@ import { subjectOf } from "./subject";
 import { optionsSaid } from "./options-said";
 import { runWidget } from "./widgets";
 import { speakFacts } from "./speak";
-import { codeLeaks, englishDays, insideOrTell, readable } from "./refusal";
+import { codeLeaks, englishDays, insideOrTell, joinDayFragment, readable } from "./refusal";
 import { shortName } from "./watch";
 import { fmtFor, gateReasons } from "@/app/k/[kitchen]/thread-words";
 import { THREAD_WORDS } from "@/app/k/[kitchen]/thread-words.text";
@@ -853,6 +853,8 @@ function plainLine(run: TurnRun, text: string): string {
     t = englishDays(t);
     t = t.replace(/\{\{(\d{1,2})\.(\d{1,2})\.?\}\}/g, (m, d: string, mo: string) => (Number(mo) >= 1 && Number(mo) <= 12 ? `{{${Number(d)} ${MON[Number(mo) - 1]}}}` : m));
   }
+  // "For Friday 20 Nov. I can get …": a day said as its own fragment joins the sentence after it.
+  if (lang === "en") t = joinDayFragment(t);
   // Catalogue jargon: a "novobox" is a 10 l box to a person.
   t = t.replace(/\bnovobox(?:ia|in|issa|eja|ista|ille|eihin)?\b/gi, (m) => (lang === "fi" ? (/ia$/i.test(m) ? "laatikkoa" : "laatikko") : lang === "sv" ? "låda" : "box"));
   // "16.11.?" reads badly: the sentence's own mark replaces the date's dot.
@@ -993,7 +995,9 @@ async function tellDifferences(run: TurnRun): Promise<void> {
   // Every ingredient not on the order is named with its reason before the question, also when the dishes are shown in
   // three groups beside it: the count alone ("5 of the 6") names nothing.
   const said = left ? sayDifferences([...pd.diffs.filter((x) => x.kind === "left_out"), ...fresh.filter((x) => x.kind !== "left_out")], ctx).said : words.said;
-  run.store.line(run.thread, run.turnId, [body, said, words.ask].filter(Boolean).join(" ").replace(/\s+/g, " ").trim());
+  // Late lines, and no later day in the kitchen's order window has them all: said, so moving the day is not hoped for.
+  const noWindow = late && !later ? { en: "No day in your order window has all of it.", fi: "Mikään päivä tilausikkunassanne ei saa kaikkea perille.", sv: "Ingen dag i ert beställningsfönster har allt." }[lang] : "";
+  run.store.line(run.thread, run.turnId, [body, said, noWindow, words.ask].filter(Boolean).join(" ").replace(/\s+/g, " ").trim());
   for (const x of fresh) told[keyOf(x)] = run.turnId;
   // What was said as left off, by plan: after the order, the reply says it again in the same words (never a new reason).
   const lefts = ((run.thread as unknown as { toldLeftOff?: Record<string, string[]> }).toldLeftOff ??= {});
@@ -1029,6 +1033,10 @@ async function tellRequestDifferences(run: TurnRun): Promise<void> {
       const id = opts.adjusted ?? opts.preselected?.optionId;
       const o = opts.options.find((x) => x.optionId === id) ?? opts.options.find((x) => x.gate?.outcome !== "reject");
       if (!o) continue;
+      // The amount asked is the request's own now: a mistake check answered "make it 100 L" changed it after the
+      // understood card was shown, and 100 L delivered is then no "only 100 L of the 1 000 L".
+      const now = (await run.rt.dock.intake.get(run.session, u.requestId!).catch(() => undefined))?.need as { quantity?: { amount: number; unit: string } } | undefined;
+      const asked = now?.quantity && Number.isFinite(now.quantity.amount) ? now.quantity : u.amount;
       const sub = o.lines.find((l) => l.substituteFor);
       const day = u.deliverOn ?? u.deliverBy;
       const one = o.lines.length === 1 ? o.lines[0] : undefined;
@@ -1036,7 +1044,7 @@ async function tellRequestDifferences(run: TurnRun): Promise<void> {
       // A stand-in by its short name, and not again when the reply already names it.
       const subName = sub ? readable(shortName(o.title.replace(/[®™]/g, "").replace(/^(Valio )?Hyvä suomalainen /i, "$1").replace(/\s*\(.*\)$/, "")), lang) : "";
       const named = !!subName && (fold(line).includes(fold(subName.split(/\s+/).slice(0, 2).join(" "))) || /\b(instead|in place of|tilalla|tilalle|i stället)\b/i.test(line) || /\b(usual|tavallinen|tavallista|vanliga)\b[^.?!]*\b(can't|cannot|won't|ei ehdi|ei tule|hinner inte|kan inte)\b|\b(can't|cannot|won't|couldn't|could not)\b[^.?!]*\busual\b/i.test(line));
-      const diffs = optionDifferences({ key: u.requestId!, name: u.item, ...(u.amount ? { amount: u.amount } : {}), ...(day ? { day } : {}), exact: !!u.deliverOn }, { delivered: o.delivered, deliveryDate: sheet?.type === "sheet" ? sheet.deliveryDate : o.deliveryDate, ...(sub && !named ? { substituteFor: sub.substituteFor, title: subName } : {}), ...(pack ? { pack } : {}) });
+      const diffs = optionDifferences({ key: u.requestId!, name: u.item, ...(asked ? { amount: asked } : {}), ...(day ? { day } : {}), exact: !!u.deliverOn }, { delivered: o.delivered, deliveryDate: sheet?.type === "sheet" ? sheet.deliveryDate : o.deliveryDate, ...(sub && !named ? { substituteFor: sub.substituteFor, title: subName } : {}), ...(pack ? { pack } : {}) });
       fresh.push(...diffs.filter((d) => !told[keyOf(d)]));
     } else if (understood.length > 1 && notice?.type === "notice" && (notice.kind === "refused" || notice.kind === "not_found" || notice.kind === "unavailable")) {
       // An item of a several-item order that will not be on it: its own refusal (the rule, the reason, the next step).
@@ -1081,7 +1089,16 @@ function sayLeftOffAfterOrder(run: TurnRun): void {
   const here = run.store.agentTurn(run.thread, run.turnId);
   if (!planId || !here?.cards.some((c) => c.type === "order")) return;
   const names = (run.thread as unknown as { toldLeftOff?: Record<string, string[]> }).toldLeftOff?.[planId] ?? [];
-  if (!names.length) return;
+  // Nothing was left off: a sentence of the agent's that says the rest is not on the order is false and not shown.
+  if (!names.length) {
+    const line = here.line ?? "";
+    const kept = line.split(/(?<=[.!?])\s+/).filter((x) => !/\b(the rest|the remaining|everything else|rest of the dish|loput|resten)\b[^.?!]*\b(isn't|aren't|is not|are not|not on|ei ole|eivät ole|inte med|finns inte)\b/i.test(x));
+    if (kept.length && kept.length < line.split(/(?<=[.!?])\s+/).length) {
+      run.store.line(run.thread, run.turnId, kept.join(" "));
+      record(run, "false_left_off", "A sentence saying part of the dish is not on the order was not shown: nothing was left off.", { said: line });
+    }
+    return;
+  }
   const lang = run.lang ?? "en";
   const and = lang === "fi" ? "ja" : lang === "sv" ? "och" : "and";
   const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} ${and} ${names.at(-1)}`;
@@ -1873,15 +1890,18 @@ async function answerOpenOffer(run: TurnRun, words: string, lang: "en" | "fi" | 
 }
 
 /** What happened when the person decided, in one sentence: OK'd and arriving, declined, or the price ran out. */
-export function afterSignOff(order: PublicOrder, lang0: "en" | "fi" | "sv"): string {
-  const lang = lang0 === "sv" ? "en" : lang0;
-  const who = order.approval?.approver.name ?? (lang === "fi" ? "hyväksyjä" : "the approver");
+export function afterSignOff(order: PublicOrder, lang: "en" | "fi" | "sv"): string {
+  const who = order.approval?.approver.name ?? { en: "the approver", fi: "hyväksyjä", sv: "godkännaren" }[lang];
   const date = order.lines[0]?.deliveryDate ?? "";
-  const day = englishDays(`${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][new Date(`${date}T12:00:00Z`).getUTCDay()]} ${Number(date.slice(8, 10))}.${Number(date.slice(5, 7))}.`);
-  if (order.status === "committed") return lang === "fi" ? `${who} hyväksyi tilauksen; se tulee ${Number(date.slice(8, 10))}.${Number(date.slice(5, 7))}.` : `${who} OK'd it: it arrives ${day}`;
-  if (order.status === "declined") return lang === "fi" ? `${who} hylkäsi tilauksen, joten mitään ei tilattu.` : `${who} declined it, so nothing is ordered.`;
-  if (order.status === "expired") return lang === "fi" ? "Hinta umpeutui ennen hyväksyntää, joten mitään ei tilattu." : "The price ran out before the OK, so nothing is ordered.";
-  if (order.status === "withdrawn") return lang === "fi" ? "Tilaus peruttiin, joten mitään ei tilattu." : "It was taken back, so nothing is ordered.";
+  const wd = new Date(`${date}T12:00:00Z`).getUTCDay();
+  const dm = `${Number(date.slice(8, 10))}.${Number(date.slice(5, 7))}.`;
+  const day = englishDays(`${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][wd]} ${dm}`);
+  const svDay = `${["söndag", "måndag", "tisdag", "onsdag", "torsdag", "fredag", "lördag"][wd]} ${Number(date.slice(8, 10))} ${["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"][Number(date.slice(5, 7)) - 1]}`;
+  const say = (en: string, fi: string, sv: string) => ({ en, fi, sv })[lang];
+  if (order.status === "committed") return say(`${who} OK'd it: it arrives ${day}`, `${who} hyväksyi tilauksen; se tulee ${dm}`, `${who} godkände beställningen: den kommer ${svDay}.`);
+  if (order.status === "declined") return say(`${who} declined it, so nothing is ordered.`, `${who} hylkäsi tilauksen, joten mitään ei tilattu.`, `${who} avböjde beställningen, så inget är beställt.`);
+  if (order.status === "expired") return say("The price ran out before the OK, so nothing is ordered.", "Hinta umpeutui ennen hyväksyntää, joten mitään ei tilattu.", "Priset gick ut före godkännandet, så inget är beställt.");
+  if (order.status === "withdrawn") return say("It was taken back, so nothing is ordered.", "Tilaus peruttiin, joten mitään ei tilattu.", "Beställningen togs tillbaka, så inget är beställt.");
   return "";
 }
 
