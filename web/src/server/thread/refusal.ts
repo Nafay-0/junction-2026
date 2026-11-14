@@ -28,6 +28,7 @@ export type Refusal =
   | { code: "licence"; signer?: string }
   | { code: "recall"; what: string }
   | { code: "no_such_kind"; what: string }
+  | { code: "claim_missing"; what: string; claims: string[]; products?: string[] }
   | { code: "nothing_fits"; what: string };
 
 const DATA = generated as { departments: Record<string, string>; categories: Record<string, { label: string }> };
@@ -139,6 +140,13 @@ export function sayRefusal(r: Refusal, lang: Lang): string {
       if (fi) return `${cap(r.what)} on pysäytetty takaisinvedon vuoksi, joten en tilaa sitä. Etsinkö korvaavan?`;
       if (sv) return `${cap(r.what)} är stoppad på grund av en återkallelse, så jag beställer den inte. Ska jag leta efter en ersättare?`;
       return `${cap(r.what)} is held under a recall notice, so I won't order it. Shall I look for a stand-in?`;
+    case "claim_missing": {
+      const c = list(r.claims.map((x) => attrL(x, lang)), lang);
+      const which = r.products?.length ? list(r.products, lang) : r.what;
+      if (fi) return `En voi tilata tätä: ${which} ei ole todistetusti ${c}, ja sääntönne vaativat sen. Vaihdanko sen tuotteeseen, joka on?`;
+      if (sv) return `Jag kan inte beställa det: ${which} är inte visat ${c}, och era regler kräver det. Ska jag byta till en som är det?`;
+      return `I can't order this: ${which} isn't shown to be ${c}, and your rules require it. Shall I swap it for one that is?`;
+    }
     case "no_such_kind":
       if (fi) return `Valikoimassa ei ole juuri tätä (${r.what}) sille päivälle; löytämäni ovat muita lajeja. Näytänkö lähimmät?`;
       if (sv) return `Sortimentet har inte just ${r.what} för den dagen; det jag hittade är andra sorter. Ska jag visa de närmaste?`;
@@ -197,6 +205,11 @@ export function refusalOfRule(run: TurnRun, rule: string | undefined, what: stri
   switch (rule) {
     case "category_allowed":
       return { code: "out_of_mandate", what, groups: groupsOf(run.session.mandate.allowedCategories, lang), ...(signer ? { signer } : {}) };
+    case "required_attributes": {
+      const missing = (details?.missing as string[] | undefined) ?? run.session.mandate.requiredAttributes;
+      const products = ((details?.products as { name?: string }[] | undefined) ?? []).map((p) => String(p.name ?? "")).filter(Boolean).slice(0, 2);
+      return { code: "claim_missing", what, claims: missing.slice(0, 2), ...(products.length ? { products } : {}) };
+    }
     case "forbidden_allergens":
       return { code: "forbidden_allergen", what, allergens: run.session.mandate.forbiddenAllergens.slice(0, 3) };
     case "nutrition_rules":

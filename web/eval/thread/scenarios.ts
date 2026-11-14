@@ -975,7 +975,7 @@ ALL.push({
   tag: "allergen-safe substitution (nutrition rules)",
   kitchen: "koulu-metsola",
   lang: "en",
-  turns: [{ say: "Our usual yoghurt didn't arrive. I need 30 kg of something for tomorrow's breakfast" }, { say: "what about an oat-based one?" }],
+  turns: [{ say: "Our usual yoghurt didn't arrive. I need 30 kg of something for Tuesday's breakfast" }, { say: "what about an oat-based one?" }],
   goal: "options",
   expect: [oatYoghurtOffered],
 });

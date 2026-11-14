@@ -31,6 +31,7 @@ export async function sayBackup(run: TurnRun, ref: { orderId: string } | { reque
     type: "backup",
     cardId: cardId("backup", `${run.turnId}:${m.id}`),
     momentId: m.id,
+    ...("orderId" in ref ? { orderId: ref.orderId } : {}),
     text: readable(text, lang),
     answers: m.answers,
     others: [...m.alternatives.map((a) => `${shortName(a.name)}: ${a.why}${a.record ? `, ${a.record}` : ""}`), ...m.others.map((o) => `${shortName(o.name)}: ${o.words}`)].slice(0, 8),

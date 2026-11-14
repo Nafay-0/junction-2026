@@ -243,6 +243,8 @@ async function fullCard(run: TurnRun, svc: Svc, m: MenuState, planned: Planned, 
   }
   const t = view.totals;
   const covers = p.settings.covers;
+  // A menu ready in this turn (not yet on a sheet) is shown as dishes in the reply.
+  if (!resolving && p.state === "planned" && !m.sheetId) run.dishesFor = { planId: p.planId };
   const days = resolving ? [] : await daysOf(run, svc, planned);
   const problem = dayProblem(m, p.settings.deliverBy, days);
   return {
@@ -496,10 +498,27 @@ async function toSheet(run: TurnRun, planId: string): Promise<void> {
   const svc = await planner(run);
   let planned = await svc.service.get(svc.kitchen, planId);
   if (planned.record.state !== "planned") throw new DockError(409, "turn_card_stale", "This menu cannot be ordered: start a new one.", "intake_sequence");
+  // Nothing left out, swapped or moved silently: a difference not yet said is said first (engine.ts tellDifferences),
+  // and the order waits for the buyer's word on it.
+  const { keyOf } = await import("./differences");
+  const told = ((run.thread as unknown as { told?: Record<string, string> }).told ??= {});
+  const pd = await planDifferences(run, planId);
+  if (pd.diffs.some((d) => !told[keyOf(d)])) {
+    run.dishesFor = { planId };
+    record(run, "order_held_untold", `The menu was not put on an order: ${pd.diffs.filter((d) => !told[keyOf(d)]).length} difference(s) from the plan not yet said to the buyer.`, { planId });
+    return;
+  }
+  // The day agreed in words is the day ordered; the plan is moved to it first, so prices and arrival are for that day.
+  if (run.orderDay && run.orderDay !== planned.record.settings.deliverBy) planned = await svc.service.edit(svc.kitchen, planId, [{ op: "deliverBy", date: run.orderDay }], byLine(run));
   const accept: string[] = [];
   const leftOff: { lineId: string; name: string; why: string }[] = [];
+  const out = new Set(pd.diffs.flatMap((d) => (d.kind === "left_out" ? [d.key] : [])));
   for (const l of planned.view.lines) {
     if (l.status !== "ready" && l.status !== "needs_decision") continue;
+    if (out.has(l.lineId)) {
+      leftOff.push({ lineId: l.lineId, name: l.name, why: "said to the buyer before the order" });
+      continue;
+    }
     const open = l.doubts.filter((d) => !d.accepted);
     if (!l.chosen || open.some((d) => !d.acceptLabel)) leftOff.push({ lineId: l.lineId, name: l.name, why: plain(open.find((d) => !d.acceptLabel)?.text ?? "nothing to buy") });
     else accept.push(...open.map((d) => d.doubtId));
@@ -519,7 +538,7 @@ async function toSheet(run: TurnRun, planId: string): Promise<void> {
   const st = step(run, "plan", "Putting the menu on the order sheet");
   const sheet = await createSheet(run, {
     lines: [...merged.values()],
-    ...(p.settings.deliverBy ? { deliveryDate: p.settings.deliverBy } : planned.view.totals.deliveryDate ? { deliveryDate: planned.view.totals.deliveryDate } : {}),
+    ...(p.settings.deliverBy ? { deliveryDate: p.settings.deliverBy } : (await daysOf(run, svc, planned)).find((d) => d.available)?.date ? { deliveryDate: (await daysOf(run, svc, planned)).find((d) => d.available)!.date } : planned.view.totals.deliveryDate ? { deliveryDate: planned.view.totals.deliveryDate } : {}),
     text: `Menu for ${p.settings.covers ?? "?"} covers: ${p.draft.dishes.map((d) => d.name).join(", ")}`,
     // The kitchen's menu agent, whose mandate covers food of every kind (the store's own agent may buy only dairy):
     // the sheet's request, prices, preview and order are under the same mandate the plan was made and previewed by.
@@ -586,4 +605,138 @@ export function openMenu(run: TurnRun): MenuCard | undefined {
     .filter((c): c is MenuCard => c.type === "menu")
     .reverse()
     .find((c) => (c.stage === "ready" || c.stage === "choose") && !c.sheetId);
+}
+
+// ---------- the menu as content: dishes and their ingredients, in the reply ----------
+
+type Dishes = import("./types").DishesCard;
+type DishItem = Dishes["dishes"][number]["items"][number];
+const COURSE_ORDER = ["starter", "soup", "salad", "main", "side", "bread", "dessert", "drink", "snack", "other"];
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const three = (en: string, fi?: string | null, sv?: string | null) => ({ en, fi: fi || en, sv: sv || en });
+
+/**
+ * The dishes of a plan with their ingredients and amounts, from the planner's record (plain code, no live call): the
+ * menu the chef decides on. The products, packs and prices stay on the menu card behind "Show the list". `before` is
+ * the earlier snapshot of the same plan: an ingredient bought as another product now is marked changed. `standIns`:
+ * the best stand-in for a line that cannot arrive (the short-notice booking's own).
+ */
+export async function dishesCard(run: TurnRun, planId: string, before?: Dishes, standIns: Record<string, string> = {}): Promise<Dishes | undefined> {
+  const svc = await planner(run);
+  const { record: p, view } = await svc.service.get(svc.kitchen, planId);
+  if (p.state !== "planned" || !p.draft.dishes.length) return undefined;
+  const deliverBy = p.settings.deliverBy;
+  const was = new Map((before?.dishes ?? []).flatMap((d) => d.items.map((i) => [i.lineId, i] as const)));
+  const leftByBuyer = (run.thread as unknown as { leftOff?: Record<string, string[]> }).leftOff?.[planId] ?? [];
+  const dishes = [...p.draft.dishes]
+    .sort((a, b) => COURSE_ORDER.indexOf(a.course) - COURSE_ORDER.indexOf(b.course))
+    .map((d) => ({ dishId: d.id, name: three(d.name, d.nameFi, d.nameSv), course: d.course, items: [] as DishItem[] }));
+  for (const l of view.lines) {
+    if (l.status === "merged") continue;
+    // The planner's own ingredient words: English, and Finnish first among its search terms.
+    const fi = l.searchTerms.find((x) => /[äöå]/i.test(x)) ?? l.searchTerms[0];
+    const name = three(cap(l.name), fi ? cap(fi) : undefined);
+    const productId = l.chosen?.products[0]?.productId;
+    const late = l.doubts.find((x) => x.kind === "cannot_arrive" && !x.accepted);
+    let note: DishItem["note"];
+    if (l.status === "struck") {
+      const chef = !!p.edits[l.lineId]?.struck;
+      const left = leftByBuyer.includes(l.lineId);
+      note = !left && (l.onHand || l.pantry || chef) ? { code: "have", basis: l.onHand ? "on_hand" : chef ? "chef" : "staple" } : { code: "left_out", ...(late ? { why: plain(late.text) } : !left && l.struckReason ? { why: l.struckReason } : {}) };
+    } else if (!l.chosen) note = p.settings.covers ? { code: "open", ...(l.doubts[0] ? { why: plain(l.doubts[0].text) } : {}) } : undefined;
+    else if (late) note = { code: "late", ...(deliverBy ? { date: deliverBy } : {}), ...(standIns[l.lineId] ? { to: three(standIns[l.lineId]) } : {}) };
+    else if (l.replaces) note = { code: "swap", to: name };
+    else if (deliverBy && l.chosen.deliveryDate > deliverBy) note = { code: "later", date: l.chosen.deliveryDate };
+    const prev = was.get(l.lineId);
+    if (before && (!note || note.code === "swap") && prev && prev.productId !== productId) note = { code: "changed" };
+    // A line used in several dishes is shown under each, with that dish's own amount.
+    const uses = l.uses.length ? l.uses : [{ dishId: dishes[0]?.dishId ?? "", gross: l.gross }];
+    for (const use of uses) {
+      const dish = dishes.find((x) => x.dishId === use.dishId) ?? dishes[0];
+      const gross = l.uses.length > 1 ? use.gross : l.gross;
+      if (!dish || dish.items.some((i) => i.lineId === l.lineId)) continue;
+      dish.items.push({
+        lineId: l.lineId,
+        // A swap is shown on the ingredient it replaces ("frozen whitefish in its place").
+        name: l.replaces ? three(cap(l.replaces.name)) : name,
+        ...(gross && gross.amount > 0 ? { need: { amount: gross.amount, unit: gross.unit } } : {}),
+        ...(productId ? { productId } : {}),
+        ...(note ? { note } : {}),
+      });
+    }
+  }
+  const covers = p.settings.covers;
+  const total = view.totals.totalCents;
+  return {
+    type: "dishes",
+    cardId: cardId("dishes", run.turnId),
+    planId,
+    covers,
+    ...(deliverBy ? { serviceDate: deliverBy } : {}),
+    dishes: dishes.filter((d) => d.items.length),
+    totalCents: total,
+    ...(covers && total ? { costPerCoverCents: Math.round(total / covers) } : {}),
+  };
+}
+
+// ---------- what the plan will not buy as planned (differences.ts), for the reply before any order ----------
+
+/**
+ * What a plan proposes against what it would buy: each ingredient not simply bought (not sold, outside the kitchen's
+ * product groups, its rule, cannot arrive, not priced, a stand-in, later than the day), with its reason from the
+ * planner's own record. What the kitchen has (a staple, on hand, struck by the chef) and what the buyer chose to
+ * leave off are not differences.
+ */
+export async function planDifferences(run: TurnRun, planId: string, lang: "en" | "fi" | "sv" = run.lang ?? "en") {
+  const { differencesOf } = await import("./differences");
+  const svc = await planner(run);
+  const { record: p, view } = await svc.service.get(svc.kitchen, planId);
+  const deliverBy = p.settings.deliverBy;
+  const leftByBuyer = (run.thread as unknown as { leftOff?: Record<string, string[]> }).leftOff?.[planId] ?? [];
+  // The gate's objection on a line's product (an allergen): from the menu card's preview, when one is on the table.
+  const card = run.store.cards(run.thread).map((x) => x.card).filter((c): c is MenuCard => c.type === "menu" && c.planId === planId).at(-1);
+  const gateStop = new Map((card?.dishes ?? []).flatMap((d) => d.lines).flatMap((l) => l.conflicts.filter((c) => c.blocking && c.code === "forbidden_allergens").map((c) => [l.lineId, c.text] as const)));
+  const wanted: import("./differences").Wanted[] = [];
+  const got: import("./differences").Got[] = [];
+  const buyable: string[] = [];
+  let buyableCents = 0;
+  for (const l of view.lines) {
+    if (l.status === "merged" || leftByBuyer.includes(l.lineId)) continue;
+    const chef = !!p.edits[l.lineId]?.struck;
+    if (l.status === "struck" && (l.onHand || l.pantry || chef)) continue;
+    const fi = l.searchTerms.find((x) => /[äöå]/i.test(x)) ?? l.searchTerms[0];
+    const name = lang === "fi" && fi ? fi : l.name;
+    wanted.push({ key: l.lineId, name, ...(l.gross ? { need: l.gross } : {}), ...(deliverBy ? { day: deliverBy } : {}) });
+    const open = l.doubts.filter((d) => !d.accepted);
+    const hard = open.find((d) => !d.acceptLabel);
+    const late = open.find((d) => d.kind === "cannot_arrive" && d.acceptLabel);
+    const stop = gateStop.get(l.lineId);
+    if (l.status === "struck" || !l.chosen || hard || stop) {
+      const categories = [...new Set(l.excluded.flatMap((e) => /^category (\S+) is not in the mandate/.exec(e.reason)?.[1] ?? []))];
+      const ruleText = /the rule "([^"]+)"(?:, ([^)]+))?/.exec(hard?.text ?? "");
+      const reason: import("./differences").Reason = stop
+        ? { code: "allergen", allergens: (/allergen\(s\): ([a-z_ ,]+)/i.exec(stop)?.[1] ?? "lactose").split(/,\s*/).map((x) => x.trim()) }
+        : hard?.kind === "cannot_arrive" || (l.status === "struck" && l.doubts.some((d) => d.kind === "cannot_arrive"))
+          ? { code: "cannot_arrive", ...(deliverBy ? { day: deliverBy } : {}) }
+          : hard?.kind === "no_safe_product" || hard?.kind === "rule_conflict"
+            ? { code: "rule", text: ruleText?.[1] ?? plain(hard.text), ...(ruleText?.[2] ? { source: ruleText[2] } : {}) }
+            : hard?.kind === "not_priced"
+              ? { code: "not_priced" }
+              : categories.length
+                ? { code: "rules_groups", categories }
+                : hard?.kind === "no_product"
+                  ? { code: "not_sold" }
+                  : { code: "unknown" };
+      got.push({ key: l.lineId, out: true, reason });
+      continue;
+    }
+    buyable.push(name);
+    buyableCents += l.chosen.totalCents;
+    const day = late ? l.chosen.deliveryDate : undefined;
+    got.push({ key: l.lineId, ...(day ? { day } : {}), ...(l.replaces ? { instead: l.name } : {}) });
+    if (l.replaces) wanted[wanted.length - 1] = { ...wanted[wanted.length - 1], name: l.replaces.name };
+  }
+  // Packs are bought whole for a dish: rounding up to a pack is how a recipe is bought, not a difference to say.
+  const diffs = differencesOf(wanted, got, { roundingCounts: false });
+  return { diffs, toBuy: wanted.length, buyable, totalCents: view.totals.totalCents, buyableCents, deliverBy, allowed: svc.kitchen.mandate.allowedCategories };
 }

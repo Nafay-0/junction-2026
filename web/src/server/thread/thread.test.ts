@@ -129,6 +129,36 @@ describe("the agent thread", () => {
     expect(rt.dock.ledger.verify().ok).toBe(true);
   });
 
+  it("records how each turn ended (asked, then ordered or sent for sign-off) and a failed turn's code and duration, never the words", async () => {
+    setInterpretModelForTests(reader(20));
+    setAgentModelForTests(agentScript([{ calls: [{ name: "order", args: { words: "20 litres of lactose-free milk for Monday" } }] }, { text: "Three options below." }]));
+    const first = await turn("laakso", { door: "typed", via: "typed", text: "20 litres of lactose-free milk for Monday" });
+    const options = first.cards.find((c) => c.type === "options");
+    if (options?.type !== "options") throw new Error("no options");
+    await turn("laakso", { door: "typed", via: "tap", action: { type: "choose", requestId: options.requestId, optionId: options.options[0].optionId }, label: "Order this" });
+    const rt = await getRuntime();
+    const ended = rt.dock.ledger.entries().filter((e) => e.type === "agent" && (e.data as { event?: string }).event === "turn_done").map((e) => (e.data as { outcome?: string }).outcome);
+    expect(ended[0]).toBe("asked");
+    expect(["ordered", "sent_for_signoff"]).toContain(ended.at(-1));
+
+    const broken = new MockLanguageModelV4({
+      provider: "anthropic.messages",
+      modelId: "broken-agent",
+      doStream: async () => {
+        throw Object.assign(new Error("overloaded"), { name: "AI_APICallError" });
+      },
+    });
+    setAgentModelForTests({ model: broken, id: "anthropic:broken-agent" });
+    const failed = await turn("laakso", { door: "typed", via: "typed", text: "and some cream for the secret recipe please" });
+    expect(failed.cards.find((c) => c.type === "notice")).toMatchObject({ kind: "unavailable", retry: true });
+    const f = rt.dock.ledger.entries().filter((e) => e.type === "agent" && (e.data as { event?: string }).event === "turn_failed").at(-1);
+    expect(f?.data).toMatchObject({ code: "model_error" });
+    expect(typeof (f?.data as { ms?: unknown }).ms).toBe("number");
+    expect(JSON.stringify(f)).not.toContain("secret recipe");
+    const ev = rt.dock.ledger.entries().filter((e) => e.type === "agent" && ["turn_failed", "turn_done"].includes(String((e.data as { event?: string }).event)));
+    expect(ev.every((e) => !JSON.stringify(e).includes("secret recipe"))).toBe(true);
+  });
+
   it("holds back a sentence that states a price no record backs", async () => {
     setInterpretModelForTests(reader(20));
     setAgentModelForTests(agentScript([{ calls: [{ name: "order", args: { words: "20 litres of lactose-free milk for Monday" } }] }, { text: "The cheapest is €3.99 a litre." }]));
