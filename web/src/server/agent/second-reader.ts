@@ -236,7 +236,7 @@ export type ReadTwice = { first: InterpretResult; second?: SecondReadingRecord }
 export async function readTwice(
   read: (o: InterpretOptions) => Promise<InterpretResult>,
   opts: InterpretOptions,
-  cfg: { model?: ModelChoice; off?: boolean; deadlineMs?: number; now?: () => Date } = {},
+  cfg: { model?: ModelChoice; off?: boolean; deadlineMs?: number; now?: () => Date; /** Wait at most this long for the second reading once the first is in (the agent thread: the buyer's "understood" card does not wait on a slow second reader). */ graceAfterFirstMs?: number } = {},
 ): Promise<ReadTwice> {
   const model = cfg.off ? undefined : (cfg.model ?? secondReaderModel());
   if (!model) return { first: await read(opts) };
@@ -250,7 +250,19 @@ export async function readTwice(
     throw err;
   }
   const firstAt = Date.now();
-  const { o, at } = await secondP;
+  const grace = cfg.graceAfterFirstMs;
+  const { o, at } =
+    grace === undefined
+      ? await secondP
+      : await Promise.race([
+          secondP,
+          new Promise<{ o: SecondOutcome; at: number }>((resolve) =>
+            setTimeout(() => {
+              ctrl.abort();
+              resolve({ o: { ok: false, reason: "timeout", detail: `not in within ${grace} ms of the first reading`, model: idOf(model), ms: Date.now() - firstAt }, at: Date.now() });
+            }, grace),
+          ),
+        ]);
   return { first, second: recordOf(first, o, opts.text, Math.max(0, at - firstAt), (cfg.now ?? (() => new Date()))()) };
 }
 

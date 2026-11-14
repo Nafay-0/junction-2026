@@ -107,7 +107,7 @@ export function read(run: TurnRun, words: string, earlier: EarlierRequest[]): Pr
   const key = `${words}\u0000${earlier.map((e) => e.id).join(",")}`;
   let p = run.readings.get(key);
   if (!p) {
-    p = interpretRequest({ text: words, ...(earlier.length ? { earlier } : {}) }, { catalog: run.rt.catalog, mandate: run.session.mandate, door: run.door === "voice" ? "voice" : "typed" }).then((r) => ({ ...r, earlier }));
+    p = interpretRequest({ text: words, ...(earlier.length ? { earlier } : {}) }, { catalog: run.rt.catalog, mandate: run.session.mandate, door: run.door === "voice" ? "voice" : "typed", secondGraceMs: Number(process.env.DOCK_THREAD_SECOND_GRACE_MS ?? 1500) }).then((r) => ({ ...r, earlier }));
     p.catch(() => undefined);
     run.readings.set(key, p);
   }

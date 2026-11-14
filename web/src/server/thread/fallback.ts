@@ -16,6 +16,11 @@ import type { LanguageModelV4, LanguageModelV4CallOptions, LanguageModelV4Stream
 export type FallbackOptions = {
   firstChunkMs: number;
   totalMs: number;
+  /**
+   * Generating only: after this long without an answer, ask the second model too and take whichever answers first
+   * (a hedged request), instead of waiting `totalMs` and then starting over. The slower call is aborted.
+   */
+  hedgeMs?: number;
   onFallback?: (info: { from: string; to: string; reason: string }) => void;
 };
 
@@ -35,6 +40,42 @@ const describe = (m: LanguageModelV4) => `${m.provider}:${m.modelId}`;
 export function withFallback(primary: LanguageModelV4, fallback: LanguageModelV4 | undefined, opts: FallbackOptions): LanguageModelV4 {
   if (!fallback) return primary;
   const switchTo = (reason: string) => opts.onFallback?.({ from: describe(primary), to: describe(fallback), reason });
+  async function hedged(options: LanguageModelV4CallOptions, hedgeMs: number) {
+    const a = linked(options.abortSignal);
+    const b = linked(options.abortSignal);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let started = false;
+    let settled = false;
+    const first = Promise.resolve(primary.doGenerate({ ...options, abortSignal: a.signal })).then((r) => ({ r, by: "primary" as const }));
+    const second = new Promise<{ r: Awaited<ReturnType<LanguageModelV4["doGenerate"]>>; by: "fallback" }>((resolve, reject) => {
+      const go = () => {
+        if (started || settled) return;
+        started = true;
+        return Promise.resolve(fallback!.doGenerate({ ...options, abortSignal: b.signal })).then((r) => resolve({ r, by: "fallback" }), reject);
+      };
+      timer = setTimeout(() => {
+        switchTo(`no answer in ${hedgeMs} ms: asked the second model too`);
+        go();
+      }, hedgeMs);
+      // The first model failing outright: ask the second at once.
+      first.catch(() => {
+        if (settled) return;
+        if (options.abortSignal?.aborted) return reject(new Error("aborted"));
+        clearTimeout(timer);
+        switchTo("the first model failed");
+        go();
+      });
+    });
+    try {
+      const win = await Promise.any([first, second]);
+      settled = true;
+      (win.by === "primary" ? b : a).abort();
+      return win.r;
+    } finally {
+      settled = true;
+      clearTimeout(timer);
+    }
+  }
   return {
     specificationVersion: "v4",
     provider: primary.provider,
@@ -42,6 +83,7 @@ export function withFallback(primary: LanguageModelV4, fallback: LanguageModelV4
     supportedUrls: primary.supportedUrls,
 
     async doGenerate(options: LanguageModelV4CallOptions) {
+      if (opts.hedgeMs !== undefined) return hedged(options, opts.hedgeMs);
       const ctl = linked(options.abortSignal);
       const timer = setTimeout(() => ctl.abort(new Error(`no answer in ${opts.totalMs} ms`)), opts.totalMs);
       try {

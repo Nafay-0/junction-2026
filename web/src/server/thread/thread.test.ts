@@ -216,6 +216,32 @@ describe("the fallback model", () => {
   });
 });
 
+describe("the hedged reader", () => {
+  const gen = (id: string, ms: number, calls: string[]) =>
+    new MockLanguageModelV4({
+      provider: "p",
+      modelId: id,
+      doGenerate: async (o) => {
+        calls.push(id);
+        await new Promise((r, j) => {
+          const t = setTimeout(r, ms);
+          o.abortSignal?.addEventListener("abort", () => (clearTimeout(t), j(new Error("aborted"))));
+        });
+        return { content: [{ type: "text", text: id }], finishReason: { unified: "stop", raw: undefined }, usage, warnings: [] };
+      },
+    });
+  const ask = async (m: ReturnType<typeof withFallback>) => ((await m.doGenerate({ prompt: [] } as unknown as LanguageModelV4CallOptions)).content[0] as { text: string }).text;
+
+  it("asks the second model only when the first is slow, and takes the first answer", async () => {
+    const calls: string[] = [];
+    expect(await ask(withFallback(gen("fast", 10, calls), gen("second", 10, calls), { firstChunkMs: 100, totalMs: 1000, hedgeMs: 100 }))).toBe("fast");
+    expect(calls).toEqual(["fast"]);
+    const calls2: string[] = [];
+    expect(await ask(withFallback(gen("slow", 400, calls2), gen("second", 10, calls2), { firstChunkMs: 50, totalMs: 1000, hedgeMs: 50 }))).toBe("second");
+    expect(calls2).toEqual(["slow", "second"]);
+  });
+});
+
 describe("the thread store", () => {
   it("replaces a card in place by its id and keeps counting after a reset", () => {
     const s = new ThreadStore();
