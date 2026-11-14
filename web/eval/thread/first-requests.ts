@@ -44,6 +44,9 @@ const REQUESTS: Record<string, { text: string; lang: "en" | "fi" }[]> = {
     { text: "jogurttia 30 litraa keskiviikoksi", lang: "fi" },
     { text: "paljonko meillä on budjettia jäljellä tällä viikolla?", lang: "fi" },
     { text: "pesto for pasta day, 3 kg", lang: "en" },
+    // A dish whose main ingredient the school's rules forbid: the rule said by name, the first time.
+    { text: "we need pesto pasta with salmon for 120 kids on thursday", lang: "en" },
+    { text: "kalapuikot ja perunamuusi 120 oppilaalle perjantaiksi", lang: "fi" },
   ],
   "kahvila-sointu": [
     { text: "burger buns for 40 burgers on Monday", lang: "en" },

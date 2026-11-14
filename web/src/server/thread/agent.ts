@@ -479,8 +479,10 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
           });
           if (c) return { said: c.kind, note: "the store shows the scenario's own words as your reply; write one short sentence only" };
         }
+        // A follow-up about the menu on the table keeps what the conversation already said: its covers and its day.
+        const onTable = subj?.kind === "menu" && subj.covers && !/\d/.test(said) ? ` (for ${subj.covers} covers${subj.day ? ` on ${subj.day}` : ""})` : "";
         const { menuFromWords } = await import("./menu");
-        return menuFromWords(run, said);
+        return menuFromWords(run, `${said}${onTable}`);
       },
       toModelOutput: ({ output }) => ({ type: "text", value: compact(output) }),
     }),
