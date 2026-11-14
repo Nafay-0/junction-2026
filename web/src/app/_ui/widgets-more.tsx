@@ -415,7 +415,7 @@ export function SetupStep({ step, of, children, onBack, next, onNext }: { step: 
 }
 
 /** The interview's end: the rules are set and a device is added. One line each, then into the agent's home. */
-export function SetupDone({ title, lines, start, onStart }: { title: string; lines: string[]; start: string; onStart: () => void }) {
+export function SetupDone({ title, lines, start, onStart }: { title: string; lines: string[]; /** Absent: the way on follows below (a demo account's choice of starting point). */ start?: string; onStart?: () => void }) {
   return (
     <div className="flex flex-col gap-4 px-1">
       <h2 className="display text-[1.7rem] leading-[1.1] sm:text-[2rem]">{title}</h2>
@@ -427,9 +427,11 @@ export function SetupDone({ title, lines, start, onStart }: { title: string; lin
           </li>
         ))}
       </ul>
-      <button type="button" onClick={onStart} className={`${buttonClass("go", "lg")} w-full`}>
-        {start}
-      </button>
+      {start && onStart && (
+        <button type="button" onClick={onStart} className={`${buttonClass("go", "lg")} w-full`}>
+          {start}
+        </button>
+      )}
     </div>
   );
 }
