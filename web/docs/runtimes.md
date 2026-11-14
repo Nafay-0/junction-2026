@@ -1,23 +1,23 @@
-# Agent runtimes that buy through Dock
+# Agent runtimes that buy through AimoPilot
 
-Buyers built on today's popular agent runtimes order through Dock unchanged: each one knows the address and the
+Buyers built on today's popular agent runtimes order through AimoPilot unchanged: each one knows the address and the
 mandate, finds the tools over MCP (or the OpenAPI document), and orders 1,000 L of lactose-free milk until the order
 is committed or waits for a person's sign-off. The code is in [`examples/runtimes/`](../../examples/runtimes/), one
 file per runtime, with the results of the last live run in
 [`RESULTS.md`](../../examples/runtimes/RESULTS.md) and what each runtime showed up in
 [`GAPS.md`](../../examples/runtimes/GAPS.md).
 
-Every quick start assumes a running Dock and a mandate in the environment:
+Every quick start assumes a running AimoPilot and a mandate in the environment:
 
 ```bash
 export DOCK_URL=http://localhost:3000 DOCK_MANDATE=$(cd web && pnpm -s dev:mandate) DOCK_AGENT_ID=agent_laakso_buyer_01
 ```
 
-The examples default to the demo kitchen (Ravintola Kaari), whose order history makes Dock question the 1,000 L;
+The examples default to the demo kitchen (Ravintola Kaari), whose order history makes AimoPilot question the 1,000 L;
 `examples/runtimes/run-all --url $DOCK_URL` mints that mandate and runs them all.
 
 Two tools, `respond_to_concerns` and `answer_questions`, carry the human buyer's own answer (they are marked
-`_meta["dock/humanInput"]` in `tools/list`). A client on MCP 2026-07-28 that declares elicitation lets Dock ask the
+`_meta["dock/humanInput"]` in `tools/list`). A client on MCP 2026-07-28 that declares elicitation lets AimoPilot ask the
 person directly; on any other client, route those two tools through the runtime's approval step, as each example does.
 
 ## Pydantic AI (Python)
@@ -31,7 +31,7 @@ print((await Agent("anthropic:claude-haiku-5-5", toolsets=[dock]).run("Order 1,0
 ```
 
 `uv run examples/runtimes/pydantic-ai/buyer.py`. Elicitation works (MCP 2026-07-28). Use `tool_error_behavior="failed"`:
-the default turns Dock's refusals into retry prompts.
+the default turns AimoPilot's refusals into retry prompts.
 
 ## OpenAI Agents SDK (Python)
 

@@ -167,7 +167,7 @@ async function placeAndReport(env: AgentEnv, requestId: string, quoted: ToolResu
       if (placed.ok) order = placed.order as PublicOrder;
     }
   }
-  if (!order) return finish(env, { status: "not_ordered", orderIds: [], message: `Dock refused the order: ${(placed.error as { message?: string })?.message ?? "unknown reason"}` });
+  if (!order) return finish(env, { status: "not_ordered", orderIds: [], message: `AimoPilot refused the order: ${(placed.error as { message?: string })?.message ?? "unknown reason"}` });
   if (order.status === "pending_approval") order = ((await env.call("get_order", { orderId: order.orderId })).order as PublicOrder) ?? order;
   if (order.status === "declined" || order.status === "rejected") return finish(env, { status: "not_ordered", orderIds: [], message: `The order was ${order.status}; nothing is coming.` });
 

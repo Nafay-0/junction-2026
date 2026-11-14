@@ -3,46 +3,83 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { DEMO_NOTE, PRODUCT_NAME } from "../_ui/brand";
+import { DEMO_NOTES } from "../_ui/brand";
+import { Wordmark } from "../_ui/wordmark";
 import { moneyShort } from "../_ui/plain";
+import { Art } from "../_ui/art";
 import { Glyph } from "../_ui/glyphs";
 import { SESSION_COOKIE } from "@/server/approver-session";
 import { listConsoleKitchens, resolveKitchen } from "@/server/console-kitchens";
 import { getRuntime } from "@/server/runtime";
+import { LangProvider } from "../_i18n/provider";
+import { DEFAULT_LANG, type Lang } from "../_i18n/lang";
+import { chosenLang, requestLang } from "../_i18n/server";
+import { EntryLangSwitch } from "./entry-lang";
+import { ENTRY_TEXT } from "./entry.text";
 
-export const metadata: Metadata = { title: `${PRODUCT_NAME}: enter a kitchen's shop` };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: ENTRY_TEXT[await requestLang()].title };
+}
 
 /** Demo entry: open a kitchen's shop with one click. No passwords: these are demo kitchens on synthetic data. */
 export default function KitchenEntry() {
   return (
     <div className="min-h-dvh bg-mist text-ink">
-      <p className="bg-petrol-deep px-4 py-1 text-center text-[0.8rem] text-paper/85">{DEMO_NOTE}</p>
-      <header className="on-dark relative overflow-hidden bg-petrol text-paper">
-        <Glyph kind="case" size={320} strokeWidth={0.9} className="pointer-events-none absolute -right-10 -top-16 text-paper/10" />
-        <div className="relative mx-auto max-w-[1100px] px-4 pb-12 pt-6 sm:px-8">
-          <p className="flex items-baseline gap-2">
-            <span aria-hidden className="size-3 bg-lime" />
-            <span className="display text-[2.2rem]">{PRODUCT_NAME}</span>
-          </p>
-          <h1 className="display mt-10 text-[3rem] sm:text-[4.2rem]">Enter a kitchen&apos;s shop</h1>
-          <p className="mt-3 max-w-[60ch] text-[1.15rem] leading-snug text-paper/90">A wholesale shop for professional kitchens, with each kitchen&apos;s own purchasing agent working inside it: its own signed rules, its own memory, and a person who signs off when an order goes beyond them. Pick one; no password, it is a demo.</p>
-        </div>
-      </header>
-      <main className="mx-auto max-w-[1100px] px-4 pb-14 sm:px-8">
-        <Suspense fallback={<div className="mt-8 h-64 animate-pulse bg-concrete-deep/60" />}>
-          <Kitchens />
-        </Suspense>
-      </main>
+      <Suspense fallback={<EntryFallback />}>
+        <Entry />
+      </Suspense>
     </div>
   );
 }
 
-const ABOUT: Record<string, string> = {
-  kaari: "A restaurant that has ordered here for six weeks: milk twice a week, cream on Thursdays. The agent knows its usual amounts and the head chef's rule.",
-  laakso: "The partner's own example: a caterer with no history yet. Try “1,000 litres of lactose-free milk by Monday”.",
-};
+/** The words are written on the server in the buyer's language (the cookie), so the page waits for the request. */
+async function Entry() {
+  const chosen = await chosenLang();
+  const lang = chosen ?? DEFAULT_LANG;
+  const tx = ENTRY_TEXT[lang];
+  return (
+    <LangProvider initial={chosen}>
+      <p className="bg-petrol-deep px-4 py-1 text-center text-[0.8rem] text-paper/85">{DEMO_NOTES[lang]}</p>
+      <header className="on-dark relative overflow-hidden bg-petrol-deep text-paper">
+        <div className="relative mx-auto max-w-[1100px] px-4 pt-6 sm:px-8">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p>
+              <Wordmark tone="paper" size={36} />
+            </p>
+            <EntryLangSwitch rendered={lang} />
+          </div>
+        </div>
+        <div className="relative mx-auto grid max-w-[1100px] items-end gap-6 px-4 pb-10 pt-8 sm:px-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:pb-12">
+          <div className="min-w-0">
+            <h1 className="display break-words text-[3rem] sm:text-[4.2rem]">{tx.heading}</h1>
+            <p className="mt-3 max-w-[60ch] text-[1.15rem] leading-snug text-paper/90">{tx.intro}</p>
+          </div>
+          {/* A generated illustration of a delivery (DESIGN.md §6), framed as a picture, not behind the type. */}
+          <div className="-mx-4 aspect-[16/9] sm:mx-0">
+            <Art k="hero" cover priority sizes="(min-width: 1024px) 34rem, 100vw" position="72% 50%" />
+          </div>
+        </div>
+      </header>
+      <main className="mx-auto max-w-[1100px] px-4 pb-14 sm:px-8">
+        <Suspense fallback={<div className="mt-8 h-64 animate-pulse bg-concrete-deep/60" />}>
+          <Kitchens lang={lang} />
+        </Suspense>
+      </main>
+    </LangProvider>
+  );
+}
 
-async function Kitchens() {
+function EntryFallback() {
+  return (
+    <>
+      <p className="h-6 bg-petrol-deep" />
+      <div className="h-[22rem] bg-petrol" />
+    </>
+  );
+}
+
+async function Kitchens({ lang }: { lang: Lang }) {
+  const tx = ENTRY_TEXT[lang];
   await connection();
   const [all, jar, rt] = await Promise.all([listConsoleKitchens(), cookies(), getRuntime()]);
   const account = await rt.passkeys.sessionApprover(jar.get(SESSION_COOKIE)?.value);
@@ -58,13 +95,13 @@ async function Kitchens() {
           <div className="flex flex-wrap items-center gap-4 p-5">
             <Glyph kind="carton" size={48} className="text-petrol" />
             <div className="min-w-0 flex-1">
-              <p className="text-ink-soft">Your kitchen, from the QR code on this phone</p>
+              <p className="text-ink-soft">{tx.yourKitchen}</p>
               <p className="display text-[1.9rem]">
                 {mine.kitchenName}, {mine.city}
               </p>
-              <p className="text-ink-soft">You are {mine.approverName}: orders over {moneyShort(mine.perOrderLimitCents)} come to you to sign.</p>
+              <p className="text-ink-soft">{tx.youAre(mine.approverName, moneyShort(mine.perOrderLimitCents))}</p>
             </div>
-            <span className="bg-lime px-4 py-3 font-semibold text-ink">Open my shop</span>
+            <span className="bg-lime px-4 py-3 font-semibold text-ink">{tx.openMine}</span>
           </div>
         </Link>
       )}
@@ -77,13 +114,13 @@ async function Kitchens() {
                 <div aria-hidden className="h-1.5 bg-petrol-deep" />
                 <div className="flex flex-1 flex-col p-6">
                   <p className="display text-[2.2rem]">{k.name}</p>
-                  <p className="mt-1 leading-snug">{ABOUT[k.slug] ?? "A demo kitchen."}</p>
+                  <p className="mt-1 leading-snug">{tx.about[k.slug] ?? tx.aDemoKitchen}</p>
                   {m && (
                     <p className="mt-3 text-[0.95rem] text-ink-soft">
-                      Agent alone up to {moneyShort(m.perOrderLimitCents)} per order; {m.approvers[0]?.name} signs above that.
+                      {tx.agentAlone(moneyShort(m.perOrderLimitCents), m.approvers[0]?.name)}
                     </p>
                   )}
-                  <span className="mt-4 self-start bg-petrol px-4 py-2.5 font-semibold text-paper">Enter the shop</span>
+                  <span className="mt-4 self-start bg-petrol px-4 py-2.5 font-semibold text-paper">{tx.enter}</span>
                 </div>
               </Link>
             </li>
@@ -92,14 +129,14 @@ async function Kitchens() {
       </ul>
       {visitors.length > 0 && (
         <section className="mt-10">
-          <h2 className="display text-[1.5rem]">Visitors&apos; kitchens here now</h2>
-          <p className="text-ink-soft">Made by scanning the QR code on the wall; each closes after 90 minutes.</p>
+          <h2 className="display text-[1.5rem]">{tx.visitors}</h2>
+          <p className="text-ink-soft">{tx.visitorsNote}</p>
           <ul className="mt-2 divide-y divide-line bg-paper">
             {visitors.map((k) => (
               <li key={k.slug}>
                 <Link href={`/k/${k.slug}`} className="flex min-h-12 items-center justify-between px-4 py-2 hover:bg-concrete/50">
                   <span className="font-semibold">{k.name}</span>
-                  <span className="text-ink-soft">{k.approverName} signs off</span>
+                  <span className="text-ink-soft">{tx.signsOff(k.approverName)}</span>
                 </Link>
               </li>
             ))}
@@ -107,11 +144,11 @@ async function Kitchens() {
         </section>
       )}
       <p className="mt-10 text-[0.95rem] text-ink-soft">
-        Joined from the QR code on the big screen? Open{" "}
+        {tx.joinedA}
         <Link href="/k/mine" className="font-semibold text-petrol underline decoration-2 underline-offset-4">
-          your own kitchen
-        </Link>{" "}
-        on the same phone.
+          {tx.joinedLink}
+        </Link>
+        {tx.joinedB}
       </p>
     </>
   );

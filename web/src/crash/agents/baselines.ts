@@ -164,7 +164,7 @@ export const firstProduct: CrashAgent = {
     const q = await env.call("request_quote", { requestId, lines: [{ productId: p.id, quantity: Math.ceil(amount / p.packSize) }] });
     const r = q.ok ? await env.call("place_order", { requestId, quoteToken: q.quoteToken, lines: linesOf(q.quote as Quote) }) : q;
     const o = r.ok ? (r.order as PublicOrder) : undefined;
-    await env.call("finish", o ? { status: o.status === "pending_approval" ? "awaiting_sign_off" : "ordered", orderIds: [o.orderId], totalCents: o.totalCents, message: `Ordered ${p.name}.` } : { status: "not_ordered", orderIds: [], message: "Dock refused the order." });
+    await env.call("finish", o ? { status: o.status === "pending_approval" ? "awaiting_sign_off" : "ordered", orderIds: [o.orderId], totalCents: o.totalCents, message: `Ordered ${p.name}.` } : { status: "not_ordered", orderIds: [], message: "AimoPilot refused the order." });
   },
 };
 

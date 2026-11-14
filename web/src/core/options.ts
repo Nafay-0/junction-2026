@@ -191,7 +191,7 @@ function sizeFor(p: Product, amount: { amount: number; unit: BaseUnit }, estimat
   if (conv.reason === "content_uncertain" && conv.estimate && estimates.includes(p.id)) {
     return { perPack: r2(conv.estimate.delivered.amount / conv.estimate.salesUnits), unit: amount.unit, packs: conv.estimate.salesUnits, estimated: true };
   }
-  if (conv.reason === "content_uncertain" || conv.reason === "content_unknown") return { error: `pack content not certain, so Dock will not guess the number of packs (${conv.message})`, code: "pack_uncertain" };
+  if (conv.reason === "content_uncertain" || conv.reason === "content_unknown") return { error: `pack content not certain, so AimoPilot will not guess the number of packs (${conv.message})`, code: "pack_uncertain" };
   return { error: conv.message, code: "wrong_unit" };
 }
 

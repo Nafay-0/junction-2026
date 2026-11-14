@@ -262,7 +262,7 @@ function utcClockToHelsinki(h: string, m: string): string {
 
 /** Who did it, in words: "agent:agent_x" -> "Agent", "buyer:Sanna" -> "Sanna", "approver:head_chef" -> "Head chef". */
 export function actorLabel(actor: string, names: { agent?: string } = {}): string {
-  if (actor === "dock") return "Dock";
+  if (actor === "dock") return "AimoPilot";
   if (actor.startsWith("agent:")) return names.agent ?? "Buyer agent";
   if (actor.startsWith("buyer:")) return actor.slice(6);
   if (actor.startsWith("approver:")) {

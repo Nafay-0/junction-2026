@@ -5,12 +5,12 @@ export async function GET(req: Request) {
   void req.url; // request-time route
   return handle(async () =>
     Response.json({
-      name: "Dock",
+      name: "AimoPilot",
       version: "v1",
       auth: { mandate: "Authorization: Mandate <compact JWS, Ed25519, typ mandate+jwt>", agent: "Dock-Agent-Id: <agent id in the mandate>" },
       flow: ["POST /requests", "GET /products", "POST /availability", "POST /quotes", "POST /orders", "POST /approvals/{id}", "GET /orders/{id}"],
       intakeFlow: {
-        about: "Buyer-side intake from a structured need: Dock checks for likely mistakes, asks only what memory cannot answer, and offers labelled options. Every reply is { step } with a state and `next`.",
+        about: "Buyer-side intake from a structured need: AimoPilot checks for likely mistakes, asks only what memory cannot answer, and offers labelled options. Every reply is { step } with a state and `next`.",
         states: ["needs_confirmation", "needs_input", "options_ready", "quoted", "no_options", "cancelled"],
         calls: ["POST /intake", "POST /intake/{id}/concerns", "POST /intake/{id}/answers", "POST /intake/{id}/choice", "POST /orders", "POST /approvals/{id}"],
       },

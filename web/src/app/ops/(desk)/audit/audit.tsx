@@ -166,7 +166,7 @@ export function AuditOrder({ orderId }: { orderId: string }) {
             <p className="mt-1 text-[0.95rem] leading-snug">
               {c.signOff.role}, {c.signOff.method === "passkey" ? "with the passkey on their phone" : c.signOff.method === "link_token" ? "through the one-time link sent only to them" : c.signOff.method ? c.signOff.method.replaceAll("_", " ") : "method not recorded"}
               {c.signOff.at ? `, ${stamp(c.signOff.at)}` : ""}.{" "}
-              <b>{c.signOff.verified ? "Verified by Dock." : c.signOff.verified === false ? "Not verified." : ""}</b>
+              <b>{c.signOff.verified ? "Verified by AimoPilot." : c.signOff.verified === false ? "Not verified." : ""}</b>
             </p>
           ) : (
             <p className="mt-1 text-[0.95rem] leading-snug text-ink-soft">{a.order.status === "committed" ? "Inside what the kitchen's signed mandate lets the agent buy alone; no person was needed." : "Nobody has authorised it."}</p>
@@ -292,7 +292,7 @@ export function AuditOrder({ orderId }: { orderId: string }) {
                 ))}
               </ol>
               <p className="mt-3 border-t border-line/70 pt-2 text-[0.88rem] text-ink-soft">
-                Not in this record: the kitchen&apos;s order history, the rules it stated and the patterns Dock learned from it. Those entries appear only by number and hash, so the chain still shows no gap.
+                Not in this record: the kitchen&apos;s order history, the rules it stated and the patterns AimoPilot learned from it. Those entries appear only by number and hash, so the chain still shows no gap.
               </p>
             </div>
           </Section>

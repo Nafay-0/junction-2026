@@ -1,16 +1,16 @@
-# Dock on Aiven: a one-page brief for Aiven's judges
+# AimoPilot on Aiven: a one-page brief for Aiven's judges
 
-**Dock** is an open loading dock for AI purchasing agents. Any company's buying agent can order food from a
+**AimoPilot** is an open loading dock for AI purchasing agents. Any company's buying agent can order food from a
 wholesaler (Valio Aimo's challenge) through open standards, MCP among them. It carries a signed mandate that
 says what it may buy. Plain code checks every order against that mandate, and a named person signs off anything
-beyond it on their phone. Every part of Dock runs on Aiven.
+beyond it on their phone. Every part of AimoPilot runs on Aiven.
 
 Open **https://jolly-wondrous-bunny.eur-1.aiven.app/ops/platform** (operations portal, then **Platform**).
 
 ## Three things to click
 
 1. **Send in an Aiven agent.** Pick "Valio's own example" and press *Send it in*. A purchasing agent that runs
-   on **Aiven Managed Agents** (its own model, in Aiven's environment, not ours) connects to Dock's MCP endpoint
+   on **Aiven Managed Agents** (its own model, in Aiven's environment, not ours) connects to AimoPilot's MCP endpoint
    on **Aiven Runtime**. Its tool calls come back on the page, and the gate's decisions appear live from **Kafka**
    while it works. About 30 to 60 seconds later it stops: 1,000 litres comes to €1,400, over the €1,000 it may
    spend alone, so the order waits for a named person's sign-off. The other two tasks show an order committed
@@ -31,13 +31,13 @@ Open **https://jolly-wondrous-bunny.eur-1.aiven.app/ops/platform** (operations p
 
 | Service | Job | Why this one |
 |---|---|---|
-| Aiven Runtime | Hosts Dock: the gate, its MCP door, REST, the portals | The app sits next to its data, gets credentials injected, public HTTPS that Managed Agents can reach |
+| Aiven Runtime | Hosts AimoPilot: the gate, its MCP door, REST, the portals | The app sits next to its data, gets credentials injected, public HTTPS that Managed Agents can reach |
 | PostgreSQL (free) | Orders, approvals, hash-chained ledger, kitchen memory (pgvector), telemetry | "Commit at a fixed price" is a transaction. Constraints and pgcrypto check the ledger's hash chain. Embeddings live next to their rows |
 | Kafka (free) | Every agent action and gate decision, keyed by order | Ordered and replayable. The dashboard's table is just a consumer group |
 | Valkey (free) | Live-price cache, per-agent lookup budget, event bus | `SET … EX` matches "this price is valid for N minutes". `INCR` is a budget |
 | OpenSearch (free) | Search over 17,546 products in Finnish, Swedish and English | Narrows the choice in master data first, so the partner's price API is asked about a short list only |
 | Grafana | The full dashboard (behind its login) | Free plans allow no metrics integration, so Grafana reads PostgreSQL as a read-only user and the Aiven API with a read-only token |
-| Managed Agents (free tier) | An outside buyer that Dock does not run | Shows the door is open, and the gate holds an agent that Dock does not control |
+| Managed Agents (free tier) | An outside buyer that AimoPilot does not run | Shows the door is open, and the gate holds an agent that AimoPilot does not control |
 | Aiven MCP server | The operations copilot's view of service state, logs and metrics | Read-only token and read-only tools. Nobody holds admin credentials to ask "is anything down?" |
 
 The **Observe** tab shows the dashboard's numbers inside the portal. They come from the same table: orders,

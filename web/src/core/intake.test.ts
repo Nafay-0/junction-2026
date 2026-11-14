@@ -142,7 +142,7 @@ describe("intake flow", () => {
     expect(profile.history.at(-1)).toMatchObject({ orderId: order.orderId, family: "milk", amount: 100, unit: "L", neededBy: "2026-11-18", chosenLabels: ["most_reliable"] });
 
     const story = explain(ledger.entries({ requestId: shown.requestId })).join("\n");
-    for (const s of ["Structured need", "Dock offered 3 options", `chose ${reliable.optionId}`, "Wholesaler quoted", "Gate decision", "Committed"]) expect(story).toContain(s);
+    for (const s of ["Structured need", "AimoPilot offered 3 options", `chose ${reliable.optionId}`, "Wholesaler quoted", "Gate decision", "Committed"]) expect(story).toContain(s);
   });
 
   it("remembers an answer when told to, and does not ask it again", async () => {

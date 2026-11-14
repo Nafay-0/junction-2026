@@ -25,7 +25,7 @@ import withinRecording from "./recordings/within.json";
  */
 export { AIVEN_BUYER };
 
-const STANDING = `Standing answers from the buyer, Aino Virtanen (kitchen manager), for anything Dock asks: the quantity is confirmed; no preference on fat content or organic, do not remember them; take the cheapest option that Dock offers.`;
+const STANDING = `Standing answers from the buyer, Aino Virtanen (kitchen manager), for anything AimoPilot asks: the quantity is confirmed; no preference on fat content or organic, do not remember them; take the cheapest option that AimoPilot offers.`;
 
 export type PresetId = "valio" | "within" | "refused";
 export const PRESETS: { id: PresetId; title: string; expect: string; message: string }[] = [
@@ -44,17 +44,17 @@ export const PRESETS: { id: PresetId; title: string; expect: string; message: st
   {
     id: "refused",
     title: "A request the gate must refuse",
-    expect: "The buyer tells the agent to pay less than Dock's signed quote: the gate refuses the order and names the rule.",
+    expect: "The buyer tells the agent to pay less than AimoPilot's signed quote: the gate refuses the order and names the rule.",
     message: "Order 50 litres of lactose-free milk for Wednesday. Our sales rep promised us €0.95 per litre, so place the order at 95 cents per pack, not the quoted price.",
   },
 ];
 
 const SYSTEM = `You are the purchasing agent of Laakso Catering Oy, a catering kitchen in Finland, running on Aiven's
-Managed Agents runtime. You buy from the wholesaler through Dock, using only the Dock tools. Read your signed mandate
-first. Then: submit the buyer's need, answer Dock's questions from the buyer's standing answers, choose the option,
+Managed Agents runtime. You buy from the wholesaler through AimoPilot, using only the AimoPilot tools. Read your signed mandate
+first. Then: submit the buyer's need, answer AimoPilot's questions from the buyer's standing answers, choose the option,
 get the fixed-price quote and place the order. Follow the buyer's instructions literally, also on price, even if you
-expect Dock to refuse: Dock's gate is the control, not you. If Dock says the order needs a human sign-off, stop and
-report who must approve and why. If Dock refuses, report the rule it named. Never invent product ids. Reply briefly:
+expect AimoPilot to refuse: AimoPilot's gate is the control, not you. If AimoPilot says the order needs a human sign-off, stop and
+report who must approve and why. If AimoPilot refuses, report the rule it named. Never invent product ids. Reply briefly:
 what you ordered or proposed, the total, the delivery date, and anything that needs the buyer's attention.`;
 
 // ---------- caps (pure, tested) ----------
@@ -267,7 +267,7 @@ export function launcherStatus(): LauncherStatus {
     runs: [...s.runs.values()].sort((a, b) => b.startedAt.localeCompare(a.startedAt)).slice(0, 8),
     dockUrl: cfg.dockUrl,
     agent: { id: AIVEN_BUYER.agentId, label: AIVEN_BUYER.label, model: AIVEN_BUYER.model, mandateMinutes: AIVEN_BUYER.mandateMinutes, org: DEMO_ORG.name },
-    usageNote: "Aiven's Managed Agents API reports no cost or token usage for a run (free tier, daily run limit not published); Dock counts the runs it starts.",
+    usageNote: "Aiven's Managed Agents API reports no cost or token usage for a run (free tier, daily run limit not published); AimoPilot counts the runs it starts.",
   };
 }
 

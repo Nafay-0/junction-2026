@@ -71,7 +71,7 @@ export function PresenterFlow() {
       <h1 className="text-3xl font-bold">Sign for a demo kitchen</h1>
       <p>
         {chosen ? `${chosen.name} at ${chosen.kitchenName}` : "This kitchen's approver"} is made up for the demo. With the operations passcode you can take their place on this
-        phone: Dock stores a passkey made here, and every sign-off needs it, exactly as for a real approver.
+        phone: AimoPilot stores a passkey made here, and every sign-off needs it, exactly as for a real approver.
       </p>
       {roles && roles.length > 1 && (
         <label className="flex flex-col gap-1">

@@ -8,11 +8,12 @@ const barlow = Barlow({ subsets: ["latin", "latin-ext"], weight: ["400", "500", 
 const barlowCondensed = Barlow_Condensed({ subsets: ["latin", "latin-ext"], weight: ["500", "600", "700", "800"], variable: "--font-barlow-condensed", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "Dock",
-  description: "Open gateway for AI purchasing agents, with signed mandates and human sign-off.",
+  title: "AimoPilot",
+  description: "A wholesale shop for professional kitchens. Each kitchen's AI purchasing agent orders under a signed mandate; plain code checks every order, and a named person signs off when needed.",
+  applicationName: "AimoPilot",
 };
 
-export const viewport: Viewport = { themeColor: "#1d2329" };
+export const viewport: Viewport = { themeColor: "#003646" };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (

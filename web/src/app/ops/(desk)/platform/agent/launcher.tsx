@@ -34,7 +34,7 @@ export function Launcher() {
 
   return (
     <>
-      <PageHead title="Send in an Aiven agent" purpose="A purchasing agent that Dock does not run: it lives on Aiven's Managed Agents runtime, has its own model, and comes in through the MCP door with a mandate minted for this run. The gate treats it like any other buyer." right={<OnAiven />} />
+      <PageHead title="Send in an Aiven agent" purpose="A purchasing agent that AimoPilot does not run: it lives on Aiven's Managed Agents runtime, has its own model, and comes in through the MCP door with a mandate minted for this run. The gate treats it like any other buyer." right={<OnAiven />} />
       <PlatformTabs />
       <LoadError message={status.error} />
       {!s ? (
@@ -76,7 +76,7 @@ function EmptyRun() {
   return (
     <Panel rule className="px-5 py-6">
       <p className="display text-[1.5rem]">No run yet</p>
-      <p className="mt-1 max-w-[60ch] text-[0.98rem] text-ink-soft">Pick a task on the left. Each step the agent takes on Aiven appears here as it happens: its tool calls into Dock and Dock&apos;s answers. About 30 seconds.</p>
+      <p className="mt-1 max-w-[60ch] text-[0.98rem] text-ink-soft">Pick a task on the left. Each step the agent takes on Aiven appears here as it happens: its tool calls into AimoPilot and AimoPilot&apos;s answers. About 30 seconds.</p>
     </Panel>
   );
 }
@@ -119,7 +119,7 @@ function RunView({ runId, dockUrl }: { runId: string; dockUrl: string }) {
       </ol>
       {!run.recorded && (
         <div className="border-t border-line/70 bg-mist px-4 py-3">
-          <p className="text-[0.88rem] font-semibold">At Dock&apos;s gate, live from Kafka (dock.actions, agent {run.gate === undefined ? "…" : "agent_laakso_aiven_01"})</p>
+          <p className="text-[0.88rem] font-semibold">At AimoPilot&apos;s gate, live from Kafka (dock.actions, agent {run.gate === undefined ? "…" : "agent_laakso_aiven_01"})</p>
           {run.gate && run.gate.length ? (
             <ol className="mt-1.5 space-y-0.5 text-[0.88rem]">
               {run.gate.map((m) => (
@@ -192,7 +192,7 @@ function Message({ m }: { m: RunMessage }) {
     const refused = /"ok":false|policy_rejected|Error from MCP tool/.test(m.text);
     return (
       <li className={`grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2 px-4 py-1.5 text-[0.88rem] ${refused ? "shadow-[inset_6px_0_0_var(--color-safety-ink)]" : ""}`}>
-        <span className="tabular text-ink-soft">Dock</span>
+        <span className="tabular text-ink-soft">AimoPilot</span>
         <span className="break-all font-mono text-[0.76rem]">{m.text.slice(0, 260)}</span>
       </li>
     );

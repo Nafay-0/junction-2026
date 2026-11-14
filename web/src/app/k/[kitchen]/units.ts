@@ -1,4 +1,5 @@
 import { num } from "../../_ui/plain";
+import type { Lang } from "../../_i18n/lang";
 import type { Product } from "./types";
 
 /**
@@ -25,8 +26,50 @@ const UNIT: Record<string, [string, string]> = {
   DZ: ["dozen", "dozen"],
 };
 
-export function unitWord(p: Pick<Product, "salesUnit">, n: number): string {
-  const u = UNIT[p.salesUnit ?? ""] ?? ["pack", "packs"];
+/** Finnish: the second form is the partitive that follows a number ("3 laatikkoa"). */
+const UNIT_FI: Record<string, [string, string]> = {
+  KI: ["laatikko", "laatikkoa"],
+  CS: ["laatikko", "laatikkoa"],
+  ST: ["kpl", "kpl"],
+  KG: ["kg", "kg"],
+  PAK: ["pakkaus", "pakkausta"],
+  BAG: ["pussi", "pussia"],
+  RAS: ["rasia", "rasiaa"],
+  PRK: ["purkki", "purkkia"],
+  BOT: ["pullo", "pulloa"],
+  SK: ["säkki", "säkkiä"],
+  KRT: ["kartonki", "kartonkia"],
+  KAN: ["kanisteri", "kanisteria"],
+  PAL: ["lava", "lavaa"],
+  NIP: ["nippu", "nippua"],
+  DSP: ["display", "displayta"],
+  DZ: ["tusina", "tusinaa"],
+};
+
+const UNIT_SV: Record<string, [string, string]> = {
+  KI: ["kartong", "kartonger"],
+  CS: ["kartong", "kartonger"],
+  ST: ["st", "st"],
+  KG: ["kg", "kg"],
+  PAK: ["förpackning", "förpackningar"],
+  BAG: ["påse", "påsar"],
+  RAS: ["ask", "askar"],
+  PRK: ["burk", "burkar"],
+  BOT: ["flaska", "flaskor"],
+  SK: ["säck", "säckar"],
+  KRT: ["kartong", "kartonger"],
+  KAN: ["dunk", "dunkar"],
+  PAL: ["pall", "pallar"],
+  NIP: ["knippe", "knippen"],
+  DSP: ["display", "displayer"],
+  DZ: ["dussin", "dussin"],
+};
+
+const UNITS: Record<Lang, Record<string, [string, string]>> = { en: UNIT, fi: UNIT_FI, sv: UNIT_SV };
+const UNIT_FALLBACK: Record<Lang, [string, string]> = { en: ["pack", "packs"], fi: ["pakkaus", "pakkausta"], sv: ["förpackning", "förpackningar"] };
+
+export function unitWord(p: Pick<Product, "salesUnit">, n: number, lang: Lang = "en"): string {
+  const u = UNITS[lang][p.salesUnit ?? ""] ?? UNIT_FALLBACK[lang];
   return n === 1 ? u[0] : u[1];
 }
 
@@ -52,18 +95,25 @@ export function contentOf(p: Product, n: number): Measure | undefined {
   return { amount: p.packSize * n, unit: p.unit, certain: true };
 }
 
-export function measureText(m: Measure | undefined): string {
-  if (!m) return "content: no data";
-  const v = m.unit === "pcs" ? `${fmt(m.amount)} pieces` : `${fmt(m.amount)} ${m.unit}`;
-  return m.certain ? v : `about ${v} (not certain)`;
+const MEASURE_WORDS: Record<Lang, { none: string; pieces: string; about: (v: string) => string }> = {
+  en: { none: "content: no data", pieces: "pieces", about: (v) => `about ${v} (not certain)` },
+  fi: { none: "sisältö: ei tietoa", pieces: "kpl", about: (v) => `noin ${v} (ei varma)` },
+  sv: { none: "innehåll: uppgift saknas", pieces: "st", about: (v) => `cirka ${v} (osäkert)` },
+};
+
+export function measureText(m: Measure | undefined, lang: Lang = "en"): string {
+  const w = MEASURE_WORDS[lang];
+  if (!m) return w.none;
+  const v = m.unit === "pcs" ? `${fmt(m.amount)} ${w.pieces}` : `${fmt(m.amount)} ${m.unit}`;
+  return m.certain ? v : w.about(v);
 }
 
-/** "3 cases = 30 L" */
-export function quantityText(p: Product, n: number): string {
+/** "3 cases = 30 L", "3 laatikkoa = 30 L", "3 kartonger = 30 L" */
+export function quantityText(p: Product, n: number, lang: Lang = "en"): string {
   const m = contentOf(p, n);
-  const head = `${fmt(n)} ${unitWord(p, n)}`;
+  const head = `${fmt(n)} ${unitWord(p, n, lang)}`;
   if (!m || (p.salesUnit === "KG" && m.unit === "kg")) return head;
-  return `${head} = ${measureText(m)}`;
+  return `${head} = ${measureText(m, lang)}`;
 }
 
 /** kg CO2e for `n` sales units from the product-group average (per kg); a litre counts as a kilo. Null without data. */

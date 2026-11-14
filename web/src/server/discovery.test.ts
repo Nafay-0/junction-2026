@@ -43,7 +43,7 @@ describe("discovery from the base URL", () => {
     const res = await get(llmsGet, "/llms.txt");
     const text = await res.text();
     expect(res.headers.get("content-type")).toMatch(/^text\/markdown/);
-    expect(text).toMatch(/^# Dock\n\n> /);
+    expect(text).toMatch(/^# AimoPilot\n\n> /);
     expect(text).toContain(`(${BASE}/api/mcp)`);
     expect(text).toMatch(/do NOT retry/);
     expect(text).toMatch(/Start every order with `submit_need`/);

@@ -1,6 +1,6 @@
-# Dock on Aiven
+# AimoPilot on Aiven
 
-Everything Dock runs on Aiven, why each piece is there, what it costs, and how to check it. Written
+Everything AimoPilot runs on Aiven, why each piece is there, what it costs, and how to check it. Written
 13 Nov 2026 (Fri evening) from Aiven's docs (`aiven.io/docs/llms.txt`, the Runtime, Managed Agents and
 MCP pages, the free-tier pages) and from the API responses themselves. Where the two differed, this
 file follows what the API did.
@@ -73,7 +73,7 @@ Teardown: `infra/aiven-teardown.sh` (dry run) and `infra/aiven-teardown.sh --yes
 dock-app, dock-grafana and the application user, refuses to delete anything on a free plan, and prints
 the command to remove the deploy key.
 
-## MCP and agents on Aiven: what exists and how Dock uses it
+## MCP and agents on Aiven: what exists and how AimoPilot uses it
 
 Aiven has three separate things, and "MCP runtime" can mean any of them:
 
@@ -93,9 +93,9 @@ Aiven has three separate things, and "MCP runtime" can mean any of them:
    `Aiven-Labs/fastmcp-caddy-proxy` is exactly that (MCP over Streamable HTTP behind a bearer-token
    proxy), and the Runtime config schema uses `Aiven-Open/mcp-aiven` as its example repository.
 
-How Dock should use them, in order of value for the demo:
+How AimoPilot should use them, in order of value for the demo:
 
-- **Dock's MCP endpoint runs on Runtime** inside dock-app (Streamable HTTP at **`/api/mcp`**, same
+- **AimoPilot's MCP endpoint runs on Runtime** inside dock-app (Streamable HTTP at **`/api/mcp`**, same
   process as the REST API, mandate as the bearer credential). Runtime ports are HTTP/1.1 behind Aiven's
   TLS edge, which is what Streamable HTTP and SSE need.
 - **The outside buyer is an Aiven Managed Agent**, and it exists (13 Nov, 21:34 UTC): agent "Laakso
@@ -104,14 +104,14 @@ How Dock should use them, in order of value for the demo:
   custom integration `dock` = `https://<app-host>/api/mcp?agent_id=agent_laakso_buyer_01` and Laakso's
   demo mandate as its token (`catalog_type: "custom"`, `credentials: {"token": <JWS>}`; the mandate is
   valid 7 days, until 20 Nov; rerun `pnpm aiven:agent` after that or after a key change: it reuses the
-  agent). The integration came up `connected` and listed Dock's 14 tools. `pnpm aiven:agent` (in `web/`)
+  agent). The integration came up `connected` and listed AimoPilot's 14 tools. `pnpm aiven:agent` (in `web/`)
   creates or reuses all of it and sends one message; `--status` only lists.
-  The integration sends no custom headers, so Dock now also takes the agent id from `?agent_id=` when
+  The integration sends no custom headers, so AimoPilot now also takes the agent id from `?agent_id=` when
   `Dock-Agent-Id` is absent (`src/server/http.ts`); the mandate must still name that agent.
   **What happened** with the partner's milk request, in one session: the agent read its mandate, called
-  `submit_need` (1,000 L, lactose-free, by Monday 16 Nov, cheapest); Dock flagged "first order, 1,000 L
+  `submit_need` (1,000 L, lactose-free, by Monday 16 Nov, cheapest); AimoPilot flagged "first order, 1,000 L
   is a large one" and the agent relayed it instead of answering for the buyer. After "confirm" it relayed
-  Dock's two questions (fat, organic); after "no preference, cheapest" it chose option 1 (Valio Eila 3 %
+  AimoPilot's two questions (fat, organic); after "no preference, cheapest" it chose option 1 (Valio Eila 3 %
   1 l, 1,000 packs at €1.40), got the signed quote and placed the order: `pending_approval`, €1,400 over
   the €1,000 per-order limit, sign-off routed to Aino Virtanen. Three messages, about 20 s each. Note: the
   demo org's approvers have no passkey in production, so that order cannot be approved there; for an
@@ -151,7 +151,7 @@ ledger sequence), with the step the replay is on highlighted. Any partition can 
   Managed Agents API accepts for creating sessions and rotating an integration's credential), token
   `DOCK_AIVEN_LAUNCH_TOKEN`, expires 20 Nov. It cannot change services or plans.
 - **Managed Agents integration `dock-aiven`** (custom MCP URL `https://<app-host>/api/mcp?agent_id=agent_laakso_aiven_01`)
-  and **agent "Dock showcase buyer (Laakso Catering)"** (`gemini-3.8-flash`) in the existing environment
+  and **agent "AimoPilot showcase buyer (Laakso Catering)"** (`gemini-3.8-flash`) in the existing environment
   `managed-agents-a0074eab`. The integration's credential is a mandate minted per run (Laakso's demo org key, agent
   `agent_laakso_aiven_01`, €1,000 per order alone, valid 20 minutes): `PUT …/integration/dock-aiven {token}` before
   each run, so between runs it holds an expired mandate. The earlier "Laakso Catering purchasing agent" and its
@@ -180,7 +180,7 @@ One run at a time, 45 s between starts, 12 starts per UTC day per server (`DOCK_
 does not reset it. Aiven publishes no number for the free tier's daily run limit and its API reports no cost or
 token usage per run; when Aiven refuses a run (429 or a limit message), or the day's starts are used, the page plays a
 **recording** of a real run instead, labelled as one (`web/src/server/aiven/showcase/recordings/*.json`, made with
-`pnpm aiven:showcase record <agentId> <sessionId> <preset>`). The agent can only reach a public Dock: it connects to
+`pnpm aiven:showcase record <agentId> <sessionId> <preset>`). The agent can only reach a public AimoPilot: it connects to
 `DOCK_SHOWCASE_DOCK_URL`, else `DOCK_PUBLIC_URL`, else the deployed app, also when the portal runs on a laptop.
 Measured 13 Nov: one message, 25 to 60 s per run, all three presets ended as expected.
 
@@ -198,7 +198,7 @@ From `web/`: `pnpm aiven:showcase launch valio|within|refused`, `pnpm aiven:show
 
 ## Hosting on Aiven Runtime
 
-dock-app serves Dock at **`https://jolly-wondrous-bunny.eur-1.aiven.app`** (Let's Encrypt certificate,
+dock-app serves AimoPilot at **`https://jolly-wondrous-bunny.eur-1.aiven.app`** (Let's Encrypt certificate,
 HTTP/2 at the edge, TLS terminated by Aiven, plain HTTP to the container on 8080). **Keep this app and
 its host name**: passkeys are bound to the host (RP ID), and recreating dock-app gives a new random name
 and orphans every registered passkey. A custom domain (subdomain + CNAME) is supported if one is wanted.
@@ -339,12 +339,12 @@ DockError` was false. DockError and PasskeyError now carry a `Symbol.for` brand 
 
 ## Observability
 
-Where to look: **Grafana → dashboard "Dock overview"** at
+Where to look: **Grafana → dashboard "AimoPilot overview"** at
 `https://dock-grafana-<project>.e.aivencloud.com/d/dock-overview` (user `avnadmin`, password on the
 dock-grafana page in the Aiven Console). `node infra/grafana/provision.mjs` recreates the data sources
 and the dashboard and prints the URL. Three rows:
 
-1. **Dock** (PostgreSQL `telemetry.events`): orders committed, committed value, human sign-offs
+1. **AimoPilot** (PostgreSQL `telemetry.events`): orders committed, committed value, human sign-offs
    (asked / granted / denied), gate refusals, live-API calls saved by the cache and the hit rate,
    refusals by rule, events per minute by kind, crash-test scores. Empty until the app writes rows.
 2. **Aiven services** (Aiven API): state and plan of every service; CPU, memory and disk for all six;

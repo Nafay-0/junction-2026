@@ -49,3 +49,6 @@ next-env.d.ts
 
 # crash test output (pnpm crash)
 /crash-results/
+
+# raw image-model output (scripts/art/generate.ts); only compressed files in public/art/ ship
+.art-raw/

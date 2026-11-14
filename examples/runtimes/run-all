@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run every buyer example against one Dock and write RESULTS.md, results.json and the transcripts.
+"""Run every buyer example against one AimoPilot and write RESULTS.md, results.json and the transcripts.
 
     examples/runtimes/run-all --url http://localhost:3000            all runtimes
     examples/runtimes/run-all --url http://localhost:3000 --only pydantic-ai,langgraph

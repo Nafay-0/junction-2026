@@ -102,7 +102,7 @@ async function runCase(file: string, t: Truth[string], model: string, system: st
         const q = need?.quantity;
         const result = q
           ? { ok: true, state: "read_back", say: `${q.amount} ${q.unit} (${amountInWords(q.amount, q.unit)}) of ${need!.item.text}: I am checking because there is no earlier order to compare it with.`, ask: "Is that right? (If the caller corrects it, call submit_request again with their correction.)", amount: `${q.amount} ${q.unit}`, item: need!.item.text, ...(need!.deliverBy ? { deliverBy: need!.deliverBy } : {}) }
-          : { ok: false, state: "incomplete", say: "Dock understood part of it but needs how much, with the unit.", ask: "Ask the caller for how much, with the unit." };
+          : { ok: false, state: "incomplete", say: "AimoPilot understood part of it but needs how much, with the unit.", ask: "Ask the caller for how much, with the unit." };
         facts = addFacts(emptyFacts(), result);
         phase = "reply";
         said = "";
