@@ -9,6 +9,7 @@ import { usePortal } from "./portal";
 import { Dishes } from "./thread-dishes";
 import { RulesSignOffSlab } from "./thread-rules-signoff";
 import { groupNameL } from "./rules-change";
+import { buyerSteps, plainStep, stepLeaks } from "./buyer-steps";
 import { familyL } from "./family.text";
 import { THREAD_RULES_TEXT } from "./thread-rules.text";
 import { attrL } from "../../_i18n/format";
@@ -565,6 +566,9 @@ function Steps({ steps, orderId }: { steps: Think[]; orderId?: string }) {
   // Shown from the start, set quieter than the reply: smaller, grey, indented under a thin rule, so the work is there
   // to read without competing with what the agent said. "N steps" folds it away.
   const [open, setOpen] = useState(true);
+  // At most three lines at first; the rest one tap away, so a reply never sits on a wall of its own work.
+  const [all, setAll] = useState(false);
+  const shown = all ? steps : steps.slice(0, 3);
   return (
     <div className="mt-3">
       <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="inline-flex min-h-8 items-center gap-1.5 rounded-full text-[0.76rem] font-medium text-ink-soft/80 transition-colors hover:text-petrol">
@@ -573,7 +577,7 @@ function Steps({ steps, orderId }: { steps: Think[]; orderId?: string }) {
       </button>
       {open && (
         <ol className="ml-1 mt-0.5 space-y-1.5 border-l border-line pl-3.5">
-          {steps.map((s, i) => (
+          {shown.map((s, i) => (
             <li key={i} className="relative pl-3.5">
               <span aria-hidden className={`absolute left-0 top-[0.5em] size-1.5 rounded-full opacity-70 ${TONE[s.tone ?? "plain"]}`} />
               <p className="max-w-[46ch] text-[0.78rem] leading-snug text-ink-soft/90">
@@ -581,6 +585,13 @@ function Steps({ steps, orderId }: { steps: Think[]; orderId?: string }) {
               </p>
             </li>
           ))}
+          {shown.length < steps.length && (
+            <li className="pl-3.5">
+              <button type="button" onClick={() => setAll(true)} className="min-h-8 text-[0.78rem] font-medium text-petrol underline decoration-petrol/40 underline-offset-4">
+                {tx.moreSteps(steps.length - shown.length)}
+              </button>
+            </li>
+          )}
           {/* The same order on the wholesaler's side (the operations portal, open to look at): one quiet link. */}
           {orderId && (
             <li className="relative pl-5">
@@ -602,16 +613,17 @@ function thinking(turn: AgentTurn, thread: Thread, tx: Tx, w: (typeof THREAD_WOR
   for (const c of turn.cards) {
     switch (c.type) {
       case "offer":
-        out.push({ label: tx.step.offer, detail: c.steps.join(" "), tone: "live" });
+        out.push({ label: tx.step.offer, detail: buyerSteps(c.steps, f.lang).join(" ") || undefined, tone: "live" });
         break;
       case "scenario":
-        out.push({ label: c.kind === "event" ? tx.step.event : tx.step.season, detail: c.steps.slice(0, 12).join(" "), tone: "live" });
+        out.push({ label: c.kind === "event" ? tx.step.event : tx.step.season, detail: buyerSteps(c.steps, f.lang).join(" ") || undefined, tone: "live" });
         break;
       case "backup":
-        out.push({ label: tx.step.backup, detail: c.steps.join(" "), tone: "live" });
+        out.push({ label: tx.step.backup, detail: buyerSteps(c.steps, f.lang).join(" ") || undefined, tone: "live" });
         break;
       case "watch":
-        out.push({ label: tx.step.watch, detail: [...c.steps, ...(c.others?.length ? [c.others.join(" · ")] : [])].join(" "), tone: "live" });
+        // The moment in at most three plain lines in the buyer's language (the Trace keeps the full detail).
+        out.push({ label: tx.step.watch, detail: (c.brief?.[f.lang] ?? buyerSteps(c.steps, f.lang)).join(" ") || undefined, tone: "live" });
         break;
       case "understood": {
         const bits = [c.amount ? f.measure(c.amount.amount, c.amount.unit) : "", c.item, c.claims.map((x) => f.attr(x)).filter((a) => !c.item.toLowerCase().includes(a.toLowerCase())).join(", "), c.deliverOn ? f.day(c.deliverOn) : c.deliverBy ? f.day(c.deliverBy) : ""].filter(Boolean);
@@ -673,7 +685,12 @@ function thinking(turn: AgentTurn, thread: Thread, tx: Tx, w: (typeof THREAD_WOR
         break;
     }
   }
-  for (const s of turn.steps as ThreadStep[]) if (s.status === "failed") out.push({ label: tx.step.failed, detail: stepLabel(s, w, f.lang), tone: "left" });
+  for (const s of turn.steps as ThreadStep[]) if (s.status === "failed") {
+    const d = stepLabel(s, w, f.lang);
+    out.push({ label: tx.step.failed, detail: stepLeaks(d) ? undefined : d, tone: "left" });
+  }
+  // Whatever a card carried: made plain, or left out (the Trace keeps the detail).
+  for (const t of out) if (t.detail && stepLeaks(t.detail)) t.detail = plainStep(t.detail, f.lang);
   void thread;
   return out;
 }
