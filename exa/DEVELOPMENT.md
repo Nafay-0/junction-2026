@@ -2,17 +2,18 @@
 
 What Beryl is, for someone meeting it for the first time, is in [README.md](README.md). This file is the detail behind it: what each part does and why, every command and test, and where the code is.
 
-**Owner:** Asadullah (`Asadullah378`). **Status (Sat 14 Nov, 12:16):** one platform in two forms, both running locally. The **web app** (also installable on a phone) signs people in, searches and reads the live web with Exa and answers with live widgets. The **desktop app** is the same interface in a window of its own with a real browser inside it, where the agent also acts on websites. Both now have **voice**: speak instead of typing (your words appear in the message box as you say them), or start a **live call** and talk with the agent while its tools run in the background. Accounts, conversations and usage are in Postgres; one admin account creates the others. Everything passes its end-to-end tests and real agent tasks, and the desktop app is packaged as `Beryl.app`. Not deployed yet; voice has been tested in the desktop app with a recorded question, not yet with a person at a real microphone or on a phone.
+**Owner:** Asadullah (`Asadullah378`). **Status (Sun 15 Nov):** one platform in three forms. The **web app** (also installable on a phone) signs people in, searches and reads the live web with Exa and answers with live widgets. The **desktop app** (Mac and Windows) is the same interface in a window of its own with a real browser inside it, where the agent also acts on websites. Both have **voice** (speak instead of typing, or start a **live call** and talk with the agent while its tools run), **jobs** that run on a schedule and email their result, and **notifications**. Accounts, conversations and usage are in Postgres; one admin account creates the others. It is live at https://beryl.zeroanomaly.tech on Google Cloud (see `DEPLOYMENT.md`). It passed its end-to-end tests and real agent runs on 14 November. Voice has been tested with a recorded voice played into the microphone, not yet with a person at a real microphone or on a phone.
 
-Beryl is a general web agent for Exa's challenge "The Internet Butler". You hand it a task; it searches the live web with Exa, answers with live widgets instead of plain text (a map, fare cards, price charts, a gallery, a research report), and takes the task as far as it can go. Beryl is a gemstone (emerald and aquamarine are beryl) whose crystals are six-sided, which is the logo. The name and the logo's shapes are set in `web/src/lib/brand.ts`. It was called Hovi, then Baton, until 14 Nov; the browser's storage keys keep the `hovi.` prefix so nothing saved is lost.
+Beryl is a general web agent for Exa's challenge "The Internet Butler". You hand it a task; it searches the live web with Exa, answers with live widgets instead of plain text (a map, fare cards, price charts, a gallery, a research report), and takes the task as far as it can go. Beryl is a gemstone (emerald and aquamarine are beryl) whose crystals are six-sided, which is the logo. The name and the logo's shapes are set in `web/src/lib/brand.ts`. The browser's storage keys still begin with `hovi.`, the first working title, so nothing people saved is lost; that prefix is not a name anyone sees.
 
-Dock, the Valio Aimo project, is a separate project in this repo, owned by Nafay. It lives in `/web` and `/infra` at the repo root. Everything for Beryl lives in `exa/`.
+AimoPilot (working title Dock), the Valio Aimo project, is a separate project in this repo, owned by Nafay. It lives at the repo root (`/web`, `/infra` and the folders beside them). Everything for Beryl lives in `exa/`.
 
-## The plan, in three steps
+## What was built, in four steps
 
 1. **Agent with live widgets (built).** Exa is read-only: search, read, structured data. Widgets, sub-agents, parallel tools, a visible plan, clarifying questions, modes and an effort dial in place of a model picker, usage and cost tracking by kind.
 2. **Live web actions (built, in the desktop app).** The agent acts in a real browser inside the app that the user watches, hands the page over for sign-ins and human checks, asks for approval before anything that commits the user, and never pays.
-3. **Phone and voice (built).** The web version can be installed on a phone (it has a web app manifest and icons). Voice input and live calls work on both web and desktop. More autonomy (Exa Monitors that keep watching) is still to do.
+3. **Phone and voice (built).** The web version can be installed on a phone (it has a web app manifest and icons). Voice input and live calls work on both web and desktop.
+4. **Jobs and notifications (built).** A job runs on a schedule, looks things up and emails the result; notices say when a chat is done or needs you, in the app and by email. More autonomy (Exa Monitors that keep watching) is still to do.
 
 ## Web and desktop: who does what
 
@@ -35,7 +36,7 @@ Postgres must be running (Postgres.app, Docker or a hosted one). Create an empty
 
 ```bash
 cd exa
-cp .env.example .env.local   # the five keys, DATABASE_URL, ADMIN_EMAIL and ADMIN_PASSWORD
+cp .env.example .env.local   # the keys, DATABASE_URL, ADMIN_EMAIL and ADMIN_PASSWORD
 createdb beryl               # once, for a local Postgres
 cd web
 pnpm install
@@ -81,7 +82,7 @@ Every widget shows its sources. Every answer shows the mode it ran in and the ti
 
 ## The website and the downloads
 
-**Landing page.** Someone who is not signed in sees the landing page at `/` on the web (`web/src/components/landing/`). It shows the product by being it: the example cards under "Ask for anything" (stocks, weather, markets, flights, products, and "Limitless possibilities"), Sift, Research and the job card are the app's real widgets running on sample data, loaded as they come near the screen and kept from reaching the server. The desktop app at work, a call and the Jobs page are real screenshots in frames. Sections: Ask for anything, It does it for you (desktop only), Talk to it, Jobs, Sift, Research, the rest, Watch it work (the demo video), Use it anywhere, Get the desktop app (pick Mac or Windows: its downloads and first-launch steps), and Powered by (Exa, Gemini, Claude, with what each does here). Each feature carries a line saying what powers it. Signed in, `/` is the app. The desktop app never shows it: a signed-out window there goes straight to sign-in (the app's window names itself in its User-Agent). `/about` shows the page to anyone. The pictures on it are real screenshots of the app (`web/public/landing/`), in both themes. Set `BERYL_DEMO_VIDEO` to a YouTube link or a video file to fill the demo section.
+**Landing page.** Someone who is not signed in sees the landing page at `/` on the web (`web/src/components/landing/`). It shows the product by being it: the example cards under "Ask for anything" (stocks, weather, markets, flights, products, and "Limitless possibilities"), Sift, Research and the job card are the app's real widgets running on sample data, loaded as they come near the screen and kept from reaching the server. The desktop app at work, a call and the Jobs page are real screenshots in frames. Sections: Watch it work (the demo film, first under the hero: the file named by `BERYL_DEMO_VIDEO`, shown behind a poster and fetched only when play is pressed), Ask for anything, It does it for you (desktop only), Talk to it, Jobs, Sift, Research, the rest, Use it anywhere, Get the desktop app (pick Mac or Windows: its downloads and first-launch steps), and Powered by (Exa, Gemini, Claude, with what each does here). Each feature carries a line saying what powers it. Signed in, `/` is the app. The desktop app never shows it: a signed-out window there goes straight to sign-in (the app's window names itself in its User-Agent). `/about` shows the page to anyone. The pictures on it are real screenshots of the app (`web/public/landing/`), in both themes. Set `BERYL_DEMO_VIDEO` to a YouTube link or a video file to fill the demo section.
 
 **Desktop downloads.** `pnpm desktop:release` builds what the site offers, from a Mac, in under two minutes:
 
@@ -253,7 +254,7 @@ Reading, navigating, searching, filling in a form, adding to a basket and refusi
 - **Sees usage and cost.** Off for a new account. When it is off, the account sees the mode and the time under each answer and nothing else, and the server does not send the figures at all. When it is on, each answer shows its Exa calls and cost, and the bar above the conversation shows the conversation's total; both open a breakdown by kind: LLMs (the answering model and its helpers), Exa, Voice, Decisions (the checks sift makes). No model is named.
 - **Usage limit.** An amount in US dollars, or none. It is compared with everything the account has used since it was made. Once that reaches the limit, new requests are refused (chat, calls and the tools of a call answer 402), a task that is running stops at its next step with its figures recorded, the message box gives way to a note, and a dialog says why and offers to email the administrator. Raising or removing the limit lets the account carry on ("Check again" in the dialog, or the next page load). The admin has every mode, sees usage and has no limit.
 
-**What the admin sees.** Nothing is hidden on the admin's side. The overview splits spending into the same four kinds, day by day, and lists it by mode and by model. From the accounts page, pressing an account's cost opens that account's usage by kind, by mode and by model.
+**What the admin sees.** Nothing is hidden on the admin's side. The Usage page (`/admin`) splits spending into the same four kinds, day by day, and lists it by mode and by model. From the accounts page, pressing an account's cost opens that account's usage by kind, by mode and by model.
 
 **Saved conversations.** Every conversation is saved to the account in Postgres as it happens, marked with where it was started (web or desktop), and listed in a sidebar on the left (a drawer on phones) that can be closed. Conversations can be reopened, renamed and deleted from either kind of client, and continued only where they were started. Preferences (theme, mode and effort, the sidebar, the place) stay in the browser.
 
@@ -272,7 +273,7 @@ Reading, navigating, searching, filling in a form, adding to a basket and refusi
   - `lib/decisions/client.ts`: the client for Gemini's Decisions API (many closed questions about one input, answered with probabilities).
   - `lib/agent/modes.ts`: the modes and the effort dial, as the interface knows them. `lib/agent/models.ts`: the models and which one stands behind each mode (server side). `lib/agent/options.ts`: what each model is sent at each step of the dial. `lib/agent/depth.ts`: how far research goes at each mode and effort. `lib/agent/stats.ts`: what an answer used, by kind.
   - `lib/db/cap.ts`, `lib/usage-cap.ts`, `lib/usage-cap-client.ts`, `app/api/usage`: the usage limit, on the server and as the interface learns of it.
-  - `lib/agent/tools/`: the 25 tools. `lib/agent/instructions.ts`: the system prompt.
+  - `lib/agent/tools/`: the agent's tools. `lib/agent/instructions.ts`: the system prompt.
   - `app/api/chat/route.ts`: the agent loop, usage metadata, context trimming, prompt caching.
   - `lib/client-kind.ts`: web or desktop, and the header that tells the server which is asking.
   - `lib/agent/tools/index.ts`: which tools each kind gets (`createTools`); `lib/agent/instructions.ts`: what each kind is told it can do.
@@ -292,7 +293,7 @@ The research done before the build (a playbook on Exa's API as of 13 Nov 2026, t
 - **Deployment.** Live on Google Cloud since 14 November: one always-on Cloud Run instance, Cloud SQL, a bucket for the installers, and a load balancer for `beryl.zeroanomaly.tech`. What exists, how to deploy and what is not done are in `DEPLOYMENT.md`. The container is `web/Dockerfile`; `/api/health` says whether the server and its database are up.
 - **Google sign-in inside the desktop app.** Built so that it should work (an ordinary embedded browser, not an automation one), but only a person signing in can show that Google accepts it. If Google objects to the engine being connected while the user types, the next step is to disconnect the bridge for as long as the user is in control.
 - **Voice with a real person.** Tested end to end with a recording fed to the microphone. Not yet tried with a person talking over loudspeakers (echo), on a phone, or in a browser tab other than the desktop app's.
-- **The packaged app is not signed or notarised**, and has only been built for this Mac.
+- **The installers are not signed or notarised.** They are built on a Mac for Apple silicon, Intel Macs and Windows; only the Apple silicon one has been run.
 - **Accounts.** A user cannot change their own password and there is no "forgot password": the admin sets a new one.
 - **Hotels are slow** (up to a minute through Jinko). A faster source would improve the trip demo.
 - **Not yet checked on a phone.** The layout is responsive, but nobody has used it on one.
