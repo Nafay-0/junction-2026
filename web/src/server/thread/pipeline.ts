@@ -441,6 +441,21 @@ export async function combineItems(run: TurnRun, words: string, items: ItemOutco
     if (lead) ready.push({ s, optionId: lead.optionId });
   }
   if (ready.length < 2) return items;
+  // Every item asked for is on the order or said as left out, with why: never dropped without a word.
+  const onSheet = new Set(ready.map((r) => r.s.requestId));
+  const leftOut = items
+    .filter((it) => it.requestId && !onSheet.has(it.requestId) && !it.placed)
+    .map((it) => {
+      const u = run.store.cards(run.thread).map((x) => x.card).find((c) => c.type === "understood" && c.requestId === it.requestId);
+      const what = u?.type === "understood" ? `${u.amount ? `${u.amount.amount} ${u.amount.unit} ` : ""}${u.item}` : it.words;
+      const why = it.notice?.message ?? it.concerns?.[0]?.message ?? it.questions?.[0]?.text ?? (it.state === "options_ready" ? "only stand-ins the rules refuse" : "needs an answer first");
+      return { what, why: why.slice(0, 200), ...(it.concerns?.[0] ? { ask: it.concerns[0].choices.slice(0, 3) } : {}) };
+    })
+    .concat(items.filter((it) => !it.requestId && it.notice).map((it) => ({ what: it.words, why: it.notice!.message.slice(0, 200) })));
+  if (leftOut.length) {
+    run.facts.push({ notOnTheOrder: leftOut, say: "name each one and why, in one sentence, before the question" });
+    record(run, "left_out", `Not on the order sheet: ${leftOut.map((l) => `${l.what} (${l.why})`).join("; ")}.`, {});
+  }
   const { createSheet } = await import("./sheet");
   const lines = ready.flatMap(({ s, optionId }) => {
     const o = s.options.find((x) => x.optionId === optionId)!;

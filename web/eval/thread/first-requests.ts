@@ -27,6 +27,8 @@ const REQUESTS: Record<string, { text: string; lang: "en" | "fi" }[]> = {
     { text: "raise the limit to 800", lang: "en" },
     // The rules answer first: no question about the amount for something the kitchen may not buy.
     { text: "something for the dishwasher", lang: "en" },
+    // Five items: each on the order or named as left out with why.
+    { text: "for tuesday: 200 l lactose free milk, 10 kg butter, 20 l whipping cream, 30 kg natural yoghurt and 5 kg grated cheese", lang: "en" },
   ],
   "koulu-metsola": [
     { text: "60 l semi skimmed milk for monday lunch", lang: "en" },

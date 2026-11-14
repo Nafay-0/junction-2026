@@ -219,9 +219,13 @@ function Choices({ turn, thread, tap, busy }: { turn: AgentTurn; thread: Thread;
       if (q) for (const o of q.options.slice(0, 3)) rows.push({ key: o.id, title: o.label, action: { type: "answer", requestId: c.requestId, questionId: q.id, optionId: o.id } });
     } else if (c.type === "anomaly" && !c.answered) {
       const k = c.concerns[0];
+      // Several items in one message: a choice names its item, so a chip is never without context.
+      const several = turn.cards.filter((x) => x.type === "understood").length > 1;
+      const item = several ? turn.cards.find((x) => x.type === "understood" && x.requestId === c.requestId) : undefined;
+      const of = item?.type === "understood" ? `${item.item}: ` : "";
       if (k) {
-        if (k.confirmable) rows.push({ key: "confirm", title: tx.asSaid, action: { type: "concern", requestId: c.requestId, key: k.key, choice: "confirm" } });
-        for (const x of k.corrections.slice(0, 2)) rows.push({ key: x.id, title: correctionLabel(x, w, wf, f.lang), action: { type: "concern", requestId: c.requestId, key: k.key, choice: x.id } });
+        if (k.confirmable) rows.push({ key: "confirm", title: `${of}${tx.asSaid}`, action: { type: "concern", requestId: c.requestId, key: k.key, choice: "confirm" } });
+        for (const x of k.corrections.slice(0, 2)) rows.push({ key: x.id, title: `${of}${correctionLabel(x, w, wf, f.lang)}`, action: { type: "concern", requestId: c.requestId, key: k.key, choice: x.id } });
       }
     }
   }

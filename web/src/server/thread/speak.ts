@@ -123,6 +123,8 @@ export function speakFacts(run: TurnRun): Record<string, unknown>[] {
     cards.push(now);
   }
   const out = cards.map(cardFacts).filter((x): x is Record<string, unknown> => !!x).map((x) => plainFacts(x) as Record<string, unknown>);
+  // Items of the same message that are not on the order (each with why): said, never dropped.
+  for (const f of run.facts) if (f && typeof f === "object" && "notOnTheOrder" in f) out.push(plainFacts(f) as Record<string, unknown>);
   // A clarification asked once already and not settled by the answer: not asked again in other words; the best
   // reading from what is on the table, as a question a yes answers.
   const incomplete = cards.find((c) => c.type === "notice" && c.kind === "incomplete");
