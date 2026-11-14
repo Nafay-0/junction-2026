@@ -938,7 +938,7 @@ export function createDock(deps: DockDeps) {
      * same rules and context as a quote's preview (orders.ts requestQuote), on an unsigned quote that is never issued,
      * stored or logged. Undefined when the lines cannot be priced from the offers given.
      */
-    async previewDecision(session: AgentSession, requestId: string, input: QuoteRequestLine[], offers: LiveOffer[]): Promise<Decision | undefined> {
+    async previewDecision(session: AgentSession, requestId: string, input: QuoteRequestLine[], offers: LiveOffer[], internal: { confirmedBy?: string } = {}): Promise<Decision | undefined> {
       const request = await ownRequest(session, requestId);
       const lines = await substitutesOf(request, input);
       const ids = [...new Set(lines.flatMap((l) => (l.substituteFor ? [l.productId, l.substituteFor] : [l.productId])))];
@@ -953,7 +953,7 @@ export function createDock(deps: DockDeps) {
       return evaluatePolicy(
         session.mandate,
         { agentId: session.agentId, quote, lines: quote.lines.map(({ productId, quantity, unitPriceCents }) => ({ productId, quantity, unitPriceCents })), neededBy: request.neededBy, deliverOn: request.deliverOn, requestId, asked: await askedOf(request, quote) },
-        { now: now(), ...supersession(session.mandate, session.mandateIssuedAt), ...(await budgetContext(quote.buyerOrgId)), ...(await mistakeCheckOf(session.mandate.issuer, request, quote, true)).context, ...(await holdsOf(quote)), quoteAlreadyUsed: false, recentOrders: await recentOrders(quote.buyerOrgId) },
+        { now: now(), ...supersession(session.mandate, session.mandateIssuedAt), ...(await budgetContext(quote.buyerOrgId)), ...(await mistakeCheckOf(session.mandate.issuer, request, quote, true)).context, ...(await holdsOf(quote)), quoteAlreadyUsed: false, recentOrders: await recentOrders(quote.buyerOrgId), ...(internal.confirmedBy ? { substitutionConfirmedBy: internal.confirmedBy } : {}) },
       );
     },
 
@@ -1031,7 +1031,12 @@ export function createDock(deps: DockDeps) {
     },
 
     /** Place an order against a signed quote. Always returns the decision; refused orders are kept with their reasons. */
-    async placeOrder(session: AgentSession, input: z.input<typeof SignedOrderInput>): Promise<PublicOrder> {
+    /**
+     * `internal.confirmedBy`: set only by server code in this process (the thread's order sheet), when the kitchen's own
+     * identified person built and confirmed these exact lines: their confirmation of a substitute (policy.ts
+     * substitutionConfirmedBy). Never from a request body.
+     */
+    async placeOrder(session: AgentSession, input: z.input<typeof SignedOrderInput>, internal: { confirmedBy?: string } = {}): Promise<PublicOrder> {
       const { requestId, quoteToken, lines } = parse(SignedOrderInput, input);
       const request = await ownRequest(session, requestId);
       let quote: Quote;
@@ -1045,7 +1050,7 @@ export function createDock(deps: DockDeps) {
       return serialize(orgId, async () => {
         const draft = { agentId: session.agentId, quote, lines, neededBy: request.neededBy, deliverOn: request.deliverOn, requestId, asked: await askedOf(request, quote) };
         const check = await mistakeCheckOf(session.mandate.issuer, request, quote);
-        const ctx = { now: now(), ...supersession(session.mandate, session.mandateIssuedAt), ...(await budgetContext(orgId)), ...check.context, ...(await holdsOf(quote)), quoteAlreadyUsed: await repo.isQuoteUsed(quote.quoteId), recentOrders: await recentOrders(orgId) };
+        const ctx = { now: now(), ...supersession(session.mandate, session.mandateIssuedAt), ...(await budgetContext(orgId)), ...check.context, ...(await holdsOf(quote)), quoteAlreadyUsed: await repo.isQuoteUsed(quote.quoteId), recentOrders: await recentOrders(orgId), ...(internal.confirmedBy ? { substitutionConfirmedBy: internal.confirmedBy } : {}) };
         let decision = evaluatePolicy(session.mandate, draft, ctx);
         if (decision.outcome !== "reject" && !(await repo.claimQuote(quote.quoteId))) {
           decision = evaluatePolicy(session.mandate, draft, { ...ctx, quoteAlreadyUsed: true });
@@ -1432,14 +1437,15 @@ export function createDock(deps: DockDeps) {
       await intakeGate(session, String((input as { requestId?: unknown }).requestId ?? ""));
       return dock.requestQuote(session, input);
     },
-    placeOrder: async (session: AgentSession, input: z.input<typeof PlaceOrderInput>) => {
+    /** `internal`: server code in this process only (the thread's order sheet), never a request body. */
+    placeOrder: async (session: AgentSession, input: z.input<typeof PlaceOrderInput>, internal: { confirmedBy?: string } = {}) => {
       const body = parse(PlaceOrderInput, input);
       await intakeGate(session, body.requestId);
       if (body.quoteToken) {
         if (!body.lines) throw new DockError(400, "invalid_request", "Send lines with quoteToken (copied from quote.lines), or leave both out after the intake's choice.");
-        return dock.placeOrder(session, { requestId: body.requestId, quoteToken: body.quoteToken, lines: body.lines });
+        return dock.placeOrder(session, { requestId: body.requestId, quoteToken: body.quoteToken, lines: body.lines }, internal);
       }
-      return dock.placeOrder(session, await currentQuoteOrder(session, body.requestId));
+      return dock.placeOrder(session, await currentQuoteOrder(session, body.requestId), internal);
     },
   };
 

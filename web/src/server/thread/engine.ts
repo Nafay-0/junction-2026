@@ -17,6 +17,7 @@ import { withTurn } from "./context";
 import { checkOpen, read, record, runAction, step, type ItemOutcome, type TurnRun } from "./pipeline";
 import { earlierFor } from "./earlier";
 import { ThreadStore, type StoredThread } from "./store";
+import { runWidget } from "./widgets";
 import { ensureTelemetry } from "./telemetry";
 import type { AgentTurn, BuyerTurn, MemoryCard, RecordsCard, SubmitTurn, SubmitTurnReply, ThreadAction, ThreadDoor } from "./types";
 
@@ -63,6 +64,25 @@ const ActionSchema: z.ZodType<ThreadAction> = z.discriminatedUnion("type", [
   z.object({ type: z.literal("retry"), turnId: z.string().min(1).max(80) }),
   z.object({ type: z.literal("plan_order"), planId: z.string().min(1).max(80) }),
   z.object({ type: z.literal("repeat"), ref: z.string().min(1).max(80) }),
+  z.object({ type: z.literal("sheet_packs"), sheetId: z.string().min(1).max(80), version: z.number().int(), lineId: z.string().min(1).max(80), packs: z.number().int().min(1).max(9999) }),
+  z.object({ type: z.literal("sheet_day"), sheetId: z.string().min(1).max(80), version: z.number().int(), date: z.iso.date() }),
+  z.object({ type: z.literal("sheet_swap"), sheetId: z.string().min(1).max(80), version: z.number().int(), lineId: z.string().min(1).max(80), productId: z.string().min(1).max(80) }),
+  z.object({ type: z.literal("sheet_remove"), sheetId: z.string().min(1).max(80), version: z.number().int(), lineId: z.string().min(1).max(80) }),
+  z.object({ type: z.literal("sheet_add"), sheetId: z.string().min(1).max(80).optional(), version: z.number().int().optional(), productId: z.string().min(1).max(80), packs: z.number().int().min(1).max(9999).optional() }),
+  z.object({ type: z.literal("sheet_alternatives"), sheetId: z.string().min(1).max(80), lineId: z.string().min(1).max(80) }),
+  z.object({ type: z.literal("sheet_place"), sheetId: z.string().min(1).max(80), version: z.number().int() }),
+  z.object({ type: z.literal("sheet_from_option"), requestId: z.string().min(1).max(80), optionId: z.string().min(1).max(80) }),
+  z.object({ type: z.literal("alt_rerank"), pickerId: z.string().min(1).max(80), chip: z.string().min(1).max(40) }),
+  z.object({ type: z.literal("alt_pick"), pickerId: z.string().min(1).max(80), productId: z.string().min(1).max(80) }),
+  z.object({ type: z.literal("menu_choose"), planId: z.string().min(1).max(80), proposalId: z.string().min(1).max(80) }),
+  z.object({ type: z.literal("menu_covers"), planId: z.string().min(1).max(80), covers: z.number().int().min(1).max(5000) }),
+  z.object({ type: z.literal("menu_day"), planId: z.string().min(1).max(80), date: z.iso.date() }),
+  z.object({ type: z.literal("menu_line_swap"), planId: z.string().min(1).max(80), lineId: z.string().min(1).max(80), optionId: z.string().min(1).max(80) }),
+  z.object({ type: z.literal("menu_line_have"), planId: z.string().min(1).max(80), lineId: z.string().min(1).max(80), have: z.boolean() }),
+  z.object({ type: z.literal("menu_line_per_cover"), planId: z.string().min(1).max(80), lineId: z.string().min(1).max(80), dishId: z.string().min(1).max(80), amount: z.number().positive().max(100000) }),
+  z.object({ type: z.literal("menu_accept"), planId: z.string().min(1).max(80), doubtId: z.string().min(1).max(80) }),
+  z.object({ type: z.literal("menu_to_sheet"), planId: z.string().min(1).max(80) }),
+  z.object({ type: z.literal("remember_this"), text: z.string().trim().min(2).max(500) }),
 ]);
 
 export const SubmitTurnSchema = z
@@ -188,8 +208,10 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
           agentResult = await agentTurn(run, buyer.text);
         }
       } else {
-        await checkOpen(run, body.action);
-        await runAction(run, body.action, body.text);
+        if (!(await runWidget(run, body.action, body.text))) {
+          await checkOpen(run, body.action);
+          await runAction(run, body.action, body.text);
+        }
       }
     } else if (!llmRoom()) {
       // The day's model cap is reached: say so in one line, and keep ordering possible without a model.
