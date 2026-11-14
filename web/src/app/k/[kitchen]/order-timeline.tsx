@@ -2,7 +2,9 @@
 
 import type { OrderTimeline } from "@/server/ops/order-timeline";
 import { Badge } from "../../_ui/kit";
-import { clockSeconds, say, timelineFact } from "../../_ui/plain";
+import { useFormat } from "../../_i18n/provider";
+import { clockSeconds, say as sayRaw, timelineFact } from "../../_ui/plain";
+import { categoryCodesL } from "./groups";
 
 /**
  * The kitchen's view of its own order's timeline: the same steps the wholesaler's operations read
@@ -11,6 +13,8 @@ import { clockSeconds, say, timelineFact } from "../../_ui/plain";
  * and any ids stay on hover.
  */
 export function OrderTimelineList({ t, agentName }: { t: OrderTimeline; agentName: string }) {
+  const { lang } = useFormat();
+  const say = (text: string) => categoryCodesL(sayRaw(text), lang);
   return (
     <ol className="divide-y divide-line">
       {t.steps.map((s) => {

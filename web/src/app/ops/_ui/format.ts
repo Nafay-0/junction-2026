@@ -109,6 +109,8 @@ export function fi(text: string | undefined | null): string {
     .replace(/\b9{6,}\b(?:\s*(?:packs?|pcs|units?))?/g, "an unreported amount")
     .replace(/€(\d{1,3}(?:,\d{3})*)(?:\.(\d{2}))?/g, (_m, w: string, f?: string) => `${w.replaceAll(",", nbsp)}${f ? `,${f}` : ""}${nbsp}€`)
     .replace(/(\d)\.(\d) ?%/g, "$1,$2 %")
+    // "17,536 products", "1,000 L": thousands with a no-break space, as the surface writes every other figure.
+    .replace(/\b\d{1,3}(?:,\d{3})+(?![.,]?\d)/g, (n) => n.replaceAll(",", nbsp))
     // "0.49 € less", "3.75 l", "16.2 kg": a decimal comma before a unit, as everywhere else on the surface.
     .replace(/\b(\d+)\.(\d+)(\s?)(€|kg|g|l|L|dl|ml|t)(?![\w.])/g, (_m, a: string, b: string, sp: string, u: string) => `${a},${b}${sp || nbsp}${u}`);
 }
