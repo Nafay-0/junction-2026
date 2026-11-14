@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { addPasskey, approvalState, approveButton, joinAsApprover, watchErrors } from "../support/dock";
+import { addPasskey, approvalState, approveButton, joinAsApprover, watchErrors, signInStage } from "../support/dock";
 
 /**
  * The store's order lane, every stage, in the visitor's own kitchen (so parallel runs never share a budget):
@@ -113,6 +113,7 @@ test("order lane, every stage, signed on the visitor's phone; reload and back in
 });
 
 test("mistake check on a demo kitchen: 1,000 L where it usually orders 100 L, corrected in one tap", async ({ page }) => {
+  await signInStage(page, "kaari");
   await page.goto("/k/kaari/order");
   await ask(page, /1,000 litres of lactose-free milk by Monday/);
   const check = step(page, 2);
@@ -126,6 +127,7 @@ test("mistake check on a demo kitchen: 1,000 L where it usually orders 100 L, co
 test("repeat with a change: same again but 200 litres", async ({ page }) => {
   // The offline example reader cannot read a change ("could not read that"); only the model can. With the model
   // off (this server) the test checks the honest message; E2E_MODEL=1 (a server with a model) checks the 200 L.
+  await signInStage(page, "kaari");
   await page.goto("/k/kaari/order");
   const earlier = page.getByRole("region", { name: "Earlier requests" });
   await earlier.getByRole("button", { name: "Repeat with a change" }).filter({ visible: true }).first().click();
@@ -142,6 +144,7 @@ test("repeat with a change: same again but 200 litres", async ({ page }) => {
 });
 
 test("one-tap repeat of an earlier request reaches options without a question", async ({ page }) => {
+  await signInStage(page, "kaari");
   await page.goto("/k/kaari/order");
   const earlier = page.getByRole("region", { name: "Earlier requests" });
   await earlier.getByRole("button", { name: "Repeat", exact: true }).filter({ visible: true }).first().click();

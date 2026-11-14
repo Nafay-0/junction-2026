@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { signInStage } from "../support/dock";
 
 /**
  * The agent panel answering a question from the shop's records. This server has the model off, so the panel must
@@ -7,19 +8,21 @@ import { expect, test, type Page } from "@playwright/test";
  */
 
 async function openAgent(page: Page) {
-  // Phone: the agent is the middle of the tab bar. Desktop: the panel may be open already, or a header button.
-  const field = page.getByRole("textbox", { name: "Ask, or say what the kitchen needs" }).filter({ visible: true });
-  if (await field.count()) return field.first();
-  const tab = page.getByRole("navigation", { name: /Shop/ }).getByRole("button", { name: "Agent" }).filter({ visible: true });
-  if (await tab.count()) await tab.first().click();
-  else await page.getByRole("button", { name: /^Agent$|purchasing agent/i }).filter({ visible: true }).first().click();
-  await expect(field.first()).toBeVisible();
-  return field.first();
+  // Phone: "Agent" in the bottom tab bar. Desktop: "Agent  Ctrl K" in the header. Either opens the panel.
+  const field = page.getByRole("complementary", { name: "Purchasing agent" }).getByRole("textbox", { name: "Ask, or say what the kitchen needs" });
+  const opener = page.getByRole("button", { name: /^Agent/ }).filter({ visible: true }).first();
+  await expect(opener).toBeVisible();
+  await page.waitForLoadState("networkidle").catch(() => {});
+  // On a wide screen the panel may already be open; the button would then close it.
+  if (!(await field.isVisible())) await opener.click();
+  await expect(field).toBeVisible();
+  return field;
 }
 
 const panel = (page: Page) => page.getByRole("complementary", { name: "Purchasing agent" });
 
 test("the agent panel answers a question from records, and says so when the model is off", async ({ page }) => {
+  await signInStage(page, "kaari");
   await page.goto("/k/kaari");
   await openAgent(page);
   await panel(page).getByRole("button", { name: "What may the agent buy alone?" }).click();
@@ -33,6 +36,7 @@ test("the agent panel answers a question from records, and says so when the mode
 });
 
 test("an order typed into the panel goes onto the order lane, nothing is ordered from the panel", async ({ page }) => {
+  await signInStage(page, "kaari");
   await page.goto("/k/kaari");
   const field = await openAgent(page);
   await field.fill("100 L lactose-free milk for Thursday");

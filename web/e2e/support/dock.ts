@@ -5,6 +5,22 @@ import { expect, type APIRequestContext, type BrowserContext, type Page, type Te
 /** The passcode e2e/support/start-server.mjs gives the server it starts (E2E_OPS_PASSCODE for a server you run). */
 export const OPS_PASSCODE = process.env.E2E_OPS_PASSCODE ?? "e2e-ops";
 
+/** The stage kitchens' account passwords on the test server (start-server.mjs). */
+export const STAGE_PASSWORDS: Record<"kaari" | "laakso", string> = {
+  kaari: process.env.E2E_KAARI_PASSWORD ?? "e2e-stage-kaari",
+  laakso: process.env.E2E_LAAKSO_PASSWORD ?? "e2e-stage-laakso",
+};
+
+/** Sign in to a stage kitchen's account (they are private to it), as the presenter at the table does. */
+export async function signInStage(page: Page, kitchen: "kaari" | "laakso"): Promise<void> {
+  await page.goto("/k");
+  const form = page.getByRole("form", { name: "Sign in" });
+  await form.getByLabel("Username", { exact: true }).fill(kitchen);
+  await form.getByLabel("Password", { exact: true }).fill(STAGE_PASSWORDS[kitchen]);
+  await form.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.waitForURL(`**/k/${kitchen}`, { timeout: 20_000 });
+}
+
 const SOFT = readFileSync(path.join(__dirname, "soft-passkey.js"), "utf8");
 
 export type Passkey = {
@@ -97,8 +113,9 @@ export const engine = (info: TestInfo) => info.project.use.browserName ?? (info.
 export function watchErrors(page: Page) {
   const errors: string[] = [];
   page.on("pageerror", (e) => {
-    // WebKit reports a Next.js route prefetch (?_rsc=) cancelled by a navigation as "access control checks": noise.
-    if (/_rsc=.*access control checks/.test(e.message)) return;
+    // WebKit reports any fetch cancelled by a navigation (route prefetches, polls, the event stream) as
+    // "... due to access control checks": noise, not an error the person sees.
+    if (/due to access control checks/.test(e.message)) return;
     errors.push(`pageerror: ${e.message}`);
   });
   page.on("console", (m) => {

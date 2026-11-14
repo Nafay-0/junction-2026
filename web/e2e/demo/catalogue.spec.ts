@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { addPasskey, joinAsApprover, watchErrors } from "../support/dock";
+import { addPasskey, joinAsApprover, watchErrors, signInStage } from "../support/dock";
 
 /**
  * The shop by hand: catalogue -> a product page with a live price -> basket -> fixed price -> the same gate as the
@@ -15,6 +15,8 @@ async function visitorKitchen(page: Page): Promise<string> {
 }
 
 const checkout = (page: Page) => page.getByRole("complementary", { name: "Totals and checkout" });
+/** Phone: the checkout buttons sit in a sticky bar outside the totals; desktop: inside. The visible one. */
+const action = (page: Page, name: string) => page.getByRole("button", { name, exact: true }).filter({ visible: true }).first();
 
 test("catalogue, product page with a live price, basket, fixed price, through the gate", async ({ page }) => {
   const errors = watchErrors(page);
@@ -39,12 +41,12 @@ test("catalogue, product page with a live price, basket, fixed price, through th
   await expect(page.getByRole("textbox", { name: "Quantity in packs" })).toHaveValue("10");
   await expect(checkout(page)).toContainText(/100\sL/);
 
-  await checkout(page).getByRole("button", { name: "Get a fixed price" }).click();
+  await action(page, "Get a fixed price").click();
   await expect(checkout(page)).toContainText(/Total, signed by the wholesaler/, { timeout: 20_000 });
   await expect(checkout(page).getByText(/^\d{1,2}[.:]\d{2}$/).first()).toBeVisible(); // the countdown
-  await checkout(page).getByRole("button", { name: "Place the order" }).click();
+  await action(page, "Place the order").click();
   // 100 L of the usual milk, 129 € under the visitor's 500 € limit: the agent's own gate lets it through alone.
-  await expect(checkout(page)).toContainText(/Order placed|placed with the wholesaler|Signed by the wholesaler/i, { timeout: 20_000 });
+  await expect(page.locator("main")).toContainText(/Order placed|placed with the wholesaler|Signed by the wholesaler/i, { timeout: 20_000 });
   expect(errors).toEqual([]);
 });
 
@@ -58,11 +60,12 @@ test("catalogue, product page with a live price, basket, fixed price, through th
  */
 test("a small hand order from the basket goes through without a sign-off", async ({ page }) => {
   test.fail(!process.env.E2E_EXPECT_FIXED, "basket orders are held by human_confirmation: nobody was asked the mistake check's question");
+  await signInStage(page, "kaari");
   await page.goto("/k/kaari/catalogue/VA-1010");
   await expect(page.getByText(/Checked live with the wholesaler at \d/)).toBeVisible({ timeout: 20_000 });
   await page.getByRole("button", { name: "Add to basket" }).click();
   await page.goto("/k/kaari/basket");
-  await checkout(page).getByRole("button", { name: "Get a fixed price" }).click();
+  await action(page, "Get a fixed price").click();
   await expect(checkout(page)).toContainText(/Total, signed by the wholesaler/, { timeout: 20_000 });
   await expect(checkout(page)).not.toContainText(/will have to sign off|must sign off/);
 });

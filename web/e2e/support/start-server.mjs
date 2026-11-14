@@ -38,6 +38,9 @@ Object.assign(env, {
   RADAR_STATE_FILE: "off",
   DOCK_RATE_LIMITS: "off",
   DOCK_OPS_PASSCODE: E2E_OPS_PASSCODE,
+  // The stage kitchens (kaari, laakso) are private to their accounts; these are their test passwords.
+  DOCK_KAARI_PASSWORD: "e2e-stage-kaari",
+  DOCK_LAAKSO_PASSWORD: "e2e-stage-laakso",
   DOCK_CONNECTOR_SECRET: "e2e-connector-secret-not-a-real-one-0123456789",
   DOCK_GIT_COMMIT: "e2e",
   DOCK_LICENCES_FILE: path.join(web, ".data/e2e-licences.json"),
