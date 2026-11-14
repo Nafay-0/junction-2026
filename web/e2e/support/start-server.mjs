@@ -44,6 +44,22 @@ Object.assign(env, {
 });
 if (process.env.E2E_SERVER_ENV) Object.assign(env, JSON.parse(process.env.E2E_SERVER_ENV));
 
+// E2E_MODEL=1: the model on, with the provider keys and model names from web/.env.local (copied into the server's
+// environment, never printed) and a hard cap of $0.50 and 60 calls for the run. Used for the few tests that check
+// what the model says (assistant, "repeat with a change"); every other test runs with the model off.
+if (process.env.E2E_MODEL) {
+  const names = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "DOCK_INTERPRET_MODEL", "DOCK_ASSISTANT_MODEL", "DOCK_MEMORY_MODEL"];
+  try {
+    for (const line of readFileSync(path.join(web, ".env.local"), "utf8").split("\n")) {
+      const m = /^([A-Z][A-Z0-9_]*)=(.*)$/.exec(line.trim());
+      if (m && names.includes(m[1])) env[m[1]] = m[2].replace(/^"(.*)"$/, "$1");
+    }
+  } catch {
+    console.error("E2E_MODEL=1 but web/.env.local is not readable: the model stays off.");
+  }
+  Object.assign(env, { DOCK_LLM: "", DOCK_LLM_DAILY_USD: "0.5", DOCK_LLM_DAILY_CALLS: "60" });
+}
+
 const child = spawn(path.join(web, "node_modules/.bin/next"), ["start", "-p", String(port)], { cwd: web, env, stdio: "inherit" });
 for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => child.kill(sig));
 child.on("exit", (code) => process.exit(code ?? 0));

@@ -64,8 +64,9 @@ export default defineConfig({
     { name: "room", testDir: "e2e/room", use: { ...devices["Pixel 7"], launchOptions: chromiumMedia } },
     { name: "a11y", testDir: "e2e/a11y", use: { ...devices["Desktop Chrome"], viewport: DESKTOP } },
     { name: "visual", testDir: "e2e/visual", use: { ...devices["Desktop Chrome"], viewport: DESKTOP } },
-    // The old single-file specs at e2e/*.spec.ts (restart proof needs a deployed server).
-    { name: "legacy", testMatch: /e2e\/[^/]+\.spec\.ts$/, testDir: "e2e", use: { ...devices["Pixel 7"] } },
+    // The single-file specs other branches keep at e2e/*.spec.ts (portal, accounts). The restart proof and the
+    // table show need a server you run (E2E_BASE_URL); they skip or are ignored here.
+    { name: "legacy", testDir: "e2e", testMatch: /\/e2e\/[^/]+\.spec\.ts$/, testIgnore: process.env.E2E_BASE_URL ? [] : [/show\.spec\.ts$/], use: { ...devices["Pixel 7"] } },
   ],
   webServer: remote
     ? undefined

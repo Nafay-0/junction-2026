@@ -96,7 +96,11 @@ export const engine = (info: TestInfo) => info.project.use.browserName ?? (info.
 /** Collect uncaught page errors and console errors; assert none at the end of a test. */
 export function watchErrors(page: Page) {
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
+  page.on("pageerror", (e) => {
+    // WebKit reports a Next.js route prefetch (?_rsc=) cancelled by a navigation as "access control checks": noise.
+    if (/_rsc=.*access control checks/.test(e.message)) return;
+    errors.push(`pageerror: ${e.message}`);
+  });
   page.on("console", (m) => {
     if (m.type() === "error" && !/Failed to load resource|ERR_|net::|NotAllowedError|status of 4\d\d/.test(m.text())) errors.push(`console: ${m.text().slice(0, 300)}`);
   });
