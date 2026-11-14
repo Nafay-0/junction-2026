@@ -186,7 +186,7 @@ export function Motion() {
     const spine = root.querySelector<HTMLElement>(".l2-spine");
     const fill = root.querySelector<HTMLElement>("[data-spine]");
     const header = root.querySelector<HTMLElement>("[data-header]");
-    const linked = sdt ? [] : [...root.querySelectorAll<HTMLElement>("[data-run], [data-morph], [data-track]")];
+    const linked = sdt ? [] : [...root.querySelectorAll<HTMLElement>("[data-run], [data-morph], [data-track], [data-map]")];
     let queued = false;
     const frame = () => {
       queued = false;

@@ -93,6 +93,7 @@ export const L2 = {
 
   agents: {
     title: "Six agents, one gate",
+    trackTitle: "Each one, at work",
     line: "Each does a real job. None can place an order the gate has not passed.",
     list: [
       { id: "buyer", name: "The kitchen's buying agent", fact: "Heard right in 33 of 36 held-out voice clips, in hall noise and three languages.", href: "/docs/doors", shot: "agent-voice", kind: "phone", alt: "Voice mode on a phone: the agent speaking, a large Hold to talk button and End call." },

@@ -9,6 +9,7 @@ import { Target } from "../_ui/target";
 import shots from "../_landing/shots.json";
 import { ATTACKS, ATTACKS_HELD, COUNTS, CRASH, FRAMES, REEL, RULES, SEARCH, STORY, crashRows, searchRow } from "./data";
 import { L2 } from "./landing2.text";
+import { AgentMap } from "./map";
 import { Motion } from "./motion";
 import "./landing2.css";
 
@@ -565,13 +566,18 @@ export function Landing2() {
           </div>
         </section>
 
+        {/* How they connect: one picture, built up by the scroll */}
+        <Section id="map" title={t.agents.title}>
+          <AgentMap />
+        </Section>
+
         {/* Six agents on a horizontal track that the vertical scroll drives */}
         <section id="agents" aria-labelledby="agents-t" className="l2-agents" data-track style={{ "--n": t.agents.list.length } as CSSProperties}>
           <div className="l2-agents-sticky">
             <div className="l2-agents-head">
               <span className="l2-node" data-node aria-hidden />
               <h2 id="agents-t" className="display l2-h2">
-                {t.agents.title}
+                {t.agents.trackTitle}
               </h2>
               <p className="l2-line">{t.agents.line}</p>
             </div>

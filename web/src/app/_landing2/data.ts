@@ -13,9 +13,9 @@ import thread from "./reel-thread.json";
 /** The product's markup in agent lines: **bold** and {{a date}}, as plain text. */
 const plain = (s: string) => s.replace(/\*\*(.+?)\*\*/g, "$1").replace(/\{\{(.+?)\}\}/g, "$1");
 
-type Turn = { role?: string; text?: string };
-const turns = (thread.turns as Turn[]).filter((t) => t.text);
-const agentTurns = turns.filter((t) => t.role === "agent").map((t) => plain(t.text!));
+type Turn = { role?: string; text?: string; line?: string };
+const turns = (thread.turns as Turn[]).map((t) => ({ role: t.role, text: t.text ?? t.line ?? "" })).filter((t) => t.text);
+const agentTurns = turns.filter((t) => t.role === "agent").map((t) => plain(t.text));
 const views = thread.stepsViewAsShown as { after: string; steps: string[] }[];
 const first = views[0].steps;
 const second = views[1]?.steps ?? [];

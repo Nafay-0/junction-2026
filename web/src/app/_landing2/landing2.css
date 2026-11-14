@@ -278,7 +278,7 @@
 
   .l2-reel {
     justify-self: center;
-    width: min(66vw, 330px);
+    width: min(66vw, 350px);
   }
   .l2-reel-phone {
     cursor: default;
@@ -435,6 +435,7 @@
   }
   .l2-js .l2-facts.l2-live .l2-facts-list {
     grid-template-columns: 1fr;
+    align-items: center;
     margin-top: 1.75rem;
   }
   .l2-js .l2-facts.l2-live .l2-fact {
@@ -532,8 +533,9 @@
     color: var(--color-ink-soft);
   }
   .l2-step-head {
-    font-size: clamp(1.15rem, 2vw, 1.5rem);
-    line-height: 1.28;
+    font-size: clamp(1.2rem, 2.3vw, 1.85rem);
+    line-height: 1.22;
+    letter-spacing: -0.01em;
     font-weight: 600;
     color: var(--color-ink);
     text-wrap: pretty;
@@ -545,7 +547,7 @@
     color: var(--color-petrol-deep);
   }
   .l2-step-rest {
-    font-size: 1rem;
+    font-size: clamp(1rem, 1.3vw, 1.12rem);
     line-height: 1.5;
     color: var(--color-ink-soft);
     max-width: 38rem;
@@ -571,7 +573,7 @@
     padding-top: 0.5rem;
   }
   .l2-counters dt {
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     line-height: 1.25;
     color: var(--color-ink-soft);
   }
@@ -581,7 +583,7 @@
     color: var(--color-ink-soft);
   }
   .l2-counters dd .display {
-    font-size: 1.9rem;
+    font-size: 2.2rem;
     line-height: 1;
     color: var(--color-petrol-deep);
   }
@@ -645,7 +647,7 @@
     }
     .l2-js .l2-stage-in {
       display: grid;
-      grid-template-columns: 7.5rem minmax(0, 1fr);
+      grid-template-columns: 8.5rem minmax(0, 1fr);
       gap: 1rem;
       align-items: end;
     }
@@ -1252,7 +1254,7 @@
   }
   .l2-track-window {
     margin-top: 2.5rem;
-    padding-left: var(--indent);
+    margin-left: var(--indent);
   }
   .l2-track {
     display: grid;
@@ -1295,12 +1297,31 @@
     color: var(--color-ink);
     max-width: 30rem;
   }
+  /* Six slides; each holds still around its place, so one agent is in focus at a time. */
   @keyframes l2-slide {
-    from {
+    0%,
+    6% {
       transform: translateX(0);
     }
-    to {
-      transform: translateX(calc((1 - var(--n)) / var(--n) * 100%));
+    14%,
+    26% {
+      transform: translateX(-16.6667%);
+    }
+    34%,
+    46% {
+      transform: translateX(-33.3333%);
+    }
+    54%,
+    66% {
+      transform: translateX(-50%);
+    }
+    74%,
+    86% {
+      transform: translateX(-66.6667%);
+    }
+    94%,
+    100% {
+      transform: translateX(-83.3333%);
     }
   }
   .l2-js .l2-agents {
@@ -1334,7 +1355,7 @@
     padding-right: 2rem;
   }
   .l2-js .l2-slide-phone {
-    width: min(40vw, 14rem, 34vh);
+    width: min(42vw, 17rem, 27vh);
   }
   .l2-js .l2-slide-desktop {
     max-width: min(100%, 70vh);
@@ -1599,5 +1620,205 @@
   }
   .l2-menu-sheet a:hover {
     background: var(--color-mist);
+  }
+
+  /* ---------- how the agents connect ---------- */
+
+  .l2-map {
+    max-width: 75rem;
+    view-timeline: --l2map block;
+  }
+  .l2-map-svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+    font-family: var(--font-sans);
+  }
+  .l2-map-tall {
+    display: none;
+  }
+  @media (max-width: 767px) {
+    .l2-map-wide {
+      display: none;
+    }
+    .l2-map-tall {
+      display: block;
+    }
+    .l2-map-svg {
+      margin-left: calc(-1 * var(--indent) + 0.25rem);
+      width: calc(100% + var(--indent) - 0.25rem);
+    }
+  }
+  .l2-mn-box {
+    fill: var(--color-paper);
+    stroke: var(--color-line-strong);
+    stroke-width: 1.2;
+  }
+  .l2-mn-name {
+    fill: var(--color-ink);
+    font-weight: 650;
+  }
+  .l2-mn-sub {
+    fill: var(--color-ink-soft);
+  }
+  .l2-mn-dark .l2-mn-box {
+    fill: var(--color-petrol-deep);
+    stroke: var(--color-petrol-deep);
+  }
+  .l2-mn-dark .l2-mn-name {
+    fill: var(--color-paper);
+  }
+  .l2-mn-dark .l2-mn-sub {
+    fill: rgb(255 255 255 / 0.75);
+  }
+  .l2-mn:hover .l2-mn-box,
+  .l2-mn:focus-visible .l2-mn-box {
+    stroke: var(--color-petrol);
+    stroke-width: 2.5;
+  }
+  .l2-mn:focus-visible {
+    outline: none;
+  }
+  .l2-mn-gate-box {
+    fill: var(--color-safety-ink);
+    stroke: var(--color-safety);
+    stroke-width: 2;
+  }
+  .l2-mn-gate:focus-visible .l2-mn-gate-box,
+  .l2-mn-gate:hover .l2-mn-gate-box {
+    stroke-width: 4;
+  }
+  .l2-mn-gate-title {
+    fill: var(--color-safety);
+    font-family: var(--font-display);
+    font-weight: 650;
+  }
+  .l2-mn-gate-sub {
+    fill: rgb(255 255 255 / 0.7);
+  }
+  .l2-mn-gate-row {
+    fill: rgb(255 255 255 / 0.08);
+  }
+  .l2-mn-gate-person {
+    fill: rgb(255 194 14 / 0.16);
+    stroke: var(--color-safety);
+    stroke-width: 1;
+  }
+  .l2-mn-gate-text {
+    fill: var(--color-paper);
+    font-weight: 600;
+  }
+  .l2-edge {
+    fill: none;
+    stroke: var(--color-petrol);
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .l2-edge-offer {
+    stroke: var(--color-lavender-deep);
+    stroke-dasharray: 0.012 0.008;
+  }
+  .l2-edge-label {
+    fill: var(--color-ink-soft);
+    font-weight: 600;
+  }
+  .l2-tok {
+    display: none;
+  }
+  .l2-tok-order {
+    fill: var(--color-lime);
+    stroke: var(--color-petrol-deep);
+    stroke-width: 2.5;
+  }
+  .l2-tok-offer {
+    fill: var(--color-lavender);
+    stroke: var(--color-lavender-deep);
+    stroke-width: 2.5;
+  }
+  .l2-map-lines {
+    margin-top: 1.75rem;
+    display: grid;
+    gap: 0.4rem;
+    font-size: clamp(1rem, 1.5vw, 1.15rem);
+    line-height: 1.45;
+    color: var(--color-ink);
+  }
+  @media (min-width: 900px) {
+    .l2-map-lines {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1.5rem;
+    }
+    .l2-map-lines p {
+      border-top: 2px solid var(--color-petrol-deep);
+      padding-top: 0.75rem;
+    }
+  }
+  @keyframes l2-pop {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes l2-draw {
+    from {
+      stroke-dashoffset: 1;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+  .l2-js .l2-tok {
+    display: block;
+  }
+  .l2-js .l2-edges-solid,
+  .l2-js .l2-edge:not(.l2-edge-offer) {
+    stroke-dasharray: 1;
+  }
+  .l2-sdt .l2-mn {
+    animation: l2-pop linear both;
+    animation-timeline: --l2map;
+    animation-range: cover calc(6% + var(--i) * 1.3%) cover calc(14% + var(--i) * 1.3%);
+  }
+  .l2-sdt .l2-map-edges > g {
+    animation: l2-pop linear both;
+    animation-timeline: --l2map;
+    animation-range: cover calc(26% + var(--i) * 0.9%) cover calc(32% + var(--i) * 0.9%);
+  }
+  .l2-sdt .l2-edge:not(.l2-edge-offer) {
+    animation: l2-draw linear both;
+    animation-timeline: --l2map;
+    animation-range: cover calc(26% + var(--i) * 0.9%) cover calc(34% + var(--i) * 0.9%);
+  }
+  .l2-sdt .l2-tok {
+    animation-duration: auto;
+    animation-timing-function: linear;
+    animation-fill-mode: both;
+    animation-timeline: --l2map;
+    animation-range: cover 42% cover 64%;
+  }
+  .l2-js:not(.l2-sdt) .l2-mn {
+    animation: l2-pop 1s linear both paused;
+    animation-delay: calc(clamp(0, (var(--p, 0) - 0.06 - var(--i) * 0.013) / 0.08, 0.999) * -1s);
+  }
+  .l2-js:not(.l2-sdt) .l2-map-edges > g {
+    animation: l2-pop 1s linear both paused;
+    animation-delay: calc(clamp(0, (var(--p, 0) - 0.26 - var(--i) * 0.009) / 0.06, 0.999) * -1s);
+  }
+  .l2-js:not(.l2-sdt) .l2-edge:not(.l2-edge-offer) {
+    animation: l2-draw 1s linear both paused;
+    animation-delay: calc(clamp(0, (var(--p, 0) - 0.26 - var(--i) * 0.009) / 0.08, 0.999) * -1s);
+  }
+  .l2-js:not(.l2-sdt) .l2-tok {
+    animation-duration: 1s;
+    animation-timing-function: linear;
+    animation-fill-mode: both;
+    animation-play-state: paused;
+    animation-delay: calc(clamp(0, (var(--p, 0) - 0.42) / 0.22, 0.999) * -1s);
   }
 }
