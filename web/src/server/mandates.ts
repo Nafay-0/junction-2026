@@ -56,7 +56,7 @@ export class MandateBook implements MandateRegister {
 
   reissueOf(orgId: string): MandateReissue | undefined {
     const r = this.byOrg.get(orgId);
-    return r && { orgId: r.orgId, at: r.at, mandateIds: r.mandateIds, by: r.by, replaced: r.history.map((h) => h.replaced) };
+    return r && { orgId: r.orgId, at: r.at, mandateIds: r.mandateIds, by: r.by, replaced: r.history.map((h) => h.replaced), requires: structuredClone(r.added) };
   }
 
   recordOf(orgId: string): ReissueRecord | undefined {

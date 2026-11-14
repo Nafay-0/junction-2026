@@ -76,7 +76,7 @@ export const RELAYED: HumanVia = { channel: "relayed" };
  * (the store screen, a voice call from that phone, the answer page with that session on it). The assumption this
  * rests on, stated once: whoever holds that signed-in session is that person. Nothing a client reports counts.
  */
-const isVerified = (v: HumanVia) => v.channel === "approver_passkey" || ((v.channel === "portal_session" || v.channel === "voice" || v.channel === "answer_link") && !!v.person);
+export const isVerified = (v: HumanVia) => v.channel === "approver_passkey" || ((v.channel === "portal_session" || v.channel === "voice" || v.channel === "answer_link") && !!v.person);
 const CHANNEL_TEXT: Record<InputChannel, string> = {
   portal_session: "in the kitchen's signed-in portal",
   approver_passkey: "with their passkey",
@@ -124,6 +124,8 @@ export type Intake = {
   excluded: Exclusion[];
   /** Plausibility warnings not asked of the buyer because a person signs the order off anyway: shown to that person. */
   signOffNotes?: string[];
+  /** Options the gate's own preview refuses: never offered, kept only to say why an obvious choice is missing. */
+  refusedOptions?: OptionCard[];
   /** Noticed without asking (core/concerns.ts noticeNeed): an amount clearly outside the kitchen's range, a standing order that crept up. Said on the card and to whoever signs off. */
   noticed?: Noticed[];
   /** Confirmations that matter but were only relayed by the agent: the order needs a person's sign-off (policy human_confirmation). */
@@ -339,7 +341,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
     const profile = await profileOf(session);
     const products = await familyProducts(i.family, i.need);
     const ctx: CheckContext = { now: at, profile, family: i.family, candidates: products, suspendedPreferenceIds: i.suspendedPreferenceIds, pending: await pendingOrders(i), ...(i.site ? { site: i.site } : {}) };
-    Object.assign(i, { concerns: [], questions: [], openChoices: [], fromMemory: [], notAsked: [], rules: [], options: [], notes: [], excluded: [], preselected: undefined, signOffNotes: undefined, noticed: undefined, updatedAt: at.toISOString() });
+    Object.assign(i, { concerns: [], questions: [], openChoices: [], fromMemory: [], notAsked: [], rules: [], options: [], notes: [], excluded: [], preselected: undefined, signOffNotes: undefined, noticed: undefined, refusedOptions: undefined, updatedAt: at.toISOString() });
     if (i.unverified?.length) i.signOffNotes = i.unverified.map(unverifiedNote);
 
     // 1. Likely mistakes block everything else. Plausibility warnings a sign-off would show anyway wait (step 6).
@@ -527,9 +529,11 @@ export function createIntakeFlow(deps: IntakeDeps) {
       }
       const refused = i.options.filter((o) => o.gate?.outcome === "reject");
       if (refused.length) {
-        i.options = [...i.options.filter((o) => o.gate?.outcome !== "reject"), ...refused];
+        // Not offered: kept apart, so a screen can say why the obvious choice is missing.
+        i.options = i.options.filter((o) => o.gate?.outcome !== "reject");
+        i.refusedOptions = refused;
         log(i, "dock", `The gate's preview refuses ${refused.map((o) => `${o.optionId} (${o.gate!.rule})`).join(", ")}: not offered as a choice.`, { step: "preview", refused: refused.map((o) => ({ optionId: o.optionId, rule: o.gate!.rule, reasons: o.gate!.reasons })) });
-        if (refused.length === i.options.length) return noOptions(i, refused[0].gate!.reasons.join(" "));
+        if (i.options.length === 0) return noOptions(i, refused[0].gate!.reasons.join(" "));
       }
     }
 
@@ -1038,6 +1042,7 @@ export function view(i: Intake) {
     memoryUsed: i.memoryUsed ?? [],
     signOffNotes: i.signOffNotes ?? [],
     noticed: i.noticed ?? [],
+    refusedOptions: i.refusedOptions ?? [],
     acknowledgements: i.acknowledgements,
     chosen: i.chosen,
     quote: i.quote,

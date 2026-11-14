@@ -16,6 +16,7 @@ import { GateHead, PhoneNotice, PhoneProblem, PhoneSkeleton, bigButton } from ".
 import { Target } from "../../_ui/target";
 import { serverClock, serverRole } from "../../_ui/phone.text";
 import { APPROVAL_TEXT } from "./approval-screen.text";
+import { clockOffset, priceMsLeft } from "./price-clock";
 import { serverAgentName, serverAmount, serverDays, serverDifference, serverLicence, serverPacks } from "./server-words";
 
 type Phase = "idle" | "passkey" | "sending";
@@ -58,11 +59,14 @@ export function ApprovalScreen({ approvalId, token }: { approvalId: string; toke
   const [showReason, setShowReason] = useState(false);
   const [reason, setReason] = useState("");
   const [now, setNow] = useState(() => Date.now());
+  /** The server's clock minus this phone's, from the latest view. */
+  const [clock, setClock] = useState(0);
   const prepared = useRef<{ options: PublicKeyCredentialRequestOptionsJSON; at: number } | null>(null);
 
   const refresh = useCallback(async () => {
     const r = await api<{ view: ApprovalView }>("GET", `/api/v1/approvals/${encodeURIComponent(approvalId)}${token ? `?token=${encodeURIComponent(token)}` : ""}`);
     if (r.ok) {
+      setClock(clockOffset(r.data.view.serverNow, Date.now()));
       setView(r.data.view);
       setLoadError(null);
       return r.data.view;
@@ -101,7 +105,10 @@ export function ApprovalScreen({ approvalId, token }: { approvalId: string; toke
     setPhase("sending");
     const r = await api<DecideReply>("POST", `/api/v1/approvals/${encodeURIComponent(approvalId)}`, body);
     setPhase("idle");
-    if (r.data?.view) setView(r.data.view);
+    if (r.data?.view) {
+      setClock(clockOffset(r.data.view.serverNow, Date.now()));
+      setView(r.data.view);
+    }
     if (r.ok || r.error.code === "policy_rejected") {
       setProblem(null);
       return true;
@@ -187,7 +194,8 @@ export function ApprovalScreen({ approvalId, token }: { approvalId: string; toke
   if (view.state !== "pending") return <Outcome view={view} />;
 
   const busy = phase !== "idle";
-  const msLeft = Date.parse(view.priceHeldUntil) - now;
+  // By the server's clock, not the phone's: a phone set half an hour fast could not sign (price-clock.ts).
+  const msLeft = priceMsLeft(view.priceHeldUntil, now, clock);
   const minutesLeft = Math.floor(msLeft / 60_000);
   const priceExpired = minutesLeft < 0;
   const share = Math.max(0, Math.min(1, msLeft / (30 * 60_000)));

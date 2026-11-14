@@ -1,3 +1,4 @@
+import { DockError } from "@/core/errors";
 import { timingSafeEqual } from "node:crypto";
 import { currentApprover } from "@/server/approver-session";
 import { currentAccount } from "@/server/accounts/http";
@@ -66,6 +67,8 @@ async function load(req: Request, ctx: RouteContext<"/ui-api/connect/[kitchen]">
   // (server/authz.ts): its signed-in account, a stage kitchen's too, or a visitor's phone.
   const k = isOperator(req) ? await resolveKitchen(slug) : await consoleKitchen(req, rt, slug);
   if (!k) return undefined;
+  // The connector address is a credential for the kitchen's agent: not for a phone signed in by the call code.
+  if ((k as { console?: { person?: { callOnly?: true } } }).console?.person?.callOnly) throw new DockError(403, "phone_session_limited", "The connector address needs the account's own sign-in. This phone was signed in by the call code.", "account");
   const kitchen = { slug, name: k.info.name, kind: k.info.kind, expiresAt: k.info.expiresAt };
   return { slug, kitchen, manage: await canManage(req, rt, slug, k.info.kind) };
 }

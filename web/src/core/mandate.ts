@@ -1,6 +1,7 @@
 import { SignJWT, decodeProtectedHeader, errors, jwtVerify, type CryptoKey } from "jose";
 import { z } from "zod";
 import { SIGN_ALG, VERIFY_ALGS, type SigningKey } from "./keys";
+import { allergenOf } from "./vocabulary";
 
 /**
  * A mandate is the buyer organisation's signed statement of what its purchasing agent may do.
@@ -168,7 +169,20 @@ export async function verifyMandateToken(token: string, registry: TrustRegistry,
  * run. One signed at or after it is the kitchen's current word: the key is the kitchen's, so what it signs later
  * replaces what it signed earlier. Plain code; the register is persisted by the server (it survives a restart).
  */
-export type MandateReissue = { orgId: string; at: string; mandateIds: string[]; by: string; /** The mandates a reissue replaced by name: refused whenever they were signed. */ replaced?: string[] };
+export type MandateReissue = {
+  orgId: string;
+  at: string;
+  mandateIds: string[];
+  by: string;
+  /** The mandates a reissue replaced by name: refused whenever they were signed. */
+  replaced?: string[];
+  /**
+   * The rules the kitchen added by reissue. A mandate of this kitchen that does not carry every one of them is not
+   * its current mandate, whoever signed it and whenever: one minted later from old terms (a script holding the
+   * kitchen's key, a server path signing from defaults) is refused like one signed before the reissue.
+   */
+  requires?: { forbiddenAllergens: string[]; requiredAttributes: string[] };
+};
 
 export interface MandateRegister {
   reissueOf(orgId: string): MandateReissue | undefined;
@@ -181,6 +195,23 @@ export function supersededBy(mandate: Pick<Mandate, "mandateId" | "issuer" | "va
   if (r.replaced?.includes(mandate.mandateId)) return r;
   return Date.parse(issuedAt ?? mandate.validFrom) < Date.parse(r.at) ? r : undefined;
 }
+
+/** The rules the kitchen added by reissue that this mandate does not carry (in words), if any. */
+export function missingAddedRules(mandate: Pick<Mandate, "issuer" | "forbiddenAllergens" | "requiredAttributes">, register: MandateRegister | undefined): string[] {
+  const need = register?.reissueOf(mandate.issuer.orgId)?.requires;
+  if (!need) return [];
+  return [
+    ...need.forbiddenAllergens.filter((a) => !mandate.forbiddenAllergens.includes(a)).map((a) => `no ${a.replaceAll("_", " ")}`),
+    // "x-free on every product" is also carried by a mandate that forbids x as an allergen: how an agent that buys
+    // every kind of food (the menu agent) states the same rule, since fish carries no lactose-free claim.
+    ...need.requiredAttributes
+      .filter((c) => !mandate.requiredAttributes.includes(c) && !(c.endsWith("_free") && allergenOf(c.slice(0, -5)) !== undefined && mandate.forbiddenAllergens.includes(allergenOf(c.slice(0, -5))!)))
+      .map((c) => `every product ${c.replaceAll("_", "-")}`),
+  ];
+}
+
+export const lacksRulesMessage = (orgName: string, r: MandateReissue, missing: string[]) =>
+  `This mandate does not carry what ${orgName} added to its mandate on ${r.at.slice(0, 16).replace("T", " ")} UTC (${missing.join(", ")}), so it is not the kitchen's current mandate. Present the current one.`;
 
 export const supersededMessage = (orgName: string, r: MandateReissue) =>
   `${orgName} reissued its mandate on ${r.at.slice(0, 16).replace("T", " ")} UTC; this one was signed before that and no longer works. Present the kitchen's current mandate.`;

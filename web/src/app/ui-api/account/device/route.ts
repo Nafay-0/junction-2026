@@ -3,7 +3,7 @@ import { DockError } from "@/core/errors";
 import { PasskeyError } from "@/core/passkeys";
 import { sessionCookie } from "@/server/approver-session";
 import { relyingParty } from "@/server/config";
-import { currentAccount } from "@/server/accounts/http";
+import { currentAccount, requireFullSession } from "@/server/accounts/http";
 import { accountRoute, noStore } from "@/server/accounts/routes";
 import { readJson } from "@/server/http";
 
@@ -21,6 +21,7 @@ export async function GET(req: Request) {
   return accountRoute(req, async (rt) => {
     const s = await currentAccount(req, rt);
     if (!s) throw new DockError(401, "not_signed_in", "Sign in first.", "account");
+    requireFullSession(s, "Seeing the signing devices");
     return Response.json(await rt.accounts.devices(s.account), { headers: noStore });
   });
 }
@@ -31,6 +32,7 @@ export async function POST(req: Request) {
       const body = (await readJson(req)) as { step?: unknown; link?: unknown; response?: RegistrationResponseJSON };
       const link = typeof body.link === "string" ? body.link : undefined;
       const s = await currentAccount(req, rt);
+      if (!link) requireFullSession(s, "Adding a signing device"); // a phone signed in by the call code is not the account
       const username = link ? await rt.accounts.linkAccount(link, "device") : s?.account.username;
       if (!username) throw new DockError(link ? 410 : 401, link ? "device_link_expired" : "not_signed_in", link ? "This code has expired or was used. Show a new one from Agent and rules." : "Sign in first.", "account");
       if (body.step === "begin") {

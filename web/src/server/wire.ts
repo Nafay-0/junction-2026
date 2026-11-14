@@ -302,6 +302,7 @@ export const ApprovalViewSchema = named(
     why: z.array(z.string()).describe("Why this person is asked, in plain words."),
     differences: z.array(z.string()).describe("What differs from what was asked for."),
     priceHeldUntil: z.iso.datetime(),
+    serverNow: z.iso.datetime().optional().describe("The server's clock when the view was made; the screen counts down from it, not from the phone's clock."),
     signIn: z.enum(["passkey", "demo_tap", "link_token"]).describe("How this approver signs."),
     demoTapEnabled: z.boolean(),
     viewerIsApprover: z.boolean(),

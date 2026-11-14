@@ -98,7 +98,8 @@ export function optionsCard(step: IntakeView): OptionsCard | undefined {
     type: "options",
     cardId: cardId("options", step.requestId),
     requestId: step.requestId,
-    options: step.options.map((o) => ({ ...optionView(o), category: step.family })),
+    // The gate's preview refused these: shown only to explain a missing obvious choice, never as one to tap.
+    options: [...step.options, ...(step.refusedOptions ?? [])].map((o) => ({ ...optionView(o), category: step.family })),
     ...(step.preselected ? { preselected: { optionId: step.preselected.optionId, reason: step.preselected.reason } } : {}),
     excluded: [...groups.entries()].map(([reason, count]) => ({ reason, count, ...(codeOf.has(reason) ? { code: codeOf.get(reason) } : {}) })).slice(0, 12),
     notes: step.notes,

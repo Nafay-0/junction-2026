@@ -44,7 +44,11 @@ export type Account = {
   keptFrom?: string;
 };
 
-export type AccountSession = { username: string; createdAt: string; expiresAt: string };
+/**
+ * `scope: "call"`: a session a phone got from the one-time "call your agent" code. Whoever scans that code first has
+ * it, so it is for the call and nothing else (accounts/http.ts requireFullSession) and lasts an hour, not two weeks.
+ */
+export type AccountSession = { username: string; createdAt: string; expiresAt: string; scope?: "call" };
 
 /**
  * A one-time link an account shows as a QR code: a phone adds itself as a signing device ("device"), or continues
