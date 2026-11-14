@@ -250,10 +250,25 @@ More. Desktop: Agent, Catalogue, Orders, Rules. "Order" and "Menu planner" stop 
 points in the agent ("Plan a menu" opens the menu builder in the stage). The catalogue's "add" puts a product on
 the thread's current order sheet.
 
-**Not built yet** (designed to compose from the pieces above): showing search results, a product's facts, order
-history with "order again", standing orders, a delivery and the memory editor as cards; the rules sheet and a rule
-change with before and after (two `FactRows` side by side, then the person's OK); the set-up interview for a new
-restaurant (one answer widget at a time under a progress line, ending in the rules to OK and the signing device).
+**Showing things, your rules, setting up** (`_ui/widgets-more.tsx`; live at `/design` and
+`/design/workspace?view=history|standing|results|rules|setup`). Each is a short list in a card with one action per
+row; lists show their first few rows and then "show more".
+
+| What the buyer asked | Component | Props the page supplies |
+|---|---|---|
+| "what oat products do you have?" | `ProductResults` | `products` (`name`, `pack`, `art`, `price`: the words "Price when opened" until a price is known, `added`), at most six shown; `onAdd` puts it on the thread's order sheet, `onOpen` shows `ProductFacts` |
+| a product | `ProductFacts` | `name`, `pack`, `art`, `price`, `rows` of label and value, `add` (label, `added`) |
+| "what did we order last week?" | `HistoryList` | `orders` (`when`, `summary`, `total`, `note`), three shown; `onAgain` opens the order card for confirming, it never orders by itself |
+| standing orders | `StandingOrders` | `items` (`name`, `rhythm`, `next`, `paused`, `note` for drift); `onPause(id, paused)` is the switch both ways, `onChange` opens the order sheet for that standing order |
+| a delivery | `DeliveryCard` | `title`, `detail`, three or four `steps` (`label`, `at`, `state`) |
+| "what do you remember?" | `MemoryList` | `items` (`text`, `source`); `onEdit`, `onForget` |
+| "what may my agent do?" | `RulesSheet` | `rows` (`label`, `value`, `detail`) in the kitchen's words: spend alone, weekly budget, may buy, always, never, who OKs above the limit; `onChange(id)` |
+| changing one rule | `RuleChange` | `title`, the control as `children` (a `Stepper`, chips), `before`, `after`, `note`, `changed`, `confirm` (the button says what the rule becomes), `onConfirm` (the engine then asks the person's device), `onCancel`, `done` |
+| a new restaurant | `SetupWelcome`, `SetupStep`, `RulesSheet` with a `footer`, `SetupDone` | the welcome's three points with why each is asked; each step wraps one answer widget with its default already chosen, `step`, `of`, `onBack`, and `onNext` where the answer itself does not move on; the last step is "These are your rules" with one button that confirms and adds the device |
+
+The word mandate does not appear in any of these: they say "your rules". In the working surface (`stage`) a card does
+not repeat the stage's title: `ThreadCard` drops its own header there, so pass the name once, as `stageTitle`, and
+leave out the picker's `onClose` (the stage has its own way back).
 
 **Checked.** Both typefaces have true tabular figures: with `font-variant-numeric: tabular-nums` every digit of
 Figtree and of Bricolage Grotesque (at the display width and weight) measures the same width; without it they

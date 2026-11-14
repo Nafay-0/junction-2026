@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ArrowUp, Camera, Check, ChevronDown, ChevronLeft, CircleAlert, Clock, Maximize2, Mic, Minimize2, Minus, ReceiptText, ShieldCheck, Sparkles, X } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useText } from "../_i18n/provider";
 import { Avatar, Badge, Spinner } from "./kit";
 import { Target } from "./target";
@@ -26,6 +26,9 @@ import { WIDGET_TEXT } from "./widgets.text";
 // ---------- where the thread lives ----------
 
 export type DockSize = "dock" | "workspace";
+
+/** True inside the dock's working surface: the stage's header already names what is open, so a card there does not say it again. */
+const StageContext = createContext(false);
 
 /**
  * The thread's place in the shell, in two sizes the buyer moves between without losing their place.
@@ -127,7 +130,9 @@ export function ThreadDock({ open, onClose, name, sub, children, footer, aside, 
               )}
             </header>
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-5 lg:py-5">
-              <div className="mx-auto w-full max-w-[56rem]">{stage}</div>
+              <div className="mx-auto w-full max-w-[56rem]">
+                <StageContext.Provider value={true}>{stage}</StageContext.Provider>
+              </div>
             </div>
           </section>
         )}
@@ -247,14 +252,19 @@ type CardTone = "plain" | "agent" | "notice" | "good";
 export function ThreadCard({ mark, kind, aside, children, actions, tone = "plain", className = "" }: { mark?: ReactNode; kind: ReactNode; aside?: ReactNode; children: ReactNode; actions?: ReactNode; tone?: CardTone; className?: string }) {
   const ground = tone === "agent" ? "border-lavender-mid bg-paper" : tone === "notice" ? "border-notice/25 bg-notice-soft" : tone === "good" ? "border-good/20 bg-paper" : "border-line bg-paper";
   const markTone = tone === "agent" ? "bg-lavender text-lavender-deep" : tone === "notice" ? "bg-notice/12 text-notice" : tone === "good" ? "bg-good-soft text-good" : "bg-petrol-soft text-petrol";
+  const inStage = useContext(StageContext);
   return (
-    <article className={`overflow-hidden rounded-xl border ${ground} ${className}`}>
-      <header className="flex items-center gap-2.5 px-4 pt-3.5">
-        {mark && <span className={`flex size-7 shrink-0 items-center justify-center rounded-full ${markTone}`}>{mark}</span>}
-        <p className={`min-w-0 flex-1 truncate text-[0.82rem] font-medium ${tone === "notice" ? "text-notice" : "text-ink-soft"}`}>{kind}</p>
-        {aside && <span className="shrink-0 text-[0.8rem] text-ink-soft">{aside}</span>}
-      </header>
-      <div className="px-4 pb-4 pt-2.5">{children}</div>
+    <article aria-label={inStage && typeof kind === "string" ? kind : undefined} className={`overflow-hidden rounded-xl border ${ground} ${className}`}>
+      {inStage ? (
+        aside && <header className="flex justify-end px-4 pt-3 text-[0.8rem] text-ink-soft">{aside}</header>
+      ) : (
+        <header className="flex items-center gap-2.5 px-4 pt-3.5">
+          {mark && <span className={`flex size-7 shrink-0 items-center justify-center rounded-full ${markTone}`}>{mark}</span>}
+          <p className={`min-w-0 flex-1 truncate text-[0.82rem] font-medium ${tone === "notice" ? "text-notice" : "text-ink-soft"}`}>{kind}</p>
+          {aside && <span className="shrink-0 text-[0.8rem] text-ink-soft">{aside}</span>}
+        </header>
+      )}
+      <div className={`px-4 pb-4 ${inStage && !aside ? "pt-4" : "pt-2.5"}`}>{children}</div>
       {actions && <footer className="flex flex-wrap items-center gap-2.5 border-t border-line/70 px-4 py-3">{actions}</footer>}
     </article>
   );
