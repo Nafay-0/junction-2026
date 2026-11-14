@@ -70,6 +70,7 @@ async function main() {
   await client.connect(new StreamableHTTPClientTransport(new URL("/api/mcp", "http://dock.local"), { fetch: async (u: string | URL, i?: RequestInit) => mcpRoute(new Request(u, i)), requestInit: { headers: { authorization: `Bearer ${mandate}`, "dock-agent-id": KITCHEN_ORG.agentId } } }));
   const call = async (name: string, a: Record<string, unknown> = {}) => {
     const r = (await client.callTool({ name, arguments: a })) as CallToolResult;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return { ok: !r.isError, s: r.structuredContent as Record<string, any> };
   };
   const listed = await call("list_offers");
