@@ -33,6 +33,7 @@ import { scheduleTestAccountResets } from "./accounts/schedule";
 import { loadCatalogIndex, resolveCatalogIndex } from "./valio/index-store";
 import { ValioLiveClient } from "./valio/live-client";
 import { ValioCatalog } from "./valio/valio-catalog";
+import { attachMail } from "./notify/service";
 
 /**
  * The one Dock instance of this server process, with in-memory storage.
@@ -181,6 +182,9 @@ async function buildRuntime(): Promise<Runtime> {
   scheduleTestAccountResets(accounts); // not under tests or during a build; DOCK_TEST_ACCOUNTS_RESET_MINUTES=0 turns it off
   radar(rt); // starts the recall radar's schedule (not under tests, during a build, or with RADAR_POLL=off)
   void import("./watch/schedule").then((m) => m.scheduleWatch(rt)); // the kitchen agent's watch (DOCK_WATCH_MINUTES, default 30; not under tests or a build)
+  // MAIL (src/server/notify): the kitchen's receipts and alerts, after the fact, from the events and the ledger above;
+  // only to a kitchen that gave and confirmed an address, never in the path of an order.
+  attachMail(rt);
   // MARIADB TIME MACHINE (src/server/mariadb): only with DOCK_MARIADB_URL. Mirrors what the gate reads into
   // system-versioned tables after the fact; never in the path of an order.
   attachTimeMachine(rt, stores);
