@@ -155,15 +155,15 @@ test("a repeat in words: the earlier order again, priced, no question", async ({
   }
 });
 
-test("a question about the records: answered in words, the rows behind Show the list", async ({ page, baseURL }) => {
+test("a question about the records: answered in words, the rows open under it and fold away", async ({ page, baseURL }) => {
   const release = await stageThread(page, "kaari", baseURL);
   try {
     await page.goto("/k/kaari");
     await say(page, "What did we order last week?");
-    const show = threadLog(page).getByRole("button", { name: /^Show the list/ }).last();
-    await expect(show).toBeVisible({ timeout: 30_000 });
-    await show.click();
-    await expect(threadLog(page).getByRole("button", { name: "Hide the list" }).last()).toBeVisible();
+    const hide = threadLog(page).getByRole("button", { name: "Hide the list" }).last();
+    await expect(hide).toBeVisible({ timeout: 30_000 });
+    await hide.click();
+    await expect(threadLog(page).getByRole("button", { name: /^Show the list/ }).last()).toBeVisible();
   } finally {
     release();
   }
