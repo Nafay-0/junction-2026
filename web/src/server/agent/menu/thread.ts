@@ -81,6 +81,7 @@ async function namesIn(rt: Awaited<ReturnType<typeof kit>>["rt"], ids: string[],
 const list = (xs: string[], lang: Lang) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} ${lang === "fi" ? "ja" : lang === "sv" ? "och" : "and"} ${xs.at(-1)}`);
 const at = (orderBy: string | undefined, lang: Lang) => (orderBy ? `${dayL(localNow(new Date(orderBy)).date, lang)} ${lang === "fi" ? "klo " : lang === "sv" ? "kl. " : ""}${clock(orderBy)}` : "");
 const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+const upper = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 // ---------- scenario 1 ----------
 
@@ -113,14 +114,14 @@ async function seasonalSay(r: SeasonalResult, rt: Awaited<ReturnType<typeof kit>
     `Total ${money(r.totalCents)}. ${r.gate ? `The gate's preview: ${r.gate.outcome}${r.gate.approver ? `, sign-off by ${r.gate.approver.name}` : ""}.` : ""}`,
     ...r.blockers.map((b) => `Blocker: ${b}`),
   ];
-  return { planId: r.planId, kind: "seasonal", say: parts.join(" "), ask: t.askSheet, steps, facts: { seasonal: r, kitchen: kitchenName }, pending: { kind: "seasonal", planId: r.planId, options: [], words } };
+  return { planId: r.planId, kind: "seasonal", say: upper(parts.join(" ")), ask: t.askSheet, steps, facts: { seasonal: r, kitchen: kitchenName }, pending: { kind: "seasonal", planId: r.planId, options: [], words } };
 }
 
 // ---------- scenario 2 ----------
 
-export async function eventForThread(slug: string, words: string, by: string, lang: Lang = "en", date?: string): Promise<ThreadScenario> {
+export async function eventForThread(slug: string, words: string, by: string, lang: Lang = "en", date?: string, planId?: string): Promise<ThreadScenario> {
   const { rt, scenarios, kitchen } = await kit(slug);
-  const r = await scenarios.event(kitchen, words, by, date ? { date } : {});
+  const r = await scenarios.event(kitchen, words, by, { ...(date ? { date } : {}), ...(planId ? { planId } : {}) });
   return eventSay(r, rt, lang, words);
 }
 
@@ -153,7 +154,9 @@ async function eventSay(r: EventResult, rt: Awaited<ReturnType<typeof kit>>["rt"
   }
   if (!r.cannotArrive.length) return { planId: r.planId, kind: "event", say: `${t.allArrive(day)} ${t.buy(r.lines.filter((l) => l.product).length, money(r.totalCents))}`, ask: t.askSheet, steps, facts: { event: r }, pending };
   const parts: string[] = [];
-  parts.push(r.cannotArrive.length === 1 ? t.cannot(what(r.cannotArrive[0]), day, why(r.cannotArrive[0])) : t.cannotMany(r.cannotArrive.length, day, list(r.cannotArrive.map((x) => `${what(x)} (${why(x)})`), lang)));
+  const named = r.cannotArrive.slice(0, 4).map((x) => `${what(x)} (${why(x)})`);
+  const more = r.cannotArrive.length - named.length;
+  parts.push(r.cannotArrive.length === 1 ? t.cannot(what(r.cannotArrive[0]), day, why(r.cannotArrive[0])) : t.cannotMany(r.cannotArrive.length, day, more > 0 ? `${named.join(", ")} ${t.more(more)}` : list(named, lang)));
   let ask = t.askSheet;
   // At most the first two ingredients get their options said; every option is in the steps.
   for (const x of r.cannotArrive) {
@@ -173,7 +176,7 @@ async function eventSay(r: EventResult, rt: Awaited<ReturnType<typeof kit>>["rt"
     pending.options.push(...os.slice(0, 2).map((o) => ({ optionId: o.optionId, lineId: x.lineId, words: optionWords(o, names) })));
     if (pending.options.length <= 2) ask = t.askChoice(optionLabel(best, names, lang), other ? optionLabel(other, names, lang) : undefined);
   }
-  return { planId: r.planId, kind: "event", say: parts.join(" "), ask, steps, facts: { event: r }, pending };
+  return { planId: r.planId, kind: "event", say: upper(parts.join(" ")), ask, steps, facts: { event: r }, pending };
 }
 
 /** Words of an option a buyer may say back: its product names and title, folded, five letters or more. */
@@ -219,7 +222,7 @@ export async function actOnScenario(slug: string, pending: PendingScenario, answ
   if (answer.kind === "no") return { reply: t.declined };
   const { scenarios, service, kitchen } = await kit(slug);
   if (answer.kind === "day") {
-    const next = await eventForThread(slug, pending.words, who.by, lang, answer.date);
+    const next = await eventForThread(slug, pending.words, who.by, lang, answer.date, pending.planId);
     return { reply: next.say, next };
   }
   let choices: { lineId: string; optionId: string }[] = [];
@@ -236,4 +239,11 @@ export async function actOnScenario(slug: string, pending: PendingScenario, answ
   const sheet = await scenarios.sheetOf(kitchen, pending.planId, choices, { by: who.by });
   const session = await service.agentSession(kitchen);
   return { reply: [t.onSheet, sheet.leftOff.length ? t.leftOff(sheet.leftOff.map((x) => x.name).join(", ")) : ""].filter(Boolean).join(" "), sheet: { ...sheet, session } };
+}
+
+/** The same scenario worded in another language, from the same figures (no model, no live call). */
+export async function inLanguage(t: ThreadScenario, lang: Lang): Promise<ThreadScenario> {
+  const { getRuntime } = await import("../../runtime");
+  const rt = await getRuntime();
+  return t.kind === "seasonal" ? seasonalSay(t.facts.seasonal as SeasonalResult, rt, lang, t.pending.words, String(t.facts.kitchen)) : eventSay(t.facts.event as EventResult, rt, lang, t.pending.words);
 }

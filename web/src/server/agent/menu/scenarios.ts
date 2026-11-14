@@ -134,6 +134,7 @@ export type SheetLines = {
 
 // ---------- helpers ----------
 
+const PREPARED_NAME = /salad|salaat|hummus|sose|puree|pikkel|marinoi|pickled|etikka|chips|sipsi|laatik|keitto|soup|juice|mehu|jam\b|hillo/;
 const fold = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");
 const amt = (a: Amount | null | undefined) => (a ? formatAmt(a) : null);
 const today = (now: Date) => localNow(now).date;
@@ -198,7 +199,10 @@ export function createScenarios(deps: ScenarioDeps) {
         if (found.size >= 12) break;
       }
       if (!found.size) continue;
-      out.push({ kind: e.kind, label: e.label, why: e.why, months: e.months, peak: !!e.peak?.includes(month), source: e.source, products: [...found.values()].slice(0, 8).map((x) => ({ productId: x.id, name: x.names?.en ?? x.name })) });
+      // The ingredient itself first (fresh produce, not a salad or a spread made of it), then the rest.
+      const raw = (x: Product) => (x.categoryCode ?? "").startsWith("174") && !PREPARED_NAME.test(fold([x.name, x.names?.fi, x.names?.en].filter(Boolean).join(" ")));
+      const ranked = [...found.values()].sort((a, b) => Number(raw(b)) - Number(raw(a)));
+      out.push({ kind: e.kind, label: e.label, why: e.why, months: e.months, peak: !!e.peak?.includes(month), source: e.source, products: ranked.slice(0, 8).map((x) => ({ productId: x.id, name: x.names?.en ?? x.name })) });
     }
     const inMonth = (a: SeasonalAnchor) => a.months.includes(month);
     return out.sort((a, b) => Number(inMonth(b)) - Number(inMonth(a)) || Number(b.peak) - Number(a.peak) || b.products.length - a.products.length);
@@ -273,7 +277,13 @@ export function createScenarios(deps: ScenarioDeps) {
 
   async function seasonalResult(k: MenuKitchen, p: PlanRecord, view: PlanView, anchor: SeasonalAnchor | null, said: SaidItem[], onHandLines: string[]): Promise<SeasonalResult> {
     const role = roleFor(p);
-    const lines = view.lines.filter((l) => l.status !== "merged").map((l) => lineFacts(l, role));
+    const lines = view.lines.filter((l) => l.status !== "merged").map((l) => {
+      const f = lineFacts(l, role);
+      // A line the planner struck because the chef said they have it: said by the chef, not the pantry list.
+      const spec = specOf(p, l.lineId);
+      const hit = f.onHand?.source === "pantry" && spec ? said.find((x) => saidCovers(x, [spec.name, spec.key.replace(/_/g, " "), ...spec.ingredient.searchTerms])) : undefined;
+      return hit ? { ...f, onHand: { amount: null, text: `said by the chef: "${hit.words}"`, source: "said" as const, estimate: false } } : f;
+    });
     if (onHandLines.length) {
       const facts = lines.filter((l) => onHandLines.includes(l.lineId));
       log(k, p, "on_hand", `On hand on the service day, so only the shortfall is bought: ${facts.map((l) => `${l.ingredient}: need ${l.need}, ${l.onHand?.amount ?? "enough"} on hand (${l.onHand?.text}), buy ${l.toBuy ?? "nothing"}`).join("; ")}.`, {
@@ -434,8 +444,9 @@ export function createScenarios(deps: ScenarioDeps) {
     return { ...ranked, signOff: { needed: false, reason: "every line is an ordinary product on the plan; the gate judges the order as a whole", approver: null, outcome: "unknown" }, dish: { name, planId: r.record.planId, lines: lines.flatMap((l) => l.chosen!.quoteLines.map((q) => ({ productId: q.productId, packs: q.quantity, name: l.chosen!.products.find((x) => x.productId === q.productId)?.name ?? q.productId }))) } };
   }
 
-  async function event(k: MenuKitchen, words: string, by: string, opts: { date?: string; swapDishes?: boolean } = {}): Promise<EventResult> {
-    const first = await service.plan(k, words, by);
+  /** `planId`: the same menu again for another day (no model call: the plan's date moves and its prices are asked again). */
+  async function event(k: MenuKitchen, words: string, by: string, opts: { date?: string; swapDishes?: boolean; planId?: string } = {}): Promise<EventResult> {
+    const first = opts.planId ? await service.get(k, opts.planId) : await service.plan(k, words, by);
     if (first.record.state === "declined") throw new DockError(422, "not_a_menu", first.record.declineReason ?? "This is not a request to plan food.");
     let planned = first;
     if (opts.date && opts.date !== first.record.settings.deliverBy) planned = await service.edit(k, first.record.planId, [{ op: "deliverBy", date: opts.date }], by);
@@ -481,8 +492,12 @@ export function createScenarios(deps: ScenarioDeps) {
       });
     const options: EventResult["options"] = {};
     const unresolved: EventResult["unresolved"] = {};
-    // Nothing at all can come by the day: the fix is the day, not every recipe.
-    if (!view.totals.allLate) {
+    // Nothing at all can come by the day (no bought line arrives): the fix is the day, not every recipe. The earliest
+    // day is the latest of the days the wholesaler names for the lines it can still deliver.
+    const arriving = lines.filter((l) => l.arrival?.ok).length;
+    const named = stuck.map((x) => x.arrival.earliest).filter((d): d is string => !!d).sort();
+    const allLate = view.totals.allLate ?? (stuck.length && !arriving ? { neededBy: want, earliest: named.at(-1) ?? null } : null);
+    if (!allLate) {
       for (const st of stuck.slice(0, 6)) {
         const r = await optionsForStuck(k, p, view, st);
         options[st.lineId] = r.options;
@@ -508,7 +523,7 @@ export function createScenarios(deps: ScenarioDeps) {
       dishes: p.draft.dishes.map((d) => ({ dishId: d.id, name: d.name, course: d.course })),
       lines,
       cannotArrive: stuck,
-      allLate: view.totals.allLate,
+      allLate,
       options,
       unresolved,
       totalCents: view.totals.totalCents,
