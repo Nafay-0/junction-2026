@@ -349,7 +349,7 @@ export function OrderSheet({ kind, lines, onPacks, onSwap, onRemove, onAdd, days
           <div className="mt-3">
             <OutcomeLine outcome={outcome} />
           </div>
-          <button type="button" disabled={busy || stuck || outcome.kind === "blocked"} onClick={onConfirm} className={`${buttonClass("go", "lg")} mt-3 w-full`}>
+          <button type="button" disabled={busy || stuck || outcome.kind === "blocked"} onClick={onConfirm} className={`${buttonClass("go", "lg")} mt-3 w-full disabled:cursor-not-allowed disabled:opacity-55`}>
             {busy && <Spinner size={16} />}
             <span className="tabular">{confirm}</span>
           </button>

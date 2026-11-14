@@ -3,7 +3,7 @@ import { isDockError } from "@/core/errors";
 import { createTrustRegistry } from "@/core/mandate";
 import { RateLimiter } from "../limits";
 import { getRuntime, resetRuntime } from "../runtime";
-import { AccountService, SIGN_IN_FAILURES_PER_ACCOUNT, tokenHash } from "./service";
+import { AccountService, SIGN_IN_FAILURES_PER_ACCOUNT, SIGN_IN_FAILURES_PER_ADDRESS, tokenHash } from "./service";
 import { InMemoryAccountStore } from "./store";
 import { DEFAULT_TERMS } from "./terms";
 import { TEST_ACCOUNTS } from "./test-accounts";
@@ -77,9 +77,15 @@ describe("accounts: sign-up, sign-in, sessions", () => {
     // ... until the window passes.
     clock.t += SIGN_IN_FAILURES_PER_ACCOUNT.windowMs + 1000;
     expect(await code(svc.signIn({ username: "bistro", password: "right-password" }, "192.0.2.99"))).toBe("ok");
-    // One address spraying many usernames is stopped too.
+    // One address spraying many usernames is stopped too (sized for a room: 200 per 15 min by default; settable).
+    expect(SIGN_IN_FAILURES_PER_ADDRESS.limit).toBe(200);
+    process.env.DOCK_LIMIT_SIGNIN_FAIL_ADDRESS = "40";
     let last = "";
-    for (let i = 0; i < 45; i++) last = await code(svc.signIn({ username: `user-${i}`, password: "whatever-pass" }, "192.0.2.50"));
+    try {
+      for (let i = 0; i < 45; i++) last = await code(svc.signIn({ username: `user-${i}`, password: "whatever-pass" }, "192.0.2.50"));
+    } finally {
+      delete process.env.DOCK_LIMIT_SIGNIN_FAIL_ADDRESS;
+    }
     expect(last).toBe("429 sign_in_attempts_exceeded");
     // Successful sign-ins are not counted: a shared test account can be used by many people.
     for (let i = 0; i < 12; i++) expect(await code(svc.signIn({ username: "bistro", password: "right-password" }, "192.0.2.51"))).toBe("ok");

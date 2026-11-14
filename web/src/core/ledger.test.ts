@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GENESIS_HASH, Ledger, explain, verifyLedger, type LedgerEntry } from "./ledger";
+import { GENESIS_HASH, InMemoryLedgerStore, Ledger, explain, verifyLedger, type LedgerEntry } from "./ledger";
 
 const T0 = new Date("2026-11-13T10:00:00.000Z");
 
@@ -98,5 +98,57 @@ describe("ledger", () => {
     const text = explain(sample().entries({ requestId: "req_1" }));
     expect(text[0]).toMatch(/10:00:00.*asked for 1,000 L of lactose-free milk/);
     expect(text.join("\n")).toMatch(/Needs sign-off from Aino Virtanen[\s\S]*Over the per-order limit/);
+  });
+
+  it("shares frozen entries with readers that only look, and indexes them by request and order", () => {
+    const ledger = sample();
+    const all = ledger.readonly();
+    expect(all).toHaveLength(5);
+    expect(Object.isFrozen(all[3])).toBe(true);
+    expect(Object.isFrozen(all[3].data.reasons)).toBe(true);
+    expect(() => {
+      (all[0] as { summary: string }).summary = "rewritten";
+    }).toThrow(TypeError);
+    expect(ledger.readonly({ requestId: "req_1" }).map((e) => e.seq)).toEqual([0, 1, 2, 3]);
+    expect(ledger.readonly({ orderId: "ord_2" }).map((e) => e.seq)).toEqual([4]);
+    expect(ledger.readonly({ requestId: "req_1", orderId: "ord_1" }).map((e) => e.seq)).toEqual([3]);
+    expect(ledger.readonly({ requestId: "nope" })).toEqual([]);
+    expect(ledger.since(2).map((e) => e.seq)).toEqual([3, 4]);
+    expect(ledger.since(-1)).toHaveLength(5);
+    expect(ledger.since(4)).toEqual([]);
+    // copies stay copies
+    const copy = ledger.entries({ requestId: "req_1" });
+    copy[0].summary = "changed";
+    expect(ledger.readonly()[0].summary).not.toBe("changed");
+  });
+
+  it("verifies incrementally, from the head it verified last, with the same answer as a full check", () => {
+    const store = new InMemoryLedgerStore();
+    const ledger = new Ledger(store);
+    expect(ledger.verify()).toMatchObject({ ok: true, length: 0, head: null });
+    for (let i = 0; i < 50; i++) {
+      ledger.append({ type: "lookup", actor: "dock", requestId: `req_${i % 7}`, summary: `step ${i}`, data: { i } });
+      if (i % 9 === 0) expect(ledger.verify()).toEqual(ledger.verifyFull());
+    }
+    expect(ledger.verify()).toEqual({ ok: true, length: 50, head: ledger.head() });
+    expect(ledger.verify(ledger.head()!)).toMatchObject({ ok: true });
+    expect(ledger.verify({ seq: 60, hash: "x" })).toMatchObject({ ok: false, problem: "head_mismatch" });
+    // An entry put straight into the store (not through append) that breaks the chain is found by the next verify.
+    const forged = { ...structuredClone(store.all()[49]), seq: 50, summary: "forged", hash: "f".repeat(64) };
+    store.append(forged);
+    expect(ledger.verify()).toMatchObject({ ok: false, brokenAt: 50, problem: "chain_break" });
+    expect(ledger.verifyFull()).toMatchObject({ ok: false, brokenAt: 50, problem: "chain_break" });
+  });
+
+  it("indexes and verifies entries a store held before the ledger opened it", () => {
+    const first = sample();
+    const store = new InMemoryLedgerStore();
+    for (const e of first.entries()) store.append(e);
+    const reopened = new Ledger(store);
+    expect(reopened.verify()).toMatchObject({ ok: true, length: 5 });
+    expect(reopened.readonly({ requestId: "req_1" })).toHaveLength(4);
+    reopened.append({ type: "order", actor: "dock", requestId: "req_1", orderId: "ord_1", summary: "Committed." });
+    expect(reopened.readonly({ orderId: "ord_1" }).map((e) => e.seq)).toEqual([3, 5]);
+    expect(reopened.verify()).toMatchObject({ ok: true, length: 6 });
   });
 });

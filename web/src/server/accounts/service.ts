@@ -12,7 +12,7 @@ import { addDays, newId } from "@/core/util";
 import { KITCHEN_ORG, demoKitchenMandate } from "../demo-kitchen";
 import { DEMO_ORG, demoMandate } from "../dev-fixtures";
 import { openKitchenOrg, type TrustRegistryHandle } from "../kitchen-org";
-import { RateLimiter, type RateRule } from "../limits";
+import { RateLimiter, envRule, type RateRule } from "../limits";
 import type { SandboxService } from "../sandboxes";
 import { cleanRestaurantName, normaliseUsername, usernameProblem } from "./names";
 import { dummyHash, hashPassword, passwordProblem, verifyPassword, PASSWORD_MIN } from "./password";
@@ -40,9 +40,12 @@ const DEVICE_LINK_MINUTES = 10;
 /** How long a phone stays signed in by the call code: longer than any call (the caps are minutes), far shorter than a sign-in. */
 export const CALL_SESSION_MINUTES = 60;
 
-export const SIGN_IN_FAILURES_PER_ACCOUNT: RateRule = { name: "signin-fail-account", limit: 8, windowMs: 15 * 60_000 };
-export const SIGN_IN_FAILURES_PER_ADDRESS: RateRule = { name: "signin-fail-address", limit: 40, windowMs: 15 * 60_000 };
-export const SIGN_UPS_PER_ADDRESS: RateRule = { name: "signup-address", limit: 12, windowMs: 60 * 60_000 };
+// Settable as DOCK_LIMIT_SIGNIN_FAIL_ACCOUNT, DOCK_LIMIT_SIGNIN_FAIL_ADDRESS, DOCK_LIMIT_SIGNUP_ADDRESS. Per account stays
+// tight (guessing one account's password); per address is sized for a room of 60 behind one venue address, where a
+// few people mistype and many sign up within the hour.
+export const SIGN_IN_FAILURES_PER_ACCOUNT: RateRule = envRule("signin-fail-account", 8, 15 * 60_000);
+export const SIGN_IN_FAILURES_PER_ADDRESS: RateRule = envRule("signin-fail-address", 200, 15 * 60_000);
+export const SIGN_UPS_PER_ADDRESS: RateRule = envRule("signup-address", 120, 60 * 60_000);
 
 const env = (k: string) => process.env[k]?.trim() || undefined;
 

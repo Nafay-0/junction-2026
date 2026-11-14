@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Ledger } from "@/core/ledger";
+import { checkOrderQueries, randomOrders } from "@/core/order-queries.fixtures";
 import { actionEvent } from "./actions";
 import { kafkaConfig, pgConnectionString, valkeyUrl } from "./env";
 import { KafkaActionStream, TelemetrySink, kafkaClient } from "./kafka";
@@ -57,6 +58,14 @@ describe.skipIf(!pgOn)("PostgreSQL adapters on dock-pg", () => {
     await store.putCeremony({ kind: "register", challenge: "ch_old", rp: { id: "x", name: "x", origins: ["https://x"] }, expiresAt: Date.now() - 1, userHandle: "u", context: {} });
     expect(await store.sweepCeremonies(Date.now())).toBe(0);
   });
+
+  it("answers the gate's order queries in SQL exactly as listOrders plus a filter would", async () => {
+    const repo = new PgDockRepository(new PgDocs(pool, `${schema}`));
+    const all = randomOrders(300);
+    for (const o of all) await repo.saveOrder(o);
+    await checkOrderQueries(repo, all, (actual, expected, what) => expect(actual, what).toEqual(expected));
+    for (const o of all) await pool.query(`delete from ${schema}.docs where collection = 'order' and id = $1`, [o.orderId]);
+  }, 120_000);
 
   it("runs an order flow on PostgreSQL and finds it again from a fresh repository", async () => {
     const ledgerStore = await PgLedgerStore.open(pool, schema);

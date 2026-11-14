@@ -165,8 +165,8 @@ export function createPlanService(deps: PlanDeps) {
 
   async function spentThisWeek(orgId: string): Promise<number> {
     const since = deps.now().getTime() - 7 * 86_400_000;
-    return (await dock.listOrders())
-      .filter((o) => o.orgId === orgId && (o.status === "committed" || o.status === "pending_approval") && Date.parse(o.createdAt) > since)
+    return (await dock.listOrders({ orgId }))
+      .filter((o) => (o.status === "committed" || o.status === "pending_approval") && Date.parse(o.createdAt) > since)
       .reduce((s, o) => s + o.totalCents, 0);
   }
 

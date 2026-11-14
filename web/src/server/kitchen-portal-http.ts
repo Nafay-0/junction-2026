@@ -1,5 +1,6 @@
 import { unstable_rethrow } from "next/navigation";
 import { DockError } from "@/core/errors";
+import { asStoreError } from "./aiven/pg/errors";
 import { consoleKitchen } from "./authz";
 import { getRuntime } from "./runtime";
 import { errorBody } from "./http";
@@ -23,14 +24,20 @@ export async function portalRoute(req: Request, params: Promise<{ kitchen: strin
       }
     }
     return res;
-  } catch (err) {
-    unstable_rethrow(err);
-    if (err instanceof DockError) return Response.json(errorBody(err.code, err.message, err.rule, err.details), { status: err.status });
+  } catch (caught) {
+    unstable_rethrow(caught);
+    const err = asStoreError(caught); // the database away: 503 store_unavailable, not a 500
+    if (err instanceof DockError) return Response.json(errorBody(err.code, err.message, err.rule, err.details), { status: err.status, headers: retryAfter(err) });
     const e = err as { status?: number; code?: string; message?: string };
     if (typeof e?.status === "number") return Response.json(errorBody(e.code ?? "portal_error", e.message ?? "The request failed."), { status: e.status });
     console.error(err);
     return Response.json(errorBody("internal_error", "Something went wrong inside AimoPilot."), { status: 500 });
   }
 }
+
+const retryAfter = (err: DockError): Record<string, string> => {
+  const s = Number((err.details as { retryAfterSeconds?: unknown } | undefined)?.retryAfterSeconds);
+  return (err.status === 503 || err.status === 429) && Number.isFinite(s) && s > 0 ? { "retry-after": String(Math.ceil(s)) } : {};
+};
 
 export const noStore = { headers: { "cache-control": "no-store" } };

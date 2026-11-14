@@ -221,10 +221,13 @@ export interface ApprovalNotifier {
   send(message: ApprovalMessage): Promise<void>;
 }
 
+/** The sign-off messages sent, newest last; the oldest are dropped past `keep` (a sign-off outlives its quote by minutes, not days). */
 export class InMemoryOutbox implements ApprovalNotifier {
   private readonly items: ApprovalMessage[] = [];
+  constructor(private readonly keep = 2000) {}
   async send(message: ApprovalMessage): Promise<void> {
     this.items.push(structuredClone(message));
+    if (this.items.length > this.keep) this.items.splice(0, this.items.length - this.keep);
   }
   messages(): ApprovalMessage[] {
     return structuredClone(this.items);

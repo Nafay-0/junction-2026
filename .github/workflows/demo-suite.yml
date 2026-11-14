@@ -1,0 +1,152 @@
+name: Demo suite
+
+# The live demo, tested the same way after every change: the browser suite on Chromium, WebKit and Firefox at phone
+# and desktop size (plus the room, accessibility and visual projects), the QA harness's invariant probes, the
+# scripted demos and the model/partner failure scenarios. Every server is hermetic (seed catalogue, no model, no
+# partner, no Aiven, no secrets), so this needs no repository secrets and never touches the public deployment.
+# Same commands locally: `cd web && pnpm test:full` (see web/e2e/README.md).
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 */3 * * *" # every three hours through the weekend: catches drift in dependencies and time-dependent bugs
+  workflow_dispatch:
+
+concurrency:
+  group: demo-suite-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Demos, QA harness, failure scenarios
+    runs-on: craci
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: cracicorp/setup@v1
+        with:
+          size: "4"
+
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm build
+
+      - name: Scripted demos, crash test, QA harness, model and partner failures
+        id: run
+        run: |
+          set +e
+          NO_BUILD=1 E2E_PORT=4601 bash tests-live/run.sh checks 2>&1 | tee test-results-checks.txt
+          echo "rc=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Report
+        if: always()
+        run: |
+          {
+            echo "### Demos and probes"
+            echo '```'
+            sed -n '/== AimoPilot test run/,$p' test-results-checks.txt 2>/dev/null || echo "no summary (the run stopped early)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "${{ steps.run.outputs.rc || 1 }}"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: checks-logs
+          path: |
+            web/test-results/
+            web/qa/results/
+            web/tests-live/results/
+            web/crash-results/reproduce/summary.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  browser:
+    name: Browser suite (Chromium, WebKit, Firefox; phone and desktop)
+    runs-on: craci
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: cracicorp/setup@v1
+        with:
+          size: "8"
+
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Browsers (with their system libraries)
+        run: pnpm exec playwright install --with-deps chromium webkit firefox
+
+      - run: pnpm build
+
+      - name: Browser suite
+        id: e2e
+        env:
+          CI: "1"
+          E2E_WORKERS: "4"
+          PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/results.json
+        run: |
+          set +e
+          pnpm exec playwright test
+          echo "rc=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Report
+        if: always()
+        run: |
+          node e2e/support/summary.mjs test-results/results.json --markdown >> "$GITHUB_STEP_SUMMARY"
+          node e2e/support/summary.mjs test-results/results.json
+          if ls e2e/visual/__screenshots__/linux >/dev/null 2>&1 && [ -n "$(git status --porcelain e2e/visual/__screenshots__/linux)" ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "New Linux visual baselines were written: download the **visual-baselines-linux** artifact and commit it under web/e2e/visual/__screenshots__/linux/." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "${{ steps.e2e.outputs.rc || 1 }}"
+
+      # Traces, screenshots and videos of failures (open a trace with `pnpm exec playwright show-trace <zip>`).
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-report
+          path: |
+            web/playwright-report/
+            web/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: visual-baselines-linux
+          path: web/e2e/visual/__screenshots__/linux/
+          if-no-files-found: ignore
+          retention-days: 30

@@ -195,6 +195,85 @@ The buyer's one conversation with their agent, typed or spoken. Names and states
 - **`VoiceStatus`**: `listening`, `thinking`, `speaking`, `waiting` (the only one that borrows the gate's mark),
   `reconnecting`, `idle`; a pill (`sm`) or the call screen's centre (`lg`). `VoiceBars` alone for inline use.
 
+## 7b. The agent is home: widgets and the workspace (`_ui/widgets.tsx`, `_ui/agent-home.tsx`)
+
+Everything a kitchen does with the wholesaler can be started, shown, changed and finished in the agent. The
+acceptance test is a cook between services with one hand free and no training: the common case is one clear card
+and one tap; a widget appears only when the buyer wants to change something or the agent needs an answer; one
+decision at a time; the one primary button says exactly what will happen, with the price on it. Live examples:
+`/design` (each widget and its states) and `/design/workspace?view=home|order|compare|menu&size=dock|workspace`.
+
+**Words.** In the buyer's interface say "your rules", "needs Aino's OK", "over your 500 € limit", "price held until",
+"your usual". Mandate, gate, sign-off, quote and ledger are words for the operations side and the documents. The
+yellow band still means "a person must OK this", with plain words on it.
+
+**Safe.** Only the confirm button orders: never Enter in an amount field, a swipe, or a tap on a line. After
+confirming there is "take it back" for as long as the cut-off allows. A removed line can be put back in one tap.
+A mistake check reads as help (the warm notice tone), never as an error.
+
+All widgets are presentational and take plain data: strings already formatted for the buyer's language, ids to
+report back, callbacks. The page maps the engine's cards (web/docs/agent-thread.md, "Widgets") onto these props.
+
+| Engine card | Component | Props the page supplies |
+|---|---|---|
+| `sheet` | `OrderSheet` | `lines` (`id`, `name`, `pack`, `art`, `packs`, `minPacks`, `maxPacks`, `amount`, `unitPrice`, `total`, `state`, `reason`, `swappedFrom`), `days` (`DayChoice`: `id`, `weekday`, `date`, `orderBy`, `possible`, `reason`), `day`, `total`, `outcome` (`alone`, `sign`, `blocked` with its sentence: the gate's own preview), `confirm` (the button's words), `notices` (budget fit, duplicate), `removed` (undo), `settled`, `settledNote`, `takeBack`; callbacks `onPacks`, `onDay`, `onSwap`, `onRemove`, `onAdd`, `onConfirm` |
+| `alternatives` | `AlternativesPicker` | `insteadOf`, `filters` (chips), `candidates` (two to four: `name`, `pack`, `art`, `price`, `per`, `headline`, `badge`, `signOff`, `cells`), `rows` (the aligned facts; `cells[row.key]` has `text` and a `tone` of same, better or worse against the product being replaced), `selected`; `onFilter`, `onSelect`, `onClose` |
+| `menu` (`proposing`) | `MenuProposals` | `proposals` (`title`, `around`, `dishes`, `respects`, `perCover`, `warning`, `art`), `forming` (`of`, `steps`) while the planner works: ready ideas show, the rest hold their place |
+| `menu` (`resolving`, `ready`) | `MenuSheet` | `title`, `covers`, `dishes` (each with `ingredients`: `name`, `amount`, `product`, `have`, `conflict`, `missing`, `state: "updating"` while it resolves), `summary` (`toOrder`, `inKitchen`, `total`, `perCover`), `confirm`; `onCovers`, `onDropDish`, `onSwapDish`, `onSwapIngredient`, `onHave`, `onConfirm` |
+| `question` | `ChoiceAnswer`, `DayAnswer`, `AmountAnswer`, `YesNoAnswer` | the question, `why` it is asked, the choices or days or the number with its unit, and `skip` when the question has a safe default |
+| `price`, `order`, left-out products | `InPlace` with `FactRows` or `LeftOut` | rows of label and value; nothing navigates away |
+| `memory` | `RememberThis` | items with `keep`; `onToggle`, `onSave` |
+| the empty thread | `AgentHome` with `TodayRow` | `greeting`, `today` (`signoff`, `cutoff`, `drift`, `recall`, `delivery`, each with one action), `quiet`, `starters` |
+
+**How each stays simple.**
+- `OrderSheet` is one card by default: lines, day, total, what will happen, the button. "Change amount, day or
+  product" opens the steppers, the day row, swap, remove and add in place. A line that became unavailable opens the
+  editor by itself and asks for a swap.
+- `AlternativesPicker` shows each candidate as picture, name, price and its one line that matters. "Compare the
+  details" adds the fact rows, aligned across candidates (the grid flows by column with a fixed number of rows).
+  Pass `defaultDetails` in the workspace, where there is room.
+- `MenuSheet` shows dishes with the covers stepper and the total; a dish's ingredients are one tap away and open by
+  themselves only when one needs the buyer (a rule conflict, no product).
+- `AgentHome` shows at most three things that need the kitchen, then "show more". The sign-off item is the only one
+  that wears the yellow.
+
+**The workspace** (`ThreadDock` with `size`, `onSize`, `stage`, `stageTitle`, `onStageClose`). The dock has two
+sizes: the column, and a large centred popup over the shop. `stage` is the working surface for the one widget that
+needs room (the picker, a menu): beside the conversation in the workspace on a wide screen, a pushed screen with
+"Back" everywhere else, including a phone. It is one element placed by CSS, so a widget keeps its state across a
+change of size. When a stage appears on a wide screen the dock asks for the workspace by itself. A buyer who never
+opens the workspace misses nothing: every widget works inline at 390 px.
+
+**Navigation when the agent is home.** The agent is the landing screen of a signed-in kitchen (`AgentHome` as the
+thread's empty state, the composer in the dock's footer under the thumb). Phone tab bar: Agent, Catalogue, Orders,
+More. Desktop: Agent, Catalogue, Orders, Rules. "Order" and "Menu planner" stop being pages: they are starting
+points in the agent ("Plan a menu" opens the menu builder in the stage). The catalogue's "add" puts a product on
+the thread's current order sheet.
+
+**Showing things, your rules, setting up** (`_ui/widgets-more.tsx`; live at `/design` and
+`/design/workspace?view=history|standing|results|rules|setup`). Each is a short list in a card with one action per
+row; lists show their first few rows and then "show more".
+
+| What the buyer asked | Component | Props the page supplies |
+|---|---|---|
+| "what oat products do you have?" | `ProductResults` | `products` (`name`, `pack`, `art`, `price`: the words "Price when opened" until a price is known, `added`), at most six shown; `onAdd` puts it on the thread's order sheet, `onOpen` shows `ProductFacts` |
+| a product | `ProductFacts` | `name`, `pack`, `art`, `price`, `rows` of label and value, `add` (label, `added`) |
+| "what did we order last week?" | `HistoryList` | `orders` (`when`, `summary`, `total`, `note`), three shown; `onAgain` opens the order card for confirming, it never orders by itself |
+| standing orders | `StandingOrders` | `items` (`name`, `rhythm`, `next`, `paused`, `note` for drift); `onPause(id, paused)` is the switch both ways, `onChange` opens the order sheet for that standing order |
+| a delivery | `DeliveryCard` | `title`, `detail`, three or four `steps` (`label`, `at`, `state`) |
+| "what do you remember?" | `MemoryList` | `items` (`text`, `source`); `onEdit`, `onForget` |
+| "what may my agent do?" | `RulesSheet` | `rows` (`label`, `value`, `detail`) in the kitchen's words: spend alone, weekly budget, may buy, always, never, who OKs above the limit; `onChange(id)` |
+| changing one rule | `RuleChange` | `title`, the control as `children` (a `Stepper`, chips), `before`, `after`, `note`, `changed`, `confirm` (the button says what the rule becomes), `onConfirm` (the engine then asks the person's device), `onCancel`, `done` |
+| a new restaurant | `SetupWelcome`, `SetupStep`, `RulesSheet` with a `footer`, `SetupDone` | the welcome's three points with why each is asked; each step wraps one answer widget with its default already chosen, `step`, `of`, `onBack`, and `onNext` where the answer itself does not move on; the last step is "These are your rules" with one button that confirms and adds the device |
+
+The word mandate does not appear in any of these: they say "your rules". In the working surface (`stage`) a card does
+not repeat the stage's title: `ThreadCard` drops its own header there, so pass the name once, as `stageTitle`, and
+leave out the picker's `onClose` (the stage has its own way back).
+
+**Checked.** Both typefaces have true tabular figures: with `font-variant-numeric: tabular-nums` every digit of
+Figtree and of Bricolage Grotesque (at the display width and weight) measures the same width; without it they
+differ. Every figure in these widgets carries the `tabular` class.
+
 ## 8. The shells and the operations portal
 
 **Store** (`k/[kitchen]/portal.tsx`): a slim demo strip; one white sticky header (word mark, the kitchen as a pill

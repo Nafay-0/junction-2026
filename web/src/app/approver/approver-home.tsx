@@ -9,7 +9,7 @@ import { useLang } from "../_i18n/provider";
 import { fiMoney } from "../_ui/plain";
 import { BellRing, ChevronRight, Clock, Phone, QrCode, Sparkles, Store, WifiOff } from "lucide-react";
 import { Avatar, Badge, Card, IconDisc, ListRow, Spinner } from "../_ui/kit";
-import { PhoneNotice, PhoneSkeleton, bigButton } from "../_ui/phone";
+import { PhoneNotice, PhoneProblem, PhoneSkeleton, bigButton } from "../_ui/phone";
 import { Target } from "../_ui/target";
 import { serverClock, serverRole } from "../_ui/phone.text";
 import { APPROVER_TEXT } from "./approver-home.text";
@@ -53,7 +53,9 @@ export function ApproverHome() {
   const tx = APPROVER_TEXT[lang];
   const at = (t: string) => serverClock(t, lang);
   const [home, setHome] = useState<Home | null>(null);
-  const [state, setState] = useState<"loading" | "ready" | "not_joined" | "offline">("loading");
+  const [state, setState] = useState<"loading" | "ready" | "not_joined" | "offline" | "store_down">("loading");
+  /** The database is away (503 store_unavailable): keep what is shown, say so, keep asking. */
+  const [storeDown, setStoreDown] = useState(false);
   const [asking, setAsking] = useState(false);
   /** A server message as it came, or the status of an order that did not need this person (said in words here). */
   const [note, setNote] = useState<{ message: string } | { status: string } | null>(null);
@@ -63,8 +65,27 @@ export function ApproverHome() {
     if (r.ok) {
       setHome(r.data);
       setState("ready");
-    } else setState(r.status === 401 ? "not_joined" : "offline");
+      setStoreDown(false);
+    } else if (r.error.code === "store_unavailable") {
+      setStoreDown(true);
+      setState((s) => (s === "ready" ? s : "store_down"));
+    } else if (r.status === 401) setState("not_joined");
+    // A blip on the venue's network must not strand the phone on an error screen: a page that has already loaded
+    // keeps what it shows and keeps asking; only one that never loaded shows "can't reach", and that retries too.
+    else setState((s) => (s === "ready" ? s : "offline"));
   }, []);
+
+  useEffect(() => {
+    if (state !== "offline") return;
+    const t = setInterval(() => void refresh(), 3000);
+    return () => clearInterval(t);
+  }, [state, refresh]);
+
+  useEffect(() => {
+    if (state !== "store_down") return;
+    const t = setTimeout(() => void refresh(), POLL_MS * 2);
+    return () => clearTimeout(t);
+  }, [state, refresh]);
 
   useEffect(() => {
     queueMicrotask(() => void refresh());
@@ -131,6 +152,22 @@ export function ApproverHome() {
         </Link>
       </PhoneNotice>
     );
+  if (state === "store_down" || (storeDown && !home))
+    return (
+      <PhoneNotice
+        title={tx.storeDown}
+        body={tx.storeDownBody}
+        mark={
+          <IconDisc tone="muted" size={60}>
+            <WifiOff size={26} />
+          </IconDisc>
+        }
+      >
+        <button className={`mt-auto ${bigButton("dark")}`} onClick={() => void refresh()}>
+          {tx.tryAgain}
+        </button>
+      </PhoneNotice>
+    );
   if (state === "offline" || !home)
     return (
       <PhoneNotice
@@ -160,6 +197,7 @@ export function ApproverHome() {
       <p className="mt-3 text-[1.02rem] leading-snug">
         {serverRole(home.approver.roleLabel, lang)}, {home.kitchen.name}
       </p>
+      {storeDown && <PhoneProblem quiet title={tx.storeDown} body={tx.storeDownStale} />}
 
       <Card className="mt-5">
         <div className="flex gap-3.5 p-4">

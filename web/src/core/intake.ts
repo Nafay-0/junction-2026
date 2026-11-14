@@ -281,7 +281,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
   /** This kitchen's orders still waiting for sign-off (their price not expired), for the duplicate check. */
   async function pendingOrders(i: Intake): Promise<PendingOrderSummary[]> {
     const t = now().getTime();
-    const waiting = (await repo.listOrders()).filter((o) => o.orgId === i.orgId && o.requestId !== i.requestId && o.status === "pending_approval" && Date.parse(o.quote.expiresAt) > t);
+    const waiting = (await repo.pendingOrders(i.orgId)).filter((o) => o.requestId !== i.requestId && o.status === "pending_approval" && Date.parse(o.quote.expiresAt) > t);
     const out: PendingOrderSummary[] = [];
     for (const o of waiting) {
       if (!o.lines.length) continue;

@@ -48,5 +48,5 @@ export async function requireApprovalReader(rt: Runtime, req: Request, approvalI
 
 /** Pending approvals of one organisation, newest first. */
 export async function pendingFor(rt: Runtime, orgId: string): Promise<PublicOrder[]> {
-  return (await rt.dock.listOrders()).filter((o) => o.orgId === orgId && o.status === "pending_approval" && o.approval?.status === "pending").reverse();
+  return (await rt.dock.pendingOrders(orgId)).filter((o) => o.status === "pending_approval" && o.approval?.status === "pending").reverse();
 }

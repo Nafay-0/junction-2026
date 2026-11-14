@@ -9,7 +9,7 @@ export async function GET(req: Request) {
   return handle(async (rt) => {
     const who = await principalOf(req, rt);
     requireSomeone(who, "The list of sign-offs");
-    const orgOf = new Map((await rt.dock.listOrders()).map((o) => [o.orderId, o.orgId]));
+    const orgOf = new Map((await rt.dock.pendingOrders()).map((o) => [o.orderId, o.orgId]));
     const approvals = (await rt.dock.listPendingApprovals()).filter((a) => canRead(who, orgOf.get(a.orderId) ?? ""));
     return Response.json({ approvals });
   });

@@ -22,6 +22,10 @@ import { TEST_ACCOUNTS } from "@/server/accounts/test-accounts";
  */
 
 const tester = TEST_ACCOUNTS[0];
+
+// One live call per kitchen, and every test here calls the same test account's kitchen: the file's tests run one
+// after another in one worker (the suite is fully parallel otherwise), and a failure does not skip the rest.
+test.describe.configure({ mode: "default" });
 const REQUEST = "Two hundred litres of oat drink for Wednesday.";
 /** 0.4 s of 24 kHz silence per chunk: the screen treats it as the agent speaking. */
 const SILENCE = Buffer.alloc(24000 * 0.4 * 2).toString("base64");

@@ -25,7 +25,10 @@ type Start = {
 };
 
 /** Kept as a kind, not as words, so the page follows a language switch. */
-type Problem = { key: "full" | "offline" | "failed"; body: string } | { key: "passkey"; err: unknown };
+type Problem = { key: "full" | "offline" | "failed"; body: string } | { key: "storeDown" } | { key: "passkey"; err: unknown };
+
+/** The database away (503 store_unavailable): said as such, and the page asks again by itself. */
+const STORE_RETRY_MS = 10_000;
 
 type Phase = "loading" | "ready" | "prompt" | "saving" | "failed" | "full" | "offline";
 
@@ -50,9 +53,20 @@ export function JoinFlow() {
       setPhase((p) => (p === "loading" || p === "offline" ? "ready" : p));
       return;
     }
+    if (r.error.code === "store_unavailable") {
+      setProblem({ key: "storeDown" });
+      setPhase("offline");
+      return;
+    }
     setProblem({ key: r.status === 503 ? "full" : "offline", body: r.error.message });
     setPhase(r.status === 503 ? "full" : "offline");
   }, []);
+
+  useEffect(() => {
+    if (phase !== "offline" || problem?.key !== "storeDown") return;
+    const t = setTimeout(() => void load(), STORE_RETRY_MS);
+    return () => clearTimeout(t);
+  }, [phase, problem, load]);
 
   useEffect(() => {
     // Feature detection must run in the browser; the passkey prompt is prepared before the tap (Safari needs the
@@ -73,7 +87,7 @@ export function JoinFlow() {
       router.replace(r.data.next);
       return;
     }
-    setProblem({ key: "failed", body: r.error.message });
+    setProblem(r.error.code === "store_unavailable" ? { key: "storeDown" } : { key: "failed", body: r.error.message });
     setPhase("failed");
     void load(); // the prompt was used up; prepare a fresh one
   }
@@ -94,7 +108,13 @@ export function JoinFlow() {
     await finish({ response });
   }
 
-  const shown = !problem ? null : problem.key === "passkey" ? passkeyProblemL(problem.err, lang) : { title: tx[problem.key], body: problem.body };
+  const shown = !problem
+    ? null
+    : problem.key === "passkey"
+      ? passkeyProblemL(problem.err, lang)
+      : problem.key === "storeDown"
+        ? { title: tx.storeDown, body: tx.storeDownBody }
+        : { title: tx[problem.key], body: problem.body };
 
   if (phase === "loading") return <PhoneSkeleton label={tx.loading} />;
   if (phase === "full" || phase === "offline")

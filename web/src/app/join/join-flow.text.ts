@@ -8,6 +8,8 @@ export const JOIN_TEXT = defineText({
   en: {
     full: "The demo is full",
     offline: "Can't reach AimoPilot",
+    storeDown: "AimoPilot can't save right now",
+    storeDownBody: "Its database is not answering, so no kitchen or passkey was created. This usually passes within a minute; this page tries again by itself.",
     failed: "That didn't work",
     loading: "Setting up your kitchen…",
     tryAgain: "Try again",
@@ -32,6 +34,8 @@ export const JOIN_TEXT = defineText({
   fi: {
     full: "Demo on täynnä",
     offline: "AimoPilotiin ei saada yhteyttä",
+    storeDown: "AimoPilot ei voi tallentaa juuri nyt",
+    storeDownBody: "Sen tietokanta ei vastaa, joten keittiötä tai pääsyavainta ei luotu. Tämä menee yleensä ohi minuutissa; sivu yrittää uudelleen itse.",
     failed: "Tämä ei onnistunut",
     loading: "Keittiötäsi valmistellaan…",
     tryAgain: "Yritä uudelleen",
@@ -62,6 +66,8 @@ export const JOIN_TEXT = defineText({
   sv: {
     full: "Demon är full",
     offline: "AimoPilot går inte att nå",
+    storeDown: "AimoPilot kan inte spara just nu",
+    storeDownBody: "Databasen svarar inte, så inget kök och ingen inloggnings­nyckel skapades. Det brukar gå över inom en minut; sidan försöker igen av sig själv.",
     failed: "Det gick inte",
     loading: "Ditt kök förbereds…",
     tryAgain: "Försök igen",

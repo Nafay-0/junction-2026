@@ -4,9 +4,10 @@ import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { LangSwitch, useLang } from "../../_i18n/provider";
 import { AgentTurn, BuyerTurn, Composer, Thread, ThreadDock, type DockSize } from "../../_ui/thread";
+import { RulesDemo, SetupDemo, ShowingDemo } from "../gallery-more";
 import { HomeDemo, useMenuDemo, useOrderDemo } from "../gallery-widgets";
 
-type View = "home" | "order" | "compare" | "menu";
+type View = "home" | "order" | "compare" | "menu" | "history" | "standing" | "results" | "rules" | "setup";
 
 /** A stand-in shop behind the agent, so the dock and the workspace are seen where they live. */
 function FakeShop() {
@@ -61,6 +62,13 @@ export function WorkspaceDemo() {
       >
         {view === "home" ? (
           <HomeDemo composer={false} />
+        ) : view === "setup" ? (
+          <SetupDemo start={Number(q.get("step") ?? 0)} />
+        ) : view === "history" || view === "standing" || view === "results" || view === "rules" ? (
+          <Thread label={f ? "Keskustelu" : "Conversation"}>
+            <BuyerTurn time="14.02">{view === "history" ? (f ? "Mitä tilasimme viime viikolla?" : "What did we order last week?") : view === "standing" ? (f ? "Näytä kestotilaukset" : "Show my standing orders") : view === "results" ? (f ? "Mitä kauratuotteita teillä on?" : "What oat products do you have?") : f ? "Mitä agentti saa tehdä?" : "What may my agent do?"}</BuyerTurn>
+            <AgentTurn>{view === "rules" ? <RulesDemo /> : <ShowingDemo only={view} />}</AgentTurn>
+          </Thread>
         ) : (
           <Thread label={f ? "Keskustelu" : "Conversation"}>
             <BuyerTurn time="14.02">{view === "menu" ? (f ? "Suunnittele lounas 40 hengelle punajuuren ympärille torstaiksi" : "Plan a lunch for 40 around beetroot for Thursday") : f ? "1000 litraa laktoositonta maitoa maanantaiksi ja kauramaitoa kahviin" : "1,000 litres of lactose-free milk for Monday, and oat drink for the coffee"}</BuyerTurn>
