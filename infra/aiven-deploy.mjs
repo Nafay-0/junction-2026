@@ -193,7 +193,7 @@ async function health(publicUrl) {
   }
 }
 
-async function waitForCommit(publicUrl, sha, timeoutMs = 15 * 60_000, startedAfter) {
+async function waitForCommit(publicUrl, sha, timeoutMs = 30 * 60_000, startedAfter) {
   const t0 = Date.now();
   let last = "";
   while (Date.now() - t0 < timeoutMs) {
