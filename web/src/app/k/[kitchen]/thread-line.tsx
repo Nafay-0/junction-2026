@@ -314,12 +314,16 @@ function Lists({ turn, thread, latest }: { turn: AgentTurn; thread: Thread; late
   const tx = useText(THREAD_LINE_TEXT);
   const rx = useText(THREAD_RULES_TEXT);
   const f = useThreadFormat();
-  const lists: { key: string; rows: { item: string; amount?: string; total?: string }[]; total?: string }[] = [];
+  // What is being bought (an order, a sheet, a menu's products) is open from the start: the buyer sees each product,
+  // its quantity and its price without a tap. Other lists (records, products, rules) wait behind "Show the list".
+  const lists: { key: string; rows: { item: string; amount?: string; total?: string }[]; total?: string; open?: boolean }[] = [];
+  // A menu's products: each with its packs and pack size, and its price.
+  const menuRows = (c: Extract<AgentTurn["cards"][number], { type: "menu" }>) => c.dishes.flatMap((d) => d.lines.filter((l) => l.product).map((l) => ({ item: l.product!.name, amount: `${f.num(l.product!.packs)} × ${f.measure(l.product!.packSize, l.product!.unit)}`, total: money(l.product!.totalCents) })));
   const fromSheet = new Set(thread.turns.flatMap((x) => (x.role === "agent" ? x.cards.flatMap((c) => (c.type === "sheet" && c.orderId ? [c.orderId] : [])) : [])));
   for (const c of turn.cards) {
-    if (c.type === "sheet") lists.push({ key: c.cardId, rows: c.lines.map((l) => ({ item: l.name, amount: `${f.num(l.packs)} × ${f.measure(l.packSize, l.unit)}`, total: money(l.lineTotalCents) })), total: money(c.totalCents) });
-    else if (c.type === "order" && !fromSheet.has(c.orderId) && c.lines.length > 1) lists.push({ key: c.cardId, rows: c.lines.map((l) => ({ item: l.name, amount: f.num(l.quantity), ...(l.unitPriceCents !== undefined ? { total: money(l.unitPriceCents * l.quantity) } : {}) })), total: money(c.totalCents) });
-    else if (c.type === "menu" && (c.stage === "ready" || c.stage === "ordered")) lists.push({ key: c.cardId, rows: c.dishes.flatMap((d) => d.lines.filter((l) => l.product).map((l) => ({ item: `${l.product!.name}`, amount: f.num(l.product!.packs), total: money(l.product!.totalCents) }))), total: money(c.totalCents) });
+    if (c.type === "sheet") lists.push({ key: c.cardId, open: true, rows: c.lines.map((l) => ({ item: l.name, amount: `${f.num(l.packs)} × ${f.measure(l.packSize, l.unit)}`, total: money(l.lineTotalCents) })), total: money(c.totalCents) });
+    else if (c.type === "order" && !fromSheet.has(c.orderId) && c.lines.length > 1) lists.push({ key: c.cardId, open: true, rows: c.lines.map((l) => ({ item: l.name, amount: f.num(l.quantity), ...(l.unitPriceCents !== undefined ? { total: money(l.unitPriceCents * l.quantity) } : {}) })), total: money(c.totalCents) });
+    else if (c.type === "menu" && (c.stage === "ready" || c.stage === "ordered")) lists.push({ key: c.cardId, open: true, rows: menuRows(c), total: money(c.totalCents) });
     else if (c.type === "records") lists.push({ key: c.cardId, rows: c.rows.map((r) => ({ item: r.label, ...(r.date ? { amount: f.day(r.date) } : {}), ...(r.totalCents !== undefined ? { total: money(r.totalCents) } : {}) })) });
     else if (c.type === "products") lists.push({ key: c.cardId, rows: c.products.map((p) => ({ item: p.name, amount: f.measure(p.packSize, p.unit) })) });
     else if (c.type === "standing") lists.push({ key: c.cardId, rows: c.items.map((i) => ({ item: i.name, amount: `${f.measure(i.usual.amount, i.usual.unit)} · ${f.weekdays(i.weekdays)}` })) });
@@ -333,20 +337,20 @@ function Lists({ turn, thread, latest }: { turn: AgentTurn; thread: Thread; late
   // away, even when the card it changed sits in an earlier turn.
   if (latest && !lists.length && /\d,\d\d\s?€/.test(turn.line ?? "")) {
     const c = thread.turns.flatMap((x) => (x.role === "agent" ? x.cards : [])).filter((x) => (x.type === "menu" && (x.stage === "ready" || x.stage === "ordered")) || (x.type === "sheet" && x.state === "editing")).at(-1);
-    if (c?.type === "menu") lists.push({ key: `${c.cardId}:here`, rows: c.dishes.flatMap((d) => d.lines.filter((l) => l.product).map((l) => ({ item: `${l.product!.name}`, amount: f.num(l.product!.packs), total: money(l.product!.totalCents) }))), total: money(c.totalCents) });
-    else if (c?.type === "sheet") lists.push({ key: `${c.cardId}:here`, rows: c.lines.map((l) => ({ item: l.name, amount: `${f.num(l.packs)} × ${f.measure(l.packSize, l.unit)}`, total: money(l.lineTotalCents) })), total: money(c.totalCents) });
+    if (c?.type === "menu") lists.push({ key: `${c.cardId}:here`, open: true, rows: menuRows(c), total: money(c.totalCents) });
+    else if (c?.type === "sheet") lists.push({ key: `${c.cardId}:here`, open: true, rows: c.lines.map((l) => ({ item: l.name, amount: `${f.num(l.packs)} × ${f.measure(l.packSize, l.unit)}`, total: money(l.lineTotalCents) })), total: money(c.totalCents) });
   }
   return (
     <>
       {lists.filter((l) => l.rows.length).map((l) => (
-        <ShortList key={l.key} rows={l.rows} total={l.total} tx={tx} />
+        <ShortList key={l.key} rows={l.rows} total={l.total} tx={tx} startOpen={l.open} />
       ))}
     </>
   );
 }
 
-function ShortList({ rows, total, tx }: { rows: { item: string; amount?: string; total?: string }[]; total?: string; tx: Tx }) {
-  const [open, setOpen] = useState(false);
+function ShortList({ rows, total, tx, startOpen = false }: { rows: { item: string; amount?: string; total?: string }[]; total?: string; tx: Tx; startOpen?: boolean }) {
+  const [open, setOpen] = useState(startOpen);
   return (
     <div className="mt-3">
       <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="inline-flex min-h-9 items-center gap-1.5 text-[0.84rem] font-medium text-petrol">
