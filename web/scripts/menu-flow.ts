@@ -17,10 +17,11 @@ async function main() {
   const { dailyUsage } = await import("@/server/limits");
   const { formatEur } = await import("@/core/util");
   for (const slug of ["kahvila-sointu", "hotel-lumo"].filter((s) => !arg("--only") || s === arg("--only"))) {
-    let { kitchen, rt } = await menuKitchen(slug);
+    const first = await menuKitchen(slug);
+    let kitchen = first.kitchen;
     if (!kitchen) {
-      await rt.accounts.resetTestAccounts("script");
-      ({ kitchen } = await menuKitchen(slug));
+      await first.rt.accounts.resetTestAccounts("script");
+      kitchen = (await menuKitchen(slug)).kitchen;
     }
     console.log(`\n== ${kitchen!.info.name}: "${words}"`);
     let t0 = Date.now();
