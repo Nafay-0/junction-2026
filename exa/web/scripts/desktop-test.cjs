@@ -339,6 +339,22 @@ async function chat(prompt, inHost, picture) {
   }, 180000);
   await wait(800);
   await picture("chat-settled");
+  // BERYL_TEST_HANDBACK=1: when the agent hands the page over, press "Done, continue" (without
+  // doing anything on the page) and let it carry on, to check the hand-back reaches the agent.
+  if (engine.state().handover && process.env.BERYL_TEST_HANDBACK) {
+    console.log("     pressing Done, continue");
+    await inHost("[...document.querySelectorAll('button')].find((b) => /Done, continue/.test(b.textContent))?.click(); 1");
+    quietSince = 0;
+    const resumed = await until(async () => {
+      const now = engine.state();
+      const busy = now.busy || (await inHost("Boolean(document.querySelector('button[aria-label=\"Stop\"]'))"));
+      if (busy) quietSince = 0;
+      else quietSince ||= Date.now();
+      return !now.handover && quietSince && Date.now() - quietSince > 4000 ? "resumed" : undefined;
+    }, 120000);
+    check("after the hand-back the agent carries on and finishes", resumed === "resumed" && engine.state().control === "agent");
+    await picture("chat-after-hand-back");
+  }
   const s = engine.state();
   console.log("    ended with:", s.approval ? "a step waiting for approval" : s.handover ? "a hand-over to the user" : "the agent finished", "| page:", s.url.slice(0, 90));
   const text = await inHost("[...document.querySelectorAll('[data-role=assistant], article')].at(-1)?.innerText?.slice(0, 500) ?? ''");
