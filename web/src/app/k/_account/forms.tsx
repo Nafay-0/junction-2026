@@ -330,14 +330,14 @@ export function DevicePanel({ heading, intro }: { heading?: ReactNode; intro?: b
   return (
     <section id="devices" aria-labelledby="devices-title" className="scroll-mt-28">
       <Card pad className="space-y-4">
-        <div className="flex items-start gap-4">
-          <IconDisc tone={n > 0 ? "good" : "petrol"}>{n > 0 ? <Check size={21} strokeWidth={2.4} /> : <KeyRound size={20} />}</IconDisc>
-          <div className="min-w-0">
-            <h2 id="devices-title" className="display text-[1.45rem] leading-tight">
+        <div>
+          <div className="flex items-center gap-3">
+            <IconDisc size={40} tone={n > 0 ? "good" : "petrol"}>{n > 0 ? <Check size={19} strokeWidth={2.4} /> : <KeyRound size={18} />}</IconDisc>
+            <h2 id="devices-title" className="display min-w-0 text-[1.45rem] leading-tight">
               {heading ?? atx.devicesTitle}
             </h2>
-            {intro !== false && d?.signer && <p className="mt-1.5 max-w-[64ch] leading-relaxed text-ink-soft">{atx.devicesIntro(d.signer.name)}</p>}
           </div>
+          {intro !== false && d?.signer && <p className="mt-3 max-w-[64ch] leading-relaxed text-ink-soft">{atx.devicesIntro(d.signer.name)}</p>}
         </div>
         {!d ? (
           <Skeleton className="h-12" />
