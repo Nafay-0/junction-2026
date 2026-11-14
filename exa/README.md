@@ -1,6 +1,6 @@
 # Baton: the Exa "Internet Butler" project
 
-**Owner:** Asadullah (`Asadullah378`). **Status (Sat 14 Nov, 12:00):** steps 1 and 2 are built and run locally. The live browser works end to end on a test site and on real shops and booking pages, either in a hidden Chrome of the app's own or in a window of the user's own Chrome, where they are already signed in. The own-Chrome mode passes its tests against a stand-in Chrome; it has not yet been run against a real, signed-in Chrome. Not deployed yet.
+**Owner:** Asadullah (`Asadullah378`). **Status (Sat 14 Nov, 09:45):** steps 1 and 2 are built and run locally. The live browser works end to end on a test site and on real shops and booking pages, in three forms: a hidden Chrome of the app's own (the web version), a window of the user's own Chrome where they are already signed in (run by the user on 14 Nov: it worked, but it takes a one-time setting in Chrome), and, new, **a desktop app with a real browser inside its own window** (`pnpm desktop`), where the user signs in by simply signing in. The desktop app passes its end-to-end test and a real agent task; nobody has yet signed in to Google inside it. Not deployed yet.
 
 Baton is a general web agent for Exa's challenge "The Internet Butler". You hand it a task; it searches the live web with Exa, answers with live widgets instead of plain text (a map, fare cards, price charts, a gallery, a research report), and ends with buttons that take the task as far as it can go. The name is set in `web/src/lib/brand.ts`, with the logo's shapes: a baton is what a relay runner passes on (you pass a task, it is handed back for the step that is yours) and what a conductor holds. It was called Hovi until 14 Nov; storage keys and `HOVI_*` variables keep that prefix so nothing saved is lost.
 
@@ -20,11 +20,15 @@ cp .env.example .env.local   # fill in the five keys
 cd web
 pnpm install
 pnpm dev                     # http://localhost:3000
+pnpm desktop                 # the same app as a desktop window with a real browser inside
 ```
+
+`pnpm desktop` starts the server itself if nothing answers on port 3000. If it is already running on another port, say which: `BATON_PORT=3100 pnpm desktop`.
 
 - `pnpm smoke` checks that Claude (through AWS) and Gemini answer with your keys. `pnpm smoke options` sends one small request per model and job (agent, sub-agent, extraction) with the exact thinking settings the app uses, so a setting a model rejects shows up there and not in front of a user.
 - `pnpm test:guard` checks the live browser's safety rules as a table (no browser needed). `pnpm test:browser 3000` runs them end to end against a pretend shop (`/dev/sandbox.html`) with the dev server running: card numbers, passwords and pay buttons must be refused, commitments must ask first.
 - `pnpm test:own 3000` checks the own-Chrome mode against a stand-in Chrome the test starts itself (its own window, live pictures, the other tabs untouched). It never touches the real Chrome.
+- `pnpm test:desktop 3000` starts the real desktop app in a throwaway profile and checks, from inside it, the browser view, the agent's clicks, keys and scrolling, the safety rules, the user's own typing, hiding and closing. `BATON_TEST_CHAT="<request>"` adds a real task for the agent; `BATON_TEST_SHOTS=<folder>` saves pictures of the window.
 - `/dev/browser` shows the live browser panel driven by a script, with a button for every state.
 - `/dev/widgets` shows every widget with sample data. `?only=flights,hotels` narrows it, `?loading=1` shows loading states, `?still=1` turns animation off.
 - `pnpm typecheck`, `pnpm lint` and `pnpm build` all pass.
@@ -66,6 +70,14 @@ Reading, navigating, searching, filling in a form, adding to a basket and refusi
 
 **Sign-ins.** Kept in a browser profile per visitor (`~/.hovi/browser-profiles/` on the computer running the app, outside the project) so the user signs in once. "Forget sign-ins" in the browser's menu wipes it.
 
+**The desktop app: a real browser inside Baton.** The web version has to keep its browser on a server and show pictures of it, and a browser started that way is an automation browser, which Google will not let anyone sign in to. `pnpm desktop` opens Baton as a desktop app (Electron, `web/desktop/`) in which the live browser is not pictures but the browser itself: a view inside the app's window, the way the browser pane works in Claude's own desktop app. The user clicks and types straight into it, so signing in to Google or anything else is just signing in, once; the sign-ins are kept by the app until "Forget sign-ins". The agent works in the same view through a small bridge inside the app (`web/desktop/relay.cjs`) that speaks the Chrome DevTools Protocol to the app's server on this computer only, behind a random address. No remote-debugging port is opened and the view is not started in automation mode, so it is an ordinary embedded browser, and nothing about it is disguised: it tells sites it is Baton on Chrome. Everything else is the same code as the web version: the same pane, the same pointer and captions drawn over the page, the same rules in `guard.ts`.
+- While the agent drives, the user's clicks and keys do not reach the page (a click says "Baton is driving, press Take over"). After Take over, or when the agent hands the page over, everything the user does goes to the page directly and nowhere else.
+- The app is a page with a browser inside it, so input needs care, and the bridge takes it: the agent's clicks are given to the view itself (Chromium would aim them at the window, where the interface's own layer lies on top), and its key presses are only sent once the view holds the keyboard, which is handed back to the chat box afterwards, so the agent's typing can never land in the chat.
+- A narrow view (the split layout) is laid out at desktop width and drawn smaller, so sites do not switch to their phone layout; full screen shows the page at its real size.
+- Hiding the pane does not close the browser: the view is parked out of sight, the agent carries on, and a globe button in the top bar brings it back. The agent also keeps working while the app is behind other windows.
+- A link that wants a new tab opens in the same view. A real pop-up window (some sign-ins open one) opens as a small window of its own, with the same sign-ins and nothing of the agent attached. Pages are refused location, camera, microphone and notifications.
+- The agent still does nothing on identity providers' sign-in pages, types no passwords or codes, and never pays.
+
 **Working in the user's own Chrome.** Google refuses a sign-in typed into a browser that software is driving, and Chrome reports that to every site. We do not hide it. Instead the user can choose "Use my own Chrome" (the live browser's menu, or the button on a sign-in hand-over): the agent then works in a window of its own inside the Chrome the user already uses, where they are signed in to Google and everything else, so there is no sign-in step at all. It uses Chrome's own remote-debugging permission (Chrome 144 and later): the user turns it on once at `chrome://inspect/#remote-debugging` and presses Allow when the app connects, and Chrome shows that it is being controlled. The app works only in its own window; the user's other tabs are never read, touched or closed, and closing "the browser" closes that window only. The live view shows the window as before, and the same rules hold. A hand-over in progress moves with the page when the user switches. The agent still does nothing on the sign-in pages of identity providers (Google, Microsoft, Apple, bank identification), not even picking an account. This needs the app and the user's Chrome on the same computer; on a hosted server set `HOVI_OWN_CHROME=0`. An earlier attempt, signing in through a separate plain Chrome window, was removed: the Google session did not survive the switch and it was clumsy.
 
 **Tidying up.** The agent closes the browser when the task there is finished and nothing is left for the user on the page, or when asked; the pane closes with it and the conversation list returns. It leaves the browser open when the page is waiting for the user. A new, unrelated task starts with the old tabs closed.
@@ -100,6 +112,8 @@ Code: `web/src/lib/browser/` (`protocol.ts` the contract, `session.ts` the brows
   - `lib/exa/client.ts`: the Exa client (search, contents, agent runs), with cost tracking and a 5-minute cache.
   - `lib/agent/tools/`: the 24 tools. `lib/agent/instructions.ts`: the system prompt.
   - `app/api/chat/route.ts`: the agent loop, usage metadata, context trimming, prompt caching.
+  - `lib/browser/`: the live browser (`session.ts` drives it in any of its three forms, `guard.ts` holds the rules, `snapshot.ts` turns a page into text). `components/browser/`: the pane; `desktop-view.tsx` is the real view in the desktop app, `browser-view.tsx` the streamed one.
+  - `desktop/` (beside `src`): the desktop app. `main.cjs` is the window, `relay.cjs` the bridge between the agent and the browser view, `preload.cjs` what the interface may ask of the app, `run.mjs` the launcher.
   - `components/butler/`: the chat interface. `components/widgets/`: the widgets. `WIDGETS.md` at the app root is the guide for building one.
 
 ## Research
@@ -111,6 +125,7 @@ Code: `web/src/lib/browser/` (`protocol.ts` the contract, `session.ts` the brows
 
 - **Two projects, one team of two.** Can one team submit two projects (Dock and this), and is each eligible for the main prize? Someone has to be at each table during peer review. Ask the organisers.
 - **Deployment.** Not done. The app needs a public address for the submission's demo link and for phones at the table. With the live browser it must be a server that can run Chrome (or a tunnel to the laptop), not a serverless host.
-- **A real signed-in Chrome.** The own-Chrome mode is tested against a stand-in Chrome started by the test (`pnpm test:own`). A person still has to turn on the setting in their real Chrome, press Allow, and run a task in a Google account. Human checks are detected and handed to the user, but nobody has yet passed one by hand in either browser.
+- **Google sign-in inside the desktop app.** Built so that it should work (an ordinary embedded browser, not an automation one, as in Claude's desktop app), but only a person signing in can show that Google accepts it. If Google objects to the agent being connected while the user types, the next step is to disconnect the agent's bridge for as long as the user is in control. Human checks are detected and handed to the user in every form of the browser.
+- **The desktop app is run from the source** (`pnpm desktop`). It is not packaged as an installer, and it still needs the server on the same computer.
 - **Hotels are slow** (up to a minute through Jinko). A faster source would improve the trip demo.
 - **Not yet checked on a phone.** The layout is responsive, but nobody has used it on one.

@@ -2,10 +2,12 @@
 
 import * as React from "react";
 import { useTheme } from "next-themes";
-import { Moon, PanelLeft, Plus, Sun } from "lucide-react";
+import { Globe, Moon, PanelLeft, Plus, Sun } from "lucide-react";
 import { APP_NAME } from "@/lib/brand";
 import { Logo } from "@/components/brand/logo";
 import { useHydrated } from "@/lib/use-client";
+import { useBrowser, useBrowserId } from "@/lib/browser/client";
+import { useBrowserLayout } from "@/components/browser/workspace";
 import type { RunStats } from "@/lib/agent/models";
 import { EMPTY_USAGE } from "@/lib/agent/models";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -86,6 +88,7 @@ export function TopBar({
 
       <div className="ml-auto flex shrink-0 items-center gap-1">
         {stats ? <UsageMeter stats={stats} /> : null}
+        <BrowserButton />
         {showNew ? (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -105,6 +108,30 @@ export function TopBar({
         <ThemeToggle />
       </div>
     </header>
+  );
+}
+
+/** A browser is running but its pane is put away: one press brings it back. */
+function BrowserButton() {
+  const { state } = useBrowser(useBrowserId());
+  const layout = useBrowserLayout();
+  const running = state.status === "starting" || state.status === "ready";
+  if (!running || layout.mode !== "closed") return null;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={() => layout.open("split")}
+          aria-label="Show the browser"
+          className="relative flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <Globe className="size-[1.05rem]" />
+          <span aria-hidden className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-brand ring-2 ring-background" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>The browser is still open. Show it</TooltipContent>
+    </Tooltip>
   );
 }
 

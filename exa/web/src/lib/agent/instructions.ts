@@ -92,7 +92,9 @@ export function buildContext(args: {
   const own =
     args.browser?.kind === "own"
       ? " The live browser is a window of the user's own Chrome, signed in to their accounts. They are usually signed in already, so open the page and look before asking them to sign in. What you see there is private: read and do only what the task needs."
-      : "";
+      : args.browser?.kind === "desktop"
+        ? " The live browser is a browser inside the app on the user's own computer. They type into it directly, so a sign-in you hand over is quick for them, and their sign-ins are kept."
+        : "";
   const now = `Now: ${args.today}, ${args.time}.${browser}${own}`;
   if (args.coords) {
     const { lat, lng, accuracyM, label } = args.coords;

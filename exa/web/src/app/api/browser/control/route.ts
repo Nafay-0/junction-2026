@@ -4,7 +4,7 @@ import type { ControlRequest } from "@/lib/browser/protocol";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const ACTIONS = new Set(["take", "release", "back", "forward", "reload", "navigate", "tab", "kind", "close", "forget"]);
+const ACTIONS = new Set(["take", "release", "back", "forward", "reload", "navigate", "tab", "kind", "fit", "close", "forget"]);
 
 /** Take over, hand back, the address bar and its buttons, tabs, closing, and forgetting sign-ins. */
 export async function POST(req: Request) {
@@ -20,7 +20,12 @@ export async function POST(req: Request) {
   if (body.action === "navigate" && (typeof body.url !== "string" || !body.url.trim() || body.url.length > 2000)) return Response.json({ error: "No address." }, { status: 400 });
   if (body.action === "tab" && typeof body.tabId !== "string") return Response.json({ error: "No tab." }, { status: 400 });
   const session = browserFor(id);
-  if (body.action === "kind" && body.kind !== "own" && body.kind !== "assisted") return Response.json({ error: "Unknown browser." }, { status: 400 });
+  if (body.action === "kind" && body.kind !== "own" && body.kind !== "assisted" && body.kind !== "desktop") return Response.json({ error: "Unknown browser." }, { status: 400 });
+  if (body.action === "kind" && body.endpoint !== undefined && typeof body.endpoint !== "string") return Response.json({ error: "Bad address." }, { status: 400 });
+  if (body.action === "fit") {
+    const ok = (n: unknown) => typeof n === "number" && Number.isFinite(n) && n >= 100 && n <= 8000;
+    if (!ok(body.width) || !ok(body.height)) return Response.json({ error: "Bad size." }, { status: 400 });
+  }
   // Typing an address is something only the user does, so it puts them in control.
   if (body.action === "navigate") await session.control({ action: "take" });
   const state = await session.control(body as unknown as ControlRequest);

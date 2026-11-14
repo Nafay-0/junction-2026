@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { DEFAULT_MODEL_ID, getModel } from "@/lib/agent/models";
 import type { ButlerMessage } from "@/lib/agent/tools";
 import { control as browserControl, useBrowserId } from "@/lib/browser/client";
+import { useDesktopApp } from "@/lib/browser/desktop";
 import type { HandoverAnswer } from "@/lib/browser/protocol";
 import {
   deleteAllConversations,
@@ -117,6 +118,12 @@ export function Butler() {
 
   const [active, setActive] = React.useState<Active | null>(null);
 
+  // The live browser belongs to the visitor, not to one conversation: it sits above the
+  // conversation, so opening another one does not disturb a browser that is running.
+  const browserId = useBrowserId();
+  const handover = React.useRef<((answer: HandoverAnswer, toolCallId?: string) => void) | null>(null);
+  const onHandoverDone = React.useCallback((answer: HandoverAnswer, toolCallId?: string) => handover.current?.(answer, toolCallId), []);
+
   // On first load, reopen the conversation that was open last, so a refresh loses nothing.
   React.useEffect(() => {
     let cancelled = false;
@@ -202,6 +209,7 @@ export function Butler() {
         }}
       />
       <div className="flex min-w-0 flex-1 flex-col">
+        <BrowserWorkspace browserId={browserId} onHandoverDone={onHandoverDone}>
         {active ? (
           // Keyed by conversation: opening another one starts a fresh chat state with its own messages.
           <ChatView
@@ -213,8 +221,11 @@ export function Butler() {
             onNewTask={newTask}
             onBrowserBeside={makeRoom}
             onBrowserGone={giveRoomBack}
+            browserId={browserId}
+            handoverRef={handover}
           />
         ) : null}
+        </BrowserWorkspace>
       </div>
     </div>
   );
@@ -228,6 +239,8 @@ function ChatView({
   onNewTask,
   onBrowserBeside,
   onBrowserGone,
+  browserId,
+  handoverRef,
 }: {
   conversationId: string;
   initialMessages: ButlerMessage[];
@@ -238,6 +251,10 @@ function ChatView({
   onBrowserBeside: () => void;
   /** The live browser is no longer shown. */
   onBrowserGone: () => void;
+  /** This visitor's live browser. */
+  browserId: string;
+  /** Where the browser pane finds this conversation's way of answering a hand-over. */
+  handoverRef: React.RefObject<((answer: HandoverAnswer, toolCallId?: string) => void) | null>;
 }) {
   const [modelId, setModelId] = useStored("hovi.model", DEFAULT_MODEL_ID);
   const [place, setPlace] = useStored("hovi.place", "");
@@ -245,8 +262,9 @@ function ChatView({
   const { location, declined, save: saveLocation, setDeclined } = useExactLocation();
   const approximatePlace = place || defaultPlace(timeZone);
   const modelLabel = getModel(modelId).label;
-  const browserId = useBrowserId();
-  const [browserKind] = useStored("hovi.browser.kind", "assisted");
+  const [storedKind] = useStored("hovi.browser.kind", "assisted");
+  // In the desktop app the browser is always the one inside the app.
+  const browserKind = useDesktopApp() ? "desktop" : storedKind;
 
   React.useEffect(() => {
     live.modelId = getModel(modelId).id;
@@ -423,6 +441,13 @@ function ChatView({
     [addToolOutput, followLatest],
   );
 
+  React.useEffect(() => {
+    handoverRef.current = answerHandover;
+    return () => {
+      if (handoverRef.current === answerHandover) handoverRef.current = null;
+    };
+  }, [handoverRef, answerHandover]);
+
   const handlers = React.useMemo<WidgetHandlers>(
     () => ({
       approximatePlace,
@@ -470,7 +495,7 @@ function ChatView({
   const waitingForFirstToken = status === "submitted" && last?.role === "user";
 
   return (
-    <BrowserWorkspace browserId={browserId} onHandoverDone={answerHandover}>
+    <>
       <LayoutBridge target={openBrowser} onBeside={onBrowserBeside} onGone={onBrowserGone} />
       <TopBar stats={stats} onNewChat={onNewTask} showNew={!empty} sidebarOpen={sidebarOpen} onToggleSidebar={onToggleSidebar} />
 
@@ -551,7 +576,7 @@ function ChatView({
           <p className="mt-2 hidden text-center text-[0.7rem] text-subtle @min-[520px]/chat:block">Searches the live web with Exa. Check important details at the source before you act.</p>
         </div>
       </div>
-    </BrowserWorkspace>
+    </>
   );
 }
 

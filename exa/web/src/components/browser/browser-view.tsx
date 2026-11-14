@@ -25,7 +25,9 @@ import {
 import { cn } from "@/lib/utils";
 import { APP_NAME } from "@/lib/brand";
 import { frameSrc, sendInput, subscribeFrames, useBrowser } from "@/lib/browser/client";
+import { useDesktopApp } from "@/lib/browser/desktop";
 import { VIEWPORT, type AgentAction, type BrowserState, type UserInput } from "@/lib/browser/protocol";
+import { DesktopBrowserView } from "./desktop-view";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -66,14 +68,24 @@ const clamp = (n: number, min: number, max: number) => Math.min(Math.max(n, min)
  * The live page: the newest picture of it, what the agent is doing drawn on top, and, while the
  * user is in control, their mouse, touch and keyboard passed through to the page.
  */
-export function BrowserView({
+export function BrowserView(props: {
+  browserId: string;
+  className?: string;
+  /** Extra content under the "no browser yet" message, for example a button. */
+  empty?: React.ReactNode;
+}) {
+  // In the desktop app the browser is a real view in the window; on the web it is pictures from the server.
+  const desktop = useDesktopApp();
+  return desktop ? <DesktopBrowserView {...props} desktop={desktop} /> : <StreamedBrowserView {...props} />;
+}
+
+function StreamedBrowserView({
   browserId,
   className,
   empty,
 }: {
   browserId: string;
   className?: string;
-  /** Extra content under the "no browser yet" message, for example a button. */
   empty?: React.ReactNode;
 }) {
   const { state, action: latest, fresh, connected } = useBrowser(browserId);
@@ -291,7 +303,7 @@ export function BrowserView({
 
 /* ───────────────────────── What shows when there is no page ───────────────────────── */
 
-function Placeholder({ state, hasFrame, empty }: { state: BrowserState; hasFrame: boolean; empty?: React.ReactNode }) {
+export function Placeholder({ state, hasFrame, empty }: { state: BrowserState; hasFrame: boolean; empty?: React.ReactNode }) {
   if (state.status === "ready" && hasFrame) return null;
   const base = "absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-card px-6 text-center";
   if (state.status === "starting" || state.status === "ready") {
@@ -340,7 +352,7 @@ function Placeholder({ state, hasFrame, empty }: { state: BrowserState; hasFrame
  * The agent's pointer. It lives across steps, so it glides from where the last step left it, and
  * it steps out of the way when the agent has been idle for a moment or the user takes over.
  */
-function AgentPointer({
+export function AgentPointer({
   action,
   scale,
   viewport,
@@ -408,7 +420,7 @@ function AgentPointer({
 
 /* ───────────────────────── One step, drawn over the page ───────────────────────── */
 
-function ActionLayer({ action, scale, stage, approvalPending }: { action: AgentAction; scale: number; stage: Size; approvalPending: boolean }) {
+export function ActionLayer({ action, scale, stage, approvalPending }: { action: AgentAction; scale: number; stage: Size; approvalPending: boolean }) {
   const text = action.text ?? "";
   const typingMs = action.kind === "type" && text ? Math.min(1100, 200 + text.length * 32) : 0;
   const [phase, setPhase] = React.useState<"lead" | "do" | "gone">("lead");

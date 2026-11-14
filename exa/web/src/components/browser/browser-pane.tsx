@@ -31,6 +31,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { APP_NAME } from "@/lib/brand";
 import { control, useBrowser } from "@/lib/browser/client";
+import { useDesktopApp } from "@/lib/browser/desktop";
 import type { BrowserState, ControlRequest, HandoverAnswer, HandoverKind } from "@/lib/browser/protocol";
 import { useStored } from "@/lib/use-client";
 import { domainOf, faviconOf } from "@/lib/widgets/types";
@@ -54,9 +55,12 @@ export function BrowserPane({
   onClose,
   onHandover,
   onShowChat,
+  parked = false,
 }: {
   browserId: string;
   /** How the pane is laid out right now. */
+  /** Desktop app: the pane is out of sight while its browser keeps running. Its controls are switched off. */
+  parked?: boolean;
   mode: "split" | "full";
   /** On a phone the pane is a full-screen sheet: no layout buttons, a way back to the chat instead. */
   phone?: boolean;
@@ -91,8 +95,9 @@ export function BrowserPane({
     [browserId],
   );
 
-  /* Which browser: the user's own Chrome, or the app's hidden one. */
-  const ownAvailable = state.own !== "unavailable";
+  /* Which browser: the user's own Chrome, or the app's hidden one. In the desktop app there is only its own. */
+  const desktop = useDesktopApp();
+  const ownAvailable = state.own !== "unavailable" && !desktop;
   const switchToOwnChrome = (reopen: boolean) => {
     if (state.own !== "ready") {
       setSetup({ reopen });
@@ -108,12 +113,12 @@ export function BrowserPane({
   // The choice is remembered in this browser. After the server restarts it has forgotten: remind it, once.
   const reminded = React.useRef(false);
   React.useEffect(() => {
-    if (reminded.current || !connected) return;
+    if (reminded.current || !connected || desktop) return;
     reminded.current = true;
     if (storedKind === "own" && state.kind === "assisted" && state.own === "ready" && state.status !== "ready" && state.status !== "starting") {
       void run({ action: "kind", kind: "own" });
     }
-  }, [connected, storedKind, state.kind, state.own, state.status, run]);
+  }, [connected, desktop, storedKind, state.kind, state.own, state.status, run]);
 
   const live = state.status === "ready";
   const userControl = state.control === "user";
@@ -123,7 +128,7 @@ export function BrowserPane({
   return (
     <section ref={section} aria-label="Live browser" className="@container flex h-full min-h-0 w-full flex-col bg-surface">
       {/* Toolbar */}
-      <div className="flex h-12 shrink-0 items-center gap-1 border-b border-border bg-background/85 px-2 backdrop-blur-xl">
+      <div inert={parked} className="flex h-12 shrink-0 items-center gap-1 border-b border-border bg-background/85 px-2 backdrop-blur-xl">
         {phone ? (
           <button type="button" onClick={onClose} className="mr-0.5 flex h-9 shrink-0 items-center gap-0.5 rounded-full pr-2.5 pl-1.5 text-[0.82rem] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
             <ChevronLeft className="size-[1.1rem]" />
@@ -352,7 +357,8 @@ export function BrowserPane({
               type="button"
               onClick={() => {
                 setConfirmForget(false);
-                void run({ action: "forget" }).then((next) => {
+                // In the desktop app the sign-ins live in the app, so the app wipes them.
+                void (desktop ? run({ action: "close" }).then((next) => desktop.forget().then(() => next)) : run({ action: "forget" })).then((next) => {
                   if (next) toast.success("Sign-ins forgotten", { description: "The browser starts clean next time." });
                 });
               }}

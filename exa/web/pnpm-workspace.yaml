@@ -1,5 +1,7 @@
 allowBuilds:
+  electron: true
   sharp: false
   unrs-resolver: false
 minimumReleaseAgeExclude:
   - playwright-core@1.65.1
+  - electron@45.3.2

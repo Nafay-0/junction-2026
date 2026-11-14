@@ -14,7 +14,9 @@
     "smoke": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/smoke.mjs",
     "test:guard": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/guard-test.mjs",
     "test:browser": "node scripts/browser-test.mjs",
-    "test:own": "node scripts/own-chrome-test.mjs"
+    "test:own": "node scripts/own-chrome-test.mjs",
+    "test:desktop": "electron scripts/desktop-test.cjs",
+    "desktop": "node desktop/run.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.103",
@@ -50,10 +52,12 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "electron": "45.3.2",
     "eslint": "^9",
     "eslint-config-next": "16.4.6",
     "tailwindcss": "4.3.3",
-    "typescript": "^5"
+    "typescript": "^5",
+    "ws": "8.23.0"
   },
   "packageManager": "pnpm@11.17.0"
 }

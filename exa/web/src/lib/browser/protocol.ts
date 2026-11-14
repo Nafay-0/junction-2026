@@ -64,9 +64,11 @@ export type BrowserState = {
   /**
    * Which browser the agent works in. "assisted": a Chrome of its own on the computer running the
    * app, hidden, with sign-ins of its own. "own": a window of the Chrome the user already uses,
-   * signed in to their accounts, so there is nothing to sign in to.
+   * signed in to their accounts, so there is nothing to sign in to. "desktop": the browser view
+   * inside the desktop app's own window; the user types straight into it, and the interface shows
+   * the real page instead of pictures of it.
    */
-  kind: "assisted" | "own";
+  kind: "assisted" | "own" | "desktop";
   /**
    * Whether the user's own Chrome can be used. "ready": Chrome allows an app to attach.
    * "setup": the user has to turn that on in Chrome first (chrome://inspect/#remote-debugging).
@@ -160,6 +162,10 @@ export type ControlRequest =
    * that is open over to the other browser (used when a sign-in is why the user is switching).
    */
   | { action: "kind"; kind: "assisted" | "own"; reopen?: boolean }
+  /** The desktop app: its browser view exists, and this is where the agent can reach it. */
+  | { action: "kind"; kind: "desktop"; endpoint?: string }
+  /** The desktop app: the size the browser view is drawn at, so the page is laid out to fit it. */
+  | { action: "fit"; width: number; height: number }
   /** Close the browser. Sign-ins are kept. */
   | { action: "close" }
   /** Close the browser and wipe every sign-in, cookie and saved form entry. */

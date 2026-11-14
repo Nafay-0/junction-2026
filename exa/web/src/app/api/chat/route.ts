@@ -76,7 +76,7 @@ export async function POST(req: Request) {
   const browserId = validBrowserId(body.browserId) ? body.browserId : undefined;
   const browser = browserId ? browserFor(browserId) : undefined;
   browser?.setTimeZone(timeZone);
-  browser?.preferKind(body.browserKind === "own" ? "own" : "assisted");
+  browser?.preferKind(body.browserKind === "own" ? "own" : body.browserKind === "desktop" ? "desktop" : "assisted");
   browser?.beginTurn();
 
   const ctx: ToolContext = { meter, model: info, worker, country, today, coords: coords ? { lat: coords.lat, lng: coords.lng, label: coords.label } : undefined, browserId };

@@ -295,6 +295,10 @@ export class BrowserSession {
   private frameTimers: Array<ReturnType<typeof setTimeout>> = [];
   private lastFrameAt = 0;
   private snapping = false;
+  /** In the desktop app: the connection to the browser view in its window, and where the app says to reach it. */
+  private desktop?: Browser;
+  private desktopEndpoint?: string;
+  private desktopWaiter?: (endpoint: string) => void;
   /** Message boxes the page showed since the model last read it. */
   private dialogs: string[] = [];
   /** Pictures of the page taken for the model, by tool call. Only the last few are kept. */
@@ -355,7 +359,9 @@ export class BrowserSession {
   }
 
   private patch(change: Partial<BrowserState>) {
+    const control = this.state.control;
     Object.assign(this.state, change);
+    if (this.state.control !== control) this.tellDesktopView();
     if (this.statePending) return;
     this.statePending = true;
     queueMicrotask(() => {
@@ -390,6 +396,7 @@ export class BrowserSession {
     this.patch({ status: "starting", error: undefined });
     try {
       if (this.kind === "own") await this.startInOwnChrome();
+      else if (this.kind === "desktop") await this.startInDesktopView();
       else await this.startAssisted();
       this.patch({ status: "ready", activity: "" });
     } catch (err) {
@@ -425,6 +432,114 @@ export class BrowserSession {
     context.on("close", () => this.onClosed());
     const first = context.pages()[0] ?? (await context.newPage());
     for (const page of context.pages()) this.adopt(page, page === first);
+  }
+
+  /**
+   * The desktop app: the browser is a view inside the app's own window, an ordinary embedded
+   * browser that the user types into directly. Saying "starting" makes the app show that view
+   * and tell us where to reach it (a bridge on this computer, see desktop/relay.cjs).
+   */
+  private async startInDesktopView() {
+    const endpoint =
+      this.desktopEndpoint ??
+      (await new Promise<string>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          this.desktopWaiter = undefined;
+          reject(new Error("The app's browser view did not appear. Open the live browser and try again."));
+        }, 20_000);
+        this.desktopWaiter = (value) => {
+          clearTimeout(timer);
+          this.desktopWaiter = undefined;
+          resolve(value);
+        };
+      }));
+    this.desktopEndpoint = undefined;
+    const browser = await chromium.connectOverCDP(endpoint, { timeout: 15_000 });
+    const context = browser.contexts()[0];
+    const page = context?.pages()[0];
+    if (!context || !page) {
+      await browser.close().catch(() => {});
+      throw new Error("The app's browser view could not be reached.");
+    }
+    this.desktop = browser;
+    this.context = context;
+    browser.on("disconnected", () => {
+      if (this.desktop !== browser) return;
+      this.desktop = undefined;
+      this.onClosed();
+    });
+    this.adopt(page, true);
+    this.tellDesktopView();
+    await this.measure(page);
+  }
+
+  /**
+   * Tell the desktop app's bridge who is driving. While it is the agent, the bridge keeps the
+   * user's keyboard out of the page; once the user takes over, everything they do goes straight in.
+   */
+  private tellDesktopView() {
+    const page = this.page;
+    if (this.kind !== "desktop" || !page || page.isClosed()) return;
+    const control = this.state.control;
+    void this.cdpFor(page)
+      .then((session) => (session as unknown as { send(method: string, params: object): Promise<unknown> }).send("Baton.setControl", { control }))
+      .catch(() => {});
+  }
+
+  /** The app's browser view is up: where to reach it. Only an address on this computer is accepted. */
+  private offerDesktopView(endpoint: string) {
+    if (!/^ws:\/\/127\.0\.0\.1:\d{2,5}\/[0-9a-f]{36}$/.test(endpoint)) return;
+    if (this.desktopWaiter) this.desktopWaiter(endpoint);
+    else this.desktopEndpoint = endpoint;
+  }
+
+  private async useDesktopView(endpoint?: string) {
+    if (this.kind !== "desktop") {
+      if (this.running) await this.close();
+      this.kind = "desktop";
+      this.patch({ ...this.cleared() });
+    }
+    if (endpoint) this.offerDesktopView(endpoint);
+    this.patch({});
+  }
+
+  private async cdpFor(page: Page): Promise<CDPSession> {
+    let session = this.cdp.get(page);
+    if (!session) {
+      session = await page.context().newCDPSession(page);
+      this.cdp.set(page, session);
+    }
+    return session;
+  }
+
+  /** In the desktop app the page is as large as the view the user sees, not a fixed size. */
+  private async measure(page: Page) {
+    if (this.kind !== "desktop" || page.isClosed()) return;
+    try {
+      const size = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
+      if (size.width > 0 && size.height > 0 && (size.width !== this.state.viewport.width || size.height !== this.state.viewport.height)) this.patch({ viewport: size });
+    } catch {
+      /* navigating: the next refresh measures again */
+    }
+  }
+
+  /**
+   * The desktop app's view has this much room. A narrow view would give most sites their phone
+   * layout, so the page is laid out at desktop width and drawn smaller, as a zoomed-out browser does.
+   */
+  private async fit(width: number, height: number) {
+    const page = this.page;
+    if (this.kind !== "desktop" || !page || page.isClosed()) return;
+    const scale = Math.min(1, Math.max(0.3, width / VIEWPORT.width));
+    try {
+      const session = await this.cdpFor(page);
+      if (scale < 0.995) {
+        await session.send("Emulation.setDeviceMetricsOverride", { width: Math.round(width / scale), height: Math.round(height / scale), deviceScaleFactor: 0, mobile: false, scale });
+      } else await session.send("Emulation.clearDeviceMetricsOverride");
+    } catch {
+      /* the page is navigating: the next size change tries again */
+    }
+    await this.measure(page);
   }
 
   /** A window of our own in the Chrome the user already uses. */
@@ -595,6 +710,11 @@ export class BrowserSession {
       /* already stopped */
     }
     try {
+      // The desktop app shows the real page, so no pictures of it are needed.
+      if (this.kind === "desktop") {
+        await this.refresh(page);
+        return;
+      }
       // In the user's own Chrome, bringing a tab forward would pull that window over the app they
       // are looking at. Only do it when they picked the tab themselves.
       if (this.kind !== "own" || raise) await page.bringToFront();
@@ -630,12 +750,9 @@ export class BrowserSession {
     const url = page.url();
     let canGoBack = false;
     let canGoForward = false;
+    await this.measure(page);
     try {
-      let session = this.cdp.get(page);
-      if (!session) {
-        session = await page.context().newCDPSession(page);
-        this.cdp.set(page, session);
-      }
+      const session = await this.cdpFor(page);
       const history = (await session.send("Page.getNavigationHistory")) as { currentIndex: number; entries: unknown[] };
       canGoBack = history.currentIndex > 0;
       canGoForward = history.currentIndex < history.entries.length - 1;
@@ -647,6 +764,7 @@ export class BrowserSession {
   }
 
   private onClosed() {
+    this.desktopEndpoint = undefined;
     this.context = undefined;
     this.page = undefined;
     this.pages = [];
@@ -661,6 +779,14 @@ export class BrowserSession {
   async close() {
     if (this.kind === "own") {
       await this.leaveOwnChrome();
+      this.onClosed();
+      return;
+    }
+    if (this.kind === "desktop") {
+      // Letting go is enough: the app takes its browser view away when it hears "closed".
+      const browser = this.desktop;
+      this.desktop = undefined;
+      await browser?.close().catch(() => {});
       this.onClosed();
       return;
     }
@@ -690,6 +816,11 @@ export class BrowserSession {
     if (kind === "own" && ownStatus() === "unavailable") return;
     this.kind = kind;
     this.patch({});
+  }
+
+  /** The size of the desktop app's browser view changed. */
+  async resize(width: number, height: number) {
+    await this.fit(width, height);
   }
 
   /** Move to the other browser. With `reopen`, the page that is open comes along, and so does a hand-over in progress. */
@@ -737,7 +868,11 @@ export class BrowserSession {
         this.patch({ control: "agent", handover: undefined });
         break;
       case "kind":
-        await this.switchKind(request.kind === "own" ? "own" : "assisted", request.reopen === true);
+        if (request.kind === "desktop") await this.useDesktopView(request.endpoint);
+        else await this.switchKind(request.kind === "own" ? "own" : "assisted", request.reopen === true);
+        break;
+      case "fit":
+        await this.fit(request.width, request.height);
         break;
       case "close":
         await this.close();
@@ -931,7 +1066,7 @@ export class BrowserSession {
         }
       };
       mark(tree);
-      let text = renderPage(tree, { url: page.url(), title: await page.title(), viewport: { ...VIEWPORT }, ...facts }, { ...options, sensitive });
+      let text = renderPage(tree, { url: page.url(), title: await page.title(), viewport: { ...this.state.viewport }, ...facts }, { ...options, sensitive });
       if (this.dialogs.length) {
         text += `\n\n${this.dialogs.join("\n")}\nIf a question that was answered Cancel needs a yes, that is a commitment: tell the user what the page asked.`;
         this.dialogs = [];
@@ -1163,11 +1298,12 @@ export class BrowserSession {
         if (input.action === "scroll") {
           const direction = input.direction === "up" ? "up" : "down";
           const box = locator ? await this.boxOf(locator) : undefined;
-          const point = box ? centre(box) : { x: VIEWPORT.width / 2, y: VIEWPORT.height / 2 };
+          const view = this.state.viewport;
+          const point = box ? centre(box) : { x: view.width / 2, y: view.height / 2 };
           this.announce({ kind: "scroll", label: direction === "down" ? "Scrolling down" : "Scrolling up", direction, point, leadMs: 150 });
           await delay(150);
           await page.mouse.move(point.x, point.y);
-          await page.mouse.wheel(0, (direction === "down" ? 1 : -1) * Math.round(VIEWPORT.height * 0.8));
+          await page.mouse.wheel(0, (direction === "down" ? 1 : -1) * Math.round(view.height * 0.8));
           await delay(450);
           await this.settle(page, 600);
           const text = await this.pageText(page);

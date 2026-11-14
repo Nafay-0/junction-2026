@@ -6,6 +6,7 @@ import { Columns2, MessageSquare, PanelRightClose } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { control, useBrowser, watchBrowser } from "@/lib/browser/client";
+import { useDesktopApp } from "@/lib/browser/desktop";
 import { IDLE_STATE, type BrowserState, type HandoverAnswer } from "@/lib/browser/protocol";
 import { useMediaQuery, useStored } from "@/lib/use-client";
 import { BrowserPane } from "./browser-pane";
@@ -90,7 +91,8 @@ export function BrowserWorkspace({
   /** The chat. */
   children: React.ReactNode;
 }) {
-  const { state } = useBrowser(browserId);
+  const { state, connected } = useBrowser(browserId);
+  const desktop = useDesktopApp() !== null;
   const wide = useMediaQuery("(min-width: 768px)");
   const storedMode = React.useSyncExternalStore(subscribeMode, readMode, () => "closed");
   const [storedSplit, setStoredSplit] = useStored(SPLIT_KEY, String(DEFAULT_SPLIT));
@@ -130,6 +132,11 @@ export function BrowserWorkspace({
       if (next.approval && !previous.approval && modeRef.current === "full") setPeek(true);
     });
   }, [browserId]);
+
+  /* The desktop app has one browser, its own: say so before anything asks for a browser. */
+  React.useEffect(() => {
+    if (desktop && connected && state.kind !== "desktop") void control(browserId, { action: "kind", kind: "desktop" }).catch(() => {});
+  }, [desktop, connected, state.kind, browserId]);
 
   const open = React.useCallback(
     (next: "split" | "full" = "split") => {
@@ -197,8 +204,12 @@ export function BrowserWorkspace({
     setStoredSplit(clampSplit(split + step).toFixed(3));
   };
 
-  const showPane = mode !== "closed";
-  const sheet = !wide && showPane;
+  // In the desktop app the pane holds the real browser. Hiding the pane must not close that
+  // browser in the middle of a task, so while a browser is running the pane stays alive, parked
+  // out of sight, instead of being taken away.
+  const parked = desktop && mode === "closed" && (state.status === "starting" || state.status === "ready");
+  const showPane = mode !== "closed" || parked;
+  const sheet = !wide && showPane && !parked;
   const paneMode = mode === "full" ? "full" : "split";
 
   return (
@@ -212,15 +223,19 @@ export function BrowserWorkspace({
               animate={{ opacity: 1, y: 0 }}
               exit={sheet ? { opacity: 0, y: 24 } : { opacity: 0 }}
               transition={{ duration: 0.28, ease: EASE }}
-              style={wide && mode === "split" ? { width: `${split * 100}%`, minWidth: MIN_PANE, maxWidth: `calc(100% - ${MIN_CHAT}px)` } : undefined}
+              style={parked ? undefined : wide && mode === "split" ? { width: `${split * 100}%`, minWidth: MIN_PANE, maxWidth: `calc(100% - ${MIN_CHAT}px)` } : undefined}
+              aria-hidden={parked || undefined}
               className={cn(
                 "flex min-h-0 flex-col",
+                // Out of sight, but still there: the agent goes on working in it (and typing needs it to hold the keyboard).
+                parked && "pointer-events-none fixed top-0 -left-[300vw] h-dvh w-[960px]",
                 // Below the app's own menus and dialogs (which sit at 50), above everything else.
-                sheet || full ? "fixed inset-0 z-40 bg-background" : "relative shrink-0",
+                parked ? "" : sheet || full ? "fixed inset-0 z-40 bg-background" : "relative shrink-0",
               )}
             >
               <BrowserPane
                 browserId={browserId}
+                parked={parked}
                 mode={paneMode}
                 phone={!wide}
                 onMode={(next) => {
