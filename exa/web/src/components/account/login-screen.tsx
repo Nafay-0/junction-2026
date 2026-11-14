@@ -1,11 +1,13 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { motion } from "motion/react";
 import { ArrowRight, Globe, LayoutGrid, LoaderCircle, MousePointerClick, TriangleAlert } from "lucide-react";
 import { APP_NAME } from "@/lib/brand";
 import { api, errorOf } from "@/lib/auth/fetch";
 import { Logo } from "@/components/brand/logo";
+import { useDesktopApp } from "@/lib/browser/desktop";
 import { Field, PasswordField } from "./field";
 import { ThemeToggle } from "./theme-toggle";
 
@@ -59,13 +61,25 @@ export function LoginScreen({
     setBusy(false);
   };
 
+  const desktop = useDesktopApp();
+  const brand = (
+    <>
+      <Logo size={32} className="rounded-[0.6rem] shadow-card" />
+      <span className="font-display text-[1.3rem] leading-none">{APP_NAME}</span>
+    </>
+  );
+
   return (
     <div className="backdrop-room flex min-h-dvh flex-col bg-background">
       <header className="flex h-14 shrink-0 items-center justify-between px-4 sm:px-6">
-        <div className="flex items-center gap-2.5">
-          <Logo size={32} className="rounded-[0.6rem] shadow-card" />
-          <span className="font-display text-[1.3rem] leading-none">{APP_NAME}</span>
-        </div>
+        {desktop ? (
+          // The desktop app has no landing page to go back to: the name is just the name there.
+          <div className="flex items-center gap-2.5">{brand}</div>
+        ) : (
+          <Link href="/" aria-label={`${APP_NAME}, home`} className="flex items-center gap-2.5 rounded-lg outline-none transition-opacity hover:opacity-85 focus-visible:ring-3 focus-visible:ring-ring/40">
+            {brand}
+          </Link>
+        )}
         <ThemeToggle />
       </header>
 
