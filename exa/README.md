@@ -1,6 +1,6 @@
 # Hovi: the Exa "Internet Butler" project
 
-**Owner:** Asadullah (`Asadullah378`). **Status (Sat 14 Nov, 02:30):** step 1 is built and runs locally, with saved conversations and in-chat location sharing. Not deployed yet.
+**Owner:** Asadullah (`Asadullah378`). **Status (Sat 14 Nov, 03:00):** step 1 is built and runs locally, with saved conversations, in-chat location sharing and a custom widget the agent composes itself. Not deployed yet.
 
 Hovi is a general web agent for Exa's challenge "The Internet Butler". You hand it a task; it searches the live web with Exa, answers with live widgets instead of plain text (a map, fare cards, price charts, a gallery, a research report), and ends with buttons that take the task as far as it can go. "Hovi" is a working title, set in `web/src/lib/brand.ts`.
 
@@ -43,6 +43,8 @@ pnpm dev                     # http://localhost:3000
 
 The model can also show a comparison table, key facts, a plan, clarifying questions (answered with taps) and action buttons (book, call, directions, calendar, email).
 
+**Custom widget.** When none of the fixed widgets fits, the agent composes its own with the `showWidget` tool, block by block: charts (pie, donut, bar, stacked bar, horizontal bar, line, area, scatter, radar), stat tiles, tables, lists and timelines, progress bars, images, callouts and buttons. A button can open a link, copy text, or send a follow-up to the agent, so the widget can continue the task. For something no block can express (a calculator, a custom diagram) there is an `html` block: a self-contained fragment that runs in a sandboxed frame with no network access and the app's colours passed in. Blocks appear as the model writes them. The block shapes are in `web/src/lib/widgets/types.ts` ("Custom widget"), the tool in `web/src/lib/agent/tools/compose.ts`.
+
 Every widget shows its sources. Every answer shows the model, the time, the number of Exa calls and the cost; the top bar adds them up for the conversation.
 
 **Saved conversations.** Every conversation is saved as it happens and listed in a sidebar on the left (a drawer on phones) that can be closed. Conversations can be reopened, renamed and deleted, and the one that was open comes back after a refresh. They are stored in the browser's IndexedDB (`web/src/lib/conversations.ts`): there is no account and no server database, so they do not follow the user to another device.
@@ -57,7 +59,7 @@ Every widget shows its sources. Every answer shows the model, the time, the numb
 - **Code map** (all under `web/src`):
   - `lib/widgets/types.ts`: the contract between tools and widgets.
   - `lib/exa/client.ts`: the Exa client (search, contents, agent runs), with cost tracking and a 5-minute cache.
-  - `lib/agent/tools/`: the 16 tools. `lib/agent/instructions.ts`: the system prompt.
+  - `lib/agent/tools/`: the 18 tools. `lib/agent/instructions.ts`: the system prompt.
   - `app/api/chat/route.ts`: the agent loop, usage metadata, context trimming, prompt caching.
   - `components/butler/`: the chat interface. `components/widgets/`: the widgets. `WIDGETS.md` at the app root is the guide for building one.
 

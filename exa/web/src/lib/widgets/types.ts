@@ -359,6 +359,96 @@ export type PlanData = {
   steps: PlanStep[];
 };
 
+/* ───────────────────────── Custom widget (composed by the model, block by block) ─────────────────────────
+ * For anything the fixed widgets do not cover: a pie chart, a small dashboard, a timeline with
+ * buttons, a calculator. The model sends a title and a list of blocks; each block is one piece of
+ * interface. Blocks are deliberately one flat shape with optional fields (not a union), because that
+ * is the schema every model family accepts. `type` says which fields matter.
+ */
+
+export type CustomChartType = "pie" | "donut" | "bar" | "stackedBar" | "horizontalBar" | "line" | "area" | "scatter" | "radar";
+
+export type CustomButton = {
+  label: string;
+  /** "link" opens `value` (a URL) in a new tab. "ask" sends `value` to the agent as the user's next message. "copy" copies `value`. */
+  action: "link" | "ask" | "copy";
+  value: string;
+  /** The main action: drawn filled. */
+  primary?: boolean;
+};
+
+export type CustomItem = {
+  label: string;
+  /** stats: the big number or short fact. list: text on the right. progress: text shown beside the bar. */
+  value?: string;
+  /** A second, quieter line. */
+  detail?: string;
+  /** Makes the item a link. */
+  href?: string;
+  /** stats: an arrow for the direction of change. */
+  trend?: "up" | "down" | "flat";
+  /** stats: whether the change is good news, which sets the colour. Default: up is good, down is bad. */
+  good?: boolean;
+  /** progress: how full the bar is, 0 to 100. */
+  percent?: number;
+};
+
+export type CustomBlock = {
+  type: "text" | "stats" | "chart" | "table" | "list" | "progress" | "image" | "buttons" | "callout" | "html";
+  /** "half" lets two consecutive blocks sit side by side on wide screens. Default "full". */
+  width?: "full" | "half";
+  /** A small heading above the block. */
+  title?: string;
+
+  /** text: markdown. callout: one or two plain sentences. */
+  text?: string;
+  /** callout: its colour. */
+  tone?: "info" | "success" | "warning";
+
+  /** stats, list and progress: the entries. */
+  items?: CustomItem[];
+  /** list: how entries are marked. Default "bullets". "timeline" draws a vertical line with a dot per entry (label = when, value/detail = what). */
+  listStyle?: "bullets" | "numbers" | "checks" | "timeline";
+
+  /** chart: which kind. */
+  chartType?: CustomChartType;
+  /** chart: the category for each data point (slice names for pie and donut, x-axis labels otherwise; for scatter, the x values as numbers in strings). */
+  labels?: string[];
+  /** chart: one or more named series; `values` lines up with `labels`. Pie and donut use the first series only. */
+  series?: Array<{ name: string; values: number[] }>;
+  /** chart: unit shown with values, for example "€", "%", "km". */
+  unit?: string;
+
+  /** table: header cells. */
+  columns?: string[];
+  /** table: body rows; each row lines up with `columns`. */
+  rows?: string[][];
+
+  /** image: the image address (https). */
+  url?: string;
+  /** image: a line under it. */
+  caption?: string;
+
+  /** buttons: the buttons, in order. */
+  buttons?: CustomButton[];
+
+  /**
+   * html: a self-contained fragment (HTML, inline CSS and JS) run in a sandboxed frame with no
+   * network access, for things no other block can express: a calculator, a custom diagram, a
+   * small simulation.
+   */
+  html?: string;
+  /** html: starting height in pixels; the frame then grows to fit its content. */
+  height?: number;
+};
+
+export type CustomData = WidgetBase & {
+  kind: "custom";
+  title: string;
+  subtitle?: string;
+  blocks: CustomBlock[];
+};
+
 /* ───────────────────────── Clarifying questions (answered in the browser) ───────────────────────── */
 
 export type ClarifyQuestion = {

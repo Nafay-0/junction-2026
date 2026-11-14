@@ -7,6 +7,7 @@ import { useClientValue } from "@/lib/use-client";
 import { Actions } from "@/components/widgets/actions";
 import { Clarify } from "@/components/widgets/clarify";
 import { Comparison } from "@/components/widgets/comparison";
+import { Custom } from "@/components/widgets/custom";
 import { KeyFacts } from "@/components/widgets/facts";
 import { Flights } from "@/components/widgets/flights";
 import { Hotels } from "@/components/widgets/hotels";
@@ -22,6 +23,7 @@ import { Weather } from "@/components/widgets/weather";
 import { actionsFixture, actionsLoadingFixture } from "@/lib/widgets/fixtures/actions";
 import { clarifyAnswerFixture, clarifyFixture } from "@/lib/widgets/fixtures/clarify";
 import { comparisonFixture, comparisonLoadingFixture } from "@/lib/widgets/fixtures/comparison";
+import { customChartsFixture, customFixture, customHtmlFixture, customLoadingFixture } from "@/lib/widgets/fixtures/custom";
 import { factsFixture, factsLoadingFixture } from "@/lib/widgets/fixtures/facts";
 import { flightsFixture, flightsLoadingFixture } from "@/lib/widgets/fixtures/flights";
 import { hotelsFixture, hotelsLoadingFixture } from "@/lib/widgets/fixtures/hotels";
@@ -72,6 +74,9 @@ export default function WidgetGallery() {
     ["market", <PredictionMarket key="market" data={loading ? marketLoadingFixture : marketFixture} loading={loading} />],
     ["images", <Images key="images" data={loading ? imagesLoadingFixture : imagesFixture} loading={loading} />],
     ["research", <Research key="research" data={loading ? researchLoadingFixture : researchFixture} loading={loading} />],
+    ["custom", <Custom key="custom" data={loading ? customLoadingFixture : customFixture} loading={loading} onAsk={(prompt) => window.alert(`Would send: ${prompt}`)} />],
+    ["custom-charts", <Custom key="custom-charts" data={customChartsFixture} />],
+    ["custom-html", <Custom key="custom-html" data={customHtmlFixture} onAsk={(prompt) => window.alert(`Would send: ${prompt}`)} />],
     ["comparison", <Comparison key="comparison" data={loading ? comparisonLoadingFixture : comparisonFixture} loading={loading} />],
     ["facts", <KeyFacts key="facts" data={loading ? factsLoadingFixture : factsFixture} loading={loading} />],
     ["actions", <Actions key="actions" data={loading ? actionsLoadingFixture : actionsFixture} loading={loading} />],

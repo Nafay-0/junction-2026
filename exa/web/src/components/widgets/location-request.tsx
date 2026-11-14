@@ -89,7 +89,7 @@ export function LocationRequest({
     };
   }, [final, loading, onResult, share]);
 
-  if (final) return <Answered answer={final} approximatePlace={approximatePlace} />;
+  if (final) return <Answered answer={final} approximatePlace={approximatePlace} saved={saved} />;
 
   const useApproximate = () => finish({ status: phase === "blocked" ? "denied" : phase === "failed" ? "unavailable" : "declined", place: approximatePlace || undefined });
   const submitPlace = () => {
@@ -198,8 +198,11 @@ export function LocationRequest({
   );
 }
 
-function Answered({ answer, approximatePlace }: { answer: LocationAnswer; approximatePlace: string }) {
+function Answered({ answer, approximatePlace, saved }: { answer: LocationAnswer; approximatePlace: string; saved?: ExactLocation | null }) {
   const granted = answer.status === "granted";
+  // The name may arrive after the position was shared: use the saved one for the same position.
+  const name =
+    answer.status === "granted" ? (answer.label ?? (saved && Math.abs(saved.lat - answer.lat) < 0.001 && Math.abs(saved.lng - answer.lng) < 0.001 ? saved.label : undefined)) : undefined;
   const fallback = !granted ? answer.place || approximatePlace : "";
   return (
     <div className="flex w-full animate-fade items-center gap-3 rounded-2xl border border-border bg-surface/70 px-4 py-3">
@@ -211,7 +214,7 @@ function Answered({ answer, approximatePlace }: { answer: LocationAnswer; approx
           <>
             <span className="font-medium">Using your location</span>
             <span className="text-muted-foreground">
-              {answer.label ? `: ${answer.label}` : `: ${answer.lat.toFixed(4)}, ${answer.lng.toFixed(4)}`}
+              {name ? `: ${name}` : ""}
               {answer.accuracyM ? ` (${formatAccuracy(answer.accuracyM)})` : ""}
             </span>
           </>

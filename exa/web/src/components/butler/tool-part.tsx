@@ -10,6 +10,8 @@ import type {
   LocationAnswer,
   LocationRequestInput,
   ComparisonData,
+  CustomBlock,
+  CustomData,
   FlightsData,
   HotelsData,
   ImagesData,
@@ -24,6 +26,7 @@ import type {
 import { Actions } from "@/components/widgets/actions";
 import { Clarify } from "@/components/widgets/clarify";
 import { Comparison } from "@/components/widgets/comparison";
+import { Custom } from "@/components/widgets/custom";
 import { KeyFacts } from "@/components/widgets/facts";
 import { Flights } from "@/components/widgets/flights";
 import { Hotels } from "@/components/widgets/hotels";
@@ -99,6 +102,8 @@ export type WidgetHandlers = {
   onAnswer?: (toolCallId: string, answer: ClarifyAnswer) => void;
   /** Called when the user answers a request for their location. */
   onLocation?: (toolCallId: string, answer: LocationAnswer) => void;
+  /** Called when a button inside a custom widget continues the conversation with a prompt. */
+  onAsk?: (prompt: string) => void;
   /** The place assumed when no exact location is shared, for example "Helsinki, Finland". */
   approximatePlace?: string;
   /** The exact location saved in this browser, if any. */
@@ -203,6 +208,21 @@ function renderWidget(part: ToolPart, handlers: WidgetHandlers): React.ReactNode
         "Briefing the researchers",
       );
       return <Research data={data} loading={loading} />;
+    }
+    case "tool-showWidget": {
+      // Blocks appear as the model writes them: while the arguments stream in, they are the data.
+      const { data, loading } = resolve<CustomData>(
+        part,
+        (i) => ({
+          kind: "custom",
+          title: str(i.title, "Custom view"),
+          subtitle: str(i.subtitle) || undefined,
+          blocks: arr<CustomBlock>(i.blocks).filter((b) => typeof b === "object" && typeof b.type === "string"),
+          sources: [],
+        }),
+        "Composing a custom view",
+      );
+      return <Custom data={data} loading={loading} onAsk={handlers.onAsk} />;
     }
     case "tool-showComparison": {
       // The table fills in as the model writes it: the partial arguments are the data.

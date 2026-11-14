@@ -55,7 +55,9 @@ export async function locate(): Promise<LocateResult> {
   try {
     const position = await currentPosition();
     const { latitude: lat, longitude: lng, accuracy } = position.coords;
-    const named = await describe(lat, lng);
+    // Give the name lookup a moment, but do not hold the conversation up for it:
+    // the name is filled in afterwards if it arrives late.
+    const named = await Promise.race([describe(lat, lng), new Promise<{ label?: string; country?: string }>((resolve) => setTimeout(() => resolve({}), 2500))]);
     return { ok: true, location: { lat, lng, accuracyM: Math.round(accuracy), label: named.label, country: named.country, at: Date.now() } };
   } catch (err) {
     const code = (err as GeolocationPositionError | undefined)?.code;

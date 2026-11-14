@@ -256,26 +256,61 @@ function ChatView({
     [conversationId],
   );
 
+  /* Keep the newest content in view while the agent works, unless the user has scrolled up to read.
+     Sending a message, or answering a card the agent showed, always brings the view back down. */
+  const scroller = React.useRef<HTMLDivElement>(null);
+  const stick = React.useRef(true);
+  const [showJump, setShowJump] = React.useState(false);
+  const toBottom = React.useCallback((smooth = false) => {
+    const el = scroller.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+  }, []);
+  React.useEffect(() => {
+    if (stick.current) toBottom();
+  }, [messages, status, toBottom]);
+  const onScroll = () => {
+    const el = scroller.current;
+    if (!el) return;
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+    stick.current = distance < 160;
+    setShowJump(distance > 480);
+  };
+  const followLatest = React.useCallback(() => {
+    stick.current = true;
+    setShowJump(false);
+    // The new message is in the list after the next paint.
+    requestAnimationFrame(() => toBottom(true));
+  }, [toBottom]);
+
   const send = React.useCallback(
     (text: string, files: FileUIPart[] = []) => {
       if (!text && files.length === 0) return;
       clearError();
       remember(conversationId);
+      followLatest();
       void sendMessage(files.length ? { text: text || "What is this? Find out more about it.", files } : { text });
     },
-    [sendMessage, clearError, conversationId],
+    [sendMessage, clearError, conversationId, followLatest],
   );
 
-  // If the position was saved before its name could be looked up, look the name up now (once per position).
-  const namedFor = React.useRef("");
+  // A position is always shown by name, never as coordinates. If it was saved before its name
+  // could be looked up (the lookup is not allowed to hold up the conversation), keep trying.
   React.useEffect(() => {
     if (!location || location.label) return;
-    const key = `${location.lat},${location.lng}`;
-    if (namedFor.current === key) return;
-    namedFor.current = key;
-    void describe(location.lat, location.lng).then((named) => {
-      if (named.label) saveLocation({ ...location, ...named });
-    });
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const attempt = (n: number) => {
+      void describe(location.lat, location.lng).then((named) => {
+        if (cancelled) return;
+        if (named.label) saveLocation({ ...location, ...named });
+        else if (n < 3) timer = setTimeout(() => attempt(n + 1), 2500 * (n + 1));
+      });
+    };
+    attempt(0);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [location, saveLocation]);
 
   /* Location. The browser is only asked when the user or the agent wants it. */
@@ -298,10 +333,14 @@ function ChatView({
     () => ({
       approximatePlace,
       savedLocation: location,
+      // A button inside a custom widget that continues the conversation.
+      onAsk: (prompt: string) => send(prompt),
       onAnswer: (toolCallId: string, output: ClarifyAnswer) => {
+        followLatest();
         void addToolOutput({ tool: "askUser", toolCallId, output });
       },
       onLocation: (toolCallId: string, output: LocationAnswer) => {
+        followLatest();
         if (output.status === "granted") {
           const { status: _status, ...exact } = output;
           void _status;
@@ -318,27 +357,8 @@ function ChatView({
         void addToolOutput({ tool: "requestLocation", toolCallId, output });
       },
     }),
-    [approximatePlace, location, addToolOutput, applyLocation, setDeclined, setPlace],
+    [approximatePlace, location, addToolOutput, applyLocation, setDeclined, setPlace, send, followLatest],
   );
-
-  /* Keep the newest content in view while the agent works, unless the user has scrolled up to read. */
-  const scroller = React.useRef<HTMLDivElement>(null);
-  const stick = React.useRef(true);
-  const [showJump, setShowJump] = React.useState(false);
-  const toBottom = React.useCallback((smooth = false) => {
-    const el = scroller.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
-  }, []);
-  React.useEffect(() => {
-    if (stick.current) toBottom();
-  }, [messages, status, toBottom]);
-  const onScroll = () => {
-    const el = scroller.current;
-    if (!el) return;
-    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-    stick.current = distance < 160;
-    setShowJump(distance > 480);
-  };
 
   const stats = React.useMemo(() => sumStats(messages.filter((m) => m.role === "assistant").map((m) => m.metadata)), [messages]);
   const last = messages.at(-1);

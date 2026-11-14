@@ -2,7 +2,7 @@ import "server-only";
 
 import { tool } from "ai";
 import { z } from "zod";
-import { toSource, type ActionsData, type ComparisonData, type KeyFactsData, type PlanData } from "@/lib/widgets/types";
+import { toSource, type ActionsData, type ComparisonData, type CustomBlock, type CustomData, type KeyFactsData, type PlanData } from "@/lib/widgets/types";
 
 /*
  * Widgets the model composes itself from what it has already found, and the two tools that
@@ -95,6 +95,135 @@ export function showActionsTool() {
     }),
     toModelOutput: () => ({ type: "text", value: "The action buttons are shown. End your turn with at most one short sentence." }),
   });
+}
+
+const HTML_LIMIT = 24_000;
+
+/**
+ * The open-ended widget. The model composes it from blocks when none of the fixed widgets fits:
+ * charts, stat tiles, tables, lists and timelines, progress bars, images, buttons, and (as a last
+ * resort) a sandboxed HTML fragment. One flat block shape with optional fields keeps the schema
+ * acceptable to every model family; `normaliseBlocks` drops anything unusable.
+ */
+export function showWidgetTool() {
+  const item = z.object({
+    label: z.string(),
+    value: z.string().optional().describe("stats: the number or short fact. list: text on the right (or the headline in a timeline). progress: text beside the bar."),
+    detail: z.string().optional().describe("A second, quieter line."),
+    href: z.string().optional().describe("A URL that makes the entry a link. Only URLs that tools returned."),
+    trend: z.enum(["up", "down", "flat"]).optional().describe("stats: direction of change, drawn as an arrow. Green for up and red for down unless good says otherwise."),
+    good: z.boolean().optional().describe("stats: set false when a rise is bad news (unemployment, prices, debt), true when a fall is good news, so the colour matches the meaning."),
+    percent: z.number().optional().describe("progress: how full the bar is, 0 to 100."),
+  });
+  const block = z.object({
+    type: z.enum(["text", "stats", "chart", "table", "list", "progress", "image", "buttons", "callout", "html"]),
+    width: z.enum(["full", "half"]).optional().describe('"half" puts two consecutive blocks side by side on wide screens.'),
+    title: z.string().optional().describe("A small heading above the block."),
+    text: z.string().optional().describe("text: markdown. callout: one or two plain sentences."),
+    tone: z.enum(["info", "success", "warning"]).optional().describe("callout: its colour."),
+    items: z.array(item).max(24).optional().describe("stats, list, progress: the entries."),
+    listStyle: z.enum(["bullets", "numbers", "checks", "timeline"]).optional().describe('list: "timeline" uses label as the date or step, value as the headline, detail as the description.'),
+    chartType: z.enum(["pie", "donut", "bar", "stackedBar", "horizontalBar", "line", "area", "scatter", "radar"]).optional(),
+    labels: z.array(z.string()).max(60).optional().describe("chart: slice names for pie and donut, x-axis labels otherwise (for scatter, the x values as numbers in strings)."),
+    series: z
+      .array(z.object({ name: z.string(), values: z.array(z.number()).describe("One number per label, in the same order.") }))
+      .max(8)
+      .optional()
+      .describe("chart: the data. Pie and donut use the first series only."),
+    unit: z.string().optional().describe('chart: unit shown with values, for example "€", "%", "km".'),
+    columns: z.array(z.string()).max(8).optional().describe("table: header cells."),
+    rows: z.array(z.array(z.string())).max(60).optional().describe("table: body rows, each lined up with columns."),
+    url: z.string().optional().describe("image: an https image address that a tool returned."),
+    caption: z.string().optional().describe("image: a line under it."),
+    buttons: z
+      .array(
+        z.object({
+          label: z.string(),
+          action: z.enum(["link", "ask", "copy"]).describe('"link" opens value (a URL). "ask" sends value to you as the user\'s next message, so write it as the user would. "copy" copies value.'),
+          value: z.string(),
+          primary: z.boolean().optional(),
+        }),
+      )
+      .max(6)
+      .optional(),
+    html: z
+      .string()
+      .optional()
+      .describe(
+        "html: a self-contained fragment (markup, a <style> and a <script> if needed; no <html> or <body>) for something no other block can express, such as a calculator or a custom diagram. " +
+          "It runs in a sandboxed frame with no network access: no external scripts, fonts, images over http, or fetch. Use inline SVG or canvas and plain JavaScript. " +
+          "Style with the provided CSS variables (--foreground, --muted-foreground, --card, --border, --brand, --brand-soft, --primary, --primary-foreground, --up, --down, --chart-1 to --chart-5, --radius) " +
+          "and helper classes (.btn, .btn-primary, .card, .muted, .row, .grid) so it matches the app in light and dark themes; never hard-code colours. " +
+          "window.hovi.ask(text) sends text to you as the user's next message, hovi.open(url) opens a page, hovi.copy(text) copies. Keep it under 150 lines.",
+      ),
+    height: z.number().optional().describe("html: starting height in pixels."),
+  });
+  return tool({
+    description:
+      "Show a custom widget that you compose from blocks, for anything the other tools do not cover: a pie or bar chart of numbers you found, a small dashboard, a timeline, a ranked list with links, a checklist, a table, buttons for next steps, or (with an html block) something interactive such as a calculator. " +
+      "Use the specialised tools first when one fits (places, flights, hotels, products, stocks, prediction markets, images, weather, comparison, key facts). " +
+      "Blocks render in order; give two related blocks width 'half' to sit side by side (a chart next to its key numbers). Three to six blocks is usually right. " +
+      "Use only data you found or the user gave; cite it with sourceUrls. Prefer chart, stats, table and list blocks over html: they are faster and always look right. " +
+      "Buttons with action 'ask' let the user continue with one tap ('Compare with last year', 'Find cheaper options').",
+    inputSchema: z.object({
+      title: z.string().describe("A short title, a few words."),
+      subtitle: z.string().optional().describe("One line of context: the period, the place, what the numbers are."),
+      blocks: z.array(block).min(1).max(10),
+      sourceUrls,
+    }),
+    execute: async ({ sourceUrls: urls, ...input }): Promise<CustomData> => ({
+      kind: "custom",
+      title: input.title,
+      subtitle: input.subtitle,
+      blocks: normaliseBlocks(input.blocks as CustomBlock[]),
+      sources: (urls ?? []).map((url) => toSource({ url })),
+    }),
+    toModelOutput: () => ({ type: "text", value: "The widget is shown to the user. Do not repeat its contents; add at most two sentences of judgement or next step." }),
+  });
+}
+
+/** Keep only blocks that have what their type needs, and trim what could hurt (oversized HTML, unsafe links). */
+export function normaliseBlocks(blocks: CustomBlock[]): CustomBlock[] {
+  const safeUrl = (u: string | undefined) => (u && /^https?:\/\//i.test(u) ? u : undefined);
+  const out: CustomBlock[] = [];
+  for (const b of blocks ?? []) {
+    if (!b || typeof b.type !== "string") continue;
+    const items = (b.items ?? []).filter((i) => i && typeof i.label === "string").map((i) => ({ ...i, href: safeUrl(i.href) }));
+    switch (b.type) {
+      case "text":
+      case "callout":
+        if (b.text?.trim()) out.push({ type: b.type, width: b.width, title: b.title, text: b.text, tone: b.tone });
+        break;
+      case "stats":
+      case "list":
+      case "progress":
+        if (items.length) out.push({ type: b.type, width: b.width, title: b.title, items, listStyle: b.listStyle });
+        break;
+      case "chart": {
+        const labels = (b.labels ?? []).map(String);
+        const series = (b.series ?? [])
+          .filter((s) => s && Array.isArray(s.values))
+          .map((s) => ({ name: String(s.name ?? ""), values: s.values.slice(0, labels.length).map((v) => (Number.isFinite(v) ? v : 0)) }));
+        if (b.chartType && labels.length && series.some((s) => s.values.length)) out.push({ type: "chart", width: b.width, title: b.title, chartType: b.chartType, labels, series, unit: b.unit });
+        break;
+      }
+      case "table":
+        if (b.columns?.length && b.rows?.length) out.push({ type: "table", width: b.width, title: b.title, columns: b.columns, rows: b.rows.map((r) => b.columns!.map((_, i) => String(r?.[i] ?? ""))) });
+        break;
+      case "image":
+        if (safeUrl(b.url)) out.push({ type: "image", width: b.width, title: b.title, url: b.url, caption: b.caption });
+        break;
+      case "buttons": {
+        const buttons = (b.buttons ?? []).filter((x) => x && x.label && x.value && (x.action !== "link" || safeUrl(x.value)));
+        if (buttons.length) out.push({ type: "buttons", width: b.width, title: b.title, buttons });
+        break;
+      }
+      case "html":
+        if (b.html?.trim()) out.push({ type: "html", width: b.width, title: b.title, html: b.html.slice(0, HTML_LIMIT), height: b.height });
+        break;
+    }
+  }
+  return out;
 }
 
 export function updatePlanTool() {

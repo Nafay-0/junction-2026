@@ -271,7 +271,8 @@ function PlaceChip({ place, onPlaceChange, exact, onLocate, onClearExact }: Wher
   const [draft, setDraft] = React.useState(place);
   const [locating, setLocating] = React.useState(false);
   const [problem, setProblem] = React.useState("");
-  const label = exact ? (exact.label ?? `${exact.lat.toFixed(3)}, ${exact.lng.toFixed(3)}`) : place;
+  // Always a name. Until the name of a freshly shared position has been looked up, say so in words.
+  const label = exact ? (exact.label ?? "Your location") : place;
 
   const shareExact = async () => {
     setLocating(true);
@@ -308,7 +309,7 @@ function PlaceChip({ place, onPlaceChange, exact, onLocate, onClearExact }: Wher
               <div className="min-w-0 flex-1 text-[0.8rem] leading-snug">
                 <p className="font-medium">Using your exact location</p>
                 <p className="truncate text-muted-foreground">
-                  {exact.label ?? `${exact.lat.toFixed(4)}, ${exact.lng.toFixed(4)}`}
+                  {exact.label ?? "Looking up the place name"}
                   {exact.accuracyM ? `, ${formatAccuracy(exact.accuracyM)}` : ""}
                 </p>
                 <div className="mt-1.5 flex gap-3">
