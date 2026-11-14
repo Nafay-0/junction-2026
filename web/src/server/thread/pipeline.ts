@@ -9,6 +9,8 @@ import type { ConsolePerson } from "@/server/console-context";
 import type { Kitchen } from "@/server/kitchen-portal";
 import { callTool } from "@/server/mcp/server";
 import { qualifiersOf, wordsNotCarried } from "@/core/qualifiers";
+import { claimOf, normaliseWantedTag } from "@/core/vocabulary";
+import { optionDifferences, type Difference } from "./differences";
 import { TOOLS } from "@/server/mcp/tools";
 import type { Runtime } from "@/server/runtime";
 import { canDraft, groupIdOf, groupOf, groupsOf, refusalOfError, refusalOfRule, refusalOfStep, sayRefusal, type Refusal } from "./refusal";
@@ -69,6 +71,20 @@ export type TurnRun = {
   opening?: ReturnType<typeof step>;
   /** Several items in one message: none is placed alone; the ones ready become one order sheet (combineItems). */
   multi?: boolean;
+  /** A request quoted at once whose quote differs from what was asked (said first by engine.ts, a yes places it). */
+  quotedDiffs?: Difference[];
+  /** A dish named for a booking's main that cannot come ("braised pork shoulder instead"): scenario.ts replaceInEvent. */
+  eventReplace?: { planId: string; pending: unknown; words: string };
+  /** The scenario's own reply is this turn's words (a plan that cannot be completed, said by plain code). */
+  scenarioReplyIsLine?: boolean;
+  /** "Only what can be bought" for a scenario's plan that cannot be completed (scenario.ts orderScenarioPartial). */
+  scenarioPartial?: unknown;
+  /** The reply already says what of the menu is missing, why, and the one question (engine.ts changeMenuInWords). */
+  menuLineSaid?: boolean;
+  /** A dish of the plan planned this turn was refused under the kitchen's rule: its refusal is the reply (engine.ts). */
+  refusedDish?: string;
+  /** The buyer said yes to looking at another day for this request (engine.ts anotherDay): it is not offered again. */
+  anotherDayFor?: { requestId: string; turnId: string };
 };
 
 export type Reading = Awaited<ReturnType<typeof interpretRequest>> & { earlier: EarlierRequest[] };
@@ -165,7 +181,7 @@ export function splitItems(text: string): string[] {
  */
 export async function qualifierCheck(run: TurnRun, family: string, item: string, options: OptionView[]): Promise<{ absent: string[]; notCarried: Map<string, string[]> }> {
   const q = await qualifiersOf(run.rt.catalog, family, item);
-  const main = (o: OptionView) => [...o.lines].sort((a, b) => b.quantity * (b.packSize ?? 1) - a.quantity * (a.packSize ?? 1))[0]?.productId;
+  const main =(o: OptionView) => [...o.lines].sort((a, b) => b.quantity * (b.packSize ?? 1) - a.quantity * (a.packSize ?? 1))[0]?.productId;
   const notCarried = new Map<string, string[]>();
   for (const o of options) {
     const id = main(o);
@@ -484,10 +500,35 @@ export async function combineItems(run: TurnRun, words: string, items: ItemOutco
 }
 
 /**
+ * A product the kitchen has bought (its order history) whose name carries every word of the request, in any of its
+ * languages ("vaasan rye rice pies" in "Vaasan Rye rice pie 90x90g"; "ruisriisipiirakoita" carries "riisipiirakka").
+ * One the request names with fewer words than another bought product is not guessed between: undefined.
+ */
+export async function boughtNamed(run: TurnRun, text: string): Promise<{ id: string; name: string; category: string } | undefined> {
+  const fold = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const STOP = new Set(["the", "of", "for", "and", "some", "our", "usual", "kg", "pcs", "packs", "pack", "litres", "liters", "ja", "och", "tavallinen", "tavallista"]);
+  const words = fold(text).split(/[^a-z0-9äöå]+/).filter((w) => w.length >= 3 && !STOP.has(w) && !/^\d/.test(w));
+  if (!words.length) return undefined;
+  const profile = await run.rt.kitchens.getProfile(run.session.mandate.issuer.orgId).catch(() => undefined);
+  const ids = [...new Set((profile?.history ?? []).slice(-60).flatMap((h) => h.lines.map((l) => (l as { productId: string }).productId)).filter(Boolean))].slice(0, 40);
+  if (!ids.length) return undefined;
+  const ps = await run.rt.catalog.searchProducts({ ids, limit: 40 });
+  const carries = (name: string, w: string) => {
+    const n = fold(name);
+    const stem = w.slice(0, Math.min(6, Math.max(3, w.length - 2)));
+    // A compound said whole ("ruisriisipiirakoita") carries a long word of the name ("riisipiirakka").
+    return n.includes(stem) || n.split(/[^a-z0-9äöå]+/).some((x) => x.length >= 8 && w.length >= 10 && w.includes(x.slice(0, 6)));
+  };
+  const hits = ps.filter((p) => run.session.mandate.allowedCategories.includes(p.category) && words.every((w) => [p.name, ...Object.values((p as { names?: Record<string, string> }).names ?? {})].some((n) => carries(n, w))));
+  const families = new Set(hits.map((p) => p.category));
+  return families.size === 1 ? { id: hits[0].id, name: hits[0].name, category: hits[0].category } : undefined;
+}
+
+/**
  * A need, however it was made (read from words, or rebuilt by plain code from an earlier order), through the
  * intake: the understood card, then whatever the intake says, then a routine order placed alone.
  */
-export async function openNeed(run: TurnRun, need: NeedInput, words: string, opts: { ref: string; basedOn?: { requestId: string; fields: string[]; label?: string }; alsoAsked?: string[]; memoryLine?: string }): Promise<ItemOutcome[]> {
+export async function openNeed(run: TurnRun, need: NeedInput, words: string, opts: { ref: string; basedOn?: { requestId: string; fields: string[]; label?: string }; alsoAsked?: string[]; memoryLine?: string; /** The day is a latest day whatever the words say (another day looked at). */ latest?: boolean }): Promise<ItemOutcome[]> {
   // A kitchen's day ("for Thursday", "torstaiksi") is the day it wants the goods, not a latest date: delivered that day
   // when it can be (the intake moves the wholesaler's earliest offer to it). Earlier only when that day cannot be had.
   // "For coffee" is a use, not a claim any product carries: it becomes the barista kind in the words searched for.
@@ -496,6 +537,33 @@ export async function openNeed(run: TurnRun, need: NeedInput, words: string, opt
   if (nn.requiredClaims?.some((c) => COFFEE.test(c)) || nn.item.attributes?.some((c) => COFFEE.test(c)) || /\b(for|to|in)\s+(the\s+)?coffee\b|kahviin|kahvikoneeseen|till kaffe/i.test(nn.item.text)) {
     const text = /barista/i.test(nn.item.text) ? nn.item.text : `${nn.item.text.replace(/\s+(for|to|in)\s+(the\s+)?coffee(\s+(machine|maker|bar|machines))?|\s+(kahviin|kahvikoneeseen)|\s+till kaffe(maskinen)?/i, "")} barista`;
     need = { ...need, ...(nn.requiredClaims ? { requiredClaims: nn.requiredClaims.filter((c) => !COFFEE.test(c)) } : {}), item: { ...need.item, text, ...(nn.item.attributes ? { attributes: nn.item.attributes.filter((c) => !COFFEE.test(c)) } : {}) } } as NeedInput;
+  }
+  // A word the reader took for a claim that no product's data can carry ("churned", "brand_peltolan", "vaasan") is
+  // part of what the product is called: it stays in the words searched for, never a requirement no product can meet
+  // (the intake would refuse every product for it, though the one the kitchen buys every week is on sale).
+  {
+    const it = need as { item: { text: string; attributes?: string[] }; requiredClaims?: string[] };
+    const checkable = (t: string) => normaliseWantedTag(t).kind !== "claim" || !!claimOf(t) || run.session.mandate.requiredAttributes.includes(t);
+    const dropped = [...(it.item.attributes ?? []), ...(it.requiredClaims ?? [])].filter((t) => !checkable(t));
+    if (dropped.length) {
+      // Each word once, without "brand" itself ("peltolan_brand" adds nothing to "Peltolan churned butter").
+      const extra = [...new Set(dropped.flatMap((t) => t.split(/[_\s]+/)))].filter((w) => w.length >= 3 && !/^(brand|merkki|maker|valmistaja|märke|tillverkare)$/i.test(w) && !it.item.text.toLowerCase().includes(w.toLowerCase()) && words.toLowerCase().includes(w.toLowerCase()));
+      need = { ...need, item: { ...it.item, text: [...extra, it.item.text].join(" ").slice(0, 200), attributes: (it.item.attributes ?? []).filter(checkable) }, ...(it.requiredClaims ? { requiredClaims: it.requiredClaims.filter(checkable) } : {}) } as NeedInput;
+      record(run, "claims_as_words", `Words read as claims that no product's data carries are kept as words of the product's name: ${dropped.join(", ")}.`, { dropped });
+    }
+  }
+  // What the kitchen already buys, in the chef's words ("Vaasan rye rice pies": the 90 g pies it orders every Thursday):
+  // the family of that product. Counting matches over the whole assortment would take the shelf with the most products
+  // carrying those words (Vaasan's rye breads) and never offer the pies themselves.
+  {
+    const it = need as { item: { text: string; category?: string; productId?: string } };
+    if (!it.item.category && !it.item.productId && it.item.text.trim()) {
+      const bought = await boughtNamed(run, it.item.text).catch(() => undefined);
+      if (bought) {
+        need = { ...need, item: { ...it.item, category: bought.category } } as NeedInput;
+        record(run, "bought_family", `"${it.item.text.slice(0, 80)}" names a product the kitchen buys (${bought.name}): looked for in its family.`, { productId: bought.id, family: bought.category });
+      }
+    }
   }
   // "An oat-based one", "kaurajogurttia": a plant yoghurt is its own family, never the dairy yoghurts with a word added.
   {
@@ -515,7 +583,7 @@ export async function openNeed(run: TurnRun, need: NeedInput, words: string, opt
     }
   }
   // Words that set a latest day ("by Monday", "mennessä", "senast") keep it a latest day.
-  const latest = /\b(by|before|at the latest|no later than|mennessä|viimeistään|ennen|senast|innan|före)\b/i.test(words);
+  const latest = opts.latest || /\b(by|before|at the latest|no later than|mennessä|viimeistään|ennen|senast|innan|före)\b/i.test(words);
   if (n.deliverBy && !n.deliverOn && !latest && n.deliverBy > new Date().toISOString().slice(0, 10)) need = { ...need, deliverOn: n.deliverBy } as NeedInput;
   const parsed = NeedSchema.parse(need) as StructuredNeed;
   const understood = understoodCard({ ref: opts.ref, words, need: parsed, ...(opts.basedOn ? { basedOn: opts.basedOn } : {}), alsoAsked: opts.alsoAsked ?? [], ...(opts.memoryLine ? { memoryUsed: [opts.memoryLine] } : {}) });
@@ -584,6 +652,10 @@ export async function afterStep(run: TurnRun, s: IntakeView, words: string): Pro
       const r = refusalOfStep(run, s, "en");
       const gid = s.family ? groupIdOf(s.family) : undefined;
       if (r.code === "out_of_mandate" && r.draft && gid) n.addGroup = { id: gid, what: r.what, words };
+      // "Shall I look at another day?" is an offer a yes carries out (engine.ts anotherDay): the request is looked at
+      // again over the following week. Offered once per request: a second "nothing" says so and stops.
+      const anotherDay = (r.code === "cutoff_passed" && !r.earliest) || r.code === "out_of_stock" || (r.code === "nothing_fits" && !!r.day && !r.noOffer);
+      if (anotherDay && !run.anotherDayFor) (run.thread as unknown as { anotherDay?: { requestId: string; turnId: string } }).anotherDay = { requestId: s.requestId, turnId: run.turnId };
     }
     run.store.card(run.thread, run.turnId, n);
     out.notice = n;
@@ -665,8 +737,41 @@ export async function afterStep(run: TurnRun, s: IntakeView, words: string): Pro
     run.store.card(run.thread, run.turnId, { ...card, chosen: routine.option.optionId });
     return placeQuoted(run, quoted, words, passedOver(s, routine.option.optionId), true);
   }
-  if (s.state === "quoted") return placeQuoted(run, s, words, [], false);
+  if (s.state === "quoted") {
+    // Quoted at once (the kitchen's usual, pre-selected): not placed by the agent when the quote differs from what was
+    // asked (an amount rounded to the product's lot, another day); the difference is said first and a yes places it.
+    const held = await quotedDifferences(run, s);
+    if (held.length && run.buyer.via !== "tap") {
+      const price = priceCard(s);
+      if (price) {
+        run.store.card(run.thread, run.turnId, price);
+        run.facts.push(price);
+      }
+      run.quotedDiffs = [...(run.quotedDiffs ?? []), ...held];
+      record(run, "alone_held", `Not ordered alone: the quote differs from the request (${held.map((d) => d.kind).join(", ")}), said to the buyer first.`, { kinds: held.map((d) => d.kind) }, s.requestId);
+      return out;
+    }
+    return placeQuoted(run, s, words, [], false);
+  }
   return out;
+}
+
+/** What a quote holds against what was asked: the amount (in the buyer's unit) and the day. */
+async function quotedDifferences(run: TurnRun, s: IntakeView): Promise<Difference[]> {
+  const q = s.quote?.quote;
+  const asked = (s.need as { quantity?: { amount: number; unit: string }; deliverOn?: string }).quantity;
+  if (!q?.lines.length) return [];
+  const lines = q.lines.filter((l) => !l.substituteFor);
+  const unit = lines[0]?.unit;
+  const same = lines.every((l) => l.unit === unit);
+  const delivered = same && unit !== "pcs" ? { amount: Math.round(lines.reduce((n, l) => n + l.quantity * l.packSize, 0) * 1000) / 1000, unit } : undefined;
+  const one = lines.length === 1 ? lines[0] : undefined;
+  const [product] = one ? await run.rt.catalog.searchProducts({ ids: [one.productId], limit: 1 }).catch(() => []) : [];
+  const lot = one ? (product?.lotSize && product.lotSize > 0.01 ? product.lotSize : 1) : undefined;
+  const pack = one && lot ? { count: Math.round(one.quantity / lot), size: Math.round(lot * one.packSize * 1000) / 1000, unit: one.unit } : undefined;
+  const on = (s.need as { deliverOn?: string }).deliverOn;
+  const day = q.lines.map((l) => l.deliveryDate).sort().at(-1);
+  return optionDifferences({ key: s.requestId, name: s.need.item.text, ...(asked ? { amount: asked } : {}), ...((on ?? s.need.deliverBy) ? { day: on ?? s.need.deliverBy } : {}), exact: !!on }, { ...(delivered ? { delivered } : {}), ...(day ? { deliveryDate: day } : {}), ...(pack && pack.size !== 1 ? { pack } : {}) });
 }
 
 /**

@@ -25,6 +25,13 @@ describe("the mistake check, said", () => {
     expect(guardWords(day, "en")).toMatch(/Shall I make it Mon 16 Nov\?$/);
   });
 
+  it("says a pack reading with the pack's size and the total, never a bare '20 packs'", () => {
+    const c = card({ key: "unit_confusion:20:L", code: "unit_confusion", message: "20 L is what you usually order in packs: 20 packs of 20 L = 400 L. Did you mean 20 packs?", confirmable: true, corrections: [{ id: "use_20_pack", label: "Make it 20 packs (400 L)" }], evidence: { usualAmount: 400, unit: "L", basedOnOrders: 6, asked: { amount: 20, unit: "L" }, packSize: 20 } });
+    const en = guardWords(c, "en");
+    expect(en).toMatch(/You usually order about 400\s?l/i);
+    expect(en).toMatch(/did you mean 20 packs of 20\s?l \(400\s?l\)\?$/i);
+  });
+
   it("takes the answer in words: the corrected figure, a yes with the figure, or a reason that means yes", () => {
     expect(guardAnswerOf(tenfold, "100")?.action).toMatchObject({ choice: "use_100_L" });
     expect(guardAnswerOf(tenfold, "yes, 1 000")?.action).toMatchObject({ choice: "confirm" });

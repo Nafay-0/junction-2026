@@ -400,7 +400,10 @@ export async function changeMenu(slug: KitchenRef, planId: string, words: string
   const before = await service.get(kitchen, planId);
   const p = before.record;
   // The dish a "… instead" replaces: a refused one, else the one whose defining ingredient cannot be had.
-  const target = before.view.totals.missing.find((m) => m.defining)?.dishId;
+  // A main course's first: "braised pork shoulder instead" in a three-course booking replaces the main that cannot come.
+  const courseOf = (dishId?: string) => p.draft.dishes.find((d) => d.id === dishId)?.course ?? "";
+  const defining = before.view.totals.missing.filter((m) => m.defining);
+  const target = (defining.find((m) => /main|pää/i.test(courseOf(m.dishId))) ?? defining[0])?.dishId;
   const missingLines = before.view.totals.missing.filter((m) => m.lineId && m.code !== "refused_dish").map((m) => m.lineId!);
   const edits = changeEditsOf(words, p, { ...(target ? { target } : {}), missing: missingLines });
   const t = MENU_SAY_TEXT[lang];

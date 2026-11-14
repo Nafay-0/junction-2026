@@ -61,5 +61,9 @@ export async function answerBackupIn(run: TurnRun, words: string, lang: Lang): P
   const r = await answerBackup(run.rt, run.session, card.momentId, answer, { by: byLine(run), via: run.door, lang });
   run.store.card(run.thread, run.turnId, { ...card, state: answer === "no" ? "declined" : "set" });
   record(run, "backup_answer", `The buyer answered the backup question (${card.momentId}): ${answer}.`, { backupId: card.momentId, answer });
-  return readable(r.reply, lang);
+  // Each catalogue name said as a chef says it, as in the question.
+  const rb = r.backup as { product?: { name: string }; chosen?: { name: string } } | undefined;
+  let reply = r.reply;
+  for (const n of [rb?.product?.name, rb?.chosen?.name].filter((x): x is string => !!x).sort((a, z) => z.length - a.length)) reply = reply.split(n).join(shortName(n));
+  return readable(reply, lang);
 }

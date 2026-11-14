@@ -4,6 +4,11 @@ import { differencesOf, keyOf, optionDifferences, sayDifferences } from "./diffe
 const ctx = { lang: "en" as const, allowedGroups: ["dairy and cheese", "bakery"] };
 
 describe("nothing is left out, swapped, reduced or moved silently", () => {
+  it("an amount in kilos of a product sold in packs is said in packs and in kilos", () => {
+    const d = optionDifferences({ key: "r1", name: "Vaasan rye rice pies", amount: { amount: 16, unit: "kg" } }, { delivered: { amount: 16.2, unit: "kg" }, pack: { count: 2, size: 8.1, unit: "kg" } });
+    expect(sayDifferences(d, ctx).said).toBe("Vaasan rye rice pies come in packs of 8,1 kg: 2 packs are 16,2 kg rather than 16 kg.");
+  });
+
   it("an ingredient outside the kitchen's product groups is said with the rule, where it comes from, and the ways forward", () => {
     const d = differencesOf(
       [
