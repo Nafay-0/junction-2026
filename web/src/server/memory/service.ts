@@ -9,7 +9,7 @@ import type { Proposer } from "./propose";
 import { applyScopedRules, recall, usageLines, type RecallQuery } from "./recall";
 import { fromHistory } from "./signals";
 import type { MemoryIndex } from "./vectors";
-import { expressible, type MandatePatch } from "../mandates";
+import { expressible, type PatchAdded } from "../mandates";
 import { writeMemory, type WriteReport } from "./writer";
 
 /**
@@ -256,7 +256,7 @@ export function createMemoryService(deps: MemoryServiceDeps) {
       return withOrg(orgId, async () => {
         const p = await load(orgId);
         const at = now().toISOString();
-        const offers: { item: MemoryItem; patch: Required<MandatePatch> }[] = [];
+        const offers: { item: MemoryItem; patch: PatchAdded }[] = [];
         for (const m of p.memory!.items) {
           if (m.status !== "active" || m.strength !== "rule" || !isSafetyFact(m.fact) || m.mandate?.status === "declined") continue;
           const f = m.fact;

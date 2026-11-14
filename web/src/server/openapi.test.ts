@@ -170,6 +170,21 @@ describe("real responses match the documented status codes and schemas", () => {
     expect((await kitchen("GET", "/api/v1/intake/req_nope")).status).toBe(404);
     await kitchen("GET", "/api/v1/kitchen");
 
+    // The wholesaler's offers: a campaign the selling agent makes for Kaari, then the buyer's answers over REST.
+    const { startCampaign } = await import("./offers/service");
+    const { getRuntime } = await import("./runtime");
+    await startCampaign(await getRuntime(), { productId: "VA-1201", by: "Staff", listAsNew: true });
+    await startCampaign(await getRuntime(), { productId: "VA-1002", by: "Staff", listAsNew: true });
+    const listed = (await kitchen("GET", "/api/v1/offers")).body.offers as { offerId: string }[];
+    expect(listed.length).toBe(2);
+    await kitchen("GET", "/api/v1/offers?all=true");
+    expect((await kitchen("POST", "/api/v1/offers/ofr_nope/decline", {})).status).toBe(404);
+    expect((await kitchen("POST", `/api/v1/offers/${listed[0].offerId}/accept`, { packs: 2, by: "Sanna" })).status).toBe(201);
+    expect((await kitchen("POST", `/api/v1/offers/${listed[0].offerId}/accept`, {})).status).toBe(409);
+    await kitchen("POST", `/api/v1/offers/${listed[1].offerId}/decline`, { by: "Sanna" });
+    expect((await kitchen("POST", "/api/v1/offers/mute", { scope: "sideways" })).status).toBe(400);
+    await kitchen("POST", "/api/v1/offers/mute", { scope: "all", by: "Sanna" });
+
     // Free text to a structured need, with a scripted model (no provider is called).
     const scripted = { item: { text: "lactose-free milk", category: "milk", attributes: ["lactose_free"], excludedAttributes: [], productId: null }, quantity: { amount: 1000, unit: "L" }, deliverBy: null, requiredClaims: [], forbiddenAllergens: [], optimise: "price", sameAsLastTime: false, isPurchaseRequest: true, notPurchaseReason: null };
     setInterpretModelForTests({ ...scriptedModel([{ text: JSON.stringify(scripted) }]), id: "scripted:interpret" });

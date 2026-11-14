@@ -4,7 +4,8 @@ import type { Product } from "./catalog";
  * A small, realistic seed of Finnish food-service dairy. Prices are per pack, ex VAT, in cents.
  * The scenario that matters: the kitchen's usual product (VA-1010, 10 L bag-in-box) has only 600 L in stock,
  * so a 1,000 L order needs a substitute. AR-2010 is the close substitute (+6.2 % per litre).
- * Products and numbers are mock data, not real Valio Aimo prices.
+ * Products and numbers are mock data, not real Valio Aimo prices. Nutrition figures are invented, typical of the kind
+ * (per 100 ml or 100 g), so the nutrition rules have something to check in a clone without partner data.
  */
 export const SEED_PRODUCTS: Product[] = [
   {
@@ -18,6 +19,8 @@ export const SEED_PRODUCTS: Product[] = [
     allergens: ["milk"],
     certificates: ["hyvaa_suomesta"],
     deliveryReliability: 0.98,
+    nutrition: { per: "100ml", values: { energy_kcal: 39, fat: 1.5, saturated_fat: 1, carbohydrate: 3.1, sugar: 3.1, protein: 3.6, salt: 0.1, calcium: 120 } },
+    vatRatePct: 13.5,
     carbonKgPerUnit: 1.05,
   },
   {
@@ -31,6 +34,8 @@ export const SEED_PRODUCTS: Product[] = [
     allergens: ["milk"],
     certificates: ["hyvaa_suomesta"],
     deliveryReliability: 0.95,
+    nutrition: { per: "100ml", values: { energy_kcal: 39, fat: 1.5, saturated_fat: 1, carbohydrate: 3.1, sugar: 3.1, protein: 3.6, salt: 0.1, calcium: 120 } },
+    vatRatePct: 13.5,
     carbonKgPerUnit: 1.12,
   },
   {
@@ -44,6 +49,8 @@ export const SEED_PRODUCTS: Product[] = [
     allergens: ["milk"],
     certificates: ["hyvaa_suomesta"],
     deliveryReliability: 0.99,
+    nutrition: { per: "100ml", values: { energy_kcal: 39, fat: 1.5, saturated_fat: 1, carbohydrate: 3.1, sugar: 3.1, protein: 3.6, salt: 0.1, calcium: 120 } },
+    vatRatePct: 13.5,
     carbonKgPerUnit: 1.15,
   },
   {
@@ -57,6 +64,8 @@ export const SEED_PRODUCTS: Product[] = [
     allergens: ["milk"],
     certificates: ["hyvaa_suomesta"],
     deliveryReliability: 0.99,
+    nutrition: { per: "100ml", values: { energy_kcal: 28, fat: 0.1, saturated_fat: 0.1, carbohydrate: 3.1, sugar: 3.1, protein: 3.7, salt: 0.1, calcium: 120 } },
+    vatRatePct: 13.5,
     carbonKgPerUnit: 1.02,
   },
   {
@@ -70,6 +79,8 @@ export const SEED_PRODUCTS: Product[] = [
     allergens: ["milk"],
     certificates: ["hyvaa_suomesta"],
     deliveryReliability: 0.97,
+    nutrition: { per: "100ml", values: { energy_kcal: 57, fat: 3.5, saturated_fat: 2.3, carbohydrate: 3.1, sugar: 3.1, protein: 3.4, salt: 0.1, calcium: 115 } },
+    vatRatePct: 13.5,
     carbonKgPerUnit: 1.31,
   },
   {
@@ -83,6 +94,8 @@ export const SEED_PRODUCTS: Product[] = [
     allergens: ["milk"],
     certificates: ["hyvaa_suomesta"],
     deliveryReliability: 0.93,
+    nutrition: { per: "100ml", values: { energy_kcal: 39, fat: 1.5, saturated_fat: 1, carbohydrate: 3.1, sugar: 3.1, protein: 3.6, salt: 0.1, calcium: 120 } },
+    vatRatePct: 13.5,
     carbonKgPerUnit: 1.18,
   },
   {
@@ -96,6 +109,8 @@ export const SEED_PRODUCTS: Product[] = [
     allergens: ["milk"],
     certificates: [],
     deliveryReliability: 0.88,
+    nutrition: { per: "100ml", values: { energy_kcal: 39, fat: 1.5, saturated_fat: 1, carbohydrate: 3.1, sugar: 3.1, protein: 3.6, salt: 0.1, calcium: 120 } },
+    vatRatePct: 13.5,
     carbonKgPerUnit: 1.14,
   },
   {
@@ -109,6 +124,8 @@ export const SEED_PRODUCTS: Product[] = [
     allergens: ["milk"],
     certificates: ["hyvaa_suomesta", "eu_organic"],
     deliveryReliability: 0.96,
+    nutrition: { per: "100ml", values: { energy_kcal: 39, fat: 1.5, saturated_fat: 1, carbohydrate: 3.1, sugar: 3.1, protein: 3.6, salt: 0.1, calcium: 120 } },
+    vatRatePct: 13.5,
     carbonKgPerUnit: 1.09,
   },
   {
@@ -122,6 +139,8 @@ export const SEED_PRODUCTS: Product[] = [
     allergens: ["milk"],
     certificates: ["hyvaa_suomesta"],
     deliveryReliability: 0.98,
+    nutrition: { per: "100ml", values: { energy_kcal: 46, fat: 1.5, saturated_fat: 1, carbohydrate: 4.8, sugar: 4.8, protein: 3.4, salt: 0.1, lactose: 4.8, calcium: 120 } },
+    vatRatePct: 13.5,
     carbonKgPerUnit: 1.03,
   },
   {
@@ -135,6 +154,8 @@ export const SEED_PRODUCTS: Product[] = [
     allergens: ["gluten"],
     certificates: ["hyvaa_suomesta"],
     deliveryReliability: 0.94,
+    nutrition: { per: "100ml", values: { energy_kcal: 59, fat: 3, saturated_fat: 0.3, carbohydrate: 6.6, sugar: 4, fibre: 0.8, protein: 1, salt: 0.1 } },
+    vatRatePct: 13.5,
     carbonKgPerUnit: 0.35,
   },
   {
@@ -148,6 +169,8 @@ export const SEED_PRODUCTS: Product[] = [
     allergens: ["milk"],
     certificates: ["hyvaa_suomesta"],
     deliveryReliability: 0.97,
+    nutrition: { per: "100ml", values: { energy_kcal: 330, fat: 35, saturated_fat: 23, carbohydrate: 3, sugar: 3, protein: 2.1, salt: 0.08 } },
+    vatRatePct: 13.5,
     carbonKgPerUnit: 4.6,
   },
   {
@@ -161,6 +184,8 @@ export const SEED_PRODUCTS: Product[] = [
     allergens: ["milk"],
     certificates: ["hyvaa_suomesta"],
     deliveryReliability: 0.97,
+    nutrition: { per: "100g", values: { energy_kcal: 60, fat: 2.5, saturated_fat: 1.6, carbohydrate: 3.4, sugar: 3.4, protein: 4.4, salt: 0.1 } },
+    vatRatePct: 13.5,
     carbonKgPerUnit: 1.6,
   },
 ];

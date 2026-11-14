@@ -1,3 +1,5 @@
+import { NeedSchema, normaliseNeed } from "./need";
+import { holdsLabel, labelOf, nutrientOf, softLabelsIn } from "./vocabulary";
 import { describe, expect, it } from "vitest";
 import { allergenOf, claimOf, forbiddenPresent, hasAllergen, resolveConstraints } from "./vocabulary";
 
@@ -30,5 +32,40 @@ describe("one constraint vocabulary (gate, intake, knowledge map)", () => {
     expect(hasAllergen({ present: ["fish"], claims: [] }, "nuts")).toBe(false);
     expect(hasAllergen({ present: [], claims: [] }, "unicorn_dust")).toBe(true);
     expect(forbiddenPresent({ present: ["milk", "gluten"], claims: [] }, ["lactose", "nuts", "gluteeni"])).toEqual(["lactose", "gluteeni"]);
+  });
+});
+
+describe("labels and nutrients in the buyer's words (data depth)", () => {
+  it("maps label words in three languages, Finnish origin included", () => {
+    expect(labelOf("MSC")).toBe("msc");
+    expect(labelOf("Hyvää Suomesta")).toBe("hyvaa_suomesta");
+    expect(labelOf("heart symbol")).toBe("sydanmerkki");
+    expect(labelOf("kotimainen")).toBe("origin_fi");
+    expect(labelOf("finsk")).toBe("origin_fi");
+    expect(labelOf("shiny")).toBeUndefined();
+  });
+
+  it("reads a label asked for 'if possible' as a preference, not a requirement", () => {
+    expect(softLabelsIn("200 kg of salmon, MSC if possible")).toEqual(["msc"]);
+    expect(softLabelsIn("Lohta 20 kg, mieluiten kotimaista")).toEqual(["origin_fi"]);
+    expect(softLabelsIn("gärna MSC-märkt")).toEqual(["msc"]);
+    expect(softLabelsIn("It must be MSC")).toEqual([]);
+    const { need } = normaliseNeed(NeedSchema.parse({ text: "Salmon 20 kg, MSC if possible", item: { text: "salmon" }, quantity: { amount: 20, unit: "kg" }, requiredClaims: ["MSC"] }));
+    expect(need.requiredLabels).toBeUndefined();
+    expect(need.preferredLabels).toEqual(["msc"]);
+  });
+
+  it("holds a label by the product's data, never by assumption", () => {
+    expect(holdsLabel({ certificates: ["msc"] }, "msc")).toBe(true);
+    expect(holdsLabel({ certificates: [], countryOfOrigin: "fi" }, "origin_fi")).toBe(true);
+    expect(holdsLabel({ certificates: ["hyvaa_suomesta"], countryOfOrigin: null }, "origin_fi")).toBe(false);
+  });
+
+  it("maps nutrient words in three languages", () => {
+    expect(nutrientOf("suola")).toBe("salt");
+    expect(nutrientOf("Socker")).toBe("sugar");
+    expect(nutrientOf("tyydyttynyt rasva")).toBe("saturated_fat");
+    expect(nutrientOf("kostfiber")).toBe("fibre");
+    expect(nutrientOf("vitamin c")).toBeUndefined();
   });
 });

@@ -23,6 +23,10 @@ import type { IntakeView } from "@/core/intake";
 import { answerLinkFor, needsBuyer } from "../answer-links";
 import { publicBaseUrl } from "../config";
 import { TOOLS, type DockTool } from "./tools";
+import { OFFER_TOOLS } from "./offer-tools";
+
+/** What the MCP door publishes: the ordering tools, then the answers to the wholesaler's offers (offer-tools.ts). */
+export const publishedTools = (): DockTool[] => [...TOOLS, ...OFFER_TOOLS] as unknown as DockTool[];
 
 /**
  * Dock over the Model Context Protocol, Streamable HTTP, served statelessly: every HTTP request gets a
@@ -58,7 +62,7 @@ Lower-level tools: open_request, search_products (free master data), check_avail
 Rules of the road:
 - Fill submit_need with only what the person said and call it; do not ask for details first. AimoPilot asks only what changes the outcome.
 - Talk to the person in plain words: option titles, totals in euros, delivery days. No ids or JSON unless they ask.
-- Quantities are packs. Prices are euro cents ex VAT.
+- Quantities are packs. Prices are euro cents ex VAT. A quote's totalCents adds returnable-packaging deposits (lines[].deposit, outside VAT; amounts at the Finnish deposit system's published rates, since the price service states none) to the goods, and the mandate's limits compare that total. Each line states its VAT rate (taxRatePct, from the price service, else the product data's VAT class) and quote.vat adds VAT up by rate. listUnitPriceCents is the list price when the kitchen's own price is lower. Products carry nutrition per 100 g or ml; a mandate's nutritionRules are checked by the gate (rule nutrition_rules), and a product that does not declare the figure is refused.
 - Ask live prices only for a short list (at most 10 products per call); never scan the catalogue.
 - If the preferred product is short, quote what it has and add a substitute line with substituteFor.
 - Every refusal names the rule that fired (error.rule) and says what to do next (nextStep). A refusal is final unless nextStep says how to fix it: tell the person, do not loop.`;
@@ -280,7 +284,7 @@ export function shallowSchema(s: Record<string, unknown>, depth = 0): Record<str
 
 export function buildMcpServer(rt: Runtime, req?: Request, via?: ConnectorCall): McpServer {
   const server = new McpServer(MCP_SERVER_INFO, { instructions: MCP_INSTRUCTIONS });
-  for (const tool of TOOLS) {
+  for (const tool of publishedTools()) {
     server.registerTool(
       tool.name,
       {

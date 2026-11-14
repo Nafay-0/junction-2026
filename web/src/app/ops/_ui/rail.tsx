@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { MessagesSquare, Activity, Bot, Circle, CirclePause, Ellipsis, FileCheck2, History, LogOut, Radar, Route, Server, ShieldCheck, SlidersHorizontal, Store, Users, type LucideIcon } from "lucide-react";
+import { MessagesSquare, Activity, Bot, Circle, CirclePause, Ellipsis, FileCheck2, History, LogOut, Radar, Route, Server, ShieldCheck, SlidersHorizontal, Store, Tag, Users, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../../_client/api";
 import { useLive } from "../../_client/use-live";
@@ -24,6 +24,7 @@ const NAV: { href: string; label: string; what: string; key: string }[] = [
   { href: "/ops/conversation", label: "Conversations", what: "A kitchen and its agent, turn by turn", key: "v" },
   { href: "/ops/safeguards", label: "Safeguards", what: "The rule book as it runs", key: "s" },
   { href: "/ops/radar", label: "Recall radar", what: "Recalls, holds, drills", key: "r" },
+  { href: "/ops/offers", label: "Selling agent", what: "What it offered, to whom, why", key: "o" },
   { href: "/ops/control", label: "Control", what: "Suspend, resume, sign-offs", key: "c" },
   { href: "/ops/audit", label: "Audit", what: "Orders and their proof", key: "a" },
   { href: "/ops/time-machine", label: "Time machine", what: "The rules as they stood", key: "m" },
@@ -40,6 +41,7 @@ const ICON: Record<string, LucideIcon> = {
   "/ops/conversation": MessagesSquare,
   "/ops/safeguards": ShieldCheck,
   "/ops/radar": Radar,
+  "/ops/offers": Tag,
   "/ops/control": SlidersHorizontal,
   "/ops/audit": FileCheck2,
   "/ops/agents": Bot,

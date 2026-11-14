@@ -113,6 +113,7 @@ async function runOne(url: string, driver: string, sc: Scenario, repeat: number)
   const base = { id: sc.id, title: sc.title, tag: sc.tag, kitchen: sc.kitchen, lang: sc.lang, repeat, limitation: sc.limitation };
   let res: RunResult;
   try {
+    if (sc.before) await sc.before(url);
     res = driver === "thread" ? await runThread(url, sc) : await runLegacy(url, sc);
   } catch (err) {
     return { ...base, pass: false, checks: [], corrections: 0, actions: { taps: 0, typed: 0, extraTyped: 0, list: [] }, ms: {}, cached: [], calls: 0, outcome: undefined as never, error: (err as Error).stack?.slice(0, 600) };

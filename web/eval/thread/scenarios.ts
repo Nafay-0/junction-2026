@@ -9,6 +9,8 @@
  * and yoghurt only; no nuts) and `laakso` (Laakso Catering, the partner's example org: no history; €1,000 alone;
  * lactose-free required; milk and plant drinks only; no gluten, no nuts; Aino Virtanen signs to €2,500).
  */
+import { nutritionFindings } from "@/core/nutrition";
+import { SCHOOL_NUTRITION } from "@/server/accounts/test-accounts";
 import type { Catalogue, Json, Outcome, ProductInfo } from "./lib";
 
 export type Goal =
@@ -45,7 +47,8 @@ export type Scenario = {
   title: string;
   /** Which of Valio's example scenarios or wish-list items this stands for. */
   tag: string;
-  kitchen: "kaari" | "laakso";
+  /** koulu-metsola: the public school test account (server/accounts/test-accounts.ts): nutrition rules, no nuts or fish. */
+  kitchen: "kaari" | "laakso" | "koulu-metsola";
   lang: "en" | "fi";
   turns: BuyerTurn[];
   goal: Goal;
@@ -57,6 +60,8 @@ export type Scenario = {
   expect: Check[];
   /** Set when the product cannot do what the partner describes; the expected end state is what a buyer gets today. */
   limitation?: string;
+  /** Run before the buyer's first turn, against the same server (the wholesaler's side of a scenario: its selling agent). */
+  before?: (url: string) => Promise<void>;
 };
 
 // ---------- dates (Helsinki) ----------
@@ -410,7 +415,7 @@ const ALL: Scenario[] = [
     lang: "en",
     turns: [{ say: "Is there anything new or seasonal we should try this month?" }],
     goal: "answer",
-    limitation: "Nothing in the store suggests a product on its own: no push from the wholesaler's side. The end state is what a buyer gets by asking: an answer from the records citing real products, and nothing ordered.",
+    limitation: "Asked by the buyer: an answer from the records citing real products, and nothing ordered. The wholesaler's own push is proactive-offer-en/fi (server/offers).",
     expect: [answered("product"), noOrder, optionsInCatalogue],
   },
   {
@@ -658,6 +663,105 @@ ALL.push(
     limitation: "legacy driver: today's store has no opening card; only the thread driver can pass.",
   },
 );
+
+// ---------- the proactive selling agent (server/offers) ----------
+
+/** What the wholesaler's selling agent offered Kaari in `before`, for the checks. Per run, in this process. */
+const offered: { productId?: string; name?: string; offerId?: string } = {};
+
+/**
+ * The wholesaler's side: enter the operations desk, run the selling agent; if it found nothing for Kaari on this
+ * catalogue, start a campaign for a lactose-free product in a family Kaari buys and has not bought, listed as new.
+ */
+async function sellingAgentOffersKaari(url: string): Promise<void> {
+  const { Browser } = await import("./lib");
+  const b = new Browser(url);
+  await b.req("POST", "/ops-api/session", { name: "Eval operations", ...(process.env.DOCK_OPS_PASSCODE ? { passcode: process.env.DOCK_OPS_PASSCODE } : {}) });
+  await b.req("POST", "/ops-api/offers", { action: "run", kitchens: ["kaari"] });
+  const open = async () => ((await b.req("GET", "/ops-api/offers")).body?.offers ?? []).find((o: Json) => o.kitchen === "kaari" && o.status === "offered");
+  let o = await open();
+  if (!o) {
+    for (const q of ["organic lactose-free milk", "lactose-free cream", "lactose-free milk"]) {
+      const found: Json[] = (await b.req("POST", "/ops-api/offers", { action: "search", q })).body?.products ?? [];
+      for (const p of found.filter((x) => ["milk", "cream"].includes(x.category)).slice(0, 4)) {
+        await b.req("POST", "/ops-api/offers", { action: "campaign", productId: p.productId, listAsNew: true });
+        if ((o = await open())) break;
+      }
+      if (o) break;
+    }
+  }
+  Object.assign(offered, o ? { productId: o.productId, name: o.productName, offerId: o.offerId } : { productId: undefined, name: undefined, offerId: undefined });
+}
+
+const nameWords = (n: string) => n.toLowerCase().split(/[\s,]+/).filter((w) => w.length > 3).slice(0, 3);
+
+/** The selling agent had something genuinely worth suggesting, signed, for this kitchen. */
+const offerMade: Check = { name: "the wholesaler's selling agent made Kaari one signed offer", run: () => ok(!!offered.offerId, "no open offer for Kaari after the run and a campaign") };
+
+/** The kitchen's own agent said it in words: the product (or the suggestion) in the conversation, not a banner. */
+const offerSaid: Check = {
+  name: "the kitchen's agent said the offer in the conversation, with its product",
+  run: (o) => {
+    const words = nameWords(offered.name ?? "");
+    const texts = [...o.answers.map((a) => a.text), ...o.today.flatMap((t) => t.items.map((i) => JSON.stringify(i)))].map((t) => t.toLowerCase());
+    return ok(words.length > 0 && texts.some((t) => words.filter((w) => t.includes(w)).length >= Math.min(2, words.length)), `said: ${texts.slice(0, 3).join(" | ").slice(0, 200) || "nothing"}; offered ${offered.name ?? "none"}`);
+  },
+};
+
+const THREAD_WIRING = "The conversation says the offer once the thread (claude/thread-live) calls server/offers/thread.ts offerForThread and answerOffer; until then 'the agent said the offer' fails and the selection, signature and nothing-ordered checks pass.";
+
+ALL.push(
+  {
+    id: "proactive-offer-en",
+    title: "Proactive selling agent: the wholesaler's agent offers, the kitchen's agent says it in words",
+    tag: "proactive selling agent",
+    kitchen: "kaari",
+    lang: "en",
+    before: sellingAgentOffersKaari,
+    turns: [{ say: "Anything new from the wholesaler worth trying?" }],
+    goal: "answer",
+    expect: [offerMade, offerSaid, noOrder],
+    limitation: THREAD_WIRING,
+  },
+  {
+    id: "proactive-offer-fi",
+    title: "Ennakoiva myyntiagentti: tukkurin agentti ehdottaa, keittiön agentti kertoo sen sanoin",
+    tag: "proactive selling agent",
+    kitchen: "kaari",
+    lang: "fi",
+    before: sellingAgentOffersKaari,
+    turns: [{ say: "Onko tukkurilla jotain uutta, mitä kannattaisi kokeilla?" }],
+    goal: "answer",
+    expect: [offerMade, offerSaid, noOrder],
+    limitation: THREAD_WIRING,
+  },
+);
+
+// --- the partner's "allergen-safe substitution under pressure": a school kitchen's nutrition rules ---
+/** Every option keeps the school's signed nutrition rules by the product's own declaration (unknown fails). */
+const keepsSchoolNutrition = optionsAll("within the school's nutrition rules (declared figures)", (p) => nutritionFindings(SCHOOL_NUTRITION, { productId: p.id, category: p.category ?? "", nutrition: p.nutrition }).length === 0);
+/** The oat drink the words allow as a fallback is not slipped in: if one was considered, protein is the reason said. */
+const noLowProteinStandIn: Check = {
+  name: "no oat drink offered in place of milk; protein named if it came up",
+  run: async (o, c) => {
+    const plant: string[] = [];
+    for (const l of o.allOptions.flatMap((x) => x.lines)) {
+      const p = await c.catalogue.product(l.productId);
+      if (p?.category === "plant_drink" && (p.nutrition?.values.protein ?? 0) < 3) plant.push(`${l.productId} ${p.name}`);
+    }
+    return ok(plant.length === 0, `offered: ${plant.join("; ")}`);
+  },
+};
+ALL.push({
+  id: "school-nutrition-en",
+  title: "Allergen-safe substitution under pressure: a school kitchen's milk, an oat drink allowed only if it keeps the nutrition rules",
+  tag: "allergen-safe substitution (nutrition rules)",
+  kitchen: "koulu-metsola",
+  lang: "en",
+  turns: [{ say: "We need 60 litres of semi-skimmed milk for Monday's lunch. If there isn't enough milk, oat drink will do." }],
+  goal: "options",
+  expect: [optionsInCatalogue, without(/nut|almond|hazel|cashew|peanut|sesame|fish/i, "nuts, peanuts, sesame and fish"), keepsSchoolNutrition, noLowProteinStandIn, optionsShown(1)],
+});
 
 /**
  * Run order. The questions about Kaari's own history go first, before any scenario adds requests of its own to

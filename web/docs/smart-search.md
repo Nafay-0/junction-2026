@@ -86,3 +86,14 @@ configuration; `--tune` leaves out the hold-out, `--opus --sample 60` adds the C
 `--ablation` shows what recall is made of. The requests and their expected kinds are in `eval/search/cases.ts`
 (kinds from the knowledge map, a sample checked by hand; `pnpm tsx eval/search/check-cases.ts` validates them).
 Answers are cached under `.data/search-eval/` with the time they took; `--fresh` measures again.
+
+## Product texts in the index (not in the vectors yet)
+
+Since the data-depth index (`core/catalog/partner.ts`), every `IndexedProduct` (and the `Product` it becomes) carries
+what the maker writes, shortened, in English and Finnish where given: `texts.ingredients.{en,fi}` (the ingredient
+list, up to 400 characters, cut at a comma with "…"), `texts.storage`, `texts.usage` (usage, else preparation
+instructions), `texts.disposal`, `texts.about` (the first 80 characters of the marketing text), plus
+`mainIngredient.names.{en,fi,sv}` with its share and origin, and `fish[].latin` / `fish[].species` (FAO code). In
+the file they are a columnar block (`IndexFile.texts`, "ingredients.en" ... arrays in row order); `pnpm index:build
+--no-texts` leaves them out. The vectors (`server/search/docs.ts embeddingText`) do not use them: adding them is
+untested against `pnpm search:eval`.

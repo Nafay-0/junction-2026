@@ -17,6 +17,7 @@ import type { AlternativesAnswer, AlternativesSource } from "./alternatives";
 import type { FindRequest, FindResult } from "./catalog/finder";
 import type { EventPublisher } from "./events";
 import { CatalogError, ProductQuerySchema, scheduledOn, usableOffer, type LiveOffer, type LiveStatus, type MeteredCatalog, type Product } from "./catalog";
+import { signOffer, type OfferBody } from "./offers";
 import { ClaimStore, availabilityClaimInput, cutoffMs, issueClaim, originClaimInput, priceClaimInput, refOf, type IssuedClaim } from "./claims";
 import { DockError, isDockError, parse } from "./errors";
 import { concernsOfOrder, unaskedNote, type OrderConcern } from "./order-check";
@@ -30,6 +31,7 @@ import { MAX_LIVE_IDS_PER_CALL } from "./catalog";
 import { MandateError, supersededBy, supersededMessage, verifyMandateToken, type Mandate, type MandateRegister, type TrustRegistry, lacksRulesMessage, missingAddedRules } from "./mandate";
 import { SPLIT_NAMED_MAX, SPLIT_WINDOW_HOURS, decidingRule, evaluatePolicy, type Decision, type OrderDraftLine, type ProductHold, type RecentOrder, type RuleResult, type SplitWindow } from "./policy";
 export type { ProductHold } from "./policy";
+import { demoCustomerNumber } from "./pricing";
 import { QuoteError, QuoteRequestLineSchema, buildQuote, signQuote, verifyQuote, type Quote, type QuoteLine, type QuoteRequestLine } from "./quote";
 import { addDays, canonicalJson, formatEur, newId } from "./util";
 
@@ -513,6 +515,11 @@ export type DockDeps = {
    * order placed under a mandate the kitchen has since replaced is not committed at sign-off either.
    */
   mandates?: MandateRegister;
+  /**
+   * The kitchen's customer number at the wholesaler, sent with every live price and availability call (prices are
+   * customer-specific). Default: a stable demo number per organisation (core/pricing.ts demoCustomerNumber).
+   */
+  customerOf?: (orgId: string) => string;
 };
 
 /** The holds in force on some products. Called with the products of one quote; must be cheap (no live call). */
@@ -545,7 +552,7 @@ function listLines(lines: { quantity: number; productId: string }[]): string {
 export const ORDER_TYP = "order+jws";
 
 /** Rules of the gate that read only a product's master data, never its price, stock or date. */
-const MASTER_DATA_RULES = new Set<RuleResult["rule"]>(["category_allowed", "required_attributes", "forbidden_allergens", "required_certificates"]);
+const MASTER_DATA_RULES = new Set<RuleResult["rule"]>(["category_allowed", "required_attributes", "forbidden_allergens", "nutrition_rules", "required_certificates"]);
 
 /**
  * The gate's verdict on the products alone, for when no live price can be had: the same evaluatePolicy, on lines
@@ -568,6 +575,8 @@ export function masterDataRefusal(mandate: Mandate, lines: { productId: string; 
       ...(p.allergenInfo ? { allergensDeclared: p.allergenInfo.declared } : {}),
       ...(p.allergenInfo?.byNature ? { allergensByNature: p.allergenInfo.byNature } : {}),
       certificates: p.certificates,
+      ...(p.nutrition ? { nutrition: p.nutrition } : {}),
+      ...(p.countryOfOrigin ? { countryOfOrigin: p.countryOfOrigin } : {}),
       quantity: Math.max(1, Math.round(l.quantity)),
       unitPriceCents: 0,
       lineTotalCents: 0,
@@ -783,7 +792,9 @@ export function createDock(deps: DockDeps) {
   ): Promise<LiveLookupResult> {
     const actor = agentActor(session);
     const ids = [...new Set(productIds)];
-    const cacheKey = (id: string) => `${id}|${deliveryDate ?? ""}`;
+    // Prices are the kitchen's own: asked for its customer number, and an answer reused only for the same customer.
+    const customer = (deps.customerOf ?? demoCustomerNumber)(session.mandate.issuer.orgId);
+    const cacheKey = (id: string) => `${id}|${deliveryDate ?? ""}|${customer}`;
     const t0 = now().getTime();
     // Answers the partner gave a moment ago are reused for option cards: they cost the partner nothing and are not
     // counted. A quote fixes a price, so it always asks afresh.
@@ -813,7 +824,7 @@ export function createDock(deps: DockDeps) {
       }
       let got: LiveStatus[];
       try {
-        got = await catalog.getLiveStatus(chunk, deliveryDate ? { deliveryDate } : undefined);
+        got = await catalog.getLiveStatus(chunk, deliveryDate ? { deliveryDate, customer } : { customer });
       } catch (err) {
         if (err instanceof CatalogError && err.code === "too_many_products") throw refuse(new DockError(400, err.code, err.message, "live_lookup_limit"), actor, { requestId });
         if (err instanceof CatalogError) {
@@ -1711,6 +1722,22 @@ export function createDock(deps: DockDeps) {
     liveAllowance,
     ledger,
     wholesalerPublicJwk: wholesalerKey.publicJwk,
+
+    /**
+     * The wholesaler's selling agent (server/offers): sign what it states about a product for one buyer (its price,
+     * for that buyer, and its origin), kept like every other claim so the buyer's agent can fetch the tokens, and sign
+     * the offer itself (core/offers.ts). Signing only; nothing is ordered or reserved.
+     */
+    async signOfferClaims(audience: string, offer: LiveOffer, product: Product, at: Date = now()): Promise<IssuedClaim[]> {
+      const out: IssuedClaim[] = [];
+      for (const input of [priceClaimInput(offer, at, audience), originClaimInput(product, at)]) {
+        const c = await issueClaim(input, wholesalerKey);
+        claimStore.put(c, input.audience);
+        out.push(c);
+      }
+      return out;
+    },
+    signOffer: (body: OfferBody) => signOffer(body, wholesalerKey),
   };
 
   /**

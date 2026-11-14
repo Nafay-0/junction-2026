@@ -206,7 +206,112 @@ const LABEL_ALIASES: Record<string, string> = {
   joutsenmerkki: "nordic_swan",
   krav: "krav",
   puhtaasti_kotimainen: "puhtaasti_kotimainen",
+  made_in_finland: "avainlippu",
+  avainlippu_merkki: "avainlippu",
+  finnish_heart: "sydanmerkki",
+  heart: "sydanmerkki",
+  sydanmerkki_tuote: "sydanmerkki",
+  hjartmarket: "sydanmerkki",
+  marine_stewardship_council: "msc",
+  aquaculture_stewardship_council: "asc",
+  reilu_kauppa: "fairtrade",
+  eu_ecolabel: "eu_ecolabel",
+  eu_eco_label: "eu_ecolabel",
+  ymparistomerkki: "nordic_swan",
+  svanen: "nordic_swan",
+  utz: "utz",
+  dolphin_safe: "dolphin_safe",
+  delfiiniturvallinen: "dolphin_safe",
+  luomu_aurinko: "luomu_sun",
+  luomu_sun: "luomu_sun",
+  soil_association: "soil_association_organic",
+  soil_association_organic: "soil_association_organic",
+  // Finnish origin as the maker states it (country of origin Finland), not a printed label: see holdsLabel.
+  finnish: "origin_fi",
+  finnish_origin: "origin_fi",
+  from_finland: "origin_fi",
+  domestic: "origin_fi",
+  kotimainen: "origin_fi",
+  kotimaista: "origin_fi",
+  kotimaisia: "origin_fi",
+  suomalainen: "origin_fi",
+  suomalaista: "origin_fi",
+  suomalaisia: "origin_fi",
+  suomesta: "origin_fi",
+  finsk: "origin_fi",
+  inhemsk: "origin_fi",
+  origin_fi: "origin_fi",
 };
+
+/**
+ * Certificates and labels a kitchen can require or prefer, by Dock's slugs (catalog/partner.ts LABELS), plus
+ * `origin_fi`: the maker states Finland as the country of origin, whether or not the pack carries a Finnish label.
+ */
+export const KNOWN_LABELS: readonly string[] = [
+  "hyvaa_suomesta", "avainlippu", "puhtaasti_kotimainen", "origin_fi", "sydanmerkki", "eu_organic", "luomu_sun", "krav", "soil_association_organic",
+  "msc", "asc", "dolphin_safe", "fairtrade", "rainforest_alliance", "utz", "nordic_swan", "eu_ecolabel",
+];
+const KNOWN_LABEL_SET = new Set(KNOWN_LABELS);
+
+/** A label word ("MSC", "Hyvää Suomesta", "kotimainen", "heart symbol") as Dock's slug; undefined when unknown. */
+export function labelOf(word: string): string | undefined {
+  const s = slug(word);
+  const v = LABEL_ALIASES[s] ?? (s === "eu_organic" || s === "organic" || s === "luomu" ? "eu_organic" : s);
+  return KNOWN_LABEL_SET.has(v) ? v : undefined;
+}
+
+/**
+ * Labels the buyer's words ask for softly: "MSC if possible", "preferably Finnish", "mieluiten kotimaista", "gärna
+ * MSC". A label word in a clause with one of these words is a preference (options carrying it rank first, the price
+ * of it said), not a requirement that refuses everything without it. Plain code: no model reads this.
+ */
+const SOFT = /\b(prefer(?:ably|red)?|if possible|ideally|where possible|when possible|if available|mieluiten|mieluummin|jos mahdollista|mahdollisuuksien mukaan|jos saatavilla|gärna|helst|om möjligt|i första hand)\b/i;
+export function softLabelsIn(text: string | undefined): string[] {
+  if (!text) return [];
+  const out = new Set<string>();
+  for (const clause of text.split(/[.;!?\n]|,\s*(?:but|mutta|men)\b/i)) {
+    if (!SOFT.test(clause)) continue;
+    const tokens = slug(clause).split("_").filter(Boolean);
+    for (const [alias, label] of Object.entries(LABEL_ALIASES)) {
+      const want = alias.split("_");
+      for (let i = 0; i + want.length <= tokens.length; i++) {
+        if (want.every((w, j) => tokens[i + j] === w || (j === want.length - 1 && tokens[i + j].startsWith(w) && w.length >= 5))) {
+          out.add(label);
+          break;
+        }
+      }
+    }
+  }
+  return [...out].sort();
+}
+
+/**
+ * Whether a product carries a label, by its data: a printed label is in its certificates; `origin_fi` is its stated
+ * country of origin. No data is no label (never assumed).
+ */
+export function holdsLabel(product: { certificates: readonly string[]; countryOfOrigin?: string | null }, label: string): boolean {
+  if (label === "origin_fi") return product.countryOfOrigin === "fi";
+  return product.certificates.includes(label);
+}
+
+// ---------- nutrients ----------
+
+const NUTRIENT_ALIASES: Record<string, string> = {
+  salt: "salt", suola: "salt", sodium_chloride: "salt",
+  sugar: "sugar", sugars: "sugar", sokeri: "sugar", sokerit: "sugar", socker: "sugar", sockerarter: "sugar",
+  protein: "protein", proteins: "protein", proteiini: "protein", valkuainen: "protein",
+  fibre: "fibre", fiber: "fibre", ravintokuitu: "fibre", kuitu: "fibre", fibrer: "fibre", kostfiber: "fibre",
+  fat: "fat", rasva: "fat", fett: "fat", total_fat: "fat",
+  saturated_fat: "saturated_fat", saturates: "saturated_fat", sat_fat: "saturated_fat", tyydyttynyt_rasva: "saturated_fat", tyydyttyneet_rasvat: "saturated_fat", tyydyttyneet: "saturated_fat", mattat_fett: "saturated_fat", mattade_fettsyror: "saturated_fat",
+  carbohydrate: "carbohydrate", carbohydrates: "carbohydrate", carbs: "carbohydrate", hiilihydraatti: "carbohydrate", hiilihydraatit: "carbohydrate", kolhydrat: "carbohydrate",
+  energy: "energy_kcal", kcal: "energy_kcal", calories: "energy_kcal", energia: "energy_kcal", energi: "energy_kcal", energy_kcal: "energy_kcal",
+  lactose: "lactose", laktoosi: "lactose", laktos: "lactose",
+};
+
+/** A nutrient word in English, Finnish or Swedish as the nutrient a kitchen can rule on; undefined when unknown. */
+export function nutrientOf(word: string): "salt" | "sugar" | "protein" | "fibre" | "fat" | "saturated_fat" | "carbohydrate" | "energy_kcal" | "lactose" | undefined {
+  return NUTRIENT_ALIASES[slug(word)] as ReturnType<typeof nutrientOf>;
+}
 
 /** Lower case, accents folded, every run of non-letters one underscore: "Lactose-free" -> "lactose_free". */
 export function slug(text: string): string {

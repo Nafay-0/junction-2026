@@ -6,6 +6,10 @@ import * as intakeConcerns from "@/app/api/v1/intake/[requestId]/concerns/route"
 import * as intakeOne from "@/app/api/v1/intake/[requestId]/route";
 import * as intake from "@/app/api/v1/intake/route";
 import * as kitchen from "@/app/api/v1/kitchen/route";
+import * as offers from "@/app/api/v1/offers/route";
+import * as offerAccept from "@/app/api/v1/offers/[offerId]/accept/route";
+import * as offerDecline from "@/app/api/v1/offers/[offerId]/decline/route";
+import * as offerMute from "@/app/api/v1/offers/mute/route";
 import * as approval from "@/app/api/v1/approvals/[approvalId]/route";
 import * as approvalChallenge from "@/app/api/v1/approvals/[approvalId]/challenge/route";
 import * as approvalLink from "@/app/api/v1/approvals/[approvalId]/link/route";
@@ -64,6 +68,10 @@ const routes: [RegExp, string[], RouteModule][] = [
   [/^\/api\/v1\/intake\/([^/]+)\/answers$/, ["requestId"], intakeAnswers as RouteModule],
   [/^\/api\/v1\/intake\/([^/]+)\/choice$/, ["requestId"], intakeChoice as RouteModule],
   [/^\/api\/v1\/kitchen$/, [], kitchen],
+  [/^\/api\/v1\/offers$/, [], offers],
+  [/^\/api\/v1\/offers\/mute$/, [], offerMute],
+  [/^\/api\/v1\/offers\/([^/]+)\/accept$/, ["offerId"], offerAccept as RouteModule],
+  [/^\/api\/v1\/offers\/([^/]+)\/decline$/, ["offerId"], offerDecline as RouteModule],
   [/^\/api\/v1\/agent\/interpret$/, [], interpret],
 ];
 

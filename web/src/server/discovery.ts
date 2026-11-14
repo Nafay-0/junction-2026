@@ -9,6 +9,7 @@ import { HUMAN_INPUT_META } from "./mcp/ask-human";
 import { LIVE_LOOKUP_LIMITS } from "./mcp/live-lookup-guard";
 import { MCP_SERVER_INFO } from "./mcp/server";
 import { TOOLS } from "./mcp/tools";
+import { OFFER_TOOLS } from "./mcp/offer-tools";
 
 /**
  * What an agent that knows only the base URL can find. Standard entry points first:
@@ -74,7 +75,7 @@ export function manifest(origin: string) {
         transport: "streamable-http",
         protocolVersions: MCP_PROTOCOL_VERSIONS,
         serverInfo: MCP_SERVER_INFO,
-        tools: TOOLS.map((t) => ({ name: t.name, title: t.title, readOnly: t.readOnly ?? false, humanInput: ("humanInput" in t && t.humanInput) || false })),
+        tools: [...TOOLS.map((t) => ({ name: t.name, title: t.title, readOnly: t.readOnly ?? false, humanInput: ("humanInput" in t && t.humanInput) || false })), ...OFFER_TOOLS.map((t) => ({ name: t.name, title: t.title, readOnly: t.readOnly ?? false, humanInput: false }))],
         humanInput: {
           tools: TOOLS.filter((t) => "humanInput" in t && t.humanInput).map((t) => t.name),
           how: `These calls carry the human buyer's own answer (a mistake confirmation, a clarifying answer). If the client declares the MCP elicitation capability (2026-07-28), AimoPilot asks the buyer directly with an input_required elicitation/create form; otherwise the agent relays the question and passes the buyer's answer. Marked in tools/list with _meta["${HUMAN_INPUT_META}"] (AimoPilot's own key, not a standard).`,
@@ -125,7 +126,7 @@ export function manifest(origin: string) {
 
 export function llmsTxt(origin: string) {
   const u = urls(origin);
-  const tools = TOOLS.map((t) => `- \`${t.name}\`: ${t.title}.`).join("\n");
+  const tools = [...TOOLS, ...OFFER_TOOLS].map((t) => `- \`${t.name}\`: ${t.title}.`).join("\n");
   return `# AimoPilot
 
 > AimoPilot is a wholesaler's open ordering gateway for AI purchasing agents. Your agent carries a mandate its organisation signed (what it may buy, how much it may spend alone, who signs off above that). It orders through MCP or REST; plain code checks every order against the mandate, and anything beyond it waits for a human sign-off on their phone.
@@ -196,7 +197,7 @@ Lower-level tools: open_request, search_products (free master data), check_avail
 
 ## Rules an agent must follow
 
-- Quantities are packs (see packSize); money is integer euro cents ex VAT.
+- Quantities are packs (see packSize); money is integer euro cents ex VAT. A quote's totalCents adds returnable-packaging deposits (lines[].deposit, outside VAT; amounts at the Finnish deposit system's published rates, since the price service states none) to the goods, and the mandate's limits compare that total. Each line states its VAT rate (taxRatePct, from the price service, else the product data's VAT class) and quote.vat adds VAT up by rate. listUnitPriceCents is the list price when the kitchen's own price is lower. Products carry nutrition per 100 g or ml; a mandate's nutritionRules are checked by the gate (rule nutrition_rules), and a product that does not declare the figure is refused.
 - Shortlist with search_products before asking live prices. Never scan the catalogue: live lookups are capped per call and per agent per hour, and refused with rule live_lookup_limit.
 - If the preferred product is short, quote what it has and add a line with substituteFor set to its productId.
 - place_order has three outcomes: committed (with a signed confirmation), pending_approval (a person signs off; do NOT retry, follow up with get_order), or refused (error.rule names the rule).

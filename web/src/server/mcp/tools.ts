@@ -43,7 +43,7 @@ export type ToolContext = {
   defaultBy?: string;
 };
 
-type ToolDef<I extends z.ZodObject, O extends z.ZodObject> = {
+export type ToolDef<I extends z.ZodObject, O extends z.ZodObject> = {
   name: string;
   title: string;
   description: string;
@@ -55,7 +55,7 @@ type ToolDef<I extends z.ZodObject, O extends z.ZodObject> = {
   run: (ctx: ToolContext, args: z.output<I>) => Promise<z.input<O> | AskHuman>;
 };
 
-const tool = <I extends z.ZodObject, O extends z.ZodObject>(def: ToolDef<I, O>) => def;
+export const tool = <I extends z.ZodObject, O extends z.ZodObject>(def: ToolDef<I, O>) => def;
 
 const nextStep = z.string().describe("What to do next, in one or two sentences.");
 const budget = z
@@ -70,12 +70,12 @@ const by = z
   .max(120)
   .describe("The name of the human buyer whose answer this is, if they told you; written to the audit ledger with the answer. Do not invent one: leave it out and AimoPilot says if it needs it.");
 
-const intakeOut = z.object({
+export const intakeOut = z.object({
   step: IntakeStepSchema,
   waitingFor: z.enum(["buyer", "agent", "nobody"]).describe("buyer: relay the step to the human buyer and wait for them. agent: your move. nobody: finished."),
   nextStep,
 });
-const intakeResult = (step: IntakeView) => ({ step, waitingFor: waitingFor(step.state), nextStep: nextStepForIntake(step) });
+export const intakeResult = (step: IntakeView) => ({ step, waitingFor: waitingFor(step.state), nextStep: nextStepForIntake(step) });
 
 const wrongState = (step: IntakeView, what: string) =>
   new DockError(409, "intake_wrong_state", `Cannot ${what} now: request ${step.requestId} is ${step.state}.`, "intake_sequence", { state: step.state });

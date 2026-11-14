@@ -307,6 +307,10 @@ Start every order with `submit_need`. The lower-level tools below the line stay 
 | `search_products` | Lower level: product master data. Free; no live call. |
 | `check_availability` | Lower level: live price, stock and delivery for at most 10 products. Metered. |
 | `request_quote` | Lower level: signed fixed-price quote, plus what the gate would decide on it. |
+| `list_offers` | The wholesaler's signed offers to this kitchen (new, seasonal, or a cheaper like-for-like), each verifiable offline. Never an order. |
+| `accept_offer` | The buyer wants it: starts an ordinary order through the intake, the gate and the sign-off. |
+| `decline_offer` | Not wanted; not offered again for 30 days. |
+| `mute_offers` | No more of this product, family or kind of reason, or no offers at all (`scope: all`). |
 
 There is no tool to approve or decline an order: only the approver can, on their own phone with their passkey.
 
@@ -429,3 +433,20 @@ pnpm verify:receipt order.json --jwks jwks.json         # fully offline
 ```
 
 The script (`scripts/verify-receipt.ts`) uses only `jose` and the published keys. Edit one byte of the receipt and it fails. Without `DOCK_WHOLESALER_JWK` set, the server makes a new key each time it starts, so keep the JWK Set that was live when the order was signed.
+
+## 7. Offers from the wholesaler's selling agent
+
+The wholesaler's own agent may offer a kitchen a product worth trying: new in the assortment, in season in Finland, or
+a like-for-like cheaper per litre, more reliable or lower in carbon than what the kitchen buys every week. Each offer
+is a signed W3C Verifiable Credential (compact JWS, `typ: vc+jwt`, type `DockProductOffer`, Ed25519, addressed with
+`aud` to the buyer organisation), checked like a receipt against the published keys:
+
+```bash
+curl -s $DOCK/api/v1/offers "${H[@]}" > offers.json
+pnpm verify:offer offers.json --url $DOCK --org <your org id>
+```
+
+An offer buys nothing: `accept_offer` (or `POST /api/v1/offers/{offerId}/accept`) starts an ordinary order, and the
+same intake, gate and sign-off decide it. Tell the buyer about at most one or two, in plain words, and only on their
+own answer accept, decline or mute. The format, the reasons and every guardrail are in [offers.md](offers.md).
+

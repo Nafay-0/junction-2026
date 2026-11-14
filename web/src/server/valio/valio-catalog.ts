@@ -18,7 +18,8 @@ import { ValioApiError, helsinkiDate, validFromMs, validUntilMs, type UpstreamSt
 
 /** What ValioCatalog needs from the live API. ValioLiveClient implements it; tests use a fake. */
 export interface LiveLookup {
-  lookup(productIds: string[], requestedDate: string): Promise<ValioLiveResult[]>;
+  /** `customer`: the kitchen's customer number, sent as the API's `customer` (the client's own default when absent). */
+  lookup(productIds: string[], requestedDate: string, customer?: string): Promise<ValioLiveResult[]>;
   upstreamStats?(): UpstreamStats;
 }
 
@@ -102,7 +103,7 @@ export class ValioCatalog implements CatalogPort, UpstreamMetered {
     let results: ValioLiveResult[] = [];
     if (known.length) {
       try {
-        results = await this.live.lookup(known, askDate);
+        results = options?.customer ? await this.live.lookup(known, askDate, options.customer) : await this.live.lookup(known, askDate);
       } catch (err) {
         if (err instanceof ValioApiError) throw new CatalogError("live_unavailable", `${err.code === "timeout" || err.code === "rate_limited" ? "The wholesaler's live price and availability service is slow or busy right now" : "Live price/availability is unavailable right now"} (${err.code}): ${err.message}`, err.retryAfterSeconds ?? (err.code === "server_error" || err.code === "network" ? 30 : undefined));
         throw err;
