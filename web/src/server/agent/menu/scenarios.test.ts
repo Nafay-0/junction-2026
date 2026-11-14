@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { FixtureSpec } from "@/core/catalog/test-data";
 import type { HistoryEntry, KitchenProfile } from "@/core/kitchen";
 import { sanitiseDraft, type LlmMenuDraft } from "./draft";
+import type { FakeScenario } from "../../valio/fake-api";
 import { MENU_NOW, MENU_SCENARIOS, menuTestDock } from "./eval/fixture-catalog";
 import { resolveMenuKitchen } from "./kitchens";
 import { liveShortlist, packAmount } from "./plan";
@@ -12,7 +13,6 @@ import { InMemoryPlanStore, createPlanService } from "./service";
 const COOL = ["coolTemperature"];
 const AMB = ["warmTemperature"];
 const kg = (n: number) => ({ netWeight: { value: n, unit: "KGM" } });
-const l = (n: number) => ({ volume: { value: n, unit: "LTR" } });
 
 /** Products the two scenarios need beyond the planner's fixture catalogue (invented, not partner data). */
 const EXTRA: FixtureSpec[] = [
@@ -23,7 +23,7 @@ const EXTRA: FixtureSpec[] = [
   { id: "810005", names: { fi: "Liemi kasvisliemijauhe 500 g", en: "Liemi vegetable bouillon powder 500 g" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "21902", freeFrom: ["AN", "AP", "AM"], labels: AMB, each: kg(0.5) },
   { id: "810006", names: { fi: "Meijeri voi 500 g laktoositon", en: "Meijeri butter 500 g lactose free" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "10501", claims: ["FREE_FROM_LACTOSE"], allergens: [["AM", "CONTAINS"]], labels: COOL, each: kg(0.5) },
 ];
-const LIVE = {
+const LIVE: Record<string, FakeScenario> = {
   ...MENU_SCENARIOS,
   "810001": { price: 1.4, amount: 500, date: "2026-11-16", closingTime: "2026-11-15T17:00:00", unit: "KG" },
   // The crème fraîche is shipped from the supplier: its cut-off for Monday passed on Thursday.

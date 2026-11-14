@@ -23,10 +23,11 @@ import type { IntakeView } from "@/core/intake";
 import { answerLinkFor, needsBuyer } from "../answer-links";
 import { publicBaseUrl } from "../config";
 import { TOOLS, type DockTool } from "./tools";
+import { MENU_TOOLS } from "./menu-tools";
 import { OFFER_TOOLS } from "./offer-tools";
 
-/** What the MCP door publishes: the ordering tools, then the answers to the wholesaler's offers (offer-tools.ts). */
-export const publishedTools = (): DockTool[] => [...TOOLS, ...OFFER_TOOLS] as unknown as DockTool[];
+/** What the MCP door publishes: the ordering tools, the answers to the wholesaler's offers (offer-tools.ts), the menu scenarios (menu-tools.ts). */
+export const publishedTools = (): DockTool[] => [...TOOLS, ...OFFER_TOOLS, ...MENU_TOOLS] as unknown as DockTool[];
 
 /**
  * Dock over the Model Context Protocol, Streamable HTTP, served statelessly: every HTTP request gets a

@@ -6,6 +6,7 @@ import { resolveMenuKitchen } from "./kitchens";
 import { menuCatalogOf } from "./match";
 import { pickProducts } from "./pick";
 import { recordedDraft, recordedFix } from "./recorded";
+import { createScenarios, type Scenarios } from "./scenarios";
 import { InMemoryPlanStore, createPlanService, type PlanService } from "./service";
 
 /**
@@ -13,7 +14,7 @@ import { InMemoryPlanStore, createPlanService, type PlanService } from "./servic
  * with DOCK_MENU_MODEL=recorded), the recorded outputs of the evaluation set answer the requests they cover, and
  * every plan made that way says so on screen.
  */
-const g = globalThis as typeof globalThis & { __dockMenu?: { service: PlanService; store: InMemoryPlanStore; key: unknown }; __dockMenuTestModel?: DraftModel };
+const g = globalThis as typeof globalThis & { __dockMenu?: { service: PlanService; store: InMemoryPlanStore; key: unknown; scenarios?: Scenarios }; __dockMenuTestModel?: DraftModel };
 
 type DraftModel = Exclude<NonNullable<Parameters<typeof draftMenu>[0]["model"]>, string>;
 
@@ -57,4 +58,11 @@ export async function menuKitchen(slug: string) {
   const { rt, service } = await menuRuntime();
   const kitchen = await resolveMenuKitchen(slug, rt);
   return { rt, service, kitchen };
+}
+
+/** The two menu scenarios (scenarios.ts) on the server's one planner: a seasonal menu, and a booking at short notice. */
+export async function menuScenarios() {
+  const { rt, service } = await menuRuntime();
+  g.__dockMenu!.scenarios ??= createScenarios({ dock: rt.dock, service, catalog: menuCatalogOf(rt.catalog), profile: (orgId) => rt.kitchens.getProfile(orgId), now: () => new Date() });
+  return { rt, service, scenarios: g.__dockMenu!.scenarios };
 }
