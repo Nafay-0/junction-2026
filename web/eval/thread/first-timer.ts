@@ -52,6 +52,7 @@ const L = {
     thursday: /^Thu /,
     swap: /^Swap$/,
     choose: /^Choose this$/,
+    skip: /^No preference: show me the options$/,
   },
   fi: {
     usual: "Tilaa tavalliset",
@@ -74,6 +75,7 @@ const L = {
     thursday: /^to /,
     swap: /^Vaihda$/,
     choose: /^Valitse tämä$/,
+    skip: /^Ei väliä: näytä vaihtoehdot$/,
   },
 }[lang];
 
@@ -108,11 +110,24 @@ class Run {
   async waitFor(target: Locator, timeout = 90_000): Promise<void> {
     const end = Date.now() + timeout;
     const yes = this.log.getByRole("button", { name: L.yes }).last();
+    const skip = this.log.getByRole("button", { name: L.skip }).last();
+    const swap = this.log.getByRole("button", { name: L.swap }).first();
     while (Date.now() < end) {
-      if (await target.isVisible().catch(() => false)) return;
-      if (await yes.isVisible().catch(() => false)) {
-        await this.tap(yes);
-        await this.page.waitForTimeout(800);
+      if ((await target.isVisible().catch(() => false)) && (await target.isEnabled().catch(() => false))) return;
+      // What a first-timer does on the way: says yes to a check, takes the stated default of a question, and swaps a
+      // product the wholesaler cannot deliver for one the picker offers.
+      for (const b of [yes, skip]) {
+        if (await b.isVisible().catch(() => false)) {
+          await this.tap(b);
+          await this.page.waitForTimeout(800);
+        }
+      }
+      if (await swap.isVisible().catch(() => false)) {
+        await this.tap(swap);
+        const choose = this.log.getByRole("button", { name: L.choose }).first();
+        await choose.waitFor({ timeout: 30_000 });
+        await this.tap(choose);
+        await this.page.waitForTimeout(1500);
         continue;
       }
       await this.page.waitForTimeout(300);
@@ -273,8 +288,10 @@ const TASKS: [string, (r: Run) => Promise<string | void>][] = [
         await r.waitFor(lead);
       }
       // The lead option, or the lactose-free one among the others.
-      const leadText = (await r.log.locator("li").filter({ has: lead }).first().innerText().catch(() => "")) ?? "";
-      if (!L.lactose.test(leadText.split("\n").slice(0, 6).join(" "))) {
+      const card = cardsOf(await r.thread()).findLast((c) => c.type === "options");
+      const leadOpt = card?.type === "options" ? (card.options.find((o) => o.optionId === card.preselected?.optionId) ?? card.options[0]) : undefined;
+      const leadIsLactoseFree = !!leadOpt && leadOpt.lines.every((l) => /lactose|laktoositon/i.test(l.name));
+      if (!leadIsLactoseFree) {
         const row = r.log.locator("summary").filter({ hasText: L.lactose }).first();
         await r.tap(row);
         const pick = r.log.locator("details[open]").getByRole("button", { name: L.order }).first();
