@@ -289,7 +289,7 @@ function ReadTwice({ r }: { r: Safeguards["secondReading"] }) {
     <Section title="Read twice" id="read-twice" aside="Two readers, different makers; plain code compares">
       <div className="rounded-xl border border-line bg-paper p-5">
         {total === 0 ? (
-          <Empty title="No request read twice yet">With DOCK_SECOND_READER_MODEL set, every typed or spoken request is read again by an independent model before any price is fixed.</Empty>
+          <Empty title="No request read twice yet">When the second reader is on, every typed or spoken request is read again by an independent model before any price is fixed.</Empty>
         ) : (
           <>
             <dl className="grid grid-cols-3 gap-x-4 gap-y-3 rounded-lg bg-surface p-4">

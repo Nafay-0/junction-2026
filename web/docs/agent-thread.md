@@ -192,6 +192,15 @@ A new account's second step is a short interview with the design kit (docs/DESIG
   `setup_interview` ledger entry, then registers this device's passkey for the signer. If the device cannot (no
   passkey support, the prompt cancelled), the rules stand and the done screen offers the device again or a phone.
 - `SetupDone`: what was set, in three lines, and "Make your first order" into the kitchen's agent.
+- Demo accounts (every account opened on this deployment, `DOCK_DEMO_ACCOUNTS`, `server/demo/`): each rules question
+  also takes "None" or "Decide later", each said in one line before it is taken; "None" to the first one offers "Skip
+  the rest and start". No limits of the kitchen's own: the safe defaults (every food group, 250 € alone per order, 6 000 €
+  a week, no allergen, diet or nutrition rules), said on the summary as defaults. After signing, the account chooses a
+  starting point: a sample history (made-up orders inside its own rules, labelled sample wherever they show) or empty.
+  The agent proposes a rule from what the kitchen orders (`memory/decide.ts proposeRule`: three orders of the same
+  kind, one question, a rule only after yes). "Try everything" (`/k/<kitchen>/guide`) lists every capability with
+  its words, a "Set it up" that stages a condition for this kitchen only, and a tick from the ledger; Start over and
+  Delete are under Your rules. Conversation hooks: `server/demo/thread.ts`. Walkthrough: `eval/demo/judge-walkthrough.ts`.
 - Evaluation: `eval/thread/first-timer-setup.ts` (EN and FI, 390 px, virtual passkey): sign up, interview, rules
   confirmed, first order placed; taps, seconds (`--think` adds reading time per tap), questions. `eval/thread/
   interview.ts` checks the mandate the answers make.

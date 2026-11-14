@@ -166,6 +166,7 @@ function OrderRow({ x, asked, request }: { x: PortalOrder; asked?: string | null
         {asked && <p className="mt-0.5 line-clamp-2 text-[0.9rem] leading-snug text-ink-soft">{asked.startsWith("Basket") ? tx.basket : tx.asked(asked.length > 80 ? `${asked.slice(0, 77)}…` : asked)}</p>}
         <p className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[0.88rem] leading-snug text-ink-soft">
           <Badge tone={tone}>{tx.status[x.status] ?? x.status}</Badge>
+          {x.orderId.startsWith("ord_sample_") && <Badge tone="waiting">{tx.sample}</Badge>}
           <span>
             {tx.head.delivery} <span className="font-medium text-ink">{f.day(x.deliveryDate)}</span>
             {x.status !== "history" && (

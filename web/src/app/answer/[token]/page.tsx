@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { PRODUCT_NAME } from "../../_ui/brand";
 import { PhoneShell } from "../../_ui/phone";
 import { AnswerScreen } from "./answer-screen";
 
-export const metadata: Metadata = { title: "Dock: your answer" };
+export const metadata: Metadata = { title: `${PRODUCT_NAME}: your answer` };
 
 /** The buyer's one-time answer page: what Dock asks about their request, answered here instead of through the agent. */
 export default function AnswerPage(props: PageProps<"/answer/[token]">) {

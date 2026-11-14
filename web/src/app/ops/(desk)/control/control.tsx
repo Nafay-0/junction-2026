@@ -164,7 +164,7 @@ function Body({ c, now, refresh }: { c: ControlView; now: number; refresh: () =>
         </Section>
         <p className="mt-4 text-[0.82rem] text-ink-soft">
           {c.mode === "demo"
-            ? "Demo entry: anyone with this server's address can open operations. Set DOCK_OPS_PASSCODE before a public demo."
+            ? "Demo entry: anyone with this server's address can open operations. Set a passcode before a public demo."
             : "Operations on this server needs the passcode."}
         </p>
       </div>

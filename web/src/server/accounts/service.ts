@@ -21,6 +21,7 @@ import { FORBID_ALLERGENS, MANDATE_DAYS, REQUIRE_CLAIMS, SIGNER_ROLE, mandateFro
 import type { MandateBook } from "../mandates";
 import { kitchenUnreadable } from "./sealed";
 import { TEST_ACCOUNTS, testAccountProducts, type TestAccountSeed } from "./test-accounts";
+import { demoAccountsOn } from "../demo/mark";
 
 /**
  * Restaurant and buyer accounts. One account, one kitchen: a restaurant signs up with its name, a username and a
@@ -67,6 +68,10 @@ export type AccountView = {
   signedAt?: string;
   terms?: MandateTerms;
   shared: boolean;
+  /** A demo account (store.ts `demo`): it may take a sample history, stage conditions for its own kitchen and start over. */
+  demo: boolean;
+  /** What it chose at the end of onboarding; undefined until it chose. */
+  start?: "sample" | "empty";
 };
 
 export type SignedIn = { account: AccountView; token: string; expiresAt: string };
@@ -147,7 +152,11 @@ export class AccountService {
       // Not a reason to stop the server (e.g. DOCK_ACCOUNT_KEY_SECRET missing on a public host): said, and skipped.
       await this.seedTestAccount(seed, 0).catch((err: Error) => console.error(`test account ${seed.username} not seeded: ${err.message}`));
     }
-    for (const a of await this.deps.store.list()) if (a.kitchen) await this.trust(a.kitchen.key.publicJwk, a.kitchen.orgId);
+    for (const a of await this.deps.store.list()) {
+      if (a.kitchen) await this.trust(a.kitchen.key.publicJwk, a.kitchen.orgId);
+      // Every account opened on this deployment is a demo account (server/demo/mark.ts): ones opened before the mark existed get it.
+      if (a.kind === "own" && !a.demo && demoAccountsOn()) await this.deps.store.put({ ...a, demo: { at: now.toISOString(), ...(a.kitchen ? { onboarded: a.kitchen.terms } : {}) } });
+    }
     await this.deps.store.sweepSessions(now);
   }
 
@@ -173,7 +182,7 @@ export class AccountService {
     if ((await this.deps.store.list()).filter((a) => a.kind === "own").length >= max) {
       throw new DockError(503, "accounts_full", "This demo server has as many accounts as it takes. Use a test account, or scan the QR code to try without one.", "account");
     }
-    const account: Account = { username, restaurant, kind: "own", passwordHash: await hashPassword(input.password as string), createdAt: this.now().toISOString() };
+    const account: Account = { username, restaurant, kind: "own", passwordHash: await hashPassword(input.password as string), createdAt: this.now().toISOString(), ...(demoAccountsOn() ? { demo: { at: this.now().toISOString() } } : {}) };
     if (!(await this.deps.store.create(account))) throw new DockError(409, "username_taken", "That username is taken. Choose another.", "account");
     return this.openSession(account);
   }
@@ -240,6 +249,8 @@ export class AccountService {
       signedAt: a.kitchen?.signedAt,
       terms: a.kitchen?.terms,
       shared: a.kind === "test",
+      demo: !!a.demo,
+      ...(a.demo?.start ? { start: a.demo.start } : {}),
     };
   }
 
@@ -411,6 +422,49 @@ export class AccountService {
         .then(([m, rt]) => (rt.accounts === this ? m.resetKitchenOffers(rt, reset, "AimoPilot", `the test accounts' reset, ${by}`) : undefined))
         .catch((err: Error) => console.warn("resetting the test kitchens' offers failed", err.message));
     return { reset };
+  }
+
+  // ---------- a demo account starts over, or goes ----------
+
+  /**
+   * A demo account starts over (server/demo/service.ts): a fresh organisation, signed with the terms it signed at
+   * onboarding, as the test accounts' reset does, so earlier orders no longer count against its weekly budget (they stay
+   * in the ledger, under the old organisation, which is append-only). The kitchen's signer, with its passkeys, moves to
+   * the new organisation, so the phone that OKs orders keeps working. The old key is no longer trusted.
+   */
+  async restartKitchen(username: string, terms: MandateTerms): Promise<{ account: Account; oldOrgId: string }> {
+    const a = await this.deps.store.get(username);
+    if (!a?.kitchen) throw new DockError(404, "kitchen_not_found", "This account has no kitchen yet.", "account");
+    if (!a.demo || a.kind !== "own") throw new DockError(403, "not_a_demo_account", "Only a demo account can start over.", "account");
+    const old = a.kitchen;
+    this.deps.registry.remove(old.key.kid);
+    const signer = await this.deps.passkeys.store.findApprover(old.orgId, old.approverRole);
+    const fresh: Account = { ...a, generation: (a.generation ?? 0) + 1 };
+    delete fresh.kitchen;
+    await this.deps.store.put(fresh);
+    const signed = await this.signKitchen(username, terms);
+    const k = signed.kitchen!;
+    if (signer) {
+      const empty = await this.deps.passkeys.store.findApprover(k.orgId, k.approverRole);
+      if (empty && empty.approverId !== signer.approverId) await this.deps.passkeys.store.deleteAccount(empty.approverId);
+      await this.deps.passkeys.store.putAccount({ ...signer, orgId: k.orgId, name: terms.signer });
+    }
+    return { account: signed, oldOrgId: old.orgId };
+  }
+
+  /** The account's own person deletes it: the account, its sessions and its kitchen's key and signer go. The ledger stays. */
+  async deleteOwnAccount(username: string): Promise<{ orgId?: string; restaurant: string }> {
+    const a = await this.deps.store.get(username);
+    if (!a) throw new DockError(404, "account_not_found", "No such account.", "account");
+    if (a.kind !== "own") throw new DockError(409, "account_shared", `${a.restaurant} is a shared or built-in account: it cannot be deleted here.`, "account");
+    if (a.kitchen) {
+      this.deps.registry.remove(a.kitchen.key.kid);
+      const signer = await this.deps.passkeys.store.findApprover(a.kitchen.orgId, a.kitchen.approverRole);
+      if (signer) await this.deps.passkeys.store.deleteAccount(signer.approverId);
+    }
+    await this.deps.store.delete(username);
+    this.deps.dock.ledger.append({ type: "intake", actor: `account:${username}`, summary: `${a.restaurant} deleted its account: its sign-in, its kitchen's key and its signer are gone. Its orders and every entry stay in the ledger.`, data: { step: "account_deleted", orgId: a.kitchen?.orgId, demo: !!a.demo } });
+    return { orgId: a.kitchen?.orgId, restaurant: a.restaurant };
   }
 
   // ---------- a visitor keeps their kitchen ----------
