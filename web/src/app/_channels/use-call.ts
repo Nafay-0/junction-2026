@@ -126,7 +126,7 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
   /** The agent's voice started or stopped: from our own playback (Gemini) or the provider's (OpenAI over WebRTC). */
   const speaking = useRef<(on: boolean) => void>(() => {});
   /** `dial` calls itself (another provider, a reconnect); through a ref, since it is declared with useCallback. */
-  const dialRef = useRef<(mode: Mode, carryFrom: string | undefined, a: CallAudio, why: { avoid?: string; reconnect?: boolean }) => Promise<void>>(async () => {});
+  const dialRef = useRef<(mode: Mode, carryFrom: string | undefined, a: CallAudio, why: { avoid?: string; reconnect?: boolean; deadline?: number }) => Promise<void>>(async () => {});
   const warned = useRef(false);
   const onStep = useRef(opts.onStep);
   const onOrder = useRef(opts.onOrder);
@@ -396,7 +396,9 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
 
   /** Start a call (or a reconnect: `again` keeps the microphone open and the desk's request). */
   const dial = useCallback(
-    async (mode: Mode, carryFrom: string | undefined, a: CallAudio, why: { avoid?: string; reconnect?: boolean }) => {
+    async (mode: Mode, carryFrom: string | undefined, a: CallAudio, why: { avoid?: string; reconnect?: boolean; deadline?: number }) => {
+      // One 12 s budget for getting a voice session, across a switch to the other provider.
+      const deadline = why.deadline ?? Date.now() + 12_000;
       const r = await post<CallStart>(`${base}/call`, { mode, carryFrom, ...(why.avoid ? { avoid: why.avoid } : {}) });
       if (!r.ok || !r.data.live) {
         cleanup();
@@ -413,12 +415,31 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
         : `[call connected] The caller is ${start.kitchen.name}.`;
       const s = connect(start, a, greeting, ({ code, reason, ready }) => {
         if (sock.current !== s) return;
-        // The provider refused the session before it started (free-tier quota, outage): the other provider.
-        if (!ready && QUOTA.test(reason) && !why.avoid) {
-          cleanup(true);
+        // The session never started (refused: a quota, an outage, a blocked network): the other provider once; if that
+        // one does not start either, say the voice connection did not open and carry on by typing. Never back and forth.
+        if (!ready) {
           void post(`${base}/call/${start.callId}`, { op: "end", reason: `refused ${code}` });
-          set({ notice: say().switching });
-          void dialRef.current(mode, start.callId, a, { avoid: start.live!.provider, reconnect: why.reconnect });
+          // A reconnect that does not start: try again (twice in all), then the call was lost, and says so.
+          if (why.reconnect) {
+            if (reconnects.current < 2) {
+              reconnects.current += 1;
+              cleanup(true);
+              window.setTimeout(() => void dialRef.current(mode, start.callId, a, { reconnect: true }), 800 * reconnects.current);
+              return;
+            }
+            cleanup();
+            set({ phase: "lost", talking: false, latched: false, agentSpeaking: false, thinking: false, notice: undefined, endReason: say().lost });
+            return;
+          }
+          if (!why.avoid) {
+            cleanup(true);
+            set({ notice: say().switching });
+            void dialRef.current(mode, start.callId, a, { avoid: start.live!.provider, reconnect: why.reconnect, deadline });
+            return;
+          }
+          cleanup();
+          set({ notice: undefined });
+          void startTyped(undefined, QUOTA.test(reason) ? say().rateLimited : say().noVoice, start.callId);
           return;
         }
         void post(`${base}/call/${start.callId}`, { op: "end", reason: `lost ${code}` });
@@ -432,25 +453,30 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
           return;
         }
         cleanup();
-        set({ phase: "lost", talking: false, latched: false, agentSpeaking: false, thinking: false, endReason: timeUp ? say().timeLimit : say().lost });
+        set({ phase: "lost", talking: false, latched: false, agentSpeaking: false, thinking: false, notice: undefined, endReason: timeUp ? say().timeLimit : say().lost });
       });
       // A provider that accepts the socket but does not start the session in 6 s (seen on Gemini's free tier under
       // load): try the other provider once. If nothing connects in 12 s (blocked WebSocket, captive portal), type.
       window.setTimeout(() => {
-        if (sock.current === s && !s.ready && !why.avoid) {
+        if (sock.current === s && !s.ready && !why.avoid && !why.reconnect) {
           cleanup(true);
           void post(`${base}/call/${start.callId}`, { op: "end", reason: "slow start" });
           set({ notice: say().switching });
-          void dialRef.current(mode, start.callId, a, { avoid: start.live!.provider, reconnect: why.reconnect });
+          void dialRef.current(mode, start.callId, a, { avoid: start.live!.provider, reconnect: why.reconnect, deadline });
         }
-      }, 6_000);
+      }, Math.max(0, Math.min(6_000, deadline - Date.now())));
       window.setTimeout(() => {
         if (sock.current === s && !s.ready) {
           cleanup();
           void post(`${base}/call/${start.callId}`, { op: "end", reason: "connect timeout" });
-          void startTyped(undefined, say().noVoice, start.callId);
+          // A call that had been connected and could not come back was lost; one that never started did not open.
+          if (why.reconnect) set({ phase: "lost", talking: false, latched: false, agentSpeaking: false, thinking: false, notice: undefined, endReason: say().lost });
+          else {
+            set({ notice: undefined });
+            void startTyped(undefined, say().noVoice, start.callId);
+          }
         }
-      }, 12_000);
+      }, Math.max(0, deadline - Date.now()));
     },
     [base, cleanup, connect, set, shown, say, startTyped],
   );

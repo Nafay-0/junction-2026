@@ -22,8 +22,8 @@ export function callCostUsd(c: Pick<Call, "usage" | "startedAt" | "endedAt" | "e
  * Bounds, so that nobody with the page open can run up spend:
  *   - one live call per kitchen at a time (a second caller is told the line is busy)
  *   - a call lasts at most DOCK_VOICE_CALL_SECONDS (default 300); Google refuses the token after that
- *   - DOCK_VOICE_CALLS_PER_KITCHEN_HOUR (default 6) and DOCK_VOICE_CALLS_PER_HOUR (default 20, all kitchens)
- *   - DOCK_VOICE_CALLS_PER_KITCHEN_DAY (default 15) and DOCK_VOICE_CALLS_PER_DAY (default 120, all kitchens):
+ *   - DOCK_VOICE_CALLS_PER_KITCHEN_HOUR (default 10) and DOCK_VOICE_CALLS_PER_HOUR (default 150, all kitchens)
+ *   - DOCK_VOICE_CALLS_PER_KITCHEN_DAY (default 30) and DOCK_VOICE_CALLS_PER_DAY (default 600, all kitchens):
  *     a photographed call QR code only ever opens a new visitor kitchen, and these caps bound the total
  *   - per call, at most 40 tool calls and 8 readings of free text by the interpret model
  *   - a call the page stops reporting on (tab closed, laptop asleep) frees the line after 30 s
@@ -39,7 +39,9 @@ export function callCostUsd(c: Pick<Call, "usage" | "startedAt" | "endedAt" | "e
 export type Desk = {
   requestId?: string;
   /** A need read from speech, waiting for the caller to confirm the read-back. */
-  pending?: { need: NeedInput; words: string; reason: string; model: string; say: string };
+  pending?: { need: NeedInput; words: string; reason: string; model: string; say: string; parts?: { need: NeedInput; words: string }[] };
+  /** Several items confirmed as one order: the engine's order sheet, placed by the caller's "yes, order it". */
+  sheet?: { sheetId: string; version: number };
   orderId?: string;
   /** Turn number of the caller's words last used for a decision: the same words never answer twice. */
   lastTurnUsed: number;
@@ -78,10 +80,13 @@ export function voiceLimits(env: Record<string, string | undefined> = process.en
   return {
     enabled: (env.DOCK_VOICE ?? "on").toLowerCase() !== "off",
     callSeconds: Math.min(900, num(env, "DOCK_VOICE_CALL_SECONDS", 300)),
-    perKitchenHour: num(env, "DOCK_VOICE_CALLS_PER_KITCHEN_HOUR", 6),
-    perHour: num(env, "DOCK_VOICE_CALLS_PER_HOUR", 20),
-    perKitchenDay: num(env, "DOCK_VOICE_CALLS_PER_KITCHEN_DAY", 15),
-    perDay: num(env, "DOCK_VOICE_CALLS_PER_DAY", 120),
+    // Sized for a queue of judges on the paid Gemini key (14 Nov: 100 sessions opened at once all started, median
+    // 0.9 s; Google's Tier 1 spend limit is $10 per rolling 10 minutes, about 200 ordering calls at list price), so
+    // the first provider serves them: a judge's phone is its own kitchen, so the per-kitchen caps bound one phone.
+    perKitchenHour: num(env, "DOCK_VOICE_CALLS_PER_KITCHEN_HOUR", 10),
+    perHour: num(env, "DOCK_VOICE_CALLS_PER_HOUR", 150),
+    perKitchenDay: num(env, "DOCK_VOICE_CALLS_PER_KITCHEN_DAY", 30),
+    perDay: num(env, "DOCK_VOICE_CALLS_PER_DAY", 600),
   };
 }
 
@@ -102,6 +107,10 @@ export class CallRegistry {
     this.prune();
     if (mode !== "typed") {
       if (!limits.enabled) throw new DockError(503, "voice_off", "Voice calls are switched off on this server. Type the request instead.");
+      // The call this one carries on from (a switch of provider, a reconnect) is being replaced, not competing for the
+      // line: it is ended here, whatever order the browser's "end" and this request arrive in.
+      const replaced = carryFrom ? this.calls.get(carryFrom) : undefined;
+      if (replaced && replaced.kitchen === kitchen && replaced.endedAt === undefined && replaced.mode !== "typed") this.end(replaced.callId, kitchen, "replaced");
       const busy = [...this.calls.values()].find((c) => c.kitchen === kitchen && this.live(c));
       if (busy) throw new DockError(409, "line_busy", "This kitchen's agent is already on a call. Hang up the other call first, or wait for it to end.", undefined, { retryAfterSeconds: Math.ceil(Math.min(busy.expiresAt - t, CALL_LIMITS.staleMs - (t - busy.lastSeen)) / 1000) });
       const hour = [...this.calls.values()].filter((c) => c.mode !== "typed" && t - c.startedAt < 3_600_000);

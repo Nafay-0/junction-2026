@@ -29,9 +29,11 @@ export const ToolBody = z.object({
 });
 export type ToolBody = z.input<typeof ToolBody>;
 
-export type Pending = { need: NeedInput; summary: string; reason: string; say: string };
+export type Pending = { need: NeedInput; summary: string; reason: string; say: string; /** Several items read back together. */ parts?: NeedInput[] };
 
 export type ToolReply = {
+  /** Already a turn of the kitchen's thread (the engine ran it): not mirrored again. */
+  threaded?: boolean;
   forModel: ForModel;
   screen: { step?: IntakeView; order?: PublicOrder; pending?: Pending; problem?: { code: string; message: string }; heard?: string };
 };
@@ -53,7 +55,7 @@ export async function runTool(kitchen: string, input: unknown, req?: Request): P
   // The call is a door of the kitchen's one conversation (server/thread/voice-bridge.ts): the step lands in the
   // thread as cards, and a routine request is placed alone by the engine's rule.
   const parsed = ToolBody.safeParse(input);
-  if (parsed.success) {
+  if (parsed.success && !reply.threaded) {
     const { mirrorVoiceTool } = await import("@/server/thread/voice-bridge");
     reply = await mirrorVoiceTool(kitchen, parsed.data, reply, req);
   }
@@ -92,11 +94,18 @@ async function runToolInner(kitchen: string, input: unknown, req?: Request): Pro
   try {
     switch (body.name) {
       case "submit_request":
+        call.desk.sheet = undefined;
         return await submit(a, call, String(body.args.request ?? ""), heard, via);
       case "confirm_read_back": {
         const p = call.desk.pending;
         if (!p) return refuse("There is no read-back waiting. If the caller wants something, call submit_request.", "nothing_pending");
         call.desk.pending = undefined;
+        // The confirmed reading goes to the engine as it was read back (never read again): its day rule, a kind it
+        // cannot offer said first, several items as one order sheet, and a routine order placed alone.
+        if (process.env.DOCK_THREAD_VOICE !== "off") {
+          const { confirmThroughEngine } = await import("@/server/thread/voice-bridge");
+          return await confirmThroughEngine(kitchen, call, p, heard, body.tapped ? "tap" : via === "typed" ? "typed" : "speech", req);
+        }
         const opened = await open(a, call, p.need, p.words, via, `The caller confirmed the read-back${p.reason ? ` (${p.reason})` : ""}.`, p.model);
         // The read-back already asked about this very amount and the caller said yes: the same check is not asked twice.
         const s = opened.screen.step;
@@ -122,6 +131,10 @@ async function runToolInner(kitchen: string, input: unknown, req?: Request): Pro
         return { forModel: orderForModel(order), screen: { order, step: await getStep(a, step.requestId), heard: heard?.text } };
       }
       case "place_order": {
+        if (call.desk.sheet && process.env.DOCK_THREAD_VOICE !== "off") {
+          const { placeSheetThroughEngine } = await import("@/server/thread/voice-bridge");
+          return await placeSheetThroughEngine(kitchen, call, heard, body.tapped ? "tap" : via === "typed" ? "typed" : "speech", req);
+        }
         const order = await place(a, current(call), "voice", heard);
         call.desk.orderId = order.orderId;
         return { forModel: orderForModel(order), screen: { order, step: await getStep(a, current(call)), heard: heard?.text } };
@@ -187,12 +200,22 @@ async function submit(a: KitchenAgent, call: Call, request: string, heard: Heard
     read = await readNeed(a, words);
   } catch (err) {
     const p = asProblem(err);
+    // Several items in one sentence the reader could not hold together: split by plain code at the item boundaries
+    // (the engine's own splitItems), each part read, all read back in one sentence and ordered as one order.
+    if (p.code === "need_incomplete") {
+      const multi = await readSeveral(a, call, words, heard, via);
+      if (multi) return multi;
+    }
     if (p.code === "need_incomplete") {
       const missing = ((p.details?.missing as string[]) ?? []).map((m) => (m === "item" ? "what to buy" : "how much, with the unit"));
       return { forModel: { ok: false, state: "incomplete", say: `AimoPilot understood part of it but needs ${missing.join(" and ")}.`, ask: `Ask the caller for ${missing.join(" and ")}.` }, screen: { problem: p, heard: words } };
     }
     if (p.code === "not_a_purchase_request") return { forModel: { ok: false, state: "not_a_request", say: "That did not sound like something to buy.", ask: "Ask what the kitchen needs." }, screen: { problem: p, heard: words } };
     return { forModel: { ok: false, state: "error", say: `AimoPilot could not read the request: ${p.message}` }, screen: { problem: p, heard: words } };
+  }
+  if (read.alsoAsked?.length && via === "speech") {
+    const multi = await readSeveral(a, call, words, heard, via, read);
+    if (multi) return multi;
   }
   const need = NeedSchema.parse(read.need);
   const memory = await a.rt.dock.intake.kitchen(a.session);
@@ -210,6 +233,46 @@ async function submit(a: KitchenAgent, call: Call, request: string, heard: Heard
     };
   }
   return open(a, call, read.need, words, via, undefined, read.model);
+}
+
+/**
+ * Several items said at once ("ten litres of cream and twenty litres of milk for Friday"): each part read on its own,
+ * the day said once given to each, and all of them read back in one sentence before anything is priced. Confirmed,
+ * they go to the engine as one order sheet (voice-bridge.ts confirmThroughEngine). Undefined when the words do not
+ * split into items that each have an amount, so the single reading (or its question) stands.
+ */
+async function readSeveral(a: KitchenAgent, call: Call, words: string, heard: HeardWords | undefined, via: Via, first?: { need: NeedInput; model: string; alsoAsked?: string[] }): Promise<ToolReply | undefined> {
+  const { splitItems } = await import("@/server/thread/pipeline");
+  const texts = first?.alsoAsked?.length ? [first.need.text ?? words, ...first.alsoAsked] : splitItems(words);
+  if (texts.length < 2) return undefined;
+  const reads = await Promise.all(texts.slice(0, 5).map((t, i) => (i === 0 && first ? Promise.resolve(first) : readNeed(a, t)).catch(() => undefined)));
+  if (reads.some((r) => !r)) return undefined;
+  const day = reads.map((r) => (r!.need as { deliverBy?: string }).deliverBy).find(Boolean);
+  const parts = reads.map((r, i) => {
+    const n = { ...(r!.need as NeedInput) } as NeedInput & { deliverBy?: string };
+    if (!n.deliverBy && day) n.deliverBy = day;
+    return { need: n as NeedInput, words: texts[i] };
+  });
+  const needs = parts.map((x) => NeedSchema.safeParse(x.need));
+  if (needs.some((n) => !n.success || !n.data.quantity)) return undefined;
+  const items = needs.map((n) => {
+    const d = n.data!;
+    return `${formatAmount(d.quantity!.amount, d.quantity!.unit)} (${amountInWords(d.quantity!.amount, d.quantity!.unit)}) of ${d.item.text}`;
+  });
+  const say = `${items.slice(0, -1).join(", ")} and ${items.at(-1)}${day ? `, for ${spokenDate(day)}` : ""}, as one order.`;
+  // The two hearings: every amount the reader took must be in the transcript.
+  const heardNums = via === "speech" && heard ? numbersHeard(heard.text) : [];
+  const missing = heardNums.length ? needs.filter((n) => !heardNums.some((h) => Math.abs(h - n.data!.quantity!.amount) < 1e-6)) : [];
+  const reason = missing.length ? `the transcript does not have ${missing.map((n) => formatAmount(n.data!.quantity!.amount, n.data!.quantity!.unit)).join(", ")}` : "";
+  const full = reason ? `${say.slice(0, -1)}. I am checking because ${reason}.` : say;
+  call.desk.pending = { need: parts[0].need, words, reason, model: first?.model ?? "", say: full, parts };
+  call.desk.requestId = undefined;
+  call.desk.orderId = undefined;
+  call.desk.sheet = undefined;
+  return {
+    forModel: { ok: true, state: "read_back", say: full, ask: "Is that right? (Wait for the caller. If they correct it, call submit_request again with their words.)", items: needs.map((n) => `${formatAmount(n.data!.quantity!.amount, n.data!.quantity!.unit)} ${n.data!.item.text}`), ...(day ? { deliverBy: day } : {}) },
+    screen: { pending: { need: parts[0].need, summary: needs.map((n) => describeNeed(n.data!)).join("; "), reason, say: full, parts: parts.map((x) => x.need) }, heard: words },
+  };
 }
 
 async function open(a: KitchenAgent, call: Call, need: NeedInput, words: string, via: Via, note: string | undefined, model: string): Promise<ToolReply> {

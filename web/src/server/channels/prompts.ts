@@ -102,7 +102,7 @@ export const VOICE_TOOLS = [
   },
   {
     name: "place_order",
-    description: "The caller said to place the order at the fixed price. AimoPilot's gate decides what happens.",
+    description: "The caller said to order it: a fixed price shown earlier, or the order sheet with several items. AimoPilot's gate decides what happens.",
     parameters: { type: "OBJECT", properties: {} },
   },
   {

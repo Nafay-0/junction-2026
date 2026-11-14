@@ -84,4 +84,13 @@ describe("CallRegistry", () => {
     r.end(c.callId, "laakso", "hung up");
     expect(hangups).toEqual(["rtc_xyz"]);
   });
+
+  it("a call carried on from another (a switch of provider, a reconnect) replaces it instead of finding the line busy", () => {
+    const r = new CallRegistry();
+    const first = r.open("kaari", "push_to_talk", limits);
+    expect(() => r.open("kaari", "push_to_talk", limits)).toThrow(/already on a call/);
+    const second = r.open("kaari", "push_to_talk", limits, first.callId);
+    expect(r.get(first.callId)?.endReason).toBe("replaced");
+    expect(second.callId).not.toBe(first.callId);
+  });
 });

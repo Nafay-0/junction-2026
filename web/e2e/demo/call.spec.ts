@@ -226,7 +226,7 @@ test("in the thread, the voice service answers nothing: the call gives up by its
 });
 
 /**
- * DEFECT (test.fail until fixed). When the voice service accepts the socket and never answers (a venue network that
+ * Was a DEFECT, fixed on claude/voice-3 (one 12 s budget across the provider switch). When the voice service accepts the socket and never answers (a venue network that
  * lets the WebSocket through and nothing back), the buyer should hear "The voice connection did not open (the network
  * may block it). Type instead." within about 12 s. Instead the call goes back and forth between the two providers
  * for about 23 s and ends on a stale notice, "The first voice service refused the call (its limit). Trying the other
@@ -236,7 +236,6 @@ test("in the thread, the voice service answers nothing: the call gives up by its
  * (src/app/k/[kitchen]/thread.tsx:559).
  */
 test("in the thread, a voice service that never answers is named as such", async ({ page }, info) => {
-  test.fail(!process.env.E2E_EXPECT_FIXED, "the call ends on a stale 'refused the call (its limit). Trying the other one…'");
   test.setTimeout(120_000);
   await threadWithVoice(page, realOrSyntheticMic(engine(info)), "silent");
   await noSecondProvider(page);
@@ -248,13 +247,12 @@ test("in the thread, a voice service that never answers is named as such", async
 });
 
 /**
- * DEFECT (test.fail until fixed). Same cause as above: when a dropped call cannot reconnect (two tries), the call ends
+ * Was a DEFECT, fixed on claude/voice-3 (a reconnect that does not start ends "lost"). Same cause as above: when a dropped call cannot reconnect (two tries), the call ends
  * and the buyer's last word is the stale notice "Connection lost. Reconnecting with your request as it was…", not
  * "The connection to the voice service was lost." (use-call.ts:435 sets endReason but keeps the notice; the toast at
  * src/app/k/[kitchen]/thread.tsx:559 prefers the notice).
  */
 test("in the thread, a call that cannot reconnect ends saying it was lost, not 'Reconnecting'", async ({ page }, info) => {
-  test.fail(!process.env.E2E_EXPECT_FIXED, "the ended call's toast is the stale 'Reconnecting…' notice");
   test.setTimeout(90_000);
   const { live } = await threadWithVoice(page, realOrSyntheticMic(engine(info)), "answer");
   await startThreadCall(page);
@@ -267,7 +265,7 @@ test("in the thread, a call that cannot reconnect ends saying it was lost, not '
 });
 
 /**
- * DEFECT (test.fail until fixed). Moving a call to the second provider ends the first provider's call and asks for
+ * Was a DEFECT, fixed on claude/voice-3 (the server ends the call a new one carries on from). Moving a call to the second provider ends the first provider's call and asks for
  * the new one at the same moment (src/app/_channels/use-call.ts:442-444 and :419-421: `void post(end)` then dial,
  * not awaited), and the server counts the call being replaced as busy (src/server/channels/voice/calls.ts:105: the
  * line check does not exempt `carryFrom`). Whenever the new request arrives before the end, it is refused "This
@@ -275,7 +273,6 @@ test("in the thread, a call that cannot reconnect ends saying it was lost, not '
  * back 1 s to make that ordering certain.
  */
 test("in the thread, switching to the second provider is not refused as a second call", async ({ page }, info) => {
-  test.fail(!process.env.E2E_EXPECT_FIXED, "the switch races the first call's end: 409 line_busy");
   test.setTimeout(90_000);
   await threadWithVoice(page, realOrSyntheticMic(engine(info)), "silent");
   const offers = await noSecondProvider(page);
@@ -334,7 +331,8 @@ test("in the thread, connected, then the phone goes offline: the call ends, typi
   const words = "100 litres of lactose-free milk for Thursday";
   await composer(page).fill(words);
   await composer(page).press("Enter");
-  await expect(threadLog(page).getByRole("alert")).toContainText(/Not sent/, { timeout: 15_000 });
+  // The thread's own words for it are now "No connection. Your words are kept below: send them again ...".
+  await expect(threadLog(page).getByRole("alert")).toContainText(/Not sent|No connection/, { timeout: 15_000 });
 
   await context.setOffline(false);
   await expect(composer(page)).toHaveValue(words);

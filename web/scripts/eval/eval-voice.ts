@@ -254,12 +254,17 @@ async function main() {
       }
       sock.activityEnd();
       endAt = Date.now();
+      const toolsBefore = log.length;
       // The answer may come after one or more tool calls; each tool round trip ends with another model turn.
       const until = Date.now() + 25_000;
       while (Date.now() < until && !closed) {
         await waitTurn(until - Date.now());
         await sleep(300);
-        if (!pendingTools) break;
+        if (pendingTools) continue;
+        // A model that reasons asynchronously (gemini-3.8-live-extended-thinking) ends a turn before its tool call:
+        // keep listening while nothing has been said or called for this turn yet.
+        if (log.length === toolsBefore && !said.trim()) continue;
+        break;
       }
       await sleep(200);
       calls().heartbeat(start.callId, KITCHEN);
@@ -335,6 +340,7 @@ async function main() {
         const before = log.length;
         await speak(replyClip(text, t.lang));
         if (log.length === before) flowLog.push(`(no tool call; agent said: ${said.trim().slice(0, 100)})`);
+        // States only: what was said can name catalogue products, which result files must not hold.
         else flowLog.push(...log.slice(before).map((l) => `${l.name}: ${l.state}${l.refused ? ` (${l.refused})` : ""}`));
       }
       if (order) orderMs = Date.now() - t0;
