@@ -93,8 +93,9 @@ async function startCall(page: Page) {
 }
 
 /** Hold the talk button for `ms`, as a thumb would. */
-async function hold(page: Page, ms = 900) {
-  const box = (await talk(page).boundingBox())!;
+async function hold(page: Page, ms = 900, button = talk(page)) {
+  await expect(button).toBeVisible();
+  const box = (await button.boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
   await page.waitForTimeout(ms);
@@ -201,9 +202,10 @@ test.describe("with a microphone", () => {
     await page.goto(`/k/${tester.username}/order`);
     const composer = page.getByRole("button", { name: "Hold to talk" }).first();
     await composer.click(); // a tap on the microphone starts the call
-    await expect(page.locator("[data-voice-mode]")).toBeVisible({ timeout: 20_000 });
-    await expect(status(page)).toHaveAttribute("data-status", "ready", { timeout: 15_000 });
-    await hold(page);
+    const bar = page.locator("[data-voice-mode]:visible").first();
+    await expect(bar).toBeVisible({ timeout: 20_000 });
+    await expect(bar.locator("[data-status]")).toHaveAttribute("data-status", "ready", { timeout: 15_000 });
+    await hold(page, 900, bar.locator("button[aria-pressed]").last());
     // The heard words become the buyer's turn and the read-back is a card in the thread itself.
     await expect(page.getByText(REQUEST).first()).toBeVisible({ timeout: 30_000 });
     await expect(page.locator("main").getByText(/200\s?L/).first()).toBeVisible({ timeout: 30_000 });
