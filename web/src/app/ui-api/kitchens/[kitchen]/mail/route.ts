@@ -5,6 +5,8 @@ import { readJson } from "@/server/http";
 import { noStore, portalRoute } from "@/server/kitchen-portal-http";
 import { addressOf, removeAddress, setAddress } from "@/server/notify/service";
 import { getRuntime } from "@/server/runtime";
+import { countConfirmSend } from "@/server/accounts/email";
+import { clientAddress } from "@/server/limits";
 
 /**
  * The kitchen's address for order emails (server/notify). Optional and the kitchen's own choice.
@@ -29,6 +31,8 @@ export async function POST(req: Request, ctx: RouteContext<"/ui-api/kitchens/[ki
     const body = (await readJson(req)) as Record<string, unknown>;
     const who = { by: k.console!.person!.name, via: "the store's Agent and rules page" };
     if (body.action === "set") {
+      // Confirmation sends per client address (accounts/email.ts), beside the mail module's own cap per kitchen.
+      countConfirmSend(clientAddress(req.headers));
       const lang = isLang(body.lang) ? body.lang : (langFromCookie(req.headers.get("cookie")) ?? "en");
       const r = await setAddress(rt, { orgId: k.info.orgId, slug: k.info.slug, name: k.info.name }, String(body.address ?? ""), { ...who, lang });
       return Response.json({ ...r.contact, confirmation: r.confirmation ? { outcome: r.confirmation.outcome, reason: r.confirmation.reason } : undefined }, noStore);

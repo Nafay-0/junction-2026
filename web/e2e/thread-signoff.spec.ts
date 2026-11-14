@@ -17,6 +17,7 @@ async function signUp(page: Page, username: string, restaurant: string) {
   await page.goto("/k/signup");
   const form = page.getByRole("form", { name: "Your restaurant" });
   await form.getByLabel("Restaurant or buyer name").fill(restaurant);
+  await form.getByLabel("Business email", { exact: true }).fill("delivered@resend.dev");
   await form.getByLabel("Username", { exact: true }).fill(username);
   await form.getByLabel("Password", { exact: true }).fill(PASSWORD);
   await page.getByRole("button", { name: "Continue" }).click();
@@ -27,7 +28,8 @@ async function signUp(page: Page, username: string, restaurant: string) {
     const confirm = page.getByRole("button", { name: "Confirm, and add this device to OK orders" });
     const kind = page.getByRole("radio", { name: "Restaurant", exact: true });
     const amount = page.getByRole("button", { name: / € is right$/ });
-    const next = page.getByRole("button", { name: /^(Next|None of these)$/ });
+    // With nothing picked, "None" (one of the rules question's alternatives) is the way on.
+    const next = page.getByRole("button", { name: /^(Next|None of these)$/ }).or(page.locator('[data-alt="none"]')).first();
     await expect(confirm.or(kind).or(amount).or(next).first()).toBeVisible({ timeout: 15_000 });
     if (await confirm.isVisible()) break;
     const q = await page.getByRole("progressbar").first().getAttribute("aria-valuenow");
@@ -44,7 +46,8 @@ async function signUp(page: Page, username: string, restaurant: string) {
     Object.defineProperty(navigator, "credentials", { value: { create: () => Promise.reject(Object.assign(new Error("cancelled"), { name: "NotAllowedError" })) } });
   });
   await page.getByRole("button", { name: "Confirm, and add this device to OK orders" }).click();
-  await page.getByRole("button", { name: "Make your first order" }).click();
+  // A demo account chooses its starting point; any other account goes straight to its first order.
+  await page.locator('[data-start="empty"]').or(page.getByRole("button", { name: "Make your first order" })).first().click();
   await page.waitForURL(`**/k/${username}`);
 }
 

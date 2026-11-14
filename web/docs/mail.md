@@ -78,6 +78,17 @@ right-aligned in tabular figures. Petrol #005670 on white; the lime #c0e021 used
 - After each send the service asks Resend what happened (30 s and 3 min later). A **bounce** or a spam complaint stops
   mail to that address and deletes it; the kitchen gives one again to start.
 
+### Given at sign-up
+
+An ordinary sign-up (`/k/signup`, step 1) asks for the business email, required, with the line "Order confirmations,
+receipts, and a note when something can't be delivered" (`server/accounts/email.ts`). It is checked on the server and
+kept on the account only until the kitchen exists at the end of the set-up interview; then it becomes the kitchen's
+contact through `setAddress` (pending, one confirmation mail) and is deleted from the account. The done screen says
+whether the confirmation went ("Check your inbox to confirm …") or honestly not ("We couldn't send the confirmation
+yet"); Your rules shows the state with "Send the confirmation again". A fresh kitchen (one click) and the shared test
+kitchens never ask: an address can be added under Your rules. Confirmation sends are capped per kitchen (here) and per
+client address (`DOCK_LIMIT_MAIL_CONFIRM_ADDRESS`, default 20 an hour).
+
 ## Guardrails
 
 | Guardrail | Setting | Default |

@@ -86,6 +86,7 @@ async function once(n: number) {
   await page.locator("#su-restaurant").fill(`${L.restaurant} ${n}`);
   await page.locator("#su-username").fill(username);
   await page.locator("#su-password").fill("first-timer-pw-123");
+  await page.locator("#su-email").fill("delivered@resend.dev");
   await tap(page.getByRole("button", { name: L.continue }));
 
   // 2. The interview: the welcome, then each question with its default taken.

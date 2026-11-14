@@ -225,6 +225,7 @@ async function buildRuntime(): Promise<Runtime> {
   const rt: Runtime = (rtRef = { dock, outbox, catalog, catalogSource, events, passkeys, sandboxes, aiven, kitchens: stores.kitchens, mandates, accounts, records: stores.records });
   scheduleTestAccountResets(accounts); // not under tests or during a build; DOCK_TEST_ACCOUNTS_RESET_MINUTES=0 turns it off
   radar(rt); // starts the recall radar's schedule (not under tests, during a build, or with RADAR_POLL=off)
+  void import("./demo/fresh").then((m) => m.scheduleFreeKitchenSweep(rt)); // fresh kitchens unused for 24 h go (hourly; not under tests or a build)
   void import("./watch/schedule").then((m) => m.scheduleWatch(rt)); // the kitchen agent's watch (DOCK_WATCH_MINUTES, default 30; not under tests or a build)
   // MAIL (src/server/notify): the kitchen's receipts and alerts, after the fact, from the events and the ledger above;
   // only to a kitchen that gave and confirmed an address, never in the path of an order.

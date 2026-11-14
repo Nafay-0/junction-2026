@@ -10,6 +10,7 @@ import { AmountAnswer, ChoiceAnswer } from "../../_ui/widgets";
 import { RulesSheet, SetupDone, SetupStep, SetupWelcome } from "../../_ui/widgets-more";
 import type { InterviewStep } from "@/server/accounts/interview-run";
 import type { InterviewAnswers, InterviewQuestion } from "@/server/accounts/interview";
+import type { SignupMail } from "@/server/accounts/email";
 import { DevicePanel } from "../_account/forms";
 import { DOOR_TEXT } from "../door.text";
 import { INTERVIEW_TEXT } from "./thread-interview.text";
@@ -32,7 +33,7 @@ export function SetUpInterview({ onFinished }: { onFinished: (next: string) => v
   const [step, setStep] = useState<InterviewStep>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<{ next: string; device: boolean; limit: string; demo: boolean }>();
+  const [done, setDone] = useState<{ next: string; device: boolean; limit: string; demo: boolean; mail?: SignupMail }>();
   const [starting, setStarting] = useState<"sample" | "empty">();
   const t0 = useRef<number>(0);
 
@@ -72,7 +73,7 @@ export function SetUpInterview({ onFinished }: { onFinished: (next: string) => v
     if (!step?.terms) return;
     setBusy(true);
     setError(undefined);
-    const r = await api<{ next: string; first: boolean }>("POST", "/ui-api/account/interview", { answers, finish: true, ms: Date.now() - t0.current });
+    const r = await api<{ next: string; first: boolean; mail?: SignupMail }>("POST", "/ui-api/account/interview", { answers, finish: true, ms: Date.now() - t0.current });
     if (!r.ok) {
       setBusy(false);
       return setError(r.error.message);
@@ -93,7 +94,7 @@ export function SetUpInterview({ onFinished }: { onFinished: (next: string) => v
       }
     }
     setBusy(false);
-    setDone({ next: r.data.next, device, limit: tx.eur(f.num(step.terms.perOrderLimitEur)), demo: !!step.demo });
+    setDone({ next: r.data.next, device, limit: tx.eur(f.num(step.terms.perOrderLimitEur)), demo: !!step.demo, ...(r.data.mail ? { mail: r.data.mail } : {}) });
   }
 
   /** A demo account's starting point (server/demo): a sample history, or empty. Then into the agent. */
@@ -110,6 +111,8 @@ export function SetUpInterview({ onFinished }: { onFinished: (next: string) => v
     onFinished(done.next);
   }
 
+  /** The business email from sign-up: sent for confirmation, or honestly not sent yet. */
+  const mailLine = (m?: SignupMail) => (!m || (m.state === "none" && !m.reason) ? [] : m.sent ? [tx.mailSent(m.masked ?? "")] : [tx.mailNotSent]);
   const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   const claim = (c: string) => cap(dx.claims[c] ?? c);
   const allergen = (a: string) => cap(dx.allergens[a] ?? a);
@@ -118,7 +121,7 @@ export function SetUpInterview({ onFinished }: { onFinished: (next: string) => v
   if (done?.demo)
     return (
       <div className="space-y-4">
-        <SetupDone title={tx.doneTitle} lines={[tx.doneLimit(done.limit), done.device ? tx.doneDevice : tx.noDevice, tx.doneChange]} />
+        <SetupDone title={tx.doneTitle} lines={[tx.doneLimit(done.limit), done.device ? tx.doneDevice : tx.noDevice, ...mailLine(done.mail), tx.doneChange]} />
         {!done.device && <DevicePanel intro={false} />}
         <StartChoice busy={starting} onChoose={(c) => void start(c)} />
         {error && <Problem text={error} />}
@@ -130,7 +133,7 @@ export function SetUpInterview({ onFinished }: { onFinished: (next: string) => v
       <div className="space-y-4">
         <SetupDone
           title={tx.doneTitle}
-          lines={[tx.doneLimit(done.limit), done.device ? tx.doneDevice : tx.noDevice, tx.doneChange]}
+          lines={[tx.doneLimit(done.limit), done.device ? tx.doneDevice : tx.noDevice, ...mailLine(done.mail), tx.doneChange]}
           start={tx.firstOrder}
           onStart={() => onFinished(done.next)}
         />

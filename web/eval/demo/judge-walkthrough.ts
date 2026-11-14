@@ -51,6 +51,7 @@ async function main() {
   await page.locator("#su-restaurant").fill(mode === "none" ? "Bistro Kide" : "Lounasravintola Aalto");
   await page.locator("#su-username").fill(username);
   await page.locator("#su-password").fill("judge-walkthrough-pw-1");
+  await page.locator("#su-email").fill("delivered@resend.dev");
   await page.getByRole("button", { name: /^Continue$/ }).click();
   await page.getByRole("button", { name: /^Let's start$/ }).click();
 

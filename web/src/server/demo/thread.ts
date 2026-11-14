@@ -81,3 +81,16 @@ export async function demoStageForThread(rt: Runtime, kitchen: string, kind: Sta
     return { ok: false, say: t.failed(isDockError(err) ? err.message : "something went wrong") };
   }
 }
+
+/**
+ * A fresh kitchen's opening line (server/demo/fresh.ts), for the conversation's first turn of the day: what it is in
+ * one sentence and where the guide is, or undefined for any other kitchen. Plain code, in the buyer's language.
+ */
+export async function freeKitchenOpening(rt: Runtime, kitchen: string, lang: Lang = "en"): Promise<{ say: string; guide: string } | undefined> {
+  const a = await rt.accounts.get(kitchen);
+  if (!a?.free || !a.kitchen) return undefined;
+  const { FRESH_TEXT } = await import("@/app/k/[kitchen]/fresh.text");
+  const t = FRESH_TEXT[lang];
+  const limited = a.kitchen.terms.perOrderLimitEur < 50_000;
+  return { say: limited ? `${t.opening} ${t.limitSet(`${a.kitchen.terms.perOrderLimitEur} €`)}` : t.opening, guide: `/k/${a.username}/guide` };
+}

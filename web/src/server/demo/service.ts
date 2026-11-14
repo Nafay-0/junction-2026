@@ -77,6 +77,17 @@ export async function chooseStart(rt: Runtime, a: Account, start: "sample" | "em
   return { start, ...(summary ? { sample: summary } : {}) };
 }
 
+/** A sample history added later ("Add a sample history" on the guide): once, for a kitchen that has none yet. */
+export async function addSampleHistory(rt: Runtime, a: Account, now = new Date()): Promise<{ sample?: SampleSummary; already?: boolean }> {
+  const { demo, kitchen } = demoOf(a);
+  const profile = await rt.kitchens.getProfile(kitchen.orgId);
+  if (profile?.history.some((h) => h.sample)) return { already: true };
+  const sample = await fillSample(rt, a, now);
+  await rt.accounts.store.put({ ...a, demo: { ...demo, start: "sample", startedAt: demo.startedAt ?? now.toISOString() } });
+  ledger(rt, a, `${a.restaurant} added a SAMPLE HISTORY for the demo: ${sample.orders} made-up orders inside its rules, labelled sample wherever they show; not orders in the wholesaler's books.`, { step: "demo_start", start: "sample", sample: true, added: true, orders: sample.orders });
+  return { sample };
+}
+
 // ---------- staging, for this account's kitchen only ----------
 
 function capStaging(a: Account, now: Date) {
@@ -212,7 +223,9 @@ export async function restartAccount(rt: Runtime, a: Account, now = new Date()):
   const k = account.kitchen!;
   const { writeSetupMemory } = await import("../accounts/interview-run");
   if (demo.remembered?.length) await writeSetupMemory(rt, { orgId: k.orgId, restaurant: a.restaurant, username: a.username, by: `${terms.signer} (set-up of ${a.restaurant})`, facts: demo.remembered });
-  const next: Account = { ...account, demo: { ...demo, staged: [], resets: (demo.resets ?? 0) + 1, resetsAt: [...recent, now.toISOString()] } };
+  // A fresh kitchen starts over as one: deliveries on any day, its free-play rules (signed above), and it lives on.
+  if (a.free) await updateKitchenProfile(rt.kitchens, k.orgId, (p) => (p ? { ...p, deliveryWeekdays: [1, 2, 3, 4, 5, 6, 7] } : p));
+  const next: Account = { ...account, ...(a.free ? { free: { ...a.free, lastUsedAt: now.toISOString() } } : {}), demo: { ...demo, staged: [], resets: (demo.resets ?? 0) + 1, resetsAt: [...recent, now.toISOString()] } };
   await rt.accounts.store.put(next);
   const sample = demo.start === "sample" ? await fillSample(rt, next, now) : undefined;
   ledger(rt, next, `${a.restaurant} started over (demo account): back to how it was after onboarding (${demo.start === "sample" ? `a fresh sample history of ${sample?.orders ?? 0} made-up orders` : "empty"}), signed again with its onboarding rules as ${k.mandate.mandateId}. The old organisation ${oldOrgId} and everything it did stay in the ledger.`, { step: "demo_reset", start: demo.start, oldOrgId, newOrgId: k.orgId, mandateId: k.mandate.mandateId });
@@ -279,6 +292,9 @@ export type GuideFacts = {
   start?: "sample" | "empty";
   hasOrder: boolean;
   orderId?: string;
+  /** A fresh kitchen (server/demo/fresh.ts), and whether it still has no limit of its own (free play). */
+  free?: boolean;
+  noLimit?: boolean;
 };
 
 export type Guide = { rows: GuideRow[]; facts: GuideFacts; demo: boolean; done: number; of: number; next?: GuideId };
@@ -326,6 +342,8 @@ export async function guideFor(rt: Runtime, a: Account, now = new Date()): Promi
     sample: history.some((h) => h.sample || h.orderId.startsWith(SAMPLE_PREFIX)),
     ...(a.demo?.start ? { start: a.demo.start } : {}),
     hasOrder: orders.length > 0,
+    ...(a.free ? { free: true } : {}),
+    ...(k.terms.perOrderLimitEur >= 50_000 ? { noLimit: true } : {}),
     ...(orders[0] ? { orderId: [...orders].sort((x, y) => y.createdAt.localeCompare(x.createdAt))[0].orderId } : {}),
   };
 
