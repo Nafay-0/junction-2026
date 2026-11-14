@@ -41,7 +41,7 @@ export type MenuKitchenInfo = {
 };
 
 /** `session`: an outside agent's own verified session (MCP, REST), used instead of signing in with `mandateToken`. */
-export type MenuKitchen = { info: MenuKitchenInfo; mandateToken: string; agentId: string; mandate: Mandate; diet: DietRules; session?: AgentSession };
+export type MenuKitchen = { info: MenuKitchenInfo; mandateToken: string; agentId: string; mandate: Mandate; diet: DietRules; session?: AgentSession; /** ISO weekdays the kitchen takes deliveries (its profile): a plan with no day is planned for the next one. */ deliveryWeekdays?: number[] };
 
 /** Partner category families that are not food: kitchenware, cleaning, packaging, office, newspapers, gases. */
 const NON_FOOD_FAMILIES = new Set(["200", "300", "329", "630", "631", "632", "633", "639", "640", "641", "643", "645", "677", "678", "777", "900"]);
@@ -247,6 +247,7 @@ export async function resolveMenuKitchen(slug: string, rt: Pick<Runtime, "catalo
     agentId,
     mandate: m,
     diet,
+    ...(profile?.deliveryWeekdays?.length ? { deliveryWeekdays: profile.deliveryWeekdays } : {}),
   };
 }
 
@@ -297,6 +298,7 @@ async function accountMenuKitchen(slug: string, rt: Pick<Runtime, "kitchens" | "
     agentId,
     mandate,
     diet: derived.diet,
+    ...(profile?.deliveryWeekdays?.length ? { deliveryWeekdays: profile.deliveryWeekdays } : {}),
   };
 }
 
@@ -326,5 +328,6 @@ export function outsideMenuKitchen(session: AgentSession, profile?: KitchenProfi
     mandate: m,
     diet: derived.diet,
     session,
+    ...(profile?.deliveryWeekdays?.length ? { deliveryWeekdays: profile.deliveryWeekdays } : {}),
   };
 }

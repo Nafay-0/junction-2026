@@ -85,8 +85,8 @@ export type SeasonalResult = {
 } & PlanChecks;
 
 /** The planner's own checks, as facts any door can say in a sentence (plan.ts PlanTotals). */
-export type PlanChecks = Pick<PlanView["totals"], "refusedDish" | "instead" | "ruleRefusals" | "day" | "coverage">;
-export const checksOf = (v: PlanView): PlanChecks => ({ refusedDish: v.totals.refusedDish, instead: v.totals.instead, ruleRefusals: v.totals.ruleRefusals, day: v.totals.day, coverage: v.totals.coverage });
+export type PlanChecks = Pick<PlanView["totals"], "refusedDish" | "instead" | "ruleRefusals" | "day" | "coverage" | "complete" | "ingredients" | "covered" | "missing" | "definingMissing">;
+export const checksOf = (v: PlanView): PlanChecks => ({ refusedDish: v.totals.refusedDish, instead: v.totals.instead, ruleRefusals: v.totals.ruleRefusals, day: v.totals.day, coverage: v.totals.coverage, complete: v.totals.complete, ingredients: v.totals.ingredients, covered: v.totals.covered, missing: v.totals.missing, definingMissing: v.totals.definingMissing });
 
 export type GatePreview = { outcome: Decision["outcome"]; reasons: string[]; approver: { name: string; role: string } | null };
 
@@ -620,7 +620,7 @@ export function createScenarios(deps: ScenarioDeps) {
    * decision and who made it. `choices: "best"`: the agent takes the best option alone only where the gate's preview
    * says it is inside the kitchen's preferences; the others wait for the buyer.
    */
-  async function sheetOf(k: MenuKitchen, planId: string, choices: Choice[] | "best", who: { by: string; agentAlone?: boolean }): Promise<SheetLines> {
+  async function sheetOf(k: MenuKitchen, planId: string, choices: Choice[] | "best", who: { by: string; agentAlone?: boolean; acceptPartial?: boolean }): Promise<SheetLines> {
     const { record: p, view } = await service.get(k, planId);
     const ev = cache.get(planId);
     const want = p.settings.deliverBy ?? undefined;
@@ -673,6 +673,11 @@ export function createScenarios(deps: ScenarioDeps) {
       const o = chosen.get(d.lineId)!;
       log(k, p, "substitution_chosen", `${d.ingredient}: ${o.rank} option "${o.title}" chosen by ${d.by}. Trade-off: ${o.tradeoff.taste}; ${o.tradeoff.texture}; work: ${o.tradeoff.work}.${o.checks.length ? ` Buys ${o.checks.filter((c) => c.product).map((c) => `${c.product!.packText} ${c.product!.name}${c.main ? " (the substitute)" : ""}`).join(" + ")}, ${formatEur(o.checks.reduce((s, c) => s + (c.product?.totalCents ?? 0), 0))}.` : ""} ${o.signOff.needed ? `Sign-off: ${o.signOff.reason}` : "Inside the kitchen's preferences."}`, { lineId: d.lineId, optionId: o.optionId, rank: o.rank, kind: o.kind, by: d.by, signOff: o.signOff.needed }, d.by.startsWith("agent:") ? `agent:${k.agentId}` : `buyer:${d.by}`);
     }
+    // Not the dish: an ingredient not covered (and not replaced by a chosen option) stops the sheet, unless the buyer
+    // accepted ordering only what can be bought. The refusal carries every missing ingredient with its code and words.
+    const missing = view.totals.missing.filter((m) => !(m.lineId && chosen.has(m.lineId)) && !swappedDishes.has(m.dish));
+    if (missing.length && !p.acceptPartial && !who.acceptPartial)
+      throw new DockError(409, "plan_incomplete", `Only ${view.totals.ingredients - missing.length} of ${view.totals.ingredients} ingredients can be bought${missing.some((m) => m.defining) ? ", and what the dish is made of is not among them" : ""}: ${missing.map((m) => `${m.ingredient} (${m.words})`).join("; ")}.`, undefined, { covered: view.totals.ingredients - missing.length, of: view.totals.ingredients, definingMissing: missing.some((m) => m.defining), missing: missing.map((m) => ({ ingredient: m.ingredient, dish: m.dish, code: m.code, words: m.words, defining: m.defining, ...(m.detail?.group ? { group: m.detail.group } : {}) })) });
     if (!lines.size) throw new DockError(409, "menu_nothing_to_order", leftOff.length ? `Nothing on this menu can be ordered: ${leftOff.map((x) => `${x.name} (${x.why})`).join("; ")}.` : "Nothing on this menu is being bought.");
     return { lines: [...lines.values()], ...(want ? { deliveryDate: want } : {}), text: `Menu for ${p.settings.covers ?? "?"} covers: ${p.draft.dishes.filter((d) => !swappedDishes.has(d.name)).map((d) => d.name).concat([...chosen.values()].flatMap((o) => (o.kind === "dish" && o.dish ? [o.dish.name] : []))).join(", ")}`.slice(0, 2000), leftOff, decisions };
   }

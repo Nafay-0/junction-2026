@@ -6,6 +6,7 @@ import { localNow } from "@/core/kitchen";
 import { yesOrNo } from "../../channels/speech";
 import type { EventResult, SeasonalResult, SheetLines, SubOption } from "./scenarios";
 import { MENU_SAY_TEXT } from "./say.text";
+import { saidHave, saidOnHand } from "@/core/on-hand";
 
 /**
  * The two menu scenarios as the kitchen's own conversation uses them: data and actions, no card. The thread (owned by
@@ -109,7 +110,7 @@ async function seasonalSay(r: SeasonalResult, rt: Awaited<ReturnType<typeof kit>
     t.dishes(r.dishes.length, covers, day, list(r.dishes.map((d) => dishL(d, lang)), lang)),
     said.length ? t.onHand(list(said, lang)) : "",
     est.length ? t.estimate(list(est, lang)) : "",
-    t.buy(buying.length, money(r.totalCents)),
+    r.complete ? t.buy(buying.length, money(r.totalCents)) : t.partialTotal(r.covered, r.ingredients, money(r.totalCents), list(r.missing.slice(0, 4).map((m) => lower(m.ingredient)), lang)),
     r.gate?.outcome === "needs_human_approval" && r.gate.approver ? t.signOff(r.gate.approver.name) : "",
   ].filter(Boolean);
   const steps = [
@@ -217,6 +218,13 @@ const STOP = new Set(["instead", "amount", "lactose", "laktoositon", "laktosfri"
 const fold = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");
 
 export type ScenarioAnswer = { kind: "yes" } | { kind: "no" } | { kind: "choose"; optionId: string } | { kind: "day"; date: string };
+/** The buyer's own "order just those": actOnScenario takes it beside the answers above (partialAnswerOf reads it). */
+export type PartialAnswer = { kind: "partial" };
+
+/** "Order just those three", "only what you can get", "tilaa vain ne": the buyer accepts ordering part of the dish. */
+export function partialAnswerOf(words: string): PartialAnswer | undefined {
+  return PARTIAL_WORDS.test(words) ? { kind: "partial" } : undefined;
+}
 
 const FIRST = /\b(?:first|1st|former|ensimmäi|eka\b|edelli|första)/iu;
 const SECOND = /\b(?:second|2nd|latter|the other|toinen|toista|jälkimmäi|toka\b|andra|den senare)/iu;
@@ -242,6 +250,7 @@ export function scenarioAnswerOf(words: string, pending: PendingScenario): Scena
 }
 
 const OK_WORDS = /\b(fine|ok|okay|sure|sounds good|go ahead|do it|do that|use that|use those|that one|that works|works for me|perfect|great|please do|käy|sopii|selvä|hyvä on|tehdään niin|käytä sitä|går bra|okej|gör det|använd den|det funkar)\b/iu;
+const PARTIAL_WORDS = /\b(just those|only those|just these|only these|only what (you|we) can|what you can get|order (just|only) (the|those|these)|vain ne|vain nuo|vain nämä|tilaa vain|bara de|bara dessa|endast de)\b/iu;
 const NO_WORDS = /\b(no thanks|don't|do not|not that|ei käy|älä|inte|nej tack)\b/iu;
 const WEEKDAY_WORDS: RegExp[] = [
   /\b(sunday|sunnuntai|söndag)/iu,
@@ -260,7 +269,7 @@ export type Who = { by: string };
  * session: the mandate the plan was made and checked under); a no is recorded nowhere and orders nothing; a new day
  * plans the booking again for that day and returns what to say then (`next`).
  */
-export async function actOnScenario(slug: string, pending: PendingScenario, answer: ScenarioAnswer, who: Who, lang: Lang = "en"): Promise<{ reply: string; sheet?: SheetLines & { session: AgentSession }; next?: ThreadScenario }> {
+export async function actOnScenario(slug: string, pending: PendingScenario, answer: ScenarioAnswer | PartialAnswer, who: Who, lang: Lang = "en"): Promise<{ reply: string; sheet?: SheetLines & { session: AgentSession }; next?: ThreadScenario; incomplete?: IncompleteChoices }> {
   const t = MENU_SAY_TEXT[lang];
   if (answer.kind === "no") return { reply: t.declined };
   const { scenarios, service, kitchen } = await kit(slug);
@@ -280,7 +289,16 @@ export async function actOnScenario(slug: string, pending: PendingScenario, answ
       else if (best) choices.push({ lineId: x.lineId, optionId: best.optionId });
     }
   } else choices = [];
-  const sheet = await scenarios.sheetOf(kitchen, pending.planId, choices, { by: who.by, agentAlone: true });
+  if (answer.kind === "partial") await service.edit(kitchen, pending.planId, [{ op: "acceptPartial" }], who.by);
+  let sheet: Awaited<ReturnType<typeof scenarios.sheetOf>>;
+  try {
+    sheet = await scenarios.sheetOf(kitchen, pending.planId, choices, { by: who.by, agentAlone: true });
+  } catch (err) {
+    // Not the dish: no sheet; the honest sentence and the ways forward instead.
+    if ((err as { code?: string }).code !== "plan_incomplete") throw err;
+    const inc = await incompleteChoices(slug, pending.planId, lang, { ideas: false });
+    return { reply: `${inc.say} ${inc.ask}`, incomplete: inc };
+  }
   const session = await service.agentSession(kitchen);
   return { reply: [t.onSheet, sheet.leftOff.length ? t.leftOff(sheet.leftOff.map((x) => x.name).join(", ")) : ""].filter(Boolean).join(" "), sheet: { ...sheet, session } };
 }
@@ -326,11 +344,11 @@ export async function menuChecks(slug: string, planId: string, lang: Lang = "en"
     for (const r of c.ruleRefusals.slice(0, 2)) parts.push(t.ruleLine(r.ingredient, r.rule.text));
     // The first reason only, without the planner's "Cannot arrive by …:" lead: the steps have the rest.
     for (const d of c.day.lines.filter((x) => !x.ok).slice(0, 2)) parts.push(t.dayLine(d.ingredient, (d.why ?? "").replace(/^Cannot arrive[^:]*:\s*/i, "").split(";")[0].replace(/\.$/, "")));
-    const staples = c.coverage.filter((x) => x.basis === "staple").map((x) => lower(x.ingredient));
+    const staples = c.coverage.filter((x) => x.status === "staple").map((x) => lower(x.ingredient));
     if (staples.length) parts.push(t.staples(list([...new Set(staples)], lang)));
   }
-  const by = (b: string) => new Set(c.coverage.filter((x) => x.basis === b).map((x) => x.lineId)).size;
-  const counts = { ingredients: new Set(c.coverage.map((x) => x.lineId)).size, toBuy: by("ordered"), staples: by("staple"), onHand: by("on_hand"), open: by("open") };
+  const by = (b: string) => new Set(c.coverage.filter((x) => x.status === b).map((x) => x.lineId ?? `${x.dishId}:${x.ingredient}`)).size;
+  const counts = { ingredients: new Set(c.coverage.map((x) => x.lineId ?? `${x.dishId}:${x.ingredient}`)).size, toBuy: by("ordered") + by("swapped"), staples: by("staple"), onHand: by("on_hand"), open: by("not_covered") };
   if (!c.refusedDish && counts.ingredients) parts.unshift(t.counts(counts.toBuy + counts.open, counts.staples, counts.onHand));
   return { ...c, counts, say: upper(parts.join(" ")), ...(ask ? { ask: upper(ask) } : {}) };
 }
@@ -419,6 +437,21 @@ export function changeEditsOf(words: string, p: Pick<import("./service").PlanRec
     const dish = p.draft.dishes.find((d) => [d.name, d.nameFi ?? "", d.nameSv ?? "", d.course].some((n) => n && stemsMatch(n, drop[1])));
     if (dish) edits.push({ op: "dropDish", dishId: dish.id });
   }
+  // What the kitchen has ("we have potatoes", "meillä on voita"): on hand, said by the chef; "we're out of butter": not.
+  for (const h of saidHave(words)) {
+    const target = matchLine(p, h.item);
+    if (target) {
+      const spec = p.specs.find((x) => x.lineId === target)!;
+      const unit = spec.ingredient.perCover.unit === "g" ? "kg" : spec.ingredient.perCover.unit === "ml" ? "L" : "pcs";
+      edits.push({ op: "onHand", lineId: target, onHand: saidOnHand(h.words, unit, h.amount) });
+    }
+  }
+  const out = /(?:we(?:'re| are)|i(?:'m| am)) out of\s+(.+?)[.!?]*$|\bno\s+(.+?)\s+left\b|\b(.+?)\s+(?:on loppu|loppui)\b|\bslut på\s+(.+?)[.!?]*$/i.exec(words);
+  if (out) {
+    const target = matchLine(p, out[1] ?? out[2] ?? out[3] ?? out[4]);
+    if (target) edits.push({ op: "onHand", lineId: target, onHand: null }, { op: "strike", lineId: target, struck: false });
+  }
+  if (partialAnswerOf(words)) edits.push({ op: "acceptPartial" });
   return edits;
 }
 
@@ -430,4 +463,177 @@ const stemsMatch = (name: string, said: string) => {
 };
 function matchLine(p: Pick<import("./service").PlanRecord, "specs">, said: string): string | undefined {
   return p.specs.find((s) => [s.name, s.key.replace(/_/g, " "), ...s.ingredient.searchTerms].some((n) => stemsMatch(n, said)))?.lineId;
+}
+
+// ---------- a plan that is not the dish, and the ways forward ----------
+
+export type IncompleteChoices = {
+  planId: string;
+  complete: boolean;
+  covered: number;
+  of: number;
+  definingMissing: boolean;
+  missing: { ingredient: string; dish: string; code: string; words: string; group?: string; defining: boolean }[];
+  /** The groups the kitchen's mandate covers, by name, and the ones the missing ingredients fall in. */
+  kitchenGroups: string[];
+  missingGroups: string[];
+  /** Up to three ways forward, each with what the conversation does on a yes. */
+  choices: (
+    | { kind: "ask_owner"; groups: string[]; words: string }
+    | { kind: "order_partial"; items: string[]; words: string; answer: PartialAnswer }
+    | { kind: "other_dish"; dishes: { name: string; ideasId: string; dishId: string }[]; words: string }
+  )[];
+  /** One honest sentence, and the question offering the choices. */
+  say: string;
+  ask: string;
+};
+
+/**
+ * For a plan that is not the dish (an ingredient not covered): the facts for one honest sentence (N of M, what is
+ * missing and why) and a real choice: ask the owner to add the missing product groups (the conversation does it
+ * through the mandate reissue), order only what can be bought (named; on a yes, actOnScenario with
+ * `{ kind: "partial" }`), or plan a dish that can be bought in full (`ideas: true` drafts and checks one or two; slower).
+ */
+export async function incompleteChoices(slug: string, planId: string, lang: Lang = "en", opts: { ideas?: boolean; by?: string } = {}): Promise<IncompleteChoices> {
+  const { service, kitchen } = await kit(slug);
+  const { record, view } = await service.get(kitchen, planId);
+  const t = MENU_SAY_TEXT[lang];
+  const tt = view.totals;
+  const missing = tt.missing.map((m) => ({ ingredient: m.ingredient, dish: m.dish, code: m.code ?? "not_sold", words: m.words, ...(m.detail?.group ? { group: m.detail.group } : {}), defining: m.defining }));
+  const missingGroups = [...new Set(missing.flatMap((m) => (m.group ? [m.group.split(":")[0]] : [])))];
+  const { kitchenGroups } = await import("./coverage");
+  const { codeOfSlug } = await import("./service");
+  const groups = kitchenGroups(kitchen.mandate.allowedCategories, codeOfSlug);
+  const bought = tt.coverage.filter((c) => c.status === "ordered" || c.status === "swapped").map((c) => ingredientL(c, lang));
+  const choices: IncompleteChoices["choices"] = [];
+  if (missingGroups.length) choices.push({ kind: "ask_owner", groups: missingGroups, words: t.choiceOwner(list(missingGroups, lang)) });
+  if (bought.length) choices.push({ kind: "order_partial", items: bought, words: t.choicePartial(list(bought.slice(0, 4), lang)), answer: { kind: "partial" } });
+  if (opts.ideas !== false) {
+    const dish = record.draft.dishes[0];
+    const ideas = await menuIdeas(slug, `Two other ${dish?.course ?? "main"} dishes for ${record.settings.covers ?? 20}, instead of ${dish?.name ?? "the dish"}, that can be made from what the kitchen's product groups cover (${groups.join(", ")}).`, opts.by ?? "the kitchen's agent", lang).catch(() => undefined);
+    const full = ideas?.ideas.filter((x) => x.buyable).slice(0, 2) ?? [];
+    if (full.length && ideas) choices.push({ kind: "other_dish", dishes: full.map((x) => ({ name: x.name, ideasId: ideas.ideasId, dishId: x.dishId })), words: t.choiceOther(list(full.map((x) => x.name), lang)) });
+  }
+  const dishName = record.draft.dishes.map((d) => dishL(d, lang)).join(", ");
+  const say = upper(t.incomplete(dishName, tt.covered, tt.ingredients, list(missing.slice(0, 5).map((m) => `${lower(m.ingredient)}${m.group ? ` (${m.group.split(":")[0]})` : ""}`), lang), tt.definingMissing));
+  const ask = choices.length ? upper(t.choicesAsk(choices.map((c) => c.words).join(lang === "fi" ? ", vai " : lang === "sv" ? ", eller " : ", or "))) : "";
+  return { planId, complete: tt.complete, covered: tt.covered, of: tt.ingredients, definingMissing: tt.definingMissing, missing, kitchenGroups: groups, missingGroups, choices, say, ask };
+}
+
+/** An ingredient in the recipe's own words in the reply's language (the planner's Finnish search word for fi). */
+const ingredientL = (c: { ingredient: string; ingredientFi: string | null }, lang: Lang) => (lang === "fi" && c.ingredientFi ? c.ingredientFi : c.ingredient);
+
+// ---------- planning a dish: ideas that fit and can be bought, then the dish in three groups ----------
+
+export type MenuIdea = { dishId: string; name: string; nameFi: string | null; nameSv: string | null; course: string; reason: string; buyable: boolean; usesOnHand: string[]; missing: { ingredient: string; code: string; words: string; group?: string }[]; say: string };
+
+const IDEAS = new Map<string, { slug: string; draft: import("./draft").MenuDraft; words: string; have: string[] }>();
+
+/**
+ * Three or four dishes that fit what the buyer said (preferences in words: style, diet, budget per person, occasion,
+ * how many, the day; what they have on hand), each with a one-line reason and checked BEFORE it is offered against
+ * master data and the kitchen's rules (product groups, allergens and claims, nutrition, sold at all): buyable dishes
+ * first; one that is not says which ingredients and why. One model call for the dishes; no live price.
+ */
+export async function menuIdeas(slug: string, words: string, by: string, lang: Lang = "en", opts: { have?: string; count?: number } = {}): Promise<{ ideasId: string; ideas: MenuIdea[]; ms: number; say: string; ask: string }> {
+  const { service, kitchen } = await kit(slug);
+  const have = saidHave(`${words}. ${opts.have ? `We have ${opts.have}` : ""}`).map((x) => x.item);
+  const n = Math.min(4, Math.max(2, opts.count ?? 4));
+  const text = `${words}\n\nSuggest ${n} different dishes that fit this, each a separate dish (not a menu of courses), for a professional kitchen. Prefer dishes made from what the kitchen's product groups cover${have.length ? ` and that use what it already has: ${have.join(", ")}` : ""}. In assumptions, give one short reason per dish, in the same order, starting with the dish name.`;
+  const r = await service.ideaCheck(kitchen, text.slice(0, 3900));
+  const ideasId = `ideas_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  IDEAS.set(ideasId, { slug, draft: r.draft, words, have });
+  if (IDEAS.size > 100) IDEAS.delete(IDEAS.keys().next().value!);
+  const t = MENU_SAY_TEXT[lang];
+  const reasonOf = (name: string) => r.draft.assumptions.find((a) => fold(a).includes(fold(name).split(" ")[0])) ?? "";
+  const ideas: MenuIdea[] = r.dishes
+    .map((d) => {
+      const usesOnHand = have.filter((h) => d.items.some((i) => fold(i.ingredient).includes(fold(h).slice(0, 4))));
+      const missing = d.missing.map((m) => ({ ingredient: m.ingredient, code: m.code ?? "not_sold", words: m.words, ...(m.group ? { group: m.group } : {}) }));
+      const name = dishL(d, lang);
+      const say = d.buyable ? name : t.ideaNeeds(name, list([...new Set(missing.map((m) => (m.group ? m.group.split(":")[0] : lower(m.ingredient))))], lang));
+      return { dishId: d.dishId, name: d.name, nameFi: d.nameFi, nameSv: d.nameSv, course: d.course, reason: reasonOf(d.name), buyable: d.buyable, usesOnHand, missing, say };
+    })
+    .sort((a, b) => Number(b.buyable) - Number(a.buyable) || b.usesOnHand.length - a.usesOnHand.length);
+  return { ideasId, ideas, ms: r.ms, say: upper(t.ideasSay(list(ideas.map((x) => x.say), lang))), ask: upper(t.ideasAsk) };
+}
+
+/** The idea the buyer picked, planned as the dish (no model call for the recipe; live prices now), with its three groups. */
+export async function pickIdea(slug: string, ideasId: string, dishId: string, by: string, lang: Lang = "en", opts: { covers?: number; date?: string } = {}): Promise<DishGroups> {
+  const { service, kitchen } = await kit(slug);
+  const idea = IDEAS.get(ideasId);
+  if (!idea || idea.slug !== slug) throw Object.assign(new Error("Those ideas are no longer open: ask for ideas again."), { code: "ideas_not_found", status: 404 });
+  const dish = idea.draft.dishes.find((d) => d.id === dishId);
+  if (!dish) throw Object.assign(new Error("No such idea."), { code: "idea_not_found", status: 404 });
+  const draft = { ...idea.draft, ...(opts.covers ? { covers: opts.covers } : {}), ...(opts.date ? { serviceDate: opts.date } : {}), dishes: [{ ...dish, id: "dish_1" }] };
+  const planned = await service.planFromDraft(kitchen, `${dish.name}: ${idea.words}`.slice(0, 2000), by, draft);
+  await service.settled(planned.record.planId);
+  // What the buyer said they have is on hand from the start.
+  if (idea.have.length) {
+    const changed = await changeMenu(slug, planned.record.planId, `We have ${idea.have.join(", ")}`, by, lang).catch(() => undefined);
+    void changed;
+  }
+  return dishGroups(slug, planned.record.planId, lang);
+}
+
+export type GroupItem = { ingredient: string; need: string | null; status: string; words: string; product?: string; packs?: number; totalCents?: number; deliveryDate?: string; code?: string; standIn?: string; basis?: string };
+export type DishGroups = {
+  planId: string;
+  dishes: string[];
+  covers: number | null;
+  day: string | null;
+  /** Said by the buyer, estimated from the kitchen's history, or a staple it keeps: each with its basis. */
+  onHand: GroupItem[];
+  /** Product, packs, live price, delivery day. */
+  toOrder: GroupItem[];
+  /** Not sold, cannot arrive by the day, outside the product groups or a rule (named), cannot be priced: each with its code. */
+  cannotGet: GroupItem[];
+  totalToOrderCents: number;
+  /** The whole dish per cover: only when the plan is complete (otherwise it is not the dish's price). */
+  perCoverCents: number | null;
+  complete: boolean;
+  covered: number;
+  of: number;
+  definingMissing: boolean;
+  say: string;
+  ask: string;
+};
+
+/**
+ * The dish as the buyer sees it: every ingredient with its amount for the covers in exactly one of three groups, in the
+ * recipe's own words in the reply's language (product names belong to the order lines), the total for what is to
+ * order, the price per cover only when the plan is complete, and the sentence that says N of M when it is not.
+ */
+export async function dishGroups(slug: string, planId: string, lang: Lang = "en"): Promise<DishGroups> {
+  const { service, kitchen } = await kit(slug);
+  const { record, view } = await service.get(kitchen, planId);
+  return groupsOf(record, view, lang);
+}
+
+/** The three groups of a plan, plain code over its coverage (dishGroups without the runtime, for tests and other doors). */
+export function groupsOf(record: Pick<import("./service").PlanRecord, "planId" | "settings" | "draft">, view: import("./plan").PlanView, lang: Lang = "en"): DishGroups {
+  const planId = record.planId;
+  const t = MENU_SAY_TEXT[lang];
+  const tt = view.totals;
+  const item = (c: (typeof tt.coverage)[number]): GroupItem => ({ ingredient: ingredientL(c, lang), need: c.need, status: c.status, words: c.words, ...(c.detail?.product ? { product: c.detail.product } : {}), ...(c.detail?.packs ? { packs: c.detail.packs } : {}), ...(c.detail?.totalCents ? { totalCents: c.detail.totalCents } : {}), ...(c.detail?.deliveryDate ? { deliveryDate: c.detail.deliveryDate } : {}), ...(c.code ? { code: c.code } : {}), ...(c.status === "on_hand" || c.status === "staple" ? { basis: c.words } : {}), ...(c.status === "swapped" && c.detail?.insteadOf ? { standIn: c.detail.product } : {}) });
+  const onHand = tt.coverage.filter((c) => c.status === "on_hand" || c.status === "staple").map(item);
+  const toOrder = tt.coverage.filter((c) => c.status === "ordered" || c.status === "swapped").map(item);
+  const cannotGet = tt.coverage.filter((c) => c.status === "not_covered").map(item);
+  const covers = record.settings.covers;
+  const perCover = tt.complete && covers ? Math.round(tt.totalCents / covers) : null;
+  const dishes = record.draft.dishes.map((d) => dishL(d, lang));
+  const day = record.settings.deliverBy ?? tt.day.date;
+  const say = upper(
+    [
+      t.dishIs(list(dishes, lang), covers),
+      onHand.length ? t.groupHave(list(onHand.map((x) => lower(x.ingredient)), lang)) : "",
+      toOrder.length ? t.groupOrder(toOrder.length, money(tt.totalCents), day ? dayL(day, lang) : "") : "",
+      cannotGet.length ? t.groupCannot(list(cannotGet.slice(0, 5).map((x) => lower(x.ingredient)), lang)) : "",
+      tt.complete ? (perCover ? t.perCover(money(perCover)) : "") : t.notTheDish(tt.covered, tt.ingredients),
+    ]
+      .filter(Boolean)
+      .join(" "),
+  );
+  const ask = upper(tt.complete ? t.askSheet : t.askIncomplete);
+  return { planId, dishes, covers, day, onHand, toOrder, cannotGet, totalToOrderCents: tt.totalCents, perCoverCents: perCover, complete: tt.complete, covered: tt.covered, of: tt.ingredients, definingMissing: tt.definingMissing, say, ask };
 }

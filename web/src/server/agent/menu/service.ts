@@ -2,8 +2,11 @@ import type { AlternativesSource } from "@/core/alternatives";
 import type { Door } from "@/core/orders";
 import { MAX_LIVE_IDS_PER_CALL, usableOffer, type LiveOffer, type LiveStatus, type Product } from "@/core/catalog";
 import { DockError } from "@/core/errors";
-import { allergenInName, definingConflict, missingEssentials } from "@/core/dish-rules";
-import { formatDay, latestDeliveryDay, localNow } from "@/core/kitchen";
+import { allergenInName, definingConflict, isDefining, missingEssentials } from "@/core/dish-rules";
+import { addDaysIso, formatDay, isoWeekday, latestDeliveryDay, localNow } from "@/core/kitchen";
+import { CATEGORY_SLUGS } from "@/core/catalog/partner";
+import labels from "../../catalog-categories.json";
+import { groupName, kitchenGroups, setGroupLabels } from "./coverage";
 import { nutritionFindings } from "@/core/nutrition";
 import { agentKeyOf } from "@/core/live-allowance";
 import type { AgentSession, Dock, PublicOrder } from "@/core/orders";
@@ -87,8 +90,31 @@ export type PlanRecord = {
   refused?: RefusedDish[];
   /** Up to three dishes of the same kind that can be made instead, each ingredient checked against the rules. */
   instead?: InsteadDish[];
+  /** The buyer accepted ordering only what can be bought ("order just those three"): who, when, and of how many. */
+  acceptPartial?: { by: string; at: string; covered: number; of: number };
   /** Lines plain code added because the recipe could not be made without them (a cake's flour and sweetener). */
   added?: { dishId: string; dish: string; key: string; name: string; what: string }[];
+};
+
+setGroupLabels(labels as { departments: Record<string, string>; categories: Record<string, { label: string }> });
+const SLUG_CODE = new Map(Object.entries(CATEGORY_SLUGS).map(([code, slug]) => [slug, code]));
+/** The partner's category code of a Dock category slug ("cream" -> 10401, "cat_18760" -> 18760). */
+export const codeOfSlug = (slug: string) => /^cat_(\d+)$/.exec(slug)?.[1] ?? SLUG_CODE.get(slug);
+
+/** One dish idea and what plain code found for each of its ingredients in master data and the kitchen's rules. */
+export type IdeaCheck = {
+  dishId: string;
+  name: string;
+  nameFi: string | null;
+  nameSv: string | null;
+  course: string;
+  portion: string;
+  buyable: boolean;
+  refused?: { ingredient: string; rule: { text: string; source: string } };
+  items: { ingredient: string; ingredientFi: string | null; status: "buyable" | "staple" | "not_covered"; code?: "outside_groups" | "rule" | "not_sold"; words: string; defining: boolean; group?: string }[];
+  missing: IdeaCheck["items"];
+  definingMissing: boolean;
+  kitchenGroups: string[];
 };
 
 export type RefusedDish = { dishId: string; name: string; ingredient: string; allergen: string; rule: { text: string; source: string } };
@@ -224,7 +250,7 @@ export function createPlanService(deps: PlanDeps) {
     // whatever the draft or an edit put on the plan; a product that breaks one is moved to the rejected list.
     const diet = withRequestRules(k.diet, p.draft ?? {});
     const candidates = diet === k.diet ? p.candidates : recheck(p.candidates, diet);
-    return { draft: p.draft, specs: p.specs, candidates, live: p.live, edits: p.edits, acceptances: p.acceptances, fixes: p.fixes, settings: p.settings, mandate: k.mandate, diet, now: deps.now(), spentThisWeekCents: spent, rules: k.info.rules, refused: p.refused ?? [], instead: p.instead ?? [] };
+    return { draft: p.draft, specs: p.specs, candidates, live: p.live, edits: p.edits, acceptances: p.acceptances, fixes: p.fixes, settings: p.settings, mandate: k.mandate, diet, now: deps.now(), spentThisWeekCents: spent, rules: k.info.rules, refused: p.refused ?? [], instead: p.instead ?? [], coverageCtx: { codeOf: codeOfSlug, kitchenGroups: kitchenGroups(k.mandate.allowedCategories, codeOfSlug) }, ...(p.acceptPartial ? { acceptPartial: p.acceptPartial } : {}) };
   }
 
   const allowedFor = (k: MenuKitchen) => {
@@ -567,6 +593,13 @@ export function createPlanService(deps: PlanDeps) {
     if (deliverBy && deliverBy > latest) {
       p.notes.push(`The kitchen's rules let the agent order at most ${k.mandate.delivery.maxLeadDays} days ahead, so the plan is delivered by ${formatDay(latest)}, before the service day ${formatDay(deliverBy)}.`);
       deliverBy = latest;
+    } else if (!deliverBy && k.deliveryWeekdays?.length) {
+      // No day given: the kitchen's next delivery day within its lead time, so the day said is the day ordered.
+      for (let i = 1; i <= k.mandate.delivery.maxLeadDays && !deliverBy; i++) {
+        const d = addDaysIso(today, i);
+        if (k.deliveryWeekdays.includes(isoWeekday(d))) deliverBy = d;
+      }
+      p.notes.push(deliverBy ? `No service day given: planned for ${formatDay(deliverBy)}, the kitchen's next delivery day.` : "No service day given, and no delivery day of the kitchen within its lead time: planned for the earliest delivery.");
     } else if (!deliverBy) p.notes.push("No service day given: planned for the earliest delivery.");
     else p.notes.push(`Delivered by ${formatDay(deliverBy)}, the ${days.length > 1 ? "first service day" : "service day"}, at the latest.`);
     p.settings.deliverBy = deliverBy;
@@ -824,6 +857,13 @@ export function createPlanService(deps: PlanDeps) {
           delete p.edits[spec.lineId]?.optionId;
           break;
         }
+        case "acceptPartial": {
+          // Only on the buyer's own words: order what can be bought, the rest named as not covered.
+          const view = computePlan(input(p, k, 0));
+          p.acceptPartial = { by, at, covered: view.totals.covered, of: view.totals.ingredients };
+          log(p, k, `buyer:${by}`, `${by} chose to order only what can be bought: ${view.totals.covered} of ${view.totals.ingredients} ingredients; not covered: ${view.totals.missing.map((m) => `${m.ingredient} (${m.code})`).join(", ")}.`, { covered: view.totals.covered, of: view.totals.ingredients, missing: view.totals.missing.map((m) => ({ ingredient: m.ingredient, code: m.code })) });
+          break;
+        }
         case "dropDish": {
           const dish = p.draft.dishes.find((x) => x.id === e.dishId);
           if (!dish) throw new DockError(404, "dish_not_found", `No dish ${e.dishId} on this plan.`);
@@ -964,7 +1004,47 @@ export function createPlanService(deps: PlanDeps) {
   /** The kitchen's menu agent as Dock sees it (its own mandate): for an order sheet made from a plan (server/thread/menu.ts). */
   const agentSession = (k: MenuKitchen) => session(k);
 
-  return { plan, planItems, get, edit, quote, order, settled, preview, agentSession };
+  /**
+   * Dish ideas, checked before they are offered: the model drafts the dishes with their ingredients (one call), then
+   * plain code checks every ingredient against master data and the kitchen's rules (its product groups, allergens,
+   * claims, nutrition; sold at all). No live price: that is for the dish that is picked.
+   */
+  async function ideaCheck(k: MenuKitchen, text: string): Promise<{ draft: MenuDraft; ms: number; costUsd: number | null; dishes: IdeaCheck[] }> {
+    const t0 = Date.now();
+    const d = await deps.draft(text, promptContext(k), deps.now());
+    const forbidden = [...new Set([...k.diet.forbiddenAllergens.map((f) => f.allergen), ...d.draft.forbiddenAllergens])];
+    const diet = withRequestRules(k.diet, d.draft);
+    const allowed = allowedFor(k);
+    const groups = kitchenGroups(k.mandate.allowedCategories, codeOfSlug);
+    const dishes = await Promise.all(
+      d.draft.dishes.map(async (dish): Promise<IdeaCheck> => {
+        const conflict = definingConflict(dish, forbidden, k.info.rules);
+        const items = await Promise.all(
+          dish.ingredients.map(async (ing) => {
+            if (ing.pantry) return { ingredient: ing.name, ingredientFi: ing.searchTerms[0] ?? null, status: "staple" as const, words: "a staple the kitchen keeps: assumed, not bought", defining: isDefining(ing, dish.name) };
+            const set = await findCandidates(catalog, ing, diet, allowed, 4);
+            const ok = set.candidates.some((c) => c.safety.verdict === "ok");
+            const outside = set.rejected.map((r) => /category (\S+) is not in the mandate/.exec(r.reason)?.[1]).find((x): x is string => !!x);
+            const unsafe = set.rejected.find((r) => /contains|may contain|lactose|claim|allergen data/.test(r.reason));
+            const status = ok ? ("buyable" as const) : ("not_covered" as const);
+            const code = ok ? undefined : outside ? ("outside_groups" as const) : unsafe ? ("rule" as const) : ("not_sold" as const);
+            const words = ok ? (set.candidates[0].product.names?.en ?? set.candidates[0].product.name) : outside ? `${ing.name} is in ${groupName(outside, codeOfSlug)}, which your product groups do not cover` : unsafe ? `${ing.name}: ${unsafe.reason}` : `the assortment has no ${ing.name}`;
+            return { ingredient: ing.name, ingredientFi: ing.searchTerms[0] ?? null, status, ...(code ? { code } : {}), words, defining: isDefining(ing, dish.name), ...(code === "outside_groups" && outside ? { group: groupName(outside, codeOfSlug) } : {}) };
+          }),
+        );
+        const missing = items.filter((x) => x.status === "not_covered");
+        return { dishId: dish.id, name: dish.name, nameFi: dish.nameFi, nameSv: dish.nameSv ?? null, course: dish.course, portion: dish.portion, buyable: !conflict && missing.length === 0, ...(conflict ? { refused: { ingredient: conflict.ingredient, rule: conflict.rule } } : {}), items, missing, definingMissing: missing.some((x) => x.defining), kitchenGroups: groups };
+      }),
+    );
+    return { draft: d.draft, ms: Date.now() - t0, costUsd: d.costUsd, dishes };
+  }
+
+  /** A plan from a dish already drafted (an idea the buyer picked): no model call for the recipe, live prices now. */
+  async function planFromDraft(k: MenuKitchen, text: string, by: string, draft: MenuDraft, opts: { onProgress?: (e: PlanProgress) => void } = {}) {
+    return planFrom(k, text, by, async () => ({ draft, raw: draft as unknown as DraftResult["raw"], model: "none: the idea already drafted", ms: 0, tokens: { input: 0, output: 0, cachedInput: 0, reasoning: 0 }, costUsd: 0, calls: [] }), { door: "menu", pantry: k.info.pantry, ...(opts.onProgress ? { onProgress: opts.onProgress } : {}) });
+  }
+
+  return { plan, planItems, get, edit, quote, order, settled, preview, agentSession, ideaCheck, planFromDraft };
 }
 
 /** One line of a list, as a person reviewed it (the photo door's reviewed lines). */
@@ -1029,6 +1109,8 @@ export type PlanEdit =
   /** A dish taken off the plan: every line only it uses is struck. */
   | { op: "dropDish"; dishId: string }
   /** A line where only a large, dear pack was found: a wider search, and the packs nearest the need priced. */
-  | { op: "repack"; lineId: string };
+  | { op: "repack"; lineId: string }
+  /** The buyer's own "order just those": an incomplete plan may be quoted, the rest named as not covered. */
+  | { op: "acceptPartial" };
 
 export type PlanService = ReturnType<typeof createPlanService>;

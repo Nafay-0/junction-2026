@@ -75,7 +75,7 @@ describe("defect 2: a recipe is complete, and the covers scale every line", () =
     expect(record.added?.map((a) => a.name)).toEqual(["Wheat flour", "Sugar"]);
     expect(record.notes.join(" ")).toMatch(/Chocolate cake had no flour or a flour substitute in the draft: Wheat flour added/);
     // Every ingredient says how it is covered: ordered, on hand, a staple the kitchen keeps, or open with why.
-    const cov = Object.fromEntries(view.totals.coverage.map((c) => [c.ingredient, c.basis]));
+    const cov = Object.fromEntries(view.totals.coverage.map((c) => [c.ingredient, c.status]));
     expect(cov).toMatchObject({ "Wheat flour": "staple", Sugar: "staple" });
     expect(Object.keys(cov).sort()).toEqual(["Baking powder", "Butter", "Cocoa powder", "Dark baking chocolate", "Egg", "Sugar", "Wheat flour"]);
     const before = Object.fromEntries(view.lines.map((l) => [l.lineId, l.gross!.amount]));
