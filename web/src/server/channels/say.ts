@@ -1,5 +1,5 @@
 import type { IntakeView } from "@/core/intake";
-import { isoWeekday } from "@/core/kitchen";
+import { isoWeekday, localNow } from "@/core/kitchen";
 import { formatAmount } from "@/core/need";
 import { LABEL_TEXT, formatCutoff } from "@/core/options";
 import type { PublicOrder } from "@/core/orders";
@@ -78,7 +78,7 @@ export function stepForModel(step: IntakeView): ForModel {
       return {
         ok: true,
         state: step.state,
-        say: `The wholesaler fixed the price: ${formatEur(q.quote.totalCents)}, valid until ${formatCutoff(q.quote.expiresAt)} UTC. ${gate}`,
+        say: `The wholesaler fixed the price: ${formatEur(q.quote.totalCents)}, valid until ${localNow(new Date(q.quote.expiresAt)).time} Helsinki time. ${gate}`,
         ask: d.outcome === "reject" ? undefined : "Ask whether to place the order.",
         total: formatEur(q.quote.totalCents),
         lines: q.quote.lines.map((l) => ({ product: l.name, packs: l.quantity, delivery: spokenDate(l.deliveryDate) })),
