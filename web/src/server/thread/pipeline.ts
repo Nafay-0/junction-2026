@@ -726,6 +726,7 @@ export async function afterStep(run: TurnRun, s: IntakeView, words: string): Pro
       record(run, "alone_held", `Not ordered alone: the option differs from the request (${diffs.map((d) => d.kind).join(", ")}), said to the buyer first.`, { kinds: diffs.map((d) => d.kind) }, s.requestId);
       return out;
     }
+    if (spokenHold(run, s.requestId, routine.option.optionId)) return out;
     record(run, "autonomy", `Routine request inside the mandate: the agent chooses "${routine.option.title}" alone (${routine.why}).`, { optionId: routine.option.optionId, why: routine.why }, s.requestId);
     const chose = step(run, "quote", "Fixing the price with the wholesaler");
     let quoted: IntakeView;
@@ -753,9 +754,33 @@ export async function afterStep(run: TurnRun, s: IntakeView, words: string): Pro
       record(run, "alone_held", `Not ordered alone: the quote differs from the request (${held.map((d) => d.kind).join(", ")}), said to the buyer first.`, { kinds: held.map((d) => d.kind) }, s.requestId);
       return out;
     }
+    if (run.buyer.via !== "tap" && spokenHold(run, s.requestId)) {
+      const price = priceCard(s);
+      if (price) {
+        run.store.card(run.thread, run.turnId, price);
+        run.facts.push(price);
+      }
+      return out;
+    }
     return placeQuoted(run, s, words, [], false);
   }
   return out;
+}
+
+/** The order the voice door holds for its read-back: what a spoken yes in the next turn orders (engine.ts). */
+export type SpokenReadBack = { requestId: string; optionId?: string; turnId: string };
+
+/**
+ * Spoken words are read back once before an order is placed on them (docs/doors.md): where the agent would order
+ * alone on words heard by the voice door, it holds instead, and the voice door says the order (amount, product, day,
+ * total) and asks. The buyer's own yes in the next turn orders exactly that (engine.ts). Typed words are unchanged.
+ */
+function spokenHold(run: TurnRun, requestId: string, optionId?: string): boolean {
+  if (run.door !== "voice" || run.buyer.via !== "speech") return false;
+  const hold: SpokenReadBack = { requestId, ...(optionId ? { optionId } : {}), turnId: run.turnId };
+  (run.thread as unknown as { spokenReadBack?: SpokenReadBack }).spokenReadBack = hold;
+  record(run, "alone_held", "Not ordered alone: the words were spoken, so the amount, product and day are read back first; the buyer's own yes orders it.", { kinds: ["spoken_read_back"], ...(optionId ? { optionId } : {}) }, requestId);
+  return true;
 }
 
 /** What a quote holds against what was asked: the amount (in the buyer's unit) and the day. */

@@ -20,8 +20,8 @@ async function main() {
   const tokens = await Promise.all(
     Array.from({ length: n }, () =>
       openai
-        ? mintRealtimeSecret(realtimeSession({ model, system: "Say nothing.", mode: "push_to_talk" }), { seconds: 60 }).then((t) => ({ ok: true as const, token: t.token }))
-        : mintLiveToken(liveSetup({ model, system: "Say nothing.", mode: "push_to_talk" }), { seconds: 60 }).then((t) => ({ ok: true as const, token: t.token })),
+        ? mintRealtimeSecret(realtimeSession({ model, system: "Say nothing.", mode: "hands_free" }), { seconds: 60 }).then((t) => ({ ok: true as const, token: t.token }))
+        : mintLiveToken(liveSetup({ model, system: "Say nothing.", mode: "hands_free" }), { seconds: 60 }).then((t) => ({ ok: true as const, token: t.token })),
     ).map((p) => p.catch((e: Error) => ({ ok: false as const, error: e.message.slice(0, 160) }))),
   );
   const t0 = Date.now();

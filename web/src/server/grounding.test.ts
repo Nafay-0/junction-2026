@@ -37,7 +37,7 @@ describe("assistant panel", () => {
 describe("voice agent", () => {
   it("counts the call screen's checks with each heartbeat and its cuts one by one", () => {
     const reg = new CallRegistry();
-    const c = reg.open("kaari", "push_to_talk", voiceLimits({}));
+    const c = reg.open("kaari", "hands_free", voiceLimits({}));
     reg.heartbeat(c.callId, "kaari", { grounding: { checked: 4, dropped: 0 } });
     reg.heartbeat(c.callId, "kaari", { grounding: { checked: 7, dropped: 1 } });
     recordGrounding("voice", [{ kind: "price", said: "1,250.00" }], `call ${c.callId}`, false); // what POST .../call/{id} {op:"dropped"} does

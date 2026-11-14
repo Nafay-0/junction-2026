@@ -1,5 +1,5 @@
 import { DockError } from "@/core/errors";
-import { VOICE_TOOLS } from "../prompts";
+import { LIVE_TOOLS } from "../../thread/voice-brief";
 
 /**
  * Gemini Live API (Google DeepMind's realtime voice interface), as documented on 2026-11-14:
@@ -33,7 +33,8 @@ export const DEFAULT_FALLBACK_MODEL = "gpt-realtime-2.1";
 /** Paid-tier list prices per minute of audio, for the cost estimate. */
 export const LIVE_PRICE = { audioInPerMin: 0.005, audioOutPerMin: 0.018, textInPerM: 0.75, textOutPerM: 4.5 };
 
-export type CallMode = "push_to_talk" | "hands_free";
+/** One voice mode: hands-free (the provider hears when the buyer starts and stops; the buyer can talk over the agent). */
+export type CallMode = "hands_free";
 export type VoiceProvider = "gemini" | "openai";
 
 export function voiceModel(env: Record<string, string | undefined> = process.env): string {
@@ -62,19 +63,22 @@ export function liveSetup(opts: { model: string; system: string; mode: CallMode;
       ...(/thinking/.test(opts.model) ? { thinkingConfig: { thinkingLevel: (process.env.DOCK_VOICE_THINKING?.trim() || "low").toUpperCase() } } : {}),
     },
     systemInstruction: { parts: [{ text: opts.system }] },
-    tools: [{ functionDeclarations: VOICE_TOOLS }],
-    // Push-to-talk: the browser marks the start and end of each turn, so hall noise between turns is never sent.
-    // Hands-free: the server's voice activity detection, set to need clear speech to start and a pause to end.
-    realtimeInputConfig:
-      opts.mode === "push_to_talk"
-        ? { automaticActivityDetection: { disabled: true } }
-        : { automaticActivityDetection: { disabled: false, startOfSpeechSensitivity: "START_SENSITIVITY_LOW", endOfSpeechSensitivity: "END_SENSITIVITY_LOW", prefixPaddingMs: 200, silenceDurationMs: 800 } },
+    tools: [{ functionDeclarations: LIVE_TOOLS }],
+    // Hands-free: the provider's voice activity detection, set to need clear speech to start and a short pause to end
+    // (DOCK_VOICE_SILENCE_MS, default 600 ms); speech that starts while the agent talks interrupts it (barge-in).
+    realtimeInputConfig: { automaticActivityDetection: { disabled: false, startOfSpeechSensitivity: "START_SENSITIVITY_LOW", endOfSpeechSensitivity: "END_SENSITIVITY_LOW", prefixPaddingMs: 200, silenceDurationMs: silenceMs() } },
     // The words a kitchen orders with, so "butter" is not heard as "powder" (customVocabulary biases recognition).
     // VERBATIM keeps number words as said ("kuusitoista"), which AimoPilot's own number reader understands; the
     // default formatting turned Finnish and Swedish numbers into wrong digits ("6" for sixteen) in the evaluation.
     inputAudioTranscription: { ...(opts.vocabulary?.length ? { customVocabulary: opts.vocabulary.slice(0, 100) } : {}), ...(transcriptionMode() ? { mode: transcriptionMode() } : {}) },
     outputAudioTranscription: {},
   };
+}
+
+/** The pause that ends the buyer's turn, in milliseconds. */
+function silenceMs(): number {
+  const v = Number(process.env.DOCK_VOICE_SILENCE_MS);
+  return Number.isFinite(v) && v >= 300 && v <= 2000 ? v : 600;
 }
 
 /** Gemini's transcript formatting: VERBATIM (default) or SMART (DOCK_VOICE_TRANSCRIPTION=smart), "" for the service default. */

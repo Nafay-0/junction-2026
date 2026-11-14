@@ -1,9 +1,9 @@
 import { DockError } from "@/core/errors";
 import { localNow } from "@/core/kitchen";
-import { calendar } from "../../agent/interpret";
 import { currentApprover } from "../../approver-session";
 import { kitchenAgent, type KitchenAgent } from "../flow";
-import { VOICE_VOCABULARY, voiceSystem, type CallContext } from "../prompts";
+import { VOICE_VOCABULARY } from "../prompts";
+import { voiceBrief } from "../../thread/voice-brief";
 import { spokenDate } from "../say";
 import { reserveLlmCall } from "../../limits";
 import { calls, voiceLimits, type Call } from "./calls";
@@ -22,7 +22,7 @@ import { REALTIME_WS_URL, mintRealtimeSecret, realtimeSession } from "./realtime
 
 export type CallStart = {
   callId: string;
-  mode: CallMode | "typed";
+  mode: CallMode;
   kitchen: { slug: string; name: string; agentName: string };
   expiresAt: string;
   maxSeconds: number;
@@ -30,8 +30,6 @@ export type CallStart = {
   /** What the agent was told at the start: already facts for the grounding check. */
   context: { standingRules: string[]; usualOrders: string[]; today: string };
   brands: string[];
-  /** A typed call was started because voice is not available, with the reason. */
-  fallback?: { code: string; message: string };
 };
 
 /**
@@ -39,25 +37,23 @@ export type CallStart = {
  * two demo kitchens. `avoid`: the screen's first provider refused the session (free-tier quota, outage), so the
  * call goes to the other one if it is configured.
  */
-export async function startCall(req: Request | undefined, slug: string, input: { mode?: string; carryFrom?: string; avoid?: string; model?: string }): Promise<CallStart> {
+export async function startCall(req: Request | undefined, slug: string, input: { carryFrom?: string; avoid?: string; model?: string; lang?: string }): Promise<CallStart> {
   const a = await kitchenAgent(slug, req);
   if (a.info.kind === "visitor") {
     const me = req ? await currentApprover(req, a.rt) : undefined;
     if (me?.sandbox?.sandboxId !== slug) throw new DockError(403, "call_not_yours", "Only the phone that joined this kitchen can call its agent. Scan the call QR code to get a kitchen of your own.");
   }
-  const mode: CallMode | "typed" = input.mode === "typed" ? "typed" : input.mode === "hands_free" ? "hands_free" : "push_to_talk";
+  const mode: CallMode = "hands_free";
   const limits = voiceLimits();
   const registry = calls();
-  const ctx = await callContext(a, mode === "push_to_talk", Math.round(limits.callSeconds / 60));
+  const lang = input.lang === "fi" || input.lang === "sv" ? input.lang : "en";
+  const ctx = await callContext(a);
   const brands = await brandsOf(a);
   const base = { kitchen: { slug, name: a.info.name, agentName: a.info.agentName }, context: { standingRules: ctx.standingRules, usualOrders: ctx.usualOrders, today: ctx.today }, brands };
-
-  if (mode === "typed") {
-    const call = registry.open(slug, "typed", limits, input.carryFrom);
-    return { ...base, callId: call.callId, mode, expiresAt: new Date(call.expiresAt).toISOString(), maxSeconds: Math.round((call.expiresAt - call.startedAt) / 1000) };
-  }
+  const system = voiceBrief({ kitchenName: a.info.name, agentName: a.info.agentName, lang, maxMinutes: Math.round(limits.callSeconds / 60) });
   reserveLlmCall(); // the server's daily model-call and spend caps (limits.ts); the spend is added at hang-up
   const call = registry.open(slug, mode, limits, input.carryFrom);
+  if (!call.desk.lang) call.desk.lang = lang;
   const first = input.model && !req ? input.model : voiceModel();
   const second = fallbackModel();
   const order = input.avoid && providerOf(first) === input.avoid && second ? [second] : second ? [first, second] : [first];
@@ -67,7 +63,7 @@ export async function startCall(req: Request | undefined, slug: string, input: {
     try {
       // A browser gets OpenAI over WebRTC set up through this server (bounded here); an in-process caller (the
       // evaluation, with no browser) uses a WebSocket with a short-lived secret.
-      const live = req && providerOf(model) === "openai" ? rtcFor(call, model, voiceSystem(ctx), mode, vocabulary) : await mintFor(model, voiceSystem(ctx), mode, vocabulary, limits.callSeconds);
+      const live = req && providerOf(model) === "openai" ? rtcFor(call, model, system, mode, vocabulary) : await mintFor(model, system, mode, vocabulary, limits.callSeconds);
       call.model = model;
       return { ...base, callId: call.callId, mode, expiresAt: live.expiresAt, maxSeconds: limits.callSeconds, live: live.live };
     } catch (err) {
@@ -93,26 +89,15 @@ async function mintFor(model: string, system: string, mode: CallMode, vocabulary
   return { expiresAt: t.expiresAt, live: { provider: "gemini" as const, wsUrl: LIVE_WS_URL, token: t.token, model, startBy: t.startBy, inputRate: 16000 } };
 }
 
-/** Typed fallback for a call that could not start or was lost: same desk, no line held. */
-export async function typedFallback(slug: string, call: Call) {
-  return calls().open(slug, "typed", voiceLimits(), call.callId);
-}
-
-async function callContext(a: KitchenAgent, pushToTalk: boolean, maxMinutes: number): Promise<CallContext & { vocabulary: string[] }> {
-  const now = new Date();
+/** What the call starts with: the kitchen's words for the recogniser, and its rules and usual orders as facts for the grounding check. */
+async function callContext(a: KitchenAgent): Promise<{ vocabulary: string[]; standingRules: string[]; usualOrders: string[]; today: string }> {
   const memory = await a.rt.dock.intake.kitchen(a.session);
-  const today = localNow(now).date;
+  const today = localNow(new Date()).date;
   return {
     vocabulary: memory.families.map((f) => f.family.replace(/_/g, " ")).filter((w) => w.length >= 3),
-    kitchenName: a.info.name,
-    agentName: a.info.agentName,
-    caller: a.info.by,
     today: `Today is ${spokenDate(today)} ${today.slice(0, 4)} (${today}, Europe/Helsinki).`,
-    calendar: calendar(now),
     standingRules: memory.stated.map((s) => `${s.text}.`.replace(/\.\.$/, ".")),
     usualOrders: memory.families.map((f) => `${f.family}: ${f.usual.text}, ${f.orders} orders so far, the last one on ${spokenDate(f.lastOrder.placedAt.slice(0, 10))}.`),
-    pushToTalk,
-    maxMinutes,
   };
 }
 

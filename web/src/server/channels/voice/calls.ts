@@ -1,6 +1,5 @@
 import { randomBytes } from "node:crypto";
 import { DockError } from "@/core/errors";
-import type { NeedInput } from "@/core/need";
 import { recordGroundingChecks } from "../../grounding";
 import { recordLlmSpend } from "../../limits";
 import { LIVE_PRICE, type CallMode } from "./live";
@@ -37,16 +36,18 @@ export function callCostUsd(c: Pick<Call, "usage" | "startedAt" | "endedAt" | "e
  */
 
 export type Desk = {
-  requestId?: string;
-  /** A need read from speech, waiting for the caller to confirm the read-back. */
-  pending?: { need: NeedInput; words: string; reason: string; model: string; say: string; parts?: { need: NeedInput; words: string }[] };
-  /** Several items confirmed as one order: the engine's order sheet, placed by the caller's "yes, order it". */
-  sheet?: { sheetId: string; version: number };
-  orderId?: string;
-  /** Turn number of the caller's words last used for a decision: the same words never answer twice. */
+  /** Turn number of the buyer's words last used: the same words never act twice. */
   lastTurnUsed: number;
-  /** The language the caller last spoke in (from their words), so the agent answers in it. */
+  /** The language the buyer last spoke in (from their words), so the reply is said in it. */
   lang?: "en" | "fi" | "sv";
+  /** Agent turns of the kitchen's thread this call's words started, newest last (thread/voice-bridge.ts). */
+  turns: string[];
+  /** Turns the buyer stopped ("stop", "never mind"): their reply is not spoken. */
+  muted: string[];
+  /** What the door said in the last half minute: words heard back from the speaker are not the buyer's. */
+  said: { text: string; at: number }[];
+  /** Per agent turn: the milestones already said, the status last spoken, when the door last spoke about it. */
+  progress: Record<string, { keys: string[]; status?: string; at: number }>;
 };
 
 export type Call = {
@@ -68,6 +69,8 @@ export type Call = {
   grounding: { checked: number; dropped: number };
   desk: Desk;
 };
+
+export const emptyDesk = (): Desk => ({ lastTurnUsed: 0, turns: [], muted: [], said: [], progress: {} });
 
 export const CALL_LIMITS = { toolCalls: 40, interprets: 8, staleMs: 30_000, typedMs: 30 * 60_000 };
 
@@ -125,7 +128,7 @@ export class CallRegistry {
     const prev = carryFrom ? this.calls.get(carryFrom) : undefined;
     // A call carried on (hung up and continued by typing, called back, reconnected) keeps its desk as it was,
     // including a read-back still waiting for the caller's yes.
-    const desk: Desk = prev && prev.kitchen === kitchen ? { ...structuredClone(prev.desk), lastTurnUsed: 0 } : { lastTurnUsed: 0 };
+    const desk: Desk = prev && prev.kitchen === kitchen ? structuredClone(prev.desk) : emptyDesk();
     const call: Call = {
       callId: `call_${randomBytes(9).toString("base64url")}`,
       kitchen,
