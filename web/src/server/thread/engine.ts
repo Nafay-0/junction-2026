@@ -816,7 +816,7 @@ function sayRulesWaiting(run: TurnRun): void {
   if (c?.type !== "rules" || !c.proposal?.approval) return;
   const lang = run.lang ?? "en";
   const who = c.proposal.approval.approver.name;
-  const what = c.diff.filter((d) => d.widens || d.field === "signer").map((d) => (d.field === "groups" ? d.after.split(", ").filter((x) => !d.before.split(", ").includes(x)).join(", ") : d.field === "perOrderLimitEur" ? `${d.after} € an order` : d.field === "weeklyBudgetEur" ? `${d.after} € a week` : d.after)).filter(Boolean).join(", ");
+  const what = c.diff.filter((d) => d.widens || d.field === "signer").map((d) => (d.field === "groups" ? d.after.split(", ").filter((x) => !d.before.split(", ").includes(x)).join(", ").toLowerCase() : d.field === "perOrderLimitEur" ? `${d.after} € an order` : d.field === "weeklyBudgetEur" ? `${d.after} € a week` : d.after)).filter(Boolean).join(", ");
   run.store.line(run.thread, run.turnId, {
     en: `That widens what I may buy${what ? ` (${what})` : ""}, so it needs ${who}'s OK: it's waiting for them to sign it with their passkey. Nothing changes until they do.`,
     fi: `Tämä laajentaa sitä, mitä saan ostaa${what ? ` (${what})` : ""}, joten se tarvitsee hyväksynnän: ${who}. Lähetin sen allekirjoitettavaksi pääsyavaimella. Mikään ei muutu ennen sitä.`,
