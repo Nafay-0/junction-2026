@@ -164,6 +164,8 @@ export async function runThread(base: string, sc: Scenario): Promise<RunResult> 
       if (c.type === "understood") marks.hit("understood", at);
       if (c.type === "options") marks.hit("options", at);
       if (c.type === "records") marks.hit("answered", at);
+      if (c.type === "menu" && c.dishes.length) marks.hit("dishes", at);
+      if (c.type === "menu" && c.stage === "ready") marks.hit("menu", at);
       if ((c.type === "gate" && (c.outcome === "placed_alone" || c.outcome === "waiting")) || (c.type === "order" && (c.status === "committed" || c.status === "pending_approval"))) marks.hit("placed", at);
     }
   };
@@ -216,8 +218,10 @@ export async function runThread(base: string, sc: Scenario): Promise<RunResult> 
     const question = st.ofType("question").filter((c) => !c.answered && !answeredReq.has(c.requestId)).at(-1);
     const options = st.ofType("options").filter((c) => !c.chosen && !answeredReq.has(c.requestId)).at(-1);
     const price = st.ofType("price").filter((c) => !answeredReq.has(c.requestId)).at(-1);
-    const plan = st.ofType("plan").filter((c) => c.state === "planned" && c.canOrder).at(-1);
-    return { anomaly, question, options, price, plan };
+    // A menu card waiting for its menu to be picked, or ready to go on the sheet; an order sheet not yet placed.
+    const menu = st.ofType("menu").filter((c) => !c.sheetId && (c.stage === "choose" || (c.stage === "ready" && c.totalCents > 0))).at(-1);
+    const sheet = st.ofType("sheet").filter((c) => c.state === "editing").at(-1);
+    return { anomaly, question, options, price, menu, sheet };
   }
 
   async function toOptions(stopAtFlag: boolean) {
@@ -246,10 +250,13 @@ export async function runThread(base: string, sc: Scenario): Promise<RunResult> 
   }
   if (sc.goal !== "answer") {
     await toOptions(sc.goal === "flag");
-    for (let i = 0; i < 3 && sc.goal === "place" && last !== "refused"; i++) {
-      const { options, price, anomaly, question, plan } = open();
+    for (let i = 0; i < 5 && sc.goal === "place" && last !== "refused"; i++) {
+      const { options, price, anomaly, question, menu, sheet } = open();
       if (anomaly || question) break;
-      if (plan) last = await tap({ type: "plan_order", planId: plan.planId }, "order the plan");
+      // A menu: the first menu offered, then "put on the order sheet", then place the sheet: three taps, no typing.
+      if (menu?.stage === "choose") last = await tap({ type: "menu_choose", planId: menu.planId, proposalId: menu.proposals[0].proposalId }, `menu: cook "${menu.proposals[0].title}"`);
+      else if (menu) last = await tap({ type: "menu_to_sheet", planId: menu.planId }, "menu: put on the order sheet");
+      else if (sheet) last = await tap({ type: "sheet_place", sheetId: sheet.sheetId, version: sheet.version }, "sheet: place the order");
       else if (options) {
         const pick = options.preselected?.optionId ?? options.options[0]?.optionId;
         if (!pick) break;
@@ -329,8 +336,24 @@ function collect(st: ThreadState, o: Outcome) {
         else o.orders.push(x);
         break;
       }
+      case "menu": {
+        const ls = c.dishes.flatMap((d) => d.lines);
+        o.plan = { lines: ls.filter((l) => l.product && l.status !== "have" && l.status !== "left_out").length, struck: ls.filter((l) => l.status === "have" || l.status === "left_out").length, doubts: ls.filter((l) => l.conflicts.length).length, unsourced: ls.filter((l) => !l.product && l.status !== "have").map((l) => l.ingredient) };
+        break;
+      }
       case "records":
         o.answers.push({ text: c.question, kind: "records", citations: c.rows.map((r) => ({ kind: r.kind, orderId: r.kind === "order" ? r.ref : undefined, productId: r.kind === "product" ? r.ref : undefined, label: r.label, date: r.date }) as any) });
+        break;
+      case "today":
+        // The opening's card carries the thread's id (one per day); one asked for later carries its turn's.
+        o.today.push({ opening: /^today:thr/.test(c.cardId), pending: !!c.pending, date: c.date, items: c.items });
+        break;
+      case "products":
+      case "product":
+      case "standing":
+      case "deliveries":
+      case "memory_list":
+        o.home.push(c.type);
         break;
       case "notice":
         o.notices.push({ kind: c.kind, message: c.message, rule: c.rule });

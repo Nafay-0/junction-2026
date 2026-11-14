@@ -244,7 +244,8 @@ export function statusFromOffer(productId: string, offer: LiveOffer | undefined,
   };
 }
 
-type StockEntry = { unitPriceCents: number; availablePacks: number; leadDays: number };
+/** `orderBy`: an order cut-off to state on the offer (tests); the seed states none. */
+type StockEntry = { unitPriceCents: number; availablePacks: number; leadDays: number; orderBy?: string };
 
 /** In-memory stand-in for the partner's data and API. Delivery dates are relative to `now()`. */
 export class InMemoryCatalog implements CatalogPort {
@@ -281,7 +282,7 @@ export class InMemoryCatalog implements CatalogPort {
       // earlier date than that cannot be met.
       const deliveryDate = addDaysIso(localNow(this.now()).date, s.leadDays); // Helsinki days, like the gate
       const requestedDate = options?.deliveryDate;
-      offers.push({ productId: id, unitPriceCents: s.unitPriceCents, availablePacks: s.availablePacks, deliveryDate, ...(requestedDate ? { requestedDate, laterThanRequested: deliveryDate > requestedDate } : {}) });
+      offers.push({ productId: id, unitPriceCents: s.unitPriceCents, availablePacks: s.availablePacks, deliveryDate, ...(s.orderBy ? { orderBy: s.orderBy } : {}), ...(requestedDate ? { requestedDate, laterThanRequested: deliveryDate > requestedDate } : {}) });
     }
     return offers;
   }

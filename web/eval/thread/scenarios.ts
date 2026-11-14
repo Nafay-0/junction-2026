@@ -326,6 +326,37 @@ const ALL: Scenario[] = [
       optionsInCatalogue,
     ],
   },
+  // --- the menu builder: open words, a menu picked, every line on one sheet, one order; no typing after the first message ---
+  {
+    id: "menu-en",
+    title: "A menu from request to signed order in the thread: lunch for 40 around beetroot",
+    tag: "need → recipe → order (menu builder)",
+    kitchen: "kaari",
+    lang: "en",
+    turns: [{ say: "Plan lunch for 40 on Thursday around beetroot" }],
+    goal: "place",
+    expect: [
+      { name: "a menu with 2+ priced lines", run: (o) => ok((o.plan?.lines ?? 0) >= 2, `menu with ${o.plan?.lines ?? 0} priced line(s)${o.plan?.unsourced.length ? `, unsourced: ${o.plan.unsourced.join(", ")}` : ""}`) },
+      { name: "one order with 2+ lines from the menu", run: (o) => ok((o.orders.at(-1)?.lines.length ?? 0) >= 2, `order ${o.orders.at(-1)?.status ?? "none"} with ${o.orders.at(-1)?.lines.length ?? 0} line(s)`) },
+      placed(KAARI_SIGNERS),
+      optionsInCatalogue,
+    ],
+  },
+  {
+    id: "menu-fi",
+    title: "The same menu in Finnish",
+    tag: "need → recipe → order (menu builder)",
+    kitchen: "kaari",
+    lang: "fi",
+    turns: [{ say: "Suunnittele lounas 40 hengelle torstaiksi punajuuren ympärille" }],
+    goal: "place",
+    expect: [
+      { name: "a menu with 2+ priced lines", run: (o) => ok((o.plan?.lines ?? 0) >= 2, `menu with ${o.plan?.lines ?? 0} priced line(s)${o.plan?.unsourced.length ? `, unsourced: ${o.plan.unsourced.join(", ")}` : ""}`) },
+      { name: "one order with 2+ lines from the menu", run: (o) => ok((o.orders.at(-1)?.lines.length ?? 0) >= 2, `order ${o.orders.at(-1)?.status ?? "none"} with ${o.orders.at(-1)?.lines.length ?? 0} line(s)`) },
+      placed(KAARI_SIGNERS),
+      optionsInCatalogue,
+    ],
+  },
   {
     id: "lastminute-en",
     title: "Last-minute event: milk for tomorrow (a Sunday; usual deliveries Mon/Thu)",
@@ -564,6 +595,64 @@ const ALL: Scenario[] = [
     expect: [nothingCommittedAlone, { name: "stopped: refused, flagged, or waiting for a named person", run: (o) => ok(o.orders.every((x) => x.status === "pending_approval" && KAARI_SIGNERS.test(x.approver ?? "")) && (o.orders.length > 0 || o.concerns.length > 0 || o.refusals.length > 0 || o.notices.length > 0 || o.state === "no_options"), `orders ${o.orders.map((x) => `${x.status}/${x.approver}`).join(", ") || "none"}, state ${o.state}`) }],
   },
 ];
+
+// ---------- the home: the day's opening (agent-thread-3) ----------
+
+/** The store opened the agent with the day's card, unasked, finished (not still gathering). */
+export const openedWithToday: Check = {
+  name: "the agent opened with the day's card, before anything was typed",
+  run: (o) => ok(o.today.some((t) => t.opening && !t.pending), `today cards: ${JSON.stringify(o.today.map((t) => ({ opening: t.opening, pending: t.pending })))}`),
+};
+
+/** Every item on every day card is in the kitchen's own records (the portal overview); nothing invented. */
+export const todayFromRecords: Check = {
+  name: "every item on the day's card is in the kitchen's records",
+  run: (o, c) => {
+    const orders: Json[] = c.overview?.orders ?? [];
+    const standing: Json[] = c.overview?.standing ?? [];
+    const bad: string[] = [];
+    for (const t of o.today)
+      for (const i of t.items) {
+        if (i.kind === "sign_off" && !orders.some((x) => x.orderId === i.orderId)) bad.push(`sign-off ${i.orderId} not in the kitchen's orders`);
+        if (i.kind === "delivery" && !orders.some((x) => x.orderId === i.orderId && x.status === "committed")) bad.push(`delivery ${i.orderId} not a committed order`);
+        if ((i.kind === "drift" || i.kind === "cutoff") && !standing.some((s) => s.family === i.family)) bad.push(`${i.kind} ${i.family} is not a recurring order`);
+        if (i.kind === "drift" && !standing.some((s) => s.family === i.family && s.drift?.warning)) bad.push(`drift ${i.family} has no drift warning in the records`);
+        if (i.kind === "cutoff" && !(i.orderBy >= c.today)) bad.push(`cut-off ${i.family} at ${i.orderBy} is not today`);
+      }
+    return ok(bad.length === 0, bad.join("; "));
+  },
+};
+
+/** Asked in words, the agent shows the day's card again (or says, grounded, that nothing needs them). */
+export const todayAnswered: Check = {
+  name: "asked what needs them today, the agent shows the day's card",
+  run: (o) => ok(o.today.some((t) => !t.opening && !t.pending) || o.answers.some((a) => a.kind === "line" && a.text.length > 0), `today cards ${o.today.length}, answers ${o.answers.length}`),
+};
+
+ALL.push(
+  {
+    id: "today-en",
+    title: "The today opening: what needs the kitchen today, from records, then asked in words",
+    tag: "the agent as home (sign-offs, cut-offs, drift, recalls, deliveries)",
+    kitchen: "kaari",
+    lang: "en",
+    turns: [{ say: "What needs my attention today?" }],
+    goal: "answer",
+    expect: [openedWithToday, todayFromRecords, todayAnswered],
+    limitation: "legacy driver: today's store has no opening card; only the thread driver can pass.",
+  },
+  {
+    id: "today-fi",
+    title: "Päivän avaus suomeksi: \"mitä minun pitää hoitaa tänään?\"",
+    tag: "the agent as home (sign-offs, cut-offs, drift, recalls, deliveries)",
+    kitchen: "kaari",
+    lang: "fi",
+    turns: [{ say: "Mitä minun pitää hoitaa tänään?" }],
+    goal: "answer",
+    expect: [openedWithToday, todayFromRecords, todayAnswered],
+    limitation: "legacy driver: today's store has no opening card; only the thread driver can pass.",
+  },
+);
 
 /**
  * Run order. The questions about Kaari's own history go first, before any scenario adds requests of its own to

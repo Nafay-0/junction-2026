@@ -25,11 +25,158 @@ ledger. That is how "not a chatbot" and "no hallucinated inventory" are both kep
 | `order` | the order record | status, lines, who authorised it, the signed confirmation, what the agent passed over |
 | `memory` | memory recall and the memory writer | what memory answered instead of asking; after an order, what to remember (confirm each) |
 | `records` | order history, requests, products, mandate | answer rows for "what did we order last week?" |
-| `plan` | the menu planner's record (`server/agent/menu`) | a dish or menu for N covers: dishes, covers, day; one row per ingredient with the product, packs and line total; what ordering also accepts or leaves out (by the planner's codes); total, delivery, who signs; one button `plan_order` |
+| `menu` | the menu planner's record (`server/agent/menu`), as the menu builder (see Widgets) | a dish or menu for N covers, forming as the planner works; edited in place; one button puts it on the order sheet |
 | `notice` | refusals and failures | not found, not a purchase, incomplete (what is missing), model unavailable, suspended |
 
 A card with the same `cardId` sent again **replaces** the earlier one in place (an anomaly card gets `answered`,
 an options card gets `chosen`, a gate card goes from `waiting` to `approved`).
+
+## Widgets: refining in place (agent-thread-3)
+
+The agent is the one place: refining an order or a menu is direct manipulation of a widget in the thread, never a
+sentence the buyer has to type or another page. The design lead builds the widgets as presentational components
+(branch `claude/thread-widgets`); the engine drives them through the card types and actions below. Exact shapes are in
+`server/thread/types.ts`; this section says what each one is for and what its actions do.
+
+**The rules every widget keeps**
+- Every action is a turn (`POST /thread/turns { via: "tap", action, label }`) through the same engine and the same
+  gate. A widget never changes a price, a day or a product on its own: the answer comes back as a new version of the
+  card (same `cardId`).
+- Amounts, prices, days, what is offered and what the gate decides are plain code. An edit re-prices the lines it
+  touched (live, short list only) and re-runs the gate's own preview. What a confirm button says will happen
+  (`gate.outcome`: placed by the agent alone, sent to `gate.approver`, cannot be ordered and why) is that preview,
+  never a guess. Nothing a widget offers is something the preview refuses: a candidate the gate would refuse is not
+  offered, or is shown disabled with its rule only when it explains why the obvious one is missing.
+- A swap goes through the substitution rule: a line that replaces the product first asked for carries
+  `substituteFor`, so the gate judges it (rule and price cap) on every door.
+- Edits are made by the kitchen's signed-in person and recorded as theirs (`portal_session`, or `voice` with the
+  words). A sheet with several lines is one order through the gate.
+- Stale protection: sheet actions carry the `version` the widget showed. An action on an older version is refused
+  with `409 turn_card_stale` and the current card is sent again.
+
+| Card | Widget | Actions |
+|---|---|---|
+| `sheet` | **Order sheet**: lines with an amount stepper in whole packs (`minPacks`..`maxPacks`), the delivery day with the possible `days` and their order-by times, a swap per line (opens the picker), remove, add; total; the gate's preview and one confirm | `sheet_packs`, `sheet_day`, `sheet_swap`, `sheet_remove`, `sheet_add`, `sheet_alternatives`, `sheet_place` |
+| `alternatives` | **Alternatives picker**: candidates side by side (packs, total, per litre or kilo, delivery and order-by, attributes, CO2, reliability, what each differs on, each one's gate preview); chips re-rank by another requirement (price, CO2, reliability, same kind, organic, lactose-free, pack size) | `alt_rerank`, `alt_pick` |
+| `menu` | **Menu builder**: `proposals` to choose from; then dishes with covers (stepper) and service day; each ingredient line with its product, packs, line total, other products (swap), "we have this", amount per cover, and its conflicts (allergen, stated rule, mandate, the planner's doubts) on the line they concern; cost per cover; blockers; the gate's preview; one button to the order sheet | `menu_choose`, `menu_covers`, `menu_day`, `menu_line_swap`, `menu_line_have`, `menu_line_per_cover`, `menu_accept`, `menu_to_sheet` |
+| `question` | **Answer widgets**: `input.kind` chooses chips (`choice`), a day picker (`day`: options carry `date` and `orderBy`) or a stepper (`amount`: `unit`, `min`, `max`, `step`) | `answer` (as before) |
+| `options` | Unchanged, plus "Change amount, day or product" under the lead option: it becomes a sheet | `choose` (order now), `sheet_from_option` |
+| `price`, `order` | **In place, not elsewhere**: the proof of a fixed price (`price.proof`: the signed quote and the signed claims it rests on, verifiable in the browser) and the order's details and signed confirmation open inside the card | none (expansion is presentation) |
+| `memory` | Remember this in the kitchen's own words, then keep or drop each proposal | `remember_this`, `remember` |
+| `rules` | **The kitchen's rules** (live): the signed mandate (`current`: per-order limit, weekly budget, product groups, required claims, forbidden allergens, who signs, lead days, substitution) and the rules its people stated (`stated`), from records. A change (tapped on the card, or typed: "never nuts", "raise the limit to 800", the agent's `rules` tool) is first a `proposal` with `after` and a field-by-field `diff` (`widens` marks what lets the agent do more), worked out in plain code; nothing is signed until the kitchen's own signed-in person taps sign. `editable` says what this browser may sign and `why` not | `rules_show`, `rules_propose { change }`, `rules_sign { proposalId }`, `rules_cancel { proposalId }` |
+
+**Changing the rules: what each kind of kitchen can sign** (`server/thread/rules.ts`)
+- *Narrowing* (adding a forbidden allergen or a required claim) is the reissue the security review made
+  (`server/mandate-reissue.ts`): any kitchen (built-in demo, visitor, account), signed by its signed-in person (not a
+  relayed name, not a call-code phone, not another account's session). Every earlier mandate of the kitchen is refused
+  from that second on.
+- *Everything else* (the per-order limit, the weekly budget, who signs, lead days, substitution, product groups, and
+  taking a rule away) is new terms, signed the way the account page signs them (`accounts.signKitchen`: checked by
+  `parseTerms`, a new key, the old mandate retired at the gate). Only an account's kitchen has terms, and only that
+  account's own full session can sign them. A built-in demo kitchen's terms are fixed for the stage, and a visitor's
+  sandbox has no way to sign wider terms: the card shows the change, says why it cannot be signed there, and the
+  sign action is refused (`403`) and recorded.
+- What the model may do: map the buyer's words to a `change`; code keeps only amounts the buyer wrote and a signer
+  they named (`groundedChange`), maps words to the mandate's vocabulary, and never signs.
+- The ledger: the mechanism's own entry (`mandate_reissued` / `mandate_signed`) plus the conversation's agent entries
+  `rules_proposed`, `rules_signed` (before, after, by, mechanism), `rules_refused`, `rules_cancelled`.
+
+**How the engine feeds them**
+- A sheet appears when the buyer edits an option (`sheet_from_option`), adds a second item (words or `sheet_add`), a
+  menu goes to ordering (`menu_to_sheet`), or a product is added from the catalogue or the basket (`sheet_add`: the
+  store's "add" puts it on the thread's current sheet, making one if there is none).
+- The menu card streams (`server/thread/menu.ts`, on the planner's `plan(…, { onProgress })`): `stage: "proposing"`
+  with the dishes once the planner's outline is in (the first model call), then each dish's lines as that dish is
+  written (`status: "resolving"`, the amount per cover and what the covers need), then `resolving` once the lines are
+  matched to the assortment, then `ready` with products, packs, prices, other products, conflicts, cost per cover,
+  the delivery days and the gate's preview of the plan as one order. The planner's ways out for stuck lines arrive
+  a few seconds later and update the card in place.
+- Words that leave the menu open ("lunch for 40 around beetroot") give `stage: "choose"` with two or three
+  `proposals` (the planner's own menu first, then up to two others its outline offers); the first keeps planning
+  behind the card, so choosing it shows the ready plan at once; another is planned with its dishes fixed, into the
+  same card. Words that name the dish skip the proposals.
+- Every `menu_*` edit maps onto the planner's own edit ops (`covers`, `deliverBy`, `choose` or `applyFix`, `strike`,
+  `perCover`, `accept`), so the kitchen's mandate, stated rules and memory bind every line as on the planner's page.
+  A line's other products are only those the gate would take in the plan (each tried in the gate's preview).
+- `menu_to_sheet` puts every bought line on one sheet: an open point the planner lets a person accept (an unusual
+  amount, another form) is accepted by that tap; a line it holds (a stated rule, the mandate, nothing safe to buy)
+  is left off and named in the record. The sheet runs under the kitchen's menu agent's mandate (food of every kind;
+  the store's own agent may buy only dairy), the same mandate the plan was made and previewed by. After that the
+  menu's edits are refused: the sheet is the order now.
+- `sheet_place` asks the wholesaler for one signed quote of all lines at the sheet's day, then places it: the gate
+  decides, and the gate and order cards follow as for any order (sign-off from the thread as before).
+
+**How the store draws them** (`k/[kitchen]/thread-sheet.tsx`, the design kit's `OrderSheet`, `AlternativesPicker`,
+`ChoiceAnswer`; words in `thread-sheet.text.ts`, en/fi/sv)
+- The sheet's outcome line and its one button come from `gate` (the preview), in the kitchen's words: "Inside your
+  rules: under your 500 € limit" / "Order this, 404,00 €"; "Aino OKs it on their phone: it is over your 500 € limit"
+  / "Send to Aino for an OK, 1 010,00 €"; a refusal says what to do. Never mandate, gate, sign-off, quote.
+- Stepper taps are one edit: the sheet shows the new total at once and sends `sheet_packs` once the buyer stops
+  (650 ms), against the card's `version`. Only the confirm button orders.
+- In-place edits (`sheet_packs`, `sheet_day`, `sheet_swap`, `sheet_remove`, the undo, `alt_*`, `menu_*` edits) are
+  not bubbles: the card changes; an agent turn with no card after one is not drawn. A refusal still shows.
+- `removed` on the card: the line the last edit took off, put back with one tap (`sheet_add` of it).
+- An options card hands over to the sheet ("Change amount, day or product", `sheet_from_option`); the options card
+  then says so and offers no order button, so only one place orders.
+- The sheet's day is the day it arrives (`deliverOn` on its request): moving it to Thursday delivers Thursday.
+- Questions: one at a time (the first unanswered), with why it is asked and "No preference" as the stated safe skip.
+- A placed order can be taken back until the wholesaler's order cut-off: `order.takeBackUntil`, a `withdraw` tap by
+  the kitchen's signed-in person (core `withdrawOrder(…, { takeBack })`, not the published withdraw, which still takes
+  back only an order waiting for an OK). The order leaves the kitchen's history and its weekly budget; the ledger has
+  `taken_back`; the event is `order_withdrawn`.
+- A change to a placed order replaces it: "make it 200" after 100 was placed takes the 100 back once the 200 is placed
+  (waiting for an OK, or before the cut-off), so one order stands. The repeat check on it is answered by the words.
+- "The usual" with no product: the recurring orders due next at their usual amounts, on a sheet (plain code).
+- Sending: a busy store (`503 store_unavailable`, `429`) or a dropped connection is tried again by itself with the same
+  `clientTurnId`; only then the buyer is told, in words, and their words stay in the box.
+
+### The home: the agent is where the kitchen starts (agent-thread-3, live)
+
+The store's "Order" entry, "Add" anywhere and "ask about this product" all lead into the agent; the old Order page
+redirects to the store with the agent open (`?agent=open`, `?agent=product:<id>`). The home's cards are made by plain
+code from records (`server/thread/home.ts`); the model never writes one, it can only ask for one to be shown
+(`find_products`, `product_facts`, `show_home` in agent.ts). Everything that buys lands on the order sheet.
+
+| Card | What it is | Actions |
+|---|---|---|
+| `today` | **The day's opening**: posted unasked, as an agent turn with no buyer turn before it (`replyTo: ""`), when the kitchen's store reads a thread that has no opening for today (Helsinki day). Items, each from records only: `sign_off` (an order waiting for a named person: sign in place with the sign-off widget), `cutoff` (an order-by time today for something the kitchen orders recurrently: one live call for at most three products, cached ten minutes, `standingCutoffs`), `drift` (a recurring order whose amount or price moved: the portal's own drift warning), `recall` (an active recall hold on a product the kitchen bought), `delivery` (a committed order arriving today or tomorrow). No item when nothing needs them. `pending` while it is gathered. Asked again later, a fresh card in that turn. | `order_show`, `standing_change`, `home_show` |
+| `products` | **Product grid** from master data only (no live call until a product goes on the sheet): only what the mandate allows (category, required attributes, no forbidden allergen) | `products_search`, `product_show`, `sheet_add` |
+| `product` | **One product's facts**: pack, allergens (or "not declared"), attributes, certificates, origin, CO2, delivery reliability | `sheet_add` |
+| `records` (history) | Earlier orders; every row can be ordered again | `order_again`: the order's lines on a new sheet for the next same weekday, re-priced and previewed there |
+| `standing` | **Recurring orders**, read from history (`standing()` in kitchen-portal.ts): weekdays, usual amount and packs, next due, drift. There is no separate standing-order store, so they cannot be paused; "change" is a new sheet for the next due day | `standing_change { family, packs? }` |
+| `deliveries` | Orders committed or waiting, delivered today or later | `order_show` |
+| `memory_list` | What the agent remembers (active or waiting for a yes); `canChange` only for the kitchen's signed-in person | `memory_edit`, `memory_forget` (refused without a signed-in person, `401 kitchen_person_required`; recorded as theirs), `remember_this` |
+| `price`, `order` | The proof (`price.proof`: the signed quote and the signed claims it rests on) and the order's details and signed confirmation open inside the card; "Check the signatures" verifies each in the browser against `/.well-known/jwks.json` (`_client/verify-signed.ts`) | none |
+
+`home_show { what: "today" | "history" | "standing" | "deliveries" | "memory" }` shows one of them. Each is in the
+ledger (`today`, `products`, `order_again`, `memory_write`) and in the operations trace like any turn.
+
+*(not yet)*: the widgets above this subsection are the contract for agent-thread-3; this line goes when the engine for each
+widget lands, and the table says per widget what is live.
+
+## Set-up interview (agent-thread-3, live)
+
+A new account's second step is a short interview in the agent's thread form instead of a form
+(`app/k/signup/thread-interview.tsx`, `server/accounts/interview.ts`, `POST /ui-api/account/interview`). Step 1
+(restaurant, username, password) and the signing-device step after it are unchanged.
+
+- The questions, their order, options and suggested amounts are plain code: kind of kitchen, "must every product be"
+  (claims), "never buy" (allergens), delivery days, a usual order, the spend-alone limit (suggested: a usual order and
+  a half), the weekly budget (suggested from the usual order and the days), who signs. The browser only words them
+  (en/fi/sv). No model is asked anything.
+- Never asked what the records answer: the kind of kitchen when the restaurant's name says it ("Päiväkoti Satu",
+  "Laakso Catering", "Ravintola …"; shown as "from your name", with "Not right?" to change it), and anything already
+  answered (stateless: the browser sends the answers so far, so a reload resumes). An account that already has a
+  kitchen is not interviewed.
+- Answer widgets, the `question` card's input kinds plus two the interview adds: chips (`choice`, `multi: true` for
+  several), weekday chips (`weekdays`), a stepper with suggested amounts (`amount`), a short text with suggestions
+  (`text`). One tap on Next accepts the suggestion.
+- It ends in the mandate as it will be signed; "Sign and continue" signs it with the account's own `signKitchen`
+  (the same key, mandate, signer and ledger entry the form made), writes the answers to the kitchen's memory
+  (diet and allergens as rules, delivery days and the usual order as habits, the kind as a note), and appends one
+  ledger entry `setup_interview` with every question asked, what was skipped and why, the answers and the seconds.
+- Evaluation: `eval/thread/interview.ts` (EN and FI): taps and seconds to a signed mandate, checks that it carries the
+  answers and that nothing the name answers was asked.
 
 ## The thread
 
@@ -116,7 +263,8 @@ Every decision the buyer makes ends in exactly one `ThreadAction`, whatever the 
 | taps option 2 / says "the second one" / "the cheaper one" | `{ type: "choose", requestId, optionId }` |
 | says "yes, order it" with a price showing | `{ type: "place", requestId }` |
 | says "keep that" to a memory proposal | `{ type: "remember", itemId, yes: true }` |
-| taps "Order this plan" / says "yes, order it" under a plan card | `{ type: "plan_order", planId }` |
+| taps a menu on the menu card / says "the second menu" | `{ type: "menu_choose", planId, proposalId }` |
+| taps "Put on the order sheet" / says "yes, put it on the sheet" under a ready menu | `{ type: "menu_to_sheet", planId }` |
 
 Mapping words onto a card is the model's proposal; plain code checks it: the action must name a choice on a card
 that is open now, a confirmation needs a clear yes in the buyer's own words (`channels/speech.ts yesOrNo`), and
@@ -138,12 +286,11 @@ chef said yes" typed by someone else is relayed, never the chef's own.
   table the open interface publishes (`server/mcp/tools.ts`, run through `server/mcp/server.ts` as the kitchen's
   own agent, so the on-site agent is one more client of the same gate), minus the tools that carry a buyer's
   answer, plus thread tools: `order` (read the words with `interpret.ts`, then the intake, as plain code),
-  `plan_menu` (a dish or menu for N covers: the menu planner as the kitchen's menu agent, its plan as a `plan` card),
+  `plan_menu` (a dish or menu for N covers: the menu planner as the kitchen's menu agent, its plan as a `menu` card),
   `buyer_reply` (map the newest buyer words onto an open card, checked as above) and `await_sign_off`.
-- **A plan is one decision.** `plan_order` settles what the card said it would (accepts the planner's acceptable
-  points, leaves out lines nothing fits), fixes one price for the whole plan and sends it through the gate as one
-  order (`server/thread/plan.ts`); the gate and order cards follow as for any order. Editing single lines stays on
-  the menu planner page (`/k/<kitchen>/menu?plan=<planId>` opens the thread's plan there).
+- **A menu is edited in place and ordered as one sheet.** The menu card's edits are turns on the planner's own ops;
+  `menu_to_sheet` makes one order sheet of it, and `sheet_place` one order through the gate (`server/thread/menu.ts`,
+  `server/thread/sheet.ts`); the gate and order cards follow as for any order.
 - **Sign-off is the runtime's approval step.** After the gate sends an order to a person, the agent calls
   `await_sign_off`, which always needs approval. The loop pauses. Only the server answers that approval, and only
   when the approver's passkey sign-off (or decline) is recorded on the order; no client, door or model can.

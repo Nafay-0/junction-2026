@@ -67,6 +67,7 @@ const EARLIER_RULES = `Earlier requests of this kitchen are listed below the cal
 - "same again", "again", "like last time", "like last Friday", "as on Tuesday", "samat uudestaan", "kuten viime perjantaina", "samma igen", "som i fredags" refer to an earlier request. A weekday ("last Friday") picks the request delivered or asked for on that day; otherwise take the newest one that fits the item named, or the newest of all.
 - Then set basedOnRequestId to its id, copy from its need every field the buyer does not restate (item text in the earlier words, category, attributes, excludedAttributes, quantity, optimise, forbiddenAllergens), and list those fields in takenFromEarlier ("item", "quantity", "attributes", "optimise", "allergens"). Never copy deliverBy from an earlier request: its date is in the past. Use only a date the buyer gives now.
 - Whatever the buyer says now wins over the earlier request ("but 200 litres" changes the quantity only; "for Thursday" changes the date only).
+- A bare change to the newest request is a purchase request based on it: "make it 200", "200 instead", "200 then", "tee siitä 200", "200 sittenkin", "muuta 200:ksi", "gör det 200", "ändra till 200". The number is the new quantity in that request's unit; copy the other fields as above.
 - sameAsLastTime stays false when you copy fields from an earlier request.
 - When the text does not refer to an earlier request, basedOnRequestId is null and takenFromEarlier is [].
 

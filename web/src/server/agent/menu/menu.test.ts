@@ -156,8 +156,19 @@ describe("the model's draft is checked by code", () => {
       },
     });
     const seen: string[] = [];
-    const r = await draftMenu({ text: "Salmon soup for 300 on Friday", now: MENU_NOW, context: { kitchenName: "K", kitchenKind: "lunch", rules: [], pantry: [] }, model: { model, id: "mock:menu" }, onDish: (ings) => seen.push(...ings.map((i) => i.key)) });
+    const order: string[] = [];
+    const r = await draftMenu({
+      text: "Salmon soup for 300 on Friday",
+      now: MENU_NOW,
+      context: { kitchenName: "K", kitchenKind: "lunch", rules: [], pantry: [] },
+      model: { model, id: "mock:menu" },
+      onOutline: (o) => order.push(`outline:${o.dishes.map((d) => `${d.dishId}=${d.name}`).join(",")}:${o.alternatives.length}`),
+      onDish: (ings, dish) => (seen.push(...ings.map((i) => i.key)), order.push(`dish:${dish.dishId}`)),
+    });
     expect(r.calls.map((c) => c.step)).toEqual(["outline", "dish 1"]);
+    // The outline (the dishes, with the ids the checked draft gives them) is handed on before any dish is written.
+    expect(order).toEqual(["outline:dish_1=Salmon soup:0", "dish:dish_1"]);
+    expect(r.draft.dishes[0].id).toBe("dish_1");
     expect(r.draft.dishes[0].ingredients.map((i) => i.key)).toContain("salmon_fillet");
     expect(seen).toContain("salmon_fillet");
     expect(prompts[0]).toContain("Today is Friday 2026-11-13");

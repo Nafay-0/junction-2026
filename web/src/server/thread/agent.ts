@@ -24,6 +24,7 @@ import { earlierFor } from "./earlier";
  *   order           the buyer's words → the reader → the intake → cards (and a routine order placed alone)
  *   buyer_reply     the newest buyer words mapped onto a card that is open now (checked by code)
  *   order_history   "what did we order last week?" → a records card
+ *   find_products, product_facts, show_home   the home's cards (home.ts): the assortment, one product, the kitchen's records
  *   await_sign_off  pauses the loop until the named person signs on their phone: the runtime's approval step,
  *                   answered only by the server when the passkey sign-off is recorded
  *
@@ -39,8 +40,9 @@ How to work each turn:
 - The buyer wants to buy something, change or repeat an order, adjust an amount, ask for a variant ("is there a lactose-free one?"), or names several items: call order with their own words, copied exactly. One call per message is enough: several items in one message are split by code. For "same as last Thursday but double" or "make it 200 litres", pass the words as they are: code reads them against earlier requests.
 - The buyer's newest words answer something open (listed under OPEN DECISIONS): call buyer_reply with the matching ref. "the second one" is o2. "yes", "that's right", "the chef said yes" confirm a check. Only use refs that are listed. If their words do not clearly pick one, ask one short question instead.
 - After an order waits for a named person's sign-off (status pending_approval), write your one sentence (who signs, on their phone) and call await_sign_off with its orderId in the same reply. Do not try to place, retry or split it.
-- Questions about past orders: order_history. About rules, limits or who signs off: read_mandate or read_kitchen_memory. About an order's status or why something happened: get_order or explain.
-- A dish or a menu for a number of covers ("salmon soup for 300 on Friday", "plan lunch for 40 around beetroot"): call plan_menu with their words. It works out the ingredients and prices them as one plan card; the buyer orders it with one tap (or "yes, order it": buyer_reply plan).
+- The buyer wants to look around the assortment without ordering yet ("show me oat drinks"): find_products. About one product shown: product_facts. "What do I need to do today?", "our recurring orders", "what's arriving", "what do you remember about us": show_home.
+- A dish or a menu for a number of covers ("salmon soup for 300 on Friday", "plan lunch for 40 around beetroot"): call plan_menu with their words. The menu card forms as the planner works (open words get two or three menus to pick from); the buyer edits it in place and puts it on the order sheet with one tap (or "yes, put it on the sheet": buyer_reply menu; "the second menu": buyer_reply menu_p2). Do not list its lines or prices.
+- Questions about past orders: order_history. About rules, limits or who signs off ("what are our rules?"), or a change to them ("never nuts", "raise the limit to 800", "Maija signs from now on"): call rules, with the change in the mandate's terms when they ask for one. It shows the rules card with before and after; only the kitchen's signed-in person signs it there, never you. About an order's status or why something happened: get_order or explain.
 - Anything else (a greeting, small talk, something outside buying food): one short sentence, no tool.
 
 Your sentence:
@@ -63,12 +65,17 @@ export function setAgentModelForTests(m: { model: LanguageModel; id: string } | 
   modelForTests = m;
 }
 
+export const AGENT_MODEL_DEFAULT = "anthropic:claude-opus-5-5";
+export const AGENT_FALLBACK_DEFAULT = "anthropic:claude-fable-5-2";
+
 function modelFor(spec: string | undefined, onFallback: (i: { from: string; to: string; reason: string }) => void): { model: LanguageModel; id: string } {
   if (modelForTests) return modelForTests;
-  const primarySpec = spec ?? defaultModel("DOCK_AGENT_MODEL");
+  // Never a smaller model by accident: with Anthropic credentials and nothing set, Opus 5.5 (not the cheap default).
+  const primarySpec = spec ?? (process.env.DOCK_AGENT_MODEL || (process.env.ANTHROPIC_API_KEY ? AGENT_MODEL_DEFAULT : defaultModel("DOCK_AGENT_MODEL")));
   if (!primarySpec) throw new DockError(503, "model_unavailable", "No model is configured for the store agent: set DOCK_AGENT_MODEL or a provider key.");
   const primary = createModel(primarySpec).model as LanguageModelV4;
-  const fallbackSpec = process.env.DOCK_AGENT_FALLBACK_MODEL || process.env.DOCK_INTERPRET_MODEL;
+  // The fallback is another model of the same tier, never a smaller one: Fable 5.2 when the primary is Opus 5.5.
+  const fallbackSpec = process.env.DOCK_AGENT_FALLBACK_MODEL || (process.env.DOCK_INTERPRET_MODEL && process.env.DOCK_INTERPRET_MODEL !== primarySpec ? process.env.DOCK_INTERPRET_MODEL : primarySpec.startsWith("anthropic:") ? AGENT_FALLBACK_DEFAULT : undefined);
   const fallback = fallbackSpec && fallbackSpec !== primarySpec ? (createModel(fallbackSpec).model as LanguageModelV4) : undefined;
   const firstChunkMs = Number(process.env.DOCK_AGENT_FIRST_TOKEN_MS ?? 6000) || 6000;
   return { model: withFallback(primary, fallback, { firstChunkMs, totalMs: firstChunkMs * 3, onFallback }), id: primarySpec };
@@ -136,8 +143,9 @@ export async function openRefs(run: TurnRun): Promise<OpenRef[]> {
       refs.push({ ref: "withdraw", label: "take back the order waiting for sign-off", action: { type: "withdraw", orderId: card.orderId } });
     }
   }
-  const plan = cards.find((x) => x.card.type === "plan" && x.card.state === "planned" && x.card.canOrder)?.card;
-  if (plan?.type === "plan") refs.push({ ref: "plan", label: `order the menu plan (${plan.dishes.join(", ")}) as one order, €${(plan.totalCents / 100).toFixed(2)}`, action: { type: "plan_order", planId: plan.planId }, confirm: true });
+  const menu = [...cards].reverse().find((x) => x.card.type === "menu" && !x.card.sheetId && (x.card.stage === "ready" || x.card.stage === "choose"))?.card;
+  if (menu?.type === "menu" && menu.stage === "choose") menu.proposals.forEach((p, i) => refs.push({ ref: `menu_p${i + 1}`, label: `cook menu ${i + 1}: ${p.title} (${p.dishes.join(", ")})`, action: { type: "menu_choose", planId: menu.planId, proposalId: p.proposalId } }));
+  else if (menu?.type === "menu" && menu.stage === "ready" && menu.totalCents > 0) refs.push({ ref: "menu", label: `put the menu (${menu.dishes.map((d) => d.name).join(", ")}) on the order sheet, €${(menu.totalCents / 100).toFixed(2)}`, action: { type: "menu_to_sheet", planId: menu.planId }, confirm: true });
   for (const { card } of cards) {
     if (card.type !== "memory") continue;
     card.proposals.forEach((p, i) => {
@@ -231,6 +239,9 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
           const out = await remember(run, r.action.itemId, r.action.yes, words);
           return out;
         }
+        // A widget's action (the menu card's "put it on the sheet", a menu picked by words): the same handler as a tap.
+        const { runWidget } = await import("./widgets");
+        if (await runWidget(run, r.action, words)) return { ok: true, done: r.action.type };
         const out = await runAction(run, r.action, words);
         items.push(...out);
         return forModel(out);
@@ -238,12 +249,12 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
       toModelOutput: ({ output }) => ({ type: "text", value: compact(output) }),
     }),
     plan_menu: tool({
-      description: "A dish or a menu for a number of covers: the menu planner works out the ingredients, matches each to the assortment, prices them live and shows the plan as one card the buyer orders with one confirmation.",
+      description: "A dish or a menu for a number of covers: the menu planner drafts the dishes, works out the ingredients, matches each to the assortment and prices them live, shown as a menu card that forms as it works; the buyer edits it in place and puts it on the order sheet.",
       inputSchema: z.object({ words: z.string().min(1).max(2000).describe("The buyer's words, copied exactly from their newest message.") }),
       execute: async ({ words: w }) => {
         const said = words.includes(w.trim()) ? w.trim() : words;
-        const { planFromWords } = await import("./plan");
-        return planFromWords(run, said);
+        const { menuFromWords } = await import("./menu");
+        return menuFromWords(run, said);
       },
       toModelOutput: ({ output }) => ({ type: "text", value: compact(output) }),
     }),
@@ -264,11 +275,72 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
           question: words.slice(0, 200),
           rows: rows.map((o) => ({ kind: "order", label: o.lines.map((l) => `${l.quantity} × ${l.name}`).join(", "), totalCents: o.totalCents, date: o.deliveryDate, ref: o.requestId ?? o.orderId, detail: o.status })),
           ...(rows[0]?.requestId ? { repeat: { ref: rows[0].requestId, label: rows[0].lines[0]?.name ?? "" } } : {}),
+          repeatable: true,
         };
         run.store.card(run.thread, run.turnId, card);
         run.facts.push(card);
         record(run, "memory_read", `Order history read for ${from}..${to}${family ? ` (${family})` : ""}: ${rows.length} orders.`, { from, to, family, orders: rows.map((r) => r.orderId) });
         return { orders: rows.map((o) => ({ delivered: o.deliveryDate, status: o.status, totalEur: (o.totalCents / 100).toFixed(2), lines: o.lines.map((l) => `${l.quantity} × ${l.name}`) })) };
+      },
+      toModelOutput: ({ output }) => ({ type: "text", value: compact(output) }),
+    }),
+    find_products: tool({
+      description: "Browse the assortment: products matching a few words (and optionally a category), shown as a grid of products the mandate allows, from master data only (no live price or stock until one goes on the order sheet). For 'show me oat drinks', 'what butters do you have?'. Not for ordering: use order for that.",
+      inputSchema: z.object({ query: z.string().max(120).describe("A few words for the product, e.g. 'oat drink', 'butter'."), category: z.string().max(40).optional().describe("A category id, only if the buyer named one.") }),
+      execute: async ({ query, category }) => {
+        const st = step(run, "products", "Looking through the assortment");
+        const { productsCard } = await import("./home");
+        const c = await productsCard(run, query, category);
+        st.done(`${c.total}`);
+        return { shown: c.products.length, total: c.total, products: c.products.slice(0, 8).map((p) => p.name) };
+      },
+      toModelOutput: ({ output }) => ({ type: "text", value: compact(output) }),
+    }),
+    product_facts: tool({
+      description: "One product's facts as a card: pack, allergens, certificates, origin, carbon, delivery reliability (master data). For 'what's in the Arla butter?' after a product grid or sheet showed it.",
+      inputSchema: z.object({ productId: z.string().min(1).max(80).describe("A productId from a tool result in this conversation.") }),
+      execute: async ({ productId }) => {
+        const { productCard } = await import("./home");
+        const c = await productCard(run, productId);
+        return { name: c.product.name, allergens: c.product.allergens, certificates: c.product.certificates };
+      },
+      toModelOutput: ({ output }) => ({ type: "text", value: compact(output) }),
+    }),
+    show_home: tool({
+      description: "Show one of the kitchen's own records as a card: what needs them today, their order history, recurring orders, upcoming deliveries, or what the agent remembers about them.",
+      inputSchema: z.object({ what: z.enum(["today", "history", "standing", "deliveries", "memory"]) }),
+      execute: async ({ what }) => {
+        const { runHomeAction } = await import("./home");
+        await runHomeAction(run, { type: "home_show", what });
+        // What the card holds, in counts only: enough for one true sentence ("nothing needs you today").
+        const card = [...run.store.agentTurn(run.thread, run.turnId)!.cards].reverse().find((c) => ["today", "records", "standing", "deliveries", "memory_list"].includes(c.type));
+        const n = !card ? 0 : card.type === "today" ? card.items.length : card.type === "records" ? card.rows.length : card.type === "standing" || card.type === "deliveries" || card.type === "memory_list" ? card.items.length : 0;
+        return { shown: what, items: n, ...(card?.type === "today" ? { kinds: card.items.map((i) => i.kind) } : {}) };
+      },
+    }),
+    rules: tool({
+      description: "The kitchen's rules: its signed mandate (limits, budget, product groups, required claims, forbidden allergens, who signs, lead days) and its stated rules, as a rules card. With a change, the card shows before and after and waits for the kitchen's signed-in person to sign it; nothing is signed by this tool.",
+      inputSchema: z.object({
+        change: z
+          .object({
+            forbidAdd: z.array(z.string().max(40)).max(14).optional().describe("Allergens to forbid, e.g. nuts, peanuts, sesame"),
+            forbidRemove: z.array(z.string().max(40)).max(14).optional(),
+            requireAdd: z.array(z.string().max(40)).max(5).optional().describe("Claims every product must have: lactose_free, gluten_free, organic, vegan, vegetarian"),
+            requireRemove: z.array(z.string().max(40)).max(5).optional(),
+            perOrderLimitEur: z.number().optional().describe("The most the agent may spend on one order alone, in euros, exactly as the buyer said"),
+            weeklyBudgetEur: z.number().optional(),
+            maxLeadDays: z.number().int().optional(),
+            signer: z.string().max(60).optional().describe("Who signs off, as the buyer named them"),
+            substitution: z.enum(["within_preferences", "needs_approval", "none"]).optional(),
+          })
+          .optional()
+          .describe("Only when the buyer asks for a change. Leave out to show the rules."),
+      }),
+      execute: async ({ change }) => {
+        const { groundedChange, showRules } = await import("./rules");
+        const { change: kept, dropped } = change ? groundedChange(change, words) : { change: undefined, dropped: [] as string[] };
+        const card = await showRules(run, kept && Object.keys(kept).length ? kept : undefined);
+        return { shown: card.proposal ? "proposal" : "rules", ...(card.proposal ? { kind: card.proposal.kind, canSign: card.proposal.canSign, ...(card.proposal.why ? { why: card.proposal.why } : {}), changes: card.diff.map((d) => `${d.field}: ${d.before || "none"} -> ${d.after || "none"}`) } : {}), ...(dropped.length ? { notInTheirWords: dropped } : {}), signedBy: "nobody yet: the kitchen's person signs on the card" };
       },
       toModelOutput: ({ output }) => ({ type: "text", value: compact(output) }),
     }),
@@ -302,7 +374,7 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
       { role: "system", content: context },
     ],
     tools,
-    activeTools: [...PUBLISHED_FOR_MODEL, "order", "plan_menu", "buyer_reply", "order_history", "await_sign_off"],
+    activeTools: [...PUBLISHED_FOR_MODEL, "order", "plan_menu", "buyer_reply", "order_history", "find_products", "product_facts", "show_home", "rules", "await_sign_off"],
     toolApproval: {
       ...Object.fromEntries(BUYERS_OR_ENGINES.map((n) => [n, deny(`${n} is the buyer's decision or the engine's step in the store: use buyer_reply or order.`)])),
       // The pause for a person's sign-off. Only the server answers it, when the passkey sign-off is recorded.
@@ -326,7 +398,7 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
 
   const result = await agent.stream({ messages, timeout: { totalMs: 90_000, toolMs: 60_000 } });
   for await (const part of result.fullStream) {
-    if (part.type === "tool-call" && !["order", "plan_menu", "buyer_reply", "order_history", "await_sign_off"].includes(part.toolName)) {
+    if (part.type === "tool-call" && !["order", "plan_menu", "buyer_reply", "order_history", "find_products", "product_facts", "show_home", "await_sign_off"].includes(part.toolName)) {
       const st = step(run, `tool:${part.toolName}`, LABELS[part.toolName] ?? `Looking up ${part.toolName.replace(/_/g, " ")}`);
       void result.steps.then(() => st.done(), () => st.fail());
     }
@@ -360,7 +432,7 @@ export async function remember(run: TurnRun, itemId: string, yes: boolean, words
     record(run, "memory_write", `${yes ? "Kept" : "Dropped"} a memory proposal (${itemId}): ${r.outcome}.`, { itemId, yes, outcome: r.outcome, ...(words ? { heard: words.slice(0, 300) } : {}) });
     for (const { turnId, card } of run.store.cards(run.thread)) {
       if (card.type === "memory" && card.proposals.some((p) => p.itemId === itemId)) {
-        run.store.card(run.thread, turnId, { ...card, proposals: card.proposals.map((p) => (p.itemId === itemId ? { ...p, decided: yes ? "kept" : "dropped" } : p)) });
+        run.store.card(run.thread, turnId, { ...card, proposals: card.proposals.map((p) => (p.itemId === itemId ? { ...p, decided: yes ? ("kept" as const) : ("dropped" as const) } : p)) });
       }
     }
     return { ok: true, outcome: r.outcome };

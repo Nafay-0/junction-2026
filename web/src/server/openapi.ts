@@ -406,7 +406,7 @@ export const API: Operation[] = [
     operationId: "events",
     summary: "Live events (server-sent events)",
     description:
-      "A text/event-stream of approval_requested, approval_approved, approval_declined, approval_withdrawn, approval_expired, order_committed and order_rejected. Each event's `data` is one DockEvent; refetch details on an event. Reconnects resume from Last-Event-ID. A comment line every 15 s keeps idle connections open. Unfiltered, the operations desk gets every event in full and anyone else an aggregated stream (type, time, amount and a generic sentence: no kitchen, order or approval ids). orgId= needs that kitchen's agent, approver or operations (the built-in demo kitchens are open); approvalId= needs a reader of that approval (or token=).",
+      "A text/event-stream of approval_requested, approval_approved, approval_declined, approval_withdrawn, approval_expired, order_committed, order_rejected and order_withdrawn (a committed order taken back before the cut-off). Each event's `data` is one DockEvent; refetch details on an event. Reconnects resume from Last-Event-ID. A comment line every 15 s keeps idle connections open. Unfiltered, the operations desk gets every event in full and anyone else an aggregated stream (type, time, amount and a generic sentence: no kitchen, order or approval ids). orgId= needs that kitchen's agent, approver or operations (the built-in demo kitchens are open); approvalId= needs a reader of that approval (or token=).",
     auth: false,
     params: [
       { name: "scope", in: "query", schema: z.enum(["mine"]), description: "mine: this phone's kitchen only (needs the approver cookie)." },

@@ -1,9 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
-import { addPasskey, joinAsApprover, watchErrors, signInStage } from "../support/dock";
+import { addPasskey, joinAsApprover, watchErrors } from "../support/dock";
+import { stageThread } from "../support/thread";
 
 /**
- * The shop by hand: catalogue -> a product page with a live price -> basket -> fixed price -> the same gate as the
- * agent's orders. Seed catalogue (the live price comes from the seed's own live layer, not the partner).
+ * The shop by hand: catalogue -> a product page with a live price -> "Add to your order" puts it on the agent's
+ * order sheet -> one confirm -> the same gate as the agent's orders. Seed catalogue (the live price comes from the seed's own live layer, not the partner).
  */
 
 async function visitorKitchen(page: Page): Promise<string> {
@@ -14,39 +15,60 @@ async function visitorKitchen(page: Page): Promise<string> {
   return new URL(page.url()).pathname.split("/")[2];
 }
 
-const checkout = (page: Page) => page.getByRole("complementary", { name: "Totals and checkout" });
-/** Phone: the checkout buttons sit in a sticky bar outside the totals; desktop: inside. The visible one. */
-const action = (page: Page, name: string) => page.getByRole("button", { name, exact: true }).filter({ visible: true }).first();
-
-test("catalogue, product page with a live price, basket, fixed price, through the gate", async ({ page }) => {
+test("catalogue, product page with a live price, basket, fixed price, through the gate", async ({
+  page,
+}) => {
   const errors = watchErrors(page);
   const kitchen = await visitorKitchen(page);
   await page.goto(`/k/${kitchen}/catalogue`);
-  await expect(page.getByText(/products from the product files/).first()).toBeVisible();
-  await expect(page.getByText(/No live call for the list/).first()).toBeVisible();
+  await expect(
+    page.getByText(/products from the product files/).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/No live call for the list/).first(),
+  ).toBeVisible();
 
-  await page.getByRole("link", { name: /Valio Eila lactose-free semi-skimmed milk drink 1\.5 %, 10 L/ }).first().click();
+  await page
+    .getByRole("link", {
+      name: /Valio Eila lactose-free semi-skimmed milk drink 1\.5 %, 10 L/,
+    })
+    .first()
+    .click();
   await page.waitForURL(/\/catalogue\/VA-1010$/);
-  await expect(page.getByRole("heading", { level: 1, name: /Valio Eila/ })).toBeVisible();
-  await expect(page.getByText(/Checked live with the wholesaler at \d/)).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page.getByRole("heading", { level: 1, name: /Valio Eila/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/Checked live with the wholesaler at \d/),
+  ).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText(/^\d+,\d{2}\s€$/).first()).toBeVisible();
   // Missing allergen data is unknown, not absent (said in words on the product page).
-  await expect(page.getByText(/every allergen is unknown, not absent/)).toBeVisible();
+  await expect(
+    page.getByText(/every allergen is unknown, not absent/),
+  ).toBeVisible();
 
+  // "Add" puts the product on the agent's order sheet (one order, priced live, previewed by the gate); its one
+  // button says what will happen and the price. 10 packs of the usual milk, 129 € under the visitor's 500 € limit.
   const qty = page.getByRole("textbox", { name: "Quantity in packs" });
   await qty.fill("10");
-  await page.getByRole("button", { name: "Add to basket" }).click();
-  await page.goto(`/k/${kitchen}/basket`);
-  await expect(page.getByRole("heading", { name: "Basket" })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "Quantity in packs" })).toHaveValue("10");
-  await expect(checkout(page)).toContainText(/100\sL/);
-
-  await action(page, "Get a fixed price").click();
-  await expect(checkout(page)).toContainText(/Total, signed by the wholesaler/, { timeout: 20_000 });
-  await expect(checkout(page).getByText(/^\d{1,2}[.:]\d{2}$/).first()).toBeVisible(); // the countdown
-  await action(page, "Place the order").click();
-  // 100 L of the usual milk, 129 € under the visitor's 500 € limit: the agent's own gate lets it through alone.
-  await expect(page.locator("main")).toContainText(/Order placed|placed with the wholesaler|Signed by the wholesaler/i, { timeout: 20_000 });
+  await page.getByRole("button", { name: "Add to your order" }).click();
+  const log = page.getByRole("log").filter({ visible: true }).first();
+  // A visitor's first order: the mistake check may ask a person to look at it (a large first order); the sheet says so
+  // before the tap, and what it says is what happens.
+  const confirm = log.getByRole("button", {
+    name: /^(Order this|Send to .+ for an OK), /,
+  });
+  await expect(confirm).toBeVisible({ timeout: 20_000 });
+  await expect(log).toContainText(/10\s×\s10\sL\s=\s100\sL/);
+  const alone = /^Order this/.test((await confirm.textContent()) ?? "");
+  await expect(log).toContainText(
+    alone ? /Inside your rules/ : /OKs it on their phone/,
+  );
+  await confirm.click();
+  await expect(log).toContainText(
+    alone ? /Ordered\. Arrives/ : /Waiting for .+'s OK/,
+    { timeout: 20_000 },
+  );
   expect(errors).toEqual([]);
 });
 
@@ -55,13 +77,25 @@ test("catalogue, product page with a live price, basket, fixed price, through th
  * (12,90 €, far under its 100 € limit) was stopped at the gate for the head chef's sign-off by a mistake check
  * nobody was asked.
  */
-test("a small hand order from the basket goes through without a sign-off", async ({ page }) => {
-  await signInStage(page, "kaari");
-  await page.goto("/k/kaari/catalogue/VA-1010");
-  await expect(page.getByText(/Checked live with the wholesaler at \d/)).toBeVisible({ timeout: 20_000 });
-  await page.getByRole("button", { name: "Add to basket" }).click();
-  await page.goto("/k/kaari/basket");
-  await action(page, "Get a fixed price").click();
-  await expect(checkout(page)).toContainText(/Total, signed by the wholesaler/, { timeout: 20_000 });
-  await expect(checkout(page)).not.toContainText(/will have to sign off|must sign off/);
+test("a small hand order from the catalogue goes through without a sign-off", async ({
+  page,
+  baseURL,
+}) => {
+  // Kaari's thread to this test alone, started over: "Add" goes on the thread's open order sheet.
+  const release = await stageThread(page, "kaari", baseURL);
+  try {
+    await page.goto("/k/kaari/catalogue/VA-1010");
+    await expect(
+      page.getByText(/Checked live with the wholesaler at \d/),
+    ).toBeVisible({ timeout: 20_000 });
+    await page.getByRole("button", { name: "Add to your order" }).click();
+    const log = page.getByRole("log").filter({ visible: true }).first();
+    // The order sheet's own preview: the agent may order it alone, so the button orders, it does not ask for an OK.
+    await expect(
+      log.getByRole("button", { name: /^Order this, / }),
+    ).toBeVisible({ timeout: 20_000 });
+    await expect(log).not.toContainText(/for an OK|OKs it on their phone/);
+  } finally {
+    release();
+  }
 });

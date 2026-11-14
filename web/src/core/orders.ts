@@ -16,12 +16,12 @@ import {
 import type { AlternativesSource } from "./alternatives";
 import type { EventPublisher } from "./events";
 import { CatalogError, ProductQuerySchema, scheduledOn, usableOffer, type LiveOffer, type LiveStatus, type MeteredCatalog, type Product } from "./catalog";
-import { ClaimStore, availabilityClaimInput, issueClaim, originClaimInput, priceClaimInput, refOf, type IssuedClaim } from "./claims";
+import { ClaimStore, availabilityClaimInput, cutoffMs, issueClaim, originClaimInput, priceClaimInput, refOf, type IssuedClaim } from "./claims";
 import { DockError, isDockError, parse } from "./errors";
 import { concernsOfOrder, unaskedNote, type OrderConcern } from "./order-check";
 import { qualifiersOf, wordsNotCarried } from "./qualifiers";
 import { InMemoryIntakeRepository, createIntakeFlow, isVerified, recordCommittedOrder, type HumanVia, type IntakeDeps, type IntakeRepository } from "./intake";
-import { InMemoryKitchenRepository, localNow, type KitchenRepository } from "./kitchen";
+import { InMemoryKitchenRepository, localNow, updateKitchenProfile, type KitchenRepository } from "./kitchen";
 import { SIGN_ALG, type KeyPair } from "./keys";
 import type { Ledger, LedgerHead } from "./ledger";
 import { LiveLookupAllowance, shareKeyOf } from "./live-allowance";
@@ -219,6 +219,21 @@ export type ApprovalContext = {
   quoteExpiresAt: string;
   mandate: Mandate;
 };
+
+/**
+ * The order cut-off each quote promises (the earliest of its lines' order-by times), kept in this process only: a
+ * committed order can be taken back until it (withdrawOrder with `takeBack`). Nothing here reaches a response, a
+ * signature or the ledger; after a restart an order simply has no take-back, which errs on the safe side. On
+ * globalThis: a bundler may load this module once per route, and the thread reads what the API side wrote.
+ */
+const quoteCutoffs: Map<string, string> = ((globalThis as typeof globalThis & { __dockQuoteCutoffs?: Map<string, string> }).__dockQuoteCutoffs ??= new Map());
+
+/** Until when the kitchen may still take back this committed order, if the wholesaler's cut-off is known. */
+export function takeBackUntil(o: Pick<Order, "quoteId" | "status">, at: Date = new Date()): string | undefined {
+  if (o.status !== "committed") return undefined;
+  const until = quoteCutoffs.get(o.quoteId);
+  return until && Date.parse(until) > at.getTime() ? until : undefined;
+}
 
 export function toPublicOrder(o: Order): PublicOrder {
   return structuredClone(stripOrder(o));
@@ -1090,22 +1105,31 @@ export function createDock(deps: DockDeps) {
      * same rules and context as a quote's preview (orders.ts requestQuote), on an unsigned quote that is never issued,
      * stored or logged. Undefined when the lines cannot be priced from the offers given.
      */
-    async previewDecision(session: AgentSession, requestId: string, input: QuoteRequestLine[], offers: LiveOffer[]): Promise<Decision | undefined> {
+    async previewDecision(session: AgentSession, requestId: string, input: QuoteRequestLine[], offers: LiveOffer[], internal: { confirmedBy?: string; referencePrices?: boolean; asPlaced?: boolean } = {}): Promise<Decision | undefined> {
       const request = await ownRequest(session, requestId);
       const lines = await substitutesOf(request, input);
       const ids = [...new Set(lines.flatMap((l) => (l.substituteFor ? [l.productId, l.substituteFor] : [l.productId])))];
       const products = await catalog.searchProducts({ ids, limit: 100 });
       const priced = offers.map((o) => scheduledOn(o, request.deliverOn));
+      // A substitute is compared with the price of the product it replaces, which is often the one not on offer
+      // now: its last price from the wholesaler's status will do, as in requestQuote (one short live call; the order
+      // sheet asks for it, the intake's previews keep to the offers they were given).
+      let reference = priced;
+      const unpriced = [...new Set(lines.flatMap((l) => (l.substituteFor && !priced.some((o) => o.productId === l.substituteFor) ? [l.substituteFor] : [])))];
+      if (unpriced.length && internal.referencePrices) {
+        const live = await liveLookup(session, requestId, unpriced, request.neededBy, "AimoPilot asked the price of a product a substitute replaces, for a preview", { batch: true }).catch(() => undefined);
+        reference = [...priced, ...(live?.statuses ?? []).map((x) => x.offer).filter((o): o is LiveOffer => !!o).map((o) => scheduledOn(o, request.deliverOn))];
+      }
       let quote: Quote;
       try {
-        quote = buildQuote({ quoteId: "preview", buyerOrgId: session.mandate.issuer.orgId, agentId: session.agentId, mandateId: session.mandate.mandateId, requestId, lines, products, offers: priced, referenceOffers: priced, now: now(), ttlMinutes: quoteTtlMinutes });
+        quote = buildQuote({ quoteId: "preview", buyerOrgId: session.mandate.issuer.orgId, agentId: session.agentId, mandateId: session.mandate.mandateId, requestId, lines, products, offers: priced, referenceOffers: reference, now: now(), ttlMinutes: quoteTtlMinutes });
       } catch {
         return undefined;
       }
       return evaluatePolicy(
         session.mandate,
         { agentId: session.agentId, quote, lines: quote.lines.map(({ productId, quantity, unitPriceCents }) => ({ productId, quantity, unitPriceCents })), neededBy: request.neededBy, deliverOn: request.deliverOn, requestId, asked: await askedOf(request, quote) },
-        { now: now(), ...supersession(session.mandate, session.mandateIssuedAt), ...(await budgetContext(quote.buyerOrgId)), ...(await mistakeCheckOf(session.mandate.issuer, request, quote, true)).context, ...(await holdsOf(quote)), quoteAlreadyUsed: false, ...(await splitWindowOf(quote)) },
+        { now: now(), ...supersession(session.mandate, session.mandateIssuedAt), ...(await budgetContext(quote.buyerOrgId)), ...(await mistakeCheckOf(session.mandate.issuer, request, quote, !internal.asPlaced)).context, ...(await holdsOf(quote)), quoteAlreadyUsed: false, ...(await splitWindowOf(quote)), ...(internal.confirmedBy ? { substitutionConfirmedBy: internal.confirmedBy } : {}) },
       );
     },
 
@@ -1120,6 +1144,7 @@ export function createDock(deps: DockDeps) {
       const ids = [...new Set(lines.flatMap((l) => (l.substituteFor ? [l.productId, l.substituteFor] : [l.productId])))];
       let quote: Quote;
       let claims: IssuedClaim[] = [];
+      let cutoff: number | undefined;
       try {
         const products = await catalog.searchProducts({ ids, limit: 100 });
         let live: LiveLookupResult;
@@ -1133,6 +1158,7 @@ export function createDock(deps: DockDeps) {
           throw err;
         }
         const offers = live.offers.map((o) => scheduledOn(o, request.deliverOn));
+        cutoff = offers.filter((o) => lines.some((l) => l.productId === o.productId)).map((o) => cutoffMs(o.orderBy)).filter((x): x is number => x !== undefined).sort((a, b) => a - b)[0];
         // Say why a line cannot be quoted, in the partner's terms (a passed cut-off, a sales block, no price).
         for (const l of lines) {
           const st = live.statuses.find((x) => x.productId === l.productId);
@@ -1166,6 +1192,7 @@ export function createDock(deps: DockDeps) {
         throw err;
       }
       const quoteToken = await signQuote(quote, wholesalerKey);
+      if (cutoff !== undefined) quoteCutoffs.set(quote.quoteId, new Date(cutoff).toISOString());
       const subs = quote.lines.filter((l) => l.substituteFor).length;
       ledger.append({
         type: "quote",
@@ -1183,7 +1210,12 @@ export function createDock(deps: DockDeps) {
     },
 
     /** Place an order against a signed quote. Always returns the decision; refused orders are kept with their reasons. */
-    async placeOrder(session: AgentSession, input: z.input<typeof SignedOrderInput>): Promise<PublicOrder> {
+    /**
+     * `internal.confirmedBy`: set only by server code in this process (the thread's order sheet), when the kitchen's own
+     * identified person built and confirmed these exact lines: their confirmation of a substitute (policy.ts
+     * substitutionConfirmedBy). Never from a request body.
+     */
+    async placeOrder(session: AgentSession, input: z.input<typeof SignedOrderInput>, internal: { confirmedBy?: string } = {}): Promise<PublicOrder> {
       const { requestId, quoteToken, lines } = parse(SignedOrderInput, input);
       const request = await ownRequest(session, requestId);
       let quote: Quote;
@@ -1197,7 +1229,7 @@ export function createDock(deps: DockDeps) {
       return serialize(orgId, async () => {
         const draft = { agentId: session.agentId, quote, lines, neededBy: request.neededBy, deliverOn: request.deliverOn, requestId, asked: await askedOf(request, quote) };
         const check = await mistakeCheckOf(session.mandate.issuer, request, quote);
-        const ctx = { now: now(), ...supersession(session.mandate, session.mandateIssuedAt), ...(await budgetContext(orgId)), ...check.context, ...(await holdsOf(quote)), quoteAlreadyUsed: await repo.isQuoteUsed(quote.quoteId), ...(await splitWindowOf(quote)) };
+        const ctx = { now: now(), ...supersession(session.mandate, session.mandateIssuedAt), ...(await budgetContext(orgId)), ...check.context, ...(await holdsOf(quote)), quoteAlreadyUsed: await repo.isQuoteUsed(quote.quoteId), ...(await splitWindowOf(quote)), ...(internal.confirmedBy ? { substitutionConfirmedBy: internal.confirmedBy } : {}) };
         let decision = evaluatePolicy(session.mandate, draft, ctx);
         if (decision.outcome !== "reject" && !(await repo.claimQuote(quote.quoteId))) {
           decision = evaluatePolicy(session.mandate, draft, { ...ctx, quoteAlreadyUsed: true });
@@ -1505,7 +1537,7 @@ export function createDock(deps: DockDeps) {
      * approver's phone shows it as withdrawn, and the ledger says who asked (relayed by the agent). Only the
      * organisation's own pending orders; anything decided stays as it is.
      */
-    async withdrawOrder(session: AgentSession, orderId: string, input: z.input<typeof WithdrawInput> = {}): Promise<PublicOrder> {
+    async withdrawOrder(session: AgentSession, orderId: string, input: z.input<typeof WithdrawInput> = {}, internal: { takeBack?: { by: string } } = {}): Promise<PublicOrder> {
       const { reason, by } = parse(WithdrawInput, input ?? {});
       const orgId = session.mandate.issuer.orgId;
       const found = await repo.getOrder(orderId);
@@ -1513,6 +1545,27 @@ export function createDock(deps: DockDeps) {
       return serialize(orgId, async () => {
         await expireStale(orgId);
         const order = (await repo.getOrder(orderId))!;
+        // `takeBack`: server code only (the kitchen's own signed-in person in the thread), never a request body. A
+        // committed order goes back before the wholesaler's order cut-off; the signed confirmation is void from then.
+        const until = internal.takeBack ? takeBackUntil(order, now()) : undefined;
+        if (until && internal.takeBack) {
+          const at = now().toISOString();
+          order.status = "withdrawn";
+          order.updatedAt = at;
+          await repo.saveOrder(order);
+          // Not bought after all: out of the kitchen's history, so "usual" amounts and the repeat check do not count it.
+          await updateKitchenProfile(kitchens, orgId, (p) => (p ? { ...p, history: p.history.filter((h) => h.orderId !== orderId) } : p));
+          ledger.append({
+            type: "order",
+            actor: agentActor(session),
+            requestId: order.requestId,
+            orderId,
+            summary: `Committed order ${orderId} (${formatEur(order.totalCents)}) taken back by ${internal.takeBack.by} (signed in) before the order cut-off ${until.slice(0, 16).replace("T", " ")} UTC; the wholesaler's confirmation no longer holds and it no longer counts against the weekly budget.`,
+            data: { decision: "taken_back", by: internal.takeBack.by, verified: true, cutoff: until, reason },
+          });
+          publish({ type: "order_withdrawn", at, orgId, orderId, totalCents: order.totalCents, summary: `${order.orgName}: a ${formatEur(order.totalCents)} order was taken back before the cut-off.` });
+          return toPublicOrder(order);
+        }
         if (order.status !== "pending_approval") {
           throw refuse(new DockError(409, "order_not_pending", `Order ${orderId} is ${order.status}; only an order waiting for sign-off can be withdrawn.`, "intake_sequence", { status: order.status }), agentActor(session), { requestId: order.requestId, orderId });
         }
@@ -1606,14 +1659,15 @@ export function createDock(deps: DockDeps) {
       await intakeGate(session, String((input as { requestId?: unknown }).requestId ?? ""));
       return dock.requestQuote(session, input);
     },
-    placeOrder: async (session: AgentSession, input: z.input<typeof PlaceOrderInput>) => {
+    /** `internal`: server code in this process only (the thread's order sheet), never a request body. */
+    placeOrder: async (session: AgentSession, input: z.input<typeof PlaceOrderInput>, internal: { confirmedBy?: string } = {}) => {
       const body = parse(PlaceOrderInput, input);
       await intakeGate(session, body.requestId);
       if (body.quoteToken) {
         if (!body.lines) throw new DockError(400, "invalid_request", "Send lines with quoteToken (copied from quote.lines), or leave both out after the intake's choice.");
-        return dock.placeOrder(session, { requestId: body.requestId, quoteToken: body.quoteToken, lines: body.lines });
+        return dock.placeOrder(session, { requestId: body.requestId, quoteToken: body.quoteToken, lines: body.lines }, internal);
       }
-      return dock.placeOrder(session, await currentQuoteOrder(session, body.requestId));
+      return dock.placeOrder(session, await currentQuoteOrder(session, body.requestId), internal);
     },
   };
 

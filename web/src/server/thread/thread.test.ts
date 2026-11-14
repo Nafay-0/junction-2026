@@ -303,3 +303,80 @@ describe("when the day's model cap is reached", () => {
     expect(rt.dock.ledger.entries().some((e) => e.type === "agent" && (e.data as { event?: string }).event === "model_call")).toBe(false);
   });
 });
+
+describe("a second request after a sign-off", () => {
+  beforeEach(() => {
+    resetRuntime();
+    process.env.DOCK_MEMORY = "off";
+  });
+  afterEach(() => {
+    setAgentModelForTests(undefined);
+    setInterpretModelForTests(undefined);
+    delete process.env.DOCK_MEMORY;
+  });
+
+  it("is answered: the paused sign-off step leaves no tool call without its result in the history", async () => {
+    setInterpretModelForTests(reader(1000));
+    setAgentModelForTests(agentScript([{ calls: [{ name: "order", args: { words: "1000 litres of lactose-free milk for Monday" } }] }, { text: "Options below." }]));
+    const first = await turn("laakso", { door: "typed", via: "typed", text: "1000 litres of lactose-free milk for Monday" });
+    let options = first.cards.find((c) => c.type === "options");
+    if (!options) {
+      const a = first.cards.find((c) => c.type === "anomaly");
+      if (a?.type !== "anomaly") throw new Error("neither options nor a check");
+      const r = await turn("laakso", { door: "typed", via: "tap", action: { type: "concern", requestId: a.requestId, key: a.concerns[0].key, choice: "confirm" } });
+      options = r.cards.find((c) => c.type === "options");
+    }
+    if (options?.type !== "options") throw new Error("no options");
+    // The tap sends it for an OK; the engine has the agent pause on await_sign_off.
+    const placedTurn = turn("laakso", { door: "typed", via: "tap", action: { type: "choose", requestId: options.requestId, optionId: options.options[0].optionId } });
+    setAgentModelForTests(
+      agentScript([
+        (o) => {
+          const m = JSON.stringify(o.prompt).match(/ord_[a-z0-9]+/);
+          return { text: "Waiting for the OK.", calls: m ? [{ name: "await_sign_off", args: { orderId: m[0] } }] : [] };
+        },
+        { text: "Signed and placed." },
+        { text: "Signed and placed." },
+      ]),
+    );
+    const placed = await placedTurn;
+    const gate = placed.cards.find((c) => c.type === "gate");
+    expect(gate?.type === "gate" && gate.outcome).toBe("waiting");
+    const rt = await getRuntime();
+    const m = rt.outbox.messages().at(-1)!;
+    const token = /[?&]token=([^&]+)/.exec(m.link)![1];
+    await rt.dock.decideApproval(m.approvalId, { decision: "approve", proof: { kind: "link_token", token: decodeURIComponent(token) } });
+    await new Promise((r) => setTimeout(r, 300));
+    // The next request: the provider would refuse a history with an unanswered tool call.
+    let sent = "";
+    setInterpretModelForTests(reader(20));
+    setAgentModelForTests(
+      agentScript([
+        (o) => {
+          sent = JSON.stringify(o.prompt);
+          return { calls: [{ name: "order", args: { words: "20 litres of lactose-free milk for Monday" } }] };
+        },
+        { text: "Options below." },
+      ]),
+    );
+    const second = await turn("laakso", { door: "typed", via: "typed", text: "20 litres of lactose-free milk for Monday" });
+    expect(second.cards.find((c) => c.type === "notice" && c.kind === "unavailable")).toBeUndefined();
+    expect(second.cards.some((c) => c.type === "understood")).toBe(true);
+    // Every tool call in what the model was sent has its result.
+    const calls = [...sent.matchAll(/"type":"tool-call","toolCallId":"([^"]+)"/g)].map((x) => x[1]);
+    for (const id of calls) expect(sent).toContain(`"toolCallId":"${id}","toolName"`);
+  });
+});
+
+describe("history sent with a new turn", () => {
+  it("has a result for every tool call and no leftover approval parts", async () => {
+    const { settled } = await import("./engine");
+    const out = settled([
+      { role: "user", content: "x" },
+      { role: "assistant", content: [{ type: "text", text: "Waiting." }, { type: "tool-call", toolCallId: "c1", toolName: "await_sign_off", input: { orderId: "o" } }, { type: "tool-approval-request", approvalId: "a1", toolCallId: "c1" }] },
+      { role: "user", content: "next" },
+    ] as never);
+    expect(JSON.stringify(out)).not.toContain("tool-approval");
+    expect(out[2]).toMatchObject({ role: "tool", content: [{ type: "tool-result", toolCallId: "c1" }] });
+  });
+});

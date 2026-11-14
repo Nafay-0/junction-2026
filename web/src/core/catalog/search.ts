@@ -95,8 +95,19 @@ export type ParsedQuery = {
 
 const AMOUNT_RE = /(?<![\d.,])(\d{1,3}(?:[ ,]\d{3})+|\d+(?:[.,]\d+)?)\s*(litres?|liters?|litraa?|l|dl|cl|ml|kg|kilos?|kiloa|g)(?![a-z])/g;
 
+/**
+ * What kitchens call a product and what the wholesaler's names say differ: "oat milk" is sold as an oat drink
+ * (kauramaito: kaurajuoma, havremjölk: havredryck), because only dairy may be called milk.
+ */
+const SPOKEN_NAMES: [RegExp, string][] = [
+  [/(?<![a-z])kaura ?mai(?:to|do)[a-z]*/g, "kaurajuoma"],
+  [/(?<![a-z])oat ?milks?(?![a-z])/g, "oat drink"],
+  [/(?<![a-z])havre ?mjolk[a-z]*/g, "havredryck"],
+];
+
 export function parseQueryText(text: string): ParsedQuery {
   let s = ` ${fold(text).replace(/-/g, " ").replace(/\s+/g, " ")} `;
+  for (const [re, to] of SPOKEN_NAMES) s = s.replace(re, to);
   const claims: string[] = [];
   const excludeAllergens: string[] = [];
   for (const [claim, phrases] of CLAIM_PHRASES) {

@@ -9,7 +9,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: `${PRODUCT_NAME}: ${pick(lang, { en: "order", fi: "tilaa", sv: "beställ" })}` };
 }
 
-/** Order: the kitchen's conversation with its agent, full width (the same thread the dock shows on other pages). */
+/** The agent, full page: the same conversation the dock shows on every other page (one thread, one engine). */
 export default function OrderPage() {
   return <ThreadPage />;
 }

@@ -9,6 +9,7 @@ import type { OptionView, OptionsCard as OptionsCardT, ThreadAction } from "@/se
 import { usePortal } from "./portal";
 import { THREAD_PAGE_TEXT } from "./thread.text";
 import { THREAD_WORDS } from "./thread-words.text";
+import { THREAD_SHEET_TEXT } from "./thread-sheet.text";
 import { approverFor, titleOf, fmtFor, leadOption, leadReasons, leftOutGroups, oneThing, otherNotes, packsText, perUnitPrice, reasonText, sharedQuiet, sharedSignoff, tradeOffs, usualNote } from "./thread-words";
 
 /**
@@ -28,6 +29,7 @@ export function OptionsDecision({ card, tap, busy }: { card: OptionsCardT; tap: 
   const fmt = useFormat();
   const tx = useText(THREAD_PAGE_TEXT);
   const w = useText(THREAD_WORDS);
+  const sx = useText(THREAD_SHEET_TEXT);
   const f = fmtFor(fmt.lang);
   if (!card.options.length) return null;
   const lead = leadOption(card);
@@ -41,7 +43,7 @@ export function OptionsDecision({ card, tap, busy }: { card: OptionsCardT; tap: 
   const left = leftOutGroups(card, w, fmt.lang);
   const leftCount = left.reduce((s, g) => s + g.count, 0);
   const notes = otherNotes(card, w, fmt.lang);
-  const open = !busy && !card.chosen;
+  const open = !busy && !card.chosen && !card.adjusted;
   const rank = (o: OptionView) => w.rank[o.rank] ?? o.rank;
 
   const buttonLabel = (o: OptionView) => {
@@ -74,12 +76,19 @@ export function OptionsDecision({ card, tap, busy }: { card: OptionsCardT; tap: 
         </p>
       )}
       {open ? (
-        <button type="button" onClick={() => choose(lead)} className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-full bg-lime px-4 text-center text-[0.92rem] font-semibold leading-snug text-ink transition-colors duration-150 hover:bg-lime-hover">
-          {buttonLabel(lead)}
-        </button>
+        <>
+          <button type="button" onClick={() => choose(lead)} className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-full bg-lime px-4 text-center text-[0.92rem] font-semibold leading-snug text-ink transition-colors duration-150 hover:bg-lime-hover">
+            {buttonLabel(lead)}
+          </button>
+          <button type="button" onClick={() => tap({ type: "sheet_from_option", requestId: card.requestId, optionId: lead.optionId }, sx.adjustWords)} className="mt-1 flex min-h-11 w-full items-center justify-center rounded-full text-[0.9rem] font-medium text-petrol transition-colors duration-150 hover:bg-petrol-soft">
+            {sx.adjust}
+          </button>
+        </>
+      ) : card.adjusted ? (
+        <p className="mt-2.5 text-[0.86rem] text-ink-soft">{sx.adjusted}</p>
       ) : null}
 
-      {others.length > 0 && !card.chosen && (
+      {others.length > 0 && !card.chosen && !card.adjusted && (
         <div className="mt-3.5 border-t border-line/70 pt-2.5">
           <p className="text-[0.76rem] font-medium uppercase tracking-wide text-ink-soft">{w.others}</p>
           <ul className="mt-1 divide-y divide-line/60">

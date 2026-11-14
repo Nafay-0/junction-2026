@@ -1,4 +1,4 @@
-import { MAX_LIVE_IDS_PER_CALL, usableOffer, type LiveOffer, type LiveStatus, type Product } from "@/core/catalog";
+import { usableOffer, type LiveOffer, type LiveStatus, type Product } from "@/core/catalog";
 import { formatAmount as formatMeasure } from "@/core/catalog/pack";
 import { piecesPerSalesUnit } from "@/core/catalog/product";
 import { formatDay } from "@/core/kitchen";
@@ -483,8 +483,8 @@ export function computePlan(input: PlanInput): PlanView {
   if (input.settings.covers === null) blockers.push("Give the number of covers.");
   if (openDoubts) blockers.push(`${openDoubts} item${openDoubts > 1 ? "s" : ""} on the plan need${openDoubts > 1 ? "" : "s"} a decision.`);
   if (chosen.length === 0 && input.settings.covers !== null) blockers.push("Nothing to order: every line is struck.");
-  if (productIds.size > MAX_LIVE_IDS_PER_CALL)
-    blockers.push(`${productIds.size} products: the wholesaler fixes a price for at most ${MAX_LIVE_IDS_PER_CALL} products in one quote today. Strike ${productIds.size - MAX_LIVE_IDS_PER_CALL} line${productIds.size - MAX_LIVE_IDS_PER_CALL > 1 ? "s" : ""} the kitchen can cover, or plan fewer dishes; AimoPilot does not split one need into several orders.`);
+  // One quote holds up to MAX_QUOTE_LINES products; its live prices come in batched calls of ten (orders.ts
+  // requestQuote), so a menu's twelve products are still one order through the gate.
   if (after > m.weeklyBudgetCents) blockers.push(`${formatEur(totalCents)} would take this week's spend to ${formatEur(after)}, over the ${formatEur(m.weeklyBudgetCents)} budget.`);
   if (reasons.length && !approver) blockers.push(`No one in the mandate may sign off ${formatEur(totalCents)}.`);
   // Nothing can come by the date: one message for the plan instead of one per line.

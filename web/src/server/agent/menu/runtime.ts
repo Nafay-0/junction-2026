@@ -13,7 +13,14 @@ import { InMemoryPlanStore, createPlanService, type PlanService } from "./servic
  * with DOCK_MENU_MODEL=recorded), the recorded outputs of the evaluation set answer the requests they cover, and
  * every plan made that way says so on screen.
  */
-const g = globalThis as typeof globalThis & { __dockMenu?: { service: PlanService; store: InMemoryPlanStore; key: unknown } };
+const g = globalThis as typeof globalThis & { __dockMenu?: { service: PlanService; store: InMemoryPlanStore; key: unknown }; __dockMenuTestModel?: DraftModel };
+
+type DraftModel = Exclude<NonNullable<Parameters<typeof draftMenu>[0]["model"]>, string>;
+
+/** Tests: the planner drafts with this scripted model (outline and dish calls), whatever DOCK_MENU_MODEL says. */
+export function setMenuModelForTests(model: DraftModel | undefined): void {
+  g.__dockMenuTestModel = model;
+}
 
 export function menuMode(): "model" | "recorded" {
   return process.env.DOCK_MENU_MODEL === "recorded" || !menuModelSpec() ? "recorded" : "model";
@@ -29,7 +36,13 @@ export async function menuRuntime() {
       catalog: menuCatalogOf(rt.catalog),
       now: () => new Date(),
       store,
-      draft: async (text, ctx, now) => (recorded ? recordedDraft(text, ctx) : draftMenu({ text, context: ctx, now })),
+      // The early hooks are passed on: each dish's catalogue search starts while the others are written, and the
+      // thread shows the outline and each dish as they come (plan(…, { onProgress })).
+      draft: async (text, ctx, now, onDish, onOutline, onDishPartial) => {
+        const hooks = { ...(onDish ? { onDish } : {}), ...(onOutline ? { onOutline } : {}), ...(onDishPartial ? { onDishPartial } : {}) };
+        if (g.__dockMenuTestModel) return draftMenu({ text, context: ctx, now, model: g.__dockMenuTestModel, ...hooks });
+        return recorded ? recordedDraft(text, ctx) : draftMenu({ text, context: ctx, now, ...hooks });
+      },
       fix: async (req, ctx) => (recorded ? recordedFix(req) : proposeFixes(req, ctx)),
       ...(recorded ? {} : { pick: (lines) => pickProducts(lines) }),
       // The product knowledge map's alternatives by the dish's use (real catalogue only).

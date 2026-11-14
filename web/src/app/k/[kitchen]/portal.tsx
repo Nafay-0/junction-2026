@@ -21,6 +21,7 @@ import { AssistantPanel } from "./assistant";
 import { useThreadState, type ThreadApi } from "./thread-state";
 import { VoiceModeProvider } from "../../_channels/voice-mode";
 import { THREAD_PAGE_TEXT } from "./thread.text";
+import { THREAD_HOME_TEXT } from "./thread-home.text";
 import { AccountBar, type PortalAccount } from "./account-bar";
 import type { KitchenChoice, KitchenInfo, LiveReply, LiveResult, Overview, PortalRequest, Product } from "./types";
 
@@ -159,11 +160,13 @@ export function Portal({ kitchen, kitchens, account, children }: { kitchen: Kitc
       // private window: the basket lives as long as the page
     }
   }, [lines, slug]);
+  const toSheet = useRef<(product: Product, packs: number) => void>(undefined);
   const basket = useMemo<Ctx["basket"]>(
     () => ({
       lines,
-      add: (product, packs = 1) =>
-        setLines((ls) => (ls.some((l) => l.productId === product.id) ? ls.map((l) => (l.productId === product.id ? { ...l, packs: l.packs + packs } : l)) : [...ls, { productId: product.id, packs, product }].slice(0, 10))),
+      // "Add" anywhere in the store puts the product on the agent's current order sheet (a `sheet_add` turn: priced
+      // live and previewed by the gate there), and shows the agent. The basket keeps what was put in it before.
+      add: (product, packs = 1) => toSheet.current?.(product, packs),
       set: (productId, packs) => setLines((ls) => ls.map((l) => (l.productId === productId ? { ...l, packs: Math.max(1, Math.min(9999, Math.round(packs))) } : l))),
       remove: (productId) => setLines((ls) => ls.filter((l) => l.productId !== productId)),
       clear: () => setLines([]),
@@ -249,6 +252,25 @@ export function Portal({ kitchen, kitchens, account, children }: { kitchen: Kitc
     () => ({ draft, setDraft, followUp, setFollowUp, product, setProduct, send, focus, open: focus, panelOpen: panelOpen && !onOrderPage, setPanelOpen }),
     [draft, followUp, product, send, focus, panelOpen, onOrderPage],
   );
+  useEffect(() => {
+    toSheet.current = (p, packs) => {
+      void submit({ door: "typed", via: "tap", action: { type: "sheet_add", productId: p.id, packs: Math.max(1, Math.round(packs)) }, label: THREAD_HOME_TEXT[lang].addWords(shortProduct(p.name), packs), lang });
+      if (!onOrderPage) setPanelOpen(true);
+    };
+  }, [submit, lang, onOrderPage]);
+  // A way into the agent from a link (the Order entry, the old Order page): ?agent=open, or ?agent=product:<id> to
+  // open it on that product's card.
+  useEffect(() => {
+    const want = new URLSearchParams(window.location.search).get("agent");
+    if (!want) return;
+    queueMicrotask(() => setPanelOpen(true));
+    if (want.startsWith("product:")) void submit({ door: "typed", via: "tap", action: { type: "product_show", productId: want.slice(8, 88) }, label: THREAD_HOME_TEXT[lang].askAbout, lang });
+    const u = new URL(window.location.href);
+    u.searchParams.delete("agent");
+    window.history.replaceState(null, "", u.pathname + u.search + u.hash);
+    // once per page load
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // The kitchen as the buyer reads it: its name, its agent's name and the example requests in the buyer's language.
   // Display only; `by` (the ledger author) and everything sent to the server stay as the server wrote them.
@@ -465,6 +487,14 @@ function Header() {
           <ul className="-ml-3 flex min-w-0 flex-1 gap-1 overflow-x-auto whitespace-nowrap">
             {NAV.map((n) => {
               const active = isActive(pathname, base, n.href);
+              if (n.key === "order")
+                return (
+                  <li key={n.key}>
+                    <button type="button" onClick={agent.open} aria-expanded={agent.panelOpen} aria-controls="assistant" className={`flex min-h-10 items-center rounded-full px-3.5 text-[0.92rem] transition-colors duration-150 ${agent.panelOpen ? "bg-petrol-soft font-semibold text-petrol-deep" : "font-medium text-ink-soft hover:bg-surface hover:text-ink"}`}>
+                      {tx.nav[n.key]}
+                    </button>
+                  </li>
+                );
               return (
                 <li key={n.key}>
                   <Link
@@ -503,11 +533,12 @@ function WaitingPill({ href, label, full = false }: { href: string; label: strin
 
 // ---------- the phone: sections under the thumb ----------
 
-const TABS: { href: string; key: "home" | "order" | "catalogue"; icon: typeof House }[] = [
+// The agent's button in the middle is the way to order; the second tab is the kitchen's orders.
+const TABS: { href: string; key: "home" | "orders" | "catalogue"; icon: typeof House }[] = [
   { href: "", key: "home", icon: House },
-  { href: "/order", key: "order", icon: ClipboardList },
+  { href: "/orders", key: "orders", icon: ClipboardList },
 ];
-const TABS_AFTER: { href: string; key: "home" | "order" | "catalogue"; icon: typeof House }[] = [{ href: "/catalogue", key: "catalogue", icon: LayoutGrid }];
+const TABS_AFTER: { href: string; key: "home" | "orders" | "catalogue"; icon: typeof House }[] = [{ href: "/catalogue", key: "catalogue", icon: LayoutGrid }];
 
 /**
  * On a phone the sections sit in a bar at the bottom edge, with the agent in the middle: one tap opens its sheet.
@@ -526,7 +557,7 @@ function TabBar() {
   }
   const basketTotal = basket.lines.reduce((s, l) => s + (live.results[l.productId]?.offer?.unitPriceCents ?? 0) * l.packs, 0);
   const priced = basket.lines.length > 0 && basket.lines.every((l) => live.results[l.productId]?.offer);
-  const moreActive = ["/menu", "/orders", "/agent", "/basket"].some((sub) => isActive(pathname, base, sub));
+  const moreActive = ["/menu", "/agent", "/basket"].some((sub) => isActive(pathname, base, sub));
   // On a phone the thread is a screen of its own: going to another tab leaves it.
   const leaveThread = () => agent.panelOpen && agent.setPanelOpen(false);
   const tab = (href: string, label: string, Icon: typeof House, active: boolean) => (

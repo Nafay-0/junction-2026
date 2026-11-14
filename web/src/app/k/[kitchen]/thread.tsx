@@ -15,7 +15,6 @@ import {
   NoticeCard,
   OrderCard,
   PriceCard,
-  QuestionCard,
   RecordsCard,
   StepLines,
   Thread,
@@ -30,8 +29,13 @@ import { requestLabel, usePortal } from "./portal";
 import { nameIn } from "./shop";
 import { THREAD_PAGE_TEXT } from "./thread.text";
 import { WaitingGate } from "./thread-signoff";
-import { PlanCardView } from "./thread-plan";
+import { MenuCardView } from "./thread-menu";
+import { HomeCardView, OrderInPlace, PriceProof } from "./thread-home";
+import { RulesCardView } from "./thread-rules";
 import { OptionsDecision } from "./thread-options";
+import { PickerView, QuestionView, SheetView, isQuiet, sheetOrders, whenText } from "./thread-sheet";
+import { THREAD_SHEET_TEXT } from "./thread-sheet.text";
+import { SEND_PROBLEM } from "./thread-state";
 import { THREAD_WORDS } from "./thread-words.text";
 import { concernText, correctionLabel, fmtFor, gateReasons, memoryKey, memoryText, stepLabel } from "./thread-words";
 import { callOn, useVoiceMode } from "../../_channels/voice-mode";
@@ -52,6 +56,7 @@ type Tap = (action: ThreadAction, label: string) => void;
 export function ThreadLog({ className = "" }: { className?: string }) {
   const { thread: api, base } = usePortal();
   const tx = useText(THREAD_PAGE_TEXT);
+  const sx = useText(THREAD_SHEET_TEXT);
   const endRef = useRef<HTMLLIElement>(null);
   const t = api.thread;
   const voice = useVoiceMode();
@@ -71,14 +76,17 @@ export function ThreadLog({ className = "" }: { className?: string }) {
   }, [lastCards]);
   const gatedRequests = new Set(turns.flatMap((x) => (x.role === "agent" ? x.cards.flatMap((c) => (c.type === "gate" && c.requestId ? [c.requestId] : [])) : [])));
   const memory = memoryOnce(t);
+  // Edits made in place on a card (a stepper, a day, a swap) change the card; they are not bubbles of their own.
+  const quiet = new Set(turns.flatMap((x) => (x.role === "buyer" && isQuiet(x) ? [x.turnId] : [])));
+  const shown = turns.filter((x) => (x.role === "buyer" ? !quiet.has(x.turnId) : !(quiet.has(x.replyTo) && x.cards.length === 0 && x.status !== "failed")));
 
   return (
     <Thread label={tx.log} className={className}>
       {turns.length === 0 && api.pending.length === 0 && <Intro />}
-      {turns.map((x) =>
+      {shown.map((x) =>
         x.role === "buyer" ? <Buyer key={x.turnId} turn={x} /> : <Agent key={x.turnId} turn={x} tap={tap} busy={api.posting} gated={gatedRequests} base={base} thread={t!} memory={memory} />,
       )}
-      {api.pending.map((p) => (
+      {api.pending.filter((p) => !isQuiet(p)).map((p) => (
         <PendingTurn key={p.turnId} turn={p} />
       ))}
       {liveYou && (
@@ -90,7 +98,12 @@ export function ThreadLog({ className = "" }: { className?: string }) {
       {api.error && (
         <li>
           <p role="alert" className="rounded-xl bg-bad-soft px-4 py-3 text-[0.92rem]">
-            {tx.sendFailed(api.error)}
+            {api.error.startsWith(SEND_PROBLEM)
+              ? (() => {
+                  const [kind, what] = api.error.slice(SEND_PROBLEM.length).split(":") as ["busy" | "offline", "words" | "tap"];
+                  return sx.sendProblem[kind]?.[what] ?? tx.sendFailed(api.error);
+                })()
+              : tx.sendFailed(api.error)}
           </p>
         </li>
       )}
@@ -189,6 +202,7 @@ function Agent({ turn, tap, busy, gated, base, thread, memory }: { turn: AgentTu
 
 function CardView({ card, tap, busy, gated, base, turn, thread, memory }: { card: Card; tap: Tap; busy: boolean; gated: Set<string>; base: string; turn: AgentTurnT; thread: ThreadT; memory: (MemoryLine | string)[] }) {
   const tx = useText(THREAD_PAGE_TEXT);
+  const sx = useText(THREAD_SHEET_TEXT);
   const w = useText(THREAD_WORDS);
   const f = useFormat();
   const wf = fmtFor(f.lang);
@@ -240,25 +254,13 @@ function CardView({ card, tap, busy, gated, base, turn, thread, memory }: { card
         </>
       );
     case "question":
-      return (
-        <>
-          {card.questions.map((q) => (
-            <QuestionCard
-              key={q.id}
-              kind={tx.kind.question}
-              question={q.text}
-              choices={q.options.map((o) => ({ id: o.id, label: o.label }))}
-              chosen={card.answered?.[q.id]}
-              onChoose={busy || card.answered?.[q.id] ? undefined : (id) => tap({ type: "answer", requestId: card.requestId, questionId: q.id, optionId: id }, q.options.find((o) => o.id === id)?.label ?? id)}
-            />
-          ))}
-        </>
-      );
+      return <QuestionView card={card} tap={tap} busy={busy} />;
     case "options":
       return <OptionsDecision card={card} tap={tap} busy={busy} />;
     case "price": {
       const placed = gated.has(card.requestId);
       return (
+        <>
         <PriceCard
           kind={tx.kind.price}
           price={money(card.totalCents)}
@@ -268,9 +270,12 @@ function CardView({ card, tap, busy, gated, base, turn, thread, memory }: { card
           signed={tx.signed}
           actions={!placed && !turnClosedFor(thread, card.requestId) ? btn("go", tx.place, { type: "place", requestId: card.requestId }) : undefined}
         />
+        <PriceProof card={card} />
+        </>
       );
     }
     case "gate": {
+      if (card.orderId && card.outcome === "placed_alone" && sheetOrders(thread).has(card.orderId)) return null;
       const name = card.approver?.name ?? "";
       const g = tx.gate;
       const title = { waiting: g.waiting(name), approved: g.approved(name), refused: g.refused(f.ruleTitle(card.rule)), placed_alone: g.placed_alone, declined: g.declined, withdrawn: g.withdrawn, expired: g.expired }[card.outcome];
@@ -289,6 +294,8 @@ function CardView({ card, tap, busy, gated, base, turn, thread, memory }: { card
       );
     }
     case "order": {
+      // An order from the order sheet: the sheet already shows its lines, total and what happened; only the details stay.
+      if (sheetOrders(thread).has(card.orderId)) return <OrderInPlace card={card} />;
       const tone = card.status === "committed" ? "good" : card.status === "pending_approval" ? "waiting" : card.status === "rejected" ? "refused" : "neutral";
       const who = card.authorised.by === "agent" ? tx.byAgent : card.authorised.by === "person" ? tx.byPerson(card.authorised.name) : tx.waitingFor(card.authorised.name);
       return (
@@ -303,6 +310,14 @@ function CardView({ card, tap, busy, gated, base, turn, thread, memory }: { card
             href={`${base}/orders/${card.orderId}`}
             linkLabel={tx.seeOrder}
           />
+          {card.status === "committed" && card.takeBackUntil && (
+            <p className="px-1">
+              <button type="button" disabled={busy} className={buttonClass("secondary", "sm")} onClick={() => tap({ type: "withdraw", orderId: card.orderId }, sx.takeBackWords)}>
+                {sx.takeBack(whenText(card.takeBackUntil, f.day))}
+              </button>
+            </p>
+          )}
+          <OrderInPlace card={card} />
           {card.passedOver.length > 0 && (
             <ul className="space-y-1 px-1 text-[0.84rem] leading-snug text-ink-soft">
               {card.passedOver.map((p, i) => (
@@ -356,9 +371,17 @@ function CardView({ card, tap, busy, gated, base, turn, thread, memory }: { card
           )}
         </>
       );
-    case "plan":
-      return <PlanCardView card={card} busy={busy} tap={tap} />;
+    case "menu":
+      return <MenuCardView card={card} busy={busy} tap={tap} />;
+    case "sheet":
+      return <SheetView card={card} tap={tap} busy={busy} />;
+    case "alternatives":
+      return <PickerView card={card} tap={tap} busy={busy} thread={thread} />;
+    case "rules":
+      return <RulesCardView card={card} busy={busy} tap={tap} />;
     case "notice": {
+      // A tap on a card that has moved on (another tap, a newer version): said plainly, never as a rule.
+      if (card.rule === "intake_sequence") return <NoticeCard kind={tx.kind.notice} title={sx.stale.title} tone="plain">{sx.stale.body}</NoticeCard>;
       const missing = (card.missing ?? []).map((m) => (/what to buy/.test(m) ? w.notice.missingItem : w.notice.missingAmount));
       const body =
         f.lang === "en"
@@ -383,6 +406,8 @@ function CardView({ card, tap, busy, gated, base, turn, thread, memory }: { card
         </NoticeCard>
       );
     }
+    default:
+      return <HomeCardView card={card} tap={tap} busy={busy} />;
   }
 }
 
@@ -391,12 +416,12 @@ function turnClosedFor(thread: ThreadT, requestId: string): boolean {
   return thread.turns.some((x) => x.role === "agent" && x.cards.some((c) => c.type === "gate" && c.requestId === requestId));
 }
 
-/** Order an earlier order again: a `repeat` tap, rebuilt by plain code on the server (no model, the same gate). */
+/** Order an earlier order again: its lines on the order sheet (an `order_again` tap, plain code, no model), confirmed there. */
 function RepeatButton({ refId, label, wide = false }: { refId: string; label: string; wide?: boolean }) {
   const { thread } = usePortal();
   const tx = useText(THREAD_PAGE_TEXT);
   return (
-    <button type="button" disabled={thread.posting} className={`${buttonClass("quiet", "sm")}${wide ? " w-full justify-start text-left" : ""}`} onClick={() => void thread.submit({ door: "typed", via: "tap", action: { type: "repeat", ref: refId }, label: tx.repeatWords(`“${label}”`) })}>
+    <button type="button" disabled={thread.posting} className={`${buttonClass("quiet", "sm")}${wide ? " w-full justify-start text-left" : ""}`} onClick={() => void thread.submit({ door: "typed", via: "tap", action: { type: "order_again", ref: refId }, label: tx.repeatWords(`“${label}”`) })}>
       {wide ? `${tx.repeat}: ${label}` : tx.repeat}
     </button>
   );

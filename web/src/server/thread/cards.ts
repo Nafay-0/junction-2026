@@ -1,7 +1,7 @@
 import type { IntakeView } from "@/core/intake";
 import type { StructuredNeed } from "@/core/need";
 import type { OptionCard } from "@/core/options";
-import type { PublicOrder } from "@/core/orders";
+import { takeBackUntil, type PublicOrder } from "@/core/orders";
 import { decidingRule } from "@/core/policy";
 import type { Quote } from "@/core/quote";
 import type { AnomalyCard, GateCard, NoticeCard, OptionView, OptionsCard, OrderCard, PriceCard, QuestionCard, UnderstoodCard } from "./types";
@@ -172,6 +172,10 @@ export function orderCard(o: PublicOrder, passedOver: OrderCard["passedOver"] = 
     lines: o.lines.map((l) => ({ productId: l.productId, name: l.name, quantity: l.quantity, packSize: l.packSize, unit: l.unit, unitPriceCents: l.unitPriceCents, ...(l.substituteFor ? { substituteFor: l.substituteFor.productId } : {}) })),
     authorised,
     ...(o.confirmation ? { confirmation: o.confirmation } : {}),
+    ...((() => {
+      const until = takeBackUntil(o);
+      return until ? { takeBackUntil: until } : {};
+    })()),
     passedOver,
   };
 }

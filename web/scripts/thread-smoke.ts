@@ -50,15 +50,29 @@ async function main() {
         }
       });
     });
-    // "@plan": tap the open plan card's one confirmation.
-    const plan = text === "@plan" ? store.cards(store.peek(kitchen)!).map((x) => x.card).filter((c) => c.type === "plan" && c.state === "planned").at(-1) : undefined;
-    const body = plan?.type === "plan" ? { door: "typed", via: "tap", action: { type: "plan_order", planId: plan.planId }, label: "Order this plan" } : text.startsWith("{") ? JSON.parse(text) : { door: "typed", via: "typed", text };
+    // "@choose": the first menu offered; "@menu": put the open menu card on the order sheet; "@sheet": place the open order sheet.
+    const held = store.peek(kitchen);
+    const cards = held && text.startsWith("@") ? store.cards(held).map((x) => x.card) : [];
+    const menu = text === "@menu" || text === "@choose" ? cards.filter((c) => c.type === "menu" && !c.sheetId).at(-1) : undefined;
+    const sheet = text === "@sheet" ? cards.filter((c) => c.type === "sheet" && c.state === "editing").at(-1) : undefined;
+    const body =
+      menu?.type === "menu" && text === "@choose"
+        ? { door: "typed", via: "tap", action: { type: "menu_choose", planId: menu.planId, proposalId: menu.proposals[0]?.proposalId ?? "p1" }, label: "Cook this" }
+        : menu?.type === "menu"
+        ? { door: "typed", via: "tap", action: { type: "menu_to_sheet", planId: menu.planId }, label: "Put on the order sheet" }
+        : sheet?.type === "sheet"
+          ? { door: "typed", via: "tap", action: { type: "sheet_place", sheetId: sheet.sheetId, version: sheet.version }, label: "Place the order" }
+          : text.startsWith("{")
+            ? JSON.parse(text)
+            : { door: "typed", via: "typed", text };
     const reply = await submitTurn(kitchen, body);
     agentTurnId = reply.agentTurnId;
     console.log(`       accepted in ${Date.now() - t0} ms`);
     await finished;
   }
   const t = store.peek(kitchen)!;
+  const rt0 = await (await import("@/server/runtime")).getRuntime();
+  for (const e of rt0.dock.ledger.entries({}).filter((x) => x.type === "agent" && (x.data as { event?: string }).event === "menu")) console.log("menu record:", JSON.stringify((e.data as Record<string, unknown>).shown), JSON.stringify((e.data as Record<string, unknown>).planner));
   console.log("\nledger agent entries:", (await (await import("@/server/runtime")).getRuntime()).dock.ledger.entries({}).filter((e) => e.type === "agent").length, "thread", t.threadId);
   process.exit(0);
 }

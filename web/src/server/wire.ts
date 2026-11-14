@@ -335,7 +335,7 @@ export const DockEventSchema = named(
   "DockEvent",
   z.looseObject({
     id: z.number().int().describe("Also the SSE event id; send it back as Last-Event-ID to resume."),
-    type: z.enum(["approval_requested", "approval_approved", "approval_declined", "approval_withdrawn", "approval_expired", "order_committed", "order_rejected"]),
+    type: z.enum(["approval_requested", "approval_approved", "approval_declined", "approval_withdrawn", "approval_expired", "order_committed", "order_rejected", "order_withdrawn"]),
     at: z.iso.datetime(),
     orgId: z.string().optional().describe("Absent on the public aggregated stream."),
     orderId: z.string().optional().describe("Absent on the public aggregated stream."),

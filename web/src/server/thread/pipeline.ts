@@ -1,3 +1,4 @@
+import { priceProof } from "./home";
 import { DockError } from "@/core/errors";
 import { RELAYED, type HumanVia, type IntakeView } from "@/core/intake";
 import { primaryLine, type KitchenProfile } from "@/core/kitchen";
@@ -159,6 +160,10 @@ export type ItemOutcome = {
   options?: { ref: string; optionId: string; title: string; totalCents: number; deliveryDate: string; match: string }[];
   concerns?: { message: string; choices: string[] }[];
   questions?: { text: string; choices: string[] }[];
+  /** An earlier order this one replaced ("make it 200" after the 100 was placed): taken back. */
+  replaced?: { orderId: string; status: string };
+  /** The words went on an order sheet to confirm (the usual, from the kitchen's recurring orders). */
+  sheet?: { sheetId: string; deliveryDate: string; lines: { name: string; packs: number }[]; totalCents: number };
 };
 
 function noticeFrom(err: unknown, ref: string, words: string): NoticeCard {
@@ -175,6 +180,29 @@ function noticeFrom(err: unknown, ref: string, words: string): NoticeCard {
     return { type: "notice", cardId: id, kind: "refused", message: err.message, ...(err.rule ? { rule: err.rule } : {}) };
   }
   return { type: "notice", cardId: cardId("notice", ref), kind: "error", message: "Something went wrong on our side. Try again.", retry: true };
+}
+
+/** "The usual", in the kitchen's languages. */
+const USUAL = /\b(the usual|usual order|as usual|tavalli\w*|tavanomai\w*|det vanliga|som vanligt|vanliga)\b/i;
+
+/** The recurring orders due next (one day: the soonest any is due), at their usual amounts, as one order sheet. */
+async function usualSheet(run: TurnRun, words: string): Promise<{ requestId: string; sheetId: string; deliveryDate: string; lines: { name: string; packs: number }[]; totalCents: number } | undefined> {
+  const { standing } = await import("@/server/kitchen-portal");
+  const { createSheet } = await import("./sheet");
+  const profile = await run.rt.kitchens.getProfile(run.session.mandate.issuer.orgId);
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Helsinki" }).format(new Date());
+  const due = standing(profile, today).filter((s) => s.nextDue);
+  const next = due.map((s) => s.nextDue!).sort()[0];
+  if (!next) return undefined;
+  const lines: { productId: string; packs: number }[] = [];
+  for (const s of due.filter((x) => x.nextDue === next)) {
+    const [p] = await run.rt.catalog.searchProducts({ ids: [s.product.productId], limit: 1 });
+    if (p && run.session.mandate.allowedCategories.includes(p.category)) lines.push({ productId: p.id, packs: Math.max(1, Math.ceil(s.usual.amount / p.packSize - 1e-9)) });
+  }
+  if (!lines.length) return undefined;
+  record(run, "usual", `"${words.slice(0, 80)}" named no product: the kitchen's recurring orders due ${next} go on the order sheet at their usual amounts.`, { day: next, lines });
+  const card = await createSheet(run, { lines, deliveryDate: next, text: words, asked: lines.map((l) => l.productId) });
+  return { requestId: card.requestId!, sheetId: card.sheetId, deliveryDate: card.deliveryDate, lines: card.lines.map((l) => ({ name: l.name, packs: l.packs })), totalCents: card.totalCents };
 }
 
 /**
@@ -206,6 +234,15 @@ export async function orderFromWords(run: TurnRun, words: string, earlier: Earli
       reading.done("several items: read one by one");
       record(run, "split_items", `The message names ${parts.length} items; each is read on its own: ${parts.map((x) => `"${x}"`).join(", ")}.`, { parts });
       return (await Promise.all(parts.map((x, i) => orderFromWords(run, x, [], { ...opts, item: i + 1 })))).flat();
+    }
+    // "The usual" with no product named: the kitchen's own records say what that is (its recurring orders due
+    // next, at their usual amounts), on the order sheet to confirm. Plain code, nothing guessed.
+    if (notice.kind === "incomplete" && notice.missing?.includes("what to buy") && !opts.item && USUAL.test(words)) {
+      const usual = await usualSheet(run, words).catch(() => undefined);
+      if (usual) {
+        reading.done("the usual, from your recurring orders");
+        return [{ words, requestId: usual.requestId, sheet: usual }];
+      }
     }
     reading.fail(err instanceof DockError ? err.code : undefined);
     run.store.card(run.thread, run.turnId, notice);
@@ -247,9 +284,19 @@ export async function openNeed(run: TurnRun, need: NeedInput, words: string, opt
     const res = await published<{ step: IntakeView }>(run, "submit_need", { need, by: byLine(run) });
     intake.done(res.step.state);
     run.requests.add(res.step.requestId);
+    let step0 = res.step;
+    if (opts.basedOn && (await noteReplacement(run, res.step.requestId, opts.basedOn.requestId))) {
+      // "Make it 200" is a repeat of the order it replaces by design: the repeat check's only question is answered by
+      // the buyer's own words (recorded as theirs, or as relayed), and that order goes back once the new one is placed.
+      const dup = step0.state === "needs_confirmation" && step0.concerns.length > 0 && step0.concerns.every((c) => c.code === "duplicate_recent" && c.confirmable);
+      if (dup) {
+        step0 = await run.rt.dock.intake.respondToConcerns(run.session, step0.requestId, { by: byLine(run), responses: step0.concerns.map((c) => ({ key: c.key, choice: "confirm" })) }, humanVia(run, words));
+        record(run, "replaces_repeat", `The repeat check on ${res.step.requestId} is the order it replaces: answered by the buyer's change "${words.slice(0, 80)}".`, {}, res.step.requestId);
+      }
+    }
     run.store.card(run.thread, run.turnId, { ...understood, requestId: res.step.requestId, memoryUsed: [...(opts.memoryLine ? [opts.memoryLine] : []), ...res.step.memoryUsed.map((m) => m.text)], memory: res.step.memoryUsed, ...(res.step.noticed?.length ? { notes: res.step.noticed.map((n) => ({ code: n.code, params: n.params })) } : {}) });
     if (res.step.memoryUsed.length) record(run, "memory_read", `Memory answered for this request: ${res.step.memoryUsed.map((m) => m.text).join("; ")}`, { lines: res.step.memoryUsed }, res.step.requestId);
-    return [await afterStep(run, res.step, words)];
+    return [await afterStep(run, step0, words)];
   } catch (err) {
     intake.fail(err instanceof DockError ? err.code : undefined);
     const notice = noticeFrom(err, opts.ref, words);
@@ -358,12 +405,14 @@ export async function placeQuoted(run: TurnRun, s: IntakeView, words: string, pa
   const out: ItemOutcome = { words, requestId: s.requestId, state: s.state };
   const price = priceCard(s);
   if (price) {
+    // The proof opens in place: the signed quote and the signed claims it rests on, checked in the browser.
+    if (s.quote) price.proof = await priceProof(run, s.quote.quoteToken, s.quote.quote.evidence).catch(() => undefined);
     run.store.card(run.thread, run.turnId, price);
     run.facts.push(price);
   }
   // Only an order inside the mandate goes alone. A quote the gate would send to a person waits for the buyer's word.
   if (alone && s.quote?.policyPreview.outcome !== "auto_approve") return out;
-  const gate = step(run, "gate", "The gate checks the order against your mandate");
+  const gate = step(run, "gate", "Checking the order against your rules");
   let order: PublicOrder;
   try {
     order = (await published<{ order: PublicOrder }>(run, "place_order", { requestId: s.requestId })).order;
@@ -389,14 +438,49 @@ export async function placeQuoted(run: TurnRun, s: IntakeView, words: string, pa
   run.store.card(run.thread, run.turnId, orderCard(order, passed));
   mark(run, order.status === "pending_approval" ? "waiting" : "placed");
   out.placed = { orderId: order.orderId, status: order.status, totalCents: order.totalCents, ...(order.approval ? { approver: order.approval.approver.name } : {}) };
+  const replaced = await replaceEarlier(run, s.requestId, order);
+  if (replaced) out.replaced = replaced;
   return out;
+}
+
+// ---------- a change to an order already placed ----------
+
+const replacesOf = (run: TurnRun): Record<string, string> => ((run.thread as unknown as { replaces?: Record<string, string> }).replaces ??= {});
+
+/**
+ * "Make it 200" after the 100 was placed: the new request replaces that order. Noted when the change is read, so the
+ * new order, once placed (alone or by the buyer's tap), takes the old one back: one order stands, never both.
+ * Only an order that can still go back: waiting for an OK, or placed and before its cut-off with a signed-in person.
+ */
+async function noteReplacement(run: TurnRun, requestId: string, earlierRequestId: string): Promise<boolean> {
+  const { takeBackUntil } = await import("@/core/orders");
+  const old = (await run.rt.dock.listOrders()).find((o) => o.requestId === earlierRequestId && o.orgId === run.session.mandate.issuer.orgId && (o.status === "pending_approval" || (o.status === "committed" && !!run.person && !!takeBackUntil(o))));
+  if (!old) return false;
+  replacesOf(run)[requestId] = old.orderId;
+  record(run, "replaces", `The new request ${requestId} changes order ${old.orderId}: placing it takes that order back.`, { orderId: old.orderId }, requestId);
+  return true;
+}
+
+async function replaceEarlier(run: TurnRun, requestId: string, placed: PublicOrder): Promise<{ orderId: string; status: string } | undefined> {
+  const oldId = replacesOf(run)[requestId];
+  if (!oldId || (placed.status !== "committed" && placed.status !== "pending_approval")) return undefined;
+  delete replacesOf(run)[requestId];
+  try {
+    const o = await run.rt.dock.withdrawOrder(run.session, oldId, { reason: `replaced by order ${placed.orderId}`, ...(run.person ? { by: run.person.name } : {}) }, run.person ? { takeBack: { by: run.person.name } } : {});
+    run.store.card(run.thread, run.turnId, gateCard(o));
+    run.store.card(run.thread, run.turnId, orderCard(o));
+    record(run, "replaced", `Order ${oldId} was taken back: order ${placed.orderId} replaces it.`, { orderId: oldId, by: placed.orderId }, requestId);
+    return { orderId: oldId, status: o.status };
+  } catch {
+    return undefined; // its cut-off passed meanwhile: both stand, and the old one's card says so
+  }
 }
 
 // ---------- the buyer's own decisions ----------
 
 /** The card an action answers must still be open: a tap on an old card never acts on a newer request. */
 export async function checkOpen(run: TurnRun, a: ThreadAction): Promise<IntakeView | undefined> {
-  if (a.type === "remember" || a.type === "withdraw" || a.type === "retry" || a.type === "plan_order" || a.type === "repeat") return undefined;
+  if (a.type !== "concern" && a.type !== "answer" && a.type !== "choose" && a.type !== "place") return undefined;
   const s = await run.rt.dock.intake.get(run.session, a.requestId);
   const want = a.type === "concern" ? ["needs_confirmation"] : a.type === "answer" ? ["needs_input", "options_ready"] : a.type === "choose" ? ["options_ready"] : ["quoted"];
   if (!want.includes(s.state)) throw new DockError(409, "turn_card_stale", `That card has moved on: the request is now ${s.state.replace(/_/g, " ")}.`, "intake_sequence", { state: s.state });
@@ -410,7 +494,7 @@ export async function checkOpen(run: TurnRun, a: ThreadAction): Promise<IntakeVi
 export async function runAction(run: TurnRun, a: ThreadAction, words?: string): Promise<ItemOutcome[]> {
   const via = humanVia(run, words);
   const by = byLine(run);
-  if (words && a.type !== "plan_order") record(run, "heard", `Heard from the buyer before ${a.type}: "${words.slice(0, 300)}"`, { heard: words.slice(0, 1000), action: a }, "requestId" in a ? a.requestId : undefined);
+  if (words) record(run, "heard", `Heard from the buyer before ${a.type}: "${words.slice(0, 300)}"`, { heard: words.slice(0, 1000), action: a }, "requestId" in a ? a.requestId : undefined);
   const dock = run.rt.dock;
   switch (a.type) {
     case "concern": {
@@ -448,15 +532,12 @@ export async function runAction(run: TurnRun, a: ThreadAction, words?: string): 
     }
     case "withdraw": {
       const st = step(run, "gate", "Taking the order back");
-      const o = await dock.withdrawOrder(run.session, a.orderId, {});
+      // Waiting for sign-off: withdrawn. Already placed: taken back before the cut-off, by the kitchen's signed-in person only.
+      const o = await dock.withdrawOrder(run.session, a.orderId, run.person ? { by: run.person.name } : {}, run.person ? { takeBack: { by: run.person.name } } : {});
       st.done(o.status);
       run.store.card(run.thread, run.turnId, gateCard(o));
       run.store.card(run.thread, run.turnId, orderCard(o));
       return [{ words: words ?? "", requestId: o.requestId, placed: { orderId: o.orderId, status: o.status, totalCents: o.totalCents } }];
-    }
-    case "plan_order": {
-      const { orderPlan } = await import("./plan");
-      return orderPlan(run, a.planId, words);
     }
     case "repeat": {
       // The earlier order rebuilt by plain code: no model, and the same intake and gate as anything else.
@@ -471,6 +552,9 @@ export async function runAction(run: TurnRun, a: ThreadAction, words?: string): 
     }
     case "remember":
     case "retry":
+      return [];
+    default:
+      // Widget actions run in server/thread/widgets.ts (engine.ts routes them there).
       return [];
   }
 }

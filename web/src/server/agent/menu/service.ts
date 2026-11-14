@@ -1,6 +1,6 @@
 import type { AlternativesSource } from "@/core/alternatives";
 import type { Door } from "@/core/orders";
-import { MAX_LIVE_IDS_PER_CALL, type LiveStatus, type Product } from "@/core/catalog";
+import { MAX_LIVE_IDS_PER_CALL, usableOffer, type LiveOffer, type LiveStatus, type Product } from "@/core/catalog";
 import { DockError } from "@/core/errors";
 import { formatDay, localNow } from "@/core/kitchen";
 import { agentKeyOf } from "@/core/live-allowance";
@@ -9,7 +9,7 @@ import type { Decision } from "@/core/policy";
 import type { Quote } from "@/core/quote";
 import { formatEur, newId } from "@/core/util";
 import { onsiteSession } from "../../ops/onsite";
-import type { CallStats, DraftIngredient, DraftResult, MenuDraft } from "./draft";
+import type { CallStats, DraftIngredient, DraftOptions, DraftOutline, DraftResult, MenuDraft } from "./draft";
 import type { FixResult, FixRequest } from "./fixes";
 import { toFixOptions } from "./fixes";
 import type { MenuKitchen } from "./kitchens";
@@ -85,7 +85,7 @@ export type PlanDeps = {
   dock: Dock;
   catalog: MenuCatalog;
   now: () => Date;
-  draft: (text: string, ctx: MenuPromptContext, now: Date, onDish?: (ingredients: DraftIngredient[]) => void) => Promise<DraftResult & { recorded?: boolean }>;
+  draft: (text: string, ctx: MenuPromptContext, now: Date, onDish?: (ingredients: DraftIngredient[], dish?: { dishId: string; name: string }) => void, onOutline?: (outline: DraftOutline) => void, onDishPartial?: DraftOptions["onDishPartial"]) => Promise<DraftResult & { recorded?: boolean }>;
   fix?: (req: FixRequest, ctx: MenuPromptContext) => Promise<FixResult>;
   /** Which found products are the ingredient (a fast model judging names). Absent: the code's ranking stands. */
   pick?: (lines: PickLine[]) => Promise<PickResult>;
@@ -110,6 +110,18 @@ export class InMemoryPlanStore implements PlanStore {
     if (this.items.size > 200) this.items.delete(this.items.keys().next().value!);
   }
 }
+
+/**
+ * What a plan has so far, while it is being made (plan(…, { onProgress })): the outline (dishes, other menus offered),
+ * each dish's ingredients as it is written, then the lines matched to products before live prices. Additive: a
+ * caller that passes nothing gets the same plan at the same time.
+ */
+export type PlanProgress =
+  | { kind: "outline"; planId: string; outline: DraftOutline }
+  /** A dish still being written: the ingredients complete so far, unchecked (the checked list follows as `dish`). */
+  | { kind: "dish_partial"; planId: string; dishId: string; name: string; ingredients: Parameters<NonNullable<DraftOptions["onDishPartial"]>>[0] }
+  | { kind: "dish"; planId: string; dishId: string; name: string; ingredients: DraftIngredient[] }
+  | { kind: "matched"; planId: string; record: PlanRecord; view: PlanView; ms: number };
 
 /** Live products per plan: two per line at first, so one plan stays inside the agent's hourly allowance. */
 export const LIVE_PER_LINE = 2;
@@ -375,8 +387,8 @@ export function createPlanService(deps: PlanDeps) {
     return { record: p, view: computePlan(input(p, k, spent)) };
   }
 
-  async function plan(k: MenuKitchen, text: string, by: string): Promise<{ record: PlanRecord; view: PlanView }> {
-    return planFrom(k, text, by, deps.draft, { door: "menu", pantry: k.info.pantry });
+  async function plan(k: MenuKitchen, text: string, by: string, opts: { onProgress?: (e: PlanProgress) => void } = {}): Promise<{ record: PlanRecord; view: PlanView }> {
+    return planFrom(k, text, by, deps.draft, { door: "menu", pantry: k.info.pantry, ...(opts.onProgress ? { onProgress: opts.onProgress } : {}) });
   }
 
   /**
@@ -391,9 +403,19 @@ export function createPlanService(deps: PlanDeps) {
     return { ...r, notPlanned };
   }
 
-  async function planFrom(k: MenuKitchen, text: string, by: string, drafter: PlanDeps["draft"], opts: { door: Door; pantry: string[] }): Promise<{ record: PlanRecord; view: PlanView }> {
+  async function planFrom(k: MenuKitchen, text: string, by: string, drafter: PlanDeps["draft"], opts: { door: Door; pantry: string[]; onProgress?: (e: PlanProgress) => void }): Promise<{ record: PlanRecord; view: PlanView }> {
     const t0 = Date.now();
     const now = deps.now();
+    const planId = newId("plan");
+    const emit = (e: PlanProgress) => {
+      try {
+        opts.onProgress?.(e);
+      } catch {
+        // a watcher's failure never stops the plan
+      }
+    };
+    let outlined = false;
+    const dishesShown = new Set<string>();
     // Each dish's ingredients are searched (master data) and judged by name while the other dishes are still written.
     const allowed = allowedFor(k);
     const early = new Map<string, Promise<{ set: PlanInput["candidates"][string]; calls: CallStats[]; notes: string[] }>>();
@@ -409,10 +431,35 @@ export function createPlanService(deps: PlanDeps) {
       })();
       for (const [i, ing] of fresh.entries()) early.set(ing.key, job.then((r) => ({ set: r.sets[ing.key], calls: i === 0 ? r.calls : [], notes: i === 0 ? r.notes : [] })));
     };
-    const d = await drafter(text, promptContext(k), now, prepare);
+    const d = await drafter(
+      text,
+      promptContext(k),
+      now,
+      (ings, dish) => {
+        if (dish) {
+          dishesShown.add(dish.dishId);
+          emit({ kind: "dish", planId, dishId: dish.dishId, name: dish.name, ingredients: ings });
+        }
+        prepare(ings);
+      },
+      (outline) => {
+        outlined = true;
+        emit({ kind: "outline", planId, outline });
+      },
+      opts.onProgress
+        ? (ings, dish) => {
+            if (!dishesShown.has(dish.dishId)) emit({ kind: "dish_partial", planId, dishId: dish.dishId, name: dish.name, ingredients: ings });
+          }
+        : undefined,
+    );
+    // A drafter that hands on nothing early (recorded outputs, a list): the same steps, from the full draft.
+    if (d.draft.isFoodOrderRequest) {
+      if (!outlined) emit({ kind: "outline", planId, outline: { covers: d.draft.covers, serviceDate: d.draft.serviceDate, occasion: d.draft.occasion, dishes: d.draft.dishes.map((x) => ({ dishId: x.id, name: x.name, course: x.course, portion: x.portion, serviceDate: x.serviceDate })), alternatives: [], ms: d.ms } });
+      for (const x of d.draft.dishes) if (!dishesShown.has(x.id)) emit({ kind: "dish", planId, dishId: x.id, name: x.name, ingredients: x.ingredients });
+    }
     const at = now.toISOString();
     const p: PlanRecord = {
-      planId: newId("plan"),
+      planId,
       kitchen: k.info.slug,
       text,
       by,
@@ -485,6 +532,7 @@ export function createPlanService(deps: PlanDeps) {
     }
     await pick(p, late);
     p.timings.matchMs = Date.now() - m0;
+    if (opts.onProgress) emit({ kind: "matched", planId, record: structuredClone(p), view: computePlan(input(p, k, 0)), ms: Date.now() - t0 });
 
     // Live: a short list, batched. Two products a line when the plan is small, else one, so a plan, its second
     // chances and its proposals fit in the agent's hourly allowance.
@@ -728,7 +776,35 @@ export function createPlanService(deps: PlanDeps) {
     return finishView(p, k);
   }
 
-  return { plan, planItems, get, edit, quote, order, settled };
+  /**
+   * The gate's own preview of the plan as one order (orders.ts previewDecision: the same rules as a quote, on an
+   * unsigned quote never issued): every line being bought, merged by product, at the live offers the plan holds.
+   * Undefined when nothing is bought or the lines cannot be priced from those offers.
+   */
+  async function preview(k: MenuKitchen, planId: string, opts: { swap?: { lineId: string; optionId: string }; view?: PlanView } = {}): Promise<Decision | undefined> {
+    const p = await load(k, planId);
+    if (!p.requestId || p.state !== "planned") return undefined;
+    const view = opts.view ?? computePlan(input(p, k, 0));
+    const merged = new Map<string, { productId: string; quantity: number; substituteFor?: string }>();
+    for (const l of view.lines) {
+      if (!l.chosen || (l.status !== "ready" && l.status !== "needs_decision")) continue;
+      // "What if this line took that option instead": the same plan with one line's products swapped.
+      const option = opts.swap?.lineId === l.lineId ? l.alternatives.find((a) => a.optionId === opts.swap!.optionId) : undefined;
+      for (const q of (option ?? l.chosen).quoteLines) {
+        const prev = merged.get(q.productId);
+        if (prev) prev.quantity += q.quantity;
+        else merged.set(q.productId, { ...q });
+      }
+    }
+    if (!merged.size) return undefined;
+    const offers = Object.values(p.live.statuses).map(usableOffer).filter((o): o is LiveOffer => !!o);
+    return dock.previewDecision(await session(k), p.requestId, [...merged.values()], offers).catch(() => undefined);
+  }
+
+  /** The kitchen's menu agent as Dock sees it (its own mandate): for an order sheet made from a plan (server/thread/menu.ts). */
+  const agentSession = (k: MenuKitchen) => session(k);
+
+  return { plan, planItems, get, edit, quote, order, settled, preview, agentSession };
 }
 
 /** One line of a list, as a person reviewed it (the photo door's reviewed lines). */

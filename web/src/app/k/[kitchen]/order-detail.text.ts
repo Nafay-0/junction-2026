@@ -5,7 +5,7 @@ export const ORDER_DETAIL_TEXT = defineText({
   en: {
     loadFailed: "This order did not load",
     loading: "Loading the order",
-    status: { committed: "Placed", pending_approval: "Waiting for sign-off", declined: "Declined", rejected: "Refused by the gate" } as Record<string, string>,
+    status: { committed: "Placed", pending_approval: "Waiting for an OK", declined: "Declined", rejected: "Not allowed by your rules" } as Record<string, string>,
     at: (status: string, day: string, time: string) => `${status}, ${day} ${time}`,
     breadcrumb: "Breadcrumb",
     orders: "Orders",
@@ -53,7 +53,7 @@ export const ORDER_DETAIL_TEXT = defineText({
   fi: {
     loadFailed: "Tilausta ei voitu ladata",
     loading: "Ladataan tilausta",
-    status: { committed: "Lähetetty", pending_approval: "Odottaa hyväksyntää", declined: "Hylätty", rejected: "Portti torjui" } as Record<string, string>,
+    status: { committed: "Lähetetty", pending_approval: "Odottaa hyväksyntää", declined: "Hylätty", rejected: "Sääntösi eivät sallineet" } as Record<string, string>,
     at: (status: string, day: string, time: string) => `${status}, ${day} klo ${time}`,
     breadcrumb: "Murupolku",
     orders: "Tilaukset",
@@ -101,7 +101,7 @@ export const ORDER_DETAIL_TEXT = defineText({
   sv: {
     loadFailed: "Beställningen kunde inte laddas",
     loading: "Beställningen laddas",
-    status: { committed: "Skickad", pending_approval: "Väntar på godkännande", declined: "Avslagen", rejected: "Stoppad av grinden" } as Record<string, string>,
+    status: { committed: "Skickad", pending_approval: "Väntar på godkännande", declined: "Avslagen", rejected: "Dina regler tillät det inte" } as Record<string, string>,
     at: (status: string, day: string, time: string) => `${status}, ${day} kl. ${time}`,
     breadcrumb: "Brödsmulor",
     orders: "Beställningar",

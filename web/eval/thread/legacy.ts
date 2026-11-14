@@ -21,7 +21,7 @@ const QUESTION = /\?\s*$|^\s*(is|are|does|do|did|what|what's|which|why|how|when|
 const isQuestion = (t: string) => QUESTION.test(t);
 
 /** A dish or a menu goes to the store's menu page, as a buyer who knows the store would take it there. */
-const DISH = /\b(soup|stew|menu|recipe|for \d+ (people|guests|covers)|keitto|menu|resepti|hengelle)\b/i;
+const DISH = /\b(soup|stew|menu|recipe|lunch|for \d+ (people|guests|covers)|keitto|menu|resepti|hengelle|lounas)\b/i;
 
 export type RunResult = { outcome: Outcome; actions: Actions; marks: Marks; calls: number; cached: boolean[]; serverMarks?: Record<string, unknown>; streamed?: boolean };
 
