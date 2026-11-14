@@ -415,6 +415,19 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
           await finishTurn(run);
           return;
         }
+        // The demo guide ("what can I try?", "show me a stock-out"): its own words, by plain code, for a demo account's
+        // own signed-in person only (server/demo/thread.ts). Anything else falls through to the agent.
+        const demo = await demoWords(run, body.text!, body.lang ?? "en").catch((err) => {
+          console.error("[thread] demo guide", err);
+          return undefined;
+        });
+        if (demo) {
+          if (run.opening) first.done("the guide");
+          store.line(thread, run.turnId, demo);
+          store.mark(thread, run.turnId, "line", Date.now() - run.t0);
+          await finishTurn(run);
+          return;
+        }
         // A short answer to the backup question just said ("you choose", "the second one", "no"): recorded, nothing bought.
         const backedUp = await (await import("./backup")).answerBackupIn(run, body.text!, body.lang ?? "en").catch((err) => {
           console.error("[thread] backup answer", err);
@@ -565,6 +578,10 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
       store.mark(thread, run.turnId, "line", Date.now() - run.t0);
       line = "";
     }
+  }
+  if (run.demoSaid) {
+    store.line(thread, run.turnId, run.demoSaid);
+    line = "";
   }
   if (line) await showLine(run, line);
   // A menu planned this turn with a dish the kitchen's rules refuse: the planner's own checks say it, by name, with
@@ -1154,6 +1171,26 @@ async function carryOn(kitchen: Kitchen | string, h: Awaited<ReturnType<typeof r
   );
   e.queues.set(thread.threadId, next);
   await next;
+}
+
+/**
+ * The "Try everything" guide in the conversation: the next thing to try with the words to say, or a condition staged for
+ * the demo and said as staged. Only for a demo account's own kitchen and its own signed-in person; undefined otherwise.
+ */
+export async function demoWords(run: TurnRun, words: string, lang: "en" | "fi" | "sv", ask?: string): Promise<string | undefined> {
+  const { demoAskOf, demoNextForThread, demoStageForThread } = await import("@/server/demo/thread");
+  const what = ask ?? demoAskOf(words);
+  if (!what || !run.person || run.person.callOnly) return undefined;
+  // Only a demo account's own kitchen has the guide: anything else is for the agent.
+  const n = await demoNextForThread(run.rt, run.k.info.slug, lang);
+  if (!n) return undefined;
+  if (what === "next") {
+    record(run, "demo_next", `The guide's next thing to try was said (${n.rowId ?? "all done"}, ${n.done} of ${n.of} tried).`, { rowId: n.rowId, done: n.done, of: n.of });
+    return n.say;
+  }
+  const r = await demoStageForThread(run.rt, run.k.info.slug, what as Parameters<typeof demoStageForThread>[2], lang);
+  record(run, "demo_staged", r.ok ? `Staged for the demo from the conversation: ${what}.` : `Staging ${what} for the demo was not done.`, { kind: what, ok: r.ok });
+  return r.say;
 }
 
 /** A sentence the door's own code wrote (the read-back), shown as the agent's line after the same grounding check. */
