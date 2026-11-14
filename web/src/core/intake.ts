@@ -164,6 +164,9 @@ export type IntakeDeps = {
   liveLookup: (session: AgentSession, requestId: string, productIds: string[], deliveryDate: string | undefined, why: string) => Promise<LiveLookupResult>;
 };
 
+/** The family of a request whose words match nothing in the catalogue (refused at once, see open()). */
+export const UNMATCHED_FAMILY = "unmatched";
+
 /** Who settled the goal. Only a goal the buyer gave (now or as a stated rule) lets the agent choose a card alone. */
 const DECIDING_SOURCES = new Set(["request", "answer", "stated"]);
 
@@ -438,6 +441,15 @@ export function createIntakeFlow(deps: IntakeDeps) {
     return i;
   }
 
+  /** No option without looking anything up: the request names no product Dock can find, or a group the mandate does not allow. */
+  async function refuseUpFront(i: Intake, rule: "family_unknown" | "category_allowed", reason: string): Promise<Intake> {
+    i.state = "no_options";
+    i.notes = [reason];
+    log(i, "dock", `Dock found no option: ${reason}`, { step: "no_options", rule, reasons: [reason] });
+    await intakes.save(i);
+    return i;
+  }
+
   async function quoteOption(session: AgentSession, i: Intake, card: OptionCard, who: string, reason?: string, via: HumanVia = RELAYED): Promise<Intake> {
     const at = now().toISOString();
     const byAgent = who.startsWith("agent ");
@@ -468,13 +480,20 @@ export function createIntakeFlow(deps: IntakeDeps) {
       const body = parse(OpenIntakeInput, input);
       const { need, changes } = normaliseNeed(parse(NeedSchema, body.need));
       const profile = await profileOf(session);
-      const family = await resolveFamily(need, profile);
-      if (need.sameAsLastTime && !need.quantity && !lastOrder(profile, family)) {
+      // Nothing in the catalogue answers to the words: the request is still opened and refused in words a chef
+      // understands, so it shows on the wall, in the ledger and in the operations trace (never a bare 422).
+      let unmatched = false;
+      const family = await resolveFamily(need, profile).catch((err) => {
+        if (!(err instanceof DockError) || err.code !== "family_unknown") throw err;
+        unmatched = true;
+        return UNMATCHED_FAMILY;
+      });
+      if (!unmatched && need.sameAsLastTime && !need.quantity && !lastOrder(profile, family)) {
         throw new DockError(422, "nothing_to_repeat", `There is no earlier ${family} order to repeat. Send a quantity to see the options.`);
       }
       // What was asked for, for the gate: the product the buyer named, and the family. Anything else ordered under
       // this request is a substitute of it, whatever the agent declares (policy substitution_rule).
-      const request = await deps.openRequest(session, { text: need.text ?? describeNeed(need), neededBy: need.deliverBy, ...(need.deliverOn ? { deliverOn: need.deliverOn } : {}), ...(need.item.productId ? { productIds: [need.item.productId] } : {}), category: family });
+      const request = await deps.openRequest(session, { text: need.text ?? describeNeed(need), neededBy: need.deliverBy, ...(need.deliverOn ? { deliverOn: need.deliverOn } : {}), ...(need.item.productId ? { productIds: [need.item.productId] } : {}), ...(unmatched ? {} : { category: family }) });
       const at = now().toISOString();
       const i: Intake = {
         requestId: request.requestId,
@@ -498,7 +517,22 @@ export function createIntakeFlow(deps: IntakeDeps) {
         createdAt: at,
         updatedAt: at,
       };
-      log(i, agentActor(session), `Structured need (${family}): ${describeNeed(need)}.`, { step: "need", need, by: body.by, ...(changes.length ? { reasons: changes.map((c) => `In the catalogue's words: ${c}`) } : {}) });
+      log(i, agentActor(session), `Structured need (${unmatched ? "no product family found" : family}): ${describeNeed(need)}.`, { step: "need", need, by: body.by, ...(changes.length ? { reasons: changes.map((c) => `In the catalogue's words: ${c}`) } : {}) });
+      const what = need.item.text.trim() || "this";
+      if (unmatched) {
+        return view(await refuseUpFront(i, "family_unknown", `Dock found nothing called "${what}" in the wholesaler's catalogue (it searched product names in English, Finnish and Swedish). Try another word for it, or name the product.`));
+      }
+      const allowed = session.mandate.allowedCategories;
+      if (!allowed.includes(family)) {
+        const groups = allowed.map((c) => c.replaceAll("_", " "));
+        return view(
+          await refuseUpFront(
+            i,
+            "category_allowed",
+            `The kitchen's agent may not buy ${what}: its signed mandate covers ${groups.length > 1 ? `${groups.slice(0, -1).join(", ")} and ${groups.at(-1)}` : groups[0]} only, and ${what} is in another product group${family.startsWith("cat_") ? "" : ` (${family.replaceAll("_", " ")})`}. Whoever signs the kitchen's mandate can add that group; until then nothing is priced or ordered.`,
+          ),
+        );
+      }
       return view(await advance(session, i));
     },
 

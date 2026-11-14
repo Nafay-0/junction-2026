@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { compactVerify } from "jose";
 import { InMemoryOutbox } from "./approval";
-import { InMemoryCatalog, MeteredCatalog } from "./catalog";
+import { CatalogError, InMemoryCatalog, MeteredCatalog } from "./catalog";
 import { generateEd25519KeyPair, type KeyPair } from "./keys";
 import { Ledger } from "./ledger";
 import { createTrustRegistry, signMandate, type Mandate } from "./mandate";
@@ -387,5 +387,29 @@ describe("ProductHolds: the gate checks a hold as the named rule recall_hold", (
     const after = await d.decideApproval(msg.approvalId, { decision: "approve", proof: { kind: "link_token", token: tokenFrom(msg.link) } });
     expect(after.status).toBe("rejected");
     expect(after.decision.rules.find((r) => r.rule === "recall_hold")?.outcome).toBe("fail");
+  });
+});
+
+// QA F-SLOW-PARTNER-WAIT: when the wholesaler's live service fails, a refusal that needs no price is still given.
+describe("the gate when the wholesaler's live service does not answer", () => {
+  beforeEach(() => {
+    Object.assign(inner, {
+      getLiveStatus: async () => {
+        throw new CatalogError("live_unavailable", "The wholesaler's live price and availability service is slow or busy right now (timeout).", 20);
+      },
+    });
+  });
+
+  it("refuses a product the mandate forbids on its master data, naming the rule, without a live answer", async () => {
+    const req = await dock.openRequest(session, { text: "oat drink" });
+    await expect(dock.requestQuote(session, { requestId: req.requestId, lines: [{ productId: "PK-4001", quantity: 10 }] })).rejects.toMatchObject({ status: 422, code: "policy_rejected", rule: "forbidden_allergens" });
+    const refusal = ledger.entries({ requestId: req.requestId }).find((e) => e.type === "refusal");
+    expect(refusal?.data).toMatchObject({ rule: "forbidden_allergens" });
+    expect(refusal?.summary).toMatch(/product data alone/);
+  });
+
+  it("says a product the mandate allows cannot be priced now, with when to try again", async () => {
+    const req = await dock.openRequest(session, { text: "milk" });
+    await expect(dock.requestQuote(session, { requestId: req.requestId, lines: [{ productId: "VA-1001", quantity: 10 }] })).rejects.toMatchObject({ status: 503, code: "live_unavailable", details: { retryable: true, retryAfterSeconds: 20 } });
   });
 });

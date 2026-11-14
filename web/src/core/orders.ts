@@ -15,7 +15,7 @@ import {
 import type { EventPublisher } from "./events";
 import { CatalogError, ProductQuerySchema, scheduledOn, usableOffer, type LiveOffer, type LiveStatus, type MeteredCatalog, type Product } from "./catalog";
 import { ClaimStore, availabilityClaimInput, issueClaim, originClaimInput, priceClaimInput, refOf, type IssuedClaim } from "./claims";
-import { DockError, parse } from "./errors";
+import { DockError, isDockError, parse } from "./errors";
 import { InMemoryIntakeRepository, createIntakeFlow, recordCommittedOrder, type IntakeRepository } from "./intake";
 import { InMemoryKitchenRepository, localNow, type KitchenRepository } from "./kitchen";
 import { SIGN_ALG, type KeyPair } from "./keys";
@@ -23,7 +23,7 @@ import type { Ledger, LedgerHead } from "./ledger";
 import { LiveLookupAllowance, shareKeyOf } from "./live-allowance";
 import { MAX_LIVE_IDS_PER_CALL } from "./catalog";
 import { MandateError, verifyMandate, type Mandate, type TrustRegistry } from "./mandate";
-import { SPLIT_WINDOW_HOURS, decidingRule, evaluatePolicy, type Decision, type OrderDraftLine, type ProductHold, type RecentOrder } from "./policy";
+import { SPLIT_WINDOW_HOURS, decidingRule, evaluatePolicy, type Decision, type OrderDraftLine, type ProductHold, type RecentOrder, type RuleResult } from "./policy";
 export type { ProductHold } from "./policy";
 import { QuoteError, QuoteRequestLineSchema, buildQuote, signQuote, verifyQuote, type Quote, type QuoteLine } from "./quote";
 import { addDays, canonicalJson, formatEur, newId } from "./util";
@@ -303,6 +303,41 @@ function listLines(lines: { quantity: number; productId: string }[]): string {
 
 export const ORDER_TYP = "order+jws";
 
+/** Rules of the gate that read only a product's master data, never its price, stock or date. */
+const MASTER_DATA_RULES = new Set<RuleResult["rule"]>(["category_allowed", "required_attributes", "forbidden_allergens", "required_certificates"]);
+
+/**
+ * The gate's verdict on the products alone, for when no live price can be had: the same evaluatePolicy, on lines
+ * priced at zero, keeping only the rules that read master data. Undefined when those rules all pass.
+ */
+export function masterDataRefusal(mandate: Mandate, lines: { productId: string; quantity: number }[], products: Product[], at: Date): RuleResult | undefined {
+  const byId = new Map(products.map((p) => [p.id, p]));
+  const qlines: QuoteLine[] = [];
+  for (const l of lines) {
+    const p = byId.get(l.productId);
+    if (!p) continue;
+    qlines.push({
+      productId: p.id,
+      name: p.name,
+      category: p.category,
+      unit: p.unit,
+      packSize: p.packSize,
+      attributes: p.attributes,
+      allergens: p.allergens,
+      ...(p.allergenInfo ? { allergensDeclared: p.allergenInfo.declared } : {}),
+      certificates: p.certificates,
+      quantity: Math.max(1, Math.round(l.quantity)),
+      unitPriceCents: 0,
+      lineTotalCents: 0,
+      deliveryDate: at.toISOString().slice(0, 10),
+    });
+  }
+  if (!qlines.length) return undefined;
+  const quote = { quoteId: "master_data_check", buyerOrgId: mandate.issuer.orgId, agentId: mandate.agentId, mandateId: mandate.mandateId, requestId: "master_data_check", currency: "EUR" as const, lines: qlines, totalCents: 0, issuedAt: at.toISOString(), expiresAt: new Date(at.getTime() + 60_000).toISOString() };
+  const d = evaluatePolicy(mandate, { agentId: mandate.agentId, quote, lines: qlines.map(({ productId, quantity, unitPriceCents }) => ({ productId, quantity, unitPriceCents })) }, { now: at, spentThisWeekCents: 0, quoteAlreadyUsed: false });
+  return d.rules.find((r) => r.outcome === "fail" && MASTER_DATA_RULES.has(r.rule));
+}
+
 export function createDock(deps: DockDeps) {
   const { catalog, repo, ledger, trustedIssuers, wholesalerKey, notifier } = deps;
   const verifier = deps.verifier ?? linkTokenVerifier;
@@ -515,7 +550,11 @@ export function createDock(deps: DockDeps) {
         if (err instanceof CatalogError && err.code === "too_many_products") throw refuse(new DockError(400, err.code, err.message, "live_lookup_limit"), actor, { requestId });
         if (err instanceof CatalogError) {
           ledger.append({ type: "lookup", actor: "dock", requestId, summary: `The wholesaler's live price/availability service did not answer (${why}); nothing was looked up or refused.`, data: { source: "live", failed: true, code: err.code, productIds: ids } });
-          throw new DockError(503, "live_unavailable", `${err.message} This is the wholesaler's service, not a rule: try again in a minute.`, undefined, { retryable: true });
+          const retryAfterSeconds = Math.min(Math.max(err.retryAfterSeconds ?? 60, 5), 300);
+          // What Dock knows without the live service: the products it was about to price, from master data (free).
+          const known = (await catalog.searchProducts({ ids: ids.slice(0, MAX_LIVE_IDS_PER_CALL), limit: MAX_LIVE_IDS_PER_CALL })).map((p) => ({ productId: p.id, name: p.name }));
+          const knownText = known.length ? ` Showing what Dock knows without it: ${known.length} product${known.length > 1 ? "s" : ""} fit${known.length > 1 ? "" : "s"} the request (${known.slice(0, 3).map((k) => k.name).join("; ")}${known.length > 3 ? "; ..." : ""}), but price, stock and delivery date need the live service.` : "";
+          throw new DockError(503, "live_unavailable", `${err.message} This is the wholesaler's service, not a rule, and Dock stopped waiting for it.${knownText} Try again in ${retryAfterSeconds} s.`, undefined, { retryable: true, retryAfterSeconds, known });
         }
         throw err;
       }
@@ -785,7 +824,16 @@ export function createDock(deps: DockDeps) {
       let claims: IssuedClaim[] = [];
       try {
         const products = await catalog.searchProducts({ ids, limit: 100 });
-        const live = await liveLookup(session, requestId, ids, request.neededBy, "Dock asked live prices for a quote", { fresh: true, batch: true });
+        let live: LiveLookupResult;
+        try {
+          live = await liveLookup(session, requestId, ids, request.neededBy, "Dock asked live prices for a quote", { fresh: true, batch: true });
+        } catch (err) {
+          // The wholesaler's service is slow or down: a refusal that needs no price (category, attributes, allergens,
+          // certificates, read from master data) is still the gate's answer, not "try again later".
+          const refused = isDockError(err) && err.code === "live_unavailable" ? masterDataRefusal(session.mandate, lines, products, now()) : undefined;
+          if (refused) throw refuse(new DockError(422, "policy_rejected", `${refused.reason} Decided on the product data alone: the wholesaler's live service did not answer, and no price would change this.`, refused.rule), agentActor(session), { requestId });
+          throw err;
+        }
         const offers = live.offers.map((o) => scheduledOn(o, request.deliverOn));
         // Say why a line cannot be quoted, in the partner's terms (a passed cut-off, a sales block, no price).
         for (const l of lines) {

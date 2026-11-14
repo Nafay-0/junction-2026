@@ -158,6 +158,8 @@ export class CatalogError extends Error {
   constructor(
     readonly code: CatalogErrorCode,
     message: string,
+    /** live_unavailable: when the wholesaler's service says (or Dock judges) it is worth trying again, in seconds. */
+    readonly retryAfterSeconds?: number,
   ) {
     super(message);
     this.name = "CatalogError";
