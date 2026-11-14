@@ -35,9 +35,23 @@ export const EventInput = z.object({
   full: z.boolean().optional().describe("Also plan a replacement dish where nothing replaces an ingredient (slower, over 60 s)."),
   by,
 });
+export const IdeasInput = z.object({
+  text: z.string().min(1).max(2000).describe("What the buyer is looking for: occasion, style, diet, budget, how many, the day."),
+  have: z.string().max(500).optional().describe("What the kitchen has, in words."),
+  by,
+});
+export const DishInput = z.object({
+  ideasId: z.string().min(1).optional(),
+  dishId: z.string().min(1).optional(),
+  planId: z.string().min(1).optional().describe("A plan already made: its three groups again."),
+  covers: z.number().int().positive().max(20_000).optional(),
+  deliverBy: z.iso.date().optional(),
+  by,
+});
 export const OrderMenuInput = z.object({
   planId: z.string().min(1),
   choices: z.array(z.object({ lineId: z.string().min(1), optionId: z.string().min(1) })).max(20).optional().describe("The buyer's pick per ingredient that cannot arrive. Left out: the best option, only where no sign-off is needed."),
+  acceptPartial: z.boolean().optional().describe("Only on the buyer's own words: order what can be bought when the plan is not the whole dish."),
   by,
 });
 
@@ -54,6 +68,33 @@ const withDetails = (text: string, a: { covers?: number; deliverBy?: string; hav
   [text, a.covers ? `${a.covers} covers.` : "", a.deliverBy ? `Service day ${a.deliverBy}.` : "", a.have?.length ? `We have ${a.have.join(", ")}.` : ""].filter(Boolean).join(" ");
 
 export const MENU_TOOLS = [
+  tool({
+    name: "menu_ideas",
+    title: "Dish ideas this kitchen can buy",
+    description: "3-4 dishes that fit, each with a reason and checked against master data and the kitchen's rules before it is offered (product groups, allergens, claims, nutrition, sold at all): buyable first; if not, which ingredients and why. No live price.",
+    input: IdeasInput,
+    output: z.object({ result: z.looseObject({ ideasId: z.string() }), nextStep }),
+    readOnly: true,
+    run: async (ctx, a) => {
+      const { k } = await kitchenOf(ctx);
+      const { menuIdeas } = await import("../agent/menu/thread");
+      const r = await menuIdeas(k, a.text, who(ctx, a.by), "en", a.have ? { have: a.have } : {});
+      return { result: r, nextStep: `Offer the buyer the ideas (buyable first; say what an unbuyable one needs). On their pick, plan_dish with ideasId ${r.ideasId} and its dishId.` };
+    },
+  }),
+  tool({
+    name: "plan_dish",
+    title: "Plan a dish: on hand, to order, cannot get",
+    description: "The picked idea (ideasId, dishId) or a plan (planId) as the dish: every ingredient with its amount in one group (on hand with basis, to order with product, packs, live price and day, cannot get with the reason), the total to order, per cover only when complete. Buys nothing.",
+    input: DishInput,
+    output: z.object({ result: z.looseObject({ planId: z.string(), complete: z.boolean() }), nextStep }),
+    run: async (ctx, a) => {
+      const { k } = await kitchenOf(ctx);
+      const { pickIdea, dishGroups } = await import("../agent/menu/thread");
+      const r = a.planId ? await dishGroups(k, a.planId) : await pickIdea(k, a.ideasId ?? "", a.dishId ?? "", who(ctx, a.by), "en", { ...(a.covers ? { covers: a.covers } : {}), ...(a.deliverBy ? { date: a.deliverBy } : {}) });
+      return { result: r, nextStep: r.complete ? `Tell the buyer the three groups and the total. On their yes, order_menu with planId ${r.planId}.` : `Not the whole dish: tell the buyer ${r.covered} of ${r.of} ingredients can be bought and what cannot, and why. Order only with their own words for part (order_menu acceptPartial: true).` };
+    },
+  }),
   tool({
     name: "plan_seasonal_menu",
     title: "Plan a menu around what is in season",
@@ -95,7 +136,7 @@ export const MENU_TOOLS = [
     output: z.looseObject({ sheet: z.looseObject({}), order: z.looseObject({ orderId: z.string(), status: z.string() }), nextStep }),
     run: async (ctx, a) => {
       const { scenarios, k } = await kitchenOf(ctx);
-      const sheet = await scenarios.sheetOf(k, a.planId, a.choices ?? "best", { by: who(ctx, a.by), agentAlone: true });
+      const sheet = await scenarios.sheetOf(k, a.planId, a.choices ?? "best", { by: who(ctx, a.by), agentAlone: true, ...(a.acceptPartial ? { acceptPartial: true } : {}) });
       const placed = await scenarios.order(k, a.planId, sheet);
       return { sheet, quote: placed.quote, order: placed.order, nextStep: nextStepForOrder(placed.order) };
     },

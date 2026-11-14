@@ -6,6 +6,7 @@ import { localNow } from "@/core/kitchen";
 import { yesOrNo } from "../../channels/speech";
 import type { EventResult, SeasonalResult, SheetLines, SubOption } from "./scenarios";
 import { MENU_SAY_TEXT } from "./say.text";
+import { DockError } from "@/core/errors";
 import { saidHave, saidOnHand } from "@/core/on-hand";
 
 /**
@@ -65,11 +66,15 @@ export function scenarioOf(words: string): ScenarioKind | undefined {
   return undefined;
 }
 
-async function kit(slug: string) {
+/** A kitchen by its slug (the store's), or an outside agent's own kitchen (MCP, REST) passed as it is. */
+export type KitchenRef = string | import("./kitchens").MenuKitchen;
+const slugOf = (k: KitchenRef) => (typeof k === "string" ? k : k.info.slug);
+
+async function kit(slug: KitchenRef) {
   const { menuScenarios } = await import("./runtime");
   const { resolveMenuKitchen } = await import("./kitchens");
   const { rt, service, scenarios } = await menuScenarios();
-  const kitchen = await resolveMenuKitchen(slug, rt);
+  const kitchen = typeof slug === "string" ? await resolveMenuKitchen(slug, rt) : slug;
   if (!kitchen) throw new Error(`no menu kitchen ${slug}`);
   return { rt, service, scenarios, kitchen };
 }
@@ -390,7 +395,7 @@ const ALLERGEN_WORDS_SAID: [RegExp, string][] = [
  * swapped ("use oat cream instead of the whipping cream"), a dish dropped ("drop the dessert"). Only what the change
  * touches is searched and priced again; the rest stays. Returns what changed and the new total, said in one sentence.
  */
-export async function changeMenu(slug: string, planId: string, words: string, by: string, lang: Lang = "en"): Promise<MenuChange> {
+export async function changeMenu(slug: KitchenRef, planId: string, words: string, by: string, lang: Lang = "en"): Promise<MenuChange> {
   const { service, kitchen } = await kit(slug);
   const before = await service.get(kitchen, planId);
   const p = before.record;
@@ -494,7 +499,7 @@ export type IncompleteChoices = {
  * through the mandate reissue), order only what can be bought (named; on a yes, actOnScenario with
  * `{ kind: "partial" }`), or plan a dish that can be bought in full (`ideas: true` drafts and checks one or two; slower).
  */
-export async function incompleteChoices(slug: string, planId: string, lang: Lang = "en", opts: { ideas?: boolean; by?: string } = {}): Promise<IncompleteChoices> {
+export async function incompleteChoices(slug: KitchenRef, planId: string, lang: Lang = "en", opts: { ideas?: boolean; by?: string } = {}): Promise<IncompleteChoices> {
   const { service, kitchen } = await kit(slug);
   const { record, view } = await service.get(kitchen, planId);
   const t = MENU_SAY_TEXT[lang];
@@ -535,14 +540,14 @@ const IDEAS = new Map<string, { slug: string; draft: import("./draft").MenuDraft
  * master data and the kitchen's rules (product groups, allergens and claims, nutrition, sold at all): buyable dishes
  * first; one that is not says which ingredients and why. One model call for the dishes; no live price.
  */
-export async function menuIdeas(slug: string, words: string, by: string, lang: Lang = "en", opts: { have?: string; count?: number } = {}): Promise<{ ideasId: string; ideas: MenuIdea[]; ms: number; say: string; ask: string }> {
+export async function menuIdeas(slug: KitchenRef, words: string, by: string, lang: Lang = "en", opts: { have?: string; count?: number } = {}): Promise<{ ideasId: string; ideas: MenuIdea[]; ms: number; say: string; ask: string }> {
   const { service, kitchen } = await kit(slug);
   const have = saidHave(`${words}. ${opts.have ? `We have ${opts.have}` : ""}`).map((x) => x.item);
   const n = Math.min(4, Math.max(2, opts.count ?? 4));
   const text = `${words}\n\nSuggest ${n} different dishes that fit this, each a separate dish (not a menu of courses), for a professional kitchen. Prefer dishes made from what the kitchen's product groups cover${have.length ? ` and that use what it already has: ${have.join(", ")}` : ""}. In assumptions, give one short reason per dish, in the same order, starting with the dish name.`;
   const r = await service.ideaCheck(kitchen, text.slice(0, 3900));
   const ideasId = `ideas_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-  IDEAS.set(ideasId, { slug, draft: r.draft, words, have });
+  IDEAS.set(ideasId, { slug: slugOf(slug), draft: r.draft, words, have });
   if (IDEAS.size > 100) IDEAS.delete(IDEAS.keys().next().value!);
   const t = MENU_SAY_TEXT[lang];
   const reasonOf = (name: string) => r.draft.assumptions.find((a) => fold(a).includes(fold(name).split(" ")[0])) ?? "";
@@ -559,12 +564,12 @@ export async function menuIdeas(slug: string, words: string, by: string, lang: L
 }
 
 /** The idea the buyer picked, planned as the dish (no model call for the recipe; live prices now), with its three groups. */
-export async function pickIdea(slug: string, ideasId: string, dishId: string, by: string, lang: Lang = "en", opts: { covers?: number; date?: string } = {}): Promise<DishGroups> {
+export async function pickIdea(slug: KitchenRef, ideasId: string, dishId: string, by: string, lang: Lang = "en", opts: { covers?: number; date?: string } = {}): Promise<DishGroups> {
   const { service, kitchen } = await kit(slug);
   const idea = IDEAS.get(ideasId);
-  if (!idea || idea.slug !== slug) throw Object.assign(new Error("Those ideas are no longer open: ask for ideas again."), { code: "ideas_not_found", status: 404 });
+  if (!idea || idea.slug !== slugOf(slug)) throw new DockError(404, "ideas_not_found", "Those ideas are no longer open: ask for ideas again.");
   const dish = idea.draft.dishes.find((d) => d.id === dishId);
-  if (!dish) throw Object.assign(new Error("No such idea."), { code: "idea_not_found", status: 404 });
+  if (!dish) throw new DockError(404, "idea_not_found", "No such idea.");
   const draft = { ...idea.draft, ...(opts.covers ? { covers: opts.covers } : {}), ...(opts.date ? { serviceDate: opts.date } : {}), dishes: [{ ...dish, id: "dish_1" }] };
   const planned = await service.planFromDraft(kitchen, `${dish.name}: ${idea.words}`.slice(0, 2000), by, draft);
   await service.settled(planned.record.planId);
@@ -604,7 +609,7 @@ export type DishGroups = {
  * recipe's own words in the reply's language (product names belong to the order lines), the total for what is to
  * order, the price per cover only when the plan is complete, and the sentence that says N of M when it is not.
  */
-export async function dishGroups(slug: string, planId: string, lang: Lang = "en"): Promise<DishGroups> {
+export async function dishGroups(slug: KitchenRef, planId: string, lang: Lang = "en"): Promise<DishGroups> {
   const { service, kitchen } = await kit(slug);
   const { record, view } = await service.get(kitchen, planId);
   return groupsOf(record, view, lang);
