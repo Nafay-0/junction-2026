@@ -144,6 +144,10 @@ describe("real responses match the documented status codes and schemas", () => {
     expect((await agent("GET", `/api/v1/orders/${pending.body.order.orderId}`)).body.order.status).toBe("committed");
     expect((await agent("GET", "/api/v1/orders/ord_nope")).status).toBe(404);
     expect((await agent("GET", `/api/v1/orders/${pending.body.order.orderId}?wait=1`)).body).toMatchObject({ decided: true });
+    const tres = await agent("GET", `/api/v1/orders/${pending.body.order.orderId}/timeline`);
+    const timeline = tres.body.timeline;
+    expect(timeline).toMatchObject({ status: "committed", complete: { ok: true } });
+    expect(timeline.steps.map((s: { ledger: { type: string } }) => s.ledger.type)).toEqual(expect.arrayContaining(["request", "quote", "decision", "approval_requested", "approval", "order"]));
     expect((await agent("GET", "/api/v1/orders?status=committed")).body.orders.length).toBeGreaterThan(0);
     const looked = await agent("POST", "/api/v1/lookup", { text: "milk", requiredClaims: ["lactose_free"], quantity: { amount: 100, unit: "L" }, limit: 3 });
     expect(looked.status, JSON.stringify(looked.body).slice(0, 400)).toBe(200);

@@ -372,6 +372,16 @@ export const API: Operation[] = [
   },
   {
     method: "get",
+    path: "/api/v1/orders/{orderId}/timeline",
+    operationId: "getOrderTimeline",
+    summary: "An order's whole timeline",
+    auth: true,
+    description: "The order from the buyer's words to now, one step per row: how the request was read, lookups, options and the choice, the signed quote, the gate's rules, the sign-off (who, how, after how long), the order, its receipt and the check of its signature, and what came after (taken back, a substitute, a backup, the receipt email). Each step names who or what acted (`actor.kind`: agent, person, system, wholesaler), marks the agent's own choices (`agentChoice`) and carries its ledger entry (`ledger.seq`, `ledger.hash`). The wholesaler's operations read the same timeline, with the kitchen's private memory left out.",
+    params: [{ name: "orderId", in: "path", schema: z.string(), required: true }],
+    responses: { 200: { description: "The timeline.", schema: z.object({ timeline: z.looseObject({ orderId: z.string(), status: z.string(), source: z.string(), steps: z.array(z.looseObject({ seq: z.number(), at: z.string(), title: z.string(), actor: z.looseObject({ kind: z.string(), name: z.string() }), agentChoice: z.boolean() })) }) }) }, 404: err("No such order for this organisation."), ...AUTH_ERRORS },
+  },
+  {
+    method: "get",
     path: "/api/v1/orders",
     operationId: "listOrders",
     summary: "List this organisation's orders",

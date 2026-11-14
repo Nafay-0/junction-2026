@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { MessagesSquare, Activity, Mail, Bot, Circle, CirclePause, Ellipsis, Eye, FileCheck2, History, LogOut, Radar, Route, Server, ShieldCheck, SlidersHorizontal, Store, Tag, Users, type LucideIcon } from "lucide-react";
+import { ClipboardList, MessagesSquare, Activity, Mail, Bot, Circle, CirclePause, Ellipsis, Eye, FileCheck2, History, LogOut, Radar, Route, Server, ShieldCheck, SlidersHorizontal, Store, Tag, Users, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../../_client/api";
 import { useLive } from "../../_client/use-live";
@@ -20,6 +20,7 @@ const modelsLow = (m: Models) => !m.enabled || m.maxUsd - m.usd < m.maxUsd * 0.1
 
 const NAV: { href: string; label: string; what: string; key: string }[] = [
   { href: "/ops", label: "Live", what: "Agents at the door", key: "l" },
+  { href: "/ops/orders", label: "Orders", what: "Every order and its whole life", key: "d" },
   { href: "/ops/trace", label: "Trace", what: "One request, step by step", key: "t" },
   { href: "/ops/conversation", label: "Conversations", what: "A kitchen and its agent, turn by turn", key: "v" },
   { href: "/ops/safeguards", label: "Safeguards", what: "The rule book as it runs", key: "s" },
@@ -40,6 +41,7 @@ const NAV: { href: string; label: string; what: string; key: string }[] = [
 const ICON: Record<string, LucideIcon> = {
   "/ops": Activity,
   "/ops/trace": Route,
+  "/ops/orders": ClipboardList,
   "/ops/conversation": MessagesSquare,
   "/ops/safeguards": ShieldCheck,
   "/ops/radar": Radar,
@@ -55,7 +57,7 @@ const ICON: Record<string, LucideIcon> = {
   "/ops/accounts": Store,
 };
 /** The four sections in the phone's tab bar; the rest are one tap further, under More. */
-const PRIMARY = ["/ops", "/ops/trace", "/ops/control", "/ops/safeguards"];
+const PRIMARY = ["/ops", "/ops/orders", "/ops/trace", "/ops/control"];
 
 /** Shown at the rail's foot on every operations page. */
 export const OPS_DEMO_NOTE = "Demo on synthetic data, built for the Junction 2026 Valio Aimo challenge. Not the wholesaler's own system.";

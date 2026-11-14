@@ -705,7 +705,8 @@ export function decideFinding(rt: Runtime, f: Finding, d: FindingDecision) {
   const s = stateOf(rt);
   saveFinding(s, { ...f, state: "decided", decision: d });
   ledger(rt, {
-    actor: d.via === "auto-renew" ? "dock" : `buyer:${f.orgId}`,
+    // The agent's own choices (auto-renew, the backup a person lined up earlier) are not the buyer's.
+    actor: d.via === "auto-renew" || d.via === "backup" ? "dock" : `buyer:${f.orgId}`,
     ...(d.requestId ? { requestId: d.requestId } : {}),
     ...(d.orderId ? { orderId: d.orderId } : {}),
     summary: `${f.staged ? "STAGED: " : ""}${d.by} ${d.action === "kept" ? `kept ${f.product.name} for ${f.need.date} (no substitute)` : `chose ${d.productId} for ${f.need.date} instead of ${f.product.name}: ${d.action === "ordered_alone" ? "committed within the mandate" : d.action === "sent_for_sign_off" ? `sent to ${d.approver ?? "a person"} for sign-off` : d.action === "refused" ? `refused by the gate. ${d.note ?? ""}` : (d.note ?? "")}`} (via ${d.via}).`,

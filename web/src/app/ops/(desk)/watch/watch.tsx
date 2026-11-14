@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import type { Finding, Renewal, Stage, WatchView } from "@/server/watch/service";
 import { api } from "../../../_client/api";
@@ -148,7 +149,7 @@ function FindingCard({ f, now }: { f: Finding; now: number }) {
         <span className="tabular text-[0.84rem] text-ink-soft">{when(f.at, new Date(now))}</span>
       </div>
       <p className="mt-1 text-[0.9rem]">
-        {f.staged && <Badge tone="bad">Staged for the demo</Badge>} Needed {f.need.date} for {f.need.source === "order" ? `order ${f.need.orderId}` : "the recurring order"} ({f.need.amount} {f.need.unit}): {f.shortfall.reason === "later" ? `earliest ${f.shortfall.backOn}` : f.problems.join(", ").replaceAll("_", " ")}
+        {f.staged && <Badge tone="bad">Staged for the demo</Badge>} Needed {f.need.date} for {f.need.source === "order" && f.need.orderId ? <Link href={`/ops/orders/${f.need.orderId}`} className="text-petrol underline decoration-petrol/30 underline-offset-4">order {f.need.orderId}</Link> : "the recurring order"} ({f.need.amount} {f.need.unit}): {f.shortfall.reason === "later" ? `earliest ${f.shortfall.backOn}` : f.problems.join(", ").replaceAll("_", " ")}
         {f.shortfall.backOn ? `, back ${f.shortfall.backOn}` : ""}.
       </p>
       {f.substitutes.length === 0 ? (
@@ -170,7 +171,14 @@ function FindingCard({ f, now }: { f: Finding; now: number }) {
         {f.decision && (
           <span className="text-ink-soft">
             {f.decision.by}, {f.decision.via}
-            {f.decision.orderId ? ` · ${f.decision.orderId}` : ""}
+            {f.decision.orderId && (
+              <>
+                {" · "}
+                <Link href={`/ops/orders/${f.decision.orderId}`} className="text-petrol underline decoration-petrol/30 underline-offset-4">
+                  {f.decision.orderId}
+                </Link>
+              </>
+            )}
             {f.decision.approver ? ` · signer ${f.decision.approver}` : ""}
             {f.decision.note ? ` · ${f.decision.note}` : ""}
           </span>
@@ -249,7 +257,10 @@ function RenewalRow({ r, now }: { r: Renewal; now: number }) {
         {o?.substitute && <p className="text-[0.82rem]">Substitute: {o.substitute.name} ({o.substitute.insidePreferences ? "inside the kitchen's preferences" : "needs a person"})</p>}
         {o?.orderId && (
           <p className="text-[0.82rem] text-ink-soft">
-            {o.orderId} · {eur(o.totalCents)}
+            <Link href={`/ops/orders/${o.orderId}`} className="text-petrol underline decoration-petrol/30 underline-offset-4">
+              {o.orderId}
+            </Link>{" "}
+            · {eur(o.totalCents)}
             {o.approver ? ` · signer ${o.approver}` : ""}
           </p>
         )}
@@ -284,7 +295,12 @@ function Backups({ backups, now }: { backups: View["backups"]; now: number }) {
           </p>
           {b.used && (
             <p className="text-[0.84rem]">
-              {b.used.staged && <Badge tone="bad">Staged</Badge>} Used {when(b.used.at, new Date(now))}: {b.used.orderId ? `${b.used.orderId}, ${b.used.status}${b.used.totalCents ? `, ${eur(b.used.totalCents)}` : ""}${b.used.approver ? `, signer ${b.used.approver}` : ""}` : `refused: ${b.used.refused?.message ?? ""}`}
+              {b.used.staged && <Badge tone="bad">Staged</Badge>} Used {when(b.used.at, new Date(now))}: {b.used.orderId && (
+                <Link href={`/ops/orders/${b.used.orderId}`} className="text-petrol underline decoration-petrol/30 underline-offset-4">
+                  {b.used.orderId}
+                </Link>
+              )}{" "}
+              {b.used.orderId ? `${b.used.status}${b.used.totalCents ? `, ${eur(b.used.totalCents)}` : ""}${b.used.approver ? `, signer ${b.used.approver}` : ""}` : `refused: ${b.used.refused?.message ?? ""}`}
             </p>
           )}
         </li>
