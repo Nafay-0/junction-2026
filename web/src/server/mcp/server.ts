@@ -23,6 +23,10 @@ import type { IntakeView } from "@/core/intake";
 import { answerLinkFor, needsBuyer } from "../answer-links";
 import { publicBaseUrl } from "../config";
 import { TOOLS, type DockTool } from "./tools";
+import { OFFER_TOOLS } from "./offer-tools";
+
+/** What the MCP door publishes: the ordering tools, then the answers to the wholesaler's offers (offer-tools.ts). */
+export const PUBLISHED_TOOLS = [...TOOLS, ...OFFER_TOOLS] as unknown as DockTool[];
 
 /**
  * Dock over the Model Context Protocol, Streamable HTTP, served statelessly: every HTTP request gets a
@@ -275,7 +279,7 @@ export function shallowSchema(s: Record<string, unknown>, depth = 0): Record<str
 
 export function buildMcpServer(rt: Runtime, req?: Request, via?: ConnectorCall): McpServer {
   const server = new McpServer(MCP_SERVER_INFO, { instructions: MCP_INSTRUCTIONS });
-  for (const tool of TOOLS) {
+  for (const tool of PUBLISHED_TOOLS) {
     server.registerTool(
       tool.name,
       {
