@@ -100,6 +100,8 @@ function isoInText(iso: string): string {
 export function fi(text: string | undefined | null): string {
   if (!text) return "";
   return idsOut(text)
+    // A partner category code ("cat_41762", "cat 41762") as its product group.
+    .replace(/\bcat[_ ](\d{3,})\b/g, (m, c: string) => groupL(`cat_${c}`, "en") ?? m)
     .replace(/\b[a-z]+(?:_[a-z0-9]+)+\b/g, (code) => CODE_WORD[code] ?? (RULE_TITLE[code] ? `“${RULE_TITLE[code].toLowerCase()}”` : ROLE_LABEL[code] ?? code))
     .replace(/\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})/g, isoInText)
     .replace(/\b(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2})\b/g, (_m, d: string, h: string, mi: string) => `${day(d)} ${h}.${mi}`)

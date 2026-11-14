@@ -410,7 +410,7 @@ function RuleList({ rows, other, side }: { rows: Described[]; other: Described[]
               })}
             </ul>
             <p className="mt-1.5 text-[0.82rem] text-ink-soft">
-              In force since {when(r.since)}, set by {byWords(r.by)}
+              In force since {when(r.since)}, {/^learned\b/i.test(byWords(r.by)) ? byWords(r.by) : `set by ${byWords(r.by)}`}
             </p>
           </li>
         );
