@@ -85,3 +85,10 @@ describe("englishDays", () => {
     expect(englishDays("on Tue 17.11., then")).toBe("on Tue 17 Nov, then");
   });
 });
+
+describe("nutritionDetail", () => {
+  it("says the product's figure and the rule's bound", async () => {
+    const { nutritionDetail } = await import("./refusal");
+    expect(nutritionDetail({ nutrient: "sugar", problem: "over", value: 13, max: 12, per: "100g", product: "Valio cherry yoghurt 1 kg" }, "en")).toBe("Valio cherry yoghurt has 13 g sugar per 100 g; your rule is at most 12 g");
+  });
+});
