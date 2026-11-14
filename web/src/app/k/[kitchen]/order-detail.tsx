@@ -8,14 +8,15 @@ import { verifyChain, type ChainCheck } from "../../_client/verify-chain";
 import { sha256Hex, verifySigned, type KeySet } from "../../_client/verify-signed";
 import { useFormat, useText } from "../../_i18n/provider";
 import { clock, helsinkiToday, money, say, shortProduct } from "../../_ui/plain";
-import { Target } from "../../_ui/target";
+import { Check as Check2, ShieldCheck, X } from "lucide-react";
+import { Badge, Card, FactList, IconDisc, PageHeader, SectionTitle, Skeleton, Tag, type BadgeTone } from "../../_ui/kit";
 import { askedText } from "./history";
 import { ORDER_DETAIL_TEXT } from "./order-detail.text";
 import { usePortal } from "./portal";
 import { Gate } from "./stages";
 import { RulesThen } from "./rules-then";
 import { Timeline } from "./timeline";
-import { Button, ErrorPlate, Field, Paper } from "./ui";
+import { Button, ErrorPlate } from "./ui";
 import type { LedgerReply, Order } from "./types";
 import { useProductName } from "./names";
 
@@ -45,99 +46,117 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   const asked = overview.data?.requests.find((r) => r.requestId === d?.order.requestId)?.text;
   const names = useMemo(() => Object.fromEntries((d?.order.lines ?? []).map((l) => [l.productId, l.name])), [d]);
 
-  if (live.error && !d) return <ErrorPlate title={tx.loadFailed} message={live.error} onRetry={live.refresh} />;
-  if (!d) return <div className="mt-6 h-96 animate-pulse bg-concrete-deep/60" aria-label={tx.loading} />;
+  if (live.error && !d)
+    return (
+      <div className="mt-6">
+        <ErrorPlate title={tx.loadFailed} message={live.error} onRetry={live.refresh} />
+      </div>
+    );
+  if (!d)
+    return (
+      <div className="mt-6 space-y-6 sm:mt-8" role="status" aria-label={tx.loading}>
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-10 w-3/4 max-w-xl" />
+        <div className="grid gap-6 xl:grid-cols-2">
+          <Skeleton className="h-72 !rounded-[20px]" />
+          <Skeleton className="h-72 !rounded-[20px]" />
+        </div>
+      </div>
+    );
   const o = d.order;
   const quoteEntry = d.entries.find((e) => e.type === "quote" && e.data.quoteId === o.quoteId);
   const q = quoteEntry?.data as { expiresAt?: string; expiresBecause?: string; evidence?: { claimId: string; type: string; productId: string; sha256: string }[] } | undefined;
   const statusWord = tx.status[o.status] ?? tx.status.rejected;
+  const tone: BadgeTone = o.status === "pending_approval" ? "waiting" : o.status === "committed" ? "good" : o.status === "rejected" ? "refused" : "neutral";
 
   return (
-    <div className="mt-5 space-y-6">
-      <nav aria-label={tx.breadcrumb} className="text-[0.92rem]">
-        <Link href={`${base}/orders`} className="underline decoration-1 underline-offset-4">
-          {tx.orders}
-        </Link>
-      </nav>
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-ink-soft">
-            {tx.at(statusWord, f.day(helsinkiToday(new Date(o.createdAt))), clock(o.createdAt))}
-          </p>
-          <h1 className="display text-[2.2rem]">{o.lines.map((l) => `${l.quantity} × ${shortProduct(pn(l.productId, l.name))}`).join(" + ")}</h1>
-          {asked && <p className="mt-1 text-[1.05rem]">{asked.startsWith("Basket") ? askedText(asked, f.lang) : tx.asked(asked)}</p>}
-        </div>
-        <p className="display text-[2.8rem] tabular">{money(o.totalCents)}</p>
-      </header>
+    <div className="mt-6 space-y-10 sm:mt-8 sm:space-y-12">
+      <PageHeader
+        back={{ href: `${base}/orders`, label: tx.orders }}
+        context={
+          <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+            <Badge tone={tone}>{statusWord}</Badge>
+            <span className="tabular">{f.day(helsinkiToday(new Date(o.createdAt)))} {clock(o.createdAt)}</span>
+          </span>
+        }
+        title={<span className="mt-1.5 block">{o.lines.map((l) => `${l.quantity} × ${shortProduct(pn(l.productId, l.name))}`).join(" + ")}</span>}
+        lead={asked ? <p>{asked.startsWith("Basket") ? askedText(asked, f.lang) : tx.asked(asked)}</p> : undefined}
+        actions={
+          <div className="hidden text-right sm:block">
+            <p className="text-[0.86rem] text-ink-soft">{tx.total}</p>
+            <p className="display text-[2.4rem] leading-none tabular sm:text-[2.8rem]">{money(o.totalCents)}</p>
+          </div>
+        }
+      />
+      <span className="sr-only">{tx.at(statusWord, f.day(helsinkiToday(new Date(o.createdAt))), clock(o.createdAt))}</span>
 
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <section aria-labelledby="lines" className="space-y-3">
-          <h2 id="lines" className="display text-[1.5rem]">
+      <div className="grid items-start gap-x-8 gap-y-10 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
+        <section aria-labelledby="lines" className="xl:col-start-1 xl:row-start-1">
+          <SectionTitle id="lines">
             {tx.fixedPrice}
-          </h2>
-          <Paper>
-            <div className="p-4">
-              <table className="w-full text-left text-[0.98rem]">
-                <thead className="text-[0.82rem] text-ink-soft">
-                  <tr>
-                    <th className="py-1.5 pr-2 font-medium">{tx.head.product}</th>
-                    <th className="py-1.5 pr-2 text-right font-medium">{tx.head.qty}</th>
-                    <th className="py-1.5 pr-2 text-right font-medium">{tx.head.each}</th>
-                    <th className="py-1.5 pr-2 text-right font-medium">{tx.head.line}</th>
-                    <th className="py-1.5 text-right font-medium">{tx.head.arrives}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {o.lines.map((l) => (
-                    <tr key={l.productId}>
-                      <td className="py-1.5 pr-2">
-                        <Link href={`${base}/catalogue/${encodeURIComponent(l.productId)}`} className="hover:underline">
-                          {shortProduct(pn(l.productId, l.name))}
-                        </Link>
-                        {l.substituteFor && <span className="block text-[0.85rem] text-ink-soft">{tx.swapFor(shortProduct(l.substituteFor.name))}</span>}
-                      </td>
-                      <td className="py-1.5 pr-2 text-right tabular">{l.quantity}</td>
-                      <td className="py-1.5 pr-2 text-right tabular">{money(l.unitPriceCents)}</td>
-                      <td className="py-1.5 pr-2 text-right tabular">{money(l.lineTotalCents)}</td>
-                      <td className="py-1.5 text-right">{f.day(l.deliveryDate)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 border-t border-line pt-3 sm:grid-cols-3">
-                <Field label={tx.priceFixedBy}>{tx.signature}</Field>
-                {q?.expiresAt && (
-                  <Field label={tx.heldUntil}>
-                    {tx.heldTime(clock(q.expiresAt))}
-                    {q.expiresBecause === "order_cutoff" ? tx.becauseCutoff : q.expiresBecause === "price_validity" ? tx.becauseValidity : ""}
-                  </Field>
-                )}
-                <Field label={tx.restsOn}>{q?.evidence?.length ? tx.claims(q.evidence.length) : tx.signedQuote}</Field>
-              </dl>
+          </SectionTitle>
+          <Card>
+            <ul className="divide-y divide-line">
+              {o.lines.map((l) => (
+                <li key={l.productId} className="flex items-start gap-4 px-5 py-4">
+                  <span className="min-w-0 flex-1">
+                    <Link href={`${base}/catalogue/${encodeURIComponent(l.productId)}`} className="font-semibold leading-snug hover:text-petrol hover:underline">
+                      {shortProduct(pn(l.productId, l.name))}
+                    </Link>
+                    <span className="mt-1 block text-[0.9rem] leading-snug text-ink-soft tabular">
+                      {l.quantity} × {f.measure(l.packSize, l.unit)} = <span className="font-medium text-ink">{f.measure(Math.round(l.quantity * l.packSize * 1000) / 1000, l.unit)}</span>, {tx.each(money(l.unitPriceCents))}
+                    </span>
+                    <span className="mt-0.5 block text-[0.9rem] leading-snug text-ink-soft">
+                      {tx.head.arrives} <span className="font-medium text-ink">{f.day(l.deliveryDate)}</span>
+                    </span>
+                    {l.substituteFor && (
+                      <span className="mt-1.5 inline-flex">
+                        <Tag tone="agent">{tx.swapFor(shortProduct(l.substituteFor.name))}</Tag>
+                      </span>
+                    )}
+                  </span>
+                  <span className="shrink-0 pt-px text-right font-semibold tabular">
+                    <span className="sr-only">{tx.head.line}: </span>
+                    {money(l.lineTotalCents)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <div className="flex items-baseline justify-between gap-4 border-t border-line px-5 py-4">
+              <span className="font-semibold">{tx.total}</span>
+              <span className="display text-[1.6rem] tabular">{money(o.totalCents)}</span>
             </div>
-          </Paper>
+            <div className="border-t border-line bg-mist/60 px-5 py-4">
+              <FactList
+                labelWidth="9.5rem"
+                rows={[
+                  { key: "by", label: tx.priceFixedBy, value: tx.signature },
+                  ...(q?.expiresAt ? [{ key: "held", label: tx.heldUntil, value: `${tx.heldTime(clock(q.expiresAt))}${q.expiresBecause === "order_cutoff" ? tx.becauseCutoff : q.expiresBecause === "price_validity" ? tx.becauseValidity : ""}` }] : []),
+                  { key: "rests", label: tx.restsOn, value: q?.evidence?.length ? tx.claims(q.evidence.length) : tx.signedQuote },
+                ]}
+              />
+            </div>
+          </Card>
         </section>
-        <section aria-labelledby="who" className="space-y-3">
-          <h2 id="who" className="display text-[1.5rem]">
-            {tx.who}
-          </h2>
+        <section aria-labelledby="who" className="xl:col-start-2 xl:row-span-2 xl:row-start-1">
+          <SectionTitle id="who">{tx.who}</SectionTitle>
           <Gate order={o} kitchen={kitchen} names={names} streaming={live.streaming} byHand={!!asked?.startsWith("Basket")} />
         </section>
+        <div className="xl:col-start-1 xl:row-start-2">
+          <Verify order={o} evidence={q?.evidence ?? []} />
+        </div>
       </div>
-
-      <Verify order={o} evidence={q?.evidence ?? []} />
 
       <RulesThen orderId={o.orderId} />
 
       {d.entries.length > 0 && (
         <section aria-labelledby="timeline">
-          <h2 id="timeline" className="display text-[1.5rem]">
+          <SectionTitle id="timeline" aside={tx.entries(d.entries.length)}>
             {tx.timeline}
-          </h2>
-          <p className="text-[0.95rem] text-ink-soft">{tx.entries(d.entries.length)}</p>
-          <div className="mt-2 bg-paper p-4">
+          </SectionTitle>
+          <Card pad>
             <Timeline entries={d.entries} names={names} agentName={kitchen.agentName} kitchen={kitchen.slug} check={false} />
-          </div>
+          </Card>
         </section>
       )}
     </div>
@@ -203,23 +222,27 @@ function Verify({ order, evidence }: { order: Order; evidence: { claimId: string
   }
 
   return (
-    <section aria-labelledby="verify" className="bg-paper">
-      <div aria-hidden className="h-[3px] bg-petrol" />
-      <div className="p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 id="verify" className="display text-[1.5rem]">
-              {tx.verify}
-            </h2>
-            <p className="text-[0.95rem] text-ink-soft">{tx.verifyIntro}</p>
+    <section aria-labelledby="verify">
+      <Card pad>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 flex-1 basis-64 items-start gap-3.5">
+            <IconDisc size={40}>
+              <ShieldCheck size={20} />
+            </IconDisc>
+            <div className="min-w-0">
+              <h2 id="verify" className="display text-[1.35rem]">
+                {tx.verify}
+              </h2>
+              <p className="mt-0.5 text-[0.92rem] leading-relaxed text-ink-soft">{tx.verifyIntro}</p>
+            </div>
           </div>
           <Button kind="primary" busy={busy} onClick={() => void run()}>
             {tx.verifyButton}
           </Button>
         </div>
-        {error && <p className="mt-2 text-ink-soft">{tx.verifyFailed(error)}</p>}
+        {error && <p className="mt-3 text-[0.95rem] text-bad">{tx.verifyFailed(error)}</p>}
         {r && (
-          <ul className="mt-3 space-y-2" aria-live="polite">
+          <ul className="lane-enter mt-5 space-y-3 border-t border-line pt-4" aria-live="polite">
             <Check ok={r.order.ok} title={tx.checkOrder} text={r.order.message} />
             <Check
               ok={r.claims.failed.length === 0}
@@ -227,10 +250,10 @@ function Verify({ order, evidence }: { order: Order; evidence: { claimId: string
               text={r.claims.total === 0 ? tx.noClaims : r.claims.failed.length === 0 ? tx.allClaims(r.claims.total) : tx.someClaims(r.claims.ok, r.claims.total, r.claims.failed.join("; "))}
             />
             <Check ok={r.chain.ok} title={tx.checkChain} text={r.chain.ok ? tx.chainOk(r.chain.length, r.ms) : r.chain.message} />
-            <li className="text-[0.88rem] text-ink-soft">{say(tx.window)}</li>
+            <li className="pl-11 text-[0.86rem] leading-snug text-ink-soft">{say(tx.window)}</li>
           </ul>
         )}
-      </div>
+      </Card>
     </section>
   );
 }
@@ -238,13 +261,15 @@ function Verify({ order, evidence }: { order: Order; evidence: { claimId: string
 function Check({ ok, title, text }: { ok: boolean; title: string; text: string }) {
   const tx = useText(ORDER_DETAIL_TEXT);
   return (
-    <li className="flex items-start gap-2 leading-snug">
-      <Target size={22} tone={ok ? "ink" : "safety"} className="mt-0.5 shrink-0" />
-      <span>
-        <strong>
+    <li className="flex items-start gap-3 leading-snug">
+      <IconDisc size={30} tone={ok ? "good" : "muted"} className={ok ? "" : "!bg-bad-soft !text-bad"}>
+        {ok ? <Check2 size={16} strokeWidth={2.6} /> : <X size={16} strokeWidth={2.6} />}
+      </IconDisc>
+      <span className="min-w-0 pt-1 text-[0.95rem]">
+        <strong className="font-semibold">
           {title}: {ok ? tx.ok : tx.notOk}
         </strong>{" "}
-        {text}
+        <span className="text-ink-soft">{text}</span>
       </span>
     </li>
   );

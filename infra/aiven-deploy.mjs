@@ -120,6 +120,9 @@ function desiredEnvironment(publicUrl) {
     // The two stage kitchens' account passwords: private, so a stranger cannot change their rules before a pitch.
     "DOCK_KAARI_PASSWORD",
     "DOCK_LAAKSO_PASSWORD",
+    // Seals each kitchen's private key and mandate token in the database (AES-256-GCM). Never change it once
+    // kitchens exist: sealed kitchens stay locked until the old value returns.
+    "DOCK_ACCOUNT_KEY_SECRET",
     // /ops can suspend agents: entering it needs this passcode on the public server.
     "DOCK_OPS_PASSCODE",
     // Demo kitchens' connector addresses (/api/mcp/c/<token>) are derived from it: stable across restarts.
@@ -134,7 +137,7 @@ function desiredEnvironment(publicUrl) {
     // Not here: DATABASE_URL, OPENSEARCH_URI, VALKEY_URL and KAFKA_* come from the application_service_credential
     // integrations (Runtime refuses a variable that duplicates one of them).
   ];
-  const required = ["DOCK_WHOLESALER_JWK", "DOCK_DEMO_ORG_JWK", "DOCK_DEMO_KITCHEN_JWK", "VALIO_API_KEY", "DOCK_OPS_PASSCODE", "DOCK_CONNECTOR_SECRET"];
+  const required = ["DOCK_WHOLESALER_JWK", "DOCK_DEMO_ORG_JWK", "DOCK_DEMO_KITCHEN_JWK", "VALIO_API_KEY", "DOCK_OPS_PASSCODE", "DOCK_CONNECTOR_SECRET", "DOCK_ACCOUNT_KEY_SECRET"];
   for (const k of required) if (!env(k)) fail(`${k} is not set in web/.env.local`);
   const out = vars.map(([key, value]) => ({ key, value, kind: "variable" }));
   for (const key of secrets) {

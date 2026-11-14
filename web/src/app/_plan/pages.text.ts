@@ -9,8 +9,8 @@ export const PLAN_PAGES_TEXT = defineText({
     heading: "Menu planner",
     intro:
       "Say what you are serving and for how many. The agent drafts each dish's ingredients and amounts; plain code finds the products, checks every line against the kitchen's rules, fixes the price and sends one order through the gate.",
-    onlyDemoTitle: "The menu planner is set up for the two demo kitchens",
-    onlyDemoBody: "Visitor kitchens order through the order lane and the basket. To try a menu, open one of these:",
+    onlyDemoTitle: "The menu planner is for kitchens with an account",
+    onlyDemoBody: "A visitor's 90-minute kitchen orders through the order lane and the basket. Keep it as an account (Keep this kitchen, above) and the menu planner opens here.",
     kitchenLink: { kaari: "Ravintola Kaari, lunch restaurant", laakso: "Laakso Catering, schools and daycare" } as Record<string, string>,
     kitchensNav: "Kitchens",
     kitchenKind: { kaari: "Lunch restaurant", laakso: "School and daycare kitchen, no nuts" } as Record<string, string>,
@@ -23,8 +23,8 @@ export const PLAN_PAGES_TEXT = defineText({
     heading: "Menusuunnittelu",
     intro:
       "Kerro, mitä tarjoat ja kuinka monelle. Agentti laatii jokaisen annoksen raaka-aineet ja määrät; tavallinen koodi etsii tuotteet, tarkistaa jokaisen rivin keittiön sääntöjä vasten, kiinnittää hinnan ja lähettää yhden tilauksen portin läpi.",
-    onlyDemoTitle: "Menusuunnittelu on käytössä kahdessa demokeittiössä",
-    onlyDemoBody: "Vierailijakeittiöt tilaavat Tilaa-sivun ja ostoskorin kautta. Kokeile ruokalistaa avaamalla jokin näistä:",
+    onlyDemoTitle: "Menusuunnittelu on käytössä keittiöillä, joilla on tili",
+    onlyDemoBody: "Vierailijan 90 minuutin keittiö tilaa Tilaa-sivun ja ostoskorin kautta. Säilytä se tilinä (Säilytä tämä keittiö, ylhäällä), niin menusuunnittelu avautuu tähän.",
     kitchenLink: { kaari: "Ravintola Kaari, lounasravintola", laakso: "Laakso Catering, koulut ja päiväkodit" },
     kitchensNav: "Keittiöt",
     kitchenKind: { kaari: "Lounasravintola", laakso: "Koulu- ja päiväkotikeittiö, ei pähkinöitä" },
@@ -37,8 +37,8 @@ export const PLAN_PAGES_TEXT = defineText({
     heading: "Menyplanering",
     intro:
       "Berätta vad du serverar och för hur många. Agenten gör ett utkast till varje rätts råvaror och mängder; vanlig kod hittar produkterna, kontrollerar varje rad mot kökets regler, låser priset och skickar en beställning genom grinden.",
-    onlyDemoTitle: "Menyplaneringen är inställd för de två demoköken",
-    onlyDemoBody: "Besökskök beställer via sidan Beställ och varukorgen. Öppna ett av dessa för att pröva en meny:",
+    onlyDemoTitle: "Menyplaneringen är till för kök med ett konto",
+    onlyDemoBody: "Ett besökskök på 90 minuter beställer via sidan Beställ och varukorgen. Behåll det som ett konto (Behåll det här köket, ovan) så öppnas menyplaneringen här.",
     kitchenLink: { kaari: "Ravintola Kaari, lunchrestaurang", laakso: "Laakso Catering, skolor och daghem" },
     kitchensNav: "Kök",
     kitchenKind: { kaari: "Lunchrestaurang", laakso: "Skol- och daghemskök, inga nötter" },

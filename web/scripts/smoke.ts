@@ -4,7 +4,9 @@
  *   pnpm smoke --url https://<app-host>                 against a deployed server
  *   pnpm smoke --url http://localhost:3100 --commit <sha>  also require /api/health to report that commit
  *
- * Signs the demo mandate with DOCK_DEMO_ORG_JWK (web/.env.local), which must match the server's.
+ * Signs the demo mandate with DOCK_DEMO_ORG_JWK (web/.env.local), which must match the server's. The store steps
+ * sign in as a public test account (server/accounts/test-accounts.ts), since no kitchen's store is open to strangers;
+ * a stage kitchen's store is checked to be closed.
  * Costs a handful of live partner lookups and no model calls. Prints one line per check and PASS or FAIL;
  * exits 1 on failure.
  */
@@ -12,6 +14,7 @@ import { base64url } from "jose";
 import { signMandate } from "@/core/mandate";
 import { addDays, isoDate } from "@/core/util";
 import { DEMO_ORG, demoMandate, demoOrgKeyPair } from "@/server/dev-fixtures";
+import { TEST_ACCOUNTS } from "@/server/accounts/test-accounts";
 import { loadLocalEnv } from "./lib/env";
 import { DockClient, type Step } from "./lib/client";
 
@@ -82,9 +85,31 @@ async function main() {
     const r = await get("/");
     return [r.status === 200 && r.text.includes("<html"), `HTTP ${r.status}, ${r.text.length} bytes`];
   });
-  await check("buyer console /k/kaari", async () => {
-    const r = await get("/k/kaari");
-    return [r.status === 200 && r.text.includes("<html"), `HTTP ${r.status}, ${r.text.length} bytes`];
+  // A public test account: the store steps act as its signed-in session, as a judge would.
+  const tester = TEST_ACCOUNTS[0];
+  const K = tester.username;
+  let cookie = "";
+  await check(`sign in as test account ${K}`, async () => {
+    const wrong = await get("/ui-api/account/signin", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: K, password: "not-the-password" }) });
+    const r = await get("/ui-api/account/signin", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: K, password: tester.password }) });
+    const set = r.headers.get("set-cookie") ?? "";
+    cookie = set.split(";")[0];
+    const flags = ["HttpOnly", "SameSite=Lax", ...(baseUrl.startsWith("https:") ? ["Secure"] : [])].every((f) => set.includes(f));
+    return [wrong.status === 401 && r.status === 200 && cookie.startsWith("dock_account=") && flags, `wrong password ${wrong.status}, sign-in ${r.status}, cookie flags ${flags ? "ok" : `MISSING in "${set.replace(/=[^;]+/, "=...")}"`}`];
+  });
+  const authed = (init: RequestInit = {}): RequestInit => ({ ...init, headers: { ...(init.headers as Record<string, string>), cookie } });
+
+  await check("stage kitchens closed to strangers", async () => {
+    const page = await get("/k/kaari");
+    const api = await get("/ui-api/kitchens/kaari");
+    const plan = await get("/ui-api/plan/kaari");
+    const asTester = await get("/ui-api/kitchens/kaari", authed());
+    return [page.text.includes("This kitchen is private") && api.status === 401 && plan.status === 401 && asTester.status === 403, `page ${page.status} (private), console ${api.status}, menu planner ${plan.status}, as ${K} ${asTester.status}`];
+  });
+
+  await check(`buyer console /k/${K}`, async () => {
+    const r = await get(`/k/${K}`, authed());
+    return [r.status === 200 && r.text.includes("<html") && !r.text.includes("This kitchen is private"), `HTTP ${r.status}, ${r.text.length} bytes`];
   });
   await check("join page /join", async () => {
     const r = await get("/join");
@@ -107,8 +132,8 @@ async function main() {
   }
 
   await check("console back end /ui-api", async () => {
-    const info = await get("/ui-api/kitchens/kaari");
-    const call = await get("/ui-api/kitchens/kaari/call", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ method: "GET", path: "/api/v1/kitchen" }) });
+    const info = await get(`/ui-api/kitchens/${K}`, authed());
+    const call = await get(`/ui-api/kitchens/${K}/call`, authed({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ method: "GET", path: "/api/v1/kitchen" }) }));
     const wall = await get("/ui-api/wall");
     return [info.status === 200 && call.status === 200 && wall.status === 200, `kitchen ${info.status}, call GET /api/v1/kitchen ${call.status} (${call.json?.kitchen?.name ?? "?"}), wall ${wall.status}`];
   });
@@ -171,15 +196,15 @@ async function main() {
     return [h.ok === true && down.length === 0 && ledgerOk, detail];
   });
 
-  await check("kitchen store /k/kaari/catalogue", async () => {
-    const page = await get("/k/kaari/catalogue");
-    const cats = await get("/ui-api/kitchens/kaari/catalog/categories");
+  await check(`kitchen store /k/${K}/catalogue`, async () => {
+    const page = await get(`/k/${K}/catalogue`, authed());
+    const cats = await get(`/ui-api/kitchens/${K}/catalog/categories`, authed());
     return [page.status === 200 && cats.status === 200, `page ${page.status}, categories ${cats.status}`];
   });
 
   let basketProducts: string[] = [];
   await check("catalogue search (store)", async () => {
-    const r = await get("/ui-api/kitchens/kaari/catalog?q=maito&limit=5");
+    const r = await get(`/ui-api/kitchens/${K}/catalog?q=maito&limit=5`, authed());
     const items = (r.json?.products ?? r.json?.items ?? r.json?.results ?? []) as { id?: string; productId?: string }[];
     basketProducts = items.map((i) => (i.productId ?? i.id)!).filter(Boolean);
     return [r.status === 200 && items.length > 0, `HTTP ${r.status}, ${items.length} products, first ${basketProducts[0] ?? "-"}`];
@@ -190,11 +215,10 @@ async function main() {
     // Up to three products: the first may be out of stock or past its cut-off, which the gate refuses by name.
     let r!: Awaited<ReturnType<typeof get>>;
     for (const id of basketProducts.slice(0, 3)) {
-      r = await get("/ui-api/kitchens/kaari/basket", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ lines: [{ productId: id, packs: 2 }], deliverBy: deliveryDay() }),
-      });
+      r = await get(
+        `/ui-api/kitchens/${K}/basket`,
+        authed({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ lines: [{ productId: id, packs: 2 }], deliverBy: deliveryDay() }) }),
+      );
       if (r.status === 201) break;
     }
     const preview = r.json?.policyPreview?.outcome ?? r.json?.error?.rule;
@@ -218,9 +242,9 @@ async function main() {
   });
 
   await check("connector address (MCP, no headers)", async () => {
-    const c = await get("/ui-api/connect/kaari");
+    const c = await get(`/ui-api/connect/${K}`, authed());
     const url: string | undefined = c.json?.connector?.url;
-    if (!url) return [false, `GET /ui-api/connect/kaari -> HTTP ${c.status}, no connector`];
+    if (!url) return [false, `GET /ui-api/connect/${K} -> HTTP ${c.status}, no connector`];
     const path = new URL(url).pathname;
     const rpc = (p: string) =>
       get(p, {
@@ -232,6 +256,12 @@ async function main() {
     const tools = (/"tools":\[/.test(ok.text) ? ok.text.match(/"name":"[a-z_]+"/g)?.length : 0) ?? 0;
     const wrong = await rpc(`/api/mcp/c/dk_${"A".repeat(43)}`);
     return [ok.status === 200 && tools > 0 && wrong.status === 404, `tools/list ${ok.status} (${tools} names, source ${c.json?.connector?.source}), wrong token ${wrong.status}`];
+  });
+
+  await check("sign out ends the session", async () => {
+    const out = await get("/ui-api/account/signout", authed({ method: "POST", headers: { "content-type": "application/json" }, body: "{}" }));
+    const after = await get(`/ui-api/kitchens/${K}`, authed());
+    return [out.status === 200 && after.status === 401, `sign-out ${out.status}, the same cookie afterwards ${after.status}`];
   });
 
   await check("no dev routes in production", async () => {

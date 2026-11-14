@@ -160,8 +160,9 @@ async function accountKitchen(slug: string): Promise<Resolved | undefined> {
 }
 
 /**
- * Kitchens a console can switch to right now: the two demo kitchens, then the viewer's own visitor kitchen (pass the
- * org of the phone's approver session). Other visitors' kitchens are never listed (server/authz.ts).
+ * Kitchens a console can switch to right now: the signed-in account's own kitchen (a stage kitchen's too, when
+ * signed in to it), then this phone's own visitor kitchen (pass the org of its approver session). Nobody else's
+ * kitchen is listed, the stage kitchens included (server/authz.ts).
  */
 export async function listConsoleKitchens(viewerOrgId?: string, viewerAccount?: { kitchen?: string; restaurant: string; kind: string }): Promise<{ slug: string; name: string; kind: KitchenKind; approverName?: string }[]> {
   const { sandboxes } = await getRuntime();
@@ -170,6 +171,6 @@ export async function listConsoleKitchens(viewerOrgId?: string, viewerAccount?: 
     .slice()
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .map((s) => ({ slug: s.sandboxId, name: `${s.kitchenName}, ${s.city}`, kind: "visitor" as const, approverName: s.approverName }));
-  const own = viewerAccount?.kitchen && viewerAccount.kind !== "demo" ? [{ slug: viewerAccount.kitchen, name: viewerAccount.restaurant, kind: "account" as const }] : [];
-  return [...own, { slug: "kaari", name: KITCHEN_ORG.name, kind: "demo" }, { slug: "laakso", name: DEMO_ORG.name, kind: "demo" }, ...visitors];
+  const own = viewerAccount?.kitchen ? [{ slug: viewerAccount.kitchen, name: viewerAccount.restaurant, kind: viewerAccount.kind === "demo" ? ("demo" as const) : ("account" as const) }] : [];
+  return [...own, ...visitors];
 }

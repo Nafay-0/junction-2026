@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { QrCode } from "lucide-react";
 import { SESSION_COOKIE } from "@/server/approver-session";
 import { getRuntime } from "@/server/runtime";
 import { LangProvider } from "../../_i18n/provider";
@@ -34,14 +35,30 @@ async function Loaded() {
   return (
     <LangProvider initial={chosen}>
       <DoorShell lang={lang}>
-        <h1 className="display text-[2.4rem]">{tx.keepTitle}</h1>
+        <div>
+          <h1 className="display text-[2.1rem] leading-[1.05] sm:text-[2.6rem]">{tx.keepTitle}</h1>
+          {mine && <p className="mt-2.5 max-w-[60ch] text-[1.02rem] leading-relaxed text-ink-soft">{tx.keepBody(`${mine.kitchenName}, ${mine.city}`)}</p>}
+        </div>
         {mine ? (
-          <section className="space-y-4 bg-paper p-5">
-            <p className="max-w-[65ch] leading-snug">{tx.keepBody(`${mine.kitchenName}, ${mine.city}`)}</p>
+          <section className="rounded-xl border border-line bg-paper p-5 sm:p-6">
+            <div className="mb-5 flex items-center gap-3 border-b border-line pb-4">
+              <span aria-hidden className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-petrol-soft text-[0.95rem] font-semibold text-petrol-deep">
+                {mine.kitchenName.slice(0, 1).toUpperCase()}
+              </span>
+              <p className="min-w-0 font-semibold leading-snug">
+                {mine.kitchenName}
+                <span className="block text-[0.88rem] font-normal text-ink-soft">{mine.city}</span>
+              </p>
+            </div>
             <KeepForm />
           </section>
         ) : (
-          <p className="bg-paper p-5">{tx.keepNone}</p>
+          <div className="flex items-start gap-4 rounded-xl border border-dashed border-line-strong bg-paper/60 p-5 sm:p-6">
+            <span aria-hidden className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-surface text-ink-soft">
+              <QrCode size={21} />
+            </span>
+            <p className="max-w-[60ch] pt-2 leading-relaxed">{tx.keepNone}</p>
+          </div>
         )}
       </DoorShell>
     </LangProvider>
