@@ -1607,6 +1607,7 @@ export function createDock(deps: DockDeps) {
     /** How many orders wait for sign-off, after closing those whose price ran out. */
     async pendingCount(): Promise<number> {
       await expireStale();
+      if (deps.visibleOrder?.()) return seen(await repo.pendingOrders()).filter((o) => o.status === "pending_approval").length;
       return repo.pendingCount();
     },
 

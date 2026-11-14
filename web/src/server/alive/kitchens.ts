@@ -30,34 +30,15 @@ async function orgOf(rt: Runtime, slug: string): Promise<{ orgId: string; name: 
 
 // ---------- mail: recorded as sample, never sent ----------
 
-type Transport = import("@/server/notify/transport").MailTransport;
-
-/** While the sample plays, a sample beat's mail is recorded and not sent; any other mail goes the usual way. */
-function sampleTransport(inner: Transport | null): Transport {
-  let n = 0;
-  return {
-    name: "sample (not sent)",
-    async send(mail) {
-      if (playingNow()) return { ok: true, id: `sample-not-sent-${++n}`, attempts: 1 };
-      if (!inner) return { ok: false, attempts: 0, code: "not_configured", message: "No mail service is configured.", permanent: true };
-      return inner.send(mail);
-    },
-    async status(id) {
-      if (id.startsWith("sample-not-sent-")) return "unknown";
-      return inner?.status ? inner.status(id) : "unknown";
-    },
-  };
-}
-
+/**
+ * Mail for sample beats is recorded with its preview and not sent (server/notify deliver() skips it while a sample beat
+ * plays, with that reason), and it never counts against the caps. Nothing is swapped: any other mail goes as usual.
+ */
 async function withSampleMail<T>(rt: Runtime, fn: () => Promise<T>): Promise<T> {
-  const mail = await import("@/server/notify/service");
-  const before = mail.transportOf(rt);
-  mail.setMailTransport(rt, sampleTransport(before));
   try {
     return await fn();
   } finally {
-    await mail.settled(rt).catch(() => undefined);
-    mail.setMailTransport(rt, before);
+    await (await import("@/server/notify/service")).settled(rt).catch(() => undefined);
   }
 }
 
