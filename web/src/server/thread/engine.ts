@@ -313,6 +313,14 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
       run.dishesFor = { planId: leaveOut.planId, changed: true };
     }
   }
+  // "Yes" to "That needs the owner's OK with their passkey: shall I send it to them?": the drafted change goes to the
+  // signer (rules_sign makes it wait for their passkey; a typed yes never signs a widening).
+  if (!body.action && body.text && body.text.trim().split(/\s+/).length <= 6) {
+    const { yesOrNo } = await import("@/server/channels/speech");
+    const last = [...thread.turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "");
+    const open = last?.role === "agent" ? last.cards.find((c) => c.type === "rules" && c.proposal?.state === "open") : undefined;
+    if (open?.type === "rules" && open.proposal && /(shall I send it to them\?|lähetänkö sen\?|ska jag skicka den\?)/i.test(last?.role === "agent" ? (last.line ?? "") : "") && yesOrNo(body.text) === "yes") body = { ...body, action: { type: "rules_sign", proposalId: open.proposal.proposalId }, label: body.text };
+  }
   // An answer to the ways forward for a dish not fully buyable: ask the owner to add the groups, order just what can be
   // bought (each left-off ingredient was said before), or anything else (another dish) for the agent.
   const ways = waysOf(run).ways;
@@ -799,6 +807,23 @@ function sayLeftOffAfterOrder(run: TurnRun): void {
   run.store.line(run.thread, run.turnId, kept.join(" "));
 }
 
+/**
+ * A change to the rules that waits for the approver's passkey is said as exactly that, never as done ("Your rules now
+ * include frozen"): the sentence is plain code, whatever the agent wrote.
+ */
+function sayRulesWaiting(run: TurnRun): void {
+  const c = run.rulesWaiting;
+  if (c?.type !== "rules" || !c.proposal?.approval) return;
+  const lang = run.lang ?? "en";
+  const who = c.proposal.approval.approver.name;
+  const what = c.diff.filter((d) => d.widens || d.field === "signer").map((d) => (d.field === "groups" ? d.after.split(", ").filter((x) => !d.before.split(", ").includes(x)).join(", ") : d.field === "perOrderLimitEur" ? `${d.after} € an order` : d.field === "weeklyBudgetEur" ? `${d.after} € a week` : d.after)).filter(Boolean).join(", ");
+  run.store.line(run.thread, run.turnId, {
+    en: `That widens what I may buy${what ? ` (${what})` : ""}, so it needs ${who}'s OK: it's waiting for them to sign it with their passkey. Nothing changes until they do.`,
+    fi: `Tämä laajentaa sitä, mitä saan ostaa${what ? ` (${what})` : ""}, joten se tarvitsee hyväksynnän: ${who}. Lähetin sen allekirjoitettavaksi pääsyavaimella. Mikään ei muutu ennen sitä.`,
+    sv: `Det vidgar vad jag får köpa${what ? ` (${what})` : ""}, så det behöver ${who}s godkännande: jag har skickat det för signering med nyckel. Inget ändras förrän dess.`,
+  }[lang]);
+}
+
 /** A day named in a sentence: "{{Tuesday 17 Nov}}", "Tue 17 Nov", "ti 17.11.", as an ISO date in the coming months. */
 function dayIn(text: string): string | undefined {
   const MON = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
@@ -830,7 +855,8 @@ async function askOwnerToAdd(run: TurnRun, lang: "en" | "fi" | "sv"): Promise<st
   const { list } = { list: (xs: string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} ${lang === "fi" ? "ja" : lang === "sv" ? "och" : "and"} ${xs.at(-1)}`) };
   record(run, "rules_drafted", `A change to the kitchen's rules was drafted at the buyer's word, for a dish it could not buy completely: add ${ids.join(", ")}.`, { proposalId: card.proposal.proposalId });
   if (!card.proposal.canSign) return { en: `I've drafted it: ${list(names)} added to what I may buy. Only the kitchen's own account can confirm it, under Your rules.`, fi: `Laadin muutoksen: ${list(names)} lisätään ostettaviin. Sen voi vahvistaa vain keittiön oma tili kohdassa Sääntösi.`, sv: `Jag har skrivit ändringen: ${list(names)} läggs till. Bara kökets eget konto kan bekräfta den, under Dina regler.` }[lang];
-  return { en: `I've drafted it: ${list(names)} added to what I may buy. Shall I confirm it now? Then I'll plan the dish again.`, fi: `Laadin muutoksen: ${list(names)} lisätään ostettaviin. Vahvistanko sen nyt? Sitten suunnittelen ruuan uudelleen.`, sv: `Jag har skrivit ändringen: ${list(names)} läggs till. Ska jag bekräfta den nu? Sedan planerar jag rätten igen.` }[lang];
+  const signer = card.current.approvers[0]?.name ?? "";
+  return { en: `I've drafted it: ${list(names)} added to what I may buy. That needs ${signer || "the signer"}'s OK with their passkey: shall I send it to them? Then I'll plan the dish again.`, fi: `Laadin muutoksen: ${list(names)} lisätään ostettaviin. Se tarvitsee hyväksynnän pääsyavaimella (${signer || "allekirjoittaja"}): lähetänkö sen? Sitten suunnittelen ruuan uudelleen.`, sv: `Jag har skrivit ändringen: ${list(names)} läggs till. Den behöver godkännas med nyckel (${signer || "den som signerar"}): ska jag skicka den? Sedan planerar jag rätten igen.` }[lang];
 }
 
 /** A turn that failed or timed out, in the ledger (and so the telemetry): a stable code and the duration, no words. */
@@ -847,6 +873,7 @@ function turnFailed(run: TurnRun, code: TurnFailure): void {
 async function finishTurn(run: TurnRun): Promise<void> {
   const { store, thread } = run;
   await showDishes(run);
+  sayRulesWaiting(run);
   await tellDifferences(run).catch((err) => console.error("[thread] differences", err));
   await tellRequestDifferences(run).catch((err) => console.error("[thread] request differences", err));
   sayLeftOffAfterOrder(run);
@@ -891,6 +918,42 @@ export async function doorTurn<T>(kitchen: Kitchen | string, buyer: { door: Thre
     } finally {
       await finishTurn(run).catch(() => undefined);
     }
+  });
+}
+
+/**
+ * A change to the kitchen's rules that widens what the agent may do, signed by the named approver's passkey: the
+ * prompt (bound to the exact change, the mandate it changes and a fresh nonce) and the signature, checked by the same
+ * verifier as an order's sign-off. Only a verified passkey signature applies the change; it is then said in the thread.
+ */
+export async function rulesSignOffOptions(kitchen: Kitchen, proposalId: string, rp: Parameters<Runtime["passkeys"]["approvalOptions"]>[0]) {
+  const r = await resolve(kitchen, "typed");
+  const e = await engine(r.rt);
+  const thread = e.store.get(r.k.info.slug, r.k.info.orgId);
+  const { rulesApproval } = await import("./rules");
+  const a = rulesApproval({ thread, k: r.k }, proposalId);
+  if (!a) throw new DockError(409, "rules_change_not_waiting", "That change is not waiting for a sign-off.");
+  return r.rt.passkeys.approvalOptions(rp, { approvalId: a.approval.approvalId, orgId: a.orgId, role: a.approval.approver.role, orderDigest: a.digest, decision: "approve" });
+}
+
+export async function rulesSignOff(kitchen: Kitchen, proposalId: string, proof: unknown) {
+  const r = await resolve(kitchen, "typed");
+  const e = await engine(r.rt);
+  const thread = e.store.get(r.k.info.slug, r.k.info.orgId);
+  const { rulesApproval, signRules } = await import("./rules");
+  const a = rulesApproval({ thread, k: r.k }, proposalId);
+  if (!a) throw new DockError(409, "rules_change_not_waiting", "That change is not waiting for a sign-off.");
+  const { ApprovalProofSchema } = await import("@/core/approval");
+  const p = ApprovalProofSchema.safeParse(proof);
+  if (!p.success || p.data.kind !== "webauthn") throw new DockError(400, "passkey_required", "A change that widens what the agent may do is signed with the approver's passkey.");
+  const v = await r.rt.passkeys.verifier.verify({ approval: a.approval, orgId: a.orgId, orderDigest: a.digest, decision: "approve", now: new Date() }, p.data);
+  if (!v.ok) throw new DockError(403, v.reason, v.message);
+  return doorTurn(kitchen, { door: "typed", via: "tap", label: "Signed the change to the rules" }, async (run) => {
+    const card = await signRules(run, proposalId, { signOff: v.signOff });
+    const lang = run.lang ?? "en";
+    const name = v.signOff.method === "passkey" ? v.signOff.approverName : a.approval.approver.name;
+    run.store.line(run.thread, run.turnId, { en: `${name} signed it with a passkey: the change is now in your rules.`, fi: `${name} allekirjoitti sen pääsyavaimella: muutos on nyt säännöissänne.`, sv: `${name} signerade med en nyckel: ändringen gäller nu.` }[lang]);
+    return { proposal: card.proposal?.state };
   });
 }
 
@@ -1231,7 +1294,9 @@ async function draftRulesChange(run: TurnRun, words: string, lang: "en" | "fi" |
   const g = name.charAt(0).toLowerCase() + name.slice(1);
   record(run, "rules_drafted", `A change to the kitchen's rules was drafted at the buyer's yes: add ${notice.addGroup.id} (${g}), to buy "${notice.addGroup.what}".`, { proposalId: card.proposal.proposalId });
   if (!card.proposal.canSign) return { en: `I've drafted it: ${g} added to what I may buy. Only the kitchen's own account can confirm it, under Your rules.`, fi: `Laadin muutoksen: ${g} lisätään ostettaviin. Sen voi vahvistaa vain keittiön oma tili kohdassa Sääntösi.`, sv: `Jag har skrivit ändringen: ${g} läggs till. Bara kökets eget konto kan bekräfta den, under Dina regler.` }[lang];
-  return { en: `I've drafted it: ${g} added to what I may buy. Shall I confirm it now? Then I'll order the ${notice.addGroup.what}.`, fi: `Laadin muutoksen: ${g} lisätään ostettaviin. Vahvistanko sen nyt? Sitten tilaan: ${notice.addGroup.what}.`, sv: `Jag har skrivit ändringen: ${g} läggs till. Ska jag bekräfta den nu? Sedan beställer jag ${notice.addGroup.what}.` }[lang];
+  // Adding a product group widens what the agent may buy: it goes to the named approver's passkey, never a typed yes.
+  const signer = card.current.approvers[0]?.name ?? "";
+  return { en: `I've drafted it: ${g} added to what I may buy. That needs ${signer || "the signer"}'s OK with their passkey: shall I send it to them? Then I'll order the ${notice.addGroup.what}.`, fi: `Laadin muutoksen: ${g} lisätään ostettaviin. Se tarvitsee hyväksynnän pääsyavaimella (${signer || "allekirjoittaja"}): lähetänkö sen? Sitten tilaan: ${notice.addGroup.what}.`, sv: `Jag har skrivit ändringen: ${g} läggs till. Den behöver godkännas med nyckel (${signer || "den som signerar"}): ska jag skicka den? Sedan beställer jag ${notice.addGroup.what}.` }[lang];
 }
 
 /** The buyer's short answer to the offer the last agent turn (or the opening) said: done by plain code, or undefined. */

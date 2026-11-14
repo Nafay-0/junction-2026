@@ -759,7 +759,7 @@ export type RulesCard = CardBase & {
   /** The values the widget may offer (the mandate's vocabulary). */
   vocabulary: { forbid: string[]; require: string[]; substitution: string[]; groups: { id: string; name: string }[] };
   /** A proposed change: nothing is signed until `rules_sign`. */
-  proposal?: { proposalId: string; change: RulesChange; kind: "narrow" | "terms"; state: "open" | "signed" | "cancelled"; canSign: boolean; why?: string; signedAs?: string };
+  proposal?: { proposalId: string; change: RulesChange; kind: "narrow" | "terms"; state: "open" | "waiting" | "signed" | "cancelled"; canSign: boolean; why?: string; signedAs?: string; /** waiting: the named approver's passkey sign-off this widening needs. */ approval?: { approvalId: string; approver: { name: string; role: string } } };
   after?: RulesSnapshot;
   /** Before and after, field by field; `widens` marks a change that lets the agent do more. */
   diff: { field: string; before: string; after: string; widens: boolean }[];

@@ -7,6 +7,7 @@ import { clock, money } from "../../_ui/plain";
 import type { AgentTurn, BuyerTurn, GateCard as GateCardT, OfferCard, ScenarioCard, WatchCard, OptionView, OrderCard, Thread, ThreadAction, ThreadStep, TodayCard } from "@/server/thread/types";
 import { usePortal } from "./portal";
 import { Dishes } from "./thread-dishes";
+import { RulesSignOffSlab } from "./thread-rules-signoff";
 import { THREAD_LINE_TEXT } from "./thread-line.text";
 import { useSignOff } from "./thread-signoff";
 import { THREAD_WORDS } from "./thread-words.text";
@@ -209,6 +210,7 @@ function AgentNode({ turn, thread, tap, busy, latest }: { turn: AgentTurn; threa
       <Memory turn={turn} />
       {cards.map((c) => (c.type === "gate" && c.outcome === "waiting" && c.approvalId ? <SignOffSlab key={c.cardId} card={c} thread={thread} tap={tap} /> : c.type === "gate" && c.outcome === "approved" && c.orderId ? <SignedSlab key={c.cardId} card={c} thread={thread} /> : null))}
       {today?.items.filter((i) => i.kind === "sign_off").map((i) => (i.kind === "sign_off" ? <SignOffSlab key={i.approvalId} card={{ type: "gate", cardId: `gate:${i.orderId}`, requestId: i.requestId ?? "", orderId: i.orderId, approvalId: i.approvalId, outcome: "waiting", approver: i.approver, reasons: [], rules: [] } as GateCardT} thread={thread} tap={tap} total={i.totalCents} what={i.lines.map((l) => `${f.num(l.quantity)} × ${l.name}`).join(", ")} /> : null))}
+      {cards.map((c) => (c.type === "rules" && c.proposal?.state === "waiting" ? <RulesSignOffSlab key={c.cardId} card={c} /> : null))}
       {thinks.length > 0 && <Steps steps={thinks} />}
     </li>
   );
