@@ -156,6 +156,13 @@ export const EXPECTED: Record<FlowKind, { http: number; status: string; rule?: R
   refuse_budget: { http: 422, status: "rejected", rule: { laakso: "weekly_budget", kaari: "weekly_budget" } },
 };
 
+/** A need-by day no other purchase of this process used: 2 days ahead and on, one more day per purchase. */
+let dayCounter = Math.floor(Math.random() * 20_000); // another process on the same server starts elsewhere
+function uniqueDay(): string {
+  const n = dayCounter++;
+  return new Date(Date.now() + (2 + (n % 20_000)) * 86_400_000).toISOString().slice(0, 10);
+}
+
 /**
  * One purchase through the open interface, as an outside agent would make it: open a request, check live price and
  * availability for a short list, ask for a fixed-price quote, place the order. Returns the order outcome.
@@ -171,6 +178,7 @@ export async function runFlow(rec: Recorder, base: string, b: Buyer, kind: FlowK
   let shortlist: string[];
   let lines: { productId: string; quantity: number; substituteFor?: string }[];
   let text: string;
+  let neededBy: string | undefined;
   if (kind === "over") {
     // Valio's example: 1,000 L lactose-free milk. VA-1010 has 600 L, AR-2010 makes up the rest as a substitute.
     text = "1000 litres of lactose-free milk (load test)";
@@ -186,13 +194,18 @@ export async function runFlow(rec: Recorder, base: string, b: Buyer, kind: FlowK
     shortlist = ["PK-4001"];
     lines = [{ productId: "PK-4001", quantity: 10 + Math.floor(Math.random() * 20) }];
   } else {
-    const packs = 5 + Math.floor(Math.random() * 56); // 5-60 x 1 L: €7.45-€89.40
+    // 40-60 x 1 L (€59.60-€89.40): within 3x of either kitchen's usual milk order (Kaari's history is about
+    // 100 L), so the mistake check (order-check.ts) never calls it an unusual amount; and a need-by day of its
+    // own: the same check flags the same family for the same day ordered within 48 h as a likely repeat. Either
+    // flag, with nobody asked, sends the order to a person (policy human_confirmation) instead of committing it.
+    const packs = 40 + Math.floor(Math.random() * 21);
     text = `${packs} litres of lactose-free milk (load test)`;
+    neededBy = uniqueDay();
     asked = ["VA-1001"];
     shortlist = ["VA-1001", "VA-1002"];
     lines = [{ productId: "VA-1001", quantity: packs }];
   }
-  const r = await http(rec, "request", base, "POST", "/api/v1/requests", { text, productIds: asked }, h);
+  const r = await http(rec, "request", base, "POST", "/api/v1/requests", { text, productIds: asked, ...(neededBy ? { neededBy } : {}) }, h);
   const requestId = r.body?.request?.requestId;
   if (r.status !== 201 || !requestId) return finish(`request_${r.status}`);
   rec.requests.push({ requestId, org: b.org });
