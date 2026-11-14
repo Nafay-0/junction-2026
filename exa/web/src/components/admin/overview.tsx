@@ -153,7 +153,8 @@ function Figure({ icon, label, value, note, accent }: { icon?: React.ReactNode; 
         {icon ? <span className="text-subtle [&_svg]:size-3.5">{icon}</span> : <span className="size-2 rounded-full bg-brand" />}
         {label}
       </div>
-      <div className={cn("nums font-display mt-2 text-[1.9rem] leading-none sm:text-[2.2rem]", accent && "text-brand")}>{value}</div>
+      {/* Figures are set in the interface type: in the serif, a 1 reads as an l. */}
+      <div className={cn("nums mt-2.5 text-[1.7rem] leading-none font-semibold tracking-tight sm:text-[1.95rem]", accent && "text-brand")}>{value}</div>
       <p className="mt-2 text-[0.74rem] leading-snug text-muted-foreground">{note}</p>
     </div>
   );
@@ -183,7 +184,7 @@ function Rows({ head, rows }: { head: [string, string, string, string]; rows: Ar
         <tbody>
           {rows.map((row) => (
             <tr key={row.key}>
-              <td className="max-w-0 border-t border-border px-1 py-2.5">
+              <td className="w-full max-w-0 border-t border-border px-1 py-2.5">
                 <div className="truncate font-medium">{row.name}</div>
                 {row.sub ? <div className="truncate text-[0.74rem] text-muted-foreground">{row.sub}</div> : null}
                 <div className="mt-1.5">

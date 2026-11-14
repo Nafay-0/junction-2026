@@ -41,6 +41,6 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Everything except Next's own files and the two routes named above.
-  matcher: ["/((?!_next/static|_next/image|api/chat|api/conversations).*)"],
+  // Everything except Next's own files (scripts, styles, images, the development tools) and the two routes named above.
+  matcher: ["/((?!_next/|__next|api/chat|api/conversations).*)"],
 };

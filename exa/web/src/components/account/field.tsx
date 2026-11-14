@@ -12,6 +12,7 @@ export function Field({
   label,
   hint,
   className,
+  inputClassName,
   trailing,
   ...props
 }: React.ComponentProps<"input"> & {
@@ -20,6 +21,8 @@ export function Field({
   hint?: React.ReactNode;
   /** Something inside the field's right edge, such as the show-password button. */
   trailing?: React.ReactNode;
+  /** For the field itself (`className` is for the whole block, label and hint included). */
+  inputClassName?: string;
 }) {
   const id = React.useId();
   return (
@@ -28,7 +31,7 @@ export function Field({
         {label}
       </label>
       <div className="relative">
-        <input id={id} aria-describedby={hint ? `${id}-hint` : undefined} className={cn(box, trailing ? "pr-11" : undefined)} {...props} />
+        <input id={id} aria-describedby={hint ? `${id}-hint` : undefined} className={cn(box, trailing ? "pr-11" : undefined, inputClassName)} {...props} />
         {trailing ? <div className="absolute inset-y-0 right-1.5 flex items-center">{trailing}</div> : null}
       </div>
       {hint ? (

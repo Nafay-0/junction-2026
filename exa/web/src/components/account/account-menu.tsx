@@ -105,7 +105,7 @@ export function AccountMenu({
       </DropdownMenu>
 
       <Dialog open={confirming} onOpenChange={setConfirming}>
-        <DialogContent className="max-w-sm">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle className="font-display text-xl font-normal">Delete all conversations?</DialogTitle>
             <DialogDescription>
