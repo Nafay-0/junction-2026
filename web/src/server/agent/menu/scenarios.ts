@@ -342,7 +342,9 @@ export function createScenarios(deps: ScenarioDeps) {
     const amount = toBase((ing.perCover.amount * covers) / (ing.yieldPct / 100), ing.perCover.unit);
     const want = p.settings.deliverBy ?? addDaysIso(today(deps.now()), 1);
     const set = { candidates: cands.map((product) => ({ product, score: 1, safety: checkSafety(product, k.diet), why: [] as string[] })) };
-    const ok = set.candidates.filter((c) => rulesOn(k, c.product).ok);
+    // The form the option names (frozen dill, dried dill) must be the product's form, read from its storage temperature.
+    const formOk = (x: Product) => ing.form === "frozen" ? x.temperatureClass === "frozen" : ing.form === "dried" ? x.temperatureClass === "ambient" : ing.form === "fresh" ? x.temperatureClass !== "frozen" && x.temperatureClass !== "ambient" : true;
+    const ok = set.candidates.filter((c) => rulesOn(k, c.product).ok && formOk(c.product));
     const live = { statuses: statuses(), deliverBy: want, calls: 0, at: deps.now().toISOString() };
     const res = optionsFor(amount, ok, live, k.mandate, deps.now(), want);
     const card = res.cards.find((c) => c.match === "full" && c.deliveryDate <= want) ?? res.cards[0];
@@ -559,11 +561,15 @@ export function createScenarios(deps: ScenarioDeps) {
     if (ev) {
       for (const st of ev.cannotArrive) {
         const os = ev.options[st.lineId] ?? [];
-        const pick = choices === "best" ? os.find((o) => !o.signOff.needed) : os.find((o) => choices.some((c) => c.lineId === st.lineId && c.optionId === o.optionId));
-        if (choices !== "best" && choices.some((c) => c.lineId === st.lineId) && !pick) throw new DockError(404, "option_not_found", `No verified option ${choices.find((c) => c.lineId === st.lineId)!.optionId} for ${st.ingredient}.`);
+        const asked = choices !== "best" && choices.some((c) => c.lineId === st.lineId);
+        const named = asked ? os.find((o) => (choices as Choice[]).some((c) => c.lineId === st.lineId && c.optionId === o.optionId)) : undefined;
+        if (asked && !named) throw new DockError(404, "option_not_found", `No verified option ${(choices as Choice[]).find((c) => c.lineId === st.lineId)!.optionId} for ${st.ingredient}.`);
+        // An ingredient the buyer was not asked about: the agent takes the best option alone only when the gate's
+        // preview says no one needs to sign it off (inside the kitchen's preferences, or nothing to buy).
+        const pick = named ?? (choices === "best" || who.agentAlone ? os.find((o) => !o.signOff.needed && o.kind === "ingredient") : undefined);
         if (!pick) continue;
         chosen.set(st.lineId, pick);
-        decisions.push({ lineId: st.lineId, ingredient: st.ingredient, optionId: pick.optionId, title: pick.title, by: choices === "best" ? `agent:${k.agentId} (alone: inside the kitchen's preferences)` : who.by });
+        decisions.push({ lineId: st.lineId, ingredient: st.ingredient, optionId: pick.optionId, title: pick.title, by: named ? who.by : `agent:${k.agentId} (alone: inside the kitchen's preferences)` });
       }
     }
     const lines = new Map<string, { productId: string; packs: number; substituteFor?: string }>();
@@ -582,7 +588,9 @@ export function createScenarios(deps: ScenarioDeps) {
         const st = ev!.cannotArrive.find((x) => x.lineId === l.lineId)!;
         if (!o) leftOff.push({ name: l.name, why: `${st.arrival.why}; no option chosen` });
         else if (o.kind === "dish" && o.dish) for (const x of o.dish.lines) add(x.productId, x.packs);
-        else for (const c of o.checks) if (c.product && c.product.packs > 0) add(c.product.productId, c.product.packs, c.main && st.product ? st.product.productId : undefined);
+        // The main part is declared a substitute for the product it replaces when that product has a price to compare
+        // with; one the wholesaler cannot offer at all has none, and the swap is then judged as a menu line (and logged).
+        else for (const c of o.checks) if (c.product && c.product.packs > 0) add(c.product.productId, c.product.packs, c.main && st.product && p.live.statuses[st.product.productId]?.offer ? st.product.productId : undefined);
         continue;
       }
       const open = l.doubts.filter((d) => !d.accepted);
@@ -597,7 +605,6 @@ export function createScenarios(deps: ScenarioDeps) {
       log(k, p, "substitution_chosen", `${d.ingredient}: ${o.rank} option "${o.title}" chosen by ${d.by}. Trade-off: ${o.tradeoff.taste}; ${o.tradeoff.texture}; work: ${o.tradeoff.work}.${o.checks.length ? ` Buys ${o.checks.filter((c) => c.product).map((c) => `${c.product!.packText} ${c.product!.name}${c.main ? " (the substitute)" : ""}`).join(" + ")}, ${formatEur(o.checks.reduce((s, c) => s + (c.product?.totalCents ?? 0), 0))}.` : ""} ${o.signOff.needed ? `Sign-off: ${o.signOff.reason}` : "Inside the kitchen's preferences."}`, { lineId: d.lineId, optionId: o.optionId, rank: o.rank, kind: o.kind, by: d.by, signOff: o.signOff.needed }, d.by.startsWith("agent:") ? `agent:${k.agentId}` : `buyer:${d.by}`);
     }
     if (!lines.size) throw new DockError(409, "menu_nothing_to_order", leftOff.length ? `Nothing on this menu can be ordered: ${leftOff.map((x) => `${x.name} (${x.why})`).join("; ")}.` : "Nothing on this menu is being bought.");
-    void who.agentAlone;
     return { lines: [...lines.values()], ...(want ? { deliveryDate: want } : {}), text: `Menu for ${p.settings.covers ?? "?"} covers: ${p.draft.dishes.filter((d) => !swappedDishes.has(d.name)).map((d) => d.name).concat([...chosen.values()].filter((o) => o.kind === "dish").map((o) => o.dish!.name)).join(", ")}`.slice(0, 2000), leftOff, decisions };
   }
 

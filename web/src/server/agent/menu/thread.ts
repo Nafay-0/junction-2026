@@ -79,9 +79,10 @@ async function namesIn(rt: Awaited<ReturnType<typeof kit>>["rt"], ids: string[],
 }
 
 const list = (xs: string[], lang: Lang) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} ${lang === "fi" ? "ja" : lang === "sv" ? "och" : "and"} ${xs.at(-1)}`);
-const at = (orderBy: string | undefined, lang: Lang) => (orderBy ? `${dayL(localNow(new Date(orderBy)).date, lang)} ${lang === "fi" ? "klo " : lang === "sv" ? "kl. " : ""}${clock(orderBy)}` : "");
+const at = (orderBy: string | undefined, lang: Lang) => (orderBy ? `${dayL(localNow(new Date(orderBy)).date, lang)} ${lang === "fi" ? "klo " : lang === "sv" ? "kl. " : "at "}${clock(orderBy)}` : "");
 const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
-const upper = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+/** Sentence case, and no double stop after a date that ends in one ("16.11.."). */
+const upper = (s: string) => (s.charAt(0).toUpperCase() + s.slice(1)).replace(/\.\.(?=\s|$)/g, ".").replace(/\.\?/g, "?");
 
 // ---------- scenario 1 ----------
 
@@ -114,7 +115,7 @@ async function seasonalSay(r: SeasonalResult, rt: Awaited<ReturnType<typeof kit>
     `Total ${money(r.totalCents)}. ${r.gate ? `The gate's preview: ${r.gate.outcome}${r.gate.approver ? `, sign-off by ${r.gate.approver.name}` : ""}.` : ""}`,
     ...r.blockers.map((b) => `Blocker: ${b}`),
   ];
-  return { planId: r.planId, kind: "seasonal", say: upper(parts.join(" ")), ask: t.askSheet, steps, facts: { seasonal: r, kitchen: kitchenName }, pending: { kind: "seasonal", planId: r.planId, options: [], words } };
+  return { planId: r.planId, kind: "seasonal", say: upper(parts.join(" ")), ask: upper(t.askSheet), steps, facts: { seasonal: r, kitchen: kitchenName }, pending: { kind: "seasonal", planId: r.planId, options: [], words } };
 }
 
 // ---------- scenario 2 ----------
@@ -150,7 +151,7 @@ async function eventSay(r: EventResult, rt: Awaited<ReturnType<typeof kit>>["rt"
     const earliest = r.allLate.earliest ? dayL(r.allLate.earliest, lang) : "";
     steps.push(`Nothing on the plan can come by ${r.allLate.neededBy}${r.allLate.earliest ? `; the earliest delivery is ${r.allLate.earliest}` : ""}: no recipe changes proposed, the fix is the day.`);
     if (r.allLate.earliest) pending.earliest = r.allLate.earliest;
-    return { planId: r.planId, kind: "event", say: t.allLate(day, earliest), ask: r.allLate.earliest ? t.askDay(earliest) : t.askSheet, steps, facts: { event: r }, pending };
+    return { planId: r.planId, kind: "event", say: upper(t.allLate(day, earliest)), ask: upper(r.allLate.earliest ? t.askDay(earliest) : t.askSheet), steps, facts: { event: r }, pending };
   }
   if (!r.cannotArrive.length) return { planId: r.planId, kind: "event", say: `${t.allArrive(day)} ${t.buy(r.lines.filter((l) => l.product).length, money(r.totalCents))}`, ask: t.askSheet, steps, facts: { event: r }, pending };
   const parts: string[] = [];
@@ -158,13 +159,21 @@ async function eventSay(r: EventResult, rt: Awaited<ReturnType<typeof kit>>["rt"
   const more = r.cannotArrive.length - named.length;
   parts.push(r.cannotArrive.length === 1 ? t.cannot(what(r.cannotArrive[0]), day, why(r.cannotArrive[0])) : t.cannotMany(r.cannotArrive.length, day, more > 0 ? `${named.join(", ")} ${t.more(more)}` : list(named, lang)));
   let ask = t.askSheet;
+  let rest = 0;
   // At most the first two ingredients get their options said; every option is in the steps.
   for (const x of r.cannotArrive) {
     const os = r.options[x.lineId] ?? [];
     steps.push(`${x.ingredient} does ${x.roleText ? `"${x.roleText}"` : "its job"} in ${x.dish} (role: ${x.role}).`);
     for (const o of os) steps.push(`  ${o.rank}: ${o.title} [${o.source}]. Taste: ${o.tradeoff.taste}; texture: ${o.tradeoff.texture}; work: ${o.tradeoff.work}.${o.checks.map((c) => ` ${c.part}: ${c.product ? `${c.product.packText} ${c.product.name}, ${money(c.product.totalCents)}` : "nothing"}; ${c.arrival.ok ? `arrives ${c.arrival.date}` : c.arrival.why}; rules ${c.rules.ok ? "pass" : c.rules.reason}.`).join("")} ${o.deltaCents !== null ? `${o.deltaCents >= 0 ? "+" : ""}${money(o.deltaCents)} against the original. ` : ""}${o.signOff.needed ? `Needs sign-off: ${o.signOff.reason}` : `Inside the kitchen's preferences: ${o.signOff.reason}`}`);
     for (const u of r.unresolved[x.lineId] ?? []) steps.push(`  not offered: ${u}`);
-    if (parts.length >= 3) continue;
+    if (parts.length >= 3) {
+      // Not said one by one: a yes takes the best verified option of each, which the steps list.
+      if (os[0]) {
+        pending.options.push({ optionId: os[0].optionId, lineId: x.lineId, words: optionWords(os[0], names) });
+        rest++;
+      }
+      continue;
+    }
     if (!os.length) {
       parts.push(t.noOption(what(x)));
       continue;
@@ -176,7 +185,8 @@ async function eventSay(r: EventResult, rt: Awaited<ReturnType<typeof kit>>["rt"
     pending.options.push(...os.slice(0, 2).map((o) => ({ optionId: o.optionId, lineId: x.lineId, words: optionWords(o, names) })));
     if (pending.options.length <= 2) ask = t.askChoice(optionLabel(best, names, lang), other ? optionLabel(other, names, lang) : undefined);
   }
-  return { planId: r.planId, kind: "event", say: upper(parts.join(" ")), ask, steps, facts: { event: r }, pending };
+  if (rest) parts.push(t.restBest(rest));
+  return { planId: r.planId, kind: "event", say: upper(parts.join(" ")), ask: upper(ask), steps, facts: { event: r }, pending };
 }
 
 /** Words of an option a buyer may say back: its product names and title, folded, five letters or more. */
@@ -236,7 +246,7 @@ export async function actOnScenario(slug: string, pending: PendingScenario, answ
       else if (best && pending.options.some((o) => o.optionId === best.optionId)) choices.push({ lineId: x.lineId, optionId: best.optionId });
     }
   } else choices = [];
-  const sheet = await scenarios.sheetOf(kitchen, pending.planId, choices, { by: who.by });
+  const sheet = await scenarios.sheetOf(kitchen, pending.planId, choices, { by: who.by, agentAlone: true });
   const session = await service.agentSession(kitchen);
   return { reply: [t.onSheet, sheet.leftOff.length ? t.leftOff(sheet.leftOff.map((x) => x.name).join(", ")) : ""].filter(Boolean).join(" "), sheet: { ...sheet, session } };
 }

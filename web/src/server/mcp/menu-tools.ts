@@ -94,7 +94,7 @@ export const MENU_TOOLS = [
     output: z.looseObject({ sheet: z.looseObject({}), order: z.looseObject({ orderId: z.string(), status: z.string() }), nextStep }),
     run: async (ctx, a) => {
       const { scenarios, k } = await kitchenOf(ctx);
-      const sheet = await scenarios.sheetOf(k, a.planId, a.choices ?? "best", { by: who(ctx, a.by) });
+      const sheet = await scenarios.sheetOf(k, a.planId, a.choices ?? "best", { by: who(ctx, a.by), agentAlone: true });
       const placed = await scenarios.order(k, a.planId, sheet);
       return { sheet, quote: placed.quote, order: placed.order, nextStep: nextStepForOrder(placed.order) };
     },
