@@ -105,7 +105,7 @@ export type PlanInput = {
   rules?: { text: string; source: string }[];
   /** Dishes refused under a rule, and dishes of the same kind that can be made instead (service.ts checkDishes). */
   refused?: { dishId: string; name: string; ingredient: string; allergen: string; rule: { text: string; source: string } }[];
-  instead?: { name: string; nameFi: string | null; course: string; portion: string; ingredients: string[]; checked: string }[];
+  instead?: { name: string; nameFi: string | null; nameSv?: string | null; course: string; portion: string; ingredients: string[]; checked: string }[];
 };
 
 export type DoubtKind = "cannot_arrive" | "no_safe_product" | "no_product" | "not_priced" | "allergen_unknown" | "different_form" | "amount_check" | "rule_conflict";

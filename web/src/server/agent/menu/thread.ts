@@ -78,6 +78,8 @@ async function namesIn(rt: Awaited<ReturnType<typeof kit>>["rt"], ids: string[],
   return new Map(ps.map((p) => [p.id, (lang === "fi" ? p.names?.fi : lang === "sv" ? p.names?.sv : p.names?.en) ?? p.names?.en ?? p.name]));
 }
 
+/** A dish's name in the reply's language when the planner gave one (the same model call writes en, fi, sv). */
+const dishL = (d: { name: string; nameFi?: string | null; nameSv?: string | null }, lang: Lang) => (lang === "fi" ? d.nameFi : lang === "sv" ? d.nameSv : null) || d.name;
 const list = (xs: string[], lang: Lang) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} ${lang === "fi" ? "ja" : lang === "sv" ? "och" : "and"} ${xs.at(-1)}`);
 const at = (orderBy: string | undefined, lang: Lang) => (orderBy ? `${dayL(localNow(new Date(orderBy)).date, lang)} ${lang === "fi" ? "klo " : lang === "sv" ? "kl. " : "at "}${clock(orderBy)}` : "");
 const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
@@ -102,7 +104,7 @@ async function seasonalSay(r: SeasonalResult, rt: Awaited<ReturnType<typeof kit>
   const day = r.deliverBy ? dayL(r.deliverBy, lang) : "";
   const parts = [
     r.anchor ? t.season(r.anchor.label[lang], list(r.anchor.products.slice(0, 3).map((p) => names.get(p.productId) ?? p.name), lang)) : t.noSeason,
-    t.dishes(r.dishes.length, covers, day, list(r.dishes.map((d) => d.name), lang)),
+    t.dishes(r.dishes.length, covers, day, list(r.dishes.map((d) => dishL(d, lang)), lang)),
     said.length ? t.onHand(list(said, lang)) : "",
     est.length ? t.estimate(list(est, lang)) : "",
     t.buy(buying.length, money(r.totalCents)),
@@ -127,7 +129,7 @@ export async function eventForThread(slug: string, words: string, by: string, la
 }
 
 function optionLabel(o: SubOption, names: Map<string, string>, lang: Lang): string {
-  if (o.kind === "dish" && o.dish) return o.dish.name;
+  if (o.kind === "dish" && o.dish) return dishL(o.dish, lang);
   if (lang === "en" || !o.checks.length) return lower(o.title);
   return list(o.checks.filter((c) => c.product).map((c) => names.get(c.product!.productId) ?? c.product!.name), lang);
 }
@@ -280,12 +282,12 @@ export async function menuChecks(slug: string, planId: string, lang: Lang = "en"
   let ask: string | undefined;
   if (c.refusedDish) {
     const r = c.refusedDish;
-    const fi = lang === "fi" ? (await service.get(kitchen, planId)).record.draft.dishes.find((d) => d.name === r.name)?.nameFi : undefined;
+    const drafted = (await service.get(kitchen, planId)).record.draft.dishes.find((d) => d.name === r.name);
     // "Fish fingers: its fish fingers, breaded, frozen is fish" says nothing: when the ingredient is the dish, say what it is.
     const same = fold(r.ingredient).includes(fold(r.name).split(/\s+/)[0]) || fold(r.name).includes(fold(r.ingredient).split(/[\s,]+/)[0]);
     const allergen = t.allergen[r.allergen] ?? (lang === "fi" ? "kiellettyä" : lang === "sv" ? "förbjudet" : "not allowed");
-    parts.push(t.refused(fi || r.name, same ? "" : lower(r.ingredient), allergen, r.rule.text));
-    ask = c.instead.length ? t.insteadAsk(list(c.instead.map((x) => (lang === "fi" && x.nameFi ? x.nameFi : x.name)), lang)) : t.noInstead;
+    parts.push(t.refused(drafted ? dishL(drafted, lang) : r.name, same ? "" : lower(r.ingredient), allergen, r.rule.text));
+    ask = c.instead.length ? t.insteadAsk(list(c.instead.map((x) => dishL(x, lang)), lang)) : t.noInstead;
   } else {
     for (const r of c.ruleRefusals.slice(0, 2)) parts.push(t.ruleLine(r.ingredient, r.rule.text));
     // The first reason only, without the planner's "Cannot arrive by …:" lead: the steps have the rest.

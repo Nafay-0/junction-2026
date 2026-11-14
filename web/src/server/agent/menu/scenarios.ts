@@ -75,7 +75,7 @@ export type SeasonalResult = {
   deliverBy: string | null;
   anchor: SeasonalAnchor | null;
   /** Each dish and the anchor product it is built on (by the chosen product's name), or null when the plan missed it. */
-  dishes: { dishId: string; name: string; course: string; anchorLine: string | null }[];
+  dishes: { dishId: string; name: string; nameFi: string | null; nameSv: string | null; course: string; anchorLine: string | null }[];
   lines: LineFacts[];
   said: SaidItem[];
   totalCents: number;
@@ -104,7 +104,7 @@ export type SubOption = RankedOption & {
   /** What the gate says of the swap: the agent may make it alone (inside the kitchen's preferences) or a person signs. */
   signOff: { needed: boolean; reason: string; approver: { name: string; role: string } | null; outcome: Decision["outcome"] | "unknown" };
   /** For a replacement dish: its name and lines. */
-  dish?: { name: string; planId: string; lines: { productId: string; packs: number; name: string }[] };
+  dish?: { name: string; nameFi?: string | null; nameSv?: string | null; planId: string; lines: { productId: string; packs: number; name: string }[] };
 };
 
 export type EventResult = {
@@ -113,7 +113,7 @@ export type EventResult = {
   requestId: string | null;
   covers: number | null;
   deliverBy: string | null;
-  dishes: { dishId: string; name: string; course: string }[];
+  dishes: { dishId: string; name: string; nameFi: string | null; nameSv: string | null; course: string }[];
   /** Every ingredient: arrives by the day, or why not. */
   lines: (LineFacts & { arrival: Arrival | null })[];
   cannotArrive: Stuck[];
@@ -304,7 +304,7 @@ export function createScenarios(deps: ScenarioDeps) {
       anchor,
       dishes: p.draft.dishes.map((d) => {
         const hit = anchor ? view.lines.find((l) => l.uses.some((u) => u.dishId === d.id) && anchorMatch(anchor, l)) : undefined;
-        return { dishId: d.id, name: d.name, course: d.course, anchorLine: hit?.chosen?.products[0].name ?? null };
+        return { dishId: d.id, name: d.name, nameFi: d.nameFi ?? null, nameSv: d.nameSv ?? null, course: d.course, anchorLine: hit?.chosen?.products[0].name ?? null };
       }),
       lines,
       said,
@@ -448,7 +448,7 @@ export function createScenarios(deps: ScenarioDeps) {
     const ranked = rankOptions([o])[0];
     if (!ranked) return undefined;
     void total;
-    return { ...ranked, signOff: { needed: false, reason: "every line is an ordinary product on the plan; the gate judges the order as a whole", approver: null, outcome: "unknown" }, dish: { name, planId: r.record.planId, lines: lines.flatMap((l) => l.chosen!.quoteLines.map((q) => ({ productId: q.productId, packs: q.quantity, name: l.chosen!.products.find((x) => x.productId === q.productId)?.name ?? q.productId }))) } };
+    return { ...ranked, signOff: { needed: false, reason: "every line is an ordinary product on the plan; the gate judges the order as a whole", approver: null, outcome: "unknown" }, dish: { name, nameFi: r.record.draft.dishes[0]?.nameFi ?? null, nameSv: r.record.draft.dishes[0]?.nameSv ?? null, planId: r.record.planId, lines: lines.flatMap((l) => l.chosen!.quoteLines.map((q) => ({ productId: q.productId, packs: q.quantity, name: l.chosen!.products.find((x) => x.productId === q.productId)?.name ?? q.productId }))) } };
   }
 
   /** `planId`: the same menu again for another day (no model call: the plan's date moves and its prices are asked again). */
@@ -531,7 +531,7 @@ export function createScenarios(deps: ScenarioDeps) {
       requestId: p.requestId ?? null,
       covers: p.settings.covers,
       deliverBy: want,
-      dishes: p.draft.dishes.map((d) => ({ dishId: d.id, name: d.name, course: d.course })),
+      dishes: p.draft.dishes.map((d) => ({ dishId: d.id, name: d.name, nameFi: d.nameFi ?? null, nameSv: d.nameSv ?? null, course: d.course })),
       lines,
       cannotArrive: stuck,
       allLate,

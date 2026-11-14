@@ -35,13 +35,17 @@ const Ingredient = z.object({
 
 const DishOutline = z.object({
   name: z.string(),
-  nameFi: z.string().nullable(),
+  nameFi: z.string().nullable().describe("the dish's name in Finnish"),
+  // Asked of the model in the outline (required there); optional in drafts recorded before it was asked.
+  nameSv: z.string().nullable().optional().describe("the dish's name in Swedish"),
   course: z.enum(COURSES),
   serviceDate: z.string().nullable().describe("YYYY-MM-DD, for a week menu"),
   portion: z.string().describe("portion per cover, a few words"),
   method: z.string().describe("one sentence: how it is cooked"),
 });
 const Dish = DishOutline.extend({ ingredients: z.array(Ingredient) });
+/** The outline as the model is asked for it: every dish named in Finnish and Swedish too (null when it has no name there). */
+const DishOutlineAsked = DishOutline.extend({ nameSv: z.string().nullable().default(null).describe("the dish's name in Swedish") });
 
 /** Step 1 output: the dishes, without ingredients. */
 export const LlmOutline = z.object({
@@ -54,7 +58,7 @@ export const LlmOutline = z.object({
   forbiddenAllergens: z.array(z.string()),
   assumptions: z.array(z.string()),
   conflicts: z.array(z.string()),
-  dishes: z.array(DishOutline),
+  dishes: z.array(DishOutlineAsked),
   alternatives: z.array(z.object({ title: z.string().describe("a few words, the chef's language"), dishes: z.array(z.string()) })).describe("only when the chef leaves the menu open: up to two other menus for the same request; else empty").default([]),
 });
 /** Step 2 output, once per dish. */
@@ -185,7 +189,7 @@ export function sanitiseDraft(raw: LlmMenuDraft): MenuDraft {
       corrections.push(`${d.name}: service date "${dishDate}" is not a date; used the plan's date.`);
       dishDate = null;
     }
-    dishes.push({ ...d, id: `dish_${di + 1}`, name: clean(d.name, 100), nameFi: d.nameFi ? clean(d.nameFi, 100) : null, portion: clean(d.portion, 120), method: clean(d.method, 300), serviceDate: dishDate, ingredients });
+    dishes.push({ ...d, id: `dish_${di + 1}`, name: clean(d.name, 100), nameFi: d.nameFi ? clean(d.nameFi, 100) : null, nameSv: d.nameSv ? clean(d.nameSv, 100) : null, portion: clean(d.portion, 120), method: clean(d.method, 300), serviceDate: dishDate, ingredients });
   });
   if (raw.isFoodOrderRequest && dishes.length === 0) corrections.push("The model said this is a food order but planned no dishes.");
   return {

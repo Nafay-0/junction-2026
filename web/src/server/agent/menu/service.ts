@@ -91,7 +91,7 @@ export type PlanRecord = {
 };
 
 export type RefusedDish = { dishId: string; name: string; ingredient: string; allergen: string; rule: { text: string; source: string } };
-export type InsteadDish = { name: string; nameFi: string | null; course: string; portion: string; ingredients: string[]; checked: string };
+export type InsteadDish = { name: string; nameFi: string | null; nameSv?: string | null; course: string; portion: string; ingredients: string[]; checked: string };
 
 export type PlanDeps = {
   dock: Dock;
@@ -443,7 +443,7 @@ export function createPlanService(deps: PlanDeps) {
         if (out.length >= 3 || definingConflict(d, forbidden, k.info.rules) || d.ingredients.some((i) => allergenInName([i.name, ...i.searchTerms].join(" "), forbidden))) continue;
         const sets = await Promise.all(d.ingredients.filter((i) => !i.pantry).map((i) => findCandidates(catalog, i, k.diet, allowed, 4)));
         const ok = sets.every((set) => set.candidates.some((c) => c.safety.verdict === "ok" && !nutritionFindings(k.mandate.nutritionRules ?? [], { productId: c.product.id, category: c.product.category, nutrition: c.product.nutrition ?? null }).length));
-        if (ok) out.push({ name: d.name, nameFi: d.nameFi, course: d.course, portion: d.portion, ingredients: d.ingredients.map((i) => i.name), checked: "every ingredient has a product in the range that passes the kitchen's allergen, diet and nutrition rules (master data); prices and delivery are checked when it is chosen" });
+        if (ok) out.push({ name: d.name, nameFi: d.nameFi, nameSv: d.nameSv ?? null, course: d.course, portion: d.portion, ingredients: d.ingredients.map((i) => i.name), checked: "every ingredient has a product in the range that passes the kitchen's allergen, diet and nutrition rules (master data); prices and delivery are checked when it is chosen" });
       }
       p.instead = out;
     } catch (err) {
@@ -932,7 +932,7 @@ export function listDraft(items: ListItem[], deliverBy?: string): { draft: MenuD
       assumptions: ["Read as written on the list: one line per item, the amount given, nothing scaled, added or left out."],
       conflicts: [],
       corrections: [],
-      dishes: [{ id: "list", name: "The list", nameFi: null, course: "other", serviceDate: deliverBy ?? null, portion: "as written", method: "a list of items to buy", ingredients }],
+      dishes: [{ id: "list", name: "The list", nameFi: null, nameSv: null, course: "other", serviceDate: deliverBy ?? null, portion: "as written", method: "a list of items to buy", ingredients }],
     },
   };
 }
