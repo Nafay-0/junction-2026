@@ -296,7 +296,7 @@ export function englishDays(text: string): string {
     const rest = all.slice(offset + m.length);
     const mark = /^(\}\}|\*\*)/.exec(rest)?.[0] ?? "";
     const after = rest.slice(mark.length);
-    const ends = dot === "." && (/^\s*$/.test(after) || /^\s+[\p{Lu}"“*{]/u.test(after));
+    const ends = dot === "." && (/^\s*$/.test(after) || /^\s+[\p{Lu}"“]/u.test(after));
     return `${w}${sp}${Number(d)} ${MON[Number(mo) - 1]}${ends && !mark ? "." : ""}${ends && mark ? "" : ""}`;
-  }).replace(/(\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec))(\}\}|\*\*)(?=\s+[\p{Lu}"“*{]|\s*$)/gu, "$1$2.");
+  }).replace(/(\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec))(\}\}|\*\*)(?=\s+[\p{Lu}"“]|\s*$)/gu, "$1$2.");
 }

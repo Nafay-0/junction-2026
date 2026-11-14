@@ -980,6 +980,28 @@ ALL.push({
   expect: [oatYoghurtOffered],
 });
 
+// ---------- the repeat-order guard: the same order twice, said with both figures ----------
+
+const repeatSaid: Check = {
+  name: "the second identical order is paused by the repeat check (the mistake check's duplicate_recent), never placed twice",
+  run: (o) => ok(o.concerns.some((c) => c.code === "duplicate_recent") && o.orders.filter((x) => x.status === "committed" || x.status === "pending_approval").length <= 1, `concerns: ${o.concerns.map((c) => c.code).join(", ") || "none"}; orders: ${o.orders.length}`),
+};
+for (const [slug, words] of [
+  ["hotel-lumo", "30 litres of lactose-free milk for Tuesday"],
+  ["koulu-metsola", "20 litres of semi skimmed milk for Tuesday"],
+  ["kahvila-sointu", "10 litres of oat drink for Tuesday"],
+] as const)
+  ALL.push({
+    id: `repeat-order-guard@${slug}`,
+    title: `The same order twice (${slug}): paused, with the earlier order's amount and day`,
+    tag: "mistake check",
+    kitchen: slug,
+    lang: "en",
+    turns: [{ say: words }, { say: "yes, order it" }, { say: words }],
+    goal: "answer",
+    expect: [repeatSaid],
+  });
+
 // ---------- a backup in case it is not delivered (server/reliability) ----------
 
 /** The kitchen's own view of its backups after the conversation, for the checks (per run). */

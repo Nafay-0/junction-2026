@@ -83,6 +83,7 @@ describe("englishDays", () => {
     expect(englishDays("the earliest delivery is Mon 16.11. Plan it for Mon 16.11. instead?")).toBe("the earliest delivery is Mon 16 Nov. Plan it for Mon 16 Nov instead?");
     expect(englishDays("It arrives {{Monday 16.11.}} Shall I order it?")).toBe("It arrives {{Monday 16 Nov}}. Shall I order it?");
     expect(englishDays("on Tue 17.11., then")).toBe("on Tue 17 Nov, then");
+    expect(englishDays("cancel until {{Sunday 15.11.}} {{17.00}}.")).toBe("cancel until {{Sunday 15 Nov}} {{17.00}}.");
   });
 });
 
