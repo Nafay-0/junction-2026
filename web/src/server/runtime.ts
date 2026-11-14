@@ -16,6 +16,7 @@ import { DEMO_ORG, demoOrgKeyPair } from "./dev-fixtures";
 import { selectAdapters, type AivenHandle } from "./aiven";
 import { LiveCacheSlot, liveCacheSlots } from "./aiven/live-slot";
 import { MandateBook } from "./mandates";
+import { attachTimeMachine } from "./mariadb/attach";
 import { admission } from "./ops/onsite";
 import { suspensions } from "./ops/suspensions";
 import { recallLayer } from "./radar/gate";
@@ -131,6 +132,9 @@ async function buildRuntime(): Promise<Runtime> {
   await sandboxes.restore();
   const rt: Runtime = { dock, outbox, catalog, catalogSource, events, passkeys, sandboxes, aiven, kitchens: stores.kitchens, mandates };
   radar(rt); // starts the recall radar's schedule (not under tests, during a build, or with RADAR_POLL=off)
+  // MARIADB TIME MACHINE (src/server/mariadb): only with DOCK_MARIADB_URL. Mirrors what the gate reads into
+  // system-versioned tables after the fact; never in the path of an order.
+  attachTimeMachine(rt, stores);
   return rt;
 }
 

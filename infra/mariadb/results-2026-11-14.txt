@@ -1,0 +1,171 @@
+$ tsx scripts/mariadb-reproduce.ts --no-docker
+Connected to 127.0.0.1:3407/dock_audit, MariaDB 12.3.3-MariaDB-ubu2404.
+
+== Seeding the scenario through the real order flow ====================================================
+  A  ord_09dadb98f3f14b37  committed         auto_approve
+  B  ord_3d1a4ef095044ebb  committed         needs_human_approval
+  C  ord_7b817d1d20694692  committed         auto_approve
+  D  ord_155445d2da64481e  committed         auto_approve
+  H  ord_e33b169878294d83  committed         auto_approve
+  E  ord_1d8b3eea2a9a46bf  committed         auto_approve
+  F  ord_4fd36b3a47884818  committed         needs_human_approval
+  G  ord_1d6e27cb12bc4c06  committed         auto_approve
+Seeded in 1940 ms: 78 orders, 78 gate decisions, 6 calls refused before an order, 110 mirror transactions (167 inserts, 92 updates, 0 quiet updates, 0 deletes).
+Scenario starts Tue 20.10. 03.00 (Helsinki); every row's ROW_START is the scenario's own moment.
+
+== The rules for Koulukeittiö Aurinko (seeded scenario) the instant before order B (Wed 21.10. 10.31) and now 
+THEN
+  Spend this week  (since Wed 21.10. 10.12, by order ord_09dadb98f3f14b37, committed)
+      €75.60 committed, over 1 order in the last 7 days.
+  Kitchen rule  (since Tue 20.10. 09.05, by Aino Virtanen (kitchen manager))
+      Always lactose-free: the whole school eats from the same pots
+  Mandate of Koulukeittiö Aurinko (seeded scenario)  (since Tue 20.10. 09.00, by Koulukeittiö Aurinko (seeded scenario), signed mandate mnd_aurinko_v1)
+      Spends up to €400 per order alone; above that a person signs.
+      Weekly budget €3,000, a hard limit.
+      Product groups: milk, plant drinks, cream.
+      Every product lactose-free.
+      No allergen forbidden.
+      Delivery within 5 days. Swaps: like for like alone, anything else to a person, at most +10 % per unit.
+      Sign-off: Aino Virtanen (kitchen manager) up to €2,500; Mikko Laine (finance director) up to €10,000.
+NOW
+  Spend this week  (since Wed 11.11. 09.02, by order ord_1d6e27cb12bc4c06, committed)
+      €2,537 committed, over 4 orders in the last 7 days.
+  Kitchen rule  (since Tue 27.10. 07.45, by Aino Virtanen (kitchen manager))
+      Never gluten: two pupils are coeliac
+  Kitchen rule  (since Tue 20.10. 09.05, by Aino Virtanen (kitchen manager))
+      Always lactose-free: the whole school eats from the same pots
+  Mandate of Koulukeittiö Aurinko (seeded scenario)  (since Wed 4.11. 08.00, by Koulukeittiö Aurinko (seeded scenario), signed mandate mnd_aurinko_v3)
+      Spends up to €1,000 per order alone; above that a person signs.
+      Weekly budget €3,000, a hard limit.
+      Product groups: milk, plant drinks, cream.
+      Every product lactose-free.
+      Never: gluten.
+      Delivery within 5 days. Swaps: like for like alone, anything else to a person, at most +10 % per unit.
+      Sign-off: Aino Virtanen (kitchen manager) up to €2,500; Mikko Laine (finance director) up to €10,000.
+
+  One statement each:
+    SELECT area, org_id, item, in_force, value, changed_by, since, until
+      FROM gate_rules FOR SYSTEM_TIME AS OF TIMESTAMP ?
+     WHERE org_id IN (?, '*') AND in_force = 1
+     ORDER BY area, item
+
+== What changed in between, who changed it, when =======================================================
+  Wed 21.10. 10.32 Weekly spend  Weekly spend waiting for sign-off €0 to €645  [order ord_3d1a4ef095044ebb, pending approval]
+  Wed 21.10. 10.39 Weekly spend  Weekly spend committed this week €75.60 to €720.60, waiting for sign-off €645 to €0  [order ord_3d1a4ef095044ebb, committed]
+  Tue 27.10. 07.45 Kitchen rule  Rule added: “Never gluten: two pupils are coeliac”  [Aino Virtanen (kitchen manager)]
+  Tue 27.10. 08.00 Mandate       Mandate reissued: Never these allergens none to gluten  [Koulukeittiö Aurinko (seeded scenario), signed mandate mnd_aurinko_v2]
+  Wed 28.10. 11.20 Weekly spend  Weekly spend committed this week €720.60 to €0  [the 7-day window moved on]
+  Thu 29.10. 10.00 Recall hold   Valio Eila lactose-free semi-skimmed milk drink 1.5 %, 10 L bag-in-box put on a recall drill: Recall drill (synthetic): batch 2611 treated as recalled for a possible foreign object.  [Leena Korhonen (quality)]
+  Thu 29.10. 11.32 Weekly spend  Weekly spend committed this week €0 to €342.50  [order ord_7b817d1d20694692, committed]
+  Sat 31.10. 09.00 Recall hold   Hold on Valio Eila lactose-free semi-skimmed milk drink 1.5 %, 10 L bag-in-box lifted: Drill closed: batch 2611 cleared.  [Leena Korhonen (quality)]
+  Sat 31.10. 10.02 Weekly spend  Weekly spend committed this week €342.50 to €729.50  [order ord_155445d2da64481e, committed]
+  Tue 3.11. 03.00 Suspension    Aurinko's buyer agent suspended: “Calls at 03.00 from an address the kitchen does not use”  [Jussi Nieminen (operations)]
+  Tue 3.11. 09.30 Suspension    Aurinko's buyer agent resumed: “The kitchen confirmed: a new tablet in the night kitchen”  [Jussi Nieminen (operations)]
+  Wed 4.11. 08.00 Mandate       Mandate reissued: Limit per order the agent may spend alone €400 to €1,000  [Koulukeittiö Aurinko (seeded scenario), signed mandate mnd_aurinko_v3]
+  Fri 6.11. 11.38 Weekly spend  Weekly spend committed this week €729.50 to €387  [the 7-day window moved on]
+  Sat 7.11. 11.42 Weekly spend  Weekly spend committed this week €387 to €0  [order ord_155445d2da64481e, committed]
+  Tue 10.11. 09.32 Weekly spend  Weekly spend committed this week €0 to €645  [order ord_e33b169878294d83, committed]
+  Wed 11.11. 08.02 Weekly spend  Weekly spend committed this week €645 to €1,539  [order ord_1d8b3eea2a9a46bf, committed]
+  Wed 11.11. 08.22 Weekly spend  Weekly spend waiting for sign-off €0 to €894  [order ord_4fd36b3a47884818, pending approval]
+  Wed 11.11. 08.29 Weekly spend  Weekly spend committed this week €1,539 to €2,433, waiting for sign-off €894 to €0  [order ord_4fd36b3a47884818, committed]
+  Wed 11.11. 09.02 Weekly spend  Weekly spend committed this week €2,433 to €2,537  [order ord_1d6e27cb12bc4c06, committed]
+
+  One statement:
+    SELECT area, org_id, item, in_force, value, changed_by, since, until
+      FROM gate_rules FOR SYSTEM_TIME FROM TIMESTAMP ? TO TIMESTAMP ?
+     WHERE org_id IN (?, '*')
+     ORDER BY area, item, since
+
+== Would it pass today? The real gate (core/policy.ts evaluatePolicy), run again =======================
+
+Order A: 40 × Pohjolan Kaura barista oat drink, 1 L (€75.60), placed Wed 21.10. 10.12
+  recorded then by the gate     auto_approve  -> replay reproduces it: yes; mirror terms match the order's own mandate: yes
+  with the rules then            Placed by the agent alone
+  with today's rules             Refused
+    differs: No forbidden allergens [forbidden_allergens]: pass -> fail. Today: PK-4001 contains forbidden allergen(s): gluten.
+  kitchen reads: When it was placed: placed by the agent alone. Today: refused, because your mandate now forbids gluten.
+
+Order B: 50 × Valio Eila lactose-free semi-skimmed milk drink 1.5 %, 10 L bag-in-box (€645), placed Wed 21.10. 10.32
+  recorded then by the gate     needs_human_approval  -> replay reproduces it: yes; mirror terms match the order's own mandate: yes
+  with the rules then            Needs a person's sign-off
+  with today's rules             Refused
+    differs: The weekly budget is a hard limit [weekly_budget]: pass -> fail. Today: This €645.00 order would take weekly spend to €3,182.00, over the €3,000.00 budget (already €2,537.00 committed).
+    differs: The agent's own spending limit [per_order_limit]: escalate -> pass. Today: Total €645.00 is within the €1,000.00 per-order limit.
+  kitchen reads: When it was placed: needs a person's sign-off. Today: refused, because this week's spend is €2,537 of €3,000; the agent's own limit is €1,000 now (it was €400).
+
+Order D: 30 × Valio Eila lactose-free semi-skimmed milk drink 1.5 %, 10 L bag-in-box (€387), placed Sat 31.10. 10.02
+  recorded then by the gate     auto_approve  -> replay reproduces it: yes; mirror terms match the order's own mandate: yes
+  with the rules then            Placed by the agent alone
+  with today's rules             Placed by the agent alone
+    no rule differs
+  kitchen reads: Under today's rules this order would get the same answer as when it was placed: placed by the agent alone.
+
+Order D slid to Thu 29.10. 11.00 (during the recall drill): Refused
+    differs from now: No product on a recall hold [recall_hold]: fail then, pass now. DRILL, not a real recall: Valio Eila lactose-free semi-skimmed milk drink 1.5 %, 10 L bag-in-box (VA-1010) is held by the wholesaler: Recall drill (synthetic): batch 2611 treated as recalled for a possible foreign object. Notice: https://example.org/dock-recall-drill/2611
+
+Order D slid to Tue 3.11. 03.30 (while the agent was suspended): Refused at the door
+    differs from now: Not suspended by the wholesaler's staff [operator_suspension]: fail then, pass now. Suspended by Jussi Nieminen (operations): “Calls at 03.00 from an address the kitchen does not use”.
+
+== Measurements ========================================================================================
+Rows now and versions kept (history = all versions minus current rows):
+  gate_mandate              3 current       4 history
+  gate_kitchen_rule         3 current       0 history
+  gate_product_hold         1 current       1 history
+  gate_suspension           1 current       1 history
+  gate_budget               3 current      74 history
+  gate_order               78 current      12 history
+  on disk (data + indexes, InnoDB pages): gate_budget 16 KiB, gate_decision 64 KiB, gate_kitchen_rule 16 KiB, gate_mandate 32 KiB, gate_order 32 KiB, gate_order_body 16 KiB, gate_product_hold 32 KiB, gate_suspension 32 KiB, mirror_meta 16 KiB
+  181 row versions in all.
+
+Query times, 200 runs each after 5 warm-up runs, median and p95, measured in Node around pool.query (network round trip to the container included):
+  rules AS OF a past moment (view over 5 versioned tables)   median 0.96 ms  p95 2.21 ms
+  rules AS OF now                                             median 0.63 ms  p95 1.40 ms
+  every version FROM then TO now (the changes)                median 1.34 ms  p95 3.13 ms
+  the whole page answer for one order (8 statements + 3 gate runs)  median 5.99 ms  p95 10.65 ms (50 runs)
+
+== MariaDB Vector: decisions like this one, with the rules each was judged under =======================
+Embedded and stored 78 decisions in 2290 ms (openai:text-embedding-3-small, 4309 tokens so far).
+Decisions like order B's:
+  0.000  Wed 21.10. 10.32  needs_human_approval  [per_order_limit]  limit then €400, never then: -
+  0.119  Wed 11.11. 08.22  needs_human_approval  [order_splitting]  limit then €1,000, never then: gluten
+  0.130  Thu 22.10. 20.35  needs_human_approval  [per_order_limit]  limit then €250, never then: -
+  0.134  Fri 30.10. 17.35  needs_human_approval  [per_order_limit]  limit then €250, never then: -
+  0.139  Sat 31.10. 13.02  needs_human_approval  [per_order_limit]  limit then €250, never then: -
+
+  One statement:
+    SELECT n.order_id, n.at, n.org_id, n.door, n.outcome, n.rules_hit, n.explanation, n.distance,
+           m.per_order_limit_cents, m.weekly_budget_cents, m.forbidden_allergens, m.required_attributes,
+           m.ROW_START AS terms_since, m.changed_by AS terms_by
+      FROM (SELECT entry_hash, order_id, at, org_id, agent_id, door, outcome, rules_hit, explanation,
+                   VEC_DISTANCE_COSINE(embedding, VEC_FromText(?)) AS distance
+              FROM gate_decision
+             ORDER BY distance
+             LIMIT ?) AS n
+      LEFT JOIN gate_mandate FOR SYSTEM_TIME ALL AS m
+             ON m.agent_id = n.agent_id AND m.ROW_START <= n.at AND n.at < m.ROW_END
+     ORDER BY n.distance
+  combined vector + FOR SYSTEM_TIME query: median 4.00 ms  p95 8.87 ms (200 runs, 78 decisions)
+  EXPLAIN (table:index): <derived2>:-, m:PRIMARY, gate_decision:embedding
+
+Does it earn its place? Ten questions staff might type, precision at 5 (share of the top 5 whose deciding rule is the one asked about):
+  orders stopped because the product contained something the kitchen  vector 1/5   FULLTEXT 0/5   (1 relevant in the corpus)
+  the agent tried to buy a kind of product the kitchen does not allo  vector 4/5   FULLTEXT 5/5   (12 relevant in the corpus)
+  too expensive for the agent to buy on its own, a manager had to ap  vector 3/5   FULLTEXT 0/5   (4 relevant in the corpus)
+  the week's money had already run out                                vector 0/5   FULLTEXT 0/5   (0 relevant in the corpus)
+  it would have come too late                                         vector 4/5   FULLTEXT 0/5   (4 relevant in the corpus)
+  a different product than the one asked for, and it cost much more   vector 3/5   FULLTEXT 3/5   (7 relevant in the corpus)
+  swapped brand needed someone to say yes                             vector 0/5   FULLTEXT 0/5   (6 relevant in the corpus)
+  small orders that together were too big                             vector 2/5   FULLTEXT 2/5   (2 relevant in the corpus)
+  milk that was not lactose free                                      vector 0/5   FULLTEXT 0/5   (8 relevant in the corpus)
+  went through without anyone having to check                         vector 5/5   FULLTEXT 0/5   (35 relevant in the corpus)
+  Mean precision at 5: vector 0.44, FULLTEXT keyword baseline 0.20, best possible on this corpus 0.72 (FULLTEXT returned anything for 6 of 10 questions).
+  Embedding tokens spent in this run: 4409 (about $0.00009).
+
+== Scale: AS OF over one versioned table with 100,000 history versions =================================
+  Loaded 100,000 history versions for 100 agents in 15054 ms (one UPDATE per version step, with @@timestamp set).
+  one agent's terms AS OF a moment 200 days back           median 1.78 ms  p95 3.64 ms
+  all 100 agents AS OF that moment (scan)                   median 15.57 ms  p95 23.17 ms
+  table size 7,696 KiB (data and indexes). The table is dropped afterwards, so the demo database stays as seeded.
+
+Done. Point the app at the same database to explore it on /ops/time-machine:
+  DOCK_MARIADB_URL=mariadb://dock:<password>@127.0.0.1:3407/dock_audit (the container's password is in infra/mariadb/compose.yaml)
