@@ -205,7 +205,9 @@ export function checkDelivery(need: StructuredNeed, ctx: CheckContext): Concern[
   if (!days.includes(isoWeekday(date))) {
     const before = nextDeliveryDay(date, days, -1);
     const after = nextDeliveryDay(date, days, 1);
-    const corrections = [...(before && before >= (earliest ?? before) ? toDate(before, "The delivery day before") : []), ...toDate(after, "The next delivery day")];
+    // The kitchen receives only on its delivery days: the day chosen is the day delivered, never an earlier one it cannot take.
+    const onDay = (d: string | undefined, label: string): Correction[] => toDate(d, label).map((c) => ({ ...c, patch: { ...c.patch, deliverOn: d } }));
+    const corrections = [...(before && before >= (earliest ?? before) ? onDay(before, "The delivery day before") : []), ...onDay(after, "The next delivery day")];
     // When a person told the memory which days the kitchen receives, say so in their words.
     const told = activeMemory(ctx.profile, { now: ctx.now }).find((m) => m.fact.kind === "delivery_days" && m.strength === "rule" && m.derived?.deliveryWeekdaysBefore);
     return [
