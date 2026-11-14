@@ -536,7 +536,12 @@ async function showLine(run: TurnRun, text: string): Promise<void> {
   // Checked as the model wrote it (its dates as "16.11."); worded for the buyer after (plainLine: English days, no codes).
   const one = text.replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n").trim().slice(0, 600).replace(/(\d{1,2}\.\d{1,2}\.)(\}\}|\*\*)?\./g, "$1$2");
   if (!one) return;
-  const plain = one.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\{\{([^}]+)\}\}/g, "$1");
+  // For the check, an English day "18 Nov" is read as the date it is ("18.11.").
+  const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+  const plain = one
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\{\{([^}]+)\}\}/g, "$1")
+    .replace(/\b(\d{1,2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\b/g, (_m, d: string, mo: string) => `${d}.${MONTHS.indexOf(mo.toLowerCase()) + 1}.`);
   // Under 60 words: whole sentences from the start while they fit, and a closing question kept (it is what is open).
   const words = (x: string) => x.replace(/\*\*|\{\{|\}\}/g, "").split(/\s+/).filter(Boolean).length;
   if (words(one) > 60) {
@@ -549,7 +554,7 @@ async function showLine(run: TurnRun, text: string): Promise<void> {
   }
   const onScreen = [...new Set(run.store.cards(run.thread).flatMap((x) => ("requestId" in x.card && x.card.requestId ? [x.card.requestId] : [])))].slice(-3);
   const steps = await Promise.all(onScreen.map((id) => run.rt.dock.intake.get(run.session, id).catch(() => undefined)));
-  const facts = addWords(factsFrom(...run.facts, ...steps.filter(Boolean), run.store.cards(run.thread).slice(-12).map((x) => x.card)), `${run.buyer.text ?? ""} ${freeOf(run.buyer.text ?? "")}`);
+  const facts = addWords(factsFrom(...run.facts, ...steps.filter(Boolean), run.store.cards(run.thread).slice(-12).map((x) => x.card)), run.buyer.text ?? "");
   const g = groundForDisplay("thread", plain, facts, { where: `thread ${run.thread.threadId}`, replacement: "" });
   if (g.violations.length) {
     record(run, "grounding_refusal", `A sentence of the agent's reply was not shown: it said ${g.violations.map((v) => `"${v.said}" (${v.kind})`).join(", ")}, which the data does not back.`, { said: one, violations: g.violations });
@@ -566,21 +571,7 @@ async function showLine(run: TurnRun, text: string): Promise<void> {
   run.store.mark(run.thread, run.turnId, "line", Date.now() - run.t0);
 }
 
-/** "No nuts", "ilman gluteenia": the buyer's own words, said as the claim they make ("nut-free"), for the check. */
-function freeOf(words: string): string {
-  const out: string[] = [];
-  const pairs: [RegExp, string][] = [
-    [/\b(no|without|ei|ilman)\s+(nuts?|pähkinö\w*|pähkinä\w*)/i, "nut-free nut free"],
-    [/\b(no|without|ei|ilman)\s+(peanuts?|maapähkin\w*)/i, "peanut-free"],
-    [/\b(no|without|ei|ilman)\s+(gluten\w*|gluteeni\w*)/i, "gluten-free"],
-    [/\b(no|without|ei|ilman)\s+(milk|dairy|maito\w*)/i, "milk-free dairy-free"],
-    [/\b(no|without|ei|ilman)\s+(eggs?|kanamuna\w*|muna\w*)/i, "egg-free"],
-    [/\b(no|without|ei|ilman)\s+(fish|kala\w*)/i, "fish-free"],
-    [/\b(no|without|ei|ilman)\s+(lactose|laktoosi\w*)/i, "lactose-free"],
-  ];
-  for (const [re, w] of pairs) if (re.test(words)) out.push(w);
-  return out.join(" ");
-}
+
 
 /** How long the turn shows the memory step as working before it lets the writer finish out of sight. */
 const MEMORY_STEP_WAIT_MS = 6_000;
