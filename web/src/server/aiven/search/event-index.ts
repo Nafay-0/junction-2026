@@ -206,13 +206,27 @@ export const eventDocId = (e: ActionEvent) => (e.ledgerSeq !== undefined ? `l${e
 
 const g = globalThis as typeof globalThis & { __dockEventIndexer?: EventIndexer | null };
 
-/** The process's indexer when OPENSEARCH_URL is set and DOCK_EVENTS_INDEX is not "off"; null otherwise (and under tests). */
+/**
+ * The process's indexer: on when the OpenSearch adapter is on (DOCK_SEARCH=opensearch, or DOCK_AIVEN=1 with
+ * OPENSEARCH_URL: the deployed site) or DOCK_EVENTS_INDEX names an index; "off" switches it off. A laptop with only
+ * the service addresses in .env.local writes nothing to the hosted service. Null under tests and the build.
+ */
 export function eventIndexer(): EventIndexer | null {
   if (g.__dockEventIndexer !== undefined) return g.__dockEventIndexer;
   const url = (process.env.OPENSEARCH_URL ?? process.env.OPENSEARCH_URI)?.trim();
   const name = process.env.DOCK_EVENTS_INDEX?.trim();
-  g.__dockEventIndexer = !url || name === "off" || process.env.VITEST || process.env.NEXT_PHASE === "phase-production-build" ? null : new EventIndexer({ url }, name || EVENTS_INDEX);
+  const on = !!name || openSearchAdapterOn();
+  g.__dockEventIndexer = !url || !on || name === "off" || process.env.VITEST || process.env.NEXT_PHASE === "phase-production-build" ? null : new EventIndexer({ url }, name || EVENTS_INDEX);
   return g.__dockEventIndexer;
+}
+
+/** DOCK_SEARCH=opensearch, or DOCK_AIVEN=1 with OPENSEARCH_URL (server/aiven/env.ts): the switch the other adapters use. */
+export function openSearchAdapterOn(): boolean {
+  const v = (n: string) => process.env[n]?.trim();
+  const url = v("OPENSEARCH_URL") || v("OPENSEARCH_URI");
+  if (!url) return false;
+  const search = v("DOCK_SEARCH");
+  return search ? search === "opensearch" : /^(1|true|yes|on)$/i.test(v("DOCK_AIVEN") ?? "");
 }
 
 /** For tests. */

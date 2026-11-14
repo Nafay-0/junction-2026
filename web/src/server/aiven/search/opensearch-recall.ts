@@ -50,6 +50,16 @@ export function toRecallDoc(p: IndexedProduct, vector: Float32Array | number[] |
   };
 }
 
+/** The allergens whose declared absence meets a claim (the same table as core/claim-evidence.ts, checked by a test). */
+export const CLAIM_ALLERGENS: Record<string, string[]> = {
+  lactose_free: ["milk", "lactose"],
+  low_lactose: ["milk", "lactose"],
+  egg_free: ["eggs"],
+  soy_free: ["soy"],
+  wheat_free: ["wheat"],
+  gluten_free: ["gluten", "oats"],
+};
+
 export type RecallFilters = { claims: string[]; forbiddenAllergens: string[]; category?: string; ids?: string[] };
 
 /** The cheap exact filters, in OpenSearch's words. */
@@ -61,7 +71,13 @@ export function recallFilter(f: RecallFilters): { filter: unknown[]; must_not: u
     const codes = categoryCodesFor(f.category);
     filter.push(codes.length ? { terms: { categoryCode: codes } } : { match_none: {} });
   }
-  for (const c of f.claims) filter.push({ term: { claims: c } });
+  for (const c of f.claims) {
+    // A claim that is the absence of declared allergens can be met without the label (core/claim-evidence.ts: the
+    // declaration, fresh produce by nature, an ingredient list): the query keeps every product that might meet it and
+    // the code's hard filter decides. Other claims (vegan, organic) are the label only.
+    const absent = CLAIM_ALLERGENS[c];
+    filter.push(absent ? { bool: { should: [{ term: { claims: c } }, { bool: { must_not: [{ terms: { "allergens.contains": absent } }, { terms: { "allergens.may_contain": absent } }] } }], minimum_should_match: 1 } } : { term: { claims: c } });
+  }
   for (const a of f.forbiddenAllergens) {
     mustNot.push({ term: { "allergens.contains": a } }, { term: { "allergens.may_contain": a } });
     // Unknown is not safe: declared data, or "free from", or fresh produce (174xx) that may be safe by its nature

@@ -30,7 +30,8 @@ import { loadVectorsFile, resolveVectorsFile, type ProductVectors } from "./vect
  *   DOCK_SEARCH_VECTORS_PATH         the vectors file (default .data/valio/search-vectors.json.gz; pnpm search:vectors)
  *   DOCK_SEARCH_DAILY_CALLS          smart search's model calls per UTC day (server/limits.ts)
  *   DOCK_SEARCH_RECALL_BACKEND       "memory" (default) or "opensearch": which recall backend answers first, the other
- *                                    is the fallback (recall-router.ts); OpenSearch needs OPENSEARCH_URL
+ *                                    is the fallback (recall-router.ts); OpenSearch needs OPENSEARCH_URL and, for the
+ *                                    fallback role, the OpenSearch adapter on (DOCK_SEARCH=opensearch or DOCK_AIVEN=1)
  *   DOCK_SEARCH_RECALL_TIMEOUT_MS    OpenSearch recall's deadline (default 400)
  *   DOCK_SEARCH_RECALL_INDEX         the OpenSearch index or alias with the vectors (default dock-recall)
  *   DOCK_SEARCH_RECALL_BACKEND=memory-only   never ask OpenSearch, even with OPENSEARCH_URL set
@@ -79,7 +80,12 @@ function embedder(dim: number) {
 /** The OpenSearch side of recall, when OPENSEARCH_URL is set (Aiven Runtime injects OPENSEARCH_URI; env.ts copies it). */
 async function openSearchRecall(): Promise<{ lists: import("./recall-router").ListsSource; index: string; ready: boolean } | undefined> {
   const url = envValue("OPENSEARCH_URL") ?? envValue("OPENSEARCH_URI");
-  if (!url || envValue("DOCK_SEARCH_RECALL_BACKEND") === "memory-only") return undefined;
+  const backend = envValue("DOCK_SEARCH_RECALL_BACKEND");
+  if (!url || backend === "memory-only") return undefined;
+  // Asked for by name, or the OpenSearch adapter is on (DOCK_SEARCH=opensearch or DOCK_AIVEN=1, as deployed): a laptop
+  // with only the address in .env.local does not send searches to the hosted service.
+  const { openSearchAdapterOn } = await import("@/server/aiven/search/event-index");
+  if (backend !== "opensearch" && !envValue("DOCK_SEARCH_RECALL_INDEX") && !openSearchAdapterOn()) return undefined;
   const { OpenSearchRecall, RECALL_ALIAS } = await import("@/server/aiven/search/opensearch-recall");
   const index = envValue("DOCK_SEARCH_RECALL_INDEX") ?? RECALL_ALIAS;
   const timeoutMs = num("DOCK_SEARCH_RECALL_TIMEOUT_MS", 400);

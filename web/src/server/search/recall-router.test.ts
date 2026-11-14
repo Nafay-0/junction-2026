@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildRecallSearches, cosineOf, recallFilter, toExternalLists, toRecallDoc } from "@/server/aiven/search/opensearch-recall";
+import { DERIVABLE_CLAIMS, claimEvidence } from "@/core/claim-evidence";
+import { CLAIM_ALLERGENS, buildRecallSearches, cosineOf, recallFilter, toExternalLists, toRecallDoc } from "@/server/aiven/search/opensearch-recall";
 import { KnowledgeMap } from "@/server/knowledge/map";
 import { testKnowledge, testProducts } from "@/server/knowledge/test-catalogue";
 import { SearchIndex, fuseLists, type ExternalLists, type Understood } from "./recall";
@@ -160,9 +161,20 @@ describe("the OpenSearch side: one msearch, cheap exact filters pushed down", ()
     const knn = (s[2].body.query as { knn: { vec: { k: number; filter: { bool: { filter: unknown[]; must_not: unknown[] } } } } }).knn.vec;
     expect(knn.k).toBe(60 + 40); // 60 nearest, plus room for the code's own allergen rule
     expect(JSON.stringify(knn.filter.bool.filter)).toContain('"claims":"lactose_free"');
+    // lactose-free can be met by a declaration without milk: the query keeps those for the code's rule to decide.
+    expect(JSON.stringify(knn.filter.bool.filter)).toContain('"allergens.contains":["milk","lactose"]');
     expect(JSON.stringify(knn.filter.bool.must_not)).toContain('"allergens.contains":"nuts"');
     const f = recallFilter({ claims: [], forbiddenAllergens: [], ids: ["1", "2"] });
     expect(f.filter).toEqual([{ terms: { id: ["1", "2"] } }]);
+  });
+
+  it("keeps the same claims-by-evidence table as the core", () => {
+    expect(Object.keys(CLAIM_ALLERGENS).sort()).toEqual([...DERIVABLE_CLAIMS].sort());
+    for (const [claim, allergens] of Object.entries(CLAIM_ALLERGENS)) {
+      // Each listed allergen, declared present, stops the claim; none present, a declaration meets it.
+      for (const a of allergens) expect(claimEvidence({ claims: [], category: "cat_10000", declared: true, present: [a] }, claim).met).toBe(false);
+      expect(claimEvidence({ claims: [], category: "cat_10000", declared: true, present: [] }, claim).met).toBe(true);
+    }
   });
 
   it("reads the answers back as ranked lists, with the cosine from Lucene's score", () => {
