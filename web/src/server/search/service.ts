@@ -43,7 +43,7 @@ const num = (name: string, fallback: number) => {
 export type SmartStatus = { on: boolean; reason?: string; vectors?: { count: number; dim: number; model: string; from: string }; judge: boolean };
 
 type Holder = { search: SmartSearch | null; status: SmartStatus; products: IndexedProduct[] };
-const g = globalThis as typeof globalThis & { __dockSmart?: Map<IndexedProduct[], Promise<Holder>>; __dockSmartTest?: SmartSearch | null };
+const g = globalThis as typeof globalThis & { __dockSmart?: Map<IndexedProduct[], Promise<Holder>>; __dockReady?: Set<IndexedProduct[]>; __dockSmartTest?: SmartSearch | null };
 
 /** The model calls go through the daily caps and into the telemetry record. */
 function observe(call: SearchCall): void {
@@ -98,36 +98,44 @@ async function build(products: IndexedProduct[]): Promise<Holder> {
 }
 
 /** The partner index a catalogue searches, when it is (or wraps) the partner's catalogue. */
-function indexOf(catalog: unknown): IndexedProduct[] | undefined {
+function indexOf(catalog: unknown): { products: IndexedProduct[] } | undefined {
   let c = catalog as { index?: { products?: IndexedProduct[] }; inner?: unknown } | undefined;
   for (let i = 0; c && i < 4; i++) {
-    if (c.index?.products && Array.isArray(c.index.products)) return c.index.products;
+    if (c.index?.products && Array.isArray(c.index.products)) return { products: c.index.products };
     c = c.inner as typeof c;
   }
   return undefined;
 }
 
-/** Smart search over this catalogue, or null when it is not the partner's (or smart search is off). */
-export async function smartSearchFor(catalog: unknown): Promise<SmartSearch | null> {
+/**
+ * Smart search over this catalogue, or null when it is not the partner's (or smart search is off). Built once per
+ * process (about 3 s: the vectors, the knowledge map's kinds, the word lists); the runtime starts it at boot.
+ * `ifReady`: do not wait for the build; null until it is done (the intake's best-effort recall uses this).
+ */
+export async function smartSearchFor(catalog: unknown, opts: { ifReady?: boolean } = {}): Promise<SmartSearch | null> {
   if (g.__dockSmartTest !== undefined) return g.__dockSmartTest;
   if (process.env.VITEST) return null; // tests get the lexical search they were written for, unless they set one
-  const products = indexOf(catalog);
-  if (!products) return null;
+  const found = indexOf(catalog);
+  if (!found) return null;
   g.__dockSmart ??= new Map();
-  let h = g.__dockSmart.get(products);
+  g.__dockReady ??= new Set();
+  let h = g.__dockSmart.get(found.products);
   if (!h) {
+    const products = found.products;
     h = build(products);
+    void h.then(() => g.__dockReady!.add(products), () => {});
     g.__dockSmart.set(products, h);
   }
+  if (opts.ifReady && !g.__dockReady.has(found.products)) return null;
   return (await h).search;
 }
 
 export async function smartSearchStatus(catalog: unknown): Promise<SmartStatus> {
-  const products = indexOf(catalog);
+  const found = indexOf(catalog);
   if (g.__dockSmartTest) return { on: true, judge: true, reason: "test" };
-  if (!products) return { on: false, reason: "not the partner catalogue", judge: false };
+  if (!found) return { on: false, reason: "not the partner catalogue", judge: false };
   await smartSearchFor(catalog);
-  return (await g.__dockSmart!.get(products)!).status;
+  return (await g.__dockSmart!.get(found.products)!).status;
 }
 
 /** For tests: this smart search for every catalogue (null: lexical only; undefined: back to normal). */
@@ -139,9 +147,9 @@ export function setSmartSearchForTests(s: SmartSearch | null | undefined): void 
  * Find products for a request. Smart search with the partner catalogue; the catalogue's own search otherwise, so
  * every caller can use this one function on any catalogue.
  */
-export async function findProducts(catalog: Pick<CatalogPort, "searchProducts">, req: FindRequest): Promise<FindResult> {
+export async function findProducts(catalog: Pick<CatalogPort, "searchProducts">, req: FindRequest, opts: { ifReady?: boolean } = {}): Promise<FindResult> {
   const t0 = performance.now();
-  const smart = req.text.trim() ? await smartSearchFor(catalog).catch(() => null) : null;
+  const smart = req.text.trim() ? await smartSearchFor(catalog, opts).catch(() => null) : null;
   if (smart) {
     try {
       return await smart.find(req);
@@ -162,6 +170,12 @@ export async function findProducts(catalog: Pick<CatalogPort, "searchProducts">,
 }
 
 /** The core's port (core/catalog/finder.ts) over findProducts, for the intake. */
-export function finderFor(catalog: Pick<CatalogPort, "searchProducts">): ProductFinder {
-  return { find: (req) => findProducts(catalog, req) };
+export function finderFor(catalog: Pick<CatalogPort, "searchProducts">, opts: { ifReady?: boolean } = {}): ProductFinder {
+  return { find: (req) => findProducts(catalog, req, opts) };
+}
+
+/** Start building smart search now (at boot), so no request waits for it. Never throws; not under tests or a build. */
+export function warmSmartSearch(catalog: unknown): void {
+  if (process.env.VITEST || process.env.NEXT_PHASE === "phase-production-build" || envValue("DOCK_SMART_SEARCH") === "off") return;
+  void smartSearchFor(catalog).catch(() => {});
 }

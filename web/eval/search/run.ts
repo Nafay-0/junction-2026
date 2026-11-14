@@ -6,7 +6,8 @@
  *   pnpm search:eval --only holdout        only the hold-out cases
  *   pnpm search:eval --configs kw,hybrid4,judge100     some configurations
  *   pnpm search:eval --fresh               ignore cached model answers (re-measures time and cost)
- *   pnpm search:eval --opus                also the reference re-ranking by Claude Opus 5.5 (about $3; not for shipping)
+ *   pnpm search:eval --opus                also the reference re-ranking by Claude Opus 5.5 (about 2 cents a case; not for shipping)
+ *   pnpm search:eval --sample 60           every k-th case only, 60 in all (spread over the set; for the Opus reference)
  *   pnpm search:eval --ablation            what recall is made of: each source alone and each one left out
  *
  * Configurations:
@@ -15,7 +16,9 @@
  *   hybrid      keywords + semantic, fused, no judge
  *   hybrid4     keywords + semantic + the knowledge map's kinds and uses, no judge
  *   judge50/100/200   hybrid4 with the Decisions judge at that recall size
- *   opus100     hybrid4's 100 candidates re-ranked by Claude Opus 5.5 (reference)
+ *   kwjudge50   keyword recall only (lexical, typo, words), 50 candidates, judged: "find a lot, then filter"
+ *   vecjudge50  semantic recall only, 50 candidates, judged
+ *   opus50      judge50's 50 candidates re-ranked by Claude Opus 5.5 (reference, not for shipping)
  *
  * Timing: every embedding and judge answer is cached on disk (.data/search-eval/) with the time it took when it was
  * fetched; a cached answer replays that measured time, so a re-run reports the same latency without paying again.
@@ -100,6 +103,10 @@ async function main() {
   if (flag("tune")) cases = cases.filter((c) => !c.holdout);
   if (arg("only") === "holdout") cases = cases.filter((c) => c.holdout);
   if (arg("case")) cases = cases.filter((c) => c.id === arg("case"));
+  if (arg("sample")) {
+    const k = Math.max(1, Math.floor(cases.length / Number(arg("sample"))));
+    cases = cases.filter((_, i) => i % k === 0).slice(0, Number(arg("sample")));
+  }
 
   // Query embeddings, measured once per text (fresh), replayed from the cache.
   const embedCache = new Map<string, { vector: number[]; tokens: number; ms: number }>();
@@ -173,22 +180,26 @@ async function main() {
     vec: (c) => run(c, "vec", { ...noJudge, recallSize: 100, signals: S({ vectors: true }) }),
     hybrid: (c) => run(c, "hybrid", { ...noJudge, recallSize: 100, signals: S({ lexical: true, typo: true, words: true, vectors: true, code: true }) }),
     hybrid4: (c) => run(c, "hybrid4", { ...noJudge, recallSize: 100 }),
+    hybrid4_50: (c) => run(c, "hybrid4_50", { ...noJudge, recallSize: 50 }),
+    kwjudge50: (c) => run(c, "kwjudge50", { recallSize: 50, signals: S({ lexical: true, typo: true, words: true, code: true }) }),
+    vecjudge50: (c) => run(c, "vecjudge50", { recallSize: 50, signals: S({ vectors: true, code: true }) }),
     judge50: (c) => run(c, "judge50", { recallSize: 50 }),
     judge100: (c) => run(c, "judge100", { recallSize: 100 }),
     judge200: (c) => run(c, "judge200", { recallSize: 200 }),
   };
   if (flag("ablation")) {
     for (const s of ["lexical", "typo", "words", "kinds", "vectors"] as const) {
-      CONFIGS[`only_${s}`] = (c) => run(c, `only_${s}`, { ...noJudge, recallSize: 100, signals: S({ [s]: true, code: true }) });
-      CONFIGS[`no_${s}`] = (c) => run(c, `no_${s}`, { ...noJudge, recallSize: 100, signals: { [s]: false } });
+      const size = Number(arg("recall") ?? 50);
+      CONFIGS[`only_${s}`] = (c) => run(c, `only_${s}`, { ...noJudge, recallSize: size, signals: S({ [s]: true, code: true }) });
+      CONFIGS[`no_${s}`] = (c) => run(c, `no_${s}`, { ...noJudge, recallSize: size, signals: { [s]: false } });
     }
   }
   let opusUsd = 0;
   if (flag("opus")) {
     const { model } = createModel("anthropic:claude-opus-5-5");
     const schema = z.object({ verdicts: z.array(z.object({ n: z.number().int(), level: z.number().int().min(0).max(3) })) });
-    CONFIGS.opus100 = async (c) => {
-      const base = await smart.findDetailed({ text: c.text, limit: 24 }, { judge: false, recallSize: 100 });
+    CONFIGS.opus50 = async (c) => {
+      const base = await smart.findDetailed({ text: c.text, limit: 24 }, { judge: false, recallSize: 50 });
       const cands = base.candidates.map((x) => x.id);
       const lines = cands.map((id, i) => `${i + 1}. ${judgeLine(byId.get(id)!, map)}`).join("\n");
       const prompt = `${judgeContext({ text: c.text, candidates: [] })}\n\nRate every product on this scale:\n${RUBRIC.map((r, i) => `${i}: ${r}`).join("\n")}\n\nProducts:\n${lines}\n\nAnswer with one verdict per product number.`;
@@ -202,7 +213,7 @@ async function main() {
       const level = new Map(r.v.verdicts.map((v) => [cands[v.n - 1], v.level]));
       const order = cands.filter((id) => (level.get(id) ?? 0) > 0).sort((a, b) => (level.get(b) ?? 0) - (level.get(a) ?? 0) || cands.indexOf(a) - cands.indexOf(b));
       const anyMatch = order.some((id) => (level.get(id) ?? 0) >= 2);
-      return { case: c, config: "opus100", top: order.slice(0, 24), labels: order.slice(0, 24).map((id) => LEVELS[level.get(id) ?? 0]), candidates: cands, ms: r.v.ms + (embedCache.get(c.text)?.ms ?? 0), costUsd: r.v.costUsd, path: "opus", notSoldSaid: !order.length, unsure: !anyMatch && order.length > 0 };
+      return { case: c, config: "opus50", top: order.slice(0, 24), labels: order.slice(0, 24).map((id) => LEVELS[level.get(id) ?? 0]), candidates: cands, ms: r.v.ms + (embedCache.get(c.text)?.ms ?? 0), costUsd: r.v.costUsd, path: "opus", notSoldSaid: !order.length, unsure: !anyMatch && order.length > 0 };
     };
   }
   const want = (arg("configs") ?? Object.keys(CONFIGS).join(",")).split(",");

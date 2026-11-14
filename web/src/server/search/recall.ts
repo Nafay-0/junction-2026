@@ -1,6 +1,6 @@
 import type { IndexedProduct } from "@/core/catalog/partner";
 import { categoryCodesFor } from "@/core/catalog/partner";
-import { LexicalSearch, allergenEvidence, fold, parseQueryText, tokenize } from "@/core/catalog/search";
+import { allergenEvidence, fold, parseQueryText, tokenize } from "@/core/catalog/search";
 import type { KnowledgeMap } from "@/server/knowledge/map";
 import { DISH_USES, USES, type Use } from "@/server/knowledge/vocab";
 import type { ProductVectors } from "./vectors";
@@ -9,9 +9,11 @@ import type { ProductVectors } from "./vectors";
  * Recall that does not miss: from the buyer's words, gather candidates from the whole assortment by every cheap
  * means at once, each under the same hard filters, and fuse their rankings.
  *
- *   lexical   today's search (core/catalog/search.ts): all words in the names, in any of the three languages
- *   typo      the same after correcting words no product name has to the nearest word one does ("spagetti")
- *   words     each content word alone, for requests whose other words name no product ("something for the dishwasher")
+ *   lexical   the words in the product names, any of the three languages, whole or as part of a compound, from an
+ *             inverted index (products carrying all the words first)
+ *   typo      the same after correcting words no product name has to the nearest word one does ("spagetti"), or
+ *             an inflected Finnish or Swedish form to its stem ("jätesäkkejä")
+ *   words     any of the words, rarer words weighing more, for requests whose other words name no product
  *   kinds     the knowledge map's kinds whose label or aliases (English, Finnish, Swedish) carry the words, all their products
  *   vectors   semantic nearest neighbours of the query embedding (vectors.ts)
  *   code      a product id said outright
@@ -186,7 +188,6 @@ type KindEntry = { key: string; tokens: string[]; size: number };
 export class SearchIndex {
   readonly products: IndexedProduct[];
   readonly byId: Map<string, IndexedProduct>;
-  readonly lexical: LexicalSearch;
   readonly map: KnowledgeMap | null;
   readonly vectors: ProductVectors | null;
   private readonly vocab = new Map<string, number>();
@@ -196,34 +197,53 @@ export class SearchIndex {
   /** Brand words: products whose brand or vendor carries the word, and products whose names do. */
   private readonly brandWords = new Map<string, { inBrand: number; inName: number }>();
   private readonly nameTokens = new Map<string, Set<string>>();
+  /** Word -> products whose names (any language) or brand carry it. */
+  private readonly postings = new Map<string, string[]>();
+  private readonly nameLength = new Map<string, number>();
+  private readonly termCache = new Map<string, [string, number][]>();
 
   constructor(products: IndexedProduct[], map: KnowledgeMap | null, vectors: ProductVectors | null) {
     this.products = products;
     this.byId = new Map(products.map((p) => [p.id, p]));
-    this.lexical = new LexicalSearch(products);
     this.map = map;
     this.vectors = vectors;
     const add = (t: string, n = 1) => this.vocab.set(t, (this.vocab.get(t) ?? 0) + n);
+    const word = (t: string) => t.length >= 3 && !/\d/.test(t);
+    const names = new Map<string, string[]>();
+    const brands = new Map<string, Set<string>>();
     for (const p of products) {
-      const toks = new Set(tokenize([p.names.en, p.names.fi, p.names.sv, p.brand].filter(Boolean).join(" ")).filter((t) => t.length >= 3 && !/\d/.test(t)));
+      const nt = tokenize([p.names.en, p.names.fi, p.names.sv].filter(Boolean).join(" "));
+      const bw = new Set(tokenize(`${p.brand ?? ""} ${p.vendor ?? ""}`).filter(word));
+      names.set(p.id, nt);
+      brands.set(p.id, bw);
+      const toks = new Set([...nt.filter(word), ...tokenize(p.brand ?? "").filter(word)]);
       this.nameTokens.set(p.id, toks);
-      for (const t of toks) add(t);
-      const bw = new Set(tokenize(`${p.brand ?? ""} ${p.vendor ?? ""}`).filter((t) => t.length >= 3 && !/\d/.test(t)));
+      this.nameLength.set(p.id, (p.names.en ?? p.names.fi ?? "").length);
+      for (const t of toks) {
+        add(t);
+        const l = this.postings.get(t);
+        if (l) l.push(p.id);
+        else this.postings.set(t, [p.id]);
+      }
       for (const t of bw) {
         const e = this.brandWords.get(t) ?? { inBrand: 0, inName: 0 };
         e.inBrand++;
         this.brandWords.set(t, e);
-      }
-      for (const t of tokenize([p.names.en, p.names.fi, p.names.sv].filter(Boolean).join(" "))) {
-        if (bw.has(t)) continue;
-        const e = this.brandWords.get(t);
-        if (e) e.inName++;
       }
       const prof = map?.profile(p.id);
       if (prof) {
         const l = this.kindProducts.get(prof.kind) ?? [];
         l.push(p.id);
         this.kindProducts.set(prof.kind, l);
+      }
+    }
+    // A brand word in the names of products of other brands counts against it being a brand ("valio" vs "kerma").
+    for (const p of products) {
+      const bw = brands.get(p.id)!;
+      for (const t of new Set(names.get(p.id))) {
+        if (bw.has(t)) continue;
+        const e = this.brandWords.get(t);
+        if (e) e.inName++;
       }
     }
     if (map) {
@@ -341,6 +361,50 @@ export class SearchIndex {
     return fold(`${p.brand ?? ""} ${p.vendor ?? ""}`).includes(brand);
   }
 
+  /** Name words a query word matches: itself (1), a compound starting or ending with it (0.75), containing it (0.55). */
+  private wordMatches(t: string): [string, number][] {
+    const hit = this.termCache.get(t);
+    if (hit) return hit;
+    const out: [string, number][] = [];
+    if (this.postings.has(t)) out.push([t, 1]);
+    if (t.length >= 4) {
+      for (const w of this.postings.keys()) {
+        if (w === t || w.length <= t.length) continue;
+        if (w.startsWith(t) || w.endsWith(t)) out.push([w, 0.75]);
+        else if (t.length >= 5 && w.includes(t)) out.push([w, 0.55]);
+      }
+    }
+    this.termCache.set(t, out);
+    if (this.termCache.size > 5000) this.termCache.delete(this.termCache.keys().next().value!);
+    return out;
+  }
+
+  /**
+   * Products by their names' words, from an inverted index (a few milliseconds over the whole assortment). "and":
+   * products carrying more of the words first; "or": by the words' summed weight (rarer words weigh more).
+   */
+  keywordRank(terms: string[], mode: "and" | "or", allow: (p: IndexedProduct) => boolean, limit: number): string[] {
+    if (!terms.length) return [];
+    const n = this.products.length;
+    const score = new Map<string, { s: number; c: number }>();
+    for (const t of terms) {
+      const best = new Map<string, number>();
+      for (const [w, q] of this.wordMatches(t)) for (const id of this.postings.get(w) ?? []) if ((best.get(id) ?? 0) < q) best.set(id, q);
+      if (!best.size) continue;
+      const idf = Math.log(1 + n / best.size);
+      for (const [id, q] of best) {
+        const e = score.get(id) ?? { s: 0, c: 0 };
+        e.s += q * idf;
+        e.c += 1;
+        score.set(id, e);
+      }
+    }
+    const ranked: { id: string; s: number; c: number }[] = [];
+    for (const [id, e] of score) if (allow(this.byId.get(id)!)) ranked.push({ id, ...e });
+    ranked.sort((a, b) => (mode === "and" ? b.c - a.c : 0) || b.s - a.s || this.nameLength.get(a.id)! - this.nameLength.get(b.id)! || a.id.localeCompare(b.id));
+    return ranked.slice(0, limit).map((r) => r.id);
+  }
+
   /** Kinds whose label or aliases carry the words (exact, compound part, or typo-corrected), best first. */
   matchKinds(u: Understood, max = 24): { key: string; score: number }[] {
     const terms = u.terms.filter((t) => !GENERIC.has(t));
@@ -372,21 +436,12 @@ export class SearchIndex {
     const sig = { ...ALL_SIGNALS, ...(opts.signals ?? {}) };
     const lists: { source: Source; weight: number; ids: string[] }[] = [];
     const allow = opts.filter;
-    const base = { requiredClaims: u.claims, forbiddenAllergens: u.forbiddenAllergens, ...(opts.category ? { category: opts.category } : {}), ...(opts.ids ? { ids: opts.ids } : {}) };
-    const lex = (text: string, limit: number) => this.lexical.search({ text, ...base, limit }).map((h) => h.product.id);
     const contentTerms = u.terms.filter((t) => !GENERIC.has(t));
     if (sig.code && u.codes.length) lists.push({ source: "code", weight: 20, ids: u.codes.filter((id) => allow(this.byId.get(id)!)) });
-    if (sig.lexical) lists.push({ source: "lexical", weight: 1, ids: lex(u.text, 100) });
-    if (sig.typo && Object.keys(u.corrections).length) {
-      const fixed = u.terms.map((t) => u.corrections[t] ?? t).join(" ");
-      lists.push({ source: "typo", weight: 0.9, ids: lex(fixed, 80) });
-    }
-    if (sig.words && contentTerms.length > 1) {
-      for (const t of contentTerms) lists.push({ source: "words", weight: 0.5, ids: lex(u.corrections[t] ?? t, 40) });
-    } else if (sig.words && contentTerms.length === 1 && contentTerms.length < u.terms.length) {
-      const t = contentTerms[0];
-      lists.push({ source: "words", weight: 0.8, ids: lex(u.corrections[t] ?? t, 60) });
-    }
+    // Keywords from the inverted index: all the words first, then the misspelt ones corrected, then any of them.
+    if (sig.lexical) lists.push({ source: "lexical", weight: 1, ids: this.keywordRank(contentTerms.length ? contentTerms : u.terms, "and", allow, 100) });
+    if (sig.typo && Object.keys(u.corrections).length) lists.push({ source: "typo", weight: 0.9, ids: this.keywordRank(contentTerms.map((t) => u.corrections[t] ?? t), "and", allow, 80) });
+    if (sig.words && contentTerms.length > 1) lists.push({ source: "words", weight: 0.6, ids: this.keywordRank([...new Set(contentTerms.flatMap((t) => (u.corrections[t] ? [t, u.corrections[t]] : [t])))], "or", allow, 80) });
     const sims = new Map<string, number>();
     if (sig.vectors && this.vectors && opts.queryVector) {
       const near = this.vectors.nearest(opts.queryVector, Math.max(opts.size, 60), (id) => {
