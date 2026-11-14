@@ -71,6 +71,14 @@ Object.assign(env, {
 });
 if (process.env.E2E_SERVER_ENV) Object.assign(env, JSON.parse(process.env.E2E_SERVER_ENV));
 
+// E2E_NOW=<ISO time with offset> (opt-in): the server's clock starts there and runs on (e2e/support/fixed-clock.cjs),
+// so cut-offs, delivery days and "today" are those of that moment whatever day the suite runs (e2e/README.md).
+if (process.env.E2E_NOW) {
+  env.DOCK_FAKE_NOW = process.env.E2E_NOW;
+  if (process.env.E2E_NOW_OFFSET_MS) env.DOCK_FAKE_OFFSET_MS = process.env.E2E_NOW_OFFSET_MS;
+  env.NODE_OPTIONS = `${env.NODE_OPTIONS ?? ""} --require ${path.join(web, "e2e/support/fixed-clock.cjs")}`.trim();
+}
+
 // E2E_MODEL=1 (opt-in, never in a default run): real models instead of the recordings, with the provider keys and
 // model names from web/.env.local (copied into the server's environment, never printed) and a hard cap of $0.50 and
 // 60 calls for the run.

@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { addPasskey, approvalState, approveButton, watchErrors } from "../support/dock";
-import { answerTo, minutesUntil, say, stageThread, threadLog, visitorKitchen } from "../support/thread";
+import { answerTo, minutesUntil, say, stageThread, threadLog, turns, visitorKitchen } from "../support/thread";
 
 /**
  * The store's conversation in the "Thread" design (docs/agent-thread.md): one line down the conversation, each agent
@@ -134,7 +134,10 @@ test("mistake check on a demo kitchen: 1,000 L where it usually orders 100 L, co
     // The tap is the buyer's turn; the choices that follow are for 100 L.
     await expect(priced(page).first()).toBeVisible({ timeout: 20_000 });
     for (const o of await priced(page).all()) await expect(o).not.toHaveAccessibleName(/1[\s  ,]?000/);
-    await expect(waiting(page)).toHaveCount(0);
+    // Nothing of this request waits for a person: no slab under any reply after its own words. (What an earlier test
+    // left waiting on Kaari, said again on the day's opening above them, is not this test's.)
+    const after = turns(page).filter({ hasText: MILK }).last().locator("xpath=following-sibling::li");
+    await expect(after.locator('[data-slab="waiting"]')).toHaveCount(0);
   } finally {
     release();
   }

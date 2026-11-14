@@ -53,6 +53,20 @@ them as an artifact). Known-defect tests are written as `test.fail(...)`: the su
 | `visual` | Chromium, phone / laptop / wall | `e2e/visual/*`; baselines in `e2e/visual/__screenshots__/<platform>/` |
 | `legacy` | Chromium phone | `e2e/*.spec.ts` kept by other branches (portal, accounts, call); restart and show need `E2E_BASE_URL` |
 
+## A fixed clock
+
+The seed catalogue's delivery days and order cut-offs follow the server's clock, so a run on a Sunday (or after an
+order cut-off) can see other answers than a run on a Tuesday morning. To run on a fixed moment:
+
+    E2E_NOW=2026-11-17T10:30:00+02:00 pnpm e2e:quick
+
+`playwright.config.ts` computes one offset from the real clock for the run (`E2E_NOW_OFFSET_MS`); the servers
+(`support/start-server.mjs`) start with `support/fixed-clock.cjs` preloaded (`NODE_OPTIONS=--require …`), which moves
+`Date.now()` and `new Date()` by that offset and lets the clock run; the tests that compare a time with the server's
+(`support/thread.ts` `minutesUntil`) use the same offset. The test runner's own clock stays real (its file locks need
+it), and so does the browser's. Without `E2E_NOW` nothing changes. In CI, set `E2E_NOW` in the job's environment for
+the e2e step to make the result independent of the weekday.
+
 ## What runs where
 
 Passkeys: Chromium uses the browser's own WebAuthn stack with a DevTools virtual authenticator. WebKit and Firefox
