@@ -93,7 +93,7 @@ export function DoorButtons({
             ) : (
               <div className="mx-auto max-w-5xl px-4 py-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <h2 className="display min-w-0 text-[2rem] hyphens-auto [overflow-wrap:anywhere]">{tx.scan}</h2>
+                  <h2 className="display min-w-0 text-[2rem] hyphens-manual [overflow-wrap:break-word]">{tx.scan}</h2>
                   <button
                     type="button"
                     onClick={() => setOpen(null)}

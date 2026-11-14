@@ -9,6 +9,7 @@ import { clock, helsinkiToday, money, shortProduct } from "../../_ui/plain";
 import { HISTORY_TEXT } from "./history.text";
 import { usePortal } from "./portal";
 import type { PortalOrder, PortalRequest } from "./types";
+import { useProductName } from "./names";
 
 /** Who let an order through, in a few words. */
 export function authorisedText(o: PortalOrder, lang: Lang = "en"): string {
@@ -27,8 +28,8 @@ export function askedText(text: string | null | undefined, lang: Lang = "en"): s
   return text.startsWith("Basket from the catalogue:") ? HISTORY_TEXT[lang].basketAsked(text.slice(26).trim()) : text;
 }
 
-export function linesText(o: PortalOrder, max = 2, lang: Lang = "en"): string {
-  const shown = o.lines.slice(0, max).map((l) => `${l.quantity} × ${shortProduct(l.name)}`);
+export function linesText(o: PortalOrder, max = 2, lang: Lang = "en", pn: (id: string, en: string) => string = (_i, en) => en): string {
+  const shown = o.lines.slice(0, max).map((l) => `${l.quantity} × ${shortProduct(pn(l.productId, l.name))}`);
   return shown.join(" + ") + (o.lines.length > max ? HISTORY_TEXT[lang].more(o.lines.length - max) : "");
 }
 
@@ -43,6 +44,7 @@ export function whenText(iso: string, lang: Lang = "en"): string {
 export function History({ requests, loading, error, onRepeat, onChange }: { requests: PortalRequest[]; loading: boolean; error?: string; onRepeat: (r: PortalRequest) => void; onChange: (r: PortalRequest) => void }) {
   const { base } = usePortal();
   const tx = useText(HISTORY_TEXT);
+  const pn = useProductName();
   const { lang } = useFormat();
   const [all, setAll] = useState(false);
   const shown = requests.filter((r) => r.kind !== "basket" || r.order).slice(0, all ? 12 : 5);
@@ -61,10 +63,10 @@ export function History({ requests, loading, error, onRepeat, onChange }: { requ
           {shown.map((r) => (
             <li key={r.key} className="py-2.5">
               <p className="text-[0.82rem] text-ink-soft tabular">{whenText(r.at, lang)}</p>
-              <p className="mt-0.5 leading-snug">{r.text ? <span className="font-semibold">{r.kind === "basket" ? tx.basket : `“${r.text.length > 90 ? `${r.text.slice(0, 87)}…` : r.text}”`}</span> : <span className="font-semibold">{r.order ? linesText(r.order, 2, lang) : tx.order}</span>}</p>
+              <p className="mt-0.5 leading-snug">{r.text ? <span className="font-semibold">{r.kind === "basket" ? tx.basket : `“${r.text.length > 90 ? `${r.text.slice(0, 87)}…` : r.text}”`}</span> : <span className="font-semibold">{r.order ? linesText(r.order, 2, lang, pn) : tx.order}</span>}</p>
               {r.order ? (
                 <p className="mt-0.5 text-[0.92rem] leading-snug text-ink-soft">
-                  {r.text && <>{linesText(r.order, 2, lang)}, </>}
+                  {r.text && <>{linesText(r.order, 2, lang, pn)}, </>}
                   {r.order.status !== "rejected" && r.order.status !== "declined" && <span className="tabular">{money(r.order.totalCents)}, </span>}
                   {tx.delivery(dayL(r.order.deliveryDate, lang), authorisedText(r.order, lang))}
                 </p>

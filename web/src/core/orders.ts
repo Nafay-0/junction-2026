@@ -17,13 +17,14 @@ import type { EventPublisher } from "./events";
 import { CatalogError, ProductQuerySchema, scheduledOn, usableOffer, type LiveOffer, type LiveStatus, type MeteredCatalog, type Product } from "./catalog";
 import { ClaimStore, availabilityClaimInput, issueClaim, originClaimInput, priceClaimInput, refOf, type IssuedClaim } from "./claims";
 import { DockError, isDockError, parse } from "./errors";
+import { concernsOfOrder, unaskedNote } from "./order-check";
 import { InMemoryIntakeRepository, createIntakeFlow, recordCommittedOrder, type IntakeDeps, type IntakeRepository } from "./intake";
 import { InMemoryKitchenRepository, localNow, type KitchenRepository } from "./kitchen";
 import { SIGN_ALG, type KeyPair } from "./keys";
 import type { Ledger, LedgerHead } from "./ledger";
 import { LiveLookupAllowance, shareKeyOf } from "./live-allowance";
 import { MAX_LIVE_IDS_PER_CALL } from "./catalog";
-import { MandateError, verifyMandate, type Mandate, type TrustRegistry } from "./mandate";
+import { MandateError, supersededBy, supersededMessage, verifyMandateToken, type Mandate, type MandateRegister, type TrustRegistry } from "./mandate";
 import { SPLIT_WINDOW_HOURS, decidingRule, evaluatePolicy, type Decision, type OrderDraftLine, type ProductHold, type RecentOrder, type RuleResult } from "./policy";
 export type { ProductHold } from "./policy";
 import { QuoteError, QuoteRequestLineSchema, buildQuote, signQuote, verifyQuote, type Quote, type QuoteLine } from "./quote";
@@ -111,7 +112,7 @@ export const ApprovalDecisionInput = z.object({
  * `share`: an on-site console's browser session, set by the server only (never from a header an outside caller can
  * send). It gives that session its own share of the agent's live-lookup allowance (see live-allowance.ts).
  */
-export type AgentSession = { mandate: Mandate; agentId: string; share?: string; door?: Door };
+export type AgentSession = { mandate: Mandate; agentId: string; share?: string; door?: Door; /** When the organisation signed the mandate (its token's `iat`), for the reissue check. */ mandateIssuedAt?: string };
 
 /**
  * Which door a request came through, set by server code only (never from a request field): the store's typed field,
@@ -181,6 +182,8 @@ export type Order = {
   quote: Quote;
   draftLines: OrderDraftLine[];
   mandate: Mandate;
+  /** When the organisation signed that mandate: a reissue since then stops the order at sign-off. */
+  mandateIssuedAt?: string;
 };
 
 /** What leaves Dock: no token hash, no internal snapshots. */
@@ -299,6 +302,20 @@ export type DockDeps = {
   alternatives?: AlternativesSource;
   /** One line per remembered item an intake used (the server wires the kitchen memory; see intake.ts). */
   memoryUsage?: IntakeDeps["memoryUsage"];
+  /**
+   * Admission: called with every session right after its mandate verified, before the session is handed out, and
+   * again for a session held across calls (admit below). Throwing a DockError refuses the agent. The server's
+   * operations layer plugs in here (a suspended agent or organisation), so no door can verify a mandate and
+   * forget to ask: there is no way to a session that does not pass this. `entrance` is whatever the caller says
+   * about where the call came from; the core only passes it on.
+   */
+  admit?: (session: AgentSession, entrance?: unknown) => void | Promise<void>;
+  /**
+   * The kitchens' reissued mandates (mandate.ts): the gate accepts only a kitchen's current mandate. Checked when a
+   * mandate is presented, when a held session is used again, and on every decision (rule mandate_window), so an
+   * order placed under a mandate the kitchen has since replaced is not committed at sign-off either.
+   */
+  mandates?: MandateRegister;
 };
 
 /** The holds in force on some products. Called with the products of one quote; must be cheap (no live call). */
@@ -504,10 +521,27 @@ export function createDock(deps: DockDeps) {
     return { spentThisWeekCents: b.spentCents, heldThisWeekCents: b.heldCents, heldOrders: b.held };
   }
 
-  /** Confirmations of the request's intake that matter but were only relayed by the agent (policy human_confirmation). */
-  async function unverifiedOf(requestId: string) {
-    const u = (await intakes.get(requestId))?.unverified ?? [];
-    return u.length ? { unverifiedConfirmations: u.map(({ code, message, by }) => ({ code, message, by })) } : {};
+  /**
+   * What the mistake check holds against an order (policy human_confirmation), on every door:
+   *   - confirmations of the request's intake that matter but were only relayed by the agent;
+   *   - when the order is not the quote the intake itself made for the buyer's choice (the agent opened a request
+   *     and asked for a quote on its own, or quoted something else under an intake's request): whatever the same
+   *     check finds in the order's own lines. Nobody was asked, so the agent may not decide it alone.
+   * The intake's own quote is not checked twice: its questions were put to the buyer, and how they were answered
+   * is the first list.
+   */
+  async function mistakeCheckOf(org: { orgId: string; name: string }, request: PurchaseRequest | undefined, quote: Quote, intakeQuote = false) {
+    const i = request ? await intakes.get(request.requestId) : undefined;
+    const u = i?.unverified ?? [];
+    const fromIntake = intakeQuote || i?.quote?.quote.quoteId === quote.quoteId;
+    const flagged = fromIntake ? [] : await concernsOfOrder({ catalog, kitchens }, { orgId: org.orgId, orgName: org.name, lines: quote.lines, neededBy: request?.neededBy, now: now() });
+    return {
+      context: {
+        ...(u.length ? { unverifiedConfirmations: u.map(({ code, message, by }) => ({ code, message, by })) } : {}),
+        ...(flagged.length ? { unconfirmedConcerns: flagged.map(({ code, message }) => ({ code, message })) } : {}),
+      },
+      notes: [...(i?.signOffNotes ?? []), ...flagged.map(unaskedNote)],
+    };
   }
 
   /** Orders of this organisation in the splitting window, for the order_splitting rule. */
@@ -645,6 +679,18 @@ export function createDock(deps: DockDeps) {
     return error;
   }
 
+  /** The gate accepts only a kitchen's current mandate: one the kitchen has since reissued is refused at the door. */
+  function refuseSuperseded(session: AgentSession, actor: string): void {
+    const r = supersededBy(session.mandate, session.mandateIssuedAt, deps.mandates);
+    if (r) throw refuse(new DockError(401, "mandate_superseded", supersededMessage(session.mandate.issuer.name, r), "mandate_window", { reissuedAt: r.at }), actor);
+  }
+
+  /** The same check for a decision (policy mandate_window): the reason in words when the mandate was replaced. */
+  function supersession(mandate: Mandate, issuedAt: string | undefined): { mandateSuperseded?: string } {
+    const r = supersededBy(mandate, issuedAt, deps.mandates);
+    return r ? { mandateSuperseded: supersededMessage(mandate.issuer.name, r) } : {};
+  }
+
   function decisionSummary(orderId: string, d: Decision, prefix = "Gate decision"): string {
     if (d.outcome === "auto_approve") return `${prefix} on order ${orderId}: approved within the mandate (${formatEur(d.totalCents)}).`;
     if (d.outcome === "needs_human_approval")
@@ -727,12 +773,13 @@ export function createDock(deps: DockDeps) {
 
   const dock = {
     /** Verify the mandate the agent presents. Throws DockError (401/403) naming the failed check. */
-    async authenticate(mandateToken: string | undefined, agentId: string | undefined): Promise<AgentSession> {
+    async authenticate(mandateToken: string | undefined, agentId: string | undefined, entrance?: unknown): Promise<AgentSession> {
       const actor = `agent:${agentId ?? "unknown"}`;
       if (!mandateToken) throw refuse(new DockError(401, "mandate_missing", "No mandate presented. Send it as `Authorization: Mandate <jws>`.", "mandate_signature"), actor);
       let mandate: Mandate;
+      let mandateIssuedAt: string;
       try {
-        mandate = await verifyMandate(mandateToken, trustedIssuers, now());
+        ({ mandate, issuedAt: mandateIssuedAt } = await verifyMandateToken(mandateToken, trustedIssuers, now()));
       } catch (err) {
         if (!(err instanceof MandateError)) throw err;
         const rule = err.code === "mandate_expired" || err.code === "mandate_not_yet_valid" ? "mandate_window" : "mandate_signature";
@@ -744,7 +791,17 @@ export function createDock(deps: DockDeps) {
       if (agentId !== mandate.agentId) {
         throw refuse(new DockError(403, "mandate_agent_mismatch", `This mandate is for agent ${mandate.agentId}, not ${agentId}.`, "mandate_agent"), actor);
       }
-      return { mandate, agentId };
+      const session: AgentSession = { mandate, agentId, mandateIssuedAt };
+      refuseSuperseded(session, actor);
+      await deps.admit?.(session, entrance);
+      return session;
+    },
+
+    /** Admission for a session that was verified earlier and is used again later (a link that outlives the call that made it). */
+    async admit(session: AgentSession, entrance?: unknown): Promise<AgentSession> {
+      refuseSuperseded(session, agentActor(session));
+      await deps.admit?.(session, entrance);
+      return session;
     },
 
     async openRequest(session: AgentSession, input: z.input<typeof OpenRequestInput>): Promise<PurchaseRequest> {
@@ -840,7 +897,7 @@ export function createDock(deps: DockDeps) {
     },
 
     /** Ask the wholesaler for a fixed-price quote. Returns the signed quote and what the gate would decide on it now. */
-    async requestQuote(session: AgentSession, input: z.input<typeof QuoteInput>) {
+    async requestQuote(session: AgentSession, input: z.input<typeof QuoteInput>, internal: { intakeQuote?: boolean } = {}) {
       const parsed = parse(QuoteInput, input);
       const { requestId } = parsed;
       const request = await ownRequest(session, requestId);
@@ -907,7 +964,7 @@ export function createDock(deps: DockDeps) {
       const policyPreview = evaluatePolicy(
         session.mandate,
         { agentId: session.agentId, quote, lines: quote.lines, neededBy: request.neededBy, deliverOn: request.deliverOn, requestId, asked: await askedOf(request) },
-        { now: now(), ...(await budgetContext(quote.buyerOrgId)), ...(await unverifiedOf(requestId)), ...(await holdsOf(quote)), quoteAlreadyUsed: false, recentOrders: await recentOrders(quote.buyerOrgId) },
+        { now: now(), ...supersession(session.mandate, session.mandateIssuedAt), ...(await budgetContext(quote.buyerOrgId)), ...(await mistakeCheckOf(session.mandate.issuer, request, quote, internal.intakeQuote)).context, ...(await holdsOf(quote)), quoteAlreadyUsed: false, recentOrders: await recentOrders(quote.buyerOrgId) },
       );
       return { quote, quoteToken, policyPreview, claims };
     },
@@ -926,7 +983,8 @@ export function createDock(deps: DockDeps) {
       const orgId = session.mandate.issuer.orgId;
       return serialize(orgId, async () => {
         const draft = { agentId: session.agentId, quote, lines, neededBy: request.neededBy, deliverOn: request.deliverOn, requestId, asked: await askedOf(request) };
-        const ctx = { now: now(), ...(await budgetContext(orgId)), ...(await unverifiedOf(requestId)), ...(await holdsOf(quote)), quoteAlreadyUsed: await repo.isQuoteUsed(quote.quoteId), recentOrders: await recentOrders(orgId) };
+        const check = await mistakeCheckOf(session.mandate.issuer, request, quote);
+        const ctx = { now: now(), ...supersession(session.mandate, session.mandateIssuedAt), ...(await budgetContext(orgId)), ...check.context, ...(await holdsOf(quote)), quoteAlreadyUsed: await repo.isQuoteUsed(quote.quoteId), recentOrders: await recentOrders(orgId) };
         let decision = evaluatePolicy(session.mandate, draft, ctx);
         if (decision.outcome !== "reject" && !(await repo.claimQuote(quote.quoteId))) {
           decision = evaluatePolicy(session.mandate, draft, { ...ctx, quoteAlreadyUsed: true });
@@ -949,9 +1007,10 @@ export function createDock(deps: DockDeps) {
           quote,
           draftLines: lines,
           mandate: session.mandate,
+          ...(session.mandateIssuedAt ? { mandateIssuedAt: session.mandateIssuedAt } : {}),
         };
-        const carried = (await intakes.get(requestId))?.signOffNotes ?? [];
-        if (carried.length) order.notes = carried;
+        // What the person signing off must see: the intake's relayed confirmations, and what nobody was asked about.
+        if (check.notes.length) order.notes = check.notes;
         ledger.append({
           type: "decision",
           actor: "dock",
@@ -1073,7 +1132,7 @@ export function createDock(deps: DockDeps) {
         const recheck = evaluatePolicy(
           order.mandate,
           { agentId: order.agentId, quote: order.quote, lines: order.draftLines, neededBy: request?.neededBy, deliverOn: request?.deliverOn, requestId: order.requestId, asked: await askedOf(request) },
-          { now: now(), ...(await budgetContext(order.orgId, order.orderId)), ...(await unverifiedOf(order.requestId)), ...(await holdsOf(order.quote)), quoteAlreadyUsed: false, recentOrders: await recentOrders(order.orgId, order.orderId) },
+          { now: now(), ...supersession(order.mandate, order.mandateIssuedAt), ...(await budgetContext(order.orgId, order.orderId)), ...(await mistakeCheckOf({ orgId: order.orgId, name: order.orgName }, request, order.quote)).context, ...(await holdsOf(order.quote)), quoteAlreadyUsed: false, recentOrders: await recentOrders(order.orgId, order.orderId) },
         );
         if (recheck.outcome === "reject") {
           order.status = "rejected";
@@ -1278,7 +1337,7 @@ export function createDock(deps: DockDeps) {
     now,
     openRequest: dock.openRequest,
     changeNeededBy: dock.changeNeededBy,
-    requestQuote: dock.requestQuote,
+    requestQuote: (session, input) => dock.requestQuote(session, input, { intakeQuote: true }),
     liveLookup: (session, requestId, productIds, deliveryDate, why) => liveLookup(session, requestId, productIds, deliveryDate, why, { batch: true }),
     spentThisWeek: (orgId) => spentThisWeek(orgId),
     budgetUse: (orgId) => budgetUse(orgId),

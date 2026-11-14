@@ -20,7 +20,7 @@ export const TIMELINE_TEXT = defineText({
     allOk: (n: number) => `Kaikki ${n} merkintää ovat kunnossa.`,
     allOkDetail: (ms: number) => ` Selaimesi laski jokaisen SHA-256-linkin uudelleen ensimmäisestä merkinnästä alkaen ${ms} ms:ssa. Mitään ei ole muutettu kirjaamisen jälkeen.`,
     caught: "Muutos paljastui.",
-    tamperedNote: " Muutos tehtiin vain tämän selaimen kopioon; palvelimen tapahtumaloki on koskematon.",
+    tamperedNote: " Muutos tehtiin vain tämän selaimen kopioon; palvelimen tapahtuma­loki on koskematon.",
   },
   sv: {
     raw: "Visa händelseloggens råa poster",
