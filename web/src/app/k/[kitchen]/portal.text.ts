@@ -4,7 +4,7 @@ import { defineText } from "../../_i18n/lang";
 export const PORTAL_TEXT = defineText({
   en: {
     skip: "Skip to the page",
-    nav: { home: "Home", order: "Order", catalogue: "Catalogue", menu: "Menu planner", orders: "Orders", agent: "Agent and rules" },
+    nav: { home: "Agent", order: "Order", catalogue: "Catalogue", menu: "Menu planner", orders: "Orders", agent: "Your rules" },
     navLabel: "Shop",
     allKitchens: "all demo kitchens",
     kitchen: "Kitchen",
@@ -34,7 +34,7 @@ export const PORTAL_TEXT = defineText({
   },
   fi: {
     skip: "Siirry sisältöön",
-    nav: { home: "Etusivu", order: "Tilaa", catalogue: "Tuotteet", menu: "Menusuunnittelu", orders: "Tilaukset", agent: "Agentti ja säännöt" },
+    nav: { home: "Agentti", order: "Tilaa", catalogue: "Tuotteet", menu: "Menusuunnittelu", orders: "Tilaukset", agent: "Sääntösi" },
     navLabel: "Verkkokauppa",
     allKitchens: "kaikki demokeittiöt",
     kitchen: "Keittiö",
@@ -64,7 +64,7 @@ export const PORTAL_TEXT = defineText({
   },
   sv: {
     skip: "Hoppa till innehållet",
-    nav: { home: "Start", order: "Beställ", catalogue: "Produkter", menu: "Menyplanering", orders: "Beställningar", agent: "Agent och regler" },
+    nav: { home: "Agent", order: "Beställ", catalogue: "Produkter", menu: "Menyplanering", orders: "Beställningar", agent: "Dina regler" },
     navLabel: "Webbutik",
     allKitchens: "alla demokök",
     kitchen: "Kök",

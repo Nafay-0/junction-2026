@@ -88,6 +88,8 @@ export type ThreadAction =
   | { type: "home_show"; what: "history" | "standing" | "deliveries" | "memory" | "today" }
   /** A recurring order changed: its product at a new amount on the order sheet for its next day. */
   | { type: "standing_change"; family: string; packs?: number }
+  /** Pause a recurring order (or run it again): no reminders, not part of "the usual", until switched back on. */
+  | { type: "standing_pause"; family: string; paused: boolean }
   /** What the agent remembers: change the words of an item, or forget it (the kitchen's signed-in person only). */
   | { type: "memory_edit"; itemId: string; text: string }
   | { type: "memory_forget"; itemId: string }
@@ -525,7 +527,7 @@ export type ProductCard = CardBase & {
 /** The kitchen's recurring orders, as the history shows them (no separate store: plain code over the order history). */
 export type StandingCard = CardBase & {
   type: "standing";
-  items: { family: string; productId: string; name: string; weekdays: number[]; usual: { amount: number; unit: string }; usualPacks: number; lastAmount: number; nextDue?: string; drift: { amountPct: number | null; pricePct: number | null } }[];
+  items: { family: string; productId: string; name: string; weekdays: number[]; usual: { amount: number; unit: string }; usualPacks: number; lastAmount: number; nextDue?: string; drift: { amountPct: number | null; pricePct: number | null }; paused?: boolean }[];
 };
 
 /** Orders on their way: committed or waiting for sign-off, by delivery day. */

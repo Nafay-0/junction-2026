@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, CalendarClock, ClipboardList, Repeat, Search, Truck } from "lucide-react";
+import { BookOpen, CalendarClock, ChefHat, ClipboardList, Repeat, Search, ShieldCheck, Truck } from "lucide-react";
 import { useState } from "react";
 import { useFormat, useText } from "../../_i18n/provider";
 import { verifySigned, type KeySet } from "../../_client/verify-signed";
@@ -8,8 +8,9 @@ import { AgentHome, type TodayItem as TodayRowItem } from "../../_ui/agent-home"
 import { artFor } from "../../_ui/art";
 import { buttonClass } from "../../_ui/kit";
 import { money } from "../../_ui/plain";
-import { FactRows, InPlace, Stepper, Thumb } from "../../_ui/widgets";
-import type { Card, DeliveriesCard, GateCard, MemoryListCard, OrderCard, PriceCard, ProductCard, ProductTile, ProductsCard, StandingCard, ThreadAction, TodayCard, TodayItem } from "@/server/thread/types";
+import { FactRows, InPlace } from "../../_ui/widgets";
+import { DeliveryCard, MemoryList, ProductFacts, ProductResults, StandingOrders } from "../../_ui/widgets-more";
+import type { Card, DeliveriesCard, GateCard, MemoryListCard, OrderCard, PriceCard, ProductCard, ProductsCard, StandingCard, ThreadAction, TodayCard, TodayItem } from "@/server/thread/types";
 import { usePortal } from "./portal";
 import { THREAD_HOME_TEXT } from "./thread-home.text";
 import { WaitingGate } from "./thread-signoff";
@@ -45,20 +46,13 @@ export function HomeCardView({ card, tap, busy }: { card: Card; tap: Tap; busy: 
   }
 }
 
-const Frame = ({ title, children, note }: { title: string; children: React.ReactNode; note?: string }) => (
-  <section className="rounded-xl border border-line bg-paper p-3.5 shadow-xs">
-    <h3 className="px-0.5 text-[0.82rem] font-semibold uppercase tracking-wide text-ink-soft">{title}</h3>
-    {note && <p className="mt-1 px-0.5 text-[0.84rem] leading-snug text-ink-soft">{note}</p>}
-    <div className="mt-2.5">{children}</div>
-  </section>
-);
 
 // ---------- the day's opening ----------
 
 function TodayView({ card, tap, busy }: { card: TodayCard; tap: Tap; busy: boolean }) {
   const tx = useText(THREAD_HOME_TEXT);
   const f = useFormat();
-  const { kitchen } = usePortal();
+  const { kitchen, agent, fieldRef } = usePortal();
   const [signing, setSigning] = useState<string>();
   const pct = (n: number) => `${n > 0 ? "+" : ""}${f.num(Math.round(n))} %`;
   const go = (action: ThreadAction, label: string) => () => !busy && tap(action, label);
@@ -84,6 +78,10 @@ function TodayView({ card, tap, busy }: { card: TodayCard; tap: Tap; busy: boole
     { id: "standing", label: tx.standing, icon: <Repeat aria-hidden size={18} />, onClick: go({ type: "home_show", what: "standing" }, tx.standing) },
     { id: "deliveries", label: tx.deliveries, icon: <Truck aria-hidden size={18} />, onClick: go({ type: "home_show", what: "deliveries" }, tx.deliveries) },
     { id: "memory", label: tx.memory, icon: <BookOpen aria-hidden size={18} />, onClick: go({ type: "home_show", what: "memory" }, tx.memory) },
+    { id: "rules", label: tx.rules, icon: <ShieldCheck aria-hidden size={18} />, onClick: go({ type: "rules_show" }, tx.rules) },
+    // The menu builder starts from the kitchen's own words (covers, day, what it is built around): the composer opens
+    // with the start of the sentence, and the buyer finishes it.
+    { id: "menu", label: tx.planMenu, icon: <ChefHat aria-hidden size={18} />, onClick: () => { agent.setDraft(tx.planMenuWords); requestAnimationFrame(() => fieldRef.current?.focus()); } },
   ];
   const sign = card.items.find((i): i is Extract<TodayItem, { kind: "sign_off" }> => i.kind === "sign_off" && i.approvalId === signing);
   if (card.pending)
@@ -107,57 +105,18 @@ function signGate(i: Extract<TodayItem, { kind: "sign_off" }>): GateCard {
 
 // ---------- the assortment ----------
 
-function Tile({ p, tap, busy }: { p: ProductTile; tap: Tap; busy: boolean }) {
-  const tx = useText(THREAD_HOME_TEXT);
-  const f = useFormat();
-  return (
-    <li className="flex items-center gap-3 rounded-lg border border-line/80 p-2.5">
-      <Thumb art={artFor({ name: p.name, category: p.category, attributes: p.attributes })} className="size-12" />
-      <div className="min-w-0 flex-1">
-        <p className="text-[0.92rem] font-medium leading-snug [overflow-wrap:anywhere]">{p.name}</p>
-        <p className="text-[0.8rem] leading-snug text-ink-soft">
-          {[p.brand, tx.pack(f.measure(p.packSize, p.unit)), ...p.attributes.slice(0, 2).map((a) => f.attr(a))].filter(Boolean).join(" · ")}
-        </p>
-      </div>
-      <div className="flex shrink-0 flex-col gap-1.5 sm:flex-row">
-        <button type="button" disabled={busy} className={buttonClass("primary", "sm")} onClick={() => tap({ type: "sheet_add", productId: p.productId, packs: 1 }, `${tx.add}: ${p.name}`)}>
-          {tx.add}
-        </button>
-        <button type="button" disabled={busy} className={buttonClass("quiet", "sm")} onClick={() => tap({ type: "product_show", productId: p.productId }, `${tx.facts}: ${p.name}`)}>
-          {tx.facts}
-        </button>
-      </div>
-    </li>
-  );
-}
-
 function ProductsView({ card, tap, busy }: { card: ProductsCard; tap: Tap; busy: boolean }) {
   const tx = useText(THREAD_HOME_TEXT);
-  const [q, setQ] = useState(card.query);
+  const f = useFormat();
+  if (!card.products.length) return <p className="px-1 text-[0.9rem] text-ink-soft">{tx.noProducts}</p>;
+  const name = (id: string) => card.products.find((p) => p.productId === id)?.name ?? id;
   return (
-    <Frame title={tx.productsFor(card.query, card.total)} note={tx.productsNote}>
-      <form
-        className="mb-2.5 flex gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!busy) tap({ type: "products_search", query: q.trim(), ...(card.category ? { category: card.category } : {}) }, `${tx.browse}: ${q.trim()}`);
-        }}
-      >
-        <input value={q} onChange={(e) => setQ(e.target.value)} aria-label={tx.browse} className="min-h-11 min-w-0 flex-1 rounded-lg border border-line-strong bg-paper px-3 text-[0.92rem]" />
-        <button type="submit" disabled={busy} className={buttonClass("secondary", "sm")} aria-label={tx.browse}>
-          <Search aria-hidden size={16} />
-        </button>
-      </form>
-      {card.products.length ? (
-        <ul className="grid gap-2">
-          {card.products.map((p) => (
-            <Tile key={p.productId} p={p} tap={tap} busy={busy} />
-          ))}
-        </ul>
-      ) : (
-        <p className="text-[0.9rem] text-ink-soft">{tx.noProducts}</p>
-      )}
-    </Frame>
+    <ProductResults
+      kind={tx.productsFor(card.query, card.total)}
+      products={card.products.map((p) => ({ id: p.productId, name: p.name, pack: f.measure(p.packSize, p.unit), art: artFor({ name: p.name, category: p.category, attributes: p.attributes }), price: tx.priceWhenOpened }))}
+      onAdd={(id) => !busy && tap({ type: "sheet_add", productId: id, packs: 1 }, `${tx.add}: ${name(id)}`)}
+      onOpen={(id) => !busy && tap({ type: "product_show", productId: id }, `${tx.facts}: ${name(id)}`)}
+    />
   );
 }
 
@@ -166,131 +125,115 @@ function ProductView({ card, tap, busy }: { card: ProductCard; tap: Tap; busy: b
   const f = useFormat();
   const p = card.product;
   return (
-    <Frame title={p.name}>
-      <div className="flex items-start gap-3">
-        <Thumb art={artFor({ name: p.name, category: p.category, attributes: p.attributes })} className="size-16" />
-        <div className="min-w-0 flex-1">
-          <FactRows
-            rows={[
-              { label: tx.pack(""), value: f.measure(p.packSize, p.unit) },
-              { label: tx.allergens, value: !p.allergensDeclared ? tx.notDeclared : p.allergens.length ? p.allergens.join(", ") : tx.noAllergens },
-              ...(p.attributes.length ? [{ label: tx.facts, value: p.attributes.map((a) => f.attr(a)).join(", ") }] : []),
-              { label: tx.certificates, value: p.certificates.length ? p.certificates.join(", ") : tx.unknown },
-              ...(p.origin ? [{ label: tx.origin, value: p.origin }] : []),
-              { label: tx.co2, value: p.co2KgPerUnit === null ? tx.unknown : `${f.num(p.co2KgPerUnit)} kg` },
-              { label: tx.reliability, value: p.reliability === null ? tx.unknown : `${f.num(Math.round(p.reliability * 100))} %` },
-              ...(p.gtin ? [{ label: tx.gtin, value: p.gtin, mono: true }] : []),
-            ]}
-          />
-        </div>
-      </div>
-      <p className="mt-2.5">
-        <button type="button" disabled={busy} className={buttonClass("primary", "sm")} onClick={() => tap({ type: "sheet_add", productId: p.productId, packs: 1 }, `${tx.add}: ${p.name}`)}>
-          {tx.add}
-        </button>
-      </p>
-    </Frame>
+    <ProductFacts
+      kind={tx.facts}
+      name={p.name}
+      pack={f.measure(p.packSize, p.unit)}
+      art={artFor({ name: p.name, category: p.category, attributes: p.attributes })}
+      rows={[
+        { label: tx.allergens, value: !p.allergensDeclared ? tx.notDeclared : p.allergens.length ? p.allergens.join(", ") : tx.noAllergens },
+        ...(p.attributes.length ? [{ label: tx.facts, value: p.attributes.map((a) => f.attr(a)).join(", ") }] : []),
+        { label: tx.certificates, value: p.certificates.length ? p.certificates.join(", ") : tx.unknown },
+        ...(p.origin ? [{ label: tx.origin, value: p.origin }] : []),
+        { label: tx.co2, value: p.co2KgPerUnit === null ? tx.unknown : `${f.num(p.co2KgPerUnit)} kg` },
+        { label: tx.reliability, value: p.reliability === null ? tx.unknown : `${f.num(Math.round(p.reliability * 100))} %` },
+      ]}
+      add={{ label: tx.add, onClick: () => !busy && tap({ type: "sheet_add", productId: p.productId, packs: 1 }, `${tx.add}: ${p.name}`) }}
+    />
   );
 }
 
 // ---------- recurring orders, deliveries ----------
 
-function StandingRow({ it, tap, busy }: { it: StandingCard["items"][number]; tap: Tap; busy: boolean }) {
-  const tx = useText(THREAD_HOME_TEXT);
-  const f = useFormat();
-  const [packs, setPacks] = useState(it.usualPacks);
-  const [editing, setEditing] = useState(false);
-  return (
-    <li className="rounded-lg border border-line/80 p-3">
-      <p className="font-medium leading-snug [overflow-wrap:anywhere]">{it.name}</p>
-      <p className="text-[0.84rem] leading-snug text-ink-soft">
-        {[tx.every(f.weekdays(it.weekdays)), tx.usual(f.measure(it.usual.amount, it.usual.unit), f.num(it.usualPacks)), it.nextDue ? tx.nextDue(f.day(it.nextDue)) : ""].filter(Boolean).join(" · ")}
-      </p>
-      {editing ? (
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <Stepper value={packs} onChange={setPacks} min={1} max={9999} less={tx.less} more={tx.more} label={tx.packs} disabled={busy} />
-          <button type="button" disabled={busy} className={buttonClass("primary", "sm")} onClick={() => tap({ type: "standing_change", family: it.family, packs }, `${tx.onSheet}: ${f.num(packs)} × ${it.name}`)}>
-            {tx.onSheet}
-          </button>
-        </div>
-      ) : (
-        <div className="mt-2 flex flex-wrap gap-2">
-          <button type="button" disabled={busy} className={buttonClass("primary", "sm")} onClick={() => tap({ type: "standing_change", family: it.family }, `${tx.orderUsual}: ${it.name}`)}>
-            {tx.orderUsual}
-          </button>
-          <button type="button" disabled={busy} className={buttonClass("secondary", "sm")} onClick={() => setEditing(true)}>
-            {tx.change}
-          </button>
-        </div>
-      )}
-    </li>
-  );
-}
-
+/**
+ * Recurring orders, read from the order history: a switch pauses one (no reminders, not part of "the usual") and runs
+ * it again; "Change" puts it on an order sheet for its next day, where the amount and the day are changed and ordered.
+ */
 function StandingView({ card, tap, busy }: { card: StandingCard; tap: Tap; busy: boolean }) {
   const tx = useText(THREAD_HOME_TEXT);
+  const f = useFormat();
+  if (!card.items.length) return <p className="px-1 text-[0.9rem] text-ink-soft">{tx.noRecurring}</p>;
+  const pct = (n: number) => `${n > 0 ? "+" : ""}${f.num(n)} %`;
   return (
-    <Frame title={tx.standing} note={tx.recurringNote}>
-      {card.items.length ? (
-        <ul className="grid gap-2">
-          {card.items.map((it) => (
-            <StandingRow key={it.family} it={it} tap={tap} busy={busy} />
-          ))}
-        </ul>
-      ) : (
-        <p className="text-[0.9rem] text-ink-soft">{tx.noRecurring}</p>
-      )}
-    </Frame>
+    <StandingOrders
+      kind={tx.standing}
+      items={card.items.map((it) => ({
+        id: it.family,
+        name: it.name,
+        rhythm: tx.rhythm(tx.usual(f.measure(it.usual.amount, it.usual.unit), f.num(it.usualPacks)), tx.every(f.weekdays(it.weekdays))),
+        ...(it.nextDue ? { next: tx.nextDue(f.day(it.nextDue)) } : {}),
+        paused: !!it.paused,
+        ...(it.drift.amountPct !== null && Math.abs(it.drift.amountPct) >= 10 ? { note: tx.driftNote(pct(it.drift.amountPct)) } : {}),
+      }))}
+      onPause={(family, paused) => !busy && tap({ type: "standing_pause", family, paused }, `${paused ? tx.paused : tx.orderUsual}: ${card.items.find((x) => x.family === family)?.name ?? family}`)}
+      onChange={(family) => !busy && tap({ type: "standing_change", family }, `${tx.onSheet}: ${card.items.find((x) => x.family === family)?.name ?? family}`)}
+    />
   );
 }
 
-function DeliveriesView({ card, tap, busy }: { card: DeliveriesCard; tap: Tap; busy: boolean }) {
+/** Each delivery coming as the kit's delivery card: ordered, the OK (or waiting for it), confirmed, arrives. */
+function DeliveriesView({ card }: { card: DeliveriesCard; tap: Tap; busy: boolean }) {
   const tx = useText(THREAD_HOME_TEXT);
   const f = useFormat();
+  if (!card.items.length) return <p className="px-1 text-[0.9rem] text-ink-soft">{tx.noDeliveries}</p>;
   return (
-    <Frame title={tx.deliveries}>
-      {card.items.length ? (
-        <ul className="divide-y divide-line/80">
-          {card.items.map((d) => (
-            <li key={d.orderId} className="flex items-center gap-3 py-2">
-              <div className="min-w-0 flex-1">
-                <p className="font-medium leading-snug">{f.day(d.deliveryDate)}</p>
-                <p className="text-[0.84rem] leading-snug text-ink-soft [overflow-wrap:anywhere]">
-                  {d.status === "pending_approval" ? `${tx.waiting} · ` : ""}
-                  {d.lines.map((l) => `${f.num(l.quantity)} × ${l.name}`).join(", ")}
-                </p>
-              </div>
-              <span className="tabular shrink-0 text-[0.9rem]">{money(d.totalCents)}</span>
-              <button type="button" disabled={busy} className={buttonClass("quiet", "sm")} onClick={() => tap({ type: "order_show", orderId: d.orderId }, tx.showOrder)}>
-                {tx.showOrder}
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="text-[0.9rem] text-ink-soft">{tx.noDeliveries}</p>
-      )}
-    </Frame>
+    <div className="flex flex-col gap-2.5">
+      {card.items.slice(0, 3).map((d) => {
+        const waiting = d.status === "pending_approval";
+        return (
+          <DeliveryCard
+            key={d.orderId}
+            kind={tx.deliveries}
+            title={tx.deliveryTitle(f.day(d.deliveryDate), money(d.totalCents))}
+            detail={d.lines.map((l) => `${f.num(l.quantity)} × ${l.name}`).join(", ")}
+            steps={[
+              { label: tx.stepOrdered, state: "done" },
+              waiting ? { label: tx.stepWaiting, state: "now" } : { label: tx.stepConfirmed, state: "done" },
+              { label: tx.stepArrives, at: f.day(d.deliveryDate), state: waiting ? "next" : "now" },
+            ]}
+          />
+        );
+      })}
+    </div>
   );
 }
 
 // ---------- what the agent remembers ----------
 
-function MemoryRow({ it, tap, busy, canChange }: { it: MemoryListCard["items"][number]; tap: Tap; busy: boolean; canChange: boolean }) {
+/**
+ * What the agent remembers, as the kit's list: each line edited (in place, below the list) or forgotten by the
+ * kitchen's signed-in person. Without one the list is read-only and says how to change it.
+ */
+function MemoryListView({ card, tap, busy }: { card: MemoryListCard; tap: Tap; busy: boolean }) {
   const tx = useText(THREAD_HOME_TEXT);
-  const [editing, setEditing] = useState(false);
-  const [text, setText] = useState(it.text);
-  const [forgetting, setForgetting] = useState(false);
+  const [editing, setEditing] = useState<string>();
+  const [text, setText] = useState("");
+  if (!card.items.length) return <p className="px-1 text-[0.9rem] text-ink-soft">{tx.noMemory}</p>;
+  const item = card.items.find((x) => x.itemId === editing);
   return (
-    <li className="py-2">
-      {editing ? (
+    <div className="flex flex-col gap-2">
+      <MemoryList
+        kind={tx.memory}
+        items={card.items.map((it) => ({ id: it.itemId, text: it.text, ...(it.status === "pending_confirmation" ? { source: tx.pending } : {}) }))}
+        {...(card.canChange
+          ? {
+              onEdit: (id: string) => {
+                setEditing(id);
+                setText(card.items.find((x) => x.itemId === id)?.text ?? "");
+              },
+            }
+          : {})}
+        onForget={(id) => card.canChange && !busy && tap({ type: "memory_forget", itemId: id }, `${tx.forget}: ${card.items.find((x) => x.itemId === id)?.text ?? ""}`)}
+      />
+      {!card.canChange && <p className="px-1 text-[0.84rem] text-ink-soft">{tx.memorySignIn}</p>}
+      {item && (
         <form
-          className="flex flex-col gap-2"
+          className="flex flex-col gap-2 rounded-xl border border-line bg-paper p-3"
           onSubmit={(e) => {
             e.preventDefault();
-            if (text.trim().length < 2) return;
-            tap({ type: "memory_edit", itemId: it.itemId, text: text.trim() }, `${tx.edit}: ${text.trim()}`);
-            setEditing(false);
+            if (text.trim().length < 2 || busy) return;
+            tap({ type: "memory_edit", itemId: item.itemId, text: text.trim() }, `${tx.edit}: ${text.trim()}`);
+            setEditing(undefined);
           }}
         >
           <label className="text-[0.82rem] text-ink-soft">
@@ -301,79 +244,13 @@ function MemoryRow({ it, tap, busy, canChange }: { it: MemoryListCard["items"][n
             <button type="submit" disabled={busy} className={buttonClass("primary", "sm")}>
               {tx.save}
             </button>
-            <button type="button" className={buttonClass("quiet", "sm")} onClick={() => {
-                setEditing(false);
-                setText(it.text);
-              }}>
+            <button type="button" className={buttonClass("quiet", "sm")} onClick={() => setEditing(undefined)}>
               {tx.cancel}
             </button>
           </div>
         </form>
-      ) : (
-        <div className="flex items-start gap-3">
-          <p className="min-w-0 flex-1 text-[0.92rem] leading-snug [overflow-wrap:anywhere]">
-            {it.text}
-            {it.status === "pending_confirmation" && <span className="ml-2 text-[0.8rem] text-ink-soft">({tx.pending})</span>}
-          </p>
-          {canChange && (
-            <div className="flex shrink-0 gap-1.5">
-              {forgetting ? (
-                <>
-                  <button type="button" disabled={busy} className={buttonClass("secondary", "sm")} onClick={() => tap({ type: "memory_forget", itemId: it.itemId }, `${tx.forget}: ${it.text}`)}>
-                    {tx.confirmForget}
-                  </button>
-                  <button type="button" className={buttonClass("quiet", "sm")} onClick={() => setForgetting(false)}>
-                    {tx.cancel}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button type="button" disabled={busy} className={buttonClass("quiet", "sm")} onClick={() => setEditing(true)}>
-                    {tx.edit}
-                  </button>
-                  <button type="button" disabled={busy} className={buttonClass("quiet", "sm")} onClick={() => setForgetting(true)}>
-                    {tx.forget}
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-        </div>
       )}
-    </li>
-  );
-}
-
-function MemoryListView({ card, tap, busy }: { card: MemoryListCard; tap: Tap; busy: boolean }) {
-  const tx = useText(THREAD_HOME_TEXT);
-  const [words, setWords] = useState("");
-  return (
-    <Frame title={tx.memory} note={card.canChange ? tx.memoryNote : tx.memorySignIn}>
-      {card.items.length ? (
-        <ul className="divide-y divide-line/80">
-          {card.items.map((it) => (
-            <MemoryRow key={it.itemId} it={it} tap={tap} busy={busy} canChange={card.canChange} />
-          ))}
-        </ul>
-      ) : (
-        <p className="text-[0.9rem] text-ink-soft">{tx.noMemory}</p>
-      )}
-      <form
-        className="mt-3 flex flex-col gap-2 sm:flex-row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          const t = words.trim();
-          if (t.length < 2 || busy) return;
-          tap({ type: "remember_this", text: t }, `${tx.remember}: ${t}`);
-          setWords("");
-        }}
-      >
-        <input value={words} onChange={(e) => setWords(e.target.value)} maxLength={500} aria-label={tx.rememberLabel} placeholder={tx.rememberPh} className="min-h-11 min-w-0 flex-1 rounded-lg border border-line-strong bg-paper px-3 text-[0.92rem]" />
-        <button type="submit" disabled={busy || words.trim().length < 2} className={buttonClass("secondary", "sm")}>
-          {tx.remember}
-        </button>
-      </form>
-    </Frame>
+    </div>
   );
 }
 

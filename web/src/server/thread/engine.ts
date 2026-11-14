@@ -104,6 +104,7 @@ const ActionSchema: z.ZodType<ThreadAction> = z.discriminatedUnion("type", [
   z.object({ type: z.literal("order_show"), orderId: z.string().min(1).max(80) }),
   z.object({ type: z.literal("home_show"), what: z.enum(["history", "standing", "deliveries", "memory", "today"]) }),
   z.object({ type: z.literal("standing_change"), family: z.string().min(1).max(80), packs: z.number().int().min(1).max(9999).optional() }),
+  z.object({ type: z.literal("standing_pause"), family: z.string().min(1).max(80), paused: z.boolean() }),
   z.object({ type: z.literal("memory_edit"), itemId: z.string().min(1).max(80), text: z.string().trim().min(2).max(500) }),
   z.object({ type: z.literal("memory_forget"), itemId: z.string().min(1).max(80) }),
   z.object({ type: z.literal("rules_show") }),

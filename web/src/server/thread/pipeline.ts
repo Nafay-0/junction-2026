@@ -191,7 +191,7 @@ async function usualSheet(run: TurnRun, words: string): Promise<{ requestId: str
   const { createSheet } = await import("./sheet");
   const profile = await run.rt.kitchens.getProfile(run.session.mandate.issuer.orgId);
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Helsinki" }).format(new Date());
-  const due = standing(profile, today).filter((s) => s.nextDue);
+  const due = standing(profile, today).filter((s) => s.nextDue && !profile?.pausedStanding?.includes(s.family));
   const next = due.map((s) => s.nextDue!).sort()[0];
   if (!next) return undefined;
   const lines: { productId: string; packs: number }[] = [];

@@ -71,6 +71,8 @@ export type KitchenProfile = {
   stated: StatedPreference[];
   /** Typed memory items, written by server/memory. Absent on profiles that predate it. */
   memory?: KitchenMemory;
+  /** Recurring orders (by product family) the kitchen paused: the agent neither reminds of them nor orders them as "the usual". */
+  pausedStanding?: string[];
 };
 
 // ---------- typed memory ----------

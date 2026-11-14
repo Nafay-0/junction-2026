@@ -33,6 +33,7 @@ import { MenuCardView } from "./thread-menu";
 import { HomeCardView, OrderInPlace, PriceProof } from "./thread-home";
 import { RulesCardView } from "./thread-rules";
 import { OptionsDecision } from "./thread-options";
+import { HistoryList } from "../../_ui/widgets-more";
 import { PickerView, QuestionView, SheetView, isQuiet, sheetOrders, whenText } from "./thread-sheet";
 import { THREAD_SHEET_TEXT } from "./thread-sheet.text";
 import { SEND_PROBLEM } from "./thread-state";
@@ -349,6 +350,15 @@ function CardView({ card, tap, busy, gated, base, turn, thread, memory }: { card
         </>
       );
     case "records":
+      // Earlier orders: the kit's history list, each with "order again" onto the order sheet (it never orders by itself).
+      if (card.repeatable && card.rows.length && card.rows.every((r) => r.kind === "order" && r.ref))
+        return (
+          <HistoryList
+            kind={tx.kind.records}
+            orders={card.rows.map((r) => ({ id: r.ref!, when: r.date ? f.day(r.date) : "", summary: r.label, total: r.totalCents !== undefined ? money(r.totalCents) : "", ...(r.detail ? { note: tx.status[r.detail] ?? r.detail } : {}) }))}
+            onAgain={(ref) => !busy && tap({ type: "order_again", ref }, tx.repeatWords(`“${card.rows.find((r) => r.ref === ref)?.label ?? ""}”`))}
+          />
+        );
       return (
         <>
           <RecordsCard
@@ -662,20 +672,21 @@ export function ThreadComposer({ id = "need", size = "md", standalone = false, p
   );
 }
 
-/** The full-page thread (the Order page): the same conversation as the dock, with room to read it. */
+/**
+ * The agent, full page: where a signed-in kitchen lands (and the Order page, the same thread). The day's opening card
+ * (AgentHome: what needs the kitchen today, then the starting points) is the page's header; the composer stays under
+ * the thumb above the tab bar.
+ */
 export function ThreadPage() {
   const { thread } = usePortal();
   const tx = useText(THREAD_PAGE_TEXT);
   return (
-    <section aria-labelledby="thread-title" className="mx-auto max-w-[46rem] py-6">
-      <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">
-          <h1 id="thread-title" className="display text-[2rem] leading-tight sm:text-[2.4rem]">
-            {tx.pageTitle}
-          </h1>
-          <p className="mt-1 max-w-[60ch] text-[0.98rem] leading-relaxed text-ink-soft">{tx.pageLead}</p>
-        </div>
-        {(thread.thread?.turns.length ?? 0) > 0 && <StartOver />}
+    <section aria-labelledby="thread-title" className="mx-auto max-w-[46rem] py-4 sm:py-6">
+      <header className="mb-2 flex items-center justify-end gap-3">
+        <h1 id="thread-title" className="sr-only">
+          {tx.pageTitle}
+        </h1>
+        {(thread.thread?.turns.length ?? 0) > 1 && <StartOver />}
       </header>
       <ThreadLog />
       <div className="sticky bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-20 mt-6 rounded-[2rem] bg-mist/95 py-2 backdrop-blur-sm lg:bottom-4">
