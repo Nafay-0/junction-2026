@@ -565,6 +565,64 @@ const ALL: Scenario[] = [
   },
 ];
 
+// ---------- the home: the day's opening (agent-thread-3) ----------
+
+/** The store opened the agent with the day's card, unasked, finished (not still gathering). */
+export const openedWithToday: Check = {
+  name: "the agent opened with the day's card, before anything was typed",
+  run: (o) => ok(o.today.some((t) => t.opening && !t.pending), `today cards: ${JSON.stringify(o.today.map((t) => ({ opening: t.opening, pending: t.pending })))}`),
+};
+
+/** Every item on every day card is in the kitchen's own records (the portal overview); nothing invented. */
+export const todayFromRecords: Check = {
+  name: "every item on the day's card is in the kitchen's records",
+  run: (o, c) => {
+    const orders: Json[] = c.overview?.orders ?? [];
+    const standing: Json[] = c.overview?.standing ?? [];
+    const bad: string[] = [];
+    for (const t of o.today)
+      for (const i of t.items) {
+        if (i.kind === "sign_off" && !orders.some((x) => x.orderId === i.orderId)) bad.push(`sign-off ${i.orderId} not in the kitchen's orders`);
+        if (i.kind === "delivery" && !orders.some((x) => x.orderId === i.orderId && x.status === "committed")) bad.push(`delivery ${i.orderId} not a committed order`);
+        if ((i.kind === "drift" || i.kind === "cutoff") && !standing.some((s) => s.family === i.family)) bad.push(`${i.kind} ${i.family} is not a recurring order`);
+        if (i.kind === "drift" && !standing.some((s) => s.family === i.family && s.drift?.warning)) bad.push(`drift ${i.family} has no drift warning in the records`);
+        if (i.kind === "cutoff" && !(i.orderBy >= c.today)) bad.push(`cut-off ${i.family} at ${i.orderBy} is not today`);
+      }
+    return ok(bad.length === 0, bad.join("; "));
+  },
+};
+
+/** Asked in words, the agent shows the day's card again (or says, grounded, that nothing needs them). */
+export const todayAnswered: Check = {
+  name: "asked what needs them today, the agent shows the day's card",
+  run: (o) => ok(o.today.some((t) => !t.opening && !t.pending) || o.answers.some((a) => a.kind === "line" && a.text.length > 0), `today cards ${o.today.length}, answers ${o.answers.length}`),
+};
+
+ALL.push(
+  {
+    id: "today-en",
+    title: "The today opening: what needs the kitchen today, from records, then asked in words",
+    tag: "the agent as home (sign-offs, cut-offs, drift, recalls, deliveries)",
+    kitchen: "kaari",
+    lang: "en",
+    turns: [{ say: "What needs my attention today?" }],
+    goal: "answer",
+    expect: [openedWithToday, todayFromRecords, todayAnswered],
+    limitation: "legacy driver: today's store has no opening card; only the thread driver can pass.",
+  },
+  {
+    id: "today-fi",
+    title: "Päivän avaus suomeksi: \"mitä minun pitää hoitaa tänään?\"",
+    tag: "the agent as home (sign-offs, cut-offs, drift, recalls, deliveries)",
+    kitchen: "kaari",
+    lang: "fi",
+    turns: [{ say: "Mitä minun pitää hoitaa tänään?" }],
+    goal: "answer",
+    expect: [openedWithToday, todayFromRecords, todayAnswered],
+    limitation: "legacy driver: today's store has no opening card; only the thread driver can pass.",
+  },
+);
+
 /**
  * Run order. The questions about Kaari's own history go first, before any scenario adds requests of its own to
  * that history ("same as last Thursday" must be read against the kitchen's real Thursday, not a request this run

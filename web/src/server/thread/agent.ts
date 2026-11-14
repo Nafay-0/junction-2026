@@ -303,7 +303,10 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
       execute: async ({ what }) => {
         const { runHomeAction } = await import("./home");
         await runHomeAction(run, { type: "home_show", what });
-        return { shown: what };
+        // What the card holds, in counts only: enough for one true sentence ("nothing needs you today").
+        const card = [...run.store.agentTurn(run.thread, run.turnId)!.cards].reverse().find((c) => ["today", "records", "standing", "deliveries", "memory_list"].includes(c.type));
+        const n = !card ? 0 : card.type === "today" ? card.items.length : card.type === "records" ? card.rows.length : card.type === "standing" || card.type === "deliveries" || card.type === "memory_list" ? card.items.length : 0;
+        return { shown: what, items: n, ...(card?.type === "today" ? { kinds: card.items.map((i) => i.kind) } : {}) };
       },
     }),
     await_sign_off: tool({

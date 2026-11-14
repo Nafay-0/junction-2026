@@ -73,7 +73,28 @@ sentence the buyer has to type or another page. The design lead builds the widge
 - `sheet_place` asks the wholesaler for one signed quote of all lines at the sheet's day, then places it: the gate
   decides, and the gate and order cards follow as for any order (sign-off from the thread as before).
 
-*(not yet)*: everything in this section is the contract for agent-thread-3; this line goes when the engine for each
+### The home: the agent is where the kitchen starts (agent-thread-3, live)
+
+The store's "Order" entry, "Add" anywhere and "ask about this product" all lead into the agent; the old Order page
+redirects to the store with the agent open (`?agent=open`, `?agent=product:<id>`). The home's cards are made by plain
+code from records (`server/thread/home.ts`); the model never writes one, it can only ask for one to be shown
+(`find_products`, `product_facts`, `show_home` in agent.ts). Everything that buys lands on the order sheet.
+
+| Card | What it is | Actions |
+|---|---|---|
+| `today` | **The day's opening**: posted unasked, as an agent turn with no buyer turn before it (`replyTo: ""`), when the kitchen's store reads a thread that has no opening for today (Helsinki day). Items, each from records only: `sign_off` (an order waiting for a named person: sign in place with the sign-off widget), `cutoff` (an order-by time today for something the kitchen orders recurrently: one live call for at most three products, cached ten minutes, `standingCutoffs`), `drift` (a recurring order whose amount or price moved: the portal's own drift warning), `recall` (an active recall hold on a product the kitchen bought), `delivery` (a committed order arriving today or tomorrow). No item when nothing needs them. `pending` while it is gathered. Asked again later, a fresh card in that turn. | `order_show`, `standing_change`, `home_show` |
+| `products` | **Product grid** from master data only (no live call until a product goes on the sheet): only what the mandate allows (category, required attributes, no forbidden allergen) | `products_search`, `product_show`, `sheet_add` |
+| `product` | **One product's facts**: pack, allergens (or "not declared"), attributes, certificates, origin, CO2, delivery reliability | `sheet_add` |
+| `records` (history) | Earlier orders; every row can be ordered again | `order_again`: the order's lines on a new sheet for the next same weekday, re-priced and previewed there |
+| `standing` | **Recurring orders**, read from history (`standing()` in kitchen-portal.ts): weekdays, usual amount and packs, next due, drift. There is no separate standing-order store, so they cannot be paused; "change" is a new sheet for the next due day | `standing_change { family, packs? }` |
+| `deliveries` | Orders committed or waiting, delivered today or later | `order_show` |
+| `memory_list` | What the agent remembers (active or waiting for a yes); `canChange` only for the kitchen's signed-in person | `memory_edit`, `memory_forget` (refused without a signed-in person, `401 kitchen_person_required`; recorded as theirs), `remember_this` |
+| `price`, `order` | The proof (`price.proof`: the signed quote and the signed claims it rests on) and the order's details and signed confirmation open inside the card; "Check the signatures" verifies each in the browser against `/.well-known/jwks.json` (`_client/verify-signed.ts`) | none |
+
+`home_show { what: "today" | "history" | "standing" | "deliveries" | "memory" }` shows one of them. Each is in the
+ledger (`today`, `products`, `order_again`, `memory_write`) and in the operations trace like any turn.
+
+*(not yet)*: the widgets above this subsection are the contract for agent-thread-3; this line goes when the engine for each
 widget lands, and the table says per widget what is live.
 
 ## The thread

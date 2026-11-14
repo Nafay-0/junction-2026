@@ -332,6 +332,17 @@ function collect(st: ThreadState, o: Outcome) {
       case "records":
         o.answers.push({ text: c.question, kind: "records", citations: c.rows.map((r) => ({ kind: r.kind, orderId: r.kind === "order" ? r.ref : undefined, productId: r.kind === "product" ? r.ref : undefined, label: r.label, date: r.date }) as any) });
         break;
+      case "today":
+        // The opening's card carries the thread's id (one per day); one asked for later carries its turn's.
+        o.today.push({ opening: /^today:thr/.test(c.cardId), pending: !!c.pending, date: c.date, items: c.items });
+        break;
+      case "products":
+      case "product":
+      case "standing":
+      case "deliveries":
+      case "memory_list":
+        o.home.push(c.type);
+        break;
       case "notice":
         o.notices.push({ kind: c.kind, message: c.message, rule: c.rule });
         if (c.kind === "refused") o.refusals.push({ rule: c.rule, message: c.message });

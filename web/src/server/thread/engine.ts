@@ -138,8 +138,8 @@ export async function readThread(k: Kitchen) {
 
 /**
  * The opening (docs/agent-thread.md "The home"): an agent turn with no buyer turn before it, whose one card says
- * what needs the kitchen today, made by plain code from records (home.ts). It joins the thread's queue like any turn
- * and its work runs in the background; the card arrives as an event. Nothing is posted twice in a day.
+ * what needs the kitchen today, made by plain code from records (home.ts). Its work runs in the background; the card
+ * arrives as an event. Nothing is posted twice in a day.
  */
 export async function openToday(k: Kitchen): Promise<string | undefined> {
   const r = await resolve(k, "typed");
@@ -153,8 +153,9 @@ export async function openToday(k: Kitchen): Promise<string | undefined> {
   e.store.card(thread, opening.turnId, { type: "today", cardId: todayCardId(thread.threadId), date: helsinkiToday(), items: [], pending: true });
   const buyer: BuyerTurn = { turnId: "", role: "buyer", at: now, door: "typed", via: "tap", label: "Opened the agent" };
   const run: TurnRun = { rt: r.rt, store: e.store, thread, turnId: opening.turnId, buyer, k: r.k, session: r.session, person: r.person, door: "typed", t0: Date.now(), facts: [], requests: new Set(), orders: new Map(), readings: new Map() };
-  const queued = e.queues.get(thread.threadId) ?? Promise.resolve();
-  const next = Promise.race([queued, new Promise<void>((res) => setTimeout(res, 20_000))]).then(() =>
+  // Not queued behind (or ahead of) the buyer's turns: it writes only its own card, and a first request typed while
+  // the cut-offs are being read must not wait for them.
+  void Promise.resolve().then(() =>
     withTurn({ threadId: thread.threadId, turnId: opening.turnId, door: "typed", kitchen: r.k.info.slug, orgId: r.k.info.orgId, agentId: r.session.agentId }, async () => {
       await postToday(run, true);
       e.store.mark(thread, opening.turnId, "done", Date.now() - run.t0);
@@ -164,7 +165,6 @@ export async function openToday(k: Kitchen): Promise<string | undefined> {
       e.store.status(thread, opening.turnId, "failed", { ms: Date.now() - run.t0 });
     }),
   );
-  e.queues.set(thread.threadId, next);
   return opening.turnId;
 }
 
