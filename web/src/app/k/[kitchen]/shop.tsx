@@ -19,6 +19,11 @@ import { Missing } from "./ui";
 import { contentOf, quantityText, stepOf, unitWord } from "./units";
 import type { LiveResult, Product } from "./types";
 import { cutoffMs, cutoffText, untilText } from "./when";
+import { NUTRIENTS, NUTRIENT_UNIT } from "@/core/nutrition";
+import { ownPrice, packDeposit, vatRateOf } from "@/core/pricing";
+
+/** A figure in the buyer's language (decimal comma in Finnish and Swedish). */
+const numIn = (v: number, lang: Lang, digits = 2) => new Intl.NumberFormat(lang === "fi" ? "fi-FI" : lang === "sv" ? "sv-FI" : "en-GB", { maximumFractionDigits: digits }).format(v);
 
 /**
  * The storefront's shared pieces: product tiles (no images in the data, so type, pack and brand carry the tile,
@@ -329,11 +334,17 @@ export function LiveBox({ r, busy, p }: { r?: LiveResult & { checkedAt: string }
     );
   const cut = cutoffMs(o.orderBy);
   const soon = cut !== undefined && cut - now < 6 * 3_600_000;
+  // A Finnish wholesaler's way: before VAT with the rate said, the customer's own price beside the list price, and a
+  // returnable-packaging deposit as its own amount (core/pricing.ts).
+  const vat = vatRateOf(o, p);
+  const own = ownPrice(o);
+  const dep = packDeposit(p.deposits);
   return (
     <div>
       <p className="display text-[2.6rem] leading-none text-ink tabular sm:text-[3rem]">{money(o.unitPriceCents)}</p>
       <p className="mt-1.5 text-[0.92rem] text-ink-soft">
-        {tx.perVat(unitWord(p, 1, f.lang))}
+        {tx.perVat(unitWord(p, 1, f.lang), vat ? numIn(vat.pct, f.lang, 1) : undefined)}
+        {!vat && <>{"; "}{tx.vatUnknown}</>}
         {o.comparisonPriceCents !== undefined && o.comparisonUnit && (
           <>
             {"; "}
@@ -342,6 +353,9 @@ export function LiveBox({ r, busy, p }: { r?: LiveResult & { checkedAt: string }
           </>
         )}
       </p>
+      {own && <p className="mt-1 text-[0.88rem] text-ink-soft">{tx.yourPrice(money(own.listCents), numIn(own.pct, f.lang, 1))}</p>}
+      {dep && dep.knownCents > 0 && <p className="mt-1 text-[0.88rem] text-ink-soft">{tx.depositLine(money(dep.knownCents), dep.lines.filter((l) => l.totalCents !== null).map((l) => `${num(l.quantity, 0)} × ${tx.depositKind[l.kind]} ${money(l.unitCents!)}`).join(", "))}</p>}
+      {dep && dep.unknown.length > 0 && <p className="mt-1 text-[0.88rem] text-ink-soft">{tx.depositUnknown}</p>}
       <dl className="mt-4 grid grid-cols-2 gap-2.5">
         <div className="min-w-0 rounded-lg bg-surface px-3.5 py-2.5">
           <dt className="text-[0.76rem] text-ink-soft">{tx.orderBy}</dt>
@@ -424,10 +438,89 @@ export function Facts({ p, lang }: { p: Product; lang: Lang }) {
           t.carbonPer(String(p.carbonKgPerUnit), p.unit)
         ),
     },
+    ...depthRows(p, lang),
     { key: "code", label: t.productCode, value: <span className="tabular">{p.id}</span> },
     ...(["fi", "sv", "en"] as const).filter((l) => l !== lang && p.names?.[l]).map((l) => ({ key: `name-${l}`, label: t.nameIn[l], value: p.names![l] })),
   ];
   return <FactList rows={rows} labelWidth="min(10.5rem, 36%)" stack={false} />;
+}
+
+/**
+ * What the partner's data says beyond the basics, each row only when the data says it (and "no data" where a buyer
+ * would otherwise read silence as "none"): nutrition per 100 g or ml, the ingredient list, storage and use, origins
+ * and the main ingredient's origin, a fish product's catch, the packaging's disposal, the VAT rate and any deposit.
+ */
+function depthRows(p: Product, lang: Lang): { key: string; label: string; value: React.ReactNode }[] {
+  const tx = SHOP_TEXT[lang];
+  const t = tx.facts;
+  const rows: { key: string; label: string; value: React.ReactNode }[] = [];
+  const text = (k: "ingredients" | "storage" | "usage" | "disposal") => {
+    const v = p.texts?.[k];
+    const shown = lang === "fi" ? (v?.fi ? { s: v.fi, l: "fi" } : v?.en ? { s: v.en, l: "en" } : undefined) : v?.en ? { s: v.en, l: "en" } : v?.fi ? { s: v.fi, l: "fi" } : undefined;
+    if (!shown) return undefined;
+    return (
+      <>
+        {shown.s}
+        {(shown.l !== lang || shown.s.endsWith("…")) && (
+          <span className="block text-[0.88rem] text-ink-soft">
+            {shown.l !== lang ? t.inLang(shown.l).trim() : ""} {shown.s.endsWith("…") ? t.shortened : ""}
+          </span>
+        )}
+      </>
+    );
+  };
+  if (p.source === "valio" || p.nutrition) {
+    const n = p.nutrition;
+    rows.push({
+      key: "nutrition",
+      label: t.nutrition(n?.per ?? "100g"),
+      value: n ? (
+        <span className="block">
+          {NUTRIENTS.filter((k) => n.values[k] !== undefined).map((k) => (
+            <span key={k} className="block">
+              {t.nutrient[k]}: {n.lessThan?.includes(k) ? t.lessThan(numIn(n.values[k]!, lang)) : numIn(n.values[k]!, lang)} {NUTRIENT_UNIT[k]}
+            </span>
+          ))}
+        </span>
+      ) : (
+        <Missing>{t.noNutrition}</Missing>
+      ),
+    });
+  }
+  const ing = text("ingredients");
+  if (ing) rows.push({ key: "ingredients", label: t.ingredients, value: ing });
+  const temp = p.storageTempC;
+  const store = text("storage");
+  if (store || temp) rows.push({ key: "storage-text", label: t.storageText, value: <>{temp && <span className="block">{t.tempRange(temp.min !== undefined ? numIn(temp.min, lang, 1) : undefined, temp.max !== undefined ? numIn(temp.max, lang, 1) : undefined)}</span>}{store}</> });
+  const use = text("usage");
+  if (use) rows.push({ key: "usage", label: t.usage, value: use });
+  const country = (c: string) => (c === "non_eu" ? t.nonEu : (originText(c, lang) ?? c.toUpperCase()));
+  if (p.origins && (p.origins.length > 1 || p.origins[0] !== p.countryOfOrigin)) rows.push({ key: "origins", label: t.origins, value: p.origins.map(country).join(", ") });
+  const m = p.mainIngredient;
+  if (m && (m.origins.length || m.pct !== undefined)) {
+    const name = (lang === "fi" ? m.names.fi : lang === "sv" ? m.names.sv : m.names.en) ?? m.names.en ?? m.names.fi ?? "";
+    rows.push({ key: "main-ingredient", label: t.mainIngredient, value: `${name}${m.pct !== undefined ? ` ${numIn(m.pct, lang, 1)} %` : ""}${m.origins.length ? `: ${m.origins.map((o) => `${t.stage[o.stage] ?? o.stage.toLowerCase()} ${country(o.country)}`).join(", ")}` : ""}` });
+  }
+  for (const [i, f] of (p.fish ?? []).entries())
+    rows.push({ key: `catch-${i}`, label: t.catch, value: [f.latin ? `${f.latin} (${f.species})` : f.species, f.production ? t.production[f.production] : undefined, f.areas.length ? t.fishArea(f.areas.join(", ")) : undefined, f.methods.length ? t.gear(f.methods.join(", ")) : undefined].filter(Boolean).join("; ") });
+  const disposal = text("disposal");
+  if (disposal) rows.push({ key: "disposal", label: t.disposal, value: disposal });
+  const vat = vatRateOf(undefined, p);
+  if (vat) rows.push({ key: "vat", label: t.vat, value: t.vatRate(numIn(vat.pct, lang, 1), false) });
+  const dep = packDeposit(p.deposits);
+  if (dep)
+    rows.push({
+      key: "deposit",
+      label: t.deposit,
+      value: (
+        <>
+          {dep.lines.map((l) => `${num(l.quantity, 0)} × ${tx.depositKind[l.kind] ?? tx.depositKind.unknown}${l.unitCents !== null ? ` ${money(l.unitCents)}` : ""}`).join(", ")}
+          {dep.knownCents > 0 && <span className="block">= {money(dep.knownCents)}</span>}
+          <span className="block text-[0.88rem] text-ink-soft">{dep.unknown.length ? `${tx.depositUnknown} ` : ""}{tx.depositBasis}</span>
+        </>
+      ),
+    });
+  return rows;
 }
 
 /**
@@ -454,6 +547,7 @@ export function BuyBox({ p }: { p: Product }) {
         {r?.offer && (
           <p key={n} className="changed mt-3 inline-block rounded-sm px-1 text-[1.05rem] font-semibold tabular">
             {tx.priceFor(money(r.offer.unitPriceCents * n), quantityText(p, n, lang))}
+            {(packDeposit(p.deposits)?.knownCents ?? 0) > 0 && tx.plusDeposit(money(packDeposit(p.deposits)!.knownCents * n))}
           </p>
         )}
       </div>

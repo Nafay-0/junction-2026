@@ -137,6 +137,7 @@ export const RULE_TITLE: Record<string, string> = {
   category_allowed: "Only product groups the kitchen allows",
   required_attributes: "Products must meet the kitchen's requirements",
   forbidden_allergens: "No forbidden allergens",
+  nutrition_rules: "Nutrition rules",
   required_certificates: "Required certificates",
   delivery_deadline: "Must arrive in time",
   substitution_rule: "Swapping products needs a person",

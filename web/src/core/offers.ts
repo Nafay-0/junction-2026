@@ -116,7 +116,7 @@ export type OfferStatus = "offered" | "accepted" | "declined" | "muted" | "expir
 /** What the selling agent sent this kitchen before (and what came of it). */
 export type PastOffer = { offerId: string; productId: string; family: string; at: string; status: OfferStatus };
 
-export type MandateRules = Pick<Mandate, "allowedCategories" | "requiredAttributes" | "forbiddenAllergens" | "requiredCertificates"> & Partial<Pick<Mandate, "allergenEvidence">>;
+export type MandateRules = Pick<Mandate, "allowedCategories" | "requiredAttributes" | "forbiddenAllergens" | "requiredCertificates"> & Partial<Pick<Mandate, "allergenEvidence" | "nutritionRules">>;
 
 export type KitchenView = {
   orgId: string;
@@ -152,7 +152,7 @@ const DAY = 86_400_000;
 export function forbiddenBy(p: Product, k: Pick<KitchenView, "mandate" | "profile">, now: Date): string | undefined {
   const m = k.mandate;
   const rules = kitchenRulesFor(k.profile, { requiredAttributes: m.requiredAttributes, forbiddenAllergens: m.forbiddenAllergens }, p.category, now);
-  const c: HardConstraints = { categories: [...m.allowedCategories], requiredAttributes: rules.requiredClaims, excludedAttributes: [], forbiddenAllergens: rules.forbiddenAllergens, requiredCertificates: [...m.requiredCertificates], sources: [], ...(m.allergenEvidence ? { allergenEvidence: m.allergenEvidence } : {}) };
+  const c: HardConstraints = { categories: [...m.allowedCategories], requiredAttributes: rules.requiredClaims, excludedAttributes: [], forbiddenAllergens: rules.forbiddenAllergens, requiredCertificates: [...m.requiredCertificates], nutritionRules: [...(m.nutritionRules ?? [])], sources: [], ...(m.allergenEvidence ? { allergenEvidence: m.allergenEvidence } : {}) };
   const why = violation(p, c);
   if (why) return why.startsWith("category ") ? `the kitchen's mandate does not cover ${p.category.replaceAll("_", " ")}` : `the kitchen's rules: ${why}`;
   for (const item of k.profile ? activeMemory(k.profile, { family: p.category, now }) : []) {

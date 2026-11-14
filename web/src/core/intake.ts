@@ -2,7 +2,7 @@ import { z } from "zod";
 import { MAX_LIVE_IDS_PER_CALL, scheduledOn, type LiveOffer, type MeteredCatalog, type Product } from "./catalog";
 import { facetsOf } from "./catalog/search";
 import type { ProductFinder } from "./catalog/finder";
-import { OPTIMISE_QUESTION_ID, answerSchema, clarify, hardConstraints, kindMismatch, optimiseQuestion, optionLabel, violation, type Answer, type ConstraintSource, type MemoryNote, type Question } from "./clarify";
+import { OPTIMISE_QUESTION_ID, answerSchema, clarify, hardConstraints, kindMismatch, nutritionExclusion, optimiseQuestion, optionLabel, violation, type Answer, type ConstraintSource, type MemoryNote, type Question } from "./clarify";
 import { proposedIds, type AlternativesAnswer, type AlternativesSource } from "./alternatives";
 import { alsoAskedIn, alsoAskedNote, groupsIn, type AlsoAsked } from "./also-asked";
 import { qualifiersOf } from "./qualifiers";
@@ -403,7 +403,10 @@ export function createIntakeFlow(deps: IntakeDeps) {
     const wantedKinds = facetsOf(`${i.need.item.text} ${i.family}`);
     const allowed = products.filter((p) => {
       const why = violation(p, constraints) ?? kindMismatch(p, wantedKinds);
-      if (why) i.excluded.push({ productId: p.id, reason: why });
+      if (why) {
+        const n = nutritionExclusion(p, constraints);
+        i.excluded.push({ productId: p.id, reason: why, ...(n && n.reason === why ? { code: n.code, params: n.params } : {}) });
+      }
       return !why;
     });
     const learned = learnPreferences(profile, i.family);
@@ -507,6 +510,8 @@ export function createIntakeFlow(deps: IntakeDeps) {
       alternatives,
       declined,
       goal: goalForRank,
+      preferLabels: [...new Set([...(session.mandate.preferredLabels ?? []), ...(i.need.preferredLabels ?? [])])].filter((l) => !constraints.requiredCertificates.includes(l)),
+      nutritionFocus: [...new Set((session.mandate.nutritionRules ?? []).map((r) => r.nutrient))],
       span,
       estimates: i.acknowledgements.filter((a) => a.code === "pack_uncertain" && a.action === "confirmed").map((a) => a.key.split(":")[1]),
     });

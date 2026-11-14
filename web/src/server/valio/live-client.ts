@@ -190,12 +190,17 @@ export class ValioLiveClient {
     return { ok: res.ok, status: res.status, body: await res.json().catch(() => null) };
   }
 
-  /** Price and availability for a short list of products, for one requested delivery date. */
-  async lookup(productIds: string[], requestedDate: string): Promise<ValioLiveResult[]> {
+  /**
+   * Price and availability for a short list of products, for one requested delivery date and one customer (the
+   * kitchen's customer number; the configured default when none is given). Answers are cached per customer, since
+   * prices and availability are customer-specific.
+   */
+  async lookup(productIds: string[], requestedDate: string, customer?: string): Promise<ValioLiveResult[]> {
     const ids = [...new Set(productIds)];
     if (!/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) throw new ValioApiError("bad_request", `requestedDate must be YYYY-MM-DD; got ${requestedDate}.`);
+    const who = customer?.trim() ? customer.trim().slice(0, 32) : this.cfg.customer;
     const dl = this.deadline();
-    const [prices, avail] = await Promise.all([this.cached("p", ids, requestedDate, (b) => this.fetchPrices(b, requestedDate, dl)), this.cached("a", ids, requestedDate, (b) => this.fetchAvailability(b, requestedDate, dl))]);
+    const [prices, avail] = await Promise.all([this.cached("p", ids, requestedDate, who, (b) => this.fetchPrices(b, requestedDate, who, dl)), this.cached("a", ids, requestedDate, who, (b) => this.fetchAvailability(b, requestedDate, who, dl))]);
     return ids.map((productId) => ({ productId, requestedDate, price: prices.get(productId) as ValioPrice | undefined, availability: avail.get(productId) as ValioAvailability | undefined }));
   }
 
@@ -208,12 +213,12 @@ export class ValioLiveClient {
     return d;
   }
 
-  private async cached(kind: "p" | "a", ids: string[], date: string, load: (batch: string[]) => Promise<Map<string, unknown>>): Promise<Map<string, unknown>> {
+  private async cached(kind: "p" | "a", ids: string[], date: string, customer: string, load: (batch: string[]) => Promise<Map<string, unknown>>): Promise<Map<string, unknown>> {
     const out = new Map<string, unknown>();
     const nowMs = this.now().getTime();
     const missing: string[] = [];
     for (const id of ids) {
-      const hit = this.cache.get(`${kind}:${date}:${id}`);
+      const hit = this.cache.get(`${kind}:${customer}:${date}:${id}`);
       if (hit && hit.expires > nowMs) {
         out.set(id, hit.value);
         this.counters.cacheHits += 1;
@@ -226,7 +231,7 @@ export class ValioLiveClient {
         if (!got.has(id)) continue; // not returned: do not cache the absence
         const value = got.get(id);
         out.set(id, value);
-        this.remember(`${kind}:${date}:${id}`, value, this.expiry(kind, value, nowMs));
+        this.remember(`${kind}:${customer}:${date}:${id}`, value, this.expiry(kind, value, nowMs));
       }
     }
     return out;
@@ -247,12 +252,12 @@ export class ValioLiveClient {
     while (this.cache.size > this.cfg.cacheSize) this.cache.delete(this.cache.keys().next().value!);
   }
 
-  private body(ids: string[], requestedDate: string) {
-    return { customer: this.cfg.customer, requestedDate, products: ids };
+  private body(ids: string[], requestedDate: string, customer: string) {
+    return { customer, requestedDate, products: ids };
   }
 
-  private async fetchPrices(ids: string[], requestedDate: string, dl: Deadline): Promise<Map<string, ValioPrice>> {
-    const json = await this.postJson("/api/price", this.body(ids, requestedDate), dl);
+  private async fetchPrices(ids: string[], requestedDate: string, customer: string, dl: Deadline): Promise<Map<string, ValioPrice>> {
+    const json = await this.postJson("/api/price", this.body(ids, requestedDate, customer), dl);
     const parsed = PriceResponse.safeParse(json);
     if (!parsed.success) throw new ValioApiError("bad_response", "Price response is not in the documented shape.");
     const out = new Map<string, ValioPrice>();
@@ -284,8 +289,8 @@ export class ValioLiveClient {
     return out;
   }
 
-  private async fetchAvailability(ids: string[], requestedDate: string, dl: Deadline): Promise<Map<string, ValioAvailability>> {
-    const json = await this.postJson("/api/availability", this.body(ids, requestedDate), dl);
+  private async fetchAvailability(ids: string[], requestedDate: string, customer: string, dl: Deadline): Promise<Map<string, ValioAvailability>> {
+    const json = await this.postJson("/api/availability", this.body(ids, requestedDate, customer), dl);
     const parsed = AvailabilityResponse.safeParse(json);
     if (!parsed.success) throw new ValioApiError("bad_response", "Availability response is not in the documented shape.");
     const out = new Map<string, ValioAvailability>();
