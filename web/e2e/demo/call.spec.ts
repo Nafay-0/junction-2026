@@ -157,10 +157,18 @@ test("the line drops mid-call: 'Reconnecting', then back, and where things stand
   const live = await fakeLive(page, { dropAfterConnect: true });
   await ownKitchen(page, micFor(engine(info)));
   await mic(page).click();
+  // Every status the bar shows, recorded as it changes (a reconnect can take well under a second).
+  await page.evaluate(() => {
+    const w = window as unknown as { __statuses: string[] };
+    w.__statuses = [];
+    new MutationObserver(() => {
+      const s = document.querySelector("[data-voice-status]")?.getAttribute("data-voice-status");
+      if (s && w.__statuses.at(-1) !== s) w.__statuses.push(s);
+    }).observe(document.body, { subtree: true, attributes: true, childList: true, attributeFilter: ["data-voice-status"] });
+  });
   await expect.poll(() => statusOf(page), { timeout: 20_000 }).toBe("listening");
-  await expect.poll(() => statusOf(page), { timeout: 10_000 }).toBe("reconnecting");
-  await expect(bar(page)).toContainText("Reconnecting");
   await expect.poll(() => live.sockets, { timeout: 15_000 }).toBe(2);
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __statuses: string[] }).__statuses), { timeout: 10_000 }).toContain("reconnecting");
   await expect.poll(() => statusOf(page), { timeout: 20_000 }).toBe("listening");
   await expect.poll(() => live.told.join(" "), { timeout: 15_000 }).toMatch(/I'm back/);
   await bar(page).getByRole("button", { name: "End" }).click();
