@@ -97,7 +97,8 @@ export const TEST_ACCOUNTS: TestAccountSeed[] = [
     restaurant: "Kahvila Sointu",
     terms: { ...DEFAULT_TERMS, perOrderLimitEur: 60, weeklyBudgetEur: 400, groups: ["10", "11", "22"], signer: "Owner", maxLeadDays: 5 },
     profile: (orgId, name, now, products) => {
-      const oat = pick(products, (p) => p.category === "plant_drink");
+      // A real oat drink for the coffee (the first plant drink by id was a coconut milk), barista or plain, not flavoured.
+      const oat = pick(products, (p) => p.category === "plant_drink" && /\boat|kaura|havre/i.test(p.name) && !/choco|kaakao|vanil|mansikka|straw/i.test(p.name) && p.packSize <= 2) ?? pick(products, (p) => p.category === "plant_drink" && /\boat|kaura|havre/i.test(p.name)) ?? pick(products, (p) => p.category === "plant_drink");
       const milk = pick(products, (p) => p.category === "milk" && p.packSize <= 2 && !p.attributes.includes("lactose_free")) ?? pick(products, (p) => p.category === "milk");
       // The milk creeps up on both delivery days (the watch's standing-order drift); the oat drink stays as usual.
       const milkDays = pastDays(now, [2, 5], 10);

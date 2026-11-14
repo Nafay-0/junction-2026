@@ -172,6 +172,17 @@ export async function watchMomentForThread(rt: Runtime, session: AgentSession, l
       staged: f.staged,
     };
   }
+  // A backup the kitchen lined up was ordered by itself (server/reliability): one sentence, no question.
+  const backed = w.findings.find((f) => f.decision?.via === "backup" && !f.saidAt && f.decision.orderId);
+  if (backed) {
+    const d = backed.decision!;
+    const ps = await productsOf(rt, [backed.product.productId, d.productId ?? ""]);
+    const what = nameIn(ps.get(backed.product.productId), backed.product.name, lang);
+    const sub = nameIn(ps.get(d.productId ?? ""), d.productId ?? "", lang);
+    const say = d.status === "committed" ? t.backupUsed(what, sub, money(d.totalCents ?? 0), backed.staged) : t.backupUsedSignOff(what, sub, d.approver?.replace(/\s*\(.*\)$/, "") ?? approver ?? "a person", backed.staged);
+    // Said as a substitute placed (the conversation's card knows that kind); facts.backup says it was the kitchen's backup.
+    return { id: backed.findingId, kind: "substitute_placed", say: cap(say), answers: [], steps: [...stepsOfFinding({ ...backed, mandateRule: session.mandate.substitution.rule }), `The kitchen had lined up ${sub} as the backup (${d.by}); ordered through the gate: ${d.status}.`], facts: { finding: backed, backup: true }, staged: backed.staged };
+  }
   const placed = w.renewals.find((r) => (r.state === "placed" || r.state === "failed") && !r.saidAt && r.outcome?.orderId);
   if (placed) {
     const o = placed.outcome!;

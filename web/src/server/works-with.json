@@ -15,7 +15,7 @@
       "verifiedDate": "2026-11-14",
       "humanInput": "elicitation",
       "examplePath": "examples/runtimes/pydantic-ai",
-      "exampleUrl": "https://github.com/Nafay-0/junction-2026/tree/main/examples/runtimes/pydantic-ai"
+      "exampleUrl": "/docs/runtimes"
     },
     {
       "runtime": "OpenAI Agents SDK",
@@ -30,7 +30,7 @@
       "verifiedDate": "2026-11-14",
       "humanInput": "relay+approval",
       "examplePath": "examples/runtimes/openai-agents",
-      "exampleUrl": "https://github.com/Nafay-0/junction-2026/tree/main/examples/runtimes/openai-agents"
+      "exampleUrl": "/docs/runtimes"
     },
     {
       "runtime": "Google ADK",
@@ -45,7 +45,7 @@
       "verifiedDate": "2026-11-14",
       "humanInput": "relay+approval",
       "examplePath": "examples/runtimes/google-adk",
-      "exampleUrl": "https://github.com/Nafay-0/junction-2026/tree/main/examples/runtimes/google-adk"
+      "exampleUrl": "/docs/runtimes"
     },
     {
       "runtime": "Claude Agent SDK",
@@ -60,7 +60,7 @@
       "verifiedDate": "2026-11-14",
       "humanInput": "elicitation",
       "examplePath": "examples/runtimes/claude-agent-sdk",
-      "exampleUrl": "https://github.com/Nafay-0/junction-2026/tree/main/examples/runtimes/claude-agent-sdk"
+      "exampleUrl": "/docs/runtimes"
     },
     {
       "runtime": "Vercel AI SDK",
@@ -75,7 +75,7 @@
       "verifiedDate": "2026-11-14",
       "humanInput": "elicitation",
       "examplePath": "examples/runtimes/vercel-ai-sdk",
-      "exampleUrl": "https://github.com/Nafay-0/junction-2026/tree/main/examples/runtimes/vercel-ai-sdk"
+      "exampleUrl": "/docs/runtimes"
     },
     {
       "runtime": "LangGraph",
@@ -90,7 +90,7 @@
       "verifiedDate": "2026-11-14",
       "humanInput": "relay+approval",
       "examplePath": "examples/runtimes/langgraph",
-      "exampleUrl": "https://github.com/Nafay-0/junction-2026/tree/main/examples/runtimes/langgraph"
+      "exampleUrl": "/docs/runtimes"
     },
     {
       "runtime": "Semantic Kernel (OpenAPI, no MCP)",
@@ -105,7 +105,7 @@
       "verifiedDate": "2026-11-14",
       "humanInput": "relay+filter",
       "examplePath": "examples/runtimes/semantic-kernel-openapi",
-      "exampleUrl": "https://github.com/Nafay-0/junction-2026/tree/main/examples/runtimes/semantic-kernel-openapi"
+      "exampleUrl": "/docs/runtimes"
     }
   ]
 }

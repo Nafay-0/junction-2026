@@ -34,6 +34,8 @@ export function urls(origin: string) {
     apiCatalog: `${origin}/.well-known/api-catalog`,
     manifest: `${origin}/.well-known/dock.json`,
     llms: `${origin}/llms.txt`,
+    guide: `${origin}/docs/connect-an-agent`,
+    docs: `${origin}/docs`,
   };
 }
 
@@ -45,6 +47,7 @@ export function apiCatalog(origin: string) {
   const docs = [
     { href: u.llms, type: "text/markdown", title: "How to connect an agent" },
     { href: u.manifest, type: "application/json", title: "AimoPilot manifest: auth, mandates, keys" },
+    { href: u.guide, type: "text/html", title: "Developer guide: connect an agent (Markdown at /docs/raw/connect-an-agent.md)" },
   ];
   return {
     linkset: [
@@ -122,7 +125,7 @@ export function manifest(origin: string) {
       refusals:
         "Every refusal is { error: { code, rule, message, details } }; `rule` is one of `rules` or live_lookup_limit, quote_availability, quote_signature, approver_identity, intake_sequence (a step out of order), human_input (needs the buyer's own answer first).",
     },
-    docs: { llmsTxt: u.llms, apiCatalog: u.apiCatalog },
+    docs: { llmsTxt: u.llms, apiCatalog: u.apiCatalog, guide: u.guide, all: u.docs },
   };
 }
 
@@ -142,6 +145,7 @@ It is not a chatbot and not a marketplace. One wholesaler, one catalogue, signed
 - [API catalog](${u.apiCatalog}): RFC 9727 entry point.
 - [Manifest](${u.manifest}): auth, mandate format, keys, limits.
 - [Public keys](${u.jwks}): JWK Set (Ed25519) to verify quotes and order receipts offline.
+- [Developer guide](${origin}/docs/raw/connect-an-agent.md) and [assumptions and next steps](${origin}/docs/raw/assumptions.md), as Markdown; [every document](${u.docs}) as pages.
 
 ## Authenticate
 

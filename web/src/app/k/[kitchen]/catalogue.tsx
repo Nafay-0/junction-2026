@@ -173,18 +173,26 @@ export function Catalogue() {
             <h1 id="shop-title" className="display mt-0.5 break-words text-[1.95rem] leading-[1.05] text-paper hyphens-manual sm:mt-1 sm:text-[2.7rem]">
               {title}
             </h1>
-            <p className="mt-1.5 max-w-[44ch] text-[0.86rem] leading-snug text-paper/80 sm:mt-2 sm:text-[0.9rem]" aria-live="polite">
-              {loading ? tx.searching : data ? tx.found(data.products.length, data.products.length === limit, data.ms) : ""}
+            <p className="mt-1.5 max-w-[44ch] text-[0.9rem] leading-snug text-paper/85 sm:mt-2" aria-live="polite">
+              {loading ? tx.searching : data ? tx.count(data.products.length, data.products.length === limit) : ""}
             </p>
-            <p className="mt-3.5 inline-flex max-w-full items-center gap-3 rounded-2xl bg-paper/8 py-1.5 pl-1.5 pr-4 sm:mt-4 sm:py-2 sm:pl-2 ring-1 ring-inset ring-paper/15" aria-live="polite">
-              <span key={pageCalls} className="display flex h-9 min-w-9 shrink-0 items-center justify-center rounded-full bg-lime px-2 text-[1.15rem] text-ink tabular">
-                {pageCalls}
-              </span>
-              <span className="min-w-0 text-[0.8rem] leading-tight text-paper/90 sm:text-[0.84rem]">
-                {tx.pageChecks(pageCalls)}
-                <span className="block text-paper/65">{tx.pageProducts(pageProducts, total ? num(total, 0) : undefined)}</span>
-              </span>
-            </p>
+            {/* For the curious, folded: where the list came from and how often the wholesaler's live service was asked. */}
+            <details className="group mt-3 max-w-full text-[0.8rem] text-paper/75 sm:text-[0.84rem]">
+              <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-full py-1 underline-offset-2 hover:underline [&::-webkit-details-marker]:hidden">
+                <ChevronDown aria-hidden size={14} className="transition-transform group-open:rotate-180" />
+                {tx.howMade}
+              </summary>
+              <p className="mt-1.5 leading-snug" aria-live="polite">{data ? tx.found(data.products.length, data.products.length === limit, data.ms) : ""}</p>
+              <p className="mt-2 inline-flex max-w-full items-center gap-3 rounded-2xl bg-paper/8 py-1.5 pl-1.5 pr-4 ring-1 ring-inset ring-paper/15">
+                <span key={pageCalls} className="display flex h-8 min-w-8 shrink-0 items-center justify-center rounded-full bg-lime px-2 text-[1rem] text-ink tabular">
+                  {pageCalls}
+                </span>
+                <span className="min-w-0 leading-tight text-paper/90">
+                  {tx.pageChecks(pageCalls)}
+                  <span className="block text-paper/65">{tx.pageProducts(pageProducts, total ? num(total, 0) : undefined)}</span>
+                </span>
+              </p>
+            </details>
           </div>
         </header>
 

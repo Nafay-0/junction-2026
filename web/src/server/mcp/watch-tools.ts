@@ -80,4 +80,24 @@ export const WATCH_TOOLS = [
       return { autoRenew: r, nextStep: "Done." };
     },
   }),
+  tool({
+    name: "line_up_backup",
+    title: "Line up a backup for a product with a poor delivery record",
+    description:
+      "For an order's products whose delivery record is poor (deliveryRecords on the order): without choice, the alternatives (good/better/best, own record, trade-off, gate preview). With choice (an alternative's productId, best, or none): the buyer's backup, bought only if the product cannot come. Buys nothing now.",
+    input: z.object({ orderId: z.string().min(1), productId: z.string().optional().describe("The poor-record product. Default: the worst."), choice: z.string().max(60).optional().describe("productId, best or none."), by: by.optional() }),
+    output: z.looseObject({ nextStep }),
+    run: async (ctx, a) => {
+      const { getRuntime } = await svc();
+      const { offerBackups, setBackup, declineBackup } = await import("../reliability/service");
+      const rt = await getRuntime();
+      const o = await ctx.dock.getOrder(ctx.session, a.orderId);
+      const backups = await offerBackups(rt, ctx.session, { orderId: o.orderId, requestId: o.requestId, lines: o.lines.map((l) => ({ productId: l.productId, quantity: l.quantity, unitPriceCents: l.unitPriceCents, deliveryDate: l.deliveryDate })) });
+      const b = a.productId ? backups.find((x) => x.product.productId === a.productId) : backups[0];
+      if (!a.choice || !b) return { backups, nextStep: backups.length ? "Tell the buyer the worst product's record in words and the closest alternative; pass their choice with choice." : "No product on this order has a poor delivery record." };
+      const w = { by: who(ctx, a.by), via: via(ctx) };
+      const done = a.choice === "none" ? await declineBackup(rt, ctx.session, b.backupId, w) : await setBackup(rt, ctx.session, b.backupId, a.choice === "best" ? "best" : { productId: a.choice }, w);
+      return { backup: done, nextStep: done.state === "set" ? "Recorded. Nothing is bought now; if the product cannot come, the backup is ordered through the gate." : "Recorded: no backup." };
+    },
+  }),
 ];
