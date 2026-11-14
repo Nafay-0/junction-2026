@@ -2,11 +2,13 @@
 
 import * as React from "react";
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport, type FileUIPart } from "ai";
+import { DefaultChatTransport, lastAssistantMessageIsCompleteWithApprovalResponses, type FileUIPart } from "ai";
 import { ArrowDown, RotateCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DEFAULT_MODEL_ID, getModel } from "@/lib/agent/models";
 import type { ButlerMessage } from "@/lib/agent/tools";
+import { control as browserControl, useBrowserId } from "@/lib/browser/client";
+import type { HandoverAnswer } from "@/lib/browser/protocol";
 import {
   deleteAllConversations,
   deleteConversation,
@@ -20,6 +22,7 @@ import {
 import { describe, locate, useExactLocation, type LocateResult } from "@/lib/location";
 import { useClientValue, useMediaQuery, useStored } from "@/lib/use-client";
 import type { ClarifyAnswer, ExactLocation, LocationAnswer } from "@/lib/widgets/types";
+import { BrowserWorkspace, useBrowserLayout } from "@/components/browser/workspace";
 import { Composer } from "./composer";
 import { AssistantMessage, UserMessage, WorkingLine } from "./message";
 import { Sidebar } from "./sidebar";
@@ -61,11 +64,12 @@ type Coords = Pick<ExactLocation, "lat" | "lng" | "accuracyM" | "label" | "count
  * created once, always reads the latest choice: switching model mid-conversation just works,
  * including when the chat resumes on its own after the user answers a question or shares a location.
  */
-const live: { modelId: string; place: string; timeZone: string; coords?: Coords; locationDeclined: boolean } = {
+const live: { modelId: string; place: string; timeZone: string; coords?: Coords; locationDeclined: boolean; browserId: string } = {
   modelId: DEFAULT_MODEL_ID,
   place: "",
   timeZone: "Europe/Helsinki",
   locationDeclined: false,
+  browserId: "",
 };
 
 const transport = new DefaultChatTransport<ButlerMessage>({
@@ -77,8 +81,16 @@ const transport = new DefaultChatTransport<ButlerMessage>({
     country: ZONES[live.timeZone]?.[1],
     coords: live.coords,
     locationDeclined: live.locationDeclined,
+    browserId: live.browserId || undefined,
   }),
 });
+
+/**
+ * The open conversation as it stands right now. The chat view can be mounted afresh while a
+ * conversation is open (a code reload in development, a layout change); it then starts from here
+ * instead of from what was loaded when the conversation was opened.
+ */
+const liveMessages = new Map<string, ButlerMessage[]>();
 
 const browserTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
 const ACTIVE_KEY = "hovi.active";
@@ -131,7 +143,14 @@ export function Butler() {
     else setDrawerOpen((v) => !v);
   }, [wide, sidebarPref, setSidebarPref]);
 
+  // The live browser opening beside the chat needs the width: on anything but a very wide screen,
+  // the conversation list steps aside. The user can bring it back.
+  const makeRoom = React.useCallback(() => {
+    if (window.innerWidth < 1500) setSidebarPref("closed");
+  }, [setSidebarPref]);
+
   const newTask = React.useCallback(() => {
+    liveMessages.clear();
     const id = newConversationId();
     remember(id);
     setActive({ id, messages: [] });
@@ -142,6 +161,7 @@ export function Butler() {
     setDrawerOpen(false);
     void loadMessages(id).then((messages) => {
       remember(id);
+      liveMessages.clear();
       setActive({ id, messages: messages ?? [] });
     });
   }, []);
@@ -173,7 +193,15 @@ export function Butler() {
       <div className="flex min-w-0 flex-1 flex-col">
         {active ? (
           // Keyed by conversation: opening another one starts a fresh chat state with its own messages.
-          <ChatView key={active.id} conversationId={active.id} initialMessages={active.messages} sidebarOpen={sidebarOpen} onToggleSidebar={toggleSidebar} onNewTask={newTask} />
+          <ChatView
+            key={active.id}
+            conversationId={active.id}
+            initialMessages={active.messages}
+            sidebarOpen={sidebarOpen}
+            onToggleSidebar={toggleSidebar}
+            onNewTask={newTask}
+            onBrowserBeside={makeRoom}
+          />
         ) : null}
       </div>
     </div>
@@ -186,12 +214,15 @@ function ChatView({
   sidebarOpen,
   onToggleSidebar,
   onNewTask,
+  onBrowserBeside,
 }: {
   conversationId: string;
   initialMessages: ButlerMessage[];
   sidebarOpen: boolean;
   onToggleSidebar: () => void;
   onNewTask: () => void;
+  /** The live browser has opened beside the chat. */
+  onBrowserBeside: () => void;
 }) {
   const [modelId, setModelId] = useStored("hovi.model", DEFAULT_MODEL_ID);
   const [place, setPlace] = useStored("hovi.place", "");
@@ -199,6 +230,7 @@ function ChatView({
   const { location, declined, save: saveLocation, setDeclined } = useExactLocation();
   const approximatePlace = place || defaultPlace(timeZone);
   const modelLabel = getModel(modelId).label;
+  const browserId = useBrowserId();
 
   React.useEffect(() => {
     live.modelId = getModel(modelId).id;
@@ -206,17 +238,21 @@ function ChatView({
     live.timeZone = timeZone;
     live.coords = location ? { lat: location.lat, lng: location.lng, accuracyM: location.accuracyM, label: location.label, country: location.country } : undefined;
     live.locationDeclined = declined;
-  }, [modelId, approximatePlace, timeZone, location, declined]);
+    live.browserId = browserId;
+  }, [modelId, approximatePlace, timeZone, location, declined, browserId]);
 
-  const { messages, sendMessage, status, stop, error, regenerate, addToolOutput, clearError } = useChat<ButlerMessage>({
+  const [seed] = React.useState(() => liveMessages.get(conversationId) ?? initialMessages);
+  const { messages, sendMessage, status, stop, error, regenerate, addToolOutput, addToolApprovalResponse, clearError } = useChat<ButlerMessage>({
     id: conversationId,
-    messages: initialMessages,
+    messages: seed,
     transport,
-    // Resume on its own only after the user has answered something the agent asked in the browser.
+    // Resume on its own only after the user has answered something the agent asked: a question,
+    // their location, a hand-over in the live browser, or an approval.
     sendAutomaticallyWhen: ({ messages: all }) => {
       const last = all.at(-1);
       const tail = last?.role === "assistant" ? last.parts.at(-1) : undefined;
-      return (tail?.type === "tool-askUser" || tail?.type === "tool-requestLocation") && tail.state === "output-available";
+      const answered = (tail?.type === "tool-askUser" || tail?.type === "tool-requestLocation" || tail?.type === "tool-requestUserAction") && tail.state === "output-available";
+      return answered || lastAssistantMessageIsCompleteWithApprovalResponses({ messages: all });
     },
   });
 
@@ -237,6 +273,7 @@ function ChatView({
   }, [modelLabel, stop]);
   React.useEffect(() => {
     latest.current = messages;
+    liveMessages.set(conversationId, messages);
     if (baseline.current === null) {
       baseline.current = messages;
       return;
@@ -356,10 +393,34 @@ function ChatView({
     return result;
   }, [applyLocation]);
 
+  /* The live browser. The pane's own buttons and the cards in the chat end up in the same place. */
+  const openBrowser = React.useRef<(() => void) | null>(null);
+  const answerHandover = React.useCallback(
+    (answer: HandoverAnswer, toolCallId?: string) => {
+      // The browser belongs to the visitor, not to one conversation: only answer a request that is in this one.
+      const pending = latest.current.some((m) => m.role === "assistant" && m.parts.some((p) => p.type === "tool-requestUserAction" && p.toolCallId === toolCallId && p.state === "input-available"));
+      if (!toolCallId || !pending) return;
+      followLatest();
+      void addToolOutput({ tool: "requestUserAction", toolCallId, output: answer });
+    },
+    [addToolOutput, followLatest],
+  );
+
   const handlers = React.useMemo<WidgetHandlers>(
     () => ({
       approximatePlace,
       savedLocation: location,
+      onOpenBrowser: () => openBrowser.current?.(),
+      onApproval: (approvalId: string, approved: boolean) => {
+        followLatest();
+        void addToolApprovalResponse({ id: approvalId, approved });
+      },
+      // "Done" in a chat card: hand the page back to the agent, then tell it.
+      onHandover: (toolCallId: string, answer: HandoverAnswer) => {
+        const finish = () => answerHandover(answer, toolCallId);
+        if (live.browserId) void browserControl(live.browserId, { action: "release" }).then(finish, finish);
+        else finish();
+      },
       // A button inside a custom widget that continues the conversation.
       onAsk: (prompt: string) => send(prompt),
       onAnswer: (toolCallId: string, output: ClarifyAnswer) => {
@@ -384,7 +445,7 @@ function ChatView({
         void addToolOutput({ tool: "requestLocation", toolCallId, output });
       },
     }),
-    [approximatePlace, location, addToolOutput, applyLocation, setDeclined, setPlace, send, followLatest],
+    [approximatePlace, location, addToolOutput, addToolApprovalResponse, answerHandover, applyLocation, setDeclined, setPlace, send, followLatest],
   );
 
   const stats = React.useMemo(() => sumStats(messages.filter((m) => m.role === "assistant").map((m) => m.metadata)), [messages]);
@@ -392,7 +453,8 @@ function ChatView({
   const waitingForFirstToken = status === "submitted" && last?.role === "user";
 
   return (
-    <>
+    <BrowserWorkspace browserId={browserId} onHandoverDone={answerHandover}>
+      <LayoutBridge target={openBrowser} onBeside={onBrowserBeside} />
       <TopBar stats={stats} onNewChat={onNewTask} showNew={!empty} sidebarOpen={sidebarOpen} onToggleSidebar={onToggleSidebar} />
 
       <div ref={scroller} onScroll={onScroll} className={cn("relative flex-1 overflow-y-auto overscroll-contain", empty && "backdrop-room")}>
@@ -472,8 +534,23 @@ function ChatView({
           <p className="mt-2 hidden text-center text-[0.7rem] text-subtle sm:block">Searches the live web with Exa. Check important details at the source before you act.</p>
         </div>
       </div>
-    </>
+    </BrowserWorkspace>
   );
+}
+
+/** Lets the chat's own handlers open the live browser, which only something inside the workspace can do. */
+function LayoutBridge({ target: targetRef, onBeside }: { target: React.RefObject<(() => void) | null>; onBeside: () => void }) {
+  const { open, mode } = useBrowserLayout();
+  React.useEffect(() => {
+    if (mode === "split") onBeside();
+  }, [mode, onBeside]);
+  React.useEffect(() => {
+    targetRef.current = () => open();
+    return () => {
+      targetRef.current = null;
+    };
+  }, [open, targetRef]);
+  return null;
 }
 
 function readable(error: Error): string {

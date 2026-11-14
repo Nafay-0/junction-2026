@@ -1,6 +1,6 @@
 # Hovi: the Exa "Internet Butler" project
 
-**Owner:** Asadullah (`Asadullah378`). **Status (Sat 14 Nov, 03:40):** step 1 is built and runs locally, with saved conversations, in-chat location sharing, a custom widget the agent composes itself, and edit, retry, copy and report download. Not deployed yet.
+**Owner:** Asadullah (`Asadullah378`). **Status (Sat 14 Nov, 05:30):** steps 1 and 2 are built and run locally. Step 2, the live browser, works end to end on a test site and on real shops and booking pages; real sites that put up a "verify you are human" check are handed to the user. Not deployed yet.
 
 Hovi is a general web agent for Exa's challenge "The Internet Butler". You hand it a task; it searches the live web with Exa, answers with live widgets instead of plain text (a map, fare cards, price charts, a gallery, a research report), and ends with buttons that take the task as far as it can go. "Hovi" is a working title, set in `web/src/lib/brand.ts`.
 
@@ -9,7 +9,7 @@ Dock, the Valio Aimo project, is a separate project in this repo, owned by Nafay
 ## The plan, in three steps
 
 1. **Agent with live widgets (built).** Exa is read-only: search, read, structured data. Widgets, sub-agents, parallel tools, a visible plan, clarifying questions, model switching, usage and cost tracking.
-2. **Live web actions (next).** The agent acts in a browser the user can watch, asks the user to sign in where needed, and asks for approval before the last step.
+2. **Live web actions (built).** The agent acts in a real browser the user watches live, hands the page over for sign-ins and human checks, asks for approval before anything that commits the user, and never pays.
 3. **Phone app and voice (after that).** Installable web app, voice input, more autonomy (Exa Monitors that keep watching).
 
 ## Run it
@@ -23,6 +23,8 @@ pnpm dev                     # http://localhost:3000
 ```
 
 - `pnpm smoke` checks that Claude (through AWS) and Gemini answer with your keys. `pnpm smoke options` sends one small request per model and job (agent, sub-agent, extraction) with the exact thinking settings the app uses, so a setting a model rejects shows up there and not in front of a user.
+- `pnpm test:guard` checks the live browser's safety rules as a table (no browser needed). `pnpm test:browser 3000` runs them end to end against a pretend shop (`/dev/sandbox.html`) with the dev server running: card numbers, passwords and pay buttons must be refused, commitments must ask first.
+- `/dev/browser` shows the live browser panel driven by a script, with a button for every state.
 - `/dev/widgets` shows every widget with sample data. `?only=flights,hotels` narrows it, `?loading=1` shows loading states, `?still=1` turns animation off.
 - `pnpm typecheck`, `pnpm lint` and `pnpm build` all pass.
 
@@ -47,6 +49,31 @@ The model can also show a comparison table, key facts, a plan, clarifying questi
 
 Every widget shows its sources. Every answer shows the model, the time, the number of Exa calls and the cost; the top bar adds them up for the conversation.
 
+## The live browser (step 2)
+
+When the task is to do something on a site (reserve a table, fill a basket, take a booking through the provider's form, fill in an application, change something in an account), the agent opens a real Chrome on the server and works in it while the user watches.
+
+**What the user sees.** The browser opens beside the chat by itself: browser on the left, chat on the right, with a divider to drag. It can fill the window (the chat is then one tap away) or be closed; on a phone it is a full-screen sheet. The agent's pointer glides to what it is about to press, the target gets a ring and a caption ("Clicking 'Reserve a table'"), typed text appears as it is typed. The chat shows the same steps as a trail.
+
+**What stays with the user.** Three things, enforced in code (`web/src/lib/browser/guard.ts`), not left to the model:
+- **Payment: never.** The agent cannot type into card, bank or security-code fields, cannot press a button that pays, and cannot submit a form that holds card fields. It does nothing at all on payment providers' pages. It takes the task to the payment page and hands it over; the user may pay there themselves.
+- **Passwords, one-time codes and human checks: the user's.** The agent cannot type into them. It hands the page over with a "your turn" card; the user types straight into the live browser, then hands it back.
+- **Commitment: with approval.** Anything that submits, sends, books, orders, posts, deletes, signs up or accepts terms stops for a yes. The card says exactly what will happen, the button is ringed in the live browser, and nothing runs until the user approves. Approvals are signed by the server, so one cannot be forged by editing the conversation.
+Reading, navigating, searching, filling in a form, adding to a basket and refusing cookies need no approval.
+
+**What the agent can read.** It reads the page as text (Chrome's accessibility tree, cut down to what is in view), never as a picture. Values of password, card and code fields are removed before the text reaches the model, including ones the user typed while in control. What the user types during a hand-over goes to Chrome and nowhere else: it is not logged or stored.
+
+**Sign-ins.** Kept in a browser profile per visitor (`web/.browser-profiles/`, not committed) so the user signs in once. "Forget sign-ins" in the browser's menu wipes it.
+
+**Assumptions and limits, stated plainly.**
+- The browser runs on the machine that runs the app (a real Chrome through Playwright). That rules out serverless hosting; a public demo needs a small server or a tunnel to a laptop. `BrowserSession` is the one place a hosted browser would plug in.
+- Chrome runs hidden and sends the same browser name a visible Chrome would; nothing else is disguised, and sites can still tell it is automated. The agent does not solve CAPTCHAs: it detects the common ones and hands them to the user. Some sites will refuse an automated browser altogether; the agent then says so and gives the link.
+- The safety rules are patterns (field names, button texts in seven languages, known payment hosts). They err towards asking, and they can miss an unusual page. The approval step is the second line: a commitment the patterns miss is still one the model is told to mark.
+- One browser per visitor, at most four at once on a server; idle ones close after twenty minutes.
+- Anyone who knows a visitor's browser id (a random value in their browser's storage) could watch that browser. Fine for a demo, not for production: that needs accounts.
+
+Code: `web/src/lib/browser/` (`protocol.ts` the contract, `session.ts` the browser, `guard.ts` the rules, `snapshot.ts` what the model reads, `client.ts` the interface's side), `web/src/components/browser/` (the panel), `web/src/lib/agent/tools/browser.ts` (the agent's four tools), and the approval policy in `web/src/app/api/chat/route.ts`.
+
 **Edit, retry, copy.** Hovering a message you sent shows copy and edit; editing turns it into a text box, and resending replaces that message and everything below it. Under each answer are copy (the answer as markdown, plus the research report if there is one) and try again, which answers the same request afresh and also drops everything below. Both wait until the agent has finished or been stopped.
 
 **Report export.** A finished research report has its own copy and download buttons in the card's header. Copy puts markdown and a formatted version on the clipboard, so it pastes with headings, tables and links into a document or an email. Download offers markdown, a self-contained web page, or the print dialog for a PDF; each holds only that report and its numbered sources (`web/src/lib/export.ts`).
@@ -63,7 +90,7 @@ Every widget shows its sources. Every answer shows the model, the time, the numb
 - **Code map** (all under `web/src`):
   - `lib/widgets/types.ts`: the contract between tools and widgets.
   - `lib/exa/client.ts`: the Exa client (search, contents, agent runs), with cost tracking and a 5-minute cache.
-  - `lib/agent/tools/`: the 18 tools. `lib/agent/instructions.ts`: the system prompt.
+  - `lib/agent/tools/`: the 22 tools. `lib/agent/instructions.ts`: the system prompt.
   - `app/api/chat/route.ts`: the agent loop, usage metadata, context trimming, prompt caching.
   - `components/butler/`: the chat interface. `components/widgets/`: the widgets. `WIDGETS.md` at the app root is the guide for building one.
 
@@ -75,6 +102,7 @@ Every widget shows its sources. Every answer shows the model, the time, the numb
 ## Open questions
 
 - **Two projects, one team of two.** Can one team submit two projects (Dock and this), and is each eligible for the main prize? Someone has to be at each table during peer review. Ask the organisers.
-- **Deployment.** Not done. The app needs a public address for the submission's demo link and for phones at the table.
+- **Deployment.** Not done. The app needs a public address for the submission's demo link and for phones at the table. With the live browser it must be a server that can run Chrome (or a tunnel to the laptop), not a serverless host.
+- **Human checks inside the live browser.** Detected and handed to the user, but nobody has yet tried passing one by hand in the automated Chrome; some may refuse it.
 - **Hotels are slow** (up to a minute through Jinko). A faster source would improve the trip demo.
 - **Not yet checked on a phone.** The layout is responsive, but nobody has used it on one.

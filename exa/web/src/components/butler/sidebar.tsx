@@ -82,7 +82,8 @@ export function Sidebar({
         aria-hidden={!open}
         inert={!open}
         className={cn(
-          "z-50 flex h-dvh shrink-0 flex-col overflow-hidden border-sidebar-border bg-sidebar text-sidebar-foreground",
+          // Above the page as a drawer on phones; an ordinary column on wide screens, so the full-screen browser can cover it.
+          "z-50 flex h-dvh shrink-0 flex-col overflow-hidden border-sidebar-border bg-sidebar text-sidebar-foreground md:z-auto",
           // Drawer below md, column from md up.
           "fixed inset-y-0 left-0 w-[86vw] max-w-[19rem] border-r shadow-float transition-transform duration-250 ease-out md:static md:max-w-none md:shadow-none md:transition-[width,border-color] md:duration-250",
           open ? "translate-x-0 md:w-[17.5rem]" : "-translate-x-full md:w-0 md:translate-x-0 md:border-r-transparent",

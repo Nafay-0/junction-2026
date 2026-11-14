@@ -8,6 +8,8 @@ const sharedEnv = resolve(process.cwd(), "../.env.local");
 if (existsSync(sharedEnv)) process.loadEnvFile(sharedEnv);
 
 const nextConfig: NextConfig = {
+  // The live browser drives a real Chrome through Playwright, which must run as plain Node code.
+  serverExternalPackages: ["playwright-core"],
   turbopack: {
     rules: {
       "*.css": {

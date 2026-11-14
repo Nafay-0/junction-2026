@@ -62,6 +62,11 @@
   --color-surface-raised: var(--surface-raised);
   --color-hairline: var(--hairline);
   --color-subtle: var(--subtle);
+  --color-page-ink: var(--page-ink);
+  --color-page-paper: var(--page-paper);
+  --color-page-accent: var(--page-accent);
+  --color-page-brass: var(--page-brass);
+  --color-page-stop: var(--page-stop);
 
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -148,6 +153,14 @@
   --sidebar-accent-foreground: oklch(0.26 0.04 166);
   --sidebar-border: oklch(0.912 0.006 95);
   --sidebar-ring: oklch(0.6 0.1 165);
+
+  /* Drawn over other people's web pages in the live browser (the agent's pointer, rings and
+     captions). Those pages do not follow our theme, so these stay the same in light and dark. */
+  --page-ink: oklch(0.22 0.012 165);
+  --page-paper: oklch(0.992 0.003 95);
+  --page-accent: oklch(0.56 0.13 164);
+  --page-brass: oklch(0.66 0.13 80);
+  --page-stop: oklch(0.577 0.2 27);
 }
 
 .dark {

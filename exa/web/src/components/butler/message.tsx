@@ -10,6 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { SourceChips, dedupeSources } from "@/components/widgets/frame";
 import { Plan } from "@/components/widgets/plan";
 import { ActivityGroup, ReasoningBlock } from "./activity";
+import { BROWSER_TOOLS, BrowserSteps } from "./browser-steps";
 import { CopyAction, IconAction } from "./icon-action";
 import { Markdown } from "./markdown";
 import { ACTIVITY_TOOLS, ToolWidget, isToolPart, type ToolPart, type WidgetHandlers } from "./tool-part";
@@ -169,6 +170,7 @@ type Block =
   | { kind: "text"; key: string; text: string; streaming: boolean }
   | { kind: "reasoning"; key: string; text: string; streaming: boolean }
   | { kind: "activity"; key: string; parts: ToolPart[] }
+  | { kind: "browser"; key: string; parts: ToolPart[] }
   | { kind: "widget"; key: string; part: ToolPart };
 
 function planFrom(part: ToolPart | undefined): PlanData | null {
@@ -228,6 +230,18 @@ export function AssistantMessage({
         planPart = part;
         return;
       }
+      if (BROWSER_TOOLS.has(part.type)) {
+        // Steps in the live browser read as one trail, however many there are. The model thinks
+        // between steps; those thoughts would chop the trail into single steps, so they give way.
+        let i = out.length - 1;
+        while (i >= 0 && out[i].kind === "reasoning") i -= 1;
+        const prior = i >= 0 ? out[i] : undefined;
+        if (prior?.kind === "browser") {
+          out.length = i + 1;
+          prior.parts.push(part);
+        } else out.push({ kind: "browser", key, parts: [part] });
+        return;
+      }
       if (ACTIVITY_TOOLS.has(part.type)) {
         const last = out.at(-1);
         if (last?.kind === "activity") last.parts.push(part);
@@ -260,6 +274,8 @@ export function AssistantMessage({
             return <ReasoningBlock key={block.key} text={block.text} streaming={active && block.streaming} />;
           case "activity":
             return <ActivityGroup key={block.key} parts={block.parts} />;
+          case "browser":
+            return <BrowserSteps key={block.key} parts={block.parts} active={active} handlers={handlers} />;
           case "widget":
             return <ToolWidget key={block.key} part={block.part} handlers={handlers} />;
         }

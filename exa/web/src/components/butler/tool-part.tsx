@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import type { ButlerMessage } from "@/lib/agent/tools";
+import type { HandoverAnswer } from "@/lib/browser/protocol";
 import type {
   ActionsData,
   ClarifyAnswer,
@@ -37,6 +38,7 @@ import { PlacesMap } from "@/components/widgets/places-map";
 import { Products } from "@/components/widgets/products";
 import { Research } from "@/components/widgets/research";
 import { Stocks } from "@/components/widgets/stocks";
+import { UserAction, type UserActionInput } from "@/components/widgets/user-action";
 import { Weather } from "@/components/widgets/weather";
 
 export type ButlerPart = ButlerMessage["parts"][number];
@@ -108,6 +110,12 @@ export type WidgetHandlers = {
   approximatePlace?: string;
   /** The exact location saved in this browser, if any. */
   savedLocation?: ExactLocation | null;
+  /** The user's yes or no to a step in the live browser that acts on their behalf. */
+  onApproval?: (approvalId: string, approved: boolean) => void;
+  /** The user has finished (or skipped) something the agent handed to them in the live browser. */
+  onHandover?: (toolCallId: string, answer: HandoverAnswer) => void;
+  /** Bring the live browser into view. */
+  onOpenBrowser?: () => void;
 };
 
 export function ToolWidget({ part, handlers }: { part: ToolPart; handlers: WidgetHandlers }) {
@@ -281,6 +289,18 @@ function renderWidget(part: ToolPart, handlers: WidgetHandlers): React.ReactNode
         "Preparing next steps",
       );
       return <Actions data={data} loading={loading} />;
+    }
+    case "tool-requestUserAction": {
+      const answered = part.state === "output-available" ? (part.output as HandoverAnswer) : undefined;
+      return (
+        <UserAction
+          input={(part.input ?? {}) as UserActionInput}
+          loading={part.state === "input-streaming"}
+          answer={answered}
+          onResult={handlers.onHandover ? (answer) => handlers.onHandover?.(part.toolCallId, answer) : undefined}
+          onOpenBrowser={handlers.onOpenBrowser}
+        />
+      );
     }
     case "tool-askUser": {
       const input = (part.input ?? { questions: [] }) as ClarifyInput;

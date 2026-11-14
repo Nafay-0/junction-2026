@@ -18,6 +18,8 @@ export type ToolContext = {
   coords?: { lat: number; lng: number; label?: string };
   /** "Friday 14 November 2026" style, so tools and sub-agents know the date. */
   today: string;
+  /** This visitor's live browser, when the interface has one. */
+  browserId?: string;
 };
 
 /** Turn a thrown value into a short message a widget can show. */

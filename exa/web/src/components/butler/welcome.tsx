@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { motion } from "motion/react";
-import { ArrowUpRight, ChartCandlestick, Images, Microscope, Plane, ShoppingBag, UtensilsCrossed } from "lucide-react";
+import { ArrowUpRight, ChartCandlestick, Microscope, MousePointerClick, Plane, ShoppingBag, UtensilsCrossed } from "lucide-react";
 import { APP_NAME } from "@/lib/brand";
 import { useClientValue } from "@/lib/use-client";
 
@@ -43,10 +43,10 @@ const PRESETS: Preset[] = [
     prompt: () => "I moved to Finland as a non-EU master's student in August 2024 and work part-time. Which rule changes since then affect me, and what should I do about each?",
   },
   {
-    icon: <Images />,
-    title: "Show me",
-    hint: "An image search, with where each one is from",
-    prompt: () => "Show me Alvar Aalto's most beautiful buildings.",
+    icon: <MousePointerClick />,
+    title: "Do it for me",
+    hint: "Watch it work in a live browser, up to the step that is yours",
+    prompt: () => "Put a Bialetti Moka Express for 6 cups in the basket at a Finnish online shop that has it in stock, and take me to the checkout.",
   },
 ];
 
