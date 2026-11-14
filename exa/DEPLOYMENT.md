@@ -62,7 +62,7 @@ BERYL_SERVER_URL=https://beryl.zeroanomaly.tech pnpm desktop:release
 gcloud storage cp desktop/release/downloads/* gs://beryl-exa-downloads/ --cache-control="no-cache, max-age=0"
 ```
 
-The address is baked into the app. The installers in the bucket open `https://beryl.zeroanomaly.tech` (built and uploaded 14 Nov, 17:07). The upload does not restart the server. The app's browser engine is inside the installer, so a change under `web/src/lib/browser/` or `web/desktop/` reaches people only through a new installer; the interface comes from the server and is new with every deploy.
+The address is baked into the app. The installers in the bucket open `https://beryl.zeroanomaly.tech` (last built and uploaded 14 Nov, 19:48, with the fix for the approval ring). The upload does not restart the server. The app's browser engine is inside the installer, so a change under `web/src/lib/browser/` or `web/desktop/` reaches people only through a new installer; the interface comes from the server and is new with every deploy.
 
 ## Email and scheduled jobs
 
