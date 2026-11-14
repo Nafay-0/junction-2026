@@ -363,6 +363,8 @@ export type NoticeCard = CardBase & {
   words?: string;
   /** For `incomplete` with only the amount missing: the kitchen's usual amount of that kind ("12 L"), offered as the answer. */
   usual?: string;
+  /** Out of the kitchen's rules, and the change can be drafted here: the group to add, and the words to order after. */
+  addGroup?: { id: string; what: string; words: string };
   /** A refusal in words, first person, in each language (refusal.ts): what the store shows when the agent says nothing. */
   said?: Record<"en" | "fi" | "sv", string>;
   /** For `refused`: the rule that fired. */

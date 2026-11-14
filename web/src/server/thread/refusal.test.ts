@@ -29,9 +29,9 @@ describe("refusals in words", () => {
   });
 
   it("says the out-of-mandate case in the first person, the groups in words, with the next step", () => {
-    const t = sayRefusal(ALL[0], "en");
-    expect(t).toBe("I can't buy burger buns for this kitchen: its rules cover dairy and cheese and seasonings, coffee and drinks, not fresh bakery. Owner can add fresh bakery under Your rules; shall I ask them?");
-    expect(t.endsWith("?")).toBe(true);
+    expect(sayRefusal(ALL[0], "en")).toBe("I can't buy burger buns for this kitchen: its rules cover dairy and cheese and seasonings, coffee and drinks, not fresh bakery. Owner can add fresh bakery under Your rules.");
+    // Offered only when the change can be drafted and confirmed here: never a promise it cannot keep.
+    expect(sayRefusal({ ...(ALL[0] as Extract<Refusal, { code: "out_of_mandate" }>), draft: true }, "en")).toMatch(/Shall I draft that change \(fresh bakery added to your rules\) for Owner to confirm\?$/);
   });
 
   it("names a kitchen's product groups in words, at most three", () => {

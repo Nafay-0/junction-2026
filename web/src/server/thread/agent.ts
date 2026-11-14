@@ -62,6 +62,7 @@ Your reply (the store shows it under the buyer's words, with your work folded aw
 - Never describe how you work inside ("the store treated your message", "the results", "my tools"): say what you found, what you did and what you need, as a person would.
 - In Finnish, packs are said with their size: "1 000 yhden litran tölkkiä" (never "1 000 litran tölkkeinä"), "10 litran laatikko"; in English "10 l box", never "novobox".
 - Every item the buyer asked for is on the order or named as left out, with why, in one sentence (notOnTheOrder). Never drop one without a word.
+- Never offer to ask someone, send a request or change something unless a result offers it ("draft" in a refusal, a ref under OPEN DECISIONS): a promise you cannot keep is worse than none. When a refusal names who can change the rules, say that and stop.
 - Never say the kitchen's rules stop something unless a result names the rule (a refusal, a gate decision, an exclusion by the mandate); "nothing fits" for another reason (the day, stock, another kind of product) is said as that reason.
 - Never call a product or a menu nut-free, gluten-free or lactose-free unless a result states it; "without nuts, as you asked" only when the result says the plan left them out.
 - In English a day is "Monday 16 Nov"; in Finnish and Swedish "16.11.", whose own dot is never followed by another mark: end the sentence before the date or rephrase.
@@ -195,7 +196,7 @@ export async function openRefs(run: TurnRun): Promise<OpenRef[]> {
   const wc = openWatch(run);
   if (wc) {
     const holder = run.thread.turns.find((x) => x.role === "agent" && x.cards.some((c) => c.cardId === wc.cardId));
-    const after = holder ? run.thread.turns.slice(run.thread.turns.indexOf(holder) + 1).filter((x) => x.role === "agent" && x.turnId !== run.turnId) : [];
+    const after = holder ? run.thread.turns.slice(run.thread.turns.indexOf(holder) + 1).filter((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "") : [];
     if (holder && after.length === 0) {
       const label: Record<string, string> = { switch: "yes, switch to the closest substitute", keep: "no, keep it as it is", renew_new: "renew at the new amount", usual: "renew at the usual amount", skip: "skip this week" };
       for (const a of wc.answers) refs.push({ ref: `watch:${a.startsWith("switch:") ? `alt${wc.answers.filter((x) => x.startsWith("switch:")).indexOf(a) + 2}` : a}`, label: a.startsWith("switch:") ? `switch to substitute ${wc.answers.filter((x) => x.startsWith("switch:")).indexOf(a) + 2} instead` : (label[a] ?? a), action: { type: "watch_answer", momentId: wc.momentId, answer: a }, ...(a === "switch" || a === "renew_new" || a === "usual" ? { confirm: a === "switch" } : {}) });
@@ -206,7 +207,7 @@ export async function openRefs(run: TurnRun): Promise<OpenRef[]> {
   const offer = openOffer(run);
   if (offer) {
     const holder = run.thread.turns.find((x) => x.role === "agent" && x.cards.some((c) => c.cardId === offer.cardId));
-    const after = holder ? run.thread.turns.slice(run.thread.turns.indexOf(holder) + 1).filter((x) => x.role === "agent" && x.turnId !== run.turnId) : [];
+    const after = holder ? run.thread.turns.slice(run.thread.turns.indexOf(holder) + 1).filter((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "") : [];
     if (holder && after.length === 0) {
       refs.push({ ref: "offer:yes", label: `yes to the wholesaler's offer of ${offer.name}: put it on an order to confirm`, action: { type: "offer_answer", offerId: offer.offerId, answer: "yes" }, confirm: true });
       refs.push({ ref: "offer:no", label: "no to the offer", action: { type: "offer_answer", offerId: offer.offerId, answer: "no" } });
@@ -378,7 +379,7 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
           const inWords = (x: string) => amount !== undefined && new RegExp(`(?<![\\d.,])${String(amount).replace(".", "[.,]")}(?![\\d])`).test(x.replace(/\s+/g, ""));
           // A plain yes to the agent's own proposal ("Is it still for 120 kids?"): the figure the buyer gave earlier in this
           // conversation, or the one the agent proposed in its last words, stands. A figure given once is never asked again.
-          const lastAgent = [...run.thread.turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId);
+          const lastAgent = [...run.thread.turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "");
           const lastAgentLine = lastAgent?.role === "agent" ? (lastAgent.line ?? "") : "";
           const earlier = run.thread.turns.flatMap((x) => (x.role === "buyer" && x.text && x.turnId !== run.buyer.turnId ? [x.text] : []));
           const said = inWords(words) || (yesOrNo(words) === "yes" && ((prevBuyer?.role === "buyer" && !!prevBuyer.text && inWords(prevBuyer.text)) || inWords(lastAgentLine) || earlier.some(inWords)));

@@ -43,7 +43,7 @@ function vatOf(options: { lines: { taxRatePct?: number }[] }[]): string | undefi
   return rates.length === 1 ? `${rates[0]} % VAT on top` : rates.length > 1 ? `VAT on top (${rates.join(" %, ")} %)` : undefined;
 }
 
-function cardFacts(c: Card): Record<string, unknown> | undefined {
+function cardFacts(c: Card, run?: TurnRun): Record<string, unknown> | undefined {
   switch (c.type) {
     case "understood":
       return { read: { item: c.item, ...(c.amount ? { amount: `${c.amount.amount} ${c.amount.unit}` } : {}), ...(c.deliverOn ? { deliverOn: c.deliverOn } : c.deliverBy ? { deliverBy: c.deliverBy } : {}), ...(c.claims.length ? { mustBe: c.claims } : {}) } };
@@ -110,7 +110,7 @@ function cardFacts(c: Card): Record<string, unknown> | undefined {
     case "records":
       return { records: c.rows.slice(0, 5).map((r) => ({ what: r.label, ...(r.date ? { date: r.date } : {}), ...(r.totalCents !== undefined ? { totalEur: eur(r.totalCents) } : {}) })) };
     case "rules":
-      return c.proposal ? { rulesChange: { changes: c.diff.map((d) => `${d.field}: ${d.before || "none"} → ${d.after || "none"}`), state: c.proposal.state, canConfirmHere: c.proposal.canSign, ...(c.proposal.why ? { whyNot: c.proposal.why } : {}) }, ask: c.proposal.state === "open" && c.proposal.canSign ? "shall I change it?" : undefined } : { rules: { perOrderLimitEur: eur(c.current.perOrderLimitCents), weeklyBudgetEur: eur(c.current.weeklyBudgetCents), ...(c.week ? { thisWeek: { spentEur: eur(c.week.spentCents), ...(c.week.heldCents ? { heldWaitingForOkEur: eur(c.week.heldCents) } : {}), leftEur: eur(c.week.leftCents) } } : {}), whoGivesTheOk: c.current.approvers.map((a) => `${a.name} (${a.role.replaceAll("_", " ")}), up to ${eur(a.maxApprovalCents)}`), groups: (c.current.groups ?? []).map((g) => g.name).slice(0, 6) } };
+      return c.proposal ? { ...(c.proposal.state === "signed" && ((run?.thread as unknown as { afterRules?: Record<string, string> } | undefined)?.afterRules ?? {})[c.proposal.proposalId] ? { thenOffer: `ask whether to order "${(run?.thread as unknown as { afterRules: Record<string, string> }).afterRules[c.proposal.proposalId]}" now that the rules allow it` } : {}), rulesChange: { changes: c.diff.map((d) => `${d.field}: ${d.before || "none"} → ${d.after || "none"}`), state: c.proposal.state, canConfirmHere: c.proposal.canSign, ...(c.proposal.why ? { whyNot: c.proposal.why } : {}) }, ask: c.proposal.state === "open" && c.proposal.canSign ? "shall I change it?" : undefined } : { rules: { perOrderLimitEur: eur(c.current.perOrderLimitCents), weeklyBudgetEur: eur(c.current.weeklyBudgetCents), ...(c.week ? { thisWeek: { spentEur: eur(c.week.spentCents), ...(c.week.heldCents ? { heldWaitingForOkEur: eur(c.week.heldCents) } : {}), leftEur: eur(c.week.leftCents) } } : {}), whoGivesTheOk: c.current.approvers.map((a) => `${a.name} (${a.role.replaceAll("_", " ")}), up to ${eur(a.maxApprovalCents)}`), groups: (c.current.groups ?? []).map((g) => g.name).slice(0, 6) } };
     case "scenario":
       return c.state === "open" ? { scenarioSaid: c.text.en.say, ask: c.text.en.ask } : { scenario: c.kind, answered: true };
     case "watch":
@@ -138,14 +138,14 @@ export function speakFacts(run: TurnRun): Record<string, unknown>[] {
     const now = run.store.cards(run.thread).find((x) => x.card.cardId === c.cardId)?.card ?? c;
     cards.push(now);
   }
-  const out = cards.map(cardFacts).filter((x): x is Record<string, unknown> => !!x).map((x) => plainFacts(x) as Record<string, unknown>);
+  const out = cards.map((c) => cardFacts(c, run)).filter((x): x is Record<string, unknown> => !!x).map((x) => plainFacts(x) as Record<string, unknown>);
   // Items of the same message that are not on the order (each with why): said, never dropped.
   for (const f of run.facts) if (f && typeof f === "object" && "notOnTheOrder" in f) out.push(plainFacts(f) as Record<string, unknown>);
   // A clarification asked once already and not settled by the answer: not asked again in other words; the best
   // reading from what is on the table, as a question a yes answers.
   const incomplete = cards.find((c) => c.type === "notice" && c.kind === "incomplete");
   if (incomplete) {
-    const prev = [...run.thread.turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId);
+    const prev = [...run.thread.turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "");
     if (prev?.role === "agent" && prev.cards.some((c) => c.type === "notice" && c.kind === "incomplete")) {
       const s = subjectOf(run);
       const all = run.store.cards(run.thread).map((x) => x.card);

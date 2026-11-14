@@ -11,7 +11,7 @@ import { callTool } from "@/server/mcp/server";
 import { qualifiersOf, wordsNotCarried } from "@/core/qualifiers";
 import { TOOLS } from "@/server/mcp/tools";
 import type { Runtime } from "@/server/runtime";
-import { groupOf, groupsOf, refusalOfError, refusalOfRule, refusalOfStep, sayRefusal, type Refusal } from "./refusal";
+import { canDraft, groupIdOf, groupOf, groupsOf, refusalOfError, refusalOfRule, refusalOfStep, sayRefusal, type Refusal } from "./refusal";
 import { anomalyCard, cardId, gateCard, noOptionsCard, optionsCard, orderCard, passedOver, priceCard, questionCard, understoodCard } from "./cards";
 import { threadTag } from "./context";
 import type { StoredThread, ThreadStore } from "./store";
@@ -395,7 +395,9 @@ export async function orderFromWords(run: TurnRun, words: string, earlier: Earli
       const outside = await outsideRules(run, String((err.details?.partial as { item?: { text?: string } } | undefined)?.item?.text ?? "")).catch(() => undefined);
       if (outside) {
         reading.done("outside the kitchen's rules");
-        const refusal: NoticeCard = { type: "notice", cardId: notice.cardId, kind: "refused", ...worded((l) => ({ code: "out_of_mandate", what: outside.what, ...(groupOf(outside.category, l) ? { group: groupOf(outside.category, l) } : {}), groups: groupsOf(run.session.mandate.allowedCategories, l), ...(run.session.mandate.approvers?.[0]?.name ? { signer: run.session.mandate.approvers[0].name } : {}) })) };
+        const gid = groupIdOf(outside.category);
+        const draft = canDraft(run) && !!gid;
+        const refusal: NoticeCard = { type: "notice", cardId: notice.cardId, kind: "refused", ...worded((l) => ({ code: "out_of_mandate", what: outside.what, ...(groupOf(outside.category, l) ? { group: groupOf(outside.category, l) } : {}), groups: groupsOf(run.session.mandate.allowedCategories, l), ...(run.session.mandate.approvers?.[0]?.name ? { signer: run.session.mandate.approvers[0].name } : {}), ...(draft ? { draft: true } : {}) })), ...(draft && gid ? { addGroup: { id: gid, what: outside.what, words } } : {}) };
         run.store.card(run.thread, run.turnId, refusal);
         run.facts.push(refusal);
         record(run, "rules_first", `"${words.slice(0, 80)}": ${outside.what} is outside the kitchen's rules (${outside.category}); said before asking how much.`, {});
@@ -587,7 +589,12 @@ export async function afterStep(run: TurnRun, s: IntakeView, words: string): Pro
     const n = noOptionsCard(s);
     if (s.state === "cancelled") Object.assign(n, { kind: "refused", message: s.notes.join(" ") || "The request was cancelled." });
     // In words, from the step's own codes (refusal.ts): never the lower layer's sentence with its category codes.
-    else Object.assign(n, worded((l) => refusalOfStep(run, s, l)));
+    else {
+      Object.assign(n, worded((l) => refusalOfStep(run, s, l)));
+      const r = refusalOfStep(run, s, "en");
+      const gid = s.family ? groupIdOf(s.family) : undefined;
+      if (r.code === "out_of_mandate" && r.draft && gid) n.addGroup = { id: gid, what: r.what, words };
+    }
     run.store.card(run.thread, run.turnId, n);
     out.notice = n;
     return out;

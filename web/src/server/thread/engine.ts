@@ -298,6 +298,19 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
       await paused(run);
     } else {
       try {
+        // "Yes" to drafting a change to the kitchen's rules (a refusal that offered it): the change drafted as a proposal
+        // the kitchen's own person confirms with a yes (rules.ts, the account's own terms), then the buy is offered again.
+        const drafted = await draftRulesChange(run, body.text!, body.lang ?? "en").catch((err) => {
+          console.error("[thread] draft rules", err);
+          return undefined;
+        });
+        if (drafted) {
+          if (run.opening) first.done("drafted the change");
+          store.line(thread, run.turnId, drafted);
+          store.mark(thread, run.turnId, "line", Date.now() - run.t0);
+          await finishTurn(run);
+          return;
+        }
         // A short answer to the wholesaler's offer said just before ("no thanks", "not now", "ei kiitos", "yes please"):
         // recorded by plain code, never left to the model to remember.
         const offered = await answerOpenOffer(run, body.text!, body.lang ?? "en").catch(() => undefined);
@@ -318,7 +331,10 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
           await finishTurn(run);
           return;
         }
-        agentResult = await agentTurn(run, body.text!);
+        // "Yes" after the kitchen's rules were changed to allow a product: the buy that was refused, now asked again.
+        const again = afterRulesWords(run, body.text!);
+        if (again) record(run, "after_rules", `The rules now allow it: the earlier request "${again.slice(0, 80)}" is asked again at the buyer's yes.`, {});
+        agentResult = await agentTurn(run, again ?? body.text!);
       } catch (err) {
         if (!(err instanceof DockError) || !PAUSED_CODES.has(err.code)) throw err;
         await paused(run);
@@ -723,6 +739,39 @@ async function onOrderEvent(rt: Runtime, orgId: string, orderId: string): Promis
   }
 }
 
+/** The words of a buy the kitchen's rules refused, when the last turn signed the change that allows it and the buyer says yes. */
+function afterRulesWords(run: TurnRun, words: string): string | undefined {
+  if (words.trim().split(/\s+/).length > 8 || !/^(yes|yeah|sure|ok|okay|please|go ahead|order it|kyllä|joo|tilaa|ja|gärna)\b/i.test(words.trim())) return undefined;
+  const store = run.thread as unknown as { afterRules?: Record<string, string>; afterRulesUsed?: string[] };
+  // The rules card is updated in place when signed: the newest signed proposal with a refused buy waiting on it.
+  const signed = run.store.cards(run.thread).map((x) => x.card).filter((c) => c.type === "rules" && c.proposal?.state === "signed").at(-1);
+  const pid = signed?.type === "rules" ? signed.proposal?.proposalId : undefined;
+  if (!pid || !store.afterRules?.[pid] || store.afterRulesUsed?.includes(pid)) return undefined;
+  store.afterRulesUsed = [...(store.afterRulesUsed ?? []), pid];
+  return store.afterRules[pid];
+}
+
+/** A yes to "Shall I draft that change for you to confirm?": the proposal, said in one sentence, or undefined. */
+async function draftRulesChange(run: TurnRun, words: string, lang: "en" | "fi" | "sv"): Promise<string | undefined> {
+  if (words.trim().split(/\s+/).length > 8) return undefined;
+  const { yesOrNo } = await import("@/server/channels/speech");
+  if (yesOrNo(words) !== "yes" && !/\b(ask|draft|do it|go ahead|kysy|laadi|fråga)\b/i.test(words)) return undefined;
+  const last = [...run.thread.turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "");
+  const notice = last?.role === "agent" ? last.cards.find((c) => c.type === "notice" && c.addGroup) : undefined;
+  if (notice?.type !== "notice" || !notice.addGroup) return undefined;
+  const { showRules } = await import("./rules");
+  const card = await showRules(run, { groupsAdd: [notice.addGroup.id] });
+  if (!card.proposal || card.proposal.state !== "open") return undefined;
+  (run.thread as unknown as { afterRules?: Record<string, string> }).afterRules = { ...((run.thread as unknown as { afterRules?: Record<string, string> }).afterRules ?? {}), [card.proposal.proposalId]: notice.addGroup.words };
+  const { groupOf } = await import("./refusal");
+  const { DEPARTMENT_NAME } = await import("@/app/k/[kitchen]/catalogue.text");
+  const name = (lang === "en" ? undefined : DEPARTMENT_NAME[lang][notice.addGroup.id]) ?? card.vocabulary.groups.find((g) => g.id === notice.addGroup!.id)?.name ?? groupOf(notice.addGroup.id, lang) ?? "";
+  const g = name.charAt(0).toLowerCase() + name.slice(1);
+  record(run, "rules_drafted", `A change to the kitchen's rules was drafted at the buyer's yes: add ${notice.addGroup.id} (${g}), to buy "${notice.addGroup.what}".`, { proposalId: card.proposal.proposalId });
+  if (!card.proposal.canSign) return { en: `I've drafted it: ${g} added to what I may buy. Only the kitchen's own account can confirm it, under Your rules.`, fi: `Laadin muutoksen: ${g} lisätään ostettaviin. Sen voi vahvistaa vain keittiön oma tili kohdassa Sääntösi.`, sv: `Jag har skrivit ändringen: ${g} läggs till. Bara kökets eget konto kan bekräfta den, under Dina regler.` }[lang];
+  return { en: `I've drafted it: ${g} added to what I may buy. Shall I confirm it now? Then I'll order the ${notice.addGroup.what}.`, fi: `Laadin muutoksen: ${g} lisätään ostettaviin. Vahvistanko sen nyt? Sitten tilaan: ${notice.addGroup.what}.`, sv: `Jag har skrivit ändringen: ${g} läggs till. Ska jag bekräfta den nu? Sedan beställer jag ${notice.addGroup.what}.` }[lang];
+}
+
 /** The buyer's short answer to the offer the last agent turn (or the opening) said: done by plain code, or undefined. */
 async function answerOpenOffer(run: TurnRun, words: string, lang: "en" | "fi" | "sv"): Promise<string | undefined> {
   if (words.trim().split(/\s+/).length > 8) return undefined;
@@ -730,7 +779,7 @@ async function answerOpenOffer(run: TurnRun, words: string, lang: "en" | "fi" | 
   const offer = openOffer(run);
   if (!offer) return undefined;
   const holder = run.thread.turns.find((x) => x.role === "agent" && x.cards.some((c) => c.cardId === offer.cardId));
-  const later = holder ? run.thread.turns.slice(run.thread.turns.indexOf(holder) + 1).filter((x) => x.role === "agent" && x.turnId !== run.turnId) : [];
+  const later = holder ? run.thread.turns.slice(run.thread.turns.indexOf(holder) + 1).filter((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "") : [];
   if (!holder || later.length) return undefined;
   const LATER = /\b(maybe later|later|not today|another time|myöhemmin|ehkä myöhemmin|ei tänään|senare|kanske senare)\b/i;
   const answer = offerAnswerIn(words) ?? (LATER.test(words) ? "no" : undefined);
