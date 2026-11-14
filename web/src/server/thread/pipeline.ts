@@ -117,7 +117,7 @@ export function read(run: TurnRun, words: string, earlier: EarlierRequest[]): Pr
 // ---------- words the assortment does not carry ----------
 
 /** Words of a request that say nothing about the product itself, or are said in another way in product data. */
-const NOT_A_QUALIFIER = /^(fresh|light|organic|whole|skim|skimmed|semi|full|plain|normal|regular|ordinary|standard|usual|same|good|cheap|cheapest|best|large|small|big|tuore|tuoret|kevy|rasvat|täys|luomu|tavalli|normaali|tavanomai|halvin|halpa|iso|pieni|färsk|lätt|ekologisk|vanlig|billig|stor|liten|some|more|extra|kpl|pcs|pack|packs|box|boxes|crate|crates|litre|litres|liter|liters|kilo|kilos|kg|laatik|pakka|purkki|säkki|låda|förpack)/i;
+const NOT_A_QUALIFIER = /^(drink|drinks|juoma|dryck|product|tuote|produkt|fresh|light|organic|whole|skim|skimmed|semi|full|plain|normal|regular|ordinary|standard|usual|same|good|cheap|cheapest|best|large|small|big|tuore|tuoret|kevy|rasvat|täys|luomu|tavalli|normaali|tavanomai|halvin|halpa|iso|pieni|färsk|lätt|ekologisk|vanlig|billig|stor|liten|some|more|extra|kpl|pcs|pack|packs|box|boxes|crate|crates|litre|litres|liter|liters|kilo|kilos|kg|laatik|pakka|purkki|säkki|låda|förpack)/i;
 
 /**
  * The words of the item that say what it is ("camel" in "camel milk", "oat" in "oat drink"), checked by plain code
@@ -129,12 +129,17 @@ const NOT_A_QUALIFIER = /^(fresh|light|organic|whole|skim|skimmed|semi|full|plai
 export async function qualifierCheck(run: TurnRun, family: string, item: string, options: OptionView[]): Promise<{ absent: string[]; notCarried: Map<string, string[]> }> {
   const { groupsIn } = await import("@/core/also-asked");
   const { claimsIn, allergenCode } = await import("@/core/grounding");
-  const words = [...new Set(item.toLowerCase().split(/[^\p{L}]+/u).filter((w) => w.length >= 3))].filter((w) => !NOT_A_QUALIFIER.test(w) && !groupsIn(w).length && !claimsIn(w).length && !allergenCode(w) && !family.toLowerCase().includes(w));
+  const words = [...new Set(item.toLowerCase().split(/[^\p{L}]+/u).filter((w) => w.length >= 3))].filter((w) => !NOT_A_QUALIFIER.test(w) && !claimsIn(w).length && !allergenCode(w) && !family.toLowerCase().includes(w));
   const absent: string[] = [];
   const notCarried = new Map<string, string[]>();
   const main = (o: OptionView) => [...o.lines].sort((a, b) => b.quantity * (b.packSize ?? 1) - a.quantity * (a.packSize ?? 1))[0]?.productId;
+  const familySize = (await run.rt.catalog.searchProducts({ category: family, limit: 2000 })).length;
   for (const w of words) {
-    const inFamily = await run.rt.catalog.searchProducts({ category: family, text: w, limit: 1 });
+    const inFamily = await run.rt.catalog.searchProducts({ category: family, text: w, limit: 2000 });
+    // A word every product of the family carries names the family itself ("maitoa", "drink"): not a qualifier. A
+    // group word that narrows it (the "kaura" of "kaurajuomaa") still is.
+    if (inFamily.length && inFamily.length >= familySize) continue;
+    if (inFamily.length && groupsIn(w).length && inFamily.length >= familySize * 0.6) continue;
     // A word the family's own products never carry, for no product: not a qualifier the catalogue knows at all
     // when the whole catalogue has none either (a word like "kitchen"); a stand-in when the family has none.
     if (!inFamily.length) {
@@ -148,11 +153,10 @@ export async function qualifierCheck(run: TurnRun, family: string, item: string,
       }
       continue;
     }
+    const carrying = new Set(inFamily.map((p) => p.id));
     for (const o of options) {
       const id = main(o);
-      if (!id) continue;
-      const carries = await run.rt.catalog.searchProducts({ ids: [id], text: w, limit: 1 });
-      if (!carries.length) notCarried.set(o.optionId, [...(notCarried.get(o.optionId) ?? []), w]);
+      if (id && !carrying.has(id)) notCarried.set(o.optionId, [...(notCarried.get(o.optionId) ?? []), w]);
     }
   }
   return { absent, notCarried };

@@ -204,7 +204,7 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
     line = agentResult?.text ?? "";
   }
 
-  if (line) showLine(run, line);
+  if (line) await showLine(run, line);
   await proposeMemory(run);
   const a = store.agentTurn(thread, run.turnId)!;
   const waitingApprover = a.cards.some((c) => c.type === "gate" && c.outcome === "waiting");
@@ -255,10 +255,16 @@ function trim(messages: ModelMessage[], keepUsers = 4): ModelMessage[] {
   });
 }
 
-/** The model's sentence, shown only if every figure, date, product and claim in it is in this turn's data. */
-function showLine(run: TurnRun, text: string): void {
+/**
+ * The model's sentence, shown only if every figure, date, product and claim in it is in the data the buyer has in
+ * front of them: this turn's tool results and cards, and the records of the requests still on screen (a follow-up
+ * question about the options shown a turn ago is answered from those options).
+ */
+async function showLine(run: TurnRun, text: string): Promise<void> {
   const one = text.replace(/\s+/g, " ").trim().slice(0, 280);
-  const facts = addWords(factsFrom(...run.facts, run.store.agentTurn(run.thread, run.turnId)?.cards ?? []), run.buyer.text ?? "");
+  const onScreen = [...new Set(run.store.cards(run.thread).flatMap((x) => ("requestId" in x.card && x.card.requestId ? [x.card.requestId] : [])))].slice(-3);
+  const steps = await Promise.all(onScreen.map((id) => run.rt.dock.intake.get(run.session, id).catch(() => undefined)));
+  const facts = addWords(factsFrom(...run.facts, ...steps.filter(Boolean), run.store.cards(run.thread).slice(-12).map((x) => x.card)), run.buyer.text ?? "");
   const g = groundForDisplay("thread", one, facts, { where: `thread ${run.thread.threadId}` });
   if (g.violations.length) {
     record(run, "grounding_refusal", `The agent's sentence was not shown: it said ${g.violations.map((v) => `"${v.said}" (${v.kind})`).join(", ")}, which the data does not back.`, { said: one, violations: g.violations });
@@ -341,7 +347,7 @@ async function resumeAfterSignOff(rt: Runtime, kitchen: string, t: StoredThread,
     try {
       const res = await runAgent(run, [...saved, response], { context: wait.context });
       t.messages = trim([...saved, response, ...res.messages]);
-      if (res.text) showLine(run, res.text);
+      if (res.text) await showLine(run, res.text);
     } catch {
       // the cards already show the outcome
     }
