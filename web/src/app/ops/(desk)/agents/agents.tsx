@@ -70,7 +70,11 @@ export function AgentsScreen({ board }: { board?: Board }) {
       <Section id="crash" title="Crash-test ratings" aside="Thirteen hard purchasing situations; the rating becomes a licence that sets what an agent may buy alone">
         {board && board.rows.length > 0 ? (
           <div className="rounded-xl border border-line bg-paper p-5 sm:p-6">
-            <CrashMatrix board={board} maxRows={12} yardsticks={["reference", "reckless", "do-nothing"]} />
+            <div className="-mx-1 overflow-x-auto px-1">
+              <div className="min-w-[44rem]">
+                <CrashMatrix board={board} maxRows={12} yardsticks={["reference", "reckless", "do-nothing"]} />
+              </div>
+            </div>
             <Reasons board={board} />
           </div>
         ) : (

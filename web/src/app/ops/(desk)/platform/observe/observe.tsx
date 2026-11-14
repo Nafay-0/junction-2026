@@ -71,7 +71,7 @@ function Body({ p }: { p: Panels }) {
       </Panel>
       <p className="mt-1 text-[0.78rem] text-ink-soft">{p.label}.</p>
 
-      <div className="mt-2 grid gap-4 lg:grid-cols-2">
+      <div className="mt-2 grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
         <Box title="Gate decisions over time" sql={p.panels.timeline}>
           <Bars rows={p.panels.timeline?.rows ?? []} label="Gate decisions over time" series={[{ key: "allowed", label: "allowed alone", tone: "ink" }, { key: "to_person", label: "sent to a person", tone: "pale" }, { key: "refused", label: "refused", tone: "safety" }]} />
         </Box>
@@ -126,7 +126,7 @@ function Body({ p }: { p: Panels }) {
           {p.panels.agents && <SqlBox sql={p.panels.agents.sql} />}
         </Panel>
       </Section>
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
         <Section title="Crash-test scores">
           <Panel className="px-3 py-2">
             <Rows columns={["ts", "agent_id", "score", "run"]} rows={p.panels.crash?.rows ?? []} empty="No crash-test run has reported a score yet." />
