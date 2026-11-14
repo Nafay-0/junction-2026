@@ -127,7 +127,7 @@ export async function watchMomentForThread(rt: Runtime, session: AgentSession, l
     if (d.basket) sentences.push(t.basket(amountL(d.basket.amount, u), money(d.basket.nowCents), money(d.basket.usualCents)));
     // The usual product cannot come for the day either: say so, and what a renewal would order instead.
     const short = held.decision.action === "hold" && held.decision.because.includes("stock") ? w.findings.find((x) => x.need.productId === held.product.productId && x.need.date === held.deliveryDate && x.state !== "resolved") : undefined;
-    if (short) sentences.push(sentences.length ? t.cannotToo(backWord(short.shortfall.backOn, lang)) : t.cannot(day, what, backWord(short.shortfall.backOn, lang), false));
+    if (short) sentences.push(sentences.length ? t.cannotToo(backWord(short.shortfall.backOn, lang), !short.staged && short.problems.includes("cutoff_passed")) : t.cannot(day, what, backWord(short.shortfall.backOn, lang), false, !short.staged && short.problems.includes("cutoff_passed")));
     sentences.push(t.held);
     if (short?.substitutes[0]) {
       const sp = await productsOf(rt, [short.substitutes[0].productId]);
