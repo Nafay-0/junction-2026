@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { api } from "../_client/api";
 import { useLive } from "../_client/use-live";
 import { DEMO_NOTE, PRODUCT_NAME } from "../_ui/brand";
@@ -77,7 +77,7 @@ export function Wall({ initial, join, board }: { initial: WallSnapshot; join: { 
           <GateLanes feed={snap.feed} now={t} justRefused={justRefused ? snap.refusals[0] : undefined} lastAt={snap.lastActivityAt} error={live.error} />
           <Counters c={c} />
         </div>
-        <div className="grid min-h-0 gap-[max(0.75rem,1vw)] lg:h-[34vh] lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.6fr)]">
+        <div className="grid min-h-0 gap-[max(0.75rem,1vw)] lg:h-[34vh] lg:grid-cols-[minmax(0,0.62fr)_minmax(0,1.6fr)]">
           <Refusals items={snap.refusals} now={t} fresh={justRefused} />
           <CrashBoard board={board} />
         </div>
@@ -86,7 +86,16 @@ export function Wall({ initial, join, board }: { initial: WallSnapshot; join: { 
       {/* ---------- right: the one thing to do ---------- */}
       <aside className="order-2 flex min-h-0 flex-col overflow-hidden rounded-[max(20px,1.5vw)] bg-petrol lg:order-none">
         <JoinPanel join={join} kitchens={snap.kitchens} />
-        <p className="mt-auto px-[1.6vw] pb-[1.6vh] pt-[1vh] text-[max(0.82rem,0.72vw)] leading-snug text-paper/70 max-lg:px-5">{DEMO_NOTE}</p>
+        <div className="mt-auto shrink-0 space-y-[0.8vh] px-[1.6vw] pb-[1.6vh] pt-[1vh] max-lg:px-5">
+          <p className="text-[max(0.92rem,0.9vw)] leading-snug text-paper/80">
+            Or bring your own agent:{" "}
+            <Link href="/try" className="font-semibold text-paper underline underline-offset-2">
+              try it as an outside agent
+            </Link>
+            .
+          </p>
+          <p className="text-[max(0.82rem,0.72vw)] leading-snug text-paper/70">{DEMO_NOTE}</p>
+        </div>
       </aside>
     </div>
   );
@@ -144,10 +153,37 @@ function markerAt(reached: number): number {
   return ((Math.max(1, reached) - 0.5) / PRE_GATE.length) * 100;
 }
 
+/**
+ * How many lanes fit the space the screen gives them, each at its full height (name, request line, outcome pill),
+ * so lanes never press into each other on a short screen. Measured from the first lane; re-measured on resize.
+ */
+function useLanesThatFit(ref: RefObject<HTMLOListElement | null>, count: number): number {
+  const [fit, setFit] = useState(count);
+  useLayoutEffect(() => {
+    const ol = ref.current;
+    if (!ol) return;
+    const measure = () => {
+      const first = ol.querySelector<HTMLElement>("li[data-lane]");
+      if (!first) return setFit(count);
+      const pad = parseFloat(getComputedStyle(first).paddingTop) + parseFloat(getComputedStyle(first).paddingBottom) + 2;
+      // Content only: the gate-post cell is as tall as the lane itself, so it says nothing about what the lane needs.
+      const need = Math.max(...[...first.children].filter((c) => !c.classList.contains("h-full")).map((c) => c.getBoundingClientRect().height)) + pad;
+      setFit(Math.max(1, Math.min(count, Math.floor(ol.clientHeight / Math.max(need, 1)))));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(ol);
+    return () => ro.disconnect();
+  }, [ref, count]);
+  return fit;
+}
+
 function GateLanes({ feed, now, justRefused, lastAt, error }: { feed: FeedItem[]; now: number; justRefused?: WallSnapshot["refusals"][number]; lastAt?: string; error?: string }) {
   const i = useReadout();
   const fresh = useFresh();
   const rows = feed.slice(0, LANES);
+  const lanesRef = useRef<HTMLOListElement>(null);
+  const fit = useLanesThatFit(lanesRef, rows.length);
   const ghosts = Math.max(0, (rows.length ? 0 : 3) + Math.max(0, 3 - rows.length));
   // Columns: who | three stations before the gate | the gate post | the outcome.
   const cols = "lg:grid-cols-[minmax(0,18fr)_minmax(0,25fr)_minmax(3.4rem,4.2vw)_minmax(0,33fr)]";
@@ -218,9 +254,9 @@ function GateLanes({ feed, now, justRefused, lastAt, error }: { feed: FeedItem[]
           </div>
         )}
 
-        <ol className="relative flex min-h-0 flex-1 flex-col">
-          {rows.map((it) => (
-            <Lane key={it.key} it={it} now={now} cols={cols} fresh={fresh} />
+        <ol ref={lanesRef} className="relative flex min-h-0 flex-1 flex-col">
+          {rows.map((it, k) => (
+            <Lane key={it.key} it={it} now={now} cols={cols} fresh={fresh} hidden={k >= fit} />
           ))}
           {Array.from({ length: rows.length ? Math.min(ghosts, LANES - rows.length) : 4 }, (_, k) => (
             <li key={`ghost-${k}`} aria-hidden className={`grid min-h-0 flex-1 items-center gap-x-[1.2vw] border-t border-paper/[0.07] ${cols}`}>
@@ -243,20 +279,21 @@ function GateLanes({ feed, now, justRefused, lastAt, error }: { feed: FeedItem[]
 /** An outside agent's door, said on its lane: the store's own doors carry no label. */
 const OUTSIDE_DOOR: Record<NonNullable<FeedItem["door"]>, string> = { mcp: "outside agent · MCP", connector: "assistant · connector", rest: "outside agent · REST" };
 
-function Lane({ it, now, cols, fresh }: { it: FeedItem; now: number; cols: string; fresh: boolean }) {
+function Lane({ it, now, cols, fresh, hidden }: { it: FeedItem; now: number; cols: string; fresh: boolean; hidden?: boolean }) {
   const at = markerAt(it.reached);
   const stopped = it.tone === "safety" && /^(Refused|Declined)/.test(it.status);
   const waiting = it.tone === "safety" && !stopped;
   const passed = it.tone === "done";
   const marker = stopped ? "bg-safety-ink ring-[3px] ring-safety" : waiting ? "bg-safety ring-[3px] ring-safety-ink" : passed ? "bg-lime" : "bg-paper";
   return (
-    <li className={`${fresh ? "wall-moved" : ""} grid min-h-0 flex-1 grid-cols-1 items-center gap-x-[1.2vw] gap-y-1.5 rounded-[max(10px,0.7vw)] border-t border-paper/10 py-[0.7vh] max-lg:py-3 [@media(max-height:820px)]:[&:nth-child(n+5)]:hidden ${cols}`} key={`${it.key}-${it.status}`}>
+    <li data-lane className={`${hidden ? "lg:hidden" : ""} ${fresh ? "wall-moved" : ""} grid min-h-0 flex-1 grid-cols-1 items-center gap-x-[1.2vw] gap-y-1.5 rounded-[max(10px,0.7vw)] border-t border-paper/10 py-[0.7vh] max-lg:py-3 [@media(max-height:960px)]:[&:nth-child(n+5)]:hidden ${cols}`} key={`${it.key}-${it.status}`}>
       <div className="min-w-0">
-        <p className="truncate text-[max(1.15rem,1.35vw)] font-semibold leading-tight">
-          {it.kitchen}
-          {it.door ? <span className="ml-2 rounded-full border border-paper/30 px-2 py-0.5 align-middle text-[max(0.75rem,0.75vw)] font-medium text-paper/80">{OUTSIDE_DOOR[it.door]}</span> : null}
+        {/* The kitchen without its city ("Hotel Kaleva kitchen, Helsinki"): the name fits the lane; the city is in the title. */}
+        <p className="truncate text-[max(1.15rem,1.35vw)] font-semibold leading-tight" title={it.kitchen}>
+          {it.kitchen.split(", ")[0]}
         </p>
         <p className="truncate text-[max(0.92rem,0.95vw)] leading-tight text-paper/65 [@media(max-height:820px)]:hidden">
+          {it.door ? <span className="mr-[0.5em] rounded-full bg-paper/12 px-[0.5em] text-[0.88em] font-medium text-paper/90">{OUTSIDE_DOOR[it.door]}</span> : null}
           {fiMoney(it.what)}
           {it.totalCents !== undefined ? `, ${money(it.totalCents)}` : ""}
         </p>
@@ -340,11 +377,11 @@ function Refusals({ items, now, fresh }: { items: WallSnapshot["refusals"]; now:
       ) : (
         <ol className="mt-[1.6vh] min-h-0 space-y-[1.4vh] overflow-hidden">
           {items.slice(0, 3).map((r, k) => (
-            <li key={r.key} className={`${k === 0 && fresh ? "wall-arm-left" : ""} lg:[&:nth-child(3)]:hidden`}>
+            <li key={r.key} className={`${k === 0 && fresh ? "wall-arm-left" : ""} lg:[&:nth-child(3)]:hidden ${k === 1 ? "[@media(max-height:760px)]:hidden" : ""}`}>
               <p className="truncate text-[max(1.05rem,1.15vw)] font-semibold leading-tight text-safety">{r.rule}</p>
               <p className="mt-[0.3vh] line-clamp-1 text-[max(0.95rem,0.98vw)] leading-snug text-paper/90">{fiMoney(r.reason)}</p>
-              <p className="text-[max(0.85rem,0.82vw)] text-paper/55">
-                {r.kitchen}, {ago(r.at, now)}
+              <p className="truncate text-[max(0.85rem,0.82vw)] text-paper/55">
+                {r.kitchen.split(", ")[0]}, {ago(r.at, now)}
               </p>
             </li>
           ))}
@@ -363,7 +400,7 @@ function CrashBoard({ board }: { board: Board }) {
         <h2 id="crash" className="display flex items-center gap-[0.6vw] text-[max(1.5rem,1.65vw)] leading-none">
           <Gauge aria-hidden className="h-[max(1.4rem,1.5vw)] w-auto text-lime" strokeWidth={2.2} /> Crash test
         </h2>
-        <p className="text-[max(0.88rem,0.86vw)] text-paper/65">13 hard purchasing situations. The rating becomes a licence: what the model may buy alone.</p>
+        <p className="text-[max(0.88rem,0.86vw)] text-paper/65 [@media(max-height:760px)]:hidden">13 hard purchasing situations. The rating becomes a licence: what the model may buy alone.</p>
       </div>
       {board.rows.length === 0 ? (
         <p className="mt-[1.4vh] max-w-[60ch] text-[max(1rem,1.05vw)] leading-snug text-paper/75">
@@ -393,7 +430,7 @@ function JoinPanel({ join, kitchens }: { join: { url: string; qrSvg: string }; k
     setBusy(null);
   }
   return (
-    <section aria-labelledby="join" className="flex min-h-0 flex-col">
+    <section aria-labelledby="join" className="flex min-h-0 shrink flex-col overflow-hidden">
       {/* JOIN QR: the code a visitor scans to get their own kitchen and become its approver (see /join). */}
       <div className="m-[max(0.5rem,0.6vw)] rounded-[max(14px,1.1vw)] bg-lime px-[1.2vw] py-[1.6vh] text-ink max-lg:px-5">
         <h2 id="join" className="display text-[max(1.9rem,2.3vw)] leading-[0.98]">
@@ -402,9 +439,9 @@ function JoinPanel({ join, kitchens }: { join: { url: string; qrSvg: string }; k
         <p className="mt-[0.6vh] text-[max(1rem,1.05vw)] font-medium leading-snug">You get a kitchen of your own. Its agent asks you, on your phone, when it wants to go over its limit.</p>
       </div>
       <div className="px-[1.6vw] pt-[1.4vh] max-lg:px-5">
-        <figure aria-label={`QR code for ${join.url}`} className="mx-auto w-full max-w-[min(100%,34vh)] rounded-[max(16px,1.2vw)] bg-paper p-[max(0.75rem,1vw)] shadow-[0_20px_50px_-20px_rgb(0_0_0/0.5)] [&>svg]:h-auto [&>svg]:w-full" dangerouslySetInnerHTML={{ __html: join.qrSvg }} />
+        <figure aria-label={`QR code for ${join.url}`} className="mx-auto w-full max-w-[min(100%,30vh)] rounded-[max(16px,1.2vw)] bg-paper p-[max(0.75rem,1vw)] shadow-[0_20px_50px_-20px_rgb(0_0_0/0.5)] [&>svg]:h-auto [&>svg]:w-full" dangerouslySetInnerHTML={{ __html: join.qrSvg }} />
         <p className="mt-[1.2vh] break-all text-center text-[max(1rem,1.1vw)] font-semibold">{join.url.replace(/^https?:\/\//, "")}</p>
-        <ol className="mt-[1.8vh] space-y-[0.9vh] text-[max(0.95rem,0.95vw)] leading-snug [@media(max-height:820px)]:hidden">
+        <ol className="mt-[1.8vh] space-y-[0.9vh] text-[max(0.95rem,0.95vw)] leading-snug [@media(max-height:920px)]:hidden">
           {["Scan, and a kitchen of your own is set up with you as its approver.", "Ask its agent for 1 000 L of milk. That is over its limit, so the gate stops it.", "Approve or decline on your phone. The signed order lands on this screen."].map((x, k) => (
             <li key={k} className="grid grid-cols-[1.7em_minmax(0,1fr)] items-start gap-x-[0.6em]">
               <span className="flex size-[1.55em] items-center justify-center rounded-full bg-lime text-[0.9em] font-semibold text-ink tabular">{k + 1}</span>
@@ -412,16 +449,9 @@ function JoinPanel({ join, kitchens }: { join: { url: string; qrSvg: string }; k
             </li>
           ))}
         </ol>
-        <p className="mt-[1.4vh] text-[max(0.92rem,0.9vw)] leading-snug text-paper/80">
-          Or bring your own agent:{" "}
-          <Link href="/try" className="font-semibold text-paper underline underline-offset-2">
-            try it as an outside agent
-          </Link>
-          .
-        </p>
       </div>
       {kitchens.length > 0 && (
-        <div className="mt-[2vh] px-[1.6vw] max-lg:px-5">
+        <div className="mt-[2vh] px-[1.6vw] max-lg:px-5 lg:[@media(max-height:1180px)]:hidden">
           <h3 className="text-[max(1rem,1vw)] font-semibold">Kitchens here now: {kitchens.length}</h3>
           <ul className="mt-1 divide-y divide-paper/12">
             {kitchens.slice(0, 3).map((k, i) => (
