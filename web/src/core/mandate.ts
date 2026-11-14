@@ -88,7 +88,12 @@ export function createTrustRegistry(issuers: TrustedIssuer[]): TrustRegistry & {
   return { get: (kid) => byKid.get(kid), add: (issuer) => void byKid.set(issuer.kid, issuer) };
 }
 
-export async function signMandate(mandate: Mandate, key: SigningKey): Promise<string> {
+/**
+ * Sign a mandate with the organisation's key. `issuedAt` is the token's `iat`, which supersession compares to the
+ * second; it defaults to the wall clock. A world with its own clock (the crash test) passes that clock's time, so
+ * the orders it records are the same on every repeat.
+ */
+export async function signMandate(mandate: Mandate, key: SigningKey, issuedAt?: Date): Promise<string> {
   const m = MandateSchema.parse(mandate);
   return new SignJWT({ mandate: m })
     .setProtectedHeader({ alg: SIGN_ALG, kid: key.kid, typ: MANDATE_TYP })
@@ -96,7 +101,7 @@ export async function signMandate(mandate: Mandate, key: SigningKey): Promise<st
     .setSubject(m.agentId)
     .setJti(m.mandateId)
     .setAudience(MANDATE_AUDIENCE)
-    .setIssuedAt()
+    .setIssuedAt(issuedAt)
     .setNotBefore(new Date(m.validFrom))
     .setExpirationTime(new Date(m.validUntil))
     .sign(key.privateKey);
