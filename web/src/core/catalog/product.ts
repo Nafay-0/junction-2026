@@ -1,6 +1,7 @@
 import type { Product } from "../catalog";
 import { amountToSalesUnits, type Amount, type Conversion, type ConversionOptions, type PackInfo } from "./pack";
 import { categorySlug, type IndexedProduct } from "./partner";
+import { natureOf } from "./nature";
 import { productFacets } from "./search";
 
 /**
@@ -32,7 +33,8 @@ export function toDockProduct(p: IndexedProduct): Product {
     unit,
     packSize,
     attributes: [...p.claims],
-    allergens: [...new Set([...p.allergens.contains, ...p.allergens.mayContain])].sort(),
+    // By its nature counts as contained too (celeriac is celery), so every check of `allergens` sees it.
+    allergens: [...new Set([...p.allergens.contains, ...p.allergens.mayContain, ...(nature(p).byNature?.allergens ?? [])])].sort(),
     certificates: [...p.labels],
     deliveryReliability: p.deliveryReliability ?? 0,
     carbonKgPerUnit: carbonPerUnit === null ? 0 : Math.round(carbonPerUnit * 1000) / 1000,
@@ -51,7 +53,7 @@ export function toDockProduct(p: IndexedProduct): Product {
       issues: [...pack.issues],
       label: pack.label,
     },
-    allergenInfo: { declared: p.allergens.declared, contains: [...p.allergens.contains], mayContain: [...p.allergens.mayContain], freeFrom: [...p.allergens.freeFrom] },
+    allergenInfo: { declared: p.allergens.declared, contains: [...p.allergens.contains], mayContain: [...p.allergens.mayContain], freeFrom: [...p.allergens.freeFrom], ...nature(p) },
     deliveryReliabilityKnown: p.deliveryReliability !== null,
     carbonKnown: carbonPerUnit !== null,
     carbonGroupAvgKgCo2ePerKg: perKg,
@@ -143,4 +145,10 @@ export function piecesPerSalesUnit(product: Product): number | undefined {
     return undefined; // "18pc" in a case of 8 bags: per bag or per case? Not decidable.
   }
   return undefined;
+}
+
+/** The by-nature evidence for a product without allergen data, when the exception applies (catalog/nature.ts). */
+function nature(p: IndexedProduct): { byNature?: { allergens: string[]; basis: string } } {
+  const n = p.allergens.declared ? undefined : natureOf(p);
+  return n ? { byNature: { allergens: [...n.allergens], basis: n.basis } } : {};
 }

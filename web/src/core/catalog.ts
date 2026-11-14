@@ -37,7 +37,17 @@ export const ProductSchema = z.object({
     .optional(),
   /** Allergen evidence. `declared: false` means no allergen data: every allergen is unknown, not absent. */
   allergenInfo: z
-    .object({ declared: z.boolean(), contains: z.array(z.string()), mayContain: z.array(z.string()), freeFrom: z.array(z.string()) })
+    .object({
+      declared: z.boolean(),
+      contains: z.array(z.string()),
+      mayContain: z.array(z.string()),
+      freeFrom: z.array(z.string()),
+      /**
+       * Only when `declared` is false: a fresh, whole, single-ingredient product taken to contain only what it is itself
+       * (core/catalog/nature.ts). Evidence by its nature, never the maker's declaration.
+       */
+      byNature: z.object({ allergens: z.array(z.string()), basis: z.string() }).optional(),
+    })
     .optional(),
   deliveryReliabilityKnown: z.boolean().optional(),
   carbonKnown: z.boolean().optional(),
@@ -57,7 +67,7 @@ export const ProductSchema = z.object({
   /** VAT rate from the product file's VAT class; the price service's rate, when asked, is the one that counts. */
   vatRatePct: z.number().nonnegative().optional(),
   /** What the maker writes about it, in English and Finnish where given, shortened in the index. */
-  texts: z.record(z.enum(["ingredients", "storage", "usage", "disposal", "about"]), z.object({ en: z.string().optional(), fi: z.string().optional() })).optional(),
+  texts: z.partialRecord(z.enum(["ingredients", "storage", "usage", "disposal", "about"]), z.object({ en: z.string().optional(), fi: z.string().optional() })).optional(),
   mainIngredient: z.object({ names: z.object({ en: z.string().optional(), fi: z.string().optional(), sv: z.string().optional() }), pct: z.number().optional(), origins: z.array(z.object({ stage: z.string(), country: z.string() })) }).optional(),
   /** Every country of origin the data states (alpha-2). */
   origins: z.array(z.string()).optional(),

@@ -23,7 +23,9 @@ import { admission } from "./ops/onsite";
 import { suspensions } from "./ops/suspensions";
 import { recallLayer } from "./radar/gate";
 import { radar } from "./radar/registry";
-import { alternativesSource } from "./knowledge/service";
+import { alternativesSource, getKnowledgeMap } from "./knowledge/service";
+import { registerNatureProfiles } from "@/core/catalog/nature";
+import { finderFor, warmSmartSearch } from "./search/service";
 import { SandboxService } from "./sandboxes";
 import { AccountService } from "./accounts/service";
 import { SealingAccountStore, accountKeySecret, publicHost } from "./accounts/sealed";
@@ -131,11 +133,24 @@ async function buildRuntime(): Promise<Runtime> {
     // Live answers reused for option cards (not quotes) for this long; each reuse costs the partner nothing.
     // The product knowledge map proposes alternatives by kitchen use (real catalogue only: the seed's products are not in it).
     ...(catalogSource.kind === "valio" && envValue("DOCK_KNOWLEDGE") !== "off" ? { alternatives: alternativesSource() } : {}),
+    // Smart search (server/search): recall over the whole assortment for the intake's candidates (real catalogue only).
+    // ifReady: the intake never waits for the index to be built (warmSmartSearch starts it below).
+    ...(catalogSource.kind === "valio" && envValue("DOCK_SMART_SEARCH") !== "off" ? { finder: finderFor(stores.catalog, { ifReady: true }) } : {}),
     // Kitchen memory: one line per remembered item each request used (lazy: the memory service is built on this runtime).
     ...(envValue("DOCK_MEMORY") !== "off" ? { memoryUsage: async (orgId: string, intake: Parameters<NonNullable<Parameters<typeof createDock>[0]["memoryUsage"]>>[1]) => (await (await import("./memory/runtime")).getMemoryService()).usage(orgId, intake) } : {}),
     liveCacheTtlMs: Number(envValue("DOCK_LIVE_CACHE_SECONDS") ?? 120) * 1000 || 0,
   });
   recall.attach(dock);
+  if (catalogSource.kind === "valio") warmSmartSearch(catalog); // smart search's index, built in the background (server/search)
+  // Fresh, whole produce without allergen data counts by its nature (core/catalog/nature.ts), once the map is loaded.
+  if (catalogSource.kind === "valio" && envValue("DOCK_KNOWLEDGE") !== "off" && !process.env.VITEST) {
+    void getKnowledgeMap()
+      .then((map) => map && registerNatureProfiles((id) => {
+        const pr = map.profile(id);
+        return pr ? { family: pr.family, form: pr.form, state: pr.state, kindLabel: pr.kindLabel } : undefined;
+      }))
+      .catch(() => {});
+  }
   // Suspensions outlive a restart: an agent staff stopped before this process started is still stopped.
   await suspensions(dock).restore(stores.records("suspension"));
   const sandboxes = new SandboxService({ dock, registry: trustedIssuers, passkeys, limits: sandboxLimits, kitchens: stores.kitchens, products: async () => products, store: stores.sandboxStore });

@@ -26,6 +26,8 @@ export type DietRules = {
   requiredClaims: { claim: string; source: string }[];
   /** Allergens the mandate forbids: for these the gate refuses a product without allergen data. */
   mandateAllergens: string[];
+  /** True when the mandate asks for the maker's allergen data only (no "by its nature" for fresh produce). */
+  declaredOnly?: boolean;
 };
 
 /** Partner category families (first three digits) of raw single-ingredient food: fresh vegetables, fruit, fish and meat. */
@@ -59,7 +61,11 @@ export function checkSafety(p: Product, rules: DietRules): Safety {
     // One vocabulary with the gate (core/vocabulary.ts): a hazelnut is a nut, milk without the claim carries lactose.
     if (hasAllergen({ present: a.contains, claims: p.attributes }, allergen)) checks.push({ rule, verdict: "block", reason: `contains ${text(allergen)}` });
     else if (hasAllergen({ present: a.mayContain, claims: p.attributes }, allergen)) checks.push({ rule, verdict: "block", reason: `may contain ${text(allergen)}` });
-    else if (!a.declared) {
+    else if (!a.declared && a.byNature && !rules.declaredOnly) {
+      // Fresh, whole produce: what it contains by its nature (core/catalog/nature.ts), never the maker's declaration.
+      if (hasAllergen({ present: a.byNature.allergens, claims: p.attributes }, allergen)) checks.push({ rule, verdict: "block", reason: `contains ${text(allergen)} by its nature` });
+      else checks.push({ rule, verdict: "ok", reason: `no ${text(allergen)} ${a.byNature.basis.split(": ").pop()} (${a.byNature.basis.split(":")[0]})` });
+    } else if (!a.declared) {
       const gate = rules.mandateAllergens.includes(allergen);
       checks.push({
         rule,
