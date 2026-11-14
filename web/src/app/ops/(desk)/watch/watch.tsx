@@ -109,7 +109,7 @@ function Body({ v, now, refresh }: { v: View; now: number; refresh: () => void }
               <ul className="space-y-1 text-[0.9rem]">
                 {v.auto.map((a) => (
                   <li key={`${a.orgId}:${a.family}`}>
-                    <Badge tone={a.on ? "good" : "neutral"}>{a.on ? "On" : "Off"}</Badge> <span className="font-semibold">{a.orgId}</span> · {a.family.replaceAll("_", " ")}: {a.by}, {a.via}, <span className="tabular">{when(a.at, new Date(now))}</span>
+                    <Badge tone={a.on ? "good" : "neutral"}>{a.on ? "On" : "Off"}</Badge> <span className="font-semibold" title={a.orgId}>{a.kitchenName ?? "A kitchen no longer here"}</span> · {a.family.replaceAll("_", " ")}: {a.by}, {a.via}, <span className="tabular">{when(a.at, new Date(now))}</span>
                   </li>
                 ))}
               </ul>

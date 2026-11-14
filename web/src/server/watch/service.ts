@@ -918,7 +918,7 @@ export type WatchView = {
   stats: { findingsOpen: number; findings: number; decided: number; placedAlone: number; sentForSignOff: number; held: number; skipped: number; autoRenewOn: number; staged: number; liveCalls: number };
   findings: Finding[];
   renewals: Renewal[];
-  auto: AutoRenew[];
+  auto: (AutoRenew & { kitchenName?: string })[];
   stages: Stage[];
   runs: State["runs"];
   schedule: { minutes: number | null; reason?: string };
@@ -944,7 +944,13 @@ export async function watchView(rt: Runtime): Promise<WatchView> {
     },
     findings: findings.slice(0, 100),
     renewals: renewals.slice(0, 100),
-    auto: [...s.auto.values()].sort((a, b) => b.at.localeCompare(a.at)),
+    // Staff read kitchens by name, not by organisation id.
+    auto: await (async () => {
+      const names = new Map<string, string>([...findings, ...renewals, ...s.stages.values()].map((x) => [x.orgId, x.kitchenName]));
+      const missing = [...s.auto.values()].some((a) => !names.has(a.orgId));
+      if (missing) for (const k of await (await import("../offers/service")).allKitchens(rt).catch(() => [])) names.set(k.orgId, k.name);
+      return [...s.auto.values()].sort((a, b) => b.at.localeCompare(a.at)).map((a) => ({ ...a, ...(names.get(a.orgId) ? { kitchenName: names.get(a.orgId) } : {}) }));
+    })(),
     stages: [...s.stages.values()].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 50),
     runs: s.runs,
     schedule: scheduleInfo(),

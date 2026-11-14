@@ -136,8 +136,8 @@ function Body({ v, now, refresh }: { v: OffersView; now: number; refresh: () => 
               <ul className="space-y-1 text-[0.9rem]">
                 {v.prefs.map((p) => (
                   <li key={p.orgId}>
-                    <span className="font-semibold">{p.orgId}</span>: {p.off ? `offers off (${p.off.by})` : "offers on"}
-                    {p.mutes.length ? `; muted ${p.mutes.map((m) => `${m.scope} ${m.value.replaceAll("_", " ")}`).join(", ")}` : ""}
+                    <span className="font-semibold" title={p.orgId}>{p.name ?? "A kitchen no longer here"}</span>: {p.off ? `offers off (${p.off.by})` : "offers on"}
+                    {p.mutes.length ? `; not offered again: ${p.mutes.map((m) => `${m.scope === "family" ? "" : `${m.scope} `}${m.value.replaceAll("_", " ")}`).join(", ")}` : ""}
                   </li>
                 ))}
               </ul>

@@ -24,7 +24,7 @@ import { PHASE_WORD, StationBody, stationOf, summaryOf } from "./stations";
  */
 const REPLAY_MS = 30_000;
 
-export function TraceScreen({ requestId }: { requestId: string }) {
+export function TraceScreen({ requestId, stream = false }: { requestId: string; stream?: boolean }) {
   const live = useOps<TraceView>(`/ops-api/trace/${requestId}`, { pollMs: 2500 });
   const t = live.data;
   if (!t && live.error) {
@@ -44,7 +44,7 @@ export function TraceScreen({ requestId }: { requestId: string }) {
     );
   }
   if (!t) return <Loading label="Reading this request's ledger entries…" />;
-  return <Trace key={t.requestId} t={t} error={live.error} />;
+  return <Trace key={t.requestId} t={t} error={live.error} stream={stream} />;
 }
 
 function stepFromUrl(n: number): number | "all" {
@@ -54,7 +54,7 @@ function stepFromUrl(n: number): number | "all" {
   return Number.isInteger(v) && v >= 0 && v < n ? v : "all";
 }
 
-function Trace({ t, error }: { t: TraceView; error?: string }) {
+function Trace({ t, error, stream }: { t: TraceView; error?: string; stream: boolean }) {
   const router = useRouter();
   const n = t.steps.length;
   // How many steps are revealed. "all" follows the request as new steps arrive. Starts from ?step= when given.
@@ -305,7 +305,7 @@ function Trace({ t, error }: { t: TraceView; error?: string }) {
               <KV k="ledger head" v={t.chain.head ? `${t.chain.head.seq} ${t.chain.head.hash.slice(0, 24)}…` : "empty"} />
             </Details>
           </Card>
-          <StreamReplay requestId={t.requestId} currentSeq={current?.seq} />
+          {stream && <StreamReplay requestId={t.requestId} currentSeq={current?.seq} />}
         </aside>
       </div>
     </>

@@ -9,6 +9,7 @@
  * Needs the local index (pnpm index:build). Re-run when the partner's data changes.
  */
 import { writeFileSync } from "node:fs";
+import { CATEGORY_NAMES } from "./category-names";
 import path from "node:path";
 import { CATEGORY_SLUGS } from "../src/core/catalog/partner";
 import { loadCatalogIndex } from "../src/server/valio/index-store";
@@ -48,7 +49,7 @@ for (const [code, ps] of [...byCat.entries()].sort((a, b) => a[0].localeCompare(
   let top = ranked.filter(([, n], i) => n / ps.length >= (i === 0 ? 0.12 : 0.2)).slice(0, 2).map(([t]) => cap(t));
   if (top.length === 0) top = ranked.slice(0, 1).map(([t]) => cap(t));
   const named = CATEGORY_SLUGS[code];
-  const label = named ? cap(named.replaceAll("_", " ")) : top.length ? top.join(", ").replace(/, ([^,]+)$/, " and $1") : `Group ${code}`;
+  const label = named ? cap(named.replaceAll("_", " ")) : CATEGORY_NAMES[code] ? CATEGORY_NAMES[code] : top.length ? top.join(", ").replace(/, ([^,]+)$/, " and $1") : `Group ${code}`;
   const temps = new Map<string, number>();
   for (const p of ps) if (p.temperature.class) temps.set(p.temperature.class, (temps.get(p.temperature.class) ?? 0) + 1);
   const temperature = [...temps.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;

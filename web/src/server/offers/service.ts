@@ -520,7 +520,7 @@ export type OffersView = {
   offers: Omit<OfferRecord, "token" | "body">[];
   campaigns: Campaign[];
   listings: NewListing[];
-  prefs: (OfferPrefs & { orgId: string })[];
+  prefs: (OfferPrefs & { orgId: string; name?: string })[];
 };
 
 export async function offersView(rt: Runtime, now = new Date()): Promise<OffersView> {
@@ -533,7 +533,11 @@ export async function offersView(rt: Runtime, now = new Date()): Promise<OffersV
     offers: all.slice(0, 200).map(({ token: _t, body: _b, ...o }) => (void _t, void _b, o)),
     campaigns: [...s.campaigns.values()].sort((a, b) => b.at.localeCompare(a.at)),
     listings: [...s.listings.values()],
-    prefs: [...s.prefs.values()],
+    // Staff read kitchens by name, not by organisation id.
+    prefs: await (async () => {
+      const names = new Map((await allKitchens(rt).catch(() => [])).map((k) => [k.orgId, k.name]));
+      return [...s.prefs.values()].map((p) => ({ ...p, ...(names.get(p.orgId) ? { name: names.get(p.orgId) } : {}) }));
+    })(),
   };
 }
 

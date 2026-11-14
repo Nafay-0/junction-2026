@@ -67,7 +67,7 @@
    "temperature": "chilled"
   },
   "10418": {
-   "label": "Fraiche and Cooking",
+   "label": "Crème fraîche and cooking cream",
    "count": 4,
    "temperature": "chilled"
   },
@@ -82,12 +82,12 @@
    "temperature": "chilled"
   },
   "10431": {
-   "label": "Profeel and Protein",
+   "label": "Protein dairy",
    "count": 42,
    "temperature": "chilled"
   },
   "10432": {
-   "label": "Vanilla and Ice",
+   "label": "Ice cream mixes",
    "count": 16,
    "temperature": "chilled"
   },
@@ -102,7 +102,7 @@
    "temperature": "chilled"
   },
   "10502": {
-   "label": "Barbeque and Butter",
+   "label": "Flavoured butter",
    "count": 1,
    "temperature": "chilled"
   },
@@ -112,42 +112,42 @@
    "temperature": "chilled"
   },
   "10516": {
-   "label": "Margarine and Portionpacket",
+   "label": "Margarine portions",
    "count": 6,
    "temperature": "chilled"
   },
   "10517": {
-   "label": "Liquid and Oil",
+   "label": "Liquid fats",
    "count": 7,
    "temperature": "chilled"
   },
   "10518": {
-   "label": "Margarine and Baking",
+   "label": "Baking margarine",
    "count": 5,
    "temperature": "chilled"
   },
   "10530": {
-   "label": "Oil and Rapeseed",
+   "label": "Rapeseed oil",
    "count": 24,
    "temperature": "ambient"
   },
   "10531": {
-   "label": "Oil and Olive",
+   "label": "Olive oil",
    "count": 45,
    "temperature": "ambient"
   },
   "10532": {
-   "label": "Oil and Sesame",
+   "label": "Sesame and speciality oils",
    "count": 17,
    "temperature": "ambient"
   },
   "10590": {
-   "label": "Egg and Barn",
+   "label": "Eggs",
    "count": 9,
    "temperature": "chilled"
   },
   "10592": {
-   "label": "Egg and Barn",
+   "label": "Egg products",
    "count": 21,
    "temperature": "chilled"
   },
@@ -157,42 +157,42 @@
    "temperature": "chilled"
   },
   "10602": {
-   "label": "Slice and Cheese",
+   "label": "Sliced cheese",
    "count": 89,
    "temperature": "chilled"
   },
   "10603": {
-   "label": "Cheese and Grated",
+   "label": "Grated cheese",
    "count": 77,
    "temperature": "chilled"
   },
   "10630": {
-   "label": "Cheese and Goat",
+   "label": "Goat's cheese",
    "count": 10,
    "temperature": "chilled"
   },
   "10631": {
-   "label": "Cheese and Matured",
+   "label": "Matured cheese",
    "count": 24,
    "temperature": "chilled"
   },
   "10632": {
-   "label": "Cheese and Aura",
+   "label": "Blue cheese",
    "count": 25,
    "temperature": "chilled"
   },
   "10633": {
-   "label": "Koskenlaskija and Cheese",
+   "label": "Processed cheese",
    "count": 20,
    "temperature": "chilled"
   },
   "10635": {
-   "label": "Cheese and Cream",
+   "label": "Cream cheese",
    "count": 54,
    "temperature": "chilled"
   },
   "10636": {
-   "label": "Cube and Feta",
+   "label": "Feta and salad cheese",
    "count": 47,
    "temperature": "chilled"
   },
@@ -202,7 +202,7 @@
    "temperature": "chilled"
   },
   "10639": {
-   "label": "Halloumi and Cheese",
+   "label": "Halloumi and grilling cheese",
    "count": 16,
    "temperature": "chilled"
   },
@@ -217,22 +217,22 @@
    "temperature": "chilled"
   },
   "10900": {
-   "label": "Bread and Rye",
+   "label": "Rye bread",
    "count": 47,
    "temperature": "ambient"
   },
   "10901": {
-   "label": "Bread and Toast",
+   "label": "Toast bread",
    "count": 71,
    "temperature": "ambient"
   },
   "10902": {
-   "label": "Roll and Bun",
+   "label": "Rolls and buns",
    "count": 16,
    "temperature": "ambient"
   },
   "10903": {
-   "label": "Bun and Pasty",
+   "label": "Buns and pasties",
    "count": 9,
    "temperature": "ambient"
   },
@@ -247,7 +247,7 @@
    "temperature": "chilled"
   },
   "17201": {
-   "label": "Frankfurter and Sausage",
+   "label": "Sausages",
    "count": 37,
    "temperature": "chilled"
   },
@@ -267,7 +267,7 @@
    "temperature": "chilled"
   },
   "17205": {
-   "label": "Sausage and Ham",
+   "label": "Ham and cold cuts",
    "count": 26,
    "temperature": "chilled"
   },
@@ -277,12 +277,12 @@
    "temperature": "chilled"
   },
   "17207": {
-   "label": "Liver and Pate",
+   "label": "Pâté",
    "count": 16,
    "temperature": "chilled"
   },
   "17208": {
-   "label": "Jelly and Country",
+   "label": "Meat jelly",
    "count": 5,
    "temperature": "chilled"
   },
@@ -307,17 +307,17 @@
    "temperature": "chilled"
   },
   "17302": {
-   "label": "Salaattimestari and Piping",
+   "label": "Salads and spreads",
    "count": 43,
    "temperature": "chilled"
   },
   "17303": {
-   "label": "Chicken and Bread",
+   "label": "Sandwiches and snacks",
    "count": 68,
    "temperature": "chilled"
   },
   "17304": {
-   "label": "Fettuccine and Pasta",
+   "label": "Fresh pasta",
    "count": 3,
    "temperature": "chilled"
   },
@@ -337,7 +337,7 @@
    "temperature": "chilled"
   },
   "17402": {
-   "label": "Pumpkin and Cucumber",
+   "label": "Cucumbers and squash",
    "count": 22,
    "temperature": "chilled"
   },
@@ -352,12 +352,12 @@
    "temperature": "chilled"
   },
   "17405": {
-   "label": "Onion and Garlic",
+   "label": "Onions and garlic",
    "count": 24,
    "temperature": "chilled"
   },
   "17406": {
-   "label": "Chili and Pepper",
+   "label": "Chillies and peppers",
    "count": 27,
    "temperature": "chilled"
   },
@@ -367,7 +367,7 @@
    "temperature": "chilled"
   },
   "17408": {
-   "label": "Bean and Cleaned",
+   "label": "Fresh beans",
    "count": 9,
    "temperature": "chilled"
   },
@@ -377,7 +377,7 @@
    "temperature": "chilled"
   },
   "17412": {
-   "label": "Apple and Pear",
+   "label": "Apples and pears",
    "count": 16,
    "temperature": "chilled"
   },
@@ -397,42 +397,42 @@
    "temperature": "chilled"
   },
   "17421": {
-   "label": "Potato and Washed",
+   "label": "Potatoes",
    "count": 20,
    "temperature": "chilled"
   },
   "17422": {
-   "label": "Peeled and Potato",
+   "label": "Peeled potatoes",
    "count": 10,
    "temperature": "chilled"
   },
   "17423": {
-   "label": "Potato and Precooked",
+   "label": "Pre-cooked potatoes",
    "count": 32,
    "temperature": "chilled"
   },
   "17424": {
-   "label": "Potato and Cube",
+   "label": "Diced potatoes",
    "count": 11,
    "temperature": "chilled"
   },
   "17431": {
-   "label": "Carrot and Washed",
+   "label": "Carrots and root vegetables",
    "count": 49,
    "temperature": "chilled"
   },
   "17432": {
-   "label": "Peeled and Vorlo",
+   "label": "Peeled root vegetables",
    "count": 22,
    "temperature": "chilled"
   },
   "17433": {
-   "label": "Pulp and Artichoke",
+   "label": "Fruit purée and artichokes",
    "count": 4,
    "temperature": "chilled"
   },
   "17441": {
-   "label": "Salad and Iceberg",
+   "label": "Lettuce",
    "count": 42,
    "temperature": "chilled"
   },
@@ -447,7 +447,7 @@
    "temperature": "chilled"
   },
   "17444": {
-   "label": "Onion and Diced",
+   "label": "Prepared onions",
    "count": 15,
    "temperature": "chilled"
   },
@@ -472,37 +472,37 @@
    "temperature": "chilled"
   },
   "17454": {
-   "label": "Mimi and Cress",
+   "label": "Cress and microgreens",
    "count": 55,
    "temperature": "chilled"
   },
   "17455": {
-   "label": "Mimi and Flower",
+   "label": "Edible flowers",
    "count": 32,
    "temperature": "chilled"
   },
   "17456": {
-   "label": "Alfalfa and Sprout",
+   "label": "Sprouts",
    "count": 3,
    "temperature": "chilled"
   },
   "17457": {
-   "label": "Bananaleave and Cup",
+   "label": "Leaves and cups for serving",
    "count": 2,
    "temperature": "chilled"
   },
   "17471": {
-   "label": "Mushroom and Kaiteki",
+   "label": "Mushrooms",
    "count": 21,
    "temperature": "chilled"
   },
   "17472": {
-   "label": "Chanterelle and China",
+   "label": "Wild mushrooms",
    "count": 5,
    "temperature": "chilled"
   },
   "17473": {
-   "label": "Mushroom and Salt",
+   "label": "Salted mushrooms",
    "count": 2,
    "temperature": "chilled"
   },
@@ -512,47 +512,47 @@
    "temperature": "chilled"
   },
   "18701": {
-   "label": "Fillet and Salmon",
+   "label": "Salmon",
    "count": 81,
    "temperature": "chilled"
   },
   "18702": {
-   "label": "Fillet and Kalaneuvo",
+   "label": "Fish fillets",
    "count": 16,
    "temperature": "chilled"
   },
   "18703": {
-   "label": "Crayfish and Brine",
+   "label": "Crayfish and shellfish",
    "count": 18,
    "temperature": "chilled"
   },
   "18704": {
-   "label": "Seaweed and Art",
+   "label": "Seaweed and roe",
    "count": 6,
    "temperature": "chilled"
   },
   "18705": {
-   "label": "Herring and Sauce",
+   "label": "Herring",
    "count": 59,
    "temperature": "chilled"
   },
   "18706": {
-   "label": "Fillet and Trout",
+   "label": "Trout fillets",
    "count": 3,
    "temperature": "chilled"
   },
   "18707": {
-   "label": "Trout and Grilled",
+   "label": "Smoked and grilled fish",
    "count": 3,
    "temperature": "chilled"
   },
   "18708": {
-   "label": "Fillet and Trout",
+   "label": "Rainbow trout",
    "count": 18,
    "temperature": "chilled"
   },
   "18710": {
-   "label": "Pork and Sirloin",
+   "label": "Pork",
    "count": 106,
    "temperature": "chilled"
   },
@@ -562,47 +562,47 @@
    "temperature": "chilled"
   },
   "18730": {
-   "label": "Reindeer and Topside",
+   "label": "Reindeer and game",
    "count": 1,
    "temperature": "chilled"
   },
   "18740": {
-   "label": "Lamb and Bone",
+   "label": "Lamb",
    "count": 3,
    "temperature": "chilled"
   },
   "18750": {
-   "label": "Chicken and Fillet",
+   "label": "Chicken",
    "count": 107,
    "temperature": "chilled"
   },
   "18751": {
-   "label": "Barbarie and Duck",
+   "label": "Duck",
    "count": 1,
    "temperature": "chilled"
   },
   "18760": {
-   "label": "Beef and Meat",
+   "label": "Beef",
    "count": 18,
    "temperature": "chilled"
   },
   "18761": {
-   "label": "Beef and Burger",
+   "label": "Burgers and minced beef",
    "count": 19,
    "temperature": "chilled"
   },
   "20000": {
-   "label": "Treat and Crunchy",
+   "label": "Pet food",
    "count": 4,
    "temperature": "ambient"
   },
   "20011": {
-   "label": "Pan and Pot",
+   "label": "Pots and pans",
    "count": 60,
    "temperature": "ambient"
   },
   "20012": {
-   "label": "Pan and Lid",
+   "label": "Gastronorm pans and lids",
    "count": 119,
    "temperature": "ambient"
   },
@@ -612,7 +612,7 @@
    "temperature": "ambient"
   },
   "20014": {
-   "label": "Freezer and Fido",
+   "label": "Food storage containers",
    "count": 34,
    "temperature": "ambient"
   },
@@ -627,17 +627,17 @@
    "temperature": "ambient"
   },
   "20023": {
-   "label": "Lux and Rack",
+   "label": "Racks and trolleys",
    "count": 30,
    "temperature": "ambient"
   },
   "20024": {
-   "label": "Thermometer and Cmx",
+   "label": "Thermometers and kitchen tools",
    "count": 5,
    "temperature": "ambient"
   },
   "20031": {
-   "label": "Bowl and Plate",
+   "label": "Bowls and plates",
    "count": 106,
    "temperature": "ambient"
   },
@@ -657,7 +657,7 @@
    "temperature": "ambient"
   },
   "20035": {
-   "label": "Spoon and Fork",
+   "label": "Cutlery",
    "count": 54,
    "temperature": "ambient"
   },
@@ -667,22 +667,22 @@
    "temperature": "ambient"
   },
   "21100": {
-   "label": "Crisp and Roll",
+   "label": "Crispbread rolls",
    "count": 4,
    "temperature": "ambient"
   },
   "21120": {
-   "label": "Cracker and Cake",
+   "label": "Crackers and rice cakes",
    "count": 33,
    "temperature": "ambient"
   },
   "21121": {
-   "label": "Crouton and Garl",
+   "label": "Croutons",
    "count": 3,
    "temperature": "ambient"
   },
   "21130": {
-   "label": "Biscuit and Wafer",
+   "label": "Biscuits and wafers",
    "count": 50,
    "temperature": "ambient"
   },
@@ -692,22 +692,22 @@
    "temperature": "ambient"
   },
   "21150": {
-   "label": "Bar and Snack",
+   "label": "Snack bars",
    "count": 70,
    "temperature": "ambient"
   },
   "21200": {
-   "label": "Rye and Crisp",
+   "label": "Rye crispbread",
    "count": 10,
    "temperature": "ambient"
   },
   "21211": {
-   "label": "Crispbread and Koulunakki",
+   "label": "Crispbread",
    "count": 32,
    "temperature": "ambient"
   },
   "21300": {
-   "label": "Flour and Wheat",
+   "label": "Flour",
    "count": 28,
    "temperature": "ambient"
   },
@@ -722,7 +722,7 @@
    "temperature": "ambient"
   },
   "21340": {
-   "label": "Rice and Grain",
+   "label": "Rice and grains",
    "count": 66,
    "temperature": "ambient"
   },
@@ -732,22 +732,22 @@
    "temperature": "ambient"
   },
   "21370": {
-   "label": "Flake and Instant",
+   "label": "Porridge flakes",
    "count": 71,
    "temperature": "ambient"
   },
   "21371": {
-   "label": "Semolina and Barley",
+   "label": "Semolina and barley",
    "count": 25,
    "temperature": "ambient"
   },
   "21372": {
-   "label": "Cereal and Flake",
+   "label": "Breakfast cereals",
    "count": 21,
    "temperature": "ambient"
   },
   "21373": {
-   "label": "Muesli and Granola",
+   "label": "Muesli and granola",
    "count": 28,
    "temperature": "ambient"
   },
@@ -757,62 +757,62 @@
    "temperature": "ambient"
   },
   "21381": {
-   "label": "Noodle and Wheat",
+   "label": "Noodles",
    "count": 31,
    "temperature": "ambient"
   },
   "21382": {
-   "label": "Bulgur and Couscou",
+   "label": "Bulgur and couscous",
    "count": 27,
    "temperature": "ambient"
   },
   "21390": {
-   "label": "Lentil and Bean",
+   "label": "Lentils and beans",
    "count": 28,
    "temperature": "ambient"
   },
   "21391": {
-   "label": "Malt and Drink",
+   "label": "Malt drinks",
    "count": 5,
    "temperature": "ambient"
   },
   "21393": {
-   "label": "Chrushed and Soya",
+   "label": "Soya protein",
    "count": 6,
    "temperature": "ambient"
   },
   "21394": {
-   "label": "Potato and Mashed",
+   "label": "Mashed potato powder",
    "count": 8,
    "temperature": "ambient"
   },
   "21400": {
-   "label": "Drink and Juice",
+   "label": "Juice drinks",
    "count": 88,
    "temperature": "ambient"
   },
   "21401": {
-   "label": "Concentrate and Juice",
+   "label": "Juice concentrates",
    "count": 61,
    "temperature": "ambient"
   },
   "21402": {
-   "label": "Soup and Berry",
+   "label": "Berry soups",
    "count": 31,
    "temperature": "chilled"
   },
   "21403": {
-   "label": "Juice and Orange",
+   "label": "Orange juice",
    "count": 94,
    "temperature": "ambient"
   },
   "21404": {
-   "label": "Apple and Fruit",
+   "label": "Fruit juices",
    "count": 50,
    "temperature": "ambient"
   },
   "21405": {
-   "label": "Beer and Alcohol",
+   "label": "Low-alcohol beer",
    "count": 4,
    "temperature": "ambient"
   },
@@ -827,12 +827,12 @@
    "temperature": "ambient"
   },
   "21452": {
-   "label": "Marmalade and Bakery",
+   "label": "Marmalade and bakery fillings",
    "count": 29,
    "temperature": "ambient"
   },
   "21453": {
-   "label": "Butter and Peanut",
+   "label": "Peanut butter and spreads",
    "count": 15,
    "temperature": "ambient"
   },
@@ -847,12 +847,12 @@
    "temperature": "ambient"
   },
   "21462": {
-   "label": "Seed and Sesame",
+   "label": "Seeds",
    "count": 35,
    "temperature": "ambient"
   },
   "21463": {
-   "label": "Seaweed and Wakame",
+   "label": "Dried seaweed",
    "count": 10,
    "temperature": "ambient"
   },
@@ -862,42 +862,42 @@
    "temperature": "ambient"
   },
   "21530": {
-   "label": "Oil and Tuna",
+   "label": "Tinned tuna",
    "count": 26,
    "temperature": "ambient"
   },
   "21540": {
-   "label": "Snail and Chantifrai",
+   "label": "Tinned delicacies",
    "count": 8,
    "temperature": "ambient"
   },
   "21550": {
-   "label": "Brine and Mushroom",
+   "label": "Tinned mushrooms",
    "count": 25,
    "temperature": "ambient"
   },
   "21580": {
-   "label": "Juice and Pineapple",
+   "label": "Tinned fruit",
    "count": 42,
    "temperature": "ambient"
   },
   "21590": {
-   "label": "Tomato and Sundried",
+   "label": "Tinned and sun-dried tomatoes",
    "count": 78,
    "temperature": "ambient"
   },
   "21591": {
-   "label": "Cucumber and Pickled",
+   "label": "Pickled cucumbers",
    "count": 49,
    "temperature": "ambient"
   },
   "21592": {
-   "label": "Cabbage and Salad",
+   "label": "Pickled cabbage",
    "count": 9,
    "temperature": "ambient"
   },
   "21593": {
-   "label": "Beetroot and Pickle",
+   "label": "Pickled beetroot",
    "count": 10,
    "temperature": "ambient"
   },
@@ -907,7 +907,7 @@
    "temperature": "ambient"
   },
   "21595": {
-   "label": "Olive and Pitted",
+   "label": "Olives",
    "count": 65,
    "temperature": "ambient"
   },
@@ -917,27 +917,27 @@
    "temperature": "ambient"
   },
   "21600": {
-   "label": "Mth and Month",
+   "label": "Ready meals",
    "count": 54,
    "temperature": "ambient"
   },
   "21900": {
-   "label": "Soup and Tomato",
+   "label": "Soups",
    "count": 11,
    "temperature": "ambient"
   },
   "21901": {
-   "label": "Soup and Hikari",
+   "label": "Soup bases",
    "count": 13,
    "temperature": "ambient"
   },
   "21902": {
-   "label": "Bouillon and Fond",
+   "label": "Stocks and fonds",
    "count": 111,
    "temperature": "ambient"
   },
   "21903": {
-   "label": "Tetra and Bouillon",
+   "label": "Liquid stocks",
    "count": 6,
    "temperature": "ambient"
   },
@@ -957,7 +957,7 @@
    "temperature": "chilled"
   },
   "21912": {
-   "label": "Ketchup and Tomato",
+   "label": "Ketchup",
    "count": 33,
    "temperature": "ambient"
   },
@@ -967,12 +967,12 @@
    "temperature": "ambient"
   },
   "21918": {
-   "label": "Dressing and Salad",
+   "label": "Salad dressings",
    "count": 81,
    "temperature": "ambient"
   },
   "21919": {
-   "label": "Balsamic and Cream",
+   "label": "Balsamic creams",
    "count": 20,
    "temperature": "ambient"
   },
@@ -987,37 +987,37 @@
    "temperature": "ambient"
   },
   "21950": {
-   "label": "Vitamin and Effervescent",
+   "label": "Vitamins",
    "count": 8,
    "temperature": "ambient"
   },
   "21952": {
-   "label": "Almond and Amylase",
+   "label": "Baking enzymes",
    "count": 2,
    "temperature": "ambient"
   },
   "21980": {
-   "label": "Mousse and Kissel",
+   "label": "Mousses and kissels",
    "count": 48,
    "temperature": "ambient"
   },
   "21981": {
-   "label": "Topping and Chocolate",
+   "label": "Dessert toppings",
    "count": 39,
    "temperature": "ambient"
   },
   "21982": {
-   "label": "Sweetened and Biscuit",
+   "label": "Sweet biscuit crumbs",
    "count": 4,
    "temperature": "ambient"
   },
   "21990": {
-   "label": "Chip and Flavoured",
+   "label": "Crisps",
    "count": 49,
    "temperature": "ambient"
   },
   "21991": {
-   "label": "Tortilla and Chip",
+   "label": "Tortilla chips",
    "count": 33,
    "temperature": "ambient"
   },
@@ -1032,7 +1032,7 @@
    "temperature": "ambient"
   },
   "21994": {
-   "label": "Sauce and Salsa",
+   "label": "Sauces and salsas",
    "count": 56,
    "temperature": "ambient"
   },
@@ -1047,37 +1047,37 @@
    "temperature": "ambient"
   },
   "22150": {
-   "label": "Honey and Hunaja",
+   "label": "Honey",
    "count": 19,
    "temperature": "ambient"
   },
   "22190": {
-   "label": "Sweetener and Hermeseta",
+   "label": "Sweeteners",
    "count": 10,
    "temperature": "ambient"
   },
   "22300": {
-   "label": "Coffee and Filter",
+   "label": "Filter coffee",
    "count": 109,
    "temperature": "ambient"
   },
   "22410": {
-   "label": "Bean and Coffee",
+   "label": "Coffee beans",
    "count": 44,
    "temperature": "ambient"
   },
   "22411": {
-   "label": "Coffee and Espresso",
+   "label": "Espresso",
    "count": 4,
    "temperature": "ambient"
   },
   "22412": {
-   "label": "Coffee and Instant",
+   "label": "Instant coffee",
    "count": 23,
    "temperature": "ambient"
   },
   "22413": {
-   "label": "Coffee and Drink",
+   "label": "Coffee drinks",
    "count": 27,
    "temperature": "ambient"
   },
@@ -1087,22 +1087,22 @@
    "temperature": "ambient"
   },
   "22531": {
-   "label": "Rfa and Loose",
+   "label": "Loose tea",
    "count": 23,
    "temperature": "ambient"
   },
   "22532": {
-   "label": "Ice and Drink",
+   "label": "Iced tea",
    "count": 21,
    "temperature": "ambient"
   },
   "22540": {
-   "label": "Chocolate and Cocoa",
+   "label": "Cocoa and hot chocolate",
    "count": 27,
    "temperature": "ambient"
   },
   "22600": {
-   "label": "Fine and Sea",
+   "label": "Salt",
    "count": 40,
    "temperature": "ambient"
   },
@@ -1112,12 +1112,12 @@
    "temperature": "ambient"
   },
   "22610": {
-   "label": "Mustard and Dijon",
+   "label": "Mustard",
    "count": 45,
    "temperature": "ambient"
   },
   "22620": {
-   "label": "Vinegar and Wine",
+   "label": "Vinegar",
    "count": 65,
    "temperature": "ambient"
   },
@@ -1132,17 +1132,17 @@
    "temperature": "ambient"
   },
   "22641": {
-   "label": "Paste and Curry",
+   "label": "Curry and spice pastes",
    "count": 64,
    "temperature": "ambient"
   },
   "22646": {
-   "label": "Puree and Onion",
+   "label": "Purées and bases",
    "count": 19,
    "temperature": "ambient"
   },
   "22660": {
-   "label": "Yeast and Instant",
+   "label": "Yeast",
    "count": 7,
    "temperature": "ambient"
   },
@@ -1152,7 +1152,7 @@
    "temperature": "ambient"
   },
   "22700": {
-   "label": "Drink and Lemonade",
+   "label": "Soft drinks",
    "count": 157,
    "temperature": "ambient"
   },
@@ -1167,17 +1167,17 @@
    "temperature": "ambient"
   },
   "22703": {
-   "label": "Beverage and Carbonated",
+   "label": "Carbonated drinks",
    "count": 27,
    "temperature": "ambient"
   },
   "22704": {
-   "label": "Drink and Ginger",
+   "label": "Ginger drinks",
    "count": 15,
    "temperature": "ambient"
   },
   "22705": {
-   "label": "Carbonated and Vellamo",
+   "label": "Mineral water",
    "count": 17,
    "temperature": "ambient"
   },
@@ -1187,17 +1187,17 @@
    "temperature": "ambient"
   },
   "22707": {
-   "label": "Concentrate and Drink",
+   "label": "Drink concentrates",
    "count": 11,
    "temperature": "ambient"
   },
   "30010": {
-   "label": "Aerosol and Flower",
+   "label": "Air fresheners",
    "count": 3,
    "temperature": "ambient"
   },
   "32990": {
-   "label": "Lighter and Matche",
+   "label": "Lighters and matches",
    "count": 13,
    "temperature": "ambient"
   },
@@ -1217,47 +1217,47 @@
    "temperature": "frozen"
   },
   "41704": {
-   "label": "Lamb and Topfood",
+   "label": "Frozen meat",
    "count": 31,
    "temperature": "frozen"
   },
   "41705": {
-   "label": "Meatball and Patty",
+   "label": "Frozen meatballs and patties",
    "count": 140,
    "temperature": "frozen"
   },
   "41710": {
-   "label": "Chicken and Fillet",
+   "label": "Frozen chicken",
    "count": 129,
    "temperature": "frozen"
   },
   "41711": {
-   "label": "Duck and Breast",
+   "label": "Frozen duck",
    "count": 9,
    "temperature": "frozen"
   },
   "41712": {
-   "label": "Chicken and Breaded",
+   "label": "Frozen breaded chicken",
    "count": 46,
    "temperature": "frozen"
   },
   "41720": {
-   "label": "Fillet and Trout",
+   "label": "Frozen fish fillets",
    "count": 122,
    "temperature": "frozen"
   },
   "41721": {
-   "label": "Shrimp and Asc",
+   "label": "Frozen shrimps",
    "count": 52,
    "temperature": "frozen"
   },
   "41722": {
-   "label": "Roe and Trout",
+   "label": "Frozen roe",
    "count": 8,
    "temperature": "frozen"
   },
   "41723": {
-   "label": "Fish and Findu",
+   "label": "Frozen fish products",
    "count": 74,
    "temperature": "frozen"
   },
@@ -1267,17 +1267,17 @@
    "temperature": "frozen"
   },
   "41732": {
-   "label": "Vegetable and Green",
+   "label": "Frozen vegetables",
    "count": 49,
    "temperature": "frozen"
   },
   "41733": {
-   "label": "Green and Chopped",
+   "label": "Frozen herbs",
    "count": 11,
    "temperature": "frozen"
   },
   "41734": {
-   "label": "Findu and Puree",
+   "label": "Frozen purées",
    "count": 7,
    "temperature": "frozen"
   },
@@ -1297,27 +1297,27 @@
    "temperature": "frozen"
   },
   "41750": {
-   "label": "Findu and Heat",
+   "label": "Frozen ready meals",
    "count": 6,
    "temperature": "frozen"
   },
   "41751": {
-   "label": "Fry and Potato",
+   "label": "Frozen fries and potatoes",
    "count": 78,
    "temperature": "frozen"
   },
   "41752": {
-   "label": "Findu and Patty",
+   "label": "Frozen fish patties",
    "count": 8,
    "temperature": "frozen"
   },
   "41753": {
-   "label": "Vegetable and Patty",
+   "label": "Frozen vegetable patties",
    "count": 146,
    "temperature": "frozen"
   },
   "41754": {
-   "label": "Vegan and Burger",
+   "label": "Frozen vegan burgers",
    "count": 47,
    "temperature": "frozen"
   },
@@ -1332,7 +1332,7 @@
    "temperature": "frozen"
   },
   "41761": {
-   "label": "Bun and Roll",
+   "label": "Frozen buns and rolls",
    "count": 119,
    "temperature": "frozen"
   },
@@ -1357,22 +1357,22 @@
    "temperature": "frozen"
   },
   "41766": {
-   "label": "Dough and Para",
+   "label": "Frozen dough",
    "count": 66,
    "temperature": "frozen"
   },
   "41770": {
-   "label": "Ice and Jacob",
+   "label": "Frozen desserts",
    "count": 17,
    "temperature": "frozen"
   },
   "41771": {
-   "label": "Mozzarella and Cheese",
+   "label": "Frozen cheese",
    "count": 25,
    "temperature": "frozen"
   },
   "41800": {
-   "label": "Ice and Cream",
+   "label": "Ice cream",
    "count": 124,
    "temperature": "frozen"
   },
@@ -1392,17 +1392,17 @@
    "temperature": "frozen"
   },
   "52200": {
-   "label": "Bar and Chocolate",
+   "label": "Chocolate bars",
    "count": 91,
    "temperature": "ambient"
   },
   "52201": {
-   "label": "Tablet and Chocolate",
+   "label": "Chocolate tablets",
    "count": 58,
    "temperature": "ambient"
   },
   "52202": {
-   "label": "Chocolate and Praline",
+   "label": "Pralines",
    "count": 40,
    "temperature": "ambient"
   },
@@ -1412,7 +1412,7 @@
    "temperature": "ambient"
   },
   "52209": {
-   "label": "Candy and Loose",
+   "label": "Loose sweets",
    "count": 62,
    "temperature": "ambient"
   },
@@ -1422,37 +1422,37 @@
    "temperature": "ambient"
   },
   "52240": {
-   "label": "Pastille and Xylitol",
+   "label": "Pastilles",
    "count": 80,
    "temperature": "ambient"
   },
   "52260": {
-   "label": "Xylitol and Chewing",
+   "label": "Chewing gum",
    "count": 21,
    "temperature": "ambient"
   },
   "52290": {
-   "label": "Chocolate and Praline",
+   "label": "Chocolate boxes",
    "count": 90,
    "temperature": "ambient"
   },
   "63000": {
-   "label": "Hair and Shampoo",
+   "label": "Shampoo and hair care",
    "count": 18,
    "temperature": "ambient"
   },
   "63001": {
-   "label": "Soap and Hand",
+   "label": "Hand soap",
    "count": 125,
    "temperature": "ambient"
   },
   "63002": {
-   "label": "Toothpaste and Toothbrush",
+   "label": "Dental care",
    "count": 25,
    "temperature": "ambient"
   },
   "63070": {
-   "label": "Alway and Ultra",
+   "label": "Feminine care",
    "count": 11,
    "temperature": "ambient"
   },
@@ -1462,17 +1462,17 @@
    "temperature": "ambient"
   },
   "63072": {
-   "label": "Wet and Wipe",
+   "label": "Wet wipes",
    "count": 21,
    "temperature": "ambient"
   },
   "63100": {
-   "label": "Dishwashing and Machine",
+   "label": "Dishwashing",
    "count": 117,
    "temperature": "ambient"
   },
   "63113": {
-   "label": "Wash and Color",
+   "label": "Laundry",
    "count": 52,
    "temperature": "ambient"
   },
@@ -1487,7 +1487,7 @@
    "temperature": "ambient"
   },
   "63120": {
-   "label": "Brush and Cloth",
+   "label": "Brushes and cloths",
    "count": 164,
    "temperature": "ambient"
   },
@@ -1497,27 +1497,27 @@
    "temperature": "ambient"
   },
   "63122": {
-   "label": "Bin and Durabin",
+   "label": "Bins",
    "count": 19,
    "temperature": "ambient"
   },
   "63130": {
-   "label": "Klip and Sistema",
+   "label": "Storage boxes",
    "count": 21,
    "temperature": "ambient"
   },
   "63131": {
-   "label": "Water and Bucket",
+   "label": "Buckets",
    "count": 10,
    "temperature": "ambient"
   },
   "63200": {
-   "label": "Household and Paper",
+   "label": "Household paper",
    "count": 6,
    "temperature": "ambient"
   },
   "63210": {
-   "label": "Toilet and Roll",
+   "label": "Toilet paper",
    "count": 37,
    "temperature": "ambient"
   },
@@ -1527,22 +1527,22 @@
    "temperature": "ambient"
   },
   "63231": {
-   "label": "Napkin and Tissue",
+   "label": "Napkins",
    "count": 94,
    "temperature": "ambient"
   },
   "63232": {
-   "label": "Tablecover and Reel",
+   "label": "Table covers",
    "count": 113,
    "temperature": "ambient"
   },
   "63233": {
-   "label": "Napkin and Dispenser",
+   "label": "Napkin dispensers",
    "count": 40,
    "temperature": "ambient"
   },
   "63234": {
-   "label": "Napkin and Dispenser",
+   "label": "Dispenser napkins",
    "count": 16,
    "temperature": "ambient"
   },
@@ -1552,62 +1552,62 @@
    "temperature": "ambient"
   },
   "63240": {
-   "label": "Hand and Towel",
+   "label": "Hand towels",
    "count": 42,
    "temperature": "ambient"
   },
   "63241": {
-   "label": "Dispenser and Roll",
+   "label": "Dispenser rolls",
    "count": 38,
    "temperature": "ambient"
   },
   "63242": {
-   "label": "Facial and Lotu",
+   "label": "Facial tissues",
    "count": 8,
    "temperature": "ambient"
   },
   "63270": {
-   "label": "Piippo and Cord",
+   "label": "Cords and strings",
    "count": 2,
    "temperature": "ambient"
   },
   "63271": {
-   "label": "Filter and Coffee",
+   "label": "Coffee filters",
    "count": 31,
    "temperature": "ambient"
   },
   "63272": {
-   "label": "Film and Paper",
+   "label": "Cling film and baking paper",
    "count": 46,
    "temperature": "ambient"
   },
   "63273": {
-   "label": "Cmx and Roasting",
+   "label": "Roasting bags",
    "count": 12,
    "temperature": "ambient"
   },
   "63300": {
-   "label": "Unisex and Hejco",
+   "label": "Workwear",
    "count": 36,
    "temperature": "ambient"
   },
   "63900": {
-   "label": "Chef and Choice",
+   "label": "Chef's clothing",
    "count": 11,
    "temperature": "ambient"
   },
   "64000": {
-   "label": "Plate and Leaf",
+   "label": "Disposable plates",
    "count": 35,
    "temperature": "ambient"
   },
   "64001": {
-   "label": "Cup and Lid",
+   "label": "Cups and lids",
    "count": 180,
    "temperature": "ambient"
   },
   "64002": {
-   "label": "Fork and Spoon",
+   "label": "Disposable cutlery",
    "count": 33,
    "temperature": "ambient"
   },
@@ -1617,7 +1617,7 @@
    "temperature": "ambient"
   },
   "64004": {
-   "label": "Tray and Lid",
+   "label": "Trays and lids",
    "count": 343,
    "temperature": "ambient"
   },
@@ -1627,12 +1627,12 @@
    "temperature": "ambient"
   },
   "64006": {
-   "label": "Away and Shopping",
+   "label": "Take-away bags",
    "count": 21,
    "temperature": "ambient"
   },
   "64007": {
-   "label": "Bakery and Brun",
+   "label": "Bakery bags",
    "count": 29,
    "temperature": "ambient"
   },
@@ -1647,7 +1647,7 @@
    "temperature": "ambient"
   },
   "64011": {
-   "label": "Lantern and Lamp",
+   "label": "Candles and lanterns",
    "count": 42,
    "temperature": "ambient"
   },
@@ -1657,7 +1657,7 @@
    "temperature": "ambient"
   },
   "64130": {
-   "label": "Biodegradable and Dog",
+   "label": "Biodegradable bags",
    "count": 2,
    "temperature": "ambient"
   },
@@ -1667,57 +1667,57 @@
    "temperature": "ambient"
   },
   "64301": {
-   "label": "Battery and Alkaline",
+   "label": "Batteries",
    "count": 21,
    "temperature": "ambient"
   },
   "64310": {
-   "label": "Disc and Lamp",
+   "label": "Lamps",
    "count": 4,
    "temperature": "ambient"
   },
   "64500": {
-   "label": "Present and Gift",
+   "label": "Gift packaging",
    "count": 14,
    "temperature": "ambient"
   },
   "67730": {
-   "label": "Iltasanomat and Special",
+   "label": "Seasonal specials",
    "count": 6,
    "temperature": "ambient"
   },
   "67800": {
-   "label": "Christma and Control",
+   "label": "Christmas",
    "count": 7,
    "temperature": "ambient"
   },
   "77722": {
-   "label": "Acid and Carbonic",
+   "label": "Carbon dioxide",
    "count": 2,
    "temperature": "ambient"
   },
   "84966": {
-   "label": "Beer and Alcohol",
+   "label": "Beer",
    "count": 15,
    "temperature": "ambient"
   },
   "84967": {
-   "label": "Alcohol and Apple",
+   "label": "Cider",
    "count": 5,
    "temperature": "ambient"
   },
   "84988": {
-   "label": "Spritz and Pink",
+   "label": "Spritz and long drinks",
    "count": 6,
    "temperature": "ambient"
   },
   "85001": {
-   "label": "Beer and Alcoholic",
+   "label": "Alcohol-free beer",
    "count": 31,
    "temperature": "ambient"
   },
   "85028": {
-   "label": "Sparkling and Alcohol",
+   "label": "Alcohol-free sparkling",
    "count": 27,
    "temperature": "ambient"
   },
@@ -1727,17 +1727,17 @@
    "temperature": "ambient"
   },
   "90011": {
-   "label": "Plastic and Folder",
+   "label": "Folders",
    "count": 49,
    "temperature": "ambient"
   },
   "90012": {
-   "label": "Marker and Permanent",
+   "label": "Markers",
    "count": 45,
    "temperature": "ambient"
   },
   "90013": {
-   "label": "Colour and Laser",
+   "label": "Printer supplies",
    "count": 7,
    "temperature": "ambient"
   },
@@ -1747,17 +1747,17 @@
    "temperature": "ambient"
   },
   "90015": {
-   "label": "Post and Pad",
+   "label": "Post-it notes and pads",
    "count": 31,
    "temperature": "ambient"
   },
   "90021": {
-   "label": "Bubble and Mailer",
+   "label": "Mailers",
    "count": 12,
    "temperature": "ambient"
   },
   "90022": {
-   "label": "Tape and Scriva",
+   "label": "Tape",
    "count": 37,
    "temperature": "ambient"
   },
