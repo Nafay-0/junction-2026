@@ -97,8 +97,9 @@ describe("quantity against the kitchen's own pattern", () => {
     expect(c.corrections.map((x) => x.label)).toEqual(["10 L in total", "10 packs of 1 L = 10 L", "10 packs of 10 L = 100 L"]);
   });
 
-  it("takes litres of a family the kitchen counts in boxes, when its products state their content in litres", () => {
-    const boxes = milkProducts.map((p) => ({ ...p, unit: "pcs" as const, packContent: { perSalesUnit: { l: p.packSize }, baseUnitsPerSalesUnit: 1, certain: true, certainMeasures: ["l"], issues: [], label: `${p.packSize} l` } }));
+  it("takes litres of a family the kitchen counts in boxes, when some of its products are sold by the litre", () => {
+    // The kitchen's usual is a box counted in pieces; the family also has products sold by the litre.
+    const boxes = milkProducts.map((p, i) => ({ ...p, unit: i === 0 ? ("pcs" as const) : p.unit }));
     const history = regularHistory().map((h) => ({ ...h, unit: "pcs" as const }));
     expect(checkQuantity(need({ quantity: { amount: 50, unit: "L" } }), ctx(kitchen(history), { candidates: boxes as never })).filter((c) => c.code === "unit_unclear")).toEqual([]);
   });

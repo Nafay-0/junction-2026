@@ -1,3 +1,4 @@
+import type { NutritionRule } from "../nutrition";
 import type { Product } from "../catalog";
 
 /**
@@ -36,6 +37,11 @@ export type FindRequest = {
   noJudge?: boolean;
   /** Skip semantic recall (no query embedding): lexical, typo, kinds and codes only, in a few milliseconds. */
   noVectors?: boolean;
+  /**
+   * The kitchen's nutrition rules (mandate nutritionRules): a hit that breaks one, or does not declare the figure, is
+   * moved to `outsideRules` with the rule and its own figure, so the caller can say why it is not offered.
+   */
+  nutritionRules?: NutritionRule[];
 };
 
 export type FoundProduct = {
@@ -62,6 +68,8 @@ export type FindResult = {
   notSold: boolean;
   /** The judge was not sure of its top answer: ask, or show a wider set. */
   unsure: boolean;
+  /** Hits the kitchen's nutrition rules leave out, each with the rule and the product's figure (`nutritionRules`). */
+  outsideRules?: { productId: string; name: string; rule: "nutrition_rules"; reason: string; details: Record<string, unknown> }[];
   /** Candidates the judge saw, and the time and cost of the search. */
   stats: { candidates: number; ms: number; judgeMs?: number; embedMs?: number; tokens?: number; costUsd?: number };
 };

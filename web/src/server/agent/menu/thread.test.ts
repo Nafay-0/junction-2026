@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { scenarioAnswerOf, scenarioOf, type PendingScenario } from "./thread";
+import { changeEditsOf, scenarioAnswerOf, scenarioOf, type PendingScenario } from "./thread";
 
 describe("the conversation's side of the menu scenarios", () => {
   it("tells which scenario the words ask for, in English, Finnish and Swedish", () => {
@@ -31,7 +31,35 @@ describe("the conversation's side of the menu scenarios", () => {
     expect(scenarioAnswerOf("yes, do that", pending)).toEqual({ kind: "yes" });
     expect(scenarioAnswerOf("no thanks", pending)).toEqual({ kind: "no" });
     expect(scenarioAnswerOf("what is the weather like", pending)).toBeUndefined();
+    // "Monday is fine" to "plan it for Monday instead?" is a yes; "use that instead" is a yes to the best swap.
+    expect(scenarioAnswerOf("Monday is fine", { ...pending, options: [], earliest: "2026-11-16" })).toEqual({ kind: "day", date: "2026-11-16" });
+    expect(scenarioAnswerOf("maanantai sopii", { ...pending, options: [], earliest: "2026-11-16" })).toEqual({ kind: "day", date: "2026-11-16" });
+    expect(scenarioAnswerOf("use that instead", pending)).toEqual({ kind: "yes" });
+    // Any verified option of any line, named: "add the frozen beef cheek".
+    expect(scenarioAnswerOf("add the frozen beef cheek", { ...pending, more: [{ optionId: "bc:same_frozen", lineId: "bc", words: ["frozen", "cheek", "haudutettu"] }] })).toEqual({ kind: "choose", optionId: "bc:same_frozen" });
     // A day nothing could make: a yes plans it for the earliest day.
     expect(scenarioAnswerOf("joo", { ...pending, options: [], earliest: "2026-11-16" })).toEqual({ kind: "day", date: "2026-11-16" });
+  });
+});
+
+describe("a change to the plan on the table, in words", () => {
+  const plan = {
+    settings: { covers: 10, deliverBy: "2026-11-16" },
+    draft: { dishes: [{ id: "dish_1", name: "Chocolate cake", nameFi: "Suklaakakku", nameSv: null, course: "dessert" }, { id: "dish_2", name: "Whipped cream", nameFi: null, nameSv: null, course: "side" }] },
+    specs: [
+      { lineId: "butter", key: "butter", name: "Butter", ingredient: { searchTerms: ["voi", "butter"] } },
+      { lineId: "whipping_cream", key: "whipping_cream", name: "Whipping cream", ingredient: { searchTerms: ["vispikerma", "whipping cream"] } },
+    ],
+  } as unknown as Parameters<typeof changeEditsOf>[1];
+
+  it("reads a dietary constraint, the portions, a swap and a dish dropped, in English and Finnish", () => {
+    expect(changeEditsOf("make it lactose-free", plan)).toEqual([{ op: "rules", requiredClaims: ["lactose_free"] }]);
+    expect(changeEditsOf("tee siitä laktoositon ja pähkinätön", plan)).toEqual([{ op: "rules", requiredClaims: ["lactose_free"], forbiddenAllergens: ["nuts"] }]);
+    expect(changeEditsOf("make it 20 portions", plan)).toEqual([{ op: "covers", covers: 20 }]);
+    expect(changeEditsOf("20 annosta", plan)).toEqual([{ op: "covers", covers: 20 }]);
+    expect(changeEditsOf("use oat cream instead of the whipping cream", plan)).toEqual([{ op: "ingredient", lineId: "whipping_cream", name: "oat cream" }]);
+    expect(changeEditsOf("replace the butter with margarine", plan)).toEqual([{ op: "ingredient", lineId: "butter", name: "margarine" }]);
+    expect(changeEditsOf("drop the whipped cream", plan)).toEqual([{ op: "dropDish", dishId: "dish_2" }]);
+    expect(changeEditsOf("what does it cost?", plan)).toEqual([]);
   });
 });

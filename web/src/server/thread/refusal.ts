@@ -15,7 +15,7 @@ import type { TurnRun } from "./pipeline";
 export type Lang = "en" | "fi" | "sv";
 
 export type Refusal =
-  | { code: "out_of_mandate"; what: string; group?: string; groups: string[]; signer?: string }
+  | { code: "out_of_mandate"; what: string; group?: string; groups: string[]; signer?: string; draft?: boolean }
   | { code: "not_sold"; what: string }
   | { code: "cutoff_passed"; what: string; day?: string; earliest?: string }
   | { code: "forbidden_allergen"; what: string; allergens: string[] }
@@ -39,6 +39,12 @@ export function groupOf(category: string, lang: Lang): string | undefined {
   if (!dept || !DATA.departments[dept]) return undefined;
   const name = lang === "en" ? DATA.departments[dept] : (DEPARTMENT_NAME[lang][dept] ?? DATA.departments[dept]);
   return name.charAt(0).toLowerCase() + name.slice(1);
+}
+
+/** A product family's group id (the department number the kitchen's terms list), when it is one. */
+export function groupIdOf(category: string): string | undefined {
+  const dept = categoryCodesFor(category)[0]?.slice(0, 2);
+  return dept && DATA.departments[dept] ? dept : undefined;
 }
 
 /** The kitchen's allowed groups in words, the ones it has most categories in first, at most three. */
@@ -70,9 +76,13 @@ export function sayRefusal(r: Refusal, lang: Lang): string {
     case "out_of_mandate": {
       const not = r.group ? (fi ? `, eivät ryhmää ${r.group}` : sv ? `, inte ${r.group}` : `, not ${r.group}`) : "";
       const add = r.group ?? (fi ? "sen" : sv ? "den" : "it");
-      if (fi) return `En voi ostaa tuotetta ${r.what} tälle keittiölle: sen säännöt kattavat ${list(r.groups, lang)}${not}. ${who(r.signer)} voi lisätä ryhmän ${add} kohdassa Sääntösi; kysynkö häneltä?`;
-      if (sv) return `Jag kan inte köpa ${r.what} åt det här köket: dess regler omfattar ${list(r.groups, lang)}${not}. ${who(r.signer)} kan lägga till ${add} under Dina regler; ska jag fråga?`;
-      return `I can't buy ${r.what} for this kitchen: its rules cover ${list(r.groups, lang)}${not}. ${who(r.signer)} can add ${add} under Your rules; shall I ask them?`;
+      // Only offered when it can be done here (an account's own session signs its new terms): never a promise it cannot keep.
+      const next = r.draft
+        ? fi ? `Laadinko muutoksen (${add} sääntöihin) ${r.signer ? `${r.signer} vahvistettavaksi` : "vahvistettavaksi"}?` : sv ? `Ska jag skriva ändringen (${add} i reglerna) så att ${r.signer ?? "ni"} kan bekräfta den?` : `Shall I draft that change (${add} added to your rules) for ${r.signer ?? "you"} to confirm?`
+        : fi ? `${who(r.signer)} voi lisätä ryhmän ${add} kohdassa Sääntösi.` : sv ? `${who(r.signer)} kan lägga till ${add} under Dina regler.` : `${who(r.signer)} can add ${add} under Your rules.`;
+      if (fi) return `En voi ostaa tuotetta ${r.what} tälle keittiölle: sen säännöt kattavat ${list(r.groups, lang)}${not}. ${next}`;
+      if (sv) return `Jag kan inte köpa ${r.what} åt det här köket: dess regler omfattar ${list(r.groups, lang)}${not}. ${next}`;
+      return `I can't buy ${r.what} for this kitchen: its rules cover ${list(r.groups, lang)}${not}. ${next}`;
     }
     case "not_sold":
       if (fi) return `En löydä tuotetta ${r.what} tukun valikoimasta. Onko sille toinen nimi tai merkki?`;
@@ -142,6 +152,13 @@ export function sayRefusal(r: Refusal, lang: Lang): string {
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
+/** Whether a change to the kitchen's terms can be drafted and confirmed here (an account's own signed-in session). */
+export function canDraft(run: TurnRun): boolean {
+  const kind = run.k.info.kind;
+  const p = run.person;
+  return kind === "account" && !!p && !p.callOnly && (!p.account || p.account === run.k.info.slug);
+}
+
 /** Who confirms the kitchen's rules, by name when the mandate names one. */
 function signerOf(run: TurnRun): string | undefined {
   return run.session.mandate.approvers?.[0]?.name;
@@ -152,7 +169,7 @@ export function refusalOfStep(run: TurnRun, step: IntakeView, lang: Lang): Refus
   const what = (step.need?.item?.text ?? "").trim() || (lang === "fi" ? "tätä" : lang === "sv" ? "det här" : "this");
   const m = run.session.mandate;
   if (step.family && !m.allowedCategories.includes(step.family) && !/nothing called/i.test(step.notes.join(" "))) {
-    return { code: "out_of_mandate", what, ...(groupOf(step.family, lang) ? { group: groupOf(step.family, lang) } : {}), groups: groupsOf(m.allowedCategories, lang), ...(signerOf(run) ? { signer: signerOf(run) } : {}) };
+    return { code: "out_of_mandate", what, ...(groupOf(step.family, lang) ? { group: groupOf(step.family, lang) } : {}), groups: groupsOf(m.allowedCategories, lang), ...(signerOf(run) ? { signer: signerOf(run) } : {}), ...(canDraft(run) && groupIdOf(step.family) ? { draft: true } : {}) };
   }
   if (/nothing called|found nothing called/i.test(step.notes.join(" "))) return { code: "not_sold", what };
   const codes = new Map<string, number>();
@@ -247,8 +264,8 @@ export function readable(text: string, lang: Lang): string {
   return t.replace(/(\d{1,2}\.\d{1,2}\.)\./g, "$1").replace(/(\d{1,2}\.\d{1,2})\.(?=[?;:,!])/g, "$1");
 }
 
-const TELL = /\b(send|type|write|re-?send|give me|tell me)\b[^.?!]{0,60}\b(product name|the name and|with the amount|order with|the exact)\b|\b(kirjoita|lähetä)\b[^.?!]{0,40}\b(tuotteen nimi|määrä)/i;
-const INSIDE = /\b(the store treated|treated your message|neither result|the results? (gave|give|show|showed|didn't|don't|did not|do not)|the store's results|tool results?|my tools|the engine|the reader|the intake|routing)\b/i;
+const TELL = /\b(send|type|write|re-?send|give me|tell me)\b[^.?!]{0,60}\b(product name|the name and|with the amount|order with|the exact|again as|as its own message|request again)\b|\b(kirjoita|lähetä)\b[^.?!]{0,40}\b(tuotteen nimi|määrä)/i;
+const INSIDE = /\b(the store treated|treated your message|neither result|the results? (gave|give|show|showed|didn't|don't|did not|do not)|the store's results|tool results?|my tools|none of my tools|the engine|the reader|the intake|routing|(the )?menu planner|the planner|a step did not finish|didn't (connect|link)|did not (connect|link)|the (system|backend|server|database)|ruokalistasuunnittelija|suunnittelija ei)\b/i;
 
 /** A sentence that tells the buyer what to type, or says how the system works inside: never shown. */
 export function insideOrTell(sentence: string): boolean {

@@ -674,7 +674,9 @@ const offered: { productId?: string; name?: string; offerId?: string } = {};
  * The wholesaler's side: enter the operations desk, run the selling agent; if it found nothing for Kaari on this
  * catalogue, start a campaign for a lactose-free product in a family Kaari buys and has not bought, listed as new.
  */
+let offerUrl = "";
 async function sellingAgentOffersKaari(url: string): Promise<void> {
+  offerUrl = url;
   const { Browser } = await import("./lib");
   const b = new Browser(url);
   await b.req("POST", "/ops-api/session", { name: "Eval operations", ...(process.env.DOCK_OPS_PASSCODE ? { passcode: process.env.DOCK_OPS_PASSCODE } : {}) });
@@ -709,6 +711,18 @@ const offerSaid: Check = {
   },
 };
 
+/** The wholesaler's operations page no longer shows the offer as open: the buyer's no was recorded. */
+const offerDeclined: Check = {
+  name: "the buyer's no was recorded: the offer is no longer open on the operations page",
+  run: async () => {
+    const { Browser } = await import("./lib");
+    const b = new Browser(offerUrl);
+    await b.req("POST", "/ops-api/session", { name: "Eval operations", ...(process.env.DOCK_OPS_PASSCODE ? { passcode: process.env.DOCK_OPS_PASSCODE } : {}) });
+    const o = ((await b.req("GET", "/ops-api/offers")).body?.offers ?? []).find((x: Json) => x.offerId === offered.offerId);
+    return ok(!!o && o.status !== "offered", `offer ${offered.offerId}: ${o?.status ?? "not found"}`);
+  },
+};
+
 const THREAD_WIRING = "The conversation says the offer once the thread (claude/thread-live) calls server/offers/thread.ts offerForThread and answerOffer; until then 'the agent said the offer' fails and the selection, signature and nothing-ordered checks pass.";
 
 ALL.push(
@@ -736,7 +750,26 @@ ALL.push(
     expect: [offerMade, offerSaid, noOrder],
     limitation: THREAD_WIRING,
   },
+  ...(
+    [
+      ["en", "no thanks"],
+      ["en", "not now"],
+      ["fi", "ei kiitos"],
+      ["fi", "ei nyt"],
+    ] as const
+  ).map(([lang, no], i): Scenario => ({
+    id: `proactive-offer-no-${i + 1}`,
+    title: `The buyer turns the offer down in words ("${no}"): recorded, and the offer is no longer open`,
+    tag: "proactive selling agent",
+    kitchen: "kaari",
+    lang,
+    before: sellingAgentOffersKaari,
+    turns: [{ say: lang === "fi" ? "Onko tukkurilla jotain uutta?" : "Anything new from the wholesaler?" }, { say: no }],
+    goal: "answer",
+    expect: [offerMade, offerDeclined, noOrder],
+  })),
 );
+
 
 // --- the partner's "allergen-safe substitution under pressure": a school kitchen's nutrition rules ---
 /** Every option keeps the school's signed nutrition rules by the product's own declaration (unknown fails). */

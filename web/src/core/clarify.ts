@@ -1,3 +1,4 @@
+import { claimsEvidence, shortfallText, subjectOfProduct } from "./claim-evidence";
 import { nutritionFindings, ruleText, type NutritionRule } from "./nutrition";
 import { allergenOf, forbiddenPresent, holdsLabel } from "./vocabulary";
 import { z } from "zod";
@@ -80,33 +81,50 @@ export function hardConstraints(mandate: Mandate, need: StructuredNeed, stated: 
 export function nutritionExclusion(p: Product, c: HardConstraints): { code: "nutrition_rule"; reason: string; params: Record<string, string | number> } | undefined {
   const f = nutritionFindings(c.nutritionRules ?? [], { productId: p.id, category: p.category, nutrition: p.nutrition })[0];
   if (!f) return undefined;
-  return { code: "nutrition_rule", reason: f.reason.replace(new RegExp(`^${p.id} `), ""), params: { nutrient: f.rule.nutrient, problem: f.problem, ...(f.value !== undefined ? { value: f.value } : {}), ...(f.rule.max !== undefined ? { max: f.rule.max } : {}), ...(f.rule.min !== undefined ? { min: f.rule.min } : {}), per: p.nutrition?.per ?? "100g" } };
+  return { code: "nutrition_rule", reason: f.reason.replace(new RegExp(`^${p.id} `), ""), params: { nutrient: f.rule.nutrient, problem: f.problem, ...(f.value !== undefined ? { value: f.value } : {}), ...(f.rule.max !== undefined ? { max: f.rule.max } : {}), ...(f.rule.min !== undefined ? { min: f.rule.min } : {}), per: p.nutrition?.per ?? "100g", ...(f.rule.categories?.length ? { kinds: f.rule.categories.join(",") } : {}), product: p.name } };
 }
 
 /** Why a product may not be offered, or undefined if it may. */
 export function violation(p: Product, c: HardConstraints): string | undefined {
-  if (!c.categories.includes(p.category)) return `category ${p.category} is not in the mandate`;
-  const missing = c.requiredAttributes.filter((a) => !p.attributes.includes(a));
-  if (missing.length) return `not ${missing.join(", ")}`;
+  return violationOf(p, c)?.reason;
+}
+
+/**
+ * Why a product may not be offered, with a stable code and parameters for a sentence in the buyer's language:
+ * `claim:<claim>` (a dietary rule it is not shown to meet, core/claim-evidence.ts), `category_rule`, `allergen_rule`,
+ * `nutrition_rule`, `label_rule`. Undefined when it may be offered.
+ */
+export function violationOf(p: Product, c: HardConstraints): { reason: string; code: string; params?: Record<string, string | number> } | undefined {
+  if (!c.categories.includes(p.category)) return { reason: `category ${p.category} is not in the mandate`, code: "category_rule" };
+  // A dietary claim is met by the maker's claim, or by what its allergen declaration shows (no milk: lactose-free),
+  // by its nature for whole fresh produce, or because it is not food at all. Each way is its own evidence kind.
+  const short = claimsEvidence(subjectOfProduct(p), c.requiredAttributes, { strict: c.allergenEvidence === "declared", rule: true }).find((e): e is Extract<typeof e, { met: false }> => !e.met);
+  if (short) return { reason: shortfallText(short), code: `claim:${short.claim}`, params: { claim: short.claim, why: short.why, ...(short.allergens?.length ? { allergens: short.allergens.join(",") } : {}) } };
   const excluded = c.excludedAttributes.filter((a) => p.attributes.includes(a));
-  if (excluded.length) return `is ${excluded.join(", ")}`;
+  if (excluded.length) return { reason: `is ${excluded.map(claimWord).join(", ")}, which the request does not want`, code: "excluded_claim", params: { claims: excluded.join(",") } };
   const unmapped = c.forbiddenAllergens.filter((a) => !allergenOf(a));
-  if (unmapped.length) return `cannot be checked for ${unmapped.join(", ")}: no product data speaks of it`;
+  if (unmapped.length) return { reason: `cannot be checked for ${unmapped.join(", ")}: no product data speaks of it`, code: "allergen_rule" };
   const allergens = forbiddenPresent({ present: p.allergens, claims: p.attributes }, c.forbiddenAllergens);
-  if (allergens.length) return `contains ${allergens.join(", ")}`;
+  if (allergens.length) return { reason: `contains ${allergens.join(", ")}`, code: "allergen_rule", params: { allergens: allergens.join(",") } };
   if (c.forbiddenAllergens.length && p.allergenInfo?.declared === false) {
     // Fresh, whole produce contains what it is itself (catalog/nature.ts), unless declared data only is asked for.
     const nature = c.allergenEvidence === "declared" ? undefined : p.allergenInfo.byNature;
-    if (!nature) return `no allergen data from its maker, so it cannot be shown free of ${c.forbiddenAllergens.join(", ")}`;
+    if (!nature) return { reason: `no allergen data from its maker, so it cannot be shown free of ${c.forbiddenAllergens.join(", ")}`, code: "allergen_rule" };
     const found = forbiddenPresent({ present: nature.allergens, claims: p.attributes }, c.forbiddenAllergens);
-    if (found.length) return `contains ${found.join(", ")} by its nature`;
+    if (found.length) return { reason: `contains ${found.join(", ")} by its nature`, code: "allergen_rule", params: { allergens: found.join(",") } };
   }
   // Nutrition has no "by nature" shortcut: a figure the maker did not declare is unknown, never compliant.
-  const nutrition = nutritionFindings(c.nutritionRules ?? [], { productId: p.id, category: p.category, nutrition: p.nutrition });
-  if (nutrition.length) return nutrition[0].reason.replace(new RegExp(`^${p.id} `), "");
+  const n = nutritionExclusion(p, c);
+  if (n) return n;
   const certs = c.requiredCertificates.filter((x) => !holdsLabel(p, x));
-  if (certs.length) return `lacks ${certs.join(", ")}`;
+  if (certs.length) return { reason: `lacks ${certs.join(", ")}`, code: "label_rule", params: { labels: certs.join(",") } };
   return undefined;
+}
+
+/** "lactose-free", "1.5 % fat": a claim slug in words. */
+export function claimWord(c: string): string {
+  const fat = /^fat_(\d+)(?:_(\d+))?$/.exec(c);
+  return fat ? `${fat[1]}${fat[2] ? `.${fat[2]}` : ""} % fat` : c.replaceAll("_", "-");
 }
 
 // ---------- clarification ----------

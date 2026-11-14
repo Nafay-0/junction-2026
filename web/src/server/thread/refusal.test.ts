@@ -29,9 +29,9 @@ describe("refusals in words", () => {
   });
 
   it("says the out-of-mandate case in the first person, the groups in words, with the next step", () => {
-    const t = sayRefusal(ALL[0], "en");
-    expect(t).toBe("I can't buy burger buns for this kitchen: its rules cover dairy and cheese and seasonings, coffee and drinks, not fresh bakery. Owner can add fresh bakery under Your rules; shall I ask them?");
-    expect(t.endsWith("?")).toBe(true);
+    expect(sayRefusal(ALL[0], "en")).toBe("I can't buy burger buns for this kitchen: its rules cover dairy and cheese and seasonings, coffee and drinks, not fresh bakery. Owner can add fresh bakery under Your rules.");
+    // Offered only when the change can be drafted and confirmed here: never a promise it cannot keep.
+    expect(sayRefusal({ ...(ALL[0] as Extract<Refusal, { code: "out_of_mandate" }>), draft: true }, "en")).toMatch(/Shall I draft that change \(fresh bakery added to your rules\) for Owner to confirm\?$/);
   });
 
   it("names a kitchen's product groups in words, at most three", () => {
@@ -70,6 +70,8 @@ describe("insideOrTell", () => {
     const { insideOrTell } = await import("./refusal");
     expect(insideOrTell("I'll try again when you send the order with the product name and amount.")).toBe(true);
     expect(insideOrTell("The store treated your message as a change to your two recurring orders, and neither result gave a day or a price.")).toBe(true);
+    expect(insideOrTell("I couldn't change the chocolate cake to lactose-free: the menu planner didn't connect your request to it.")).toBe(true);
+    expect(insideOrTell("A step did not finish, so nothing is ordered.")).toBe(true);
     expect(insideOrTell("Shall I order 12 L of the Fazer barista for Tuesday 17 Nov?")).toBe(false);
   });
 });

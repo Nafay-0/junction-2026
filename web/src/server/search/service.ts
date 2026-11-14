@@ -1,3 +1,4 @@
+import { nutritionFindings } from "@/core/nutrition";
 import type { CatalogPort, Product } from "@/core/catalog";
 import type { FindRequest, FindResult, FoundProduct, ProductFinder } from "@/core/catalog/finder";
 import type { IndexedProduct } from "@/core/catalog/partner";
@@ -149,6 +150,24 @@ export function setSmartSearchForTests(s: SmartSearch | null | undefined): void 
  * every caller can use this one function on any catalogue.
  */
 export async function findProducts(catalog: Pick<CatalogPort, "searchProducts">, req: FindRequest, opts: { ifReady?: boolean } = {}): Promise<FindResult> {
+  const r = await findRaw(catalog, req, opts);
+  return req.nutritionRules?.length ? withNutritionRules(r, req.nutritionRules) : r;
+}
+
+/** The kitchen's nutrition rules on a result: what breaks one (or declares no figure) moves out, with the rule and its figure. */
+function withNutritionRules(r: FindResult, rules: NonNullable<FindRequest["nutritionRules"]>): FindResult {
+  const outside: NonNullable<FindResult["outsideRules"]> = [];
+  const hits = r.hits.filter((h) => {
+    const p = h.product;
+    const f = nutritionFindings(rules, { productId: p.id, category: p.category, nutrition: p.nutrition })[0];
+    if (!f) return true;
+    outside.push({ productId: p.id, name: p.name, rule: "nutrition_rules", reason: f.reason.replace(new RegExp(`^${p.id} `), `${p.name} `), details: { nutrient: f.rule.nutrient, problem: f.problem, ...(f.value !== undefined ? { value: f.value } : {}), ...(f.rule.max !== undefined ? { max: f.rule.max } : {}), ...(f.rule.min !== undefined ? { min: f.rule.min } : {}), per: p.nutrition?.per ?? "100g", ...(f.rule.categories?.length ? { kinds: f.rule.categories } : {}) } });
+    return false;
+  });
+  return { ...r, hits, ...(outside.length ? { outsideRules: outside } : {}) };
+}
+
+async function findRaw(catalog: Pick<CatalogPort, "searchProducts">, req: FindRequest, opts: { ifReady?: boolean } = {}): Promise<FindResult> {
   const t0 = performance.now();
   const smart = req.text.trim() ? await smartSearchFor(catalog, opts).catch(() => null) : null;
   if (smart) {

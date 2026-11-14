@@ -59,10 +59,14 @@ Your reply (the store shows it under the buyer's words, with your work folded aw
 - Never tell the buyer what to type or say (no "say ...", no "send the product name with the amount"): ask a question a plain yes or a few words answer. If you asked something last turn and the answer did not settle it, do not ask it again in other words: offer your best reading from what is on the table ("12 litres of the cream for the sauce?").
 - Name the options in their order (n = 1 first, as the store lists them), so "the first one" is the one you named first. One product per option, each with its own price: never two options in one phrase ("Oatly Semi or Whole, 16,80 €"). When the buyer counts in another unit than the product (cartons, packs, boxes), say the amount in theirs too ("12 cartons of 1 L"). When the usual product cannot be had, say what changes for them: how it comes now (1 000 one-litre cartons instead of 100 boxes of 10 L) and the price difference when a result gives it.
 - Exceptions come first, one clear sentence each: nothing can arrive in time (and the earliest day that can), the kind asked for cannot be had (and what stands in, and what differs), an amount looks unusual, it needs a person's OK (whose). Then the question that moves it on. Which products and order times stay in the steps.
-- Never describe how you work inside ("the store treated your message", "the results", "my tools"): say what you found, what you did and what you need, as a person would.
+- Never describe how you work inside ("the store treated your message", "the results", "my tools", "the menu planner", "a step did not finish"): if something did not get done, say what is not done in the buyer's terms and what happens next.
+- Never describe how you work inside, in other words either: say what you found, what you did and what you need, as a person would.
 - In Finnish, packs are said with their size: "1 000 yhden litran tölkkiä" (never "1 000 litran tölkkeinä"), "10 litran laatikko"; in English "10 l box", never "novobox".
 - Every item the buyer asked for is on the order or named as left out, with why, in one sentence (notOnTheOrder). Never drop one without a word.
+- Never offer to ask someone, send a request or change something unless a result offers it ("draft" in a refusal, a ref under OPEN DECISIONS): a promise you cannot keep is worse than none. When a refusal names who can change the rules, say that and stop.
 - Never say the kitchen's rules stop something unless a result names the rule (a refusal, a gate decision, an exclusion by the mandate); "nothing fits" for another reason (the day, stock, another kind of product) is said as that reason.
+- When the buyer asks you to skip the limit or says the manager already agreed, the order still goes through the rules: say plainly it needs that person's own OK on their own device; the store sends it to them.
+- A chef counts a dish in portions and a meal in people: never ask "how many covers".
 - Never call a product or a menu nut-free, gluten-free or lactose-free unless a result states it; "without nuts, as you asked" only when the result says the plan left them out.
 - In English a day is "Monday 16 Nov"; in Finnish and Swedish "16.11.", whose own dot is never followed by another mark: end the sentence before the date or rephrase.
 - When something cannot be done, say it in the first person ("I can't buy burger buns for this kitchen"), the kitchen's product groups in words (at most three), never a code, an id or a rule name, and end on the next step when there is one ("The owner can add bread under Your rules; shall I ask them?"). A refusal in the results already says it that way: keep its sense.
@@ -195,7 +199,7 @@ export async function openRefs(run: TurnRun): Promise<OpenRef[]> {
   const wc = openWatch(run);
   if (wc) {
     const holder = run.thread.turns.find((x) => x.role === "agent" && x.cards.some((c) => c.cardId === wc.cardId));
-    const after = holder ? run.thread.turns.slice(run.thread.turns.indexOf(holder) + 1).filter((x) => x.role === "agent" && x.turnId !== run.turnId) : [];
+    const after = holder ? run.thread.turns.slice(run.thread.turns.indexOf(holder) + 1).filter((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "") : [];
     if (holder && after.length === 0) {
       const label: Record<string, string> = { switch: "yes, switch to the closest substitute", keep: "no, keep it as it is", renew_new: "renew at the new amount", usual: "renew at the usual amount", skip: "skip this week" };
       for (const a of wc.answers) refs.push({ ref: `watch:${a.startsWith("switch:") ? `alt${wc.answers.filter((x) => x.startsWith("switch:")).indexOf(a) + 2}` : a}`, label: a.startsWith("switch:") ? `switch to substitute ${wc.answers.filter((x) => x.startsWith("switch:")).indexOf(a) + 2} instead` : (label[a] ?? a), action: { type: "watch_answer", momentId: wc.momentId, answer: a }, ...(a === "switch" || a === "renew_new" || a === "usual" ? { confirm: a === "switch" } : {}) });
@@ -206,7 +210,7 @@ export async function openRefs(run: TurnRun): Promise<OpenRef[]> {
   const offer = openOffer(run);
   if (offer) {
     const holder = run.thread.turns.find((x) => x.role === "agent" && x.cards.some((c) => c.cardId === offer.cardId));
-    const after = holder ? run.thread.turns.slice(run.thread.turns.indexOf(holder) + 1).filter((x) => x.role === "agent" && x.turnId !== run.turnId) : [];
+    const after = holder ? run.thread.turns.slice(run.thread.turns.indexOf(holder) + 1).filter((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "") : [];
     if (holder && after.length === 0) {
       refs.push({ ref: "offer:yes", label: `yes to the wholesaler's offer of ${offer.name}: put it on an order to confirm`, action: { type: "offer_answer", offerId: offer.offerId, answer: "yes" }, confirm: true });
       refs.push({ ref: "offer:no", label: "no to the offer", action: { type: "offer_answer", offerId: offer.offerId, answer: "no" } });
@@ -378,7 +382,7 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
           const inWords = (x: string) => amount !== undefined && new RegExp(`(?<![\\d.,])${String(amount).replace(".", "[.,]")}(?![\\d])`).test(x.replace(/\s+/g, ""));
           // A plain yes to the agent's own proposal ("Is it still for 120 kids?"): the figure the buyer gave earlier in this
           // conversation, or the one the agent proposed in its last words, stands. A figure given once is never asked again.
-          const lastAgent = [...run.thread.turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId);
+          const lastAgent = [...run.thread.turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "");
           const lastAgentLine = lastAgent?.role === "agent" ? (lastAgent.line ?? "") : "";
           const earlier = run.thread.turns.flatMap((x) => (x.role === "buyer" && x.text && x.turnId !== run.buyer.turnId ? [x.text] : []));
           const said = inWords(words) || (yesOrNo(words) === "yes" && ((prevBuyer?.role === "buyer" && !!prevBuyer.text && inWords(prevBuyer.text)) || inWords(lastAgentLine) || earlier.some(inWords)));
@@ -489,7 +493,14 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
         // A follow-up about the menu on the table keeps what the conversation already said: its covers and its day.
         const onTable = subj?.kind === "menu" && subj.covers && !/\d/.test(said) ? ` (for ${subj.covers} covers${subj.day ? ` on ${subj.day}` : ""})` : "";
         const { menuFromWords } = await import("./menu");
-        return menuFromWords(run, `${said}${onTable}`);
+        // A step that fails is tried once more before anything is said; then it is said in the buyer's terms
+        // (what is not done, and what happens next), never as a part of the system.
+        const first = await menuFromWords(run, `${said}${onTable}`).catch((err) => ({ state: "error", error: String(err) }) as Record<string, unknown>);
+        if ((first as { state?: string }).state !== "error") return first;
+        record(run, "menu_retry", "The menu could not be drafted: tried once more.", {});
+        const again = await menuFromWords(run, `${said}${onTable}`).catch((err) => ({ state: "error", error: String(err) }) as Record<string, unknown>);
+        if ((again as { state?: string }).state !== "error") return again;
+        return { state: "not_done", say: "say in one sentence that the menu isn't drafted yet and you will try again if they say so; never name a part of the system" };
       },
       toModelOutput: ({ output }) => ({ type: "text", value: compact(output) }),
     }),
