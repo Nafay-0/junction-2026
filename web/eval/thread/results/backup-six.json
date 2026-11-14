@@ -1,0 +1,1429 @@
+{
+  "driver": "thread",
+  "url": "http://localhost:4820",
+  "startedAt": "2026-11-14T19:38:07.893Z",
+  "finishedAt": "2026-11-14T19:39:49.273Z",
+  "repeat": 1,
+  "spend": {
+    "usd": 0.4347,
+    "calls": 41
+  },
+  "summary": {
+    "runs": 6,
+    "passed": 4,
+    "corrections": {
+      "median": 3,
+      "mean": 2.5,
+      "total": 15
+    },
+    "milestones": {
+      "first_sign": {
+        "n": 6,
+        "median": 116,
+        "p90": 165
+      },
+      "understood": {
+        "n": 6,
+        "median": 2878,
+        "p90": 4000
+      },
+      "options": {
+        "n": 4,
+        "median": 4390,
+        "p90": 6352
+      },
+      "dishes": {
+        "n": 0,
+        "median": null,
+        "p90": null
+      },
+      "menu": {
+        "n": 0,
+        "median": null,
+        "p90": null
+      },
+      "placed": {
+        "n": 5,
+        "median": 5910,
+        "p90": 10542
+      },
+      "answered": {
+        "n": 0,
+        "median": null,
+        "p90": null
+      },
+      "total": {
+        "n": 6,
+        "median": 14938,
+        "p90": 21074
+      }
+    },
+    "byScenario": {
+      "reliability-backup-en": {
+        "runs": 1,
+        "passed": 1,
+        "corrections": [
+          2
+        ],
+        "taps": [
+          0
+        ],
+        "typed": [
+          2
+        ]
+      },
+      "reliability-backup-fi@hotel-lumo": {
+        "runs": 1,
+        "passed": 0,
+        "corrections": [
+          3
+        ],
+        "taps": [
+          1
+        ],
+        "typed": [
+          2
+        ]
+      },
+      "reliability-backup-en@koulu-metsola": {
+        "runs": 1,
+        "passed": 0,
+        "corrections": [
+          2
+        ],
+        "taps": [
+          0
+        ],
+        "typed": [
+          2
+        ]
+      },
+      "reliability-backup-fi": {
+        "runs": 1,
+        "passed": 1,
+        "corrections": [
+          3
+        ],
+        "taps": [
+          1
+        ],
+        "typed": [
+          2
+        ]
+      },
+      "reliability-backup-en@kahvila-sointu": {
+        "runs": 1,
+        "passed": 1,
+        "corrections": [
+          2
+        ],
+        "taps": [
+          0
+        ],
+        "typed": [
+          2
+        ]
+      },
+      "reliability-backup-fi@kahvila-sointu": {
+        "runs": 1,
+        "passed": 1,
+        "corrections": [
+          3
+        ],
+        "taps": [
+          1
+        ],
+        "typed": [
+          2
+        ]
+      }
+    }
+  },
+  "rows": [
+    {
+      "id": "reliability-backup-en",
+      "title": "A weekly product with a poor delivery record (hotel-lumo): the record said as history, \"you choose\" lines up a backup (en)",
+      "tag": "partial availability: a backup in case it is not delivered",
+      "kitchen": "hotel-lumo",
+      "lang": "en",
+      "repeat": 1,
+      "pass": true,
+      "checks": [
+        {
+          "name": "the agent said the product's delivery record in words (history, not a forecast) and offered a backup",
+          "ok": true
+        },
+        {
+          "name": "\"you choose\" lined up a backup, recorded with who chose it (or said why it cannot choose)",
+          "ok": true
+        },
+        {
+          "name": "nothing extra bought for the backup",
+          "ok": true
+        }
+      ],
+      "corrections": 2,
+      "actions": {
+        "taps": 0,
+        "typed": 2,
+        "extraTyped": 0,
+        "list": [
+          "typed: yes",
+          "typed: you choose"
+        ]
+      },
+      "ms": {
+        "first_sign": 90,
+        "understood": 3414,
+        "options": 3642,
+        "placed": 10292,
+        "total": 15778
+      },
+      "serverMarks": {
+        "trn_cc967a710e584ec2": {
+          "first_step": 0,
+          "done": 2011
+        },
+        "trn_4fa079fdda3a4fed": {
+          "first_step": 0,
+          "understood": 3299,
+          "options": 3627,
+          "line": 7427,
+          "done": 7430
+        },
+        "trn_ec24f1a51ae04475": {
+          "first_step": 0,
+          "placed": 2716,
+          "line": 5207,
+          "done": 6165
+        },
+        "trn_033f5c2f169b4a5c": {
+          "first_step": 0,
+          "line": 1884,
+          "done": 1884
+        }
+      },
+      "streamed": true,
+      "cached": [],
+      "calls": 7,
+      "outcome": {
+        "readings": [
+          {
+            "item": "Vaasan rye rice pies",
+            "amount": 16,
+            "unit": "kg",
+            "deliverBy": "2026-11-19",
+            "alsoAsked": []
+          }
+        ],
+        "concerns": [],
+        "questions": 0,
+        "options": [
+          {
+            "optionId": "opt_1",
+            "rank": "best",
+            "title": "Vaasan Rye rice pie 90x90g",
+            "match": "full",
+            "totalCents": 5620,
+            "deliveryDate": "2026-11-19",
+            "orderBy": "2026-11-15T17:00:00+0200",
+            "givesUp": [],
+            "lines": [
+              {
+                "productId": "461319",
+                "name": "Vaasan Rye rice pie 90x90g",
+                "packs": 2
+              }
+            ],
+            "signOff": [
+              "Packs of 8.1 kg round it up to 16.2 kg: 0.2 kg more than asked."
+            ]
+          }
+        ],
+        "allOptions": [
+          {
+            "optionId": "opt_1",
+            "rank": "best",
+            "title": "Vaasan Rye rice pie 90x90g",
+            "match": "full",
+            "totalCents": 5620,
+            "deliveryDate": "2026-11-19",
+            "orderBy": "2026-11-15T17:00:00+0200",
+            "givesUp": [],
+            "lines": [
+              {
+                "productId": "461319",
+                "name": "Vaasan Rye rice pie 90x90g",
+                "packs": 2
+              }
+            ],
+            "signOff": [
+              "Packs of 8.1 kg round it up to 16.2 kg: 0.2 kg more than asked."
+            ]
+          }
+        ],
+        "excluded": [
+          "38 not lactose-free: its allergen declaration lists milk and it carries no lactose-free claim",
+          "2 a different kind of product (cheese) than asked",
+          "1 a different kind of product (cream, cheese) than asked",
+          "1 a different kind of product (flavoured) than asked",
+          "1 461697: no offer; not available for 2026-11-19: the wholesaler's answer is empty.",
+          "7 order cut-off Thu 12 Nov 15:00 has passed, so it cannot arrive Mon 16 Nov; the wholesaler's service names no later date yet",
+          "1 order cut-off Thu 12 Nov 14:00 has passed, so it cannot arrive Mon 16 Nov; the wholesaler's service names no later date yet",
+          "1 460355: no offer; not available for 2026-11-19: the wholesaler's answer is empty.",
+          "1 470117: no offer; not available for 2026-11-19: the wholesaler's answer is empty.",
+          "1 470150: no offer; not available for 2026-11-19: the wholesaler's answer is empty.",
+          "1 pack content not certain, so AimoPilot will not guess the number of packs (Not sure what one KI holds (45 x 60 g = 2.7 kg per KI; sources_disagree). Estimate: 6 KI = 16.2 kg. Ask a human to confirm.)",
+          "1 Not the kind asked for (rye): Vaasan Rice pie 70x90g instead: not offered, because other options meet the whole request"
+        ],
+        "notes": [
+          "All 20 checks passed; €56.20 is within what the agent may spend alone."
+        ],
+        "requests": [
+          "req_e82cae5080e04d64"
+        ],
+        "orders": [
+          {
+            "orderId": "ord_b9fca9c364264447",
+            "status": "committed",
+            "rules": [],
+            "reasons": [],
+            "totalCents": 5620,
+            "lines": [
+              {
+                "productId": "461319",
+                "quantity": 2
+              }
+            ]
+          }
+        ],
+        "refusals": [],
+        "answers": [
+          {
+            "text": "Your Monday lactose-free milk can't come this week: the order cut-off for that day has passed. The closest is Valio Hyvä suomalainen Arki: 0,49 € less per litre, 420 l as 420 × 1 l, same maker. Shall I switch this week's order? Maanantain laktoositon maito ei tule tällä viikolla: sen päivän tilausten viimeinen jättöaika on mennyt. Lähin vaihtoehto on Valio Hyvä suomalainen Arki: 0,49 € vähemmän litralta, 420 l eli 420 × 1 l, sama valmistaja. Vaihdanko tämän viikon tilauksen?",
+            "kind": "line",
+            "citations": []
+          },
+          {
+            "text": "One thing: the Vaasan Rye rice pie has arrived as ordered about 5 times in 10. Want a backup lined up in case it doesn't come? The Vaasan Rice pie is the closest, 0,38 € less per kilo.",
+            "kind": "line",
+            "citations": []
+          }
+        ],
+        "acknowledgements": [],
+        "notices": [],
+        "today": [
+          {
+            "opening": true,
+            "pending": false,
+            "date": "2026-11-14",
+            "items": []
+          }
+        ],
+        "home": [],
+        "log": [],
+        "state": "done",
+        "understood": {
+          "item": "Vaasan rye rice pies",
+          "amount": 16,
+          "unit": "kg",
+          "deliverBy": "2026-11-19",
+          "alsoAsked": [],
+          "attributes": [],
+          "allergens": []
+        },
+        "chosen": {
+          "optionId": "opt_1",
+          "index": 0
+        }
+      }
+    },
+    {
+      "id": "reliability-backup-fi@hotel-lumo",
+      "title": "A weekly product with a poor delivery record (hotel-lumo): the record said as history, \"you choose\" lines up a backup (fi)",
+      "tag": "partial availability: a backup in case it is not delivered",
+      "kitchen": "hotel-lumo",
+      "lang": "fi",
+      "repeat": 1,
+      "pass": false,
+      "checks": [
+        {
+          "name": "the agent said the product's delivery record in words (history, not a forecast) and offered a backup",
+          "ok": false,
+          "why": "said: aa **56,20 €** {{torstaiksi 19.11.}} Tilaanko nämä? | Suosittelen tavallisia Vaasan Rye rice pie 90 x 90 g -piirakoita: **16,2 kg** maksaa **56,20 €** (ennen 13,5 % alv:tä) ja ne tulevat {{torstaiksi 19.11.}} Tilaus pitää tehdä viimeistään {{sunnuntaina 15.11. klo 17.00}} Sano kyllä, niin tilaan ne."
+        },
+        {
+          "name": "\"you choose\" lined up a backup, recorded with who chose it (or said why it cannot choose)",
+          "ok": true
+        },
+        {
+          "name": "nothing extra bought for the backup",
+          "ok": true
+        }
+      ],
+      "corrections": 3,
+      "actions": {
+        "taps": 1,
+        "typed": 2,
+        "extraTyped": 0,
+        "list": [
+          "tap: duplicate_recent → confirm",
+          "typed: kyllä",
+          "typed: valitse sinä"
+        ]
+      },
+      "ms": {
+        "first_sign": 161,
+        "understood": 4585,
+        "options": 6900,
+        "total": 21237
+      },
+      "serverMarks": {
+        "trn_cca3f62dcafd4bea": {
+          "first_step": 0,
+          "done": 6
+        },
+        "trn_4acf4921b62648e6": {
+          "first_step": 0,
+          "understood": 4490,
+          "line": 6242,
+          "done": 6259
+        },
+        "trn_29bcc10e42a948e0": {
+          "first_step": 0,
+          "options": 504,
+          "line": 7159,
+          "done": 7160
+        },
+        "trn_b71d6208478f4e7c": {
+          "first_step": 0,
+          "line": 3042,
+          "done": 3044
+        },
+        "trn_b3294503d4504eab": {
+          "first_step": 0,
+          "line": 4439,
+          "done": 4440
+        }
+      },
+      "streamed": true,
+      "cached": [],
+      "calls": 8,
+      "outcome": {
+        "readings": [
+          {
+            "item": "Vaasan ruisriisipiirakoita",
+            "amount": 16,
+            "unit": "kg",
+            "deliverBy": "2026-11-19",
+            "alsoAsked": []
+          }
+        ],
+        "concerns": [
+          {
+            "code": "duplicate_recent",
+            "message": "You already ordered 16.2 kg of cat_41762 a moment ago for Thu 19 Nov (order ord_b9fca9c364264447). Order again?",
+            "key": "duplicate_recent:ord_b9fca9c364264447"
+          }
+        ],
+        "questions": 0,
+        "options": [
+          {
+            "optionId": "opt_1",
+            "rank": "best",
+            "title": "Vaasan Rye rice pie 90x90g",
+            "match": "compromise",
+            "totalCents": 5620,
+            "deliveryDate": "2026-11-19",
+            "orderBy": "2026-11-15T17:00:00+0200",
+            "givesUp": [
+              "not ruisriisipiirakoita: nothing in the assortment is",
+              "Not the kind asked for (ruisriisipiirakoita): Vaasan Rye rice pie 90x90g instead."
+            ],
+            "lines": [
+              {
+                "productId": "461319",
+                "name": "Vaasan Rye rice pie 90x90g",
+                "packs": 2
+              }
+            ],
+            "signOff": [
+              "Not the kind asked for (ruisriisipiirakoita): Vaasan Rye rice pie 90x90g instead.",
+              "Delivery reliability 50 %, against 100 % for the most reliable option.",
+              "Packs of 8.1 kg round it up to 16.2 kg: 0.2 kg more than asked."
+            ]
+          },
+          {
+            "optionId": "opt_2",
+            "rank": "better",
+            "title": "Vaasan Rice pie 70x90g",
+            "match": "compromise",
+            "totalCents": 5829,
+            "deliveryDate": "2026-11-19",
+            "orderBy": "2026-11-15T17:00:00+0200",
+            "givesUp": [
+              "not ruisriisipiirakoita: nothing in the assortment is",
+              "Not the kind asked for (ruisriisipiirakoita): Vaasan Rice pie 70x90g instead."
+            ],
+            "lines": [
+              {
+                "productId": "461861",
+                "name": "Vaasan Rice pie 70x90g",
+                "packs": 3
+              }
+            ],
+            "signOff": [
+              "Not the kind asked for (ruisriisipiirakoita): Vaasan Rice pie 70x90g instead.",
+              "€2.09 (3.7 %) more than the cheapest option.",
+              "6.27 kg CO2e more than the lowest-carbon option (product-group average).",
+              "Packs of 6.3 kg round it up to 18.9 kg: 2.9 kg more than asked.",
+              "Against Vaasan Rye rice pie 90x90g: 0.3 g less protein, 0.1 g more salt, 1.1 g less sugar per 100 g or ml."
+            ]
+          },
+          {
+            "optionId": "opt_3",
+            "rank": "good",
+            "title": "Fazer Pasty with egg and rice 80 x 80g, raw frozen",
+            "match": "compromise",
+            "totalCents": 13743,
+            "deliveryDate": "2026-11-19",
+            "orderBy": "2026-11-15T17:00:00+0200",
+            "givesUp": [
+              "not vaasan ruisriisipiirakoita: nothing in the assortment is",
+              "Not the kind asked for (vaasan ruisriisipiirakoita): Fazer Pasty with egg and rice 80 x 80g, raw frozen instead."
+            ],
+            "lines": [
+              {
+                "productId": "463953",
+                "name": "Fazer Pasty with egg and rice 80 x 80g, raw frozen",
+                "packs": 3
+              }
+            ],
+            "signOff": [
+              "Not the kind asked for (vaasan ruisriisipiirakoita): Fazer Pasty with egg and rice 80 x 80g, raw frozen instead.",
+              "€81.23 (144.5 %) more than the cheapest option.",
+              "6.96 kg CO2e more than the lowest-carbon option (product-group average).",
+              "Packs of 6.4 kg round it up to 19.2 kg: 3.2 kg more than asked.",
+              "Against Vaasan Rye rice pie 90x90g: 2.8 g more protein, 0.1 g more salt, 1.9 g less sugar per 100 g or ml."
+            ]
+          }
+        ],
+        "allOptions": [
+          {
+            "optionId": "opt_1",
+            "rank": "best",
+            "title": "Vaasan Rye rice pie 90x90g",
+            "match": "compromise",
+            "totalCents": 5620,
+            "deliveryDate": "2026-11-19",
+            "orderBy": "2026-11-15T17:00:00+0200",
+            "givesUp": [
+              "not ruisriisipiirakoita: nothing in the assortment is",
+              "Not the kind asked for (ruisriisipiirakoita): Vaasan Rye rice pie 90x90g instead."
+            ],
+            "lines": [
+              {
+                "productId": "461319",
+                "name": "Vaasan Rye rice pie 90x90g",
+                "packs": 2
+              }
+            ],
+            "signOff": [
+              "Not the kind asked for (ruisriisipiirakoita): Vaasan Rye rice pie 90x90g instead.",
+              "Delivery reliability 50 %, against 100 % for the most reliable option.",
+              "Packs of 8.1 kg round it up to 16.2 kg: 0.2 kg more than asked."
+            ]
+          },
+          {
+            "optionId": "opt_2",
+            "rank": "better",
+            "title": "Vaasan Rice pie 70x90g",
+            "match": "compromise",
+            "totalCents": 5829,
+            "deliveryDate": "2026-11-19",
+            "orderBy": "2026-11-15T17:00:00+0200",
+            "givesUp": [
+              "not ruisriisipiirakoita: nothing in the assortment is",
+              "Not the kind asked for (ruisriisipiirakoita): Vaasan Rice pie 70x90g instead."
+            ],
+            "lines": [
+              {
+                "productId": "461861",
+                "name": "Vaasan Rice pie 70x90g",
+                "packs": 3
+              }
+            ],
+            "signOff": [
+              "Not the kind asked for (ruisriisipiirakoita): Vaasan Rice pie 70x90g instead.",
+              "€2.09 (3.7 %) more than the cheapest option.",
+              "6.27 kg CO2e more than the lowest-carbon option (product-group average).",
+              "Packs of 6.3 kg round it up to 18.9 kg: 2.9 kg more than asked.",
+              "Against Vaasan Rye rice pie 90x90g: 0.3 g less protein, 0.1 g more salt, 1.1 g less sugar per 100 g or ml."
+            ]
+          },
+          {
+            "optionId": "opt_3",
+            "rank": "good",
+            "title": "Fazer Pasty with egg and rice 80 x 80g, raw frozen",
+            "match": "compromise",
+            "totalCents": 13743,
+            "deliveryDate": "2026-11-19",
+            "orderBy": "2026-11-15T17:00:00+0200",
+            "givesUp": [
+              "not vaasan ruisriisipiirakoita: nothing in the assortment is",
+              "Not the kind asked for (vaasan ruisriisipiirakoita): Fazer Pasty with egg and rice 80 x 80g, raw frozen instead."
+            ],
+            "lines": [
+              {
+                "productId": "463953",
+                "name": "Fazer Pasty with egg and rice 80 x 80g, raw frozen",
+                "packs": 3
+              }
+            ],
+            "signOff": [
+              "Not the kind asked for (vaasan ruisriisipiirakoita): Fazer Pasty with egg and rice 80 x 80g, raw frozen instead.",
+              "€81.23 (144.5 %) more than the cheapest option.",
+              "6.96 kg CO2e more than the lowest-carbon option (product-group average).",
+              "Packs of 6.4 kg round it up to 19.2 kg: 3.2 kg more than asked.",
+              "Against Vaasan Rye rice pie 90x90g: 2.8 g more protein, 0.1 g more salt, 1.9 g less sugar per 100 g or ml."
+            ]
+          }
+        ],
+        "excluded": [
+          "38 not lactose-free: its allergen declaration lists milk and it carries no lactose-free claim",
+          "2 a different kind of product (cheese) than asked",
+          "1 a different kind of product (cream, cheese) than asked",
+          "1 a different kind of product (flavoured) than asked",
+          "3 order cut-off Thu 12 Nov 15:00 has passed, so it cannot arrive Mon 16 Nov; the wholesaler's service names no later date yet",
+          "1 order cut-off Thu 12 Nov 14:00 has passed, so it cannot arrive Mon 16 Nov; the wholesaler's service names no later date yet",
+          "1 461697: no offer; not available for 2026-11-19: the wholesaler's answer is empty.",
+          "1 460355: no offer; not available for 2026-11-19: the wholesaler's answer is empty."
+        ],
+        "notes": [
+          "Nothing meets the whole request, so every option below says what it gives up."
+        ],
+        "requests": [
+          "req_bf907595c0534a80"
+        ],
+        "orders": [],
+        "refusals": [],
+        "answers": [
+          {
+            "text": "Your Thursday lactose-free cream can't come this week: the order cut-off for that day has passed. The closest is Valio whipping cream: 360 l as 360 × 1 l, same maker. Shall I switch this week's order? Torstain laktoositon kerma ei tule tällä viikolla: sen päivän tilausten viimeinen jättöaika on mennyt. Lähin vaihtoehto on Valio kuohukerma: 360 l eli 360 × 1 l, sama valmistaja. Vaihdanko tämän viikon tilauksen?",
+            "kind": "line",
+            "citations": []
+          }
+        ],
+        "acknowledgements": [
+          {
+            "code": "duplicate_recent",
+            "action": "confirm",
+            "verified": true,
+            "channel": "portal_session"
+          }
+        ],
+        "notices": [
+          {
+            "kind": "not_found",
+            "message": "Nothing in the assortment is \"Vaasan ruisriisipiirakoita\". The options are the closest products the wholesaler has."
+          }
+        ],
+        "today": [
+          {
+            "opening": true,
+            "pending": false,
+            "date": "2026-11-14",
+            "items": [
+              {
+                "kind": "drift",
+                "family": "cat_41762",
+                "warning": "the last price per kg is up 16 % on the usual.",
+                "productId": "461319",
+                "name": "Vaasan Rye rice pie 90x90g",
+                "usual": {
+                  "amount": 16.2,
+                  "unit": "kg"
+                },
+                "recent": 16.2,
+                "amountPct": 0,
+                "pricePct": 16,
+                "nextDue": "2026-11-19"
+              }
+            ]
+          }
+        ],
+        "home": [],
+        "log": [],
+        "state": "no_options",
+        "understood": {
+          "item": "Vaasan ruisriisipiirakoita",
+          "amount": 16,
+          "unit": "kg",
+          "deliverBy": "2026-11-19",
+          "alsoAsked": [],
+          "attributes": [],
+          "allergens": []
+        }
+      }
+    },
+    {
+      "id": "reliability-backup-en@koulu-metsola",
+      "title": "A weekly product with a poor delivery record (koulu-metsola): the record said as history, \"you choose\" lines up a backup (en)",
+      "tag": "partial availability: a backup in case it is not delivered",
+      "kitchen": "koulu-metsola",
+      "lang": "en",
+      "repeat": 1,
+      "pass": false,
+      "checks": [
+        {
+          "name": "the agent said the product's delivery record in words (history, not a forecast) and offered a backup",
+          "ok": true
+        },
+        {
+          "name": "\"you choose\" lined up a backup, recorded with who chose it (or said why it cannot choose)",
+          "ok": false,
+          "why": "backups: [{\"product\":\"LOLLOROSSO FI\",\"state\":\"offered\"}]"
+        },
+        {
+          "name": "nothing extra bought for the backup",
+          "ok": true
+        }
+      ],
+      "corrections": 2,
+      "actions": {
+        "taps": 0,
+        "typed": 2,
+        "extraTyped": 0,
+        "list": [
+          "typed: the Lollorosso FI",
+          "typed: you choose"
+        ]
+      },
+      "ms": {
+        "first_sign": 168,
+        "understood": 3065,
+        "options": 3706,
+        "placed": 4076,
+        "total": 20910
+      },
+      "serverMarks": {
+        "trn_9e772f44d1f04fe9": {
+          "first_step": 0,
+          "done": 895
+        },
+        "trn_6fa76774173e4ade": {
+          "first_step": 0,
+          "understood": 2276,
+          "options": 3541,
+          "placed": 3938,
+          "line": 5305,
+          "done": 6641
+        },
+        "trn_1e0a26d392db48de": {
+          "first_step": 0,
+          "line": 10185,
+          "done": 10185
+        },
+        "trn_009520cbd0b44cd6": {
+          "first_step": 0,
+          "line": 3680,
+          "done": 3680
+        }
+      },
+      "streamed": true,
+      "cached": [],
+      "calls": 7,
+      "outcome": {
+        "readings": [
+          {
+            "item": "Finnish lollo rosso",
+            "amount": 3,
+            "unit": "kg",
+            "deliverBy": "2026-11-18",
+            "alsoAsked": []
+          }
+        ],
+        "concerns": [],
+        "questions": 0,
+        "options": [
+          {
+            "optionId": "opt_1",
+            "rank": "best",
+            "title": "LOLLOROSSO FI",
+            "match": "full",
+            "totalCents": 1356,
+            "deliveryDate": "2026-11-18",
+            "orderBy": "2026-11-15T17:00:00+0200",
+            "givesUp": [],
+            "lines": [
+              {
+                "productId": "460324",
+                "name": "LOLLOROSSO FI",
+                "packs": 1
+              }
+            ],
+            "signOff": []
+          }
+        ],
+        "allOptions": [
+          {
+            "optionId": "opt_1",
+            "rank": "best",
+            "title": "LOLLOROSSO FI",
+            "match": "full",
+            "totalCents": 1356,
+            "deliveryDate": "2026-11-18",
+            "orderBy": "2026-11-15T17:00:00+0200",
+            "givesUp": [],
+            "lines": [
+              {
+                "productId": "460324",
+                "name": "LOLLOROSSO FI",
+                "packs": 1
+              }
+            ],
+            "signOff": []
+          }
+        ],
+        "excluded": [
+          "10 lacks origin_fi",
+          "3 no allergen data from its maker, so it cannot be shown free of nuts, peanuts, sesame, fish",
+          "1 460192: no offer; not available for 2026-11-18: the wholesaler's answer is empty.",
+          "1 460201: no offer; not available for 2026-11-18: the wholesaler's answer is empty.",
+          "1 pack content not certain, so AimoPilot will not guess the number of packs (Not sure what one KI holds (2 kg per KI; case_content_unclear). Estimate: 2 KI = 4 kg. Ask a human to confirm.)",
+          "1 460209: no offer; not available for 2026-11-18: the wholesaler's answer is empty.",
+          "1 460226: no offer; not available for 2026-11-18: the wholesaler's answer is empty.",
+          "1 pack content not certain, so AimoPilot will not guess the number of packs (Not sure what one KI holds (4 x 4 kg = 16 kg per KI; sources_disagree). Estimate: 1 KI = 16 kg. Ask a human to confirm.)",
+          "1 460254: no offer; not available for 2026-11-18: the wholesaler's answer is empty.",
+          "1 pack content not certain, so AimoPilot will not guess the number of packs (Not sure what one KI holds (100 g per KI; name_ambiguous). Estimate: 30 KI = 3 kg. Ask a human to confirm.)",
+          "1 469622: no offer; not available for 2026-11-18: the wholesaler's answer is empty.",
+          "1 462405: no offer; not available for 2026-11-18: the wholesaler's answer is empty."
+        ],
+        "notes": [
+          "All 20 checks passed; €13.56 is within what the agent may spend alone."
+        ],
+        "requests": [
+          "req_510ba93f84a548ea"
+        ],
+        "orders": [
+          {
+            "orderId": "ord_00649f5e4abf4356",
+            "status": "committed",
+            "rules": [],
+            "reasons": [],
+            "totalCents": 1356,
+            "lines": [
+              {
+                "productId": "460324",
+                "quantity": 1
+              }
+            ]
+          }
+        ],
+        "refusals": [],
+        "answers": [
+          {
+            "text": "Your Monday lactose-free milk can't come this week: the order cut-off for that day has passed. The closest is Valio Eila semi skimmed: 1,36 € more per litre, 60 l as 16 × 3,75 l, same maker, it needs Food service manager's sign-off. Shall I switch this week's order? Maanantain laktoositon maito ei tule tällä viikolla: sen päivän tilausten viimeinen jättöaika on mennyt. Lähin vaihtoehto on Valio Eila kevytmaitojuoma: 1,36 € enemmän litralta, 60 l eli 16 × 3,75 l, sama valmistaja, se vaatii hyväksynnän (Food service manager). Vaihdanko tämän viikon tilauksen?",
+            "kind": "line",
+            "citations": []
+          },
+          {
+            "text": "One thing: the Lollorosso FI has arrived as ordered about 7 times in 10. Want a backup lined up in case it doesn't come? The Oak leaf salad green is the closest, the same price per kilo.",
+            "kind": "line",
+            "citations": []
+          }
+        ],
+        "acknowledgements": [],
+        "notices": [
+          {
+            "kind": "incomplete",
+            "message": "I understood part of \"the Lollorosso FI\" but need how much, with the unit."
+          }
+        ],
+        "today": [
+          {
+            "opening": true,
+            "pending": false,
+            "date": "2026-11-14",
+            "items": []
+          }
+        ],
+        "home": [],
+        "log": [],
+        "state": "done",
+        "understood": {
+          "item": "Finnish lollo rosso",
+          "amount": 3,
+          "unit": "kg",
+          "deliverBy": "2026-11-18",
+          "alsoAsked": [],
+          "attributes": [
+            "finnish"
+          ],
+          "allergens": []
+        },
+        "chosen": {
+          "optionId": "opt_1",
+          "index": 0
+        }
+      }
+    },
+    {
+      "id": "reliability-backup-fi",
+      "title": "A weekly product with a poor delivery record (koulu-metsola): the record said as history, \"you choose\" lines up a backup (fi)",
+      "tag": "partial availability: a backup in case it is not delivered",
+      "kitchen": "koulu-metsola",
+      "lang": "fi",
+      "repeat": 1,
+      "pass": true,
+      "checks": [
+        {
+          "name": "the agent said the product's delivery record in words (history, not a forecast) and offered a backup",
+          "ok": true
+        },
+        {
+          "name": "\"you choose\" lined up a backup, recorded with who chose it (or said why it cannot choose)",
+          "ok": true
+        },
+        {
+          "name": "nothing extra bought for the backup",
+          "ok": true
+        }
+      ],
+      "corrections": 3,
+      "actions": {
+        "taps": 1,
+        "typed": 2,
+        "extraTyped": 0,
+        "list": [
+          "tap: duplicate_recent → confirm",
+          "typed: Lollorosso FI",
+          "typed: valitse sinä"
+        ]
+      },
+      "ms": {
+        "first_sign": 24,
+        "understood": 2691,
+        "options": 5073,
+        "placed": 10709,
+        "total": 14097
+      },
+      "serverMarks": {
+        "trn_294c8a852693490e": {
+          "first_step": 0,
+          "done": 3
+        },
+        "trn_9c107899fdef41e3": {
+          "first_step": 0,
+          "understood": 2536,
+          "line": 4920,
+          "done": 4920
+        },
+        "trn_7b55dcef5b374630": {
+          "first_step": 0,
+          "options": 55,
+          "line": 3799,
+          "done": 3799
+        },
+        "trn_df8960dcf5224fb1": {
+          "first_step": 0,
+          "placed": 1811,
+          "line": 3429,
+          "done": 3471
+        },
+        "trn_9c3f730414814187": {
+          "first_step": 0,
+          "line": 1620,
+          "done": 1620
+        }
+      },
+      "streamed": true,
+      "cached": [],
+      "calls": 8,
+      "outcome": {
+        "readings": [
+          {
+            "item": "suomalaista lollo rosso -salaattia",
+            "amount": 3,
+            "unit": "kg",
+            "deliverBy": "2026-11-18",
+            "alsoAsked": []
+          }
+        ],
+        "concerns": [
+          {
+            "code": "duplicate_recent",
+            "message": "You already ordered 3 kg of cat_17403 a moment ago for Wed 18 Nov (order ord_00649f5e4abf4356). Order again?",
+            "key": "duplicate_recent:ord_00649f5e4abf4356"
+          }
+        ],
+        "questions": 0,
+        "options": [
+          {
+            "optionId": "opt_1",
+            "rank": "best",
+            "title": "LOLLOROSSO FI",
+            "match": "full",
+            "totalCents": 1356,
+            "deliveryDate": "2026-11-18",
+            "orderBy": "2026-11-15T17:00:00+0200",
+            "givesUp": [],
+            "lines": [
+              {
+                "productId": "460324",
+                "name": "LOLLOROSSO FI",
+                "packs": 1
+              }
+            ],
+            "signOff": []
+          }
+        ],
+        "allOptions": [
+          {
+            "optionId": "opt_1",
+            "rank": "best",
+            "title": "LOLLOROSSO FI",
+            "match": "full",
+            "totalCents": 1356,
+            "deliveryDate": "2026-11-18",
+            "orderBy": "2026-11-15T17:00:00+0200",
+            "givesUp": [],
+            "lines": [
+              {
+                "productId": "460324",
+                "name": "LOLLOROSSO FI",
+                "packs": 1
+              }
+            ],
+            "signOff": []
+          }
+        ],
+        "excluded": [
+          "10 lacks origin_fi",
+          "3 no allergen data from its maker, so it cannot be shown free of nuts, peanuts, sesame, fish",
+          "1 460192: no offer; not available for 2026-11-18: the wholesaler's answer is empty.",
+          "1 460201: no offer; not available for 2026-11-18: the wholesaler's answer is empty.",
+          "1 pack content not certain, so AimoPilot will not guess the number of packs (Not sure what one KI holds (2 kg per KI; case_content_unclear). Estimate: 2 KI = 4 kg. Ask a human to confirm.)",
+          "1 460209: no offer; not available for 2026-11-18: the wholesaler's answer is empty.",
+          "1 460226: no offer; not available for 2026-11-18: the wholesaler's answer is empty.",
+          "1 pack content not certain, so AimoPilot will not guess the number of packs (Not sure what one KI holds (4 x 4 kg = 16 kg per KI; sources_disagree). Estimate: 1 KI = 16 kg. Ask a human to confirm.)",
+          "1 460254: no offer; not available for 2026-11-18: the wholesaler's answer is empty.",
+          "1 pack content not certain, so AimoPilot will not guess the number of packs (Not sure what one KI holds (100 g per KI; name_ambiguous). Estimate: 30 KI = 3 kg. Ask a human to confirm.)",
+          "1 469622: no offer; not available for 2026-11-18: the wholesaler's answer is empty.",
+          "1 462405: no offer; not available for 2026-11-18: the wholesaler's answer is empty."
+        ],
+        "notes": [
+          "All 20 checks passed; €13.56 is within what the agent may spend alone."
+        ],
+        "requests": [
+          "req_269209254f824a1d"
+        ],
+        "orders": [
+          {
+            "orderId": "ord_633664eb3cbc4b24",
+            "status": "committed",
+            "rules": [],
+            "reasons": [],
+            "totalCents": 1356,
+            "lines": [
+              {
+                "productId": "460324",
+                "quantity": 1
+              }
+            ]
+          }
+        ],
+        "refusals": [],
+        "answers": [
+          {
+            "text": "Yksi asia: Lollorosso salaatti suomi pesty on toimitettu tilatusti noin 7 kertaa 10:stä. Laitetaanko varalle vaihtoehto siltä varalta, ettei se tule? Lähin on Tammenlehti salaatti vihreä suomi pesty, sama hinta kilolta.",
+            "kind": "line",
+            "citations": []
+          }
+        ],
+        "acknowledgements": [
+          {
+            "code": "duplicate_recent",
+            "action": "confirm",
+            "verified": true,
+            "channel": "portal_session"
+          }
+        ],
+        "notices": [],
+        "today": [
+          {
+            "opening": true,
+            "pending": false,
+            "date": "2026-11-14",
+            "items": [
+              {
+                "kind": "drift",
+                "family": "cat_17403",
+                "warning": "the last price per kg is up 51 % on the usual.",
+                "productId": "460324",
+                "name": "LOLLOROSSO FI",
+                "usual": {
+                  "amount": 3,
+                  "unit": "kg"
+                },
+                "recent": 3,
+                "amountPct": 0,
+                "pricePct": 51,
+                "nextDue": "2026-11-18"
+              }
+            ]
+          }
+        ],
+        "home": [],
+        "log": [],
+        "state": "done",
+        "understood": {
+          "item": "suomalaista lollo rosso -salaattia",
+          "amount": 3,
+          "unit": "kg",
+          "deliverBy": "2026-11-18",
+          "alsoAsked": [],
+          "attributes": [
+            "finnish"
+          ],
+          "allergens": []
+        },
+        "chosen": {
+          "optionId": "opt_1",
+          "index": 0
+        }
+      }
+    },
+    {
+      "id": "reliability-backup-en@kahvila-sointu",
+      "title": "A weekly product with a poor delivery record (kahvila-sointu): the record said as history, \"you choose\" lines up a backup (en)",
+      "tag": "partial availability: a backup in case it is not delivered",
+      "kitchen": "kahvila-sointu",
+      "lang": "en",
+      "repeat": 1,
+      "pass": true,
+      "checks": [
+        {
+          "name": "the agent said the product's delivery record in words (history, not a forecast) and offered a backup",
+          "ok": true
+        },
+        {
+          "name": "\"you choose\" lined up a backup, recorded with who chose it (or said why it cannot choose)",
+          "ok": true
+        },
+        {
+          "name": "nothing extra bought for the backup",
+          "ok": true
+        }
+      ],
+      "corrections": 2,
+      "actions": {
+        "taps": 0,
+        "typed": 2,
+        "extraTyped": 0,
+        "list": [
+          "typed: yes",
+          "typed: you choose"
+        ]
+      },
+      "ms": {
+        "first_sign": 115,
+        "understood": 2649,
+        "placed": 5910,
+        "total": 11670
+      },
+      "serverMarks": {
+        "trn_225de533a59f4392": {
+          "first_step": 0,
+          "done": 141
+        },
+        "trn_a437823f54544fca": {
+          "first_step": 0,
+          "understood": 2496,
+          "line": 4636,
+          "done": 4638
+        },
+        "trn_9ae887612ca740c3": {
+          "first_step": 0,
+          "placed": 1183,
+          "line": 3997,
+          "done": 4988
+        },
+        "trn_7f66ad2c8ec24097": {
+          "first_step": 1,
+          "line": 1924,
+          "done": 1924
+        }
+      },
+      "streamed": true,
+      "cached": [],
+      "calls": 7,
+      "outcome": {
+        "readings": [
+          {
+            "item": "Peltolan churned butter",
+            "amount": 2,
+            "unit": "kg",
+            "deliverBy": "2026-11-17",
+            "alsoAsked": []
+          }
+        ],
+        "concerns": [],
+        "questions": 0,
+        "options": [],
+        "allOptions": [],
+        "excluded": [],
+        "notes": [
+          "All 20 checks passed; €30.32 is within what the agent may spend alone."
+        ],
+        "requests": [
+          "req_df948b10f4e847d3"
+        ],
+        "orders": [
+          {
+            "orderId": "ord_bfc6b5fa42b64a03",
+            "status": "committed",
+            "rules": [],
+            "reasons": [],
+            "totalCents": 3032,
+            "lines": [
+              {
+                "productId": "475594",
+                "quantity": 2.1
+              }
+            ]
+          }
+        ],
+        "refusals": [],
+        "answers": [
+          {
+            "text": "One thing: the Peltolan churned butter has arrived as ordered about 17 times in 20. Want a backup lined up in case it doesn't come? The Valio Eila butter is the closest, 7,82 € less per kilo.",
+            "kind": "line",
+            "citations": []
+          }
+        ],
+        "acknowledgements": [],
+        "notices": [],
+        "today": [
+          {
+            "opening": true,
+            "pending": false,
+            "date": "2026-11-14",
+            "items": [
+              {
+                "kind": "drift",
+                "family": "milk",
+                "warning": "the last three orders average 11 L, up 33 % on the usual 8 L.",
+                "productId": "463047",
+                "name": "Arla Whole milk 1 L Suomesta low lactose Uht",
+                "usual": {
+                  "amount": 8,
+                  "unit": "L"
+                },
+                "recent": 11,
+                "amountPct": 33,
+                "pricePct": 0,
+                "nextDue": "2026-11-17"
+              }
+            ]
+          }
+        ],
+        "home": [],
+        "log": [],
+        "state": "done",
+        "understood": {
+          "item": "Peltolan churned butter",
+          "amount": 2,
+          "unit": "kg",
+          "deliverBy": "2026-11-17",
+          "alsoAsked": [],
+          "attributes": [],
+          "allergens": []
+        }
+      }
+    },
+    {
+      "id": "reliability-backup-fi@kahvila-sointu",
+      "title": "A weekly product with a poor delivery record (kahvila-sointu): the record said as history, \"you choose\" lines up a backup (fi)",
+      "tag": "partial availability: a backup in case it is not delivered",
+      "kitchen": "kahvila-sointu",
+      "lang": "fi",
+      "repeat": 1,
+      "pass": true,
+      "checks": [
+        {
+          "name": "the agent said the product's delivery record in words (history, not a forecast) and offered a backup",
+          "ok": true
+        },
+        {
+          "name": "\"you choose\" lined up a backup, recorded with who chose it (or said why it cannot choose)",
+          "ok": true
+        },
+        {
+          "name": "nothing extra bought for the backup",
+          "ok": true
+        }
+      ],
+      "corrections": 3,
+      "actions": {
+        "taps": 1,
+        "typed": 2,
+        "extraTyped": 0,
+        "list": [
+          "tap: duplicate_recent → confirm",
+          "typed: kyllä",
+          "typed: valitse sinä"
+        ]
+      },
+      "ms": {
+        "first_sign": 117,
+        "understood": 2618,
+        "placed": 4176,
+        "total": 12815
+      },
+      "serverMarks": {
+        "trn_c62232abd7f4465f": {
+          "first_step": 0,
+          "done": 4
+        },
+        "trn_f71b409f72944227": {
+          "first_step": 0,
+          "understood": 2533,
+          "line": 3976,
+          "done": 3977
+        },
+        "trn_8027bf8ac21f457d": {
+          "first_step": 0,
+          "waiting": 68,
+          "done": 1682
+        },
+        "trn_6aa86ad63d764a39": {
+          "first_step": 0,
+          "line": 2025,
+          "done": 2025
+        },
+        "trn_08a12f56cfd646eb": {
+          "first_step": 0,
+          "line": 4853,
+          "done": 4853
+        }
+      },
+      "streamed": true,
+      "cached": [],
+      "calls": 9,
+      "outcome": {
+        "readings": [
+          {
+            "item": "Peltolan kirnuvoita",
+            "amount": 2,
+            "unit": "kg",
+            "deliverBy": "2026-11-17",
+            "alsoAsked": []
+          }
+        ],
+        "concerns": [
+          {
+            "code": "duplicate_recent",
+            "message": "You already ordered 2.1 kg of butter a moment ago for Tue 17 Nov (order ord_bfc6b5fa42b64a03). Order again?",
+            "key": "duplicate_recent:ord_bfc6b5fa42b64a03"
+          }
+        ],
+        "questions": 0,
+        "options": [],
+        "allOptions": [],
+        "excluded": [],
+        "notes": [
+          "Looks like one need split into smaller orders: with ord_bfc6b5fa42b64a03 (€30.32) placed alone in the last 24 h for butter, whatever the delivery days, this €30.32 order makes €60.64, over the €60.00 the agent may spend alone. Splitting does not lift the limit, so a person must sign off.",
+          "Sent to Owner (kitchen_signer) for sign-off."
+        ],
+        "requests": [
+          "req_593f405a8d434f5d"
+        ],
+        "orders": [
+          {
+            "orderId": "ord_35093bb28d5f4f4a",
+            "status": "pending_approval",
+            "approver": "Owner",
+            "rules": [],
+            "reasons": [],
+            "totalCents": 3032,
+            "lines": [
+              {
+                "productId": "475594",
+                "quantity": 2.1
+              }
+            ]
+          }
+        ],
+        "refusals": [],
+        "answers": [
+          {
+            "text": "Yksi asia: Peltolan gourmet kirnuvoi N.700G on toimitettu tilatusti noin 17 kertaa 20:stä. Laitetaanko varalle vaihtoehto siltä varalta, ettei se tule? Lähin on Valio Eila® voi 500 g laktoositon, 7,82 € vähemmän kilolta.",
+            "kind": "line",
+            "citations": []
+          }
+        ],
+        "acknowledgements": [
+          {
+            "code": "duplicate_recent",
+            "action": "confirm",
+            "verified": true,
+            "channel": "portal_session"
+          }
+        ],
+        "notices": [],
+        "today": [
+          {
+            "opening": true,
+            "pending": false,
+            "date": "2026-11-14",
+            "items": [
+              {
+                "kind": "drift",
+                "family": "milk",
+                "warning": "the last three orders average 11 L, up 33 % on the usual 8 L.",
+                "productId": "463047",
+                "name": "Arla Whole milk 1 L Suomesta low lactose Uht",
+                "usual": {
+                  "amount": 8,
+                  "unit": "L"
+                },
+                "recent": 11,
+                "amountPct": 33,
+                "pricePct": 0,
+                "nextDue": "2026-11-17"
+              },
+              {
+                "kind": "drift",
+                "family": "butter",
+                "warning": "the last price per kg is up 381 % on the usual.",
+                "productId": "475594",
+                "name": "PELTOLAN HAND MADE CHURNED BUTTER A.700G",
+                "usual": {
+                  "amount": 2,
+                  "unit": "kg"
+                },
+                "recent": 2.1,
+                "amountPct": 2,
+                "pricePct": 381,
+                "nextDue": "2026-11-17"
+              }
+            ]
+          }
+        ],
+        "home": [],
+        "log": [],
+        "state": "done",
+        "understood": {
+          "item": "Peltolan kirnuvoita",
+          "amount": 2,
+          "unit": "kg",
+          "deliverBy": "2026-11-17",
+          "alsoAsked": [],
+          "attributes": [],
+          "allergens": []
+        }
+      }
+    }
+  ]
+}

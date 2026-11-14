@@ -10,7 +10,7 @@ import { watchErrors } from "../support/dock";
 test("/ is the landing page: the ways in, no sideways scroll, every picture described and sized", async ({ page }) => {
   const errors = watchErrors(page);
   await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1, name: "Your AI buyer orders. Plain code decides." })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Let AI do the buying. Keep the last word." })).toBeVisible();
   await expect(page.getByText(/demo on synthetic data/i).first()).toBeVisible();
   await expect(page.getByText(/Built for Valio Aimo's Trusted Trade Agents challenge, Junction 2026\./)).toBeVisible();
 

@@ -1,7 +1,7 @@
 import { familyL } from "@/app/k/[kitchen]/family.text";
 import { answerWatchMoment, markWatchSaid, watchAnswerOf, watchMomentForThread, type WatchMoment } from "@/server/watch/thread";
 import { cardId } from "./cards";
-import { readable } from "./refusal";
+import { codeLeaks, readable } from "./refusal";
 import { byLine, record, step, type TurnRun } from "./pipeline";
 import type { WatchCard } from "./types";
 
@@ -22,6 +22,8 @@ export function shortName(name: string): string {
   const out: string[] = [];
   for (const w of words) {
     if (/\d/.test(w) || /^(x|l|kg|g|ml|dl|cl)$/i.test(w) || out.length >= 4) break;
+    // Marketing words a chef does not say ("Peltolan hand made churned butter" is the Peltolan churned butter).
+    if (/^(hand|made|handmade|käsintehty|gourmet)$/i.test(w) && out.length) continue;
     out.push(w);
   }
   return out.join(" ") || name;
@@ -31,6 +33,8 @@ export function shortName(name: string): string {
 function kitchenName(product: { name: string; family: string }, lang: Lang): string {
   const lf = /lactose[ -]free|laktoositon|laktosfri/i.test(product.name);
   const fam = familyL(product.family, lang).toLowerCase();
+  // A family with no word of its own (a partner category, "cat 17403"): the product's short name, as people write it.
+  if (!fam || /^cat[ _]?\d/.test(fam) || codeLeaks(fam).length) return readable(shortName(product.name), lang);
   return lf ? `${lang === "fi" ? "laktoositon" : lang === "sv" ? "laktosfri" : "lactose-free"} ${fam}` : fam;
 }
 
@@ -51,9 +55,12 @@ async function shorten(run: TurnRun, m: WatchMoment, lang: Lang): Promise<string
       return [...new Set([p?.names?.[lang], p?.names?.en, p?.name, fallback].filter((x): x is string => !!x))].sort((a, b) => b.length - a.length);
     };
     const family = f.product.family ?? (ps.find((x) => x.id === f.product.productId)?.category as string | undefined) ?? "";
-    for (const n of namesOf(f.product.productId, f.product.name)) say = say.split(n).join(family ? kitchenName({ name: f.product.name, family }, lang) : shortName(n));
+    const own = (ps.find((x) => x.id === f.product.productId) as { names?: Partial<Record<Lang, string>> } | undefined)?.names?.[lang] ?? f.product.name;
+    for (const n of namesOf(f.product.productId, f.product.name)) say = say.split(n).join(family ? kitchenName({ name: own, family }, lang) : shortName(n));
     for (const s of subs) for (const n of namesOf(s.productId, s.name)) say = say.split(n).join(shortName(n));
   }
+  // A short name can now open the sentence ("voi ei voinut tulla"): its first letter in capitals.
+  say = say.charAt(0).toUpperCase() + say.slice(1);
   return say
     .replace(/\(This is a staged stock-out for the demo\.\)|\(This trend is staged for the demo\.\)/g, "(staged for the demo)")
     .replace(/\((Tämä|Detta)[^)]*(demo|demoa|demon)[^)]*\)/gi, (x) => (/^\(Tämä/.test(x) ? "(lavastettu demoa varten)" : "(iscensatt för demon)"));
