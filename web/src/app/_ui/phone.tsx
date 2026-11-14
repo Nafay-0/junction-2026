@@ -17,9 +17,10 @@ import { Wordmark } from "./wordmark";
  *
  * `context` is a short word for the page ("Sign-off"), given in all three languages by a server page; it sits beside
  * the word mark and gives way first when the line is short. `tone` is kept for the server pages that pass it; the
- * hazard band itself belongs to `GateHead`, so it disappears once nobody needs to sign.
+ * hazard band itself belongs to `GateHead`, so it disappears once nobody needs to sign. `langs={false}` hides the
+ * language switch on a page that is written in English only (the presenter's enrolment, the one-time answer).
  */
-export function PhoneShell({ children, context }: { children: ReactNode; context?: string | Record<Lang, string>; tone?: "plain" | "gate" }) {
+export function PhoneShell({ children, context, langs = true }: { children: ReactNode; context?: string | Record<Lang, string>; tone?: "plain" | "gate"; /** false on a page written in one language only. */ langs?: boolean }) {
   const { lang } = useLang();
   const ctx = typeof context === "string" ? context : context?.[lang];
   return (
@@ -28,7 +29,7 @@ export function PhoneShell({ children, context }: { children: ReactNode; context
         <div className="mx-auto flex w-full max-w-md items-center gap-3 px-4 py-2.5">
           <Wordmark size={24} />
           <span className="min-w-0 flex-1 truncate border-l border-line pl-3 text-[0.9rem] leading-tight text-ink-soft">{ctx}</span>
-          <LangSwitch />
+          {langs && <LangSwitch />}
         </div>
       </header>
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pb-6 pt-6 text-[1.02rem] leading-normal text-ink sm:pt-10">{children}</main>
@@ -73,7 +74,7 @@ export function bigButton(kind: "go" | "secondary" | "dark" | "demo" = "go"): st
 /** A plain notice on a phone page: an optional mark, a title and what to do next. */
 export function PhoneNotice({ title, body, children, mark }: { title: string; body?: string; children?: ReactNode; mark?: ReactNode }) {
   return (
-    <div className="mt-6 flex flex-1 flex-col">
+    <div className="mt-2 flex flex-1 flex-col">
       {mark && <div className="mb-5">{mark}</div>}
       <h1 className="display text-[2.1rem] leading-[1.05] text-ink hyphens-manual [overflow-wrap:break-word]">{title}</h1>
       {body && <p className="mt-3 max-w-[38ch] leading-relaxed text-ink-soft">{body}</p>}
