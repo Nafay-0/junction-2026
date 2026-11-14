@@ -559,7 +559,7 @@ export type RulesCard = CardBase & {
   /** Rules the kitchen's people stated (memory), applied on every order. */
   stated: { id: string; text: string }[];
   /** What this browser may sign here; `why` is a code the widget words (not_signed_in, not_this_account, demo_terms_fixed, visitor_terms_fixed). */
-  editable: { narrow: boolean; terms: boolean; why?: string };
+  editable: { narrow: boolean; terms: boolean; why?: string; /** The signed-in person who would sign. */ as?: string };
   /** The values the widget may offer (the mandate's vocabulary). */
   vocabulary: { forbid: string[]; require: string[]; substitution: string[]; groups: { id: string; name: string }[] };
   /** A proposed change: nothing is signed until `rules_sign`. */

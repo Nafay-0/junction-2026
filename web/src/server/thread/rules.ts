@@ -180,7 +180,7 @@ export function editableFor(run: Pick<TurnRun, "k" | "person">): RulesCard["edit
   const person = signedIn && (!run.person!.account || kind === "visitor" || run.person!.account === run.k.info.slug);
   const ownAccount = person && kind === "account";
   const why = !signedIn ? "not_signed_in" : !person ? "not_this_account" : ownAccount ? undefined : kind === "demo" ? "demo_terms_fixed" : "visitor_terms_fixed";
-  return { narrow: person, terms: ownAccount, ...(why ? { why } : {}) };
+  return { narrow: person, terms: ownAccount, ...(why ? { why } : {}), ...(person ? { as: run.person!.name } : {}) };
 }
 
 async function statedOf(run: TurnRun) {
