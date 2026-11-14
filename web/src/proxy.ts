@@ -13,9 +13,10 @@ const rule = (name: string, limit: number): RateRule => envRule(name, limit);
 
 // Sized for a room, not a table: a presenter says "scan this" and sixty phones behind one or two venue addresses
 // arrive within the same minute. Measured per visitor (e2e/room/crowd.spec.ts records every request by rule):
-//   the sign-off path (/join, a passkey, /approver waiting, "ask my agent", /approve, sign): join 2-3 (the prompt,
-//   the passkey back, the page preparing a fresh prompt), demo-order 1, events 2-5 (a stream per screen, plus
-//   reconnects; the kitchen's thread one more), page 4-6, any about 40 in the first two minutes (the approver screen asks every 5 s);
+//   the sign-off path (/join, a passkey, /approver waiting, "ask my agent", /approve, sign), at most per visitor on
+//   14 Nov: join 1 and join-verify 1 (a failed passkey or a page left open 4 min prepares another prompt), demo-order 1,
+//   events 2 (a stream per screen; reconnects and the kitchen's thread add more), page 7, any 32 in two minutes
+//   (the approver screen asks every 5 s);
 //   one ordinary order through the kitchen store (scripts/edge-cost.ts, 14 Nov 2026): any 83, page 20,
 //   console-call 46, catalog-live 1, events 3.
 // The per-address limits below hold 60 visitors doing either in one minute behind one address, with headroom.
