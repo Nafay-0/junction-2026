@@ -56,6 +56,7 @@ const L = {
     choose: /^Choose this$/,
     skip: /^No preference: show me the options$/,
     takeOff: /^Take it off this order$/,
+    lookAgain: /^Find other options for this$/,
     lastWeek: "what did we order last week?",
     twoItems: "400 litres of lactose-free milk and 24 litres of oat drink for Thursday",
     oatName: /oat/i,
@@ -85,6 +86,7 @@ const L = {
     choose: /^Valitse tämä$/,
     skip: /^Ei väliä: näytä vaihtoehdot$/,
     takeOff: /^Poista se tästä tilauksesta$/,
+    lookAgain: /^Etsi tälle muita vaihtoehtoja$/,
     lastWeek: "mitä tilasimme viime viikolla?",
     twoItems: "400 litraa laktoositonta maitoa ja 24 litraa kaurajuomaa torstaiksi",
     oatName: /oat|kaura/i,
@@ -140,9 +142,11 @@ class Run {
         await this.tap(swap);
         const choose = this.log.getByRole("button", { name: L.choose }).first();
         const takeOff = this.log.getByRole("button", { name: L.takeOff }).first();
-        // Another product, or, when the kitchen's rules allow nothing else, the line taken off the order.
-        await choose.or(takeOff).first().waitFor({ timeout: 30_000 });
-        await this.tap((await choose.isVisible().catch(() => false)) ? choose : takeOff);
+        const again = this.log.getByRole("button", { name: L.lookAgain }).first();
+        // Another product; when the kitchen's rules allow nothing else, the line taken off the order, or (the only
+        // line) the agent asked to look again with options.
+        await choose.or(takeOff).or(again).first().waitFor({ timeout: 30_000 });
+        await this.tap((await choose.isVisible().catch(() => false)) ? choose : (await takeOff.isVisible().catch(() => false)) ? takeOff : again);
         await this.page.waitForTimeout(1500);
         continue;
       }

@@ -40,6 +40,7 @@ export const THREAD_SHEET_TEXT = defineText({
     adjusted: "Being changed on the order below.",
     pickerKind: "Other products",
     removeLine: "Take it off this order",
+    lookAgain: "Find other options for this",
     alone: { limit: (limit: string) => `Inside your rules: under your ${limit} limit.`, plain: "Inside your rules." },
     sign: {
       per_order_limit: (who: string, limit: string) => `${who} OKs it on their phone: it is over your ${limit} limit.`,
@@ -131,6 +132,7 @@ export const THREAD_SHEET_TEXT = defineText({
     adjusted: "Muutetaan alla olevassa tilauksessa.",
     pickerKind: "Muut tuotteet",
     removeLine: "Poista se tästä tilauksesta",
+    lookAgain: "Etsi tälle muita vaihtoehtoja",
     alone: { limit: (limit: string) => `Sääntöjesi sisällä: alle ${limit} rajan.`, plain: "Sääntöjesi sisällä." },
     sign: {
       per_order_limit: (who: string, limit: string) => `${who} hyväksyy puhelimellaan: summa ylittää ${limit} rajasi.`,
@@ -222,6 +224,7 @@ export const THREAD_SHEET_TEXT = defineText({
     adjusted: "Ändras i beställningen nedan.",
     pickerKind: "Andra produkter",
     removeLine: "Ta bort den från beställningen",
+    lookAgain: "Hitta andra alternativ för detta",
     alone: { limit: (limit: string) => `Inom dina regler: under din gräns på ${limit}.`, plain: "Inom dina regler." },
     sign: {
       per_order_limit: (who: string, limit: string) => `${who} godkänner i telefonen: det är över din gräns på ${limit}.`,
