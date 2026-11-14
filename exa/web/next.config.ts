@@ -8,6 +8,8 @@ const sharedEnv = resolve(process.cwd(), "../.env.local");
 if (existsSync(sharedEnv)) process.loadEnvFile(sharedEnv);
 
 const nextConfig: NextConfig = {
+  // Next's development badge sits on the account row at the bottom left and takes its clicks.
+  devIndicators: false,
   turbopack: {
     rules: {
       "*.css": {

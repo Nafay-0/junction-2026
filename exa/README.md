@@ -1,36 +1,56 @@
-# Baton: the Exa "Internet Butler" project
+# Beryl: the Exa "Internet Butler" project
 
-**Owner:** Asadullah (`Asadullah378`). **Status (Sat 14 Nov, 09:45):** steps 1 and 2 are built and run locally. The live browser works end to end on a test site and on real shops and booking pages, in three forms: a hidden Chrome of the app's own (the web version), a window of the user's own Chrome where they are already signed in (run by the user on 14 Nov: it worked, but it takes a one-time setting in Chrome), and, new, **a desktop app with a real browser inside its own window** (`pnpm desktop`), where the user signs in by simply signing in. The desktop app passes its end-to-end test and a real agent task; nobody has yet signed in to Google inside it. Not deployed yet.
+**Owner:** Asadullah (`Asadullah378`). **Status (Sat 14 Nov, 10:58):** one platform in two forms, both running locally. The **web app** (also installable on a phone) signs people in, searches and reads the live web with Exa and answers with live widgets. The **desktop app** is the same interface in a window of its own with a real browser inside it, where the agent also acts on websites. Accounts, conversations and usage are in Postgres; one admin account creates the others. The desktop app passes its end-to-end test and real agent tasks, and is packaged as `Beryl.app`. Not deployed yet, and nobody has signed in to Google inside the desktop app yet.
 
-Baton is a general web agent for Exa's challenge "The Internet Butler". You hand it a task; it searches the live web with Exa, answers with live widgets instead of plain text (a map, fare cards, price charts, a gallery, a research report), and ends with buttons that take the task as far as it can go. The name is set in `web/src/lib/brand.ts`, with the logo's shapes: a baton is what a relay runner passes on (you pass a task, it is handed back for the step that is yours) and what a conductor holds. It was called Hovi until 14 Nov; storage keys and `HOVI_*` variables keep that prefix so nothing saved is lost.
+Beryl is a general web agent for Exa's challenge "The Internet Butler". You hand it a task; it searches the live web with Exa, answers with live widgets instead of plain text (a map, fare cards, price charts, a gallery, a research report), and takes the task as far as it can go. Beryl is a gemstone (emerald and aquamarine are beryl) whose crystals are six-sided, which is the logo. The name and the logo's shapes are set in `web/src/lib/brand.ts`. It was called Hovi, then Baton, until 14 Nov; the browser's storage keys keep the `hovi.` prefix so nothing saved is lost.
 
-Dock, the Valio Aimo project, is a separate project in this repo, owned by Nafay. It lives in `/web` and `/infra` at the repo root. Everything for Baton lives in `exa/`.
+Dock, the Valio Aimo project, is a separate project in this repo, owned by Nafay. It lives in `/web` and `/infra` at the repo root. Everything for Beryl lives in `exa/`.
 
 ## The plan, in three steps
 
 1. **Agent with live widgets (built).** Exa is read-only: search, read, structured data. Widgets, sub-agents, parallel tools, a visible plan, clarifying questions, model switching, usage and cost tracking.
-2. **Live web actions (built).** The agent acts in a real browser the user watches live, hands the page over for sign-ins and human checks, asks for approval before anything that commits the user, and never pays.
-3. **Phone app and voice (after that).** Installable web app, voice input, more autonomy (Exa Monitors that keep watching).
+2. **Live web actions (built, in the desktop app).** The agent acts in a real browser inside the app that the user watches, hands the page over for sign-ins and human checks, asks for approval before anything that commits the user, and never pays.
+3. **Phone and voice (started).** The web version can be installed on a phone (it has a web app manifest and icons). Voice input and more autonomy (Exa Monitors that keep watching) are still to do.
+
+## Web and desktop: who does what
+
+| | Web (a browser tab, the installed web app, a phone) | Desktop app |
+|---|---|---|
+| Sign in | Email and password | The same account, the same screen |
+| Search, read, widgets, research | Yes | Yes |
+| Act on websites in a live browser | No. The agent has no browser tools here and says that doing it needs the desktop app | Yes |
+| Conversations | Saved to the account | Saved to the account |
+| A conversation started in the other one | Read-only | Read-only |
+
+There is one codebase and one server. The desktop app does not contain the interface: it loads it from the server, exactly as a browser tab does, so both are always the same version and share the sign-in screen, the accounts and the database. What only the desktop app has is the live browser and the small engine that drives it, which run on the user's own computer.
+
+A conversation belongs to where it was started, because one from the desktop app relies on a browser the web does not have. Opened from the other kind of client it can be read, not continued: the message box is replaced by a note, and the server refuses a save or a new message there.
 
 ## Run it
 
+Postgres must be running (Postgres.app, Docker or a hosted one). Create an empty database and put its address in `DATABASE_URL`.
+
 ```bash
 cd exa
-cp .env.example .env.local   # fill in the five keys
+cp .env.example .env.local   # the five keys, DATABASE_URL, ADMIN_EMAIL and ADMIN_PASSWORD
+createdb beryl               # once, for a local Postgres
 cd web
 pnpm install
-pnpm dev                     # http://localhost:3000
-pnpm desktop                 # the same app as a desktop window with a real browser inside
+pnpm dev                     # the web app on http://localhost:3000 (tables are created at start)
+pnpm desktop                 # the desktop app, on the same server
 ```
 
-`pnpm desktop` starts the server itself if nothing answers on port 3000. If it is already running on another port, say which: `BATON_PORT=3100 pnpm desktop`.
+Sign in with `ADMIN_EMAIL` and `ADMIN_PASSWORD` from `exa/.env.local`. The admin adds every other account under `/admin`.
 
-- `pnpm smoke` checks that Claude (through AWS) and Gemini answer with your keys. `pnpm smoke options` sends one small request per model and job (agent, sub-agent, extraction) with the exact thinking settings the app uses, so a setting a model rejects shows up there and not in front of a user.
-- `pnpm test:guard` checks the live browser's safety rules as a table (no browser needed). `pnpm test:browser 3000` runs them end to end against a pretend shop (`/dev/sandbox.html`) with the dev server running: card numbers, passwords and pay buttons must be refused, commitments must ask first.
-- `pnpm test:own 3000` checks the own-Chrome mode against a stand-in Chrome the test starts itself (its own window, live pictures, the other tabs untouched). It never touches the real Chrome.
-- `pnpm test:desktop 3000` starts the real desktop app in a throwaway profile and checks, from inside it, the browser view, the agent's clicks, keys and scrolling, the safety rules, the user's own typing, hiding and closing. `BATON_TEST_CHAT="<request>"` adds a real task for the agent; `BATON_TEST_SHOTS=<folder>` saves pictures of the window.
-- `/dev/browser` shows the live browser panel driven by a script, with a button for every state.
-- `/dev/widgets` shows every widget with sample data. `?only=flights,hotels` narrows it, `?loading=1` shows loading states, `?still=1` turns animation off.
+- `pnpm desktop` builds the app's browser engine, starts the server if nothing answers on port 3000 (`BERYL_PORT` picks another port) and opens the app. `BERYL_URL=https://beryl.example.com pnpm desktop` opens it on a server that runs somewhere else.
+- `pnpm desktop:pack` packages it as a real application in `web/desktop/release/` (`Beryl.app` on a Mac). Give it the server's address with `BERYL_SERVER_URL` when packaging; anyone can change it later on the app's own "cannot reach the server" page. The package is not signed: on another Mac it opens with right-click, Open, the first time.
+- `pnpm db:generate` writes a migration after `src/lib/db/schema.ts` changes; `pnpm db:migrate` applies migrations by hand (the server also does it when it starts).
+- `pnpm smoke` checks that Claude (through AWS) and Gemini answer with your keys. `pnpm smoke options` sends one small request per model and job (agent, sub-agent, extraction) with the exact thinking settings the app uses.
+- `pnpm test:guard` checks the live browser's safety rules as a table (no browser needed).
+- `pnpm test:auth 3000` checks accounts over HTTP with the server running: sign-in, the admin's powers, each account seeing only its own conversations, the read-only rule, blocking and deleting.
+- `pnpm test:desktop 3000` starts the real desktop app in a throwaway profile, signs in, and checks from inside it: the browser view, the agent's clicks, keys and scrolling, the safety rules, approvals, the user's own typing, hiding and closing. `BERYL_TEST_CHAT="<request>"` then types a real request into the app; `BERYL_TEST_SHOTS=<folder>` saves pictures of the window.
+- `pnpm icons` redraws the desktop and installed-app icons from the logo.
+- `/dev/widgets` shows every widget with sample data. `/dev/sandbox.html` is a pretend cafe and shop for testing the browser without touching a real site.
 - `pnpm typecheck`, `pnpm lint` and `pnpm build` all pass.
 
 ## What it does today
@@ -54,57 +74,49 @@ The model can also show a comparison table, key facts, a plan, clarifying questi
 
 Every widget shows its sources. Every answer shows the model, the time, the number of Exa calls and the cost; the top bar adds them up for the conversation.
 
-## The live browser (step 2)
+## The live browser (step 2, desktop app only)
 
-When the task is to do something on a site (reserve a table, fill a basket, take a booking through the provider's form, fill in an application, change something in an account), the agent opens a real Chrome on the server and works in it while the user watches.
+When the task is to do something on a site (reserve a table, fill a basket, take a booking through the provider's form, fill in an application, change something in an account), the agent opens a page in the browser inside the desktop app and works in it while the user watches. Nothing ever opens a browser outside the app: a link pressed in the chat opens in the app's own browser too, with the user in control.
 
-**What the user sees.** The browser opens beside the chat by itself: browser on the left, chat on the right, with a divider to drag. It can fill the window (the chat is then one tap away) or be closed; on a phone it is a full-screen sheet. The agent's pointer glides to what it is about to press, the target gets a ring and a caption ("Clicking 'Reserve a table'"), typed text appears as it is typed. The chat shows the same steps as a trail.
+**How it is put together.** The agent runs on the server; the browser is on the user's computer. So the agent's browser tools have no code on the server: when the agent asks for a step, the interface hands it to the app, the app's engine takes the step in the browser view and the page as it then stands goes back to the agent with the next request. The engine is `web/src/lib/browser/` (`session.ts`, `guard.ts`, `snapshot.ts`, `engine.ts`) bundled into `web/desktop/dist/engine.cjs`; it drives the view through a small bridge inside the app (`web/desktop/relay.cjs`) that speaks the Chrome DevTools Protocol on this computer only. No remote-debugging port is opened and the view is not started in automation mode, so it is an ordinary embedded browser (`navigator.webdriver` is false), and nothing about it is disguised: it tells sites it is Beryl on Chrome.
 
-**What stays with the user.** Three things, enforced in code (`web/src/lib/browser/guard.ts`), not left to the model:
+**What the user sees.** The browser opens beside the chat by itself: browser on the left, chat on the right, with a divider to drag. It can fill the window (the chat is then one tap away) or be hidden; hiding it does not close it, the agent carries on, and a globe button in the top bar brings it back. The agent's pointer glides to what it is about to press, the target gets a ring and a caption ("Clicking 'Reserve a table'"), typed text appears as it is typed. The chat shows the same steps as a trail.
+
+**What stays with the user.** Three things, enforced in code (`web/src/lib/browser/guard.ts`) inside the app, where the page is, not left to the model:
 - **Payment: never.** The agent cannot type into card, bank or security-code fields, cannot press a button that pays, and cannot submit a form that holds card fields. It does nothing at all on payment providers' pages. It takes the task to the payment page and hands it over; the user may pay there themselves.
-- **Passwords, one-time codes and human checks: the user's.** The agent cannot type into them. It hands the page over with a "your turn" card; the user types straight into the live browser, then hands it back. A human check is only handed over when it is in the way: the whole page is the check, or the form the task needs carries it. Many sites keep one in a newsletter form at the foot of every page; the agent is told where a check is (the whole page, a form on screen, a form elsewhere) and leaves those alone. `/dev/sandbox.html#newsletter` has a pretend one.
-- **Commitment: with approval.** Anything that submits, sends, books, orders, posts, deletes, signs up or accepts terms stops for a yes. The card says exactly what will happen, the button is ringed in the live browser, and nothing runs until the user approves. Approvals are signed by the server, so one cannot be forged by editing the conversation.
+- **Passwords, one-time codes and human checks: the user's.** The agent cannot type into them. It hands the page over with a "your turn" card; the user clicks and types straight into the page, inside the app, then hands it back. A human check is only handed over when it is in the way: the whole page is the check, or the form the task needs carries it. Many sites keep one in a newsletter form at the foot of every page; the agent is told where a check is and leaves those alone.
+- **Commitment: with approval.** Anything that submits, sends, books, orders, posts, deletes, signs up or accepts terms stops for a yes. The step waits inside the app: the card in the chat says exactly what will happen, the button is ringed in the browser, and nothing runs until the user presses Approve. Decline, Stop, or closing the browser all mean no.
 Reading, navigating, searching, filling in a form, adding to a basket and refusing cookies need no approval.
 
-**What the agent can read.** It reads the page as text (Chrome's accessibility tree, cut down to what is in view), never as a picture. Values of password, card and code fields are removed before the text reaches the model, including ones the user typed while in control. What the user types during a hand-over goes to Chrome and nowhere else: it is not logged or stored.
+**Who is driving.** While the agent drives, the user's clicks and keys do not reach the page (a click says "Beryl is driving, press Take over"). After Take over, or when the agent hands the page over, everything the user does goes to the page directly and nowhere else. The app is a page with a browser inside it, so the bridge takes care of input: the agent's clicks are given to the view itself, and its key presses are only sent once the view holds the keyboard, which goes back to the chat box afterwards, so the agent's typing can never land in the chat.
 
-**Sign-ins.** Kept in a browser profile per visitor (`~/.hovi/browser-profiles/` on the computer running the app, outside the project) so the user signs in once. "Forget sign-ins" in the browser's menu wipes it.
+**What the agent can read.** It reads the page as text (the accessibility tree, cut down to what is in view), never as a picture unless it asks for one. Values of password, card and code fields are removed before the text reaches the model, including ones the user typed while in control. What the user types during a hand-over goes to the page and nowhere else: it is not logged or stored. `browserLook` gives the model a picture when the text is not enough (a canvas, a seat map); fields that hold secrets are painted over, payment and sign-in pages are never pictured, and the picture is not kept in the saved conversation.
 
-**The desktop app: a real browser inside Baton.** The web version has to keep its browser on a server and show pictures of it, and a browser started that way is an automation browser, which Google will not let anyone sign in to. `pnpm desktop` opens Baton as a desktop app (Electron, `web/desktop/`) in which the live browser is not pictures but the browser itself: a view inside the app's window, the way the browser pane works in Claude's own desktop app. The user clicks and types straight into it, so signing in to Google or anything else is just signing in, once; the sign-ins are kept by the app until "Forget sign-ins". The agent works in the same view through a small bridge inside the app (`web/desktop/relay.cjs`) that speaks the Chrome DevTools Protocol to the app's server on this computer only, behind a random address. No remote-debugging port is opened and the view is not started in automation mode, so it is an ordinary embedded browser, and nothing about it is disguised: it tells sites it is Baton on Chrome. Everything else is the same code as the web version: the same pane, the same pointer and captions drawn over the page, the same rules in `guard.ts`.
-- While the agent drives, the user's clicks and keys do not reach the page (a click says "Baton is driving, press Take over"). After Take over, or when the agent hands the page over, everything the user does goes to the page directly and nowhere else.
-- The app is a page with a browser inside it, so input needs care, and the bridge takes it: the agent's clicks are given to the view itself (Chromium would aim them at the window, where the interface's own layer lies on top), and its key presses are only sent once the view holds the keyboard, which is handed back to the chat box afterwards, so the agent's typing can never land in the chat.
-- A narrow view (the split layout) is laid out at desktop width and drawn smaller, so sites do not switch to their phone layout; full screen shows the page at its real size.
-- Hiding the pane does not close the browser: the view is parked out of sight, the agent carries on, and a globe button in the top bar brings it back. The agent also keeps working while the app is behind other windows.
-- A link that wants a new tab opens in the same view. A real pop-up window (some sign-ins open one) opens as a small window of its own, with the same sign-ins and nothing of the agent attached. Pages are refused location, camera, microphone and notifications.
-- The agent still does nothing on identity providers' sign-in pages, types no passwords or codes, and never pays.
+**Sign-ins.** Kept by the desktop app on the user's computer, in a store per account, so two accounts on one computer do not share them. They stay until "Forget sign-ins" in the browser's menu. They are never sent to the server.
 
-**Working in the user's own Chrome.** Google refuses a sign-in typed into a browser that software is driving, and Chrome reports that to every site. We do not hide it. Instead the user can choose "Use my own Chrome" (the live browser's menu, or the button on a sign-in hand-over): the agent then works in a window of its own inside the Chrome the user already uses, where they are signed in to Google and everything else, so there is no sign-in step at all. It uses Chrome's own remote-debugging permission (Chrome 144 and later): the user turns it on once at `chrome://inspect/#remote-debugging` and presses Allow when the app connects, and Chrome shows that it is being controlled. The app works only in its own window; the user's other tabs are never read, touched or closed, and closing "the browser" closes that window only. The live view shows the window as before, and the same rules hold. A hand-over in progress moves with the page when the user switches. The agent still does nothing on the sign-in pages of identity providers (Google, Microsoft, Apple, bank identification), not even picking an account. This needs the app and the user's Chrome on the same computer; on a hosted server set `HOVI_OWN_CHROME=0`. An earlier attempt, signing in through a separate plain Chrome window, was removed: the Google session did not survive the switch and it was clumsy.
+**Layout and windows.** A narrow view (the split layout) is laid out at desktop width and drawn smaller, so sites do not switch to their phone layout; full screen shows the page at its real size. A link that wants a new tab opens in the same view. A real pop-up window (some sign-ins open one) opens as a small window of the app, with the same sign-ins and nothing of the agent attached. Pages are refused location, camera, microphone and notifications. The agent keeps working while the app is behind other windows.
 
-**Tidying up.** The agent closes the browser when the task there is finished and nothing is left for the user on the page, or when asked; the pane closes with it and the conversation list returns. It leaves the browser open when the page is waiting for the user. A new, unrelated task starts with the old tabs closed.
-
-**When the text is not enough.** `browserLook` gives the model a picture of the page (a canvas, a seat map, a control that does nothing for no visible reason). Fields that hold secrets are painted over, and no picture is taken of payment or sign-in pages. A page's own message boxes are answered for it (a notice is acknowledged, a question gets "no" while the agent drives) and reported to the model.
+**Tidying up.** The agent closes the browser when the task there is finished and nothing is left for the user on the page, or when asked; the pane closes with it. A new, unrelated task starts with a fresh tab. Each step is shown once: taking over, handing back, hiding and reopening never replay the last one.
 
 **Assumptions and limits, stated plainly.**
-- The browser runs on the machine that runs the app (a real Chrome through Playwright). That rules out serverless hosting; a public demo needs a small server or a tunnel to a laptop. `BrowserSession` is the one place a hosted browser would plug in.
-- The built-in browser is a hidden Chrome that sends the same browser name a visible Chrome would. Nothing else is disguised: Chrome reports that it is being driven and we leave that alone, so sites can tell. The agent does not solve CAPTCHAs: it detects the common ones and hands them to the user. Some sites refuse a driven browser altogether; the agent then says so and gives the link.
-- In the user's own Chrome the agent has a signed-in browser in front of it. It is told to treat what it sees as private and do only what the task needs, and every rule above applies, but the trust involved is larger: Chrome's permission covers the whole browser, even though the app confines itself to its own window. Chrome's window may sit behind others, where Chrome stops sending pictures by itself, so the live view there is refreshed by taking pictures (a few a second while something happens, slower when idle).
-- The safety rules are patterns (field names, button texts in seven languages, known payment hosts). They err towards asking, and they can miss an unusual page. The approval step is the second line: a commitment the patterns miss is still one the model is told to mark.
-- One browser per visitor, at most four at once on a server; idle ones close after twenty minutes.
-- Anyone who knows a visitor's browser id (a random value in their browser's storage) could watch that browser. Fine for a demo, not for production: that needs accounts.
-
-Code: `web/src/lib/browser/` (`protocol.ts` the contract, `session.ts` the browser, `guard.ts` the rules, `snapshot.ts` what the model reads, `client.ts` the interface's side), `web/src/components/browser/` (the panel), `web/src/lib/agent/tools/browser.ts` (the agent's four tools), and the approval policy in `web/src/app/api/chat/route.ts`.
+- The safety rules are patterns (field names, button texts in seven languages, known payment hosts). They err towards asking, and they can miss an unusual page. The approval step is the second line: a miss there asks one time too many rather than one too few.
+- The rules run in the desktop app on the user's computer. They protect the user from the model, not from someone who rebuilds the app.
+- Sites can see that the browser is Beryl and may refuse it; human checks are handed to the user, never solved.
+- One browser per app window.
 
 **Edit, retry, copy.** Hovering a message you sent shows copy and edit; editing turns it into a text box, and resending replaces that message and everything below it. Under each answer are copy (the answer as markdown, plus the research report if there is one) and try again, which answers the same request afresh and also drops everything below. Both wait until the agent has finished or been stopped.
 
 **Report export.** A finished research report has its own copy and download buttons in the card's header. Copy puts markdown and a formatted version on the clipboard, so it pastes with headings, tables and links into a document or an email. Download offers markdown, a self-contained web page, or the print dialog for a PDF; each holds only that report and its numbered sources (`web/src/lib/export.ts`).
 
-**Saved conversations.** Every conversation is saved as it happens and listed in a sidebar on the left (a drawer on phones) that can be closed. Conversations can be reopened, renamed and deleted, and the one that was open comes back after a refresh. They are stored in the browser's IndexedDB (`web/src/lib/conversations.ts`): there is no account and no server database, so they do not follow the user to another device.
+**Accounts.** Sign-in is email and password, the same on web and desktop. There are two kinds of account. A user chats and runs tasks, and their conversations and browser sign-ins are theirs alone. The admin has all of that plus `/admin`: an overview (accounts, who was active, conversations, requests, tokens, cost split into model, sub-agents and Exa, day by day, by model and by web or desktop) and the accounts page (add an account, block and unblock, set a new password, delete). There is exactly one admin, named in `ADMIN_EMAIL` and `ADMIN_PASSWORD`; it is created when the server starts and nobody can be made admin through the interface. There is no public sign-up. Passwords are hashed with scrypt; a session is a random token in an httpOnly cookie, stored hashed, checked against the database on every request, so signing out, blocking or deleting takes effect at once.
+
+**Saved conversations.** Every conversation is saved to the account in Postgres as it happens, marked with where it was started (web or desktop), and listed in a sidebar on the left (a drawer on phones) that can be closed. Conversations can be reopened, renamed and deleted from either kind of client, and continued only where they were started. Preferences (theme, model, the sidebar, the place) stay in the browser.
 
 **Exact location.** When a task depends on where the user is ("near me", "the closest"), the agent shows a card asking to share their location. Accepting triggers the browser's own permission prompt; the position is saved in the browser, named through a reverse lookup (`/api/geo/reverse`, coordinates rounded to about 100 m), sent with later messages, and used by Exa's "near me" search. The map then shows the user's position, each place's distance and directions from where they are. If the browser blocks it or the user says no, the agent carries on with the approximate place or one the user types, and does not ask again. The location button in the message box turns it on and off at any time. Places also show whether they are open right now, worked out in the place's own time zone.
 
 ## How it is built
 
-- **Stack:** Next.js 16, React 19, Tailwind 4, shadcn/ui, Vercel AI SDK 7. One app, one deployment.
+- **Stack:** Next.js 16, React 19, Tailwind 4, shadcn/ui, Vercel AI SDK 7, Postgres through Drizzle. One server for web and desktop; the desktop shell is Electron.
 - **Models:** Claude (Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5.2) through Claude Platform on AWS (`@ai-sdk/anthropic-aws`) and Gemini (4 Carbon, 4 Hydrogen) through Google AI Studio, switchable per message. Sub-agents and extraction run on the fast model of the same family (Haiku 5.5 or Gemini 4 Hydrogen). The thinking settings differ by family and by model (Gemini 4 rejects the "minimal" level; only Haiku lets Claude's thinking be switched off), so they are decided per model and job in one file, `web/src/lib/agent/options.ts`. Prices are in `web/src/lib/agent/models.ts`; Gemini 4 Carbon's list price doubles on 1 Dec 2026.
 - **Why the AI SDK and not Pydantic AI or a hand-written loop:** see `research_notes/Agent runtime choice/`. Short version: one codebase, and each tool's output type is the widget's input type.
 - **Code map** (all under `web/src`):
@@ -112,8 +124,12 @@ Code: `web/src/lib/browser/` (`protocol.ts` the contract, `session.ts` the brows
   - `lib/exa/client.ts`: the Exa client (search, contents, agent runs), with cost tracking and a 5-minute cache.
   - `lib/agent/tools/`: the 24 tools. `lib/agent/instructions.ts`: the system prompt.
   - `app/api/chat/route.ts`: the agent loop, usage metadata, context trimming, prompt caching.
-  - `lib/browser/`: the live browser (`session.ts` drives it in any of its three forms, `guard.ts` holds the rules, `snapshot.ts` turns a page into text). `components/browser/`: the pane; `desktop-view.tsx` is the real view in the desktop app, `browser-view.tsx` the streamed one.
-  - `desktop/` (beside `src`): the desktop app. `main.cjs` is the window, `relay.cjs` the bridge between the agent and the browser view, `preload.cjs` what the interface may ask of the app, `run.mjs` the launcher.
+  - `lib/client-kind.ts`: web or desktop, and the header that tells the server which is asking.
+  - `lib/agent/tools/index.ts`: which tools each kind gets (`createTools`); `lib/agent/instructions.ts`: what each kind is told it can do.
+  - `lib/browser/`: the live browser's engine, which runs in the desktop app (`session.ts` the browser, `guard.ts` the rules, `snapshot.ts` what the model reads, `engine.ts` the door the interface knocks on, `protocol.ts` and `tool-inputs.ts` the shapes shared with the server and the interface, `client.ts` and `desktop.ts` the interface's side). `components/browser/`: the pane.
+  - `desktop/` (beside `src`): the desktop app. `main.cjs` is the window and the wiring, `relay.cjs` the bridge between the engine and the browser view, `preload.cjs` everything the interface may ask of the app, `offline.html` the page shown when the server cannot be reached, `build.mjs`, `run.mjs` and `pack.mjs` build, start and package it.
+  - `lib/db/`: the schema (`schema.ts`), the connection, migrations at start, conversations, usage and the admin's figures. `drizzle/`: the SQL migrations. `lib/auth/`: passwords, sessions, the cookie, `requireUser()` and `requireAdmin()`. `proxy.ts`: sends signed-out visitors to `/login`.
+  - `app/login`, `app/admin`, `components/account/`, `components/admin/`: the sign-in screen, the account menu and the admin's pages.
   - `components/butler/`: the chat interface. `components/widgets/`: the widgets. `WIDGETS.md` at the app root is the guide for building one.
 
 ## Research
@@ -124,8 +140,9 @@ Code: `web/src/lib/browser/` (`protocol.ts` the contract, `session.ts` the brows
 ## Open questions
 
 - **Two projects, one team of two.** Can one team submit two projects (Dock and this), and is each eligible for the main prize? Someone has to be at each table during peer review. Ask the organisers.
-- **Deployment.** Not done. The app needs a public address for the submission's demo link and for phones at the table. With the live browser it must be a server that can run Chrome (or a tunnel to the laptop), not a serverless host.
-- **Google sign-in inside the desktop app.** Built so that it should work (an ordinary embedded browser, not an automation one, as in Claude's desktop app), but only a person signing in can show that Google accepts it. If Google objects to the agent being connected while the user types, the next step is to disconnect the agent's bridge for as long as the user is in control. Human checks are detected and handed to the user in every form of the browser.
-- **The desktop app is run from the source** (`pnpm desktop`). It is not packaged as an installer, and it still needs the server on the same computer.
+- **Deployment.** Not done. The server no longer runs a browser, so it can go on any host that runs Next.js, with a hosted Postgres; set `DATABASE_URL`, the admin's two variables and the model keys there, then package the desktop app with `BERYL_SERVER_URL` pointing at it. On a serverless host run `pnpm db:migrate` at deploy. The sign-in limiter is in memory, per server instance.
+- **Google sign-in inside the desktop app.** Built so that it should work (an ordinary embedded browser, not an automation one), but only a person signing in can show that Google accepts it. If Google objects to the engine being connected while the user types, the next step is to disconnect the bridge for as long as the user is in control.
+- **The packaged app is not signed or notarised**, and has only been built for this Mac.
+- **Accounts.** A user cannot change their own password and there is no "forgot password": the admin sets a new one.
 - **Hotels are slow** (up to a minute through Jinko). A faster source would improve the trip demo.
 - **Not yet checked on a phone.** The layout is responsive, but nobody has used it on one.

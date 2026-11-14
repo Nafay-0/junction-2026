@@ -7,6 +7,7 @@ import { ArrowDown, Eye, Plus, RotateCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DEFAULT_MODEL_ID, getModel } from "@/lib/agent/models";
 import type { ButlerMessage } from "@/lib/agent/tools";
+import { useUser } from "@/lib/auth/client";
 import { APP_NAME } from "@/lib/brand";
 import { browserState, control as browserControl, requestHandover, runBrowserTool, stopBrowserTools } from "@/lib/browser/client";
 import { useDesktopApp } from "@/lib/browser/desktop";
@@ -155,7 +156,7 @@ export function Butler() {
 
   // The live browser belongs to the account, not to one conversation: it sits above the
   // conversation, so opening another one does not disturb a browser that is running.
-  const accountId = "local";
+  const accountId = useUser().id;
   const handover = React.useRef<((answer: HandoverAnswer, toolCallId?: string) => void) | null>(null);
   const onHandoverDone = React.useCallback((answer: HandoverAnswer, toolCallId?: string) => handover.current?.(answer, toolCallId), []);
 
@@ -229,7 +230,7 @@ export function Butler() {
 
   // A conversation belongs to the kind of client it was started in. Opened from the other kind
   // it can be read, not continued: the desktop app's conversations use a browser the web lacks.
-  const startedIn: ClientKind | undefined = undefined;
+  const startedIn: ClientKind | undefined = active ? conversations.find((c) => c.id === active.id)?.origin : undefined;
 
   return (
     <div className="flex h-dvh bg-background">

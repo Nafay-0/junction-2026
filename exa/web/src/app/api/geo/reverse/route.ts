@@ -1,3 +1,4 @@
+import { requireUser } from "@/lib/auth/server";
 /**
  * Coordinates to a place name ("Otaniemi, Espoo, Finland"), for showing the user where the app
  * thinks they are. Two open geocoders built on OpenStreetMap are tried in turn: Photon first,
@@ -44,6 +45,8 @@ async function nominatim(lat: string, lng: string): Promise<Named> {
 }
 
 export async function GET(req: Request) {
+  const user = await requireUser();
+  if (user instanceof Response) return user;
   const params = new URL(req.url).searchParams;
   const latNum = Number(params.get("lat"));
   const lngNum = Number(params.get("lng"));

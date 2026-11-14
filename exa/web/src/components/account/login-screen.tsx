@@ -82,6 +82,11 @@ export function LoginScreen({
 
           <motion.form
             onSubmit={submit}
+            // If Enter is pressed before the page has taken the form over, the browser sends it
+            // itself: as a POST the sign-in route understands, so the password never ends up in
+            // the address bar or a log, and the sign-in still works.
+            method="post"
+            action="/api/auth/login"
             noValidate
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}

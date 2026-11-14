@@ -2,8 +2,9 @@
 
 import * as React from "react";
 import { motion } from "motion/react";
-import { ArrowUpRight, ChartCandlestick, Microscope, MousePointerClick, Plane, ShoppingBag, UtensilsCrossed } from "lucide-react";
+import { ArrowUpRight, ChartCandlestick, Images, Microscope, MousePointerClick, Plane, ShoppingBag, UtensilsCrossed } from "lucide-react";
 import { APP_NAME } from "@/lib/brand";
+import { useDesktopApp } from "@/lib/browser/desktop";
 import { useClientValue } from "@/lib/use-client";
 
 type Preset = { icon: React.ReactNode; title: string; hint: string; prompt: (place: string) => string };
@@ -50,6 +51,14 @@ const PRESETS: Preset[] = [
   },
 ];
 
+/** The last card. In the desktop app the agent acts in a live browser; on the web it finds and shows. */
+const SHOW_ME: Preset = {
+  icon: <Images />,
+  title: "Show me",
+  hint: "Pictures, a map and the facts behind them",
+  prompt: () => "Show me the best places to see the northern lights near Rovaniemi, and tell me when to go.",
+};
+
 function greeting(hour: number): string {
   if (hour < 5) return "Still up";
   if (hour < 12) return "Good morning";
@@ -61,6 +70,9 @@ export function Welcome({ place, onPick }: { place: string; onPick: (prompt: str
   // The hour is only known in the browser, so the greeting appears after hydration.
   const hour = useClientValue(() => new Date().getHours(), -1);
   const hello = hour >= 0 ? greeting(hour) : null;
+  // Only the desktop app has a live browser, so only there does the agent offer to act on a site.
+  const desktop = useDesktopApp() !== null;
+  const presets = desktop ? PRESETS : [...PRESETS.slice(0, -1), SHOW_ME];
 
   return (
     // Sized to the chat column: beside the live browser it is narrow even on a wide screen.
@@ -73,13 +85,15 @@ export function Welcome({ place, onPick }: { place: string; onPick: (prompt: str
           <span className="text-muted-foreground italic">What can I take off your hands?</span>
         </h1>
         <p className="mt-4 max-w-[34rem] text-[0.9rem] leading-relaxed text-muted-foreground @min-[440px]/chat:mt-5 @min-[440px]/chat:text-[0.95rem]">
-          Pass me a task. I search the live web with Exa, show what I find as maps, charts and cards you can use, and do the work in a live browser you can watch. The last step comes back to you.
+          {desktop
+            ? "Pass me a task. I search the live web with Exa, show what I find as maps, charts and cards you can use, and do the work in a live browser you can watch. The last step comes back to you."
+            : `Pass me a task. I search the live web with Exa and show what I find as maps, charts and cards you can use. To have it done for you on a site, in a live browser you can watch, open the ${APP_NAME} desktop app.`}
         </p>
       </motion.div>
 
       {/* Narrow column: two columns of small chips, name only. Wider: tiles with a line of explanation, two then three across. */}
       <div className="mt-6 grid grid-cols-2 gap-2 @min-[440px]/chat:mt-9 @min-[440px]/chat:gap-2.5 @min-[640px]/chat:mt-11 @min-[640px]/chat:grid-cols-3">
-        {PRESETS.map((preset, i) => (
+        {presets.map((preset, i) => (
           <motion.button
             key={preset.title}
             type="button"

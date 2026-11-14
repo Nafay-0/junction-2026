@@ -5,7 +5,11 @@ import { costOf, getModel, type RunStats } from "@/lib/agent/models";
 import { agentProviderOptions, languageModel, workerModelFor } from "@/lib/agent/providers";
 import { createTools, type ButlerMessage } from "@/lib/agent/tools";
 import type { ToolContext } from "@/lib/agent/tools/context";
+import { requireUser } from "@/lib/auth/server";
 import { clientKindOf } from "@/lib/client-kind";
+import { conversationOrigin, validConversationId } from "@/lib/db/conversations";
+import { readOnlyReason } from "@/lib/db/origin";
+import { recordUsage } from "@/lib/db/usage";
 
 /** Agent runs with sub-agents and live inventory lookups can take a minute or more. */
 export const maxDuration = 300;
@@ -20,6 +24,8 @@ const TRIM_ABOVE_TOKENS = 120_000;
 const MAX_STEPS = 45;
 
 type ChatRequest = {
+  /** The conversation, as the interface names it. */
+  id?: string;
   messages: ButlerMessage[];
   modelId?: string;
   /** "Espoo, Finland": where the user is, for local questions. */
@@ -31,8 +37,6 @@ type ChatRequest = {
   coords?: { lat: number; lng: number; accuracyM?: number; label?: string; country?: string };
   /** True when the user has said no to sharing their exact location. */
   locationDeclined?: boolean;
-  /** The conversation this belongs to, as the interface names it. */
-  conversationId?: string;
   /** Desktop app: where its live browser stands right now. */
   browser?: { status?: string; url?: string; title?: string; control?: string };
 };
@@ -40,6 +44,10 @@ type ChatRequest = {
 const estimateTokens = (messages: ModelMessage[]) => Math.ceil(JSON.stringify(messages).length / 4);
 
 export async function POST(req: Request) {
+  // Only a signed-in account talks to the agent, and what it uses is counted against that account.
+  const user = await requireUser();
+  if (user instanceof Response) return user;
+
   let body: ChatRequest;
   try {
     body = (await req.json()) as ChatRequest;
@@ -73,6 +81,14 @@ export async function POST(req: Request) {
   // gets and what it is told it can do.
   const client = clientKindOf(req);
   const browser = client === "desktop" ? browserNote(body.browser) : undefined;
+
+  // A conversation is continued only where it was started: one from the desktop app relies on a
+  // browser the web does not have, so from the other kind of client it can be read, not continued.
+  const conversationId = validConversationId(body.id) ? body.id : undefined;
+  if (conversationId) {
+    const origin = await conversationOrigin(user.id, conversationId);
+    if (origin && origin !== client) return Response.json({ error: readOnlyReason(origin) }, { status: 409 });
+  }
 
   const ctx: ToolContext = { meter, model: info, worker, country, today, coords: coords ? { lat: coords.lat, lng: coords.lng, label: coords.label } : undefined, client };
   const tools = createTools(ctx, model);
@@ -132,7 +148,7 @@ export async function POST(req: Request) {
         }
         if (part.type === "finish") {
           const usage = toTokenUsage(part.totalUsage);
-          return addStats(earlier, {
+          const request: RunStats = {
             modelId: info.id,
             modelLabel: info.label,
             startedAt: meter.startedAt,
@@ -142,7 +158,10 @@ export async function POST(req: Request) {
             llmCostUsd: round(costOf(info.id, usage)),
             finishReason: part.finishReason,
             ...meter.snapshot(),
-          });
+          };
+          // This request's own figures go to the account's record; the answer shows the running total.
+          void recordUsage({ userId: user.id, conversationId, client, stats: request });
+          return addStats(earlier, request);
         }
         return undefined;
       },

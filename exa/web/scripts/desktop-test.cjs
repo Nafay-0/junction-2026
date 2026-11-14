@@ -308,7 +308,8 @@ async function signIn(inHost) {
   if (!email || !password) throw new Error("ADMIN_EMAIL and ADMIN_PASSWORD are needed in exa/.env.local to sign in.");
   const fill = (selector, value) =>
     inHost(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(el, ${JSON.stringify(value)}); el.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
-  await until(() => inHost("Boolean(document.querySelector('input[type=email]') && document.querySelector('input[type=password]'))"));
+  // Wait until the form is alive (the page has taken it over), not merely drawn: before that, typing is lost.
+  await until(() => inHost("(() => { const el = document.querySelector('input[type=email]'); return Boolean(el && document.querySelector('input[type=password]') && Object.keys(el).some((k) => k.startsWith('__reactProps'))); })()"));
   await fill("input[type=email]", email);
   await fill("input[type=password]", password);
   await inHost("document.querySelector('form').requestSubmit(); 1");
