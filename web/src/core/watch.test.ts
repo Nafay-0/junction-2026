@@ -138,7 +138,7 @@ describe("substitutes: good, better, best, and who decides", () => {
     const dear = c(P.litre, 160);
     expect(insidePreferences(P.box, dear, tradeOffOf(P.box, 129, dear, need), mandate).outside.join(" ")).toMatch(/24 % dearer/);
     const whole = c(P.whole, 130);
-    expect(insidePreferences(P.box, whole, tradeOffOf(P.box, 129, whole, need), mandate).outside.join(" ")).toMatch(/fat 1 5/);
+    expect(insidePreferences(P.box, whole, tradeOffOf(P.box, 129, whole, need), mandate).outside.join(" ")).toMatch(/not fat 1\.5 % like the usual/);
     const oat = c(P.oat, 120, { label: "standin" });
     const out = insidePreferences(P.box, oat, tradeOffOf(P.box, 129, oat, need), mandate).outside.join(" ");
     expect(out).toMatch(/another kind/);

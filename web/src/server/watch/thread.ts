@@ -47,6 +47,9 @@ export type WatchMoment = {
 const nameIn = (p: Product | undefined, fallback: string, lang: Lang) => (p?.names?.[lang] ?? (lang === "en" ? p?.names?.en : undefined) ?? p?.name ?? fallback);
 const amountL = (n: number, unit: string) => `${num(n, 2)} ${unit === "L" ? "l" : unit}`;
 const dayWord = (date: string, lang: Lang) => (lang === "en" ? weekdayL(date, lang) : weekdayL(date, lang).toLowerCase());
+/** The day it can come again: the weekday (en, sv), the date in Finnish ("19.11.", no case ending needed). */
+const backWord = (d: string | null, lang: Lang) => (!d ? "" : lang === "fi" ? `${Number(d.slice(8, 10))}.${Number(d.slice(5, 7))}.` : weekdayL(d, lang));
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const shortDay = (date: string, lang: Lang) => `${weekdayL(date, lang)} ${Number(date.slice(8, 10))}.${Number(date.slice(5, 7))}.`;
 
 async function productsOf(rt: Runtime, ids: string[]): Promise<Map<string, Product>> {
@@ -109,7 +112,7 @@ export async function watchMomentForThread(rt: Runtime, session: AgentSession, l
   const held = w.renewals.find((r) => r.state === "held" && !r.saidAt);
   if (held) {
     const ps = await productsOf(rt, [held.product.productId]);
-    const what = nameIn(ps.get(held.product.productId), held.product.name, lang).toLowerCase();
+    const what = nameIn(ps.get(held.product.productId), held.product.name, lang);
     const day = dayWord(held.deliveryDate, lang);
     const u = held.amounts.unit;
     const sentences: string[] = [];
@@ -117,12 +120,19 @@ export async function watchMomentForThread(rt: Runtime, session: AgentSession, l
     if (d.portions) sentences.push((d.portions.direction === "up" ? t.crept : t.fell)(day, what, amountL(d.portions.from, u), amountL(d.portions.to, u), d.portions.weeks));
     if (d.cost) sentences.push(t.dearer(what, money(Math.round(d.cost.from)), money(Math.round(d.cost.to)), shortDay(d.cost.since, lang)));
     if (d.basket) sentences.push(t.basket(amountL(d.basket.amount, u), money(d.basket.nowCents), money(d.basket.usualCents)));
+    // The usual product cannot come for the day either: say so, and what a renewal would order instead.
+    const short = held.decision.action === "hold" && held.decision.because.includes("stock") ? w.findings.find((x) => x.need.productId === held.product.productId && x.need.date === held.deliveryDate && x.state !== "resolved") : undefined;
+    if (short) sentences.push(sentences.length ? t.cannotToo(backWord(short.shortfall.backOn, lang)) : t.cannot(day, what, backWord(short.shortfall.backOn, lang), false));
     sentences.push(t.held);
+    if (short?.substitutes[0]) {
+      const sp = await productsOf(rt, [short.substitutes[0].productId]);
+      sentences.push(t.instead(nameIn(sp.get(short.substitutes[0].productId), short.substitutes[0].name, lang)));
+    }
     const choices = held.decision.action === "hold" ? held.decision.choices : ["usual", "skip"];
     return {
       id: held.renewalId,
       kind: "renewal_held",
-      say: `${sentences.join(" ")}${held.staged ? ` ${t.stagedTrend}` : ""}`,
+      say: cap(`${sentences.join(" ")}${held.staged ? ` ${t.stagedTrend}` : ""}`),
       ask: choices.includes("renew_new") ? t.askThree(amountL(held.amounts.latest, u), amountL(held.amounts.usual, u)) : t.askTwo(amountL(held.amounts.usual, u)),
       answers: choices,
       steps: stepsOfRenewal(held),
@@ -134,15 +144,15 @@ export async function watchMomentForThread(rt: Runtime, session: AgentSession, l
   if (open) {
     const f: FindingWithRule = { ...open, ...(approver ? { approver } : {}), mandateRule: session.mandate.substitution.rule };
     const ps = await productsOf(rt, [f.product.productId, ...f.substitutes.map((s) => s.productId)]);
-    const what = nameIn(ps.get(f.product.productId), f.product.name, lang).toLowerCase();
-    const back = f.shortfall.backOn ? weekdayL(f.shortfall.backOn, lang) : "";
+    const what = nameIn(ps.get(f.product.productId), f.product.name, lang);
+    const back = backWord(f.shortfall.backOn, lang);
     const order = f.need.source === "order";
     const best = f.substitutes[0];
     const say = [t.cannot(dayWord(f.need.date, lang), what, back, order), best ? t.closest(nameIn(ps.get(best.productId), best.name, lang), figures(f, lang)) : t.noneCloser, f.staged ? t.staged : ""].filter(Boolean).join(" ");
     return {
       id: f.findingId,
       kind: "stock_out",
-      say: lang === "fi" ? say.charAt(0).toUpperCase() + say.slice(1) : say,
+      say: cap(say),
       ask: best ? t.askSwitch(order) : t.askNone,
       answers: best ? ["switch", "keep", ...f.substitutes.slice(1).map((s) => `switch:${s.productId}`)] : ["keep"],
       steps: stepsOfFinding(f),
@@ -155,14 +165,14 @@ export async function watchMomentForThread(rt: Runtime, session: AgentSession, l
   if (placed) {
     const o = placed.outcome!;
     const ps = await productsOf(rt, [placed.product.productId, ...(o.substitute ? [o.substitute.productId] : [])]);
-    const what = nameIn(ps.get(placed.product.productId), placed.product.name, lang).toLowerCase();
+    const what = nameIn(ps.get(placed.product.productId), placed.product.name, lang);
     const day = dayWord(placed.deliveryDate, lang);
     const who = o.approver ?? approver ?? "a person";
     const sub = o.substitute ? nameIn(ps.get(o.substitute.productId), o.substitute.name, lang) : undefined;
     const say = sub
       ? o.status === "committed" ? t.replaced(day, what, sub, money(o.totalCents ?? 0)) : t.replacedSignOff(day, what, sub, who)
       : o.status === "committed" ? t.renewed(day, what, money(o.totalCents ?? 0)) : t.renewedSignOff(day, what, money(o.totalCents ?? 0), who);
-    return { id: placed.renewalId, kind: sub ? "substitute_placed" : "renewal_placed", say: lang === "fi" ? say.charAt(0).toUpperCase() + say.slice(1) : say, answers: [], steps: stepsOfRenewal(placed), facts: { renewal: placed }, staged: placed.staged };
+    return { id: placed.renewalId, kind: sub ? "substitute_placed" : "renewal_placed", say: cap(say), answers: [], steps: stepsOfRenewal(placed), facts: { renewal: placed }, staged: placed.staged };
   }
   return undefined;
 }

@@ -331,6 +331,8 @@ export type RankedSubstitute = {
   why: string;
 };
 
+/** "fat_1_5" -> "fat 1.5 %", "lactose_free" -> "lactose free". */
+export const attrWord = (a: string) => (/^fat_\d/.test(a) ? `fat ${a.slice(4).replace("_", ".")} %` : a.replaceAll("_", " "));
 const fatOf = (attrs: string[]) => attrs.find((a) => /^fat_\d/.test(a)) ?? null;
 const fatText = (a: string | null) => (a ? `${a.slice(4).replace("_", ",")} %` : "unknown");
 const perUnit = (p: Product, packCents: number) => (p.unit === "pcs" ? null : r1(packCents / p.packSize));
@@ -397,7 +399,7 @@ export function insidePreferences(original: Product, c: SubstituteCandidate, t: 
   if (p.category !== original.category || p.unit !== original.unit) why.push(`another kind of product (${p.category.replaceAll("_", " ")})`);
   else if (c.label === "standin" || c.label === "other" || (c.map && !c.map.sameKind)) why.push("a stand-in of another kind, not the same product kind");
   const lost = original.attributes.filter(isMaterialAttribute).filter((a) => !p.attributes.includes(a));
-  if (lost.length) why.push(`not ${lost.map((a) => a.replaceAll("_", " ")).join(", ")} like the usual`);
+  if (lost.length) why.push(`not ${lost.map(attrWord).join(", ")} like the usual`);
   if (t.allergenDataMissing) why.push("no declared allergen data");
   else if (t.allergensAdded.length) why.push(`contains ${t.allergensAdded.join(", ")}, which the usual does not`);
   if (!mandate.allowedCategories.includes(p.category)) why.push(`${p.category.replaceAll("_", " ")} is not in the kitchen's signed product groups`);

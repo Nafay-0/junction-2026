@@ -612,13 +612,13 @@ async function renew(rt: Runtime, k: WatchKitchen, p: Pattern, next: { date: str
     r.state = placed.order ? "placed" : "failed";
   } else if (onlyStock) {
     // The usual product cannot come: the best substitute, alone when inside the kitchen's preferences, else for sign-off.
-    const f = [...s.findings.values()].find((x) => x.orgId === k.orgId && x.need.productId === p.product.productId && x.need.date === next.date && x.state === "open");
+    const f = [...s.findings.values()].find((x) => x.orgId === k.orgId && x.need.productId === p.product.productId && x.need.date === next.date && x.state !== "resolved");
     const best = f?.substitutes[0];
     if (f && best) {
       const placed = await placeThroughGate(rt, session, { text: `Recurring ${p.family.replaceAll("_", " ")} for ${dayName(next.date)}: ${p.product.name} cannot come${f.staged ? " (STAGED for the demo)" : ""}, so the agent renewed it with ${best.name}${best.insidePreferences ? ", inside the kitchen's preferences" : ", for a person's sign-off"}`, date: next.date, productId: best.productId, packs: best.tradeOff.packs, substituteFor: p.product.productId });
       r.outcome = { ...outcomeOf(placed), substitute: { productId: best.productId, name: best.name, insidePreferences: best.insidePreferences, findingId: f.findingId } };
       r.state = placed.order ? "placed" : "failed";
-      decideFinding(rt, f, { at: now.toISOString(), by: `the agent (auto-renew on, by ${auto.by})`, via: "auto-renew", action: placed.order ? (placed.order.status === "committed" ? "ordered_alone" : "sent_for_sign_off") : "refused", productId: best.productId, ...findingOutcome(placed) });
+      if (f.state === "open") decideFinding(rt, f, { at: now.toISOString(), by: `the agent (auto-renew on, by ${auto.by})`, via: "auto-renew", action: placed.order ? (placed.order.status === "committed" ? "ordered_alone" : "sent_for_sign_off") : "refused", productId: best.productId, ...findingOutcome(placed) });
     }
   }
   saveRenewal(s, r);
@@ -733,8 +733,13 @@ export async function answerRenewal(rt: Runtime, session: AgentSession, renewalI
     return { renewal: done };
   }
   const amount = choice === "renew_new" ? r.amounts.latest : r.amounts.usual;
-  const placed = await placeThroughGate(rt, session, { text: `Recurring ${r.family.replaceAll("_", " ")} for ${dayName(r.deliveryDate)}: ${who.by} chose ${choice === "renew_new" ? "the new amount" : "the usual amount"}, ${amount} ${unitWord(r.amounts.unit)}, after the agent held it (${r.decision.reason})`, date: r.deliveryDate, productId: r.product.productId, packs: packsFor(amount, r.product.packSize) });
-  const done: Renewal = { ...r, state: placed.order ? "answered" : "failed", answer, outcome: outcomeOf(placed) };
+  // The usual product cannot come for the day (a watch finding): the amount chosen, of the best substitute.
+  const f = [...s.findings.values()].find((x) => x.orgId === r.orgId && x.need.productId === r.product.productId && x.need.date === r.deliveryDate && x.state !== "resolved");
+  const sub = f?.substitutes[0];
+  const subPacks = sub ? packsFor(amount, sub.tradeOff.packSize) : 0;
+  const placed = await placeThroughGate(rt, session, { text: `Recurring ${r.family.replaceAll("_", " ")} for ${dayName(r.deliveryDate)}: ${who.by} chose ${choice === "renew_new" ? "the new amount" : "the usual amount"}, ${amount} ${unitWord(r.amounts.unit)}, after the agent held it (${r.decision.reason})${sub ? `; ${r.product.name} cannot come, so ${sub.name}` : ""}`, date: r.deliveryDate, ...(sub ? { productId: sub.productId, packs: subPacks, substituteFor: r.product.productId } : { productId: r.product.productId, packs: packsFor(amount, r.product.packSize) }) });
+  if (f && sub && f.state === "open") decideFinding(rt, f, { at: now.toISOString(), by: who.by, via: who.via, action: placed.order ? (placed.order.status === "committed" ? "switched" : placed.order.status === "pending_approval" ? "sent_for_sign_off" : "refused") : "refused", productId: sub.productId, ...findingOutcome(placed) });
+  const done: Renewal = { ...r, state: placed.order ? "answered" : "failed", answer, outcome: { ...outcomeOf(placed), ...(f && sub ? { substitute: { productId: sub.productId, name: sub.name, insidePreferences: sub.insidePreferences, findingId: f.findingId } } : {}) } };
   saveRenewal(s, done);
   ledger(rt, { actor: `buyer:${r.orgId}`, ...(placed.requestId ? { requestId: placed.requestId } : {}), ...(placed.order ? { orderId: placed.order.orderId } : {}), summary: renewalSummary(done), data: { step: "renewal_answered", renewalId, family: r.family, deliveryDate: r.deliveryDate, choice, amount, by: who.by, outcome: done.outcome, staged: r.staged } });
   return { renewal: done, ...(placed.order ? { order: placed.order } : {}), ...(placed.refused ? { refused: placed.refused } : {}) };
@@ -835,7 +840,7 @@ export async function stageStockOut(rt: Runtime, input: { kitchen: string; produ
 }
 
 /**
- * Stage a creeping recurring order for one demo kitchen: the last four orders on its busiest weekday become 80, 90,
+ * Stage a creeping recurring order for one demo kitchen: the last four orders on the weekday that comes next become 80, 90,
  * 100 and 110 % of the usual amount (portions) and, with `cost`, cost 0, 3, 6 and 10 % more per litre or kilo. The
  * orders it replaced are kept and put back when the stage is lifted.
  */
@@ -848,12 +853,17 @@ export async function stageDrift(rt: Runtime, input: { kitchen: string; family: 
   const { patterns } = await patternsOf(rt, k.orgId);
   const p = patterns.find((x) => x.family === input.family);
   if (!p) throw new DockError(404, "standing_not_found", `${k.name} has no recurring ${input.family} order to stage drift on.`);
-  const slot = [...p.slots].sort((a, b) => b.orders - a.orders)[0];
+  // The weekday that comes next, so the next renewal is the one that has drifted.
+  const slot = nextSlot(p, today(now))?.slot ?? [...p.slots].sort((a, b) => b.orders - a.orders)[0];
   const last = slot.points.slice(-4);
   if (last.length < 4) throw new DockError(409, "not_enough_orders", "Four orders on one weekday are needed to stage a trend.");
   const steps = [0.8, 0.9, 1, 1.1];
   const price = input.cost ? [1, 1.03, 1.06, 1.1] : [1, 1, 1, 1];
   const ids = new Set(last.map((x) => x.orderId));
+  // Whole packs, each week at least one pack more than the one before (a 20 L case cannot step by 11 L).
+  const packSize = p.product.packSize;
+  const stagedPacks: number[] = [];
+  for (const s0 of steps) stagedPacks.push(Math.max((stagedPacks.at(-1) ?? 0) + 1, Math.round((slot.usualAmount * s0) / packSize)));
   const g: Stage = { stageId: newId("stg"), kind: "drift", orgId: k.orgId, kitchen: k.slug, kitchenName: k.name, family: p.family, productId: p.product.productId, productName: p.product.name, by: input.by, at: now.toISOString(), replaced: [], stagedIds: [] };
   await updateKitchenProfile(rt.kitchens, k.orgId, (prof) => {
     if (!prof) return prof;
@@ -862,7 +872,7 @@ export async function stageDrift(rt: Runtime, input: { kitchen: string; family: 
       const i = last.findIndex((x) => x.orderId === h.orderId);
       g.replaced!.push(structuredClone(h));
       const line = h.lines[0];
-      const packs = Math.max(1, Math.round((slot.usualAmount * steps[i]) / line.packSize));
+      const packs = Math.max(1, Math.round((stagedPacks[i] * packSize) / line.packSize));
       const unitPrice = Math.round(line.unitPriceCents * price[i]);
       const id = `${h.orderId}_staged`;
       g.stagedIds!.push(id);
