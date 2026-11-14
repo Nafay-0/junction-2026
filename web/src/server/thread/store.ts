@@ -19,7 +19,7 @@ export type StoredThread = Thread & {
   /** The agent loop's message history (model messages), pruned to the last few turns. */
   messages: ModelMessage[];
   /** Pending sign-off waits: approval id of the runtime's approval request, per order. */
-  waits: Record<string, { approvalId: string; toolCallId: string; turnId: string; messages: ModelMessage[] }>;
+  waits: Record<string, { approvalId: string; toolCallId: string; turnId: string; messages: ModelMessage[]; context: string }>;
   /** clientTurnId → reply, for resends. */
   seen: Record<string, { buyerTurnId: string; agentTurnId: string }>;
   archived?: string[];

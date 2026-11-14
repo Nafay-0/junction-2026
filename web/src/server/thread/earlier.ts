@@ -19,6 +19,7 @@ export async function earlierFor(run: TurnRun, words: string): Promise<EarlierRe
   const ov = await overview(run.k);
   const byId = new Map(ov.requests.map((r) => [r.requestId ?? r.key, r]));
   const thread = inThread.slice(0, 3).flatMap((id) => (byId.get(id) ? [byId.get(id)!] : []));
-  const rest = backRef ? ov.requests.filter((r) => !thread.includes(r)) : [];
+  // "Same as last Thursday" points at what the kitchen ordered: requests that never became an order stay out.
+  const rest = backRef ? ov.requests.filter((r) => !thread.includes(r) && (r.order || r.kind === "history")) : [];
   return fromRequests([...thread, ...rest], 6);
 }

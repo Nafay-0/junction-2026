@@ -29,7 +29,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { runLegacy, type RunResult } from "./legacy";
-import { Browser, Catalogue, MILESTONES, quantile, type Milestone } from "./lib";
+import { Browser, Catalogue, MILESTONES, quantile, signInAs, type Milestone } from "./lib";
 import { SCENARIOS, type Scenario } from "./scenarios";
 import { runThread } from "./thread";
 
@@ -140,6 +140,7 @@ async function runOne(url: string, driver: string, sc: Scenario, repeat: number)
  * through the store's own read routes (no live calls, no model). */
 async function evaluate(url: string, sc: Scenario, outcome: RunResult["outcome"]): Promise<Row["checks"]> {
   const b = new Browser(url);
+  await signInAs(b, sc.kitchen);
   const overview = (await b.get(`/ui-api/kitchens/${sc.kitchen}/portal`)).body;
   const ctx = { catalogue: new Catalogue(b, sc.kitchen), today: helsinkiToday(), kitchen: sc.kitchen, overview, lang: sc.lang };
   const checks: Row["checks"] = [];

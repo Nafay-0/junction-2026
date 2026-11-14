@@ -14,7 +14,7 @@
  */
 import { earlierFor, looksLikeFollowUp, toEarlier } from "@/app/k/[kitchen]/memory";
 import type { Scenario } from "./scenarios";
-import { Browser, Marks, emptyOutcome, noActions, sleep, type Actions, type Json, type OptionSeen, type Outcome } from "./lib";
+import { signInAs, Browser, Marks, emptyOutcome, noActions, sleep, type Actions, type Json, type OptionSeen, type Outcome } from "./lib";
 
 /** The assistant panel's rule for "this is a question" (k/[kitchen]/assistant.tsx, copied: that file is a React component). */
 const QUESTION = /\?\s*$|^\s*(is|are|does|do|did|what|what's|which|why|how|when|where|who|can|could|should|has|have|tell|show|explain|compare|onko|ovatko|mikä|mitkä|mitä|miksi|miten|milloin|kuka|voiko|paljonko|kerro|är|vad|varför|hur|när|vilken|vilka|finns|kan)\b/i;
@@ -28,6 +28,7 @@ export type RunResult = { outcome: Outcome; actions: Actions; marks: Marks; call
 export async function runLegacy(base: string, sc: Scenario): Promise<RunResult> {
   const b = new Browser(base);
   const k = sc.kitchen;
+  await signInAs(b, k);
   const o = emptyOutcome();
   const actions = noActions();
   const cached: boolean[] = [];

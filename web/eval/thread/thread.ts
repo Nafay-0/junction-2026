@@ -12,7 +12,7 @@
  */
 import type { Card, ThreadAction, ThreadEvent, Turn } from "@/server/thread/types";
 import type { Scenario } from "./scenarios";
-import { Browser, Marks, emptyOutcome, noActions, sleep, type Json, type OptionSeen, type Outcome } from "./lib";
+import { Browser, Marks, emptyOutcome, noActions, signInAs, sleep, type Json, type OptionSeen, type Outcome } from "./lib";
 import type { RunResult } from "./legacy";
 
 const SETTLED = new Set(["waiting_buyer", "waiting_approver", "done", "failed"]);
@@ -25,6 +25,8 @@ class ThreadState {
   cards = new Map<string, { turnId: string; card: Card; at: number }>();
   steps = new Map<string, { turnId: string; at: number }>();
   lines: string[] = [];
+  /** Lines by agent turn, so a later turn's line can count as the answer to a follow-up question. */
+  lineTurns: { turnId: string; text: string }[] = [];
   serverMarks = new Map<string, Json>();
   onEvent?: (e: ThreadEvent, at: number) => void;
 
@@ -40,7 +42,10 @@ class ThreadState {
           this.status.set(t.turnId, t.status);
           for (const s of t.steps ?? []) if (!this.steps.has(s.stepId)) this.steps.set(s.stepId, { turnId: t.turnId, at });
           for (const c of t.cards ?? []) this.putCard(t.turnId, c, at);
-          if (t.line) this.lines.push(t.line);
+          if (t.line && !this.lineTurns.some((x) => x.turnId === t.turnId)) {
+            this.lines.push(t.line);
+            this.lineTurns.push({ turnId: t.turnId, text: t.line });
+          }
           if (t.marks) this.serverMarks.set(t.turnId, t.marks);
         }
         break;
@@ -52,7 +57,10 @@ class ThreadState {
         this.putCard(e.turnId, e.card, at);
         break;
       case "line":
-        this.lines.push(e.text);
+        if (!this.lineTurns.some((x) => x.turnId === e.turnId)) {
+          this.lines.push(e.text);
+          this.lineTurns.push({ turnId: e.turnId, text: e.text });
+        }
         break;
       case "status":
         this.status.set(e.turnId, e.status);
@@ -131,6 +139,9 @@ export async function runThread(base: string, sc: Scenario): Promise<RunResult> 
   const actions = noActions();
   const st = new ThreadState();
 
+  // The stage kitchens are open only to their own signed-in account (main since 14 Nov): sign in when the server's
+  // password is known (DOCK_KAARI_PASSWORD / DOCK_LAAKSO_PASSWORD), as a judge at the table would.
+  await signInAs(b, k);
   // Start over, then load the (empty) thread: not timed.
   await b.post(`${root}/reset`, {});
   const snap = await b.get(root);
@@ -253,6 +264,8 @@ export async function runThread(base: string, sc: Scenario): Promise<RunResult> 
   const fin = await b.get(root);
   if (fin.status === 200) st.applySnapshot(fin.body?.thread);
   collect(st, o);
+  // A follow-up question answered in words: the agent's grounded line on a later turn is the answer.
+  for (const l of st.lineTurns) if (l.turnId !== firstAgentTurn && sc.turns.slice(1).some((t) => /\?\s*$/.test(t.say))) o.answers.push({ text: l.text, kind: "line", citations: [] });
 
   for (const x of o.orders) if (x.status === "pending_approval") await b.post(`/ui-api/kitchens/${k}/call`, { method: "POST", path: `/api/v1/orders/${x.orderId}/withdraw`, body: { reason: "eval cleanup", by: "eval" } });
   return { outcome: o, actions, marks, calls: b.calls.length, cached: [], serverMarks: Object.fromEntries(st.serverMarks), streamed: streamedOnce };

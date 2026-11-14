@@ -155,6 +155,16 @@ export type Actions = {
 
 export const noActions = (): Actions => ({ taps: 0, typed: 0, extraTyped: 0, list: [] });
 
+/**
+ * The stage kitchens are open only to their own signed-in account (main since 14 Nov). Sign in as a judge at the table
+ * would, when the server's password is known (DOCK_KAARI_PASSWORD / DOCK_LAAKSO_PASSWORD); a server from before
+ * accounts needs none.
+ */
+export async function signInAs(b: Browser, kitchen: string): Promise<void> {
+  const pw = process.env[`DOCK_${kitchen.toUpperCase()}_PASSWORD`];
+  if (pw) await b.post("/ui-api/account/signin", { username: kitchen, password: pw });
+}
+
 // ---------- the catalogue, for checks ----------
 
 export type ProductInfo = { id: string; name: string; category?: string; attributes: string[]; allergens: string[] } | null;

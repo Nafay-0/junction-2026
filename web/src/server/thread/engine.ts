@@ -135,18 +135,20 @@ export async function submitTurn(kitchen: Kitchen | string, input: unknown): Pro
   const t0 = Date.now();
   const run: TurnRun = { rt: r.rt, store: e.store, thread, turnId: agentTurn.turnId, buyer, k: r.k, session: r.session, person: r.person, door, t0, facts: [], requests: new Set(), orders: new Map(), readings: new Map() };
   // The first visible sign of work, before any model call.
+  const usage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, costUsd: 0, fallbacks: 0, toolCalls: 0 };
+  const turnCtx = () => ({ threadId: thread.threadId, turnId: agentTurn.turnId, door, kitchen: slug, orgId: r.k.info.orgId, agentId: r.session.agentId, usage });
   const first = step(run, body.action ? "tap" : "read", !body.action && body.text && worthReading(body.text) ? "Reading your request" : "On it");
   if (!body.action) run.opening = first;
 
   // A speculative reading of new words, in parallel with the agent's first step (agent.ts asks for the same reading).
   if (body.text && !body.action && worthReading(body.text)) {
-    void earlierFor(run, body.text).then((earlier) => read(run, body.text!, earlier)).catch(() => undefined);
+    void withTurn(turnCtx(), () => earlierFor(run, body.text!).then((earlier) => read(run, body.text!, earlier))).catch(() => undefined);
   }
 
   // One agent turn at a time per thread: a turn sent while one works is answered next.
   const prev = e.queues.get(slug) ?? Promise.resolve();
   const next = prev.then(() =>
-    withTurn({ threadId: thread.threadId, turnId: agentTurn.turnId, door, kitchen: slug, orgId: r.k.info.orgId, agentId: r.session.agentId }, () => work(run, body, first)).catch((err) => {
+    withTurn(turnCtx(), () => work(run, body, first)).catch((err) => {
       console.error("[thread]", err);
       e.store.card(thread, agentTurn.turnId, { type: "notice", cardId: cardId("notice", agentTurn.turnId), kind: "error", message: "Something went wrong on our side. Try again.", retry: true });
       e.store.status(thread, agentTurn.turnId, "failed", { ms: Date.now() - t0 });
@@ -225,20 +227,32 @@ async function agentTurn(run: TurnRun, words: string | undefined, nudge?: string
   run.thread.messages = trim([...history, user, ...res.messages]);
   if (res.approval?.orderId) {
     // With the exact history the approval belongs to: the continuation must follow the request it answers.
-    run.thread.waits[res.approval.orderId] = { approvalId: res.approval.approvalId, toolCallId: res.approval.toolCallId, turnId: run.turnId, messages: [...history, user, ...res.messages] };
+    run.thread.waits[res.approval.orderId] = { approvalId: res.approval.approvalId, toolCallId: res.approval.toolCallId, turnId: run.turnId, messages: [...history, user, ...res.messages], context: res.context };
     record(run, "sign_off_wait", `The agent paused for the sign-off of ${res.approval.orderId} (approval request ${res.approval.approvalId}).`, { orderId: res.approval.orderId, approvalId: res.approval.approvalId });
   }
   run.store.save(run.thread);
   return res;
 }
 
-/** The last few exchanges only, cut at a user message so tool calls and results stay paired. */
+/**
+ * The last few exchanges only, cut at a user message so tool calls and results stay paired, and without the model's
+ * reasoning: a provider binds a reasoning block to the exact conversation it was made in (Anthropic refuses a signed
+ * thinking block replayed under another system prompt), and the turn context changes every turn.
+ */
 function trim(messages: ModelMessage[], keepUsers = 4): ModelMessage[] {
+  let start = 0;
   let users = 0;
   for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].role === "user" && ++users === keepUsers) return messages.slice(i);
+    if (messages[i].role === "user" && ++users === keepUsers) {
+      start = i;
+      break;
+    }
   }
-  return messages;
+  return messages.slice(start).flatMap((m): ModelMessage[] => {
+    if (m.role !== "assistant" || typeof m.content === "string") return [m];
+    const content = m.content.filter((p) => p.type !== "reasoning");
+    return content.length ? [{ ...m, content }] : [];
+  });
 }
 
 /** The model's sentence, shown only if every figure, date, product and claim in it is in this turn's data. */
@@ -325,7 +339,7 @@ async function resumeAfterSignOff(rt: Runtime, kitchen: string, t: StoredThread,
   await withTurn({ threadId: t.threadId, turnId: wait.turnId, door: buyer.door, kitchen, orgId: t.orgId, agentId: r.session.agentId }, async () => {
     record(run, "sign_off_answered", `The sign-off of ${order.orderId} was recorded (${order.status}); the agent's pending approval was answered by the server: ${approved ? "approved" : "not approved"}.`, { orderId: order.orderId, approvalId: wait.approvalId, approved }, order.requestId);
     try {
-      const res = await runAgent(run, [...saved, response]);
+      const res = await runAgent(run, [...saved, response], { context: wait.context });
       t.messages = trim([...saved, response, ...res.messages]);
       if (res.text) showLine(run, res.text);
     } catch {

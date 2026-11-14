@@ -230,3 +230,14 @@ describe("the thread store", () => {
     expect(s.events("k", 0).map((e) => e.type)).toEqual(["reset"]);
   });
 });
+
+describe("words that pass on someone else's answer", () => {
+  it("are relayed, whoever types them", async () => {
+    const { passedOn } = await import("./pipeline");
+    expect(passedOn("the chef said yes")).toBe(true);
+    expect(passedOn("keittiömestari sanoi että käy")).toBe(true);
+    expect(passedOn("kocken säger ja")).toBe(true);
+    expect(passedOn("yes, 1000 is right")).toBe(false);
+    expect(passedOn("our chef loves this milk")).toBe(false);
+  });
+});

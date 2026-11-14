@@ -80,9 +80,19 @@ export function record(run: Pick<TurnRun, "rt" | "thread" | "turnId" | "door" | 
 
 // ---------- reading ----------
 
+/**
+ * Words that pass on someone else's answer ("the chef said yes", "keittiömestari sanoi että käy", "kocken säger ja"):
+ * whoever types them, the answer is not their own, so it is recorded as relayed even from a signed-in session.
+ */
+const PASSED_ON = /\b(said|says|told me|asked me to|confirmed|approved|okayed|according to|sanoi|sanoo|kertoi|vahvisti|hyväksyi|mukaan|sa|säger|sade|bekräftade|godkände|enligt)\b/i;
+const SOMEONE_ELSE = /\b(the |our |my )?(chef|head chef|cook|boss|manager|owner|kitchen manager|keittiömestari|kokki|esimies|pomo|omistaja|keittiöpäällikkö|kocken|kock|chefen|ägaren|köksmästaren)\b/i;
+export function passedOn(words: string | undefined): boolean {
+  return !!words && SOMEONE_ELSE.test(words) && PASSED_ON.test(words);
+}
+
 /** Whose words these are, as the intake records them: the kitchen's signed-in person, or relayed. */
 export function humanVia(run: TurnRun, words?: string): HumanVia {
-  if (!run.person) return words ? { ...RELAYED, words: words.slice(0, 300) } : RELAYED;
+  if (!run.person || passedOn(words)) return words ? { ...RELAYED, words: words.slice(0, 300) } : RELAYED;
   if (run.door === "voice" && words) return { channel: "voice", person: run.person.name, words: words.slice(0, 300) };
   return { channel: "portal_session", person: run.person.name };
 }
@@ -102,6 +112,50 @@ export function read(run: TurnRun, words: string, earlier: EarlierRequest[]): Pr
     run.readings.set(key, p);
   }
   return p;
+}
+
+// ---------- words the assortment does not carry ----------
+
+/** Words of a request that say nothing about the product itself, or are said in another way in product data. */
+const NOT_A_QUALIFIER = /^(fresh|light|organic|whole|skim|skimmed|semi|full|plain|normal|regular|ordinary|standard|usual|same|good|cheap|cheapest|best|large|small|big|tuore|tuoret|kevy|rasvat|täys|luomu|tavalli|normaali|tavanomai|halvin|halpa|iso|pieni|färsk|lätt|ekologisk|vanlig|billig|stor|liten|some|more|extra|kpl|pcs|pack|packs|box|boxes|crate|crates|litre|litres|liter|liters|kilo|kilos|kg|laatik|pakka|purkki|säkki|låda|förpack)/i;
+
+/**
+ * The words of the item that say what it is ("camel" in "camel milk", "oat" in "oat drink"), checked by plain code
+ * against the products themselves with the catalogue's own search: which words no product of the family carries at
+ * all (`absent`), and which words each option's main product does not carry (`notCarried`). The intake finds the
+ * family; this keeps a stand-in from being shown as the thing asked for. Words naming the family, a claim, an
+ * allergen or a generic quality are not counted.
+ */
+export async function qualifierCheck(run: TurnRun, family: string, item: string, options: OptionView[]): Promise<{ absent: string[]; notCarried: Map<string, string[]> }> {
+  const { groupsIn } = await import("@/core/also-asked");
+  const { claimsIn, allergenCode } = await import("@/core/grounding");
+  const words = [...new Set(item.toLowerCase().split(/[^\p{L}]+/u).filter((w) => w.length >= 3))].filter((w) => !NOT_A_QUALIFIER.test(w) && !groupsIn(w).length && !claimsIn(w).length && !allergenCode(w) && !family.toLowerCase().includes(w));
+  const absent: string[] = [];
+  const notCarried = new Map<string, string[]>();
+  const main = (o: OptionView) => [...o.lines].sort((a, b) => b.quantity * (b.packSize ?? 1) - a.quantity * (a.packSize ?? 1))[0]?.productId;
+  for (const w of words) {
+    const inFamily = await run.rt.catalog.searchProducts({ category: family, text: w, limit: 1 });
+    // A word the family's own products never carry, for no product: not a qualifier the catalogue knows at all
+    // when the whole catalogue has none either (a word like "kitchen"); a stand-in when the family has none.
+    if (!inFamily.length) {
+      const anywhere = await run.rt.catalog.searchProducts({ text: w, limit: 1 });
+      if (anywhere.length && anywhere[0].category !== family) {
+        absent.push(w);
+        for (const o of options) notCarried.set(o.optionId, [...(notCarried.get(o.optionId) ?? []), w]);
+      } else if (!anywhere.length) {
+        absent.push(w);
+        for (const o of options) notCarried.set(o.optionId, [...(notCarried.get(o.optionId) ?? []), w]);
+      }
+      continue;
+    }
+    for (const o of options) {
+      const id = main(o);
+      if (!id) continue;
+      const carries = await run.rt.catalog.searchProducts({ ids: [id], text: w, limit: 1 });
+      if (!carries.length) notCarried.set(o.optionId, [...(notCarried.get(o.optionId) ?? []), w]);
+    }
+  }
+  return { absent, notCarried };
 }
 
 // ---------- the intake ----------
@@ -139,7 +193,7 @@ function noticeFrom(err: unknown, ref: string, words: string): NoticeCard {
  * question, options), then, for a routine request, the order placed alone. Several items in one message each come
  * through here, in parallel.
  */
-export async function orderFromWords(run: TurnRun, words: string, earlier: EarlierRequest[], opts: { deliverBy?: string; item?: number } = {}): Promise<ItemOutcome[]> {
+export async function orderFromWords(run: TurnRun, words: string, earlier: EarlierRequest[], opts: { deliverBy?: string; item?: number; quietIfNotPurchase?: boolean } = {}): Promise<ItemOutcome[]> {
   const ref = `${run.turnId}:${opts.item ?? 0}`;
   const reading = !opts.item && run.opening ? run.opening : step(run, "read", opts.item ? `Reading "${words.slice(0, 40)}"` : "Reading your request");
   if (!opts.item) run.opening = undefined;
@@ -148,8 +202,15 @@ export async function orderFromWords(run: TurnRun, words: string, earlier: Earli
     r = await read(run, words, earlier);
     reading.done(r.model);
   } catch (err) {
-    reading.fail(err instanceof DockError ? err.code : undefined);
     const notice = noticeFrom(err, ref, words);
+    // Words the reader says are not a purchase, asked through the agent: the agent answers them itself (a question
+    // about the cards on screen), so no "not a purchase" card is shown.
+    if (opts.quietIfNotPurchase && notice.kind === "not_purchase") {
+      reading.skip("not a purchase request");
+      record(run, "read_not_purchase", `The reader found no purchase in "${words.slice(0, 200)}"; the agent answers it instead.`, {});
+      return [{ words, notice }];
+    }
+    reading.fail(err instanceof DockError ? err.code : undefined);
     run.store.card(run.thread, run.turnId, notice);
     run.facts.push(notice);
     record(run, "read_failed", `The request could not be read: ${notice.message}`, { code: err instanceof DockError ? err.code : "error" });
@@ -158,6 +219,13 @@ export async function orderFromWords(run: TurnRun, words: string, earlier: Earli
   const need = { ...(r.need as NeedInput) };
   // A second item of the same message without its own day takes the day the message gave (plain code, said once).
   if (!need.deliverBy && opts.deliverBy) need.deliverBy = opts.deliverBy;
+  // A change to the request on the table ("make it 200 litres") keeps what it did not restate: its day.
+  const base = r.basedOn && earlier.find((e) => e.id === r.basedOn!.requestId);
+  const baseDay = base && typeof base.need?.deliverBy === "string" ? (base.need.deliverBy as string) : undefined;
+  if (!need.deliverBy && !(need as { deliverOn?: string }).deliverOn && baseDay && baseDay >= new Date().toISOString().slice(0, 10) && r.basedOn) {
+    need.deliverBy = baseDay;
+    if (!r.basedOn.fields.includes("deliverBy")) r.basedOn = { ...r.basedOn, fields: [...r.basedOn.fields, "deliverBy"] };
+  }
   const parsed = NeedSchema.parse(need) as StructuredNeed;
   const basedOn = r.basedOn ? { ...r.basedOn, label: earlier.find((e) => e.id === r.basedOn!.requestId)?.text ?? undefined } : undefined;
   const alsoAsked = (r.alsoAsked ?? []).map((a) => a.text);
@@ -214,10 +282,27 @@ export async function afterStep(run: TurnRun, s: IntakeView, words: string): Pro
   }
   if (s.state === "options_ready") {
     const card = optionsCard(s)!;
+    // A word of the request no product in the assortment carries ("camel" in "camel milk"): the options are the
+    // closest products, never shown as the thing asked for, and the agent does not choose one alone.
+    const q = await qualifierCheck(run, s.family, s.need.item.text, card.options);
+    for (const o of card.options) {
+      const lacks = q.notCarried.get(o.optionId);
+      if (!lacks?.length) continue;
+      o.match = "compromise";
+      o.givesUp = [`not ${lacks.join(" ")}${q.absent.length ? ": nothing in the assortment is" : ""}`, ...o.givesUp];
+    }
+    const missing = [...new Set([...q.notCarried.values()].flat())];
+    if (q.absent.length) {
+      const notice: NoticeCard = { type: "notice", cardId: cardId("notice", `${s.requestId}:missing`), requestId: s.requestId, kind: "not_found", message: `Nothing in the assortment is "${s.need.item.text}". The options are the closest products the wholesaler has.` };
+      run.store.card(run.thread, run.turnId, notice);
+      run.facts.push(notice);
+      out.notice = notice;
+    }
+    if (missing.length) record(run, "not_in_assortment", `The options do not carry "${missing.join(" ")}" (from "${s.need.item.text}")${q.absent.length ? ", and nothing in the assortment does" : ""}: they are shown as stand-ins, not as a match.`, { words: missing, absent: q.absent }, s.requestId);
     run.store.card(run.thread, run.turnId, card);
     mark(run, "options");
     out.options = card.options.map((o, i) => ({ ref: `o${i + 1}`, optionId: o.optionId, title: o.title, totalCents: o.totalCents, deliveryDate: o.deliveryDate, match: o.match }));
-    const routine = await routineChoice(run, s, card.options);
+    const routine = missing.length ? undefined : await routineChoice(run, s, card.options);
     if (!routine) return out;
     record(run, "autonomy", `Routine request inside the mandate: the agent chooses "${routine.option.title}" alone (${routine.why}).`, { optionId: routine.option.optionId, why: routine.why }, s.requestId);
     const chose = step(run, "quote", "Fixing the price with the wholesaler");

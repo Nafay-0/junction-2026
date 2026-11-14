@@ -46,6 +46,7 @@ Your sentence:
 - One sentence, at most 20 words, in the buyer's language (English, Finnish or Swedish: the language they wrote in).
 - Never write a product name, price, amount, date, delivery day, stock level, allergen or diet claim unless a tool result in this turn states it exactly. Prefer pointing at the cards ("Three options below; the first is what you usually order.").
 - Never say an order is placed, confirmed or approved unless a tool result says so. A waiting order is waiting.
+- A requested day is the latest acceptable day: an option delivered earlier meets it. Do not restate what the cards already show.
 - If memory answered something, say so in a few words ("Lactose-free, as you always order.").
 - No greetings, no apologies, no lists, no markdown, no ids.`;
 
@@ -163,11 +164,13 @@ export function turnContext(run: TurnRun, refs: OpenRef[]): string {
 
 // ---------- the agent ----------
 
-export type AgentRunResult = { text: string; messages: ModelMessage[]; approval?: { approvalId: string; toolCallId: string; orderId: string }; items: ItemOutcome[]; model: string };
+export type AgentRunResult = { text: string; messages: ModelMessage[]; approval?: { approvalId: string; toolCallId: string; orderId: string }; items: ItemOutcome[]; model: string; context: string };
 
-export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { words?: string } = {}): Promise<AgentRunResult> {
+/** `context`: the turn context to use (a resumed sign-off wait reuses its own, so the conversation the model's reasoning is bound to stays the same). */
+export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { words?: string; context?: string } = {}): Promise<AgentRunResult> {
   const items: ItemOutcome[] = [];
   const refs = await openRefs(run);
+  const context = opts.context ?? turnContext(run, refs);
   const words = opts.words ?? run.buyer.text ?? "";
   let usedReply = false;
 
@@ -198,7 +201,7 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
         // The model may only pass on words the buyer said: anything else is read from the buyer's message itself.
         const said = words.includes(w.trim()) ? w.trim() : words;
         const earlier = await earlierFor(run, said);
-        const out = await orderFromWords(run, said, earlier);
+        const out = await orderFromWords(run, said, earlier, { quietIfNotPurchase: true });
         items.push(...out);
         return forModel(out);
       },
@@ -265,7 +268,7 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
   let fellBack = "";
   const { model, id } = modelFor(undefined, (i) => {
     fellBack = i.to;
-    run.store.step(run.thread, run.turnId, { stepId: `fb${Date.now()}`, kind: "model", label: "The first model was slow; a second one answers", status: "done", startedAt: new Date().toISOString(), detail: i.reason });
+    run.store.step(run.thread, run.turnId, { stepId: `fb${Date.now()}`, kind: "model", label: "The first model did not answer in time; a second one answers", status: "done", startedAt: new Date().toISOString(), detail: i.reason });
     record(run, "model_fallback", `The agent's model ${i.from} did not answer in time (${i.reason}); ${i.to} answered instead.`, i);
   });
 
@@ -275,7 +278,7 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
     model,
     instructions: [
       { role: "system", content: AGENT_INSTRUCTIONS, providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } } },
-      { role: "system", content: turnContext(run, refs) },
+      { role: "system", content: context },
     ],
     tools,
     activeTools: [...PUBLISHED_FOR_MODEL, "order", "buyer_reply", "order_history", "await_sign_off"],
@@ -314,7 +317,7 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
       approval = { approvalId: p.approvalId, toolCallId: p.toolCall.toolCallId, orderId: String((p.toolCall.input as { orderId?: string }).orderId ?? "") };
     }
   }
-  return { text: text.trim(), messages: response.messages, approval, items, model: fellBack || id };
+  return { text: text.trim(), messages: response.messages, approval, items, model: fellBack || id, context };
 }
 
 const LABELS: Record<string, string> = {
