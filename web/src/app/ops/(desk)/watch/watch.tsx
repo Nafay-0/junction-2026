@@ -7,7 +7,7 @@ import { api } from "../../../_client/api";
 import { verifySigned, type KeySet } from "../../../_client/verify-signed";
 import { Badge } from "../../../_ui/kit";
 import { fi, num, when } from "../../_ui/format";
-import { Button, Details, Empty, LoadError, Loading, Num, PageHead, Panel, Section, useNow, useOps } from "../../_ui/kit";
+import { Button, Details, Empty, LoadError, Loading, Num, PageHead, Panel, Section, useNow, useOps, StaffButton } from "../../_ui/kit";
 import { Table } from "../../_ui/parts";
 import { WATCH_TEXT } from "./watch.text";
 import { SamplePill, isSample } from "../../../_ui/sample";
@@ -65,7 +65,7 @@ function Body({ v, now, refresh }: { v: View; now: number; refresh: () => void }
         <Num n={num(v.stats.staged)} label="staged now" sub="demo and test kitchens only" />
       </Panel>
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        <Button kind="primary" onClick={() => void run()} disabled={running}>
+        <Button staff kind="primary" onClick={() => void run()} disabled={running}>
           {running ? "Watching…" : "Run the watch now"}
         </Button>
         {note && (
@@ -153,7 +153,7 @@ function FindingCard({ f, now }: { f: Finding; now: number }) {
         <span className="tabular text-[0.84rem] text-ink-soft">{when(f.at, new Date(now))}</span>
       </div>
       <p className="mt-1 text-[0.9rem]">
-        {f.staged && <Badge tone="bad">Staged for the demo</Badge>} Needed {fi(f.need.date)} for {f.need.source === "order" && f.need.orderId ? <Link href={`/ops/orders/${f.need.orderId}`} title={f.need.orderId} className="text-petrol underline decoration-petrol/30 underline-offset-4">an order</Link> : "the recurring order"} ({fi(`${f.need.amount} ${f.need.unit}`)}): {f.shortfall.reason === "later" ? `earliest ${fi(f.shortfall.backOn)}` : fi(f.problems.join(", "))}
+        {f.staged && <Badge tone="staged">Staged for the demo</Badge>} Needed {fi(f.need.date)} for {f.need.source === "order" && f.need.orderId ? <Link href={`/ops/orders/${f.need.orderId}`} title={f.need.orderId} className="text-petrol underline decoration-petrol/30 underline-offset-4">an order</Link> : "the recurring order"} ({fi(`${f.need.amount} ${f.need.unit}`)}): {f.shortfall.reason === "later" ? `earliest ${fi(f.shortfall.backOn)}` : fi(f.problems.join(", "))}
         {f.shortfall.backOn ? `, back ${fi(f.shortfall.backOn)}` : ""}.
       </p>
       {f.substitutes.length === 0 ? (
@@ -212,9 +212,9 @@ function ClaimCheck({ findingId, claimId, simulated }: { findingId: string; clai
     <p className="font-sans text-[0.84rem]">
       Availability claim {claimId}
       {simulated ? " (simulated: staged)" : ""}.{" "}
-      <button type="button" className="text-petrol underline underline-offset-2" onClick={() => void check()}>
+      <StaffButton className="text-petrol underline underline-offset-2" onClick={() => void check()}>
         Check the signature
-      </button>
+      </StaffButton>
       {out && <span className="ml-2 text-ink-soft">{out}</span>}
     </p>
   );
@@ -257,7 +257,7 @@ function RenewalRow({ r, now }: { r: Renewal; now: number }) {
         )}
       </td>
       <td>
-        {r.staged && <Badge tone="bad">Staged</Badge>} <Badge tone={tone}>{label}</Badge>
+        {r.staged && <Badge tone="staged">Staged</Badge>} <Badge tone={tone}>{label}</Badge>
         <p className="mt-1 text-[0.82rem] text-ink-soft">{fi(r.decision.reason)}</p>
         {o?.substitute && <p className="text-[0.82rem]">Substitute: {o.substitute.name} ({o.substitute.insidePreferences ? "inside the kitchen's preferences" : "needs a person"})</p>}
         {o?.orderId && (
@@ -300,7 +300,7 @@ function Backups({ backups, now }: { backups: View["backups"]; now: number }) {
           </p>
           {b.used && (
             <p className="text-[0.84rem]">
-              {b.used.staged && <Badge tone="bad">Staged</Badge>} Used {when(b.used.at, new Date(now))}: {b.used.orderId && (
+              {b.used.staged && <Badge tone="staged">Staged</Badge>} Used {when(b.used.at, new Date(now))}: {b.used.orderId && (
                 <Link href={`/ops/orders/${b.used.orderId}`} className="text-petrol underline decoration-petrol/30 underline-offset-4">
                   {b.used.orderId}
                 </Link>
@@ -364,7 +364,7 @@ function StageForm({ kitchens, refresh }: { kitchens: Kitchens; refresh: () => v
                 <span className="text-ink-soft">Out of stock until</span>
                 <input type="date" value={until} onChange={(e) => setUntil(e.target.value)} className="mt-1 block min-h-11 rounded-lg border border-line-strong bg-paper px-3" />
               </label>
-              <Button kind="primary" disabled={busy || !pick} onClick={() => void stage("stage_stock_out")}>
+              <Button staff kind="primary" disabled={busy || !pick} onClick={() => void stage("stage_stock_out")}>
                 Stage a stock-out of this product
               </Button>
             </div>
@@ -372,7 +372,7 @@ function StageForm({ kitchens, refresh }: { kitchens: Kitchens; refresh: () => v
               <label className="flex items-center gap-2">
                 <input type="checkbox" checked={cost} onChange={(e) => setCost(e.target.checked)} /> and the price creeping up
               </label>
-              <Button disabled={busy || !pick} onClick={() => void stage("stage_drift")}>
+              <Button staff disabled={busy || !pick} onClick={() => void stage("stage_drift")}>
                 Stage creeping portions (80, 90, 100, 110 %)
               </Button>
             </div>
@@ -392,13 +392,13 @@ function Stages({ stages, refresh, now }: { stages: Stage[]; refresh: () => void
       {on.map((g) => (
         <li key={g.stageId} className="rounded-lg border border-line bg-paper px-3 py-2 text-[0.9rem]">
           <p>
-            <Badge tone="bad">Staged</Badge> <span className="font-semibold">{g.kitchenName}</span>: {g.kind === "stock_out" ? `${g.productName} out of stock until ${g.until}` : `${g.family} orders creeping up`}
+            <Badge tone="staged">Staged</Badge> <span className="font-semibold">{g.kitchenName}</span>: {g.kind === "stock_out" ? `${g.productName} out of stock until ${g.until}` : `${g.family} orders creeping up`}
           </p>
           <p className="text-ink-soft">
             {g.by}, <span className="tabular">{when(g.at, new Date(now))}</span>{" "}
-            <button type="button" className="text-petrol underline underline-offset-2" onClick={() => void post({ action: "lift", stageId: g.stageId }).then(refresh)}>
+            <StaffButton className="text-petrol underline underline-offset-2" onClick={() => void post({ action: "lift", stageId: g.stageId }).then(refresh)}>
               Lift it
-            </button>
+            </StaffButton>
           </p>
         </li>
       ))}

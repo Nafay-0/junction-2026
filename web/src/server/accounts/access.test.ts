@@ -140,13 +140,14 @@ describe("account isolation", () => {
     await openAccount("aalto", "Ravintola Aalto");
     const ops = opsCookie(new Request(BASE), enterOps({ name: "Riikka" })).split(";")[0];
     expect((await portalRoute.GET(get("/ui-api/kitchens/aalto/portal", ops), params("aalto"))).status).toBe(200);
-    expect((await opsAccounts.GET(get("/ops-api/accounts"))).status).toBe(401);
+    // A viewer (no passcode) sees that accounts exist, as staff do; acting needs the passcode (403 staff_only).
+    expect((await opsAccounts.GET(get("/ops-api/accounts"))).status).toBe(200);
     const list = await (await opsAccounts.GET(get("/ops-api/accounts", ops))).json();
     const row = list.accounts.find((r: { kitchen: string }) => r.kitchen === "aalto");
     expect(row).toMatchObject({ restaurant: "Ravintola Aalto", kind: "own", orders: 0 });
     expect(Object.keys(row).sort()).toEqual(["hasKitchen", "kind", "kitchen", "orders", "restaurant", "signedUpAt"]);
     expect(JSON.stringify(list)).not.toMatch(/scrypt|password|privateJwk|"d":/);
-    expect((await opsReset.POST(post("/ops-api/accounts/reset", {}))).status).toBe(401);
+    expect((await opsReset.POST(post("/ops-api/accounts/reset", {}))).status).toBe(403);
     expect((await opsReset.POST(post("/ops-api/accounts/reset", {}, ops))).status).toBe(200);
   });
 });

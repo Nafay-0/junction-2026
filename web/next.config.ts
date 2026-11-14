@@ -9,7 +9,13 @@ const nextConfig: NextConfig = {
   // src/proxy.ts makes Next.js buffer request bodies; cap that buffer (Dock's JSON bodies are at most 64 KB).
   // DOCK_BUILD_WORKERS (set in web/Dockerfile): how many workers `next build` may use. The hosted build machine
   // reports many cores but has 4 GB, and fifteen workers ran it out of memory on 14 Nov.
-  experimental: { proxyClientMaxBodySize: "128kb", ...(Number(process.env.DOCK_BUILD_WORKERS) > 0 ? { cpus: Number(process.env.DOCK_BUILD_WORKERS) } : {}) },
+  // DOCK_BUILD_LEAN (set in web/Dockerfile): the compile step itself was killed at the same 4 GB later that day.
+  // In the image build only: no source maps and no on-disk compile cache (a fresh image never reads it back).
+  experimental: {
+    proxyClientMaxBodySize: "128kb",
+    ...(Number(process.env.DOCK_BUILD_WORKERS) > 0 ? { cpus: Number(process.env.DOCK_BUILD_WORKERS) } : {}),
+    ...(process.env.DOCK_BUILD_LEAN === "1" ? { turbopackSourceMaps: false, turbopackInputSourceMaps: false, turbopackFileSystemCacheForBuild: false } : {}),
+  },
   // Read with fs at runtime, so shipped with the server functions: the partner catalogue index when it was built,
   // and the published crash-test results (the wall and the Agents page show them on a server that ran none itself).
   outputFileTracingIncludes: { "/*": ["./.data/valio/**/*", "./src/crash/results/*.json", "./src/crash/*.md", "./docs/*.md"] },

@@ -232,18 +232,20 @@ async function main() {
     return [gated, `HTTP ${r.status}, ${r.json?.quoteToken ? `quote ${r.json?.quote?.quoteId}, gate preview ${preview}` : `refused: rule ${preview}, ${r.json?.error?.code}`}`];
   });
 
-  await check("operations desk /ops with passcode", async () => {
+  await check("operations desk /ops: viewers read, staff act with the passcode", async () => {
     const page = await get("/ops");
     const wrong = await get("/ops-api/session", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ passcode: "not-the-passcode", name: "Smoke test" }) });
     const passcode = process.env.DOCK_OPS_PASSCODE?.trim();
     if (!passcode) return [false, "DOCK_OPS_PASSCODE is not set locally"];
     const enter = await get("/ops-api/session", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ passcode, name: "Smoke test" }) });
     const cookie = (enter.headers.get("set-cookie") ?? "").split(";")[0];
-    const denied = await get("/ops-api/overview");
+    // A viewer (no passcode) reads the overview; an action without the passcode is refused (403 staff_only).
+    const viewed = await get("/ops-api/overview");
+    const acted = await get("/ops-api/control", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "resume", suspensionId: "sus_smoke" }) });
     const overview = await get("/ops-api/overview", { headers: { cookie } });
     await get("/ops-api/session", { method: "DELETE", headers: { cookie } });
-    const ok = page.status < 400 && wrong.status === 401 && enter.status === 200 && enter.json?.mode === "passcode" && denied.status === 401 && overview.status === 200;
-    return [ok, `page ${page.status}, wrong passcode ${wrong.status}, enter ${enter.status} (${enter.json?.mode}), overview without session ${denied.status}, with ${overview.status}`];
+    const ok = page.status < 400 && wrong.status === 401 && enter.status === 200 && enter.json?.mode === "passcode" && viewed.status === 200 && (acted.status === 401 || acted.status === 403) && overview.status === 200;
+    return [ok, `page ${page.status}, wrong passcode ${wrong.status}, enter ${enter.status} (${enter.json?.mode}), overview as a viewer ${viewed.status}, an action without the passcode ${acted.status}, overview as staff ${overview.status}`];
   });
 
   await check("connector address (MCP, no headers)", async () => {

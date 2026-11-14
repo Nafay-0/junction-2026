@@ -1,3 +1,4 @@
+import { signerL } from "@/app/_i18n/signer";
 import { weekdayL } from "@/app/_i18n/format";
 import type { Lang } from "@/app/_i18n/lang";
 import { money, num } from "@/app/_ui/plain";
@@ -69,7 +70,7 @@ function figures(f: FindingWithRule, lang: Lang): string {
   parts.push(t.packs(amountL(need.amount, need.unit), String(to.packs), amountL(to.packSize, to.unit)));
   if (to.sameMaker) parts.push(t.sameMaker);
   else if (to.maker) parts.push(t.otherMaker(to.maker));
-  if (!s.insidePreferences) parts.push(t.signOff(f.approver ?? "a person"));
+  if (!s.insidePreferences) parts.push(t.signOff(f.approver ? signerL(f.approver, lang) : "a person"));
   return parts.join(", ");
 }
 
@@ -190,7 +191,7 @@ export async function watchMomentForThread(rt: Runtime, session: AgentSession, l
     const ps = await productsOf(rt, [placed.product.productId, ...(o.substitute ? [o.substitute.productId] : [])]);
     const what = nameIn(ps.get(placed.product.productId), placed.product.name, lang);
     const day = dayWord(placed.deliveryDate, lang);
-    const who = o.approver ?? approver ?? "a person";
+    const who = o.approver ?? approver ? signerL((o.approver ?? approver)!, lang) : "a person";
     const sub = o.substitute ? nameIn(ps.get(o.substitute.productId), o.substitute.name, lang) : undefined;
     const say = sub
       ? o.status === "committed" ? t.replaced(day, what, sub, money(o.totalCents ?? 0)) : t.replacedSignOff(day, what, sub, who)
@@ -255,7 +256,7 @@ export function watchAnswerOf(m: Pick<WatchMoment, "kind" | "answers"> & { facts
 export async function answerWatchMoment(rt: Runtime, session: AgentSession, id: string, answer: string, who: Who & { lang?: Lang }): Promise<{ reply: string; order?: PublicOrder; refused?: { code: string; rule?: string; message: string } }> {
   const t = WATCH_SAY_TEXT[who.lang ?? "en"];
   const lang = who.lang ?? "en";
-  const signer = (o: PublicOrder) => o.approval?.approver.name ?? session.mandate.approvers[0]?.name ?? "a person";
+  const signer = (o: PublicOrder) => { const n = o.approval?.approver.name ?? session.mandate.approvers[0]?.name; return n ? signerL(n, lang) : "a person"; };
   if (id.startsWith("wr")) {
     const r = await answerRenewal(rt, session, id, answer as RenewalChoice, who);
     await markSaid(rt, id);

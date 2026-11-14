@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import type { OrdersPage } from "@/server/ops/orders-view";
 import { Badge } from "../../../_ui/kit";
-import { day as dayWords } from "../../../_ui/plain";
+import { dayEn as dayWords } from "../../../_ui/plain";
 import { STATUS_WORD, decidedWords, fi, money, since, statusTone, when, whenSeconds } from "../../_ui/format";
 import { Button, Empty, LiveMark, LoadError, Loading, PageHead, useNow, useOps } from "../../_ui/kit";
 import { useUrlState } from "../../_ui/filters";
@@ -40,33 +40,26 @@ export function OrdersScreen() {
         purpose={OPS_ORDERS_TEXT.en.purpose}
         right={d && <LiveMark at={whenSeconds(d.at)} error={live.error} />}
       />
+      {/* One row to search (the field and its button), one row of filters that apply at once. */}
       <form
-        className="mb-4 grid grid-cols-2 items-end gap-2 sm:flex sm:flex-wrap"
+        className="mb-4 space-y-2"
         onSubmit={(e) => {
           e.preventDefault();
           setQ(typed.trim());
           setPage("1");
         }}
       >
-        <label className="col-span-2 min-w-0 sm:flex-[2_1_16rem]">
-          <span className="text-[0.8rem] font-medium text-ink-soft">Search</span>
-          <input
-            value={typed}
-            onChange={(e) => setTyped(e.target.value)}
-            placeholder="Kitchen, product, or a question"
-            title="An order id, a kitchen, a product, or in words: “refusals for allergens today”"
-            className="field mt-1 w-full"
-          />
-        </label>
-        <Pick label="Kitchen" value={kitchen} set={reset(setKitchen)} options={d?.facets.kitchens} />
-        <Pick label="Agent" value={agent} set={reset(setAgent)} options={d?.facets.agents} />
-        <Pick label="Door" value={source} set={reset(setSource)} options={d?.facets.sources} />
-        <Pick label="Status" value={status} set={reset(setStatus)} options={d?.facets.statuses} />
-        <label className="min-w-0 sm:flex-[0_1_10rem]">
-          <span className="text-[0.8rem] font-medium text-ink-soft">Day</span>
-          <input type="date" value={day} onChange={(e) => reset(setDay)(e.target.value)} className="field mt-1 w-full" title="Placed or delivered on this day" />
-        </label>
-        <span className="flex items-end gap-2">
+        <div className="flex items-end gap-2">
+          <label className="min-w-0 flex-1">
+            <span className="text-[0.8rem] font-medium text-ink-soft">Search</span>
+            <input
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              placeholder="Kitchen, product, or a question"
+              title="An order id, a kitchen, a product, or in words: “refusals for allergens today”"
+              className="field mt-1 w-full"
+            />
+          </label>
           <Button type="submit" kind="primary" size="md">
             Search
           </Button>
@@ -82,7 +75,17 @@ export function OrdersScreen() {
               Clear
             </Button>
           )}
-        </span>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+          <Pick label="Kitchen" value={kitchen} set={reset(setKitchen)} options={d?.facets.kitchens} />
+          <Pick label="Agent" value={agent} set={reset(setAgent)} options={d?.facets.agents} />
+          <Pick label="Door" value={source} set={reset(setSource)} options={d?.facets.sources} />
+          <Pick label="Status" value={status} set={reset(setStatus)} options={d?.facets.statuses} />
+          <label className="min-w-0">
+            <span className="text-[0.8rem] font-medium text-ink-soft">Day</span>
+            <input type="date" value={day} onChange={(e) => reset(setDay)(e.target.value)} className="field mt-1 w-full" title="Placed or delivered on this day" />
+          </label>
+        </div>
       </form>
       <LoadError message={live.error} />
       {d?.search && (
@@ -174,9 +177,9 @@ export function OrdersScreen() {
 
 function Pick({ label, value, set, options }: { label: string; value: string; set: (v: string) => void; options?: { id: string; label: string; n: number }[] }) {
   return (
-    <label className="min-w-0 sm:flex-[1_1_10rem]">
+    <label className="min-w-0">
       <span className="text-[0.8rem] font-medium text-ink-soft">{label}</span>
-      <select value={value} onChange={(e) => set(e.target.value)} className="field mt-1 w-full">
+      <select value={value} onChange={(e) => set(e.target.value)} title={(options ?? []).find((o) => o.id === value)?.label} className="field mt-1 w-full">
         <option value="">All</option>
         {(options ?? []).map((o) => (
           <option key={o.id} value={o.id}>

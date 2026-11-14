@@ -1,5 +1,5 @@
 import { DockError } from "@/core/errors";
-import { opsRoute } from "@/server/ops/handler";
+import { opsRead } from "@/server/ops/handler";
 import { needKafka, platformRoute } from "@/server/aiven/showcase/routes";
 import { requestEvents, streamConfigured } from "@/server/aiven/showcase/stream";
 
@@ -9,7 +9,7 @@ import { requestEvents, streamConfigured } from "@/server/aiven/showcase/stream"
  */
 export async function GET(req: Request, ctx: RouteContext<"/ops-api/platform/stream/request/[requestId]">) {
   const { requestId } = await ctx.params;
-  return opsRoute(req, async (rt, staff) => {
+  return opsRead(req, async (rt, staff) => {
     platformRoute(rt, staff, { name: "stream replay", limit: 20, windowMs: 60_000 });
     needKafka(streamConfigured());
     if (!/^req_[a-z0-9]{6,40}$/.test(requestId)) throw new DockError(400, "bad_request_id", "Not a request id.");

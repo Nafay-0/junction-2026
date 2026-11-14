@@ -28,7 +28,7 @@ export function RecallProbe() {
     <div className="mt-3 border-t border-line pt-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[0.84rem] font-medium text-ink-soft">About 30 queries from the evaluation, through both, here; query embeddings only, no judge</p>
-        <Button onClick={go} disabled={busy}>
+        <Button staff onClick={go} disabled={busy}>
           {busy ? "Timing…" : "Time both search backends"}
         </Button>
       </div>

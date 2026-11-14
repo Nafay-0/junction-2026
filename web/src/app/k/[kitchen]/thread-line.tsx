@@ -661,6 +661,12 @@ function fallbackLine(turn: AgentTurn, thread: Thread, tx: Tx, f: ReturnType<typ
 
 // ---------- the landing: Paper-style text ----------
 
+/** An amount as the replies write it: "8 l", "12 kg", "20 pcs" (kpl, st), with a space and a lower-case litre. */
+function amountWord(n: number, unit: string, f: ReturnType<typeof useFormat>): string {
+  const u = unit === "L" || unit === "l" ? "l" : unit === "pcs" ? ({ en: "pcs", fi: "kpl", sv: "st" } as const)[f.lang] : unit;
+  return `${f.num(n)} ${u}`;
+}
+
 function todaySentence(card: TodayCard, tx: Tx, f: ReturnType<typeof useFormat>): string {
   if (card.pending) return "";
   const parts: string[] = [];
@@ -673,7 +679,7 @@ function todaySentence(card: TodayCard, tx: Tx, f: ReturnType<typeof useFormat>)
       // for the first drift, and only when nothing waits for a person's OK.
       const ask = !asked && !card.items.some((x) => x.kind === "sign_off") && !!i.nextDue;
       if (ask) asked = true;
-      parts.push(tx.today.drift({ what: familyL(i.family, f.lang).toLowerCase(), usual: f.measure(i.usual.amount, i.usual.unit as never), amountPct: i.amountPct, pricePct: i.pricePct, ...(ask && i.nextDue ? { day: f.day(i.nextDue).replace(/\.$/, "") } : {}) }));
+      parts.push(tx.today.drift({ what: familyL(i.family, f.lang).toLowerCase(), usual: amountWord(i.usual.amount, i.usual.unit, f), amountPct: i.amountPct, pricePct: i.pricePct, ...(ask && i.nextDue ? { day: f.day(i.nextDue).replace(/\.$/, "") } : {}) }));
     }
     else if (i.kind === "recall") parts.push(tx.today.recall(i.productName));
     else if (i.kind === "delivery") parts.push(tx.today.delivery(f.day(i.deliveryDate)));
@@ -737,7 +743,8 @@ function Landing({ today, offer, watch, thread }: { today?: TodayCard; offer?: O
         i.kind === "sign_off" && thread ? <SignOffSlab key={i.approvalId} card={{ type: "gate", cardId: `gate:${i.orderId}`, requestId: i.requestId ?? "", orderId: i.orderId, approvalId: i.approvalId, outcome: "waiting", approver: i.approver, reasons: [], rules: [] } as GateCardT} thread={thread} tap={(action, label) => void api.submit({ door: "typed", via: "tap", action, label, lang })} total={i.totalCents} what={i.lines.map((l) => `${f.num(l.quantity)} × ${l.name}`).join(", ")} /> : null,
       )}
       <ul className="mt-6 flex flex-col gap-1.5">
-        {tx.examples.map((e) => (
+        {/* A demo account with nothing yet has no "last week": a first order, a menu, and what to try. */}
+        {(demoOwn && today && !today.pending && today.items.length === 0 ? tx.examplesNew : tx.examples).map((e) => (
           <li key={e}>
             <button type="button" onClick={() => void api.submit({ door: "typed", via: "typed", text: e, lang })} className="text-left text-[0.92rem] text-ink-soft transition-colors hover:text-petrol">
               “{e}”

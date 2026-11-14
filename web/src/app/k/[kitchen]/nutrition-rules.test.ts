@@ -9,7 +9,7 @@ describe("nutrition and label rules on Your rules, in plain words", () => {
     expect(en).toEqual([
       "Buy milk or plant drinks with less than 3 g protein per 100 g, or any that does not declare its protein.",
       "Buy yoghurt, plant-based yoghurt or quark with more than 12 g sugar per 100 g, or any that does not declare its sugar.",
-      "Buy cheese, sliced cheese or grated cheese with more than 1.2 g salt per 100 g, or any that does not declare its salt.",
+      "Buy cheese, sliced cheese or grated cheese with more than 1,2 g salt per 100 g, or any that does not declare its salt.",
       "Buy rye bread, toast bread or bread loaves with less than 6 g fibre per 100 g, or any that does not declare its fibre.",
     ]);
     expect(nutritionRuleWords(SCHOOL_NUTRITION[1], "fi")).toBe("Ostaa tuotetta (jogurtti, kasvipohjainen jogurtti, rahka), jossa on yli 12 g sokeria / 100 g, tai joka ei ilmoita sokeria.");

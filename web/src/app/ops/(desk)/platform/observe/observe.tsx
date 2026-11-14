@@ -3,7 +3,8 @@
 import { useState } from "react";
 import type { Panels, Range } from "@/server/aiven/showcase/panels";
 import { whenSeconds } from "../../../_ui/format";
-import { LoadError, Loading, PageHead, Panel, Section, useOps } from "../../../_ui/kit";
+import { LoadError, Loading, PageHead, Panel, Said, Section, useOps } from "../../../_ui/kit";
+import { envOut } from "../../../_ui/format";
 import { Bars, HBars, PlatformTabs, Rows, SqlBox, Status, fmtCell } from "../_parts/parts";
 
 /**
@@ -61,7 +62,11 @@ function Body({ p }: { p: Panels }) {
   const errors = Object.values(p.panels).filter((x) => x.error);
   return (
     <>
-      {errors.length > 0 && <p className="mt-3 rounded-lg bg-safety-soft px-4 py-2.5 ring-1 ring-inset ring-safety/50 text-[0.86rem]">{errors.length} panels could not be read: {errors[0].error}</p>}
+      {errors.length > 0 && (
+        <div className="mt-3 rounded-lg border border-line bg-surface px-4 py-2.5 text-[0.9rem]">
+          <b className="font-semibold">{errors.length} panels have no data here.</b> <Said text={errors[0].error} />
+        </div>
+      )}
       <Panel className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 lg:divide-x lg:divide-line">
         <Stat n={n(t.orders)} label="orders committed" sub={eur(n(t.value_eur))} />
         <Stat n={n(t.signoffs_asked)} label="sign-offs asked" sub={`${n(t.signoffs_granted)} granted, ${n(t.signoffs_denied)} declined`} />
@@ -240,7 +245,7 @@ function Box({ title, sql, children }: { title: string; sql?: { sql: string; err
   return (
     <Panel className="p-5">
       <h2 className="display text-[1.3rem]">{title}</h2>
-      <div className="mt-2">{sql?.error ? <p className="text-[0.84rem] font-semibold">{sql.error}</p> : children}</div>
+      <div className="mt-2">{sql?.error ? <p className="text-[0.84rem] text-ink-soft">{envOut(sql.error).names.length ? "Not connected on this server." : sql.error}</p> : children}</div>
       {sql && <SqlBox sql={sql.sql} summary={`The query${sql.ms !== undefined ? ` (${sql.ms} ms)` : ""}`} />}
     </Panel>
   );

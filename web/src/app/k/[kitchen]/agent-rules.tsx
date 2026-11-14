@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { Ban, Check, ChefHat, Copy, Eye, EyeOff, KeyRound, Lock, PenLine, Warehouse, X } from "lucide-react";
+import { Ban, Check, ChefHat, ChevronDown, Copy, Eye, EyeOff, KeyRound, Lock, PenLine, Warehouse, X } from "lucide-react";
 import { api } from "../../_client/api";
 import { useFormat, useText } from "../../_i18n/provider";
 import { helsinkiToday, moneyShort } from "../../_ui/plain";
@@ -395,7 +395,14 @@ function Connect() {
   return (
     <section aria-labelledby="connect">
       <SectionTitle id="connect">{tx.connect}</SectionTitle>
-      <p className="-mt-2 mb-5 max-w-[68ch] leading-relaxed text-ink-soft">{tx.connectIntro}</p>
+      <p className="-mt-2 max-w-[68ch] leading-relaxed text-ink-soft">{tx.connectIntro}</p>
+      {/* The addresses, keys and assistants are for the one who sets an agent up: one tap away, not on the page. */}
+      <details className="group mt-3">
+        <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 rounded-full px-1 font-semibold text-petrol hover:underline [&::-webkit-details-marker]:hidden">
+          <ChevronDown aria-hidden size={17} className="transition-transform duration-150 group-open:rotate-180 motion-reduce:transition-none" />
+          {tx.connectShow}
+        </summary>
+        <div className="mt-3">
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] [&>*]:min-w-0">
         <Card pad className="space-y-6">
           {!c ? (
@@ -446,6 +453,8 @@ function Connect() {
           </div>
         </Panel>
       </div>
+        </div>
+      </details>
     </section>
   );
 }

@@ -1,5 +1,5 @@
 import { groupL } from "../../k/[kitchen]/groups";
-import { RULE_TITLE, ROLE_LABEL, clock, clockSeconds, day, helsinkiToday } from "../../_ui/plain";
+import { RULE_TITLE, ROLE_LABEL, clock, clockSeconds, dayEn as day, helsinkiToday } from "../../_ui/plain";
 
 /**
  * Finnish conventions for the operations portal: money as 1 280,50 €, dates as ti 17.11. (shown with the English
@@ -100,10 +100,14 @@ function isoInText(iso: string): string {
 export function fi(text: string | undefined | null): string {
   if (!text) return "";
   return idsOut(text)
+    // A partner category code ("cat_41762", "cat 41762") as its product group.
+    .replace(/\bcat[_ ](\d{3,})\b/g, (m, c: string) => groupL(`cat_${c}`, "en") ?? m)
     .replace(/\b[a-z]+(?:_[a-z0-9]+)+\b/g, (code) => CODE_WORD[code] ?? (RULE_TITLE[code] ? `“${RULE_TITLE[code].toLowerCase()}”` : ROLE_LABEL[code] ?? code))
     .replace(/\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})/g, isoInText)
     .replace(/\b(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2})\b/g, (_m, d: string, h: string, mi: string) => `${day(d)} ${h}.${mi}`)
     .replace(/\b(\d{4}-\d{2}-\d{2})\b/g, (_m, d: string) => day(d))
+    // The core's own "Mon 16.11." in a sentence, said the way this surface says a day.
+    .replace(/\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (\d{1,2})\.(\d{1,2})\.(?!\d)/g, (_m, w: string, d: string, mo: string) => `${w} ${d} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(mo) - 1] ?? mo}`)
     .replace(/\bEUR\s?\/\s?([A-Z]{2,3})\b/g, (_m, u: string) => `€/${UNIT_WORD[u] ?? u.toLowerCase()}`)
     .replace(/\bper ([A-Z]{2,3})\b/g, (_m, u: string) => `per ${UNIT_WORD[u] ?? u.toLowerCase()}`)
     .replace(/\b9{6,}\b(?:\s*(?:packs?|pcs|units?))?/g, "an unreported amount")
@@ -115,7 +119,7 @@ export function fi(text: string | undefined | null): string {
     .replace(/\b(\d+)\.(\d+)(\s?)(€|kg|g|l|L|dl|ml|t)(?![\w.])/g, (_m, a: string, b: string, sp: string, u: string) => `${a},${b}${sp || nbsp}${u}`);
 }
 
-/** "Fri 13.11. 23.54" for any timestamp, today or not: for records that must be read later. */
+/** "Fri 13 Nov 23.54" for any timestamp, today or not: for records that must be read later. */
 export function stamp(iso: string | undefined): string {
   if (!iso) return "–";
   return `${day(helsinkiToday(new Date(iso)))} ${clock(iso)}`;
@@ -131,7 +135,7 @@ export function pct(share: number | null | undefined, digits = 1): string {
   return `${(share * 100).toFixed(digits).replace(".", ",")}${nbsp}%`;
 }
 
-/** "14.05" today, "Tue 17.11. 14.05" another day. */
+/** "14.05" today, "Tue 17 Nov 14.05" another day. */
 export function when(iso: string | undefined, now = new Date()): string {
   if (!iso) return "–";
   const d = helsinkiToday(new Date(iso));
@@ -219,9 +223,10 @@ export function decidedWords(d: { kind: string; words: string; rule?: string; pe
  * groups in words: "Only dairy and cheese, frozen food and 4 more groups; butter, milk, cream." Never a code.
  */
 export function categoriesInWords(text: string): string {
-  const m = /^Only (.+?)\.?$/.exec(text.trim());
+  // "Only a, b, c." (Agents) or "Product groups: a, b, c" (Time machine).
+  const m = /^(Only |[^:,]{1,40}: )(.+?)\.?$/.exec(text.trim());
   if (!m || !/\bcat[ _]\d{3,}/.test(text)) return text;
-  const items = m[1].split(/,\s*/);
+  const items = m[2].split(/,\s*/);
   const groups = new Map<string, number>();
   const named: string[] = [];
   for (const it of items) {
@@ -233,5 +238,33 @@ export function categoriesInWords(text: string): string {
   }
   const g = [...groups.entries()].sort((a, b) => b[1] - a[1]).map(([x]) => x);
   const shown = g.slice(0, 4).join(", ") + (g.length > 4 ? ` and ${g.length - 4} more groups` : "");
-  return `Only ${[shown, named.join(", ")].filter(Boolean).join("; ")}.`;
+  return `${m[1]}${[shown, named.join(", ")].filter(Boolean).join("; ")}.`;
+}
+
+const ENV_NAME = /\b(?:DOCK|KAFKA|AIVEN|OPENSEARCH|VALKEY|DATABASE|RADAR|RESEND|OPENAI|ANTHROPIC|GEMINI)_[A-Z0-9_]+\b/g;
+
+/**
+ * A server note that names environment variables ("not configured on this server (DOCK_COPILOT_PG_URL)") in words
+ * for the page, with the names kept apart for a detail an engineer can open.
+ */
+export function envOut(text: string | undefined | null): { text: string; names: string[] } {
+  if (!text) return { text: "", names: [] };
+  const names = [...new Set(text.match(ENV_NAME) ?? [])];
+  if (!names.length) return { text, names };
+  const out = text
+    .replace(/\s*\(([^()]*)\)/g, (m, inner: string) => (ENV_NAME.test(inner) ? ((ENV_NAME.lastIndex = 0), "") : ((ENV_NAME.lastIndex = 0), m)))
+    .replace(/\b(?:set|setting)\s+(?=\b(?:DOCK|KAFKA|AIVEN|RADAR)_)/gi, "")
+    .replace(ENV_NAME, "its setting")
+    .replace(/\s+([.,;:])/g, "$1");
+  return { text: out, names };
+}
+
+/**
+ * What a request "asked": a person's or agent's own words, or a label the system wrote for its own work ("Kitchen
+ * portal: live price checks for …", "Kitchen agent's watch: …"). A label is never shown in quotes, as if someone said it.
+ */
+export function askedWords(text: string | undefined | null): { words: string; system: boolean } {
+  const t = fi(text);
+  const m = /^((?:Kitchen portal|Kitchen agent's watch|Kitchen watch|Selling agent|Operations|Presenter[^:]*|The watch)): (.+)$/i.exec(t);
+  return m ? { words: m[2].charAt(0).toUpperCase() + m[2].slice(1), system: true } : { words: t, system: false };
 }

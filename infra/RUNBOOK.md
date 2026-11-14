@@ -83,7 +83,9 @@ lost on the next restart.
 
 ## Operations desk
 
-`/ops` needs `DOCK_OPS_PASSCODE` (in `web/.env.local`; read it there, do not paste it in chats). The same
+Anyone may open `/ops` to look (a viewer: every page reads, other people's own kitchens' words are hidden, every
+action is refused 403 `staff_only`). Acting needs `DOCK_OPS_PASSCODE` (in `web/.env.local`; read it there, do not
+paste it in chats), entered at `/ops/enter` ("Staff sign-in" in the header). The same
 passcode protects the one-time approver enrolment for the built-in demo kitchens once that lands from the fix
 branch. Connector management (reissue, revoke at `/ui-api/connect/<kitchen>`) takes `DOCK_CONNECTOR_SECRET`
 as a bearer token.
@@ -140,7 +142,7 @@ cd web && E2E_LIVE_URL=https://jolly-wondrous-bunny.eur-1.aiven.app pnpm exec pl
 
 Expect 6 passed (1 skipped): health ok on the `valio` catalogue with the ledger not diverged, the landing page at `/`,
 the wall (`/wall`) with its QR code and no script errors, `/join` served, the shop's sign-in door with the stage kitchens private, the operations
-desk asking for the passcode. Add `E2E_LIVE_SIGNIN=1` to also sign in to the first public test account and open one
+desk open to look and asking for the passcode to act. Add `E2E_LIVE_SIGNIN=1` to also sign in to the first public test account and open one
 product page with a live price (a session row and one partner lookup, nothing else).
 
 **Then, with two real phones on the venue Wi-Fi (5 minutes)**: the checklist in `web/e2e/README.md`, "Five-minute

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { api } from "../../_client/api";
-import { PenLine, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
+import { ChevronDown, PenLine, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
 import { Button, Card, ErrorPlate, Input, Panel, Skeleton, Switch, Tag } from "../../_ui/kit";
 import { dayL } from "../../_i18n/format";
 import type { Lang } from "../../_i18n/lang";
@@ -92,6 +92,8 @@ export function MemoryBook({ fallback }: { fallback: ReactNode }) {
   const [busy, setBusy] = useState<string>();
   const [problem, setProblem] = useState<string>();
   const [now] = useState(() => Date.now());
+  // Each group shows its first three; the rest one tap away, so the page stays short on a phone.
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const load = useCallback(() => {
     void api<View>("GET", base).then((r) => setView(r.ok && Array.isArray(r.data.items) ? r.data : null));
   }, [base]);
@@ -206,13 +208,21 @@ export function MemoryBook({ fallback }: { fallback: ReactNode }) {
             {items.length === 0 ? (
               <p className="rounded-xl border border-dashed border-line-strong bg-paper/60 px-5 py-4 leading-snug text-ink-soft">{g.id === "rule" ? tx.noRules : tx.noHabits}</p>
             ) : (
-              <Card>
-                <ul className="divide-y divide-line">
-                  {items.map((it) => (
-                    <MemoryRow key={it.id} it={it} now={now} busy={busy} act={act} />
-                  ))}
-                </ul>
-              </Card>
+              <>
+                <Card>
+                  <ul className="divide-y divide-line">
+                    {(openGroups[g.id] ? items : items.slice(0, 3)).map((it) => (
+                      <MemoryRow key={it.id} it={it} now={now} busy={busy} act={act} />
+                    ))}
+                  </ul>
+                </Card>
+                {items.length > 3 && (
+                  <button type="button" aria-expanded={!!openGroups[g.id]} onClick={() => setOpenGroups((o) => ({ ...o, [g.id]: !o[g.id] }))} className="mt-2 inline-flex min-h-11 items-center gap-1.5 rounded-full px-1 text-[0.95rem] font-semibold text-petrol hover:underline">
+                    <ChevronDown aria-hidden size={17} className={`transition-transform duration-150 motion-reduce:transition-none ${openGroups[g.id] ? "rotate-180" : ""}`} />
+                    {openGroups[g.id] ? tx.showFewer : tx.showAll(items.length)}
+                  </button>
+                )}
+              </>
             )}
           </div>
         );

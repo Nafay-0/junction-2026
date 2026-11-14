@@ -61,16 +61,22 @@ async function control(page: Page): Promise<Control> {
   return r.json();
 }
 
-test("the desk is closed without the passcode; a wrong passcode is refused", async ({ page }) => {
-  expect((await page.request.get("/ops-api/control")).status()).toBe(401);
+test("anyone may look at the desk; acting needs the passcode; a wrong passcode is refused", async ({ page }) => {
+  // A viewer reads; every action is refused, staff only.
+  expect((await page.request.get("/ops-api/control")).status()).toBe(200);
+  const act = await page.request.post("/ops-api/control", { data: { action: "resume", suspensionId: "sus_nope" } });
+  expect(act.status()).toBe(403);
+  expect((await act.json()).error.code).toBe("staff_only");
   await page.goto("/ops");
+  await expect(page.locator("text=You are looking, not operating. >> visible=true").first()).toBeVisible({ timeout: 20_000 });
+  await page.locator('a:has-text("Staff sign-in") >> visible=true').first().click();
   await page.waitForURL("**/ops/enter**");
   await page.getByLabel("Your name, for the record").fill("E2E wrong");
   await page.getByLabel("Passcode").fill("not-it");
   await page.getByRole("button", { name: "Enter as operations staff" }).click();
   await expect(page.getByRole("alert").filter({ hasText: /passcode/i })).toBeVisible();
   await expect(page).toHaveURL(/\/ops\/enter/);
-  expect((await page.request.get("/ops-api/control")).status()).toBe(401);
+  expect((await page.request.post("/ops-api/control", { data: { action: "resume", suspensionId: "sus_nope" } })).status()).toBe(403);
 });
 
 test("suspend a visitor's agent: its next call is refused naming the suspension; resume and it works again", async ({ page, browser, baseURL }) => {
@@ -195,7 +201,7 @@ test("overview, then a trace of the visitor's own request replays station by sta
   const requestId = /"(req_[a-z0-9]+)"/.exec(audit)?.[1];
   expect(requestId, "the audit record names the request").toBeTruthy();
   await page.goto(`/ops/trace/${requestId}`);
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("I need 1,000 litres of lactose-free milk by Monday");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(/I need 1[,\s]?000 litres of lactose-free milk by Monday/);
   await expect(page.getByText(/Waiting for .+ to sign off/).first()).toBeVisible();
   const stations = page.getByRole("group", { name: "Stations" }).getByRole("button");
   await expect(stations.first()).toBeVisible();

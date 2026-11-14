@@ -9,7 +9,7 @@ import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsDownU
 import { Avatar, Card, Kbd, buttonClass } from "../../../../_ui/kit";
 import { Target } from "../../../../_ui/target";
 import { ChainCheck } from "../../../_ui/chain";
-import { fi, span, stamp, when, whenSeconds } from "../../../_ui/format";
+import { askedWords, fi, span, stamp, when, whenSeconds } from "../../../_ui/format";
 import { Button, Details, Empty, KV, Licence, LoadError, Loading, ViaTag, useOps } from "../../../_ui/kit";
 import { Funnel, Stamp } from "../../../_ui/parts";
 import type { ChainResult } from "../../../_ui/verify-client";
@@ -192,7 +192,7 @@ function Trace({ t, error, stream }: { t: TraceView; error?: string; stream: boo
         </div>
         <div className="mt-6 flex flex-wrap items-start justify-between gap-x-10 gap-y-5">
           <div className="min-w-0 max-w-[68ch] flex-1">
-            <h1 className={`display text-ink ${t.asked.length > 70 ? "text-[clamp(1.55rem,2.2vw,2.15rem)] leading-[1.1]" : "text-[clamp(1.9rem,2.8vw,2.75rem)] leading-[1.05]"}`}>“{fi(t.asked) || "A request with no words"}”</h1>
+            <h1 className={`display text-ink ${t.asked.length > 70 ? "text-[clamp(1.55rem,2.2vw,2.15rem)] leading-[1.1]" : "text-[clamp(1.9rem,2.8vw,2.75rem)] leading-[1.05]"}`}>{askedWords(t.asked).system ? askedWords(t.asked).words : `“${fi(t.asked) || "A request with no words"}”`}</h1>
             <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3 text-[0.9rem]">
               <span className="flex min-w-0 items-center gap-2.5">
                 <Avatar name={t.orgName} size={34} />

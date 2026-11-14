@@ -293,6 +293,7 @@ async function shootAll() {
     await shot({}, storeState, "store-agent", `/k/${k}/agent`);
     await shot({}, storeState, "store-menu", `/k/${k}/menu`);
     await shot({}, storeState, "store-thread", `/k/${k}/order`);
+    await shot({}, storeState, "store-guide", `/k/${k}/guide`);
   }
   if (found.visitor) {
     await shot({}, phoneState, "store-visitor-home", `/k/${found.visitor}`);
