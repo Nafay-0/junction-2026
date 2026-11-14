@@ -59,7 +59,12 @@ const BAD = /couldn't get prices|don't have prices|no prices|Something went wron
       }
       const types = (a?.cards ?? []).map((c: any) => c.type);
       const reached = types.some((t: string) => ["options", "order", "gate", "price", "sheet"].includes(t));
-      const ok = reached && !lines.some((l) => BAD.test(l)) && a?.status !== "failed";
+      // Options said in words: the first option's total and why it is first are in the sentence itself.
+      const opts = (a?.cards ?? []).find((c: any) => c.type === "options");
+      const first = opts?.options?.find((o: any) => o.gate?.outcome !== "reject");
+      const total = first ? `${(first.totalCents / 100).toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, " ")} €` : "";
+      const said = !first || (opts.options.filter((o: any) => o.gate?.outcome !== "reject").length < 2) || (lines.at(-1)!.includes(total) && /is first at/.test(lines.at(-1)!));
+      const ok = reached && said && !lines.some((l) => BAD.test(l)) && a?.status !== "failed";
       if (!ok) failed++;
       console.log(`${ok ? "PASS" : "FAIL"} ${k0} run ${round}: [${a?.status}; ${types.join(",")}]\n  ${lines.join("\n  ")}\n`);
     }
