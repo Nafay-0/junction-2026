@@ -25,7 +25,10 @@ async function tap(k: Kitchen, action: Record<string, unknown>, label = "tap"): 
   let id = "";
   const done = new Promise<void>((resolve) => {
     const off = store.subscribe(k.info.slug, (e) => {
-      if (e.type === "status" && e.turnId === id && e.status !== "working") off(), resolve();
+      if (e.type === "status" && e.turnId === id && e.status !== "working") {
+        off();
+        resolve();
+      }
     });
   });
   id = (await submitTurn(k, { door: "typed", via: "tap", action, label })).agentTurnId;
