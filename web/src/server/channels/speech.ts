@@ -106,6 +106,8 @@ const NO = /(?<![\p{L}\p{N}])(no|nope|not|wrong|don'?t|stop|cancel|wait|ei|älä
 /** "yes" | "no" | "unclear", from what the person said. A sentence with both counts as unclear. */
 export function yesOrNo(text: string): "yes" | "no" | "unclear" {
   const t = text.normalize("NFC").toLowerCase();
+  // A question is not an answer: "is that right?", "are you sure?" contain a yes-word and confirm nothing.
+  if (/\?\s*$/.test(t.trim())) return NO.test(t) && !YES.test(t) ? "no" : "unclear";
   const yes = YES.test(t);
   const no = NO.test(t);
   if (yes && !no) return "yes";
