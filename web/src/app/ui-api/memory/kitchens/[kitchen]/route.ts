@@ -5,7 +5,8 @@ import { body, kitchenMemoryRoute, MemoryAction } from "@/server/memory/http";
  *   Everything this kitchen's agent remembers: items (with strength, provenance, audience), questions waiting
  *   for an answer, superseded items, staff proposals, when the wholesaler's staff read it, and what was forgotten.
  *
- * POST /ui-api/memory/kitchens/{kitchen}   one change, by the person the console relays for:
+ * POST /ui-api/memory/kitchens/{kitchen}   one change, only by the kitchen's own signed-in person (a visitor's phone;
+ * for a built-in demo kitchen the presenter enrolled as its approver), else 401 kitchen_person_required:
  *   { action: "confirm", itemId, answer: "yes" | "no" }        answer "should I remember this?" / "keep this rule?"
  *   { action: "correct", itemId, text?, fact?, family?, strength?, site? }
  *   { action: "forget", itemId }                               removes it and what derives from it
@@ -43,5 +44,5 @@ export async function POST(req: Request, ctx: RouteContext<"/ui-api/memory/kitch
       case "mandate":
         return memory.decideMandate(org, a.itemId, a.decision, by);
     }
-  });
+  }, { change: "Changing what this kitchen remembers" });
 }

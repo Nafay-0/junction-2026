@@ -5,7 +5,8 @@ import * as recallRoute from "@/app/ui-api/memory/kitchens/[kitchen]/recall/rout
 import * as mandateRoute from "@/app/ui-api/memory/kitchens/[kitchen]/mandate/route";
 import * as wholesaler from "@/app/ui-api/memory/wholesaler/route";
 import * as proposals from "@/app/ui-api/memory/wholesaler/proposals/route";
-import { resetRuntime } from "@/server/runtime";
+import { getRuntime, resetRuntime } from "@/server/runtime";
+import { presenterRoles } from "@/server/presenter";
 import { resetMemoryService } from "./runtime";
 import { enterOps } from "@/server/ops/access";
 import { OPS_COOKIE } from "./staff";
@@ -27,7 +28,18 @@ const req = (path: string, body?: unknown, headers: Record<string, string> = {})
 const json = async (r: Response) => ({ status: r.status, body: await r.json() });
 
 const view = async (k: string) => json(await kitchenMemory.GET(req(`/ui-api/memory/kitchens/${k}`), params(k)));
-const act = async (k: string, b: unknown) => json(await kitchenMemory.POST(req(`/ui-api/memory/kitchens/${k}`, b), params(k)));
+
+/** The presenter enrolled as a demo kitchen's approver: that kitchen's own signed-in person (server/authz.ts). */
+async function presenterCookie(slug: string): Promise<string> {
+  const rt = await getRuntime();
+  const role = presenterRoles(slug)![0];
+  const approverId = `apv_test_${slug}`;
+  const expiresAt = new Date(Date.now() + 3600_000);
+  await rt.passkeys.enrol({ approverId, orgId: role.orgId, role: role.role, name: role.name, userHandle: "", createdAt: new Date().toISOString(), expiresAt: expiresAt.toISOString() });
+  return `dock_approver=${encodeURIComponent(await rt.passkeys.newSession(approverId, expiresAt))}`;
+}
+const act = async (k: string, b: unknown) => json(await kitchenMemory.POST(req(`/ui-api/memory/kitchens/${k}`, b, { cookie: await presenterCookie(k) }), params(k)));
+const actAnon = async (k: string, b: unknown) => json(await kitchenMemory.POST(req(`/ui-api/memory/kitchens/${k}`, b), params(k)));
 
 describe("kitchen memory routes", () => {
   it("lists what the demo kitchen remembers, including the rule its head chef stated", async () => {
@@ -35,6 +47,17 @@ describe("kitchen memory routes", () => {
     expect(status).toBe(200);
     expect(body.items).toEqual(expect.arrayContaining([expect.objectContaining({ text: "Always lactose-free", strength: "rule", origin: "stated", audience: "shared", confirmedBy: expect.objectContaining({ by: "Sanna Koskinen (head chef)" }) })]));
     expect(body.items.some((i: { kind: string }) => i.kind === "standing_order")).toBe(true); // Monday and Thursday milk, from six weeks of history
+  });
+
+  it("a stranger at a demo kitchen's open console can read its rules but not forget, correct or state one (QA F-PORTAL-MEMORY-OPEN)", async () => {
+    const before = await view("kaari");
+    const rule = before.body.items.find((i: { text: string }) => i.text === "Always lactose-free");
+    for (const b of [{ action: "forget", itemId: rule.id }, { action: "correct", itemId: rule.id, text: "Any milk" }, { action: "state", fact: { kind: "goal", goal: "price" } }, { action: "audience", itemId: rule.id, audience: "private" }]) {
+      const r = await actAnon("kaari", b);
+      expect(r.status).toBe(401);
+      expect(r.body.error.code).toBe("kitchen_person_required");
+    }
+    expect((await view("kaari")).body.items.some((i: { id: string }) => i.id === rule.id)).toBe(true);
   });
 
   it("states, recalls, makes private, and forgets, all within the one kitchen", async () => {
