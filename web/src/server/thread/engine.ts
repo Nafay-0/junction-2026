@@ -295,6 +295,15 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
       }
     }
   }
+  // "Yes" to "Shall I order it?" for the menu on the table: ordered (the same as its order button, then the gate).
+  if (!body.action && body.text && body.text.trim().split(/\s+/).length <= 6) {
+    const { yesOrNo } = await import("@/server/channels/speech");
+    const last = [...thread.turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "");
+    const asked = last?.role === "agent" && /(shall i order it|tilaanko sen|ska jag beställa)/i.test(last.line ?? "");
+    const { openMenu } = await import("./menu");
+    const m = openMenu(run);
+    if (asked && yesOrNo(body.text) === "yes" && m?.stage === "ready" && m.totalCents > 0 && !m.blockers.length) body = { ...body, action: { type: "menu_to_sheet", planId: m.planId }, label: body.text };
+  }
   // An answer in words to the mistake check just said ("yes, 1 000", "100", "it's for an event"): the same as the tap,
   // and a reason the buyer gives is recorded as theirs.
   if (!body.action && body.text) {
@@ -324,6 +333,11 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
         if (!(await runWidget(run, body.action, body.text))) {
           await checkOpen(run, body.action);
           await runAction(run, body.action, body.text);
+        } else if (body.action.type === "menu_to_sheet" && body.via !== "tap") {
+          // "Yes" to "Shall I order it?" for the menu on the table: onto one order sheet, and that sheet through the gate.
+          const { currentSheet, placeSheet } = await import("./sheet");
+          const sh = currentSheet(run);
+          if (sh) await placeSheet(run, sh.sheetId, sh.version);
         }
       }
     } else if (!llmRoom()) {
