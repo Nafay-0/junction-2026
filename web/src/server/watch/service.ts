@@ -416,7 +416,24 @@ export type WatchReport = { kitchen: string; name: string; keys: KeyProduct[]; f
  * One look over one kitchen: its key products (one live call, cached), a finding for each that cannot come for its
  * day (with substitutes), then the recurring orders it may renew. `fresh`: ask the wholesaler again now.
  */
-export async function runWatchFor(rt: Runtime, k: WatchKitchen, opts: { now?: Date; fresh?: boolean; by?: string; renew?: "due" | "now"; families?: string[]; holdOnly?: boolean } = {}): Promise<WatchReport> {
+export type WatchRunOptions = { now?: Date; fresh?: boolean; by?: string; renew?: "due" | "now" | "none"; families?: string[]; holdOnly?: boolean };
+
+/** One run per kitchen at a time (the schedule, staff, the conversation's look and a switch-on may meet): no renewal twice. */
+const gl = globalThis as typeof globalThis & { __dockWatchLocks?: Map<string, Promise<unknown>> };
+const locks = (gl.__dockWatchLocks ??= new Map());
+
+export async function runWatchFor(rt: Runtime, k: WatchKitchen, opts: WatchRunOptions = {}): Promise<WatchReport> {
+  const prev = locks.get(k.orgId) ?? Promise.resolve();
+  const run = prev.catch(() => undefined).then(() => runWatchLocked(rt, k, opts));
+  locks.set(k.orgId, run);
+  try {
+    return await run;
+  } finally {
+    if (locks.get(k.orgId) === run) locks.delete(k.orgId);
+  }
+}
+
+async function runWatchLocked(rt: Runtime, k: WatchKitchen, opts: WatchRunOptions): Promise<WatchReport> {
   const s = await ready(rt);
   const now = opts.now ?? new Date();
   const { keys, patterns } = await keyProducts(rt, k.orgId, now);
@@ -442,6 +459,10 @@ export async function runWatchFor(rt: Runtime, k: WatchKitchen, opts: { now?: Da
     // Staged (or lifted) since: the earlier finding is closed and the new one says what holds now.
     if (open) resolve(rt, open, st.staged ? "A stock-out was staged for the demo over it." : "The staged stock-out was lifted.");
     report.findings.push(await addFinding(rt, k, key, original, st, short, live, patterns, now));
+  }
+  if (opts.renew === "none") {
+    report.liveCalls = s.liveCalls - before;
+    return report;
   }
   report.renewals = await renewDue(rt, k, { now, window: opts.renew ?? "due", holdOnly: !!opts.holdOnly, live, patterns: opts.families ? patterns.filter((p) => opts.families!.includes(p.family)) : patterns });
   report.liveCalls = s.liveCalls - before;
@@ -817,10 +838,10 @@ export async function watchForOrg(rt: Runtime, orgId: string, opts: { all?: bool
 }
 
 /** Run the watch now for the kitchen of this session (an outside agent's "check again"). */
-export async function watchNowFor(rt: Runtime, session: AgentSession, opts: { fresh?: boolean; now?: Date } = {}): Promise<WatchReport> {
+export async function watchNowFor(rt: Runtime, session: AgentSession, opts: { fresh?: boolean; now?: Date; renew?: "due" | "none" } = {}): Promise<WatchReport> {
   const k = await kitchenOfSession(rt, session);
   if (!k.mandateToken) return { kitchen: k.slug, name: k.name, keys: [], findings: [], renewals: [], liveCalls: 0, note: "This organisation has no kitchen the watch runs for." };
-  return runWatchFor(rt, k, { ...opts, renew: "due" });
+  return runWatchFor(rt, k, { ...opts, renew: opts.renew ?? "due" });
 }
 
 /**
@@ -831,7 +852,8 @@ export async function watchNowFor(rt: Runtime, session: AgentSession, opts: { fr
 export async function watchIfStale(rt: Runtime, session: AgentSession, now = new Date()): Promise<void> {
   const at = await watchedAt(rt, session.mandate.issuer.orgId);
   if (at && Date.now() - at < CACHE_MS) return;
-  await watchNowFor(rt, session, { now }).catch((err: Error) => console.warn("[watch] look before the conversation", err.message));
+  // Only looks: renewing is the schedule's and staff's run, never a side effect of opening the conversation.
+  await watchNowFor(rt, session, { now, renew: "none" }).catch((err: Error) => console.warn("[watch] look before the conversation", err.message));
 }
 
 /** Marks a moment as said in the conversation, so it is not said again. */
@@ -860,7 +882,7 @@ export async function stageStockOut(rt: Runtime, input: { kitchen: string; produ
   const [p] = await rt.catalog.searchProducts({ ids: [input.productId], limit: 1 });
   if (!p) throw new DockError(404, "product_not_found", `No product ${input.productId} in the assortment.`);
   const now = input.now ?? new Date();
-  const until = input.until && /^\d{4}-\d{2}-\d{2}$/.test(input.until) ? input.until : addDaysIso(today(now), 5);
+  const until = input.until && /^\d{4}-\d{2}-\d{2}$/.test(input.until) ? input.until : addDaysIso(today(now), 7);
   if (until <= today(now)) throw new DockError(400, "invalid_request", "The day it can come again must be after today.");
   for (const old of activeStockOuts(s, k.orgId).filter((g) => g.productId === p.id)) saveStage(s, { ...old, liftedAt: now.toISOString(), liftedBy: input.by });
   const g: Stage = { stageId: newId("stg"), kind: "stock_out", orgId: k.orgId, kitchen: k.slug, kitchenName: k.name, productId: p.id, productName: p.name, until, by: input.by, at: now.toISOString() };
