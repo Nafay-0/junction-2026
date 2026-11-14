@@ -302,7 +302,8 @@ export class InMemoryDockRepository implements DockRepository {
   private byOrg = new Map<string, string[]>();
   private byRequest = new Map<string, string[]>();
   private byApproval = new Map<string, string>();
-  private pending = new Set<string>();
+  /** Orders waiting for sign-off, per organisation. */
+  private pending = new Map<string, Set<string>>();
 
   async saveRequest(r: PurchaseRequest) {
     this.requests.set(r.requestId, structuredClone(r));
@@ -333,8 +334,11 @@ export class InMemoryDockRepository implements DockRepository {
       else this.byRequest.set(o.requestId, [o.orderId]);
     }
     if (o.approval) this.byApproval.set(o.approval.approvalId, o.orderId);
-    if (o.status === "pending_approval") this.pending.add(o.orderId);
-    else this.pending.delete(o.orderId);
+    const waiting = this.pending.get(o.orgId);
+    if (o.status === "pending_approval") {
+      if (waiting) waiting.add(o.orderId);
+      else this.pending.set(o.orgId, new Set([o.orderId]));
+    } else waiting?.delete(o.orderId);
   }
   async getOrder(id: string) {
     const o = this.orders.get(id);
@@ -401,11 +405,8 @@ export class InMemoryDockRepository implements DockRepository {
 
   private pendingRefs(orgId?: string): Order[] {
     const out: Order[] = [];
-    for (const id of this.pending) {
-      const o = this.orders.get(id)!;
-      if (!orgId || o.orgId === orgId) out.push(o);
-    }
-    return out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    for (const [org, ids] of this.pending) if (!orgId || org === orgId) for (const id of ids) out.push(this.orders.get(id)!);
+    return out.sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0));
   }
   /** The organisation's stored orders created after `since`, oldest first (references: never hand them out). */
   private window(orgId: string, since: string): Order[] {
