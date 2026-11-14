@@ -110,7 +110,9 @@ export class CallRegistry {
       this.days.set(`${day}:*`, (this.days.get(`${day}:*`) ?? 0) + 1);
     }
     const prev = carryFrom ? this.calls.get(carryFrom) : undefined;
-    const desk: Desk = prev && prev.kitchen === kitchen ? { ...structuredClone(prev.desk), pending: undefined, lastTurnUsed: 0 } : { lastTurnUsed: 0 };
+    // A call carried on (hung up and continued by typing, called back, reconnected) keeps its desk as it was,
+    // including a read-back still waiting for the caller's yes.
+    const desk: Desk = prev && prev.kitchen === kitchen ? { ...structuredClone(prev.desk), lastTurnUsed: 0 } : { lastTurnUsed: 0 };
     const call: Call = {
       callId: `call_${randomBytes(9).toString("base64url")}`,
       kitchen,
@@ -172,7 +174,38 @@ export class CallRegistry {
 
   private prune() {
     const t = this.now();
-    for (const [id, c] of this.calls) if (t - c.startedAt > 2 * 3_600_000) this.calls.delete(id);
+    // A call whose page went away without hanging up still cost what it used: end it and count its spend.
+    for (const c of this.calls.values()) if (c.mode !== "typed" && c.endedAt === undefined && (t >= c.expiresAt || t - c.lastSeen >= CALL_LIMITS.staleMs)) this.end(c.callId, c.kitchen, "stale");
+    for (const [id, c] of this.calls) if (t - c.startedAt > 2 * 3_600_000) {
+      this.calls.delete(id);
+      if (c.endedAt !== undefined && c.mode !== "typed") this.spent.set(new Date(c.startedAt).toISOString().slice(0, 10), (this.spent.get(new Date(c.startedAt).toISOString().slice(0, 10)) ?? 0) + callCostUsd(c));
+    }
+  }
+
+  /** Voice spend kept for calls already pruned from memory, per UTC day. */
+  private spent = new Map<string, number>();
+
+  /** For the presenter: today's voice calls, the lines open now, and what voice has cost today at list prices. */
+  usage(limits: ReturnType<typeof voiceLimits>) {
+    this.prune();
+    const t = this.now();
+    const day = new Date(t).toISOString().slice(0, 10);
+    const today = [...this.calls.values()].filter((c) => c.mode !== "typed" && new Date(c.startedAt).toISOString().slice(0, 10) === day);
+    const byModel: Record<string, { calls: number; usd: number }> = {};
+    for (const c of today) {
+      const m = (byModel[c.model ?? "unknown"] ??= { calls: 0, usd: 0 });
+      m.calls += 1;
+      m.usd += c.endedAt !== undefined || c.usage ? callCostUsd(c) : 0;
+    }
+    const usd = (this.spent.get(day) ?? 0) + Object.values(byModel).reduce((s, m) => s + m.usd, 0);
+    return {
+      day,
+      callsToday: this.days.get(`${day}:*`) ?? 0,
+      liveNow: today.filter((c) => this.live(c)).length,
+      usdToday: Math.round(usd * 1000) / 1000,
+      byModel: Object.fromEntries(Object.entries(byModel).map(([k, v]) => [k, { calls: v.calls, usd: Math.round(v.usd * 1000) / 1000 }])),
+      limits: { perKitchenHour: limits.perKitchenHour, perHour: limits.perHour, perKitchenDay: limits.perKitchenDay, perDay: limits.perDay, callSeconds: limits.callSeconds },
+    };
   }
 }
 
