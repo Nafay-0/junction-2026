@@ -42,7 +42,7 @@ Object.assign(env, {
   // Scripted models only (no key is set, so nothing else can answer): the reader and the agent from recordings.
   DOCK_LLM: "",
   DOCK_LLM_DAILY_CALLS: "1000000",
-  DOCK_LLM_DAILY_USD: "1",
+  DOCK_LLM_DAILY_USD: "1000000", // an estimate only (voice minutes are priced at hang-up); nothing is paid
   DOCK_SCRIPTED_MODELS: "1",
   DOCK_SCRIPTED_RECORDINGS: path.join(web, "e2e/fixtures/recordings.json"),
   DOCK_INTERPRET_MODEL: "scripted:e2e",

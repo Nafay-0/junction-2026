@@ -84,25 +84,29 @@ export async function stubVoiceToken(page: Page): Promise<string[]> {
 
 /**
  * Stand in for the Gemini Live service. "answer": reply setupComplete to the setup message (the call connects);
- * "silent": accept the socket and never answer (a network that lets the socket through but nothing comes back).
- * The returned function gives the socket the test can close.
+ * "silent": accept the socket and never answer (a network that lets the socket through but nothing comes back);
+ * "down": close every new socket at once, abnormally (the service unreachable after a drop). `set` changes the
+ * behaviour for the sockets that open from then on. The returned function gives the socket the test can close.
  */
-export async function stubLiveService(page: Page, behaviour: "answer" | "silent"): Promise<{ socket: () => WebSocketRoute | undefined; setups: string[]; urls: string[] }> {
+type LiveBehaviour = "answer" | "silent" | "down";
+export async function stubLiveService(page: Page, behaviour: LiveBehaviour): Promise<{ socket: () => WebSocketRoute | undefined; setups: string[]; urls: string[]; set: (b: LiveBehaviour) => void }> {
   let current: WebSocketRoute | undefined;
+  let now = behaviour;
   const setups: string[] = [];
   const urls: string[] = [];
   await page.routeWebSocket(LIVE_WS, (ws) => {
     current = ws;
     urls.push(ws.url());
+    if (now === "down") return void setTimeout(() => ws.close({ code: 1011, reason: "unavailable" }), 50);
     ws.onMessage((m) => {
       const text = typeof m === "string" ? m : m.toString();
       if (text.includes('"setup"')) {
         setups.push(text);
-        if (behaviour === "answer") ws.send(JSON.stringify({ setupComplete: {} }));
+        if (now === "answer") ws.send(JSON.stringify({ setupComplete: {} }));
       }
     });
   });
-  return { socket: () => current, setups, urls };
+  return { socket: () => current, setups, urls, set: (b) => void (now = b) };
 }
 
 /** The visitor kitchen's own ledger entries, read with the phone's approver session: nothing ordered, quoted or sent for sign-off. */
