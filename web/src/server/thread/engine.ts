@@ -359,8 +359,10 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
     const last = [...thread.turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "");
     const open = last?.role === "agent" ? last.cards.find((c) => c.type === "anomaly" && !c.answered) : undefined;
     if (open?.type === "anomaly") {
-      const { guardAnswerOf } = await import("./guard");
-      const a = guardAnswerOf(open, body.text);
+      const { guardAnswerOf, guardWords } = await import("./guard");
+      // "Which order?": the check's own words again, which name the order (what, how much, when, for which day).
+      if (/\b(which (order|one)|what order|mikä tilaus|mikä niistä|vilken (order|beställning))\b/i.test(body.text)) run.sayNow = whichOrder(run, open, body.lang ?? "en") ?? guardWords(open, body.lang ?? "en");
+      const a = run.sayNow ? undefined : guardAnswerOf(open, body.text);
       if (a) {
         if (a.reason) record(run, "buyer_reason", `The buyer kept the amount as asked, with a reason: "${a.reason}".`, { reason: a.reason, key: open.concerns[0]?.key }, open.requestId);
         body = { ...body, action: a.action, label: body.text };
@@ -422,6 +424,14 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
           const { mailFactAfterOrder } = await import("@/server/notify/thread");
           const mailFact = ord?.type === "order" ? await mailFactAfterOrder(run.rt, run.k, { orderId: ord.orderId, status: ord.status }, { lang: body.lang ?? "en", threadId: thread.threadId }).catch(() => undefined) : undefined;
           store.line(thread, run.turnId, mailFact ? `${backedUp} ${mailFact}` : backedUp);
+          store.mark(thread, run.turnId, "line", Date.now() - run.t0);
+          await finishTurn(run);
+          return;
+        }
+        // A sentence plain code already has for these words (the mistake check's own words, asked again).
+        if (run.sayNow) {
+          if (run.opening) first.done();
+          store.line(thread, run.turnId, run.sayNow);
           store.mark(thread, run.turnId, "line", Date.now() - run.t0);
           await finishTurn(run);
           return;
@@ -618,6 +628,27 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
  * by the sentence's punctuation; and no code (a category code, a product id, a rule or reason code, a snake_case word)
  * in any sentence: a sentence carrying one is dropped, and if none is left, the refusal's own words (refusal.ts) stand.
  */
+
+/**
+ * Only whole sentences reach the buyer: a fragment left where a sentence was not backed by the data (or was cut) is
+ * dropped; with nothing left, the store's own short sentence for what is on the table (the options, the order).
+ */
+function wholeSentences(run: TurnRun, t: string): string {
+  if (!t) return t;
+  const end = (x: string) => /[.!?…]["”»)]?$/.test(x.replace(/\*\*|\{\{|\}\}/g, "").trim());
+  if (end(t)) return t;
+  const parts = t.split(/(?<=[.!?])\s+/);
+  const kept = parts.filter(end);
+  if (kept.length) return kept.join(" ");
+  const lang = run.lang ?? "en";
+  const opts = run.store.agentTurn(run.thread, run.turnId)?.cards.find((c) => c.type === "options" && !c.chosen);
+  if (opts?.type === "options") {
+    const n = opts.options.filter((o) => o.gate?.outcome !== "reject").length;
+    return { en: `${n === 1 ? "One option can" : `${n} options can`} be ordered. Which one?`, fi: `${n === 1 ? "Yksi vaihtoehto" : `${n} vaihtoehtoa`} voidaan tilata. Mikä niistä?`, sv: `${n === 1 ? "Ett alternativ" : `${n} alternativ`} kan beställas. Vilket?` }[lang];
+  }
+  return `${t.trim()}.`;
+}
+
 function plainLine(run: TurnRun, text: string): string {
   const lang = /\b(maanantai|tiistai|keskiviikko|torstai|perjantai|lauantai|sunnuntai)\w*|[äö]/i.test(text) ? "fi" : /\b(måndag|tisdag|onsdag|torsdag|fredag|lördag|söndag)\b|å/i.test(text) ? "sv" : "en";
   let t = text.replace(/(\d{1,2}\.\d{1,2}\.)(\}\}|\*\*)?\./g, "$1$2");
@@ -822,6 +853,23 @@ function sayRulesWaiting(run: TurnRun): void {
     fi: `Tämä laajentaa sitä, mitä saan ostaa${what ? ` (${what})` : ""}, joten se tarvitsee hyväksynnän: ${who}. Lähetin sen allekirjoitettavaksi pääsyavaimella. Mikään ei muutu ennen sitä.`,
     sv: `Det vidgar vad jag får köpa${what ? ` (${what})` : ""}, så det behöver ${who}s godkännande: jag har skickat det för signering med nyckel. Inget ändras förrän dess.`,
   }[lang]);
+}
+
+/** "Which order?" after "You already ordered …": that order by what it holds, its total and day, and the question again. */
+function whichOrder(run: TurnRun, card: Extract<Card, { type: "anomaly" }>, lang: "en" | "fi" | "sv"): string | undefined {
+  const k = card.concerns[0];
+  const orderId = (k?.evidence as { orderId?: string } | undefined)?.orderId ?? /^duplicate_recent:(\S+)/.exec(k?.key ?? "")?.[1];
+  const o = run.store.cards(run.thread).map((x) => x.card).filter((c): c is OrderCard => c.type === "order" && c.orderId === orderId).at(-1);
+  if (!o) return undefined;
+  const f = fmtFor(lang);
+  const what = o.lines.map((l) => `${l.quantity} × ${l.name.replace(/[®™]/g, "").split(/\s+/).slice(0, 4).join(" ")}`).join(", ");
+  const day = lang === "en" ? englishDays(f.day(o.deliveryDate)).replace(/\.$/, "") : f.day(o.deliveryDate);
+  const total = `**${(o.totalCents / 100).toFixed(2).replace(".", ",")} €**`;
+  return {
+    en: `The one already placed: ${what} for ${total}, arriving {{${day}}}. Shall I order the same again on top of it?`,
+    fi: `Jo tehty tilaus: ${what}, ${total}, toimitus {{${day}}}. Tilaanko saman uudelleen sen lisäksi?`,
+    sv: `Den som redan är lagd: ${what} för ${total}, kommer {{${day}}}. Ska jag beställa samma igen utöver den?`,
+  }[lang];
 }
 
 /** A day named in a sentence: "{{Tuesday 17 Nov}}", "Tue 17 Nov", "ti 17.11.", as an ISO date in the coming months. */
@@ -1100,7 +1148,8 @@ async function showLine(run: TurnRun, text: string): Promise<void> {
   if (g.violations.length) {
     record(run, "grounding_refusal", `A sentence of the agent's reply was not shown: it said ${g.violations.map((v) => `"${v.said}" (${v.kind})`).join(", ")}, which the data does not back.`, { said: one, violations: g.violations });
     // Only the sentences the data backs are shown (without marks); none at all when none is backed.
-    const kept = plainLine(run, g.text.replace(/\s+/g, " ").trim());
+    // What is left of a sentence the data did not back is not shown as a fragment.
+    const kept = wholeSentences(run, plainLine(run, g.text.replace(/\s+/g, " ").trim()));
     if (!kept || g.replaced >= g.sentences) return;
     run.store.line(run.thread, run.turnId, kept);
     run.store.mark(run.thread, run.turnId, "line", Date.now() - run.t0);
