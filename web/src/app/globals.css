@@ -204,10 +204,10 @@ body {
   }
 }
 
-/* Finnish and Swedish compounds are long ("toimituspäivä", "hyväksyntäpyyntö"): headings, buttons, labels and table
-   heads may hyphenate and break rather than overflow. The language comes from <html lang>, set by LangProvider. */
+/* Finnish and Swedish compounds are long ("toimituspäivä", "hankintapäällikkö"). The texts carry soft hyphens at
+   compound boundaries, and only those are used: the browser's own Finnish hyphenation breaks words in the wrong
+   place ("hankintapäälli-köksi"). A word with no soft hyphen that still does not fit breaks as a last resort. */
 :is(:lang(fi), :lang(sv)) :is(h1, h2, h3, h4, .display, button, label, th, dt) {
-  hyphens: auto;
-  hyphenate-limit-chars: 10 4 4; /* only long compounds; never "Ho-tel" */
+  hyphens: manual;
   overflow-wrap: break-word;
 }

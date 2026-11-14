@@ -5,6 +5,7 @@ import { moneyShort, shortProduct } from "../../_ui/plain";
 import { familyL } from "./family.text";
 import { RAIL_TEXT } from "./rail.text";
 import type { Entry, KitchenInfo, KitchenMemory } from "./types";
+import { useProductName } from "./names";
 
 /** How many times this request touched the partner's live price and availability service, from the ledger. */
 export function liveCallsOf(entries: Entry[]): { calls: number; products: number } {
@@ -79,6 +80,7 @@ export function MandateBox({ k }: { k: KitchenInfo }) {
 }
 
 export function Memory({ memory, error, family }: { memory: KitchenMemory | undefined; error?: string; family?: string }) {
+  const pn = useProductName();
   // The family this request is about first, then the ones the kitchen orders most.
   const families = [...(memory?.families ?? [])].sort((a, b) => Number(b.family === family) - Number(a.family === family) || b.orders - a.orders);
   const tx = useText(RAIL_TEXT);
@@ -119,7 +121,7 @@ export function Memory({ memory, error, family }: { memory: KitchenMemory | unde
               </dd>
               <dt className="text-ink-soft">{tx.lastOrder}</dt>
               <dd>
-                {last.lines.map((l) => `${l.packs} × ${shortProduct(l.name)}`).join(" + ")}, {f.day(last.placedAt.slice(0, 10))}
+                {last.lines.map((l) => `${l.packs} × ${shortProduct(pn(l.productId, l.name))}`).join(" + ")}, {f.day(last.placedAt.slice(0, 10))}
               </dd>
               {fam.learned.length > 0 && (
                 <>

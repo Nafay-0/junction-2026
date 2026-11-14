@@ -7,6 +7,7 @@ import type { AgentSession, PublicOrder } from "@/core/orders";
 import { newId } from "@/core/util";
 import { resolveKitchen } from "./console-kitchens";
 import { localFetch } from "./local-transport";
+import { STORE_PAGE_READ } from "./ops/onsite";
 import { suspensions } from "./ops/suspensions";
 import { getRuntime, type Runtime } from "./runtime";
 
@@ -34,7 +35,8 @@ export async function agentCall<T = unknown>(k: Kitchen, method: "GET" | "POST",
 }
 
 async function sessionOf(rt: Runtime, k: Kitchen): Promise<AgentSession> {
-  return rt.dock.authenticate(k.mandateToken, k.agentId);
+  // The store's pages read the kitchen's own records; a suspended kitchen still sees them, with the suspension shown.
+  return rt.dock.authenticate(k.mandateToken, k.agentId, STORE_PAGE_READ);
 }
 
 // ---------- requests the portal opens for itself ----------

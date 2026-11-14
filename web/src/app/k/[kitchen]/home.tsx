@@ -16,6 +16,7 @@ import { CallAgent } from "./call-agent";
 import { Button } from "./ui";
 import type { CutoffReply, Overview, PortalOrder, PortalRequest, Standing } from "./types";
 import { cutoffMs, cutoffText, untilText } from "./when";
+import { useProductName } from "./names";
 
 type Fmt = ReturnType<typeof useFormat>;
 
@@ -183,6 +184,7 @@ function Hero({ o, cutoffs, now }: { o: Overview; cutoffs?: CutoffReply; now: nu
 function Attention({ o, cutoffs, now }: { o: Overview; cutoffs?: CutoffReply; now: number }) {
   const { base } = usePortal();
   const tx = useText(HOME_TEXT);
+  const pn = useProductName();
   const f = useFormat();
   const waiting = o.orders.filter((x) => x.status === "pending_approval");
   const soon = (cutoffs?.items ?? []).flatMap((i) => {
@@ -216,7 +218,7 @@ function Attention({ o, cutoffs, now }: { o: Overview; cutoffs?: CutoffReply; no
                   {tx.orderBy(familyL(s.family, f.lang), cutoffText(s.result?.offer?.orderBy, f.lang) ?? "")}
                 </p>
                 <p className="mt-1 leading-snug text-ink-soft">
-                  {tx.soonDesc(s.result?.offer ? f.day(s.result.offer.deliveryDate) : tx.nextDay, shortProduct(s.name), s.match === "nearest")}
+                  {tx.soonDesc(s.result?.offer ? f.day(s.result.offer.deliveryDate) : tx.nextDay, shortProduct(pn(s.productId, s.name)), s.match === "nearest")}
                 </p>
                 <RepeatButtons family={s.family} requests={o.requests} />
               </div>
@@ -250,6 +252,7 @@ function CheckSquare() {
 
 function WaitingCard({ o, href, now }: { o: PortalOrder; href: string; now: number }) {
   const tx = useText(HOME_TEXT);
+  const pn = useProductName();
   const f = useFormat();
   const a = o.authorised;
   return (
@@ -262,7 +265,7 @@ function WaitingCard({ o, href, now }: { o: PortalOrder; href: string; now: numb
             {tx.waitingFor(money(o.totalCents), a.by === "waiting" ? `${a.name}, ${f.role(a.role)}` : undefined)}
           </p>
           <p className="text-[0.95rem] text-paper/75">
-            {tx.waitingLine(linesText(o, 2, f.lang), f.day(o.deliveryDate), a.by === "waiting" ? f.ago(a.requestedAt, now) : f.ago(o.createdAt, now))}
+            {tx.waitingLine(linesText(o, 2, f.lang, pn), f.day(o.deliveryDate), a.by === "waiting" ? f.ago(a.requestedAt, now) : f.ago(o.createdAt, now))}
           </p>
           {o.reasons.length > 0 && (
             <ul className="mt-2 space-y-0.5 leading-snug text-paper/90">
@@ -488,6 +491,7 @@ function StandingOrders({ o, cutoffs, cutoffError, now }: { o: Overview; cutoffs
 function StandingCard({ s, item, requests, now }: { s: Standing; item?: CutoffReply["items"][number]; requests: PortalRequest[]; now: number }) {
   const { agent } = usePortal();
   const tx = useText(HOME_TEXT);
+  const pn = useProductName();
   const f = useFormat();
   const last = requests.find((r) => r.family === s.family && r.order && (r.order.status === "committed" || r.order.status === "history"));
   const offer = item?.result?.offer;
@@ -501,7 +505,7 @@ function StandingCard({ s, item, requests, now }: { s: Standing; item?: CutoffRe
           <div className="min-w-0">
             <h3 className="display text-[1.9rem] capitalize text-ink">{familyL(s.family, f.lang)}</h3>
             <p className="truncate text-[0.9rem] text-ink-soft">
-              {tx.productOrders(shortProduct(s.product.name), s.orders)}
+              {tx.productOrders(shortProduct(pn(s.product.productId, s.product.name)), s.orders)}
             </p>
           </div>
           {drifted ? <Tag tone="agent">{tx.tagDrifted}</Tag> : <Tag tone="muted">{tx.tagSteady}</Tag>}
@@ -572,6 +576,7 @@ function StandingCard({ s, item, requests, now }: { s: Standing; item?: CutoffRe
 function Deliveries({ o }: { o: Overview }) {
   const { base } = usePortal();
   const tx = useText(HOME_TEXT);
+  const pn = useProductName();
   const f = useFormat();
   const coming = o.orders.filter((x) => (x.status === "committed" || x.status === "pending_approval") && x.deliveryDate >= o.today).sort((a, b) => a.deliveryDate.localeCompare(b.deliveryDate));
   const nextDue = o.standing.map((s) => s.nextDue).filter((d): d is string => !!d).sort()[0];
@@ -591,7 +596,7 @@ function Deliveries({ o }: { o: Overview }) {
                 <Link href={`${base}/orders/${x.orderId}`} className="grid items-baseline gap-x-5 px-5 py-3.5 hover:bg-mist sm:grid-cols-[9rem_1fr_auto]">
                   <span className="display text-[1.5rem]">{f.day(x.deliveryDate)}</span>
                   <span className="min-w-0">
-                    {linesText(x, 3, f.lang)}
+                    {linesText(x, 3, f.lang, pn)}
                     <span className="block text-[0.9rem] text-ink-soft">{authorisedText(x, f.lang)}</span>
                   </span>
                   <span className="font-semibold tabular">{money(x.totalCents)}</span>

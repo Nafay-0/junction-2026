@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useSyncExternalStore } from "react";
 import { api } from "../../_client/api";
 import { Glyph, TempGlyph, type GlyphKind } from "../../_ui/glyphs";
-import { Art, artKeyFor } from "../../_ui/art";
+import { Art, artFor } from "../../_ui/art";
 import { ART_TEXT } from "../../_ui/art.text";
 import { Spinner, Tag, Working } from "../../_ui/kit";
 import { attr, clock, helsinkiToday, money, num } from "../../_ui/plain";
@@ -74,7 +74,7 @@ export function PackPlate({ p, size = "md" }: { p: Product; size?: "md" | "lg" }
   const big = m ? (m.unit === "pcs" ? tx.pcs(num(m.amount)) : `${num(m.amount)} ${m.unit}`) : unitWord(p, 1, lang);
   const per = `${tx.per(unitWord(p, 1, lang))}${m && !m.certain ? tx.about : ""}`;
   const lg = size === "lg";
-  const key = artKeyFor(p, packGlyph(p) === "bib");
+  const key = artFor(p);
   const drawn = <DrawnPlate p={p} big={big} per={per} lg={lg} />;
   if (!key) return drawn;
   // The picture is an illustration of the kind of product, never this product: it says so, and the pack's real
@@ -328,7 +328,7 @@ export function Facts({ p, lang }: { p: Product; lang: Lang }) {
   const a = p.allergenInfo;
   const al = (x: string) => allergenText(x, lang);
   return (
-    <dl className="grid grid-cols-[10rem_1fr] gap-x-4 gap-y-1.5 text-[0.98rem] [&>dd]:min-w-0 [&>dd]:break-words [&>dt]:hyphens-auto">
+    <dl className="grid grid-cols-[10rem_1fr] gap-x-4 gap-y-1.5 text-[0.98rem] [&>dd]:min-w-0 [&>dd]:break-words [&>dt]:hyphens-manual">
       <dt className="text-ink-soft">{t.productCode}</dt>
       <dd className="tabular">{p.id}</dd>
       <dt className="text-ink-soft">{t.soldPer}</dt>

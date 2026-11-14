@@ -23,10 +23,12 @@ export async function POST(req: Request) {
       const scope = body.scope === "org" ? "org" : body.scope === "agent" ? "agent" : undefined;
       if (!scope) throw new DockError(400, "invalid_request", 'scope must be "agent" or "org".');
       const suspension = await suspendTarget(rt, { scope, target: str("target"), reason: str("reason").slice(0, 300), by: staff.name });
+      await suspensions(rt.dock).saved(); // in the store before staff are told it is in force: it outlives a restart
       return Response.json({ suspension }, { status: 201 });
     }
     if (body.action === "resume") {
       const suspension = suspensions(rt.dock).resume(str("suspensionId"), { by: staff.name, note: str("note").slice(0, 300) });
+      await suspensions(rt.dock).saved();
       return Response.json({ suspension });
     }
     if (body.action === "approve" || body.action === "decline") {

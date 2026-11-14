@@ -385,7 +385,7 @@ function Outcome({ view }: { view: ApprovalView }) {
           </p>
         )}
       </div>
-      <h1 className="display mt-6 text-[2.4rem] text-ink hyphens-auto [overflow-wrap:anywhere]">{placed ? tx.placed : declined ? tx.declined : tx.approvedNotPlaced}</h1>
+      <h1 className="display mt-6 text-[2.4rem] text-ink hyphens-manual [overflow-wrap:break-word]">{placed ? tx.placed : declined ? tx.declined : tx.approvedNotPlaced}</h1>
       <p className="mt-1 text-[1.2rem]">
         <span className="tabular">{fiMoney(view.total)}</span>, {serverDays(view.delivery, lang)}
       </p>

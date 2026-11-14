@@ -40,7 +40,7 @@ export const APPROVER_TEXT = defineText({
     youAre: "Olet",
     agentIntro: (agent: ReactNode, limit: ReactNode) =>
       r(agent, " ostaa tälle keittiölle. Se saa tilata itsenäisesti enintään ", limit, " tilausta kohden. Suuremmat tilaukset ja tuotteiden vaihdot pysähtyvät portille ja tulevat tänne sinulle."),
-    noPasskey: "Vain demo: liityit ilman pääsyavainta, joten hyväksyntäsi merkitään vahvistamattomiksi.",
+    noPasskey: "Vain demo: liityit ilman pääsyavainta, joten hyväksyntäsi merkitään vahvistamat­tomiksi.",
     openShop: "Avaa keittiöni verkkokauppa",
     waitingForYou: "Odottaa sinua",
     since: (t: string) => `${t} alkaen`,
@@ -70,7 +70,7 @@ export const APPROVER_TEXT = defineText({
     youAre: "Du är",
     agentIntro: (agent: ReactNode, limit: ReactNode) =>
       r(agent, " köper in för det här köket. Den får beställa på egen hand för högst ", limit, " per beställning. Större beställningar och produktbyten stannar vid grinden och kommer till dig här."),
-    noPasskey: "Endast demo: du gick med utan inloggningsnyckel, så dina godkännanden märks som overifierade.",
+    noPasskey: "Endast demo: du gick med utan inloggnings­nyckel, så dina godkännanden märks som overifierade.",
     openShop: "Öppna mitt köks webbutik",
     waitingForYou: "Väntar på dig",
     since: (t: string) => `sedan ${t}`,

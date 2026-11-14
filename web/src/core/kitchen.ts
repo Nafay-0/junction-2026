@@ -157,7 +157,13 @@ export type MemoryItem = {
   /** Data derived from it elsewhere in the profile, removed when it is forgotten. */
   derived?: { preferenceId?: string; deliveryWeekdaysBefore?: number[] };
   /** A safety rule offered for the kitchen's signed mandate, so the gate enforces it and not only memory. */
-  mandate?: { status: "offered" | "added" | "declined"; at: string; by?: string };
+  /**
+   * offered: the rule can be stated in the mandate and is not in it yet. added: the kitchen reissued its mandate with
+   * it (`mandateId`), so the gate enforces it. declined: kept in memory only. intake_only: a rule the mandate cannot
+   * state (a word outside its vocabulary, or one that holds for one family or site only): a preference the intake
+   * uses, not something the gate enforces.
+   */
+  mandate?: { status: "offered" | "added" | "declined" | "intake_only"; at: string; by?: string; mandateId?: string };
   supersededBy?: string;
   /** A pending proposal that would replace this item when a person confirms it. */
   replaces?: string;

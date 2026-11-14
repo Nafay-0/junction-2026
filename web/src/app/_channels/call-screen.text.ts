@@ -88,7 +88,7 @@ export const CALL_TEXT = defineText({
       cancelled: "Peruttu.",
       "ended by the server": "Palvelin lopetti puhelun.",
     } as Record<string, string>,
-    micBlocked: "estetty. Salli se selaimen sivustoasetuksista, niin voit soittaa",
+    micBlocked: "estetty. Salli se selaimen sivusto­asetuksista, niin voit soittaa",
     mic: (what: string) => `Mikrofoni: ${what}.`,
     micWord: { no_device: "laitetta ei löydy", insecure: "yhteys ei ole suojattu", unsupported: "ei tuettu", failed: "ei käynnistynyt" } as Record<string, string>,
     checked: (n: number, dropped: number) => `${n} agentin puheenvuoro${n > 1 ? "a" : ""} tarkistettu AimoPilotia vasten, ${dropped} katkaistu. `,
@@ -172,10 +172,10 @@ export const CALL_HOOK_TEXT = defineText({
   },
   fi: {
     mic: {
-      denied: "Mikrofoni on estetty tällä sivulla. Salli se selaimen sivustoasetuksista tai kirjoita mieluummin.",
+      denied: "Mikrofoni on estetty tällä sivulla. Salli se selaimen sivusto­asetuksista tai kirjoita mieluummin.",
       no_device: "Mikrofonia ei löytynyt. Kirjoita mieluummin.",
       insecure: "Mikrofoni toimii vain suojatussa (https) osoitteessa. Kirjoita mieluummin.",
-      unsupported: "Mikrofoni ei ole tämän sivun käytettävissä (estetty, tai selain ei tue sitä). Salli se sivustoasetuksista tai kirjoita mieluummin.",
+      unsupported: "Mikrofoni ei ole tämän sivun käytettävissä (estetty, tai selain ei tue sitä). Salli se sivusto­asetuksista tai kirjoita mieluummin.",
       failed: "Mikrofoni ei käynnistynyt. Kirjoita mieluummin.",
     } as Record<string, string>,
     goAway: "Puhepalvelu lopettaa tämän puhelun pian.",

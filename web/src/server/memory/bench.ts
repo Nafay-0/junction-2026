@@ -139,7 +139,8 @@ export async function runKitchen(k: ScriptedKitchen, mode: "off" | "on", opts: {
         const offers = await memory.mandateOffers(k.orgId, mandate);
         for (const o of offers) {
           mandate = { ...mandate, forbiddenAllergens: [...new Set([...mandate.forbiddenAllergens, ...(o.patch.forbiddenAllergens ?? [])])], requiredAttributes: [...new Set([...mandate.requiredAttributes, ...(o.patch.requiredAttributes ?? [])])] };
-          await memory.decideMandate(k.orgId, o.itemId, "added", k.person);
+          // The benchmark plays the kitchen: it signs the mandate again itself (below), with its own key.
+          await memory.decideMandate(k.orgId, o.itemId, "added", k.person, { mandateId: mandate.mandateId, at: new Date().toISOString() });
           log.notes.push(`Mandate re-signed by ${k.person}: ${o.text} is now enforced by the gate.`);
         }
         if (offers.length) session = await dock.authenticate(await signMandate(mandate, key), k.agentId);

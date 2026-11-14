@@ -14,6 +14,7 @@ import { Spinner, Tag, Working } from "../../_ui/kit";
 import { Button, Field, MemoryNote, Missing, Paper } from "./ui";
 import { cutoffText } from "./when";
 import type { ApprovalQr, KitchenInfo, Order, Step } from "./types";
+import { useProductName } from "./names";
 
 type Names = Record<string, string>;
 
@@ -407,6 +408,7 @@ export function Options({
 }) {
   const tx = useText(STAGES_TEXT);
   const f = useFormat();
+  const pn = useProductName();
   const chosen = step.chosen?.optionId;
   const open = step.state === "options_ready";
   const choices = step.openChoices ?? [];
@@ -480,7 +482,7 @@ export function Options({
                     </p>
                   )}
                   {c.match === "compromise" && <p className="mt-2 text-[0.95rem] font-semibold leading-snug">{tx.compromise((c.givesUp ?? []).map((g) => say(g.text, names).replace(/\.$/, "")).join("; "))}</p>}
-                  <p className="mt-2 min-h-[2.75em] text-[0.95rem] leading-snug text-ink-soft">{c.lines.map((l) => `${l.packs} × ${shortProduct(l.name)}${l.substituteFor ? tx.swap : ""}`).join(" + ")}</p>
+                  <p className="mt-2 min-h-[2.75em] text-[0.95rem] leading-snug text-ink-soft">{c.lines.map((l) => `${l.packs} × ${shortProduct(pn(l.productId, l.name))}${l.substituteFor ? tx.swap : ""}`).join(" + ")}</p>
                   <p className="display mt-3 text-[2.6rem] text-ink tabular">{money(c.totalCents)}</p>
                   <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-line pt-3">
                     <Field label={tx.arrives}>{f.day(c.deliveryDate)}</Field>
@@ -561,6 +563,7 @@ export function Options({
 
 /** The options as columns, one row per fact, with the best value in each row marked. */
 function CompareTable({ options, step, open, chosen, busyKey, onChoose, names }: { options: Card[]; step: Step; open: boolean; chosen?: string; busyKey?: string; onChoose: (id: string) => void; names: Names }) {
+  const pn = useProductName();
   const tx = useText(STAGES_TEXT);
   const f = useFormat();
   // The best value in a row is marked only when the options differ on it.
@@ -584,7 +587,7 @@ function CompareTable({ options, step, open, chosen, busyKey, onChoose, names }:
   );
   const rows: { label: string; cell: (c: Card) => React.ReactNode }[] = [
     { label: tx.total, cell: (c) => mark(c.totalCents === cheapest, <span className="display text-[1.5rem] tabular">{money(c.totalCents)}</span>) },
-    { label: tx.what, cell: (c) => c.lines.map((l) => `${l.packs} × ${shortProduct(l.name)}${l.substituteFor ? tx.swap : ""}`).join(" + ") },
+    { label: tx.what, cell: (c) => c.lines.map((l) => `${l.packs} × ${shortProduct(pn(l.productId, l.name))}${l.substituteFor ? tx.swap : ""}`).join(" + ") },
     { label: tx.arrives, cell: (c) => mark(c.deliveryDate === earliest && options.some((o) => o.deliveryDate !== earliest), f.day(c.deliveryDate)) },
     { label: tx.amount, cell: (c) => `${f.measure(c.delivered.amount, c.delivered.unit)}${c.leftover.amount > 0 ? tx.overInline(f.measure(c.leftover.amount, c.leftover.unit)) : ""}` },
     { label: tx.carbon, cell: (c) => (co2Text(c) ? mark(c.co2.kg === greenest, co2Text(c)) : <Missing>{tx.noData}</Missing>) },
@@ -703,6 +706,7 @@ export function NoOptions({ step, names, onNew }: { step: Step; names: Names; on
 // ---------- 5. fixed price ----------
 
 export function Quote({ q, names, decided, busy, onPlace, onNew }: { q: NonNullable<Step["quote"]>; names: Names; decided: boolean; busy: boolean; onPlace: () => void; onNew: () => void }) {
+  const pn = useProductName();
   const tx = useText(STAGES_TEXT);
   const f = useFormat();
   const now = useNow();
@@ -756,7 +760,7 @@ export function Quote({ q, names, decided, busy, onPlace, onNew }: { q: NonNulla
             {q.quote.lines.map((l) => (
               <tr key={l.productId}>
                 <td className="py-2 pr-2">
-                  {shortProduct(l.name)}
+                  {shortProduct(pn(l.productId, l.name))}
                   {l.substituteFor && <span className="block text-[0.85rem] text-ink-soft">{tx.swapFor(shortProduct(l.substituteFor.name))}</span>}
                 </td>
                 <td className="py-2 pr-2 text-right tabular">{l.quantity}</td>
@@ -894,7 +898,7 @@ function GateSlab({ title, sub, children, closed = true }: { title: string; sub:
           <Target size={84} tone="safety" className="hidden shrink-0 sm:block" />
           <Target size={52} tone="safety" className="shrink-0 sm:hidden" />
           <div className="min-w-0">
-            <p className="display hyphens-auto break-words text-[2.4rem] leading-[0.95] text-safety sm:text-[3.6rem]">{title}</p>
+            <p className="display hyphens-manual break-words text-[2.4rem] leading-[0.95] text-safety sm:text-[3.6rem]">{title}</p>
             <p className="mt-2 max-w-[60ch] text-[1.1rem] leading-snug text-paper">{sub}</p>
           </div>
         </div>
@@ -1078,6 +1082,7 @@ function ledgerSeq(jws?: string): number | undefined {
 }
 
 export function SignedOrder({ order, names, onNew }: { order: Order; names: Names; onNew: () => void }) {
+  const pn = useProductName();
   const tx = useText(STAGES_TEXT);
   const f = useFormat();
   if (order.status === "declined") {
@@ -1112,7 +1117,7 @@ export function SignedOrder({ order, names, onNew }: { order: Order; names: Name
           {order.lines.map((l) => (
             <li key={l.productId} className="flex justify-between gap-3 py-2">
               <span>
-                {l.quantity} × {shortProduct(l.name)}
+                {l.quantity} × {shortProduct(pn(l.productId, l.name))}
                 {l.substituteFor && <span className="text-ink-soft">{tx.swapParen(shortProduct(l.substituteFor.name))}</span>}
               </span>
               <span className="shrink-0 tabular">{money(l.lineTotalCents)}</span>

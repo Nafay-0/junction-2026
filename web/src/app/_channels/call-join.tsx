@@ -8,6 +8,7 @@ import { LangSwitch, useLang } from "../_i18n/provider";
 import { passkeyProblemL } from "../_ui/passkey.text";
 import { fiMoney } from "../_ui/plain";
 import { DOORS_TEXT } from "./doors.text";
+import { placeNameL } from "../_i18n/kitchen-words";
 
 /**
  * The one step before a first call from a phone: become the purchasing manager of a fresh visitor kitchen, with
@@ -68,7 +69,7 @@ export function CallJoin() {
       </div>
       {id && (
         <>
-          <h1 className="mt-2 display text-[2.4rem] leading-[0.98] hyphens-auto [overflow-wrap:anywhere]">{tx.joinTitle(id.kitchenName, id.city)}</h1>
+          <h1 className="mt-2 display text-[2.4rem] leading-[0.98] hyphens-manual [overflow-wrap:break-word]">{tx.joinTitle(placeNameL(id.kitchenName, lang), id.city)}</h1>
           <p className="mt-4 text-[1.15rem]">{tx.joinIntro(<strong>{id.approverName}</strong>, lang === "en" ? start!.perOrderLimit : fiMoney(start!.perOrderLimit))}</p>
           <p className="mt-3 text-base text-ink-soft">{tx.joinPasskey}</p>
         </>

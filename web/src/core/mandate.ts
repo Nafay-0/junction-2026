@@ -66,7 +66,8 @@ export type MandateErrorCode =
   | "mandate_expired"
   | "mandate_not_yet_valid"
   | "mandate_issuer_mismatch"
-  | "mandate_claims_invalid";
+  | "mandate_claims_invalid"
+  | "mandate_superseded";
 
 export class MandateError extends Error {
   constructor(
@@ -87,7 +88,12 @@ export function createTrustRegistry(issuers: TrustedIssuer[]): TrustRegistry & {
   return { get: (kid) => byKid.get(kid), add: (issuer) => void byKid.set(issuer.kid, issuer) };
 }
 
-export async function signMandate(mandate: Mandate, key: SigningKey): Promise<string> {
+/**
+ * Sign a mandate with the organisation's key. `issuedAt` is the token's `iat`, which supersession compares to the
+ * second; it defaults to the wall clock. A world with its own clock (the crash test) passes that clock's time, so
+ * the orders it records are the same on every repeat.
+ */
+export async function signMandate(mandate: Mandate, key: SigningKey, issuedAt?: Date): Promise<string> {
   const m = MandateSchema.parse(mandate);
   return new SignJWT({ mandate: m })
     .setProtectedHeader({ alg: SIGN_ALG, kid: key.kid, typ: MANDATE_TYP })
@@ -95,7 +101,7 @@ export async function signMandate(mandate: Mandate, key: SigningKey): Promise<st
     .setSubject(m.agentId)
     .setJti(m.mandateId)
     .setAudience(MANDATE_AUDIENCE)
-    .setIssuedAt()
+    .setIssuedAt(issuedAt)
     .setNotBefore(new Date(m.validFrom))
     .setExpirationTime(new Date(m.validUntil))
     .sign(key.privateKey);
@@ -107,6 +113,11 @@ export async function signMandate(mandate: Mandate, key: SigningKey): Promise<st
  * Throws MandateError with a machine-readable code on any failure.
  */
 export async function verifyMandate(token: string, registry: TrustRegistry, now: Date): Promise<Mandate> {
+  return (await verifyMandateToken(token, registry, now)).mandate;
+}
+
+/** verifyMandate, with when the organisation signed the token (its `iat`; the start of its validity when it has none). */
+export async function verifyMandateToken(token: string, registry: TrustRegistry, now: Date): Promise<{ mandate: Mandate; issuedAt: string }> {
   let kid: string | undefined;
   try {
     kid = decodeProtectedHeader(token).kid;
@@ -143,8 +154,35 @@ export async function verifyMandate(token: string, registry: TrustRegistry, now:
   }
   if (Date.parse(m.validFrom) > now.getTime()) throw new MandateError("mandate_not_yet_valid", "Mandate is not valid yet.");
   if (Date.parse(m.validUntil) <= now.getTime()) throw new MandateError("mandate_expired", "Mandate has expired.");
-  return m;
+  return { mandate: m, issuedAt: typeof payload.iat === "number" ? new Date(payload.iat * 1000).toISOString() : m.validFrom };
 }
+
+// ---------- reissue ----------
+
+/**
+ * Reissue. A kitchen that changes what its agents may do signs a new mandate, and the earlier ones stop working:
+ * the gate accepts only a kitchen's current mandate. Dock keeps, per organisation, the last reissue: the moment (to
+ * the second, as a token's `iat` is) and the mandates signed in it. A mandate of that organisation signed before
+ * that moment and not among them is refused as superseded, whatever it says and however long it would still have
+ * run. One signed at or after it is the kitchen's current word: the key is the kitchen's, so what it signs later
+ * replaces what it signed earlier. Plain code; the register is persisted by the server (it survives a restart).
+ */
+export type MandateReissue = { orgId: string; at: string; mandateIds: string[]; by: string; /** The mandates a reissue replaced by name: refused whenever they were signed. */ replaced?: string[] };
+
+export interface MandateRegister {
+  reissueOf(orgId: string): MandateReissue | undefined;
+}
+
+/** The reissue that replaced this mandate, if any. */
+export function supersededBy(mandate: Pick<Mandate, "mandateId" | "issuer" | "validFrom">, issuedAt: string | undefined, register: MandateRegister | undefined): MandateReissue | undefined {
+  const r = register?.reissueOf(mandate.issuer.orgId);
+  if (!r || r.mandateIds.includes(mandate.mandateId)) return undefined;
+  if (r.replaced?.includes(mandate.mandateId)) return r;
+  return Date.parse(issuedAt ?? mandate.validFrom) < Date.parse(r.at) ? r : undefined;
+}
+
+export const supersededMessage = (orgName: string, r: MandateReissue) =>
+  `${orgName} reissued its mandate on ${r.at.slice(0, 16).replace("T", " ")} UTC; this one was signed before that and no longer works. Present the kitchen's current mandate.`;
 
 function mapJoseError(err: unknown): MandateError {
   if (err instanceof errors.JWTExpired) return new MandateError("mandate_expired", "Mandate has expired.");
