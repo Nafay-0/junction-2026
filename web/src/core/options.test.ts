@@ -295,3 +295,55 @@ describe("alternatives from the product map (only good and meaningful)", () => {
     expect(r.cards.at(-1)!.cons).toContain("The kitchen turned the box down before (declined by Sanna Koskinen on 3 Nov).".replace("the box", P.box.name));
   });
 });
+
+describe("data depth on option cards: deposits, labels, the wholesaler's own substitutes, nutrition", () => {
+  const named = { productId: "T-BOX", name: "the box", source: "named" as const };
+
+  it("puts a pack's deposit into the line and the card's total, and says so", () => {
+    const cans = { ...P.box2, deposits: [{ material: "4", quantity: 24 }] };
+    const r = buildOptions(input({ candidates: [P.box, cans], offers: [offer(P.box), offer(P.box2)] }));
+    const card = r.cards.find((c) => c.lines[0].productId === "U-BOX")!;
+    expect(card.lines[0]).toMatchObject({ packs: 10, lineTotalCents: 13700, depositCents: 360, lineDepositCents: 3600 });
+    expect(card.totalCents).toBe(13700 + 3600);
+    expect(card.reasons).toContainEqual({ code: "deposit", tone: "quiet", params: { cents: 3600 } });
+  });
+
+  it("ranks options carrying a preferred label first and states what the label costs", () => {
+    const finnish = { ...P.box2, certificates: ["hyvaa_suomesta"] };
+    const r = buildOptions(input({ candidates: [P.box, finnish, P.litre], offers: [offer(P.box), offer(P.box2), offer(P.litre)], preferLabels: ["hyvaa_suomesta"] }));
+    expect(r.cards[0].lines[0].productId).toBe("U-BOX");
+    expect(r.cards[0].reasons).toContainEqual({ code: "label_kept", tone: "pro", params: { labels: "hyvaa_suomesta", moreCents: 800, pct: 6.2 } });
+    expect(r.cards[0].pros).toContain("Carries hyvaa_suomesta: €8.00 more than the cheapest option without it.");
+    expect(r.cards.find((c) => c.lines[0].productId === "T-BOX")!.reasons).toContainEqual({ code: "label_missing", tone: "con", params: { labels: "hyvaa_suomesta" } });
+    // Finnish origin is the stated country of origin, not a printed label.
+    const fi = { ...P.litre, countryOfOrigin: "fi" };
+    const o = buildOptions(input({ candidates: [P.box, fi], offers: [offer(P.box), offer(P.litre)], preferLabels: ["origin_fi"] }));
+    expect(o.cards[0].lines[0].productId).toBe("T-1L");
+  });
+
+  it("ranks the substitute the wholesaler itself lists first among the alternatives, and says it lists it", () => {
+    const listing = { ...P.box, substitutes: ["T-1_5L"] };
+    const r = buildOptions(input({ candidates: [listing, P.box2, P.litre, P.bottle], offers: [offer(P.box, { availablePacks: 0 }), offer(P.box2), offer(P.litre), offer(P.bottle)], reference: named }));
+    expect(r.cards[0].lines[0].productId).toBe("T-1_5L");
+    expect(r.cards[0].reasons).toContainEqual({ code: "wholesaler_lists", tone: "pro", params: { product: P.box.name } });
+    // With the product map in play, the listed one still goes before the map's best.
+    const m = buildOptions(
+      input({
+        candidates: [listing, P.box2, P.litre, P.bottle],
+        offers: [offer(P.box, { availablePacks: 0 }), offer(P.box2), offer(P.litre), offer(P.bottle)],
+        reference: named,
+        alternatives: { substitutes: [{ productId: "T-1L", tier: "best", reason: "Same kind.", otherPacks: [] }, { productId: "T-1_5L", tier: "good", reason: "Same kind.", otherPacks: [] }], packAlternatives: [] },
+      }),
+    );
+    expect(m.cards.map((c) => c.lines[0].productId)).toEqual(["T-1_5L", "T-1L"]);
+  });
+
+  it("compares a substitute's declaration with the original's, the kitchen's ruled nutrients first", () => {
+    const orig = { ...P.box, nutrition: { per: "100ml" as const, values: { protein: 3.4, salt: 0.1, sugar: 4.8 } } };
+    const sub = { ...P.box2, nutrition: { per: "100ml" as const, values: { protein: 3.4, salt: 0.4, sugar: 3.1 } } };
+    const r = buildOptions(input({ candidates: [orig, sub], offers: [offer(P.box, { availablePacks: 0 }), offer(P.box2)], reference: named, nutritionFocus: ["salt"] }));
+    const card = r.cards[0];
+    expect(card.reasons).toContainEqual({ code: "nutrition_vs", tone: "quiet", params: { product: orig.name, diff: "salt:0.3|protein:0:s|sugar:-1.7", per: "100ml" } });
+    expect(card.cons).toContain(`Against ${orig.name}: 0.3 g more salt, same protein, 1.7 g less sugar per 100 g or ml.`);
+  });
+});

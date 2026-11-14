@@ -9,6 +9,8 @@
  * and yoghurt only; no nuts) and `laakso` (Laakso Catering, the partner's example org: no history; €1,000 alone;
  * lactose-free required; milk and plant drinks only; no gluten, no nuts; Aino Virtanen signs to €2,500).
  */
+import { nutritionFindings } from "@/core/nutrition";
+import { SCHOOL_NUTRITION } from "@/server/accounts/test-accounts";
 import type { Catalogue, Json, Outcome, ProductInfo } from "./lib";
 
 export type Goal =
@@ -45,7 +47,8 @@ export type Scenario = {
   title: string;
   /** Which of Valio's example scenarios or wish-list items this stands for. */
   tag: string;
-  kitchen: "kaari" | "laakso";
+  /** koulu-metsola: the public school test account (server/accounts/test-accounts.ts): nutrition rules, no nuts or fish. */
+  kitchen: "kaari" | "laakso" | "koulu-metsola";
   lang: "en" | "fi";
   turns: BuyerTurn[];
   goal: Goal;
@@ -733,6 +736,32 @@ ALL.push(
     limitation: THREAD_WIRING,
   },
 );
+
+// --- the partner's "allergen-safe substitution under pressure": a school kitchen's nutrition rules ---
+/** Every option keeps the school's signed nutrition rules by the product's own declaration (unknown fails). */
+const keepsSchoolNutrition = optionsAll("within the school's nutrition rules (declared figures)", (p) => nutritionFindings(SCHOOL_NUTRITION, { productId: p.id, category: p.category ?? "", nutrition: p.nutrition }).length === 0);
+/** The oat drink the words allow as a fallback is not slipped in: if one was considered, protein is the reason said. */
+const noLowProteinStandIn: Check = {
+  name: "no oat drink offered in place of milk; protein named if it came up",
+  run: async (o, c) => {
+    const plant: string[] = [];
+    for (const l of o.allOptions.flatMap((x) => x.lines)) {
+      const p = await c.catalogue.product(l.productId);
+      if (p?.category === "plant_drink" && (p.nutrition?.values.protein ?? 0) < 3) plant.push(`${l.productId} ${p.name}`);
+    }
+    return ok(plant.length === 0, `offered: ${plant.join("; ")}`);
+  },
+};
+ALL.push({
+  id: "school-nutrition-en",
+  title: "Allergen-safe substitution under pressure: a school kitchen's milk, an oat drink allowed only if it keeps the nutrition rules",
+  tag: "allergen-safe substitution (nutrition rules)",
+  kitchen: "koulu-metsola",
+  lang: "en",
+  turns: [{ say: "We need 60 litres of semi-skimmed milk for Monday's lunch. If there isn't enough milk, oat drink will do." }],
+  goal: "options",
+  expect: [optionsInCatalogue, without(/nut|almond|hazel|cashew|peanut|sesame|fish/i, "nuts, peanuts, sesame and fish"), keepsSchoolNutrition, noLowProteinStandIn, optionsShown(1)],
+});
 
 /**
  * Run order. The questions about Kaari's own history go first, before any scenario adds requests of its own to

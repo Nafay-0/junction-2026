@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { POST as memoryPost } from "@/app/ui-api/memory/kitchens/[kitchen]/route";
 import { localNow, nextDeliveryDay } from "@/core/kitchen";
-import { signMandate, supersededBy } from "@/core/mandate";
+import { missingAddedRules, signMandate, supersededBy } from "@/core/mandate";
 import { menuKitchen } from "./agent/menu/runtime";
 import { demoCredentials } from "./agent/runner";
 import { resolveKitchen } from "./console-kitchens";
@@ -150,6 +150,20 @@ describe("what the mandate can and cannot state", () => {
       expect(offers.some((o) => o.itemId === creamOnly.id)).toBe(false);
       expect(creamOnly.mandate).toMatchObject({ status: "intake_only" });
     }
+  });
+
+  it("narrows with a nutrition rule like an allergen rule: signed in, carried forward, and a mandate without it is not current", async () => {
+    const rule = { nutrient: "salt" as const, max: 1.2, categories: ["cat_10600"] };
+    expect(expressible({ nutritionRules: [rule] })).toEqual({ forbiddenAllergens: [], requiredAttributes: [], nutritionRules: [rule] });
+    expect(expressible({ nutritionRules: [{ nutrient: "salt" } as never] })).toBeUndefined();
+    const book = new MandateBook();
+    const old = demoKitchenMandate(new Date(Date.now() - 3600_000));
+    const { mandate, added } = await book.reissue(old, { nutritionRules: [rule] }, BY);
+    expect(mandate.nutritionRules).toEqual([rule]);
+    expect(added.nutritionRules).toEqual([rule]);
+    await expect(book.reissue(mandate, { nutritionRules: [{ ...rule, categories: ["cat_10600"] }] }, BY)).rejects.toMatchObject({ code: "rule_already_in_mandate" });
+    expect(book.restrict(demoKitchenMandate(new Date())).nutritionRules).toEqual([rule]);
+    expect(missingAddedRules({ ...demoKitchenMandate(new Date()), nutritionRules: [] }, book)).toEqual(["at most 1.2 g salt per 100 g or ml (cat_10600)"]);
   });
 
   it("the register survives a restart: a new process reads it back and refuses the same mandates", async () => {

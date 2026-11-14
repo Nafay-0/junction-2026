@@ -29,6 +29,7 @@ export const RULE_INFO: Record<string, RuleInfo> = {
   order_splitting: { group: "money", where: "gate", does: "Orders the agent placed alone within 24 hours for the same product family may not add up to more than it may spend alone, whatever their delivery days. The weekly budget is the ceiling behind it." },
   required_attributes: { group: "food", where: "gate", does: "Every product must carry what the mandate requires, for example lactose-free." },
   forbidden_allergens: { group: "food", where: "gate", does: "No product may contain an allergen the mandate forbids. A product with no allergen data counts as unsafe." },
+  nutrition_rules: { group: "food", where: "gate", does: "Every product keeps the kitchen's nutrition rules (at most so much salt or sugar, at least so much protein or fibre per 100 g or ml) by its maker's declaration; a product that does not declare the figure is refused." },
   required_certificates: { group: "food", where: "gate", does: "Every product must carry the certificates the mandate requires." },
   category_allowed: { group: "food", where: "gate", does: "Only product groups the kitchen allows, for example milk and plant drinks." },
   substitution_rule: { group: "food", where: "gate", does: "Swaps follow the kitchen's rule: none, like for like only, or with a person's sign-off." },

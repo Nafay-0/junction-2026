@@ -1,4 +1,5 @@
 import type { Product } from "@/core/catalog";
+import type { NutritionRule } from "@/core/nutrition";
 import { addDaysIso, emptyProfile, isoWeekday, localNow, type HistoryEntry, type KitchenProfile, type StatedPreference } from "@/core/kitchen";
 import { SEED_PRODUCTS, SEED_STOCK } from "@/core/seed";
 import { bigMilkBoxes } from "../demo-kitchen";
@@ -23,6 +24,14 @@ export type TestAccountSeed = {
   /** Made-up history and stated rules, so memory and standing orders have something to show. */
   profile: (orgId: string, name: string, now: Date, products: Product[]) => KitchenProfile;
 };
+
+/** Metsola school kitchen's nutrition rules, per 100 g or 100 ml (core/nutrition.ts). */
+export const SCHOOL_NUTRITION: NutritionRule[] = [
+  { nutrient: "protein", min: 3, categories: ["milk", "plant_drink"] },
+  { nutrient: "sugar", max: 12, categories: ["yoghurt", "plant_yoghurt", "quark"] },
+  { nutrient: "salt", max: 1.2, categories: ["cat_10600", "cat_10602", "cat_10603"] },
+  { nutrient: "fibre", min: 6, categories: ["cat_10900", "cat_10901", "cat_11030"] },
+];
 
 export const TEST_ACCOUNTS: TestAccountSeed[] = [
   {
@@ -49,7 +58,19 @@ export const TEST_ACCOUNTS: TestAccountSeed[] = [
     username: "koulu-metsola",
     password: "metsola-school-NlUJi4B8",
     restaurant: "Metsola school kitchen",
-    terms: { ...DEFAULT_TERMS, perOrderLimitEur: 250, weeklyBudgetEur: 2_500, forbid: ["nuts", "peanuts", "sesame", "fish"], signer: "Food service manager", maxLeadDays: 5 },
+    // A school kitchen's nutrition rules beside its allergen rules (the partner's "allergen-safe substitution under
+    // pressure" scenario): what pupils drink as milk keeps milk's protein, so an oat drink is no stand-in; yoghurt,
+    // cheese and bread within the sugar, salt and fibre a school menu allows. Finnish origin preferred, not required.
+    terms: {
+      ...DEFAULT_TERMS,
+      perOrderLimitEur: 250,
+      weeklyBudgetEur: 2_500,
+      forbid: ["nuts", "peanuts", "sesame", "fish"],
+      signer: "Food service manager",
+      maxLeadDays: 5,
+      nutrition: SCHOOL_NUTRITION,
+      labels: { require: [], prefer: ["origin_fi"] },
+    },
     profile: (orgId, name, now, products) => {
       const milk = pick(products, (p) => p.category === "milk" && p.attributes.includes("fat_1_5") && p.packSize >= 5) ?? pick(products, (p) => p.category === "milk");
       const yoghurt = pick(products, (p) => p.category === "yoghurt");

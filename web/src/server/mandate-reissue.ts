@@ -1,7 +1,8 @@
 import { DockError } from "@/core/errors";
 import type { Mandate } from "@/core/mandate";
 import { currentDemoMandate, type ConsoleKitchenInfo, type DemoSlug } from "./console-kitchens";
-import type { MandatePatch } from "./mandates";
+import { ruleText } from "@/core/nutrition";
+import type { MandatePatch, PatchAdded } from "./mandates";
 import type { Runtime } from "./runtime";
 
 export type MandateReissued = {
@@ -9,9 +10,9 @@ export type MandateReissued = {
   by: string;
   mandateId: string;
   replaced: string;
-  added: Required<MandatePatch>;
-  before: Pick<Mandate, "forbiddenAllergens" | "requiredAttributes">;
-  after: Pick<Mandate, "forbiddenAllergens" | "requiredAttributes">;
+  added: PatchAdded;
+  before: Pick<Mandate, "forbiddenAllergens" | "requiredAttributes" | "nutritionRules">;
+  after: Pick<Mandate, "forbiddenAllergens" | "requiredAttributes" | "nutritionRules">;
   signedWith: "the kitchen's configured key" | "a new key of the kitchen" | "the kitchen's key, held for it by this service";
 };
 
@@ -40,9 +41,9 @@ export async function reissueKitchenMandate(rt: Runtime, kitchen: Pick<ConsoleKi
   const g = globalThis as { __dockConsoleTokens?: Map<string, unknown>; __dockMenuTokens?: Map<string, unknown> };
   g.__dockConsoleTokens?.clear();
   g.__dockMenuTokens?.clear();
-  const pick = (m: Mandate) => ({ forbiddenAllergens: m.forbiddenAllergens, requiredAttributes: m.requiredAttributes });
+  const pick = (m: Mandate) => ({ forbiddenAllergens: m.forbiddenAllergens, requiredAttributes: m.requiredAttributes, ...(m.nutritionRules?.length ? { nutritionRules: m.nutritionRules } : {}) });
   const out: MandateReissued = { at: record.at, by, mandateId: mandate.mandateId, replaced: before.mandateId, added, before: pick(before), after: pick(mandate), signedWith: demo ? "the kitchen's configured key" : account ? "the kitchen's key, held for it by this service" : "a new key of the kitchen" };
-  const words = [...added.forbiddenAllergens.map((a) => `no ${a.replaceAll("_", " ")}`), ...added.requiredAttributes.map((c) => `every product ${c.replaceAll("_", "-")}`)].join(", ");
+  const words = [...added.forbiddenAllergens.map((a) => `no ${a.replaceAll("_", " ")}`), ...added.requiredAttributes.map((c) => `every product ${c.replaceAll("_", "-")}`), ...(added.nutritionRules ?? []).map(ruleText)].join(", ");
   rt.dock.ledger.append({
     type: "intake",
     actor: `buyer:${by}`,

@@ -3,6 +3,8 @@ import { z } from "zod";
 import type { LiveOffer, Product } from "./catalog";
 import { ClaimRefSchema, cutoffMs, statedUntilMs, type ClaimRef } from "./claims";
 import { SIGN_ALG, VERIFY_ALGS, type SigningKey, type VerifyingKey } from "./keys";
+import { NutritionSchema } from "./nutrition";
+import { ownPrice, packDeposit, vatBreakdown, vatRateOf } from "./pricing";
 import { addMinutes } from "./util";
 
 /**
@@ -32,7 +34,32 @@ export const QuoteLineSchema = z.object({
   lineTotalCents: z.number().int().nonnegative(),
   deliveryDate: z.iso.date(),
   /** Present when this line replaces a product the buyer could not get enough of. */
-  substituteFor: z.object({ ...ProductFacts, unitPriceCents: z.number().int().nonnegative() }).optional(),
+  substituteFor: z.object({ ...ProductFacts, unitPriceCents: z.number().int().nonnegative(), nutrition: NutritionSchema.optional() }).optional(),
+  /** The maker's nutrition declaration, signed with the line so the gate judges the nutrition rules on signed data. Absent: unknown. */
+  nutrition: NutritionSchema.optional(),
+  /** Stated country of origin (alpha-2), for a rule on Finnish origin. Absent: unknown. */
+  countryOfOrigin: z.string().optional(),
+  /** VAT rate on this line, and where it comes from (the price service's, else the product file's). Absent: unknown. */
+  taxRatePct: z.number().nonnegative().optional(),
+  taxSource: z.enum(["price_service", "product_file"]).optional(),
+  /** The list price per pack, when the customer's own price is lower (core/pricing.ts ownPrice). */
+  listUnitPriceCents: z.number().int().nonnegative().optional(),
+  /** Deposits charged with the line's packs, outside VAT; part of the quote's total (core/pricing.ts). */
+  deposit: z
+    .object({
+      perPackCents: z.number().int().nonnegative(),
+      totalCents: z.number().int().nonnegative(),
+      items: z.array(z.object({ material: z.string(), kind: z.string(), quantity: z.number().positive(), unitCents: z.number().int().nonnegative().nullable() })),
+      /** Materials charged at delivery whose amount Dock cannot state (not in the total). */
+      unknown: z.array(z.string()).optional(),
+    })
+    .optional(),
+});
+
+const VatSchema = z.object({
+  byRate: z.array(z.object({ ratePct: z.number().nullable(), baseCents: z.number().int(), vatCents: z.number().int().nullable() })),
+  vatCents: z.number().int().nonnegative(),
+  incomplete: z.boolean(),
 });
 
 export const QuoteSchema = z
@@ -51,9 +78,15 @@ export const QuoteSchema = z
     expiresBecause: z.enum(["ttl", "price_validity", "order_cutoff"]).optional(),
     /** The signed claims (price, availability, origin) the quote rests on, by id and token hash. See claims.ts. */
     evidence: z.array(ClaimRefSchema).optional(),
+    /** Goods before VAT and deposits, when the quote carries a deposit: totalCents is their sum. */
+    goodsCents: z.number().int().nonnegative().optional(),
+    depositCents: z.number().int().nonnegative().optional(),
+    /** VAT on the goods by rate, the way the invoice will show it; totalCents stays before VAT (the mandate's limits are). */
+    vat: VatSchema.optional(),
   })
   .refine((q) => q.lines.every((l) => l.lineTotalCents === l.quantity * l.unitPriceCents), "line totals do not add up")
-  .refine((q) => q.totalCents === q.lines.reduce((s, l) => s + l.lineTotalCents, 0), "quote total does not add up");
+  .refine((q) => q.lines.every((l) => !l.deposit || l.deposit.totalCents === l.quantity * l.deposit.perPackCents), "deposit totals do not add up")
+  .refine((q) => q.totalCents === q.lines.reduce((s, l) => s + l.lineTotalCents + (l.deposit?.totalCents ?? 0), 0), "quote total does not add up");
 
 export type Quote = z.infer<typeof QuoteSchema>;
 export type QuoteLine = z.infer<typeof QuoteLineSchema>;
@@ -177,6 +210,7 @@ export function buildQuote(input: QuoteInput): Quote {
         packSize: orig.packSize,
         attributes: orig.attributes,
         unitPriceCents: origOffer.unitPriceCents,
+        ...(orig.nutrition ? { nutrition: orig.nutrition } : {}),
       };
     }
     return {
@@ -195,6 +229,7 @@ export function buildQuote(input: QuoteInput): Quote {
       lineTotalCents: req.quantity * o.unitPriceCents,
       deliveryDate: o.deliveryDate,
       substituteFor,
+      ...lineDetail(p, o, req.quantity),
     };
   });
 
@@ -207,6 +242,9 @@ export function buildQuote(input: QuoteInput): Quote {
       { expiresAt: expiresAt.toISOString(), because },
     );
   }
+  const goods = lines.reduce((s, l) => s + l.lineTotalCents, 0);
+  const deposits = lines.reduce((s, l) => s + (l.deposit?.totalCents ?? 0), 0);
+  const vat = vatBreakdown(lines);
   return QuoteSchema.parse({
     quoteId: input.quoteId,
     buyerOrgId: input.buyerOrgId,
@@ -215,12 +253,41 @@ export function buildQuote(input: QuoteInput): Quote {
     requestId: input.requestId,
     currency: "EUR",
     lines,
-    totalCents: lines.reduce((s, l) => s + l.lineTotalCents, 0),
+    totalCents: goods + deposits,
+    ...(deposits > 0 || lines.some((l) => l.deposit) ? { goodsCents: goods, depositCents: deposits } : {}),
+    ...(lines.some((l) => l.taxRatePct !== undefined) ? { vat } : {}),
     issuedAt: input.now.toISOString(),
     expiresAt: expiresAt.toISOString(),
     expiresBecause: because,
     ...(input.evidence?.length ? { evidence: input.evidence } : {}),
   });
+}
+
+/**
+ * What a line carries beyond its price: the facts the gate's nutrition and origin rules read, the VAT rate, the list
+ * price when the customer's own is lower, and the deposit charged with its packs. Each is left out when unknown.
+ */
+export function lineDetail(p: Product, o: LiveOffer, quantity: number): Partial<QuoteLine> {
+  const out: Partial<QuoteLine> = {};
+  if (p.nutrition) out.nutrition = p.nutrition;
+  if (p.countryOfOrigin) out.countryOfOrigin = p.countryOfOrigin;
+  const vat = vatRateOf(o, p);
+  if (vat) {
+    out.taxRatePct = vat.pct;
+    out.taxSource = vat.source;
+  }
+  const own = ownPrice(o);
+  if (own) out.listUnitPriceCents = own.listCents;
+  const dep = packDeposit(p.deposits);
+  if (dep) {
+    out.deposit = {
+      perPackCents: dep.knownCents,
+      totalCents: dep.knownCents * quantity,
+      items: dep.lines.map((l) => ({ material: l.material, kind: l.kind, quantity: l.quantity, unitCents: l.unitCents })),
+      ...(dep.unknown.length ? { unknown: dep.unknown } : {}),
+    };
+  }
+  return out;
 }
 
 export async function signQuote(quote: Quote, key: SigningKey): Promise<string> {

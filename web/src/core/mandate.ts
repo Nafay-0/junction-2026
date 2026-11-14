@@ -1,6 +1,7 @@
 import { SignJWT, decodeProtectedHeader, errors, jwtVerify, type CryptoKey } from "jose";
 import { z } from "zod";
 import { SIGN_ALG, VERIFY_ALGS, type SigningKey } from "./keys";
+import { NutritionRuleSchema, ruleText, sameRule, type NutritionRule } from "./nutrition";
 import { allergenOf } from "./vocabulary";
 
 /**
@@ -43,8 +44,16 @@ export const MandateSchema = z
      * single-ingredient vegetable, fruit or herb without that data counts by its nature (core/catalog/nature.ts).
      */
     allergenEvidence: z.enum(["declared", "declared_or_nature"]).optional(),
-    /** Every product ordered must carry all of these certificates or labels. */
+    /** Every product ordered must carry all of these certificates or labels ("origin_fi": Finland as the stated origin). */
     requiredCertificates: z.array(z.string().min(1)),
+    /**
+     * Nutrition rules, checked by the gate like the allergen rules (core/nutrition.ts): a ceiling or a floor per 100 g
+     * or ml for the product kinds named. A product whose declaration lacks the figure is refused: unknown is not
+     * compliant. Absent: none.
+     */
+    nutritionRules: z.array(NutritionRuleSchema).max(30).optional(),
+    /** Labels the kitchen prefers (not requires): options carrying them rank first, with the price of the label said. */
+    preferredLabels: z.array(z.string().min(1).max(40)).max(20).optional(),
     /** Latest acceptable delivery: no later than `maxLeadDays` after the order, and no later than the request's need-by date. */
     delivery: z.object({ maxLeadDays: z.number().int().positive() }),
     substitution: z.object({
@@ -186,7 +195,7 @@ export type MandateReissue = {
    * its current mandate, whoever signed it and whenever: one minted later from old terms (a script holding the
    * kitchen's key, a server path signing from defaults) is refused like one signed before the reissue.
    */
-  requires?: { forbiddenAllergens: string[]; requiredAttributes: string[] };
+  requires?: { forbiddenAllergens: string[]; requiredAttributes: string[]; nutritionRules?: NutritionRule[] };
 };
 
 export interface MandateRegister {
@@ -202,7 +211,7 @@ export function supersededBy(mandate: Pick<Mandate, "mandateId" | "issuer" | "va
 }
 
 /** The rules the kitchen added by reissue that this mandate does not carry (in words), if any. */
-export function missingAddedRules(mandate: Pick<Mandate, "issuer" | "forbiddenAllergens" | "requiredAttributes">, register: MandateRegister | undefined): string[] {
+export function missingAddedRules(mandate: Pick<Mandate, "issuer" | "forbiddenAllergens" | "requiredAttributes" | "nutritionRules">, register: MandateRegister | undefined): string[] {
   const need = register?.reissueOf(mandate.issuer.orgId)?.requires;
   if (!need) return [];
   return [
@@ -212,6 +221,7 @@ export function missingAddedRules(mandate: Pick<Mandate, "issuer" | "forbiddenAl
     ...need.requiredAttributes
       .filter((c) => !mandate.requiredAttributes.includes(c) && !(c.endsWith("_free") && allergenOf(c.slice(0, -5)) !== undefined && mandate.forbiddenAllergens.includes(allergenOf(c.slice(0, -5))!)))
       .map((c) => `every product ${c.replaceAll("_", "-")}`),
+    ...(need.nutritionRules ?? []).filter((r) => !(mandate.nutritionRules ?? []).some((m) => sameRule(m, r))).map(ruleText),
   ];
 }
 

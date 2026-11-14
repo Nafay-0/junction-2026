@@ -2,6 +2,8 @@ import { z } from "zod";
 import { DockError } from "@/core/errors";
 import type { Mandate } from "@/core/mandate";
 import { categorySlug } from "@/core/catalog/partner";
+import { NutritionRuleSchema } from "@/core/nutrition";
+import { KNOWN_LABELS } from "@/core/vocabulary";
 import { addDays } from "@/core/util";
 import generated from "../catalog-categories.json";
 
@@ -26,6 +28,8 @@ export const REQUIRE_CLAIMS = ["lactose_free", "gluten_free", "organic", "vegan"
 /** Allergens a kitchen can rule out (the catalogue's slugs, core/catalog/partner.ts). */
 export const FORBID_ALLERGENS = ["nuts", "peanuts", "gluten", "milk", "eggs", "fish", "crustaceans", "molluscs", "sesame", "soy", "celery", "mustard", "lupin", "sulphites"] as const;
 export const SUBSTITUTION_RULES = ["within_preferences", "needs_approval", "none"] as const;
+/** Labels a kitchen can require of every product or prefer (core/vocabulary.ts KNOWN_LABELS; origin_fi: Finland as the stated origin). */
+export const LABEL_CHOICES = KNOWN_LABELS;
 
 export const TermsSchema = z
   .object({
@@ -37,6 +41,10 @@ export const TermsSchema = z
     signer: z.string().trim().min(2).max(60),
     substitution: z.enum(SUBSTITUTION_RULES),
     maxLeadDays: z.number().int().min(1).max(30),
+    /** Nutrition rules, checked by the gate beside the allergen rules (core/nutrition.ts). Absent: none. */
+    nutrition: z.array(NutritionRuleSchema).max(20).optional(),
+    /** Labels every product must carry, and labels the agent should prefer (ranked first, the price of them said). */
+    labels: z.object({ require: z.array(z.enum(KNOWN_LABELS as [string, ...string[]])).max(KNOWN_LABELS.length).default([]), prefer: z.array(z.enum(KNOWN_LABELS as [string, ...string[]])).max(KNOWN_LABELS.length).default([]) }).optional(),
   })
   .refine((t) => t.weeklyBudgetEur >= t.perOrderLimitEur, { message: "The weekly budget must be at least the per-order limit.", path: ["weeklyBudgetEur"] });
 
@@ -62,7 +70,8 @@ export function parseTerms(raw: unknown): MandateTerms {
     throw new DockError(400, "terms_invalid", `${first?.path.join(".") || "terms"}: ${first?.message ?? "not valid"}`);
   }
   const t = r.data;
-  return { ...t, groups: [...new Set(t.groups)], require: [...new Set(t.require)], forbid: [...new Set(t.forbid)] };
+  const labels = t.labels ? { require: [...new Set(t.labels.require)], prefer: [...new Set(t.labels.prefer)].filter((l) => !t.labels!.require.includes(l)) } : undefined;
+  return { ...t, groups: [...new Set(t.groups)], require: [...new Set(t.require)], forbid: [...new Set(t.forbid)], ...(labels ? { labels } : {}) };
 }
 
 /** The catalogue categories (product.category slugs) a set of product groups covers. */
@@ -92,7 +101,9 @@ export function mandateFromTerms(t: MandateTerms, o: { orgId: string; orgName: s
     allowedCategories: categoriesOf(t.groups),
     requiredAttributes: [...t.require],
     forbiddenAllergens: [...t.forbid],
-    requiredCertificates: [],
+    requiredCertificates: [...(t.labels?.require ?? [])],
+    ...(t.nutrition?.length ? { nutritionRules: t.nutrition.map((r) => ({ ...r })) } : {}),
+    ...(t.labels?.prefer.length ? { preferredLabels: [...t.labels.prefer] } : {}),
     delivery: { maxLeadDays: t.maxLeadDays },
     substitution: { rule: t.substitution, maxPriceIncreasePct: 10 },
     approvers: [{ role: SIGNER_ROLE, name: t.signer, maxApprovalCents: t.weeklyBudgetEur * 100 }],
@@ -111,5 +122,9 @@ export function termsFromMandate(m: Mandate): MandateTerms {
     signer: m.approvers[0]?.name ?? DEFAULT_TERMS.signer,
     substitution: (SUBSTITUTION_RULES as readonly string[]).includes(m.substitution.rule) ? (m.substitution.rule as MandateTerms["substitution"]) : "within_preferences",
     maxLeadDays: Math.min(30, m.delivery.maxLeadDays),
+    ...(m.nutritionRules?.length ? { nutrition: m.nutritionRules.map((r) => ({ ...r })) } : {}),
+    ...(m.requiredCertificates.length || m.preferredLabels?.length
+      ? { labels: { require: m.requiredCertificates.filter((l) => (KNOWN_LABELS as readonly string[]).includes(l)), prefer: (m.preferredLabels ?? []).filter((l) => (KNOWN_LABELS as readonly string[]).includes(l)) } }
+      : {}),
   };
 }

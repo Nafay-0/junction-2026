@@ -175,7 +175,7 @@ Lower-level tools for follow-up: open_request, search_products (free master data
 
 ## Rules an agent must follow
 
-- Quantities are packs (see packSize); money is integer euro cents ex VAT.
+- Quantities are packs (see packSize); money is integer euro cents ex VAT. A quote's totalCents adds returnable-packaging deposits (lines[].deposit, outside VAT; amounts at the Finnish deposit system's published rates, since the price service states none) to the goods, and the mandate's limits compare that total. Each line states its VAT rate (taxRatePct, from the price service, else the product data's VAT class) and quote.vat adds VAT up by rate. listUnitPriceCents is the list price when the kitchen's own price is lower. Products carry nutrition per 100 g or ml; a mandate's nutritionRules are checked by the gate (rule nutrition_rules), and a product that does not declare the figure is refused.
 - Shortlist with search_products before asking live prices. Never scan the catalogue: live lookups are capped per call and per agent per hour, and refused with rule live_lookup_limit.
 - If the preferred product is short, quote what it has and add a line with substituteFor set to its productId.
 - place_order has three outcomes: committed (with a signed confirmation), pending_approval (a person signs off; do NOT retry, follow up with get_order), or refused (error.rule names the rule).
