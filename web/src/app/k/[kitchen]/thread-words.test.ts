@@ -97,7 +97,7 @@ describe("the options as one decision", () => {
 
   it("says a split's substitute in the buyer's language", async () => {
     const { titleOf } = await import("./thread-words");
-    expect(titleOf(good, fi.w)).toMatch(/\(korvaava\)$/);
+    expect(titleOf(good, fi.w)).toMatch(/\(toinen tuote\)$/);
     expect(titleOf(best, fi.w)).toBe(best.title);
   });
 
@@ -125,7 +125,7 @@ describe("the options as one decision", () => {
       { name: "Jari Mäkelä", role: "owner", maxApprovalCents: 500000 },
     ];
     expect(plain(approverFor(101000, approvers)?.name)).toBe("Jari Mäkelä");
-    expect(plain(en.w.sendToSign("Jari Mäkelä", en.f.money(101000)))).toBe("Send to Jari Mäkelä to sign, 1 010,00 €");
+    expect(plain(en.w.sendToSign("Jari Mäkelä", en.f.money(101000)))).toBe("Send to Jari Mäkelä for an OK, 1 010,00 €");
   });
 });
 

@@ -257,6 +257,8 @@ export type OptionsCard = CardBase & {
   excluded: { reason: string; count: number; code?: string }[];
   notes: string[];
   chosen?: string;
+  /** The buyer took this option to the order sheet to change it: the card no longer orders by itself. */
+  adjusted?: string;
 };
 
 export type PriceCard = CardBase & {

@@ -20,14 +20,14 @@ export const threadLog = (scope: Page | Locator) => scope.getByRole("log", { nam
 /** The thread's turns, oldest first (the log's own list items, not the lists inside cards). */
 export const turns = (scope: Page | Locator) => threadLog(scope).locator(":scope > li:not([aria-hidden])");
 
-/** Cards are articles headed by their kind ("What I understood", "Options with live prices", "The gate", ...). */
+/** Cards are articles headed by their kind ("What I understood", "Options with live prices", "Checked against your rules", ...). */
 export const KIND = {
   understood: "What I understood",
   anomaly: "Check before I go on",
   question: "One question",
   options: "Options with live prices",
   price: "Fixed price",
-  gate: "The gate",
+  gate: "Checked against your rules",
   order: "Order",
   memory: "Memory",
   records: "From your records",
@@ -43,11 +43,11 @@ export const card = (scope: Page | Locator, kind: keyof typeof KIND) => cards(sc
 
 /**
  * The newest options card (main f49eea8): the agent's pick first, with one button that says what a tap does ("Order
- * this, 129,00 €" inside the mandate, "Send to <name> to sign, 1 322,00 €" beyond it); the other options folded
+ * this, 129,00 €" inside the mandate, "Send to <name> for an OK, 1 322,00 €" beyond it); the other options folded
  * under "Other options", each with the same kind of button once opened; options the gate would refuse are shown as
  * "Cannot be ordered: <rule>" with no button.
  */
-export const CHOICE = /^(Order this|Send to .+ to sign), /;
+export const CHOICE = /^(Order this|Send to .+ for an OK), /;
 /** Every choice button of the newest options card (the others' only once their fold is open). */
 export const choices = (scope: Page | Locator) => card(scope, "options").getByRole("button", { name: CHOICE });
 /** The agent's pick: the first choice button of the newest options card. */

@@ -79,7 +79,7 @@ describe("the order sheet", () => {
     const order = placed.find((c): c is OrderCard => c.type === "order")!;
     expect(order.status).toBe("committed");
     expect(order.takeBackUntil).toBeTruthy();
-    expect(Date.parse(order.takeBackUntil)).toBeGreaterThan(Date.now());
+    expect(Date.parse(order.takeBackUntil!)).toBeGreaterThan(Date.now());
 
     // Without a signed-in person the tap is relayed: a committed order stays as it is.
     const relayed = await kitchen("laakso");

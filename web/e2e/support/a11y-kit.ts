@@ -103,7 +103,7 @@ export const target = (id: string): Target => {
  * follow the first ("you already asked ... Order again?").
  */
 export async function confirmConcerns(page: Page, timeout = 20_000): Promise<void> {
-  const options = page.getByRole("button", { name: /^(Order this|Send to .+ to sign), / }).filter({ visible: true });
+  const options = page.getByRole("button", { name: /^(Order this|Send to .+ for an OK), / }).filter({ visible: true });
   const yes = page.getByRole("button", { name: "Yes, that is right" }).filter({ visible: true });
   const end = Date.now() + timeout;
   while (Date.now() < end) {

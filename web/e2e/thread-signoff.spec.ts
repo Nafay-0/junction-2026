@@ -83,7 +83,7 @@ test("an order over the limit is signed from the thread's gate card with this de
   await log.getByRole("button", { name: "Add this device and sign" }).click();
 
   // Signed with this device's passkey, bound to the exact order: the thread turns the gate card into the signed outcome.
-  await expect(log.getByText(/^Signed off by /).first()).toBeVisible({ timeout: 30_000 });
+  await expect(log.getByText(/^Approved by /).first()).toBeVisible({ timeout: 30_000 });
   await expect(log.getByText("Placed").first()).toBeVisible({ timeout: 30_000 });
   await shot(page, "thread-02-signed");
   console.log(`from the first tap to the signed order: ${((Date.now() - t0) / 1000).toFixed(1)} s`);

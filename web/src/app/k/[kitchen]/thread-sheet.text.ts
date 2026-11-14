@@ -8,6 +8,9 @@ import { defineText } from "../../_i18n/lang";
 export const THREAD_SHEET_TEXT = defineText({
   en: {
     kind: "Your order",
+    adjust: "Change amount, day or product",
+    adjustWords: "Change it before ordering",
+    adjusted: "Being changed on the order below.",
     pickerKind: "Other products",
     alone: { limit: (limit: string) => `Inside your rules: under your ${limit} limit.`, plain: "Inside your rules." },
     sign: {
@@ -68,6 +71,9 @@ export const THREAD_SHEET_TEXT = defineText({
   },
   fi: {
     kind: "Tilauksesi",
+    adjust: "Muuta määrää, päivää tai tuotetta",
+    adjustWords: "Muutan ennen tilaamista",
+    adjusted: "Muutetaan alla olevassa tilauksessa.",
     pickerKind: "Muut tuotteet",
     alone: { limit: (limit: string) => `Sääntöjesi sisällä: alle ${limit} rajan.`, plain: "Sääntöjesi sisällä." },
     sign: {
@@ -128,6 +134,9 @@ export const THREAD_SHEET_TEXT = defineText({
   },
   sv: {
     kind: "Din beställning",
+    adjust: "Ändra mängd, dag eller produkt",
+    adjustWords: "Ändra innan jag beställer",
+    adjusted: "Ändras i beställningen nedan.",
     pickerKind: "Andra produkter",
     alone: { limit: (limit: string) => `Inom dina regler: under din gräns på ${limit}.`, plain: "Inom dina regler." },
     sign: {

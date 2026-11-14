@@ -57,6 +57,9 @@ export async function runWidget(run: TurnRun, a: ThreadAction, words?: string): 
       const o = s.options.find((x) => x.optionId === a.optionId);
       if (!o || s.state !== "options_ready") throw new DockError(409, "turn_card_stale", "That option is no longer open.", "intake_sequence");
       record(run, "sheet_from_option", `The buyer chose to adjust ${o.optionId} before ordering.`, { optionId: o.optionId }, a.requestId);
+      // The options card hands over to the sheet: one place orders, never two.
+      for (const x of run.thread.turns)
+        if (x.role === "agent") for (const c of x.cards) if (c.type === "options" && c.requestId === a.requestId) run.store.card(run.thread, x.turnId, { ...c, adjusted: o.optionId });
       await createSheet(run, {
         lines: o.quoteLines.map((l, n) => ({ productId: l.productId, packs: l.quantity, ...(l.substituteFor ? { substituteFor: l.substituteFor } : n === 0 && o.alternative?.for && o.alternative.for !== l.productId ? { substituteFor: o.alternative.for } : {}) })),
         deliveryDate: o.deliveryDate,

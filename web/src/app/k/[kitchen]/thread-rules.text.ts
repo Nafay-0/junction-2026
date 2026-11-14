@@ -4,7 +4,7 @@ import { defineText } from "../../_i18n/lang";
 export const THREAD_RULES_TEXT = defineText({
   en: {
     kind: "Your rules",
-    signedMandate: (until: string) => `Signed mandate, valid until ${until}`,
+    signedMandate: (until: string) => `Your rules, valid until ${until}`,
     field: {
       perOrderLimitEur: "Spends alone per order",
       weeklyBudgetEur: "Weekly budget",
@@ -12,8 +12,8 @@ export const THREAD_RULES_TEXT = defineText({
       forbiddenAllergens: "Never",
       requiredAttributes: "Always",
       groups: "Product groups",
-      signer: "Signs off",
-      substitution: "Substitutes",
+      signer: "OKs above the limit",
+      substitution: "Other products instead",
     } as Record<string, string>,
     days: (n: string) => `${n} days`,
     none: "none",
@@ -26,12 +26,12 @@ export const THREAD_RULES_TEXT = defineText({
     addNever: "Never buy",
     addAlways: "Always require",
     limits: "Limits",
-    signerName: "Who signs off",
+    signerName: "Who OKs above the limit",
     propose: "Show the change",
     sign: (name: string) => `Sign as ${name}`,
-    signGeneric: "Sign the new mandate",
+    signGeneric: "Confirm your new rules",
     drop: "Drop it",
-    signed: (id: string) => `Signed. The new mandate (${id}) is the one the gate checks from now on.`,
+    signed: (id: string) => `Done. Every order is checked against your new rules (${id}) from now on.`,
     dropped: "Dropped. Nothing was signed.",
     nothingSigned: "Nothing is signed until you sign it here.",
     why: {
@@ -45,7 +45,7 @@ export const THREAD_RULES_TEXT = defineText({
   },
   fi: {
     kind: "Säännöt",
-    signedMandate: (until: string) => `Allekirjoitettu valtuutus, voimassa ${until} asti`,
+    signedMandate: (until: string) => `Sääntösi, voimassa ${until} asti`,
     field: {
       perOrderLimitEur: "Tilaa itse enintään",
       weeklyBudgetEur: "Viikkobudjetti",
@@ -54,7 +54,7 @@ export const THREAD_RULES_TEXT = defineText({
       requiredAttributes: "Aina",
       groups: "Tuoteryhmät",
       signer: "Hyväksyy",
-      substitution: "Korvaavat tuotteet",
+      substitution: "Toinen tuote tilalle",
     },
     days: (n: string) => `${n} päivää`,
     none: "ei mitään",
@@ -70,9 +70,9 @@ export const THREAD_RULES_TEXT = defineText({
     signerName: "Kuka hyväksyy",
     propose: "Näytä muutos",
     sign: (name: string) => `Allekirjoita: ${name}`,
-    signGeneric: "Allekirjoita uusi valtuutus",
+    signGeneric: "Vahvista uudet sääntösi",
     drop: "Hylkää",
-    signed: (id: string) => `Allekirjoitettu. Portti tarkistaa tästä lähtien uuden valtuutuksen (${id}).`,
+    signed: (id: string) => `Valmis. Jokainen tilaus tarkistetaan tästä lähtien uusia sääntöjäsi vasten (${id}).`,
     dropped: "Hylätty. Mitään ei allekirjoitettu.",
     nothingSigned: "Mitään ei allekirjoiteta ennen kuin allekirjoitat tässä.",
     why: {
@@ -86,7 +86,7 @@ export const THREAD_RULES_TEXT = defineText({
   },
   sv: {
     kind: "Era regler",
-    signedMandate: (until: string) => `Signerat mandat, giltigt till ${until}`,
+    signedMandate: (until: string) => `Dina regler, giltiga till ${until}`,
     field: {
       perOrderLimitEur: "Beställer själv högst",
       weeklyBudgetEur: "Veckobudget",
@@ -95,7 +95,7 @@ export const THREAD_RULES_TEXT = defineText({
       requiredAttributes: "Alltid",
       groups: "Produktgrupper",
       signer: "Godkänner",
-      substitution: "Ersättningar",
+      substitution: "Annan produkt i stället",
     },
     days: (n: string) => `${n} dagar`,
     none: "inget",
@@ -111,9 +111,9 @@ export const THREAD_RULES_TEXT = defineText({
     signerName: "Vem godkänner",
     propose: "Visa ändringen",
     sign: (name: string) => `Signera som ${name}`,
-    signGeneric: "Signera det nya mandatet",
+    signGeneric: "Bekräfta dina nya regler",
     drop: "Släpp den",
-    signed: (id: string) => `Signerat. Grinden kontrollerar det nya mandatet (${id}) från och med nu.`,
+    signed: (id: string) => `Klart. Varje beställning prövas mot dina nya regler (${id}) från och med nu.`,
     dropped: "Släppt. Inget signerades.",
     nothingSigned: "Inget signeras förrän du signerar här.",
     why: {

@@ -188,7 +188,7 @@ test("presenter enrols with the passcode and a passkey, signs Kaari's order over
     expect(view.view).toMatchObject({ state: "committed", outcome: { method: "passkey", verified: true } });
 
     // The kitchen's thread and the wall follow live: the same gate card now says who signed.
-    await expect(card(k, "gate")).toContainText("Signed off by Sanna Koskinen", { timeout: 20_000 });
+    await expect(card(k, "gate")).toContainText("Approved by Sanna Koskinen", { timeout: 20_000 });
     await expect(card(k, "order")).toContainText("Placed");
     await expect(wall.getByText(/^Signed order/).first()).toBeVisible({ timeout: 20_000 });
 

@@ -53,7 +53,7 @@ async function once(n: number) {
   await field.press("Enter");
   const marks: Record<string, number> = {};
   let taps = 0;
-  const lead = log.getByRole("button", { name: /^(Send to .+ to sign|Order this|Lähetä hyväksyttäväksi|Tilaa tämä)/ }).first();
+  const lead = log.getByRole("button", { name: /^(Send to .+ for an OK|Order this|Lähetä hyväksyttäväksi|Tilaa tämä)/ }).first();
   // A check the agent asks first (a likely slip, a repeat of a recent order) is answered as the judge means it: one tap.
   const confirm = log.getByRole("button", { name: /^(Yes, that is right|Kyllä, tämä on oikein)$/ }).last();
   for (let i = 0; i < 2; i++) {
@@ -76,7 +76,7 @@ async function once(n: number) {
   await shot(page, `${String(n).padStart(2, "0")}-${lang}-${width}-2-gate`);
   await sign.click();
   taps++;
-  await log.getByText(/(Signed off by|Hyväksyjä:)/).first().waitFor({ timeout: 60_000 });
+  await log.getByText(/(Signed off by|Approved by|Hyväksyjä:)/).first().waitFor({ timeout: 60_000 });
   marks.signed = Date.now() - t0;
   await page.waitForTimeout(2500); // the agent's closing line
   await shot(page, `${String(n).padStart(2, "0")}-${lang}-${width}-3-signed`);

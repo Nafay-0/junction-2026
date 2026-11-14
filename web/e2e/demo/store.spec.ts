@@ -52,7 +52,7 @@ test("thread, every stage, signed on the visitor's phone; reload and back in the
   const options = card(page, "options");
   await expect(pick(page)).toBeVisible({ timeout: 20_000 });
   await expect(options).toContainText(/^Options with live prices\s*Best/);
-  await expect(pick(page)).toHaveText(/^Send to .+ to sign, [\d\s\u00a0\u202f]+,\d\d\s?€$/);
+  await expect(pick(page)).toHaveText(/^Send to .+ for an OK, [\d\s\u00a0\u202f]+,\d\d\s?€$/);
   await expect(options).toContainText(/a person signs it off/);
   expect(await otherOptions(page).count()).toBeGreaterThanOrEqual(1);
 
@@ -81,7 +81,7 @@ test("thread, every stage, signed on the visitor's phone; reload and back in the
   // The person who signs is named with their role; their passkey is bound to this exact order.
   await expect(gate).toContainText(/, purchasing manager/);
   await expect(gate).toContainText(/passkey is bound to this exact order/);
-  await expect(card(page, "order")).toContainText("Waiting for sign-off");
+  await expect(card(page, "order")).toContainText("Waiting for an OK");
 
   // Reload, then the back button from another page, while waiting for the sign-off: still waiting, not lost.
   await page.reload();
@@ -102,10 +102,10 @@ test("thread, every stage, signed on the visitor's phone; reload and back in the
   await expect(phone.getByRole("heading", { name: "Order placed" })).toBeVisible({ timeout: 30_000 });
 
   // The thread changes by itself: the same gate card now says who signed, and the order is placed.
-  await expect(card(page, "gate")).toContainText(/Signed off by /, { timeout: 30_000 });
+  await expect(card(page, "gate")).toContainText(/Approved by /, { timeout: 30_000 });
   await expect(card(page, "order")).toContainText("Placed");
   await expect(card(page, "order")).toContainText(total);
-  await expect(card(page, "order")).toContainText(/Signed off by /);
+  await expect(card(page, "order")).toContainText(/Approved by /);
   expect((await approvalState(page.request, approvalId)).view?.state).toBe("committed");
   expect(errors).toEqual([]);
 });
@@ -248,7 +248,7 @@ test("after the phone signs, the same thread answers the next request", async ({
   await phone.waitForURL("**/approve/**", { timeout: 30_000 });
   await approveButton(phone).click();
   await expect(phone.getByRole("heading", { name: "Order placed" })).toBeVisible({ timeout: 30_000 });
-  await expect(card(page, "gate")).toContainText(/Signed off by /, { timeout: 30_000 });
+  await expect(card(page, "gate")).toContainText(/Approved by /, { timeout: 30_000 });
   await say(page, "200 litres of lactose-free milk for Wednesday, cheapest");
   await expect(answerTo(page, "200 litres of lactose-free milk for Wednesday, cheapest").getByRole("article").first()).toBeVisible({ timeout: 30_000 });
   await expect(cards(page, "notice").filter({ hasText: "The agent did not answer" })).toHaveCount(0);
