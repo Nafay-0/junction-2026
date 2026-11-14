@@ -39,8 +39,8 @@ async function sessionOf(rt: Runtime, k: Kitchen): Promise<AgentSession> {
 // ---------- requests the portal opens for itself ----------
 
 /** Request texts the portal writes; the request history shows them as what they are. */
-export const BROWSE_TEXT = "Kitchen portal: live price checks for products the buyer opened in the catalogue";
-export const BASKET_PREFIX = "Basket from the catalogue:";
+import { BASKET_PREFIX, BROWSE_TEXT } from "./portal-requests";
+export { BASKET_PREFIX, BROWSE_TEXT };
 
 // ---------- the overview ----------
 
