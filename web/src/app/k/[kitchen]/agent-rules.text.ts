@@ -5,6 +5,8 @@ type Dim = { label: string; options: { id: string; label: string }[] };
 /** Agent and rules: the mandate in plain words, the fallback memory view, who sees what, and Connect. */
 export const AGENT_RULES_TEXT = defineText({
   en: {
+    showAll: "Show all",
+    showLess: "Show less",
     figAlone: "The agent alone, per order",
     figWeek: "Spending in seven days, at most",
     figLead: "Delivery booked ahead",
@@ -79,6 +81,8 @@ export const AGENT_RULES_TEXT = defineText({
     noConnector: "A per-kitchen connector address for consumer assistants (with setup steps, revoke and reissue) is being added; until then, use the MCP address and mandate above.",
   },
   fi: {
+    showAll: "Näytä kaikki",
+    showLess: "Näytä vähemmän",
     figAlone: "Agentti itse, tilausta kohden",
     figWeek: "Kulut seitsemässä päivässä enintään",
     figLead: "Toimitus varataan enintään",
@@ -153,6 +157,8 @@ export const AGENT_RULES_TEXT = defineText({
     noConnector: "Keittiökohtainen liitännän osoite kuluttaja-avustajille (käyttöönoton ohjeineen, mitätöinteineen ja uudelleen myöntämisineen) on tulossa; siihen asti käytä yllä olevaa MCP-osoitetta ja valtakirjaa.",
   },
   sv: {
+    showAll: "Visa alla",
+    showLess: "Visa färre",
     figAlone: "Agenten på egen hand, per beställning",
     figWeek: "Utgifter på sju dagar, högst",
     figLead: "Leverans bokas högst",

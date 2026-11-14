@@ -98,9 +98,14 @@ function ChangeMandate() {
   const [signed, setSigned] = useState(false);
   return (
     <section aria-labelledby="change-mandate">
-      <SectionTitle id="change-mandate">{atx.mandateTitle}</SectionTitle>
       <Card pad>
-        <p className="max-w-[68ch] leading-relaxed text-ink-soft">{atx.mandateIntro}</p>
+        <h2 id="change-mandate" className="flex items-center gap-3">
+          <IconDisc size={40}>
+            <PenLine size={19} />
+          </IconDisc>
+          <span className="display text-[1.4rem] leading-tight">{atx.mandateTitle}</span>
+        </h2>
+        <p className="mt-3 max-w-[68ch] leading-relaxed text-ink-soft">{atx.mandateIntro}</p>
         {signed && (
           <Panel tone="good" className="mt-4 flex items-center gap-2 px-4 py-3 text-good">
             <Check aria-hidden size={17} strokeWidth={2.5} />
@@ -119,7 +124,6 @@ function ChangeMandate() {
             />
           ) : (
             <Button kind="secondary" onClick={() => setOpen(true)}>
-              <PenLine aria-hidden size={17} />
               {atx.mandateChange}
             </Button>
           )}
@@ -135,6 +139,26 @@ const MARK = {
   never: { icon: <Ban size={18} strokeWidth={2.2} />, disc: "bg-surface text-ink-soft", bullet: <X aria-hidden size={14} strokeWidth={2.6} className="text-ink-soft" /> },
 } as const;
 
+/** One line of the mandate in words. A very long one (a kitchen allowed hundreds of categories) folds to three lines. */
+function RuleItem({ text, bullet }: { text: string; bullet: ReactNode }) {
+  const tx = useText(AGENT_RULES_TEXT);
+  const [open, setOpen] = useState(false);
+  const long = text.length > 180;
+  return (
+    <li className="grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-1.5">
+      <span className="flex h-[1.375em] items-center">{bullet}</span>
+      <span className="min-w-0">
+        <span className={`break-words ${long && !open ? "line-clamp-3" : "block"}`}>{text}</span>
+        {long && (
+          <Button kind="quiet" className="text-[0.9rem]" onClick={() => setOpen((x) => !x)}>
+            {open ? tx.showLess : tx.showAll}
+          </Button>
+        )}
+      </span>
+    </li>
+  );
+}
+
 function RuleList({ title, items, mark, children }: { title: string; items: string[]; mark: keyof typeof MARK; children?: ReactNode }) {
   const k = MARK[mark];
   return (
@@ -147,10 +171,7 @@ function RuleList({ title, items, mark, children }: { title: string; items: stri
       </h3>
       <ul className="mt-4 space-y-2.5 leading-snug">
         {items.map((t) => (
-          <li key={t} className="grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-1.5">
-            <span className="flex h-[1.375em] items-center">{k.bullet}</span>
-            <span>{t}</span>
-          </li>
+          <RuleItem key={t} text={t} bullet={k.bullet} />
         ))}
       </ul>
       {children}
