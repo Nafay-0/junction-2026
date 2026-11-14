@@ -1,3 +1,4 @@
+import { natureOf } from "./nature";
 import { categoryCodesFor, type IndexedProduct } from "./partner";
 import type { Amount, Measure } from "./pack";
 
@@ -6,7 +7,8 @@ import type { Amount, Measure } from "./pack";
  * Lexical and deterministic: no LLM, no embeddings. `SearchBackend` is the seam for another engine later.
  */
 
-export type AllergenEvidence = "contains" | "may_contain" | "free_from" | "not_declared" | "unknown";
+/** by_nature: no allergen data, but fresh whole produce without this allergen in it (catalog/nature.ts); never a declaration. */
+export type AllergenEvidence = "contains" | "may_contain" | "free_from" | "not_declared" | "by_nature" | "unknown";
 
 export type SearchQuery = {
   text?: string;
@@ -196,7 +198,9 @@ export function allergenEvidence(p: IndexedProduct, allergen: string): AllergenE
   if (p.allergens.contains.includes(allergen)) return "contains";
   if (p.allergens.mayContain.includes(allergen)) return "may_contain";
   if (p.allergens.freeFrom.includes(allergen)) return "free_from";
-  return p.allergens.declared ? "not_declared" : "unknown";
+  if (p.allergens.declared) return "not_declared";
+  const n = natureOf(p);
+  return n ? (n.allergens.includes(allergen) ? "contains" : "by_nature") : "unknown";
 }
 
 export class LexicalSearch implements SearchBackend {
@@ -242,7 +246,8 @@ export class LexicalSearch implements SearchBackend {
       if (minC && !(p.pack.certainMeasures.includes(minC.unit) && (p.pack.perSalesUnit[minC.unit] ?? 0) >= minC.amount)) return false;
       for (const a of forbidden) {
         const e = allergenEvidence(p, a);
-        if (e === "contains" || e === "may_contain" || e === "unknown") return false;
+        // Plain search stays strict: a product without allergen data is out, by its nature or not.
+        if (e === "contains" || e === "may_contain" || e === "unknown" || e === "by_nature") return false;
         if (proof === "free_from" && e !== "free_from") return false;
       }
       return true;
