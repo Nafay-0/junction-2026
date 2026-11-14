@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { connection } from "next/server";
+import { Suspense } from "react";
 import { isLang } from "../../_i18n/lang";
 import { LangProvider } from "../../_i18n/provider";
 import { DoorShell } from "../../k/_account/shell";
@@ -9,8 +11,17 @@ import { MAIL_PAGES_TEXT } from "../mail-pages.text";
 export const metadata: Metadata = { title: "AimoPilot: no more emails", robots: { index: false } };
 
 /** /mail/stopped: where the stop link in an order email lands, after it stopped the mails (ui-api/mail/stop). */
-export default async function StoppedPage(props: PageProps<"/mail/stopped">) {
-  const q = await props.searchParams;
+export default function StoppedPage(props: PageProps<"/mail/stopped">) {
+  return (
+    <Suspense fallback={<div className="min-h-dvh bg-mist" />}>
+      <Loaded searchParams={props.searchParams} />
+    </Suspense>
+  );
+}
+
+async function Loaded({ searchParams }: { searchParams: PageProps<"/mail/stopped">["searchParams"] }) {
+  await connection();
+  const q = await searchParams;
   const lang = isLang(q.lang) ? q.lang : "en";
   const tx = MAIL_PAGES_TEXT[lang];
   const ok = q.ok === "1";
