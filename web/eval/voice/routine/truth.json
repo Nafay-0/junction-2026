@@ -1,0 +1,164 @@
+{
+ "r01-en-routine-none.wav": {
+  "lang": "en",
+  "accent": "American",
+  "voice": "say:Samantha",
+  "noise": "none",
+  "snr": null,
+  "category": "routine",
+  "said": "A hundred litres of milk for Tuesday, please.",
+  "expect": "order",
+  "item": [
+   "milk"
+  ],
+  "amount": 100,
+  "unit": "L",
+  "weekday": "Tuesday"
+ },
+ "r02-en-routine-chatter10.wav": {
+  "lang": "en",
+  "accent": "British",
+  "voice": "say:Daniel",
+  "noise": "chatter",
+  "snr": 10,
+  "category": "routine",
+  "said": "Our usual milk, a hundred litres, for Wednesday.",
+  "expect": "order",
+  "item": [
+   "milk"
+  ],
+  "amount": 100,
+  "unit": "L",
+  "weekday": "Wednesday"
+ },
+ "r03-en-routine-clatter10.wav": {
+  "lang": "en",
+  "accent": "Finnish-accented English",
+  "voice": "openai:cedar",
+  "noise": "clatter",
+  "snr": 10,
+  "category": "routine",
+  "said": "Ten litres of cream for Thursday.",
+  "expect": "order",
+  "item": [
+   "cream"
+  ],
+  "amount": 10,
+  "unit": "L",
+  "weekday": "Thursday"
+ },
+ "r04-en-routine-chatter5.wav": {
+  "lang": "en",
+  "accent": "Indian",
+  "voice": "say:Rishi",
+  "noise": "chatter",
+  "snr": 5,
+  "category": "routine",
+  "said": "We need a hundred litres of lactose-free milk for Friday.",
+  "expect": "order",
+  "item": [
+   "milk"
+  ],
+  "amount": 100,
+  "unit": "L",
+  "weekday": "Friday"
+ },
+ "r05-en-routine-hum10.wav": {
+  "lang": "en",
+  "accent": "Australian",
+  "voice": "say:Karen",
+  "noise": "hum",
+  "snr": 10,
+  "category": "routine",
+  "said": "Twelve litres of cream, for Tuesday.",
+  "expect": "order",
+  "item": [
+   "cream"
+  ],
+  "amount": 12,
+  "unit": "L",
+  "weekday": "Tuesday"
+ },
+ "r06-en-routine-music10.wav": {
+  "lang": "en",
+  "accent": "Scottish",
+  "voice": "openai:sage",
+  "noise": "music",
+  "snr": 10,
+  "category": "routine",
+  "said": "Ninety litres of milk for Wednesday.",
+  "expect": "order",
+  "item": [
+   "milk"
+  ],
+  "amount": 90,
+  "unit": "L",
+  "weekday": "Wednesday"
+ },
+ "r07-fi-routine-none.wav": {
+  "lang": "fi",
+  "accent": "Finnish",
+  "voice": "say:Satu",
+  "noise": "none",
+  "snr": null,
+  "category": "routine",
+  "said": "Sata litraa maitoa keskiviikoksi.",
+  "expect": "order",
+  "item": [
+   "maito",
+   "milk"
+  ],
+  "amount": 100,
+  "unit": "L",
+  "weekday": "Wednesday"
+ },
+ "r08-fi-routine-chatter10.wav": {
+  "lang": "fi",
+  "accent": "Finnish",
+  "voice": "openai:coral",
+  "noise": "chatter",
+  "snr": 10,
+  "category": "routine",
+  "said": "Kymmenen litraa kermaa torstaiksi.",
+  "expect": "order",
+  "item": [
+   "kerma",
+   "cream"
+  ],
+  "amount": 10,
+  "unit": "L",
+  "weekday": "Thursday"
+ },
+ "r09-en-routine-none.wav": {
+  "lang": "en",
+  "accent": "Irish",
+  "voice": "say:Moira",
+  "noise": "none",
+  "snr": null,
+  "category": "routine",
+  "said": "A hundred and ten litres of milk for Friday.",
+  "expect": "order",
+  "item": [
+   "milk"
+  ],
+  "amount": 110,
+  "unit": "L",
+  "weekday": "Friday"
+ },
+ "r10-en-routine-clatter5.wav": {
+  "lang": "en",
+  "accent": "South African",
+  "voice": "say:Tessa",
+  "noise": "clatter",
+  "snr": 5,
+  "category": "routine",
+  "said": "Ten litres of cream please, Wednesday.",
+  "expect": "order",
+  "item": [
+   "cream"
+  ],
+  "amount": 10,
+  "unit": "L",
+  "weekday": "Wednesday"
+ }
+}

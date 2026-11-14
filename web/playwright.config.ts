@@ -24,6 +24,6 @@ export default defineConfig({
         url: `http://localhost:${port}/join`,
         reuseExistingServer: false,
         timeout: 60_000,
-        env: { DOCK_DEMO_TAP_APPROVAL: "", DOCK_PUBLIC_URL: "", DOCK_VOICE_CALLS_PER_KITCHEN_HOUR: "100", DOCK_VOICE_CALLS_PER_HOUR: "200", DOCK_RATE_LIMITS: "off" },
+        env: { DOCK_DEMO_TAP_APPROVAL: "", DOCK_PUBLIC_URL: "", DOCK_VOICE_CALLS_PER_KITCHEN_HOUR: "100", DOCK_VOICE_CALLS_PER_HOUR: "200", DOCK_VOICE_CALLS_PER_KITCHEN_DAY: "200", DOCK_VOICE_CALLS_PER_DAY: "400", DOCK_RATE_LIMITS: "off" },
       },
 });

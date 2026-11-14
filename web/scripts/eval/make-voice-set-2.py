@@ -398,7 +398,7 @@ SAY_ACCENT = {"Samantha": "American", "Daniel": "British", "Rishi": "Indian", "T
               "Eddy (Finnish (Finland))": "Finnish"}
 
 
-def build(name, clips, seed, hall, babble_voices, near, bpm, chords):
+def build(name, clips, seed, hall, babble_voices, near, bpm, chords, noise_plan=None):
     rng = np.random.default_rng(seed)
     out_dir = os.path.join(OUT, name)
     os.makedirs(out_dir, exist_ok=True)
@@ -411,7 +411,7 @@ def build(name, clips, seed, hall, babble_voices, near, bpm, chords):
     near_speech = tts("say", near[0], near[1])
     speech_clips = [c for c in clips if c["expect"] != "nothing"]
     order = rng.permutation(len(speech_clips))
-    plan = {speech_clips[i]["id"]: NOISE_PLAN[k] for k, i in enumerate(order)}
+    plan = noise_plan or {speech_clips[i]["id"]: NOISE_PLAN[k] for k, i in enumerate(order)}
     truth = {}
     report = []
     for c in clips:
@@ -478,7 +478,30 @@ def build(name, clips, seed, hall, babble_voices, near, bpm, chords):
 CLEAN_DIR = sys.argv[sys.argv.index("--clean-to") + 1] if "--clean-to" in sys.argv else None
 
 
+# Routine requests for the stage kitchen "kaari" (it usually orders about 100 L of lactose-free milk and 10 L of
+# cream): what a kitchen with history says most days. The engine's rule should place these alone after one "yes".
+ROUTINE = [
+    C("r01", "en", "routine", S("Samantha"), "A hundred litres of milk for Tuesday, please.", item=["milk"], amount=100, unit="L", weekday="Tuesday"),
+    C("r02", "en", "routine", S("Daniel"), "Our usual milk, a hundred litres, for Wednesday.", item=["milk"], amount=100, unit="L", weekday="Wednesday"),
+    C("r03", "en", "routine", T("cedar", "fi-en"), "Ten litres of cream for Thursday.", item=["cream"], amount=10, unit="L", weekday="Thursday"),
+    C("r04", "en", "routine", S("Rishi"), "We need a hundred litres of lactose-free milk for Friday.", item=["milk"], amount=100, unit="L", weekday="Friday"),
+    C("r05", "en", "routine", S("Karen"), "Twelve litres of cream, for Tuesday.", item=["cream"], amount=12, unit="L", weekday="Tuesday"),
+    C("r06", "en", "routine", T("sage", "sc"), "Ninety litres of milk for Wednesday.", item=["milk"], amount=90, unit="L", weekday="Wednesday"),
+    C("r07", "fi", "routine", S("Satu"), "Sata litraa maitoa keskiviikoksi.", item=["maito", "milk"], amount=100, unit="L", weekday="Wednesday"),
+    C("r08", "fi", "routine", T("coral", "fi"), "Kymmenen litraa kermaa torstaiksi.", item=["kerma", "cream"], amount=10, unit="L", weekday="Thursday"),
+    C("r09", "en", "routine", S("Moira"), "A hundred and ten litres of milk for Friday.", item=["milk"], amount=110, unit="L", weekday="Friday"),
+    C("r10", "en", "routine", S("Tessa"), "Ten litres of cream please, Wednesday.", item=["cream"], amount=10, unit="L", weekday="Wednesday"),
+]
+ROUTINE_NOISE = {"r01": ("none", None), "r02": ("chatter", 10), "r03": ("clatter", 10), "r04": ("chatter", 5), "r05": ("hum", 10),
+                 "r06": ("music", 10), "r07": ("none", None), "r08": ("chatter", 10), "r09": ("none", None), "r10": ("clatter", 5)}
+
+
 def main():
+    if "--routine" in sys.argv:
+        r = build("routine", ROUTINE, 3003, HALL_DEV, BABBLE_VOICES_DEV, NEAR_DEV, 104, [(261.6, 329.6, 392.0), (220.0, 261.6, 329.6)], ROUTINE_NOISE)
+        for row in r:
+            print("  %-42s %5.2fs mix %6.1f dBFS speech %s dBFS snr %s measured %s" % row)
+        return
     r1 = build("dev", DEV, 1001, HALL_DEV, BABBLE_VOICES_DEV, NEAR_DEV, 112, [(261.6, 329.6, 392.0), (196.0, 246.9, 293.7), (220.0, 261.6, 329.6), (174.6, 220.0, 261.6)])
     r2 = build("held", HELD, 2002, HALL_HELD, BABBLE_VOICES_HELD, NEAR_HELD, 96, [(293.7, 370.0, 440.0), (246.9, 311.1, 370.0), (196.0, 246.9, 293.7), (220.0, 277.2, 329.6)])
     for name, r in (("dev", r1), ("held", r2)):

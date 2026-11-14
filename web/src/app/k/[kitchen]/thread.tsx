@@ -1,6 +1,6 @@
 "use client";
 
-import { X } from "lucide-react";
+import { Mic, PhoneOff, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useFormat, useText } from "../../_i18n/provider";
 import { buttonClass, useToast } from "../../_ui/kit";
@@ -20,7 +20,9 @@ import {
   StepLines,
   Thread,
   UnderstoodCard,
+  VoiceStatus,
   type MicState,
+  type VoiceState,
   type UnderstoodItem,
 } from "../../_ui/thread";
 import type { AgentTurn as AgentTurnT, BuyerTurn as BuyerTurnT, Card, MemoryLine, Thread as ThreadT, ThreadAction, ThreadStep } from "@/server/thread/types";
@@ -32,6 +34,8 @@ import { PlanCardView } from "./thread-plan";
 import { OptionsDecision } from "./thread-options";
 import { THREAD_WORDS } from "./thread-words.text";
 import { concernText, correctionLabel, fmtFor, gateReasons, memoryKey, memoryText, stepLabel } from "./thread-words";
+import { callOn, useVoiceMode } from "../../_channels/voice-mode";
+import { VOICE_MODE_TEXT } from "../../_channels/voice-mode.text";
 
 /**
  * The kitchen's conversation with its purchasing agent (docs/agent-thread.md): the buyer's turns, and the agent's
@@ -50,9 +54,18 @@ export function ThreadLog({ className = "" }: { className?: string }) {
   const tx = useText(THREAD_PAGE_TEXT);
   const endRef = useRef<HTMLLIElement>(null);
   const t = api.thread;
-  const tap: Tap = (action, label) => void api.submit({ door: "typed", via: "tap", action, label });
+  const voice = useVoiceMode();
+  const onCall = callOn(voice);
+  const tap: Tap = (action, label) => {
+    void api.submit({ door: "typed", via: "tap", action, label });
+    // On a call, the agent hears what was tapped, so it does not ask for it again.
+    if (onCall) voice?.note(`The caller tapped "${label}" on the screen; the screen handles it. Do not act on it, and say nothing about it unless asked.`);
+  };
+  // What is being heard, and what the agent is saying, before the call's step reaches the thread.
+  const liveYou = onCall ? voice?.view.lines.findLast((l) => l.who === "you" && !l.final) : undefined;
+  const liveAgent = onCall ? voice?.view.lines.findLast((l) => l.who === "agent" && !l.final && l.text.trim()) : undefined;
   const turns = t?.turns ?? [];
-  const lastCards = turns.reduce((n, x) => n + (x.role === "agent" ? x.cards.length + x.steps.length : 1), 0) + api.pending.length;
+  const lastCards = turns.reduce((n, x) => n + (x.role === "agent" ? x.cards.length + x.steps.length : 1), 0) + api.pending.length + (voice?.view.lines.length ?? 0);
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "nearest" });
   }, [lastCards]);
@@ -68,6 +81,12 @@ export function ThreadLog({ className = "" }: { className?: string }) {
       {api.pending.map((p) => (
         <PendingTurn key={p.turnId} turn={p} />
       ))}
+      {liveYou && (
+        <BuyerTurn via="voice">
+          <span className="opacity-75">{liveYou.text}</span>
+        </BuyerTurn>
+      )}
+      {liveAgent && <AgentTurn pending text={liveAgent.text} />}
       {api.error && (
         <li>
           <p role="alert" className="rounded-xl bg-bad-soft px-4 py-3 text-[0.92rem]">
@@ -372,17 +391,101 @@ function RepeatButton({ label }: { label: string }) {
 // ---------- the composer: words, the microphone, a photo ----------
 
 /**
- * The microphone is the voice door (server/channels/voice/): its realtime recogniser primed with the kitchen's own
- * words in three languages, and the spoken read-back of amount, product and day before anything is priced. The
- * call writes every step into this same thread (server/thread/voice-bridge.ts), so the conversation continues
- * here when the call ends. A visitor's kitchen calls from its own phone at /call; an account's kitchen at
- * /call?k=<kitchen>, on a phone signed in to it (this one).
+ * Speaking is a mode of this thread (docs/doors.md): the microphone starts a call with the kitchen's agent on the
+ * voice door's own recogniser (primed with the kitchen's words, a spoken read-back of amount, product and day before
+ * anything is priced; no browser speech recognition anywhere). While the call is on, the composer holds to talk (or
+ * listens, with the open microphone), the log shows what is heard and what the agent says, and every step lands in
+ * this same thread as the buyer's turn and the cards (server/thread/voice-bridge.ts). Hanging up leaves the buyer
+ * here, typing; a read-back that was never confirmed goes back into the field.
  */
-function useVoiceDoor(slug: string, visitor: boolean) {
-  const onDown = () => {
-    window.location.assign(visitor ? "/call" : `/call?k=${encodeURIComponent(slug)}`);
+function VoiceBar({ onEnded }: { onEnded: (pendingWords?: string) => void }) {
+  const voice = useVoiceMode();
+  const tx = useText(VOICE_MODE_TEXT);
+  if (!voice || !callOn(voice)) return null;
+  const v = voice.view;
+  const approver = v.order?.status === "pending_approval" ? v.order.approval?.approver?.name : undefined;
+  const state: VoiceState = v.phase === "recovering" ? "reconnecting" : v.phase === "ringing" ? "thinking" : voice.status === "listening" ? "listening" : voice.status === "speaking" ? "speaking" : voice.status === "thinking" ? "thinking" : voice.status === "waiting" ? "waiting" : "idle";
+  const label = v.phase === "ringing" ? tx.calling : v.phase === "recovering" ? tx.reconnecting : voice.status === "paused" ? tx.paused : voice.status === "waiting" && approver ? tx.waitingFor(approver) : voice.status === "ready" ? tx.holdToTalk : undefined;
+  const live = v.phase === "connected";
+  const end = () => {
+    const words = v.pending ? ((v.pending.need as { text?: string }).text ?? "") : undefined;
+    voice.hangUp();
+    onEnded(words);
   };
-  return { state: "idle" as MicState, heard: "", onDown, onUp: () => undefined };
+  const switchMode = () => {
+    const next = v.mode === "push_to_talk" ? "hands_free" : "push_to_talk";
+    const id = voice.callId() ?? undefined;
+    voice.hangUp("switching mode");
+    void voice.call(next, id);
+  };
+  return (
+    <div className="mb-2 space-y-2" data-voice-mode={v.mode}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span data-status={v.phase === "recovering" ? "recovering" : voice.status} onClick={voice.status === "paused" ? voice.resume : undefined}>
+          <VoiceStatus state={state} label={label} />
+        </span>
+        <span className="flex items-center gap-1.5">
+          {live && (
+            <button type="button" className={buttonClass("quiet", "sm")} onClick={switchMode} aria-pressed={v.mode === "hands_free"}>
+              {v.mode === "push_to_talk" ? tx.handsFree : tx.pushToTalk}
+            </button>
+          )}
+          <button type="button" className={buttonClass("secondary", "sm", "!bg-bad !text-paper")} onClick={end} aria-label={tx.endCall}>
+            <PhoneOff aria-hidden size={16} /> {tx.endCall}
+          </button>
+        </span>
+      </div>
+      {live && v.mode === "push_to_talk" && (
+        // A large target for a thumb in a loud room; the composer's microphone does the same.
+        <button
+          type="button"
+          aria-pressed={v.talking}
+          onPointerDown={(e) => {
+            e.preventDefault();
+            (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+            voice.pressTalk();
+          }}
+          onPointerUp={() => voice.releaseTalk()}
+          onPointerCancel={() => voice.releaseTalk()}
+          onContextMenu={(e) => e.preventDefault()}
+          onKeyDown={(e) => {
+            if ((e.key === " " || e.key === "Enter") && !e.repeat) {
+              e.preventDefault();
+              voice.pressTalk();
+            }
+          }}
+          onKeyUp={(e) => (e.key === " " || e.key === "Enter") && voice.releaseTalk()}
+          className={`flex h-16 w-full touch-none select-none items-center justify-center gap-2.5 rounded-full text-[1.1rem] font-semibold shadow-sm transition-colors [-webkit-touch-callout:none] ${v.talking ? "bg-lavender-deep text-paper ring-4 ring-lavender-mid" : "bg-petrol text-paper"}`}
+        >
+          <Mic aria-hidden size={24} />
+          {v.talking ? (v.latched ? tx.tapToStop : tx.listening) : tx.holdToTalk}
+        </button>
+      )}
+      {(v.notice || v.phase === "ringing") && <p className="px-1 text-[0.8rem] leading-snug text-ink-soft">{v.notice ?? tx.languages}</p>}
+    </div>
+  );
+}
+
+function useVoiceDoor(onStarted: () => void): { state: MicState; heard: string; onDown: () => void; onUp: () => void } {
+  const voice = useVoiceMode();
+  if (!voice) return { state: "off", heard: "", onDown: () => undefined, onUp: () => undefined };
+  const v = voice.view;
+  if (callOn(voice)) {
+    if (v.phase !== "connected" || v.mode !== "push_to_talk") return { state: "processing", heard: "", onDown: () => undefined, onUp: () => undefined };
+    const heard = v.lines.findLast((l) => l.who === "you" && !l.final)?.text ?? "";
+    return { state: v.talking ? "listening" : "idle", heard, onDown: voice.pressTalk, onUp: voice.releaseTalk };
+  }
+  // No call yet: a tap on the microphone starts one. On release, which every phone counts as the user's gesture
+  // (iOS opens the microphone and plays audio only inside one).
+  return {
+    state: "idle",
+    heard: "",
+    onDown: () => undefined,
+    onUp: () => {
+      onStarted();
+      void voice.call("push_to_talk");
+    },
+  };
 }
 
 type ScanReply = { lines: { read: string; status: string }[]; deliverByAsWritten: string | null };
@@ -419,7 +522,39 @@ export function ThreadComposer({ id = "need", size = "md", standalone = false, p
       }
     }
   };
-  const mic = useVoiceDoor(kitchen.slug, kitchen.kind === "visitor");
+  const voice = useVoiceMode();
+  const vtx = useText(VOICE_MODE_TEXT);
+  const mic = useVoiceDoor(() => {
+    if (standalone) shared.setPanelOpen(true);
+  });
+  // The microphone refused or the call over: say so once, and carry on typing here.
+  const micProblem = voice?.view.micProblem;
+  useEffect(() => {
+    if (micProblem === "denied") toast.show(vtx.micBlocked, "bad");
+  }, [micProblem, toast, vtx.micBlocked]);
+  // A call that ends by itself (dropped after two reconnects, the time limit, no voice connection): say why, and the
+  // buyer carries on typing here; a read-back still waiting goes back into the field.
+  const setDraft = agent.setDraft;
+  const wasOn = useRef(false);
+  const byUser = useRef(false);
+  const on = callOn(voice);
+  useEffect(() => {
+    if (wasOn.current && !on && !byUser.current && voice) {
+      const words = voice.view.pending ? ((voice.view.pending.need as { text?: string }).text ?? "") : "";
+      if (words) setDraft(words);
+      toast.show(voice.view.notice ?? voice.view.endReason ?? vtx.ended, "bad");
+    }
+    if (!on) byUser.current = false;
+    wasOn.current = on;
+  }, [on, voice, setDraft, toast, vtx.ended]);
+  const onEnded = (pendingWords?: string) => {
+    byUser.current = true;
+    if (pendingWords) {
+      agent.setDraft(pendingWords);
+      toast.show(vtx.readBackLeft);
+    } else toast.show(vtx.ended);
+    fieldRef.current?.focus();
+  };
 
   const onFile = async (f: File | undefined) => {
     if (!f) return;
@@ -468,6 +603,7 @@ export function ThreadComposer({ id = "need", size = "md", standalone = false, p
           )}
         </div>
       )}
+      {!standalone && <VoiceBar onEnded={onEnded} />}
       <Composer
         id={id}
         value={agent.draft}

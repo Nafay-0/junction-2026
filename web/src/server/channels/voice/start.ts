@@ -26,7 +26,7 @@ export type CallStart = {
   kitchen: { slug: string; name: string; agentName: string };
   expiresAt: string;
   maxSeconds: number;
-  live?: { provider: VoiceProvider; wsUrl: string; token: string; model: string; startBy: string; inputRate: number };
+  live?: { provider: VoiceProvider; transport?: "websocket" | "webrtc"; wsUrl: string; token: string; model: string; startBy: string; inputRate: number };
   /** What the agent was told at the start: already facts for the grounding check. */
   context: { standingRules: string[]; usualOrders: string[]; today: string };
   brands: string[];
@@ -65,7 +65,9 @@ export async function startCall(req: Request | undefined, slug: string, input: {
   let lastErr: unknown;
   for (const model of order) {
     try {
-      const live = await mintFor(model, voiceSystem(ctx), mode, vocabulary, limits.callSeconds);
+      // A browser gets OpenAI over WebRTC set up through this server (bounded here); an in-process caller (the
+      // evaluation, with no browser) uses a WebSocket with a short-lived secret.
+      const live = req && providerOf(model) === "openai" ? rtcFor(call, model, voiceSystem(ctx), mode, vocabulary) : await mintFor(model, voiceSystem(ctx), mode, vocabulary, limits.callSeconds);
       call.model = model;
       return { ...base, callId: call.callId, mode, expiresAt: live.expiresAt, maxSeconds: limits.callSeconds, live: live.live };
     } catch (err) {
@@ -74,6 +76,12 @@ export async function startCall(req: Request | undefined, slug: string, input: {
   }
   registry.end(call.callId, slug, "token_failed");
   throw lastErr;
+}
+
+function rtcFor(call: Call, model: string, system: string, mode: CallMode, vocabulary: string[]) {
+  call.rtc = { session: realtimeSession({ model, system, mode, vocabulary }) };
+  const now = Date.now();
+  return { expiresAt: new Date(call.expiresAt).toISOString(), live: { provider: "openai" as const, transport: "webrtc" as const, wsUrl: "", token: "", model, startBy: new Date(now + 60_000).toISOString(), inputRate: 24000 } };
 }
 
 async function mintFor(model: string, system: string, mode: CallMode, vocabulary: string[], seconds: number) {

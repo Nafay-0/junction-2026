@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { CallRegistry, voiceLimits } from "./calls";
+
+const hangups: string[] = [];
+vi.mock("./realtime", async (orig) => ({ ...(await orig<typeof import("./realtime")>()), hangupRealtimeCall: vi.fn(async (id: string) => (hangups.push(id), true)) }));
 
 const limits = voiceLimits({ DOCK_VOICE_CALLS_PER_KITCHEN_HOUR: "3", DOCK_VOICE_CALLS_PER_HOUR: "4", DOCK_VOICE_CALLS_PER_KITCHEN_DAY: "5", DOCK_VOICE_CALLS_PER_DAY: "6" });
 
@@ -50,5 +53,35 @@ describe("CallRegistry", () => {
 
   it("can be switched off", () => {
     expect(() => new CallRegistry().open("kaari", "push_to_talk", voiceLimits({ DOCK_VOICE: "off" }))).toThrow(/switched off/);
+  });
+
+  it("an OpenAI call over WebRTC is hung up by the server at the time limit, whatever the browser does", async () => {
+    vi.useFakeTimers();
+    try {
+      hangups.length = 0;
+      const r = new CallRegistry(() => Date.now());
+      const c = r.open("kaari", "push_to_talk", voiceLimits({ DOCK_VOICE_CALL_SECONDS: "120" }));
+      c.rtc = { session: { type: "realtime" } };
+      const answer = await r.connectRtc(c.callId, "kaari", "v=0 offer", async () => ({ answer: "v=0 answer", callId: "rtc_abc123" }));
+      expect(answer).toBe("v=0 answer");
+      await expect(r.connectRtc(c.callId, "kaari", "v=0 again", async () => ({ answer: "", callId: "rtc_other" }))).rejects.toMatchObject({ code: "call_connected" });
+      vi.advanceTimersByTime(119_000);
+      expect(hangups).toEqual([]);
+      vi.advanceTimersByTime(2_000);
+      expect(hangups).toEqual(["rtc_abc123"]);
+      expect(r.get(c.callId)?.endReason).toBe("time limit");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("hanging up an OpenAI call ends the provider's session too", async () => {
+    hangups.length = 0;
+    const r = new CallRegistry();
+    const c = r.open("laakso", "push_to_talk", limits);
+    c.rtc = { session: {} };
+    await r.connectRtc(c.callId, "laakso", "v=0 offer", async () => ({ answer: "v=0", callId: "rtc_xyz" }));
+    r.end(c.callId, "laakso", "hung up");
+    expect(hangups).toEqual(["rtc_xyz"]);
   });
 });
