@@ -19,6 +19,7 @@ import { CatalogError, ProductQuerySchema, scheduledOn, usableOffer, type LiveOf
 import { ClaimStore, availabilityClaimInput, issueClaim, originClaimInput, priceClaimInput, refOf, type IssuedClaim } from "./claims";
 import { DockError, isDockError, parse } from "./errors";
 import { concernsOfOrder, unaskedNote } from "./order-check";
+import { qualifiersOf, wordsNotCarried } from "./qualifiers";
 import { InMemoryIntakeRepository, createIntakeFlow, recordCommittedOrder, type IntakeDeps, type IntakeRepository } from "./intake";
 import { InMemoryKitchenRepository, localNow, type KitchenRepository } from "./kitchen";
 import { SIGN_ALG, type KeyPair } from "./keys";
@@ -148,7 +149,7 @@ export type PurchaseRequest = {
    * What the buyer asked for, as Dock read it (never what the agent declares at quote time): products named by id
    * (in the request's fields or its text) and the family. The gate treats any other product as a substitute of it.
    */
-  asked?: { productIds: string[]; category?: string };
+  asked?: { productIds: string[]; category?: string; /** Words that say what kind of product it is (core/qualifiers.ts), set by the intake: a line that does not carry them is a stand-in. */ words?: string[] };
   /** Which door it came through (server-set; see Door). */
   door?: Door;
   createdAt: string;
@@ -426,15 +427,27 @@ export function createDock(deps: DockDeps) {
   }
 
   /** What the request asked for, with the products' names (looked up in master data, free), for the gate's reasons. */
-  async function askedOf(request: PurchaseRequest | undefined): Promise<(NonNullable<PurchaseRequest["asked"]> & { names?: Record<string, string> }) | undefined> {
+  async function askedOf(request: PurchaseRequest | undefined, quote?: Quote): Promise<(NonNullable<PurchaseRequest["asked"]> & { names?: Record<string, string>; standIns?: string[] }) | undefined> {
     const asked = request?.asked;
-    if (!asked?.productIds.length) return asked;
+    if (!asked) return asked;
+    let out: NonNullable<PurchaseRequest["asked"]> & { names?: Record<string, string>; standIns?: string[] } = asked;
+    // The kind asked for ("oat" drink): a line of the family that does not carry those words stands in for it.
+    if (quote && asked.words?.length && asked.category) {
+      try {
+        const q = await qualifiersOf(catalog, asked.category, asked.words.join(" "));
+        const standIns = quote.lines.filter((l) => l.category === asked.category && !l.substituteFor && wordsNotCarried(q, l.productId).length).map((l) => l.productId);
+        if (standIns.length) out = { ...out, standIns };
+      } catch {
+        // the catalogue did not answer: judged by product and family only
+      }
+    }
+    if (!asked.productIds.length) return out;
     try {
       const found = await catalog.searchProducts({ ids: asked.productIds, limit: 100 });
       const names = Object.fromEntries(found.map((p) => [p.id, p.name]));
-      return Object.keys(names).length ? { ...asked, names } : asked;
+      return Object.keys(names).length ? { ...out, names } : out;
     } catch {
-      return asked;
+      return out;
     }
   }
 
@@ -542,6 +555,8 @@ export function createDock(deps: DockDeps) {
       context: {
         ...(u.length ? { unverifiedConfirmations: u.map(({ code, message, by }) => ({ code, message, by })) } : {}),
         ...(flagged.length ? { unconfirmedConcerns: flagged.map(({ code, message }) => ({ code, message })) } : {}),
+        // The intake's own quote, chosen by the kitchen's identified person: their confirmation of a stand-in.
+        ...(fromIntake && i?.chosen?.verified ? { substitutionConfirmedBy: i.chosen.by } : {}),
       },
       notes: [...(i?.signOffNotes ?? []), ...flagged.map(unaskedNote)],
     };
@@ -807,8 +822,10 @@ export function createDock(deps: DockDeps) {
       return session;
     },
 
-    async openRequest(session: AgentSession, input: z.input<typeof OpenRequestInput>): Promise<PurchaseRequest> {
+    /** `internal.askedWords`: set by the intake only (never from a request body): the words that say what kind of product was asked for. */
+    async openRequest(session: AgentSession, input: z.input<typeof OpenRequestInput>, internal: { askedWords?: string[] } = {}): Promise<PurchaseRequest> {
       const { text, neededBy: by, deliverOn, productIds, category } = parse(OpenRequestInput, input);
+      const words = category && internal.askedWords?.length ? internal.askedWords.slice(0, 6) : undefined;
       const neededBy = deliverOn ?? by;
       const named = await askedProducts(text, productIds ?? []);
       const r: PurchaseRequest = {
@@ -819,7 +836,7 @@ export function createDock(deps: DockDeps) {
         text,
         neededBy,
         ...(deliverOn ? { deliverOn } : {}),
-        ...(named.length || category ? { asked: { productIds: named, ...(category ? { category } : {}) } } : {}),
+        ...(named.length || category ? { asked: { productIds: named, ...(category ? { category } : {}), ...(words ? { words } : {}) } } : {}),
         ...(session.door ? { door: session.door } : {}),
         createdAt: now().toISOString(),
       };
@@ -966,7 +983,7 @@ export function createDock(deps: DockDeps) {
       });
       const policyPreview = evaluatePolicy(
         session.mandate,
-        { agentId: session.agentId, quote, lines: quote.lines, neededBy: request.neededBy, deliverOn: request.deliverOn, requestId, asked: await askedOf(request) },
+        { agentId: session.agentId, quote, lines: quote.lines, neededBy: request.neededBy, deliverOn: request.deliverOn, requestId, asked: await askedOf(request, quote) },
         { now: now(), ...supersession(session.mandate, session.mandateIssuedAt), ...(await budgetContext(quote.buyerOrgId)), ...(await mistakeCheckOf(session.mandate.issuer, request, quote, internal.intakeQuote)).context, ...(await holdsOf(quote)), quoteAlreadyUsed: false, recentOrders: await recentOrders(quote.buyerOrgId) },
       );
       return { quote, quoteToken, policyPreview, claims };
@@ -985,7 +1002,7 @@ export function createDock(deps: DockDeps) {
       }
       const orgId = session.mandate.issuer.orgId;
       return serialize(orgId, async () => {
-        const draft = { agentId: session.agentId, quote, lines, neededBy: request.neededBy, deliverOn: request.deliverOn, requestId, asked: await askedOf(request) };
+        const draft = { agentId: session.agentId, quote, lines, neededBy: request.neededBy, deliverOn: request.deliverOn, requestId, asked: await askedOf(request, quote) };
         const check = await mistakeCheckOf(session.mandate.issuer, request, quote);
         const ctx = { now: now(), ...supersession(session.mandate, session.mandateIssuedAt), ...(await budgetContext(orgId)), ...check.context, ...(await holdsOf(quote)), quoteAlreadyUsed: await repo.isQuoteUsed(quote.quoteId), recentOrders: await recentOrders(orgId) };
         let decision = evaluatePolicy(session.mandate, draft, ctx);
@@ -1134,7 +1151,7 @@ export function createDock(deps: DockDeps) {
         const request = await repo.getRequest(order.requestId);
         const recheck = evaluatePolicy(
           order.mandate,
-          { agentId: order.agentId, quote: order.quote, lines: order.draftLines, neededBy: request?.neededBy, deliverOn: request?.deliverOn, requestId: order.requestId, asked: await askedOf(request) },
+          { agentId: order.agentId, quote: order.quote, lines: order.draftLines, neededBy: request?.neededBy, deliverOn: request?.deliverOn, requestId: order.requestId, asked: await askedOf(request, order.quote) },
           { now: now(), ...supersession(order.mandate, order.mandateIssuedAt), ...(await budgetContext(order.orgId, order.orderId)), ...(await mistakeCheckOf({ orgId: order.orgId, name: order.orgName }, request, order.quote)).context, ...(await holdsOf(order.quote)), quoteAlreadyUsed: false, recentOrders: await recentOrders(order.orgId, order.orderId) },
         );
         if (recheck.outcome === "reject") {

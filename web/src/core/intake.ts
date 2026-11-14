@@ -4,6 +4,7 @@ import { facetsOf } from "./catalog/search";
 import { OPTIMISE_QUESTION_ID, answerSchema, clarify, hardConstraints, kindMismatch, optimiseQuestion, optionLabel, violation, type Answer, type ConstraintSource, type MemoryNote, type Question } from "./clarify";
 import { proposedIds, type AlternativesAnswer, type AlternativesSource } from "./alternatives";
 import { alsoAskedIn, alsoAskedNote, groupsIn, type AlsoAsked } from "./also-asked";
+import { qualifiersOf } from "./qualifiers";
 import { baseAmount, checkNeed, noticeNeed, type CheckContext, type Concern, type ConcernCode, type Noticed, type PendingOrderSummary } from "./concerns";
 import { DockError, parse } from "./errors";
 import {
@@ -133,7 +134,7 @@ export type Intake = {
   site?: string;
   /** One line per remembered thing this request used (a rule applied, a habit pre-selected, a check, a product left out). */
   memoryUsed?: { itemId?: string; text: string; code?: string; params?: Record<string, string | number> }[];
-  chosen?: { optionId: string; labels: OptionLabel[]; by: string; at: string };
+  chosen?: { optionId: string; labels: OptionLabel[]; by: string; at: string; /** The kitchen's own identified person chose it (their passkey-backed session, their voice on their phone): their confirmation of a stand-in. */ verified?: boolean };
   quote?: { quote: Quote; quoteToken: string; policyPreview: Decision };
   /** The buyer's words read a second time by an independent model (core/second-reading.ts): what it found. */
   secondReading?: SecondReadingRecord;
@@ -181,7 +182,7 @@ export type IntakeDeps = {
   intakes: IntakeRepository;
   ledger: Ledger;
   now: () => Date;
-  openRequest: (session: AgentSession, input: { text: string; neededBy?: string; deliverOn?: string; productIds?: string[]; category?: string }) => Promise<PurchaseRequest>;
+  openRequest: (session: AgentSession, input: { text: string; neededBy?: string; deliverOn?: string; productIds?: string[]; category?: string }, internal?: { askedWords?: string[] }) => Promise<PurchaseRequest>;
   requestQuote: (session: AgentSession, input: { requestId: string; lines: QuoteRequestLine[] }) => Promise<{ quote: Quote; quoteToken: string; policyPreview: Decision }>;
   /** The order flow's way to move a request's need-by date (validated and written to the ledger, see orders.ts). */
   changeNeededBy?: (session: AgentSession, requestId: string, input: { neededBy: string | null; by?: string; reason?: string }) => Promise<unknown>;
@@ -605,8 +606,13 @@ export function createIntakeFlow(deps: IntakeDeps) {
       relayedBy: session.agentId,
     });
     await intakes.save(i); // the gate's preview reads what the intake knows (an unverified confirmation, say)
-    const quoted = await deps.requestQuote(session, { requestId: i.requestId, lines: card.quoteLines });
-    i.chosen = { optionId: card.optionId, labels: card.labels, by: who, at };
+    // An alternative the product map proposed for the product the request is about is declared as its substitute,
+    // so the gate prices it against that product (substitute_price) and applies the mandate's substitution rule.
+    const alt = card.alternative?.for;
+    const lines = alt ? card.quoteLines.map((l, n) => (n === 0 && !l.substituteFor && l.productId !== alt ? { ...l, substituteFor: alt } : l)) : card.quoteLines;
+    i.chosen = { optionId: card.optionId, labels: card.labels, by: who, at, ...(!byAgent && verified ? { verified: true } : {}) };
+    await intakes.save(i); // the gate's preview reads who chose it
+    const quoted = await deps.requestQuote(session, { requestId: i.requestId, lines });
     i.quote = quoted;
     i.state = "quoted";
     i.updatedAt = at;
@@ -633,7 +639,12 @@ export function createIntakeFlow(deps: IntakeDeps) {
       }
       // What was asked for, for the gate: the product the buyer named, and the family. Anything else ordered under
       // this request is a substitute of it, whatever the agent declares (policy substitution_rule).
-      const request = await deps.openRequest(session, { text: need.text ?? describeNeed(need), neededBy: need.deliverBy, ...(need.deliverOn ? { deliverOn: need.deliverOn } : {}), ...(need.item.productId ? { productIds: [need.item.productId] } : {}), ...(unmatched ? {} : { category: family }) });
+      // And the words that say which kind of product within the family ("oat" drink): the gate holds a line of the
+      // family that does not carry them as a stand-in, judged by the substitution rule (core/qualifiers.ts).
+      // Not for a repeat or a named product: the product itself is the reference there (the substitution rule names it).
+      const kind = unmatched || need.item.productId || need.sameAsLastTime ? undefined : await qualifiersOf(catalog, family, need.item.text).catch(() => undefined);
+      const askedWords = kind?.words.map((w) => w.word) ?? [];
+      const request = await deps.openRequest(session, { text: need.text ?? describeNeed(need), neededBy: need.deliverBy, ...(need.deliverOn ? { deliverOn: need.deliverOn } : {}), ...(need.item.productId ? { productIds: [need.item.productId] } : {}), ...(unmatched ? {} : { category: family }) }, askedWords.length ? { askedWords } : {});
       const at = now().toISOString();
       const i: Intake = {
         requestId: request.requestId,
