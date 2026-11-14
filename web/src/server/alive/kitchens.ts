@@ -122,6 +122,12 @@ async function converse(slug: string, conv: Conversation): Promise<string> {
     const cards = await turn(slug, { door, via: door === "voice" ? "speech" : "typed", text: t.words, ...(conv.lang ? { lang: conv.lang } : {}) }, { words: t.words, need: t.need ? needOf(t.need) : undefined, line: t.line, order: !!t.need, ...(t.holdMs ? { holdMs: t.holdMs } : {}) });
     const options = cards.find((c) => c.type === "options");
     let order = cards.find((c) => c.type === "order");
+    // Spoken words: the voice door reads an order the agent would place alone back first, and the buyer's yes
+    // places it (thread/pipeline.ts spokenHold): the sample's buyer says it.
+    if (door === "voice" && !order && cards.some((c) => c.type === "price")) {
+      const yes = await turn(slug, { door, via: "speech", text: conv.lang === "fi" ? "Kyllä, tilaa se." : "Yes, order it.", ...(conv.lang ? { lang: conv.lang } : {}) }, { line: t.line });
+      order = yes.find((c) => c.type === "order");
+    }
     if (t.tap && options && !order) {
       const second = await turn(slug, { door, via: "tap", action: { type: "choose", requestId: options.requestId, optionId: options.preselected?.optionId ?? options.options[0].optionId }, label: conv.lang === "fi" ? "Tilaa tämä" : "Order this", ...(conv.lang ? { lang: conv.lang } : {}) }, { line: t.line });
       order = second.find((c) => c.type === "order");
