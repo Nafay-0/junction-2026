@@ -8,6 +8,7 @@ import type { Mandate } from "@/core/mandate";
 import type { AgentSession, PublicOrder } from "@/core/orders";
 import { formatEur, newId } from "@/core/util";
 import { isMaterialAttribute } from "@/core/vocabulary";
+import { likeForLike } from "@/core/options";
 import {
   decideRenewal,
   driftOf,
@@ -304,7 +305,7 @@ async function liveOf(rt: Runtime, k: WatchKitchen, keys: KeyProduct[], now: Dat
     for (const u of r.unavailable) {
       // The offer of a product that cannot be quoted, as the wholesaler stated it: from its signed availability claim.
       const c = claims.find((x) => x.productId === u.productId && x.type === "availability");
-      const st = c ? (decodeJwt(c.token) as { credentialSubject?: { statement?: { deliveryDate?: string } } }).credentialSubject?.statement : undefined;
+      const st = c ? (claimStatement(c.token) as { deliveryDate?: string }) : undefined;
       statuses.set(u.productId, { productId: u.productId, problems: u.problems, orderable: false, message: u.message, ...(st?.deliveryDate ? { offer: { productId: u.productId, unitPriceCents: 0, availablePacks: 0, deliveryDate: st.deliveryDate } } : {}) });
     }
   }
@@ -323,6 +324,18 @@ function overlay(s: State, orgId: string, statuses: Map<string, WatchStatus>): M
 }
 
 // ---------- substitutes ----------
+
+/** The words that say what kind of product it is: the name without the maker, figures and pack words. */
+export function kindWords(p: Product): string {
+  const brand = p.brand && p.brand !== "unknown" ? p.brand.toLowerCase().split(/\s+/) : [];
+  return p.name
+    .replace(/\d+([.,]\d+)?\s*(%|l|kg|g|ml|dl|cl|x)?(?=\b|\s|,|$)/gi, " ")
+    .replace(/bag-in-box|carton|tetra|pack|box|bottle|ltk|kpl|×/gi, " ")
+    .split(/[\s,]+/)
+    .filter((w) => w.length > 1 && !brand.includes(w.toLowerCase()))
+    .join(" ")
+    .trim() || p.name;
+}
 
 const dietClaims = (p: Product) => p.attributes.filter((a) => isMaterialAttribute(a) && !/^fat_/.test(a));
 
@@ -356,7 +369,7 @@ async function substitutesFor(rt: Runtime, k: WatchKitchen, session: AgentSessio
   let searchCount = 0;
   try {
     const { findProducts } = await import("../search/service");
-    const found = await findProducts(rt.catalog, { text: original.name, category: original.category, requiredClaims: claims, forbiddenAllergens: forbidden, ...(k.mandate.allergenEvidence === "declared" ? { declaredAllergensOnly: true } : {}), limit: 12 });
+    const found = await findProducts(rt.catalog, { text: kindWords(original), category: original.category, requiredClaims: claims, forbiddenAllergens: forbidden, ...(k.mandate.allergenEvidence === "declared" ? { declaredAllergensOnly: true } : {}), limit: 12 });
     path = found.path;
     for (const h of found.hits) {
       if (h.product.id === original.id) continue;
@@ -367,8 +380,13 @@ async function substitutesFor(rt: Runtime, k: WatchKitchen, session: AgentSessio
   } catch {
     // no search: the map's candidates stand
   }
+  // The family at large, with the same diet claims (master data): what the search's words did not reach.
+  for (const p of await rt.catalog.searchProducts({ category: original.category, attributes: claims, ...(forbidden.length ? { forbiddenAllergens: forbidden } : {}), limit: 30 }).catch(() => [] as Product[])) {
+    if (p.id !== original.id && !candidates.has(p.id)) candidates.set(p.id, { product: p, ...(p.attributes.filter(isMaterialAttribute).join() === original.attributes.filter(isMaterialAttribute).join() ? {} : { label: "variant" as const }) });
+  }
   // One live call for the closest few: the map's first, then the search's matches before its stand-ins.
-  const order = [...candidates.values()].sort((a, b) => Number(!!original.substitutes?.includes(b.product.id)) - Number(!!original.substitutes?.includes(a.product.id)) || Number(!!b.map) - Number(!!a.map) || (a.label === "exact" ? 0 : a.label === "variant" ? 1 : 2) - (b.label === "exact" ? 0 : b.label === "variant" ? 1 : 2));
+  const close = (c: SubstituteCandidate) => (c.label === "exact" ? 0 : c.label === "variant" ? 2 : c.label ? 3 : likeForLike(original, c.product) ? 1 : 2);
+  const order = [...candidates.values()].sort((a, b) => Number(!!original.substitutes?.includes(b.product.id)) - Number(!!original.substitutes?.includes(a.product.id)) || Number(!!b.map) - Number(!!a.map) || close(a) - close(b) || Number(b.product.brand === original.brand) - Number(a.product.brand === original.brand));
   const ids = order.map((c) => c.product.id).filter((id) => id !== original.id).slice(0, MAX_LIVE_IDS_PER_CALL);
   if (ids.length) {
     const live = await rt.dock.lookupAvailability(session, { requestId, productIds: ids, deliveryDate: key.date }).catch(() => undefined);
@@ -464,7 +482,7 @@ async function addFinding(rt: Runtime, k: WatchKitchen, key: KeyProduct, origina
   return f;
 }
 
-const claimStatement = (token: string) => ((decodeJwt(token) as { credentialSubject?: { statement?: Record<string, unknown> } }).credentialSubject?.statement ?? {}) as Record<string, unknown>;
+const claimStatement = (token: string) => ((decodeJwt(token) as { credentialSubject?: { availability?: Record<string, unknown> } }).credentialSubject?.availability ?? {}) as Record<string, unknown>;
 
 function resolve(rt: Runtime, f: Finding, why: string) {
   const s = stateOf(rt);

@@ -57,7 +57,7 @@ export type Slot = { weekday: number; orders: number; usualAmount: number; usual
 export type Pattern = {
   family: string;
   unit: BaseUnit;
-  /** The product of the latest order (its main line). */
+  /** The product it usually buys (the most frequent main line of its last eight orders). */
   product: { productId: string; name: string; packSize: number; unit: BaseUnit; attributes: string[]; unitPriceCents: number };
   slots: Slot[];
   /** Per order, median over every order of the family. */
@@ -98,7 +98,13 @@ export function learnPatterns(profile: KitchenProfile | undefined, opts: { stage
       })
       .sort((a, b) => a.weekday - b.weekday);
     if (!slots.length) continue;
-    const main = primaryLine(hist.at(-1)!);
+    // The product it usually buys: the most frequent main product of its last eight orders (a sell-out week's
+    // other product does not become the usual), the latest on a tie.
+    const recent = hist.slice(-8).map((h) => primaryLine(h));
+    const freq = new Map<string, number>();
+    for (const l of recent) freq.set(l.productId, (freq.get(l.productId) ?? 0) + 1);
+    const top = Math.max(...freq.values());
+    const main = [...recent].reverse().find((l) => freq.get(l.productId) === top)!;
     out.push({
       family,
       unit,
