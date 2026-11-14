@@ -118,7 +118,8 @@ export function artFor(p: ArtProduct): string | undefined {
     if (named(p, /feta|salaattijuusto|halloumi/)) return "tile-cheese-feta";
     if (named(p, /tuorejuusto|cream cheese|mascarpone|färskost/)) return "tile-cheese-soft";
     // Semi-hard cheese by the piece a kitchen buys: a whole wheel, a case of small pieces, or a block.
-    if (perItem !== undefined && perItem >= 2.5) return "tile-cheese-wheel";
+    const whole = /\bn\.?\s?(\d+(?:[.,]\d+)?)\s?kg/i.exec(p.name); // "Gouda vanha n.4kg": about a 4 kg wheel, sold by the kilo
+    if ((perItem !== undefined && perItem >= 2.5) || (whole && Number(whole[1].replace(",", ".")) >= 2.5)) return "tile-cheese-wheel";
     if (items >= 4 && perItem !== undefined && perItem <= 0.6) return "tile-cheese-pieces";
   }
   if (k === "tile-drinks" && named(p, /tölkki|\bcan\b|burk|0[,.]33 ?l|33 ?cl/)) return "tile-drink-cans";
