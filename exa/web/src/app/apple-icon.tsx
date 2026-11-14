@@ -14,8 +14,10 @@ export default function AppleIcon() {
     (
       <div style={{ width: "100%", height: "100%", display: "flex", background: LOGO.tile }}>
         <svg width="180" height="180" viewBox="0 0 32 32">
-          <path d={LOGO.near} fill={LOGO.ink} />
-          <path d={LOGO.far} fill={LOGO.ink} opacity={LOGO.farOpacity} />
+          {LOGO.facets.map((facet) => (
+            <path key={facet.d} d={facet.d} fill={LOGO.ink} opacity={facet.opacity} />
+          ))}
+          <path d={LOGO.table} fill={LOGO.ink} />
         </svg>
       </div>
     ),

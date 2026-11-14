@@ -13,23 +13,30 @@ export const APP_DESCRIPTION =
   "Hand over a task. Beryl searches the live web with Exa, shows what it finds as live maps, charts and cards, and in the desktop app works in a live browser you can watch, handing the task back for the step that is yours.";
 
 /**
- * The logo: a baton caught at the moment it changes hands. One short diagonal bar with rounded
- * ends, cut by an upright gap. The solid part is the hand that passes it on; the lighter part is
- * already on its way.
+ * The logo: a cut beryl seen from above. Beryl crystals are six-sided, so the stone is a hexagon:
+ * a flat table in the middle and six facets round it, lit from the upper left. The two facets
+ * that face the light are brightest, the two that face away are darkest.
  *
  * Drawn in a 32 by 32 box. The same shapes are used by the logo in the interface
- * (components/brand/logo.tsx), the Apple touch icon (app/apple-icon.tsx) and, copied by hand
- * because it is a static file, the favicon (app/icon.svg). Change them together.
+ * (components/brand/logo.tsx), the Apple touch icon (app/apple-icon.tsx), the installed app's
+ * icons (scripts/make-icons.cjs) and, copied by hand because they are static files, the favicon
+ * (app/icon.svg) and the desktop app's "cannot reach the server" page. Change them together.
  */
 export const LOGO = {
-  /** The solid part, lower left. */
-  near: "M14.7 13.06 7.48 20.28A3 3 0 0 0 11.72 24.52L14.7 21.54Z",
-  /** The lighter part, upper right. */
-  far: "M17.3 10.46 20.28 7.48A3 3 0 0 1 24.52 11.72L17.3 18.94Z",
-  farOpacity: 0.6,
+  /** The six facets, clockwise from the upper right, each with how much light it catches. */
+  facets: [
+    { d: "M16.42 5.81 24.62 10.55 21.01 12.62 16.42 9.97Z", opacity: 0.62 },
+    { d: "M25.03 11.27 25.03 20.73 21.43 18.66 21.43 13.34Z", opacity: 0.4 },
+    { d: "M24.62 21.45 16.42 26.19 16.42 22.03 21.01 19.38Z", opacity: 0.4 },
+    { d: "M15.58 26.19 7.38 21.45 10.99 19.38 15.58 22.03Z", opacity: 0.62 },
+    { d: "M6.97 20.73 6.97 11.27 10.57 13.34 10.57 18.66Z", opacity: 0.92 },
+    { d: "M7.38 10.55 15.58 5.81 15.58 9.97 10.99 12.62Z", opacity: 0.92 },
+  ],
+  /** The table: the flat top of the stone. */
+  table: "M16.00 11.60 19.81 13.80 19.81 18.20 16.00 20.40 12.19 18.20 12.19 13.80Z",
   /** Corner radius of the tile behind the mark. */
   radius: 9,
-  /** Fixed colours for files that cannot read the theme (favicon, touch icon): the light theme's emerald and ivory. */
+  /** Fixed colours for files that cannot read the theme (favicon, touch icon, app icons): the light theme's emerald and ivory. */
   tile: "#004935",
   ink: "#f5fcf8",
 } as const;

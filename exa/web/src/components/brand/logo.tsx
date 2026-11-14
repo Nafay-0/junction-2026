@@ -2,8 +2,8 @@ import { cn } from "@/lib/utils";
 import { LOGO } from "@/lib/brand";
 
 /**
- * The mark: a baton changing hands, on the brand tile. It follows the theme (dark emerald with an
- * ivory baton in light mode, the reverse in dark mode). Decorative by default: pass `title` where
+ * The mark: a cut beryl seen from above, on the brand tile. It follows the theme (dark emerald
+ * with an ivory stone in light mode, the reverse in dark mode). Decorative by default: pass `title` where
  * it stands alone, without the name beside it.
  */
 export function Logo({
@@ -28,8 +28,10 @@ export function Logo({
       className={cn("shrink-0", className)}
     >
       <rect width="32" height="32" rx={LOGO.radius} className="fill-primary" />
-      <path d={LOGO.near} className="fill-primary-foreground" />
-      <path d={LOGO.far} className="fill-primary-foreground" opacity={LOGO.farOpacity} />
+      {LOGO.facets.map((facet) => (
+        <path key={facet.d} d={facet.d} opacity={facet.opacity} className="fill-primary-foreground" />
+      ))}
+      <path d={LOGO.table} className="fill-primary-foreground" />
     </svg>
   );
 }

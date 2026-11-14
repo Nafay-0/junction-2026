@@ -19,7 +19,8 @@
     "test:guard": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/guard-test.mjs",
     "test:desktop": "node desktop/build.mjs && electron scripts/desktop-test.cjs",
     "desktop": "node desktop/run.mjs",
-    "desktop:build": "node desktop/build.mjs"
+    "desktop:build": "node desktop/build.mjs",
+    "icons": "electron scripts/make-icons.cjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.103",
