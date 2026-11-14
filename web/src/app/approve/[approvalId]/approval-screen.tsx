@@ -60,13 +60,13 @@ export function ApprovalScreen({ approvalId, token }: { approvalId: string; toke
   const [reason, setReason] = useState("");
   const [now, setNow] = useState(() => Date.now());
   /** The server's clock minus this phone's, from the latest view. */
-  const clock = useRef(0);
+  const [clock, setClock] = useState(0);
   const prepared = useRef<{ options: PublicKeyCredentialRequestOptionsJSON; at: number } | null>(null);
 
   const refresh = useCallback(async () => {
     const r = await api<{ view: ApprovalView }>("GET", `/api/v1/approvals/${encodeURIComponent(approvalId)}${token ? `?token=${encodeURIComponent(token)}` : ""}`);
     if (r.ok) {
-      clock.current = clockOffset(r.data.view.serverNow, Date.now());
+      setClock(clockOffset(r.data.view.serverNow, Date.now()));
       setView(r.data.view);
       setLoadError(null);
       return r.data.view;
@@ -106,7 +106,7 @@ export function ApprovalScreen({ approvalId, token }: { approvalId: string; toke
     const r = await api<DecideReply>("POST", `/api/v1/approvals/${encodeURIComponent(approvalId)}`, body);
     setPhase("idle");
     if (r.data?.view) {
-      clock.current = clockOffset(r.data.view.serverNow, Date.now());
+      setClock(clockOffset(r.data.view.serverNow, Date.now()));
       setView(r.data.view);
     }
     if (r.ok || r.error.code === "policy_rejected") {
@@ -195,7 +195,7 @@ export function ApprovalScreen({ approvalId, token }: { approvalId: string; toke
 
   const busy = phase !== "idle";
   // By the server's clock, not the phone's: a phone set half an hour fast could not sign (price-clock.ts).
-  const msLeft = priceMsLeft(view.priceHeldUntil, now, clock.current);
+  const msLeft = priceMsLeft(view.priceHeldUntil, now, clock);
   const minutesLeft = Math.floor(msLeft / 60_000);
   const priceExpired = minutesLeft < 0;
   const share = Math.max(0, Math.min(1, msLeft / (30 * 60_000)));
