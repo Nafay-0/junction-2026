@@ -33,7 +33,9 @@ export type ThreadAction =
   /** The after-order memory proposal: keep it, or not. */
   | { type: "remember"; itemId: string; yes: boolean }
   /** Run the last failed step of an agent turn again. */
-  | { type: "retry"; turnId: string };
+  | { type: "retry"; turnId: string }
+  /** Order a menu plan as it stands: one fixed-price quote for every line, then the gate (the plan card's one confirmation). */
+  | { type: "plan_order"; planId: string };
 
 export type BuyerTurn = {
   turnId: string;
@@ -235,7 +237,55 @@ export type NoticeCard = CardBase & {
   retry?: boolean;
 };
 
-export type Card = UnderstoodCard | AnomalyCard | QuestionCard | OptionsCard | PriceCard | GateCard | OrderCard | MemoryCard | RecordsCard | NoticeCard;
+/** One point of a plan, by the planner's code: cannot_arrive, no_safe_product, no_product, not_priced, allergen_unknown, different_form, amount_check, rule_conflict. */
+export type PlanPoint = { ingredient: string; kind: string; text: string };
+
+/**
+ * A dish or a menu for a number of covers, planned by the menu planner (server/agent/menu): the ingredients it worked
+ * out, the product chosen for each with the amount in packs and the line's price, and what ordering it means. One
+ * confirmation (`plan_order`) orders the whole plan as one fixed-price order through the gate.
+ */
+export type PlanCard = CardBase & {
+  type: "plan";
+  planId: string;
+  requestId?: string;
+  state: "planned" | "quoted" | "ordered" | "declined";
+  covers: number | null;
+  serviceDate?: string;
+  dishes: string[];
+  lines: {
+    lineId: string;
+    /** The ingredient as the plan names it ("salmon fillet"). */
+    ingredient: string;
+    /** For which dishes, when there are several. */
+    dishes: string[];
+    status: "ready" | "decide" | "left_out";
+    /** The product chosen, its full name. */
+    product?: string;
+    /** Packs as the wholesaler sells them ("12 × 1 kg"). */
+    packs?: string;
+    totalCents?: number;
+    /** Why a line is left out, or what ordering accepts for it: the planner's code and its sentence. */
+    point?: { kind: string; text: string };
+  }[];
+  /**
+   * What the one confirmation also does: points it accepts as they are, and lines it leaves out because nothing fits.
+   * `kind` is the planner's reason code (translated at the edge); `text` its own sentence, for detail.
+   */
+  onOrder: { accepts: PlanPoint[]; leavesOut: PlanPoint[] };
+  /** Why it cannot be ordered yet (no number of covers, nothing can arrive by the day): the button stays off. */
+  blockers: string[];
+  totalCents: number;
+  deliveryDate?: string;
+  orderBy?: string;
+  signOff?: { approver?: { name: string; role: string }; reasons: string[] };
+  canOrder: boolean;
+  /** Where the plan's lines can be edited one by one (the menu planner page). */
+  editUrl: string;
+  declined?: string;
+};
+
+export type Card = UnderstoodCard | AnomalyCard | QuestionCard | OptionsCard | PriceCard | GateCard | OrderCard | MemoryCard | RecordsCard | NoticeCard | PlanCard;
 export type CardType = Card["type"];
 
 // ---------- the thread and its event stream ----------

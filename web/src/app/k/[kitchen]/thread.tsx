@@ -30,6 +30,7 @@ import { requestLabel, usePortal } from "./portal";
 import { nameIn } from "./shop";
 import { THREAD_PAGE_TEXT } from "./thread.text";
 import { WaitingGate } from "./thread-signoff";
+import { PlanCardView } from "./thread-plan";
 
 /**
  * The kitchen's conversation with its purchasing agent (docs/agent-thread.md): the buyer's turns, and the agent's
@@ -292,6 +293,8 @@ function CardView({ card, tap, busy, gated, base, turn, thread }: { card: Card; 
           {card.repeat && <RepeatButton label={card.repeat.label} />}
         </>
       );
+    case "plan":
+      return <PlanCardView card={card} busy={busy} tap={tap} />;
     case "notice":
       return (
         <NoticeCard kind={tx.kind.notice} title={tx.notice[card.kind] ?? tx.kind.notice} tone={card.kind === "suspended" ? "gate" : "plain"} actions={card.retry ? btn("secondary", tx.retry, { type: "retry", turnId: turn.turnId }) : undefined}>

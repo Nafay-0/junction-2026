@@ -216,7 +216,8 @@ export async function runThread(base: string, sc: Scenario): Promise<RunResult> 
     const question = st.ofType("question").filter((c) => !c.answered && !answeredReq.has(c.requestId)).at(-1);
     const options = st.ofType("options").filter((c) => !c.chosen && !answeredReq.has(c.requestId)).at(-1);
     const price = st.ofType("price").filter((c) => !answeredReq.has(c.requestId)).at(-1);
-    return { anomaly, question, options, price };
+    const plan = st.ofType("plan").filter((c) => c.state === "planned" && c.canOrder).at(-1);
+    return { anomaly, question, options, price, plan };
   }
 
   async function toOptions(stopAtFlag: boolean) {
@@ -246,9 +247,10 @@ export async function runThread(base: string, sc: Scenario): Promise<RunResult> 
   if (sc.goal !== "answer") {
     await toOptions(sc.goal === "flag");
     for (let i = 0; i < 3 && sc.goal === "place" && last !== "refused"; i++) {
-      const { options, price, anomaly, question } = open();
+      const { options, price, anomaly, question, plan } = open();
       if (anomaly || question) break;
-      if (options) {
+      if (plan) last = await tap({ type: "plan_order", planId: plan.planId }, "order the plan");
+      else if (options) {
         const pick = options.preselected?.optionId ?? options.options[0]?.optionId;
         if (!pick) break;
         last = await tap({ type: "choose", requestId: options.requestId, optionId: pick }, `choose ${pick}`);

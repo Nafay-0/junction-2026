@@ -60,6 +60,7 @@ const ActionSchema: z.ZodType<ThreadAction> = z.discriminatedUnion("type", [
   z.object({ type: z.literal("withdraw"), orderId: z.string().min(1).max(80) }),
   z.object({ type: z.literal("remember"), itemId: z.string().min(1).max(80), yes: z.boolean() }),
   z.object({ type: z.literal("retry"), turnId: z.string().min(1).max(80) }),
+  z.object({ type: z.literal("plan_order"), planId: z.string().min(1).max(80) }),
 ]);
 
 export const SubmitTurnSchema = z
@@ -214,7 +215,7 @@ async function finishTurn(run: TurnRun): Promise<void> {
   await proposeMemory(run);
   const a = store.agentTurn(thread, run.turnId)!;
   const waitingApprover = a.cards.some((c) => c.type === "gate" && c.outcome === "waiting");
-  const waitingBuyer = !waitingApprover && a.cards.some((c) => (c.type === "anomaly" && !c.answered) || c.type === "question" || (c.type === "options" && !c.chosen) || (c.type === "price" && !a.cards.some((x) => x.type === "gate" && x.requestId === c.requestId)));
+  const waitingBuyer = !waitingApprover && a.cards.some((c) => (c.type === "anomaly" && !c.answered) || c.type === "question" || (c.type === "options" && !c.chosen) || (c.type === "plan" && c.state === "planned" && c.canOrder) || (c.type === "price" && !a.cards.some((x) => x.type === "gate" && x.requestId === c.requestId)));
   store.mark(thread, run.turnId, "done", Date.now() - run.t0);
   store.status(thread, run.turnId, waitingApprover ? "waiting_approver" : waitingBuyer ? "waiting_buyer" : "done", { ms: Date.now() - run.t0, marks: a.marks });
   record(run, "turn_done", `Agent turn finished (${a.status}) in ${Date.now() - run.t0} ms: ${a.cards.map((c) => c.type).join(", ") || "no cards"}.`, { status: a.status, marks: a.marks, cards: a.cards.map((c) => c.type), requests: [...run.requests], orders: [...run.orders.keys()] });

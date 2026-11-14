@@ -40,7 +40,7 @@ How to work each turn:
 - The buyer's newest words answer something open (listed under OPEN DECISIONS): call buyer_reply with the matching ref. "the second one" is o2. "yes", "that's right", "the chef said yes" confirm a check. Only use refs that are listed. If their words do not clearly pick one, ask one short question instead.
 - After an order waits for a named person's sign-off (status pending_approval), write your one sentence (who signs, on their phone) and call await_sign_off with its orderId in the same reply. Do not try to place, retry or split it.
 - Questions about past orders: order_history. About rules, limits or who signs off: read_mandate or read_kitchen_memory. About an order's status or why something happened: get_order or explain.
-- A dish or a menu for a number of covers ("salmon soup for 300 on Friday"): the menu planner works out the ingredients; say in one sentence that the Menu page plans it into one order. No tool.
+- A dish or a menu for a number of covers ("salmon soup for 300 on Friday", "plan lunch for 40 around beetroot"): call plan_menu with their words. It works out the ingredients and prices them as one plan card; the buyer orders it with one tap (or "yes, order it": buyer_reply plan).
 - Anything else (a greeting, small talk, something outside buying food): one short sentence, no tool.
 
 Your sentence:
@@ -133,6 +133,8 @@ export async function openRefs(run: TurnRun): Promise<OpenRef[]> {
       refs.push({ ref: "withdraw", label: "take back the order waiting for sign-off", action: { type: "withdraw", orderId: card.orderId } });
     }
   }
+  const plan = cards.find((x) => x.card.type === "plan" && x.card.state === "planned" && x.card.canOrder)?.card;
+  if (plan?.type === "plan") refs.push({ ref: "plan", label: `order the menu plan (${plan.dishes.join(", ")}) as one order, €${(plan.totalCents / 100).toFixed(2)}`, action: { type: "plan_order", planId: plan.planId }, confirm: true });
   for (const { card } of cards) {
     if (card.type !== "memory") continue;
     card.proposals.forEach((p, i) => {
@@ -227,6 +229,16 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
       },
       toModelOutput: ({ output }) => ({ type: "text", value: compact(output) }),
     }),
+    plan_menu: tool({
+      description: "A dish or a menu for a number of covers: the menu planner works out the ingredients, matches each to the assortment, prices them live and shows the plan as one card the buyer orders with one confirmation.",
+      inputSchema: z.object({ words: z.string().min(1).max(2000).describe("The buyer's words, copied exactly from their newest message.") }),
+      execute: async ({ words: w }) => {
+        const said = words.includes(w.trim()) ? w.trim() : words;
+        const { planFromWords } = await import("./plan");
+        return planFromWords(run, said);
+      },
+      toModelOutput: ({ output }) => ({ type: "text", value: compact(output) }),
+    }),
     order_history: tool({
       description: "The kitchen's orders between two dates (inclusive), optionally one product family, for questions like 'what did we order last week?'. Shows them as a records card.",
       inputSchema: z.object({ from: z.iso.date().describe("YYYY-MM-DD"), to: z.iso.date().describe("YYYY-MM-DD"), family: z.string().max(40).optional().describe("e.g. milk, cream, butter") }),
@@ -282,7 +294,7 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
       { role: "system", content: context },
     ],
     tools,
-    activeTools: [...PUBLISHED_FOR_MODEL, "order", "buyer_reply", "order_history", "await_sign_off"],
+    activeTools: [...PUBLISHED_FOR_MODEL, "order", "plan_menu", "buyer_reply", "order_history", "await_sign_off"],
     toolApproval: {
       ...Object.fromEntries(BUYERS_OR_ENGINES.map((n) => [n, deny(`${n} is the buyer's decision or the engine's step in the store: use buyer_reply or order.`)])),
       // The pause for a person's sign-off. Only the server answers it, when the passkey sign-off is recorded.
@@ -306,7 +318,7 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
 
   const result = await agent.stream({ messages, timeout: { totalMs: 90_000, toolMs: 60_000 } });
   for await (const part of result.fullStream) {
-    if (part.type === "tool-call" && !["order", "buyer_reply", "order_history", "await_sign_off"].includes(part.toolName)) {
+    if (part.type === "tool-call" && !["order", "plan_menu", "buyer_reply", "order_history", "await_sign_off"].includes(part.toolName)) {
       const st = step(run, `tool:${part.toolName}`, LABELS[part.toolName] ?? `Looking up ${part.toolName.replace(/_/g, " ")}`);
       void result.steps.then(() => st.done(), () => st.fail());
     }
