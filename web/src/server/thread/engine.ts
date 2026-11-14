@@ -23,7 +23,7 @@ import { codeLeaks, insideOrTell } from "./refusal";
 import { fixTypos } from "./pipeline";
 import { hasToday, helsinkiToday, postToday, todayCardId } from "./home";
 import { ensureTelemetry } from "./telemetry";
-import type { AgentTurn, BuyerTurn, MemoryCard, RecordsCard, SubmitTurn, SubmitTurnReply, ThreadAction, ThreadDoor } from "./types";
+import type { AgentTurn, BuyerTurn, GateCard, MemoryCard, OrderCard, RecordsCard, SubmitTurn, SubmitTurnReply, ThreadAction, ThreadDoor } from "./types";
 
 /**
  * One conversation per kitchen, one engine for every door. A door submits a turn (typed words, a transcript, a tap
@@ -363,6 +363,13 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
     }
   }
   if (line) await showLine(run, line);
+  // An order that went straight to a person's OK, with no words from the agent: what, how much and why, in one sentence.
+  const sent = store.agentTurn(thread, run.turnId);
+  const gateHere = sent?.cards.find((c) => c.type === "gate" && c.outcome === "waiting");
+  if (sent && !sent.line && gateHere?.type === "gate") {
+    const order = sent.cards.find((c) => c.type === "order" && c.orderId === gateHere.orderId);
+    if (order?.type === "order") store.line(thread, run.turnId, waitingSentence(order, gateHere, body.lang ?? "en"));
+  }
   // Never an empty reply: when the agent's words did not come (or none were backed), plain words from what the engine knows.
   const after = store.agentTurn(thread, run.turnId);
   if (after && !after.line && !after.cards.some((c) => c.type !== "understood")) {
@@ -414,6 +421,19 @@ function plainLine(run: TurnRun, text: string): string {
   if (kept.length) return kept.join(" ");
   const said = run.store.agentTurn(run.thread, run.turnId)?.cards.flatMap((c) => ((c.type === "notice" || c.type === "gate") && c.said ? [c.said] : [])).at(-1);
   return said ? said[lang] : "";
+}
+
+/** "1 000 × Valio Eila 1 l for 1 010,00 € is over the 500,00 € I may spend alone, so it needs the kitchen manager's OK." */
+function waitingSentence(order: OrderCard, gate: GateCard, lang: "en" | "fi" | "sv"): string {
+  const eur = (c: number) => `**${(c / 100).toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, " ")} €**`;
+  const first = order.lines[0];
+  const what = first ? `${first.quantity} × ${first.name.replace(/[®™]/g, "").split(/\s+/).slice(0, 4).join(" ")}${order.lines.length > 1 ? (lang === "fi" ? ` ja ${order.lines.length - 1} muuta` : lang === "sv" ? ` och ${order.lines.length - 1} till` : ` and ${order.lines.length - 1} more`) : ""}` : "";
+  const limit = gate.rules?.find((r) => r.rule === "per_order_limit")?.details?.limitCents;
+  const who = gate.approver?.name ?? (lang === "fi" ? "vastuuhenkilö" : lang === "sv" ? "en ansvarig" : "a person");
+  const whoEn = /^[A-Z][a-z]+ [a-z]/.test(who) ? `the ${who.toLowerCase()}` : who;
+  if (lang === "fi") return `${what} hintaan ${eur(order.totalCents)}${typeof limit === "number" ? ` ylittää ${eur(limit)}, jonka voin käyttää yksin, joten` : ", joten"} se tarvitsee hyväksynnän: ${who}.`;
+  if (lang === "sv") return `${what} för ${eur(order.totalCents)}${typeof limit === "number" ? ` är över de ${eur(limit)} jag får handla för själv, så` : ", så"} det behöver godkännas av ${who}.`;
+  return `${what} for ${eur(order.totalCents)}${typeof limit === "number" ? ` is over the ${eur(limit)} I may spend alone, so it` : " needs a person's check, so it"} needs ${whoEn}'s OK.`;
 }
 
 /** The end of an agent turn: what to remember, its status (waiting for the buyer, for a person, or done) and the record. */
