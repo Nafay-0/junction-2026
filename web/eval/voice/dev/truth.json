@@ -1,0 +1,601 @@
+{
+ "d01-en-number-none.wav": {
+  "lang": "en",
+  "accent": "Finnish-accented English",
+  "voice": "openai:alloy",
+  "noise": "none",
+  "snr": null,
+  "category": "number",
+  "said": "Fifty litres of milk for Thursday, please.",
+  "expect": "order",
+  "item": [
+   "milk"
+  ],
+  "amount": 50,
+  "unit": "L",
+  "weekday": "Thursday"
+ },
+ "d02-en-number-none.wav": {
+  "lang": "en",
+  "accent": "American",
+  "voice": "say:Samantha",
+  "noise": "none",
+  "snr": null,
+  "category": "number",
+  "said": "Fifteen kilos of quark, for Friday.",
+  "expect": "order",
+  "item": [
+   "quark",
+   "rahka"
+  ],
+  "amount": 15,
+  "unit": "kg",
+  "weekday": "Friday"
+ },
+ "d03-en-number-chatter0.wav": {
+  "lang": "en",
+  "accent": "Indian",
+  "voice": "openai:ash",
+  "noise": "chatter",
+  "snr": 0,
+  "category": "number",
+  "said": "We need thirteen litres of cooking cream.",
+  "expect": "order",
+  "item": [
+   "cooking cream",
+   "cream",
+   "ruokakerma"
+  ],
+  "amount": 13,
+  "unit": "L",
+  "weekday": null
+ },
+ "d04-en-number-music10.wav": {
+  "lang": "en",
+  "accent": "British",
+  "voice": "say:Daniel",
+  "noise": "music",
+  "snr": 10,
+  "category": "number",
+  "said": "Can I get a hundred and ten litres of oat drink for Monday?",
+  "expect": "order",
+  "item": [
+   "oat"
+  ],
+  "amount": 110,
+  "unit": "L",
+  "weekday": "Monday"
+ },
+ "d05-en-number-chatter10.wav": {
+  "lang": "en",
+  "accent": "Scottish",
+  "voice": "openai:coral",
+  "noise": "chatter",
+  "snr": 10,
+  "category": "number",
+  "said": "Two point five kilos of emmental, please.",
+  "expect": "order",
+  "item": [
+   "emmental",
+   "cheese"
+  ],
+  "amount": 2.5,
+  "unit": "kg",
+  "weekday": null
+ },
+ "d06-en-number-none.wav": {
+  "lang": "en",
+  "accent": "hurried",
+  "voice": "openai:echo",
+  "noise": "none",
+  "snr": null,
+  "category": "number",
+  "said": "Twelve hundred eggs for Saturday.",
+  "expect": "order",
+  "item": [
+   "egg"
+  ],
+  "amount": 1200,
+  "unit": "pcs",
+  "weekday": "Saturday"
+ },
+ "d07-en-correction-hum10.wav": {
+  "lang": "en",
+  "accent": "South African",
+  "voice": "say:Tessa",
+  "noise": "hum",
+  "snr": 10,
+  "category": "correction",
+  "said": "A hundred litres of milk, no, make that two hundred.",
+  "expect": "order",
+  "item": [
+   "milk"
+  ],
+  "amount": 200,
+  "unit": "L",
+  "weekday": null
+ },
+ "d08-en-correction-none.wav": {
+  "lang": "en",
+  "accent": "Spanish-accented English",
+  "voice": "openai:sage",
+  "noise": "none",
+  "snr": null,
+  "category": "correction",
+  "said": "Send thirty kilos of butter, sorry, I mean twenty kilos.",
+  "expect": "order",
+  "item": [
+   "butter"
+  ],
+  "amount": 20,
+  "unit": "kg",
+  "weekday": null
+ },
+ "d09-fi-correction-chatter10.wav": {
+  "lang": "fi",
+  "accent": "Finnish",
+  "voice": "openai:verse",
+  "noise": "chatter",
+  "snr": 10,
+  "category": "correction",
+  "said": "Kolmekymmentä litraa kermaa, ei kun neljäkymmentä.",
+  "expect": "order",
+  "item": [
+   "kerma",
+   "cream"
+  ],
+  "amount": 40,
+  "unit": "L",
+  "weekday": null
+ },
+ "d10-en-fi-words-chatter10.wav": {
+  "lang": "en",
+  "accent": "Finnish-accented English",
+  "voice": "openai:alloy",
+  "noise": "chatter",
+  "snr": 10,
+  "category": "fi-words",
+  "said": "Twenty litres of maitoa for tomorrow, please.",
+  "expect": "order",
+  "item": [
+   "maito",
+   "milk"
+  ],
+  "amount": 20,
+  "unit": "L",
+  "weekday": null,
+  "when": "tomorrow"
+ },
+ "d11-en-fi-words-hum5.wav": {
+  "lang": "en",
+  "accent": "Indian",
+  "voice": "say:Rishi",
+  "noise": "hum",
+  "snr": 5,
+  "category": "fi-words",
+  "said": "Five kilos of voita and that's it.",
+  "expect": "order",
+  "item": [
+   "voi",
+   "butter"
+  ],
+  "amount": 5,
+  "unit": "kg",
+  "weekday": null
+ },
+ "d12-en-fi-words-clatter5.wav": {
+  "lang": "en",
+  "accent": "Finnish-accented English",
+  "voice": "openai:ash",
+  "noise": "clatter",
+  "snr": 5,
+  "category": "fi-words",
+  "said": "Ten litres of kermaa please, for Wednesday.",
+  "expect": "order",
+  "item": [
+   "kerma",
+   "cream"
+  ],
+  "amount": 10,
+  "unit": "L",
+  "weekday": "Wednesday"
+ },
+ "d13-fi-fi-hum5.wav": {
+  "lang": "fi",
+  "accent": "Finnish",
+  "voice": "say:Satu",
+  "noise": "hum",
+  "snr": 5,
+  "category": "fi",
+  "said": "Tarvitsemme kuusikymmentä litraa laktoositonta maitoa perjantaiksi.",
+  "expect": "order",
+  "item": [
+   "maito",
+   "milk"
+  ],
+  "amount": 60,
+  "unit": "L",
+  "weekday": "Friday"
+ },
+ "d14-fi-fi-none.wav": {
+  "lang": "fi",
+  "accent": "Finnish",
+  "voice": "openai:coral",
+  "noise": "none",
+  "snr": null,
+  "category": "fi",
+  "said": "Kuusitoista kiloa rahkaa maanantaiksi.",
+  "expect": "order",
+  "item": [
+   "rahka",
+   "quark"
+  ],
+  "amount": 16,
+  "unit": "kg",
+  "weekday": "Monday"
+ },
+ "d15-fi-fi-music0.wav": {
+  "lang": "fi",
+  "accent": "Finnish",
+  "voice": "say:Satu",
+  "noise": "music",
+  "snr": 0,
+  "category": "fi",
+  "said": "Kaksi ja puoli kiloa parmesaania, kiitos.",
+  "expect": "order",
+  "item": [
+   "parmesa",
+   "cheese"
+  ],
+  "amount": 2.5,
+  "unit": "kg",
+  "weekday": null
+ },
+ "d16-fi-fi-chatter0.wav": {
+  "lang": "fi",
+  "accent": "Finnish",
+  "voice": "openai:echo",
+  "noise": "chatter",
+  "snr": 0,
+  "category": "fi",
+  "said": "Sata kaksikymmentä kananmunaa lauantaiksi.",
+  "expect": "order",
+  "item": [
+   "kananmun",
+   "muna",
+   "egg"
+  ],
+  "amount": 120,
+  "unit": "pcs",
+  "weekday": "Saturday"
+ },
+ "d17-fi-fi-near-talker0.wav": {
+  "lang": "fi",
+  "accent": "Finnish",
+  "voice": "openai:sage",
+  "noise": "near-talker",
+  "snr": 0,
+  "category": "fi",
+  "said": "Neljä laatikkoa kauramaitoa tiistaiksi.",
+  "expect": "order",
+  "item": [
+   "kaura",
+   "oat"
+  ],
+  "amount": 4,
+  "unit": "pack",
+  "weekday": "Tuesday"
+ },
+ "d18-fi-no-amount-music10.wav": {
+  "lang": "fi",
+  "accent": "Finnish",
+  "voice": "say:Satu",
+  "noise": "music",
+  "snr": 10,
+  "category": "no-amount",
+  "said": "Tarvitaan kermaviiliä torstaiksi.",
+  "expect": "ask",
+  "item": [
+   "kermaviili",
+   "sour cream"
+  ],
+  "amount": null,
+  "unit": null,
+  "weekday": "Thursday"
+ },
+ "d19-sv-sv-near-talker5.wav": {
+  "lang": "sv",
+  "accent": "Swedish",
+  "voice": "say:Alva",
+  "noise": "near-talker",
+  "snr": 5,
+  "category": "sv",
+  "said": "Vi behöver femtio liter mjölk till torsdag.",
+  "expect": "order",
+  "item": [
+   "mjölk",
+   "milk"
+  ],
+  "amount": 50,
+  "unit": "L",
+  "weekday": "Thursday"
+ },
+ "d20-sv-sv-none.wav": {
+  "lang": "sv",
+  "accent": "Swedish",
+  "voice": "openai:verse",
+  "noise": "none",
+  "snr": null,
+  "category": "sv",
+  "said": "Femton kilo smör, tack.",
+  "expect": "order",
+  "item": [
+   "smör",
+   "butter"
+  ],
+  "amount": 15,
+  "unit": "kg",
+  "weekday": null
+ },
+ "d21-sv-sv-clatter0.wav": {
+  "lang": "sv",
+  "accent": "Swedish",
+  "voice": "openai:alloy",
+  "noise": "clatter",
+  "snr": 0,
+  "category": "sv",
+  "said": "Hundratio liter havredryck till måndag.",
+  "expect": "order",
+  "item": [
+   "havre",
+   "oat"
+  ],
+  "amount": 110,
+  "unit": "L",
+  "weekday": "Monday"
+ },
+ "d22-sv-sv-chatter5.wav": {
+  "lang": "sv",
+  "accent": "Swedish",
+  "voice": "say:Alva",
+  "noise": "chatter",
+  "snr": 5,
+  "category": "sv",
+  "said": "Tre lådor yoghurt till fredag.",
+  "expect": "order",
+  "item": [
+   "yoghurt",
+   "jogurt"
+  ],
+  "amount": 3,
+  "unit": "pack",
+  "weekday": "Friday"
+ },
+ "d23-sv-sv-none.wav": {
+  "lang": "sv",
+  "accent": "Swedish",
+  "voice": "openai:coral",
+  "noise": "none",
+  "snr": null,
+  "category": "sv",
+  "said": "Två och ett halvt kilo ost, tack.",
+  "expect": "order",
+  "item": [
+   "ost",
+   "cheese",
+   "juusto"
+  ],
+  "amount": 2.5,
+  "unit": "kg",
+  "weekday": null
+ },
+ "d24-sv-correction-music5.wav": {
+  "lang": "sv",
+  "accent": "Swedish",
+  "voice": "openai:ash",
+  "noise": "music",
+  "snr": 5,
+  "category": "correction",
+  "said": "Fyrtio liter grädde, nej förlåt, sextio liter.",
+  "expect": "order",
+  "item": [
+   "grädde",
+   "cream"
+  ],
+  "amount": 60,
+  "unit": "L",
+  "weekday": null
+ },
+ "d25-sv-date-clatter5.wav": {
+  "lang": "sv",
+  "accent": "Swedish",
+  "voice": "say:Alva",
+  "noise": "clatter",
+  "snr": 5,
+  "category": "date",
+  "said": "Tvåhundra ägg till i morgon.",
+  "expect": "order",
+  "item": [
+   "ägg",
+   "egg"
+  ],
+  "amount": 200,
+  "unit": "pcs",
+  "weekday": null,
+  "when": "tomorrow"
+ },
+ "d26-en-pack-clatter10.wav": {
+  "lang": "en",
+  "accent": "Indian",
+  "voice": "openai:echo",
+  "noise": "clatter",
+  "snr": 10,
+  "category": "pack",
+  "said": "Eight cases of lactose-free milk for Tuesday.",
+  "expect": "order",
+  "item": [
+   "milk"
+  ],
+  "amount": 8,
+  "unit": "pack",
+  "weekday": "Tuesday"
+ },
+ "d27-en-pack-chatter10.wav": {
+  "lang": "en",
+  "accent": "British",
+  "voice": "say:Daniel",
+  "noise": "chatter",
+  "snr": 10,
+  "category": "pack",
+  "said": "Three boxes of butter, please.",
+  "expect": "order",
+  "item": [
+   "butter"
+  ],
+  "amount": 3,
+  "unit": "pack",
+  "weekday": null
+ },
+ "d28-en-date-chatter5.wav": {
+  "lang": "en",
+  "accent": "Scottish",
+  "voice": "openai:sage",
+  "noise": "chatter",
+  "snr": 5,
+  "category": "date",
+  "said": "Ninety eggs by Sunday.",
+  "expect": "order",
+  "item": [
+   "egg"
+  ],
+  "amount": 90,
+  "unit": "pcs",
+  "weekday": "Sunday"
+ },
+ "d29-en-date-none.wav": {
+  "lang": "en",
+  "accent": "American",
+  "voice": "say:Samantha",
+  "noise": "none",
+  "snr": null,
+  "category": "date",
+  "said": "Forty litres of whole milk for next Monday.",
+  "expect": "order",
+  "item": [
+   "milk"
+  ],
+  "amount": 40,
+  "unit": "L",
+  "weekday": "Monday"
+ },
+ "d30-en-number-none.wav": {
+  "lang": "en",
+  "accent": "hurried",
+  "voice": "openai:verse",
+  "noise": "none",
+  "snr": null,
+  "category": "number",
+  "said": "Eighteen kilos of natural yoghurt.",
+  "expect": "order",
+  "item": [
+   "yoghurt",
+   "yogurt"
+  ],
+  "amount": 18,
+  "unit": "kg",
+  "weekday": null
+ },
+ "d31-en-history-clatter10.wav": {
+  "lang": "en",
+  "accent": "South African",
+  "voice": "say:Tessa",
+  "noise": "clatter",
+  "snr": 10,
+  "category": "history",
+  "said": "Same milk as last time, but seventy litres.",
+  "expect": "order",
+  "item": [
+   "milk"
+  ],
+  "amount": 70,
+  "unit": "L",
+  "weekday": null
+ },
+ "d32-en-history-music5.wav": {
+  "lang": "en",
+  "accent": "Spanish-accented English",
+  "voice": "openai:alloy",
+  "noise": "music",
+  "snr": 5,
+  "category": "history",
+  "said": "Like last week's oat drink, but thirty litres this time.",
+  "expect": "order",
+  "item": [
+   "oat"
+  ],
+  "amount": 30,
+  "unit": "L",
+  "weekday": null
+ },
+ "d33-en-no-amount-hum10.wav": {
+  "lang": "en",
+  "accent": "Indian",
+  "voice": "say:Rishi",
+  "noise": "hum",
+  "snr": 10,
+  "category": "no-amount",
+  "said": "We need cream for Friday.",
+  "expect": "ask",
+  "item": [
+   "cream"
+  ],
+  "amount": null,
+  "unit": null,
+  "weekday": "Friday"
+ },
+ "d34-en-no-amount-chatter5.wav": {
+  "lang": "en",
+  "accent": "neutral",
+  "voice": "openai:coral",
+  "noise": "chatter",
+  "snr": 5,
+  "category": "no-amount",
+  "said": "Some butter for tomorrow, please.",
+  "expect": "ask",
+  "item": [
+   "butter"
+  ],
+  "amount": null,
+  "unit": null,
+  "weekday": null,
+  "when": "tomorrow"
+ },
+ "d35-en-silence-hum.wav": {
+  "lang": "en",
+  "accent": null,
+  "voice": null,
+  "noise": "hum",
+  "snr": null,
+  "category": "silence",
+  "said": "",
+  "expect": "nothing",
+  "item": null,
+  "amount": null,
+  "unit": null,
+  "weekday": null
+ },
+ "d36-en-silence-chatter.wav": {
+  "lang": "en",
+  "accent": null,
+  "voice": null,
+  "noise": "chatter",
+  "snr": null,
+  "category": "silence",
+  "said": "",
+  "expect": "nothing",
+  "item": null,
+  "amount": null,
+  "unit": null,
+  "weekday": null
+ }
+}

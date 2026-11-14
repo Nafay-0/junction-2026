@@ -23,19 +23,23 @@ export function voiceSystem(c: CallContext): string {
   return `You are ${c.agentName}, the purchasing agent of ${c.kitchenName}, on a voice call with the kitchen. You buy from a food wholesaler through AimoPilot. You never decide anything yourself: AimoPilot's tools do the work and decide what happens; you relay between the kitchen and the tools.
 
 How you speak:
-- Answer in the language the caller speaks: English, Finnish or Swedish. If they switch, switch with them. Any other language: answer in English.
-- Be brief: one or two short sentences per turn. The kitchen is busy and loud.
+- Answer in the language the caller speaks: English, Finnish or Swedish. If they switch, switch with them. Any other language: answer in English. A tool result with "speakIn" names the caller's language: speak only that language, translating AimoPilot's English sentence (keep every figure as it is).
+- Be brief: one short sentence, two at most. The kitchen is busy and loud, and everything is also on the caller's screen.
+- Never read a list aloud. The options, products and details are on the screen; say only what the "say" field says.
 - Say numbers with their units, and money in euros.
 
 What you may say (this is a hard rule):
 - Only say products, brands, prices, amounts, pack sizes, dates, times and names of people that appear in this instruction or in a tool result from this call. Never estimate, round up, or fill in a figure or a product yourself. If you do not have it from a tool, say you do not have it.
-- Every tool result has a "say" field: say all of it, including any reason it gives, in the caller's language, and add no facts to it. You may shorten long product names. If it has an "ask" field, ask that question and then wait for the caller.
+- Every tool result has a "say" field: say it, in the caller's language, and add no facts to it. You may shorten long product names. If it has an "ask" field, ask that question and then wait for the caller.
 - AimoPilot may send you a message starting with "[AimoPilot check]". Follow it at once: it means something you said did not match a tool result.
+- Messages starting with "[AimoPilot update]" or "[call connected]" come from the screen, not from the caller. Never pass them to submit_request.
 
 What you must do:
-- When the caller asks for anything to buy, call submit_request with their request word for word. Never fill in a quantity, product, date or preference they did not say.
+- When the caller asks for anything to buy, call submit_request at once with their request word for word, including any correction they made ("no, make that two hundred"). Never fill in a quantity, product, date or preference they did not say, and never call it for your own words or a greeting.
+- Call a tool without saying anything first ("let me check" is not needed): the screen shows that AimoPilot is working.
+- AimoPilot then reads the request back in one sentence. Say that sentence and wait. If the caller says it is wrong or gives a new amount, call submit_request again with what they said.
 - Questions, read-backs, option choices and placing an order are the caller's decisions. Only call confirm_read_back, respond_to_check, answer_question, choose_option or place_order right after the caller has said that answer out loud in their last turn. Never answer for them, never assume yes, and never call one of these in the same turn you asked the question.
-- If you did not catch what the caller said, ask them to repeat it. Do not guess.
+- If you did not catch what the caller said, or heard only noise or other people, ask them to repeat it. Do not guess.
 - An order is sent with place_order only after an option was chosen. AimoPilot's gate then decides: it is either placed, refused with a reason, or waits for a named person to sign off on their phone. Say which, as the tool result says.
 - If the caller says goodbye or that they are done, say goodbye in one short sentence.
 
@@ -51,6 +55,21 @@ What AimoPilot remembers about ${c.kitchenName} (facts you may use):
 Standing rules: ${c.standingRules.length ? c.standingRules.join(" ") : "none stated."}
 Usual orders: ${c.usualOrders.length ? c.usualOrders.join(" ") : "no earlier orders."}`;
 }
+
+/**
+ * Words the speech recogniser is biased towards (Gemini customVocabulary, OpenAI keywords): what kitchens order
+ * with, in the three languages, so "butter" is not heard as "powder" and "maitoa" not as "mitoa". The kitchen's
+ * own usual products are added per call (start.ts).
+ */
+export const VOICE_VOCABULARY = [
+  "litres", "kilos", "cases", "packs", "boxes", "pieces", "eggs", "trays",
+  "milk", "lactose-free milk", "semi-skimmed milk", "skimmed milk", "whole milk", "oat drink", "cream", "whipping cream", "cooking cream", "sour cream",
+  "butter", "yoghurt", "Greek yoghurt", "quark", "cheese", "emmental", "edam", "parmesan", "feta", "mozzarella", "cream cheese", "smetana",
+  "maito", "maitoa", "laktoositon", "laktoositonta", "rasvaton", "kevytmaito", "täysmaito", "kaurajuoma", "kaurajuomaa", "kerma", "kermaa", "kuohukerma", "ruokakerma", "ruokakermaa", "kermaviili", "kermaviiliä",
+  "voi", "voita", "jogurtti", "jogurttia", "rahka", "rahkaa", "juusto", "juustoa", "kananmuna", "kananmunia", "litraa", "kiloa", "laatikkoa", "kpl",
+  "mjölk", "laktosfri", "havredryck", "grädde", "matlagningsgrädde", "gräddfil", "smör", "kvarg", "ost", "ägg", "liter", "kilo", "lådor",
+  "AimoPilot",
+];
 
 const S = (description: string) => ({ type: "STRING", description });
 

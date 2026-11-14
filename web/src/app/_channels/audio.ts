@@ -56,9 +56,9 @@ function fromBase64(b64: string): Uint8Array {
   return out;
 }
 
-/** Float32 frames at `rate` to 16 kHz Int16, averaging each output sample's input span. */
-export function downsampleTo16k(input: Float32Array, rate: number): Int16Array {
-  const ratio = rate / 16000;
+/** Float32 frames at `rate` to `target` Hz (16 kHz for Gemini, 24 kHz for OpenAI) Int16, averaging each output sample's input span. */
+export function downsampleTo16k(input: Float32Array, rate: number, target = 16000): Int16Array {
+  const ratio = rate / target;
   const n = Math.floor(input.length / ratio);
   const out = new Int16Array(n);
   for (let i = 0; i < n; i++) {
@@ -87,6 +87,12 @@ export class CallAudio {
   readonly seconds = { in: 0, out: 0 };
   /** Rough loudness of the last captured frames, 0..1, for the level meter. */
   level = 0;
+  /** The sample rate the voice provider takes (set once the call's session is known). */
+  rate = 16000;
+  /** The microphone stopped by itself (permission revoked, device unplugged, another app took it). */
+  onMicEnded?: () => void;
+  /** The audio context was suspended or interrupted by the system (a phone call, Siri, the page in the background). */
+  onAudioState?: (state: string) => void;
 
   constructor(
     private readonly onChunk: (b64: string) => void,
@@ -96,6 +102,7 @@ export class CallAudio {
     this.ctx = new Ctx();
     this.gain = this.ctx.createGain();
     this.gain.connect(this.ctx.destination);
+    this.ctx.onstatechange = () => this.onAudioState?.(this.ctx.state);
     // Safari 16.4+: ask for a call-style audio session, so the microphone and playback coexist.
     const session = (navigator as unknown as { audioSession?: { type: string } }).audioSession;
     if (session) {
@@ -118,6 +125,7 @@ export class CallAudio {
     } finally {
       URL.revokeObjectURL(url);
     }
+    for (const t of this.stream.getAudioTracks()) t.onended = () => this.onMicEnded?.();
     this.source = this.ctx.createMediaStreamSource(this.stream);
     this.node = new AudioWorkletNode(this.ctx, "dock-capture");
     this.node.port.onmessage = (e: MessageEvent<Float32Array>) => this.frame(e.data);
@@ -133,7 +141,11 @@ export class CallAudio {
   }
 
   resume() {
-    if (this.ctx.state === "suspended") void this.ctx.resume();
+    if (this.ctx.state !== "running" && this.ctx.state !== "closed") void this.ctx.resume().catch(() => {});
+  }
+
+  get audioState(): string {
+    return this.ctx.state;
   }
 
   /** Start or stop sending microphone audio (push-to-talk, or hands-free with the agent silent). */
@@ -170,8 +182,8 @@ export class CallAudio {
     }
     this.pending = [];
     this.pendingLen = 0;
-    const pcm = downsampleTo16k(all, this.ctx.sampleRate);
-    this.seconds.in += pcm.length / 16000;
+    const pcm = downsampleTo16k(all, this.ctx.sampleRate, this.rate);
+    this.seconds.in += pcm.length / this.rate;
     this.onChunk(toBase64(new Uint8Array(pcm.buffer)));
   }
 
@@ -254,6 +266,7 @@ export class CallAudio {
     this.node?.disconnect();
     this.source?.disconnect();
     for (const t of this.stream?.getTracks() ?? []) t.stop();
+    this.ctx.onstatechange = null;
     void this.ctx.close().catch(() => {});
   }
 }

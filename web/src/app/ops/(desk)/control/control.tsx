@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useState } from "react";
 import type { ControlView } from "@/server/ops/views";
 import { api } from "../../../_client/api";
-import { buttonClass } from "../../../_ui/kit";
+import { Check, ChevronRight, CircleAlert, CirclePlay, ShieldCheck } from "lucide-react";
+import { Badge, Select, buttonClass } from "../../../_ui/kit";
 import { clock } from "../../../_ui/plain";
 import { fi, money, num, since, until, when, whenSeconds } from "../../_ui/format";
 import { Button, Details, Empty, KV, LiveMark, LoadError, Loading, PageHead, Section, useNow, useOps } from "../../_ui/kit";
@@ -56,16 +57,21 @@ function Body({ c, now, refresh }: { c: ControlView; now: number; refresh: () =>
 
         {c.past.length > 0 && (
           <Section title="Resumed">
-            <ol className="divide-y divide-line/70 bg-paper text-[0.92rem]">
+            <ol className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-paper text-[0.92rem]">
               {c.past.map((s) => (
-                <li key={s.suspensionId} className="grid gap-x-4 px-4 py-2.5 sm:grid-cols-[minmax(0,1fr)_auto]">
+                <li key={s.suspensionId} className="flex gap-3.5 px-5 py-3.5">
+                  <span aria-hidden className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-good-soft text-good">
+                    <CirclePlay size={16} />
+                  </span>
+                  <div className="min-w-0">
                   <p>
-                    <b>{s.label}</b> <span className="text-ink-soft">“{s.reason}”</span>
+                    <b className="font-semibold">{s.label}</b> <span className="text-ink-soft">“{s.reason}”</span>
                   </p>
-                  <p className="text-[0.85rem] text-ink-soft tabular sm:text-right">
+                  <p className="mt-0.5 text-[0.85rem] text-ink-soft tabular">
                     Suspended {when(s.at)} by {s.by}; resumed {when(s.resumedAt)} by {s.resumedBy}
                     {s.resumeNote ? `: “${s.resumeNote}”` : ""}; {num(s.refusals)} call{s.refusals === 1 ? "" : "s"} refused meanwhile
                   </p>
+                  </div>
                 </li>
               ))}
             </ol>
@@ -75,11 +81,16 @@ function Body({ c, now, refresh }: { c: ControlView; now: number; refresh: () =>
 
       <div>
         <Section id="waiting" title="Waiting for a customer's sign-off" aside={c.waiting.length ? `${c.waiting.length} order${c.waiting.length > 1 ? "s" : ""}` : undefined}>
-          <div className="mb-3 border-l-[6px] border-petrol bg-paper px-4 py-3 text-[0.92rem] leading-snug">
+          <div className="mb-4 flex gap-3.5 rounded-lg bg-petrol-soft px-4 py-3.5 text-[0.92rem] leading-snug">
+            <span aria-hidden className="flex size-8 shrink-0 items-center justify-center rounded-full bg-petrol text-paper">
+              <ShieldCheck size={16} />
+            </span>
+            <div className="min-w-0">
             <p className="font-semibold">Operations never signs for a customer</p>
-            <p className="mt-0.5 text-ink-soft">
+            <p className="mt-1 text-ink-soft">
               Staff here cannot approve or decline an order. Only the person the kitchen&apos;s mandate names can, on their own phone, and their proof covers exactly the order&apos;s lines and total. If the fixed price runs out first, the gate&apos;s re-check refuses the order and the agent asks for a new quote. A suspended agent&apos;s waiting orders stay the customer&apos;s to decide.
             </p>
+            </div>
           </div>
           {c.waiting.length === 0 ? (
             <Empty title="Nothing waiting">Orders over an agent&apos;s own limit, or with a substitute, wait here until the named person signs off.</Empty>
@@ -103,11 +114,15 @@ function Body({ c, now, refresh }: { c: ControlView; now: number; refresh: () =>
                           <p className="font-semibold">{w.orgName}</p>
                           <p className="text-[0.8rem] text-ink-soft">
                             {w.agentLabel}
-                            {w.agentSuspended && <span className="ml-1.5 border border-safety-ink bg-safety px-1 text-[0.78rem] font-semibold text-safety-ink">agent suspended</span>}
+                            {w.agentSuspended && (
+                              <span className="ml-1.5">
+                                <Badge tone="refused">agent suspended</Badge>
+                              </span>
+                            )}
                           </p>
                           {w.requestId && (
-                            <Link href={`/ops/trace/${w.requestId}`} className="text-[0.85rem] font-semibold text-petrol underline underline-offset-2">
-                              Open the trace
+                            <Link href={`/ops/trace/${w.requestId}`} className="mt-1 inline-flex items-center gap-1 text-[0.85rem] font-medium text-petrol hover:underline">
+                              Open the trace <ChevronRight aria-hidden size={14} />
                             </Link>
                           )}
                         </td>
@@ -124,11 +139,11 @@ function Body({ c, now, refresh }: { c: ControlView; now: number; refresh: () =>
                         </td>
                         <td className="whitespace-nowrap text-right font-semibold tabular">{money(w.totalCents)}</td>
                         <td className="whitespace-nowrap tabular">
-                          <span className="inline-flex items-center gap-1.5 bg-safety px-1.5 font-semibold text-safety-ink">
-                            <span aria-hidden className="breathe size-2 bg-safety-ink" />
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-safety-soft px-2.5 text-[0.86rem] font-semibold leading-6 text-safety-ink ring-1 ring-inset ring-safety/60">
+                            <span aria-hidden className="breathe size-1.5 rounded-full bg-safety-ink" />
                             {since(w.requestedAt, now).replace(" ago", "")}
                           </span>
-                          <p className="text-[0.78rem] text-ink-soft">since {when(w.requestedAt)}</p>
+                          <p className="mt-0.5 text-[0.78rem] text-ink-soft">since {when(w.requestedAt)}</p>
                         </td>
                         <td className="tabular">
                           {held ? (
@@ -186,16 +201,15 @@ function SuspendForm({ agents, orgs, onDone }: { agents: { id: string; label: st
   }
 
   return (
-    <div className="bg-paper">
-      <div aria-hidden className="h-[3px] bg-petrol" />
+    <div className="overflow-hidden rounded-xl border border-line bg-paper">
       <form
         onSubmit={(e) => {
           e.preventDefault();
           if (chosen && reason.trim()) setConfirming(true);
         }}
-        className="px-4 py-4"
+        className="p-5"
       >
-        <div role="radiogroup" aria-label="What to suspend" className="flex flex-wrap gap-1">
+        <div role="radiogroup" aria-label="What to suspend" className="inline-flex max-w-full gap-1 overflow-x-auto rounded-full bg-surface p-1">
           {(
             [
               ["agent", "One agent", agents.length],
@@ -212,38 +226,35 @@ function SuspendForm({ agents, orgs, onDone }: { agents: { id: string; label: st
                 setTarget("");
                 setConfirming(false);
               }}
-              className={`min-h-9 px-3 text-[0.92rem] font-semibold ${scope === id ? "bg-petrol text-paper" : "border-2 border-line text-ink hover:border-petrol"}`}
+              className={`inline-flex min-h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-4 text-[0.9rem] font-medium transition-[background-color,color,box-shadow] duration-150 pointer-coarse:min-h-10 ${scope === id ? "bg-paper text-ink shadow-xs" : "text-ink-soft hover:text-ink"}`}
             >
-              {label} <span className={scope === id ? "text-paper/80" : "text-ink-soft"}>{n}</span>
+              {label} <span className={`tabular text-[0.78rem] ${scope === id ? "text-ink-soft" : "text-ink-faint"}`}>{n}</span>
             </button>
           ))}
         </div>
-        <p className="mt-2 text-[0.88rem] text-ink-soft">
+        <p className="mt-3 text-[0.88rem] text-ink-soft">
           {scope === "agent" ? "Stops this agent only. Other agents of the same kitchen keep working." : "Stops every agent that presents a mandate from this organisation, its own on-site agent included."}
         </p>
         {options.length === 0 ? (
           <p className="mt-3 text-[0.92rem] text-ink-soft">Nothing to suspend: no {scope === "agent" ? "agent" : "organisation"} has come to the gate yet, or every one is already suspended.</p>
         ) : (
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <div className="mt-4 grid gap-4">
+            <Select
+              label={scope === "agent" ? "Agent" : "Organisation"}
+              value={chosen?.id ?? ""}
+              onChange={(v) => {
+                setTarget(v);
+                setConfirming(false);
+              }}
+            >
+              {options.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
             <label className="block">
-              <span className="text-[0.88rem] font-semibold">{scope === "agent" ? "Agent" : "Organisation"}</span>
-              <select
-                value={chosen?.id ?? ""}
-                onChange={(e) => {
-                  setTarget(e.target.value);
-                  setConfirming(false);
-                }}
-                className="mt-1 min-h-11 w-full border-2 border-line bg-paper px-2 text-[0.95rem] focus:border-petrol"
-              >
-                {options.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="text-[0.88rem] font-semibold">Reason, shown to the agent and written to the ledger</span>
+              <span className="mb-1.5 block text-[0.875rem] font-medium">Reason, shown to the agent and written to the ledger</span>
               <input
                 required
                 maxLength={300}
@@ -253,30 +264,30 @@ function SuspendForm({ agents, orgs, onDone }: { agents: { id: string; label: st
                   setConfirming(false);
                 }}
                 placeholder="Ordering in a loop since 14.00"
-                className="mt-1 min-h-11 w-full border-2 border-line bg-paper px-3 text-[0.95rem] placeholder:text-ink-soft focus:border-petrol focus:outline-none"
+                className="field"
               />
             </label>
           </div>
         )}
         {options.length > 0 && !confirming && (
-          <Button type="submit" kind="primary" size="md" disabled={!reason.trim()} className="mt-3">
+          <Button type="submit" kind="primary" size="md" disabled={!reason.trim()} className="mt-4">
             Review the suspension
           </Button>
         )}
       </form>
       {confirming && chosen && (
-        <div role="alertdialog" aria-labelledby="confirm-title" className="on-dark barrier-left bg-safety-ink px-4 pb-4 pt-0 text-paper">
-          <div aria-hidden className="hazard -mx-4 mb-3 h-3" />
+        <div role="alertdialog" aria-labelledby="confirm-title" className="hazard-frame on-dark lane-enter mx-3 mb-3 text-paper">
+          <div className="px-4 pb-4 pt-3.5">
           <p id="confirm-title" className="flex items-center gap-2.5">
             <Target size={28} tone="safety" />
             <span className="display text-[1.5rem] leading-tight text-safety">Suspend {chosen.label.split(",")[0]}?</span>
           </p>
-          <ul className="mt-2 space-y-1 text-[0.95rem] leading-snug text-paper/90">
+          <ul className="mt-3 space-y-1.5 text-[0.95rem] leading-snug text-paper/90">
             <li>Its next call, over any door, is refused with your reason: “{reason.trim()}”.</li>
             <li>Orders already waiting for a sign-off stay the customer&apos;s to decide.</li>
             <li>Nothing is deleted. Resume it from this page at any time; both acts are written to the ledger.</li>
           </ul>
-          <div className="mt-3 flex flex-wrap gap-3">
+          <div className="mt-4 flex flex-wrap gap-3">
             <Button kind="stop" size="md" onClick={suspend} disabled={busy}>
               {busy ? "Suspending…" : scope === "agent" ? "Suspend the agent" : "Suspend the organisation"}
             </Button>
@@ -284,10 +295,12 @@ function SuspendForm({ agents, orgs, onDone }: { agents: { id: string; label: st
               Cancel
             </button>
           </div>
+          </div>
         </div>
       )}
       {msg && (
-        <p role="status" className={`border-t border-line/70 px-4 py-2.5 text-[0.92rem] ${msg.ok ? "" : "font-semibold"}`}>
+        <p role="status" className={`flex items-start gap-2.5 border-t px-5 py-3 text-[0.92rem] ${msg.ok ? "border-good/15 bg-good-soft" : "border-bad/20 bg-bad-soft font-semibold"}`}>
+          {msg.ok ? <Check aria-hidden size={17} className="mt-0.5 shrink-0 text-good" strokeWidth={2.6} /> : <CircleAlert aria-hidden size={17} className="mt-0.5 shrink-0 text-bad" />}
           {msg.text}
         </p>
       )}
@@ -307,9 +320,8 @@ function ActiveRow({ s, now, onDone }: { s: Suspension; now: number; onDone: () 
     onDone();
   }
   return (
-    <li className="on-dark bg-safety-ink text-paper">
-      <div aria-hidden className="hazard h-2.5" />
-      <div className="grid gap-4 px-4 py-3 2xl:grid-cols-[minmax(0,1fr)_16rem]">
+    <li className="hazard-frame on-dark text-paper">
+      <div className="grid gap-4 px-5 pb-5 pt-4 2xl:grid-cols-[minmax(0,1fr)_16rem]">
         <div>
           <p className="flex items-center gap-2 text-[0.88rem] font-semibold text-safety">
             <Target size={18} tone="safety" />
@@ -320,24 +332,24 @@ function ActiveRow({ s, now, onDone }: { s: Suspension; now: number; onDone: () 
           <p className="mt-1 text-[0.88rem] text-paper/75 tabular">
             By {s.by}, {when(s.at)}, {since(s.at, now)}. {num(s.refusals)} call{s.refusals === 1 ? "" : "s"} refused since{s.lastRefusalAt ? `, the last ${since(s.lastRefusalAt, now)}` : ""}.
           </p>
-          <div className="mt-1 [&_summary]:text-paper/70 [&_div]:text-paper/70">
-            <Details summary="Ids">
+          <div className="mt-1.5">
+            <Details summary="Ids" dark>
               <KV k="suspension" v={s.suspensionId} />
               <KV k={s.scope} v={s.target} />
               <KV k="rule" v="operator_suspension" />
             </Details>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 2xl:flex-col 2xl:flex-nowrap 2xl:items-stretch 2xl:justify-center [&>*]:min-w-[12rem] [&>*]:flex-1 2xl:[&>*]:flex-none">
+        <div className="flex flex-wrap items-center gap-2 2xl:flex-col 2xl:flex-nowrap 2xl:items-stretch 2xl:justify-center">
           <input
             value={note}
             onChange={(e) => setNote(e.target.value)}
             maxLength={300}
             placeholder="Note for the record (optional)"
             aria-label="Note for the record"
-            className="min-h-10 border-2 border-paper/30 bg-transparent px-2 text-[0.92rem] text-paper placeholder:text-paper/55 focus:border-paper focus:outline-none"
+            className="min-h-11 min-w-0 flex-[2_1_14rem] rounded-md border border-paper/25 bg-paper/[0.06] px-3.5 text-[0.92rem] text-paper placeholder:text-paper/55 focus:border-lime focus:shadow-[0_0_0_3px_rgb(192_224_33/0.25)] focus:outline-none"
           />
-          <button type="button" onClick={resume} disabled={busy} className={buttonClass("ghost-dark", "md", "w-full disabled:opacity-50")}>
+          <button type="button" onClick={resume} disabled={busy} className={buttonClass("ghost-dark", "md", "flex-[1_1_7rem] disabled:opacity-50")}>
             {busy ? "Resuming…" : "Resume"}
           </button>
           {err && <p className="text-[0.85rem]">{err}</p>}

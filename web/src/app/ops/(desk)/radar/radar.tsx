@@ -5,6 +5,8 @@ import type { HoldCard, NoticeCard, RadarView } from "@/server/radar/views";
 import { api } from "../../../_client/api";
 import { fi, num, since, span, when } from "../../_ui/format";
 import { Button, Details, Empty, LoadError, Loading, PageHead, Panel, Section, useNow, useOps } from "../../_ui/kit";
+import { Check, CircleAlert, ExternalLink, FlaskConical } from "lucide-react";
+import { Badge, Select, Tag, buttonClass } from "../../../_ui/kit";
 import { Target } from "../../../_ui/target";
 
 type Evidence = { value: string; sentence?: string; verified: boolean; english?: string };
@@ -41,7 +43,7 @@ function Body({ v, now, refresh }: { v: RadarView; now: number; refresh: () => v
   const realHolds = v.holds.filter((h) => !h.drill);
   return (
     <>
-      <Panel rule className="grid grid-cols-2 divide-line/70 sm:grid-cols-3 xl:grid-cols-6 xl:divide-x">
+      <Panel className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 xl:divide-x xl:divide-line">
         <Tile n={num(v.stats.read)} label={`real notices read since ${fiDate(v.stats.window)}`} />
         <Tile n={num(v.stats.matchedAny)} label="matched anything in the assortment" sub={`${v.stats.confirmed} on a hard identifier, ${v.stats.possible} possible`} />
         <Tile n={num(v.stats.holds)} label="real products on hold" gate={v.stats.holds > 0} sub={drillHolds.length ? `and ${drillHolds.length} drill hold${drillHolds.length > 1 ? "s" : ""}` : undefined} />
@@ -101,10 +103,11 @@ function Body({ v, now, refresh }: { v: RadarView; now: number; refresh: () => v
 
 function Tile({ n, label, sub, safety, gate }: { n: ReactNode; label: string; sub?: string; safety?: boolean; gate?: boolean }) {
   return (
-    <div className="min-w-0 border-b border-line/70 px-4 py-3 xl:border-b-0">
-      <p className="display flex items-center gap-2 text-[2.1rem] leading-none tabular">
-        {gate ? <span className="bg-safety-ink px-1.5 text-safety">{n}</span> : n}
-        {safety && <span aria-hidden className="hazard-thin inline-block size-3.5" />}
+    <div className="min-w-0 border-b border-line px-5 py-4 xl:border-b-0">
+      <p className="display flex items-center gap-2 text-[2rem] leading-none tabular">
+        {gate ? <span className="rounded-md bg-safety-ink px-2 py-0.5 text-safety">{n}</span> : n}
+        {gate && <Target size={18} tone="safety" />}
+        {safety && <span aria-hidden className="breathe inline-block size-2.5 rounded-full bg-safety ring-2 ring-safety/30" />}
       </p>
       <p className="mt-1 text-[0.88rem] leading-snug text-ink-soft">{label}</p>
       {sub && <p className="text-[0.82rem] text-ink-soft">{sub}</p>}
@@ -114,7 +117,12 @@ function Tile({ n, label, sub, safety, gate }: { n: ReactNode; label: string; su
 
 function Msg({ m }: { m?: { ok: boolean; text: string } }) {
   if (!m) return null;
-  return <p className={`mt-1.5 text-[0.85rem] ${m.ok ? "text-ink-soft" : "font-semibold"}`}>{m.text}</p>;
+  return (
+    <p role="status" className={`mt-2.5 flex items-start gap-2 rounded-md px-3 py-2 text-[0.86rem] ${m.ok ? "bg-good-soft text-ink" : "bg-bad-soft font-semibold"}`}>
+      {m.ok ? <Check aria-hidden size={15} className="mt-0.5 shrink-0 text-good" strokeWidth={2.6} /> : <CircleAlert aria-hidden size={15} className="mt-0.5 shrink-0 text-bad" />}
+      {m.text}
+    </p>
+  );
 }
 
 // ---------- drill ----------
@@ -139,27 +147,24 @@ function DrillSection({ v, now, refresh }: { v: RadarView; now: number; refresh:
   }
   return (
     <Section title="Drill" aside="Never a real recall">
-      <div className="bg-paper">
-        <div className="flex items-center gap-2 bg-petrol-deep px-4 py-2 text-[0.92rem] font-semibold text-paper">
-          <span aria-hidden className="size-2.5 border-2 border-paper" />
+      <div className="overflow-hidden rounded-xl border border-line bg-paper">
+        <div className="flex items-center gap-2.5 border-b border-line bg-surface px-5 py-2.5 text-[0.9rem] font-semibold">
+          <FlaskConical aria-hidden size={16} className="text-petrol" />
           A drill: a test notice on AimoPilot&apos;s own page, never a real recall
         </div>
-        <div className="px-4 py-3">
+        <div className="p-5">
           <p className="text-[0.92rem] leading-snug text-ink-soft">
-            Publishes a notice marked “Harjoitus / Drill” on <a className="underline" href={v.partners.drillUrl} target="_blank" rel="noreferrer">AimoPilot&apos;s drill page</a>, in the authority&apos;s layout. The radar picks it up through the same reader and matching as a real notice ({v.partners.drillReadVia === "context.dev" ? "read by Context.dev from the public address" : "read directly: Context.dev cannot reach this server's own address; set RADAR_PUBLIC_URL to a public one"}), and holds the product. Then try to order it.
+            Publishes a notice marked “Harjoitus / Drill” on <a className="font-medium text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol" href={v.partners.drillUrl} target="_blank" rel="noreferrer">AimoPilot&apos;s drill page</a>, in the authority&apos;s layout. The radar picks it up through the same reader and matching as a real notice ({v.partners.drillReadVia === "context.dev" ? "read by Context.dev from the public address" : "read directly: Context.dev cannot reach this server's own address; set RADAR_PUBLIC_URL to a public one"}), and holds the product. Then try to order it.
           </p>
           {v.drill.active.length === 0 && (
-            <div className="mt-2 flex flex-wrap items-end gap-2">
-              <label className="min-w-0 flex-1 text-[0.88rem] font-semibold">
-                Product to recall in the drill
-                <select value={chosen} onChange={(e) => setProductId(e.target.value)} className="mt-1 block min-h-11 w-full border-2 border-line bg-paper px-2 text-[0.95rem] font-normal focus:border-petrol">
-                  {v.drill.candidates.map((c) => (
-                    <option key={c.productId} value={c.productId}>
-                      {c.name}: {c.why}
-                    </option>
-                  ))}
-                </select>
-              </label>
+            <div className="mt-4 flex flex-wrap items-end gap-3">
+              <Select label="Product to recall in the drill" value={chosen} onChange={setProductId} className="min-w-0 flex-1 basis-[16rem]">
+                {v.drill.candidates.map((c) => (
+                  <option key={c.productId} value={c.productId}>
+                    {c.name}: {c.why}
+                  </option>
+                ))}
+              </Select>
               <Button kind="primary" size="md" onClick={publish} disabled={busy || !chosen}>
                 {busy ? "Publishing…" : "Publish drill notice"}
               </Button>
@@ -177,17 +182,18 @@ function DrillSection({ v, now, refresh }: { v: RadarView; now: number; refresh:
                   <span className="display text-[2.6rem] leading-none tabular">{d.secondsToRefusal !== undefined ? span(d.secondsToRefusal * 1000) : span(now - Date.parse(d.publishedAt))}</span>
                 </p>
               </div>
-              <ol className="mt-2 grid grid-cols-2 gap-1 sm:grid-cols-4">
+              <ol className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <Step n={1} label="Published" value={when(d.publishedAt, new Date(now))} done />
                 <Step n={2} label="Picked up by the radar" value={d.secondsToPickUp !== undefined ? `+${span(d.secondsToPickUp * 1000)}` : "waiting…"} done={d.secondsToPickUp !== undefined} />
                 <Step n={3} label="Product held" value={d.secondsToHold !== undefined ? `+${span(d.secondsToHold * 1000)}` : "…"} done={d.secondsToHold !== undefined} tone="gate" />
                 <Step n={4} label="An order stopped" value={d.secondsToRefusal !== undefined ? `+${span(d.secondsToRefusal * 1000)}` : "try to order it"} done={d.secondsToRefusal !== undefined} tone="gate" />
               </ol>
-              <p className="mt-2 flex flex-wrap gap-4 text-[0.92rem] font-semibold text-petrol">
-                <a href={d.url} target="_blank" rel="noreferrer" className="underline underline-offset-2">
+              <p className="mt-4 flex flex-wrap gap-2.5">
+                <a href={d.url} target="_blank" rel="noreferrer" className={buttonClass("secondary", "sm")}>
+                  <ExternalLink aria-hidden size={15} />
                   Open the drill notice
                 </a>
-                <button type="button" className="underline underline-offset-2" onClick={() => void end(d.drillId)}>
+                <button type="button" className={buttonClass("secondary", "sm")} onClick={() => void end(d.drillId)}>
                   End drill and lift its hold
                 </button>
               </p>
@@ -201,13 +207,13 @@ function DrillSection({ v, now, refresh }: { v: RadarView; now: number; refresh:
 }
 
 function Step({ n, label, value, done, tone = "plain" }: { n: number; label: string; value: string; done?: boolean; tone?: "plain" | "gate" }) {
-  const look = !done ? "border-2 border-dashed border-line text-ink-soft" : tone === "gate" ? "bg-safety-ink text-paper" : "bg-petrol text-paper";
+  const look = !done ? "border border-dashed border-line-strong text-ink-soft" : tone === "gate" ? "bg-safety-ink text-paper" : "bg-petrol-soft text-petrol-deep";
   return (
-    <li className={`px-3 py-2 ${look}`}>
-      <span className={`block text-[0.82rem] ${done ? (tone === "gate" ? "text-safety" : "text-paper/80") : ""}`}>
+    <li className={`rounded-lg px-3.5 py-2.5 ${look}`}>
+      <span className={`block text-[0.8rem] ${done ? (tone === "gate" ? "text-safety" : "text-petrol") : ""}`}>
         {n}. {label}
       </span>
-      <span className="display text-[1.3rem] leading-tight tabular">{value}</span>
+      <span className="display text-[1.25rem] leading-tight tabular">{value}</span>
     </li>
   );
 }
@@ -225,10 +231,10 @@ function HoldRow({ h, now, refresh }: { h: HoldCard; now: number; refresh: () =>
     refresh();
   }
   return (
-    <li className="bg-paper">
-      <div aria-hidden className="hazard h-2.5" />
-      <div className="px-4 py-3">
-        <p className="flex items-center gap-2 text-[0.88rem] font-semibold">
+    <li className="overflow-hidden rounded-xl border border-safety-ink/15 bg-paper shadow-sm">
+      <div aria-hidden className="hazard h-1.5" />
+      <div className="p-5">
+        <p className="flex items-center gap-2 text-[0.86rem] font-semibold">
           <Target size={16} tone="safety" />
           {h.drill ? "Held for a drill" : "Held: no quote, no order"}
         </p>
@@ -237,12 +243,12 @@ function HoldRow({ h, now, refresh }: { h: HoldCard; now: number; refresh: () =>
         <p className="mt-1 text-[0.88rem] text-ink-soft">
           Held {when(h.placedAt, new Date(now))} by {h.placedBy === "radar" ? "the radar (confirmed identifier)" : h.placedBy.replace(/^operator:/, "")}. {h.refusals} call{h.refusals === 1 ? "" : "s"} refused
           {h.lastRefusalAt ? `, last ${since(h.lastRefusalAt, now)}` : ""}.{" "}
-          <a href={h.noticeUrl} target="_blank" rel="noreferrer" className="font-semibold text-petrol underline underline-offset-2">
+          <a href={h.noticeUrl} target="_blank" rel="noreferrer" className="font-medium text-petrol hover:underline">
             Read the notice
           </a>
         </p>
         {h.orders.length > 0 && (
-          <ul className="mt-2 space-y-1 text-[0.85rem]">
+          <ul className="mt-3 space-y-1 rounded-lg bg-surface px-3.5 py-2.5 text-[0.85rem]">
             {h.orders.map((o) => (
               <li key={o.orderId} className={o.affected ? "font-semibold" : "text-ink-soft"}>
                 {o.orgName}: {o.status}
@@ -251,9 +257,9 @@ function HoldRow({ h, now, refresh }: { h: HoldCard; now: number; refresh: () =>
             ))}
           </ul>
         )}
-        <form onSubmit={lift} className="mt-2 flex flex-wrap gap-2">
-          <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why lift it (stock checked: other batch…)" aria-label="Why lift the hold" className="min-h-10 min-w-0 flex-1 border-2 border-line px-2 text-[0.92rem] focus:border-petrol focus:outline-none" />
-          <Button type="submit" disabled={!reason.trim()}>
+        <form onSubmit={lift} className="mt-3.5 flex flex-wrap gap-2.5">
+          <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why lift it (stock checked: other batch…)" aria-label="Why lift the hold" className="field min-w-0 flex-1 basis-[14rem] !text-[0.92rem]" />
+          <Button type="submit" size="md" disabled={!reason.trim()}>
             Lift hold
           </Button>
         </form>
@@ -275,28 +281,29 @@ function ReviewRow({ m, refresh }: { m: RadarView["review"][number]; refresh: ()
     refresh();
   }
   return (
-    <li className="border-l-[10px] border-safety bg-paper px-4 py-3">
-      <p className="text-[0.88rem] font-semibold text-ink-soft">
+    <li className="rounded-xl bg-safety-soft p-5 ring-1 ring-inset ring-safety/60">
+      <p className="flex items-center gap-2 text-[0.86rem] font-semibold">
+        <Target size={15} tone="safety" />
         {m.drill ? "Drill, " : ""}
         {m.strength === "confirmed" ? "a confirmed identifier on an older notice" : "a possible match"}: a person decides
       </p>
-      <p className="font-semibold">{m.productName}</p>
+      <p className="display mt-1 text-[1.25rem] leading-tight">{m.productName}</p>
       <p className="text-[0.88rem]">
         Notice: “{m.notice.title}” ({m.notice.publisher}, {fiDate(m.notice.publishedOn)}){m.noticeProduct ? `, product “${m.noticeProduct}”` : ""}.
       </p>
       <p className="mt-1 text-[0.85rem] text-ink-soft">{m.why}</p>
       {m.reviewReason && <p className="text-[0.85rem] text-ink-soft">{m.reviewReason}</p>}
-      <div className="mt-2 flex flex-wrap gap-2">
-        <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (written to the ledger)" aria-label="Reason" className="min-h-10 min-w-0 flex-1 border-2 border-line px-2 text-[0.92rem] focus:border-petrol focus:outline-none" />
-        <Button kind="stop" disabled={!reason.trim()} onClick={() => void decide("confirm")}>
+      <div className="mt-3.5 flex flex-wrap gap-2.5">
+        <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (written to the ledger)" aria-label="Reason" className="field min-w-0 flex-1 basis-[14rem] !text-[0.92rem]" />
+        <Button kind="stop" size="md" disabled={!reason.trim()} onClick={() => void decide("confirm")}>
           Confirm and hold
         </Button>
-        <Button disabled={!reason.trim()} onClick={() => void decide("dismiss")}>
+        <Button size="md" disabled={!reason.trim()} onClick={() => void decide("dismiss")}>
           Dismiss
         </Button>
       </div>
-      <a href={m.notice.url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-[0.9rem] font-semibold text-petrol underline underline-offset-2">
-        Open the notice
+      <a href={m.notice.url} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-[0.9rem] font-medium text-petrol hover:underline">
+        Open the notice <ExternalLink aria-hidden size={14} />
       </a>
       <Msg m={msg} />
     </li>
@@ -315,21 +322,22 @@ function SourcesSection({ v, now, refresh }: { v: RadarView; now: number; refres
   }
   return (
     <Section title="Sources" aside="Checked on a schedule; Context.dev watches the authority's list between checks">
-      <Panel rule>
-        <ul className="divide-y divide-line/70">
+      <Panel>
+        <ul className="divide-y divide-line">
           {v.sources.map((s) => (
-            <li key={s.id} className="px-4 py-3">
+            <li key={s.id} className="px-5 py-4">
               <div className="flex flex-wrap items-baseline justify-between gap-x-3">
                 <p className="font-semibold">
-                  {s.drill && <span className="mr-1.5 border border-petrol px-1 text-[0.78rem] font-semibold text-petrol">Drill page</span>}
-                  <a href={s.homeUrl} target="_blank" rel="noreferrer" className="underline decoration-line underline-offset-2">
+                  {s.drill && (
+                    <span className="mr-2">
+                      <Tag>Drill page</Tag>
+                    </span>
+                  )}
+                  <a href={s.homeUrl} target="_blank" rel="noreferrer" className="hover:text-petrol hover:underline">
                     {s.name}
                   </a>
                 </p>
-                <span className={`inline-flex items-center gap-1.5 text-[0.88rem] font-semibold ${s.status === "ok" ? "text-petrol" : "text-ink"}`}>
-                  <span aria-hidden className={`size-2.5 ${s.status === "ok" ? "bg-petrol" : s.status === "down" || s.status === "layout_changed" ? "bg-ink" : "border-2 border-ink-soft"}`} />
-                  {STATUS[s.status] ?? s.status}
-                </span>
+                <Badge tone={s.status === "ok" ? "good" : s.status === "down" || s.status === "layout_changed" ? "bad" : "neutral"}>{STATUS[s.status] ?? s.status}</Badge>
               </div>
               <p className="text-[0.8rem] text-ink-soft">
                 {s.publisher}, in {LANG[s.language]}
@@ -349,7 +357,7 @@ function SourcesSection({ v, now, refresh }: { v: RadarView; now: number; refres
               )}
               {s.lastError && <p className="mt-1 text-[0.82rem]">{s.lastError}</p>}
               <p className="mt-1 text-[0.8rem] text-ink-soft">{s.about}</p>
-              <button type="button" disabled={busy === s.id} onClick={() => void check(s.id)} className="mt-1 text-[0.88rem] font-semibold text-petrol underline underline-offset-2 disabled:opacity-50">
+              <button type="button" disabled={busy === s.id} onClick={() => void check(s.id)} className={buttonClass("secondary", "sm", "mt-2.5 disabled:opacity-50")}>
                 {busy === s.id ? "Checking…" : "Check now"}
               </button>
             </li>
@@ -375,9 +383,15 @@ function NoticesSection({ v, now }: { v: RadarView; now: number }) {
   ];
   return (
     <Section title="Notices" aside={<span className="tabular">Newest first</span>}>
-      <div className="mb-2 flex flex-wrap gap-1">
+      <div className="mb-4 flex flex-wrap gap-1 rounded-full bg-surface p-1 sm:inline-flex">
         {tabs.map(([id, label]) => (
-          <button key={id} type="button" onClick={() => setFilter(id)} aria-pressed={filter === id} className={`min-h-9 px-3 text-[0.9rem] font-semibold ${filter === id ? "bg-petrol text-paper" : "border-2 border-line bg-paper hover:border-petrol"}`}>
+          <button
+            key={id}
+            type="button"
+            onClick={() => setFilter(id)}
+            aria-pressed={filter === id}
+            className={`inline-flex min-h-9 items-center whitespace-nowrap rounded-full px-4 text-[0.9rem] font-medium transition-[background-color,color,box-shadow] duration-150 pointer-coarse:min-h-10 ${filter === id ? "bg-paper text-ink shadow-xs" : "text-ink-soft hover:text-ink"}`}
+          >
             {label}
           </button>
         ))}
@@ -411,13 +425,17 @@ function Said({ label, e }: { label: string; e?: Evidence }) {
 
 function NoticeRow({ n, now }: { n: NoticeCard; now: number }) {
   return (
-    <li className={`bg-paper px-4 py-3 ${n.matches.length ? "border-t-[3px] border-petrol" : ""}`}>
-      {n.drill && <p className="mb-1 inline-block border border-petrol px-1.5 text-[0.82rem] font-semibold text-petrol">Drill, not a real recall</p>}
+    <li className={`rounded-xl border bg-paper p-5 ${n.matches.length ? "border-petrol/40 shadow-xs" : "border-line"}`}>
+      {n.drill && (
+        <p className="mb-2">
+          <Tag>Drill, not a real recall</Tag>
+        </p>
+      )}
       <p className="text-[0.85rem] text-ink-soft">
         {n.publisher}, {fiDate(n.publishedOn)}, in {LANG[n.language] ?? n.language}; seen {when(n.seenAt, new Date(now))}
         {n.readBy ? `, read by ${n.readBy}` : ""}
       </p>
-      <a href={n.url} target="_blank" rel="noreferrer" className="display mt-0.5 block text-[1.25rem] leading-tight underline decoration-line underline-offset-2" lang={n.language}>
+      <a href={n.url} target="_blank" rel="noreferrer" className="display mt-1 block text-[1.2rem] leading-tight hover:text-petrol hover:underline" lang={n.language}>
         {n.title}
       </a>
       {n.state === "unreadable" && <p className="mt-1 text-[0.85rem]">Could not be read: {n.readError}. Retried on the next check.</p>}
@@ -443,9 +461,9 @@ function NoticeRow({ n, now }: { n: NoticeCard; now: number }) {
         </ul>
       )}
       {n.matches.length > 0 && (
-        <ul className="mt-2 space-y-1">
+        <ul className="mt-3 space-y-1.5">
           {n.matches.map((m) => (
-            <li key={m.matchId} className="border-l-4 border-petrol pl-2 text-[0.9rem]">
+            <li key={m.matchId} className="rounded-md bg-petrol-soft px-3 py-2 text-[0.9rem]">
               <span className="font-semibold">{m.productName}</span>: {m.strength === "confirmed" ? "confirmed" : "possible"} ({m.status.replaceAll("_", " ")}). {fi(m.why)}
               {m.reviewReason && m.status === "confirmed" ? <span className="block text-ink-soft">{m.reviewReason}</span> : null}
               {m.review ? <span className="block text-ink-soft">{m.review.decision === "confirm" ? "Confirmed" : "Dismissed"} by {m.review.by}: “{m.review.reason}”</span> : null}
@@ -466,14 +484,14 @@ function NoticeRow({ n, now }: { n: NoticeCard; now: number }) {
         </div>
       </Details>
       {(n.corroboration.length > 0 || n.sameAs.length > 0) && (
-        <p className="mt-1.5 flex flex-wrap gap-x-3 text-[0.88rem] text-petrol">
+        <p className="mt-2 flex flex-wrap gap-x-4 text-[0.88rem] text-petrol">
           {n.sameAs.map((x) => (
-            <a key={x.noticeId} href={x.url} target="_blank" rel="noreferrer" className="underline">
+            <a key={x.noticeId} href={x.url} target="_blank" rel="noreferrer" className="hover:underline">
               {LANG[x.language]} version
             </a>
           ))}
           {n.corroboration.map((c) => (
-            <a key={c.url} href={c.url} target="_blank" rel="noreferrer" className="underline" title={c.title}>
+            <a key={c.url} href={c.url} target="_blank" rel="noreferrer" className="hover:underline" title={c.title}>
               Also: {hostOf(c.url)} (found by Exa)
             </a>
           ))}

@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { DEMO_NOTE, PRODUCT_NAME } from "../_ui/brand";
 import { day as dayText, money, moneyShort } from "../_ui/plain";
+import { Check, CircleAlert, Quote, Sparkles } from "lucide-react";
 import { Target } from "../_ui/target";
+import { PilotLight } from "../_ui/wordmark";
 import type { OptionView, WeekRun, WeekStep } from "@/server/show/types";
 import { GatePanel, Lane } from "./gate-moment";
 import { css } from "./css";
@@ -37,7 +39,7 @@ function Header({ run, greeting, compact }: { run: WeekRun; greeting?: string; c
   return (
     <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 px-[clamp(0.9rem,2vw,2.6rem)] pt-[clamp(0.6rem,1.2vw,1.6rem)]">
       <div className="flex min-w-0 items-center gap-3">
-        <Target size={compact ? 28 : 40} tone="chalk" />
+        <PilotLight size={compact ? "1.6rem" : "clamp(1.8rem,2.4vw,3rem)"} onDark />
         <p className={`display truncate ${css.title}`}>
           {greeting ?? "A week in"} {k.name}, {k.city}
         </p>
@@ -49,7 +51,7 @@ function Header({ run, greeting, compact }: { run: WeekRun; greeting?: string; c
         <span>
           {k.house ? "No phone joined: nobody can sign" : <>Signs: <strong className="text-paper">{k.approverName}</strong>{k.passkey ? ", passkey on the phone" : ""}</>}
         </span>
-        {run.source === "recording" && <span className="bg-paper px-2 py-0.5 font-semibold text-petrol-deep">Recording of a real run{run.recordedAt ? `, ${dayText(run.recordedAt.slice(0, 10))}` : ""}</span>}
+        {run.source === "recording" && <span className="rounded-full bg-paper/[0.12] px-[0.8em] py-[0.15em] font-medium text-paper">Recording of a real run{run.recordedAt ? `, ${dayText(run.recordedAt.slice(0, 10))}` : ""}</span>}
       </div>
     </header>
   );
@@ -57,7 +59,7 @@ function Header({ run, greeting, compact }: { run: WeekRun; greeting?: string; c
 
 function Doors({ run }: { run: WeekRun }) {
   return (
-    <ol className="mt-[clamp(0.5rem,1vw,1.3rem)] grid grid-cols-6 gap-[3px] px-[clamp(0.9rem,2vw,2.6rem)]" aria-label="The week">
+    <ol className="mt-[clamp(0.5rem,1vw,1.3rem)] grid grid-cols-6 gap-[clamp(0.3rem,0.5vw,0.7rem)] px-[clamp(0.9rem,2vw,2.6rem)]" aria-label="The week">
       {run.steps.map((s, i) => {
         const now = i === run.current && run.state !== "finished";
         const gate = s.gate && (s.gate.outcome !== "auto_approve");
@@ -65,12 +67,17 @@ function Doors({ run }: { run: WeekRun }) {
           <li
             key={s.kind}
             aria-current={now ? "step" : undefined}
-            className={`relative min-w-0 px-[clamp(0.4rem,0.8vw,1rem)] py-[clamp(0.35rem,0.6vw,0.8rem)] ${now ? "bg-paper text-ink" : s.status === "ahead" ? "bg-paper/[0.06] text-paper/55" : "bg-paper/[0.14] text-paper"}`}
+            className={`relative min-w-0 overflow-hidden rounded-[clamp(10px,0.9vw,18px)] px-[clamp(0.5rem,0.9vw,1.1rem)] py-[clamp(0.4rem,0.65vw,0.85rem)] transition-colors duration-300 ${now ? "bg-paper text-ink shadow-[0_10px_30px_-12px_rgb(0_0_0/0.5)]" : s.status === "ahead" ? "bg-paper/[0.05] text-paper/50" : "bg-paper/[0.11] text-paper"}`}
           >
             <p className={`display ${css.lead}`}>{SHORT_DAY[s.day] ?? s.day}</p>
             <p className={`truncate ${css.small}`}>{s.status === "ahead" || now ? s.title : outcomeLine(s, moneyShort)}</p>
-            {gate && s.status !== "ahead" && <Target size={20} tone="safety" className="absolute right-2 top-2" title="Decided at the gate" />}
-            {now && <span aria-hidden className="absolute inset-x-0 bottom-0 h-[4px] bg-lime" />}
+            {gate && s.status !== "ahead" && <Target size={20} tone="safety" className="absolute right-[0.6vw] top-[0.6vw] size-[clamp(1rem,1.2vw,1.6rem)]" title="Decided at the gate" />}
+            {!gate && s.status === "done" && !now && (
+              <span aria-hidden className="absolute right-[0.6vw] top-[0.6vw] flex size-[clamp(1rem,1.2vw,1.6rem)] items-center justify-center rounded-full bg-lime text-ink">
+                <Check className="size-[65%]" strokeWidth={3} />
+              </span>
+            )}
+            {now && <span aria-hidden className="absolute inset-x-[clamp(0.5rem,0.9vw,1.1rem)] bottom-[0.35vw] h-[4px] rounded-full bg-lime" />}
           </li>
         );
       })}
@@ -99,18 +106,25 @@ function Bay({ step, compact }: { step: WeekStep; compact: boolean }) {
         </div>
         {step.delivery && <p className={`mt-1 text-paper/70 ${css.small}`}>For delivery {dayText(step.delivery)} (a real date: the week is compressed, the orders are not)</p>}
         {step.asked && (
-          <figure className="mt-[clamp(0.6rem,1.2vw,1.4rem)] border-l-[5px] border-paper pl-[clamp(0.6rem,1vw,1.2rem)]">
-            <figcaption className={`text-paper/70 ${css.small}`}>The kitchen</figcaption>
-            <blockquote className={`text-paper ${css.lead}`}>&ldquo;{step.asked}&rdquo;</blockquote>
+          <figure className="mt-[clamp(0.6rem,1.2vw,1.4rem)] rounded-[clamp(14px,1.2vw,24px)] bg-paper/[0.07] px-[clamp(0.8rem,1.3vw,1.6rem)] py-[clamp(0.6rem,1vw,1.3rem)]">
+            <figcaption className={`flex items-center gap-[0.4em] text-paper/65 ${css.small}`}>
+              <Quote aria-hidden className="size-[1em] text-paper/70" fill="currentColor" strokeWidth={0} />
+              The kitchen
+            </figcaption>
+            <blockquote className={`mt-[0.2em] text-paper ${css.lead}`}>&ldquo;{step.asked}&rdquo;</blockquote>
           </figure>
         )}
         {step.did.length > 0 && (
-          <div className="mt-[clamp(0.6rem,1.2vw,1.4rem)] border-l-[5px] border-lavender pl-[clamp(0.6rem,1vw,1.2rem)]">
-            <p className={`text-lavender ${css.small}`}>Its agent</p>
-            <ol className="space-y-[0.3em]">
+          <div className="mt-[clamp(0.6rem,1.2vw,1.4rem)] px-[clamp(0.8rem,1.3vw,1.6rem)]">
+            <p className={`flex items-center gap-[0.4em] text-lavender-mid ${css.small}`}>
+              <Sparkles aria-hidden className="size-[1em]" />
+              Its agent
+            </p>
+            <ol className="mt-[0.3em] space-y-[0.35em]">
               {step.did.map((d, i) => (
-                <li key={i} className={`text-paper ${css.body} ${css.lineIn}`}>
-                  {d}
+                <li key={i} className={`grid grid-cols-[1.1em_minmax(0,1fr)] gap-x-[0.5em] text-paper ${css.body} ${css.lineIn}`}>
+                  <span aria-hidden className="mt-[0.5em] size-[0.45em] rounded-full bg-lavender-mid" />
+                  <span>{d}</span>
                 </li>
               ))}
             </ol>
@@ -119,7 +133,8 @@ function Bay({ step, compact }: { step: WeekStep; compact: boolean }) {
         {step.memory.length > 0 && !compact && (
           <ul className="mt-[clamp(0.5rem,1vw,1.2rem)] flex flex-wrap gap-2">
             {step.memory.slice(0, 3).map((m) => (
-              <li key={m} className={`bg-lavender px-2 py-1 text-lavender-deep ${css.small}`}>
+              <li key={m} className={`inline-flex items-center gap-[0.4em] rounded-full bg-lavender px-[0.8em] py-[0.2em] text-lavender-deep ${css.small}`}>
+                <Sparkles aria-hidden className="size-[0.95em] shrink-0" />
                 From memory: {m}
               </li>
             ))}
@@ -135,7 +150,7 @@ function Bay({ step, compact }: { step: WeekStep; compact: boolean }) {
           <ul className={`space-y-1 text-paper/80 ${css.small}`}>
             {shownExcluded(step).slice(0, compact ? 1 : 3).map((e) => (
               <li key={e.name + e.reason}>
-                {e.simulated && <strong className="mr-2 bg-paper px-1.5 text-petrol-deep">Simulated</strong>}
+                {e.simulated && <strong className="mr-2 rounded-full bg-paper px-[0.6em] font-semibold text-petrol-deep">Simulated</strong>}
                 Left out: {e.name}: {e.reason}
               </li>
             ))}
@@ -157,10 +172,12 @@ function shownExcluded(step: WeekStep) {
 function ConcernCard({ step }: { step: WeekStep }) {
   const c = step.concern!;
   return (
-    <div className="bg-paper text-ink">
-      <div aria-hidden className="h-[4px] bg-petrol" />
-      <div className="p-[clamp(0.8rem,1.2vw,1.6rem)]">
-        <p className={`display text-petrol ${css.title}`}>{step.kind === "drift" ? "Asked before renewing" : "Stopped before any price lookup"}</p>
+    <div className={`rounded-[clamp(18px,1.6vw,32px)] bg-notice-soft text-ink ${css.slabIn}`}>
+      <div className="p-[clamp(0.9rem,1.4vw,1.8rem)]">
+        <p className={`display flex items-center gap-[0.4em] text-notice ${css.title}`}>
+          <CircleAlert aria-hidden className="size-[0.9em] shrink-0" strokeWidth={2.4} />
+          {step.kind === "drift" ? "Asked before renewing" : "Stopped before any price lookup"}
+        </p>
         <p className={`mt-1 ${css.body}`}>{c.message}</p>
         <p className={`mt-2 ${css.body}`}>
           <strong>Answer: {c.answer}.</strong> <span className="text-ink-soft">Scripted for the demo, as {c.answeredBy} would; the ledger records it as relayed by the agent.</span>
@@ -175,14 +192,14 @@ const LABEL: Record<string, string> = { best_price: "best price", lowest_carbon:
 
 function Options({ options, compact }: { options: OptionView[]; compact: boolean }) {
   return (
-    <ol className={`grid gap-[3px] ${compact ? "grid-cols-1" : "grid-cols-3"}`} aria-label="Options, good, better, best">
+    <ol className={`grid gap-[clamp(0.3rem,0.5vw,0.7rem)] ${compact ? "grid-cols-1" : "grid-cols-3"}`} aria-label="Options, good, better, best">
       {options.slice(0, compact ? 1 : 3).map((o) => (
-        <li key={o.title + o.rank} className={`relative p-[clamp(0.5rem,0.9vw,1.1rem)] ${o.chosen ? "bg-paper text-ink" : "bg-paper/[0.12] text-paper"}`}>
+        <li key={o.title + o.rank} className={`relative rounded-[clamp(12px,1.1vw,22px)] p-[clamp(0.6rem,1vw,1.2rem)] ${o.chosen ? "bg-paper text-ink" : "bg-paper/[0.08] text-paper"}`}>
           <p className={`display ${css.lead}`}>{RANK[o.rank] ?? o.rank}</p>
           <p className={`mt-0.5 line-clamp-2 ${css.small}`}>{o.title}</p>
           <p className={`display tabular mt-1 ${css.lead}`}>{money(o.totalCents)}</p>
           <p className={`${o.chosen ? "text-ink-soft" : "text-paper/75"} ${css.small}`}>{o.labels.map((l) => LABEL[l] ?? l).join(", ") || (o.match === "compromise" ? "gives something up" : "a full match")}</p>
-          {o.chosen && <span className={`absolute right-2 top-2 bg-lime px-1.5 text-ink ${css.small}`}>Chosen</span>}
+          {o.chosen && <span className={`absolute right-[0.7vw] top-[0.7vw] inline-flex items-center gap-[0.3em] rounded-full bg-lime px-[0.6em] font-semibold text-ink ${css.small}`}><Check aria-hidden className="size-[0.9em]" strokeWidth={3} />Chosen</span>}
         </li>
       ))}
     </ol>
@@ -194,10 +211,16 @@ function Summary({ run, compact }: { run: WeekRun; compact: boolean }) {
     <div className={`flex h-full min-h-0 flex-col ${css.bayIn}`}>
       <h2 className={`display ${css.day}`}>{run.state === "finished" ? "The week, done" : run.state === "cancelled" ? "The week was stopped" : "The week stopped early"}</h2>
       {run.error && <p className={`mt-2 text-paper/85 ${css.body}`}>{run.error}</p>}
-      <ol className={`mt-[clamp(0.6rem,1.2vw,1.4rem)] grid gap-[3px] ${compact ? "grid-cols-1" : "grid-cols-2 xl:grid-cols-3"}`}>
+      <ol className={`mt-[clamp(0.6rem,1.2vw,1.4rem)] grid gap-[clamp(0.4rem,0.6vw,0.8rem)] ${compact ? "grid-cols-1" : "grid-cols-2 xl:grid-cols-3"}`}>
         {run.steps.map((s) => (
-          <li key={s.kind} className="flex items-start gap-3 bg-paper/[0.1] p-[clamp(0.5rem,0.9vw,1.1rem)]">
-            {s.gate && s.gate.outcome !== "auto_approve" ? <Target size={28} tone="safety" className="mt-1 shrink-0" /> : <span aria-hidden className="mt-1 flex size-7 shrink-0 items-center justify-center bg-petrol text-paper">✓</span>}
+          <li key={s.kind} className="flex items-start gap-[0.8em] rounded-[clamp(14px,1.2vw,24px)] bg-paper/[0.08] p-[clamp(0.7rem,1.1vw,1.4rem)]">
+            {s.gate && s.gate.outcome !== "auto_approve" ? (
+              <Target size={28} tone="safety" className="mt-[0.15em] size-[clamp(1.6rem,2vw,2.6rem)] shrink-0" />
+            ) : (
+              <span aria-hidden className="mt-[0.15em] flex size-[clamp(1.6rem,2vw,2.6rem)] shrink-0 items-center justify-center rounded-full bg-lime text-ink">
+                <Check className="size-[60%]" strokeWidth={3} />
+              </span>
+            )}
             <div className="min-w-0">
               <p className={`display ${css.lead}`}>
                 {s.day}: {s.title}

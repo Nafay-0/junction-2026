@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { buttonClass } from "../../../_ui/kit";
 import { Empty, LoadError, Loading, PageHead, useOps } from "../../_ui/kit";
 
 export function Latest() {
@@ -18,8 +19,15 @@ export function Latest() {
       <LoadError message={live.error} />
       {live.data && !id ? (
         <div className="mt-4">
-          <Empty title="No request to trace yet">
-            When an agent asks for something, its trace appears here. Try the returning kitchen at <Link className="underline" href="/k/kaari">/k/kaari</Link>.
+          <Empty
+            title="No request to trace yet"
+            action={
+              <Link className={buttonClass("secondary", "sm")} href="/k/kaari">
+                Open Ravintola Kaari&apos;s shop
+              </Link>
+            }
+          >
+            When an agent asks for something, its trace appears here, station by station. The returning kitchen at /k/kaari is the quickest way to make one.
           </Empty>
         </div>
       ) : (

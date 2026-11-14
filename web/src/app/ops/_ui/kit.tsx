@@ -144,15 +144,15 @@ export function Licence({ licence }: { licence: { level: string; name: string; r
   );
 }
 
-/** Ids, codes and hashes: there when someone asks, out of the way otherwise. */
-export function Details({ summary = "Details", children, className = "" }: { summary?: string; children: ReactNode; className?: string }) {
+/** Ids, codes and hashes: there when someone asks, out of the way otherwise. `dark` on the gate's slab. */
+export function Details({ summary = "Details", children, className = "", dark = false }: { summary?: string; children: ReactNode; className?: string; dark?: boolean }) {
   return (
     <details className={`group text-[0.82rem] ${className}`}>
-      <summary className="inline-flex cursor-pointer select-none list-none items-center gap-1 rounded-full text-ink-soft hover:text-ink [&::-webkit-details-marker]:hidden">
+      <summary className={`inline-flex min-h-8 cursor-pointer select-none list-none items-center gap-1 rounded-full pr-2 [&::-webkit-details-marker]:hidden ${dark ? "text-paper/70 hover:text-paper" : "text-ink-soft hover:text-ink"}`}>
         <ChevronRight aria-hidden size={14} className="transition-transform duration-150 group-open:rotate-90 motion-reduce:transition-none" />
         <span>{summary}</span>
       </summary>
-      <div className="mt-2 space-y-1 break-all rounded-md bg-surface px-3 py-2 font-mono text-[0.75rem] leading-relaxed text-ink-soft">{children}</div>
+      <div className={`mt-1.5 space-y-1 break-all rounded-md px-3 py-2 font-mono text-[0.75rem] leading-relaxed ${dark ? "bg-paper/8 text-paper/75" : "bg-surface text-ink/85"}`}>{children}</div>
     </details>
   );
 }
@@ -160,8 +160,8 @@ export function Details({ summary = "Details", children, className = "" }: { sum
 export function KV({ k, v }: { k: string; v: ReactNode }) {
   return (
     <div className="flex gap-2">
-      <span className="shrink-0 text-ink-soft/80">{k}</span>
-      <span className="text-ink">{v}</span>
+      <span className="shrink-0 opacity-75">{k}</span>
+      <span>{v}</span>
     </div>
   );
 }

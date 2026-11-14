@@ -10,7 +10,7 @@ import {
   type ServerContext,
 } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { DockError } from "@/core/orders";
+import { DockError, type AgentSession } from "@/core/orders";
 import { resolveKitchen } from "../console-kitchens";
 import { authenticate, errorBody } from "../http";
 import { getRuntime, type Runtime } from "../runtime";
@@ -168,6 +168,17 @@ export function humanChannel(ctx?: Pick<ServerContext, "mcpReq">): HumanChannel 
 }
 
 /**
+ * One tool of the published table, run for a session that is already authenticated (and admitted). The MCP door and
+ * the kitchen's own on-site agent (server/thread/tools.ts) both come through here, so the store's agent is one more
+ * client of the same tools and the same gate. Throws DockError on a refusal; the caller shapes it.
+ */
+export async function callTool(rt: Runtime, session: AgentSession, tool: DockTool, args: unknown, human: HumanChannel = { canAsk: false }, defaultBy?: string): Promise<Record<string, unknown> | AskHuman> {
+  const agentKey = `${session.mandate.issuer.orgId}:${session.agentId}`;
+  const run = tool.run as (ctx: Parameters<DockTool["run"]>[0], args: unknown) => Promise<Record<string, unknown> | AskHuman>;
+  return run({ dock: rt.dock, session, guard: guardFor(rt), agentKey, human, defaultBy }, args);
+}
+
+/**
  * Authenticate the caller, run one tool, and shape the result. Never throws a DockError.
  * Through a connector address the credential is the kitchen's own mandate and agent id, held on the server; the
  * request's headers are ignored. The call is then counted against the address's limits and, when it opens a
@@ -187,11 +198,9 @@ export async function runTool(
     const session = await authenticate(via ? connectorCredentials(via) : (req ?? new Request("http://dock.invalid/")), dock);
     agentId = session.agentId;
     session.door = via ? "connector" : "mcp"; // which door a request it opens came through (core/orders.ts Door)
-    const agentKey = `${session.mandate.issuer.orgId}:${session.agentId}`;
     const counted = via && COUNTED[tool.name];
     if (via && counted) via.service.limiter.hit(via.connector.connectorId, counted);
-    const run = tool.run as (ctx: Parameters<DockTool["run"]>[0], args: unknown) => Promise<Record<string, unknown> | AskHuman>;
-    const out = await run({ dock, session, guard: guardFor(rt), agentKey, human, defaultBy: via && `${via.kitchen.by}, through the kitchen's connector` }, args);
+    const out = await callTool(rt, session, tool, args, human, via && `${via.kitchen.by}, through the kitchen's connector`);
     if (out instanceof AskHuman) return out.result;
     // A client that cannot ask the buyer itself: hand the buyer Dock's own one-time answer page (server/answer-links.ts).
     const step = out.step as IntakeView | undefined;

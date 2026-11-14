@@ -5,8 +5,9 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   // src/proxy.ts makes Next.js buffer request bodies; cap that buffer (Dock's JSON bodies are at most 64 KB).
   experimental: { proxyClientMaxBodySize: "128kb" },
-  // The partner catalogue index is read with fs at runtime; ship it with the server functions when it was built.
-  outputFileTracingIncludes: { "/*": ["./.data/valio/**/*"] },
+  // Read with fs at runtime, so shipped with the server functions: the partner catalogue index when it was built,
+  // and the published crash-test results (the wall and the Agents page show them on a server that ran none itself).
+  outputFileTracingIncludes: { "/*": ["./.data/valio/**/*", "./src/crash/results/*.json"] },
   partialPrefetching: true,
   turbopack: {
     rules: {

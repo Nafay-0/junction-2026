@@ -14,7 +14,7 @@ import { groundField, groundText, type CheckOptions, type Facts, type Grounded, 
  *   memory     memory proposals the writer model made (an item whose words the interaction does not back)
  *   aiven      the Aiven agent's and the operations copilot's transcript in the operations portal
  */
-export const GROUNDING_SURFACES = ["assistant", "voice", "menu", "interpret", "memory", "aiven"] as const;
+export const GROUNDING_SURFACES = ["assistant", "voice", "menu", "interpret", "memory", "aiven", "thread"] as const;
 export type GroundingSurface = (typeof GROUNDING_SURFACES)[number];
 
 export type GroundingFire = { at: string; surface: GroundingSurface; kinds: Violation["kind"][]; said: string[]; where?: string };

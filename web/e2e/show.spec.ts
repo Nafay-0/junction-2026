@@ -31,8 +31,24 @@ async function wallSignedIn(browser: Browser, path: string, size = { width: 1920
   const wall = await ctx.newPage();
   const enter = await wall.request.post("/ops-api/session", { data: { passcode: process.env.DOCK_OPS_PASSCODE || undefined, name: "E2E presenter" } });
   expect(enter.ok()).toBe(true);
+  if (path === "/present/table") await untilNoFreshKitchen(wall);
   await wall.goto(path);
   return { ctx, wall };
+}
+
+/**
+ * Table mode greets a kitchen made up to a minute before the wall opened (a visitor who scanned just before). Run
+ * after the other spec files, their visitor kitchens are that fresh, so the wall would open on their week instead of
+ * the QR code. Wait until every visitor kitchen on the server is older than that window.
+ */
+async function untilNoFreshKitchen(wall: Page) {
+  for (let i = 0; i < 75; i++) {
+    const r = await wall.request.get("/ui-api/show/kitchens");
+    const { kitchens, now } = (await r.json()) as { kitchens: { createdAt: string; passkey?: boolean; house?: boolean }[]; now: string };
+    const newest = Math.max(0, ...kitchens.filter((k) => k.passkey && !k.house).map((k) => Date.parse(k.createdAt)));
+    if (Date.parse(now) - newest > 62_000) return;
+    await wall.waitForTimeout(1000);
+  }
 }
 
 test.describe.configure({ timeout: 240_000 });

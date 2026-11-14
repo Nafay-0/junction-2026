@@ -98,6 +98,10 @@ Operations (`ops/_ui/`): `PageHead`, `Section`, `Panel`, `LiveMark`, `Outcome`, 
 on a phone each row becomes a small card and every cell is labelled with its column heading, automatically),
 `Stamp`, `CountBar`, `Funnel`, `CheckGrid`. The time machine's slider (`(desk)/time-machine/time-machine.tsx`) marks each
 moment a rule changed, shaped by kind, with the order as a pointer and the lime thumb as the one action.
+`Table inset` sits inside a card (the inner-panel radius); `CheckGrid dark` sets the checks on the gate's slab and
+`stagger` lets them arrive one by one; `Details dark` reads on the slab. `.range` (globals) is the scrubber: a rounded
+track filled to the thumb (`--fill`), a white thumb ringed in petrol. On a phone a `Table` cell with several lines
+keeps them all beside its label.
 
 ## 6. Images
 
@@ -210,7 +214,18 @@ gets an icon in `ICON` (a ring shows until it has one).
 **Phone pages** (`_ui/phone.tsx`, `PhoneShell`): a white top bar, one column, the main action held at the bottom
 edge under the thumb. The sign-off (`approve/`) is the product's signature: the gate's slab with the hazard band
 (who asks, the total, delivery), the rule that stopped it, the exact lines in one card, Face ID to approve; once
-decided it ends on a stamp and the band is gone. **The wall** (`_wall/`) inherits the tokens and the type.
+decided it ends on a stamp and the band is gone.
+
+**The trace** (`ops/(desk)/trace/`): one request as a vertical story. A sticky transport card (the station strip,
+lime play, icon steps, the scrubber; on a phone the strip is the scrubber), then a marker per station on a line and,
+when open, a card in the thread's anatomy (a mark and the kind, the title, the content, the ledger entry). The gate
+that stops an order or hands it to a person is the slab itself, its checks on it; a calm pass is a white card.
+
+**The wall** (`_wall/`) and **the show** (`_show/`) are petrol-deep: soft panels (`paper` at 4 to 8 %, a hairline
+ring, radius scaled in `vw`), every size in `vw` / `clamp` so 1080p and 4K read the same from three metres. The gate
+is a rounded hazard post on the wall and, in the show, one slab whose top band is the barrier (its arms close while
+held and lift once signed) with the sign-off inside it. What passed is lime; the anomaly is `notice`, never yellow;
+the product's pilot light, not `Target`, stands beside the name. Each keeps its reduced-motion variant.
 
 **Store pages** follow Home: a `PageHeader` (no box), then sections. The catalogue's tiles are cards with the
 picture full bleed, two to a row on a phone with a round add button; on a phone the departments and the filters are
