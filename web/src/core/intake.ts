@@ -782,7 +782,8 @@ export function createIntakeFlow(deps: IntakeDeps) {
       if (!allowed.includes(family)) {
         // Product groups by name, never a category code ("dairy and cheese", not "cat 10418").
         // Named categories by their words, the rest by their product group ("dairy and cheese", never "cat 10418").
-        const groups = [...new Set(allowed.map((c) => (c.startsWith("cat_") ? departmentOf(c) : c.replaceAll("_", " "))).filter((g): g is string => !!g))];
+        const coded = new Set(allowed.filter((c) => c.startsWith("cat_")).map(departmentOf));
+        const groups = [...new Set(allowed.map((c) => (c.startsWith("cat_") ? departmentOf(c) : coded.has(departmentOf(c)) ? departmentOf(c) : c.replaceAll("_", " "))).filter((g): g is string => !!g))];
         const theirs = family.startsWith("cat_") ? departmentOf(family) : undefined;
         return view(
           await refuseUpFront(
