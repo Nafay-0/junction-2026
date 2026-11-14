@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { approvalState } from "../support/dock";
-import { note, openApproval, PHONE, settle } from "../support/a11y-kit";
+import { note, openApproval, openStage, PHONE, settle } from "../support/a11y-kit";
 
 /**
  * Keyboard only (Tab, Shift+Tab, Enter, Space; no mouse, no fill): complete an order on the store's order lane
@@ -32,7 +32,7 @@ async function tabTo(page: Page, re: RegExp, nth = 1, max = 120): Promise<number
 }
 
 test("order lane: request to gate with the keyboard only", async ({ page }) => {
-  await page.goto("/k/kaari/order");
+  await openStage(page, "/k/kaari/order");
   await expect(page.getByRole("button", { name: "Write a request" })).toBeVisible();
   await settle(page);
   const log: string[] = [];
@@ -48,11 +48,16 @@ test("order lane: request to gate with the keyboard only", async ({ page }) => {
     expect(page.getByRole("button", { name: "Use the offline example reader" })).toBeVisible({ timeout: 20_000 }),
   );
   await step("offline example reader", /^Use the offline example reader$/, " ", () => expect(page.getByRole("button", { name: "Yes, I meant that" })).toBeVisible({ timeout: 20_000 }));
-  // One concern at a time; on a shared server a second one can follow ("you already asked a moment ago").
+  // One concern at a time; on a shared server a second one can follow ("you already asked a moment ago"). Tab to
+  // whichever comes first, a concern's "Yes, I meant that" or the first option, until it is an option.
   const options = page.getByRole("button", { name: "Get a fixed price for this" }).filter({ visible: true });
-  const yes = page.getByRole("button", { name: "Yes, I meant that" }).filter({ visible: true });
-  for (let n = 1; n <= 3 && !(await options.count()); n++)
-    await step(`mistake check ${n}`, /^Yes, I meant that$/, "Enter", () => expect(options.nth(2).or(yes.first())).toBeVisible({ timeout: 20_000 }));
+  for (let n = 1; n <= 4; n++) {
+    await page.waitForTimeout(800);
+    const presses = await tabTo(page, /^(Yes, I meant that|Get a fixed price for this)$/);
+    if ((await focusedName(page)) !== "Yes, I meant that") break;
+    await page.keyboard.press("Enter");
+    log.push(`mistake check ${n}: ${presses} Tab presses, Enter; focus afterwards: ${await focusedName(page)}`);
+  }
   await expect(options.nth(2)).toBeVisible({ timeout: 20_000 });
   await step("third option (best)", /^Get a fixed price for this$/, " ", () => expect(page.getByRole("button", { name: "Place the order" })).toBeVisible({ timeout: 20_000 }), 3);
   await step("place the order", /^Place the order$/, "Enter", () =>

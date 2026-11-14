@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, type TestInfo } from "@playwright/test";
-import { addPasskey, askForMilkAndWaitForSignOff, enterOps, joinAsApprover } from "./dock";
+import { addPasskey, askForMilkAndWaitForSignOff, enterOps, joinAsApprover, signInStage } from "./dock";
 
 /**
  * Shared pieces for e2e/a11y (accessibility, legibility) and e2e/visual (screenshot comparison):
@@ -30,8 +30,14 @@ export type Target = {
   open: (page: Page) => Promise<void>;
 };
 
-const go = (path: string, ready?: (page: Page) => Promise<unknown>) => async (page: Page) => {
+/** The stage kitchens are private: sign in as kaari before any /k/kaari page. */
+export async function openStage(page: Page, path: string): Promise<void> {
+  if (path.startsWith("/k/kaari")) await signInStage(page, "kaari");
   await page.goto(path);
+}
+
+const go = (path: string, ready?: (page: Page) => Promise<unknown>) => async (page: Page) => {
+  await openStage(page, path);
   if (ready) await ready(page);
   await settle(page);
 };
@@ -134,7 +140,7 @@ export type Known = {
   pages: string[] | "*";
   rule: string;
   /** Every offending node's HTML must contain this, so a new offender of the same rule still fails. */
-  match?: string;
+  match?: string | string[];
   /** No more offending nodes than this on one page. */
   maxCount?: number;
   reason: string;
@@ -148,7 +154,7 @@ export const knownFor = (f: Finding, known: Known[]) =>
       k.rule === f.rule &&
       (k.pages === "*" || k.pages.includes(f.page)) &&
       (k.maxCount === undefined || f.count <= k.maxCount) &&
-      (!k.match || f.examples.every((e) => e.html.includes(k.match!))),
+      (!k.match || f.examples.every((e) => [k.match!].flat().some((m) => e.html.includes(m)))),
   );
 
 export const isBlocking = (f: Finding) => f.impact === "serious" || f.impact === "critical";

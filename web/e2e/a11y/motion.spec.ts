@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { confirmConcerns, note, PHONE, runningMotion, WALL, type Running } from "../support/a11y-kit";
+import { confirmConcerns, note, openStage, PHONE, runningMotion, WALL, type Running } from "../support/a11y-kit";
 
 /**
  * Reduced motion. With the system set to "reduce motion", the wall and the store's order lane must not run CSS
@@ -33,7 +33,7 @@ test("wall and order lane run no motion longer than 0.1 s when reduced motion is
 
   await page.setViewportSize(PHONE);
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/k/kaari/order");
+  await openStage(page, "/k/kaari/order");
   expect(await page.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches)).toBe(true);
   const pages = { wall, lane: page };
   const seen = new Map<string, Running & { page: string }>();

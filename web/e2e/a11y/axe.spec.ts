@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
-import { animationsDone, audit, confirmConcerns, note, splitKnown, TARGETS, unnamedControls, VIEWPORT, type Finding } from "../support/a11y-kit";
+import { animationsDone, audit, confirmConcerns, note, splitKnown, TARGETS, unnamedControls, VIEWPORT, openStage, type Finding } from "../support/a11y-kit";
 import { KNOWN } from "./known-violations";
 
 /**
@@ -46,7 +46,7 @@ for (const t of TARGETS) {
 
 test("axe: order lane with options on screen (phone)", async ({ page }) => {
   await page.setViewportSize(VIEWPORT.phone);
-  await page.goto("/k/kaari/order");
+  await openStage(page, "/k/kaari/order");
   await page.getByRole("button", { name: "1,000 litres of lactose-free milk by Monday" }).filter({ visible: true }).first().click();
   await page.getByRole("button", { name: "Use the offline example reader" }).filter({ visible: true }).first().click();
   await confirmConcerns(page);

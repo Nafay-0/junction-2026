@@ -2,7 +2,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { addPasskey, askForMilkAndWaitForSignOff, enterOps } from "../support/dock";
-import { DIGIT_REWRITES, literal, settle, steadyText, TIME_REWRITES, VIEWPORT, type Rewrite, type Size } from "../support/a11y-kit";
+import { DIGIT_REWRITES, literal, openStage, settle, steadyText, TIME_REWRITES, VIEWPORT, type Rewrite, type Size } from "../support/a11y-kit";
 import { wallFixture } from "./wall-fixture";
 
 /**
@@ -97,7 +97,7 @@ for (const size of ["phone", "laptop"] as Size[])
   for (const s of STORE)
     test(`store ${s.id} (${s.path}) at ${size} size`, async ({ page }) => {
       await page.setViewportSize(VIEWPORT[size]);
-      await page.goto(s.path);
+      await openStage(page, s.path);
       if (s.ready) await expect(s.ready(page)).toBeVisible();
       await settle(page, 1200);
       const chart = page.getByText(/^Euros a week/).locator("xpath=..");
