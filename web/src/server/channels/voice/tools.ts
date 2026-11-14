@@ -63,8 +63,11 @@ export async function runTool(kitchen: string, input: unknown, req?: Request): P
   const spoken = body.heard?.text ? languageOf(body.heard.text) : undefined;
   if (call && spoken && (body.heard?.text ?? "").trim().split(/\s+/).length >= 2) call.desk.lang = spoken;
   const lang = call?.desk.lang;
+  if (lang === "sv" && (input as { via?: string }).via !== "typed") reply.forModel = { speakIn: "English", ...reply.forModel };
   // Only for the voice model: a typed call shows AimoPilot's sentence on screen as it is.
-  if (lang && lang !== "en" && (input as { via?: string }).via !== "typed") reply.forModel = { speakIn: LANGUAGE_NAME[lang], ...reply.forModel, say: `(Say this in ${LANGUAGE_NAME[lang]}:) ${reply.forModel.say}` };
+  // Finnish is answered in Finnish; Swedish is understood but answered in English (measured: the model answered a
+  // Swedish caller in Swedish only 4 times in 7, so the screen promises English and the agent is told so).
+  if (lang === "fi" && (input as { via?: string }).via !== "typed") reply.forModel = { speakIn: LANGUAGE_NAME[lang], ...reply.forModel, say: `(Say this in ${LANGUAGE_NAME[lang]}:) ${reply.forModel.say}` };
   return reply;
 }
 
@@ -108,8 +111,16 @@ async function runToolInner(kitchen: string, input: unknown, req?: Request): Pro
         return fromStep(call, await respond(a, current(call), str(body.args, "key"), str(body.args, "choice"), "voice", via, heard), heard);
       case "answer_question":
         return fromStep(call, await answer(a, current(call), str(body.args, "questionId"), str(body.args, "optionId"), "voice", via, heard), heard);
-      case "choose_option":
-        return fromStep(call, await choose(a, current(call), str(body.args, "optionId"), "voice", via, heard), heard);
+      case "choose_option": {
+        // As in the thread (a tapped or spoken choice orders it): the price is fixed and the order goes straight to
+        // the gate, which places it or sends it to a named person. No second "place it?" question.
+        const step = await choose(a, current(call), str(body.args, "optionId"), "voice", via, heard);
+        if (step.state !== "quoted") return fromStep(call, step, heard);
+        call.desk.requestId = step.requestId;
+        const order = await place(a, step.requestId, "voice", heard);
+        call.desk.orderId = order.orderId;
+        return { forModel: orderForModel(order), screen: { order, step: await getStep(a, step.requestId), heard: heard?.text } };
+      }
       case "place_order": {
         const order = await place(a, current(call), "voice", heard);
         call.desk.orderId = order.orderId;

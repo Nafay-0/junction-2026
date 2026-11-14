@@ -4,7 +4,7 @@ import type { NeedInput } from "@/core/need";
 import { recordGroundingChecks } from "../../grounding";
 import { recordLlmSpend } from "../../limits";
 import { LIVE_PRICE, type CallMode } from "./live";
-import { REALTIME_PRICE } from "./realtime";
+import { REALTIME_PRICE, hangupRealtimeCall } from "./realtime";
 
 /** What a call cost at list prices, from the screen's usage report; at least one minute of each way when unknown. */
 export function callCostUsd(c: Pick<Call, "usage" | "startedAt" | "endedAt" | "expiresAt" | "model">): number {
@@ -61,6 +61,8 @@ export type Call = {
   usage?: { audioInSeconds: number; audioOutSeconds: number; promptTokens: number; responseTokens: number; costUsd?: number };
   /** The voice model this call runs on (set when its session is minted). */
   model?: string;
+  /** OpenAI over WebRTC: the session this server set up, and the call id it hangs up at the time limit. */
+  rtc?: { session: unknown; callId?: string; timer?: ReturnType<typeof setTimeout> };
   grounding: { checked: number; dropped: number };
   desk: Desk;
 };
@@ -164,10 +166,31 @@ export class CallRegistry {
   end(callId: string, kitchen: string, reason: string): Call | undefined {
     const c = this.calls.get(callId);
     if (!c || c.kitchen !== kitchen) return undefined;
+    if (c.rtc?.callId && c.endedAt === undefined) {
+      clearTimeout(c.rtc.timer);
+      void hangupRealtimeCall(c.rtc.callId);
+    }
     if (c.endedAt === undefined && c.mode !== "typed") recordLlmSpend(callCostUsd(c));
     c.endedAt ??= this.now();
     c.endReason ??= reason.slice(0, 80);
     return c;
+  }
+
+  /**
+   * The browser's WebRTC offer for an OpenAI call: answered through OpenAI with this call's session, once, while the
+   * call is live; the session is hung up at the call's time limit by this server, whatever the browser does.
+   */
+  async connectRtc(callId: string, kitchen: string, sdp: string, create: (session: unknown, sdp: string) => Promise<{ answer: string; callId: string }>): Promise<string> {
+    const c = this.calls.get(callId);
+    if (!c || c.kitchen !== kitchen || !c.rtc) throw new DockError(404, "call_not_found", "No such call for this kitchen. Start a new call.");
+    if (!this.live(c)) throw new DockError(410, "call_over", "This call has ended. Start a new call, or type the request.");
+    if (c.rtc.callId) throw new DockError(409, "call_connected", "This call is already connected. Start a new call.");
+    const r = await create(c.rtc.session, sdp);
+    c.rtc.callId = r.callId;
+    const left = Math.max(1000, c.expiresAt - this.now());
+    c.rtc.timer = setTimeout(() => this.end(c.callId, c.kitchen, "time limit"), left);
+    (c.rtc.timer as { unref?: () => void }).unref?.();
+    return r.answer;
   }
 
   get(callId: string): Call | undefined {

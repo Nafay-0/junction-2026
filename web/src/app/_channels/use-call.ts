@@ -123,6 +123,8 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
   const wake = useRef<{ release: () => Promise<void> } | null>(null);
   const stopRing = useRef<(() => void) | null>(null);
   const reconnects = useRef(0);
+  /** The agent's voice started or stopped: from our own playback (Gemini) or the provider's (OpenAI over WebRTC). */
+  const speaking = useRef<(on: boolean) => void>(() => {});
   /** `dial` calls itself (another provider, a reconnect); through a ref, since it is declared with useCallback. */
   const dialRef = useRef<(mode: Mode, carryFrom: string | undefined, a: CallAudio, why: { avoid?: string; reconnect?: boolean }) => Promise<void>>(async () => {});
   const warned = useRef(false);
@@ -237,6 +239,7 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
       if (!fresh.length) return;
       for (const x of fresh) s.flagged.add(`${x.kind}:${x.said}`);
       audio.current?.stopPlayback();
+      sock.current?.stopSpeaking?.();
       grounding.current.dropped += 1;
       patchLine(s.id, (l) => ({ ...l, dropped: [...(l.dropped ?? []), ...fresh.map((x) => x.said)] }));
       set({ grounding: { ...grounding.current } });
@@ -350,7 +353,21 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
         reconnects.current = 0;
         onReady();
       };
-      s = live.provider === "openai" ? new RealtimeSocket(live.wsUrl, live.token, live.model, ev) : new LiveSocket(live.wsUrl, live.token, live.model, ev);
+      const rtc =
+        live.transport === "webrtc"
+          ? {
+              stream: a.micStream!,
+              handsFree: modeRef.current === "hands_free",
+              play: (remote: MediaStream) => a.playStream(remote),
+              offer: async (sdp: string) => {
+                const r = await post<{ sdp: string }>(`${base}/call/${start.callId}`, { op: "rtc", sdp });
+                if (!r.ok || !r.data.sdp) throw new Error(r.data.error?.message ?? "the voice service did not answer");
+                return r.data.sdp;
+              },
+            }
+          : undefined;
+      ev.onSpeaking = (on) => speaking.current(on);
+      s = live.provider === "openai" ? new RealtimeSocket(live.wsUrl, live.token, live.model, ev, rtc) : new LiveSocket(live.wsUrl, live.token, live.model, ev);
       sock.current = s;
       const ends = Date.parse(start.expiresAt);
       timers.current.push(
@@ -458,16 +475,24 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
       set({ phase: "ringing", mode, lines: [], notice: undefined, problem: undefined, micProblem: undefined, endReason: undefined, talking: false, latched: false, thinking: false, paused: false, grounding: { checked: 0, dropped: 0 } });
       let a: CallAudio;
       try {
+        speaking.current = (on: boolean) => {
+          set({ agentSpeaking: on });
+          // Hands-free on a phone: half-duplex, so the speaker never feeds the agent its own voice.
+          if (modeRef.current === "hands_free" && audio.current) {
+            if (on) {
+              audio.current.setSending(false);
+              sock.current?.setSending?.(false);
+            } else
+              window.setTimeout(() => {
+                if (!audio.current || audio.current.speaking) return;
+                audio.current.setSending(true);
+                sock.current?.setSending?.(true);
+              }, 300);
+          }
+        };
         a = new CallAudio(
           (b64) => sock.current?.audio(b64),
-          (speaking) => {
-            set({ agentSpeaking: speaking });
-            // Hands-free on a phone: half-duplex, so the speaker never feeds the agent its own voice.
-            if (modeRef.current === "hands_free" && audio.current) {
-              if (speaking) audio.current.setSending(false);
-              else window.setTimeout(() => audio.current && !audio.current.speaking && audio.current.setSending(true), 300);
-            }
-          },
+          (on) => speaking.current(on),
         );
         audio.current = a;
         stopRing.current = a.ring();
@@ -647,5 +672,10 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
     return startTyped(undefined, say().typing, id);
   }, [base, cleanup, startTyped, say]);
 
-  return { view: v, status: statusOf(v), call, hangUp, typeInstead, pressTalk, releaseTalk, resume, typed, tap, callId: () => callId.current, level: () => audio.current?.level ?? 0 };
+  /** Tell the agent something that happened on the screen (a card tapped in the thread), without a caller turn. */
+  const note = useCallback((text: string) => {
+    if (sock.current?.open) sock.current.text(`[AimoPilot update] ${text}`);
+  }, []);
+
+  return { view: v, status: statusOf(v), call, hangUp, typeInstead, pressTalk, releaseTalk, resume, typed, tap, note, callId: () => callId.current, level: () => audio.current?.level ?? 0 };
 }

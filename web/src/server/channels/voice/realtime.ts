@@ -98,3 +98,44 @@ export async function mintRealtimeSecret(session: ReturnType<typeof realtimeSess
   if (!res.ok || !body.value) throw new DockError(res.status === 429 ? 429 : 503, res.status === 429 ? "voice_rate_limited" : "voice_unavailable", `The voice service refused to start a call (${res.status}${body.error?.message ? `: ${body.error.message.slice(0, 200)}` : ""}). Type the request instead.`);
   return { token: body.value, expiresAt: new Date(now + opts.seconds * 1000).toISOString(), startBy: new Date(now + 60_000).toISOString() };
 }
+
+// ---------- WebRTC set up by this server: the session can be ended here ----------
+
+const CALLS_URL = "https://api.openai.com/v1/realtime/calls";
+
+/**
+ * The browser's WebRTC offer, answered through this server ("unified interface", docs: realtime-webrtc): the
+ * session configuration and the API key stay here, and the call id OpenAI returns lets this server hang the
+ * session up (POST /v1/realtime/calls/{id}/hangup, which ends WebRTC sessions too) at the call's time limit, the
+ * same bound Gemini's token enforces. The browser never holds a key that could open or prolong a session.
+ */
+export async function createRealtimeCall(session: ReturnType<typeof realtimeSession>, sdp: string, opts: { apiKey?: string; fetchImpl?: typeof fetch } = {}): Promise<{ answer: string; callId: string }> {
+  const apiKey = opts.apiKey ?? process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new DockError(503, "voice_unavailable", "Voice calls are not configured on this server (no OpenAI API key). Type the request instead.");
+  const fd = new FormData();
+  fd.set("sdp", sdp);
+  fd.set("session", JSON.stringify(session));
+  let res: Response;
+  try {
+    res = await (opts.fetchImpl ?? fetch)(CALLS_URL, { method: "POST", headers: { authorization: `Bearer ${apiKey}` }, body: fd, signal: AbortSignal.timeout(10_000) });
+  } catch {
+    throw new DockError(503, "voice_unavailable", "The voice service did not answer. Type the request instead.");
+  }
+  const text = await res.text();
+  if (!res.ok) throw new DockError(res.status === 429 ? 429 : 503, res.status === 429 ? "voice_rate_limited" : "voice_unavailable", `The voice service refused to start a call (${res.status}: ${text.slice(0, 200)}). Type the request instead.`);
+  const callId = (res.headers.get("location") ?? "").split("/").filter(Boolean).at(-1) ?? "";
+  if (!/^rtc_[\w-]+$/.test(callId)) throw new DockError(503, "voice_unavailable", "The voice service did not return a call id, so this server could not bound the call. Type the request instead.");
+  return { answer: text, callId };
+}
+
+/** End an OpenAI realtime call from this server. Never throws: a call already over is fine. */
+export async function hangupRealtimeCall(callId: string, opts: { apiKey?: string; fetchImpl?: typeof fetch } = {}): Promise<boolean> {
+  const apiKey = opts.apiKey ?? process.env.OPENAI_API_KEY;
+  if (!apiKey || !/^rtc_[\w-]+$/.test(callId)) return false;
+  try {
+    const res = await (opts.fetchImpl ?? fetch)(`${CALLS_URL}/${callId}/hangup`, { method: "POST", headers: { authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000) });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
