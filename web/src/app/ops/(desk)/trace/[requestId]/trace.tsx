@@ -195,6 +195,7 @@ function Trace({ t, error }: { t: TraceView; error?: string }) {
               <span className="font-semibold">{t.orgName}</span>
               <span className="text-ink-soft">{t.agentLabel}</span>
               <ViaTag via={t.via} />
+              {t.doorText && <span className="text-ink-soft">through {t.doorText}</span>}
               <Licence licence={t.licence} />
               <span className="text-ink-soft tabular">
                 {stamp(t.startedAt)}, {n} step{n === 1 ? "" : "s"} in {span(Date.parse(t.endedAt) - t0)}
@@ -257,7 +258,7 @@ function Trace({ t, error }: { t: TraceView; error?: string }) {
         <aside className="space-y-4 xl:sticky xl:top-[9.5rem] xl:max-h-[calc(100dvh-10.5rem)] xl:self-start xl:overflow-y-auto">
           <Panel rule className="px-4 py-4">
             <h2 className="display text-[1.3rem]">What the live price service saw</h2>
-            <p className="mt-1 text-[0.88rem] leading-snug text-ink-soft">The partner&apos;s live price service is metered. Dock narrows the catalogue in master data first and asks live prices only for a short list.</p>
+            <p className="mt-1 text-[0.88rem] leading-snug text-ink-soft">The partner&apos;s live price service is metered. AimoPilot narrows the catalogue in master data first and asks live prices only for a short list.</p>
             <div className="mt-3">
               <Funnel catalogue={t.catalogueSize} considered={!replaying || consideredReached ? t.considered : undefined} priced={replaying ? pricedSoFar : t.priced} />
             </div>

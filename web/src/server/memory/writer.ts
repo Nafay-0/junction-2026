@@ -1,6 +1,7 @@
 import type { KitchenProfile } from "@/core/kitchen";
 import { answerConfirmation, decide, respondToCitedItems, type Outcome } from "./decide";
 import type { Candidate, Interaction } from "./model";
+import { groundProposals } from "./grounding";
 import { toCandidate, worthReading, type Proposer } from "./propose";
 import { fromEvents, fromHistory } from "./signals";
 
@@ -8,7 +9,8 @@ import { fromEvents, fromHistory } from "./signals";
  * The memory writer: after every interaction, through every door. Order of work:
  *   1. a mistake check that cited memory and was answered: confirm or weaken the cited items
  *   2. candidates made by code: taps, answers, substitutes, and patterns in the order history
- *   3. candidates proposed by the model from the person's words (only when there are words)
+ *   3. candidates proposed by the model from the person's words (only when there are words), their free text
+ *      checked against those words (grounding.ts)
  *   4. plain code decides each one (decide.ts)
  * The model's failure is reported and changes nothing else.
  */
@@ -36,7 +38,8 @@ export async function writeMemory(profile: KitchenProfile, interaction: Interact
     const families = [...new Set(p.history.map((h) => h.family))];
     const res = await opts.proposer({ interaction, families });
     model = { id: res.model, ms: res.ms, costUsd: res.costUsd, ...(res.error ? { error: res.error } : {}), proposed: res.raw.candidates.length };
-    candidates.push(...res.raw.candidates.map((c) => toCandidate(c)));
+    // The model's own words around each proposal must be backed by what the person said (grounding check).
+    candidates.push(...groundProposals(res.raw.candidates.map((c) => toCandidate(c)), interaction).kept);
   }
   const d = decide(p, candidates, interaction, opts.now);
   outcomes.push(...d.outcomes);

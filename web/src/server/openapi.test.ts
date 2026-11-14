@@ -11,6 +11,8 @@ import { DEMO_ORG, demoMandate, demoOrgKeyPair } from "./dev-fixtures";
 import { localFetch } from "./local-transport";
 import { API, UNDOCUMENTED_ROUTES, buildOpenApi } from "./openapi";
 import { resetRuntime } from "./runtime";
+import { setInterpretModelForTests } from "./agent/interpret";
+import { scriptedModel } from "./agent/testing";
 
 const BASE = "https://dock.test";
 const V1 = join(__dirname, "..", "app", "api", "v1");
@@ -39,6 +41,23 @@ describe("OpenAPI document", () => {
     const onDisk = (await routesOnDisk()).filter((r) => !UNDOCUMENTED_ROUTES.some((u) => r.endsWith(" " + u)));
     const documented = API.map((op) => `${op.method} ${op.path}`).sort();
     expect(documented).toEqual(onDisk);
+  });
+
+  it("marks the buyer's own answers and tags approver operations, which the agent view leaves out", async () => {
+    type Doc = { paths: Record<string, Record<string, { operationId: string; tags: string[]; "x-dock-audience": string; "x-dock-human-input"?: { required: boolean; from: string } }>> };
+    const ops = (d: Doc) => Object.values(d.paths).flatMap((p) => Object.values(p));
+    const all = ops(buildOpenApi(BASE) as unknown as Doc);
+    expect(all.filter((o) => o["x-dock-human-input"]).map((o) => o.operationId).sort()).toEqual(["answerQuestions", "respondToConcerns"]);
+    expect(all.find((o) => o.operationId === "respondToConcerns")!["x-dock-human-input"]).toMatchObject({ required: true, from: "buyer" });
+    const approver = all.filter((o) => o["x-dock-audience"] === "approver").map((o) => o.operationId);
+    expect(approver).toEqual(expect.arrayContaining(["decideApproval", "approvalChallenge", "approvalLink", "beginJoin", "completeJoin", "approverDemoOrder", "sandboxDemoOrder", "listSandboxes"]));
+    for (const o of all) expect(o.tags).toEqual([o["x-dock-audience"]]);
+    expect(all.find((o) => o.operationId === "placeOrder")!["x-dock-audience"]).toBe("agent");
+    const res = await openapiRoute(new Request(`${BASE}/api/v1/openapi.json?audience=agent`));
+    const agentOps = ops((await res.json()) as Doc).map((o) => o.operationId);
+    expect(agentOps).toContain("openIntake");
+    for (const id of approver) expect(agentOps).not.toContain(id);
+    expect((await new Validator().validate(buildOpenApi(BASE, { audience: "agent" }))).valid).toBe(true);
   });
 
   it("is what /api/v1/openapi.json serves", async () => {
@@ -134,15 +153,28 @@ describe("real responses match the documented status codes and schemas", () => {
     let step = (await kitchen("POST", "/api/v1/intake", { need: { item: { text: "milk", category: "milk" }, quantity: { amount: 1000, unit: "L" }, deliverBy: day }, by: "Sanna" })).body.step;
     expect(step.state).toBe("needs_confirmation");
     expect((await kitchen("POST", `/api/v1/intake/${step.requestId}/choice`, { by: "Sanna", optionId: "opt_1" })).status).toBe(409);
-    step = (await kitchen("POST", step.next.path, { ...step.next.example, by: "Sanna" })).body.step;
+    step = (await kitchen("POST", step.next.path, { by: "Sanna", responses: step.concerns.map((c: { key: string; corrections: { id: string }[] }) => ({ key: c.key, choice: c.corrections[0].id })) })).body.step;
     expect(step.state).toBe("options_ready");
     step = (await kitchen("POST", `/api/v1/intake/${step.requestId}/answers`, { by: "Sanna", answers: [{ questionId: "optimise", optionId: "no_preference" }] })).body.step;
     expect(step.state).toBe("options_ready");
-    step = (await kitchen("POST", step.next.path, step.next.example)).body.step;
+    step = (await kitchen("POST", step.next.path, { by: "Sanna", optionId: step.options[0].optionId })).body.step;
     expect(step.state).toBe("quoted");
     await kitchen("GET", `/api/v1/intake/${step.requestId}`);
     expect((await kitchen("GET", "/api/v1/intake/req_nope")).status).toBe(404);
     await kitchen("GET", "/api/v1/kitchen");
+
+    // Free text to a structured need, with a scripted model (no provider is called).
+    const scripted = { item: { text: "lactose-free milk", category: "milk", attributes: ["lactose_free"], excludedAttributes: [], productId: null }, quantity: { amount: 1000, unit: "L" }, deliverBy: null, requiredClaims: [], forbiddenAllergens: [], optimise: "price", sameAsLastTime: false, isPurchaseRequest: true, notPurchaseReason: null };
+    setInterpretModelForTests({ ...scriptedModel([{ text: JSON.stringify(scripted) }]), id: "scripted:interpret" });
+    try {
+      const read = await kitchen("POST", "/api/v1/agent/interpret", { text: "1000 l laktoositonta maitoa, halvin" });
+      expect(read.body).toMatchObject({ need: { quantity: { amount: 1000, unit: "L" }, item: { category: "milk" } }, model: "scripted:interpret" });
+      expect((await kitchen("POST", "/api/v1/agent/interpret", { text: "" })).status).toBe(400);
+      setInterpretModelForTests({ ...scriptedModel([{ text: JSON.stringify({ ...scripted, isPurchaseRequest: false, notPurchaseReason: "A question about opening hours." }) }]), id: "scripted:interpret" });
+      expect((await kitchen("POST", "/api/v1/agent/interpret", { text: "When do you open on Saturdays?" })).status).toBe(422);
+    } finally {
+      setInterpretModelForTests(undefined);
+    }
 
     // The approver's phone: join with a passkey, the kitchen's agent orders, sign off with the passkey.
     const phone = new SoftwareAuthenticator(BASE);

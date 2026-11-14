@@ -23,7 +23,7 @@ export type WholesalerAuditEntry = {
   type: LedgerEntry["type"];
   requestId?: string;
   orderId?: string;
-  kind: "asked" | "claimed" | "quoted" | "decided" | "signed" | "committed" | "refused" | "private";
+  kind: "asked" | "claimed" | "quoted" | "decided" | "signed" | "committed" | "refused" | "control" | "private";
   summary: string;
   data?: Record<string, unknown>;
 };
@@ -39,6 +39,7 @@ function intakeForWholesaler(e: LedgerEntry): Omit<WholesalerAuditEntry, "seq" |
   }
   if (d.step === "choice") return { kind: "asked", summary: `Option ${String(d.optionId)} chosen (${(d.labels as string[] | undefined)?.join(", ") || "no label"}).`, data: pick(d, ["optionId", "labels", "lines"]) };
   if (d.step === "compromise") return { kind: "asked", summary: "The buyer accepted a later delivery date.", data: pick(d, ["optionId", "givesUp"]) };
+  if (d.step === "needed_by") return { kind: "asked", summary: `Need-by date changed from ${String(d.from ?? "the earliest possible")} to ${String(d.to ?? "the earliest possible")}.`, data: pick(d, ["from", "to"]) };
   return { kind: "private", summary: "Buyer-side intake step, kept with the buyer." };
 }
 
@@ -68,6 +69,9 @@ export function wholesalerEntry(e: LedgerEntry): WholesalerAuditEntry {
       return { ...base, kind: "committed", summary: e.summary, data: pick(d, ["authorisedBy", "ledgerHead"]) };
     case "refusal":
       return { ...base, kind: "refused", summary: e.summary, data: pick(d, ["code", "rule", "status"]) };
+    case "control":
+      // The wholesaler's own act (an operator suspended or resumed an agent): theirs to read in full.
+      return { ...base, kind: "control", summary: e.summary, data: pick(d, ["action", "scope", "target", "suspensionId", "reason", "by"]) };
   }
 }
 

@@ -18,7 +18,10 @@ import { AskHuman, HUMAN_INPUT_META, type HumanChannel } from "./ask-human";
 import type { LiveBudget } from "@/server/aiven/valkey";
 import { ConnectorService, connectorSecret, type Connector, type ConnectorKitchen, type ConnectorLimitKind } from "./connectors";
 import { LiveLookupGuard } from "./live-lookup-guard";
-import { nextStepFor } from "./next-step";
+import { nextStepFor, nextStepForIntake } from "./next-step";
+import type { IntakeView } from "@/core/intake";
+import { answerLinkFor, needsBuyer } from "../answer-links";
+import { publicBaseUrl } from "../config";
 import { TOOLS, type DockTool } from "./tools";
 
 /**
@@ -38,20 +41,20 @@ import { TOOLS, type DockTool } from "./tools";
  * the same code and rule the REST API returns.
  */
 
-export const MCP_SERVER_INFO = { name: "dock", title: "Dock", version: "1.0.0" };
+export const MCP_SERVER_INFO = { name: "aimopilot", title: "AimoPilot", version: "1.0.0" };
 
-export const MCP_INSTRUCTIONS = `Dock is a wholesaler's ordering gateway. You order food for a kitchen under a mandate its organisation signed; Dock checks every order in plain code and a named person signs off anything beyond it.
+export const MCP_INSTRUCTIONS = `AimoPilot is a wholesaler's ordering gateway. You order food for a kitchen under a mandate its organisation signed; AimoPilot checks every order in plain code and a named person signs off anything beyond it.
 
 Start every new order with submit_need. Each result has a step, waitingFor and nextStep: do what nextStep says.
-When waitingFor is "buyer", Dock needs the person's own answer: ask them Dock's question in plain words with its choices, then stop and wait for their reply. Never answer or confirm for them, even when one choice looks obvious.
+When waitingFor is "buyer", AimoPilot needs the person's own answer: ask them AimoPilot's question in plain words with its choices, then stop and wait for their reply. Never answer or confirm for them, even when one choice looks obvious.
 When place_order returns pending_approval, tell the person in one sentence who must sign off (they are asked on their own phone) and stop. Do not retry, place it again, split it or find another way round.
 
 Flow: read_mandate -> submit_need -> [respond_to_concerns] -> [answer_questions] -> choose_option (signed fixed-price quote) -> place_order -> get_order / explain.
-If your client supports elicitation, Dock asks the buyer directly instead.
+If your client supports elicitation, AimoPilot asks the buyer directly instead.
 Lower-level tools for follow-up: open_request, search_products (free master data), check_availability (live, metered, short lists only), request_quote.
 
 Rules of the road:
-- Fill submit_need with only what the person said and call it; do not ask for details first. Dock asks only what changes the outcome.
+- Fill submit_need with only what the person said and call it; do not ask for details first. AimoPilot asks only what changes the outcome.
 - Talk to the person in plain words: option titles, totals in euros, delivery days. No ids or JSON unless they ask.
 - Quantities are packs. Prices are euro cents ex VAT.
 - Ask live prices only for a short list (at most 10 products per call); never scan the catalogue.
@@ -183,12 +186,19 @@ export async function runTool(
   try {
     const session = await authenticate(via ? connectorCredentials(via) : (req ?? new Request("http://dock.invalid/")), dock);
     agentId = session.agentId;
+    session.door = via ? "connector" : "mcp"; // which door a request it opens came through (core/orders.ts Door)
     const agentKey = `${session.mandate.issuer.orgId}:${session.agentId}`;
     const counted = via && COUNTED[tool.name];
     if (via && counted) via.service.limiter.hit(via.connector.connectorId, counted);
     const run = tool.run as (ctx: Parameters<DockTool["run"]>[0], args: unknown) => Promise<Record<string, unknown> | AskHuman>;
     const out = await run({ dock, session, guard: guardFor(rt), agentKey, human, defaultBy: via && `${via.kitchen.by}, through the kitchen's connector` }, args);
     if (out instanceof AskHuman) return out.result;
+    // A client that cannot ask the buyer itself: hand the buyer Dock's own one-time answer page (server/answer-links.ts).
+    const step = out.step as IntakeView | undefined;
+    if (!human.canAsk && step && needsBuyer(step.state)) {
+      const answerUrl = answerLinkFor(session, step, publicBaseUrl(req));
+      if (answerUrl) Object.assign(out, { answerUrl, nextStep: nextStepForIntake(step, "mcp", answerUrl) });
+    }
     if (via && counted === "requests") {
       const requestId = (out.step as { requestId?: string } | undefined)?.requestId ?? (out.request as { requestId?: string } | undefined)?.requestId;
       if (requestId) logChannel(rt, via, session.agentId, requestId, tool.name);
@@ -219,12 +229,39 @@ const dropDialect = ({ $schema: _, ...rest }: Record<string, unknown>) => (void 
  * 2020-12, and some clients' validators (Gemini CLI 0.25, with Ajv's draft-07 default) refuse every call to a tool
  * whose schema names a dialect they do not know. Validation stays with zod; only the published JSON changes.
  */
-export function published<T extends z.ZodType>(schema: T): T {
+export function published<T extends z.ZodType>(schema: T, opts: { shallow?: boolean } = {}): T {
   const std = schema["~standard"] as T["~standard"] & { jsonSchema?: JsonSchemaHook };
   if (!std.jsonSchema) return schema;
-  const jsonSchema: JsonSchemaHook = { input: (o) => dropDialect(std.jsonSchema!.input(o)), output: (o) => dropDialect(std.jsonSchema!.output(o)) };
+  const out = (o: unknown) => dropDialect(std.jsonSchema!.output(o));
+  const jsonSchema: JsonSchemaHook = { input: (o) => dropDialect(std.jsonSchema!.input(o)), output: opts.shallow ? (o) => shallowSchema(out(o)) : out };
   const standard = { ...std, jsonSchema };
   return new Proxy(schema, { get: (target, key, receiver) => (key === "~standard" ? standard : Reflect.get(target, key, receiver)) });
+}
+
+/**
+ * A tool's output schema as published: the top-level fields with their descriptions, and one level of their shape
+ * (an intake step's `state` and `requestId`, an order's `status`), every deeper value just its type. Some runtimes
+ * (Google ADK) hand each tool's output schema to their model on every call; the full nested schemas made tools/list
+ * about 109 KB of output schema, which multiplied every run's cost. The full shapes stay in the OpenAPI document
+ * (/api/v1/openapi.json) and zod still checks every result Dock returns.
+ */
+export function shallowSchema(s: Record<string, unknown>, depth = 0): Record<string, unknown> {
+  const keep = (x: Record<string, unknown>): Record<string, unknown> => {
+    const t = x.type;
+    if (x.anyOf || x.oneOf) return {}; // any value: a union's branches are documented in the OpenAPI document
+    if (t === "array") return { type: "array" };
+    if (t === "object") return { type: "object" };
+    return { ...(t ? { type: t } : {}), ...(x.enum ? { enum: x.enum } : {}), ...(x.const !== undefined ? { const: x.const } : {}) };
+  };
+  if (s.type !== "object" || !s.properties) return depth === 0 ? s : keep(s);
+  const props = s.properties as Record<string, Record<string, unknown>>;
+  const properties = Object.fromEntries(
+    Object.entries(props).map(([k, v]) => {
+      const inner = depth < 1 ? shallowSchema(v, depth + 1) : keep(v);
+      return [k, depth === 0 && typeof v.description === "string" ? { ...inner, description: v.description } : inner];
+    }),
+  );
+  return { type: "object", properties, ...(depth === 0 && Array.isArray(s.required) ? { required: s.required } : {}) };
 }
 
 export function buildMcpServer(rt: Runtime, req?: Request, via?: ConnectorCall): McpServer {
@@ -236,7 +273,7 @@ export function buildMcpServer(rt: Runtime, req?: Request, via?: ConnectorCall):
         title: tool.title,
         description: tool.description,
         inputSchema: published(tool.input),
-        outputSchema: published(tool.output.extend({ ok: z.literal(true) }).loose()), // loose: new fields must not break clients
+        outputSchema: published(tool.output.extend({ ok: z.literal(true) }).loose(), { shallow: true }), // loose: new fields must not break clients; shallow: see shallowSchema
         annotations: { title: tool.title, readOnlyHint: tool.readOnly ?? false, destructiveHint: false, idempotentHint: tool.readOnly ?? false, openWorldHint: false },
         ...("humanInput" in tool && tool.humanInput
           ? { _meta: { [HUMAN_INPUT_META]: { required: true, from: "buyer", how: "elicitation (input_required) when the client supports it, else the agent relays the buyer's own answer" } } }
@@ -274,9 +311,9 @@ function connectorError(status: number, code: string, message: string, headers: 
 }
 
 const GONE: Record<"unknown" | "revoked" | "expired", string> = {
-  unknown: "There is no Dock connector at this address. Check the address, or ask the kitchen for its current one.",
-  revoked: "This Dock connector address was revoked. Ask the kitchen for its new address.",
-  expired: "This Dock connector address has expired with its demo kitchen. Scan the code again for a new kitchen.",
+  unknown: "There is no AimoPilot connector at this address. Check the address, or ask the kitchen for its current one.",
+  revoked: "This AimoPilot connector address was revoked. Ask the kitchen for its new address.",
+  expired: "This AimoPilot connector address has expired with its demo kitchen. Scan the code again for a new kitchen.",
 };
 
 /** The /api/mcp/c/<token> endpoint: the same MCP server, authenticated by the connector address. */

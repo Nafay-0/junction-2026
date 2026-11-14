@@ -1,5 +1,6 @@
 import { DockError } from "@/core/errors";
 import { authenticate, handle, readBody } from "@/server/http";
+import { restOrder } from "@/server/rest-step";
 
 /**
  * POST /api/v1/orders/{orderId}/withdraw  { reason?, by? }
@@ -17,6 +18,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ orderId: strin
     } catch {
       throw new DockError(400, "invalid_json", "Request body must be JSON (or empty).");
     }
-    return Response.json({ order: await dock.withdrawOrder(session, orderId, body as never) });
+    return Response.json(restOrder(await dock.withdrawOrder(session, orderId, body as never)));
   });
 }

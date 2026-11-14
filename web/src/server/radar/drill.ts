@@ -35,7 +35,7 @@ h1{font-size:1.7rem;line-height:1.2}ul.content-list-block{list-style:none;paddin
 dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px}dt{font-weight:700}
 </style></head>
 <body><main>
-<p class="drill-banner">HARJOITUS / DRILL / ÖVNING – Tämä ei ole oikea takaisinveto. This is not a real recall. Detta är inte en verklig återkallelse. Sivu kuuluu Dock-hackathon-demon tuotteisiin kohdistuvaan harjoitukseen.</p>
+<p class="drill-banner">HARJOITUS / DRILL / ÖVNING – Tämä ei ole oikea takaisinveto. This is not a real recall. Detta är inte en verklig återkallelse. Sivu kuuluu AimoPilot-hackathon-demon tuotteisiin kohdistuvaan harjoitukseen.</p>
 ${body}
 </main></body></html>`;
 }
@@ -52,7 +52,7 @@ export function renderDrillListing(drills: DrillNotice[], base = "/ui-api/radar/
     )
     .join("\n");
   return page(
-    "HARJOITUS: Takaisinvedot (drill) – Dock",
+    "HARJOITUS: Takaisinvedot (drill) – AimoPilot",
     `<h1>HARJOITUS: Takaisinvedot</h1>
 <p>Harjoitussivu. Dockin henkilökunta julkaisee tänne harjoitustiedotteita testatakseen, että takaisinvetotutka huomaa ne. Ei oikeita takaisinvetoja.</p>
 <div class="content-list-block"><ul class="content-list-block">
@@ -78,7 +78,7 @@ export function renderDrillNotice(d: DrillNotice): string {
   ];
   const withdrawn = d.withdrawnAt ? `<p class="drill-banner">HARJOITUS PÄÄTTYNYT: tämä harjoitustiedote on peruttu ${fiDate(d.withdrawnAt)}.</p>` : "";
   return page(
-    `${drillTitle(d)} – Dock`,
+    `${drillTitle(d)} – AimoPilot`,
     `${withdrawn}<article>
 <h1>${esc(drillTitle(d))}</h1>
 <p class="content-list-block__date">${fiDate(d.publishedAt)}</p>
@@ -90,7 +90,7 @@ ${fields.map(([k, v]) => `<li>${esc(k)}: ${esc(v)}</li>`).join("\n")}
 </ul>
 <p>Harjoituksessa kuluttajia pyydetään palauttamaan tuote ostopaikkaan tai hävittämään se.</p>
 <p>Harjoituksessa ammattikeittiöitä ja ravintoloita pyydetään poistamaan tuote käytöstä ja ilmoittamaan siitä tukkurille.</p>
-<p>DRILL (English): this page is an exercise of Dock's recall radar. It is not a real recall and states no real finding about this product.</p>
+<p>DRILL (English): this page is an exercise of AimoPilot's recall radar. It is not a real recall and states no real finding about this product.</p>
 </article>`,
   );
 }

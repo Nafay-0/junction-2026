@@ -5,7 +5,11 @@ import { interpretNeed, offlineExample, type EarlierRequest, type InterpretOutco
 import type { NeedInput } from "@/core/need";
 import { useLive } from "../../_client/use-live";
 import { api, type ApiError } from "../../_client/api";
-import { clock, day, measure, money, moneyShort, shortProduct } from "../../_ui/plain";
+import { money, moneyShort, shortProduct } from "../../_ui/plain";
+import { useFormat, useText } from "../../_i18n/provider";
+import { CONSOLE_TEXT } from "./console.text";
+import type { Lang } from "../../_i18n/lang";
+import { UI_TEXT } from "./ui.text";
 import { Target } from "../../_ui/target";
 import { History } from "./history";
 import { describeEarlier, earlierFor, looksLikeFollowUp, memoryLineFor, repeatNeed, toEarlier } from "./memory";
@@ -46,6 +50,9 @@ type ReadContext = { earlier?: EarlierRequest[]; followUp?: PortalRequest; produ
 
 export function Console() {
   const { kitchen, call, agent, overview } = usePortal();
+  const tx = useText(CONSOLE_TEXT);
+  const ux = useText(UI_TEXT);
+  const f = useFormat();
   const slug = kitchen.slug;
   const [run, setRun] = useState<Run>(() => fresh(0));
   const runN = useRef(0);
@@ -82,10 +89,10 @@ export function Console() {
         update(n, (r) => ({
           ...r,
           busy: undefined,
-          failure: { at: "understood", title: "Dock did not take the request", message: res.error.message, retry: res.status === 0 || res.status >= 500 ? () => void openIntake(n, interp) : undefined },
+          failure: { at: "understood", title: tx.fail.notTaken, message: res.error.message, retry: res.status === 0 || res.status >= 500 ? () => void openIntake(n, interp) : undefined },
         }));
     },
-    [call, kitchen.by, update, absorb],
+    [call, kitchen.by, update, absorb, tx],
   );
 
   /** Read the buyer's words: with the model, or with the offline example reader when the buyer asks for it. */
@@ -93,17 +100,17 @@ export function Console() {
     async (n: number, text: string, offline: boolean, ctx: ReadContext = { requests: [] }) => {
       update(n, (r) => ({ ...r, busy: "interpret", failure: undefined, incomplete: undefined }));
       const out = offline ? offlineExample(text) : await interpretNeed(slug, text, ctx.earlier);
-      if (out.kind === "ok") return openIntake(n, withContext(out.interp, ctx));
+      if (out.kind === "ok") return openIntake(n, withContext(out.interp, ctx, tx, f.lang));
       if (out.kind === "incomplete") return update(n, (r) => ({ ...r, busy: undefined, incomplete: out }));
       const failure: Failure =
         out.kind === "not_purchase"
-          ? { at: "understood", title: "That does not read as something to buy", message: `${out.message} Write what the kitchen needs and how much.` }
+          ? { at: "understood", title: tx.fail.notPurchase, message: tx.fail.notPurchaseHint(out.message) }
           : out.kind === "unavailable"
-            ? { at: "understood", title: "The model reader did not answer", message: out.message, retry: () => void read(n, text, false), offline: () => void read(n, text, true) }
-            : { at: "understood", title: "Dock could not read that", message: out.message };
+            ? { at: "understood", title: tx.fail.modelDown, message: out.message, retry: () => void read(n, text, false), offline: () => void read(n, text, true) }
+            : { at: "understood", title: tx.fail.unreadable, message: out.message };
       update(n, (r) => ({ ...r, busy: undefined, failure }));
     },
-    [slug, update, openIntake],
+    [slug, update, openIntake, tx, f.lang],
   );
 
   const requests = useMemo(() => overview.data?.requests ?? [], [overview.data]);
@@ -127,16 +134,16 @@ export function Console() {
   /** One-click repeat: the earlier need, rebuilt by plain code with a fresh date. No model, no question it already answered. */
   const repeat = useCallback(
     (r: PortalRequest) => {
-      const rep = repeatNeed(r);
+      const rep = repeatNeed(r, undefined, f.lang);
       const n = ++runN.current;
       if (!rep) {
-        setRun({ ...fresh(n), text: r.text ?? "Repeat", failure: { at: "understood", title: "Nothing to repeat", message: "That earlier request has no amount or product to repeat. Write the request instead." } });
+        setRun({ ...fresh(n), text: r.text ?? tx.repeat, failure: { at: "understood", title: tx.fail.nothingToRepeat, message: tx.fail.nothingToRepeatMsg } });
         return;
       }
-      setRun({ ...fresh(n), text: rep.need.text ?? "Repeat", busy: "open" });
+      setRun({ ...fresh(n), text: rep.need.text ?? tx.repeat, busy: "open" });
       void openIntake(n, { need: rep.need, model: "no model", ms: 0, offline: false, noModel: true, memoryLine: rep.memoryLine, basedOn: { requestId: r.key, fields: ["item", "quantity", "attributes"] } });
     },
-    [openIntake],
+    [openIntake, tx, f.lang],
   );
 
   // What the agent bar (on any page) or a "repeat" button handed over.
@@ -178,7 +185,7 @@ export function Console() {
         busyKey: undefined,
         failure: {
           at,
-          title: res.status === 409 ? "That step has moved on" : "Dock refused that",
+          title: res.status === 409 ? tx.fail.movedOn : tx.fail.refused,
           message: res.error.message,
           retry: res.status === 0 || res.status >= 500 ? () => void stepCall(busy, busyKey, at, path, body, after) : undefined,
         },
@@ -217,7 +224,7 @@ export function Console() {
     if (res.ok) update(n, (r) => ({ ...r, busy: undefined, order: res.data.order }));
     else if (res.data?.order) update(n, (r) => ({ ...r, busy: undefined, order: res.data!.order, orderRefusal: res.error }));
     else if (res.status === 0 || res.status >= 500)
-      update(n, (r) => ({ ...r, busy: undefined, failure: { at: "quote", title: "The order did not reach Dock", message: res.error.message, retry: () => void placeOrder() } }));
+      update(n, (r) => ({ ...r, busy: undefined, failure: { at: "quote", title: tx.fail.notReached, message: res.error.message, retry: () => void placeOrder() } }));
     else update(n, (r) => ({ ...r, busy: undefined, orderRefusal: res.error }));
   };
 
@@ -242,7 +249,8 @@ export function Console() {
       if (!r.ok) throw new Error(r.error.message);
       return r.data.order;
     },
-    { events, enabled: !!orderId && waiting, pollMs: 1000, pollMsStreaming: 3000 },
+    // The event stream carries this org's approval and order events and refetches at once; the slow poll is only the fallback.
+    { events, enabled: !!orderId && waiting, pollMs: 1000, pollMsStreaming: 20_000 },
   );
   useEffect(() => {
     const o = orderLive.data;
@@ -255,7 +263,8 @@ export function Console() {
       if (!r.ok) throw new Error(r.error.message);
       return { requestId, ...r.data };
     },
-    { events, enabled: !!requestId, pollMs: 2000, pollMsStreaming: 4000 },
+    // This page's own steps refresh it (below) and the stream's events do; the slow poll is only the fallback.
+    { events, enabled: !!requestId, pollMs: 2000, pollMsStreaming: 20_000 },
   );
   const entries = ledger.data && ledger.data.requestId === requestId ? ledger.data.entries : [];
   const refreshLedger = ledger.refresh;
@@ -298,17 +307,26 @@ export function Console() {
 
   // ---------- the run survives a reload (this browser tab only) ----------
 
+  // Read before the first save: the save below would otherwise remove the saved run (the fresh page's empty run)
+  // before the restore reads it, and a reload would drop a live fixed price.
+  const restored = useRef(false);
   useEffect(() => {
+    const saved = restored.current ? undefined : readSession<Run>(`dock-run:${slug}`);
+    restored.current = true;
     queueMicrotask(() => {
-      if (runN.current !== 0) return;
-      const saved = readSession<Run>(`dock-run:${slug}`);
-      if (!saved?.text) return;
+      if (runN.current !== 0 || !saved?.text) return;
       runN.current = saved.n;
       setRun({ ...saved, busy: undefined, busyKey: undefined, failure: undefined });
+      // The step may have moved on while the page was away (a price ran out, an order placed from another screen).
+      const id = saved.step?.requestId;
+      if (id && !saved.order)
+        void call<{ step: Step }>("GET", `/api/v1/intake/${id}`).then((res) => {
+          if (res.ok) setRun((r) => (r.n === saved.n ? { ...r, step: res.data.step, options: res.data.step.options.length ? res.data.step.options : r.options } : r));
+        });
     });
-  }, [slug]);
+  }, [slug, call]);
   useEffect(() => {
-    if (run.busy) return;
+    if (run.busy || !restored.current) return;
     try {
       if (run.text) sessionStorage.setItem(`dock-run:${slug}`, JSON.stringify({ ...run, failure: undefined }));
       else sessionStorage.removeItem(`dock-run:${slug}`);
@@ -327,9 +345,9 @@ export function Console() {
     stages.push({
       key: "understood",
       station: "Request",
-      title: "What the agent understood",
+      title: tx.understood,
       tone: run.busy === "interpret" || run.busy === "open" ? "busy" : run.incomplete ? "active" : "done",
-      summary: need ? [need.quantity ? measure(need.quantity.amount, need.quantity.unit) : need.sameAsLastTime ? "same as last time" : "", need.item.text, need.deliverBy ? `by ${day(need.deliverBy)}` : ""].filter(Boolean).join(" ") : `“${run.text}”`,
+      summary: need ? [need.quantity ? f.measure(need.quantity.amount, need.quantity.unit) : need.sameAsLastTime ? tx.sameAsLast : "", need.item.text, need.deliverBy ? tx.by(f.day(need.deliverBy)) : ""].filter(Boolean).join(" ") : `“${run.text}”`,
       body: (
         <>
           <Understood
@@ -338,10 +356,10 @@ export function Console() {
             step={s}
             incomplete={run.incomplete}
             onComplete={complete}
-            busy={run.busy === "interpret" ? "Reading the request…" : run.busy === "open" ? "Checking it against the kitchen's memory…" : undefined}
+            busy={run.busy === "interpret" ? tx.reading : run.busy === "open" ? tx.checkingMemory : undefined}
           />
           {run.failure?.at === "understood" && (
-            <ErrorPlate title={run.failure.title} message={run.failure.message} onRetry={run.failure.retry} extra={run.failure.offline && { label: "Use the offline example reader", onClick: run.failure.offline }} />
+            <ErrorPlate title={run.failure.title} message={run.failure.message} onRetry={run.failure.retry} extra={run.failure.offline && { label: tx.offlineReader, onClick: run.failure.offline }} />
           )}
         </>
       ),
@@ -353,9 +371,9 @@ export function Console() {
     stages.push({
       key: "concerns",
       station: "Lookup",
-      title: "Mistake check",
+      title: tx.mistakeCheck,
       tone: run.busy === "concern" ? "busy" : open ? "active" : "done",
-      summary: settled === 0 ? `Nothing unusual${memoryLines.length ? `; ${memoryLines.length} thing${memoryLines.length === 1 ? "" : "s"} from memory` : ""}` : open ? `${settled} to settle` : `${settled} settled`,
+      summary: settled === 0 ? tx.nothingUnusual(memoryLines.length) : open ? tx.toSettle(settled) : tx.settled(settled),
       body: (
         <>
           <Concerns step={s} seen={run.concernsSeen} onRespond={respond} busyKey={run.busy === "concern" ? run.busyKey : undefined} names={names} remembered={memoryLines} />
@@ -369,9 +387,9 @@ export function Console() {
     stages.push({
       key: "questions",
       station: "Lookup",
-      title: run.asked.length ? `${["One question", "Two questions", "Three questions", "Four questions"][run.asked.length - 1] ?? `${run.asked.length} questions`}` : "Answered from memory",
+      title: run.asked.length ? tx.questions(run.asked.length) : tx.answeredFromMemory,
       tone: state === "needs_input" ? (run.busy === "answer" ? "busy" : "active") : "done",
-      summary: given.length ? `Answered: ${given.join(", ")}` : "The kitchen's memory answered",
+      summary: given.length ? tx.answered(given.join(", ")) : tx.memoryAnswered,
       body: (
         <>
           <Questions step={s} asked={run.asked} answers={run.answers} fromMemory={run.fromMemory} onAnswer={answer} busyKey={run.busy === "answer" ? run.busyKey : undefined} hideMemory={memoryLines.length > 0} />
@@ -386,9 +404,9 @@ export function Console() {
     stages.push({
       key: "options",
       station: "Options",
-      title: run.options.length === 1 ? "The option" : `${run.options.length} options, good to best`,
+      title: run.options.length === 1 ? tx.theOption : tx.nOptions(run.options.length),
       tone: state === "options_ready" ? (run.busy === "choose" ? "busy" : "active") : "done",
-      summary: picked ? `${picked.rank ? `${picked.rank.charAt(0).toUpperCase()}${picked.rank.slice(1)} chosen` : "Chosen"}: ${picked.lines.map((l) => `${l.packs} × ${shortProduct(l.name)}`).join(" + ")}` : `from ${money(cheapest)}`,
+      summary: picked ? tx.chosen(picked.rank, picked.lines.map((l) => `${l.packs} × ${shortProduct(l.name)}`).join(" + ")) : tx.from(money(cheapest)),
       body: (
         <>
           <Options step={s} options={run.options} onChoose={choose} onNarrow={(q, o, label) => answer(q, o, label, false)} busyKey={run.busy === "choose" || run.busy === "answer" ? run.busyKey : undefined} names={names} />
@@ -398,15 +416,15 @@ export function Console() {
     });
   }
   if (s && (state === "no_options" || state === "cancelled")) {
-    stages.push({ key: "none", station: "Options", title: state === "cancelled" ? "Cancelled" : "Nothing fits", tone: "done", body: <NoOptions step={s} names={names} onNew={newRequest} /> });
+    stages.push({ key: "none", station: "Options", title: state === "cancelled" ? tx.cancelled : tx.nothingFits, tone: "done", body: <NoOptions step={s} names={names} onNew={newRequest} /> });
   }
   if (s?.quote) {
     stages.push({
       key: "quote",
       station: "Price",
-      title: "Fixed price",
+      title: tx.fixedPrice,
       tone: decided ? "done" : run.busy === "order" ? "busy" : "active",
-      summary: `${money(s.quote.quote.totalCents)}, held until ${clock(s.quote.quote.expiresAt)}`,
+      summary: tx.heldUntil(money(s.quote.quote.totalCents), f.clock(s.quote.quote.expiresAt)),
       body: (
         <>
           <Quote q={s.quote} names={names} decided={decided} busy={run.busy === "order"} onPlace={() => void placeOrder()} onNew={newRequest} />
@@ -422,9 +440,9 @@ export function Console() {
     stages.push({
       key: "gate",
       station: "Gate",
-      title: "The gate",
+      title: tx.gate,
       tone: stopped ? "safety" : "done",
-      summary: !o || o.status === "rejected" ? "Refused, nothing ordered" : a ? `Stopped: ${a.approver.name} had to sign off` : `Passed all ${o.decision.rules.length} checks`,
+      summary: !o || o.status === "rejected" ? tx.gateRefused : a ? tx.gateStopped(a.approver.name) : tx.gatePassed(o.decision.rules.length),
       body: <Gate order={o} refusal={run.orderRefusal} kitchen={kitchen} names={names} streaming={orderLive.streaming} withSignOff={false} />,
     });
   }
@@ -432,10 +450,10 @@ export function Console() {
     stages.push({
       key: "signoff",
       station: "Sign-off",
-      title: "Sign-off",
+      title: tx.signOff,
       tone: a.status === "pending" ? "safety" : "done",
       keepOpen: true,
-      summary: a.status === "pending" ? `Waiting for ${a.approver.name}` : `${a.status === "approved" ? "Signed off" : "Declined"} by ${a.approver.name} at ${clock(a.decidedAt ?? o.updatedAt)}`,
+      summary: a.status === "pending" ? tx.waitingFor(a.approver.name) : tx.decidedBy(a.status === "approved", a.approver.name, f.clock(a.decidedAt ?? o.updatedAt)),
       body: <SignOff order={o} kitchen={kitchen} streaming={orderLive.streaming} />,
     });
   }
@@ -443,9 +461,9 @@ export function Console() {
     stages.push({
       key: "order",
       station: "Order",
-      title: o.status === "committed" ? "Signed order" : "Not ordered",
+      title: o.status === "committed" ? tx.signedOrder : tx.notOrdered,
       tone: "done",
-      summary: o.status === "committed" ? `${money(o.totalCents)}, delivery ${day(o.lines.map((l) => l.deliveryDate).sort().at(-1)!)}` : "Declined",
+      summary: o.status === "committed" ? tx.delivery(money(o.totalCents), f.day(o.lines.map((l) => l.deliveryDate).sort().at(-1)!)) : tx.declined,
       body: <SignedOrder order={o} names={names} onNew={newRequest} />,
     });
   }
@@ -454,10 +472,10 @@ export function Console() {
       key: "timeline",
       station: "Order",
       extra: true,
-      title: "What the agent did and why",
+      title: tx.whatAndWhy,
       tone: "done",
-      summary: `${entries.length} entries in the ledger`,
-      aside: <span className="hidden text-[0.92rem] text-ink-soft sm:inline">{entries.length} ledger entries</span>,
+      summary: tx.entriesInLedger(entries.length),
+      aside: <span className="hidden text-[0.92rem] text-ink-soft sm:inline">{tx.ledgerEntries(entries.length)}</span>,
       body: <Timeline entries={entries} names={names} agentName={kitchen.agentName} kitchen={slug} />,
     });
   }
@@ -484,24 +502,24 @@ export function Console() {
       <div className="min-w-0">
         <div className="mt-5 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="display text-[2.6rem] text-ink sm:text-[3rem]">Order</h1>
-            <p className="max-w-[60ch] text-[1.02rem] text-ink-soft">Tell {kitchen.agentName} what the kitchen needs. Each request travels the lane below; the gate checks it against the kitchen&apos;s signed rules.</p>
+            <h1 className="display text-[2.6rem] text-ink sm:text-[3rem]">{tx.title}</h1>
+            <p className="max-w-[60ch] text-[1.02rem] text-ink-soft">{tx.intro(kitchen.agentName)}</p>
           </div>
           {run.text && (
             <Button kind="secondary" onClick={newRequest}>
-              New request
+              {tx.newRequest}
             </Button>
           )}
         </div>
         <div className="sticky top-0 z-20 -mx-4 mt-4 border-b border-line bg-mist/95 px-4 py-2 backdrop-blur sm:mx-0 sm:px-0">
-          <StationStrip states={strip} label={here ? `The request is at: ${here.station}` : undefined} />
+          <StationStrip states={strip} label={here ? tx.requestAt(ux.stations[here.station]) : undefined} />
         </div>
         <Examples examples={kitchen.examples} hasRun={!!run.text} onPick={(x) => void submit(x)} onWrite={focusField} />
         <div className="mt-6" aria-live="polite">
           {stages.length === 0 ? <EmptyLane kitchen={kitchen} /> : <Lane stages={stages} runKey={run.n} />}
         </div>
       </div>
-      <aside aria-label="This kitchen" className="mt-8 grid content-start gap-4 md:grid-cols-2 2xl:mt-5 2xl:grid-cols-1">
+      <aside aria-label={tx.thisKitchen} className="mt-8 grid content-start gap-4 md:grid-cols-2 2xl:mt-5 2xl:grid-cols-1">
         <History
           requests={requests}
           loading={!overview.data && !overview.error}
@@ -522,15 +540,15 @@ export function Console() {
 }
 
 /** Put what memory answered on the card, and a product picked in the catalogue into the need. Plain code. */
-function withContext(interp: Interpretation, ctx: ReadContext): Interpretation {
+function withContext(interp: Interpretation, ctx: ReadContext, tx: (typeof CONSOLE_TEXT)["en"] = CONSOLE_TEXT.en, lang: Lang = "en"): Interpretation {
   let out = interp;
   if (ctx.product) {
     const p = ctx.product;
-    out = { ...out, need: { ...out.need, item: { ...out.need.item, productId: p.id, category: p.category } }, memoryLine: `Product picked in the catalogue: ${shortProduct(p.name)}. Only that product is offered.` };
+    out = { ...out, need: { ...out.need, item: { ...out.need.item, productId: p.id, category: p.category } }, memoryLine: tx.pickedProduct(shortProduct(p.name)) };
   }
   const based = interp.basedOn && ctx.requests.find((r) => r.key === interp.basedOn!.requestId);
-  if (based) out = { ...out, memoryLine: [memoryLineFor(based, interp.basedOn!.fields), out.memoryLine].filter(Boolean).join(" ") };
-  else if (ctx.followUp) out = { ...out, memoryLine: [`Read as a change to ${describeEarlier(ctx.followUp)}.`, out.memoryLine].filter(Boolean).join(" ") };
+  if (based) out = { ...out, memoryLine: [memoryLineFor(based, interp.basedOn!.fields, lang), out.memoryLine].filter(Boolean).join(" ") };
+  else if (ctx.followUp) out = { ...out, memoryLine: [tx.changeTo(describeEarlier(ctx.followUp, lang)), out.memoryLine].filter(Boolean).join(" ") };
   return out;
 }
 
@@ -543,13 +561,14 @@ function mergeConcerns(seen: Step["concerns"], now: Step["concerns"]): Step["con
 // ---------- examples ----------
 
 function Examples({ examples, hasRun, onPick, onWrite }: { examples: string[]; hasRun: boolean; onPick: (x: string) => void; onWrite: () => void }) {
+  const tx = useText(CONSOLE_TEXT);
   if (hasRun) return null;
   return (
     <div className="mt-5 flex flex-wrap items-center gap-2">
       <Button kind="go" onClick={onWrite}>
-        Write a request
+        {tx.writeRequest}
       </Button>
-      <span className="px-1 text-[0.95rem] text-ink-soft">or try</span>
+      <span className="px-1 text-[0.95rem] text-ink-soft">{tx.orTry}</span>
       {examples.map((x) => (
         <button key={x} type="button" onClick={() => onPick(x)} className="min-h-11 bg-paper px-3 text-left text-[0.95rem] outline-1 outline-line hover:outline-2 hover:outline-petrol">
           {x.length > 60 ? `${x.slice(0, 57)}…` : x}
@@ -560,14 +579,16 @@ function Examples({ examples, hasRun, onPick, onWrite }: { examples: string[]; h
 }
 
 function EmptyLane({ kitchen }: { kitchen: KitchenInfo }) {
-  const steps: [string, string][] = [
-    ["Request", "Your words, turned into fields: item, amount, day."],
-    ["Lookup", "Compared with what this kitchen usually orders, before any price is asked. Memory answers what it can."],
-    ["Options", "Good, better, best, with pros and cons, side by side."],
-    ["Price", "The wholesaler signs the price. It holds for 30 minutes."],
-    ["Gate", `Plain code checks the order against the mandate. Above ${moneyShort(kitchen.mandate.perOrderLimitCents)}, it stops.`],
-    ["Sign-off", `${kitchen.mandate.approvers[0]?.name ?? "A named person"} signs off on their phone.`],
-    ["Order", "Signed by the wholesaler, and in the ledger."],
+  const e = useText(CONSOLE_TEXT).empty;
+  const st = useText(UI_TEXT).stations;
+  const steps: [Station, string][] = [
+    ["Request", e.Request],
+    ["Lookup", e.Lookup],
+    ["Options", e.Options],
+    ["Price", e.Price],
+    ["Gate", e.Gate(moneyShort(kitchen.mandate.perOrderLimitCents))],
+    ["Sign-off", e.SignOff(kitchen.mandate.approvers[0]?.name)],
+    ["Order", e.Order],
   ];
   return (
     <ol className="grid grid-cols-1 gap-px bg-line sm:grid-cols-2 lg:grid-cols-4">
@@ -579,7 +600,7 @@ function EmptyLane({ kitchen }: { kitchen: KitchenInfo }) {
             ) : (
               <span className="display flex size-7 items-center justify-center border-2 border-petrol text-[1rem] text-petrol tabular">{i + 1}</span>
             )}
-            <span className={`display text-[1.5rem] ${t === "Gate" ? "text-safety" : "text-ink"}`}>{t}</span>
+            <span className={`display text-[1.5rem] ${t === "Gate" ? "text-safety" : "text-ink"}`}>{st[t]}</span>
           </p>
           <p className={`mt-1.5 text-[0.98rem] leading-snug ${t === "Gate" ? "text-paper/85" : "text-ink-soft"}`}>{d}</p>
         </li>

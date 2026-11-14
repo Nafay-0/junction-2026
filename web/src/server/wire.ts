@@ -180,7 +180,7 @@ export const QuestionSchema = named(
     id: z.string(),
     kind: z.enum(["dimension", "optimise"]),
     text: z.string().describe("The question to put to the buyer."),
-    options: z.array(z.looseObject({ id: z.string(), label: z.string() })).describe("The only answers Dock accepts: send one optionId."),
+    options: z.array(z.looseObject({ id: z.string(), label: z.string() })).describe("The only answers AimoPilot accepts: send one optionId."),
     dimension: z.string().optional(),
   }),
 );
@@ -216,6 +216,10 @@ export const OptionCardSchema = named(
     pros: z.array(z.string()),
     cons: z.array(z.string()),
     quoteLines: z.array(z.looseObject({ productId: z.string(), quantity: z.number().int(), substituteFor: z.string().optional() })),
+    alternative: z
+      .looseObject({ for: z.string(), tier: z.enum(["best", "better", "good"]), reason: z.string(), use: z.string().optional() })
+      .optional()
+      .describe("When this card stands in for the product the request is about: how the product knowledge map ranks it for the kitchen use, and why."),
   }),
 );
 
@@ -226,10 +230,18 @@ export const IntakeStepSchema = named(
     state: z.enum(INTAKE_STATES).describe("needs_confirmation, needs_input, options_ready, quoted, no_options or cancelled."),
     family: z.string().describe("Product family, e.g. milk."),
     need: NeedOutSchema,
-    amount: amount.optional().describe("The need in base units, once Dock could work it out."),
+    amount: amount.optional().describe("The need in base units, once AimoPilot could work it out."),
     concerns: z.array(ConcernSchema).describe("needs_confirmation: likely mistakes the buyer must confirm or correct."),
     questions: z.array(QuestionSchema).describe("needs_input: at most two questions for the buyer."),
-    fromMemory: z.array(MemoryNoteSchema).describe("Answers Dock took from the kitchen's memory instead of asking."),
+    fromMemory: z.array(MemoryNoteSchema).describe("Answers AimoPilot took from the kitchen's memory instead of asking."),
+    memoryUsed: z
+      .array(z.looseObject({ itemId: z.string().optional(), text: z.string() }))
+      .optional()
+      .describe("One line per remembered item of the kitchen's memory this request used without asking: a rule applied, a habit pre-selected, a check made, a product left out."),
+    alsoAsked: z
+      .array(z.looseObject({ text: z.string(), group: z.string(), amount: z.looseObject({ amount: z.number(), unit: z.string() }).optional() }))
+      .optional()
+      .describe("Items the buyer's own words name that this request does not cover (found by plain code in the text). Nothing is ordered for them here: submit each as its own need next."),
     rules: z.array(z.looseObject({ text: z.string(), source: z.enum(["mandate", "request", "stated"]), preferenceId: z.string().optional() })),
     options: z.array(OptionCardSchema).describe("options_ready: the choices, with pros and cons."),
     preselected: z.looseObject({ optionId: z.string(), reason: z.string(), source: z.enum(["request", "answer", "stated", "learned"]) }).optional(),
@@ -255,7 +267,7 @@ export const KitchenSchema = named(
         orders: z.number().int(),
         usual: z.looseObject({ amount: z.number(), unit: z.string(), text: z.string() }),
         lastOrder: z.record(z.string(), z.unknown()),
-        learned: z.array(z.looseObject({ kind: z.string(), text: z.string() })).describe("Patterns Dock learned from the history."),
+        learned: z.array(z.looseObject({ kind: z.string(), text: z.string() })).describe("Patterns AimoPilot learned from the history."),
       }),
     ),
     recentHistory: z.array(z.record(z.string(), z.unknown())),

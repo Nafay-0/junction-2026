@@ -57,7 +57,7 @@ they call `dock.intake` and `dock.placeOrder` as the kitchen's own agent, exactl
   every figure in this call's tool results: amounts, prices, dates and weekdays, clock times, and catalogue brand
   names. Small bare numbers ("option 2") pass; money said rounded passes. On a mismatch the screen cuts the agent's
   audio (it plays 250 ms behind, so most of a wrong sentence is never heard), strikes the line through with "did not
-  come from Dock", sends the agent `[Dock check] ... take it back`, and the ledger records `grounding_check`.
+  come from AimoPilot", sends the agent `[AimoPilot check] ... take it back`, and the ledger records `grounding_check`.
 - **No order from speech alone:** an order needs the option cards shown and one chosen, then a spoken (or tapped)
   yes to place it; the gate decides; sign-off stays on the approver's phone with a passkey.
 

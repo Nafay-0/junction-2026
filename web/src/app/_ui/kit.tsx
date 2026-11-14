@@ -1,6 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useText } from "../_i18n/provider";
+import { KIT_TEXT } from "./kit.text";
 
 /**
  * Dock's core components (see web/docs/DESIGN.md). Square, flat, petrol for structure, lime for the one main action,
@@ -154,6 +156,7 @@ export function SectionTitle({ id, children, aside, className = "" }: { id?: str
 
 /** Something went wrong: what happened and how to fix it. No apology. */
 export function ErrorPlate({ title, message, onRetry, extra }: { title: string; message: string; onRetry?: () => void; extra?: { label: string; onClick: () => void } | false | undefined }) {
+  const tx = useText(KIT_TEXT);
   return (
     <div role="alert" className="mt-3 flex flex-wrap items-start justify-between gap-3 border-l-[6px] border-petrol bg-paper px-4 py-3">
       <div className="min-w-0">
@@ -164,7 +167,7 @@ export function ErrorPlate({ title, message, onRetry, extra }: { title: string; 
         <div className="flex flex-wrap gap-3">
           {onRetry && (
             <Button onClick={onRetry} kind="secondary">
-              Try again
+              {tx.tryAgain}
             </Button>
           )}
           {extra && (

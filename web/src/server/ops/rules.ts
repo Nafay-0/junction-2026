@@ -33,12 +33,12 @@ export const RULE_INFO: Record<string, RuleInfo> = {
   category_allowed: { group: "food", where: "gate", does: "Only product groups the kitchen allows, for example milk and plant drinks." },
   substitution_rule: { group: "food", where: "gate", does: "Swaps follow the kitchen's rule: none, like for like only, or with a person's sign-off." },
   delivery_deadline: { group: "food", where: "gate", does: "Every line must arrive by the date asked for and within the mandate's longest lead time." },
-  mandate_signature: { group: "authority", where: "door", does: "The agent must present a mandate signed with a key of a kitchen Dock trusts." },
+  mandate_signature: { group: "authority", where: "door", does: "The agent must present a mandate signed with a key of a kitchen AimoPilot trusts." },
   mandate_window: { group: "authority", where: "door", does: "The mandate must be in force: not before it starts, not after it ends." },
   mandate_agent: { group: "authority", where: "door", does: "The agent presenting the mandate must be the one it names." },
   quote_binding: { group: "authority", where: "gate", does: "A price quoted to one kitchen and agent cannot be used by another." },
   approver_identity: { group: "authority", where: "gate", does: "Only the named person can sign off, and their proof must cover exactly this order." },
-  human_input: { group: "authority", where: "intake", does: "Answers to Dock's questions and to likely mistakes must come from the buyer, not from the agent." },
+  human_input: { group: "authority", where: "intake", does: "Answers to AimoPilot's questions and to likely mistakes must come from the buyer, not from the agent." },
   intake_sequence: { group: "authority", where: "intake", does: "A request follows its steps: no quote while a likely mistake waits for the buyer, nothing after they cancel." },
   operator_suspension: { group: "authority", where: "operations", does: "Operations staff can stop an agent or a whole organisation; its next call is refused until they resume it." },
   recall_hold: { group: "food", where: "operations", does: "A product an authority's recall notice names (matched on its EAN, or on producer, exact name and pack) is held: no quote or order for it, and a waiting order with it cannot be approved. The notice is the stated reason." },
@@ -48,6 +48,7 @@ export const RULE_INFO: Record<string, RuleInfo> = {
   quote_expiry: { group: "systems", where: "gate", does: "A fixed price holds for a limited time; after that the agent asks again." },
   quote_replay: { group: "systems", where: "gate", does: "A quote buys once." },
   order_matches_quote: { group: "systems", where: "gate", does: "The order buys exactly what was quoted, at the quoted quantities and prices." },
+  grounding_check: { group: "food", where: "door", does: "Text a model wrote (the assistant's answers, the voice agent's speech, the menu planner's lines, the interpreter's reading, memory proposals, the Aiven agent's transcript) may name only products, prices, amounts, dates, dietary claims and allergen facts that the catalogue, a live lookup, the ledger or the kitchen's memory backs. Anything else is removed or shown as \"The data does not say\" before anyone reads it." },
 };
 
 const EXTRA_TITLE: Record<string, string> = {
@@ -56,6 +57,7 @@ const EXTRA_TITLE: Record<string, string> = {
   human_confirmation: "A person confirms what matters",
   intake_sequence: "Steps in order",
   recall_hold: "Recall hold",
+  grounding_check: "Model text checked against the data",
 };
 
 export function ruleTitleOf(rule: string): string {

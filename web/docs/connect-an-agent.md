@@ -1,11 +1,11 @@
-# Connect an agent to Dock
+# Connect an agent to AimoPilot
 
-Dock speaks two open interfaces with the same operations and the same refusals:
+AimoPilot speaks two open interfaces with the same operations and the same refusals:
 
 - **MCP** (Model Context Protocol) over Streamable HTTP at `/api/mcp`, and at a per-kitchen connector address `/api/mcp/c/<token>` for assistants that can only be given a URL (section 0). Protocol revision 2026-07-28, plus the 2025-era handshake (2025-11-25 and earlier) that most clients still send.
 - **REST** described by OpenAPI 3.1 at `/api/v1/openapi.json`.
 
-An agent that knows only the base URL can find both: `/.well-known/api-catalog` (RFC 9727), `/.well-known/dock.json` (Dock's own manifest) and `/llms.txt`.
+An agent that knows only the base URL can find both: `/.well-known/api-catalog` (RFC 9727), `/.well-known/dock.json` (AimoPilot's own manifest) and `/llms.txt`.
 
 The examples use a local server. Replace `http://localhost:3000` with the deployed URL.
 
@@ -26,7 +26,7 @@ The token in the path stands for that kitchen's signed mandate and agent id, whi
 | Demo kitchens (`kaari`, `laakso`) | Derived from `DOCK_CONNECTOR_SECRET`, so the address is the same after every restart and deploy. Set it on the deployment and configure the assistant once, before the demo. Without the secret, the address is random per process. |
 | Revoke / reissue | `DELETE` / `POST /ui-api/connect/<kitchen>`. The old address stops at once (HTTP 404, and a `refusal` in the ledger). Visitor kitchens: the visitor's own phone session. Demo kitchens: `Authorization: Bearer <DOCK_CONNECTOR_SECRET>`. A revoked demo address comes back after a restart, because it is derived from configuration; change the secret to retire it for good. |
 | Ledger | A request opened through an address gets an `intake` entry with `data.step: "channel"`, `via: "connector"`, the address id (`con_…`, not the secret) and the client's User-Agent. |
-| Errors | An unknown, revoked or expired address answers **404, never 401**. A 401 with `WWW-Authenticate` makes Claude and ChatGPT start an OAuth sign-in, and Dock has none to offer. |
+| Errors | An unknown, revoked or expired address answers **404, never 401**. A 401 with `WWW-Authenticate` makes Claude and ChatGPT start an OAuth sign-in, and AimoPilot has none to offer. |
 
 ### Limits on one address
 
@@ -59,7 +59,7 @@ Most vendor pages carry no date. Where one did, it is given.
 | **Gemini CLI** | `gemini mcp add --transport http dock <url>`, or `mcpServers.dock.httpUrl` in `settings.json` | stdio, SSE (`url`), Streamable HTTP (`httpUrl`) | `headers` (so the header route works too), OAuth discovered on 401 with DCR | Since 18 June 2026 only with a paid Gemini API key or Code Assist Standard/Enterprise; free and Google One users were moved to Antigravity CLI | Asks per tool call unless `trust: true`. Elicitation is not documented, and the client source registers only `roots`. |
 | **Claude Code** | `claude mcp add --transport http dock <url>` | Streamable HTTP, SSE, stdio | Headers, OAuth | any | Asks per tool unless allowed. Elicitation forms are shown "only in interactive terminal sessions". Headless (`-p`), forms come back `cancel`. |
 
-So a plain URL is enough for the leading assistants: Claude on every plan, ChatGPT on Business/Enterprise, Claude Code, and Gemini CLI. **Dock does not implement OAuth.** The one consumer assistant that seems to need it, the Gemini app, is not offered in Finland anyway.
+So a plain URL is enough for the leading assistants: Claude on every plan, ChatGPT on Business/Enterprise, Claude Code, and Gemini CLI. **AimoPilot does not implement OAuth.** The one consumer assistant that seems to need it, the Gemini app, is not offered in Finland anyway.
 
 Sources:
 - Claude:
@@ -98,13 +98,13 @@ curl -s https://jolly-wondrous-bunny.eur-1.aiven.app/ui-api/connect/kaari | jq -
 1. Sign in at claude.ai, or open Claude Desktop.
 2. Open **Customize > Connectors**, click **Add**, then **Add custom connector**.
 3. Fill in:
-   - **Name:** `Dock (Ravintola Kaari)`
+   - **Name:** `AimoPilot (Ravintola Kaari)`
    - **Remote MCP server URL:** paste the address.
 4. Click **Continue**. If Claude asks how to sign in, choose **No sign-in**. Then click **Add**, then **Connect**.
-5. Optional, to avoid a prompt on every step: go to **Customize > Connectors > Dock > Tool permissions** and set the read tools to **Always allow**. Leave `place_order` on **Needs approval** if you want Claude to ask before ordering.
-6. Start a new chat. Check that Dock is switched on under **+ > Connectors**.
-7. Type: *"Using Dock, order 1,000 litres of lactose-free milk for our kitchen, delivered by Monday."* Click **Allow once** (or **Always allow**) when Claude asks to use a Dock tool.
-8. Answer the question Claude relays from Dock ("1,000 L where you usually order about 100 L?").
+5. Optional, to avoid a prompt on every step: go to **Customize > Connectors > AimoPilot > Tool permissions** and set the read tools to **Always allow**. Leave `place_order` on **Needs approval** if you want Claude to ask before ordering.
+6. Start a new chat. Check that AimoPilot is switched on under **+ > Connectors**.
+7. Type: *"Using AimoPilot, order 1,000 litres of lactose-free milk for our kitchen, delivered by Monday."* Click **Allow once** (or **Always allow**) when Claude asks to use a AimoPilot tool.
+8. Answer the question Claude relays from AimoPilot ("1,000 L where you usually order about 100 L?").
 9. Pick an option. The approver's phone (or the portal's sign-off QR code) then asks for the sign-off.
 
 The connector also shows up in the Claude mobile app at its next sign-in.
@@ -114,12 +114,12 @@ The connector also shows up in the Claude mobile app at its next sign-in.
 1. Sign in at chatgpt.com in a browser.
 2. Open **Plugins**, click **+**, then **Add custom MCP server**.
 3. Fill in:
-   - **Name:** `Dock (Ravintola Kaari)`
+   - **Name:** `AimoPilot (Ravintola Kaari)`
    - **Server URL:** paste the address.
    - **Authentication:** **No authentication**.
 4. Tick **I understand and want to continue**, click **Create as a plugin**, then install it.
-5. In a new chat, type **@** and pick **Dock**, then the same request as above.
-6. ChatGPT asks you to confirm each write step (`submit_need`, `respond_to_concerns`, `choose_option`, `place_order`). Confirm each one. Answer Dock's question when ChatGPT relays it.
+5. In a new chat, type **@** and pick **AimoPilot**, then the same request as above.
+6. ChatGPT asks you to confirm each write step (`submit_need`, `respond_to_concerns`, `choose_option`, `place_order`). Confirm each one. Answer AimoPilot's question when ChatGPT relays it.
 
 On a Pro account, ChatGPT connects only read/fetch tools, so it cannot order.
 
@@ -135,8 +135,8 @@ gemini mcp add --transport http dock <address>   # needs a paid Gemini API key o
 | Client | Result |
 |---|---|
 | Stock `@modelcontextprotocol/client`, given only the URL: no headers, no elicitation, the 2025-11-25 handshake a consumer assistant uses (`scripts/connector-smoke.ts`) | 14 tools, none that approves. Ran mandate, need, the mistake check relayed, options, quote and order, to `pending_approval` with "Do not retry". |
-| Claude Code 2.1.323 (`claude -p --mcp-config` with only `{"type":"http","url":…}`, model Opus) | **Turn 1:** it called `read_mandate` and `submit_need`, then stopped. It put Dock's question to the user ("Did you mean 100 L?") with both choices and did not answer it. **Turn 2:** the user confirmed 1,000 L. Claude Code declares elicitation but cannot show forms headless, so the form came back `cancel`. It then used the `relay: true` fallback and showed the three option cards in plain euros. **Turn 3:** the user picked option 1. It called `choose_option` and `place_order` (`pending_approval`), told the user in one sentence that Jari Mäkelä must sign off on his phone, and did not retry. |
-| Gemini CLI 0.25.2 (`settings.json` with only `httpUrl`; model gemini-3.5-flash-lite, on the team's free-tier key, because the CLI's default models are retired and the 3.5-flash quota was used up) | **First run:** every Dock call failed with `no schema with key or ref "https://json-schema.org/draft/2020-12/schema"` (Ajv, draft-07 default). Dock now publishes its schemas without the `$schema` keyword; 2020-12 is MCP's default anyway. **Second run:** it relayed the mistake check correctly. It then corrupted the long signed quote token while copying it into `place_order`, three times; the gate refused each one (`quote_signature`), but the model told the user the order was sent. `place_order` now takes only `requestId` after `choose_option`. **Third run:** need, relayed check, choice, then `place_order` (`pending_approval`, first try). It told the user Jari Mäkelä must sign off and did not retry. Two lapses remain, both the small model's: it chose the pre-selected cheapest option without asking, and it filled `by` with an approver's name from the mandate. |
+| Claude Code 2.1.323 (`claude -p --mcp-config` with only `{"type":"http","url":…}`, model Opus) | **Turn 1:** it called `read_mandate` and `submit_need`, then stopped. It put AimoPilot's question to the user ("Did you mean 100 L?") with both choices and did not answer it. **Turn 2:** the user confirmed 1,000 L. Claude Code declares elicitation but cannot show forms headless, so the form came back `cancel`. It then used the `relay: true` fallback and showed the three option cards in plain euros. **Turn 3:** the user picked option 1. It called `choose_option` and `place_order` (`pending_approval`), told the user in one sentence that Jari Mäkelä must sign off on his phone, and did not retry. |
+| Gemini CLI 0.25.2 (`settings.json` with only `httpUrl`; model gemini-3.5-flash-lite, on the team's free-tier key, because the CLI's default models are retired and the 3.5-flash quota was used up) | **First run:** every AimoPilot call failed with `no schema with key or ref "https://json-schema.org/draft/2020-12/schema"` (Ajv, draft-07 default). AimoPilot now publishes its schemas without the `$schema` keyword; 2020-12 is MCP's default anyway. **Second run:** it relayed the mistake check correctly. It then corrupted the long signed quote token while copying it into `place_order`, three times; the gate refused each one (`quote_signature`), but the model told the user the order was sent. `place_order` now takes only `requestId` after `choose_option`. **Third run:** need, relayed check, choice, then `place_order` (`pending_approval`, first try). It told the user Jari Mäkelä must sign off and did not retry. Two lapses remain, both the small model's: it chose the pre-selected cheapest option without asking, and it filled `by` with an approver's name from the mandate. |
 | Claude app, ChatGPT | Not run: no consumer account here. Follow the steps above against the deployed HTTPS address. |
 
 To check again against any address: `pnpm tsx scripts/connector-smoke.ts <address>`. It places one order, which then waits for sign-off.
@@ -149,18 +149,18 @@ On a production build (`pnpm build && pnpm start`), the smoke script reaches `pe
 
 ### In a chat assistant: questions and sign-off
 
-Most chat assistants cannot show Dock's own form (elicitation), so the assistant relays. These rules are written for a model that has never seen Dock, and they appear in three places: the server `instructions`, each tool's description, and each result's `nextStep`.
+Most chat assistants cannot show AimoPilot's own form (elicitation), so the assistant relays. These rules are written for a model that has never seen AimoPilot, and they appear in three places: the server `instructions`, each tool's description, and each result's `nextStep`.
 
-- **`waitingFor: "buyer"`:** ask the person Dock's question in plain words with its choices, stop, and pass on their reply. The original request does not count as the answer.
+- **`waitingFor: "buyer"`:** ask the person AimoPilot's question in plain words with its choices, stop, and pass on their reply. The original request does not count as the answer.
 - **`pending_approval`:** tell the person in one sentence who must sign off, on their own phone, and stop. Do not retry, place it again, split it, or find a way around it.
 - **A refusal is final** unless `nextStep` says how to fix it: tell the person, and do not loop.
-- **After `choose_option`, `place_order` needs only `requestId`.** Dock places the quote it signed for that request, so the model never has to copy a long signed token.
-- **`by` (the buyer's name) is optional through a connector.** When the assistant does not say, Dock records the kitchen's person "through the kitchen's connector". A chat assistant should not have to ask your name.
+- **After `choose_option`, `place_order` needs only `requestId`.** AimoPilot places the quote it signed for that request, so the model never has to copy a long signed token.
+- **`by` (the buyer's name) is optional through a connector.** When the assistant does not say, AimoPilot records the kitchen's person "through the kitchen's connector". A chat assistant should not have to ask your name.
 - **If the client declares elicitation but closes the form unanswered** (`cancel`, as Claude Code does headless), the result is `form_not_answered`. For that request only, the agent may then ask in the chat and send the reply with `relay: true`. An explicit `decline` still stops.
 
 ### The production version: how a buyer organisation would delegate to its assistant
 
-A URL that carries a secret works for a demo, and Dock keeps it narrow:
+A URL that carries a secret works for a demo, and AimoPilot keeps it narrow:
 
 - one address per kitchen
 - revocable and expiring
@@ -172,7 +172,7 @@ It is still a bearer secret, in a place where URLs get copied and logged. Anthro
 The production version is standard MCP authorization (OAuth 2.1), with the mandate kept as the grant:
 
 1. **The connection.** The buyer's purchasing manager adds `https://<dock>/api/mcp` (no token) in their assistant.
-   - Dock answers 401 with RFC 9728 protected-resource metadata pointing at Dock's authorization server, or at the buyer's own identity provider.
+   - AimoPilot answers 401 with RFC 9728 protected-resource metadata pointing at AimoPilot's authorization server, or at the buyer's own identity provider.
    - The assistant identifies itself with its Client ID Metadata Document (Claude's or ChatGPT's published identity, so no registration step), with PKCE and an RFC 8707 `resource`.
 2. **The consent screen is the mandate.** The manager signs in with their organisation account and sees what they are delegating:
    - which kitchen, and which categories
@@ -195,7 +195,7 @@ Authorization: Bearer <mandate JWS>      (Authorization: Mandate <jws> works too
 Dock-Agent-Id: <agent id>
 ```
 
-The mandate is a JWT (`typ: mandate+jwt`, `aud: dock`) signed by the organisation's own Ed25519 key. Dock holds only the organisation's public key. There is no OAuth flow and no Dock account. Listing MCP tools works without a mandate; every tool call checks it.
+The mandate is a JWT (`typ: mandate+jwt`, `aud: dock`) signed by the organisation's own Ed25519 key. AimoPilot holds only the organisation's public key. There is no OAuth flow and no AimoPilot account. Listing MCP tools works without a mandate; every tool call checks it.
 
 For local runs, mint one for the fictional demo buyer, Laakso Catering Oy (valid 7 days):
 
@@ -226,7 +226,7 @@ Or check a project-scoped `.mcp.json` into a repo. Claude Code expands environme
 }
 ```
 
-Then ask, for example: *"Using the dock tools, order 1,000 litres of lactose-free milk for Monday."* The tool descriptions steer the model to start with `submit_need` and to bring Dock's questions back to you rather than answer them itself.
+Then ask, for example: *"Using the dock tools, order 1,000 litres of lactose-free milk for Monday."* The tool descriptions steer the model to start with `submit_need` and to bring AimoPilot's questions back to you rather than answer them itself.
 
 ## 3. Claude Desktop
 
@@ -251,7 +251,7 @@ Dock-Agent-Id: agent_laakso_buyer_01
 }
 ```
 
-Add `--allow-http` only if Dock runs over plain HTTP on another machine in a trusted network. Loopback and HTTPS need nothing extra.
+Add `--allow-http` only if AimoPilot runs over plain HTTP on another machine in a trusted network. Loopback and HTTPS need nothing extra.
 
 ## 4. Any other MCP client
 
@@ -271,7 +271,7 @@ const r = await client.callTool({ name: "read_mandate", arguments: {} });
 console.log(r.structuredContent);
 ```
 
-`pnpm demo:mcp --url http://localhost:3000` does the whole milk order this way, with no LLM and no Dock client code: a returning kitchen asks for 1,000 L, Dock flags it against the usual 100 L, the head chef confirms it on the form Dock sends through the client, answers one question, the agent shows three option cards and chooses one, gets a fixed-price quote, places the order, the owner signs off, and the script verifies the signed receipt.
+`pnpm demo:mcp --url http://localhost:3000` does the whole milk order this way, with no LLM and no AimoPilot client code: a returning kitchen asks for 1,000 L, AimoPilot flags it against the usual 100 L, the head chef confirms it on the form AimoPilot sends through the client, answers one question, the agent shows three option cards and chooses one, gets a fixed-price quote, places the order, the owner signs off, and the script verifies the signed receipt.
 
 ### Tools
 
@@ -282,7 +282,7 @@ Start every order with `submit_need`. The lower-level tools below the line stay 
 | `read_mandate` | What this agent may buy, spend and substitute, and who signs off above that. |
 | `submit_need` | **Start here.** The buyer's need as fields. Returns a step: `needs_confirmation`, `needs_input`, `options_ready`, `quoted`, `no_options` or `cancelled`. |
 | `respond_to_concerns` * | The buyer confirms or corrects a likely mistake ("1,000 L where you usually order 100 L"). |
-| `answer_questions` * | The buyer answers at most two typed questions Dock's memory could not answer. |
+| `answer_questions` * | The buyer answers at most two typed questions AimoPilot's memory could not answer. |
 | `choose_option` | The option card the buyer picks. Returns a signed fixed-price quote and the exact `place_order` arguments. |
 | `get_intake_step` | Where an order stands, and the call to make next. |
 | `read_kitchen_memory` | Order history, usual amounts, rules people stated, patterns learned. |
@@ -305,19 +305,21 @@ Every intake result is `{ ok, step, waitingFor, nextStep }`. `step.state` is whe
   "step": { "requestId": "req_…", "state": "needs_confirmation",
             "concerns": [{ "key": "quantity_tenfold:1000:L", "message": "1,000 L where you usually order about 100 L: did you mean 100 L?",
                            "confirmable": true, "corrections": [{ "id": "use_100_L", "label": "Make it 100 L" }] }] },
-  "nextStep": "Dock found a likely mistake. Ask the buyer: … Then call respond_to_concerns … This answer must come from the human buyer …" }
+  "nextStep": "AimoPilot found a likely mistake. Ask the buyer: … Then call respond_to_concerns … This answer must come from the human buyer …" }
 ```
 
 ### * The buyer answers, not the agent
 
-`respond_to_concerns` and `answer_questions` carry the human buyer's own answer. The agent relays Dock's question and passes on what the buyer says; it must never confirm a likely mistake or answer a question for them. While a confirmation is pending, `request_quote` and `place_order` on that request are refused with rule `human_input`, so the check cannot be skipped by going around the intake.
+`respond_to_concerns` and `answer_questions` carry the human buyer's own answer. The agent relays AimoPilot's question and passes on what the buyer says; it must never confirm a likely mistake or answer a question for them. While a confirmation is pending, `request_quote` and `place_order` on that request are refused with rule `human_input`, so the check cannot be skipped by going around the intake.
 
-The MCP specification has no tool annotation for "needs a person" (annotations are only the `readOnlyHint`, `destructiveHint`, `idempotentHint` and `openWorldHint` hints). What the 2026-07-28 revision does define is **elicitation through `input_required` results**: a tool answers with an `elicitation/create` form, the client shows it to the user (not the model), and retries the call with the user's answer. Dock uses exactly that:
+The MCP specification has no tool annotation for "needs a person" (annotations are only the `readOnlyHint`, `destructiveHint`, `idempotentHint` and `openWorldHint` hints). What the 2026-07-28 revision does define is **elicitation through `input_required` results**: a tool answers with an `elicitation/create` form, the client shows it to the user (not the model), and retries the call with the user's answer. AimoPilot uses exactly that:
 
-- **Client declares the `elicitation` capability** (form mode): Dock asks the buyer directly. The agent's arguments, if any, only pre-fill the form; the buyer's answer is what counts, and a declined form changes nothing (code `buyer_declined`).
-- **Client without elicitation** (or a 2025-era connection, which this stateless server cannot push requests to): the agent passes the buyer's answer as `by` and `responses` / `answers`. A call with no answer is refused with code `human_answer_required`.
+- **Client declares the `elicitation` capability** (form mode): AimoPilot asks the buyer directly. The agent's arguments, if any, only pre-fill the form; the buyer's answer is what counts, and a declined form changes nothing (code `buyer_declined`).
+- **Client without elicitation** (or a 2025-era connection, which this stateless server cannot push requests to): the agent passes the buyer's answer as `by` and `responses` / `answers`, recorded as relayed and not verified. A call with no answer is refused with code `human_answer_required`. The step also carries **`answerUrl`**, a one-time page on AimoPilot (30 minutes, single use, bound to that exact step) where the buyer taps one of AimoPilot's fixed choices themselves; the agent is told to hand it over instead of relaying. Answers there are recorded with the channel `answer_link`. Whoever holds the link can answer, so without the kitchen's signed-in session on that phone a confirmation that matters (an unusual amount, a rule broken) still goes to a named person's sign-off.
 
-Both tools also carry `_meta: { "dock/humanInput": { "required": true, … } }` in `tools/list` and `humanInput: true` in the manifest. That key is Dock's own, not a standard.
+Both tools also carry `_meta: { "dock/humanInput": { "required": true, … } }` in `tools/list` and `humanInput: true` in the manifest; in the OpenAPI document the same two operations carry `x-dock-human-input`. Those keys are AimoPilot's own, not a standard. Operations for the approver's phone are tagged `approver` (`x-dock-audience: approver`); `/api/v1/openapi.json?audience=agent` leaves them out, so an OpenAPI-to-tools converter never offers an agent a tool to approve orders.
+
+Output schemas in `tools/list` are published shallow (the top-level fields with their descriptions, one level of shape below): some runtimes send every output schema to their model on each call. The full shapes are in the OpenAPI document.
 
 ### Results and refusals
 
@@ -346,11 +348,14 @@ Same headers, same flow. The OpenAPI document lists every status and schema.
 DOCK=http://localhost:3000
 H=(-H "Authorization: Bearer $DOCK_MANDATE" -H "Dock-Agent-Id: $DOCK_AGENT_ID" -H "content-type: application/json")
 
-# start from a structured need; every reply is { step } and step.next is the next call with an example body
+# start from a structured need; every reply is { step, waitingFor, nextStep } (plus answerUrl when the buyer must
+# answer), and step.next is the next call with an example body whose answers are placeholders, never a pre-filled choice
 STEP=$(curl -s -X POST $DOCK/api/v1/intake "${H[@]}" \
-  -d '{"need":{"item":{"text":"lactose-free milk","category":"milk"},"quantity":{"amount":20,"unit":"L"},"deliverBy":"2026-11-17"},"by":"Aino"}')
-echo "$STEP" | jq '{state: .step.state, next: .step.next}'
-# then POST .step.next.path with the buyer's answer: /intake/{id}/concerns, /answers, /choice, and finally /orders
+  -d '{"need":{"item":{"text":"lactose-free milk","category":"milk"},"quantity":{"amount":20,"unit":"L"},"deliverOn":"2026-11-17"},"by":"Aino"}')
+echo "$STEP" | jq '{state: .step.state, waitingFor, nextStep, answerUrl, next: .step.next}'
+# then POST .step.next.path with the buyer's answer: /intake/{id}/concerns, /answers, /choice, and finally
+# POST /orders with just {"requestId": …}: Dock places the quote it signed at the choice.
+# "deliverOn" asks for that exact day; "deliverBy" for that day at the latest.
 ```
 
 The lower-level calls, for follow-up or a quote built line by line:
@@ -379,7 +384,7 @@ curl -s -X POST $DOCK/api/v1/orders "${H[@]}" \
 
 Errors are always `{ "error": { "code", "rule", "message", "details" } }`.
 
-## 6. Verify a receipt without trusting Dock
+## 6. Verify a receipt without trusting AimoPilot
 
 A committed order's `confirmation` is a compact JWS (`typ: order+jws`) signed by the wholesaler. The public keys are an RFC 7517 JWK Set at `/.well-known/jwks.json` (also `/api/v1/keys`), Ed25519 per RFC 8037. Any JOSE library can verify it offline:
 

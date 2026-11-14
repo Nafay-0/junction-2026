@@ -1,5 +1,5 @@
 import type { LedgerEntry } from "@/core/ledger";
-import type { PublicOrder } from "@/core/orders";
+import { DOOR_TEXT, type Door, type PublicOrder } from "@/core/orders";
 import { amount, attr, clock, day, eur, humanize, roleLabel } from "@/app/_ui/plain";
 import { memoryCount, memoryParts, publicReasons } from "./privacy";
 import { ruleTitleOf } from "./rules";
@@ -66,6 +66,9 @@ export type Trace = {
   orgName: string;
   agentId: string;
   via?: Via;
+  /** Which door it came through, and in words ("a voice call", "an outside agent over MCP"). */
+  door?: Door;
+  doorText?: string;
   asked: string;
   neededBy?: string;
   startedAt: string;
@@ -87,6 +90,7 @@ export type TraceInput = {
   catalogueSize?: number;
   orgName?: string;
   via?: Via;
+  door?: Door;
 };
 
 const SENTINEL_STOCK = 999_999;
@@ -203,7 +207,7 @@ const CONCERN_KIND: Record<string, string> = {
 };
 
 function actorOf(actor: string, approverNames: Map<string, string>): string {
-  if (actor === "dock") return "Dock";
+  if (actor === "dock") return "AimoPilot";
   if (actor.startsWith("agent:")) return "Buyer agent";
   if (actor.startsWith("buyer:")) return actor.slice(6);
   if (actor.startsWith("operator:")) return `Operations (${actor.slice(9)})`;
@@ -299,7 +303,7 @@ export function buildTrace(input: TraceInput): Trace {
           push({ phase: "answered", tone: "safety", title, lines, memory });
         } else if (step === "questions") {
           const fromMemory = memoryCount(d.reasons);
-          const qs = say(e.summary.replace(/^Dock asked \d+ questions?: /, "")).split(" / ");
+          const qs = say(e.summary.replace(/^(?:Dock|AimoPilot) asked \d+ questions?: /, "")).split(" / ");
           push({
             phase: "checked",
             tone: "safety",
@@ -340,7 +344,7 @@ export function buildTrace(input: TraceInput): Trace {
               step === "options"
                 ? `Built ${options.length === 1 ? "one option" : `${options.length} options`}; ruled out ${allExcluded.length} product${allExcluded.length === 1 ? "" : "s"}`
                 : `No option fits: ruled out ${allExcluded.length} product${allExcluded.length === 1 ? "" : "s"}`,
-            lines: step === "no_options" ? [say(e.summary.replace(/^Dock found no option: /, ""))] : fromMemory ? [`Ranked with ${fromMemory} preference${fromMemory > 1 ? "s" : ""} from the kitchen's own memory (kept private to the kitchen).`] : [],
+            lines: step === "no_options" ? [say(e.summary.replace(/^(?:Dock|AimoPilot) found no option: /, ""))] : fromMemory ? [`Ranked with ${fromMemory} preference${fromMemory > 1 ? "s" : ""} from the kitchen's own memory (kept private to the kitchen).`] : [],
             products,
             excluded: groupExclusions(allExcluded, name),
             memory,
@@ -467,7 +471,7 @@ export function buildTrace(input: TraceInput): Trace {
         const who = order?.approval?.approver.name ?? /^(.+?) \(/.exec(e.summary)?.[1] ?? base.actor;
         const how =
           signOff.method === "passkey"
-            ? "with the passkey on their phone (Face ID or fingerprint), verified by Dock"
+            ? "with the passkey on their phone (Face ID or fingerprint), verified by AimoPilot"
             : signOff.method === "link_token"
               ? "through the one-time link sent only to them"
               : signOff.method === "demo_tap"
@@ -543,6 +547,7 @@ export function buildTrace(input: TraceInput): Trace {
     orgName: input.orgName ?? last?.orgName ?? orgFromSummary ?? "Unknown organisation",
     agentId: request?.actor.replace(/^agent:/, "") ?? last?.agentId ?? "unknown",
     via: input.via,
+    ...(input.door ? { door: input.door, doorText: DOOR_TEXT[input.door] } : {}),
     asked: String(request?.data.text ?? ""),
     neededBy: typeof request?.data.neededBy === "string" ? request.data.neededBy : undefined,
     startedAt: entries[0]?.at ?? "",

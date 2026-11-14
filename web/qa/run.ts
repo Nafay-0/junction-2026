@@ -53,7 +53,7 @@ async function main() {
   const http = new Http(url, rec);
   const ping = await http.get("/api/v1");
   if (ping.status !== 200) {
-    console.error(`No Dock at ${url} (GET /api/v1 -> ${ping.status}). Start one: DOCK_CATALOG=seed pnpm start -p 4311`);
+    console.error(`No AimoPilot at ${url} (GET /api/v1 -> ${ping.status}). Start one: DOCK_CATALOG=seed pnpm start -p 4311`);
     process.exit(2);
   }
   // Do locally minted mandates verify here (same demo org keys)?
@@ -62,11 +62,12 @@ async function main() {
   const realHttp = realUrl ? new Http(realUrl, rec) : undefined;
   const live = { used: 0, budget: Number(process.env.QA_LIVE_BUDGET ?? 40) };
 
-  console.log(`Dock QA: ${probes.length} probes against ${url}${realUrl ? ` (+ real catalogue at ${realUrl})` : ""}, seed ${seed}, keys ${keysMatch ? "match" : "DO NOT match (mandate probes skipped)"}`);
+  console.log(`AimoPilot QA: ${probes.length} probes against ${url}${realUrl ? ` (+ real catalogue at ${realUrl})` : ""}, seed ${seed}, keys ${keysMatch ? "match" : "DO NOT match (mandate probes skipped)"}`);
   const results: Result[] = [];
   for (const p of probes) {
     rec.current = p.id;
     rec.allow5xx.clear();
+    rec.allowCodes = new Set();
     const check = new Checks();
     const before = rec.violations.length;
     const t0 = Date.now();
@@ -85,6 +86,11 @@ async function main() {
         status = "error";
         check.failures.push(`probe threw: ${(err as Error).stack?.split("\n").slice(0, 3).join(" | ")}`);
       }
+    }
+    if (rec.rateLimited) {
+      status = "error";
+      check.failures.unshift(`the server rate-limited this address ${rec.rateLimited} time(s): start it with DOCK_RATE_LIMITS=off (qa/bin/fresh-server.sh does) for the full run`);
+      rec.rateLimited = 0;
     }
     const violations = rec.violations.length - before;
     if (status === "pass" && (check.failures.length || violations)) status = "fail";

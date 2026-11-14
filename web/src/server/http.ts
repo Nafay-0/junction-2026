@@ -3,6 +3,7 @@ import { DockError, isDockError } from "@/core/errors";
 import type { AgentSession, Dock } from "@/core/orders";
 import { consoleContextOf } from "./console-context";
 import { doorLog, interfaceOf } from "./ops/door";
+import { licenceGate } from "./ops/licence-gate";
 import { suspensions } from "./ops/suspensions";
 import { getRuntime, type Runtime } from "./runtime";
 
@@ -23,9 +24,12 @@ export async function handle(fn: (rt: Runtime) => Promise<Response>): Promise<Re
     return await fn(await getRuntime());
   } catch (err) {
     unstable_rethrow(err); // let Next.js see its own control-flow errors (e.g. "this route is request-time")
-    if (isDockError(err)) return Response.json(errorBody(err.code, err.message, err.rule, err.details), { status: err.status });
+    if (isDockError(err)) {
+      const retry = err.status === 503 || err.status === 429 ? Number((err.details as { retryAfterSeconds?: unknown } | undefined)?.retryAfterSeconds) : NaN;
+      return Response.json(errorBody(err.code, err.message, err.rule, err.details), { status: err.status, ...(Number.isFinite(retry) && retry > 0 ? { headers: { "retry-after": String(Math.ceil(retry)) } } : {}) });
+    }
     console.error(err);
-    return Response.json(errorBody("internal_error", "Something went wrong inside Dock."), { status: 500 });
+    return Response.json(errorBody("internal_error", "Something went wrong inside AimoPilot."), { status: 500 });
   }
 }
 
@@ -49,15 +53,19 @@ export async function authenticate(req: Request, dock: Dock): Promise<AgentSessi
   }
   const call = { at: new Date().toISOString(), agentId: session.agentId, orgId: session.mandate.issuer.orgId, orgName: session.mandate.issuer.name, ...door };
   try {
-    suspensions(dock).enforce(session, door);
+    suspensions(dock).enforce(session, { ...door, method: req.method });
   } catch (err) {
     if (isDockError(err)) doorLog(dock).record({ ...call, ok: false, code: err.code, rule: err.rule });
     throw err;
   }
   doorLog(dock).record({ ...call, ok: true }, session.mandate);
+  // The crash-test licence (DOCK_LICENCE_ENFORCE=on): the core sees the stricter of the mandate and the licence.
+  session = licenceGate(dock).apply(session);
   // The on-site console's browser session gets its own share of the live-lookup allowance (set in-process only).
   const consoleCtx = consoleContextOf(req);
   if (consoleCtx) session.share = `console:${consoleCtx.session}`;
+  // Which door a request it opens came through (core/orders.ts Door): set here, never from a request field.
+  session.door = consoleCtx ? (consoleCtx.door ?? "typed") : door.via === "mcp" ? "mcp" : door.via === "onsite" ? "store" : "rest";
   return session;
 }
 

@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { DockError } from "@/core/errors";
 import type { NeedInput } from "@/core/need";
+import { recordGroundingChecks } from "../../grounding";
 import { recordLlmSpend } from "../../limits";
 import { LIVE_PRICE, type CallMode } from "./live";
 
@@ -127,14 +128,14 @@ export class CallRegistry {
     const t = this.now();
     if (via === "speech" && !this.live(c)) throw new DockError(410, "call_over", "This call has ended. Start a new call, or type the request.");
     if (t - c.startedAt > CALL_LIMITS.typedMs + (c.expiresAt - c.startedAt)) throw new DockError(410, "call_over", "This call is too old. Start a new one.");
-    if (c.toolCalls >= CALL_LIMITS.toolCalls) throw new DockError(429, "call_tool_limit", `This call has made ${CALL_LIMITS.toolCalls} requests to Dock, its limit. Start a new call.`);
+    if (c.toolCalls >= CALL_LIMITS.toolCalls) throw new DockError(429, "call_tool_limit", `This call has made ${CALL_LIMITS.toolCalls} requests to AimoPilot, its limit. Start a new call.`);
     c.toolCalls += 1;
     c.lastSeen = t;
     return c;
   }
 
   countInterpret(c: Call) {
-    if (c.interprets >= CALL_LIMITS.interprets) throw new DockError(429, "call_interpret_limit", `This call has asked Dock to read ${CALL_LIMITS.interprets} requests, its limit. Start a new call.`);
+    if (c.interprets >= CALL_LIMITS.interprets) throw new DockError(429, "call_interpret_limit", `This call has asked AimoPilot to read ${CALL_LIMITS.interprets} requests, its limit. Start a new call.`);
     c.interprets += 1;
   }
 
@@ -143,7 +144,10 @@ export class CallRegistry {
     if (!c || c.kitchen !== kitchen) throw new DockError(404, "call_not_found", "No such call for this kitchen.");
     c.lastSeen = this.now();
     if (report?.usage) c.usage = report.usage;
-    if (report?.grounding) c.grounding = report.grounding;
+    if (report?.grounding) {
+      recordGroundingChecks("voice", report.grounding.checked - c.grounding.checked); // the operations portal's count (server/grounding.ts)
+      c.grounding = report.grounding;
+    }
     return c;
   }
 

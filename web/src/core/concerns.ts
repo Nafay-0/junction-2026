@@ -78,7 +78,17 @@ export type CheckContext = {
   suspendedPreferenceIds?: string[];
   /** Are two product families related (a knowledge map can tell)? Default: relatedFamilies below. */
   related?: (a: string, b: string) => boolean;
+  /**
+   * Orders of this kitchen still waiting for a person's sign-off. They are not in the history yet (it holds committed
+   * orders only), but they are just as likely to be what a second request repeats.
+   */
+  pending?: PendingOrderSummary[];
+  /** The site within the kitchen the request is for (a daycare unit of a school kitchen): amounts compare with its own orders. */
+  site?: string;
 };
+
+/** An order waiting for sign-off, as the duplicate check needs it (the intake builds these from the repository). */
+export type PendingOrderSummary = { orderId: string; placedAt: string; family: string; amount: number; unit: BaseUnit; neededBy?: string; deliveryDate: string };
 
 /** True when the catalogue reports each product's own order cut-off (the partner's live API does): then that decides. */
 export function hasProductCutoffs(ctx: CheckContext): boolean {
@@ -282,9 +292,15 @@ export function checkQuantity(need: StructuredNeed, ctx: CheckContext): Concern[
     ];
   }
 
-  const usual = usualAmount(ctx.profile, ctx.family);
+  const usual = usualAmount(ctx.profile, ctx.family, ctx.site);
   const base = baseAmount(need, ctx);
   if (!base) return [];
+  if (!usual && ctx.site) {
+    // A site's first order: never "too small" against the whole kitchen; only an amount above the kitchen's own
+    // usual is worth a word.
+    const kitchen = usualAmount(ctx.profile, ctx.family);
+    return kitchen && kitchen.unit === base.unit && base.amount <= kitchen.amount * TENFOLD_LOW ? [] : largeFirstOrder(need, ctx, base);
+  }
   if (!usual) return largeFirstOrder(need, ctx, base);
   if (usual.unit !== base.unit) return [];
   const usualText = formatAmount(usual.amount, usual.unit);
@@ -395,7 +411,7 @@ export function checkPack(need: StructuredNeed, ctx: CheckContext): Concern[] {
       code: "pack_uncertain",
       severity: "warning",
       message: estimate
-        ? `${named.name}: what one ${named.salesUnit ?? "pack"} holds is not certain (${named.packContent.label}). Dock's estimate is ${estimate.salesUnits} ${named.salesUnit ?? "packs"} = ${formatAmount(estimate.delivered.amount, estimate.delivered.unit)}. Use the estimate?`
+        ? `${named.name}: what one ${named.salesUnit ?? "pack"} holds is not certain (${named.packContent.label}). AimoPilot's estimate is ${estimate.salesUnits} ${named.salesUnit ?? "packs"} = ${formatAmount(estimate.delivered.amount, estimate.delivered.unit)}. Use the estimate?`
         : `${named.name}: what one ${named.salesUnit ?? "pack"} holds is not known (${named.packContent.label}), so ${formatAmount(q.amount, q.unit)} cannot be turned into packs.`,
       confirmable: !!estimate,
       corrections: [{ id: "choose_other", label: "Show products with a known pack size instead", patch: { item: { productId: null } } }],
@@ -404,27 +420,40 @@ export function checkPack(need: StructuredNeed, ctx: CheckContext): Concern[] {
   ];
 }
 
+/** "a moment ago", "12 minutes ago", "3 hours ago" (QA: "ordered 1 hour ago" was said for an order 3 minutes old). */
+export function agoText(ms: number): string {
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 1) return "a moment ago";
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+  const hours = Math.round(minutes / 60);
+  return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+}
+
 export function checkDuplicate(need: StructuredNeed, ctx: CheckContext): Concern[] {
   const since = ctx.now.getTime() - DUPLICATE_WINDOW_HOURS * 3600_000;
   const today = localNow(ctx.now).date;
-  const dup = familyHistory(ctx.profile, ctx.family)
-    .reverse()
-    .find((h) => {
-      if (Date.parse(h.placedAt) < since) return false;
-      const forDay = h.neededBy ?? h.deliveryDate;
-      return need.deliverBy ? forDay === need.deliverBy : h.deliveryDate >= today;
-    });
+  const matches = (h: { placedAt: string; neededBy?: string; deliveryDate: string }) => {
+    if (Date.parse(h.placedAt) < since) return false;
+    const forDay = h.neededBy ?? h.deliveryDate;
+    return need.deliverBy ? forDay === need.deliverBy : h.deliveryDate >= today;
+  };
+  // A waiting order first: it is the likelier repeat (the buyer may think the first one did not go through).
+  const waiting = (ctx.pending ?? []).filter((o) => o.family === ctx.family).sort((a, b) => b.placedAt.localeCompare(a.placedAt)).find(matches);
+  const dup = waiting ?? familyHistory(ctx.profile, ctx.family).reverse().find(matches);
   if (!dup) return [];
-  const hours = Math.max(1, Math.round((ctx.now.getTime() - Date.parse(dup.placedAt)) / 3600_000));
+  const ago = agoText(ctx.now.getTime() - Date.parse(dup.placedAt));
+  const message = waiting
+    ? `You already asked for ${formatAmount(dup.amount, dup.unit)} of ${dup.family} ${ago} for ${formatDay(dup.neededBy ?? dup.deliveryDate)} (order ${dup.orderId}), and that order is still waiting for sign-off. Order again?`
+    : `You already ordered ${formatAmount(dup.amount, dup.unit)} of ${dup.family} ${ago} for ${formatDay(dup.neededBy ?? dup.deliveryDate)} (order ${dup.orderId}). Order again?`;
   return [
     {
       key: `duplicate_recent:${dup.orderId}`,
       code: "duplicate_recent",
       severity: "warning",
-      message: `You already ordered ${formatAmount(dup.amount, dup.unit)} of ${dup.family} ${hours} hour${hours === 1 ? "" : "s"} ago for ${formatDay(dup.neededBy ?? dup.deliveryDate)} (order ${dup.orderId}). Order again?`,
+      message,
       confirmable: true,
-      corrections: [{ id: "cancel", label: "Cancel: the earlier order covers it", cancel: true }],
-      evidence: { orderId: dup.orderId, placedAt: dup.placedAt },
+      corrections: [{ id: "cancel", label: waiting ? "Cancel: the order waiting for sign-off covers it" : "Cancel: the earlier order covers it", cancel: true }],
+      evidence: { orderId: dup.orderId, placedAt: dup.placedAt, ...(waiting ? { status: "pending_approval" } : {}) },
     },
   ];
 }

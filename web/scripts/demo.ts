@@ -87,7 +87,7 @@ async function happyPath(): Promise<void> {
   let interruptions = 0;
   while (s.state === "needs_confirmation" || s.state === "needs_input") {
     interruptions += 1;
-    step(s.state, "Dock stops the buyer:");
+    step(s.state, "AimoPilot stops the buyer:");
     showStep(s);
     s = s.state === "needs_confirmation" ? await settle(agent, s, LAAKSO) : (await agent.intakeAnswers(s.requestId, LAAKSO, s.questions.map((q) => ({ questionId: q.id, optionId: q.options[0].id })))).body.step;
   }
@@ -205,7 +205,7 @@ async function returningKitchen(): Promise<void> {
   const agent = base.as(token, KITCHEN_ORG.agentId);
 
   const k = (await agent.kitchen()).body.kitchen;
-  step("memory", `What Dock remembers about ${k.name}:`);
+  step("memory", `What AimoPilot remembers about ${k.name}:`);
   for (const f of k.families) {
     const last = f.lastOrder;
     say(`      ${f.family}: ${f.orders} orders, ${f.usual.text}; last time ${last.lines.map((l) => `${l.packs} x ${l.productId}`).join(" + ")} on ${formatDay(last.placedAt.slice(0, 10))}`);
@@ -224,7 +224,7 @@ async function returningKitchen(): Promise<void> {
   // (a) 1,000 litres where the kitchen usually takes about 100.
   say("\n  (a) The agent sends 1,000 L where the kitchen usually orders about 100 L.");
   let s = (await agent.intakeOpen({ text: "1000 litres of lactose-free milk for " + formatDay(days[0]), item: { text: "lactose-free milk", category: "milk" }, quantity: { amount: 1000, unit: "L" }, deliverBy: days[0] }, SANNA)).body.step;
-  step(s.state, `Before any price lookup, Dock asks:`);
+  step(s.state, `Before any price lookup, AimoPilot asks:`);
   showStep(s);
   const tenfold = s.concerns.find((c) => c.code === "quantity_tenfold");
   if (tenfold) {
@@ -237,7 +237,7 @@ async function returningKitchen(): Promise<void> {
   // (b) No stated preference: one question, three options, one chosen, quoted, approved.
   say(`\n  (b) "100 litres of milk for ${formatDay(days[1])}", nothing said about price or CO2.`);
   s = await settle(agent, (await agent.intakeOpen({ item: { text: "milk", category: "milk" }, quantity: { amount: 100, unit: "L" }, deliverBy: days[1] }, SANNA)).body.step);
-  step(s.state, `Dock asks ${s.questions.length} question${s.questions.length === 1 ? "" : "s"}; the rest comes from memory:`);
+  step(s.state, `AimoPilot asks ${s.questions.length} question${s.questions.length === 1 ? "" : "s"}; the rest comes from memory:`);
   showStep(s);
   const requestB = s.requestId;
   if (s.state === "needs_input") {
@@ -312,7 +312,10 @@ async function attacks(): Promise<void> {
   const price = P.offerOf(cheap.id).unitPriceCents;
   const packsFor = (cents: number) => Math.max(1, Math.ceil(cents / price));
   // For the big amounts: a product with enough stock (or none reported) for well over the weekly budget.
-  const roomy = P.milk.find((x) => { const o = P.offerOf(x.id); return o.stockKnown === false || o.availablePacks * o.unitPriceCents > m.weeklyBudgetCents + 30_000; }) ?? cheap;
+  // The demo kitchens' own weekly budget is sized for a day of demos, so the budget attack signs a mandate with a
+  // €2,000 week: the same key, the same rule, a cap the seed's stock can reach.
+  const ATTACK_WEEK = 200_000;
+  const roomy = P.milk.find((x) => { const o = P.offerOf(x.id); return o.stockKnown === false || o.availablePacks * o.unitPriceCents > ATTACK_WEEK + 30_000; }) ?? cheap;
   const roomyPrice = P.offerOf(roomy.id).unitPriceCents;
   const roomyPacks = (cents: number) => Math.max(1, Math.ceil(cents / roomyPrice));
   step("products", `Chosen by attribute from the catalogue, checked live once: ${cheap.id} (${cheap.name}, ${formatEur(price)}/pack)${P.regular ? `, regular milk ${P.regular.id}` : ""}${P.allergen ? `, ${P.allergen.id} (contains ${P.allergen.allergens.filter((a) => m.forbiddenAllergens.includes(a)).join(", ")})` : ""}.`);
@@ -326,7 +329,13 @@ async function attacks(): Promise<void> {
   results.push({ name: "Reuse a quote that already bought something", reply: await agent.placeOrder(requestId, smallQuote.body.quoteToken, pick(smallQuote.body)) });
 
   // 2. Over the weekly budget.
-  await tryOrder(`Order ${formatEur(roomyPacks(m.weeklyBudgetCents + 20_000) * roomyPrice)} against a ${formatEur(m.weeklyBudgetCents)} weekly budget`, [{ productId: roomy.id, quantity: roomyPacks(m.weeklyBudgetCents + 20_000) }]);
+  {
+    const week = base.as(await mandateToken({ weeklyBudgetCents: ATTACK_WEEK }), DEMO_ORG.agentId);
+    const lines = [{ productId: roomy.id, quantity: roomyPacks(ATTACK_WEEK + 20_000) }];
+    const name = `Order ${formatEur(lines[0].quantity * roomyPrice)} against a ${formatEur(ATTACK_WEEK)} weekly budget`;
+    const q = await week.quote(requestId, lines);
+    results.push({ name, reply: q.status !== 201 ? q : await week.placeOrder(requestId, q.body.quoteToken, pick(q.body)) });
+  }
 
   // 3. Forbidden allergen.
   if (P.allergen) await tryOrder(`Buy ${P.allergen.name}, which contains ${P.allergen.allergens.filter((a) => m.forbiddenAllergens.includes(a)).join(", ")}`, [{ productId: P.allergen.id, quantity: 5 }]);
@@ -433,12 +442,12 @@ async function fullLedger(): Promise<{ verification: { ok: boolean }; entries: u
 
 async function main() {
   const source = urlFlag >= 0 ? undefined : (await getRuntime()).catalogSource;
-  say(`Dock scripted buyer: ${urlFlag >= 0 ? `against ${baseUrl}` : "in-process (no server)"}; catalogue: ${source ? (source.kind === "valio" ? `the partner's real catalogue (${source.products} products) with its live price/availability API` : "the 12-product seed (no index or no VALIO_API_KEY)") : "whatever the server runs"}`);
+  say(`AimoPilot scripted buyer: ${urlFlag >= 0 ? `against ${baseUrl}` : "in-process (no server)"}; catalogue: ${source ? (source.kind === "valio" ? `the partner's real catalogue (${source.products} products) with its live price/availability API` : "the 12-product seed (no index or no VALIO_API_KEY)") : "whatever the server runs"}`);
   if (which === "all" || which === "happy") await happyPath();
   if (which === "all" || which === "kitchen") await returningKitchen();
   if (which === "all" || which === "attacks") await attacks();
   const { catalog } = (await base.ledger()).body;
-  say(`\nPartner API use for the whole run: ${catalog.liveCalls} live lookups by Dock, ${catalog.upstream ? `${catalog.upstream.httpRequests} HTTP requests to the partner (${catalog.upstream.cacheHits} answered from the cache)` : "none (seed catalogue)"}; ${catalog.searches} local master-data searches.`);
+  say(`\nPartner API use for the whole run: ${catalog.liveCalls} live lookups by AimoPilot, ${catalog.upstream ? `${catalog.upstream.httpRequests} HTTP requests to the partner (${catalog.upstream.cacheHits} answered from the cache)` : "none (seed catalogue)"}; ${catalog.searches} local master-data searches.`);
 }
 
 main()

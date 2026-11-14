@@ -1,26 +1,25 @@
-import { decodeJwt } from "jose";
 import { statusFromOffer, type CatalogPort, type LiveOptions, type LiveStatus, type Product } from "@/core/catalog";
 import { likeForLike } from "@/core/options";
-import { DockError, type AgentSession, type Dock } from "@/core/orders";
+import { DockError, type Dock, type ProductHold, type ProductHolds, type PublicOrder } from "@/core/orders";
 import { alternativesFor as knowledgeAlternatives } from "../knowledge/service";
 import { radarStore, type RadarStore } from "./store";
 import type { Hold } from "./types";
 
 /**
- * The recall hold, enforced in the server layer in front of the core, the way suspensions are. The core is not
- * edited; it gains a hold through two seams it already has:
+ * The recall hold. The core's gate checks it as the named rule `recall_hold` through the `ProductHolds` dependency
+ * of createDock (core/orders.ts), on every quote preview, every order and the re-check before sign-off, so the hold
+ * shows in the gate's own rule list and an order is kept, refused, with that reason. The server layer adds:
  *
  *   1. The catalogue port. Dock reads live availability through `CatalogPort.getLiveStatus`. A held product comes
- *      back as `sales_block` with the notice as its message, so the intake's existing options logic leaves it out
- *      with that reason and ranks the alternatives, and the quote refuses it, without any new code in the core.
- *   2. The Dock object's own methods. `requestQuote` and `placeOrder` refuse a held product with the named rule
- *      `recall_hold` (an order quoted before the hold cannot slip through), and `decideApproval` refuses to commit
- *      a waiting order that contains one: the wholesaler does not deliver a product it holds under a recall notice.
- *      The approver can still decline. Every refusal is a ledger entry naming the rule, the notice and its link.
+ *      back as `sales_block` with the notice as its message, so the intake's options logic leaves it out with that
+ *      reason and ranks the alternatives.
+ *   2. An early refusal of a quote for a held product (409, rule recall_hold), with the alternatives that have no
+ *      hold, and the radar's own counters: every quote, order or sign-off a hold stopped counts against it (the
+ *      drill's stopwatch reads the first).
  *
- * The smallest hook the core should gain instead: a `ProductHolds` dependency of createDock
- * (`holdsFor(productIds) -> { productId, rule, reason, url }[]`) checked by evaluatePolicy as a rule `recall_hold`
- * (fail for new orders, and at the re-check before sign-off), so the hold shows in the gate's own rule list.
+ *   const recall = recallLayer(stores.catalog);
+ *   const dock = createDock({ catalog: new MeteredCatalog(recall.catalog), holds: recall.holds, ... });
+ *   recall.attach(dock);
  */
 export const RECALL_RULE = "recall_hold";
 
@@ -90,23 +89,6 @@ async function alternativesFor(catalog: CatalogPort, store: RadarStore, productI
   }
 }
 
-function quoteProductIds(token: unknown): string[] {
-  if (typeof token !== "string") return [];
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return [];
-    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")) as { lines?: { productId?: string }[]; quote?: { lines?: { productId?: string }[] } };
-    return [...(payload.lines ?? []), ...(payload.quote?.lines ?? [])].map((l) => l.productId).filter((x): x is string => typeof x === "string");
-  } catch {
-    try {
-      const p = decodeJwt(token) as { lines?: { productId?: string }[] };
-      return (p.lines ?? []).map((l) => l.productId).filter((x): x is string => typeof x === "string");
-    } catch {
-      return [];
-    }
-  }
-}
-
 /**
  * A catalogue port that knows about holds: live status says `sales_block` for a held product, with the notice as
  * the reason, and live offers leave it out. Everything else passes through unchanged (a Proxy, so the adapters'
@@ -139,51 +121,62 @@ export function recallAwareCatalog<C extends CatalogPort>(inner: C, holdsOf: (id
   });
 }
 
+/** A hold as the core's gate reads it. */
+export function toProductHold(h: Hold): ProductHold {
+  return { productId: h.productId, name: h.productName, reason: h.reason, url: h.noticeUrl, drill: h.drill };
+}
+
+/** The radar's count of a call a hold stopped (no ledger line: the gate's own decision entry names the rule). */
+function countRefusal(store: RadarStore, h: Hold): void {
+  const now = new Date().toISOString();
+  h.refusals += 1;
+  h.lastRefusalAt = now;
+  const drill = h.drillId ? store.state.drills.find((d) => d.drillId === h.drillId) : undefined;
+  if (drill && !drill.firstRefusalAt) drill.firstRefusalAt = now;
+  store.save();
+}
+
+const heldByGate = (o: PublicOrder) => o.status === "rejected" && o.decision.rules.some((r) => r.rule === RECALL_RULE && r.outcome === "fail");
+
 /**
- * The recall layer of one runtime: build it around the catalogue before createDock, attach it to the Dock after.
- *
- *   const recall = recallLayer(stores.catalog);
- *   const dock = createDock({ catalog: new MeteredCatalog(recall.catalog), ... });
- *   recall.attach(dock);
+ * The recall layer of one runtime: build it around the catalogue before createDock (its `catalog` and `holds` go
+ * in), attach it to the Dock after.
  */
 export function recallLayer<C extends CatalogPort>(inner: C) {
   let store: RadarStore | undefined;
   const catalog = recallAwareCatalog(inner, (ids) => store?.activeHolds(ids) ?? []);
+  const holds: ProductHolds = { holdsFor: (ids) => (store?.activeHolds(ids) ?? []).map(toProductHold) };
   return {
     catalog,
+    holds,
     attach(dock: Dock): Dock {
       store = radarStore(dock);
       const s = store;
       const original = { requestQuote: dock.requestQuote, placeOrder: dock.placeOrder, decideApproval: dock.decideApproval };
-
-      const check = async (session: AgentSession, ids: string[], call: { requestId?: string; path: string }) => {
-        const h = s.activeHolds(ids)[0];
-        if (!h) return;
-        throw refusal(s, h, await alternativesFor(inner, s, h.productId), { actor: `agent:${session.agentId}`, ...call });
+      const countFor = (o: PublicOrder) => {
+        if (!heldByGate(o)) return;
+        for (const h of s.activeHolds(o.lines.map((l) => l.productId))) countRefusal(s, h);
       };
 
       dock.requestQuote = async (session, input) => {
         const lines = ((input as { lines?: { productId?: unknown }[] }).lines ?? []).map((l) => l.productId).filter((x): x is string => typeof x === "string");
-        await check(session, lines, { requestId: String((input as { requestId?: unknown }).requestId ?? "") || undefined, path: "requestQuote" });
+        const h = s.activeHolds(lines)[0];
+        if (h) {
+          const requestId = String((input as { requestId?: unknown }).requestId ?? "") || undefined;
+          throw refusal(s, h, await alternativesFor(inner, s, h.productId), { actor: `agent:${session.agentId}`, requestId, path: "requestQuote" });
+        }
         return original.requestQuote(session, input);
       };
+      // Orders and sign-offs: the gate refuses a held product itself (rule recall_hold); the radar only counts it.
       dock.placeOrder = async (session, input) => {
-        const i = input as { lines?: { productId?: unknown }[]; quoteToken?: unknown; requestId?: unknown };
-        const ids = [...(i.lines ?? []).map((l) => l.productId).filter((x): x is string => typeof x === "string"), ...quoteProductIds(i.quoteToken)];
-        await check(session, ids, { requestId: typeof i.requestId === "string" ? i.requestId : undefined, path: "placeOrder" });
-        return original.placeOrder(session, input);
+        const o = await original.placeOrder(session, input);
+        countFor(o);
+        return o;
       };
       dock.decideApproval = async (approvalId, input) => {
-        if ((input as { decision?: unknown }).decision === "approve") {
-          const ctx = await dock.approvalContext(approvalId).catch(() => undefined);
-          const h = ctx ? s.activeHolds(ctx.order.lines.map((l) => l.productId))[0] : undefined;
-          if (ctx && h) {
-            const alternatives = await alternativesFor(inner, s, h.productId);
-            const err = refusal(s, h, alternatives, { actor: `approver:${ctx.approval.approver.role}`, requestId: ctx.order.requestId, orderId: ctx.order.orderId, path: "decideApproval" });
-            throw new DockError(409, err.code, `${err.message} The wholesaler will not deliver it, so this order cannot be approved; decline it and the agent can order an alternative.`, RECALL_RULE, err.details);
-          }
-        }
-        return original.decideApproval(approvalId, input);
+        const o = await original.decideApproval(approvalId, input);
+        countFor(o);
+        return o;
       };
       return dock;
     },

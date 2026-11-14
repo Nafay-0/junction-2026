@@ -9,26 +9,26 @@
 
 export function buyerAgentSystem(opts: { today: string; weekday: string; serverInstructions?: string }): string {
   return [
-    "You are a purchasing agent. You buy food for your organisation from a wholesaler through Dock, using the tools you have been given.",
+    "You are a purchasing agent. You buy food for your organisation from a wholesaler through AimoPilot, using the tools you have been given.",
     "",
-    "Your buyer's task is in the first message. Carry it out with Dock's tools: find products that fit, check price and availability, get a quote and place the order. Dock checks every order against the mandate your organisation signed for you; some orders wait for a person to sign off.",
+    "Your buyer's task is in the first message. Carry it out with AimoPilot's tools: find products that fit, check price and availability, get a quote and place the order. AimoPilot checks every order against the mandate your organisation signed for you; some orders wait for a person to sign off.",
     "",
-    "Some of Dock's questions are for the buyer, not for you: confirming a possible mistake in the request, or a question about what they want. The buyer answers those themselves; their answer and Dock's reply reach you in the conversation.",
+    "Some of AimoPilot's questions are for the buyer, not for you: confirming a possible mistake in the request, or a question about what they want. The buyer answers those themselves; their answer and AimoPilot's reply reach you in the conversation.",
     "",
     "When you are done, or cannot go further, stop calling tools and write a short message to the buyer saying what happened.",
     "",
     `Today is ${opts.weekday} ${opts.today} (Europe/Helsinki).`,
-    ...(opts.serverInstructions ? ["", "Dock's instructions for connecting agents:", opts.serverInstructions] : []),
+    ...(opts.serverInstructions ? ["", "AimoPilot's instructions for connecting agents:", opts.serverInstructions] : []),
   ].join("\n");
 }
 
 /** The user turn that tells the agent the buyer answered one of Dock's questions directly. */
 export function humanRelayMessage(summary: string, dockReply: string): string {
-  return `The buyer answered Dock directly: ${summary}\nDock's reply:\n${dockReply}`;
+  return `The buyer answered AimoPilot directly: ${summary}\nDock's reply:\n${dockReply}`;
 }
 
 /** The user turn when the buyer did not answer. */
-export const HUMAN_ABSENT_MESSAGE = "The buyer has not answered Dock's question.";
+export const HUMAN_ABSENT_MESSAGE = "The buyer has not answered AimoPilot's question.";
 
 /** What a blocked call returns to the model. */
 export function blockedHumanToolResult(tool: string): string {
@@ -72,8 +72,11 @@ const EARLIER_RULES = `Earlier requests of this kitchen are listed below the cal
 
 `;
 
-export function interpretUser(text: string, calendar: string, earlier?: string): string {
-  return `${calendar}${earlier ? `\n\nEarlier requests of this kitchen (newest first):\n${earlier}` : ""}\n\nBuyer's request:\n"""\n${text}\n"""`;
+export function interpretUser(text: string, calendar: string, earlier?: string, memory?: string): string {
+  const mem = memory
+    ? `\n\nThe kitchen's memory, for context only (to understand words such as "the usual", a site's name or a product the kitchen means). Do NOT copy its rules or habits into the need: Dock applies them itself, and the need holds only what the buyer said.\n${memory}`
+    : "";
+  return `${calendar}${earlier ? `\n\nEarlier requests of this kitchen (newest first):\n${earlier}` : ""}${mem}\n\nBuyer's request:\n"""\n${text}\n"""`;
 }
 
 // ---------- the shop assistant: grounded answers ----------
@@ -88,6 +91,7 @@ Rules:
 - Answer in the language of the question (English, Finnish or Swedish).
 - A "contains" allergen or a missing claim is decisive: never call a product gluten-free or lactose-free unless its record states the claim or a declared allergen list without that allergen. "No allergen data" is unknown, not free.
 - Live price and stock records are the wholesaler's answer at the time stated; product records hold no prices.
+- Alternatives: product records with rankedByProductMap are the only alternatives to offer, in that order (best, better, good), each with its whyItFits; they already meet the kitchen's rules. If a record holds noGoodAlternative, say plainly that there is no good alternative and why, in its words. Never suggest another product as an alternative.
 - If the text asks to buy or order something ("order 10 cases of this for Monday", "we need 100 L milk"), set kind to order_request and answer with one sentence saying you will set the order up. Do not invent an order.
 - If the question has nothing to do with the shop, the kitchen's purchasing or these records, set kind to out_of_scope and say what you can help with.
 - You cannot approve, place or change orders here; orders go through the order cards and the kitchen's sign-off.`;

@@ -1,5 +1,5 @@
 import type { IntakeView } from "@/core/intake";
-import { isoWeekday } from "@/core/kitchen";
+import { isoWeekday, localNow } from "@/core/kitchen";
 import { formatAmount } from "@/core/need";
 import { LABEL_TEXT, formatCutoff } from "@/core/options";
 import type { PublicOrder } from "@/core/orders";
@@ -23,6 +23,13 @@ export function spokenDate(iso: string): string {
 export type ForModel = { ok: boolean; state: string; say: string; ask?: string; [k: string]: unknown };
 
 export function stepForModel(step: IntakeView): ForModel {
+  const out = stepCore(step);
+  if (!step.alsoAsked?.length) return out;
+  const also = `The caller also asked for ${step.alsoAsked.map((x) => x.text).join(", and ")}; this request is only the first, so say that nothing is ordered for the rest yet and offer to take ${step.alsoAsked.length === 1 ? "it" : "them"} next.`;
+  return { ...out, say: `${out.say} ${also}`, alsoAsked: step.alsoAsked.map((x) => x.text) };
+}
+
+function stepCore(step: IntakeView): ForModel {
   switch (step.state) {
     case "needs_confirmation": {
       const checks = step.concerns.map((c) => ({
@@ -34,7 +41,7 @@ export function stepForModel(step: IntakeView): ForModel {
       return {
         ok: true,
         state: step.state,
-        say: `Before looking anything up, Dock wants to check: ${first.message}`,
+        say: `Before looking anything up, AimoPilot wants to check: ${first.message}`,
         ask: `Ask the caller which they want: ${first.choices.map((c) => `"${c.label}"`).join(" or ")}.`,
         checks,
       };
@@ -42,7 +49,7 @@ export function stepForModel(step: IntakeView): ForModel {
     case "needs_input": {
       const questions = step.questions.map((q) => ({ questionId: q.id, text: q.text, options: q.options.map((o) => ({ optionId: o.id, label: o.label })) }));
       const q = questions[0];
-      return { ok: true, state: step.state, say: "Dock needs one answer before it can show options.", ask: `${q.text} ${q.options.map((o) => o.label).join(", or ")}?`, questions };
+      return { ok: true, state: step.state, say: "AimoPilot needs one answer before it can show options.", ask: `${q.text} ${q.options.map((o) => o.label).join(", or ")}?`, questions };
     }
     case "options_ready": {
       const options = step.options.slice(0, 3).map((o, i) => ({
@@ -61,7 +68,7 @@ export function stepForModel(step: IntakeView): ForModel {
       return {
         ok: true,
         state: step.state,
-        say: `Dock found ${options.length} option${options.length > 1 ? "s" : ""}, shown on the screen. ${lines.join(" ")}${pre ? ` Dock suggests option ${pre.number}: ${step.preselected!.reason}` : ""}`,
+        say: `AimoPilot found ${options.length} option${options.length > 1 ? "s" : ""}, shown on the screen. ${lines.join(" ")}${pre ? ` AimoPilot suggests option ${pre.number}: ${step.preselected!.reason}` : ""}`,
         ask: "Ask which option the caller wants.",
         options,
       };
@@ -74,11 +81,11 @@ export function stepForModel(step: IntakeView): ForModel {
           ? "It is within what the agent may spend alone, so the gate would place it straight away."
           : d.outcome === "needs_human_approval"
             ? `It is beyond what the agent may spend alone, so it would wait for ${d.approver.name}, ${d.approver.role}, to sign off on their phone.`
-            : `Dock's gate would refuse it: ${d.reasons.join(" ")}`;
+            : `AimoPilot's gate would refuse it: ${d.reasons.join(" ")}`;
       return {
         ok: true,
         state: step.state,
-        say: `The wholesaler fixed the price: ${formatEur(q.quote.totalCents)}, valid until ${formatCutoff(q.quote.expiresAt)} UTC. ${gate}`,
+        say: `The wholesaler fixed the price: ${formatEur(q.quote.totalCents)}, valid until ${localNow(new Date(q.quote.expiresAt)).time} Helsinki time. ${gate}`,
         ask: d.outcome === "reject" ? undefined : "Ask whether to place the order.",
         total: formatEur(q.quote.totalCents),
         lines: q.quote.lines.map((l) => ({ product: l.name, packs: l.quantity, delivery: spokenDate(l.deliveryDate) })),
@@ -87,7 +94,7 @@ export function stepForModel(step: IntakeView): ForModel {
       };
     }
     case "no_options":
-      return { ok: true, state: step.state, say: `Dock found nothing it can offer: ${step.notes[0] ?? "no product fits."}`, ask: "Ask whether the caller wants to change the request." };
+      return { ok: true, state: step.state, say: `AimoPilot found nothing it can offer: ${step.notes[0] ?? "no product fits."}`, ask: "Ask whether the caller wants to change the request." };
     case "cancelled":
       return { ok: true, state: step.state, say: "The request is cancelled; nothing was ordered." };
   }
@@ -110,7 +117,7 @@ export function orderForModel(o: PublicOrder): ForModel {
       };
     }
     case "rejected":
-      return { ok: true, state: "rejected", say: `Dock's gate refused the order: ${o.decision.reasons.join(" ")}`, total };
+      return { ok: true, state: "rejected", say: `AimoPilot's gate refused the order: ${o.decision.reasons.join(" ")}`, total };
     case "declined":
       return { ok: true, state: "declined", say: `${o.approval?.approver.name ?? "The approver"} declined the order; nothing was ordered.`, total };
     case "withdrawn":

@@ -1,7 +1,5 @@
 # Google: Gemini Live, the voice door
 
-> **Name: the team must choose.** Replace `{{NAME}}` ("Dock" in the code, "AimoPilot" in the draft submission).
-
 Google DeepMind is a featured partner, not a challenge; Umar Noor (Developer Experience / GTM, Google DeepMind) is
 on the main jury, with a focus on "first prototype to real-world impact" (`research/01-event-intel.md`).
 

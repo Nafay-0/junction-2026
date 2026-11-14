@@ -54,7 +54,7 @@ export async function readMemory(orgId: string): Promise<MemoryState> {
   try {
     res = await fetch(`/ui-api/memory/kitchens/${encodeURIComponent(orgId)}`, { cache: "no-store", credentials: "same-origin", headers: { accept: "application/json" } });
   } catch {
-    return { state: "error", message: "No connection to Dock." };
+    return { state: "error", message: "No connection to AimoPilot." };
   }
   if (res.status === 404 || res.status === 405) {
     // The route itself is missing (not merged yet), or it says this kitchen shares nothing.
@@ -63,7 +63,7 @@ export async function readMemory(orgId: string): Promise<MemoryState> {
     return { state: "ok", data: { orgId, items: [], views: [] } };
   }
   const body = (await res.json().catch(() => null)) as Raw | null;
-  if (!res.ok || !body) return { state: "error", message: (body?.error as Raw | undefined)?.message as string ?? `Dock answered ${res.status}.` };
+  if (!res.ok || !body) return { state: "error", message: (body?.error as Raw | undefined)?.message as string ?? `AimoPilot answered ${res.status}.` };
   const k = (body.kitchen ?? body) as Raw;
   const items = (Array.isArray(k.items) ? (k.items as Raw[]) : []).map(normaliseItem).filter((x): x is MemoryItem => !!x);
   const views = (Array.isArray(k.views) ? (k.views as Raw[]) : []).map((v) => ({ by: str(v.by) ?? "staff", at: str(v.at) ?? "" }));
@@ -80,9 +80,9 @@ export async function proposeCorrection(orgId: string, input: { itemId?: string;
     });
     if (res.status === 404 || res.status === 405) return { ok: false, message: "Proposals are not available on this server yet." };
     const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
-    if (!res.ok) return { ok: false, message: body?.error?.message ?? `Dock answered ${res.status}.` };
+    if (!res.ok) return { ok: false, message: body?.error?.message ?? `AimoPilot answered ${res.status}.` };
     return { ok: true, message: "Sent to the kitchen. Nothing changes until they confirm it." };
   } catch {
-    return { ok: false, message: "No connection to Dock." };
+    return { ok: false, message: "No connection to AimoPilot." };
   }
 }

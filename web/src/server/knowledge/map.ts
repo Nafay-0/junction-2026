@@ -1,5 +1,6 @@
 import type { IndexedProduct } from "@/core/catalog/partner";
 import { fold, LexicalSearch } from "@/core/catalog/search";
+import { forbiddenPresent } from "@/core/vocabulary";
 import { hardCheck, protectedClaims, type AllergenEvidence, type BuyerConstraints, type HardCheck } from "./facts";
 import type { KindDef, KnowledgeData, Profile } from "./types";
 import { DISH_USES, FAMILY_BRIDGES, INHERENTLY_VEGAN, INHERENTLY_VEGETARIAN, USE_TEXT, USES, isUse, type Family, type Use } from "./vocab";
@@ -567,7 +568,7 @@ export class KnowledgeMap {
           excluded++;
           continue;
         }
-        if (c?.forbiddenAllergens?.length && (!n.p.allergens.declared || c.forbiddenAllergens.some((a) => n.p.allergens.contains.includes(a) || n.p.allergens.mayContain.includes(a)))) {
+        if (c?.forbiddenAllergens?.length && (!n.p.allergens.declared || forbiddenPresent({ present: [...n.p.allergens.contains, ...n.p.allergens.mayContain], claims: n.p.claims }, c.forbiddenAllergens).length)) {
           excluded++;
           continue;
         }

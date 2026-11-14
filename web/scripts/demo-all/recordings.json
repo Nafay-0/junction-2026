@@ -1,0 +1,132 @@
+[
+  {
+    "match": "same again but 200 litres",
+    "output": {
+      "isPurchaseRequest": true,
+      "notPurchaseReason": null,
+      "item": {
+        "text": "lactose-free milk",
+        "category": "milk",
+        "attributes": [
+          "lactose_free"
+        ],
+        "excludedAttributes": [],
+        "productId": null
+      },
+      "quantity": {
+        "amount": 200,
+        "unit": "L"
+      },
+      "deliverBy": "{{weekday:1}}",
+      "requiredClaims": [],
+      "forbiddenAllergens": [],
+      "optimise": "price",
+      "sameAsLastTime": false,
+      "basedOnRequestId": "{{earlier:0}}",
+      "takenFromEarlier": [
+        "item",
+        "attributes",
+        "deliverBy",
+        "optimise"
+      ]
+    }
+  },
+  {
+    "match": "1,000 litres of lactose-free milk by Monday",
+    "output": {
+      "isPurchaseRequest": true,
+      "notPurchaseReason": null,
+      "item": {
+        "text": "lactose-free milk",
+        "category": "milk",
+        "attributes": [
+          "lactose_free"
+        ],
+        "excludedAttributes": [],
+        "productId": null
+      },
+      "quantity": {
+        "amount": 1000,
+        "unit": "L"
+      },
+      "deliverBy": "{{weekday:1}}",
+      "requiredClaims": [],
+      "forbiddenAllergens": [],
+      "optimise": "price",
+      "sameAsLastTime": false
+    }
+  },
+  {
+    "match": "Transcribe the purchase list in this image.",
+    "output": {
+      "isOrderList": true,
+      "deliverByAsWritten": "Monday",
+      "lines": [
+        {
+          "text": "Order for Monday",
+          "item": null,
+          "amountAsWritten": null,
+          "amount": null,
+          "unit": null,
+          "legibility": "clear",
+          "kind": "heading",
+          "why": null,
+          "box": null,
+          "page": null
+        },
+        {
+          "text": "Lactose free milk 40 L",
+          "item": "Lactose free milk",
+          "amountAsWritten": "40 L",
+          "amount": 40,
+          "unit": "L",
+          "legibility": "clear",
+          "kind": "item",
+          "why": null,
+          "box": null,
+          "page": null
+        },
+        {
+          "text": "Cream 10 L",
+          "item": "Cream",
+          "amountAsWritten": "10 L",
+          "amount": 10,
+          "unit": "L",
+          "legibility": "clear",
+          "kind": "item",
+          "why": null,
+          "box": null,
+          "page": null
+        },
+        {
+          "text": "Butter 5 kg",
+          "item": "Butter",
+          "amountAsWritten": "5 kg",
+          "amount": 5,
+          "unit": "kg",
+          "legibility": "clear",
+          "kind": "item",
+          "why": null,
+          "box": null,
+          "page": null
+        },
+        {
+          "text": "Eggs 360 pcs",
+          "item": "Eggs",
+          "amountAsWritten": "360 pcs",
+          "amount": 360,
+          "unit": "pcs",
+          "legibility": "clear",
+          "kind": "item",
+          "why": null,
+          "box": null,
+          "page": null
+        }
+      ]
+    }
+  },
+  {
+    "match": "Buyer's question",
+    "output": "{{assistant:alternatives}}"
+  }
+]

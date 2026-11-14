@@ -1,12 +1,13 @@
 import { attachConsoleContext, type ConsoleContext } from "./console-context";
 import type { LiveOffer, LiveProblem, Product } from "@/core/catalog";
 import type { IntakeView } from "@/core/intake";
-import { addDaysIso, addStatedPreference, isoWeekday, kitchenView, localNow, primaryLine, type HistoryEntry, type KitchenProfile, type StatedPreference } from "@/core/kitchen";
+import { addDaysIso, addStatedPreference, isoWeekday, kitchenView, localNow, primaryLine, withKitchenLock, type HistoryEntry, type KitchenProfile, type StatedPreference } from "@/core/kitchen";
 import { SPEC_DIMENSIONS, dimensionLabel, type StructuredNeed } from "@/core/need";
 import type { AgentSession, PublicOrder } from "@/core/orders";
 import { newId } from "@/core/util";
 import { resolveKitchen } from "./console-kitchens";
 import { localFetch } from "./local-transport";
+import { suspensions } from "./ops/suspensions";
 import { getRuntime, type Runtime } from "./runtime";
 
 /**
@@ -39,8 +40,8 @@ async function sessionOf(rt: Runtime, k: Kitchen): Promise<AgentSession> {
 // ---------- requests the portal opens for itself ----------
 
 /** Request texts the portal writes; the request history shows them as what they are. */
-export const BROWSE_TEXT = "Kitchen portal: live price checks for products the buyer opened in the catalogue";
-export const BASKET_PREFIX = "Basket from the catalogue:";
+import { BASKET_PREFIX, BROWSE_TEXT } from "./portal-requests";
+export { BASKET_PREFIX, BROWSE_TEXT };
 
 // ---------- the overview ----------
 
@@ -106,6 +107,8 @@ export type Overview = {
   week: WeekNumbers;
   standing: Standing[];
   liveCalls: number;
+  /** Set while the wholesaler's operations staff have stopped this kitchen's agent: it can do nothing until resumed. */
+  suspension?: { scope: "agent" | "org"; since: string; reason: string; message: string };
 };
 
 function portalOrder(o: PublicOrder): PortalOrder {
@@ -205,7 +208,14 @@ export async function overview(k: Kitchen): Promise<Overview> {
   requests.sort((a, b) => b.at.localeCompare(a.at));
   orders.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
-  return { now: now.toISOString(), today, memory, requests, orders, week: weekNumbers(all, intakes, [...correctedThisWeek].filter((id) => requests.some((r) => r.requestId === id)).length, now), standing: standing(profile, today), liveCalls: dock.stats().liveCalls };
+  const stopped = suspensions(dock).find(k.agentId, k.info.orgId);
+  const suspension = stopped && {
+    scope: stopped.scope,
+    since: stopped.at,
+    reason: stopped.reason,
+    message: `The wholesaler's operations staff stopped ${stopped.scope === "agent" ? "this kitchen's purchasing agent" : "every agent of this kitchen"}: "${stopped.reason}". It cannot look up prices, quote or order until they resume it; orders already waiting for sign-off stay with their signer.`,
+  };
+  return { ...(suspension ? { suspension } : {}), now: now.toISOString(), today, memory, requests, orders, week: weekNumbers(all, intakes, [...correctedThisWeek].filter((id) => requests.some((r) => r.requestId === id)).length, now), standing: standing(profile, today), liveCalls: dock.stats().liveCalls };
 }
 
 function weekNumbers(orders: PublicOrder[], intakes: Map<string, IntakeView>, corrected: number, now: Date): WeekNumbers {
@@ -311,7 +321,7 @@ async function browseRequest(k: Kitchen): Promise<string> {
   const hit = g.__dockPortalBrowse.get(key);
   if (hit) return hit;
   const r = await agentCall<{ request?: { requestId: string }; error?: { message: string } }>(k, "POST", "/api/v1/requests", { text: BROWSE_TEXT });
-  if (!r.json.request) throw new Error(r.json.error?.message ?? "Dock did not open a request for the live checks.");
+  if (!r.json.request) throw new Error(r.json.error?.message ?? "AimoPilot did not open a request for the live checks.");
   g.__dockPortalBrowse.set(key, r.json.request.requestId);
   return r.json.request.requestId;
 }
@@ -420,6 +430,11 @@ export type MemoryChange =
 /** Forget a stated rule, or turn a learned habit (or its opposite) into a stated rule. Written to the ledger. */
 export async function changeMemory(k: Kitchen, change: MemoryChange): Promise<ReturnType<typeof kitchenView>> {
   const rt = await getRuntime();
+  // The kitchen's lock (core/kitchen.ts): a memory write or an order's history in between is not lost.
+  return withKitchenLock(rt.kitchens, k.info.orgId, () => changeMemoryLocked(rt, k, change));
+}
+
+async function changeMemoryLocked(rt: Awaited<ReturnType<typeof getRuntime>>, k: Kitchen, change: MemoryChange): Promise<ReturnType<typeof kitchenView>> {
   const profile = (await rt.kitchens.getProfile(k.info.orgId)) ?? { orgId: k.info.orgId, name: k.info.name, deliveryWeekdays: [1, 2, 3, 4, 5], history: [], stated: [] };
   const actor = `buyer:${change.by}`;
   if (change.action === "forget") {

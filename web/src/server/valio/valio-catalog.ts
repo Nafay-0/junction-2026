@@ -104,7 +104,7 @@ export class ValioCatalog implements CatalogPort, UpstreamMetered {
       try {
         results = await this.live.lookup(known, askDate);
       } catch (err) {
-        if (err instanceof ValioApiError) throw new CatalogError("live_unavailable", `Live price/availability is unavailable right now (${err.code}): ${err.message}`);
+        if (err instanceof ValioApiError) throw new CatalogError("live_unavailable", `${err.code === "timeout" || err.code === "rate_limited" ? "The wholesaler's live price and availability service is slow or busy right now" : "Live price/availability is unavailable right now"} (${err.code}): ${err.message}`, err.retryAfterSeconds ?? (err.code === "server_error" || err.code === "network" ? 30 : undefined));
         throw err;
       }
     }

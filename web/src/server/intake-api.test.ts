@@ -28,13 +28,14 @@ describe("intake over HTTP", () => {
     let step = opened.body.step;
     expect(step.state).toBe("needs_confirmation");
 
-    step = (await call("POST", step.next.path, { ...step.next.example, by: "Sanna" })).body.step;
+    expect(JSON.stringify(step.next.example)).not.toMatch(/"choice":"(confirm|use_)/); // no pre-filled answer
+    step = (await call("POST", step.next.path, { by: "Sanna", responses: step.concerns.map((c: { key: string; corrections: { id: string }[] }) => ({ key: c.key, choice: c.corrections[0].id })) })).body.step;
     expect(step.state).toBe("options_ready"); // memory answers the rest: no question
     expect(step.questions).toEqual([]);
     expect(step.rules.map((r: { text: string }) => r.text)).toContain("Stated by Sanna Koskinen (head chef): Always lactose-free");
     expect(step.options.length).toBeGreaterThanOrEqual(2);
 
-    step = (await call("POST", step.next.path, step.next.example)).body.step;
+    step = (await call("POST", step.next.path, { by: "Sanna", optionId: step.options[0].optionId })).body.step;
     expect(step.state).toBe("quoted");
     expect(step.next.path).toBe("/api/v1/orders");
 
