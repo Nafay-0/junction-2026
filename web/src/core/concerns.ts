@@ -46,7 +46,9 @@ export type ConcernCode =
   | "breaks_remembered_rule" // a product a person said never to order
   | "standing_order_range" // far outside a standing order's normal range
   | "delivery_unusual_day" // a weekday the kitchen does not receive on, by its own pattern
-  | "unrelated_first_order"; // a first order of a family unrelated to anything the kitchen buys
+  | "unrelated_first_order" // a first order of a family unrelated to anything the kitchen buys
+  // From the second reading (core/second-reading.ts): two independent models read the buyer's words differently.
+  | "readings_differ";
 
 export type Correction = { id: string; label: string; patch?: NeedPatch; cancel?: true };
 

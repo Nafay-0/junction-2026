@@ -122,12 +122,16 @@ export function factsFrom(...data: unknown[]): Facts {
 const EN: Record<string, number> = {
   zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19,
   twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90,
+  // "double the usual 100 litres": the 2 that backs 200
+  double: 2, twice: 2,
 };
 const FI: Record<string, number> = {
   nolla: 0, yksi: 1, yhden: 1, kaksi: 2, kahden: 2, kolme: 3, neljä: 4, viisi: 5, kuusi: 6, seitsemän: 7, kahdeksan: 8, yhdeksän: 9, kymmenen: 10,
-  sata: 100, sataa: 100, tuhat: 1000, tuhatta: 1000, kymmentä: 10,
+  sata: 100, sataa: 100, tuhat: 1000, tuhatta: 1000, kymmentä: 10, tupla: 2, tuplat: 2, kaksinkertainen: 2, kaksinkertaisesti: 2,
 };
-const SV: Record<string, number> = { noll: 0, en: 1, ett: 1, två: 2, tre: 3, fyra: 4, fem: 5, sex: 6, sju: 7, åtta: 8, nio: 9, tio: 10, tjugo: 20, trettio: 30, fyrtio: 40, femtio: 50, hundra: 100, tusen: 1000 };
+const SV: Record<string, number> = { dubbelt: 2, dubbla: 2, noll: 0, en: 1, ett: 1, två: 2, tre: 3, fyra: 4, fem: 5, sex: 6, sju: 7, åtta: 8, nio: 9, tio: 10, tjugo: 20, trettio: 30, fyrtio: 40, femtio: 50, hundra: 100, tusen: 1000 };
+/** Counted in twelves: "a dozen", "two dozen", "kaksi tusinaa", "två dussin". */
+const DOZEN = new Set(["dozen", "dozens", "tusina", "tusinaa", "tusinan", "tusinoittain", "dussin", "dussinet"]);
 const SCALE: Record<string, number> = { hundred: 100, thousand: 1000, million: 1_000_000, sata: 100, sataa: 100, tuhat: 1000, tuhatta: 1000, hundra: 100, tusen: 1000, miljoona: 1_000_000, miljon: 1_000_000 };
 
 /** A Finnish compound like "kaksisataa" or "viisikymmentä" as one number, or undefined. */
@@ -182,8 +186,11 @@ export function numbersIn(text: string): Found[] {
       const parts = words[j][0].split("-");
       let v: number | undefined = EN[w] ?? SV[w] ?? FI[w];
       if (v === undefined && parts.length === 2 && EN[parts[0]] !== undefined && EN[parts[1]] !== undefined) v = EN[parts[0]] + EN[parts[1]];
-      if (v === undefined && !SCALE[w]) v = finnishCompound(w) ?? swedishCompound(w);
-      if (v !== undefined && !SCALE[w]) {
+      if (v === undefined && !SCALE[w] && !DOZEN.has(w)) v = finnishCompound(w) ?? swedishCompound(w);
+      if (DOZEN.has(w)) {
+        cur = (cur || 1) * 12;
+        any = true;
+      } else if (v !== undefined && !SCALE[w]) {
         cur += v;
         any = true;
       } else if (SCALE[w]) {
@@ -576,5 +583,91 @@ const DAY_WORDS = new RegExp(
 
 /** True when a text says anything about when: a weekday, a date, "tomorrow", "next week", in the three languages. */
 export function mentionsDay(text: string): boolean {
-  return DAY_WORDS.test(text);
+  return DAY_WORDS.test(text) || RELATIVE_DAYS.some(([re]) => re.test(text.toLowerCase())) || WRITTEN_DAY.test(text.toLowerCase());
+}
+
+// ---------- the day a person's words name ----------
+
+/** Weekday stems that match every inflection: "maanantaiksi", "tiistaina", "på måndag", "i fredags", "Monday's". */
+const WEEKDAY_STEMS: RegExp[] = [
+  /(?<![\p{L}])(monday|mon\b|maanant|måndag|mandag)/iu,
+  /(?<![\p{L}])(tuesday|tue\b|tues\b|tiistai|tisdag)/iu,
+  /(?<![\p{L}])(wednesday|wed\b|keskiviik|onsdag)/iu,
+  /(?<![\p{L}])(thursday|thu\b|thur\b|thurs\b|torstai|torsdag)/iu,
+  /(?<![\p{L}])(friday|fri\b|perjanta|fredag)/iu,
+  /(?<![\p{L}])(saturday|sat\b|lauanta|lördag|lordag)/iu,
+  /(?<![\p{L}])(sunday|sun\b|sunnunta|söndag|sondag)/iu,
+];
+/** Days from today: "the day after tomorrow" first, because it also says "tomorrow". */
+const RELATIVE_DAYS: [RegExp, number][] = [
+  [/day after tomorrow|(?<![\p{L}])ylihuom|(?<![\p{L}])(i\s*)?övermorgon|(?<![\p{L}])overmorgon/iu, 2],
+  [/(?<![\p{L}])(tomorrow|huomen|huomis|i\s*morgon|imorgon)/iu, 1],
+  [/(?<![\p{L}])(today|tonight|tänään|tanaan|idag|i\s*dag|i\s*kväll)/iu, 0],
+];
+/** Said without a day: any day in the coming three weeks fits ("next week", "for the weekend", "asap"). */
+const VAGUE_DAYS = /(?<![\p{L}])(next week|this week|weekend|asap|as soon as|ensi viiko|tällä viiko|viikonlop|mahdollisimman pian|pikaisesti|nästa vecka|denna vecka|i helgen|helgen|snarast|så snart)/iu;
+/** Before or by a day: the day before it fits too ("before Tuesday" is a Monday). */
+const BEFORE = /(?<![\p{L}])(before|ennen|före|innan|viimeistään)(?![\p{L}])/iu;
+/** A day of the month written out: "16.11.", "16/11", "den 19:e", "the 20th", "20. päiväksi", "20 November", "November 20", "20. marraskuuta". */
+const WRITTEN_DAY = /(?<!\d)(\d{1,2})\s*[./]\s*(\d{1,2})(?!\d)|(?<!\d)(\d{1,2})(?::e|:a|st|nd|rd|th)(?![\p{L}])|(?<!\d)(\d{1,2})\.\s*(?:päivä|pv|p\.|dag)|(?<![\p{L}])den\s+(\d{1,2})(?!\d)/iu;
+
+const addDaysTo = (iso: string, n: number) => {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+
+/**
+ * The days a person's words name, from `today` (Helsinki, YYYY-MM-DD): each weekday named (the next one and the one a
+ * week later: "ensi maanantaiksi"), "tomorrow" and its kin, and each day of the month written out (any month when the
+ * words give none). `vague`: the words speak of when without a day ("next week").
+ */
+export function daysNamed(text: string, today: string): { days: Set<string>; dayOfMonth: Map<number, number | undefined>; vague: boolean } {
+  const t = text.toLowerCase().normalize("NFC");
+  const days = new Set<string>();
+  WEEKDAY_STEMS.forEach((re, i) => {
+    if (!re.test(t)) return;
+    const ahead = (i + 1 - weekdayOf(today) + 7) % 7 || 7;
+    days.add(addDaysTo(today, ahead));
+    days.add(addDaysTo(today, ahead + 7));
+  });
+  for (const [re, n] of RELATIVE_DAYS) {
+    if (re.test(t)) {
+      days.add(addDaysTo(today, n));
+      break;
+    }
+  }
+  const dayOfMonth = new Map<number, number | undefined>();
+  for (const m of t.matchAll(new RegExp(WRITTEN_DAY.source, "giu"))) {
+    const day = Number(m[1] ?? m[3] ?? m[4] ?? m[5]);
+    const month = m[2] ? Number(m[2]) : undefined;
+    if (day >= 1 && day <= 31 && (!month || (month >= 1 && month <= 12))) dayOfMonth.set(day, month);
+  }
+  MONTHS.forEach((names, mi) => {
+    for (const name of names) {
+      const stem = name.slice(0, Math.max(3, name.length - 2));
+      for (const m of t.matchAll(new RegExp(`(?<!\\d)(\\d{1,2})\\.?\\s*(?:of\\s+)?${stem}|${stem}[\\p{L}]*\\s+(\\d{1,2})(?!\\d)`, "giu"))) {
+        const day = Number(m[1] ?? m[2]);
+        if (day >= 1 && day <= 31) dayOfMonth.set(day, mi + 1);
+      }
+    }
+  });
+  return { days, dayOfMonth, vague: VAGUE_DAYS.test(t) };
+}
+
+/**
+ * Do the words state this delivery day? It must be a day they name (above), the day before one when they say
+ * "before", or, when they speak of when only vaguely, a day in the coming three weeks. A day they do not contain is
+ * not stated. Without `today`, only that the words say anything about when (the older, looser check).
+ */
+export function dayStated(text: string, iso: string, today?: string): boolean {
+  if (!today) return mentionsDay(text);
+  const n = daysNamed(text, today);
+  if (n.days.has(iso)) return true;
+  const [, m, d] = iso.split("-").map(Number);
+  const written = n.dayOfMonth.get(d);
+  if (n.dayOfMonth.has(d) && (written === undefined || written === m)) return true;
+  if (BEFORE.test(text) && n.days.has(addDaysTo(iso, 1))) return true;
+  if (n.vague && iso >= today && iso <= addDaysTo(today, 21)) return true;
+  return false;
 }

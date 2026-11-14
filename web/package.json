@@ -47,6 +47,7 @@
     "qa": "tsx qa/run.ts",
     "edge:cost": "tsx scripts/edge-cost.ts",
     "menu:eval": "tsx scripts/menu-eval.ts",
+    "eval:second-reader": "tsx scripts/eval/eval-second-reader.ts",
     "knowledge:build": "tsx scripts/knowledge-build.ts",
     "knowledge:eval": "tsx scripts/knowledge-eval.ts",
     "knowledge:publish": "tsx scripts/knowledge-publish.ts",

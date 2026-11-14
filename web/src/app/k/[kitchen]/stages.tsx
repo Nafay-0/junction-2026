@@ -13,6 +13,7 @@ import { Target } from "../../_ui/target";
 import { Spinner, Tag, Working } from "../../_ui/kit";
 import { Button, Field, MemoryNote, Missing, Paper } from "./ui";
 import { cutoffText } from "./when";
+import { SecondReadingLine } from "./second-reading";
 import type { ApprovalQr, KitchenInfo, Order, Step } from "./types";
 import { useProductName } from "./names";
 
@@ -100,6 +101,7 @@ export function Understood({
             )}
           </p>
         )}
+        {interp && !interp.offline && !interp.noModel && <SecondReadingLine reading={step?.secondReading} />}
         {busy && need && <Working className="mt-2 text-[0.95rem]">{busy}</Working>}
       </div>
     </Paper>

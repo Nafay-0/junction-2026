@@ -109,6 +109,7 @@ async function openLine(a: KitchenAgent, body: Extract<z.output<typeof StepBody>
   let need: NeedInput;
   let interpretModel: string | undefined;
   try {
+    // Not read a second time (the photo door): these words are written by code from the line the buyer just reviewed.
     const r = await readNeed(a, words);
     need = r.need;
     interpretModel = r.model;
