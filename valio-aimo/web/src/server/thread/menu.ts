@@ -8,6 +8,8 @@ import type { PlanEdit, PlanProgress, PlanRecord } from "@/server/agent/menu/ser
 import { cardId } from "./cards";
 import { byLine, record, step, type TurnRun } from "./pipeline";
 import { createSheet, gateOf } from "./sheet";
+import { readable as rd } from "./refusal";
+import { shortName as sn } from "./watch";
 import type { MenuCard, NoticeCard } from "./types";
 
 /**
@@ -800,7 +802,10 @@ export async function planDifferences(run: TurnRun, planId: string, lang: "en" |
     buyable.push(name);
     buyableCents += l.chosen.totalCents;
     const day = late ? l.chosen.deliveryDate : undefined;
-    got.push({ key: l.lineId, ...(day ? { day } : {}), ...(l.replaces ? { instead: l.name } : {}) });
+    // A stand-in is named as what it is: the product's own short name ("Monin chocolate sauce"), not the ingredient
+    // it stands in for ("lactose-free dark chocolate").
+    const standIn = l.replaces ? rd(sn((l.chosen.products[0]?.name ?? l.name).replace(/[®™]/g, "")), lang) : undefined;
+    got.push({ key: l.lineId, ...(day ? { day } : {}), ...(standIn ? { instead: standIn } : {}) });
     if (l.replaces) wanted[wanted.length - 1] = { ...wanted[wanted.length - 1], name: l.replaces.name };
   }
   // Packs are bought whole for a dish: rounding up to a pack is how a recipe is bought, not a difference to say.

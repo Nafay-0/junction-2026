@@ -121,17 +121,12 @@ async function ideasFor(run: TurnRun, words: string, lang: Lang, frame: { covers
   const st = stateOf(run);
   st.ideas = { ideasId: r.ideasId, words, ...frame, ideas: r.ideas.map((d) => ({ dishId: d.dishId, name: d.name, nameFi: d.nameFi, nameSv: d.nameSv, buyable: d.buyable })) };
   record(run, "dish_ideas", `${r.ideas.length} ideas, ${r.ideas.filter((d) => d.buyable).length} the kitchen can buy completely: ${r.ideas.map((d) => `${d.name}${d.buyable ? "" : ` (needs ${d.missing.map((m) => m.ingredient).join(", ")})`}`).join("; ")}.`, { ideasId: r.ideasId });
-  // The reason, short and whole: its first clause, cut at a comma when it runs long, never mid-phrase.
-  const short = (t: string) => {
-    const x = t.replace(/^[^:—]*[:—]\s*/, "").split(/(?<=[.;])\s/)[0].replace(/[.;]$/, "");
-    return x.split(/\s+/).length <= 12 ? x : "";
-  };
   const lines = r.ideas.slice(0, 4).map((d, i) => {
     const groups = [...new Set(d.missing.map((m) => (m.group ? m.group.split(":")[0].toLowerCase() : m.ingredient.toLowerCase())))];
     const can = d.buyable
       ? { en: "your rules cover all of it", fi: "sääntönne kattavat kaiken", sv: "era regler täcker allt" }[lang]
       : { en: `needs ${groups.join(", ")}, which your rules don't cover`, fi: `tarvitsee: ${groups.join(", ")}, joita sääntönne eivät kata`, sv: `behöver ${groups.join(", ")}, som era regler inte omfattar` }[lang];
-    const why = d.reason ? short(d.reason) : "";
+    const why = d.reason ? shortReason(d.reason) : "";
     return `${i + 1}. ${nameL(d, lang)}${why ? `: ${why.charAt(0).toLowerCase()}${why.slice(1)}` : ""} (${can}).`;
   });
   return `${lines.join("\n")}\n${{ en: "Which one shall I plan?", fi: "Minkä niistä suunnittelen?", sv: "Vilken ska jag planera?" }[lang]}`;
@@ -178,4 +173,15 @@ function nextSunday(): string {
   let d = addDaysIso(today, 1);
   while (isoWeekday(d) !== 1) d = addDaysIso(d, 1);
   return addDaysIso(d, 6);
+}
+
+/**
+ * An idea's reason, short and whole: its first clause, at most about six words, cut at a clause; a reason that will
+ * not fit is left out, never cut mid-phrase.
+ */
+export function shortReason(t: string): string {
+  const x = t.replace(/^[^:—]*[:—]\s*/, "").split(/(?<=[.;])\s/)[0].replace(/[.;]$/, "");
+  if (x.split(/\s+/).length <= 6) return x;
+  const clause = x.split(/,\s|\s(?:and|with|for|ja|och)\s/)[0];
+  return clause.split(/\s+/).length <= 6 ? clause : "";
 }
