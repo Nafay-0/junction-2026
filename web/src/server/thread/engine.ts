@@ -353,6 +353,18 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
     }
   }
   if (line) await showLine(run, line);
+  // Never an empty reply: when the agent's words did not come (or none were backed), plain words from what the engine knows.
+  const after = store.agentTurn(thread, run.turnId);
+  if (after && !after.line && !after.cards.some((c) => c.type !== "understood")) {
+    const l = body.lang ?? "en";
+    const waitingCard = store.cards(thread).map((x) => x.card).find((c) => c.type === "gate" && c.outcome === "waiting");
+    const who = waitingCard?.type === "gate" ? (waitingCard.approver?.name ?? "") : "";
+    const text = waitingCard
+      ? { en: `Your order still waits for ${who || "a person"}'s OK on their phone; only their own OK places it. Anything else I can do?`, fi: `Tilauksesi odottaa yhä hyväksyntää${who ? ` (${who})` : ""} puhelimella; vain se hyväksyntä tekee tilauksen. Voinko auttaa muuten?`, sv: `Din beställning väntar fortfarande på godkännande${who ? ` av ${who}` : ""} i telefonen; bara det godkännandet lägger den. Något annat jag kan göra?` }[l]
+      : { en: "I didn't manage to act on that. Could you say it another way?", fi: "En saanut tästä kiinni. Voisitko sanoa sen toisin?", sv: "Jag fick inte grepp om det. Kan du säga det på ett annat sätt?" }[l];
+    store.line(thread, run.turnId, text);
+    record(run, "empty_reply", "The agent's turn had no words: the engine's plain sentence was said instead.", {});
+  }
   // An order finished in this turn (placed, nothing waiting): the moment for the wholesaler's one offer, if any.
   const mine = store.agentTurn(thread, run.turnId);
   if (!run.offerAsked && mine?.cards.some((c) => c.type === "order" && c.status === "committed") && !mine.cards.some((c) => c.type === "gate" && c.outcome === "waiting")) {

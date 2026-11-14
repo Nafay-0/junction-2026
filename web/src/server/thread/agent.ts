@@ -245,12 +245,21 @@ async function placedAlready(run: TurnRun, requestId: string): Promise<boolean> 
 export function turnContext(run: TurnRun, refs: OpenRef[]): string {
   const today = localNow(new Date()).date;
   const weekday = new Date(`${today}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" });
-  const waiting = run.store.cards(run.thread).filter((x) => x.card.type === "gate" && x.card.outcome === "waiting").map((x) => (x.card.type === "gate" ? `${x.card.orderId} waits for ${x.card.approver?.name ?? "a person"}` : ""));
+  // Orders waiting for a person's OK in this conversation (and the day's opening): what, how much, for whom. "The
+  // manager already approved it, just place it" is about one of these: only the named person's own OK places it.
+  const cardsNow = run.store.cards(run.thread).map((x) => x.card);
+  const waiting = [
+    ...cardsNow.filter((c) => c.type === "gate" && c.outcome === "waiting").map((c) => {
+      const o = c.type === "gate" ? cardsNow.find((x) => x.type === "order" && x.orderId === c.orderId) : undefined;
+      return c.type === "gate" ? `${o?.type === "order" ? `${(o.totalCents / 100).toFixed(2).replace(".", ",")} € (${o.lines.slice(0, 2).map((l) => `${l.quantity} × ${l.name}`).join(", ")}), delivery ${o.deliveryDate}` : "an order"} waits for ${c.approver?.name ?? "a person"}'s OK on their phone` : "";
+    }),
+    ...cardsNow.flatMap((c) => (c.type === "today" ? c.items.flatMap((i) => (i.kind === "sign_off" ? [`${(i.totalCents / 100).toFixed(2).replace(".", ",")} € (${i.lines.slice(0, 2).map((l) => `${l.quantity} × ${l.name}`).join(", ")}) waits for ${i.approver.name}'s OK on their phone`] : [])) : [])),
+  ].filter((x, i, a) => x && a.indexOf(x) === i);
   return [
     `Today is ${weekday} ${today} (Helsinki). Kitchen: ${run.k.info.name}. You are ${run.k.info.agentName}. This turn came through the ${run.door === "voice" ? "voice door (spoken)" : "store (typed)"}.`,
     subjectLine(subjectOf(run)),
     refs.length ? `OPEN DECISIONS (ref: what it does):\n${refs.map((r) => `- ${r.ref}: ${r.label}`).join("\n")}` : "OPEN DECISIONS: none.",
-    waiting.length ? `Waiting for sign-off: ${waiting.join("; ")}.` : "",
+    waiting.length ? `WAITING FOR A PERSON'S OK (you know these orders; say which one when asked; nobody but that person, with their own passkey, can place it): ${waiting.join("; ")}.` : "",
   ]
     .filter(Boolean)
     .join("\n\n");
