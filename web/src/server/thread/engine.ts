@@ -19,7 +19,7 @@ import { earlierFor } from "./earlier";
 import { ThreadStore, type StoredThread } from "./store";
 import { runWidget } from "./widgets";
 import { speakFacts } from "./speak";
-import { codeLeaks } from "./refusal";
+import { codeLeaks, insideOrTell } from "./refusal";
 import { fixTypos } from "./pipeline";
 import { hasToday, helsinkiToday, postToday, todayCardId } from "./home";
 import { ensureTelemetry } from "./telemetry";
@@ -387,8 +387,16 @@ function plainLine(run: TurnRun, text: string): string {
     t = t.replace(/\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Mon|Tue|Wed|Thu|Fri|Sat|Sun)( |\u00a0)(\d{1,2})\.(\d{1,2})\.?/g, (m, w: string, sp: string, d: string, mo: string) => (Number(mo) >= 1 && Number(mo) <= 12 && Number(d) <= 31 ? `${w}${sp}${Number(d)} ${MON[Number(mo) - 1]}` : m));
     t = t.replace(/\{\{(\d{1,2})\.(\d{1,2})\.?\}\}/g, (m, d: string, mo: string) => (Number(mo) >= 1 && Number(mo) <= 12 ? `{{${Number(d)} ${MON[Number(mo) - 1]}}}` : m));
   }
+  // Catalogue jargon: a "novobox" is a 10 l box to a person.
+  t = t.replace(/\bnovobox(?:ia|in|issa|eja|ista|ille|eihin)?\b/gi, (m) => (lang === "fi" ? (/ia$/i.test(m) ? "laatikkoa" : "laatikko") : lang === "sv" ? "låda" : "box"));
   // "16.11.?" reads badly: the sentence's own mark replaces the date's dot.
   t = t.replace(/(\d{1,2}\.\d{1,2})\.(\}\}|\*\*)?(?=[?;:,!])/g, "$1$2");
+  // Never a set phrase for the buyer to type, never how the system works inside: such a sentence is dropped.
+  const plainOnes = t.split(/(?<=[.!?])\s+/).filter((x) => !insideOrTell(x));
+  if (plainOnes.length && plainOnes.length < t.split(/(?<=[.!?])\s+/).length) {
+    record(run, "inside_words", "Sentences that told the buyer what to type, or how the system works inside, were not shown.", { said: t });
+    t = plainOnes.join(" ");
+  }
   const leaks = codeLeaks(t.replace(/\*\*|\{\{|\}\}/g, ""));
   if (!leaks.length) return t;
   const kept = t.split(/(?<=[.!?])\s+/).filter((x) => !codeLeaks(x.replace(/\*\*|\{\{|\}\}/g, "")).length);

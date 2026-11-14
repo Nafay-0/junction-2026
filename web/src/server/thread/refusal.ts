@@ -241,3 +241,11 @@ export function readable(text: string, lang: Lang): string {
   }
   return t.replace(/(\d{1,2}\.\d{1,2}\.)\./g, "$1").replace(/(\d{1,2}\.\d{1,2})\.(?=[?;:,!])/g, "$1");
 }
+
+const TELL = /\b(send|type|write|re-?send|give me|tell me)\b[^.?!]{0,60}\b(product name|the name and|with the amount|order with|the exact)\b|\b(kirjoita|lähetä)\b[^.?!]{0,40}\b(tuotteen nimi|määrä)/i;
+const INSIDE = /\b(the store treated|treated your message|neither result|the results? (gave|give|show|showed|didn't|don't|did not|do not)|the store's results|tool results?|my tools|the engine|the reader|the intake|routing)\b/i;
+
+/** A sentence that tells the buyer what to type, or says how the system works inside: never shown. */
+export function insideOrTell(sentence: string): boolean {
+  return TELL.test(sentence) || INSIDE.test(sentence);
+}

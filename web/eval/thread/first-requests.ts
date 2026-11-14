@@ -4,7 +4,7 @@
  *
  *   pnpm tsx eval/thread/first-requests.ts --url http://localhost:PORT [--only hotel-lumo]
  */
-import { codeLeaks } from "@/server/thread/refusal";
+import { codeLeaks, insideOrTell } from "@/server/thread/refusal";
 import { TEST_ACCOUNTS } from "@/server/accounts/test-accounts";
 import type { AgentTurn, Thread } from "@/server/thread/types";
 
@@ -79,7 +79,7 @@ async function main() {
       }
       const line = a?.line ?? "";
       const words = line.replace(/\*\*|\{\{|\}\}/g, "").split(/\s+/).filter(Boolean).length;
-      const leaks = codeLeaks(line);
+      const leaks = [...codeLeaks(line), ...line.split(/(?<=[.!?])\s+/).filter(insideOrTell).map((x) => `"${x.slice(0, 40)}…"`)];
       console.log(`> ${q.text}\n  [${a?.status}; ${(a?.cards ?? []).map((c) => c.type + ("kind" in c ? `:${(c as { kind: string }).kind}` : "")).join(",")}; ${words} w; ${Math.round((Date.now() - t0) / 100) / 10} s${leaks.length ? `; CODES ${leaks.join(",")}` : ""}]\n  ${line || "(no line)"}`);
     }
   }

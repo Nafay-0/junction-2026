@@ -63,3 +63,12 @@ describe("readable", () => {
     expect(readable("pe 20.11.? PUNAJUURI HOLLANTI", "fi")).toBe("pe 20.11? Punajuuri hollanti");
   });
 });
+
+describe("insideOrTell", () => {
+  it("catches a set phrase for the buyer to type and talk of the system's insides", async () => {
+    const { insideOrTell } = await import("./refusal");
+    expect(insideOrTell("I'll try again when you send the order with the product name and amount.")).toBe(true);
+    expect(insideOrTell("The store treated your message as a change to your two recurring orders, and neither result gave a day or a price.")).toBe(true);
+    expect(insideOrTell("Shall I order 12 L of the Fazer barista for Tuesday 17 Nov?")).toBe(false);
+  });
+});
