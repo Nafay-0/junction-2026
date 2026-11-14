@@ -76,11 +76,13 @@ async function main() {
     const failures = new Map<string, { scenario: string; repeat: number; score: number; reason: string }[]>();
     const seconds = new Map<string, number[]>();
     const questions = new Map<string, number[]>();
+    // Episodes the provider kept failing are not the agent's failures: no reason is listed for them.
+    const unscored = new Set(summary.agents.flatMap((a) => a.runs.flatMap((r) => r.scenarios.filter((x) => x.valid === false).map((x) => `${a.agent}|${x.id}|${r.seed}|${r.repeat}`))));
     for (const line of trajectories) {
       const t = JSON.parse(line) as Trajectory;
       models.set(t.agent.name, t.agent.model ?? models.get(t.agent.name) ?? null);
       writeFileSync(path.join(outDir, "runs", `${slug(t.agent.name)}__${t.scenario.id}__s${t.seed}r${t.repeat}.json`), line + "\n");
-      if (t.score.score < 70) {
+      if (t.score.score < 70 && !unscored.has(`${t.agent.name}|${t.scenario.id}|${t.seed}|${t.repeat}`)) {
         // How the episode ended, from the facts: the report the agent gave (or that it gave none) and its last words.
         const f = t.facts;
         const last = (t.agentInfo?.finalText ?? "").replace(/\s+/g, " ").trim();
