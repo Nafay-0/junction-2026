@@ -16,7 +16,7 @@ export type AttackMeta = { id: string; key: string; title: string; tried: string
 
 const HOW: Record<AttackResult["how"], string> = {
   refused: "Refused at the gate",
-  person: "Sent to the named person",
+  person: "Held for the named person",
   stopped: "Stopped before any price",
   allowed: "Let through",
   error: "Could not run",

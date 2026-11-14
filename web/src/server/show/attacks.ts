@@ -102,15 +102,28 @@ const ATTACK_FNS: Record<AttackId, (ctx: Ctx) => Promise<Outcome>> = {
   },
 
   async replay(ctx) {
-    const req = await ctx.agent.openRequest("Two litres of milk for the bar", nextDay());
+    const req = await ctx.agent.openRequest("A carton for the coffee bar", nextDay());
     const requestId = String(req.body.request?.requestId);
-    const milk = await milkFor(ctx, requestId);
-    const q = await ctx.agent.quote(requestId, [{ productId: milk.id, quantity: 1 }]);
+    // The first use must be an ordinary order the agent may place alone. One carton of the kitchen's milk would
+    // look like a slip next to its usual hundreds of litres (the gate now holds such an order for the person), so
+    // it buys one carton of a plant drink the mandate allows; on a catalogue without one, one pack of milk.
+    const plant = (await ctx.rt.catalog.searchProducts({ category: "plant_drink", attributes: ["lactose_free"], limit: 40 })).filter((p) => p.unit === "L" && p.packSize <= 1 && !p.allergens.some((a) => ["gluten", "nuts"].includes(a)) && (p.kinds ?? []).length === 0);
+    let pick: { id: string } | undefined;
+    if (plant.length) {
+      const offers = ((await ctx.agent.availability(requestId, plant.slice(0, 6).map((p) => p.id))).body.offers ?? []) as Json[];
+      pick = offers[0] ? { id: String(offers[0].productId) } : undefined;
+    }
+    pick ??= await milkFor(ctx, requestId);
+    const q = await ctx.agent.quote(requestId, [{ productId: pick.id, quantity: 1 }]);
     if (q.status !== 201) return refusal(q);
     const first = await ctx.agent.placeOrder(requestId, q.body.quoteToken, orderLines(q.body.quote));
-    const notes = [`First use: ${String(first.body.order?.status ?? first.status).replace("_", " ")} (one pack, bought for real).`];
+    const notes: string[] = [];
+    const st = String(first.body.order?.status ?? first.status);
+    notes.push(st === "committed" ? "First use: one carton, placed alone and bought for real." : `First use: ${st.replace("_", " ")}.`);
     const again = await ctx.agent.placeOrder(requestId, q.body.quoteToken, orderLines(q.body.quote));
-    return { ...refusal(again), notes };
+    const out = refusal(again);
+    await tidy(ctx, first.body.order, notes);
+    return { ...out, notes };
   },
 
   async self_approve(ctx) {
