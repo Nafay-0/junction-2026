@@ -17,7 +17,7 @@ export async function GET(req: Request, ctx: RouteContext<"/ui-api/kitchens/[kit
       start(c) {
         let last = after;
         const send = (e: ThreadEvent) => {
-          if (e.seq <= last && e.type !== "reset") return;
+          if (e.seq <= last) return; // sequence numbers keep counting across a reset, so a reset is newer too
           last = Math.max(last, e.seq);
           try {
             c.enqueue(enc.encode(`id: ${e.seq}\nevent: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`));
