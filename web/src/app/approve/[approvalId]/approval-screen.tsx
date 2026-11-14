@@ -10,7 +10,10 @@ import type { Lang } from "../../_i18n/lang";
 import { useFormat, useLang } from "../../_i18n/provider";
 import { passkeyProblemL } from "../../_ui/passkey.text";
 import { fiMoney } from "../../_ui/plain";
-import { GateHead, PhoneNotice, PhoneProblem, bigButton } from "../../_ui/phone";
+import { ArrowLeftRight, BadgeCheck, ChevronDown, CircleSlash, CircleX, Clock, Hourglass, ScanFace, ShieldCheck, Sparkles, TriangleAlert, Truck, Undo2 } from "lucide-react";
+import { Card, Chip, IconDisc, Input, Panel, Spinner, buttonClass } from "../../_ui/kit";
+import { GateHead, PhoneNotice, PhoneProblem, PhoneSkeleton, bigButton } from "../../_ui/phone";
+import { Target } from "../../_ui/target";
 import { serverClock, serverRole } from "../../_ui/phone.text";
 import { APPROVAL_TEXT } from "./approval-screen.text";
 import { serverAgentName, serverAmount, serverDays, serverDifference, serverLicence, serverPacks } from "./server-words";
@@ -166,19 +169,28 @@ export function ApprovalScreen({ approvalId, token }: { approvalId: string; toke
 
   if (loadError && !view)
     return (
-      <PhoneNotice title={loadError.code === "approval_not_found" ? tx.noSuch : tx.didNotLoad} body={loadError.message}>
-        <button className={`mt-6 ${bigButton("dark")}`} onClick={() => void refresh()}>
+      <PhoneNotice
+        title={loadError.code === "approval_not_found" ? tx.noSuch : tx.didNotLoad}
+        body={loadError.message}
+        mark={
+          <IconDisc tone="muted" size={56}>
+            <CircleSlash size={26} />
+          </IconDisc>
+        }
+      >
+        <button className={`mt-auto ${bigButton("dark")}`} onClick={() => void refresh()}>
           {tx.tryAgain}
         </button>
       </PhoneNotice>
     );
-  if (!view) return <p className="mt-20 text-center text-ink-soft">{tx.opening}</p>;
+  if (!view) return <PhoneSkeleton label={tx.opening} gate />;
   if (view.state !== "pending") return <Outcome view={view} />;
 
   const busy = phase !== "idle";
   const msLeft = Date.parse(view.priceHeldUntil) - now;
   const minutesLeft = Math.floor(msLeft / 60_000);
   const priceExpired = minutesLeft < 0;
+  const share = Math.max(0, Math.min(1, msLeft / (30 * 60_000)));
   const passkeyUsable = view.signIn === "passkey" && supported;
   const showDemoTap = view.demoTapEnabled && view.viewerIsApprover && (view.signIn === "demo_tap" || passkeyFailed || !supported);
   const total = fiMoney(view.total);
@@ -187,85 +199,128 @@ export function ApprovalScreen({ approvalId, token }: { approvalId: string; toke
   return (
     <div className="flex flex-1 flex-col">
       <GateHead title={tx.gateTitle} sub={tx.needsOk(serverAgentName(view.agentName, lang), view.approverName)}>
-        <p className="display mt-5 text-[3.4rem] leading-none text-paper tabular">{total}</p>
-        <p className="mt-1 text-[1.15rem] text-paper/90">{tx.deliveryLine(<strong className="text-paper">{serverDays(view.delivery, lang)}</strong>, view.kitchenName)}</p>
+        <p className="display mt-6 text-[3.2rem] leading-none text-paper tabular">{total}</p>
+        <p className="mt-3 flex items-start gap-2 text-[1rem] leading-snug text-paper/85">
+          <Truck aria-hidden size={18} className="mt-[0.15em] shrink-0 text-paper/60" />
+          <span>{tx.deliveryLine(<strong className="font-semibold text-paper">{serverDays(view.delivery, lang)}</strong>, view.kitchenName)}</span>
+        </p>
       </GateHead>
 
       {view.recall?.map((r) => (
-        <section key={r.productId} role="alert" className="mt-5 border-4 border-ink bg-safety p-4 text-safety-ink">
-          <h2 className="font-display text-xl font-bold leading-tight">
+        <section key={r.productId} role="alert" className="mt-4 rounded-xl bg-safety-soft p-4 ring-1 ring-inset ring-safety">
+          <h2 className="flex items-start gap-2.5 text-[1.05rem] font-semibold leading-snug">
+            <TriangleAlert aria-hidden size={20} className="mt-0.5 shrink-0" />
             {tx.recallTitle(r.productName, !!r.drill)}
           </h2>
-          <p className="mt-1.5">{r.reason}</p>
-          <p className="mt-1.5 font-semibold">{tx.recallBody}</p>
-          <a href={r.noticeUrl} target="_blank" rel="noreferrer" className="mt-1.5 inline-block font-semibold underline underline-offset-4">
+          <p className="mt-2 leading-snug">{r.reason}</p>
+          <p className="mt-2 font-semibold leading-snug">{tx.recallBody}</p>
+          <a href={r.noticeUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex min-h-11 items-center font-semibold text-petrol underline decoration-petrol/40 underline-offset-4">
             {tx.recallNotice(r.publisher)}
           </a>
         </section>
       ))}
 
-      <section className="mt-5">
-        <h2 className="text-[0.95rem] font-semibold text-ink-soft">{tx.whyAsked}</h2>
-        <ul className="mt-1.5 space-y-2">
+      <section aria-labelledby="why" className="mt-7">
+        <h2 id="why" className="text-[0.92rem] font-medium text-ink-soft">
+          {tx.whyAsked}
+        </h2>
+        <ul className="mt-2 space-y-2">
           {why.map((w, i) => (
-            <li key={i} className="border-l-[5px] border-safety-ink bg-safety/20 px-3 py-2 leading-snug">
-              {w.main}
-              {w.detail && <span className="mt-0.5 block text-[0.92rem] text-ink-soft">{w.detail}</span>}
+            <li key={i} className="flex items-start gap-3 rounded-lg bg-safety-soft px-4 py-3 ring-1 ring-inset ring-safety/50">
+              <Target size={20} tone="safety" className="mt-0.5 shrink-0" />
+              <span className="min-w-0 leading-snug">
+                <span className="font-medium">{w.main}</span>
+                {w.detail && <span className="mt-0.5 block text-[0.9rem] text-ink-soft">{w.detail}</span>}
+              </span>
             </li>
           ))}
         </ul>
       </section>
 
-      <section className="mt-5">
-        <h2 className="text-[0.95rem] font-semibold text-ink-soft">{tx.theOrder}</h2>
-        <ul className="mt-1.5 divide-y divide-line border-y border-line">
-          {view.items.map((it, i) => (
-            <li key={i} className="py-3">
-              <p className="leading-snug">
-                <strong className="display mr-1.5 text-[1.5rem]">{serverAmount(it.amount, lang)}</strong> {it.name}
-              </p>
-              {it.substituteFor && <p className="mt-1 text-[1rem] font-semibold">{tx.swappedFor(it.substituteFor)}</p>}
-            </li>
-          ))}
-        </ul>
+      <section aria-labelledby="order" className="mt-7">
+        <h2 id="order" className="text-[0.92rem] font-medium text-ink-soft">
+          {tx.theOrder}
+        </h2>
+        <Card className="mt-2">
+          <ul className="divide-y divide-line">
+            {view.items.map((it, i) => (
+              <li key={i} className="px-4 py-4">
+                <div className="flex items-baseline justify-between gap-3">
+                  <p className="display text-[1.55rem] leading-none text-petrol-deep tabular">{serverAmount(it.amount, lang)}</p>
+                  <p className="shrink-0 font-semibold tabular">{fiMoney(it.lineTotal)}</p>
+                </div>
+                <p className="mt-2 leading-snug">{it.name}</p>
+                <p className="mt-1 text-[0.88rem] leading-snug text-ink-soft">{serverPacks(it.packs, lang)}</p>
+                {it.substituteFor && (
+                  <p className="mt-2.5 flex items-start gap-2 rounded-md bg-lavender px-3 py-2 text-[0.92rem] leading-snug text-lavender-deep">
+                    <ArrowLeftRight aria-hidden size={16} className="mt-[0.15em] shrink-0" />
+                    <span className="font-medium">{tx.swappedFor(it.substituteFor)}</span>
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+          <div className="flex items-baseline justify-between gap-3 border-t border-line bg-mist/70 px-4 py-3.5">
+            <span className="font-medium">{tx.total}</span>
+            <span className="display text-[1.5rem] tabular">{total}</span>
+          </div>
+        </Card>
       </section>
 
       {view.differences.length > 0 && (
-        <section className="mt-5 bg-lavender p-3">
-          <h2 className="font-semibold text-lavender-deep">{tx.notExactly}</h2>
-          <ul className="mt-1 list-disc space-y-1 pl-5">
+        <Panel tone="agent" className="mt-4 p-4">
+          <h2 className="flex items-center gap-2 font-semibold text-lavender-deep">
+            <Sparkles aria-hidden size={16} />
+            {tx.notExactly}
+          </h2>
+          <ul className="mt-2 space-y-1.5">
             {view.differences.map((d, i) => (
-              <li key={i}>{serverDifference(d, lang)}</li>
+              <li key={i} className="flex gap-2 leading-snug">
+                <span aria-hidden className="mt-[0.55em] size-1.5 shrink-0 rounded-full bg-lavender-deep" />
+                <span>{serverDifference(d, lang)}</span>
+              </li>
             ))}
           </ul>
-          {view.asked && <p className="mt-2 text-[1rem] text-ink-soft">{tx.theRequest(view.asked)}</p>}
-        </section>
+          {view.asked && <p className="mt-3 border-t border-lavender-mid pt-3 text-[0.95rem] leading-snug text-ink-soft">{tx.theRequest(view.asked)}</p>}
+        </Panel>
       )}
 
-      {view.licence && <p className="mt-4 text-[1rem] text-ink-soft">{tx.agentLicence(serverLicence(view.licence, lang))}</p>}
-      <div className="mt-4">
-        <p className={`text-[1rem] ${priceExpired ? "font-semibold" : "text-ink-soft"}`}>
-          {priceExpired ? tx.priceExpired : tx.priceUntil(serverClock(view.priceHeldUntilText, lang), minutesLeft)}
+      <Panel className="mt-4 px-4 py-3.5">
+        <p className={`flex items-start gap-2.5 text-[0.95rem] leading-snug ${priceExpired ? "font-semibold" : ""}`}>
+          <Clock aria-hidden size={18} className={`mt-[0.1em] shrink-0 ${priceExpired || share < 0.2 ? "text-notice" : "text-petrol"}`} />
+          <span>{priceExpired ? tx.priceExpired : tx.priceUntil(serverClock(view.priceHeldUntilText, lang), minutesLeft)}</span>
         </p>
         {!priceExpired && (
-          <div aria-hidden className="mt-1.5 h-1.5 bg-line">
-            <div className="h-full bg-petrol" style={{ width: `${Math.max(2, Math.min(100, (msLeft / (30 * 60_000)) * 100))}%` }} />
+          <div aria-hidden className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-paper">
+            <div className={`h-full rounded-full transition-[width] duration-500 ${share < 0.2 ? "bg-notice" : "bg-petrol"}`} style={{ width: `${Math.max(2, share * 100)}%` }} />
           </div>
         )}
-      </div>
+        {view.licence && (
+          <p className="mt-3 flex items-start gap-2.5 border-t border-line pt-3 text-[0.9rem] leading-snug text-ink-soft">
+            <BadgeCheck aria-hidden size={17} className="mt-[0.1em] shrink-0" />
+            <span>{tx.agentLicence(serverLicence(view.licence, lang))}</span>
+          </p>
+        )}
+      </Panel>
 
-      <details className="mt-4 text-[1rem]">
-        <summary className="min-h-11 cursor-pointer py-2 font-semibold text-petrol underline decoration-2 underline-offset-4">{tx.showDetails}</summary>
-        <div className="space-y-2 pb-2 text-[0.88rem] text-ink-soft">
+      <details className="group mt-4 rounded-xl border border-line bg-paper">
+        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-4 py-2 font-medium text-petrol [&::-webkit-details-marker]:hidden">
+          {tx.showDetails}
+          <ChevronDown aria-hidden size={18} className="shrink-0 transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none" />
+        </summary>
+        <div className="space-y-2.5 border-t border-line px-4 py-3.5 text-[0.86rem] leading-snug text-ink-soft">
           {view.items.map((it, i) => (
             <p key={i}>{tx.packsLine(serverPacks(it.packs, lang), fiMoney(it.lineTotal), serverDays(it.delivery, lang))}</p>
           ))}
           <p>{tx.approverLine(view.approverName, serverRole(view.approverRoleLabel, lang))}</p>
           <p className="break-all">{tx.ids(view.details)}</p>
           <p className="break-all">{tx.digest(view.details.orderDigest)}</p>
-          <ul className="list-disc pl-5">
+          <ul className="space-y-1.5">
             {view.details.rules.map((r) => (
-              <li key={r.rule}>{tx.ruleLine(r.rule, f.ruleTitle(r.rule), tx.outcomeWord[r.outcome] ?? r.outcome, fiMoney(r.reason))}</li>
+              <li key={r.rule} className="flex gap-2">
+                <span aria-hidden className={`mt-[0.45em] size-1.5 shrink-0 rounded-full ${r.outcome === "pass" ? "bg-good" : r.outcome === "escalate" ? "bg-safety ring-1 ring-safety-ink/40" : "bg-bad"}`} />
+                <span className="min-w-0 break-words">{tx.ruleLine(r.rule, f.ruleTitle(r.rule), tx.outcomeWord[r.outcome] ?? r.outcome, fiMoney(r.reason))}</span>
+              </li>
             ))}
           </ul>
         </div>
@@ -273,59 +328,56 @@ export function ApprovalScreen({ approvalId, token }: { approvalId: string; toke
 
       {shown && <PhoneProblem title={shown.title} body={shown.body} quiet={shown.cancelled} />}
 
-      <div className="sticky bottom-0 -mx-5 mt-auto border-t border-line bg-paper/95 px-5 pb-3 pt-4 backdrop-blur">
-        {view.signIn === "passkey" && (
-          <button className={bigButton("go")} disabled={busy || !passkeyUsable} onClick={() => void approveWithPasskey()}>
-            {phase === "passkey" ? tx.waitingBio : phase === "sending" ? tx.placing : tx.approve(total)}
-          </button>
-        )}
-        {view.signIn === "link_token" &&
-          (token ? (
-            <button className={bigButton("go")} disabled={busy} onClick={() => void send({ decision: "approve", token })}>
-              {tx.approve(total)}
+      {/* The decision, under the thumb: it stays at the bottom edge while the order above is read. */}
+      <div className="sticky bottom-0 z-10 -mx-4 mt-auto pt-6">
+        <div className="rounded-t-2xl border-t border-line bg-paper/95 px-4 pb-[calc(0.85rem+env(safe-area-inset-bottom))] pt-4 shadow-[0_-12px_30px_-18px_rgb(0_54_70/0.35)] backdrop-blur-md">
+          {view.signIn === "passkey" && (
+            <button className={bigButton("go")} disabled={busy || !passkeyUsable} onClick={() => void approveWithPasskey()}>
+              {phase === "idle" ? <ScanFace aria-hidden size={22} strokeWidth={2.1} /> : <Spinner size={18} />}
+              {phase === "passkey" ? tx.waitingBio : phase === "sending" ? tx.placing : tx.approve(total)}
             </button>
-          ) : (
-            <p className="text-[1rem]">{tx.openLink(view.approverName)}</p>
-          ))}
-        {view.signIn === "passkey" && !supported && <p className="mt-2 text-[1rem] font-semibold">{tx.noPasskeyBrowser}</p>}
-        {view.signIn === "demo_tap" && !view.demoTapEnabled && <p className="text-[1rem] font-semibold">{tx.demoOff}</p>}
-        {showDemoTap && (
-          <button className={`mt-3 ${bigButton("demo")} min-h-14 text-[1rem]`} disabled={busy} onClick={() => void send({ decision: "approve", proof: { kind: "demo_tap" } })}>
-            {tx.demoApprove}
-          </button>
-        )}
-
-        {showReason && (
-          <div className="mt-3">
-            <div className="flex flex-wrap gap-2">
-              {tx.quickReasons.map((q) => (
-                <button key={q} type="button" aria-pressed={reason === q} className={`min-h-11 border-2 px-3 text-[1rem] ${reason === q ? "border-ink bg-ink text-paper" : "border-line bg-paper"}`} onClick={() => setReason(reason === q ? "" : q)}>
-                  {q}
-                </button>
-              ))}
-            </div>
-            <input
-              className="mt-2 min-h-12 w-full border-2 border-line px-3 text-[1rem] focus:border-petrol"
-              placeholder={tx.reasonPlaceholder}
-              maxLength={500}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              aria-label={tx.reasonLabel}
-            />
-          </div>
-        )}
-        {(view.signIn !== "link_token" || token) && (
-          <div className="mt-3 flex items-center gap-3">
-            <button className={`${bigButton("secondary")} min-h-14 flex-1 text-[1.08rem]`} disabled={busy} onClick={() => void decline()}>
-              {tx.decline(reason.trim().slice(0, 24))}
-            </button>
-            {!showReason && (
-              <button type="button" className="min-h-14 px-2 text-[1rem] font-semibold text-petrol underline decoration-2 underline-offset-4" onClick={() => setShowReason(true)}>
-                {tx.addReason}
+          )}
+          {view.signIn === "link_token" &&
+            (token ? (
+              <button className={bigButton("go")} disabled={busy} onClick={() => void send({ decision: "approve", token })}>
+                {tx.approve(total)}
               </button>
-            )}
-          </div>
-        )}
+            ) : (
+              <p className="text-[0.95rem] leading-snug">{tx.openLink(view.approverName)}</p>
+            ))}
+          {view.signIn === "passkey" && !supported && <p className="mt-2 text-[0.92rem] font-semibold leading-snug">{tx.noPasskeyBrowser}</p>}
+          {view.signIn === "demo_tap" && !view.demoTapEnabled && <p className="text-[0.92rem] font-semibold leading-snug">{tx.demoOff}</p>}
+          {showDemoTap && (
+            <button className={`mt-2.5 ${bigButton("demo")}`} disabled={busy} onClick={() => void send({ decision: "approve", proof: { kind: "demo_tap" } })}>
+              {tx.demoApprove}
+            </button>
+          )}
+
+          {showReason && (
+            <div className="sheet-up mt-3.5">
+              <div className="flex flex-wrap gap-2">
+                {tx.quickReasons.map((q) => (
+                  <Chip key={q} on={reason === q} onClick={() => setReason(reason === q ? "" : q)}>
+                    {q}
+                  </Chip>
+                ))}
+              </div>
+              <Input className="mt-2.5" placeholder={tx.reasonPlaceholder} maxLength={500} value={reason} onChange={setReason} aria-label={tx.reasonLabel} />
+            </div>
+          )}
+          {(view.signIn !== "link_token" || token) && (
+            <div className="mt-2.5 flex items-center gap-2">
+              <button className={`${buttonClass("secondary", "md", "min-h-12 min-w-0 flex-1")} disabled:opacity-50`} disabled={busy} onClick={() => void decline()}>
+                <span className="truncate">{tx.decline(reason.trim().slice(0, 24))}</span>
+              </button>
+              {!showReason && (
+                <button type="button" className={buttonClass("quiet", "md", "shrink-0 px-3")} onClick={() => setShowReason(true)}>
+                  {tx.addReason}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -355,16 +407,19 @@ function Outcome({ view }: { view: ApprovalView }) {
   if (view.state === "withdrawn" || view.state === "expired") {
     const reason = closedReason(view, lang);
     return (
-      <div className="mt-8 flex flex-1 flex-col" role="status" aria-live="polite">
-        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-neutral-700 text-4xl text-white" aria-hidden>
-          ×
-        </div>
-        <h1 className="mt-5 text-3xl font-bold">{view.state === "withdrawn" ? tx.withdrawn : tx.expired}</h1>
-        <p className="mt-2 text-xl">
-          {lang === "en" ? view.total : fiMoney(view.total)} · {serverDays(view.delivery, lang)}
-        </p>
-        {reason && <p className="mt-4">{reason}</p>}
-        <Link href="/approver" className="mt-auto flex h-14 items-center justify-center rounded-xl border border-neutral-300 text-lg">
+      <div className="mt-4 flex flex-1 flex-col" role="status" aria-live="polite">
+        <IconDisc tone="muted" size={60}>
+          {view.state === "withdrawn" ? <Undo2 size={26} /> : <Hourglass size={26} />}
+        </IconDisc>
+        <h1 className="display mt-5 text-[2.1rem] leading-[1.05] text-ink hyphens-manual [overflow-wrap:break-word]">{view.state === "withdrawn" ? tx.withdrawn : tx.expired}</h1>
+        <Card className="mt-5">
+          <div className="flex items-baseline justify-between gap-3 px-4 py-3.5">
+            <span className="text-ink-soft">{serverDays(view.delivery, lang)}</span>
+            <span className="display text-[1.35rem] text-ink-soft line-through decoration-1 tabular">{fiMoney(view.total)}</span>
+          </div>
+          {reason && <p className="border-t border-line px-4 py-3.5 leading-snug text-ink-soft">{reason}</p>}
+        </Card>
+        <Link href="/approver" className={`mt-auto ${bigButton("secondary")}`}>
           {tx.back}
         </Link>
       </div>
@@ -375,25 +430,37 @@ function Outcome({ view }: { view: ApprovalView }) {
   const declined = view.state === "declined";
   const how = tx.how[o?.method ?? "link_token"] ?? tx.how.link_token;
   const notPlaced = notPlacedReason(view, lang);
+  const stampLook = placed ? "border-good/40 bg-good-soft text-good" : declined ? "border-line-strong bg-paper text-ink" : "border-safety-ink bg-safety-ink text-safety";
   return (
     <div className="flex flex-1 flex-col" role="status" aria-live="polite">
-      <div className={`stamp mt-6 self-start border-[5px] px-5 py-3 ${placed ? "border-petrol text-petrol" : declined ? "border-ink text-ink" : "border-safety-ink bg-safety text-safety-ink"}`}>
-        <p className="display text-[2.6rem] leading-none">{placed ? tx.stampSigned : declined ? tx.stampDeclined : tx.stampNotPlaced}</p>
-        {o && (
-          <p className="mt-1 font-semibold">
-            {o.signedBy}, {at(o.atText)}
-          </p>
-        )}
+      <div className={`stamp mt-2 inline-flex items-center gap-3.5 self-start rounded-xl border-2 py-3 pl-3.5 pr-5 ${stampLook}`}>
+        {placed ? <ShieldCheck aria-hidden size={34} strokeWidth={1.9} /> : declined ? <CircleX aria-hidden size={34} strokeWidth={1.9} /> : <Target size={34} tone="safety" />}
+        <span className="min-w-0">
+          {/* The stamp's word, unless the heading under it already says the same ("Declined" twice reads as a stutter). */}
+          {(placed ? tx.stampSigned : declined ? tx.stampDeclined : tx.stampNotPlaced) !== (placed ? tx.placed : declined ? tx.declined : tx.approvedNotPlaced) && (
+            <span className="display block text-[1.9rem] leading-none">{placed ? tx.stampSigned : declined ? tx.stampDeclined : tx.stampNotPlaced}</span>
+          )}
+          {o && (
+            <span className="mt-1 block text-[0.92rem] font-semibold first:mt-0 first:text-[1.05rem]">
+              {o.signedBy}, {at(o.atText)}
+            </span>
+          )}
+        </span>
       </div>
-      <h1 className="display mt-6 text-[2.4rem] text-ink hyphens-manual [overflow-wrap:break-word]">{placed ? tx.placed : declined ? tx.declined : tx.approvedNotPlaced}</h1>
-      <p className="mt-1 text-[1.2rem]">
-        <span className="tabular">{fiMoney(view.total)}</span>, {serverDays(view.delivery, lang)}
-      </p>
-      {o && <p className="mt-4 leading-snug">{tx.decidedLine(o.decision === "approved", o.signedBy, at(o.atText), how)}</p>}
-      {o?.note && <p className="mt-2">{tx.reasonQuote(o.note)}</p>}
-      {notPlaced && <p className="mt-2 font-semibold">{notPlaced}</p>}
-      {o && !o.verified && <p className="mt-3 border-2 border-dashed border-ink-soft p-3 text-[1rem]">{tx.notVerified}</p>}
-      {placed && <p className="mt-3 text-[1rem] text-ink-soft">{tx.placedNote}</p>}
+      <h1 className="display mt-7 text-[2.1rem] leading-[1.05] text-ink hyphens-manual [overflow-wrap:break-word]">{placed ? tx.placed : declined ? tx.declined : tx.approvedNotPlaced}</h1>
+      <Card className="mt-5">
+        <div className="flex items-baseline justify-between gap-3 px-4 py-3.5">
+          <span>{serverDays(view.delivery, lang)}</span>
+          <span className="display text-[1.5rem] tabular">{fiMoney(view.total)}</span>
+        </div>
+        <div className="space-y-2.5 border-t border-line px-4 py-3.5 leading-snug">
+          {o && <p>{tx.decidedLine(o.decision === "approved", o.signedBy, at(o.atText), how)}</p>}
+          {o?.note && <p className="text-ink-soft">{tx.reasonQuote(o.note)}</p>}
+          {notPlaced && <p className="font-semibold">{notPlaced}</p>}
+        </div>
+      </Card>
+      {o && !o.verified && <p className="mt-3 rounded-lg border border-dashed border-line-strong bg-paper px-4 py-3 text-[0.92rem] leading-snug">{tx.notVerified}</p>}
+      {placed && <p className="mt-4 text-[0.95rem] leading-relaxed text-ink-soft">{tx.placedNote}</p>}
       <Link href="/approver" className={`mt-auto ${bigButton("secondary")}`}>
         {tx.back}
       </Link>

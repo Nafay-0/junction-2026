@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api } from "../../_client/api";
-import { Plate, Skeleton, Tag, Working } from "../../_ui/kit";
+import { ChevronRight, SearchX } from "lucide-react";
+import { Card, IconDisc, Panel, SectionTitle, Skeleton, Tabs, Tag } from "../../_ui/kit";
 import { useFormat, useText } from "../../_i18n/provider";
 import { usePortal } from "./portal";
 import { PRODUCT_TEXT } from "./product.text";
-import { BuyBox, Facts, PackPlate, TempMark, Tile, allergenText, nameIn, readable, useProfile } from "./shop";
+import { BuyBox, CLAIM_LABELS, Facts, PackPlate, TempMark, Tile, allergenText, claimsOf, nameIn, readable, useProfile } from "./shop";
 import { ErrorPlate } from "./ui";
 import type { ProductPage as Page } from "./types";
 
@@ -33,62 +34,75 @@ export function ProductPage({ id }: { id: string }) {
   if (error) return <ErrorPlate title={tx.loadFailed} message={tx.loadFailedMessage(error)} />;
   if (!page)
     return (
-      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_26rem]" aria-label={tx.loading}>
-        <Skeleton className="h-[30rem]" />
-        <Skeleton className="h-[24rem]" />
+      <div className="mt-5 grid items-start gap-6 lg:mt-6 lg:grid-cols-[minmax(0,1fr)_25rem] lg:gap-10" role="status" aria-label={tx.loading}>
+        <div className="space-y-5">
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="aspect-[4/3] w-full !rounded-[28px]" />
+          <Skeleton className="h-10 w-3/4" />
+        </div>
+        <Skeleton className="h-[26rem] !rounded-[20px]" />
       </div>
     );
   const p = page.product;
-  const grid = "repeat(auto-fill, minmax(min(100%, 15rem), 1fr))";
+  const brand = p.brand !== "unknown" ? p.brand : p.vendor;
   return (
-    <div className="mt-5">
-      <nav aria-label={tx.breadcrumb} className="flex flex-wrap items-center gap-1.5 text-[0.95rem]">
-        <Link href={`${base}/catalogue`} className="text-petrol underline decoration-1 underline-offset-4 hover:decoration-2">
+    <div className="mt-4 sm:mt-5">
+      <nav aria-label={tx.breadcrumb} className="flex min-w-0 flex-wrap items-center gap-x-1 text-[0.9rem]">
+        <Link href={`${base}/catalogue`} className="inline-flex min-h-9 items-center rounded-full px-1 font-medium text-petrol hover:underline hover:underline-offset-4 pointer-coarse:min-h-11">
           {tx.catalogue}
         </Link>
-        <span aria-hidden className="text-ink-soft">
-          /
-        </span>
-        <Link href={`${base}/catalogue?c=${encodeURIComponent(page.category.id)}`} className="text-petrol underline decoration-1 underline-offset-4 hover:decoration-2">
-          {page.category.label}
+        <ChevronRight aria-hidden size={15} className="shrink-0 text-ink-faint" />
+        <Link href={`${base}/catalogue?c=${encodeURIComponent(page.category.id)}`} className="inline-flex min-h-9 min-w-0 items-center rounded-full px-1 font-medium text-petrol hover:underline hover:underline-offset-4 pointer-coarse:min-h-11">
+          <span className="truncate">{page.category.label}</span>
         </Link>
       </nav>
-      <div className="mt-3 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_26rem]">
-        <article className="bg-paper">
+      <div className="mt-2 grid items-start gap-x-10 gap-y-6 [grid-template-areas:'head'_'pic'_'buy'_'facts'] lg:grid-cols-[minmax(0,1fr)_25rem] lg:[grid-template-areas:'pic_buy'_'head_buy'_'facts_buy']">
+        <div className="[grid-area:pic]">
           <PackPlate p={p} size="lg" />
-          <div className="p-5 sm:p-7">
-            <p className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[0.95rem]">
-              <TempMark t={p.temperatureClass} />
-              <span className="text-ink-soft">{p.brand !== "unknown" ? p.brand : p.vendor}</span>
+        </div>
+        <header className="min-w-0 [grid-area:head]">
+          <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[0.92rem]">
+            <TempMark t={p.temperatureClass} />
+            {brand && <span className="text-ink-soft">{brand}</span>}
+          </p>
+          <h1 className="display mt-1.5 max-w-[26ch] break-words text-[1.95rem] leading-[1.06] text-ink hyphens-manual sm:text-[2.5rem]">{readable(nameIn(p, lang))}</h1>
+          {prof ? (
+            <p className="mt-3 max-w-[60ch] text-[1.02rem] leading-relaxed">
+              <strong className="font-semibold">{prof.kind.charAt(0).toUpperCase() + prof.kind.slice(1)}</strong>
+              {prof.uses.length > 0 && (
+                <span className="text-ink-soft">
+                  {tx.forUses}
+                  {prof.uses.map((u) => u.text).join(", ")}
+                </span>
+              )}
+              .
             </p>
-            <h1 className="display mt-2 max-w-[24ch] break-words text-[2.6rem] leading-[1] text-ink sm:text-[3.1rem]">{readable(nameIn(p, lang))}</h1>
-            {prof && (
-              <p className="mt-3 max-w-[60ch] text-[1.08rem] leading-snug">
-                <strong>{prof.kind.charAt(0).toUpperCase() + prof.kind.slice(1)}</strong>
-                {prof.uses.length > 0 && <span className="text-ink-soft">
-                    {tx.forUses}
-                    {prof.uses.map((u) => u.text).join(", ")}
-                  </span>}.
-              </p>
-            )}
-            <div className="mt-6 border-t border-line pt-5">
-              <Facts p={p} lang={lang} />
-            </div>
-          </div>
-        </article>
-        <div className="lg:sticky lg:top-3">
+          ) : prof === undefined ? (
+            <Skeleton className="mt-3 h-5 w-64" />
+          ) : null}
+          {claimsOf(p).length > 0 && (
+            <p className="mt-3 flex flex-wrap gap-1.5">
+              {claimsOf(p).map((c) => (
+                <Tag key={c}>{CLAIM_LABELS[lang][c]}</Tag>
+              ))}
+            </p>
+          )}
+        </header>
+        <div className="[grid-area:buy] lg:sticky lg:top-24">
           <BuyBox p={p} />
         </div>
+        <Card as="section" className="p-5 [grid-area:facts] sm:p-6">
+          <h2 className="display mb-4 text-[1.3rem]">{tx.factsTitle}</h2>
+          <Facts p={p} lang={lang} />
+        </Card>
       </div>
 
       <Alternatives productId={p.id} />
 
       {page.substitutes.length > 0 && (
-        <section aria-labelledby="subs" className="mt-10">
-          <h2 id="subs" className="display text-[1.9rem] text-ink">
-            {tx.substitutes}
-          </h2>
-          <ul className="mt-3 grid gap-3" style={{ gridTemplateColumns: grid }}>
+        <section aria-labelledby="subs" className="mt-12">
+          <SectionTitle id="subs">{tx.substitutes}</SectionTitle>
+          <ul className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-[repeat(auto-fill,minmax(12.5rem,1fr))]">
             {page.substitutes.map((s) => (
               <Tile key={s.id} p={s} />
             ))}
@@ -96,11 +110,9 @@ export function ProductPage({ id }: { id: string }) {
         </section>
       )}
       {page.similar.length > 0 && (
-        <section aria-labelledby="more" className="mt-10">
-          <h2 id="more" className="display text-[1.9rem] text-ink">
-            {tx.moreIn(page.category.label)}
-          </h2>
-          <ul className="mt-3 grid gap-3" style={{ gridTemplateColumns: grid }}>
+        <section aria-labelledby="more" className="mt-12">
+          <SectionTitle id="more">{tx.moreIn(page.category.label)}</SectionTitle>
+          <ul className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-[repeat(auto-fill,minmax(12.5rem,1fr))]">
             {page.similar.map((s) => (
               <Tile key={s.id} p={s} />
             ))}
@@ -165,65 +177,56 @@ function Alternatives({ productId }: { productId: string }) {
   const rules = [...m.requiredAttributes.map(f.attr), ...m.forbiddenAllergens.map((x) => tx.noAllergen(allergenText(x, lang)))];
 
   return (
-    <section aria-labelledby="alts" className="mt-10">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 id="alts" className="display text-[1.9rem] text-ink">
-            {tx.altsTitle}
-          </h2>
-          <p className="max-w-[70ch] text-ink-soft">
-            {tx.altsIntro}
-            {rules.length ? tx.checkedAgainst(kitchen.name, rules.join(", ")) : ""}
-          </p>
-        </div>
-      </div>
-      {uses.length > 1 && (
-        <div role="tablist" aria-label={tx.useTabs} className="mt-3 flex flex-wrap gap-1">
-          {uses.map((u) => (
-            <button
-              key={u.id}
-              role="tab"
-              aria-selected={shownUse === u.id}
-              onClick={() => setUse(u.id)}
-              className={`min-h-10 px-3 text-[0.95rem] font-semibold ${shownUse === u.id ? "bg-petrol text-paper" : "bg-paper text-petrol outline-1 outline-line hover:outline-petrol"}`}
-            >
-              {tx.forUse(u.text)}
-            </button>
-          ))}
-        </div>
-      )}
-      <div className="mt-3 grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <Plate>
-          {!current && <Working className="p-4">{tx.ranking}</Working>}
-          {current?.error && <p className="p-4 text-ink-soft">{tx.altsFailed(current.error)}</p>}
+    <section aria-labelledby="alts" className="mt-12">
+      <SectionTitle id="alts">{tx.altsTitle}</SectionTitle>
+      <p className="-mt-2 max-w-[68ch] leading-relaxed text-ink-soft">
+        {tx.altsIntro}
+        {rules.length ? tx.checkedAgainst(kitchen.name, rules.join(", ")) : ""}
+      </p>
+      {uses.length > 1 && <Tabs className="mt-4" label={tx.useTabs} value={shownUse ?? ""} onChange={setUse} options={uses.map((u) => ({ id: u.id, label: tx.forUse(u.text) }))} />}
+      <div className="mt-4 grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <Card>
+          {!current && (
+            <div className="space-y-3 p-5" role="status" aria-label={tx.ranking}>
+              <Skeleton className="h-5 w-1/2" />
+              <Skeleton className="h-4 w-5/6" />
+              <Skeleton className="h-5 w-2/5" />
+            </div>
+          )}
+          {current?.error && <p className="p-5 text-ink-soft">{tx.altsFailed(current.error)}</p>}
           {a && a.substitutes.length === 0 && (
-            <div className="p-5">
-              <p className="text-[1.15rem] font-semibold">{tx.noGood(shownUse ? textOfUse(shownUse) : undefined)}</p>
-              <p className="mt-1 max-w-[60ch] leading-snug text-ink-soft">
-                {a.none ?? tx.noneFallback}
-                {tx.agentAsks}
-              </p>
+            <div className="flex items-start gap-4 p-5 sm:p-6">
+              <IconDisc tone="muted">
+                <SearchX size={20} />
+              </IconDisc>
+              <div className="min-w-0">
+                <p className="text-[1.05rem] font-semibold leading-snug">{tx.noGood(shownUse ? textOfUse(shownUse) : undefined)}</p>
+                <p className="mt-1 max-w-[60ch] leading-relaxed text-ink-soft">
+                  {a.none ?? tx.noneFallback}
+                  {tx.agentAsks}
+                </p>
+              </div>
             </div>
           )}
           {a && a.substitutes.length > 0 && (
             <ol className="divide-y divide-line">
               {a.substitutes.map((s) => (
-                <li key={s.productId} className="grid gap-x-4 gap-y-1 px-4 py-3.5 sm:grid-cols-[5.5rem_minmax(0,1fr)]">
-                  <p className="flex items-center gap-2 sm:flex-col sm:items-start">
-                    <span className="display text-[1.35rem]">{tx.tier[s.tier]}</span>
-                    <span aria-hidden className="flex items-end gap-0.5">
+                <li key={s.productId} className="relative flex gap-4 px-5 py-4 transition-colors hover:bg-mist">
+                  <span className="w-[4.5rem] shrink-0 pt-0.5">
+                    <span className="block text-[0.9rem] font-semibold text-petrol-deep">{tx.tier[s.tier]}</span>
+                    <span aria-hidden className="mt-1 flex items-end gap-0.5">
                       {[1, 2, 3].map((i) => (
-                        <span key={i} className={`w-2 ${i <= (TIER[s.tier]?.n ?? 0) ? "bg-petrol" : "bg-line"}`} style={{ height: 5 + i * 4 }} />
+                        <span key={i} className={`w-2 rounded-[2px] ${i <= (TIER[s.tier]?.n ?? 0) ? "bg-petrol" : "bg-line"}`} style={{ height: 4 + i * 4 }} />
                       ))}
                     </span>
-                  </p>
-                  <div className="min-w-0">
-                    <Link href={`${base}/catalogue/${encodeURIComponent(s.productId)}`} className="font-semibold text-ink underline decoration-line decoration-2 underline-offset-4 hover:decoration-petrol">
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <Link href={`${base}/catalogue/${encodeURIComponent(s.productId)}`} className="font-semibold leading-snug text-ink after:absolute after:inset-0 hover:text-petrol">
                       {readable(s.name.replace(/[®™]/g, ""))}
                     </Link>
-                    <p className="mt-0.5 leading-snug text-ink-soft">{s.reason}</p>
+                    <p className="mt-0.5 text-[0.95rem] leading-snug text-ink-soft">{s.reason}</p>
                     {(s.changes.length > 0 || s.conditions.length > 0 || s.partnerListed) && (
-                      <p className="mt-1.5 flex flex-wrap gap-1">
+                      <p className="mt-2 flex flex-wrap gap-1">
                         {s.changes.map((c) => (
                           <Tag key={c.text} tone="muted">
                             {c.text}
@@ -236,31 +239,30 @@ function Alternatives({ productId }: { productId: string }) {
                       </p>
                     )}
                   </div>
+                  <ChevronRight aria-hidden size={18} className="mt-0.5 shrink-0 text-ink-faint" />
                 </li>
               ))}
             </ol>
           )}
-        </Plate>
-        <Plate>
-          <div className="p-4">
-            <h3 className="font-semibold">{tx.otherPacks}</h3>
-            {!a && !current?.error && <Skeleton className="mt-2 h-16" />}
-            {a && a.packAlternatives.length === 0 && <p className="mt-1 text-ink-soft">{tx.noOtherPacks}</p>}
-            {a && a.packAlternatives.length > 0 && (
-              <ul className="mt-2 space-y-2">
-                {a.packAlternatives.map((s) => (
-                  <li key={s.productId} className="leading-snug">
-                    <Link href={`${base}/catalogue/${encodeURIComponent(s.productId)}`} className="text-petrol underline decoration-1 underline-offset-4 hover:decoration-2">
-                      {readable(s.name.replace(/[®™]/g, ""))}
-                    </Link>
-                    {s.changes.length > 0 && <span className="block text-[0.88rem] text-ink-soft">{s.changes.map((c) => c.text).join(", ")}</span>}
-                  </li>
-                ))}
-              </ul>
-            )}
-            <p className="mt-3 text-[0.85rem] leading-snug text-ink-soft">{tx.packNote}</p>
-          </div>
-        </Plate>
+        </Card>
+        <Panel className="p-5">
+          <h3 className="font-semibold">{tx.otherPacks}</h3>
+          {!a && !current?.error && <Skeleton className="mt-3 h-14" />}
+          {a && a.packAlternatives.length === 0 && <p className="mt-1 text-[0.95rem] text-ink-soft">{tx.noOtherPacks}</p>}
+          {a && a.packAlternatives.length > 0 && (
+            <ul className="mt-2 space-y-2.5">
+              {a.packAlternatives.map((s) => (
+                <li key={s.productId} className="leading-snug">
+                  <Link href={`${base}/catalogue/${encodeURIComponent(s.productId)}`} className="font-medium text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol">
+                    {readable(s.name.replace(/[®™]/g, ""))}
+                  </Link>
+                  {s.changes.length > 0 && <span className="mt-0.5 block text-[0.86rem] text-ink-soft">{s.changes.map((c) => c.text).join(", ")}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-4 text-[0.82rem] leading-snug text-ink-soft">{tx.packNote}</p>
+        </Panel>
       </div>
     </section>
   );

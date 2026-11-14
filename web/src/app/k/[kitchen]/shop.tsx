@@ -7,14 +7,15 @@ import { api } from "../../_client/api";
 import { Glyph, TempGlyph, type GlyphKind } from "../../_ui/glyphs";
 import { Art, artFor } from "../../_ui/art";
 import { ART_TEXT } from "../../_ui/art.text";
-import { Spinner, Tag, Working } from "../../_ui/kit";
+import { Check, Plus, Sparkles } from "lucide-react";
+import { Button as KitButton, FactList, Panel, Spinner, Tag } from "../../_ui/kit";
 import { attr, clock, helsinkiToday, money, num } from "../../_ui/plain";
 import { useFormat, useLang, useText } from "../../_i18n/provider";
 import { attrL } from "../../_i18n/format";
 import { usePortal, type Lang } from "./portal";
 import { Quantity } from "./qty";
 import { SHOP_TEXT } from "./shop.text";
-import { Button, Missing } from "./ui";
+import { Missing } from "./ui";
 import { contentOf, quantityText, stepOf, unitWord } from "./units";
 import type { LiveResult, Product } from "./types";
 import { cutoffMs, cutoffText, untilText } from "./when";
@@ -36,14 +37,14 @@ export function tempLabel(t: string | null | undefined, lang: Lang = "en"): stri
   return TEMP[t ?? ""] ? SHOP_TEXT[lang].temp[t ?? ""] : undefined;
 }
 
-/** The temperature as a quiet code: glyph and word in the class colour. */
-export function TempMark({ t, className = "" }: { t?: string | null; className?: string }) {
+/** The temperature as a quiet code: glyph and word in the class colour. `chip` sets it on a paper pill (over a picture). */
+export function TempMark({ t, className = "", chip = false }: { t?: string | null; className?: string; chip?: boolean }) {
   const tx = useText(SHOP_TEXT);
   const x = TEMP[t ?? ""];
-  if (!x) return <span className={`text-ink-soft ${className}`}>{tx.storageNoData}</span>;
+  if (!x) return chip ? null : <span className={`text-ink-soft ${className}`}>{tx.storageNoData}</span>;
   return (
-    <span className={`inline-flex items-center gap-1 font-semibold ${className}`} style={{ color: x.color }}>
-      <TempGlyph t={t ?? ""} size={13} />
+    <span className={`inline-flex items-center gap-1 font-semibold ${chip ? "rounded-full bg-paper/92 px-2 py-0.5 text-[0.72rem] leading-5 shadow-xs backdrop-blur-sm" : ""} ${className}`} style={{ color: x.color }}>
+      <TempGlyph t={t ?? ""} size={chip ? 11 : 13} />
       {tx.temp[t ?? ""]}
     </span>
   );
@@ -65,8 +66,12 @@ export function packGlyph(p: Product): GlyphKind {
   return "can";
 }
 
-/** The pack is the picture: the drawn pack, and what one sales unit holds, set large. */
-export function PackPlate({ p, size = "md" }: { p: Product; size?: "md" | "lg" }) {
+/**
+ * The pack is the picture: a generated illustration of the kind of product (never this product: it says so), or the
+ * drawn pack where there is none, with what one sales unit holds set in type on a paper badge, readable before the name.
+ * `tile` fills its parent's box; `lg` is the product page's picture.
+ */
+export function PackPlate({ p, size = "md", temp = false }: { p: Product; size?: "md" | "lg"; temp?: boolean }) {
   const tx = useText(SHOP_TEXT);
   const ax = useText(ART_TEXT);
   const { lang } = useLang();
@@ -75,35 +80,35 @@ export function PackPlate({ p, size = "md" }: { p: Product; size?: "md" | "lg" }
   const per = `${tx.per(unitWord(p, 1, lang))}${m && !m.certain ? tx.about : ""}`;
   const lg = size === "lg";
   const key = artFor(p);
-  const drawn = <DrawnPlate p={p} big={big} per={per} lg={lg} />;
-  if (!key) return drawn;
-  // The picture is an illustration of the kind of product, never this product: it says so, and the pack's real
-  // content stays in type on a paper badge, readable before the name.
+  const drawn = <DrawnPlate p={p} lg={lg} />;
   return (
-    <div className={`relative ${lg ? "aspect-[4/3]" : "aspect-[16/11]"}`}>
-      <Art k={key} cover sizes={lg ? "(min-width: 1024px) 34rem, 92vw" : "(min-width: 1280px) 16rem, (min-width: 640px) 30vw, 92vw"} position="50% 58%" fallback={drawn} />
-      <p className={`absolute bottom-0 left-0 bg-paper ${lg ? "px-5 py-3" : "px-2.5 pb-1.5 pt-1"}`}>
-        <span className={`display block text-petrol-deep tabular ${lg ? "text-[3.4rem]" : "text-[1.75rem]"}`}>{big}</span>
-        <span className={`block text-ink-soft ${lg ? "text-[1rem]" : "text-[0.78rem]"}`}>{per}</span>
+    <div className={`relative overflow-hidden ${lg ? "aspect-[4/3] rounded-2xl" : "aspect-[1/1] sm:aspect-[5/4]"}`}>
+      {key ? <Art k={key} cover sizes={lg ? "(min-width: 1024px) 40rem, 92vw" : "(min-width: 1280px) 15rem, (min-width: 640px) 30vw, 46vw"} position="50% 58%" fallback={drawn} /> : drawn}
+      {temp && (
+        <span className="absolute left-2 top-2">
+          <TempMark t={p.temperatureClass} chip />
+        </span>
+      )}
+      {key && (
+        <span title={ax.illustrationLong} className={`absolute right-2 top-2 rounded-full bg-petrol-deep/70 text-paper/95 backdrop-blur-sm ${lg ? "right-3 top-3 px-2.5 py-0.5 text-[0.8rem]" : "px-2 text-[0.68rem] leading-5"}`}>
+          {ax.illustration}
+          <span className="sr-only">: {ax.illustrationLong}</span>
+        </span>
+      )}
+      <p className={`absolute rounded-md bg-paper shadow-xs ${lg ? "bottom-4 left-4 rounded-lg px-4 py-2.5" : "bottom-2 left-2 px-2 pb-1 pt-0.5"}`}>
+        <span className={`display block leading-[1.05] text-petrol-deep tabular ${lg ? "text-[2.6rem] sm:text-[3rem]" : "text-[1.3rem] sm:text-[1.45rem]"}`}>{big}</span>
+        <span className={`block leading-tight text-ink-soft ${lg ? "text-[0.95rem]" : "text-[0.72rem]"}`}>{per}</span>
       </p>
-      <span title={ax.illustrationLong} className={`absolute right-0 top-0 bg-petrol-deep/75 text-paper ${lg ? "px-2.5 py-1 text-[0.85rem]" : "px-1.5 py-0.5 text-[0.7rem]"}`}>
-        {ax.illustration}
-        <span className="sr-only">: {ax.illustrationLong}</span>
-      </span>
     </div>
   );
 }
 
 /** The drawn pack: the fallback when there is no picture for the kind of product, or it fails to load. */
-function DrawnPlate({ p, big, per, lg }: { p: Product; big: string; per: string; lg: boolean }) {
+function DrawnPlate({ p, lg }: { p: Product; lg: boolean }) {
   const t = TEMP[p.temperatureClass ?? ""];
   return (
-    <div className={`flex items-center gap-3 ${lg ? "px-6 py-8" : "px-3 py-3"}`} style={{ background: t?.tint ?? "var(--color-mist)" }}>
-      <Glyph kind={packGlyph(p)} size={lg ? 96 : 44} className="shrink-0 text-petrol-deep" strokeWidth={lg ? 2 : 2.5} />
-      <div className="min-w-0">
-        <p className={`display text-petrol-deep tabular ${lg ? "text-[4.2rem]" : "text-[2rem]"}`}>{big}</p>
-        <p className={`text-ink-soft ${lg ? "mt-1 text-[1.05rem]" : "text-[0.82rem]"}`}>{per}</p>
-      </div>
+    <div className="absolute inset-0 flex items-center justify-center" style={{ background: t?.tint ?? "var(--color-surface)" }}>
+      <Glyph kind={packGlyph(p)} size={lg ? 120 : 64} className={`text-petrol-deep/70 ${lg ? "" : "-translate-y-2"}`} strokeWidth={lg ? 1.6 : 2} />
     </div>
   );
 }
@@ -191,6 +196,12 @@ export function originText(code: string | null | undefined, lang: Lang = "en"): 
   return SHOP_TEXT[lang].origin[code.toLowerCase()] ?? code.toUpperCase();
 }
 
+/**
+ * A product in the grid, the way a good shop shows one: the picture with the pack's content on it, then brand, name,
+ * what it is for, the pack and origin, claims; at the foot the price (asked of the wholesaler only when the buyer
+ * opens or adds the product) and the add button. A narrow tile (two to a phone row) shows the add button as a round
+ * plus, still named in full for screen readers.
+ */
 export function Tile({ p }: { p: Product }) {
   const { base, lang, live, basket } = usePortal();
   const tx = useText(SHOP_TEXT);
@@ -199,42 +210,40 @@ export function Tile({ p }: { p: Product }) {
   const href = `${base}/catalogue/${encodeURIComponent(p.id)}`;
   const prof = useProfile(p.id);
   const origin = originText(p.countryOfOrigin, lang);
+  const claims = claimsOf(p);
+  const brand = p.brand !== "unknown" ? p.brand : (p.vendor ?? "");
+  const addLabel = stepOf(p) > 1 || p.salesUnit === "KG" ? tx.addN(stepOf(p), unitWord(p, stepOf(p), lang)) : tx.addOne(unitWord(p, 1, lang));
   return (
-    <li className="group relative flex flex-col bg-paper outline-petrol hover:outline-2">
-      <p className="flex items-baseline justify-between gap-2 px-3 pt-2.5 text-[0.8rem]">
-        <TempMark t={p.temperatureClass} />
-        <span className="truncate text-ink-soft">{p.brand !== "unknown" ? p.brand : (p.vendor ?? "")}</span>
-      </p>
-      <div className="mx-3 mt-2">
-        <PackPlate p={p} />
-      </div>
-      <div className="flex flex-1 flex-col px-3 pb-3 pt-2.5">
-        <Link href={href} className="line-clamp-3 text-[1.08rem] font-semibold leading-[1.2] text-ink after:absolute after:inset-0 hover:text-petrol">
+    <li className="lift group @container relative flex flex-col overflow-hidden rounded-xl border border-line bg-paper">
+      <PackPlate p={p} temp />
+      <div className="flex flex-1 flex-col p-3 sm:p-4">
+        {brand && <p className="truncate text-[0.76rem] text-ink-soft">{brand}</p>}
+        <Link href={href} className="mt-0.5 line-clamp-3 text-[0.95rem] font-semibold leading-[1.25] text-ink after:absolute after:inset-0 after:rounded-xl hover:text-petrol sm:text-[1rem]">
           {readable(nameIn(p, lang))}
         </Link>
-        <p className="mt-1 text-[0.86rem] leading-snug text-ink-soft">
-          {prof?.kind ? <span className="font-semibold text-ink">{prof.kind}</span> : null}
+        <p className="mt-1 line-clamp-2 text-[0.8rem] leading-snug text-ink-soft">
+          {prof?.kind ? <span className="font-medium text-ink">{prof.kind}</span> : null}
           {prof?.uses.length ? <>{tx.forUses(!!prof.kind)}{prof.uses.slice(0, 3).map((u) => u.text).join(", ")}</> : null}
-          {prof === undefined && <span className="inline-block h-3 w-28 animate-pulse bg-mist align-middle" />}
+          {prof === undefined && <span className="skeleton inline-block h-3 w-24 align-middle" />}
         </p>
-        <p className="mt-1 text-[0.86rem] text-ink-soft">
+        <p className="mt-1 text-[0.8rem] leading-snug text-ink-soft">
           {quantityText(p, 1, lang)}
           {origin ? `, ${origin}` : ""}
         </p>
-        {claimsOf(p).length > 0 && (
+        {claims.length > 0 && (
           <p className="mt-2 flex flex-wrap gap-1">
-            {claimsOf(p)
-              .slice(0, 4)
-              .map((c) => (
-                <Tag key={c}>{tx.claim[c]}</Tag>
-              ))}
+            {claims.slice(0, 3).map((c, i) => (
+              <span key={c} className={i < 2 ? "contents" : "hidden @[15rem]:contents"}>
+                <Tag>{tx.claim[c]}</Tag>
+              </span>
+            ))}
           </p>
         )}
-        <div className="relative z-10 mt-auto flex items-end justify-between gap-2 border-t border-line pt-2.5">
-          <span className="text-[0.88rem] leading-tight">
+        <div className="relative z-10 mt-auto flex items-end justify-between gap-2 pt-3">
+          <span className="min-w-0 text-[0.8rem] leading-tight">
             {r?.offer ? (
               <>
-                <span className="display text-[1.45rem] tabular">{money(r.offer.unitPriceCents)}</span>
+                <span className="display block text-[1.3rem] text-ink tabular">{money(r.offer.unitPriceCents)}</span>
                 <span className="block text-ink-soft">{tx.per(unitWord(p, 1, lang))}</span>
               </>
             ) : r ? (
@@ -248,22 +257,44 @@ export function Tile({ p }: { p: Product }) {
             )}
           </span>
           {line ? (
-            <Link href={`${base}/basket`} className="flex min-h-10 items-center gap-1.5 bg-petrol-soft px-2.5 text-[0.92rem] font-semibold text-petrol-deep">
-              <span aria-hidden>✓</span> {tx.inBasket(line.packs)}
+            <Link href={`${base}/basket`} className="inline-flex min-h-10 shrink-0 items-center gap-1 rounded-full bg-petrol-soft px-3 text-[0.85rem] font-semibold text-petrol-deep transition-colors hover:bg-petrol/15 pointer-coarse:min-h-11">
+              <Check aria-hidden size={15} strokeWidth={2.6} /> {tx.inBasket(line.packs)}
             </Link>
           ) : (
-            <Button
-              kind="primary"
-              size="sm"
-              className={`min-h-10 ${lang === "en" ? "whitespace-nowrap" : "text-balance"}`}
+            <button
+              type="button"
+              aria-label={addLabel}
+              title={addLabel}
               onClick={() => {
                 basket.add(p, stepOf(p));
                 void live.check([p.id]);
               }}
+              className="inline-flex size-11 shrink-0 items-center justify-center gap-1.5 rounded-full bg-petrol text-[0.88rem] font-semibold text-paper shadow-xs transition-[background-color,transform] duration-150 hover:bg-petrol-deep active:scale-95 motion-reduce:active:scale-100 @[15rem]:h-10 @[15rem]:w-auto @[15rem]:px-3.5 pointer-coarse:@[15rem]:h-11"
             >
-              {stepOf(p) > 1 || p.salesUnit === "KG" ? tx.addN(stepOf(p), unitWord(p, stepOf(p), lang)) : tx.addOne(unitWord(p, 1, lang))}
-            </Button>
+              <Plus aria-hidden size={18} strokeWidth={2.4} className="@[15rem]:-ml-0.5" />
+              <span aria-hidden className="hidden whitespace-nowrap @[15rem]:inline">
+                {addLabel}
+              </span>
+            </button>
           )}
+        </div>
+      </div>
+    </li>
+  );
+}
+
+/** A tile's place while the grid loads. */
+export function TileSkeleton() {
+  return (
+    <li aria-hidden className="overflow-hidden rounded-xl border border-line bg-paper">
+      <div className="skeleton aspect-[1/1] !rounded-none sm:aspect-[5/4]" />
+      <div className="space-y-2 p-3 sm:p-4">
+        <div className="skeleton h-3 w-16" />
+        <div className="skeleton h-4 w-full" />
+        <div className="skeleton h-4 w-2/3" />
+        <div className="flex items-end justify-between pt-3">
+          <div className="skeleton h-4 w-20" />
+          <div className="skeleton size-10 !rounded-full" />
         </div>
       </div>
     </li>
@@ -274,22 +305,34 @@ export function LiveBox({ r, busy, p }: { r?: LiveResult & { checkedAt: string }
   const tx = useText(SHOP_TEXT);
   const f = useFormat();
   const [now] = useState(() => Date.now());
-  if (busy && !r) return <Working>{tx.askingWholesaler}</Working>;
+  if (busy && !r)
+    return (
+      <div role="status" aria-label={tx.askingWholesaler} className="space-y-3">
+        <div className="skeleton h-12 w-40" />
+        <div className="skeleton h-4 w-56" />
+        <div className="grid grid-cols-2 gap-2.5 pt-1">
+          <div className="skeleton h-16" />
+          <div className="skeleton h-16" />
+        </div>
+        <p className="text-[0.85rem] text-ink-soft">{tx.askingWholesaler}</p>
+      </div>
+    );
   if (!r) return null;
   const o = r.offer;
   if (!o)
     return (
-      <div className="border-l-[6px] border-ink bg-mist px-3 py-2">
+      <Panel className="px-4 py-3.5">
         <p className="font-semibold">{tx.notOrderableRightNow}</p>
-        <p className="text-[0.95rem] text-ink-soft">{r.problems.length ? problemsText(r.problems, f.lang) : r.message}</p>
-        <p className="mt-1 text-[0.82rem] text-ink-soft">{tx.checkedLiveOn(f.day(helsinkiToday(new Date(r.checkedAt))), clock(r.checkedAt))}</p>
-      </div>
+        <p className="mt-0.5 text-[0.95rem] leading-snug text-ink-soft">{r.problems.length ? problemsText(r.problems, f.lang) : r.message}</p>
+        <p className="mt-1.5 text-[0.8rem] text-ink-soft">{tx.checkedLiveOn(f.day(helsinkiToday(new Date(r.checkedAt))), clock(r.checkedAt))}</p>
+      </Panel>
     );
   const cut = cutoffMs(o.orderBy);
+  const soon = cut !== undefined && cut - now < 6 * 3_600_000;
   return (
     <div>
-      <p className="display text-[3rem] text-ink tabular">{money(o.unitPriceCents)}</p>
-      <p className="text-[0.95rem] text-ink-soft">
+      <p className="display text-[2.6rem] leading-none text-ink tabular sm:text-[3rem]">{money(o.unitPriceCents)}</p>
+      <p className="mt-1.5 text-[0.92rem] text-ink-soft">
         {tx.perVat(unitWord(p, 1, f.lang))}
         {o.comparisonPriceCents !== undefined && o.comparisonUnit && (
           <>
@@ -299,61 +342,53 @@ export function LiveBox({ r, busy, p }: { r?: LiveResult & { checkedAt: string }
           </>
         )}
       </p>
-      <dl className="mt-3 grid grid-cols-2 gap-px bg-line">
-        <div className="min-w-0 bg-paper py-2 pr-2">
-          <dt className="text-[0.8rem] text-ink-soft">{tx.orderBy}</dt>
-          <dd className="font-semibold leading-snug">
+      <dl className="mt-4 grid grid-cols-2 gap-2.5">
+        <div className="min-w-0 rounded-lg bg-surface px-3.5 py-2.5">
+          <dt className="text-[0.76rem] text-ink-soft">{tx.orderBy}</dt>
+          <dd className="mt-0.5 font-semibold leading-snug">
             {o.orderBy ? (cutoffText(o.orderBy, f.lang) ?? o.orderBy) : tx.noCutoff}
-            {cut !== undefined && <span className={`block text-[0.88rem] ${cut - now < 6 * 3_600_000 ? "font-bold text-ink" : "font-medium text-ink-soft"}`}>{untilText(cut, now, f.lang)}</span>}
+            {cut !== undefined && <span className={`block text-[0.84rem] ${soon ? "font-semibold text-notice" : "font-medium text-ink-soft"}`}>{untilText(cut, now, f.lang)}</span>}
           </dd>
         </div>
-        <div className="min-w-0 bg-paper py-2 pl-3">
-          <dt className="text-[0.8rem] text-ink-soft">{tx.earliestDelivery}</dt>
-          <dd className="font-semibold">{f.day(o.deliveryDate)}</dd>
+        <div className="min-w-0 rounded-lg bg-surface px-3.5 py-2.5">
+          <dt className="text-[0.76rem] text-ink-soft">{tx.earliestDelivery}</dt>
+          <dd className="mt-0.5 font-semibold leading-snug">{f.day(o.deliveryDate)}</dd>
         </div>
-        <div className="col-span-2 bg-paper py-2">
-          <dt className="text-[0.8rem] text-ink-soft">{tx.stock}</dt>
-          <dd className="font-semibold">{o.stockKnown === false ? tx.stockNotConfirmed : `${num(o.availablePacks, 0)} ${unitWord(p, o.availablePacks, f.lang)}`}</dd>
+        <div className="col-span-2 min-w-0 rounded-lg bg-surface px-3.5 py-2.5">
+          <dt className="text-[0.76rem] text-ink-soft">{tx.stock}</dt>
+          <dd className="mt-0.5 font-semibold leading-snug">{o.stockKnown === false ? tx.stockNotConfirmed : `${num(o.availablePacks, 0)} ${unitWord(p, o.availablePacks, f.lang)}`}</dd>
         </div>
       </dl>
-      <p className="mt-2 text-[0.82rem] text-ink-soft">{tx.checkedLiveAt(clock(r.checkedAt))}</p>
+      <p className="mt-2.5 text-[0.8rem] text-ink-soft">{tx.checkedLiveAt(clock(r.checkedAt))}</p>
     </div>
   );
 }
 
-/** Product facts as a waybill: every field present, "no data" where the data does not say. */
+/** Product facts as the data states them: every field present, "no data" where the data does not say. */
 export function Facts({ p, lang }: { p: Product; lang: Lang }) {
   const tx = SHOP_TEXT[lang];
   const t = tx.facts;
   const a = p.allergenInfo;
   const al = (x: string) => allergenText(x, lang);
-  return (
-    <dl className="grid grid-cols-[10rem_1fr] gap-x-4 gap-y-1.5 text-[0.98rem] [&>dd]:min-w-0 [&>dd]:break-words [&>dt]:hyphens-manual">
-      <dt className="text-ink-soft">{t.productCode}</dt>
-      <dd className="tabular">{p.id}</dd>
-      <dt className="text-ink-soft">{t.soldPer}</dt>
-      <dd>
-        {unitWord(p, 1, lang)}: {quantityText(p, 1, lang).split(" = ")[1] ?? t.contentNoData}
-        {p.packContent && !p.packContent.certain && <span className="block text-[0.88rem] text-ink-soft">{t.contentUncertain}</span>}
-      </dd>
-      <dt className="text-ink-soft">{t.brand}</dt>
-      <dd>{p.brand !== "unknown" ? p.brand : <Missing>{tx.noData}</Missing>}</dd>
-      <dt className="text-ink-soft">{t.supplier}</dt>
-      <dd>{p.vendor ?? <Missing>{tx.noData}</Missing>}</dd>
-      <dt className="text-ink-soft">{t.origin}</dt>
-      <dd>{originText(p.countryOfOrigin, lang) ?? <Missing>{tx.noData}</Missing>}</dd>
-      <dt className="text-ink-soft">{t.storage}</dt>
-      <dd>{tempLabel(p.temperatureClass, lang) ?? <Missing>{tx.noData}</Missing>}</dd>
-      <dt className="text-ink-soft">{t.claims}</dt>
-      <dd>{claimsOf(p).length ? claimsOf(p).map((c) => tx.claim[c]).join(", ") : t.noneStated}</dd>
-      <dt className="text-ink-soft">{t.labels}</dt>
-      <dd>{p.certificates.length ? p.certificates.map(labelText).join(", ") : t.noneStated}</dd>
-      <dt className="text-ink-soft">{t.allergens}</dt>
-      <dd>
-        {!a || !a.declared ? (
+  const rows: { key: string; label: string; value: React.ReactNode }[] = [
+    {
+      key: "sold",
+      label: t.soldPer,
+      value: (
+        <>
+          {unitWord(p, 1, lang)}: {quantityText(p, 1, lang).split(" = ")[1] ?? t.contentNoData}
+          {p.packContent && !p.packContent.certain && <span className="block text-[0.88rem] text-ink-soft">{t.contentUncertain}</span>}
+        </>
+      ),
+    },
+    {
+      key: "allergens",
+      label: t.allergens,
+      value:
+        !a || !a.declared ? (
           <>
             <Missing>{tx.noData}</Missing>
-            <span className="block text-[0.88rem] text-ink-soft">{t.noAllergenData}</span>
+            <span className="mt-1 block text-[0.88rem] text-ink-soft">{t.noAllergenData}</span>
           </>
         ) : (
           <>
@@ -361,13 +396,24 @@ export function Facts({ p, lang }: { p: Product; lang: Lang }) {
             {a.mayContain.length > 0 && <span className="block">{t.mayContain(a.mayContain.map(al).join(", "))}</span>}
             {a.freeFrom.length > 0 && <span className="block text-ink-soft">{t.freeFrom(a.freeFrom.map(al).join(", "))}</span>}
           </>
-        )}
-      </dd>
-      <dt className="text-ink-soft">{t.deliveredInFull}</dt>
-      <dd>{p.deliveryReliabilityKnown === false || (p.source === "valio" && p.deliveryReliabilityKnown === undefined) ? <Missing>{tx.noData}</Missing> : t.pastDeliveries(Math.round(p.deliveryReliability * 100))}</dd>
-      <dt className="text-ink-soft">{t.carbon}</dt>
-      <dd>
-        {p.carbonGroupAvgKgCo2ePerKg != null ? (
+        ),
+    },
+    { key: "claims", label: t.claims, value: claimsOf(p).length ? claimsOf(p).map((c) => tx.claim[c]).join(", ") : <span className="text-ink-soft">{t.noneStated}</span> },
+    { key: "brand", label: t.brand, value: p.brand !== "unknown" ? p.brand : <Missing>{tx.noData}</Missing> },
+    { key: "supplier", label: t.supplier, value: p.vendor ?? <Missing>{tx.noData}</Missing> },
+    { key: "origin", label: t.origin, value: originText(p.countryOfOrigin, lang) ?? <Missing>{tx.noData}</Missing> },
+    { key: "storage", label: t.storage, value: tempLabel(p.temperatureClass, lang) ?? <Missing>{tx.noData}</Missing> },
+    { key: "labels", label: t.labels, value: p.certificates.length ? p.certificates.map(labelText).join(", ") : <span className="text-ink-soft">{t.noneStated}</span> },
+    {
+      key: "reliability",
+      label: t.deliveredInFull,
+      value: p.deliveryReliabilityKnown === false || (p.source === "valio" && p.deliveryReliabilityKnown === undefined) ? <Missing>{tx.noData}</Missing> : t.pastDeliveries(Math.round(p.deliveryReliability * 100)),
+    },
+    {
+      key: "carbon",
+      label: t.carbon,
+      value:
+        p.carbonGroupAvgKgCo2ePerKg != null ? (
           <>
             {t.carbonPerKg(num(p.carbonGroupAvgKgCo2ePerKg, 2))}
             <span className="block text-[0.88rem] text-ink-soft">{t.carbonGroupNote}</span>
@@ -376,21 +422,19 @@ export function Facts({ p, lang }: { p: Product; lang: Lang }) {
           <Missing>{tx.noData}</Missing>
         ) : (
           t.carbonPer(String(p.carbonKgPerUnit), p.unit)
-        )}
-      </dd>
-      {(["fi", "sv", "en"] as const)
-        .filter((l) => l !== lang && p.names?.[l])
-        .map((l) => (
-          <div key={l} className="contents">
-            <dt className="text-ink-soft">{t.nameIn[l]}</dt>
-            <dd className="min-w-0 break-words">{p.names![l]}</dd>
-          </div>
-        ))}
-    </dl>
-  );
+        ),
+    },
+    { key: "code", label: t.productCode, value: <span className="tabular">{p.id}</span> },
+    ...(["fi", "sv", "en"] as const).filter((l) => l !== lang && p.names?.[l]).map((l) => ({ key: `name-${l}`, label: t.nameIn[l], value: p.names![l] })),
+  ];
+  return <FactList rows={rows} labelWidth="min(10.5rem, 36%)" stack={false} />;
 }
 
-/** The buy box on a product page: live price on open, quantity in the sales unit with what it means, basket or agent. */
+/**
+ * The buy box on a product page: the live price on open, the quantity in the sales unit with what it means, then the
+ * basket (the one lime action) or the agent. On a phone it comes straight after the picture and the name, before the
+ * facts, so the action is a thumb's reach from the top.
+ */
 export function BuyBox({ p }: { p: Product }) {
   const { live, basket, agent, lang } = usePortal();
   const tx = useText(SHOP_TEXT);
@@ -402,47 +446,45 @@ export function BuyBox({ p }: { p: Product }) {
   const r = live.results[p.id];
   const line = basket.lines.find((l) => l.productId === p.id);
   return (
-    <div className="bg-paper">
-      <div aria-hidden className="h-1.5 bg-petrol" />
-      <div className="space-y-5 p-5">
-        <LiveBox r={r} busy={live.busy.includes(p.id)} p={p} />
-        {live.error && !r && <p className="text-ink-soft">{tx.liveFailed(live.error)}</p>}
-        <div className="border-t border-line pt-4">
-          <Quantity p={p} value={n} onChange={setN} id={`qty-${p.id}`} />
-          {r?.offer && (
-            <p key={n} className="changed mt-2 inline-block px-1 text-[1.1rem] font-semibold tabular">
-              {tx.priceFor(money(r.offer.unitPriceCents * n), quantityText(p, n, lang))}
-            </p>
-          )}
-        </div>
-        <div className="flex flex-col gap-2">
-          <Button kind="go" size="lg" onClick={() => basket.add(p, n)}>
-            {line ? tx.addMore : tx.add}
-          </Button>
-          <button
-            type="button"
-            className="flex min-h-11 items-center justify-center gap-2 bg-lavender px-4 font-semibold text-lavender-deep hover:bg-[#e3daf0]"
-            onClick={() => {
-              agent.setProduct(p);
-              agent.setFollowUp(undefined);
-              agent.open();
-            }}
-          >
-            {tx.orderWithAgent}
-          </button>
-        </div>
-        {line && (
-          <p className="flex items-center gap-2 bg-petrol-soft px-3 py-2 text-[0.95rem] text-petrol-deep">
-            <span aria-hidden>✓</span> {tx.inBasketQty(quantityText(p, line.packs, lang))}
+    <div className="rounded-xl border border-line bg-paper p-5 shadow-sm sm:p-6">
+      <LiveBox r={r} busy={live.busy.includes(p.id)} p={p} />
+      {live.error && !r && <p className="text-ink-soft">{tx.liveFailed(live.error)}</p>}
+      <div className="mt-5 border-t border-line pt-5">
+        <Quantity p={p} value={n} onChange={setN} id={`qty-${p.id}`} />
+        {r?.offer && (
+          <p key={n} className="changed mt-3 inline-block rounded-sm px-1 text-[1.05rem] font-semibold tabular">
+            {tx.priceFor(money(r.offer.unitPriceCents * n), quantityText(p, n, lang))}
           </p>
         )}
-        <p className="border-t border-line pt-3 text-[0.85rem] leading-snug text-ink-soft">
-          <span className="font-semibold text-ink tabular">{live.calls}</span>
-          {tx.callsA(live.calls)}
-          <span className="tabular">{live.products}</span>
-          {tx.callsB(live.products)}
-        </p>
       </div>
+      <div className="mt-5 flex flex-col gap-2.5">
+        <KitButton kind="go" size="lg" onClick={() => basket.add(p, n)}>
+          {line ? tx.addMore : tx.add}
+        </KitButton>
+        <button
+          type="button"
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-lavender px-5 font-semibold text-lavender-deep transition-colors duration-150 hover:bg-lavender-mid"
+          onClick={() => {
+            agent.setProduct(p);
+            agent.setFollowUp(undefined);
+            agent.open();
+          }}
+        >
+          <Sparkles aria-hidden size={17} />
+          {tx.orderWithAgent}
+        </button>
+      </div>
+      {line && (
+        <p className="mt-4 flex items-center gap-2 rounded-md bg-good-soft px-3.5 py-2.5 text-[0.92rem] font-medium text-good">
+          <Check aria-hidden size={17} strokeWidth={2.4} className="shrink-0" /> {tx.inBasketQty(quantityText(p, line.packs, lang))}
+        </p>
+      )}
+      <p className="mt-5 text-[0.82rem] leading-snug text-ink-soft">
+        <span className="font-semibold text-ink tabular">{live.calls}</span>
+        {tx.callsA(live.calls)}
+        <span className="tabular">{live.products}</span>
+        {tx.callsB(live.products)}
+      </p>
     </div>
   );
 }

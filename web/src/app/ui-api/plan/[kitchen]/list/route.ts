@@ -17,7 +17,7 @@ const Body = z.object({
 
 export async function POST(req: Request, ctx: RouteContext<"/ui-api/plan/[kitchen]/list">) {
   return handle(async () => {
-    const { service, kitchen, reply } = await withKitchen((await ctx.params).kitchen);
+    const { service, kitchen, reply } = await withKitchen((await ctx.params).kitchen, req);
     const body = parse(Body, await readJson(req));
     const r = await service.planItems(kitchen, body.items, kitchen.info.by, { deliverBy: body.deliverBy, source: body.source, door: "photo" });
     const res = reply(r, 201);

@@ -1,3 +1,4 @@
+import { sessionCookieFor } from "../accounts/test-session";
 import { beforeEach, describe, expect, it } from "vitest";
 import { addDaysIso, localNow } from "@/core/kitchen";
 import { getRuntime, resetRuntime } from "../runtime";
@@ -33,11 +34,13 @@ describe("door answers and who gave them", () => {
     await expect(kitchenAgent(sandbox.sandboxId, new Request("https://dock.test/ui-api/voice/x/tool", { method: "POST" }))).rejects.toMatchObject({ status: 401 });
   });
 
-  it("on an open demo kitchen, a spoken answer is recorded as relayed (nobody is signed in)", async () => {
-    const a = await kitchenAgent("laakso", new Request("https://dock.test/ui-api/voice/laakso/tool", { method: "POST" }));
+  it("a stage kitchen's voice door is closed to strangers; signed in to its account, a spoken answer is that account's", async () => {
+    const tool = (cookie?: string) => new Request("https://dock.test/ui-api/voice/laakso/tool", { method: "POST", headers: cookie ? { cookie } : {} });
+    await expect(kitchenAgent("laakso", tool())).rejects.toMatchObject({ status: 401 });
+    const a = await kitchenAgent("laakso", tool(await sessionCookieFor(await getRuntime(), "laakso")));
     const step = await openNeed(a, { item: { text: "lactose-free milk", category: "milk" }, quantity: { amount: 50, unit: "L" }, deliverBy: yesterday() }, "voice", "speech", { summary: "test" });
     const c = step.concerns[0];
     const next = await respond(a, step.requestId, c.key, c.corrections[0].id, "voice", "speech", { text: "tomorrow", turn: 1 });
-    expect(next.acknowledgements[0]).toMatchObject({ channel: "relayed", verified: false });
+    expect(next.acknowledgements[0]).toMatchObject({ channel: "voice", verified: true });
   });
 });

@@ -24,7 +24,7 @@ export function Observe() {
           <span className="flex items-center gap-3">
             {p && <span className="tabular">Read {whenSeconds(p.at)} as {p.readAs}</span>}
             {grafanaUrl && (
-              <a href={grafanaUrl} target="_blank" rel="noreferrer" className="font-semibold text-petrol underline underline-offset-2">
+              <a href={grafanaUrl} target="_blank" rel="noreferrer" className="font-medium text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol">
                 Full Grafana dashboard
               </a>
             )}
@@ -32,9 +32,9 @@ export function Observe() {
         }
       />
       <PlatformTabs />
-      <div className="flex gap-1" role="group" aria-label="Time range">
+      <div className="inline-flex gap-1 rounded-full bg-surface p-1" role="group" aria-label="Time range">
         {(["1h", "24h", "7d"] as Range[]).map((r) => (
-          <button key={r} type="button" onClick={() => setRange(r)} aria-pressed={range === r} className={`min-h-9 px-3 text-[0.9rem] font-semibold ${range === r ? "bg-petrol text-paper" : "border-2 border-line bg-paper hover:border-petrol"}`}>
+          <button key={r} type="button" onClick={() => setRange(r)} aria-pressed={range === r} className={`inline-flex min-h-9 items-center rounded-full px-4 text-[0.9rem] font-medium transition-[background-color,color,box-shadow] duration-150 ${range === r ? "bg-paper text-ink shadow-xs" : "text-ink-soft hover:text-ink"}`}>
             {r === "1h" ? "Last hour" : r === "24h" ? "24 hours" : "7 days"}
           </button>
         ))}
@@ -60,8 +60,8 @@ function Body({ p }: { p: Panels }) {
   const errors = Object.values(p.panels).filter((x) => x.error);
   return (
     <>
-      {errors.length > 0 && <p className="mt-3 border-l-4 border-safety bg-paper px-3 py-2 text-[0.86rem]">{errors.length} panels could not be read: {errors[0].error}</p>}
-      <Panel rule className="mt-3 grid grid-cols-2 divide-line/70 sm:grid-cols-3 lg:grid-cols-6 lg:divide-x">
+      {errors.length > 0 && <p className="mt-3 rounded-lg bg-safety-soft px-4 py-2.5 ring-1 ring-inset ring-safety/50 text-[0.86rem]">{errors.length} panels could not be read: {errors[0].error}</p>}
+      <Panel className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 lg:divide-x lg:divide-line">
         <Stat n={n(t.orders)} label="orders committed" sub={eur(n(t.value_eur))} />
         <Stat n={n(t.signoffs_asked)} label="sign-offs asked" sub={`${n(t.signoffs_granted)} granted, ${n(t.signoffs_denied)} declined`} />
         <Stat n={n(t.refused)} label="refused by the gate" safety={n(t.refused) > 0} />
@@ -71,7 +71,7 @@ function Body({ p }: { p: Panels }) {
       </Panel>
       <p className="mt-1 text-[0.78rem] text-ink-soft">{p.label}.</p>
 
-      <div className="mt-2 grid gap-4 lg:grid-cols-2">
+      <div className="mt-2 grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
         <Box title="Gate decisions over time" sql={p.panels.timeline}>
           <Bars rows={p.panels.timeline?.rows ?? []} label="Gate decisions over time" series={[{ key: "allowed", label: "allowed alone", tone: "ink" }, { key: "to_person", label: "sent to a person", tone: "pale" }, { key: "refused", label: "refused", tone: "safety" }]} />
         </Box>
@@ -104,7 +104,7 @@ function Body({ p }: { p: Panels }) {
           {(p.panels.health?.rows ?? []).length ? (
             <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {p.panels.health!.rows.map((r) => (
-                <li key={String(r.service)} className="bg-mist px-2.5 py-2">
+                <li key={String(r.service)} className="rounded-lg bg-surface px-3 py-2.5">
                   <p className="font-semibold">{String(r.service)}</p>
                   <Status ok={r.ok as boolean} label={`${r.ok ? "up" : "down"}, ${fmtCell(r.ms)} ms`} />
                   <p className="text-[0.8rem] text-ink-soft">{fmtCell(r.checked_at)}</p>
@@ -126,7 +126,7 @@ function Body({ p }: { p: Panels }) {
           {p.panels.agents && <SqlBox sql={p.panels.agents.sql} />}
         </Panel>
       </Section>
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
         <Section title="Crash-test scores">
           <Panel className="px-3 py-2">
             <Rows columns={["ts", "agent_id", "score", "run"]} rows={p.panels.crash?.rows ?? []} empty="No crash-test run has reported a score yet." />
@@ -159,7 +159,7 @@ function Stat({ n: value, label, sub, safety }: { n: number | string; label: str
 
 function Box({ title, sql, children }: { title: string; sql?: { sql: string; error?: string; ms?: number }; children: React.ReactNode }) {
   return (
-    <Panel rule className="px-4 py-4">
+    <Panel className="p-5">
       <h2 className="display text-[1.3rem]">{title}</h2>
       <div className="mt-2">{sql?.error ? <p className="text-[0.84rem] font-semibold">{sql.error}</p> : children}</div>
       {sql && <SqlBox sql={sql.sql} summary={`The query${sql.ms !== undefined ? ` (${sql.ms} ms)` : ""}`} />}

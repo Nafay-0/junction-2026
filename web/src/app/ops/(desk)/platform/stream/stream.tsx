@@ -1,5 +1,7 @@
 "use client";
 
+import { buttonClass } from "../../../../_ui/kit";
+
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { LagReport, StreamMessage } from "@/server/aiven/showcase/stream";
@@ -58,12 +60,12 @@ export function StreamView() {
       <LoadError message={error} />
       <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <Panel>
-          <div className="flex items-center justify-between border-b border-line/70 border-t-[3px] border-t-petrol px-4 py-2.5">
+          <div className="flex items-center justify-between border-b border-line px-5 py-3">
             <p className="flex items-center gap-2 text-[0.92rem]">
               {!paused && <span aria-hidden className="breathe size-2.5 bg-petrol" />}
               <b>Live tail</b> <span className="text-ink-soft">newest first, {msgs.length} shown{warming ? ", joining the topic…" : ""}</span>
             </p>
-            <button type="button" onClick={() => setPaused((p) => !p)} className="text-[0.9rem] font-semibold text-petrol underline underline-offset-2">
+            <button type="button" onClick={() => setPaused((p) => !p)} className={buttonClass("secondary", "sm")}>
               {paused ? "Resume" : "Pause"}
             </button>
           </div>
@@ -79,7 +81,7 @@ export function StreamView() {
                   {m.event.rule && <span className="ml-1.5 font-mono text-[0.74rem]">{m.event.rule}</span>}
                   {m.event.agentId && <span className="ml-1.5 text-ink-soft">{m.event.agentId}</span>}
                   {m.event.requestId && (
-                    <Link href={`/ops/trace/${m.event.requestId}`} className="ml-1.5 font-mono text-[0.76rem] text-petrol underline decoration-line underline-offset-2">
+                    <Link href={`/ops/trace/${m.event.requestId}`} className="ml-1.5 font-mono text-[0.76rem] text-petrol hover:underline">
                       {m.event.requestId}
                     </Link>
                   )}
@@ -91,7 +93,7 @@ export function StreamView() {
           </ol>
         </Panel>
         <aside className="space-y-3">
-          <Panel rule className="px-4 py-4">
+          <Panel className="p-5">
             <h2 className="display text-[1.3rem]">Consumer lag</h2>
             {lag ? (
               <>
@@ -101,7 +103,7 @@ export function StreamView() {
                 </p>
                 <table className="mt-2 w-full text-[0.82rem] tabular">
                   <thead>
-                    <tr className="border-b-2 border-petrol text-left text-ink-soft">
+                    <tr className="border-b border-line text-left text-ink-soft">
                       <th className="py-1">partition</th>
                       <th>end</th>
                       <th>committed</th>
@@ -127,7 +129,7 @@ export function StreamView() {
               <p className="mt-1 text-[0.86rem] text-ink-soft">Reading offsets…</p>
             )}
           </Panel>
-          <Panel rule className="px-4 py-4 text-[0.92rem] leading-snug">
+          <Panel className="p-5 text-[0.92rem] leading-snug">
             <h2 className="display text-[1.3rem]">Replay from the stream</h2>
             <p className="mt-1">
               The trace view reads a request&apos;s events back from Kafka in order, with each message&apos;s partition and offset beside its step (<Mono>/ops-api/platform/stream/request/&lt;id&gt;</Mono>). Any partition can also be read by offset range: <Mono>/ops-api/platform/stream/range?partition=1&amp;from=0&amp;to=50</Mono>.

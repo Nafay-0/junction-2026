@@ -8,9 +8,11 @@ import { Target } from "../_ui/target";
 import { useFormat, useText } from "../_i18n/provider";
 import { GATE_TEXT } from "./gate.text";
 import { cutoff } from "./sheet";
+import { Check, ChevronDown } from "lucide-react";
+import { IconDisc, Skeleton } from "../_ui/kit";
 import { Btn, Field, Sheet } from "./ui";
 
-type ApprovalQr = { mode: "demo_link" | "view_only"; approver: { name: string; role: string }; status: string; url: string; qrSvg: string };
+type ApprovalQr = { mode: "demo_link" | "view_only" | "passkey" | "enrol" | "no_device"; approver: { name: string; role: string }; status: string; url: string; qrSvg: string };
 
 /** The bottom of the sheet: total, delivery, what needs a person, and the one button that asks for a fixed price. */
 export function Totals({ plan, onQuote, busy }: { plan: PlanWire; onQuote: () => void; busy: boolean }) {
@@ -18,11 +20,11 @@ export function Totals({ plan, onQuote, busy }: { plan: PlanWire; onQuote: () =>
   const tx = useText(GATE_TEXT);
   const f = useFormat();
   return (
-    <Sheet safety={t.signOff.needed || t.openDoubts > 0}>
-      <div className="p-4 sm:p-5">
-        <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
-          <Field label={tx.total}>
-            <span className="display text-[2rem] tabular">{money(t.totalCents)}</span>
+    <section className="rounded-xl border border-line bg-paper shadow-sm">
+      <div className="p-5 sm:p-7">
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-5 lg:grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(0,1fr))]">
+          <Field label={tx.total} className="col-span-2 lg:col-span-1">
+            <span className="display text-[2.4rem] leading-none tabular">{money(t.totalCents)}</span>
           </Field>
           <Field label={tx.lines}>
             {tx.linesCount(t.lines, t.products)}
@@ -32,18 +34,19 @@ export function Totals({ plan, onQuote, busy }: { plan: PlanWire; onQuote: () =>
             {t.deliveryDate ? f.day(t.deliveryDate) : "-"}
             {t.orderBy ? <span className="block text-[0.9rem] font-medium text-ink-soft">{tx.orderBy(cutoff(t.orderBy, f.lang))}</span> : null}
           </Field>
-          <Field label={tx.whoDecides}>
+          <Field label={tx.whoDecides} className="col-span-2 sm:col-span-1">
+            {t.signOff.needed && <Target size={16} tone="safety" className="mr-1.5 inline-block align-[-2px]" />}
             {t.signOff.needed ? (t.signOff.approver ? `${t.signOff.approver.name}, ${f.role(t.signOff.approver.role)}` : tx.noOne) : tx.agentAlone}
             {t.signOff.reasons[0] ? <span className="block text-[0.9rem] font-medium text-ink-soft">{t.signOff.reasons[0]}</span> : null}
           </Field>
         </dl>
         {plan.state === "planned" && (
-          <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-line pt-3">
-            <Btn kind="primary" busy={busy} disabled={!t.canQuote} onClick={onQuote} className="min-h-12 px-5 text-[1.1rem]">
+          <div className="mt-6 flex flex-col gap-3 border-t border-line pt-5 sm:flex-row sm:items-center sm:gap-5">
+            <Btn kind="go" size="lg" busy={busy} disabled={!t.canQuote} onClick={onQuote} className="w-full shrink-0 sm:w-auto">
               {tx.getPrice}
             </Btn>
             {t.blockers.length > 0 ? (
-              <ul className="text-[0.95rem] leading-snug">
+              <ul className="space-y-0.5 text-[0.95rem] leading-snug text-ink-soft">
                 {t.blockers.map((b, i) => (
                   <li key={i}>{b}</li>
                 ))}
@@ -53,13 +56,13 @@ export function Totals({ plan, onQuote, busy }: { plan: PlanWire; onQuote: () =>
             )}
           </div>
         )}
-        <p className="mt-3 text-[0.85rem] text-ink-soft">
+        <p className="mt-4 text-[0.84rem] leading-snug text-ink-soft">
           {tx.live(plan.live.calls, plan.live.products, plan.live.allowance.newProductsLeft)}
           {plan.live.refused ? ` ${plan.live.refused}` : ""}
           {tx.model(plan.model.calls.length, plan.model.ms, plan.model.costUsd)}
         </p>
       </div>
-    </Sheet>
+    </section>
   );
 }
 
@@ -77,27 +80,27 @@ export function GateStage({ plan, kitchen, onOrder, onRefresh, busy, base }: { p
   if (!q && !plan.error) return null;
   return (
     <Sheet safety={!!o && (o.status !== "committed" || !!o.approval)}>
-      <div className="p-4 sm:p-5">
+      <div className="p-5 sm:p-7">
         {plan.error && (
-          <div role="alert" className="mb-3 border-l-[6px] border-safety-ink bg-safety/30 px-3 py-2">
+          <div role="alert" className="mb-4 rounded-lg bg-safety-soft px-4 py-3 ring-1 ring-inset ring-safety/60">
             <p className="font-semibold">{tx.gateSaidNo(f.ruleTitle(plan.error.rule) || plan.error.code)}</p>
             <p>{plan.error.message}</p>
           </div>
         )}
         {q && (
           <>
-            <h2 className="display text-[1.6rem]">{tx.fixedPrice(money(q.totalCents))}</h2>
-            <p className="text-[0.95rem] text-ink-soft">{tx.holds(clock(q.expiresAt), q.expiresBecause, q.evidence, q.lines.length)}</p>
+            <h2 className="display text-[1.5rem] sm:text-[1.7rem]">{tx.fixedPrice(money(q.totalCents))}</h2>
+            <p className="mt-0.5 text-[0.95rem] text-ink-soft">{tx.holds(clock(q.expiresAt), q.expiresBecause, q.evidence, q.lines.length)}</p>
             {!o && (
               <>
-                <p className="mt-2">
+                <p className="mt-3 max-w-[62ch] leading-relaxed">
                   {q.policyPreview.outcome === "auto_approve"
                     ? tx.previewAuto
                     : q.policyPreview.outcome === "needs_human_approval"
                       ? tx.previewAsk(q.policyPreview.approver?.name, f.role(q.policyPreview.approver?.role ?? ""), q.policyPreview.reasons[0])
                       : tx.previewRefuse(q.policyPreview.reasons[0])}
                 </p>
-                <Btn kind="go" busy={busy} onClick={onOrder} className="mt-3 min-h-12 px-5 text-[1.1rem]">
+                <Btn kind="go" size="lg" busy={busy} onClick={onOrder} className="mt-4 w-full sm:w-auto">
                   {tx.place}
                 </Btn>
               </>
@@ -127,18 +130,18 @@ function Decision({ order, kitchen, base }: { order: NonNullable<PlanWire["order
           ? tx.declinedBy(a?.approver.name)
           : tx.refused;
   return (
-    <div className="mt-4 grid gap-5 border-t border-line pt-4 md:grid-cols-[1fr_auto]">
+    <div className="mt-5 grid gap-6 border-t border-line pt-5 md:grid-cols-[1fr_auto]">
       <div className="min-w-0">
         <div className="flex items-start gap-3">
           {order.status === "committed" && !a ? (
-            <span aria-hidden className="flex size-12 shrink-0 items-center justify-center bg-petrol text-[1.5rem] font-bold text-paper">
-              ✓
-            </span>
+            <IconDisc tone="good" size={48}>
+              <Check size={24} strokeWidth={2.6} />
+            </IconDisc>
           ) : (
             <Target size={52} tone="safety" className="shrink-0" />
           )}
           <div>
-            <p className="display text-[1.9rem]">{title}</p>
+            <p className="display text-[1.6rem] leading-tight sm:text-[1.9rem]">{title}</p>
             <p className="text-ink-soft">
               {money(order.totalCents)}
               {order.confirmed ? tx.confirmed : ""}.
@@ -154,11 +157,14 @@ function Decision({ order, kitchen, base }: { order: NonNullable<PlanWire["order
             ))}
           </ul>
         )}
-        <details className="mt-3 text-[0.92rem]">
-          <summary className="min-h-10 cursor-pointer py-2 font-semibold text-petrol underline decoration-2 underline-offset-4">{tx.allChecks(order.decision.rules.length)}</summary>
-          <ul className="mt-1 divide-y divide-line">
+        <details className="group mt-4 text-[0.92rem]">
+          <summary className="inline-flex min-h-10 cursor-pointer list-none items-center gap-1.5 font-semibold text-petrol hover:text-petrol-deep pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden">
+            <ChevronDown aria-hidden size={17} className="transition-transform group-open:rotate-180 motion-reduce:transition-none" />
+            {tx.allChecks(order.decision.rules.length)}
+          </summary>
+          <ul className="mt-1 divide-y divide-line rounded-lg bg-mist px-3">
             {order.decision.rules.map((r) => (
-              <li key={r.rule} className="grid gap-x-3 py-1 sm:grid-cols-[13rem_5rem_1fr]">
+              <li key={r.rule} className="grid gap-x-3 py-2 sm:grid-cols-[13rem_5rem_1fr]">
                 <span className="font-semibold">{f.ruleTitle(r.rule)}</span>
                 <span>{tx.outcome[r.outcome === "pass" || r.outcome === "escalate" ? r.outcome : "fail"]}</span>
                 <span className="text-ink-soft">{say(r.reason)}</span>
@@ -188,7 +194,16 @@ function ApprovalQrPanel({ kitchen, approvalId, base }: { kitchen: string; appro
     };
   }, [kitchen, approvalId, base]);
   if (error) return <p className="max-w-56 text-[0.9rem] text-ink-soft">{error}</p>;
-  if (!qr) return <div className="size-48 animate-pulse bg-mist" />;
+  if (!qr) return <Skeleton className="size-48 !rounded-[20px]" />;
+  if (qr.mode === "no_device")
+    return (
+      <div className="w-56 text-[0.9rem] leading-snug">
+        <p>{tx.noDevice(qr.approver.name)}</p>
+        <a href={`/k/${encodeURIComponent(kitchen)}/agent#devices`} className="font-semibold text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol">
+          {tx.addDevice}
+        </a>
+      </div>
+    );
   return (
     <div className="w-52 text-[0.85rem]">
       <div className="rounded-[1.4rem] bg-safety-ink p-2.5 pb-4">

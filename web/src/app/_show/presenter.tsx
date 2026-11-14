@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../_client/api";
 import { PRODUCT_NAME } from "../_ui/brand";
 import { clock } from "../_ui/plain";
-import { Target } from "../_ui/target";
+import { Check, CircleAlert, X } from "lucide-react";
+import { Kbd } from "../_ui/kit";
+import { PilotLight } from "../_ui/wordmark";
 import { CrashMatrix } from "../_wall/crash-matrix";
 import type { Board } from "../_wall/crash-board";
 import type { AttackResult, KitchenRef, OutsideRun, PreflightCheck, Recording, Spend, WeekRun } from "@/server/show/types";
@@ -244,7 +246,8 @@ export function Presenter({ board, attacks, publicUrl, staff }: Props) {
       <main className="relative min-h-0 flex-1">
         <StageView beat={current} board={board} attacks={attacks} results={results} busyAttack={busyAttack} outside={outside} liveWeek={liveWeek} kitchen={kitchen} fallback={fallback} recs={recs} publicUrl={publicUrl} />
         {problem && (
-          <p role="status" className={`absolute inset-x-0 top-0 bg-paper px-4 py-2 font-semibold text-petrol-deep ${css.body}`}>
+          <p role="status" className={`absolute left-1/2 top-[clamp(0.6rem,1vw,1.2rem)] z-10 flex max-w-[min(90vw,70rem)] -translate-x-1/2 items-center gap-[0.6em] rounded-full bg-paper px-[1.1em] py-[0.5em] font-semibold text-ink shadow-lg ${css.body}`}>
+            <CircleAlert aria-hidden className="size-[1.1em] shrink-0 text-notice" />
             {problem}
           </p>
         )}
@@ -253,35 +256,38 @@ export function Presenter({ board, attacks, publicUrl, staff }: Props) {
         {overlay === "help" && <Help />}
       </main>
       {notes && (
-        <footer className="shrink-0 border-t-4 border-lime bg-ink text-paper">
-          <div className="grid gap-x-6 gap-y-2 px-4 py-3 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+        <footer className="shrink-0 border-t border-paper/10 bg-ink text-paper">
+          <div className="grid gap-x-8 gap-y-2 px-5 py-3.5 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] [@media(max-height:860px)]:py-2.5">
             <div className="min-w-0">
-              <p className="text-[0.85rem] text-paper/70">
-                {beat + 1} of {BEATS.length}, {current.act}. Speaker {current.speaker}.
+              <p className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[0.85rem] text-paper/70">
+                <span className="rounded-full bg-paper/10 px-2.5 font-semibold leading-6 text-paper tabular">
+                  {beat + 1} of {BEATS.length}
+                </span>
+                {current.act}. Speaker {current.speaker}.
               </p>
-              <p className="display text-[1.5rem]">{current.title}</p>
-              <p className="mt-1 max-w-[110ch] text-[1.05rem] leading-snug">{current.say}</p>
-              <p className="mt-1 text-[0.92rem] text-paper/75">What happens: {current.happens}</p>
+              <p className="display mt-1 text-[1.5rem] [@media(max-height:860px)]:text-[1.2rem]">{current.title}</p>
+              <p className="mt-1 max-w-[110ch] text-[1.05rem] leading-snug [@media(max-height:860px)]:text-[0.92rem]">{current.say}</p>
+              <p className="mt-1 text-[0.92rem] text-paper/70 [@media(max-height:860px)]:line-clamp-1 [@media(max-height:860px)]:text-[0.82rem]">What happens: {current.happens}</p>
             </div>
-            <div className="min-w-0 space-y-2 text-[0.92rem]">
-              <p>
-                <span className={`display tabular text-[1.8rem] ${elapsed > TOTAL_SECONDS ? "text-safety" : "text-lime"}`}>{mmss(elapsed)}</span> <span className="text-paper/70">of 3:00</span>
-                <span className="ml-4 tabular">
+            <div className="min-w-0 space-y-2.5 text-[0.92rem]">
+              <p className="flex flex-wrap items-baseline gap-x-3">
+                <span className={`display tabular text-[1.9rem] leading-none ${elapsed > TOTAL_SECONDS ? "text-safety" : "text-lime"}`}>{mmss(elapsed)}</span>
+                <span className="text-paper/70">of 3:00</span>
+                <span className="tabular text-paper/85">
                   this beat {mmss(beatElapsed)} of {mmss(current.seconds)}
                 </span>
               </p>
-              <ul className="flex flex-wrap gap-x-4 gap-y-1" aria-label="Dependencies">
+              <ul className="flex flex-wrap gap-1.5" aria-label="Dependencies">
                 {(["partner", "phone", "model", "database"] as Dep[]).map((d) => (
-                  <li key={d} className={current.deps.includes(d) ? "" : "text-paper/50"}>
-                    <span aria-hidden className={depState[d] === "ok" ? "text-lime" : depState[d] === "fail" ? "text-safety" : depState[d] === "warn" ? "text-safety" : "text-paper/50"}>
-                      ●
-                    </span>{" "}
+                  <li key={d} className={`inline-flex items-center gap-1.5 rounded-full px-2.5 leading-7 ${current.deps.includes(d) ? "bg-paper/10" : "text-paper/50"}`}>
+                    <span aria-hidden className={`size-2 rounded-full ${depState[d] === "ok" ? "bg-lime" : depState[d] === "fail" || depState[d] === "warn" ? "bg-safety" : "bg-paper/35"}`} />
+                    <span className="sr-only">{depState[d]}: </span>
                     {DEP_LABEL[d]}
                     {d === "phone" && kitchen ? `: ${kitchen.approverName}` : ""}
                   </li>
                 ))}
               </ul>
-              <p className="text-paper/75">
+              <p className="text-paper/70">
                 {current.fallback ? (fallback[current.fallback] ? "Showing the recording. F: back to live." : "F: switch this act to its recording.") : "No live dependency here."} P: preflight. K: kitchen. ?: keys. Signed in as {staff}.
               </p>
             </div>
@@ -326,9 +332,11 @@ function StageView(p: {
     case "title":
       return (
         <div className="flex h-full flex-col justify-center px-[6vw]">
-          <div className="flex items-center gap-[1.5vw]">
-            <Target size={120} tone="chalk" />
-            <p className="display text-[clamp(4rem,10vw,12rem)] leading-none">{PRODUCT_NAME}</p>
+          <div className="flex items-center gap-[1.6vw]">
+            <PilotLight size="clamp(3.4rem,8vw,9.5rem)" onDark />
+            <p className="display text-[clamp(4rem,10vw,12rem)] leading-none" style={{ fontWeight: 700, letterSpacing: "-0.035em" }}>
+              {PRODUCT_NAME}
+            </p>
           </div>
           <p className={`mt-[2vw] max-w-[30ch] text-paper/90 ${css.title}`}>The open gate through which AI purchasing agents order food from a wholesaler.</p>
           <p className={`mt-[3vw] text-paper/70 ${css.body}`}>Junction 2026, Valio Aimo: Trusted Trade Agents. Demo on synthetic data.</p>
@@ -390,7 +398,7 @@ function StageView(p: {
       return (
         <div className="flex h-full min-h-0 flex-col px-[clamp(0.9rem,2vw,2.6rem)] py-[clamp(0.6rem,1.4vw,1.8rem)]">
           <h2 className={`display ${css.day}`}>The crash test for AI buyers</h2>
-          <div className="mt-4 min-h-0 flex-1 overflow-hidden">
+          <div className="mt-[clamp(0.8rem,1.4vw,1.8rem)] min-h-0 flex-1 overflow-hidden rounded-[clamp(18px,1.6vw,32px)] bg-paper/[0.05] p-[clamp(0.9rem,1.6vw,2rem)] ring-1 ring-inset ring-paper/10">
             <CrashMatrix board={p.board} dark big maxRows={7} />
           </div>
         </div>
@@ -408,16 +416,18 @@ function Missing({ what, loading }: { what: string; loading?: boolean }) {
 
 function Panel({ title, children, onClose }: { title: string; children: React.ReactNode; onClose?: () => void }) {
   return (
-    <div role="dialog" aria-label={title} className="absolute inset-[4vh_4vw] overflow-auto bg-paper p-6 text-ink shadow-2xl">
-      <div className="flex items-baseline justify-between gap-4">
-        <h2 className="display text-[2.2rem]">{title}</h2>
-        {onClose && (
-          <button type="button" onClick={onClose} className="text-petrol underline underline-offset-4">
-            Close (Esc)
-          </button>
-        )}
+    <div className="absolute inset-0 z-20 flex items-center justify-center bg-petrol-deep/60 p-[4vh_4vw] backdrop-blur-[2px]">
+      <div role="dialog" aria-label={title} className="sheet-up max-h-full w-full max-w-[72rem] overflow-auto rounded-2xl bg-paper p-7 text-ink shadow-lg">
+        <div className="flex items-center justify-between gap-4">
+          <h2 className="display text-[2rem]">{title}</h2>
+          {onClose && (
+            <button type="button" onClick={onClose} className="inline-flex min-h-10 items-center gap-2 rounded-full border border-line-strong px-4 text-[0.95rem] font-semibold hover:bg-mist">
+              Close <Kbd>Esc</Kbd>
+            </button>
+          )}
+        </div>
+        {children}
       </div>
-      {children}
     </div>
   );
 }
@@ -426,11 +436,11 @@ function Preflight({ checks, spend, checking, onClose, onModel }: { checks?: Pre
   const bad = checks?.filter((c) => c.state !== "ok") ?? [];
   return (
     <Panel title={checking ? "Preflight: checking…" : bad.length ? `Preflight: ${bad.length} thing${bad.length === 1 ? "" : "s"} to fix` : "Preflight: ready"} onClose={onClose}>
-      <ul className="mt-4 divide-y divide-line">
+      <ul className="mt-5 divide-y divide-line overflow-hidden rounded-xl border border-line">
         {(checks ?? []).map((c) => (
-          <li key={c.id} className="grid grid-cols-[2rem_14rem_1fr] gap-3 py-2 text-[1.05rem]">
-            <span aria-label={c.state} className={c.state === "ok" ? "text-petrol" : "font-bold text-safety-ink"}>
-              {c.state === "ok" ? "✓" : c.state === "warn" ? "!" : "✕"}
+          <li key={c.id} className="grid grid-cols-[2rem_14rem_1fr] items-start gap-3 px-4 py-3 text-[1.02rem]">
+            <span aria-label={c.state} className={`mt-0.5 flex size-6 items-center justify-center rounded-full ${c.state === "ok" ? "bg-good-soft text-good" : c.state === "warn" ? "bg-safety-soft text-safety-ink" : "bg-safety-ink text-safety"}`}>
+              {c.state === "ok" ? <Check aria-hidden size={14} strokeWidth={3} /> : c.state === "warn" ? <CircleAlert aria-hidden size={14} /> : <X aria-hidden size={14} strokeWidth={3} />}
             </span>
             <span className="font-semibold">{c.label}</span>
             <span>
@@ -446,7 +456,7 @@ function Preflight({ checks, spend, checking, onClose, onModel }: { checks?: Pre
         </p>
       )}
       <p className="mt-4">
-        <button type="button" onClick={onModel} className="text-petrol underline underline-offset-4">
+        <button type="button" onClick={onModel} className="inline-flex min-h-10 items-center rounded-full border border-line-strong px-4 font-semibold hover:bg-mist">
           Also call the model once (Shift+P, under a cent)
         </button>
       </p>
@@ -458,11 +468,11 @@ function Kitchens({ kitchens, chosen, onPick }: { kitchens: KitchenRow[]; chosen
   return (
     <Panel title="Which kitchen plays the week">
       <p className="mt-2 text-ink-soft">The approver&apos;s phone joins by scanning the QR code on /join; its kitchen appears here. Kitchens live 90 minutes.</p>
-      <ul className="mt-4 divide-y divide-line">
-        {kitchens.length === 0 && <li className="py-2">No kitchen is open. Without one, the week plays in a house kitchen whose sign-off times out.</li>}
+      <ul className="mt-5 divide-y divide-line overflow-hidden rounded-xl border border-line">
+        {kitchens.length === 0 && <li className="px-4 py-3">No kitchen is open. Without one, the week plays in a house kitchen whose sign-off times out.</li>}
         {kitchens.map((k) => (
           <li key={k.sandboxId}>
-            <button type="button" onClick={() => onPick(k.sandboxId)} className={`w-full py-2 text-left text-[1.05rem] ${k.sandboxId === chosen ? "font-bold text-petrol" : ""}`}>
+            <button type="button" onClick={() => onPick(k.sandboxId)} aria-pressed={k.sandboxId === chosen} className={`w-full rounded-none px-4 py-3 text-left text-[1.02rem] transition-colors hover:bg-mist ${k.sandboxId === chosen ? "bg-petrol-soft font-semibold text-petrol-deep" : ""}`}>
               {k.name}, {k.city}: {k.house ? "house kitchen, no phone" : `${k.approverName}${k.passkey ? ", passkey" : ", no passkey"}`}; joined {clock(k.createdAt)}, closes {clock(k.expiresAt)}
               {k.week ? `; week ${k.week.state}` : ""}
             </button>
@@ -493,12 +503,18 @@ function Help() {
   ];
   return (
     <Panel title="Keys">
-      <table className="mt-4 text-[1.05rem]">
-        <tbody>
+      <table className="mt-5 w-full text-[1.02rem]">
+        <tbody className="divide-y divide-line">
           {rows.map(([k, v]) => (
             <tr key={k}>
-              <th className="py-1 pr-6 text-left font-semibold">{k}</th>
-              <td>{v}</td>
+              <th className="whitespace-nowrap py-2 pr-8 text-left align-top font-normal">
+                <span className="inline-flex flex-wrap gap-1">
+                  {k.split(/\s{2,}|, /).map((x) => (
+                    <Kbd key={x}>{x}</Kbd>
+                  ))}
+                </span>
+              </th>
+              <td className="py-2">{v}</td>
             </tr>
           ))}
         </tbody>

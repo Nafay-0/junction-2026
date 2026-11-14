@@ -23,9 +23,13 @@ export default function ApprovePage(props: PageProps<"/approve/[approvalId]">) {
     <PhonePage tone="gate" context={context}>
       <Suspense
         fallback={
-          <p className="mt-20 text-center text-ink-soft">
-            <LangText t={opening} />
-          </p>
+          <div className="flex flex-col gap-4" role="status">
+            <div className="hazard-frame h-60 opacity-90" />
+            <div className="skeleton mt-2 h-32 !rounded-xl" />
+            <span className="sr-only">
+              <LangText t={opening} />
+            </span>
+          </div>
         }
       >
         <Approval {...props} />

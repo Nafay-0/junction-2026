@@ -77,7 +77,9 @@ All text pairs meet 4.5:1. The older names (`concrete`, `steel`, `chalk`) remain
 |---|---|
 | `Button`, `buttonClass` | kinds: `go` (lime, one per view), `primary` (petrol), `secondary`, `quiet` (text), `safety` (gate only), `dark`, `ghost-dark`; sizes sm, md, lg; `busy` |
 | `IconButton` | round, 44 px, always labelled |
-| `Input`, `Select`, `.field` | label above, hint or error below, icon inside; one field look |
+| `Input`, `Select`, `Textarea`, `.field` | label above, hint or error below, icon inside (`suffix` for a unit); native attributes pass through; one field look |
+| `Checkbox`, `Chip`, `Switch` | a checkbox as a whole 44 px row (`card` for a choice in a list); a toggling pill for filters, ticked when on; an on/off for a view setting (`role="switch"`) |
+| `PageHeader`, `FactList` | a page's top (back link or context, title, lead, actions; no box); facts as hairline rows, label beside value on a desk and above it on a phone |
 | `Tabs` | segmented pill for a few views or filters, with counts |
 | `Tag`, `Badge` | a chip for a claim; a status with a dot (`waiting` and `refused` are the gate's) |
 | `Card`, `Panel`, `Plate` | card; tinted panel; `Plate` is the older name (tone `agent`, `gate`) |
@@ -96,6 +98,10 @@ Operations (`ops/_ui/`): `PageHead`, `Section`, `Panel`, `LiveMark`, `Outcome`, 
 on a phone each row becomes a small card and every cell is labelled with its column heading, automatically),
 `Stamp`, `CountBar`, `Funnel`, `CheckGrid`. The time machine's slider (`(desk)/time-machine/time-machine.tsx`) marks each
 moment a rule changed, shaped by kind, with the order as a pointer and the lime thumb as the one action.
+`Table inset` sits inside a card (the inner-panel radius); `CheckGrid dark` sets the checks on the gate's slab and
+`stagger` lets them arrive one by one; `Details dark` reads on the slab. `.range` (globals) is the scrubber: a rounded
+track filled to the thumb (`--fill`), a white thumb ringed in petrol. On a phone a `Table` cell with several lines
+keeps them all beside its label.
 
 ## 6. Images
 
@@ -205,8 +211,25 @@ the page answers), then `Section`s. Ids, codes and hashes sit behind `Details`. 
 `Num`; the gate's slab and yellow mark only refusals, suspensions and waiting sign-offs. A new section added to `NAV`
 gets an icon in `ICON` (a ring shows until it has one).
 
-**Phone pages** (`_ui/phone.tsx`) and **the wall** (`_wall/`) inherit the tokens and the type; their layouts are on
-the roll-out list.
+**Phone pages** (`_ui/phone.tsx`, `PhoneShell`): a white top bar, one column, the main action held at the bottom
+edge under the thumb. The sign-off (`approve/`) is the product's signature: the gate's slab with the hazard band
+(who asks, the total, delivery), the rule that stopped it, the exact lines in one card, Face ID to approve; once
+decided it ends on a stamp and the band is gone.
+
+**The trace** (`ops/(desk)/trace/`): one request as a vertical story. A sticky transport card (the station strip,
+lime play, icon steps, the scrubber; on a phone the strip is the scrubber), then a marker per station on a line and,
+when open, a card in the thread's anatomy (a mark and the kind, the title, the content, the ledger entry). The gate
+that stops an order or hands it to a person is the slab itself, its checks on it; a calm pass is a white card.
+
+**The wall** (`_wall/`) and **the show** (`_show/`) are petrol-deep: soft panels (`paper` at 4 to 8 %, a hairline
+ring, radius scaled in `vw`), every size in `vw` / `clamp` so 1080p and 4K read the same from three metres. The gate
+is a rounded hazard post on the wall and, in the show, one slab whose top band is the barrier (its arms close while
+held and lift once signed) with the sign-off inside it. What passed is lime; the anomaly is `notice`, never yellow;
+the product's pilot light, not `Target`, stands beside the name. Each keeps its reduced-motion variant.
+
+**Store pages** follow Home: a `PageHeader` (no box), then sections. The catalogue's tiles are cards with the
+picture full bleed, two to a row on a phone with a round add button; on a phone the departments and the filters are
+sheets and the categories a row of chips. The product page puts the buy box straight after the name on a phone.
 
 ## 9. Do and do not
 

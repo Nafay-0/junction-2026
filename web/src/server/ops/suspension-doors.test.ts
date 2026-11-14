@@ -1,3 +1,4 @@
+import { sessionCookieFor } from "../accounts/test-session";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GET as answerGet, POST as answerPost } from "@/app/ui-api/answer/[token]/route";
 import { localNow, nextDeliveryDay } from "@/core/kitchen";
@@ -67,7 +68,8 @@ describe("a suspended agent is refused at every in-process door", () => {
   });
 
   it("photo door: a reviewed line opens nothing for a suspended agent", async () => {
-    const step = (body: unknown) => scanStep("kaari", new Request("http://dock.test/ui-api/scan/kaari/step", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }));
+    const own = await sessionCookieFor(await getRuntime(), "kaari"); // the stage kitchen's own signed-in account
+    const step = (body: unknown) => scanStep("kaari", new Request("http://dock.test/ui-api/scan/kaari/step", { method: "POST", headers: { "content-type": "application/json", cookie: own }, body: JSON.stringify(body) }));
     const line = { action: "open", source: "image", line: { id: "l1", read: "milk 120 l", item: "lactose-free milk", amount: 120, unit: "L", confidence: "high", edited: false } };
     expect((await step(line)).step?.requestId).toMatch(/^req_/);
     const before = await requestsOpened();

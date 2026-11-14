@@ -7,6 +7,7 @@ import { connectorSetup } from "@/server/mcp/connector-setup";
 import { connectorSecret, type Connector } from "@/server/mcp/connectors";
 import { connectorsFor } from "@/server/mcp/server";
 import { consoleKitchen } from "@/server/authz";
+import { resolveKitchen } from "@/server/console-kitchens";
 import type { Runtime } from "@/server/runtime";
 import { WORKS_WITH } from "@/server/works-with";
 
@@ -61,7 +62,9 @@ async function canManage(req: Request, rt: Runtime, slug: string, kind: "demo" |
 
 async function load(req: Request, ctx: RouteContext<"/ui-api/connect/[kitchen]">, rt: Runtime) {
   const { kitchen: slug } = await ctx.params;
-  const k = await consoleKitchen(req, rt, slug); // a visitor's connector address only for that visitor (server/authz.ts)
+  // The operator (DOCK_CONNECTOR_SECRET) manages any kitchen's address; anyone else needs the kitchen's own session
+  // (server/authz.ts): its signed-in account, a stage kitchen's too, or a visitor's phone.
+  const k = isOperator(req) ? await resolveKitchen(slug) : await consoleKitchen(req, rt, slug);
   if (!k) return undefined;
   const kitchen = { slug, name: k.info.name, kind: k.info.kind, expiresAt: k.info.expiresAt };
   return { slug, kitchen, manage: await canManage(req, rt, slug, k.info.kind) };

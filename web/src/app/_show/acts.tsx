@@ -28,23 +28,25 @@ export function AttackBoard({ attacks, results, busy, recording }: { attacks: At
     <section className={`${css.stage} flex h-full min-h-0 flex-col px-[clamp(0.9rem,2vw,2.6rem)] py-[clamp(0.6rem,1.4vw,1.8rem)]`} aria-label="Now try to break it">
       <div className="flex flex-wrap items-baseline justify-between gap-4">
         <h2 className={`display ${css.day}`}>Now try to break it</h2>
-        {recording && <span className={`bg-paper px-2 py-0.5 font-semibold text-petrol-deep ${css.small}`}>Recording of real runs, {recording}</span>}
+        {recording && <span className={`rounded-full bg-paper/[0.12] px-[0.8em] py-[0.15em] font-medium ${css.small}`}>Recording of real runs, {recording}</span>}
       </div>
       <div className="mt-[clamp(0.6rem,1.2vw,1.4rem)] grid min-h-0 flex-1 gap-[clamp(0.8rem,2vw,2.4rem)] lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
         <div className="min-h-0">
           {busy && !latest?.id.startsWith(busy) && <p className={`text-paper/85 ${css.lead}`}>Trying: {attacks.find((a) => a.id === busy)?.tried}</p>}
           {latest ? <AttackSlab key={latest.id + latest.at} r={latest} /> : !busy && <p className={`max-w-[50ch] text-paper/85 ${css.lead}`}>Each key sends one attack through the real gate with this kitchen&apos;s own agent credentials, or a forged copy of them. Press 1 to 6, or S to suspend the agent from the operations side.</p>}
         </div>
-        <ol className="min-h-0 space-y-[3px] overflow-hidden">
+        <ol className="min-h-0 space-y-[clamp(0.3rem,0.5vw,0.7rem)] overflow-hidden">
           {attacks.map((a) => {
             const r = [...results].reverse().find((x) => x.id === a.id);
+            const held = r && (r.how === "refused" || r.how === "person" || r.how === "stopped");
             return (
-              <li key={a.id} className={`flex items-start gap-3 px-3 py-2 ${r ? "bg-paper/[0.14]" : "bg-paper/[0.06] text-paper/60"}`}>
-                <kbd className={`display min-w-[1.6em] bg-paper text-center text-petrol-deep ${css.lead}`}>{a.key}</kbd>
+              <li key={a.id} className={`flex items-start gap-[0.8em] rounded-[clamp(12px,1.1vw,22px)] px-[1em] py-[0.7em] ${r ? "bg-paper/[0.1]" : "bg-paper/[0.04] text-paper/60"}`}>
+                <kbd className={`display flex size-[1.7em] shrink-0 items-center justify-center rounded-[0.4em] bg-paper text-petrol-deep shadow-[0_2px_0_rgb(0_0_0/0.25)] ${css.lead}`}>{a.key}</kbd>
                 <div className="min-w-0">
                   <p className={`font-semibold ${css.body}`}>{a.title}</p>
                   {r && (
-                    <p className={`text-paper/85 ${css.small}`}>
+                    <p className={`flex items-center gap-[0.4em] ${held ? "text-safety" : "text-paper/85"} ${css.small}`}>
+                      {held ? <Target size={18} tone="safety" className="size-[1.05em] shrink-0" /> : null}
                       {HOW[r.how]}
                       {r.rule ? `: ${titleOf(r.rule)}` : ""}
                     </p>
@@ -78,7 +80,7 @@ function AttackSlab({ r }: { r: AttackResult }) {
   );
   if (!loud) {
     return (
-      <div className={`border-2 border-paper/40 p-[clamp(0.9rem,1.4vw,1.8rem)] ${css.slabIn}`}>
+      <div className={`rounded-[clamp(18px,1.6vw,32px)] bg-paper/[0.07] p-[clamp(0.9rem,1.4vw,1.8rem)] ring-1 ring-inset ring-paper/15 ${css.slabIn}`}>
         <p className={`display ${css.title}`}>
           {r.title}: {HOW[r.how]}
         </p>
@@ -87,14 +89,14 @@ function AttackSlab({ r }: { r: AttackResult }) {
     );
   }
   return (
-    <div role="group" aria-label={r.title} className={`hazard-frame on-dark relative overflow-hidden ${css.slabIn}`}>
-      <div aria-hidden className="relative h-5 overflow-hidden">
-        <span className={`hazard-thin absolute inset-y-0 left-0 w-1/2 ${css.armLeft}`} />
-        <span className={`hazard-thin absolute inset-y-0 right-0 w-1/2 ${css.armRight}`} />
+    <div role="group" aria-label={r.title} className={`on-dark relative overflow-hidden rounded-[clamp(18px,1.6vw,32px)] bg-safety-ink shadow-[inset_0_0_0_1px_rgb(255_194_14/0.28),0_30px_80px_-30px_rgb(0_0_0/0.6)] ${css.slabIn}`}>
+      <div aria-hidden className="relative h-[clamp(0.6rem,0.9vw,1.1rem)] overflow-hidden">
+        <span className={`hazard absolute inset-y-0 left-0 w-1/2 ${css.armLeft}`} />
+        <span className={`hazard absolute inset-y-0 right-0 w-1/2 ${css.armRight}`} />
       </div>
-      <div className="p-[clamp(0.9rem,1.6vw,2.2rem)]">
-        <div className="flex items-start gap-[clamp(0.8rem,1.4vw,1.8rem)]">
-          <Target size={72} tone="safety" className="shrink-0" />
+      <div className="p-[clamp(0.9rem,1.5vw,2rem)]">
+        <div className="flex items-start gap-[clamp(0.7rem,1.2vw,1.6rem)]">
+          <Target size={72} tone="safety" className="size-[clamp(2.6rem,3.8vw,5rem)] shrink-0" />
           <div className="min-w-0">
             <p className={`display leading-[0.92] text-safety ${css.gate}`}>{HOW[r.how]}</p>
             <p className={`mt-2 text-paper ${css.lead}`}>
@@ -102,7 +104,7 @@ function AttackSlab({ r }: { r: AttackResult }) {
             </p>
           </div>
         </div>
-        <div className="mt-4">{body}</div>
+        <div className="mt-[clamp(0.7rem,1.1vw,1.4rem)] rounded-[clamp(10px,0.9vw,18px)] bg-paper/[0.06] px-[1.1em] py-[0.9em]">{body}</div>
       </div>
     </div>
   );
@@ -113,7 +115,7 @@ export function OutsideBoard({ run, idle }: { run?: OutsideRun; idle?: string })
     <section className={`${css.stage} flex h-full min-h-0 flex-col px-[clamp(0.9rem,2vw,2.6rem)] py-[clamp(0.6rem,1.4vw,1.8rem)]`} aria-label="Any agent can order">
       <div className="flex flex-wrap items-baseline justify-between gap-4">
         <h2 className={`display ${css.day}`}>Any agent can order</h2>
-        {run?.source === "recording" && <span className={`bg-paper px-2 py-0.5 font-semibold text-petrol-deep ${css.small}`}>Recording of a real run{run.recordedAt ? `, ${clock(run.recordedAt)}` : ""}</span>}
+        {run?.source === "recording" && <span className={`rounded-full bg-paper/[0.12] px-[0.8em] py-[0.15em] font-medium ${css.small}`}>Recording of a real run{run.recordedAt ? `, ${clock(run.recordedAt)}` : ""}</span>}
       </div>
       {!run ? (
         <p className={`mt-4 max-w-[56ch] text-paper/85 ${css.lead}`}>{idle ?? "Press A to send in an outside agent. It gets no special door: only the open MCP interface any agent can use, and the same gate."}</p>
@@ -128,21 +130,22 @@ export function OutsideBoard({ run, idle }: { run?: OutsideRun; idle?: string })
               <dt className="text-paper/70">Buys for</dt>
               <dd>{run.kitchenName}</dd>
             </dl>
-            <figure className="border-l-[5px] border-paper pl-3">
-              <figcaption className={`text-paper/70 ${css.small}`}>Its task</figcaption>
-              <blockquote className={css.lead}>&ldquo;{run.task}&rdquo;</blockquote>
+            <figure className="rounded-[clamp(14px,1.2vw,24px)] bg-paper/[0.07] px-[clamp(0.8rem,1.3vw,1.6rem)] py-[clamp(0.6rem,1vw,1.3rem)]">
+              <figcaption className={`text-paper/65 ${css.small}`}>Its task</figcaption>
+              <blockquote className={`mt-[0.2em] ${css.lead}`}>&ldquo;{run.task}&rdquo;</blockquote>
             </figure>
             {run.outcome && <p className={`display ${css.title}`}>{run.outcome}</p>}
             {run.gate && <GatePanel step={{ kind: "standing", day: "", title: "", status: "done", asked: "", did: [], memory: [], options: [], excluded: [], simulated: [], decisions: 0, askedPerson: 0, refused: 0, requestIds: [], orderIds: [], liveCalls: 0, gate: run.gate }} />}
             {run.costUsd !== undefined && <p className={`text-paper/70 ${css.small}`}>Model cost of this run: ${run.costUsd.toFixed(4)}{run.totalCents !== undefined ? `; order ${money(run.totalCents)}` : ""}.</p>}
           </div>
-          <ol className="min-h-0 space-y-[3px] overflow-hidden" aria-label="Its calls at the door" aria-live="polite">
+          <ol className="min-h-0 space-y-[clamp(0.25rem,0.4vw,0.55rem)] overflow-hidden" aria-label="Its calls at the door" aria-live="polite">
             {run.events.slice(-9).map((e, i) => (
-              <li key={i + e.at} className={`border-l-[5px] px-3 py-1.5 ${css.small} ${css.lineIn} ${e.kind === "error" ? "border-safety" : e.kind === "model" ? "border-lavender" : "border-paper/50"} bg-paper/[0.08]`}>
-                {e.text}
+              <li key={i + e.at} className={`grid grid-cols-[0.6em_minmax(0,1fr)] items-start gap-x-[0.7em] rounded-[clamp(10px,0.9vw,18px)] bg-paper/[0.07] px-[0.9em] py-[0.5em] ${css.small} ${css.lineIn}`}>
+                <span aria-hidden className={`mt-[0.45em] size-[0.55em] rounded-full ${e.kind === "error" ? "bg-safety" : e.kind === "model" ? "bg-lavender-mid" : "bg-paper/55"}`} />
+                <span>{e.text}</span>
               </li>
             ))}
-            {run.state === "running" && <li className={`px-3 py-1.5 text-paper/70 ${css.small} ${css.breathe}`}>Working…</li>}
+            {run.state === "running" && <li className={`px-[0.9em] py-[0.5em] text-paper/70 ${css.small} ${css.breathe}`}>Working…</li>}
           </ol>
         </div>
       )}

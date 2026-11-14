@@ -1,10 +1,35 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+import { TEST_ACCOUNTS } from "@/server/accounts/test-accounts";
 
-/** The kitchen shop: enter a demo kitchen with one click, browse, and read the agent's rules. No model, no live call. */
-test("enter a kitchen's shop, browse the catalogue, read the rules", async ({ page }) => {
+/**
+ * The kitchen shop, entered as a judge would: signed in to a public test account (no kitchen is open to strangers,
+ * the stage kitchens included). Browse, read the agent's rules. No model, no live call.
+ */
+const tester = TEST_ACCOUNTS[0];
+
+async function signIn(page: Page) {
   await page.goto("/k");
   await expect(page.getByRole("heading", { name: "Your kitchen's shop" })).toBeVisible();
-  await page.getByRole("link", { name: /Ravintola Kaari/ }).first().click();
+  const form = page.getByRole("form", { name: "Sign in" });
+  await form.getByLabel("Username", { exact: true }).fill(tester.username);
+  await form.getByLabel("Password", { exact: true }).fill(tester.password);
+  await form.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.waitForURL(`**/k/${tester.username}`);
+}
+
+test("the stage kitchens are closed to strangers; the door lists none of them", async ({ page }) => {
+  await page.goto("/k");
+  await expect(page.getByRole("link", { name: /Ravintola Kaari|Laakso Catering/ })).toHaveCount(0);
+  for (const k of ["kaari", "laakso"]) {
+    await page.goto(`/k/${k}`);
+    await expect(page.getByRole("heading", { name: "This kitchen is private" })).toBeVisible();
+    expect((await page.request.get(`/ui-api/kitchens/${k}/portal`)).status()).toBe(401);
+    expect((await page.request.get(`/ui-api/plan/${k}`)).status()).toBe(401);
+  }
+});
+
+test("enter a kitchen's shop, browse the catalogue, read the rules", async ({ page }) => {
+  await signIn(page);
   await expect(page.getByRole("heading", { name: "Needs you now" })).toBeVisible();
   // The demo note: the full sentence on a desk, its short form in the phone's top strip.
   await expect(page.locator("text=/demo built for the Junction 2026|Demo on synthetic data/ >> visible=true").first()).toBeVisible();
@@ -26,11 +51,20 @@ test("enter a kitchen's shop, browse the catalogue, read the rules", async ({ pa
 
 /** The order page keeps the request in progress across a reload (QA: a reload discarded a live fixed price). */
 test("a reload of the order page keeps the request in progress", async ({ page }) => {
-  await page.goto("/k/kaari/order");
+  await signIn(page);
+  await page.goto(`/k/${tester.username}/order`);
   const run = { n: 1, text: "Reload check: 100 L lactose-free milk for Thursday", concernsSeen: [], asked: [], answers: {}, fromMemory: [], options: [] };
-  await page.evaluate((r) => sessionStorage.setItem("dock-run:kaari", JSON.stringify(r)), run);
+  await page.evaluate(([key, r]) => sessionStorage.setItem(key as string, JSON.stringify(r)), [`dock-run:${tester.username}`, run] as const);
   await page.reload();
   await expect(page.getByText(run.text).first()).toBeVisible();
   await page.reload();
   await expect(page.getByText(run.text).first()).toBeVisible();
+});
+
+test("the menu planner opens for an account's kitchen", async ({ page }) => {
+  await signIn(page);
+  await page.goto(`/k/${tester.username}/menu`);
+  const info = await (await page.request.get(`/ui-api/plan/${tester.username}`)).json();
+  expect(info.kitchen).toMatchObject({ slug: tester.username, name: tester.restaurant });
+  await expect(page.getByText(/is for kitchens with an account/)).toHaveCount(0);
 });

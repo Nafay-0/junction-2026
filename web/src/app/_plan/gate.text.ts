@@ -37,6 +37,8 @@ export const GATE_TEXT = defineText({
     outcome: { pass: "Passed", escalate: "Needs a person", fail: "Failed" } as Record<string, string>,
     scanAs: (name: string) => `Scan to sign off as ${name}: the one-time link AimoPilot sent to their phone (demo kitchen).`,
     signsOnPhone: (name: string) => `${name} signs off on their phone.`,
+    noDevice: (name: string) => `This order waits for ${name}'s passkey, and the kitchen has no signing device yet. Add one in Agent and rules; nothing is ordered until it is signed.`,
+    addDevice: "Add a signing device",
     openSignOff: "Open the sign-off page",
   },
   fi: {
@@ -73,6 +75,8 @@ export const GATE_TEXT = defineText({
     outcome: { pass: "Läpi", escalate: "Vaatii ihmisen", fail: "Hylätty" },
     scanAs: (name: string) => `Skannaa ja hyväksy henkilönä ${name}: kertakäyttölinkki, jonka AimoPilot lähetti hänen puhelimeensa (demokeittiö).`,
     signsOnPhone: (name: string) => `${name} hyväksyy puhelimellaan.`,
+    noDevice: (name: string) => `Tilaus odottaa hyväksyjän (${name}) pääsyavainta, eikä keittiöllä ole vielä hyväksyntälaitetta. Lisää laite kohdassa Agentti ja säännöt; mitään ei tilata ennen hyväksyntää.`,
+    addDevice: "Lisää hyväksyntälaite",
     openSignOff: "Avaa hyväksyntäsivu",
   },
   sv: {
@@ -108,6 +112,8 @@ export const GATE_TEXT = defineText({
     outcome: { pass: "Godkänd", escalate: "Kräver en person", fail: "Underkänd" },
     scanAs: (name: string) => `Skanna för att godkänna som ${name}: engångslänken som AimoPilot skickade till hens telefon (demokök).`,
     signsOnPhone: (name: string) => `${name} godkänner i sin telefon.`,
+    noDevice: (name: string) => `Beställningen väntar på inloggningsnyckeln för ${name}, och köket har ingen godkännandeenhet än. Lägg till en under Agent och regler; inget beställs innan den är godkänd.`,
+    addDevice: "Lägg till en godkännandeenhet",
     openSignOff: "Öppna godkännandesidan",
   },
 });

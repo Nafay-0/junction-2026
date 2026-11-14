@@ -108,5 +108,6 @@ as a bearer token.
 - Run `pnpm aiven:migrate --reset`, or point a laptop at schema `dock_prod` (`DOCK_PG_SCHEMA=dock_prod pnpm dev`):
   a second process writing the same ledger makes the live one stop persisting it.
 - Revoke or reissue the demo kitchen's connector address while the assistant demo is on.
-- Change `DOCK_WHOLESALER_JWK`, `DOCK_DEMO_ORG_JWK`, `DOCK_CONNECTOR_SECRET` or `DOCK_OPS_PASSCODE`.
+- Change `DOCK_WHOLESALER_JWK`, `DOCK_DEMO_ORG_JWK`, `DOCK_CONNECTOR_SECRET`, `DOCK_OPS_PASSCODE` or
+  `DOCK_ACCOUNT_KEY_SECRET` (it seals every kitchen's key in the database; a new value locks them all).
 - Merge or push to branch `deploy/aiven` by hand.

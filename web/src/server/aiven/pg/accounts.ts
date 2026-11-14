@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import type { Account, AccountSession, AccountStore } from "@/server/accounts/store";
+import type { Account, AccountLink, AccountSession, AccountStore } from "@/server/accounts/store";
 
 /**
  * Accounts and sessions in PostgreSQL (tables in schema.ts). The username is the primary key, so "this username is
@@ -56,5 +56,23 @@ export class PgAccountStore implements AccountStore {
   }
   async sweepSessions(now: Date) {
     await this.pool.query(`delete from ${this.s} where expires_at <= $1`, [now]);
+    await this.pool.query(`delete from ${this.l} where expires_at <= $1`, [now]);
+  }
+  private get l() {
+    return `${this.schema}.account_links`;
+  }
+  async putLink(tokenHash: string, l: AccountLink) {
+    await this.pool.query(`insert into ${this.l} (token_hash, username, purpose, expires_at, created_at) values ($1, $2, $3, $4, $5) on conflict (token_hash) do nothing`, [tokenHash, l.username, l.purpose, l.expiresAt, l.createdAt]);
+  }
+  private row(r?: { username: string; purpose: AccountLink["purpose"]; expires_at: Date; created_at: Date }): AccountLink | undefined {
+    return r && { username: r.username, purpose: r.purpose, expiresAt: new Date(r.expires_at).toISOString(), createdAt: new Date(r.created_at).toISOString() };
+  }
+  async getLink(tokenHash: string) {
+    const r = await this.pool.query(`select username, purpose, expires_at, created_at from ${this.l} where token_hash = $1`, [tokenHash]);
+    return this.row(r.rows[0]);
+  }
+  async takeLink(tokenHash: string) {
+    const r = await this.pool.query(`delete from ${this.l} where token_hash = $1 returning username, purpose, expires_at, created_at`, [tokenHash]);
+    return this.row(r.rows[0]);
   }
 }
