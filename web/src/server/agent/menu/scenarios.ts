@@ -85,10 +85,27 @@ export type SeasonalResult = {
 } & PlanChecks;
 
 /** The planner's own checks, as facts any door can say in a sentence (plan.ts PlanTotals). */
-export type PlanChecks = Pick<PlanView["totals"], "refusedDish" | "instead" | "ruleRefusals" | "day" | "coverage">;
-export const checksOf = (v: PlanView): PlanChecks => ({ refusedDish: v.totals.refusedDish, instead: v.totals.instead, ruleRefusals: v.totals.ruleRefusals, day: v.totals.day, coverage: v.totals.coverage });
+export type PlanChecks = Pick<PlanView["totals"], "refusedDish" | "instead" | "ruleRefusals" | "day" | "coverage" | "complete" | "ingredients" | "covered" | "missing" | "definingMissing">;
+export const checksOf = (v: PlanView): PlanChecks => ({ refusedDish: v.totals.refusedDish, instead: v.totals.instead, ruleRefusals: v.totals.ruleRefusals, day: v.totals.day, coverage: v.totals.coverage, complete: v.totals.complete, ingredients: v.totals.ingredients, covered: v.totals.covered, missing: v.totals.missing, definingMissing: v.totals.definingMissing });
 
-export type GatePreview = { outcome: Decision["outcome"]; reasons: string[]; approver: { name: string; role: string } | null };
+export type GatePreview = { outcome: Decision["outcome"]; reasons: string[]; approver: { name: string; role: string } | null; findings: GateFinding[] };
+
+/** What the gate objects to, each tied to the plan's lines it names (by product id or name), else to the order as a whole. */
+export type GateFinding = { rule: string; outcome: "escalate" | "fail"; reason: string; lines: { lineId: string; ingredient: string; product: string }[] };
+export function gateFindings(d: Decision | undefined, view: PlanView): GateFinding[] {
+  if (!d) return [];
+  const bought = view.lines.filter((l) => l.chosen && l.status !== "struck" && l.status !== "merged");
+  return d.rules
+    .filter((r) => r.outcome !== "pass")
+    .map((r) => {
+      const ids = new Set<string>(JSON.stringify(r.details ?? {}).match(/"(?:productId|product)":"([^"]+)"/g)?.map((x) => x.split(":")[1].replace(/"/g, "")) ?? []);
+      for (const k of ["flagged", "productIds", "undeclared", "held"]) for (const x of ((r.details as Record<string, unknown> | undefined)?.[k] as unknown[] | undefined) ?? []) if (typeof x === "string") ids.add(x);
+      const lines = bought
+        .filter((l) => l.chosen!.products.some((x) => ids.has(x.productId) || r.reason.includes(x.productId) || r.reason.includes(x.name)))
+        .map((l) => ({ lineId: l.lineId, ingredient: l.name, product: l.chosen!.products.map((x) => x.name).join(" + ") }));
+      return { rule: r.rule, outcome: r.outcome as "escalate" | "fail", reason: r.reason, lines };
+    });
+}
 
 export type Stuck = {
   lineId: string;
@@ -142,8 +159,8 @@ const PREPARED_NAME = /salad|salaat|hummus|sose|puree|pikkel|marinoi|pickled|eti
 const fold = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");
 const amt = (a: Amount | null | undefined) => (a ? formatAmt(a) : null);
 const today = (now: Date) => localNow(now).date;
-const preview = (d: Decision | undefined): GatePreview | null =>
-  d ? { outcome: d.outcome, reasons: d.reasons, approver: d.outcome === "needs_human_approval" ? { name: d.approver.name, role: d.approver.role } : null } : null;
+const preview = (d: Decision | undefined, view?: PlanView): GatePreview | null =>
+  d ? { outcome: d.outcome, reasons: d.reasons, approver: d.outcome === "needs_human_approval" ? { name: d.approver.name, role: d.approver.role } : null, findings: view ? gateFindings(d, view) : [] } : null;
 
 function lineFacts(l: PlanLineView, roleOfLine: (l: PlanLineView) => Role): LineFacts {
   const c = l.chosen;
@@ -311,7 +328,7 @@ export function createScenarios(deps: ScenarioDeps) {
       lines,
       said,
       totalCents: view.totals.totalCents,
-      gate: preview(gate),
+      gate: preview(gate, view),
       blockers: view.totals.blockers,
       notes: [...p.notes, ...(p.declineReason ? [p.declineReason] : [])],
       ...checksOf(view),
@@ -597,7 +614,7 @@ export function createScenarios(deps: ScenarioDeps) {
       options,
       unresolved,
       totalCents: view.totals.totalCents,
-      gate: preview(gate),
+      gate: preview(gate, view),
       notes: p.notes,
       ...checksOf(view),
     };
@@ -620,7 +637,7 @@ export function createScenarios(deps: ScenarioDeps) {
    * decision and who made it. `choices: "best"`: the agent takes the best option alone only where the gate's preview
    * says it is inside the kitchen's preferences; the others wait for the buyer.
    */
-  async function sheetOf(k: MenuKitchen, planId: string, choices: Choice[] | "best", who: { by: string; agentAlone?: boolean }): Promise<SheetLines> {
+  async function sheetOf(k: MenuKitchen, planId: string, choices: Choice[] | "best", who: { by: string; agentAlone?: boolean; acceptPartial?: boolean }): Promise<SheetLines> {
     const { record: p, view } = await service.get(k, planId);
     const ev = cache.get(planId);
     const want = p.settings.deliverBy ?? undefined;
@@ -673,6 +690,11 @@ export function createScenarios(deps: ScenarioDeps) {
       const o = chosen.get(d.lineId)!;
       log(k, p, "substitution_chosen", `${d.ingredient}: ${o.rank} option "${o.title}" chosen by ${d.by}. Trade-off: ${o.tradeoff.taste}; ${o.tradeoff.texture}; work: ${o.tradeoff.work}.${o.checks.length ? ` Buys ${o.checks.filter((c) => c.product).map((c) => `${c.product!.packText} ${c.product!.name}${c.main ? " (the substitute)" : ""}`).join(" + ")}, ${formatEur(o.checks.reduce((s, c) => s + (c.product?.totalCents ?? 0), 0))}.` : ""} ${o.signOff.needed ? `Sign-off: ${o.signOff.reason}` : "Inside the kitchen's preferences."}`, { lineId: d.lineId, optionId: o.optionId, rank: o.rank, kind: o.kind, by: d.by, signOff: o.signOff.needed }, d.by.startsWith("agent:") ? `agent:${k.agentId}` : `buyer:${d.by}`);
     }
+    // Not the dish: an ingredient not covered (and not replaced by a chosen option) stops the sheet, unless the buyer
+    // accepted ordering only what can be bought. The refusal carries every missing ingredient with its code and words.
+    const missing = view.totals.missing.filter((m) => !(m.lineId && chosen.has(m.lineId)) && !swappedDishes.has(m.dish));
+    if (missing.length && !p.acceptPartial && !who.acceptPartial)
+      throw new DockError(409, "plan_incomplete", `Only ${view.totals.ingredients - missing.length} of ${view.totals.ingredients} ingredients can be bought${missing.some((m) => m.defining) ? ", and what the dish is made of is not among them" : ""}: ${missing.map((m) => `${m.ingredient} (${m.words})`).join("; ")}.`, undefined, { covered: view.totals.ingredients - missing.length, of: view.totals.ingredients, definingMissing: missing.some((m) => m.defining), missing: missing.map((m) => ({ ingredient: m.ingredient, dish: m.dish, code: m.code, words: m.words, defining: m.defining, ...(m.detail?.group ? { group: m.detail.group } : {}) })) });
     if (!lines.size) throw new DockError(409, "menu_nothing_to_order", leftOff.length ? `Nothing on this menu can be ordered: ${leftOff.map((x) => `${x.name} (${x.why})`).join("; ")}.` : "Nothing on this menu is being bought.");
     return { lines: [...lines.values()], ...(want ? { deliveryDate: want } : {}), text: `Menu for ${p.settings.covers ?? "?"} covers: ${p.draft.dishes.filter((d) => !swappedDishes.has(d.name)).map((d) => d.name).concat([...chosen.values()].flatMap((o) => (o.kind === "dish" && o.dish ? [o.dish.name] : []))).join(", ")}`.slice(0, 2000), leftOff, decisions };
   }

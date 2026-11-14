@@ -9,7 +9,8 @@ import { EMBED_MODEL, embedTexts, geminiKey, queryPrompt, warmGemini } from "./g
 import { DecisionsJudge, type RelevanceJudge } from "./judge";
 import { metrics } from "@/server/aiven/metrics";
 import { SearchIndex } from "./recall";
-import { RecallRouter, type RecallBackendName, type RecallRouterStats } from "./recall-router";
+import { RecallRouter, type ListsSource, type RecallBackendName, type RecallRouterStats } from "./recall-router";
+import type { Embedder } from "./finder";
 import { emitSearchEvent } from "./telemetry";
 import { loadVectorsFile, resolveVectorsFile, type ProductVectors } from "./vectors";
 
@@ -52,7 +53,15 @@ const num = (name: string, fallback: number) => {
 
 export type SmartStatus = { on: boolean; reason?: string; vectors?: { count: number; dim: number; model: string; from: string }; judge: boolean; recall?: RecallRouterStats & { index?: string } };
 
-type Holder = { search: SmartSearch | null; status: SmartStatus; products: IndexedProduct[]; router?: RecallRouter; recallIndex?: string };
+type Holder = {
+  search: SmartSearch | null;
+  status: SmartStatus;
+  products: IndexedProduct[];
+  router?: RecallRouter;
+  recallIndex?: string;
+  /** For the probe that times both recall backends (recall-probe.ts). */
+  probe?: { index: SearchIndex; remote?: ListsSource; embed?: Embedder; recallSize: number; timeoutMs: number };
+};
 const g = globalThis as typeof globalThis & { __dockSmart?: Map<IndexedProduct[], Promise<Holder>>; __dockReady?: Set<IndexedProduct[]>; __dockSmartTest?: SmartSearch | null; __dockSmartHolders?: Holder[] };
 
 /** The model calls go through the daily caps and into the telemetry record. */
@@ -142,13 +151,33 @@ async function build(products: IndexedProduct[]): Promise<Holder> {
       ...(!map ? { reason: "no knowledge map: kinds and uses are not used" } : !v && !remote ? { reason: "no search vectors: semantic recall is off (pnpm search:vectors)" } : !v ? { reason: "vectors not in memory (yet): semantic recall is answered by OpenSearch" } : !keyed ? { reason: "GEMINI_API_KEY not set: no judge, no query embedding" } : {}),
     };
   };
-  const holder: Holder = { search, get status() { return status(); }, products, router, ...(remote ? { recallIndex: remote.index } : {}) };
+  const holder: Holder = {
+    search,
+    get status() {
+      return status();
+    },
+    products,
+    router,
+    ...(remote ? { recallIndex: remote.index } : {}),
+    probe: { index, ...(remote ? { remote: remote.lists } : {}), ...(embed ? { embed } : {}), recallSize: config.recallSize ?? 50, timeoutMs: num("DOCK_SEARCH_RECALL_TIMEOUT_MS", 400) },
+  };
   if (!testing && remote?.ready) {
     void loadVectors().then(() => {
       if (vectors) index.attachVectors(vectors);
     });
   }
   return holder;
+}
+
+/** What the recall probe needs from the running smart search, or why it cannot run here. */
+export function recallProbeParts(): { ok: true; index: SearchIndex; remote: ListsSource; embed: Embedder; recallSize: number; timeoutMs: number; order: RecallBackendName[] } | { ok: false; reason: string } {
+  const h = (g.__dockSmartHolders ?? []).find((x) => x.probe);
+  if (!h?.probe) return { ok: false, reason: "Smart search has not started on this server yet (it starts with the partner catalogue)." };
+  const p = h.probe;
+  if (!p.remote) return { ok: false, reason: "OpenSearch recall is not configured here: it needs OPENSEARCH_URL with the OpenSearch adapter on (DOCK_AIVEN=1 or DOCK_SEARCH=opensearch) and the dock-recall index (pnpm search:publish:opensearch)." };
+  if (!p.index.vectors) return { ok: false, reason: "The vectors are not in memory yet: memory recall would not be comparable. Try again in a minute." };
+  if (!p.embed) return { ok: false, reason: "No query embedding here (GEMINI_API_KEY is not set)." };
+  return { ok: true, index: p.index, remote: p.remote, embed: p.embed, recallSize: p.recallSize, timeoutMs: p.timeoutMs, order: h.router?.order ?? ["memory"] };
 }
 
 /** How recall was answered in this process: the order, counts per backend, fallbacks (for /api/health and the Platform page). */
