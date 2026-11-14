@@ -889,7 +889,8 @@ async function tellRequestDifferences(run: TurnRun): Promise<void> {
   const extra: string[] = [];
   const line = here.line ?? "";
   const fold = (t: string) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  const understood = here.cards.filter((c): c is Extract<Card, { type: "understood" }> => c.type === "understood" && !!c.requestId);
+  // A request read in this turn, or one whose options came in this turn (after its mistake check was answered).
+  const understood = [...here.cards.filter((c): c is Extract<Card, { type: "understood" }> => c.type === "understood" && !!c.requestId), ...here.cards.filter((c) => c.type === "options" && !here.cards.some((x) => x.type === "understood" && x.requestId === c.requestId)).flatMap((o) => all.filter((c): c is Extract<Card, { type: "understood" }> => c.type === "understood" && c.requestId === (o as { requestId?: string }).requestId).slice(-1))];
   for (const u of understood) {
     const opts = all.filter((c): c is Extract<Card, { type: "options" }> => c.type === "options" && c.requestId === u.requestId).at(-1);
     const notice = here.cards.find((c) => c.type === "notice" && c.requestId === u.requestId);

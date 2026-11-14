@@ -53,7 +53,7 @@ function reasonOf(k: AnomalyCard["concerns"][number], lang: Lang): string {
     const rule = /"([^"]+)"/.exec(k.message)?.[1];
     if (rule) text = `${text.replace(/\.$/, "")}: "${rule}".`;
     const when = typeof k.evidence?.placedAt === "string" ? f.day(String(k.evidence.placedAt).slice(0, 10)) : "";
-    if (k.code === "duplicate_recent" && when) text = lang === "fi" ? `Tilasit saman jo ${when}.` : `Du beställde samma sak redan ${when}.`;
+    if (k.code === "duplicate_recent" && when) text = lang === "fi" ? `Tilasit saman jo ${when.replace(/\.$/, "")}.` : `Du beställde samma sak redan ${when.replace(/\.$/, "")}.`;
   }
   return text
     .replace(/\s*\((?:order|tilaus|beställning) [a-z]+_[0-9a-z]+\)/gi, "")
@@ -86,7 +86,8 @@ export function guardWords(card: AnomalyCard, lang: Lang): string {
     const next = days.at(-1)!;
     const dayName = (lang === "en" ? englishDays(f.day(next)) : f.day(next)).replace(/\.$/, "");
     question = { en: `Shall I make it ${dayName}?`, fi: `Teenkö sen päivälle ${dayName}?`, sv: `Ska jag göra det till ${dayName}?` }[lang];
-  } else question = k.confirmable ? QUESTION[lang].right : QUESTION[lang].which;
+  } else if (k.code === "duplicate_recent") question = { en: "Shall I order it again on top of it?", fi: "Tilaanko sen uudelleen sen lisäksi?", sv: "Ska jag beställa den igen utöver den?" }[lang];
+  else question = k.confirmable ? QUESTION[lang].right : QUESTION[lang].which;
   if (/\?\s*$/.test(reason)) return lang === "en" ? englishDays(reason) : reason;
   const text = `${reason.replace(/\s*$/, "")}${/[.!]$/.test(reason) ? "" : "."} ${question}`;
   return lang === "en" ? englishDays(text) : text;
