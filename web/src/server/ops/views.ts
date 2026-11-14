@@ -200,6 +200,8 @@ export type TraceView = Trace & {
   agentLabel: string;
   licence: LicenceView;
   viaLabel?: string;
+  /** The conversation the request came from, when a kitchen's agent thread opened it (/ops/conversation/<id>). */
+  conversation?: string;
   chain: { ok: boolean; length: number; head: { seq: number; hash: string } | null; message?: string };
   others: { requestId: string; label: string; at: string }[];
   /** The signed claims named in the trace, by id, so the page can verify each against the published keys. */
@@ -220,6 +222,7 @@ export async function traceView(rt: Runtime, requestId: string): Promise<TraceVi
     agentLabel: ctx.agents.get(t.agentId)?.label ?? t.agentId,
     licence: licenceView(ctx.licence(t.agentId)),
     viaLabel: t.via && VIA_LABEL[t.via],
+    conversation: (ctx.entries.find((e) => e.type === "agent" && e.requestId === requestId)?.data as { thread?: { threadId?: string } } | undefined)?.thread?.threadId,
     chain: chain.ok ? { ok: true, length: chain.length, head: chain.head } : { ok: false, length: ctx.entries.length, head: rt.dock.ledger.head(), message: chain.message },
     others: [...ctx.requests.values()]
       .slice(-40)

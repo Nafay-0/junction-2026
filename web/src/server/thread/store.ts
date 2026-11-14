@@ -81,7 +81,13 @@ export class ThreadStore {
     if (old) this.emit(old, { type: "reset" });
     this.threads.delete(kitchen);
     const t = this.get(kitchen, orgId);
-    if (old) t.archived = [...(old.archived ?? []), old.threadId].slice(-20);
+    if (old) {
+      t.archived = [...(old.archived ?? []), old.threadId].slice(-20);
+      // Sequence numbers keep counting per kitchen, so a client that missed the reset still sees it as newer; the
+      // old thread's events leave the log, all but the reset itself.
+      t.seq = old.seq;
+      this.logs.set(kitchen, (this.logs.get(kitchen) ?? []).filter((e) => e.type === "reset" && e.threadId === old.threadId));
+    }
     return t;
   }
 
