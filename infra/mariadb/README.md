@@ -6,9 +6,36 @@ was on a recall hold, whether the agent was suspended, how much of the week's bu
 changing. This keeps every version of them in MariaDB's system-versioned tables, so both sides can see the rules
 exactly as they stood at any second, and puts a past order through the real gate again, as of then and as of now.
 
-PostgreSQL, the system of record, has no built-in system versioning. MariaDB does (`WITH SYSTEM VERSIONING`,
-`FOR SYSTEM_TIME`), and since 11.8 also a `VECTOR` type with a vector index. That is why it is used here, for this
-one job, beside the system of record rather than instead of it.
+## Three homes for the same history
+
+The time machine is always on. It keeps its history in the best store the deployment has, behind one small
+interface (`web/src/server/history/store.ts`) that the mirror, the page, the gate replay and the kitchen's view all
+use, so none of them cares which is underneath:
+
+| Store | When | How a version is kept | "As of t" |
+|---|---|---|---|
+| MariaDB | `DOCK_MARIADB_URL` is set | `WITH SYSTEM VERSIONING`: MariaDB keeps every earlier version itself | `FOR SYSTEM_TIME AS OF t` |
+| PostgreSQL (the hosted site: Aiven PostgreSQL) | the site's database is on (`DOCK_STORE=postgres` or `DOCK_AIVEN=1`) | each version carries `during`, the `tstzrange` it was in force; an exclusion constraint (`btree_gist`) keeps two versions of one item from overlapping; a change closes the current range and opens the next | `WHERE during @> t`; "between" is `during && tstzrange(a, b)`; the slider's ticks are `lower(during)` |
+| This server's memory | neither (a laptop, a preview with the hosted services blank) | the same versions in the process, with the moment each came into force and the moment it stopped | the same half-open interval, in code |
+
+PostgreSQL keeps its history in a schema of its own, `<app schema>_history` (`dock_prod_history` beside `dock_prod`;
+`DOCK_HISTORY_SCHEMA` to name another), and never writes to the app's tables. The PostgreSQL and memory stores build
+the past from the ledger once, on their first start (`web/src/server/history/backfill.ts`): the app's state is read as
+it stood at each moment the ledger records a change the gate reads, oldest first, and the same mirror writes what
+differs, stamped with that moment. The run is recorded (`history_meta`); an interrupted run is cleared and repeated,
+so the result is the same either way. What the ledger cannot tell: a mandate presented without any request, a kitchen
+rule later removed (the past shows the rules as they read now, from when each was stated). "Decisions like this one"
+(below) needs MariaDB's `VECTOR` type and appears only there.
+
+`pnpm history:migrate` creates the PostgreSQL schema ahead of a deploy (idempotent, safe while the site is up; the app
+also creates it at start); `--status` shows the backfill's record and how many versions each table keeps. One test
+file (`web/src/server/history/history-store.test.ts`) runs the same behaviour on all three stores and checks they give
+the same answers for the seeded scenario: memory always, PostgreSQL with `DOCK_HISTORY_PG_URL` and MariaDB with
+`DOCK_MARIADB_URL` pointing at local databases.
+
+Why MariaDB first: PostgreSQL has no built-in system versioning. MariaDB does (`WITH SYSTEM VERSIONING`,
+`FOR SYSTEM_TIME`), and since 11.8 also a `VECTOR` type with a vector index. Aiven offers no MariaDB (its MySQL has no
+system versioning), so the hosted site models the same history with PostgreSQL's ranges.
 
 ## Run it (one command)
 

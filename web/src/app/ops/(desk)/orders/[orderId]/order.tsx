@@ -53,6 +53,9 @@ export function OrderScreen({ orderId }: { orderId: string }) {
                 <Link href={t.links.audit} className={link}>
                   Audit record
                 </Link>
+                <Link href={`/ops/time-machine?order=${encodeURIComponent(t.orderId)}`} className={link}>
+                  Replay this order in the Time machine
+                </Link>
                 {t.links.conversation && (
                   <Link href={t.links.conversation} className={link}>
                     The conversation
