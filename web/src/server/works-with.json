@@ -1,6 +1,6 @@
 {
   "generatedBy": "examples/runtimes/run-all",
-  "commit": "c7d22bd",
+  "commit": "9350b41",
   "runtimes": [
     {
       "runtime": "Pydantic AI",

@@ -1,19 +1,25 @@
 # Semantic Kernel (OpenAPI, no MCP) buyer against http://localhost:4733
-# 2026-11-14 15:53 EET, commit c7d22bd
+# 2026-11-14 15:58 EET, commit 9350b41
 # command: (cd examples/runtimes/semantic-kernel-openapi && uv run -q buyer.py), agent id agent_kaari_buyer_semantic_kernel_openapi
 
 [connect] http://localhost:4733/api/v1/openapi.json (OpenAPI 3.1.1): 17 operations for this credential: answerQuestions, checkAvailability, chooseOption, findAlternatives, getIntake, getKitchen, getOrder, interpretRequest, listOrders, lookupProducts, openIntake, openRequest, placeOrder, requestQuote, respondToConcerns, searchProducts, withdrawOrder
 [user] Order 1,000 litres of lactose-free milk for delivery on Monday for this kitchen; ask me if something needs my decision.
-[tool call] openIntake {"need_item_text": "lactose-free milk", "need_item_category": "milk", "need_item_attributes": ["lactose_free"], "need_quantity_amount": 1000, "need_quantity_un…
-[result] openIntake needs_confirmation /api/v1/intake/req_5e0b5c2d5f7f485d/concerns
-[agent] Your usual order is about 100 L. Did you mean **100 L**, or should I proceed with **1,000 L**? Delivery is requested for Monday, 16 November.
+[tool call] openIntake {"need_item_text": "lactose-free milk", "need_item_category": "milk", "need_item_attributes": ["lactose-free"], "need_quantity_amount": 1000, "need_quantity_un…
+[result] openIntake options_ready /api/v1/intake/req_291959497acb49d4/choice
+[agent] I found three options for delivery Monday, 16 November. All are lactose-free semi-skimmed milk and provide exactly 1,000 L:
+
+- **Option 1 — €1,010.00:** Valio Eila 1 L cartons. Lowest price and most reliable of the options, but stock quantity isn’t confirmed.
+- **Option 2 — €1,560.00:** Valio lactose-free UHT 1 L cartons. Stock quantity isn’t confirmed.
+- **Option 3 — €1,574.48:** 384 L Arla plus 616 L Valio. Lowest estimated carbon, but it’s a split order and reliability data isn’t available.
+
+The usual 10 L pack can’t arrive Monday because its order cut-off has passed. **Every option exceeds the €100 limit for orders placed without approval**, so a person must sign off. Which option would you like me to select?
 [buyer] Yes, 1,000 litres is right: we have a wedding this week. If something has to be chosen, take the cheapest option that meets our requirements; delivery any day up to Monday is fine. Go ahead and place the order. - Sanna Koskinen, head chef
-[tool call] respondToConcerns {"requestId": "req_5e0b5c2d5f7f485d", "by": "Sanna Koskinen, head chef", "responses": [{"key": "quantity_tenfold:1000:L", "choice": "confirm"}]}
+[tool call] respondToConcerns {"requestId": "req_291959497acb49d4", "by": "Sanna Koskinen, head chef", "responses": [{"key": "quantity", "choice": "confirm_1000_litres"}, {"key": "delivery_…
 [buyer review] respondToConcerns -> approved
-[result] respondToConcerns options_ready /api/v1/intake/req_5e0b5c2d5f7f485d/choice
-[tool call] chooseOption {"requestId": "req_5e0b5c2d5f7f485d", "by": "Sanna Koskinen, head chef", "optionId": "opt_1"}
+[refused] respondToConcerns: intake_wrong_state (rule intake_sequence) Cannot respond to concerns now: request req_291959497acb49d4 is options_ready.
+[tool call] chooseOption {"requestId": "req_291959497acb49d4", "by": "Sanna Koskinen, head chef", "optionId": "opt_1"}
 [result] chooseOption quoted /api/v1/orders
-[tool call] placeOrder {"requestId": "req_5e0b5c2d5f7f485d"}
+[tool call] placeOrder {"requestId": "req_291959497acb49d4"}
 [result] placeOrder pending_approval Your part is done: this order now waits for a human sign-off by Jari Mäkelä (owner), who has been asked on their own phone. Tell the buyer exactly that in one …
-[agent] The order is placed **pending Jari Mäkelä’s approval**: 1,000 L lactose-free semi-skimmed milk for **Monday, 16 November**, at **€1,010.00**. Jari has been asked to approve it; the order is not yet confirmed.
-RESULT {"runtime": "semantic-kernel (OpenAPI)", "version": "1.47.0", "model": "openai:gpt-6-luna", "outcome": "pending_approval", "orderId": "ord_4a7618a30e934692", "steps": 6, "toolCalls": 4, "tools": ["openIntake", "respondToConcerns", "chooseOption", "placeOrder"], "refusals": [], "humanInput": "relay+filter", "humanTurns": 1, "selfAnswerAttempts": 0, "retriedAfterPending": false, "seconds": 10.9, "tokens": {"input": 63182, "output": 341}, "costUsd": 0.00649, "interface": "openapi"}
+[agent] The 1,000 L order of lactose-free semi-skimmed milk for Monday, 16 November, is placed at **€1,010.00** and is awaiting Jari Mäkelä’s owner approval.
+RESULT {"runtime": "semantic-kernel (OpenAPI)", "version": "1.47.0", "model": "openai:gpt-6-luna", "outcome": "pending_approval", "orderId": "ord_867690d94f0641a0", "steps": 6, "toolCalls": 4, "tools": ["openIntake", "respondToConcerns", "chooseOption", "placeOrder"], "refusals": [{"tool": "respondToConcerns", "code": "intake_wrong_state", "rule": "intake_sequence"}], "humanInput": "relay+filter", "humanTurns": 1, "selfAnswerAttempts": 0, "retriedAfterPending": false, "seconds": 11.4, "tokens": {"input": 66429, "output": 489}, "costUsd": 0.00689, "interface": "openapi"}
