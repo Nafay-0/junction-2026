@@ -6,6 +6,8 @@ import type { PublicOrder } from "@/core/orders";
 import type { Pending } from "@/server/channels/voice/tools";
 import { useFormat, useText } from "../_i18n/provider";
 import { clock, money } from "../_ui/plain";
+import { Button } from "../_ui/kit";
+import { UnderstoodCard } from "../_ui/thread";
 import { CARDS_TEXT } from "./cards.text";
 
 /**
@@ -50,23 +52,39 @@ function Plain({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+/**
+ * Every spoken request, read back before anything is looked up or priced: amount, product and day as AimoPilot
+ * read them from the transcript, and the reason when the amount looks unusual or the two hearings disagree.
+ * The caller says yes (or taps it), or says the request again.
+ */
 export function ReadBack({ pending, act, busy }: { pending: Pending; act: Act; busy?: boolean }) {
   const tx = useText(CARDS_TEXT);
   const f = useFormat();
   const q = pending.need.quantity;
+  const day = (pending.need as { deliverBy?: string }).deliverBy;
   return (
-    <Decide title={tx.readBackTitle}>
-      <p className="text-[1.6rem] font-bold leading-tight tabular">
-        {q ? f.measure(q.amount, q.unit) : ""} <span className="font-semibold">{pending.need.item.text}</span>
-      </p>
-      <p className="text-[1.05rem] text-ink-soft">{tx.asksBecause(pending.reason)}</p>
-      <div className="flex flex-wrap gap-2">
-        <Btn disabled={busy} onClick={() => act("confirm_read_back", {}, tx.yesRight)}>
-          {tx.yesRight}
-        </Btn>
-      </div>
-      <p className="text-sm text-ink-soft">{tx.notRight}</p>
-    </Decide>
+    <UnderstoodCard
+      kind={tx.readBackTitle}
+      summary={
+        <>
+          {q ? f.measure(q.amount, q.unit) : ""} {pending.need.item.text}
+        </>
+      }
+      items={[
+        ...(q ? [{ label: tx.amountLabel, value: f.measure(q.amount, q.unit) }] : []),
+        { label: tx.itemLabel, value: pending.need.item.text },
+        { label: tx.dayLabel, value: day ? f.day(day) : tx.noDay },
+      ]}
+      basedOn={pending.reason ? tx.asksBecause(pending.reason) : undefined}
+      actions={
+        <>
+          <Button kind="primary" disabled={busy} onClick={() => act("confirm_read_back", {}, tx.yesRight)}>
+            {tx.yesRight}
+          </Button>
+          <span className="text-[0.86rem] text-ink-soft">{tx.notRight}</span>
+        </>
+      }
+    />
   );
 }
 
