@@ -34,7 +34,7 @@ export function searchFacts(req: Pick<FindRequest, "ids" | "noJudge" | "need">, 
   const count = { exact: 0, variant: 0, standin: 0, other: 0 };
   for (const c of r.candidates) if (c.verdict) count[c.verdict.label] += 1;
   const request: SearchFacts["request"] = r.reason === "a product code said outright" ? "code" : req.ids ? "within" : req.noJudge ? "recall" : req.need ? "need" : "words";
-  const judgeAsked = r.path === "judge" || !!r.reason?.startsWith("judge ");
+  const judgeAsked = r.path === "judge" || (!!r.reason?.startsWith("judge ") && r.reason !== "judge off");
   return {
     request,
     backend: r.stats.recallBackend ?? "memory",

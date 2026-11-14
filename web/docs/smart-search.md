@@ -97,3 +97,45 @@ instructions), `texts.disposal`, `texts.about` (the first 80 characters of the m
 the file they are a columnar block (`IndexFile.texts`, "ingredients.en" ... arrays in row order); `pnpm index:build
 --no-texts` leaves them out. The vectors (`server/search/docs.ts embeddingText`) do not use them: adding them is
 untested against `pnpm search:eval`.
+
+## Recall on Aiven OpenSearch
+
+Recall can be answered in this process's memory (the inverted index and the vectors above) or by OpenSearch
+(`server/aiven/search/opensearch-recall.ts`): one `_msearch` brings back the lexical, typo and per-word keyword lists
+(the catalogue index's stemmed, folded and n-gram name fields, a matched word worth more than any text score so
+"and" ranks products carrying more of the words first) and the nearest vectors (Lucene HNSW, cosine, `ef_search`
+400). The code and kinds sources, the hard filter, the fusion, the quotas and the use lift are the same code for
+both (`recall.ts` `recallPlan`, `fuseLists`); cheap exact filters (ids, the family's category codes, every claim,
+no declared or "may contain" forbidden allergen) are pushed into the queries and the hard rules still run in code on
+what comes back. OpenSearch's own hybrid query is not used: it fuses scores into one list, and the lists are needed
+to fuse them as memory recall does.
+
+`DOCK_SEARCH_RECALL_BACKEND` picks the order (`recall-router.ts`): `memory` (default) answers from memory and asks
+OpenSearch only when the vectors are not loaded yet (after a deploy the vectors load after the index when the recall
+index answers, so the first searches are already semantic) or memory recall fails; `opensearch` asks OpenSearch first
+with memory as the fallback; `memory-only` never asks it. OpenSearch has a deadline (`DOCK_SEARCH_RECALL_TIMEOUT_MS`,
+400) and a breaker (3 failures in a row, 30 s); when both fail, memory recall without vectors answers. Each search's
+result says which backend answered (`stats.recallBackend`, `recallFallback`), `/api/health` (`dataPlane.recall`)
+and the Platform page count them, and each search is one `search.done` telemetry event (counts, codes and
+milliseconds only).
+
+The index: `pnpm search:publish:opensearch` fills `dock-recall-v<N+1>` and moves the alias `dock-recall` once the
+count matches; `--rollback` moves it back to the previous version, `--status` shows them, `--index <name>` fills a
+development copy without touching the alias, `--drop <name>` deletes one of its own indexes (never one behind the
+alias). About 90 s for 17,546 products from a laptop. The catalogue's keyword index (`dock-products`) is not touched.
+
+Evaluation, 14 Nov, 189 requests, `judge50` (the shipped configuration), measured from a laptop in Finland; the
+OpenSearch run against a development copy of the index on the project's Aiven OpenSearch (3.6):
+
+| recall | right first | in top 3 | recall | dropped | stand-in as match | "not sold" | p50 ms | p90 ms | recall p50 / p90 ms |
+|---|---|---|---|---|---|---|---|---|---|
+| memory | 97% | 98% | 100% | 0 | 0 | 11/11 | 706 | 875 | 19 / 34 |
+| OpenSearch | 97% | 98% | 100% | 0 | 0 | 11/11 | 837 | 1051 | 149 / 272 |
+
+Per case: the same first product in 185 of 189, and no request right with one backend and wrong with the other; the
+candidate lists overlap 86 % on average (the keyword lists differ: OpenSearch's analyzers against memory's word
+index; on a local copy the vector lists alone overlapped 99 % with the exact in-memory ones). One OpenSearch call of 189 missed the 400 ms
+deadline and memory answered it. The difference in time is the round trip from the laptop (about 80 ms warm, 600 to
+900 ms for the first calls on a cold connection and graph: an earlier run that was not warmed up fell back to memory
+on every search after the breaker opened). So memory stays first and OpenSearch is the fallback; on Aiven Runtime,
+next to the service, the round trip is shorter but was not measured.

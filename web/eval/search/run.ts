@@ -154,7 +154,14 @@ async function main() {
     recallOn === "opensearch"
       ? new RecallRouter(index, new OpenSearchRecall({ url: osUrl, index: arg("recall-index") ?? "dock-recall", timeoutMs: recallTimeout + 200 }), { primary: "opensearch", timeoutMs: recallTimeout })
       : undefined;
-  if (router) console.log(`recall: OpenSearch (${arg("recall-index") ?? "dock-recall"}), ${recallTimeout} ms deadline, memory as the fallback`);
+  if (router) {
+    // A deployed server's connection and the index's HNSW graph are warm; a laptop's first calls are not (TLS, the
+    // graph read from disk: 600 to 900 ms each on 14 Nov). Three calls before the run, not counted.
+    const warm = new OpenSearchRecall({ url: osUrl, index: arg("recall-index") ?? "dock-recall", timeoutMs: 10_000 });
+    const v = new Float32Array(vectors.meta.dim).fill(1 / Math.sqrt(vectors.meta.dim));
+    for (let i = 0; i < 3; i++) await warm.lists({ claims: [], forbiddenAllergens: [] }, { lexical: { terms: ["milk"], mode: "and", limit: 10 }, vectors: { k: 60 } }, { queryVector: v }).catch(() => undefined);
+    console.log(`recall: OpenSearch (${arg("recall-index") ?? "dock-recall"}), ${recallTimeout} ms deadline, memory as the fallback (warmed up with 3 calls)`);
+  }
   const smart = new SmartSearch({
     index,
     ...(router ? { recall: router } : {}),
