@@ -170,6 +170,16 @@ export async function autoRenewFromWords(run: TurnRun, words: string): Promise<s
   if (intent === "on") {
     const signer = run.session.mandate.approvers[0]?.name ?? (lang === "fi" ? "hyväksyjä" : lang === "sv" ? "den som signerar" : "the signer");
     const what = familyL(row.family, lang).toLowerCase();
+    // The kitchen's own signed-in person asks: it goes to the approver's phone for their passkey, like any widening
+    // (rules.ts, kind auto_renew); the sentence that it waits is said by plain code (engine.ts sayRulesWaiting).
+    if (run.person && !run.person.callOnly) {
+      const { showRules, signRules } = await import("./rules");
+      const card = await showRules(run, { autoRenewOn: [row.family] }).catch(() => undefined);
+      if (card?.proposal?.canSign) {
+        const sent = await signRules(run, card.proposal.proposalId).catch(() => undefined);
+        if (sent?.proposal?.state === "waiting") return { en: `Renewing the ${what} by itself needs ${signer}'s OK.`, fi: `Automaattinen uusinta (${what}) tarvitsee hyväksynnän: ${signer}.`, sv: `Att förnya ${what} automatiskt behöver ${signer}s godkännande.` }[lang];
+      }
+    }
     record(run, "auto_renew_refused", `Auto-renew on for ${row.family} was asked in the chat and not switched on: it widens what the agent may do and needs ${signer}'s sign-off.`, { family: row.family });
     return {
       en: `Renewing the ${what} by itself would let me order it without asking each time, so it needs ${signer}'s OK; I haven't switched it on. Until then I'll remind you before each order.`,

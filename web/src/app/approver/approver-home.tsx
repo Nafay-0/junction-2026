@@ -12,6 +12,7 @@ import { Avatar, Badge, Card, IconDisc, ListRow, Spinner } from "../_ui/kit";
 import { PhoneNotice, PhoneProblem, PhoneSkeleton, bigButton } from "../_ui/phone";
 import { Target } from "../_ui/target";
 import { serverClock, serverRole } from "../_ui/phone.text";
+import { changeLines, type ChangeRow } from "../k/[kitchen]/rules-change";
 import { APPROVER_TEXT } from "./approver-home.text";
 
 type Home = {
@@ -21,6 +22,8 @@ type Home = {
   expiresAtText: string;
   demoTapEnabled: boolean;
   pending: { approvalId: string; total: string; requestedAtText: string }[];
+  /** Changes to the kitchen's rules that widen what the agent may do, waiting for this person (/approve/rch_...). */
+  rulesChanges?: { approvalId: string; changes: ChangeRow[]; requestedAtText: string }[];
   recent: { approvalId?: string; status: string; total: string; delivery?: string; atText: string }[];
 };
 
@@ -118,7 +121,7 @@ export function ApproverHome() {
   // A request this phone has not opened yet opens by itself, once, however the page learnt of it. Going back
   // from the sign-off screen does not reopen it; it stays in the list below.
   useEffect(() => {
-    const next = home?.pending.find((p) => !wasOpened(p.approvalId));
+    const next = [...(home?.pending ?? []), ...(home?.rulesChanges ?? [])].find((p) => !wasOpened(p.approvalId));
     if (!next) return;
     markOpened(next.approvalId);
     navigator.vibrate?.([120, 60, 120]);
@@ -216,12 +219,25 @@ export function ApproverHome() {
         </a>
       </Card>
 
-      {home.pending.length > 0 ? (
+      {home.pending.length + (home.rulesChanges?.length ?? 0) > 0 ? (
         <section aria-labelledby="waiting" className="mt-8">
           <h2 id="waiting" className="display text-[1.45rem]">
             {tx.waitingForYou}
           </h2>
           <ul className="mt-3 space-y-2.5">
+            {(home.rulesChanges ?? []).map((p) => (
+              <li key={p.approvalId}>
+                <Link href={`/approve/${p.approvalId}`} className="hazard-frame on-dark flex min-h-18 items-center gap-3.5 px-4 pb-3 pt-3.5 text-paper transition-[filter] hover:brightness-110">
+                  <Target size={30} tone="safety" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[0.82rem] font-medium text-safety">{tx.rulesChange}</span>
+                    <span className="display mt-0.5 block text-[1.2rem] leading-snug text-paper">{changeLines(p.changes, lang).join(" · ")}</span>
+                    <span className="mt-1 block text-[0.9rem] text-paper/75">{tx.since(at(p.requestedAtText))}</span>
+                  </span>
+                  <ChevronRight aria-hidden size={22} className="shrink-0 text-paper/70" />
+                </Link>
+              </li>
+            ))}
             {home.pending.map((p) => (
               <li key={p.approvalId}>
                 <Link href={`/approve/${p.approvalId}`} className="hazard-frame on-dark flex min-h-18 items-center gap-3.5 px-4 pb-3 pt-3.5 text-paper transition-[filter] hover:brightness-110">
@@ -291,10 +307,12 @@ export function ApproverHome() {
           {asking && <Spinner size={16} />}
           {asking ? tx.asking : tx.demoAsk}
         </button>
-        <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-[0.86rem] text-ink-soft">
-          <Clock aria-hidden size={14} />
-          {tx.closesAt(at(home.expiresAtText))}
-        </p>
+        {home.expiresAtText && (
+          <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-[0.86rem] text-ink-soft">
+            <Clock aria-hidden size={14} />
+            {tx.closesAt(at(home.expiresAtText))}
+          </p>
+        )}
       </div>
     </div>
   );

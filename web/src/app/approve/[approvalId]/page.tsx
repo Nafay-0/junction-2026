@@ -6,6 +6,7 @@ import { LangText } from "../../_ui/phone";
 import { PhonePage } from "../../_ui/phone-page";
 import { ApprovalScreen } from "./approval-screen";
 import { APPROVAL_TEXT } from "./approval-screen.text";
+import { RulesChangeScreen } from "./rules-change-screen";
 
 export async function generateMetadata(): Promise<Metadata> {
   return { title: pick(await requestLang(), { en: "AimoPilot: sign-off", fi: "AimoPilot: hyväksyntä", sv: "AimoPilot: godkännande" }) };
@@ -41,5 +42,7 @@ export default function ApprovePage(props: PageProps<"/approve/[approvalId]">) {
 async function Approval({ params, searchParams }: PageProps<"/approve/[approvalId]">) {
   const { approvalId } = await params;
   const sp = await searchParams;
+  // A change to the kitchen's rules has its own id space (rch_...) and its own screen; an order's link never opens it.
+  if (approvalId.startsWith("rch_")) return <RulesChangeScreen approvalId={approvalId} />;
   return <ApprovalScreen approvalId={approvalId} token={typeof sp.token === "string" ? sp.token : undefined} />;
 }

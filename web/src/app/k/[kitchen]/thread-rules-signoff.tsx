@@ -1,20 +1,23 @@
 "use client";
 
 import { startAuthentication, startRegistration, type PublicKeyCredentialCreationOptionsJSON, type PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/browser";
-import { Check, ScanFace } from "lucide-react";
+import { Check, ScanFace, X } from "lucide-react";
 import { useState } from "react";
 import { api } from "../../_client/api";
 import { useLang, useText } from "../../_i18n/provider";
 import { passkeyProblemL } from "../../_ui/passkey.text";
+import { clock } from "../../_ui/plain";
 import type { RulesCard } from "@/server/thread/types";
 import { usePortal } from "./portal";
+import { changeLines } from "./rules-change";
 import { RULES_SIGNOFF_TEXT } from "./thread-rules-signoff.text";
 
 /**
  * A change to the kitchen's rules that widens what its agent may do, waiting for the named approver: the change
- * spelled out on the same dark slab as an order over the limit, and the approver's passkey as the one action. The
- * passkey signs this exact change (POST .../rules/{proposalId}/challenge, then .../rules/{proposalId}); a typed yes
- * never does. On a shared test account the buyer's browser is the approver, and the passkey step still happens.
+ * spelled out on the same dark slab as an order over the limit. The first action sends it to the approver's phone (the
+ * QR code and link of /approve/rch_..., where they sign or decline with their passkey); the kitchen's own account may
+ * also sign here, with the signer's passkey on this device. A typed yes never signs it. When it is decided, on the
+ * phone or here, the card changes in place (signed, declined, lapsed) and the conversation carries on beneath.
  */
 export function RulesSignOffSlab({ card }: { card: RulesCard }) {
   const tx = useText(RULES_SIGNOFF_TEXT);
@@ -22,18 +25,48 @@ export function RulesSignOffSlab({ card }: { card: RulesCard }) {
   const { kitchen, account } = usePortal();
   const [phase, setPhase] = useState<"idle" | "signing" | "signed">("idle");
   const [problem, setProblem] = useState<string>();
+  const [phone, setPhone] = useState<{ url: string; qrSvg: string; adds: boolean }>();
   const p = card.proposal;
-  if (!p?.approval || (p.state !== "waiting" && phase !== "signed")) return null;
+  if (!p?.approval) return null;
   const who = p.approval.approver.name;
   const own = !!account && account.kitchen === kitchen.slug;
   const base = `/ui-api/kitchens/${encodeURIComponent(kitchen.slug)}/rules/${encodeURIComponent(p.proposalId)}`;
-  const added = (d: RulesCard["diff"][number]) => d.after.split(", ").filter((x) => x && !d.before.split(", ").includes(x)).join(", ");
-  const removed = (d: RulesCard["diff"][number]) => d.before.split(", ").filter((x) => x && !d.after.split(", ").includes(x)).join(", ");
-  const lines = card.diff
-    .filter((d) => d.widens || d.field === "signer")
-    .map((d) =>
-      d.field === "groups" ? tx.groups(added(d).toLowerCase()) : d.field === "perOrderLimitEur" ? tx.limit(`${d.after} €`) : d.field === "weeklyBudgetEur" ? tx.budget(`${d.after} €`) : d.field === "forbiddenAllergens" ? tx.unforbid(removed(d).replaceAll("_", " ")) : d.field === "requiredAttributes" ? tx.unrequire(removed(d).replaceAll("_", " ")) : d.field === "maxLeadDays" ? tx.lead(d.after) : d.field === "substitution" ? tx.substitution : tx.signer(d.after),
+  const lines = changeLines(card.diff, lang);
+  const decided = p.approval.decided;
+
+  if (p.state !== "waiting" && phase !== "signed") {
+    if (p.state !== "signed" && p.state !== "declined" && p.state !== "expired") return null;
+    return (
+      <section aria-label={tx.needs(who)} data-slab={`rules-${p.state}`} className="tl-in mt-4 overflow-hidden rounded-[1.4rem] bg-safety-ink text-paper">
+        <div className="p-4 pt-3.5">
+          {lines.map((l) => (
+            <p key={l} className={`display text-[1.1rem] leading-snug ${p.state === "signed" ? "" : "text-paper/60 line-through decoration-1"}`}>
+              {l}
+            </p>
+          ))}
+          <p className={`mt-3 flex items-center gap-2 text-[0.92rem] font-semibold ${p.state === "signed" ? "text-lime" : "text-paper/75"}`}>
+            {p.state === "signed" ? <Check aria-hidden size={17} strokeWidth={2.6} /> : <X aria-hidden size={17} strokeWidth={2.6} />}
+            {p.state === "signed" ? tx.signedBy(decided?.by ?? who, decided ? clock(decided.at) : "") : p.state === "declined" ? tx.declinedBy(decided?.by ?? who, decided ? clock(decided.at) : "") : tx.lapsed}
+          </p>
+          {decided?.note && <p className="mt-1.5 text-[0.86rem] text-paper/60">“{decided.note}”</p>}
+        </div>
+      </section>
     );
+  }
+
+  async function toPhone() {
+    if (phone) return setPhone(undefined);
+    setProblem(undefined);
+    const r = await api<{ approvalId: string; mode: "passkey" | "no_device"; url: string; qrSvg: string }>("GET", base);
+    if (!r.ok) return setProblem(r.error.message);
+    // No signing device yet, from the kitchen's own account: the code adds the phone as the signer's device, then opens the change.
+    if (r.data.mode === "no_device" && own) {
+      const l = await api<{ url: string; qrSvg: string }>("POST", "/ui-api/account/device/link", { next: `/approve/${r.data.approvalId}` });
+      if (l.ok) return setPhone({ url: l.data.url, qrSvg: l.data.qrSvg, adds: true });
+      return setProblem(l.error.message);
+    }
+    setPhone({ url: r.data.url, qrSvg: r.data.qrSvg, adds: false });
+  }
 
   async function sign() {
     setProblem(undefined);
@@ -76,20 +109,36 @@ export function RulesSignOffSlab({ card }: { card: RulesCard }) {
           </p>
         ))}
         <p className="mt-2 text-[0.86rem] leading-snug text-paper/55">{tx.nothing}</p>
-        {account?.shared && own && phase !== "signed" && <p className="mt-3 text-[0.8rem] leading-snug text-paper/65">{tx.testSigner(who)}</p>}
         {phase === "signed" ? (
           <p className="mt-4 flex min-h-12 items-center justify-center gap-2 rounded-full bg-paper/10 text-[0.95rem] font-semibold text-lime">
             <Check aria-hidden size={18} strokeWidth={2.6} /> {tx.signed}
           </p>
-        ) : own ? (
-          <button type="button" disabled={phase === "signing"} onClick={() => void sign()} className="mt-4 flex min-h-13 w-full items-center justify-center gap-2.5 rounded-full bg-lime text-[1rem] font-semibold text-ink transition-transform active:scale-[0.98] disabled:opacity-70">
-            <ScanFace aria-hidden size={21} />
-            {phase === "signing" ? tx.signing : tx.sign}
-          </button>
         ) : (
-          <p className="mt-4 text-[0.9rem] text-paper/75">{tx.waits(who)}</p>
+          <>
+            <button type="button" onClick={() => void toPhone()} aria-expanded={!!phone} className="mt-4 flex min-h-13 w-full items-center justify-center gap-2.5 rounded-full bg-lime px-4 text-center text-[1rem] font-semibold text-ink transition-transform active:scale-[0.98]">
+              {phone ? tx.hidePhone : tx.toPhone(who)}
+            </button>
+            {own && (
+              <button type="button" disabled={phase === "signing"} onClick={() => void sign()} className="mt-2 inline-flex min-h-10 items-center gap-2 text-[0.88rem] text-paper/70 underline underline-offset-4 hover:text-paper disabled:opacity-60">
+                <ScanFace aria-hidden size={17} />
+                {phase === "signing" ? tx.signing : tx.signHere}
+              </button>
+            )}
+            {account?.shared && own && phase === "idle" && !phone && <p className="mt-1 text-[0.8rem] leading-snug text-paper/55">{tx.testSigner(who)}</p>}
+          </>
         )}
         {problem && <p className="mt-2 text-[0.88rem] text-safety">{problem}</p>}
+        {phone && (
+          <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl bg-paper p-3 text-ink">
+            <span aria-hidden className="block size-32 shrink-0 [&>svg]:size-full" dangerouslySetInnerHTML={{ __html: phone.qrSvg }} />
+            <p className="min-w-0 flex-1 basis-40 text-[0.88rem] leading-snug">
+              {phone.adds ? tx.phoneAddHint(who) : tx.phoneHint(who)}{" "}
+              <a className="font-semibold text-petrol underline underline-offset-4" href={phone.url}>
+                {tx.openLink}
+              </a>
+            </p>
+          </div>
+        )}
       </div>
     </section>
   );
