@@ -37,6 +37,10 @@ export type ConsoleKitchenInfo = {
     allowedCategories: string[];
     requiredAttributes: string[];
     forbiddenAllergens: string[];
+    /** Nutrition and label rules, for "Your rules" in plain words (absent: none). */
+    nutritionRules?: Mandate["nutritionRules"];
+    requiredCertificates?: string[];
+    preferredLabels?: string[];
     maxLeadDays: number;
     substitution: Mandate["substitution"];
     approvers: { name: string; role: string; maxApprovalCents: number }[];
@@ -83,6 +87,9 @@ function summary(m: Mandate): ConsoleKitchenInfo["mandate"] {
     allowedCategories: m.allowedCategories,
     requiredAttributes: m.requiredAttributes,
     forbiddenAllergens: m.forbiddenAllergens,
+    ...(m.nutritionRules?.length ? { nutritionRules: m.nutritionRules } : {}),
+    ...(m.requiredCertificates.length ? { requiredCertificates: m.requiredCertificates } : {}),
+    ...(m.preferredLabels?.length ? { preferredLabels: m.preferredLabels } : {}),
     maxLeadDays: m.delivery.maxLeadDays,
     substitution: m.substitution,
     approvers: m.approvers.map((a) => ({ name: a.name, role: a.role, maxApprovalCents: a.maxApprovalCents })),
