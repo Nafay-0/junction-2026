@@ -57,7 +57,7 @@ async function frozenWall(page: Page) {
   await page.route("**/ui-api/wall", (r) => r.fulfill({ json: wallFixture(T0 + 20_000) }));
   // The clock runs during load (React reveals streamed Suspense content on a timer), then stops at a fixed time.
   await page.clock.install({ time: T0 });
-  await page.goto("/");
+  await page.goto("/wall");
   await expect(page.getByRole("heading", { name: "Scan to become the approver" })).toBeVisible();
   await expect(page.getByText("Waiting for Leevi Saarinen")).toBeVisible(); // the fixture has replaced the live snapshot
   await page.evaluate(() => document.fonts.ready.then(() => undefined));

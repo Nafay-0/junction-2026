@@ -111,7 +111,7 @@ async function Try() {
               {tx.seeTitle}
             </h2>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Where href="/" icon={<MonitorPlay size={20} />} title={tx.wall} about={tx.wallAbout} />
+              <Where href="/wall" icon={<MonitorPlay size={20} />} title={tx.wall} about={tx.wallAbout} />
               <Where href="/ops" icon={<Building2 size={20} />} title={tx.ops} about={tx.opsAbout} />
             </div>
           </section>
