@@ -50,7 +50,7 @@ export type ConsoleKitchenInfo = {
   examples: string[];
   expiresAt?: string;
   /** Account kitchens: the restaurant's username, and whether it is a shared test account (reset on a schedule). */
-  account?: { username: string; shared: boolean };
+  account?: { username: string; shared: boolean; /** A demo account (accounts/store.ts `demo`): may stage conditions for this kitchen only. */ demo?: boolean };
 };
 
 type Resolved = { info: ConsoleKitchenInfo; mandateToken: string; agentId: string };
@@ -161,7 +161,7 @@ async function accountKitchen(slug: string): Promise<Resolved | undefined> {
       by: `${a.restaurant} (signed in as ${a.username})`,
       mandate: summary(k.mandate),
       examples: ACCOUNT_EXAMPLES,
-      account: { username: a.username, shared: a.kind === "test" },
+      account: { username: a.username, shared: a.kind === "test", demo: !!a.demo },
     },
   };
 }

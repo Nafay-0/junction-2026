@@ -200,7 +200,7 @@ const unitWord = (u: string) => (u === "kg" ? "kg" : u === "L" ? "L" : u);
 
 // ---------- the kitchens it watches ----------
 
-export type WatchKitchen = { slug: string; kind: KitchenKind; orgId: string; name: string; mandate: Mandate; mandateToken: string; agentId: string; by: string; /** A shared public test account (reset on a timer). */ shared?: boolean };
+export type WatchKitchen = { slug: string; kind: KitchenKind; orgId: string; name: string; mandate: Mandate; mandateToken: string; agentId: string; by: string; /** A shared public test account (reset on a timer). */ shared?: boolean; /** A demo account's own kitchen (accounts/store.ts `demo`). */ demoAccount?: boolean };
 
 /** The kitchens with an agent: the two demo kitchens, visitors' kitchens, account kitchens. */
 export async function watchKitchens(rt: Runtime, only?: string[]): Promise<WatchKitchen[]> {
@@ -210,7 +210,7 @@ export async function watchKitchens(rt: Runtime, only?: string[]): Promise<Watch
   for (const slug of [...new Set(slugs)]) {
     const k = await resolveKitchen(slug).catch(() => undefined);
     if (!k) continue;
-    out.push({ slug, kind: k.info.kind, orgId: k.info.orgId, name: k.info.name, mandate: (decodeJwt(k.mandateToken) as { mandate: Mandate }).mandate, mandateToken: k.mandateToken, agentId: k.agentId, by: k.info.by, ...(k.info.account?.shared ? { shared: true } : {}) });
+    out.push({ slug, kind: k.info.kind, orgId: k.info.orgId, name: k.info.name, mandate: (decodeJwt(k.mandateToken) as { mandate: Mandate }).mandate, mandateToken: k.mandateToken, agentId: k.agentId, by: k.info.by, ...(k.info.account?.shared ? { shared: true } : {}), ...(k.info.account?.demo ? { demoAccount: true } : {}) });
   }
   return out;
 }
@@ -893,15 +893,19 @@ export async function markSaid(rt: Runtime, id: string, now = new Date()): Promi
 
 // ---------- staging (operations, demo kitchens only) ----------
 
-/** Demo kitchens, visitors' QR kitchens and the shared public test accounts: never a restaurant's own account. */
-export const isStageable = (k: Pick<WatchKitchen, "kind" | "shared">) => k.kind === "demo" || k.kind === "visitor" || (k.kind === "account" && !!k.shared);
+/**
+ * Demo kitchens, visitors' QR kitchens, the shared public test accounts and demo accounts' own kitchens (an account
+ * opened on this synthetic-data deployment carries the mark, accounts/store.ts `demo`): never a restaurant's own
+ * account without the mark.
+ */
+export const isStageable = (k: Pick<WatchKitchen, "kind" | "shared" | "demoAccount">) => k.kind === "demo" || k.kind === "visitor" || (k.kind === "account" && (!!k.shared || !!k.demoAccount));
 
 function stageable(k: WatchKitchen) {
-  if (!isStageable(k)) throw new DockError(403, "stage_not_allowed", `${k.name} is a restaurant's own kitchen: conditions are staged only for the demo kitchens and the shared test accounts.`);
+  if (!isStageable(k)) throw new DockError(403, "stage_not_allowed", `${k.name} is a restaurant's own kitchen: conditions are staged only for the demo kitchens, the shared test accounts and demo accounts.`);
 }
 
 /** Stage a stock-out of one product for one demo kitchen: the watch reads it as out of stock until `until`. */
-export async function stageStockOut(rt: Runtime, input: { kitchen: string; productId: string; until?: string; by: string; now?: Date }): Promise<Stage> {
+export async function stageStockOut(rt: Runtime, input: { kitchen: string; productId: string; until?: string; by: string; now?: Date; /** Who staged it, for the ledger (default staff:<by>; a demo account stages for its own kitchen). */ actor?: string }): Promise<Stage> {
   const s = await ready(rt);
   const k = await watchKitchen(rt, input.kitchen);
   stageable(k);
@@ -915,7 +919,7 @@ export async function stageStockOut(rt: Runtime, input: { kitchen: string; produ
   saveStage(s, g);
   syncOverlay(rt, s, k.orgId);
   s.cache.delete(k.orgId);
-  ledger(rt, { actor: `staff:${input.by}`, summary: `STAGED for the demo by ${input.by}: ${p.name} (${p.id}) is out of stock for ${k.name} until ${until}, in every live answer that kitchen gets (its intake, quotes, the watch; no other kitchen). The partner's live figures are unchanged; every claim signed from it says simulated.`, data: { step: "staged", stageId: g.stageId, kind: g.kind, productId: p.id, until, staged: true, by: input.by } });
+  ledger(rt, { actor: input.actor ?? `staff:${input.by}`, summary: `STAGED for the demo by ${input.by}: ${p.name} (${p.id}) is out of stock for ${k.name} until ${until}, in every live answer that kitchen gets (its intake, quotes, the watch; no other kitchen). The partner's live figures are unchanged; every claim signed from it says simulated.`, data: { step: "staged", stageId: g.stageId, kind: g.kind, productId: p.id, until, staged: true, by: input.by } });
   return g;
 }
 
@@ -924,7 +928,7 @@ export async function stageStockOut(rt: Runtime, input: { kitchen: string; produ
  * 100 and 110 % of the usual amount (portions) and, with `cost`, cost 0, 3, 6 and 10 % more per litre or kilo. The
  * orders it replaced are kept and put back when the stage is lifted.
  */
-export async function stageDrift(rt: Runtime, input: { kitchen: string; family: string; cost?: boolean; by: string; now?: Date }): Promise<Stage> {
+export async function stageDrift(rt: Runtime, input: { kitchen: string; family: string; cost?: boolean; by: string; now?: Date; actor?: string }): Promise<Stage> {
   const s = await ready(rt);
   const k = await watchKitchen(rt, input.kitchen);
   stageable(k);
@@ -961,7 +965,7 @@ export async function stageDrift(rt: Runtime, input: { kitchen: string; family: 
     return { ...prof, history };
   });
   saveStage(s, g);
-  ledger(rt, { actor: `staff:${input.by}`, summary: `STAGED for the demo by ${input.by}: ${k.name}'s last four ${WEEKDAY[slot.weekday]} ${p.family.replaceAll("_", " ")} orders now creep up (80, 90, 100, 110 % of the usual ${slot.usualAmount} ${unitWord(p.unit)})${input.cost ? " and cost 0, 3, 6, 10 % more per unit" : ""}. The real orders are kept and put back when the stage is lifted.`, data: { step: "staged", stageId: g.stageId, kind: g.kind, family: p.family, staged: true, by: input.by, orderIds: [...ids] } });
+  ledger(rt, { actor: input.actor ?? `staff:${input.by}`, summary: `STAGED for the demo by ${input.by}: ${k.name}'s last four ${WEEKDAY[slot.weekday]} ${p.family.replaceAll("_", " ")} orders now creep up (80, 90, 100, 110 % of the usual ${slot.usualAmount} ${unitWord(p.unit)})${input.cost ? " and cost 0, 3, 6, 10 % more per unit" : ""}. The real orders are kept and put back when the stage is lifted.`, data: { step: "staged", stageId: g.stageId, kind: g.kind, family: p.family, staged: true, by: input.by, orderIds: [...ids] } });
   return g;
 }
 
