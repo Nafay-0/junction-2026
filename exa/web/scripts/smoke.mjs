@@ -49,7 +49,7 @@ if (which === "all" || which === "models") {
   for (const id of ["claude-sonnet-5-5", "claude-opus-5-5", "claude-fable-5-2"]) await timed(id, () => say(claude(id)));
 }
 if (which === "all" || which === "gemini") {
-  for (const id of ["gemini-flash-latest", "gemini-3.8-flash", "gemini-pro-latest"]) await timed(id, () => say(google(id)));
+  for (const id of ["gemini-4-carbon", "gemini-4-hydrogen"]) await timed(id, () => say(google(id)));
 }
 if (which === "all" || which === "tools") {
   const claude = process.argv[3] === "bearer" ? bearer : aws;
@@ -60,7 +60,7 @@ if (which === "all" || which === "tools") {
       execute: async ({ city }) => ({ city, tempC: city.length, sky: "clear" }),
     }),
   };
-  for (const [label, model] of [["claude-opus-5-5", claude("claude-opus-5-5")], ["gemini-3.8-flash", google("gemini-3.8-flash")]]) {
+  for (const [label, model] of [["claude-opus-5-5", claude("claude-opus-5-5")], ["gemini-4-carbon", google("gemini-4-carbon")], ["gemini-4-hydrogen", google("gemini-4-hydrogen")]]) {
     await timed(`tool loop + stream on ${label}`, async () => {
       const t0 = Date.now();
       let first = 0;

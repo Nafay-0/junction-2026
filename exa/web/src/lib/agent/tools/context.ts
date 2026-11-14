@@ -14,6 +14,8 @@ export type ToolContext = {
   worker: { info: ModelInfo; model: LanguageModel };
   /** Two-letter country code used to localise searches, when known. */
   country?: string;
+  /** The user's exact position, when they have shared it through the browser. */
+  coords?: { lat: number; lng: number; label?: string };
   /** "Friday 14 November 2026" style, so tools and sub-agents know the date. */
   today: string;
 };

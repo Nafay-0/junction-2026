@@ -11,6 +11,7 @@ import { KeyFacts } from "@/components/widgets/facts";
 import { Flights } from "@/components/widgets/flights";
 import { Hotels } from "@/components/widgets/hotels";
 import { Images } from "@/components/widgets/images";
+import { LocationRequest } from "@/components/widgets/location-request";
 import { PredictionMarket } from "@/components/widgets/market";
 import { PlacesMap } from "@/components/widgets/places-map";
 import { Plan } from "@/components/widgets/plan";
@@ -52,6 +53,16 @@ export default function WidgetGallery() {
     ["plan", <Plan key="plan" data={planFixture} />],
     ["clarify", <Clarify key="clarify" input={clarifyFixture} onSubmit={() => {}} />],
     ["clarify-answered", <Clarify key="clarify-answered" input={clarifyFixture} answer={clarifyAnswerFixture} />],
+    ["location", <LocationRequest key="location" input={{ reason: "to find cafes within walking distance of you" }} approximatePlace="Helsinki, Finland" />],
+    [
+      "location-answered",
+      <LocationRequest
+        key="location-answered"
+        input={{}}
+        approximatePlace="Helsinki, Finland"
+        answer={{ status: "granted", lat: 60.1841, lng: 24.8301, accuracyM: 18, label: "Otaniemi, Espoo, Finland", country: "FI", at: 0 }}
+      />,
+    ],
     ["places", <PlacesMap key="places" data={loading ? placesLoadingFixture : placesFixture} loading={loading} />],
     ["weather", <Weather key="weather" data={loading ? weatherLoadingFixture : weatherFixture} loading={loading} />],
     ["flights", <Flights key="flights" data={loading ? flightsLoadingFixture : flightsFixture} loading={loading} />],

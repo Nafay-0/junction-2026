@@ -64,8 +64,11 @@ export type ExaSearchRequest = {
   excludeDomains?: string[];
   startPublishedDate?: string;
   endPublishedDate?: string;
-  /** Two-letter country code that localises results. */
-  userLocation?: string;
+  /**
+   * A two-letter country code that localises results, or the user's coordinates.
+   * Coordinates only matter for queries that name no place ("coffee near me").
+   */
+  userLocation?: string | { country?: string; latitude: number; longitude: number };
   contents?: {
     highlights?: boolean | { query?: string; maxCharacters?: number };
     text?: boolean | { maxCharacters?: number };

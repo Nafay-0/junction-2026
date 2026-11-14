@@ -21,6 +21,23 @@ export function useClientValue<T>(read: () => T, fallback: T): T {
   return React.useSyncExternalStore(never, read, () => fallback);
 }
 
+/** Whether a CSS media query matches, kept up to date. False on the server. */
+export function useMediaQuery(query: string): boolean {
+  const subscribeToQuery = React.useCallback(
+    (onChange: () => void) => {
+      const list = window.matchMedia(query);
+      list.addEventListener("change", onChange);
+      return () => list.removeEventListener("change", onChange);
+    },
+    [query],
+  );
+  return React.useSyncExternalStore(
+    subscribeToQuery,
+    () => window.matchMedia(query).matches,
+    () => false,
+  );
+}
+
 const listeners = new Set<() => void>();
 const memory = new Map<string, string>();
 

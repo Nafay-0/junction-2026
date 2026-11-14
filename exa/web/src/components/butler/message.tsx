@@ -4,13 +4,13 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 import type { ButlerMessage } from "@/lib/agent/tools";
 import type { RunStats } from "@/lib/agent/models";
-import type { ClarifyAnswer, PlanData, PlanStep, Source } from "@/lib/widgets/types";
+import type { PlanData, PlanStep, Source } from "@/lib/widgets/types";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SourceChips, dedupeSources } from "@/components/widgets/frame";
 import { Plan } from "@/components/widgets/plan";
 import { ActivityGroup, ReasoningBlock } from "./activity";
 import { Markdown } from "./markdown";
-import { ACTIVITY_TOOLS, ToolWidget, isToolPart, type ToolPart } from "./tool-part";
+import { ACTIVITY_TOOLS, ToolWidget, isToolPart, type ToolPart, type WidgetHandlers } from "./tool-part";
 
 export function UserMessage({ message }: { message: ButlerMessage }) {
   const text = message.parts
@@ -57,12 +57,12 @@ function planFrom(part: ToolPart | undefined): PlanData | null {
 export function AssistantMessage({
   message,
   active,
-  onAnswer,
+  handlers,
 }: {
   message: ButlerMessage;
   /** True while this message is still being generated. */
   active: boolean;
-  onAnswer: (toolCallId: string, answer: ClarifyAnswer) => void;
+  handlers: WidgetHandlers;
 }) {
   const { blocks, plan, sources } = React.useMemo(() => {
     const out: Block[] = [];
@@ -120,7 +120,7 @@ export function AssistantMessage({
           case "activity":
             return <ActivityGroup key={block.key} parts={block.parts} />;
           case "widget":
-            return <ToolWidget key={block.key} part={block.part} onAnswer={onAnswer} />;
+            return <ToolWidget key={block.key} part={block.part} handlers={handlers} />;
         }
       })}
       {active && nothingYet ? <WorkingLine /> : null}

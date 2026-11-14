@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useTheme } from "next-themes";
-import { ConciergeBell, Moon, Plus, Sun } from "lucide-react";
+import { ConciergeBell, Moon, PanelLeft, Plus, Sun } from "lucide-react";
 import { APP_NAME } from "@/lib/brand";
 import { useHydrated } from "@/lib/use-client";
 import type { RunStats } from "@/lib/agent/models";
@@ -45,9 +45,31 @@ export function sumStats(all: Array<RunStats | undefined>): RunStats | null {
   );
 }
 
-export function TopBar({ stats, onNewChat, showNew }: { stats: RunStats | null; onNewChat: () => void; showNew: boolean }) {
+export function TopBar({
+  stats,
+  onNewChat,
+  showNew,
+  sidebarOpen,
+  onToggleSidebar,
+}: {
+  stats: RunStats | null;
+  onNewChat: () => void;
+  showNew: boolean;
+  sidebarOpen: boolean;
+  onToggleSidebar: () => void;
+}) {
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-transparent bg-background/80 px-3 backdrop-blur-xl sm:px-5">
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-1.5 border-b border-transparent bg-background/80 px-3 backdrop-blur-xl sm:px-4">
+      {/* When the list is open it carries its own close button; on phones it is a drawer, so the toggle stays. */}
+      <button
+        type="button"
+        onClick={onToggleSidebar}
+        aria-label={sidebarOpen ? "Close the conversation list" : "Open the conversation list"}
+        aria-expanded={sidebarOpen}
+        className={`flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground ${sidebarOpen ? "md:hidden" : ""}`}
+      >
+        <PanelLeft className="size-[1.1rem]" />
+      </button>
       <button type="button" onClick={onNewChat} className="flex items-center gap-2.5 rounded-lg py-1 pr-2 transition-opacity hover:opacity-80" aria-label={`${APP_NAME}: start over`}>
         <span className="flex size-8 items-center justify-center rounded-[0.6rem] bg-primary text-primary-foreground shadow-card">
           <ConciergeBell className="size-[1.05rem]" strokeWidth={2} />
@@ -55,7 +77,7 @@ export function TopBar({ stats, onNewChat, showNew }: { stats: RunStats | null; 
         <span className="font-display text-[1.45rem] leading-none tracking-tight">{APP_NAME}</span>
       </button>
 
-      <div className="flex items-center gap-1">
+      <div className="ml-auto flex items-center gap-1">
         {stats ? <UsageMeter stats={stats} /> : null}
         {showNew ? (
           <Tooltip>

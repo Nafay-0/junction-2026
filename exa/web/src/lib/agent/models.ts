@@ -49,18 +49,19 @@ export const MODELS: ModelInfo[] = [
     price: { input: 8, output: 40, cacheRead: 0.2, cacheWrite: 10 },
   },
   {
-    id: "gemini-4-argon",
-    label: "Gemini 4 Argon",
+    // Google's list price through 30 Nov 2026; it doubles on 1 Dec 2026.
+    id: "gemini-4-carbon",
+    label: "Gemini 4 Carbon",
     provider: "gemini",
-    blurb: "Google's flagship.",
+    blurb: "Google's most capable reasoning model.",
     price: { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2 },
   },
   {
-    id: "gemini-3.8-flash",
-    label: "Gemini 3.8 Flash",
+    id: "gemini-4-hydrogen",
+    label: "Gemini 4 Hydrogen",
     provider: "gemini",
-    blurb: "Google's fast model.",
-    price: { input: 0.75, output: 3.75, cacheRead: 0.075, cacheWrite: 0.75 },
+    blurb: "Google's fast everyday model.",
+    price: { input: 1.5, output: 7.5, cacheRead: 0.075, cacheWrite: 1.5 },
   },
 ];
 
@@ -69,7 +70,7 @@ export const DEFAULT_MODEL_ID = "claude-opus-5-5";
 /** The model sub-agents and small extraction jobs run on, per provider family: fast and cheap. */
 export const WORKER_MODEL: Record<ModelProvider, string> = {
   claude: "claude-haiku-5-5",
-  gemini: "gemini-3.8-flash",
+  gemini: "gemini-4-hydrogen",
 };
 
 export function getModel(id: string | undefined | null): ModelInfo {

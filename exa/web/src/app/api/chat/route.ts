@@ -21,6 +21,10 @@ type ChatRequest = {
   /** Two-letter country code, used to localise Exa searches. */
   country?: string;
   timeZone?: string;
+  /** The user's exact position, when they have shared it through the browser. */
+  coords?: { lat: number; lng: number; accuracyM?: number; label?: string; country?: string };
+  /** True when the user has said no to sharing their exact location. */
+  locationDeclined?: boolean;
 };
 
 const estimateTokens = (messages: ModelMessage[]) => Math.ceil(JSON.stringify(messages).length / 4);
@@ -51,9 +55,11 @@ export async function POST(req: Request) {
   const now = new Date();
   const today = now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone });
   const time = `${now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone })} (${timeZone})`;
-  const country = /^[A-Za-z]{2}$/.test(body.country ?? "") ? body.country!.toUpperCase() : undefined;
+  const coords = validCoords(body.coords);
+  const countryCode = coords?.country ?? body.country ?? "";
+  const country = /^[A-Za-z]{2}$/.test(countryCode) ? countryCode.toUpperCase() : undefined;
 
-  const ctx: ToolContext = { meter, model: info, worker, country, today };
+  const ctx: ToolContext = { meter, model: info, worker, country, today, coords: coords ? { lat: coords.lat, lng: coords.lng, label: coords.label } : undefined };
   const tools = createTools(ctx, model);
 
   // Reasoning from earlier turns is never replayed. Claude's thinking blocks are bound to the exact
@@ -69,7 +75,7 @@ export async function POST(req: Request) {
   // tool definitions before them) at a tenth of the price on every later step and request.
   const instructions: SystemModelMessage[] = [
     { role: "system", content: buildInstructions(), providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } } },
-    { role: "system", content: buildContext({ today, time, place: body.place?.slice(0, 80) }) },
+    { role: "system", content: buildContext({ today, time, place: body.place?.slice(0, 80), coords, locationDeclined: body.locationDeclined === true }) },
   ];
 
   let steps = 0;
@@ -123,6 +129,18 @@ export async function POST(req: Request) {
       },
     }),
   });
+}
+
+function validCoords(input: ChatRequest["coords"]): ChatRequest["coords"] | undefined {
+  if (!input || typeof input.lat !== "number" || typeof input.lng !== "number") return undefined;
+  if (!Number.isFinite(input.lat) || !Number.isFinite(input.lng) || Math.abs(input.lat) > 90 || Math.abs(input.lng) > 180) return undefined;
+  return {
+    lat: input.lat,
+    lng: input.lng,
+    accuracyM: typeof input.accuracyM === "number" ? Math.round(input.accuracyM) : undefined,
+    label: typeof input.label === "string" ? input.label.slice(0, 80) : undefined,
+    country: typeof input.country === "string" ? input.country.slice(0, 2) : undefined,
+  };
 }
 
 function safeTimeZone(tz: string | undefined): string {

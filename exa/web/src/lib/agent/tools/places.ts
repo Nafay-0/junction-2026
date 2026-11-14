@@ -5,6 +5,7 @@ import { z } from "zod";
 import { exaSearch, type ExaEntity, type ExaResult } from "@/lib/exa/client";
 import { toSource, type Place, type PlacesData, type WeatherData, type WeatherDay } from "@/lib/widgets/types";
 import { errorMessage, type ToolContext } from "./context";
+import { liveStatus } from "./opening-hours";
 
 /*
  * Exa indexes 211M places and a weather feed as structured records under exa.ai/library.
@@ -86,21 +87,47 @@ function placeFromPage(r: ExaResult): Place | null {
   };
 }
 
+const NEAR_ME = /^(near|around|close to)?\s*(me|here|my (current )?location|current location|nearby)\.?$/i;
+
+/** Straight-line distance in metres between two points. */
+function distanceM(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const rad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * rad;
+  const dLng = (b.lng - a.lng) * rad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
+  return Math.round(2 * 6_371_000 * Math.asin(Math.sqrt(h)));
+}
+
 export function findPlacesTool(ctx: ToolContext) {
   return tool({
     description:
       "Find real places (restaurants, cafes, bars, shops, hotels, attractions, services, parks) and show them on an interactive map with ratings, opening hours, phone and directions. " +
-      "Use it for anything location-based. Describe the place like you would ask a local, and always name the area or city.",
+      "Use it for anything location-based. Describe the place like you would ask a local, and say where: a named area, or \"near me\" when the user's exact location is known.",
     inputSchema: z.object({
       query: z.string().describe('What kind of place and its qualities, for example "cosy vegan-friendly restaurant for an anniversary dinner".'),
-      near: z.string().describe('Neighbourhood, city and country, for example "Kamppi, Helsinki, Finland".'),
+      near: z
+        .string()
+        .describe('Neighbourhood, city and country, for example "Kamppi, Helsinki, Finland". Use exactly "near me" to search around the user\'s exact location, only when the context says it has been shared.'),
     }),
     execute: async ({ query, near }, { abortSignal }): Promise<PlacesData> => {
-      const base = { kind: "places" as const, query, area: near };
+      // "near me" searches around the coordinates the user shared; without them it falls back to a named area.
+      const aroundUser = NEAR_ME.test(near.trim()) && !!ctx.coords;
+      const origin = ctx.coords ? { lat: ctx.coords.lat, lng: ctx.coords.lng, label: ctx.coords.label } : undefined;
+      const area = aroundUser ? (ctx.coords?.label ? `Near you, ${ctx.coords.label}` : "Near you") : near;
+      const base = { kind: "places" as const, query, area };
       try {
         const res = await exaSearch(
-          { query: `${query} in ${near}`, numResults: 10, includeDomains: ["exa.ai"], contents: { text: { maxCharacters: 1600 } } },
-          { meter: ctx.meter, signal: abortSignal },
+          aroundUser
+            ? {
+                query: `${query} near me`,
+                numResults: 10,
+                includeDomains: ["exa.ai"],
+                userLocation: { country: ctx.country, latitude: ctx.coords!.lat, longitude: ctx.coords!.lng },
+                contents: { text: { maxCharacters: 400 } },
+              }
+            : { query: `${query} in ${near}`, numResults: 10, includeDomains: ["exa.ai"], contents: { text: { maxCharacters: 1600 } } },
+          // A position changes as the user moves: do not reuse a cached "near me" answer.
+          { meter: ctx.meter, signal: abortSignal, cache: !aroundUser },
         );
         const byId = new Map<string, Place>();
         for (const r of res.results) {
@@ -110,22 +137,36 @@ export function findPlacesTool(ctx: ToolContext) {
             if (place && !byId.has(place.id)) byId.set(place.id, place);
           }
         }
-        // Individual place pages are ranked by relevance to the query: keep that order first.
         const ordered: Place[] = [];
-        for (const r of res.results) {
-          if (!r.url.includes("/library/place/")) continue;
-          const id = r.url.split("/").pop() ?? "";
-          const place = byId.get(id) ?? placeFromPage(r);
-          if (place && !ordered.some((p) => p.id === place.id)) ordered.push(place);
+        if (!aroundUser) {
+          // Individual place pages are ranked by relevance to the query: keep that order first.
+          // (Around the user only the located list is used: single pages match the words "near me", not the position.)
+          for (const r of res.results) {
+            if (!r.url.includes("/library/place/")) continue;
+            const id = r.url.split("/").pop() ?? "";
+            const place = byId.get(id) ?? placeFromPage(r);
+            if (place && !ordered.some((p) => p.id === place.id)) ordered.push(place);
+          }
         }
         for (const place of byId.values()) if (!ordered.some((p) => p.id === place.id)) ordered.push(place);
-        const places = ordered.filter((p) => p.status?.toLowerCase() !== "permanently closed").slice(0, 8);
+
+        let places = ordered.filter((p) => p.status?.toLowerCase() !== "permanently closed");
+        if (origin) {
+          places = places.map((p) => ({ ...p, distanceM: distanceM(origin, p) }));
+          // Around the user, nearest first; drop anything implausibly far for a "near me" search.
+          if (aroundUser) places = places.filter((p) => p.distanceM! < 40_000).sort((a, b) => a.distanceM! - b.distanceM!);
+        }
+        // Exa's "open" means the business still exists. Work out whether it is open at this moment, in its own time zone.
+        places = places.slice(0, 8).map((p) => ({ ...p, status: liveStatus(p) }));
+        // Show the user's own position on the map only when the results are around it.
+        const showOrigin = origin && places.some((p) => (p.distanceM ?? Infinity) < 30_000);
         return {
           ...base,
           places,
+          origin: showOrigin ? origin : undefined,
           sources: places.map((p) => toSource({ url: p.url, title: `${p.name} (Exa Places)` })),
           exaCostUsd: res.costDollars?.total,
-          error: places.length === 0 ? `No places found for "${query}" near ${near}. Try a broader description or a larger area.` : undefined,
+          error: places.length === 0 ? `No places found for "${query}" ${aroundUser ? "near you" : `near ${near}`}. Try a broader description or a larger area.` : undefined,
         };
       } catch (err) {
         return { ...base, places: [], sources: [], error: errorMessage(err) };
@@ -136,6 +177,7 @@ export function findPlacesTool(ctx: ToolContext) {
       const today = new Date().toLocaleDateString("en-US", { weekday: "long" });
       const lines = output.places.map((p, i) => {
         const bits = [
+          p.distanceM !== undefined ? (p.distanceM < 1000 ? `${p.distanceM} m away` : `${(p.distanceM / 1000).toFixed(1)} km away`) : undefined,
           p.category,
           p.rating ? `${p.rating}/5 (${p.reviewCount ?? "?"} reviews)` : undefined,
           p.status,

@@ -2,9 +2,11 @@
 
 import * as React from "react";
 import type { FileUIPart } from "ai";
-import { ArrowUp, Check, ChevronDown, ImagePlus, MapPin, Square, X } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, ImagePlus, LoaderCircle, LocateFixed, MapPin, Square, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MODELS, getModel, type ModelInfo } from "@/lib/agent/models";
+import { formatAccuracy, type LocateResult } from "@/lib/location";
+import type { ExactLocation } from "@/lib/widgets/types";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
@@ -29,8 +31,7 @@ export function Composer({
   busy,
   modelId,
   onModelChange,
-  place,
-  onPlaceChange,
+  where,
   autoFocus,
 }: {
   onSend: (text: string, files: FileUIPart[]) => void;
@@ -39,8 +40,8 @@ export function Composer({
   busy: boolean;
   modelId: string;
   onModelChange: (id: string) => void;
-  place: string;
-  onPlaceChange: (place: string) => void;
+  /** Where the user is: an exact position if they shared one, otherwise a place name. */
+  where: WhereProps;
   autoFocus?: boolean;
 }) {
   const [text, setText] = React.useState("");
@@ -173,7 +174,7 @@ export function Composer({
         </button>
 
         <ModelPicker modelId={modelId} onChange={onModelChange} />
-        <PlaceChip place={place} onChange={onPlaceChange} />
+        <PlaceChip {...where} />
 
         <div className="flex-1" />
 
@@ -245,47 +246,118 @@ function ModelPicker({ modelId, onChange }: { modelId: string; onChange: (id: st
   );
 }
 
-function PlaceChip({ place, onChange }: { place: string; onChange: (place: string) => void }) {
+export type WhereProps = {
+  /** The place name used when no exact position is shared ("Helsinki, Finland"). */
+  place: string;
+  onPlaceChange: (place: string) => void;
+  /** The exact position saved in this browser, if the user has shared one. */
+  exact: ExactLocation | null;
+  /** Ask the browser for the position (shows its permission prompt if needed) and save it. */
+  onLocate: () => Promise<LocateResult>;
+  /** Stop using the exact position. */
+  onClearExact: () => void;
+};
+
+const LOCATE_PROBLEM: Record<Exclude<LocateResult, { ok: true }>["reason"], string> = {
+  denied: "Your browser blocked it. Allow location for this site from the icon at the left of the address bar, then try again.",
+  unavailable: "Your device could not work out where it is.",
+  timeout: "That took too long. Try again.",
+  unsupported: "This browser cannot share a location.",
+  insecure: "Browsers only share location on a secure (https) page.",
+};
+
+function PlaceChip({ place, onPlaceChange, exact, onLocate, onClearExact }: WhereProps) {
   const [open, setOpen] = React.useState(false);
   const [draft, setDraft] = React.useState(place);
+  const [locating, setLocating] = React.useState(false);
+  const [problem, setProblem] = React.useState("");
+  const label = exact ? (exact.label ?? `${exact.lat.toFixed(3)}, ${exact.lng.toFixed(3)}`) : place;
+
+  const shareExact = async () => {
+    setLocating(true);
+    setProblem("");
+    const result = await onLocate();
+    setLocating(false);
+    if (!result.ok) setProblem(LOCATE_PROBLEM[result.reason]);
+  };
+
   return (
     <Popover
       open={open}
       onOpenChange={(next) => {
-        if (next) setDraft(place);
+        if (next) {
+          setDraft(place);
+          setProblem("");
+        }
         setOpen(next);
       }}
     >
       <PopoverTrigger
         className="hidden h-9 min-w-0 items-center gap-1.5 rounded-full px-2.5 text-[0.8rem] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-[state=open]:bg-muted min-[420px]:flex"
-        aria-label="Your location"
+        aria-label={exact ? `Your exact location: ${label}` : `Your location: ${label || "not set"}`}
       >
-        <MapPin className="size-3.5 shrink-0" />
-        <span className="max-w-[9rem] truncate">{place || "Set location"}</span>
+        {exact ? <LocateFixed className="size-3.5 shrink-0 text-brand" /> : <MapPin className="size-3.5 shrink-0" />}
+        <span className="max-w-[9rem] truncate">{label || "Set location"}</span>
       </PopoverTrigger>
-      <PopoverContent align="start" side="top" className="w-72">
+      <PopoverContent align="start" side="top" className="w-80 p-0">
+        <div className="space-y-2.5 p-3.5">
+          <p className="text-[0.8rem] font-medium">Where are you?</p>
+          {exact ? (
+            <div className="flex items-start gap-2.5 rounded-xl bg-brand-soft/60 p-2.5">
+              <LocateFixed className="mt-0.5 size-4 shrink-0 text-brand" />
+              <div className="min-w-0 flex-1 text-[0.8rem] leading-snug">
+                <p className="font-medium">Using your exact location</p>
+                <p className="truncate text-muted-foreground">
+                  {exact.label ?? `${exact.lat.toFixed(4)}, ${exact.lng.toFixed(4)}`}
+                  {exact.accuracyM ? `, ${formatAccuracy(exact.accuracyM)}` : ""}
+                </p>
+                <div className="mt-1.5 flex gap-3">
+                  <button type="button" onClick={() => void shareExact()} disabled={locating} className="font-medium text-brand hover:underline disabled:opacity-50">
+                    {locating ? "Updating" : "Update"}
+                  </button>
+                  <button type="button" onClick={onClearExact} className="text-muted-foreground hover:text-foreground hover:underline">
+                    Stop using it
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void shareExact()}
+              disabled={locating}
+              className="flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-primary text-[0.8rem] font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
+            >
+              {locating ? <LoaderCircle className="size-4 animate-spin" /> : <LocateFixed className="size-4" />}
+              {locating ? "Waiting for your browser" : "Use my exact location"}
+            </button>
+          )}
+          {problem ? <p className="text-[0.75rem] leading-snug text-destructive">{problem}</p> : null}
+        </div>
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            onChange(draft.trim());
+            onPlaceChange(draft.trim());
             setOpen(false);
           }}
-          className="space-y-2"
+          className="space-y-2 border-t border-border p-3.5"
         >
-          <label htmlFor="place" className="block text-[0.8rem] font-medium">
-            Where are you?
+          <label htmlFor="place" className="block text-[0.75rem] text-muted-foreground">
+            {exact ? "Fallback place, used if you stop sharing" : "Or name a place"}
           </label>
-          <input
-            id="place"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="Espoo, Finland"
-            className="h-9 w-full rounded-lg border border-input bg-background px-3 text-[0.85rem] outline-none focus:border-ring focus:ring-3 focus:ring-ring/20"
-          />
-          <p className="text-[0.72rem] leading-snug text-muted-foreground">Used for anything local: places, weather, shops, prices. It is sent with your messages and not stored on a server.</p>
-          <button type="submit" className="h-8 w-full rounded-lg bg-primary text-[0.8rem] font-medium text-primary-foreground transition-opacity hover:opacity-90">
-            Save
-          </button>
+          <div className="flex gap-2">
+            <input
+              id="place"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="Espoo, Finland"
+              className="h-9 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-[0.85rem] outline-none focus:border-ring focus:ring-3 focus:ring-ring/20"
+            />
+            <button type="submit" className="h-9 shrink-0 rounded-lg border border-border px-3 text-[0.8rem] font-medium transition-colors hover:bg-muted">
+              Save
+            </button>
+          </div>
+          <p className="text-[0.72rem] leading-snug text-muted-foreground">Used for anything local: places, weather, shops, prices. Kept in this browser and sent only with your messages.</p>
         </form>
       </PopoverContent>
     </Popover>

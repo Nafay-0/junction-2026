@@ -48,9 +48,31 @@ Plain, warm and brief, like a capable person who respects the user's time. Lead 
 If the user attaches an image, look at it, say what you see in a line, and use it: identify the place or product, find where to buy it, find similar ones.`;
 }
 
-export function buildContext(args: { today: string; time: string; place?: string }): string {
+export function buildContext(args: {
+  today: string;
+  time: string;
+  /** Approximate place: typed by the user, or guessed from their time zone. */
+  place?: string;
+  /** Exact position shared through the browser. */
+  coords?: { lat: number; lng: number; accuracyM?: number; label?: string };
+  /** True when the user has already said no to sharing their exact location in this browser. */
+  locationDeclined?: boolean;
+}): string {
+  const now = `Now: ${args.today}, ${args.time}.`;
+  if (args.coords) {
+    const { lat, lng, accuracyM, label } = args.coords;
+    return (
+      `${now} The user has shared their exact location: ${label ?? "unnamed place"} (${lat.toFixed(5)}, ${lng.toFixed(5)}` +
+      `${accuracyM ? `, accurate to about ${accuracyM} m` : ""}). Use it for anything local and use local units and currency. ` +
+      'For places around them call findPlaces with near set to "near me"; for directions use these coordinates as the starting point. Do not call requestLocation.'
+    );
+  }
+  const place = args.place ? ` The user is in or around ${args.place} (approximate); assume that for anything local unless they say otherwise, and use local units and currency.` : "";
+  if (args.locationDeclined) {
+    return `${now}${place} They have declined to share their exact location, so do not call requestLocation; work with the approximate place and ask which area they mean if it matters.`;
+  }
   return (
-    `Now: ${args.today}, ${args.time}.` +
-    (args.place ? ` The user is in ${args.place}; assume that for anything local unless they say otherwise, and use local units and currency.` : "")
+    `${now}${place} Their exact location has not been shared. When a task depends on exactly where they are ("near me", the closest one, walking distance, directions from here), ` +
+    "call requestLocation first; for anything where the city is enough, just use the approximate place."
   );
 }

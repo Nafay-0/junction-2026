@@ -6,6 +6,9 @@ import type {
   ActionsData,
   ClarifyAnswer,
   ClarifyInput,
+  ExactLocation,
+  LocationAnswer,
+  LocationRequestInput,
   ComparisonData,
   FlightsData,
   HotelsData,
@@ -25,6 +28,7 @@ import { KeyFacts } from "@/components/widgets/facts";
 import { Flights } from "@/components/widgets/flights";
 import { Hotels } from "@/components/widgets/hotels";
 import { Images } from "@/components/widgets/images";
+import { LocationRequest } from "@/components/widgets/location-request";
 import { PredictionMarket } from "@/components/widgets/market";
 import { PlacesMap } from "@/components/widgets/places-map";
 import { Products } from "@/components/widgets/products";
@@ -89,19 +93,38 @@ function resolve<T extends { sources: unknown[]; error?: string; stage?: string 
 const str = (v: unknown, d = ""): string => (typeof v === "string" ? v : d);
 const arr = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v.filter((x) => x != null) as T[]) : []);
 
-export function ToolWidget({
-  part,
-  onAnswer,
-}: {
-  part: ToolPart;
+/** What the widgets that talk back to the agent need from the chat. */
+export type WidgetHandlers = {
   /** Called when the user answers a clarifying question. */
   onAnswer?: (toolCallId: string, answer: ClarifyAnswer) => void;
-}) {
-  return <WidgetBoundary>{renderWidget(part, onAnswer)}</WidgetBoundary>;
+  /** Called when the user answers a request for their location. */
+  onLocation?: (toolCallId: string, answer: LocationAnswer) => void;
+  /** The place assumed when no exact location is shared, for example "Helsinki, Finland". */
+  approximatePlace?: string;
+  /** The exact location saved in this browser, if any. */
+  savedLocation?: ExactLocation | null;
+};
+
+export function ToolWidget({ part, handlers }: { part: ToolPart; handlers: WidgetHandlers }) {
+  return <WidgetBoundary>{renderWidget(part, handlers)}</WidgetBoundary>;
 }
 
-function renderWidget(part: ToolPart, onAnswer?: (toolCallId: string, answer: ClarifyAnswer) => void): React.ReactNode {
+function renderWidget(part: ToolPart, handlers: WidgetHandlers): React.ReactNode {
+  const { onAnswer } = handlers;
   switch (part.type) {
+    case "tool-requestLocation": {
+      const answered = part.state === "output-available" ? (part.output as LocationAnswer) : undefined;
+      return (
+        <LocationRequest
+          input={(part.input ?? {}) as LocationRequestInput}
+          loading={part.state === "input-streaming"}
+          answer={answered}
+          approximatePlace={handlers.approximatePlace ?? ""}
+          saved={handlers.savedLocation}
+          onResult={handlers.onLocation ? (answer) => handlers.onLocation?.(part.toolCallId, answer) : undefined}
+        />
+      );
+    }
     case "tool-findPlaces": {
       const { data, loading } = resolve<PlacesData>(
         part,

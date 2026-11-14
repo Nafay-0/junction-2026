@@ -76,7 +76,15 @@ function statusTone(status?: string): StatusTone {
   return "neutral";
 }
 
-const directionsUrl = (p: Place) => `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`;
+type Origin = PlacesData["origin"];
+
+/** The user's own position, when shared: read by the map (a "you are here" dot) and the directions links. */
+const OriginContext = React.createContext<Origin>(undefined);
+
+const directionsUrl = (p: Place, origin?: Origin) =>
+  `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}${origin ? `&origin=${origin.lat},${origin.lng}` : ""}`;
+
+const formatDistance = (m: number) => (m < 1000 ? `${Math.max(10, Math.round(m / 10) * 10)} m` : `${(m / 1000).toFixed(m < 10_000 ? 1 : 0)} km`);
 const telHref = (phone: string) => `tel:${phone.replace(/[^\d+]/g, "")}`;
 
 function hasCoords(p: Place): boolean {
@@ -139,9 +147,11 @@ const MapCanvas = dynamic(
         const fittedOnce = React.useRef(false);
 
         const located = React.useMemo(() => places.filter(hasCoords), [places]);
+        const origin = React.useContext(OriginContext);
 
         // Key the bounds on the coordinates, so new array identities with the same places do not refit.
-        const boundsKey = located.map((p) => `${p.lng},${p.lat}`).join(";");
+        // The user's own position is part of the view when it is known.
+        const boundsKey = [...located.map((p) => `${p.lng},${p.lat}`), ...(origin && located.length ? [`${origin.lng},${origin.lat}`] : [])].join(";");
         const bounds = React.useMemo<[[number, number], [number, number]] | null>(() => {
           if (!boundsKey) return null;
           const pts = boundsKey.split(";").map((s) => s.split(",").map(Number));
@@ -220,6 +230,14 @@ const MapCanvas = dynamic(
               style={{ width: "100%", height: "100%" }}
             >
               <AttributionControl compact position="bottom-right" />
+              {origin ? (
+                <Marker longitude={origin.lng} latitude={origin.lat} anchor="center" style={{ zIndex: 5 }}>
+                  <span className="relative flex size-5 items-center justify-center" title={origin.label ? `You are here: ${origin.label}` : "You are here"} aria-label="Your location">
+                    <span className="absolute size-5 animate-ping rounded-full bg-chart-3/40" />
+                    <span className="relative size-3.5 rounded-full border-2 border-card bg-chart-3 shadow-float" />
+                  </span>
+                </Marker>
+              ) : null}
               {located.map((p) => {
                 const index = places.indexOf(p) + 1;
                 const isSelected = p.id === selectedId;
@@ -433,6 +451,7 @@ function PlaceCard({
         <span className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 pl-7 text-[0.75rem]">
           <Rating place={place} />
           <Status status={place.status} />
+          {place.distanceM !== undefined ? <span className="nums text-muted-foreground">{formatDistance(place.distanceM)} away</span> : null}
         </span>
         {place.address ? (
           <span className="mt-1 truncate pl-7 text-[0.75rem] text-muted-foreground">{place.address}</span>
@@ -492,9 +511,10 @@ function ActionLink({
 }
 
 function PlaceActions({ place, className }: { place: Place; className?: string }) {
+  const origin = React.useContext(OriginContext);
   return (
     <div className={cn("grid grid-cols-2 gap-2", className)}>
-      <ActionLink href={directionsUrl(place)} icon={<Navigation />} primary>
+      <ActionLink href={directionsUrl(place, origin)} icon={<Navigation />} primary>
         Directions
       </ActionLink>
       {place.phone ? (
@@ -690,7 +710,15 @@ function ExpandedMap({
 
 /* ───────────────────────── Widget ───────────────────────── */
 
-export function PlacesMap({ data, loading }: WidgetProps<PlacesData>) {
+export function PlacesMap(props: WidgetProps<PlacesData>) {
+  return (
+    <OriginContext.Provider value={props.data.origin}>
+      <PlacesMapInner {...props} />
+    </OriginContext.Provider>
+  );
+}
+
+function PlacesMapInner({ data, loading }: WidgetProps<PlacesData>) {
   const dark = useIsDark();
   const places = React.useMemo(() => data.places ?? [], [data.places]);
 

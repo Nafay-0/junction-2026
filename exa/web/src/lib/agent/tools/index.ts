@@ -2,7 +2,7 @@ import "server-only";
 
 import type { InferUITools, LanguageModel, UIMessage } from "ai";
 import type { RunStats } from "../models";
-import { askUserTool, showActionsTool, showComparisonTool, showKeyFactsTool, updatePlanTool } from "./compose";
+import { askUserTool, requestLocationTool, showActionsTool, showComparisonTool, showKeyFactsTool, updatePlanTool } from "./compose";
 import type { ToolContext } from "./context";
 import { getPredictionMarketTool, getStocksTool } from "./markets";
 import { findPlacesTool, getWeatherTool } from "./places";
@@ -30,6 +30,7 @@ export function createTools(ctx: ToolContext, mainModel: LanguageModel) {
     showActions: showActionsTool(),
     updatePlan: updatePlanTool(),
     askUser: askUserTool(),
+    requestLocation: requestLocationTool(),
   };
 }
 

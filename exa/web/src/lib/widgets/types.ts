@@ -65,7 +65,7 @@ export type Place = {
   /** 0 to 5. */
   rating?: number;
   reviewCount?: number;
-  /** "Open", "Closed", "Temporarily closed". */
+  /** Whether it is open right now, in the place's own time zone: "Open until 9 PM", "Closed now", "Temporarily closed". Unset when unknown. */
   status?: string;
   hours?: Array<{ day: string; hours: string }>;
   phone?: string;
@@ -75,6 +75,8 @@ export type Place = {
   url: string;
   /** One line from the agent on why this place fits the request. */
   note?: string;
+  /** Straight-line distance from the user, in metres, when their exact location is known. */
+  distanceM?: number;
 };
 
 export type PlacesData = WidgetBase & {
@@ -83,6 +85,8 @@ export type PlacesData = WidgetBase & {
   /** Human-readable search area, for example "Kamppi, Helsinki". */
   area?: string;
   places: Place[];
+  /** The user's own position, when they have shared it: drawn on the map and used for directions. */
+  origin?: { lat: number; lng: number; label?: string };
 };
 
 /* ───────────────────────── Travel ───────────────────────── */
@@ -374,6 +378,36 @@ export type ClarifyAnswer = {
   answers: Record<string, string | string[]>;
   skipped?: boolean;
 };
+
+/* ───────────────────────── Location request (answered in the browser) ───────────────────────── */
+
+/** The user's exact position, as shared through the browser. */
+export type ExactLocation = {
+  lat: number;
+  lng: number;
+  /** Radius of uncertainty in metres, as reported by the device. */
+  accuracyM?: number;
+  /** "Otaniemi, Espoo, Finland". */
+  label?: string;
+  /** Two-letter country code. */
+  country?: string;
+  /** When it was read, Unix milliseconds. */
+  at: number;
+};
+
+export type LocationRequestInput = {
+  /** Why the agent wants the location, in one short sentence. */
+  reason?: string;
+};
+
+export type LocationAnswer =
+  | ({ status: "granted" } & ExactLocation)
+  | {
+      /** "denied": the user or browser said no. "unavailable": the device could not get a fix. "declined": the user chose not to share. */
+      status: "denied" | "unavailable" | "declined";
+      /** A place the user typed or chose instead, for example "Tapiola, Espoo". */
+      place?: string;
+    };
 
 /* ───────────────────────── Helpers ───────────────────────── */
 

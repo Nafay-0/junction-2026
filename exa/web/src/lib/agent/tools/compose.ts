@@ -113,6 +113,51 @@ export function updatePlanTool() {
   });
 }
 
+/**
+ * Answered in the browser: shows a card that asks to share the exact location. Accepting makes the
+ * browser show its own permission prompt (if it has not been allowed before); the position is then
+ * saved in the browser and sent with every later message.
+ */
+export function requestLocationTool() {
+  return tool({
+    description:
+      "Ask the user to share their exact location through the browser. Use it when the task depends on exactly where they are and you only have an approximate place: " +
+      "'near me', 'closest', 'within walking distance', 'how do I get there from here'. Do not use it when they named a place, or when the context already gives their exact location. " +
+      "If they decline or the browser blocks it, carry on with the approximate place (or the place they typed) and say which place you assumed.",
+    inputSchema: z.object({
+      reason: z.string().describe("One short sentence telling the user what you will use it for, for example 'to find cafes within walking distance of you'."),
+    }),
+    outputSchema: z.union([
+      z.object({
+        status: z.literal("granted"),
+        lat: z.number(),
+        lng: z.number(),
+        accuracyM: z.number().optional(),
+        label: z.string().optional(),
+        country: z.string().optional(),
+        at: z.number(),
+      }),
+      z.object({ status: z.enum(["denied", "unavailable", "declined"]), place: z.string().optional() }),
+    ]),
+    toModelOutput: ({ output }) => {
+      if (output.status === "granted") {
+        return {
+          type: "text",
+          value:
+            `The user shared their exact location: ${output.label ?? "unnamed place"} (${output.lat.toFixed(5)}, ${output.lng.toFixed(5)}` +
+            `${output.accuracyM ? `, accurate to about ${output.accuracyM} m` : ""}). It is saved for the rest of this conversation. ` +
+            'For places around them, call findPlaces with near set to "near me".',
+        };
+      }
+      const why = output.status === "denied" ? "The user or their browser did not allow location access." : output.status === "unavailable" ? "The device could not determine a location." : "The user chose not to share their location.";
+      return {
+        type: "text",
+        value: `${why} ${output.place ? `Use this place instead: ${output.place}.` : "Carry on with the approximate place from the context and say which place you assumed."} Do not ask for location again.`,
+      };
+    },
+  });
+}
+
 /** Answered in the browser: there is no `execute`, so the run pauses until the user replies. */
 export function askUserTool() {
   return tool({
