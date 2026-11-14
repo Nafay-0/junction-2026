@@ -1,4 +1,5 @@
 import type { JWK } from "jose";
+import type { MemoryFact } from "@/core/kitchen";
 import type { Mandate } from "@/core/mandate";
 import type { MandateTerms } from "./terms";
 
@@ -42,6 +43,28 @@ export type Account = {
   generation?: number;
   /** A visitor kitchen this account was kept from. */
   keptFrom?: string;
+  /**
+   * A DEMO ACCOUNT: opened on a deployment that runs on synthetic data (every account here is one, DOCK_DEMO_ACCOUNTS).
+   * The mark is what lets the account stage conditions for its own kitchen, take a sample history and start over
+   * (server/demo). Absent: a restaurant's own account; nothing is staged for it, ever.
+   */
+  demo?: DemoMark;
+};
+
+/** What a demo account chose at the end of onboarding, and what it staged (capped per account, server/demo). */
+export type DemoMark = {
+  at: string;
+  /** "sample": several weeks of made-up orders, labelled sample wherever they show; "empty": real orders only. */
+  start?: "sample" | "empty";
+  startedAt?: string;
+  /** The terms signed at onboarding, so "start over" puts the kitchen back to them. */
+  onboarded?: MandateTerms;
+  /** What the agent remembered from the onboarding answers (written to memory again on "start over"). */
+  remembered?: { fact: MemoryFact; text: string }[];
+  /** When each staging was done (the per-account cap counts the last day). */
+  staged?: { at: string; kind: string }[];
+  resets?: number;
+  resetsAt?: string[];
 };
 
 /**

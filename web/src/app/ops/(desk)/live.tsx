@@ -92,7 +92,7 @@ function Body({ o, now }: { o: Overview; now: number }) {
                         </span>
                       </p>
                     ) : a.current ? (
-                      <Link href={`/ops/trace/${a.current.requestId}`} className="text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol">
+                      <Link href={`/ops/trace/${a.current.requestId}`} title={fi(a.current.doing)} className="line-clamp-3 text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol">
                         {fi(a.current.doing)}
                       </Link>
                     ) : (
@@ -304,8 +304,12 @@ function Sessions({ rows, now }: { rows: Overview["sessions"]; now: number }) {
                 <td>
                   <ViaTag via={r.via} short />
                 </td>
-                <td className="max-w-[32ch]">“{fi(r.asked)}”</td>
-                <td className="max-w-[34ch] text-ink-soft">{fi(r.doing)}</td>
+                <td className="max-w-[32ch]">
+                  <span className="line-clamp-3" title={fi(r.asked)}>“{fi(r.asked)}”</span>
+                </td>
+                <td className="max-w-[34ch] text-ink-soft">
+                  <span className="line-clamp-3" title={fi(r.doing)}>{fi(r.doing)}</span>
+                </td>
                 <td className="min-w-[14rem]">
                   <Outcome kind={r.outcome.kind} label={fi(r.outcome.label)} />
                 </td>

@@ -1,6 +1,7 @@
 import { attrL } from "../../_i18n/format";
 import type { Lang } from "../../_i18n/lang";
 import { attr } from "../../_ui/plain";
+import { groupL } from "./groups";
 
 /**
  * Product families (the catalogue's groups: "milk", "cream", "fruit_berry") as a buyer names them. English keeps the
@@ -126,6 +127,8 @@ const FAMILY: Record<"fi" | "sv", Record<string, string>> = {
 
 /** "milk" / "maito" / "mjölk". English is exactly what `attr()` gave before. */
 export function familyL(family: string, lang: Lang): string {
+  // A partner category code ("cat_41762") is said as its product group, never as the code.
+  if (/^cat_\d{3,}$/.test(family)) return groupL(family, lang) ?? attr(family);
   if (lang === "en") return attr(family);
   return FAMILY[lang][family] ?? attrL(family, lang);
 }

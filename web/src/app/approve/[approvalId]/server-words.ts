@@ -6,7 +6,8 @@ import { fiMoney, num } from "../../_ui/plain";
  * The sign-off view is written by the server in English (src/server/approval-view.ts). Its amounts, days and times
  * follow fixed patterns, so the phone can say them in Finnish or Swedish: "1,000 L" becomes "1 000 L", "Monday 16
  * November" becomes "maanantai 16.11.". Anything that does not match a known pattern is shown exactly as it came.
- * English is never rewritten.
+ * Numbers and money follow the Finnish conventions in every language (web/docs/LANGUAGE.md), so English gets
+ * "1 000 L" and "1,01 €" too; English words are never rewritten.
  */
 
 const WEEKDAYS_EN = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -25,16 +26,14 @@ export function serverDays(text: string, lang: Lang): string {
 
 /** "1,000 L", "12 pieces" → "1 000 L", "12 kpl". */
 export function serverAmount(text: string, lang: Lang): string {
-  if (lang === "en") return text;
   const m = /^([\d,]+(?:\.\d+)?) (L|kg|pieces)$/.exec(text);
   return m ? measureL(enNumber(m[1]), UNIT[m[2]], lang) : text;
 }
 
 /** "10 × 1 L at €1.23" → "10 × 1 L à 1,23 €". */
 export function serverPacks(text: string, lang: Lang): string {
-  if (lang === "en") return text;
   const m = /^([\d,]+(?:\.\d+)?) × ([\d,]+(?:\.\d+)?) (L|kg|pieces) at (.+)$/.exec(text);
-  return m ? `${num(enNumber(m[1]), 2)} × ${measureL(enNumber(m[2]), UNIT[m[3]], lang)} à ${fiMoney(m[4])}` : fiMoney(text);
+  return m ? `${num(enNumber(m[1]), 2)} × ${measureL(enNumber(m[2]), UNIT[m[3]], lang)} ${lang === "en" ? "at" : "à"} ${fiMoney(m[4])}` : fiMoney(text);
 }
 
 /** "Licence level 2" → "Lupataso 2" / "Licensnivå 2". */

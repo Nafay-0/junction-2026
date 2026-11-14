@@ -35,6 +35,8 @@ export type HistoryEntry = {
   lines: HistoryLine[];
   /** Option labels the buyer chose this order by, when it came through the intake ("best_price", ...). */
   chosenLabels?: string[];
+  /** Made-up sample history of a demo account (server/demo/sample.ts): labelled sample wherever it shows, never a real order. */
+  sample?: true;
 };
 
 type StatedCommon = {

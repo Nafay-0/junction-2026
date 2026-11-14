@@ -6,7 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { api, type ApiResult } from "../../_client/api";
 import { useLive, type Live } from "../../_client/use-live";
 import { DEMO_NOTES, PRODUCT_NAME } from "../../_ui/brand";
-import { ChevronDown, ChevronRight, ClipboardList, Ellipsis, House, LayoutGrid, Search, ShieldCheck, ShoppingBasket, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronRight, ClipboardList, Ellipsis, House, LayoutGrid, ListChecks, Search, ShieldCheck, ShoppingBasket, Sparkles } from "lucide-react";
 import { Avatar, IconButton, IconDisc, Kbd, ListRow, Select, Sheet, Toaster } from "../../_ui/kit";
 import { helsinkiToday, money, shortProduct } from "../../_ui/plain";
 import { LangSwitch, useLang, useText } from "../../_i18n/provider";
@@ -106,6 +106,8 @@ const NAV: { href: string; key: keyof (typeof PORTAL_TEXT)["en"]["nav"] }[] = [
   { href: "/orders", key: "orders" },
   { href: "/agent", key: "agent" },
 ];
+/** A demo account's own store also has "Try everything" (server/demo): every capability, with a tick when it happened. */
+const GUIDE_NAV = { href: "/guide", key: "guide" } as const;
 
 export function readSession<T>(key: string): T | undefined {
   try {
@@ -363,7 +365,8 @@ function isActive(pathname: string, base: string, sub: string): boolean {
  * keeps the mark, the kitchen and the search, and the sections move to the tab bar under the thumb.
  */
 function Header() {
-  const { kitchen, kitchens, base, overview, agent, lang } = usePortal();
+  const { kitchen, kitchens, base, overview, agent, lang, account } = usePortal();
+  const guideShown = !!account?.demo && account.kitchen === kitchen.slug;
   const tx = useText(PORTAL_TEXT);
   const router = useRouter();
   const pathname = usePathname() ?? base;
@@ -479,7 +482,7 @@ function Header() {
       <nav aria-label={tx.navLabel} className="hidden border-t border-line/70 lg:block">
         <div className="mx-auto flex max-w-[1320px] items-center gap-3 px-6 py-1.5 xl:px-8">
           <ul className="-ml-3 flex min-w-0 flex-1 gap-1 overflow-x-auto whitespace-nowrap">
-            {NAV.map((n) => {
+            {[...NAV, ...(guideShown ? [GUIDE_NAV] : [])].map((n) => {
               const active = isActive(pathname, base, n.href);
               return (
                 <li key={n.key}>
@@ -530,7 +533,8 @@ const TABS: { href: string; key: "home" | "orders" | "catalogue"; icon: typeof H
  * When the basket holds something it rides just above the bar. Wider than a phone, the header carries all of this.
  */
 function TabBar() {
-  const { base, basket, live, agent, kitchens, kitchen } = usePortal();
+  const { base, basket, live, agent, kitchens, kitchen, account } = usePortal();
+  const guideShown = !!account?.demo && account.kitchen === kitchen.slug;
   const tx = useText(PORTAL_TEXT);
   const router = useRouter();
   const pathname = usePathname() ?? base;
@@ -542,7 +546,7 @@ function TabBar() {
   }
   const basketTotal = basket.lines.reduce((s, l) => s + (live.results[l.productId]?.offer?.unitPriceCents ?? 0) * l.packs, 0);
   const priced = basket.lines.length > 0 && basket.lines.every((l) => live.results[l.productId]?.offer);
-  const moreActive = ["/agent", "/basket"].some((sub) => isActive(pathname, base, sub));
+  const moreActive = ["/agent", "/basket", "/guide"].some((sub) => isActive(pathname, base, sub));
   // On a phone the thread is a screen of its own: going to another tab leaves it.
   const leaveThread = () => agent.panelOpen && agent.setPanelOpen(false);
   const tab = (href: string, label: string, Icon: typeof House, active: boolean) => (
@@ -591,6 +595,7 @@ function TabBar() {
         <ul className="-mx-5 divide-y divide-line border-y border-line">
           {(
             [
+              ...(guideShown ? [{ sub: "/guide", key: "guide", icon: ListChecks } as const] : []),
               { sub: "/agent", key: "agent", icon: ShieldCheck },
               { sub: "/basket", key: "basket", icon: ShoppingBasket },
             ] as const

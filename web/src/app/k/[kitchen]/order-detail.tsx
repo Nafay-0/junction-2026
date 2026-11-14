@@ -93,7 +93,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
       />
       <span className="sr-only">{tx.at(statusWord, f.day(helsinkiToday(new Date(o.createdAt))), clock(o.createdAt))}</span>
 
-      <div className="grid items-start gap-x-8 gap-y-10 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 items-start gap-x-8 gap-y-10 *:min-w-0 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
         <section aria-labelledby="lines" className="xl:col-start-1 xl:row-start-1">
           <SectionTitle id="lines">
             {tx.fixedPrice}

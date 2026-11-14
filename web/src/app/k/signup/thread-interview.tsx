@@ -32,7 +32,8 @@ export function SetUpInterview({ onFinished }: { onFinished: (next: string) => v
   const [step, setStep] = useState<InterviewStep>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<{ next: string; device: boolean; limit: string }>();
+  const [done, setDone] = useState<{ next: string; device: boolean; limit: string; demo: boolean }>();
+  const [starting, setStarting] = useState<"sample" | "empty">();
   const t0 = useRef<number>(0);
 
   async function load(next: InterviewAnswers) {
@@ -92,13 +93,37 @@ export function SetUpInterview({ onFinished }: { onFinished: (next: string) => v
       }
     }
     setBusy(false);
-    setDone({ next: r.data.next, device, limit: tx.eur(f.num(step.terms.perOrderLimitEur)) });
+    setDone({ next: r.data.next, device, limit: tx.eur(f.num(step.terms.perOrderLimitEur)), demo: !!step.demo });
+  }
+
+  /** A demo account's starting point (server/demo): a sample history, or empty. Then into the agent. */
+  async function start(choice: "sample" | "empty") {
+    if (!done || starting) return;
+    setStarting(choice);
+    setError(undefined);
+    const slug = done.next.split("/").filter(Boolean).pop() ?? "";
+    const r = await api("POST", `/ui-api/kitchens/${encodeURIComponent(slug)}/demo`, { action: "start", start: choice });
+    if (!r.ok) {
+      setStarting(undefined);
+      return setError(r.error.message);
+    }
+    onFinished(done.next);
   }
 
   const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   const claim = (c: string) => cap(dx.claims[c] ?? c);
   const allergen = (a: string) => cap(dx.allergens[a] ?? a);
   const list = (xs: string[], word: (x: string) => string) => (xs.length ? xs.map(word).join(", ") : tx.answerNone);
+
+  if (done?.demo)
+    return (
+      <div className="space-y-4">
+        <SetupDone title={tx.doneTitle} lines={[tx.doneLimit(done.limit), done.device ? tx.doneDevice : tx.noDevice, tx.doneChange]} />
+        {!done.device && <DevicePanel intro={false} />}
+        <StartChoice busy={starting} onChoose={(c) => void start(c)} />
+        {error && <Problem text={error} />}
+      </div>
+    );
 
   if (done)
     return (
@@ -156,18 +181,28 @@ export function SetUpInterview({ onFinished }: { onFinished: (next: string) => v
 
   if (step?.terms) {
     const t = step.terms;
-    const days = answers.days ?? [];
+    const days = Array.isArray(answers.days) ? answers.days : [];
+    const d = step.defaults;
+    const isDefault = (id: string) => !!d?.defaults.includes(id as never);
+    const tag = (id: string, detail?: string) => (isDefault(id) ? [detail, tx.defaultTag].filter(Boolean).join(" · ") : detail);
     return (
       <div className="space-y-3">
         <SetupStep step={step.plan.length + 1} of={step.plan.length + 1} onBack={() => back()}>
+          {d && (d.none || d.defaults.length > 0 || d.later.length > 0) && (
+            <div className="space-y-1.5 rounded-xl border border-line bg-paper px-4 py-3 text-[0.95rem] leading-snug" data-testid="setup-defaults">
+              {(d.none || d.defaults.length > 0) && <p className="font-semibold">{d.none ? tx.noLimits : tx.someDefaults}</p>}
+              {d.later.length > 0 && <p className="text-ink-soft">{tx.learnLine}</p>}
+            </div>
+          )}
           <RulesSheet
             kind={tx.rulesKind}
             title={tx.rulesTitle}
             rows={[
-              { id: "limit", label: tx.perOrder, value: tx.perOrderValue(tx.eur(f.num(t.perOrderLimitEur))), detail: tx.perOrderDetail(t.signer) },
-              { id: "budget", label: tx.weekly, value: tx.eur(f.num(t.weeklyBudgetEur)) },
+              { id: "limit", label: tx.perOrder, value: tx.perOrderValue(tx.eur(f.num(t.perOrderLimitEur))), detail: tag("limitEur", tx.perOrderDetail(t.signer)) },
+              { id: "budget", label: tx.weekly, value: tx.eur(f.num(t.weeklyBudgetEur)), detail: tag("budgetEur") },
+              ...(isDefault("groups") ? [{ id: "groups", label: tx.groups, value: t.groups.length >= 10 ? tx.groupsAll : tx.groupsN(t.groups.length), detail: tag("groups") }] : []),
               ...(t.require.length ? [{ id: "always", label: tx.always, value: list(t.require, claim) }] : []),
-              { id: "never", label: tx.never, value: list(t.forbid, allergen) },
+              { id: "never", label: tx.never, value: list(t.forbid, allergen), detail: tag("allergens") },
               ...(days.length ? [{ id: "days", label: tx.days, value: cap(f.weekdays(days)) }] : []),
               { id: "signer", label: tx.signs, value: t.signer },
             ]}
@@ -187,9 +222,58 @@ export function SetUpInterview({ onFinished }: { onFinished: (next: string) => v
   if (!q) return error ? <Problem text={error} /> : null;
   return (
     <div className="space-y-3">
-      <Question key={q.id} q={q} busy={busy} onAnswer={(v) => answer(q.id, v)} onBack={() => back(q.id)} />
+      <Question key={q.id} q={q} busy={busy} onAnswer={(v) => answer(q.id, v)} onBack={() => back(q.id)} onSkip={() => void load({ ...answers, skipRest: true })} />
       {error && <Problem text={error} />}
     </div>
+  );
+}
+
+/** "None", "decide later" and, when offered, "skip the rest": each a quiet choice with what it means in one line. */
+function Alternatives({ options, skip }: { options: { id: string; label: string; line: string; onTake: () => void }[]; skip?: { label: string; line: string; onTake: () => void } }) {
+  return (
+    <div className="space-y-2 px-1" data-testid="setup-alternatives">
+      <ul className="grid gap-2 sm:grid-cols-2">
+        {options.map((o) => (
+          <li key={o.id}>
+            <button type="button" onClick={o.onTake} data-alt={o.id} className="flex min-h-11 w-full flex-col items-start rounded-xl border border-line bg-paper px-3.5 py-2.5 text-left transition-colors hover:border-petrol/50 hover:bg-mist">
+              <span className="font-semibold leading-snug">{o.label}</span>
+              <span className="text-[0.84rem] leading-snug text-ink-soft">{o.line}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {skip && (
+        <button type="button" onClick={skip.onTake} data-alt="skip" className="flex min-h-11 w-full flex-col items-start rounded-xl bg-petrol-soft px-3.5 py-2.5 text-left text-petrol-deep transition-colors hover:brightness-95">
+          <span className="font-semibold leading-snug">{skip.label}</span>
+          <span className="text-[0.84rem] leading-snug opacity-85">{skip.line}</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** A demo account's starting point: a sample history (recommended for trying everything) or empty, one line each. */
+function StartChoice({ busy, onChoose }: { busy?: "sample" | "empty"; onChoose: (c: "sample" | "empty") => void }) {
+  const tx = useText(INTERVIEW_TEXT);
+  const card = (id: "sample" | "empty", title: string, line: string, badge?: string) => (
+    <li>
+      <button type="button" disabled={!!busy} onClick={() => onChoose(id)} data-start={id} className={`flex min-h-14 w-full flex-col items-start gap-1 rounded-2xl border px-4 py-3.5 text-left transition-colors disabled:opacity-60 ${id === "sample" ? "border-petrol bg-petrol-soft/60 hover:bg-petrol-soft" : "border-line bg-paper hover:bg-mist"}`}>
+        {badge && <span className="rounded-full bg-lime px-2 py-0.5 text-[0.75rem] font-semibold text-ink">{badge}</span>}
+        <span className="text-[1.05rem] font-semibold leading-snug">{busy === id ? tx.starting : title}</span>
+        <span className="text-[0.9rem] leading-snug text-ink-soft">{line}</span>
+      </button>
+    </li>
+  );
+  return (
+    <section aria-labelledby="start-choice" className="space-y-2.5 px-1">
+      <h3 id="start-choice" className="display text-[1.35rem] leading-tight">
+        {tx.startTitle}
+      </h3>
+      <ul className="grid gap-2.5">
+        {card("sample", tx.sampleTitle, tx.sampleLine, tx.sampleBadge)}
+        {card("empty", tx.emptyTitle, tx.emptyLine)}
+      </ul>
+    </section>
   );
 }
 
@@ -202,7 +286,7 @@ function Problem({ text }: { text: string }) {
 }
 
 /** One question with the kit's answer widget, started at the server's suggestion; one tap on the way on accepts it. */
-function Question({ q, busy, onAnswer, onBack }: { q: InterviewQuestion; busy: boolean; onAnswer: (v: unknown) => void; onBack: () => void }) {
+function Question({ q, busy, onAnswer, onBack, onSkip }: { q: InterviewQuestion; busy: boolean; onAnswer: (v: unknown) => void; onBack: () => void; onSkip: () => void }) {
   const tx = useText(INTERVIEW_TEXT);
   const dx = useText(DOOR_TEXT);
   const f = useFormat();
@@ -215,6 +299,18 @@ function Question({ q, busy, onAnswer, onBack }: { q: InterviewQuestion; busy: b
   const label = (id: string) => (q.id === "kind" ? (tx.kinds[id] ?? id) : q.id === "diet" ? cap(dx.claims[id] ?? id) : q.id === "allergens" ? cap(dx.allergens[id] ?? id) : q.id === "days" ? f.weekdays([Number(id)]) : id);
   const why = tx.why[q.because ?? q.id];
   const question = tx.q[q.id];
+  // "None" and "decide later" are answers too, each said in one line before it is taken; "skip the rest" when offered.
+  const noneValue = q.id === "diet" || q.id === "allergens" || q.id === "days" ? [] : "none";
+  const amountLine = (line: string) => (q.defaultAmount !== undefined ? `${line} ${q.id === "limitEur" ? tx.defaultLimit(tx.eur(f.num(q.defaultAmount))) : tx.defaultBudget(tx.eur(f.num(q.defaultAmount)))}` : line);
+  const alternatives = q.alternatives ? (
+    <Alternatives
+      options={[
+        ...(q.alternatives.includes("none") ? [{ id: "none", label: q.id === "days" ? tx.altAnyDay : tx.altNone, line: amountLine(tx.noneLine[q.id] ?? ""), onTake: () => !busy && onAnswer(noneValue) }] : []),
+        ...(q.alternatives.includes("later") ? [{ id: "later", label: tx.altLater, line: amountLine(tx.laterLine[q.id] ?? ""), onTake: () => !busy && onAnswer("later") }] : []),
+      ]}
+      skip={q.offerSkip ? { label: tx.skip, line: tx.skipLine, onTake: () => !busy && onSkip() } : undefined}
+    />
+  ) : null;
 
   if (q.input.kind === "choice" && !q.input.multi)
     return (
@@ -224,9 +320,12 @@ function Question({ q, busy, onAnswer, onBack }: { q: InterviewQuestion; busy: b
     );
   if (q.input.kind === "choice" || q.input.kind === "weekdays") {
     const days = q.input.kind === "weekdays";
+    // With the alternatives shown, "None" is one of them: the way on only appears once something is picked.
+    const canNext = picked.length > 0 || (!days && !q.alternatives);
     return (
-      <SetupStep step={q.n} of={q.of + 1} onBack={onBack} next={!days && !picked.length ? tx.none : tx.next} onNext={() => !busy && (!days || picked.length) && onAnswer(days ? picked.map(Number) : picked)}>
+      <SetupStep step={q.n} of={q.of + 1} onBack={onBack} next={!days && !picked.length ? tx.none : tx.next} onNext={canNext ? () => !busy && onAnswer(days ? picked.map(Number) : picked) : undefined}>
         <ChoiceAnswer kind={tx.kind} multiple question={question} why={why} choices={q.options.map((o) => ({ id: o.id, label: label(o.id) }))} chosen={picked} onChoose={toggle} />
+        {alternatives}
       </SetupStep>
     );
   }
@@ -248,6 +347,7 @@ function Question({ q, busy, onAnswer, onBack }: { q: InterviewQuestion; busy: b
           confirm={tx.isRight(tx.eur(f.num(amount)))}
           onConfirm={() => !busy && onAnswer(amount)}
         />
+        {alternatives}
       </SetupStep>
     );
   }

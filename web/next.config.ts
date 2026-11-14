@@ -3,6 +3,9 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   /* config options here */
   cacheComponents: true,
+  // Only in the hosted image build (web/Dockerfile sets this): skip `next build`'s own type check, which ran out of
+  // the build's 4 GB there. Everywhere else the build checks types as usual, and `pnpm typecheck` gates every merge.
+  typescript: { ignoreBuildErrors: process.env.DOCK_BUILD_SKIP_TYPES === "1" },
   // src/proxy.ts makes Next.js buffer request bodies; cap that buffer (Dock's JSON bodies are at most 64 KB).
   experimental: { proxyClientMaxBodySize: "128kb" },
   // Read with fs at runtime, so shipped with the server functions: the partner catalogue index when it was built,

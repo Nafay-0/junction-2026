@@ -3,6 +3,8 @@ import { GET as approvalGet } from "@/app/api/v1/approvals/[approvalId]/route";
 import { GET as approvalsGet } from "@/app/api/v1/approvals/route";
 import { GET as ledgerGet } from "@/app/api/v1/ledger/route";
 import { GET as orderGet } from "@/app/api/v1/orders/[orderId]/route";
+import { GET as demoGet, POST as demoPost } from "@/app/ui-api/kitchens/[kitchen]/demo/route";
+import { stagedFor } from "../watch/overlay";
 import { getRuntime, resetRuntime } from "../runtime";
 import { ACCOUNT_COOKIE } from "./http";
 import { DEFAULT_TERMS } from "./terms";
@@ -85,5 +87,28 @@ describe("one restaurant cannot reach another's kitchen", () => {
     await expect(rt.dock.intake.get(b.session, requestId)).rejects.toMatchObject({ status: 404 });
     // And Alfa's own agent still can.
     await expect(rt.dock.getOrder(a.session, order.orderId)).resolves.toMatchObject({ status: "pending_approval" });
+  });
+
+  it("through a demo account's own controls: another account can neither read the guide nor stage, start over or delete for it", async () => {
+    const { rt, a, b } = await twoKitchens();
+    for (const u of ["alfa", "bravo"]) {
+      const acc = (await rt.accounts.get(u))!;
+      expect(acc.demo).toBeTruthy();
+    }
+    const url = `${BASE}/ui-api/kitchens/${a.username}/demo`;
+    const ctx = { params: Promise.resolve({ kitchen: a.username }) } as never;
+    const g = await demoGet(new Request(url, { headers: { cookie: b.cookie } }), ctx);
+    expect(g.status).toBe(403);
+    for (const body of [{ action: "stage", kind: "stock_out" }, { action: "stage", kind: "offer" }, { action: "restart" }, { action: "delete", confirm: a.username }, { action: "start", start: "sample" }]) {
+      const r = await demoPost(new Request(url, { method: "POST", headers: { cookie: b.cookie, "content-type": "application/json" }, body: JSON.stringify(body) }), ctx);
+      expect(r.status).toBeGreaterThanOrEqual(400);
+      expect(await r.text()).not.toContain("Ravintola alfa");
+    }
+    expect(stagedFor(rt.dock, a.k.orgId)).toEqual([]);
+    expect(await rt.accounts.get("alfa")).toBeDefined();
+    expect((await rt.accounts.get("alfa"))!.kitchen!.orgId).toBe(a.k.orgId);
+    // And its own person can.
+    const own = await demoGet(new Request(url, { headers: { cookie: a.cookie } }), ctx);
+    expect(own.status).toBe(200);
   });
 });
