@@ -1,174 +1,223 @@
 import { expect, test, type Page } from "@playwright/test";
-import { addPasskey, approvalState, approveButton, joinAsApprover, watchErrors, signInStage } from "../support/dock";
-
-// The order lane and agent panel these tests drive were replaced on main (b9f934e).
-test.fixme(true, "main b9f934e replaced the order lane and the agent panel with one conversation thread: rewrite against the thread once it settles");
+import { addPasskey, approvalState, approveButton, watchErrors } from "../support/dock";
+import { answerTo, card, cards, composer, minutesUntil, option, options, say, stageThread, threadLog, visitorKitchen } from "../support/thread";
 
 /**
- * The store's order lane, every stage, in the visitor's own kitchen (so parallel runs never share a budget):
- * request -> what the agent understood -> mistake check -> options -> fixed price with its countdown -> gate ->
- * sign-off on the visitor's phone (a second tab of the same browser, as on a real phone) -> signed order.
- * Reloads and the back button in the middle. The server has no model: free text goes through the "offline
- * example" reader, which the page offers when the model does not answer (the honest path on a model outage).
+ * The store's conversation thread (docs/agent-thread.md; main b9f934e replaced the order lane and agent panel with
+ * it): a request typed in the visitor's own kitchen (so parallel runs never share a budget or a thread), every
+ * stage as cards: what the agent understood, the mistake check (when the request is unusual), options with live
+ * prices, the fixed price and how long it holds, the gate, the sign-off on the visitor's phone (a second tab of the
+ * same browser, as on a real phone), the signed order. Reloads and the back button in the middle.
+ *
+ * The reader and the agent are the scripted provider (e2e/fixtures/recordings.json): the words are read as the
+ * recording says; everything after the reading (intake, ranking, live prices, quote, gate, sign-off) is the real
+ * server. The stage kitchen tests (kaari) take a lock on Kaari's one thread and start it over (support/thread.ts).
  */
 
-const step = (page: Page, n: number) => page.getByRole("region", { name: new RegExp(`^Step ${n}:`) });
-const where = (page: Page) => page.getByRole("navigation", { name: "Where the request is" });
+const MILK = "1,000 litres of lactose-free milk by Monday";
 
-async function visitorStore(page: Page): Promise<string> {
-  await joinAsApprover(page);
-  await page.goto("/k/mine");
-  await page.waitForURL(/\/k\/(?!mine)[^/]+$/);
-  return new URL(page.url()).pathname.split("/")[2];
-}
-
-/** Get past the model being off: the page offers the offline example reader; take it when it appears. */
-async function pastReader(page: Page) {
-  const offline = page.getByRole("button", { name: "Use the offline example reader" }).filter({ visible: true });
-  await expect
-    .poll(async () => (await offline.count()) > 0 || /Offline example|Read by/.test(await step(page, 1).innerText().catch(() => "")), { timeout: 20_000 })
-    .toBe(true);
-  if (await offline.count()) await offline.first().click();
-}
-
-/** Send a suggested request and get past the reader. */
-async function ask(page: Page, suggestion: RegExp) {
-  await page.getByRole("button", { name: suggestion }).filter({ visible: true }).first().click();
-  await pastReader(page);
-}
-
-/** Countdown text "mm.ss" in the fixed-price step, as seconds. */
-async function countdownSeconds(page: Page): Promise<number> {
-  const t = (await step(page, 4).getByText(/^\d{1,2}[.:]\d{2}$/).first().innerText()).trim();
-  const [m, s] = t.split(/[.:]/).map(Number);
-  return m * 60 + s;
-}
-
-test("order lane, every stage, signed on the visitor's phone; reload and back in the middle", async ({ page: phone, context }) => {
-  test.setTimeout(150_000);
-  // The phone that joined keeps the passkey (a virtual authenticator belongs to one page), so the store runs in a
-  // second tab of the same browser, as when a visitor switches from the shop to the sign-off page.
+/** The visitor's phone joins and waits for requests; the store opens in a second tab of the same browser. */
+async function phoneAndStore(phone: Page) {
   await addPasskey(phone);
-  const kitchen = await visitorStore(phone);
+  const kitchen = await visitorKitchen(phone);
   await phone.goto("/approver");
   await expect(phone.getByText("Waiting for requests")).toBeVisible();
-  const page = await context.newPage();
-  const errors = watchErrors(page);
+  const page = await phone.context().newPage();
   await page.goto(`/k/${kitchen}/order`);
-  await ask(page, /1,000 litres of lactose-free milk by Monday/);
+  await expect(page.getByRole("heading", { name: "Order with your agent" })).toBeVisible();
+  return { kitchen, page };
+}
 
-  // 1 understood, 2 mistake check (a first order of 1,000 L may be questioned: confirm it as meant)
-  await expect(step(page, 1)).toContainText(/Amount\s*1\s?000\sL/);
-  await expect(step(page, 2)).toBeVisible();
-  const meant = step(page, 2).getByRole("button", { name: /Yes, I meant that/ });
-  if (await meant.isVisible().catch(() => false)) await meant.click();
+test("thread, every stage, signed on the visitor's phone; reload and back in the middle", async ({ page: phone }) => {
+  test.setTimeout(150_000);
+  const { page } = await phoneAndStore(phone);
+  const errors = watchErrors(page);
+  await say(page, MILK);
 
-  // 3 options, good-better-best
-  await expect(step(page, 3).getByRole("article").first()).toBeVisible({ timeout: 20_000 });
-  expect(await step(page, 3).getByRole("article").count()).toBeGreaterThanOrEqual(1);
-  await expect(where(page)).toContainText(/Options/);
+  // The buyer's words are their turn; the agent's turn shows what it understood, as fields a person reads.
+  await expect(answerTo(page, MILK)).toBeVisible({ timeout: 20_000 });
+  const understood = card(page, "understood");
+  await expect(understood).toBeVisible({ timeout: 20_000 });
+  await expect(understood).toContainText(/How much\s*1\s?000\sL/);
+  await expect(understood).toContainText(/Must be\s*lactose-free/);
+  await expect(understood).toContainText(/Delivered by\s*Mon/);
 
-  // Reload with the options on screen: the request survives.
+  // The mistake check, when the amount is unusual for this kitchen: confirm it as meant.
+  const confirm = card(page, "anomaly").getByRole("button", { name: "Yes, that is right" });
+  await expect(card(page, "options").or(confirm)).toBeVisible({ timeout: 20_000 });
+  if (await confirm.isVisible()) await confirm.click();
+
+  // Options with live prices, good-better-best; the over-the-limit ones say a person must sign off.
+  await expect(options(page).first()).toBeVisible({ timeout: 20_000 });
+  expect(await options(page).count()).toBeGreaterThanOrEqual(2);
+  await expect(option(page, "Best")).toContainText(/€/);
+  await expect(option(page, "Best")).toContainText(/a person must sign off/);
+
+  // Reload with the options on screen: the thread is the server's, so they come back as they were.
   await page.reload();
-  await expect(step(page, 3).getByRole("article").first()).toBeVisible({ timeout: 20_000 });
+  await expect(option(page, "Best")).toBeVisible({ timeout: 20_000 });
 
-  // 4 fixed price, with a countdown that runs
-  // "Best" (cheapest, the usual product): the first card can be a swap the gate refuses (see the test below).
-  await step(page, 3).getByRole("article", { name: /^Best/ }).getByRole("button", { name: "Get a fixed price for this" }).click();
-  await expect(step(page, 4)).toContainText(/signed by the wholesaler/i, { timeout: 20_000 });
-  await expect(step(page, 4)).not.toContainText(/would refuse/);
-  const first = await countdownSeconds(page);
-  expect(first).toBeGreaterThan(25 * 60);
-  await expect.poll(() => countdownSeconds(page), { timeout: 10_000 }).toBeLessThan(first);
-  const total = (await step(page, 4).getByText(/\d\s€$/).first().innerText()).trim();
+  // "Best" is the cheapest, the kitchen's usual products (the "Good" card is a swap the gate refuses: test below).
+  const total = ((await option(page, "Best").getByText(/\d\s?€/).first().innerText()).match(/[\d\s ]+,\d\d\s?€/) ?? [""])[0].trim();
+  expect(total).not.toBe("");
+  await option(page, "Best").getByRole("button", { name: "Choose" }).click();
+  // A choice orders it: the price is fixed and signed, then the gate decides.
+  const price = card(page, "price");
+  await expect(price).toBeVisible({ timeout: 20_000 });
+  await expect(price).toContainText(total);
+  await expect(price).toContainText(/Signed by the wholesaler/);
+  await expect(price).not.toContainText(/would refuse/);
+  // How long the fixed price holds: about 30 minutes from now.
+  const holds = (await price.getByText(/^holds until \d{1,2}[.:]\d{2}$/).innerText()).replace("holds until ", "");
+  expect(minutesUntil(holds)).toBeGreaterThan(25);
+  expect(minutesUntil(holds)).toBeLessThanOrEqual(31);
 
-  // Reload with a live fixed price (QA once lost it here), then the back button from another page.
+  // The gate stops it (over the visitor's 500 € limit) and names the person who signs, on their phone.
+  const gate = card(page, "gate");
+  await expect(gate).toContainText(/Waiting for /, { timeout: 20_000 });
+  await expect(gate).toContainText(/over the €500\.00 per-order limit/);
+  await expect(gate).toContainText("Asked on their phone, with their passkey");
+  await expect(card(page, "order")).toContainText("Waiting for sign-off");
+
+  // Reload, then the back button from another page, while waiting for the sign-off: still waiting, not lost.
   await page.reload();
-  await expect(step(page, 4)).toContainText(total, { timeout: 20_000 });
-  await page.getByRole("navigation", { name: /Shop/ }).getByRole("link", { name: "Catalogue" }).first().click();
+  await expect(card(page, "gate")).toContainText(/Waiting for /, { timeout: 20_000 });
+  await page.getByRole("navigation", { name: "Shop sections" }).getByRole("link", { name: "Catalogue" }).filter({ visible: true }).first().click();
   await page.waitForURL(/\/catalogue/);
   await page.goBack();
-  await expect(step(page, 4)).toContainText(total, { timeout: 20_000 });
+  await expect(card(page, "gate")).toContainText(/Waiting for /, { timeout: 20_000 });
+  await expect(card(page, "price")).toContainText(total);
 
-  // 5 the gate stops it (over the visitor's 500 € limit) and 6 waits for the phone
-  await step(page, 4).getByRole("button", { name: "Place the order" }).click();
-  await expect(step(page, 5)).toContainText(/Stopped at the gate/, { timeout: 20_000 });
-  await expect(step(page, 6)).toContainText(/Waiting for a person/);
-
-  // Reload while waiting for the sign-off: still waiting, not lost.
-  await page.reload();
-  await expect(step(page, 6)).toContainText(/Waiting for a person/, { timeout: 20_000 });
-
-  // The phone opens the request by itself and signs it with the passkey.
+  // The phone opens the request by itself, with the same total and minutes left on the fixed price, and signs it.
   await phone.waitForURL("**/approve/**", { timeout: 30_000 });
-  const approvalId = phone.url().split("/approve/")[1];
+  const approvalId = phone.url().split("/approve/")[1].split(/[?#]/)[0];
   await expect(phone.getByText(total).first()).toBeVisible();
+  const left = Number(/\((\d+) min left\)/.exec(await phone.getByText(/min left\)/).innerText())?.[1]);
+  expect(left).toBeGreaterThan(20);
   await approveButton(phone).click();
   await expect(phone.getByRole("heading", { name: "Order placed" })).toBeVisible({ timeout: 30_000 });
 
-  // 7 the store page changes by itself: signed and in the ledger
-  await expect(where(page)).toContainText(/Order/, { timeout: 30_000 });
-  await expect(step(page, 6)).toContainText(/with their passkey/, { timeout: 30_000 });
-  await expect(step(page, 7)).toContainText("Order placed with the wholesaler");
-  await expect(step(page, 7)).toContainText(total);
+  // The thread changes by itself: the same gate card now says who signed, and the order is placed.
+  await expect(card(page, "gate")).toContainText(/Signed off by /, { timeout: 30_000 });
+  await expect(card(page, "order")).toContainText("Placed");
+  await expect(card(page, "order")).toContainText(total);
+  await expect(card(page, "order")).toContainText(/Signed off by /);
   expect((await approvalState(page.request, approvalId)).view?.state).toBe("committed");
   expect(errors).toEqual([]);
 });
 
-test("mistake check on a demo kitchen: 1,000 L where it usually orders 100 L, corrected in one tap", async ({ page }) => {
-  await signInStage(page, "kaari");
-  await page.goto("/k/kaari/order");
-  await ask(page, /1,000 litres of lactose-free milk by Monday/);
-  const check = step(page, 2);
-  await expect(check.getByText(/did you mean 100 L\?/)).toBeVisible({ timeout: 20_000 });
-  await check.getByRole("button", { name: "Make it 100 L" }).click();
-  await expect(step(page, 1)).toContainText(/Amount\s*100\sLcorrected from 1\s?000\sL/, { timeout: 20_000 });
-  await expect(step(page, 3).getByRole("article").first()).toBeVisible({ timeout: 20_000 });
-  await expect(step(page, 3).getByRole("article").first()).toContainText(/100\sL/);
-});
-
-test("repeat with a change: same again but 200 litres", async ({ page }) => {
-  // The offline example reader cannot read a change ("could not read that"); only the model can. With the model
-  // off (this server) the test checks the honest message; E2E_MODEL=1 (a server with a model) checks the 200 L.
-  await signInStage(page, "kaari");
-  await page.goto("/k/kaari/order");
-  const earlier = page.getByRole("region", { name: "Earlier requests" });
-  await earlier.getByRole("button", { name: "Repeat with a change" }).filter({ visible: true }).first().click();
-  const field = page.getByRole("textbox", { name: "What changes?" });
-  await expect(field).toBeVisible();
-  await expect(page.getByRole("button", { name: "Stop changing that request" })).toBeVisible();
-  await field.fill("same again but 200 litres");
-  await field.press("Enter");
-  if (!process.env.E2E_MODEL) {
-    await expect(step(page, 1)).toContainText(/model reader did not answer|could not read/, { timeout: 20_000 });
-    return;
+test("mistake check on a demo kitchen: 1,000 L where it usually orders 100 L, corrected in one tap", async ({ page, baseURL }) => {
+  const release = await stageThread(page, "kaari", baseURL);
+  try {
+    await page.goto("/k/kaari/order");
+    await threadLog(page).getByRole("button", { name: MILK }).click();
+    const check = card(page, "anomaly");
+    await expect(check).toContainText(/1,000 L where you usually order about 100 L: did you mean 100 L\?/, { timeout: 20_000 });
+    await expect(check.getByRole("button", { name: "Yes, that is right" })).toBeVisible();
+    // Nothing is priced while the check is open.
+    await expect(cards(page, "options")).toHaveCount(0);
+    await check.getByRole("button", { name: "Make it 100 L" }).click();
+    // The tap is the buyer's turn; the check says what changed; the options are for 100 L.
+    await expect(check).toContainText("Changed: Make it 100 L", { timeout: 20_000 });
+    await expect(option(page, "Best")).toBeVisible({ timeout: 20_000 });
+    for (const o of await options(page).all()) await expect(o).toContainText(/100\sL/);
+    await expect(cards(page, "price")).toHaveCount(0);
+  } finally {
+    release();
   }
-  await expect(step(page, 1)).toContainText(/Amount\s*200\sL/, { timeout: 40_000 });
 });
 
-test("one-tap repeat of an earlier request reaches options without a question", async ({ page }) => {
-  await signInStage(page, "kaari");
-  await page.goto("/k/kaari/order");
-  const earlier = page.getByRole("region", { name: "Earlier requests" });
-  await earlier.getByRole("button", { name: "Repeat", exact: true }).filter({ visible: true }).first().click();
-  await expect(step(page, 3).getByRole("article").first().or(step(page, 2).getByRole("article").first())).toBeVisible({ timeout: 20_000 });
+test("one-tap repeat from the kitchen's home: straight to a fixed price and the gate, no question", async ({ page, baseURL }) => {
+  const release = await stageThread(page, "kaari", baseURL);
+  try {
+    await page.goto("/k/kaari");
+    // Standing orders, milk first (Kaari's usual).
+    const standing = page.getByRole("region", { name: "Standing orders" });
+    await expect(standing.getByRole("heading", { name: "milk", exact: true })).toBeVisible({ timeout: 20_000 });
+    await standing.getByRole("button", { name: "Repeat", exact: true }).first().click();
+    // Off the Order page the same thread opens in the dock.
+    const dock = page.getByRole("complementary", { name: "Purchasing agent" });
+    await expect(threadLog(dock)).toBeVisible();
+    await expect(threadLog(dock).getByText(/^Same again as /)).toBeVisible();
+    // The last order, again: memory answers what and how much, so nothing is asked; Kaari's 100 € limit sends it to
+    // the head chef. (Or the options, when the last product cannot be had now; or the duplicate check, when an
+    // earlier test's repeat for the same day still waits for sign-off.)
+    const gate = card(dock, "gate");
+    const duplicate = card(dock, "anomaly").filter({ hasText: /Order again\?/ });
+    await expect(gate.or(option(dock, "Best")).or(duplicate)).toBeVisible({ timeout: 20_000 });
+    await expect(cards(dock, "question")).toHaveCount(0);
+    if (await duplicate.isVisible()) {
+      await duplicate.getByRole("button", { name: /^Cancel/ }).click();
+      await expect(duplicate).toContainText(/Changed: Cancel/, { timeout: 20_000 });
+    } else if (await gate.isVisible()) {
+      await expect(card(dock, "price")).toContainText(/Signed by the wholesaler/);
+      await expect(gate).toContainText(/Waiting for Sanna Koskinen/);
+      // Taken back from the thread, so the shared kitchen keeps no waiting order from this test.
+      await gate.getByRole("button", { name: "Take it back" }).click();
+      await expect(card(dock, "gate")).toContainText("Taken back", { timeout: 20_000 });
+    }
+  } finally {
+    release();
+  }
+});
+
+test("repeat with a change: the earlier request with 200 litres instead", async ({ page, baseURL }) => {
+  const release = await stageThread(page, "kaari", baseURL);
+  try {
+    await page.goto("/k/kaari");
+    const standing = page.getByRole("region", { name: "Standing orders" });
+    await expect(standing.getByRole("heading", { name: "milk", exact: true })).toBeVisible({ timeout: 20_000 });
+    await standing.getByRole("button", { name: "Repeat with a change" }).first().click();
+    const dock = page.getByRole("complementary", { name: "Purchasing agent" });
+    const field = composer(dock);
+    await expect(field).toBeVisible();
+    await expect(dock.getByRole("textbox", { name: "What changes?" })).toBeVisible();
+    await expect(dock.getByRole("button", { name: "Stop changing that request" })).toBeVisible();
+    await say(dock, "200 litres");
+    // The buyer's turn says which request it changes; the reading takes the rest from it.
+    await expect(threadLog(dock).getByText(/^Same as .+, but 200 litres$/)).toBeVisible();
+    const understood = card(dock, "understood");
+    await expect(understood).toContainText(/How much\s*200\sL/, { timeout: 20_000 });
+    await expect(understood).toContainText(/Read against /);
+    await expect(dock.getByRole("button", { name: "Stop changing that request" })).toHaveCount(0);
+  } finally {
+    release();
+  }
 });
 
 /**
- * DEFECT (test.fail until fixed; E2E_EXPECT_FIXED=1 runs it as an ordinary test). On the visitor's own kitchen the
- * headline request's first card ("Good: most reliable", 1,000 x 1 L) is a swap 15.5 % dearer per litre than the
- * usual product, over the mandate's 10 % tolerance. The card says nothing; the fixed price says "The gate would
- * refuse this" yet still offers "Place the order"; placing it is refused (substitute_price). Seed catalogue.
+ * DEFECT (test.fail until fixed; E2E_EXPECT_FIXED=1 runs it as an ordinary test). Still there in the thread: in the
+ * visitor's own kitchen the headline request's "Good" option (1,000 x 1 L of the usual brand) is a swap 15.5 % dearer
+ * per litre than the usual 10 L box, over the mandate's 10 % substitute tolerance. The option card offers "Choose" and
+ * says nothing about the gate; a tap fixes the price ("The gate would refuse this.") and the gate refuses it
+ * (substitute_price). Cause: the intake ranks options without the gate's substitution check
+ * (src/core/options.ts builds them; src/core/policy.ts refuses). Seed catalogue.
  */
-test("every option card the lane offers can pass the gate", async ({ page }) => {
-  test.fail(!process.env.E2E_EXPECT_FIXED, "first card is a swap over the substitute price tolerance: refused at the gate");
-  await addPasskey(page);
-  const kitchen = await visitorStore(page);
-  await page.goto(`/k/${kitchen}/order`);
-  await ask(page, /1,000 litres of lactose-free milk by Monday/);
-  const cards = step(page, 3).getByRole("article");
-  await expect(cards.first()).toBeVisible({ timeout: 20_000 });
-  await cards.first().getByRole("button", { name: "Get a fixed price for this" }).click();
-  await expect(step(page, 4)).toContainText(/signed by the wholesaler/i, { timeout: 20_000 });
-  await expect(step(page, 4)).not.toContainText(/would refuse/);
+test("every option card the thread offers can pass the gate", async ({ page: phone }) => {
+  test.fail(!process.env.E2E_EXPECT_FIXED, "the Good card is a swap over the substitute price tolerance: refused at the gate");
+  const { page } = await phoneAndStore(phone);
+  await say(page, MILK);
+  await expect(options(page).first()).toBeVisible({ timeout: 20_000 });
+  const n = await options(page).count();
+  for (const o of await options(page).all()) await expect(o.getByText(/gate would refuse|refused/i)).toHaveCount(0);
+  // Take the last card (the one furthest from the usual): its fixed price must not be one the gate refuses.
+  await options(page).nth(n - 1).getByRole("button", { name: "Choose" }).click();
+  await expect(card(page, "price")).toBeVisible({ timeout: 20_000 });
+  await expect(card(page, "price")).not.toContainText(/would refuse/);
+  await expect(card(page, "gate")).not.toContainText(/^Refused/);
+});
+
+/**
+ * DEFECT (test.fail until fixed). The understood card's "What matters" shows the reader's raw goal code ("price",
+ * "unstated") instead of words: THREAD_PAGE_TEXT.goal (src/app/k/[kitchen]/thread.text.ts:54) is keyed cheapest /
+ * lowest_co2 / most_reliable / fastest, but a need's goal is price / co2 / reliability (src/core/need.ts:14) or
+ * "unstated", so the lookup in thread.tsx:178 always falls back to the code. "unstated" should not be shown at all.
+ */
+test("the understood card says what matters in words, never a code", async ({ page: phone }) => {
+  test.fail(!process.env.E2E_EXPECT_FIXED, "the goal labels are keyed by names the reader never returns: raw codes on screen");
+  const { page } = await phoneAndStore(phone);
+  await say(page, MILK);
+  const understood = card(page, "understood");
+  await expect(understood).toBeVisible({ timeout: 20_000 });
+  await expect(understood).not.toContainText(/What matters\s*(unstated|price|co2|reliability)\b/);
 });

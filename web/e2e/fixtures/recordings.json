@@ -32,7 +32,56 @@
   }
  },
  {
-  "match": "\"\"\"\nSame as “",
+  "match": "\"\"\"\nSame as last time, for Friday",
+  "output": {
+   "isPurchaseRequest": true,
+   "notPurchaseReason": null,
+   "item": {
+    "text": "milk",
+    "category": "milk",
+    "attributes": [],
+    "excludedAttributes": [],
+    "productId": null
+   },
+   "quantity": null,
+   "deliverBy": "{{weekday:5}}",
+   "requiredClaims": [],
+   "forbiddenAllergens": [],
+   "optimise": "unstated",
+   "sameAsLastTime": true,
+   "basedOnRequestId": null,
+   "takenFromEarlier": []
+  }
+ },
+ {
+  "match": "\"\"\"\nSame again as ",
+  "output": {
+   "isPurchaseRequest": true,
+   "notPurchaseReason": null,
+   "item": {
+    "text": "milk",
+    "category": "milk",
+    "attributes": [],
+    "excludedAttributes": [],
+    "productId": null
+   },
+   "quantity": null,
+   "deliverBy": null,
+   "requiredClaims": [],
+   "forbiddenAllergens": [],
+   "optimise": "unstated",
+   "sameAsLastTime": true,
+   "basedOnRequestId": "{{earlier:0}}",
+   "takenFromEarlier": [
+    "item",
+    "quantity",
+    "attributes",
+    "deliverBy"
+   ]
+  }
+ },
+ {
+  "match": "\"\"\"\nSame as ",
   "output": {
    "isPurchaseRequest": true,
    "notPurchaseReason": null,
@@ -61,55 +110,6 @@
     "deliverBy",
     "optimise"
    ]
-  }
- },
- {
-  "match": "\"\"\"\nSame again as “",
-  "output": {
-   "isPurchaseRequest": true,
-   "notPurchaseReason": null,
-   "item": {
-    "text": "milk",
-    "category": "milk",
-    "attributes": [],
-    "excludedAttributes": [],
-    "productId": null
-   },
-   "quantity": null,
-   "deliverBy": null,
-   "requiredClaims": [],
-   "forbiddenAllergens": [],
-   "optimise": "unstated",
-   "sameAsLastTime": true,
-   "basedOnRequestId": "{{earlier:0}}",
-   "takenFromEarlier": [
-    "item",
-    "quantity",
-    "attributes",
-    "deliverBy"
-   ]
-  }
- },
- {
-  "match": "\"\"\"\nSame as last time, for Friday",
-  "output": {
-   "isPurchaseRequest": true,
-   "notPurchaseReason": null,
-   "item": {
-    "text": "milk",
-    "category": "milk",
-    "attributes": [],
-    "excludedAttributes": [],
-    "productId": null
-   },
-   "quantity": null,
-   "deliverBy": "{{weekday:5}}",
-   "requiredClaims": [],
-   "forbiddenAllergens": [],
-   "optimise": "unstated",
-   "sameAsLastTime": true,
-   "basedOnRequestId": null,
-   "takenFromEarlier": []
   }
  },
  {
@@ -160,7 +160,7 @@
    "deliverBy": "{{weekday:1}}",
    "requiredClaims": [],
    "forbiddenAllergens": [],
-   "optimise": "price",
+   "optimise": "unstated",
    "sameAsLastTime": false,
    "basedOnRequestId": null,
    "takenFromEarlier": []

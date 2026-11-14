@@ -1,51 +1,69 @@
 import { expect, test, type Page } from "@playwright/test";
-import { signInStage } from "../support/dock";
-
-// The order lane and agent panel these tests drive were replaced on main (b9f934e).
-test.fixme(true, "main b9f934e replaced the order lane and the agent panel with one conversation thread: rewrite against the thread once it settles");
+import { card, cards, composer, say, stageThread, threadLog, turns } from "../support/thread";
 
 /**
- * The agent panel answering a question from the shop's records. This server has the model off, so the panel must
- * say so plainly and show records, never an invented answer; with E2E_MODEL=1 (start-server.mjs copies the model
- * keys in, capped at $0.50) it must answer from records: the 100 € limit for "What may the agent buy alone?".
+ * The kitchen's agent in the store's dock ("Purchasing agent", on every page but the Order page), which since main
+ * b9f934e is the same conversation thread as the Order page (docs/agent-thread.md): a question is answered from the
+ * kitchen's records as a records card, and an order request typed into the dock goes through the same thread and
+ * the same cards, nothing ordered without the buyer.
+ *
+ * The agent here is the scripted provider (e2e/fixtures/recordings.json): for "What did we order last week?" it calls
+ * order_history for the last seven days; the rows are Kaari's real order history on this server.
+ * Kaari has one thread for every test and project: each test takes it (lock) and starts it over.
  */
 
+/** Open the dock: "Agent" in the phone's bottom bar, "Talk to the purchasing agent" on a wide screen. */
 async function openAgent(page: Page) {
-  // Phone: "Agent" in the bottom tab bar. Desktop: "Agent  Ctrl K" in the header. Either opens the panel.
-  const field = page.getByRole("complementary", { name: "Purchasing agent" }).getByRole("textbox", { name: "Ask, or say what the kitchen needs" });
-  const opener = page.getByRole("button", { name: /^Agent/ }).filter({ visible: true }).first();
-  await expect(opener).toBeVisible();
+  const dock = page.getByRole("complementary", { name: "Purchasing agent" });
   await page.waitForLoadState("networkidle").catch(() => {});
-  // On a wide screen the panel may already be open; the button would then close it.
-  if (!(await field.isVisible())) await opener.click();
-  await expect(field).toBeVisible();
-  return field;
+  if (!(await threadLog(dock).isVisible().catch(() => false))) {
+    await page.getByRole("button", { name: /^(Agent|Talk to the purchasing agent)$/ }).filter({ visible: true }).first().click();
+  }
+  await expect(threadLog(dock)).toBeVisible();
+  return dock;
 }
 
-const panel = (page: Page) => page.getByRole("complementary", { name: "Purchasing agent" });
-
-test("the agent panel answers a question from records, and says so when the model is off", async ({ page }) => {
-  await signInStage(page, "kaari");
-  await page.goto("/k/kaari");
-  await openAgent(page);
-  await panel(page).getByRole("button", { name: "What may the agent buy alone?" }).click();
-  if (!process.env.E2E_MODEL) {
-    await expect(panel(page).getByText(/model is not answering/)).toBeVisible({ timeout: 30_000 });
-    await expect(panel(page).getByText(/nothing below is a model's answer/)).toBeVisible();
-    await expect(panel(page).getByText(/no live call/)).toBeVisible();
-    return;
+test("a question is answered from the kitchen's records in the thread, with nothing priced or ordered", async ({ page, baseURL }) => {
+  const release = await stageThread(page, "kaari", baseURL);
+  try {
+    await page.goto("/k/kaari");
+    const dock = await openAgent(page);
+    await threadLog(dock).getByRole("button", { name: "What did we order last week?" }).click();
+    const records = card(dock, "records");
+    await expect(records).toBeVisible({ timeout: 20_000 });
+    // Rows from Kaari's order history: what, when, the total.
+    const rows = records.getByRole("listitem");
+    expect(await rows.count()).toBeGreaterThan(0);
+    await expect(rows.first()).toContainText(/\d+ × .+\d,\d\d\s?€/);
+    // The answer is the record itself (the agent's one line is optional and is shown only if it passes the
+    // grounding check); no price, gate or order card for a question.
+    await expect(turns(dock).last()).not.toContainText(/placed|approved/i);
+    for (const k of ["price", "gate", "order", "options"] as const) await expect(cards(dock, k)).toHaveCount(0);
+  } finally {
+    release();
   }
-  await expect(panel(page).getByText(/100\s?€|€\s?100/).first()).toBeVisible({ timeout: 45_000 });
 });
 
-test("an order typed into the panel goes onto the order lane, nothing is ordered from the panel", async ({ page }) => {
-  await signInStage(page, "kaari");
-  await page.goto("/k/kaari");
-  const field = await openAgent(page);
-  await field.fill("100 L lactose-free milk for Thursday");
-  await panel(page).getByRole("button", { name: "Send" }).click();
-  await page.waitForURL(/\/k\/kaari\/order/, { timeout: 20_000 });
-  await expect(page.getByRole("region", { name: /^Step 1:/ })).toBeVisible({ timeout: 20_000 });
-  const orders = await (await page.request.get("/ui-api/kitchens/kaari/portal")).json().catch(() => ({}));
-  expect(JSON.stringify(orders)).not.toMatch(/"status":"committed".*100 L lactose-free milk for Thursday/);
+test("an order typed into the dock goes through the same thread as the Order page; nothing is ordered from the dock", async ({ page, baseURL }) => {
+  const release = await stageThread(page, "kaari", baseURL);
+  try {
+    await page.goto("/k/kaari");
+    const dock = await openAgent(page);
+    await expect(composer(dock)).toBeVisible();
+    const words = "100 L lactose-free milk for Thursday";
+    await say(dock, words);
+    await expect(card(dock, "understood")).toContainText(/How much\s*100\sL/, { timeout: 20_000 });
+    // The request waits for the buyer (options to choose from, or a check): no order without a tap.
+    await expect(card(dock, "options").or(card(dock, "anomaly"))).toBeVisible({ timeout: 20_000 });
+    await expect(cards(dock, "order")).toHaveCount(0);
+
+    // The Order page is the same conversation, not a copy.
+    await page.goto("/k/kaari/order");
+    await expect(threadLog(page).getByText(words, { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(card(page, "understood")).toContainText(/How much\s*100\sL/);
+    const portal = await (await page.request.get("/ui-api/kitchens/kaari/portal")).json().catch(() => ({}));
+    expect(JSON.stringify(portal)).not.toMatch(/"status":"committed"[^}]*100 L lactose-free milk for Thursday/);
+  } finally {
+    release();
+  }
 });
