@@ -35,12 +35,30 @@ test("join page is served (HTML only: loading it in a browser would prepare a pa
   expect(await r.text()).toMatch(/AimoPilot/);
 });
 
-test("the shop: kitchens, catalogue, one product page with a live price", async ({ page }) => {
+test("the shop's door: sign-in form; the stage kitchens are private to strangers", async ({ page }) => {
   const errors = watchErrors(page);
   await page.goto("/k");
-  await expect(page.getByRole("link", { name: /Ravintola Kaari/ }).first()).toBeVisible();
-  await page.goto("/k/kaari/catalogue");
-  const first = page.locator('a[href^="/k/kaari/catalogue/"]').first();
+  await expect(page.getByRole("form", { name: "Sign in" })).toBeVisible();
+  await page.goto("/k/kaari");
+  await expect(page.getByRole("heading", { name: "This kitchen is private" })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+// Opt-in (E2E_LIVE_SIGNIN=1): signs in to the first public test account (a session row, nothing else), opens the
+// catalogue and one product page (one live price lookup).
+test("signed in to a public test account: catalogue and one product page with a live price", async ({ page }) => {
+  test.skip(!process.env.E2E_LIVE_SIGNIN, "E2E_LIVE_SIGNIN=1 to sign in to a public test account");
+  const { TEST_ACCOUNTS } = await import("../../src/server/accounts/test-accounts");
+  const tester = TEST_ACCOUNTS[0];
+  const errors = watchErrors(page);
+  await page.goto("/k");
+  const form = page.getByRole("form", { name: "Sign in" });
+  await form.getByLabel("Username", { exact: true }).fill(tester.username);
+  await form.getByLabel("Password", { exact: true }).fill(tester.password);
+  await form.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.waitForURL(`**/k/${tester.username}`);
+  await page.goto(`/k/${tester.username}/catalogue`);
+  const first = page.locator(`a[href^="/k/${tester.username}/catalogue/"]`).first();
   await expect(first).toBeVisible({ timeout: 20_000 });
   await first.click();
   await expect(page.getByText(/Checked live with the wholesaler|could not|not available/i).first()).toBeVisible({ timeout: 30_000 });
