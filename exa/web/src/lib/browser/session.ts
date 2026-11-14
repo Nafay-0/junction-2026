@@ -358,8 +358,37 @@ export class BrowserSession {
    * layout, so the page is laid out at desktop width and drawn smaller, as a zoomed-out browser does.
    */
   private async fit(width: number, height: number) {
+    this.room = { width, height };
+    await this.applyFit();
+  }
+
+  /** The room the view has, as the interface last said. Kept so the layout can be put right again. */
+  private room: { width: number; height: number } | undefined;
+
+  /** How wide the page should be laid out for that room: desktop width at least, the view's own width beyond that. */
+  private layoutWidth(): number | undefined {
+    if (!this.room) return undefined;
+    const scale = Math.min(1, Math.max(0.3, this.room.width / VIEWPORT.width));
+    return scale < 0.995 ? Math.round(this.room.width / scale) : this.room.width;
+  }
+
+  /**
+   * Make sure the page is laid out at the width it should be before anything is measured on it.
+   * The setting can be lost (a page that moves to another site starts over), and a step that
+   * measures a button in one layout and is shown over another points at empty space.
+   */
+  private async keepFit(page: Page) {
+    const wanted = this.layoutWidth();
+    if (wanted === undefined || page.isClosed()) return;
+    await this.measure(page);
+    if (Math.abs(this.state.viewport.width - wanted) > 2) await this.applyFit();
+  }
+
+  private async applyFit() {
     const page = this.page;
-    if (!page || page.isClosed()) return;
+    const room = this.room;
+    if (!page || page.isClosed() || !room) return;
+    const { width, height } = room;
     const scale = Math.min(1, Math.max(0.3, width / VIEWPORT.width));
     try {
       const session = await this.cdpFor(page);
@@ -764,6 +793,8 @@ export class BrowserSession {
       } catch (err) {
         problem = `${site} did not load (${err instanceof Error ? clip(err.message.split("\n")[0], 100) : "unknown error"}).`;
       }
+      // A page that has just arrived may have lost the layout width the view asked for.
+      await this.keepFit(this.page ?? page);
       await this.settle(page, 2000);
       this.patch({ loading: false });
       const text = await this.pageText(this.page ?? page);
@@ -779,6 +810,7 @@ export class BrowserSession {
       if (waiting) return this.step("Waiting for you", "read", this.page, { ok: false, problem: waiting, page: waiting });
       const page = this.page;
       if (!page) return this.step("No page is open", "read", undefined, { ok: false, problem: "No page is open.", page: "No page is open in the live browser. Open one with browserOpen." });
+      await this.keepFit(page);
       this.announce({ kind: "read", label: options.find ? `Looking for "${clip(options.find, 40)}"` : "Reading the page", leadMs: 0 });
       await this.refresh(page);
       const text = await this.pageText(page, options);
@@ -799,6 +831,7 @@ export class BrowserSession {
       if (waiting) return this.step("Waiting for you", "read", this.page, { ok: false, problem: waiting, page: waiting });
       const page = this.page;
       if (!page) return this.step("No page is open", "read", undefined, { ok: false, problem: "No page is open.", page: "No page is open in the live browser. Open one with browserOpen." });
+      await this.keepFit(page);
       await this.refresh(page);
       if (this.state.paymentPage || isPaymentHost(page.url()) || isIdentityHost(page.url())) {
         const problem = "No picture is taken of a payment or sign-in page. Hand it to the user with requestUserAction.";
@@ -887,6 +920,7 @@ export class BrowserSession {
       if (waiting) return this.step("Waiting for you", kind, this.page, { ok: false, problem: waiting, page: waiting });
       const page = this.page;
       if (!page) return this.step("No page is open", kind, undefined, { ok: false, problem: "No page is open.", page: "No page is open in the live browser. Open one with browserOpen." });
+      await this.keepFit(page);
 
       // A step that commits the user waits here for their yes. Whether it does is decided in code
       // from what the element is (guard.ts), not left to the model, and only the user's own click

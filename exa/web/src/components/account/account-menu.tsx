@@ -3,11 +3,10 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, CalendarClock, ChevronsUpDown, LayoutDashboard, LogOut, MessagesSquare, Trash2 } from "lucide-react";
+import { Bell, CalendarClock, ChartNoAxesCombined, ChevronsUpDown, LogOut, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { initialsOf, signOut, useUser } from "@/lib/auth/client";
 import type { SessionUser } from "@/lib/auth/types";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { NotificationSettings } from "@/components/notifications/settings";
 
@@ -20,27 +19,24 @@ export function AccountBadge({ user, className }: { user: Pick<SessionUser, "nam
   );
 }
 
+/** The pages the menu leads to. The first two are the admin's. */
+const PAGES = [
+  { href: "/admin", label: "Usage", icon: ChartNoAxesCombined, admin: true },
+  { href: "/admin/accounts", label: "Accounts", icon: Users, admin: true },
+  { href: "/jobs", label: "Jobs", icon: CalendarClock, admin: false },
+] as const;
+
+/** True when `pathname` is that page or one beneath it. "/admin" is only itself: the accounts page is its own entry. */
+const isOn = (pathname: string, href: string) => (href === "/admin" ? pathname === "/admin" : pathname === href || pathname.startsWith(`${href}/`));
+
 /**
- * Who is signed in, and what they can do about it: see their jobs, choose which emails they get,
- * go to the admin area (the admin only), clear their conversations, sign out. In the conversation list it is a full row at the bottom; in the
- * admin area's header it is just the badge.
+ * Who is signed in, and where they can go. It is the same list wherever it is shown: Usage and
+ * Accounts for the admin, then Jobs, Notifications and Sign out for everyone. In the conversation
+ * list it is a full row at the bottom; in a page's bar (the chat's included) it is just the badge.
  */
-export function AccountMenu({
-  variant = "row",
-  conversationCount = 0,
-  onDeleteAll,
-  toChat = false,
-}: {
-  variant?: "row" | "badge";
-  /** How many conversations "Delete all conversations" would delete. The item is hidden at 0 or without `onDeleteAll`. */
-  conversationCount?: number;
-  onDeleteAll?: () => void;
-  /** In the admin area: offer the way back to the chat instead of the way to the admin area. */
-  toChat?: boolean;
-}) {
+export function AccountMenu({ variant = "row" }: { variant?: "row" | "badge" }) {
   const user = useUser();
   const pathname = usePathname() ?? "/";
-  const [confirming, setConfirming] = React.useState(false);
   const [leaving, setLeaving] = React.useState(false);
   const [notifications, setNotifications] = React.useState(false);
 
@@ -60,7 +56,7 @@ export function AccountMenu({
             <ChevronsUpDown className="mr-1 size-3.5 shrink-0 text-subtle" />
           </DropdownMenuTrigger>
         ) : (
-          <DropdownMenuTrigger aria-label={`Account: ${user.name}`} className="rounded-full outline-none transition-opacity hover:opacity-85 focus-visible:ring-3 focus-visible:ring-ring/40">
+          <DropdownMenuTrigger aria-label={`Account: ${user.name}`} className="shrink-0 rounded-full outline-none transition-opacity hover:opacity-85 focus-visible:ring-3 focus-visible:ring-ring/40">
             <AccountBadge user={user} className="size-9 text-[0.76rem]" />
           </DropdownMenuTrigger>
         )}
@@ -73,41 +69,23 @@ export function AccountMenu({
             <span className="truncate text-[0.76rem] text-muted-foreground">{user.email}</span>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          {toChat ? (
-            <DropdownMenuItem asChild>
-              <Link href="/">
-                <MessagesSquare className="size-4" />
-                Back to the chat
-              </Link>
-            </DropdownMenuItem>
-          ) : null}
-          {/* The same entries on every page, each left out on the page it leads to. */}
-          {user.role === "admin" && !pathname.startsWith("/admin") ? (
-            <DropdownMenuItem asChild>
-              <Link href="/admin">
-                <LayoutDashboard className="size-4" />
-                Usage and Accounts
-              </Link>
-            </DropdownMenuItem>
-          ) : null}
-          {pathname.startsWith("/jobs") ? null : (
-            <DropdownMenuItem asChild>
-              <Link href="/jobs">
-                <CalendarClock className="size-4" />
-                Jobs
-              </Link>
-            </DropdownMenuItem>
-          )}
+          {PAGES.filter((page) => !page.admin || user.role === "admin").map((page) => {
+            const here = isOn(pathname, page.href);
+            return (
+              <DropdownMenuItem key={page.href} asChild>
+                <Link href={page.href} aria-current={here ? "page" : undefined} className={cn(here && "font-medium text-foreground")}>
+                  <page.icon className="size-4" />
+                  {page.label}
+                  {/* The page you are on is marked, not left out: the list is the same everywhere. */}
+                  {here ? <span aria-hidden className="ml-auto size-1.5 rounded-full bg-brand" /> : null}
+                </Link>
+              </DropdownMenuItem>
+            );
+          })}
           <DropdownMenuItem onSelect={() => setNotifications(true)}>
             <Bell className="size-4" />
             Notifications
           </DropdownMenuItem>
-          {onDeleteAll && conversationCount > 0 ? (
-            <DropdownMenuItem onSelect={() => setConfirming(true)}>
-              <Trash2 className="size-4" />
-              Delete all conversations
-            </DropdownMenuItem>
-          ) : null}
           <DropdownMenuSeparator />
           <DropdownMenuItem
             disabled={leaving}
@@ -123,32 +101,6 @@ export function AccountMenu({
       </DropdownMenu>
 
       <NotificationSettings open={notifications} onOpenChange={setNotifications} />
-
-      <Dialog open={confirming} onOpenChange={setConfirming}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="font-display text-[1.2rem]">Delete all conversations?</DialogTitle>
-            <DialogDescription>
-              {conversationCount === 1 ? "The one conversation" : `All ${conversationCount} conversations`} saved to your account will be deleted, on every device you use. This cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <button type="button" onClick={() => setConfirming(false)} className="h-9 rounded-full border border-border bg-card px-4 text-[0.85rem] font-medium transition-colors hover:bg-muted">
-              Keep them
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setConfirming(false);
-                onDeleteAll?.();
-              }}
-              className="h-9 rounded-full bg-destructive/10 px-4 text-[0.85rem] font-medium text-destructive transition-colors hover:bg-destructive/20"
-            >
-              Delete all
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }

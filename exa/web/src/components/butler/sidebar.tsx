@@ -38,7 +38,6 @@ export function Sidebar({
   onNew,
   onRename,
   onDelete,
-  onDeleteAll,
   running,
   waiting,
 }: {
@@ -54,7 +53,6 @@ export function Sidebar({
   onNew: () => void;
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
-  onDeleteAll: () => void;
 }) {
   const [editing, setEditing] = React.useState<string | null>(null);
 
@@ -160,9 +158,9 @@ export function Sidebar({
             )}
           </nav>
 
-          {/* The account: who is signed in, the admin area for the admin, clearing the list, signing out. */}
+          {/* The account: who is signed in, and the same menu the bar at the top has. */}
           <div className="safe-bottom shrink-0 border-t border-sidebar-border px-2 pt-2">
-            <AccountMenu conversationCount={conversations.length} onDeleteAll={onDeleteAll} />
+            <AccountMenu />
           </div>
         </div>
       </aside>

@@ -90,7 +90,7 @@ const ok = (label, pass, note = "") => { if (!pass) failures += 1; console.log(`
   ok("nothing says it was stopped", !/Stopped before this finished/.test(during));
 
   // ── Leave it running and start another beside it ──
-  await inHost(`(() => { ${V} vis('button[aria-label="New chat"]')[0].click(); return true; })()`);
+  await inHost(`(() => { ${V} (vis('button[aria-label="New chat"]')[0] ?? vis('button').find((b) => b.innerText.trim() === 'New chat')).click(); return true; })()`);
   await wait(800); await ready();
   ok("a new task opens with an empty message box", (await box()) === "" && !(await busy()));
   ok("the list marks the task left running", (await until(async () => (await runningDots()) >= 1, 8000)) === true, await runningDots());
@@ -127,7 +127,7 @@ const ok = (label, pass, note = "") => { if (!pass) failures += 1; console.log(`
   await shot("5-first-finished");
 
   // ── Stop really stops ──
-  await inHost(`(() => { ${V} vis('button[aria-label="New chat"]')[0].click(); return true; })()`);
+  await inHost(`(() => { ${V} (vis('button[aria-label="New chat"]')[0] ?? vis('button').find((b) => b.innerText.trim() === 'New chat')).click(); return true; })()`);
   await wait(800); await ready();
   await ask("Search the web one at a time, never in parallel, for the population of each of these and then list them: Helsinki, Espoo, Tampere, Vantaa, Oulu, Turku, Jyväskylä, Kuopio.");
   await until(busy, 10000);
@@ -138,13 +138,13 @@ const ok = (label, pass, note = "") => { if (!pass) failures += 1; console.log(`
   ok("Stop ends the task on the server too", !(await serverRuns()).includes(third) && !(await busy()));
 
   // ── A task in the live browser carries on while another conversation is on screen ──
-  await inHost(`(() => { ${V} vis('button[aria-label="New chat"]')[0].click(); return true; })()`);
+  await inHost(`(() => { ${V} (vis('button[aria-label="New chat"]')[0] ?? vis('button').find((b) => b.innerText.trim() === 'New chat')).click(); return true; })()`);
   await wait(800); await ready();
   await ask(`In the live browser, open http://localhost:${port}/dev/sandbox.html, read the page, and tell me in one sentence what the page is for. Then close the browser.`);
   ok("a task in the live browser starts", Boolean(await until(busy, 15000)));
   const fourth = await active(); made.push(fourth);
   await until(() => inHost("Boolean(document.querySelector('webview'))"), 30000);
-  await inHost(`(() => { ${V} vis('button[aria-label="New chat"]')[0].click(); return true; })()`);
+  await inHost(`(() => { ${V} (vis('button[aria-label="New chat"]')[0] ?? vis('button').find((b) => b.innerText.trim() === 'New chat')).click(); return true; })()`);
   await wait(800); await ready();
   ok("another conversation is on screen", (await active()) !== fourth && !(await busy()));
   const browsed = await until(async () => {

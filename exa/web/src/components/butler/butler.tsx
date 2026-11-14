@@ -15,7 +15,6 @@ import { useDesktopApp } from "@/lib/browser/desktop";
 import { BROWSER_TOOL_NAMES, type BrowserToolName, type HandoverAnswer } from "@/lib/browser/protocol";
 import { CLIENT_HEADER, clientKind, type ClientKind } from "@/lib/client-kind";
 import {
-  deleteAllConversations,
   deleteConversation,
   loadMessages,
   newConversationId,
@@ -633,13 +632,6 @@ export function Butler() {
         onNew={newTask}
         onRename={(id, title) => void renameConversation(id, title)}
         onDelete={remove}
-        onDeleteAll={() => {
-          workingNow.clear();
-          setWorking([]);
-          setKept([]);
-          void deleteAllConversations();
-          newTask();
-        }}
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <BrowserWorkspace accountId={accountId} onHandoverDone={onHandoverDone}>

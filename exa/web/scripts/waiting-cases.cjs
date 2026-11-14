@@ -77,7 +77,7 @@ const note = (name) => path.join(profile, name);
   const text = async (id) => ((await saved(id))?.messages?.at(-1)?.parts ?? []).filter((p) => p.type === "text").map((p) => p.text).join(" ").replace(/\s+/g, " ");
   const remove = (id) => inHost(`fetch('/api/conversations/${id}', { method: 'DELETE', headers: { 'x-beryl-client': 'desktop' } }).then(() => 1)`);
   const click = (label) => inHost(`(() => { ${V} const b = vis('button').find((x) => x.innerText.trim().includes(${JSON.stringify(label)})); if (b) b.click(); return Boolean(b); })()`);
-  const newTask = () => inHost(`(() => { ${V} vis('button[aria-label="New chat"]')[0].click(); return true; })()`);
+  const newTask = () => inHost(`(() => { ${V} (vis('button[aria-label="New chat"]')[0] ?? vis('button').find((b) => b.innerText.trim() === 'New chat')).click(); return true; })()`);
   const signIn = async () => {
     await until(() => inHost("(() => { const el = document.querySelector('input[type=email]'); return Boolean(el && Object.keys(el).some((k) => k.startsWith('__reactProps'))); })()"));
     const fill = (sel, value) => inHost(`(() => { const el = document.querySelector(${JSON.stringify(sel)}); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, ${JSON.stringify(value)}); el.dispatchEvent(new Event('input', { bubbles: true })); })()`);

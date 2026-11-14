@@ -431,3 +431,29 @@
   background: var(--card);
   border: 2px solid var(--brand);
 }
+
+/* ───────── The landing page only (src/components/landing) ───────── */
+
+/* Jumps to a section glide, unless the visitor has asked for less motion. */
+@media (prefers-reduced-motion: no-preference) {
+  html:has(.landing) { scroll-behavior: smooth; }
+}
+
+/* A live card shown in a box of fixed height: what does not fit fades out at the bottom. */
+.landing .fade-below {
+  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 4.5rem), transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 4.5rem), transparent 100%);
+}
+
+/* The bars beside the call move like a voice. */
+.landing .voice-wave { transform-origin: center; animation: voice-bar 1.5s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .landing .voice-wave { animation: none; }
+}
+
+/* A soft glow behind layered pictures, so they read as lit from the brand colour. */
+.landing .stage-glow {
+  background:
+    radial-gradient(38rem 20rem at 22% 12%, color-mix(in oklch, var(--brand) 16%, transparent), transparent 70%),
+    radial-gradient(34rem 18rem at 84% 78%, color-mix(in oklch, var(--brass) 12%, transparent), transparent 70%);
+}

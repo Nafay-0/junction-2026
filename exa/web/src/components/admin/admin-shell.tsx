@@ -12,7 +12,7 @@ import { NotificationBell } from "@/components/notifications/bell";
 import { Logo } from "@/components/brand/logo";
 
 const TABS = [
-  { href: "/admin", label: "Overview", icon: <ChartNoAxesCombined /> },
+  { href: "/admin", label: "Usage", icon: <ChartNoAxesCombined /> },
   { href: "/admin/accounts", label: "Accounts", icon: <Users /> },
 ];
 
@@ -67,7 +67,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             {/* Notices reach every page, and a window open here counts as "the user is here". */}
             <NotificationBell />
             <ThemeToggle />
-            <AccountMenu variant="badge" toChat />
+            <AccountMenu variant="badge" />
           </div>
         </div>
         <div className="mx-auto w-full max-w-[1120px] px-4 pb-3 md:hidden">{tabs}</div>

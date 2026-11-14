@@ -43,7 +43,7 @@ export function JobsShell({ inApp, children }: { inApp: boolean; children: React
             {/* Notices reach every page, and a window open here counts as "the user is here". */}
             <NotificationBell />
             <ThemeToggle />
-            <AccountMenu variant="badge" toChat />
+            <AccountMenu variant="badge" />
           </div>
         </div>
       </header>

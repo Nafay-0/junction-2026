@@ -13,6 +13,7 @@ import { NO_USAGE, addSummaries, exaCallCount, hasFigures, summarise, totalSpend
 import { useUser } from "@/lib/auth/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { AccountMenu } from "@/components/account/account-menu";
 import { NotificationBell } from "@/components/notifications/bell";
 import { UsageBreakdown, fmtUsd } from "./usage";
 
@@ -30,9 +31,10 @@ export function sumUsage(all: Array<RunStats | undefined>): UsageSummary | null 
  * It is sized to the chat column, not to the window: beside the live browser the column can be
  * 380 pixels wide on a large screen, and on a phone it is the whole screen. Nothing wraps and
  * nothing overlaps. The name takes whatever room is left and is cut with an ellipsis. As the
- * column narrows, things step out in this order: the Exa count, the token count, the "New task"
- * label, the product's name beside the logo (the conversation's name matters more). The logo, the
- * cost, the bell, the theme switch and the list button always stay.
+ * column narrows, things step out in this order: the Exa count, the token count, the "New chat"
+ * label, the product's name beside the logo (the conversation's name matters more), and under
+ * 420 pixels the "New chat" button itself (the logo starts a new chat too). The logo, the
+ * cost, the bell, the theme switch, the account badge and the list button always stay.
  */
 export function TopBar({
   usage,
@@ -98,7 +100,8 @@ export function TopBar({
                 type="button"
                 onClick={onNewChat}
                 aria-label="New chat"
-                className="flex h-9 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[0.8rem] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                // On the narrowest screens it steps out: the logo starts a new chat too, and the list has the button.
+                className="hidden h-9 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[0.8rem] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground @min-[420px]/chat:flex"
               >
                 <Plus className="size-4" />
                 <span className="hidden @min-[560px]/chat:inline">New chat</span>
@@ -108,6 +111,8 @@ export function TopBar({
           </Tooltip>
         ) : null}
         <ThemeToggle />
+        {/* The same account menu as at the foot of the list, within reach when the list is closed. */}
+        <AccountMenu variant="badge" />
       </div>
     </header>
   );

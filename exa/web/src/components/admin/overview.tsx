@@ -23,7 +23,7 @@ export function OverviewScreen({ data }: { data: Overview }) {
   return (
     <div className="flex flex-col gap-5">
       <PageHeading
-        title="Overview"
+        title="Usage"
         lead="Who is here, how much they use it, and what it costs."
         action={
           <div role="group" aria-label="Period" className="flex items-center gap-1 rounded-full border border-border bg-card p-1 text-[0.8rem] shadow-card">
