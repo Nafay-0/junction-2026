@@ -120,3 +120,13 @@ export const stocksLoadingFixture: StocksData = {
   quotes: [],
   sources: [],
 };
+
+/** A weekend: the market is closed, so each quote is its last close and there is no minute-by-minute line. */
+export const stocksClosedFixture: StocksData = {
+  kind: "stocks",
+  quotes: [
+    { symbol: "NVDA", name: "Nvidia Corp", price: 162.85, change: -3.34, changePercent: -2.01, currency: "USD", asOf: "the close on Fri 13 Nov", open: 169.89, high: 170, low: 158.39, previousClose: 166.19, series: [], seriesLabel: "Last close", url: "https://exa.ai/library/markets/stocks/NVDA", closed: true, volume: "362.49M" },
+    { symbol: "AAPL", name: "Apple Inc", price: 356.27, change: 1.39, changePercent: 0.39, currency: "USD", asOf: "the close on Fri 13 Nov", open: 357.96, high: 360.83, low: 355.75, previousClose: 354.88, series: [], seriesLabel: "Last close", url: "https://exa.ai/library/markets/stocks/AAPL", closed: true, volume: "39.03M" },
+  ],
+  sources: [toSource({ url: "https://exa.ai/library/markets/stocks/NVDA", title: "NVDA market data (Exa)" }), toSource({ url: "https://exa.ai/library/markets/stocks/AAPL", title: "AAPL market data (Exa)" })],
+};

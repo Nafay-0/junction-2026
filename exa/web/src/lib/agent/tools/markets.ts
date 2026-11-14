@@ -25,8 +25,8 @@ const money = (s: string | undefined) => (s ? Number(s.replace(/[$,]/g, "")) : u
 
 export function parseStockPage(text: string, url: string, symbol: string): StockQuote | null {
   const head = text.match(/^#\s+([A-Z.\-]+)\s+[—-]\s+(.+)$/m);
-  const line = text.match(/is currently at \$([\d,.]+), (up|down|unchanged)[^$]*(?:\$([\d,.]+))?\s*\(([\d.]+)%\)[^,]*, as of ([A-Za-z]+) (\d{1,2}), (\d{4})/);
-  if (!line) return null;
+  const line = text.match(/is currently at \$([\d,.]+), (up|down|unchanged)[^$]*(?:\$([\d,.]+))?\s*\([+\-−]?([\d.]+)%\)[^,]*, as of ([A-Za-z]+) (\d{1,2}), (\d{4})/);
+  if (!line) return parseClosedPage(text, url, symbol, head);
   const price = money(line[1])!;
   const sign = line[2] === "down" ? -1 : 1;
   const change = sign * (money(line[3]) ?? 0);
@@ -62,6 +62,46 @@ export function parseStockPage(text: string, url: string, symbol: string): Stock
     series,
     seriesLabel: "Latest session, 1-minute prices",
     url,
+  };
+}
+
+/**
+ * The page as it reads while the market is closed (an evening, a weekend, a holiday):
+ *   "NVIDIA CORP (NVDA) closed at $162.85, down $3.34 (2.01%) on Fri, Nov 13."
+ * followed by that session's open, high, low, close and volume. There is no minute-by-minute
+ * table then. The last close is still an answer: it is returned, marked as closed.
+ */
+function parseClosedPage(text: string, url: string, symbol: string, head: RegExpMatchArray | null): StockQuote | null {
+  // An up day is written with plus signs ("up +$1.39 (+0.39%)"), a down day without ("down $3.34 (2.01%)").
+  const line = text.match(/closed at \$([\d,.]+)(?:,\s*(up|down|unchanged)(?:[^$(\n]*\$([\d,.]+))?\s*(?:\([+\-−]?([\d.]+)%\))?)?\s+on\s+([A-Za-z]{3,9}),?\s+([A-Za-z]{3,9})\.?\s+(\d{1,2})/);
+  if (!line) return null;
+  const price = money(line[1]);
+  if (price === undefined || !Number.isFinite(price)) return null;
+  const sign = line[2] === "down" ? -1 : 1;
+  const section = (title: string) => text.split(new RegExp(`^##\\s+${title}\\s*$`, "m"))[1]?.split(/^##\s/m)[0] ?? "";
+  const pick = (block: string, label: string) => money(block.match(new RegExp(`${label}:\\s*\\$([\\d,.]+)`))?.[1]);
+  const session = section("Trading Session");
+  const previousClose = pick(section("Previous Close"), "Close");
+  // The page gives the change; when it does not, it follows from the close before.
+  const change = line[3] !== undefined ? sign * (money(line[3]) ?? 0) : previousClose !== undefined ? Math.round((price - previousClose) * 100) / 100 : 0;
+  const changePercent = line[4] !== undefined ? sign * Number(line[4]) : previousClose ? Math.round(((price - previousClose) / previousClose) * 10000) / 100 : 0;
+  return {
+    symbol: head?.[1] ?? symbol,
+    name: titleName(head?.[2] ?? symbol),
+    price,
+    change,
+    changePercent,
+    currency: "USD",
+    asOf: `the close on ${line[5].slice(0, 3)} ${Number(line[7])} ${line[6].slice(0, 3)}`,
+    open: pick(session, "Open"),
+    high: pick(session, "High"),
+    low: pick(session, "Low"),
+    previousClose,
+    series: [],
+    seriesLabel: "Last close",
+    url,
+    closed: true,
+    volume: session.match(/Volume:\s*([\d.,]+\s?[KMBT]?)/)?.[1]?.trim(),
   };
 }
 
@@ -102,7 +142,8 @@ export function getStocksTool(ctx: ToolContext) {
   return tool({
     description:
       "Get live stock prices for one or more US-listed tickers and show an interactive price chart that keeps updating. " +
-      "Default is the latest session minute by minute (about a second). Longer ranges take about 20 seconds.",
+      "Default is the latest session minute by minute (about a second). Longer ranges take about 20 seconds. " +
+      "While the US market is closed (evenings, weekends, holidays) it returns the last close and says so: that is the answer then, not a failure.",
     inputSchema: z.object({
       symbols: z.array(z.string()).min(1).max(4).describe('Ticker symbols, for example ["NVDA","AAPL"]. Use the US listing or ADR.'),
       range: z.enum(["today", "1m", "6m", "1y"]).optional().describe("Chart range. Default today."),
@@ -140,9 +181,15 @@ export function getStocksTool(ctx: ToolContext) {
       type: "text",
       value: output.error
         ? output.error
-        : "A live chart is now shown to the user. Do not repeat the numbers in a table; comment in a sentence or two.\n" +
+        : (output.quotes.every((q) => q.closed)
+            ? "The US stock market is closed right now, so there is no live price: the card shows the last close and says so. Tell the user in one short sentence that the market is closed and which day's close this is. Do not call it a live or current price, and do not repeat the numbers in a table.\n"
+            : "A live chart is now shown to the user. Do not repeat the numbers in a table; comment in a sentence or two.\n") +
           output.quotes
-            .map((q) => `${q.symbol} (${q.name}): ${q.price} USD, ${q.change >= 0 ? "+" : ""}${q.change} (${q.changePercent}%) as of ${q.asOf}. Open ${q.open}, high ${q.high}, low ${q.low}, previous close ${q.previousClose}.`)
+            .map((q) =>
+              q.closed
+                ? `${q.symbol} (${q.name}): closed at ${q.price} USD, ${q.change >= 0 ? "+" : ""}${q.change} (${q.changePercent}%) on that day, at ${q.asOf}. That session: open ${q.open}, high ${q.high}, low ${q.low}${q.volume ? `, volume ${q.volume}` : ""}. The close before it: ${q.previousClose}.`
+                : `${q.symbol} (${q.name}): ${q.price} USD, ${q.change >= 0 ? "+" : ""}${q.change} (${q.changePercent}%) as of ${q.asOf}. Open ${q.open}, high ${q.high}, low ${q.low}, previous close ${q.previousClose}.`,
+            )
             .join("\n"),
     }),
   });

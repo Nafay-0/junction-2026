@@ -35,9 +35,11 @@ export function Stocks({ data, loading }: WidgetProps<StocksData>) {
     () => (symbolKey ? symbolKey.split(",").map((s) => `/api/live/stock?symbol=${encodeURIComponent(s)}`) : []),
     [symbolKey],
   );
+  // While the market is closed there is nothing new to ask for: the last close stays the last close.
+  const allClosed = propQuotes.length > 0 && propQuotes.every((q) => q.closed);
   const { observe, ...live } = useLiveMany<StockQuote>(urls, {
     intervalMs: POLL_MS,
-    enabled: !loading && !data?.error,
+    enabled: !loading && !data?.error && !allClosed,
     accept: isQuote,
   });
   const quotes = React.useMemo(
@@ -50,13 +52,8 @@ export function Stocks({ data, loading }: WidgetProps<StocksData>) {
   const current = quotes.find((q) => q.symbol === active);
 
   const now = useNow(1000, live.updatedAt !== null);
-  const footerNote = live.updatedAt
-    ? formatUpdated(live.updatedAt, now)
-    : current
-      ? `As of ${current.asOf}`
-      : quotes[0]
-        ? `As of ${quotes[0].asOf}`
-        : undefined;
+  const shown = current ?? quotes[0];
+  const footerNote = live.updatedAt ? formatUpdated(live.updatedAt, now) : shown ? (shown.closed ? "Market closed. Live prices are back when trading opens." : `As of ${shown.asOf}`) : undefined;
 
   const title =
     quotes.length === 1 ? quotes[0].name || quotes[0].symbol : quotes.length > 1 ? quotes.map((q) => q.symbol).join(", ") : "Stocks";
@@ -73,7 +70,7 @@ export function Stocks({ data, loading }: WidgetProps<StocksData>) {
         icon={<ChartLine />}
         title={title}
         subtitle={subtitle}
-        aside={live.active ? <LiveDot /> : null}
+        aside={live.active ? <LiveDot /> : allClosed ? <ClosedMark /> : null}
         sources={data?.sources}
         footerNote={footerNote}
         loading={loading}
@@ -98,6 +95,30 @@ export function Stocks({ data, loading }: WidgetProps<StocksData>) {
           </div>
         )}
       </WidgetFrame>
+    </div>
+  );
+}
+
+/** The last closes side by side, for comparing while the market is closed. */
+function ClosedCompare({ quotes }: { quotes: StockQuote[] }) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-border">
+      <p className="border-b border-border bg-surface/60 px-3.5 py-2.5 text-[0.8rem] text-muted-foreground">
+        <span className="font-medium text-foreground">The market is closed.</span> These are the last closes.
+      </p>
+      <ul className="divide-y divide-border">
+        {quotes.map((q) => {
+          const up = q.change >= 0;
+          return (
+            <li key={q.symbol} className="flex items-center gap-3 px-3.5 py-2.5 text-[0.86rem]">
+              <span className="w-14 shrink-0 font-medium">{q.symbol}</span>
+              <span className="min-w-0 flex-1 truncate text-muted-foreground">{q.name}</span>
+              <span className="nums font-medium">{formatPrice(q.price, q.currency)}</span>
+              <span className={cn("w-[4.6rem] text-right nums", up ? "text-up" : "text-down")}>{formatSignedPercent(q.changePercent)}</span>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
@@ -228,7 +249,7 @@ function QuotePanel({ quote }: { quote: StockQuote }) {
               {formatSigned(change, quote.currency)} ({formatSignedPercent(changePercent)})
             </span>
             <span className="text-muted-foreground nums">
-              {hovered ? formatTime(hovered.t, span, tz, true) : `As of ${quote.asOf}`}
+              {hovered ? formatTime(hovered.t, span, tz, true) : quote.closed ? `At ${quote.asOf}` : `As of ${quote.asOf}`}
             </span>
           </div>
         </div>
@@ -254,6 +275,8 @@ function QuotePanel({ quote }: { quote: StockQuote }) {
           pulseKey={flash.n}
           onHover={setHoverIndex}
         />
+      ) : quote.closed ? (
+        <SessionRange quote={quote} />
       ) : (
         <div
           className="flex items-center justify-center rounded-xl border border-dashed border-border text-[0.8rem] text-muted-foreground"
@@ -264,6 +287,69 @@ function QuotePanel({ quote }: { quote: StockQuote }) {
       )}
 
       <StatsRow quote={quote} />
+    </div>
+  );
+}
+
+/** Said in the card's corner while the market is closed, where "Live" sits when it is open. */
+function ClosedMark() {
+  return (
+    <span className="flex h-6 shrink-0 items-center gap-1.5 rounded-full bg-muted px-2 text-[0.7rem] font-medium text-muted-foreground">
+      <span aria-hidden className="size-1.5 rounded-full bg-subtle" />
+      Market closed
+    </span>
+  );
+}
+
+/**
+ * The last session at a glance, for when the market is closed and there is no minute-by-minute
+ * line to draw: where the price went between the day's low and high, and where it opened and
+ * closed. The bar between open and close is the day's move, in the colour of its direction.
+ */
+function SessionRange({ quote }: { quote: StockQuote }) {
+  const { low, high, open, price: close, previousClose } = quote;
+  const ranged = low !== undefined && high !== undefined && high > low;
+  const at = (v: number | undefined) => (ranged && v !== undefined ? Math.min(100, Math.max(0, ((v - low!) / (high! - low!)) * 100)) : undefined);
+  const openAt = at(open);
+  const closeAt = at(close);
+  const prevAt = previousClose !== undefined && ranged && previousClose >= low! && previousClose <= high! ? at(previousClose) : undefined;
+  const up = quote.change >= 0;
+  const tone = up ? "var(--up)" : "var(--down)";
+  return (
+    <div className="rounded-xl border border-border bg-surface/60 px-4 py-3.5">
+      <p className="text-[0.84rem] leading-snug">
+        <span className="font-medium">The market is closed.</span> <span className="text-muted-foreground">This is {quote.asOf}{quote.volume ? `, on a volume of ${quote.volume}` : ""}.</span>
+      </p>
+      {ranged && closeAt !== undefined ? (
+        <div className="mt-4" role="img" aria-label={`That session ran from a low of ${formatPrice(low!, quote.currency)} to a high of ${formatPrice(high!, quote.currency)}${open !== undefined ? `, opened at ${formatPrice(open, quote.currency)}` : ""} and closed at ${formatPrice(close, quote.currency)}.`}>
+          <div className="relative h-9">
+            {/* The day's whole range, with the move from open to close on it. */}
+            <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-muted" />
+            {openAt !== undefined ? (
+              <div className="absolute top-1/2 h-2 -translate-y-1/2 rounded-full" style={{ left: `${Math.min(openAt, closeAt)}%`, width: `${Math.max(1.5, Math.abs(closeAt - openAt))}%`, background: tone, opacity: 0.85 }} />
+            ) : null}
+            {prevAt !== undefined ? <div className="absolute top-1/2 h-4 w-px -translate-y-1/2 bg-subtle" style={{ left: `${prevAt}%` }} title={`Close before: ${formatPrice(previousClose!, quote.currency)}`} /> : null}
+            {openAt !== undefined ? <div className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 bg-card" style={{ left: `${openAt}%`, borderColor: tone }} title={`Open: ${formatPrice(open!, quote.currency)}`} /> : null}
+            <div className="absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-card" style={{ left: `${closeAt}%`, background: tone }} title={`Close: ${formatPrice(close, quote.currency)}`} />
+          </div>
+          <div className="flex items-center justify-between text-[0.74rem] text-muted-foreground nums">
+            <span>Low {formatPrice(low!, quote.currency)}</span>
+            <span className="flex items-center gap-3">
+              {openAt !== undefined ? (
+                <span className="flex items-center gap-1.5">
+                  <span aria-hidden className="size-2 rounded-full border-[1.5px]" style={{ borderColor: tone }} />
+                  Open
+                </span>
+              ) : null}
+              <span className="flex items-center gap-1.5">
+                <span aria-hidden className="size-2 rounded-full" style={{ background: tone }} />
+                Close
+              </span>
+            </span>
+            <span>High {formatPrice(high!, quote.currency)}</span>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -494,6 +580,8 @@ function CompareView({ quotes }: { quotes: StockQuote[] }) {
     });
 
   if (withSeries.length < 2) {
+    // With the market closed there are no lines to lay over each other: the closes side by side say the same.
+    if (quotes.length > 1 && quotes.every((q) => q.closed)) return <ClosedCompare quotes={quotes} />;
     return <EmptyNote>Need chart data for at least two symbols to compare.</EmptyNote>;
   }
 

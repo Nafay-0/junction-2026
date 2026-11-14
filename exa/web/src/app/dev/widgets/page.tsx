@@ -37,7 +37,7 @@ import { planFixture } from "@/lib/widgets/fixtures/plan";
 import { productsFixture, productsLoadingFixture } from "@/lib/widgets/fixtures/products";
 import { researchFixture, researchLoadingFixture } from "@/lib/widgets/fixtures/research";
 import { siftFixture, siftLoadingFixture } from "@/lib/widgets/fixtures/sift";
-import { stocksFixture, stocksLoadingFixture } from "@/lib/widgets/fixtures/stocks";
+import { stocksClosedFixture, stocksFixture, stocksLoadingFixture } from "@/lib/widgets/fixtures/stocks";
 import { weatherFixture, weatherLoadingFixture } from "@/lib/widgets/fixtures/weather";
 
 /**
@@ -75,6 +75,7 @@ export default function WidgetGallery() {
     ["hotels", <Hotels key="hotels" data={loading ? hotelsLoadingFixture : hotelsFixture} loading={loading} />],
     ["products", <Products key="products" data={loading ? productsLoadingFixture : productsFixture} loading={loading} />],
     ["stocks", <Stocks key="stocks" data={loading ? stocksLoadingFixture : stocksFixture} loading={loading} />],
+    ["stocks-closed", <Stocks key="stocks-closed" data={stocksClosedFixture} />],
     ["job", <JobCard key="job" data={loading ? jobLoadingFixture : jobCreatedFixture} loading={loading} />],
     ["job-list", <JobCard key="job-list" data={jobListFixture} />],
     ["job-deleted", <JobCard key="job-deleted" data={jobDeletedFixture} />],

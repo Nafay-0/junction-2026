@@ -214,6 +214,13 @@ export type StockQuote = {
   /** What the series covers: "Today, 1-minute" or "1 year, daily". */
   seriesLabel: string;
   url: string;
+  /**
+   * The market is closed (an evening, a weekend, a holiday): `price` is the last session's close
+   * and `asOf` names that session. There is no minute-by-minute series then.
+   */
+  closed?: boolean;
+  /** Shares traded in that session, as the source writes it: "362.49M". */
+  volume?: string;
 };
 
 export type StocksData = WidgetBase & {
