@@ -158,8 +158,8 @@ function Today({ day, isToday }: { day: WeatherDay; isToday: boolean }) {
           <span className="text-subtle normal-case"> · {dayMonth(day.date)}</span>
         </p>
         <div className="mt-0.5 flex items-baseline gap-2">
-          <span className="font-display text-[2.6rem] leading-none text-foreground nums sm:text-5xl">{deg(day.highC)}</span>
-          <span className="font-display text-2xl leading-none text-muted-foreground nums">{deg(day.lowC)}</span>
+          <span className="font-display text-[2.3rem] leading-none text-foreground nums sm:text-[2.7rem]">{deg(day.highC)}</span>
+          <span className="font-display text-[1.35rem] leading-none text-muted-foreground nums">{deg(day.lowC)}</span>
         </div>
         <p className="mt-1.5 truncate text-[0.9rem] text-foreground">{day.condition}</p>
       </div>

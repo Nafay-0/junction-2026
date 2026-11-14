@@ -352,7 +352,7 @@ function Stats({ items }: { items: Item[] }) {
             <span
               className={cn(
                 "nums mt-1.5 text-foreground",
-                short ? "font-display text-[1.6rem] leading-8" : "line-clamp-2 text-[0.98rem] leading-6 font-medium",
+                short ? "font-display text-[1.45rem] leading-8" : "line-clamp-2 text-[0.98rem] leading-6 font-medium",
               )}
             >
               {it.value || "–"}

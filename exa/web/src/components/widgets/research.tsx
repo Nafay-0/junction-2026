@@ -67,7 +67,7 @@ export function Research({ data, loading }: WidgetProps<ResearchData>) {
       ) : (
         <>
           {data?.question ? (
-            <h4 className="font-display text-[1.15rem] leading-snug text-balance text-foreground sm:text-[1.25rem]">
+            <h4 className="font-display text-[1.05rem] leading-snug text-balance text-foreground sm:text-[1.12rem]">
               {data.question}
             </h4>
           ) : (

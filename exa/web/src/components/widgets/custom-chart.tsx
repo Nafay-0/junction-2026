@@ -354,7 +354,7 @@ function PieBlock({ data, donut }: { data: Clean; donut: boolean }) {
           {donut ? (
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
               <span className="max-w-[55%] truncate text-[0.72rem] text-muted-foreground">{activeSlice ? activeSlice.name : "Total"}</span>
-              <span className="nums font-display text-[1.45rem] leading-tight text-foreground">
+              <span className="nums font-display text-[1.3rem] leading-tight text-foreground">
                 {/* The centre is the headline number: written out in full unless it is very large. */}
                 {formatValue(activeSlice ? activeSlice.value : total, data.unit, Math.abs(activeSlice ? activeSlice.value : total) >= 100_000 ? "compact" : "full")}
               </span>

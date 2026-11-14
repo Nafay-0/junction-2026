@@ -212,7 +212,7 @@ function QuotePanel({ quote }: { quote: StockQuote }) {
           </p>
           <p
             className={cn(
-              "mt-0.5 font-display text-[2.15rem] leading-[1.1] nums",
+              "mt-0.5 font-display text-[1.95rem] leading-[1.1] nums",
               flash.dir === "up"
                 ? "text-up transition-none"
                 : flash.dir === "down"

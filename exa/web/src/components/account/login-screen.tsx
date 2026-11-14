@@ -64,7 +64,7 @@ export function LoginScreen({
       <header className="flex h-14 shrink-0 items-center justify-between px-4 sm:px-6">
         <div className="flex items-center gap-2.5">
           <Logo size={32} className="rounded-[0.6rem] shadow-card" />
-          <span className="font-display text-[1.45rem] leading-none tracking-tight">{APP_NAME}</span>
+          <span className="font-display text-[1.3rem] leading-none">{APP_NAME}</span>
         </div>
         <ThemeToggle />
       </header>
@@ -73,10 +73,10 @@ export function LoginScreen({
         <div className="w-full max-w-[25.5rem]">
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: EASE }}>
             <p className="text-[0.74rem] font-medium tracking-[0.14em] text-brand uppercase sm:text-[0.8rem]">{APP_NAME}, your internet butler</p>
-            <h1 className="font-display mt-3 text-[2.3rem] leading-[1.06] text-balance sm:text-[2.9rem]">
+            <h1 className="font-display mt-3 text-[2rem] leading-[1.12] text-balance sm:text-[2.5rem]">
               Welcome back.
               <br />
-              <span className="text-muted-foreground italic">Sign in to carry on.</span>
+              <span className="text-muted-foreground">Sign in to carry on.</span>
             </h1>
           </motion.div>
 

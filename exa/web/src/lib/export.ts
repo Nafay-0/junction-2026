@@ -130,7 +130,7 @@ const DOCUMENT_STYLE = `
   body { margin: 0; background: #faf8f3; color: #1c211d; font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Helvetica, Arial, sans-serif; }
   main { max-width: 46rem; margin: 0 auto; padding: 3.5rem 1.5rem 4rem; }
   .kicker { margin: 0 0 .6rem; font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: #0f6b4f; font-weight: 600; }
-  h1 { margin: 0 0 1.6rem; font: 400 2.1rem/1.15 "Instrument Serif", "Iowan Old Style", Georgia, "Times New Roman", serif; letter-spacing: -.01em; text-wrap: balance; }
+  h1 { margin: 0 0 1.6rem; font-size: 1.85rem; line-height: 1.2; font-weight: 600; letter-spacing: -.03em; text-wrap: balance; }
   h2 { margin: 2.1rem 0 .6rem; font-size: 1.15rem; line-height: 1.3; }
   h3, h4 { margin: 1.6rem 0 .4rem; font-size: 1rem; }
   p { margin: 0 0 1rem; }

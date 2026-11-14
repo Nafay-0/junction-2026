@@ -220,7 +220,7 @@ function OutcomeRow({
           <span className={cn("truncate text-[0.88rem] font-medium transition-colors", hidden && "text-muted-foreground")}>
             {outcome.name}
           </span>
-          <span className="shrink-0 font-display text-[1.45rem] leading-none nums">
+          <span className="shrink-0 font-display text-[1.3rem] leading-none nums">
             <Ticker value={pct} format={formatPercent} />
           </span>
         </span>

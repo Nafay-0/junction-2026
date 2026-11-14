@@ -79,10 +79,10 @@ export function Welcome({ place, onPick }: { place: string; onPick: (prompt: str
     <div className="mx-auto flex w-full max-w-[760px] flex-col px-4 pt-[6vh] pb-6 @min-[440px]/chat:pt-[8vh] @min-[640px]/chat:pt-[12vh]">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.2, 0.8, 0.2, 1] }}>
         <p className="text-[0.74rem] font-medium tracking-[0.14em] text-brand uppercase @min-[440px]/chat:text-[0.8rem]">{APP_NAME}, your internet butler</p>
-        <h1 className="font-display mt-3 text-[2.05rem] leading-[1.07] text-balance @min-[440px]/chat:text-[2.6rem] @min-[640px]/chat:text-[3.6rem] @min-[640px]/chat:leading-[1.05]">
+        <h1 className="font-display mt-3 text-[1.8rem] leading-[1.12] text-balance @min-[440px]/chat:text-[2.25rem] @min-[640px]/chat:text-[2.9rem] @min-[640px]/chat:leading-[1.1]">
           <span className={hello ? "opacity-100 transition-opacity duration-500" : "opacity-0"}>{hello ?? "Good evening"}.</span>
           <br />
-          <span className="text-muted-foreground italic">What can I take off your hands?</span>
+          <span className="text-muted-foreground">What can I take off your hands?</span>
         </h1>
         <p className="mt-4 max-w-[34rem] text-[0.9rem] leading-relaxed text-muted-foreground @min-[440px]/chat:mt-5 @min-[440px]/chat:text-[0.95rem]">
           {desktop

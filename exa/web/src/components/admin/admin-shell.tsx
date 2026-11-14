@@ -49,7 +49,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         <div className="mx-auto flex h-14 w-full max-w-[1120px] items-center gap-2 px-4 sm:px-6">
           <Link href="/" className="flex shrink-0 items-center gap-2.5 rounded-lg py-1 pr-1 transition-opacity hover:opacity-80" aria-label={`${APP_NAME}: back to the chat`}>
             <Logo size={32} className="rounded-[0.6rem] shadow-card" />
-            <span className="font-display text-[1.45rem] leading-none tracking-tight">{APP_NAME}</span>
+            <span className="font-display text-[1.3rem] leading-none">{APP_NAME}</span>
           </Link>
           <span className="rounded-full bg-brand-soft px-2 py-0.5 text-[0.66rem] font-semibold tracking-wider text-brand uppercase">Admin</span>
 
@@ -75,12 +75,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** The heading of an admin page: a serif title, a line under it, and room on the right for a control. */
+/** The heading of an admin page: a title, a line under it, and room on the right for a control. */
 export function PageHeading({ title, lead, action }: { title: string; lead: string; action?: React.ReactNode }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
       <div className="min-w-0">
-        <h1 className="font-display text-[2rem] leading-[1.1] sm:text-[2.4rem]">{title}</h1>
+        <h1 className="font-display text-[1.75rem] leading-[1.15] sm:text-[2.1rem]">{title}</h1>
         <p className="mt-1.5 text-[0.9rem] text-muted-foreground">{lead}</p>
       </div>
       {action}

@@ -107,7 +107,7 @@ export function AccountMenu({
       <Dialog open={confirming} onOpenChange={setConfirming}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="font-display text-xl font-normal">Delete all conversations?</DialogTitle>
+            <DialogTitle className="font-display text-[1.2rem]">Delete all conversations?</DialogTitle>
             <DialogDescription>
               {conversationCount === 1 ? "The one conversation" : `All ${conversationCount} conversations`} saved to your account will be deleted, on every device you use. This cannot be undone.
             </DialogDescription>

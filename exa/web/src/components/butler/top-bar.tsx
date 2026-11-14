@@ -83,7 +83,7 @@ export function TopBar({
       </button>
       <button type="button" onClick={onNewChat} className="flex shrink-0 items-center gap-2.5 rounded-lg py-1 pr-2 transition-opacity hover:opacity-80" aria-label={`${APP_NAME}: start over`}>
         <Logo size={32} className="rounded-[0.6rem] shadow-card" />
-        <span className={`font-display text-[1.45rem] leading-none tracking-tight ${roomy ? "" : "hidden @min-[360px]/chat:inline"}`}>{APP_NAME}</span>
+        <span className={`font-display text-[1.3rem] leading-none ${roomy ? "" : "hidden @min-[360px]/chat:inline"}`}>{APP_NAME}</span>
       </button>
 
       <div className="ml-auto flex shrink-0 items-center gap-1">

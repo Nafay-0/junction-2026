@@ -91,7 +91,7 @@ export function Placeholder({ state, hasFrame, empty }: { state: BrowserState; h
       <span className="flex size-11 items-center justify-center rounded-2xl bg-brand-soft text-brand">
         <Icon className="size-5" />
       </span>
-      <p className="font-display text-[1.35rem] leading-tight">{closed ? "The browser is closed" : "No browser yet"}</p>
+      <p className="font-display text-[1.2rem] leading-tight">{closed ? "The browser is closed" : "No browser yet"}</p>
       <p className="max-w-[24rem] text-[0.85rem] leading-relaxed text-muted-foreground">
         {closed ? "Your sign-ins are kept. The agent opens it again when a task needs it." : "The agent opens a browser here when a task needs one, and you can watch every step."}
       </p>

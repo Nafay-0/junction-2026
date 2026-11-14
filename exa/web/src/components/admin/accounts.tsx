@@ -409,7 +409,7 @@ function AddDialog({ open, onClose, onDone }: { open: boolean; onClose: () => vo
     <Dialog open={open} onOpenChange={(next) => (next ? undefined : close())}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-display text-[1.5rem] leading-tight font-normal">{made ? "Account added" : "Add an account"}</DialogTitle>
+          <DialogTitle className="font-display text-[1.3rem] leading-tight">{made ? "Account added" : "Add an account"}</DialogTitle>
           <DialogDescription>{made ? "They can sign in on the web and in the desktop app." : "An ordinary account: it can chat and hand over tasks, and sees only its own conversations."}</DialogDescription>
         </DialogHeader>
         {made ? (
@@ -482,7 +482,7 @@ function PasswordDialog({ account, onClose }: { account: Account | null; onClose
     <Dialog open={account !== null} onOpenChange={(next) => (next ? undefined : close())}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-display text-[1.5rem] leading-tight font-normal">{done ? "Password changed" : `A new password for ${shown?.name ?? "this account"}`}</DialogTitle>
+          <DialogTitle className="font-display text-[1.3rem] leading-tight">{done ? "Password changed" : `A new password for ${shown?.name ?? "this account"}`}</DialogTitle>
           <DialogDescription>{done ? `${shown?.name ?? "The account"} has been signed out everywhere and signs in with the new one.` : "The old password stops working at once, and the account is signed out everywhere."}</DialogDescription>
         </DialogHeader>
         {done ? (
@@ -544,7 +544,7 @@ function DeleteDialog({ account, onClose, onDone }: { account: Account | null; o
     <Dialog open={account !== null} onOpenChange={(next) => (next ? undefined : close())}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-display text-[1.5rem] leading-tight font-normal">Delete {shown?.name ?? "this account"}?</DialogTitle>
+          <DialogTitle className="font-display text-[1.3rem] leading-tight">Delete {shown?.name ?? "this account"}?</DialogTitle>
           <DialogDescription>
             Deleting signs {shown?.email} out everywhere, and it can no longer sign in.{" "}
             {n === 0 ? "It has no saved conversations." : n === 1 ? "Its one saved conversation is deleted with it." : `Its ${n} saved conversations are deleted with it.`} This cannot be undone. What the account cost stays in

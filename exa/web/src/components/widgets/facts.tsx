@@ -9,7 +9,7 @@ import { Favicon, Shimmer, WidgetError, WidgetFrame } from "./frame";
 
 type Fact = KeyFactsData["facts"][number];
 
-/** short: a number-like headline in the display serif; medium: a phrase; long: a sentence that gets its own row. */
+/** short: a number-like headline in the display type; medium: a phrase; long: a sentence that gets its own row. */
 function sizeOf(value: string): "short" | "medium" | "long" {
   const v = value.trim();
   if (v.length <= 11) return "short";
@@ -72,7 +72,7 @@ function FactTile({ fact, index }: { fact: Fact; index: number }) {
         transition={{ duration: 0.4, delay: Math.min(index, 8) * 0.06 + 0.08, ease: "easeOut" }}
         className={cn(
           "mt-1.5 block break-words text-foreground",
-          size === "short" && "nums font-display text-[1.5rem] leading-[1.15] sm:text-[1.7rem]",
+          size === "short" && "nums font-display text-[1.35rem] leading-[1.15] sm:text-[1.5rem]",
           size === "medium" && "nums text-[1.02rem] leading-snug font-medium tracking-tight",
           size === "long" && "text-[0.9rem] leading-relaxed",
         )}

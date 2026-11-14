@@ -153,7 +153,6 @@ function Figure({ icon, label, value, note, accent }: { icon?: React.ReactNode; 
         {icon ? <span className="text-subtle [&_svg]:size-3.5">{icon}</span> : <span className="size-2 rounded-full bg-brand" />}
         {label}
       </div>
-      {/* Figures are set in the interface type: in the serif, a 1 reads as an l. */}
       <div className={cn("nums mt-2.5 text-[1.7rem] leading-none font-semibold tracking-tight sm:text-[1.95rem]", accent && "text-brand")}>{value}</div>
       <p className="mt-2 text-[0.74rem] leading-snug text-muted-foreground">{note}</p>
     </div>
