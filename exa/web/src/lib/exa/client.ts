@@ -161,6 +161,10 @@ function gate(concurrent: number, perSecond: number) {
   };
 }
 
+/** How many requests this server has sent to Exa since it started. A plain count, for the health check and for tests. */
+let sent = 0;
+export const exaRequestsSent = () => sent;
+
 /** Kept a little under Exa's limits, so a retry or another server on the same key still has room. */
 const searchTurn = gate(8, 8);
 const contentsTurn = gate(24, 60);
@@ -176,6 +180,7 @@ async function request<T>(
       // The clock starts when the request is sent, not while it waits its turn.
       const timeout = AbortSignal.timeout(init.timeoutMs ?? 30_000);
       const signal = init.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
+      sent += 1;
       return fetch(BASE_URL + path, {
         method: init.method,
         headers: { "x-api-key": apiKey(), "content-type": "application/json" },
