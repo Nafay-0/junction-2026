@@ -11,7 +11,7 @@ import { fi } from "../../../_ui/format";
 import { LoadError, PageHead, Panel, Section } from "../../../_ui/kit";
 import { Mono, PlatformTabs, Status } from "../_parts/parts";
 
-type Tail = { messages: StreamMessage[]; error: string | null; warming: boolean; lag: LagReport };
+type Tail = { messages: StreamMessage[]; problem: string | null; warming: boolean; lag: LagReport };
 
 /**
  * The stream: dock.actions on Kafka as the gate produces it, read server side, with the telemetry sink's committed
@@ -23,18 +23,21 @@ export function StreamView() {
   const [error, setError] = useState<string>();
   const [warming, setWarming] = useState(true);
   const [paused, setPaused] = useState(false);
+  // Kafka not configured on this server: nothing to tail, so the page says so and stops asking.
+  const [off, setOff] = useState(false);
   const last = useRef<string | undefined>(undefined);
 
   useEffect(() => {
-    if (paused) return;
+    if (paused || off) return;
     let stop = false;
     const tick = async () => {
       const r = await api<Tail>("GET", `/ops-api/platform/stream${last.current ? `?after=${last.current}` : ""}`);
       if (stop) return;
       if (!r.ok) {
+        if (r.error.code === "stream_not_configured") setOff(true);
         setError(r.error.message);
       } else {
-        setError(r.data.error ?? undefined);
+        setError(r.data.problem ?? undefined);
         setWarming(r.data.warming);
         setLag(r.data.lag);
         if (r.data.messages.length) {
@@ -50,7 +53,7 @@ export function StreamView() {
       stop = true;
       clearInterval(t);
     };
-  }, [paused]);
+  }, [paused, off]);
 
   const newest = [...msgs].reverse();
   return (
@@ -63,12 +66,14 @@ export function StreamView() {
         <Panel>
           <div className="flex items-center justify-between border-b border-line px-5 py-3">
             <p className="flex items-center gap-2 text-[0.92rem]">
-              {!paused && <span aria-hidden className="breathe size-2.5 bg-petrol" />}
-              <b>Live tail</b> <span className="text-ink-soft">newest first, {msgs.length} shown{warming ? ", joining the topic…" : ""}</span>
+              {!paused && !off && <span aria-hidden className="breathe size-2.5 bg-petrol" />}
+              <b>Live tail</b> <span className="text-ink-soft">{off ? "not available on this server" : `newest first, ${msgs.length} shown${warming ? ", joining the topic…" : ""}`}</span>
             </p>
-            <button type="button" onClick={() => setPaused((p) => !p)} className={buttonClass("secondary", "sm")}>
-              {paused ? "Resume" : "Pause"}
-            </button>
+            {!off && (
+              <button type="button" onClick={() => setPaused((p) => !p)} className={buttonClass("secondary", "sm")}>
+                {paused ? "Resume" : "Pause"}
+              </button>
+            )}
           </div>
           <ol className="max-h-[70vh] divide-y divide-line/60 overflow-y-auto">
             {newest.map((m) => (
@@ -90,7 +95,7 @@ export function StreamView() {
                 </span>
               </li>
             ))}
-            {!newest.length && <li className="px-4 py-6 text-[0.88rem] text-ink-soft">{warming ? "Joining dock.actions; the last messages of each partition appear in a few seconds." : "No messages yet. Send in an Aiven agent and watch them arrive."}</li>}
+            {!newest.length && <li className="px-4 py-6 text-[0.88rem] text-ink-soft">{off ? "Kafka is not configured on this server, so there is no topic to read here. On the hosted site this tail shows dock.actions live." : warming ? "Joining dock.actions; the last messages of each partition appear in a few seconds." : "No messages yet. Send in an Aiven agent and watch them arrive."}</li>}
           </ol>
         </Panel>
         <aside className="space-y-3">
@@ -127,7 +132,7 @@ export function StreamView() {
                 </p>
               </>
             ) : (
-              <p className="mt-1 text-[0.86rem] text-ink-soft">Reading offsets…</p>
+              <p className="mt-1 text-[0.86rem] text-ink-soft">{off ? "Not available: Kafka is not configured on this server." : "Reading offsets…"}</p>
             )}
           </Panel>
           <Panel className="p-5 text-[0.92rem] leading-snug">

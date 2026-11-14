@@ -9,6 +9,7 @@ import { clockSeconds, ruleTitle } from "../../../../_ui/plain";
 import { fi, stamp, whenSeconds } from "../../../_ui/format";
 import { Button, LoadError, Loading, PageHead, Panel, useOps } from "../../../_ui/kit";
 import { OnAiven, PlatformTabs } from "../_parts/parts";
+import { TryNote, tryBlocked, useTry } from "../_parts/try";
 
 /**
  * Send in an Aiven agent: one action starts a buyer on Aiven's Managed Agents runtime with a plain-words task; staff
@@ -16,11 +17,23 @@ import { OnAiven, PlatformTabs } from "../_parts/parts";
  */
 export function Launcher() {
   const status = useOps<LauncherStatus>("/ops-api/platform/agent", { pollMs: 4000 });
+  const t = useTry("aiven-agent");
   const [runId, setRunId] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string>();
   const s = status.data;
   const current = runId ?? s?.runs[0]?.runId;
+  // A recording is free: it plays whatever this address has used. Otherwise: why the buttons wait, in words.
+  const recordingOnly = Boolean(s && (!s.configured || s.blocked?.recording));
+  const why = !s
+    ? undefined
+    : s.running
+      ? "An Aiven agent is on its way now; the buttons come back when it finishes (usually within a minute). Watch it on the right."
+      : !recordingOnly && s.blocked
+        ? s.blocked.reason
+        : !recordingOnly && tryBlocked(t)
+          ? t.room!.blocked
+          : undefined;
 
   async function start(preset: string) {
     setBusy(true);
@@ -30,6 +43,7 @@ export function Launcher() {
     if (!r.ok) setProblem(r.error.message);
     else setRunId(r.data.run.runId);
     status.refresh();
+    t.refresh();
   }
 
   return (
@@ -43,13 +57,17 @@ export function Launcher() {
       ) : (
         <div className="mt-4 grid gap-4 xl:grid-cols-[400px_minmax(0,1fr)]">
           <div className="space-y-3">
+            <Panel className="px-4 py-3">
+              <TryNote t={t} free={recordingOnly ? "Each button plays a recording of a real run here: it costs nothing and is not counted." : undefined} className="!text-[0.9rem]" />
+              {why && why !== t.room?.blocked && <p className="mt-1 text-[0.9rem] font-semibold" role="status">{why}</p>}
+            </Panel>
             {s.presets.map((p, i) => (
               <Panel key={p.id} rule className="px-4 py-4">
                 <p className="display text-[1.4rem] leading-tight">{p.title}</p>
                 <p className="mt-2 rounded-lg bg-surface px-4 py-3 text-[0.98rem] leading-snug">&ldquo;{p.message}&rdquo;</p>
                 <p className="mt-2 text-[0.88rem] text-ink-soft">What should happen: {fi(p.expect)}</p>
-                <Button staff kind={i === 0 ? "go" : "primary"} size="md" className="mt-3" disabled={busy || Boolean(s.running)} onClick={() => start(p.id)}>
-                  {busy ? "Starting on Aiven…" : s.blocked?.recording ? "Play the recording" : "Send in the agent"}
+                <Button kind={i === 0 ? "go" : "primary"} size="md" className="mt-3" disabled={busy || Boolean(why)} onClick={() => start(p.id)}>
+                  {busy ? "Starting on Aiven…" : recordingOnly ? "Play the recording" : "Send in the agent"}
                 </Button>
               </Panel>
             ))}
@@ -63,7 +81,7 @@ export function Launcher() {
                 The agent: {s.agent.label} ({s.agent.id}), model {s.agent.model}. Its mandate is minted on this server for each run: {s.agent.org}, 1 000 € per order alone, valid {s.agent.mandateMinutes} minutes, handed straight to Aiven&apos;s credential store; the signed token is never shown. It connects to {s.dockUrl.replace(/^https?:\/\//, "")}.
               </p>
               <p className="mt-1.5 text-ink-soft">{s.usageNote}</p>
-              {!s.configured && <p className="mt-1.5 font-semibold">Not configured here ({s.missing.join(", ")}): only recordings play.</p>}
+              {!s.configured && <p className="mt-1.5 font-semibold">Aiven Managed Agents is not configured on this server ({s.missing.join(", ")}), so each button plays a recording of a real run instead, marked as one.</p>}
             </Panel>
           </div>
           <div>{current ? <RunView runId={current} dockUrl={s.dockUrl} /> : <EmptyRun />}</div>
@@ -83,7 +101,7 @@ function EmptyRun() {
 }
 
 function RunView({ runId, dockUrl }: { runId: string; dockUrl: string }) {
-  const live = useOps<Run & { gate?: StreamMessage[] }>(`/ops-api/platform/agent/${runId}`, { pollMs: 1500 });
+  const live = useOps<Omit<Run, "error"> & { problem?: string; gate?: StreamMessage[] }>(`/ops-api/platform/agent/${runId}`, { pollMs: 1500 });
   const run = live.data;
   const [shown, setShown] = useState(0);
   // Recordings play back step by step, at most a second and a half apart.
@@ -92,7 +110,7 @@ function RunView({ runId, dockUrl }: { runId: string; dockUrl: string }) {
     const t = setTimeout(() => setShown((n) => n + 1), shown === 0 ? 300 : 1400);
     return () => clearTimeout(t);
   }, [run, shown]);
-  if (!run) return <Loading />;
+  if (!run) return live.error ? <LoadError message={live.error} /> : <Loading />;
   const messages = run.messages.slice(0, run.recorded ? shown : undefined);
   const sameHost = typeof window !== "undefined" && dockUrl.startsWith(window.location.origin);
   const traceHref = run.requestId ? `${sameHost || run.recorded ? "" : dockUrl}/ops/trace/${run.requestId}` : undefined;
@@ -110,7 +128,7 @@ function RunView({ runId, dockUrl }: { runId: string; dockUrl: string }) {
           {run.environment ? `, ${run.environment}` : ""}, started {whenSeconds(run.startedAt)}
         </p>
         <p className="mt-2 rounded-lg bg-surface px-4 py-3 text-[0.98rem]">&ldquo;{run.question}&rdquo;</p>
-        {run.error && <p className={`mt-2 text-[0.92rem] ${run.recorded ? "" : "rounded-lg bg-surface px-4 py-2.5 font-semibold"}`}>{run.error}</p>}
+        {run.problem && <p className={`mt-2 text-[0.92rem] ${run.recorded ? "" : "rounded-lg bg-surface px-4 py-2.5 font-semibold"}`}>{run.problem}</p>}
       </div>
       <ol className="divide-y divide-line/60" aria-live="polite">
         {messages.map((m, i) => (
