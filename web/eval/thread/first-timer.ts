@@ -58,7 +58,7 @@ const L = {
     takeOff: /^Take it off this order$/,
     lastWeek: "what did we order last week?",
     twoItems: "400 litres of lactose-free milk and 24 litres of oat drink for Thursday",
-    oat: /oat/i,
+    oatName: /oat/i,
     again: /^Order again$/,
     recurring: /^Recurring orders$/,
   },
@@ -87,7 +87,7 @@ const L = {
     takeOff: /^Poista se tästä tilauksesta$/,
     lastWeek: "mitä tilasimme viime viikolla?",
     twoItems: "400 litraa laktoositonta maitoa ja 24 litraa kaurajuomaa torstaiksi",
-    oat: /oat|kaura/i,
+    oatName: /oat|kaura/i,
     again: /^Tilaa uudelleen$/,
     recurring: /^Toistuvat tilaukset$/,
   },
@@ -473,7 +473,7 @@ const TASKS: [string, (r: Run) => Promise<string | void>][] = [
       const sh = sheet(t0);
       if (sh?.type !== "sheet") throw new Error("no order sheet");
       if (sh.lines.length !== 2) throw new Error(`${sh.lines.length} lines on the sheet, not 2`);
-      if (!sh.lines.some((l) => L.oat.test(l.name))) throw new Error(`no oat drink on the sheet: ${sh.lines.map((l) => l.name).join(", ")}`);
+      if (!sh.lines.some((l) => L.oatName.test(l.name))) throw new Error(`no oat drink on the sheet: ${sh.lines.map((l) => l.name).join(", ")}`);
       const thursday = new Date(`${sh.deliveryDate}T12:00:00Z`).getUTCDay() === 4;
       const confirm = r.log.getByRole("button", { name: L.order }).last();
       await r.waitFor(confirm);
