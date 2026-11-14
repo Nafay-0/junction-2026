@@ -142,3 +142,17 @@ export function ensureTelemetry(): void {
   s.registered = true;
   registerTelemetry(new DockTelemetry());
 }
+
+/**
+ * A model call made outside the AI SDK (smart search's relevance judge and query embedding, plain fetch): measured
+ * the same way, into the same record, and counted on the conversation's turn when there is one.
+ */
+export function recordExternalModelCall(r: { functionId: string; model: string; ms: number; ok: boolean; inputTokens: number; costUsd: number }): void {
+  const turn = currentTurn();
+  if (turn && r.ok) {
+    turn.usage.modelCalls++;
+    turn.usage.inputTokens += r.inputTokens;
+    turn.usage.costUsd += r.costUsd;
+  }
+  void sink({ at: new Date().toISOString(), kind: "model", functionId: r.functionId, model: r.model, ms: r.ms, ok: r.ok, inputTokens: r.inputTokens, outputTokens: 0, cachedInputTokens: 0, costUsd: r.costUsd, door: turn?.door, threadId: turn?.threadId, turnId: turn?.turnId });
+}

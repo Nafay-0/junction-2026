@@ -36,7 +36,17 @@ export const ProductSchema = z.object({
     .optional(),
   /** Allergen evidence. `declared: false` means no allergen data: every allergen is unknown, not absent. */
   allergenInfo: z
-    .object({ declared: z.boolean(), contains: z.array(z.string()), mayContain: z.array(z.string()), freeFrom: z.array(z.string()) })
+    .object({
+      declared: z.boolean(),
+      contains: z.array(z.string()),
+      mayContain: z.array(z.string()),
+      freeFrom: z.array(z.string()),
+      /**
+       * Only when `declared` is false: a fresh, whole, single-ingredient product taken to contain only what it is itself
+       * (core/catalog/nature.ts). Evidence by its nature, never the maker's declaration.
+       */
+      byNature: z.object({ allergens: z.array(z.string()), basis: z.string() }).optional(),
+    })
     .optional(),
   deliveryReliabilityKnown: z.boolean().optional(),
   carbonKnown: z.boolean().optional(),

@@ -205,11 +205,18 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
       if (unmapped.length) return `the mandate forbids ${unmapped.join(", ")}, which Dock cannot check against product data, so nothing shows ${l.productId} is free of it.`;
       const found = forbiddenPresent({ present: l.allergens, claims: l.attributes }, mandate.forbiddenAllergens);
       if (found.length) return `${l.productId} contains forbidden allergen(s): ${found.join(", ")}.`;
-      if (mandate.forbiddenAllergens.length && l.allergensDeclared === false)
-        return `${l.productId} has no allergen data from its maker, so nothing shows it is free of ${mandate.forbiddenAllergens.join(", ")}. Unknown is not safe: choose a product with declared allergens.`;
+      if (mandate.forbiddenAllergens.length && l.allergensDeclared === false) {
+        // Fresh, whole produce contains what it is itself (core/catalog/nature.ts), unless the mandate asks for declared data only.
+        const nature = mandate.allergenEvidence === "declared" ? undefined : l.allergensByNature;
+        if (!nature) return `${l.productId} has no allergen data from its maker, so nothing shows it is free of ${mandate.forbiddenAllergens.join(", ")}. Unknown is not safe: choose a product with declared allergens.`;
+        const byNature = forbiddenPresent({ present: nature.allergens, claims: l.attributes }, mandate.forbiddenAllergens);
+        if (byNature.length) return `${l.productId} contains forbidden allergen(s) by its nature: ${byNature.join(", ")}.`;
+      }
       return null;
     },
-    mandate.forbiddenAllergens.length ? `No product contains ${mandate.forbiddenAllergens.join(", ")}, by declared allergen data.` : "No product contains a forbidden allergen.",
+    mandate.forbiddenAllergens.length
+      ? `No product contains ${mandate.forbiddenAllergens.join(", ")}, by declared allergen data${q.lines.some((l) => l.allergensDeclared === false && l.allergensByNature) && mandate.allergenEvidence !== "declared" ? `; ${q.lines.filter((l) => l.allergensDeclared === false && l.allergensByNature).map((l) => `${l.productId} by its nature, not declared by the maker (${l.allergensByNature!.basis.split(":")[0]})`).join("; ")}` : ""}.`
+      : "No product contains a forbidden allergen.",
   );
   lineCheck(
     "required_certificates",

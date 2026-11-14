@@ -13,6 +13,8 @@ import { DockError } from "@/core/errors";
  *   DOCK_LLM_DAILY_USD       spend cap for model calls per UTC day (default 5)
  *   DOCK_LLM_DAILY_CALLS     model calls per UTC day (default 500)
  *   DOCK_LIVE_DAILY_CALLS    partner live API requests per UTC day (default 3000)
+ *   DOCK_SEARCH_DAILY_CALLS  smart search's model calls (relevance judge, query embedding) per UTC day (default 5000);
+ *                            their spend counts in DOCK_LLM_DAILY_USD
  *   DOCK_RATE_LIMITS         "off" disables the per-address limits (local load tests only)
  *   DOCK_LIMIT_<RULE>        one rate rule's limit per window, e.g. DOCK_LIMIT_JOIN=240, DOCK_LIMIT_DEMO_ORDER_KITCHEN=6
  *                            (the rule name upper-cased, dashes as underscores; rules and defaults in src/proxy.ts and
@@ -158,6 +160,20 @@ export function recordLlmSpend(usd: number | null, now = new Date()): void {
   counter("llm", now).usd += usd ?? 0.01;
 }
 
+/**
+ * Before one of smart search's model calls (the relevance judge, a query embedding). Its own daily count, so a busy
+ * catalogue search box never uses up the calls an order needs; its spend counts in the shared daily USD cap, and
+ * search stops calling once that cap's last SPARE_RESERVE is reached. False: skip the call (search falls back).
+ */
+export function admitSearchCall(now = new Date()): boolean {
+  if (env("DOCK_LLM") === "off") return false;
+  const c = counter("search", now);
+  if (c.calls >= int(env("DOCK_SEARCH_DAILY_CALLS"), 5000)) return false;
+  if (counter("llm", now).usd >= int(env("DOCK_LLM_DAILY_USD"), 5) * (1 - SPARE_RESERVE)) return false;
+  c.calls++;
+  return true;
+}
+
 /** Before a request to the partner's live price/availability API. */
 export function reserveLiveLookup(now = new Date()): void {
   const c = counter("live", now);
@@ -168,10 +184,12 @@ export function reserveLiveLookup(now = new Date()): void {
 export function dailyUsage(now = new Date()) {
   const llm = counter("llm", now);
   const live = counter("live", now);
+  const search = counter("search", now);
   return {
     day: llm.day,
     llm: { calls: llm.calls, usd: Math.round(llm.usd * 10_000) / 10_000, maxCalls: int(env("DOCK_LLM_DAILY_CALLS"), 500), maxUsd: int(env("DOCK_LLM_DAILY_USD"), 5), enabled: env("DOCK_LLM") !== "off" },
     live: { calls: live.calls, maxCalls: int(env("DOCK_LIVE_DAILY_CALLS"), 3000) },
+    search: { calls: search.calls, maxCalls: int(env("DOCK_SEARCH_DAILY_CALLS"), 5000) },
   };
 }
 
