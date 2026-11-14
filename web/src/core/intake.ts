@@ -363,7 +363,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
     for (const o of next.options) for (const c of o.cons) if (/^The kitchen turned .* down before/.test(c) && !lines.some((l) => l.text === c)) lines.push({ text: c });
     next.memoryUsed = lines;
     if (JSON.stringify(lines) !== before) {
-      if (lines.length) log(next, "dock", `Dock applied ${lines.length} remembered item${lines.length > 1 ? "s" : ""} of the kitchen's memory to this request, without asking.`, { step: "memory_used", count: lines.length, itemIds: lines.flatMap((l) => (l.itemId ? [l.itemId] : [])) });
+      if (lines.length) log(next, "dock", `AimoPilot applied ${lines.length} remembered item${lines.length > 1 ? "s" : ""} of the kitchen's memory to this request, without asking.`, { step: "memory_used", count: lines.length, itemIds: lines.flatMap((l) => (l.itemId ? [l.itemId] : [])) });
       await intakes.save(next);
     }
     return next;
@@ -591,14 +591,14 @@ export function createIntakeFlow(deps: IntakeDeps) {
     for (const c of deferred.filter((x) => x.code === "large_first_order")) {
       for (const card of i.options) card.cons.push(c.message);
       (i.signOffNotes ??= []).push(`Check the amount: ${c.message}`);
-      log(i, "dock", `AimoPilot did not stop the buyer for large_first_order: it is a note on every option${i.options.some((o) => o.totalCents > session.mandate.perOrderLimitCents) ? " and goes to the person signing off" : ""}.`, { step: "noted", concerns: [{ key: c.key, code: c.code }], reasons: [c.message] });
+      log(i, "dock", `AimoPilot did not stop the buyer for ${concernWords("large_first_order")}: it is a note on every option${i.options.some((o) => o.totalCents > session.mandate.perOrderLimitCents) ? " and goes to the person signing off" : ""}.`, { step: "noted", concerns: [{ key: c.key, code: c.code }], reasons: [c.message] });
     }
     const ask = deferred.filter((x) => x.code !== "large_first_order");
     if (ask.length) {
       const limit = session.mandate.perOrderLimitCents;
       if (result.cards.every((c) => c.totalCents > limit)) {
         (i.signOffNotes ??= []).push(...ask.map((c) => `Check the amount: ${c.message} (not asked before ordering, because a person signs this order off anyway).`));
-        log(i, "dock", `AimoPilot did not stop the buyer for ${ask.map((c) => c.code).join(", ")}: every option is over the ${formatEur(limit)} the agent may spend alone, so the person signing it off sees it.`, {
+        log(i, "dock", `AimoPilot did not stop the buyer for ${ask.map((c) => concernWords(c.code)).join(", ")}: every option is over the ${formatEur(limit)} the agent may spend alone, so the person signing it off sees it.`, {
           step: "carried_to_sign_off",
           concerns: ask.map((c) => ({ key: c.key, code: c.code })),
           reasons: i.signOffNotes,
@@ -1109,3 +1109,23 @@ export function view(i: Intake) {
     next,
   };
 }
+
+/** A check's code in words, for the record people read (the operations trace): never the code itself. */
+const CONCERN_WORDS: Partial<Record<ConcernCode, string>> = {
+  quantity_tenfold: "an amount ten times the usual",
+  quantity_unusual: "an unusual amount",
+  unit_confusion: "a possible mix-up of units",
+  unit_unclear: "an unclear pack size",
+  duplicate_recent: "the same order placed recently",
+  contradicts_preference: "going against a stated rule",
+  large_first_order: "a large first order",
+  pack_uncertain: "an uncertain pack size",
+  declined_before: "something declined before",
+  breaks_remembered_rule: "a remembered rule",
+  standing_order_range: "an amount outside the recurring order's usual range",
+  delivery_unusual_day: "an unusual delivery day",
+};
+function concernWords(code: ConcernCode): string {
+  return CONCERN_WORDS[code] ?? code.replaceAll("_", " ");
+}
+

@@ -41,6 +41,7 @@ export const THREAD_LINE_TEXT = defineText({
     toPhone: "Send to my phone",
     toPhoneOf: (who: string) => (who ? `Send to the ${who.toLowerCase()}'s phone` : "Send to the approver's phone"),
     hidePhone: "Hide the code",
+    asWholesaler: "See this order as the wholesaler sees it",
     takeBack: "Take it back",
     // memory
     remembered: "Remembered",
@@ -50,6 +51,8 @@ export const THREAD_LINE_TEXT = defineText({
     today: {
       none: "Nothing needs you today. What does the kitchen need?",
       signOff: (total: string, name: string) => `One order is waiting for ${name ? `${name}'s` : "your"} OK: **${total}**.`,
+      signOffMany: (n: number, newest: string) => `${n} orders are waiting for your OK; the newest is **${newest}**.`,
+      allWaiting: (n: number) => `See all ${n} waiting for an OK`,
       cutoff: (product: string, time: string) => `The order time for ${product} closes at {{${time}}}.`,
       drift: (d: { what: string; usual: string; amountPct: number | null; pricePct: number | null; day?: string }) =>
         [
@@ -130,7 +133,7 @@ export const THREAD_LINE_TEXT = defineText({
     inPlaceOf: (usual: string) => `Tavallisen tuotteen (${usual}) tilalle, koska se ei ehdi.`,
     many: (n: number, names: string) => `${n} tuotetta: ${names}…`,
     ok: "Hyväksy Face ID:llä",
-    testSigner: (who: string) => `Tällä testitilillä hyväksyt roolissa ${who}.`,
+    testSigner: (who: string) => `Tällä testitilillä tämä selain hyväksyy hyväksyjän (${who}) puolesta.`,
     okWorking: "Odottaa kasvojasi tai sormenjälkeäsi",
     okDone: (time: string) => `Hyväksytty klo ${time}`,
     okBy: (name: string) => `Hyväksyjä: ${name}`,
@@ -138,6 +141,7 @@ export const THREAD_LINE_TEXT = defineText({
     toPhone: "Lähetä puhelimeeni",
     toPhoneOf: (who: string) => (who ? `Lähetä hyväksyjän puhelimeen (${who})` : "Lähetä hyväksyjän puhelimeen"),
     hidePhone: "Piilota koodi",
+    asWholesaler: "Katso tilausta tukun silmin",
     takeBack: "Peru tilaus",
     remembered: "Muistan",
     canRemember: "Voin muistaa tämän",
@@ -145,6 +149,8 @@ export const THREAD_LINE_TEXT = defineText({
     today: {
       none: "Tänään ei ole mitään hoidettavaa. Mitä keittiö tarvitsee?",
       signOff: (total: string, name: string) => `Yksi tilaus odottaa ${name ? `hyväksyntää: ${name}` : "hyväksyntääsi"}: **${total}**.`,
+      signOffMany: (n: number, newest: string) => `${n} tilausta odottaa hyväksyntääsi; uusin on **${newest}**.`,
+      allWaiting: (n: number) => `Kaikki ${n} hyväksyntää odottavaa`,
       cutoff: (product: string, time: string) => `Tuotteen ${product} tilausaika päättyy {{${time}}}.`,
       drift: (d: { what: string; usual: string; amountPct: number | null; pricePct: number | null; day?: string }) =>
         [
@@ -232,6 +238,7 @@ export const THREAD_LINE_TEXT = defineText({
     toPhone: "Skicka till min telefon",
     toPhoneOf: (who: string) => (who ? `Skicka till telefonen hos ${who}` : "Skicka till godkännarens telefon"),
     hidePhone: "Dölj koden",
+    asWholesaler: "Se beställningen som grossisten ser den",
     takeBack: "Ta tillbaka",
     remembered: "Jag minns",
     canRemember: "Jag kan minnas det här",
@@ -239,6 +246,8 @@ export const THREAD_LINE_TEXT = defineText({
     today: {
       none: "Inget behöver dig i dag. Vad behöver köket?",
       signOff: (total: string, name: string) => `En beställning väntar på ${name ? `godkännande av ${name}` : "ditt godkännande"}: **${total}**.`,
+      signOffMany: (n: number, newest: string) => `${n} beställningar väntar på ditt godkännande; den senaste är **${newest}**.`,
+      allWaiting: (n: number) => `Se alla ${n} som väntar på godkännande`,
       cutoff: (product: string, time: string) => `Beställningstiden för ${product} går ut {{${time}}}.`,
       drift: (d: { what: string; usual: string; amountPct: number | null; pricePct: number | null; day?: string }) =>
         [
