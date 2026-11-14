@@ -1,9 +1,9 @@
-import type { Maria } from "./client";
-import { ensureSchema } from "./schema";
-import { SPECS, TABLE_ORDER, allColumns, bindValue, collectRows, keyOf, planWrites, type GateSources, type Row, type TableName, type Write } from "./rows";
+import type { HistoryStore } from "../history/store";
+import { SPECS, allColumns, bindValue, collectRows, keyOf, planWrites, TABLE_ORDER, type GateSources, type Row, type TableName, type Write } from "./rows";
 
 /**
- * The mirror: copies what the gate reads into MariaDB's system-versioned tables, after the fact. It is told that
+ * The mirror: copies what the gate reads into the history store (MariaDB's system-versioned tables, PostgreSQL's
+ * ranges or this process's memory: history/store.ts), after the fact. It is told that
  * something may have changed (`poke`, from taps on the ledger, the kitchen store and the mandate check), waits a
  * moment so a burst of changes is one transaction, reads the app's state, and writes only what differs, with
  * ordinary INSERT, UPDATE and DELETE statements. MariaDB keeps the history.
@@ -28,7 +28,7 @@ export type MirrorStatus = {
 };
 
 export type MirrorOptions = {
-  db: Maria;
+  store: HistoryStore;
   writer: string;
   read: () => Promise<GateSources>;
   sessionClock?: () => Date;
@@ -40,7 +40,7 @@ export type MirrorOptions = {
   now?: () => Date;
 };
 
-export class MariaMirror {
+export class HistoryMirror {
   private written: Map<TableName, Map<string, Row>> | undefined;
   private timer?: ReturnType<typeof setTimeout>;
   private tick?: ReturnType<typeof setInterval>;
@@ -54,8 +54,8 @@ export class MariaMirror {
     this.st = { writer: opts.writer, syncs: 0, writes: { insert: 0, update: 0, touch: 0, delete: 0 } };
   }
 
-  get db(): Maria {
-    return this.opts.db;
+  get store(): HistoryStore {
+    return this.opts.store;
   }
 
   status(): MirrorStatus {
@@ -110,15 +110,8 @@ export class MariaMirror {
   }
 
   private async load(): Promise<Map<TableName, Map<string, Row>>> {
-    await ensureSchema(this.opts.db);
-    const out = new Map<TableName, Map<string, Row>>();
-    for (const t of TABLE_ORDER) {
-      // Only the columns the planner compares: the order bodies are written once and never re-read.
-      const cols = t === "gate_order_body" ? SPECS[t].key : allColumns(t);
-      const { rows } = await this.opts.db.query<Row>(`SELECT ${cols.join(", ")} FROM ${t} WHERE writer = ?`, [this.opts.writer]);
-      out.set(t, new Map(rows.map((r) => [keyOf(t, r), r])));
-    }
-    return out;
+    await this.opts.store.ensure();
+    return this.opts.store.loadWritten(this.opts.writer);
   }
 
   private async syncOnce(): Promise<{ writes: Write[] }> {
@@ -161,24 +154,12 @@ export class MariaMirror {
   }
 
   private async apply(writes: Write[]): Promise<void> {
-    const conn = await this.opts.db.pool.getConnection();
-    try {
-      if (this.opts.sessionClock) await conn.query("SET @@timestamp = ?", [this.opts.sessionClock().getTime() / 1000]);
-      await conn.beginTransaction();
-      for (const w of writes) {
-        const { sql, params } = statement(w, this.opts.writer);
-        await conn.query(sql, params);
-      }
-      await conn.commit();
-    } catch (err) {
-      await conn.rollback().catch(() => undefined);
-      throw err;
-    } finally {
-      if (this.opts.sessionClock) await conn.query("SET @@timestamp = DEFAULT").catch(() => undefined);
-      await conn.release();
-    }
+    await this.opts.store.apply(writes, this.opts.writer, this.opts.sessionClock?.());
   }
 }
+
+/** The mirror's old name, from when MariaDB was its only home. */
+export const MariaMirror = HistoryMirror;
 
 /** One write as SQL. Inserts that meet a row another writer keeps are skipped (INSERT IGNORE): never overwritten. */
 export function statement(w: Write, writer: string): { sql: string; params: unknown[] } {

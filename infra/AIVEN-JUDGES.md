@@ -7,7 +7,7 @@ beyond it on their phone. Every part of AimoPilot runs on Aiven.
 
 Open **https://jolly-wondrous-bunny.eur-1.aiven.app/ops/platform** (operations portal, then **Platform**).
 
-## Four things to click
+## Five things to click
 
 1. **Send in an Aiven agent.** Pick "Valio's own example" and press *Send it in*. A purchasing agent that runs
    on **Aiven Managed Agents** (its own model, in Aiven's environment, not ours) connects to AimoPilot's MCP endpoint
@@ -38,12 +38,17 @@ Open **https://jolly-wondrous-bunny.eur-1.aiven.app/ops/platform** (operations p
    fallback. The copilot answers *Which agents are failing?*, *Which need a person most often?* and *What is waiting
    for sign-off?* from the same rows.
 
+5. **The Time machine.** In **Time machine**, pick an order and slide the time: the rules in force then and now,
+   who changed what in between, and the real gate run again on the order as of each moment, with the one rule that
+   would now decide differently named. Each answer is one statement on **PostgreSQL** (`WHERE during @> t` over
+   versions kept as time ranges), shown with its time under the page. An order's timeline links straight to it.
+
 ## Which service does which job, and why
 
 | Service | Job | Why this one |
 |---|---|---|
 | Aiven Runtime | Hosts AimoPilot: the gate, its MCP door, REST, the portals | The app sits next to its data, gets credentials injected, public HTTPS that Managed Agents can reach |
-| PostgreSQL (free) | Orders, approvals, hash-chained ledger, kitchen memory (pgvector), telemetry; the agent scorecard is SQL over it | "Commit at a fixed price" is a transaction. Constraints and pgcrypto check the ledger's hash chain. Embeddings live next to their rows. Every scorecard figure is a query staff can read |
+| PostgreSQL (free) | Orders, approvals, hash-chained ledger, kitchen memory (pgvector), telemetry; the agent scorecard is SQL over it; the Time machine's history as ranges | "Commit at a fixed price" is a transaction. Constraints and pgcrypto check the ledger's hash chain. Embeddings live next to their rows. Every scorecard figure is a query staff can read. Every version of a rule the gate reads (mandate, kitchen rules, recall holds, suspensions, the week's spend) carries the `tstzrange` it was in force, an exclusion constraint forbids overlap, and "the rules as they stood" is `during @> t`: the Time machine replays any order against them, built from the ledger on first start |
 | Kafka (free) | Every agent action, gate decision, product search and conversation turn, keyed by order | Ordered and replayable. The dashboard's table is just a consumer group, and its lag is one of the app's alerts |
 | Valkey (free) | Live-price cache, per-agent lookup budget, event bus | `SET … EX` matches "this price is valid for N minutes". `INCR` is a budget |
 | OpenSearch (free) | Search over 17,546 products in Finnish, Swedish and English: the store's keyword search, and a recall index for the agent's smart search (names in three languages plus one 768-dimension vector per product, HNSW); the audit trail (`dock-events`) | Narrows the choice in master data first, so the partner's price API is asked about a short list only. Keyword lists and nearest vectors come back in one `_msearch`; smart search uses them when this server's in-memory copy is not loaded yet (the first searches after a deploy) or fails, and one setting makes OpenSearch answer first. On 189 test requests both give the same answers (97 % right first) |

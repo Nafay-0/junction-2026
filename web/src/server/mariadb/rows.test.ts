@@ -1,3 +1,4 @@
+import { MariaStore } from "@/server/history/maria-store";
 import { describe, expect, it } from "vitest";
 import { demoMandate } from "../dev-fixtures";
 import { connectMaria } from "./client";
@@ -75,7 +76,7 @@ describe("from versions to changes", () => {
 describe("the mirror is never in the path of an order", () => {
   it("a poke with MariaDB unreachable returns at once, and the status says it is failing", async () => {
     const db = connectMaria("mariadb://dock:dock@127.0.0.1:1/dock_audit", { connections: 1, timeoutMs: 300 });
-    const mirror = new MariaMirror({ db, writer: "test", intervalMs: 0, debounceMs: 1, read: async () => ({ now: new Date(), mandates: [], orders: [], requests: new Map(), unverified: new Map(), kitchens: [], holds: [], suspensions: [] }) });
+    const mirror = new MariaMirror({ store: new MariaStore(db), writer: "test", intervalMs: 0, debounceMs: 1, read: async () => ({ now: new Date(), mandates: [], orders: [], requests: new Map(), unverified: new Map(), kitchens: [], holds: [], suspensions: [] }) });
     const t0 = performance.now();
     mirror.poke();
     expect(performance.now() - t0).toBeLessThan(5);
