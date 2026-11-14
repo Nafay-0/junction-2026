@@ -264,7 +264,7 @@ export function AssistantMessage({
   return (
     <div className="flex flex-col gap-3.5">
       {plan ? <Plan data={plan} loading={active} /> : null}
-      {blocks.map((block) => {
+      {blocks.map((block, index) => {
         switch (block.kind) {
           case "text":
             if (spoken) return null;
@@ -277,8 +277,13 @@ export function AssistantMessage({
             return <ReasoningBlock key={block.key} text={block.text} streaming={active && block.streaming} />;
           case "activity":
             return <ActivityGroup key={block.key} parts={block.parts} />;
-          case "browser":
-            return <BrowserSteps key={block.key} parts={block.parts} active={active} handlers={handlers} />;
+          case "browser": {
+            // Only the trail the agent is on now is "working". One with something written or shown
+            // after it is finished, even while the answer as a whole is still being worked on.
+            const latest = blocks.slice(index + 1).every((later) => later.kind === "reasoning");
+            const inFlight = block.parts.some((p) => p.state === "input-streaming" || p.state === "input-available");
+            return <BrowserSteps key={block.key} parts={block.parts} active={active && (latest || inFlight)} handlers={handlers} />;
+          }
           case "widget":
             return <ToolWidget key={block.key} part={block.part} handlers={handlers} />;
         }
