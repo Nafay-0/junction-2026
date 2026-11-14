@@ -195,7 +195,10 @@ describe("the sample activity", () => {
       let id = "";
       const done = new Promise<void>((resolve) => {
         const off = store.subscribe(slug, (e) => {
-          if (e.type === "status" && e.turnId === id && e.status !== "working") (off(), resolve());
+          if (e.type === "status" && e.turnId === id && e.status !== "working") {
+            off();
+            resolve();
+          }
         });
       });
       id = (await submitTurn(slug, { door: "typed", via: "typed", text: "Monday is fine" })).agentTurnId;
