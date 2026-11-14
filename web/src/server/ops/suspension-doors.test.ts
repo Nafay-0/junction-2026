@@ -56,12 +56,13 @@ describe("a suspended agent is refused at every in-process door", () => {
   it("voice call: no request is opened for a suspended agent", async () => {
     const callId = calls().open("kaari", "push_to_talk", voiceLimits({})).callId;
     const said = { callId, name: "submit_request", args: { request: "120 litres of lactose-free milk" }, heard: { text: "120 litres of lactose-free milk", turn: 1 } };
-    // Not suspended: the same words open a request (the control for this test).
-    expect((await runTool("kaari", said)).screen.step?.requestId).toMatch(/^req_/);
+    // Not suspended: the same words, read back and confirmed, open a request (the control for this test).
+    expect((await runTool("kaari", said)).forModel.state).toBe("read_back");
+    expect((await runTool("kaari", { callId, name: "confirm_read_back", heard: { text: "yes", turn: 2 } })).screen.step?.requestId).toMatch(/^req_/);
     const before = await requestsOpened();
 
     await suspend("agent");
-    await expect(runTool("kaari", { ...said, heard: { text: "120 litres of lactose-free milk", turn: 2 } })).rejects.toMatchObject(refusal);
+    await expect(runTool("kaari", { ...said, heard: { text: "120 litres of lactose-free milk", turn: 3 } })).rejects.toMatchObject(refusal);
     expect(await requestsOpened()).toBe(before);
   });
 

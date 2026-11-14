@@ -65,9 +65,17 @@ export function liveSetup(opts: { model: string; system: string; mode: CallMode;
         ? { automaticActivityDetection: { disabled: true } }
         : { automaticActivityDetection: { disabled: false, startOfSpeechSensitivity: "START_SENSITIVITY_LOW", endOfSpeechSensitivity: "END_SENSITIVITY_LOW", prefixPaddingMs: 200, silenceDurationMs: 800 } },
     // The words a kitchen orders with, so "butter" is not heard as "powder" (customVocabulary biases recognition).
-    inputAudioTranscription: opts.vocabulary?.length ? { customVocabulary: opts.vocabulary.slice(0, 100) } : {},
+    // VERBATIM keeps number words as said ("kuusitoista"), which AimoPilot's own number reader understands; the
+    // default formatting turned Finnish and Swedish numbers into wrong digits ("6" for sixteen) in the evaluation.
+    inputAudioTranscription: { ...(opts.vocabulary?.length ? { customVocabulary: opts.vocabulary.slice(0, 100) } : {}), ...(transcriptionMode() ? { mode: transcriptionMode() } : {}) },
     outputAudioTranscription: {},
   };
+}
+
+/** Gemini's transcript formatting: VERBATIM (default) or SMART (DOCK_VOICE_TRANSCRIPTION=smart), "" for the service default. */
+function transcriptionMode(): string | undefined {
+  const v = (process.env.DOCK_VOICE_TRANSCRIPTION ?? "verbatim").trim().toLowerCase();
+  return v === "smart" ? "SMART" : v === "verbatim" ? "VERBATIM" : undefined;
 }
 
 export type LiveToken = { token: string; expiresAt: string; startBy: string };

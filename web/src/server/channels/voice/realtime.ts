@@ -48,10 +48,7 @@ export function realtimeSession(opts: { model: string; system: string; mode: Cal
         // A phone held close: the near-field filter keeps the caller and lowers the hall.
         noise_reduction: { type: "near_field" },
         // The transcript is what AimoPilot acts on, so it gets the kitchen's words and the three languages.
-        transcription:
-          opts.mode === "push_to_talk"
-            ? { model: "gpt-live-transcribe", languages: ["en", "fi", "sv"], ...(keywords.length ? { keywords } : {}) }
-            : { model: "gpt-transcribe", prompt: "A kitchen worker on a phone ordering food supplies from a wholesaler, in English, Finnish or Swedish, in a loud room. Amounts in litres, kilos, pieces or cases." },
+        transcription: transcriptionFor(opts.mode, keywords),
         // Push-to-talk: the browser commits each turn. Hands-free: semantic turn detection, slow to jump in.
         turn_detection: opts.mode === "push_to_talk" ? null : { type: "semantic_vad", eagerness: "low", create_response: true, interrupt_response: true },
       },
@@ -61,6 +58,22 @@ export function realtimeSession(opts: { model: string; system: string; mode: Cal
     tool_choice: "auto",
     max_output_tokens: 800,
   };
+}
+
+const SETTING = "A kitchen worker on a phone ordering food supplies from a wholesaler, in English, Finnish or Swedish, in a loud room. Amounts in litres, kilos, pieces or cases.";
+
+/**
+ * Which transcriber: gpt-live-transcribe (streams as the caller speaks, takes keywords; needs turns committed by
+ * the browser, so push-to-talk only) or gpt-transcribe (reads the whole turn). DOCK_VOICE_OPENAI_TRANSCRIBE
+ * overrides it for push-to-talk; DOCK_VOICE_OPENAI_DELAY sets gpt-live-transcribe's delay (minimal..xhigh).
+ */
+function transcriptionFor(mode: CallMode, keywords: string[]) {
+  const want = process.env.DOCK_VOICE_OPENAI_TRANSCRIBE?.trim() || "gpt-live-transcribe";
+  if (mode === "push_to_talk" && want === "gpt-live-transcribe") {
+    const delay = process.env.DOCK_VOICE_OPENAI_DELAY?.trim();
+    return { model: want, languages: ["en", "fi", "sv"], prompt: SETTING, ...(keywords.length ? { keywords } : {}), ...(delay ? { delay } : {}) };
+  }
+  return { model: "gpt-transcribe", prompt: `${SETTING} Words they use: ${keywords.slice(0, 60).join(", ")}.` };
 }
 
 export type RealtimeSecret = { token: string; expiresAt: string; startBy: string };
