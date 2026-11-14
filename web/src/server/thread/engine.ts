@@ -237,6 +237,9 @@ export async function submitTurn(kitchen: Kitchen | string, input: unknown): Pro
   e.store.addTurn(thread, agentTurn);
   e.store.status(thread, agentTurn.turnId, "working");
   if (body.clientTurnId) thread.seen[body.clientTurnId] = { buyerTurnId: buyer.turnId, agentTurnId: agentTurn.turnId };
+  // The conversation's language, as the store sends it with each turn: what is said later without a turn (an OK that
+  // arrives from a phone) is said in it.
+  if (body.lang) (thread as unknown as { lang?: string }).lang = body.lang;
   const t0 = Date.now();
   const run: TurnRun = { rt: r.rt, store: e.store, thread, turnId: agentTurn.turnId, buyer, k: r.k, session: r.session, person: r.person, door, ...(body.lang ? { lang: body.lang } : {}), t0, facts: [], requests: new Set(), orders: new Map(), readings: new Map() };
   // The first visible sign of work, before any model call.
@@ -346,7 +349,11 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
     const wc = openWatch(run);
     const holder = wc ? thread.turns.find((x) => x.role === "agent" && x.cards.some((c) => c.cardId === wc.cardId)) : undefined;
     const later = holder ? thread.turns.slice(thread.turns.indexOf(holder) + 1).filter((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "") : [];
-    const answer = wc && holder && later.length === 0 ? watchAnswerIn(wc, body.text) : undefined;
+    // A question of the buyer's last request still open (the mistake check, a which-one, a sheet) is what a "yes"
+    // answers, even when the day's opening with the watch was posted after it.
+    const lastReply = [...thread.turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "");
+    const openElsewhere = lastReply?.role === "agent" && lastReply.cards.some((c) => (c.type === "anomaly" && !c.answered) || c.type === "question" || (c.type === "options" && !c.chosen && !c.adjusted) || (c.type === "sheet" && c.state === "editing") || (c.type === "menu" && !c.sheetId));
+    const answer = wc && holder && later.length === 0 && !openElsewhere ? watchAnswerIn(wc, body.text) : undefined;
     if (wc && answer && wc.answers.includes(answer)) body = { ...body, action: { type: "watch_answer", momentId: wc.momentId, answer }, label: body.text };
   }
   // "Yes" to the opening's own question about a recurring order that drifted ("Shall I set up the next one, for Tue
@@ -1027,7 +1034,7 @@ async function tellRequestDifferences(run: TurnRun): Promise<void> {
       const pack = one?.packSize && one.unit && one.packSize !== 1 ? { count: one.quantity, size: one.packSize, unit: one.unit } : undefined;
       // A stand-in by its short name, and not again when the reply already names it.
       const subName = sub ? readable(shortName(o.title.replace(/[®™]/g, "").replace(/^(Valio )?Hyvä suomalainen /i, "$1").replace(/\s*\(.*\)$/, "")), lang) : "";
-      const named = !!subName && (fold(line).includes(fold(subName.split(/\s+/).slice(0, 2).join(" "))) || /\b(instead|in place of|tilalla|tilalle|i stället)\b/i.test(line) || /\b(usual|tavallinen|tavallista|vanliga)\b[^.?!]*\b(can't|cannot|won't|ei ehdi|ei tule|hinner inte|kan inte)\b/i.test(line));
+      const named = !!subName && (fold(line).includes(fold(subName.split(/\s+/).slice(0, 2).join(" "))) || /\b(instead|in place of|tilalla|tilalle|i stället)\b/i.test(line) || /\b(usual|tavallinen|tavallista|vanliga)\b[^.?!]*\b(can't|cannot|won't|ei ehdi|ei tule|hinner inte|kan inte)\b|\b(can't|cannot|won't)\b[^.?!]*\busual\b/i.test(line));
       const diffs = optionDifferences({ key: u.requestId!, name: u.item, ...(u.amount ? { amount: u.amount } : {}), ...(day ? { day } : {}), exact: !!u.deliverOn }, { delivered: o.delivered, deliveryDate: sheet?.type === "sheet" ? sheet.deliveryDate : o.deliveryDate, ...(sub && !named ? { substituteFor: sub.substituteFor, title: subName } : {}), ...(pack ? { pack } : {}) });
       fresh.push(...diffs.filter((d) => !told[keyOf(d)]));
     } else if (understood.length > 1 && notice?.type === "notice" && (notice.kind === "refused" || notice.kind === "not_found" || notice.kind === "unavailable")) {
@@ -1041,8 +1048,15 @@ async function tellRequestDifferences(run: TurnRun): Promise<void> {
   // A request quoted at once that differs from what was asked (an amount rounded to the lot): said, then the yes.
   const quoted = (run.quotedDiffs ?? []).filter((d) => !told[keyOf(d)]);
   fresh.push(...quoted);
-  // An amount the reply already says as rounded ("16,2 kg in two 8,1 kg packs") is said: not again.
+  // An amount or a day the reply already states ("16,2 kg in two 8,1 kg packs", "only 243 l", "for Tuesday 17 Nov") is
+  // said: not again in the store's words beside it.
   const num = (n: number) => String(Math.round(n * 100) / 100).replace(".", ",");
+  const plainLine = fold(line.replace(/\*\*|\{\{|\}\}/g, "")).replace(/(\d)\s(?=\d{3}\b)/g, "$1");
+  const weekday = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" }).toLowerCase();
+  for (const d of [...fresh]) if ((d.kind === "reduced" && plainLine.includes(num(d.to.amount).replace(/\s/g, ""))) || (d.kind === "moved_day" && lang === "en" && plainLine.includes(weekday(d.to)))) {
+    told[keyOf(d)] = run.turnId;
+    fresh.splice(fresh.indexOf(d), 1);
+  }
   for (const d of [...fresh]) if (d.kind === "rounded_up" && fold(line).includes(fold(`${num(d.to.amount)} ${d.to.unit}`))) {
     told[keyOf(d)] = run.turnId;
     fresh.splice(fresh.indexOf(d), 1);
@@ -1680,7 +1694,8 @@ async function onOrderEvent(rt: Runtime, orgId: string, orderId: string): Promis
       // No agent loop waits for this order (a watch switch, an offer, a sheet placed by a tap): the turn still says what
       // happened, beneath what it said before, in plain words from the order itself.
       const a = e.store.agentTurn(t, holder.turnId);
-      const said = afterSignOff(order, (a?.line ?? "").match(/[äöå]/i) ? "fi" : "en");
+      // The conversation's own language (the buyer's last turn), never a guess from the words of a product name.
+      const said = afterSignOff(order, (t as unknown as { lang?: "en" | "fi" | "sv" }).lang ?? "en");
       if (a && said && !(a.line ?? "").includes(said)) e.store.line(t, holder.turnId, a.line ? `${a.line}\n${said}` : said);
       if (a?.status === "waiting_approver") e.store.status(t, holder.turnId, "done", { ms: a.ms });
       return;
@@ -1837,7 +1852,8 @@ async function answerOpenOffer(run: TurnRun, words: string, lang: "en" | "fi" | 
 }
 
 /** What happened when the person decided, in one sentence: OK'd and arriving, declined, or the price ran out. */
-function afterSignOff(order: PublicOrder, lang: "en" | "fi"): string {
+export function afterSignOff(order: PublicOrder, lang0: "en" | "fi" | "sv"): string {
+  const lang = lang0 === "sv" ? "en" : lang0;
   const who = order.approval?.approver.name ?? (lang === "fi" ? "hyväksyjä" : "the approver");
   const date = order.lines[0]?.deliveryDate ?? "";
   const day = englishDays(`${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][new Date(`${date}T12:00:00Z`).getUTCDay()]} ${Number(date.slice(8, 10))}.${Number(date.slice(5, 7))}.`);

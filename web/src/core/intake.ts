@@ -630,7 +630,10 @@ export function createIntakeFlow(deps: IntakeDeps) {
     });
     // The cards differ on something the buyer left open (fat content): that choice is theirs, so the agent waits.
     const openOnCards = !!span && new Set(i.options.map((o) => span(short.find((p) => p.id === o.lines[0].productId)!))).size > 1;
-    if (picked && picked.match === "full" && DECIDING_SOURCES.has(i.preselected!.source) && !openOnCards) {
+    // A pick that stands in for the kitchen's usual product (cartons for the boxes that missed their cut-off) is the
+    // buyer's moment: the ranked options are shown, the cheapest first with why, and nothing is chosen alone.
+    const replacesUsual = !!picked && !!reference && !picked.lines.some((l) => l.productId === reference.productId);
+    if (picked && picked.match === "full" && DECIDING_SOURCES.has(i.preselected!.source) && !openOnCards && !replacesUsual) {
       return quoteOption(session, i, picked, `agent ${session.agentId}`, `${i.preselected!.reason} It meets the whole request, so the agent chose it without asking.`);
     }
     i.state = "options_ready";
