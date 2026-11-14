@@ -134,8 +134,15 @@ test("recall drill: publish, product held, order refused with recall_hold naming
     // visitor's €500 limit, so it would go through alone).
     const before = await quoteFor(agent, d.need, DRILL_PRODUCT);
     expect(before.state, JSON.stringify(before).slice(0, 300)).toBe("quoted");
-    const orderBody = before.next.example;
-    expect(JSON.stringify(orderBody)).toContain(before.quote.quoteToken);
+    // The order exactly as the console sends it: the signed quote token and its lines. (Since main 4f0e267 the
+    // step's `next.example` is just `{ requestId }`, which places the quote Dock signed for the request; the explicit
+    // body pins the same quote either way.)
+    const orderBody = {
+      requestId: before.requestId,
+      quoteToken: before.quote.quoteToken,
+      lines: before.quote.quote.lines.map(({ productId, quantity, unitPriceCents }: { productId: string; quantity: number; unitPriceCents: number }) => ({ productId, quantity, unitPriceCents })),
+    };
+    expect(before.next.example).toMatchObject({ requestId: before.requestId });
 
     // ---- publish the drill from the operations screen ----
     await ops.goto("/ops/radar");
@@ -178,9 +185,12 @@ test("recall drill: publish, product held, order refused with recall_hold naming
 
     // ---- the order with the price fixed before the hold is refused, by name, with the notice ----
     const refused = await agent("POST", "/api/v1/orders", orderBody);
-    expect(refused.status, JSON.stringify(refused.body).slice(0, 400)).toBe(409);
-    expect(refused.body.error).toMatchObject({ code: "product_on_recall_hold", rule: "recall_hold", details: { productId: DRILL_PRODUCT, drill: true, noticeUrl: hold!.noticeUrl } });
-    expect(refused.body.error.message).toMatch(/^DRILL, not a real recall: .*is on a recall hold: .*Notice: http/);
+    // Since main 4f0e267 the hold is a rule of the core gate itself (ProductHolds): the order is refused by the
+    // policy (422 policy_rejected) with the rule recall_hold; before, the server layer refused it (409
+    // product_on_recall_hold). Either way the rule and the notice are named.
+    expect([409, 422], JSON.stringify(refused.body).slice(0, 400)).toContain(refused.status);
+    expect(refused.body.error).toMatchObject({ rule: "recall_hold", code: expect.stringMatching(/^(policy_rejected|product_on_recall_hold)$/) });
+    expect(refused.body.error.message).toMatch(/^DRILL, not a real recall: .*\(?VA-\d+\)? is (on a recall hold|held by the wholesaler): .*Notice: http/);
     expect(refused.body.error.message).toContain(hold!.noticeUrl);
 
     // ---- a fresh attempt from scratch gets no quote either ----
@@ -189,7 +199,7 @@ test("recall drill: publish, product held, order refused with recall_hold naming
     // test.fail test below), so both are accepted here and the rule is recorded.
     const again = await quoteFor(agent, d.need, DRILL_PRODUCT).catch((e: Error) => ({ error: e.message }));
     if ("refused" in again && again.refused) {
-      expect(again.refused.status).toBe(409);
+      expect([409, 422]).toContain(again.refused.status);
       expect(["recall_hold", "quote_availability"]).toContain(again.refused.body.error?.rule);
       test.info().annotations.push({ type: "fresh attempt", description: `stale card chosen, refused with ${again.refused.body.error?.rule}: ${again.refused.body.error?.message}` });
     } else if ("error" in again) {
@@ -289,7 +299,7 @@ test("a quote chosen from the kitchen's option cards for a held product is refus
     await expect.poll(async () => (await radarView(ops)).holds.some((h) => h.productId === STALE_CARD.id), { timeout: 20_000 }).toBe(true);
     const r = await quoteFor(agent, STALE_CARD.need, STALE_CARD.id);
     expect(r.refused, `expected the chosen card to be refused: ${JSON.stringify(r).slice(0, 300)}`).toBeTruthy();
-    expect(r.refused.body.error, JSON.stringify(r.refused.body.error).slice(0, 500)).toMatchObject({ rule: "recall_hold", code: "product_on_recall_hold" });
+    expect(r.refused.body.error, JSON.stringify(r.refused.body.error).slice(0, 500)).toMatchObject({ rule: "recall_hold" });
   } finally {
     await endOurDrills(ops).catch(() => undefined);
     await opsContext.close();

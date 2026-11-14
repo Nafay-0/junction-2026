@@ -198,15 +198,19 @@ test.describe("photo door in the kitchen's agent panel (own visitor kitchen)", (
     await page.waitForURL(/\/k\/sbx_/);
     const kitchen = new URL(page.url()).pathname.split("/")[2];
 
-    // The panel is behind the floating "Ask the purchasing agent" button at every width (docked beside the page at
-    // 1280 px and up, over the page below that).
-    const camera = page.getByRole("button", { name: "Add a photo or document" });
-    const openPanel = page.getByRole("button", { name: "Ask the purchasing agent" });
-    if (page.viewportSize()!.width >= 1280) await expect(camera).toBeVisible(); // docked and open by default
-    else {
-      await expect(camera).toBeHidden();
-      await openPanel.click();
-    }
+    // Design v2 (main 4f0e267): the agent panel is the "Purchasing agent" sidebar. Its opener is the "Agent" button:
+    // in the header from 1024 px up (open by default on a wide screen), in the middle of the bottom tab bar on a phone.
+    // The home page has a second "Add a photo or document" button of its own; this test uses the panel's.
+    await page.waitForLoadState("networkidle").catch(() => undefined);
+    const panel = page.getByRole("complementary", { name: "Purchasing agent" });
+    const camera = panel.getByRole("button", { name: "Add a photo or document" });
+    const opener =
+      page.viewportSize()!.width >= 1024
+        ? page.getByRole("banner").getByRole("button", { name: "Agent", exact: true })
+        : page.getByRole("navigation", { name: "Shop sections" }).getByRole("button", { name: "Agent", exact: true });
+    await expect(opener).toBeVisible();
+    if ((await opener.getAttribute("aria-expanded")) !== "true") await opener.click();
+    await expect(camera).toBeVisible();
     await camera.click();
     const door = page.getByRole("dialog", { name: "Add a photo or document" });
     await expect(door).toBeVisible();

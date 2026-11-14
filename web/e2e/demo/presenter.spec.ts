@@ -186,8 +186,8 @@ test("presenter enrols with the passcode and a passkey, signs Kaari's order over
     await expect(page.getByRole("heading", { name: "Declined" })).toBeVisible();
     expect((await approvalState(page.request, second!.approvalId)).view?.state).toMatch(/declined/);
     await expect(k.getByText(/Declined|Not ordered/).first()).toBeVisible({ timeout: 20_000 });
-    // WebKit reports a cancelled Next.js RSC prefetch as "... due to access control checks."; not a user-visible error.
-    expect(errors.filter((e) => !/_rsc=.* due to access control checks\.$/.test(e))).toEqual([]);
+    // WebKit reports a fetch cancelled by a navigation as "... due to access control checks."; not a user-visible error.
+    expect(errors.filter((e) => !/^pageerror: \S+ due to access control checks\.$/.test(e))).toEqual([]);
     await k.context().close();
   } finally {
     await wallContext.close();
@@ -196,15 +196,12 @@ test("presenter enrols with the passcode and a passkey, signs Kaari's order over
 });
 
 /**
- * DEFECT (test.fail until fixed; E2E_EXPECT_FIXED=1 runs it as an ordinary test). A presenter who enrols from
- * /join/presenter without a `next` (enrolling before the demo starts, as server/presenter.ts describes) lands on
- * /approver (presenter-flow.tsx:17), and /api/v1/approver answers 401 "not_joined" for every approver without a
- * visitor sandbox (api/v1/approver/route.ts:11). So the presenter's phone says "You haven't joined yet. Scan the QR
- * code on the big screen", and, since the home only subscribes to live events once it has loaded, the demo kitchen's
- * next request never opens on the phone by itself: the presenter must scan the console's code for every order.
+ * Regression test, fixed on main in 4f0e267. Before, a presenter who enrolled from /join/presenter without a `next`
+ * (enrolling before the demo starts) landed on /approver, which answered 401 "not_joined" for any approver without a
+ * visitor sandbox: the phone said "You haven't joined yet" and the demo kitchen's next request never opened on it by
+ * itself. Now the presenter's home shows the role they took and the next request opens by itself.
  */
 test("a presenter who enrols ahead of the demo sees their sign-offs and gets the next one by itself", async ({ page, browser, baseURL }) => {
-  test.fail(!process.env.E2E_EXPECT_FIXED, "presenter lands on 'You haven't joined yet': /api/v1/approver needs a visitor sandbox");
   test.setTimeout(240_000);
   await page.context().setExtraHTTPHeaders({ "x-forwarded-for": fakeAddress() });
   await addPasskey(page);
@@ -217,7 +214,7 @@ test("a presenter who enrols ahead of the demo sees their sign-offs and gets the
     await page.getByRole("button", { name: "Continue" }).click();
     await page.getByRole("button", { name: "Create my passkey" }).click();
     await page.waitForURL("**/approver", { timeout: 30_000 });
-    // What a judge would see on the presenter's phone today: "You haven't joined yet".
+    // Not "You haven't joined yet" (the defect fixed in 4f0e267): the role the presenter took.
     await expect(page.getByRole("heading", { name: "You haven't joined yet" })).toHaveCount(0, { timeout: 5_000 });
     await expect(page.getByRole("heading", { name: "Sanna Koskinen" })).toBeVisible();
 

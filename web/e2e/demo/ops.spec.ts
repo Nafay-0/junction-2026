@@ -35,10 +35,13 @@ async function visitorPhone(browser: Browser, baseURL: string | undefined) {
 }
 
 /**
- * WebKit reports a Next.js RSC prefetch that is cancelled by a navigation as an uncaught "... due to access control
- * checks." page error (seen on /ops/* links). Nothing fails for the user; it is left out of the error check.
+ * WebKit reports a fetch that a navigation cancels (Next.js RSC prefetches of /ops/* links, the desk's own
+ * /ops-api polling) as an uncaught "... due to access control checks." page error. Nothing fails for the user; it
+ * is left out of the error check.
  */
-const realErrors = (errors: string[]) => errors.filter((e) => !/_rsc=.* due to access control checks\.$/.test(e));
+const realErrors = (errors: string[]) => errors.filter((e) => !/^pageerror: \S+ due to access control checks\.$/.test(e));
+/** A reason no parallel test shares (several workers start in the same millisecond). */
+const uniqueReason = (what: string) => `${what} ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
 const askButton = (phone: Page) => phone.getByRole("button", { name: /ask my agent for 1[,  ]?000 L of milk/i });
 
@@ -64,7 +67,7 @@ test("suspend a visitor's agent: its next call is refused naming the suspension;
   test.setTimeout(180_000);
   const errors = watchErrors(page);
   const v = await visitorPhone(browser, baseURL);
-  const reason = `E2E drill ${Date.now().toString(36)}: ordering in a loop`;
+  const reason = `${uniqueReason("E2E drill")}: ordering in a loop`;
 
   // The agent comes to the gate once (the scripted 1,000 L order), so the desk knows it. Declined: costs nothing.
   await askButton(v.phone).click();
@@ -149,11 +152,11 @@ test("suspend a visitor's agent: its next call is refused naming the suspension;
 
   // Resumed: the same calls work again.
   expect((await v.phone.request.get("/api/v1/kitchen", { headers: mandate })).status()).toBe(200);
+  // The refused run would come back on reload (the console keeps it in session storage, restored a moment after the
+  // page renders, which races the example chips); forget it first so the order page starts empty.
+  await k.evaluate((slug) => sessionStorage.removeItem(`dock-run:${slug}`), v.slug);
   await k.goto(`/k/${v.slug}/order`);
-  // The refused run survives the reload (session storage); start a new request to get the example chips back.
   const example = k.getByRole("button", { name: "200 litres of lactose-free milk for Wednesday, cheapest", exact: true });
-  await expect(example.or(k.getByRole("button", { name: "New request" }).first())).toBeVisible();
-  if (!(await example.isVisible())) await k.getByRole("button", { name: "New request" }).first().click();
   await example.click();
   // "cheapest" names the criterion, so the agent chooses and the fixed price is offered straight away.
   const price = k.getByRole("button", { name: "Get a fixed price for this" }).first();
@@ -210,17 +213,12 @@ test("overview, then a trace of the visitor's own request replays station by sta
 });
 
 /**
- * DEFECT (test.fail until fixed; E2E_EXPECT_FIXED=1 runs it as an ordinary test). The visitor phone's own
- * "Ask my agent for 1,000 L of milk" button (POST /api/v1/approver/demo-order -> sandboxes.runDemoOrder) is NOT
- * stopped by a suspension: the order reaches the gate and the sign-off opens, and the suspension's refusal count does
- * not move. REST, MCP and the console are refused (test above). runDemoOrder does call
- * `suspensions(dock).enforce(...)` (src/server/sandboxes.ts:226), but the registry is a module-level WeakMap
- * (src/server/ops/suspensions.ts:139), and Next bundles that module into several server chunks, so the approver
- * route's copy has never seen the suspension made through /ops-api/control. runtime.ts keeps its state on globalThis
- * for exactly this reason; the registry needs the same.
+ * Regression test, fixed on main in 4f0e267. Before, the visitor phone's own "Ask my agent for 1,000 L of milk"
+ * button (POST /api/v1/approver/demo-order -> sandboxes.runDemoOrder) was not stopped by a suspension: the
+ * suspension registry was a module-level WeakMap that Next bundled into several server chunks, so the approver
+ * route's copy never saw a suspension made through /ops-api/control, and the order reached sign-off.
  */
 test("a suspended agent's scripted order from the visitor's phone is refused too", async ({ page, browser, baseURL }) => {
-  test.fail(!process.env.E2E_EXPECT_FIXED, "the approver route's suspension registry is a separate module copy: the phone's demo order passes");
   test.setTimeout(150_000);
   const v = await visitorPhone(browser, baseURL);
   await askButton(v.phone).click();
@@ -230,7 +228,7 @@ test("a suspended agent's scripted order from the visitor's phone is refused too
 
   await enterOps(page);
   const agent = (await control(page)).agents.find((a) => a.orgId === v.orgId)!;
-  const reason = `E2E phone door ${Date.now().toString(36)}`;
+  const reason = uniqueReason("E2E phone door");
   const sus = await page.request.post("/ops-api/control", { data: { action: "suspend", scope: "agent", target: agent.agentId, reason } });
   expect(sus.status()).toBe(201);
   const { suspension } = await sus.json();
@@ -250,7 +248,7 @@ test("a suspended agent's scripted order from the visitor's phone is refused too
  * DEFECT (test.fail until fixed). While its agent is suspended, the kitchen's home page says nothing about it: the
  * "order cut-offs" panel stays on "Checking the order cut-offs…" for good, because /ui-api/kitchens/{k}/cutoffs
  * answers 500 "Something went wrong inside AimoPilot": standingCutoffs opens a request as the agent, the gate refuses
- * it (operator_suspension), and src/server/kitchen-portal.ts:314 rethrows the refusal as a plain Error without its
+ * it (operator_suspension), and src/server/kitchen-portal.ts:326 rethrows the refusal as a plain Error without its
  * status, so portalRoute (kitchen-portal-http.ts:31) logs it as a crash. Expected: the refusal passed through (403
  * with the reason), and the home page saying the agent is suspended and why.
  */
@@ -264,7 +262,7 @@ test("the kitchen's home says its agent is suspended, and why", async ({ page, b
   await expect(v.phone.getByRole("heading", { name: "Declined" })).toBeVisible();
   await enterOps(page);
   const agent = (await control(page)).agents.find((a) => a.orgId === v.orgId)!;
-  const reason = `E2E home ${Date.now().toString(36)}`;
+  const reason = uniqueReason("E2E home");
   const { suspension } = await (await page.request.post("/ops-api/control", { data: { action: "suspend", scope: "agent", target: agent.agentId, reason } })).json();
   try {
     const cutoffs = await v.phone.request.get(`/ui-api/kitchens/${v.slug}/cutoffs`);
