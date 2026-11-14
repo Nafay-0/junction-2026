@@ -113,7 +113,7 @@ export function Catalogue() {
               <li key={d.id} className="border-b border-line last:border-b-0">
                 <button type="button" aria-expanded={open} onClick={() => setOpenDept(open ? "" : d.id)} className={`flex min-h-11 w-full items-center gap-2.5 px-3 py-1.5 text-left ${open ? "bg-petrol-deep font-semibold text-paper" : "hover:bg-mist"}`}>
                   {g ? <Glyph kind={g} size={22} className={`shrink-0 ${open ? "text-lime" : "text-petrol"}`} strokeWidth={3} /> : <span className="w-[22px]" />}
-                  <span className="min-w-0 flex-1 leading-tight hyphens-auto">{departmentName(d, lang)}</span>
+                  <span className="min-w-0 flex-1 leading-tight hyphens-manual">{departmentName(d, lang)}</span>
                   <span className={`text-[0.8rem] font-normal tabular ${open ? "text-paper/70" : "text-ink-soft"}`}>{num(d.count, 0)}</span>
                 </button>
                 {open && (
@@ -148,35 +148,32 @@ export function Catalogue() {
       </nav>
 
       <section aria-labelledby="shop-title" className="min-w-0">
-        <header className={`on-dark relative overflow-hidden bg-petrol-deep px-5 py-6 text-paper sm:px-7 sm:py-8 ${art ? "sm:min-h-[15rem] sm:pr-[54%]" : ""}`}>
+        {/* Text has its own solid ground; the department's picture (a generated illustration, DESIGN.md §6) sits in
+            its own cell beside it, never behind the words: a band above them on phones, a column on wider screens. */}
+        <header className={`on-dark overflow-hidden bg-petrol-deep text-paper ${art ? "grid sm:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]" : "relative"}`}>
           {art ? (
-            <>
-              {/* The department's picture: a band on phones, the whole ground on wider screens (its left side is
-                  quiet petrol, so the type sits on it). Generated illustration, see DESIGN.md §6. */}
-              <div className="-mx-5 -mt-6 mb-4 h-32 sm:hidden">
-                <Art k={art} cover sizes="100vw" priority position="70% 50%" />
-              </div>
-              <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[52%] sm:block">
-                <Art k={art} cover sizes="(min-width: 1280px) 32rem, 50vw" priority position="78% 50%" />
-              </div>
-            </>
+            <div className="h-36 sm:order-2 sm:h-full sm:min-h-[15rem]">
+              <Art k={art} cover sizes="(min-width: 1280px) 30rem, (min-width: 640px) 45vw, 100vw" priority position="72% 50%" />
+            </div>
           ) : (
             glyph && !applied && <Glyph kind={glyph} size={220} strokeWidth={1.2} className="pointer-events-none absolute -right-6 -top-6 text-paper/10 sm:right-6" />
           )}
-          <p className="relative text-[0.95rem] text-paper/75">{applied ? tx.search : current ? departmentName(current.dept, lang) : tx.catalogue}</p>
-          <h1 id="shop-title" className="display relative mt-1 break-words text-[2.6rem] text-paper sm:text-[3.4rem]">
-            {title}
-          </h1>
-          <p className="relative mt-2 text-[0.95rem] text-paper/80" aria-live="polite">
-            {loading ? tx.searching : data ? tx.found(data.products.length, data.products.length === limit, data.ms) : ""}
-          </p>
-          <p className="relative mt-4 flex items-center gap-2" aria-live="polite">
-            <span className="display text-[2.4rem] text-lime tabular">{pageCalls}</span>
-            <span className="min-w-0 text-[0.9rem] leading-tight text-paper/85">
-              {tx.pageChecks(pageCalls)}
-              <span className="block text-paper/65">{tx.pageProducts(pageProducts, total ? num(total, 0) : undefined)}</span>
-            </span>
-          </p>
+          <div className="relative min-w-0 px-5 py-6 sm:px-7 sm:py-8">
+            <p className="text-[0.95rem] text-paper/75">{applied ? tx.search : current ? departmentName(current.dept, lang) : tx.catalogue}</p>
+            <h1 id="shop-title" className="display mt-1 break-words text-[2.6rem] text-paper sm:text-[3.4rem]">
+              {title}
+            </h1>
+            <p className="mt-2 max-w-[44ch] text-[0.95rem] leading-snug text-paper/80" aria-live="polite">
+              {loading ? tx.searching : data ? tx.found(data.products.length, data.products.length === limit, data.ms) : ""}
+            </p>
+            <p className="mt-4 flex items-center gap-2" aria-live="polite">
+              <span className="display text-[2.4rem] text-lime tabular">{pageCalls}</span>
+              <span className="min-w-0 text-[0.9rem] leading-tight text-paper/85">
+                {tx.pageChecks(pageCalls)}
+                <span className="block text-paper/65">{tx.pageProducts(pageProducts, total ? num(total, 0) : undefined)}</span>
+              </span>
+            </p>
+          </div>
         </header>
 
         <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 bg-paper px-4 py-3">
