@@ -123,9 +123,10 @@ export class SandboxService {
   }
 
   /** Step 1 of joining: a made-up identity to show, and the passkey prompt to create. Nothing is stored but the prompt. */
-  async beginJoin(rp: RelyingParty): Promise<{ options: PublicKeyCredentialCreationOptionsJSON; identity: SandboxIdentity }> {
+  async beginJoin(rp: RelyingParty, named?: (identity: SandboxIdentity) => SandboxIdentity): Promise<{ options: PublicKeyCredentialCreationOptionsJSON; identity: SandboxIdentity }> {
     await this.ensureRoom();
-    const identity = sandboxIdentity(this.seq++);
+    // `named`: server code only (the sample activity names its own kitchens so they never read as a real one).
+    const identity = named ? named(sandboxIdentity(this.seq++)) : sandboxIdentity(this.seq++);
     const { options } = await this.deps.passkeys.registrationOptions(
       rp,
       { name: `${identity.approverName} · ${identity.kitchenName}`, displayName: identity.approverName },

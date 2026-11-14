@@ -14,6 +14,7 @@ import type { FeedItem, WallSnapshot } from "@/server/wall-snapshot";
 import type { Board } from "./crash-board";
 import { CrashMatrix } from "./crash-matrix";
 import "./wall.css";
+import { SamplePill } from "../_ui/sample";
 
 /**
  * The wall: the big screen at the table, read from three metres by people walking past. Its one bold thing is the
@@ -293,6 +294,7 @@ function Lane({ it, now, cols, fresh, hidden }: { it: FeedItem; now: number; col
           {it.kitchen.split(", ")[0]}
         </p>
         <p className="truncate text-[max(0.92rem,0.95vw)] leading-tight text-paper/65 [@media(max-height:820px)]:hidden">
+          {it.sample && <SamplePill dark className="ml-0 mr-[0.5em]" />}
           {it.door ? <span className="mr-[0.5em] rounded-full bg-paper/12 px-[0.5em] text-[0.88em] font-medium text-paper/90">{OUTSIDE_DOOR[it.door]}</span> : null}
           {fiMoney(it.what)}
           {it.totalCents !== undefined ? `, ${money(it.totalCents)}` : ""}
@@ -382,6 +384,7 @@ function Refusals({ items, now, fresh }: { items: WallSnapshot["refusals"]; now:
               <p className="mt-[0.3vh] line-clamp-1 text-[max(0.95rem,0.98vw)] leading-snug text-paper/90">{fiMoney(r.reason)}</p>
               <p className="truncate text-[max(0.85rem,0.82vw)] text-paper/55">
                 {r.kitchen.split(", ")[0]}, {ago(r.at, now)}
+                {r.sample && <SamplePill dark />}
               </p>
             </li>
           ))}

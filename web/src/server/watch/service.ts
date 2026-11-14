@@ -1038,8 +1038,13 @@ export type WatchView = {
 
 export async function watchView(rt: Runtime): Promise<WatchView> {
   const s = await ready(rt);
-  const findings = [...s.findings.values()].sort((a, b) => b.at.localeCompare(a.at));
-  const renewals = [...s.renewals.values()].sort((a, b) => b.at.localeCompare(a.at));
+  // A viewer who hid the sample activity (server/alive) sees none of it, in the lists or the counts.
+  const { hiddenSample } = await import("../alive/marks");
+  const shown = <T extends { orgId: string }>(x: T, id: string) => !hiddenSample(rt.dock.ledger, id, x.orgId);
+  const findings = [...s.findings.values()].filter((f) => shown(f, f.findingId)).sort((a, b) => b.at.localeCompare(a.at));
+  const renewals = [...s.renewals.values()].filter((r) => shown(r, r.renewalId)).sort((a, b) => b.at.localeCompare(a.at));
+  const auto = [...s.auto.values()].filter((a) => !hiddenSample(rt.dock.ledger, a.orgId));
+  const stages = [...s.stages.values()].filter((g) => shown(g, g.stageId));
   const { scheduleInfo } = await import("./schedule");
   return {
     stats: {
@@ -1050,23 +1055,23 @@ export async function watchView(rt: Runtime): Promise<WatchView> {
       sentForSignOff: renewals.filter((r) => r.outcome?.status === "pending_approval").length + findings.filter((f) => f.decision?.action === "sent_for_sign_off").length,
       held: renewals.filter((r) => r.state === "held").length,
       skipped: renewals.filter((r) => r.state === "skipped").length,
-      autoRenewOn: [...s.auto.values()].filter((a) => a.on).length,
-      staged: [...s.stages.values()].filter((g) => !g.liftedAt).length,
+      autoRenewOn: auto.filter((a) => a.on).length,
+      staged: stages.filter((g) => !g.liftedAt).length,
       liveCalls: s.liveCalls,
     },
     findings: findings.slice(0, 100),
     renewals: renewals.slice(0, 100),
     // Staff read kitchens by name, not by organisation id.
     auto: await (async () => {
-      const names = new Map<string, string>([...findings, ...renewals, ...s.stages.values()].map((x) => [x.orgId, x.kitchenName]));
-      const missing = [...s.auto.values()].some((a) => !names.has(a.orgId));
+      const names = new Map<string, string>([...findings, ...renewals, ...stages].map((x) => [x.orgId, x.kitchenName]));
+      const missing = auto.some((a) => !names.has(a.orgId));
       if (missing) for (const k of await (await import("../offers/service")).allKitchens(rt).catch(() => [])) names.set(k.orgId, k.name);
-      return [...s.auto.values()].sort((a, b) => b.at.localeCompare(a.at)).map((a) => ({ ...a, ...(names.get(a.orgId) ? { kitchenName: names.get(a.orgId) } : {}) }));
+      return auto.sort((a, b) => b.at.localeCompare(a.at)).map((a) => ({ ...a, ...(names.get(a.orgId) ? { kitchenName: names.get(a.orgId) } : {}) }));
     })(),
-    stages: [...s.stages.values()].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 50),
+    stages: stages.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 50),
     runs: s.runs,
     schedule: scheduleInfo(),
-    backups: (await (await import("../reliability/service")).allBackups(rt)).slice(0, 100),
+    backups: (await (await import("../reliability/service")).allBackups(rt)).filter((b) => !hiddenSample(rt.dock.ledger, b.backupId, b.orgId)).slice(0, 100),
   };
 }
 
