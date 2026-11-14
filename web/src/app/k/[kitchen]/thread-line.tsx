@@ -401,6 +401,11 @@ function SignOffSlab({ card, thread, tap, total, what }: { card: GateCardT; thre
         <p className="text-[0.78rem] font-medium tracking-wide text-safety">{tx.needsOk}</p>
         {sum !== undefined && <p className="display mt-1.5 text-[2.1rem] leading-none tabular">{money(sum)}</p>}
         {lines && <p className="mt-2 text-[0.92rem] leading-snug text-paper/85">{lines}</p>}
+        {/* What the person OKs includes what it replaces: a substitute is said on the slab, in one line. */}
+        {(() => {
+          const sub = order?.lines.find((l) => l.substituteForName);
+          return sub ? <p className="mt-1 text-[0.86rem] leading-snug text-safety">{tx.inPlaceOf(sub.substituteForName!.replace(/[®™]/g, "").replace(/novobox/gi, f.lang === "fi" ? "laatikko" : "box"))}</p> : null;
+        })()}
         <p className="text-[0.86rem] leading-snug text-paper/55">
           {[order?.deliveryDate ? f.day(order.deliveryDate).replace(/\.$/, "") : "", why].filter(Boolean).join(". ")}
         </p>

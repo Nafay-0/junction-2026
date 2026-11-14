@@ -29,6 +29,7 @@ export const THREAD_LINE_TEXT = defineText({
     sections: { catalogue: "Catalogue", orders: "Orders", rules: "Your rules", language: "Language" },
     // the slab
     needsOk: "Needs your OK",
+    inPlaceOf: (usual: string) => `In place of your usual ${usual}, which cannot come in time.`,
     many: (n: number, names: string) => `${n} products: ${names}…`,
     ok: "OK with Face ID",
     testSigner: (who: string) => `On this test account you sign as ${who.toLowerCase()}.`,
@@ -117,6 +118,7 @@ export const THREAD_LINE_TEXT = defineText({
     menu: "Valikko",
     sections: { catalogue: "Tuotteet", orders: "Tilaukset", rules: "Sääntösi", language: "Kieli" },
     needsOk: "Tarvitsee hyväksyntäsi",
+    inPlaceOf: (usual: string) => `Tavallisen tuotteen (${usual}) tilalle, koska se ei ehdi.`,
     many: (n: number, names: string) => `${n} tuotetta: ${names}…`,
     ok: "Hyväksy Face ID:llä",
     testSigner: (who: string) => `Tällä testitilillä hyväksyt roolissa ${who}.`,
@@ -202,6 +204,7 @@ export const THREAD_LINE_TEXT = defineText({
     menu: "Meny",
     sections: { catalogue: "Produkter", orders: "Beställningar", rules: "Dina regler", language: "Språk" },
     needsOk: "Behöver ditt godkännande",
+    inPlaceOf: (usual: string) => `I stället för er vanliga ${usual}, som inte hinner fram.`,
     many: (n: number, names: string) => `${n} produkter: ${names}…`,
     ok: "Godkänn med Face ID",
     testSigner: (who: string) => `På det här testkontot godkänner du som ${who}.`,
