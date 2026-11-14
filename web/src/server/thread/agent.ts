@@ -25,6 +25,7 @@ import { earlierFor } from "./earlier";
  *   buyer_reply     the newest buyer words mapped onto a card that is open now (checked by code)
  *   order_history   "what did we order last week?" → a records card
  *   find_products, product_facts, show_home   the home's cards (home.ts): the assortment, one product, the kitchen's records
+ *   in_season       what is in season in Finland for the days asked, with products (season.ts)
  *   await_sign_off  pauses the loop until the named person signs on their phone: the runtime's approval step,
  *                   answered only by the server when the passkey sign-off is recorded
  *
@@ -40,6 +41,7 @@ How to work each turn:
 - The buyer wants to buy something, change or repeat an order, adjust an amount, ask for a variant ("is there a lactose-free one?"), or names several items: call order with their own words, copied exactly. One call per message is enough: several items in one message are split by code. For "same as last Thursday but double" or "make it 200 litres", pass the words as they are: code reads them against earlier requests.
 - The buyer's newest words answer something open (listed under OPEN DECISIONS): call buyer_reply with the matching ref. "the second one" is o2. "yes", "that's right", "the chef said yes" confirm a check. Only use refs that are listed. If their words do not clearly pick one, ask one short question instead.
 - After an order waits for a named person's sign-off (status pending_approval), write your one sentence (who signs, on their phone) and call await_sign_off with its orderId in the same reply. Do not try to place, retry or split it.
+- What is in season, or anything seasonal to try ("what is in season next week?", "mikä on sesongissa?"): in_season. A menu around what is in season: plan_menu.
 - The buyer wants to look around the assortment without ordering yet ("show me oat drinks"): find_products. About one product shown: product_facts. "What do I need to do today?", "our recurring orders", "what's arriving", "what do you remember about us": show_home.
 - A dish or a menu for a number of covers ("salmon soup for 300 on Friday", "plan lunch for 40 around beetroot"): call plan_menu with their words. The menu card forms as the planner works (open words get two or three menus to pick from); the buyer edits it in place and puts it on the order sheet with one tap (or "yes, put it on the sheet": buyer_reply menu; "the second menu": buyer_reply menu_p2). Do not list its lines or prices.
 - Questions about past orders: order_history. About rules, limits or who signs off ("what are our rules?"), or a change to them ("never nuts", "raise the limit to 800", "Maija signs from now on"): call rules, with the change in the mandate's terms when they ask for one. It shows the change with before and after; only the kitchen's signed-in person confirms it there, with one tap, never you. Say "confirm", never "sign" or "mandate". About an order's status or why something happened: get_order or explain.
@@ -297,6 +299,16 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
       },
       toModelOutput: ({ output }) => ({ type: "text", value: compact(output) }),
     }),
+    in_season: tool({
+      description: "What is in season in Finland for some days (default: the next seven), each with a product of the wholesaler's the kitchen may buy, as a card. For 'what is in season next week?', 'anything seasonal we should try?'. For a menu around what is in season, use plan_menu.",
+      inputSchema: z.object({ from: z.iso.date().optional().describe("YYYY-MM-DD, the first day asked about"), to: z.iso.date().optional().describe("YYYY-MM-DD, the last day") }),
+      execute: async ({ from, to }) => {
+        const { seasonCard } = await import("./season");
+        const c = await seasonCard(run, words, from, to);
+        return { shown: c.rows.length, items: c.rows.map((r) => r.label) };
+      },
+      toModelOutput: ({ output }) => ({ type: "text", value: compact(output) }),
+    }),
     product_facts: tool({
       description: "One product's facts as a card: pack, allergens, certificates, origin, carbon, delivery reliability (master data). For 'what's in the Arla butter?' after a product grid or sheet showed it.",
       inputSchema: z.object({ productId: z.string().min(1).max(80).describe("A productId from a tool result in this conversation.") }),
@@ -375,7 +387,7 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
       { role: "system", content: context },
     ],
     tools,
-    activeTools: [...PUBLISHED_FOR_MODEL, "order", "plan_menu", "buyer_reply", "order_history", "find_products", "product_facts", "show_home", "rules", "await_sign_off"],
+    activeTools: [...PUBLISHED_FOR_MODEL, "order", "plan_menu", "buyer_reply", "order_history", "find_products", "product_facts", "in_season", "show_home", "rules", "await_sign_off"],
     toolApproval: {
       ...Object.fromEntries(BUYERS_OR_ENGINES.map((n) => [n, deny(`${n} is the buyer's decision or the engine's step in the store: use buyer_reply or order.`)])),
       // The pause for a person's sign-off. Only the server answers it, when the passkey sign-off is recorded.

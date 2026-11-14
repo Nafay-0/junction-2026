@@ -5,7 +5,9 @@ import type { Decision } from "@/core/policy";
 import type { DraftIngredient, DraftOutline } from "@/server/agent/menu/draft";
 import { toBase, type PlanLineView, type PlanView } from "@/server/agent/menu/plan";
 import type { PlanEdit, PlanProgress, PlanRecord } from "@/server/agent/menu/service";
+import { inSeason, seasonalIn, seasonText, type SeasonItem } from "@/server/agent/menu/season";
 import { cardId } from "./cards";
+import { stockFromRecords } from "./menu-stock";
 import { byLine, record, step, type TurnRun } from "./pipeline";
 import { createSheet, gateOf } from "./sheet";
 import type { MenuCard, NoticeCard } from "./types";
@@ -38,6 +40,8 @@ type MenuState = {
   chosen?: string;
   stage: MenuCard["stage"];
   sheetId?: string;
+  /** Lines counted as in stock from the kitchen's records (menu-stock.ts), until the buyer says otherwise. */
+  assumed?: Record<string, { amount: number; unit: string; deliveredOn: string }>;
   outline?: DraftOutline;
   dishes: Record<string, DraftIngredient[]>;
   /** When the outline and the ready card were shown, ms after the tool started (the record and the eval read them). */
@@ -123,9 +127,10 @@ function gateOnLine(decision: Decision | undefined, l: PlanLineView): MenuCard["
     .map((r) => ({ code: r.rule, text: r.reason, blocking: r.outcome === "fail" }));
 }
 
-function cardLine(p: PlanRecord, l: PlanLineView, dishId: string, decision: Decision | undefined, refused: Set<string>, resolving: boolean): MenuCard["dishes"][number]["lines"][number] {
+function cardLine(p: PlanRecord, l: PlanLineView, dishId: string, decision: Decision | undefined, refused: Set<string>, resolving: boolean, assumed?: MenuState["assumed"]): MenuCard["dishes"][number]["lines"][number] {
   const use = l.uses.find((u) => u.dishId === dishId) ?? l.uses[0];
   const c = l.chosen;
+  const late = resolving ? undefined : lateOf(l);
   const chefStruck = !!p.edits[l.lineId]?.struck;
   const status: MenuCard["dishes"][number]["lines"][number]["status"] =
     l.status === "struck" ? (chefStruck || l.pantry ? "have" : "left_out") : resolving ? "resolving" : l.status === "ready" ? "ready" : "decide";
@@ -166,8 +171,27 @@ function cardLine(p: PlanRecord, l: PlanLineView, dishId: string, decision: Deci
         }
       : {}),
     options: status === "have" || status === "left_out" ? [] : options,
-    conflicts: status === "have" ? [] : conflicts,
+    conflicts: status === "have" ? [] : conflicts.filter((c) => !(late && c.code === "cannot_arrive")),
+    ...(status === "have" && assumed?.[l.lineId] ? { stock: assumed[l.lineId] } : {}),
+    ...(late && status !== "have" && status !== "left_out" ? { late } : {}),
   };
+}
+
+/**
+ * A line that cannot arrive by the service day: the reason (the wholesaler's real cut-off, as the planner read it),
+ * and the first way out by the dish's logic that plain code checked: the cook's own idea first (an ingredient that
+ * does the same job, then less of it, then another dish), then the product map's stand-in for the same use.
+ */
+function lateOf(l: PlanLineView): MenuCard["dishes"][number]["lines"][number]["late"] | undefined {
+  const d = l.doubts.find((x) => x.kind === "cannot_arrive" && !x.accepted);
+  if (!d) return undefined;
+  const ok = l.fixes.filter((f) => f.check?.ok);
+  const rank = (f: (typeof ok)[number]) => (f.source === "model" ? 0 : 3) + (f.kind === "substitute" ? 0 : f.kind === "change_amount" ? 1 : 2);
+  const f = [...ok].sort((a, b) => rank(a) - rank(b))[0];
+  const c = f?.check as Extract<NonNullable<(typeof ok)[number]["check"]>, { ok: true }> | undefined;
+  // Without a checked way out the planner's own doubt stays on the line as before (with "accept the later delivery").
+  if (!f || !c) return undefined;
+  return { reason: plain(d.text), way: { optionId: `fix:${f.fixId}`, kind: f.kind, title: f.title, effect: f.effect, name: c.product, totalCents: c.totalCents } };
 }
 
 /** Days the plan can move to: the kitchen's delivery days inside the mandate's lead time, none earlier than every line can come. */
@@ -211,7 +235,14 @@ async function fullCard(run: TurnRun, svc: Svc, m: MenuState, planned: Planned, 
     if (l.status === "merged") continue;
     const dishId = l.uses[0]?.dishId;
     const dish = dishes.find((x) => x.dishId === dishId) ?? dishes[0];
-    if (dish) dish.lines.push(cardLine(p, l, dish.dishId, decision, refused, resolving));
+    if (dish) dish.lines.push(cardLine(p, l, dish.dishId, decision, refused, resolving, m.assumed));
+  }
+  // What in each dish is in season on the service day (the season calendar), said under the dish's name.
+  const day = p.settings.deliverBy ?? addDaysIso(localNow(new Date()).date, 3);
+  const now = new Set(inSeason(day).map((x) => x.key));
+  for (const d of dishes) {
+    const items = seasonalIn([d.name, ...d.lines.map((x) => x.ingredient)].join(" ")).filter((x) => now.has(x.key));
+    if (items.length) d.season = items.slice(0, 3).map(seasonOf);
   }
   const t = view.totals;
   const covers = p.settings.covers;
@@ -232,6 +263,40 @@ async function fullCard(run: TurnRun, svc: Svc, m: MenuState, planned: Planned, 
     ...(decision ? { gate: gateOf(decision) } : {}),
     ...(m.sheetId ? { sheetId: m.sheetId } : {}),
   };
+}
+
+const seasonOf = (x: SeasonItem) => ({ name: x.names, span: { en: seasonText(x, "en"), fi: seasonText(x, "fi"), sv: seasonText(x, "sv") } });
+
+/**
+ * What the kitchen probably still has (menu-stock.ts): from its own deliveries, a line whose need is covered by what
+ * is likely left is counted as in stock (a strike in the plan, by the agent from records), said on the line, and
+ * bought after all with one tap. Applied once, when the plan is first ready.
+ */
+async function assumeStock(run: TurnRun, svc: Svc, m: MenuState, planned: Planned): Promise<Planned> {
+  if (m.assumed || planned.record.state !== "planned") return planned;
+  m.assumed = {};
+  const profile = await run.rt.kitchens.getProfile(run.k.info.orgId).catch(() => undefined);
+  if (!profile?.history.length) return planned;
+  const p = planned.record;
+  const lines = planned.view.lines
+    .filter((l) => (l.status === "ready" || l.status === "needs_decision") && l.gross && !p.edits[l.lineId]?.struck)
+    .map((l) => {
+      const cands = p.candidates[l.lineId]?.candidates ?? [];
+      return {
+        lineId: l.lineId,
+        name: l.name,
+        need: { amount: l.gross!.amount, unit: l.gross!.unit },
+        productIds: [...new Set([...cands.map((c) => c.product.id), ...(l.chosen?.products.map((x) => x.productId) ?? [])])],
+        ...(cands[0] ? { category: cands[0].product.category } : {}),
+        kindWords: l.name.split(/\s+/).slice(-2),
+      };
+    });
+  const guesses = stockFromRecords(profile.history, lines, localNow(new Date()).date);
+  if (!guesses.length) return planned;
+  for (const g of guesses) m.assumed[g.lineId] = { amount: g.amount, unit: g.unit, deliveredOn: g.deliveredOn };
+  const next = await svc.service.edit(svc.kitchen, p.planId, guesses.map((g) => ({ op: "strike" as const, lineId: g.lineId, struck: true })), "AimoPilot, from the kitchen's own deliveries");
+  record(run, "menu_stock", `Counted as in stock from the kitchen's deliveries (one tap buys each after all): ${guesses.map((g) => `${g.lineId} ${g.amount} ${g.unit} left of ${g.deliveredOn}`).join("; ")}.`, { planId: p.planId, guesses }, p.requestId);
+  return next;
 }
 
 function show(run: TurnRun, card: MenuCard): void {
@@ -284,8 +349,9 @@ function startPlan(run: TurnRun, svc: Svc, m: MenuState, text: string, proposalI
   };
   const job = svc.service
     .plan(svc.kitchen, text, byLine(run), { onProgress })
-    .then(async (planned) => {
-      if (!mine()) return planned;
+    .then(async (first) => {
+      if (!mine()) return first;
+      const planned = await assumeStock(run, svc, m, first).catch(() => first);
       m.planId = planned.record.planId;
       if (planned.record.requestId) run.requests.add(planned.record.requestId);
       if (m.stage !== "choose") m.stage = planned.record.state === "declined" ? "declined" : "ready";
@@ -504,9 +570,13 @@ export async function runMenuAction(run: TurnRun, a: { type: string } & Record<s
       await edit(run, planId, [optionId.startsWith("fix:") ? { op: "applyFix", lineId, fixId: optionId.slice(4) } : { op: "choose", lineId, optionId }], "Another product for a line");
       return true;
     }
-    case "menu_line_have":
+    case "menu_line_have": {
+      // The buyer's own word on it replaces the agent's guess from the records.
+      const m = Object.values(menusOf(run)).find((x) => x.planId === planId);
+      if (m?.assumed) delete m.assumed[String(a.lineId)];
       await edit(run, planId, [{ op: "strike", lineId: String(a.lineId), struck: !!a.have }], a.have ? "The kitchen has this" : "Buying this after all");
       return true;
+    }
     case "menu_line_per_cover":
       await edit(run, planId, [{ op: "perCover", lineId: String(a.lineId), dishId: String(a.dishId), amount: Number(a.amount) }], "Amount per cover");
       return true;

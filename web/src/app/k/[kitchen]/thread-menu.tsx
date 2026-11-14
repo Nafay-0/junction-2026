@@ -67,6 +67,7 @@ export function MenuCardView({ card, busy, tap }: { card: MenuCard; busy: boolea
             <section key={d.dishId} className="mt-3" aria-label={d.name}>
               <h3 className="text-[0.95rem] font-semibold leading-snug">{d.name}</h3>
               {d.portion && <p className="text-[0.8rem] text-ink-soft">{d.portion}</p>}
+              {d.season?.length ? <p className="text-[0.8rem] text-good">{tx.inSeason(d.season.map((x) => `${x.name[f.lang]} (${x.span[f.lang]})`).join(", "))}</p> : null}
               <ul className="mt-1 divide-y divide-line/70">
                 {d.lines.map((l) => (
                   <MenuLine key={`${l.lineId}:${l.perCover.amount}`} line={l} dishId={d.dishId} planId={card.planId} lock={lock} tap={tap} />
@@ -177,6 +178,28 @@ function MenuLine({ line: l, dishId, planId, lock, tap }: { line: Line; dishId: 
         </span>
         {l.product && !off && <span className="shrink-0 font-medium tabular">{money(l.product.totalCents)}</span>}
       </div>
+      {/* Counted as in stock from the kitchen's own deliveries: said, never silent, and bought after all with one tap. */}
+      {l.stock && (
+        <p className="mt-1 text-[0.8rem] text-ink">
+          {tx.stock(f.measure(l.stock.amount, l.stock.unit), f.lang === "en" ? f.weekday(l.stock.deliveredOn) : f.day(l.stock.deliveredOn))}
+        </p>
+      )}
+      {/* Cannot arrive by the day: why, and the way out by the dish's logic, one tap to use it. */}
+      {l.late && (
+        <div className="mt-1.5 rounded-md bg-notice-soft px-2.5 py-2 text-[0.8rem] leading-snug">
+          <p className="text-notice">{f.lang === "en" ? tx.late(l.late.reason) : (tx.conflict.cannot_arrive ?? l.late.reason)}</p>
+          {l.late.way && (
+            <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+              <p className="min-w-0 text-ink">
+                <b className="font-semibold">{tx.instead}:</b> {l.late.way.title}. {l.late.way.effect} <span className="text-ink-soft">({l.late.way.name}, {money(l.late.way.totalCents)})</span>
+              </p>
+              <button type="button" disabled={lock} className={buttonClass("secondary", "sm")} onClick={() => tap({ type: "menu_line_swap", planId, lineId: l.lineId, optionId: l.late!.way!.optionId }, tx.useWords(l.late!.way!.title))}>
+                {tx.useThis}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
       {l.conflicts.map((c) => (
         <p key={`${c.code}:${c.doubtId ?? c.text}`} className={`mt-1 text-[0.8rem] ${c.blocking ? "text-notice" : "text-ink-soft"}`}>
           {f.lang === "en" ? c.text : (tx.conflict[c.code] ?? c.text)}
@@ -226,7 +249,7 @@ function MenuLine({ line: l, dishId, planId, lock, tap }: { line: Line; dishId: 
           )}
           {l.status !== "left_out" && (
             <button type="button" disabled={lock} className="text-petrol underline decoration-1 underline-offset-4 disabled:opacity-50" onClick={() => tap({ type: "menu_line_have", planId, lineId: l.lineId, have: l.status !== "have" }, l.status === "have" ? tx.buyWords(l.ingredient) : tx.haveWords(l.ingredient))}>
-              {l.status === "have" ? tx.buy : tx.have}
+              {l.status === "have" ? (l.stock ? tx.buyAfterAll : tx.buy) : tx.have}
             </button>
           )}
         </div>

@@ -12,6 +12,10 @@ export type MenuPromptContext = {
   rules: string[];
   /** Staples the kitchen says it always has. */
   pantry: string[];
+  /** What is in season in Finland around the service (server/agent/menu/season.ts), for a menu around what is in season. */
+  season?: string[];
+  /** The chef's own words, so ways out are written in their language. */
+  requestText?: string;
 };
 
 const COMMON = `You are the menu planner in a professional kitchen's purchasing system in Finland. Requests may be in English, Finnish or Swedish. Your output is a draft that plain code checks: it finds products in the wholesaler's catalogue, converts amounts into packs, checks allergens, prices and delivery. Never invent products, prices, stock or brands. Write short, concrete text.`;
@@ -19,7 +23,7 @@ const COMMON = `You are the menu planner in a professional kitchen's purchasing 
 function kitchenLines(ctx: MenuPromptContext): string {
   return `The kitchen: ${ctx.kitchenName} (${ctx.kitchenKind}).
 Kitchen rules: ${ctx.rules.length ? ctx.rules.join("; ") : "none stated"}.
-Always in stock here: ${ctx.pantry.length ? ctx.pantry.join(", ") : "nothing stated"}.`;
+Always in stock here: ${ctx.pantry.length ? ctx.pantry.join(", ") : "nothing stated"}.${ctx.season?.length ? `\nIn season in Finland now (domestic harvest, catch or storage): ${ctx.season.join(", ")}. When the chef asks for what is in season, build the dishes around these, and name the seasonal ingredient in the dish name.` : ""}`;
 }
 
 /** Step 1: what is being served, to whom, when. Small and fast; the dishes are then detailed in parallel. */
@@ -79,7 +83,7 @@ Your job in this step: one ingredient of a dish cannot be bought as planned (it 
 - substitute: another ingredient that does the same job in THIS dish, judged by how it is cooked (cooking cream works in a soup but will not whip for a dessert; frozen salmon works in a soup, not for gravlax; dried dill can replace fresh in a soup at about a third of the amount). Give the full ingredient with per-cover amount.
 - change_amount: use less or more of this ingredient (perCover), when the dish still works.
 - change_dish: change the dish so the ingredient is not needed or another one takes its place (salmon soup becomes white-fish soup). Give the ingredient that comes in, if any.
-For each option: title (a few words), effect (what it does to the dish, one sentence), changesDish (true when a guest would notice a different dish). Rules of the kitchen and the menu still apply to every option. Plain code checks each option against the catalogue, the rules, prices and delivery, and drops what fails.
+For each option: title (a few words), effect (what changes on the plate, one short sentence), changesDish (true when a guest would notice a different dish). Write title and effect in the language of the chef's request${ctx.requestText ? ` ("${ctx.requestText.slice(0, 80)}")` : ""}. Rules of the kitchen and the menu still apply to every option. Plain code checks each option against the catalogue, the rules, prices and delivery, and drops what fails.
 
 ${kitchenLines(ctx)}`;
 }

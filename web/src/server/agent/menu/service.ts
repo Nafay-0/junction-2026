@@ -1,3 +1,4 @@
+import { inSeason } from "./season";
 import type { AlternativesSource } from "@/core/alternatives";
 import type { Door } from "@/core/orders";
 import { MAX_LIVE_IDS_PER_CALL, usableOffer, type LiveOffer, type LiveStatus, type Product } from "@/core/catalog";
@@ -127,8 +128,10 @@ export type PlanProgress =
 export const LIVE_PER_LINE = 2;
 export const LIVE_MAX_PER_PLAN = 16;
 
-export function promptContext(k: MenuKitchen): MenuPromptContext {
-  return { kitchenName: k.info.name, kitchenKind: k.info.kind, rules: k.info.rules.map((r) => r.text), pantry: k.info.pantry };
+export function promptContext(k: MenuKitchen, requestText?: string): MenuPromptContext {
+  // What is in season around the service, by default the coming week (server/agent/menu/season.ts).
+  const day = new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10);
+  return { kitchenName: k.info.name, kitchenKind: k.info.kind, rules: k.info.rules.map((r) => r.text), pantry: k.info.pantry, season: inSeason(day).map((x) => x.names.en), ...(requestText ? { requestText } : {}) };
 }
 
 /** Candidate sets with each product's safety judged again under `diet`; blocked products move to `rejected`. */
@@ -274,7 +277,7 @@ export function createPlanService(deps: PlanDeps) {
             const spec = p.specs.find((x) => x.lineId === line.lineId)!;
             const dish = p.draft.dishes.find((d) => d.id === spec.uses[0].dishId)!;
             const problem = line.doubts.filter((d) => !d.accepted).map((d) => d.text).join(" ");
-            const r = await deps.fix!({ lineKey: spec.key, dish: dish.name, method: dish.method, ingredient: spec.ingredient, problem, rules }, promptContext(k));
+            const r = await deps.fix!({ lineKey: spec.key, dish: dish.name, method: dish.method, ingredient: spec.ingredient, problem, rules }, promptContext(k, p.text));
             p.model.calls.push({ step: `fix ${spec.key}`, ms: r.ms, tokens: r.tokens, costUsd: r.costUsd });
             p.raw.fixes[spec.key] = r.fixes;
             return { line, spec, proposals: toFixOptions(r.fixes, spec.ingredient) };

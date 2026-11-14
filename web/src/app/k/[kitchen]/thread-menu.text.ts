@@ -3,6 +3,13 @@ import { defineText } from "../../_i18n/lang";
 /** The menu builder card in the agent thread: labels and buttons only; dishes, products, amounts and prices come from the plan. */
 export const THREAD_MENU_TEXT = defineText({
   en: {
+    inSeason: (items: string) => `In season: ${items}`,
+    stock: (amount: string, day: string) => `You probably still have ${amount} from ${day}'s delivery; counted as in stock.`,
+    buyAfterAll: "Buy it after all",
+    late: (reason: string) => `Cannot arrive in time: ${reason}`,
+    instead: "Instead",
+    useThis: "Use this",
+    useWords: (title: string) => `Use instead: ${title}`,
     kind: "Menu",
     stage: { proposing: "Writing the dishes…", choose: "Pick a menu", resolving: "Finding products and live prices…", ready: "", ordered: "Ordered", declined: "Not planned" } as Record<string, string>,
     choose: "Which menu?",
@@ -63,6 +70,13 @@ export const THREAD_MENU_TEXT = defineText({
     acceptWords: (x: string) => `Accept ${x} as it is`,
   },
   fi: {
+    inSeason: (items: string) => `Sesongissa: ${items}`,
+    stock: (amount: string, day: string) => `Teillä on todennäköisesti vielä ${amount} ${day} tulleesta toimituksesta; laskettu varastoon.`,
+    buyAfterAll: "Osta sittenkin",
+    late: (reason: string) => `Ei ehdi ajoissa: ${reason}`,
+    instead: "Tilalle",
+    useThis: "Käytä tätä",
+    useWords: (title: string) => `Käytä tilalle: ${title}`,
     kind: "Menu",
     stage: { proposing: "Kirjoitetaan ruokia…", choose: "Valitse menu", resolving: "Haetaan tuotteita ja hintoja…", ready: "", ordered: "Tilattu", declined: "Ei suunniteltu" } as Record<string, string>,
     choose: "Mikä menu?",
@@ -123,6 +137,13 @@ export const THREAD_MENU_TEXT = defineText({
     acceptWords: (x: string) => `Hyväksytään ${x} sellaisenaan`,
   },
   sv: {
+    inSeason: (items: string) => `I säsong: ${items}`,
+    stock: (amount: string, day: string) => `Ni har troligen kvar ${amount} från leveransen ${day}; räknat som i lager.`,
+    buyAfterAll: "Köp ändå",
+    late: (reason: string) => `Hinner inte fram i tid: ${reason}`,
+    instead: "I stället",
+    useThis: "Använd detta",
+    useWords: (title: string) => `Använd i stället: ${title}`,
     kind: "Meny",
     stage: { proposing: "Rätterna skrivs…", choose: "Välj en meny", resolving: "Produkter och priser hämtas…", ready: "", ordered: "Beställd", declined: "Inte planerad" } as Record<string, string>,
     choose: "Vilken meny?",

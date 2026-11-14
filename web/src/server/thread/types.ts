@@ -479,6 +479,8 @@ export type MenuCard = CardBase & {
     name: string;
     course: string;
     portion?: string;
+    /** What in this dish is in season in Finland on the service day (server/agent/menu/season.ts), in each language. */
+    season?: { name: Record<"en" | "fi" | "sv", string>; span: Record<"en" | "fi" | "sv", string> }[];
     lines: {
       lineId: string;
       ingredient: string;
@@ -492,6 +494,16 @@ export type MenuCard = CardBase & {
       options: { optionId: string; productId: string; name: string; totalCents: number; differs: { code: string; params: Record<string, string | number> }[] }[];
       /** Allergen, rule and mandate conflicts and the planner's doubts, on the line they concern. */
       conflicts: { code: string; text: string; doubtId?: string; blocking: boolean }[];
+      /**
+       * Counted as in stock from the kitchen's records, not by the buyer: what was delivered recently and is probably
+       * left after its usual use ("you probably still have 6 kg from Thursday's delivery"). One tap buys it after all.
+       */
+      stock?: { amount: number; unit: string; deliveredOn: string };
+      /**
+       * The line cannot arrive by the service day (the wholesaler's real cut-off): why, and the way out by the dish's
+       * logic (an ingredient that does the same job, or another dish), with what changes on the plate. One tap uses it.
+       */
+      late?: { reason: string; way?: { optionId: string; kind: "substitute" | "change_amount" | "change_dish"; title: string; effect: string; name: string; totalCents: number } };
     }[];
   }[];
   totalCents: number;
