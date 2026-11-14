@@ -218,7 +218,10 @@ export function buildQuote(input: QuoteInput): Quote {
     let substituteFor: QuoteLine["substituteFor"];
     if (req.substituteFor) {
       const orig = product(req.substituteFor);
-      const origOffer = input.referenceOffers?.find((x) => x.productId === req.substituteFor) ?? offer(req.substituteFor);
+      // The product a stand-in replaces is never quoted itself: it only lends its price for the substitution rule. One
+      // that cannot be priced now (its cut-off passed: the very reason it is replaced) lends no price, and the rule then
+      // treats the increase as unknown, so a person decides (core/policy.ts perUnitIncreasePct): never a failed quote.
+      const origOffer = input.referenceOffers?.find((x) => x.productId === req.substituteFor) ?? input.offers.find((x) => x.productId === req.substituteFor) ?? { unitPriceCents: 0 };
       substituteFor = {
         productId: orig.id,
         name: orig.name,

@@ -49,7 +49,7 @@ export function differencesOf(wanted: Wanted[], got: Got[], opts: { roundingCoun
       continue;
     }
     if (g.instead) out.push({ kind: "swapped", key: w.key, name: w.name, to: g.instead, ...(g.insteadWhy ? { reason: g.insteadWhy } : {}) });
-    if (w.need && g.amount && sameUnit(w.need.unit, g.amount.unit)) {
+    if (w.need && g.amount && Number.isFinite(w.need.amount) && Number.isFinite(g.amount.amount) && sameUnit(w.need.unit, g.amount.unit)) {
       const a = toBase(w.need);
       const b = toBase(g.amount);
       if (b < a * 0.999) out.push({ kind: "reduced", key: w.key, name: w.name, from: w.need, to: g.amount });
@@ -61,8 +61,9 @@ export function differencesOf(wanted: Wanted[], got: Got[], opts: { roundingCoun
 }
 
 const BASE: Record<string, [string, number]> = { kg: ["g", 1000], g: ["g", 1], l: ["ml", 1000], dl: ["ml", 100], ml: ["ml", 1], pcs: ["pcs", 1], kpl: ["pcs", 1] };
-const sameUnit = (a: string, b: string) => (BASE[a.toLowerCase()]?.[0] ?? a.toLowerCase()) === (BASE[b.toLowerCase()]?.[0] ?? b.toLowerCase());
-const toBase = (x: Amount) => x.amount * (BASE[x.unit.toLowerCase()]?.[1] ?? 1);
+// A missing unit (an amount the buyer gave in packs, or one not known yet) is no comparison: never a throw.
+const sameUnit = (a?: string, b?: string) => !!a && !!b && (BASE[a.toLowerCase()]?.[0] ?? a.toLowerCase()) === (BASE[b.toLowerCase()]?.[0] ?? b.toLowerCase());
+const toBase = (x: Amount) => x.amount * (BASE[(x.unit ?? "").toLowerCase()]?.[1] ?? 1);
 
 /** A stable key per difference: said once, remembered as said (the thread's `told`). */
 export const keyOf = (d: Difference) => `${d.kind}:${d.key}:${d.kind === "swapped" ? d.to : d.kind === "moved_day" ? d.to : d.kind === "reduced" || d.kind === "rounded_up" ? `${d.to.amount}${d.to.unit}` : d.reason.code}`;

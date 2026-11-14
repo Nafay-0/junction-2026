@@ -58,6 +58,12 @@ describe("buildQuote", () => {
     expect(q.totalCents).toBe(77_400 + 54_800);
   });
 
+  it("quotes a stand-in whose replaced product cannot be priced now (its cut-off passed): never a failed quote", () => {
+    const q = buildQuote({ ...input, offers: input.offers.filter((o) => o.productId !== "VA-1010"), lines: [{ productId: "AR-2010", quantity: 40, substituteFor: "VA-1010" }] });
+    expect(q.lines).toHaveLength(1);
+    expect(q.lines[0].substituteFor).toMatchObject({ productId: "VA-1010", unitPriceCents: 0 });
+  });
+
   it.each([
     [{ productId: "XX-1", quantity: 1 }, "quote_unknown_product"],
     [{ productId: "VA-1010", quantity: 61 }, "quote_insufficient_stock"],
