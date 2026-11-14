@@ -45,7 +45,7 @@ function Body({ o, now }: { o: Overview; now: number }) {
                 <Link className="font-semibold text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol" href="/k/kaari">
                   Open Ravintola Kaari&apos;s shop
                 </Link>
-                <Link className="font-semibold text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol" href="/">
+                <Link className="font-semibold text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol" href="/wall">
                   Show the wall&apos;s join code
                 </Link>
               </>

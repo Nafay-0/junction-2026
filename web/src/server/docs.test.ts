@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { Markdown } from "@/app/_ui/markdown";
 import { GET as rawDoc } from "@/app/docs/raw/[file]/route";
 import { apiCatalog, llmsTxt, manifest } from "./discovery";
-import { PUBLIC_DOCS, docHref, readDoc } from "./docs";
+import { PUBLIC_DOCS, docHref, docPath, readDoc } from "./docs";
 import { buildOpenApi } from "./openapi";
 import { WORKS_WITH } from "./works-with";
 
@@ -26,7 +26,7 @@ describe("no page links into the private repository", () => {
     const shipped = [
       ...files(path.join(web, "src", "app"), (f) => /\.(tsx?|json|txt|md)$/.test(f) && !/\.test\.ts$/.test(f)),
       ...files(path.join(web, "src", "server"), (f) => /\.(tsx?|json)$/.test(f) && !/\.test\.ts$/.test(f)),
-      ...PUBLIC_DOCS.map((d) => path.join(web, "docs", d.file)),
+      ...PUBLIC_DOCS.map((d) => docPath(d)),
       ...files(path.join(web, "public"), (f) => /\.(html|txt|json|md|svg)$/.test(f)),
     ];
     const offenders = shipped.filter((f) => PRIVATE_REPO.test(readFileSync(f, "utf8"))).map((f) => path.relative(web, f));

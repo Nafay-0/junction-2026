@@ -13,6 +13,10 @@ export const PUBLIC_DOCS = [
   { slug: "runtime-results", file: "runtime-results.md", title: "Runtime results", about: "The last live run of the seven buyers" },
   { slug: "runtime-gaps", file: "runtime-gaps.md", title: "What the runtimes showed up", about: "Gaps the runtimes found in the gate, and the fixes" },
   { slug: "offers", file: "offers.md", title: "Offers from the wholesaler's agent", about: "The selling agent: what it proposes, its guardrails, the open format" },
+  { slug: "smart-search", file: "smart-search.md", title: "Smart search", about: "How a search runs, and how it was measured against BM25, semantic and hybrid search on 189 requests" },
+  { slug: "doors", file: "doors.md", title: "Voice and photo", about: "The voice call and the photo of a list, and how both were evaluated" },
+  { slug: "mail", file: "mail.md", title: "Email to the kitchen", about: "Receipts and alerts: what is sent, when, and the guardrails" },
+  { slug: "crash-test", file: "LEADERBOARD.md", dir: "src/crash", title: "Crash-test leaderboard", about: "13 hard purchasing situations, every model through the same harness, the licence each earned" },
 ] as const;
 
 export type PublicDoc = (typeof PUBLIC_DOCS)[number];
@@ -21,10 +25,15 @@ export function publicDoc(slug: string): PublicDoc | undefined {
   return PUBLIC_DOCS.find((d) => d.slug === slug);
 }
 
+/** Where a served document lives, from the app's root: `docs/` unless the entry names another folder. */
+export function docPath(doc: PublicDoc): string {
+  return path.join(process.cwd(), "dir" in doc ? doc.dir : "docs", doc.file);
+}
+
 /** Read a served document. Undefined when the file is not there. */
 export function readDoc(doc: PublicDoc): string | undefined {
   try {
-    return readFileSync(path.join(process.cwd(), "docs", doc.file), "utf8");
+    return readFileSync(docPath(doc), "utf8");
   } catch {
     return undefined;
   }
