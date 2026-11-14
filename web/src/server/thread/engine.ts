@@ -18,6 +18,7 @@ import { checkOpen, read, record, runAction, step, type ItemOutcome, type TurnRu
 import { earlierFor } from "./earlier";
 import { ThreadStore, type StoredThread } from "./store";
 import { runWidget } from "./widgets";
+import { hasToday, helsinkiToday, postToday, todayCardId } from "./home";
 import { ensureTelemetry } from "./telemetry";
 import type { AgentTurn, BuyerTurn, MemoryCard, RecordsCard, SubmitTurn, SubmitTurnReply, ThreadAction, ThreadDoor } from "./types";
 
@@ -83,6 +84,14 @@ const ActionSchema: z.ZodType<ThreadAction> = z.discriminatedUnion("type", [
   z.object({ type: z.literal("menu_accept"), planId: z.string().min(1).max(80), doubtId: z.string().min(1).max(80) }),
   z.object({ type: z.literal("menu_to_sheet"), planId: z.string().min(1).max(80) }),
   z.object({ type: z.literal("remember_this"), text: z.string().trim().min(2).max(500) }),
+  z.object({ type: z.literal("products_search"), query: z.string().max(120), category: z.string().min(1).max(40).optional() }),
+  z.object({ type: z.literal("product_show"), productId: z.string().min(1).max(80) }),
+  z.object({ type: z.literal("order_again"), ref: z.string().min(1).max(80) }),
+  z.object({ type: z.literal("order_show"), orderId: z.string().min(1).max(80) }),
+  z.object({ type: z.literal("home_show"), what: z.enum(["history", "standing", "deliveries", "memory", "today"]) }),
+  z.object({ type: z.literal("standing_change"), family: z.string().min(1).max(80), packs: z.number().int().min(1).max(9999).optional() }),
+  z.object({ type: z.literal("memory_edit"), itemId: z.string().min(1).max(80), text: z.string().trim().min(2).max(500) }),
+  z.object({ type: z.literal("memory_forget"), itemId: z.string().min(1).max(80) }),
 ]);
 
 export const SubmitTurnSchema = z
@@ -120,8 +129,43 @@ async function resolve(slugOrKitchen: string | Kitchen, door: ThreadDoor): Promi
 /** GET /thread: the kitchen's thread as a browser may see it. */
 export async function readThread(k: Kitchen) {
   const rt = await getRuntime();
-  const { store } = await engine(rt);
-  return store.publicView(store.get(k.info.slug, k.info.orgId));
+  const e = await engine(rt);
+  const t = e.store.get(k.info.slug, k.info.orgId);
+  // The kitchen's own store opening the agent on a new day (or an empty thread): the agent speaks first.
+  if (k.console && !hasToday(t.turns)) await openToday(k).catch((err) => console.error("[thread] opening", err));
+  return e.store.publicView(t);
+}
+
+/**
+ * The opening (docs/agent-thread.md "The home"): an agent turn with no buyer turn before it, whose one card says
+ * what needs the kitchen today, made by plain code from records (home.ts). It joins the thread's queue like any turn
+ * and its work runs in the background; the card arrives as an event. Nothing is posted twice in a day.
+ */
+export async function openToday(k: Kitchen): Promise<string | undefined> {
+  const r = await resolve(k, "typed");
+  const e = await engine(r.rt);
+  const thread = e.store.get(r.k.info.slug, r.k.info.orgId);
+  if (hasToday(thread.turns)) return undefined;
+  const now = new Date().toISOString();
+  const opening: AgentTurn = { turnId: newId("trn"), role: "agent", at: now, replyTo: "", status: "working", steps: [], cards: [] };
+  // A placeholder card at once, so a second read in the same moment does not open the day twice.
+  e.store.addTurn(thread, opening);
+  e.store.card(thread, opening.turnId, { type: "today", cardId: todayCardId(thread.threadId), date: helsinkiToday(), items: [], pending: true });
+  const buyer: BuyerTurn = { turnId: "", role: "buyer", at: now, door: "typed", via: "tap", label: "Opened the agent" };
+  const run: TurnRun = { rt: r.rt, store: e.store, thread, turnId: opening.turnId, buyer, k: r.k, session: r.session, person: r.person, door: "typed", t0: Date.now(), facts: [], requests: new Set(), orders: new Map(), readings: new Map() };
+  const queued = e.queues.get(thread.threadId) ?? Promise.resolve();
+  const next = Promise.race([queued, new Promise<void>((res) => setTimeout(res, 20_000))]).then(() =>
+    withTurn({ threadId: thread.threadId, turnId: opening.turnId, door: "typed", kitchen: r.k.info.slug, orgId: r.k.info.orgId, agentId: r.session.agentId }, async () => {
+      await postToday(run, true);
+      e.store.mark(thread, opening.turnId, "done", Date.now() - run.t0);
+      e.store.status(thread, opening.turnId, "done", { ms: Date.now() - run.t0 });
+    }).catch((err) => {
+      console.error("[thread] opening", err);
+      e.store.status(thread, opening.turnId, "failed", { ms: Date.now() - run.t0 });
+    }),
+  );
+  e.queues.set(thread.threadId, next);
+  return opening.turnId;
 }
 
 export async function resetThread(k: Kitchen) {

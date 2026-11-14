@@ -3,6 +3,7 @@ import { cardId } from "./cards";
 import { record, type TurnRun } from "./pipeline";
 import { createSheet, currentSheet, editSheet, openAlternatives, pickAlternative, placeSheet } from "./sheet";
 import type { ThreadAction } from "./types";
+import { runHomeAction } from "./home";
 
 /**
  * The widgets' actions (docs/agent-thread.md "Widgets"), each one a turn: the order sheet, the alternatives picker,
@@ -65,7 +66,7 @@ export async function runWidget(run: TurnRun, a: ThreadAction, words?: string): 
       return true;
     }
     default:
-      return false;
+      return runHomeAction(run, a);
   }
 }
 
