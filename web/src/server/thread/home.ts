@@ -82,31 +82,37 @@ export async function todayItems(run: TurnRun): Promise<TodayItem[]> {
 }
 
 /** The opening's card (`opening`: the day's one card, `todayCardId`), or a fresh one in this turn when asked for again. */
+const OPENING_WATCH_MS = 12_000;
+
 export async function postToday(run: TurnRun, opening = false): Promise<TodayCard> {
   const st = step(run, "today", "What needs you today");
   const items = await todayItems(run);
   st.done(`${items.length}`);
-  const card: TodayCard = { type: "today", cardId: opening ? todayCardId(run.thread.threadId) : cardId("today", run.turnId), date: today(), items };
-  run.store.card(run.thread, run.turnId, card);
-  run.facts.push(card);
-  record(run, "today", `The opening: ${items.length ? items.map((i) => i.kind).join(", ") : "nothing needs the kitchen today"}.`, { items: items.map((i) => i.kind) });
+  let card: TodayCard = { type: "today", cardId: opening ? todayCardId(run.thread.threadId) : cardId("today", run.turnId), date: today(), items };
   // The day's opening is the moment for the watch (a stock-out, a held renewal: what needs the kitchen first) and,
-  // when there is none, for the wholesaler's one offer.
+  // when there is none, for the wholesaler's one offer. The opening stays "looking" until both are known, so it never
+  // says "Nothing needs you today" a moment before a stock-out arrives.
   if (opening) {
     const { sayWatch } = await import("./watch");
     // What still needs the kitchen is said on every opening (a new day, or after "Start over"), even if an earlier
     // conversation said it already: an open stock-out or a held renewal is still open.
-    const w = await sayWatch(run, { asked: true }).catch(() => undefined);
-    if (w?.family && w.kind === "renewal_held") {
-      // The held renewal says the drift with its figures: the opening's own drift line for that family goes.
-      const items = card.items.filter((i) => !(i.kind === "drift" && i.family === w.family));
-      if (items.length !== card.items.length) run.store.card(run.thread, run.turnId, { ...card, items });
-    }
-    if (!w) {
+    // At most a few seconds: a slow live check never keeps the opening "looking" (its card still arrives when ready).
+    let watched = false;
+    const watching = sayWatch(run, { asked: true })
+      .catch(() => undefined)
+      .finally(() => (watched = true));
+    const w = await Promise.race([watching, new Promise<undefined>((r) => setTimeout(() => r(undefined), OPENING_WATCH_MS))]);
+    // The held renewal says the drift with its figures: the opening's own drift line for that family goes.
+    if (w?.family && w.kind === "renewal_held") card = { ...card, items: card.items.filter((i) => !(i.kind === "drift" && i.family === w.family)) };
+    // The offer only when the watch has answered and has nothing (never over a stock-out still being checked).
+    if (!w && watched) {
       const { sayOffer } = await import("./offer");
       await sayOffer(run).catch(() => undefined);
     }
   }
+  run.store.card(run.thread, run.turnId, card);
+  run.facts.push(card);
+  record(run, "today", `The opening: ${card.items.length ? card.items.map((i) => i.kind).join(", ") : "nothing needs the kitchen today"}.`, { items: card.items.map((i) => i.kind) });
   return card;
 }
 
