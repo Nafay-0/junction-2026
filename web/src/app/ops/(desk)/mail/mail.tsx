@@ -28,7 +28,8 @@ export function MailScreen() {
     <>
       <PageHead
         title="Mail"
-        purpose="Receipts and alerts emailed to kitchens, after the fact and never in the path of an order. Only a kitchen that gave an address and confirmed it gets mail; one mail per event; every mail sent, skipped or failed is in the ledger without the address. Addresses are shown masked: staff never see them."
+        purpose="Receipts and alerts emailed to kitchens, after the fact."
+        about="Receipts and alerts emailed to kitchens, after the fact and never in the path of an order. Only a kitchen that gave an address and confirmed it gets mail; one mail per event; every mail sent, skipped or failed is in the ledger without the address. Addresses are shown masked: staff never see them."
         right={v ? <span>{v.configured ? `${v.transport}, from ${v.from}` : "No mail service configured"}</span> : undefined}
       />
       <LoadError message={live.error} />

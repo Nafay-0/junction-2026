@@ -59,7 +59,8 @@ export function TimeMachineScreen() {
     <>
       <PageHead
         title="Time machine"
-        purpose={`The rules an order was judged by, exactly as they stood at that second, beside the rules now: what changed in between, who changed it, and whether the order would pass today. Every answer is one query on the history${r?.attached ? ` in ${WHERE[r.backend]}` : ""}, shown under the page.`}
+        purpose="The rules an order was judged by, as they stood at that second, beside the rules now."
+        about={`What changed in between, who changed it, and whether the order would pass today. Every answer is one query on the history${r?.attached ? ` in ${WHERE[r.backend]}` : ""}, shown under the page.`}
         right={r?.attached ? <MirrorMark r={r} /> : undefined}
       />
       <LoadError message={live.error} />

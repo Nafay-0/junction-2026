@@ -16,7 +16,8 @@ export function Conversations() {
   const live = useOps<{ conversations: ConversationSummary[] }>("/ops-api/conversation", { pollMs: 3000 });
   return (
     <>
-      <PageHead title="Conversations" purpose="Each kitchen's conversation with its own agent, typed or spoken, as one record: every turn, model call, tool call and gate decision." />
+      <PageHead title="Conversations" purpose="Each kitchen's conversation with its own agent, as one record."
+        about="Each kitchen's conversation with its own agent, typed or spoken, as one record: every turn, model call, tool call and gate decision." />
       <LoadError message={live.error} />
       {!live.data ? (
         <Loading />

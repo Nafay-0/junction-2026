@@ -33,7 +33,8 @@ export function AuditIndex() {
     <>
       <PageHead
         title="Audit"
-        purpose="Who approved an order, for exactly what, and the proof: for any order, what was asked, what the wholesaler stated, what was committed and who signed, checkable against the published keys. A kitchen's private memory is not part of it."
+        purpose="Who approved an order, for exactly what, and the proof."
+        about="Who approved an order, for exactly what, and the proof: for any order, what was asked, what the wholesaler stated, what was committed and who signed, checkable against the published keys. A kitchen's private memory is not part of it."
       />
       <LoadError message={live.error} />
       <div className="grid grid-cols-1 gap-x-8 xl:grid-cols-[minmax(0,1fr)_380px]">

@@ -19,7 +19,8 @@ export function Observe() {
     <>
       <PageHead
         title="Observe"
-        purpose="Orders, sign-offs, refusals by rule, what the cache and narrowing saved, model spend and service health: the dashboard's numbers, drawn here from the same PostgreSQL table, each panel with the query behind it."
+        purpose="The dashboard's numbers: orders, sign-offs, refusals, savings, spend and health."
+        about="Orders, sign-offs, refusals by rule, what the cache and narrowing saved, model spend and service health: the dashboard's numbers, drawn here from the same PostgreSQL table, each panel with the query behind it."
         right={
           <span className="flex items-center gap-3">
             {p && <span className="tabular">Read {whenSeconds(p.at)} as {p.readAs}</span>}

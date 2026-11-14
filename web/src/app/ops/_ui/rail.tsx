@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ClipboardList, MessagesSquare, Activity, Mail, Bot, Circle, CirclePause, Ellipsis, Eye, FileCheck2, History, LogOut, Radar, Route, Server, ShieldCheck, SlidersHorizontal, Store, Tag, Users, type LucideIcon } from "lucide-react";
+import { ClipboardList, MessagesSquare, Activity, Mail, Bot, Circle, CirclePause, Ellipsis, Eye, FileCheck2, History, Hourglass, LogOut, Radar, Route, Server, ShieldCheck, SlidersHorizontal, Store, Tag, Users, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../../_client/api";
 import { useLive } from "../../_client/use-live";
@@ -18,24 +18,52 @@ type Models = { calls: number; usd: number; maxCalls: number; maxUsd: number; en
 type Session = { signedIn: boolean; name?: string; mode: "demo" | "passcode"; chain?: { ok: boolean; length: number }; waiting?: number; suspended?: number; models?: Models };
 const modelsLow = (m: Models) => !m.enabled || m.maxUsd - m.usd < m.maxUsd * 0.1 || m.maxCalls - m.calls < m.maxCalls * 0.1;
 
-const NAV: { href: string; label: string; what: string; key: string }[] = [
-  { href: "/ops", label: "Live", what: "Agents at the door", key: "l" },
-  { href: "/ops/orders", label: "Orders", what: "Every order and its whole life", key: "d" },
-  { href: "/ops/trace", label: "Trace", what: "One request, step by step", key: "t" },
-  { href: "/ops/conversation", label: "Conversations", what: "A kitchen and its agent, turn by turn", key: "v" },
-  { href: "/ops/safeguards", label: "Safeguards", what: "The rule book as it runs", key: "s" },
-  { href: "/ops/radar", label: "Recall radar", what: "Recalls, holds, drills", key: "r" },
-  { href: "/ops/offers", label: "Selling agent", what: "What it offered, to whom, why", key: "o" },
-  { href: "/ops/watch", label: "Kitchen watch", what: "Stock-outs, drift, renewals", key: "w" },
-  { href: "/ops/mail", label: "Mail", what: "Receipts and alerts to kitchens", key: "e" },
-  { href: "/ops/control", label: "Control", what: "Suspend, resume, sign-offs", key: "c" },
-  { href: "/ops/audit", label: "Audit", what: "Orders and their proof", key: "a" },
-  { href: "/ops/time-machine", label: "Time machine", what: "The rules as they stood", key: "m" },
-  { href: "/ops/agents", label: "Agents", what: "Licences and records", key: "g" },
-  { href: "/ops/customers", label: "Customers", what: "What kitchens share", key: "u" },
-  { href: "/ops/accounts", label: "Accounts", what: "Kitchens with an account", key: "n" },
-  { href: "/ops/platform", label: "Platform", what: "What runs on Aiven, live", key: "p" },
+type NavItem = { href: string; label: string; what: string; key: string; /** In the phone's tab bar. */ short?: string };
+
+/**
+ * The sections, grouped the way a wholesaler's staff work: what is happening today first, then the agents, then what
+ * makes the gate trustworthy, then setup. Every route is unchanged; "Waiting for a person" opens Control's list.
+ */
+const GROUPS: { title: string; items: NavItem[] }[] = [
+  {
+    title: "Today",
+    items: [
+      { href: "/ops", label: "Live", what: "Agents at the door", key: "l" },
+      { href: "/ops/orders", label: "Orders", what: "Every order and its whole life", key: "d" },
+      { href: "/ops/control#waiting", label: "Waiting for a person", short: "Waiting", what: "Sign-offs a person has not given yet", key: "q" },
+    ],
+  },
+  {
+    title: "Agents",
+    items: [
+      { href: "/ops/agents", label: "Agents", what: "Licences, scorecard and the queue", key: "g" },
+      { href: "/ops/conversation", label: "Conversations", what: "A kitchen and its agent, turn by turn", key: "v" },
+      { href: "/ops/offers", label: "Selling agent", what: "What it offered, to whom, why", key: "o" },
+      { href: "/ops/watch", label: "Kitchen watch", what: "Stock-outs, drift, renewals", key: "w" },
+    ],
+  },
+  {
+    title: "Trust",
+    items: [
+      { href: "/ops/safeguards", label: "Safeguards", what: "The rule book as it runs", key: "s" },
+      { href: "/ops/audit", label: "Audit", what: "Orders and their proof", key: "a" },
+      { href: "/ops/trace", label: "Trace", what: "One request, step by step", key: "t" },
+      { href: "/ops/time-machine", label: "Time machine", what: "The rules as they stood", key: "m" },
+      { href: "/ops/radar", label: "Recall radar", what: "Recalls, holds, drills", key: "r" },
+    ],
+  },
+  {
+    title: "Setup",
+    items: [
+      { href: "/ops/customers", label: "Customers", what: "What kitchens share", key: "u" },
+      { href: "/ops/accounts", label: "Accounts", what: "Kitchens with an account", key: "n" },
+      { href: "/ops/mail", label: "Mail", what: "Receipts and alerts to kitchens", key: "e" },
+      { href: "/ops/control", label: "Control", what: "Suspend, resume, sign-offs", key: "c" },
+      { href: "/ops/platform", label: "Platform", what: "What runs on Aiven, live", key: "p" },
+    ],
+  },
 ];
+const NAV: NavItem[] = GROUPS.flatMap((g) => g.items);
 
 /** One icon per section, by address, so a section added to NAV without one still shows (with a plain ring). */
 const ICON: Record<string, LucideIcon> = {
@@ -55,9 +83,10 @@ const ICON: Record<string, LucideIcon> = {
   "/ops/platform": Server,
   "/ops/time-machine": History,
   "/ops/accounts": Store,
+  "/ops/control#waiting": Hourglass,
 };
-/** The four sections in the phone's tab bar; the rest are one tap further, under More. */
-const PRIMARY = ["/ops", "/ops/orders", "/ops/trace", "/ops/control"];
+/** The phone's tab bar: the first group (Today); the rest are one tap further, under More. */
+const PRIMARY = GROUPS[0].items.map((n) => n.href);
 
 /** Shown at the rail's foot on every operations page. */
 export const OPS_DEMO_NOTE = "Demo on synthetic data, built for the Junction 2026 Valio Aimo challenge. Not the wholesaler's own system.";
@@ -85,7 +114,8 @@ export function Rail() {
     { events: null, pollMs: 5000 },
   );
   const s = live.data;
-  const active = (href: string) => (href === "/ops" ? path === "/ops" : path.startsWith(href));
+  // A link to a part of a page (#waiting) is never "the page you are on": its page has its own entry.
+  const active = (href: string) => (href.includes("#") ? false : href === "/ops" ? path === "/ops" : path.startsWith(href));
 
   // "g" then a letter jumps to a section, as in a mail client. Ignored while typing.
   useEffect(() => {
@@ -174,7 +204,7 @@ export function Rail() {
         aria-keyshortcuts={`g ${n.key}`}
         className={
           onDark
-            ? `group relative flex min-h-10 items-center gap-3 rounded-lg px-3 text-[0.92rem] transition-colors duration-150 ${on ? "bg-paper/12 font-semibold text-paper" : "font-medium text-paper/70 hover:bg-paper/8 hover:text-paper"}`
+            ? `group relative flex min-h-[2.125rem] items-center gap-3 rounded-lg px-3 text-[0.92rem] transition-colors duration-150 ${on ? "bg-paper/12 font-semibold text-paper" : "font-medium text-paper/70 hover:bg-paper/8 hover:text-paper"}`
             : `flex min-h-13 items-center gap-3.5 px-5 text-[0.98rem] transition-colors ${on ? "font-semibold text-petrol" : "font-medium text-ink hover:bg-mist"}`
         }
       >
@@ -193,18 +223,20 @@ export function Rail() {
     <>
       {/* ----- a desk: the sidebar, and the status bar above the page ----- */}
       <aside className="on-dark sticky top-0 hidden h-dvh w-[15rem] shrink-0 flex-col bg-petrol-deep text-paper lg:flex">
-        <Link href="/ops" className="block px-5 pb-4 pt-5 leading-none" aria-label={`${PRODUCT_NAME}, wholesaler operations`}>
+        <Link href="/ops" className="block px-5 pb-3 pt-5 leading-none" aria-label={`${PRODUCT_NAME}, wholesaler operations`}>
           <Wordmark tone="paper" size={27} />
-          <span className="mt-2 block text-[0.8rem] text-paper/60">Wholesaler operations</span>
+          <span className="mt-1.5 block text-[0.8rem] text-paper/60">Wholesaler operations</span>
         </Link>
-        <nav aria-label="Operations" className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-3">
-          {NAV.map((n) => item(n, true))}
+        <nav aria-label="Operations" className="flex flex-1 flex-col overflow-y-auto px-2.5 pb-3">
+          {GROUPS.map((g, i) => (
+            <div key={g.title} className={i ? "mt-3" : ""}>
+              <p className="px-3 pb-0.5 text-[0.74rem] font-medium text-paper/50">{g.title}</p>
+              <div className="flex flex-col gap-0.5">{g.items.map((n) => item(n, true))}</div>
+            </div>
+          ))}
         </nav>
         <div className="border-t border-paper/10 px-5 py-4 text-[0.76rem] leading-snug text-paper/55">
-          <p>
-            Press <kbd className="rounded-xs border border-paper/30 px-1 text-paper/80">g</kbd> then a section&apos;s letter to jump.
-          </p>
-          <p className="mt-2">{OPS_DEMO_NOTE}</p>
+          <p title="Press g, then a section's letter, to jump to it">{OPS_DEMO_NOTE}</p>
         </div>
       </aside>
       <div className="fixed left-[15rem] right-0 top-0 z-20 hidden h-14 items-center justify-end gap-2.5 border-b border-line bg-mist/85 px-6 backdrop-blur-md lg:flex xl:px-10">
@@ -231,14 +263,19 @@ export function Rail() {
         {status(true)}
       </header>
       <nav aria-label="Operations" className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-paper/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden">
-        <div className="mx-auto grid max-w-md grid-cols-5 px-2">
+        <div className="mx-auto grid max-w-md grid-cols-4 px-2">
           {NAV.filter((n) => PRIMARY.includes(n.href)).map((n) => {
             const on = active(n.href);
             const Icon = ICON[n.href] ?? Circle;
             return (
               <Link key={n.href} href={n.href} aria-current={on ? "page" : undefined} className={`flex min-h-14 flex-col items-center justify-center gap-0.5 text-[0.7rem] font-medium ${on ? "text-petrol" : "text-ink-soft"}`}>
-                <Icon aria-hidden size={22} strokeWidth={on ? 2.3 : 1.9} />
-                <span className="max-w-full truncate px-1">{n.label}</span>
+                <span className="relative">
+                  <Icon aria-hidden size={22} strokeWidth={on ? 2.3 : 1.9} />
+                  {n.href === "/ops/control#waiting" && waiting > 0 && (
+                    <span className="absolute -right-2.5 -top-1.5 flex min-w-4.5 items-center justify-center rounded-full bg-safety px-1 text-[0.66rem] font-bold leading-[1.1rem] text-safety-ink tabular">{waiting}</span>
+                  )}
+                </span>
+                <span className="max-w-full truncate px-1">{n.short ?? n.label}</span>
               </Link>
             );
           })}
@@ -249,8 +286,13 @@ export function Rail() {
         </div>
       </nav>
       <Sheet open={more} onClose={() => setMore(false)} title="Operations">
-        <nav aria-label="All sections" className="-mx-5 divide-y divide-line border-y border-line">
-          {NAV.map((n) => item(n, false))}
+        <nav aria-label="All sections" className="-mx-5">
+          {GROUPS.map((g) => (
+            <div key={g.title}>
+              <p className="bg-mist px-5 pb-1.5 pt-3 text-[0.8rem] font-medium text-ink-soft">{g.title}</p>
+              <div className="divide-y divide-line border-y border-line">{g.items.map((n) => item(n, false))}</div>
+            </div>
+          ))}
         </nav>
         <p className="mt-5 flex items-center justify-between gap-4 text-[0.9rem]">
           <span className="text-ink-soft">

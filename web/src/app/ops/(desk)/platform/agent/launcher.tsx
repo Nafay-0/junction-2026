@@ -34,7 +34,8 @@ export function Launcher() {
 
   return (
     <>
-      <PageHead title="Send in an Aiven agent" purpose="A purchasing agent that AimoPilot does not run: it lives on Aiven's Managed Agents runtime, has its own model, and comes in through the MCP door with a mandate minted for this run. The gate treats it like any other buyer." right={<OnAiven />} />
+      <PageHead title="Send in an Aiven agent" purpose="Send in a purchasing agent that AimoPilot does not run."
+        about="A purchasing agent that AimoPilot does not run: it lives on Aiven's Managed Agents runtime, has its own model, and comes in through the MCP door with a mandate minted for this run. The gate treats it like any other buyer." right={<OnAiven />} />
       <PlatformTabs />
       <LoadError message={status.error} />
       {!s ? (
