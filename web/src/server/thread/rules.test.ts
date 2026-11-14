@@ -3,8 +3,9 @@ import { resolveKitchen } from "@/server/console-kitchens";
 import type { Kitchen } from "@/server/kitchen-portal";
 import { DEFAULT_TERMS } from "@/server/accounts/terms";
 import { getRuntime, resetRuntime } from "@/server/runtime";
-import { submitTurn, threadStore } from "./engine";
-import { diffOf, groundedChange, isNarrowing, normaliseChange, snapshotAfter, snapshotOf } from "./rules";
+import { SoftwareAuthenticator } from "@/core/test-webauthn";
+import { rulesSignOff, rulesSignOffOptions, submitTurn, threadStore } from "./engine";
+import { diffOf, groundedChange, isNarrowing, needsSignOff, normaliseChange, snapshotAfter, snapshotOf } from "./rules";
 import type { Card, RulesCard, ThreadEvent } from "./types";
 
 /**
@@ -48,6 +49,15 @@ async function accountKitchen(username: string, person: "own" | "none" | "call" 
   const k = (await resolveKitchen(username))!;
   const who = { own: { channel: "portal_session" as const, name: "Aino Virtanen", account: username }, call: { channel: "portal_session" as const, name: "Aino Virtanen", account: username, callOnly: true as const }, other: { channel: "portal_session" as const, name: "Someone", account: "someone-else" }, none: undefined }[person];
   return { rt, k: { ...k, console: { kitchen: username, session: `s_${username}`, ...(who ? { person: who } : {}) } } as Kitchen };
+}
+
+const RP = { id: "localhost", name: "AimoPilot", origins: ["http://localhost:3000"] };
+/** The kitchen's signer with a passkey on this (software) device, as Agent and rules adds one. */
+async function signerDevice(rt: Awaited<ReturnType<typeof getRuntime>>, username: string) {
+  const auth = new SoftwareAuthenticator("http://localhost:3000");
+  const a = (await rt.accounts.get(username))!;
+  await rt.accounts.completeDevice(auth.register(await rt.accounts.beginDevice(a, RP, "session")), { username });
+  return auth;
 }
 
 const events = (rt: Awaited<ReturnType<typeof getRuntime>>, name: string) => rt.dock.ledger.entries().filter((e) => (e.data as { event?: string; step?: string }).event === name || (e.data as { step?: string }).step === name);
@@ -118,24 +128,32 @@ describe("a change is signed only by the kitchen's own person, and recorded", ()
     // Proposing signs nothing.
     expect((await rt.accounts.kitchenOf("aalto"))!.kitchen.mandate.mandateId).toBe(before.mandateId);
 
-    const signed = rulesOf((await turn(k, { via: "tap", action: { type: "rules_sign", proposalId: shown.proposal!.proposalId } })).cards)!;
+    // A raise widens what the agent may spend: the signed-in person's confirm sends it to the signer, nothing changes.
+    const waiting = rulesOf((await turn(k, { via: "tap", action: { type: "rules_sign", proposalId: shown.proposal!.proposalId } })).cards)!;
+    expect(waiting.proposal).toMatchObject({ state: "waiting", approval: { approver: { name: "Aino Virtanen" } } });
+    expect((await rt.accounts.kitchenOf("aalto"))!.kitchen.mandate.mandateId).toBe(before.mandateId);
+    // The signer's passkey over this exact change signs it.
+    await rulesSignOff(k, shown.proposal!.proposalId, { kind: "webauthn", response: (await signerDevice(rt, "aalto")).assert(await rulesSignOffOptions(k, shown.proposal!.proposalId, RP)) });
     const now = (await rt.accounts.kitchenOf("aalto"))!.kitchen.mandate;
     expect(now.mandateId).not.toBe(before.mandateId);
     expect(now.perOrderLimitCents).toBe(80000);
-    expect(signed.proposal).toMatchObject({ state: "signed", signedAs: now.mandateId });
-    expect(signed.current.perOrderLimitCents).toBe(80000);
     expect(events(rt, "rules_proposed")).toHaveLength(1);
+    expect(events(rt, "rules_signoff_requested")).toHaveLength(1);
     const s = events(rt, "rules_signed");
     expect(s).toHaveLength(1);
-    expect(s[0].data).toMatchObject({ by: "Aino Virtanen", mechanism: "account_terms", replaced: before.mandateId, mandateId: now.mandateId });
+    expect(s[0].data).toMatchObject({ by: "Aino Virtanen", mechanism: "account_terms", replaced: before.mandateId, mandateId: now.mandateId, signOff: { method: "passkey", verified: true } });
     expect(rt.dock.ledger.verify().ok).toBe(true);
   });
 
-  it("the widget's confirm proposes and signs in one tap; without a signed-in person it only shows the change", async () => {
+  it("the widget's confirm proposes and signs a narrowing in one tap, sends a widening to the signer; without a signed-in person it only shows the change", async () => {
     const { rt, k } = await accountKitchen("aaltoone");
-    const signed = rulesOf((await turn(k, { via: "tap", action: { type: "rules_propose", change: { perOrderLimitEur: 800 }, sign: true } })).cards)!;
-    expect(signed.proposal).toMatchObject({ state: "signed" });
-    expect((await rt.accounts.kitchenOf("aaltoone"))!.kitchen.mandate.perOrderLimitCents).toBe(80000);
+    const narrow = rulesOf((await turn(k, { via: "tap", action: { type: "rules_propose", change: { perOrderLimitEur: 200 }, sign: true } })).cards)!;
+    expect(narrow.proposal).toMatchObject({ state: "signed" });
+    expect((await rt.accounts.kitchenOf("aaltoone"))!.kitchen.mandate.perOrderLimitCents).toBe(20000);
+    const two = await accountKitchen("aaltotwo");
+    const wide = rulesOf((await turn(two.k, { via: "tap", action: { type: "rules_propose", change: { perOrderLimitEur: 800 }, sign: true } })).cards)!;
+    expect(wide.proposal).toMatchObject({ state: "waiting" });
+    expect((await rt.accounts.kitchenOf("aaltotwo"))!.kitchen.mandate.perOrderLimitCents).toBe(30000);
     resetRuntime();
     const none = await accountKitchen("aaltonone", "none");
     const shown = rulesOf((await turn(none.k, { via: "tap", action: { type: "rules_propose", change: { perOrderLimitEur: 800 }, sign: true } })).cards)!;
@@ -200,5 +218,41 @@ describe("a change is signed only by the kitchen's own person, and recorded", ()
     expect(noticeOf(r.cards)).toMatchObject({ kind: "refused" });
     expect((await rt.accounts.kitchenOf("pudotus"))!.kitchen.mandate.weeklyBudgetCents).toBe(300000);
     expect(events(rt, "rules_cancelled")).toHaveLength(1);
+  });
+});
+
+describe("a change that widens what the agent may do needs the named approver's passkey", () => {
+  const terms = { ...DEFAULT_TERMS, signer: "Aino", forbid: ["nuts" as const], require: ["lactose_free" as const], substitution: "needs_approval" as const };
+  const base = snapshotAfter(snapshotOf({ perOrderLimitCents: 30000, weeklyBudgetCents: 300000, allowedCategories: [], requiredAttributes: ["lactose_free"], forbiddenAllergens: ["nuts"], approvers: [{ name: "Aino", role: "kitchen_signer", maxApprovalCents: 300000 }], delivery: { maxLeadDays: 7 }, substitution: { rule: "needs_approval" } } as never, terms), {}, terms);
+  const kinds: [string, Parameters<typeof normaliseChange>[0], boolean][] = [
+    ["a product group added", { groupsAdd: ["18"] }, true],
+    ["the per-order limit raised", { perOrderLimitEur: 800 }, true],
+    ["the weekly budget raised", { weeklyBudgetEur: 5000 }, true],
+    ["a forbidden allergen taken away", { forbidRemove: ["nuts"] }, true],
+    ["a required claim taken away", { requireRemove: ["lactose_free"] }, true],
+    ["more days ahead", { maxLeadDays: 14 }, true],
+    ["a looser substitution", { substitution: "within_preferences" }, true],
+    ["a new signer", { signer: "Maija Laine" }, true],
+    ["a forbidden allergen added", { forbidAdd: ["sesame"] }, false],
+    ["the limit lowered", { perOrderLimitEur: 100 }, false],
+    ["the budget lowered", { weeklyBudgetEur: 1000 }, false],
+  ];
+  for (const [name, change, widens] of kinds)
+    it(`${name}: ${widens ? "needs the passkey" : "a plain yes"}`, () => {
+      expect(needsSignOff(diffOf(base, snapshotAfter(base, normaliseChange(change), terms)))).toBe(widens);
+    });
+
+  it("a product group added in the chat waits; only a passkey over that change signs it, a link or a session cannot", async () => {
+    const { rt, k } = await accountKitchen("pakaste");
+    const before = (await rt.accounts.kitchenOf("pakaste"))!.kitchen;
+    const shown = rulesOf((await turn(k, { via: "tap", action: { type: "rules_propose", change: { groupsAdd: ["18"] } } })).cards)!;
+    const waiting = rulesOf((await turn(k, { via: "tap", action: { type: "rules_sign", proposalId: shown.proposal!.proposalId } })).cards)!;
+    expect(waiting.proposal?.state).toBe("waiting");
+    // A second confirm does not sign it either.
+    await turn(k, { via: "tap", action: { type: "rules_sign", proposalId: shown.proposal!.proposalId } });
+    expect((await rt.accounts.kitchenOf("pakaste"))!.kitchen.terms.groups).toEqual(before.terms.groups);
+    await expect(rulesSignOff(k, shown.proposal!.proposalId, { kind: "link_token", token: "x" })).rejects.toMatchObject({ code: "passkey_required" });
+    await rulesSignOff(k, shown.proposal!.proposalId, { kind: "webauthn", response: (await signerDevice(rt, "pakaste")).assert(await rulesSignOffOptions(k, shown.proposal!.proposalId, RP)) });
+    expect((await rt.accounts.kitchenOf("pakaste"))!.kitchen.terms.groups).toContain("18");
   });
 });

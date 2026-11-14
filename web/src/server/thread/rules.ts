@@ -4,6 +4,8 @@ import { allergenOf, claimOf } from "@/core/vocabulary";
 import { FORBID_ALLERGENS, PRODUCT_GROUPS, REQUIRE_CLAIMS, SUBSTITUTION_RULES, categoriesOf, parseTerms, type MandateTerms } from "@/server/accounts/terms";
 import { currentDemoMandate, type DemoSlug } from "@/server/console-kitchens";
 import { reissueKitchenMandate } from "@/server/mandate-reissue";
+import type { Approval, SignOff } from "@/core/approval";
+import { canonicalJson, sha256Hex } from "@/core/util";
 import { cardId } from "./cards";
 import { record, step, type TurnRun } from "./pipeline";
 import type { RulesCard, RulesChange, RulesSnapshot } from "./types";
@@ -26,7 +28,15 @@ import type { RulesCard, RulesChange, RulesSnapshot } from "./types";
  * agent entries (proposed, signed, refused, cancelled) with the before and after, so the operations trace shows each.
  */
 
-type Proposal = { proposalId: string; change: RulesChange; kind: "narrow" | "terms"; turnId: string; state: "open" | "signed" | "cancelled" };
+type Proposal = {
+  proposalId: string;
+  change: RulesChange;
+  kind: "narrow" | "terms";
+  turnId: string;
+  state: "open" | "waiting" | "signed" | "cancelled";
+  /** A change that widens what the agent may do waits for the named approver's passkey, bound to this digest. */
+  approval?: { approvalId: string; digest: string; mandateId: string; approver: { name: string; role: string }; requestedAt: string };
+};
 const proposalsOf = (run: TurnRun): Record<string, Proposal> => ((run.thread as unknown as { rulesProposals?: Record<string, Proposal> }).rulesProposals ??= {});
 
 const uniq = <T,>(xs: T[]) => [...new Set(xs)];
@@ -244,10 +254,35 @@ export async function showRules(run: TurnRun, raw?: RulesChange): Promise<RulesC
   return card;
 }
 
+/**
+ * Whether a change needs the named approver's passkey before it takes effect: anything that WIDENS what the agent may
+ * do (a product group added, a limit or budget or lead time raised, an allergen or required claim taken away, a looser
+ * substitution) or changes who signs. A narrowing (a rule added, a limit lowered) takes the signed-in person's yes.
+ */
+export function needsSignOff(diff: RulesCard["diff"]): boolean {
+  return diff.some((d) => d.widens || d.field === "signer");
+}
+
+/** What the approver signs: the kitchen, the mandate it changes, the proposal and the exact change. */
+export function changeDigest(input: { orgId: string; mandateId: string; proposalId: string; change: RulesChange }): string {
+  return sha256Hex(canonicalJson({ purpose: "dock.rules_change.v1", ...input }));
+}
+
+/** A proposal's sign-off as the passkey verifier reads it (core/approval.ts Approval), with no link token. */
+export function rulesApproval(run: Pick<TurnRun, "thread" | "k">, proposalId: string): { approval: Approval; orgId: string; digest: string } | undefined {
+  const p = ((run.thread as unknown as { rulesProposals?: Record<string, Proposal> }).rulesProposals ?? {})[proposalId];
+  if (!p?.approval || p.state !== "waiting") return undefined;
+  return {
+    approval: { approvalId: p.approval.approvalId, approver: { role: p.approval.approver.role, name: p.approval.approver.name, maxApprovalCents: 0 } as Approval["approver"], status: "pending", orderDigest: p.approval.digest, tokenHash: "0".repeat(64), requestedAt: p.approval.requestedAt },
+    orgId: run.k.info.orgId,
+    digest: p.approval.digest,
+  };
+}
+
 /** Sign an open proposal: the kitchen's own person, through the mechanism its kind of kitchen has. */
-export async function signRules(run: TurnRun, proposalId: string): Promise<RulesCard> {
+export async function signRules(run: TurnRun, proposalId: string, opts: { signOff?: SignOff } = {}): Promise<RulesCard> {
   const p = proposalsOf(run)[proposalId];
-  if (!p || p.state !== "open") throw new DockError(409, "turn_card_stale", "That change is no longer open.", "intake_sequence");
+  if (!p || (p.state !== "open" && !(p.state === "waiting" && opts.signOff))) throw new DockError(409, "turn_card_stale", p?.state === "waiting" ? "That change waits for the approver's passkey." : "That change is no longer open.", "intake_sequence");
   const can = editableFor(run);
   const by = run.person?.name;
   if (!by || !can.narrow) {
@@ -263,9 +298,28 @@ export async function signRules(run: TurnRun, proposalId: string): Promise<Rules
       "data_access",
     );
   }
-  const st = step(run, "rules", "Saving your new rules");
   const { mandate, terms } = await current(run);
   const before = snapshotOf(mandate, terms);
+  const diffNow = diffOf(before, snapshotAfter(before, p.change, terms));
+  // A widening takes effect only with the named approver's passkey over this exact change: a typed yes (or a model
+  // that reads one) sends it to them instead, through the same sign-off as an order over the limit.
+  if (needsSignOff(diffNow)) {
+    const digest = changeDigest({ orgId: run.k.info.orgId, mandateId: mandate.mandateId, proposalId, change: p.change });
+    const ok = opts.signOff && opts.signOff.verified && opts.signOff.decision === "approve" && opts.signOff.method === "passkey" && opts.signOff.orderDigest === digest && p.approval?.digest === digest;
+    if (!ok) {
+      const approver = { name: mandate.approvers[0]?.name ?? "the kitchen's signer", role: (run.k.info as { approverRole?: string }).approverRole ?? mandate.approvers[0]?.role ?? "kitchen_signer" };
+      p.state = "waiting";
+      p.approval = { approvalId: `rch_${proposalId.replace(/^rp_/, "")}`, digest, mandateId: mandate.mandateId, approver, requestedAt: new Date().toISOString() };
+      record(run, "rules_signoff_requested", `A change that widens what the agent may do (${describe(diffNow.filter((d) => d.widens || d.field === "signer"))}) waits for ${approver.name}'s passkey; nothing is changed yet.`, { proposalId, approvalId: p.approval.approvalId, digest, diff: diffNow, approver });
+      run.store.save(run.thread);
+      const card = cardFor(run, proposalId, mandate, before, await statedOf(run), { proposal: { proposalId, change: p.change, kind: p.kind, state: "waiting", canSign: false, approval: { approvalId: p.approval.approvalId, approver } }, after: snapshotAfter(before, p.change, terms), diff: diffNow });
+      run.store.card(run.thread, run.turnId, card);
+      run.facts.push(card);
+      run.rulesWaiting = card;
+      return card;
+    }
+  }
+  const st = step(run, "rules", "Saving your new rules");
   try {
     if (p.kind === "narrow") {
       const r = await reissueKitchenMandate(run.rt, run.k.info, { forbiddenAllergens: p.change.forbidAdd ?? [], requiredAttributes: p.change.requireAdd ?? [] }, by);
@@ -273,7 +327,7 @@ export async function signRules(run: TurnRun, proposalId: string): Promise<Rules
     } else {
       const signed = await run.rt.accounts.signKitchen(run.k.info.slug, termsAfter(terms!, p.change));
       const m = signed.kitchen!.mandate;
-      record(run, "rules_signed", `${by} signed new terms for ${run.k.info.name} (${m.mandateId}, replacing ${mandate.mandateId}).`, { proposalId, kind: p.kind, mandateId: m.mandateId, replaced: mandate.mandateId, before, after: snapshotOf(m, signed.kitchen!.terms), by, mechanism: "account_terms" });
+      record(run, "rules_signed", `${opts.signOff?.method === "passkey" ? `${opts.signOff.approverName} signed with a passkey` : by + " signed"} new terms for ${run.k.info.name} (${m.mandateId}, replacing ${mandate.mandateId}).`, { proposalId, kind: p.kind, mandateId: m.mandateId, replaced: mandate.mandateId, before, after: snapshotOf(m, signed.kitchen!.terms), by: opts.signOff?.method === "passkey" ? opts.signOff.approverName : by, mechanism: "account_terms", ...(opts.signOff ? { signOff: opts.signOff } : {}) });
     }
   } catch (e) {
     st.fail(e instanceof DockError ? e.code : "failed");
