@@ -50,10 +50,10 @@ export function Entry({ mode }: { mode: "demo" | "passcode" }) {
         <p className="text-[0.82rem] text-paper/60">{OPS_DEMO_NOTE}</p>
       </section>
       <section className="flex items-center px-6 py-10 sm:px-12">
-        <form onSubmit={enter} className="w-full max-w-[420px] bg-paper">
-          <div aria-hidden className="h-[3px] bg-petrol" />
-          <div className="p-6">
-            <label className="block text-[0.95rem] font-semibold" htmlFor="ops-name">
+        <form onSubmit={enter} className="w-full max-w-[440px] rounded-2xl border border-line bg-paper shadow-sm">
+          <div className="p-6 sm:p-8">
+            <h2 className="display mb-5 text-[1.5rem]">Enter the operations desk</h2>
+            <label className="block text-[0.875rem] font-medium" htmlFor="ops-name">
               Your name, for the record
             </label>
             <input
@@ -63,12 +63,12 @@ export function Entry({ mode }: { mode: "demo" | "passcode" }) {
               placeholder="Operations desk"
               maxLength={60}
               autoComplete="name"
-              className="mt-1.5 min-h-11 w-full border-2 border-line bg-paper px-3 text-[1rem] text-ink placeholder:text-ink-soft focus:border-petrol focus:outline-none"
+              className="field mt-1.5"
             />
-            <p className="mt-1 text-[0.84rem] text-ink-soft">Written to the ledger with every suspension you make.</p>
+            <p className="mt-1.5 text-[0.84rem] text-ink-soft">Written to the ledger with every suspension you make.</p>
             {mode === "passcode" && (
               <>
-                <label className="mt-4 block text-[0.95rem] font-semibold" htmlFor="ops-passcode">
+                <label className="mt-5 block text-[0.875rem] font-medium" htmlFor="ops-passcode">
                   Passcode
                 </label>
                 <input
@@ -78,22 +78,22 @@ export function Entry({ mode }: { mode: "demo" | "passcode" }) {
                   value={passcode}
                   onChange={(e) => setPasscode(e.target.value)}
                   autoComplete="current-password"
-                  className="mt-1.5 min-h-11 w-full border-2 border-line bg-paper px-3 text-[1rem] text-ink focus:border-petrol focus:outline-none"
+                  className="field mt-1.5"
                 />
               </>
             )}
-            <button type="submit" disabled={busy} className={buttonClass("go", "lg", "mt-5 w-full")}>
+            <button type="submit" disabled={busy} className={buttonClass("go", "lg", "mt-6 w-full")}>
               {busy && <Spinner size={16} />}
               {busy ? "Entering…" : "Enter as operations staff"}
             </button>
             {error && (
-              <p role="alert" className="mt-3 border-l-[6px] border-petrol bg-mist px-3 py-2 text-[0.92rem] font-semibold">
+              <p role="alert" className="mt-4 rounded-lg border border-bad/20 bg-bad-soft px-4 py-3 text-[0.92rem] font-semibold">
                 {error}
               </p>
             )}
-            <p className="mt-4 text-[0.86rem] text-ink-soft">
+            <p className="mt-5 border-t border-line pt-4 text-[0.86rem] text-ink-soft">
               {mode === "demo" ? "Demo entry: no password on this server." : "This server asks for a passcode."} Looking for a kitchen?{" "}
-              <Link href="/k" className="font-semibold text-petrol underline underline-offset-2">
+              <Link href="/k" className="font-medium text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol">
                 Kitchen shop
               </Link>
             </p>
