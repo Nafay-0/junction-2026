@@ -83,7 +83,7 @@ for (const size of ["wall", "laptop"] as const) {
 
 const MONEY: Rewrite = ["\\d[\\d  ]*,\\d{2} €", "g", "100,00 €"];
 const STORE: { id: string; path: string; ready?: (p: Page) => Locator; history?: boolean; collapse?: string[] }[] = [
-  { id: "k", path: "/k", ready: (p) => p.getByRole("heading", { name: /Enter a kitchen/ }) },
+  { id: "k", path: "/k", ready: (p) => p.getByRole("heading", { name: /Your kitchen's shop|Enter a kitchen/ }) },
   { id: "kaari", path: "/k/kaari", ready: (p) => p.getByRole("heading", { name: "Ravintola Kaari" }).first(), history: true },
   { id: "order", path: "/k/kaari/order", ready: (p) => p.getByRole("button", { name: "Write a request" }) },
   { id: "catalogue", path: "/k/kaari/catalogue" },

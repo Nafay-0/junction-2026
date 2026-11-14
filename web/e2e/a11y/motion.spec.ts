@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { note, PHONE, runningMotion, WALL, type Running } from "../support/a11y-kit";
+import { confirmConcerns, note, PHONE, runningMotion, WALL, type Running } from "../support/a11y-kit";
 
 /**
  * Reduced motion. With the system set to "reduce motion", the wall and the store's order lane must not run CSS
@@ -12,10 +12,10 @@ test.use({ contextOptions: { reducedMotion: "reduce" } });
 
 /**
  * Known today (finding, not waiver): Tailwind's `animate-pulse` loading placeholders keep pulsing (opacity, 2 s,
- * forever) under reduced motion: src/app/k/[kitchen]/history.tsx:57 and rail.tsx:91 (19 uses of animate-pulse in
+ * forever) under reduced motion: src/app/k/[kitchen]/history.tsx:59 and rail.tsx:93 (19 uses of animate-pulse in
  * src/app; none has motion-reduce:animate-none). Opacity only, nothing moves: cosmetic.
  * And the fixed-price countdown bar on the lane shrinks with a 1 s linear width transition every second
- * (src/app/k/[kitchen]/stages.tsx:740, no motion-reduce:transition-none): cosmetic.
+ * (src/app/k/[kitchen]/stages.tsx:746, no motion-reduce:transition-none): cosmetic.
  */
 const KNOWN_MOTION = [/CSSAnimation pulse .* on div\..*animate-pulse/, /CSSTransition width 1000ms .* on div\.h-full\.transition-\[width\]\.duration-1000/];
 
@@ -40,11 +40,11 @@ test("wall and order lane run no motion longer than 0.1 s when reduced motion is
   await sample(pages, seen);
 
   const steps: [string, () => Promise<unknown>][] = [
-    ["ask", () => page.getByRole("button", { name: "1,000 litres of lactose-free milk by Monday" }).click()],
-    ["offline reader", () => page.getByRole("button", { name: "Use the offline example reader" }).click()],
-    ["confirm amount", () => page.getByRole("button", { name: "Yes, I meant that" }).click()],
-    ["fixed price", () => page.getByRole("button", { name: "Get a fixed price for this" }).last().click()],
-    ["place", () => page.getByRole("button", { name: "Place the order" }).click()],
+    ["ask", () => page.getByRole("button", { name: "1,000 litres of lactose-free milk by Monday" }).filter({ visible: true }).first().click()],
+    ["offline reader", () => page.getByRole("button", { name: "Use the offline example reader" }).filter({ visible: true }).first().click()],
+    ["confirm amount", () => confirmConcerns(page)],
+    ["fixed price", () => page.getByRole("button", { name: "Get a fixed price for this" }).filter({ visible: true }).last().click()],
+    ["place", () => page.getByRole("button", { name: "Place the order" }).filter({ visible: true }).first().click()],
   ];
   for (const [, act] of steps) {
     await act();

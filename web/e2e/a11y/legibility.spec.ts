@@ -96,5 +96,5 @@ test("wall: the demo note stays clear of other text once kitchens have joined (1
     return hit;
   });
   for (const o of overlaps) note(test.info(), "wall overlap", `the "demo on synthetic data" note is drawn over "${o}"`);
-  // Reported, not failed: src/app/_wall/wall.tsx:394 (kitchens list) and :78 (note, mt-auto in an overflow-hidden aside).
+  // Reported, not failed: src/app/_wall/wall.tsx:396 (kitchens list) and :83 (note, mt-auto in an overflow-hidden aside).
 });

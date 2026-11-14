@@ -10,12 +10,9 @@ import { note, PHONE, tabThrough, target, upwardJumps, type Stop } from "../supp
 
 test.use({ viewport: PHONE });
 
-/**
- * Upward jumps that exist today (finding, not waiver). Kitchen portal header on a phone: the search form is first in
- * the DOM but laid out on the second row, so Tab goes search -> agent button -> basket, back up to the first row
- * (src/app/k/[kitchen]/portal.tsx:385, `col-start-2 row-start-1`).
- */
-const KNOWN_JUMPS: { page: string; from: RegExp; to: RegExp }[] = [{ page: "order", from: /^Search$/, to: /^$|purchasing agent/i }];
+/** Upward jumps that exist today (finding, not waiver). None since design v2 (the store header's search-before-
+ * agent-button jump is gone). Shape: { page: "order", from: /^Search$/, to: /^$/ }. */
+const KNOWN_JUMPS: { page: string; from: RegExp; to: RegExp }[] = [];
 
 async function checkOrder(page: Page, id: string, mustReach: RegExp[]) {
   const stops = await tabThrough(page, 90);

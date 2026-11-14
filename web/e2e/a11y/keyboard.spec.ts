@@ -48,7 +48,12 @@ test("order lane: request to gate with the keyboard only", async ({ page }) => {
     expect(page.getByRole("button", { name: "Use the offline example reader" })).toBeVisible({ timeout: 20_000 }),
   );
   await step("offline example reader", /^Use the offline example reader$/, " ", () => expect(page.getByRole("button", { name: "Yes, I meant that" })).toBeVisible({ timeout: 20_000 }));
-  await step("mistake check", /^Yes, I meant that$/, "Enter", () => expect(page.getByRole("button", { name: "Get a fixed price for this" }).nth(2)).toBeVisible({ timeout: 20_000 }));
+  // One concern at a time; on a shared server a second one can follow ("you already asked a moment ago").
+  const options = page.getByRole("button", { name: "Get a fixed price for this" }).filter({ visible: true });
+  const yes = page.getByRole("button", { name: "Yes, I meant that" }).filter({ visible: true });
+  for (let n = 1; n <= 3 && !(await options.count()); n++)
+    await step(`mistake check ${n}`, /^Yes, I meant that$/, "Enter", () => expect(options.nth(2).or(yes.first())).toBeVisible({ timeout: 20_000 }));
+  await expect(options.nth(2)).toBeVisible({ timeout: 20_000 });
   await step("third option (best)", /^Get a fixed price for this$/, " ", () => expect(page.getByRole("button", { name: "Place the order" })).toBeVisible({ timeout: 20_000 }), 3);
   await step("place the order", /^Place the order$/, "Enter", () =>
     expect(page.getByText(/Refused at the gate|Stopped|Waiting for|Signed order/).filter({ visible: true }).first()).toBeVisible({ timeout: 20_000 }),

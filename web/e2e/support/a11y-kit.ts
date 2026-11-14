@@ -63,7 +63,7 @@ export const TARGETS: Target[] = [
   { id: "approve", path: "/approve/<id>", size: "phone", open: async (page) => void (await openApproval(page)) },
   { id: "presenter", path: "/join/presenter", size: "phone", open: go("/join/presenter") },
   { id: "call", path: "/call", size: "phone", open: go("/call") },
-  { id: "k", path: "/k", size: "phone", open: go("/k", heading(/Enter a kitchen/)) },
+  { id: "k", path: "/k", size: "phone", open: go("/k", heading(/Your kitchen's shop|Enter a kitchen/)) },
   { id: "kaari", path: "/k/kaari", size: "phone", open: go("/k/kaari", heading("Ravintola Kaari")) },
   { id: "order", path: "/k/kaari/order", size: "phone", open: go("/k/kaari/order", (p) => expect(p.getByRole("button", { name: "Write a request" })).toBeVisible()) },
   { id: "catalogue", path: "/k/kaari/catalogue", size: "phone", open: go("/k/kaari/catalogue") },
@@ -90,6 +90,22 @@ export const target = (id: string): Target => {
   if (!t) throw new Error(`no target ${id}`);
   return t;
 };
+
+/**
+ * Answer the lane's mistake check until the options show. The store kitchen is shared by every test on the server,
+ * so besides "1,000 L where you usually order 100 L" a second concern can appear ("you already asked a moment ago").
+ */
+export async function confirmConcerns(page: Page, timeout = 20_000): Promise<void> {
+  const options = page.getByRole("button", { name: "Get a fixed price for this" }).filter({ visible: true });
+  const yes = page.getByRole("button", { name: "Yes, I meant that" }).filter({ visible: true });
+  const end = Date.now() + timeout;
+  while (Date.now() < end) {
+    if (await options.count()) return;
+    if (await yes.count()) await yes.first().click();
+    await page.waitForTimeout(300);
+  }
+  await expect(options.first()).toBeVisible();
+}
 
 // ---------------------------------------------------------------- axe
 
