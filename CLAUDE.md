@@ -25,7 +25,7 @@ Win the overall Junction 2026 main prize (€10,000), not only a partner challen
 
 ## What we are building (decided Fri 13 Nov, evening)
 
-**Challenge:** Valio Aimo, "Trusted Trade Agents" (€4,000 / €2,000 / €1,000). Working title: **Dock**.
+**Challenge:** Valio Aimo, "Trusted Trade Agents" (€4,000 / €2,000 / €1,000). Name: **AimoPilot** (decided Sat 14 Nov; the partner has no objection). Code identifiers, routes and `DOCK_*` environment variables keep the working title "Dock".
 
 **Pitch:** the open loading dock for AI buyers. Any company's purchasing agent can order from a wholesaler through open standards, carrying a signed mandate that says what it may buy; anything beyond the mandate needs a human sign-off on their phone. The model is never trusted: plain code checks every order.
 
