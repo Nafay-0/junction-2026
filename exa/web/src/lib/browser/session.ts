@@ -110,7 +110,13 @@ function ownChrome(): Promise<OwnChrome> {
     const cdp = await browser.newBrowserCDPSession();
     browser.on("disconnected", () => {
       registry.own = undefined;
-      for (const session of registry.sessions.values()) session.ownChromeGone();
+      for (const session of everySession()) {
+        try {
+          session.ownChromeGone();
+        } catch {
+          /* one session failing to tidy up must not take the server down */
+        }
+      }
     });
     return { browser, context, cdp };
   })();
@@ -1332,10 +1338,31 @@ export function devUseChromeFolder(folder: string | undefined) {
 
 export const validBrowserId = (id: unknown): id is string => typeof id === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(id);
 
+/**
+ * Sessions outlive the code that made them: they sit on globalThis so that a code reload in
+ * development does not orphan a running Chrome. After a reload, such a session is an object of
+ * the previous version of this class, without the methods and fields added since, and calling a
+ * new method on it fails. Bring it up to date in place: the live browser, its page and the
+ * people watching it stay exactly as they are. In production nothing reloads and this does nothing.
+ */
+function current(session: BrowserSession): BrowserSession {
+  if (Object.getPrototypeOf(session) === BrowserSession.prototype) return session;
+  Object.setPrototypeOf(session, BrowserSession.prototype);
+  const fresh = new BrowserSession(session.id) as unknown as Record<string, unknown>;
+  const target = session as unknown as Record<string, unknown>;
+  for (const key of Object.keys(fresh)) if (!(key in target)) target[key] = fresh[key];
+  return session;
+}
+
+function everySession(): BrowserSession[] {
+  return [...registry.sessions.values()].map(current);
+}
+
 /** The browser for this visitor. Creating the object does not start Chrome. */
 export function browserFor(id: string): BrowserSession {
   let session = registry.sessions.get(id);
-  if (!session) {
+  if (session) session = current(session);
+  else {
     session = new BrowserSession(id);
     registry.sessions.set(id, session);
   }
@@ -1345,7 +1372,8 @@ export function browserFor(id: string): BrowserSession {
 
 function sweep() {
   const timer = setInterval(() => {
-    for (const [id, session] of registry.sessions) {
+    for (const session of everySession()) {
+      const id = session.id;
       const idle = Date.now() - session.lastUsed > IDLE_CLOSE_MS;
       if (idle && session.watchers === 0) {
         if (session.running) void session.close();
@@ -1359,7 +1387,7 @@ function sweep() {
 
 /** A machine can only run so many Chromes: close the one left alone the longest. */
 async function makeRoom(starting: BrowserSession) {
-  const running = [...registry.sessions.values()].filter((s) => s !== starting && s.running);
+  const running = everySession().filter((s) => s !== starting && s.running);
   if (running.length < MAX_BROWSERS) return;
   const oldest = running.sort((a, b) => a.lastUsed - b.lastUsed)[0];
   await oldest.close();
