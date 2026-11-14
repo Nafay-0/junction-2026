@@ -326,7 +326,7 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
         let followUp = false;
         let addTo: Extract<Subject, { kind: "need" }> | undefined;
         if (subj && isShort(said) && !REPEAT_SCALED.test(said)) {
-          if (subj.kind === "incomplete") said = `${subj.words} ${said}`;
+          if (subj.kind === "incomplete") said = subj.usual && yesOrNo(said) === "yes" ? `${subj.words} ${subj.usual}` : `${subj.words} ${said}`;
           else if (subj.kind === "need" && ADDITION.test(said)) addTo = subj;
           else if (subj.kind === "need") followUp = true;
         }

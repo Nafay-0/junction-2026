@@ -30,6 +30,8 @@ const CHAINS: Record<"en" | "fi", Chain[]> = {
     { id: "again", turns: [{ text: "salmon soup for 10 on Monday", says: ["amount", "day"] }, { text: "12 litres", says: [] }, { text: "12 litres", says: [] }], expect: { item: /./ } },
     // A kitchen that receives on Tuesdays and Fridays: told Monday is not a delivery day, the yes to Tuesday is the day ordered.
     { id: "agreed-day", kitchen: "kahvila-sointu", turns: [{ text: "I need 30 litres of lactose-free milk by Monday", says: ["item", "amount", "day"] }, { text: "yes", says: [] }], expect: { item: /milk/i, day: true, weekday: 2 } },
+    // The café's oat drink: the usual amount offered, a yes orders it, on one of the café's delivery days (Tue, Fri).
+    { id: "cafe-oat", kitchen: "kahvila-sointu", turns: [{ text: "oat drink for coffee", says: ["item"] }, { text: "yes", says: [] }], expect: { item: /oat/i, day: true } },
     // "When is the cut-off?" is answered with the wholesaler's own order time.
     { id: "cutoff", turns: [{ text: "200 litres of lactose-free milk for Wednesday", says: ["item", "amount", "day"] }, { text: "when is the cut-off?", says: [] }], expect: { item: /milk/i, amount: 200, day: true, lastSaysTime: true } },
     { id: "back", turns: [{ text: "30 litres of lactose-free milk for Friday", says: ["item", "amount", "day"] }, { text: "what did we spend this week?", says: [] }, { text: "make it 40", says: ["amount"] }], expect: { item: /milk/i, amount: 40, day: true } },

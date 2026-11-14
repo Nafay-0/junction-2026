@@ -106,7 +106,7 @@ function cardFacts(c: Card): Record<string, unknown> | undefined {
     case "offer":
       return c.state === "open" ? { wholesalerOffer: { product: c.name, said: c.text.en.say, ask: "yes (put it on an order), no, or don't suggest this kind again" } } : { wholesalerOffer: { product: c.name, answered: c.state, ...(c.reply ? { reply: c.reply } : {}) } };
     case "notice":
-      return { notice: c.message, ...(c.said ? { sayItLikeThis: "first person, the groups in words, ending on the next step, as in notice" } : {}), ...(c.kind === "incomplete" ? { missing: c.missing } : {}) };
+      return { notice: c.message, ...(c.said ? { sayItLikeThis: "first person, the groups in words, ending on the next step, as in notice" } : {}), ...(c.kind === "incomplete" ? { missing: c.missing, ...(c.usual ? { usualAmount: c.usual, ask: `offer the usual ${c.usual} as a yes/no question` } : {}) } : {}) };
     case "today":
       return { today: c.items.slice(0, 3).map((i) => i.kind) };
     default:

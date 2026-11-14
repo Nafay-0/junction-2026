@@ -361,6 +361,8 @@ export type NoticeCard = CardBase & {
   missing?: string[];
   /** For `incomplete`: the words read so far (a follow-up completes them: subject.ts). */
   words?: string;
+  /** For `incomplete` with only the amount missing: the kitchen's usual amount of that kind ("12 L"), offered as the answer. */
+  usual?: string;
   /** A refusal in words, first person, in each language (refusal.ts): what the store shows when the agent says nothing. */
   said?: Record<"en" | "fi" | "sv", string>;
   /** For `refused`: the rule that fired. */
