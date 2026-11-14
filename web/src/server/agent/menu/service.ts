@@ -10,7 +10,8 @@ import type { CallStats, DraftIngredient, DraftResult, MenuDraft } from "./draft
 import type { FixResult, FixRequest } from "./fixes";
 import { toFixOptions } from "./fixes";
 import type { MenuKitchen } from "./kitchens";
-import { findCandidates, type MenuCatalog } from "./match";
+import { findCandidates, type CandidateSet, type MenuCatalog } from "./match";
+import { checkSafety, withRequestRules, type DietRules } from "./safety";
 import {
   buildSpecs,
   computePlan,
@@ -113,6 +114,23 @@ export function promptContext(k: MenuKitchen): MenuPromptContext {
   return { kitchenName: k.info.name, kitchenKind: k.info.kind, rules: k.info.rules.map((r) => r.text), pantry: k.info.pantry };
 }
 
+/** Candidate sets with each product's safety judged again under `diet`; blocked products move to `rejected`. */
+export function recheck(sets: PlanInput["candidates"], diet: DietRules): PlanInput["candidates"] {
+  const out: PlanInput["candidates"] = {};
+  for (const [id, set] of Object.entries(sets)) {
+    if (!set) continue;
+    const kept: CandidateSet["candidates"] = [];
+    const rejected = [...set.rejected];
+    for (const c of set.candidates) {
+      const safety = checkSafety(c.product, diet);
+      if (safety.verdict === "block") rejected.push({ productId: c.product.id, name: c.product.name, reason: safety.checks.filter((x) => x.verdict === "block").map((x) => x.reason).join("; ") });
+      else kept.push({ ...c, safety });
+    }
+    out[id] = { ...set, candidates: kept, rejected };
+  }
+  return out;
+}
+
 function statusesFrom(r: { offers: import("@/core/catalog").LiveOffer[]; unavailable: { productId: string; problems: LiveStatus["problems"]; message: string }[] }): LiveStatus[] {
   return [
     ...r.offers.map((o) => ({ productId: o.productId, orderable: true, problems: [], offer: o, message: "" }) as LiveStatus),
@@ -167,7 +185,11 @@ export function createPlanService(deps: PlanDeps) {
   }
 
   function input(p: PlanRecord, k: MenuKitchen, spent: number): PlanInput {
-    return { draft: p.draft, specs: p.specs, candidates: p.candidates, live: p.live, edits: p.edits, acceptances: p.acceptances, fixes: p.fixes, settings: p.settings, mandate: k.mandate, diet: k.diet, now: deps.now(), spentThisWeekCents: spent };
+    // Every line passes the kitchen's rules and the request's own ("nut-free"), checked again here on the data,
+    // whatever the draft or an edit put on the plan; a product that breaks one is moved to the rejected list.
+    const diet = withRequestRules(k.diet, p.draft ?? {});
+    const candidates = diet === k.diet ? p.candidates : recheck(p.candidates, diet);
+    return { draft: p.draft, specs: p.specs, candidates, live: p.live, edits: p.edits, acceptances: p.acceptances, fixes: p.fixes, settings: p.settings, mandate: k.mandate, diet, now: deps.now(), spentThisWeekCents: spent };
   }
 
   const allowedFor = (k: MenuKitchen) => {

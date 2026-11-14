@@ -264,19 +264,55 @@ describe("menu to order, on the fixture catalogue", () => {
     expect(salmon.chosen!.products[0].productId).toBe("800021");
   });
 
-  it("in a no-nuts school kitchen: no may-contain, no unknown data, held for a person", async () => {
+  it("in a school kitchen whose own mandate forbids gluten and nuts: no may-contain, no gluten, never a pass for unknown data", async () => {
     const { service, laakso } = await setup();
+    // The planner's rules are the kitchen's own: its console mandate (dev-fixtures.ts) forbids gluten and nuts.
+    expect(laakso.mandate.forbiddenAllergens).toEqual(expect.arrayContaining(["gluten", "nuts", "peanuts", "lactose"]));
     const { record } = await service.plan(laakso, "school lunch", "Aino");
     await service.settled(record.planId);
     const { view } = await service.get(laakso, record.planId);
     const line = (key: string) => view.lines.find((l) => l.lineId === key)!;
-    // The rye bread that may contain nuts is never offered; the one with clean declared data is.
-    expect(line("rye_bread").chosen!.products[0].productId).toBe("800017");
-    expect(line("rye_bread").excluded.find((e) => e.productId === "800016")!.reason).toMatch(/may contain nuts/);
-    // Washed potatoes have no allergen data: the mandate's gate would refuse them, so the peeled ones with data are chosen.
-    expect(line("potato").chosen!.products[0].productId).toBe("800005");
-    expect(line("potato").excluded.find((e) => e.productId === "800004")!.reason).toMatch(/no allergen data/);
-    for (const l of view.lines.filter((x) => x.chosen)) for (const s of l.chosen!.safety.filter((x) => x.rule.startsWith("no nuts"))) expect(s.verdict).toBe("ok");
+    // Both rye breads contain gluten (one may contain nuts too): neither is offered.
+    expect(line("rye_bread").chosen).toBeUndefined();
+    expect(line("rye_bread").excluded.find((e) => e.productId === "800016")!.reason).toMatch(/gluten|may contain nuts/);
+    expect(line("rye_bread").excluded.find((e) => e.productId === "800017")!.reason).toMatch(/gluten/);
+    for (const l of view.lines.filter((x) => x.chosen)) for (const s of l.chosen!.safety.filter((x) => /^no (nuts|gluten)/.test(x.rule))) expect(s.verdict).toBe("ok");
+    expect(view.totals.canQuote).toBe(false);
+  });
+
+  it("Kaari's planner carries the kitchen's own nut rule and lactose-free as forbidden allergens, so the gate refuses a hazelnut or ordinary cream line however a plan is assembled", async () => {
+    const { kaari, dock } = await setup();
+    expect(kaari.mandate.forbiddenAllergens).toEqual(expect.arrayContaining(["nuts", "lactose"]));
+    expect(kaari.info.mandate.forbiddenAllergens).toEqual(expect.arrayContaining(["nuts"]));
+    const session = await dock.authenticate(kaari.mandateToken, kaari.agentId);
+    const req = await dock.openRequest(session, { text: "cream for the soup" });
+    // Ordinary cooking cream (milk, no lactose-free claim): lactose by data, refused by the gate itself.
+    const q = await dock.requestQuote(session, { requestId: req.requestId, lines: [{ productId: "800011", quantity: 2 }] });
+    const rule = q.policyPreview.rules.find((r) => r.rule === "forbidden_allergens")!;
+    expect(rule.outcome).toBe("fail");
+    expect(rule.reason).toMatch(/lactose/);
+  });
+
+  it("a rule stated for the kitchen, or a safety rule in its memory, reaches the planner's mandate and its line checks", async () => {
+    const { menuRules } = await import("./kitchens");
+    const profile = {
+      orgId: "org_x", name: "X", history: [], deliveryWeekdays: [],
+      stated: [{ id: "p1", kind: "forbid_allergen", allergen: "sesame", text: "No sesame", statedBy: "Sanna", statedAt: MENU_NOW.toISOString() }],
+      memory: { items: [{ id: "m1", status: "active", strength: "rule", fact: { kind: "allergen", allergen: "kala" }, text: "No fish", origin: "stated", sources: [], confirmations: 1, weight: 1, history: [], audience: "private", safety: true }], forgotten: [], proposals: [], staffReads: [] },
+    } as unknown as import("@/core/kitchen").KitchenProfile;
+    const r = menuRules({ diet: { forbiddenAllergens: [], requiredClaims: [], mandateAllergens: [] }, rules: [] }, { forbiddenAllergens: ["nuts"], requiredAttributes: ["gluten_free"] }, profile, MENU_NOW);
+    expect(r.diet.forbiddenAllergens.map((f) => f.allergen).sort()).toEqual(["fish", "nuts", "sesame"]);
+    expect(r.diet.requiredClaims.map((c) => c.claim)).toEqual(["gluten_free"]);
+    expect(r.diet.mandateAllergens).toEqual(["fish", "gluten", "nuts", "sesame"]);
+    expect(r.rules.map((x) => x.source)).toEqual(expect.arrayContaining(["mandate", "stated by Sanna", "kitchen memory"]));
+  });
+
+  it("a request's own allergen words ('nut-free') tighten the plan's rules; they never loosen the kitchen's", async () => {
+    const { withRequestRules } = await import("./safety");
+    const { kaari } = await setup();
+    const d = withRequestRules(kaari.diet, { forbiddenAllergens: ["pähkinä", "peanut"] });
+    expect(d.forbiddenAllergens.map((f) => f.allergen)).toEqual(expect.arrayContaining(["nuts", "peanuts"]));
+    expect(withRequestRules(kaari.diet, {})).toBe(kaari.diet);
   });
 
   it("holds a request that breaks the kitchen's rule: no peanut product is offered, nothing is quoted", async () => {
