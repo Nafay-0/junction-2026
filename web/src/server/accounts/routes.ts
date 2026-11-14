@@ -2,7 +2,7 @@ import { DockError } from "@/core/errors";
 import { handle } from "../http";
 import { clientAddress } from "../limits";
 import type { Runtime } from "../runtime";
-import { currentAccount, requireSameOrigin } from "./http";
+import { currentAccount, requireFullSession, requireSameOrigin } from "./http";
 import type { Account } from "./store";
 
 /**
@@ -20,6 +20,7 @@ export function signedInRoute(req: Request, fn: (rt: Runtime, account: Account, 
   return accountRoute(req, async (rt, ctx) => {
     const s = await currentAccount(req, rt);
     if (!s) throw new DockError(401, "not_signed_in", "Sign in first.", "account");
+    requireFullSession(s); // every route built on this changes or reveals the account: not for a call-code session
     return fn(rt, s.account, ctx);
   });
 }

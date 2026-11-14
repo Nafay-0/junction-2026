@@ -38,6 +38,16 @@ export async function currentAccount(req: Request, rt: Pick<Runtime, "accounts">
   return rt.accounts.session(accountTokenOf(req));
 }
 
+/**
+ * What only the account's own sign-in may do, never a phone signed in by the call code: add a signing device, sign
+ * the mandate, read or change the connector address, change what the kitchen remembers, mint another code.
+ */
+export function requireFullSession(s: { session: AccountSession } | undefined, what = "This"): void {
+  if (s?.session.scope === "call") {
+    throw new DockError(403, "phone_session_limited", `${what} needs the account's own sign-in. This phone was signed in by the call code, which is for calling the kitchen's agent only.`, "account");
+  }
+}
+
 const SAFE = new Set(["GET", "HEAD", "OPTIONS"]);
 
 /**

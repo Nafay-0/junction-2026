@@ -37,6 +37,8 @@ import { TEST_ACCOUNTS, testAccountProducts, type TestAccountSeed } from "./test
 export const SESSION_DAYS = 14;
 const RENEW_BEFORE_MS = 2 * 86_400_000;
 const DEVICE_LINK_MINUTES = 10;
+/** How long a phone stays signed in by the call code: longer than any call (the caps are minutes), far shorter than a sign-in. */
+export const CALL_SESSION_MINUTES = 60;
 
 export const SIGN_IN_FAILURES_PER_ACCOUNT: RateRule = { name: "signin-fail-account", limit: 8, windowMs: 15 * 60_000 };
 export const SIGN_IN_FAILURES_PER_ADDRESS: RateRule = { name: "signin-fail-address", limit: 40, windowMs: 15 * 60_000 };
@@ -195,11 +197,11 @@ export class AccountService {
     return this.openSession(account);
   }
 
-  private async openSession(a: Account): Promise<SignedIn> {
+  private async openSession(a: Account, scope?: AccountSession["scope"]): Promise<SignedIn> {
     const token = randomBytes(32).toString("base64url");
     const now = this.now();
-    const expiresAt = addDays(now, SESSION_DAYS).toISOString();
-    await this.deps.store.putSession(tokenHash(token), { username: a.username, createdAt: now.toISOString(), expiresAt });
+    const expiresAt = scope === "call" ? new Date(now.getTime() + CALL_SESSION_MINUTES * 60_000).toISOString() : addDays(now, SESSION_DAYS).toISOString();
+    await this.deps.store.putSession(tokenHash(token), { username: a.username, createdAt: now.toISOString(), expiresAt, ...(scope ? { scope } : {}) });
     return { account: this.view(a), token, expiresAt };
   }
 
@@ -489,7 +491,8 @@ export class AccountService {
   async handOff(token: unknown): Promise<SignedIn | undefined> {
     const username = await this.linkAccount(token, "session", true);
     const a = username ? await this.deps.store.get(username) : undefined;
-    return a ? this.openSession(a) : undefined;
+    // For the call only (store.ts AccountSession.scope): the code was on a screen, and whoever scanned it has this.
+    return a ? this.openSession(a, "call") : undefined;
   }
 
   async beginDevice(a: Account, rp: RelyingParty, via: "session" | "link", link?: string): Promise<PublicKeyCredentialCreationOptionsJSON> {

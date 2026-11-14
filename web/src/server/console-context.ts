@@ -13,7 +13,7 @@ import { requestOrigin } from "./config";
  *             visitor's approver cookie for their sandbox kitchen): answers and confirmations made at the console
  *             are then that person's, verified
  */
-export type ConsolePerson = { channel: "portal_session"; name: string; approverId?: string; account?: string };
+export type ConsolePerson = { channel: "portal_session"; name: string; approverId?: string; account?: string; /** A phone signed in by the call code: the kitchen's voice on a call, not the account (accounts/store.ts). */ callOnly?: true };
 export type ConsoleContext = { kitchen: string; session: string; person?: ConsolePerson; /** typed or assistant: which part of the store the request came from. */ door?: "typed" | "assistant" };
 
 const contexts = new WeakMap<Request, ConsoleContext>();
