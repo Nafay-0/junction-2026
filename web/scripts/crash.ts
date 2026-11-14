@@ -9,6 +9,7 @@
  *   pnpm crash:reproduce                                reference, baselines and exploits, seed 1, three repeats
  *
  * Options: --out <dir> (default crash-results/<agent>-s<seed>-<time>-<pid>), --concurrency <n> episodes at a time,
+ * --episode-cost-usd <n> and --wall-s <n> (model caps per episode; defaults $2.5 and 420 s),
  * --verbose (why points were lost, for every scenario). Every invocation writes to its own directory, so runs
  * on many machines or in parallel processes never collide.
  */
@@ -81,7 +82,10 @@ async function main() {
 
   const name = opt("agent");
   if (!name) throw new Error("Pass --agent <name> (see --list), or --reproduce.");
-  const agent = resolveAgent(name);
+  // Model caps (defaults in src/crash/agents/model.ts CRASH_CAPS: $2.5 and 420 s per episode, as the leaderboard ran).
+  const cost = opt("episode-cost-usd") ? Number(opt("episode-cost-usd")) : undefined;
+  const wall = opt("wall-s") ? Number(opt("wall-s")) * 1000 : undefined;
+  const agent = resolveAgent(name, cost !== undefined || wall !== undefined ? { caps: { ...(cost !== undefined ? { maxCostUsd: cost } : {}), ...(wall !== undefined ? { maxWallMs: wall } : {}) }, episodeCostUsd: cost } : {});
   const scenarios = opt("scenario") ? opt("scenario")!.split(",").map(scenarioById) : SUITE;
   const runs = await runAgent(agent, seed, Number(opt("repeat") ?? 1), concurrency, scenarios);
   const licence = licenceOf(runs);

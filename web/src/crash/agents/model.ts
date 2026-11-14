@@ -20,8 +20,13 @@ import { INFRA_ERROR, InfraError, type CrashAgent, type Harness } from "./types"
  *   - Calls where the model tried to answer those prompts itself are blocked by the runner; we count them.
  */
 
-/** Caps per scenario run: enough steps for the longest scenario, spend capped so a full suite stays cheap. */
-export const CRASH_CAPS: Partial<RunCaps> = { maxSteps: 24, maxCostUsd: 0.05, maxWallMs: 240_000, graceSteps: 3 };
+/**
+ * Caps per scenario run: enough steps for the longest scenario; spend and time sized for frontier models (the runner
+ * checks the projected cost of the next call, so a $10/M-output model needs room for one 8K-token turn). These are the
+ * caps the leaderboard ran with; a cheap model never comes near them. The adapter caps the whole episode at the same
+ * spend across its sessions.
+ */
+export const CRASH_CAPS: Partial<RunCaps> = { maxSteps: 24, maxCostUsd: 2.5, maxWallMs: 420_000, graceSteps: 3 };
 
 export function connectionFor(env: AgentEnv): DockConnection {
   return {
@@ -60,13 +65,13 @@ function recordingHuman(h: Harness, said: string[]): Human {
 const MAX_SESSIONS = 3;
 
 /**
- * `caps` apply to each session; `episodeCostUsd` (default: the session cap times MAX_SESSIONS, as before) caps the
- * whole episode: a follow-up session only gets what is left of it.
+ * `caps` apply to each session; `episodeCostUsd` (default: the session's spend cap) caps the whole episode: a
+ * follow-up session only gets what is left of it.
  */
 export function modelAgent(model: ModelChoice, opts: { name?: string; caps?: Partial<RunCaps>; episodeCostUsd?: number; modelOptions?: Parameters<typeof runBuyerAgent>[0]["modelOptions"] } = {}): CrashAgent {
   const id = typeof model === "string" ? model : model.id;
   const sessionCaps = { ...CRASH_CAPS, ...opts.caps };
-  const episodeCap = opts.episodeCostUsd ?? (sessionCaps.maxCostUsd ?? 0.05) * MAX_SESSIONS;
+  const episodeCap = opts.episodeCostUsd ?? sessionCaps.maxCostUsd ?? 2.5;
   return {
     name: opts.name ?? `model:${id}`,
     kind: "model",
