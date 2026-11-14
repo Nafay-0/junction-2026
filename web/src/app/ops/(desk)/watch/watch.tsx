@@ -102,6 +102,9 @@ function Body({ v, now, refresh }: { v: View; now: number; refresh: () => void }
           <Section title="Staged now" aside={v.stages.filter((g) => !g.liftedAt).length || undefined}>
             <Stages stages={v.stages} refresh={refresh} now={now} />
           </Section>
+          <Section title="Backups lined up" aside={v.backups.filter((b) => b.state === "set" || b.state === "used").length || undefined}>
+            <Backups backups={v.backups} now={now} />
+          </Section>
           <Section title="Auto-renew, as kitchens chose it">
             {v.auto.length === 0 ? (
               <Empty title="Off everywhere">Off by default. A kitchen switches it on for a recurring order in its conversation or through its agent (set_auto_renew); who chose it is recorded.</Empty>
@@ -261,6 +264,32 @@ function RenewalRow({ r, now }: { r: Renewal; now: number }) {
         </p>
       </td>
     </tr>
+  );
+}
+
+function Backups({ backups, now }: { backups: View["backups"]; now: number }) {
+  const shown = backups.filter((b) => b.state !== "offered" || b.alternatives.length).slice(0, 30);
+  if (shown.length === 0) return <Empty title="None yet">Only for a product with a poor delivery record (the wholesaler&apos;s history, below 9 in 10): the kitchen can line up a backup at order time. Nothing is bought unless the product then cannot come.</Empty>;
+  const label: Record<string, { text: string; tone: "good" | "info" | "neutral" | "refused" | "bad" }> = { offered: { text: "Offered", tone: "neutral" }, set: { text: "Lined up", tone: "info" }, declined: { text: "No backup wanted", tone: "neutral" }, used: { text: "Used", tone: "good" } };
+  return (
+    <ul className="space-y-2 text-[0.9rem]">
+      {shown.map((b) => (
+        <li key={b.backupId} className="rounded-lg border border-line bg-paper px-3 py-2">
+          <p>
+            <Badge tone={label[b.state].tone}>{label[b.state].text}</Badge> <span className="font-semibold">{b.kitchenName}</span> · {b.product.name}, {b.need.date}
+          </p>
+          <p className="text-ink-soft">
+            {b.record.words} ({Math.round(b.record.share * 100)} %).{" "}
+            {b.chosen ? `Backup: ${b.chosen.name}, chosen by ${b.chosen.by}${b.chosen.how === "you_choose" ? " (\"you choose\")" : ""}.` : b.alternatives.length ? `${b.alternatives.length} alternatives offered.` : "No alternative with a better record."}
+          </p>
+          {b.used && (
+            <p className="text-[0.84rem]">
+              {b.used.staged && <Badge tone="bad">Staged</Badge>} Used {when(b.used.at, new Date(now))}: {b.used.orderId ? `${b.used.orderId}, ${b.used.status}${b.used.totalCents ? `, ${eur(b.used.totalCents)}` : ""}${b.used.approver ? `, signer ${b.used.approver}` : ""}` : `refused: ${b.used.refused?.message ?? ""}`}
+            </p>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }
 

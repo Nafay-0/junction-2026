@@ -222,13 +222,13 @@ export async function watchKitchen(rt: Runtime, slug: string): Promise<WatchKitc
 }
 
 /** The kitchen's agent, in-process, on its own share of the live allowance (the watch does not use up the store's). */
-async function sessionOf(rt: Runtime, k: WatchKitchen): Promise<AgentSession> {
+export async function sessionOf(rt: Runtime, k: WatchKitchen): Promise<AgentSession> {
   const s = await rt.dock.authenticate(k.mandateToken, k.agentId, { via: "onsite", transport: "direct", path: "kitchen agent's watch" });
   return { ...s, share: "watch" };
 }
 
 /** The kitchen whose session this is (an outside agent's or the conversation's). */
-async function kitchenOfSession(rt: Runtime, session: AgentSession): Promise<WatchKitchen> {
+export async function kitchenOfSession(rt: Runtime, session: AgentSession): Promise<WatchKitchen> {
   const orgId = session.mandate.issuer.orgId;
   const known = (await watchKitchens(rt)).find((k) => k.orgId === orgId);
   if (known) return { ...known, mandate: session.mandate };
@@ -346,7 +346,7 @@ export function kindWords(p: Product): string {
  */
 const dietClaims = (p: Product) => p.attributes.filter((a) => isMaterialAttribute(a) && !/^fat_/.test(a) && a !== "organic");
 
-async function substitutesFor(rt: Runtime, k: WatchKitchen, session: AgentSession, requestId: string, original: Product, key: KeyProduct, usualPerUnitCents: number | null): Promise<{ ranked: RankedSubstitute[]; search: Finding["search"] }> {
+export async function substitutesFor(rt: Runtime, k: WatchKitchen, session: AgentSession, requestId: string, original: Product, key: KeyProduct, usualPerUnitCents: number | null): Promise<{ ranked: RankedSubstitute[]; search: Finding["search"]; offers: Map<string, LiveOffer> }> {
   const s = stateOf(rt);
   const claims = [...new Set([...k.mandate.requiredAttributes, ...dietClaims(original)])];
   const forbidden = k.mandate.forbiddenAllergens;
@@ -405,7 +405,8 @@ async function substitutesFor(rt: Runtime, k: WatchKitchen, session: AgentSessio
   }
   const stated = (await rt.kitchens.getProfile(k.orgId))?.stated ?? [];
   const ranked = rankSubstitutes(original, usualPerUnitCents, ids.map((id) => candidates.get(id)!), { amount: key.amount, date: key.date }, { mandate: k.mandate, stated });
-  return { ranked, search: { mapCandidates: mapCount, searchCandidates: searchCount, priced: ids.length, ...(path ? { path } : {}) } };
+  const offers = new Map(ids.flatMap((id) => (candidates.get(id)?.offer ? [[id, candidates.get(id)!.offer!] as const] : [])));
+  return { ranked, search: { mapCandidates: mapCount, searchCandidates: searchCount, priced: ids.length, ...(path ? { path } : {}) }, offers };
 }
 
 // ---------- the watch's run ----------
@@ -453,12 +454,17 @@ async function runWatchLocked(rt: Runtime, k: WatchKitchen, opts: WatchRunOption
       continue;
     }
     if (open && open.staged === !!st.staged) {
-      report.findings.push(open);
+      // A backup lined up since the finding was made: ordered now.
+      const used = open.state === "open" ? await (await import("../reliability/service")).useBackup(rt, open).catch(() => undefined) : undefined;
+      report.findings.push(used ? s.findings.get(open.findingId)! : open);
       continue;
     }
     // Staged (or lifted) since: the earlier finding is closed and the new one says what holds now.
     if (open) resolve(rt, open, st.staged ? "A stock-out was staged for the demo over it." : "The staged stock-out was lifted.");
-    report.findings.push(await addFinding(rt, k, key, original, st, short, live, patterns, now));
+    const f = await addFinding(rt, k, key, original, st, short, live, patterns, now);
+    // A backup the kitchen lined up in advance for this product (server/reliability): ordered now, no second question.
+    const used = await (await import("../reliability/service")).useBackup(rt, f).catch((err: Error) => (console.warn("[watch] backup", err.message), undefined));
+    report.findings.push(used ? s.findings.get(f.findingId)! : f);
   }
   if (opts.renew === "none") {
     report.liveCalls = s.liveCalls - before;
@@ -530,10 +536,10 @@ export async function runWatch(rt: Runtime, opts: { kitchens?: string[]; now?: D
 
 // ---------- placing an order through the gate ----------
 
-type Placed = { requestId?: string; order?: PublicOrder; refused?: { code: string; rule?: string; message: string } };
+export type Placed = { requestId?: string; order?: PublicOrder; refused?: { code: string; rule?: string; message: string } };
 
 /** openRequest -> requestQuote -> placeOrder with the kitchen's mandate: the one path to an order. */
-async function placeThroughGate(rt: Runtime, session: AgentSession, input: { text: string; date: string; productId: string; packs: number; substituteFor?: string }): Promise<Placed> {
+export async function placeThroughGate(rt: Runtime, session: AgentSession, input: { text: string; date: string; productId: string; packs: number; substituteFor?: string }): Promise<Placed> {
   let requestId: string | undefined;
   try {
     const req = await rt.dock.openRequest(session, { text: input.text.slice(0, 2000), deliverOn: input.date, productIds: [input.substituteFor ?? input.productId] });
@@ -691,9 +697,9 @@ export function renewalSummary(r: Renewal): string {
   return `${st}The agent renewed ${r.kitchenName}'s recurring ${r.family.replaceAll("_", " ")} order for ${day} by itself: ${what}, ${formatEur(o.totalCents ?? 0)}; ${o.status === "committed" ? "within the mandate, committed" : `over what it may do alone, sent to ${o.approver ?? "a person"} for sign-off`} (auto-renew on since ${r.autoRenew.at.slice(0, 10)}, by ${r.autoRenew.by}).`;
 }
 
-const findingOutcome = (p: Placed) => ({ ...(p.requestId ? { requestId: p.requestId } : {}), ...(p.order ? { orderId: p.order.orderId, status: p.order.status, totalCents: p.order.totalCents, reasons: p.order.decision.reasons, ...(p.order.approval ? { approver: `${p.order.approval.approver.name} (${p.order.approval.approver.role.replaceAll("_", " ")})` } : {}) } : {}), ...(p.refused ? { note: `Refused by the gate (${p.refused.rule ?? p.refused.code}): ${p.refused.message}` } : {}) });
+export const findingOutcome = (p: Placed) => ({ ...(p.requestId ? { requestId: p.requestId } : {}), ...(p.order ? { orderId: p.order.orderId, status: p.order.status, totalCents: p.order.totalCents, reasons: p.order.decision.reasons, ...(p.order.approval ? { approver: `${p.order.approval.approver.name} (${p.order.approval.approver.role.replaceAll("_", " ")})` } : {}) } : {}), ...(p.refused ? { note: `Refused by the gate (${p.refused.rule ?? p.refused.code}): ${p.refused.message}` } : {}) });
 
-function decideFinding(rt: Runtime, f: Finding, d: FindingDecision) {
+export function decideFinding(rt: Runtime, f: Finding, d: FindingDecision) {
   const s = stateOf(rt);
   saveFinding(s, { ...f, state: "decided", decision: d });
   ledger(rt, {
@@ -1000,6 +1006,8 @@ export type WatchView = {
   stages: Stage[];
   runs: State["runs"];
   schedule: { minutes: number | null; reason?: string };
+  /** Backups lined up for products with a poor delivery record (server/reliability), and when one was used. */
+  backups: import("../reliability/service").Backup[];
 };
 
 export async function watchView(rt: Runtime): Promise<WatchView> {
@@ -1026,6 +1034,7 @@ export async function watchView(rt: Runtime): Promise<WatchView> {
     stages: [...s.stages.values()].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 50),
     runs: s.runs,
     schedule: scheduleInfo(),
+    backups: (await (await import("../reliability/service")).allBackups(rt)).slice(0, 100),
   };
 }
 
