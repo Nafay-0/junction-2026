@@ -1,4 +1,5 @@
 import { signMandate, type Mandate } from "@/core/mandate";
+import type { AgentSession } from "@/core/orders";
 import { activeMemory, type KitchenProfile } from "@/core/kitchen";
 import { allergenOf, claimOf } from "@/core/vocabulary";
 import { categorySlug } from "@/core/catalog/partner";
@@ -39,7 +40,8 @@ export type MenuKitchenInfo = {
   examples: string[];
 };
 
-export type MenuKitchen = { info: MenuKitchenInfo; mandateToken: string; agentId: string; mandate: Mandate; diet: DietRules };
+/** `session`: an outside agent's own verified session (MCP, REST), used instead of signing in with `mandateToken`. */
+export type MenuKitchen = { info: MenuKitchenInfo; mandateToken: string; agentId: string; mandate: Mandate; diet: DietRules; session?: AgentSession };
 
 /** Partner category families that are not food: kitchenware, cleaning, packaging, office, newspapers, gases. */
 const NON_FOOD_FAMILIES = new Set(["200", "300", "329", "630", "631", "632", "633", "639", "640", "641", "643", "645", "677", "678", "777", "900"]);
@@ -293,5 +295,34 @@ async function accountMenuKitchen(slug: string, rt: Pick<Runtime, "kitchens" | "
     agentId,
     mandate,
     diet: derived.diet,
+  };
+}
+
+/**
+ * An outside agent's own kitchen in the menu planner (MCP, REST): the agent's verified session and mandate bind every
+ * line, with every allergen and diet rule the organisation holds (the mandate, stated rules, memory rules). No pantry
+ * is assumed: what the kitchen has on hand comes from its history and what its person says. Plans are kept per agent.
+ */
+export function outsideMenuKitchen(session: AgentSession, profile?: KitchenProfile, now = new Date()): MenuKitchen {
+  const m = session.mandate;
+  const derived = menuRules({ diet: { forbiddenAllergens: [], requiredClaims: [], mandateAllergens: [] }, rules: [] }, m, profile, now);
+  return {
+    info: {
+      slug: `outside:${m.issuer.orgId}:${session.agentId}`,
+      name: m.issuer.name,
+      kind: "professional kitchen",
+      city: "",
+      agentName: `${m.issuer.name}'s agent (${session.agentId})`,
+      by: `${m.issuer.name}'s agent (relayed)`,
+      rules: derived.rules,
+      pantry: [],
+      mandate: { perOrderLimitCents: m.perOrderLimitCents, weeklyBudgetCents: m.weeklyBudgetCents, forbiddenAllergens: m.forbiddenAllergens, maxLeadDays: m.delivery.maxLeadDays, substitution: m.substitution, approvers: m.approvers.map((x) => ({ name: x.name, role: x.role, maxApprovalCents: x.maxApprovalCents })), categories: m.allowedCategories.length },
+      examples: [],
+    },
+    mandateToken: "",
+    agentId: session.agentId,
+    mandate: m,
+    diet: derived.diet,
+    session,
   };
 }

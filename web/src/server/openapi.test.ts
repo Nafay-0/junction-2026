@@ -196,6 +196,20 @@ describe("real responses match the documented status codes and schemas", () => {
     expect((await kitchen("POST", "/api/v1/watch/auto-renew", { family: "nothing", on: true, by: "Sanna" })).status).toBe(404);
     await kitchen("POST", "/api/v1/watch/auto-renew", { family: "milk", on: false, by: "Sanna" });
 
+    // The menu scenarios, with a scripted planner (no provider is called).
+    const { setMenuModelForTests } = await import("./agent/menu/runtime");
+    const { scriptedPlanner, MILK_DRAFT } = await import("./agent/menu/testing");
+    setMenuModelForTests(scriptedPlanner(MILK_DRAFT));
+    try {
+      expect((await agent("POST", "/api/v1/menus/seasonal", {})).status).toBe(400);
+      const seasonal = (await agent("POST", "/api/v1/menus/seasonal", { text: "Lunch for 40, something in season", have: ["butter"] })).body.result;
+      await agent("POST", "/api/v1/menus/event", { text: "Unexpected booking for 40, milk with lunch" });
+      expect((await agent("POST", "/api/v1/menus/plan_nope/order", {})).status).toBe(404);
+      expect((await agent("POST", `/api/v1/menus/${seasonal.planId}/order`, { by: "Aino" })).status).toBe(201);
+    } finally {
+      setMenuModelForTests(undefined);
+    }
+
     // Free text to a structured need, with a scripted model (no provider is called).
     const scripted = { item: { text: "lactose-free milk", category: "milk", attributes: ["lactose_free"], excludedAttributes: [], productId: null }, quantity: { amount: 1000, unit: "L" }, deliverBy: null, requiredClaims: [], forbiddenAllergens: [], optimise: "price", sameAsLastTime: false, isPurchaseRequest: true, notPurchaseReason: null };
     setInterpretModelForTests({ ...scriptedModel([{ text: JSON.stringify(scripted) }]), id: "scripted:interpret" });

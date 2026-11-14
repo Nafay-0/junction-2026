@@ -4,6 +4,8 @@ import { piecesPerSalesUnit } from "@/core/catalog/product";
 import { formatDay } from "@/core/kitchen";
 import type { Mandate } from "@/core/mandate";
 import { buildOptions, formatCutoff, type OptionCard } from "@/core/options";
+import { shortfall, type OnHand } from "@/core/on-hand";
+import { leftoverNote, orderByFit } from "@/core/pack-choice";
 import { formatEur } from "@/core/util";
 import type { DraftIngredient, DraftUnit, MenuDraft } from "./draft";
 import type { Candidate, Rejected } from "./match";
@@ -57,6 +59,11 @@ export type LineEdits = {
   yieldPct?: number;
   /** A card the chef chose instead of the best one. */
   optionId?: string;
+  /**
+   * What the kitchen has on hand on the service day (core/on-hand.ts): an estimate from its order history, what the
+   * chef said, or its pantry list. Only the shortfall is bought, rounded to packs; all of it on hand strikes the line.
+   */
+  onHand?: OnHand;
 };
 
 export type FixKind = "substitute" | "change_amount" | "change_dish";
@@ -138,6 +145,10 @@ export type PlanLineView = {
   replaces?: LineSpec["replaces"];
   /** Products of this line that were priced live. */
   priced: string[];
+  /** What was taken as on hand and where the figure came from; `need` is before it was subtracted. */
+  onHand?: OnHand & { need: Amount; toBuy: Amount };
+  /** Said when even the smallest pack that covers the need is far more than it (core/pack-choice.ts). */
+  leftover?: string;
 };
 
 export type PlanTotals = {
@@ -322,8 +333,18 @@ function evaluateLine(spec: LineSpec, input: PlanInput): PlanLineView {
   if (covers === null) {
     return { ...base, status: "needs_covers", statusText: "Give the number of covers to work out the amount." };
   }
-  const { uses, gross } = grossOf(spec, edits, covers);
+  const { uses, gross: need } = grossOf(spec, edits, covers);
+  let gross = need;
   const view: PlanLineView = { ...base, uses, gross, working: uses.length > 1 ? `${uses.map((u) => u.working.split(" = ").slice(-1)[0]).join(" + ")} = ${formatAmt(gross)}` : (uses[0]?.working ?? "") };
+  // What the kitchen has on hand: only the shortfall is bought; all of it on hand, and the line is not bought.
+  if (!struck && edits?.onHand && edits.onHand.unit === need.unit) {
+    const sf = shortfall(need, edits.onHand);
+    view.onHand = { ...edits.onHand, need, toBuy: sf.toBuy as Amount };
+    if (sf.covered) return { ...view, status: "struck", statusText: edits.onHand.estimate ? "On hand (estimate)" : "On hand", struckReason: edits.onHand.text };
+    gross = sf.toBuy as Amount;
+    view.gross = gross;
+    view.working = `${view.working}; less ${edits.onHand.amount === null ? "what is" : formatAmt({ amount: edits.onHand.amount, unit: need.unit })} on hand (${edits.onHand.text}) = ${formatAmt(gross)} to buy`;
+  }
   if (struck) {
     return { ...view, status: "struck", statusText: edits?.struck === undefined ? "Assumed in stock" : "Struck by the chef", struckReason: edits?.struck === undefined ? "a pantry staple this kitchen keeps; tap to order it" : "the kitchen has it or buys it elsewhere" };
   }
@@ -401,6 +422,14 @@ function evaluateLine(spec: LineSpec, input: PlanInput): PlanLineView {
   const main = candOf(card.lines[0].productId);
   view.chosen = { ...toChosen(card, products), safety: main?.safety.checks ?? [], fitNotes: main?.why ?? [] };
   view.alternatives = res.cards.filter((c) => c !== card).map((c) => ({ ...toChosen(c, products), safety: candOf(c.lines[0].productId)?.safety.checks ?? [] }));
+  // Even the smallest pack that covers it may be far more than a dish needs: say what is left over.
+  if (card.lines.length === 1 && gross.unit !== "pcs") {
+    const note = leftoverNote(view.gross?.amount ?? gross.amount, card.lines[0].packSize, gross.unit, (a, u) => formatAmt({ amount: a, unit: u as BaseUnit }));
+    if (note) {
+      view.leftover = note;
+      view.chosen.fitNotes = [...view.chosen.fitNotes, note];
+    }
+  }
   const late = card.match === "compromise" && card.givesUp.some((g) => g.part === "delivery_date");
   view.timing = late
     ? { ok: false, text: card.givesUp.map((g) => g.text).join(" ") }
@@ -446,6 +475,11 @@ function mergeShared(lines: PlanLineView[], specs: LineSpec[], input: PlanInput)
     first.chosen = { ...toChosen(card, products), safety: first.chosen!.safety, fitNotes: [...first.chosen!.fitNotes, `combined with ${v.name}: ${formatAmt(first.gross!)} + ${formatAmt(v.gross)} = ${formatAmt(amount)}`] };
     first.gross = amount;
     first.working = `${first.working}; with ${v.name} (${v.working}): ${formatAmt(amount)} in all`;
+    // What is left over is said for the amounts together, not for the first line alone.
+    const left = card.lines.length === 1 && amount.unit !== "pcs" ? leftoverNote(amount.amount, card.lines[0].packSize, amount.unit, (a, u) => formatAmt({ amount: a, unit: u as BaseUnit })) : undefined;
+    first.chosen.fitNotes = first.chosen.fitNotes.filter((n) => n !== first.leftover);
+    if (left) first.chosen.fitNotes.push(left);
+    first.leftover = left;
     first.statusText = first.status === "ready" ? first.chosen.products.map((p) => p.packText).join(" + ") : first.statusText;
     first.doubts.push(...v.doubts);
     v.status = "merged";
@@ -516,14 +550,29 @@ export function computePlan(input: PlanInput): PlanView {
   };
 }
 
+/** What one pack holds in the line's measure, when the data says it. */
+export function packAmount(p: Product, unit: BaseUnit): number | undefined {
+  if (unit === "pcs") return piecesPerSalesUnit(p);
+  return p.packContent?.perSalesUnit[unit] ?? (p.unit === unit ? p.packSize : undefined);
+}
+
 /** The products worth one batched live call: the best few per line that is being bought, at most `max` in all. */
-export function liveShortlist(specs: LineSpec[], candidates: PlanInput["candidates"], edits: Record<string, LineEdits>, opts: { perLine: number; max: number; already?: string[] }): string[] {
+export function liveShortlist(specs: LineSpec[], candidates: PlanInput["candidates"], edits: Record<string, LineEdits>, opts: { perLine: number; max: number; already?: string[]; covers?: number | null }): string[] {
   const out: string[] = [];
   const already = new Set(opts.already ?? []);
   const active = specs.filter((s) => !(edits[s.lineId]?.struck ?? s.pantry));
+  // A small need (80 g of bouillon) prices the smallest pack that covers it first, not the top-scored 1.5 kg tub.
+  const ordered = (s: LineSpec): Candidate[] => {
+    const list = candidates[s.lineId]?.candidates ?? [];
+    if (!opts.covers) return list;
+    const { gross } = grossOf(s, edits[s.lineId], opts.covers);
+    const sized = list.map((c) => ({ id: c.product.id, score: c.score, packSize: packAmount(c.product, gross.unit), c }));
+    return orderByFit(sized, gross.amount).map((x) => x.c);
+  };
   for (let round = 0; round < opts.perLine; round++) {
     for (const s of active) {
-      const c = (candidates[s.lineId]?.candidates ?? []).filter((x) => x.safety.verdict === "ok" || round > 0)[round] ?? candidates[s.lineId]?.candidates[round];
+      const list = ordered(s);
+      const c = list.filter((x) => x.safety.verdict === "ok" || round > 0)[round] ?? list[round];
       if (c && !out.includes(c.product.id) && !already.has(c.product.id) && out.length < opts.max) out.push(c.product.id);
     }
   }

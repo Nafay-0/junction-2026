@@ -7,6 +7,7 @@ import { agentKeyOf } from "@/core/live-allowance";
 import type { AgentSession, Dock, PublicOrder } from "@/core/orders";
 import type { Decision } from "@/core/policy";
 import type { Quote } from "@/core/quote";
+import type { OnHand } from "@/core/on-hand";
 import { formatEur, newId } from "@/core/util";
 import { onsiteSession } from "../../ops/onsite";
 import type { CallStats, DraftIngredient, DraftOptions, DraftOutline, DraftResult, MenuDraft } from "./draft";
@@ -148,7 +149,9 @@ export function recheck(sets: PlanInput["candidates"], diet: DietRules): PlanInp
   return out;
 }
 
-function statusesFrom(r: { offers: import("@/core/catalog").LiveOffer[]; unavailable: { productId: string; problems: LiveStatus["problems"]; message: string }[] }): LiveStatus[] {
+function statusesFrom(r: { offers: import("@/core/catalog").LiveOffer[]; unavailable: { productId: string; problems: LiveStatus["problems"]; message: string }[]; statuses?: LiveStatus[] }): LiveStatus[] {
+  // The wholesaler's own statuses when the lookup returns them: a product that cannot come keeps its cut-off and day.
+  if (r.statuses?.length) return r.statuses.map((st) => (r.offers.some((o) => o.productId === st.productId) ? { ...st, offer: r.offers.find((o) => o.productId === st.productId) } : st));
   return [
     ...r.offers.map((o) => ({ productId: o.productId, orderable: true, problems: [], offer: o, message: "" }) as LiveStatus),
     ...r.unavailable.map((u) => ({ productId: u.productId, orderable: false, problems: u.problems, message: u.message }) as LiveStatus),
@@ -160,6 +163,8 @@ export function createPlanService(deps: PlanDeps) {
 
   /** The menu agent's session, through the same operations check as a call over HTTP (ops/onsite.ts): suspended, it plans, quotes and orders nothing. Its requests carry the door. */
   async function session(k: MenuKitchen, door: Door = "menu"): Promise<AgentSession> {
+    // An outside agent's own session (MCP, REST): its mandate binds the plan, never the kitchen's menu agent's.
+    if (k.session) return { ...k.session, door: k.session.door ?? door };
     return { ...(await onsiteSession(dock, k, door === "menu" ? "menu planner" : `${door} door`)), door };
   }
 
@@ -539,7 +544,7 @@ export function createPlanService(deps: PlanDeps) {
     const left = dock.liveAllowance.remaining(agentKeyOf(s.mandate.issuer.orgId, s.agentId));
     const active = p.specs.filter((x) => !x.pantry).length;
     const perLine = active * LIVE_PER_LINE <= LIVE_MAX_PER_PLAN && left.newProductsLeft >= LIVE_PER_LINE * active ? LIVE_PER_LINE : 1; // a week menu: one each, up to the cap
-    await price(p, s, liveShortlist(p.specs, p.candidates, p.edits, { perLine, max: Math.min(LIVE_MAX_PER_PLAN, left.newProductsLeft) }));
+    await price(p, s, liveShortlist(p.specs, p.candidates, p.edits, { perLine, max: Math.min(LIVE_MAX_PER_PLAN, left.newProductsLeft), covers: p.settings.covers }));
 
     // A line whose first products cannot come: price its next products before changing the recipe.
     const firstView = computePlan(input(p, k, 0));
@@ -639,7 +644,16 @@ export function createPlanService(deps: PlanDeps) {
           break;
         case "strike":
           ed!.struck = e.struck;
-          if (!e.struck) reprice = true;
+          if (!e.struck) {
+            delete ed!.onHand; // "buy it after all": what was taken as on hand no longer counts
+            reprice = true;
+          }
+          break;
+        case "onHand":
+          if (e.onHand) ed!.onHand = e.onHand;
+          else delete ed!.onHand;
+          log(p, k, e.by ?? `agent:${k.agentId}`, e.onHand ? `On hand for ${line!.name}: ${e.onHand.amount === null ? "enough" : formatAmt({ amount: e.onHand.amount, unit: e.onHand.unit })} (${e.onHand.text}); only the shortfall is bought.` : `Nothing taken as on hand for ${line!.name} any more.`, { lineId: line!.lineId, onHand: e.onHand, estimate: e.onHand?.estimate ?? false });
+          reprice = true;
           break;
         case "perCover":
           if (!(e.amount > 0) || e.amount > 2000) throw new DockError(400, "invalid_amount", "The amount per cover must be above 0.");
@@ -706,7 +720,7 @@ export function createPlanService(deps: PlanDeps) {
     }
     if (reprice) {
       const room = dock.liveAllowance.remaining(agentKeyOf(s.mandate.issuer.orgId, s.agentId)).newProductsLeft;
-      await price(p, s, liveShortlist(p.specs, p.candidates, p.edits, { perLine: 1, max: Math.min(10, room), already: Object.keys(p.live.statuses) }));
+      await price(p, s, liveShortlist(p.specs, p.candidates, p.edits, { perLine: 1, max: Math.min(10, room), already: Object.keys(p.live.statuses), covers: p.settings.covers }));
     }
     p.updatedAt = at;
     await store.save(p);
@@ -859,6 +873,8 @@ export type PlanEdit =
   | { op: "yield"; lineId: string; yieldPct: number }
   | { op: "choose"; lineId: string; optionId: string }
   | { op: "accept"; doubtId: string }
-  | { op: "applyFix"; lineId: string; fixId: string };
+  | { op: "applyFix"; lineId: string; fixId: string }
+  /** What the kitchen has on hand of a line (core/on-hand.ts), or null to take it away; `by` names who said it, else the agent. */
+  | { op: "onHand"; lineId: string; onHand: OnHand | null; by?: string };
 
 export type PlanService = ReturnType<typeof createPlanService>;
