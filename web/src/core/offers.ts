@@ -283,7 +283,7 @@ export function guardOffer(c: { product: Product; reasons: OfferReason[]; claime
   const p = c.product;
   if (k.prefs.off) return { ok: false, rule: "offers_off", reason: `${k.name} turned offers off (${k.prefs.off.by}, ${k.prefs.off.at.slice(0, 10)}).` };
   const forbidden = forbiddenBy(p, k, ctx.now);
-  if (forbidden) return { ok: false, rule: "forbidden_by_rule", reason: `Not offered: ${forbidden}.` };
+  if (forbidden) return { ok: false, rule: "forbidden_by_rule", reason: `Not offered: ${forbidden.replace(/\.+$/, "")}.` };
   const mute = muteFor(k.prefs, { productId: p.id, category: p.category }, c.reasons.map((r) => r.kind));
   if (mute) return { ok: false, rule: "muted", reason: `${mute.by} asked not to be offered ${mute.scope === "product" ? "this product" : mute.scope === "family" ? `${mute.value.replaceAll("_", " ")} products` : `"${mute.value.replaceAll("_", " ")}" suggestions`} (${mute.at.slice(0, 10)}).` };
   const declined = k.past.find((o) => o.productId === p.id && o.status === "declined" && ctx.now.getTime() - Date.parse(o.at) < DECLINED_QUIET_DAYS * DAY);
