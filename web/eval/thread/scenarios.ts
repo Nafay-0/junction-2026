@@ -326,6 +326,37 @@ const ALL: Scenario[] = [
       optionsInCatalogue,
     ],
   },
+  // --- the menu builder: open words, a menu picked, every line on one sheet, one order; no typing after the first message ---
+  {
+    id: "menu-en",
+    title: "A menu from request to signed order in the thread: lunch for 40 around beetroot",
+    tag: "need → recipe → order (menu builder)",
+    kitchen: "kaari",
+    lang: "en",
+    turns: [{ say: "Plan lunch for 40 on Thursday around beetroot" }],
+    goal: "place",
+    expect: [
+      { name: "a menu with 2+ priced lines", run: (o) => ok((o.plan?.lines ?? 0) >= 2, `menu with ${o.plan?.lines ?? 0} priced line(s)${o.plan?.unsourced.length ? `, unsourced: ${o.plan.unsourced.join(", ")}` : ""}`) },
+      { name: "one order with 2+ lines from the menu", run: (o) => ok((o.orders.at(-1)?.lines.length ?? 0) >= 2, `order ${o.orders.at(-1)?.status ?? "none"} with ${o.orders.at(-1)?.lines.length ?? 0} line(s)`) },
+      placed(KAARI_SIGNERS),
+      optionsInCatalogue,
+    ],
+  },
+  {
+    id: "menu-fi",
+    title: "The same menu in Finnish",
+    tag: "need → recipe → order (menu builder)",
+    kitchen: "kaari",
+    lang: "fi",
+    turns: [{ say: "Suunnittele lounas 40 hengelle torstaiksi punajuuren ympärille" }],
+    goal: "place",
+    expect: [
+      { name: "a menu with 2+ priced lines", run: (o) => ok((o.plan?.lines ?? 0) >= 2, `menu with ${o.plan?.lines ?? 0} priced line(s)${o.plan?.unsourced.length ? `, unsourced: ${o.plan.unsourced.join(", ")}` : ""}`) },
+      { name: "one order with 2+ lines from the menu", run: (o) => ok((o.orders.at(-1)?.lines.length ?? 0) >= 2, `order ${o.orders.at(-1)?.status ?? "none"} with ${o.orders.at(-1)?.lines.length ?? 0} line(s)`) },
+      placed(KAARI_SIGNERS),
+      optionsInCatalogue,
+    ],
+  },
   {
     id: "lastminute-en",
     title: "Last-minute event: milk for tomorrow (a Sunday; usual deliveries Mon/Thu)",

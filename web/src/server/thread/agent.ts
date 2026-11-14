@@ -136,8 +136,6 @@ export async function openRefs(run: TurnRun): Promise<OpenRef[]> {
       refs.push({ ref: "withdraw", label: "take back the order waiting for sign-off", action: { type: "withdraw", orderId: card.orderId } });
     }
   }
-  const plan = cards.find((x) => x.card.type === "plan" && x.card.state === "planned" && x.card.canOrder)?.card;
-  if (plan?.type === "plan") refs.push({ ref: "plan", label: `order the menu plan (${plan.dishes.join(", ")}) as one order, €${(plan.totalCents / 100).toFixed(2)}`, action: { type: "plan_order", planId: plan.planId }, confirm: true });
   const menu = [...cards].reverse().find((x) => x.card.type === "menu" && !x.card.sheetId && (x.card.stage === "ready" || x.card.stage === "choose"))?.card;
   if (menu?.type === "menu" && menu.stage === "choose") menu.proposals.forEach((p, i) => refs.push({ ref: `menu_p${i + 1}`, label: `cook menu ${i + 1}: ${p.title} (${p.dishes.join(", ")})`, action: { type: "menu_choose", planId: menu.planId, proposalId: p.proposalId } }));
   else if (menu?.type === "menu" && menu.stage === "ready" && menu.totalCents > 0) refs.push({ ref: "menu", label: `put the menu (${menu.dishes.map((d) => d.name).join(", ")}) on the order sheet, €${(menu.totalCents / 100).toFixed(2)}`, action: { type: "menu_to_sheet", planId: menu.planId }, confirm: true });

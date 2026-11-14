@@ -25,7 +25,7 @@ ledger. That is how "not a chatbot" and "no hallucinated inventory" are both kep
 | `order` | the order record | status, lines, who authorised it, the signed confirmation, what the agent passed over |
 | `memory` | memory recall and the memory writer | what memory answered instead of asking; after an order, what to remember (confirm each) |
 | `records` | order history, requests, products, mandate | answer rows for "what did we order last week?" |
-| `plan` | the menu planner's record (`server/agent/menu`) | a dish or menu for N covers: dishes, covers, day; one row per ingredient with the product, packs and line total; what ordering also accepts or leaves out (by the planner's codes); total, delivery, who signs; one button `plan_order` |
+| `menu` | the menu planner's record (`server/agent/menu`), as the menu builder (see Widgets) | a dish or menu for N covers, forming as the planner works; edited in place; one button puts it on the order sheet |
 | `notice` | refusals and failures | not found, not a purchase, incomplete (what is missing), model unavailable, suspended |
 
 A card with the same `cardId` sent again **replaces** the earlier one in place (an anomaly card gets `answered`,
@@ -68,8 +68,24 @@ sentence the buyer has to type or another page. The design lead builds the widge
 - A sheet appears when the buyer edits an option (`sheet_from_option`), adds a second item (words or `sheet_add`), a
   menu goes to ordering (`menu_to_sheet`), or a product is added from the catalogue or the basket (`sheet_add`: the
   store's "add" puts it on the thread's current sheet, making one if there is none).
-- The menu card streams: `stage: "proposing"` with the dishes as the planner drafts them, then `resolving` while
-  lines match and price (each line appears with `status: "resolving"` and updates as it resolves), then `ready`.
+- The menu card streams (`server/thread/menu.ts`, on the planner's `plan(…, { onProgress })`): `stage: "proposing"`
+  with the dishes once the planner's outline is in (the first model call), then each dish's lines as that dish is
+  written (`status: "resolving"`, the amount per cover and what the covers need), then `resolving` once the lines are
+  matched to the assortment, then `ready` with products, packs, prices, other products, conflicts, cost per cover,
+  the delivery days and the gate's preview of the plan as one order. The planner's ways out for stuck lines arrive
+  a few seconds later and update the card in place.
+- Words that leave the menu open ("lunch for 40 around beetroot") give `stage: "choose"` with two or three
+  `proposals` (the planner's own menu first, then up to two others its outline offers); the first keeps planning
+  behind the card, so choosing it shows the ready plan at once; another is planned with its dishes fixed, into the
+  same card. Words that name the dish skip the proposals.
+- Every `menu_*` edit maps onto the planner's own edit ops (`covers`, `deliverBy`, `choose` or `applyFix`, `strike`,
+  `perCover`, `accept`), so the kitchen's mandate, stated rules and memory bind every line as on the planner's page.
+  A line's other products are only those the gate would take in the plan (each tried in the gate's preview).
+- `menu_to_sheet` puts every bought line on one sheet: an open point the planner lets a person accept (an unusual
+  amount, another form) is accepted by that tap; a line it holds (a stated rule, the mandate, nothing safe to buy)
+  is left off and named in the record. The sheet runs under the kitchen's menu agent's mandate (food of every kind;
+  the store's own agent may buy only dairy), the same mandate the plan was made and previewed by. After that the
+  menu's edits are refused: the sheet is the order now.
 - `sheet_place` asks the wholesaler for one signed quote of all lines at the sheet's day, then places it: the gate
   decides, and the gate and order cards follow as for any order (sign-off from the thread as before).
 
@@ -161,7 +177,8 @@ Every decision the buyer makes ends in exactly one `ThreadAction`, whatever the 
 | taps option 2 / says "the second one" / "the cheaper one" | `{ type: "choose", requestId, optionId }` |
 | says "yes, order it" with a price showing | `{ type: "place", requestId }` |
 | says "keep that" to a memory proposal | `{ type: "remember", itemId, yes: true }` |
-| taps "Order this plan" / says "yes, order it" under a plan card | `{ type: "plan_order", planId }` |
+| taps a menu on the menu card / says "the second menu" | `{ type: "menu_choose", planId, proposalId }` |
+| taps "Put on the order sheet" / says "yes, put it on the sheet" under a ready menu | `{ type: "menu_to_sheet", planId }` |
 
 Mapping words onto a card is the model's proposal; plain code checks it: the action must name a choice on a card
 that is open now, a confirmation needs a clear yes in the buyer's own words (`channels/speech.ts yesOrNo`), and
@@ -183,12 +200,11 @@ chef said yes" typed by someone else is relayed, never the chef's own.
   table the open interface publishes (`server/mcp/tools.ts`, run through `server/mcp/server.ts` as the kitchen's
   own agent, so the on-site agent is one more client of the same gate), minus the tools that carry a buyer's
   answer, plus thread tools: `order` (read the words with `interpret.ts`, then the intake, as plain code),
-  `plan_menu` (a dish or menu for N covers: the menu planner as the kitchen's menu agent, its plan as a `plan` card),
+  `plan_menu` (a dish or menu for N covers: the menu planner as the kitchen's menu agent, its plan as a `menu` card),
   `buyer_reply` (map the newest buyer words onto an open card, checked as above) and `await_sign_off`.
-- **A plan is one decision.** `plan_order` settles what the card said it would (accepts the planner's acceptable
-  points, leaves out lines nothing fits), fixes one price for the whole plan and sends it through the gate as one
-  order (`server/thread/plan.ts`); the gate and order cards follow as for any order. Editing single lines stays on
-  the menu planner page (`/k/<kitchen>/menu?plan=<planId>` opens the thread's plan there).
+- **A menu is edited in place and ordered as one sheet.** The menu card's edits are turns on the planner's own ops;
+  `menu_to_sheet` makes one order sheet of it, and `sheet_place` one order through the gate (`server/thread/menu.ts`,
+  `server/thread/sheet.ts`); the gate and order cards follow as for any order.
 - **Sign-off is the runtime's approval step.** After the gate sends an order to a person, the agent calls
   `await_sign_off`, which always needs approval. The loop pauses. Only the server answers that approval, and only
   when the approver's passkey sign-off (or decline) is recorded on the order; no client, door or model can.

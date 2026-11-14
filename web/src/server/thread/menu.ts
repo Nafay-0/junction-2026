@@ -59,9 +59,6 @@ async function planner(run: TurnRun) {
   return { service, kitchen };
 }
 
-/** "21 × ST (600 g per ST)" → "21 × 600 g": the wholesaler's sales-unit code stays off the buyer's card. */
-export const packs = (t: string) => t.replace(/^([\d.,\s]+)\s*×\s*[A-Z]{1,4}\s*\(([^)]*?)\s+per\s+[A-Z]{1,4}\)$/, "$1 × $2").replace(/\s+/g, " ").trim();
-
 /** The planner's sentence without its search log ("(searched: lohifilee, ...)"): the buyer's card has no internal words. */
 const plain = (t: string) => t.replace(/\s*\(searched:[^)]*\)/g, "").trim();
 
@@ -436,7 +433,7 @@ async function edit(run: TurnRun, planId: string, edits: PlanEdit[], what: strin
 
 /**
  * menu_to_sheet: every line being bought onto one order sheet (sheet.ts), where the buyer places it as one order
- * through the gate. A line whose open point can be accepted as it is (an unusual amount, another form) is accepted by
+ * through the gate, under the menu agent's mandate (the same the plan was made and previewed by). A line whose open point can be accepted as it is (an unusual amount, another form) is accepted by
  * this tap, as the card's button says; a line the planner holds (a rule or the mandate, nothing safe to buy) is left
  * off and named.
  */
@@ -470,6 +467,9 @@ async function toSheet(run: TurnRun, planId: string): Promise<void> {
     lines: [...merged.values()],
     ...(p.settings.deliverBy ? { deliveryDate: p.settings.deliverBy } : planned.view.totals.deliveryDate ? { deliveryDate: planned.view.totals.deliveryDate } : {}),
     text: `Menu for ${p.settings.covers ?? "?"} covers: ${p.draft.dishes.map((d) => d.name).join(", ")}`,
+    // The kitchen's menu agent, whose mandate covers food of every kind (the store's own agent may buy only dairy):
+    // the sheet's request, prices, preview and order are under the same mandate the plan was made and previewed by.
+    session: await svc.service.agentSession(svc.kitchen),
   });
   m.sheetId = sheet.sheetId;
   record(run, "menu_to_sheet", `The buyer put the menu on the order sheet ${sheet.sheetId}: ${merged.size} products${accept.length ? `, ${accept.length} open point${accept.length > 1 ? "s" : ""} accepted by the tap` : ""}${leftOff.length ? `; left off: ${leftOff.map((x) => `${x.name} (${x.why})`).join("; ")}` : ""}.`, { planId, sheetId: sheet.sheetId, accepted: accept, leftOff }, p.requestId);

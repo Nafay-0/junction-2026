@@ -410,7 +410,7 @@ export async function checkOpen(run: TurnRun, a: ThreadAction): Promise<IntakeVi
 export async function runAction(run: TurnRun, a: ThreadAction, words?: string): Promise<ItemOutcome[]> {
   const via = humanVia(run, words);
   const by = byLine(run);
-  if (words && a.type !== "plan_order") record(run, "heard", `Heard from the buyer before ${a.type}: "${words.slice(0, 300)}"`, { heard: words.slice(0, 1000), action: a }, "requestId" in a ? a.requestId : undefined);
+  if (words) record(run, "heard", `Heard from the buyer before ${a.type}: "${words.slice(0, 300)}"`, { heard: words.slice(0, 1000), action: a }, "requestId" in a ? a.requestId : undefined);
   const dock = run.rt.dock;
   switch (a.type) {
     case "concern": {
@@ -453,10 +453,6 @@ export async function runAction(run: TurnRun, a: ThreadAction, words?: string): 
       run.store.card(run.thread, run.turnId, gateCard(o));
       run.store.card(run.thread, run.turnId, orderCard(o));
       return [{ words: words ?? "", requestId: o.requestId, placed: { orderId: o.orderId, status: o.status, totalCents: o.totalCents } }];
-    }
-    case "plan_order": {
-      const { orderPlan } = await import("./plan");
-      return orderPlan(run, a.planId, words);
     }
     case "repeat": {
       // The earlier order rebuilt by plain code: no model, and the same intake and gate as anything else.

@@ -156,6 +156,14 @@ describe("the menu builder in the thread", () => {
     expect(t.status).toBe("waiting_buyer");
     // The planner's calls: one outline, then the dishes (the planner model, not the agent's).
     expect(planner.prompts.filter((p) => p.includes("ONE dish"))).toHaveLength(DAIRY.dishes.length);
+    // The conversation's record: when the dishes and the ready plan were on screen, and the planner's own timings.
+    const { dock } = await getRuntime();
+    const rec = dock.ledger.entries().filter((e) => e.type === "agent" && (e.data as { event?: string }).event === "menu");
+    expect(rec).toHaveLength(1);
+    const data = rec[0].data as { thread?: { threadId?: string }; shown: { outlineMs: number; readyMs: number }; planner: { calls: unknown[] } };
+    expect(data.thread?.threadId).toBeTruthy();
+    expect(data.shown.outlineMs).toBeLessThanOrEqual(data.shown.readyMs);
+    expect(data.planner.calls.length).toBe(1 + DAIRY.dishes.length);
   });
 
   it("open words get menus to choose from; the first plans behind the card, another is planned with its dishes fixed", async () => {
@@ -298,7 +306,10 @@ describe("the menu builder in the thread", () => {
     const ordersBefore = (await dock.listOrders()).length;
     const placed = await turn("kaari", { door: "typed", via: "tap", action: { type: "sheet_place", sheetId: sheet.sheetId, version: sheet.version } });
     expect(placed.cards.some((x) => x.type === "gate")).toBe(true);
-    expect((await dock.listOrders()).length).toBe(ordersBefore + 1);
+    const orders = await dock.listOrders();
+    expect(orders.length).toBe(ordersBefore + 1);
+    // Under the menu agent's mandate (food of every kind), the one the plan was made and previewed by.
+    expect(orders.at(-1)!.agentId).toMatch(/menu/);
   });
 
   it("a line that breaks a stated rule is shown as a conflict on the line and is not ordered", async () => {

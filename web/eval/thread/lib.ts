@@ -129,8 +129,9 @@ export const emptyOutcome = (): Outcome => ({
   log: [],
 });
 
-export type Milestone = "first_sign" | "understood" | "options" | "placed" | "answered" | "total";
-export const MILESTONES: Milestone[] = ["first_sign", "understood", "options", "placed", "answered", "total"];
+export type Milestone = "first_sign" | "understood" | "options" | "dishes" | "menu" | "placed" | "answered" | "total";
+/** `dishes`: a menu card shows its dishes (the planner's outline); `menu`: the menu card is ready to edit, every line priced. */
+export const MILESTONES: Milestone[] = ["first_sign", "understood", "options", "dishes", "menu", "placed", "answered", "total"];
 
 /** Times are milliseconds from the first submit. A milestone is kept the first time it is reached. */
 export class Marks {
