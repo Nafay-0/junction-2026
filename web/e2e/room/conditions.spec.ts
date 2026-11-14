@@ -106,7 +106,16 @@ test("hidden tab (another app in front) when the request arrives, then shown aga
   await expect(approveButton(page)).toBeEnabled();
 });
 
+/**
+ * DEFECT (test.fail until fixed; would lose the demo), new with main 718aa8b. The approver phone now polls every 5 s
+ * besides the live stream; a poll that fails while the phone is offline turns the page into "Can't reach AimoPilot"
+ * (src/app/approver/approver-home.tsx:66 sets "offline" on any failure), and both the poll (:89-95) and the live
+ * stream (:74) run only while the page is "ready", so nothing brings it back when the network returns: a 5 s Wi-Fi
+ * blip leaves the reviewer's phone on the offline screen, and the next sign-off request never opens by itself until
+ * someone taps "Try again".
+ */
 test("event stream cut for a few seconds (Wi-Fi blip), then the request arrives: it opens by itself", async ({ page, context }) => {
+  test.fail(!process.env.E2E_EXPECT_FIXED, "a failed poll during the blip leaves /approver on 'Can't reach AimoPilot' with polling and the stream stopped");
   test.setTimeout(120_000);
   await addPasskey(page);
   await joinAsApprover(page);
@@ -114,6 +123,8 @@ test("event stream cut for a few seconds (Wi-Fi blip), then the request arrives:
   await page.waitForTimeout(5_000);
   await context.setOffline(false); // EventSource reconnects by itself
   await page.waitForTimeout(4_000);
+  // Still the waiting screen (not "Can't reach AimoPilot"), within a few seconds of the network coming back.
+  await expect(page.getByText("Waiting for requests")).toBeVisible({ timeout: 15_000 });
   const t = Date.now();
   await askForMilkAndWaitForSignOff(page);
   note("stream back", `request opened ${Date.now() - t} ms after the tap, after a 5 s outage`);
@@ -122,15 +133,12 @@ test("event stream cut for a few seconds (Wi-Fi blip), then the request arrives:
 });
 
 /**
- * DEFECT (test.fail until fixed; E2E_EXPECT_FIXED=1 runs it as an ordinary test). /approver has no polling: when
- * the event stream cannot be held open (a venue proxy or captive portal that buffers or cuts long responses), a
- * request never opens on the phone and the "Waiting for requests" screen never changes until a reload.
- * Cause: src/app/approver/approver-home.tsx:47-58 navigates only on the live event and refreshes only on (re)connect
- * or visibility; askAgent (:61-68) ignores the approvalId it gets back.
+ * Regression test, fixed on main in 718aa8b. Before, /approver had no polling: when the event stream could not be
+ * held open (a venue proxy or captive portal that buffers or cuts long responses), a request never opened on the
+ * phone until a reload.
  */
 test("event stream blocked by the network: the request still reaches the phone", async ({ page }) => {
   test.setTimeout(90_000);
-  test.fail(!process.env.E2E_EXPECT_FIXED, "the approver page has no fallback when the event stream is blocked");
   await addPasskey(page);
   await joinAsApprover(page);
   await page.route(/\/api\/v1\/events/, (r) => r.abort("connectionreset"));

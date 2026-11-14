@@ -47,7 +47,16 @@ const uniqueReason = (what: string) => `${what} ${Date.now().toString(36)}${Math
 const askButton = (phone: Page) => phone.getByRole("button", { name: /ask my agent for 1[,  ]?000 L of milk/i });
 
 async function control(page: Page): Promise<Control> {
-  const r = await page.request.get("/ops-api/control");
+  // A kept-alive socket the server has just closed shows up as "read ECONNRESET" (support/dock.ts approvalState): retry.
+  let r;
+  for (let i = 0; ; i++) {
+    try {
+      r = await page.request.get("/ops-api/control");
+      break;
+    } catch (e) {
+      if (i >= 2 || !/ECONNRESET|socket hang up/.test(String(e))) throw e;
+    }
+  }
   expect(r.ok()).toBe(true);
   return r.json();
 }

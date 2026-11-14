@@ -98,8 +98,8 @@ both on the venue Wi-Fi, not on mobile data. Reset the demo first if the runbook
    then "Waiting for requests" within 3 s. If the sheet says "no screen lock", that phone cannot take part: use another.
 3. **Request**: tap "Demo: ask my agent for 1,000 L of milk". Expect: the sign-off page opens **by itself** within
    3 s, with the total, "Over this agent's 500 € per-order limit", the swap explained, and minutes left (about 29).
-   If it does not open by itself within 10 s, the venue network is blocking the live stream (a known defect: the waiting screen has
-   no fallback when the event stream is blocked): reload the page and tap the request under "Waiting for you"; tell the presenter.
+   If it does not open by itself within 10 s, the venue network is blocking the live stream (the waiting screen falls back to
+   polling since main 718aa8b, so give it a few seconds more): reload the page and tap the request under "Waiting for you"; tell the presenter.
 4. **Lock and come back**: before signing, lock the phone for 10 s, unlock. Expect: still the same request, minutes
    left still sensible, Approve still there.
 5. **Sign**: tap Approve. Expect: the system sheet again, then "Order placed", "with a passkey". On the wall within

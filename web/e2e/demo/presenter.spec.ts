@@ -245,7 +245,16 @@ test("a presenter who enrols ahead of the demo sees their sign-offs and gets the
     await page.waitForURL("**/approver", { timeout: 30_000 });
     // Not "You haven't joined yet" (the defect fixed in 4f0e267): the role the presenter took.
     await expect(page.getByRole("heading", { name: "You haven't joined yet" })).toHaveCount(0, { timeout: 5_000 });
-    await expect(page.getByRole("heading", { name: "Sanna Koskinen" })).toBeVisible();
+    // The role the presenter took; or, when an order from another test already waits for the head chef, that
+    // request opened by itself (declined here, so the next one is this test's).
+    const role = page.getByRole("heading", { name: "Sanna Koskinen" });
+    await expect(role.or(approveButton(page))).toBeVisible({ timeout: 20_000 });
+    while (page.url().includes("/approve/")) {
+      await page.getByRole("button", { name: /^Decline/ }).click();
+      await expect(page.getByRole("heading", { name: "Declined" })).toBeVisible();
+      await page.goto("/approver");
+      await expect(role.or(approveButton(page))).toBeVisible({ timeout: 20_000 });
+    }
 
     k = await kitchenScreen(browser, baseURL);
     const order = await orderOverTheLimit(k, "100 L milk for Wednesday, lowest CO2");

@@ -28,7 +28,15 @@ test("the stage kitchens are closed to strangers; the door lists none of them", 
   }
 });
 
+/**
+ * DEFECT (test.fail until fixed; cosmetic, seen with the seed catalogue). The catalogue opens on the kitchen's first
+ * allowed category whether or not it has any products (src/app/k/[kitchen]/catalogue.tsx:38-39,
+ * `kitchen.mandate.allowedCategories[0]`): the test account's is "butter", which the seed catalogue (the hermetic
+ * test server, DOCK_CATALOG=seed) does not carry, so a visitor lands on "butter: 0 products, Nothing matches".
+ * With the partner's catalogue butter exists and the page fills.
+ */
 test("enter a kitchen's shop, browse the catalogue, read the rules", async ({ page }) => {
+  test.fail(!process.env.E2E_BASE_URL && !process.env.E2E_EXPECT_FIXED, "the catalogue opens on an empty first category ('butter') with the seed catalogue");
   await signIn(page);
   await expect(page.getByRole("heading", { name: "Needs you now" })).toBeVisible();
   // The demo note: the full sentence on a desk, its short form in the phone's top strip.

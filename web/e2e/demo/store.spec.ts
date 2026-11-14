@@ -82,7 +82,7 @@ test("thread, every stage, signed on the visitor's phone; reload and back in the
   // Reload, then the back button from another page, while waiting for the sign-off: still waiting, not lost.
   await page.reload();
   await expect(card(page, "gate")).toContainText(/Waiting for /, { timeout: 20_000 });
-  await page.getByRole("navigation", { name: "Shop sections" }).getByRole("link", { name: "Catalogue" }).filter({ visible: true }).first().click();
+  await page.getByRole("link", { name: "Catalogue", exact: true }).filter({ visible: true }).first().click();
   await page.waitForURL(/\/catalogue/);
   await page.goBack();
   await expect(card(page, "gate")).toContainText(/Waiting for /, { timeout: 20_000 });
@@ -180,6 +180,14 @@ test("repeat with a change: the earlier request with 200 litres instead", async 
     await expect(understood).toContainText(/How much\s*200\sL/, { timeout: 20_000 });
     await expect(understood).toContainText(/Read against /);
     await expect(dock.getByRole("button", { name: "Stop changing that request" })).toHaveCount(0);
+    // A change of a known request can be priced and sent to the gate straight away (Kaari's head chef signs): taken
+    // back, so the shared kitchen keeps no waiting order from this test.
+    await page.waitForTimeout(1500);
+    const gate = card(dock, "gate");
+    if (await gate.isVisible()) {
+      await gate.getByRole("button", { name: "Take it back" }).click();
+      await expect(card(dock, "gate")).toContainText("Taken back", { timeout: 20_000 });
+    }
   } finally {
     release();
   }
@@ -223,8 +231,8 @@ test("the understood card says what matters in words, never a code", async ({ pa
 });
 
 /**
- * DEFECT (test.fail until fixed; would lose the demo). After a person signs a waiting order off on their phone, the
- * next request in the same thread fails: "The agent did not answer. Try again in a moment." (and "Try again" fails
+ * DEFECT (test.fail until fixed; would lose the demo). Once the agent has sent an order for sign-off, the next request
+ * in the same thread fails, while the order waits and after the person signs it on their phone: "The agent did not answer. Try again in a moment." (and "Try again" fails
  * the same way; only "Start over" clears it). Cause: src/server/thread/agent.ts:314 keeps `result.response.messages`,
  * which in AI SDK 7 is the final step's messages only (ai/dist/index.js:10870), not `result.responseMessages`
  * (:10873). The thread's model history so loses the steps before the last; after a sign-off the resumed loop's last
@@ -248,4 +256,18 @@ test("after the phone signs, the same thread answers the next request", async ({
   await expect(answerTo(page, "200 litres of lactose-free milk for Wednesday, cheapest").getByRole("article").first()).toBeVisible({ timeout: 30_000 });
   await expect(cards(page, "notice").filter({ hasText: "The agent did not answer" })).toHaveCount(0);
   await expect(card(page, "understood")).toContainText(/How much\s*200\sL/);
+});
+
+/** Same defect, before the sign-off: the order is still waiting for the person when the buyer asks for something else. */
+test("while an order waits for sign-off, the same thread answers the next request", async ({ page: phone }) => {
+  test.fail(!process.env.E2E_EXPECT_FIXED, "the waiting await_sign_off call has no tool result in the thread's history: the next turn is refused");
+  test.setTimeout(120_000);
+  const { page } = await phoneAndStore(phone);
+  await say(page, MILK);
+  await option(page, "Best").getByRole("button", { name: "Choose" }).click({ timeout: 20_000 });
+  await expect(card(page, "gate")).toContainText(/Waiting for /, { timeout: 20_000 });
+  const next = "200 litres of lactose-free milk for Wednesday, cheapest";
+  await say(page, next);
+  await expect(answerTo(page, next).getByRole("article").first()).toBeVisible({ timeout: 30_000 });
+  await expect(cards(page, "notice").filter({ hasText: "The agent did not answer" })).toHaveCount(0);
 });

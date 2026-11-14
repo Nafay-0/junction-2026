@@ -3,7 +3,7 @@ import path from "node:path";
 import { expect, test, type Locator, type Page, type Route, type TestInfo } from "@playwright/test";
 // The real plain-code line rules of the photo door, run here on a recorded model reading (see stubReading).
 import { toLines, type RawScan } from "../../src/server/channels/scan/lines";
-import { addPasskey, engine, joinAsApprover, signInStage, watchErrors } from "../support/dock";
+import { addPasskey, engine, signInStage, watchErrors } from "../support/dock";
 import { card, cards, threadLog, turns, visitorKitchen } from "../support/thread";
 
 /**
