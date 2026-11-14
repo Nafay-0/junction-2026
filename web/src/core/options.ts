@@ -4,9 +4,11 @@ import { packsFor as convertPacks } from "./catalog/product";
 import { formatDay, latestDeliveryDay, localDateOf, primaryLine, type HistoryEntry } from "./kitchen";
 import type { Mandate } from "./mandate";
 import { formatAmount, type BaseUnit, type OptimiseGoal } from "./need";
+import { compareNutrition, comparisonText, encodeComparison, type Nutrient } from "./nutrition";
+import { packDeposit } from "./pricing";
 import type { QuoteRequestLine } from "./quote";
 import { formatEur } from "./util";
-import { isMaterialAttribute } from "./vocabulary";
+import { holdsLabel, isMaterialAttribute } from "./vocabulary";
 
 /**
  * Option cards, ranked good, better, best (the partner's phrase). Every figure comes from master data or the live
@@ -56,6 +58,9 @@ export type PlanLine = {
   estimated?: boolean;
   /** Signed claims behind this line's price, availability and origin (see claims.ts). */
   claims?: LiveOffer["claims"];
+  /** Deposit charged with each pack (returnable packaging, core/pricing.ts), and with the line; in the card's total. */
+  depositCents?: number;
+  lineDepositCents?: number;
 };
 
 export type OptionCard = {
@@ -103,7 +108,8 @@ export type ReasonCode =
   | "cheapest" | "joint_cheapest" | "more_expensive" | "no_co2" | "lowest_co2" | "more_co2" | "no_reliability" | "most_reliable" | "less_reliable"
   | "rounds_up" | "exact_amount" | "many_packs" | "partial_stock" | "estimated_pack" | "stock_unconfirmed" | "cutoff_soon" | "instead_of_usual"
   | "arrives_later" | "arrives_first" | "alternative" | "declined_before" | "same_as_last" | "your_usual" | "gives_up"
-  | "over_limit" | "budget_held" | "substitute_needs_approval" | "not_like_for_like";
+  | "over_limit" | "budget_held" | "substitute_needs_approval" | "not_like_for_like"
+  | "nutrition_vs" | "label_kept" | "label_missing" | "wholesaler_lists" | "deposit";
 /** One reason, as data: amounts in cents, kilos, base units and fractions; days as ISO dates; products by name. */
 export type OptionReason = { code: ReasonCode; tone: ReasonTone; params: Record<string, string | number> };
 
@@ -146,6 +152,13 @@ export type OptionsInput = {
   alternatives?: AlternativesAnswer;
   /** Products the kitchen turned down before, with why: offered last, and the card says so. */
   declined?: Map<string, string>;
+  /**
+   * Labels the buyer or the kitchen prefers (not requires): "msc", "hyvaa_suomesta", "origin_fi". Options carrying
+   * all of them rank before those that do not, other things equal, and each card says what the label costs.
+   */
+  preferLabels?: string[];
+  /** Nutrients the kitchen rules on, named first when a substitute's declaration is compared with the original's. */
+  nutritionFocus?: Nutrient[];
 };
 
 export type ExclusionCode = "no_offer" | "cutoff_passed" | "out_of_stock" | "too_late" | "pack_uncertain" | "wrong_unit" | "over_budget" | "no_substitute" | "blocked" | "compromise";
@@ -275,6 +288,7 @@ export function buildOptions(input: OptionsInput): OptionsResult {
     else viable.push({ p, o, size, late: o.deliveryDate > latest, stockKnown });
   }
 
+  const depositOf = (v: Viable) => packDeposit(v.p.deposits)?.knownCents ?? 0;
   const line = (v: Viable, packs: number, substituteFor?: string): PlanLine => ({
     productId: v.p.id,
     name: v.p.name,
@@ -289,6 +303,7 @@ export function buildOptions(input: OptionsInput): OptionsResult {
     ...(v.stockKnown ? {} : { stockKnown: false }),
     ...(v.size.estimated ? { estimated: true } : {}),
     ...(v.o.claims ? { claims: v.o.claims } : {}),
+    ...(depositOf(v) ? { depositCents: depositOf(v), lineDepositCents: depositOf(v) * packs } : {}),
   });
   const perUnit = (v: Viable) => v.o.unitPriceCents / v.size.perPack;
   const enough = (v: Viable, units: number) => !v.stockKnown || v.o.availablePacks * v.size.perPack >= units - 1e-9;
@@ -309,9 +324,10 @@ export function buildOptions(input: OptionsInput): OptionsResult {
     const sub = viable
       .filter((q) => q !== v && q.late === v.late && enough(q, rest))
       // the rest of the same milk: never 400 L skimmed topped up with semi-skimmed (or a best/better stand-in the map ranks)
-      .filter((q) => likeForLike(v.p, q.p) || (input.reference?.productId === v.p.id && tierRank(proposalFor(input.alternatives, q.p.id)?.tier) <= 1))
+      .filter((q) => likeForLike(v.p, q.p) || (input.reference?.productId === v.p.id && tierRank(proposalFor(input.alternatives, q.p.id)?.tier) <= 1) || (v.p.substitutes?.includes(q.p.id) ?? false))
       .filter((q) => (perUnit(q) / perUnit(v) - 1) * 100 <= mandate.substitution.maxPriceIncreasePct + 1e-9)
-      .sort((a, b) => perUnit(a) - perUnit(b) || a.p.id.localeCompare(b.p.id))[0];
+      // The wholesaler's own listed substitute first, then the cheapest per unit.
+      .sort((a, b) => Number(!v.p.substitutes?.includes(a.p.id)) - Number(!v.p.substitutes?.includes(b.p.id)) || perUnit(a) - perUnit(b) || a.p.id.localeCompare(b.p.id))[0];
     if (!sub) {
       excluded.push({ productId: v.p.id, reason: `${stockNote}, and no substitute within the mandate covers the rest`, code: "no_substitute" });
       continue;
@@ -346,7 +362,7 @@ export function buildOptions(input: OptionsInput): OptionsResult {
     }
   }
 
-  const total = (pl: Plan) => pl.lines.reduce((s, l) => s + l.lineTotalCents, 0);
+  const total = (pl: Plan) => pl.lines.reduce((s, l) => s + l.lineTotalCents + (l.lineDepositCents ?? 0), 0);
   const held = heldOf(input);
   const committed = input.spentThisWeekCents - held;
   const affordable = plans.filter((pl) => {
@@ -369,7 +385,7 @@ export function buildOptions(input: OptionsInput): OptionsResult {
     const pool = [...viable].sort((a, b) => Number(a.late) - Number(b.late) || perUnit(a) - perUnit(b) || a.p.id.localeCompare(b.p.id));
     for (const v of pool) {
       const stockPacks = v.stockKnown ? v.o.availablePacks : Infinity;
-      const packs = Math.min(Math.floor(cap / v.o.unitPriceCents), stockPacks, v.size.packs - 1);
+      const packs = Math.min(Math.floor(cap / (v.o.unitPriceCents + depositOf(v))), stockPacks, v.size.packs - 1);
       if (packs < 1) continue;
       const delivered = r2(packs * v.size.perPack);
       affordable.push({ primary: v, lines: [line(v, packs)], late: v.late, partial: { delivered, rest: r2(amount.amount - delivered), why: leftNow <= signable ? "weekly_budget" : "approver_authority", capCents: cap } });
@@ -426,13 +442,20 @@ export function buildOptions(input: OptionsInput): OptionsResult {
   // The product map's tier for a plan that stands in for the reference (the reference itself first); a product the
   // kitchen turned down before goes last.
   const coreGiveUps = (pl: Plan) => givesUp(pl).filter((g) => g.part !== "pack_size").length;
-  const tierOf = (pl: Plan) => (input.declined?.has(pl.primary.p.id) ? 9 : !ref || pl.primary.p.id === ref.productId ? -1 : tierRank(proposalFor(input.alternatives, pl.primary.p.id)?.tier));
+  // The wholesaler's own substitute list (the product file's `substitutions`): a product it lists for the reference
+  // ranks first among the alternatives, before the map's best.
+  const listed = (pl: Plan) => !!ref && pl.primary.p.id !== ref.productId && listedFor(input, ref.productId, pl.primary.p.id);
+  const tierOf = (pl: Plan) => (input.declined?.has(pl.primary.p.id) ? 9 : !ref || pl.primary.p.id === ref.productId ? -1 : listed(pl) ? -0.5 : tierRank(proposalFor(input.alternatives, pl.primary.p.id)?.tier));
+  const prefer = input.preferLabels ?? [];
+  const lacksPreferred = (pl: Plan) => (prefer.length && !planHolds(pl, prefer) ? 1 : 0);
   const ranked = [...pool].sort(
     (a, b) =>
       // A pack size the map already weighed in its tier does not outrank the map's tier.
       (input.alternatives && !refFull ? coreGiveUps(a) - coreGiveUps(b) || tierOf(a) - tierOf(b) : 0) ||
       givesUp(a).length - givesUp(b).length ||
+      (ref && !refFull ? Number(!listed(a)) - Number(!listed(b)) : 0) ||
       (input.declined?.has(a.primary.p.id) ? 1 : 0) - (input.declined?.has(b.primary.p.id) ? 1 : 0) ||
+      lacksPreferred(a) - lacksPreferred(b) ||
       goalKey(a) - goalKey(b) ||
       m(a).total - m(b).total ||
       (m(a).co2 ?? Infinity) - (m(b).co2 ?? Infinity) ||
@@ -538,6 +561,17 @@ function alternativeOf(plan: Plan, input: OptionsInput): { alternative?: NonNull
   return prop ? { alternative: { for: ref.productId, tier: prop.tier, reason: prop.reason, ...(input.alternatives.use ? { use: input.alternatives.use } : {}) } } : {};
 }
 
+/** Whether the wholesaler's own substitute list (on the reference product) names this product. */
+function listedFor(input: OptionsInput, refId: string, productId: string): boolean {
+  return input.candidates.find((p) => p.id === refId)?.substitutes?.includes(productId) ?? false;
+}
+
+/** Every product in the plan carries every label (a split carries it only if both products do). */
+function planHolds(pl: Plan, labels: string[]): boolean {
+  const products = [pl.primary.p, ...(pl.split ? [pl.split.sub.p] : [])];
+  return labels.every((l) => products.every((p) => holdsLabel(p, l)));
+}
+
 /** Same category and unit, and every material attribute (diet, fat, organic) of the original. */
 export function likeForLike(original: Product, sub: Product): boolean {
   return original.category === sub.category && original.attributes.filter(isMaterialAttribute).every((a) => sub.attributes.includes(a));
@@ -546,7 +580,7 @@ export function likeForLike(original: Product, sub: Product): boolean {
 const heldOf = (input: OptionsInput) => Math.min(Math.max(0, input.heldThisWeekCents ?? 0), input.spentThisWeekCents);
 
 function measure(pl: Plan, input: OptionsInput) {
-  const total = pl.lines.reduce((s, l) => s + l.lineTotalCents, 0);
+  const total = pl.lines.reduce((s, l) => s + l.lineTotalCents + (l.lineDepositCents ?? 0), 0);
   const delivered = r2(pl.lines.reduce((s, l) => s + l.packs * l.packSize, 0));
   const byId = new Map<string, Product>([[pl.primary.p.id, pl.primary.p]]);
   if (pl.split) byId.set(pl.split.sub.p.id, pl.split.sub.p);
@@ -649,6 +683,35 @@ function explainCard(c: Card, all: Card[], input: OptionsInput): void {
     const why = input.declined?.get(l.productId);
     if (why) say("con", "declined_before", { product: l.name, why }, `The kitchen turned ${l.name} down before (${why}).`);
   }
+
+  // The wholesaler lists this product as a substitute for the one asked for.
+  const ref = input.reference;
+  const subId = c._plan.split?.sub.p.id ?? (ref && c._plan.primary.p.id !== ref.productId ? c._plan.primary.p.id : undefined);
+  const originalId = c._plan.split ? c._plan.primary.p.id : ref?.productId;
+  if (subId && originalId && listedFor(input, originalId, subId)) {
+    const originalName = input.candidates.find((p) => p.id === originalId)?.name ?? ref?.name ?? originalId;
+    say("pro", "wholesaler_lists", { product: originalName }, `The wholesaler itself lists it as a substitute for ${originalName}.`);
+  }
+  // A substitute's nutrition against the original's: what changes per 100 g or ml, unknown said as unknown.
+  const original = originalId ? input.candidates.find((p) => p.id === originalId) : undefined;
+  const subProduct = subId ? (c._plan.split?.sub.p ?? c._plan.primary.p) : undefined;
+  if (original?.nutrition && subProduct) {
+    const cmp = compareNutrition(original.nutrition, subProduct.nutrition, input.nutritionFocus ?? []);
+    const text = comparisonText(cmp);
+    if (cmp && text) say("quiet", "nutrition_vs", { product: original.name, diff: encodeComparison(cmp), per: original.nutrition.per }, `Against ${original.name}: ${text}.`);
+  }
+  // Preferred labels: what carrying them costs, or that this option does not carry them.
+  const prefer = input.preferLabels ?? [];
+  if (prefer.length) {
+    if (planHolds(c._plan, prefer)) {
+      const without = others.filter((x) => !planHolds(x._plan, prefer)).map((x) => x.totalCents);
+      const cheapestWithout = without.length ? Math.min(...without) : undefined;
+      const more = cheapestWithout !== undefined ? c.totalCents - cheapestWithout : 0;
+      say("pro", "label_kept", { labels: prefer.join(","), ...(cheapestWithout !== undefined ? { moreCents: more, pct: Math.round((c.totalCents / cheapestWithout - 1) * 1000) / 10 } : {}) }, `Carries ${prefer.join(", ")}${cheapestWithout !== undefined ? (more > 0 ? `: ${formatEur(more)} more than the cheapest option without it` : more < 0 ? `, and costs ${formatEur(-more)} less than the cheapest without it` : ", at the same price as without it") : ""}.`);
+    } else say("con", "label_missing", { labels: prefer.filter((l) => !planHolds(c._plan, [l])).join(",") }, `Does not carry ${prefer.filter((l) => !planHolds(c._plan, [l])).join(", ")}, which the kitchen prefers.`);
+  }
+  const deposit = c.lines.reduce((s, l) => s + (l.lineDepositCents ?? 0), 0);
+  if (deposit > 0) say("quiet", "deposit", { cents: deposit }, `Includes ${formatEur(deposit)} deposit for returnable packaging (refunded on return; no VAT).`);
   c.cons.push(...c.signOff);
   if (c.labels.includes("same_as_last_time") && input.last) say("pro", "same_as_last", { date: localDateOf(input.last.placedAt) }, `Same product as your last order (${formatDay(localDateOf(input.last.placedAt))}).`);
   if (input.usual && c._plan.primary.p.id === input.usual.productId) say("pro", "your_usual", { text: input.usual.text.replace(/^Usually [^:]*: /, "") }, `Your usual product (${input.usual.text.replace(/^Usually [^:]*: /, "")}).`);

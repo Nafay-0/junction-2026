@@ -474,6 +474,8 @@ export function createIntakeFlow(deps: IntakeDeps) {
       alternatives,
       declined,
       goal: goalForRank,
+      preferLabels: [...new Set([...(session.mandate.preferredLabels ?? []), ...(i.need.preferredLabels ?? [])])].filter((l) => !constraints.requiredCertificates.includes(l)),
+      nutritionFocus: [...new Set((session.mandate.nutritionRules ?? []).map((r) => r.nutrient))],
       span,
       estimates: i.acknowledgements.filter((a) => a.code === "pack_uncertain" && a.action === "confirmed").map((a) => a.key.split(":")[1]),
     });

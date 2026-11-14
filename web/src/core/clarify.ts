@@ -1,4 +1,5 @@
-import { allergenOf, forbiddenPresent } from "./vocabulary";
+import { nutritionFindings, ruleText, type NutritionRule } from "./nutrition";
+import { allergenOf, forbiddenPresent, holdsLabel } from "./vocabulary";
 import { z } from "zod";
 import type { Product } from "./catalog";
 import { memoryItemIdOf, type Evidence, type LearnedPreference, type StatedPreference } from "./kitchen";
@@ -19,6 +20,8 @@ export type HardConstraints = {
   excludedAttributes: string[];
   forbiddenAllergens: string[];
   requiredCertificates: string[];
+  /** The mandate's nutrition rules (core/nutrition.ts): a product that breaks one, or does not declare the figure, is not offered. */
+  nutritionRules: NutritionRule[];
   sources: ConstraintSource[];
 };
 
@@ -31,6 +34,7 @@ export function hardConstraints(mandate: Mandate, need: StructuredNeed, stated: 
     excludedAttributes: [],
     forbiddenAllergens: [...mandate.forbiddenAllergens],
     requiredCertificates: [...mandate.requiredCertificates],
+    nutritionRules: [...(mandate.nutritionRules ?? [])],
     sources: [],
   };
   const add = (text: string, source: ConstraintSource["source"], preferenceId?: string) => c.sources.push({ text, source, preferenceId });
@@ -38,6 +42,7 @@ export function hardConstraints(mandate: Mandate, need: StructuredNeed, stated: 
   if (mandate.requiredAttributes.length) add(`Mandate: must be ${mandate.requiredAttributes.join(", ")}`, "mandate");
   if (mandate.forbiddenAllergens.length) add(`Mandate: never ${mandate.forbiddenAllergens.join(", ")}`, "mandate");
   if (mandate.requiredCertificates.length) add(`Mandate: must carry ${mandate.requiredCertificates.join(", ")}`, "mandate");
+  for (const r of c.nutritionRules) add(`Mandate: ${ruleText(r)}`, "mandate");
 
   const wanted = [...need.requiredClaims, ...need.item.attributes];
   if (wanted.length) add(`Request: must be ${wanted.join(", ")}`, "request");
@@ -80,7 +85,9 @@ export function violation(p: Product, c: HardConstraints): string | undefined {
   const allergens = forbiddenPresent({ present: p.allergens, claims: p.attributes }, c.forbiddenAllergens);
   if (allergens.length) return `contains ${allergens.join(", ")}`;
   if (c.forbiddenAllergens.length && p.allergenInfo?.declared === false) return `no allergen data from its maker, so it cannot be shown free of ${c.forbiddenAllergens.join(", ")}`;
-  const certs = c.requiredCertificates.filter((x) => !p.certificates.includes(x));
+  const nutrition = nutritionFindings(c.nutritionRules ?? [], { productId: p.id, category: p.category, nutrition: p.nutrition });
+  if (nutrition.length) return nutrition[0].reason.replace(new RegExp(`^${p.id} `), "");
+  const certs = c.requiredCertificates.filter((x) => !holdsLabel(p, x));
   if (certs.length) return `lacks ${certs.join(", ")}`;
   return undefined;
 }

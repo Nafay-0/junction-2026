@@ -2,7 +2,8 @@ import type { Approver, Mandate } from "./mandate";
 import type { Quote, QuoteLine } from "./quote";
 import { latestDeliveryDay } from "./kitchen";
 import { formatEur } from "./util";
-import { allergenOf, forbiddenPresent, isMaterialAttribute } from "./vocabulary";
+import { nutritionFindings, ruleText } from "./nutrition";
+import { allergenOf, forbiddenPresent, holdsLabel, isMaterialAttribute } from "./vocabulary";
 
 /**
  * The gate. A pure function: same mandate, draft and context in, same decision out. No I/O, no clock,
@@ -28,6 +29,7 @@ export const RULES = [
   "category_allowed",
   "required_attributes",
   "forbidden_allergens",
+  "nutrition_rules", // every product keeps the kitchen's nutrition rules by its signed declaration; a missing figure is not compliant
   "required_certificates",
   "recall_hold", // no product is held by the wholesaler under a recall notice (or a recall drill)
   "delivery_deadline", // every line arrives by the need-by date and within the mandate's max lead time
@@ -211,10 +213,21 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
     },
     mandate.forbiddenAllergens.length ? `No product contains ${mandate.forbiddenAllergens.join(", ")}, by declared allergen data.` : "No product contains a forbidden allergen.",
   );
+  // Same honesty as allergens: a product whose declaration does not show the figure is refused, not sent to a person
+  // (the approver has no better data), and the reason names the rule, the figure and the product.
+  const nutritionRules = mandate.nutritionRules ?? [];
+  lineCheck(
+    "nutrition_rules",
+    (l) => {
+      const found = nutritionFindings(nutritionRules, { productId: l.productId, category: l.category, nutrition: l.nutrition });
+      return found.length ? found.map((f) => f.reason).join(" ") : null;
+    },
+    nutritionRules.length ? `Every product keeps the kitchen's nutrition rules by its maker's declaration: ${nutritionRules.map(ruleText).join("; ")}.` : "No nutrition rules.",
+  );
   lineCheck(
     "required_certificates",
     (l) => {
-      const missing = mandate.requiredCertificates.filter((c) => !l.certificates.includes(c));
+      const missing = mandate.requiredCertificates.filter((c) => !holdsLabel({ certificates: l.certificates, countryOfOrigin: l.countryOfOrigin }, c));
       return missing.length ? `${l.productId} lacks required certificate(s): ${missing.join(", ")}.` : null;
     },
     mandate.requiredCertificates.length ? `Every product carries ${mandate.requiredCertificates.join(", ")}.` : "No certificates required.",

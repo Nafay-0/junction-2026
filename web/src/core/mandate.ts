@@ -1,6 +1,7 @@
 import { SignJWT, decodeProtectedHeader, errors, jwtVerify, type CryptoKey } from "jose";
 import { z } from "zod";
 import { SIGN_ALG, VERIFY_ALGS, type SigningKey } from "./keys";
+import { NutritionRuleSchema } from "./nutrition";
 import { allergenOf } from "./vocabulary";
 
 /**
@@ -38,8 +39,16 @@ export const MandateSchema = z
     /** Every product ordered must carry all of these attributes (e.g. "lactose_free"). */
     requiredAttributes: z.array(z.string().min(1)),
     forbiddenAllergens: z.array(z.string().min(1)),
-    /** Every product ordered must carry all of these certificates or labels. */
+    /** Every product ordered must carry all of these certificates or labels ("origin_fi": Finland as the stated origin). */
     requiredCertificates: z.array(z.string().min(1)),
+    /**
+     * Nutrition rules, checked by the gate like the allergen rules (core/nutrition.ts): a ceiling or a floor per 100 g
+     * or ml for the product kinds named. A product whose declaration lacks the figure is refused: unknown is not
+     * compliant. Absent: none.
+     */
+    nutritionRules: z.array(NutritionRuleSchema).max(30).optional(),
+    /** Labels the kitchen prefers (not requires): options carrying them rank first, with the price of the label said. */
+    preferredLabels: z.array(z.string().min(1).max(40)).max(20).optional(),
     /** Latest acceptable delivery: no later than `maxLeadDays` after the order, and no later than the request's need-by date. */
     delivery: z.object({ maxLeadDays: z.number().int().positive() }),
     substitution: z.object({
