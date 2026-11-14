@@ -34,6 +34,10 @@ export type TurnRun = {
   session: AgentSession;
   person?: ConsolePerson;
   door: ThreadDoor;
+  /** The wholesaler's offer the buyer asked for this turn: its own words are the reply (offer.ts). */
+  offerAsked?: string;
+  /** The buyer's language as the store sent it (en when not said). */
+  lang?: "en" | "fi" | "sv";
   t0: number;
   /** Everything the agent turn's cards were built from: the facts the model's line is checked against. */
   facts: unknown[];
@@ -173,7 +177,7 @@ function noticeFrom(err: unknown, ref: string, words: string): NoticeCard {
     const id = cardId("notice", ref);
     if (err.code === "need_incomplete") {
       const missing = ((err.details?.missing as string[]) ?? []).map((m) => (m === "item" ? "what to buy" : "how much, with the unit"));
-      return { type: "notice", cardId: id, kind: "incomplete", message: `I understood part of "${words.slice(0, 80)}" but need ${missing.join(" and ")}.`, missing };
+      return { type: "notice", cardId: id, kind: "incomplete", message: `I understood part of "${words.slice(0, 80)}" but need ${missing.join(" and ")}.`, missing, words: words.slice(0, 600) };
     }
     if (err.code === "not_a_purchase_request") return { type: "notice", cardId: id, kind: "not_purchase", message: err.message };
     if (err.code === "family_unknown") return { type: "notice", cardId: id, kind: "not_found", message: `Nothing in the assortment matches "${words.slice(0, 80)}".` };
@@ -182,6 +186,51 @@ function noticeFrom(err: unknown, ref: string, words: string): NoticeCard {
     return { type: "notice", cardId: id, kind: "refused", message: err.message, ...(err.rule ? { rule: err.rule } : {}) };
   }
   return { type: "notice", cardId: cardId("notice", ref), kind: "error", message: "Something went wrong on our side. Try again.", retry: true };
+}
+
+/** "Same as last week but 20 % more" (or less), in the kitchen's languages: a whole earlier order, scaled. */
+export const REPEAT_SCALED = /(same|again|like|as)\b[^%]*?\b(last|previous)\b[^%]*?(\d{1,3})\s*%\s*(more|less|extra|fewer)|(sama|samat|samoin|uudestaan|kuin)\b[^%]*?\b(viime|edelli)\w*[^%]*?(\d{1,3})\s*%\s*(enemmän|vähemmän|lisää)|(samma|som)\b[^%]*?\b(förra|senaste)\b[^%]*?(\d{1,3})\s*%\s*(mer|mindre)/i;
+
+/**
+ * A whole earlier order again, every line scaled by the percentage said: last week's deliveries (or, failing those, the
+ * latest order), each product's packs times the factor, rounded up to whole packs, on one order sheet to confirm.
+ * Plain code from the kitchen's records; the reader only ever sees one item at a time, so this is done before it.
+ */
+export async function repeatScaled(run: TurnRun, words: string): Promise<ItemOutcome[] | undefined> {
+  const m = REPEAT_SCALED.exec(words);
+  if (!m) return undefined;
+  const pct = Number(m[3] ?? m[7] ?? m[11]);
+  const dir = (m[4] ?? m[8] ?? m[12] ?? "").toLowerCase();
+  if (!Number.isFinite(pct) || pct <= 0 || pct > 300) return undefined;
+  const factor = /less|fewer|vähemmän|mindre/.test(dir) ? 1 - pct / 100 : 1 + pct / 100;
+  const { overview } = await import("@/server/kitchen-portal");
+  const ov = await overview(run.k);
+  const today = new Date().toISOString().slice(0, 10);
+  const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
+  const usable = ov.orders.filter((o) => o.status === "committed" || o.status === "history");
+  const lastWeek = usable.filter((o) => o.deliveryDate >= weekAgo && o.deliveryDate < today);
+  const from = lastWeek.length ? lastWeek : usable.slice(0, 1);
+  if (!from.length) return undefined;
+  const packs = new Map<string, number>();
+  for (const o of from) for (const l of o.lines) packs.set(l.productId, (packs.get(l.productId) ?? 0) + l.quantity);
+  const known = await run.rt.catalog.searchProducts({ ids: [...packs.keys()], limit: 30 });
+  const products = known.filter((p) => run.session.mandate.allowedCategories.includes(p.category)).slice(0, 6);
+  if (!products.length) return undefined;
+  record(run, "repeat_scaled", `"${words.slice(0, 80)}": ${from.length} earlier order${from.length > 1 ? "s" : ""} (${from.map((o) => o.deliveryDate).join(", ")}) again, every line times ${factor.toFixed(2)}: each through the intake (live prices, stand-ins if the product cannot be had), then one order.`, { orders: from.map((o) => o.orderId), factor, products: products.map((p) => p.id) });
+  // Each product as a need of its own amount (the kitchen's units), through the same intake as typed words: a product
+  // that cannot be had now gets its stand-ins there. Then the ready ones become one order (combineItems).
+  run.multi = true;
+  // No day in the words: the soonest each can come within the week (a latest day, so each offer is its earliest).
+  const lead = Math.max(1, Math.min(6, run.session.mandate.delivery?.maxLeadDays ?? 6));
+  const deliverBy = new Date(Date.now() + lead * 86_400_000).toISOString().slice(0, 10);
+  const outs = await Promise.all(
+    products.map((p, i) => {
+      const amount = Math.round(packs.get(p.id)! * p.packSize * factor * 100) / 100;
+      const unit = p.unit === "L" ? "L" : p.unit === "kg" ? "kg" : "pcs";
+      return openNeed(run, { text: words.slice(0, 2000), item: { text: p.name, category: p.category, productId: p.id }, quantity: { amount, unit }, deliverBy } as NeedInput, `${amount} ${unit} ${p.name} by ${deliverBy}`, { ref: `${run.turnId}:r${i}` });
+    }),
+  );
+  return combineItems(run, words, outs.flat());
 }
 
 /** "The usual", in the kitchen's languages. */
@@ -264,6 +313,15 @@ export async function orderFromWords(run: TurnRun, words: string, earlier: Earli
     if (!r.basedOn.fields.includes("deliverBy")) r.basedOn = { ...r.basedOn, fields: [...r.basedOn.fields, "deliverBy"] };
   }
   const basedOn = r.basedOn ? { ...r.basedOn, label: earlier.find((e) => e.id === r.basedOn!.requestId)?.text ?? undefined } : undefined;
+  // "If there isn't enough milk, oat drink will do": a fallback, not a second item. Kept as words for the agent (it says
+  // whether it is needed), never opened as a request of its own with holes in it.
+  const FALLBACK = /\b(will do|would do|is fine too|works too|otherwise|instead if|käy myös|kelpaa|käy sitten|duger|går också)\b/i;
+  const fallbacks = (r.alsoAsked ?? []).filter((a) => FALLBACK.test(a.text) && /\b(if|jos|om)\b/i.test(words));
+  if (fallbacks.length) {
+    r = { ...r, alsoAsked: (r.alsoAsked ?? []).filter((a) => !fallbacks.includes(a)) };
+    run.facts.push({ fallbackIfNeeded: fallbacks.map((a) => a.text), say: "only if the main item cannot be had" });
+    record(run, "fallback_item", `A fallback in the words, not a second item: ${fallbacks.map((a) => `"${a.text}"`).join(", ")}.`, {});
+  }
   const alsoAsked = (r.alsoAsked ?? []).map((a) => a.text);
   const parsed = NeedSchema.parse(need) as StructuredNeed;
   // The other items the same message named: read and run in parallel with this one.
@@ -313,6 +371,13 @@ export async function combineItems(run: TurnRun, words: string, items: ItemOutco
 export async function openNeed(run: TurnRun, need: NeedInput, words: string, opts: { ref: string; basedOn?: { requestId: string; fields: string[]; label?: string }; alsoAsked?: string[]; memoryLine?: string }): Promise<ItemOutcome[]> {
   // A kitchen's day ("for Thursday", "torstaiksi") is the day it wants the goods, not a latest date: delivered that day
   // when it can be (the intake moves the wholesaler's earliest offer to it). Earlier only when that day cannot be had.
+  // "For coffee" is a use, not a claim any product carries: it becomes the barista kind in the words searched for.
+  const nn = need as { requiredClaims?: string[]; item: { text: string; attributes?: string[] } };
+  const COFFEE = /coffee|barista|foam|kahvi|kaffe/i;
+  if (nn.requiredClaims?.some((c) => COFFEE.test(c)) || nn.item.attributes?.some((c) => COFFEE.test(c)) || /\b(for|to|in)\s+(the\s+)?coffee\b|kahviin|till kaffe/i.test(nn.item.text)) {
+    const text = /barista/i.test(nn.item.text) ? nn.item.text : `${nn.item.text.replace(/\s+(for|to|in)\s+(the\s+)?coffee|\s+kahviin|\s+till kaffe/i, "")} barista`;
+    need = { ...need, ...(nn.requiredClaims ? { requiredClaims: nn.requiredClaims.filter((c) => !COFFEE.test(c)) } : {}), item: { ...need.item, text, ...(nn.item.attributes ? { attributes: nn.item.attributes.filter((c) => !COFFEE.test(c)) } : {}) } } as NeedInput;
+  }
   const n = need as { deliverBy?: string; deliverOn?: string };
   // Words that set a latest day ("by Monday", "mennessä", "senast") keep it a latest day.
   const latest = /\b(by|before|at the latest|no later than|mennessä|viimeistään|ennen|senast|innan|före)\b/i.test(words);

@@ -318,12 +318,14 @@ export function Portal({ kitchen, kitchens, account, children }: { kitchen: Kitc
             <span className="sm:hidden">{tx.demoShort}</span>
             <span className="hidden sm:inline">{DEMO_NOTES[lang]}</span>
           </p>
-          <AccountBar kitchen={kitchen} account={account} />
-          <Header />
-          <main id="main" className="mx-auto min-w-0 max-w-[1320px] px-4 pb-12 sm:px-6 xl:px-8">
-            <RecallNotice kitchen={slug} />
+          {/* The agent's own page is the agent alone, as the design shows it: the store's sections sit under the kitchen's name there. */}
+          {!onOrderPage && <AccountBar kitchen={kitchen} account={account} />}
+          {!onOrderPage && <Header />}
+          <main id="main" className={onOrderPage ? "min-w-0" : "mx-auto min-w-0 max-w-[1320px] px-4 pb-12 sm:px-6 xl:px-8"}>
+            {!onOrderPage && <RecallNotice kitchen={slug} />}
             {children}
           </main>
+          {!onOrderPage && (
           <footer className="border-t border-line bg-paper">
             <div className="pb-tabbar mx-auto flex max-w-[1320px] flex-wrap items-center justify-between gap-3 px-4 pt-5 text-[0.82rem] text-ink-soft sm:px-6 lg:!pb-5 xl:px-8">
               <p className="max-w-[80ch]">{tx.footer(PRODUCT_NAME)}</p>
@@ -333,7 +335,8 @@ export function Portal({ kitchen, kitchens, account, children }: { kitchen: Kitc
               </p>
             </div>
           </footer>
-          <TabBar />
+          )}
+          {!onOrderPage && <TabBar />}
           <AssistantPanel />
         </div>
       </Toaster>

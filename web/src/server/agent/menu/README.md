@@ -40,7 +40,7 @@ card with the allowance.
 
 ## The two scenarios (scenarios.ts)
 
-Plain code in `core/on-hand.ts`, `core/pack-choice.ts`, `core/recipe-roles.ts` (tests beside each); `pnpm scenarios`
+Plain code in `core/on-hand.ts`, `core/pack-choice.ts`, `core/recipe-roles.ts` (tests beside each); `pnpm scenarios:menu`
 runs both on the real catalogue in process and as an outside MCP agent.
 
 **A menu around what is in season.** The anchor is the season calendar's entry for this month (`core/season.ts`, each

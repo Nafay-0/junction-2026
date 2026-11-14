@@ -764,6 +764,124 @@ ALL.push({
   expect: [optionsInCatalogue, without(/nut|almond|hazel|cashew|peanut|sesame|fish/i, "nuts, peanuts, sesame and fish"), keepsSchoolNutrition, noLowProteinStandIn, optionsShown(1)],
 });
 
+// ---------- the kitchen agent's watch (server/watch) ----------
+
+/** What the watch found or held for Kaari in `before`, for the checks. Per run, in this process. */
+const watched: { finding?: Json; renewal?: Json; product?: string } = {};
+
+async function opsBrowser(url: string) {
+  const { loadLocalEnv } = await import("../../scripts/lib/env");
+  loadLocalEnv(); // the operations passcode and the demo kitchen's key, as the server has them
+  const { Browser } = await import("./lib");
+  const b = new Browser(url);
+  await b.req("POST", "/ops-api/session", { name: "Eval operations", ...(process.env.DOCK_OPS_PASSCODE ? { passcode: process.env.DOCK_OPS_PASSCODE } : {}) });
+  return b;
+}
+
+/** The wholesaler's side: stage a stock-out of Kaari's usual milk (the mock API will not run out on cue), run the watch. */
+async function stockOutForKaari(url: string): Promise<void> {
+  const b = await opsBrowser(url);
+  const v = (await b.req("GET", "/ops-api/watch")).body;
+  const milk = (v?.kitchens ?? []).find((k: Json) => k.slug === "kaari")?.standing.find((s: Json) => s.family === "milk");
+  Object.assign(watched, { finding: undefined, renewal: undefined, product: milk?.name });
+  if (!milk) return;
+  await b.req("POST", "/ops-api/watch", { action: "stage_stock_out", kitchen: "kaari", productId: milk.productId });
+  await b.req("POST", "/ops-api/watch", { action: "run", kitchens: ["kaari"], fresh: true });
+  watched.finding = ((await b.req("GET", "/ops-api/watch")).body?.findings ?? []).find((f: Json) => f.kitchen === "kaari" && f.state === "open" && f.product.productId === milk.productId);
+}
+
+/** Staff stage creeping portions on Kaari's milk; the kitchen (its own mandate, over REST) switches auto-renew on; the watch runs. */
+async function driftForKaari(url: string): Promise<void> {
+  const b = await opsBrowser(url);
+  Object.assign(watched, { finding: undefined, renewal: undefined });
+  await b.req("POST", "/ops-api/watch", { action: "stage_drift", kitchen: "kaari", family: "milk" });
+  const { signMandate } = await import("@/core/mandate");
+  const { KITCHEN_ORG, demoKitchenKeyPair, demoKitchenMandate } = await import("@/server/demo-kitchen");
+  const mandate = await signMandate(demoKitchenMandate(new Date()), await demoKitchenKeyPair());
+  await fetch(new URL("/api/v1/watch/auto-renew", url), { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${mandate}`, "dock-agent-id": KITCHEN_ORG.agentId }, body: JSON.stringify({ family: "milk", on: true, by: "Sanna Koskinen (eval)" }) });
+  await b.req("POST", "/ops-api/watch", { action: "run", kitchens: ["kaari"], fresh: true });
+  watched.renewal = ((await b.req("GET", "/ops-api/watch")).body?.renewals ?? []).find((r: Json) => r.kitchen === "kaari" && r.family === "milk");
+}
+
+const stockOutFound: Check = {
+  name: "the watch noticed the staged stock-out first: ranked substitutes, a signed (simulated) claim, marked staged",
+  run: () => ok(!!watched.finding && watched.finding.staged === true && watched.finding.substitutes.length > 0 && watched.finding.claim?.simulated === true, `finding: ${JSON.stringify(watched.finding ?? null).slice(0, 200)}`),
+};
+const stockOutSaid: Check = {
+  name: "the kitchen's agent said it in the conversation: what cannot come and the closest substitute",
+  run: (o) => {
+    const sub = String(watched.finding?.substitutes?.[0]?.name ?? "").toLowerCase();
+    const words = nameWords(sub);
+    const texts = o.answers.map((a) => a.text.toLowerCase());
+    return ok(texts.some((t) => /can'?t come|cannot come|out until|ei tule|loppu/.test(t)) && texts.some((t) => words.filter((w) => t.includes(w)).length >= Math.min(2, words.length)), `said: ${texts.join(" | ").slice(0, 200) || "nothing"}`);
+  },
+};
+const renewalHeld: Check = {
+  name: "the watch held the auto-renewal of the drifted milk (portions trend, staged) instead of placing it",
+  run: () => ok(!!watched.renewal && watched.renewal.state === "held" && !!watched.renewal.drift?.portions && watched.renewal.staged === true, `renewal: ${JSON.stringify(watched.renewal ?? null).slice(0, 200)}`),
+};
+const renewalSaid: Check = {
+  name: "the kitchen's agent said the drift with its figures and asked: new amount, the usual, or skip",
+  run: (o) => {
+    const p = watched.renewal?.drift?.portions;
+    const texts = o.answers.map((a) => a.text.toLowerCase());
+    return ok(!!p && texts.some((t) => t.includes(String(p.from)) && t.includes(String(p.to))) && texts.some((t) => /skip|usual|väliin|tavalli/.test(t)), `said: ${texts.join(" | ").slice(0, 200) || "nothing"}`);
+  },
+};
+
+const WATCH_WIRING = "The conversation says it once the thread calls server/watch/thread.ts watchMomentForThread and answerWatchMoment; until then 'the agent said it' fails and the watch's own checks (found or held, staged, signed, nothing ordered) pass.";
+
+ALL.push(
+  {
+    id: "stock-out-en",
+    title: "Supplier stock-out: the agent notices first and proposes a compatible substitute with its trade-off",
+    tag: "supplier stock-out",
+    kitchen: "kaari",
+    lang: "en",
+    before: stockOutForKaari,
+    turns: [{ say: "Anything I should know about this week's orders?" }],
+    goal: "answer",
+    expect: [stockOutFound, stockOutSaid, noOrder],
+    limitation: WATCH_WIRING,
+  },
+  {
+    id: "stock-out-fi",
+    title: "Toimittajan loppuminen: agentti huomaa ensin ja ehdottaa korvaavaa tuotetta",
+    tag: "supplier stock-out",
+    kitchen: "kaari",
+    lang: "fi",
+    before: stockOutForKaari,
+    turns: [{ say: "Onko tämän viikon tilauksissa jotain, mitä minun pitää tietää?" }],
+    goal: "answer",
+    expect: [stockOutFound, stockOutSaid, noOrder],
+    limitation: WATCH_WIRING,
+  },
+  {
+    id: "drift-renewal-en",
+    title: "Standing-order drift: the creeping milk order is held before auto-renewing, and the kitchen is asked",
+    tag: "standing-order drift",
+    kitchen: "kaari",
+    lang: "en",
+    before: driftForKaari,
+    turns: [{ say: "Is this week's milk order sorted?" }],
+    goal: "answer",
+    expect: [renewalHeld, renewalSaid, noOrder],
+    limitation: WATCH_WIRING,
+  },
+  {
+    id: "drift-renewal-fi",
+    title: "Vakiotilauksen ajautuminen: kasvava maitotilaus pidätetään ennen automaattista uusintaa",
+    tag: "standing-order drift",
+    kitchen: "kaari",
+    lang: "fi",
+    before: driftForKaari,
+    turns: [{ say: "Onko tämän viikon maitotilaus kunnossa?" }],
+    goal: "answer",
+    expect: [renewalHeld, renewalSaid, noOrder],
+    limitation: WATCH_WIRING,
+  },
+);
+
 /**
  * Run order. The questions about Kaari's own history go first, before any scenario adds requests of its own to
  * that history ("same as last Thursday" must be read against the kitchen's real Thursday, not a request this run

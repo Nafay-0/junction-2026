@@ -23,7 +23,7 @@ export type WholesalerAuditEntry = {
   type: LedgerEntry["type"];
   requestId?: string;
   orderId?: string;
-  kind: "asked" | "claimed" | "quoted" | "decided" | "signed" | "committed" | "refused" | "control" | "offered" | "private";
+  kind: "asked" | "claimed" | "quoted" | "decided" | "signed" | "committed" | "refused" | "control" | "offered" | "watched" | "private";
   summary: string;
   data?: Record<string, unknown>;
 };
@@ -83,6 +83,11 @@ export function wholesalerEntry(e: LedgerEntry): WholesalerAuditEntry {
       // The selling agent's offers and the kitchen's answers to them: both sides read them in full (what was offered,
       // why, at what price, and accepted, declined or muted). Nothing of the kitchen's memory is in them.
       return { ...base, kind: "offered", summary: e.summary, data: pick(d, ["step", "offerId", "productId", "reasons", "line", "price", "validUntil", "rule", "reason", "campaignId", "answer", "scope", "by", "requestId"]) };
+    case "watch":
+      // The kitchen agent's watch (server/watch): what could not come and what it proposed, a recurring order renewed
+      // or held and why, a condition staff staged for a demo. Both sides read the step and its products; the figures
+      // are the kitchen's own orders and the wholesaler's live answers.
+      return { ...base, kind: "watched", summary: e.summary, data: pick(d, ["step", "findingId", "renewalId", "productId", "family", "deliveryDate", "staged", "decision", "choice", "by", "requestId", "orderId", "outcome", "claimId"]) };
     case "agent":
       // The kitchen's conversation with its own agent: the buyer's words and the agent's work stay with the buyer.
       return { ...base, kind: "private", summary: "Buyer-side conversation step, kept with the buyer." };

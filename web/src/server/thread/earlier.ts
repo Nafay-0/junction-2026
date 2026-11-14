@@ -11,10 +11,10 @@ const CHANGE = /\b(make it|instead|rather|change|double|half|twice|more|less|few
  * (so "make it 200 litres" changes the one on the table), then the kitchen's history when the words point back
  * ("same as last Thursday but double"). None for a plain new request: the reader then reads only the words.
  */
-export async function earlierFor(run: TurnRun, words: string): Promise<EarlierRequest[]> {
+export async function earlierFor(run: TurnRun, words: string, opts: { followUp?: boolean } = {}): Promise<EarlierRequest[]> {
   const inThread = [...new Set(run.store.cards(run.thread).flatMap((x) => ("requestId" in x.card && x.card.requestId ? [x.card.requestId] : [])))].reverse();
   const backRef = looksLikeFollowUp(words);
-  const change = inThread.length > 0 && CHANGE.test(words);
+  const change = inThread.length > 0 && (opts.followUp || CHANGE.test(words));
   if (!backRef && !change) return [];
   const ov = await overview(run.k);
   const byId = new Map(ov.requests.map((r) => [r.requestId ?? r.key, r]));

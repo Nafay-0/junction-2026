@@ -74,6 +74,11 @@ export async function runWidget(run: TurnRun, a: ThreadAction, words?: string): 
       });
       return true;
     }
+    case "offer_answer": {
+      const { answerOfferIn, offerAnswerIn } = await import("./offer");
+      await answerOfferIn(run, a.offerId, offerAnswerIn(words ?? "", a.answer) ?? a.answer, words, run.lang ?? "en");
+      return true;
+    }
     case "menu_choose":
     case "menu_covers":
     case "menu_day":

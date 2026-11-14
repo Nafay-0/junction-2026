@@ -19,8 +19,9 @@ describe("tools/list size", () => {
     // Measured 14 Nov 2026: 128,707 bytes in all with 109,078 of output schemas before; 30,385 and 10,756 after.
     expect(out).toBeLessThan(20_000);
     expect(out).toBeLessThan(input * 2);
-    // 14 Nov: the three menu-scenario tools (menu-tools.ts) add about 4.3 KB to the 44.9 KB before them.
-    expect(all).toBeLessThan(50_000);
+    // 47,813 on 14 Nov 2026 with the watch's three tools (watch_orders, answer_watch, set_auto_renew), descriptions kept short;
+    // the three menu-scenario tools (plan_seasonal_menu, plan_event_menu, order_menu) add about 4.3 KB.
+    expect(all).toBeLessThan(52_500);
     // Still a usable shape: the intake tools say a step has a state, and an order a status.
     const submit = tools.find((t) => t.name === "submit_need")!.outputSchema as { properties: Record<string, { properties?: Record<string, { enum?: string[] }> }> };
     expect(submit.properties.step.properties?.state.enum).toContain("quoted");

@@ -9,7 +9,7 @@
  *   3. an outside buyer's agent (a stock MCP client, a menu mandate Kaari signed for it) calls plan_seasonal_menu,
  *      plan_event_menu and order_menu
  *
- *   pnpm scenarios [--day YYYY-MM-DD] [--only seasonal|event|mcp]
+ *   pnpm scenarios:menu [--day YYYY-MM-DD] [--only seasonal|event|mcp]
  *
  * Model calls: the planner (Opus 5.5, low effort) once per plan, smart search's judge per ingredient. Spend printed.
  */

@@ -11,6 +11,7 @@ import { MCP_SERVER_INFO } from "./mcp/server";
 import { TOOLS } from "./mcp/tools";
 import { MENU_TOOLS } from "./mcp/menu-tools";
 import { OFFER_TOOLS } from "./mcp/offer-tools";
+import { WATCH_TOOLS } from "./mcp/watch-tools";
 
 /**
  * What an agent that knows only the base URL can find. Standard entry points first:
@@ -76,7 +77,7 @@ export function manifest(origin: string) {
         transport: "streamable-http",
         protocolVersions: MCP_PROTOCOL_VERSIONS,
         serverInfo: MCP_SERVER_INFO,
-        tools: [...TOOLS.map((t) => ({ name: t.name, title: t.title, readOnly: t.readOnly ?? false, humanInput: ("humanInput" in t && t.humanInput) || false })), ...[...OFFER_TOOLS, ...MENU_TOOLS].map((t) => ({ name: t.name, title: t.title, readOnly: t.readOnly ?? false, humanInput: false }))],
+        tools: [...TOOLS.map((t) => ({ name: t.name, title: t.title, readOnly: t.readOnly ?? false, humanInput: ("humanInput" in t && t.humanInput) || false })), ...[...OFFER_TOOLS, ...WATCH_TOOLS, ...MENU_TOOLS].map((t) => ({ name: t.name, title: t.title, readOnly: t.readOnly ?? false, humanInput: false }))],
         humanInput: {
           tools: TOOLS.filter((t) => "humanInput" in t && t.humanInput).map((t) => t.name),
           how: `These calls carry the human buyer's own answer (a mistake confirmation, a clarifying answer). If the client declares the MCP elicitation capability (2026-07-28), AimoPilot asks the buyer directly with an input_required elicitation/create form; otherwise the agent relays the question and passes the buyer's answer. Marked in tools/list with _meta["${HUMAN_INPUT_META}"] (AimoPilot's own key, not a standard).`,
@@ -127,7 +128,7 @@ export function manifest(origin: string) {
 
 export function llmsTxt(origin: string) {
   const u = urls(origin);
-  const tools = [...TOOLS, ...OFFER_TOOLS, ...MENU_TOOLS].map((t) => `- \`${t.name}\`: ${t.title}.`).join("\n");
+  const tools = [...TOOLS, ...OFFER_TOOLS, ...WATCH_TOOLS, ...MENU_TOOLS].map((t) => `- \`${t.name}\`: ${t.title}.`).join("\n");
   return `# AimoPilot
 
 > AimoPilot is a wholesaler's open ordering gateway for AI purchasing agents. Your agent carries a mandate its organisation signed (what it may buy, how much it may spend alone, who signs off above that). It orders through MCP or REST; plain code checks every order against the mandate, and anything beyond it waits for a human sign-off on their phone.

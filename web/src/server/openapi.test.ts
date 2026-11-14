@@ -185,6 +185,17 @@ describe("real responses match the documented status codes and schemas", () => {
     expect((await kitchen("POST", "/api/v1/offers/mute", { scope: "sideways" })).status).toBe(400);
     await kitchen("POST", "/api/v1/offers/mute", { scope: "all", by: "Sanna" });
 
+    // The kitchen agent's watch: a stock-out staged for Kaari, the finding and an answer, auto-renew.
+    const { stageStockOut } = await import("./watch/service");
+    await stageStockOut(await getRuntime(), { kitchen: "kaari", productId: "VA-1010", by: "Staff" });
+    const watched = (await kitchen("GET", "/api/v1/watch?fresh=true")).body as { findings: { findingId: string }[] };
+    expect(watched.findings.length).toBeGreaterThan(0);
+    expect((await kitchen("POST", "/api/v1/watch/answer", { choice: "switch", by: "Sanna" })).status).toBe(400);
+    expect((await kitchen("POST", "/api/v1/watch/answer", { findingId: "wf_nope", choice: "keep", by: "Sanna" })).status).toBe(404);
+    await kitchen("POST", "/api/v1/watch/answer", { findingId: watched.findings[0].findingId, choice: "keep", by: "Sanna" });
+    expect((await kitchen("POST", "/api/v1/watch/auto-renew", { family: "nothing", on: true, by: "Sanna" })).status).toBe(404);
+    await kitchen("POST", "/api/v1/watch/auto-renew", { family: "milk", on: false, by: "Sanna" });
+
     // The menu scenarios, with a scripted planner (no provider is called).
     const { setMenuModelForTests } = await import("./agent/menu/runtime");
     const { scriptedPlanner, MILK_DRAFT } = await import("./agent/menu/testing");

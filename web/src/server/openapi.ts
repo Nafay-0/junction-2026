@@ -229,6 +229,12 @@ const OfferListOut = named("OfferList", z.object({ offers: z.array(OfferOutSchem
 const OfferAcceptBody = named("OfferAcceptBody", z.object({ packs: z.number().int().positive().max(10_000).optional(), deliverBy: z.iso.date().optional(), by: z.string().min(1).max(120).optional() }));
 const OfferAnswerBody = named("OfferAnswerBody", z.object({ by: z.string().min(1).max(120).optional() }));
 const OfferMuteBody = named("OfferMuteBody", z.object({ scope: z.enum(["product", "family", "reason", "all"]), offerId: z.string().optional(), value: z.string().min(1).max(60).optional(), undo: z.boolean().optional(), by: z.string().min(1).max(120).optional() }));
+// The kitchen agent's watch (server/watch, core/watch.ts).
+const WatchOut = named("Watch", z.object({ findings: z.array(z.looseObject({ findingId: z.string(), state: z.string(), substitutes: z.array(z.looseObject({ rank: z.string(), productId: z.string(), insidePreferences: z.boolean() })) })), renewals: z.array(z.looseObject({ renewalId: z.string(), state: z.string() })), standing: z.array(z.looseObject({ family: z.string() })), staged: z.array(z.looseObject({})), keysUrl: z.string() }).loose());
+const WatchAnswerBody = named("WatchAnswerBody", z.object({ findingId: z.string().optional(), renewalId: z.string().optional(), choice: z.enum(["switch", "keep", "renew_new", "usual", "skip"]), productId: z.string().optional(), by: z.string().min(1).max(120) }));
+const WatchAnswered = named("WatchAnswered", z.object({ state: z.string(), order: z.looseObject({}).optional(), refused: z.looseObject({}).optional() }).loose());
+const AutoRenewBody = named("AutoRenewBody", z.object({ family: z.string().min(1).max(60), on: z.boolean(), by: z.string().min(1).max(120) }));
+const AutoRenewOut = named("AutoRenew", z.object({ autoRenew: z.looseObject({ family: z.string(), on: z.boolean(), by: z.string() }) }).loose());
 const OfferAccepted = named("OfferAccepted", z.object({ offerId: z.string() }).loose());
 const OfferDeclined = named("OfferDeclined", z.object({ offer: z.looseObject({ offerId: z.string(), status: z.string() }) }).loose());
 const OfferPrefsOut = named("OfferPrefsReply", z.object({ prefs: OfferPrefsSchema }).loose());
@@ -706,6 +712,37 @@ export const API: Operation[] = [
     params: [planIdParam],
     body: MenuOrderBody,
     responses: { 201: { description: "The sheet's lines and the order.", schema: MenuOrderOut }, 400: err("Invalid body."), 404: err("No such plan for this agent, or no such option (codes plan_not_found, option_not_found)."), 409: err("Nothing on the plan can be ordered (code menu_nothing_to_order)."), 422: err("Refused by the gate; the error names the rule."), ...AUTH_ERRORS },
+  },
+  {
+    method: "get",
+    path: "/api/v1/watch",
+    operationId: "getWatch",
+    summary: "What may not arrive, and how recurring orders drift",
+    description:
+      "The kitchen agent's watch over its recurring orders and orders not yet delivered. `findings`: a product that cannot come for its day, with good/better/best substitutes (each with its trade-off in figures and `insidePreferences`: may be ordered without sign-off) and the signed availability claim (vc+jwt, verify against /.well-known/jwks.json; `simulated` when staged for a demo). `standing`: the weekly pattern learned from past orders (weekday, usual amount and unit price, the weeks it rests on), drift (portions, cost) and auto-renew. `renewals`: placed alone, sent for sign-off, or held with the question. `fresh=true` checks live now (one call for at most ten products).",
+    auth: true,
+    params: [{ name: "fresh", in: "query", schema: z.enum(["true", "false"]), description: "true: run the watch now." }],
+    responses: { 200: { description: "The watch for this kitchen.", schema: WatchOut }, ...AUTH_ERRORS },
+  },
+  {
+    method: "post",
+    path: "/api/v1/watch/answer",
+    operationId: "answerWatch",
+    summary: "Answer a watch finding or a held renewal",
+    description: "findingId with `switch` (the best substitute, or `productId`) or `keep`; renewalId with `renew_new`, `usual` or `skip`. A switch or renewal is an ordinary order through the gate: committed within the mandate, otherwise it waits for the person the mandate names. Only on the buyer's own answer.",
+    auth: true,
+    body: WatchAnswerBody,
+    responses: { 200: { description: "What happened.", schema: WatchAnswered }, 400: err("Invalid body or choice."), 404: err("No such finding or renewal for this organisation."), 409: err("Already decided, or no substitute can come."), ...AUTH_ERRORS },
+  },
+  {
+    method: "post",
+    path: "/api/v1/watch/auto-renew",
+    operationId: "setAutoRenew",
+    summary: "Switch auto-renew for a recurring order",
+    description: "The kitchen's explicit choice, recorded with who made it; off by default. On: placed before the cut-off when nothing drifted, through the gate; held and asked when something did.",
+    auth: true,
+    body: AutoRenewBody,
+    responses: { 200: { description: "The setting now.", schema: AutoRenewOut }, 404: err("No recurring order for that family (code standing_not_found)."), ...AUTH_ERRORS },
   },
   {
     method: "get",

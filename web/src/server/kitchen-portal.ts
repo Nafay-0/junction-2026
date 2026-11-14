@@ -42,7 +42,7 @@ async function sessionOf(rt: Runtime, k: Kitchen): Promise<AgentSession> {
 // ---------- requests the portal opens for itself ----------
 
 /** Request texts the portal writes; the request history shows them as what they are. */
-import { BASKET_PREFIX, BROWSE_TEXT } from "./portal-requests";
+import { BASKET_PREFIX, BROWSE_TEXT, WATCH_TEXT } from "./portal-requests";
 export { BASKET_PREFIX, BROWSE_TEXT };
 
 // ---------- the overview ----------
@@ -184,7 +184,7 @@ export async function overview(k: Kitchen): Promise<Overview> {
   for (const e of entries) {
     if (e.type !== "request" || e.actor !== actor || !e.requestId) continue;
     const text = typeof e.data.text === "string" ? e.data.text : e.summary;
-    if (text === BROWSE_TEXT) continue;
+    if (text === BROWSE_TEXT || text === WATCH_TEXT) continue;
     const intake = await dock.intake.get(session, e.requestId).catch(() => undefined);
     if (intake) intakes.set(e.requestId, intake);
     const basket = text.startsWith(BASKET_PREFIX);
