@@ -1097,13 +1097,14 @@ const addressTaken: Check = {
   run: (o) => ok(saidLines(o).some((l) => /confirmation to d•••@resend\.dev|vahvistuksen osoitteeseen d•••@resend\.dev|not switched on|ei ole vielä käytössä/i.test(l)), `said: ${saidLines(o).join(" | ").slice(0, 200)}`),
 };
 const mailClauseAfterOrder: Check = {
-  name: "after an order, at most one sentence about email, after the order's own words (never before)",
+  name: "after an order, one sentence about the receipt (to the masked address), after the order's own words, never before",
   run: (o) => {
     const placed = o.orders.some((x) => x.status === "committed" || x.status === "pending_approval");
+    const mailOn = saidLines(o).some((l) => /confirmation to d•••@/.test(l));
     const line = saidLines(o).find((l) => /ordered|tilasin|beställt|waits|odottaa/i.test(l)) ?? "";
     const sentences = line.split(/(?<=[.!?])\s+/);
     const mail = sentences.map((x, i) => (MAIL_SAID.test(x) ? i : -1)).filter((i) => i >= 0);
-    return ok(placed && mail.length <= 1 && (mail.length === 0 || mail[0] > 0), `placed: ${placed}; line: ${line.slice(0, 220)}`);
+    return ok(placed && (mailOn ? mail.length === 1 && mail[0] > 0 : mail.length <= 1), `placed: ${placed}; mail on: ${mailOn}; line: ${line.slice(0, 260)}`);
   },
 };
 const stopped: Check = {
@@ -1131,9 +1132,9 @@ ALL.push(
     tag: "audit trail readable by the buyer (receipts by email)",
     kitchen: "hotel-lumo",
     lang: "en",
-    turns: [{ say: "30 litres of lactose-free milk for Wednesday" }, { say: "yes, order it" }],
+    turns: [{ say: `email the receipts to ${TEST_INBOX}` }, { say: "30 litres of lactose-free milk for Wednesday" }, { say: "yes, order it" }],
     goal: "place",
-    expect: [mailClauseAfterOrder, neverCannotEmail],
+    expect: [mailClauseAfterOrder, neverCannotEmail, neverEchoed],
   },
   {
     id: "mail-stop-en",
@@ -1159,7 +1160,8 @@ ALL.push(
     id: "mail-address-in-words-fi",
     title: "Tilausviestit: sanoin annettu osoite otetaan, peitettynä",
     tag: "audit trail readable by the buyer (receipts by email)",
-    kitchen: "hotel-lumo",
+    // Another kitchen: an address can be given three times an hour per kitchen, and the English cases use Lumo's.
+    kitchen: "kahvila-sointu",
     lang: "fi",
     turns: [{ say: `lähetä kuitit osoitteeseen ${TEST_INBOX}` }],
     goal: "answer",

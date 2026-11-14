@@ -144,7 +144,7 @@ describe("a rules change on the approver's phone", () => {
     expect(after.terms).toEqual(before.terms);
     const card = rulesOf((await threadStore()).cards((await threadStore()).peek("hylkays")!).map((x) => x.card))!;
     expect(card.proposal).toMatchObject({ state: "declined", approval: { decided: { by: "Aino Virtanen", note: "Not this month" } } });
-    expect(await lineOf(k)).toMatch(/Aino Virtanen declined the change at \d\d\.\d\d, so your rules stay as they were\./);
+    expect(await lineOf(k)).toMatch(/Aino Virtanen declined the change at \d\d\.\d\d: your rules stay as they were\./);
     expect(rt.dock.ledger.entries().some((e) => [(e.data as { event?: string }).event, (e.data as { step?: string }).step].includes("rules_declined"))).toBe(true);
     // Declined is final: the passkey can no longer sign it.
     await expect(rulesChangeOptions(rt, req(), approvalId, "approve", RP)).rejects.toMatchObject({ code: "approval_not_pending" });

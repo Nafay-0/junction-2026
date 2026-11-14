@@ -27,6 +27,8 @@ class ThreadState {
   lines: string[] = [];
   /** Lines by agent turn, so a later turn's line can count as the answer to a follow-up question. */
   lineTurns: { turnId: string; text: string }[] = [];
+  /** Each turn's line as it stands last (a line said beneath an earlier one replaces it). */
+  latest = new Map<string, string>();
   serverMarks = new Map<string, Json>();
   onEvent?: (e: ThreadEvent, at: number) => void;
 
@@ -42,6 +44,7 @@ class ThreadState {
           this.status.set(t.turnId, t.status);
           for (const s of t.steps ?? []) if (!this.steps.has(s.stepId)) this.steps.set(s.stepId, { turnId: t.turnId, at });
           for (const c of t.cards ?? []) this.putCard(t.turnId, c, at);
+          if (t.line) this.latest.set(t.turnId, t.line);
           if (t.line && !this.lineTurns.some((x) => x.turnId === t.turnId)) {
             this.lines.push(t.line);
             this.lineTurns.push({ turnId: t.turnId, text: t.line });
@@ -57,6 +60,7 @@ class ThreadState {
         this.putCard(e.turnId, e.card, at);
         break;
       case "line":
+        this.latest.set(e.turnId, e.text);
         if (!this.lineTurns.some((x) => x.turnId === e.turnId)) {
           this.lines.push(e.text);
           this.lineTurns.push({ turnId: e.turnId, text: e.text });
@@ -273,7 +277,7 @@ export async function runThread(base: string, sc: Scenario): Promise<RunResult> 
   const fin = await b.get(root);
   if (fin.status === 200) st.applySnapshot(fin.body?.thread);
   collect(st, o);
-  o.lines = st.lineTurns.map((l) => l.text);
+  o.lines = [...st.latest.values()];
   // A follow-up question answered in words: the agent's grounded line on a later turn is the answer.
   for (const l of st.lineTurns) if (l.turnId !== firstAgentTurn && sc.turns.slice(1).some((t) => /\?\s*$/.test(t.say))) o.answers.push({ text: l.text, kind: "line", citations: [] });
 

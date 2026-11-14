@@ -604,7 +604,10 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
   }
   // An order placed or waiting in this turn with a product whose delivery record is poor: one sentence beneath the
   // order's own reply (server/reliability), a backup offered in case it is not delivered. Most orders say nothing.
-  const ordered = store.agentTurn(thread, run.turnId)?.cards.find((c) => c.type === "order" && (c.status === "committed" || c.status === "pending_approval"));
+  // An order placed by a yes to a card shown earlier updates that card where it was first shown: the orders this turn
+  // placed count too.
+  const placedNow = [...run.orders.values()].find((o) => o.status === "committed" || o.status === "pending_approval");
+  const ordered = store.agentTurn(thread, run.turnId)?.cards.find((c) => c.type === "order" && (c.status === "committed" || c.status === "pending_approval")) ?? (placedNow ? ({ type: "order", orderId: placedNow.orderId, status: placedNow.status } as const) : undefined);
   if (ordered?.type === "order") {
     const { sayBackup } = await import("./backup");
     const b = await sayBackup(run, { orderId: ordered.orderId }, body.lang ?? "en").catch(() => undefined);
@@ -613,9 +616,14 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
     // The order emails: one clause after the order's own reply; when the backup question was asked, after its answer.
     if (!b) {
       const { mailFactAfterOrder } = await import("@/server/notify/thread");
-      const mailFact = await mailFactAfterOrder(run.rt, run.k, { orderId: ordered.orderId, status: ordered.status }, { lang: body.lang ?? "en", threadId: thread.threadId }).catch(() => undefined);
+      const mailFact = await mailFactAfterOrder(run.rt, run.k, { orderId: ordered.orderId, status: ordered.status }, { lang: body.lang ?? "en", threadId: thread.threadId }).catch((err) => {
+        console.error("[thread] mail clause", err);
+        return undefined;
+      });
       const line = store.agentTurn(thread, run.turnId)?.line ?? "";
       if (mailFact && !line.includes(mailFact)) store.line(thread, run.turnId, line ? `${line} ${mailFact}` : mailFact);
+      // Whether a sentence about the receipt was said (never the address itself).
+      record(run, "mail_clause", mailFact ? "One sentence about the order's email was said after the order." : "Nothing about email was said after the order.", { orderId: ordered.orderId, said: !!mailFact });
     }
   }
   // Never an empty reply: when the agent's words did not come (or none were backed), plain words from what the engine knows.
@@ -1093,8 +1101,8 @@ export async function rulesDecline(kitchen: Kitchen | string, proposalId: string
     const t = h.thread as unknown as { afterRulesUsed?: string[] };
     if (next.words) t.afterRulesUsed = [...(t.afterRulesUsed ?? []), proposalId];
     const lang = h.lang;
-    const left = next.words ? { en: next.what ? ` So I haven't ordered the ${next.what}.` : " So nothing that waited on it is ordered.", fi: next.what ? ` En siis tilannut: ${next.what}.` : " Mitään sitä odottanutta ei siis tilattu.", sv: next.what ? ` Så jag har inte beställt ${next.what}.` : " Så inget som väntade på den är beställt." }[lang] : "";
-    sayBeneath(h.run, { en: `${decided.by} declined the change at ${clockHki(decided.at)}, so your rules stay as they were.${left}`, fi: `${decided.by} hylkäsi muutoksen klo ${clockHki(decided.at)}, joten säännöt pysyvät ennallaan.${left}`, sv: `${decided.by} avböjde ändringen kl. ${clockHki(decided.at)}, så era regler är som förut.${left}` }[lang]);
+    const left = next.words ? { en: next.what ? `, so I haven't ordered the ${next.what}` : ", so nothing that waited on it is ordered", fi: next.what ? `, joten en tilannut: ${next.what}` : ", joten mitään sitä odottanutta ei tilattu", sv: next.what ? `, så jag har inte beställt ${next.what}` : ", så inget som väntade på den är beställt" }[lang] : "";
+    sayBeneath(h.run, { en: `${decided.by} declined the change at ${clockHki(decided.at)}: your rules stay as they were${left}.`, fi: `${decided.by} hylkäsi muutoksen klo ${clockHki(decided.at)}: säännöt pysyvät ennallaan${left}.`, sv: `${decided.by} avböjde ändringen kl. ${clockHki(decided.at)}: era regler är som förut${left}.` }[lang]);
     h.e.store.save(h.thread);
     return card;
   });
