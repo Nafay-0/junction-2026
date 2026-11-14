@@ -28,6 +28,7 @@ export const THREAD_RULES_TEXT = defineText({
     kind: "Your rules",
     signedMandate: (until: string) => `Your rules, valid until ${until}`,
     field: {
+      autoRenew: "Renews by itself",
       perOrderLimitEur: "Spends alone per order",
       weeklyBudgetEur: "Weekly budget",
       maxLeadDays: "Orders ahead at most",
@@ -91,6 +92,7 @@ export const THREAD_RULES_TEXT = defineText({
     kind: "Sääntösi",
     signedMandate: (until: string) => `Sääntösi, voimassa ${until} asti`,
     field: {
+      autoRenew: "Uusii itse",
       perOrderLimitEur: "Tilaa itse enintään",
       weeklyBudgetEur: "Viikkobudjetti",
       maxLeadDays: "Tilaa ennakkoon enintään",
@@ -154,6 +156,7 @@ export const THREAD_RULES_TEXT = defineText({
     kind: "Dina regler",
     signedMandate: (until: string) => `Dina regler, giltiga till ${until}`,
     field: {
+      autoRenew: "Förnyar själv",
       perOrderLimitEur: "Beställer själv högst",
       weeklyBudgetEur: "Veckobudget",
       maxLeadDays: "Beställer i förväg högst",
