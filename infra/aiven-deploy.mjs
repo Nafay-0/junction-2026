@@ -98,6 +98,8 @@ function desiredEnvironment(publicUrl) {
   // The independent second reader (NVIDIA Nemotron through Featherless; empty is off) and whether the crash-test
   // licence limits what an agent may place alone (off until the suite has been re-run on the deployed tool table).
   for (const k of ["DOCK_SECOND_READER_MODEL", "DOCK_LICENCE_ENFORCE"]) if (env(k)) vars.push([k, env(k)]);
+  // Accounts (web/src/server/accounts): the shared test accounts' panel on /k, how often they reset, the ceiling.
+  for (const k of ["DOCK_TEST_ACCOUNTS_SHOWN", "DOCK_TEST_ACCOUNTS_RESET_MINUTES", "DOCK_ACCOUNTS_MAX"]) if (env(k)) vars.push([k, env(k)]);
   // The operations portal's Platform section (web/src/server/aiven/showcase): which project and organisation to read.
   for (const k of ["AIVEN_PROJECT", "AIVEN_ORGANIZATION_ID", "DOCK_SHOWCASE_LAUNCHES_PER_DAY"]) if (env(k)) vars.push([k, env(k)]);
 
@@ -115,6 +117,9 @@ function desiredEnvironment(publicUrl) {
     "CONTEXT_DEV_API_KEY",
     "EXA_API_KEY",
     "FEATHERLESS_API_KEY",
+    // The two stage kitchens' account passwords: private, so a stranger cannot change their rules before a pitch.
+    "DOCK_KAARI_PASSWORD",
+    "DOCK_LAAKSO_PASSWORD",
     // /ops can suspend agents: entering it needs this passcode on the public server.
     "DOCK_OPS_PASSCODE",
     // Demo kitchens' connector addresses (/api/mcp/c/<token>) are derived from it: stable across restarts.

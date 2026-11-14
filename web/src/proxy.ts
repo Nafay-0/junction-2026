@@ -37,6 +37,9 @@ const LIVE_LOOKUP = rule("catalog-live", 60); // a product page checks its live 
 const KITCHEN_WRITE = rule("kitchen-write", 60);
 const KITCHEN_WRITE_KITCHEN = rule("kitchen-write-kitchen", 120);
 const OPS_ENTER = rule("ops-enter", 10);
+// Accounts: sign-in, sign-up, sign-out, the mandate, signing devices. Failed sign-ins are limited again per account
+// and per address in server/accounts/service.ts, which holds even with DOCK_RATE_LIMITS=off.
+const ACCOUNT = rule("account", 30);
 // The planner: creating a plan is several model calls; every edit of a plan (covers, a decision, a date) is one POST
 // too, about four a minute while a chef works through a plan.
 const MENU_PLAN = rule("menu-plan", 40);
@@ -75,6 +78,7 @@ export function rulesFor(method: string, path: string): [RateRule, string?][] {
   if (post && (m = /^\/ui-api\/plan\/([^/]+)\/[^/]+\/(quote|order)$/.exec(path))) out.push([KITCHEN_WRITE], [KITCHEN_WRITE_KITCHEN, `k:${m[1]}`]);
   // The operations desk: entering takes the passcode, so guessing is slowed down.
   if (post && path === "/ops-api/session") out.push([OPS_ENTER]);
+  if (post && path.startsWith("/ui-api/account/")) out.push([ACCOUNT]);
   // Reissuing or revoking a connector takes the operator secret (or the visitor's own session).
   if ((post || method === "DELETE") && path.startsWith("/ui-api/connect/")) out.push([OPS_ENTER]);
   // The buyer's one-time answer page (server/answer-links.ts).

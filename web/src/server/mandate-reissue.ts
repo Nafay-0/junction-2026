@@ -12,7 +12,7 @@ export type MandateReissued = {
   added: Required<MandatePatch>;
   before: Pick<Mandate, "forbiddenAllergens" | "requiredAttributes">;
   after: Pick<Mandate, "forbiddenAllergens" | "requiredAttributes">;
-  signedWith: "the kitchen's configured key" | "a new key of the kitchen";
+  signedWith: "the kitchen's configured key" | "a new key of the kitchen" | "the kitchen's key, held for it by this service";
 };
 
 /**
@@ -21,6 +21,7 @@ export type MandateReissued = {
  *
  *   built-in demo kitchen   signed with the kitchen's key this server is configured with; the store's agent, the
  *                           menu agent and the hosted buyer carry the rule from their next call
+ *   account's kitchen       signed with the key the service holds for it (accounts/service.ts, a demo assumption)
  *   visitor's kitchen       signed with a new key of that kitchen (its first private key was discarded after one
  *                           signature, by design); its agent, console and connector address present the new mandate
  *
@@ -29,15 +30,18 @@ export type MandateReissued = {
  */
 export async function reissueKitchenMandate(rt: Runtime, kitchen: Pick<ConsoleKitchenInfo, "slug" | "kind" | "orgId" | "name">, patch: MandatePatch, by: string): Promise<MandateReissued> {
   const demo = kitchen.kind === "demo";
-  const before = demo ? await currentDemoMandate(kitchen.slug as DemoSlug) : await rt.sandboxes.mandateOf(kitchen.slug);
+  const account = kitchen.kind === "account";
+  const before = demo ? await currentDemoMandate(kitchen.slug as DemoSlug) : account ? (await rt.accounts.kitchenOf(kitchen.slug))?.kitchen.mandate : await rt.sandboxes.mandateOf(kitchen.slug);
   if (!before) throw new DockError(404, "kitchen_not_found", "This kitchen does not exist or its demo time is over.");
-  const { mandate, record, added } = await rt.mandates.reissue(before, patch, by, new Date(), demo ? undefined : (m) => rt.sandboxes.reissue(kitchen.slug, m));
+  // An account's kitchen: signed with the key held for it (accounts/service.ts), and the rule kept in its terms.
+  const sign = demo ? undefined : account ? (m: Mandate) => rt.accounts.applyReissue(kitchen.slug, m) : (m: Mandate) => rt.sandboxes.reissue(kitchen.slug, m);
+  const { mandate, record, added } = await rt.mandates.reissue(before, patch, by, new Date(), sign);
   // Mandates this server signed earlier for the kitchen are not presented again.
   const g = globalThis as { __dockConsoleTokens?: Map<string, unknown>; __dockMenuTokens?: Map<string, unknown> };
   g.__dockConsoleTokens?.clear();
   g.__dockMenuTokens?.clear();
   const pick = (m: Mandate) => ({ forbiddenAllergens: m.forbiddenAllergens, requiredAttributes: m.requiredAttributes });
-  const out: MandateReissued = { at: record.at, by, mandateId: mandate.mandateId, replaced: before.mandateId, added, before: pick(before), after: pick(mandate), signedWith: demo ? "the kitchen's configured key" : "a new key of the kitchen" };
+  const out: MandateReissued = { at: record.at, by, mandateId: mandate.mandateId, replaced: before.mandateId, added, before: pick(before), after: pick(mandate), signedWith: demo ? "the kitchen's configured key" : account ? "the kitchen's key, held for it by this service" : "a new key of the kitchen" };
   const words = [...added.forbiddenAllergens.map((a) => `no ${a.replaceAll("_", " ")}`), ...added.requiredAttributes.map((c) => `every product ${c.replaceAll("_", "-")}`)].join(", ");
   rt.dock.ledger.append({
     type: "intake",

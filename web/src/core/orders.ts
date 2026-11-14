@@ -1,3 +1,4 @@
+import type { SecondReadingRecord } from "./second-reading";
 import { CompactSign } from "jose";
 import { z } from "zod";
 import {
@@ -293,6 +294,8 @@ export type DockDeps = {
   /** How long a live answer (per product and delivery date) is reused for option cards. Quotes always ask afresh. Default 120 s; 0 switches it off. */
   liveCacheTtlMs?: number;
   claims?: ClaimStore; // signed claims handed out (see claims.ts)
+  /** The interpreter's second readings, for the intake (see second-reading.ts): only ever adds a question. */
+  secondReadings?: (orgId: string, text: string | undefined) => SecondReadingRecord | undefined;
   /**
    * Products the wholesaler holds right now (a recall notice, a drill), checked by the gate as the rule recall_hold
    * on every quote preview, order and re-check at sign-off. The server's recall radar implements it.
@@ -1341,6 +1344,7 @@ export function createDock(deps: DockDeps) {
     liveLookup: (session, requestId, productIds, deliveryDate, why) => liveLookup(session, requestId, productIds, deliveryDate, why, { batch: true }),
     spentThisWeek: (orgId) => spentThisWeek(orgId),
     budgetUse: (orgId) => budgetUse(orgId),
+    secondReading: deps.secondReadings,
     alternatives: deps.alternatives,
     memoryUsage: deps.memoryUsage,
   });

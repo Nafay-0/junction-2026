@@ -94,7 +94,8 @@ language switch (`_i18n/provider.tsx`), the word mark (`_ui/wordmark.tsx`).
 Operations (`ops/_ui/`): `PageHead`, `Section`, `Panel`, `LiveMark`, `Outcome`, `Licence`, `ViaTag`, `Details`,
 `Num`, `Loading`, `Empty`, `FilterBar`, and in `parts.tsx` the **data table** (`Table`: a card with hairline rows;
 on a phone each row becomes a small card and every cell is labelled with its column heading, automatically),
-`Stamp`, `CountBar`, `Funnel`, `CheckGrid`.
+`Stamp`, `CountBar`, `Funnel`, `CheckGrid`. The time machine's slider (`(desk)/time-machine/time-machine.tsx`) marks each
+moment a rule changed, shaped by kind, with the order as a pointer and the lime thumb as the one action.
 
 ## 6. Images
 

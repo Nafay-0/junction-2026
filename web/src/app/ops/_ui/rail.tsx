@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Activity, Bot, Circle, CirclePause, Ellipsis, FileCheck2, History, LogOut, Radar, Route, Server, ShieldCheck, SlidersHorizontal, Users, type LucideIcon } from "lucide-react";
+import { Activity, Bot, Circle, CirclePause, Ellipsis, FileCheck2, History, LogOut, Radar, Route, Server, ShieldCheck, SlidersHorizontal, Store, Users, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../../_client/api";
 import { useLive } from "../../_client/use-live";
@@ -23,8 +23,10 @@ const NAV: { href: string; label: string; what: string; key: string }[] = [
   { href: "/ops/radar", label: "Recall radar", what: "Recalls, holds, drills", key: "r" },
   { href: "/ops/control", label: "Control", what: "Suspend, resume, sign-offs", key: "c" },
   { href: "/ops/audit", label: "Audit", what: "Orders and their proof", key: "a" },
+  { href: "/ops/time-machine", label: "Time machine", what: "The rules as they stood", key: "m" },
   { href: "/ops/agents", label: "Agents", what: "Licences and records", key: "g" },
   { href: "/ops/customers", label: "Customers", what: "What kitchens share", key: "u" },
+  { href: "/ops/accounts", label: "Accounts", what: "Kitchens with an account", key: "n" },
   { href: "/ops/platform", label: "Platform", what: "What runs on Aiven, live", key: "p" },
 ];
 
@@ -40,6 +42,7 @@ const ICON: Record<string, LucideIcon> = {
   "/ops/customers": Users,
   "/ops/platform": Server,
   "/ops/time-machine": History,
+  "/ops/accounts": Store,
 };
 /** The four sections in the phone's tab bar; the rest are one tap further, under More. */
 const PRIMARY = ["/ops", "/ops/trace", "/ops/control", "/ops/safeguards"];

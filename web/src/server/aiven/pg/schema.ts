@@ -12,6 +12,9 @@
  *     constraints at insert time: the stored body hashes to `hash` (pgcrypto), the body's seq and prevHash
  *     match the columns, and prev_hash is the previous entry's hash (or the genesis hash for entry 0).
  *     `S.ledger_verify()` re-checks the whole chain in SQL.
+ *
+ * Accounts are a real table too: the username is the primary key, so two sign-ups cannot take the same name, and
+ * a session row (only the SHA-256 of its token) is deleted with its account (server/accounts, pg/accounts.ts).
  */
 export const GENESIS = "0".repeat(64);
 
@@ -106,11 +109,38 @@ language sql stable as $$
          (select problem from bad where problem is not null order by seq limit 1)
 $$;
 
+-- Restaurant and buyer accounts (server/accounts). doc holds the account as the app keeps it: restaurant name, the
+-- scrypt hash of the password (never the password) and, once signed, its kitchen: organisation, agent, mandate and,
+-- as a demo assumption, the kitchen's signing key held on its behalf. No email address or other personal data.
+create table if not exists ${S}.accounts (
+  username   text        primary key check (username ~ '^[a-z0-9][a-z0-9_-]{2,31}$'),
+  kind       text        not null check (kind in ('own', 'demo', 'test')),
+  doc        jsonb       not null,
+  org_id     text        generated always as (doc->'kitchen'->>'orgId') stored,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint accounts_doc_username check (doc->>'username' = username)
+);
+create unique index if not exists accounts_org_uq on ${S}.accounts (org_id) where org_id is not null;
+comment on table ${S}.accounts is 'Restaurant and buyer accounts: one account, one kitchen. Password as an scrypt hash only.';
+
+create table if not exists ${S}.account_sessions (
+  token_hash text        primary key check (token_hash ~ '^[0-9a-f]{64}$'),
+  username   text        not null references ${S}.accounts (username) on delete cascade,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists account_sessions_user_idx   on ${S}.account_sessions (username);
+create index if not exists account_sessions_expiry_idx on ${S}.account_sessions (expires_at);
+comment on table ${S}.account_sessions is 'Signed-in browsers: SHA-256 of the session cookie, never the cookie itself. Ended by signing out.';
+
 -- Read-only access for Grafana (role created in infra/telemetry.sql); skipped where the role does not exist.
 do $$ begin
   if exists (select 1 from pg_roles where rolname = 'grafana_reader') then
     execute 'grant usage on schema ${S} to grafana_reader';
     execute 'grant select on all tables in schema ${S} to grafana_reader';
+    -- but never the accounts: password hashes, sessions and the kitchens' keys stay with the app
+    execute 'revoke all on ${S}.accounts, ${S}.account_sessions from grafana_reader';
   end if;
 end $$;
 

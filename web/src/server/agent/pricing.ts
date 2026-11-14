@@ -34,6 +34,8 @@ const PRICES: Record<string, Price> = {
   "google:gemini-3.5-flash-lite": { inputPerM: 0.3, outputPerM: 2.5 },
   "google:gemini-3-flash-preview": { inputPerM: 0.5, outputPerM: 3 },
   "google:gemini-3.8-flash": { inputPerM: 0.75, outputPerM: 3.75 },
+  // Featherless reports a cost per call; these rates reproduce it exactly (read from responses on 2026-11-14).
+  "featherless:nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16": { inputPerM: 0.05, outputPerM: 0.2 },
   "google:gemini-3.6-flash": { inputPerM: 0.75, outputPerM: 3.75 },
   "google:gemini-4-carbon": { inputPerM: 2, outputPerM: 10 },
   "google:gemini-4-argon": { inputPerM: 2, outputPerM: 10 },

@@ -23,7 +23,8 @@ type Concern =
   | "breaks_remembered_rule"
   | "standing_order_range"
   | "delivery_unusual_day"
-  | "unrelated_first_order";
+  | "unrelated_first_order"
+  | "readings_differ";
 
 /** Short Finnish and Swedish headings per concern code, above the server's English sentence. English shows none. */
 const CONCERN_FI: Record<Concern, string> = {
@@ -44,6 +45,7 @@ const CONCERN_FI: Record<Concern, string> = {
   standing_order_range: "Poikkeaa vakiotilauksesta",
   delivery_unusual_day: "Epätavallinen toimituspäivä",
   unrelated_first_order: "Uusi tuoteryhmä tälle keittiölle",
+  readings_differ: "Kaksi riippumatonta lukijaa luki tämän eri tavalla",
 };
 
 const CONCERN_SV: Record<Concern, string> = {
@@ -64,6 +66,7 @@ const CONCERN_SV: Record<Concern, string> = {
   standing_order_range: "Avviker från den stående beställningen",
   delivery_unusual_day: "Ovanlig leveransdag",
   unrelated_first_order: "Ny produktgrupp för köket",
+  readings_differ: "Två oberoende läsare läste det här olika",
 };
 
 const NO_TITLE: Record<string, string> = {};
@@ -222,6 +225,8 @@ export const STAGES_TEXT = defineText({
     qrView: (name: string) => `${name} signs off with the link sent to their phone.`,
     qrEnrol: (name: string) => `${name} is made up for this demo kitchen. A presenter scans this, enters the operations passcode and makes a passkey to sign in their place.`,
     becomeApprover: "Become the approver",
+    qrNoDevice: (name: string) => `This order waits for ${name}'s passkey, and this kitchen has no signing device yet. Add one in Agent and rules (this laptop's passkey, or a phone by QR code); then sign here. Nothing is ordered until then.`,
+    addDevice: "Add a signing device",
     openSignOff: "Open the sign-off screen",
     preparing: "Preparing the code…",
     withdrawn: "Withdrawn. It no longer holds the weekly budget.",
@@ -384,6 +389,8 @@ export const STAGES_TEXT = defineText({
     qrView: (name: string) => `${name} hyväksyy puhelimeen lähetetyllä linkillä.`,
     qrEnrol: (name: string) => `${name} on tämän demokeittiön keksitty henkilö. Esittäjä skannaa koodin, antaa henkilökunnan pääsykoodin ja luo pääsyavaimen hyväksyäkseen hänen puolestaan.`,
     becomeApprover: "Ryhdy hyväksyjäksi",
+    qrNoDevice: (name: string) => `Tilaus odottaa hyväksyjän (${name}) pääsyavainta, eikä keittiöllä ole vielä hyväksyntälaitetta. Lisää laite kohdassa Agentti ja säännöt (tämän tietokoneen pääsyavain tai puhelin QR-koodilla) ja hyväksy sitten. Mitään ei tilata ennen sitä.`,
+    addDevice: "Lisää hyväksyntälaite",
     openSignOff: "Avaa hyväksyntänäkymä",
     preparing: "Valmistellaan koodia…",
     withdrawn: "Peruttu. Tilaus ei enää varaa viikkobudjettia.",
@@ -545,6 +552,8 @@ export const STAGES_TEXT = defineText({
     qrView: (name: string) => `${name} godkänner med länken som skickades till telefonen.`,
     qrEnrol: (name: string) => `${name} är påhittad för det här demoköket. En presentatör skannar koden, anger personalens lösenkod och skapar en inloggnings­nyckel för att godkänna i personens ställe.`,
     becomeApprover: "Bli godkännare",
+    qrNoDevice: (name: string) => `Beställningen väntar på inloggningsnyckeln för ${name}, och köket har ingen godkännandeenhet än. Lägg till en under Agent och regler (den här datorns nyckel, eller en telefon via QR-kod) och godkänn sedan. Inget beställs innan dess.`,
+    addDevice: "Lägg till en godkännandeenhet",
     openSignOff: "Öppna godkännandevyn",
     preparing: "Förbereder koden…",
     withdrawn: "Återkallad. Den binder inte längre veckobudgeten.",

@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Product } from "@/core/catalog";
 import { alsoAskedIn } from "@/core/also-asked";
 import { DockError } from "@/core/errors";
+import type { Door } from "@/core/orders";
 import { recordLlmSpend, reserveLlmCall } from "@/server/limits";
 import { addDaysIso, isoWeekday, localNow } from "@/core/kitchen";
 import { NEED_UNITS, NeedSchema, OPTIMISE_GOALS, type StructuredNeed } from "@/core/need";
@@ -10,6 +11,8 @@ import { createModel, defaultModel, ModelConfigError, type ModelOptions } from "
 import { costOf, tokensFromUsage, type Price, type Tokens } from "./pricing";
 import { interpretSystem, interpretUser, type Vocabulary } from "./prompts";
 import { describeError, isRetryable, withRetry } from "./retry";
+import { readTwice } from "./second-reader";
+import { rememberSecondReading } from "./second-reading-store";
 import { groundInterpretation } from "./interpret-grounding";
 
 /**
@@ -244,7 +247,7 @@ export async function interpretNeed(opts: InterpretOptions): Promise<InterpretRe
     throw new DockError(status, "interpret_failed", `The model call failed: ${describeError(err)}`);
   }
   // Nothing the buyer did not say: a claim, allergen, product, amount or date with no backing is removed (grounding check).
-  const raw = groundInterpretation(res.output as LlmNeed | LlmFollowUp, { text, earlier, extra: opts.evidence }).raw;
+  const raw = groundInterpretation(res.output as LlmNeed | LlmFollowUp, { text, earlier, extra: opts.evidence, today: localNow(now).date }).raw;
   const tokens = tokensFromUsage(res.usage);
   recordLlmSpend(costOf(tokens, price));
   const basedOn = earlier.length ? checkBasedOn(raw as LlmFollowUp, earlier) : undefined;
@@ -296,6 +299,18 @@ export const InterpretResponse = z.object({
     .object({ requestId: z.string(), fields: z.array(z.enum(EARLIER_FIELDS)) })
     .optional()
     .describe("Present when the text referred to one of the earlier requests: which one, and the fields taken from it."),
+  secondReading: z
+    .object({
+      status: z.enum(["agreed", "differed", "unavailable"]),
+      firstModel: z.string(),
+      secondModel: z.string(),
+      reason: z.string().optional().describe("unavailable: timeout, at_capacity, failed, unreadable, over_limit, not_a_purchase or not_configured."),
+      differences: z.array(z.object({ field: z.enum(["amount", "claims", "allergens", "kind", "date"]), first: z.string(), second: z.string(), why: z.string() })),
+    })
+    .optional()
+    .describe(
+      "The words read a second time by an independent open-weights model (NVIDIA Nemotron), compared by plain code. It never changes the need: when the readings differ on something material, POST /api/v1/intake with this need asks the buyer about exactly that field first.",
+    ),
 });
 
 type Mandateish = { allowedCategories: string[]; requiredAttributes: string[]; forbiddenAllergens: string[]; issuer?: { orgId: string } };
@@ -312,17 +327,44 @@ async function recallFor(orgId: string | undefined, text: string): Promise<{ blo
   }
 }
 
-/** The route body: vocabulary from the product data and the caller's mandate, then interpretNeed. */
+/**
+ * Doors where the second reader reads too: where a model reads a person's own words. Not the photo door (its words
+ * are written by code from a line the buyer already reviewed), the menu planner or the store's basket (no free text).
+ * A caller that names no door (a script, a test) gets it.
+ */
+const SECOND_READING_DOORS: readonly Door[] = ["typed", "assistant", "voice", "mcp", "connector", "rest"];
+export const secondReadingDoor = (door: Door | undefined) => !door || SECOND_READING_DOORS.includes(door);
+
+/**
+ * The route body: vocabulary from the product data and the caller's mandate, then interpretNeed, with the second
+ * reader alongside (server/agent/second-reader.ts) for the doors above, unless the text is a follow-up of earlier
+ * requests (the second reader does not see them). The second reading is kept for the intake that opens on this need.
+ */
 export async function interpretRequest(
   body: z.output<typeof InterpretBody>,
-  ctx: { catalog: { searchProducts: (q: { limit: number }) => Promise<Product[]> }; mandate: Mandateish },
+  ctx: { catalog: { searchProducts: (q: { limit: number }) => Promise<Product[]> }; mandate: Mandateish; door?: Door },
 ): Promise<z.input<typeof InterpretResponse>> {
   const products = await ctx.catalog.searchProducts({ limit: 100 });
   const vocabulary = vocabularyFrom(products, { categories: ctx.mandate.allowedCategories, attributes: ctx.mandate.requiredAttributes, allergens: ctx.mandate.forbiddenAllergens });
   // The kitchen's memory, recalled for these words, goes to the reader as context (never copied into the need).
   const recalled = await recallFor(ctx.mandate.issuer?.orgId, body.text);
-  const r = await interpretNeed({ text: body.text, now: body.now ? new Date(body.now) : undefined, vocabulary, earlier: body.earlier, ...(recalled.block ? { memory: recalled.block, evidence: recalled.lines } : {}) });
+  // The second reader reads the same words alongside (server/agent/second-reader.ts), at the same call: on for every
+  // door where a model reads a person's words, off where code wrote them (SECOND_READING_DOORS) and for follow-ups.
+  const off = !ctx.mandate.issuer || !secondReadingDoor(ctx.door) || !!body.earlier?.length;
+  const { first: r, second } = await readTwice(
+    interpretNeed,
+    { text: body.text, now: body.now ? new Date(body.now) : undefined, vocabulary, earlier: body.earlier, ...(recalled.block ? { memory: recalled.block, evidence: recalled.lines } : {}) },
+    { off },
+  );
+  if (second && ctx.mandate.issuer) rememberSecondReading(ctx.mandate.issuer.orgId, r.need.text ?? body.text, second);
   // Plain code, not the model's word: whatever else the buyer's text names is returned, so it can be offered next.
   const alsoAsked = alsoAskedIn(body.text, r.need);
-  return { need: r.need, model: r.model, ms: r.ms, ...(r.basedOn ? { basedOn: r.basedOn } : {}), ...(alsoAsked.length ? { alsoAsked } : {}) };
+  return {
+    need: r.need,
+    model: r.model,
+    ms: r.ms,
+    ...(r.basedOn ? { basedOn: r.basedOn } : {}),
+    ...(alsoAsked.length ? { alsoAsked } : {}),
+    ...(second ? { secondReading: { status: second.status, firstModel: second.firstModel, secondModel: second.secondModel, ...(second.reason ? { reason: second.reason } : {}), differences: second.differences.map(({ field, first, second: s2, why }) => ({ field, first, second: s2, why })) } } : {}),
+  };
 }

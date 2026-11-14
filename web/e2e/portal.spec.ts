@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 /** The kitchen shop: enter a demo kitchen with one click, browse, and read the agent's rules. No model, no live call. */
 test("enter a kitchen's shop, browse the catalogue, read the rules", async ({ page }) => {
   await page.goto("/k");
-  await expect(page.getByRole("heading", { name: "Enter a kitchen's shop" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your kitchen's shop" })).toBeVisible();
   await page.getByRole("link", { name: /Ravintola Kaari/ }).first().click();
   await expect(page.getByRole("heading", { name: "Needs you now" })).toBeVisible();
   // The demo note: the full sentence on a desk, its short form in the phone's top strip.
