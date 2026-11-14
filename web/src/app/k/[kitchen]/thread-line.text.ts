@@ -20,6 +20,7 @@ export const THREAD_LINE_TEXT = defineText({
     sections: { catalogue: "Catalogue", orders: "Orders", rules: "Your rules", language: "Language" },
     // the slab
     needsOk: "Needs your OK",
+    many: (n: number, names: string) => `${n} products: ${names}…`,
     ok: "OK with Face ID",
     okWorking: "Waiting for your face or finger",
     okDone: (time: string) => `OK'd at ${time}`,
@@ -90,6 +91,7 @@ export const THREAD_LINE_TEXT = defineText({
     menu: "Valikko",
     sections: { catalogue: "Tuotteet", orders: "Tilaukset", rules: "Sääntösi", language: "Kieli" },
     needsOk: "Tarvitsee hyväksyntäsi",
+    many: (n: number, names: string) => `${n} tuotetta: ${names}…`,
     ok: "Hyväksy Face ID:llä",
     okWorking: "Odottaa kasvojasi tai sormenjälkeäsi",
     okDone: (time: string) => `Hyväksytty klo ${time}`,
@@ -157,6 +159,7 @@ export const THREAD_LINE_TEXT = defineText({
     menu: "Meny",
     sections: { catalogue: "Produkter", orders: "Beställningar", rules: "Dina regler", language: "Språk" },
     needsOk: "Behöver ditt godkännande",
+    many: (n: number, names: string) => `${n} produkter: ${names}…`,
     ok: "Godkänn med Face ID",
     okWorking: "Väntar på ditt ansikte eller finger",
     okDone: (time: string) => `Godkänd kl. ${time}`,

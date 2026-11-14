@@ -184,6 +184,51 @@ function noticeFrom(err: unknown, ref: string, words: string): NoticeCard {
   return { type: "notice", cardId: cardId("notice", ref), kind: "error", message: "Something went wrong on our side. Try again.", retry: true };
 }
 
+/** "Same as last week but 20 % more" (or less), in the kitchen's languages: a whole earlier order, scaled. */
+const REPEAT_SCALED = /(same|again|like|as)\b[^%]*?\b(last|previous)\b[^%]*?(\d{1,3})\s*%\s*(more|less|extra|fewer)|(sama|samat|samoin|uudestaan|kuin)\b[^%]*?\b(viime|edelli)\w*[^%]*?(\d{1,3})\s*%\s*(enemmän|vähemmän|lisää)|(samma|som)\b[^%]*?\b(förra|senaste)\b[^%]*?(\d{1,3})\s*%\s*(mer|mindre)/i;
+
+/**
+ * A whole earlier order again, every line scaled by the percentage said: last week's deliveries (or, failing those, the
+ * latest order), each product's packs times the factor, rounded up to whole packs, on one order sheet to confirm.
+ * Plain code from the kitchen's records; the reader only ever sees one item at a time, so this is done before it.
+ */
+export async function repeatScaled(run: TurnRun, words: string): Promise<ItemOutcome[] | undefined> {
+  const m = REPEAT_SCALED.exec(words);
+  if (!m) return undefined;
+  const pct = Number(m[3] ?? m[7] ?? m[11]);
+  const dir = (m[4] ?? m[8] ?? m[12] ?? "").toLowerCase();
+  if (!Number.isFinite(pct) || pct <= 0 || pct > 300) return undefined;
+  const factor = /less|fewer|vähemmän|mindre/.test(dir) ? 1 - pct / 100 : 1 + pct / 100;
+  const { overview } = await import("@/server/kitchen-portal");
+  const ov = await overview(run.k);
+  const today = new Date().toISOString().slice(0, 10);
+  const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
+  const usable = ov.orders.filter((o) => o.status === "committed" || o.status === "history");
+  const lastWeek = usable.filter((o) => o.deliveryDate >= weekAgo && o.deliveryDate < today);
+  const from = lastWeek.length ? lastWeek : usable.slice(0, 1);
+  if (!from.length) return undefined;
+  const packs = new Map<string, number>();
+  for (const o of from) for (const l of o.lines) packs.set(l.productId, (packs.get(l.productId) ?? 0) + l.quantity);
+  const known = await run.rt.catalog.searchProducts({ ids: [...packs.keys()], limit: 30 });
+  const products = known.filter((p) => run.session.mandate.allowedCategories.includes(p.category)).slice(0, 6);
+  if (!products.length) return undefined;
+  record(run, "repeat_scaled", `"${words.slice(0, 80)}": ${from.length} earlier order${from.length > 1 ? "s" : ""} (${from.map((o) => o.deliveryDate).join(", ")}) again, every line times ${factor.toFixed(2)}: each through the intake (live prices, stand-ins if the product cannot be had), then one order.`, { orders: from.map((o) => o.orderId), factor, products: products.map((p) => p.id) });
+  // Each product as a need of its own amount (the kitchen's units), through the same intake as typed words: a product
+  // that cannot be had now gets its stand-ins there. Then the ready ones become one order (combineItems).
+  run.multi = true;
+  // No day in the words: the soonest each can come within the week (a latest day, so each offer is its earliest).
+  const lead = Math.max(1, Math.min(6, run.session.mandate.delivery?.maxLeadDays ?? 6));
+  const deliverBy = new Date(Date.now() + lead * 86_400_000).toISOString().slice(0, 10);
+  const outs = await Promise.all(
+    products.map((p, i) => {
+      const amount = Math.round(packs.get(p.id)! * p.packSize * factor * 100) / 100;
+      const unit = p.unit === "L" ? "L" : p.unit === "kg" ? "kg" : "pcs";
+      return openNeed(run, { text: words.slice(0, 2000), item: { text: p.name, category: p.category, productId: p.id }, quantity: { amount, unit }, deliverBy } as NeedInput, `${amount} ${unit} ${p.name} by ${deliverBy}`, { ref: `${run.turnId}:r${i}` });
+    }),
+  );
+  return combineItems(run, words, outs.flat());
+}
+
 /** "The usual", in the kitchen's languages. */
 const USUAL = /\b(the usual|usual order|as usual|tavalli\w*|tavanomai\w*|det vanliga|som vanligt|vanliga)\b/i;
 
@@ -313,6 +358,13 @@ export async function combineItems(run: TurnRun, words: string, items: ItemOutco
 export async function openNeed(run: TurnRun, need: NeedInput, words: string, opts: { ref: string; basedOn?: { requestId: string; fields: string[]; label?: string }; alsoAsked?: string[]; memoryLine?: string }): Promise<ItemOutcome[]> {
   // A kitchen's day ("for Thursday", "torstaiksi") is the day it wants the goods, not a latest date: delivered that day
   // when it can be (the intake moves the wholesaler's earliest offer to it). Earlier only when that day cannot be had.
+  // "For coffee" is a use, not a claim any product carries: it becomes the barista kind in the words searched for.
+  const nn = need as { requiredClaims?: string[]; item: { text: string; attributes?: string[] } };
+  const COFFEE = /coffee|barista|foam|kahvi|kaffe/i;
+  if (nn.requiredClaims?.some((c) => COFFEE.test(c)) || nn.item.attributes?.some((c) => COFFEE.test(c)) || /\b(for|to|in)\s+(the\s+)?coffee\b|kahviin|till kaffe/i.test(nn.item.text)) {
+    const text = /barista/i.test(nn.item.text) ? nn.item.text : `${nn.item.text.replace(/\s+(for|to|in)\s+(the\s+)?coffee|\s+kahviin|\s+till kaffe/i, "")} barista`;
+    need = { ...need, ...(nn.requiredClaims ? { requiredClaims: nn.requiredClaims.filter((c) => !COFFEE.test(c)) } : {}), item: { ...need.item, text, ...(nn.item.attributes ? { attributes: nn.item.attributes.filter((c) => !COFFEE.test(c)) } : {}) } } as NeedInput;
+  }
   const n = need as { deliverBy?: string; deliverOn?: string };
   // Words that set a latest day ("by Monday", "mennessä", "senast") keep it a latest day.
   const latest = /\b(by|before|at the latest|no later than|mennessä|viimeistään|ennen|senast|innan|före)\b/i.test(words);

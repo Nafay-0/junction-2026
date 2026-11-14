@@ -50,8 +50,9 @@ function cardFacts(c: Card): Record<string, unknown> | undefined {
         orderToConfirm: c.state === "placed" ? undefined : { lines: c.lines.map((l) => `${l.packs} × ${l.name}`), totalEur: eur(c.totalCents), delivery: c.deliveryDate, gate: gateWords(c.gate, c.totalCents), ...(c.check?.length ? { noticed: c.check } : {}), ask: "say yes to order it, or what to change" },
       };
     case "menu":
-      if (c.stage === "choose") return { menus: c.proposals.slice(0, 3).map((p, i) => ({ n: i + 1, title: p.title, dishes: p.dishes, ...(p.costPerCoverCents ? { perCoverEur: eur(p.costPerCoverCents) } : {}) })), ask: "which menu" };
-      if (c.stage === "ready" && !c.sheetId) return { menu: { dishes: c.dishes.map((d) => d.name), covers: c.covers, day: c.serviceDate, totalEur: eur(c.totalCents), ...(c.costPerCoverCents ? { perCoverEur: eur(c.costPerCoverCents) } : {}), ...(c.blockers.length ? { cannotOrderYet: c.blockers } : {}), gate: gateWords(c.gate, c.totalCents) }, ask: "order it?" };
+      if (c.stage === "choose") return { menus: c.proposals.slice(0, 3).map((p, i) => ({ n: i + 1, title: p.title, dishes: p.dishes, ...(p.costPerCoverCents ? { perCoverEur: eur(p.costPerCoverCents) } : {}) })), ...(c.serviceDate ? { dayAsked: c.serviceDate } : {}), ...(c.days.length ? { deliveryDaysPossible: c.days.filter((d) => d.available).map((d) => d.date).slice(0, 3) } : {}), ask: "which menu" };
+      // No promise about a person's OK here: the order the menu becomes is judged when it is placed, and said then.
+      if (c.stage === "ready" && !c.sheetId) return { menu: { dishes: c.dishes.map((d) => d.name), covers: c.covers, day: c.serviceDate, ...(c.days.length ? { deliveryDaysPossible: c.days.filter((d) => d.available).map((d) => d.date).slice(0, 3) } : {}), totalEur: eur(c.totalCents), ...(c.costPerCoverCents ? { perCoverEur: eur(c.costPerCoverCents) } : {}), ...(c.blockers.length ? { cannotOrderYet: c.blockers } : {}) }, ask: "order it?" };
       if (c.stage === "declined") return { menu: { cannot: c.blockers } };
       return undefined;
     case "records":

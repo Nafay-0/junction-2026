@@ -12,7 +12,7 @@ import { callTool } from "@/server/mcp/server";
 import { TOOLS } from "@/server/mcp/tools";
 import { cardId, gateCard, orderCard } from "./cards";
 import { withFallback } from "./fallback";
-import { orderFromWords, record, runAction, step, type ItemOutcome, type TurnRun } from "./pipeline";
+import { orderFromWords, record, repeatScaled, runAction, step, type ItemOutcome, type TurnRun } from "./pipeline";
 import type { RecordsCard, ThreadAction } from "./types";
 import { earlierFor } from "./earlier";
 import { speakFacts } from "./speak";
@@ -237,7 +237,18 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
       inputSchema: z.object({ words: z.string().min(1).max(2000).describe("The buyer's words, copied exactly from their newest message (or the part of it about the purchase).") }),
       execute: async ({ words: w }) => {
         // The model may only pass on words the buyer said: anything else is read from the buyer's message itself.
-        const said = words.includes(w.trim()) ? w.trim() : words;
+        let said = words.includes(w.trim()) ? w.trim() : words;
+        // The answer to "how much?" ("12 litres", "12 cartons"): the request it completes is the buyer's words before it.
+        const turns = run.thread.turns;
+        const prevAgent = [...turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId);
+        const prevBuyer = prevAgent?.role === "agent" ? turns.find((x) => x.turnId === prevAgent.replyTo) : undefined;
+        if (prevAgent?.role === "agent" && prevAgent.cards.some((c) => c.type === "notice" && c.kind === "incomplete") && prevBuyer?.role === "buyer" && prevBuyer.text && said.split(/\s+/).length <= 6) said = `${prevBuyer.text} ${said}`;
+        // "Same as last week but 20 % more": a whole earlier order, scaled by code (the reader reads one item at a time).
+        const scaled = await repeatScaled(run, said).catch(() => undefined);
+        if (scaled) {
+          items.push(...scaled);
+          return forModel(scaled);
+        }
         const earlier = await earlierFor(run, said);
         const out = await orderFromWords(run, said, earlier, { quietIfNotPurchase: true });
         items.push(...out);

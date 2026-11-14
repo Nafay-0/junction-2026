@@ -35,6 +35,7 @@ const W = {
     go: "yes, order it",
     monday: "Monday is fine",
     oatAmount: "the first one, 12 cartons",
+    amount: "12 litres",
   },
   fi: {
     milk: "Tarvitsen 1 000 litraa laktoositonta maitoa maanantaiksi",
@@ -47,6 +48,7 @@ const W = {
     go: "kyllä, tilaa se",
     monday: "maanantai käy",
     oatAmount: "ensimmäinen, 12 tölkkiä",
+    amount: "12 litraa",
   },
 }[lang];
 
@@ -136,7 +138,9 @@ async function run(id: keyof typeof W & ("milk" | "lunch" | "oat" | "reorder")):
       const sheet = open("sheet");
       const options = c.find((x) => x.type === "options" && !x.chosen && !x.adjusted);
       const question = c.find((x) => x.type === "question");
-      if (anomaly) next = W.yes;
+      const incomplete = c.find((x) => x.type === "notice" && x.kind === "incomplete");
+      if (incomplete || (/how (much|many)|kuinka paljon|montako|paljonko/i.test(a.line ?? "") && !c.some((x) => x.type === "options" || x.type === "sheet"))) next = W.amount;
+      else if (anomaly) next = W.yes;
       else if (menu?.type === "menu" && menu.stage === "choose") next = W.firstMenu;
       else if (menu?.type === "menu" && menu.stage === "ready" && !menu.sheetId) next = W.go;
       else if (sheet?.type === "sheet" && sheet.state === "editing") next = W.go;

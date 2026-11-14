@@ -331,7 +331,9 @@ function SignOffSlab({ card, thread, tap, total, what }: { card: GateCardT; thre
   const s = useSignOff(card);
   const order = orderOf(thread, card.orderId);
   const sum = total ?? order?.totalCents;
-  const lines = what ?? order?.lines.map((l) => `${f.num(l.quantity)} × ${l.name}`).join(", ");
+  // At most three lines on the slab; a longer order says how many and lists them behind the reply's "Show the list".
+  const all = order?.lines ?? [];
+  const lines = what ?? (all.length > 3 ? tx.many(all.length, all.slice(0, 2).map((l) => l.name).join(", ")) : all.map((l) => `${f.num(l.quantity)} × ${l.name}`).join(", "));
   const why = gateReasons(card.rules, card.reasons, w, fmtFor(f.lang), f.lang)[0];
   return (
     <div className="tl-in mt-4 overflow-hidden rounded-[1.4rem] bg-safety-ink text-paper">
@@ -390,7 +392,7 @@ function SignedSlab({ card, thread }: { card: GateCardT; thread: Thread }) {
       <div className="p-4">
         <p className="text-[0.78rem] font-medium tracking-wide text-paper/55">{tx.needsOk}</p>
         {order && <p className="display mt-1.5 text-[2.1rem] leading-none tabular">{money(order.totalCents)}</p>}
-        {order && <p className="mt-2 text-[0.92rem] leading-snug text-paper/85">{order.lines.map((l) => `${f.num(l.quantity)} × ${l.name}`).join(", ")}</p>}
+        {order && <p className="mt-2 text-[0.92rem] leading-snug text-paper/85">{order.lines.length > 3 ? tx.many(order.lines.length, order.lines.slice(0, 2).map((l) => l.name).join(", ")) : order.lines.map((l) => `${f.num(l.quantity)} × ${l.name}`).join(", ")}</p>}
         <p className="mt-4 flex min-h-12 items-center justify-center gap-2 rounded-full bg-paper/10 text-[0.95rem] font-semibold text-lime">
           <Check aria-hidden size={18} strokeWidth={2.6} /> {card.approver ? tx.okBy(card.approver.name) : tx.okDone("")}
         </p>
