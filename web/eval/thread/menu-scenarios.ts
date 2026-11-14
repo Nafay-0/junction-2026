@@ -124,7 +124,9 @@ const byRole: Check = {
     const all = Object.values(ev.options ?? {}).flat() as Json[];
     const verified = all.every((o) => o.kind === "technique" || o.checks.every((c: Json) => c.product && c.arrival.ok && c.rules.ok));
     const ranked = Object.values(ev.options ?? {}).every((os: any) => os.every((o: Json, i: number) => o.rank === ["best", "better", "good"][i] && o.tradeoff?.taste));
-    return ok(all.length > 0 && verified && ranked && (ev.cannotArrive ?? []).every((x: Json) => x.role), `${all.length} options; verified ${verified}; ranked ${ranked}`);
+    // Each ingredient that cannot come has verified options, or says why none can stand in (never silence).
+    const accounted = (ev.cannotArrive ?? []).every((x: Json) => (ev.options?.[x.lineId] ?? []).length > 0 || (ev.unresolved?.[x.lineId] ?? []).length > 0);
+    return ok(accounted && verified && ranked && (ev.cannotArrive ?? []).every((x: Json) => x.role), `${all.length} options; every ingredient accounted for ${accounted}; verified ${verified}; ranked ${ranked}`);
   },
 };
 const eventOrdered: Check = {

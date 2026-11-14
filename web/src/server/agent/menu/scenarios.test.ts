@@ -24,6 +24,7 @@ const EXTRA: FixtureSpec[] = [
   // A beef cheek the wholesaler cannot deliver on any day, and another beef cheek, frozen, that can come.
   { id: "810007", names: { fi: "NAUDAN POSKI TUORE 2KG", en: "BEEF CHEEK FRESH 2KG" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "18731", freeFrom: ["AN", "AP", "AM"], labels: COOL, each: kg(2) },
   { id: "810008", names: { fi: "HK naudan poski haudutettu pakaste 2 kg", en: "HK beef cheek slow-cooked frozen 2 kg" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "41720", freeFrom: ["AN", "AP", "AM"], labels: ["freezeTemperature"], each: kg(2) },
+  { id: "810009", names: { fi: "Naudan rintapala sous vide pakaste 1,7 kg", en: "Beef brisket sous vide frozen 1,7 kg" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "41720", freeFrom: ["AN", "AP", "AM"], labels: ["freezeTemperature"], each: kg(1.7) },
   { id: "810006", names: { fi: "Meijeri voi 500 g laktoositon", en: "Meijeri butter 500 g lactose free" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "10501", claims: ["FREE_FROM_LACTOSE"], allergens: [["AM", "CONTAINS"]], labels: COOL, each: kg(0.5) },
 ];
 const LIVE: Record<string, FakeScenario> = {
@@ -36,6 +37,7 @@ const LIVE: Record<string, FakeScenario> = {
   "810005": { price: 8.4, amount: 500, date: "2026-11-16", closingTime: "2026-11-15T17:00:00", unit: "ST" },
   "810007": { price: 30, noLines: true },
   "810008": { price: 41, amount: 500, date: "2026-11-16", closingTime: "2026-11-15T17:00:00", unit: "ST" },
+  "810009": { price: 20, amount: 500, date: "2026-11-16", closingTime: "2026-11-15T17:00:00", unit: "ST" },
   "810006": { price: 4.1, amount: 500, date: "2026-11-16", closingTime: "2026-11-15T17:00:00", unit: "ST" },
 };
 
@@ -205,6 +207,8 @@ describe("scenario 2: a booking at short notice, substitutes by the ingredient's
     expect(st.arrival.code).toBe("not_deliverable");
     expect(r.options.beef_cheek[0]).toMatchObject({ rank: "best", optionId: "beef_cheek:same_frozen", title: "HK beef cheek slow-cooked frozen 2 kg" });
     expect(r.options.beef_cheek[0].checks[0].product).toMatchObject({ productId: "810008", packs: 4 });
+    // A cheaper frozen beef brisket is beef, not beef cheek: never "the same ingredient".
+    expect(r.options.beef_cheek.flatMap((o) => o.checks.map((c) => c.product?.productId))).not.toContain("810009");
     const sheet = await scenarios.sheetOf(kaari, r.planId, r.cannotArrive.map((x) => ({ lineId: x.lineId, optionId: r.options[x.lineId][0].optionId })), { by: "Sanna Koskinen (test)" });
     expect(sheet.lines.find((x) => x.productId === "810008")).toMatchObject({ packs: 4 });
     expect(sheet.leftOff).toEqual([]);

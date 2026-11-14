@@ -408,7 +408,10 @@ export function createScenarios(deps: ScenarioDeps) {
     // "The same ingredient" means the thing itself: every word of one of its names in the product's name ("naudan poski",
     // "beef cheek"), so pork cheek is not beef cheek, whatever a search ranked it.
     const terms = [spec.name, ...spec.ingredient.searchTerms].map((t) => t.toLowerCase().split(/[^a-zåäö]+/u).filter((w) => w.length >= 3 && !/^(fresh|frozen|tuore|pakaste|raw)$/.test(w)).map((w) => w.slice(0, Math.min(6, Math.max(3, w.length - 2))))).filter((ws) => ws.length);
-    const isIt = (c: { product: Product; why: string[] }) => terms.some((ws) => { const n = [c.product.name, c.product.names?.fi, c.product.names?.en].filter(Boolean).join(" ").toLowerCase(); return ws.every((w) => n.includes(w)); });
+    // A two-word ingredient is matched by its two-word names only: "beef" alone would make brisket a beef cheek.
+    const multi = terms.filter((ws) => ws.length >= 2);
+    const named = multi.length ? multi : terms;
+    const isIt = (c: { product: Product; why: string[] }) => named.some((ws) => { const n = [c.product.name, c.product.names?.fi, c.product.names?.en].filter(Boolean).join(" ").toLowerCase(); return ws.every((w) => n.includes(w)); });
     const other = (xs: { product: Product; why: string[] }[]) => xs.filter(isIt).map((c) => c.product).filter((x) => x.id !== st.product?.productId && !knownLate(p, x.id, want));
     const fresh = other(same[0].candidates).filter((x) => x.temperatureClass !== "frozen");
     const frozen = other([...(same[1]?.candidates ?? []), ...same[0].candidates]).filter((x) => x.temperatureClass === "frozen");
