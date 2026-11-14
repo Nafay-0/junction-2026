@@ -32,6 +32,7 @@ import { LABEL_TEXT, MAX_CARDS, buildOptions, formatCutoff, preselect, shortlist
 import type { AgentSession, DockRepository, LiveLookupResult, Order, PurchaseRequest } from "./orders";
 import type { Decision } from "./policy";
 import type { Quote, QuoteRequestLine } from "./quote";
+import { describeSecondReading, readerName, readingConcerns, type SecondReadingRecord } from "./second-reading";
 import { formatEur, newId } from "./util";
 
 /**
@@ -132,6 +133,8 @@ export type Intake = {
   memoryUsed?: { itemId?: string; text: string }[];
   chosen?: { optionId: string; labels: OptionLabel[]; by: string; at: string };
   quote?: { quote: Quote; quoteToken: string; policyPreview: Decision };
+  /** The buyer's words read a second time by an independent model (core/second-reading.ts): what it found. */
+  secondReading?: SecondReadingRecord;
   createdAt: string;
   updatedAt: string;
 };
@@ -192,6 +195,11 @@ export type IntakeDeps = {
   budgetUse?: (orgId: string) => Promise<{ spentCents: number; heldCents: number; held: { orderId: string; totalCents: number; expiresAt: string }[] }>;
   /** The order flow's live lookup: allowance, delivery date, signed claims and ledger in one place (see orders.ts). */
   liveLookup: (session: AgentSession, requestId: string, productIds: string[], deliveryDate: string | undefined, why: string) => Promise<LiveLookupResult>;
+  /**
+   * The second reading of these words, if the interpreter made one (server/agent/second-reading-store.ts): looked up
+   * by the kitchen and the buyer's own words. It can only add a question; nothing else here reads it.
+   */
+  secondReading?: (orgId: string, text: string | undefined) => SecondReadingRecord | undefined;
 };
 
 /** The family of a request whose words match nothing in the catalogue (refused at once, see open()). */
@@ -327,7 +335,11 @@ export function createIntakeFlow(deps: IntakeDeps) {
     if (i.unverified?.length) i.signOffNotes = i.unverified.map(unverifiedNote);
 
     // 1. Likely mistakes block everything else. Plausibility warnings a sign-off would show anyway wait (step 6).
+    //    First the second reading: two independent readers that read a field differently ask about that field
+    //    before anything else is checked on it.
     const acked = new Set(i.acknowledgements.map((a) => a.key));
+    const readings = readingConcerns(i.need, i.secondReading).filter((c) => !acked.has(c.key));
+    if (readings.length) return needsConfirmation(i, readings, "before any price lookup: two independent readers read the request differently");
     const open = checkNeed(i.need, ctx).filter((c) => !acked.has(c.key));
     const blocking = open.filter((c) => !c.deferrable);
     const deferred = open.filter((c) => c.deferrable);
@@ -639,6 +651,21 @@ export function createIntakeFlow(deps: IntakeDeps) {
         ...(body.site ? { site: body.site } : {}),
       };
       log(i, agentActor(session), `Structured need (${unmatched ? "no product family found" : family}): ${describeNeed(need)}.`, { step: "need", need, by: body.by, ...(session.door ? { door: session.door } : {}), ...(changes.length ? { reasons: changes.map((c) => `In the catalogue's words: ${c}`) } : {}) });
+      const second = deps.secondReading?.(request.orgId, need.text);
+      if (second) {
+        i.secondReading = second;
+        log(i, "dock", describeSecondReading(second), {
+          step: "second_reading",
+          status: second.status,
+          firstModel: second.firstModel,
+          secondModel: second.secondModel,
+          ...(second.secondMs !== undefined ? { secondMs: second.secondMs } : {}),
+          ...(second.waitedMs !== undefined ? { waitedMs: second.waitedMs } : {}),
+          ...(second.reason ? { reason: second.reason } : {}),
+          differences: second.differences.map(({ field, first, second: s2, why }) => ({ field, first, second: s2, why })),
+          ...(second.minor.length ? { reasons: second.minor } : {}),
+        });
+      }
       const also = alsoAskedIn(need.text, need);
       if (also.length) {
         i.alsoAsked = also;
@@ -950,6 +977,15 @@ export function view(i: Intake) {
     acknowledgements: i.acknowledgements,
     chosen: i.chosen,
     quote: i.quote,
+    secondReading: i.secondReading && {
+      status: i.secondReading.status,
+      firstModel: i.secondReading.firstModel,
+      secondModel: i.secondReading.secondModel,
+      /** The readers in words, for the buyer. */
+      readers: { first: readerName(i.secondReading.firstModel), second: readerName(i.secondReading.secondModel) },
+      ...(i.secondReading.reason ? { reason: i.secondReading.reason } : {}),
+      differences: i.secondReading.differences.map(({ field, first, second, why }) => ({ field, first, second, why })),
+    },
     next,
   };
 }

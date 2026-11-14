@@ -3,6 +3,7 @@ import { signMandate, type Mandate } from "@/core/mandate";
 import { KITCHEN_ORG, demoKitchenKeyPair, demoKitchenMandate } from "./demo-kitchen";
 import { DEMO_ORG, demoMandate, demoOrgKeyPair } from "./dev-fixtures";
 import { getRuntime } from "./runtime";
+import { USERNAME_RE } from "./accounts/names";
 
 /**
  * Which kitchen a buyer console at /k/[kitchen] speaks for, and the credentials its agent presents.
@@ -13,15 +14,18 @@ import { getRuntime } from "./runtime";
  *   kaari      Ravintola Kaari: the returning kitchen with six weeks of history (demo-kitchen.ts)
  *   laakso     Laakso Catering: the partner's example org, no history (dev-fixtures.ts)
  *   sbx_...    a visitor's own kitchen, made by scanning the join QR code (sandboxes.ts)
+ *   <username> a restaurant's own kitchen, behind its account (accounts/service.ts); private to that account
  *
  * Who may use a console is decided in server/authz.ts (consoleKitchen): the two demo kitchens are open to anyone at
  * the table; a visitor's kitchen only from the phone that joined it. Anyone at a demo kitchen can make its agent ask for things. The agent still
  * cannot approve anything: sign-off needs the named person (their passkey, or the one-time link for the two
  * demo kitchens, which have no real person behind them).
  */
+export type KitchenKind = "demo" | "visitor" | "account";
+
 export type ConsoleKitchenInfo = {
   slug: string;
-  kind: "demo" | "visitor";
+  kind: KitchenKind;
   name: string;
   orgId: string;
   agentName: string;
@@ -41,6 +45,8 @@ export type ConsoleKitchenInfo = {
   /** Sentences worth trying here, shown under the request field. */
   examples: string[];
   expiresAt?: string;
+  /** Account kitchens: the restaurant's username, and whether it is a shared test account (reset on a schedule). */
+  account?: { username: string; shared: boolean };
 };
 
 type Resolved = { info: ConsoleKitchenInfo; mandateToken: string; agentId: string };
@@ -106,6 +112,7 @@ export async function resolveKitchen(slug: string): Promise<Resolved | undefined
       info: { slug, kind: "demo", name: DEMO_ORG.name, orgId: DEMO_ORG.orgId, agentName: "Laakso's buyer agent", by: "Kitchen staff at Laakso Catering", mandate: summary(m), examples: EXAMPLES.laakso },
     };
   }
+  if (USERNAME_RE.test(slug) && !slug.startsWith("sbx")) return accountKitchen(slug);
   if (!/^sbx_[a-z0-9]+$/i.test(slug)) return undefined;
   const { sandboxes } = await getRuntime();
   const [s, creds] = [await sandboxes.get(slug), await sandboxes.agentCredentials(slug)];
@@ -128,16 +135,41 @@ export async function resolveKitchen(slug: string): Promise<Resolved | undefined
   };
 }
 
+const ACCOUNT_EXAMPLES = ["100 litres of lactose-free milk for Thursday", "Same as last time, for Friday", "20 kg of wheat flour for Monday, cheapest"];
+
+async function accountKitchen(slug: string): Promise<Resolved | undefined> {
+  const { accounts } = await getRuntime();
+  const found = await accounts.kitchenOf(slug);
+  if (!found) return undefined;
+  const { account: a, kitchen: k } = found;
+  return {
+    mandateToken: k.mandateToken,
+    agentId: k.agentId,
+    info: {
+      slug,
+      kind: "account",
+      name: a.restaurant,
+      orgId: k.orgId,
+      agentName: `${a.restaurant}'s buyer agent`,
+      by: `${a.restaurant} (signed in as ${a.username})`,
+      mandate: summary(k.mandate),
+      examples: ACCOUNT_EXAMPLES,
+      account: { username: a.username, shared: a.kind === "test" },
+    },
+  };
+}
+
 /**
  * Kitchens a console can switch to right now: the two demo kitchens, then the viewer's own visitor kitchen (pass the
  * org of the phone's approver session). Other visitors' kitchens are never listed (server/authz.ts).
  */
-export async function listConsoleKitchens(viewerOrgId?: string): Promise<{ slug: string; name: string; kind: "demo" | "visitor"; approverName?: string }[]> {
+export async function listConsoleKitchens(viewerOrgId?: string, viewerAccount?: { kitchen?: string; restaurant: string; kind: string }): Promise<{ slug: string; name: string; kind: KitchenKind; approverName?: string }[]> {
   const { sandboxes } = await getRuntime();
   const visitors = (await sandboxes.list())
     .filter((s) => viewerOrgId !== undefined && s.orgId === viewerOrgId)
     .slice()
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .map((s) => ({ slug: s.sandboxId, name: `${s.kitchenName}, ${s.city}`, kind: "visitor" as const, approverName: s.approverName }));
-  return [{ slug: "kaari", name: KITCHEN_ORG.name, kind: "demo" }, { slug: "laakso", name: DEMO_ORG.name, kind: "demo" }, ...visitors];
+  const own = viewerAccount?.kitchen && viewerAccount.kind !== "demo" ? [{ slug: viewerAccount.kitchen, name: viewerAccount.restaurant, kind: "account" as const }] : [];
+  return [...own, { slug: "kaari", name: KITCHEN_ORG.name, kind: "demo" }, { slug: "laakso", name: DEMO_ORG.name, kind: "demo" }, ...visitors];
 }

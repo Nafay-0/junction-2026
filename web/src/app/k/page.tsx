@@ -1,155 +1,187 @@
 import type { Metadata } from "next";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { DEMO_NOTES } from "../_ui/brand";
 import { Wordmark } from "../_ui/wordmark";
 import { moneyShort } from "../_ui/plain";
-import { Art } from "../_ui/art";
-import { Glyph } from "../_ui/glyphs";
+import { Plate } from "../_ui/kit";
+import { LINK_GO, LINK_PRIMARY } from "./_account/links";
 import { SESSION_COOKIE } from "@/server/approver-session";
-import { listConsoleKitchens, resolveKitchen } from "@/server/console-kitchens";
+import { ACCOUNT_COOKIE } from "@/server/accounts/http";
+import { testAccountsShown, testResetMinutes } from "@/server/accounts/schedule";
+import { TEST_ACCOUNTS } from "@/server/accounts/test-accounts";
+import { joinLink } from "@/server/approval-links";
+import { resolveKitchen } from "@/server/console-kitchens";
 import { getRuntime } from "@/server/runtime";
 import { LangProvider } from "../_i18n/provider";
 import { DEFAULT_LANG, type Lang } from "../_i18n/lang";
 import { chosenLang, requestLang } from "../_i18n/server";
 import { EntryLangSwitch } from "./entry-lang";
 import { ENTRY_TEXT } from "./entry.text";
+import { DOOR_TEXT } from "./door.text";
+import { SignInForm, SignOutButton, TestSignIn } from "./_account/forms";
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: ENTRY_TEXT[await requestLang()].title };
+  return { title: DOOR_TEXT[await requestLang()].title };
 }
 
-/** Demo entry: open a kitchen's shop with one click. No passwords: these are demo kitchens on synthetic data. */
-export default function KitchenEntry() {
+/**
+ * The door to the shop (/k): sign in, open an account, use a shared test account, or scan to try without one; and
+ * the two stage kitchens, open to look around. Built from the shared kit with plain markup (design-v2 restyles it).
+ */
+export default function KitchenEntry({ searchParams }: PageProps<"/k">) {
   return (
     <div className="min-h-dvh bg-mist text-ink">
-      <Suspense fallback={<EntryFallback />}>
-        <Entry />
+      <Suspense fallback={<p className="h-6 bg-petrol-deep" />}>
+        <Entry searchParams={searchParams} />
       </Suspense>
     </div>
   );
 }
 
-/** The words are written on the server in the buyer's language (the cookie), so the page waits for the request. */
-async function Entry() {
+async function Entry({ searchParams }: { searchParams: PageProps<"/k">["searchParams"] }) {
   const chosen = await chosenLang();
   const lang = chosen ?? DEFAULT_LANG;
-  const tx = ENTRY_TEXT[lang];
+  const tx = DOOR_TEXT[lang];
   return (
     <LangProvider initial={chosen}>
       <p className="bg-petrol-deep px-4 py-1 text-center text-[0.8rem] text-paper/85">{DEMO_NOTES[lang]}</p>
-      <header className="on-dark relative overflow-hidden bg-petrol-deep text-paper">
-        <div className="relative mx-auto max-w-[1100px] px-4 pt-6 sm:px-8">
+      <header className="on-dark bg-petrol-deep text-paper">
+        <div className="mx-auto max-w-[1100px] px-4 pb-8 pt-6 sm:px-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p>
               <Wordmark tone="paper" size={36} />
             </p>
             <EntryLangSwitch rendered={lang} />
           </div>
-        </div>
-        <div className="relative mx-auto grid max-w-[1100px] items-end gap-6 px-4 pb-10 pt-8 sm:px-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:pb-12">
-          <div className="min-w-0">
-            <h1 className="display break-words text-[3rem] sm:text-[4.2rem]">{tx.heading}</h1>
-            <p className="mt-3 max-w-[60ch] text-[1.15rem] leading-snug text-paper/90">{tx.intro}</p>
-          </div>
-          {/* A generated illustration of a delivery (DESIGN.md §6), framed as a picture, not behind the type. */}
-          <div className="-mx-4 aspect-[16/9] sm:mx-0">
-            <Art k="hero" cover priority sizes="(min-width: 1024px) 34rem, 100vw" position="72% 50%" />
-          </div>
+          <h1 className="display mt-6 break-words text-[2.6rem] sm:text-[3.4rem]">{tx.heading}</h1>
+          <p className="mt-2 max-w-[65ch] text-[1.05rem] leading-snug text-paper/90">{tx.intro}</p>
         </div>
       </header>
-      <main className="mx-auto max-w-[1100px] px-4 pb-14 sm:px-8">
-        <Suspense fallback={<div className="mt-8 h-64 animate-pulse bg-concrete-deep/60" />}>
-          <Kitchens lang={lang} />
+      <main className="mx-auto max-w-[1100px] space-y-8 px-4 py-8 sm:px-8">
+        <Suspense fallback={<div className="h-64 animate-pulse bg-concrete-deep/60" />}>
+          <Door lang={lang} searchParams={searchParams} />
         </Suspense>
       </main>
     </LangProvider>
   );
 }
 
-function EntryFallback() {
-  return (
-    <>
-      <p className="h-6 bg-petrol-deep" />
-      <div className="h-[22rem] bg-petrol" />
-    </>
-  );
-}
-
-async function Kitchens({ lang }: { lang: Lang }) {
-  const tx = ENTRY_TEXT[lang];
+async function Door({ lang, searchParams }: { lang: Lang; searchParams: PageProps<"/k">["searchParams"] }) {
+  const tx = DOOR_TEXT[lang];
+  const etx = ENTRY_TEXT[lang];
   await connection();
-  const [all, jar, rt] = await Promise.all([listConsoleKitchens(), cookies(), getRuntime()]);
-  const account = await rt.passkeys.sessionApprover(jar.get(SESSION_COOKIE)?.value);
-  const mine = account ? await rt.sandboxes.forApprover(account.approverId) : undefined;
-  const demos = all.filter((k) => k.kind === "demo");
-  const visitors = all.filter((k) => k.kind === "visitor" && k.slug !== mine?.sandboxId);
-  const info = await Promise.all(demos.map((k) => resolveKitchen(k.slug)));
+  const [jar, rt, hdrs] = await Promise.all([cookies(), getRuntime(), headers()]);
+  const signedIn = await rt.accounts.session(jar.get(ACCOUNT_COOKIE)?.value);
+  const me = signedIn ? rt.accounts.view(signedIn.account) : undefined;
+  const approver = await rt.passkeys.sessionApprover(jar.get(SESSION_COOKIE)?.value);
+  const mine = approver ? await rt.sandboxes.forApprover(approver.approverId) : undefined;
+  const demos = await Promise.all(["kaari", "laakso"].map((slug) => resolveKitchen(slug)));
+  const join = await joinLink(hdrs);
+  const shown = testAccountsShown();
+  const as = (await searchParams).as; // "Sign in to this account" from a private kitchen's page
+  const prefill = typeof as === "string" && /^[a-z0-9][a-z0-9_-]{2,31}$/.test(as) ? as : undefined;
   return (
     <>
-      {mine && (
-        <Link href={`/k/${mine.sandboxId}`} className="mt-8 block bg-paper hover:outline-[3px] hover:outline-petrol">
-          <div aria-hidden className="h-2 bg-lime" />
-          <div className="flex flex-wrap items-center gap-4 p-5">
-            <Glyph kind="carton" size={48} className="text-petrol" />
-            <div className="min-w-0 flex-1">
-              <p className="text-ink-soft">{tx.yourKitchen}</p>
-              <p className="display text-[1.9rem]">
-                {mine.kitchenName}, {mine.city}
-              </p>
-              <p className="text-ink-soft">{tx.youAre(mine.approverName, moneyShort(mine.perOrderLimitCents))}</p>
-            </div>
-            <span className="bg-lime px-4 py-3 font-semibold text-ink">{tx.openMine}</span>
+      <div className="grid items-start gap-6 lg:grid-cols-2">
+        <Plate as="section" className="p-0">
+          <div className="space-y-3 p-5">
+            <h2 className="display text-[1.8rem]">{tx.signInTitle}</h2>
+            {me ? (
+              <>
+                <p className="leading-snug">{tx.signedInAs(me.username, me.restaurant)}</p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Link href={me.kitchen ? `/k/${me.kitchen}` : "/k/signup?step=rules"} className={LINK_GO}>
+                    {me.kitchen ? tx.openShop : tx.finishSignUp}
+                  </Link>
+                  <SignOutButton kind="secondary" />
+                </div>
+              </>
+            ) : (
+              <SignInForm prefill={prefill} />
+            )}
           </div>
+        </Plate>
+        <section aria-labelledby="new" className="space-y-3 bg-paper p-5">
+          <h2 id="new" className="display text-[1.8rem]">
+            {tx.newTitle}
+          </h2>
+          <p className="max-w-[60ch] leading-snug">{tx.newBody}</p>
+          <Link href="/k/signup" className={LINK_PRIMARY}>
+            {tx.newButton}
+          </Link>
+        </section>
+      </div>
+
+      {mine && (
+        <Link href={`/k/${mine.sandboxId}`} className="block bg-paper p-5 hover:outline-[3px] hover:outline-petrol">
+          <p className="text-ink-soft">{etx.yourKitchen}</p>
+          <p className="display text-[1.6rem]">
+            {mine.kitchenName}, {mine.city}
+          </p>
+          <p className="text-ink-soft">{etx.youAre(mine.approverName, moneyShort(mine.perOrderLimitCents))}</p>
         </Link>
       )}
-      <ul className="-mt-6 grid gap-4 md:grid-cols-2">
-        {demos.map((k, i) => {
-          const m = info[i]?.info.mandate;
-          return (
-            <li key={k.slug}>
-              <Link href={`/k/${k.slug}`} className="flex h-full flex-col bg-paper hover:outline-[3px] hover:outline-petrol">
-                <div aria-hidden className="h-1.5 bg-petrol-deep" />
-                <div className="flex flex-1 flex-col p-6">
-                  <p className="display text-[2.2rem]">{k.name}</p>
-                  <p className="mt-1 leading-snug">{tx.about[k.slug] ?? tx.aDemoKitchen}</p>
-                  {m && (
-                    <p className="mt-3 text-[0.95rem] text-ink-soft">
-                      {tx.agentAlone(moneyShort(m.perOrderLimitCents), m.approvers[0]?.name)}
-                    </p>
-                  )}
-                  <span className="mt-4 self-start bg-petrol px-4 py-2.5 font-semibold text-paper">{tx.enter}</span>
-                </div>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-      {visitors.length > 0 && (
-        <section className="mt-10">
-          <h2 className="display text-[1.5rem]">{tx.visitors}</h2>
-          <p className="text-ink-soft">{tx.visitorsNote}</p>
-          <ul className="mt-2 divide-y divide-line bg-paper">
-            {visitors.map((k) => (
-              <li key={k.slug}>
-                <Link href={`/k/${k.slug}`} className="flex min-h-12 items-center justify-between px-4 py-2 hover:bg-concrete/50">
-                  <span className="font-semibold">{k.name}</span>
-                  <span className="text-ink-soft">{tx.signsOff(k.approverName)}</span>
-                </Link>
+
+      {shown && (
+        <section aria-labelledby="test" className="space-y-3">
+          <h2 id="test" className="display text-[1.8rem]">
+            {tx.testTitle}
+          </h2>
+          <p className="max-w-[72ch] leading-snug text-ink-soft">{tx.testIntro(testResetMinutes() || 60)}</p>
+          <ul className="grid gap-4 md:grid-cols-3">
+            {TEST_ACCOUNTS.map((t) => (
+              <li key={t.username} className="flex flex-col gap-2 bg-paper p-5">
+                <h3 className="display text-[1.4rem]">{t.restaurant}</h3>
+                <p className="flex-1 leading-snug">{tx.testAbout[t.username]}</p>
+                <dl className="grid grid-cols-[auto_1fr] gap-x-3 text-[0.92rem]">
+                  <dt className="text-ink-soft">{tx.username}</dt>
+                  <dd className="break-all font-semibold">{t.username}</dd>
+                  <dt className="text-ink-soft">{tx.password}</dt>
+                  <dd className="break-all font-semibold">{t.password}</dd>
+                </dl>
+                <TestSignIn username={t.username} password={t.password} name={t.restaurant} />
               </li>
             ))}
           </ul>
         </section>
       )}
-      <p className="mt-10 text-[0.95rem] text-ink-soft">
-        {tx.joinedA}
-        <Link href="/k/mine" className="font-semibold text-petrol underline decoration-2 underline-offset-4">
-          {tx.joinedLink}
-        </Link>
-        {tx.joinedB}
-      </p>
+
+      <section aria-labelledby="scan" className="grid items-center gap-5 bg-paper p-5 sm:grid-cols-[12rem_1fr]">
+        <div className="aspect-square w-full max-w-[12rem] [&>svg]:size-full" dangerouslySetInnerHTML={{ __html: join.qrSvg }} />
+        <div className="space-y-2">
+          <h2 id="scan" className="display text-[1.8rem]">
+            {tx.scanTitle}
+          </h2>
+          <p className="max-w-[60ch] leading-snug">{tx.scanBody}</p>
+          <Link href="/join" className="font-semibold text-petrol underline decoration-2 underline-offset-4">
+            {tx.scanOpen}
+          </Link>
+        </div>
+      </section>
+
+      <section aria-labelledby="demo" className="space-y-3">
+        <h2 id="demo" className="display text-[1.8rem]">
+          {tx.demoTitle}
+        </h2>
+        <p className="max-w-[72ch] leading-snug text-ink-soft">{tx.demoBody}</p>
+        <ul className="grid gap-4 md:grid-cols-2">
+          {demos.map((k) =>
+            k ? (
+              <li key={k.info.slug}>
+                <Link href={`/k/${k.info.slug}`} className="flex h-full flex-col bg-paper p-5 hover:outline-[3px] hover:outline-petrol">
+                  <span className="display text-[1.6rem]">{k.info.name}</span>
+                  <span className="mt-1 leading-snug">{etx.about[k.info.slug] ?? etx.aDemoKitchen}</span>
+                  <span className="mt-2 text-[0.95rem] text-ink-soft">{etx.agentAlone(moneyShort(k.info.mandate.perOrderLimitCents), k.info.mandate.approvers[0]?.name)}</span>
+                  <span className="mt-3 font-semibold text-petrol">{tx.enter}</span>
+                </Link>
+              </li>
+            ) : null,
+          )}
+        </ul>
+      </section>
     </>
   );
 }

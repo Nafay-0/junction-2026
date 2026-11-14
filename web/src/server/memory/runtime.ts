@@ -44,7 +44,7 @@ async function build(): Promise<MemoryService> {
     ledger: rt.dock.ledger,
     proposer: memoryModelSpec() ? llmProposer() : undefined,
     index: index(),
-    // The PostgreSQL kitchen store cannot list its kitchens: the demo kitchens and the visitors' are the ones there are.
-    knownOrgIds: async () => [KITCHEN_ORG.orgId, DEMO_ORG.orgId, ...(await rt.sandboxes.list()).map((s) => s.orgId)],
+    // The PostgreSQL kitchen store cannot list its kitchens: the demo kitchens, the visitors' and the accounts' are the ones there are.
+    knownOrgIds: async () => [KITCHEN_ORG.orgId, DEMO_ORG.orgId, ...(await rt.sandboxes.list()).map((s) => s.orgId), ...(await rt.accounts.list()).flatMap((a) => (a.kind !== "demo" && a.orgId ? [a.orgId] : []))],
   });
 }

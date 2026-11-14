@@ -60,9 +60,12 @@ export function byLine(info: ConsoleKitchenInfo, door: Door, via: Via): string {
   return `${info.by} (${how})`.slice(0, 120);
 }
 
-/** Free text to a structured need with the same reader the typed console uses. */
+/**
+ * Free text to a structured need with the same reader the typed console uses, read a second time by the second
+ * reader on the doors where a person's own words are read (not the photo door: see interpret.ts SECOND_READING_DOORS).
+ */
 export async function readNeed(a: KitchenAgent, text: string): Promise<{ need: NeedInput; model: string; ms: number }> {
-  const r = await interpretRequest({ text }, { catalog: a.rt.catalog, mandate: a.session.mandate });
+  const r = await interpretRequest({ text }, { catalog: a.rt.catalog, mandate: a.session.mandate, door: a.session.door });
   return { need: r.need as NeedInput, model: r.model, ms: r.ms };
 }
 

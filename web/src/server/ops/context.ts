@@ -24,7 +24,7 @@ export type AgentInfo = {
   orgId: string;
   orgName: string;
   label: string;
-  kind: "demo" | "visitor" | "outside";
+  kind: "demo" | "visitor" | "account" | "outside";
   mandate?: Mandate;
   approverName?: string;
   expiresAt?: string;
@@ -111,6 +111,11 @@ export async function opsContext(rt: Runtime, now = new Date()): Promise<OpsCont
       approverName: s.approverName,
       expiresAt: s.expiresAt,
     });
+  }
+  // Restaurants' own kitchens, behind their accounts (server/accounts). Ops sees each as a kitchen, nothing about the person.
+  for (const a of await rt.accounts.store.list()) {
+    if (!a.kitchen || agents.has(a.kitchen.agentId)) continue;
+    agents.set(a.kitchen.agentId, { agentId: a.kitchen.agentId, orgId: a.kitchen.orgId, orgName: a.restaurant, label: `${a.restaurant}'s buyer agent`, kind: "account", mandate: door.mandateOf(a.kitchen.agentId) ?? a.kitchen.mandate, approverName: a.kitchen.terms.signer });
   }
   // Anyone else who came to the door with a mandate Dock trusts (an outside agent of a known kitchen, a closed visitor kitchen).
   for (const c of door.all()) {

@@ -1,0 +1,292 @@
+{
+ "about": "Requests naming several items, added after main gained the multi-item reader: the first reading is one need (the first item); the second reading must not disagree because of the others. Same format as set.json.",
+ "now": "2026-11-14T10:00:00+02:00",
+ "cases": [
+  {
+   "id": "m-en-01",
+   "lang": "en",
+   "text": "I need 100 litres of lactose-free milk and 20 kg of butter by Monday",
+   "tags": [
+    "several items"
+   ],
+   "expect": {
+    "amount": [
+     [
+      100,
+      "L"
+     ]
+    ],
+    "kind": [
+     "milk",
+     "maito",
+     "mjolk"
+    ],
+    "date": "2026-11-16",
+    "claims": [
+     "lactose_free"
+    ],
+    "excluded": [
+     []
+    ],
+    "avoid": [],
+    "fat": []
+   }
+  },
+  {
+   "id": "m-en-02",
+   "lang": "en",
+   "text": "200 L milk plus 15 kg natural yoghurt for Thursday",
+   "tags": [
+    "several items"
+   ],
+   "expect": {
+    "amount": [
+     [
+      200,
+      "L"
+     ]
+    ],
+    "kind": [
+     "milk",
+     "maito",
+     "mjolk"
+    ],
+    "date": "2026-11-19",
+    "claims": [],
+    "excluded": [
+     []
+    ],
+    "avoid": [],
+    "fat": []
+   }
+  },
+  {
+   "id": "m-en-03",
+   "lang": "en",
+   "text": "30 l oat drink on Wednesday and the same again next Monday",
+   "tags": [
+    "several items"
+   ],
+   "expect": {
+    "amount": [
+     [
+      30,
+      "L"
+     ]
+    ],
+    "kind": [
+     "oat"
+    ],
+    "date": "2026-11-18",
+    "claims": [],
+    "excluded": [
+     []
+    ],
+    "avoid": [],
+    "fat": []
+   }
+  },
+  {
+   "id": "m-en-04",
+   "lang": "en",
+   "text": "Please send 50 litres of organic milk, 10 kg of cheese and 5 kg of butter on Friday",
+   "tags": [
+    "several items"
+   ],
+   "expect": {
+    "amount": [
+     [
+      50,
+      "L"
+     ]
+    ],
+    "kind": [
+     "milk",
+     "maito",
+     "mjolk"
+    ],
+    "date": "2026-11-20",
+    "claims": [
+     "organic"
+    ],
+    "excluded": [
+     []
+    ],
+    "avoid": [],
+    "fat": []
+   }
+  },
+  {
+   "id": "m-fi-01",
+   "lang": "fi",
+   "text": "40 litraa maitoa ja 15 kg voita perjantaiksi",
+   "tags": [
+    "several items"
+   ],
+   "expect": {
+    "amount": [
+     [
+      40,
+      "L"
+     ]
+    ],
+    "kind": [
+     "milk",
+     "maito",
+     "mjolk"
+    ],
+    "date": "2026-11-20",
+    "claims": [],
+    "excluded": [
+     []
+    ],
+    "avoid": [],
+    "fat": []
+   }
+  },
+  {
+   "id": "m-fi-02",
+   "lang": "fi",
+   "text": "Laktoositonta maitoa 120 litraa ja kermaa 10 litraa tiistaiksi",
+   "tags": [
+    "several items"
+   ],
+   "expect": {
+    "amount": [
+     [
+      120,
+      "L"
+     ]
+    ],
+    "kind": [
+     "milk",
+     "maito",
+     "mjolk"
+    ],
+    "date": "2026-11-17",
+    "claims": [
+     "lactose_free"
+    ],
+    "excluded": [
+     []
+    ],
+    "avoid": [],
+    "fat": []
+   }
+  },
+  {
+   "id": "m-fi-03",
+   "lang": "fi",
+   "text": "Huomiseksi 60 l maitoa, ja samat uudestaan torstaiksi",
+   "tags": [
+    "several items"
+   ],
+   "expect": {
+    "amount": [
+     [
+      60,
+      "L"
+     ]
+    ],
+    "kind": [
+     "milk",
+     "maito",
+     "mjolk"
+    ],
+    "date": "2026-11-15",
+    "claims": [],
+    "excluded": [
+     []
+    ],
+    "avoid": [],
+    "fat": []
+   }
+  },
+  {
+   "id": "m-sv-01",
+   "lang": "sv",
+   "text": "100 liter mjölk och 20 kg smör till måndag",
+   "tags": [
+    "several items"
+   ],
+   "expect": {
+    "amount": [
+     [
+      100,
+      "L"
+     ]
+    ],
+    "kind": [
+     "milk",
+     "maito",
+     "mjolk"
+    ],
+    "date": "2026-11-16",
+    "claims": [],
+    "excluded": [
+     []
+    ],
+    "avoid": [],
+    "fat": []
+   }
+  },
+  {
+   "id": "m-sv-02",
+   "lang": "sv",
+   "text": "Laktosfri mjölk 80 liter samt 12 kg yoghurt till onsdag",
+   "tags": [
+    "several items"
+   ],
+   "expect": {
+    "amount": [
+     [
+      80,
+      "L"
+     ]
+    ],
+    "kind": [
+     "milk",
+     "maito",
+     "mjolk"
+    ],
+    "date": "2026-11-18",
+    "claims": [
+     "lactose_free"
+    ],
+    "excluded": [
+     []
+    ],
+    "avoid": [],
+    "fat": []
+   }
+  },
+  {
+   "id": "m-sv-03",
+   "lang": "sv",
+   "text": "50 liter mjölk till tisdag och samma igen till fredag",
+   "tags": [
+    "several items"
+   ],
+   "expect": {
+    "amount": [
+     [
+      50,
+      "L"
+     ]
+    ],
+    "kind": [
+     "milk",
+     "maito",
+     "mjolk"
+    ],
+    "date": "2026-11-17",
+    "claims": [],
+    "excluded": [
+     []
+    ],
+    "avoid": [],
+    "fat": []
+   }
+  }
+ ]
+}

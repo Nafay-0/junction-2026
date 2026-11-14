@@ -1,5 +1,6 @@
 "use client";
 
+import { Check, ChevronDown } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Target } from "../../_ui/target";
 import { AgentNote, Button as KitButton, Plate, Spinner, type ButtonKind, type ButtonSize } from "../../_ui/kit";
@@ -17,7 +18,7 @@ export function Button(props: ButtonProps) {
   return <KitButton {...props} />;
 }
 
-/** A document: white paper with a petrol top rule. Gate documents carry the hazard band instead. */
+/** A document: a card. Gate documents carry the hazard band along their top edge. */
 export function Paper({ children, className = "", safety = false, agent = false }: { children: ReactNode; className?: string; safety?: boolean; agent?: boolean }) {
   return (
     <Plate className={className} tone={safety ? "gate" : agent ? "agent" : "paper"}>
@@ -61,35 +62,35 @@ export type StationState = "done" | "current" | "stopped" | "pending" | "skipped
 export function StationStrip({ states, label }: { states: Record<Station, StationState>; label?: string }) {
   const tx = useText(UI_TEXT);
   return (
-    <nav aria-label={tx.whereLabel} className="bg-paper">
+    <nav aria-label={tx.whereLabel} className="rounded-xl border border-line bg-paper px-4 py-3 sm:px-5 sm:py-4">
       <CompactStrip states={states} />
-      <ol className="hidden grid-cols-7 sm:grid">
+      <ol className="hidden items-center sm:flex">
         {STATIONS.map((s, i) => {
           const st = states[s];
           const word = tx.stations[s];
-          const look =
-            st === "current"
-              ? "bg-petrol-deep text-paper"
-              : st === "stopped"
-                ? "bg-safety-ink text-safety"
-                : st === "done"
-                  ? "bg-petrol-soft text-petrol-deep"
-                  : st === "skipped"
-                    ? "bg-paper text-ink-soft/70"
-                    : "bg-paper text-ink-soft";
+          const here = st === "current" || st === "stopped";
           return (
-            <li key={s} aria-current={st === "current" || st === "stopped" ? "step" : undefined} className={`relative flex min-h-[3.75rem] flex-col justify-center border-r border-paper px-1.5 py-2 last:border-r-0 sm:px-3 ${look}`}>
-              {st === "stopped" && <span aria-hidden className="hazard-thin absolute inset-x-0 top-0 h-1.5" />}
-              <span className="flex items-center gap-1.5">
+            <li key={s} aria-current={here ? "step" : undefined} className="flex min-w-0 flex-1 items-center last:flex-none">
+              <span className={`flex min-w-0 items-center gap-2 rounded-full py-1 pl-1 pr-3 ${st === "stopped" ? "bg-safety-ink text-safety" : st === "current" ? "bg-petrol-soft" : ""}`}>
                 {st === "stopped" ? (
-                  <Target size={18} tone="safety" className="hidden shrink-0 sm:block" />
+                  <span className="flex size-7 shrink-0 items-center justify-center">
+                    <Target size={20} tone="safety" />
+                  </span>
                 ) : (
-                  <span aria-hidden className={`hidden size-5 shrink-0 items-center justify-center text-[0.75rem] font-bold tabular sm:flex ${st === "current" ? "bg-lime text-ink" : st === "done" ? "bg-petrol text-paper" : "text-current"}`}>
-                    {st === "done" ? "✓" : i + 1}
+                  <span
+                    aria-hidden
+                    className={`flex size-7 shrink-0 items-center justify-center rounded-full text-[0.8rem] font-semibold tabular ${
+                      st === "current" ? "bg-petrol text-paper" : st === "done" ? "bg-petrol-soft text-petrol" : "border border-line-strong text-ink-soft"
+                    }`}
+                  >
+                    {st === "done" ? <Check size={15} strokeWidth={2.6} /> : i + 1}
                   </span>
                 )}
-                <span title={word.length > 9 ? word : undefined} className={`display truncate text-[0.95rem] ${word.length > 9 ? "sm:text-[1rem] lg:text-[1.08rem] 2xl:text-[1.25rem]" : "sm:text-[1.25rem]"} ${st === "skipped" ? "line-through decoration-1" : ""}`}>{word}</span>
+                <span title={word.length > 9 ? word : undefined} className={`truncate text-[0.9rem] ${here ? "font-semibold" : st === "skipped" ? "text-ink-faint line-through decoration-1" : st === "done" ? "text-ink" : "text-ink-soft"} ${st === "current" ? "text-petrol-deep" : ""}`}>
+                  {word}
+                </span>
               </span>
+              {i < STATIONS.length - 1 && <span aria-hidden className={`mx-1.5 h-px min-w-2 flex-1 ${st === "done" ? "bg-petrol/40" : "bg-line"}`} />}
               <span className="sr-only">{tx.srStep(i + 1, st)}</span>
             </li>
           );
@@ -107,16 +108,16 @@ function CompactStrip({ states }: { states: Record<Station, StationState> }) {
   const here = i >= 0 ? STATIONS[i] : undefined;
   const stopped = here ? states[here] === "stopped" : false;
   return (
-    <div className="px-3 py-2 sm:hidden" aria-hidden>
+    <div className="sm:hidden" aria-hidden>
       <div className="flex gap-1">
         {STATIONS.map((s) => (
-          <span key={s} className={`h-2 flex-1 ${states[s] === "stopped" ? "hazard-thin" : states[s] === "current" ? "bg-petrol-deep" : states[s] === "done" ? "bg-petrol" : "bg-line"}`} />
+          <span key={s} className={`h-1.5 flex-1 rounded-full ${states[s] === "stopped" ? "bg-safety" : states[s] === "current" ? "bg-petrol" : states[s] === "done" ? "bg-petrol/45" : "bg-line"}`} />
         ))}
       </div>
-      <p className="mt-1.5 flex flex-wrap items-center gap-x-2">
+      <p className="mt-2.5 flex flex-wrap items-center gap-x-2">
         {stopped && <Target size={18} tone="safety" />}
-        <span className="display text-[1.3rem]">{here ? tx.stations[here] : tx.stations.Request}</span>
-        <span className="text-[0.9rem] text-ink-soft">{here ? tx.compactStep(i + 1, stopped) : tx.nothingYet}</span>
+        <span className="display text-[1.2rem]">{here ? tx.stations[here] : tx.stations.Request}</span>
+        <span className="text-[0.875rem] text-ink-soft">{here ? tx.compactStep(i + 1, stopped) : tx.nothingYet}</span>
       </p>
     </div>
   );
@@ -161,40 +162,42 @@ function LaneRow({ n, st, open, last, current, onToggle }: { n: number; st: Lane
   const tx = useText(UI_TEXT);
   const id = `st-${st.key}`;
   const bodyId = `${id}-body`;
+  const dot = "flex size-9 items-center justify-center rounded-full text-[0.95rem] font-semibold tabular";
   const node =
     st.tone === "safety" ? (
-      <span className="flex size-10 items-center justify-center bg-safety-ink">
-        <Target size={30} tone="safety" />
+      <span className={`${dot} bg-safety-ink`}>
+        <Target size={22} tone="safety" />
       </span>
     ) : st.tone === "busy" ? (
-      <span className="flex size-10 items-center justify-center bg-petrol-deep text-paper">
-        <Spinner size={18} />
+      <span className={`${dot} bg-petrol-soft text-petrol`}>
+        <Spinner size={16} />
       </span>
     ) : current || st.tone === "active" ? (
-      <span className="display flex size-10 items-center justify-center bg-petrol-deep text-[1.35rem] text-paper tabular">{n}</span>
+      <span className={`${dot} bg-petrol text-paper shadow-sm`}>{n}</span>
     ) : (
-      <span className="display flex size-10 items-center justify-center border-2 border-petrol bg-paper text-[1.2rem] text-petrol tabular">{n}</span>
+      <span className={`${dot} border border-line-strong bg-paper text-ink-soft`}>{n}</span>
     );
   return (
-    <li id={id} className="lane-enter relative grid scroll-mt-28 grid-cols-[2rem_minmax(0,1fr)] gap-x-2.5 pb-5 sm:grid-cols-[3rem_minmax(0,1fr)] sm:gap-x-5">
+    <li id={id} className="lane-enter relative grid scroll-mt-28 grid-cols-[2.25rem_minmax(0,1fr)] gap-x-3 pb-6 sm:grid-cols-[2.25rem_minmax(0,1fr)] sm:gap-x-5">
       <div className="relative flex justify-center">
-        {!last && <span aria-hidden className={`absolute bottom-0 top-10 w-[3px] ${st.tone === "safety" ? "hazard-thin" : "bg-petrol/30"}`} />}
-        <span className="relative origin-top scale-[0.8] sm:scale-100">{node}</span>
+        {!last && <span aria-hidden className={`absolute bottom-0 top-10 w-0.5 rounded-full ${st.tone === "safety" ? "hazard-thin w-[3px]" : "bg-line"}`} />}
+        <span className="relative">{node}</span>
       </div>
       <section aria-labelledby={`${id}-h`} className="min-w-0">
-        <header className={`flex min-h-10 flex-wrap items-center gap-x-4 gap-y-1 ${open ? "mb-3" : ""}`}>
-          <h2 id={`${id}-h`} className="display text-[1.55rem] text-ink sm:text-[1.75rem]">
+        <header className={`flex min-h-9 flex-wrap items-center gap-x-4 gap-y-1 ${open ? "mb-3" : ""}`}>
+          <h2 id={`${id}-h`} className="display text-[1.3rem] text-ink sm:text-[1.45rem]">
             <span className="sr-only">{tx.srLaneStep(n)}</span>
             {st.title}
           </h2>
-          <span className="ml-auto flex items-center gap-4 sm:order-last">
+          <span className="ml-auto flex items-center gap-3 sm:order-last">
             {st.aside}
-            <button type="button" aria-expanded={open} aria-controls={bodyId} onClick={onToggle} className="min-h-10 text-[0.95rem] font-semibold text-petrol underline decoration-2 underline-offset-4 hover:text-petrol-deep">
+            <button type="button" aria-expanded={open} aria-controls={bodyId} onClick={onToggle} className="inline-flex min-h-9 items-center gap-1 rounded-full px-2.5 text-[0.875rem] font-medium text-petrol transition-colors hover:bg-petrol-soft pointer-coarse:min-h-11">
               {open ? tx.fold : tx.open}
+              <ChevronDown aria-hidden size={16} className={`transition-transform duration-200 motion-reduce:transition-none ${open ? "rotate-180" : ""}`} />
               <span className="sr-only"> {st.title}</span>
             </button>
           </span>
-          {!open && st.summary && <p className="basis-full truncate text-[1rem] text-ink-soft sm:min-w-0 sm:flex-1 sm:basis-auto">{st.summary}</p>}
+          {!open && st.summary && <p className="basis-full truncate text-[0.95rem] text-ink-soft sm:min-w-0 sm:flex-1 sm:basis-auto">{st.summary}</p>}
         </header>
         <div id={bodyId} hidden={!open}>
           {st.body}

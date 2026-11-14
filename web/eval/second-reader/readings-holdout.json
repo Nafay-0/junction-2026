@@ -1,0 +1,4589 @@
+{
+ "anthropic:claude-opus-5-5~pre-merge": {
+  "h-en-02": {
+   "ok": true,
+   "need": {
+    "text": "3 crates of lactose-free yoghurt for tomorrow please",
+    "item": {
+     "text": "lactose-free yoghurt",
+     "attributes": [
+      "lactose_free"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 3,
+     "unit": "pack"
+    },
+    "deliverBy": "2026-11-15",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 2561,
+   "costUsd": 0.014416
+  },
+  "h-en-03": {
+   "ok": true,
+   "need": {
+    "text": "We need 2.000 l of milk next Thursday",
+    "item": {
+     "text": "milk",
+     "attributes": [],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 2000,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-19",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 4157,
+   "costUsd": 0.018372
+  },
+  "h-en-01": {
+   "ok": true,
+   "need": {
+    "text": "Could you deliver 450 litres of whole milk on Wednesday?",
+    "item": {
+     "text": "whole milk",
+     "attributes": [
+      "whole"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 450,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-18",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 4354,
+   "costUsd": 0.01766
+  },
+  "h-en-04": {
+   "ok": true,
+   "need": {
+    "text": "No dairy, it's for a vegan event: 25 litres of oat cooking cream by Friday",
+    "item": {
+     "text": "oat cooking cream",
+     "attributes": [
+      "vegan"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 25,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-20",
+    "requiredClaims": [],
+    "forbiddenAllergens": [
+     "milk"
+    ],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 4585,
+   "costUsd": 0.018892
+  },
+  "h-en-05": {
+   "ok": true,
+   "need": {
+    "text": "18 kg of cottage cheese, organic, before Tuesday",
+    "item": {
+     "text": "cottage cheese",
+     "attributes": [
+      "organic"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 18,
+     "unit": "kg"
+    },
+    "deliverBy": "2026-11-16",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 3600,
+   "costUsd": 0.017932
+  },
+  "h-en-08": {
+   "ok": true,
+   "need": {
+    "text": "Order fifty litres of milk for Friday",
+    "item": {
+     "text": "milk",
+     "attributes": [],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 50,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-20",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 2234,
+   "costUsd": 0.014084
+  },
+  "h-en-06": {
+   "ok": true,
+   "need": {
+    "text": "Please order 120 x 1 l lactose free milk for Monday",
+    "item": {
+     "text": "lactose free milk",
+     "attributes": [
+      "lactose_free"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 120,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-16",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 3318,
+   "costUsd": 0.016892
+  },
+  "h-en-07": {
+   "ok": true,
+   "need": {
+    "text": "5 kg of grated mozzarella, gluten free, for the 19th",
+    "item": {
+     "text": "grated mozzarella",
+     "attributes": [
+      "grated",
+      "gluten_free"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 5,
+     "unit": "kg"
+    },
+    "deliverBy": "2026-11-19",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 3608,
+   "costUsd": 0.01826
+  },
+  "h-en-09": {
+   "ok": true,
+   "need": {
+    "text": "Need 1500 L of milk but NOT lactose free, by Tuesday",
+    "item": {
+     "text": "milk",
+     "attributes": [],
+     "excludedAttributes": [
+      "lactose_free"
+     ]
+    },
+    "quantity": {
+     "amount": 1500,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-17",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 1907,
+   "costUsd": 0.014268
+  },
+  "h-en-10": {
+   "ok": true,
+   "need": {
+    "text": "Two hundred litres of semi-skimmed milk, delivery the day after tomorrow",
+    "item": {
+     "text": "semi-skimmed milk",
+     "attributes": [
+      "fat_1_5"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 200,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-16",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 2491,
+   "costUsd": 0.014424
+  },
+  "h-fi-02": {
+   "ok": true,
+   "need": {
+    "text": "Kolme laatikkoa laktoositonta jogurttia huomiseksi",
+    "item": {
+     "text": "laktoositonta jogurttia",
+     "attributes": [
+      "lactose_free"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 3,
+     "unit": "pack"
+    },
+    "deliverBy": "2026-11-15",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 1983,
+   "costUsd": 0.014456
+  },
+  "h-fi-01": {
+   "ok": true,
+   "need": {
+    "text": "Tarvitsemme 750 litraa täysmaitoa keskiviikoksi",
+    "item": {
+     "text": "täysmaitoa",
+     "attributes": [
+      "whole_milk"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 750,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-18",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 3231,
+   "costUsd": 0.018304
+  },
+  "h-fi-03": {
+   "ok": true,
+   "need": {
+    "text": "2.000 l maitoa ensi torstaiksi",
+    "item": {
+     "text": "maitoa",
+     "attributes": [],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 2000,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-19",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 3481,
+   "costUsd": 0.01842
+  },
+  "h-fi-05": {
+   "ok": true,
+   "need": {
+    "text": "18 kg luomu raejuustoa tiistaiksi",
+    "item": {
+     "text": "luomu raejuustoa",
+     "attributes": [
+      "organic"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 18,
+     "unit": "kg"
+    },
+    "deliverBy": "2026-11-17",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 2283,
+   "costUsd": 0.015848
+  },
+  "h-fi-04": {
+   "ok": true,
+   "need": {
+    "text": "Vegaaninen tapahtuma, ei maitotuotteita: 25 litraa kaurakermaa perjantaiksi",
+    "item": {
+     "text": "kaurakermaa",
+     "attributes": [],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 25,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-20",
+    "requiredClaims": [
+     "vegan"
+    ],
+    "forbiddenAllergens": [
+     "milk"
+    ],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 3226,
+   "costUsd": 0.018464
+  },
+  "h-fi-06": {
+   "ok": true,
+   "need": {
+    "text": "120 x 1 l laktoositonta maitoa maanantaiksi",
+    "item": {
+     "text": "laktoositonta maitoa",
+     "attributes": [
+      "lactose_free"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 120,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-16",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 2691,
+   "costUsd": 0.016604
+  },
+  "h-fi-08": {
+   "ok": true,
+   "need": {
+    "text": "Viisikymmentä litraa maitoa perjantaiksi",
+    "item": {
+     "text": "maitoa",
+     "attributes": [],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 50,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-20",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 1369,
+   "costUsd": 0.014156
+  },
+  "h-fi-09": {
+   "ok": true,
+   "need": {
+    "text": "1500 l maitoa, EI laktoositonta, tiistaiksi",
+    "item": {
+     "text": "maitoa",
+     "attributes": [],
+     "excludedAttributes": [
+      "lactose_free"
+     ]
+    },
+    "quantity": {
+     "amount": 1500,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-17",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 1878,
+   "costUsd": 0.014308
+  },
+  "h-fi-07": {
+   "ok": true,
+   "need": {
+    "text": "5 kg gluteenitonta mozzarellaraastetta 19. päiväksi",
+    "item": {
+     "text": "gluteenitonta mozzarellaraastetta",
+     "attributes": [
+      "gluten_free"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 5,
+     "unit": "kg"
+    },
+    "deliverBy": "2026-11-19",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 3513,
+   "costUsd": 0.018064
+  },
+  "h-sv-02": {
+   "ok": true,
+   "need": {
+    "text": "Tre backar laktosfri yoghurt till i morgon",
+    "item": {
+     "text": "laktosfri yoghurt",
+     "attributes": [
+      "lactose_free"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 3,
+     "unit": "pack"
+    },
+    "deliverBy": "2026-11-15",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 1447,
+   "costUsd": 0.014408
+  },
+  "h-fi-10": {
+   "ok": true,
+   "need": {
+    "text": "Kaksisataa litraa kevytmaitoa ylihuomiseksi",
+    "item": {
+     "text": "kevytmaitoa",
+     "attributes": [
+      "fat_1_5"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 200,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-16",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 3119,
+   "costUsd": 0.017176
+  },
+  "h-sv-01": {
+   "ok": true,
+   "need": {
+    "text": "Kan ni leverera 450 liter standardmjölk på onsdag?",
+    "item": {
+     "text": "standardmjölk",
+     "attributes": [
+      "standard"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 450,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-18",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 4622,
+   "costUsd": 0.020988
+  },
+  "h-sv-05": {
+   "ok": true,
+   "need": {
+    "text": "18 kg ekologisk keso till tisdag",
+    "item": {
+     "text": "ekologisk keso",
+     "attributes": [
+      "organic"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 18,
+     "unit": "kg"
+    },
+    "deliverBy": "2026-11-17",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 1996,
+   "costUsd": 0.014272
+  },
+  "h-sv-04": {
+   "ok": true,
+   "need": {
+    "text": "Inga mjölkprodukter, vegansk fest: 25 liter havregrädde till fredag",
+    "item": {
+     "text": "havregrädde",
+     "attributes": [
+      "vegan"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 25,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-20",
+    "requiredClaims": [],
+    "forbiddenAllergens": [
+     "milk"
+    ],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 3541,
+   "costUsd": 0.01864
+  },
+  "h-sv-03": {
+   "ok": true,
+   "need": {
+    "text": "2.000 l mjölk nästa torsdag",
+    "item": {
+     "text": "mjölk",
+     "attributes": [],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 2000,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-19",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 4618,
+   "costUsd": 0.018932
+  },
+  "h-sv-09": {
+   "ok": true,
+   "need": {
+    "text": "1500 liter mjölk, INTE laktosfri, till tisdag",
+    "item": {
+     "text": "mjölk",
+     "attributes": [],
+     "excludedAttributes": [
+      "lactose_free"
+     ]
+    },
+    "quantity": {
+     "amount": 1500,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-17",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 1834,
+   "costUsd": 0.014304
+  },
+  "h-sv-08": {
+   "ok": true,
+   "need": {
+    "text": "Femtio liter mjölk till fredag",
+    "item": {
+     "text": "mjölk",
+     "attributes": [],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 50,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-20",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 2286,
+   "costUsd": 0.014124
+  },
+  "h-sv-07": {
+   "ok": true,
+   "need": {
+    "text": "5 kg glutenfri riven mozzarella till den 19:e",
+    "item": {
+     "text": "glutenfri riven mozzarella",
+     "attributes": [
+      "gluten_free",
+      "grated"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 5,
+     "unit": "kg"
+    },
+    "deliverBy": "2026-11-19",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 3474,
+   "costUsd": 0.018736
+  },
+  "h-sv-06": {
+   "ok": true,
+   "need": {
+    "text": "120 x 1 l laktosfri mjölk till måndag",
+    "item": {
+     "text": "laktosfri mjölk",
+     "attributes": [
+      "lactose_free",
+      "pack_size_1_l"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 120,
+     "unit": "pcs"
+    },
+    "deliverBy": "2026-11-16",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 5043,
+   "costUsd": 0.021268
+  },
+  "h-sv-10": {
+   "ok": true,
+   "need": {
+    "text": "Tvåhundra liter lättmjölk till i övermorgon",
+    "item": {
+     "text": "lättmjölk",
+     "attributes": [
+      "fat_1_5"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 200,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-16",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 3262,
+   "costUsd": 0.017516
+  }
+ },
+ "featherless:nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16~transcribe-v3": {
+  "h-en-01": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "whole milk",
+    "amount": 450,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [
+     "lactose_free",
+     "low_lactose",
+     "organic",
+     "vegan",
+     "vegetarian"
+    ],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "wednesday",
+    "deliveryRelative": null
+   },
+   "ms": 1823,
+   "costUsd": 0.00006
+  },
+  "h-en-02": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "lactose-free yoghurt",
+    "amount": 3,
+    "unit": "pcs",
+    "packSize": null,
+    "wanted": [
+     "lactose_free"
+    ],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": "tomorrow"
+   },
+   "ms": 2057,
+   "costUsd": 0.000058
+  },
+  "h-en-03": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "milk",
+    "amount": 2000,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "thursday",
+    "deliveryRelative": null
+   },
+   "ms": 1196,
+   "costUsd": 0.000056
+  },
+  "h-en-04": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "oat cooking cream",
+    "amount": 25,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [
+     "vegan"
+    ],
+    "notWanted": [
+     "lactose_free"
+    ],
+    "avoid": [
+     "milk"
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": null
+   },
+   "ms": 1282,
+   "costUsd": 0.000058
+  },
+  "h-en-05": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "cottage cheese",
+    "amount": 18,
+    "unit": "kg",
+    "packSize": null,
+    "wanted": [
+     "organic"
+    ],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": {
+     "day": 18,
+     "month": 11
+    },
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": null
+   },
+   "ms": 1227,
+   "costUsd": 0.000059
+  },
+  "h-en-06": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "lactose free milk",
+    "amount": 120,
+    "unit": "pack",
+    "packSize": {
+     "amount": 120,
+     "unit": "L"
+    },
+    "wanted": [
+     "lactose_free"
+    ],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "monday",
+    "deliveryRelative": null
+   },
+   "ms": 1248,
+   "costUsd": 0.000062
+  },
+  "h-en-08": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "milk",
+    "amount": 50,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [
+     "lactose_free"
+    ],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": null
+   },
+   "ms": 1183,
+   "costUsd": 0.000056
+  },
+  "h-en-07": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "grated mozzarella",
+    "amount": 5,
+    "unit": "kg",
+    "packSize": null,
+    "wanted": [
+     "lactose_free",
+     "organic",
+     "vegan",
+     "vegetarian"
+    ],
+    "notWanted": [
+     "lactose_free",
+     "organic",
+     "vegan",
+     "vegetarian"
+    ],
+    "avoid": [
+     "gluten"
+    ],
+    "deliveryDate": {
+     "day": 19,
+     "month": null
+    },
+    "deliveryWeekday": null,
+    "deliveryRelative": null
+   },
+   "ms": 1560,
+   "costUsd": 0.000066
+  },
+  "h-en-10": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "semi-skimmed milk",
+    "amount": 200,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [
+     "lactose_free"
+    ],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": null,
+    "deliveryRelative": "day_after_tomorrow"
+   },
+   "ms": 1396,
+   "costUsd": 0.000058
+  },
+  "h-en-09": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "milk",
+    "amount": 1500,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [
+     "lactose_free"
+    ],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": null
+   },
+   "ms": 2007,
+   "costUsd": 0.000057
+  },
+  "h-fi-02": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "laktoositonta jogurttia",
+    "amount": 3,
+    "unit": "pcs",
+    "packSize": null,
+    "wanted": [
+     "lactose_free"
+    ],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "saturday",
+    "deliveryRelative": "tomorrow"
+   },
+   "ms": 1178,
+   "costUsd": 0.000058
+  },
+  "h-fi-01": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "täysmaitoa",
+    "amount": 750,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "wednesday",
+    "deliveryRelative": null
+   },
+   "ms": 2513,
+   "costUsd": 0.000057
+  },
+  "h-fi-03": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "maitoa",
+    "amount": 2000,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "thursday",
+    "deliveryRelative": null
+   },
+   "ms": 1260,
+   "costUsd": 0.000056
+  },
+  "h-fi-04": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "kaurakermaa",
+    "amount": 25,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [
+     "vegan"
+    ],
+    "notWanted": [
+     "lactose_free"
+    ],
+    "avoid": [
+     "milk"
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": null
+   },
+   "ms": 1246,
+   "costUsd": 0.000059
+  },
+  "h-fi-05": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "luomu raejuustoa",
+    "amount": 18,
+    "unit": "kg",
+    "packSize": null,
+    "wanted": [
+     "organic"
+    ],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": null
+   },
+   "ms": 1318,
+   "costUsd": 0.000057
+  },
+  "h-fi-06": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "laktoositonta maitoa",
+    "amount": 120,
+    "unit": "pack",
+    "packSize": {
+     "amount": 100,
+     "unit": "L"
+    },
+    "wanted": [
+     "lactose_free"
+    ],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "monday",
+    "deliveryRelative": null
+   },
+   "ms": 1334,
+   "costUsd": 0.000062
+  },
+  "h-fi-07": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "gluteenitonta mozzarellaraastetta",
+    "amount": 5,
+    "unit": "kg",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [
+     "lactose_free",
+     "low_lactose",
+     "organic",
+     "vegan",
+     "vegetarian"
+    ],
+    "avoid": [
+     "gluten"
+    ],
+    "deliveryDate": {
+     "day": 19,
+     "month": null
+    },
+    "deliveryWeekday": null,
+    "deliveryRelative": null
+   },
+   "ms": 1968,
+   "costUsd": 0.000065
+  },
+  "h-fi-08": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "maito",
+    "amount": 50,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": null
+   },
+   "ms": 1500,
+   "costUsd": 0.000055
+  },
+  "h-fi-09": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "maitoa",
+    "amount": 1500,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [
+     "lactose_free"
+    ],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": null
+   },
+   "ms": 1288,
+   "costUsd": 0.000057
+  },
+  "h-fi-10": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "kevytmaitoa",
+    "amount": 200,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "saturday",
+    "deliveryRelative": "day_after_tomorrow"
+   },
+   "ms": 2309,
+   "costUsd": 0.000057
+  },
+  "h-sv-01": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "standardmjölk",
+    "amount": 450,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "wednesday",
+    "deliveryRelative": null
+   },
+   "ms": 1489,
+   "costUsd": 0.000056
+  },
+  "h-sv-03": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "mjölk",
+    "amount": 2000,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "thursday",
+    "deliveryRelative": null
+   },
+   "ms": 2377,
+   "costUsd": 0.000056
+  },
+  "h-sv-02": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "backar laktosfri yoghurt",
+    "amount": 3,
+    "unit": "pcs",
+    "packSize": null,
+    "wanted": [
+     "lactose_free"
+    ],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": "tomorrow"
+   },
+   "ms": 3301,
+   "costUsd": 0.000058
+  },
+  "h-sv-04": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "havregrädde",
+    "amount": 25,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [
+     "vegan"
+    ],
+    "notWanted": [],
+    "avoid": [
+     "milk"
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": null
+   },
+   "ms": 1269,
+   "costUsd": 0.000058
+  },
+  "h-sv-06": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "laktosfri mjölk",
+    "amount": 120,
+    "unit": "pack",
+    "packSize": {
+     "amount": 100,
+     "unit": "L"
+    },
+    "wanted": [
+     "lactose_free"
+    ],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "monday",
+    "deliveryRelative": null
+   },
+   "ms": 1295,
+   "costUsd": 0.000063
+  },
+  "h-sv-05": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "ekologisk keso",
+    "amount": 18,
+    "unit": "kg",
+    "packSize": null,
+    "wanted": [
+     "organic"
+    ],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": null
+   },
+   "ms": 1813,
+   "costUsd": 0.000056
+  },
+  "h-sv-08": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "mjölk",
+    "amount": 50,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": null
+   },
+   "ms": 1248,
+   "costUsd": 0.000056
+  },
+  "h-sv-07": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "glutenfri riven mozzarella",
+    "amount": 5,
+    "unit": "kg",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [
+     "lactose_free",
+     "low_lactose",
+     "organic",
+     "vegan",
+     "vegetarian"
+    ],
+    "avoid": [
+     "gluten"
+    ],
+    "deliveryDate": {
+     "day": 19,
+     "month": null
+    },
+    "deliveryWeekday": null,
+    "deliveryRelative": null
+   },
+   "ms": 1423,
+   "costUsd": 0.000065
+  },
+  "h-sv-10": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "lättmjölk",
+    "amount": 200,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "thursday",
+    "deliveryRelative": "day_after_tomorrow"
+   },
+   "ms": 1271,
+   "costUsd": 0.000057
+  },
+  "h-sv-09": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "mjölk",
+    "amount": 1500,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [
+     "lactose_free"
+    ],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": null
+   },
+   "ms": 1523,
+   "costUsd": 0.000057
+  }
+ },
+ "featherless:nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16~transcribe-v3@2": {
+  "h-en-01": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "whole milk",
+    "amount": 450,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [
+     "organic"
+    ],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "wednesday",
+    "deliveryRelative": null
+   },
+   "ms": 1103,
+   "costUsd": 0.000056
+  },
+  "h-en-02": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "lactose-free yoghurt",
+    "amount": 3,
+    "unit": "pcs",
+    "packSize": null,
+    "wanted": [
+     "lactose_free"
+    ],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": "tomorrow"
+   },
+   "ms": 1384,
+   "costUsd": 0.000058
+  },
+  "h-en-03": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "milk",
+    "amount": 2000,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "thursday",
+    "deliveryRelative": null
+   },
+   "ms": 1158,
+   "costUsd": 0.000056
+  },
+  "h-en-04": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "oat cooking cream",
+    "amount": 25,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [
+     "vegan"
+    ],
+    "notWanted": [
+     "lactose_free"
+    ],
+    "avoid": [
+     "milk"
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": null
+   },
+   "ms": 1086,
+   "costUsd": 0.000058
+  },
+  "h-en-05": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "cottage cheese",
+    "amount": 18,
+    "unit": "kg",
+    "packSize": null,
+    "wanted": [
+     "organic"
+    ],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": {
+     "day": 18,
+     "month": 11
+    },
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": null
+   },
+   "ms": 1356,
+   "costUsd": 0.000059
+  },
+  "h-en-06": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "lactose free milk",
+    "amount": 120,
+    "unit": "pack",
+    "packSize": {
+     "amount": 120,
+     "unit": "L"
+    },
+    "wanted": [
+     "lactose_free"
+    ],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "monday",
+    "deliveryRelative": null
+   },
+   "ms": 1299,
+   "costUsd": 0.000062
+  },
+  "h-en-07": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "grated mozzarella",
+    "amount": 5,
+    "unit": "kg",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [
+     "lactose_free",
+     "low_lactose",
+     "organic",
+     "vegan",
+     "vegetarian"
+    ],
+    "avoid": [
+     "gluten"
+    ],
+    "deliveryDate": {
+     "day": 19,
+     "month": null
+    },
+    "deliveryWeekday": null,
+    "deliveryRelative": null
+   },
+   "ms": 1367,
+   "costUsd": 0.000064
+  },
+  "h-en-08": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "milk",
+    "amount": 50,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": null
+   },
+   "ms": 1413,
+   "costUsd": 0.000055
+  },
+  "h-en-09": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "milk",
+    "amount": 1500,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [
+     "lactose_free"
+    ],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": null
+   },
+   "ms": 1107,
+   "costUsd": 0.000057
+  },
+  "h-en-10": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "semi-skimmed milk",
+    "amount": 200,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [
+     "lactose_free"
+    ],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": null,
+    "deliveryRelative": "day_after_tomorrow"
+   },
+   "ms": 1309,
+   "costUsd": 0.000058
+  },
+  "h-fi-01": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "täysmaito",
+    "amount": 750,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "wednesday",
+    "deliveryRelative": null
+   },
+   "ms": 1184,
+   "costUsd": 0.000056
+  },
+  "h-fi-02": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "laktoositonta jogurttia",
+    "amount": 3,
+    "unit": "pcs",
+    "packSize": null,
+    "wanted": [
+     "lactose_free"
+    ],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "saturday",
+    "deliveryRelative": "tomorrow"
+   },
+   "ms": 1835,
+   "costUsd": 0.000058
+  },
+  "h-fi-03": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "maito",
+    "amount": 2000,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "thursday",
+    "deliveryRelative": null
+   },
+   "ms": 2144,
+   "costUsd": 0.000056
+  },
+  "h-fi-04": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "kaurakermaa",
+    "amount": 25,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [
+     "vegan"
+    ],
+    "notWanted": [
+     "lactose_free"
+    ],
+    "avoid": [
+     "milk"
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": null
+   },
+   "ms": 1254,
+   "costUsd": 0.000059
+  },
+  "h-fi-05": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "luomu raejuustoa",
+    "amount": 18,
+    "unit": "kg",
+    "packSize": null,
+    "wanted": [
+     "organic"
+    ],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": null
+   },
+   "ms": 1255,
+   "costUsd": 0.000057
+  },
+  "h-fi-06": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "laktoositonta maitoa",
+    "amount": 120,
+    "unit": "pack",
+    "packSize": {
+     "amount": 120,
+     "unit": "L"
+    },
+    "wanted": [
+     "lactose_free"
+    ],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "monday",
+    "deliveryRelative": null
+   },
+   "ms": 1362,
+   "costUsd": 0.000062
+  },
+  "h-fi-07": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "gluteenitonta mozzarellaraastetta",
+    "amount": 5,
+    "unit": "kg",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [
+     "lactose_free"
+    ],
+    "avoid": [
+     "gluten"
+    ],
+    "deliveryDate": {
+     "day": 19,
+     "month": null
+    },
+    "deliveryWeekday": null,
+    "deliveryRelative": null
+   },
+   "ms": 1534,
+   "costUsd": 0.000062
+  },
+  "h-fi-08": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "maito",
+    "amount": 50,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": null
+   },
+   "ms": 1272,
+   "costUsd": 0.000055
+  },
+  "h-fi-10": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "kevytmaitoa",
+    "amount": 200,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "saturday",
+    "deliveryRelative": "day_after_tomorrow"
+   },
+   "ms": 1430,
+   "costUsd": 0.000057
+  },
+  "h-fi-09": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "maitoa",
+    "amount": 1500,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [
+     "lactose_free"
+    ],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": null
+   },
+   "ms": 1532,
+   "costUsd": 0.000057
+  },
+  "h-sv-02": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "backar laktosfri yoghurt",
+    "amount": 3,
+    "unit": "pcs",
+    "packSize": null,
+    "wanted": [
+     "lactose_free"
+    ],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": "tomorrow"
+   },
+   "ms": 1149,
+   "costUsd": 0.000058
+  },
+  "h-sv-01": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "standardmjölk",
+    "amount": 450,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "wednesday",
+    "deliveryRelative": null
+   },
+   "ms": 1332,
+   "costUsd": 0.000056
+  },
+  "h-sv-03": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "mjölk",
+    "amount": 2000,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "thursday",
+    "deliveryRelative": null
+   },
+   "ms": 1339,
+   "costUsd": 0.000056
+  },
+  "h-sv-04": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "havregrädde",
+    "amount": 25,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [
+     "vegan"
+    ],
+    "notWanted": [],
+    "avoid": [
+     "milk"
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": null
+   },
+   "ms": 1678,
+   "costUsd": 0.000058
+  },
+  "h-sv-05": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "ekologisk keso",
+    "amount": 18,
+    "unit": "kg",
+    "packSize": null,
+    "wanted": [
+     "organic"
+    ],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": null
+   },
+   "ms": 1387,
+   "costUsd": 0.000056
+  },
+  "h-sv-06": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "laktosfri mjölk",
+    "amount": 120,
+    "unit": "pack",
+    "packSize": {
+     "amount": 100,
+     "unit": "L"
+    },
+    "wanted": [
+     "lactose_free"
+    ],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "monday",
+    "deliveryRelative": null
+   },
+   "ms": 1793,
+   "costUsd": 0.000063
+  },
+  "h-sv-07": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "glutenfri riven mozzarella",
+    "amount": 5,
+    "unit": "kg",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [],
+    "avoid": [
+     "gluten"
+    ],
+    "deliveryDate": {
+     "day": 19,
+     "month": null
+    },
+    "deliveryWeekday": null,
+    "deliveryRelative": null
+   },
+   "ms": 1625,
+   "costUsd": 0.00006
+  },
+  "h-sv-08": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "mjölk",
+    "amount": 50,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": null
+   },
+   "ms": 1239,
+   "costUsd": 0.000056
+  },
+  "h-sv-09": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "mjölk",
+    "amount": 1500,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [
+     "lactose_free"
+    ],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": null
+   },
+   "ms": 1507,
+   "costUsd": 0.000057
+  },
+  "h-sv-10": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "item": "lättmjölk",
+    "amount": 200,
+    "unit": "L",
+    "packSize": null,
+    "wanted": [],
+    "notWanted": [],
+    "avoid": [],
+    "deliveryDate": null,
+    "deliveryWeekday": "thursday",
+    "deliveryRelative": "day_after_tomorrow"
+   },
+   "ms": 1223,
+   "costUsd": 0.000057
+  }
+ },
+ "featherless:nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16": {
+  "h-en-01": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1082
+  },
+  "h-en-02": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1183
+  },
+  "h-en-03": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1404
+  },
+  "h-en-04": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1124
+  },
+  "h-en-05": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1138
+  },
+  "h-en-06": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1273
+  },
+  "h-en-07": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1986
+  },
+  "h-en-08": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 2309
+  },
+  "h-en-09": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1618
+  },
+  "h-en-10": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1193
+  },
+  "h-fi-01": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1081
+  },
+  "h-fi-02": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1079
+  },
+  "h-fi-03": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1015
+  },
+  "h-fi-04": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1158
+  },
+  "h-fi-05": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 990
+  },
+  "h-fi-06": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1161
+  },
+  "h-fi-07": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 997
+  },
+  "h-fi-08": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1250
+  },
+  "h-fi-09": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1158
+  },
+  "h-fi-10": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1158
+  },
+  "h-sv-01": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1240
+  },
+  "h-sv-02": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1168
+  },
+  "h-sv-03": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1100
+  },
+  "h-sv-04": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1500
+  },
+  "h-sv-05": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1071
+  },
+  "h-sv-06": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1219
+  },
+  "h-sv-07": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1168
+  },
+  "h-sv-08": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1030
+  },
+  "h-sv-09": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1484
+  },
+  "h-sv-10": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1123
+  }
+ },
+ "featherless:nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16@2": {
+  "h-en-01": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1056
+  },
+  "h-en-02": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1076
+  },
+  "h-en-03": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1148
+  },
+  "h-en-04": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1097
+  },
+  "h-en-06": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1149
+  },
+  "h-en-05": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 2286
+  },
+  "h-en-07": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 2018
+  },
+  "h-en-08": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 2184
+  },
+  "h-en-09": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1347
+  },
+  "h-en-10": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1037
+  },
+  "h-fi-01": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1127
+  },
+  "h-fi-02": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1109
+  },
+  "h-fi-04": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1123
+  },
+  "h-fi-03": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1659
+  },
+  "h-fi-05": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1157
+  },
+  "h-fi-06": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1150
+  },
+  "h-fi-07": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1139
+  },
+  "h-fi-08": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1523
+  },
+  "h-fi-09": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1174
+  },
+  "h-fi-10": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1285
+  },
+  "h-sv-02": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1109
+  },
+  "h-sv-01": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 2049
+  },
+  "h-sv-03": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1177
+  },
+  "h-sv-04": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1098
+  },
+  "h-sv-06": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1088
+  },
+  "h-sv-05": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 2241
+  },
+  "h-sv-07": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1068
+  },
+  "h-sv-08": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1118
+  },
+  "h-sv-09": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1116
+  },
+  "h-sv-10": {
+   "ok": false,
+   "reason": "at_capacity",
+   "detail": "HTTP 429: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16 is temporarily at capacity. Please try again shortly.",
+   "ms": 1524
+  }
+ },
+ "anthropic:claude-opus-5-5": {
+  "h-en-02": {
+   "ok": true,
+   "need": {
+    "text": "3 crates of lactose-free yoghurt for tomorrow please",
+    "item": {
+     "text": "lactose-free yoghurt",
+     "attributes": [
+      "lactose_free"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 3,
+     "unit": "pack"
+    },
+    "deliverBy": "2026-11-15",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 2206,
+   "costUsd": 0.014416
+  },
+  "h-en-03": {
+   "ok": true,
+   "need": {
+    "text": "We need 2.000 l of milk next Thursday",
+    "item": {
+     "text": "milk",
+     "attributes": [],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 2000,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-19",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 3833,
+   "costUsd": 0.018452
+  },
+  "h-en-01": {
+   "ok": true,
+   "need": {
+    "text": "Could you deliver 450 litres of whole milk on Wednesday?",
+    "item": {
+     "text": "whole milk",
+     "attributes": [
+      "whole"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 450,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-18",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 4581,
+   "costUsd": 0.01822
+  },
+  "h-en-04": {
+   "ok": true,
+   "need": {
+    "text": "No dairy, it's for a vegan event: 25 litres of oat cooking cream by Friday",
+    "item": {
+     "text": "oat cooking cream",
+     "attributes": [
+      "vegan"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 25,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-20",
+    "requiredClaims": [],
+    "forbiddenAllergens": [
+     "milk"
+    ],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 4788,
+   "costUsd": 0.019052
+  },
+  "h-en-07": {
+   "ok": true,
+   "need": {
+    "text": "5 kg of grated mozzarella, gluten free, for the 19th",
+    "item": {
+     "text": "grated mozzarella",
+     "attributes": [
+      "gluten_free"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 5,
+     "unit": "kg"
+    },
+    "deliverBy": "2026-11-19",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 1638,
+   "costUsd": 0.01436
+  },
+  "h-en-05": {
+   "ok": true,
+   "need": {
+    "text": "18 kg of cottage cheese, organic, before Tuesday",
+    "item": {
+     "text": "cottage cheese",
+     "attributes": [
+      "organic"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 18,
+     "unit": "kg"
+    },
+    "deliverBy": "2026-11-16",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 4115,
+   "costUsd": 0.018072
+  },
+  "h-en-08": {
+   "ok": true,
+   "need": {
+    "text": "Order fifty litres of milk for Friday",
+    "item": {
+     "text": "milk",
+     "attributes": [],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 50,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-20",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 1573,
+   "costUsd": 0.014084
+  },
+  "h-en-06": {
+   "ok": true,
+   "need": {
+    "text": "Please order 120 x 1 l lactose free milk for Monday",
+    "item": {
+     "text": "lactose free milk",
+     "attributes": [
+      "lactose_free"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 120,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-16",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 3077,
+   "costUsd": 0.017072
+  },
+  "h-en-09": {
+   "ok": true,
+   "need": {
+    "text": "Need 1500 L of milk but NOT lactose free, by Tuesday",
+    "item": {
+     "text": "milk",
+     "attributes": [],
+     "excludedAttributes": [
+      "lactose_free"
+     ]
+    },
+    "quantity": {
+     "amount": 1500,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-17",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 2045,
+   "costUsd": 0.014268
+  },
+  "h-en-10": {
+   "ok": true,
+   "need": {
+    "text": "Two hundred litres of semi-skimmed milk, delivery the day after tomorrow",
+    "item": {
+     "text": "semi-skimmed milk",
+     "attributes": [
+      "fat_1_5"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 200,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-16",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 2296,
+   "costUsd": 0.014424
+  },
+  "h-fi-02": {
+   "ok": true,
+   "need": {
+    "text": "Kolme laatikkoa laktoositonta jogurttia huomiseksi",
+    "item": {
+     "text": "laktoositonta jogurttia",
+     "attributes": [
+      "lactose_free"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 3,
+     "unit": "pack"
+    },
+    "deliverBy": "2026-11-15",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 2182,
+   "costUsd": 0.014456
+  },
+  "h-fi-01": {
+   "ok": true,
+   "need": {
+    "text": "Tarvitsemme 750 litraa täysmaitoa keskiviikoksi",
+    "item": {
+     "text": "täysmaitoa",
+     "attributes": [
+      "whole_milk"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 750,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-18",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 3617,
+   "costUsd": 0.018384
+  },
+  "h-fi-05": {
+   "ok": true,
+   "need": {
+    "text": "18 kg luomu raejuustoa tiistaiksi",
+    "item": {
+     "text": "luomu raejuustoa",
+     "attributes": [
+      "organic"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 18,
+     "unit": "kg"
+    },
+    "deliverBy": "2026-11-17",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 2389,
+   "costUsd": 0.016508
+  },
+  "h-fi-03": {
+   "ok": true,
+   "need": {
+    "text": "2.000 l maitoa ensi torstaiksi",
+    "item": {
+     "text": "maitoa",
+     "attributes": [],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 2000,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-19",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 3211,
+   "costUsd": 0.01812
+  },
+  "h-fi-04": {
+   "ok": true,
+   "need": {
+    "text": "Vegaaninen tapahtuma, ei maitotuotteita: 25 litraa kaurakermaa perjantaiksi",
+    "item": {
+     "text": "kaurakermaa",
+     "attributes": [
+      "vegan"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 25,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-20",
+    "requiredClaims": [],
+    "forbiddenAllergens": [
+     "milk"
+    ],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 4008,
+   "costUsd": 0.019884
+  },
+  "h-fi-08": {
+   "ok": true,
+   "need": {
+    "text": "Viisikymmentä litraa maitoa perjantaiksi",
+    "item": {
+     "text": "maitoa",
+     "attributes": [],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 50,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-20",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 1491,
+   "costUsd": 0.014156
+  },
+  "h-fi-06": {
+   "ok": true,
+   "need": {
+    "text": "120 x 1 l laktoositonta maitoa maanantaiksi",
+    "item": {
+     "text": "laktoositonta maitoa",
+     "attributes": [
+      "lactose_free"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 120,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-16",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 3110,
+   "costUsd": 0.016904
+  },
+  "h-fi-09": {
+   "ok": true,
+   "need": {
+    "text": "1500 l maitoa, EI laktoositonta, tiistaiksi",
+    "item": {
+     "text": "maitoa",
+     "attributes": [],
+     "excludedAttributes": [
+      "lactose_free"
+     ]
+    },
+    "quantity": {
+     "amount": 1500,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-17",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 2207,
+   "costUsd": 0.014308
+  },
+  "h-fi-07": {
+   "ok": true,
+   "need": {
+    "text": "5 kg gluteenitonta mozzarellaraastetta 19. päiväksi",
+    "item": {
+     "text": "gluteenitonta mozzarellaraastetta",
+     "attributes": [
+      "gluten_free"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 5,
+     "unit": "kg"
+    },
+    "deliverBy": "2026-11-19",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 3877,
+   "costUsd": 0.019084
+  },
+  "h-fi-10": {
+   "ok": true,
+   "need": {
+    "text": "Kaksisataa litraa kevytmaitoa ylihuomiseksi",
+    "item": {
+     "text": "kevytmaitoa",
+     "attributes": [
+      "fat_1_5"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 200,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-16",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 2760,
+   "costUsd": 0.016576
+  },
+  "h-sv-01": {
+   "ok": true,
+   "need": {
+    "text": "Kan ni leverera 450 liter standardmjölk på onsdag?",
+    "item": {
+     "text": "standardmjölk",
+     "attributes": [],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 450,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-18",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 3255,
+   "costUsd": 0.017788
+  },
+  "h-sv-02": {
+   "ok": true,
+   "need": {
+    "text": "Tre backar laktosfri yoghurt till i morgon",
+    "item": {
+     "text": "laktosfri yoghurt",
+     "attributes": [
+      "lactose_free"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 3,
+     "unit": "pack"
+    },
+    "deliverBy": "2026-11-15",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 1523,
+   "costUsd": 0.014408
+  },
+  "h-sv-05": {
+   "ok": true,
+   "need": {
+    "text": "18 kg ekologisk keso till tisdag",
+    "item": {
+     "text": "ekologisk keso",
+     "attributes": [
+      "organic"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 18,
+     "unit": "kg"
+    },
+    "deliverBy": "2026-11-17",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 2142,
+   "costUsd": 0.014272
+  },
+  "h-sv-06": {
+   "ok": true,
+   "need": {
+    "text": "120 x 1 l laktosfri mjölk till måndag",
+    "item": {
+     "text": "laktosfri mjölk",
+     "attributes": [
+      "lactose_free"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 120,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-16",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 2591,
+   "costUsd": 0.016368
+  },
+  "h-sv-03": {
+   "ok": true,
+   "need": {
+    "text": "2.000 l mjölk nästa torsdag",
+    "item": {
+     "text": "mjölk",
+     "attributes": [],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 2000,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-19",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 4347,
+   "costUsd": 0.020212
+  },
+  "h-sv-04": {
+   "ok": true,
+   "need": {
+    "text": "Inga mjölkprodukter, vegansk fest: 25 liter havregrädde till fredag",
+    "item": {
+     "text": "havregrädde",
+     "attributes": [
+      "vegan"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 25,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-20",
+    "requiredClaims": [],
+    "forbiddenAllergens": [
+     "milk"
+    ],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 3796,
+   "costUsd": 0.01972
+  },
+  "h-sv-08": {
+   "ok": true,
+   "need": {
+    "text": "Femtio liter mjölk till fredag",
+    "item": {
+     "text": "mjölk",
+     "attributes": [],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 50,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-20",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 1559,
+   "costUsd": 0.014124
+  },
+  "h-sv-09": {
+   "ok": true,
+   "need": {
+    "text": "1500 liter mjölk, INTE laktosfri, till tisdag",
+    "item": {
+     "text": "mjölk",
+     "attributes": [],
+     "excludedAttributes": [
+      "lactose_free"
+     ]
+    },
+    "quantity": {
+     "amount": 1500,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-17",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 1699,
+   "costUsd": 0.014304
+  },
+  "h-sv-07": {
+   "ok": true,
+   "need": {
+    "text": "5 kg glutenfri riven mozzarella till den 19:e",
+    "item": {
+     "text": "glutenfri riven mozzarella",
+     "attributes": [
+      "gluten_free",
+      "grated"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 5,
+     "unit": "kg"
+    },
+    "deliverBy": "2026-11-19",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 2322,
+   "costUsd": 0.014516
+  },
+  "h-sv-10": {
+   "ok": true,
+   "need": {
+    "text": "Tvåhundra liter lättmjölk till i övermorgon",
+    "item": {
+     "text": "lättmjölk",
+     "attributes": [
+      "fat_1_5"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 200,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-16",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 2921,
+   "costUsd": 0.017796
+  }
+ },
+ "featherless:nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16": {
+  "h-en-01": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "whole milk",
+      "amount": 450,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "wednesday",
+    "deliveryRelative": null
+   },
+   "ms": 1208,
+   "costUsd": 0.00006
+  },
+  "h-en-02": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "lactose-free yoghurt",
+      "amount": 3,
+      "unit": "pcs",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": "tomorrow"
+   },
+   "ms": 1513,
+   "costUsd": 0.000062
+  },
+  "h-en-03": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "milk",
+      "amount": 2000,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "thursday",
+    "deliveryRelative": null
+   },
+   "ms": 1267,
+   "costUsd": 0.000061
+  },
+  "h-en-04": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "oat cooking cream",
+      "amount": 25,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [
+       "vegan"
+      ],
+      "notWanted": [
+       "lactose_free"
+      ],
+      "avoid": [
+       "milk",
+       "eggs",
+       "gluten",
+       "wheat",
+       "nuts",
+       "peanuts",
+       "soy",
+       "fish",
+       "crustaceans",
+       "molluscs",
+       "sesame",
+       "mustard",
+       "celery",
+       "lupin",
+       "sulphites",
+       "oats"
+      ]
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": null
+   },
+   "ms": 1491,
+   "costUsd": 0.000076
+  },
+  "h-en-05": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "cottage cheese",
+      "amount": 18,
+      "unit": "kg",
+      "packSize": null,
+      "wanted": [
+       "organic"
+      ],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": null
+   },
+   "ms": 1198,
+   "costUsd": 0.000061
+  },
+  "h-en-06": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "lactose free milk",
+      "amount": 120,
+      "unit": "pack",
+      "packSize": {
+       "amount": 120,
+       "unit": "L"
+      },
+      "wanted": [
+       "lactose_free"
+      ],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": {
+     "day": 16,
+     "month": 11
+    },
+    "deliveryWeekday": "monday",
+    "deliveryRelative": null
+   },
+   "ms": 1359,
+   "costUsd": 0.00007
+  },
+  "h-en-07": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "grated mozzarella",
+      "amount": 5,
+      "unit": "kg",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": [
+       "gluten"
+      ]
+     }
+    ],
+    "deliveryDate": {
+     "day": 19,
+     "month": null
+    },
+    "deliveryWeekday": null,
+    "deliveryRelative": null
+   },
+   "ms": 1156,
+   "costUsd": 0.000064
+  },
+  "h-en-08": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "milk",
+      "amount": 50,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": null
+   },
+   "ms": 1150,
+   "costUsd": 0.00006
+  },
+  "h-en-09": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "milk",
+      "amount": 1500,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [
+       "lactose_free"
+      ],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": null
+   },
+   "ms": 1075,
+   "costUsd": 0.000062
+  },
+  "h-en-10": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "semi-skimmed milk",
+      "amount": 200,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": {
+     "day": 2,
+     "month": null
+    },
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": "day_after_tomorrow"
+   },
+   "ms": 1410,
+   "costUsd": 0.000064
+  },
+  "h-fi-01": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "täysmaitoa",
+      "amount": 750,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "wednesday",
+    "deliveryRelative": null
+   },
+   "ms": 2023,
+   "costUsd": 0.000062
+  },
+  "h-fi-02": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "laktoositonta jogurttia",
+      "amount": 3,
+      "unit": "pcs",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "saturday",
+    "deliveryRelative": "tomorrow"
+   },
+   "ms": 1434,
+   "costUsd": 0.000062
+  },
+  "h-fi-04": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "kaurakermaa",
+      "amount": 25,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [
+       "vegan"
+      ],
+      "notWanted": [
+       "lactose_free"
+      ],
+      "avoid": [
+       "milk"
+      ]
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": null
+   },
+   "ms": 1127,
+   "costUsd": 0.000064
+  },
+  "h-fi-03": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "maitoa",
+      "amount": 2000,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "thursday",
+    "deliveryRelative": null
+   },
+   "ms": 2156,
+   "costUsd": 0.000061
+  },
+  "h-fi-05": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "luomu raejuustoa",
+      "amount": 18,
+      "unit": "kg",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": null
+   },
+   "ms": 1152,
+   "costUsd": 0.000061
+  },
+  "h-fi-06": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "laktoositonta maitoa",
+      "amount": 120,
+      "unit": "pack",
+      "packSize": {
+       "amount": 100,
+       "unit": "L"
+      },
+      "wanted": [
+       "lactose_free"
+      ],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "monday",
+    "deliveryRelative": null
+   },
+   "ms": 1676,
+   "costUsd": 0.000067
+  },
+  "h-fi-07": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "gluteenitonta mozzarellaraastetta",
+      "amount": 5,
+      "unit": "kg",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": [
+       "gluten"
+      ]
+     }
+    ],
+    "deliveryDate": {
+     "day": 19,
+     "month": null
+    },
+    "deliveryWeekday": null,
+    "deliveryRelative": null
+   },
+   "ms": 1310,
+   "costUsd": 0.000066
+  },
+  "h-fi-09": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "maitoa",
+      "amount": 1500,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [
+       "lactose_free"
+      ],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": null
+   },
+   "ms": 1345,
+   "costUsd": 0.000062
+  },
+  "h-fi-08": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "maito",
+      "amount": 50,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": null
+   },
+   "ms": 1871,
+   "costUsd": 0.00006
+  },
+  "h-fi-10": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "kevytmaito",
+      "amount": 200,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "saturday",
+    "deliveryRelative": "day_after_tomorrow"
+   },
+   "ms": 1288,
+   "costUsd": 0.000062
+  },
+  "h-sv-01": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "standardmjölk",
+      "amount": 450,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "wednesday",
+    "deliveryRelative": null
+   },
+   "ms": 1618,
+   "costUsd": 0.000061
+  },
+  "h-sv-03": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "mjölk",
+      "amount": 2000,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "thursday",
+    "deliveryRelative": null
+   },
+   "ms": 1112,
+   "costUsd": 0.000061
+  },
+  "h-sv-02": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "backar laktosfri yoghurt",
+      "amount": 3,
+      "unit": "pcs",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": "tomorrow"
+   },
+   "ms": 1841,
+   "costUsd": 0.000062
+  },
+  "h-sv-04": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "havregrädde",
+      "amount": 25,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [
+       "vegan"
+      ],
+      "notWanted": [],
+      "avoid": [
+       "milk"
+      ]
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": null
+   },
+   "ms": 1246,
+   "costUsd": 0.000063
+  },
+  "h-sv-05": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "ekologisk keso",
+      "amount": 18,
+      "unit": "kg",
+      "packSize": null,
+      "wanted": [
+       "organic"
+      ],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": null
+   },
+   "ms": 1210,
+   "costUsd": 0.000061
+  },
+  "h-sv-07": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "glutenfri riven mozzarella",
+      "amount": 5,
+      "unit": "kg",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": [
+       "gluten"
+      ]
+     }
+    ],
+    "deliveryDate": {
+     "day": 19,
+     "month": null
+    },
+    "deliveryWeekday": null,
+    "deliveryRelative": null
+   },
+   "ms": 1395,
+   "costUsd": 0.000065
+  },
+  "h-sv-06": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "laktosfri mjölk",
+      "amount": 120,
+      "unit": "pack",
+      "packSize": {
+       "amount": 1,
+       "unit": "L"
+      },
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "monday",
+    "deliveryRelative": null
+   },
+   "ms": 2418,
+   "costUsd": 0.000065
+  },
+  "h-sv-08": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "mjölk",
+      "amount": 50,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": {
+     "day": 50,
+     "month": null
+    },
+    "deliveryWeekday": "friday",
+    "deliveryRelative": null
+   },
+   "ms": 2095,
+   "costUsd": 0.000063
+  },
+  "h-sv-09": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "mjölk",
+      "amount": 1500,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [
+       "lactose_free"
+      ],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": null
+   },
+   "ms": 1460,
+   "costUsd": 0.000062
+  },
+  "h-sv-10": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "lättmjölk",
+      "amount": 200,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "thursday",
+    "deliveryRelative": "day_after_tomorrow"
+   },
+   "ms": 1362,
+   "costUsd": 0.000062
+  }
+ },
+ "featherless:nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16@2": {
+  "h-en-01": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "whole milk",
+      "amount": 450,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "wednesday",
+    "deliveryRelative": null
+   },
+   "ms": 1246,
+   "costUsd": 0.00006
+  },
+  "h-en-02": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "lactose-free yoghurt",
+      "amount": 3,
+      "unit": "pcs",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": "tomorrow"
+   },
+   "ms": 1459,
+   "costUsd": 0.000062
+  },
+  "h-en-03": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "milk",
+      "amount": 2000,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "thursday",
+    "deliveryRelative": null
+   },
+   "ms": 1307,
+   "costUsd": 0.000061
+  },
+  "h-en-04": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "oat cooking cream",
+      "amount": 25,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [
+       "vegan"
+      ],
+      "notWanted": [
+       "lactose_free"
+      ],
+      "avoid": [
+       "milk",
+       "eggs",
+       "gluten",
+       "wheat",
+       "nuts",
+       "peanuts",
+       "soy",
+       "fish",
+       "crustaceans",
+       "molluscs",
+       "sesame",
+       "mustard",
+       "celery",
+       "lupin",
+       "sulphites",
+       "oats"
+      ]
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": null
+   },
+   "ms": 1351,
+   "costUsd": 0.000076
+  },
+  "h-en-05": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "cottage cheese",
+      "amount": 18,
+      "unit": "kg",
+      "packSize": null,
+      "wanted": [
+       "organic"
+      ],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": null
+   },
+   "ms": 1325,
+   "costUsd": 0.000061
+  },
+  "h-en-07": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "grated mozzarella",
+      "amount": 5,
+      "unit": "kg",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": [
+       "gluten"
+      ]
+     }
+    ],
+    "deliveryDate": {
+     "day": 19,
+     "month": null
+    },
+    "deliveryWeekday": null,
+    "deliveryRelative": null
+   },
+   "ms": 1276,
+   "costUsd": 0.000064
+  },
+  "h-en-08": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "milk",
+      "amount": 50,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": null
+   },
+   "ms": 1195,
+   "costUsd": 0.00006
+  },
+  "h-en-09": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "milk",
+      "amount": 1500,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [
+       "lactose_free"
+      ],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": null
+   },
+   "ms": 2344,
+   "costUsd": 0.000062
+  },
+  "h-en-10": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "semi-skimmed milk",
+      "amount": 200,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": {
+     "day": 2,
+     "month": null
+    },
+    "deliveryWeekday": "wednesday",
+    "deliveryRelative": "day_after_tomorrow"
+   },
+   "ms": 1368,
+   "costUsd": 0.000065
+  },
+  "h-en-06": {
+   "ok": false,
+   "reason": "unreadable",
+   "detail": "No object generated: could not parse the response.",
+   "ms": 6890
+  },
+  "h-fi-01": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "täysmaitoa",
+      "amount": 750,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "wednesday",
+    "deliveryRelative": null
+   },
+   "ms": 1095,
+   "costUsd": 0.000062
+  },
+  "h-fi-02": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "laktoositonta jogurttia",
+      "amount": 3,
+      "unit": "pcs",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "saturday",
+    "deliveryRelative": "tomorrow"
+   },
+   "ms": 1269,
+   "costUsd": 0.000062
+  },
+  "h-fi-03": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "maito",
+      "amount": 2000,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "thursday",
+    "deliveryRelative": null
+   },
+   "ms": 1101,
+   "costUsd": 0.000061
+  },
+  "h-fi-04": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "kaurakermaa",
+      "amount": 25,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [
+       "vegan"
+      ],
+      "notWanted": [
+       "lactose_free"
+      ],
+      "avoid": [
+       "milk"
+      ]
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": null
+   },
+   "ms": 1198,
+   "costUsd": 0.000064
+  },
+  "h-fi-05": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "luomu raejuustoa",
+      "amount": 18,
+      "unit": "kg",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": null
+   },
+   "ms": 2028,
+   "costUsd": 0.000061
+  },
+  "h-fi-06": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "laktoositonta maitoa",
+      "amount": 120,
+      "unit": "pack",
+      "packSize": {
+       "amount": 1,
+       "unit": "L"
+      },
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "monday",
+    "deliveryRelative": null
+   },
+   "ms": 1210,
+   "costUsd": 0.000065
+  },
+  "h-fi-07": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "gluteenitonta mozzarellaraastetta",
+      "amount": 5,
+      "unit": "kg",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": [
+       "gluten"
+      ]
+     }
+    ],
+    "deliveryDate": {
+     "day": 19,
+     "month": null
+    },
+    "deliveryWeekday": null,
+    "deliveryRelative": null
+   },
+   "ms": 1537,
+   "costUsd": 0.000066
+  },
+  "h-fi-08": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "maito",
+      "amount": 50,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": null
+   },
+   "ms": 1712,
+   "costUsd": 0.00006
+  },
+  "h-fi-09": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "maito",
+      "amount": 1500,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [
+       "lactose_free"
+      ],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": null
+   },
+   "ms": 1549,
+   "costUsd": 0.000062
+  },
+  "h-sv-01": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "standardmjölk",
+      "amount": 450,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "wednesday",
+    "deliveryRelative": null
+   },
+   "ms": 1657,
+   "costUsd": 0.000061
+  },
+  "h-fi-10": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "kevytmaito",
+      "amount": 200,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "saturday",
+    "deliveryRelative": "day_after_tomorrow"
+   },
+   "ms": 3032,
+   "costUsd": 0.000062
+  },
+  "h-sv-02": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "backar laktosfri yoghurt",
+      "amount": 3,
+      "unit": "pcs",
+      "packSize": null,
+      "wanted": [
+       "lactose_free"
+      ],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": "tomorrow"
+   },
+   "ms": 1174,
+   "costUsd": 0.000063
+  },
+  "h-sv-03": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "mjölk",
+      "amount": 2000,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "thursday",
+    "deliveryRelative": null
+   },
+   "ms": 1137,
+   "costUsd": 0.000061
+  },
+  "h-sv-05": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "ekologisk keso",
+      "amount": 18,
+      "unit": "kg",
+      "packSize": null,
+      "wanted": [
+       "organic"
+      ],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": null
+   },
+   "ms": 1250,
+   "costUsd": 0.000061
+  },
+  "h-sv-04": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "havregrädde",
+      "amount": 25,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [
+       "vegan"
+      ],
+      "notWanted": [],
+      "avoid": [
+       "milk"
+      ]
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": null
+   },
+   "ms": 1761,
+   "costUsd": 0.000063
+  },
+  "h-sv-06": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "laktosfri mjölk",
+      "amount": 120,
+      "unit": "pack",
+      "packSize": {
+       "amount": 1,
+       "unit": "L"
+      },
+      "wanted": [
+       "lactose_free"
+      ],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "monday",
+    "deliveryRelative": null
+   },
+   "ms": 1422,
+   "costUsd": 0.000067
+  },
+  "h-sv-07": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "glutenfri riven mozzarella",
+      "amount": 5,
+      "unit": "kg",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": [
+       "gluten"
+      ]
+     }
+    ],
+    "deliveryDate": {
+     "day": 19,
+     "month": null
+    },
+    "deliveryWeekday": null,
+    "deliveryRelative": null
+   },
+   "ms": 1972,
+   "costUsd": 0.000065
+  },
+  "h-sv-08": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "mjölk",
+      "amount": 50,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": null
+   },
+   "ms": 1437,
+   "costUsd": 0.00006
+  },
+  "h-sv-09": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "mjölk",
+      "amount": 1500,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [
+       "lactose_free"
+      ],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": null
+   },
+   "ms": 1388,
+   "costUsd": 0.000062
+  },
+  "h-sv-10": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "lättmjölk",
+      "amount": 200,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "thursday",
+    "deliveryRelative": "day_after_tomorrow"
+   },
+   "ms": 1251,
+   "costUsd": 0.000062
+  }
+ },
+ "anthropic:claude-opus-5-5~before-refresh": {
+  "h-fi-02": {
+   "ok": true,
+   "need": {
+    "text": "Kolme laatikkoa laktoositonta jogurttia huomiseksi",
+    "item": {
+     "text": "laktoositonta jogurttia",
+     "attributes": [
+      "lactose_free"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 3,
+     "unit": "pack"
+    },
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 1948,
+   "costUsd": 0.014456
+  },
+  "h-fi-10": {
+   "ok": true,
+   "need": {
+    "text": "Kaksisataa litraa kevytmaitoa ylihuomiseksi",
+    "item": {
+     "text": "kevytmaitoa",
+     "attributes": [
+      "fat_1_5"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 200,
+     "unit": "L"
+    },
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 2841,
+   "costUsd": 0.016856
+  },
+  "h-sv-07": {
+   "ok": true,
+   "need": {
+    "text": "5 kg glutenfri riven mozzarella till den 19:e",
+    "item": {
+     "text": "glutenfri riven mozzarella",
+     "attributes": [
+      "gluten_free",
+      "grated"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 5,
+     "unit": "kg"
+    },
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 2844,
+   "costUsd": 0.016836
+  }
+ }
+}

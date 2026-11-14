@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Check, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { Overview } from "@/server/ops/views";
 import { Target } from "../../_ui/target";
@@ -41,10 +42,10 @@ function Body({ o, now }: { o: Overview; now: number }) {
             title="No agent at the door"
             action={
               <>
-                <Link className="font-semibold text-petrol underline underline-offset-2" href="/k/kaari">
+                <Link className="font-semibold text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol" href="/k/kaari">
                   Open Ravintola Kaari&apos;s shop
                 </Link>
-                <Link className="font-semibold text-petrol underline underline-offset-2" href="/">
+                <Link className="font-semibold text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol" href="/">
                   Show the wall&apos;s join code
                 </Link>
               </>
@@ -82,16 +83,16 @@ function Body({ o, now }: { o: Overview; now: number }) {
                   <td className="max-w-[38ch]">
                     {a.suspended ? (
                       <p className="flex items-start gap-2">
-                        <span aria-hidden className="hazard-thin mt-1 size-3.5 shrink-0" />
+                        <span className="mt-0.5 shrink-0"><Target size={15} tone="safety" /></span>
                         <span>
                           <b>Suspended{a.suspended.scope === "org" ? " with its organisation" : ""}</b> since {when(a.suspended.since)}: <span className="text-ink-soft">“{a.suspended.reason}”</span>{" "}
-                          <Link href="/ops/control" className="font-semibold text-petrol underline underline-offset-2">
+                          <Link href="/ops/control" className="font-semibold text-petrol underline decoration-petrol/30 underline-offset-4">
                             Control
                           </Link>
                         </span>
                       </p>
                     ) : a.current ? (
-                      <Link href={`/ops/trace/${a.current.requestId}`} className="text-petrol underline decoration-line underline-offset-2 hover:decoration-petrol">
+                      <Link href={`/ops/trace/${a.current.requestId}`} className="text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol">
                         {fi(a.current.doing)}
                       </Link>
                     ) : (
@@ -100,7 +101,7 @@ function Body({ o, now }: { o: Overview; now: number }) {
                   </td>
                   <td className="text-right tabular">
                     {num(a.calls)}
-                    {a.refused > 0 && <span className="ml-2 whitespace-nowrap bg-safety-ink px-1.5 text-[0.8rem] font-semibold text-safety">{a.refused} refused</span>}
+                    {a.refused > 0 && <span className="ml-2 inline-block whitespace-nowrap rounded-full bg-safety-ink px-2 text-[0.76rem] font-semibold leading-5 text-safety">{a.refused} refused</span>}
                   </td>
                   <td className="whitespace-nowrap text-ink-soft tabular">{since(a.lastAt, now)}</td>
                 </tr>
@@ -155,33 +156,32 @@ function DoorsToGate({ o }: { o: Overview }) {
   const doorY = [50, 150, 250];
   const outY = [37.5, 112.5, 187.5, 262.5];
   return (
-    <section aria-labelledby="doors" className="bg-paper">
-      <div aria-hidden className="h-[3px] bg-petrol" />
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 px-5 pt-4">
-        <h2 id="doors" className="display text-[1.6rem]">
+    <section aria-labelledby="doors" className="overflow-hidden rounded-xl border border-line bg-paper">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-5 pt-5 sm:px-6">
+        <h2 id="doors" className="display text-[1.35rem] sm:text-[1.45rem]">
           Three doors, one gate
         </h2>
-        <p className="text-[0.88rem] text-ink-soft">
+        <p className="text-[0.86rem] text-ink-soft">
           {num(c.requests)} requests so far; {num(c.liveCalls)} calls to the live price service; {o.catalogue.kind === "valio" ? `the partner's catalogue, ${num(o.catalogue.products)} products` : `the seed catalogue, ${num(o.catalogue.products)} products`}
         </p>
       </div>
-      <div className="grid gap-y-4 px-5 pb-5 pt-4 lg:grid-cols-[minmax(0,1fr)_72px_minmax(0,0.9fr)_72px_minmax(0,1fr)] lg:gap-y-0">
+      <div className="grid gap-y-3 px-5 pb-6 pt-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_64px_minmax(0,0.9fr)_64px_minmax(0,1fr)] lg:gap-y-0">
         {/* doors */}
-        <ul className="grid grid-rows-3 gap-2">
+        <ul className="grid grid-rows-3 gap-2.5">
           {DOORS.map((v) => {
             const d = o.doors[v];
             return (
-              <li key={v} className={`flex items-center gap-3 border-2 px-3 py-2.5 transition-colors motion-reduce:transition-none ${lit[v] ? "border-petrol bg-petrol-soft" : "border-line"}`}>
-                <span className="flex size-10 shrink-0 items-center justify-center bg-mist text-petrol">
-                  <DoorGlyph via={v} size={18} />
+              <li key={v} className={`flex items-center gap-3 rounded-lg border px-3.5 py-3 transition-colors duration-300 motion-reduce:transition-none ${lit[v] ? "border-petrol bg-petrol-soft" : "border-line"}`}>
+                <span className={`flex size-10 shrink-0 items-center justify-center rounded-full transition-colors duration-300 ${lit[v] ? "bg-petrol text-paper" : "bg-surface text-petrol"}`}>
+                  <DoorGlyph via={v} size={16} />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block font-semibold leading-tight">{VIA[v].label}</span>
-                  <span className="block text-[0.84rem] leading-tight text-ink-soft">{VIA[v].how}</span>
+                  <span className="mt-0.5 block text-[0.82rem] leading-snug text-ink-soft">{VIA[v].how}</span>
                 </span>
                 <span className="shrink-0 text-right tabular">
-                  <span className="display block text-[1.6rem] leading-none">{num(d.calls)}</span>
-                  <span className="block text-[0.78rem] text-ink-soft">
+                  <span className="display block text-[1.45rem] leading-none">{num(d.calls)}</span>
+                  <span className="mt-0.5 block text-[0.74rem] text-ink-soft">
                     calls, {d.agents} agent{d.agents === 1 ? "" : "s"}
                   </span>
                 </span>
@@ -189,46 +189,47 @@ function DoorsToGate({ o }: { o: Overview }) {
             );
           })}
         </ul>
-        <svg viewBox="0 0 72 300" preserveAspectRatio="none" aria-hidden className="hidden h-full w-full lg:block">
+        <svg viewBox="0 0 64 300" preserveAspectRatio="none" aria-hidden className="hidden h-full w-full lg:block">
           {DOORS.map((v, i) => (
-            <path key={v} d={`M0 ${doorY[i]} C 40 ${doorY[i]}, 32 150, 72 150`} fill="none" stroke={lit[v] ? "var(--color-petrol)" : "var(--color-line)"} strokeWidth={lit[v] ? 5 : Math.max(2, Math.min(6, 1 + Math.log2(1 + o.doors[v].calls)))} vectorEffect="non-scaling-stroke" />
+            <path key={v} d={`M0 ${doorY[i]} C 36 ${doorY[i]}, 28 150, 64 150`} fill="none" strokeLinecap="round" stroke={lit[v] ? "var(--color-petrol)" : "var(--color-line-strong)"} strokeWidth={lit[v] ? 4 : Math.max(1.5, Math.min(5, 1 + Math.log2(1 + o.doors[v].calls) * 0.7))} vectorEffect="non-scaling-stroke" />
           ))}
         </svg>
         {/* the gate */}
-        <div className="on-dark flex flex-col justify-center bg-petrol-deep text-paper">
-          <div aria-hidden className="hazard h-2.5" />
-          <div className="px-5 py-4">
+        <div className="hazard-frame on-dark flex flex-col justify-center text-paper">
+          <div className="px-5 py-5">
             <p className="flex items-center gap-2.5">
-              <Target size={30} tone="chalk" />
-              <span className="display text-[2rem] leading-none">The gate</span>
+              <Target size={28} tone="safety" />
+              <span className="display text-[1.7rem] leading-none">The gate</span>
             </p>
-            <ol className="mt-3 space-y-1 text-[0.92rem] leading-snug text-paper/90">
-              <li>The mandate the kitchen signed, checked at the door.</li>
-              <li>Every rule, in plain code, on the exact order.</li>
-              <li>Above the mandate, a named person on their phone.</li>
+            <ol className="mt-4 space-y-2 text-[0.9rem] leading-snug text-paper/85">
+              {["The mandate the kitchen signed, checked at the door.", "Every rule, in plain code, on the exact order.", "Above the mandate, a named person on their phone."].map((line) => (
+                <li key={line} className="flex items-start gap-2">
+                  <Check aria-hidden size={15} strokeWidth={2.6} className="mt-[0.15em] shrink-0 text-lime" />
+                  {line}
+                </li>
+              ))}
             </ol>
-            <p className="mt-3 flex items-center gap-2 text-[0.88rem]">
-              <Target size={14} tone={o.chain.ok ? "chalk" : "safety"} />
+            <p className={`mt-4 inline-flex items-center gap-2 rounded-full px-3 py-1 text-[0.82rem] font-medium ${o.chain.ok ? "bg-paper/10 text-paper" : "bg-safety text-safety-ink"}`}>
+              {o.chain.ok ? <ShieldCheck aria-hidden size={15} className="text-lime" /> : <Target size={14} tone="safety" />}
               {o.chain.ok ? `Ledger intact, ${num(o.chain.length)} entries` : `Ledger chain broken: ${o.chain.message}`}
             </p>
           </div>
-          <div aria-hidden className="hazard h-2.5" />
         </div>
-        <svg viewBox="0 0 72 300" preserveAspectRatio="none" aria-hidden className="hidden h-full w-full lg:block">
+        <svg viewBox="0 0 64 300" preserveAspectRatio="none" aria-hidden className="hidden h-full w-full lg:block">
           {outs.map((x, i) => (
-            <path key={x.label} d={`M0 150 C 40 150, 32 ${outY[i]}, 72 ${outY[i]}`} fill="none" stroke={x.tone === "gate" ? "var(--color-safety-ink)" : x.tone === "person" ? "var(--color-safety)" : "var(--color-line)"} strokeWidth={Math.max(2, Math.min(6, 1 + Math.log2(1 + x.n)))} vectorEffect="non-scaling-stroke" />
+            <path key={x.label} d={`M0 150 C 36 150, 28 ${outY[i]}, 64 ${outY[i]}`} fill="none" strokeLinecap="round" stroke={x.tone === "gate" ? "var(--color-safety-ink)" : x.tone === "person" ? "var(--color-safety)" : "var(--color-line-strong)"} strokeWidth={Math.max(1.5, Math.min(5, 1 + Math.log2(1 + x.n) * 0.7))} vectorEffect="non-scaling-stroke" />
           ))}
         </svg>
         {/* what came out */}
-        <ul className="grid grid-rows-4 gap-2">
+        <ul className="grid grid-rows-4 gap-2.5">
           {outs.map((x) => (
             <li key={x.label}>
               <Link
                 href={x.href}
-                className={`flex h-full items-center gap-3 px-3 py-2 ${x.tone === "gate" ? "bg-safety-ink text-paper hover:bg-ink" : x.tone === "person" ? "border-l-[8px] border-safety bg-mist hover:bg-petrol-soft" : "bg-mist hover:bg-petrol-soft"}`}
+                className={`flex h-full items-center gap-3.5 rounded-lg px-3.5 py-2.5 transition-colors duration-150 ${x.tone === "gate" ? "bg-safety-ink text-paper hover:bg-ink" : x.tone === "person" ? "bg-safety-soft ring-1 ring-inset ring-safety/60 hover:bg-safety/30" : "bg-surface hover:bg-petrol-soft"}`}
               >
-                <span className={`display w-14 shrink-0 text-right text-[1.9rem] leading-none tabular ${x.tone === "gate" ? "text-safety" : ""}`}>{num(x.n)}</span>
-                <span className="text-[0.92rem] font-semibold leading-snug">{x.label}</span>
+                <span className={`display w-12 shrink-0 text-right text-[1.6rem] leading-none tabular ${x.tone === "gate" ? "text-safety" : ""}`}>{num(x.n)}</span>
+                <span className="text-[0.9rem] font-medium leading-snug">{x.label}</span>
               </Link>
             </li>
           ))}
@@ -286,9 +287,9 @@ function Sessions({ rows, now }: { rows: Overview["sessions"]; now: number }) {
           </thead>
           <tbody>
             {shown.map((r) => (
-              <tr key={r.requestId} onClick={() => router.push(`/ops/trace/${r.requestId}`)} className="cursor-pointer hover:bg-petrol-soft/50">
+              <tr key={r.requestId} onClick={() => router.push(`/ops/trace/${r.requestId}`)} className="cursor-pointer hover:bg-mist">
                 <td className="whitespace-nowrap tabular">
-                  <Link href={`/ops/trace/${r.requestId}`} className="font-semibold text-petrol underline decoration-line underline-offset-2" onClick={(e) => e.stopPropagation()}>
+                  <Link href={`/ops/trace/${r.requestId}`} className="font-semibold text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol" onClick={(e) => e.stopPropagation()}>
                     {when(r.startedAt)}
                   </Link>
                   <p className="text-[0.82rem] text-ink-soft">{since(r.lastAt, now)}</p>
@@ -297,7 +298,7 @@ function Sessions({ rows, now }: { rows: Overview["sessions"]; now: number }) {
                   <p className="font-semibold">{r.orgName}</p>
                   <p className="text-[0.85rem] text-ink-soft">
                     {r.agentLabel}
-                    {r.suspended && <span className="ml-1.5 whitespace-nowrap border border-safety-ink bg-safety px-1 text-[0.78rem] font-semibold text-safety-ink">suspended</span>}
+                    {r.suspended && <span className="ml-1.5 inline-block whitespace-nowrap rounded-full bg-safety px-2 text-[0.74rem] font-semibold leading-5 text-safety-ink">suspended</span>}
                   </p>
                 </td>
                 <td>

@@ -8,6 +8,8 @@ import { AGENT_RULES_TEXT } from "./agent-rules.text";
 import { familyL } from "./family.text";
 import { usePortal, weekdaysText } from "./portal";
 import { MemoryBook } from "./memory-book";
+import { ACCOUNT_TEXT } from "./account.text";
+import { DevicePanel, MandateForm } from "../_account/forms";
 import { approverLine, mandateWords } from "./rules";
 import { Button, ErrorPlate, Paper } from "./ui";
 import type { ConnectReply, KitchenMemory } from "./types";
@@ -21,7 +23,8 @@ import type { ConnectReply, KitchenMemory } from "./types";
 // The choices a habit or rule can be about, as the intake asks them (labels for the buyer): `AGENT_RULES_TEXT.dimensions`.
 
 export function AgentRules() {
-  const { kitchen, overview } = usePortal();
+  const { kitchen, overview, account } = usePortal();
+  const own = !!account && account.kitchen === kitchen.slug;
   const tx = useText(AGENT_RULES_TEXT);
   const f = useFormat();
   const w = mandateWords(kitchen.mandate, f.lang);
@@ -44,10 +47,42 @@ export function AgentRules() {
         <RuleList title={tx.never} items={w.never} />
       </section>
 
+      {own && <DevicePanel />}
+      {own && <ChangeMandate />}
       <WhoSees />
       <MemoryBook fallback={<Memory memory={memory} loading={!memory && !overview.error} error={overview.error} />} />
       <Connect />
     </div>
+  );
+}
+
+/** Only the kitchen's own signed-in account sees this: a new mandate, signed with the key held for it; the old one retires. */
+function ChangeMandate() {
+  const atx = useText(ACCOUNT_TEXT);
+  const [open, setOpen] = useState(false);
+  const [signed, setSigned] = useState(false);
+  return (
+    <section aria-labelledby="change-mandate" className="space-y-3 bg-paper p-5">
+      <h2 id="change-mandate" className="display text-[1.6rem]">
+        {atx.mandateTitle}
+      </h2>
+      <p className="max-w-[72ch] leading-snug text-ink-soft">{atx.mandateIntro}</p>
+      {signed && <p role="status" className="border-l-4 border-petrol bg-petrol-soft px-3 py-2">{atx.mandateSigned}</p>}
+      {open ? (
+        <MandateForm
+          change
+          onSigned={() => {
+            setSigned(true);
+            setOpen(false);
+            window.location.reload(); // the store shows the new mandate everywhere
+          }}
+        />
+      ) : (
+        <Button kind="secondary" onClick={() => setOpen(true)}>
+          {atx.mandateChange}
+        </Button>
+      )}
+    </section>
   );
 }
 

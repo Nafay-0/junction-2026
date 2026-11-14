@@ -1,0 +1,528 @@
+{
+ "about": "Fresh set: written after every rule change, scored once, and not used to change anything. Same format as set.json.",
+ "now": "2026-11-14T10:00:00+02:00",
+ "cases": [
+  {
+   "id": "f-en-01",
+   "lang": "en",
+   "text": "Hi! Could we get 360 litres of milk delivered Thursday morning?",
+   "tags": [],
+   "expect": {
+    "amount": [
+     [
+      360,
+      "L"
+     ]
+    ],
+    "kind": [
+     "milk",
+     "maito",
+     "mjolk"
+    ],
+    "date": "2026-11-19",
+    "claims": [],
+    "excluded": [
+     []
+    ],
+    "avoid": [],
+    "fat": []
+   }
+  },
+  {
+   "id": "f-en-02",
+   "lang": "en",
+   "text": "Please send 6 cases of butter (unsalted) by Monday",
+   "tags": [],
+   "expect": {
+    "amount": [
+     [
+      6,
+      "pack"
+     ]
+    ],
+    "kind": [
+     "butter"
+    ],
+    "date": "2026-11-16",
+    "claims": [],
+    "excluded": [
+     []
+    ],
+    "avoid": [],
+    "fat": []
+   }
+  },
+  {
+   "id": "f-en-03",
+   "lang": "en",
+   "text": "For the school kitchen: 80 kg natural yoghurt, must be lactose free, Wednesday",
+   "tags": [],
+   "expect": {
+    "amount": [
+     [
+      80,
+      "kg"
+     ]
+    ],
+    "kind": [
+     "yog"
+    ],
+    "date": "2026-11-18",
+    "claims": [
+     "lactose_free"
+    ],
+    "excluded": [
+     []
+    ],
+    "avoid": [],
+    "fat": []
+   }
+  },
+  {
+   "id": "f-en-04",
+   "lang": "en",
+   "text": "We're out of cream, 25 litres whipping cream tomorrow if possible",
+   "tags": [],
+   "expect": {
+    "amount": [
+     [
+      25,
+      "L"
+     ]
+    ],
+    "kind": [
+     "cream"
+    ],
+    "date": "2026-11-15",
+    "claims": [],
+    "excluded": [
+     []
+    ],
+    "avoid": [],
+    "fat": []
+   }
+  },
+  {
+   "id": "f-en-05",
+   "lang": "en",
+   "text": "Order 1.200 l of organic skimmed milk for next Monday",
+   "tags": [],
+   "expect": {
+    "amount": [
+     [
+      1200,
+      "L"
+     ]
+    ],
+    "kind": [
+     "milk",
+     "maito",
+     "mjolk"
+    ],
+    "date": [
+     "2026-11-16",
+     "2026-11-23"
+    ],
+    "claims": [
+     "organic"
+    ],
+    "excluded": [
+     []
+    ],
+    "avoid": [],
+    "fat": []
+   }
+  },
+  {
+   "id": "f-en-06",
+   "lang": "en",
+   "text": "15 trays of eggs for Friday",
+   "tags": [],
+   "expect": {
+    "amount": [
+     [
+      15,
+      "pack"
+     ]
+    ],
+    "kind": [
+     "egg"
+    ],
+    "date": "2026-11-20",
+    "claims": [],
+    "excluded": [
+     []
+    ],
+    "avoid": [],
+    "fat": []
+   }
+  },
+  {
+   "id": "f-en-07",
+   "lang": "en",
+   "text": "40 l oat drink, barista version, no soy, by Tuesday",
+   "tags": [],
+   "expect": {
+    "amount": [
+     [
+      40,
+      "L"
+     ]
+    ],
+    "kind": [
+     "oat"
+    ],
+    "date": "2026-11-17",
+    "claims": [],
+    "excluded": [
+     []
+    ],
+    "avoid": [
+     "soy"
+    ],
+    "fat": []
+   }
+  },
+  {
+   "id": "f-en-08",
+   "lang": "en",
+   "text": "Coeliac guest: 3 kg gluten-free pasta for Saturday",
+   "tags": [],
+   "expect": {
+    "amount": [
+     [
+      3,
+      "kg"
+     ]
+    ],
+    "kind": [
+     "pasta"
+    ],
+    "date": "2026-11-21",
+    "claims": [],
+    "excluded": [
+     []
+    ],
+    "avoid": [
+     "gluten"
+    ],
+    "fat": []
+   }
+  },
+  {
+   "id": "f-fi-01",
+   "lang": "fi",
+   "text": "Maitoa 500 litraa, laktoositonta, maanantaiaamuksi",
+   "tags": [],
+   "expect": {
+    "amount": [
+     [
+      500,
+      "L"
+     ]
+    ],
+    "kind": [
+     "milk",
+     "maito",
+     "mjolk"
+    ],
+    "date": "2026-11-16",
+    "claims": [
+     "lactose_free"
+    ],
+    "excluded": [
+     []
+    ],
+    "avoid": [],
+    "fat": []
+   }
+  },
+  {
+   "id": "f-fi-02",
+   "lang": "fi",
+   "text": "Kermaa 30 l ja ei laktoositonta, perjantaiksi",
+   "tags": [],
+   "expect": {
+    "amount": [
+     [
+      30,
+      "L"
+     ]
+    ],
+    "kind": [
+     "kerma"
+    ],
+    "date": "2026-11-20",
+    "claims": [],
+    "excluded": [
+     [
+      "lactose_free"
+     ]
+    ],
+    "avoid": [],
+    "fat": []
+   }
+  },
+  {
+   "id": "f-fi-03",
+   "lang": "fi",
+   "text": "Tarvitaan kaksi tusinaa voirasiaa torstaiksi",
+   "tags": [],
+   "expect": {
+    "amount": [
+     [
+      24,
+      "pack"
+     ]
+    ],
+    "kind": [
+     "voi"
+    ],
+    "date": "2026-11-19",
+    "claims": [],
+    "excluded": [
+     []
+    ],
+    "avoid": [],
+    "fat": []
+   }
+  },
+  {
+   "id": "f-fi-04",
+   "lang": "fi",
+   "text": "Huomiseksi 120 kg luomujogurttia",
+   "tags": [],
+   "expect": {
+    "amount": [
+     [
+      120,
+      "kg"
+     ]
+    ],
+    "kind": [
+     "jogurt"
+    ],
+    "date": "2026-11-15",
+    "claims": [
+     "organic"
+    ],
+    "excluded": [
+     []
+    ],
+    "avoid": [],
+    "fat": []
+   }
+  },
+  {
+   "id": "f-fi-05",
+   "lang": "fi",
+   "text": "Ilman pähkinöitä: 10 kg vaniljarahkaa keskiviikoksi",
+   "tags": [],
+   "expect": {
+    "amount": [
+     [
+      10,
+      "kg"
+     ]
+    ],
+    "kind": [
+     "rahka"
+    ],
+    "date": "2026-11-18",
+    "claims": [],
+    "excluded": [
+     []
+    ],
+    "avoid": [
+     "nuts"
+    ],
+    "fat": []
+   }
+  },
+  {
+   "id": "f-fi-06",
+   "lang": "fi",
+   "text": "4.500 litraa maitoa ensi viikon tiistaiksi",
+   "tags": [],
+   "expect": {
+    "amount": [
+     [
+      4500,
+      "L"
+     ]
+    ],
+    "kind": [
+     "milk",
+     "maito",
+     "mjolk"
+    ],
+    "date": [
+     "2026-11-17",
+     "2026-11-24"
+    ],
+    "claims": [],
+    "excluded": [
+     []
+    ],
+    "avoid": [],
+    "fat": []
+   }
+  },
+  {
+   "id": "f-sv-01",
+   "lang": "sv",
+   "text": "Vi behöver 240 liter mjölk till torsdag morgon",
+   "tags": [],
+   "expect": {
+    "amount": [
+     [
+      240,
+      "L"
+     ]
+    ],
+    "kind": [
+     "milk",
+     "maito",
+     "mjolk"
+    ],
+    "date": "2026-11-19",
+    "claims": [],
+    "excluded": [
+     []
+    ],
+    "avoid": [],
+    "fat": []
+   }
+  },
+  {
+   "id": "f-sv-02",
+   "lang": "sv",
+   "text": "Fem lådor smör till måndag",
+   "tags": [],
+   "expect": {
+    "amount": [
+     [
+      5,
+      "pack"
+     ]
+    ],
+    "kind": [
+     "smor"
+    ],
+    "date": "2026-11-16",
+    "claims": [],
+    "excluded": [
+     []
+    ],
+    "avoid": [],
+    "fat": []
+   }
+  },
+  {
+   "id": "f-sv-03",
+   "lang": "sv",
+   "text": "Laktosfri grädde, 18 liter, till i morgon",
+   "tags": [],
+   "expect": {
+    "amount": [
+     [
+      18,
+      "L"
+     ]
+    ],
+    "kind": [
+     "gradde"
+    ],
+    "date": "2026-11-15",
+    "claims": [
+     "lactose_free"
+    ],
+    "excluded": [
+     []
+    ],
+    "avoid": [],
+    "fat": []
+   }
+  },
+  {
+   "id": "f-sv-04",
+   "lang": "sv",
+   "text": "Ekologisk yoghurt 60 kg till onsdag",
+   "tags": [],
+   "expect": {
+    "amount": [
+     [
+      60,
+      "kg"
+     ]
+    ],
+    "kind": [
+     "yog"
+    ],
+    "date": "2026-11-18",
+    "claims": [
+     "organic"
+    ],
+    "excluded": [
+     []
+    ],
+    "avoid": [],
+    "fat": []
+   }
+  },
+  {
+   "id": "f-sv-05",
+   "lang": "sv",
+   "text": "Utan nötter: 12 kg kvarg till fredag",
+   "tags": [],
+   "expect": {
+    "amount": [
+     [
+      12,
+      "kg"
+     ]
+    ],
+    "kind": [
+     "kvarg"
+    ],
+    "date": "2026-11-20",
+    "claims": [],
+    "excluded": [
+     []
+    ],
+    "avoid": [
+     "nuts"
+    ],
+    "fat": []
+   }
+  },
+  {
+   "id": "f-sv-06",
+   "lang": "sv",
+   "text": "Inte laktosfri: 300 liter vanlig mjölk till tisdag",
+   "tags": [],
+   "expect": {
+    "amount": [
+     [
+      300,
+      "L"
+     ]
+    ],
+    "kind": [
+     "milk",
+     "maito",
+     "mjolk"
+    ],
+    "date": "2026-11-17",
+    "claims": [],
+    "excluded": [
+     [
+      "lactose_free"
+     ]
+    ],
+    "avoid": [],
+    "fat": []
+   }
+  }
+ ]
+}
