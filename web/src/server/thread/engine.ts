@@ -417,11 +417,42 @@ function trim(messages: ModelMessage[], keepUsers = 4): ModelMessage[] {
       break;
     }
   }
-  return messages.slice(start).flatMap((m): ModelMessage[] => {
-    if (m.role !== "assistant" || typeof m.content === "string") return [m];
-    const content = m.content.filter((p) => p.type !== "reasoning");
-    return content.length ? [{ ...m, content }] : [];
-  });
+  return settled(
+    messages.slice(start).flatMap((m): ModelMessage[] => {
+      if (m.role !== "assistant" || typeof m.content === "string") return [m];
+      const content = m.content.filter((p) => p.type !== "reasoning");
+      return content.length ? [{ ...m, content }] : [];
+    }),
+  );
+}
+
+/**
+ * History a new turn can be sent with: every tool call answered. A paused approval (await_sign_off) leaves a call
+ * whose result lives only in the resumed run, or nowhere if the sign-off came another way; the provider then refuses
+ * the whole conversation (missing tool result). Approval requests and responses of finished pauses are dropped, and a
+ * call still without a result gets one saying it is settled outside the conversation: its cards say how.
+ */
+export function settled(messages: ModelMessage[]): ModelMessage[] {
+  const answered = new Set<string>();
+  for (const m of messages) if (m.role === "tool") for (const p of m.content) if (p.type === "tool-result") answered.add(p.toolCallId);
+  const out: ModelMessage[] = [];
+  for (const m of messages) {
+    if (m.role === "tool") {
+      const content = m.content.filter((p) => p.type === "tool-result");
+      if (content.length) out.push({ ...m, content });
+      continue;
+    }
+    if (m.role !== "assistant" || typeof m.content === "string") {
+      out.push(m);
+      continue;
+    }
+    const content = m.content.filter((p) => p.type !== "tool-approval-request");
+    if (!content.length) continue;
+    out.push({ ...m, content });
+    const open = content.filter((p): p is Extract<typeof p, { type: "tool-call" }> => p.type === "tool-call" && !answered.has(p.toolCallId));
+    if (open.length) out.push({ role: "tool", content: open.map((p) => ({ type: "tool-result" as const, toolCallId: p.toolCallId, toolName: p.toolName, output: { type: "text" as const, value: "Settled outside this conversation step: the cards show the outcome." } })) });
+  }
+  return out;
 }
 
 /**
