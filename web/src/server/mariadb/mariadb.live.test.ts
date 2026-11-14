@@ -16,7 +16,12 @@ import { decisionDoc, indexDecisions, similarTo, type TextEmbedder } from "./vec
  * Start one with: docker compose -f infra/mariadb/compose.yaml up -d --wait
  */
 const url = mariaUrl();
-if (!url) console.info(`[mariadb] live tests skipped: ${MARIADB_ENV} is not set (see infra/mariadb/compose.yaml).`);
+
+describe.runIf(!url)("the audit time machine on a real MariaDB", () => {
+  it(`is skipped: ${MARIADB_ENV} is not set`, () => {
+    console.warn(`[mariadb] live tests skipped: ${MARIADB_ENV} is not set. Start one with docker compose -f infra/mariadb/compose.yaml up -d --wait and set ${MARIADB_ENV}=mariadb://dock:dock@127.0.0.1:3407/dock_audit.`);
+  });
+});
 
 describe.skipIf(!url)("the audit time machine on a real MariaDB", () => {
   const dbName = `dock_test_${randomUUID().slice(0, 8)}`;

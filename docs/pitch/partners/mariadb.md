@@ -1,7 +1,5 @@
 # MariaDB
 
-> **Name: the team must choose.** Replace `{{NAME}}` ("Dock" in the code, "AimoPilot" in the draft submission).
-
 **Short version: a real, narrow use with measured results. MariaDB keeps the history of every rule the gate judges
 orders by, so both sides can see the rules as they stood at any second and put a past order through the real gate
 again. It is a reproduction a judge runs with one command; the public site has no MariaDB attached.**
@@ -12,7 +10,7 @@ The ledger says what happened. When a kitchen disputes an order three weeks late
 was true then: the agent's spending limit that morning, the kitchen's allergen rules, whether the product was on a
 recall hold, whether the agent was suspended, how much of the week's budget was gone. Those rules change.
 
-{{NAME}} copies them, as they change, into MariaDB tables declared `WITH SYSTEM VERSIONING`. The app only inserts,
+AimoPilot copies them, as they change, into MariaDB tables declared `WITH SYSTEM VERSIONING`. The app only inserts,
 updates and deletes the current rows; MariaDB keeps every earlier version and when it stopped being true. A staff
 member slides to any moment and sees the rules then beside the rules now, what changed in between, who changed it
 and when, each answered by one `FOR SYSTEM_TIME` query shown on the page. Then the question that matters: **would
