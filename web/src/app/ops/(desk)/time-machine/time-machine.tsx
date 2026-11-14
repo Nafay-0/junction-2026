@@ -6,7 +6,9 @@ import type { MirrorStatus } from "@/server/mariadb/mirror";
 import type { Similar } from "@/server/mariadb/vector";
 import type { Described, TimeMachineView } from "@/server/mariadb/service";
 import type { Difference, Verdict } from "@/server/mariadb/replay";
+import { Check, Database, Route } from "lucide-react";
 import { api } from "../../../_client/api";
+import { Badge, Select, Tag, buttonClass } from "../../../_ui/kit";
 import { ruleTitle } from "../../../_ui/plain";
 import { fi, money, when, whenSeconds } from "../../_ui/format";
 import { Button, Details, Empty, LoadError, Loading, PageHead, Section, useOps } from "../../_ui/kit";
@@ -18,11 +20,11 @@ type Reply =
   | { attached: true; server: string; status: MirrorStatus; health: { state: string; sentence: string }; vectors: string | null; view?: TimeMachineView; reachable?: false; sentence?: string };
 
 const AREA = {
-  mandate: { label: "Mandate", mark: "h-7 w-[3px] bg-petrol" },
-  kitchen_rule: { label: "Kitchen rule", mark: "h-5 w-[3px] bg-lavender-deep" },
-  hold: { label: "Recall hold", mark: "h-7 w-[5px] hazard-thin" },
-  suspension: { label: "Suspension", mark: "h-7 w-[5px] bg-safety ring-1 ring-safety-ink/40" },
-  budget: { label: "Weekly spend", mark: "h-2.5 w-px bg-ink-soft/60" },
+  mandate: { label: "Mandate", mark: "h-7 w-1 rounded-full bg-petrol" },
+  kitchen_rule: { label: "Kitchen rule", mark: "h-5 w-1 rounded-full bg-lavender-deep" },
+  hold: { label: "Recall hold", mark: "h-7 w-1.5 rounded-full hazard-thin" },
+  suspension: { label: "Suspension", mark: "h-7 w-1.5 rounded-full bg-safety ring-1 ring-safety-ink/40" },
+  budget: { label: "Weekly spend", mark: "h-2.5 w-0.5 rounded-full bg-ink-soft/50" },
 } as const;
 
 const RULE_EXTRA: Record<string, string> = { recall_hold: "No product on a recall hold", operator_suspension: "Not suspended by the wholesaler's staff" };
@@ -77,7 +79,7 @@ function MirrorMark({ r }: { r: Extract<Reply, { attached: true }> }) {
   const ok = r.health.state === "current";
   return (
     <span className="inline-flex max-w-[30rem] items-start gap-2 text-right" role="status" title={r.health.sentence}>
-      <span aria-hidden className={`mt-1 size-2.5 shrink-0 ${ok ? "breathe bg-petrol" : "border-2 border-ink"}`} />
+      <span aria-hidden className={`mt-1.5 size-2 shrink-0 rounded-full ${ok ? "breathe bg-good" : "border-[1.5px] border-ink-soft"}`} />
       <span>
         MariaDB at {r.server}. {ok ? `Mirror current${r.status.lastOkAt ? `, written ${whenSeconds(r.status.lastOkAt)}` : ""}.` : r.health.state === "behind" ? "The mirror is behind; ordering is not affected." : "The mirror cannot write just now; ordering is not affected."}
       </span>
@@ -87,12 +89,17 @@ function MirrorMark({ r }: { r: Extract<Reply, { attached: true }> }) {
 
 function NotAttached({ env, sentence }: { env: string; sentence: string }) {
   return (
-    <div className="mt-2 max-w-[78ch] border-t-[3px] border-petrol bg-paper px-5 py-5">
-      <p className="display text-[1.5rem]">No time machine on this deployment</p>
-      <p className="mt-2 leading-snug">{sentence}</p>
-      <p className="mt-3 text-[0.95rem] leading-snug text-ink-soft">
-        To see it, run it locally against the pinned MariaDB (one command, from <code>web/</code>): <code className="bg-mist px-1">pnpm mariadb:reproduce</code>, then start the app with <code className="bg-mist px-1">{env}</code> set to the address it prints. A hosted MariaDB 11.8 or later works the same way.
-      </p>
+    <div className="mt-2 flex max-w-[82ch] flex-wrap gap-4 rounded-xl border border-dashed border-line-strong bg-paper/60 p-5 sm:p-6">
+      <span aria-hidden className="flex size-11 shrink-0 items-center justify-center rounded-full bg-petrol-soft text-petrol">
+        <Database size={20} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="display text-[1.35rem]">No time machine on this deployment</p>
+        <p className="mt-1.5 leading-relaxed">{sentence}</p>
+        <p className="mt-3 text-[0.95rem] leading-relaxed text-ink-soft">
+          To see it, run it locally against the pinned MariaDB (one command, from <code className="rounded-xs bg-surface px-1.5 py-0.5 text-[0.88em] text-ink">web/</code>): <code className="rounded-xs bg-surface px-1.5 py-0.5 text-[0.88em] text-ink">pnpm mariadb:reproduce</code>, then start the app with <code className="rounded-xs bg-surface px-1.5 py-0.5 text-[0.88em] text-ink">{env}</code> set to the address it prints. A hosted MariaDB 11.8 or later works the same way.
+        </p>
+      </div>
     </div>
   );
 }
@@ -121,39 +128,34 @@ function Machine({ v, vectors, order, pick, pickOrg, setAt }: { v: TimeMachineVi
     <div>
       {/* Pick an order or a kitchen */}
       <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
-        <label className="grid gap-1 text-[0.88rem] text-ink-soft">
-          Kitchen
-          <select className="min-w-[16rem] border border-line bg-paper px-2 py-1.5 text-[0.98rem] text-ink" value={v.orgId ?? ""} onChange={(e) => pickOrg(e.target.value)}>
-            {v.kitchens.map((k) => (
-              <option key={k.orgId} value={k.orgId}>
-                {k.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="grid gap-1 text-[0.88rem] text-ink-soft">
-          Order
-          <select className="min-w-[24rem] max-w-full border border-line bg-paper px-2 py-1.5 text-[0.98rem] text-ink" value={order || v.order?.orderId || ""} onChange={(e) => pick(e.target.value)}>
-            <option value="">No order: pick a moment only</option>
-            {orders.map((o) => (
-              <option key={o.orderId} value={o.orderId}>
-                {when(o.createdAt)}, {money(o.totalCents)}, {o.summary.slice(0, 60)} ({OUTCOME[o.outcome]?.toLowerCase() ?? o.outcome}{o.door ? `, via ${o.door === "mcp" || o.door === "rest" ? o.door.toUpperCase() : o.door}` : ""})
-              </option>
-            ))}
-          </select>
-        </label>
+        <Select label="Kitchen" value={v.orgId ?? ""} onChange={pickOrg} className="w-full sm:w-[16rem]">
+          {v.kitchens.map((k) => (
+            <option key={k.orgId} value={k.orgId}>
+              {k.name}
+            </option>
+          ))}
+        </Select>
+        <Select label="Order" value={order || v.order?.orderId || ""} onChange={pick} className="w-full min-w-0 sm:w-[28rem] sm:max-w-full">
+          <option value="">No order: pick a moment only</option>
+          {orders.map((o) => (
+            <option key={o.orderId} value={o.orderId}>
+              {when(o.createdAt)}, {money(o.totalCents)}, {o.summary.slice(0, 60)} ({OUTCOME[o.outcome]?.toLowerCase() ?? o.outcome}{o.door ? `, via ${o.door === "mcp" || o.door === "rest" ? o.door.toUpperCase() : o.door}` : ""})
+            </option>
+          ))}
+        </Select>
         {v.order && (
-          <Link className="pb-1.5 text-[0.92rem] text-petrol underline underline-offset-4" href={`/ops/trace/${v.order.body.requestId}`}>
+          <Link className={buttonClass("secondary", "md")} href={`/ops/trace/${v.order.body.requestId}`}>
+            <Route aria-hidden size={16} />
             Open its trace
           </Link>
         )}
       </div>
 
       {/* The one bold thing: the time rail, with a mark for every moment a rule changed */}
-      <div className="mt-5 border-t-[3px] border-petrol bg-paper px-4 pb-4 pt-3">
+      <div className="mt-6 rounded-xl border border-line bg-paper px-5 pb-5 pt-4 sm:px-6">
         <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
           <p>
-            <span className="display text-[2.2rem] tabular">{when(shown)}</span>
+            <span className="display text-[2.1rem] tabular">{when(shown)}</span>
             <span className="ml-3 text-ink-soft">{relation}</span>
           </p>
           <div className="flex flex-wrap gap-2">
@@ -168,7 +170,7 @@ function Machine({ v, vectors, order, pick, pickOrg, setAt }: { v: TimeMachineVi
           </div>
         </div>
         <div className="relative mt-3 h-9" aria-hidden>
-          <div className="absolute inset-x-0 bottom-0 h-px bg-line" />
+          <div className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-line" />
           {v.moments.map((m, i) => (
             <button
               key={`${m.at}${i}`}
@@ -267,7 +269,7 @@ function Verdicts({ v }: { v: TimeMachineView }) {
   const diffs: Difference[] = r.atVsNow;
   return (
     <Section title="Would it pass today?" aside={`${o.summary}, ${money(o.totalCents)}${o.doorText ? `; came through ${o.doorText}` : ""}`}>
-      <div className="grid gap-px bg-line md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="grid divide-y divide-line overflow-hidden rounded-xl border border-line bg-paper md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:divide-x md:divide-y-0">
         <VerdictCard heading={sameMoment ? `When it arrived, ${when(o.body.createdAt)}` : `At ${when(v.at)}`} verdict={r.at} />
         <VerdictCard heading={`Today, ${when(v.now)}`} verdict={r.now} />
       </div>
@@ -293,7 +295,9 @@ function Verdicts({ v }: { v: TimeMachineView }) {
           </tbody>
         </Table>
       ) : (
-        <p className="mt-3 bg-paper px-4 py-3">Every rule gives the same answer {sameMoment ? "today as when it arrived" : "at both moments"}.</p>
+        <p className="mt-3 flex items-center gap-2.5 rounded-lg bg-good-soft px-4 py-3">
+          <Check aria-hidden size={17} strokeWidth={2.6} className="shrink-0 text-good" />
+          Every rule gives the same answer {sameMoment ? "today as when it arrived" : "at both moments"}.</p>
       )}
       <ul className="mt-3 space-y-1 text-[0.92rem] leading-snug">
         <li>
@@ -319,9 +323,9 @@ function Verdicts({ v }: { v: TimeMachineView }) {
 function VerdictCard({ heading, verdict }: { heading: string; verdict: Verdict }) {
   const hits = verdict.rules.filter((x) => x.outcome !== "pass");
   return (
-    <div className="bg-paper px-4 py-4">
-      <p className="text-[0.9rem] text-ink-soft">{heading}</p>
-      <div className="mt-2">
+    <div className="p-5 sm:p-6">
+      <p className="text-[0.88rem] text-ink-soft">{heading}</p>
+      <div className="mt-2.5">
         <Stamp kind={stampKind(verdict.outcome)} label={OUTCOME[verdict.outcome]} />
       </div>
       <p className="mt-3 max-w-[60ch] text-[0.95rem] leading-snug">{fi(verdict.headline)}</p>
@@ -347,17 +351,17 @@ function RuleList({ rows, other, side }: { rows: Described[]; other: Described[]
         const state = !twin ? (side === "now" ? "new since" : "gone by now") : sameValue(r, twin) ? "same" : "changed";
         const gate = r.area === "hold" || r.area === "suspension";
         return (
-          <li key={sig(r)} className={`relative bg-paper py-3 pl-5 pr-4 ${state === "same" ? "" : "ring-1 ring-petrol/50"}`}>
-            <span aria-hidden className={`absolute inset-y-0 left-0 w-[5px] ${gate ? (r.area === "hold" ? "hazard-thin" : "bg-safety") : state === "same" ? "bg-line" : "bg-petrol"}`} />
+          <li key={sig(r)} className={`relative overflow-hidden rounded-lg border bg-paper py-3.5 pl-6 pr-4 ${state === "same" ? "border-line" : "border-petrol/45"}`}>
+            <span aria-hidden className={`absolute inset-y-3 left-2.5 w-1 rounded-full ${gate ? (r.area === "hold" ? "hazard-thin" : "bg-safety") : state === "same" ? "bg-line-strong" : "bg-petrol"}`} />
             <div className="flex flex-wrap items-baseline justify-between gap-x-3">
               <p className="font-semibold">{r.title}</p>
-              {state !== "same" && <span className="bg-petrol-soft px-1.5 text-[0.8rem] font-semibold text-petrol-deep">{state === "changed" ? "differs" : state}</span>}
+              {state !== "same" && <Badge tone="info">{state === "changed" ? "differs" : state}</Badge>}
             </div>
             <ul className="mt-1 space-y-0.5 text-[0.93rem] leading-snug">
               {r.lines.map((l, i) => {
                 const moved = state === "changed" && twin && !twin.lines.includes(l);
                 return (
-                  <li key={i} className={moved ? "-mx-1 bg-petrol-soft px-1 font-semibold" : ""}>
+                  <li key={i} className={moved ? "-mx-1.5 rounded-xs bg-lime-soft px-1.5 font-semibold" : ""}>
                     {fi(l)}
                   </li>
                 );
@@ -396,7 +400,9 @@ function Changes({ v }: { v: TimeMachineView }) {
               <tr key={i}>
                 <td className="whitespace-nowrap tabular">{when(c.at)}</td>
                 <td>
-                  <span className="mr-2 text-[0.82rem] font-semibold text-ink-soft">{c.area}</span>
+                  <span className="mr-2">
+                    <Tag tone="muted">{c.area}</Tag>
+                  </span>
                   {fi(c.what)}
                 </td>
                 <td className="text-ink-soft">{c.by}</td>
@@ -406,7 +412,7 @@ function Changes({ v }: { v: TimeMachineView }) {
         </Table>
       )}
       {budget.length > 0 && (
-        <button type="button" className="mt-2 text-[0.9rem] text-petrol underline underline-offset-4" onClick={() => setSpend(!spend)}>
+        <button type="button" className={buttonClass("secondary", "sm", "mt-3")} onClick={() => setSpend(!spend)}>
           {spend ? "Hide the changes of weekly spend" : `Show the ${budget.length} changes of weekly spend too`}
         </button>
       )}
@@ -439,7 +445,7 @@ function Similar({ orderId, vectors }: { orderId: string; vectors: string | null
           {busy ? "Searching…" : "Find decisions like this one"}
         </Button>
       ) : !res.available ? (
-        <p className="bg-paper px-4 py-3">{res.reason}</p>
+        <p className="rounded-lg bg-surface px-4 py-3">{res.reason}</p>
       ) : (
         <>
           <Table label="Nearest decisions">
