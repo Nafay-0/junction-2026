@@ -30,7 +30,7 @@ export const SUITE: Scenario[] = [
   liveEconomy,
 ];
 
-export const SUITE_VERSION = "crash-suite/1";
+export const SUITE_VERSION = "crash-suite/2";
 
 export function scenarioById(id: string): Scenario {
   const s = SUITE.find((x) => x.id === id);

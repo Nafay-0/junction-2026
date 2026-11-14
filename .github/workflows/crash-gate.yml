@@ -1,0 +1,145 @@
+name: Crash-test gate
+
+# On every push: reproduce the crash test's scripted results and fail the build when the reference agent's score
+# drops, a baseline rises above its ceiling, or an exploit probe starts scoring (web/src/crash/gate.ts).
+# Runs on a CRACI runner with outbound network limited to GitHub and npm; a second job reads CRACI's record of the
+# gate job (CycloneDX SBOM and network trace, through the CRACI API) into build-record.json.
+
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: crash-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  gate:
+    name: Crash-test reward gate
+    runs-on: craci
+    timeout-minutes: 10
+    outputs:
+      job-id: ${{ steps.record.outputs.job-id }}
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: cracicorp/setup@v1
+        with:
+          size: "2"
+          # The crash test needs no network at all; installing needs GitHub and npm. Everything else is refused,
+          # and CRACI's network trace shows what the build reached.
+          network: |
+            default: deny
+            presets: [github, npm]
+
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Reproduce the scripted results (reference, baselines, exploit probes; 3 repeats)
+        run: pnpm crash:reproduce
+
+      - name: Gate on the reward
+        run: pnpm crash:gate --json crash-results/gate.json
+
+      - name: Build record (where CRACI publishes this job's SBOM)
+        id: record
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          pnpm -s build:record --gate crash-results/gate.json --out crash-results/build-record.json
+          echo "job-id=$(node -p "require('./crash-results/build-record.json').craci.jobId ?? ''")" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Crash-test gate"
+            echo '```'
+            pnpm -s crash:gate || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: crash-reproduce
+          path: |
+            web/crash-results/reproduce/summary.json
+            web/crash-results/reproduce/trajectories.jsonl
+            web/crash-results/gate.json
+            web/crash-results/build-record.json
+          retention-days: 30
+
+  record:
+    name: CRACI build record (SBOM, network trace)
+    needs: gate
+    if: always() && needs.gate.outputs.job-id != ''
+    runs-on: craci
+    timeout-minutes: 6
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: crash-reproduce
+          path: web/crash-results
+
+      - name: Fetch the gate job's SBOM and network trace from CRACI
+        env:
+          CRACI_API_TOKEN: ${{ secrets.CRACI_API_TOKEN }}
+          JOB_ID: ${{ needs.gate.outputs.job-id }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ -z "$CRACI_API_TOKEN" ]; then
+            echo "::notice::No CRACI_API_TOKEN secret: the build record names where the SBOM is, without its contents."
+            exit 0
+          fi
+          for what in sbom network-trace; do
+            out="crash-results/$what.json"
+            for i in 1 2 3 4 5 6 7 8; do
+              code=$(curl -sS -o "$out" -w '%{http_code}' -H "Authorization: Bearer $CRACI_API_TOKEN" \
+                "https://api.craci.com/v1preview1/$what?provider=github&repo=$REPO&job_id=$JOB_ID")
+              [ "$code" = "200" ] && break
+              echo "CRACI $what: HTTP $code (409 means the job is not final yet); retrying"
+              rm -f "$out"; sleep 15
+            done
+          done
+          ls -la crash-results
+
+      - name: Build record with what CRACI recorded
+        env:
+          JOB_ID: ${{ needs.gate.outputs.job-id }}
+        run: |
+          node scripts/build-record.ts --job-id "$JOB_ID" --gate crash-results/gate.json \
+            --sbom crash-results/sbom.json --trace crash-results/network-trace.json --out crash-results/build-record.json
+          node -e "const r=require('./crash-results/build-record.json'); console.log(JSON.stringify(r.craci, null, 2))" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: craci-build-record
+          path: |
+            web/crash-results/build-record.json
+            web/crash-results/sbom.json
+            web/crash-results/network-trace.json
+          if-no-files-found: warn
+          retention-days: 30
