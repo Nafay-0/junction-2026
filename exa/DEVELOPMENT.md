@@ -265,7 +265,7 @@ Reading, navigating, searching, filling in a form, adding to a basket and refusi
 - **Sift:** Gemini's Decisions API (`gemini-decision-1`) called over HTTP from the server, with the same key as the other Gemini models.
 - **Voice:** Gemini's Live API straight from the browser, with short-lived tokens from the server (`@google/genai` on the server only). `gemini-3.8-live` for calls, `gemini-3.5-transcribe-live` for voice input.
 - **Models:** Claude (Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5.2) through Claude Platform on AWS (`@ai-sdk/anthropic-aws`) and Gemini (4 Carbon, 4 Hydrogen) through Google AI Studio. Four of them stand behind the four modes (`MODE_MODEL` in `lib/agent/models.ts`); the user switches mode, per message if they like, never model. Sub-agents and extraction run on the fast model of the same family (Haiku 5.5 or Gemini 4 Hydrogen). The thinking settings differ by family and by model (Gemini 4 rejects the "minimal" level; only Haiku lets Claude's thinking be switched off), so they are decided per model and job in one file, `web/src/lib/agent/options.ts`. Prices are in `web/src/lib/agent/models.ts`; Gemini 4 Carbon's list price doubles on 1 Dec 2026.
-- **Why the AI SDK and not Pydantic AI or a hand-written loop:** see `research_notes/Agent runtime choice/`. Short version: one codebase, and each tool's output type is the widget's input type.
+- **Why the AI SDK and not Pydantic AI or a hand-written loop:** in short, one codebase, and each tool's output type is the widget's input type.
 - **Code map** (all under `web/src`):
   - `lib/widgets/types.ts`: the contract between tools and widgets.
   - `lib/exa/client.ts`: the Exa client (search, contents, agent runs), with cost tracking and a 5-minute cache.
@@ -284,8 +284,7 @@ Reading, navigating, searching, filling in a form, adding to a basket and refusi
 
 ## Research
 
-- `reports/Exa Internet Butler playbook.md`: Exa's API as of 13 Nov 2026, costs and how to stand out. Read it before touching the Exa calls; Exa changed a lot in 2026.
-- `research_notes/`: the notes behind it, and the runtime comparison.
+The research done before the build (a playbook on Exa's API as of 13 Nov 2026, the notes behind it, and a comparison of agent runtimes) is not in the repository. It is kept on the authors' machines, in `exa/reports/` and `exa/research_notes/`, which git ignores.
 
 ## Open questions
 
