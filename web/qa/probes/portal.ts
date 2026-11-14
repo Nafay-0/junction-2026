@@ -38,7 +38,7 @@ export const portalProbes: Probe[] = [
       const before = await consoleCall(http, "kaari")("GET", "/api/v1/kitchen");
       const pref = (before.body?.kitchen?.stated ?? before.body?.kitchen?.statedPreferences ?? []).find((p: any) => /lactose/i.test(p.text ?? ""));
       if (!pref) return { skip: "Kaari has no stated lactose rule on this server (already forgotten?)" };
-      const f = await http.post("/ui-api/kitchens/kaari/memory", { action: "forget", preferenceId: pref.id });
+      const f = await http.anonymous().post("/ui-api/kitchens/kaari/memory", { action: "forget", preferenceId: pref.id }); // a stranger: no kitchen session
       check.expect(f.status >= 400, `anonymous POST /ui-api/kitchens/kaari/memory forget ${pref.id}: ${f.status}`);
       const t = await driveIntake(consoleCall(http, "kaari") as never, { item: { text: "milk", category: "milk" }, quantity: { amount: 100, unit: "L" } }, { by: "Kitchen staff", onConcern: "confirm", placeOrder: false });
       const lines = (t.final?.options ?? []).flatMap((o: any) => o.lines);

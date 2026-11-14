@@ -188,7 +188,7 @@ export const exposureProbes: Probe[] = [
     title: "The model interpreter is reachable with no credentials through the console back end, with no rate limit",
     findings: ["F-MODEL-SPEND"],
     async run({ http, check }) {
-      const call = consoleCall(http, "kaari");
+      const call = consoleCall(http.anonymous(), "kaari"); // an anonymous visitor: no kitchen session
       const rs = [];
       for (let i = 0; i < 3; i++) rs.push(await call("POST", "/api/v1/agent/interpret", { text: `${10 + i} litres of milk for Tuesday` }));
       const paid = rs.filter((r) => r.status === 200).length;

@@ -70,8 +70,9 @@ export const mcpProbes: Probe[] = [
       check.expect(edited.json?.order?.status !== "committed", `edited lines over MCP committed`);
       const ok = await m.call("place_order", { requestId, quoteToken: token, lines });
       const again = await m.call("place_order", { requestId, quoteToken: token, lines });
-      check.expect(ok.json?.order?.status === "committed", `honest order over MCP: ${ok.text.slice(0, 160)}`);
-      check.expect(again.json?.order?.status !== "committed", "the same quote bought twice over MCP");
+      // Accepted: committed, or waiting for a person (the mistake check flags a repeat of this run's earlier orders).
+      check.expect(["committed", "pending_approval"].includes(ok.json?.order?.status), `honest order over MCP: ${ok.json?.order?.status ?? ok.text.slice(0, 160)}`);
+      check.expect(!["committed", "pending_approval"].includes(again.json?.order?.status), "the same quote bought twice over MCP");
       await m.client.close();
     },
   },
