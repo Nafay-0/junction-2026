@@ -242,7 +242,8 @@ export function Console() {
       if (!r.ok) throw new Error(r.error.message);
       return r.data.order;
     },
-    { events, enabled: !!orderId && waiting, pollMs: 1000, pollMsStreaming: 3000 },
+    // The event stream carries this org's approval and order events and refetches at once; the slow poll is only the fallback.
+    { events, enabled: !!orderId && waiting, pollMs: 1000, pollMsStreaming: 20_000 },
   );
   useEffect(() => {
     const o = orderLive.data;
@@ -255,7 +256,8 @@ export function Console() {
       if (!r.ok) throw new Error(r.error.message);
       return { requestId, ...r.data };
     },
-    { events, enabled: !!requestId, pollMs: 2000, pollMsStreaming: 4000 },
+    // This page's own steps refresh it (below) and the stream's events do; the slow poll is only the fallback.
+    { events, enabled: !!requestId, pollMs: 2000, pollMsStreaming: 20_000 },
   );
   const entries = ledger.data && ledger.data.requestId === requestId ? ledger.data.entries : [];
   const refreshLedger = ledger.refresh;
