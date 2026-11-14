@@ -9,10 +9,11 @@ import { requestOrigin } from "./config";
  * process can set it: no header an outside caller sends can claim to be a console session or a signed-in person.
  *
  *   session   the browser's console session (cookie `dock_console`): its own share of the live-lookup allowance
- *   person    set when the kitchen's own signed-in session is present (a visitor's approver cookie for their
- *             sandbox kitchen): answers and confirmations made at the console are then that person's, verified
+ *   person    set when the kitchen's own signed-in session is present (the account's session for its kitchen, a
+ *             visitor's approver cookie for their sandbox kitchen): answers and confirmations made at the console
+ *             are then that person's, verified
  */
-export type ConsolePerson = { channel: "portal_session"; name: string; approverId: string };
+export type ConsolePerson = { channel: "portal_session"; name: string; approverId?: string; account?: string };
 export type ConsoleContext = { kitchen: string; session: string; person?: ConsolePerson };
 
 const contexts = new WeakMap<Request, ConsoleContext>();

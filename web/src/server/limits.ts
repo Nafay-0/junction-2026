@@ -47,6 +47,18 @@ export class RateLimiter {
     return null;
   }
 
+  /** Hits counted in the key's current window, without counting one. */
+  count(rule: RateRule, key: string, now = Date.now()): number {
+    const w = this.windows.get(`${rule.name}|${key}`);
+    return w && now - w.start < rule.windowMs ? w.count : 0;
+  }
+
+  /** Seconds until the key's current window resets (at least 1). */
+  retryAfter(rule: RateRule, key: string, now = Date.now()): number {
+    const w = this.windows.get(`${rule.name}|${key}`);
+    return w ? Math.max(1, Math.ceil((w.start + rule.windowMs - now) / 1000)) : 1;
+  }
+
   private evict() {
     if (this.windows.size <= this.maxKeys) return;
     for (const id of this.windows.keys()) {

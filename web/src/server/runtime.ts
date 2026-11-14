@@ -18,6 +18,8 @@ import { LiveCacheSlot, liveCacheSlots } from "./aiven/live-slot";
 import { recallLayer } from "./radar/gate";
 import { radar } from "./radar/registry";
 import { SandboxService } from "./sandboxes";
+import { AccountService } from "./accounts/service";
+import { scheduleTestAccountResets } from "./accounts/schedule";
 import { loadCatalogIndex, resolveCatalogIndex } from "./valio/index-store";
 import { ValioLiveClient } from "./valio/live-client";
 import { ValioCatalog } from "./valio/valio-catalog";
@@ -49,6 +51,8 @@ export type Runtime = {
   aiven: AivenHandle;
   /** Kitchen memory (history, stated rules), shared with the Dock instance; the kitchen portal corrects stated rules here. */
   kitchens: KitchenRepository;
+  /** Restaurant and buyer accounts: one account, one kitchen (server/accounts). */
+  accounts: AccountService;
 };
 
 const g = globalThis as typeof globalThis & { __dockRuntime?: Promise<Runtime> };
@@ -108,7 +112,19 @@ async function buildRuntime(): Promise<Runtime> {
   recall.attach(dock);
   const sandboxes = new SandboxService({ dock, registry: trustedIssuers, passkeys, limits: sandboxLimits, kitchens: stores.kitchens, products: async () => products, store: stores.sandboxStore });
   await sandboxes.restore();
-  const rt: Runtime = { dock, outbox, catalog, catalogSource, events, passkeys, sandboxes, aiven, kitchens: stores.kitchens };
+  const accounts = new AccountService({
+    store: stores.accountStore,
+    registry: trustedIssuers,
+    passkeys,
+    kitchens: stores.kitchens,
+    dock,
+    sandboxes,
+    catalog,
+    maxAccounts: () => Number(envValue("DOCK_ACCOUNTS_MAX") ?? 1000) || 1000,
+  });
+  await accounts.restore();
+  const rt: Runtime = { dock, outbox, catalog, catalogSource, events, passkeys, sandboxes, aiven, kitchens: stores.kitchens, accounts };
+  scheduleTestAccountResets(accounts); // not under tests or during a build; DOCK_TEST_ACCOUNTS_RESET_MINUTES=0 turns it off
   radar(rt); // starts the recall radar's schedule (not under tests, during a build, or with RADAR_POLL=off)
   return rt;
 }

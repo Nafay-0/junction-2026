@@ -2,13 +2,14 @@ import type { PublicKeyCredentialCreationOptionsJSON, RegistrationResponseJSON }
 import { importJWK, type CryptoKey, type JWK } from "jose";
 import type { Product } from "@/core/catalog";
 import type { KitchenRepository } from "@/core/kitchen";
-import { SIGN_ALG, generateEd25519KeyPair } from "@/core/keys";
-import { signMandate, type Mandate, type createTrustRegistry } from "@/core/mandate";
+import { SIGN_ALG } from "@/core/keys";
+import type { Mandate, createTrustRegistry } from "@/core/mandate";
 import { DockError, type Dock, type PublicOrder } from "@/core/orders";
 import { PasskeyError, type PasskeyService, type RelyingParty } from "@/core/passkeys";
 import { addMinutes, newId } from "@/core/util";
 import { SANDBOX_ROLE, sandboxIdentity, sandboxMandate, type SandboxIdentity } from "./dev-fixtures";
 import { hotelKitchenProfile } from "./demo-kitchen";
+import { openKitchenOrg } from "./kitchen-org";
 import { doorLog } from "./ops/door";
 import { suspensions } from "./ops/suspensions";
 import { runKitchenScenario } from "./sandbox-scenario";
@@ -157,14 +158,10 @@ export class SandboxService {
     const sandboxId = newId("sbx");
     const orgId = `org_${sandboxId}`;
     const agentId = `agent_${sandboxId}`;
-    const key = await generateEd25519KeyPair(`${orgId}-key`);
-    this.deps.registry.add({ kid: key.kid, orgId, publicKey: key.publicKey });
     const mandate = sandboxMandate({ now, expiresAt, orgId, orgName: `${identity.kitchenName}, ${identity.city}`, agentId, approverName: identity.approverName });
-    const mandateToken = await signMandate(mandate, key);
-    if (this.deps.kitchens) {
-      // A plausible past: a hotel buying a few hundred litres of milk twice a week, from the catalogue it runs on.
-      await this.deps.kitchens.saveProfile(hotelKitchenProfile(orgId, mandate.issuer.name, now, await this.deps.products?.()));
-    }
+    // A plausible past: a hotel buying a few hundred litres of milk twice a week, from the catalogue it runs on.
+    const profile = this.deps.kitchens ? hotelKitchenProfile(orgId, mandate.issuer.name, now, await this.deps.products?.()) : undefined;
+    const { key, mandateToken } = await openKitchenOrg({ registry: this.deps.registry, kitchens: this.deps.kitchens, kid: `${orgId}-key`, mandate, profile });
     const approverId = newId("apv");
     await this.deps.passkeys.enrol(
       { approverId, orgId, role: SANDBOX_ROLE.id, name: identity.approverName, userHandle: passkey?.userHandle ?? "", createdAt: now.toISOString(), expiresAt: expiresAt.toISOString() },
@@ -188,6 +185,18 @@ export class SandboxService {
     await this.sandboxes.put(sandbox);
     const sessionToken = await this.deps.passkeys.newSession(approverId, expiresAt);
     return { sandbox: summarize(sandbox), sessionToken };
+  }
+
+  /**
+   * The visitor kept their kitchen as an account (accounts/service.ts keepVisitor): the sandbox record goes, but not
+   * its approver, its passkey, its memory or its orders, which the account now owns. Its old key is retired.
+   */
+  async release(sandboxId: string): Promise<SandboxRecord | undefined> {
+    const s = await this.sandboxes.get(sandboxId);
+    if (!s) return undefined;
+    await this.sandboxes.delete(sandboxId);
+    this.deps.registry.remove(String(s.publicJwk.kid ?? `${s.orgId}-key`));
+    return s;
   }
 
   async get(sandboxId: string): Promise<SandboxSummary | undefined> {

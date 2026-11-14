@@ -82,9 +82,10 @@ export class MandateError extends Error {
 export type TrustedIssuer = { kid: string; orgId: string; publicKey: CryptoKey };
 export type TrustRegistry = { get(kid: string): TrustedIssuer | undefined };
 
-export function createTrustRegistry(issuers: TrustedIssuer[]): TrustRegistry & { add(issuer: TrustedIssuer): void } {
+/** `remove` retires a key: every mandate signed with it stops verifying at once (a reissued kitchen mandate). */
+export function createTrustRegistry(issuers: TrustedIssuer[]): TrustRegistry & { add(issuer: TrustedIssuer): void; remove(kid: string): void } {
   const byKid = new Map(issuers.map((i) => [i.kid, i]));
-  return { get: (kid) => byKid.get(kid), add: (issuer) => void byKid.set(issuer.kid, issuer) };
+  return { get: (kid) => byKid.get(kid), add: (issuer) => void byKid.set(issuer.kid, issuer), remove: (kid) => void byKid.delete(kid) };
 }
 
 export async function signMandate(mandate: Mandate, key: SigningKey): Promise<string> {
