@@ -3,6 +3,8 @@ import { recordLlmSpend, reserveLlmCall } from "@/server/limits";
 import { costOf, tokensFromUsage, type Price } from "./pricing";
 import { z } from "zod";
 import { DockError } from "@/core/errors";
+import { addWords, factsFrom } from "@/core/grounding";
+import { groundForDisplay } from "@/server/grounding";
 import { createModel, defaultModel, ModelConfigError } from "./models";
 import { assistantSystem, assistantUser } from "./prompts";
 import { describeError, isRetryable, withRetry } from "./retry";
@@ -36,6 +38,8 @@ export type AskOptions = {
   history?: { q: string; a: string }[];
   model?: string | { model: LanguageModel; id: string };
   timeoutMs?: number;
+  /** The catalogue's brand names: an answer naming one that no record holds is not shown as said (core/grounding.ts). */
+  brands?: string[];
 };
 
 export async function askAssistant(opts: AskOptions): Promise<AssistantAnswer> {
@@ -82,14 +86,24 @@ export async function askAssistant(opts: AskOptions): Promise<AssistantAnswer> {
     throw new DockError(isRetryable(err) ? 503 : 502, "assistant_failed", `The model call failed: ${describeError(err)}`);
   }
   recordLlmSpend(costOf(tokensFromUsage(res.usage), price));
-  return { ...checkAnswer(res.output as LlmAnswer, opts.records), model: id, ms: Date.now() - t0 };
+  return { ...checkAnswer(res.output as LlmAnswer, opts.records, { question, history: opts.history, brands: opts.brands }), model: id, ms: Date.now() - t0 };
 }
 
-/** Plain code after the model: only ids it was given, and an answer with no citation is marked as such. */
-export function checkAnswer(raw: LlmAnswer, records: AssistantRecord[]): Omit<AssistantAnswer, "model" | "ms"> {
+/**
+ * Plain code after the model: only ids it was given, an answer with no citation is marked as such, and every
+ * sentence naming a product, price, amount, date, claim or allergen that no record backs is replaced by "The data
+ * does not say." (the grounding check, core/grounding.ts). The buyer's own question backs its numbers and dates,
+ * never a claim.
+ */
+export function checkAnswer(raw: LlmAnswer, records: AssistantRecord[], ctx: { question?: string; history?: { q: string; a: string }[]; brands?: string[] } = {}): Omit<AssistantAnswer, "model" | "ms"> {
   const known = new Set(records.map((r) => r.id));
   const citations = [...new Set(raw.citations.filter((c) => known.has(c)))];
-  const answer = raw.answer.trim().slice(0, 1500);
+  const facts = factsFrom(records.map((r) => ({ label: r.label, data: r.data })));
+  addWords(facts, ctx.question);
+  for (const h of ctx.history ?? []) addWords(facts, h.q);
+  const grounded = groundForDisplay("assistant", raw.answer.trim().slice(0, 1500), facts, { brands: ctx.brands, where: ctx.question });
+  const answer = grounded.text;
+  if (grounded.replaced) raw = { ...raw, dataMissing: true };
   if (raw.kind === "answer" && citations.length === 0 && !raw.dataMissing) {
     return { kind: "answer", answer: `${answer} (No record cited: treat this as unconfirmed.)`, citations, dataMissing: true };
   }

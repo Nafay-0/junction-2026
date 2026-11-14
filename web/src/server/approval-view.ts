@@ -165,7 +165,9 @@ export function buildApprovalView(
     total: formatEur(order.totalCents),
     totalCents: order.totalCents,
     delivery: dates.length === 1 ? dayText(dates[0]) : `${dayText(dates[0])} to ${dayText(dates[dates.length - 1])}`,
-    why: escalations.length ? escalations.map((r) => plainWhy(r, ctx)) : order.decision.reasons,
+    // What the intake carried to the signer instead of asking the buyer first ("Check the amount: ..."): the order
+    // page promises the person signing sees it, so it is part of why they are asked.
+    why: [...(escalations.length ? escalations.map((r) => plainWhy(r, ctx)) : order.decision.reasons), ...(order.notes ?? []).filter((n) => !order.decision.reasons.includes(n))],
     differences: differences(ctx),
     asked: ctx.request?.text,
     licence: licenceOf(ctx),

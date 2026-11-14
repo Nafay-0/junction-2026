@@ -1,3 +1,4 @@
+import { findSecondReading } from "./agent/second-reading-store";
 import { randomUUID } from "node:crypto";
 import type { JWK } from "jose";
 import { InMemoryOutbox } from "@/core/approval";
@@ -15,9 +16,16 @@ import { KITCHEN_ORG, demoKitchenKeyPair, demoKitchenProfile, demoProducts } fro
 import { DEMO_ORG, demoOrgKeyPair } from "./dev-fixtures";
 import { selectAdapters, type AivenHandle } from "./aiven";
 import { LiveCacheSlot, liveCacheSlots } from "./aiven/live-slot";
+import { MandateBook } from "./mandates";
+import { attachTimeMachine } from "./mariadb/attach";
+import { admission } from "./ops/onsite";
+import { suspensions } from "./ops/suspensions";
 import { recallLayer } from "./radar/gate";
 import { radar } from "./radar/registry";
+import { alternativesSource } from "./knowledge/service";
 import { SandboxService } from "./sandboxes";
+import { AccountService } from "./accounts/service";
+import { scheduleTestAccountResets } from "./accounts/schedule";
 import { loadCatalogIndex, resolveCatalogIndex } from "./valio/index-store";
 import { ValioLiveClient } from "./valio/live-client";
 import { ValioCatalog } from "./valio/valio-catalog";
@@ -49,6 +57,10 @@ export type Runtime = {
   aiven: AivenHandle;
   /** Kitchen memory (history, stated rules), shared with the Dock instance; the kitchen portal corrects stated rules here. */
   kitchens: KitchenRepository;
+  /** Restaurant and buyer accounts: one account, one kitchen (server/accounts). */
+  accounts: AccountService;
+  /** The kitchens' reissued mandates: the register the gate reads, and what each kitchen added (server/mandates.ts). */
+  mandates: MandateBook;
 };
 
 const g = globalThis as typeof globalThis & { __dockRuntime?: Promise<Runtime> };
@@ -88,28 +100,62 @@ async function buildRuntime(): Promise<Runtime> {
   // Approvers who registered a passkey must use it; others (the scripted Laakso demo) keep the link token.
   const passkeys = new PasskeyService({ store: stores.passkeyStore, demoTapEnabled });
   // RECALL RADAR HOOK (src/server/radar/gate.ts): held products read as sales-blocked, and quotes, orders and
-  // sign-offs that contain one are refused with the rule recall_hold.
+  // sign-offs that contain one are refused by the gate with the rule recall_hold (the core's ProductHolds dependency).
   const recall = recallLayer(stores.catalog);
+  // REISSUED MANDATES (src/server/mandates.ts): read back before the first mandate is presented, so a kitchen's
+  // earlier mandates stay refused after a restart.
+  const mandates = new MandateBook();
+  await mandates.restore(stores.records("mandate_reissue"));
   const dock = createDock({
     catalog: new MeteredCatalog(recall.catalog),
+    holds: recall.holds,
+    // ADMISSION (src/server/ops/onsite.ts): the core asks the operations layer on every authenticate, so a
+    // suspended agent gets no session through any door.
+    admit: admission(() => dock),
+    mandates,
     repo: stores.repo,
     ledger: new Ledger(stores.ledgerStore),
     trustedIssuers,
     wholesalerKey,
     notifier: outbox,
     verifier: passkeys.verifier,
+    secondReadings: findSecondReading, // the interpreter's second readings (server/agent/second-reader.ts)
     events,
     kitchens: stores.kitchens,
     intakes: stores.intakes,
     liveAllowance: stores.liveAllowance,
     // Live answers reused for option cards (not quotes) for this long; each reuse costs the partner nothing.
+    // The product knowledge map proposes alternatives by kitchen use (real catalogue only: the seed's products are not in it).
+    ...(catalogSource.kind === "valio" && envValue("DOCK_KNOWLEDGE") !== "off" ? { alternatives: alternativesSource() } : {}),
+    // Kitchen memory: one line per remembered item each request used (lazy: the memory service is built on this runtime).
+    ...(envValue("DOCK_MEMORY") !== "off" ? { memoryUsage: async (orgId: string, intake: Parameters<NonNullable<Parameters<typeof createDock>[0]["memoryUsage"]>>[1]) => (await (await import("./memory/runtime")).getMemoryService()).usage(orgId, intake) } : {}),
     liveCacheTtlMs: Number(envValue("DOCK_LIVE_CACHE_SECONDS") ?? 120) * 1000 || 0,
   });
   recall.attach(dock);
+  // Suspensions outlive a restart: an agent staff stopped before this process started is still stopped.
+  await suspensions(dock).restore(stores.records("suspension"));
   const sandboxes = new SandboxService({ dock, registry: trustedIssuers, passkeys, limits: sandboxLimits, kitchens: stores.kitchens, products: async () => products, store: stores.sandboxStore });
   await sandboxes.restore();
-  const rt: Runtime = { dock, outbox, catalog, catalogSource, events, passkeys, sandboxes, aiven, kitchens: stores.kitchens };
+  const accounts = new AccountService({
+    store: stores.accountStore,
+    registry: trustedIssuers,
+    passkeys,
+    kitchens: stores.kitchens,
+    dock,
+    sandboxes,
+    catalog,
+    maxAccounts: () => Number(envValue("DOCK_ACCOUNTS_MAX") ?? 1000) || 1000,
+    mandates,
+  });
+  // Not while the build prerenders pages: restoring hashes passwords (real work off the main thread), which would end
+  // prerendering early; a running server restores at its first request.
+  if (process.env.NEXT_PHASE !== "phase-production-build") await accounts.restore();
+  const rt: Runtime = { dock, outbox, catalog, catalogSource, events, passkeys, sandboxes, aiven, kitchens: stores.kitchens, mandates, accounts };
+  scheduleTestAccountResets(accounts); // not under tests or during a build; DOCK_TEST_ACCOUNTS_RESET_MINUTES=0 turns it off
   radar(rt); // starts the recall radar's schedule (not under tests, during a build, or with RADAR_POLL=off)
+  // MARIADB TIME MACHINE (src/server/mariadb): only with DOCK_MARIADB_URL. Mirrors what the gate reads into
+  // system-versioned tables after the fact; never in the path of an order.
+  attachTimeMachine(rt, stores);
   return rt;
 }
 

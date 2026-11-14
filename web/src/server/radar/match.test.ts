@@ -147,3 +147,24 @@ describe("lots: which deliveries a notice can concern", () => {
     expect(decide({ strength: "confirmed", lots: f.lots }, { today: "2026-11-14", noticeAgeDays: 141 })).toMatchObject({ status: "review", hold: false });
   });
 });
+
+describe("GTINs from the catalogue index", () => {
+  it("reads each product's GTINs from the loaded index, so a deployment without the side file still matches EANs", async () => {
+    const { assortmentOf } = await import("./assortment");
+    const pack = { perSalesUnit: { L: 2.5 }, baseUnitsPerSalesUnit: 10, primary: "L" as const };
+    const ean = gtin("640843000013");
+    const catalog = { index: { products: [{ id: "T-1", names: { fi: "Testijuoma 10 x 2,5dl" }, brand: "Testi", vendor: "TESTI OY", gtins: [ean], pack }, { id: "T-2", names: { fi: "Muu 1 l" }, brand: null, vendor: null, gtins: [], pack }] }, searchProducts: async () => [] };
+    const a = await assortmentOf({ catalog } as never);
+    expect(a).toMatchObject({ gtins: true, gtinSource: "index", source: "valio" });
+    expect(a.byId.get("T-1")!.gtins).toEqual([ean]);
+    expect(validGtin(ean)).toBe(true);
+    // An index built before GTINs were kept has no field: the side file (absent here) is the fallback, and matching is off.
+    const legacy = { index: { products: [{ id: "T-1", names: { fi: "Testijuoma" }, brand: null, vendor: null, pack }] }, searchProducts: async () => [] };
+    process.env.RADAR_GTIN_INDEX = "/nonexistent/gtins.json.gz";
+    try {
+      expect(await assortmentOf({ catalog: legacy } as never)).toMatchObject({ gtins: false, gtinSource: "none" });
+    } finally {
+      delete process.env.RADAR_GTIN_INDEX;
+    }
+  });
+});

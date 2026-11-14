@@ -23,10 +23,10 @@ type RuleInfo = { group: RuleGroup; does: string; where: "gate" | "door" | "quot
 export const RULE_INFO: Record<string, RuleInfo> = {
   per_order_limit: { group: "money", where: "gate", does: "Above the per-order limit in the kitchen's mandate, the agent cannot buy alone: a named person must sign off." },
   weekly_budget: { group: "money", where: "gate", does: "Committed orders over seven days may not pass the weekly budget: a hard limit. Money held by orders waiting for sign-off the agent may not spend alone; a person decides." },
-  human_confirmation: { group: "authority", where: "gate", does: "A likely mistake that matters, confirmed only by the agent's word and not by a person, sends the order to a named person's sign-off." },
+  human_confirmation: { group: "authority", where: "gate", does: "An order the mistake check flags, on any door, that no identified person confirmed (nobody was asked, or the yes was only relayed by the agent or its client) goes to a named person's sign-off, with the check shown." },
   approver_authority: { group: "money", where: "gate", does: "When a sign-off is needed, someone named in the mandate must be allowed to sign that amount, or the order is refused." },
   substitute_price: { group: "money", where: "gate", does: "A substitute may cost only the tolerated percentage more per litre or kilo than the product it replaces." },
-  order_splitting: { group: "money", where: "gate", does: "Several orders the agent placed alone for one need may not add up to more than it may spend alone." },
+  order_splitting: { group: "money", where: "gate", does: "Orders the agent placed alone within 24 hours for the same product family may not add up to more than it may spend alone, whatever their delivery days. The weekly budget is the ceiling behind it." },
   required_attributes: { group: "food", where: "gate", does: "Every product must carry what the mandate requires, for example lactose-free." },
   forbidden_allergens: { group: "food", where: "gate", does: "No product may contain an allergen the mandate forbids. A product with no allergen data counts as unsafe." },
   required_certificates: { group: "food", where: "gate", does: "Every product must carry the certificates the mandate requires." },
@@ -34,7 +34,7 @@ export const RULE_INFO: Record<string, RuleInfo> = {
   substitution_rule: { group: "food", where: "gate", does: "Swaps follow the kitchen's rule: none, like for like only, or with a person's sign-off." },
   delivery_deadline: { group: "food", where: "gate", does: "Every line must arrive by the date asked for and within the mandate's longest lead time." },
   mandate_signature: { group: "authority", where: "door", does: "The agent must present a mandate signed with a key of a kitchen AimoPilot trusts." },
-  mandate_window: { group: "authority", where: "door", does: "The mandate must be in force: not before it starts, not after it ends." },
+  mandate_window: { group: "authority", where: "door", does: "The mandate must be in force: not before it starts, not after it ends, and not replaced. When a kitchen reissues its mandate, the ones it signed before stop working." },
   mandate_agent: { group: "authority", where: "door", does: "The agent presenting the mandate must be the one it names." },
   quote_binding: { group: "authority", where: "gate", does: "A price quoted to one kitchen and agent cannot be used by another." },
   approver_identity: { group: "authority", where: "gate", does: "Only the named person can sign off, and their proof must cover exactly this order." },
@@ -48,6 +48,7 @@ export const RULE_INFO: Record<string, RuleInfo> = {
   quote_expiry: { group: "systems", where: "gate", does: "A fixed price holds for a limited time; after that the agent asks again." },
   quote_replay: { group: "systems", where: "gate", does: "A quote buys once." },
   order_matches_quote: { group: "systems", where: "gate", does: "The order buys exactly what was quoted, at the quoted quantities and prices." },
+  grounding_check: { group: "food", where: "door", does: "Text a model wrote (the assistant's answers, the voice agent's speech, the menu planner's lines, the interpreter's reading, memory proposals, the Aiven agent's transcript) may name only products, prices, amounts, dates, dietary claims and allergen facts that the catalogue, a live lookup, the ledger or the kitchen's memory backs. Anything else is removed or shown as \"The data does not say\" before anyone reads it." },
 };
 
 const EXTRA_TITLE: Record<string, string> = {
@@ -56,6 +57,7 @@ const EXTRA_TITLE: Record<string, string> = {
   human_confirmation: "A person confirms what matters",
   intake_sequence: "Steps in order",
   recall_hold: "Recall hold",
+  grounding_check: "Model text checked against the data",
 };
 
 export function ruleTitleOf(rule: string): string {

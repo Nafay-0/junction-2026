@@ -176,8 +176,14 @@ async function main() {
 
   if (placed.order.status === "pending_approval") {
     // The human side, not the agent: the approver opens the link sent to their phone and approves.
-    const { messages } = await (await fetch(new URL("/api/v1/dev/outbox", base))).json();
-    const msg = messages.find((x: { orderId: string }) => x.orderId === orderId);
+    const outbox = await fetch(new URL("/api/v1/dev/outbox", base));
+    const messages = outbox.ok ? (((await outbox.json()) as { messages?: unknown[] }).messages ?? []) : [];
+    const msg = (messages as { orderId: string; approvalId: string; link: string; approver: { name: string; role: string } }[]).find((x) => x.orderId === orderId);
+    if (!msg) {
+      // A production server keeps the approval link on the approver's phone, not in a dev outbox (pnpm demo:all signs with a passkey instead).
+      step("approver", `The order waits for ${placed.order.approval?.approver?.name ?? "the approver"} to sign on their own phone; this server has no dev outbox to stand in for them, so the demo stops here.`);
+      return;
+    }
     const res = await fetch(new URL(`/api/v1/approvals/${msg.approvalId}`, base), {
       method: "POST",
       headers: { "content-type": "application/json" },

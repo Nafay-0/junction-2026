@@ -30,7 +30,7 @@ export async function POST(req: Request) {
       if (isDockError(err)) return Response.json(errorBody(err.code, err.message, err.rule, err.details), { status: err.status, headers: (err as unknown as { headers?: Record<string, string> }).headers });
       throw err;
     }
-    const out = await interpretRequest(body, { catalog, mandate: session.mandate });
+    const out = await interpretRequest(body, { catalog, mandate: session.mandate, door: session.door });
     rememberInterpretation(key, day, out);
     return Response.json(out, { headers });
   });

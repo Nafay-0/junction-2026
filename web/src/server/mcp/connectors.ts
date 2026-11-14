@@ -25,7 +25,7 @@ import { DockError } from "@/core/orders";
 
 export type ConnectorKitchen = {
   slug: string;
-  kind: "demo" | "visitor";
+  kind: "demo" | "visitor" | "account";
   name: string;
   mandateToken: string;
   agentId: string;

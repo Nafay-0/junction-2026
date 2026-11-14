@@ -58,6 +58,9 @@ describe("intake tools", () => {
     expect(opened.s).toMatchObject({ ok: true, waitingFor: "buyer", step: { state: "needs_confirmation" } });
     IntakeStepSchema.parse(opened.s.step);
     expect(opened.s.nextStep).toMatch(/respond_to_concerns.*must come from the human buyer.*Do not answer for them/);
+    // This client cannot ask the buyer itself: Dock hands over its own one-time answer page for them.
+    expect(opened.s.answerUrl).toMatch(/\/answer\/[A-Za-z0-9_-]{20,}$/);
+    expect(opened.s.nextStep).toContain(opened.s.answerUrl);
     const { requestId, concerns } = opened.s.step;
     expect(concerns[0].code).toBe("quantity_tenfold");
 
@@ -78,7 +81,7 @@ describe("intake tools", () => {
 
     const quoted = await call(client, "choose_option", { requestId, by: "Sanna", optionId: answered.s.step.options[0].optionId });
     expect(quoted.s).toMatchObject({ waitingFor: "agent", step: { state: "quoted", quote: { quoteToken: expect.any(String) } } });
-    expect(quoted.s.nextStep).toMatch(/place_order with just .*requestId/);
+    expect(quoted.s.nextStep).toMatch(/place_order now with just .*requestId/);
 
     const placed = await call(client, "place_order", quoted.s.step.next.example);
     expect(placed.isError).toBe(false);
@@ -156,16 +159,23 @@ describe("intake tools with a client that can ask the buyer (MCP elicitation)", 
       return { action: "accept", content: { by: "Sanna Koskinen", [field]: field === "optimise" ? "price" : "confirm" } };
     };
     const client = await connect(kitchenAuth, buyer);
-    const { step } = (await call(client, "submit_need", milk())).s;
+    const opened = (await call(client, "submit_need", milk())).s;
+    const { step } = opened;
     const key = step.concerns[0].key;
+    expect(opened.answerUrl).toBeUndefined(); // the client asks the buyer itself: no link needed
 
     // The agent proposes a correction; the buyer sees it pre-selected, and confirms the 1,000 L instead.
     const r = await call(client, "respond_to_concerns", { requestId: step.requestId, by: "agent guess", responses: [{ key, choice: step.concerns[0].corrections[0].id }] });
     expect(r.s).toMatchObject({ ok: true, step: { state: "options_ready", need: { quantity: { amount: 1000 } }, acknowledgements: [{ action: "confirmed", by: "Sanna Koskinen" }] } });
     expect(forms[0].requestedSchema.properties[key]).toMatchObject({ default: step.concerns[0].corrections[0].id, oneOf: expect.arrayContaining([{ const: "confirm", title: expect.any(String) }]) });
     expect(forms[0].requestedSchema.required).toEqual(["by", key]);
-    // Elicitation is the protocol's own human-input mechanism: the answer is the buyer's, not relayed.
-    expect(r.s.step.acknowledgements[0]).toMatchObject({ channel: "protocol_elicitation", verified: true });
+    // The form is shown and returned by the agent's client: Dock cannot tell a client that asked its user from one
+    // that answered itself, so the answer is recorded as relayed by the client, never as the buyer's own.
+    expect(r.s.step.acknowledgements[0]).toMatchObject({ channel: "protocol_elicitation", verified: false });
+    const { dock } = await getRuntime();
+    const confirmation = dock.ledger.entries({ requestId: step.requestId }).find((e) => e.data.step === "confirmation")!;
+    expect(confirmation.summary).toMatch(/^Relayed by the agent's client, not verified/);
+    expect(confirmation).toMatchObject({ actor: `agent:${KITCHEN_ORG.agentId}`, data: { verified: false, needsSignOff: true } });
   });
 
   it("changes nothing when the buyer declines", async () => {

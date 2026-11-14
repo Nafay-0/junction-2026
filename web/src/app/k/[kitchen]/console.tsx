@@ -19,6 +19,8 @@ import { Concerns, Gate, NoOptions, Options, Questions, Quote, SignOff, SignedOr
 import { Timeline } from "./timeline";
 import { Button, ErrorPlate, Lane, STATIONS, StationStrip, useFollowLane, type LaneStage, type Station, type StationState } from "./ui";
 import type { KitchenInfo, LedgerReply, Order, PortalRequest, Product, Step } from "./types";
+import { useProductName } from "./names";
+import { exampleToEnglish } from "../../_i18n/kitchen-words";
 
 type Busy = "interpret" | "open" | "concern" | "answer" | "choose" | "order";
 type Failure = { at: "understood" | "concerns" | "questions" | "options" | "quote"; title: string; message: string; retry?: () => void; offline?: () => void };
@@ -49,6 +51,7 @@ const fresh = (n: number): Run => ({ n, text: "", concernsSeen: [], asked: [], a
 type ReadContext = { earlier?: EarlierRequest[]; followUp?: PortalRequest; product?: Product; requests: PortalRequest[] };
 
 export function Console() {
+  const pn = useProductName();
   const { kitchen, call, agent, overview } = usePortal();
   const tx = useText(CONSOLE_TEXT);
   const ux = useText(UI_TEXT);
@@ -99,7 +102,7 @@ export function Console() {
   const read = useCallback(
     async (n: number, text: string, offline: boolean, ctx: ReadContext = { requests: [] }) => {
       update(n, (r) => ({ ...r, busy: "interpret", failure: undefined, incomplete: undefined }));
-      const out = offline ? offlineExample(text) : await interpretNeed(slug, text, ctx.earlier);
+      const out = offline ? offlineExample(exampleToEnglish(text)) : await interpretNeed(slug, text, ctx.earlier);
       if (out.kind === "ok") return openIntake(n, withContext(out.interp, ctx, tx, f.lang));
       if (out.kind === "incomplete") return update(n, (r) => ({ ...r, busy: undefined, incomplete: out }));
       const failure: Failure =
@@ -249,7 +252,8 @@ export function Console() {
       if (!r.ok) throw new Error(r.error.message);
       return r.data.order;
     },
-    { events, enabled: !!orderId && waiting, pollMs: 1000, pollMsStreaming: 3000 },
+    // The event stream carries this org's approval and order events and refetches at once; the slow poll is only the fallback.
+    { events, enabled: !!orderId && waiting, pollMs: 1000, pollMsStreaming: 20_000 },
   );
   useEffect(() => {
     const o = orderLive.data;
@@ -262,7 +266,8 @@ export function Console() {
       if (!r.ok) throw new Error(r.error.message);
       return { requestId, ...r.data };
     },
-    { events, enabled: !!requestId, pollMs: 2000, pollMsStreaming: 4000 },
+    // This page's own steps refresh it (below) and the stream's events do; the slow poll is only the fallback.
+    { events, enabled: !!requestId, pollMs: 2000, pollMsStreaming: 20_000 },
   );
   const entries = ledger.data && ledger.data.requestId === requestId ? ledger.data.entries : [];
   const refreshLedger = ledger.refresh;
@@ -305,17 +310,26 @@ export function Console() {
 
   // ---------- the run survives a reload (this browser tab only) ----------
 
+  // Read before the first save: the save below would otherwise remove the saved run (the fresh page's empty run)
+  // before the restore reads it, and a reload would drop a live fixed price.
+  const restored = useRef(false);
   useEffect(() => {
+    const saved = restored.current ? undefined : readSession<Run>(`dock-run:${slug}`);
+    restored.current = true;
     queueMicrotask(() => {
-      if (runN.current !== 0) return;
-      const saved = readSession<Run>(`dock-run:${slug}`);
-      if (!saved?.text) return;
+      if (runN.current !== 0 || !saved?.text) return;
       runN.current = saved.n;
       setRun({ ...saved, busy: undefined, busyKey: undefined, failure: undefined });
+      // The step may have moved on while the page was away (a price ran out, an order placed from another screen).
+      const id = saved.step?.requestId;
+      if (id && !saved.order)
+        void call<{ step: Step }>("GET", `/api/v1/intake/${id}`).then((res) => {
+          if (res.ok) setRun((r) => (r.n === saved.n ? { ...r, step: res.data.step, options: res.data.step.options.length ? res.data.step.options : r.options } : r));
+        });
     });
-  }, [slug]);
+  }, [slug, call]);
   useEffect(() => {
-    if (run.busy) return;
+    if (run.busy || !restored.current) return;
     try {
       if (run.text) sessionStorage.setItem(`dock-run:${slug}`, JSON.stringify({ ...run, failure: undefined }));
       else sessionStorage.removeItem(`dock-run:${slug}`);
@@ -395,7 +409,7 @@ export function Console() {
       station: "Options",
       title: run.options.length === 1 ? tx.theOption : tx.nOptions(run.options.length),
       tone: state === "options_ready" ? (run.busy === "choose" ? "busy" : "active") : "done",
-      summary: picked ? tx.chosen(picked.rank, picked.lines.map((l) => `${l.packs} × ${shortProduct(l.name)}`).join(" + ")) : tx.from(money(cheapest)),
+      summary: picked ? tx.chosen(picked.rank, picked.lines.map((l) => `${l.packs} × ${shortProduct(pn(l.productId, l.name))}`).join(" + ")) : tx.from(money(cheapest)),
       body: (
         <>
           <Options step={s} options={run.options} onChoose={choose} onNarrow={(q, o, label) => answer(q, o, label, false)} busyKey={run.busy === "choose" || run.busy === "answer" ? run.busyKey : undefined} names={names} />

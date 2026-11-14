@@ -47,7 +47,7 @@ export function GateHead({ title, sub, children }: { title: string; sub?: string
     <section className="on-dark -mx-5 -mt-5 bg-safety-ink px-5 pb-6 pt-5 text-paper">
       <div className="flex items-center gap-3">
         <Target size={44} tone="safety" />
-        <p className="display min-w-0 text-[2.2rem] leading-[0.95] text-safety [overflow-wrap:anywhere] hyphens-auto">{title}</p>
+        <p className="display min-w-0 text-[2.2rem] leading-[0.95] text-safety [overflow-wrap:break-word] hyphens-manual">{title}</p>
       </div>
       {sub && <p className="mt-2 text-[1.08rem] leading-snug text-paper/90">{sub}</p>}
       {children}
@@ -72,7 +72,7 @@ export function bigButton(kind: "go" | "secondary" | "dark" | "demo" = "go"): st
 export function PhoneNotice({ title, body, children }: { title: string; body?: string; children?: ReactNode }) {
   return (
     <div className="mt-10">
-      <h1 className="display text-[2.4rem] text-ink hyphens-auto [overflow-wrap:anywhere]">{title}</h1>
+      <h1 className="display text-[2.4rem] text-ink hyphens-manual [overflow-wrap:break-word]">{title}</h1>
       {body && <p className="mt-3 leading-snug">{body}</p>}
       {children}
     </div>

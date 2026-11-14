@@ -12,12 +12,12 @@ export const CALL_AGENT_TEXT = defineText({
     call: "Soita agentille",
     checking: "Tarkistetaan…",
     connecting: "Puheyhteyttä otetaan vielä käyttöön.",
-    scan: (agent: string) => `Skannaa koodi puhelimella, niin pääset puhumaan agentin ${agent} kanssa.`,
+    scan: () => `Skannaa koodi puhelimella, niin pääset puhumaan ostoagentin kanssa.`,
   },
   sv: {
     call: "Ring din agent",
     checking: "Kontrollerar…",
     connecting: "Röstsamtal kopplas in snart.",
-    scan: (agent: string) => `Skanna med telefonen för att prata med ${agent}.`,
+    scan: () => `Skanna med telefonen för att prata med inköpsagenten.`,
   },
 });

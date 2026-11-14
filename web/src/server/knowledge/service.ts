@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { loadCatalogIndex, resolveCatalogIndex } from "@/server/valio/index-store";
-import type { BuyerConstraints } from "./facts";
+import { resolveBuyer, type BuyerConstraints } from "./facts";
 import { KnowledgeMap, type AlternativesOptions, type AlternativesResult, type RoleResult } from "./map";
 import { loadKnowledgeFile, resolveKnowledgeFile, type KnowledgeSource } from "./store";
 import { USES, type Use } from "./vocab";
@@ -53,7 +53,18 @@ export function setKnowledgeMapForTests(map: KnowledgeMap | null): void {
   g.__dockKnowledge = Promise.resolve(map ? { map, status: { available: true, products: map.size, builtAt: map.builtAt, model: map.stats.model, source: "file" } } : { map: null, status: { available: false, reason: "disabled in a test" } });
 }
 
-export type AlternativesAnswer = ({ available: true } & AlternativesResult) | { available: true; unknownProduct: string } | { available: false; reason: string };
+/** A constraint word the data cannot check: refused, never passed (the routes answer 400). */
+export type UnknownConstraints = { available: false; reason: string; unknownConstraints: { word: string; as: "claim" | "allergen" }[] };
+
+function cannotVerify(unknown: UnknownConstraints["unknownConstraints"]): UnknownConstraints {
+  return {
+    available: false,
+    reason: `Cannot verify ${unknown.map((u) => `${u.as === "claim" ? "the claim" : "the allergen"} "${u.word}"`).join(", ")}: no product data speaks of it. Use words such as lactose_free, gluten_free, vegan (claims) or milk, lactose, gluten, nuts, peanuts, eggs, fish, soy, sesame (allergens), in English, Finnish or Swedish.`,
+    unknownConstraints: unknown,
+  };
+}
+
+export type AlternativesAnswer = ({ available: true } & AlternativesResult) | { available: true; unknownProduct: string } | { available: false; reason: string } | UnknownConstraints;
 
 /**
  * Ranked alternatives for one product in one use (default: its most typical use), every one checked against the
@@ -61,19 +72,23 @@ export type AlternativesAnswer = ({ available: true } & AlternativesResult) | { 
  * `packAlternatives` are the same product in other pack sizes; `none` says why there is no substitute.
  */
 export async function alternativesFor(productId: string, opts: AlternativesOptions = {}): Promise<AlternativesAnswer> {
+  const buyer = resolveBuyer(opts.constraints);
+  if (buyer.unknown.length) return cannotVerify(buyer.unknown);
   const map = await getKnowledgeMap();
   if (!map) return { available: false, reason: ((await knowledgeStatus()) as { reason: string }).reason };
-  const r = map.alternatives(productId, opts);
+  const r = map.alternatives(productId, { ...opts, constraints: buyer.constraints });
   return r ? { available: true, ...r } : { available: true, unknownProduct: productId };
 }
 
-export type RoleAnswer = ({ available: true } & RoleResult) | { available: false; reason: string };
+export type RoleAnswer = ({ available: true } & RoleResult) | { available: false; reason: string } | UnknownConstraints;
 
 /** Products that fit a role described in free text ("cream for carbonara", "gluten-free flour for bread"). */
 export async function productsForRole(text: string, opts: { constraints?: BuyerConstraints; limit?: number; uses?: Use[] } = {}): Promise<RoleAnswer> {
+  const buyer = resolveBuyer(opts.constraints);
+  if (buyer.unknown.length) return cannotVerify(buyer.unknown);
   const map = await getKnowledgeMap();
   if (!map) return { available: false, reason: ((await knowledgeStatus()) as { reason: string }).reason };
-  return { available: true, ...map.forRole(text, opts) };
+  return { available: true, ...map.forRole(text, { ...opts, constraints: buyer.constraints }) };
 }
 
 // ---------- query parsing shared by the routes ----------
@@ -85,7 +100,7 @@ const list = z
     s
       .split(",")
       .map((x) => x.trim().toLowerCase().replace(/[\s-]+/g, "_"))
-      .filter((x) => /^[a-z0-9_:]{2,40}$/.test(x)),
+      .filter((x) => x.length >= 2 && x.length <= 40),
   );
 
 export const AlternativesQuery = z.object({
@@ -107,4 +122,31 @@ export const RoleQuery = z.object({
 export function constraintsOf(q: { claims?: string[]; allergens?: string[] }): BuyerConstraints | undefined {
   if (!q.claims?.length && !q.allergens?.length) return undefined;
   return { requiredClaims: q.claims, forbiddenAllergens: q.allergens };
+}
+
+// ---------- the core's dependency slot (core/alternatives.ts) ----------
+
+/**
+ * The knowledge map as the core's `AlternativesSource`: what can stand in for a product, ranked for the use the
+ * buyer's words name ("milk for coffee" -> coffee; otherwise the product's most typical use), in the kitchen's
+ * constraints. Words the map's vocabulary cannot check are left to the core's own filter, which every proposal
+ * passes anyway. Undefined when there is no map or it does not know the product: the core then keeps its own rule.
+ */
+export function alternativesSource(): import("@/core/alternatives").AlternativesSource {
+  return async (productId, q) => {
+    const map = await getKnowledgeMap();
+    if (!map) return undefined;
+    const requiredClaims = q.requiredClaims.filter((c) => !resolveBuyer({ requiredClaims: [c] }).unknown.length);
+    const forbiddenAllergens = q.forbiddenAllergens.filter((a) => !resolveBuyer({ forbiddenAllergens: [a] }).unknown.length);
+    const buyer = resolveBuyer({ requiredClaims, forbiddenAllergens });
+    const use = q.text ? map.forRole(q.text).uses[0] : undefined;
+    const r = map.alternatives(productId, { ...(use ? { use } : {}), constraints: buyer.constraints });
+    if (!r) return undefined;
+    return {
+      substitutes: r.substitutes.map((s) => ({ productId: s.productId, tier: s.tier, reason: s.reason, otherPacks: s.otherPacks })),
+      packAlternatives: r.packAlternatives.map((p) => p.productId),
+      ...(r.none ? { none: r.none } : {}),
+      ...(r.use ? { use: r.use } : {}),
+    };
+  };
 }

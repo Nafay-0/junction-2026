@@ -1,3 +1,5 @@
+import { DOORS, type Door } from "@/core/orders";
+import { viaOfDoor } from "../door-session";
 import { decodeJwt } from "jose";
 import type { LedgerEntry } from "@/core/ledger";
 import type { Mandate } from "@/core/mandate";
@@ -22,7 +24,7 @@ export type AgentInfo = {
   orgId: string;
   orgName: string;
   label: string;
-  kind: "demo" | "visitor" | "outside";
+  kind: "demo" | "visitor" | "account" | "outside";
   mandate?: Mandate;
   approverName?: string;
   expiresAt?: string;
@@ -45,6 +47,8 @@ export type OpsContext = {
   byRequest: Map<string, LedgerEntry[]>;
   licence(agentId: string): LicenceRecord | undefined;
   viaOfRequest(requestId: string): Via | undefined;
+  /** Which door the request came through (typed, assistant, voice, photo, menu, store, mcp, connector, rest). */
+  doorOfRequest(requestId: string): Door | undefined;
   orgOfRequest(requestId: string): string | undefined;
 };
 
@@ -108,6 +112,11 @@ export async function opsContext(rt: Runtime, now = new Date()): Promise<OpsCont
       expiresAt: s.expiresAt,
     });
   }
+  // Restaurants' own kitchens, behind their accounts (server/accounts). Ops sees each as a kitchen, nothing about the person.
+  for (const a of await rt.accounts.store.list()) {
+    if (!a.kitchen || agents.has(a.kitchen.agentId)) continue;
+    agents.set(a.kitchen.agentId, { agentId: a.kitchen.agentId, orgId: a.kitchen.orgId, orgName: a.restaurant, label: `${a.restaurant}'s buyer agent`, kind: "account", mandate: door.mandateOf(a.kitchen.agentId) ?? a.kitchen.mandate, approverName: a.kitchen.terms.signer });
+  }
   // Anyone else who came to the door with a mandate Dock trusts (an outside agent of a known kitchen, a closed visitor kitchen).
   for (const c of door.all()) {
     if (agents.has(c.agentId) || !c.orgId) continue;
@@ -151,9 +160,16 @@ export async function opsContext(rt: Runtime, now = new Date()): Promise<OpsCont
       const r = resolveLicence({ agentId, orgId: agents.get(agentId)?.orgId ?? "" });
       return r.record ? { ...r.record, agentId } : lic.get(agentId);
     },
+    // The door the request recorded itself (core Door, set by the server) decides; the door log's timing is the fallback.
     viaOfRequest: (requestId) => {
       const r = requests.get(requestId);
-      return r ? door.viaAt(r.actor.replace(/^agent:/, ""), r.at)?.via : undefined;
+      if (!r) return undefined;
+      const d = doorOf(r);
+      return d ? viaOfDoor(d) : door.viaAt(r.actor.replace(/^agent:/, ""), r.at)?.via;
+    },
+    doorOfRequest: (requestId) => {
+      const r = requests.get(requestId);
+      return r ? doorOf(r) : undefined;
     },
     orgOfRequest: (requestId) => {
       const r = requests.get(requestId);
@@ -161,6 +177,11 @@ export async function opsContext(rt: Runtime, now = new Date()): Promise<OpsCont
     },
   };
 }
+
+const doorOf = (e: LedgerEntry): Door | undefined => {
+  const d = (e.data as { door?: unknown }).door;
+  return typeof d === "string" && (DOORS as readonly string[]).includes(d) ? (d as Door) : undefined;
+};
 
 async function seedSize(rt: Runtime): Promise<number | undefined> {
   try {

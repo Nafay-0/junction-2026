@@ -9,8 +9,8 @@ import { PasskeyError, type PasskeyService, type RelyingParty } from "@/core/pas
 import { addMinutes, newId } from "@/core/util";
 import { SANDBOX_ROLE, sandboxIdentity, sandboxMandate, type SandboxIdentity } from "./dev-fixtures";
 import { hotelKitchenProfile } from "./demo-kitchen";
-import { doorLog } from "./ops/door";
-import { suspensions } from "./ops/suspensions";
+import { openKitchenOrg } from "./kitchen-org";
+import { onsiteSession } from "./ops/onsite";
 import { runKitchenScenario } from "./sandbox-scenario";
 
 /**
@@ -157,14 +157,10 @@ export class SandboxService {
     const sandboxId = newId("sbx");
     const orgId = `org_${sandboxId}`;
     const agentId = `agent_${sandboxId}`;
-    const key = await generateEd25519KeyPair(`${orgId}-key`);
-    this.deps.registry.add({ kid: key.kid, orgId, publicKey: key.publicKey });
     const mandate = sandboxMandate({ now, expiresAt, orgId, orgName: `${identity.kitchenName}, ${identity.city}`, agentId, approverName: identity.approverName });
-    const mandateToken = await signMandate(mandate, key);
-    if (this.deps.kitchens) {
-      // A plausible past: a hotel buying a few hundred litres of milk twice a week, from the catalogue it runs on.
-      await this.deps.kitchens.saveProfile(hotelKitchenProfile(orgId, mandate.issuer.name, now, await this.deps.products?.()));
-    }
+    // A plausible past: a hotel buying a few hundred litres of milk twice a week, from the catalogue it runs on.
+    const profile = this.deps.kitchens ? hotelKitchenProfile(orgId, mandate.issuer.name, now, await this.deps.products?.()) : undefined;
+    const { key, mandateToken } = await openKitchenOrg({ registry: this.deps.registry, kitchens: this.deps.kitchens, kid: `${orgId}-key`, mandate, profile });
     const approverId = newId("apv");
     await this.deps.passkeys.enrol(
       { approverId, orgId, role: SANDBOX_ROLE.id, name: identity.approverName, userHandle: passkey?.userHandle ?? "", createdAt: now.toISOString(), expiresAt: expiresAt.toISOString() },
@@ -188,6 +184,18 @@ export class SandboxService {
     await this.sandboxes.put(sandbox);
     const sessionToken = await this.deps.passkeys.newSession(approverId, expiresAt);
     return { sandbox: summarize(sandbox), sessionToken };
+  }
+
+  /**
+   * The visitor kept their kitchen as an account (accounts/service.ts keepVisitor): the sandbox record goes, but not
+   * its approver, its passkey, its memory or its orders, which the account now owns. Its old key is retired.
+   */
+  async release(sandboxId: string): Promise<SandboxRecord | undefined> {
+    const s = await this.sandboxes.get(sandboxId);
+    if (!s) return undefined;
+    await this.sandboxes.delete(sandboxId);
+    this.deps.registry.remove(String(s.publicJwk.kid ?? `${s.orgId}-key`));
+    return s;
   }
 
   async get(sandboxId: string): Promise<SandboxSummary | undefined> {
@@ -214,21 +222,31 @@ export class SandboxService {
     return s && { mandateToken: s.mandateToken, agentId: s.agentId };
   }
 
+  /**
+   * Reissue a visitor kitchen's mandate with new terms (server/mandates.ts decides them). The organisation's first
+   * private key was used once and never stored, so the kitchen signs with a fresh key: Dock trusts its public half
+   * from now on, the private half is used for this one signature and discarded again. The kitchen's agent, console
+   * and connector address present the new mandate from the next call.
+   */
+  async reissue(sandboxId: string, mandate: Mandate): Promise<void> {
+    const s = await this.sandboxes.get(sandboxId);
+    if (!s) throw new DockError(404, "sandbox_not_found", "This demo kitchen does not exist or has closed.");
+    const key = await generateEd25519KeyPair(`${s.orgId}-key-${newId("k").slice(2, 10)}`);
+    this.deps.registry.add({ kid: key.kid, orgId: s.orgId, publicKey: key.publicKey });
+    await this.sandboxes.put({ ...s, mandate, mandateToken: await signMandate(mandate, key), publicJwk: key.publicJwk });
+  }
+
+  /** The mandate a kitchen's agent presents now. */
+  async mandateOf(sandboxId: string): Promise<Mandate | undefined> {
+    return (await this.sandboxes.get(sandboxId))?.mandate;
+  }
+
   /** Run the scripted buyer for this kitchen: the 1,000 L milk order, which needs the visitor's sign-off. */
   async runDemoOrder(sandboxId: string): Promise<PublicOrder> {
     const creds = await this.agentCredentials(sandboxId);
     if (!creds) throw new DockError(404, "sandbox_not_found", "This demo kitchen does not exist or has closed.");
-    const session = await this.deps.dock.authenticate(creds.mandateToken, creds.agentId);
-    // The scripted buyer passes the same operations check as every other caller (see ops/suspensions.ts).
-    const call = { via: "onsite" as const, transport: "direct" as const, path: "scripted demo order" };
-    const record = { at: this.now().toISOString(), agentId: session.agentId, orgId: session.mandate.issuer.orgId, orgName: session.mandate.issuer.name, ...call };
-    try {
-      suspensions(this.deps.dock).enforce(session, call);
-    } catch (err) {
-      if (err instanceof DockError) doorLog(this.deps.dock).record({ ...record, ok: false, code: err.code, rule: err.rule });
-      throw err;
-    }
-    doorLog(this.deps.dock).record({ ...record, ok: true }, session.mandate);
+    // The scripted buyer passes the same operations check as every other caller (ops/onsite.ts admission).
+    const session = await onsiteSession(this.deps.dock, creds, "scripted demo order");
     const s = await this.sandboxes.get(sandboxId);
     return runKitchenScenario(this.deps.dock, session, { now: this.now(), by: s ? `${s.approverName} (scripted buyer)` : undefined });
   }

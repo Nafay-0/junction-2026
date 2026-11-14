@@ -30,7 +30,7 @@ export function DoorButtons({
     return () => window.removeEventListener("keydown", esc);
   }, [open]);
   const btn =
-    "inline-flex size-12 shrink-0 items-center justify-center border-l-2 border-ink/20 text-ink hover:bg-concrete disabled:opacity-50";
+    "inline-flex size-11 shrink-0 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-surface hover:text-ink disabled:opacity-50";
   return (
     <>
       <button
@@ -93,7 +93,7 @@ export function DoorButtons({
             ) : (
               <div className="mx-auto max-w-5xl px-4 py-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <h2 className="display min-w-0 text-[2rem] hyphens-auto [overflow-wrap:anywhere]">{tx.scan}</h2>
+                  <h2 className="display min-w-0 text-[2rem] hyphens-manual [overflow-wrap:break-word]">{tx.scan}</h2>
                   <button
                     type="button"
                     onClick={() => setOpen(null)}

@@ -47,6 +47,18 @@ export class RateLimiter {
     return null;
   }
 
+  /** Hits counted in the key's current window, without counting one. */
+  count(rule: RateRule, key: string, now = Date.now()): number {
+    const w = this.windows.get(`${rule.name}|${key}`);
+    return w && now - w.start < rule.windowMs ? w.count : 0;
+  }
+
+  /** Seconds until the key's current window resets (at least 1). */
+  retryAfter(rule: RateRule, key: string, now = Date.now()): number {
+    const w = this.windows.get(`${rule.name}|${key}`);
+    return w ? Math.max(1, Math.ceil((w.start + rule.windowMs - now) / 1000)) : 1;
+  }
+
   private evict() {
     if (this.windows.size <= this.maxKeys) return;
     for (const id of this.windows.keys()) {
@@ -96,12 +108,20 @@ function counter(kind: string, now = new Date()): Day {
 const demoLimit = (what: string) =>
   new DockError(429, "demo_limit_reached", `Demo limit reached: ${what} for today on this server. It resets at midnight UTC.`, "demo_budget");
 
-/** Before a model call: refuse when switched off or over today's caps. Counts the call. */
-export function reserveLlmCall(now = new Date()): void {
+/** Of each daily cap, the share a spare call (the second reader) may not use: it is kept for first readings. */
+export const SPARE_RESERVE = 0.1;
+
+/**
+ * Before a model call: refuse when switched off or over today's caps. Counts the call. `spare`: a call the product
+ * works without (the second reader) is refused once the last SPARE_RESERVE of either cap is reached, so it can never
+ * use up the calls an order needs.
+ */
+export function reserveLlmCall(now = new Date(), opts: { spare?: boolean } = {}): void {
   if (env("DOCK_LLM") === "off") throw new DockError(503, "llm_disabled", "Model calls are switched off on this server.", "demo_budget");
   const c = counter("llm", now);
-  if (c.calls >= int(env("DOCK_LLM_DAILY_CALLS"), 500)) throw demoLimit("the number of model calls");
-  if (c.usd >= int(env("DOCK_LLM_DAILY_USD"), 5)) throw demoLimit("the model spend");
+  const room = opts.spare ? 1 - SPARE_RESERVE : 1;
+  if (c.calls >= int(env("DOCK_LLM_DAILY_CALLS"), 500) * room) throw demoLimit("the number of model calls");
+  if (c.usd >= int(env("DOCK_LLM_DAILY_USD"), 5) * room) throw demoLimit("the model spend");
   c.calls++;
 }
 

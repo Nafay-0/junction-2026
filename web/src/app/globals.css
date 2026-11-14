@@ -1,98 +1,346 @@
 @import "tailwindcss";
 
 /*
- * Dock's tokens. The full contract, with do and do not, is web/docs/DESIGN.md.
+ * AimoPilot's tokens. The contract, with do and do not, is web/docs/DESIGN.md.
  *
- * The store lives in the wholesaler's world: petrol blue for structure, white paper for documents and tiles, a mist
- * ground, charcoal text, lime for the one main action in view, lavender for anything the agent remembered or wrote.
- * Warning-sign yellow with black hazard striping belongs ONLY to the gate: a rule refused, or a person must decide.
- * Square corners everywhere; the round crash-test mark is the only circle.
+ * A food-service ordering product: calm, bright, appetising, precise. White surfaces on a light mist ground, petrol
+ * as the brand's accent and for the few dark surfaces, lime for the one main action in view, lavender for anything
+ * the agent remembered or wrote. Warning yellow with the hazard stripe belongs ONLY to the gate: a rule refused, or
+ * a person must decide.
+ *
+ * Shape is a scale, not one number: controls are pills, fields are 12, containers 20, feature surfaces 28.
  */
 @theme {
-  --font-sans: var(--font-barlow), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-barlow-condensed), var(--font-barlow), ui-sans-serif, system-ui, sans-serif;
+  /* Figtree carries everything people read; Bricolage Grotesque, set a little narrow, carries titles and figures. */
+  --font-sans: var(--font-figtree), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: var(--font-bricolage), var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  /* --- the store (light) --- */
-  --color-petrol: #005670; /* structure: nav band, links, active states, document rules (8.1:1 on white) */
-  --color-petrol-deep: #003646; /* dark grounds: demo strip, plates, the lane's current station */
-  --color-petrol-soft: #d5e6eb; /* petrol tint: selected rows, hover on mist */
-  --color-ink: #23282d; /* text on light (14.6:1 on white) */
-  --color-ink-soft: #55616b; /* secondary text (6.3:1 on white, 5.9:1 on mist, 5.4:1 on lavender) */
-  --color-line: #c9d6db; /* hairlines and quiet borders */
-  --color-mist: #f2f7f8; /* the page ground */
-  --color-lavender: #eee8f5; /* the agent's tint */
-  --color-lavender-deep: #5b4a7a; /* the agent's marks on lavender (7.0:1) */
-  --color-lime: #c0e021; /* the main action; text on lime is ink (11:1) */
-  --color-lime-hover: #aed01a;
-  --color-paper: #ffffff; /* documents and tiles */
+  /* --- brand and text --- */
+  --color-petrol: #005670; /* brand accent: links, active states, strong secondary actions (8.1:1 on white) */
+  --color-petrol-deep: #003646; /* dark surfaces: the hero, the operations sidebar, the gate's slab */
+  --color-petrol-soft: #e2eef1; /* petrol tint: selected, hover, quiet fills */
+  --color-ink: #15242b; /* text (15.9:1 on white) */
+  --color-ink-soft: #55666e; /* secondary text (6.0:1 on white, 5.6:1 on mist, 5.2:1 on lavender) */
+  --color-ink-faint: #8a999f; /* placeholders, disabled marks, decoration; never body text */
 
-  /* Older names, kept so every screen keeps working: concrete is the page ground, concrete-deep a quiet fill. */
-  --color-concrete: #f2f7f8;
-  --color-concrete-deep: #dce7ea;
+  /* --- surfaces --- */
+  --color-paper: #ffffff; /* cards, sheets, fields */
+  --color-mist: #f4f8f8; /* the page ground */
+  --color-surface: #ecf3f4; /* a sunken or tinted panel on white: stat strips, quiet groups */
+  --color-line: #dde7ea; /* hairlines */
+  --color-line-strong: #b9c8cd; /* field borders, dividers that must be seen */
 
-  /* Temperature: a quiet code with a glyph, never the only signal and never a fill behind text. */
+  /* --- action and the agent --- */
+  --color-lime: #c0e021; /* the one main action; text on lime is ink (12:1) */
+  --color-lime-hover: #b1d315;
+  --color-lime-soft: #f1f8cf; /* a done or positive tint */
+  --color-lavender: #f1ecf8; /* the agent's tint */
+  --color-lavender-mid: #dfd5ee; /* hover and borders on lavender */
+  --color-lavender-deep: #5b4a7a; /* the agent's marks and text on lavender (7.0:1) */
+
+  /* --- meaning (never the only signal) --- */
+  --color-good: #1c6b4a; /* text and marks: placed, intact, passed (6.4:1 on white) */
+  --color-good-soft: #e2f3ea;
+  --color-bad: #a3312b; /* text and marks outside the gate: a failed call, a broken chain (6.6:1 on white) */
+  --color-bad-soft: #fbe9e6;
+  --color-notice: #96501d; /* something looks off and the agent is asking: warm, calm, never the gate's yellow (6.1:1) */
+  --color-notice-soft: #fbefe4;
   --color-chilled: #2b8c9e;
   --color-frozen: #4f67b5;
   --color-ambient: #a97e36;
 
   /* --- the gate (the only loud thing) --- */
-  --color-safety: #ffc20e; /* warning-sign yellow: human decisions and refusals only */
-  --color-safety-ink: #1a1d21; /* text on safety yellow, and the black of the hazard stripe */
+  --color-safety: #ffc20e; /* warning yellow: human decisions and refusals only */
+  --color-safety-soft: #fff5d1; /* a waiting tint beside the gate's mark */
+  --color-safety-ink: #1a1d21; /* text on safety yellow; the dark of the hazard stripe and the gate's slab */
 
-  /* --- the wall and the operations desk (dark), until they are restyled --- */
+  /* Older names, kept so every screen keeps working until it is restyled. */
+  --color-concrete: #f4f8f8;
+  --color-concrete-deep: #dde7ea;
   --color-steel: #1d2329;
   --color-steel-2: #262e36;
   --color-steel-3: #36404a;
   --color-chalk: #eef1f0;
   --color-chalk-soft: #a9b3bb;
+
+  /* --- shape: a scale by role --- */
+  --radius-xs: 6px; /* tags, keys */
+  --radius-sm: 8px; /* small marks, bars */
+  --radius-md: 12px; /* fields, list rows, raw buttons */
+  --radius-lg: 16px; /* inner panels, tiles */
+  --radius-xl: 20px; /* cards and panels */
+  --radius-2xl: 28px; /* feature surfaces: the hero, sheets */
+
+  /* --- depth: sparing; most surfaces are flat with a hairline --- */
+  --shadow-xs: 0 1px 2px rgb(0 54 70 / 0.05);
+  --shadow-sm: 0 1px 2px rgb(0 54 70 / 0.05), 0 4px 14px -6px rgb(0 54 70 / 0.1);
+  --shadow-md: 0 2px 4px rgb(0 54 70 / 0.05), 0 12px 28px -12px rgb(0 54 70 / 0.18);
+  --shadow-lg: 0 24px 60px -20px rgb(0 54 70 / 0.35);
+
+  --ease-out-soft: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-body {
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-  background: var(--color-mist);
-  color: var(--color-ink);
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-padding-top: 6rem;
+  }
+  body {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: var(--color-mist);
+    color: var(--color-ink);
+    line-height: 1.5;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    text-wrap: balance;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--color-lime) 55%, transparent);
+  }
+  /* Controls a page writes by hand are never square: fields and plain buttons take the field radius. The kit's
+     buttons and chips are pills and say so themselves; any `rounded-*` utility still wins. */
+  button,
+  select,
+  textarea,
+  input:not([type="checkbox"], [type="radio"], [type="range"]) {
+    border-radius: var(--radius-md);
+  }
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  summary,
+  select,
+  label[for] {
+    cursor: pointer;
+  }
+  a,
+  button {
+    -webkit-tap-highlight-color: transparent;
+  }
+  a {
+    text-underline-offset: 0.22em;
+    text-decoration-thickness: 1px;
+  }
+  kbd {
+    font-family: var(--font-sans);
+  }
+  th {
+    font-weight: 600;
+  }
 }
 
-/* Numerals that change (money, counters, countdowns) never jitter. */
-.tabular {
-  font-variant-numeric: tabular-nums;
+@layer components {
+  /* Numerals that change (money, counters, countdowns) never jitter. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Display type: titles and big figures. A little narrow, confident, never heavy. */
+  .display {
+    font-family: var(--font-display);
+    font-weight: 650;
+    font-stretch: 86%;
+    font-variation-settings: "wdth" 86;
+    font-optical-sizing: auto;
+    letter-spacing: -0.022em;
+    line-height: 1.08;
+  }
+
+  /* ---------- surfaces by role ---------- */
+
+  /* A card: white, hairline, the container radius. Flat by default; `.card-raise` for the few that float. */
+  .card {
+    background: var(--color-paper);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-xl);
+  }
+  .card-raise {
+    box-shadow: var(--shadow-sm);
+  }
+  /* An interactive card or row lifts a little under the pointer and settles on press. */
+  .lift {
+    transition:
+      transform 160ms var(--ease-out-soft),
+      box-shadow 160ms var(--ease-out-soft),
+      border-color 160ms var(--ease-out-soft),
+      background-color 160ms var(--ease-out-soft);
+  }
+  @media (hover: hover) {
+    .lift:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+      border-color: var(--color-line-strong);
+    }
+  }
+  .lift:active {
+    transform: translateY(0);
+  }
+
+  /* A field: the one look for text inputs and selects (the kit's Input and Select use it). */
+  .field {
+    min-height: 2.75rem;
+    width: 100%;
+    border: 1px solid var(--color-line-strong);
+    border-radius: var(--radius-md);
+    background: var(--color-paper);
+    padding: 0 0.875rem;
+    font-size: 1rem;
+    color: var(--color-ink);
+    transition:
+      border-color 140ms ease,
+      box-shadow 140ms ease;
+  }
+  .field::placeholder {
+    color: var(--color-ink-faint);
+  }
+  .field:hover {
+    border-color: var(--color-ink-soft);
+  }
+  .field:focus {
+    outline: none;
+    border-color: var(--color-petrol);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-petrol) 22%, transparent);
+  }
+  .field:disabled {
+    background: var(--color-surface);
+    color: var(--color-ink-soft);
+  }
+
+  /* ---------- the gate ---------- */
+
+  /* The hazard stripe: marks a surface where a person must act, or the gate refused. Gate only, and thin. */
+  .hazard {
+    background-image: repeating-linear-gradient(-45deg, var(--color-safety) 0 9px, var(--color-safety-ink) 9px 18px);
+  }
+  .hazard-thin {
+    background-image: repeating-linear-gradient(-45deg, var(--color-safety) 0 5px, var(--color-safety-ink) 5px 10px);
+  }
+  /* The gate's slab: a dark, rounded surface with one hazard band along its top edge. */
+  .hazard-frame {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--radius-xl);
+    background: var(--color-safety-ink);
+    padding-top: 6px;
+    box-shadow: inset 0 0 0 1px rgb(255 194 14 / 0.28);
+  }
+  .hazard-frame::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 6px;
+    background-image: repeating-linear-gradient(-45deg, var(--color-safety) 0 9px, var(--color-safety-ink) 9px 18px);
+  }
+  /* Inline uses (a stamp, a tag) keep their own padding and a smaller radius. */
+  span.hazard-frame {
+    border-radius: var(--radius-md);
+  }
 }
 
-/* Display type: the heavy condensed register. Tight, never tracked out. */
-.display {
-  font-family: var(--font-display);
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  line-height: 1;
+/* ---------- focus ---------- */
+
+/* In the base layer, so a control that draws its own focus (a field's ring, the composer) can switch this off. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-petrol);
+    outline-offset: 2px;
+  }
+  .on-dark :focus-visible,
+  .on-steel :focus-visible {
+    outline-color: var(--color-lime);
+  }
 }
 
-/* Black-and-yellow hazard: marks a surface where a person must act, or the gate refused. Gate only. */
-.hazard {
-  background-image: repeating-linear-gradient(-45deg, var(--color-safety) 0 14px, var(--color-safety-ink) 14px 28px);
-}
-.hazard-thin {
-  background-image: repeating-linear-gradient(-45deg, var(--color-safety) 0 7px, var(--color-safety-ink) 7px 14px);
-}
-/* A hazard frame around a dark slab: the gate when it stops something. */
-.hazard-frame {
-  border: 10px solid transparent;
-  background:
-    linear-gradient(var(--color-safety-ink), var(--color-safety-ink)) padding-box,
-    repeating-linear-gradient(-45deg, var(--color-safety) 0 14px, var(--color-safety-ink) 14px 28px) border-box;
+@layer components {
+  /* ---------- the data table, and its phone form ---------- */
+
+  /*
+   * `.dt` is the kit's table (operations Table, store lists). On a phone each row becomes a small card and every
+   * cell is labelled with its column's heading (the kit copies the heading into data-label).
+   */
+  .dt {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    text-align: left;
+    font-size: 0.925rem;
+  }
+  .dt th {
+    padding: 0.75rem 1rem 0.625rem;
+    font-size: 0.8rem;
+    color: var(--color-ink-soft);
+    white-space: nowrap;
+    border-bottom: 1px solid var(--color-line);
+    background: var(--color-paper);
+  }
+  .dt td {
+    padding: 0.75rem 1rem;
+    vertical-align: top;
+    border-bottom: 1px solid var(--color-line);
+  }
+  .dt tbody tr:last-child td {
+    border-bottom: 0;
+  }
+  .dt tbody tr {
+    transition: background-color 120ms ease;
+  }
+  @media (max-width: 767px) {
+    .dt thead {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+    }
+    .dt,
+    .dt tbody,
+    .dt tr,
+    .dt td {
+      display: block;
+      width: auto;
+      max-width: none;
+      min-width: 0;
+    }
+    .dt tr {
+      padding: 0.875rem 1rem;
+      border-bottom: 1px solid var(--color-line);
+    }
+    .dt tbody tr:last-child {
+      border-bottom: 0;
+    }
+    .dt td {
+      padding: 0.125rem 0;
+      border: 0;
+      text-align: left;
+    }
+    .dt td[data-label]:not(:first-child) {
+      display: grid;
+      grid-template-columns: 6.5rem minmax(0, 1fr);
+      gap: 0.75rem;
+      padding-top: 0.375rem;
+    }
+    .dt td[data-label]:not(:first-child)::before {
+      content: attr(data-label);
+      font-size: 0.8rem;
+      color: var(--color-ink-soft);
+      padding-top: 0.1rem;
+    }
+    .dt td:first-child {
+      font-size: 1rem;
+      padding-bottom: 0.25rem;
+    }
+    .dt td:empty {
+      display: none;
+    }
+  }
 }
 
-:focus-visible {
-  outline: 3px solid var(--color-petrol);
-  outline-offset: 2px;
-}
-.on-dark :focus-visible,
-.on-steel :focus-visible {
-  outline-color: var(--color-lime);
-}
-
-/* ---------- motion: only to show what changed ---------- */
+/* ---------- motion: short, and only to show what changed ---------- */
 
 @keyframes dock-spin {
   to {
@@ -104,7 +352,7 @@ body {
   transform-origin: center;
 }
 .spin {
-  animation: dock-spin 1.1s linear infinite;
+  animation: dock-spin 0.8s linear infinite;
   transform-origin: center;
 }
 
@@ -117,15 +365,15 @@ body {
   animation: dock-arrive 1.6s ease-out;
 }
 
-/* A new stage arrives on the lane: it slides in from the lane's side. */
+/* A new stage arrives on the lane. */
 @keyframes lane-enter {
   from {
     opacity: 0;
-    transform: translateX(-12px);
+    transform: translateY(8px);
   }
 }
 .lane-enter {
-  animation: lane-enter 360ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  animation: lane-enter 320ms var(--ease-out-soft);
 }
 
 /* The gate closes: two barrier arms swing in from the sides and meet. */
@@ -150,18 +398,18 @@ body {
 @keyframes stamp {
   0% {
     opacity: 0;
-    transform: scale(1.35) rotate(-4deg);
+    transform: scale(1.25) rotate(-3deg);
   }
   70% {
     opacity: 1;
-    transform: scale(0.97) rotate(-2deg);
+    transform: scale(0.98) rotate(-1.5deg);
   }
   100% {
-    transform: scale(1) rotate(-2deg);
+    transform: scale(1) rotate(-1.5deg);
   }
 }
 .stamp {
-  animation: stamp 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: stamp 480ms var(--ease-out-soft) both;
 }
 
 /* Waiting for a person: the waiting dot breathes. */
@@ -174,14 +422,57 @@ body {
   animation: breathe 1.6s ease-in-out infinite;
 }
 
-/* A value just changed (basket total, quantity meaning): a brief petrol wash. */
+/* A value just changed (basket total, quantity meaning): a brief lime wash. */
 @keyframes changed {
   from {
-    background-color: var(--color-petrol-soft);
+    background-color: var(--color-lime-soft);
   }
 }
 .changed {
   animation: changed 900ms ease-out;
+}
+
+/* Loading: a shape of what is coming, with a slow sheen. The one loading language. */
+@keyframes sheen {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+.skeleton {
+  border-radius: var(--radius-md);
+  background: linear-gradient(100deg, var(--color-surface) 40%, #f8fbfb 50%, var(--color-surface) 60%) 0 0 / 200% 100%;
+  animation: sheen 1.6s ease-in-out infinite;
+}
+
+/* A sheet rises from the bottom edge on a phone; a panel slides from the side on a desk. */
+@keyframes sheet-up {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+@keyframes panel-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+.sheet-up {
+  animation: sheet-up 260ms var(--ease-out-soft);
+}
+.panel-in {
+  animation: panel-in 240ms var(--ease-out-soft);
+}
+.fade-in {
+  animation: fade-in 200ms ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -193,21 +484,107 @@ body {
   .barrier-right,
   .stamp,
   .breathe,
-  .changed {
+  .changed,
+  .skeleton,
+  .sheet-up,
+  .panel-in,
+  .fade-in {
     animation: none;
   }
   .stamp {
-    transform: rotate(-2deg);
+    transform: rotate(-1.5deg);
+  }
+  .lift,
+  .lift:hover {
+    transition: none;
+    transform: none;
   }
   html {
     scroll-behavior: auto;
   }
 }
 
-/* Finnish and Swedish compounds are long ("toimituspäivä", "hyväksyntäpyyntö"): headings, buttons, labels and table
-   heads may hyphenate and break rather than overflow. The language comes from <html lang>, set by LangProvider. */
+/* Finnish and Swedish compounds are long ("toimituspäivä", "hankintapäällikkö"). The texts carry soft hyphens at
+   compound boundaries, and only those are used: the browser's own Finnish hyphenation breaks words in the wrong
+   place ("hankintapäälli-köksi"). A word with no soft hyphen that still does not fit breaks as a last resort. */
 :is(:lang(fi), :lang(sv)) :is(h1, h2, h3, h4, .display, button, label, th, dt) {
-  hyphens: auto;
-  hyphenate-limit-chars: 10 4 4; /* only long compounds; never "Ho-tel" */
+  -webkit-hyphens: manual;
+  hyphens: manual;
   overflow-wrap: break-word;
+}
+
+/* ---------- voice ---------- */
+
+@keyframes voice-bar {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+.voice-bar {
+  transform-origin: center;
+  animation: voice-bar 900ms ease-in-out infinite;
+}
+.voice-bar-calm {
+  animation-duration: 1500ms;
+}
+@keyframes voice-dot {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+.voice-dot {
+  animation: voice-dot 1.1s ease-in-out infinite;
+}
+@keyframes voice-ring {
+  from {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.45);
+  }
+}
+.voice-ring {
+  animation: voice-ring 1.4s ease-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .voice-bar,
+  .voice-dot {
+    animation: none;
+  }
+  .voice-ring {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+/* The thread on a phone is the primary screen: it fills the screen above the tab bar. */
+.thread-dock {
+  bottom: calc(3.55rem + env(safe-area-inset-bottom));
+}
+@media (min-width: 640px) {
+  .thread-dock {
+    bottom: 0;
+  }
+}
+
+/* Room for the phone's tab bar and home indicator under the store and the operations portal. */
+.pb-tabbar {
+  padding-bottom: calc(5.75rem + env(safe-area-inset-bottom));
+}
+@media (min-width: 1024px) {
+  .pb-tabbar {
+    padding-bottom: 4rem;
+  }
 }

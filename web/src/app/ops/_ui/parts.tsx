@@ -1,22 +1,36 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { Check } from "lucide-react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Target } from "../../_ui/target";
 import { fi, num } from "./format";
 
 /**
- * Pieces the operations side needs that the shared system does not have yet: a dense table, an outcome stamp,
- * a counted bar, the catalogue funnel and the gate's inspection grid. Same tokens, same square geometry.
- * Listed for the system's owner in web/docs/DESIGN-OPS.md.
+ * Pieces the operations side adds to the shared system: the data table, an outcome stamp, a counted bar, the
+ * catalogue funnel and the gate's inspection grid. Same tokens, same shapes (web/docs/DESIGN.md).
  */
 
 // ---------- dense table ----------
 
-/** A dense table on paper (DESIGN.md §8): a 3 px petrol rule on top, hairline rows, sentence-case headers. */
+/**
+ * The data table: a card with hairline rows and sentence-case headings. On a phone every row becomes a small card
+ * and each cell is labelled with its column's heading (copied here into data-label; the look is `.dt` in globals.css).
+ */
 export function Table({ children, className = "", label }: { children: ReactNode; className?: string; label?: string }) {
+  const ref = useRef<HTMLTableElement>(null);
+  useEffect(() => {
+    const t = ref.current;
+    if (!t) return;
+    const heads = Array.from(t.querySelectorAll("thead th")).map((th) => th.textContent?.trim() ?? "");
+    t.querySelectorAll("tbody tr").forEach((tr) =>
+      Array.from(tr.children).forEach((td, i) => {
+        if (heads[i] && td.getAttribute("data-label") !== heads[i]) td.setAttribute("data-label", heads[i]);
+      }),
+    );
+  });
   return (
-    <div className={`overflow-x-auto border-t-[3px] border-petrol bg-paper ${className}`}>
-      <table aria-label={label} className="w-full border-collapse text-left text-[0.92rem] [&_td]:border-t [&_td]:border-line/70 [&_td]:px-3 [&_td]:py-2.5 [&_td]:align-top [&_th]:px-3 [&_th]:pb-2 [&_th]:pt-3 [&_th]:text-[0.8rem] [&_th]:whitespace-nowrap [&_th]:font-semibold [&_th]:text-ink-soft [&_thead]:border-b [&_thead]:border-line">
+    <div className={`overflow-x-auto rounded-xl border border-line bg-paper ${className}`}>
+      <table ref={ref} aria-label={label} className="dt">
         {children}
       </table>
     </div>
@@ -32,16 +46,16 @@ export function Table({ children, className = "", label }: { children: ReactNode
 export function Stamp({ kind, label, animate = false, className = "" }: { kind: string; label: string; animate?: boolean; className?: string }) {
   const look =
     kind === "committed"
-      ? "border-[3px] border-petrol text-petrol"
+      ? "rounded-full border border-good/30 bg-good-soft text-good"
       : kind === "waiting"
         ? "hazard-frame text-safety"
         : kind === "refused" || kind === "declined"
-          ? "bg-safety-ink text-safety"
-          : "border-[3px] border-dashed border-ink-soft text-ink-soft";
+          ? "rounded-md bg-safety-ink text-safety"
+          : "rounded-full border border-dashed border-line-strong text-ink-soft";
   return (
-    <span className={`inline-flex max-w-[22rem] items-center gap-2.5 px-3 py-2 ${look} ${animate ? "stamp" : "-rotate-1"} ${className}`}>
-      {kind === "committed" ? <span aria-hidden className="size-3 shrink-0 bg-petrol" /> : kind === "waiting" || kind === "refused" || kind === "declined" ? <Target size={22} tone="safety" /> : null}
-      <span className="display text-[1.25rem] leading-[1.05]">{fi(label)}</span>
+    <span className={`inline-flex max-w-[22rem] items-center gap-2.5 px-3.5 py-2 ${look} ${animate ? "stamp" : ""} ${className}`}>
+      {kind === "committed" ? <Check aria-hidden size={17} strokeWidth={2.6} className="shrink-0" /> : kind === "waiting" || kind === "refused" || kind === "declined" ? <Target size={20} tone="safety" /> : null}
+      <span className="display text-[1.1rem] leading-[1.1]">{fi(label)}</span>
     </span>
   );
 }
@@ -54,12 +68,12 @@ export function CountBar({ count, max, label, sub, tone = "petrol" }: { count: n
   const bar = tone === "safety" ? "bg-safety" : tone === "ink" ? "bg-ink" : "bg-petrol";
   return (
     <div className="grid grid-cols-[3rem_minmax(0,1fr)] items-start gap-x-3 py-1">
-      <span className="display text-right text-[1.35rem] tabular">{num(count)}</span>
+      <span className="display text-right text-[1.25rem] tabular">{num(count)}</span>
       <div className="min-w-0">
         <div className="flex items-center gap-2">
-          <span aria-hidden className={`h-2.5 shrink-0 ${bar}`} style={{ width: `${w * 0.6}%` }} />
+          <span aria-hidden className={`h-2 shrink-0 rounded-full ${bar}`} style={{ width: `${w * 0.6}%` }} />
         </div>
-        <p className="mt-0.5 text-[0.92rem] font-semibold leading-snug">{label}</p>
+        <p className="mt-1 text-[0.92rem] font-medium leading-snug">{label}</p>
         {sub && <p className="text-[0.82rem] leading-snug text-ink-soft">{sub}</p>}
       </div>
     </div>
@@ -77,7 +91,7 @@ export function Funnel({ catalogue, considered, priced, compact = false }: { cat
   const top = Math.max(catalogue ?? 0, considered ?? 0, priced ?? 0, 1);
   const w = (n?: number) => (n === undefined ? 0 : n <= 0 ? 0 : Math.max(1.5, (Math.log10(n + 1) / Math.log10(top + 1)) * 100));
   const rows: { n?: number; label: string; tone: string }[] = [
-    { n: catalogue, label: "in the catalogue", tone: "bg-line" },
+    { n: catalogue, label: "in the catalogue", tone: "bg-line-strong" },
     { n: considered, label: "looked at in master data, free", tone: "bg-petrol/45" },
     { n: priced, label: "sent for a live price check", tone: "bg-petrol" },
   ];
@@ -89,8 +103,8 @@ export function Funnel({ catalogue, considered, priced, compact = false }: { cat
             <span className={`display tabular ${compact ? "text-[1.35rem]" : "text-[1.7rem]"} ${r.n === undefined ? "text-ink-soft" : ""}`}>{r.n === undefined ? "–" : num(r.n)}</span>
             <span className="text-[0.86rem] text-ink-soft">{r.label}</span>
           </div>
-          <div className="mt-1 h-2 bg-mist">
-            <div className={`h-full ${r.tone} transition-[width] duration-500 motion-reduce:transition-none`} style={{ width: `${w(r.n)}%` }} />
+          <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-surface">
+            <div className={`h-full rounded-full ${r.tone} transition-[width] duration-500 motion-reduce:transition-none`} style={{ width: `${w(r.n)}%` }} />
           </div>
         </div>
       ))}
@@ -114,23 +128,20 @@ export function CheckGrid({ checks, showPassReasons = false }: { checks: GateChe
       {hits.length > 0 && (
         <ul className="mb-3 space-y-2">
           {hits.map((c) => (
-            <li key={c.rule} className={`grid gap-x-4 gap-y-1 px-4 py-3 sm:grid-cols-[10rem_minmax(0,1fr)] ${c.outcome === "fail" ? "bg-safety-ink text-paper" : "border-l-[10px] border-safety bg-paper ring-1 ring-ink/15"}`}>
+            <li key={c.rule} className={`grid gap-x-4 gap-y-1 rounded-lg px-4 py-3.5 sm:grid-cols-[10rem_minmax(0,1fr)] ${c.outcome === "fail" ? "bg-safety-ink text-paper" : "bg-safety-soft ring-1 ring-inset ring-safety/60"}`}>
               <span className={`display self-start text-[1.15rem] ${c.outcome === "fail" ? "text-safety" : "text-ink"}`}>{c.outcome === "fail" ? "Refused" : "Sent to a person"}</span>
               <span>
-                <span className="block font-semibold">{c.title}</span>
+                <span className="block font-semibold leading-snug">{c.title}</span>
                 {c.reason && <span className={`mt-0.5 block text-[0.92rem] leading-snug ${c.outcome === "fail" ? "text-paper/85" : "text-ink-soft"}`}>{fi(c.reason)}</span>}
               </span>
             </li>
           ))}
         </ul>
       )}
-      <ul className="grid grid-cols-1 gap-1 sm:grid-cols-2 2xl:grid-cols-3" aria-label={`${passes.length} checks passed`}>
+      <ul className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 2xl:grid-cols-3" aria-label={`${passes.length} checks passed`}>
         {passes.map((c) => (
-          <li key={c.rule} title={c.reason ? fi(c.reason) : undefined} className="flex items-start gap-2 bg-mist px-2.5 py-1.5 text-[0.88rem] leading-snug">
-            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden className="mt-[0.2em] shrink-0 text-petrol">
-              <rect x="0" y="0" width="14" height="14" fill="currentColor" />
-              <path d="M3.5 7.2 L6 9.6 L10.6 4.6" fill="none" stroke="white" strokeWidth="2" strokeLinecap="square" />
-            </svg>
+          <li key={c.rule} title={c.reason ? fi(c.reason) : undefined} className="flex items-start gap-2 rounded-md bg-surface px-3 py-2 text-[0.88rem] leading-snug">
+            <Check aria-hidden size={15} strokeWidth={2.6} className="mt-[0.15em] shrink-0 text-good" />
             <span className="min-w-0">
               {c.title}
               {showPassReasons && c.reason && <span className="block text-[0.8rem] text-ink-soft">{fi(c.reason)}</span>}

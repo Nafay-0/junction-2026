@@ -78,7 +78,10 @@ export class DoorLog {
   }
 }
 
-const logs = new WeakMap<Dock, DoorLog>();
+// Process-wide for the same reason as the suspension registry (ops/suspensions.ts): one log per Dock, whichever
+// bundle's copy of this module writes to it.
+const sharedLogs = globalThis as typeof globalThis & { __dockDoorLogs?: WeakMap<Dock, DoorLog> };
+const logs = (sharedLogs.__dockDoorLogs ??= new WeakMap<Dock, DoorLog>());
 
 /** The door log of one runtime (a fresh runtime, as in tests, gets a fresh log). */
 export function doorLog(dock: Dock): DoorLog {

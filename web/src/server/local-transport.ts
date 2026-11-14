@@ -1,4 +1,5 @@
 import * as index from "@/app/api/v1/route";
+import * as interpret from "@/app/api/v1/agent/interpret/route";
 import * as intakeAnswers from "@/app/api/v1/intake/[requestId]/answers/route";
 import * as intakeChoice from "@/app/api/v1/intake/[requestId]/choice/route";
 import * as intakeConcerns from "@/app/api/v1/intake/[requestId]/concerns/route";
@@ -59,6 +60,7 @@ const routes: [RegExp, string[], RouteModule][] = [
   [/^\/api\/v1\/intake\/([^/]+)\/answers$/, ["requestId"], intakeAnswers as RouteModule],
   [/^\/api\/v1\/intake\/([^/]+)\/choice$/, ["requestId"], intakeChoice as RouteModule],
   [/^\/api\/v1\/kitchen$/, [], kitchen],
+  [/^\/api\/v1\/agent\/interpret$/, [], interpret],
 ];
 
 /**

@@ -195,6 +195,7 @@ function Trace({ t, error }: { t: TraceView; error?: string }) {
               <span className="font-semibold">{t.orgName}</span>
               <span className="text-ink-soft">{t.agentLabel}</span>
               <ViaTag via={t.via} />
+              {t.doorText && <span className="text-ink-soft">through {t.doorText}</span>}
               <Licence licence={t.licence} />
               <span className="text-ink-soft tabular">
                 {stamp(t.startedAt)}, {n} step{n === 1 ? "" : "s"} in {span(Date.parse(t.endedAt) - t0)}
@@ -248,6 +249,11 @@ function Trace({ t, error }: { t: TraceView; error?: string }) {
               {t.orderIds.map((id, i) => (
                 <Link key={id} href={`/ops/audit/${id}`} className="font-semibold text-petrol underline underline-offset-2">
                   Open the audit record{t.orderIds.length > 1 ? ` of order ${i + 1}` : ""}
+                </Link>
+              ))}
+              {t.orderIds.map((id, i) => (
+                <Link key={`tm-${id}`} href={`/ops/time-machine?order=${encodeURIComponent(id)}`} className="font-semibold text-petrol underline underline-offset-2">
+                  The rules at this moment{t.orderIds.length > 1 ? `, order ${i + 1}` : ""}
                 </Link>
               ))}
             </p>

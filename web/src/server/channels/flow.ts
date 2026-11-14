@@ -6,6 +6,7 @@ import { interpretRequest } from "../agent/interpret";
 import { consoleKitchen } from "../authz";
 import type { ConsolePerson } from "../console-context";
 import { resolveKitchen, type ConsoleKitchenInfo } from "../console-kitchens";
+import { onsiteSession } from "../ops/onsite";
 import { getRuntime, type Runtime } from "../runtime";
 
 /**
@@ -33,12 +34,13 @@ export type KitchenAgent = { rt: Runtime; info: ConsoleKitchenInfo; session: Age
  * The kitchen's purchasing agent, as the console's server side holds it: the browser never sees the mandate. With the
  * request, the console rule applies (a visitor's kitchen only from their own phone) and the signed-in person is known.
  */
-export async function kitchenAgent(slug: string, req?: Request): Promise<KitchenAgent> {
+export async function kitchenAgent(slug: string, req?: Request, door: Door = "voice"): Promise<KitchenAgent> {
   const rt = await getRuntime();
   const viaConsole = req ? await consoleKitchen(req, rt, slug) : undefined;
   const k = viaConsole ?? (req ? undefined : await resolveKitchen(slug));
   if (!k) throw new DockError(404, "kitchen_not_found", "This kitchen does not exist or its demo time is over.");
-  const session = await rt.dock.authenticate(k.mandateToken, k.agentId);
+  // The same operations check as a call over HTTP: a suspended agent is refused at this door too (ops/onsite.ts).
+  const session = { ...(await onsiteSession(rt.dock, k, `${door} door`)), door };
   return { rt, info: k.info, session, person: viaConsole?.console.person };
 }
 
@@ -58,9 +60,12 @@ export function byLine(info: ConsoleKitchenInfo, door: Door, via: Via): string {
   return `${info.by} (${how})`.slice(0, 120);
 }
 
-/** Free text to a structured need with the same reader the typed console uses. */
+/**
+ * Free text to a structured need with the same reader the typed console uses, read a second time by the second
+ * reader on the doors where a person's own words are read (not the photo door: see interpret.ts SECOND_READING_DOORS).
+ */
 export async function readNeed(a: KitchenAgent, text: string): Promise<{ need: NeedInput; model: string; ms: number }> {
-  const r = await interpretRequest({ text }, { catalog: a.rt.catalog, mandate: a.session.mandate });
+  const r = await interpretRequest({ text }, { catalog: a.rt.catalog, mandate: a.session.mandate, door: a.session.door });
   return { need: r.need as NeedInput, model: r.model, ms: r.ms };
 }
 
@@ -84,7 +89,7 @@ export async function openNeed(
   via: Via,
   detail: { words?: string; summary: string; data?: Record<string, unknown> },
 ): Promise<IntakeView> {
-  const step = await a.rt.dock.intake.open(a.session, { need, by: byLine(a.info, door, via) });
+  const step = await a.rt.dock.intake.open({ ...a.session, door }, { need, by: byLine(a.info, door, via) });
   a.rt.dock.ledger.append({
     type: "intake",
     actor: `door:${door}`,

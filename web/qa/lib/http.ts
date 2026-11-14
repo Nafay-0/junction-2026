@@ -15,6 +15,11 @@ export class Recorder {
   current = "(setup)";
   /** Paths whose 5xx is expected for this probe (e.g. the partner API is down on purpose). */
   allow5xx = new Set<string>();
+  /** 429 rate_limited replies seen where a probe did not ask for them (the server's per-address limits are on). */
+  rateLimited = 0;
+  /** Error codes whose 5xx is the documented answer for this probe (e.g. 503 live_unavailable when the partner is down). */
+  allowCodes = new Set<string>();
+  expectRateLimit = false;
 }
 
 export class Http {
@@ -49,6 +54,7 @@ export class Http {
       body = undefined;
     }
     this.rec.calls.push({ method, path, status: res.status, ms, probe: this.rec.current });
+    if (res.status === 429 && /"rate_limited"/.test(text) && !this.rec.expectRateLimit) this.rec.rateLimited++;
     for (const v of scanResponse({ method, path, status: res.status, text, body, contentType: res.headers.get("content-type") ?? "" }, this.rec)) this.rec.violations.push(v);
     return { status: res.status, body, text, ms, headers: res.headers };
   }

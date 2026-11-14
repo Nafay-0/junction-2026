@@ -1,5 +1,6 @@
 import type { LedgerEntry } from "@/core/ledger";
-import type { PublicOrder } from "@/core/orders";
+import { readerName } from "@/core/second-reading";
+import { DOOR_TEXT, type Door, type PublicOrder } from "@/core/orders";
 import { amount, attr, clock, day, eur, humanize, roleLabel } from "@/app/_ui/plain";
 import { memoryCount, memoryParts, publicReasons } from "./privacy";
 import { ruleTitleOf } from "./rules";
@@ -66,6 +67,9 @@ export type Trace = {
   orgName: string;
   agentId: string;
   via?: Via;
+  /** Which door it came through, and in words ("a voice call", "an outside agent over MCP"). */
+  door?: Door;
+  doorText?: string;
   asked: string;
   neededBy?: string;
   startedAt: string;
@@ -87,6 +91,7 @@ export type TraceInput = {
   catalogueSize?: number;
   orgName?: string;
   via?: Via;
+  door?: Door;
 };
 
 const SENTINEL_STOCK = 999_999;
@@ -188,6 +193,14 @@ function needFacts(n: Need): { label: string; value: string }[] {
   return f;
 }
 
+/** What a compared field is, for the second-reading step. */
+const READ_FIELD: Record<string, string> = { amount: "the amount", claims: "what the product must be", allergens: "what to avoid", kind: "the product", date: "the delivery day" };
+
+/** A model id in words: "anthropic:claude-opus-5-5" is Claude Opus 5.5 (the same names the buyer sees). */
+function readerWords(id: string): string {
+  return id ? readerName(id) : "the reader";
+}
+
 const CONCERN_KIND: Record<string, string> = {
   quantity_tenfold: "the amount is about ten times the kitchen's usual",
   quantity_unusual: "the amount is unusual for this kitchen",
@@ -200,6 +213,7 @@ const CONCERN_KIND: Record<string, string> = {
   contradicts_preference: "it contradicts one of the kitchen's own rules",
   large_first_order: "a large first order",
   nothing_to_repeat: "there is no earlier order to repeat",
+  readings_differ: "two independent readers read the request differently",
 };
 
 function actorOf(actor: string, approverNames: Map<string, string>): string {
@@ -280,13 +294,40 @@ export function buildTrace(input: TraceInput): Trace {
         if (step === "need") {
           const need = (d.need ?? {}) as Need;
           push({ phase: "understood", title: `Understood as ${describeNeedPlain(need)}`, facts: needFacts(need), lines: typeof d.by === "string" ? [`Relayed for ${d.by}.`] : [] });
+        } else if (step === "second_reading") {
+          const status = String(d.status ?? "");
+          const diffs = (Array.isArray(d.differences) ? d.differences : []) as { field?: string; first?: string; second?: string; why?: string }[];
+          const first = readerWords(String(d.firstModel ?? ""));
+          const second = readerWords(String(d.secondModel ?? ""));
+          push({
+            phase: "understood",
+            tone: status === "differed" ? "safety" : "plain",
+            title:
+              status === "agreed"
+                ? "Read twice: the two readings agree"
+                : status === "differed"
+                  ? `Read twice: the readings differ on ${diffs.map((x) => READ_FIELD[x.field ?? ""] ?? x.field).join(" and ")}`
+                  : "Read once: the second reader was unavailable",
+            lines:
+              status === "differed"
+                ? diffs.map((x) => `${READ_FIELD[x.field ?? ""] ?? x.field}: ${first} read “${x.first}”, ${second} read “${x.second}” (${x.why}). The buyer was asked before any price lookup.`)
+                : status === "agreed"
+                  ? [`${first} and ${second}, two models from different makers, read the same amount, claims, allergens, product and day. Nothing was asked.`]
+                  : [`${second} did not answer in time or could not be used (${String(d.reason ?? "failed").replaceAll("_", " ")}); Dock carried on with ${first}'s reading, as it always does.`],
+            facts: [
+              { label: "First reader", value: first },
+              { label: "Second reader", value: second },
+              ...(typeof d.secondMs === "number" ? [{ label: "Second reading took", value: `${(d.secondMs / 1000).toFixed(1)} s` }] : []),
+              ...(typeof d.waitedMs === "number" ? [{ label: "Wait it added", value: d.waitedMs ? `${(d.waitedMs / 1000).toFixed(1)} s` : "none" }] : []),
+            ],
+          });
         } else if (step === "concerns") {
           const concerns = (Array.isArray(d.concerns) ? d.concerns : []) as { code?: string; severity?: string }[];
           push({
             phase: "checked",
             tone: "safety",
             title: `Stopped before any price lookup: ${concerns.length === 1 ? "a likely mistake" : `${concerns.length} likely mistakes`} for the kitchen to confirm`,
-            lines: concerns.map((c) => `Checked against the kitchen's own order history: ${CONCERN_KIND[c.code ?? ""] ?? "something looks wrong"}.`),
+            lines: concerns.map((c) => (c.code === "readings_differ" ? `Two independent readers read the buyer's words differently: the buyer chooses which reading is meant.` : `Checked against the kitchen's own order history: ${CONCERN_KIND[c.code ?? ""] ?? "something looks wrong"}.`)),
             memory,
           });
         } else if (step === "confirmation" || step === "correction" || step === "cancelled") {
@@ -543,6 +584,7 @@ export function buildTrace(input: TraceInput): Trace {
     orgName: input.orgName ?? last?.orgName ?? orgFromSummary ?? "Unknown organisation",
     agentId: request?.actor.replace(/^agent:/, "") ?? last?.agentId ?? "unknown",
     via: input.via,
+    ...(input.door ? { door: input.door, doorText: DOOR_TEXT[input.door] } : {}),
     asked: String(request?.data.text ?? ""),
     neededBy: typeof request?.data.neededBy === "string" ? request.data.neededBy : undefined,
     startedAt: entries[0]?.at ?? "",

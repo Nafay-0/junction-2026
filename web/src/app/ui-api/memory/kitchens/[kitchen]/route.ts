@@ -1,3 +1,6 @@
+import { DockError } from "@/core/errors";
+import { reissueKitchenMandate } from "@/server/mandate-reissue";
+import { getRuntime } from "@/server/runtime";
 import { body, kitchenMemoryRoute, MemoryAction } from "@/server/memory/http";
 
 /**
@@ -5,7 +8,8 @@ import { body, kitchenMemoryRoute, MemoryAction } from "@/server/memory/http";
  *   Everything this kitchen's agent remembers: items (with strength, provenance, audience), questions waiting
  *   for an answer, superseded items, staff proposals, when the wholesaler's staff read it, and what was forgotten.
  *
- * POST /ui-api/memory/kitchens/{kitchen}   one change, by the person the console relays for:
+ * POST /ui-api/memory/kitchens/{kitchen}   one change, only by the kitchen's own signed-in person (a visitor's phone;
+ * for a built-in demo kitchen the presenter enrolled as its approver), else 401 kitchen_person_required:
  *   { action: "confirm", itemId, answer: "yes" | "no" }        answer "should I remember this?" / "keep this rule?"
  *   { action: "correct", itemId, text?, fact?, family?, strength?, site? }
  *   { action: "forget", itemId }                               removes it and what derives from it
@@ -40,8 +44,15 @@ export async function POST(req: Request, ctx: RouteContext<"/ui-api/memory/kitch
         return { report: await memory.state(org, { fact: { kind: "note", text: a.text }, by }), memory: await memory.view(org, k.info.name) };
       case "proposal":
         return memory.decideProposal(org, a.proposalId, a.accept, by);
-      case "mandate":
-        return memory.decideMandate(org, a.itemId, a.decision, by);
+      case "mandate": {
+        if (a.decision === "declined") return memory.decideMandate(org, a.itemId, "declined", by);
+        // "Add to signed mandate" is true or it is nothing: the kitchen's mandate is signed again with the rule, its
+        // earlier mandates stop working at the gate, and only then is the rule recorded as added.
+        const offer = (await memory.mandateOffers(org, k.info.mandate)).find((o) => o.itemId === a.itemId);
+        if (!offer) throw new DockError(409, "rule_not_offered", "This rule is already in the kitchen's mandate, or the mandate cannot state it: it stays a preference the intake uses.");
+        const reissued = await reissueKitchenMandate(await getRuntime(), k.info, offer.patch, by);
+        return memory.decideMandate(org, a.itemId, "added", by, reissued);
+      }
     }
-  });
+  }, { change: "Changing what this kitchen remembers" });
 }

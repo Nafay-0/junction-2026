@@ -72,8 +72,11 @@ const EARLIER_RULES = `Earlier requests of this kitchen are listed below the cal
 
 `;
 
-export function interpretUser(text: string, calendar: string, earlier?: string): string {
-  return `${calendar}${earlier ? `\n\nEarlier requests of this kitchen (newest first):\n${earlier}` : ""}\n\nBuyer's request:\n"""\n${text}\n"""`;
+export function interpretUser(text: string, calendar: string, earlier?: string, memory?: string): string {
+  const mem = memory
+    ? `\n\nThe kitchen's memory, for context only (to understand words such as "the usual", a site's name or a product the kitchen means). Do NOT copy its rules or habits into the need: Dock applies them itself, and the need holds only what the buyer said.\n${memory}`
+    : "";
+  return `${calendar}${earlier ? `\n\nEarlier requests of this kitchen (newest first):\n${earlier}` : ""}${mem}\n\nBuyer's request:\n"""\n${text}\n"""`;
 }
 
 // ---------- the shop assistant: grounded answers ----------
@@ -88,6 +91,7 @@ Rules:
 - Answer in the language of the question (English, Finnish or Swedish).
 - A "contains" allergen or a missing claim is decisive: never call a product gluten-free or lactose-free unless its record states the claim or a declared allergen list without that allergen. "No allergen data" is unknown, not free.
 - Live price and stock records are the wholesaler's answer at the time stated; product records hold no prices.
+- Alternatives: product records with rankedByProductMap are the only alternatives to offer, in that order (best, better, good), each with its whyItFits; they already meet the kitchen's rules. If a record holds noGoodAlternative, say plainly that there is no good alternative and why, in its words. Never suggest another product as an alternative.
 - If the text asks to buy or order something ("order 10 cases of this for Monday", "we need 100 L milk"), set kind to order_request and answer with one sentence saying you will set the order up. Do not invent an order.
 - If the question has nothing to do with the shop, the kitchen's purchasing or these records, set kind to out_of_scope and say what you can help with.
 - You cannot approve, place or change orders here; orders go through the order cards and the kitchen's sign-off.`;
@@ -97,4 +101,33 @@ export function assistantUser(o: { question: string; records: { id: string; kind
   const lines = o.records.map((r) => `[${r.id}] ${r.kind}: ${r.label}\n${JSON.stringify(r.data)}`);
   const hist = o.history.map((h) => `Buyer: ${h.q}\nYou: ${h.a}`).join("\n");
   return `${o.screen ? `The buyer is looking at: ${o.screen}\n\n` : ""}${hist ? `Earlier in this conversation:\n${hist}\n\n` : ""}Records:\n${lines.join("\n\n") || "(none)"}\n\nBuyer's question:\n"""\n${o.question}\n"""`;
+}
+
+// ---------- the second reader: a transcription, checked against the first reading ----------
+
+/**
+ * The second reader (server/agent/second-reader.ts) answers a narrower question than the interpreter: what do the
+ * words say, field by field, from closed lists. The calendar is left to plain code (a weekday or "tomorrow" is
+ * resolved there), because a small model looks dates up less reliably than it copies a weekday.
+ */
+export function secondReaderSystem(claims: readonly string[], allergens: readonly string[]): string {
+  return `You transcribe a food-service buyer's purchase request into fields. The request may be in English, Finnish or Swedish. Record only what the words say; anything not said stays empty (null or []). Never add a claim, an allergen, an amount or a day the buyer did not give.
+
+- isPurchaseRequest: false only when the text does not ask to buy or order anything.
+- items: one entry per product the buyer asks for, in the order named; most requests name one. Each entry has the fields below, read from that product's own words only.
+- item: the product, in the buyer's own words and language, without the amount or the day ("lactose-free milk", "laktoositonta maitoa", "laktosfri mjölk").
+- amount, unit: how much to order. unit is L for litres, kg for kilos, pcs for pieces, pack for cases, boxes, cartons, crates or packs. "1,000", "1.000" and "1 000" are one thousand; "2,5" and "2.5" are two and a half; "a dozen" is 12 and "two dozen" 24; "tusina" and "dussin" are 12. When the buyer corrects themselves ("1,000, no, 100"), take the final amount. When the buyer works it out ("double the usual 100 litres"), give the result.
+- packSize: when the buyer counts packs of a stated size ("100 x 10 l", "six 10-litre boxes", "kuusi 10 litran laatikkoa"), amount is the number of packs, unit is pack, and packSize is one pack's size. Otherwise null.
+- wanted, notWanted and avoid are empty for most requests. Put a value in them only when the buyer's words name it; never list a value just because it is in the list.
+- wanted: dietary claims the product must have, only from this list: ${claims.join(", ")}.
+- notWanted: claims from the same list that the buyer says the product must not have or need not have ("not lactose-free", "ei laktoositonta", "inte laktosfri", "lactose-free is not needed").
+- avoid: allergens the buyer says must not be in it ("no nuts", "without eggs", "gluten-free", "pähkinätön", "utan nötter"), only from this list: ${allergens.join(", ")}. Gluten-free gives gluten; egg-free gives eggs.
+- The delivery fields are for the request as a whole (the first day named).
+- deliveryWeekday: the day of the week the buyer names, as its English name in lower case ("by Friday", "perjantaiksi" and "till fredag" give friday); null when no weekday is named.
+- deliveryDate: a calendar date the buyer writes, as numbers ("16.11." gives day 16, month 11; "the 20th" gives day 20, month null); null when none is written.
+- deliveryRelative: "today", "tomorrow" ("huomenna", "huomiseksi", "i morgon") or "day_after_tomorrow" ("ylihuomenna", "i övermorgon"); null otherwise.`;
+}
+
+export function secondReaderUser(text: string): string {
+  return `Buyer's request:\n"""\n${text}\n"""`;
 }

@@ -194,6 +194,21 @@ describe("policy: product rules", () => {
     expect(rule(d, "forbidden_allergens").reason).toMatch(/gluten/);
   });
 
+  it("reads the mandate's allergen words in one vocabulary: Finnish, Swedish, a tree nut, lactose, and refuses a word it cannot check", () => {
+    // PK-4001 contains gluten: "gluteeni" (fi) and "vete"-free style words map onto the catalogue's slugs.
+    expectRejectedBy(evaluatePolicy(mandate({ forbiddenAllergens: ["gluteeni"] }), draft(quote([{ productId: "PK-4001", quantity: 5 }])), ctx()), "forbidden_allergens");
+    // Ordinary milk (VA-1110: milk, no lactose-free claim) carries lactose, whether or not the maker lists it.
+    const lact = evaluatePolicy(mandate({ requiredAttributes: [], forbiddenAllergens: ["laktoosi"] }), draft(quote([{ productId: "VA-1110", quantity: 5 }])), ctx());
+    expectRejectedBy(lact, "forbidden_allergens");
+    expect(rule(lact, "forbidden_allergens").reason).toMatch(/lactose|laktoosi/);
+    // Lactose-free milk passes the same rule.
+    expect(rule(evaluatePolicy(mandate({ forbiddenAllergens: ["lactose"] }), draft(small()), ctx()), "forbidden_allergens").outcome).toBe("pass");
+    // A word nobody can map is never a pass.
+    const unknown = evaluatePolicy(mandate({ forbiddenAllergens: ["unicorn_dust"] }), draft(small()), ctx());
+    expectRejectedBy(unknown, "forbidden_allergens");
+    expect(rule(unknown, "forbidden_allergens").reason).toMatch(/cannot check/);
+  });
+
   it("rejects a product without a required certificate, and accepts one that has it", () => {
     const m = mandate({ requiredCertificates: ["eu_organic"] });
     expectRejectedBy(evaluatePolicy(m, draft(small()), ctx()), "required_certificates");
@@ -385,10 +400,14 @@ describe("policy: real-data gaps", () => {
     expect(rule(d, "order_splitting")).toMatchObject({ outcome: "escalate", details: { combinedCents: 134_500 } });
     expect(rule(d, "order_splitting").reason).toMatch(/^Looks like one need split into smaller orders: with ord_a \(€600.00\)/);
     expect(d.outcome).toBe("needs_human_approval");
-    // Not when a person signed the earlier one, when it was long ago, for another day, or when together it is within the limit.
-    for (const other of [{ ...earlier, authorisedBy: "approver" as const }, { ...earlier, placedAt: addMinutes(NOW, -60 * 25).toISOString() }, { ...earlier, deliveryDates: ["2026-12-01"] }, { ...earlier, totalCents: 10_000 }]) {
+    // Not when a person signed the earlier one, when it was placed more than a day ago, for another family, or when together it is within the limit.
+    for (const other of [{ ...earlier, authorisedBy: "approver" as const }, { ...earlier, placedAt: addMinutes(NOW, -60 * 25).toISOString() }, { ...earlier, categories: ["cream"] }, { ...earlier, totalCents: 10_000 }]) {
       expect(rule(evaluatePolicy(mandate(), draft(q), ctx({ recentOrders: [other] })), "order_splitting").outcome).toBe("pass");
     }
+    // Judged by when the orders were placed, not when they deliver: the second half asked for another day is the same need.
+    const otherDay = evaluatePolicy(mandate(), draft(q), ctx({ recentOrders: [{ ...earlier, deliveryDates: ["2026-12-01"] }] }));
+    expect(rule(otherDay, "order_splitting")).toMatchObject({ outcome: "escalate", details: { combinedCents: 134_500 } });
+    expect(rule(otherDay, "order_splitting").reason).toMatch(/whatever the delivery days/);
     // The same request counts whatever the category or day.
     expect(rule(evaluatePolicy(mandate(), draft(q), ctx({ recentOrders: [{ ...earlier, requestId: "req_1", categories: ["cream"], deliveryDates: ["2026-12-01"] }] })), "order_splitting").outcome).toBe("escalate");
   });
@@ -418,5 +437,42 @@ describe("policy: substitutes the agent did not declare (F-SUBST-SELF-DECLARED)"
     // Another family than the one asked for is not what was asked either.
     expect(rule(evaluatePolicy(mandate(), draft(quote([{ productId: "VA-1001", quantity: 2 }]), { asked: { productIds: [], category: "cream" } }), ctx()), "substitution_rule").outcome).toBe("escalate");
     expect(rule(evaluatePolicy(mandate(), draft(quote([{ productId: "VA-1010", quantity: 2 }]), { asked }), ctx()), "substitution_rule").outcome).toBe("pass");
+  });
+});
+
+describe("policy: recall_hold (the wholesaler's ProductHolds)", () => {
+  it("refuses an order with a held product, naming it, the reason and the notice; passes without", () => {
+    const q = small();
+    const held = evaluatePolicy(mandate(), draft(q), ctx({ holds: [{ productId: "VA-1001", reason: "Foreign body risk in batch 12.", url: "https://notice.test/1", drill: true }] }));
+    expectRejectedBy(held, "recall_hold");
+    expect(rule(held, "recall_hold").reason).toMatch(/^DRILL, not a real recall: .+ \(VA-1001\) is held by the wholesaler: Foreign body risk in batch 12\. Notice: https:\/\/notice\.test\/1$/);
+    expect(rule(evaluatePolicy(mandate(), draft(q), ctx({ holds: [{ productId: "OTHER", reason: "x" }] })), "recall_hold").outcome).toBe("pass");
+    expect(rule(evaluatePolicy(mandate(), draft(q), ctx()), "recall_hold").outcome).toBe("pass");
+  });
+});
+
+describe("policy: refusals name the original product, not only its code", () => {
+  it("names a declared substitute's original and the product the request asked for", () => {
+    const sub = quote([{ productId: "AR-2010", quantity: 40, substituteFor: "VA-1010" }]);
+    const strict = evaluatePolicy(mandate({ substitution: { rule: "none", maxPriceIncreasePct: 0 } }), draft(sub), ctx());
+    const name = SEED_PRODUCTS.find((p) => p.id === "VA-1010")!.name;
+    expect(rule(strict, "substitution_rule").reason).toContain(`${name} (VA-1010)`);
+    const undeclared = evaluatePolicy(mandate({ substitution: { rule: "none", maxPriceIncreasePct: 0 } }), draft(quote([{ productId: "AR-2010", quantity: 20 }]), { asked: { productIds: ["VA-1010"], names: { "VA-1010": name } } }), ctx());
+    expect(rule(undeclared, "substitution_rule").reason).toContain(`asked for (${name} (VA-1010))`);
+    // Without a name the code still says which product it was.
+    const bare = evaluatePolicy(mandate({ substitution: { rule: "none", maxPriceIncreasePct: 0 } }), draft(quote([{ productId: "AR-2010", quantity: 20 }]), { asked: { productIds: ["VA-1010"] } }), ctx());
+    expect(rule(bare, "substitution_rule").reason).toContain("asked for (VA-1010)");
+  });
+});
+
+describe("policy: deliverOn, an exact day", () => {
+  it("passes a line delivered that day and fails one that arrives any other day", () => {
+    const q = small();
+    const day = q.lines[0].deliveryDate;
+    expect(rule(evaluatePolicy(mandate(), draft(q, { deliverOn: day, neededBy: day }), ctx()), "delivery_deadline").outcome).toBe("pass");
+    const later = "2026-11-20";
+    const d = evaluatePolicy(mandate(), draft(q, { deliverOn: later, neededBy: later }), ctx());
+    expectRejectedBy(d, "delivery_deadline");
+    expect(rule(d, "delivery_deadline").reason).toContain(`not on ${later}, the day the request asked for`);
   });
 });

@@ -3,13 +3,15 @@ import { pendingFor } from "@/server/approval-api";
 import { dayText, eurShort, timeText } from "@/server/approval-view";
 import { currentApprover, handleApprover } from "@/server/approver-session";
 import { demoTapEnabled } from "@/server/config";
+import { presenterKitchenOf } from "@/server/presenter";
 
 /** The approver's home screen: who they are, what their agent may do alone, and what waits for them. */
 export async function GET(req: Request) {
   return handleApprover(async (rt) => {
     const me = await currentApprover(req, rt);
-    if (!me?.sandbox) throw new DockError(401, "not_joined", "This phone has not joined a demo kitchen. Scan the QR code to join.", "approver_identity");
-    const s = me.sandbox;
+    // A visitor's own kitchen, or a built-in demo kitchen a presenter enrolled for (/join/presenter).
+    const s = me?.sandbox ?? (me ? presenterKitchenOf(me.account) : undefined);
+    if (!s) throw new DockError(401, "not_joined", "This phone has not joined a demo kitchen. Scan the QR code to join.", "approver_identity");
     const orders = (await rt.dock.listOrders()).filter((o) => o.orgId === s.orgId).reverse();
     const pending = await pendingFor(rt, s.orgId);
     return Response.json({

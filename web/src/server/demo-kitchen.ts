@@ -1,12 +1,11 @@
-import { createPrivateKey } from "node:crypto";
-import type { JWK } from "jose";
 import type { Product } from "@/core/catalog";
 import { addDaysIso, emptyProfile, isoWeekday, localNow, type HistoryEntry, type KitchenProfile } from "@/core/kitchen";
-import { importEd25519KeyPair, type KeyPair } from "@/core/keys";
+import type { KeyPair } from "@/core/keys";
 import type { Mandate } from "@/core/mandate";
 import { SEED_PRODUCTS, SEED_STOCK } from "@/core/seed";
 import { known } from "@/core/options";
-import { addDays, sha256Hex } from "@/core/util";
+import { addDays } from "@/core/util";
+import { DEMO_WEEKLY_BUDGET_CENTS, demoKey } from "./dev-fixtures";
 
 /**
  * DEV ONLY. A returning restaurant kitchen for the demo: six weeks of milk and cream orders, and one rule
@@ -20,17 +19,12 @@ export const KITCHEN_ORG = {
   agentId: "agent_kaari_buyer_01",
 };
 
-const PUBLIC_DEV_SEED = "dock demo kitchen key v1 - public, not a secret";
+export const KITCHEN_PUBLIC_DEV_SEED = "dock demo kitchen key v1 - public, not a secret";
+const PUBLIC_DEV_SEED = KITCHEN_PUBLIC_DEV_SEED;
 
-function devJwkFromSeed(seedText: string): JWK {
-  const seed = Buffer.from(sha256Hex(seedText), "hex"); // 32 bytes, as in dev-fixtures.ts
-  const pkcs8 = Buffer.concat([Buffer.from("302e020100300506032b657004220420", "hex"), seed]);
-  return createPrivateKey({ key: pkcs8, format: "der", type: "pkcs8" }).export({ format: "jwk" }) as JWK;
-}
-
+/** As for the other demo organisation (dev-fixtures.ts demoKey): never the repository's key on a public site. */
 export async function demoKitchenKeyPair(): Promise<KeyPair> {
-  const fromEnv = process.env.DOCK_DEMO_KITCHEN_JWK;
-  return importEd25519KeyPair(KITCHEN_ORG.kid, fromEnv ? (JSON.parse(fromEnv) as JWK) : devJwkFromSeed(PUBLIC_DEV_SEED));
+  return demoKey("DOCK_DEMO_KITCHEN_JWK", KITCHEN_ORG.kid, PUBLIC_DEV_SEED);
 }
 
 /** The kitchen's mandate: the agent may spend €100 alone; the head chef signs off up to €1,000. */
@@ -43,7 +37,7 @@ export function demoKitchenMandate(now: Date, overrides: Partial<Mandate> = {}):
     validUntil: addDays(now, 7).toISOString(),
     currency: "EUR",
     perOrderLimitCents: 10_000,
-    weeklyBudgetCents: 150_000,
+    weeklyBudgetCents: DEMO_WEEKLY_BUDGET_CENTS, // sized for a day of demos (dev-fixtures.ts)
     allowedCategories: ["milk", "cream", "yoghurt"],
     requiredAttributes: [],
     forbiddenAllergens: ["nuts"],

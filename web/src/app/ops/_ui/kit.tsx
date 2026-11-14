@@ -4,15 +4,15 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { api } from "../../_client/api";
 import { useLive } from "../../_client/use-live";
-import { buttonClass, Spinner } from "../../_ui/kit";
+import { Check, ChevronRight } from "lucide-react";
+import { buttonClass } from "../../_ui/kit";
 import { Target } from "../../_ui/target";
 import { VIA, type Via } from "./format";
 
 /**
- * The operations portal's building blocks, in the shared system's language (web/docs/DESIGN.md): paper plates on
- * mist, petrol for structure, the display face for titles and figures. Safety yellow and the hazard stripe appear only
- * on refusals, suspensions and sign-offs waiting on a person. Ids, codes and hashes sit behind <Details>.
- * What this adds beside the system is listed in web/docs/DESIGN-OPS.md.
+ * The operations portal's building blocks, in the shared system's language (web/docs/DESIGN.md): white cards with
+ * hairlines on mist, the display face for titles and figures, quiet status marks. Safety yellow and the hazard stripe
+ * appear only on refusals, suspensions and sign-offs waiting on a person. Ids, codes and hashes sit behind <Details>.
  */
 
 /** Live data from /ops-api: refetched on every order/approval event and polled underneath. 401 sends to the entry. */
@@ -46,21 +46,21 @@ export function useNow(ms = 1000): number | undefined {
 /** The page's title, the one question it answers, and on the right whether it is live. */
 export function PageHead({ title, purpose, right }: { title: string; purpose: string; right?: ReactNode }) {
   return (
-    <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 pb-4">
+    <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 pb-5">
       <div className="min-w-0">
-        <h1 className="display text-[2.5rem] text-ink">{title}</h1>
-        <p className="mt-2 max-w-[70ch] text-[1rem] leading-snug text-ink-soft">{purpose}</p>
+        <h1 className="display text-[1.9rem] text-ink sm:text-[2.2rem]">{title}</h1>
+        <p className="mt-2 max-w-[72ch] text-[0.98rem] leading-relaxed text-ink-soft">{purpose}</p>
       </div>
-      {right && <div className="flex items-center gap-3 text-[0.88rem] text-ink-soft">{right}</div>}
+      {right && <div className="flex items-center gap-3 text-[0.86rem] text-ink-soft">{right}</div>}
     </header>
   );
 }
 
-/** "Live, updated 14.05.32": a small square that breathes while the stream is up. */
+/** "Live, updated 14.05.32": a dot that breathes while the stream is up. */
 export function LiveMark({ at, error }: { at?: string; error?: string }) {
   return (
-    <span className="inline-flex items-center gap-2" role="status">
-      <span aria-hidden className={`size-2.5 ${error ? "border border-ink-soft" : "breathe bg-petrol"}`} />
+    <span className={`inline-flex min-h-8 items-center gap-2 whitespace-nowrap rounded-full px-3 text-[0.82rem] font-medium tabular ${error ? "bg-surface text-ink-soft" : "bg-good-soft text-good"}`} role="status">
+      <span aria-hidden className={`size-2 rounded-full ${error ? "border border-ink-soft" : "breathe bg-good"}`} />
       {error ? "Reconnecting…" : at ? `Live, updated ${at}` : "Connecting…"}
     </span>
   );
@@ -68,28 +68,28 @@ export function LiveMark({ at, error }: { at?: string; error?: string }) {
 
 export function Section({ title, aside, children, id, className = "" }: { title: string; aside?: ReactNode; children: ReactNode; id?: string; className?: string }) {
   return (
-    <section aria-labelledby={id} className={`mt-8 ${className}`}>
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
-        <h2 id={id} className="display text-[1.6rem] text-ink">
+    <section aria-labelledby={id} className={`mt-10 ${className}`}>
+      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h2 id={id} className="display text-[1.35rem] text-ink sm:text-[1.45rem]">
           {title}
         </h2>
-        {aside && <div className="text-[0.88rem] text-ink-soft">{aside}</div>}
+        {aside && <div className="text-[0.86rem] text-ink-soft">{aside}</div>}
       </div>
       {children}
     </section>
   );
 }
 
-/** A paper plate. `rule` adds the petrol top rule that marks a document. */
-export function Panel({ children, className = "", rule = false }: { children: ReactNode; className?: string; rule?: boolean }) {
-  return <div className={`bg-paper ${rule ? "border-t-[3px] border-petrol" : ""} ${className}`}>{children}</div>;
+/** A card. `rule` once drew a petrol top rule; the new system has none, so it is accepted and ignored. */
+export function Panel({ children, className = "" }: { children: ReactNode; className?: string; rule?: boolean }) {
+  return <div className={`overflow-hidden rounded-xl border border-line bg-paper ${className}`}>{children}</div>;
 }
 
 /** The door an agent came through. Same shape for all three: they meet the same gate. */
 export function ViaTag({ via, className = "", short = false }: { via?: Via; className?: string; short?: boolean }) {
   if (!via) return <span className={`text-[0.85rem] text-ink-soft ${className}`}>Door not recorded</span>;
   return (
-    <span title={VIA[via].how} className={`inline-flex items-center gap-1.5 whitespace-nowrap text-[0.85rem] font-semibold text-petrol ${className}`}>
+    <span title={VIA[via].how} className={`inline-flex items-center gap-1.5 whitespace-nowrap text-[0.86rem] font-medium text-petrol-deep ${className}`}>
       <DoorGlyph via={via} />
       {short ? VIA[via].short : VIA[via].label}
     </span>
@@ -100,8 +100,8 @@ export function ViaTag({ via, className = "", short = false }: { via?: Via; clas
 export function DoorGlyph({ via, size = 11, color = "currentColor" }: { via: Via; size?: number; color?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 10 10" aria-hidden className="shrink-0">
-      <rect x="0.75" y="0.75" width="8.5" height="8.5" fill={via === "onsite" ? color : "none"} stroke={color} strokeWidth="1.5" />
-      {via === "mcp" && <path d="M0.75 9.25 L9.25 0.75 L9.25 9.25 Z" fill={color} />}
+      <rect x="0.75" y="0.75" width="8.5" height="8.5" rx="2" fill={via === "onsite" ? color : "none"} stroke={color} strokeWidth="1.5" />
+      {via === "mcp" && <path d="M1.6 8.4 L8.4 1.6 L8.4 7 Q8.4 8.4 7 8.4 Z" fill={color} />}
     </svg>
   );
 }
@@ -110,15 +110,23 @@ export type Tone = "plain" | "safety" | "done";
 
 /**
  * Outcome words. The gate's mark and yellow only when a person must act or the gate refused; a signed order gets a
- * petrol square, anything still moving an open one.
+ * green tick, anything still moving an open ring.
  */
 export function Outcome({ kind, label, size = "sm" }: { kind: string; label: string; size?: "sm" | "md" }) {
   const gate = kind === "waiting" || kind === "refused" || kind === "declined";
   const text = size === "md" ? "text-[0.98rem]" : "text-[0.88rem]";
   return (
-    <span className={`inline-flex items-start gap-1.5 font-semibold leading-snug ${text} ${kind === "committed" ? "text-petrol" : gate ? "text-ink" : "text-ink-soft"}`}>
-      <span className="mt-[0.2em] shrink-0">
-        {gate ? <Target size={14} tone="safety" /> : <span aria-hidden className={`block size-3 ${kind === "committed" ? "bg-petrol" : "border-[1.5px] border-current"}`} />}
+    <span className={`inline-flex items-start gap-2 font-medium leading-snug ${text} ${kind === "committed" ? "text-good" : gate ? "text-ink" : "text-ink-soft"}`}>
+      <span className="mt-[0.15em] shrink-0">
+        {gate ? (
+          <Target size={15} tone="safety" />
+        ) : kind === "committed" ? (
+          <span aria-hidden className="flex size-[15px] items-center justify-center rounded-full bg-good text-paper">
+            <Check size={10} strokeWidth={3.5} />
+          </span>
+        ) : (
+          <span aria-hidden className="block size-[13px] rounded-full border-[1.5px] border-current" />
+        )}
       </span>
       <span>{label}</span>
     </span>
@@ -128,8 +136,8 @@ export function Outcome({ kind, label, size = "sm" }: { kind: string; label: str
 export function Licence({ licence }: { licence: { level: string; name: string; rating?: number } | null | undefined }) {
   if (!licence) return <span className="text-[0.85rem] text-ink-soft">Not crash-tested yet</span>;
   return (
-    <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap text-[0.88rem] font-semibold">
-      <span className="bg-petrol px-1 text-[0.78rem] text-paper">{licence.level}</span>
+    <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap text-[0.88rem] font-medium">
+      <span className="rounded-full bg-petrol-soft px-2 text-[0.76rem] font-semibold leading-5 text-petrol-deep">{licence.level}</span>
       {licence.name}
       {licence.rating !== undefined && <span className="font-normal text-ink-soft tabular">{licence.rating.toFixed(1).replace(".", ",")}</span>}
     </span>
@@ -140,13 +148,11 @@ export function Licence({ licence }: { licence: { level: string; name: string; r
 export function Details({ summary = "Details", children, className = "" }: { summary?: string; children: ReactNode; className?: string }) {
   return (
     <details className={`group text-[0.82rem] ${className}`}>
-      <summary className="inline-flex cursor-pointer select-none items-center gap-1 text-ink-soft hover:text-ink">
-        <span aria-hidden className="inline-block transition-transform group-open:rotate-90 motion-reduce:transition-none">
-          ▸
-        </span>
-        <span className="underline decoration-line underline-offset-2">{summary}</span>
+      <summary className="inline-flex cursor-pointer select-none list-none items-center gap-1 rounded-full text-ink-soft hover:text-ink [&::-webkit-details-marker]:hidden">
+        <ChevronRight aria-hidden size={14} className="transition-transform duration-150 group-open:rotate-90 motion-reduce:transition-none" />
+        <span>{summary}</span>
       </summary>
-      <div className="mt-1.5 space-y-1 break-all font-mono text-[0.76rem] leading-relaxed text-ink-soft">{children}</div>
+      <div className="mt-2 space-y-1 break-all rounded-md bg-surface px-3 py-2 font-mono text-[0.75rem] leading-relaxed text-ink-soft">{children}</div>
     </details>
   );
 }
@@ -163,10 +169,10 @@ export function KV({ k, v }: { k: string; v: ReactNode }) {
 /** An empty state is a direction: what is not here yet, and what makes it appear. */
 export function Empty({ title, children, action }: { title: string; children?: ReactNode; action?: ReactNode }) {
   return (
-    <div className="border border-dashed border-line bg-paper/70 px-5 py-5">
-      <p className="text-[1.08rem] font-semibold">{title}</p>
-      {children && <div className="mt-1 max-w-[70ch] text-[0.95rem] leading-snug text-ink-soft">{children}</div>}
-      {action && <div className="mt-3 flex flex-wrap gap-3">{action}</div>}
+    <div className="rounded-xl border border-dashed border-line-strong bg-paper/60 px-5 py-5 sm:px-6">
+      <p className="text-[1.05rem] font-semibold">{title}</p>
+      {children && <div className="mt-1 max-w-[70ch] text-[0.95rem] leading-relaxed text-ink-soft">{children}</div>}
+      {action && <div className="mt-3.5 flex flex-wrap gap-x-5 gap-y-2">{action}</div>}
     </div>
   );
 }
@@ -174,26 +180,24 @@ export function Empty({ title, children, action }: { title: string; children?: R
 export function LoadError({ message }: { message?: string }) {
   if (!message) return null;
   return (
-    <p role="status" className="mt-3 border-l-[6px] border-petrol bg-paper px-4 py-2.5 text-[0.95rem]">
-      <b>Could not refresh from AimoPilot.</b> {message} The view shows the last data it had and keeps trying.
+    <p role="status" className="mb-4 rounded-lg border border-bad/20 bg-bad-soft px-4 py-3 text-[0.95rem]">
+      <b className="font-semibold">Could not refresh from AimoPilot.</b> {message} The view shows the last data it had and keeps trying.
     </p>
   );
 }
 
-/** Loading, in the shape of what is coming: a title bar and a few rows. */
+/** Loading, in the shape of what is coming: a diagram and a few rows. */
 export function Loading({ label = "Reading the gate…" }: { label?: string }) {
   return (
     <div className="mt-2" role="status" aria-label={label}>
-      <div className="h-10 w-72 animate-pulse bg-concrete-deep/70 motion-reduce:animate-none" />
-      <div className="mt-3 h-4 w-[34rem] max-w-full animate-pulse bg-concrete-deep/50 motion-reduce:animate-none" />
-      <div className="mt-6 space-y-2">
+      <div className="skeleton h-44 !rounded-[20px]" />
+      <div className="skeleton mt-8 h-6 w-56" />
+      <div className="mt-4 space-y-2">
         {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="h-14 animate-pulse bg-paper motion-reduce:animate-none" />
+          <div key={i} className="skeleton h-14" />
         ))}
       </div>
-      <p className="mt-3 flex items-center gap-2 text-[0.9rem] text-ink-soft">
-        <Spinner size={14} className="text-petrol" /> {label}
-      </p>
+      <p className="sr-only">{label}</p>
     </div>
   );
 }
@@ -201,13 +205,13 @@ export function Loading({ label = "Reading the gate…" }: { label?: string }) {
 /** A figure: the number in the display face, its meaning under it. `safety` only when a person must act. */
 export function Num({ n, label, sub, safety = false }: { n: ReactNode; label: string; sub?: ReactNode; safety?: boolean }) {
   return (
-    <div className="min-w-0 px-4 py-3">
-      <p className="flex items-center gap-2 display text-[2.4rem] tabular">
+    <div className="min-w-0 px-5 py-4">
+      <p className="display flex items-center gap-2 text-[2.1rem] tabular">
         {n}
-        {safety && <span aria-hidden className="hazard-thin inline-block size-3.5" />}
+        {safety && <Target size={18} tone="safety" />}
       </p>
-      <p className="mt-1 text-[0.88rem] leading-snug text-ink-soft">{label}</p>
-      {sub && <p className="text-[0.82rem] text-ink-soft">{sub}</p>}
+      <p className="mt-1 text-[0.86rem] leading-snug text-ink-soft">{label}</p>
+      {sub && <p className="text-[0.8rem] text-ink-soft">{sub}</p>}
     </div>
   );
 }
