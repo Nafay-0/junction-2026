@@ -1,7 +1,7 @@
 import { SignJWT, decodeProtectedHeader, errors, jwtVerify, type CryptoKey } from "jose";
 import { z } from "zod";
 import { SIGN_ALG, VERIFY_ALGS, type SigningKey } from "./keys";
-import { NutritionRuleSchema } from "./nutrition";
+import { NutritionRuleSchema, ruleText, sameRule, type NutritionRule } from "./nutrition";
 import { allergenOf } from "./vocabulary";
 
 /**
@@ -195,7 +195,7 @@ export type MandateReissue = {
    * its current mandate, whoever signed it and whenever: one minted later from old terms (a script holding the
    * kitchen's key, a server path signing from defaults) is refused like one signed before the reissue.
    */
-  requires?: { forbiddenAllergens: string[]; requiredAttributes: string[] };
+  requires?: { forbiddenAllergens: string[]; requiredAttributes: string[]; nutritionRules?: NutritionRule[] };
 };
 
 export interface MandateRegister {
@@ -211,7 +211,7 @@ export function supersededBy(mandate: Pick<Mandate, "mandateId" | "issuer" | "va
 }
 
 /** The rules the kitchen added by reissue that this mandate does not carry (in words), if any. */
-export function missingAddedRules(mandate: Pick<Mandate, "issuer" | "forbiddenAllergens" | "requiredAttributes">, register: MandateRegister | undefined): string[] {
+export function missingAddedRules(mandate: Pick<Mandate, "issuer" | "forbiddenAllergens" | "requiredAttributes" | "nutritionRules">, register: MandateRegister | undefined): string[] {
   const need = register?.reissueOf(mandate.issuer.orgId)?.requires;
   if (!need) return [];
   return [
@@ -221,6 +221,7 @@ export function missingAddedRules(mandate: Pick<Mandate, "issuer" | "forbiddenAl
     ...need.requiredAttributes
       .filter((c) => !mandate.requiredAttributes.includes(c) && !(c.endsWith("_free") && allergenOf(c.slice(0, -5)) !== undefined && mandate.forbiddenAllergens.includes(allergenOf(c.slice(0, -5))!)))
       .map((c) => `every product ${c.replaceAll("_", "-")}`),
+    ...(need.nutritionRules ?? []).filter((r) => !(mandate.nutritionRules ?? []).some((m) => sameRule(m, r))).map(ruleText),
   ];
 }
 

@@ -103,6 +103,12 @@ export function ruleText(r: NutritionRule): string {
   return `${range} per 100 g or ml${r.categories?.length ? ` (${r.categories.join(", ")})` : ""}`;
 }
 
+/** Two rules say the same (same nutrient, bounds and kinds, in any order). */
+export function sameRule(a: NutritionRule, b: NutritionRule): boolean {
+  const kinds = (r: NutritionRule) => [...(r.categories ?? [])].sort().join(",");
+  return a.nutrient === b.nutrient && a.max === b.max && a.min === b.min && kinds(a) === kinds(b);
+}
+
 /** Whether a rule speaks about a product of this category. */
 export function ruleApplies(r: NutritionRule, category: string): boolean {
   return !r.categories?.length || r.categories.includes(category);
