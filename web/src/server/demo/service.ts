@@ -105,14 +105,13 @@ export async function poorRecordProduct(rt: Runtime, a: Account, opts: { live?: 
   // A name a person would type: an English name in plain case, and none whose words read as a claim ("hand made").
   const plain = (p: Product) => (p.names?.en ? 2 : 0) + (p.name === p.name.toUpperCase() ? 0 : 1) + (/hand ?made|käsin|artisan/i.test(p.names?.en ?? p.name) ? -3 : 0);
   const rank = (ps: Product[]) => ps.sort((x, y) => plain(y) - plain(x) || y.deliveryReliability - x.deliveryReliability || x.id.localeCompare(y.id));
+  // The kitchen's own products first; for staging, more from master data, so the live check has several to choose from.
   let pool = rank(mine.filter(ok));
-  if (!pool.length) {
+  if (!pool.length || (opts.live && pool.length < 5)) {
     for (const family of k.mandate.allowedCategories.slice(0, 60)) {
-      const found = (await rt.catalog.searchProducts({ category: family, limit: 100 }).catch(() => [] as Product[])).filter(ok);
-      if (found.length) {
-        pool = rank(found);
-        break;
-      }
+      const found = (await rt.catalog.searchProducts({ category: family, limit: 100 }).catch(() => [] as Product[])).filter((p) => ok(p) && !pool.some((x) => x.id === p.id));
+      if (found.length) pool = [...pool, ...rank(found)];
+      if (pool.length >= (opts.live ? 10 : 1)) break;
     }
   }
   if (!pool.length) return undefined;
@@ -383,8 +382,9 @@ export async function guideFor(rt: Runtime, a: Account, now = new Date()): Promi
     {
       id: "backup",
       ...(() => {
-        const b = backups.find((x) => x.state === "set" || x.state === "declined" || x.state === "used");
-        return b ? { done: true, at: b.chosen?.at ?? b.at } : { done: false };
+        // The agent offered a backup in the conversation (or the kitchen answered it).
+        const b = backups.find((x) => x.state === "set" || x.state === "declined" || x.state === "used" || !!x.saidAt);
+        return b ? { done: true, at: b.chosen?.at ?? b.saidAt ?? b.at } : { done: false };
       })(),
       staged: stagedAny("poor_record"),
       setup: { action: "poor_record", ready: demo, ...(demo ? {} : { why: "not_demo" as const }) },
