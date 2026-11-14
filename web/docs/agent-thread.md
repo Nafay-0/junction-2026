@@ -154,29 +154,31 @@ ledger (`today`, `products`, `order_again`, `memory_write`) and in the operation
 *(not yet)*: the widgets above this subsection are the contract for agent-thread-3; this line goes when the engine for each
 widget lands, and the table says per widget what is live.
 
-## Set-up interview (agent-thread-3, live)
+## Set-up interview (agent-thread-4, live)
 
-A new account's second step is a short interview in the agent's thread form instead of a form
+A new account's second step is a short interview with the design kit (docs/DESIGN.md §7b: `SetupWelcome`,
+`SetupStep` with the answer widgets, `RulesSheet` with a footer, `SetupDone`), not a form
 (`app/k/signup/thread-interview.tsx`, `server/accounts/interview.ts`, `POST /ui-api/account/interview`). Step 1
-(restaurant, username, password) and the signing-device step after it are unchanged.
+(restaurant, username, password) is unchanged.
 
-- The questions, their order, options and suggested amounts are plain code: kind of kitchen, "must every product be"
-  (claims), "never buy" (allergens), delivery days, a usual order, the spend-alone limit (suggested: a usual order and
-  a half), the weekly budget (suggested from the usual order and the days), who signs. The browser only words them
-  (en/fi/sv). No model is asked anything.
-- Never asked what the records answer: the kind of kitchen when the restaurant's name says it ("Päiväkoti Satu",
-  "Laakso Catering", "Ravintola …"; shown as "from your name", with "Not right?" to change it), and anything already
-  answered (stateless: the browser sends the answers so far, so a reload resumes). An account that already has a
-  kitchen is not interviewed.
-- Answer widgets, the `question` card's input kinds plus two the interview adds: chips (`choice`, `multi: true` for
-  several), weekday chips (`weekdays`), a stepper with suggested amounts (`amount`), a short text with suggestions
-  (`text`). One tap on Next accepts the suggestion.
-- It ends in the mandate as it will be signed; "Sign and continue" signs it with the account's own `signKitchen`
-  (the same key, mandate, signer and ledger entry the form made), writes the answers to the kitchen's memory
-  (diet and allergens as rules, delivery days and the usual order as habits, the kind as a note), and appends one
-  ledger entry `setup_interview` with every question asked, what was skipped and why, the answers and the seconds.
-- Evaluation: `eval/thread/interview.ts` (EN and FI): taps and seconds to a signed mandate, checks that it carries the
-  answers and that nothing the name answers was asked.
+- A welcome: what the agent is, the three things it asks and why, "under two minutes", one button.
+- Then one question at a time, its answer already chosen (`SetupStep`, progress "n of m", Back keeps everything):
+  kind of kitchen (`ChoiceAnswer`, one tap moves on), "every product must be" and "never buy" (`ChoiceAnswer`
+  multiple, "None of these" until one is picked), delivery days (weekday chips, suggested), a usual order, the
+  spend-alone limit and the weekly budget (`AmountAnswer` with the suggestion set and presets, "300 € is right"), who
+  OKs above the limit (a role already chosen, or their name). The questions, order, options and suggestions are plain
+  code; the browser only words them (en/fi/sv). No model.
+- Never asked what the records answer: the kind of kitchen when the name says it (said on the welcome, with "Not
+  right?" to change it), and anything already answered (stateless, so a reload resumes).
+- "These are your rules": the limit, the week, "every product must be" and "never" as labels (never ids), the
+  delivery days, who OKs. One button, "Confirm, and add this device to OK orders": signs the rules with the account's
+  own `signKitchen` (same key, mandate, signer and ledger entry), writes the answers to memory, appends the
+  `setup_interview` ledger entry, then registers this device's passkey for the signer. If the device cannot (no
+  passkey support, the prompt cancelled), the rules stand and the done screen offers the device again or a phone.
+- `SetupDone`: what was set, in three lines, and "Make your first order" into the kitchen's agent.
+- Evaluation: `eval/thread/first-timer-setup.ts` (EN and FI, 390 px, virtual passkey): sign up, interview, rules
+  confirmed, first order placed; taps, seconds (`--think` adds reading time per tap), questions. `eval/thread/
+  interview.ts` checks the mandate the answers make.
 
 ## The thread
 

@@ -13,49 +13,63 @@ const stamp = Date.now().toString(36).slice(-6);
 const PASSWORD = "e2e-password-123";
 
 /**
- * The set-up interview (the sign-up's second step): the kind of kitchen only when the name does not say it, then
- * diet, allergens, days, the usual order, the spend-alone limit (€300, as the tests below rely on), the weekly
- * budget and who signs; the last card is the mandate as signed. Returns the taps it took.
+ * The set-up interview (the sign-up's second step, the design kit's SetupWelcome / SetupStep / RulesSheet / SetupDone):
+ * the welcome, then one question at a time with its answer already chosen (the kind of kitchen only when the name does
+ * not say it): diet, allergens, days, the usual order, the spend-alone limit (€300, as the tests below rely on), the
+ * weekly budget and who OKs above it; then "These are your rules" with one button that confirms them and adds this
+ * device's passkey; then done, into the agent. Returns the taps it took.
  */
 async function setUpInterview(page: Page, restaurant: string): Promise<number> {
   let taps = 0;
-  const tap = async (name: string | RegExp) => {
-    await page.getByRole("button", { name, exact: typeof name === "string" }).last().click();
+  const tap = async (name: string | RegExp, role: "button" | "radio" = "button") => {
+    await page.getByRole(role, { name, exact: typeof name === "string" }).last().click();
     taps++;
   };
   const ask = (q: string) => expect(page.getByText(q, { exact: true }).last()).toBeVisible({ timeout: 15_000 });
   const named = /ravintola|bistro|restaurant/i.test(restaurant);
-  if (named) await expect(page.getByText(/^.+ is a restaurant: from “.+” in your name\.$/)).toBeVisible({ timeout: 15_000 });
-  else {
+  if (named) await expect(page.getByText(/You are a restaurant: from “.+” in your name\./)).toBeVisible({ timeout: 15_000 });
+  await tap("Let's start");
+  if (!named) {
     await ask("What kind of kitchen is it?");
-    await tap("Restaurant");
+    await tap("Restaurant", "radio");
   }
   await ask("Must every product be one of these?");
-  await tap("Next");
-  await ask("Anything the agent must never buy?");
-  await tap("nuts");
+  await tap("None of these");
+  await ask("Anything your agent must never buy?");
+  await tap("Nuts");
   await tap("Next");
   await ask("Which days do you usually want deliveries?");
   await tap("Next");
   await ask("About how much is a usual order?");
   await tap("300 €");
-  await tap("Next");
-  await ask("Up to how much may the agent order alone?");
+  await tap("300 € is right");
+  await ask("Up to how much may your agent order alone?");
   await tap("300 €");
-  await tap("Next");
+  await tap("300 € is right");
   await ask("And the most in a whole week?");
+  await tap(/ € is right$/);
+  await ask("Who OKs orders above that?");
+  await page.getByRole("textbox", { name: "Who OKs orders above that?" }).fill("Aino Virtanen");
   await tap("Next");
-  await ask("Who signs orders above that?");
-  await page.getByRole("textbox", { name: "Who signs orders above that?" }).fill("Aino Virtanen");
-  await tap("Next");
-  await expect(page.getByText("This is what you sign")).toBeVisible();
-  await expect(page.getByText("300 €").first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "These are your rules" })).toBeVisible();
+  await expect(page.getByText("300 € per order")).toBeVisible();
+  await expect(page.getByText("Nuts", { exact: true })).toBeVisible(); // a label, never an id
   await shot(page, "03-signup-interview");
-  await tap("Sign and continue");
+  await tap("Confirm, and add this device to OK orders");
   return taps;
 }
 
+/** This browser's passkey authenticator (Face ID or a fingerprint on a real phone): the set-up adds it as the device that OKs orders. */
+async function withPasskey(page: Page) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("WebAuthn.enable");
+  await cdp.send("WebAuthn.addVirtualAuthenticator", {
+    options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true },
+  });
+}
+
 async function signUp(page: Page, username: string, restaurant: string) {
+  await withPasskey(page);
   await page.goto("/k");
   await expect(page.getByRole("heading", { name: "Your kitchen's shop" })).toBeVisible();
   await shot(page, "01-door");
@@ -68,9 +82,10 @@ async function signUp(page: Page, username: string, restaurant: string) {
   await shot(page, "02-signup-step1");
   await page.getByRole("button", { name: "Continue" }).click();
   await setUpInterview(page, restaurant);
-  await expect(page.getByRole("heading", { name: "Add a signing device now?" })).toBeVisible();
-  await shot(page, "04-signup-device-offer");
-  await page.getByRole("link", { name: "Open my shop" }).click();
+  await expect(page.getByRole("heading", { name: "Done. Your agent is ready." })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("This device OKs orders with Face ID or a fingerprint.")).toBeVisible();
+  await shot(page, "04-signup-done");
+  await page.getByRole("button", { name: "Make your first order" }).click();
   await page.waitForURL(`**/k/${username}`);
   await expect(page.getByTestId("signed-in-as")).toContainText(`Signed in as ${username}, for ${restaurant}.`);
 }
@@ -121,15 +136,15 @@ test("a restaurant signs up, orders within its limit, comes back to its order an
   test.skip(live && !pick, "the live answer says no milk product can be ordered for the next delivery right now (order cut-offs, unconfirmed stock)");
   const productId = pick?.productId;
   await page.goto(productId ? `/k/${a}/catalogue/${productId}` : `/k/${a}/catalogue?q=milk`);
-  const add = page.getByRole("button", { name: /^Add (a |to basket|\d)/ }).first();
+  // "Add" puts it on the agent's order sheet (round 3): one confirm, priced live and checked like any order.
+  const add = page.getByRole("button", { name: /^Add (a |to your order|\d)/ }).first();
   await expect(add).toBeVisible({ timeout: 30_000 });
   await add.click();
-  await page.goto(`/k/${a}/basket`);
-  await page.getByRole("button", { name: "Get a fixed price" }).click();
-  const place = page.getByRole("button", { name: "Place the order" });
+  const log = page.getByRole("log").filter({ visible: true }).first();
+  const place = log.getByRole("button", { name: /^Order this, / });
   await expect(place).toBeVisible({ timeout: 30_000 });
   await place.click();
-  await expect(page.getByText("Order placed with the wholesaler")).toBeVisible({ timeout: 30_000 });
+  await expect(log).toContainText(/Ordered\. Arrives/, { timeout: 30_000 });
   await shot(page, "06-order-placed");
 
   // Memory: a stated rule, through the kitchen's own memory page.
@@ -178,15 +193,10 @@ test("a restaurant signs up, orders within its limit, comes back to its order an
   await other.close();
 });
 
-test("an order above the limit waits for a signing device, then is signed with this device's passkey", async ({ page }) => {
+test("an order above the limit waits for an OK, then is signed with the passkey the set-up added", async ({ page }) => {
   test.setTimeout(180_000);
   const health = (await (await page.request.get("/api/health")).json()) as { catalog?: { source?: string } };
   const live = health.catalog?.source === "valio";
-  const cdp = await page.context().newCDPSession(page);
-  await cdp.send("WebAuthn.enable");
-  await cdp.send("WebAuthn.addVirtualAuthenticator", {
-    options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true },
-  });
   const user = `e2e-s-${stamp}`;
   await signUp(page, user, `Signer E2E ${stamp}`);
 
@@ -196,21 +206,20 @@ test("an order above the limit waits for a signing device, then is signed with t
   test.skip(live && !pick, "the live answer says no milk product can be ordered for the next delivery right now");
   const packs = pick ? Math.ceil(40_000 / Math.max(1, pick.unitPriceCents)) : 30;
   await page.goto(pick ? `/k/${user}/catalogue/${pick.productId}` : `/k/${user}/catalogue?q=milk`);
-  await page.getByRole("button", { name: /^Add (a |to basket|\d)/ }).first().click();
-  await page.goto(`/k/${user}/basket`);
-  await page.getByRole("textbox", { name: /^Quantity in / }).fill(String(packs));
-  await page.getByRole("button", { name: "Get a fixed price" }).click();
-  await page.getByRole("button", { name: "Place the order" }).click();
-  await expect(page.getByText(/no signing device yet/).first()).toBeVisible({ timeout: 30_000 });
-  await shot(page, "10-waits-no-device");
-
-  // Add this device's passkey from Agent and rules.
-  await page.getByRole("link", { name: "Add a signing device" }).first().click();
-  await page.waitForURL(`**/k/${user}/agent*`);
-  await page.getByRole("button", { name: "Add this device's passkey" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Signing device added." }).first()).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("1 signing device added.")).toBeVisible();
-  await shot(page, "11-device-added");
+  if (pick) await page.getByRole("textbox", { name: /^Quantity in / }).first().fill(String(packs));
+  await page.getByRole("button", { name: /^Add (a |to your order|\d)/ }).first().click();
+  const log = page.getByRole("log").filter({ visible: true }).first();
+  const send = log.getByRole("button", { name: /^Send to .+ for an OK, / });
+  if (!pick) {
+    // The seed's milk: enough packs on the order sheet to pass the €300 limit.
+    await log.getByRole("button", { name: "Change amount, day or product" }).click();
+    for (let i = 0; i < 40 && !(await send.isVisible()); i++) await log.getByRole("button", { name: /^One pack more/ }).first().click();
+  }
+  await expect(send).toBeVisible({ timeout: 30_000 });
+  await send.click();
+  await expect(log).toContainText(/Waiting for .+'s OK/, { timeout: 30_000 });
+  // The set-up already added this device's passkey: the order waits for its OK.
+  await shot(page, "10-waits-for-ok");
 
   // Sign it: the sign-off screen, the passkey bound to this exact order.
   const portal = await (await page.request.get(`/ui-api/kitchens/${user}/portal`)).json();
@@ -256,5 +265,5 @@ test("a phone adds itself as the kitchen's signing device from the QR code's one
   await phoneContext.close();
 
   const devices = await (await page.request.get("/ui-api/account/device")).json();
-  expect(devices.devices).toHaveLength(1);
+  expect(devices.devices).toHaveLength(2); // the set-up's (this browser) and the phone's
 });
