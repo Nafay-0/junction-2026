@@ -34,6 +34,8 @@ const demo = (name: string, use: Project["use"]): Project => ({ name, testDir: "
 
 export default defineConfig({
   testDir: "e2e",
+  // Baselines differ by operating system (fonts, anti-aliasing): darwin baselines for laptops, linux for CI.
+  snapshotPathTemplate: "{testDir}/__screenshots__/{platform}/{projectName}/{testFilePath}/{arg}{ext}",
   timeout: 90_000,
   expect: { timeout: 15_000, toHaveScreenshot: { maxDiffPixelRatio: 0.02, animations: "disabled", caret: "hide" } },
   fullyParallel: true,
