@@ -47,7 +47,8 @@
     "knowledge:publish": "tsx scripts/knowledge-publish.ts",
     "aiven:showcase": "tsx scripts/aiven-showcase.ts",
     "radar:gtins": "tsx scripts/radar-gtins.ts",
-    "radar:check": "tsx scripts/radar-check.ts"
+    "radar:check": "tsx scripts/radar-check.ts",
+    "demo:all": "tsx scripts/demo-all.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.102",
