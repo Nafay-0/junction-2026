@@ -160,6 +160,8 @@ export type ItemOutcome = {
   options?: { ref: string; optionId: string; title: string; totalCents: number; deliveryDate: string; match: string }[];
   concerns?: { message: string; choices: string[] }[];
   questions?: { text: string; choices: string[] }[];
+  /** An earlier order this one replaced ("make it 200" after the 100 was placed): taken back. */
+  replaced?: { orderId: string; status: string };
   /** The words went on an order sheet to confirm (the usual, from the kitchen's recurring orders). */
   sheet?: { sheetId: string; deliveryDate: string; lines: { name: string; packs: number }[]; totalCents: number };
 };
@@ -282,6 +284,7 @@ export async function openNeed(run: TurnRun, need: NeedInput, words: string, opt
     const res = await published<{ step: IntakeView }>(run, "submit_need", { need, by: byLine(run) });
     intake.done(res.step.state);
     run.requests.add(res.step.requestId);
+    if (opts.basedOn) await noteReplacement(run, res.step.requestId, opts.basedOn.requestId);
     run.store.card(run.thread, run.turnId, { ...understood, requestId: res.step.requestId, memoryUsed: [...(opts.memoryLine ? [opts.memoryLine] : []), ...res.step.memoryUsed.map((m) => m.text)], memory: res.step.memoryUsed, ...(res.step.noticed?.length ? { notes: res.step.noticed.map((n) => ({ code: n.code, params: n.params })) } : {}) });
     if (res.step.memoryUsed.length) record(run, "memory_read", `Memory answered for this request: ${res.step.memoryUsed.map((m) => m.text).join("; ")}`, { lines: res.step.memoryUsed }, res.step.requestId);
     return [await afterStep(run, res.step, words)];
@@ -426,7 +429,41 @@ export async function placeQuoted(run: TurnRun, s: IntakeView, words: string, pa
   run.store.card(run.thread, run.turnId, orderCard(order, passed));
   mark(run, order.status === "pending_approval" ? "waiting" : "placed");
   out.placed = { orderId: order.orderId, status: order.status, totalCents: order.totalCents, ...(order.approval ? { approver: order.approval.approver.name } : {}) };
+  const replaced = await replaceEarlier(run, s.requestId, order);
+  if (replaced) out.replaced = replaced;
   return out;
+}
+
+// ---------- a change to an order already placed ----------
+
+const replacesOf = (run: TurnRun): Record<string, string> => ((run.thread as unknown as { replaces?: Record<string, string> }).replaces ??= {});
+
+/**
+ * "Make it 200" after the 100 was placed: the new request replaces that order. Noted when the change is read, so the
+ * new order, once placed (alone or by the buyer's tap), takes the old one back: one order stands, never both.
+ * Only an order that can still go back: waiting for an OK, or placed and before its cut-off with a signed-in person.
+ */
+async function noteReplacement(run: TurnRun, requestId: string, earlierRequestId: string): Promise<void> {
+  const { takeBackUntil } = await import("@/core/orders");
+  const old = (await run.rt.dock.listOrders()).find((o) => o.requestId === earlierRequestId && o.orgId === run.session.mandate.issuer.orgId && (o.status === "pending_approval" || (o.status === "committed" && !!run.person && !!takeBackUntil(o))));
+  if (!old) return;
+  replacesOf(run)[requestId] = old.orderId;
+  record(run, "replaces", `The new request ${requestId} changes order ${old.orderId}: placing it takes that order back.`, { orderId: old.orderId }, requestId);
+}
+
+async function replaceEarlier(run: TurnRun, requestId: string, placed: PublicOrder): Promise<{ orderId: string; status: string } | undefined> {
+  const oldId = replacesOf(run)[requestId];
+  if (!oldId || (placed.status !== "committed" && placed.status !== "pending_approval")) return undefined;
+  delete replacesOf(run)[requestId];
+  try {
+    const o = await run.rt.dock.withdrawOrder(run.session, oldId, { reason: `replaced by order ${placed.orderId}`, ...(run.person ? { by: run.person.name } : {}) }, run.person ? { takeBack: { by: run.person.name } } : {});
+    run.store.card(run.thread, run.turnId, gateCard(o));
+    run.store.card(run.thread, run.turnId, orderCard(o));
+    record(run, "replaced", `Order ${oldId} was taken back: order ${placed.orderId} replaces it.`, { orderId: oldId, by: placed.orderId }, requestId);
+    return { orderId: oldId, status: o.status };
+  } catch {
+    return undefined; // its cut-off passed meanwhile: both stand, and the old one's card says so
+  }
 }
 
 // ---------- the buyer's own decisions ----------

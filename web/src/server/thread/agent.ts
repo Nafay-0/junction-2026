@@ -65,12 +65,17 @@ export function setAgentModelForTests(m: { model: LanguageModel; id: string } | 
   modelForTests = m;
 }
 
+export const AGENT_MODEL_DEFAULT = "anthropic:claude-opus-5-5";
+export const AGENT_FALLBACK_DEFAULT = "anthropic:claude-fable-5-2";
+
 function modelFor(spec: string | undefined, onFallback: (i: { from: string; to: string; reason: string }) => void): { model: LanguageModel; id: string } {
   if (modelForTests) return modelForTests;
-  const primarySpec = spec ?? defaultModel("DOCK_AGENT_MODEL");
+  // Never a smaller model by accident: with Anthropic credentials and nothing set, Opus 5.5 (not the cheap default).
+  const primarySpec = spec ?? (process.env.DOCK_AGENT_MODEL || (process.env.ANTHROPIC_API_KEY ? AGENT_MODEL_DEFAULT : defaultModel("DOCK_AGENT_MODEL")));
   if (!primarySpec) throw new DockError(503, "model_unavailable", "No model is configured for the store agent: set DOCK_AGENT_MODEL or a provider key.");
   const primary = createModel(primarySpec).model as LanguageModelV4;
-  const fallbackSpec = process.env.DOCK_AGENT_FALLBACK_MODEL || process.env.DOCK_INTERPRET_MODEL;
+  // The fallback is another model of the same tier, never a smaller one: Fable 5.2 when the primary is Opus 5.5.
+  const fallbackSpec = process.env.DOCK_AGENT_FALLBACK_MODEL || (process.env.DOCK_INTERPRET_MODEL && process.env.DOCK_INTERPRET_MODEL !== primarySpec ? process.env.DOCK_INTERPRET_MODEL : primarySpec.startsWith("anthropic:") ? AGENT_FALLBACK_DEFAULT : undefined);
   const fallback = fallbackSpec && fallbackSpec !== primarySpec ? (createModel(fallbackSpec).model as LanguageModelV4) : undefined;
   const firstChunkMs = Number(process.env.DOCK_AGENT_FIRST_TOKEN_MS ?? 6000) || 6000;
   return { model: withFallback(primary, fallback, { firstChunkMs, totalMs: firstChunkMs * 3, onFallback }), id: primarySpec };

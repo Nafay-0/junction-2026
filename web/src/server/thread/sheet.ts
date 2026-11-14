@@ -244,7 +244,7 @@ export async function editSheet(run: TurnRun, sheetId: string, version: number |
       const have = s.lines.find((x) => x.productId === edit.productId);
       if (have) have.packs += edit.packs;
       else {
-        if (s.lines.length >= 10) throw new DockError(409, "sheet_full", "At most 10 products on one order sheet.");
+        if (s.lines.length >= 30) throw new DockError(409, "sheet_full", "At most 30 products on one order sheet.");
         s.lines.push({ productId: edit.productId, packs: edit.packs, lineId: newLineId() });
       }
       reprice = true;

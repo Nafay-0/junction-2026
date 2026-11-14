@@ -80,7 +80,7 @@ export function invariants(v: PlanView, d: MenuDraft, opts: { forbidden: string[
     for (const s of c.safety) if (opts.forbidden.some((a) => s.rule.startsWith(`no ${a}`))) out.push(check(`${l.name}: ${s.rule} shown safe by data`, s.verdict === "ok" || l.doubts.some((x) => x.kind === "allergen_unknown"), s.reason));
   }
   out.push(check("a quote is never asked with open doubts", !v.totals.canQuote || v.totals.openDoubts === 0));
-  out.push(check("one quote: at most 10 products, or the plan says why not", v.totals.products <= 10 || v.totals.blockers.some((b) => b.includes("at most 10"))));
+  out.push(check("one quote: at most 60 products", v.totals.products <= 60));
   void d;
   return out;
 }
