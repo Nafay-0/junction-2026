@@ -542,7 +542,7 @@ export type TodayItem =
 
 /** The opening: what needs the kitchen today, posted by the engine when the kitchen opens the agent. Empty: nothing does. */
 /** What needs the kitchen today (the opening); `pending` while it is being gathered. Plain code from records only. */
-export type TodayCard = CardBase & { type: "today"; date: string; items: TodayItem[]; pending?: boolean };
+export type TodayCard = CardBase & { type: "today"; date: string; items: TodayItem[]; pending?: boolean; /** A fresh kitchen (no rules yet): its own opening, in each language, instead of the rules sentence. */ opening?: Record<"en" | "fi" | "sv", string> };
 
 export type ProductTile = {
   productId: string;

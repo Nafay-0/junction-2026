@@ -117,6 +117,20 @@ async function signOut(page: Page) {
   await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
 }
 
+/** The newest order sheet in the kitchen's conversation, as the store sees it. */
+async function sheetOf(page: Page, kitchen: string): Promise<{ sheetId: string; version: number; state: string; totalCents: number; lines: { lineId: string; packs: number }[] } | undefined> {
+  const t = await (await page.request.get(`/ui-api/kitchens/${kitchen}/thread`)).json();
+  const cards = (t.thread?.turns ?? []).flatMap((x: { cards?: unknown[] }) => x.cards ?? []) as { type: string }[];
+  return cards.filter((c) => c.type === "sheet").at(-1) as never;
+}
+
+/** The buyer types in the conversation's composer and sends. */
+async function say(page: Page, words: string) {
+  const box = page.getByRole("textbox", { name: /Ask, or say what the kitchen needs|What does the kitchen need/ }).filter({ visible: true }).first();
+  await box.fill(words);
+  await box.press("Enter");
+}
+
 async function signIn(page: Page, username: string) {
   await page.goto("/k");
   const form = page.getByRole("form", { name: "Sign in" });
@@ -147,10 +161,11 @@ test("a restaurant signs up, orders within its limit, comes back to its order an
   await expect(add).toBeVisible({ timeout: 30_000 });
   await add.click();
   const log = page.getByRole("log").filter({ visible: true }).first();
-  const place = log.getByRole("button", { name: /^Order this, / });
-  await expect(place).toBeVisible({ timeout: 30_000 });
-  await place.click();
-  await expect(log).toContainText(/Ordered\. Arrives/, { timeout: 30_000 });
+  // The order sheet is in the conversation; the buyer orders it in words, as a chef would ("yes").
+  await expect.poll(async () => (await sheetOf(page, a))?.state, { timeout: 30_000 }).toBe("editing");
+  await say(page, "yes");
+  await expect.poll(async () => (await page.request.get(`/ui-api/kitchens/${a}/portal`).then((r) => r.json())).orders.filter((o: { status: string }) => o.status === "committed").length, { timeout: 45_000 }).toBeGreaterThan(0);
+  await expect(log.getByText(/Sent the order|Placed|ordered/i).first()).toBeVisible({ timeout: 30_000 });
   await shot(page, "06-order-placed");
 
   // Memory: a stated rule, through the kitchen's own memory page.
@@ -215,15 +230,18 @@ test("an order above the limit waits for an OK, then is signed with the passkey 
   if (pick) await page.getByRole("textbox", { name: /^Quantity in / }).first().fill(String(packs));
   await page.getByRole("button", { name: /^Add (a |to your order|\d)/ }).first().click();
   const log = page.getByRole("log").filter({ visible: true }).first();
-  const send = log.getByRole("button", { name: /^Send to .+ for an OK, / });
+  await expect.poll(async () => (await sheetOf(page, user))?.state, { timeout: 30_000 }).toBe("editing");
   if (!pick) {
-    // The seed's milk: enough packs on the order sheet to pass the €300 limit.
-    await log.getByRole("button", { name: "Change amount, day or product" }).click();
-    for (let i = 0; i < 40 && !(await send.isVisible()); i++) await log.getByRole("button", { name: /^One pack more/ }).first().click();
+    // The seed's milk: enough packs on the order sheet to pass the €300 limit (the sheet's own amount edit).
+    const sh = (await sheetOf(page, user))!;
+    const line = sh.lines[0];
+    const r = await page.request.post(`/ui-api/kitchens/${user}/thread/turns`, { data: { door: "typed", via: "tap", action: { type: "sheet_packs", sheetId: sh.sheetId, version: sh.version, lineId: line.lineId, packs: Math.ceil(40_000 / Math.max(1, Math.round(sh.totalCents / Math.max(1, line.packs)))) }, label: "More packs" } });
+    expect(r.status()).toBe(202);
+    await expect.poll(async () => (await sheetOf(page, user))?.totalCents ?? 0, { timeout: 30_000 }).toBeGreaterThan(30_000);
   }
-  await expect(send).toBeVisible({ timeout: 30_000 });
-  await send.click();
-  await expect(log).toContainText(/Waiting for .+'s OK/, { timeout: 30_000 });
+  // Ordered in words; over the limit, it goes to the signer.
+  await say(page, "yes");
+  await expect(log.getByRole("region", { name: /Needs (your|.+'s) OK/ }).first()).toBeVisible({ timeout: 45_000 });
   // The set-up already added this device's passkey: the order waits for its OK.
   await shot(page, "10-waits-for-ok");
 

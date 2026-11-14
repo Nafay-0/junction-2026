@@ -317,6 +317,8 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
       execute: async ({ words: w }) => {
         // The model may only pass on words the buyer said: anything else is read from the buyer's message itself.
         let said = words.includes(w.trim()) ? w.trim() : words;
+        // A tap has no words of the buyer's: there is nothing to read as an order (the tap did what it did).
+        if (!said.trim()) return { ok: false, refused: "no_words", say: "The buyer tapped; nothing new to order. Say what the tap did, from the shown facts." };
         // "Switch auto-renew on for the weekly milk order": the kitchen's own choice for a recurring order (server/watch).
         const { autoRenewFromWords } = await import("./watch");
         const auto = await autoRenewFromWords(run, said);

@@ -96,20 +96,21 @@ test("an order over the limit is signed from the thread's gate card with this de
   expect((await turn({ type: "choose", requestId: step.requestId, optionId: step.options[0].optionId }, "Order the first")).status()).toBe(202);
 
   // The gate holds it for the kitchen's signer, and there is no signing device yet: the card says so and offers the step.
-  await expect(log.getByText(/No signing device yet/)).toBeVisible({ timeout: 30_000 });
+  // The slab: it needs the kitchen's own OK, with this device's passkey (added in the same step) or on a phone.
+  await expect(log.getByRole("region", { name: /Needs (your|.+'s) OK/ }).first()).toBeVisible({ timeout: 30_000 });
   await expect(log.getByText("Asked on their phone, with their passkey.")).toHaveCount(0);
-  await expect(log.getByRole("button", { name: "Send to my phone" })).toBeVisible();
+  await expect(log.getByRole("button", { name: "Send to my phone" }).first()).toBeVisible();
   await shot(page, "thread-01-waiting-no-device");
   // "Send to my phone": the one-time code that adds the phone as the signer's device, then opens this order's sign-off.
-  await log.getByRole("button", { name: "Send to my phone" }).click();
-  const phoneLink = page.getByRole("link", { name: "Or open this address on the phone" });
+  await log.getByRole("button", { name: "Send to my phone" }).first().click();
+  const phoneLink = log.getByRole("link", { name: /\/join\/device\?t=/ }).first();
   await expect(phoneLink).toHaveAttribute("href", /\/join\/device\?t=.+&next=%2Fapprove%2Fapr_/);
-  await log.getByRole("button", { name: "Hide the code" }).click();
-  await log.getByRole("button", { name: "Add this device and sign" }).click();
+  await log.getByRole("button", { name: "Hide the code" }).first().click();
+  // Or here: this device's passkey is added and signs in the same step.
+  await log.getByRole("button", { name: /^OK with / }).first().click();
 
   // Signed with this device's passkey, bound to the exact order: the thread turns the gate card into the signed outcome.
-  await expect(log.getByText(/^Approved by /).first()).toBeVisible({ timeout: 30_000 });
-  await expect(log.getByText("Placed").first()).toBeVisible({ timeout: 30_000 });
+  await expect(log.getByRole("region", { name: "OK given" }).first()).toBeVisible({ timeout: 30_000 });
   await shot(page, "thread-02-signed");
   console.log(`from the first tap to the signed order: ${((Date.now() - t0) / 1000).toFixed(1)} s`);
   const portal = await (await page.request.get(`/ui-api/kitchens/${user}/portal`)).json();

@@ -11,14 +11,23 @@ import { TEST_ACCOUNTS } from "@/server/accounts/test-accounts";
   const argv = process.argv.slice(2);
   const flag = (f: string) => (argv.includes(f) ? argv[argv.indexOf(f) + 1] : undefined);
   const base = flag("--url") ?? "http://localhost:4820";
-  const slug = flag("--kitchen") ?? "hotel-lumo";
+  let slug = flag("--kitchen") ?? "hotel-lumo";
   const lang = flag("--lang") ?? "en";
   const quiet = argv.includes("--quiet");
   const says = argv.filter((a, i) => !a.startsWith("--") && !["--url", "--kitchen", "--lang"].includes(argv[i - 1] ?? ""));
-  const acc = TEST_ACCOUNTS.find((a) => a.username === slug);
-  if (!acc) throw new Error(`not a test account: ${slug}`);
-  const r0 = await fetch(`${base}/ui-api/account/signin`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: acc.username, password: acc.password }) });
-  const cookie = (r0.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).join("; ");
+  let cookie = "";
+  // --kitchen fresh: a fresh kitchen of its own (no rules, a high limit), started as a visitor would.
+  if (slug === "fresh") {
+    const r0 = await fetch(`${base}/ui-api/account/fresh`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ fresh: true }) });
+    cookie = (r0.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).join("; ");
+    slug = String(((await r0.json()) as any).next ?? "").split("/").filter(Boolean).at(-1) ?? "";
+    console.log(`fresh kitchen: ${slug}`);
+  } else {
+    const acc = TEST_ACCOUNTS.find((a) => a.username === slug);
+    if (!acc) throw new Error(`not a test account: ${slug}`);
+    const r0 = await fetch(`${base}/ui-api/account/signin`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: acc.username, password: acc.password }) });
+    cookie = (r0.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).join("; ");
+  }
   const call = (m: string, p: string, b?: unknown) => fetch(`${base}${p}`, { method: m, headers: { "content-type": "application/json", cookie }, ...(b ? { body: JSON.stringify(b) } : {}) }).then((r) => r.json() as Promise<any>);
   if (!argv.includes("--keep")) await call("POST", `/ui-api/kitchens/${slug}/thread/reset`, {});
   for (const text of says) {

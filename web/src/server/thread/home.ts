@@ -89,6 +89,12 @@ export async function postToday(run: TurnRun, opening = false): Promise<TodayCar
   const items = await todayItems(run);
   st.done(`${items.length}`);
   let card: TodayCard = { type: "today", cardId: opening ? todayCardId(run.thread.threadId) : cardId("today", run.turnId), date: today(), items };
+  // A fresh kitchen (no rules, a high limit) is greeted as what it is, never "inside the rules you set".
+  if (opening) {
+    const { freeKitchenOpening } = await import("@/server/demo/thread");
+    const [en, fi, sv] = await Promise.all((["en", "fi", "sv"] as const).map((l) => freeKitchenOpening(run.rt, run.k.info.slug, l).catch(() => undefined)));
+    if (en && fi && sv) card = { ...card, opening: { en: en.say, fi: fi.say, sv: sv.say } };
+  }
   // The day's opening is the moment for the watch (a stock-out, a held renewal: what needs the kitchen first) and,
   // when there is none, for the wholesaler's one offer. The opening stays "looking" until both are known, so it never
   // says "Nothing needs you today" a moment before a stock-out arrives.
