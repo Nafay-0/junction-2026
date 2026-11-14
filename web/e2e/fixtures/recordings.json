@@ -400,5 +400,174 @@
    ],
    "line": "Your mandate sets what the agent may buy alone."
   }
+ },
+ {
+  "match": "\"\"\"\n- milk 20 L",
+  "output": {
+   "isPurchaseRequest": true,
+   "notPurchaseReason": null,
+   "item": {
+    "text": "milk",
+    "category": "milk",
+    "attributes": [],
+    "excludedAttributes": [],
+    "productId": null
+   },
+   "quantity": {
+    "amount": 20,
+    "unit": "L"
+   },
+   "deliverBy": null,
+   "requiredClaims": [],
+   "forbiddenAllergens": [],
+   "optimise": "unstated",
+   "sameAsLastTime": false,
+   "basedOnRequestId": null,
+   "takenFromEarlier": []
+  }
+ },
+ {
+  "match": "\"\"\"\nmilk 20 L",
+  "output": {
+   "isPurchaseRequest": true,
+   "notPurchaseReason": null,
+   "item": {
+    "text": "milk",
+    "category": "milk",
+    "attributes": [],
+    "excludedAttributes": [],
+    "productId": null
+   },
+   "quantity": {
+    "amount": 20,
+    "unit": "L"
+   },
+   "deliverBy": null,
+   "requiredClaims": [],
+   "forbiddenAllergens": [],
+   "optimise": "unstated",
+   "sameAsLastTime": false,
+   "basedOnRequestId": null,
+   "takenFromEarlier": []
+  }
+ },
+ {
+  "match": "\"\"\"\n- whipping cream ?? L",
+  "output": {
+   "isPurchaseRequest": true,
+   "notPurchaseReason": null,
+   "item": {
+    "text": "whipping cream",
+    "category": "cream",
+    "attributes": [],
+    "excludedAttributes": [],
+    "productId": null
+   },
+   "quantity": null,
+   "deliverBy": null,
+   "requiredClaims": [],
+   "forbiddenAllergens": [],
+   "optimise": "unstated",
+   "sameAsLastTime": false,
+   "basedOnRequestId": null,
+   "takenFromEarlier": []
+  }
+ },
+ {
+  "match": "\"\"\"\nwhipping cream ?? L",
+  "output": {
+   "isPurchaseRequest": true,
+   "notPurchaseReason": null,
+   "item": {
+    "text": "whipping cream",
+    "category": "cream",
+    "attributes": [],
+    "excludedAttributes": [],
+    "productId": null
+   },
+   "quantity": null,
+   "deliverBy": null,
+   "requiredClaims": [],
+   "forbiddenAllergens": [],
+   "optimise": "unstated",
+   "sameAsLastTime": false,
+   "basedOnRequestId": null,
+   "takenFromEarlier": []
+  }
+ },
+ {
+  "match": "\"\"\"\n- yoghurt 2 packs",
+  "output": {
+   "isPurchaseRequest": true,
+   "notPurchaseReason": null,
+   "item": {
+    "text": "yoghurt",
+    "category": "yoghurt",
+    "attributes": [],
+    "excludedAttributes": [],
+    "productId": null
+   },
+   "quantity": {
+    "amount": 2,
+    "unit": "pack"
+   },
+   "deliverBy": null,
+   "requiredClaims": [],
+   "forbiddenAllergens": [],
+   "optimise": "unstated",
+   "sameAsLastTime": false,
+   "basedOnRequestId": null,
+   "takenFromEarlier": []
+  }
+ },
+ {
+  "match": "\"\"\"\nyoghurt 2 packs",
+  "output": {
+   "isPurchaseRequest": true,
+   "notPurchaseReason": null,
+   "item": {
+    "text": "yoghurt",
+    "category": "yoghurt",
+    "attributes": [],
+    "excludedAttributes": [],
+    "productId": null
+   },
+   "quantity": {
+    "amount": 2,
+    "unit": "pack"
+   },
+   "deliverBy": null,
+   "requiredClaims": [],
+   "forbiddenAllergens": [],
+   "optimise": "unstated",
+   "sameAsLastTime": false,
+   "basedOnRequestId": null,
+   "takenFromEarlier": []
+  }
+ },
+ {
+  "match": "\"\"\"\nL\n- yoghurt 2 packs",
+  "output": {
+   "isPurchaseRequest": true,
+   "notPurchaseReason": null,
+   "item": {
+    "text": "yoghurt",
+    "category": "yoghurt",
+    "attributes": [],
+    "excludedAttributes": [],
+    "productId": null
+   },
+   "quantity": {
+    "amount": 2,
+    "unit": "pack"
+   },
+   "deliverBy": null,
+   "requiredClaims": [],
+   "forbiddenAllergens": [],
+   "optimise": "unstated",
+   "sameAsLastTime": false,
+   "basedOnRequestId": null,
+   "takenFromEarlier": []
+  }
  }
 ]

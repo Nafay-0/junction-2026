@@ -41,4 +41,42 @@ export const KNOWN: Known[] = [
     where: "src/app/ops/(desk)/agents/agents.tsx:127",
     reason: "<dl> whose children are <div><p> (Stat), one per agent card, not <dt>/<dd>.",
   },
+  {
+    pages: ["order", "order-options", "order-chosen"],
+    rule: "listitem",
+    match: "<li",
+    maxCount: 80,
+    severity: "cosmetic",
+    where: "src/app/_ui/thread.tsx:73 (Thread: <ol role=\"log\">), BuyerTurn/AgentTurn render <li>",
+    reason:
+      "Triaged after main b9f934e (the conversation thread): role=\"log\" on the <ol> replaces its list role, so every turn's <li> is a list item outside a list. A screen reader still reads the log live, but not as a list of turns (no 'item 3 of 8'). One node per turn, so the count grows with the conversation. Fix: a <div role=\"log\"> holding the <ol>, or role=\"listitem\"-free <div> turns.",
+  },
+  {
+    pages: ["ops", "ops-agents"],
+    rule: "color-contrast",
+    match: "text-ink-faint",
+    maxCount: 6,
+    severity: "cosmetic",
+    where: "src/app/ops/_ui/filters.tsx:95 (count on an inactive filter chip)",
+    reason: "Triaged after the operations desk redesign (0a1c3db): the count on an inactive filter chip is text-ink-faint on surface, 2.61:1 at 12.5 px (needs 4.5:1). The same token as the orders tab count above.",
+  },
+  {
+    pages: ["ops-safeguards"],
+    rule: "scrollable-region-focusable",
+    match: "max-h-[70vh]",
+    maxCount: 1,
+    severity: "cosmetic",
+    where: "src/app/ops/(desk)/safeguards/safeguards.tsx:108 (Refused attempts)",
+    reason: "Triaged after the operations desk redesign: the refused-attempts list scrolls inside a 70vh box but nothing in it can take focus, so a keyboard user cannot scroll it (needs tabIndex=0 and a label on the <ol>).",
+  },
+  {
+    pages: ["order-chosen"],
+    rule: "color-contrast",
+    match: "",
+    maxCount: 40,
+    severity: "cosmetic",
+    where: "src/app/_ui/thread.tsx:318 (options card: the options not chosen get opacity-55)",
+    reason:
+      "Triaged after main b9f934e: once an option is chosen, the others stay on screen at 55 % opacity, which takes their small grey text (rank chip, delivery, product names) below 4.5:1. They are history, still readable for the record; a muted colour instead of opacity would keep contrast.",
+  },
 ];

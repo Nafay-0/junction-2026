@@ -71,7 +71,7 @@ export const TARGETS: Target[] = [
   { id: "call", path: "/call", size: "phone", open: go("/call") },
   { id: "k", path: "/k", size: "phone", open: go("/k", heading(/Your kitchen's shop|Enter a kitchen/)) },
   { id: "kaari", path: "/k/kaari", size: "phone", open: go("/k/kaari", heading("Ravintola Kaari")) },
-  { id: "order", path: "/k/kaari/order", size: "phone", open: go("/k/kaari/order", (p) => expect(p.getByRole("button", { name: "Write a request" })).toBeVisible()) },
+  { id: "order", path: "/k/kaari/order", size: "phone", open: go("/k/kaari/order", heading("Order with your agent")) },
   { id: "catalogue", path: "/k/kaari/catalogue", size: "phone", open: go("/k/kaari/catalogue") },
   { id: "product", path: "/k/kaari/catalogue/VA-1010", size: "phone", open: go("/k/kaari/catalogue/VA-1010") },
   { id: "basket", path: "/k/kaari/basket", size: "phone", open: go("/k/kaari/basket") },
@@ -98,16 +98,17 @@ export const target = (id: string): Target => {
 };
 
 /**
- * Answer the lane's mistake check until the options show. The store kitchen is shared by every test on the server,
- * so besides "1,000 L where you usually order 100 L" a second concern can appear ("you already asked a moment ago").
+ * Answer the thread's mistake check ("Yes, that is right") until an options card shows. Kaari's thread is shared by
+ * every test on the server, so callers hold its lock (support/thread.ts stageThread); a second concern can still
+ * follow the first ("you already asked ... Order again?").
  */
 export async function confirmConcerns(page: Page, timeout = 20_000): Promise<void> {
-  const options = page.getByRole("button", { name: "Get a fixed price for this" }).filter({ visible: true });
-  const yes = page.getByRole("button", { name: "Yes, I meant that" }).filter({ visible: true });
+  const options = page.getByRole("button", { name: "Choose" }).filter({ visible: true });
+  const yes = page.getByRole("button", { name: "Yes, that is right" }).filter({ visible: true });
   const end = Date.now() + timeout;
   while (Date.now() < end) {
     if (await options.count()) return;
-    if (await yes.count()) await yes.first().click();
+    if (await yes.count()) await yes.last().click().catch(() => undefined);
     await page.waitForTimeout(300);
   }
   await expect(options.first()).toBeVisible();
@@ -214,8 +215,17 @@ export type Stop = { i: number; tag: string; name: string; top: number; left: nu
  * in a fixed/sticky layer, and what changes visibly when it has focus (outline, ring, border, background, underline).
  */
 export async function tabThrough(page: Page, max = 80, stopWhen?: RegExp): Promise<Stop[]> {
-  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
-  await page.locator("body").focus().catch(() => undefined);
+  // From the top of the page. A page that focuses a field on load (the Order page's composer) keeps Chromium's
+  // sequential-focus starting point there even after blur(); focusing the body itself moves it to the top.
+  await page.evaluate(() => {
+    (document.activeElement as HTMLElement | null)?.blur();
+    const b = document.body;
+    const had = b.getAttribute("tabindex");
+    b.setAttribute("tabindex", "-1");
+    b.focus();
+    if (had === null) b.removeAttribute("tabindex");
+    else b.setAttribute("tabindex", had);
+  });
   const stops: Stop[] = [];
   const seen = new Set<string>();
   for (let i = 0; i < max; i++) {

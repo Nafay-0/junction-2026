@@ -1,13 +1,14 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
-import { animationsDone, audit, confirmConcerns, note, splitKnown, TARGETS, unnamedControls, VIEWPORT, openStage, type Finding } from "../support/a11y-kit";
+import { animationsDone, audit, confirmConcerns, note, splitKnown, TARGETS, unnamedControls, VIEWPORT, type Finding } from "../support/a11y-kit";
 import { KNOWN } from "./known-violations";
+import { stageThread, threadLog } from "../support/thread";
 
 /**
  * Automated WCAG 2.1 A/AA audit (axe-core) of every page that matters, at the size it is used at (phone for the phone
- * and store pages, 1920x1080 for the wall, laptop for operations), plus two mid-flow states: the order lane showing
- * its options, and the phone's sign-off page after approving. Serious and critical violations fail unless listed in
+ * and store pages, 1920x1080 for the wall, laptop for operations), plus two mid-flow states: the store's thread
+ * showing its options (cards), and the phone's sign-off page after approving. Serious and critical violations fail unless listed in
  * known-violations.ts; every violation (any impact) is written to test-results/a11y/<page>.json and as annotations.
  * Also: every interactive control has an accessible name in Chromium's accessibility tree.
  */
@@ -37,24 +38,43 @@ async function check(page: Page, id: string) {
 }
 
 for (const t of TARGETS) {
-  test(`axe: ${t.id} (${t.path}) at ${t.size} size`, async ({ page }) => {
-    test.fixme(["order", "ops", "ops-agents"].includes(t.id), "redesigned page on main: new violations not yet triaged (run the a11y project and update known-violations.ts)");
+  test(`axe: ${t.id} (${t.path}) at ${t.size} size`, async ({ page, baseURL }) => {
     await page.setViewportSize(VIEWPORT[t.size]);
-    await t.open(page);
-    await check(page, t.id);
+    // Kaari's Order page shows Kaari's one thread, which other tests write to: audit it started over, as a judge
+    // first sees it (the states with cards are audited below).
+    const release = t.id === "order" ? await stageThread(page, "kaari", baseURL) : undefined;
+    try {
+      if (release) {
+        await page.goto(t.path);
+        await expect(page.getByRole("heading", { name: "Order with your agent" })).toBeVisible();
+      } else await t.open(page);
+      await check(page, t.id);
+    } finally {
+      release?.();
+    }
   });
 }
 
-test("axe: order lane with options on screen (phone)", async ({ page }) => {
-  test.fixme(true, "main b9f934e replaced the order lane and the agent panel with one conversation thread: rewrite against the thread once it settles");
+test("axe: the thread with its cards and options on screen (phone)", async ({ page, baseURL }) => {
   await page.setViewportSize(VIEWPORT.phone);
-  await openStage(page, "/k/kaari/order");
-  await page.getByRole("button", { name: "1,000 litres of lactose-free milk by Monday" }).filter({ visible: true }).first().click();
-  await page.getByRole("button", { name: "Use the offline example reader" }).filter({ visible: true }).first().click();
-  await confirmConcerns(page);
-  await expect(page.getByRole("button", { name: "Get a fixed price for this" }).first()).toBeVisible({ timeout: 20_000 });
-  await page.waitForTimeout(500);
-  await check(page, "order-options");
+  const release = await stageThread(page, "kaari", baseURL);
+  try {
+    await page.goto("/k/kaari/order");
+    await threadLog(page).getByRole("button", { name: "1,000 litres of lactose-free milk by Monday" }).click();
+    await confirmConcerns(page);
+    await expect(page.getByRole("button", { name: "Choose" }).first()).toBeVisible({ timeout: 20_000 });
+    await page.waitForTimeout(500);
+    await check(page, "order-options");
+    // A choice orders it: the chosen card stays, the others are kept for the record, then the price and the gate.
+    await page.getByRole("button", { name: "Choose" }).first().click();
+    await expect(page.getByText(/^(Waiting for |Placed by the agent alone|Refused: )/).first()).toBeVisible({ timeout: 20_000 });
+    await page.waitForTimeout(500);
+    await check(page, "order-chosen");
+    const back = page.getByRole("button", { name: "Take it back" });
+    if (await back.isVisible()) await back.click();
+  } finally {
+    release();
+  }
 });
 
 test("axe: approve page after signing (phone)", async ({ page }) => {

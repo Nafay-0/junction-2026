@@ -1,17 +1,17 @@
 import { expect, test, type Browser, type Page, devices } from "@playwright/test";
 import { STAGE_PASSWORDS } from "../support/dock";
-
-// The order lane and agent panel these tests drive were replaced on main (b9f934e).
-test.fixme(true, "main b9f934e replaced the order lane and the agent panel with one conversation thread: rewrite against the thread once it settles");
+import { card, cards, option, say } from "../support/thread";
 
 /**
  * Order pages watching a request that waits for sign-off, from one venue address, with the public limits on.
- * QA found that two such pages exceed the console's per-address limit within a minute. Each page here is a real
- * /k/kaari/order with its own waiting order; every 429 the pages receive is counted for 75 s.
+ * QA found that two such pages exceeded the console's per-address limit within a minute (the old order lane). Each
+ * page here is a real /k/kaari/order (the conversation thread, main b9f934e) with its own order waiting for the head
+ * chef; every 429 the pages receive is counted for 75 s. Kaari has one thread: the pages share it, as two screens of
+ * one kitchen do; the first starts it over.
  */
 const LIMITS_URL = process.env.E2E_LIMITS_URL;
 
-async function watcher(browser: Browser): Promise<{ page: Page; refusals: string[]; close: () => Promise<void> }> {
+async function watcher(browser: Browser, first: boolean): Promise<{ page: Page; refusals: string[]; close: () => Promise<void> }> {
   const context = await browser.newContext({ ...devices["Pixel 7"], baseURL: LIMITS_URL });
   const page = await context.newPage();
   const refusals: string[] = [];
@@ -26,18 +26,17 @@ async function watcher(browser: Browser): Promise<{ page: Page; refusals: string
   await form.getByLabel("Password", { exact: true }).fill(STAGE_PASSWORDS.kaari);
   await form.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.waitForURL("**/k/kaari");
+  if (first) expect((await page.request.post("/ui-api/kitchens/kaari/thread/reset")).ok()).toBe(true);
   await page.goto("/k/kaari/order");
-  await page.getByRole("button", { name: /100 litres of milk for Thursday/ }).filter({ visible: true }).first().click();
-  const offline = page.getByRole("button", { name: "Use the offline example reader" }).filter({ visible: true });
-  await expect(offline.or(page.getByRole("region", { name: /^Step 3:/ }))).toBeVisible({ timeout: 20_000 });
-  if (await offline.count()) await offline.first().click();
-  const meant = page.getByRole("button", { name: /Yes, I meant that/ }).filter({ visible: true });
-  const best = page.getByRole("region", { name: /^Step 3:/ }).getByRole("article", { name: /^Best/ });
-  await expect(meant.or(best).first()).toBeVisible({ timeout: 20_000 });
-  if (await meant.count()) await meant.first().click();
-  await best.getByRole("button", { name: "Get a fixed price for this" }).click();
-  await page.getByRole("region", { name: /^Step 4:/ }).getByRole("button", { name: "Place the order" }).click();
-  await expect(page.getByRole("region", { name: /^Step 6:/ })).toContainText(/Waiting for a person/, { timeout: 20_000 });
+  const gates = cards(page, "gate");
+  const before = await gates.count();
+  await say(page, "100 litres of milk for Thursday");
+  // The duplicate check ("Order again?") when an earlier watcher's order for the same day waits; then the options.
+  const again = card(page, "anomaly").getByRole("button", { name: "Yes, that is right" });
+  await expect(again.or(option(page, "Best"))).toBeVisible({ timeout: 20_000 });
+  if (await again.isVisible()) await again.click();
+  await option(page, "Best").getByRole("button", { name: "Choose" }).click({ timeout: 20_000 });
+  await expect(gates.nth(before)).toContainText(/Waiting for /, { timeout: 20_000 });
   return { page, refusals, close: () => context.close() };
 }
 
@@ -48,7 +47,7 @@ for (const n of (process.env.E2E_WATCHERS ?? "1,2").split(",").map(Number)) {
     test.setTimeout(240_000);
     await new Promise((r) => setTimeout(r, 61_000)); // a fresh rate-limit minute
     const pages = [];
-    for (let i = 0; i < n; i++) pages.push(await watcher(browser));
+    for (let i = 0; i < n; i++) pages.push(await watcher(browser, i === 0));
     const start = pages.map((p) => p.refusals.length);
     await pages[0].page.waitForTimeout(75_000);
     const during = pages.map((p, i) => p.refusals.slice(start[i]));

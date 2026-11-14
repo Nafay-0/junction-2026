@@ -1,10 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
 import { approvalState } from "../support/dock";
-import { note, openApproval, openStage, PHONE, settle } from "../support/a11y-kit";
+import { note, openApproval, PHONE, settle } from "../support/a11y-kit";
+import { stageThread } from "../support/thread";
 
 /**
- * Keyboard only (Tab, Shift+Tab, Enter, Space; no mouse, no fill): complete an order on the store's order lane
- * (suggested request, offline example reader since the model is off, mistake check, options, fixed price, the gate),
+ * Keyboard only (Tab, Shift+Tab, Enter, Space; no mouse, no fill): take a request through the store's thread
+ * (suggested request, mistake check, options; a choice fixes the price and goes to the gate),
  * and approve and decline on the phone's sign-off page (the passkey prompt itself belongs to the authenticator).
  * Records how many Tab presses each step took and where focus was after each action. Focus lost to <body> (the pressed
  * button unmounts): Chromium resumes Tab near where it was, but a screen reader loses its place and hears nothing.
@@ -31,44 +32,49 @@ async function tabTo(page: Page, re: RegExp, nth = 1, max = 120): Promise<number
   throw new Error(`Tab never reached ${re} (#${nth}) within ${max} presses; last focus "${await focusedName(page)}"`);
 }
 
-test("order lane: request to gate with the keyboard only", async ({ page }) => {
-  test.fixme(true, "main b9f934e replaced the order lane and the agent panel with one conversation thread: rewrite against the thread once it settles");
-  await openStage(page, "/k/kaari/order");
-  await expect(page.getByRole("button", { name: "Write a request" })).toBeVisible();
-  await settle(page);
-  const log: string[] = [];
-  const step = async (label: string, re: RegExp, key: "Enter" | " ", wait: () => Promise<unknown>, nth = 1) => {
-    const presses = await tabTo(page, re, nth);
-    await page.keyboard.press(key);
-    await wait();
-    const after = await focusedName(page);
-    log.push(`${label}: ${presses} Tab presses, ${key === " " ? "Space" : "Enter"}; focus afterwards: ${after}`);
-  };
+test("the thread: request to gate with the keyboard only", async ({ page, baseURL }) => {
+  const release = await stageThread(page, "kaari", baseURL);
+  try {
+    await page.goto("/k/kaari/order");
+    await expect(page.getByRole("heading", { name: "Order with your agent" })).toBeVisible();
+    await settle(page);
+    const log: string[] = [];
+    const step = async (label: string, re: RegExp, key: "Enter" | " ", wait: () => Promise<unknown>, nth = 1) => {
+      const presses = await tabTo(page, re, nth);
+      await page.keyboard.press(key);
+      await wait();
+      const after = await focusedName(page);
+      log.push(`${label}: ${presses} Tab presses, ${key === " " ? "Space" : "Enter"}; focus afterwards: ${after}`);
+    };
 
-  await step("suggested request", /^1,000 litres of lactose-free milk by Monday$/, "Enter", () =>
-    expect(page.getByRole("button", { name: "Use the offline example reader" })).toBeVisible({ timeout: 20_000 }),
-  );
-  await step("offline example reader", /^Use the offline example reader$/, " ", () => expect(page.getByRole("button", { name: "Yes, I meant that" })).toBeVisible({ timeout: 20_000 }));
-  // One concern at a time; on a shared server a second one can follow ("you already asked a moment ago"). Tab to
-  // whichever comes first, a concern's "Yes, I meant that" or the first option, until it is an option.
-  const options = page.getByRole("button", { name: "Get a fixed price for this" }).filter({ visible: true });
-  for (let n = 1; n <= 4; n++) {
-    await page.waitForTimeout(800);
-    const presses = await tabTo(page, /^(Yes, I meant that|Get a fixed price for this)$/);
-    if ((await focusedName(page)) !== "Yes, I meant that") break;
-    await page.keyboard.press("Enter");
-    log.push(`mistake check ${n}: ${presses} Tab presses, Enter; focus afterwards: ${await focusedName(page)}`);
+    // A suggested request (the kitchen's own example) is a button in the thread.
+    await step("suggested request", /^1,000 litres of lactose-free milk by Monday$/, "Enter", () => expect(page.getByRole("button", { name: /^(Yes, that is right|Choose)$/ }).first()).toBeVisible({ timeout: 20_000 }));
+    // The mistake check (one card per concern; a duplicate check can follow on a shared server), until the options.
+    for (let n = 1; n <= 4; n++) {
+      await page.waitForTimeout(800);
+      const presses = await tabTo(page, /^(Yes, that is right|Choose)$/);
+      if ((await focusedName(page)) !== "Yes, that is right") break;
+      await page.keyboard.press("Enter");
+      log.push(`mistake check ${n}: ${presses} Tab presses, Enter; focus afterwards: ${await focusedName(page)}`);
+    }
+    await expect(page.getByRole("button", { name: "Choose" }).first()).toBeVisible({ timeout: 20_000 });
+    // "Best", the first option: a choice orders it, the price is fixed and the gate decides.
+    await step("first option (best)", /^Choose$/, " ", () => expect(page.getByText(/^(Waiting for |Placed by the agent alone|Refused: )/).filter({ visible: true }).first()).toBeVisible({ timeout: 20_000 }));
+
+    for (const l of log) note(test.info(), "keyboard", l);
+    await test.info().attach("keyboard-thread.txt", { body: log.join("\n"), contentType: "text/plain" });
+    const lost = log.filter((l) => l.endsWith("<body>"));
+    if (lost.length) note(test.info(), "focus lost", `${lost.length} of ${log.length} steps drop focus to <body> (the pressed button unmounts and nothing takes focus)`);
+    // Taken back with the keyboard, so Kaari keeps no waiting order from this test.
+    const back = page.getByRole("button", { name: "Take it back" });
+    if (await back.isVisible()) {
+      await tabTo(page, /^Take it back$/);
+      await page.keyboard.press("Enter");
+      await expect(page.getByText("Taken back").first()).toBeVisible({ timeout: 20_000 });
+    }
+  } finally {
+    release();
   }
-  await expect(options.nth(2)).toBeVisible({ timeout: 20_000 });
-  await step("third option (best)", /^Get a fixed price for this$/, " ", () => expect(page.getByRole("button", { name: "Place the order" })).toBeVisible({ timeout: 20_000 }), 3);
-  await step("place the order", /^Place the order$/, "Enter", () =>
-    expect(page.getByText(/Refused at the gate|Stopped|Waiting for|Signed order/).filter({ visible: true }).first()).toBeVisible({ timeout: 20_000 }),
-  );
-
-  for (const l of log) note(test.info(), "keyboard", l);
-  await test.info().attach("keyboard-order-lane.txt", { body: log.join("\n"), contentType: "text/plain" });
-  const lost = log.filter((l) => l.endsWith("<body>"));
-  if (lost.length) note(test.info(), "focus lost", `${lost.length} of ${log.length} steps drop focus to <body> (the pressed button unmounts and nothing takes focus)`);
 });
 
 test("sign-off: approve with Tab and Enter", async ({ page }) => {

@@ -94,7 +94,7 @@ export function scriptedModel(name: string): LanguageModel {
     async doGenerate(options: { prompt: unknown }) {
       const text = userText(options.prompt);
       const hit = recordings().find((r) => r.output !== undefined && text.includes(r.match));
-      if (!hit) throw new Error(`scripted:${name} has no recording for this prompt (first 120 characters: ${JSON.stringify(text.slice(0, 120))}).`);
+      if (!hit) throw new Error(`scripted:${name} has no recording for this prompt (${JSON.stringify((text.split('"""\n').at(-1) ?? text).slice(0, 120))}).`);
       const output = hit.output === "{{assistant:alternatives}}" ? assistantFromRecords(text) : fill(hit.output, text, new Date());
       return {
         content: [{ type: "text", text: JSON.stringify(output) }],
