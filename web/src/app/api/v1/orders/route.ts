@@ -1,7 +1,7 @@
 import { decidingRule } from "@/core/policy";
 import { authenticate, errorBody, handle, readJson } from "@/server/http";
 import { listOrders } from "@/server/lookup";
-import { restOrder } from "@/server/rest-step";
+import { restOrder, restOrderWithMail } from "@/server/rest-step";
 
 /** GET /api/v1/orders?status=pending_approval&limit=20: this organisation's orders, newest first (the MCP tool list_orders). */
 export async function GET(req: Request) {
@@ -25,6 +25,6 @@ export async function POST(req: Request) {
       const rule = decidingRule(order.decision);
       return Response.json({ ...errorBody("policy_rejected", order.decision.reasons.join(" "), rule?.rule), ...restOrder(order) }, { status: 422 });
     }
-    return Response.json({ ...restOrder(order), ...(replaced ? { replaced } : {}) }, { status: order.status === "committed" ? 201 : 202 });
+    return Response.json({ ...(await restOrderWithMail(order)), ...(replaced ? { replaced } : {}) }, { status: order.status === "committed" ? 201 : 202 });
   });
 }

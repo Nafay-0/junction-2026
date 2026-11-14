@@ -205,6 +205,15 @@ export async function setAddress(rt: Runtime, k: KitchenRef, input: string, opts
   return { contact: await addressOf(rt, k.orgId, { own: true }), confirmation };
 }
 
+/** What a confirmation link is for, without using it (the confirmation page shows it before the kitchen presses confirm). */
+export async function peekConfirm(rt: Runtime, token: string | null | undefined, now = new Date()): Promise<{ ok: true; kitchenName: string; masked: string; lang: Lang; confirmed: boolean } | { ok: false }> {
+  const s = await ready(rt);
+  const claims = readLink(token, "confirm", now);
+  const c = claims ? s.contacts.get(claims.o) : undefined;
+  if (!claims || !c || c.contactId !== claims.c || !c.address || (c.state !== "pending" && c.state !== "confirmed")) return { ok: false };
+  return { ok: true, kitchenName: c.kitchenName, masked: c.masked, lang: c.lang, confirmed: c.state === "confirmed" };
+}
+
 /** The kitchen's confirmation link. Only the pending address it was sent to; an earlier link stops working when the address changes. */
 export async function confirmAddress(rt: Runtime, token: string | null | undefined, now = new Date()): Promise<{ ok: true; kitchenName: string; masked: string; lang: Lang } | { ok: false; problem: "invalid" | "expired_or_replaced" }> {
   const s = await ready(rt);

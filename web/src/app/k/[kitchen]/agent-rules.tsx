@@ -12,6 +12,7 @@ import { AGENT_RULES_TEXT } from "./agent-rules.text";
 import { familyL } from "./family.text";
 import { usePortal, weekdaysText } from "./portal";
 import { MemoryBook } from "./memory-book";
+import { MailPanel } from "./mail-panel";
 import { ACCOUNT_TEXT } from "./account.text";
 import { DevicePanel, MandateForm } from "../_account/forms";
 import { mandateWords } from "./rules";
@@ -76,6 +77,7 @@ export function AgentRules() {
 
       {own && <DevicePanel />}
       {own && <ChangeMandate />}
+      <MailPanel own={own} />
       <WhoSees />
       <MemoryBook fallback={<Memory memory={memory} loading={!memory && !overview.error} error={overview.error} />} />
       <Connect />
