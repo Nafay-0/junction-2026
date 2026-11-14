@@ -150,6 +150,13 @@ class Run {
   }
 }
 
+/** The agent has finished answering the buyer's newest turn (not an earlier one, like the day's opening). */
+const idle = (t: Thread) => {
+  const buyer = t.turns.findLast((x) => x.role === "buyer");
+  const answer = buyer && t.turns.find((x) => x.role === "agent" && x.replyTo === buyer.turnId);
+  return !!answer && answer.role === "agent" && answer.status !== "working";
+};
+
 const ordered = (statuses: string[]) => (t: Thread) => cardsOf(t).some((c) => c.type === "order" && statuses.includes(c.status));
 const sheet = (t: Thread) => cardsOf(t).find((c) => c.type === "sheet");
 
@@ -243,8 +250,7 @@ const TASKS: [string, (r: Run) => Promise<string | void>][] = [
       let placedFirst = false;
       while (Date.now() < end) {
         const t = (await r.thread())!;
-        const last = t.turns.at(-1);
-        if (last?.role === "agent" && last.status !== "working") {
+        if (t.turns.some((x) => x.role === "buyer") && idle(t)) {
           placedFirst = ordered(["committed", "pending_approval"])(t);
           break;
         }
@@ -264,7 +270,7 @@ const TASKS: [string, (r: Run) => Promise<string | void>][] = [
       }
       // The new options (or the sheet) for 200 L: the first-timer checks the amount on the button's card and orders.
       await r.page.waitForTimeout(1500);
-      await r.until((t) => t.turns.at(-1)?.role === "agent" && (t.turns.at(-1) as { status: string }).status !== "working");
+      await r.until((t) => t.turns.filter((x) => x.role === "buyer").length >= 2 && idle(t));
       const again = r.log.getByRole("button", { name: L.order }).last();
       await r.waitFor(again);
       await r.tap(again);

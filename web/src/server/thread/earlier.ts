@@ -4,7 +4,7 @@ import { earlierFor as fromRequests, looksLikeFollowUp } from "@/app/k/[kitchen]
 import type { TurnRun } from "./pipeline";
 
 /** Words that change the request on the table rather than start a new one ("make it 200 litres", "is there a lactose-free one?"). */
-const CHANGE = /\b(make it|instead|rather|change|double|half|twice|more|less|fewer|lactose|gluten|organic|cheaper|cheapest|bigger|smaller|another|other|one|vaihda|tuplat?|puolet|enemmän|vähemmän|sen sijaan|halvempi|laktoositon\w*|gluteeniton\w*|ändra|dubbel|hälften|mer|mindre|istället|billigare|laktosfri\w*)\b/i;
+const CHANGE = /\b(make it|instead|rather|change|double|half|twice|more|less|fewer|lactose|gluten|organic|cheaper|cheapest|bigger|smaller|another|other|one|then|vaihda|tee siitä|tehdään|muuta|sittenkin|tuplat?|puolet|enemmän|vähemmän|sen sijaan|halvempi|laktoositon\w*|gluteeniton\w*|ändra|gör det|dubbel|hälften|mer|mindre|istället|billigare|laktosfri\w*)(?![\p{L}])|^\s*\d[\d\s.,]*\s*(l|litraa?|litres?|liters?|kg|kiloa?|pcs|kpl)?\s*[.!]?\s*$/iu;
 
 /**
  * The earlier requests the reader may resolve the words against, newest first: the requests of this conversation
