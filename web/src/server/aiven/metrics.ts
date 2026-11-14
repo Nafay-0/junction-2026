@@ -17,7 +17,10 @@ export type CounterName =
   | "bus.remote" // live events received from another process over Valkey pub/sub
   | "pg.write_retry" // a write-behind ledger insert had to be retried
   | "search.opensearch" // product search answered by OpenSearch
-  | "search.fallback"; // OpenSearch slow or down: answered in-process
+  | "search.fallback" // OpenSearch slow or down: answered in-process
+  | "recall.memory" // smart search's recall answered from this process's memory
+  | "recall.opensearch" // smart search's recall answered by OpenSearch (keyword lists and nearest vectors)
+  | "recall.fallback"; // the first recall backend did not answer; the other one did
 
 const counters = new Map<CounterName, number>();
 

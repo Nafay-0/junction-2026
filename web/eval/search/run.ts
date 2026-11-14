@@ -9,6 +9,9 @@
  *   pnpm search:eval --opus                also the reference re-ranking by Claude Opus 5.5 (about 2 cents a case; not for shipping)
  *   pnpm search:eval --sample 60           every k-th case only, 60 in all (spread over the set; for the Opus reference)
  *   pnpm search:eval --ablation            what recall is made of: each source alone and each one left out
+ *   pnpm search:eval --recall opensearch   recall's keyword and vector lists from OpenSearch (OPENSEARCH_URL,
+ *                                          --recall-index, default dock-recall; --recall-timeout ms, default 400),
+ *                                          memory recall as the fallback; the table counts the fallbacks
  *
  * Configurations:
  *   kw          keywords only: today's search (core/catalog/search.ts)
@@ -40,6 +43,8 @@ import { SmartSearch, type Detailed, type SmartConfig } from "@/server/search/fi
 import { EMBED_USD_PER_M, embedTexts, queryPrompt } from "@/server/search/gemini";
 import { DecisionsJudge, LEVELS, RUBRIC, judgeContext, type JudgeInput, type JudgeOutput, type RelevanceJudge, type Verdict } from "@/server/search/judge";
 import { SearchIndex, type Signals } from "@/server/search/recall";
+import { RecallRouter } from "@/server/search/recall-router";
+import { OpenSearchRecall } from "@/server/aiven/search/opensearch-recall";
 import { loadVectorsFile, resolveVectorsFile } from "@/server/search/vectors";
 import { loadCatalogIndex } from "@/server/valio/index-store";
 import { loadLocalEnv } from "../../scripts/lib/env";
@@ -77,6 +82,8 @@ type Row = {
   path: string;
   notSoldSaid: boolean;
   unsure?: boolean;
+  recallMs?: number;
+  recallBackend?: string;
 };
 
 async function main() {
@@ -139,8 +146,18 @@ async function main() {
   let judgeLate = 0;
   const judgeTimeout = Number(arg("judge-timeout") ?? 800);
 
+  const recallOn = arg("recall") ?? "memory";
+  const osUrl = process.env.OPENSEARCH_URL?.trim();
+  if (recallOn === "opensearch" && !osUrl) throw new Error("--recall opensearch needs OPENSEARCH_URL");
+  const recallTimeout = Number(arg("recall-timeout") ?? 400);
+  const router =
+    recallOn === "opensearch"
+      ? new RecallRouter(index, new OpenSearchRecall({ url: osUrl, index: arg("recall-index") ?? "dock-recall", timeoutMs: recallTimeout + 200 }), { primary: "opensearch", timeoutMs: recallTimeout })
+      : undefined;
+  if (router) console.log(`recall: OpenSearch (${arg("recall-index") ?? "dock-recall"}), ${recallTimeout} ms deadline, memory as the fallback`);
   const smart = new SmartSearch({
     index,
+    ...(router ? { recall: router } : {}),
     judge: new CachedJudge(),
     embed: async (text) => {
       const e = await embed(text);
@@ -166,6 +183,8 @@ async function main() {
       path: r.path + (r.reason ? ` (${r.reason})` : ""),
       notSoldSaid: r.notSold || (r.path !== "judge" && r.hits.length === 0),
       unsure: r.unsure,
+      recallMs: r.stats.recallMs,
+      recallBackend: r.stats.recallBackend + (r.stats.recallFallback ? ` (fallback: ${r.stats.recallFallback})` : ""),
     };
   };
 
@@ -288,6 +307,14 @@ async function main() {
   table((c) => !!(c.claims?.length || c.brand || c.pack || c.allergenFree?.length), "Requests where a filter decides (claims, brand, pack, allergens)");
   console.log("\ntop1/top3: right product first / in the first three (stand-in-only cases: a stand-in, labelled as one). recl: right product among the candidates the ranking saw. drp: requirements dropped (a top-3 product without a stated claim or with a forbidden allergen). sam: a stand-in shown first as if it were the match. nsold: \"we do not sell that\" said for things not sold. cent/q: US cents per search. fallback: searches the judge did not answer in time.");
   if (judgeLate) console.log(`judge answers over the ${judgeTimeout} ms deadline: ${judgeLate}`);
+  for (const name of want) {
+    const rs = rows.filter((r) => r.config === name && r.recallMs !== undefined);
+    if (!rs.length) continue;
+    const by = new Map<string, number>();
+    for (const r of rs) by.set(r.recallBackend ?? "?", (by.get(r.recallBackend ?? "?") ?? 0) + 1);
+    console.log(`recall ${name}: p50 ${q(rs.map((r) => r.recallMs!), 0.5)} ms, p90 ${q(rs.map((r) => r.recallMs!), 0.9)} ms; answered by ${[...by.entries()].map(([k, v]) => `${k} ${v}`).join(", ")}`);
+  }
+  if (router) console.log(`router: ${JSON.stringify(router.stats())}`);
   if (opusUsd) console.log(`Opus reference spend this run: $${opusUsd.toFixed(3)}`);
 
   // Misses, for tuning: ids only.

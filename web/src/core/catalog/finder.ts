@@ -63,7 +63,7 @@ export type FindResult = {
   /** The judge was not sure of its top answer: ask, or show a wider set. */
   unsure: boolean;
   /** Candidates the judge saw, and the time and cost of the search. */
-  stats: { candidates: number; ms: number; judgeMs?: number; embedMs?: number; tokens?: number; costUsd?: number };
+  stats: { candidates: number; ms: number; judgeMs?: number; embedMs?: number; tokens?: number; costUsd?: number; recallMs?: number; recallBackend?: string; recallFallback?: string };
 };
 
 export interface ProductFinder {
