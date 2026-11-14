@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { NeedSchema } from "@/core/need";
-import { amountInWords, digitsIn, numberInWords, readBackReason, yesOrNo } from "./speech";
+import { amountInWords, digitsIn, languageOf, numberInWords, readBackReason, yesOrNo } from "./speech";
 
 const need = (amount: number, unit: "L" | "kg" | "pcs" | "pack", text = "milk", category?: string) => NeedSchema.parse({ item: { text, ...(category ? { category } : {}) }, quantity: { amount, unit } });
 
@@ -42,5 +42,16 @@ describe("digitsIn and yesOrNo", () => {
     for (const n of ["No, fifteen", "ei", "nej, fel", "wait"]) expect(yesOrNo(n)).toBe("no");
     expect(yesOrNo("yes no")).toBe("unclear");
     expect(yesOrNo("fifteen litres")).toBe("unclear");
+  });
+});
+
+describe("languageOf", () => {
+  it("tells the caller's language from their words", () => {
+    expect(languageOf("Tarvitsen sata litraa laktoositonta maitoa torstaiksi.")).toBe("fi");
+    expect(languageOf("Kaksi laatikkoa voita perjantaiksi.")).toBe("fi");
+    expect(languageOf("Vi behöver trettio liter grädde till fredag.")).toBe("sv");
+    expect(languageOf("Tolv kilo yoghurt, tack.")).toBe("sv");
+    expect(languageOf("Twenty litres of maitoa for tomorrow, please.")).toBe("en");
+    expect(languageOf("200")).toBeUndefined();
   });
 });

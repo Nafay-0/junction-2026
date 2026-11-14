@@ -135,6 +135,7 @@ async function main() {
   const { RealtimeSocket } = await import("@/app/_channels/realtime-socket");
   const { addFacts, checkSpeech, emptyFacts } = await import("@/app/_channels/grounding");
   const { localNow, addDaysIso, isoWeekday } = await import("@/core/kitchen");
+  const { languageOf } = await import("@/server/channels/speech");
   await getRuntime();
   const today = localNow(new Date()).date;
 
@@ -352,6 +353,8 @@ async function main() {
       outcome,
       why: why || undefined,
       grounded: violations.length === 0,
+      replyLang: languageOf(requestSaid) ?? null,
+      replyInCallerLang: t.expect === "nothing" || !requestSaid ? null : (languageOf(requestSaid) ?? "en") === t.lang,
       violations: violations.map((v) => v.said),
       firstSoundMs: firstSoundMs ?? null,
       answerSoundMs: answerSoundMs ?? null,
@@ -413,6 +416,7 @@ async function main() {
     infra: count("infra"),
     accuracy: n ? Number((count("right") / n).toFixed(3)) : 0,
     grounded: rows.filter((r) => r.grounded !== false).length,
+    replyInCallerLanguage: `${rows.filter((r) => r.replyInCallerLang === true).length}/${rows.filter((r) => r.replyInCallerLang !== null && r.replyInCallerLang !== undefined).length}`,
     medianFirstSoundMs: med("firstSoundMs"),
     p90FirstSoundMs: p90("firstSoundMs"),
     medianToolMs: med("toolMs"),

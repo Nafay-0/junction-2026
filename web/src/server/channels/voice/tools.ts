@@ -5,7 +5,7 @@ import { describeNeed, formatAmount, NeedSchema, type NeedInput } from "@/core/n
 import type { PublicOrder } from "@/core/orders";
 import { answer, asProblem, choose, getOrder, getStep, kitchenAgent, openNeed, place, readNeed, respond, type HeardWords, type KitchenAgent, type Via } from "../flow";
 import { orderForModel, spokenDate, stepForModel, type ForModel } from "../say";
-import { amountInWords, numbersHeard, readBackReason, yesOrNo } from "../speech";
+import { amountInWords, LANGUAGE_NAME, languageOf, numbersHeard, readBackReason, yesOrNo } from "../speech";
 import { calls, type Call } from "./calls";
 
 /**
@@ -49,6 +49,18 @@ function str(args: Record<string, unknown>, k: string): string {
 
 /** `req`: the call screen's request; the visitor's session on it makes their spoken or tapped answers theirs (flow.ts). */
 export async function runTool(kitchen: string, input: unknown, req?: Request): Promise<ToolReply> {
+  const reply = await runToolInner(kitchen, input, req);
+  // The caller's language, from their own words: the agent says AimoPilot's English sentence in it.
+  const body = input as { callId?: string; heard?: { text?: string } };
+  const call = body.callId ? calls().get(body.callId) : undefined;
+  const spoken = body.heard?.text ? languageOf(body.heard.text) : undefined;
+  if (call && spoken && (body.heard?.text ?? "").trim().split(/\s+/).length >= 2) call.desk.lang = spoken;
+  const lang = call?.desk.lang;
+  if (lang && lang !== "en") reply.forModel = { ...reply.forModel, speakIn: LANGUAGE_NAME[lang], say: reply.forModel.say, note: `The caller speaks ${LANGUAGE_NAME[lang]}: say this in ${LANGUAGE_NAME[lang]}, not in English.` };
+  return reply;
+}
+
+async function runToolInner(kitchen: string, input: unknown, req?: Request): Promise<ToolReply> {
   const body = parse(ToolBody, input);
   const registry = calls();
   const call = registry.use(body.callId, kitchen, body.via);

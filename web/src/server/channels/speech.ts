@@ -112,3 +112,23 @@ export function yesOrNo(text: string): "yes" | "no" | "unclear" {
   if (no && !yes) return "no";
   return "unclear";
 }
+
+const FI_WORDS = /(?<![\p{L}])(tarvitsen|tarvitsemme|tarvitaan|litraa|kiloa|laatikkoa|kappaletta|kpl|ja|kiitos|maitoa|kermaa|voita|rahkaa|juustoa|kananmunaa|kyllä|joo|ei|on|se|oikein|tilaa|ensimmäinen|toinen|huomiseksi|huomenna|maanantaiksi|tiistaiksi|keskiviikoksi|torstaiksi|perjantaiksi|lauantaiksi|sunnuntaiksi)(?![\p{L}])/giu;
+const SV_WORDS = /(?<![\p{L}])(vi|behöver|jag|och|till|liter|kilo|lådor|tack|mjölk|grädde|smör|ost|ägg|ja|nej|det|stämmer|beställ|första|andra|imorgon|måndag|tisdag|onsdag|torsdag|fredag|lördag|söndag)(?![\p{L}])/giu;
+const EN_WORDS = /(?<![\p{L}])(i|we|need|the|of|for|please|litres|liters|kilos|cases|boxes|eggs|milk|cream|butter|yes|no|and|some|can|get)(?![\p{L}])/giu;
+
+/** The language a caller spoke in, from marker words: what the agent should answer in. Undefined when unclear. */
+export function languageOf(text: string): "en" | "fi" | "sv" | undefined {
+  const t = text.normalize("NFC");
+  const fi = (t.match(FI_WORDS) ?? []).length + (/(aa|ää|iksi)\b/i.test(t) ? 1 : 0);
+  const sv = (t.match(SV_WORDS) ?? []).length + (/å/i.test(t) ? 1 : 0);
+  const en = (t.match(EN_WORDS) ?? []).length;
+  const best = Math.max(fi, sv, en);
+  if (best === 0) return undefined;
+  if (fi === best && fi > sv && fi > en) return "fi";
+  if (sv === best && sv > fi && sv > en) return "sv";
+  if (en === best && en > fi && en > sv) return "en";
+  return undefined;
+}
+
+export const LANGUAGE_NAME = { en: "English", fi: "Finnish", sv: "Swedish" } as const;

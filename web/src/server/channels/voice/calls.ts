@@ -43,6 +43,8 @@ export type Desk = {
   orderId?: string;
   /** Turn number of the caller's words last used for a decision: the same words never answer twice. */
   lastTurnUsed: number;
+  /** The language the caller last spoke in (from their words), so the agent answers in it. */
+  lang?: "en" | "fi" | "sv";
 };
 
 export type Call = {
