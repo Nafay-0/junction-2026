@@ -56,7 +56,6 @@ Sign in with the admin email and password from `.env.local`.
 | [DEPLOYMENT.md](DEPLOYMENT.md) | How the live site is set up on Google Cloud, and how to deploy |
 | [CLAUDE.md](CLAUDE.md) | The rules the coding agents follow in this folder |
 | [web/WIDGETS.md](web/WIDGETS.md) | How to add a card |
-| [reports/](reports/) | Our notes on Exa's API |
 
 The team's other project, for Valio Aimo's challenge, is separate and lives at the root of this repository.
 

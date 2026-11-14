@@ -30,10 +30,10 @@ Two separate projects share this repo. Each person owns one, and its Claude Code
 | Project | Challenge | Folders | Owner |
 |---|---|---|---|
 | Dock (AimoPilot) | Valio Aimo, "Trusted Trade Agents" | `valio-aimo/` (the app in `valio-aimo/web/`, plus `infra/`, `docs/`, `examples/`, `modal/`, `qa/`, `video/`), and the workflows `ci`, `crash-gate`, `crash-models`, `demo-suite` in `.github/workflows/` | Nafay (`Nafay-0`) |
-| Exa project (name to come) | Exa, "The Internet Butler" | `exa/` (rules in `exa/CLAUDE.md`) | Asadullah (`Asadullah378`) |
+| Beryl | Exa, "The Internet Butler" | `exa/` (rules in `exa/CLAUDE.md`) | Asadullah (`Asadullah378`) |
 | Shared | | `CLAUDE.md`, `README.md`, `research/`, `.claude/`, `.env.example`, `.gitignore` | Both: small edits only, named in the commit message |
 
-The next section describes Dock. The Exa project's brief and plan are in `exa/README.md`.
+The next section describes Dock. Beryl is described in `exa/README.md`, and in detail in `exa/DEVELOPMENT.md`.
 
 ## What we are building (decided Fri 13 Nov, evening)
 
