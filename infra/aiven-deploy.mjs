@@ -95,6 +95,9 @@ function desiredEnvironment(publicUrl) {
     if (env(`DOCK_DEPLOY_${name}`)) vars.push([key, env(`DOCK_DEPLOY_${name}`)]);
   }
   for (const k of ["DOCK_INTERPRET_MODEL", "DOCK_AGENT_MODEL", "DOCK_ASSISTANT_MODEL", "DOCK_MEMORY_MODEL", "DOCK_SCAN_MODEL", "DOCK_MENU_MODEL", "DOCK_MENU_PICK_MODEL", "DOCK_VOICE_MODEL", "VALIO_CUSTOMER"]) if (env(k)) vars.push([k, env(k)]);
+  // The independent second reader (NVIDIA Nemotron through Featherless; empty is off) and whether the crash-test
+  // licence limits what an agent may place alone (off until the suite has been re-run on the deployed tool table).
+  for (const k of ["DOCK_SECOND_READER_MODEL", "DOCK_LICENCE_ENFORCE"]) if (env(k)) vars.push([k, env(k)]);
   // The operations portal's Platform section (web/src/server/aiven/showcase): which project and organisation to read.
   for (const k of ["AIVEN_PROJECT", "AIVEN_ORGANIZATION_ID", "DOCK_SHOWCASE_LAUNCHES_PER_DAY"]) if (env(k)) vars.push([k, env(k)]);
 
@@ -107,6 +110,11 @@ function desiredEnvironment(publicUrl) {
     "ANTHROPIC_API_KEY",
     "OPENAI_API_KEY",
     "GEMINI_API_KEY",
+    // The recall radar's web readers (Context.dev reads the authority's notices, Exa finds producers' own) and the
+    // open-model provider (the second reader). Without them the deployed radar and second reader stay off.
+    "CONTEXT_DEV_API_KEY",
+    "EXA_API_KEY",
+    "FEATHERLESS_API_KEY",
     // /ops can suspend agents: entering it needs this passcode on the public server.
     "DOCK_OPS_PASSCODE",
     // Demo kitchens' connector addresses (/api/mcp/c/<token>) are derived from it: stable across restarts.
