@@ -30,7 +30,7 @@ import { requestLabel, usePortal } from "./portal";
 import { nameIn } from "./shop";
 import { THREAD_PAGE_TEXT } from "./thread.text";
 import { WaitingGate } from "./thread-signoff";
-import { PlanCardView } from "./thread-plan";
+import { MenuCardView } from "./thread-menu";
 import { OptionsDecision } from "./thread-options";
 import { THREAD_WORDS } from "./thread-words.text";
 import { concernText, correctionLabel, fmtFor, gateReasons, memoryKey, memoryText, stepLabel } from "./thread-words";
@@ -356,8 +356,8 @@ function CardView({ card, tap, busy, gated, base, turn, thread, memory }: { card
           )}
         </>
       );
-    case "plan":
-      return <PlanCardView card={card} busy={busy} tap={tap} />;
+    case "menu":
+      return <MenuCardView card={card} busy={busy} tap={tap} />;
     case "notice": {
       const missing = (card.missing ?? []).map((m) => (/what to buy/.test(m) ? w.notice.missingItem : w.notice.missingAmount));
       const body =
