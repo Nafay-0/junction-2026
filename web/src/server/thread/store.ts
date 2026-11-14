@@ -149,6 +149,18 @@ export class ThreadStore {
     const a = this.agentTurn(t, turnId);
     if (!a) return;
     a.status = status;
+    // Nothing spins without an end: a turn that stops working closes every step still running (skipped: the turn
+    // ended without it), except the wait for a person's OK while the turn waits for exactly that.
+    if (status !== "working") {
+      const now = Date.now();
+      for (const st of a.steps) {
+        if (st.status !== "running") continue;
+        if (status === "waiting_approver" && st.kind === "tool:await_sign_off") continue;
+        const closed: ThreadStep = { ...st, status: "skipped", ms: Math.max(0, now - Date.parse(st.startedAt)), detail: st.detail ?? "ended with the turn" };
+        Object.assign(st, closed);
+        this.emit(t, { type: "step", turnId, step: structuredClone(closed) });
+      }
+    }
     if (extra.ms !== undefined) a.ms = extra.ms;
     if (extra.marks) a.marks = { ...a.marks, ...extra.marks };
     if (status === "working" || status === "waiting_buyer" || status === "waiting_approver") t.activeTurnId = turnId;

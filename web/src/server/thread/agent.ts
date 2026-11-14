@@ -42,11 +42,12 @@ How to work each turn:
 - After an order waits for a named person's sign-off (status pending_approval), write your one sentence (who signs, on their phone) and call await_sign_off with its orderId in the same reply. Do not try to place, retry or split it.
 - The buyer wants to look around the assortment without ordering yet ("show me oat drinks"): find_products. About one product shown: product_facts. "What do I need to do today?", "our recurring orders", "what's arriving", "what do you remember about us": show_home.
 - A dish or a menu for a number of covers ("salmon soup for 300 on Friday", "plan lunch for 40 around beetroot"): call plan_menu with their words. The menu card forms as the planner works (open words get two or three menus to pick from); the buyer edits it in place and puts it on the order sheet with one tap (or "yes, put it on the sheet": buyer_reply menu; "the second menu": buyer_reply menu_p2). Do not list its lines or prices.
-- Questions about past orders: order_history. About rules, limits or who signs off ("what are our rules?"), or a change to them ("never nuts", "raise the limit to 800", "Maija signs from now on"): call rules, with the change in the mandate's terms when they ask for one. It shows the rules card with before and after; only the kitchen's signed-in person signs it there, never you. About an order's status or why something happened: get_order or explain.
+- Questions about past orders: order_history. About rules, limits or who signs off ("what are our rules?"), or a change to them ("never nuts", "raise the limit to 800", "Maija signs from now on"): call rules, with the change in the mandate's terms when they ask for one. It shows the change with before and after; only the kitchen's signed-in person confirms it there, with one tap, never you. Say "confirm", never "sign" or "mandate". About an order's status or why something happened: get_order or explain.
 - Anything else (a greeting, small talk, something outside buying food): one short sentence, no tool.
 
 Your sentence:
 - One sentence, at most 20 words, in the buyer's language (English, Finnish or Swedish: the language they wrote in).
+- When the order result carries a \`sheet\` (several items in one message, or the usual), everything is on that one order below: say so in one sentence and point at its button; never ask the buyer to pick per item.
 - Never write a product name, price, amount, date, delivery day, stock level, allergen or diet claim unless a tool result in this turn states it exactly. Prefer pointing at the cards ("Three options below; the first is what you usually order.").
 - Never say an order is placed, confirmed or approved unless a tool result says so. A waiting order is waiting.
 - A requested day is the latest acceptable day: an option delivered earlier meets it. Do not restate what the cards already show.
@@ -340,7 +341,7 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
         const { groundedChange, showRules } = await import("./rules");
         const { change: kept, dropped } = change ? groundedChange(change, words) : { change: undefined, dropped: [] as string[] };
         const card = await showRules(run, kept && Object.keys(kept).length ? kept : undefined);
-        return { shown: card.proposal ? "proposal" : "rules", ...(card.proposal ? { kind: card.proposal.kind, canSign: card.proposal.canSign, ...(card.proposal.why ? { why: card.proposal.why } : {}), changes: card.diff.map((d) => `${d.field}: ${d.before || "none"} -> ${d.after || "none"}`) } : {}), ...(dropped.length ? { notInTheirWords: dropped } : {}), signedBy: "nobody yet: the kitchen's person signs on the card" };
+        return { shown: card.proposal ? "proposal" : "rules", ...(card.proposal ? { kind: card.proposal.kind, canSign: card.proposal.canSign, ...(card.proposal.why ? { why: card.proposal.why } : {}), changes: card.diff.map((d) => `${d.field}: ${d.before || "none"} -> ${d.after || "none"}`) } : {}), ...(dropped.length ? { notInTheirWords: dropped } : {}), confirmedBy: "nobody yet: the kitchen's person confirms it on the card" };
       },
       toModelOutput: ({ output }) => ({ type: "text", value: compact(output) }),
     }),

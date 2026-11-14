@@ -155,6 +155,11 @@ export const optionsAll = (label: string, pred: (p: NonNullable<ProductInfo>) =>
 
 export const lactoseFree = optionsAll("lactose-free", (p) => p.attributes.includes("lactose_free"));
 export const without = (allergen: RegExp, label: string) => optionsAll(`free of ${label}`, (p) => !p.allergens.some((a) => allergen.test(a)));
+/**
+ * Free of gluten as the law reads it: no wheat, barley or rye, and oats only when the maker declares the product
+ * gluten-free (gluten-free oats are allowed for coeliacs under that claim).
+ */
+export const glutenFree = () => optionsAll("free of gluten", (p) => !p.allergens.some((a) => /gluten|wheat|barley|rye/i.test(a)) && (!p.allergens.some((a) => /oat/i.test(a)) || p.attributes.includes("gluten_free")));
 
 /** Every option arrives by the date, and none has an order cut-off that already passed. */
 export const deliversBy = (date: (c: CheckCtx) => string): Check => ({
@@ -417,7 +422,7 @@ const ALL: Scenario[] = [
     turns: [{ say: "For the school kitchen: 60 litres of oat drink for Monday. It must be gluten-free, we have coeliac pupils." }],
     goal: "options",
     expect: [
-      without(/gluten|wheat|oat|barley|rye/i, "gluten"),
+      glutenFree(),
       without(/nut|almond|hazel|cashew/i, "nuts"),
       optionsInCatalogue,
       { name: "offered gluten-free options, or said why none", run: (o) => ok(o.options.length > 0 || /gluten/i.test(text(o)), `no options and gluten not named: ${text(o).slice(0, 160)}`) },
@@ -433,7 +438,7 @@ const ALL: Scenario[] = [
     turns: [{ say: "Koulukeittiöön 60 litraa kaurajuomaa maanantaiksi. Sen pitää olla gluteeniton, meillä on keliakiaa sairastavia oppilaita." }],
     goal: "options",
     expect: [
-      without(/gluten|wheat|oat|barley|rye/i, "gluten"),
+      glutenFree(),
       without(/nut|almond|hazel|cashew/i, "nuts"),
       optionsInCatalogue,
       { name: "offered gluten-free options, or said why none", run: (o) => ok(o.options.length > 0 || /gluten/i.test(text(o)), `no options and gluten not named: ${text(o).slice(0, 160)}`) },

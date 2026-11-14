@@ -6,7 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { api, type ApiResult } from "../../_client/api";
 import { useLive, type Live } from "../../_client/use-live";
 import { DEMO_NOTES, PRODUCT_NAME } from "../../_ui/brand";
-import { ChefHat, ChevronDown, ChevronRight, ClipboardList, Ellipsis, House, LayoutGrid, ReceiptText, Search, ShieldCheck, ShoppingBasket, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronRight, ClipboardList, Ellipsis, House, LayoutGrid, Search, ShieldCheck, ShoppingBasket, Sparkles } from "lucide-react";
 import { Avatar, IconButton, IconDisc, Kbd, ListRow, Select, Sheet, Toaster } from "../../_ui/kit";
 import { helsinkiToday, money, shortProduct } from "../../_ui/plain";
 import { LangSwitch, useLang, useText } from "../../_i18n/provider";
@@ -95,11 +95,14 @@ export function usePortal(): Ctx {
   return c;
 }
 
+/**
+ * The agent is where a signed-in kitchen lands (docs/DESIGN.md §7b): the store's first section is the agent itself,
+ * then the catalogue, the orders and the kitchen's rules. Ordering and the menu builder are starting points inside the
+ * agent, not pages of their own.
+ */
 const NAV: { href: string; key: keyof (typeof PORTAL_TEXT)["en"]["nav"] }[] = [
   { href: "", key: "home" },
-  { href: "/order", key: "order" },
   { href: "/catalogue", key: "catalogue" },
-  { href: "/menu", key: "menu" },
   { href: "/orders", key: "orders" },
   { href: "/agent", key: "agent" },
 ];
@@ -212,7 +215,8 @@ export function Portal({ kitchen, kitchens, account, children }: { kitchen: Kitc
   const [product, setProduct] = useState<Product>();
   const inputRef = useRef<HTMLInputElement>(null);
   const thread = useThreadState(slug);
-  const onOrderPage = pathname === `${base}/order`;
+  // The agent's own page (the landing screen, and /order): the thread is the page, so nothing opens a dock there.
+  const onOrderPage = pathname === `${base}/order` || pathname === base;
   const [panelOpen, setPanelOpen] = useState(false);
   const restored = useRef(false);
   useEffect(() => {
@@ -356,7 +360,7 @@ function isActive(pathname: string, base: string, sub: string): boolean {
  * keeps the mark, the kitchen and the search, and the sections move to the tab bar under the thumb.
  */
 function Header() {
-  const { kitchen, kitchens, base, overview, basket, live, agent, lang } = usePortal();
+  const { kitchen, kitchens, base, overview, agent, lang } = usePortal();
   const tx = useText(PORTAL_TEXT);
   const router = useRouter();
   const pathname = usePathname() ?? base;
@@ -364,8 +368,6 @@ function Header() {
   const waiting = (overview.data?.orders ?? []).filter((o) => o.status === "pending_approval");
   const approver = kitchen.mandate.approvers[0];
   const days = overview.data?.memory.deliveryWeekdays;
-  const basketTotal = basket.lines.reduce((s, l) => s + (live.results[l.productId]?.offer?.unitPriceCents ?? 0) * l.packs, 0);
-  const priced = basket.lines.length > 0 && basket.lines.every((l) => live.results[l.productId]?.offer);
   const onCatalogue = pathname.startsWith(`${base}/catalogue`);
   const [q, setQ] = useState(onCatalogue ? (params.get("q") ?? "") : "");
   const [forPath, setForPath] = useState(pathname);
@@ -397,7 +399,7 @@ function Header() {
               <span className="truncate">{kitchen.name}</span>
               <ChevronDown aria-hidden size={15} className="shrink-0 text-ink-soft" />
             </p>
-            <p className="hidden truncate text-[0.78rem] leading-snug text-ink-soft lg:block">
+            <p className={`hidden truncate text-[0.78rem] leading-snug text-ink-soft ${agent.panelOpen ? "2xl:block" : "lg:block"}`}>
               {days ? tx.deliveries(weekdaysText(days, lang)) : ""}
               {approver ? tx.signsOff(approver.name) : ""}
               {kitchen.kind === "visitor" && kitchen.expiresAt ? tx.visitor : ""}
@@ -447,7 +449,8 @@ function Header() {
         </form>
 
         <div className="flex shrink-0 items-center gap-1.5 lg:gap-2">
-          <div className="hidden lg:block">
+          {/* With the agent docked beside the page the header has less room: the language moves under More. */}
+          <div className={agent.panelOpen ? "hidden 2xl:block" : "hidden lg:block"}>
             <LangSwitch />
           </div>
           <IconButton label={tx.searchLabel} onClick={() => { setSearchOpen((x) => !x); setTimeout(() => document.getElementById("shop-search")?.focus(), 30); }} expanded={showSearch} className="lg:hidden">
@@ -467,18 +470,6 @@ function Header() {
               <Kbd dark={agent.panelOpen}>Ctrl K</Kbd>
             </span>
           </button>
-          <Link
-            href={`${base}/basket`}
-            aria-current={pathname === `${base}/basket` ? "page" : undefined}
-            className="hidden min-h-11 items-center gap-2 rounded-full border border-line-strong bg-paper pl-3.5 pr-1.5 text-[0.92rem] font-semibold text-ink transition-colors duration-150 hover:border-ink-soft hover:bg-mist lg:inline-flex"
-            aria-label={tx.basketLabel(basket.lines.length, priced ? money(basketTotal) : undefined)}
-          >
-            <ShoppingBasket aria-hidden size={19} />
-            {basket.lines.length > 0 && <span className="tabular">{priced ? money(basketTotal) : tx.notPriced}</span>}
-            <span key={basket.lines.length} className={`changed flex h-8 min-w-8 items-center justify-center rounded-full px-2 tabular ${basket.lines.length > 0 ? "bg-lime text-ink" : "bg-surface text-ink-soft"}`}>
-              {basket.lines.length}
-            </span>
-          </Link>
         </div>
       </div>
 
@@ -487,14 +478,6 @@ function Header() {
           <ul className="-ml-3 flex min-w-0 flex-1 gap-1 overflow-x-auto whitespace-nowrap">
             {NAV.map((n) => {
               const active = isActive(pathname, base, n.href);
-              if (n.key === "order")
-                return (
-                  <li key={n.key}>
-                    <button type="button" onClick={agent.open} aria-expanded={agent.panelOpen} aria-controls="assistant" className={`flex min-h-10 items-center rounded-full px-3.5 text-[0.92rem] transition-colors duration-150 ${agent.panelOpen ? "bg-petrol-soft font-semibold text-petrol-deep" : "font-medium text-ink-soft hover:bg-surface hover:text-ink"}`}>
-                      {tx.nav[n.key]}
-                    </button>
-                  </li>
-                );
               return (
                 <li key={n.key}>
                   <Link
@@ -533,12 +516,11 @@ function WaitingPill({ href, label, full = false }: { href: string; label: strin
 
 // ---------- the phone: sections under the thumb ----------
 
-// The agent's button in the middle is the way to order; the second tab is the kitchen's orders.
+// The agent is the first tab and the landing screen; then the catalogue and the orders; the rest under More.
 const TABS: { href: string; key: "home" | "orders" | "catalogue"; icon: typeof House }[] = [
-  { href: "", key: "home", icon: House },
+  { href: "/catalogue", key: "catalogue", icon: LayoutGrid },
   { href: "/orders", key: "orders", icon: ClipboardList },
 ];
-const TABS_AFTER: { href: string; key: "home" | "orders" | "catalogue"; icon: typeof House }[] = [{ href: "/catalogue", key: "catalogue", icon: LayoutGrid }];
 
 /**
  * On a phone the sections sit in a bar at the bottom edge, with the agent in the middle: one tap opens its sheet.
@@ -557,7 +539,7 @@ function TabBar() {
   }
   const basketTotal = basket.lines.reduce((s, l) => s + (live.results[l.productId]?.offer?.unitPriceCents ?? 0) * l.packs, 0);
   const priced = basket.lines.length > 0 && basket.lines.every((l) => live.results[l.productId]?.offer);
-  const moreActive = ["/menu", "/agent", "/basket"].some((sub) => isActive(pathname, base, sub));
+  const moreActive = ["/agent", "/basket"].some((sub) => isActive(pathname, base, sub));
   // On a phone the thread is a screen of its own: going to another tab leaves it.
   const leaveThread = () => agent.panelOpen && agent.setPanelOpen(false);
   const tab = (href: string, label: string, Icon: typeof House, active: boolean) => (
@@ -583,21 +565,19 @@ function TabBar() {
         </Link>
       )}
       <nav aria-label={tx.tabsLabel} className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-paper/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden">
-        <div className="mx-auto grid max-w-md grid-cols-5 items-end px-2">
-          {TABS.map((t) => tab(t.href, tx.nav[t.key], t.icon, !agent.panelOpen && isActive(pathname, base, t.href)))}
-          <button
-            type="button"
-            onClick={() => (agent.panelOpen ? agent.setPanelOpen(false) : agent.open())}
-            aria-expanded={agent.panelOpen}
-            aria-controls="assistant"
+        <div className="mx-auto grid max-w-md grid-cols-4 items-end px-2">
+          <Link
+            href={base}
+            onClick={leaveThread}
+            aria-current={!agent.panelOpen && isActive(pathname, base, "") ? "page" : undefined}
             className="flex min-h-14 flex-col items-center justify-end gap-0.5 rounded-xl pb-[0.3rem] text-[0.7rem] font-semibold text-lavender-deep"
           >
-            <span className="-mt-5 flex size-13 items-center justify-center rounded-full bg-lavender-deep text-paper shadow-md ring-4 ring-paper transition-transform duration-150 active:scale-95">
+            <span className={`-mt-5 flex size-13 items-center justify-center rounded-full text-paper shadow-md ring-4 ring-paper transition-transform duration-150 active:scale-95 ${isActive(pathname, base, "") || isActive(pathname, base, "/order") ? "bg-lavender-deep" : "bg-lavender-deep/85"}`}>
               <AgentIcon size={22} />
             </span>
             <span>{tx.agentButton}</span>
-          </button>
-          {TABS_AFTER.map((t) => tab(t.href, tx.nav[t.key], t.icon, !agent.panelOpen && isActive(pathname, base, t.href)))}
+          </Link>
+          {TABS.map((t) => tab(t.href, tx.nav[t.key], t.icon, !agent.panelOpen && isActive(pathname, base, t.href)))}
           <button type="button" onClick={() => { leaveThread(); setMore(true); }} aria-haspopup="dialog" aria-expanded={more} className={`flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-xl text-[0.7rem] font-medium ${moreActive ? "text-petrol" : "text-ink-soft"}`}>
             <Ellipsis aria-hidden size={22} strokeWidth={moreActive ? 2.3 : 1.9} />
             <span>{tx.more}</span>
@@ -608,10 +588,8 @@ function TabBar() {
         <ul className="-mx-5 divide-y divide-line border-y border-line">
           {(
             [
-              { sub: "/orders", key: "orders", icon: ReceiptText },
-              { sub: "/basket", key: "basket", icon: ShoppingBasket },
-              { sub: "/menu", key: "menu", icon: ChefHat },
               { sub: "/agent", key: "agent", icon: ShieldCheck },
+              { sub: "/basket", key: "basket", icon: ShoppingBasket },
             ] as const
           ).map(({ sub, key, icon: Icon }) => (
             <li key={sub}>

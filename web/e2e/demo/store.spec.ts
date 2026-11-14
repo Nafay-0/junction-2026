@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { addPasskey, approvalState, approveButton, watchErrors } from "../support/dock";
-import { answerTo, card, cards, choices, composer, minutesUntil, otherOptions, pick, say, stageThread, threadLog, totalOf, visitorKitchen } from "../support/thread";
+import { answerTo, card, cards, choices, minutesUntil, otherOptions, pick, say, stageThread, threadLog, totalOf, visitorKitchen } from "../support/thread";
 
 /**
  * The store's conversation thread (docs/agent-thread.md; main b9f934e replaced the order lane and agent panel with
@@ -132,67 +132,36 @@ test("mistake check on a demo kitchen: 1,000 L where it usually orders 100 L, co
   }
 });
 
-test("one-tap repeat from the kitchen's home: straight to a fixed price and the gate, no question", async ({ page, baseURL }) => {
+test("one-tap repeat from the landing screen: an earlier order onto the order sheet, no question", async ({ page, baseURL }) => {
   const release = await stageThread(page, "kaari", baseURL);
   try {
+    // The agent is where the kitchen lands: its starting points open the earlier orders in the thread.
     await page.goto("/k/kaari");
-    // Standing orders, milk first (Kaari's usual).
-    const standing = page.getByRole("region", { name: "Standing orders" });
-    await expect(standing.getByRole("heading", { name: "milk", exact: true })).toBeVisible({ timeout: 20_000 });
-    await standing.getByRole("button", { name: "Repeat", exact: true }).first().click();
-    // Off the Order page the same thread opens in the dock.
-    const dock = page.getByRole("complementary", { name: "Purchasing agent" });
-    await expect(threadLog(dock)).toBeVisible();
-    await expect(threadLog(dock).getByText(/^Same again as /)).toBeVisible();
-    // The last order, again: memory answers what and how much, so nothing is asked; Kaari's 100 € limit sends it to
-    // the head chef. (Or the options, when the last product cannot be had now; or the duplicate check, when an
-    // earlier test's repeat for the same day still waits for sign-off.)
-    const gate = card(dock, "gate");
-    const duplicate = card(dock, "anomaly").filter({ hasText: /Order again\?|ordered the same for the same day/ });
-    await expect(gate.or(pick(dock)).or(duplicate)).toBeVisible({ timeout: 20_000 });
-    await expect(cards(dock, "question")).toHaveCount(0);
-    if (await duplicate.isVisible()) {
-      await duplicate.getByRole("button", { name: /^Cancel/ }).click();
-      await expect(duplicate).toContainText(/Changed: Cancel|Cancelled|Confirmed/, { timeout: 20_000 });
-    } else if (await gate.isVisible()) {
-      await expect(card(dock, "price")).toContainText(/Signed by the wholesaler/);
-      await expect(gate).toContainText(/Waiting for Sanna Koskinen/);
-      // Taken back from the thread, so the shared kitchen keeps no waiting order from this test.
-      await gate.getByRole("button", { name: "Take it back" }).click();
-      await expect(card(dock, "gate")).toContainText("Taken back", { timeout: 20_000 });
-    }
+    const log = threadLog(page);
+    await log.getByRole("button", { name: "Earlier orders" }).first().click();
+    await log.getByRole("button", { name: "Order again" }).first().click({ timeout: 20_000 });
+    // The earlier order's lines on the order sheet, priced and previewed: its one button says what will happen.
+    await expect(log.getByRole("button", { name: /^(Order this|Send to .+ for an OK), / }).last()).toBeVisible({ timeout: 20_000 });
+    await expect(cards(page, "question")).toHaveCount(0);
   } finally {
     release();
   }
 });
 
-test("repeat with a change: the earlier request with 200 litres instead", async ({ page, baseURL }) => {
+test("a recurring order changed: onto the order sheet for its next day, paused and run again from the list", async ({ page, baseURL }) => {
   const release = await stageThread(page, "kaari", baseURL);
   try {
     await page.goto("/k/kaari");
-    const standing = page.getByRole("region", { name: "Standing orders" });
-    await expect(standing.getByRole("heading", { name: "milk", exact: true })).toBeVisible({ timeout: 20_000 });
-    await standing.getByRole("button", { name: "Repeat with a change" }).first().click();
-    const dock = page.getByRole("complementary", { name: "Purchasing agent" });
-    const field = composer(dock);
-    await expect(field).toBeVisible();
-    await expect(dock.getByRole("textbox", { name: "What changes?" })).toBeVisible();
-    await expect(dock.getByRole("button", { name: "Stop changing that request" })).toBeVisible();
-    await say(dock, "200 litres");
-    // The buyer's turn says which request it changes; the reading takes the rest from it.
-    await expect(threadLog(dock).getByText(/^Same as .+, but 200 litres$/)).toBeVisible();
-    const understood = card(dock, "understood");
-    await expect(understood).toContainText(/How much\s*200\sL/, { timeout: 20_000 });
-    await expect(understood).toContainText(/Read against /);
-    await expect(dock.getByRole("button", { name: "Stop changing that request" })).toHaveCount(0);
-    // A change of a known request can be priced and sent to the gate straight away (Kaari's head chef signs): taken
-    // back, so the shared kitchen keeps no waiting order from this test.
-    await page.waitForTimeout(1500);
-    const gate = card(dock, "gate");
-    if (await gate.isVisible()) {
-      await gate.getByRole("button", { name: "Take it back" }).click();
-      await expect(card(dock, "gate")).toContainText("Taken back", { timeout: 20_000 });
-    }
+    const log = threadLog(page);
+    await log.getByRole("button", { name: "Recurring orders" }).first().click();
+    const pause = log.getByRole("switch").first();
+    await expect(pause).toHaveAttribute("aria-checked", "true", { timeout: 20_000 });
+    await pause.click();
+    await expect(pause).toHaveAttribute("aria-checked", "false", { timeout: 20_000 });
+    await pause.click();
+    await expect(pause).toHaveAttribute("aria-checked", "true", { timeout: 20_000 });
+    await log.getByRole("button", { name: "Change" }).first().click();
+    await expect(log.getByRole("button", { name: /^(Order this|Send to .+ for an OK), / }).last()).toBeVisible({ timeout: 20_000 });
   } finally {
     release();
   }

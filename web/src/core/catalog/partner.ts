@@ -440,6 +440,16 @@ export function isIndexFile(x: unknown): x is IndexFile {
 }
 
 /** Restore products from the file. Rows that do not have the expected shape are dropped. */
+/**
+ * Claims the product's own declared data implies: a product its maker declares free from milk, with no milk or lactose
+ * among what it contains or may contain, has no lactose (an oat or soya drink), so a kitchen whose rules require
+ * lactose-free is offered it. The maker's data, read at load time, so an index built earlier gets it too.
+ */
+export function impliedClaims(claims: string[], a: IndexedProduct["allergens"]): string[] {
+  const milkFree = a.declared && a.freeFrom.includes("milk") && ![...a.contains, ...a.mayContain].some((x) => x === "milk" || x === "lactose");
+  return milkFree && !claims.includes("lactose_free") ? [...claims, "lactose_free"] : claims;
+}
+
 export function decodeIndex(file: IndexFile): CatalogIndex {
   const products: IndexedProduct[] = [];
   const width = file.columns.length === LEGACY_COLUMNS.length ? LEGACY_COLUMNS.length : COLUMNS.length;
@@ -487,7 +497,7 @@ export function decodeIndex(file: IndexFile): CatalogIndex {
         sources: split(pk[8]),
         label: describePack(String(salesUnit), String(baseUnit), factor, perBaseUnit, perSalesUnit, primary),
       },
-      claims: split(claims),
+      claims: impliedClaims(split(claims), { declared: al[0] === 1, contains: split(al[1]), mayContain: split(al[2]), freeFrom: split(al[3]) }),
       allergens: { declared: al[0] === 1, contains: split(al[1]), mayContain: split(al[2]), freeFrom: split(al[3]) },
       labels: split(labels),
       temperature: { code: num(temp[0]), class: TEMP_BACK[String(temp[1])] ?? null },

@@ -20,9 +20,31 @@ async function signUp(page: Page, username: string, restaurant: string) {
   await form.getByLabel("Username", { exact: true }).fill(username);
   await form.getByLabel("Password", { exact: true }).fill(PASSWORD);
   await page.getByRole("button", { name: "Continue" }).click();
-  await expect(page.getByLabel("The agent may spend alone, per order (€)")).toHaveValue("300");
-  await page.getByRole("button", { name: "Sign the mandate and open the shop" }).click();
-  await page.getByRole("link", { name: "Open my shop" }).click();
+  // The set-up interview, every default taken except the €300 the test relies on. No passkey authenticator in this
+  // browser yet, so the confirm leaves no device: the gate card below adds it.
+  await page.getByRole("button", { name: "Let's start" }).click();
+  for (let i = 0; i < 12; i++) {
+    const confirm = page.getByRole("button", { name: "Confirm, and add this device to OK orders" });
+    const kind = page.getByRole("radio", { name: "Restaurant", exact: true });
+    const amount = page.getByRole("button", { name: / € is right$/ });
+    const next = page.getByRole("button", { name: /^(Next|None of these)$/ });
+    await expect(confirm.or(kind).or(amount).or(next).first()).toBeVisible({ timeout: 15_000 });
+    if (await confirm.isVisible()) break;
+    const q = await page.getByRole("progressbar").first().getAttribute("aria-valuenow");
+    if (await kind.isVisible()) await kind.click();
+    else if (await amount.isVisible()) {
+      if (await page.getByText(/^Up to how much may your agent order alone\?$/).isVisible()) await page.getByRole("button", { name: "300 €", exact: true }).click();
+      await amount.click();
+    } else await next.click();
+    await expect(page.getByRole("progressbar").first()).not.toHaveAttribute("aria-valuenow", q ?? "", { timeout: 15_000 });
+  }
+  await expect(page.getByText("300 € per order")).toBeVisible();
+  await page.evaluate(() => {
+    // No authenticator here: the passkey prompt is refused at once, as a person cancelling it would.
+    Object.defineProperty(navigator, "credentials", { value: { create: () => Promise.reject(Object.assign(new Error("cancelled"), { name: "NotAllowedError" })) } });
+  });
+  await page.getByRole("button", { name: "Confirm, and add this device to OK orders" }).click();
+  await page.getByRole("button", { name: "Make your first order" }).click();
   await page.waitForURL(`**/k/${username}`);
 }
 

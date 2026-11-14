@@ -130,12 +130,31 @@ sentence the buyer has to type or another page. The design lead builds the widge
 - Sending: a busy store (`503 store_unavailable`, `429`) or a dropped connection is tried again by itself with the same
   `clientTurnId`; only then the buyer is told, in words, and their words stay in the box.
 
-### The home: the agent is where the kitchen starts (agent-thread-3, live)
+**What was asked, precisely** (agent-thread-4)
+- Several items in one message are one order: each item's lead option goes on one order sheet, previewed and
+  confirmed once (`combineItems` in pipeline.ts); none is placed alone, and the intake's "you also asked for" note is
+  dropped in the thread. Items still waiting on a question keep their own card.
+- When the kind asked for cannot be offered though the assortment has it, the options card says so first with the
+  reason (`insteadOf`: your rules, the day, stock) and every option is "instead", never "best". A product its maker
+  declares free from milk counts as lactose-free (core/catalog/partner.ts `impliedClaims`), so oat drinks reach
+  kitchens whose rules require lactose-free.
+- A day the kitchen names is the delivery day (`deliverOn`) unless the words make it a latest day ("by", "mennessä",
+  "senast"); an option arriving earlier says "arrives Monday, earlier than the Thursday you asked for".
+- Nothing spins without an end: a turn that stops closes its running steps (store.ts), and a turn still working after
+  150 s ends with a plain notice (engine.ts).
 
-The store's "Order" entry, "Add" anywhere and "ask about this product" all lead into the agent; the old Order page
-redirects to the store with the agent open (`?agent=open`, `?agent=product:<id>`). The home's cards are made by plain
+### The home: the agent is where the kitchen starts (agent-thread-4, live)
+
+A signed-in kitchen lands on its agent (`/k/<kitchen>`, and `/order` is the same page): the thread full width, the
+day's opening card at its head (the kit's `AgentHome`: at most three things that need the kitchen today, each acted on
+in place, then the starting points: browse products, earlier orders, recurring orders, deliveries, what the agent
+remembers, your rules, plan a menu), the composer under the thumb. There is no other front page: navigation is Agent,
+Catalogue, Orders, Your rules (a phone: Agent, Catalogue, Orders, More); no dock beside the agent's own page. On the
+other pages "Add" and "ask about this product" open the same thread in the dock. The home's cards are made by plain
 code from records (`server/thread/home.ts`); the model never writes one, it can only ask for one to be shown
-(`find_products`, `product_facts`, `show_home` in agent.ts). Everything that buys lands on the order sheet.
+(`find_products`, `product_facts`, `show_home` in agent.ts). Everything that buys lands on the order sheet. They are
+drawn with the kit in `_ui/widgets-more.tsx` (`ProductResults`, `ProductFacts`, `HistoryList`, `StandingOrders`,
+`DeliveryCard`, `MemoryList`); a turn that only shows something keeps no step list once shown.
 
 | Card | What it is | Actions |
 |---|---|---|
@@ -143,7 +162,7 @@ code from records (`server/thread/home.ts`); the model never writes one, it can 
 | `products` | **Product grid** from master data only (no live call until a product goes on the sheet): only what the mandate allows (category, required attributes, no forbidden allergen) | `products_search`, `product_show`, `sheet_add` |
 | `product` | **One product's facts**: pack, allergens (or "not declared"), attributes, certificates, origin, CO2, delivery reliability | `sheet_add` |
 | `records` (history) | Earlier orders; every row can be ordered again | `order_again`: the order's lines on a new sheet for the next same weekday, re-priced and previewed there |
-| `standing` | **Recurring orders**, read from history (`standing()` in kitchen-portal.ts): weekdays, usual amount and packs, next due, drift. There is no separate standing-order store, so they cannot be paused; "change" is a new sheet for the next due day | `standing_change { family, packs? }` |
+| `standing` | **Recurring orders**, read from history (`standing()` in kitchen-portal.ts): weekdays, usual amount and packs, next due, drift, `paused`. A pause is kept in the kitchen's profile (`pausedStanding`): the agent neither reminds of it (today's cut-offs and drift) nor orders it as "the usual" until it runs again; the store places no order by itself either way. "Change" is a new sheet for the next due day | `standing_change { family, packs? }`, `standing_pause { family, paused }` (the kitchen's signed-in person only; recorded) |
 | `deliveries` | Orders committed or waiting, delivered today or later | `order_show` |
 | `memory_list` | What the agent remembers (active or waiting for a yes); `canChange` only for the kitchen's signed-in person | `memory_edit`, `memory_forget` (refused without a signed-in person, `401 kitchen_person_required`; recorded as theirs), `remember_this` |
 | `price`, `order` | The proof (`price.proof`: the signed quote and the signed claims it rests on) and the order's details and signed confirmation open inside the card; "Check the signatures" verifies each in the browser against `/.well-known/jwks.json` (`_client/verify-signed.ts`) | none |
@@ -151,32 +170,31 @@ code from records (`server/thread/home.ts`); the model never writes one, it can 
 `home_show { what: "today" | "history" | "standing" | "deliveries" | "memory" }` shows one of them. Each is in the
 ledger (`today`, `products`, `order_again`, `memory_write`) and in the operations trace like any turn.
 
-*(not yet)*: the widgets above this subsection are the contract for agent-thread-3; this line goes when the engine for each
-widget lands, and the table says per widget what is live.
+## Set-up interview (agent-thread-4, live)
 
-## Set-up interview (agent-thread-3, live)
-
-A new account's second step is a short interview in the agent's thread form instead of a form
+A new account's second step is a short interview with the design kit (docs/DESIGN.md §7b: `SetupWelcome`,
+`SetupStep` with the answer widgets, `RulesSheet` with a footer, `SetupDone`), not a form
 (`app/k/signup/thread-interview.tsx`, `server/accounts/interview.ts`, `POST /ui-api/account/interview`). Step 1
-(restaurant, username, password) and the signing-device step after it are unchanged.
+(restaurant, username, password) is unchanged.
 
-- The questions, their order, options and suggested amounts are plain code: kind of kitchen, "must every product be"
-  (claims), "never buy" (allergens), delivery days, a usual order, the spend-alone limit (suggested: a usual order and
-  a half), the weekly budget (suggested from the usual order and the days), who signs. The browser only words them
-  (en/fi/sv). No model is asked anything.
-- Never asked what the records answer: the kind of kitchen when the restaurant's name says it ("Päiväkoti Satu",
-  "Laakso Catering", "Ravintola …"; shown as "from your name", with "Not right?" to change it), and anything already
-  answered (stateless: the browser sends the answers so far, so a reload resumes). An account that already has a
-  kitchen is not interviewed.
-- Answer widgets, the `question` card's input kinds plus two the interview adds: chips (`choice`, `multi: true` for
-  several), weekday chips (`weekdays`), a stepper with suggested amounts (`amount`), a short text with suggestions
-  (`text`). One tap on Next accepts the suggestion.
-- It ends in the mandate as it will be signed; "Sign and continue" signs it with the account's own `signKitchen`
-  (the same key, mandate, signer and ledger entry the form made), writes the answers to the kitchen's memory
-  (diet and allergens as rules, delivery days and the usual order as habits, the kind as a note), and appends one
-  ledger entry `setup_interview` with every question asked, what was skipped and why, the answers and the seconds.
-- Evaluation: `eval/thread/interview.ts` (EN and FI): taps and seconds to a signed mandate, checks that it carries the
-  answers and that nothing the name answers was asked.
+- A welcome: what the agent is, the three things it asks and why, "under two minutes", one button.
+- Then one question at a time, its answer already chosen (`SetupStep`, progress "n of m", Back keeps everything):
+  kind of kitchen (`ChoiceAnswer`, one tap moves on), "every product must be" and "never buy" (`ChoiceAnswer`
+  multiple, "None of these" until one is picked), delivery days (weekday chips, suggested), a usual order, the
+  spend-alone limit and the weekly budget (`AmountAnswer` with the suggestion set and presets, "300 € is right"), who
+  OKs above the limit (a role already chosen, or their name). The questions, order, options and suggestions are plain
+  code; the browser only words them (en/fi/sv). No model.
+- Never asked what the records answer: the kind of kitchen when the name says it (said on the welcome, with "Not
+  right?" to change it), and anything already answered (stateless, so a reload resumes).
+- "These are your rules": the limit, the week, "every product must be" and "never" as labels (never ids), the
+  delivery days, who OKs. One button, "Confirm, and add this device to OK orders": signs the rules with the account's
+  own `signKitchen` (same key, mandate, signer and ledger entry), writes the answers to memory, appends the
+  `setup_interview` ledger entry, then registers this device's passkey for the signer. If the device cannot (no
+  passkey support, the prompt cancelled), the rules stand and the done screen offers the device again or a phone.
+- `SetupDone`: what was set, in three lines, and "Make your first order" into the kitchen's agent.
+- Evaluation: `eval/thread/first-timer-setup.ts` (EN and FI, 390 px, virtual passkey): sign up, interview, rules
+  confirmed, first order placed; taps, seconds (`--think` adds reading time per tap), questions. `eval/thread/
+  interview.ts` checks the mandate the answers make.
 
 ## The thread
 

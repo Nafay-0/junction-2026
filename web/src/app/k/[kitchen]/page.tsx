@@ -2,13 +2,16 @@ import type { Metadata } from "next";
 import { pick } from "../../_i18n/lang";
 import { requestLang } from "../../_i18n/server";
 import { PRODUCT_NAME } from "../../_ui/brand";
-import { Home } from "./home";
+import { ThreadPage } from "./thread";
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: `${PRODUCT_NAME}: ${pick(await requestLang(), { en: "kitchen home", fi: "keittiön etusivu", sv: "kökets startsida" })}` };
+  return { title: `${PRODUCT_NAME}: ${pick(await requestLang(), { en: "your agent", fi: "agenttisi", sv: "din agent" })}` };
 }
 
-/** Home: what needs the buyer now, what the agent did this week, and the standing orders. */
+/**
+ * Where a signed-in kitchen lands: its agent (docs/DESIGN.md §7b). The day's opening card says what needs the kitchen
+ * today, from records, each acted on in place; then the composer and the starting points. One front page, not two.
+ */
 export default function KitchenHome() {
-  return <Home />;
+  return <ThreadPage />;
 }

@@ -195,7 +195,7 @@ function cardFor(run: TurnRun, ref: string, m: Mandate, current: RulesSnapshot, 
 
 /** The rules card: the mandate as it stands, the stated rules, and (with a change) an open proposal with its before and after. */
 export async function showRules(run: TurnRun, raw?: RulesChange): Promise<RulesCard> {
-  const st = step(run, "rules", raw ? "Working out the change to your rules" : "Reading your rules and mandate");
+  const st = step(run, "rules", raw ? "Working out the change to your rules" : "Reading your rules");
   const { mandate, terms } = await current(run);
   const before = snapshotOf(mandate, terms);
   const can = editableFor(run);
@@ -249,7 +249,7 @@ export async function signRules(run: TurnRun, proposalId: string): Promise<Rules
       "data_access",
     );
   }
-  const st = step(run, "rules", "Signing the new mandate");
+  const st = step(run, "rules", "Saving your new rules");
   const { mandate, terms } = await current(run);
   const before = snapshotOf(mandate, terms);
   try {

@@ -12,6 +12,8 @@
  *   3 make it 200 instead of 100 7 OK an order over the limit (passkey on this device)
  *   4 pick the lactose-free one  8 take one back
  *   9 and 10: two orders in one conversation, the second after a person's OK, typed and through the order sheet
+ *  11 reorder last week's order (asked in words, "order again" on the list)   12 pause a standing order (from the landing screen)
+ *  13 two items in one message (milk and oat drink for Thursday): one order sheet, the oat drink an oat drink, Thursday
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -54,6 +56,12 @@ const L = {
     choose: /^Choose this$/,
     skip: /^No preference: show me the options$/,
     takeOff: /^Take it off this order$/,
+    lookAgain: /^Find other options for this$/,
+    lastWeek: "what did we order last week?",
+    twoItems: "400 litres of lactose-free milk and 24 litres of oat drink for Thursday",
+    oatName: /oat/i,
+    again: /^Order again$/,
+    recurring: /^Recurring orders$/,
   },
   fi: {
     usual: "Tilaa tavalliset",
@@ -64,7 +72,7 @@ const L = {
     fifty: "50 litraa laktoositonta maitoa perjantaiksi",
     lunch: "Suunnittele lounas 40 hengelle perjantaiksi",
     big: "Tarvitsen 1 000 litraa laktoositonta maitoa maanantaiksi",
-    order: /^(Tilaa|Lähetä hyväksyttäväksi)/,
+    order: /^(Tilaa(,| tämä)|Lähetä hyväksyttäväksi)/,
     adjust: /^Muuta määrää, päivää tai tuotetta$/,
     sheetChange: /^Muuta määrää, päivää tai tuotetta$/,
     yes: /^(Kyllä, tämä on oikein|Pidä)/,
@@ -78,6 +86,12 @@ const L = {
     choose: /^Valitse tämä$/,
     skip: /^Ei väliä: näytä vaihtoehdot$/,
     takeOff: /^Poista se tästä tilauksesta$/,
+    lookAgain: /^Etsi tälle muita vaihtoehtoja$/,
+    lastWeek: "mitä tilasimme viime viikolla?",
+    twoItems: "400 litraa laktoositonta maitoa ja 24 litraa kaurajuomaa torstaiksi",
+    oatName: /oat|kaura/i,
+    again: /^Tilaa uudelleen$/,
+    recurring: /^Toistuvat tilaukset$/,
   },
 }[lang];
 
@@ -128,9 +142,11 @@ class Run {
         await this.tap(swap);
         const choose = this.log.getByRole("button", { name: L.choose }).first();
         const takeOff = this.log.getByRole("button", { name: L.takeOff }).first();
-        // Another product, or, when the kitchen's rules allow nothing else, the line taken off the order.
-        await choose.or(takeOff).first().waitFor({ timeout: 30_000 });
-        await this.tap((await choose.isVisible().catch(() => false)) ? choose : takeOff);
+        const again = this.log.getByRole("button", { name: L.lookAgain }).first();
+        // Another product; when the kitchen's rules allow nothing else, the line taken off the order, or (the only
+        // line) the agent asked to look again with options.
+        await choose.or(takeOff).or(again).first().waitFor({ timeout: 30_000 });
+        await this.tap((await choose.isVisible().catch(() => false)) ? choose : (await takeOff.isVisible().catch(() => false)) ? takeOff : again);
         await this.page.waitForTimeout(1500);
         continue;
       }
@@ -175,7 +191,7 @@ async function task(name: string, n: number, body: (r: Run) => Promise<string | 
   if (s.status() !== 200) throw new Error(`sign-in: HTTP ${s.status()}`);
   await page.request.post(`${base}/ui-api/kitchens/${account.username}/thread/reset`, { data: {} });
   await ctx.addCookies([{ name: "aimopilot-lang", value: lang, url: base }]);
-  await page.goto(`${base}/k/${account.username}?agent=open`);
+  await page.goto(`${base}/k/${account.username}`);
   // The agent's panel, as a first-timer opens it if the page did not: the Agent tab.
   const log = page.getByRole("log").first();
   await page.waitForTimeout(1500);
@@ -416,6 +432,60 @@ const TASKS: [string, (r: Run) => Promise<string | void>][] = [
       await r.page.waitForTimeout(500);
       await r.tap(lead);
       await r.until((t) => cardsOf(t).filter((c) => c.type === "order" && ["committed", "pending_approval"].includes(c.status)).length >= 2);
+    },
+  ],
+  [
+    "reorder last week's order",
+    async (r) => {
+      await r.say(L.lastWeek);
+      const again = r.log.getByRole("button", { name: L.again }).first();
+      await r.waitFor(again);
+      await r.tap(again);
+      await r.until((t) => !!sheet(t));
+      const confirm = r.log.getByRole("button", { name: L.order }).last();
+      await r.waitFor(confirm);
+      await r.tap(confirm);
+      const t = await r.until(ordered(["committed", "pending_approval"]));
+      const o = cardsOf(t).findLast((c) => c.type === "order");
+      return o?.type === "order" ? `${o.lines.length} line(s), ${o.status}` : undefined;
+    },
+  ],
+  [
+    "pause a standing order",
+    async (r) => {
+      // From the landing screen's starting points: no words needed.
+      const start = r.log.getByRole("button", { name: L.recurring }).first();
+      await start.waitFor({ timeout: 30_000 });
+      await r.tap(start);
+      const sw = r.log.getByRole("switch").first();
+      await sw.waitFor({ timeout: 30_000 });
+      await r.tap(sw);
+      const t = await r.until((t) => cardsOf(t).some((c) => c.type === "standing" && c.items.some((i) => i.paused)), 30_000);
+      // Run it again, so the next run starts from the same records (not counted as a tap of the task).
+      const card = cardsOf(t).find((c) => c.type === "standing");
+      const fam = card?.type === "standing" ? card.items.find((i) => i.paused)?.family : undefined;
+      if (fam) await r.page.request.post(`${base}/ui-api/kitchens/${account.username}/thread/turns`, { data: { door: "typed", via: "tap", action: { type: "standing_pause", family: fam, paused: false }, label: "clean-up", clientTurnId: `unpause-${Date.now()}` } });
+      return fam ? `paused ${fam}` : undefined;
+    },
+  ],
+  [
+    "two items in one message, one of them oat drink, for Thursday",
+    async (r) => {
+      // One order sheet with both lines (one total, one confirm); the oat drink is an oat drink; it arrives Thursday.
+      await r.say(L.twoItems);
+      const t0 = await r.until((t) => !!sheet(t) && idle(t), 90_000);
+      const sh = sheet(t0);
+      if (sh?.type !== "sheet") throw new Error("no order sheet");
+      if (sh.lines.length !== 2) throw new Error(`${sh.lines.length} lines on the sheet, not 2`);
+      if (!sh.lines.some((l) => L.oatName.test(l.name))) throw new Error(`no oat drink on the sheet: ${sh.lines.map((l) => l.name).join(", ")}`);
+      const thursday = new Date(`${sh.deliveryDate}T12:00:00Z`).getUTCDay() === 4;
+      const confirm = r.log.getByRole("button", { name: L.order }).last();
+      await r.waitFor(confirm);
+      await r.tap(confirm);
+      const t = await r.until(ordered(["committed", "pending_approval"]));
+      const o = cardsOf(t).findLast((c) => c.type === "order");
+      if (o?.type === "order" && o.lines.length !== 2) throw new Error(`the order has ${o.lines.length} lines`);
+      return `one order, 2 lines, ${thursday ? "Thursday" : `delivers ${sh.deliveryDate}`}`;
     },
   ],
 ];

@@ -88,12 +88,15 @@ export type ThreadAction =
   | { type: "home_show"; what: "history" | "standing" | "deliveries" | "memory" | "today" }
   /** A recurring order changed: its product at a new amount on the order sheet for its next day. */
   | { type: "standing_change"; family: string; packs?: number }
+  /** Pause a recurring order (or run it again): no reminders, not part of "the usual", until switched back on. */
+  | { type: "standing_pause"; family: string; paused: boolean }
   /** What the agent remembers: change the words of an item, or forget it (the kitchen's signed-in person only). */
   | { type: "memory_edit"; itemId: string; text: string }
   | { type: "memory_forget"; itemId: string }
   /** The rules card: propose a change (before and after shown, nothing signed), sign it as the kitchen's person, or drop it. */
   | { type: "rules_show" }
-  | { type: "rules_propose"; change: RulesChange }
+  /** `sign`: the person confirms in the same tap (the widget's confirm button): proposed, then signed, if this browser may. */
+  | { type: "rules_propose"; change: RulesChange; sign?: boolean }
   | { type: "rules_sign"; proposalId: string }
   | { type: "rules_cancel"; proposalId: string };
 
@@ -259,6 +262,13 @@ export type OptionsCard = CardBase & {
   chosen?: string;
   /** The buyer took this option to the order sheet to change it: the card no longer orders by itself. */
   adjusted?: string;
+  /**
+   * The kind asked for cannot be offered (oat drink), though the assortment has it: why (the kitchen's rules, the day,
+   * stock), said first, and every option is shown as something else instead, never as the best match.
+   */
+  insteadOf?: { asked: string; why: "rules" | "day" | "stock" | "other"; attr?: string; day?: string };
+  /** The day the buyer asked for, so an option arriving earlier says so ("arrives Monday, earlier than the Thursday you asked for"). */
+  askedDay?: string;
 };
 
 export type PriceCard = CardBase & {
@@ -394,6 +404,8 @@ export type SheetCard = CardBase & {
     /** What on this line the gate or the kitchen's rules object to (an allergen, a stated rule, a price cap). */
     issues: { code: string; text: string; blocking: boolean }[];
     stockConfirmed: boolean;
+    /** The kitchen's usual amounts of this product, in packs, from its records (one-tap picks beside the stepper). */
+    usualPacks?: number[];
   }[];
   totalCents: number;
   /** The gate's own preview of the sheet as it stands. */
@@ -525,7 +537,7 @@ export type ProductCard = CardBase & {
 /** The kitchen's recurring orders, as the history shows them (no separate store: plain code over the order history). */
 export type StandingCard = CardBase & {
   type: "standing";
-  items: { family: string; productId: string; name: string; weekdays: number[]; usual: { amount: number; unit: string }; usualPacks: number; lastAmount: number; nextDue?: string; drift: { amountPct: number | null; pricePct: number | null } }[];
+  items: { family: string; productId: string; name: string; weekdays: number[]; usual: { amount: number; unit: string }; usualPacks: number; lastAmount: number; nextDue?: string; drift: { amountPct: number | null; pricePct: number | null }; paused?: boolean }[];
 };
 
 /** Orders on their way: committed or waiting for sign-off, by delivery day. */

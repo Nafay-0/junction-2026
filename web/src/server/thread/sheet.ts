@@ -111,6 +111,7 @@ async function render(run: TurnRun, s: SheetRecord, changed?: string[]): Promise
     }
   }
   const gate = gateOf(decision);
+  const usual = await usualPacksOf(run, s.lines.map((l) => products.get(l.productId)).filter((p): p is Product => !!p));
   const lines = s.lines.map((l) => {
     const p = products.get(l.productId);
     const o = s.offers[l.productId];
@@ -138,6 +139,11 @@ async function render(run: TurnRun, s: SheetRecord, changed?: string[]): Promise
       alternatives: p ? 3 : 0,
       issues,
       stockConfirmed: o?.stockKnown !== false,
+      ...((() => {
+        const max = Math.max(1, Math.min(o && o.stockKnown !== false ? o.availablePacks : 9999, 9999));
+        const picks = (usual.get(l.productId) ?? []).filter((n) => n >= 1 && n <= max);
+        return picks.length ? { usualPacks: picks } : {};
+      })()),
     };
   });
   const card: SheetCard = {
@@ -160,6 +166,31 @@ async function render(run: TurnRun, s: SheetRecord, changed?: string[]): Promise
   run.store.card(run.thread, s.turnId === run.turnId ? run.turnId : s.turnId, card);
   run.facts.push(card);
   return card;
+}
+
+/**
+ * The kitchen's usual amounts for each product on the sheet, in its packs, from its own records: the amounts it
+ * ordered this product in most often (up to three), or else its recurring order's usual amount for the product's
+ * family. Plain code, one read of the kitchen's profile.
+ */
+async function usualPacksOf(run: TurnRun, products: Product[]): Promise<Map<string, number[]>> {
+  const out = new Map<string, number[]>();
+  if (!products.length) return out;
+  const profile = await run.rt.kitchens.getProfile(run.session.mandate.issuer.orgId).catch(() => undefined);
+  if (!profile) return out;
+  const { standing } = await import("@/server/kitchen-portal");
+  const recurring = standing(profile, localNow(new Date()).date);
+  for (const p of products) {
+    const counts = new Map<number, number>();
+    for (const h of profile.history) for (const l of h.lines) if (l.productId === p.id && l.packs > 0) counts.set(l.packs, (counts.get(l.packs) ?? 0) + 1);
+    let picks = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]).slice(0, 3).map(([n]) => n);
+    if (!picks.length) {
+      const r = recurring.find((x) => x.family === p.category && x.usual.unit === p.unit && p.packSize > 0);
+      if (r) picks = [Math.max(1, Math.ceil(r.usual.amount / p.packSize - 1e-9))];
+    }
+    if (picks.length) out.set(p.id, picks.sort((a, b) => a - b));
+  }
+  return out;
 }
 
 /** The days the sheet may move to: the kitchen's delivery days within the mandate's lead time, from the earliest any line can arrive. */

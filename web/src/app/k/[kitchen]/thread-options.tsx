@@ -44,7 +44,17 @@ export function OptionsDecision({ card, tap, busy }: { card: OptionsCardT; tap: 
   const leftCount = left.reduce((s, g) => s + g.count, 0);
   const notes = otherNotes(card, w, fmt.lang);
   const open = !busy && !card.chosen && !card.adjusted;
-  const rank = (o: OptionView) => w.rank[o.rank] ?? o.rank;
+  // When the kind asked for cannot be offered, no option is "best": each is something else instead.
+  const rank = (o: OptionView) => (card.insteadOf ? sx.instead.chip : (w.rank[o.rank] ?? o.rank));
+  const insteadLine = card.insteadOf
+    ? card.insteadOf.why === "rules"
+      ? sx.instead.rules(card.insteadOf.asked, card.insteadOf.attr ? fmt.attr(card.insteadOf.attr) : "")
+      : card.insteadOf.why === "day"
+        ? sx.instead.day(card.insteadOf.asked, card.insteadOf.day ? fmt.day(card.insteadOf.day) : "")
+        : card.insteadOf.why === "stock"
+          ? sx.instead.stock(card.insteadOf.asked)
+          : sx.instead.other(card.insteadOf.asked)
+    : undefined;
 
   const buttonLabel = (o: OptionView) => {
     // The gate's own preview says what happens on the tap; the reasons are the fallback for an older engine.
@@ -57,7 +67,8 @@ export function OptionsDecision({ card, tap, busy }: { card: OptionsCardT; tap: 
 
   return (
     <ThreadCard kind={tx.kind.options} mark={<ReceiptText aria-hidden size={14} />}>
-      <Lead o={lead} rank={rank(lead)} picked={card.preselected?.optionId === lead.optionId} chosen={card.chosen === lead.optionId} />
+      {insteadLine && <p className="mb-3 rounded-lg bg-notice-soft px-3 py-2 text-[0.9rem] font-medium leading-snug text-ink">{insteadLine}</p>}
+      <Lead o={lead} askedDay={card.askedDay} rank={rank(lead)} picked={card.preselected?.optionId === lead.optionId} chosen={card.chosen === lead.optionId} />
       <ul className="mt-2.5 space-y-1 text-[0.88rem] leading-snug">
         {leadReasons(lead, w, f).map((r, i) => (
           <li key={i} className="flex items-start gap-2">
@@ -174,7 +185,8 @@ export function OptionsDecision({ card, tap, busy }: { card: OptionsCardT; tap: 
   );
 }
 
-function Lead({ o, rank, picked, chosen }: { o: OptionView; rank: string; picked: boolean; chosen: boolean }) {
+function Lead({ o, rank, picked, chosen, askedDay }: { o: OptionView; rank: string; picked: boolean; chosen: boolean; askedDay?: string }) {
+  const sx = useText(THREAD_SHEET_TEXT);
   const fmt = useFormat();
   const tx = useText(THREAD_PAGE_TEXT);
   const w = useText(THREAD_WORDS);
@@ -206,7 +218,10 @@ function Lead({ o, rank, picked, chosen }: { o: OptionView; rank: string; picked
       </div>
       <p className="mt-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
         <span className="display text-[1.4rem] tabular">{f.money(o.totalCents)}</span>
-        <span className="text-[0.84rem] text-ink-soft">{[tx.deliver(f.day(o.deliveryDate)), o.orderBy ? tx.orderBy(f.clock(o.orderBy)) : ""].filter(Boolean).join(", ")}</span>
+        <span className="text-[0.84rem] text-ink-soft">
+          {/* Earlier than the day asked is said as such, so it never looks like a misreading of the day. */}
+          {[askedDay && o.deliveryDate < askedDay ? sx.earlier(fmt.day(o.deliveryDate), fmt.weekday(askedDay)) : tx.deliver(f.day(o.deliveryDate)), o.orderBy ? tx.orderBy(f.clock(o.orderBy)) : ""].filter(Boolean).join(", ")}
+        </span>
       </p>
     </div>
   );

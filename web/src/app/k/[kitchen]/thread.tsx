@@ -33,6 +33,7 @@ import { MenuCardView } from "./thread-menu";
 import { HomeCardView, OrderInPlace, PriceProof } from "./thread-home";
 import { RulesCardView } from "./thread-rules";
 import { OptionsDecision } from "./thread-options";
+import { HistoryList } from "../../_ui/widgets-more";
 import { PickerView, QuestionView, SheetView, isQuiet, sheetOrders, whenText } from "./thread-sheet";
 import { THREAD_SHEET_TEXT } from "./thread-sheet.text";
 import { SEND_PROBLEM } from "./thread-state";
@@ -182,10 +183,15 @@ function stepsOf(steps: ThreadStep[], label: (s: ThreadStep) => string) {
   return steps.filter((s) => s.status !== "skipped").map((s) => ({ key: s.stepId, text: label(s), state: s.status === "running" ? ("doing" as const) : s.status === "failed" ? ("failed" as const) : ("done" as const), detail: s.ms !== undefined && s.status !== "running" ? `${(s.ms / 1000).toFixed(1)} s` : undefined }));
 }
 
+const SHOWING = new Set<Card["type"]>(["today", "products", "product", "standing", "deliveries", "memory_list", "records", "rules"]);
+
 function Agent({ turn, tap, busy, gated, base, thread, memory }: { turn: AgentTurnT; tap: Tap; busy: boolean; gated: Set<string>; base: string; thread: ThreadT; memory: Map<string, (MemoryLine | string)[]> }) {
   const w = useText(THREAD_WORDS);
   const { lang } = useFormat();
-  const steps = stepsOf(turn.steps, (s) => stepLabel(s, w, lang));
+  // Showing something (the day's opening, a list, a product, the rules) has nothing to explain once it is there: its
+  // steps are drawn only while it works or if one failed. Ordering keeps its steps (how the order was checked).
+  const showing = turn.status !== "working" && turn.cards.length > 0 && turn.cards.every((c) => SHOWING.has(c.type)) && !turn.steps.some((s) => s.status === "failed");
+  const steps = showing ? [] : stepsOf(turn.steps, (s) => stepLabel(s, w, lang));
   return (
     <AgentTurn text={turn.line} status={turn.status} pending={turn.status === "working" && turn.cards.length === 0} steps={steps.length ? <StepLines steps={steps} fold={turn.status !== "working"} /> : undefined}>
       {turn.cards.length > 0 && (
@@ -350,6 +356,15 @@ function CardView({ card, tap, busy, gated, base, turn, thread, memory }: { card
         </>
       );
     case "records":
+      // Earlier orders: the kit's history list, each with "order again" onto the order sheet (it never orders by itself).
+      if (card.repeatable && card.rows.length && card.rows.every((r) => r.kind === "order" && r.ref))
+        return (
+          <HistoryList
+            kind={tx.kind.records}
+            orders={card.rows.map((r) => ({ id: r.ref!, when: r.date ? f.day(r.date) : "", summary: r.label, total: r.totalCents !== undefined ? money(r.totalCents) : "", ...(r.detail && tx.status[r.detail] && r.detail !== "committed" ? { note: tx.status[r.detail] } : {}) }))}
+            onAgain={(ref) => !busy && tap({ type: "order_again", ref }, tx.repeatWords(`“${card.rows.find((r) => r.ref === ref)?.label ?? ""}”`))}
+          />
+        );
       return (
         <>
           <RecordsCard
@@ -534,7 +549,7 @@ type ScanReply = { lines: { read: string; status: string }[]; deliverByAsWritten
  * `standalone`: a composer of its own (Home's hero), with its own field, that opens the thread once it has sent;
  * otherwise the thread's composer, sharing the field (and what it is set to change) with the rest of the store.
  */
-export function ThreadComposer({ id = "need", size = "md", standalone = false, placeholder, label }: { id?: string; size?: "md" | "lg"; standalone?: boolean; placeholder?: string; label?: string }) {
+export function ThreadComposer({ id = "need", size = "md", standalone = false, placeholder, label, hint = true }: { id?: string; size?: "md" | "lg"; standalone?: boolean; placeholder?: string; label?: string; hint?: boolean }) {
   const { thread, agent: shared, kitchen, lang, fieldRef } = usePortal();
   const [ownDraft, setOwnDraft] = useState("");
   const agent = standalone ? { ...shared, draft: ownDraft, setDraft: setOwnDraft, followUp: undefined, product: undefined } : shared;
@@ -656,31 +671,33 @@ export function ThreadComposer({ id = "need", size = "md", standalone = false, p
         placeholder={placeholder ?? (agent.followUp ? tx.phChange : agent.product ? tx.phProduct : tx.phAsk)}
         mic={{ state: mic.state, onDown: mic.onDown, onUp: mic.onUp, heard: mic.heard }}
         onPhoto={() => file.current?.click()}
-        hint={standalone ? undefined : tx.hint}
+        hint={standalone || !hint ? undefined : tx.hint}
       />
       <input ref={file} type="file" accept="image/*,application/pdf" capture="environment" className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => void onFile(e.target.files?.[0])} />
     </div>
   );
 }
 
-/** The full-page thread (the Order page): the same conversation as the dock, with room to read it. */
+/**
+ * The agent, full page: where a signed-in kitchen lands (and the Order page, the same thread). The day's opening card
+ * (AgentHome: what needs the kitchen today, then the starting points) is the page's header; the composer stays under
+ * the thumb above the tab bar.
+ */
 export function ThreadPage() {
   const { thread } = usePortal();
   const tx = useText(THREAD_PAGE_TEXT);
   return (
-    <section aria-labelledby="thread-title" className="mx-auto max-w-[46rem] py-6">
-      <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">
-          <h1 id="thread-title" className="display text-[2rem] leading-tight sm:text-[2.4rem]">
-            {tx.pageTitle}
-          </h1>
-          <p className="mt-1 max-w-[60ch] text-[0.98rem] leading-relaxed text-ink-soft">{tx.pageLead}</p>
-        </div>
-        {(thread.thread?.turns.length ?? 0) > 0 && <StartOver />}
+    <section aria-labelledby="thread-title" className="mx-auto max-w-[46rem] py-4 sm:py-6">
+      <header className="mb-2 flex items-center justify-end gap-3">
+        <h1 id="thread-title" className="sr-only">
+          {tx.pageTitle}
+        </h1>
+        {(thread.thread?.turns.length ?? 0) > 1 && <StartOver />}
       </header>
       <ThreadLog />
+      {/* On the agent's own page the composer is all that stays under the thumb: what the rules mean is in the cards. */}
       <div className="sticky bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-20 mt-6 rounded-[2rem] bg-mist/95 py-2 backdrop-blur-sm lg:bottom-4">
-        <ThreadComposer />
+        <ThreadComposer hint={false} />
       </div>
     </section>
   );

@@ -1,5 +1,5 @@
 import { DockError } from "@/core/errors";
-import { localNow } from "@/core/kitchen";
+import { localNow, updateKitchenProfile } from "@/core/kitchen";
 import type { Product } from "@/core/catalog";
 import type { PriceCard } from "./types";
 import { overview, standing, standingCutoffs, type PortalOrder } from "@/server/kitchen-portal";
@@ -52,7 +52,7 @@ export async function todayItems(run: TurnRun): Promise<TodayItem[]> {
       const offer = c.result?.offer;
       if (!offer?.orderBy || dayOf(offer.orderBy) !== today() || Date.parse(offer.orderBy.replace(/([+-]\d{2})(\d{2})$/, "$1:$2")) < Date.now()) continue;
       const s = standings.find((x) => x.family === c.family);
-      if (!s) continue;
+      if (!s || profile?.pausedStanding?.includes(s.family)) continue;
       const [p] = await run.rt.catalog.searchProducts({ ids: [c.productId], limit: 1 });
       if (!p) continue;
       items.push({ kind: "cutoff", family: c.family, productId: c.productId, name: c.name, orderBy: offer.orderBy, deliveryDate: offer.deliveryDate, usual: s.usual, packs: Math.max(1, Math.ceil(s.usual.amount / p.packSize - 1e-9)) });
@@ -62,7 +62,7 @@ export async function todayItems(run: TurnRun): Promise<TodayItem[]> {
   }
 
   for (const s of standings) {
-    if (!s.drift.warning) continue; // the portal's own drift rule (core/concerns.ts noticeDrift)
+    if (!s.drift.warning || profile?.pausedStanding?.includes(s.family)) continue; // the portal's own drift rule (core/concerns.ts noticeDrift)
     items.push({ kind: "drift", family: s.family, warning: s.drift.warning, productId: s.product.productId, name: s.product.name, usual: s.usual, recent: s.lastAmount, amountPct: s.drift.amountPct, pricePct: s.drift.pricePct, ...(s.nextDue ? { nextDue: s.nextDue } : {}) });
   }
 
@@ -160,14 +160,15 @@ export async function historyCard(run: TurnRun, question = ""): Promise<RecordsC
   return card;
 }
 
-export async function standingCard(run: TurnRun): Promise<StandingCard> {
+export async function standingCard(run: TurnRun, inPlace?: string): Promise<StandingCard> {
   const profile = await run.rt.kitchens.getProfile(run.session.mandate.issuer.orgId);
   const items: StandingCard["items"] = [];
   for (const s of standing(profile, today())) {
     const [p] = await run.rt.catalog.searchProducts({ ids: [s.product.productId], limit: 1 });
-    items.push({ family: s.family, productId: s.product.productId, name: s.product.name, weekdays: s.weekdays, usual: s.usual, usualPacks: p ? Math.max(1, Math.ceil(s.usual.amount / p.packSize - 1e-9)) : 1, lastAmount: s.lastAmount, ...(s.nextDue ? { nextDue: s.nextDue } : {}), drift: { amountPct: s.drift.amountPct, pricePct: s.drift.pricePct } });
+    items.push({ family: s.family, productId: s.product.productId, name: s.product.name, weekdays: s.weekdays, usual: s.usual, usualPacks: p ? Math.max(1, Math.ceil(s.usual.amount / p.packSize - 1e-9)) : 1, lastAmount: s.lastAmount, ...(s.nextDue ? { nextDue: s.nextDue } : {}), drift: { amountPct: s.drift.amountPct, pricePct: s.drift.pricePct }, ...(profile?.pausedStanding?.includes(s.family) ? { paused: true } : {}) });
   }
-  const card: StandingCard = { type: "standing", cardId: cardId("standing", run.turnId), items };
+  // Shown again in place (a pause switched): the same card, not a new one.
+  const card: StandingCard = { type: "standing", cardId: cardId("standing", inPlace ?? run.turnId), items };
   run.store.card(run.thread, run.turnId, card);
   run.facts.push(card);
   return card;
@@ -255,6 +256,15 @@ export async function runHomeAction(run: TurnRun, a: ThreadAction): Promise<bool
       if (!lines.length) throw new DockError(404, "nothing_to_repeat", "None of that order's products is in the assortment now.");
       record(run, "order_again", `The buyer asked to order ${o.orderId} again: its lines go on the order sheet.`, { orderId: o.orderId });
       await createSheet(run, { lines, deliveryDate: nextSameWeekday(o.deliveryDate), text: `Again: ${o.lines.map((l) => `${l.quantity} × ${l.name}`).join(", ")}`.slice(0, 2000), category: known[0].category, asked: lines.map((l) => l.productId) });
+      return true;
+    }
+    case "standing_pause": {
+      const by = needPerson(run, "Pausing a recurring order");
+      const orgId = run.session.mandate.issuer.orgId;
+      await updateKitchenProfile(run.rt.kitchens, orgId, (p) => (p ? { ...p, pausedStanding: a.paused ? [...new Set([...(p.pausedStanding ?? []), a.family])] : (p.pausedStanding ?? []).filter((f) => f !== a.family) } : p));
+      record(run, "standing_pause", `${by} ${a.paused ? "paused" : "ran again"} the recurring ${a.family} order: ${a.paused ? "no reminders, and it is not part of the usual, until switched back on" : "reminders and the usual include it again"}.`, { family: a.family, paused: a.paused, by });
+      const last = [...run.store.cards(run.thread)].reverse().find((x) => x.card.type === "standing");
+      await standingCard(run, last ? last.card.cardId.replace(/^standing:/, "") : undefined);
       return true;
     }
     case "standing_change": {

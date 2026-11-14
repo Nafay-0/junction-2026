@@ -19,7 +19,8 @@ export function AssistantPanel() {
   const tx = useText(THREAD_PAGE_TEXT);
   const ptx = useText(PORTAL_TEXT);
   const pathname = usePathname() ?? base;
-  if (pathname === `${base}/order`) return null;
+  // The agent's own page (the landing screen, and /order) shows the thread full width: no dock beside it.
+  if (pathname === base || pathname === `${base}/order`) return null;
   const open = agent.panelOpen;
   return (
     <>

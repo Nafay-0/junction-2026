@@ -9,6 +9,7 @@ import { AlternativesPicker, ChoiceAnswer, OrderSheet, type Candidate, type DayC
 import type { AlternativesCard, BuyerTurn, GatePreview, OrderCard, QuestionCard, SheetCard, Thread, ThreadAction } from "@/server/thread/types";
 import { usePortal } from "./portal";
 import { THREAD_SHEET_TEXT } from "./thread-sheet.text";
+import { stepFor } from "./sheet-steps";
 
 type Tap = (action: ThreadAction, label: string) => void;
 type Tx = (typeof THREAD_SHEET_TEXT)["en"];
@@ -152,6 +153,8 @@ export function SheetView({ card, tap, busy }: { card: SheetCard; tap: Tap; busy
       state: blocking ? "unavailable" : "ok",
       ...(blocking ? { reason: blocking.code === "short" ? tx.notice.short(l.maxPacks) : tx.notice.noOffer } : {}),
       ...(l.substituteFor ? { swappedFrom: l.substituteFor.name } : {}),
+      step: stepFor(l.packSize, l.unit, packs),
+      ...(l.usualPacks?.length ? { quick: l.usualPacks.map((n) => ({ packs: n, label: f.measure(Math.round(n * l.packSize * 100) / 100, l.unit) })) } : {}),
     };
   });
   const totalCents = card.lines.reduce((t, l) => t + l.unitPriceCents * (draft[l.lineId] ?? l.packs), 0);
@@ -217,6 +220,7 @@ const sign = (n: number) => (n > 0 ? 1 : n < 0 ? -1 : 0);
 export function PickerView({ card, tap, busy, thread }: { card: AlternativesCard; tap: Tap; busy: boolean; thread: Thread }) {
   const tx = useText(THREAD_SHEET_TEXT);
   const f = useFormat();
+  const { thread: api } = usePortal();
   const [closed, setClosed] = useState(false);
   const sheet = card.for.sheetId ? thread.turns.flatMap((x) => (x.role === "agent" ? x.cards : [])).find((c): c is SheetCard => c.type === "sheet" && c.sheetId === card.for.sheetId) : undefined;
   // A later picker for the same line, a pick, or the order sent: this one is history.
@@ -278,6 +282,14 @@ export function PickerView({ card, tap, busy, thread }: { card: AlternativesCard
       busy={busy}
       onClose={() => setClosed(true)}
     />
+    {/* The only line, and nothing else stands in on this sheet: the agent looks again from the words, with options. */}
+    {!card.candidates.some((c) => !c.current) && sheet && sheet.state !== "placed" && sheet.lines.length === 1 && (
+      <p className="px-1">
+        <button type="button" disabled={busy} className={buttonClass("secondary", "sm")} onClick={() => void api.submit({ door: "typed", via: "typed", text: `${f.measure(card.for.amount.amount, card.for.amount.unit)} ${card.for.name}` })}>
+          {tx.lookAgain}
+        </button>
+      </p>
+    )}
     {nothingElse && sheet && (
       <p className="px-1">
         <button type="button" disabled={busy} className={buttonClass("secondary", "sm")} onClick={() => tap({ type: "sheet_remove", sheetId: sheet.sheetId, version: sheet.version, lineId: card.for.lineId! }, tx.words.remove(card.for.name))}>

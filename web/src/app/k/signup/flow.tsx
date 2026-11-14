@@ -14,15 +14,16 @@ import { SetUpInterview } from "./thread-interview";
 type Step = "account" | "rules" | "device";
 
 /**
- * The two steps (the account, then the set-up interview with the agent that ends in the signed mandate), then the
- * one-time offer of a signing device. A reload resumes at the right step (the session says).
+ * The two steps: the account, then the set-up interview that ends in the kitchen's rules confirmed and this device
+ * added to OK orders (thread-interview.tsx). A reload after the rules were confirmed lands on the one-time offer of a
+ * signing device (the session says).
  */
 export function SignUpFlow({ signedIn }: { signedIn?: { restaurant: string; kitchen?: string; kind: string } }) {
   const tx = useText(DOOR_TEXT);
   const atx = useText(ACCOUNT_TEXT);
   const router = useRouter();
   const [step, setStep] = useState<Step>(signedIn ? (signedIn.kitchen && signedIn.kind !== "demo" ? "device" : "rules") : "account");
-  const [shop, setShop] = useState(signedIn?.kitchen ? `/k/${signedIn.kitchen}` : "/k");
+  const shop = signedIn?.kitchen ? `/k/${signedIn.kitchen}` : "/k";
   const steps: { key: string; label: string; state: StepState }[] = [
     { key: "account", label: tx.step1, state: step === "account" ? "current" : "done" },
     { key: "rules", label: tx.step2, state: step === "rules" ? "current" : step === "device" ? "done" : "pending" },
@@ -54,9 +55,9 @@ export function SignUpFlow({ signedIn }: { signedIn?: { restaurant: string; kitc
       )}
       {step === "rules" && (
         <SetUpInterview
-          onSigned={(r) => {
-            setShop(r.next);
-            setStep("device");
+          onFinished={(next) => {
+            // Signed, and this device added (or offered on the done screen): straight into the agent.
+            router.push(next);
             router.refresh();
           }}
         />

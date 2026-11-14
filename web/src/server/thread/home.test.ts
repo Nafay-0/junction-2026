@@ -156,6 +156,26 @@ describe("buying from the home goes through the order sheet", () => {
   });
 });
 
+describe("pausing a recurring order", () => {
+  it("the signed-in person pauses one: the card says so in place, and the usual leaves it out until it runs again", async () => {
+    const k = await kitchen("kaari", "Mikael Laine");
+    const store = await threadStore();
+    const list = (await tap(k, { type: "home_show", what: "standing" })).find((c) => c.type === "standing");
+    if (list?.type !== "standing") throw new Error("no recurring orders");
+    const fam = list.items[0].family;
+    await tap(k, { type: "standing_pause", family: fam, paused: true });
+    const now = store.cards(store.peek(k.info.slug)!).map((x) => x.card).find((c) => c.cardId === list.cardId);
+    expect(now?.type === "standing" && now.items.find((i) => i.family === fam)?.paused).toBe(true);
+    const rt = await getRuntime();
+    expect((await rt.kitchens.getProfile(k.info.orgId))?.pausedStanding).toContain(fam);
+    await tap(k, { type: "standing_pause", family: fam, paused: false });
+    expect((await rt.kitchens.getProfile(k.info.orgId))?.pausedStanding ?? []).not.toContain(fam);
+    // Without a signed-in person it is refused.
+    const relayed = await tap(await kitchen("kaari"), { type: "standing_pause", family: fam, paused: true });
+    expect(relayed.some((c) => c.type === "notice")).toBe(true);
+  });
+});
+
 describe("what the agent remembers", () => {
   it("a signed-in person edits and forgets an item, recorded as theirs; without one it is refused", async () => {
     const memory = await getMemoryService();

@@ -131,6 +131,18 @@ describe("a change is signed only by the kitchen's own person, and recorded", ()
     expect(rt.dock.ledger.verify().ok).toBe(true);
   });
 
+  it("the widget's confirm proposes and signs in one tap; without a signed-in person it only shows the change", async () => {
+    const { rt, k } = await accountKitchen("aaltoone");
+    const signed = rulesOf((await turn(k, { via: "tap", action: { type: "rules_propose", change: { perOrderLimitEur: 800 }, sign: true } })).cards)!;
+    expect(signed.proposal).toMatchObject({ state: "signed" });
+    expect((await rt.accounts.kitchenOf("aaltoone"))!.kitchen.mandate.perOrderLimitCents).toBe(80000);
+    resetRuntime();
+    const none = await accountKitchen("aaltonone", "none");
+    const shown = rulesOf((await turn(none.k, { via: "tap", action: { type: "rules_propose", change: { perOrderLimitEur: 800 }, sign: true } })).cards)!;
+    expect(shown.proposal).toMatchObject({ state: "open", canSign: false });
+    expect((await none.rt.accounts.kitchenOf("aaltonone"))!.kitchen.mandate.perOrderLimitCents).not.toBe(80000);
+  });
+
   it("'never mustard' on a built-in demo kitchen: the narrowing reissue, signed by its person", async () => {
     const rt = await getRuntime();
     const base = (await resolveKitchen("kaari"))!;
