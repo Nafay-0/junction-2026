@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { addPasskey, approvalState, approveButton, watchErrors } from "../support/dock";
-import { answerTo, card, cards, composer, minutesUntil, option, options, say, stageThread, threadLog, visitorKitchen } from "../support/thread";
+import { answerTo, card, cards, choices, composer, minutesUntil, otherOptions, pick, say, stageThread, threadLog, totalOf, visitorKitchen } from "../support/thread";
 
 /**
  * The store's conversation thread (docs/agent-thread.md; main b9f934e replaced the order lane and agent panel with
@@ -47,20 +47,22 @@ test("thread, every stage, signed on the visitor's phone; reload and back in the
   await expect(card(page, "options").or(confirm)).toBeVisible({ timeout: 20_000 });
   if (await confirm.isVisible()) await confirm.click();
 
-  // Options with live prices, good-better-best; the over-the-limit ones say a person must sign off.
-  await expect(options(page).first()).toBeVisible({ timeout: 20_000 });
-  expect(await options(page).count()).toBeGreaterThanOrEqual(2);
-  await expect(option(page, "Best")).toContainText(/€/);
-  await expect(option(page, "Best")).toContainText(/a person must sign off/);
+  // Options with live prices, good-better-best: the agent's pick first (ranked Best), the others folded; over the
+  // visitor's 500 € limit, so the pick's button says who signs and for how much.
+  const options = card(page, "options");
+  await expect(pick(page)).toBeVisible({ timeout: 20_000 });
+  await expect(options).toContainText(/^Options with live prices\s*Best/);
+  await expect(pick(page)).toHaveText(/^Send to .+ to sign, [\d\s\u00a0\u202f]+,\d\d\s?€$/);
+  await expect(options).toContainText(/a person signs it off/);
+  expect(await otherOptions(page).count()).toBeGreaterThanOrEqual(1);
 
   // Reload with the options on screen: the thread is the server's, so they come back as they were.
   await page.reload();
-  await expect(option(page, "Best")).toBeVisible({ timeout: 20_000 });
+  await expect(pick(page)).toBeVisible({ timeout: 20_000 });
 
-  // "Best" is the cheapest, the kitchen's usual products (the "Good" card is a swap the gate refuses: test below).
-  const total = ((await option(page, "Best").getByText(/\d\s?€/).first().innerText()).match(/[\d\s ]+,\d\d\s?€/) ?? [""])[0].trim();
+  const total = await totalOf(pick(page));
   expect(total).not.toBe("");
-  await option(page, "Best").getByRole("button", { name: "Choose" }).click();
+  await pick(page).click();
   // A choice orders it: the price is fixed and signed, then the gate decides.
   const price = card(page, "price");
   await expect(price).toBeVisible({ timeout: 20_000 });
@@ -75,8 +77,10 @@ test("thread, every stage, signed on the visitor's phone; reload and back in the
   // The gate stops it (over the visitor's 500 € limit) and names the person who signs, on their phone.
   const gate = card(page, "gate");
   await expect(gate).toContainText(/Waiting for /, { timeout: 20_000 });
-  await expect(gate).toContainText(/over the €500\.00 per-order limit/);
-  await expect(gate).toContainText("Asked on their phone, with their passkey");
+  await expect(gate).toContainText(/is over the 500,00\s?€ the agent may spend alone/);
+  // The person who signs is named with their role; their passkey is bound to this exact order.
+  await expect(gate).toContainText(/, purchasing manager/);
+  await expect(gate).toContainText(/passkey is bound to this exact order/);
   await expect(card(page, "order")).toContainText("Waiting for sign-off");
 
   // Reload, then the back button from another page, while waiting for the sign-off: still waiting, not lost.
@@ -112,15 +116,16 @@ test("mistake check on a demo kitchen: 1,000 L where it usually orders 100 L, co
     await page.goto("/k/kaari/order");
     await threadLog(page).getByRole("button", { name: MILK }).click();
     const check = card(page, "anomaly");
-    await expect(check).toContainText(/1,000 L where you usually order about 100 L: did you mean 100 L\?/, { timeout: 20_000 });
+    await expect(check).toContainText(/1\D?000\s?L where you usually\s+order about 100\s?L: did you mean 100\s?L\?/, { timeout: 20_000 });
     await expect(check.getByRole("button", { name: "Yes, that is right" })).toBeVisible();
     // Nothing is priced while the check is open.
     await expect(cards(page, "options")).toHaveCount(0);
     await check.getByRole("button", { name: "Make it 100 L" }).click();
     // The tap is the buyer's turn; the check says what changed; the options are for 100 L.
     await expect(check).toContainText("Changed: Make it 100 L", { timeout: 20_000 });
-    await expect(option(page, "Best")).toBeVisible({ timeout: 20_000 });
-    for (const o of await options(page).all()) await expect(o).toContainText(/100\sL/);
+    await expect(pick(page)).toBeVisible({ timeout: 20_000 });
+    await expect(card(page, "options")).toContainText(/10\s×\s10\sL|100\s×\s1\sL/);
+    for (const o of await otherOptions(page).all()) await expect(o).not.toContainText(/1[\s\u00a0\u202f,]?000/);
     await expect(cards(page, "price")).toHaveCount(0);
   } finally {
     release();
@@ -143,12 +148,12 @@ test("one-tap repeat from the kitchen's home: straight to a fixed price and the 
     // the head chef. (Or the options, when the last product cannot be had now; or the duplicate check, when an
     // earlier test's repeat for the same day still waits for sign-off.)
     const gate = card(dock, "gate");
-    const duplicate = card(dock, "anomaly").filter({ hasText: /Order again\?/ });
-    await expect(gate.or(option(dock, "Best")).or(duplicate)).toBeVisible({ timeout: 20_000 });
+    const duplicate = card(dock, "anomaly").filter({ hasText: /Order again\?|ordered the same for the same day/ });
+    await expect(gate.or(pick(dock)).or(duplicate)).toBeVisible({ timeout: 20_000 });
     await expect(cards(dock, "question")).toHaveCount(0);
     if (await duplicate.isVisible()) {
       await duplicate.getByRole("button", { name: /^Cancel/ }).click();
-      await expect(duplicate).toContainText(/Changed: Cancel/, { timeout: 20_000 });
+      await expect(duplicate).toContainText(/Changed: Cancel|Cancelled|Confirmed/, { timeout: 20_000 });
     } else if (await gate.isVisible()) {
       await expect(card(dock, "price")).toContainText(/Signed by the wholesaler/);
       await expect(gate).toContainText(/Waiting for Sanna Koskinen/);
@@ -194,35 +199,27 @@ test("repeat with a change: the earlier request with 200 litres instead", async 
 });
 
 /**
- * DEFECT (test.fail until fixed; E2E_EXPECT_FIXED=1 runs it as an ordinary test). Still there in the thread: in the
- * visitor's own kitchen the headline request's "Good" option (1,000 x 1 L of the usual brand) is a swap 15.5 % dearer
- * per litre than the usual 10 L box, over the mandate's 10 % substitute tolerance. The option card offers "Choose" and
- * says nothing about the gate; a tap fixes the price ("The gate would refuse this.") and the gate refuses it
- * (substitute_price). Cause: the intake ranks options without the gate's substitution check
- * (src/core/options.ts builds them; src/core/policy.ts refuses). Seed catalogue.
+ * Regression test, fixed on main (f49eea8). Before, the visitor kitchen's headline request offered a "Good" option
+ * (1,000 x 1 L, 15.5 % dearer per litre than the usual box, over the mandate's 10 % substitute tolerance) with a
+ * "Choose" button, and the gate refused it after the tap. Now each option carries the gate's preview: one the gate
+ * would refuse is shown "Cannot be ordered" with no button. Every button the card offers must pass the gate.
  */
-test("every option card the thread offers can pass the gate", async ({ page: phone }) => {
-  test.fail(!process.env.E2E_EXPECT_FIXED, "the Good card is a swap over the substitute price tolerance: refused at the gate");
+test("every option the thread offers to order can pass the gate", async ({ page: phone }) => {
   const { page } = await phoneAndStore(phone);
   await say(page, MILK);
-  await expect(options(page).first()).toBeVisible({ timeout: 20_000 });
-  const n = await options(page).count();
-  for (const o of await options(page).all()) await expect(o.getByText(/gate would refuse|refused/i)).toHaveCount(0);
-  // Take the last card (the one furthest from the usual): its fixed price must not be one the gate refuses.
-  await options(page).nth(n - 1).getByRole("button", { name: "Choose" }).click();
+  await expect(pick(page)).toBeVisible({ timeout: 20_000 });
+  for (const g of await otherOptions(page).all()) await g.locator("summary").click();
+  const n = await choices(page).count();
+  expect(n).toBeGreaterThanOrEqual(2);
+  // The last offered option (the one furthest from the pick): its fixed price is not one the gate refuses.
+  await choices(page).nth(n - 1).click();
   await expect(card(page, "price")).toBeVisible({ timeout: 20_000 });
   await expect(card(page, "price")).not.toContainText(/would refuse/);
-  await expect(card(page, "gate")).not.toContainText(/^Refused/);
+  await expect(card(page, "gate")).not.toContainText(/Refused/);
 });
 
-/**
- * DEFECT (test.fail until fixed). The understood card's "What matters" shows the reader's raw goal code ("price",
- * "unstated") instead of words: THREAD_PAGE_TEXT.goal (src/app/k/[kitchen]/thread.text.ts:54) is keyed cheapest /
- * lowest_co2 / most_reliable / fastest, but a need's goal is price / co2 / reliability (src/core/need.ts:14) or
- * "unstated", so the lookup in thread.tsx:178 always falls back to the code. "unstated" should not be shown at all.
- */
+/** Regression test, fixed on main (f49eea8): "What matters" showed the reader's raw goal code ("price", "unstated"). */
 test("the understood card says what matters in words, never a code", async ({ page: phone }) => {
-  test.fail(!process.env.E2E_EXPECT_FIXED, "the goal labels are keyed by names the reader never returns: raw codes on screen");
   const { page } = await phoneAndStore(phone);
   await say(page, MILK);
   const understood = card(page, "understood");
@@ -233,11 +230,11 @@ test("the understood card says what matters in words, never a code", async ({ pa
 /**
  * DEFECT (test.fail until fixed; would lose the demo). Once the agent has sent an order for sign-off, the next request
  * in the same thread fails, while the order waits and after the person signs it on their phone: "The agent did not answer. Try again in a moment." (and "Try again" fails
- * the same way; only "Start over" clears it). Cause: src/server/thread/agent.ts:314 keeps `result.response.messages`,
+ * the same way; only "Start over" clears it). Cause: src/server/thread/agent.ts:334 keeps `result.response.messages`,
  * which in AI SDK 7 is the final step's messages only (ai/dist/index.js:10870), not `result.responseMessages`
  * (:10873). The thread's model history so loses the steps before the last; after a sign-off the resumed loop's last
  * step is the model's sentence, so the approved await_sign_off call keeps no tool result
- * (src/server/thread/engine.ts:390), and the SDK refuses the next turn's history (AI_MissingToolResultsError).
+ * (src/server/thread/engine.ts:434), and the SDK refuses the next turn's history (AI_MissingToolResultsError).
  * Model-independent: reproduced in process with the scripted provider. On the demo path the reviewer types into the
  * same thread right after signing.
  */
@@ -246,7 +243,7 @@ test("after the phone signs, the same thread answers the next request", async ({
   test.setTimeout(120_000);
   const { page } = await phoneAndStore(phone);
   await say(page, MILK);
-  await option(page, "Best").getByRole("button", { name: "Choose" }).click({ timeout: 20_000 });
+  await pick(page).click({ timeout: 20_000 });
   await expect(card(page, "gate")).toContainText(/Waiting for /, { timeout: 20_000 });
   await phone.waitForURL("**/approve/**", { timeout: 30_000 });
   await approveButton(phone).click();
@@ -264,7 +261,7 @@ test("while an order waits for sign-off, the same thread answers the next reques
   test.setTimeout(120_000);
   const { page } = await phoneAndStore(phone);
   await say(page, MILK);
-  await option(page, "Best").getByRole("button", { name: "Choose" }).click({ timeout: 20_000 });
+  await pick(page).click({ timeout: 20_000 });
   await expect(card(page, "gate")).toContainText(/Waiting for /, { timeout: 20_000 });
   const next = "200 litres of lactose-free milk for Wednesday, cheapest";
   await say(page, next);

@@ -51,15 +51,11 @@ test("catalogue, product page with a live price, basket, fixed price, through th
 });
 
 /**
- * DEFECT (test.fail until fixed; E2E_EXPECT_FIXED=1 runs it as an ordinary test). A person ordering one 10 L
- * pack by hand from the basket of the demo kitchen Kaari (12,90 €, far under its 100 € limit) is stopped at the gate
- * for the head chef's sign-off: "The mistake check flagged a unit that may be mixed up, and no person was asked."
- * The basket never shows the mistake check's question to the person at the keyboard (the order lane does), so a
- * hand order on a demo kitchen always needs a presenter's sign-off. Cause: core/orders.ts mistakeCheckOf runs
- * concernsOfOrder (core/order-check.ts) for every order not quoted by the intake, and the basket's quote never is.
+ * Regression test, fixed on main (f49eea8). Before, a person ordering one 10 L pack by hand from Kaari's basket
+ * (12,90 €, far under its 100 € limit) was stopped at the gate for the head chef's sign-off by a mistake check
+ * nobody was asked.
  */
 test("a small hand order from the basket goes through without a sign-off", async ({ page }) => {
-  test.fail(!process.env.E2E_EXPECT_FIXED, "basket orders are held by human_confirmation: nobody was asked the mistake check's question");
   await signInStage(page, "kaari");
   await page.goto("/k/kaari/catalogue/VA-1010");
   await expect(page.getByText(/Checked live with the wholesaler at \d/)).toBeVisible({ timeout: 20_000 });

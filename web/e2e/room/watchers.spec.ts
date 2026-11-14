@@ -1,6 +1,6 @@
 import { expect, test, type Browser, type Page, devices } from "@playwright/test";
 import { STAGE_PASSWORDS } from "../support/dock";
-import { card, cards, option, say } from "../support/thread";
+import { card, cards, pick, say } from "../support/thread";
 
 /**
  * Order pages watching a request that waits for sign-off, from one venue address, with the public limits on.
@@ -41,11 +41,11 @@ async function watcher(browser: Browser, i: number): Promise<{ page: Page; refus
   // A check (the duplicate check, "Order again?", when an earlier run's order for the same day waits), then the
   // options; or, for the kitchen's usual order, a fixed price and the gate straight away.
   const again = card(page, "anomaly").getByRole("button", { name: "Yes, that is right" });
-  const best = option(page, "Best");
+  const best = pick(page);
   for (let i = 0; i < 3 && !(await gates.nth(before).isVisible()); i++) {
     await expect(gates.nth(before).or(again).or(best)).toBeVisible({ timeout: 20_000 });
     if (await again.isVisible()) await again.click();
-    else if (await best.isVisible()) await best.getByRole("button", { name: "Choose" }).click();
+    else if (await best.isVisible()) await best.click();
     await page.waitForTimeout(1000);
   }
   await expect(gates.nth(before)).toContainText(/Waiting for /, { timeout: 20_000 });

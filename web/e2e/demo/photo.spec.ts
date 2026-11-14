@@ -244,7 +244,7 @@ test.describe("photo door in the kitchen's thread (own visitor kitchen)", () => 
 /**
  * DEFECT (test.fail until fixed; would lose points). The photo's lines are sent as one turn, the lines as the reader
  * wrote them ("- milk 20 L", "- whipping cream ?? L", "- yoghurt 2 packs"), and the thread splits a message into
- * items only where a new line starts with a digit (src/server/thread/pipeline.ts:123); the reader's "- " bullets
+ * items only where a new line starts with a digit (src/server/thread/pipeline.ts:124); the reader's "- " bullets
  * defeat that, so the intake's also-asked reading cuts the text at the next amount instead: the cream line is
  * swallowed into the milk request, and the second item becomes "L - yoghurt 2 packs" ("Also in your message: L -
  * yoghurt 2 packs. Each gets its own cards."). The cream, whose amount the buyer still has to give, never gets a card.

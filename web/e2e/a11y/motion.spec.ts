@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { confirmConcerns, note, PHONE, runningMotion, WALL, type Running } from "../support/a11y-kit";
-import { threadLog, stageThread } from "../support/thread";
+import { CHOICE, threadLog, stageThread } from "../support/thread";
 
 /**
  * Reduced motion. With the system set to "reduce motion", the wall and the store's thread must not run CSS
@@ -51,7 +51,7 @@ test("wall and the store's thread run no motion longer than 0.1 s when reduced m
     const steps: [string, () => Promise<unknown>][] = [
       ["ask", () => threadLog(page).getByRole("button", { name: "1,000 litres of lactose-free milk by Monday" }).click()],
       ["confirm amount", () => confirmConcerns(page)],
-      ["choose", () => page.getByRole("button", { name: "Choose" }).filter({ visible: true }).first().click()],
+      ["choose", () => page.getByRole("button", { name: CHOICE }).filter({ visible: true }).first().click()],
     ];
     for (const [, act] of steps) {
       await act();

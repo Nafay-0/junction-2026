@@ -41,18 +41,43 @@ export const cards = (scope: Page | Locator, kind: keyof typeof KIND) => threadL
 /** The newest card of a kind. */
 export const card = (scope: Page | Locator, kind: keyof typeof KIND) => cards(scope, kind).last();
 
-/** The options of the newest options card: one list item per option, ranked Best / Better / Good. */
-export const options = (scope: Page | Locator) => card(scope, "options").getByRole("listitem").filter({ has: pg(scope).getByRole("button", { name: "Choose" }) });
-export const option = (scope: Page | Locator, rank: "Best" | "Better" | "Good") => options(scope).filter({ hasText: new RegExp(`^\\s*${rank}(?![a-z])`) });
+/**
+ * The newest options card (main f49eea8): the agent's pick first, with one button that says what a tap does ("Order
+ * this, 129,00 €" inside the mandate, "Send to <name> to sign, 1 322,00 €" beyond it); the other options folded
+ * under "Other options", each with the same kind of button once opened; options the gate would refuse are shown as
+ * "Cannot be ordered: <rule>" with no button.
+ */
+export const CHOICE = /^(Order this|Send to .+ to sign), /;
+/** Every choice button of the newest options card (the others' only once their fold is open). */
+export const choices = (scope: Page | Locator) => card(scope, "options").getByRole("button", { name: CHOICE });
+/** The agent's pick: the first choice button of the newest options card. */
+export const pick = (scope: Page | Locator) => choices(scope).first();
+/** The folds of the other options (summary + details), not the "not offered: why" note. */
+export const otherOptions = (scope: Page | Locator) => card(scope, "options").getByRole("group").filter({ hasNotText: /not offered: why/ });
+/** The total a choice button names ("…, 1 322,00 €"). */
+export const totalOf = async (button: Locator) => /, ([\d\s\u00a0\u202f.,]+\s?€)$/.exec(((await button.getAttribute("aria-label")) ?? (await button.innerText())).trim())?.[1]?.trim() ?? "";
 
 /** The composer's field (its label changes with what it is set to: asking, changing a request, a product). */
 export const composer = (scope: Page | Locator) => scope.getByRole("textbox", { name: /^(Ask, or say what the kitchen needs|What changes\?|How much, and for when\?)$/ }).filter({ visible: true }).first();
 
-/** Type words into the composer and send them (Enter, as a person does). */
+/**
+ * Type words into the composer and send them (Enter, as a person does), until they are the buyer's turn in the log.
+ * A fill that lands before the page has hydrated is wiped by React (seen on WebKit): then it is typed again.
+ */
 export async function say(scope: Page | Locator, words: string): Promise<void> {
   const field = composer(scope);
-  await field.fill(words);
-  await field.press("Enter");
+  const sent = threadLog(scope).getByText(words.split("\n")[0].slice(0, 60)).first();
+  for (let i = 0; i < 3; i++) {
+    await field.fill(words);
+    await field.press("Enter");
+    try {
+      await expect(sent).toBeVisible({ timeout: 8_000 });
+      break;
+    } catch (e) {
+      if (i === 2) throw e;
+      if ((await field.inputValue().catch(() => "")) === words) continue; // still in the field: send again
+    }
+  }
   await expect(field).toHaveValue("", { timeout: 15_000 });
 }
 

@@ -3,7 +3,7 @@ import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import { animationsDone, audit, confirmConcerns, note, splitKnown, TARGETS, unnamedControls, VIEWPORT, type Finding } from "../support/a11y-kit";
 import { KNOWN } from "./known-violations";
-import { stageThread, threadLog } from "../support/thread";
+import { CHOICE, stageThread, threadLog } from "../support/thread";
 
 /**
  * Automated WCAG 2.1 A/AA audit (axe-core) of every page that matters, at the size it is used at (phone for the phone
@@ -62,11 +62,11 @@ test("axe: the thread with its cards and options on screen (phone)", async ({ pa
     await page.goto("/k/kaari/order");
     await threadLog(page).getByRole("button", { name: "1,000 litres of lactose-free milk by Monday" }).click();
     await confirmConcerns(page);
-    await expect(page.getByRole("button", { name: "Choose" }).first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole("button", { name: CHOICE }).first()).toBeVisible({ timeout: 20_000 });
     await page.waitForTimeout(500);
     await check(page, "order-options");
     // A choice orders it: the chosen card stays, the others are kept for the record, then the price and the gate.
-    await page.getByRole("button", { name: "Choose" }).first().click();
+    await page.getByRole("button", { name: CHOICE }).first().click();
     await expect(page.getByText(/^(Waiting for |Placed by the agent alone|Refused: )/).first()).toBeVisible({ timeout: 20_000 });
     await page.waitForTimeout(500);
     await check(page, "order-chosen");

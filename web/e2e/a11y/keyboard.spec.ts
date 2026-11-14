@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { approvalState } from "../support/dock";
 import { note, openApproval, PHONE, settle } from "../support/a11y-kit";
-import { stageThread } from "../support/thread";
+import { CHOICE, stageThread } from "../support/thread";
 
 /**
  * Keyboard only (Tab, Shift+Tab, Enter, Space; no mouse, no fill): take a request through the store's thread
@@ -48,18 +48,18 @@ test("the thread: request to gate with the keyboard only", async ({ page, baseUR
     };
 
     // A suggested request (the kitchen's own example) is a button in the thread.
-    await step("suggested request", /^1,000 litres of lactose-free milk by Monday$/, "Enter", () => expect(page.getByRole("button", { name: /^(Yes, that is right|Choose)$/ }).first()).toBeVisible({ timeout: 20_000 }));
+    await step("suggested request", /^1,000 litres of lactose-free milk by Monday$/, "Enter", () => expect(page.getByRole("button", { name: /^(Yes, that is right|Order this, .+|Send to .+ to sign, .+)$/ }).first()).toBeVisible({ timeout: 20_000 }));
     // The mistake check (one card per concern; a duplicate check can follow on a shared server), until the options.
     for (let n = 1; n <= 4; n++) {
       await page.waitForTimeout(800);
-      const presses = await tabTo(page, /^(Yes, that is right|Choose)$/);
+      const presses = await tabTo(page, /^(Yes, that is right|Order this, .+|Send to .+ to sign, .+)$/);
       if ((await focusedName(page)) !== "Yes, that is right") break;
       await page.keyboard.press("Enter");
       log.push(`mistake check ${n}: ${presses} Tab presses, Enter; focus afterwards: ${await focusedName(page)}`);
     }
-    await expect(page.getByRole("button", { name: "Choose" }).first()).toBeVisible({ timeout: 20_000 });
-    // "Best", the first option: a choice orders it, the price is fixed and the gate decides.
-    await step("first option (best)", /^Choose$/, " ", () => expect(page.getByText(/^(Waiting for |Placed by the agent alone|Refused: )/).filter({ visible: true }).first()).toBeVisible({ timeout: 20_000 }));
+    await expect(page.getByRole("button", { name: CHOICE }).first()).toBeVisible({ timeout: 20_000 });
+    // The agent's pick: its button says what the tap does; the price is fixed and the gate decides.
+    await step("the agent's pick", /^(Order this|Send to .+ to sign), .+$/, " ", () => expect(page.getByText(/^(Waiting for |Placed by the agent alone|Refused: )/).filter({ visible: true }).first()).toBeVisible({ timeout: 20_000 }));
 
     for (const l of log) note(test.info(), "keyboard", l);
     await test.info().attach("keyboard-thread.txt", { body: log.join("\n"), contentType: "text/plain" });

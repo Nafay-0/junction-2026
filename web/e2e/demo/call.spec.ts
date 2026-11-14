@@ -233,7 +233,7 @@ test("in the thread, the voice service answers nothing: the call gives up by its
  * one…", which is not what happened and promises a retry that never comes. Cause: src/app/_channels/use-call.ts:438-446
  * (the 6 s switch replaces the socket, so the 12 s "did not open" timer at :447-453 never fires for it), :425-431 (a
  * lost second provider reconnects to the first), and the ended call's toast reads `view.notice` before `endReason`
- * (src/app/k/[kitchen]/thread.tsx:521).
+ * (src/app/k/[kitchen]/thread.tsx:559).
  */
 test("in the thread, a voice service that never answers is named as such", async ({ page }, info) => {
   test.fail(!process.env.E2E_EXPECT_FIXED, "the call ends on a stale 'refused the call (its limit). Trying the other one…'");
@@ -251,7 +251,7 @@ test("in the thread, a voice service that never answers is named as such", async
  * DEFECT (test.fail until fixed). Same cause as above: when a dropped call cannot reconnect (two tries), the call ends
  * and the buyer's last word is the stale notice "Connection lost. Reconnecting with your request as it was…", not
  * "The connection to the voice service was lost." (use-call.ts:435 sets endReason but keeps the notice; the toast at
- * src/app/k/[kitchen]/thread.tsx:521 prefers the notice).
+ * src/app/k/[kitchen]/thread.tsx:559 prefers the notice).
  */
 test("in the thread, a call that cannot reconnect ends saying it was lost, not 'Reconnecting'", async ({ page }, info) => {
   test.fail(!process.env.E2E_EXPECT_FIXED, "the ended call's toast is the stale 'Reconnecting…' notice");

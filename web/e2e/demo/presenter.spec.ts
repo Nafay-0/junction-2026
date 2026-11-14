@@ -2,7 +2,7 @@ import { randomInt } from "node:crypto";
 import { expect, test, type APIRequestContext, type Browser, type Page } from "@playwright/test";
 import { OPS_PASSCODE, addPasskey, approvalState, approveButton, openWall, signInStage, watchErrors } from "../support/dock";
 import { acquireLock } from "../support/recall-lock";
-import { card, cards, option, say, threadLog } from "../support/thread";
+import { card, cards, pick, say, threadLog } from "../support/thread";
 
 /**
  * The presenter path: the two built-in demo kitchens (/k/kaari, /k/laakso) name fictional approvers, so in a
@@ -74,14 +74,14 @@ async function orderOverTheLimit(k: Page, words: string): Promise<{ approvalId: 
   await say(k, words);
   const gate = cards(k, "gate").nth(before);
   const check = card(k, "anomaly").getByRole("button", { name: "Yes, that is right" });
-  const best = option(k, "Best");
+  const best = pick(k);
   const nothing = card(k, "notice").filter({ hasText: /Nothing in the assortment fits|budget/i });
   for (let i = 0; i < 3; i++) {
     await expect(gate.or(check).or(best).or(nothing).first()).toBeVisible({ timeout: 30_000 });
     if (await nothing.isVisible()) return undefined;
     if (await gate.isVisible()) break;
     if (await check.isVisible()) await check.click();
-    else if (await best.isVisible()) await best.getByRole("button", { name: "Choose" }).click();
+    else if (await best.isVisible()) await best.click();
     await expect(check).toHaveCount(0, { timeout: 15_000 }).catch(() => undefined);
   }
   await expect(gate).toBeVisible({ timeout: 30_000 });

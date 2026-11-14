@@ -109,7 +109,7 @@ test("hidden tab (another app in front) when the request arrives, then shown aga
 /**
  * DEFECT (test.fail until fixed; would lose the demo), new with main 718aa8b. The approver phone now polls every 5 s
  * besides the live stream; a poll that fails while the phone is offline turns the page into "Can't reach AimoPilot"
- * (src/app/approver/approver-home.tsx:66 sets "offline" on any failure), and both the poll (:89-95) and the live
+ * (src/app/approver/approver-home.tsx:72 sets "offline" on any failure), and both the poll (:89-95) and the live
  * stream (:74) run only while the page is "ready", so nothing brings it back when the network returns: a 5 s Wi-Fi
  * blip leaves the reviewer's phone on the offline screen, and the next sign-off request never opens by itself until
  * someone taps "Try again".
