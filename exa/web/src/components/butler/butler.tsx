@@ -28,12 +28,14 @@ import { describe, locate, useExactLocation, type LocateResult } from "@/lib/loc
 import { useClientValue, useMediaQuery, useStored } from "@/lib/use-client";
 import { USAGE_CAP_SENTENCE } from "@/lib/usage-cap";
 import { isCapRefusal, markCapReached, refreshCap, useCap } from "@/lib/usage-cap-client";
+import { RUN_ACTIVE_CODE, RUN_GONE_CODE } from "@/lib/run-state";
+import { fetchRunState, refreshRunning, stopRunOnServer, useRunning } from "@/lib/runs-client";
 import type { ClarifyAnswer, ExactLocation, LocationAnswer } from "@/lib/widgets/types";
 import { liveCall, useCall } from "@/lib/voice/use-call";
 import { BrowserWorkspace, useBrowserLayout } from "@/components/browser/workspace";
 import { CallBar, CallView } from "@/components/voice/call-view";
 import { CapDialog, CapNote } from "./cap";
-import { Composer } from "./composer";
+import { Composer, type ComposerHandle } from "./composer";
 import { AssistantMessage, UserMessage, WorkingLine } from "./message";
 import { Sidebar } from "./sidebar";
 import type { WidgetHandlers } from "./tool-part";
@@ -89,21 +91,41 @@ function browserNote() {
   return { status, url, title, control };
 }
 
+/** Marks a request that joins a task already running on the server instead of starting one. */
+const REJOIN = { rejoin: true } as const;
+const isRejoin = (metadata: unknown) => Boolean(metadata && typeof metadata === "object" && (metadata as { rejoin?: unknown }).rejoin === true);
+
 const transport = new DefaultChatTransport<ButlerMessage>({
   api: "/api/chat",
   // Which kind of client is asking decides what the agent can do: only the desktop app has a live browser.
   headers: () => ({ [CLIENT_HEADER]: clientKind() }),
-  body: () => ({
-    // The mode and the effort, never a model: the server decides what stands behind them.
-    mode: live.mode,
-    effort: live.effort,
-    place: live.place,
-    timeZone: live.timeZone,
-    country: ZONES[live.timeZone]?.[1],
-    coords: live.coords,
-    locationDeclined: live.locationDeclined,
-    browser: browserNote(),
-  }),
+  /*
+   * A request either starts a task or joins one. A task belongs to the server once it has
+   * started (see lib/runs.ts): after a reload, or when a conversation is opened again, the
+   * interface puts the conversation back as it was when the task began and asks for the task's
+   * stream from its start. That replay goes through the same path as a fresh answer, so what is
+   * rebuilt is exactly what would have been shown had nobody left.
+   */
+  prepareSendMessagesRequest: ({ id, messages, requestMetadata, trigger, messageId }) =>
+    isRejoin(requestMetadata)
+      ? { api: `/api/chat/${encodeURIComponent(id)}/stream`, body: {} }
+      : {
+          body: {
+            id,
+            messages,
+            trigger,
+            messageId,
+            // The mode and the effort, never a model: the server decides what stands behind them.
+            mode: live.mode,
+            effort: live.effort,
+            place: live.place,
+            timeZone: live.timeZone,
+            country: ZONES[live.timeZone]?.[1],
+            coords: live.coords,
+            locationDeclined: live.locationDeclined,
+            browser: browserNote(),
+          },
+        },
 });
 
 /** The tools the interface answers itself: questions to the user, and (in the desktop app) the steps in the live browser. */
@@ -140,6 +162,20 @@ function withoutPictures(messages: ButlerMessage[]): ButlerMessage[] {
  */
 const liveMessages = new Map<string, ButlerMessage[]>();
 
+/** What a step is told when another task is working in the one live browser. */
+const BROWSER_BUSY = {
+  kind: "browser" as const,
+  label: "The live browser is busy",
+  action: "open" as const,
+  url: "",
+  title: "",
+  ok: false,
+  problem:
+    "The live browser is being used by another of the user's tasks right now, and there is only one. This step was not taken. Tell the user in one sentence that this task needs the browser the other task is using, and that they can ask again when it has finished or stop it. Do not retry.",
+  page: "",
+  sources: [] as [],
+};
+
 const browserTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
 const ACTIVE_KEY = "hovi.active";
 
@@ -151,7 +187,28 @@ function remember(id: string) {
   }
 }
 
-type Active = { id: string; messages: ButlerMessage[] };
+type Active = {
+  id: string;
+  messages: ButlerMessage[];
+  /** A task is running in it on the server: the chat joins it as soon as it is on screen. */
+  rejoin?: boolean;
+};
+
+/**
+ * A saved conversation, ready to show. When a task is running in it, what comes back is the
+ * conversation as that task found it, and the chat replays the task on top of it.
+ */
+async function openConversation(id: string): Promise<Active | null> {
+  const [messages, run] = await Promise.all([loadMessages(id), fetchRunState(id)]);
+  if (run.active && run.messages) return { id, messages: run.messages, rejoin: true };
+  return messages?.length ? { id, messages } : null;
+}
+
+/** Conversations with work in progress in this window, and which of them is using the live browser. */
+const workingNow = new Set<string>();
+let browserHolder: string | null = null;
+
+type HandoverHandler = (answer: HandoverAnswer, toolCallId?: string) => void;
 
 /** The app shell: the conversation list on the left, the open conversation on the right. */
 export function Butler() {
@@ -162,14 +219,63 @@ export function Butler() {
   const sidebarOpen = wide ? sidebarPref === "open" : drawerOpen;
 
   const [active, setActive] = React.useState<Active | null>(null);
+  /*
+   * Tasks run side by side. A conversation that is left while it is working is not closed: it
+   * stays alive out of sight, carries on (its steps in the live browser included), and is there,
+   * mid-task, when it is opened again. Once its work is done it is let go. A task also survives
+   * a reload or a closed window, because it runs on the server: see `openConversation`.
+   */
+  const [kept, setKept] = React.useState<string[]>([]);
+  const [working, setWorking] = React.useState<string[]>([]);
+  const activeId = React.useRef<string | null>(null);
+  const keptIds = React.useRef<string[]>([]);
+  React.useEffect(() => {
+    activeId.current = active?.id ?? null;
+    keptIds.current = kept;
+  }, [active, kept]);
+
+  const onWorking = React.useCallback((id: string, now: boolean) => {
+    if (now === workingNow.has(id)) return;
+    if (now) workingNow.add(id);
+    else {
+      workingNow.delete(id);
+      if (browserHolder === id) browserHolder = null;
+    }
+    setWorking([...workingNow]);
+    void refreshRunning();
+    // A conversation kept alive only for its task is let go a moment after the task ends.
+    if (!now) {
+      setTimeout(() => {
+        if (workingNow.has(id) || activeId.current === id) return;
+        setKept((ids) => ids.filter((x) => x !== id));
+        liveMessages.delete(id);
+      }, 2500);
+    }
+  }, []);
+
+  /** The conversation on screen is being left: if it is working it stays alive, otherwise it is closed. */
+  const leave = React.useCallback((id: string | null) => {
+    if (!id) return;
+    if (workingNow.has(id)) setKept((ids) => (ids.includes(id) ? ids : [...ids, id]));
+    else {
+      setKept((ids) => ids.filter((x) => x !== id));
+      liveMessages.delete(id);
+    }
+  }, []);
 
   // The live browser belongs to the account, not to one conversation: it sits above the
-  // conversation, so opening another one does not disturb a browser that is running.
+  // conversations, so opening another one does not disturb a browser that is running. What the
+  // user does in its pane is answered by whichever conversation asked for it.
   const accountId = useUser().id;
-  const handover = React.useRef<((answer: HandoverAnswer, toolCallId?: string) => void) | null>(null);
-  const onHandoverDone = React.useCallback((answer: HandoverAnswer, toolCallId?: string) => handover.current?.(answer, toolCallId), []);
+  const handovers = React.useRef(new Map<string, HandoverHandler>());
+  const onHandoverDone = React.useCallback((answer: HandoverAnswer, toolCallId?: string) => handovers.current.forEach((answerIn) => answerIn(answer, toolCallId)), []);
+  const registerHandover = React.useCallback((id: string, handler: HandoverHandler | null) => {
+    if (handler) handovers.current.set(id, handler);
+    else handovers.current.delete(id);
+  }, []);
 
-  // On first load, reopen the conversation that was open last, so a refresh loses nothing.
+  // On first load, reopen the conversation that was open last, so a refresh loses nothing: if a
+  // task was running in it, it still is, and the chat joins it.
   React.useEffect(() => {
     let cancelled = false;
     let lastId: string | null = null;
@@ -178,9 +284,9 @@ export function Butler() {
     } catch {
       /* ignore */
     }
-    void (lastId ? loadMessages(lastId) : Promise.resolve(null)).then((messages) => {
+    void (lastId ? openConversation(lastId) : Promise.resolve(null)).then((found) => {
       if (cancelled) return;
-      setActive(lastId && messages?.length ? { id: lastId, messages } : { id: newConversationId(), messages: [] });
+      setActive(found ?? { id: newConversationId(), messages: [] });
     });
     return () => {
       cancelled = true;
@@ -213,33 +319,51 @@ export function Butler() {
   }, [setSidebarPref]);
 
   const newTask = React.useCallback(() => {
-    liveMessages.clear();
+    leave(activeId.current);
     const id = newConversationId();
     remember(id);
     setActive({ id, messages: [] });
     setDrawerOpen(false);
-  }, []);
+  }, [leave]);
 
-  const open = React.useCallback((id: string) => {
-    setDrawerOpen(false);
-    void loadMessages(id).then((messages) => {
-      remember(id);
-      liveMessages.clear();
-      setActive({ id, messages: messages ?? [] });
-    });
-  }, []);
+  const open = React.useCallback(
+    (id: string) => {
+      setDrawerOpen(false);
+      const from = activeId.current;
+      if (id === from) return;
+      // Still alive in the background: show it as it stands, mid-task.
+      if (keptIds.current.includes(id)) {
+        leave(from);
+        remember(id);
+        setActive({ id, messages: liveMessages.get(id) ?? [] });
+        return;
+      }
+      void openConversation(id).then((found) => {
+        leave(from);
+        remember(id);
+        liveMessages.delete(id);
+        setActive(found ?? { id, messages: [] });
+      });
+    },
+    [leave],
+  );
 
   const remove = React.useCallback(
     (id: string) => {
-      void deleteConversation(id);
-      if (active?.id === id) newTask();
+      // Deleting a conversation ends whatever is running in it (the server does the same).
+      workingNow.delete(id);
+      setWorking([...workingNow]);
+      setKept((ids) => ids.filter((x) => x !== id));
+      void deleteConversation(id).then(() => void refreshRunning());
+      if (activeId.current === id) newTask();
     },
-    [active?.id, newTask],
+    [newTask],
   );
 
-  // A conversation belongs to the kind of client it was started in. Opened from the other kind
-  // it can be read, not continued: the desktop app's conversations use a browser the web lacks.
-  const startedIn: ClientKind | undefined = active ? conversations.find((c) => c.id === active.id)?.origin : undefined;
+  // Tasks running here, and tasks left running on the server (after a reload, or from another window).
+  const onServer = useRunning(working.length > 0);
+  const running = React.useMemo(() => [...new Set([...working, ...onServer])], [working, onServer]);
+  const mounted = active ? [...new Set([...kept, active.id])] : kept;
 
   return (
     <div className="flex h-dvh bg-background">
@@ -248,33 +372,47 @@ export function Butler() {
         onClose={closeSidebar}
         conversations={conversations}
         activeId={active?.id ?? null}
+        running={running}
         onSelect={open}
         onNew={newTask}
         onRename={(id, title) => void renameConversation(id, title)}
         onDelete={remove}
         onDeleteAll={() => {
+          workingNow.clear();
+          setWorking([]);
+          setKept([]);
           void deleteAllConversations();
           newTask();
         }}
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <BrowserWorkspace accountId={accountId} onHandoverDone={onHandoverDone}>
-        {active ? (
-          // Keyed by conversation: opening another one starts a fresh chat state with its own messages.
-          <ChatView
-            key={active.id}
-            conversationId={active.id}
-            initialMessages={active.messages}
-            sidebarOpen={sidebarOpen}
-            onToggleSidebar={toggleSidebar}
-            onNewTask={newTask}
-            onBrowserBeside={makeRoom}
-            onBrowserGone={giveRoomBack}
-            handoverRef={handover}
-            startedIn={startedIn}
-            title={conversations.find((c) => c.id === active.id)?.title}
-          />
-        ) : null}
+          {mounted.map((id) => {
+            const shown = id === active?.id;
+            // A conversation belongs to the kind of client it was started in. Opened from the other kind
+            // it can be read, not continued: the desktop app's conversations use a browser the web lacks.
+            const meta = conversations.find((c) => c.id === id);
+            return (
+              // Keyed by conversation: each one has its own chat state. One that is working out of sight is only hidden.
+              <div key={id} className={shown ? "contents" : "hidden"}>
+                <ChatView
+                  conversationId={id}
+                  initialMessages={shown && active ? active.messages : (liveMessages.get(id) ?? [])}
+                  rejoin={shown && active?.rejoin === true}
+                  hidden={!shown}
+                  sidebarOpen={sidebarOpen}
+                  onToggleSidebar={toggleSidebar}
+                  onNewTask={newTask}
+                  onBrowserBeside={makeRoom}
+                  onBrowserGone={giveRoomBack}
+                  registerHandover={registerHandover}
+                  onWorking={onWorking}
+                  startedIn={meta?.origin}
+                  title={meta?.title}
+                />
+              </div>
+            );
+          })}
         </BrowserWorkspace>
       </div>
     </div>
@@ -289,10 +427,21 @@ function ChatView({
   onNewTask,
   onBrowserBeside,
   onBrowserGone,
-  handoverRef,
+  registerHandover,
+  onWorking,
+  hidden,
+  rejoin,
   startedIn,
   title,
 }: {
+  /** Not on screen: the conversation was left while it was working, and carries on. */
+  hidden: boolean;
+  /** A task is already running in this conversation on the server: join it. */
+  rejoin: boolean;
+  /** Tell the shell whether this conversation has work in progress. */
+  onWorking: (id: string, working: boolean) => void;
+  /** Where the browser pane finds this conversation's way of answering a hand-over. */
+  registerHandover: (id: string, handler: ((answer: HandoverAnswer, toolCallId?: string) => void) | null) => void;
   /** The conversation's name, once it has been saved under one. */
   title?: string;
   conversationId: string;
@@ -306,8 +455,6 @@ function ChatView({
   onBrowserGone: () => void;
   /** Where the conversation was started, when it is a saved one. Elsewhere it is read-only. */
   startedIn?: ClientKind;
-  /** Where the browser pane finds this conversation's way of answering a hand-over. */
-  handoverRef: React.RefObject<((answer: HandoverAnswer, toolCallId?: string) => void) | null>;
 }) {
   const user = useUser();
   const [storedMode, setStoredMode] = useStored("hovi.mode", "");
@@ -333,7 +480,9 @@ function ChatView({
     live.locationDeclined = declined;
   }, [mode, effort, approximatePlace, timeZone, location, declined]);
 
-  const [seed] = React.useState(() => liveMessages.get(conversationId) ?? initialMessages);
+  // A task being joined starts from the conversation as that task found it, whatever this window last showed.
+  const [seed] = React.useState(() => (rejoin ? initialMessages : (liveMessages.get(conversationId) ?? initialMessages)));
+  const composer = React.useRef<ComposerHandle>(null);
   /** The user pressed Stop (or left): what arrives after that is kept, but does not start the agent again. */
   const halted = React.useRef(false);
   const takeStep = React.useRef<((call: { toolName: string; toolCallId: string; input: unknown }) => void) | null>(null);
@@ -351,6 +500,7 @@ function ChatView({
   /* The live browser's steps. The agent asks, the app (on this computer) takes the step under its
      safety rules, and the page as it then stands goes back to the agent. Each step is taken once. */
   const taken = React.useRef(new Set<string>());
+  const [stepping, setStepping] = React.useState(0);
   React.useEffect(() => {
     takeStep.current = (call) => {
       if (taken.current.has(call.toolCallId)) return;
@@ -362,13 +512,22 @@ function ChatView({
       if (!isBrowserTool(call.toolName)) return;
       taken.current.add(call.toolCallId);
       const tool = call.toolName;
+      // There is one live browser. While another task is working in it, this one is told so instead of taking the page from under it.
+      if (browserHolder && browserHolder !== conversationId && workingNow.has(browserHolder)) {
+        void addToolOutput({ tool, toolCallId: call.toolCallId, output: BROWSER_BUSY });
+        return;
+      }
+      browserHolder = conversationId;
+      setStepping((n) => n + 1);
       // Not awaited here: the answer is written into the conversation when the step is done.
-      void runBrowserTool({ tool, toolCallId: call.toolCallId, input: call.input }).then((output) => void addToolOutput({ tool, toolCallId: call.toolCallId, output }));
+      void runBrowserTool({ tool, toolCallId: call.toolCallId, input: call.input })
+        .then((output) => void addToolOutput({ tool, toolCallId: call.toolCallId, output }))
+        .finally(() => setStepping((n) => Math.max(0, n - 1)));
     };
     return () => {
       takeStep.current = null;
     };
-  }, [addToolOutput]);
+  }, [addToolOutput, conversationId]);
   // The view was mounted afresh while a step was on its way (a code reload, a layout change): ask
   // for it again. The app answers a step it has already taken with the same result.
   React.useEffect(() => {
@@ -381,6 +540,60 @@ function ChatView({
 
   const busy = status === "submitted" || status === "streaming";
   const empty = messages.length === 0;
+
+  /* Work in progress: an answer being written, a step in the live browser, or the moment between
+     a step coming back and the agent carrying on. While it lasts the conversation is kept alive
+     when the user goes elsewhere. Pressing Stop ends it. */
+  const [stopped, setStopped] = React.useState(false);
+  const working = busy || stepping > 0 || (!stopped && !readOnly && answeredHere(messages));
+  React.useEffect(() => {
+    onWorking(conversationId, working);
+  }, [onWorking, conversationId, working]);
+  React.useEffect(() => () => onWorking(conversationId, false), [onWorking, conversationId]);
+
+  /* A task that is already running on the server (the page was reloaded or closed, or the task
+     was started from another window): the conversation was opened as that task found it, and
+     here its stream is asked for from the start. A dropped connection is picked up the same way. */
+  const joined = React.useRef(false);
+  React.useEffect(() => {
+    if (!rejoin || joined.current) return;
+    // A tick later, so that it happens once: in development React mounts a view, takes it down and
+    // mounts it again, and the leaving code below would hang up on a request sent in between.
+    const timer = setTimeout(() => {
+      joined.current = true;
+      halted.current = false;
+      void sendMessage(undefined, { metadata: REJOIN });
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [rejoin, sendMessage]);
+  const dropped = Boolean(error) && !isCapRefusal(error);
+  const gone = Boolean(error && (error.message || "").includes(`"${RUN_GONE_CODE}"`));
+  const retried = React.useRef(0);
+  React.useEffect(() => {
+    if (!dropped || readOnly) return;
+    let cancelled = false;
+    void fetchRunState(conversationId).then((run) => {
+      if (cancelled) return;
+      // The task ended between asking and joining: what it did is saved, so show that.
+      if (!run.active && gone) {
+        void loadMessages(conversationId).then((saved) => {
+          if (cancelled) return;
+          if (saved) setMessages(saved);
+          clearError();
+        });
+        return;
+      }
+      // Nothing running: the error stands, with its "Try again". Three times in a row is not a blip.
+      if (!run.active || !run.messages || retried.current >= 3) return;
+      retried.current += 1;
+      setMessages(run.messages);
+      clearError();
+      void sendMessage(undefined, { metadata: REJOIN });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dropped, gone, readOnly, conversationId, setMessages, clearError, sendMessage]);
 
   /* A live call. It is another way of holding this same conversation: what is said and done in
      it is written into these messages as it happens, so the conversation view shows the call
@@ -465,6 +678,8 @@ function ChatView({
         return;
       }
       halted.current = false;
+      setStopped(false);
+      retried.current = 0;
       clearError();
       remember(conversationId);
       followLatest();
@@ -541,7 +756,9 @@ function ChatView({
     if (liveCall.conversationId) return;
     // One voice at a time: an answer that is still being written stops here.
     halted.current = true;
+    setStopped(true);
     stopBrowserTools();
+    void stopRunOnServer(conversationId);
     void stop();
     clearError();
     remember(conversationId);
@@ -567,7 +784,7 @@ function ChatView({
     (answer: HandoverAnswer, toolCallId?: string) => {
       // Asked for during a call: the call tells the agent, aloud.
       if (toolCallId && liveCall.ownsHandover(toolCallId)) {
-        liveCall.handoverDone(answer, toolCallId);
+        if (liveCall.conversationId === conversationId) liveCall.handoverDone(answer, toolCallId);
         return;
       }
       // The browser belongs to the visitor, not to one conversation: only answer a request that is in this one.
@@ -576,15 +793,13 @@ function ChatView({
       followLatest();
       void addToolOutput({ tool: "requestUserAction", toolCallId, output: answer });
     },
-    [addToolOutput, followLatest],
+    [addToolOutput, followLatest, conversationId],
   );
 
   React.useEffect(() => {
-    handoverRef.current = answerHandover;
-    return () => {
-      if (handoverRef.current === answerHandover) handoverRef.current = null;
-    };
-  }, [handoverRef, answerHandover]);
+    registerHandover(conversationId, answerHandover);
+    return () => registerHandover(conversationId, null);
+  }, [registerHandover, conversationId, answerHandover]);
 
   const handlers = React.useMemo<WidgetHandlers>(
     () => ({
@@ -650,6 +865,7 @@ function ChatView({
   }, [hasCap]);
   // A request the server refused for the limit is not an error to retry.
   const refused = Boolean(error && isCapRefusal(error));
+  const alreadyRunning = Boolean(error && (error.message || "").includes(`"${RUN_ACTIVE_CODE}"`));
   React.useEffect(() => {
     if (!refused) return;
     halted.current = true;
@@ -672,6 +888,10 @@ function ChatView({
       markCapReached();
     } else if (hasCap) void refreshCap();
   }, [busy, hasCap]);
+  // A call belongs to the conversation on screen: leaving it ends the call, though not the task.
+  React.useEffect(() => {
+    if (hidden && liveCall.conversationId === conversationId) liveCall.end();
+  }, [hidden, conversationId]);
   // Reaching the limit ends a call too.
   React.useEffect(() => {
     if (capped && liveCall.conversationId === conversationId) liveCall.end();
@@ -681,9 +901,9 @@ function ChatView({
 
   return (
     <>
-      <LayoutBridge target={openBrowser} onBeside={onBrowserBeside} onGone={onBrowserGone} />
+      {hidden ? null : <LayoutBridge target={openBrowser} onBeside={onBrowserBeside} onGone={onBrowserGone} />}
       <TopBar usage={usage} title={empty ? undefined : title} onNewChat={onNewTask} showNew={!empty} sidebarOpen={sidebarOpen} onToggleSidebar={onToggleSidebar} />
-      <CapDialog open={capOpen} onOpenChange={setCapOpen} />
+      <CapDialog open={capOpen && !hidden} onOpenChange={setCapOpen} />
 
       {calling ? (
         <div className="flex shrink-0 justify-center px-3 pb-1">
@@ -716,7 +936,7 @@ function ChatView({
       <>
       <div ref={scroller} onScroll={onScroll} className={cn("relative flex-1 overflow-y-auto overscroll-contain", empty && "backdrop-room")}>
         {empty ? (
-          <Welcome place={location?.label ?? approximatePlace} onPick={(prompt) => send(prompt)} onTalk={readOnly ? undefined : startCall} />
+          <Welcome place={location?.label ?? approximatePlace} onPick={(prompt) => composer.current?.fill(prompt)} onTalk={readOnly ? undefined : startCall} />
         ) : (
           <div className="mx-auto flex w-full max-w-[760px] flex-col gap-7 px-4 pt-4 pb-10">
             {messages.map((message, i) =>
@@ -734,7 +954,7 @@ function ChatView({
               ),
             )}
             {waitingForFirstToken ? <WorkingLine /> : null}
-            {error && !readOnly && !refused ? (
+            {error && !readOnly && !refused && !alreadyRunning && !gone ? (
               <div className="flex animate-rise items-center justify-between gap-3 rounded-xl border border-destructive/25 bg-destructive/5 px-4 py-3 text-[0.85rem]">
                 <span className="text-destructive">{readable(error)}</span>
                 <button
@@ -777,13 +997,17 @@ function ChatView({
             <CapNote onDetails={() => setCapOpen(true)} />
           ) : (
           <Composer
+            ref={composer}
             onSend={send}
             onTalk={calling ? undefined : startCall}
             inCall={calling}
             onStop={() => {
-              // Stopping also ends a step in the live browser; a step waiting for approval counts as declined.
+              // Stop is the one thing that ends a task: the server is told, since leaving the page no longer does it.
+              // It also ends a step in the live browser; a step waiting for approval counts as declined.
               halted.current = true;
+              setStopped(true);
               stopBrowserTools();
+              void stopRunOnServer(conversationId);
               void stop();
             }}
             busy={busy}

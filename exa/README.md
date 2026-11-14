@@ -77,6 +77,17 @@ The model can also show a comparison table, key facts, a plan, clarifying questi
 
 Every widget shows its sources. Every answer shows the mode it ran in and the time. An account the admin lets see usage also gets the number of Exa calls and the cost, split by kind, and the bar above the conversation adds them up; the bar also carries the conversation's name.
 
+## Tasks keep running
+
+A task belongs to the server once it has started, not to the page that started it. Reloading, closing the window or opening another conversation only stops someone watching.
+
+- **Leaving and coming back.** The task carries on, and the server saves the conversation itself: when the task starts, after each step and when it ends. Opening the conversation again, after a reload, a closed window or from the list, shows what has happened so far and then follows it live. The server keeps everything a task has streamed until the task ends; the interface puts the conversation back as it was when the task began and replays the stream on top through its ordinary request path, so what is rebuilt is exactly what would have been shown had nobody left (`web/src/lib/runs.ts`, `/api/chat/[id]/run`, `/api/chat/[id]/stream`).
+- **Switching conversations.** A conversation that is left while it is working stays alive out of sight, so nothing has to be rebuilt when it is opened again, and in the desktop app its steps in the live browser go on. It is let go once its work is done. The list marks every conversation with a task running.
+- **Side by side.** Several people use the server at once, and one person can have several tasks running: each is its own entry with its own meter and stream. An account may have six at a time, and one per conversation. There is one live browser per desktop app, so a second task that wants it while another is using it is told so and says so.
+- **Stop.** The Stop button is the one thing that ends a task early (it tells the server), besides the usage limit, which counts what all of an account's running tasks have spent. A stopped or broken-off task still has what it used recorded. Deleting a conversation ends the task in it.
+- **Where it holds.** The list of running tasks is in the memory of one server process. That is right for a server that stays up (`next start`, a container, a VM); on a host where each request may land on a different short-lived instance it would need to sit on Redis, as the AI SDK's guide to resumable streams does.
+- `pnpm test:background 3000` checks all of this in the real desktop app with real questions: a reload mid-task, a second task beside the first, opening the first again, Stop, and a browser task finishing out of sight.
+
 ## Modes and effort
 
 The user does not pick a model. They pick a **mode**, from the quickest to the most capable, and turn an **effort** dial. Both sit in one control in the message box, with an icon per mode (lightning for the quickest, a brain for the ones that think longest).
@@ -225,7 +236,7 @@ Reading, navigating, searching, filling in a form, adding to a basket and refusi
 ## Open questions
 
 - **Two projects, one team of two.** Can one team submit two projects (Dock and this), and is each eligible for the main prize? Someone has to be at each table during peer review. Ask the organisers.
-- **Deployment.** Not done. The server no longer runs a browser, so it can go on any host that runs Next.js, with a hosted Postgres; set `DATABASE_URL`, the admin's two variables and the model keys there, then package the desktop app with `BERYL_SERVER_URL` pointing at it. On a serverless host run `pnpm db:migrate` at deploy. The sign-in limiter is in memory, per server instance.
+- **Deployment.** Not done. Tasks that keep running need a server process that stays up, so the host must run Next.js as a long-lived Node server (a container or a VM), not as short-lived functions. The server no longer runs a browser, so beyond that it can go on any host that runs Next.js, with a hosted Postgres; set `DATABASE_URL`, the admin's two variables and the model keys there, then package the desktop app with `BERYL_SERVER_URL` pointing at it. On a serverless host run `pnpm db:migrate` at deploy. The sign-in limiter is in memory, per server instance.
 - **Google sign-in inside the desktop app.** Built so that it should work (an ordinary embedded browser, not an automation one), but only a person signing in can show that Google accepts it. If Google objects to the engine being connected while the user types, the next step is to disconnect the bridge for as long as the user is in control.
 - **Voice with a real person.** Tested end to end with a recording fed to the microphone. Not yet tried with a person talking over loudspeakers (echo), on a phone, or in a browser tab other than the desktop app's.
 - **The packaged app is not signed or notarised**, and has only been built for this Mac.

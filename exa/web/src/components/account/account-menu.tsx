@@ -80,7 +80,7 @@ export function AccountMenu({
             <DropdownMenuItem asChild>
               <Link href="/admin">
                 <LayoutDashboard className="size-4" />
-                Admin: usage and accounts
+                Usage and Accounts
               </Link>
             </DropdownMenuItem>
           ) : null}

@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth/server";
 import { clientKindOf } from "@/lib/client-kind";
 import { deleteConversation, getConversation, renameConversation, saveConversation, validConversationId } from "@/lib/db/conversations";
 import { readOnlyReason } from "@/lib/db/origin";
+import { serverCopy, stopRun } from "@/lib/runs";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +45,12 @@ export async function PUT(req: Request, { params }: Context) {
 
   const parsed = SaveBody.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return refuse(400, "There is nothing to save.");
-  const result = await saveConversation(user.id, id, clientKindOf(req), parsed.data);
+  // While a task is running in this conversation, and for a moment after it ends, the server's
+  // own copy is the one that counts: a watcher's unfinished view of the answer must not replace
+  // what the server has. What the interface sends still names the conversation.
+  const held = serverCopy(user.id, id);
+  const messages = held && held.length >= parsed.data.messages.length ? (held as typeof parsed.data.messages) : parsed.data.messages;
+  const result = await saveConversation(user.id, id, clientKindOf(req), { ...parsed.data, messages });
   return result.saved ? Response.json({ meta: result.meta }) : refuse(409, readOnlyReason(result.origin));
 }
 
@@ -64,6 +70,8 @@ export async function DELETE(_req: Request, { params }: Context) {
   const user = await requireUser();
   if (user instanceof Response) return user;
   const { id } = await params;
+  // A task still running in it has nothing left to write to.
+  if (validConversationId(id)) stopRun(user.id, id);
   const deleted = validConversationId(id) ? await deleteConversation(user.id, id) : false;
   return Response.json({ deleted });
 }

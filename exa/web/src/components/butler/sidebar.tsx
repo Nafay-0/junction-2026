@@ -39,7 +39,10 @@ export function Sidebar({
   onRename,
   onDelete,
   onDeleteAll,
+  running,
 }: {
+  /** Conversations with a task running in them right now, here or left running in the background. */
+  running?: string[];
   open: boolean;
   onClose: () => void;
   conversations: ConversationMeta[];
@@ -134,6 +137,7 @@ export function Sidebar({
                         <Row
                           conversation={c}
                           elsewhere={c.origin !== here}
+                          running={running?.includes(c.id) ?? false}
                           active={c.id === activeId}
                           editing={editing === c.id}
                           onSelect={() => onSelect(c.id)}
@@ -163,6 +167,7 @@ export function Sidebar({
 }
 
 function Row({
+  running,
   conversation,
   elsewhere,
   active,
@@ -175,6 +180,8 @@ function Row({
   conversation: ConversationMeta;
   /** Started in the other kind of client: it can be read here, not continued. */
   elsewhere: boolean;
+  /** A task is running in this conversation. */
+  running: boolean;
   active: boolean;
   editing: boolean;
   onSelect: () => void;
@@ -220,6 +227,16 @@ function Row({
       <button type="button" onClick={onSelect} aria-current={active ? "page" : undefined} title={conversation.title} className="min-w-0 flex-1 truncate py-2 pr-1 pl-2.5 text-left text-[0.85rem] leading-5 outline-none focus-visible:underline">
         {conversation.title}
       </button>
+      {running ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span tabIndex={0} role="img" aria-label="A task is running in this conversation" className="flex size-6 shrink-0 items-center justify-center outline-none">
+              <span className="size-2 animate-pulse-dot rounded-full bg-brand" />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="right">Working on it. Open it to follow along.</TooltipContent>
+        </Tooltip>
+      ) : null}
       {elsewhere ? (
         <Tooltip>
           <TooltipTrigger asChild>

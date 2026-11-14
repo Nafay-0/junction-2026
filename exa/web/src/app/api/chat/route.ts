@@ -1,21 +1,24 @@
 import { convertToModelMessages, createUIMessageStreamResponse, isStepCount, pruneMessages, streamText, toUIMessageStream, type ModelMessage, type SystemModelMessage } from "ai";
+import { after } from "next/server";
 import { researchDepth } from "@/lib/agent/depth";
 import { buildContext, buildInstructions } from "@/lib/agent/instructions";
-import { RunMeter, round, toTokenUsage } from "@/lib/agent/meter";
-import { cleanEffort, pickMode } from "@/lib/agent/modes";
+import { RunMeter, addUsage, round, toTokenUsage } from "@/lib/agent/meter";
+import { cleanEffort, getMode, pickMode } from "@/lib/agent/modes";
 import { costOf, modelForMode } from "@/lib/agent/models";
 import { MODE_UNAVAILABLE, agentProviderOptions, languageModel, workerModelFor } from "@/lib/agent/providers";
-import type { RunStats } from "@/lib/agent/stats";
+import { EMPTY_USAGE, type RunStats, type TokenUsage } from "@/lib/agent/stats";
 import { createTools, type ButlerMessage } from "@/lib/agent/tools";
 import type { ToolContext } from "@/lib/agent/tools/context";
 import { requireUser } from "@/lib/auth/server";
 import { clientKindOf } from "@/lib/client-kind";
-import { capFor, capRefusal } from "@/lib/db/cap";
-import { conversationOrigin, validConversationId } from "@/lib/db/conversations";
+import { capFor, capRefusal, spentBy } from "@/lib/db/cap";
+import { conversationOrigin, saveConversation, validConversationId } from "@/lib/db/conversations";
 import { readOnlyReason } from "@/lib/db/origin";
 import { recordUsage } from "@/lib/db/usage";
+import { RUN_ACTIVE_CODE, RUN_ACTIVE_SENTENCE } from "@/lib/run-state";
+import { MAX_RUNS_PER_ACCOUNT, activeRun, follow, noteProgress, runsOf, spendingNow, startRun, type Run } from "@/lib/runs";
 
-/** Agent runs with sub-agents and live inventory lookups can take a minute or more. */
+/** Agent runs with sub-agents and live inventory lookups can take a minute or more, and the deepest research several. */
 export const maxDuration = 800;
 
 /** Rough size, in tokens, at which older tool results are dropped from what the model re-reads. */
@@ -104,6 +107,12 @@ export async function POST(req: Request) {
   if (conversationId) {
     const origin = await conversationOrigin(user.id, conversationId);
     if (origin && origin !== client) return Response.json({ error: readOnlyReason(origin) }, { status: 409 });
+    // One task at a time in a conversation: the one that is running is followed, not doubled.
+    if (activeRun(user.id, conversationId)) return Response.json({ error: RUN_ACTIVE_SENTENCE, code: RUN_ACTIVE_CODE }, { status: 409 });
+  }
+  // Several tasks side by side are fine; an unbounded number is somebody's mistake.
+  if (runsOf(user.id).length >= MAX_RUNS_PER_ACCOUNT) {
+    return Response.json({ error: `You already have ${MAX_RUNS_PER_ACCOUNT} tasks running. Wait for one to finish, or stop one.` }, { status: 429 });
   }
 
   const ctx: ToolContext = { meter, mode, effort, depth, model: info, worker, country, today, coords: coords ? { lat: coords.lat, lng: coords.lng, label: coords.label } : undefined, client };
@@ -136,12 +145,43 @@ export async function POST(req: Request) {
   // The limit also stops a task that is running: after each step, what this request has spent so
   // far is added to what the account had already used. The step in hand finishes, its figures are
   // recorded, and the answer says why it stopped.
+  // With several tasks running side by side, each one counts what all of them have spent and not
+  // yet recorded, on top of what is on the account's record by now.
   let capHit = false;
-  const overCap = ({ steps: done }: { steps: Array<{ usage: Parameters<typeof toTokenUsage>[0] }> }) => {
+  /** What the answering model has used in the steps finished so far. */
+  let finishedUsage: TokenUsage = { ...EMPTY_USAGE };
+  let recorded = false;
+  const unrecorded = () => (recorded ? 0 : costOf(info.id, finishedUsage) + meter.exaCostUsd + meter.workerCostUsd + meter.decisionCostUsd);
+  const overCap = async ({ steps: done }: { steps: Array<{ usage: Parameters<typeof toTokenUsage>[0] }> }) => {
+    finishedUsage = done.reduce((sum, step) => addUsage(sum, toTokenUsage(step.usage)), { ...EMPTY_USAGE });
     if (cap.capUsd === null) return false;
-    const answering = done.reduce((sum, step) => sum + costOf(info.id, toTokenUsage(step.usage)), 0);
-    capHit = cap.spentUsd + answering + meter.exaCostUsd + meter.workerCostUsd + meter.decisionCostUsd >= cap.capUsd;
+    const onRecord = await spentBy(user.id).catch(() => cap.spentUsd);
+    capHit = onRecord + spendingNow(user.id) >= cap.capUsd;
     return capHit;
+  };
+
+  /*
+   * The run belongs to the server, not to this connection. Reloading the page, closing it or
+   * opening another conversation only stops someone watching: the work goes on, the server saves
+   * the result, and whoever opens the conversation again is shown the progress so far and then
+   * the rest (see lib/runs.ts). Only Stop and the usage limit end a run early.
+   */
+  const abort = new AbortController();
+  const runId = conversationId ?? crypto.randomUUID();
+  // Filled in below, once the stream it takes over exists; the stream's own callbacks read it later.
+  const held: { run?: Run } = {};
+  const title = titleOf(body.messages);
+  const save = async (messages: unknown[]) => {
+    if (!conversationId) return;
+    try {
+      await saveConversation(user.id, conversationId, client, { title, modelLabel: getMode(mode).label, messages });
+    } catch (err) {
+      console.warn("[chat] could not save the conversation", err instanceof Error ? err.message : err);
+    }
+  };
+  const record = (request: RunStats) => {
+    recorded = true;
+    void recordUsage({ userId: user.id, conversationId, client, model: { id: info.id, label: info.label }, kind: "chat", stats: request });
   };
 
   let steps = 0;
@@ -152,7 +192,7 @@ export async function POST(req: Request) {
     tools,
     stopWhen: [isStepCount(MAX_STEPS), overCap],
     providerOptions: agentProviderOptions(info, effort),
-    abortSignal: req.signal,
+    abortSignal: abort.signal,
     // Context overflow guard: once the conversation is large, the model stops re-reading old tool
     // results (the user still sees every widget). Reasoning goes with them, see above.
     prepareStep: ({ messages }) => {
@@ -163,12 +203,27 @@ export async function POST(req: Request) {
     },
   });
 
-  return createUIMessageStreamResponse({
-    stream: toUIMessageStream<typeof tools, ButlerMessage>({
+  const stream = toUIMessageStream<typeof tools, ButlerMessage>({
       stream: result.stream,
       tools,
       originalMessages: body.messages,
       sendReasoning: true,
+      // After each step the server notes where the conversation stands and saves it, so the record
+      // does not depend on anyone watching.
+      onStepEnd: ({ messages }) => {
+        if (!held.run) return;
+        noteProgress(held.run, withoutPictures(messages));
+        void save(held.run.latest);
+      },
+      onEnd: async ({ messages, isAborted }) => {
+        const final = withoutPictures(messages);
+        if (held.run) noteProgress(held.run, final);
+        // A task that was stopped, or broke off, has still used what it used.
+        if (!recorded) {
+          record({ mode, effort, startedAt: meter.startedAt, durationMs: Date.now() - meter.startedAt, steps, usage: finishedUsage, llmCostUsd: round(costOf(info.id, finishedUsage)), finishReason: isAborted ? "stopped" : "error", ...meter.snapshot() });
+        }
+        await save(final);
+      },
       messageMetadata: ({ part }): RunStats | undefined => {
         // What the interface is told names the mode, never the model behind it.
         if (part.type === "start") {
@@ -188,7 +243,7 @@ export async function POST(req: Request) {
             ...meter.snapshot(),
           };
           // This request's own figures go to the account's record; the answer shows the running total.
-          void recordUsage({ userId: user.id, conversationId, client, model: { id: info.id, label: info.label }, kind: "chat", stats: request });
+          record(request);
           const total = addStats(earlier, request);
           // An account that may not see usage is sent the mode and the time, and none of the figures.
           const shown: RunStats = user.showUsage ? total : { mode, effort, startedAt: total.startedAt, durationMs: total.durationMs, finishReason: total.finishReason };
@@ -200,8 +255,33 @@ export async function POST(req: Request) {
         console.error("[chat] stream error", error);
         return friendlyError(error);
       },
-    }),
   });
+
+  // The conversation exists on the server from the first moment, with what the user just sent.
+  void save(body.messages);
+  const running = startRun({ userId: user.id, conversationId: runId, client, original: body.messages, stream, abort, spent: unrecorded });
+  held.run = running;
+  // Where the platform would otherwise end the request with the response, it is told to wait for the run.
+  after(() => running.finished);
+  return createUIMessageStreamResponse({ stream: follow(running) });
+}
+
+/** A title from the first thing the user asked, as the interface would make it. */
+function titleOf(messages: ButlerMessage[]): string {
+  const first = messages.find((m) => m.role === "user");
+  const text = first?.parts.find((p) => p.type === "text");
+  const clean = (text && text.type === "text" ? text.text : "").replace(/\s+/g, " ").trim();
+  if (!clean) return first?.parts.some((p) => p.type === "file") ? "Image search" : "New task";
+  return clean.length > 72 ? `${clean.slice(0, 70).trimEnd()}…` : clean;
+}
+
+/** A picture the agent took of a page is for the answer being written. It is not kept in the saved conversation. */
+function withoutPictures(messages: ButlerMessage[]): ButlerMessage[] {
+  const has = (p: ButlerMessage["parts"][number]) => p.type === "tool-browserLook" && p.state === "output-available" && Boolean(p.output?.picture);
+  if (!messages.some((m) => m.role === "assistant" && m.parts.some(has))) return messages;
+  return messages.map((m) =>
+    m.role === "assistant" && m.parts.some(has) ? { ...m, parts: m.parts.map((p) => (p.type === "tool-browserLook" && p.state === "output-available" && p.output?.picture ? { ...p, output: { ...p.output, picture: undefined } } : p)) } : m,
+  );
 }
 
 /** The figures of an answer that was written in more than one request: time, tokens, calls and cost add up. */

@@ -32,7 +32,14 @@ async function toImagePart(file: File): Promise<FileUIPart> {
   return { type: "file", mediaType: "image/jpeg", filename: file.name.replace(/\.[^.]+$/, "") + ".jpg", url: canvas.toDataURL("image/jpeg", 0.85) };
 }
 
+/** What the chat can ask of the message box from outside. */
+export type ComposerHandle = {
+  /** Put text in the box and place the cursor after it, without sending: the user reads it, changes it if they like, and sends. */
+  fill: (text: string) => void;
+};
+
 export function Composer({
+  ref,
   onSend,
   onStop,
   busy,
@@ -46,6 +53,7 @@ export function Composer({
   onTalk,
   inCall,
 }: {
+  ref?: React.Ref<ComposerHandle>;
   onSend: (text: string, files: FileUIPart[]) => void;
   /** Start a live call: talk with the agent instead of typing. Left out where there is no call to start. */
   onTalk?: () => void;
@@ -69,6 +77,23 @@ export function Composer({
   const [dragging, setDragging] = React.useState(false);
   const textarea = React.useRef<HTMLTextAreaElement>(null);
   const fileInput = React.useRef<HTMLInputElement>(null);
+
+  React.useImperativeHandle(
+    ref,
+    () => ({
+      fill: (next: string) => {
+        setText(next);
+        // After the box has grown to fit: focus it with the cursor at the end.
+        requestAnimationFrame(() => {
+          const box = textarea.current;
+          if (!box) return;
+          box.focus();
+          box.setSelectionRange(next.length, next.length);
+        });
+      },
+    }),
+    [],
+  );
 
   /* Voice input. Speak, and the words appear here as they are spoken; nothing is sent until the
      user presses Send. `interim` is what is being said right now: it changes until the speaker
