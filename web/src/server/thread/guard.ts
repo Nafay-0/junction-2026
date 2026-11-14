@@ -57,6 +57,8 @@ function reasonOf(k: AnomalyCard["concerns"][number], lang: Lang): string {
   }
   return text
     .replace(/\s*\((?:order|tilaus|beställning) [a-z]+_[0-9a-z]+\)/gi, "")
+    // A product family's slug ("cat_10632", "plant_drink") is never said: "this".
+    .replace(/\bof cat_\d+\b/g, "of this").replace(/\bcat_\d+\b/g, "this").replace(/\b([a-z]+)_([a-z_]+)\b/g, (m) => m.replaceAll("_", " "))
     .replace(/\s*(Order again\?|Order it anyway\?|Please check the amount\.)\s*$/i, "")
     .trim();
 }
@@ -74,6 +76,12 @@ export function guardWords(card: AnomalyCard, lang: Lang): string {
     // The finding's own question ("did you mean 100 L?") becomes the one plain question with both figures.
     reason = reason.replace(/[,:;]?\s*(did you mean|tarkoititko|menade du)[^?]*\?\s*$/i, ".").replace(/\.\.$/, ".");
     question = QUESTION[lang].either(f.measure(asked.amount, asked.unit ?? ""), f.measure(Number(use[1]), use[2]));
+  } else if (k.corrections.some((x) => /^deliver_\d{4}-\d{2}-\d{2}$/.test(x.id))) {
+    // A day the kitchen cannot receive: the next one it can, as the question.
+    const days = k.corrections.map((x) => /^deliver_(\d{4}-\d{2}-\d{2})$/.exec(x.id)?.[1]).filter((x): x is string => !!x);
+    const next = days.at(-1)!;
+    const dayName = (lang === "en" ? englishDays(f.day(next)) : f.day(next)).replace(/\.$/, "");
+    question = { en: `Shall I make it ${dayName}?`, fi: `Teenkö sen päivälle ${dayName}?`, sv: `Ska jag göra det till ${dayName}?` }[lang];
   } else question = k.confirmable ? QUESTION[lang].right : QUESTION[lang].which;
   if (/\?\s*$/.test(reason)) return lang === "en" ? englishDays(reason) : reason;
   const text = `${reason.replace(/\s*$/, "")}${/[.!]$/.test(reason) ? "" : "."} ${question}`;

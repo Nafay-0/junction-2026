@@ -19,6 +19,10 @@ describe("the mistake check, said", () => {
     const r = guardWords(repeat, "en");
     expect(r).toMatch(/200 L/);
     expect(r).not.toMatch(/ord_/);
+    const dup = card({ ...repeat.concerns[0], message: "You already ordered 2 kg of cat_10632 1 minute ago for Tue 17 Nov (order ord_9). Order again?" });
+    expect(guardWords(dup, "en")).not.toMatch(/cat_|cat \d/);
+    const day = card({ key: "delivery_not_delivery_day:2026-11-15", code: "delivery_not_delivery_day", message: "x", confirmable: false, corrections: [{ id: "deliver_2026-11-16", label: "Next" }], evidence: { deliverBy: "2026-11-15" } });
+    expect(guardWords(day, "en")).toMatch(/Shall I make it Mon 16 Nov\?$/);
   });
 
   it("takes the answer in words: the corrected figure, a yes with the figure, or a reason that means yes", () => {
