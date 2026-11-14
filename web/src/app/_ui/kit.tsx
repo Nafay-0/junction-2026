@@ -209,9 +209,10 @@ export function Badge({ children, tone = "neutral", className = "" }: { children
   };
   const [pill, dot] = look[tone];
   return (
-    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[0.8rem] font-semibold leading-6 ${pill} ${className}`}>
+    <span title={typeof children === "string" ? children : undefined} className={`inline-flex max-w-full items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[0.8rem] font-semibold leading-6 ${pill} ${className}`}>
       <span aria-hidden className={`size-1.5 shrink-0 rounded-full ${dot}`} />
-      {children}
+      {/* A long status stays inside its pill on a narrow screen (the whole of it on hover). */}
+      <span className="min-w-0 truncate">{children}</span>
     </span>
   );
 }

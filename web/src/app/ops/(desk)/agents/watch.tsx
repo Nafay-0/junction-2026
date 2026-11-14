@@ -7,6 +7,7 @@ import type { EscalationQueue, Scorecard } from "@/server/ops/agent-watch";
 import type { ScoreRow } from "@/server/ops/scorecard";
 import { api } from "../../../_client/api";
 import { Badge } from "../../../_ui/kit";
+import { ruleTitle } from "../../../_ui/plain";
 import { money, num, since, whenSeconds } from "../../_ui/format";
 import { Button, Details, LoadError, Loading, Section, useNow, useOps } from "../../_ui/kit";
 import { Table } from "../../_ui/parts";
@@ -151,7 +152,7 @@ function Scores({ rows: all, onDone }: { rows: ScoreRow[]; onDone: () => void })
             </td>
             <td className="text-right tabular">
               {num(r.refused)}
-              {r.refusedRules[0] && <span className="block text-[0.8rem] text-ink-soft">{r.refusedRules.slice(0, 2).map((x) => `${x.rule} ${x.n}`).join(", ")}</span>}
+              {r.refusedRules[0] && <span className="block text-[0.8rem] text-ink-soft">{r.refusedRules.slice(0, 2).map((x) => `${ruleTitle(x.rule)} (${x.n})`).join(", ")}</span>}
             </td>
             <td className="text-right tabular">
               {num(r.failedTurns)}

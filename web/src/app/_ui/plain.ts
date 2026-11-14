@@ -91,9 +91,14 @@ export function fiMoney(text: string): string {
   });
 }
 
-/** humanize() for the customer side: ids out, and money as written in Finland. */
+/**
+ * humanize() for the customer side: ids out, money as written in Finland, a rule's code as its title, and a decimal
+ * before a unit with a comma ("16.2 kg" -> "16,2 kg").
+ */
 export function say(text: string, products: Record<string, string> = {}): string {
-  return fiMoney(humanize(text, products));
+  return fiMoney(humanize(text, products))
+    .replace(/\(([a-z]+(?:_[a-z]+)+)\)/g, (m, code: string) => (RULE_TITLE[code] ? `(${RULE_TITLE[code].toLowerCase()})` : m))
+    .replace(/\b(\d+)\.(\d+)(\s?)(kg|g|l|L|dl|ml)(?![\w.])/g, (_m, a: string, b: string, sp: string, u: string) => `${a},${b}${sp || NBSP}${u}`);
 }
 
 /** "100 L", "2,5 kg", "12 pcs" with Finnish decimals. */
@@ -237,6 +242,7 @@ export function humanize(text: string, products: Record<string, string> = {}): s
     .replace(/\b(\d{4})-(\d{2})-(\d{2})\b\.?/g, (_m, y: string, mo: string, d: string) => day(`${y}-${mo}-${d}`))
     .replace(/\bcorrected ([a-z_]+): /g, (_m, code: string) => `corrected ${CONCERN_WORD[code] ?? "the request"}: `)
     .replace(/^([a-z]+(?:_[a-z0-9]+)+): /, "")
+    .replace(/\bDock\b/g, "AimoPilot")
     .replace(/\b(lactose_free|fat_1_5|fat_3_5|fat_free|plant_drink)\b/g, (m) => attr(m));
 }
 
@@ -272,4 +278,35 @@ export function actorLabel(actor: string, names: { agent?: string } = {}): strin
     return r.charAt(0).toUpperCase() + r.slice(1);
   }
   return "Unknown caller";
+}
+
+// ---------- an order's timeline: facts fit to read ----------
+
+/** The kinds of card the conversation showed, as words ("Shown: understood, anomaly"). */
+const CARD_WORD: Record<string, string> = {
+  understood: "what it understood",
+  anomaly: "a check",
+  question: "a question",
+  options: "the options",
+  price: "the fixed price",
+  gate: "the rules check",
+  order: "the order",
+  offer: "an offer",
+  memory: "memory",
+  records: "records",
+  notice: "a notice",
+  sheet: "the order sheet",
+  alternatives: "alternatives",
+  menu: "a menu",
+};
+
+/** A value that is an id or a hash: kept for engineers (on hover or in details), never a visible label. */
+export function isRawId(value: string): boolean {
+  return /^(?:qt|ord|req|apr|agent|thr|wf|run|off|sus|sbx|clm|msg)_[A-Za-z0-9_]+$/.test(value.trim()) || /^[0-9a-f]{12,}…?$/i.test(value.trim()) || /^order digest /i.test(value.trim());
+}
+
+/** One timeline fact as read: card kinds in words; `id` when the value is an id or hash (show it only on request). */
+export function timelineFact(f: { label: string; value: string }): { label: string; value: string; id: boolean } {
+  if (f.label === "Shown") return { label: "Showed", value: f.value.split(/,\s*/).map((k) => CARD_WORD[k] ?? k.replaceAll("_", " ")).join(", "), id: false };
+  return { ...f, id: isRawId(f.value) };
 }

@@ -1,4 +1,5 @@
-import { RULE_TITLE, clock, clockSeconds, day, helsinkiToday } from "../../_ui/plain";
+import { groupL } from "../../k/[kitchen]/groups";
+import { RULE_TITLE, ROLE_LABEL, clock, clockSeconds, day, helsinkiToday } from "../../_ui/plain";
 
 /**
  * Finnish conventions for the operations portal: money as 1 280,50 €, dates as ti 17.11. (shown with the English
@@ -45,7 +46,40 @@ const CODE_WORD: Record<string, string> = {
   best_price: "best price",
   lowest_carbon: "lowest carbon",
   most_reliable: "most reliable",
+  // What the watch and the live check write about stock and cut-offs.
+  stock_unknown: "stock not reported",
+  cutoff_passed: "order cut-off passed",
+  out_of_stock: "out of stock",
+  not_delivered: "no delivery that day",
+  set_auto_renew: "automatic renewal",
+  // Ledger entry kinds, for "Ledger entry 144 (approval_requested)".
+  approval_requested: "sign-off asked",
+  approval_granted: "signed off",
+  approval_declined: "declined",
+  order_committed: "order placed",
+  sign_off: "a sign-off",
+  watch_said: "the watch spoke",
+  // Kinds of card the conversation showed.
+  product_specification: "product specification",
+  standing_order: "standing order",
+  delivery_days: "delivery days",
 };
+
+/** Ids the core writes into sentences, as plain nouns (the id itself stays in the record's details). */
+function idsOut(text: string): string {
+  return text
+    .replace(/ \((?:order )?ord_[a-z0-9]+\)/gi, "")
+    .replace(/\bagent:agent_[a-z0-9_]+/gi, "the agent")
+    .replace(/\b(?:agent|Agent) agent_[a-z0-9_]+/g, (m) => (m.startsWith("A") ? "The agent" : "the agent"))
+    .replace(/\bagent_[a-z0-9_]+/gi, "the agent")
+    .replace(/\b(?:order )?ord_[a-z0-9]+/gi, "the order")
+    .replace(/\b(?:quote )?qt_[a-z0-9]+/gi, "the quote")
+    .replace(/\breq_[a-z0-9]+/gi, "the request")
+    .replace(/\bapr_[a-z0-9]+/gi, "the sign-off")
+    .replace(/\bwf_[a-z0-9]+/gi, "")
+    .replace(/\bopt_(\d+)/g, "option $1")
+    .replace(/\bDock\b/g, "AimoPilot");
+}
 
 /** The partner's unit codes, in words. */
 const UNIT_WORD: Record<string, string> = { ST: "piece", KPL: "piece", KI: "case", PAL: "pallet", KRS: "layer", PS: "bag", RAS: "box", LTR: "L", GRM: "g", KGM: "kg", KG: "kg" };
@@ -65,8 +99,8 @@ function isoInText(iso: string): string {
  */
 export function fi(text: string | undefined | null): string {
   if (!text) return "";
-  return text
-    .replace(/\b[a-z]+(?:_[a-z0-9]+)+\b/g, (code) => CODE_WORD[code] ?? (RULE_TITLE[code] ? `“${RULE_TITLE[code].toLowerCase()}”` : code))
+  return idsOut(text)
+    .replace(/\b[a-z]+(?:_[a-z0-9]+)+\b/g, (code) => CODE_WORD[code] ?? (RULE_TITLE[code] ? `“${RULE_TITLE[code].toLowerCase()}”` : ROLE_LABEL[code] ?? code))
     .replace(/\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})/g, isoInText)
     .replace(/\b(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2})\b/g, (_m, d: string, h: string, mi: string) => `${day(d)} ${h}.${mi}`)
     .replace(/\b(\d{4}-\d{2}-\d{2})\b/g, (_m, d: string) => day(d))
@@ -74,7 +108,11 @@ export function fi(text: string | undefined | null): string {
     .replace(/\bper ([A-Z]{2,3})\b/g, (_m, u: string) => `per ${UNIT_WORD[u] ?? u.toLowerCase()}`)
     .replace(/\b9{6,}\b(?:\s*(?:packs?|pcs|units?))?/g, "an unreported amount")
     .replace(/€(\d{1,3}(?:,\d{3})*)(?:\.(\d{2}))?/g, (_m, w: string, f?: string) => `${w.replaceAll(",", nbsp)}${f ? `,${f}` : ""}${nbsp}€`)
-    .replace(/(\d)\.(\d) ?%/g, "$1,$2 %");
+    .replace(/(\d)\.(\d) ?%/g, "$1,$2 %")
+    // "17,536 products", "1,000 L": thousands with a no-break space, as the surface writes every other figure.
+    .replace(/\b\d{1,3}(?:,\d{3})+(?![.,]?\d)/g, (n) => n.replaceAll(",", nbsp))
+    // "0.49 € less", "3.75 l", "16.2 kg": a decimal comma before a unit, as everywhere else on the surface.
+    .replace(/\b(\d+)\.(\d+)(\s?)(€|kg|g|l|L|dl|ml|t)(?![\w.])/g, (_m, a: string, b: string, sp: string, u: string) => `${a},${b}${sp || nbsp}${u}`);
 }
 
 /** "Fri 13.11. 23.54" for any timestamp, today or not: for records that must be read later. */
@@ -145,4 +183,55 @@ const COUNTRY: Record<string, string> = { fi: "Finland", se: "Sweden", ee: "Esto
 export function country(code: string | null | undefined): string {
   if (!code) return "not stated";
   return COUNTRY[code.toLowerCase()] ?? code.toUpperCase();
+}
+
+// ---------- an order's state, in the same words and colours everywhere ----------
+
+export type OrderStatus = "pending_approval" | "committed" | "rejected" | "declined" | "withdrawn" | "expired" | "replaced";
+
+/** The order's state in two or three words: the badge. The store says the same in the buyer's words. */
+export const STATUS_WORD: Record<OrderStatus, string> = {
+  pending_approval: "Waiting for sign-off",
+  committed: "Placed",
+  rejected: "Refused",
+  declined: "Declined",
+  withdrawn: "Taken back",
+  expired: "Expired unsigned",
+  replaced: "Replaced",
+};
+
+/** The badge's tone: the gate's colours only for a sign-off waiting and a refusal; placed is green; the rest quiet. */
+export function statusTone(status: string): "waiting" | "good" | "refused" | "neutral" {
+  return status === "pending_approval" ? "waiting" : status === "committed" ? "good" : status === "rejected" ? "refused" : "neutral";
+}
+
+/** How the order was decided, in words: who let it through, and the rule that decided it (never its code). */
+export function decidedWords(d: { kind: string; words: string; rule?: string; person?: string }): { head: string; rule?: string } {
+  const rule = d.rule ? (RULE_TITLE[d.rule] ?? fi(d.rule)) : undefined;
+  if (d.kind === "alone") return { head: "Agent alone, within its limit" };
+  if (d.kind === "person") return { head: d.person ? `Sent to ${d.person}` : "Sent to a person", rule };
+  if (d.kind === "refused") return { head: "Refused by the gate", rule };
+  return { head: fi(d.words) };
+}
+
+/**
+ * "Only butter, cat 10418, cat 10431, …, milk." (a mandate's allowed categories as the core writes them) as product
+ * groups in words: "Only dairy and cheese, frozen food and 4 more groups; butter, milk, cream." Never a code.
+ */
+export function categoriesInWords(text: string): string {
+  const m = /^Only (.+?)\.?$/.exec(text.trim());
+  if (!m || !/\bcat[ _]\d{3,}/.test(text)) return text;
+  const items = m[1].split(/,\s*/);
+  const groups = new Map<string, number>();
+  const named: string[] = [];
+  for (const it of items) {
+    const code = /^cat[ _](\d{3,})$/.exec(it.trim())?.[1];
+    if (code) {
+      const g = groupL(`cat_${code}`, "en");
+      if (g) groups.set(g, (groups.get(g) ?? 0) + 1);
+    } else named.push(it.trim().replaceAll("_", " "));
+  }
+  const g = [...groups.entries()].sort((a, b) => b[1] - a[1]).map(([x]) => x);
+  const shown = g.slice(0, 4).join(", ") + (g.length > 4 ? ` and ${g.length - 4} more groups` : "");
+  return `Only ${[shown, named.join(", ")].filter(Boolean).join("; ")}.`;
 }

@@ -398,7 +398,7 @@ STEP=$(curl -s -X POST $DOCK/api/v1/intake "${H[@]}" \
   -d '{"need":{"item":{"text":"lactose-free milk","category":"milk"},"quantity":{"amount":20,"unit":"L"},"deliverOn":"2026-11-17"},"by":"Aino"}')
 echo "$STEP" | jq '{state: .step.state, waitingFor, nextStep, answerUrl, next: .step.next}'
 # then POST .step.next.path with the buyer's answer: /intake/{id}/concerns, /answers, /choice, and finally
-# POST /orders with just {"requestId": …}: Dock places the quote it signed at the choice.
+# POST /orders with just {"requestId": …}: AimoPilot places the quote it signed at the choice.
 # "deliverOn" asks for that exact day; "deliverBy" for that day at the latest.
 ```
 
@@ -444,7 +444,7 @@ curl -s -X POST $DOCK/api/v1/orders/$ORDER/withdraw "${H[@]}" -d '{"reason":"bre
 # change an order: quote the new lines, then POST /orders { requestId, replaces: "<old orderId>" }
 ```
 
-`POST /orders` with only `{ requestId }` also works after `POST /quotes`: Dock places the latest quote it signed for that request.
+`POST /orders` with only `{ requestId }` also works after `POST /quotes`: AimoPilot places the latest quote it signed for that request.
 
 Errors are always `{ "error": { "code", "rule", "message", "details" } }`.
 

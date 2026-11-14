@@ -28,7 +28,7 @@ export const DOOR_TEXT = defineText({
     testAbout: {
       "hotel-lumo": "A hotel breakfast kitchen with many lactose-free guests: 400 litres of milk twice a week, a stated lactose-free rule.",
       "koulu-metsola": "A school kitchen with strict allergen rules signed into its mandate: no nuts, peanuts, sesame or fish.",
-      "kahvila-sointu": "A small cafe on a tight budget: €60 per order alone, €400 a week, oat drink and milk for coffee.",
+      "kahvila-sointu": "A small cafe on a tight budget: 60 € per order alone, 400 € a week, oat drink and milk for coffee.",
     } as Record<string, string>,
     scanTitle: "Try it without an account",
     scanBody: "Scan with your phone: you get a kitchen of your own for 90 minutes and become the person who signs its orders. No typing.",

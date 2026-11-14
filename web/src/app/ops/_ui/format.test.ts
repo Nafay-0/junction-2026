@@ -24,6 +24,13 @@ describe("fi: core sentences fit for the operations surface", () => {
     expect(fi("999999 packs available")).toBe("an unreported amount available");
   });
 
+  it("keeps ids and codes out of sentences, and writes decimals before a unit with a comma", () => {
+    expect(fi("Sent to Onni (per_order_limit); quote qt_d37f7ad5 for agent:agent_sbx_56b9")).toBe("Sent to Onni (“the agent's own spending limit”); the quote for the agent");
+    expect(fi("cannot come (stock_unknown, cutoff_passed); 0.49 € less per litre, 3.75 l")).toBe("cannot come (stock not reported, order cut-off passed); 0,49 € less per litre, 3,75 l");
+    expect(fi("Dock applied 2 remembered items")).toBe("AimoPilot applied 2 remembered items");
+    expect(fi("The other 17,536 products; 1,000 L at 1,01 €")).toBe("The other 17 536 products; 1 000 L at 1,01 €");
+  });
+
   it("formats money and stamps", () => {
     expect(money(128040)).toBe("1 280,40 €");
     expect(stamp("2026-11-13T21:54:00Z")).toBe("Fri 13.11. 23.54");

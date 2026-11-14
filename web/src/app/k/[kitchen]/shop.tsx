@@ -23,7 +23,8 @@ import { NUTRIENTS, NUTRIENT_UNIT } from "@/core/nutrition";
 import { ownPrice, packDeposit, vatRateOf } from "@/core/pricing";
 
 /** A figure in the buyer's language (decimal comma in Finnish and Swedish). */
-const numIn = (v: number, lang: Lang, digits = 2) => new Intl.NumberFormat(lang === "fi" ? "fi-FI" : lang === "sv" ? "sv-FI" : "en-GB", { maximumFractionDigits: digits }).format(v);
+/** Numbers keep the Finnish conventions in every language ("13,5", "0,8"), as the rest of the store writes them. */
+const numIn = (v: number, _lang: Lang, digits = 2) => new Intl.NumberFormat("fi-FI", { maximumFractionDigits: digits }).format(v);
 
 /**
  * The storefront's shared pieces: product tiles (no images in the data, so type, pack and brand carry the tile,
