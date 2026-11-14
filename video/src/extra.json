@@ -1,1 +1,1 @@
-{ "lead": 12, "tail": 12, "fade": 12, "beat": 18, "extra": { "problem": 2, "title": 12, "flow": 6, "gate": 2, "agents": 7, "memory": 8, "search": 15, "aiven": 12, "close": 47 } }
+{"lead":12,"tail":12,"beat":18,"into":{"problem":0,"title":12,"flow":12,"gate":18,"agents":18,"memory":18,"search":18,"aiven":18,"close":18},"min":{"problem":2,"title":12,"flow":6,"gate":8,"agents":14,"memory":24,"search":6,"aiven":6,"close":30},"extra":{"problem":2,"title":12,"flow":9,"gate":8,"agents":22,"memory":32,"search":12,"aiven":9,"close":41}}

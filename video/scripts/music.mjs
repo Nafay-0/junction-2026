@@ -15,7 +15,7 @@ if (!key) throw new Error("ELEVENLABS_API_KEY is not set (web/.env.local)");
 const cfg = JSON.parse(readFileSync(join(root, "src/extra.json"), "utf8"));
 const vo = JSON.parse(readFileSync(join(root, "src/vo.json"), "utf8"));
 const ids = Object.keys(cfg.extra);
-const frames = ids.reduce((a, id) => a + cfg.lead + Math.ceil(vo[id].seconds * 30) + cfg.tail + cfg.extra[id], 0) - (ids.length - 1) * cfg.fade;
+const frames = ids.reduce((a, id) => a + cfg.lead + Math.ceil(vo[id].seconds * 30) + cfg.tail + cfg.extra[id] - cfg.into[id], 0);
 const ms = Math.round((frames / 30) * 1000);
 
 const PROMPT = `Instrumental background music for a two-minute technology product film with a narrator speaking over it. Exactly 100 BPM, 4/4, steady from the first beat, in a major key. Light, modern, optimistic and confident. A clean soft pulse, warm electric piano and muted plucks, a gentle sub bass, light tight percussion that enters after the first ten seconds. Sparse and spacious so a voice sits on top: no lead melody that competes with speech, no vocals, no choir, no risers, nothing cinematic or epic. A small lift in energy at about 15 seconds, a calm steady middle, a gentle lift over the last 25 seconds, and a clear resolved final chord that rings out and ends exactly at the end of the track.`;

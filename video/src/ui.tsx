@@ -247,6 +247,8 @@ export const Support = ({ children, size = 40, color = "rgb(255 255 255 / 0.78)"
 );
 
 /** The dark ground every scene stands on. */
-export const Ground = ({ children, tone = "deep" }: { children: ReactNode; tone?: "deep" | "slab" }) => (
-  <div style={{ position: "absolute", inset: 0, overflow: "hidden", background: tone === "deep" ? `radial-gradient(120% 90% at 78% 8%, #06495d 0%, ${C.petrolDeep} 46%, #012a37 100%)` : `radial-gradient(120% 90% at 20% 0%, #23292f 0%, ${C.slab} 55%, #121518 100%)` }}>{children}</div>
-);
+/**
+ * A scene's ground. The film's world (src/camera.tsx) is drawn once behind every scene and moves with the camera, so a
+ * scene draws no background of its own: only what stands in the world. `tone` is kept for the Stills.
+ */
+export const Ground = ({ children }: { children: ReactNode; tone?: "deep" | "slab" }) => <div style={{ position: "absolute", inset: 0 }}>{children}</div>;

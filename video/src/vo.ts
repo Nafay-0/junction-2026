@@ -9,9 +9,10 @@ import vo from "./vo.json";
 export const FPS = 30;
 export const LEAD = cfg.lead;
 export const TAIL = cfg.tail;
-export const FADE = cfg.fade;
-export type SceneId = keyof typeof cfg.extra;
-export const SCENES = Object.keys(cfg.extra) as SceneId[];
+/** The frames each scene shares with the one before it: the camera move (or cut) into it. */
+export const INTO = cfg.into as Record<string, number>;
+export type SceneId = keyof typeof cfg.min;
+export const SCENES = Object.keys(cfg.min) as SceneId[];
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
@@ -26,4 +27,4 @@ export function cue(scene: SceneId, phrase: string, shift = 0): number {
 }
 
 export const voFrames = (scene: SceneId) => Math.ceil(vo[scene].seconds * FPS);
-export const sceneFrames = (scene: SceneId) => LEAD + voFrames(scene) + TAIL + cfg.extra[scene];
+export const sceneFrames = (scene: SceneId) => LEAD + voFrames(scene) + TAIL + (cfg.extra as Record<string, number>)[scene];

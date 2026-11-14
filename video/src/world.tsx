@@ -149,3 +149,77 @@ export const Field = ({ appear = 1, pull = 0, rules = 0, pulse = 0, top = 170, h
   }, [appear, pull, rules, pulse, top, height, hub]);
   return <canvas ref={ref} width={1920} height={1080} style={{ position: "absolute", inset: 0 }} />;
 };
+
+/**
+ * The gate, large: the object the film keeps coming back to. A slab with the twenty rules as a ring of lights around
+ * its mark, the four checks every order passes, and a hazard barrier that drops when something is refused. Drawn at
+ * 400 × 700 and scaled to `w`; every state is a number so scenes animate it with the film's easing.
+ * - lit: how many of the twenty rule lights are on (fractional: the next one is fading in).
+ * - checks: how many of the four checks have passed (fractional likewise); fail: the check that just failed.
+ * - barrier: 0 up, 1 down. glow: the lime aura of a pass. knock: the amber flash of a refusal.
+ */
+export const GATE_W = 400;
+export const GATE_H = 700;
+const LIGHT = (on: number, flash: number) => {
+  const a = Math.min(1, on + flash);
+  return { background: `rgb(${Math.round(255 + (192 - 255) * a)} ${Math.round(255 + (224 - 255) * a)} ${Math.round(255 + (33 - 255) * a)} / ${0.18 + 0.82 * a})`, boxShadow: a > 0.05 ? `0 0 ${14 * a}px rgb(192 224 33 / ${0.8 * a})` : "none" };
+};
+export const TheGate = ({ w = GATE_W, lit = 0, checks = 0, fail = -1, barrier = 0, glow = 0, knock = 0, flash = 0, label = true }: { w?: number; lit?: number; checks?: number; fail?: number; barrier?: number; glow?: number; knock?: number; flash?: number; label?: boolean }) => {
+  const k = w / GATE_W;
+  return (
+    <div style={{ width: w, height: GATE_H * k, position: "relative" }}>
+      <div style={{ position: "absolute", left: 0, top: 0, width: GATE_W, height: GATE_H, transformOrigin: "0 0", transform: `scale(${k})` }}>
+        <div style={{ position: "absolute", inset: 0, borderRadius: 48, background: `linear-gradient(180deg, #232a31 0%, ${C.slab} 60%)`, border: `3px solid ${knock > 0.02 ? `rgb(255 194 14 / ${0.4 + 0.6 * knock})` : `rgb(${Math.round(255 - 63 * glow)} ${Math.round(255 - 31 * glow)} ${Math.round(255 - 222 * glow)} / ${0.2 + 0.7 * glow})`}`, boxShadow: `${SHADOW.xl}, 0 0 ${110 * Math.max(glow, knock)}px -14px ${knock > glow ? "rgb(255 194 14 / 0.85)" : "rgb(192 224 33 / 0.75)"}` }} />
+        <div style={{ position: "absolute", left: 70, top: 34, width: 260, height: 260 }}>
+          {Array.from({ length: 20 }, (_, i) => {
+            const a = (i / 20) * Math.PI * 2 - Math.PI / 2;
+            const on = Math.max(0, Math.min(1, lit - i));
+            return <span key={i} style={{ position: "absolute", left: 130 + Math.cos(a) * 116 - 5, top: 130 + Math.sin(a) * 116 - 14, width: 10, height: 28, borderRadius: 5, rotate: `${(a * 180) / Math.PI + 90}deg`, ...LIGHT(on, flash) }} />;
+          })}
+          <div style={{ position: "absolute", left: 66, top: 66 }}>
+            <GateMark size={128} />
+          </div>
+        </div>
+        {label && (
+          <div style={{ position: "absolute", left: 0, right: 0, top: 304, textAlign: "center" }}>
+            <div style={{ ...display, fontSize: 46, color: C.paper }}>The gate</div>
+            <div style={{ ...sans, fontSize: 23, color: C.chalkSoft, marginTop: 4 }}>plain code, 20 rules</div>
+          </div>
+        )}
+        <div style={{ position: "absolute", left: 44, right: 44, top: 404 }}>
+          {CHECKS.map((name, i) => {
+            const on = Math.max(0, Math.min(1, checks - i));
+            const no = i === fail;
+            return (
+              <div key={name} style={{ display: "flex", alignItems: "center", gap: 18, height: 58, borderTop: i ? "1px solid rgb(255 255 255 / 0.09)" : "none", ...sans, fontSize: 28, color: `rgb(255 255 255 / ${no ? 1 : 0.45 + 0.55 * on})` }}>
+                <span style={{ position: "relative", width: 34, height: 34, borderRadius: "50%", background: no ? C.safety : "rgb(255 255 255 / 0.13)", boxShadow: no ? "0 0 22px rgb(255 194 14 / 0.9)" : "none", display: "flex", alignItems: "center", justifyContent: "center", ...display, fontSize: 24, color: C.slab }}>
+                  {!no && <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: C.lime, scale: String(0.4 + 0.6 * on), opacity: on, boxShadow: `0 0 ${22 * on}px rgb(192 224 33 / 0.8)` }} />}
+                  {no ? "!" : on > 0.5 ? <IconCheck size={22} color={C.slab} style={{ position: "relative", opacity: (on - 0.5) * 2 }} /> : null}
+                </span>
+                {name}
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ position: "absolute", left: -64, right: -64, top: 640 - 260 * (1 - barrier), height: 44, borderRadius: 12, background: `repeating-linear-gradient(135deg, ${C.safety} 0 26px, ${C.slab} 26px 52px)`, opacity: Math.min(1, barrier * 1.6), boxShadow: "0 16px 30px -10px rgb(0 0 0 / 0.6)" }} />
+      </div>
+    </div>
+  );
+};
+
+/** An agent in the ring: its lamp, its name, what it is for. `lit` 0 is a ghost slot, 1 a live agent. */
+export const AGENT_W = 400;
+export const AgentNode = ({ name, sub, lit = 1, ghost = 0, w = AGENT_W, style }: { name: string; sub: string; lit?: number; ghost?: number; w?: number; style?: CSSProperties }) => {
+  const k = w / AGENT_W;
+  return (
+    <div style={{ width: w, height: 118 * k, ...style }}>
+      <div style={{ width: AGENT_W, height: 118, transformOrigin: "0 0", transform: `scale(${k})`, boxSizing: "border-box", borderRadius: 26, padding: "20px 24px", background: `rgb(255 255 255 / ${0.05 * ghost + 0.08 * lit})`, border: `2.5px ${lit > 0.02 ? "solid" : "dashed"} rgb(192 224 33 / ${0.4 * ghost * (1 - lit) + lit})`, opacity: Math.max(ghost, lit), boxShadow: lit > 0.02 ? `0 20px 50px -24px rgb(0 0 0 / 0.7), 0 0 ${56 * lit}px -12px rgb(192 224 33 / ${0.7 * lit})` : "none", display: "flex", alignItems: "center", gap: 18 }}>
+        <span style={{ width: 22, height: 22, borderRadius: "50%", flexShrink: 0, background: lit > 0.02 ? C.lime : "rgb(255 255 255 / 0.2)", opacity: Math.max(ghost * 0.5, lit), boxShadow: `0 0 ${18 * lit}px rgb(192 224 33 / 0.9)` }} />
+        <div style={{ opacity: lit, minWidth: 0 }}>
+          <div style={{ ...display, fontSize: 38, color: C.paper, whiteSpace: "nowrap" }}>{name}</div>
+          <div style={{ ...sans, fontSize: 23, color: "rgb(255 255 255 / 0.74)", marginTop: 3, whiteSpace: "nowrap" }}>{sub}</div>
+        </div>
+      </div>
+    </div>
+  );
+};

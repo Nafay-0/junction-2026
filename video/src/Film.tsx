@@ -2,22 +2,40 @@ import { Audio } from "@remotion/media";
 import { linearTiming, TransitionSeries } from "@remotion/transitions";
 import type { ReactNode } from "react";
 import { AbsoluteFill, Sequence, staticFile, useCurrentFrame } from "remotion";
-import { Drift, through } from "./anim";
-import { Agents } from "./scenes/Agents";
+import { Drift } from "./anim";
+import { type Move, presentation, World } from "./camera";
+import { Agents, BUYER_NODE, RING_GATE } from "./scenes/Agents";
 import { Aiven } from "./scenes/Aiven";
 import { Close } from "./scenes/Close";
 import { Flow } from "./scenes/Flow";
-import { Gate } from "./scenes/Gate";
-import { Memory } from "./scenes/Memory";
+import { Gate, GATE_SCENE } from "./scenes/Gate";
+import { Memory, MEMORY_NODE } from "./scenes/Memory";
 import { Problem } from "./scenes/Problem";
 import { Search } from "./scenes/Search";
 import { Title } from "./scenes/Title";
 import { C } from "./theme";
 import { D, START, TOTAL } from "./timing";
-import { cue, FADE, FPS, LEAD, SCENES, type SceneId } from "./vo";
+import { cue, FPS, INTO, LEAD, SCENES, type SceneId } from "./vo";
 import vo from "./vo.json";
 
-const cut = <TransitionSeries.Transition presentation={through()} timing={linearTiming({ durationInFrames: FADE })} />;
+/**
+ * How the camera gets into each scene (src/camera.tsx). The shop's signed order travels on to the gate; the camera
+ * pulls back from the gate to the six agents around it, pushes into the buying agent for its memory, follows the
+ * corrected order on to the search, tilts down through the floor to the platform it all runs on, and rises to the
+ * wholesaler's portal for the close. The opening and the title are cuts on the beat.
+ */
+const MOVES: Partial<Record<SceneId, Move>> = {
+  title: { kind: "through" },
+  flow: { kind: "through" },
+  gate: { kind: "pan", dx: 2160, dy: 0 },
+  agents: { kind: "zoom", from: [GATE_SCENE.x, GATE_SCENE.y], to: [RING_GATE.x, RING_GATE.y], s: (GATE_SCENE.w * (1 + GATE_SCENE.push)) / RING_GATE.w },
+  memory: { kind: "zoom", from: [BUYER_NODE.x, BUYER_NODE.y], to: [MEMORY_NODE.x, MEMORY_NODE.y], s: BUYER_NODE.w / MEMORY_NODE.w },
+  search: { kind: "pan", dx: 2160, dy: 0 },
+  aiven: { kind: "pan", dx: 0, dy: 1700, floor: true },
+  close: { kind: "pan", dx: 0, dy: -1500 },
+};
+const WORLD_MOVES = SCENES.filter((id) => MOVES[id]).map((id) => ({ at: START[id], dur: INTO[id], move: MOVES[id] as Move }));
+const move = (id: SceneId) => <TransitionSeries.Transition presentation={presentation(MOVES[id] as Move)} timing={linearTiming({ durationInFrames: INTO[id] })} />;
 
 /** A scene with its narration: the clip starts after the lead-in, on the frame the cut into the scene ends. */
 const scene = (id: SceneId, picture: ReactNode) => (
@@ -66,23 +84,24 @@ const TAP = START.flow + cue("flow", "One passkey", 4);
 
 export const Film = () => (
   <AbsoluteFill style={{ background: C.petrolDeep }}>
+    <World moves={WORLD_MOVES} />
     <TransitionSeries>
       {scene("problem", <Drift origin="20% 50%">{<Problem />}</Drift>)}
-      {cut}
+      {move("title")}
       {scene("title", <Drift by={0.04}>{<Title />}</Drift>)}
-      {cut}
+      {move("flow")}
       {scene("flow", <Flow />)}
-      {cut}
-      {scene("gate", <Drift by={0.02}>{<Gate />}</Drift>)}
-      {cut}
-      {scene("agents", <Drift by={0.02}>{<Agents />}</Drift>)}
-      {cut}
-      {scene("memory", <Drift by={0.03}>{<Memory />}</Drift>)}
-      {cut}
+      {move("gate")}
+      {scene("gate", <Gate />)}
+      {move("agents")}
+      {scene("agents", <Agents />)}
+      {move("memory")}
+      {scene("memory", <Memory />)}
+      {move("search")}
       {scene("search", <Drift by={0.02}>{<Search />}</Drift>)}
-      {cut}
+      {move("aiven")}
       {scene("aiven", <Drift by={0.02}>{<Aiven />}</Drift>)}
-      {cut}
+      {move("close")}
       {scene("close", <Close />)}
     </TransitionSeries>
     <Bed />
