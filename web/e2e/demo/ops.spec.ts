@@ -1,5 +1,6 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { addPasskey, approvalState, enterOps, joinAsApprover, watchErrors } from "../support/dock";
+import { card, cards, composer, threadLog } from "../support/thread";
 
 /**
  * The operations portal, against the real hermetic server (nothing stubbed). The wholesaler's staff enter with the
@@ -64,7 +65,6 @@ test("the desk is closed without the passcode; a wrong passcode is refused", asy
 });
 
 test("suspend a visitor's agent: its next call is refused naming the suspension; resume and it works again", async ({ page, browser, baseURL }) => {
-  test.fixme(true, "main b9f934e replaced the order lane and the agent panel with one conversation thread: rewrite against the thread once it settles");
   test.setTimeout(180_000);
   const errors = watchErrors(page);
   const v = await visitorPhone(browser, baseURL);
@@ -113,18 +113,22 @@ test("suspend a visitor's agent: its next call is refused naming the suspension;
   const mcpText = await mcp.text();
   expect(mcpText).toContain("operator_suspension");
   expect(mcpText).toContain(reason);
-  // ... and the kitchen's own order page (the on-site agent), where a judge would see it.
+  // ... and the kitchen's own thread (the on-site agent, one more client of the same gate), where a judge would see
+  // it: the request is refused with the suspension and its reason, nothing priced.
   const k = await v.phone.context().newPage();
   await k.setViewportSize({ width: 1440, height: 900 });
   await k.goto(`/k/${v.slug}/order`);
-  await k.getByRole("button", { name: "200 litres of lactose-free milk for Wednesday, cheapest", exact: true }).click();
-  const offline = k.getByRole("button", { name: "Use the offline example reader" });
-  const refusedText = k.getByText(/suspended this agent/).first();
-  await expect(offline.or(refusedText)).toBeVisible({ timeout: 30_000 });
-  if (await offline.isVisible()) await offline.click();
-  await expect(refusedText).toBeVisible({ timeout: 30_000 });
-  await expect(k.getByText(reason).first()).toBeVisible();
-  await expect(k.getByRole("button", { name: "Get a fixed price for this" })).toHaveCount(0);
+  await expect(threadLog(k)).toBeVisible();
+  const words = "200 litres of lactose-free milk for Wednesday, cheapest";
+  // The turn itself is refused (403 agent_suspended): "Not sent", the reason, and the words stay in the field.
+  await composer(k).fill(words);
+  await composer(k).press("Enter");
+  const refusedAlert = threadLog(k).getByRole("alert");
+  await expect(refusedAlert).toContainText(/Not sent: .*suspended this agent/, { timeout: 30_000 });
+  await expect(refusedAlert).toContainText(reason);
+  await expect(composer(k)).toHaveValue(words);
+  await expect(cards(k, "understood")).toHaveCount(0);
+  await expect(cards(k, "price")).toHaveCount(0);
 
   // What the kitchen's own home page shows while its agent is suspended (QA saw it look normal). Recorded as an
   // annotation, not asserted: the order page above does say it once a request is made.
@@ -151,27 +155,19 @@ test("suspend a visitor's agent: its next call is refused naming the suspension;
   const past = (await control(page)).past.find((s) => s.target === agent!.agentId);
   expect(past?.refusals).toBeGreaterThan(0);
 
-  // Resumed: the same calls work again.
+  // Resumed: the same calls work again, and the same words in the thread reach the reading and the options.
   expect((await v.phone.request.get("/api/v1/kitchen", { headers: mandate })).status()).toBe(200);
-  // The refused run would come back on reload (the console keeps it in session storage, restored a moment after the
-  // page renders, which races the example chips); forget it first so the order page starts empty.
-  await k.evaluate((slug) => sessionStorage.removeItem(`dock-run:${slug}`), v.slug);
   await k.goto(`/k/${v.slug}/order`);
-  const example = k.getByRole("button", { name: "200 litres of lactose-free milk for Wednesday, cheapest", exact: true });
-  await example.click();
-  // "cheapest" names the criterion, so the agent chooses and the fixed price is offered straight away.
-  const price = k.getByRole("button", { name: "Get a fixed price for this" }).first();
-  const place = k.getByRole("button", { name: "Place the order" });
-  await expect(offline.or(price).or(place)).toBeVisible({ timeout: 30_000 });
-  if (await offline.isVisible()) await offline.click();
-  await expect(price.or(place)).toBeVisible({ timeout: 30_000 });
-  await expect(k.getByText(/suspended this agent/)).toHaveCount(0);
+  await composer(k).fill(words);
+  await composer(k).press("Enter");
+  await expect(card(k, "understood")).toContainText(/How much\s*200\sL/, { timeout: 30_000 });
+  await expect(card(k, "options").or(card(k, "price"))).toBeVisible({ timeout: 30_000 });
+  await expect(threadLog(k).getByRole("alert")).toHaveCount(0);
   expect(realErrors(errors)).toEqual([]);
   await v.phone.context().close();
 });
 
 test("overview, then a trace of the visitor's own request replays station by station", async ({ page, browser, baseURL }) => {
-  test.fixme(true, "main redesigned the operations desk (0a1c3db): rewrite against the new trace screen once it settles");
   test.setTimeout(150_000);
   const errors = watchErrors(page);
   const v = await visitorPhone(browser, baseURL);
@@ -206,7 +202,10 @@ test("overview, then a trace of the visitor's own request replays station by sta
   await expect(page.getByText(new RegExp(`^Replaying: \\d+ of ${n} stations reached\\.$`))).toBeVisible();
   await expect(page.getByRole("button", { name: "Pause the replay" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Play the replay" })).toHaveText(/Replay/, { timeout: 90_000 });
-  await expect(page.getByRole("slider", { name: "Scrub through the stations" })).toHaveValue(String(n));
+  // The scrubber is there from 640 px up; on a phone the last station is open instead.
+  const scrub = page.getByRole("slider", { name: "Scrub through the stations" });
+  if (await scrub.isVisible()) await expect(scrub).toHaveValue(String(n));
+  else await expect(page.getByRole("button", { name: "Show every station" })).toBeDisabled();
   expect(realErrors(errors)).toEqual([]);
 
   await v.phone.getByRole("button", { name: /^Decline/ }).click();

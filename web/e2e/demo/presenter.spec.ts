@@ -2,6 +2,7 @@ import { randomInt } from "node:crypto";
 import { expect, test, type APIRequestContext, type Browser, type Page } from "@playwright/test";
 import { OPS_PASSCODE, addPasskey, approvalState, approveButton, openWall, signInStage, watchErrors } from "../support/dock";
 import { acquireLock } from "../support/recall-lock";
+import { card, cards, option, say, threadLog } from "../support/thread";
 
 /**
  * The presenter path: the two built-in demo kitchens (/k/kaari, /k/laakso) name fictional approvers, so in a
@@ -9,7 +10,7 @@ import { acquireLock } from "../support/recall-lock";
  * on their own phone (/join/presenter, server/presenter.ts). Everything here runs against the real hermetic server
  * (model off, seed catalogue); nothing is stubbed.
  *
- * Kitchen and amount: Ravintola Kaari, "100 litres of milk for Thursday" (an example chip on /k/kaari/order), about
+ * Kitchen and amount: Ravintola Kaari, "100 litres of milk for Thursday" (typed into Kaari's thread), about
  * €130-150 against Kaari's €100 per-order limit, so it goes to Sanna Koskinen (head chef, signs up to €1,000).
  * Not Laakso's 1,000 L example: Laakso's weekly budget is €2,000 and one signed 1,000 L order (€1,322) uses it up
  * for the week (QA finding 2), so only one of the six projects could ever pass, and the shared kitchens are also
@@ -48,51 +49,55 @@ const KITCHEN_SIZE = { width: 1440, height: 900 };
 /**
  * The demo kitchen's order page, on its own laptop-sized screen. Since main 1d1e7f1 the stage kitchens are private:
  * the kitchen's screen is signed in to Kaari's account first, as the kitchen's staff (or the presenter's laptop) is.
+ * Kaari has one conversation thread for every test on the server: the caller holds the thread lock, and the thread
+ * is started over here.
  */
 async function kitchenScreen(browser: Browser, baseURL: string | undefined): Promise<Page> {
   const ctx = await browser.newContext({ baseURL, viewport: KITCHEN_SIZE, extraHTTPHeaders: { "x-forwarded-for": fakeAddress() } });
   const k = await ctx.newPage();
   await signInStage(k, "kaari");
+  expect((await k.request.post("/ui-api/kitchens/kaari/thread/reset")).ok()).toBe(true);
   await k.goto("/k/kaari/order");
-  await expect(k.getByRole("heading", { name: "Order", exact: true })).toBeVisible();
+  await expect(k.getByRole("heading", { name: "Order with your agent" })).toBeVisible();
   return k;
 }
 
 /**
- * Pick an example request on the kitchen's order page and take it to the gate: model off, so the console offers the
- * offline example reader; then the cheapest card (the last, "Best price") unless the agent already chose, a fixed
- * price, place it.
- * Returns the approval id the sign-off panel's QR code points at, or undefined when Kaari's budget is spent.
+ * Ask Kaari's agent in the thread and take the request to the gate: confirm a check if one comes (an earlier
+ * project's order for the same day: "Order again?"), choose the "Best" option unless the agent already fixed the
+ * price; the choice orders it and the gate sends it to the head chef. Then the order's page (the thread's order card
+ * links to it) shows the sign-off code for the head chef's phone.
+ * Returns the approval id the code points at, or undefined when Kaari's budget is spent.
  */
-async function orderOverTheLimit(k: Page, example: string): Promise<{ approvalId: string; qrLink: string; qrMode: "enrol" | "passkey" } | undefined> {
-  await k.getByRole("button", { name: example, exact: true }).click();
-  const offline = k.getByRole("button", { name: "Use the offline example reader" });
-  const price = k.getByRole("button", { name: "Get a fixed price for this" });
-  const nothing = k.getByText(/Nothing fits/);
-  // A request that names its criterion ("lowest CO2") is chosen by the agent and priced at once: no card to pick.
-  const place = k.getByRole("button", { name: "Place the order" });
-  // An earlier project's signed 100 L for the same day: the mistake check asks "Order again?" (the duplicate check).
-  const again = k.getByRole("button", { name: "Yes, I meant that" });
-  const ready = price.first().or(place).or(nothing.first());
-  await expect(offline.or(ready).or(again)).toBeVisible({ timeout: 30_000 });
-  if (await offline.isVisible()) {
-    await offline.click();
-    await expect(ready.or(again)).toBeVisible({ timeout: 30_000 });
+async function orderOverTheLimit(k: Page, words: string): Promise<{ approvalId: string; qrLink: string; qrMode: "enrol" | "passkey" } | undefined> {
+  const before = await cards(k, "gate").count();
+  await say(k, words);
+  const gate = cards(k, "gate").nth(before);
+  const check = card(k, "anomaly").getByRole("button", { name: "Yes, that is right" });
+  const best = option(k, "Best");
+  const nothing = card(k, "notice").filter({ hasText: /Nothing in the assortment fits|budget/i });
+  for (let i = 0; i < 3; i++) {
+    await expect(gate.or(check).or(best).or(nothing).first()).toBeVisible({ timeout: 30_000 });
+    if (await nothing.isVisible()) return undefined;
+    if (await gate.isVisible()) break;
+    if (await check.isVisible()) await check.click();
+    else if (await best.isVisible()) await best.getByRole("button", { name: "Choose" }).click();
+    await expect(check).toHaveCount(0, { timeout: 15_000 }).catch(() => undefined);
   }
-  if ((await again.isVisible()) && !(await ready.isVisible())) {
-    await again.click();
-    await expect(ready).toBeVisible({ timeout: 30_000 });
-  }
-  if (await nothing.first().isVisible()) return undefined;
-  if (!(await place.isVisible())) await price.last().click();
-  await place.click();
-  await expect(k.getByText("Stopped at the gate").first()).toBeVisible({ timeout: 30_000 });
-  await expect(k.getByText(/Sanna Koskinen, head chef, must sign off/)).toBeVisible();
-  const link = k.getByRole("link", { name: /^(Become the approver|Open the sign-off screen)$/ });
+  await expect(gate).toBeVisible({ timeout: 30_000 });
+  if (/budget/i.test(await gate.innerText())) return undefined;
+  await expect(gate).toContainText("Waiting for Sanna Koskinen", { timeout: 30_000 });
+  // The order's own page carries the sign-off code (the thread links to it), on a second tab of the kitchen's screen.
+  const href = (await card(k, "order").getByRole("link", { name: "See the order" }).getAttribute("href"))!;
+  const detail = await k.context().newPage();
+  await detail.goto(href);
+  const link = detail.getByRole("link", { name: /^(Become the approver|Open the sign-off screen)$/ });
   await expect(link).toBeVisible({ timeout: 20_000 });
-  const href = (await link.getAttribute("href"))!;
+  const url = new URL((await link.getAttribute("href"))!, k.url());
   const name = (await link.textContent())!;
-  const url = new URL(href);
+  if (name === "Become the approver") await expect(detail.getByText(/A presenter scans this, enters the operations passcode/)).toBeVisible();
+  else await expect(detail.getByText("Scan with Sanna Koskinen's phone. Approving needs their passkey.")).toBeVisible();
+  await detail.close();
   const approvalPath = name === "Become the approver" ? url.searchParams.get("next")! : url.pathname;
   const approvalId = approvalPath.split("/approve/")[1].split(/[?#/]/)[0];
   return { approvalId, qrLink: url.pathname + url.search, qrMode: name === "Become the approver" ? "enrol" : "passkey" };
@@ -142,13 +147,13 @@ test("five wrong passcodes from one address lock out the right one too", async (
   expect(other.status()).toBe(200);
 });
 
-test("presenter enrols with the passcode and a passkey, signs Kaari's order over the limit, signed order on the wall; the next one opens from the console's code", async ({ page, browser, baseURL }) => {
-  test.fixme(true, "main b9f934e replaced the order lane and the agent panel with one conversation thread: rewrite against the thread once it settles");
-  test.setTimeout(240_000);
+test("presenter enrols with the passcode and a passkey, signs Kaari's order over the limit, signed order on the wall; the next one opens from the order's code", async ({ page, browser, baseURL }) => {
+  test.setTimeout(300_000);
   const errors = watchErrors(page);
   await page.context().setExtraHTTPHeaders({ "x-forwarded-for": fakeAddress() });
   const passkey = await addPasskey(page);
-  const release = await acquireLock(`presenter-kaari-${baseURL}`, { timeoutMs: 200_000 });
+  const release = await acquireLock(`presenter-kaari-${baseURL}`, { timeoutMs: 280_000 });
+  const releaseThread = await acquireLock(`thread-kaari-${baseURL}`, { timeoutMs: 280_000 });
   const wallContext = await browser.newContext({ baseURL });
   try {
     const wall = await openWall(wallContext);
@@ -157,7 +162,6 @@ test("presenter enrols with the passcode and a passkey, signs Kaari's order over
     // 1. The kitchen's agent places an order over its limit; the console shows a code for the (fictional) head chef.
     const first = await orderOverTheLimit(k, "100 litres of milk for Thursday");
     test.skip(!first, "Kaari's weekly budget is spent on this server (other specs ordered on the shared demo kitchen)");
-    if (first!.qrMode === "enrol") await expect(k.getByText(/A presenter scans this, enters the operations passcode/)).toBeVisible();
     await expect(wall.getByText(/^Waiting for /).first()).toBeVisible({ timeout: 20_000 });
 
     // 2. The presenter scans it (or, when an earlier project already enrolled, opens the presenter page for the same
@@ -183,8 +187,9 @@ test("presenter enrols with the passcode and a passkey, signs Kaari's order over
     const view = await stateOf(page.request, first!.approvalId);
     expect(view.view).toMatchObject({ state: "committed", outcome: { method: "passkey", verified: true } });
 
-    // The kitchen's page and the wall follow live.
-    await expect(k.getByText(/Authorised by Sanna Koskinen/)).toBeVisible({ timeout: 20_000 });
+    // The kitchen's thread and the wall follow live: the same gate card now says who signed.
+    await expect(card(k, "gate")).toContainText("Signed off by Sanna Koskinen", { timeout: 20_000 });
+    await expect(card(k, "order")).toContainText("Placed");
     await expect(wall.getByText(/^Signed order/).first()).toBeVisible({ timeout: 20_000 });
 
     // The ledger records who enrolled, on what authority, and that the order was signed with the passkey.
@@ -192,25 +197,28 @@ test("presenter enrols with the passcode and a passkey, signs Kaari's order over
     expect(ledger.verification.ok).toBe(true);
     expect(ledger.explanation.join("\n")).toMatch(/signed with a passkey/);
 
-    // 4. The next order over the limit: the console's code now says the head chef's passkey is needed and opens the
+    // 4. The next order over the limit: the order's code now says the head chef's passkey is needed and opens the
     //    sign-off screen straight away (no second enrolment). Declined from the phone, so it costs no budget.
-    await k.getByRole("button", { name: "New request" }).first().click();
+    //    The thread is started over first: after a sign-off the same thread's next request fails today (the
+    //    test.fail "after the phone signs, the same thread answers the next request" in store.spec.ts).
+    await k.getByRole("button", { name: "Start over" }).click();
+    await expect(threadLog(k).getByRole("article")).toHaveCount(0);
     const second = await orderOverTheLimit(k, "100 L milk for Wednesday, lowest CO2");
     test.skip(!second, "Kaari's weekly budget is spent on this server (other specs ordered on the shared demo kitchen)");
     expect(second!.qrMode).toBe("passkey");
-    await expect(k.getByText("Scan with Sanna Koskinen's phone. Approving needs their passkey.")).toBeVisible();
     await page.goto(second!.qrLink);
     await page.getByRole("button", { name: "Add reason" }).click();
     await page.getByRole("button", { name: "Too expensive" }).click();
     await page.getByRole("button", { name: /^Decline/ }).click();
     await expect(page.getByRole("heading", { name: "Declined" })).toBeVisible();
     expect((await stateOf(page.request, second!.approvalId)).view?.state).toMatch(/declined/);
-    await expect(k.getByText(/Declined|Not ordered/).first()).toBeVisible({ timeout: 20_000 });
+    await expect(card(k, "gate")).toContainText("Declined", { timeout: 20_000 });
     // WebKit reports a fetch cancelled by a navigation as "... due to access control checks."; not a user-visible error.
     expect(errors.filter((e) => !/^pageerror: \S+ due to access control checks\.$/.test(e))).toEqual([]);
     await k.context().close();
   } finally {
     await wallContext.close();
+    releaseThread();
     release();
   }
 });
@@ -222,11 +230,11 @@ test("presenter enrols with the passcode and a passkey, signs Kaari's order over
  * itself. Now the presenter's home shows the role they took and the next request opens by itself.
  */
 test("a presenter who enrols ahead of the demo sees their sign-offs and gets the next one by itself", async ({ page, browser, baseURL }) => {
-  test.fixme(true, "main b9f934e replaced the order lane and the agent panel with one conversation thread: rewrite against the thread once it settles");
-  test.setTimeout(240_000);
+  test.setTimeout(300_000);
   await page.context().setExtraHTTPHeaders({ "x-forwarded-for": fakeAddress() });
   await addPasskey(page);
-  const release = await acquireLock(`presenter-kaari-${baseURL}`, { timeoutMs: 200_000 });
+  const release = await acquireLock(`presenter-kaari-${baseURL}`, { timeoutMs: 280_000 });
+  const releaseThread = await acquireLock(`thread-kaari-${baseURL}`, { timeoutMs: 280_000 });
   let k: Page | undefined;
   try {
     await page.goto("/join/presenter?kitchen=kaari&role=head_chef");
@@ -247,6 +255,7 @@ test("a presenter who enrols ahead of the demo sees their sign-offs and gets the
     await expect(page.getByRole("heading", { name: "Declined" })).toBeVisible();
   } finally {
     await k?.context().close();
+    releaseThread();
     release();
   }
 });

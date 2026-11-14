@@ -212,9 +212,9 @@ test("in the thread, the voice service answers nothing: the call gives up by its
  * lets the WebSocket through and nothing back), the buyer should hear "The voice connection did not open (the network
  * may block it). Type instead." within about 12 s. Instead the call goes back and forth between the two providers
  * for about 23 s and ends on a stale notice, "The first voice service refused the call (its limit). Trying the other
- * one…", which is not what happened and promises a retry that never comes. Cause: src/app/_channels/use-call.ts:451
- * (the 6 s switch replaces the socket, so the 12 s "did not open" timer at :460 never fires for it), :427 (a lost
- * second provider reconnects to the first), and the ended call's toast reads `view.notice` before `endReason`
+ * one…", which is not what happened and promises a retry that never comes. Cause: src/app/_channels/use-call.ts:438-446
+ * (the 6 s switch replaces the socket, so the 12 s "did not open" timer at :447-453 never fires for it), :425-431 (a
+ * lost second provider reconnects to the first), and the ended call's toast reads `view.notice` before `endReason`
  * (src/app/k/[kitchen]/thread.tsx:521).
  */
 test("in the thread, a voice service that never answers is named as such", async ({ page }, info) => {
@@ -250,7 +250,7 @@ test("in the thread, a call that cannot reconnect ends saying it was lost, not '
 
 /**
  * DEFECT (test.fail until fixed). Moving a call to the second provider ends the first provider's call and asks for
- * the new one at the same moment (src/app/_channels/use-call.ts:452-454 and :409-411: `void post(end)` then dial,
+ * the new one at the same moment (src/app/_channels/use-call.ts:442-444 and :419-421: `void post(end)` then dial,
  * not awaited), and the server counts the call being replaced as busy (src/server/channels/voice/calls.ts:105: the
  * line check does not exempt `carryFrom`). Whenever the new request arrives before the end, it is refused "This
  * kitchen's agent is already on a call", and the switch the fallback exists for never happens. Here the end is held

@@ -221,3 +221,31 @@ test("the understood card says what matters in words, never a code", async ({ pa
   await expect(understood).toBeVisible({ timeout: 20_000 });
   await expect(understood).not.toContainText(/What matters\s*(unstated|price|co2|reliability)\b/);
 });
+
+/**
+ * DEFECT (test.fail until fixed; would lose the demo). After a person signs a waiting order off on their phone, the
+ * next request in the same thread fails: "The agent did not answer. Try again in a moment." (and "Try again" fails
+ * the same way; only "Start over" clears it). Cause: src/server/thread/agent.ts:314 keeps `result.response.messages`,
+ * which in AI SDK 7 is the final step's messages only (ai/dist/index.js:10870), not `result.responseMessages`
+ * (:10873). The thread's model history so loses the steps before the last; after a sign-off the resumed loop's last
+ * step is the model's sentence, so the approved await_sign_off call keeps no tool result
+ * (src/server/thread/engine.ts:390), and the SDK refuses the next turn's history (AI_MissingToolResultsError).
+ * Model-independent: reproduced in process with the scripted provider. On the demo path the reviewer types into the
+ * same thread right after signing.
+ */
+test("after the phone signs, the same thread answers the next request", async ({ page: phone }) => {
+  test.fail(!process.env.E2E_EXPECT_FIXED, "the thread's history loses the signed-off tool result: the next turn is refused");
+  test.setTimeout(120_000);
+  const { page } = await phoneAndStore(phone);
+  await say(page, MILK);
+  await option(page, "Best").getByRole("button", { name: "Choose" }).click({ timeout: 20_000 });
+  await expect(card(page, "gate")).toContainText(/Waiting for /, { timeout: 20_000 });
+  await phone.waitForURL("**/approve/**", { timeout: 30_000 });
+  await approveButton(phone).click();
+  await expect(phone.getByRole("heading", { name: "Order placed" })).toBeVisible({ timeout: 30_000 });
+  await expect(card(page, "gate")).toContainText(/Signed off by /, { timeout: 30_000 });
+  await say(page, "200 litres of lactose-free milk for Wednesday, cheapest");
+  await expect(answerTo(page, "200 litres of lactose-free milk for Wednesday, cheapest").getByRole("article").first()).toBeVisible({ timeout: 30_000 });
+  await expect(cards(page, "notice").filter({ hasText: "The agent did not answer" })).toHaveCount(0);
+  await expect(card(page, "understood")).toContainText(/How much\s*200\sL/);
+});
