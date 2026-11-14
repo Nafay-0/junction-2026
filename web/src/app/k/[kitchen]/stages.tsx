@@ -49,6 +49,11 @@ export function Quote({ q, names, decided, busy, onPlace, onNew }: { q: NonNulla
           <div>
             <p className="text-[0.88rem] font-medium text-ink-soft">{tx.totalSigned}</p>
             <p className="display text-[3.4rem] text-ink tabular">{money(q.quote.totalCents)}</p>
+            {q.quote.depositCents ? (
+              <p className="text-[0.86rem] text-ink-soft">{tx.totalParts(money(q.quote.goodsCents ?? q.quote.totalCents - q.quote.depositCents), money(q.quote.depositCents), q.quote.vat && !q.quote.vat.incomplete ? money(q.quote.vat.vatCents) : undefined)}</p>
+            ) : q.quote.vat && !q.quote.vat.incomplete ? (
+              <p className="text-[0.86rem] text-ink-soft">{tx.vatOnTop(money(q.quote.vat.vatCents))}</p>
+            ) : null}
           </div>
           <div className="min-w-[12rem] flex-1 sm:max-w-[18rem]" aria-live="off">
             <p className="flex items-baseline justify-between gap-3 text-[0.88rem] font-medium text-ink-soft">

@@ -56,7 +56,7 @@ Lower-level tools for follow-up: open_request, search_products (free master data
 Rules of the road:
 - Fill submit_need with only what the person said and call it; do not ask for details first. AimoPilot asks only what changes the outcome.
 - Talk to the person in plain words: option titles, totals in euros, delivery days. No ids or JSON unless they ask.
-- Quantities are packs. Prices are euro cents ex VAT.
+- Quantities are packs. Prices are euro cents ex VAT. A quote's totalCents adds returnable-packaging deposits (lines[].deposit, outside VAT; amounts at the Finnish deposit system's published rates, since the price service states none) to the goods, and the mandate's limits compare that total. Each line states its VAT rate (taxRatePct, from the price service, else the product data's VAT class) and quote.vat adds VAT up by rate. listUnitPriceCents is the list price when the kitchen's own price is lower. Products carry nutrition per 100 g or ml; a mandate's nutritionRules are checked by the gate (rule nutrition_rules), and a product that does not declare the figure is refused.
 - Ask live prices only for a short list (at most 10 products per call); never scan the catalogue.
 - If the preferred product is short, quote what it has and add a substitute line with substituteFor.
 - Every refusal names the rule that fired (error.rule) and says what to do next (nextStep). A refusal is final unless nextStep says how to fix it: tell the person, do not loop.`;
