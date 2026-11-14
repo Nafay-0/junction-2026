@@ -248,6 +248,9 @@ export function useCall(kitchen: string) {
       }
       const words = (heardFinal.current ?? heard.current).trim();
       const t = turn.current;
+      // These words are used: the next utterance starts clean (a provider that sends only a final transcript too).
+      heard.current = "";
+      heardFinal.current = undefined;
       const wasOverlap = overlap.current;
       const wasDuring = duringAgent.current;
       heardOpen.current = false;
@@ -351,6 +354,14 @@ export function useCall(kitchen: string) {
       },
       onHeardFinal: (t) => {
         lastHeardAt.current = Date.now();
+        if (!heardOpen.current && t.trim()) {
+          // A final transcript with no deltas before it: a new utterance all the same.
+          turn.current += 1;
+          heardOpen.current = true;
+          duringAgent.current = !!audio.current?.speaking;
+          overlap.current = duringAgent.current && lastAsk.current;
+          timings.current.push({ turn: turn.current, words: t.trim().slice(0, 120) });
+        }
         heardFinal.current = t;
         if (t.trim()) set({ heard: t.trim() });
       },

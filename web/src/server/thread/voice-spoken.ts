@@ -87,7 +87,7 @@ export function speakable(text: string, lang: Lang, max = 45): string {
   t = t.replace(/(\d+(?:[.,]\d+)?)\s?(L|l|kg|g)(?![\p{L}\d])/gu, (_, n: string, u: string) => sayAmount(Number(n.replace(",", ".")), u, lang));
   t = t.replace(/\s\+\s/g, { en: " and ", fi: " ja ", sv: " och " }[lang]);
   t = t.replace(/[•·▪]\s*/g, "").replace(/\s*\n+\s*/g, ". ").replace(/\.\s*\./g, ".").replace(/\s{2,}/g, " ").replace(/\s+([.,;:!?])/g, "$1").trim();
-  const sentences = t.split(/(?<=[.!?])\s+/).map((x) => x.trim()).filter((x) => x && !SCREEN_ONLY.test(x));
+  const sentences = t.split(/(?<=[.!?])\s+(?=[\p{Lu}\d"“(])/u).map((x) => x.trim()).filter((x) => x && !SCREEN_ONLY.test(x));
   const out: string[] = [];
   let words = 0;
   for (const s of sentences) {
