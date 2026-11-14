@@ -195,6 +195,7 @@ async function flushMetrics(h: AivenHandle): Promise<void> {
   if (h.schema && h.switches.store === "postgres") {
     await h.pool.query(`delete from ${h.schema}.docs where collection in ('session', 'ceremony') and expires_at < now() - interval '1 hour'`);
     await h.pool.query(`delete from ${h.schema}.account_sessions where expires_at < now()`);
+    await h.pool.query(`delete from ${h.schema}.account_links where expires_at < now()`);
   }
 }
 

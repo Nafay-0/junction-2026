@@ -31,7 +31,7 @@ export async function POST(req: Request) {
       const body = (await readJson(req)) as { step?: unknown; link?: unknown; response?: RegistrationResponseJSON };
       const link = typeof body.link === "string" ? body.link : undefined;
       const s = await currentAccount(req, rt);
-      const username = link ? rt.accounts.linkAccount(link) : s?.account.username;
+      const username = link ? await rt.accounts.linkAccount(link, "device") : s?.account.username;
       if (!username) throw new DockError(link ? 410 : 401, link ? "device_link_expired" : "not_signed_in", link ? "This code has expired or was used. Show a new one from Agent and rules." : "Sign in first.", "account");
       if (body.step === "begin") {
         const account = await rt.accounts.get(username);

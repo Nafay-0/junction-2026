@@ -15,7 +15,6 @@ import { ACCOUNT_COOKIE } from "@/server/accounts/http";
 import { testAccountsShown, testResetMinutes } from "@/server/accounts/schedule";
 import { TEST_ACCOUNTS } from "@/server/accounts/test-accounts";
 import { joinLink } from "@/server/approval-links";
-import { resolveKitchen } from "@/server/console-kitchens";
 import { getRuntime } from "@/server/runtime";
 import { LangProvider } from "../_i18n/provider";
 import { DEFAULT_LANG, type Lang } from "../_i18n/lang";
@@ -31,9 +30,9 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /**
- * The door to the shop (/k): sign in, open an account, use a shared test account, or scan to try without one; and
- * the two stage kitchens, open to look around. The first page a visitor sees after the wall: a petrol hero with the
- * generated still life, the sign-in card lifted over its edge, the quieter paths under it.
+ * The door to the shop (/k): sign in, open an account, use a shared test account, or scan to try without one. No
+ * kitchen is open to strangers, the stage kitchens included: they are accounts like any other. The first page a
+ * visitor sees after the wall: a petrol hero with the generated still life, the sign-in card lifted over its edge.
  */
 export default function KitchenEntry({ searchParams }: PageProps<"/k">) {
   return (
@@ -95,7 +94,6 @@ async function Door({ lang, searchParams }: { lang: Lang; searchParams: PageProp
   const me = signedIn ? rt.accounts.view(signedIn.account) : undefined;
   const approver = await rt.passkeys.sessionApprover(jar.get(SESSION_COOKIE)?.value);
   const mine = approver ? await rt.sandboxes.forApprover(approver.approverId) : undefined;
-  const demos = await Promise.all(["kaari", "laakso"].map((slug) => resolveKitchen(slug)));
   const join = await joinLink(hdrs);
   const shown = testAccountsShown();
   const as = (await searchParams).as; // "Sign in to this account" from a private kitchen's page
@@ -211,32 +209,6 @@ async function Door({ lang, searchParams }: { lang: Lang; searchParams: PageProp
         </div>
       </section>
 
-      <section aria-labelledby="demo">
-        <h2 id="demo" className="display text-[1.6rem] leading-tight sm:text-[1.8rem]">
-          {tx.demoTitle}
-        </h2>
-        <p className="mt-2 max-w-[68ch] leading-relaxed text-ink-soft">{tx.demoBody}</p>
-        <ul className="mt-6 grid gap-4 md:grid-cols-2">
-          {demos.map((k) =>
-            k ? (
-              <li key={k.info.slug}>
-                <Link href={`/k/${k.info.slug}`} className="lift group flex h-full flex-col rounded-xl border border-line bg-paper p-5 sm:p-6">
-                  <span className="flex items-center gap-3">
-                    <Avatar name={k.info.name} size={44} />
-                    <span className="display min-w-0 text-[1.4rem] leading-tight">{k.info.name}</span>
-                  </span>
-                  <span className="mt-3 leading-relaxed">{etx.about[k.info.slug] ?? etx.aDemoKitchen}</span>
-                  <span className="mt-2 flex-1 text-[0.92rem] leading-snug text-ink-soft">{etx.agentAlone(moneyShort(k.info.mandate.perOrderLimitCents), k.info.mandate.approvers[0]?.name)}</span>
-                  <span className="mt-4 inline-flex items-center gap-1.5 font-semibold text-petrol">
-                    {tx.enter}
-                    <ArrowRight aria-hidden size={17} className="transition-transform duration-150 group-hover:translate-x-0.5 motion-reduce:transition-none" />
-                  </span>
-                </Link>
-              </li>
-            ) : null,
-          )}
-        </ul>
-      </section>
     </>
   );
 }

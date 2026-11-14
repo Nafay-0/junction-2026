@@ -1,4 +1,5 @@
 import { approvalLink } from "@/server/approval-links";
+import { accountApprovalQr } from "@/server/accounts/approval-qr";
 import { demoApprovalQr } from "@/server/presenter";
 import { consoleKitchen } from "@/server/authz";
 import { errorBody, handle } from "@/server/http";
@@ -26,15 +27,7 @@ export async function GET(req: Request, ctx: RouteContext<"/ui-api/kitchens/[kit
     const approver = { name: c.approval.approver.name, role: c.approval.approver.role };
     const base = { approver, status: c.approval.status, orderId: c.order.orderId };
 
-    if (k.info.kind === "account") {
-      // The kitchen's signer signs with a passkey on a signing device. With none added yet, the order waits and the
-      // screen says how to add one; no link or tap stands in for the passkey.
-      const signer = await rt.passkeys.store.findApprover(c.order.orgId, c.approval.approver.role);
-      const devices = signer ? (await rt.passkeys.store.credentialsOf(signer.approverId)).length : 0;
-      const link = await approvalLink(approvalId, req);
-      if (devices === 0) return Response.json({ mode: "no_device", ...base, url: link.url, qrSvg: "" });
-      return Response.json({ mode: "passkey", ...base, url: link.url, qrSvg: link.qrSvg });
-    }
+    if (k.info.kind === "account") return Response.json(await accountApprovalQr(rt, req, { orgId: c.order.orgId, role: c.approval.approver.role, ...base }, approvalId));
     if (k.info.kind === "visitor") {
       const link = await approvalLink(approvalId, req);
       return Response.json({ mode: "passkey", ...base, url: link.url, qrSvg: link.qrSvg });

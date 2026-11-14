@@ -21,11 +21,12 @@ export default function MenuPage(props: PageProps<"/k/[kitchen]/menu">) {
 
 async function Loaded({ params }: PageProps<"/k/[kitchen]/menu">) {
   const { kitchen } = await params;
-  const planned = (MENU_KITCHENS as string[]).includes(kitchen);
+  // The stage kitchens and every account's kitchen; a visitor's 90-minute kitchen has no menu agent.
+  const planned = (MENU_KITCHENS as string[]).includes(kitchen) || !kitchen.startsWith("sbx_");
   return (
     <div className="mt-6 sm:mt-8">
       <StorePlanIntro />
-      <div className="mt-7 sm:mt-8">{planned ? <MenuPlanner key={kitchen} kitchen={kitchen} /> : <StorePlanUnavailable kitchens={MENU_KITCHENS} />}</div>
+      <div className="mt-7 sm:mt-8">{planned ? <MenuPlanner key={kitchen} kitchen={kitchen} /> : <StorePlanUnavailable kitchens={[]} />}</div>
     </div>
   );
 }

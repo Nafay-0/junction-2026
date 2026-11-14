@@ -4,10 +4,14 @@
  * assistant should. Read-only apart from the one order it places.
  *
  *   pnpm tsx scripts/connector-smoke.ts <connector address>
- *   pnpm tsx scripts/connector-smoke.ts --kitchen kaari --url http://localhost:3141   (asks /ui-api/connect for it)
+ *   pnpm tsx scripts/connector-smoke.ts --kitchen hotel-lumo --url http://localhost:3141   (asks /ui-api/connect for it)
+ *
+ * Asking /ui-api/connect for a kitchen's address needs that kitchen's signed-in account: a public test account signs
+ * in with the seed's password (server/accounts/test-accounts.ts); any other account needs --password.
  */
 import { Client, StreamableHTTPClientTransport, type CallToolResult } from "@modelcontextprotocol/client";
 import { localNow, nextDeliveryDay } from "@/core/kitchen";
+import { TEST_ACCOUNTS } from "@/server/accounts/test-accounts";
 
 const args = process.argv.slice(2);
 const opt = (name: string) => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
@@ -17,7 +21,13 @@ async function address(): Promise<string> {
   const direct = args.find((a) => /\/api\/mcp\/c\//.test(a));
   if (direct) return direct;
   const base = opt("--url") ?? "http://localhost:3000";
-  const res = await fetch(new URL(`/ui-api/connect/${opt("--kitchen") ?? "kaari"}`, base));
+  const kitchen = opt("--kitchen") ?? TEST_ACCOUNTS[0].username;
+  const password = opt("--password") ?? TEST_ACCOUNTS.find((t) => t.username === kitchen)?.password;
+  if (!password) throw new Error(`Give --password for the account ${kitchen}.`);
+  const signin = await fetch(new URL("/ui-api/account/signin", base), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: kitchen, password }) });
+  if (signin.status !== 200) throw new Error(`Sign-in as ${kitchen}: HTTP ${signin.status}`);
+  const cookie = (signin.headers.get("set-cookie") ?? "").split(";")[0];
+  const res = await fetch(new URL(`/ui-api/connect/${kitchen}`, base), { headers: { cookie } });
   const body = (await res.json()) as { connector?: { url: string } };
   if (!body.connector) throw new Error(`No connector address: HTTP ${res.status}`);
   return body.connector.url;
