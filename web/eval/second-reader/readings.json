@@ -17078,15 +17078,18 @@
      "attributes": [],
      "excludedAttributes": []
     },
+    "quantity": {
+     "amount": 12,
+     "unit": "pack"
+    },
     "deliverBy": "2026-11-20",
     "requiredClaims": [],
     "forbiddenAllergens": [],
     "optimise": "unstated",
     "sameAsLastTime": false
    },
-   "ms": 2236,
-   "incomplete": true,
-   "costUsd": null
+   "ms": 2625,
+   "costUsd": 0.0141
   },
   "en-11": {
    "ok": true,
@@ -17121,15 +17124,18 @@
      ],
      "excludedAttributes": []
     },
+    "quantity": {
+     "amount": 24,
+     "unit": "pcs"
+    },
     "deliverBy": "2026-11-16",
     "requiredClaims": [],
     "forbiddenAllergens": [],
     "optimise": "unstated",
     "sameAsLastTime": false
    },
-   "ms": 2718,
-   "incomplete": true,
-   "costUsd": null
+   "ms": 3455,
+   "costUsd": 0.016488
   },
   "en-13": {
    "ok": true,
@@ -17424,13 +17430,17 @@
      ],
      "excludedAttributes": []
     },
+    "quantity": {
+     "amount": 200,
+     "unit": "L"
+    },
     "deliverBy": "2026-11-16",
     "requiredClaims": [],
     "forbiddenAllergens": [],
     "optimise": "unstated",
     "sameAsLastTime": false
    },
-   "ms": 3028,
+   "ms": 4123,
    "incomplete": true,
    "costUsd": null
   },
@@ -17758,12 +17768,13 @@
      "amount": 50,
      "unit": "kg"
     },
+    "deliverBy": "2026-11-15",
     "requiredClaims": [],
     "forbiddenAllergens": [],
     "optimise": "unstated",
     "sameAsLastTime": false
    },
-   "ms": 1753,
+   "ms": 2584,
    "costUsd": 0.014448
   },
   "fi-07": {
@@ -17847,15 +17858,18 @@
      "attributes": [],
      "excludedAttributes": []
     },
+    "quantity": {
+     "amount": 12,
+     "unit": "pack"
+    },
     "deliverBy": "2026-11-20",
     "requiredClaims": [],
     "forbiddenAllergens": [],
     "optimise": "unstated",
     "sameAsLastTime": false
    },
-   "ms": 1600,
-   "incomplete": true,
-   "costUsd": null
+   "ms": 3048,
+   "costUsd": 0.016244
   },
   "fi-09": {
    "ok": true,
@@ -17890,14 +17904,18 @@
      "attributes": [],
      "excludedAttributes": []
     },
+    "quantity": {
+     "amount": 24,
+     "unit": "pcs"
+    },
+    "deliverBy": "2026-11-16",
     "requiredClaims": [],
     "forbiddenAllergens": [],
     "optimise": "unstated",
     "sameAsLastTime": false
    },
-   "ms": 2473,
-   "incomplete": true,
-   "costUsd": null
+   "ms": 3661,
+   "costUsd": 0.016616
   },
   "fi-13": {
    "ok": true,
@@ -17954,12 +17972,13 @@
      "amount": 5.5,
      "unit": "kg"
     },
+    "deliverBy": "2026-11-15",
     "requiredClaims": [],
     "forbiddenAllergens": [],
     "optimise": "unstated",
     "sameAsLastTime": false
    },
-   "ms": 1939,
+   "ms": 2039,
    "costUsd": 0.014144
   },
   "fi-10": {
@@ -18378,15 +18397,18 @@
      "attributes": [],
      "excludedAttributes": []
     },
+    "quantity": {
+     "amount": 12,
+     "unit": "pack"
+    },
     "deliverBy": "2026-11-20",
     "requiredClaims": [],
     "forbiddenAllergens": [],
     "optimise": "unstated",
     "sameAsLastTime": false
    },
-   "ms": 2234,
-   "incomplete": true,
-   "costUsd": null
+   "ms": 2585,
+   "costUsd": 0.015788
   },
   "sv-08": {
    "ok": true,
@@ -18627,15 +18649,18 @@
      ],
      "excludedAttributes": []
     },
+    "quantity": {
+     "amount": 24,
+     "unit": "pack"
+    },
     "deliverBy": "2026-11-16",
     "requiredClaims": [],
     "forbiddenAllergens": [],
     "optimise": "unstated",
     "sameAsLastTime": false
    },
-   "ms": 2308,
-   "incomplete": true,
-   "costUsd": null
+   "ms": 2114,
+   "costUsd": 0.015944
   },
   "sv-17": {
    "ok": true,
@@ -22373,6 +22398,190 @@
    },
    "ms": 1924,
    "costUsd": 0.000063
+  }
+ },
+ "anthropic:claude-opus-5-5~before-refresh": {
+  "fi-05": {
+   "ok": true,
+   "need": {
+    "text": "Huomiseksi 50 kiloa maustamatonta jogurttia",
+    "item": {
+     "text": "maustamatonta jogurttia",
+     "attributes": [
+      "unflavoured"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 50,
+     "unit": "kg"
+    },
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 1753,
+   "costUsd": 0.014448
+  },
+  "fi-12": {
+   "ok": true,
+   "need": {
+    "text": "Kaksi tusinaa purkkia kermaa ylihuomiseksi",
+    "item": {
+     "text": "kermaa",
+     "attributes": [],
+     "excludedAttributes": []
+    },
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 2473,
+   "incomplete": true,
+   "costUsd": null
+  },
+  "fi-14": {
+   "ok": true,
+   "need": {
+    "text": "5,5 kg voita huomiseksi",
+    "item": {
+     "text": "voita",
+     "attributes": [],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 5.5,
+     "unit": "kg"
+    },
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 1939,
+   "costUsd": 0.014144
+  },
+  "en-08": {
+   "ok": true,
+   "need": {
+    "text": "Two dozen cartons of lactose-free milk for Monday",
+    "item": {
+     "text": "lactose-free milk",
+     "attributes": [
+      "lactose_free"
+     ],
+     "excludedAttributes": []
+    },
+    "deliverBy": "2026-11-16",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 2718,
+   "incomplete": true,
+   "costUsd": null
+  },
+  "en-09": {
+   "ok": true,
+   "need": {
+    "text": "a dozen cases of butter for Friday",
+    "item": {
+     "text": "butter",
+     "attributes": [],
+     "excludedAttributes": []
+    },
+    "deliverBy": "2026-11-20",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 2236,
+   "incomplete": true,
+   "costUsd": null
+  },
+  "en-22": {
+   "ok": true,
+   "need": {
+    "text": "We usually take 100 litres a week; this week we need double, lactose-free, by Monday",
+    "item": {
+     "text": "",
+     "attributes": [
+      "lactose_free"
+     ],
+     "excludedAttributes": []
+    },
+    "deliverBy": "2026-11-16",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 3028,
+   "incomplete": true,
+   "costUsd": null
+  },
+  "fi-11": {
+   "ok": true,
+   "need": {
+    "text": "Tusina laatikkoa voita perjantaiksi",
+    "item": {
+     "text": "voita",
+     "attributes": [],
+     "excludedAttributes": []
+    },
+    "deliverBy": "2026-11-20",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 1600,
+   "incomplete": true,
+   "costUsd": null
+  },
+  "sv-06": {
+   "ok": true,
+   "need": {
+    "text": "Ett dussin lådor smör till fredag",
+    "item": {
+     "text": "smör",
+     "attributes": [],
+     "excludedAttributes": []
+    },
+    "deliverBy": "2026-11-20",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 2234,
+   "incomplete": true,
+   "costUsd": null
+  },
+  "sv-18": {
+   "ok": true,
+   "need": {
+    "text": "Två dussin paket laktosfri grädde till måndag",
+    "item": {
+     "text": "laktosfri grädde",
+     "attributes": [
+      "lactose_free"
+     ],
+     "excludedAttributes": []
+    },
+    "deliverBy": "2026-11-16",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 2308,
+   "incomplete": true,
+   "costUsd": null
   }
  }
 }
