@@ -43,7 +43,7 @@ describe("defect 1: a dish made of what the kitchen forbids is refused with its 
   it("fish fingers and mash in a no-fish school kitchen", async () => {
     const { service, metsola } = await setup();
     const { record, view } = await service.plan(metsola, "kalapuikot ja perunamuusi 120 oppilaalle perjantaiksi", "Food service manager");
-    expect(view.totals.refusedDish).toEqual({ name: "Kalapuikot ja perunamuusi", ingredient: "kalapuikot", rule: { text: "No fish", source: "mandate" } });
+    expect(view.totals.refusedDish).toEqual({ name: "Kalapuikot ja perunamuusi", ingredient: "kalapuikot", allergen: "fish", rule: { text: "No fish", source: "mandate" } });
     // Not planned under its name with the fish taken out: nothing of the dish is bought.
     expect(view.lines).toEqual([]);
     expect(view.totals.canQuote).toBe(false);

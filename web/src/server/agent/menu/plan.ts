@@ -174,7 +174,7 @@ export type PlanTotals = {
   /** Set when nothing can arrive by the date asked: the earliest date the products can come. */
   allLate: { neededBy: string; earliest: string | null } | null;
   /** A dish refused because what it is made of breaks a rule (the rule named), and what can be made instead. */
-  refusedDish: { name: string; ingredient: string; rule: { text: string; source: string } } | null;
+  refusedDish: { name: string; ingredient: string; allergen: string; rule: { text: string; source: string } } | null;
   instead: NonNullable<PlanInput["instead"]>;
   /** Every rule that kept a line from being bought, named: what refused it, never just "your rules". */
   ruleRefusals: { lineId: string; ingredient: string; rule: { text: string; source: string }; reason: string }[];
@@ -602,7 +602,7 @@ export function computePlan(input: PlanInput): PlanView {
       blockers,
       warnings: input.draft.conflicts,
       allLate,
-      refusedDish: refused ? { name: refused.name, ingredient: refused.ingredient, rule: refused.rule } : null,
+      refusedDish: refused ? { name: refused.name, ingredient: refused.ingredient, allergen: refused.allergen, rule: refused.rule } : null,
       instead,
       ruleRefusals,
       day: { date: day, ok: dayLines.every((x) => x.ok), lines: dayLines },

@@ -279,11 +279,17 @@ export async function menuChecks(slug: string, planId: string, lang: Lang = "en"
   const parts: string[] = [];
   let ask: string | undefined;
   if (c.refusedDish) {
-    parts.push(t.refused(c.refusedDish.name, lower(c.refusedDish.ingredient), c.refusedDish.rule.text));
+    const r = c.refusedDish;
+    const fi = lang === "fi" ? (await service.get(kitchen, planId)).record.draft.dishes.find((d) => d.name === r.name)?.nameFi : undefined;
+    // "Fish fingers: its fish fingers, breaded, frozen is fish" says nothing: when the ingredient is the dish, say what it is.
+    const same = fold(r.ingredient).includes(fold(r.name).split(/\s+/)[0]) || fold(r.name).includes(fold(r.ingredient).split(/[\s,]+/)[0]);
+    const allergen = t.allergen[r.allergen] ?? (lang === "fi" ? "kiellettyä" : lang === "sv" ? "förbjudet" : "not allowed");
+    parts.push(t.refused(fi || r.name, same ? "" : lower(r.ingredient), allergen, r.rule.text));
     ask = c.instead.length ? t.insteadAsk(list(c.instead.map((x) => (lang === "fi" && x.nameFi ? x.nameFi : x.name)), lang)) : t.noInstead;
   } else {
     for (const r of c.ruleRefusals.slice(0, 2)) parts.push(t.ruleLine(r.ingredient, r.rule.text));
-    for (const d of c.day.lines.filter((x) => !x.ok).slice(0, 2)) parts.push(t.dayLine(d.ingredient, d.why ?? ""));
+    // The first reason only, without the planner's "Cannot arrive by …:" lead: the steps have the rest.
+    for (const d of c.day.lines.filter((x) => !x.ok).slice(0, 2)) parts.push(t.dayLine(d.ingredient, (d.why ?? "").replace(/^Cannot arrive[^:]*:\s*/i, "").split(";")[0].replace(/\.$/, "")));
     const staples = c.coverage.filter((x) => x.basis === "staple").map((x) => lower(x.ingredient));
     if (staples.length) parts.push(t.staples(list([...new Set(staples)], lang)));
   }

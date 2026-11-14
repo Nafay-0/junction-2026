@@ -388,7 +388,7 @@ describe("menu to order, on the fixture catalogue", () => {
     await service.settled(record.planId);
     const { view } = await service.get(laakso, record.planId);
     // Not planned with the peanut quietly left out: the whole dish is refused under the rule that forbids it.
-    expect(view.totals.refusedDish).toEqual({ name: "Peanut satay chicken", ingredient: "Peanut butter", rule: { text: expect.stringMatching(/nuts or peanuts/), source: "mandate" } });
+    expect(view.totals.refusedDish).toEqual({ name: "Peanut satay chicken", ingredient: "Peanut butter", allergen: "peanuts", rule: { text: expect.stringMatching(/nuts or peanuts/), source: "mandate" } });
     expect(view.lines.filter((l) => l.chosen)).toEqual([]);
     expect(view.totals.blockers[0]).toMatch(/^Peanut satay chicken cannot be made under the kitchen's rule "No nuts or peanuts/);
     expect(view.totals.canQuote).toBe(false);
