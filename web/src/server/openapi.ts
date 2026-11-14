@@ -91,9 +91,13 @@ const OfferList = named("OfferList", z.object({
   liveCallsSoFar: z.number().int(),
 }));
 const nextStepOut = z.string().describe("What to do next, in one or two sentences: the same guidance an MCP tool result carries.");
-const OrderEnvelope = named("OrderEnvelope", z.object({ order: OrderSchema, nextStep: nextStepOut.optional() }));
-const PlacedEnvelope = named("PlacedEnvelope", z.object({ order: OrderSchema, nextStep: nextStepOut.optional(), replaced: z.object({ orderId: z.string(), status: z.string(), refused: z.object({ code: z.string(), rule: z.string().optional(), message: z.string() }).optional() }).optional().describe("With replaces: the earlier order's new status, or why it still stands.") }));
-const WaitedEnvelope = named("WaitedEnvelope", z.object({ order: OrderSchema, nextStep: nextStepOut.optional(), decided: z.boolean().optional(), waitedSeconds: z.number().optional() }));
+const receiptEmailOut = z
+  .object({ emailed: z.boolean(), to: z.string().optional().describe("The kitchen's address, masked: m•••@example.com."), status: z.enum(["sent", "sending", "failed", "skipped", "no_address", "not_confirmed", "not_configured", "not_committed"]) })
+  .optional()
+  .describe("On a committed order: whether its receipt was emailed to the kitchen (sent after the fact: `sending` right after the order, `sent` once it went). Absent otherwise.");
+const OrderEnvelope = named("OrderEnvelope", z.object({ order: OrderSchema, nextStep: nextStepOut.optional(), receiptEmail: receiptEmailOut }));
+const PlacedEnvelope = named("PlacedEnvelope", z.object({ order: OrderSchema, nextStep: nextStepOut.optional(), receiptEmail: receiptEmailOut, replaced: z.object({ orderId: z.string(), status: z.string(), refused: z.object({ code: z.string(), rule: z.string().optional(), message: z.string() }).optional() }).optional().describe("With replaces: the earlier order's new status, or why it still stands.") }));
+const WaitedEnvelope = named("WaitedEnvelope", z.object({ order: OrderSchema, nextStep: nextStepOut.optional(), receiptEmail: receiptEmailOut, decided: z.boolean().optional(), waitedSeconds: z.number().optional() }));
 const LiveFacts = z.looseObject({
   unitPriceCents: z.number().int().describe("Live price per pack, euro cents ex VAT."),
   perUnit: z.object({ cents: z.number(), unit: z.string() }),
@@ -234,6 +238,8 @@ const WatchOut = named("Watch", z.object({ findings: z.array(z.looseObject({ fin
 const WatchAnswerBody = named("WatchAnswerBody", z.object({ findingId: z.string().optional(), renewalId: z.string().optional(), choice: z.enum(["switch", "keep", "renew_new", "usual", "skip"]), productId: z.string().optional(), by: z.string().min(1).max(120) }));
 const WatchAnswered = named("WatchAnswered", z.object({ state: z.string(), order: z.looseObject({}).optional(), refused: z.looseObject({}).optional() }).loose());
 const AutoRenewBody = named("AutoRenewBody", z.object({ family: z.string().min(1).max(60), on: z.boolean(), by: z.string().min(1).max(120) }));
+const BackupBody = named("BackupBody", z.object({ orderId: z.string(), productId: z.string().optional(), choice: z.string().max(60).optional(), by: z.string().min(1).max(120).optional() }));
+const BackupOut = named("BackupResult", z.object({ backups: z.array(z.looseObject({ backupId: z.string(), record: z.looseObject({ share: z.number(), words: z.string() }) })).optional(), backup: z.looseObject({ backupId: z.string(), state: z.string() }).optional() }).loose());
 const AutoRenewOut = named("AutoRenew", z.object({ autoRenew: z.looseObject({ family: z.string(), on: z.boolean(), by: z.string() }) }).loose());
 const OfferAccepted = named("OfferAccepted", z.object({ offerId: z.string() }).loose());
 const OfferDeclined = named("OfferDeclined", z.object({ offer: z.looseObject({ offerId: z.string(), status: z.string() }) }).loose());
@@ -743,6 +749,16 @@ export const API: Operation[] = [
     auth: true,
     body: AutoRenewBody,
     responses: { 200: { description: "The setting now.", schema: AutoRenewOut }, 404: err("No recurring order for that family (code standing_not_found)."), ...AUTH_ERRORS },
+  },
+  {
+    method: "post",
+    path: "/api/v1/watch/backup",
+    operationId: "lineUpBackup",
+    summary: "Line up a backup for a product with a poor delivery record",
+    description: "Only for an order's products whose delivery record is below the line (the wholesaler's delivery history, e.g. \"has arrived as ordered about 7 times in 10\"; never a forecast; a product with no figure is never flagged). Without `choice`: up to three alternatives, good/better/best, each with its own record, the trade-off in figures and the gate's preview. With `choice` (an alternative's productId, `best` for the best inside the kitchen's preferences, or `none`): recorded with who chose it. Buys nothing now: if the product later cannot come, the backup is ordered through the gate by itself. Quote and order results carry `deliveryRecords` for such lines.",
+    auth: true,
+    body: BackupBody,
+    responses: { 200: { description: "The alternatives, or the backup recorded.", schema: BackupOut }, 400: err("Not one of the alternatives."), 404: err("No such order or backup for this organisation."), 409: err("None inside the kitchen's preferences for best, or already used."), ...AUTH_ERRORS },
   },
   {
     method: "get",

@@ -32,6 +32,7 @@ import { MandateError, supersededBy, supersededMessage, verifyMandateToken, type
 import { SPLIT_NAMED_MAX, SPLIT_WINDOW_HOURS, decidingRule, evaluatePolicy, type Decision, type OrderDraftLine, type ProductHold, type RecentOrder, type RuleResult, type SplitWindow } from "./policy";
 export type { ProductHold } from "./policy";
 import { demoCustomerNumber } from "./pricing";
+import { wholeIngredients } from "./claim-evidence";
 import { QuoteError, QuoteRequestLineSchema, buildQuote, signQuote, verifyQuote, type Quote, type QuoteLine, type QuoteRequestLine } from "./quote";
 import { addDays, canonicalJson, formatEur, newId } from "./util";
 
@@ -580,6 +581,7 @@ export function masterDataRefusal(mandate: Mandate, lines: { productId: string; 
       allergens: p.allergens,
       ...(p.allergenInfo ? { allergensDeclared: p.allergenInfo.declared } : {}),
       ...(p.allergenInfo?.byNature ? { allergensByNature: p.allergenInfo.byNature } : {}),
+      ...(p.allergenInfo?.declared === false && wholeIngredients(p.texts?.ingredients) ? { ingredients: wholeIngredients(p.texts?.ingredients) } : {}),
       certificates: p.certificates,
       ...(p.nutrition ? { nutrition: p.nutrition } : {}),
       ...(p.countryOfOrigin ? { countryOfOrigin: p.countryOfOrigin } : {}),

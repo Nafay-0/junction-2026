@@ -1,3 +1,4 @@
+import { wholeIngredients } from "./claim-evidence";
 import { CompactSign, compactVerify, errors } from "jose";
 import { z } from "zod";
 import type { LiveOffer, Product } from "./catalog";
@@ -28,6 +29,8 @@ export const QuoteLineSchema = z.object({
   allergensDeclared: z.boolean().optional(),
   /** When the maker sent no allergen data but the product is fresh, whole produce: what it contains by its nature (never a declaration). */
   allergensByNature: z.object({ allergens: z.array(z.string()), basis: z.string() }).optional(),
+  /** The maker's whole ingredient list, when it sent no allergen declaration: what a lactose-free rule is read from then. */
+  ingredients: z.string().max(1000).optional(),
   certificates: z.array(z.string()),
   quantity: z.number().int().positive(), // packs
   unitPriceCents: z.number().int().nonnegative(), // per pack
@@ -223,6 +226,7 @@ export function buildQuote(input: QuoteInput): Quote {
       allergens: p.allergens,
       ...(p.allergenInfo ? { allergensDeclared: p.allergenInfo.declared } : {}),
       ...(p.allergenInfo?.byNature ? { allergensByNature: p.allergenInfo.byNature } : {}),
+      ...(p.allergenInfo?.declared === false && wholeIngredients(p.texts?.ingredients) ? { ingredients: wholeIngredients(p.texts?.ingredients) } : {}),
       certificates: p.certificates,
       quantity: req.quantity,
       unitPriceCents: o.unitPriceCents,

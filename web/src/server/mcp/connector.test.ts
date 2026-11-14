@@ -88,7 +88,7 @@ describe("connector address: binding", () => {
   it("lists the agent runtimes that work with Dock beside the address", async () => {
     const body = (await (await connect$("kaari")).json()) as { worksWith: { runtime: string; interface: string; verified: boolean; exampleUrl: string }[] };
     expect(body.worksWith.length).toBeGreaterThan(0);
-    expect(body.worksWith[0]).toMatchObject({ runtime: expect.any(String), interface: expect.stringMatching(/MCP|OpenAPI/), verified: expect.any(Boolean), exampleUrl: expect.stringMatching(/^https?:\/\//) });
+    expect(body.worksWith[0]).toMatchObject({ runtime: expect.any(String), interface: expect.stringMatching(/MCP|OpenAPI/), verified: expect.any(Boolean), exampleUrl: expect.stringMatching(/^\/docs\//) });
   });
 
   it("is a URL that carries the kitchen's own mandate and agent id, and ignores any headers sent with it", async () => {

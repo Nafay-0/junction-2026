@@ -338,7 +338,8 @@ export const attrWord = (a: string) => (/^fat_\d/.test(a) ? `fat ${a.slice(4).re
 const fatOf = (attrs: string[]) => attrs.find((a) => /^fat_\d/.test(a)) ?? null;
 const fatText = (a: string | null) => (a ? `${a.slice(4).replace("_", ",")} %` : "unknown");
 const perUnit = (p: Product, packCents: number) => (p.unit === "pcs" ? null : r1(packCents / p.packSize));
-const declaredAllergens = (p: Product) => p.allergenInfo?.declared !== false;
+/** Allergen data the gate accepts: declared by the maker, or (fresh, whole produce) by the product's nature. */
+const declaredAllergens = (p: Product) => p.allergenInfo?.declared !== false || !!p.allergenInfo?.byNature;
 
 export type Measure = { unit: "L" | "kg"; perPack: number; certain: boolean };
 
@@ -393,8 +394,9 @@ export function tradeOffOf(original: Product, usualPerUnitCents: number | null, 
     sameMaker: !!p.brand && p.brand !== "unknown" && p.brand === original.brand,
     maker: p.brand && p.brand !== "unknown" ? p.brand : null,
     usualMaker: original.brand && original.brand !== "unknown" ? original.brand : null,
-    allergensAdded: p.allergens.filter((a) => !original.allergens.includes(a)),
-    allergensRemoved: original.allergens.filter((a) => !p.allergens.includes(a)),
+    // Compared only when the usual's allergens are known: "contains milk, which the usual does not" from a usual with no data is untrue.
+    allergensAdded: declaredAllergens(original) ? p.allergens.filter((a) => !original.allergens.includes(a)) : [],
+    allergensRemoved: declaredAllergens(original) ? original.allergens.filter((a) => !p.allergens.includes(a)) : [],
     allergenDataMissing: !declaredAllergens(p),
     claimsLost: omat.filter((a) => !pmat.includes(a) && !/^fat_/.test(a)),
     claimsGained: pmat.filter((a) => !omat.includes(a) && !/^fat_/.test(a)),

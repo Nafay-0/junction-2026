@@ -28,7 +28,6 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 WEB = ROOT / "web"
-REPO_URL = "https://github.com/Nafay-0/junction-2026/tree/main/examples/runtimes"
 KEYS = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY")
 
 RUNTIMES = [
@@ -189,11 +188,14 @@ workaround for that. The mandate for each run names its own agent id and has a r
 {notes}
 """
     (HERE / "RESULTS.md").write_text(md)
+    # The app serves these reports itself (/docs/runtime-results, /docs/runtime-gaps): the repository is private.
+    (WEB / "docs" / "runtime-results.md").write_text(md)
+    (WEB / "docs" / "runtime-gaps.md").write_text((HERE / "GAPS.md").read_text())
     works_with = [{
         "runtime": r["name"], "slug": r["slug"], "language": r["language"], "package": next(x["package"] for x in RUNTIMES if x["slug"] == r["slug"]),
         "version": r.get("version"), "interface": r["interface"], "model": r.get("model"), "outcome": r.get("outcome"),
         "verified": r.get("outcome") in ("committed", "pending_approval"), "verifiedDate": r.get("date", today), "humanInput": r.get("humanInput"),
-        "examplePath": f"examples/runtimes/{r['slug']}", "exampleUrl": f"{REPO_URL}/{r['slug']}",
+        "examplePath": f"examples/runtimes/{r['slug']}", "exampleUrl": "/docs/runtimes",
     } for r in results]
     target = WEB / "src" / "server" / "works-with.json"
     old = json.loads(target.read_text()) if target.exists() else {"runtimes": []}

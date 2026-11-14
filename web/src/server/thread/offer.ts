@@ -83,6 +83,24 @@ export async function answerOfferIn(run: TurnRun, offerId: string, answer: Offer
     sheetId = sheet.sheetId;
     requestId = sheet.requestId ?? currentSheet(run)?.requestId;
     if (requestId) reply = await offerOnSheet(run.rt, run.session, offerId, who, requestId);
+    // "Want 1 × 1 l on Thursday's order?" "Yes": that yes orders it (one yes, not two), through the gate like any order.
+    const { placeSheet } = await import("./sheet");
+    const o = await placeSheet(run, sheet.sheetId, sheet.version).catch(() => undefined);
+    if (o) {
+      const { englishDays } = await import("./refusal");
+      const date = o.lines[0]?.deliveryDate ?? "";
+      const total = `${(o.totalCents / 100).toFixed(2).replace(".", ",")} €`;
+      const what = `${o.lines[0]?.quantity ?? ""} × ${(o.lines[0]?.name ?? "").replace(/[®™]/g, "").split(/\s+/).slice(0, 4).join(" ")}`;
+      const dayEn = englishDays(`${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][new Date(`${date}T12:00:00Z`).getUTCDay()]} ${Number(date.slice(8, 10))}.${Number(date.slice(5, 7))}.`);
+      const dayFi = `${Number(date.slice(8, 10))}.${Number(date.slice(5, 7))}.`;
+      const who = o.approval?.approver.name ?? "";
+      reply =
+        o.status === "committed"
+          ? { en: `Ordered: ${what} for ${total}, arriving ${dayEn}`, fi: `Tilattu: ${what} hintaan ${total}, toimitus ${dayFi}`, sv: `Beställt: ${what} för ${total}, leverans ${dayFi}` }[lang]
+          : o.status === "pending_approval"
+            ? { en: `${what} for ${total} is on its way to ${who || "a person"} for an OK.`, fi: `${what} hintaan ${total} odottaa hyväksyntää${who ? ` (${who})` : ""}.`, sv: `${what} för ${total} väntar på godkännande${who ? ` av ${who}` : ""}.` }[lang]
+            : reply;
+    }
   }
   if (card) run.store.card(run.thread, run.turnId, { ...card, state: r.answer, ...(reply ? { reply } : {}), ...(requestId ? { requestId } : {}) });
   record(run, "offer_answer", `The buyer answered the wholesaler's offer ${offerId}: ${r.answer}${words ? ` ("${words.slice(0, 80)}")` : ""}.`, { offerId, answer: r.answer, ...(requestId ? { requestId } : {}) });

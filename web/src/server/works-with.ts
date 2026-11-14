@@ -19,7 +19,7 @@ export const WorksWithEntrySchema = z.object({
   verifiedDate: z.string(), // YYYY-MM-DD
   humanInput: z.string().nullable().optional(), // elicitation | relay+approval | relay+filter
   examplePath: z.string(),
-  exampleUrl: z.string().url(),
+  exampleUrl: z.string().regex(/^\/docs\//, "a document the app serves (/docs/...), never a link into the private repository"),
 });
 export type WorksWithEntry = z.infer<typeof WorksWithEntrySchema>;
 

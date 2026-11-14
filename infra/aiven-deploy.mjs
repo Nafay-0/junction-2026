@@ -102,6 +102,8 @@ function desiredEnvironment(publicUrl) {
   for (const k of ["DOCK_TEST_ACCOUNTS_SHOWN", "DOCK_TEST_ACCOUNTS_RESET_MINUTES", "DOCK_ACCOUNTS_MAX"]) if (env(k)) vars.push([k, env(k)]);
   // The operations portal's Platform section (web/src/server/aiven/showcase): which project and organisation to read.
   for (const k of ["AIVEN_PROJECT", "AIVEN_ORGANIZATION_ID", "DOCK_SHOWCASE_LAUNCHES_PER_DAY"]) if (env(k)) vars.push([k, env(k)]);
+  // Email to the kitchen (web/src/server/notify): the sender and the caps. Optional; the defaults hold without them.
+  for (const k of ["DOCK_MAIL_FROM", "DOCK_MAIL_PER_KITCHEN_HOUR", "DOCK_MAIL_DAILY"]) if (env(k)) vars.push([k, env(k)]);
 
   const secrets = [
     // Fixed keys: quotes and receipts stay verifiable across restarts; the demo orgs' keys are not the public dev ones.
@@ -117,6 +119,8 @@ function desiredEnvironment(publicUrl) {
     "CONTEXT_DEV_API_KEY",
     "EXA_API_KEY",
     "FEATHERLESS_API_KEY",
+    // Email to the kitchen (web/src/server/notify): optional. Without it the app runs and records mail as not sent.
+    "RESEND_API_KEY",
     // The two stage kitchens' account passwords: private, so a stranger cannot change their rules before a pitch.
     "DOCK_KAARI_PASSWORD",
     "DOCK_LAAKSO_PASSWORD",

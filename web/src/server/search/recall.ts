@@ -1,3 +1,5 @@
+import { claimEvidence } from "@/core/claim-evidence";
+import { subjectOfIndexed } from "@/core/catalog/search";
 import type { IndexedProduct } from "@/core/catalog/partner";
 import { categoryCodesFor } from "@/core/catalog/partner";
 import { allergenEvidence, fold, parseQueryText, tokenize } from "@/core/catalog/search";
@@ -378,7 +380,9 @@ export class SearchIndex {
     return (p) => {
       if (ids && !ids.has(p.id)) return false;
       if (codes && !codes.has(p.categoryCode)) return false;
-      if (!u.claims.every((c) => p.claims.includes(c))) return false;
+      // A claim is met by the maker's claim or what its allergen declaration shows (core/claim-evidence.ts); by nature
+      // only when the kitchen accepts it.
+      if (!u.claims.every((c) => claimEvidence(subjectOfIndexed(p), c, { strict: opts.declaredOnly }).met)) return false;
       for (const a of u.forbiddenAllergens) {
         const e = allergenEvidence(p, a);
         if (e === "contains" || e === "may_contain" || e === "unknown") return false;

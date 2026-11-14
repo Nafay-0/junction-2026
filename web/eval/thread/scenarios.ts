@@ -674,7 +674,9 @@ const offered: { productId?: string; name?: string; offerId?: string } = {};
  * The wholesaler's side: enter the operations desk, run the selling agent; if it found nothing for Kaari on this
  * catalogue, start a campaign for a lactose-free product in a family Kaari buys and has not bought, listed as new.
  */
+let offerUrl = "";
 async function sellingAgentOffersKaari(url: string): Promise<void> {
+  offerUrl = url;
   const { Browser } = await import("./lib");
   const b = new Browser(url);
   await b.req("POST", "/ops-api/session", { name: "Eval operations", ...(process.env.DOCK_OPS_PASSCODE ? { passcode: process.env.DOCK_OPS_PASSCODE } : {}) });
@@ -709,6 +711,18 @@ const offerSaid: Check = {
   },
 };
 
+/** The wholesaler's operations page no longer shows the offer as open: the buyer's no was recorded. */
+const offerDeclined: Check = {
+  name: "the buyer's no was recorded: the offer is no longer open on the operations page",
+  run: async () => {
+    const { Browser } = await import("./lib");
+    const b = new Browser(offerUrl);
+    await b.req("POST", "/ops-api/session", { name: "Eval operations", ...(process.env.DOCK_OPS_PASSCODE ? { passcode: process.env.DOCK_OPS_PASSCODE } : {}) });
+    const o = ((await b.req("GET", "/ops-api/offers")).body?.offers ?? []).find((x: Json) => x.offerId === offered.offerId);
+    return ok(!!o && o.status !== "offered", `offer ${offered.offerId}: ${o?.status ?? "not found"}`);
+  },
+};
+
 const THREAD_WIRING = "The conversation says the offer once the thread (claude/thread-live) calls server/offers/thread.ts offerForThread and answerOffer; until then 'the agent said the offer' fails and the selection, signature and nothing-ordered checks pass.";
 
 ALL.push(
@@ -736,7 +750,26 @@ ALL.push(
     expect: [offerMade, offerSaid, noOrder],
     limitation: THREAD_WIRING,
   },
+  ...(
+    [
+      ["en", "no thanks"],
+      ["en", "not now"],
+      ["fi", "ei kiitos"],
+      ["fi", "ei nyt"],
+    ] as const
+  ).map(([lang, no], i): Scenario => ({
+    id: `proactive-offer-no-${i + 1}`,
+    title: `The buyer turns the offer down in words ("${no}"): recorded, and the offer is no longer open`,
+    tag: "proactive selling agent",
+    kitchen: "kaari",
+    lang,
+    before: sellingAgentOffersKaari,
+    turns: [{ say: lang === "fi" ? "Onko tukkurilla jotain uutta?" : "Anything new from the wholesaler?" }, { say: no }],
+    goal: "answer",
+    expect: [offerMade, offerDeclined, noOrder],
+  })),
 );
+
 
 // --- the partner's "allergen-safe substitution under pressure": a school kitchen's nutrition rules ---
 /** Every option keeps the school's signed nutrition rules by the product's own declaration (unknown fails). */
@@ -924,6 +957,114 @@ for (const slug of ["hotel-lumo", "koulu-metsola", "kahvila-sointu"] as const) {
   for (const lang of ["en", "fi"] as const)
     ALL.push({ id: `drift-renewal-${lang}@${slug}`, title: `Standing-order drift on the test kitchen ${slug}: the creeping order is held before auto-renewing (${lang})`, tag: "standing-order drift", kitchen: slug, lang, before: driftFor(slug), turns: [{ say: say[lang].drift }], goal: "answer", expect: [renewalHeld, renewalSaid, noOrder], limitation: WATCH_WIRING });
 }
+
+// ---------- the school's oat yoghurt: the plant-yoghurt family, the rule named for one left out ----------
+
+const oatYoghurtOffered: Check = {
+  name: "an oat yoghurt within the school's rules is offered, and a left-out one is said with its rule",
+  run: (o) => {
+    const opts = o.options.map((x) => String(x.title ?? "")).join(" | ").toLowerCase();
+    const said = [...o.answers.map((a) => a.text), ...o.notes].join(" ").toLowerCase();
+    return ok(/oat|kaura|havre/.test(opts) && /(sugar|sokeri|rule|sääntö|at most|enintään)/.test(said), `options: ${opts.slice(0, 160)}; said: ${said.slice(0, 160)}`);
+  },
+};
+
+ALL.push({
+  id: "school-oat-yoghurt-en",
+  title: "School: the usual yoghurt did not arrive; 'what about an oat-based one?' offers oat yoghurts within the rules",
+  tag: "allergen-safe substitution (nutrition rules)",
+  kitchen: "koulu-metsola",
+  lang: "en",
+  turns: [{ say: "Our usual yoghurt didn't arrive. I need 30 kg of something for tomorrow's breakfast" }, { say: "what about an oat-based one?" }],
+  goal: "options",
+  expect: [oatYoghurtOffered],
+});
+
+// ---------- the repeat-order guard: the same order twice, said with both figures ----------
+
+const repeatSaid: Check = {
+  name: "the second identical order is paused by the repeat check (the mistake check's duplicate_recent), never placed twice",
+  run: (o) => ok(o.concerns.some((c) => c.code === "duplicate_recent") && o.orders.filter((x) => x.status === "committed" || x.status === "pending_approval").length <= 1, `concerns: ${o.concerns.map((c) => c.code).join(", ") || "none"}; orders: ${o.orders.length}`),
+};
+for (const [slug, words] of [
+  ["hotel-lumo", "30 litres of lactose-free milk for Tuesday"],
+  ["koulu-metsola", "20 litres of semi skimmed milk for Tuesday"],
+  ["kahvila-sointu", "10 litres of oat drink for Tuesday"],
+] as const)
+  ALL.push({
+    id: `repeat-order-guard@${slug}`,
+    title: `The same order twice (${slug}): paused, with the earlier order's amount and day`,
+    tag: "mistake check",
+    kitchen: slug,
+    lang: "en",
+    turns: [{ say: words }, { say: "yes, order it" }, { say: words }],
+    goal: "answer",
+    expect: [repeatSaid],
+  });
+
+// ---------- a backup in case it is not delivered (server/reliability) ----------
+
+/** The kitchen's own view of its backups after the conversation, for the checks (per run). */
+const backupSeen: { url?: string } = {};
+async function rememberUrl(url: string): Promise<void> {
+  backupSeen.url = url;
+}
+async function kitchenBackups(slug: string): Promise<Json[]> {
+  if (!backupSeen.url) return [];
+  const { Browser, signInAs } = await import("./lib");
+  const k = new Browser(backupSeen.url);
+  await signInAs(k, slug);
+  return (await k.req("GET", `/ui-api/kitchens/${slug}/watch`)).body?.backups ?? [];
+}
+const recordSaid: Check = {
+  name: "the agent said the product's delivery record in words (history, not a forecast) and offered a backup",
+  run: (o) => {
+    const t = o.answers.map((a) => a.text).join(" | ");
+    return ok(/arrived as ordered about \d+ times in (10|20)|tilatusti noin \d+ kertaa (10|20):stä/i.test(t) && !/will (probably )?not arrive|ei todennäköisesti tule/i.test(t), `said: ${t.slice(0, 200) || "nothing"}`);
+  },
+};
+const backupLinedUp: Check = {
+  name: "\"you choose\" lined up a backup, recorded with who chose it",
+  run: async (_o, c) => {
+    const b = (await kitchenBackups(c.kitchen)).find((x) => x.state === "set" || x.state === "used");
+    return ok(!!b?.chosen?.by, `backups: ${JSON.stringify((await kitchenBackups(c.kitchen)).map((x) => ({ product: x.product?.name, state: x.state }))).slice(0, 200)}`);
+  },
+};
+const nothingExtraBought: Check = {
+  name: "nothing extra bought for the backup",
+  run: async (o, c) => {
+    const chosen = (await kitchenBackups(c.kitchen)).find((x) => x.chosen)?.chosen?.productId;
+    return ok(!chosen || !o.orders.some((x) => x.lines.some((l) => l.productId === chosen)), `an order holds the backup ${chosen}`);
+  },
+};
+const BACKUP_WIRING = "The conversation says it once the thread calls server/reliability/thread.ts backupMomentForThread after a quote or an order, and backupAnswerOf / answerBackup on the answer; until then 'the agent said the record' and 'a backup lined up' fail and 'nothing extra bought' passes.";
+
+ALL.push(
+  {
+    id: "reliability-backup-en",
+    title: "A product with a poor delivery record: the agent says its record and lines up a backup on 'you choose'",
+    tag: "partial availability: a backup in case it is not delivered",
+    kitchen: "kahvila-sointu",
+    lang: "en",
+    before: rememberUrl,
+    turns: [{ say: "2 packs of the Peltolan blue cheese 400 g for Tuesday" }, { say: "you choose" }],
+    goal: "answer",
+    expect: [recordSaid, backupLinedUp, nothingExtraBought],
+    limitation: BACKUP_WIRING,
+  },
+  {
+    id: "reliability-backup-fi",
+    title: "Heikosti toimitettu tuote: agentti kertoo toimitushistorian ja laittaa varavaihtoehdon, kun ostaja sanoo 'valitse sinä'",
+    tag: "partial availability: a backup in case it is not delivered",
+    kitchen: "kahvila-sointu",
+    lang: "fi",
+    before: rememberUrl,
+    turns: [{ say: "2 pakkausta Peltolan sinihomejuustoa 400 g tiistaiksi" }, { say: "valitse sinä" }],
+    goal: "answer",
+    expect: [recordSaid, backupLinedUp, nothingExtraBought],
+    limitation: BACKUP_WIRING,
+  },
+);
 
 /**
  * Run order. The questions about Kaari's own history go first, before any scenario adds requests of its own to

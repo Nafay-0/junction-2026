@@ -28,6 +28,8 @@ export const SMALL_NEED_SHARE = 0.5;
 export const SCORE_TOLERANCE = 0.8;
 /** Leftover above this share of what is delivered, and more than the need itself, is said. */
 export const LEFTOVER_SAY_SHARE = 0.5;
+/** For a need under a tenth of the best-scored pack: products within this share of the best score are compared by pack. */
+export const WIDE_TOLERANCE = 0.6;
 
 export type Sized = { id: string; score: number; packSize: number | undefined };
 
@@ -40,7 +42,11 @@ export type Sized = { id: string; score: number; packSize: number | undefined };
 export function orderByFit<T extends Sized>(items: readonly T[], need: number | undefined): T[] {
   if (!need || need <= 0 || items.length < 2) return [...items];
   const top = Math.max(...items.map((i) => i.score));
-  const close = items.filter((i) => i.score >= top * SCORE_TOLERANCE && i.packSize && i.packSize > 0);
+  // A tiny need against the top pack (6 l of stock from a 333 l tub) widens the pool: a smaller pack of the same thing
+  // scored a little lower is still the better buy.
+  const best = items.find((i) => i.score === top)?.packSize;
+  const tolerance = best && need < best * 0.1 ? WIDE_TOLERANCE : SCORE_TOLERANCE;
+  const close = items.filter((i) => i.score >= top * tolerance && i.packSize && i.packSize > 0);
   const smallest = Math.min(...close.map((i) => i.packSize!));
   // Only a small need: when even the smallest pack fitting about as well is several times the need.
   if (!close.length || need >= smallest * SMALL_NEED_SHARE) return [...items];

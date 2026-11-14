@@ -12,6 +12,7 @@
  *   pnpm search:eval --recall opensearch   recall's keyword and vector lists from OpenSearch (OPENSEARCH_URL,
  *                                          --recall-index, default dock-recall; --recall-timeout ms, default 400),
  *                                          memory recall as the fallback; the table counts the fallbacks
+ *   pnpm search:eval --literal-claims      count a claim as dropped when the label is missing, whatever the data shows
  *
  * Configurations:
  *   kw          keywords only: today's search (core/catalog/search.ts)
@@ -32,7 +33,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { generateText, Output } from "ai";
 import { z } from "zod";
-import { LexicalSearch, allergenEvidence } from "@/core/catalog/search";
+import { LexicalSearch, allergenEvidence, subjectOfIndexed } from "@/core/catalog/search";
+import { claimEvidence } from "@/core/claim-evidence";
 import type { IndexedProduct } from "@/core/catalog/partner";
 import { createModel } from "@/server/agent/models";
 import { costOf, tokensFromUsage, priceOf } from "@/server/agent/pricing";
@@ -264,7 +266,10 @@ async function main() {
   const stand = (c: SearchCase, id: string) => isStandin(c, byId.get(id)!, kindSlugOf);
   // A stated claim missing, or a forbidden allergen not ruled out (contains, may contain, or no data and not fresh
   // whole produce by its nature: core/catalog/nature.ts, the server's rule).
-  const violates = (c: SearchCase, p: IndexedProduct) => (c.claims ?? []).some((x) => !p.claims.includes(x)) || (c.allergenFree ?? []).some((a) => ["contains", "may_contain", "unknown"].includes(allergenEvidence(p, a)));
+  // A claim is met as the product rules meet it (core/claim-evidence.ts: the claim, or what the maker's data shows);
+  // --literal-claims counts only the label, as before the evidence rule.
+  const literal = process.argv.includes("--literal-claims");
+  const violates = (c: SearchCase, p: IndexedProduct) => (c.claims ?? []).some((x) => (literal ? !p.claims.includes(x) : !claimEvidence(subjectOfIndexed(p), x).met)) || (c.allergenFree ?? []).some((a) => ["contains", "may_contain", "unknown"].includes(allergenEvidence(p, a)));
   type Score = { n: number; top1: number; top3: number; recall: number; dropped: number; standinAsMatch: number; notSold: number; notSoldN: number; ms: number[]; cost: number[]; judged: number; fallback: number };
   const score = (rs: Row[]): Score => {
     const s: Score = { n: 0, top1: 0, top3: 0, recall: 0, dropped: 0, standinAsMatch: 0, notSold: 0, notSoldN: 0, ms: [], cost: [], judged: 0, fallback: 0 };

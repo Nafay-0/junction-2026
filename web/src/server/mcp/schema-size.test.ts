@@ -21,7 +21,9 @@ describe("tools/list size", () => {
     expect(out).toBeLessThan(input * 2);
     // 47,813 on 14 Nov 2026 with the watch's three tools (watch_orders, answer_watch, set_auto_renew), descriptions kept short;
     // the three menu-scenario tools (plan_seasonal_menu, plan_event_menu, order_menu) add about 4.3 KB.
-    expect(all).toBeLessThan(52_500);
+    // 53,175 on 14 Nov 2026 with line_up_backup (a backup for a product with a poor delivery record), kept short.
+    // 53,523 with receiptEmail on place_order and get_order (whether the kitchen's receipt was emailed, server/notify).
+    expect(all).toBeLessThan(53_800);
     // Still a usable shape: the intake tools say a step has a state, and an order a status.
     const submit = tools.find((t) => t.name === "submit_need")!.outputSchema as { properties: Record<string, { properties?: Record<string, { enum?: string[] }> }> };
     expect(submit.properties.step.properties?.state.enum).toContain("quoted");

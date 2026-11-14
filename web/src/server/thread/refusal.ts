@@ -15,7 +15,7 @@ import type { TurnRun } from "./pipeline";
 export type Lang = "en" | "fi" | "sv";
 
 export type Refusal =
-  | { code: "out_of_mandate"; what: string; group?: string; groups: string[]; signer?: string }
+  | { code: "out_of_mandate"; what: string; group?: string; groups: string[]; signer?: string; draft?: boolean }
   | { code: "not_sold"; what: string }
   | { code: "cutoff_passed"; what: string; day?: string; earliest?: string }
   | { code: "forbidden_allergen"; what: string; allergens: string[] }
@@ -39,6 +39,12 @@ export function groupOf(category: string, lang: Lang): string | undefined {
   if (!dept || !DATA.departments[dept]) return undefined;
   const name = lang === "en" ? DATA.departments[dept] : (DEPARTMENT_NAME[lang][dept] ?? DATA.departments[dept]);
   return name.charAt(0).toLowerCase() + name.slice(1);
+}
+
+/** A product family's group id (the department number the kitchen's terms list), when it is one. */
+export function groupIdOf(category: string): string | undefined {
+  const dept = categoryCodesFor(category)[0]?.slice(0, 2);
+  return dept && DATA.departments[dept] ? dept : undefined;
 }
 
 /** The kitchen's allowed groups in words, the ones it has most categories in first, at most three. */
@@ -70,9 +76,13 @@ export function sayRefusal(r: Refusal, lang: Lang): string {
     case "out_of_mandate": {
       const not = r.group ? (fi ? `, eivät ryhmää ${r.group}` : sv ? `, inte ${r.group}` : `, not ${r.group}`) : "";
       const add = r.group ?? (fi ? "sen" : sv ? "den" : "it");
-      if (fi) return `En voi ostaa tuotetta ${r.what} tälle keittiölle: sen säännöt kattavat ${list(r.groups, lang)}${not}. ${who(r.signer)} voi lisätä ryhmän ${add} kohdassa Sääntösi; kysynkö häneltä?`;
-      if (sv) return `Jag kan inte köpa ${r.what} åt det här köket: dess regler omfattar ${list(r.groups, lang)}${not}. ${who(r.signer)} kan lägga till ${add} under Dina regler; ska jag fråga?`;
-      return `I can't buy ${r.what} for this kitchen: its rules cover ${list(r.groups, lang)}${not}. ${who(r.signer)} can add ${add} under Your rules; shall I ask them?`;
+      // Only offered when it can be done here (an account's own session signs its new terms): never a promise it cannot keep.
+      const next = r.draft
+        ? fi ? `Laadinko muutoksen (${add} sääntöihin) ${r.signer ? `${r.signer} vahvistettavaksi` : "vahvistettavaksi"}?` : sv ? `Ska jag skriva ändringen (${add} i reglerna) så att ${r.signer ?? "ni"} kan bekräfta den?` : `Shall I draft that change (${add} added to your rules) for ${r.signer ?? "you"} to confirm?`
+        : fi ? `${who(r.signer)} voi lisätä ryhmän ${add} kohdassa Sääntösi.` : sv ? `${who(r.signer)} kan lägga till ${add} under Dina regler.` : `${who(r.signer)} can add ${add} under Your rules.`;
+      if (fi) return `En voi ostaa tuotetta ${r.what} tälle keittiölle: sen säännöt kattavat ${list(r.groups, lang)}${not}. ${next}`;
+      if (sv) return `Jag kan inte köpa ${r.what} åt det här köket: dess regler omfattar ${list(r.groups, lang)}${not}. ${next}`;
+      return `I can't buy ${r.what} for this kitchen: its rules cover ${list(r.groups, lang)}${not}. ${next}`;
     }
     case "not_sold":
       if (fi) return `En löydä tuotetta ${r.what} tukun valikoimasta. Onko sille toinen nimi tai merkki?`;
@@ -142,6 +152,13 @@ export function sayRefusal(r: Refusal, lang: Lang): string {
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
+/** Whether a change to the kitchen's terms can be drafted and confirmed here (an account's own signed-in session). */
+export function canDraft(run: TurnRun): boolean {
+  const kind = run.k.info.kind;
+  const p = run.person;
+  return kind === "account" && !!p && !p.callOnly && (!p.account || p.account === run.k.info.slug);
+}
+
 /** Who confirms the kitchen's rules, by name when the mandate names one. */
 function signerOf(run: TurnRun): string | undefined {
   return run.session.mandate.approvers?.[0]?.name;
@@ -152,7 +169,7 @@ export function refusalOfStep(run: TurnRun, step: IntakeView, lang: Lang): Refus
   const what = (step.need?.item?.text ?? "").trim() || (lang === "fi" ? "tätä" : lang === "sv" ? "det här" : "this");
   const m = run.session.mandate;
   if (step.family && !m.allowedCategories.includes(step.family) && !/nothing called/i.test(step.notes.join(" "))) {
-    return { code: "out_of_mandate", what, ...(groupOf(step.family, lang) ? { group: groupOf(step.family, lang) } : {}), groups: groupsOf(m.allowedCategories, lang), ...(signerOf(run) ? { signer: signerOf(run) } : {}) };
+    return { code: "out_of_mandate", what, ...(groupOf(step.family, lang) ? { group: groupOf(step.family, lang) } : {}), groups: groupsOf(m.allowedCategories, lang), ...(signerOf(run) ? { signer: signerOf(run) } : {}), ...(canDraft(run) && groupIdOf(step.family) ? { draft: true } : {}) };
   }
   if (/nothing called|found nothing called/i.test(step.notes.join(" "))) return { code: "not_sold", what };
   const codes = new Map<string, number>();
@@ -163,8 +180,8 @@ export function refusalOfStep(run: TurnRun, step: IntakeView, lang: Lang): Refus
   if (top === "out_of_stock") return { code: "out_of_stock", what, ...(day ? { day } : {}) };
   if (top === "over_budget") return { code: "over_budget", ...(signerOf(run) ? { signer: signerOf(run) } : {}) };
   if (top === "nutrition_rule") {
-    const e = step.excluded.find((x) => x.code === "nutrition_rule");
-    return { code: "nutrition_rule", what, ...(e ? { detail: plainDetail(e.reason) } : {}) };
+    const e = step.excluded.find((x) => x.code === "nutrition_rule") as { reason: string; params?: Record<string, string | number> } | undefined;
+    return { code: "nutrition_rule", what, ...(e ? { detail: nutritionDetail(e.params, lang) ?? plainDetail(e.reason) } : {}) };
   }
   // Most of what was looked at is another kind of product: say that, never "your rules" (it is not a rule).
   const kinds = step.excluded.filter((e) => /different kind of product/i.test(e.reason)).length;
@@ -208,6 +225,19 @@ export function refusalOfError(err: DockError): Refusal | undefined {
   return undefined;
 }
 
+/** "the cherry yoghurt has 13 g sugar per 100 g; your rule is at most 12 g", from the finding's own figures. */
+export function nutritionDetail(p: Record<string, string | number> | undefined, lang: Lang): string | undefined {
+  if (!p?.nutrient) return undefined;
+  const NUT: Record<string, Record<Lang, string>> = { sugar: { en: "sugar", fi: "sokeria", sv: "socker" }, salt: { en: "salt", fi: "suolaa", sv: "salt" }, protein: { en: "protein", fi: "proteiinia", sv: "protein" }, fibre: { en: "fibre", fi: "kuitua", sv: "fiber" }, fat: { en: "fat", fi: "rasvaa", sv: "fett" }, saturated_fat: { en: "saturated fat", fi: "tyydyttynyttä rasvaa", sv: "mättat fett" } };
+  const n = NUT[String(p.nutrient)]?.[lang] ?? String(p.nutrient).replaceAll("_", " ");
+  const per = String(p.per ?? "100g").replace(/^100/, "100 ");
+  const product = p.product ? String(p.product).replace(/[®™]/g, "").split(/\s+/).filter((w) => !/\d/.test(w) && !/^(kg|g|l|ml|dl|cl|x)$/i.test(w)).slice(0, 4).join(" ") : "";
+  const bound = p.max !== undefined ? { en: `at most ${p.max} g`, fi: `enintään ${p.max} g`, sv: `högst ${p.max} g` }[lang] : p.min !== undefined ? { en: `at least ${p.min} g`, fi: `vähintään ${p.min} g`, sv: `minst ${p.min} g` }[lang] : "";
+  if (p.problem === "unknown") return { en: `${product} does not declare its ${n}, and your rule asks for ${bound} per ${per}`, fi: `${product} ei ilmoita ${n}, ja sääntönne vaatii ${bound} / ${per}`, sv: `${product} anger inte ${n}, och er regel kräver ${bound} per ${per}` }[lang];
+  const v = p.value !== undefined ? `${String(p.value).replace(".", lang === "en" ? "." : ",")} g` : "";
+  return { en: `${product} has ${v} ${n} per ${per}; your rule is ${bound}`, fi: `${product}: ${v} ${n} / ${per}; sääntönne on ${bound}`, sv: `${product} har ${v} ${n} per ${per}; er regel är ${bound}` }[lang];
+}
+
 /** A lower layer's sentence made fit to say: product codes and ids out, snake_case words as words. */
 function plainDetail(reason: string): string {
   return reason
@@ -247,8 +277,8 @@ export function readable(text: string, lang: Lang): string {
   return t.replace(/(\d{1,2}\.\d{1,2}\.)\./g, "$1").replace(/(\d{1,2}\.\d{1,2})\.(?=[?;:,!])/g, "$1");
 }
 
-const TELL = /\b(send|type|write|re-?send|give me|tell me)\b[^.?!]{0,60}\b(product name|the name and|with the amount|order with|the exact)\b|\b(kirjoita|lähetä)\b[^.?!]{0,40}\b(tuotteen nimi|määrä)/i;
-const INSIDE = /\b(the store treated|treated your message|neither result|the results? (gave|give|show|showed|didn't|don't|did not|do not)|the store's results|tool results?|my tools|the engine|the reader|the intake|routing)\b/i;
+const TELL = /\b(send|type|write|re-?send|give me|tell me)\b[^.?!]{0,60}\b(product name|the name and|with the amount|order with|the exact|again as|as its own message|request again)\b|\b(kirjoita|lähetä)\b[^.?!]{0,40}\b(tuotteen nimi|määrä)/i;
+const INSIDE = /\b(the store treated|treated your message|neither result|the results? (gave|give|show|showed|didn't|don't|did not|do not)|the store's results|tool results?|my tools|none of my tools|the engine|the reader|the intake|routing|(the )?menu planner|the planner|a step did not finish|didn't (connect|link)|did not (connect|link)|the (system|backend|server|database)|ruokalistasuunnittelija|suunnittelija ei)\b/i;
 
 /** A sentence that tells the buyer what to type, or says how the system works inside: never shown. */
 export function insideOrTell(sentence: string): boolean {
@@ -266,7 +296,7 @@ export function englishDays(text: string): string {
     const rest = all.slice(offset + m.length);
     const mark = /^(\}\}|\*\*)/.exec(rest)?.[0] ?? "";
     const after = rest.slice(mark.length);
-    const ends = dot === "." && (/^\s*$/.test(after) || /^\s+[\p{Lu}"“*{]/u.test(after));
+    const ends = dot === "." && (/^\s*$/.test(after) || /^\s+[\p{Lu}"“]/u.test(after));
     return `${w}${sp}${Number(d)} ${MON[Number(mo) - 1]}${ends && !mark ? "." : ""}${ends && mark ? "" : ""}`;
-  }).replace(/(\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec))(\}\}|\*\*)(?=\s+[\p{Lu}"“*{]|\s*$)/gu, "$1$2.");
+  }).replace(/(\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec))(\}\}|\*\*)(?=\s+[\p{Lu}"“]|\s*$)/gu, "$1$2.");
 }

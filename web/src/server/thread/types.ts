@@ -237,7 +237,7 @@ export type OptionView = {
   orderBy?: string;
   stockConfirmed: boolean;
   /** `taxRatePct`: the VAT rate (prices are before VAT); `depositCents`: per pack, refunded on return, no VAT. */
-  lines: { productId: string; name: string; quantity: number; packSize?: number; unit?: string; unitPriceCents?: number; substituteFor?: string; taxRatePct?: number; depositCents?: number }[];
+  lines: { productId: string; name: string; quantity: number; packSize?: number; unit?: string; unitPriceCents?: number; substituteFor?: string; substituteForName?: string; taxRatePct?: number; depositCents?: number }[];
   delivered: { amount: number; unit: string };
   co2Kg: number | null;
   reliability: number | null;
@@ -299,6 +299,8 @@ export type PriceCard = CardBase & {
 
 export type GateCard = CardBase & {
   type: "gate";
+  /** The buyer pressed to skip the limit or said the approver already agreed: the OK goes to the approver's own device. */
+  pressured?: boolean;
   /** Why it was refused or stopped, in words, in each language (refusal.ts). */
   said?: Record<"en" | "fi" | "sv", string>;
   requestId: string;
@@ -363,6 +365,8 @@ export type NoticeCard = CardBase & {
   words?: string;
   /** For `incomplete` with only the amount missing: the kitchen's usual amount of that kind ("12 L"), offered as the answer. */
   usual?: string;
+  /** Out of the kitchen's rules, and the change can be drafted here: the group to add, and the words to order after. */
+  addGroup?: { id: string; what: string; words: string };
   /** A refusal in words, first person, in each language (refusal.ts): what the store shows when the agent says nothing. */
   said?: Record<"en" | "fi" | "sv", string>;
   /** For `refused`: the rule that fired. */
@@ -652,13 +656,26 @@ export type ScenarioCard = CardBase & {
   text: Record<"en" | "fi" | "sv", { say: string; ask: string }>;
   steps: string[];
   /** What the answer is read against (server/agent/menu/thread.ts PendingScenario). */
-  pending: { kind: "seasonal" | "event"; planId: string; options: { optionId: string; lineId: string; words: string[] }[]; earliest?: string; words: string };
+  pending: { kind: "seasonal" | "event"; planId: string; options: { optionId: string; lineId: string; words: string[] }[]; more?: { optionId: string; lineId: string; words: string[] }[]; earliest?: string; words: string };
   /** Each ingredient that cannot arrive, with its best stand-in (behind Show the list). */
   others?: string[];
   state: "open" | "answered";
 };
 
-export type Card = ScenarioCard | WatchCard | OfferCard | UnderstoodCard | AnomalyCard | QuestionCard | OptionsCard | PriceCard | GateCard | OrderCard | MemoryCard | RecordsCard | NoticeCard | SheetCard | AlternativesCard | MenuCard | TodayCard | ProductsCard | ProductCard | StandingCard | DeliveriesCard | MemoryListCard | RulesCard;
+/** A backup in case a product with a poor delivery record does not come (server/reliability), said after the order. */
+export type BackupCard = CardBase & {
+  type: "backup";
+  momentId: string;
+  /** Its sentence and question, in the buyer's language. */
+  text: string;
+  answers: string[];
+  /** The alternatives and the other poor-record products (behind Show the list). */
+  others: string[];
+  steps: string[];
+  state: "open" | "set" | "declined";
+};
+
+export type Card = BackupCard | ScenarioCard | WatchCard | OfferCard | UnderstoodCard | AnomalyCard | QuestionCard | OptionsCard | PriceCard | GateCard | OrderCard | MemoryCard | RecordsCard | NoticeCard | SheetCard | AlternativesCard | MenuCard | TodayCard | ProductsCard | ProductCard | StandingCard | DeliveriesCard | MemoryListCard | RulesCard;
 // ---------- the kitchen's rules (docs/agent-thread.md "Widgets": rules) ----------
 
 /** The mandate as the rules card shows it: plain values. `groups` only where the kitchen has terms (an account). */

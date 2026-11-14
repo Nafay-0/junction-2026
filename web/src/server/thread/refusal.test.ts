@@ -29,9 +29,9 @@ describe("refusals in words", () => {
   });
 
   it("says the out-of-mandate case in the first person, the groups in words, with the next step", () => {
-    const t = sayRefusal(ALL[0], "en");
-    expect(t).toBe("I can't buy burger buns for this kitchen: its rules cover dairy and cheese and seasonings, coffee and drinks, not fresh bakery. Owner can add fresh bakery under Your rules; shall I ask them?");
-    expect(t.endsWith("?")).toBe(true);
+    expect(sayRefusal(ALL[0], "en")).toBe("I can't buy burger buns for this kitchen: its rules cover dairy and cheese and seasonings, coffee and drinks, not fresh bakery. Owner can add fresh bakery under Your rules.");
+    // Offered only when the change can be drafted and confirmed here: never a promise it cannot keep.
+    expect(sayRefusal({ ...(ALL[0] as Extract<Refusal, { code: "out_of_mandate" }>), draft: true }, "en")).toMatch(/Shall I draft that change \(fresh bakery added to your rules\) for Owner to confirm\?$/);
   });
 
   it("names a kitchen's product groups in words, at most three", () => {
@@ -70,6 +70,8 @@ describe("insideOrTell", () => {
     const { insideOrTell } = await import("./refusal");
     expect(insideOrTell("I'll try again when you send the order with the product name and amount.")).toBe(true);
     expect(insideOrTell("The store treated your message as a change to your two recurring orders, and neither result gave a day or a price.")).toBe(true);
+    expect(insideOrTell("I couldn't change the chocolate cake to lactose-free: the menu planner didn't connect your request to it.")).toBe(true);
+    expect(insideOrTell("A step did not finish, so nothing is ordered.")).toBe(true);
     expect(insideOrTell("Shall I order 12 L of the Fazer barista for Tuesday 17 Nov?")).toBe(false);
   });
 });
@@ -81,5 +83,13 @@ describe("englishDays", () => {
     expect(englishDays("the earliest delivery is Mon 16.11. Plan it for Mon 16.11. instead?")).toBe("the earliest delivery is Mon 16 Nov. Plan it for Mon 16 Nov instead?");
     expect(englishDays("It arrives {{Monday 16.11.}} Shall I order it?")).toBe("It arrives {{Monday 16 Nov}}. Shall I order it?");
     expect(englishDays("on Tue 17.11., then")).toBe("on Tue 17 Nov, then");
+    expect(englishDays("cancel until {{Sunday 15.11.}} {{17.00}}.")).toBe("cancel until {{Sunday 15 Nov}} {{17.00}}.");
+  });
+});
+
+describe("nutritionDetail", () => {
+  it("says the product's figure and the rule's bound", async () => {
+    const { nutritionDetail } = await import("./refusal");
+    expect(nutritionDetail({ nutrient: "sugar", problem: "over", value: 13, max: 12, per: "100g", product: "Valio cherry yoghurt 1 kg" }, "en")).toBe("Valio cherry yoghurt has 13 g sugar per 100 g; your rule is at most 12 g");
   });
 });
