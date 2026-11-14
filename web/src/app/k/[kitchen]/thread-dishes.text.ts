@@ -1,0 +1,41 @@
+import { defineText } from "../../_i18n/lang";
+
+/** The light words beside an ingredient when it is not simply ordered, and the menu's total line (thread-dishes.tsx). */
+export const THREAD_DISHES_TEXT = defineText({
+  en: {
+    have: "you have it",
+    haveList: (list: string) => `Already in your kitchen: ${list}.`,
+    leftOut: (why?: string) => `left off${why ? `: ${why}` : ""}`,
+    late: (day: string, to?: string) => (to ? `can't arrive${day ? ` by ${day}` : ""}: ${to} could stand in` : `can't arrive${day ? ` by ${day}` : ""}`),
+    swap: (to: string) => `${to} in its place`,
+    later: (day: string) => `arrives ${day}`,
+    open: "no product yet",
+    changed: "changed",
+    total: (total: string, per?: string) => `${total} in all${per ? ` · ${per} a portion` : ""}`,
+    label: "The menu",
+  },
+  fi: {
+    have: "teillä on jo",
+    haveList: (list: string) => `Teillä on jo: ${list}.`,
+    leftOut: (why?: string) => `jätetty pois${why ? `: ${why}` : ""}`,
+    late: (day: string, to?: string) => (to ? `ei ehdi${day ? ` ${day}` : ""}: tilalle käy ${to}` : `ei ehdi${day ? ` ${day}` : ""}`),
+    swap: (to: string) => `tilalla ${to}`,
+    later: (day: string) => `tulee ${day}`,
+    open: "tuotetta ei vielä valittu",
+    changed: "muutettu",
+    total: (total: string, per?: string) => `yhteensä ${total}${per ? ` · ${per} annos` : ""}`,
+    label: "Menu",
+  },
+  sv: {
+    have: "ni har det",
+    haveList: (list: string) => `Finns redan hos er: ${list}.`,
+    leftOut: (why?: string) => `utelämnad${why ? `: ${why}` : ""}`,
+    late: (day: string, to?: string) => (to ? `hinner inte${day ? ` till ${day}` : ""}: ${to} kan ersätta` : `hinner inte${day ? ` till ${day}` : ""}`),
+    swap: (to: string) => `${to} i stället`,
+    later: (day: string) => `kommer ${day}`,
+    open: "ingen produkt än",
+    changed: "ändrad",
+    total: (total: string, per?: string) => `${total} totalt${per ? ` · ${per} per portion` : ""}`,
+    label: "Menyn",
+  },
+});
