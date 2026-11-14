@@ -171,24 +171,34 @@ export function interpret(product: IndexedProduct, r: ValioLiveResult | undefine
       notes.push(`price valid ${price.validFrom ?? "?"} to ${price.validTo ?? "?"}`);
     }
   }
+  // The row the answer is about. closingTime is the cut-off for the availableDate of the answer's (first) row: with
+  // several rows, it belongs to the earliest; a later row's day has no cut-off stated, and is used when the earliest
+  // row's cut-off has passed or it has nothing to offer (Valio: "closingTime is the cut off related to availableDate").
+  const rows = avail?.lines ?? (avail?.line ? [avail.line] : []);
+  const firstCut = avail?.closingTime && rows[0] ? cutoffPassed(avail.closingTime, avail.timeNow, now) : undefined;
+  const usableRow = (l: (typeof rows)[number]) => l.availableAmount > 0 && !l.salesBlock;
+  const later = rows.slice(1).find(usableRow);
+  const line = rows[0] && (firstCut || !usableRow(rows[0])) && later ? later : rows[0];
+  const cutoffFor = line && line === rows[0] && avail?.closingTime ? rows[0].availableDate : undefined;
+
   if (!avail) {
     problems.push("not_deliverable");
     notes.push("the availability API did not return it");
   } else {
-    if (avail.salesBlock || avail.line?.salesBlock) {
+    if (avail.salesBlock || line?.salesBlock) {
       problems.push("sales_block");
       notes.push("sales block: cannot be ordered right now");
     }
-    if (!avail.line) {
-      problems.push("not_deliverable");
-      notes.push("no schedule line: cannot be delivered on any date");
+    if (!line) {
+      // "Empty = not available": no rows, or rows without an amount. Out of stock for the day asked.
+      problems.push("out_of_stock");
+      notes.push(`not available${requested ? ` for ${requested}` : ""}: the wholesaler's answer is empty`);
     }
   }
 
-  const line = avail?.line;
-  const terminal = avail?.logisticModel?.toLowerCase() === "terminal";
-  const placeholder = line !== undefined && line.availableAmount >= IMPLAUSIBLE_AMOUNT;
-  const stockUnknown = terminal || placeholder;
+  // An amount of 999999 or more means the wholesaler does not know the stock (typically a Terminal product it does not
+  // hold) and takes an order of any quantity: unknown, never short, never a reason to refuse.
+  const stockUnknown = line !== undefined && line.availableAmount >= IMPLAUSIBLE_AMOUNT;
   if (line) {
     if (line.salesUnit && line.salesUnit !== product.salesUnit) {
       problems.push("unit_mismatch");
@@ -196,24 +206,22 @@ export function interpret(product: IndexedProduct, r: ValioLiveResult | undefine
     }
     if (stockUnknown) {
       problems.push("stock_unknown");
-      notes.push(
-        terminal
-          ? `shipped from the supplier's warehouse: stock not known${placeholder ? ` (${line.availableAmount} is a placeholder)` : ""}`
-          : `stock not known (${line.availableAmount} is a placeholder, not a real quantity)`,
-      );
+      notes.push("stock isn't reported for this one; the wholesaler takes the order");
     } else if (line.availableAmount <= 0) {
       problems.push("out_of_stock");
-      notes.push("none in stock");
+      notes.push(`none in stock for ${line.availableDate}`);
     }
     if (requested && line.availableDate > requested) {
       problems.push("later_than_requested");
       notes.push(`earliest delivery ${line.availableDate}, after the requested ${requested}`);
     }
   }
-  const cutoff = avail?.closingTime ? cutoffPassed(avail.closingTime, avail.timeNow, now) : undefined;
+  const cutoff = cutoffFor ? firstCut : undefined;
   if (cutoff) {
     problems.push("cutoff_passed");
-    notes.push(`order cut-off ${avail!.closingTime} has passed: cannot be ordered for ${line?.availableDate ?? requested ?? "that date"} any more, whatever the schedule line says`);
+    notes.push(`order cut-off ${avail!.closingTime} for delivery ${cutoffFor} has passed: it cannot be ordered for ${cutoffFor} any more`);
+  } else if (line && rows[0] && line !== rows[0]) {
+    notes.push(`the earliest row (${rows[0].availableDate}) ${firstCut ? `is past its cut-off ${avail!.closingTime}` : "has nothing to offer"}; ${line.availableDate} has no cut-off stated`);
   }
 
   let offer: LiveOffer | undefined;
@@ -228,7 +236,7 @@ export function interpret(product: IndexedProduct, r: ValioLiveResult | undefine
       stockKnown: !stockUnknown,
       logisticModel: avail?.logisticModel,
       salesUnit: line.salesUnit ?? product.salesUnit,
-      orderBy: avail?.closingTime,
+      ...(cutoffFor ? { orderBy: avail!.closingTime, orderByFor: cutoffFor } : {}),
       cutoffPassed: cutoff,
       priceValidFrom: price.validFrom,
       priceValidUntil: price.validTo,
@@ -246,7 +254,7 @@ export function interpret(product: IndexedProduct, r: ValioLiveResult | undefine
 
   const orderable = !problems.some((p) => BLOCKING.has(p));
   const summary = offer
-    ? `${id}: ${offer.stockKnown === false ? "stock unknown" : `${offer.availablePacks} ${offer.salesUnit} available`} at ${(offer.unitPriceCents / 100).toFixed(2)} ${offer.currency ?? "EUR"}/${offer.salesUnit}, delivery ${offer.deliveryDate}`
+    ? `${id}: ${offer.stockKnown === false ? "stock not reported" : `${offer.availablePacks} ${offer.salesUnit} available`} at ${(offer.unitPriceCents / 100).toFixed(2)} ${offer.currency ?? "EUR"}/${offer.salesUnit}, delivery ${offer.deliveryDate}`
     : `${id}: no offer`;
   return { productId: id, requestedDate: requested, orderable, problems, offer, message: notes.length ? `${summary}; ${notes.join("; ")}.` : `${summary}.` };
 }

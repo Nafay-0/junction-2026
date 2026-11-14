@@ -88,7 +88,7 @@ export const MENU_SCENARIOS: Record<string, FakeScenario> = {
 export async function menuTestDock(scenarios: Record<string, FakeScenario> = MENU_SCENARIOS, extra: FixtureSpec[] = []) {
   const index = buildCatalogIndex([...MENU_FIXTURES, ...extra].map(rawProduct), "productId,reliability\n", "productId,carbon\n", MENU_NOW);
   const api = fakeValioApi(scenarios, { timeNow: "2026-11-13T12:00:00" });
-  const live = new ValioLiveClient({ baseUrl: "https://valio.test", apiKey: "test-key", fetch: api.fetch, now: () => MENU_NOW, sleep: async () => {} });
+  const live = new ValioLiveClient({ baseUrl: "https://valio.test", apiKey: "test-key", fetch: api.fetch, now: () => MENU_NOW, sleep: async () => {}, gate: null });
   const valio = new ValioCatalog(index, live, { now: () => MENU_NOW });
   const [kaari, laakso] = [await demoKitchenKeyPair(), await demoOrgKeyPair()];
   const outbox = new InMemoryOutbox();

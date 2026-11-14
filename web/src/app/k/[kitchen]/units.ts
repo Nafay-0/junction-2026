@@ -73,10 +73,10 @@ export function unitWord(p: Pick<Product, "salesUnit">, n: number, lang: Lang = 
   return n === 1 ? u[0] : u[1];
 }
 
-/** Step of the quantity control: the lot size when it is a whole number, else 1 (0.01 means "any"). */
+/** Step of the quantity control: the product's lot (1 sales unit, or the data's real fractional lot such as 1.5 kg). */
 export function stepOf(p: Pick<Product, "lotSize">): number {
   const l = p.lotSize ?? 1;
-  return l >= 1 ? Math.round(l) : 1;
+  return l > 0.01 + 1e-9 ? l : 1;
 }
 
 const fmt = (n: number) => num(n, 2);

@@ -156,11 +156,18 @@ describe("amountToSalesUnits", () => {
     if (c.ok) expect(c.warnings[0]).toMatch(/adds 15 l \(\+60 %\)/);
   });
 
-  it("honours the lot size, and whole units for quotes", () => {
-    // Sold by the kilo in steps of 1.5 kg; quotes take whole numbers, so the step becomes 3 kg.
-    expect(amountToSalesUnits(pack("900014"), kilos(10))).toMatchObject({ ok: true, salesUnits: 12, step: 3, delivered: kilos(12) });
-    expect(amountToSalesUnits(pack("900014"), kilos(10), { wholeUnits: false })).toMatchObject({ ok: true, salesUnits: 10.5, step: 1.5 });
+  it("honours the lot size: 0.01 and none are one sales unit, a real fractional lot is kept", () => {
+    // Sold by the kilo in steps of 1.5 kg: 10 kg is seven steps, 10.5 kg (the data's lot, not rounded to whole kilos).
+    expect(amountToSalesUnits(pack("900014"), kilos(10))).toMatchObject({ ok: true, salesUnits: 10.5, step: 1.5, delivered: kilos(10.5) });
+    expect(amountToSalesUnits(pack("900014"), kilos(10), { wholeUnits: true })).toMatchObject({ ok: true, salesUnits: 12, step: 3 });
     expect(amountToSalesUnits(pack("900026"), kilos(9))).toMatchObject({ ok: true, salesUnits: 10, step: 2 });
+    // "You should treat 0.01 as 1": a weight product with the partner's 0.01 is ordered in whole kilos.
+    const kg = (lotSize?: number) => ({ salesUnit: "KG", perSalesUnit: { kg: 1 }, certainMeasures: ["kg" as const], issues: [], label: "1 kg per KG", ...(lotSize !== undefined ? { lotSize } : {}) });
+    expect(amountToSalesUnits(kg(0.01), kilos(2.3))).toMatchObject({ ok: true, salesUnits: 3, step: 1 });
+    expect(amountToSalesUnits(kg(undefined), kilos(2.3))).toMatchObject({ ok: true, salesUnits: 3, step: 1 });
+    expect(amountToSalesUnits(kg(1), kilos(2.3))).toMatchObject({ ok: true, salesUnits: 3, step: 1 });
+    expect(amountToSalesUnits(kg(1.5), kilos(2.3))).toMatchObject({ ok: true, salesUnits: 3, step: 1.5 });
+    expect(amountToSalesUnits(kg(2.5), kilos(6))).toMatchObject({ ok: true, salesUnits: 7.5, step: 2.5 });
   });
 
   it("refuses to guess when the content is uncertain, but gives an estimate", () => {
@@ -192,8 +199,9 @@ describe("salesUnitsToAmount", () => {
   it("converts back and checks the order step", () => {
     expect(salesUnitsToAmount(pack("900001"), 50, "L")).toMatchObject({ ok: true, amount: litres(1000) });
     expect(salesUnitsToAmount(pack("900001"), 2.5, "L")).toMatchObject({ ok: false, reason: "invalid_quantity" });
-    expect(salesUnitsToAmount(pack("900014"), 4.5, "kg")).toMatchObject({ ok: false, reason: "invalid_quantity" });
-    expect(salesUnitsToAmount(pack("900014"), 4.5, "kg", { wholeUnits: false })).toMatchObject({ ok: true, amount: kilos(4.5) });
+    expect(salesUnitsToAmount(pack("900014"), 4.5, "kg")).toMatchObject({ ok: true, amount: kilos(4.5) }); // three steps of 1.5 kg
+    expect(salesUnitsToAmount(pack("900014"), 4, "kg")).toMatchObject({ ok: false, reason: "invalid_quantity" });
+    expect(salesUnitsToAmount(pack("900014"), 4.5, "kg", { wholeUnits: true })).toMatchObject({ ok: false, reason: "invalid_quantity" });
     expect(salesUnitsToAmount(pack("900015"), 3, "kg")).toMatchObject({ ok: false, reason: "content_uncertain", estimate: kilos(6) });
     expect(salesUnitsToAmount(pack("900001"), 0, "L")).toMatchObject({ ok: false, reason: "invalid_quantity" });
   });

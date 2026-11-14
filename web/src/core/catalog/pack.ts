@@ -452,14 +452,18 @@ export function describePack(salesUnit: string, baseUnit: string, factor: number
 
 /** The facts the conversion needs: the derived content plus the order step. */
 export type PackInfo = Pick<PackContent, "salesUnit" | "perSalesUnit" | "certainMeasures" | "issues" | "label"> & {
-  /** Smallest order step in sales units (the partner's allowedLotSize; 0.01 means "no restriction"). */
+  /** Order step in sales units (the partner's allowedLotSize, read by partner.ts lotOf: 0.01 or none is 1). */
   lotSize?: number;
 };
 
 export type ConversionOptions = {
   /** "up" (default) never delivers less than asked; "down" never more; "nearest" the closest whole step. */
   rounding?: "up" | "down" | "nearest";
-  /** Dock quotes whole sales units only. Default true. */
+  /**
+   * Whole sales units even when the lot is fractional (the step becomes the least common multiple of the lot and 1).
+   * Default false: the step is the lot, which is a whole number of sales units unless the data gives a fractional
+   * lot (1.5 kg).
+   */
   wholeUnits?: boolean;
   /** Warn when rounding adds more than this share on top of the request. Default 0.1 (10 %). */
   maxOvershoot?: number;
@@ -489,11 +493,11 @@ export type Conversion =
 const SCALE = 100;
 
 function orderStep(salesUnit: string, lotSize: number | undefined, wholeUnits: boolean): number {
-  const lot = lotSize && lotSize > 0 ? lotSize : 0.01;
-  // Counted units (cases, pieces, bags) are ordered whole; a lot of 0.01 is the system default meaning "any".
-  const isWeight = salesUnit === "KG";
+  // The partner's 0.01 (or no lot) is 1 sales unit: "0.01 crates is not possible". A real fractional lot is kept.
+  const lot = lotSize && lotSize > 0.01 + 1e-9 ? lotSize : 1;
+  void salesUnit;
   let stepH = Math.round(lot * SCALE);
-  if (!isWeight || wholeUnits) {
+  if (wholeUnits) {
     const one = SCALE;
     const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
     stepH = (stepH * one) / gcd(stepH, one); // least common multiple of the lot and one whole unit
@@ -508,7 +512,7 @@ function orderStep(salesUnit: string, lotSize: number | undefined, wholeUnits: b
  */
 export function amountToSalesUnits(pack: PackInfo, requested: Amount, opts: ConversionOptions = {}): Conversion {
   const rounding = opts.rounding ?? "up";
-  const wholeUnits = opts.wholeUnits ?? true;
+  const wholeUnits = opts.wholeUnits ?? false;
   const maxOvershoot = opts.maxOvershoot ?? 0.1;
   if (!Number.isFinite(requested.amount) || requested.amount <= 0) {
     return { ok: false, reason: "invalid_amount", message: `Requested amount must be a positive number; got ${requested.amount}.`, requested };
@@ -580,7 +584,7 @@ export type BackConversion = { ok: true; amount: Amount; explanation: string } |
 /** What a number of sales units holds, in litres or kilograms. Also checks the quantity against the order step. */
 export function salesUnitsToAmount(pack: PackInfo, salesUnits: number, unit: Measure, opts: { wholeUnits?: boolean } = {}): BackConversion {
   if (!Number.isFinite(salesUnits) || salesUnits <= 0) return { ok: false, reason: "invalid_quantity", message: `Quantity must be positive; got ${salesUnits}.` };
-  const step = orderStep(pack.salesUnit, pack.lotSize, opts.wholeUnits ?? true);
+  const step = orderStep(pack.salesUnit, pack.lotSize, opts.wholeUnits ?? false);
   const steps = salesUnits / step;
   if (Math.abs(steps - Math.round(steps)) > 1e-9) {
     return { ok: false, reason: "invalid_quantity", message: `${salesUnits} ${pack.salesUnit} is not a multiple of the order step ${step} ${pack.salesUnit}.` };

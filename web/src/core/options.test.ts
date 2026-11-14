@@ -190,7 +190,12 @@ describe("good, better, best when the request cannot be met in full", () => {
     const [card] = buildOptions(input({ candidates: [P.box], offers: [terminal] })).cards;
     expect(card.stockConfirmed).toBe(false);
     expect(card.orderBy).toBe("2026-11-16T17:00:00+0200");
-    expect(card.cons).toEqual(expect.arrayContaining(["Stock not confirmed: the wholesaler does not report a quantity for this product, only that it can deliver.", "Order by Mon 16 Nov 17:00: the cut-off for this date is close."]));
+    expect(card.cons).toEqual(expect.arrayContaining(["Order by Mon 16 Nov 17:00: the cut-off for this date is close."]));
+    // Unknown stock is said only when it matters: beside an option whose stock is reported. Never a shortage.
+    expect(card.reasons.some((r) => r.code === "stock_unconfirmed")).toBe(false);
+    const two = buildOptions(input({ candidates: [P.box, P.box2], offers: [terminal, offer(P.box2)] })).cards;
+    expect(two.find((c) => !c.stockConfirmed)!.cons).toContain("Stock isn't reported for this one; the wholesaler takes the order.");
+    expect(two.every((c) => !c.reasons.some((r) => r.code === "partial_stock"))).toBe(true);
   });
 
   it("converts litres to the partner's sales units with the pack data, and will not guess an uncertain pack", () => {

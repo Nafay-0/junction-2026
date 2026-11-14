@@ -173,12 +173,14 @@ export function arrivalOf(status: LiveStatus | undefined, wanted: string): Arriv
   const o = status.offer;
   const has = (p: LiveStatus["problems"][number]) => status.problems.includes(p);
   if (has("unknown_product")) return { ok: false, code: "blocked", why: "not in the wholesaler's assortment" };
+  // "Empty = not available": an empty answer is out of stock for the day asked, before "no delivery on any day".
+  if (has("out_of_stock") && !o) return { ok: false, code: "out_of_stock", why: "out of stock" };
   if (has("not_deliverable") || (!o && !has("no_price"))) return { ok: false, code: "not_deliverable", why: "the wholesaler has no delivery for it on any day" };
   if (has("no_price") || has("price_not_valid")) return { ok: false, code: "no_price", why: "no valid price from the wholesaler now" };
   if (has("sales_block")) return { ok: false, code: "blocked", why: "blocked for sale now" };
   if (has("out_of_stock")) return { ok: false, code: "out_of_stock", why: "out of stock", ...(o?.deliveryDate && o.deliveryDate > wanted ? { earliest: o.deliveryDate } : {}) };
   if (has("cutoff_passed") || o?.cutoffPassed)
-    return { ok: false, code: "cutoff_passed", why: `the order cut-off passed${o?.orderBy ? ` on ${cutoffText(o.orderBy)}` : ""}${o?.deliveryDate ? ` (for delivery ${dayText(o.deliveryDate)})` : ""}`, ...(o?.orderBy ? { orderBy: o.orderBy } : {}) };
+    return { ok: false, code: "cutoff_passed", why: `the order cut-off passed${o?.orderBy ? ` on ${cutoffText(o.orderBy)}` : ""}${o?.orderByFor ?? o?.deliveryDate ? ` (for delivery ${dayText((o?.orderByFor ?? o?.deliveryDate)!)})` : ""}`, ...(o?.orderBy ? { orderBy: o.orderBy } : {}) };
   if (o && o.deliveryDate > wanted) return { ok: false, code: "later", why: `no delivery on ${dayText(wanted)}: the earliest is ${dayText(o.deliveryDate)}${o.orderBy ? `, ordered by ${cutoffText(o.orderBy)}` : ""}`, earliest: o.deliveryDate, ...(o.orderBy ? { orderBy: o.orderBy } : {}) };
   if (!o) return { ok: false, code: "no_price", why: "no offer from the wholesaler now" };
   return { ok: true, date: o.deliveryDate, ...(o.orderBy ? { orderBy: o.orderBy } : {}) };

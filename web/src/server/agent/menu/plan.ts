@@ -6,6 +6,7 @@ import type { Mandate } from "@/core/mandate";
 import { buildOptions, formatCutoff, type OptionCard } from "@/core/options";
 import { shortfall, type OnHand } from "@/core/on-hand";
 import { ruleFor } from "@/core/dish-rules";
+import { completeness, type Coverage, type Ctx as CoverageCtx } from "./coverage";
 import { leftoverNote, orderByFit } from "@/core/pack-choice";
 import { formatEur } from "@/core/util";
 import type { DraftIngredient, DraftUnit, MenuDraft } from "./draft";
@@ -105,6 +106,10 @@ export type PlanInput = {
   rules?: { text: string; source: string }[];
   /** Dishes refused under a rule, and dishes of the same kind that can be made instead (service.ts checkDishes). */
   refused?: { dishId: string; name: string; ingredient: string; allergen: string; rule: { text: string; source: string } }[];
+  /** How to name groups and read rules for the coverage (the service gives it; tests may leave it out). */
+  coverageCtx?: Partial<CoverageCtx>;
+  /** The buyer accepted ordering only what can be bought ("order just those three"). */
+  acceptPartial?: { by: string; at: string; covered: number; of: number };
   instead?: { name: string; nameFi: string | null; nameSv?: string | null; course: string; portion: string; ingredients: string[]; checked: string }[];
 };
 
@@ -180,8 +185,15 @@ export type PlanTotals = {
   ruleRefusals: { lineId: string; ingredient: string; rule: { text: string; source: string }; reason: string }[];
   /** The delivery day as offered, checked for every line being bought: which line cannot make it, and why. */
   day: { date: string | null; ok: boolean; lines: { lineId: string; ingredient: string; ok: boolean; arrives: string | null; why?: string }[] };
-  /** Each ingredient of each dish and how it is covered: ordered, on hand (with the basis), a staple assumed, or left out. */
-  coverage: { dish: string; ingredient: string; lineId: string; basis: "ordered" | "on_hand" | "staple" | "left_out" | "open"; text: string }[];
+  /** Every ingredient of every dish, refused dishes included, with exactly one coverage and its reason (coverage.ts). */
+  coverage: Coverage[];
+  /** The plan is the dish: every ingredient ordered, on hand, a staple, or swapped (said). */
+  complete: boolean;
+  ingredients: number;
+  covered: number;
+  missing: Coverage[];
+  /** A dish's defining ingredient (the meat in meatballs) is among what is not covered. */
+  definingMissing: boolean;
 };
 
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
@@ -583,13 +595,22 @@ export function computePlan(input: PlanInput): PlanView {
     const ok = !!arrives && !late && (!day || arrives <= day);
     return { lineId: l.lineId, ingredient: l.name, ok, arrives, ...(ok ? {} : { why: (late?.text ?? (arrives ? `arrives ${formatDay(arrives)}, after ${day ? formatDay(day) : "the day"}` : l.statusText)).replace(/\s*\(searched:[^)]*\)/g, "") }) };
   });
-  const coverage: PlanTotals["coverage"] = input.specs.flatMap((spec) => {
-    const l = lines.find((x) => x.lineId === spec.lineId);
-    const owner = l?.status === "merged" ? lines.find((x) => x.lineId === l.mergedInto) : l;
-    const basis: PlanTotals["coverage"][number]["basis"] = !owner ? "open" : owner.status === "struck" ? (owner.onHand ? "on_hand" : spec.pantry && !input.edits[spec.lineId]?.struck ? "staple" : "left_out") : owner.chosen ? (owner.status === "ready" ? "ordered" : "open") : "open";
-    const text = basis === "ordered" ? (owner!.chosen!.products.map((x) => x.packText).join(" + ")) : basis === "on_hand" ? owner!.struckReason ?? "on hand" : basis === "staple" ? "a staple the kitchen keeps (its pantry list): not bought" : basis === "left_out" ? (owner?.struckReason ?? "left out") : (owner?.doubts.filter((d) => !d.accepted).map((d) => d.text).join(" ") || owner?.statusText || "not planned");
-    return [...new Set(spec.uses.map((u) => u.dish))].map((dish) => ({ dish, ingredient: spec.name, lineId: spec.lineId, basis, text }));
-  });
+  const ctx: CoverageCtx = {
+    codeOf: (slug) => /^cat_(\d+)$/.exec(slug)?.[1],
+    codeOfProduct: (id) => Object.values(input.candidates).flatMap((x) => x?.candidates ?? []).find((c) => c.product.id === id)?.product.categoryCode,
+    kitchenGroups: [],
+    struckByBuyer: (id) => input.edits[id]?.struck === true,
+    ruleOf: (l) => ruleOfReasons([...l.doubts.map((d) => d.text), ...l.excluded.map((e) => e.reason)], input.rules ?? []),
+    earliest: (l) => [l.chosen?.deliveryDate, ...l.alternatives.map((a) => a.deliveryDate)].filter((d): d is string => !!d).sort()[0],
+    ...input.coverageCtx,
+  };
+  const done = completeness(input.draft.dishes, input.specs, lines, input.refused ?? [], ctx);
+  // Not the dish: said as the first thing, with the count, never a total as if it were (unless the buyer accepted it).
+  if (input.settings.covers !== null && !done.complete && !refused) {
+    const names = done.missing.slice(0, 6).map((m) => `${m.ingredient} (${m.code === "outside_groups" ? `outside your product groups: ${m.detail?.group ?? ""}` : m.words})`);
+    const msg = `Only ${done.covered} of ${done.ingredients} ingredients can be bought${done.definingMissing ? ", and what the dish is made of is not among them" : ""}: not covered ${names.join("; ")}${done.missing.length > 6 ? ` and ${done.missing.length - 6} more` : ""}.`;
+    if (!input.acceptPartial) blockers.unshift(msg);
+  }
   return {
     lines,
     totals: {
@@ -610,7 +631,12 @@ export function computePlan(input: PlanInput): PlanView {
       instead,
       ruleRefusals,
       day: { date: day, ok: dayLines.every((x) => x.ok), lines: dayLines },
-      coverage,
+      coverage: done.coverage,
+      complete: done.complete,
+      ingredients: done.ingredients,
+      covered: done.covered,
+      missing: done.missing,
+      definingMissing: done.definingMissing,
     },
   };
 }

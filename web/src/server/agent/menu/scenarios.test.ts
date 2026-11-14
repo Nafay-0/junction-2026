@@ -204,7 +204,7 @@ describe("scenario 2: a booking at short notice, substitutes by the ingredient's
     const st = r.cannotArrive.find((x) => x.lineId === "beef_cheek")!;
     // One truth per product per day: it is this product that cannot come, named, and the other one that can is offered.
     expect(st.product?.productId).toBe("810007");
-    expect(st.arrival.code).toBe("not_deliverable");
+    expect(st.arrival.code).toBe("out_of_stock"); // an empty availability answer: not available for the day
     expect(r.options.beef_cheek[0]).toMatchObject({ rank: "best", optionId: "beef_cheek:same_frozen", title: "HK beef cheek slow-cooked frozen 2 kg" });
     expect(r.options.beef_cheek[0].checks[0].product).toMatchObject({ productId: "810008", packs: 4 });
     // A cheaper frozen beef brisket is beef, not beef cheek: never "the same ingredient".

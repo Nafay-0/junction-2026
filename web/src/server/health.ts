@@ -1,3 +1,4 @@
+import { partnerGate } from "./valio/partner-gate";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { connect as tlsConnect } from "node:tls";
@@ -134,6 +135,8 @@ export async function healthReport(rt: Runtime, req?: Request) {
       products: src.kind === "valio" ? src.products : SEED_PRODUCTS.length,
       index: idx && { from: idx.from, ...("sha256" in idx ? { sha256: idx.sha256.slice(0, 16), builtAt: idx.builtAt } : {}), ...("reason" in idx ? { note: idx.reason } : {}) },
       liveApi: env("VALIO_API_KEY") ? "configured" : "not configured",
+      // The pace this process keeps with the wholesaler's service, and whether it asked us to wait (a 429).
+      partnerCalls: partnerGate().state(),
     },
     services: await serviceHealth(),
     demoLimits: dailyUsage(),

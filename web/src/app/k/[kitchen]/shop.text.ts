@@ -32,7 +32,7 @@ export const SHOP_TEXT = defineText({
     noCutoff: "No cut-off stated",
     earliestDelivery: "Earliest delivery",
     stock: "Stock",
-    stockNotConfirmed: "Not confirmed by the wholesaler",
+    stockNotConfirmed: "Not reported; the wholesaler takes the order",
     checkedLiveAt: (c: string) => `Checked live with the wholesaler at ${c}.`,
     // product facts
     facts: {
@@ -115,7 +115,7 @@ export const SHOP_TEXT = defineText({
       sales_block: "sales block: cannot be ordered now",
       not_deliverable: "cannot be delivered on any date now",
       out_of_stock: "out of stock",
-      stock_unknown: "stock not confirmed",
+      stock_unknown: "stock isn't reported; the wholesaler takes the order",
       later_than_requested: "arrives later than asked",
       cutoff_passed: "the order cut-off for the next delivery has passed",
       unit_mismatch: "sold in another unit than listed",
@@ -153,7 +153,7 @@ export const SHOP_TEXT = defineText({
     noCutoff: "Jättöaikaa ei ilmoitettu",
     earliestDelivery: "Aikaisin toimitus",
     stock: "Saldo",
-    stockNotConfirmed: "Tukku ei ole vahvistanut",
+    stockNotConfirmed: "Saldoa ei ilmoiteta; tukku ottaa tilauksen vastaan",
     checkedLiveAt: (c: string) => `Tarkistettu suoraan tukusta klo ${c}.`,
     facts: {
       productCode: "Tuotekoodi",
@@ -233,7 +233,7 @@ export const SHOP_TEXT = defineText({
       sales_block: "myyntiesto: ei tilattavissa nyt",
       not_deliverable: "ei toimitettavissa nyt millekään päivälle",
       out_of_stock: "loppu varastosta",
-      stock_unknown: "saldoa ei ole vahvistettu",
+      stock_unknown: "saldoa ei ilmoiteta; tukku ottaa tilauksen vastaan",
       later_than_requested: "tulee pyydettyä myöhemmin",
       cutoff_passed: "seuraavan toimituksen viimeinen jättöaika on mennyt",
       unit_mismatch: "myydään eri yksikössä kuin ilmoitettu",
@@ -301,7 +301,7 @@ export const SHOP_TEXT = defineText({
     noCutoff: "Ingen sista beställningstid angiven",
     earliestDelivery: "Tidigaste leverans",
     stock: "Lagersaldo",
-    stockNotConfirmed: "Inte bekräftat av grossisten",
+    stockNotConfirmed: "Anges inte; grossisten tar emot beställningen",
     checkedLiveAt: (c: string) => `Kontrollerat direkt hos grossisten kl. ${c}.`,
     facts: {
       productCode: "Produktkod",
@@ -381,7 +381,7 @@ export const SHOP_TEXT = defineText({
       sales_block: "försäljningsspärr: kan inte beställas nu",
       not_deliverable: "kan inte levereras någon dag just nu",
       out_of_stock: "slut i lager",
-      stock_unknown: "lagersaldot är inte bekräftat",
+      stock_unknown: "lagersaldot anges inte; grossisten tar emot beställningen",
       later_than_requested: "kommer senare än önskat",
       cutoff_passed: "sista beställningstiden för nästa leverans har passerat",
       unit_mismatch: "säljs i en annan enhet än angivet",

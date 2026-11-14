@@ -32,7 +32,7 @@ export const QuoteLineSchema = z.object({
   /** The maker's whole ingredient list, when it sent no allergen declaration: what a lactose-free rule is read from then. */
   ingredients: z.string().max(1000).optional(),
   certificates: z.array(z.string()),
-  quantity: z.number().int().positive(), // packs
+  quantity: z.number().positive(), // sales units: whole, or a multiple of the product's fractional lot (1.5 kg)
   unitPriceCents: z.number().int().nonnegative(), // per pack
   lineTotalCents: z.number().int().nonnegative(),
   deliveryDate: z.iso.date(),
@@ -87,8 +87,8 @@ export const QuoteSchema = z
     /** VAT on the goods by rate, the way the invoice will show it; totalCents stays before VAT (the mandate's limits are). */
     vat: VatSchema.optional(),
   })
-  .refine((q) => q.lines.every((l) => l.lineTotalCents === l.quantity * l.unitPriceCents), "line totals do not add up")
-  .refine((q) => q.lines.every((l) => !l.deposit || l.deposit.totalCents === l.quantity * l.deposit.perPackCents), "deposit totals do not add up")
+  .refine((q) => q.lines.every((l) => l.lineTotalCents === lineCents(l.quantity, l.unitPriceCents)), "line totals do not add up")
+  .refine((q) => q.lines.every((l) => !l.deposit || l.deposit.totalCents === lineCents(l.quantity, l.deposit.perPackCents)), "deposit totals do not add up")
   .refine((q) => q.totalCents === q.lines.reduce((s, l) => s + l.lineTotalCents + (l.deposit?.totalCents ?? 0), 0), "quote total does not add up");
 
 export type Quote = z.infer<typeof QuoteSchema>;
@@ -102,6 +102,15 @@ export const QuoteRequestLineSchema = z.object({
 export type QuoteRequestLine = z.infer<typeof QuoteRequestLineSchema>;
 
 export const QUOTE_TYP = "quote+jws";
+
+/** A line's money: the quantity (possibly a fractional lot, 1.5 kg) times the price per sales unit, to the cent. */
+export const lineCents = (quantity: number, unitCents: number) => Math.round(quantity * unitCents);
+
+/** Whether a quantity is a whole multiple of the order step (to a millionth: steps like 1.5 and 0.7 are not exact in binary). */
+export function onStep(quantity: number, step: number): boolean {
+  const n = quantity / step;
+  return n >= 1 - 1e-9 && Math.abs(n - Math.round(n)) < 1e-6;
+}
 
 export type QuoteErrorCode =
   | "quote_unknown_product"
@@ -185,16 +194,21 @@ export function buildQuote(input: QuoteInput): Quote {
   const lines: QuoteLine[] = input.lines.map((req) => {
     if (seen.has(req.productId)) throw new QuoteError("quote_invalid_line", `Product ${req.productId} appears twice.`);
     seen.add(req.productId);
-    if (!Number.isInteger(req.quantity) || req.quantity <= 0)
-      throw new QuoteError("quote_invalid_line", `Quantity for ${req.productId} must be a whole number of packs above zero.`);
+    if (!Number.isFinite(req.quantity) || req.quantity <= 0)
+      throw new QuoteError("quote_invalid_line", `Quantity for ${req.productId} must be above zero.`);
     if (req.quantity > MAX_LINE_PACKS)
       throw new QuoteError("quote_invalid_line", `Quantity for ${req.productId} is ${req.quantity} packs; one line takes at most ${MAX_LINE_PACKS.toLocaleString("en-US")}.`, { productId: req.productId, requested: req.quantity, max: MAX_LINE_PACKS });
     if (req.substituteFor === req.productId)
       throw new QuoteError("quote_invalid_line", `${req.productId} cannot substitute for itself.`);
 
     const p = product(req.productId);
+    // Whole sales units, or a multiple of a real fractional lot the data gives (1.5 kg); the partner's 0.01 is 1.
+    const lot = p.lotSize && p.lotSize > 0.01 + 1e-9 ? p.lotSize : 1;
+    if (!onStep(req.quantity, lot))
+      throw new QuoteError("quote_invalid_line", lot === 1 ? `Quantity for ${req.productId} must be a whole number of packs; got ${req.quantity}.` : `Quantity for ${req.productId} must be a multiple of its order step ${lot} ${p.salesUnit ?? "units"}; got ${req.quantity}.`, { productId: req.productId, requested: req.quantity, step: lot });
     const o = offer(req.productId);
-    if (req.quantity > o.availablePacks) {
+    // An unknown stock (999999 or more) takes any quantity: only a real figure can be short.
+    if (o.stockKnown !== false && req.quantity > o.availablePacks) {
       throw new QuoteError(
         "quote_insufficient_stock",
         `Only ${o.availablePacks} packs of ${p.id} available; ${req.quantity} requested.`,
@@ -230,7 +244,7 @@ export function buildQuote(input: QuoteInput): Quote {
       certificates: p.certificates,
       quantity: req.quantity,
       unitPriceCents: o.unitPriceCents,
-      lineTotalCents: req.quantity * o.unitPriceCents,
+      lineTotalCents: lineCents(req.quantity, o.unitPriceCents),
       deliveryDate: o.deliveryDate,
       substituteFor,
       ...lineDetail(p, o, req.quantity),
@@ -286,7 +300,7 @@ export function lineDetail(p: Product, o: LiveOffer, quantity: number): Partial<
   if (dep) {
     out.deposit = {
       perPackCents: dep.knownCents,
-      totalCents: dep.knownCents * quantity,
+      totalCents: lineCents(quantity, dep.knownCents),
       items: dep.lines.map((l) => ({ material: l.material, kind: l.kind, quantity: l.quantity, unitCents: l.unitCents })),
       ...(dep.unknown.length ? { unknown: dep.unknown } : {}),
     };

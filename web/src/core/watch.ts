@@ -518,8 +518,10 @@ export type Shortfall = { reason: "not_orderable" | "later" | "cutoff_passed"; b
 export function shortfallOf(status: { offer?: LiveOffer; problems: string[]; orderable: boolean }, date: string): Shortfall | undefined {
   const o = status.offer;
   const blocking = ["out_of_stock", "sales_block", "not_deliverable", "no_price", "price_not_valid", "unit_mismatch", "unknown_product"];
-  if (!status.orderable || status.problems.some((p) => blocking.includes(p))) return { reason: "not_orderable", backOn: o && o.deliveryDate > date ? o.deliveryDate : null };
+  // An unknown stock (stock_unknown, 999999 or more) is never a shortfall: the wholesaler takes any quantity.
+  if (status.problems.some((p) => blocking.includes(p))) return { reason: "not_orderable", backOn: o && o.deliveryDate > date ? o.deliveryDate : null };
   if (o && o.deliveryDate > date) return { reason: "later", backOn: o.deliveryDate };
   if (status.problems.includes("cutoff_passed")) return { reason: "cutoff_passed", backOn: o?.deliveryDate ?? null };
+  if (!status.orderable && !status.problems.every((p) => p === "stock_unknown" || p === "later_than_requested")) return { reason: "not_orderable", backOn: o && o.deliveryDate > date ? o.deliveryDate : null };
   return undefined;
 }

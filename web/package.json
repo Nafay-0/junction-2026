@@ -36,6 +36,7 @@
     "scenarios": "tsx scripts/scenarios.ts",
     "watch:acceptance": "tsx scripts/watch-acceptance.ts",
     "backups": "tsx scripts/backups.ts",
+    "backup:acceptance": "tsx scripts/backup-acceptance.ts",
     "scenarios:menu": "tsx scripts/menu-scenarios.ts",
     "dev:mandate": "tsx scripts/dev-mandate.ts",
     "e2e": "next build && playwright test",
