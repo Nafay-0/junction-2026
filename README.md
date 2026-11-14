@@ -10,7 +10,7 @@ Built at Junction 2026 (13 to 15 November, Espoo) for Valio Aimo's challenge, "T
 
 Live demo: <https://jolly-wondrous-bunny.eur-1.aiven.app>
 
-1. Open the demo on a large screen. That page is the wall: live requests passing the gate, and a QR code.
+1. The address opens on the landing page: what AimoPilot is, every agent, the security story and the measurements, with "Talk to the agent" to start. For the table, open `/wall` on a large screen: live requests passing the gate, and a QR code.
 2. Scan the code with your phone and create a passkey (Face ID or fingerprint, nothing to type). Your phone is now the approver for a demo kitchen whose agent may spend €500 on its own.
 3. The kitchen's agent runs Valio Aimo's own example, "1,000 litres of lactose-free milk by Monday". The order is over the limit, so it arrives on your phone. Sign it and it appears on the wall.
 4. Then try to make the agent misbehave. The gate refuses and names the rule.
@@ -42,7 +42,8 @@ It starts a production build on a free port. The hotel's purchasing manager join
 | `/ops` | The wholesaler | Every agent at the door, a step-by-step replay of any request, each safeguard and how often it fired, a switch to suspend an agent, a recall radar that holds affected products |
 | `/join`, `/approve/<id>` | The approver | Phone sign-off with a passkey |
 | `/call`, photo upload | The kitchen | Other doors into the same gate: a voice call, and a photo or PDF of an order list |
-| `/` | The room | The wall for a big screen |
+| `/` | Everyone | The landing page: what it is, every agent, the security model, the measurements, links into each door |
+| `/wall` | The room | The wall for a big screen |
 | `/api/mcp`, `/api/v1` | Any outside agent | The open interface: MCP over Streamable HTTP, and REST described in OpenAPI 3.1. The agent in the store is only one client of the same gate |
 
 ## Where to look, by judging criterion

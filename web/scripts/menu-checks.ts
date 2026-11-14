@@ -39,7 +39,7 @@ async function main() {
       if (c.instead.length) console.log(`   instead: ${c.instead.map((x) => `${x.name} [${x.ingredients.join(", ")}]`).join(" | ")}`);
       for (const r of c.ruleRefusals) console.log(`   rule refusal: ${r.ingredient}: "${r.rule.text}" (${r.rule.source})`);
       console.log(`   day ${c.day.date}: ${c.day.ok ? "every line makes it" : c.day.lines.filter((l) => !l.ok).map((l) => `${l.ingredient}: ${l.why}`).join("; ")}`);
-      for (const x of c.coverage) console.log(`   ${x.dish} / ${x.ingredient}: ${x.basis} (${x.text.slice(0, 120)})`);
+      for (const x of c.coverage) console.log(`   ${x.dish} / ${x.ingredient}: ${x.status}${x.code ? ` [${x.code}]` : ""} (${x.words.slice(0, 120)})`);
       for (const l of view.lines.filter((x) => x.gross)) console.log(`     ${l.name}: ${l.working}`);
       console.log(`   total ${formatEur(view.totals.totalCents)}; blockers: ${view.totals.blockers.join(" | ") || "none"}`);
       for (const n of record.notes) console.log(`   note: ${n}`);

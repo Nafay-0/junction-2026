@@ -215,7 +215,7 @@ async function headline() {
   const ex = await call("explain", { requestId });
   step("audit", `explain: ${ex.explanation.length} lines, hash chain verified: ${ex.verification.ok}. The buyer's side and the wholesaler read the same record:`);
   indent(ex.explanation.slice(0, 14).map((l: string) => `- ${l}`));
-  step("see it", `The wall: ${BASE}/   The operations trace (door: connector): ${BASE}/ops/trace/${requestId}`);
+  step("see it", `The wall: ${BASE}/wall   The operations trace (door: connector): ${BASE}/ops/trace/${requestId}`);
   await client.close();
   return { ok: true };
 }

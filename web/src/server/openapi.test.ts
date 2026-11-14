@@ -144,6 +144,10 @@ describe("real responses match the documented status codes and schemas", () => {
     expect((await agent("GET", `/api/v1/orders/${pending.body.order.orderId}`)).body.order.status).toBe("committed");
     expect((await agent("GET", "/api/v1/orders/ord_nope")).status).toBe(404);
     expect((await agent("GET", `/api/v1/orders/${pending.body.order.orderId}?wait=1`)).body).toMatchObject({ decided: true });
+    const tres = await agent("GET", `/api/v1/orders/${pending.body.order.orderId}/timeline`);
+    const timeline = tres.body.timeline;
+    expect(timeline).toMatchObject({ status: "committed", complete: { ok: true } });
+    expect(timeline.steps.map((s: { ledger: { type: string } }) => s.ledger.type)).toEqual(expect.arrayContaining(["request", "quote", "decision", "approval_requested", "approval", "order"]));
     expect((await agent("GET", "/api/v1/orders?status=committed")).body.orders.length).toBeGreaterThan(0);
     const looked = await agent("POST", "/api/v1/lookup", { text: "milk", requiredClaims: ["lactose_free"], quantity: { amount: 100, unit: "L" }, limit: 3 });
     expect(looked.status, JSON.stringify(looked.body).slice(0, 400)).toBe(200);
@@ -207,6 +211,8 @@ describe("real responses match the documented status codes and schemas", () => {
       expect((await agent("POST", "/api/v1/menus/seasonal", {})).status).toBe(400);
       const seasonal = (await agent("POST", "/api/v1/menus/seasonal", { text: "Lunch for 40, something in season", have: ["butter"] })).body.result;
       await agent("POST", "/api/v1/menus/event", { text: "Unexpected booking for 40, milk with lunch" });
+      const ideas = (await agent("POST", "/api/v1/menus/ideas", { text: "Something for lunch for 40" })).body.result;
+      await agent("POST", "/api/v1/menus/dish", { ideasId: ideas.ideasId, dishId: ideas.ideas[0].dishId, covers: 40 });
       expect((await agent("POST", "/api/v1/menus/plan_nope/order", {})).status).toBe(404);
       expect((await agent("POST", `/api/v1/menus/${seasonal.planId}/order`, { by: "Aino" })).status).toBe(201);
     } finally {

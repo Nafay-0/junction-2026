@@ -20,7 +20,9 @@ describe.skipIf(!hasIndex)("real catalogue index (skipped without pnpm index:bui
 
   it("loads fast and holds the whole catalogue", () => {
     expect(products.length).toBeGreaterThan(17_000);
-    expect(loaded!.loadMs).toBeLessThan(1500);
+    // About 200 ms on an idle laptop; the bound only catches a load that has gone badly wrong, and leaves room for a
+    // machine that several engineers are building on at once (it measured 1.6 s at a load average of 50).
+    expect(loaded!.loadMs).toBeLessThan(10_000);
   });
 
   it("converts nearly every lactose-free milk from litres cleanly", () => {

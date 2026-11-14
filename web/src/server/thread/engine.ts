@@ -359,8 +359,10 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
     const last = [...thread.turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "");
     const open = last?.role === "agent" ? last.cards.find((c) => c.type === "anomaly" && !c.answered) : undefined;
     if (open?.type === "anomaly") {
-      const { guardAnswerOf } = await import("./guard");
-      const a = guardAnswerOf(open, body.text);
+      const { guardAnswerOf, guardWords } = await import("./guard");
+      // "Which order?": the check's own words again, which name the order (what, how much, when, for which day).
+      if (/\b(which (order|one)|what order|mikä tilaus|mikä niistä|vilken (order|beställning))\b/i.test(body.text)) run.sayNow = whichOrder(run, open, body.lang ?? "en") ?? guardWords(open, body.lang ?? "en");
+      const a = run.sayNow ? undefined : guardAnswerOf(open, body.text);
       if (a) {
         if (a.reason) record(run, "buyer_reason", `The buyer kept the amount as asked, with a reason: "${a.reason}".`, { reason: a.reason, key: open.concerns[0]?.key }, open.requestId);
         body = { ...body, action: a.action, label: body.text };
@@ -426,11 +428,31 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
           await finishTurn(run);
           return;
         }
+        // A sentence plain code already has for these words (the mistake check's own words, asked again).
+        if (run.sayNow) {
+          if (run.opening) first.done();
+          store.line(thread, run.turnId, run.sayNow);
+          store.mark(thread, run.turnId, "line", Date.now() - run.t0);
+          await finishTurn(run);
+          return;
+        }
         // The answer to the ways forward: the owner asked (a drafted change to the kitchen's product groups), or which one.
         if (run.waysAnswer) {
           const said = run.waysAnswer === "owner" ? await askOwnerToAdd(run, body.lang ?? "en") : { en: "Which one: ask the owner to add them, order just what I can buy, or plan another dish?", fi: "Kumpi: pyydänkö omistajaa lisäämään ne, tilaanko vain sen, minkä voin ostaa, vai suunnittelenko toisen ruuan?", sv: "Vilket: ska jag be ägaren lägga till dem, beställa bara det jag kan köpa, eller planera en annan rätt?" }[body.lang ?? "en"];
           if (run.opening) first.done();
           store.line(thread, run.turnId, said);
+          store.mark(thread, run.turnId, "line", Date.now() - run.t0);
+          await finishTurn(run);
+          return;
+        }
+        // Planning a dish: one question for an open request, the ideas, the pick (dish.ts), by plain code and the planner.
+        const dish = await import("./dish").then((d) => d.dishTurn(run, body.text!, body.lang ?? "en")).catch((err) => {
+          console.error("[thread] dish", err);
+          return undefined;
+        });
+        if (dish) {
+          if (run.opening) first.done("planning a dish");
+          store.line(thread, run.turnId, dish);
           store.mark(thread, run.turnId, "line", Date.now() - run.t0);
           await finishTurn(run);
           return;
@@ -618,6 +640,27 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
  * by the sentence's punctuation; and no code (a category code, a product id, a rule or reason code, a snake_case word)
  * in any sentence: a sentence carrying one is dropped, and if none is left, the refusal's own words (refusal.ts) stand.
  */
+
+/**
+ * Only whole sentences reach the buyer: a fragment left where a sentence was not backed by the data (or was cut) is
+ * dropped; with nothing left, the store's own short sentence for what is on the table (the options, the order).
+ */
+function wholeSentences(run: TurnRun, t: string): string {
+  if (!t) return t;
+  const end = (x: string) => /[.!?…]["”»)]?$/.test(x.replace(/\*\*|\{\{|\}\}/g, "").trim());
+  if (end(t)) return t;
+  const parts = t.split(/(?<=[.!?])\s+/);
+  const kept = parts.filter(end);
+  if (kept.length) return kept.join(" ");
+  const lang = run.lang ?? "en";
+  const opts = run.store.agentTurn(run.thread, run.turnId)?.cards.find((c) => c.type === "options" && !c.chosen);
+  if (opts?.type === "options") {
+    const n = opts.options.filter((o) => o.gate?.outcome !== "reject").length;
+    return { en: `${n === 1 ? "One option can" : `${n} options can`} be ordered. Which one?`, fi: `${n === 1 ? "Yksi vaihtoehto" : `${n} vaihtoehtoa`} voidaan tilata. Mikä niistä?`, sv: `${n === 1 ? "Ett alternativ" : `${n} alternativ`} kan beställas. Vilket?` }[lang];
+  }
+  return `${t.trim()}.`;
+}
+
 function plainLine(run: TurnRun, text: string): string {
   const lang = /\b(maanantai|tiistai|keskiviikko|torstai|perjantai|lauantai|sunnuntai)\w*|[äö]/i.test(text) ? "fi" : /\b(måndag|tisdag|onsdag|torsdag|fredag|lördag|söndag)\b|å/i.test(text) ? "sv" : "en";
   let t = text.replace(/(\d{1,2}\.\d{1,2}\.)(\}\}|\*\*)?\./g, "$1$2");
@@ -730,7 +773,9 @@ async function tellDifferences(run: TurnRun): Promise<void> {
   // the differences added and the closing question replaced.
   const line = here.line ?? "";
   const body = left ? "" : line.replace(CLOSING_ASK, "").trim();
-  const said = left && !fresh.some((x) => x.kind === "left_out") ? sayDifferences(pd.diffs.filter((x) => x.kind === "left_out"), ctx).said.split(/(?<=\.)\s/)[0] : words.said;
+  // The dish in three groups says each missing ingredient with its reason on screen: the sentence is the count alone.
+  const grouped = here.cards.some((c) => c.type === "dishes" && !!c.groups);
+  const said = left && (grouped || !fresh.some((x) => x.kind === "left_out")) ? sayDifferences(pd.diffs.filter((x) => x.kind === "left_out"), ctx).said.split(/(?<=\.)\s/)[0] : words.said;
   run.store.line(run.thread, run.turnId, [body, said, words.ask].filter(Boolean).join(" ").replace(/\s+/g, " ").trim());
   for (const x of fresh) told[keyOf(x)] = run.turnId;
   // What was said as left off, by plan: after the order, the reply says it again in the same words (never a new reason).
@@ -822,6 +867,23 @@ function sayRulesWaiting(run: TurnRun): void {
     fi: `Tämä laajentaa sitä, mitä saan ostaa${what ? ` (${what})` : ""}, joten se tarvitsee hyväksynnän: ${who}. Lähetin sen allekirjoitettavaksi pääsyavaimella. Mikään ei muutu ennen sitä.`,
     sv: `Det vidgar vad jag får köpa${what ? ` (${what})` : ""}, så det behöver ${who}s godkännande: jag har skickat det för signering med nyckel. Inget ändras förrän dess.`,
   }[lang]);
+}
+
+/** "Which order?" after "You already ordered …": that order by what it holds, its total and day, and the question again. */
+function whichOrder(run: TurnRun, card: Extract<Card, { type: "anomaly" }>, lang: "en" | "fi" | "sv"): string | undefined {
+  const k = card.concerns[0];
+  const orderId = (k?.evidence as { orderId?: string } | undefined)?.orderId ?? /^duplicate_recent:(\S+)/.exec(k?.key ?? "")?.[1];
+  const o = run.store.cards(run.thread).map((x) => x.card).filter((c): c is OrderCard => c.type === "order" && c.orderId === orderId).at(-1);
+  if (!o) return undefined;
+  const f = fmtFor(lang);
+  const what = o.lines.map((l) => `${l.quantity} × ${l.name.replace(/[®™]/g, "").split(/\s+/).slice(0, 4).join(" ")}`).join(", ");
+  const day = lang === "en" ? englishDays(f.day(o.deliveryDate)).replace(/\.$/, "") : f.day(o.deliveryDate);
+  const total = `**${(o.totalCents / 100).toFixed(2).replace(".", ",")} €**`;
+  return {
+    en: `The one already placed: ${what} for ${total}, arriving {{${day}}}. Shall I order the same again on top of it?`,
+    fi: `Jo tehty tilaus: ${what}, ${total}, toimitus {{${day}}}. Tilaanko saman uudelleen sen lisäksi?`,
+    sv: `Den som redan är lagd: ${what} för ${total}, kommer {{${day}}}. Ska jag beställa samma igen utöver den?`,
+  }[lang];
 }
 
 /** A day named in a sentence: "{{Tuesday 17 Nov}}", "Tue 17 Nov", "ti 17.11.", as an ISO date in the coming months. */
@@ -1100,7 +1162,8 @@ async function showLine(run: TurnRun, text: string): Promise<void> {
   if (g.violations.length) {
     record(run, "grounding_refusal", `A sentence of the agent's reply was not shown: it said ${g.violations.map((v) => `"${v.said}" (${v.kind})`).join(", ")}, which the data does not back.`, { said: one, violations: g.violations });
     // Only the sentences the data backs are shown (without marks); none at all when none is backed.
-    const kept = plainLine(run, g.text.replace(/\s+/g, " ").trim());
+    // What is left of a sentence the data did not back is not shown as a fragment.
+    const kept = wholeSentences(run, plainLine(run, g.text.replace(/\s+/g, " ").trim()));
     if (!kept || g.replaced >= g.sentences) return;
     run.store.line(run.thread, run.turnId, kept);
     run.store.mark(run.thread, run.turnId, "line", Date.now() - run.t0);
@@ -1207,7 +1270,7 @@ function afterRulesWords(run: TurnRun, words: string): string | undefined {
 }
 
 /** Words that change a menu already planned, rather than start a new one. */
-const MENU_CHANGE = /\b(make it|make them|no\s+\w+|without|lactose|gluten|nut-?free|vegan|vegetarian|instead|swap|replace|drop|remove|leave out|add|more|less|fewer|portions?|people|servings|ilman|tee siitä|laktoositon|gluteeniton|lisää|poista|vaihda|jätä pois|annosta|hengelle|utan|byt|ta bort|lägg till)\b/i;
+const MENU_CHANGE = /\b(we have|we've got|we got|we're out of|we are out of|out of|no more|meillä on|meiltä puuttuu|loppu|vi har|slut på|make it|make them|no\s+\w+|without|lactose|gluten|nut-?free|vegan|vegetarian|instead|swap|replace|drop|remove|leave out|add|more|less|fewer|portions?|people|servings|ilman|tee siitä|laktoositon|gluteeniton|lisää|poista|vaihda|jätä pois|annosta|hengelle|utan|byt|ta bort|lägg till)\b/i;
 
 /** "Make it lactose-free" while a menu is the subject: changed by the menu adapter, its sentence said; else undefined. */
 async function changeMenuInWords(run: TurnRun, words: string, lang: "en" | "fi" | "sv"): Promise<string | undefined> {

@@ -13,6 +13,10 @@ export const THREAD_DISHES_TEXT = defineText({
     changed: "changed",
     total: (total: string, per?: string) => `${total} in all${per ? ` · ${per} a portion` : ""}`,
     label: "The menu",
+    gHave: "You have",
+    gOrder: "I'll order",
+    gCannot: "Can't get",
+    forThese: (total: string) => `${total} for what I'll order`,
   },
   fi: {
     have: "teillä on jo",
@@ -25,6 +29,10 @@ export const THREAD_DISHES_TEXT = defineText({
     changed: "muutettu",
     total: (total: string, per?: string) => `yhteensä ${total}${per ? ` · ${per} annos` : ""}`,
     label: "Menu",
+    gHave: "Teillä on",
+    gOrder: "Tilaan",
+    gCannot: "En saa",
+    forThese: (total: string) => `tilattavat ${total}`,
   },
   sv: {
     have: "ni har det",
@@ -37,5 +45,9 @@ export const THREAD_DISHES_TEXT = defineText({
     changed: "ändrad",
     total: (total: string, per?: string) => `${total} totalt${per ? ` · ${per} per portion` : ""}`,
     label: "Menyn",
+    gHave: "Ni har",
+    gOrder: "Jag beställer",
+    gCannot: "Kan inte fås",
+    forThese: (total: string) => `${total} för det jag beställer`,
   },
 });

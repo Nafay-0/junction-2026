@@ -693,6 +693,17 @@ export type DishesCard = CardBase & {
   }[];
   totalCents: number;
   costPerCoverCents?: number;
+  /**
+   * One dish: every ingredient in exactly one of three groups (the planner's coverage), in the reply's language, each
+   * with its amount for the covers; what the kitchen has with its basis, what cannot be had with its reason.
+   */
+  groups?: {
+    have: { name: string; need?: string; basis?: string }[];
+    order: { name: string; need?: string; instead?: string }[];
+    cannot: { name: string; need?: string; why: string }[];
+    totalToOrderCents: number;
+    complete: boolean;
+  };
 };
 
 /** A backup in case a product with a poor delivery record does not come (server/reliability), said after the order. */

@@ -81,9 +81,14 @@ async function main() {
   });
 
   // The wall first: rendering it used to break every later API error (500 instead of 401/422).
-  await check("wall page /", async () => {
-    const r = await get("/");
+  await check("wall page /wall", async () => {
+    const r = await get("/wall");
     return [r.status === 200 && r.text.includes("<html"), `HTTP ${r.status}, ${r.text.length} bytes`];
+  });
+  await check("landing page /", async () => {
+    const r = await get("/");
+    const ok = r.status === 200 && r.text.includes("An AI buyer for every kitchen") && r.text.includes('href="/wall"');
+    return [ok, `HTTP ${r.status}, ${r.text.length} bytes${ok ? "" : ", not the landing page"}`];
   });
   // A public test account: the store steps act as its signed-in session, as a judge would.
   const tester = TEST_ACCOUNTS[0];

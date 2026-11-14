@@ -36,7 +36,7 @@ test("wall and the store's thread run no motion longer than 0.1 s when reduced m
   const wallContext = await browser.newContext({ baseURL, reducedMotion: "reduce", viewport: WALL });
   try {
     const wall = await wallContext.newPage();
-    await wall.goto("/");
+    await wall.goto("/wall");
     await expect(wall.getByRole("heading", { name: "Scan to become the approver" })).toBeVisible();
     expect(await wall.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches)).toBe(true);
 

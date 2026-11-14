@@ -705,7 +705,8 @@ export function decideFinding(rt: Runtime, f: Finding, d: FindingDecision) {
   const s = stateOf(rt);
   saveFinding(s, { ...f, state: "decided", decision: d });
   ledger(rt, {
-    actor: d.via === "auto-renew" ? "dock" : `buyer:${f.orgId}`,
+    // The agent's own choices (auto-renew, the backup a person lined up earlier) are not the buyer's.
+    actor: d.via === "auto-renew" || d.via === "backup" ? "dock" : `buyer:${f.orgId}`,
     ...(d.requestId ? { requestId: d.requestId } : {}),
     ...(d.orderId ? { orderId: d.orderId } : {}),
     summary: `${f.staged ? "STAGED: " : ""}${d.by} ${d.action === "kept" ? `kept ${f.product.name} for ${f.need.date} (no substitute)` : `chose ${d.productId} for ${f.need.date} instead of ${f.product.name}: ${d.action === "ordered_alone" ? "committed within the mandate" : d.action === "sent_for_sign_off" ? `sent to ${d.approver ?? "a person"} for sign-off` : d.action === "refused" ? `refused by the gate. ${d.note ?? ""}` : (d.note ?? "")}`} (via ${d.via}).`,
@@ -1006,7 +1007,8 @@ export async function clearForOrgs(rt: Runtime, orgIds: string[], by: string, no
     autoOff += 1;
   }
   for (const orgId of orgIds) s.cache.delete(orgId);
-  if (lifted || autoOff) ledger(rt, { actor: "dock", summary: `Test account reset (${by}): ${lifted} staged condition${lifted === 1 ? "" : "s"} lifted and auto-renew switched off for ${autoOff} recurring order${autoOff === 1 ? "" : "s"}.`, data: { step: "reset", orgIds, lifted, autoOff, staged: lifted > 0 } });
+  const backups = await (await import("../reliability/service")).clearBackupsFor(rt, orgIds, by);
+  if (lifted || autoOff || backups) ledger(rt, { actor: "dock", summary: `Test account reset (${by}): ${lifted} staged condition${lifted === 1 ? "" : "s"} lifted, auto-renew switched off for ${autoOff} recurring order${autoOff === 1 ? "" : "s"}, ${backups} backup${backups === 1 ? "" : "s"} cleared.`, data: { step: "reset", orgIds, lifted, autoOff, staged: lifted > 0 } });
   return { lifted, autoOff };
 }
 

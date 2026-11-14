@@ -33,4 +33,10 @@ describe("the mistake check, said", () => {
     expect(event?.reason).toBe("it's for an event");
     expect(guardAnswerOf(unit, "50 L")?.action).toMatchObject({ choice: "use_50_L" });
   });
+
+  it("settles a pack question with the pack in words: '5 packs of 400 g' is the 2 kg reading", () => {
+    const packs = card({ key: "unit_unclear:5:pack", code: "unit_unclear", message: "5 packs of Peltolan blue cheese: packs come in 0,4 kg, 1 kg, so the amount is unclear.", confirmable: false, corrections: [{ id: "use_5_kg", label: "5 kg in total" }, { id: "use_2_kg", label: "5 packs of 0,4 kg = 2 kg" }, { id: "use_5_kg", label: "5 packs of 1 kg = 5 kg" }] });
+    expect(guardAnswerOf(packs, "yes, 5 packs of 400 g")?.action).toMatchObject({ choice: "use_2_kg" });
+    expect(guardAnswerOf(packs, "5 x 0,4 kg")?.action).toMatchObject({ choice: "use_2_kg" });
+  });
 });

@@ -12,6 +12,8 @@ import * as offerDecline from "@/app/api/v1/offers/[offerId]/decline/route";
 import * as offerMute from "@/app/api/v1/offers/mute/route";
 import * as menuSeasonal from "@/app/api/v1/menus/seasonal/route";
 import * as menuEvent from "@/app/api/v1/menus/event/route";
+import * as menuIdeas from "@/app/api/v1/menus/ideas/route";
+import * as menuDish from "@/app/api/v1/menus/dish/route";
 import * as menuOrder from "@/app/api/v1/menus/[planId]/order/route";
 import * as watch from "@/app/api/v1/watch/route";
 import * as watchAnswer from "@/app/api/v1/watch/answer/route";
@@ -36,6 +38,7 @@ import * as keys from "@/app/api/v1/keys/route";
 import * as ledger from "@/app/api/v1/ledger/route";
 import * as order from "@/app/api/v1/orders/[orderId]/route";
 import * as orderWithdraw from "@/app/api/v1/orders/[orderId]/withdraw/route";
+import * as orderTimeline from "@/app/api/v1/orders/[orderId]/timeline/route";
 import * as orders from "@/app/api/v1/orders/route";
 import * as products from "@/app/api/v1/products/route";
 import * as quotes from "@/app/api/v1/quotes/route";
@@ -55,6 +58,7 @@ const routes: [RegExp, string[], RouteModule][] = [
   [/^\/api\/v1\/orders$/, [], orders],
   [/^\/api\/v1\/orders\/([^/]+)$/, ["orderId"], order as RouteModule],
   [/^\/api\/v1\/orders\/([^/]+)\/withdraw$/, ["orderId"], orderWithdraw as RouteModule],
+  [/^\/api\/v1\/orders\/([^/]+)\/timeline$/, ["orderId"], orderTimeline as RouteModule],
   [/^\/api\/v1\/approvals$/, [], approvals],
   [/^\/api\/v1\/approvals\/([^/]+)$/, ["approvalId"], approval as RouteModule],
   [/^\/api\/v1\/approvals\/([^/]+)\/challenge$/, ["approvalId"], approvalChallenge as RouteModule],
@@ -85,6 +89,8 @@ const routes: [RegExp, string[], RouteModule][] = [
   [/^\/api\/v1\/offers\/([^/]+)\/decline$/, ["offerId"], offerDecline as RouteModule],
   [/^\/api\/v1\/menus\/seasonal$/, [], menuSeasonal],
   [/^\/api\/v1\/menus\/event$/, [], menuEvent],
+  [/^\/api\/v1\/menus\/ideas$/, [], menuIdeas],
+  [/^\/api\/v1\/menus\/dish$/, [], menuDish],
   [/^\/api\/v1\/menus\/([^/]+)\/order$/, ["planId"], menuOrder as RouteModule],
   [/^\/api\/v1\/agent\/interpret$/, [], interpret],
 ];

@@ -3,7 +3,7 @@ import { MAX_LIVE_IDS_PER_CALL } from "@/core/catalog";
 import { AnswersInput, ChoiceInput, ConcernResponseInput, OpenIntakeInput } from "@/core/intake";
 import { InterpretBody, InterpretResponse } from "@/server/agent/interpret";
 import { AlternativesInput, ListOrdersInput, LookupInput } from "@/server/lookup";
-import { EventInput, OrderMenuInput, SeasonalInput } from "@/server/mcp/menu-tools";
+import { DishInput, EventInput, IdeasInput, OrderMenuInput, SeasonalInput } from "@/server/mcp/menu-tools";
 import { AvailabilityInput, OpenRequestInput, PlaceOrderInput, QuoteInput, SearchInput } from "@/core/orders";
 import {
   ApprovalViewSchema,
@@ -250,6 +250,10 @@ const MenuSeasonalBody = named("MenuSeasonalBody", SeasonalInput);
 const MenuEventBody = named("MenuEventBody", EventInput);
 const MenuOrderBody = named("MenuOrderBody", OrderMenuInput.omit({ planId: true }));
 const MenuPlanOut = named("MenuPlan", z.object({ result: z.looseObject({ scenario: z.enum(["seasonal", "event"]), planId: z.string(), requestId: z.string().nullable(), lines: z.array(z.looseObject({ lineId: z.string(), ingredient: z.string() })) }), nextStep: z.string() }).loose());
+const MenuIdeasBody = named("MenuIdeasBody", IdeasInput);
+const MenuDishBody = named("MenuDishBody", DishInput);
+const MenuIdeasOut = named("MenuIdeas", z.object({ result: z.looseObject({ ideasId: z.string(), ideas: z.array(z.looseObject({ dishId: z.string(), name: z.string(), buyable: z.boolean() })) }), nextStep: z.string() }).loose());
+const MenuDishOut = named("MenuDish", z.object({ result: z.looseObject({ planId: z.string(), complete: z.boolean(), onHand: z.array(z.looseObject({})), toOrder: z.array(z.looseObject({})), cannotGet: z.array(z.looseObject({})) }), nextStep: z.string() }).loose());
 const MenuOrderOut = named("MenuOrdered", z.object({ sheet: z.looseObject({ lines: z.array(z.looseObject({ productId: z.string(), packs: z.number() })) }), order: OrderSchema, nextStep: z.string() }).loose());
 const ApiIndex = named("ApiIndex", z.object({ name: z.string(), version: z.string(), endpoints: z.record(z.string(), z.string()) }));
 const OpenApiDocument = named("OpenApiDocument", z.object({ openapi: z.string() }));
@@ -369,6 +373,16 @@ export const API: Operation[] = [
     description: "With `wait` (seconds, at most 55), the answer comes as soon as a person decides an order that waits for sign-off, or when the time is up (`decided: false`).",
     params: [{ name: "orderId", in: "path", schema: z.string(), required: true }, { name: "wait", in: "query", schema: z.number().int().min(0).max(55), description: "Wait up to this many seconds for a sign-off decision." }],
     responses: { 200: { description: "The order.", schema: WaitedEnvelope }, 404: err("No such order for this organisation."), ...AUTH_ERRORS },
+  },
+  {
+    method: "get",
+    path: "/api/v1/orders/{orderId}/timeline",
+    operationId: "getOrderTimeline",
+    summary: "An order's whole timeline",
+    auth: true,
+    description: "The order from the buyer's words to now, one step per row: how the request was read, lookups, options and the choice, the signed quote, the gate's rules, the sign-off (who, how, after how long), the order, its receipt and the check of its signature, and what came after (taken back, a substitute, a backup, the receipt email). Each step names who or what acted (`actor.kind`: agent, person, system, wholesaler), marks the agent's own choices (`agentChoice`) and carries its ledger entry (`ledger.seq`, `ledger.hash`). The wholesaler's operations read the same timeline, with the kitchen's private memory left out.",
+    params: [{ name: "orderId", in: "path", schema: z.string(), required: true }],
+    responses: { 200: { description: "The timeline.", schema: z.object({ timeline: z.looseObject({ orderId: z.string(), status: z.string(), source: z.string(), steps: z.array(z.looseObject({ seq: z.number(), at: z.string(), title: z.string(), actor: z.looseObject({ kind: z.string(), name: z.string() }), agentChoice: z.boolean() })) }) }) }, 404: err("No such order for this organisation."), ...AUTH_ERRORS },
   },
   {
     method: "get",
@@ -707,6 +721,26 @@ export const API: Operation[] = [
     auth: true,
     body: MenuEventBody,
     responses: { 200: { description: "The plan, what cannot arrive, the verified options.", schema: MenuPlanOut }, 400: err("Invalid body."), 422: err("Not a request to plan food (code not_a_menu)."), ...AUTH_ERRORS },
+  },
+  {
+    method: "post",
+    path: "/api/v1/menus/ideas",
+    operationId: "menuIdeas",
+    summary: "Dish ideas this kitchen can buy",
+    description: "Three or four dishes that fit the buyer's words, each with a reason, checked before it is offered against master data and the kitchen's rules (its product groups, allergens and claims, nutrition rules, sold at all): dishes it can buy in full first; one that it cannot names the ingredients and why. One model call; no live price.",
+    auth: true,
+    body: MenuIdeasBody,
+    responses: { 200: { description: "The ideas, with what each needs that the kitchen cannot buy.", schema: MenuIdeasOut }, 400: err("Invalid body."), ...AUTH_ERRORS },
+  },
+  {
+    method: "post",
+    path: "/api/v1/menus/dish",
+    operationId: "planDish",
+    summary: "A dish in three groups: on hand, to order, cannot get",
+    description: "The picked idea (ideasId, dishId) planned as the dish, or an existing plan (planId): every ingredient with its amount for the covers in exactly one group (on hand with its basis; to order with product, packs, live price and day; cannot get with the reason as a code), the total to order, the price per cover only when the plan is complete, and `complete`. Buys nothing.",
+    auth: true,
+    body: MenuDishBody,
+    responses: { 200: { description: "The dish in three groups.", schema: MenuDishOut }, 400: err("Invalid body."), 404: err("No such ideas or plan."), ...AUTH_ERRORS },
   },
   {
     method: "post",

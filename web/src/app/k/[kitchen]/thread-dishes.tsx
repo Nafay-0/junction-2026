@@ -80,6 +80,33 @@ export function Dishes({
         return tx.changed;
     }
   };
+  // One dish: its ingredients in three groups, each a short run of text; the reason beside what cannot be had.
+  const g = card.groups;
+  if (g && card.dishes.length === 1) {
+    const row = (label: string, items: { name: string; need?: string; extra?: string }[], tone = "") =>
+      items.length > 0 && (
+        <p className="text-[0.88rem] leading-[1.55] text-ink-soft [text-wrap:pretty]">
+          <span className="font-medium text-ink">{label}: </span>
+          {items.map((i, k) => (
+            <Fragment key={k}>
+              {k > 0 && ", "}
+              {nameOf(i.name, false)}
+              {i.need && <span className="tabular whitespace-nowrap"> {i.need.replace(".", ",")}</span>}
+              {i.extra && <span className={`italic ${tone}`}> ({i.extra})</span>}
+            </Fragment>
+          ))}
+        </p>
+      );
+    return (
+      <section aria-label={tx.label} className="mt-3 max-w-[40ch] space-y-1">
+        <h3 className="display text-[1.02rem] leading-snug text-ink">{card.dishes[0].name[lang]}</h3>
+        {row(tx.gHave, g.have.map((i) => ({ name: i.name, ...(i.basis ? { extra: i.basis.replace(/\.$/, "").replace(/^./, (c) => c.toLowerCase()) } : {}) })))}
+        {row(tx.gOrder, g.order.map((i) => ({ name: i.name, ...(i.need ? { need: i.need } : {}), ...(i.instead ? { extra: tx.swap(i.instead) } : {}) })))}
+        {row(tx.gCannot, g.cannot.map((i) => ({ name: i.name, ...(i.need ? { need: i.need } : {}), extra: i.why.replace(/\.$/, "").replace(/^./, (c) => c.toLowerCase()) })), "text-notice")}
+        {g.totalToOrderCents > 0 && !flat(said).includes(flat(money(g.totalToOrderCents))) && <p className="pt-1 text-[0.88rem] tabular text-ink">{g.complete ? tx.total(money(card.totalCents), card.costPerCoverCents ? money(card.costPerCoverCents) : undefined) : tx.forThese(money(g.totalToOrderCents))}</p>}
+      </section>
+    );
+  }
   return (
     <section aria-label={tx.label} className="mt-3 max-w-[40ch] space-y-2.5">
       {card.dishes.map((d) => {
