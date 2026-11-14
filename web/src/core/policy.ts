@@ -223,14 +223,13 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
   // Same honesty as allergens: a product whose declaration does not show the figure is refused, not sent to a person
   // (the approver has no better data), and the reason names the rule, the figure and the product.
   const nutritionRules = mandate.nutritionRules ?? [];
-  lineCheck(
-    "nutrition_rules",
-    (l) => {
-      const found = nutritionFindings(nutritionRules, { productId: l.productId, category: l.category, nutrition: l.nutrition });
-      return found.length ? found.map((f) => f.reason).join(" ") : null;
-    },
-    nutritionRules.length ? `Every product keeps the kitchen's nutrition rules by its maker's declaration: ${nutritionRules.map(ruleText).join("; ")}.` : "No nutrition rules.",
-  );
+  const nutritionFound = q.lines.flatMap((l) => nutritionFindings(nutritionRules, { productId: l.productId, category: l.category, nutrition: l.nutrition }).map((f) => ({ l, f })));
+  if (nutritionFound.length)
+    add("nutrition_rules", "fail", nutritionFound.map(({ f }) => f.reason).join(" "), {
+      // As data, for a sentence in the buyer's language: which product, which nutrient, over, under or unknown.
+      findings: nutritionFound.map(({ l, f }) => ({ productId: l.productId, name: l.name, nutrient: f.rule.nutrient, problem: f.problem, ...(f.value !== undefined ? { value: f.value } : {}), ...(f.rule.max !== undefined ? { max: f.rule.max } : {}), ...(f.rule.min !== undefined ? { min: f.rule.min } : {}), per: l.nutrition?.per ?? "100g" })),
+    });
+  else add("nutrition_rules", "pass", nutritionRules.length ? `Every product keeps the kitchen's nutrition rules by its maker's declaration: ${nutritionRules.map(ruleText).join("; ")}.` : "No nutrition rules.");
   lineCheck(
     "required_certificates",
     (l) => {

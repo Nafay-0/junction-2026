@@ -76,6 +76,13 @@ export function hardConstraints(mandate: Mandate, need: StructuredNeed, stated: 
   return c;
 }
 
+/** The first nutrition rule a product breaks (or cannot be shown to keep), as an exclusion's code and parameters. */
+export function nutritionExclusion(p: Product, c: HardConstraints): { code: "nutrition_rule"; reason: string; params: Record<string, string | number> } | undefined {
+  const f = nutritionFindings(c.nutritionRules ?? [], { productId: p.id, category: p.category, nutrition: p.nutrition })[0];
+  if (!f) return undefined;
+  return { code: "nutrition_rule", reason: f.reason.replace(new RegExp(`^${p.id} `), ""), params: { nutrient: f.rule.nutrient, problem: f.problem, ...(f.value !== undefined ? { value: f.value } : {}), ...(f.rule.max !== undefined ? { max: f.rule.max } : {}), ...(f.rule.min !== undefined ? { min: f.rule.min } : {}), per: p.nutrition?.per ?? "100g" } };
+}
+
 /** Why a product may not be offered, or undefined if it may. */
 export function violation(p: Product, c: HardConstraints): string | undefined {
   if (!c.categories.includes(p.category)) return `category ${p.category} is not in the mandate`;

@@ -518,6 +518,7 @@ describe("policy: nutrition rules and label rules (data depth)", () => {
     const d = evaluatePolicy(withRules([{ nutrient: "protein", min: 3, categories: ["milk", "plant_drink"] }]), draft(q), ctx());
     expectRejectedBy(d, "nutrition_rules");
     expect(rule(d, "nutrition_rules").reason).toMatch(/PK-4001 has 1 g protein per 100 ml, under the 3 g the kitchen requires/);
+    expect(rule(d, "nutrition_rules").details).toEqual({ findings: [{ productId: "PK-4001", name: expect.any(String), nutrient: "protein", problem: "under", value: 1, min: 3, per: "100ml" }] });
   });
 
   it("refuses a product whose maker declares no figure: unknown is not compliant, and no sign-off can lift it", () => {

@@ -5,7 +5,7 @@ import { formatDay, latestDeliveryDay, localDateOf, primaryLine, type HistoryEnt
 import type { Mandate } from "./mandate";
 import { formatAmount, type BaseUnit, type OptimiseGoal } from "./need";
 import { compareNutrition, comparisonText, encodeComparison, type Nutrient } from "./nutrition";
-import { packDeposit } from "./pricing";
+import { ownPrice, packDeposit, vatRateOf } from "./pricing";
 import type { QuoteRequestLine } from "./quote";
 import { formatEur } from "./util";
 import { holdsLabel, isMaterialAttribute } from "./vocabulary";
@@ -61,6 +61,10 @@ export type PlanLine = {
   /** Deposit charged with each pack (returnable packaging, core/pricing.ts), and with the line; in the card's total. */
   depositCents?: number;
   lineDepositCents?: number;
+  /** VAT rate the line's price is before (the price service's, else the product data's); absent: unknown. */
+  taxRatePct?: number;
+  /** The list price per pack, when the kitchen's own price is lower. */
+  listUnitPriceCents?: number;
 };
 
 export type OptionCard = {
@@ -161,8 +165,9 @@ export type OptionsInput = {
   nutritionFocus?: Nutrient[];
 };
 
-export type ExclusionCode = "no_offer" | "cutoff_passed" | "out_of_stock" | "too_late" | "pack_uncertain" | "wrong_unit" | "over_budget" | "no_substitute" | "blocked" | "compromise";
-export type Exclusion = { productId: string; reason: string; code?: ExclusionCode };
+export type ExclusionCode = "no_offer" | "cutoff_passed" | "out_of_stock" | "too_late" | "pack_uncertain" | "wrong_unit" | "over_budget" | "no_substitute" | "blocked" | "compromise" | "nutrition_rule";
+/** `params`: for nutrition_rule, the nutrient, the problem (over, under, unknown), the figure and the rule's bounds. */
+export type Exclusion = { productId: string; reason: string; code?: ExclusionCode; params?: Record<string, string | number> };
 export type OptionsResult = { cards: OptionCard[]; excluded: Exclusion[]; notes: string[] };
 
 // ---------- thresholds ----------
@@ -304,6 +309,8 @@ export function buildOptions(input: OptionsInput): OptionsResult {
     ...(v.size.estimated ? { estimated: true } : {}),
     ...(v.o.claims ? { claims: v.o.claims } : {}),
     ...(depositOf(v) ? { depositCents: depositOf(v), lineDepositCents: depositOf(v) * packs } : {}),
+    ...(vatRateOf(v.o, v.p) ? { taxRatePct: vatRateOf(v.o, v.p)!.pct } : {}),
+    ...(ownPrice(v.o) ? { listUnitPriceCents: ownPrice(v.o)!.listCents } : {}),
   });
   const perUnit = (v: Viable) => v.o.unitPriceCents / v.size.perPack;
   const enough = (v: Viable, units: number) => !v.stockKnown || v.o.availablePacks * v.size.perPack >= units - 1e-9;
