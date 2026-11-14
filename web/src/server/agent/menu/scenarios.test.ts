@@ -81,7 +81,13 @@ async function setup() {
       if (!raw) throw new Error(`no draft for ${text}`);
       return { draft: sanitiseDraft(raw), raw, model: "scripted:menu", ms: 1, tokens: { input: 0, output: 0, cachedInput: 0, reasoning: 0 }, costUsd: 0, calls: [] };
     },
-    fix: async () => ({ fixes: { options: [] }, ms: 1, tokens: { input: 0, output: 0, cachedInput: 0, reasoning: 0 }, costUsd: 0 }),
+    // The model's way out for the crème fraîche: change the dish (no replacement dish planned, only an ingredient).
+    fix: async (req) => ({
+      fixes: { options: req.lineKey === "creme_fraiche" ? [{ kind: "change_dish" as const, title: "Make it a smetana dip instead", effect: "A dip, not a sauce.", changesDish: true, ingredient: { key: "smetana_dip", name: "Smetana", searchTerms: ["smetana"], role: "the dip", perCover: { amount: 40, unit: "g" as const }, yieldPct: 100, amountBasis: "same", form: "any" as const, avoid: [] }, perCover: null }] : [] },
+      ms: 1,
+      tokens: { input: 0, output: 0, cachedInput: 0, reasoning: 0 },
+      costUsd: 0,
+    }),
   });
   const kaari = (await resolveMenuKitchen("kaari", { catalog: valio }, MENU_NOW))!;
   const profile: KitchenProfile = { orgId: kaari.mandate.issuer.orgId, name: "Kaari", deliveryWeekdays: [1, 4], history: creamWeeks, stated: [] };
@@ -152,6 +158,19 @@ describe("scenario 2: a booking at short notice, substitutes by the ingredient's
     const steps = dock.ledger.entries({ requestId: r.requestId! }).map((e) => (e.data as { step?: string }).step);
     expect(steps).toEqual(expect.arrayContaining(["cannot_arrive", "substitution_options", "substitution_chosen"]));
     // And it orders through the gate like any order.
+    const placed = await scenarios.order(kaari, r.planId, sheet);
+    expect(["committed", "pending_approval"]).toContain(placed.order.status);
+  });
+
+  it("a model's 'change the dish' way out can be chosen and ordered (the REST order crashed reading its name)", async () => {
+    const { scenarios, kaari } = await setup();
+    const r = await scenarios.event(kaari, "Unexpected booking for 40 on Monday", "Sanna Koskinen (test)");
+    const change = r.options.creme_fraiche.find((o) => o.kind === "dish");
+    expect(change).toMatchObject({ title: "Make it a smetana dip instead", source: "model" });
+    expect(change!.dish).toBeUndefined();
+    const sheet = await scenarios.sheetOf(kaari, r.planId, [{ lineId: "creme_fraiche", optionId: change!.optionId }], { by: "Sanna Koskinen (test)" });
+    expect(sheet.lines.find((x) => x.productId === "810003")).toBeDefined();
+    expect(sheet.text).toMatch(/Menu for 40 covers: Beetroot with crème fraîche and dill/);
     const placed = await scenarios.order(kaari, r.planId, sheet);
     expect(["committed", "pending_approval"]).toContain(placed.order.status);
   });
