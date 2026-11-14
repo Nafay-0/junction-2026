@@ -1,5 +1,5 @@
 {
- "at": "2026-11-14T00:55:18.635Z",
+ "at": "2026-11-14T00:59:35.784Z",
  "set": {
   "cases": 77,
   "byLanguage": {
@@ -491,13 +491,13 @@
    "injected": {
     "n": 664,
     "withSecond": 573,
-    "caught": 413,
-    "pctOfAll": 62.2,
-    "pctWhenAvailable": 72.1,
+    "caught": 412,
+    "pctOfAll": 62,
+    "pctWhenAvailable": 71.9,
     "misreadings": {
      "n": 536,
-     "caught": 412,
-     "pct": 76.9
+     "caught": 411,
+     "pct": 76.7
     },
     "byKind": {
      "amount x10": {
@@ -506,7 +506,7 @@
      },
      "amount /10": {
       "n": 68,
-      "caught": 56
+      "caught": 55
      },
      "1.000 read as 1": {
       "n": 13,
@@ -591,33 +591,21 @@
    ],
    "falseAlarm": {
     "firstRight": 76,
-    "alarms": 4,
-    "pct": 5.3,
+    "alarms": 2,
+    "pct": 2.6,
     "byField": {
-     "amount": 2,
-     "claims": 1,
+     "amount": 1,
+     "claims": 0,
      "allergens": 0,
      "kind": 1,
      "date": 0
     },
     "cases": [
      {
-      "id": "en-12",
-      "field": "amount",
-      "first": "100 packs",
-      "second": "1,000 packs"
-     },
-     {
       "id": "en-24",
       "field": "kind",
       "first": "Milk",
       "second": "Maitoa"
-     },
-     {
-      "id": "fi-02",
-      "field": "claims",
-      "first": "lactose-free",
-      "second": "not lactose-free"
      },
      {
       "id": "fi-18",
@@ -990,13 +978,13 @@
    "injected": {
     "n": 664,
     "withSecond": 664,
-    "caught": 486,
-    "pctOfAll": 73.2,
-    "pctWhenAvailable": 73.2,
+    "caught": 485,
+    "pctOfAll": 73,
+    "pctWhenAvailable": 73,
     "misreadings": {
      "n": 536,
-     "caught": 484,
-     "pct": 90.3
+     "caught": 483,
+     "pct": 90.1
     },
     "byKind": {
      "amount x10": {
@@ -1005,7 +993,7 @@
      },
      "amount /10": {
       "n": 68,
-      "caught": 68
+      "caught": 67
      },
      "1.000 read as 1": {
       "n": 13,
@@ -1090,22 +1078,16 @@
    ],
    "falseAlarm": {
     "firstRight": 76,
-    "alarms": 2,
-    "pct": 2.6,
+    "alarms": 1,
+    "pct": 1.3,
     "byField": {
-     "amount": 1,
+     "amount": 0,
      "claims": 0,
      "allergens": 0,
      "kind": 1,
      "date": 0
     },
     "cases": [
-     {
-      "id": "en-12",
-      "field": "amount",
-      "first": "100 packs",
-      "second": "1,000 packs"
-     },
      {
       "id": "en-14",
       "field": "kind",
@@ -1239,13 +1221,13 @@
    "injected": {
     "n": 664,
     "withSecond": 664,
-    "caught": 490,
-    "pctOfAll": 73.8,
-    "pctWhenAvailable": 73.8,
+    "caught": 489,
+    "pctOfAll": 73.6,
+    "pctWhenAvailable": 73.6,
     "misreadings": {
      "n": 536,
-     "caught": 488,
-     "pct": 91
+     "caught": 487,
+     "pct": 90.9
     },
     "byKind": {
      "amount x10": {
@@ -1254,7 +1236,7 @@
      },
      "amount /10": {
       "n": 68,
-      "caught": 68
+      "caught": 67
      },
      "1.000 read as 1": {
       "n": 13,
@@ -1337,23 +1319,16 @@
    ],
    "falseAlarm": {
     "firstRight": 76,
-    "alarms": 1,
-    "pct": 1.3,
+    "alarms": 0,
+    "pct": 0,
     "byField": {
-     "amount": 1,
+     "amount": 0,
      "claims": 0,
      "allergens": 0,
      "kind": 0,
      "date": 0
     },
-    "cases": [
-     {
-      "id": "en-12",
-      "field": "amount",
-      "first": "100 packs",
-      "second": "1,000 packs"
-     }
-    ]
+    "cases": []
    },
    "natural": {
     "firstWrong": 0,
@@ -1747,96 +1722,96 @@
      "name": "production",
      "falseAlarmPct": 2.6,
      "falseAlarms": 2,
-     "injectedCaughtPct": 72.1,
-     "misreadingsCaughtPct": 76.9,
+     "injectedCaughtPct": 71.9,
+     "misreadingsCaughtPct": 76.7,
      "naturalCaught": "0/0"
     },
     {
      "name": "amount factor 1.25",
      "falseAlarmPct": 2.6,
      "falseAlarms": 2,
-     "injectedCaughtPct": 72.1,
-     "misreadingsCaughtPct": 76.9,
+     "injectedCaughtPct": 71.9,
+     "misreadingsCaughtPct": 76.7,
      "naturalCaught": "0/0"
     },
     {
      "name": "amount factor 1.5",
      "falseAlarmPct": 2.6,
      "falseAlarms": 2,
-     "injectedCaughtPct": 72.1,
-     "misreadingsCaughtPct": 76.9,
+     "injectedCaughtPct": 71.9,
+     "misreadingsCaughtPct": 76.7,
      "naturalCaught": "0/0"
     },
     {
      "name": "amount factor 5",
      "falseAlarmPct": 2.6,
      "falseAlarms": 2,
-     "injectedCaughtPct": 72.1,
-     "misreadingsCaughtPct": 76.9,
+     "injectedCaughtPct": 71.9,
+     "misreadingsCaughtPct": 76.7,
      "naturalCaught": "0/0"
     },
     {
      "name": "ask when only the first has a date",
      "falseAlarmPct": 2.6,
      "falseAlarms": 2,
-     "injectedCaughtPct": 72.1,
-     "misreadingsCaughtPct": 76.9,
+     "injectedCaughtPct": 71.9,
+     "misreadingsCaughtPct": 76.7,
      "naturalCaught": "0/0"
     },
     {
      "name": "no question when only the second has a date",
      "falseAlarmPct": 2.6,
      "falseAlarms": 2,
-     "injectedCaughtPct": 63.9,
-     "misreadingsCaughtPct": 68.1,
+     "injectedCaughtPct": 63.7,
+     "misreadingsCaughtPct": 67.9,
      "naturalCaught": "0/0"
     },
     {
      "name": "ask when only the first has a claim",
      "falseAlarmPct": 3.9,
      "falseAlarms": 3,
-     "injectedCaughtPct": 72.4,
-     "misreadingsCaughtPct": 76.9,
+     "injectedCaughtPct": 72.3,
+     "misreadingsCaughtPct": 76.7,
      "naturalCaught": "0/0"
     },
     {
      "name": "no question when only the second has a claim",
      "falseAlarmPct": 2.6,
      "falseAlarms": 2,
-     "injectedCaughtPct": 67.5,
-     "misreadingsCaughtPct": 72,
+     "injectedCaughtPct": 67.4,
+     "misreadingsCaughtPct": 71.8,
      "naturalCaught": "0/0"
     },
     {
      "name": "kind not compared",
      "falseAlarmPct": 1.3,
      "falseAlarms": 1,
-     "injectedCaughtPct": 60.6,
-     "misreadingsCaughtPct": 64.6,
+     "injectedCaughtPct": 60.4,
+     "misreadingsCaughtPct": 64.4,
      "naturalCaught": "0/0"
     },
     {
      "name": "fat content compared",
      "falseAlarmPct": 2.6,
      "falseAlarms": 2,
-     "injectedCaughtPct": 72.1,
-     "misreadingsCaughtPct": 76.9,
+     "injectedCaughtPct": 71.9,
+     "misreadingsCaughtPct": 76.7,
      "naturalCaught": "0/0"
     },
     {
      "name": "every difference, not only what the words say",
      "falseAlarmPct": 30.3,
      "falseAlarms": 23,
-     "injectedCaughtPct": 81.8,
-     "misreadingsCaughtPct": 84.1,
+     "injectedCaughtPct": 81.7,
+     "misreadingsCaughtPct": 84,
      "naturalCaught": "0/0"
     },
     {
      "name": "ask when one excludes a claim and the other is silent",
      "falseAlarmPct": 3.9,
      "falseAlarms": 3,
-     "injectedCaughtPct": 72.1,
-     "misreadingsCaughtPct": 76.9,
+     "injectedCaughtPct": 71.9,
+     "misreadingsCaughtPct": 76.7,
      "naturalCaught": "0/0"
     }
    ]
@@ -1949,96 +1924,96 @@
      "name": "production",
      "falseAlarmPct": 0,
      "falseAlarms": 0,
-     "injectedCaughtPct": 73.2,
-     "misreadingsCaughtPct": 90.3,
+     "injectedCaughtPct": 73,
+     "misreadingsCaughtPct": 90.1,
      "naturalCaught": "0/0"
     },
     {
      "name": "amount factor 1.25",
      "falseAlarmPct": 0,
      "falseAlarms": 0,
-     "injectedCaughtPct": 73.2,
-     "misreadingsCaughtPct": 90.3,
+     "injectedCaughtPct": 73,
+     "misreadingsCaughtPct": 90.1,
      "naturalCaught": "0/0"
     },
     {
      "name": "amount factor 1.5",
      "falseAlarmPct": 0,
      "falseAlarms": 0,
-     "injectedCaughtPct": 73.2,
-     "misreadingsCaughtPct": 90.3,
+     "injectedCaughtPct": 73,
+     "misreadingsCaughtPct": 90.1,
      "naturalCaught": "0/0"
     },
     {
      "name": "amount factor 5",
      "falseAlarmPct": 0,
      "falseAlarms": 0,
-     "injectedCaughtPct": 73.2,
-     "misreadingsCaughtPct": 90.3,
+     "injectedCaughtPct": 73,
+     "misreadingsCaughtPct": 90.1,
      "naturalCaught": "0/0"
     },
     {
      "name": "ask when only the first has a date",
      "falseAlarmPct": 0,
      "falseAlarms": 0,
-     "injectedCaughtPct": 73.2,
-     "misreadingsCaughtPct": 90.3,
+     "injectedCaughtPct": 73,
+     "misreadingsCaughtPct": 90.1,
      "naturalCaught": "0/0"
     },
     {
      "name": "no question when only the second has a date",
      "falseAlarmPct": 0,
      "falseAlarms": 0,
-     "injectedCaughtPct": 64.6,
-     "misreadingsCaughtPct": 79.7,
+     "injectedCaughtPct": 64.5,
+     "misreadingsCaughtPct": 79.5,
      "naturalCaught": "0/0"
     },
     {
      "name": "ask when only the first has a claim",
      "falseAlarmPct": 1.3,
      "falseAlarms": 1,
-     "injectedCaughtPct": 73.3,
-     "misreadingsCaughtPct": 90.3,
+     "injectedCaughtPct": 73.2,
+     "misreadingsCaughtPct": 90.1,
      "naturalCaught": "0/0"
     },
     {
      "name": "no question when only the second has a claim",
      "falseAlarmPct": 0,
      "falseAlarms": 0,
-     "injectedCaughtPct": 68.5,
-     "misreadingsCaughtPct": 84.5,
+     "injectedCaughtPct": 68.4,
+     "misreadingsCaughtPct": 84.3,
      "naturalCaught": "0/0"
     },
     {
      "name": "kind not compared",
      "falseAlarmPct": 0,
      "falseAlarms": 0,
-     "injectedCaughtPct": 61.7,
-     "misreadingsCaughtPct": 76.1,
+     "injectedCaughtPct": 61.6,
+     "misreadingsCaughtPct": 75.9,
      "naturalCaught": "0/0"
     },
     {
      "name": "fat content compared",
      "falseAlarmPct": 0,
      "falseAlarms": 0,
-     "injectedCaughtPct": 73.2,
-     "misreadingsCaughtPct": 90.3,
+     "injectedCaughtPct": 73,
+     "misreadingsCaughtPct": 90.1,
      "naturalCaught": "0/0"
     },
     {
      "name": "every difference, not only what the words say",
      "falseAlarmPct": 21.1,
      "falseAlarms": 16,
-     "injectedCaughtPct": 80.9,
-     "misreadingsCaughtPct": 97.6,
+     "injectedCaughtPct": 80.7,
+     "misreadingsCaughtPct": 97.4,
      "naturalCaught": "0/0"
     },
     {
      "name": "ask when one excludes a claim and the other is silent",
      "falseAlarmPct": 2.6,
      "falseAlarms": 2,
-     "injectedCaughtPct": 73.2,
-     "misreadingsCaughtPct": 90.3,
+     "injectedCaughtPct": 73,
+     "misreadingsCaughtPct": 90.1,
      "naturalCaught": "0/0"
     }
    ]
@@ -2050,96 +2025,96 @@
      "name": "production",
      "falseAlarmPct": 0,
      "falseAlarms": 0,
-     "injectedCaughtPct": 73.8,
-     "misreadingsCaughtPct": 91,
+     "injectedCaughtPct": 73.6,
+     "misreadingsCaughtPct": 90.9,
      "naturalCaught": "0/0"
     },
     {
      "name": "amount factor 1.25",
      "falseAlarmPct": 1.3,
      "falseAlarms": 1,
-     "injectedCaughtPct": 73.8,
-     "misreadingsCaughtPct": 91,
+     "injectedCaughtPct": 73.6,
+     "misreadingsCaughtPct": 90.9,
      "naturalCaught": "0/0"
     },
     {
      "name": "amount factor 1.5",
      "falseAlarmPct": 1.3,
      "falseAlarms": 1,
-     "injectedCaughtPct": 73.8,
-     "misreadingsCaughtPct": 91,
+     "injectedCaughtPct": 73.6,
+     "misreadingsCaughtPct": 90.9,
      "naturalCaught": "0/0"
     },
     {
      "name": "amount factor 5",
      "falseAlarmPct": 0,
      "falseAlarms": 0,
-     "injectedCaughtPct": 73.8,
-     "misreadingsCaughtPct": 91,
+     "injectedCaughtPct": 73.6,
+     "misreadingsCaughtPct": 90.9,
      "naturalCaught": "0/0"
     },
     {
      "name": "ask when only the first has a date",
      "falseAlarmPct": 0,
      "falseAlarms": 0,
-     "injectedCaughtPct": 73.8,
-     "misreadingsCaughtPct": 91,
+     "injectedCaughtPct": 73.6,
+     "misreadingsCaughtPct": 90.9,
      "naturalCaught": "0/0"
     },
     {
      "name": "no question when only the second has a date",
      "falseAlarmPct": 0,
      "falseAlarms": 0,
-     "injectedCaughtPct": 65.1,
-     "misreadingsCaughtPct": 80.2,
+     "injectedCaughtPct": 64.9,
+     "misreadingsCaughtPct": 80,
      "naturalCaught": "0/0"
     },
     {
      "name": "ask when only the first has a claim",
      "falseAlarmPct": 2.6,
      "falseAlarms": 2,
-     "injectedCaughtPct": 73.9,
-     "misreadingsCaughtPct": 91,
+     "injectedCaughtPct": 73.8,
+     "misreadingsCaughtPct": 90.9,
      "naturalCaught": "0/0"
     },
     {
      "name": "no question when only the second has a claim",
      "falseAlarmPct": 0,
      "falseAlarms": 0,
-     "injectedCaughtPct": 69.1,
-     "misreadingsCaughtPct": 85.3,
+     "injectedCaughtPct": 69,
+     "misreadingsCaughtPct": 85.1,
      "naturalCaught": "0/0"
     },
     {
      "name": "kind not compared",
      "falseAlarmPct": 0,
      "falseAlarms": 0,
-     "injectedCaughtPct": 62.3,
-     "misreadingsCaughtPct": 76.9,
+     "injectedCaughtPct": 62.2,
+     "misreadingsCaughtPct": 76.7,
      "naturalCaught": "0/0"
     },
     {
      "name": "fat content compared",
      "falseAlarmPct": 0,
      "falseAlarms": 0,
-     "injectedCaughtPct": 73.8,
-     "misreadingsCaughtPct": 91,
+     "injectedCaughtPct": 73.6,
+     "misreadingsCaughtPct": 90.9,
      "naturalCaught": "0/0"
     },
     {
      "name": "every difference, not only what the words say",
      "falseAlarmPct": 21.1,
      "falseAlarms": 16,
-     "injectedCaughtPct": 81.5,
-     "misreadingsCaughtPct": 98.3,
+     "injectedCaughtPct": 81.3,
+     "misreadingsCaughtPct": 98.1,
      "naturalCaught": "0/0"
     },
     {
      "name": "ask when one excludes a claim and the other is silent",
      "falseAlarmPct": 2.6,
      "falseAlarms": 2,
-     "injectedCaughtPct": 73.8,
-     "misreadingsCaughtPct": 91,
+     "injectedCaughtPct": 73.6,
+     "misreadingsCaughtPct": 90.9,
      "naturalCaught": "0/0"
     }
    ]

@@ -33,7 +33,9 @@ different prompt, different method.
 - **Amount**: two amounts at least 2x apart, or packs against litres or kilos that no pack size written in the text
   reconciles ("100 x 10 l" is 100 packs and 1,000 L).
 - **Claims**: a dietary claim the words name (lactose-free, organic, vegan, vegetarian) that the second reading requires
-  and the first does not, or that one requires and the other excludes ("not lactose-free" read as lactose-free).
+  and the first does not, or that one requires and the other excludes ("not lactose-free" read as lactose-free). The
+  second reading's "not" counts only when the words negate the claim (a negation within three words before it, or
+  "not needed" after it).
 - **Allergens**: an allergen the words name that the second reading avoids and the first does not. "Gluten-free" and
   "no gluten" are the same.
 - **Kind of product**: item words that share no stem or name another kind (cream for milk, coffee milk), or two product codes.
@@ -43,7 +45,8 @@ different prompt, different method.
 Not material, and why: anything the words do not name (a claim, allergen or day one reading invented is the grounding
 check's business, not a question); a field the second reading left empty; a claim one reading excludes and the other
 leaves unsaid (neither requires it); fat content and other attributes; "by" against "on" the same day; a second
-reading's day that contradicts the weekday the words name (the second reader misread it).
+reading's day that contradicts the weekday the words name, or a total it wrote as a count of packs ("100 x 10 l" as
+1,000 packs of 10 l): the second reader misread, and the first reading is not in question.
 
 ## Never slower, never in the way
 
@@ -72,14 +75,15 @@ already reviewed), and neither does a follow-up of earlier requests (the second 
 ## The evaluation
 
 `pnpm eval:second-reader` reads what is not yet recorded and scores; `--offline` re-scores the recorded readings for
-free; `--set holdout` uses the held-out set. Every number below is in `eval/second-reader/results*.json`.
+free; `--set holdout` and `--set fresh` use the other two sets. Every number below is in `eval/second-reader/results*.json`.
 
 **The sets.** 77 requests (32 English, 25 Finnish, 20 Swedish) written for this, each with the right reading on the
 compared fields; most are easy to misread: digit grouping ("1.000", "1,000", "1 000"), decimal commas, "a dozen" and
 "tusina", packs with sizes ("100 x 10 l", "six 10-litre boxes"), self-corrections, arithmetic ("double the usual"),
 distractor numbers, negated claims ("not lactose-free", "ei tarvitse olla laktoositonta"), allergens to avoid, relative
 days. Then a **held-out set** of 30 (10 per language, number words, "before Tuesday", "next Thursday"), written after
-the rules and the prompt were tuned, and scored once. Now = Saturday 14 Nov 2026 10:00 Helsinki. The vocabulary is
+the rules and the prompt were tuned, and a **fresh set** of 20 (6 to 8 per language) written after the last change
+and not used for anything else. Now = Saturday 14 Nov 2026 10:00 Helsinki. The vocabulary is
 the live one (the partner catalogue's tags and the demo mandate).
 
 **Injected misreadings.** From each right first reading, known wrong ones are made (x10 and /10 the amount, "1.000" read
@@ -90,29 +94,32 @@ grounding check, and they are reported apart.
 
 ### Results, production settings (two runs of the second reader on each set)
 
-| | Tuning set (77) | Held-out set (30) |
-|---|---|---|
-| First reader (Opus 5.5) right on every field | 76 of 77; the other it asked about (no item named) | 30 of 30 |
-| Nemotron 3 Nano alone right on every compared field | 50 and 46 of 77 (65 %, 60 %) | 16 and 18 of 30 |
-| By field, alone: amount / claims / allergens / product / day | 97 / 81 / 97 / 100 / 83 % (run 1) | 100 / 73 / 100 / 100 / 80 % |
-| **False alarms** (first right, a question anyway) | **0 of 76 and 1 of 76** | **0 of 30 and 0 of 30** (2 of 60 before the last rule change, see below) |
-| **Injected misreadings caught** | **488 and 482 of 536 (91 %, 90 %)** | **202 of 222 in both runs (91 %)** (94.6 % before) |
-| All injected, including the two invented kinds | 74 %, 73 % | 74 % |
-| Real misreadings of the first reader caught | none to catch: it made none | none to catch |
-| Second reader time, median / 90th pct | 1.4 s / 1.9 s | 1.4 s / 2.4 s |
-| Wait added after the first reading, median / 90th / max | 0 / 0 / 1.0 s | 0 / 0.1 / 1.9 s |
-| Unavailable | 0 of 154 | 0 of 60 |
+| | Tuning set (77) | Held-out set (30) | Fresh set (20) |
+|---|---|---|---|
+| First reader (Opus 5.5) right on every field | 76; the 77th it asked about (no item named) | 30 | 20 |
+| Nemotron 3 Nano alone right on every compared field | 50 and 46 (65 %, 60 %) | 16 and 18 (53 %, 60 %) | 12 and 12 (60 %) |
+| By field, alone (run 1): amount / claims / allergens / product / day | 97 / 81 / 97 / 100 / 83 % | 100 / 73 / 100 / 100 / 80 % | 100 / 75 / 100 / 100 / 85 % |
+| **Needless questions** (first right, asked anyway) | **0 of 76, 0 of 76** | **0 of 30, 0 of 30** | **0 of 20, 0 of 20** |
+| **Injected misreadings caught** | **487 and 482 of 536 (91 %, 90 %)** | **202 and 202 of 222 (91 %)** | **133 and 133 of 142 (94 %)** |
+| All injected, with the two invented kinds | 74 %, 73 % | 74 % | 76 % |
+| Real misreadings of the first reader caught | none to catch: it made none | none | none |
+| Second reader time, median / 90th percentile | 1.4 s / 1.9 s | 1.4 s / 2.4 s | 1.3 s / 2.0 s |
+| Wait added after the first reading, median / 90th / max | 0 / 0 / 1.0 s | 0 / 0.1 / 1.9 s | 0 / 0.3 s |
+| Unavailable | 0 of 154 | 0 of 60 | 0 of 40 |
 
-Caught by kind (tuning set, run 1): x10 75/76, /10 68/68, "1.000" as 1 13/13, litres as packs 34/41, claim dropped
-20/20, claim negated 19/19, allergen dropped 11/12, another product 76/76, a week later 61/69, the day before 67/71,
-day dropped 58/71.
+Caught by kind (tuning set, run 1): x10 75/76, /10 67/68, "1.000" as 1 13/13, litres as packs 34/41, claim dropped
+20/20, claim negated 19/19, allergen dropped 11/12, another product 76/76, a week later 56/69, the day before 58/71,
+day dropped 58/71. Over the three sets and both runs: **0 needless questions in 252 compared requests, and 91 % of
+1,800 injected misreadings caught.**
 
-The one false alarm: "100 x 10 l bag-in-box milk" read by Nemotron once as 1,000 packs. Combined over both sets and
-both runs: **1 needless question in 212 requests (0.5 %)**, and 90.6 % of misreadings caught.
+**Live, on the production build** (port 3417, the real Opus 5.5 and Nemotron through the store's own API), ten tricky
+requests written on the spot gave three needless questions under the rules of the time: "before Wednesday" (a written
+date read from "4 kg"), "100 x 10 l" (the total as packs) and "lactose free" (read as *not* lactose-free). The last
+three rules above were made from those three; the fresh set was written after them and changed nothing.
 
 ### How it got there (the honest path)
 
-| Design | False alarms | Misreadings caught | Note |
+| Design | Needless questions (tuning set) | Misreadings caught | Note |
 |---|---|---|---|
 | Nemotron fills the interpreter's own schema and prompt, every difference asked | 40 of 76 (53 %) | 95 % | Wrong weekday dates on 28 requests; invented claims |
 | Same, thinking on | | | 9.5 s median, 15 s at the 90th: past the deadline 2 times in 3 |
@@ -120,29 +127,30 @@ both runs: **1 needless question in 212 requests (0.5 %)**, and 90.6 % of misrea
 | Transcription with closed lists, every difference asked | 30 of 76 | | Listed every claim as "not wanted"; 11 unparseable answers |
 | ... at temperature 0 | 31 of 76 | | No unparseable answers; "by Friday" often read as "the day after tomorrow" |
 | ... a flat day field, only what the words name compared | 12 of 76 | | |
-| ... "tomorrow" checked, a claim excluded against unsaid not asked, pack totals | 3 of 76 | 94 % | |
-| ... amount 2x, a claim only the first reading has not asked | 0 and 1 of 76 | 91 %, 90 % | production, swept below |
+| ... "tomorrow" checked, a claim excluded against unsaid not asked, pack totals reconciled | 3 of 76 | 94 % | |
+| ... amount 2x, a claim only the first reading has not asked | 0 and 1 of 76 | 91 %, 90 % | |
+| ... a day against the named weekday, a "not" the words must say, a total written as packs | 0 and 0 of 76 | 91 %, 90 % | production |
 
 Sweep on the tuning set (run 1, other rules as in production): comparing every difference, not only what the words
-name: 16 false alarms (21 %), 98 % caught. Amount factor 1.25 or 1.5: 1 false alarm, same catches. Asking when only
-the first reading has a claim: 2 false alarms, nothing more caught. Not asking when only the second has a day: 80 %
-caught. Not comparing the kind of product: 77 % caught.
+name: 16 needless questions (21 %), 98 % caught. Amount factor 1.25 or 1.5: 1 needless question, same catches.
+Asking when only the first reading has a claim: 2, nothing more caught. Not asking when only the second has a day:
+80 % caught. Not comparing the kind of product: 77 % caught.
 
-**Caveats.** The rules and the prompt were tuned on the 77-request set, so its numbers flatter; the held-out set is
-the fairer one, and it is small. One rule changed after the held-out set was first scored: a live probe ("40 kg of
-yoghurt, no wait, 4 kg, before Wednesday") showed that a second reading whose day contradicts the named weekday was
-still asked about when the first reading was the day before ("before Wednesday" is a Tuesday). Before that change the
-held-out set had 1 false alarm per run ("before Tuesday") and 94.6 % caught. The first reader made no real misreading
-in 107 requests, so the measured benefit on real errors is zero; the catch rate is on injected errors. Nemotron alone
-is right on every field only about 60 % of the time: it is useful as a second reader only because plain code asks
-about what the words name and leaves the rest.
+**Caveats.** The rules and the prompt were tuned on the 77-request set and on ten live probes, so those numbers
+flatter. The held-out set was written after most of the tuning but before the last rule changes: on its first
+scoring it had 1 needless question per run ("before Tuesday") and caught 94.6 %. The fresh set (20) was written after
+every change and scored once: it is the fairest number, and it is small. The first reader made no real misreading in
+127 requests, so the measured benefit on real errors is zero; every catch is of an injected error. Nemotron alone is
+right on every field only about 60 % of the time: it is useful as a second reader only because plain code asks about
+what the words name and leaves the rest.
 
 **Decision.** On, for the doors where a model reads a person's words: the typed order lane, the voice door, and outside
 agents calling `POST /api/v1/agent/interpret`. Off for the photo door (its words are written by code from a line the
-buyer reviewed) and for follow-ups of earlier requests (the second reader does not see them). Reason: a needless
-question on about 1 request in 200, no wait at the 90th percentile, about $0.0001 a request on Featherless, against
-about nine in ten of the misreadings that would otherwise go to the price unasked. If the first reader is ever a
+buyer reviewed) and for follow-ups of earlier requests (the second reader does not see them). Reason: no needless
+question in 252 compared requests (and 3 in 10 deliberately tricky live probes before the last fixes), no wait at the
+90th percentile, about $0.0001 a request on Featherless, against about nine in ten of the misreadings that would
+otherwise go to the price unasked. If the first reader is ever a
 smaller, cheaper model, the case gets stronger; if Featherless is at capacity, it is read once and nothing else changes.
 
-Spend: about $1.70 of Opus 5.5 first readings (107 requests, recorded once, re-scored for free since), about $0.20 of
-live probes on the production build, and under $0.05 of Nemotron for about 1,000 readings.
+Spend: about $2.00 of Opus 5.5 first readings (127 requests, recorded once, re-scored for free since), about $0.25 of
+live probes on the production build, and under $0.05 of Nemotron for about 1,100 readings.

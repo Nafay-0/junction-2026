@@ -169,6 +169,20 @@ const RELATIVE_WORDS: [RegExp, number][] = [
   [/\btoday\b|tanaan|\bidag\b/, 0],
 ];
 
+const NEGATION = /^(not|no|non|without|never|ei|eika|ilman|inte|ej|utan|ingen|inga|icke)$/;
+const NOT_NEEDED = /^(not|isnt|ei|inte|ej)$/;
+
+/**
+ * Do the words negate this claim ("not lactose-free", "ei laktoositonta", "inte laktosfri", "lactose-free is not
+ * needed")? A negation within three words before a word for the claim, or "not" within three words after it.
+ */
+export function claimNegatedInWords(text: string, tag: string): boolean {
+  const re = CLAIM_WORDS[tag];
+  if (!re) return true;
+  const words = fold(text).replace(/n't\b/g, " not").split(/[^a-z0-9]+/).filter(Boolean);
+  return words.some((w, i) => re.test(w) && (words.slice(Math.max(0, i - 3), i).some((x) => NEGATION.test(x)) || words.slice(i + 1, i + 4).some((x) => NOT_NEEDED.test(x))));
+}
+
 /**
  * Does a day fit what the words say? A named weekday must be that weekday; "tomorrow", "ylihuomenna" or "idag" (with no
  * weekday or date written) must be that day from `today`. Words that pin nothing ("next week", a written date) fit any day.
@@ -269,6 +283,12 @@ function compareAmount(a: Reading, b: Reading, text: string, rules: ReadingRules
   const diff = (why: string): ReadingDifference => ({ field: "amount", first: show(x, a), second: show(y, b), why, patch: { quantity: { ...y } } });
   const ratio = Math.max(x.amount, y.amount) / Math.min(x.amount, y.amount);
   if (x.unit === y.unit || (isCount(x.unit) && isCount(y.unit))) {
+    // The second reading counted packs of a size it also wrote, and its count is the first's count times that size:
+    // it wrote the total ("100 x 10 l" as 1,000 packs of 10 l). The other way round (the first did it) is asked.
+    if (isCount(y.unit) && b.packSize && close(y.amount, x.amount * b.packSize.amount) && b.packSize.amount !== 1) {
+      minor.push(`the second reading wrote the total (${show(y, b)}) as a count of ${b.packSize.amount} ${b.packSize.unit} packs`);
+      return undefined;
+    }
     if (ratio >= rules.amountFactor - 1e-9) return diff(`${ratio >= 9.5 && ratio <= 10.5 ? "10x" : `${Math.round(ratio * 10) / 10}x`} the amount`);
     if (!close(x.amount, y.amount)) minor.push(`amounts ${show(x, a)} and ${show(y, b)} are close`);
     if (x.unit !== y.unit) minor.push(`${x.unit} and ${y.unit} both count packs`);
@@ -301,7 +321,12 @@ function compareClaims(a: Reading, b: Reading, text: string, rules: ReadingRules
   const whys: string[] = [];
   for (const t of tags) {
     const sa = claimState(ca, t);
-    const sb = claimState(cb, t);
+    let sb = claimState(cb, t);
+    // The second reading excludes a claim the words do not negate ("lactose free" read as not lactose-free): it misread.
+    if (sb === "excluded" && rules.onlyWhatTheWordsSay && text && !claimNegatedInWords(text, t)) {
+      minor.push(`the second reading excludes ${words(t)}, but the words do not negate it`);
+      sb = "unstated";
+    }
     if (sa === sb) continue;
     if (rules.onlyWhatTheWordsSay && text && !claimNamed(text, t)) {
       minor.push(`${words(t)} in one reading, but the words do not name it`);

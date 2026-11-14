@@ -26,19 +26,21 @@ model is open weights, a wholesaler can run this check on its own hardware.
 
 ## Results (`web/docs/second-reader.md`; `pnpm eval:second-reader`)
 
-107 requests in English, Finnish and Swedish (77 for tuning, 30 held out), many written to be easy to misread:
-"1.000" against "1,000", "a dozen cases", "100 x 10 l", "not lactose-free", "no nuts", "tomorrow". Two runs each.
+127 requests in English, Finnish and Swedish (77 for tuning, 30 held out, 20 fresh: written after the last change),
+many written to be easy to misread: "1.000" against "1,000", "a dozen cases", "100 x 10 l", "not lactose-free",
+"no nuts", "tomorrow". Two runs of Nemotron each.
 
-| | Tuning set | Held-out set |
-|---|---|---|
-| Needless questions (first reading right, asked anyway) | 0 and 1 of 76 | 0 and 0 of 30 |
-| Known misreadings caught (x10, "1.000" as 1, a dropped or negated claim, a dropped allergen, another product, another day) | 91 %, 90 % of 536 | 91 % of 222 |
-| Nemotron alone right on every compared field | 65 %, 60 % | 53 %, 60 % |
-| Nemotron time, median / 90th percentile | 1.4 s / 1.9 s | 1.4 s / 2.4 s |
-| Unavailable | 0 of 154 | 0 of 60 |
+| | Tuning set | Held-out set | Fresh set |
+|---|---|---|---|
+| Needless questions (first reading right, asked anyway) | 0 and 0 of 76 | 0 and 0 of 30 | 0 and 0 of 20 |
+| Known misreadings caught (x10, "1.000" as 1, a dropped or negated claim, a dropped allergen, another product, another day) | 91 %, 90 % of 536 | 91 % of 222 | 94 % of 142 |
+| Nemotron alone right on every compared field | 65 %, 60 % | 53 %, 60 % | 60 % |
+| Nemotron time, median / 90th percentile | 1.4 s / 1.9 s | 1.4 s / 2.4 s | 1.3 s / 2.0 s |
+| Unavailable | 0 of 154 | 0 of 60 | 0 of 40 |
 
-Claude Opus 5.5 made no real misreading in the 107, so every catch above is on injected errors: the second reader is
-insurance, not a fix for an observed failure.
+The rules were tuned on the first set and on ten tricky live requests (three of which got a needless question before
+the last fixes); the fresh set is the fair number, and it is small. Claude Opus 5.5 made no real misreading in the
+127, so every catch is of an injected error: the second reader is insurance, not a fix for an observed failure.
 
 What it took: Nemotron filling the interpreter's own schema asked a needless question on 53 % of requests (wrong
 weekday dates, invented claims). With thinking on it took 9.5 s at the median. The version that works transcribes into

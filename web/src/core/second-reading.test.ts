@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyNeedPatch, NeedSchema } from "./need";
-import { compareReadings, describeSecondReading, fieldValues, numbersInText, readerName, readingConcerns, READING_RULES, type Reading, type SecondReadingRecord } from "./second-reading";
+import { claimNegatedInWords, compareReadings, describeSecondReading, fieldValues, numbersInText, readerName, readingConcerns, READING_RULES, type Reading, type SecondReadingRecord } from "./second-reading";
 
 const base: Reading = {
   item: { text: "lactose-free milk", attributes: ["lactose_free"], excludedAttributes: [] },
@@ -164,6 +164,28 @@ describe("only what the words say", () => {
     expect(fields(r({ deliverBy: "2026-11-16" }), r({ deliverBy: "2026-11-20" }), text)).toEqual(["date"]);
     // "next Tuesday": both readings are Tuesdays, a week apart, and that is asked.
     expect(fields(r({ deliverBy: "2026-11-17" }), r({ deliverBy: "2026-11-24" }), "50 litres of milk for next Tuesday")).toEqual(["date"]);
+  });
+});
+
+describe("negation and totals in the words", () => {
+  it("a second reading that excludes a claim the words do not negate misread it: no question", () => {
+    const text = "Need yoghurt, 2 dozen 1 kg tubs, lactose free, no nuts, Tuesday";
+    expect(compareReadings(base, r({ item: { attributes: [], excludedAttributes: ["lactose_free"] } }), { text }).agreed).toBe(true);
+  });
+
+  it("the words negate it, in each language: asked", () => {
+    for (const text of ["Ordinary milk, not lactose-free, 150 litres", "Tavallista maitoa, ei laktoositonta, 150 litraa", "Vanlig mjölk, inte laktosfri, 150 liter", "Lactose-free is not needed: 120 litres of milk", "lactose-free isn't needed this time"]) {
+      expect(claimNegatedInWords(text, "lactose_free")).toBe(true);
+      expect(fields(base, r({ item: { attributes: [], excludedAttributes: ["lactose_free"] } }), text)).toEqual(["claims"]);
+    }
+    expect(claimNegatedInWords("lactose free, no nuts", "lactose_free")).toBe(false);
+  });
+
+  it("the second reading writing the total as packs ('100 x 10 l' as 1,000 packs of 10 l) is no question; the first doing it is", () => {
+    const text = "100 x 10 l bag-in-box milk for Wednesday";
+    const packs = (n: number, size?: number) => r({ quantity: { amount: n, unit: "pack" }, ...(size ? { packSize: { amount: size, unit: "L" as const } } : {}) });
+    expect(compareReadings(packs(100), packs(1000, 10), { text }).agreed).toBe(true);
+    expect(fields(packs(1000), packs(100, 10), text)).toEqual(["amount"]);
   });
 });
 
