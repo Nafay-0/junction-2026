@@ -6,7 +6,8 @@ import path from "node:path";
  * page and the Agents page read it when they render. No file, or a broken one, gives an empty board, which both
  * screens say plainly.
  *
- *   DOCK_CRASH_SUMMARY   a summary.json, or a folder of results (default: crash-results/ under the app)
+ *   DOCK_CRASH_SUMMARY   a summary.json, or a folder of results (default: crash-results/ under the app; when that
+ *                        has no export, the published results committed at src/crash/results/summary.json)
  *
  * Preferred source: crash-results/export/summary.json (`pnpm crash:export`, schema dock-crash-export/1), with one
  * trajectory per episode under export/runs/, from which each scenario that went wrong gets its one-line reason.
@@ -164,7 +165,10 @@ const g = globalThis as typeof globalThis & { __dockCrashBoard?: { key: string; 
 export function crashBoard(): Board {
   const given = process.env.DOCK_CRASH_SUMMARY?.trim();
   const root = given || path.join(process.cwd(), "crash-results");
-  const exportFile = exists(root) && root.endsWith(".json") ? root : path.join(root, "export", "summary.json");
+  const localExport = exists(root) && root.endsWith(".json") ? root : path.join(root, "export", "summary.json");
+  // A server that has run no crash test of its own (the public deployment: crash-results/ is not in the repository)
+  // shows the published leaderboard that is committed with the code, in the same export format.
+  const exportFile = exists(localExport) ? localExport : path.join(process.cwd(), "src", "crash", "results", "summary.json");
   const runFiles = (() => {
     try {
       return readdirSync(/*turbopackIgnore: true*/ root)
