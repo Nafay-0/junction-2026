@@ -398,6 +398,13 @@ export class AccountService {
       reset.push(seed.username);
     }
     this.deps.dock.ledger.append({ type: "intake", actor: "dock", summary: `The shared test accounts (${reset.join(", ")}) were reset to their seed: rules, mandate and history; ${by}.`, data: { step: "test_accounts_reset", accounts: reset, by } });
+    // The selling agent's offers to them, their mutes and their weekly cap go with the reset (server/offers).
+    // Only on a running server's runtime: never build one from here.
+    const running = (globalThis as { __dockRuntime?: Promise<import("../runtime").Runtime> }).__dockRuntime;
+    if (running)
+      await Promise.all([import("../offers/service"), running])
+        .then(([m, rt]) => (rt.accounts === this ? m.resetKitchenOffers(rt, reset, "AimoPilot", `the test accounts' reset, ${by}`) : undefined))
+        .catch((err: Error) => console.warn("resetting the test kitchens' offers failed", err.message));
     return { reset };
   }
 

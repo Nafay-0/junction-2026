@@ -501,11 +501,13 @@ export async function verifyOffer(token: string, keys: VerifyingKey[], opts: { n
  * allowed by its rules (the mandate it signed, rules its people stated, its memory), not muted, offers not off, and
  * not something it already buys. The wholesaler's agent ran its own guardrails; the buyer's agent does not rely on them.
  */
-export function buyerCheck(offer: OfferBody, k: Pick<KitchenView, "mandate" | "profile" | "prefs" | "bought">, now: Date): { show: true } | { show: false; why: string } {
+export function buyerCheck(offer: OfferBody, k: Pick<KitchenView, "mandate" | "profile" | "prefs" | "bought">, now: Date, product?: Product): { show: true } | { show: false; why: string } {
   if (Date.parse(offer.validUntil) <= now.getTime()) return { show: false, why: "expired" };
   if (k.prefs.off) return { show: false, why: "offers are off" };
   const p = offer.product;
-  const forbidden = forbiddenBy({ id: p.productId, name: p.name, brand: p.brand ?? "unknown", category: p.category, unit: p.unit, packSize: p.packSize, attributes: p.attributes, allergens: p.allergens, certificates: p.certificates, deliveryReliability: 0, carbonKgPerUnit: 0, allergenInfo: { declared: p.allergensDeclared, contains: p.allergens, mayContain: [], freeFrom: [], ...(p.allergensByNature ? { byNature: p.allergensByNature } : {}) } }, k, now);
+  // The product's own master data when the caller has it (nutrition declarations, allergens by nature): the offer
+  // carries only what a buyer needs to read, and judging a nutrition rule on it would hide every offer as "undeclared".
+  const forbidden = forbiddenBy(product && product.id === p.productId ? product : { id: p.productId, name: p.name, brand: p.brand ?? "unknown", category: p.category, unit: p.unit, packSize: p.packSize, attributes: p.attributes, allergens: p.allergens, certificates: p.certificates, deliveryReliability: 0, carbonKgPerUnit: 0, allergenInfo: { declared: p.allergensDeclared, contains: p.allergens, mayContain: [], freeFrom: [], ...(p.allergensByNature ? { byNature: p.allergensByNature } : {}) } }, k, now);
   if (forbidden) return { show: false, why: forbidden };
   const mute = muteFor(k.prefs, { productId: p.productId, category: p.category }, offer.reasons.map((r) => r.kind));
   if (mute) return { show: false, why: "muted" };
