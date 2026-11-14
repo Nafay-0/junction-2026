@@ -62,6 +62,39 @@ world stay strict.
 
 Times are end to end, including the query embedding. The judge missed its deadline once in 185 searches.
 
+### Common practice on the same 189 requests (14 Nov)
+
+The same requests and the same scoring code, run with approaches most teams use, on our catalogue and our index.
+These are textbook set-ups we built and ran, not other companies' products. They take the buyer's words as typed
+(no reading of claims or allergens), and the index is the one `pnpm search:publish:opensearch` creates (on a local
+Docker OpenSearch 3.3 for this run; BM25 and HNSW are the same algorithms as on the hosted 3.6 service).
+
+| configuration | right first | in top 3 | recall | dropped | stand-in as match | "not sold" | p50 ms | p90 ms | US cents |
+|---|---|---|---|---|---|---|---|---|---|
+| BM25 | 31% | 43% | 75% | 22 | 0 | 4/11 | 4 | 7 | 0 |
+| k-NN (semantic search) | 72% | 85% | 98% | 18 | 5 | 0/11 | 350 | 417 | 0.0003 |
+| hybrid: BM25 + k-NN, reciprocal rank fusion | 58% | 71% | 98% | 21 | 3 | 0/11 | 352 | 407 | 0.0003 |
+| BM25 + our hard rules | 33% | 47% | 75% | 0 | 0 | 4/11 | 9 | 23 | 0 |
+| hybrid (RRF) + our hard rules | 62% | 72% | 98% | 0 | 3 | 0/11 | 355 | 420 | 0.0003 |
+
+- **BM25**: one `multi_match` (best fields, any word) with OpenSearch's default BM25 (k1 1.2, b 0.75) over `names.fi`
+  (the `finnish` analyzer), `names.sv` (`swedish`), `names.en` (`english`) and `brand` (lowercase and ASCII folding);
+  no synonyms, no filters, no rules, no judge; the top 100 are the candidates.
+- **k-NN**: the query embedding (gemini-embedding-2, 768 dimensions) against the same product vectors smart search
+  uses (Lucene HNSW, cosine), top 100, no filters.
+- **Hybrid (RRF)**: the BM25 and k-NN top 100 fused by reciprocal rank (k = 60, equal weights): what a standard hybrid
+  search ships, with no rules and no judge.
+- **+ our hard rules**: the same lists after the claims and allergens read from the words are applied in code
+  (`recall.ts` `hardFilter`), no judge: the rules take "dropped" to 0; the judge (rows above) takes right-first from
+  about 60 % to 97 % and says "we do not sell that".
+
+"Dropped" is a top-3 product that misses a stated claim or carries a forbidden allergen. BM25 times are a local
+round trip; k-NN and hybrid times include the query embedding's measured time (replayed from the evaluation's
+cache, about 340 ms).
+
+To reproduce: `pnpm search:publish:opensearch` against an OpenSearch with the k-NN plugin (OPENSEARCH_URL), then
+`pnpm search:eval --baselines --configs bm25,knn,hybrid_rrf,bm25_rules,hybrid_rrf_rules`.
+
 ## Cost, limits, telemetry
 
 Per search about 0.06 US cents (one query embedding of about 15 tokens at $0.20 per million, about 5,500 judge
