@@ -4,7 +4,7 @@ import { facetsOf } from "./catalog/search";
 import { OPTIMISE_QUESTION_ID, answerSchema, clarify, hardConstraints, kindMismatch, optimiseQuestion, optionLabel, violation, type Answer, type ConstraintSource, type MemoryNote, type Question } from "./clarify";
 import { proposedIds, type AlternativesAnswer, type AlternativesSource } from "./alternatives";
 import { alsoAskedIn, alsoAskedNote, groupsIn, type AlsoAsked } from "./also-asked";
-import { baseAmount, checkNeed, type CheckContext, type Concern, type ConcernCode, type PendingOrderSummary } from "./concerns";
+import { baseAmount, checkNeed, noticeNeed, type CheckContext, type Concern, type ConcernCode, type Noticed, type PendingOrderSummary } from "./concerns";
 import { DockError, parse } from "./errors";
 import {
   addDaysIso,
@@ -123,6 +123,8 @@ export type Intake = {
   excluded: Exclusion[];
   /** Plausibility warnings not asked of the buyer because a person signs the order off anyway: shown to that person. */
   signOffNotes?: string[];
+  /** Noticed without asking (core/concerns.ts noticeNeed): an amount clearly outside the kitchen's range, a standing order that crept up. Said on the card and to whoever signs off. */
+  noticed?: Noticed[];
   /** Confirmations that matter but were only relayed by the agent: the order needs a person's sign-off (policy human_confirmation). */
   unverified?: UnverifiedConfirmation[];
   /** Items the buyer's own words name that this request does not cover (plain code, see also-asked.ts): said, never dropped. */
@@ -331,7 +333,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
     const profile = await profileOf(session);
     const products = await familyProducts(i.family, i.need);
     const ctx: CheckContext = { now: at, profile, family: i.family, candidates: products, suspendedPreferenceIds: i.suspendedPreferenceIds, pending: await pendingOrders(i), ...(i.site ? { site: i.site } : {}) };
-    Object.assign(i, { concerns: [], questions: [], openChoices: [], fromMemory: [], notAsked: [], rules: [], options: [], notes: [], excluded: [], preselected: undefined, signOffNotes: undefined, updatedAt: at.toISOString() });
+    Object.assign(i, { concerns: [], questions: [], openChoices: [], fromMemory: [], notAsked: [], rules: [], options: [], notes: [], excluded: [], preselected: undefined, signOffNotes: undefined, noticed: undefined, updatedAt: at.toISOString() });
     if (i.unverified?.length) i.signOffNotes = i.unverified.map(unverifiedNote);
 
     // 1. Likely mistakes block everything else. Plausibility warnings a sign-off would show anyway wait (step 6).
@@ -344,6 +346,12 @@ export function createIntakeFlow(deps: IntakeDeps) {
     const blocking = open.filter((c) => !c.deferrable);
     const deferred = open.filter((c) => c.deferrable);
     if (blocking.length) return needsConfirmation(i, blocking, "before any price lookup");
+    // Not a likely slip: said, not asked. The buyer sees it on the card; a person signing the order off sees it too.
+    i.noticed = noticeNeed(i.need, ctx);
+    if (i.noticed.length) {
+      (i.signOffNotes ??= []).push(...i.noticed.map((n) => `Noticed, not asked: ${n.message}`));
+      log(i, "dock", `AimoPilot noticed, without asking: ${i.noticed.map((n) => n.message).join(" ")}`, { step: "noticed", noticed: i.noticed.map((n) => ({ code: n.code, params: n.params })) });
+    }
     i.amount = baseAmount(i.need, ctx) ?? (i.need.sameAsLastTime ? lastAmount(profile, i.family) : undefined);
     if (!i.amount) throw new DockError(422, "amount_unknown", "Could not work out the amount in litres, kilos or pieces.");
 
@@ -974,6 +982,7 @@ export function view(i: Intake) {
     alsoAsked: i.alsoAsked ?? [],
     memoryUsed: i.memoryUsed ?? [],
     signOffNotes: i.signOffNotes ?? [],
+    noticed: i.noticed ?? [],
     acknowledgements: i.acknowledgements,
     chosen: i.chosen,
     quote: i.quote,

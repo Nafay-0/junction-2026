@@ -348,23 +348,74 @@ export function checkQuantity(need: StructuredNeed, ctx: CheckContext): Concern[
     const fix = inUnit(base.amount * 10);
     return [tenfold(q, fix, `${formatAmount(base.amount, base.unit)} where you usually order about ${usualText}: did you mean ${formatAmount(fix.amount, fix.unit)}?`, evidence)];
   }
-  if (usual.orders >= QUANTITY_PATTERN_MIN_ORDERS && (ratio >= UNUSUAL_RATIO || ratio <= 1 / UNUSUAL_RATIO)) {
-    const fix = inUnit(usual.amount);
-    const how = ratio > 1 ? `${round(ratio)}x` : `1/${round(1 / ratio)} of`;
-    return [
-      {
-        key: `quantity_unusual:${q.amount}:${q.unit}`,
-        code: "quantity_unusual",
-        severity: "warning",
-        message: `${formatAmount(base.amount, base.unit)} is ${how} your usual ${usualText} (median of your last ${usual.orders} ${ctx.family} orders).`,
-        confirmable: true,
-        deferrable: true,
-        corrections: [{ id: `use_${fix.amount}_${fix.unit}`, label: `Make it the usual ${formatAmount(fix.amount, fix.unit)}`, patch: { quantity: fix } }],
-        evidence: { ...evidence, ratio: round(ratio) },
-      },
-    ];
-  }
+  // An amount far from the kitchen's pattern but not a likely slip is not asked: noticeNeed says it on the card.
   return [];
+}
+
+// ---------- noticing without asking ----------
+
+/**
+ * Things worth a line on the "understood" card that do not stop the order: the buyer said the amount in words, it is
+ * not a likely slip (those are asked, above), and a question would cost more than it saves. The person signing an
+ * order off sees them too. Two kinds:
+ *   amount_above_usual / amount_below_usual   clearly outside the kitchen's own range (NOTE_HIGH x or 1/NOTE_LOW of
+ *                                             its usual, from at least QUANTITY_PATTERN_MIN_ORDERS orders)
+ *   standing_order_drift                      the kitchen's recurring order has crept up over its recent weeks
+ *                                             (the newer half of its last orders DRIFT_RATIO above the older half),
+ *                                             said when it is about to be ordered again
+ */
+export type NoticedCode = "amount_above_usual" | "amount_below_usual" | "standing_order_drift";
+export type Noticed = { code: NoticedCode; message: string; params: Record<string, string | number> };
+
+export const NOTE_HIGH = 1.5;
+export const NOTE_LOW = 2;
+export const DRIFT_RATIO = 1.2;
+export const DRIFT_MIN_ORDERS = 4;
+
+export function noticeNeed(need: StructuredNeed, ctx: CheckContext): Noticed[] {
+  return [...noticeQuantity(need, ctx), ...noticeDrift(need, ctx)];
+}
+
+/** The amount is UNUSUAL_RATIO or more away from the kitchen's usual (what used to be asked as quantity_unusual). */
+export function farFromUsual(need: StructuredNeed, ctx: CheckContext): boolean {
+  const n = noticeQuantity(need, ctx)[0];
+  const r = n ? Number(n.params.ratio) : 1;
+  return !!n && (r >= UNUSUAL_RATIO || r <= 1 / UNUSUAL_RATIO);
+}
+
+export function noticeQuantity(need: StructuredNeed, ctx: CheckContext): Noticed[] {
+  const base = baseAmount(need, ctx);
+  const usual = usualAmount(ctx.profile, ctx.family, ctx.site);
+  if (!base || !usual || usual.unit !== base.unit || usual.orders < QUANTITY_PATTERN_MIN_ORDERS) return [];
+  const ratio = base.amount / usual.amount;
+  // A likely slip is asked instead (checkQuantity), never also noted.
+  if ((ratio >= TENFOLD_LOW && ratio <= TENFOLD_HIGH) || (ratio <= 1 / TENFOLD_LOW && ratio >= 1 / TENFOLD_HIGH)) return [];
+  const params = { ratio: round(ratio), usual: usual.amount, unit: usual.unit, asked: base.amount, orders: usual.orders };
+  if (ratio >= NOTE_HIGH) return [{ code: "amount_above_usual", params, message: `${formatAmount(base.amount, base.unit)} is ${round(ratio)} times your usual ${formatAmount(usual.amount, usual.unit)} (median of your last ${usual.orders} ${ctx.family} orders).` }];
+  if (ratio <= 1 / NOTE_LOW) return [{ code: "amount_below_usual", params, message: `${formatAmount(base.amount, base.unit)} is ${round(ratio * 100)} % of your usual ${formatAmount(usual.amount, usual.unit)} (median of your last ${usual.orders} ${ctx.family} orders).` }];
+  return [];
+}
+
+export function noticeDrift(need: StructuredNeed, ctx: CheckContext): Noticed[] {
+  const base = baseAmount(need, ctx);
+  if (!base) return [];
+  const recent = ctx.profile.history.filter((h) => h.family === ctx.family && h.unit === base.unit && (ctx.site ? h.site === ctx.site : !h.site)).sort((a, b) => a.placedAt.localeCompare(b.placedAt)).slice(-6);
+  if (recent.length < DRIFT_MIN_ORDERS) return [];
+  const half = Math.floor(recent.length / 2);
+  const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor((xs.length - 1) / 2)];
+  const older = median(recent.slice(0, half).map((h) => h.amount));
+  const newer = median(recent.slice(-half).map((h) => h.amount));
+  const last = recent.at(-1)!.amount;
+  // Crept up: the newer orders sit clearly above the older ones, and this order keeps (or raises) the newer level.
+  if (newer < older * DRIFT_RATIO || base.amount < newer || last < older * DRIFT_RATIO) return [];
+  const weeks = Math.max(1, Math.round((Date.parse(recent.at(-1)!.placedAt) - Date.parse(recent[0].placedAt)) / (7 * 86_400_000)));
+  return [
+    {
+      code: "standing_order_drift",
+      params: { from: older, to: base.amount, unit: base.unit, weeks, orders: recent.length },
+      message: `Your ${ctx.family} order has crept up from about ${formatAmount(older, base.unit)} to ${formatAmount(base.amount, base.unit)} over ${weeks} week${weeks === 1 ? "" : "s"}.`,
+    },
+  ];
 }
 
 function tenfold(q: NonNullable<StructuredNeed["quantity"]>, fix: { amount: number; unit: NeedUnit }, message: string, evidence: Record<string, unknown>): Concern {
@@ -571,7 +622,8 @@ export function relatedFamilies(a: string, b: string): boolean {
 /** The memory checks. `already`: concerns the other checks raised, so the same slip is not asked twice. */
 export function checkMemory(need: StructuredNeed, ctx: CheckContext, already: Concern[] = []): Concern[] {
   const out = [...checkDeclined(need, ctx)];
-  const quantityRaised = already.some((c) => c.code.startsWith("quantity_") || c.code.startsWith("unit_") || c.code === "large_first_order");
+  // An amount far outside the pattern (noted, not asked) also counts: the standing-order check would only repeat it.
+  const quantityRaised = already.some((c) => c.code.startsWith("quantity_") || c.code.startsWith("unit_") || c.code === "large_first_order") || farFromUsual(need, ctx);
   if (!quantityRaised) out.push(...checkStanding(need, ctx));
   if (!already.some((c) => c.code.startsWith("delivery_"))) out.push(...checkReceivingDay(need, ctx));
   out.push(...checkUnrelated(need, ctx));

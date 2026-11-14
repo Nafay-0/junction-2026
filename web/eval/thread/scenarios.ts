@@ -417,7 +417,9 @@ const ALL: Scenario[] = [
     lang: "en",
     turns: [{ say: "160 litres of lactose-free milk for Thursday" }],
     goal: "flag",
-    expect: [understood({ amount: 160, unit: "L", deliverBy: THU }), concern(["quantity_unusual", "standing_order_range", "quantity_tenfold"])],
+    // Since the two-tier mistake check (14 Nov): an amount clearly outside the usual is noticed on the card without a
+    // question (amount_above_usual, standing_order_drift); only a likely slip is asked. Either counts as noticed.
+    expect: [understood({ amount: 160, unit: "L", deliverBy: THU }), concern(["quantity_unusual", "standing_order_range", "quantity_tenfold", "amount_above_usual", "standing_order_drift"])],
   },
   // --- follow-ups ---
   {

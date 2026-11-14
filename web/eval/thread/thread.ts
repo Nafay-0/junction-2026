@@ -282,6 +282,8 @@ function collect(st: ThreadState, o: Outcome) {
         const r = { item: c.item, amount: c.amount?.amount, unit: c.amount?.unit, deliverBy: c.deliverBy ?? c.deliverOn, basedOn: c.basedOn?.requestId, alsoAsked: c.alsoAsked ?? [] };
         o.readings.push(r);
         o.understood ??= { ...r, attributes: c.claims ?? [], allergens: c.allergens ?? [] };
+        // Noticed without asking (the mistake check's quiet tier): counted as a flag, with no tap.
+        for (const n of c.notes ?? []) if (!o.concerns.some((x) => x.key === `noted:${n.code}`)) o.concerns.push({ code: n.code, message: `noticed ${JSON.stringify(n.params)}`, key: `noted:${n.code}` });
         if (c.requestId && !o.requests.includes(c.requestId)) o.requests.push(c.requestId);
         break;
       }
