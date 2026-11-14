@@ -46,7 +46,7 @@ async function usable(catalog: Catalog, mandate: Mandate, family: string, now: D
   if (!mandate.allowedCategories.includes(family)) return [];
   const found = await catalog.searchProducts({ category: family, limit: 100 }).catch(() => [] as Product[]);
   return found
-    .filter((p) => !avoid.has(p.id) && p.packSize > 0 && !forbiddenBy(p, { mandate, profile: undefined }, now))
+    .filter((p) => !avoid.has(p.id) && p.packSize > 0 && mandate.requiredAttributes.every((x) => p.attributes.includes(x)) && !forbiddenBy(p, { mandate, profile: undefined }, now))
     .sort((a, b) => a.id.localeCompare(b.id));
 }
 

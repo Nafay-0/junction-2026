@@ -149,7 +149,10 @@ async function main() {
   };
   /** Tap the passkey sign-off on the screen (the order's or the rules'), if there is one. */
   const signHere = async () => {
-    const b = page.getByRole("log").first().getByRole("button", { name: /(OK with|Sign with this device|Add this device and sign|OK it|Approve|Sign)/ }).last();
+    // A widening's card may sit behind "Show the list": open the last one first.
+    const list = page.getByRole("log").first().getByRole("button", { name: /^Show the list/ }).last();
+    if (await list.isVisible().catch(() => false)) await list.click().catch(() => undefined);
+    const b = page.getByRole("log").first().getByRole("button", { name: /(OK with|Sign with passkey|Sign with this device|Add this device and sign|OK it|Approve|Sign)/ }).last();
     if (await b.isVisible().catch(() => false)) {
       await b.click();
       await page.waitForTimeout(4000);

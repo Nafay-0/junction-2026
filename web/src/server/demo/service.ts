@@ -92,7 +92,7 @@ async function recurring(rt: Runtime, orgId: string) {
 }
 
 /** A product with a poor delivery record the kitchen may buy: from its own history first, else master data in its groups. */
-export async function poorRecordProduct(rt: Runtime, a: Account): Promise<{ product: Product; name: string; words: string; packs: number; amount: number; unit: string } | undefined> {
+export async function poorRecordProduct(rt: Runtime, a: Account, opts: { live?: boolean } = {}): Promise<{ product: Product; name: string; words: string; packs: number; amount: number; unit: string } | undefined> {
   const k = a.kitchen!;
   const { forbiddenBy } = await import("@/core/offers");
   const { warnLevel } = await import("../reliability/service");
@@ -100,20 +100,32 @@ export async function poorRecordProduct(rt: Runtime, a: Account): Promise<{ prod
   const profile = await rt.kitchens.getProfile(k.orgId);
   const own = [...new Set((profile?.history ?? []).flatMap((h) => h.lines.map((l) => l.productId)))].slice(0, 100);
   const mine = own.length ? await rt.catalog.searchProducts({ ids: own, limit: 100 }) : [];
-  const ok = (p: Product) => !!deliveryRecordOf(p, warn)?.poor && !forbiddenBy(p, { mandate: k.mandate, profile }, new Date());
+  // Its required claims stated on the product itself (not only by its nature), so the agent's own check agrees.
+  const ok = (p: Product) => !!deliveryRecordOf(p, warn)?.poor && k.mandate.requiredAttributes.every((x) => p.attributes.includes(x)) && !forbiddenBy(p, { mandate: k.mandate, profile }, new Date());
   // A name a person would type: an English name in plain case, and none whose words read as a claim ("hand made").
   const plain = (p: Product) => (p.names?.en ? 2 : 0) + (p.name === p.name.toUpperCase() ? 0 : 1) + (/hand ?made|käsin|artisan/i.test(p.names?.en ?? p.name) ? -3 : 0);
-  const best = (ps: Product[]) => ps.sort((x, y) => plain(y) - plain(x) || y.deliveryReliability - x.deliveryReliability || x.id.localeCompare(y.id))[0];
-  let p = best(mine.filter(ok));
-  if (!p) {
+  const rank = (ps: Product[]) => ps.sort((x, y) => plain(y) - plain(x) || y.deliveryReliability - x.deliveryReliability || x.id.localeCompare(y.id));
+  let pool = rank(mine.filter(ok));
+  if (!pool.length) {
     for (const family of k.mandate.allowedCategories.slice(0, 60)) {
       const found = (await rt.catalog.searchProducts({ category: family, limit: 100 }).catch(() => [] as Product[])).filter(ok);
-      if (found.length && (p = best(found))) break;
+      if (found.length) {
+        pool = rank(found);
+        break;
+      }
     }
   }
-  if (!p) return undefined;
-  const usual = (profile?.history ?? []).filter((h) => h.lines.some((l) => l.productId === p!.id)).at(-1);
-  const packs = usual?.lines.find((l) => l.productId === p!.id)?.packs ?? Math.max(2, Math.min(10, Math.round(6 / Math.max(1, p.packSize)) || 2));
+  if (!pool.length) return undefined;
+  let p = pool[0];
+  if (opts.live && pool.length > 1) {
+    // Staging only (a person's tap, capped): ONE live call for at most ten candidates, so the one picked can come.
+    const cat = rt.catalog as { getLiveStatus?: (ids: string[]) => Promise<{ productId: string; orderable: boolean }[]> };
+    const st = await cat.getLiveStatus?.(pool.slice(0, 10).map((x) => x.id)).catch(() => undefined);
+    const can = st?.find((x) => x.orderable)?.productId;
+    p = pool.find((x) => x.id === can) ?? p;
+  }
+  const usual = (profile?.history ?? []).filter((h) => h.lines.some((l) => l.productId === p.id)).at(-1);
+  const packs = usual?.lines.find((l) => l.productId === p.id)?.packs ?? Math.max(2, Math.min(10, Math.round(6 / Math.max(1, p.packSize)) || 2));
   const name = p.names?.en ?? p.name;
   return { product: p, name, words: deliveryRecordOf(p, warn)!.words, packs, amount: Math.round(packs * p.packSize * 100) / 100, unit: p.unit };
 }
@@ -167,7 +179,7 @@ export async function stageForAccount(rt: Runtime, a: Account, kind: StageKind, 
     ledger(rt, a, `STAGED for the demo by ${by(a)}: the wholesaler's selling agent was run for ${a.restaurant} now instead of on its schedule, and offered ${o.productName}. The offer itself is the agent's own, signed as always.`, { step: "staged", kind, staged: true, offerId: o.offerId, productId: o.productId }, "offer");
     out = { kind, summary: `The wholesaler's agent offered ${o.productName} (staged for the demo: run now instead of on its schedule).`, offerId: o.offerId, productId: o.productId, productName: o.productName, family: o.family };
   } else {
-    const found = await poorRecordProduct(rt, a);
+    const found = await poorRecordProduct(rt, a, { live: true });
     if (!found) throw new DockError(409, "no_poor_record", "No product this kitchen may buy has a poor delivery record in the wholesaler's file.", "account");
     const day = nextDay(await weekdaysOf(rt, k.orgId), now);
     ledger(rt, a, `STAGED for the demo by ${by(a)}: ${found.product.name} (${found.product.id}), which ${found.words} (the wholesaler's delivery file, unchanged), was picked for ${a.restaurant} to put on an order.`, { step: "staged", kind, staged: true, productId: found.product.id }, "watch");
