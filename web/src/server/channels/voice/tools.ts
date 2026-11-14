@@ -49,7 +49,14 @@ function str(args: Record<string, unknown>, k: string): string {
 
 /** `req`: the call screen's request; the visitor's session on it makes their spoken or tapped answers theirs (flow.ts). */
 export async function runTool(kitchen: string, input: unknown, req?: Request): Promise<ToolReply> {
-  const reply = await runToolInner(kitchen, input, req);
+  let reply = await runToolInner(kitchen, input, req);
+  // The call is a door of the kitchen's one conversation (server/thread/voice-bridge.ts): the step lands in the
+  // thread as cards, and a routine request is placed alone by the engine's rule.
+  const parsed = ToolBody.safeParse(input);
+  if (parsed.success) {
+    const { mirrorVoiceTool } = await import("@/server/thread/voice-bridge");
+    reply = await mirrorVoiceTool(kitchen, parsed.data, reply, req);
+  }
   // The caller's language, from their own words: the agent says AimoPilot's English sentence in it.
   const body = input as { callId?: string; heard?: { text?: string } };
   const call = body.callId ? calls().get(body.callId) : undefined;

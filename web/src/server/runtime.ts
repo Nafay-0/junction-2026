@@ -1,3 +1,4 @@
+import type { Records } from "./records";
 import { findSecondReading } from "./agent/second-reading-store";
 import { randomUUID } from "node:crypto";
 import type { JWK } from "jose";
@@ -62,6 +63,8 @@ export type Runtime = {
   accounts: AccountService;
   /** The kitchens' reissued mandates: the register the gate reads, and what each kitchen added (server/mandates.ts). */
   mandates: MandateBook;
+  /** Small keyed records that outlive a restart with DOCK_STORE=postgres (server/records.ts): the agent threads keep theirs here. */
+  records: Records;
 };
 
 const g = globalThis as typeof globalThis & { __dockRuntime?: Promise<Runtime> };
@@ -159,7 +162,7 @@ async function buildRuntime(): Promise<Runtime> {
   // Not while the build prerenders pages: restoring hashes passwords (real work off the main thread), which would end
   // prerendering early; a running server restores at its first request.
   if (process.env.NEXT_PHASE !== "phase-production-build") await accounts.restore();
-  const rt: Runtime = { dock, outbox, catalog, catalogSource, events, passkeys, sandboxes, aiven, kitchens: stores.kitchens, mandates, accounts };
+  const rt: Runtime = { dock, outbox, catalog, catalogSource, events, passkeys, sandboxes, aiven, kitchens: stores.kitchens, mandates, accounts, records: stores.records };
   scheduleTestAccountResets(accounts); // not under tests or during a build; DOCK_TEST_ACCOUNTS_RESET_MINUTES=0 turns it off
   radar(rt); // starts the recall radar's schedule (not under tests, during a build, or with RADAR_POLL=off)
   // MARIADB TIME MACHINE (src/server/mariadb): only with DOCK_MARIADB_URL. Mirrors what the gate reads into

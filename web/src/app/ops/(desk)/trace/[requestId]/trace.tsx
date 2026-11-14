@@ -205,6 +205,11 @@ function Trace({ t, error }: { t: TraceView; error?: string }) {
               <span className="leading-tight">
                 <ViaTag via={t.via} />
                 {t.doorText && <span className="block text-[0.84rem] text-ink-soft">through {t.doorText}</span>}
+                {t.conversation && (
+                  <Link className="block text-[0.84rem] text-petrol hover:underline" href={`/ops/conversation/${t.conversation}`}>
+                    the whole conversation
+                  </Link>
+                )}
               </span>
               <span aria-hidden className="hidden h-8 w-px bg-line sm:block" />
               <span className="leading-tight">

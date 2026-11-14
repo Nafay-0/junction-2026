@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Activity, Bot, Circle, CirclePause, Ellipsis, FileCheck2, History, LogOut, Radar, Route, Server, ShieldCheck, SlidersHorizontal, Store, Users, type LucideIcon } from "lucide-react";
+import { MessagesSquare, Activity, Bot, Circle, CirclePause, Ellipsis, FileCheck2, History, LogOut, Radar, Route, Server, ShieldCheck, SlidersHorizontal, Store, Users, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../../_client/api";
 import { useLive } from "../../_client/use-live";
@@ -19,6 +19,7 @@ type Session = { signedIn: boolean; name?: string; mode: "demo" | "passcode"; ch
 const NAV: { href: string; label: string; what: string; key: string }[] = [
   { href: "/ops", label: "Live", what: "Agents at the door", key: "l" },
   { href: "/ops/trace", label: "Trace", what: "One request, step by step", key: "t" },
+  { href: "/ops/conversation", label: "Conversations", what: "A kitchen and its agent, turn by turn", key: "v" },
   { href: "/ops/safeguards", label: "Safeguards", what: "The rule book as it runs", key: "s" },
   { href: "/ops/radar", label: "Recall radar", what: "Recalls, holds, drills", key: "r" },
   { href: "/ops/control", label: "Control", what: "Suspend, resume, sign-offs", key: "c" },
@@ -34,6 +35,7 @@ const NAV: { href: string; label: string; what: string; key: string }[] = [
 const ICON: Record<string, LucideIcon> = {
   "/ops": Activity,
   "/ops/trace": Route,
+  "/ops/conversation": MessagesSquare,
   "/ops/safeguards": ShieldCheck,
   "/ops/radar": Radar,
   "/ops/control": SlidersHorizontal,

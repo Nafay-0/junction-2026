@@ -94,20 +94,24 @@ export function cosine(a: number[], b: number[]): number {
   return s;
 }
 
+/**
+ * text-embedding-3-small through the AI SDK (embedMany), the same runtime every model call in Dock goes through:
+ * retries, timeouts and telemetry (latency and tokens into the action stream, server/thread/telemetry.ts) come with it.
+ */
 export class OpenAIEmbedder implements Embedder {
   readonly id = "openai:text-embedding-3-small";
   readonly dims = 1536;
   constructor(private readonly apiKey: string) {}
   async embed(texts: string[]): Promise<number[][]> {
-    const res = await fetch("https://api.openai.com/v1/embeddings", {
-      method: "POST",
-      headers: { authorization: `Bearer ${this.apiKey}`, "content-type": "application/json" },
-      body: JSON.stringify({ model: "text-embedding-3-small", input: texts.map((t) => t.slice(0, 2000)) }),
-      signal: AbortSignal.timeout(10_000),
+    const [{ embedMany }, { createOpenAI }] = await Promise.all([import("ai"), import("@ai-sdk/openai")]);
+    const { embeddings } = await embedMany({
+      model: createOpenAI({ apiKey: this.apiKey }).embedding("text-embedding-3-small"),
+      values: texts.map((t) => t.slice(0, 2000)),
+      maxRetries: 1,
+      abortSignal: AbortSignal.timeout(10_000),
+      telemetry: { functionId: "memory.embed" },
     });
-    if (!res.ok) throw new Error(`embeddings failed: HTTP ${res.status}`);
-    const body = (await res.json()) as { data: { embedding: number[] }[] };
-    return body.data.map((d) => d.embedding);
+    return embeddings;
   }
 }
 

@@ -213,6 +213,15 @@ export async function interpretNeed(opts: InterpretOptions): Promise<InterpretRe
       const m = createModel(spec, opts.modelOptions);
       ({ model, price } = m);
       id = m.spec.id;
+      // A slow first answer is hedged with a second model (DOCK_INTERPRET_FALLBACK_MODEL, default the agent's):
+      // after DOCK_INTERPRET_HEDGE_MS (default 4 s) both are asked and the first answer is read.
+      const fb = process.env.DOCK_INTERPRET_FALLBACK_MODEL ?? process.env.DOCK_AGENT_MODEL;
+      if (fb && fb !== spec && fb !== "off") {
+        const { withFallback } = await import("@/server/thread/fallback");
+        const second = createModel(fb, opts.modelOptions);
+        const hedgeMs = Number(process.env.DOCK_INTERPRET_HEDGE_MS ?? 4000) || 4000;
+        model = withFallback(m.model as never, second.model as never, { firstChunkMs: hedgeMs, totalMs: 30_000, hedgeMs }) as LanguageModel;
+      }
     } catch (err) {
       if (err instanceof ModelConfigError) throw new DockError(503, "model_unavailable", err.message);
       throw err;
@@ -342,7 +351,7 @@ export const secondReadingDoor = (door: Door | undefined) => !door || SECOND_REA
  */
 export async function interpretRequest(
   body: z.output<typeof InterpretBody>,
-  ctx: { catalog: { searchProducts: (q: { limit: number }) => Promise<Product[]> }; mandate: Mandateish; door?: Door },
+  ctx: { catalog: { searchProducts: (q: { limit: number }) => Promise<Product[]> }; mandate: Mandateish; door?: Door; /** See readTwice: how long the second reading may trail the first. */ secondGraceMs?: number },
 ): Promise<z.input<typeof InterpretResponse>> {
   const products = await ctx.catalog.searchProducts({ limit: 100 });
   const vocabulary = vocabularyFrom(products, { categories: ctx.mandate.allowedCategories, attributes: ctx.mandate.requiredAttributes, allergens: ctx.mandate.forbiddenAllergens });
@@ -354,7 +363,7 @@ export async function interpretRequest(
   const { first: r, second } = await readTwice(
     interpretNeed,
     { text: body.text, now: body.now ? new Date(body.now) : undefined, vocabulary, earlier: body.earlier, ...(recalled.block ? { memory: recalled.block, evidence: recalled.lines } : {}) },
-    { off },
+    { off, ...(ctx.secondGraceMs !== undefined ? { graceAfterFirstMs: ctx.secondGraceMs } : {}) },
   );
   if (second && ctx.mandate.issuer) rememberSecondReading(ctx.mandate.issuer.orgId, r.need.text ?? body.text, second);
   // Plain code, not the model's word: whatever else the buyer's text names is returned, so it can be offered next.

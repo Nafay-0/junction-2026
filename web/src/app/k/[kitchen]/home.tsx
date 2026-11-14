@@ -4,13 +4,12 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CalendarClock, Check, Clock, Package, Repeat, Sparkles, Truck } from "lucide-react";
 import { Card, Empty, IconDisc, Panel, SectionTitle, Skeleton, Tag, buttonClass } from "../../_ui/kit";
-import { Composer, GateCard } from "../../_ui/thread";
+import { GateCard } from "../../_ui/thread";
 import { Art } from "../../_ui/art";
 import { useFormat, useText } from "../../_i18n/provider";
 import { money, num, say, shortProduct } from "../../_ui/plain";
 import { Target } from "../../_ui/target";
-import { isQuestion } from "./assistant";
-import { ChannelSlot } from "./channel-slot";
+import { ThreadComposer } from "./thread";
 import { familyL } from "./family.text";
 import { authorisedText, linesText } from "./history";
 import { HOME_TEXT, type Until } from "./home.text";
@@ -126,21 +125,10 @@ function Hero({ o, cutoffs, now }: { o: Overview; cutoffs?: CutoffReply; now: nu
   const { kitchen, agent } = usePortal();
   const tx = useText(HOME_TEXT);
   const f = useFormat();
-  const [draft, setDraft] = useState("");
   const waiting = o.orders.filter((x) => x.status === "pending_approval").length;
   const next = nextCutoff(cutoffs, now);
   const days = o.memory.deliveryWeekdays;
   const usual = o.requests.find((r) => r.family === o.standing[0]?.family && r.order && (r.order.status === "committed" || r.order.status === "history"));
-  const send = () => {
-    const text = draft.trim();
-    if (!text) return agent.open();
-    setDraft("");
-    // A need goes to the agent's order work; a question opens the thread with the words ready to send.
-    if (isQuestion(text)) {
-      agent.setDraft(text);
-      agent.open();
-    } else agent.send({ kind: "ask", text });
-  };
   const chip = "inline-flex min-h-10 items-center gap-2 rounded-full border border-paper/25 bg-paper/8 px-4 text-[0.9rem] font-medium text-paper transition-colors duration-150 hover:bg-paper/16 pointer-coarse:min-h-11";
   return (
     <section aria-label={tx.yourKitchen} className="on-dark relative overflow-hidden rounded-2xl bg-petrol-deep text-paper">
@@ -163,17 +151,9 @@ function Hero({ o, cutoffs, now }: { o: Overview; cutoffs?: CutoffReply; now: nu
             )}
             {days?.length ? tx.deliveries(weekdaysText(days, f.lang)) : ""}
           </p>
-          <div className="mt-6 max-w-[38rem] text-ink max-sm:[&_form_button[type=button]:nth-of-type(2)]:hidden">
-            <Composer
-              id="need-home"
-              size="lg"
-              value={draft}
-              onChange={setDraft}
-              onSubmit={send}
-              label={tx.tellAgent}
-              placeholder={tx.tellAgent}
-              tools={<ChannelSlot kitchen={kitchen.slug} lang={{ en: "en-GB", fi: "fi-FI", sv: "sv-SE" }[f.lang]} onText={setDraft} onSubmit={(t) => agent.send({ kind: "ask", text: t })} />}
-            />
+          <div className="mt-6 max-w-[38rem] text-ink">
+            {/* Typing, speaking or a photo here goes straight into the thread, which then opens. */}
+            <ThreadComposer id="need-home" size="lg" standalone label={tx.tellAgent} placeholder={tx.tellAgent} />
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {usual && (
@@ -183,7 +163,7 @@ function Hero({ o, cutoffs, now }: { o: Overview; cutoffs?: CutoffReply; now: nu
               </button>
             )}
             {kitchen.examples.slice(0, usual ? 1 : 2).map((ex) => (
-              <button key={ex} type="button" className={`${chip} max-w-full`} onClick={() => setDraft(ex)}>
+              <button key={ex} type="button" className={`${chip} max-w-full`} onClick={() => agent.send({ kind: "ask", text: ex })}>
                 <span className="truncate">“{ex}”</span>
               </button>
             ))}

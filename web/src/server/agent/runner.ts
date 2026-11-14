@@ -1,8 +1,8 @@
 import { generateText, jsonSchema, tool, type LanguageModel, type ModelMessage, type ToolSet } from "ai";
 import { localNow } from "@/core/kitchen";
 import { signMandate } from "@/core/mandate";
-import { KITCHEN_ORG, demoKitchenKeyPair, demoKitchenMandate } from "@/server/demo-kitchen";
-import { DEMO_ORG, demoMandate, demoOrgKeyPair } from "@/server/dev-fixtures";
+import { KITCHEN_ORG, demoKitchenKeyPair } from "@/server/demo-kitchen";
+import { DEMO_ORG, demoOrgKeyPair } from "@/server/dev-fixtures";
 import { connectDock, type Credentials, type DockConnection, type DockTarget, type ToolOutcome } from "./dock-connection";
 import { autoHuman, findHumanStep, humanToolKind, relayArgs, type Human, type HumanPrompt, type HumanToolKind } from "./human";
 import { createModel, type ModelOptions } from "./models";
@@ -74,9 +74,15 @@ export type RunOptions = {
   sleep?: (ms: number) => Promise<void>;
 };
 
+/**
+ * The demo kitchen's CURRENT mandate, as the store's own agent presents it: today's terms with every rule the kitchen
+ * added since by reissuing it, and the reissue's id (console-kitchens.ts currentDemoMandate). A mandate signed from the
+ * template alone would drop a rule the kitchen added later, and the gate refuses a superseded mandate anyway.
+ */
 export async function demoCredentials(which: "demo" | "kitchen" = "demo", now = new Date()): Promise<Credentials> {
-  if (which === "kitchen") return { mandate: await signMandate(demoKitchenMandate(now), await demoKitchenKeyPair()), agentId: KITCHEN_ORG.agentId };
-  return { mandate: await signMandate(demoMandate(now), await demoOrgKeyPair()), agentId: DEMO_ORG.agentId };
+  const { currentDemoMandate } = await import("@/server/console-kitchens");
+  if (which === "kitchen") return { mandate: await signMandate(await currentDemoMandate("kaari", now), await demoKitchenKeyPair()), agentId: KITCHEN_ORG.agentId };
+  return { mandate: await signMandate(await currentDemoMandate("laakso", now), await demoOrgKeyPair()), agentId: DEMO_ORG.agentId };
 }
 
 const FINAL_ORDER_STATES: Record<string, Outcome> = { committed: "committed", pending_approval: "pending_approval", declined: "declined" };

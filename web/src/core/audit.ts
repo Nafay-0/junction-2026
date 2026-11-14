@@ -72,6 +72,9 @@ export function wholesalerEntry(e: LedgerEntry): WholesalerAuditEntry {
     case "control":
       // The wholesaler's own act (an operator suspended or resumed an agent): theirs to read in full.
       return { ...base, kind: "control", summary: e.summary, data: pick(d, ["action", "scope", "target", "suspensionId", "reason", "by"]) };
+    case "agent":
+      // The kitchen's conversation with its own agent: the buyer's words and the agent's work stay with the buyer.
+      return { ...base, kind: "private", summary: "Buyer-side conversation step, kept with the buyer." };
   }
 }
 

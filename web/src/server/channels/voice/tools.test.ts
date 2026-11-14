@@ -105,3 +105,23 @@ describe("voice tools: the model proposes, the door checks", () => {
     expect(r.screen.step).toBeDefined();
   });
 });
+
+describe("the call is a door of the kitchen's thread", () => {
+  it("puts the heard words, the read-back and the intake's cards in the kitchen's one conversation", async () => {
+    const callId = open();
+    reading = { amount: 120, unit: "L" };
+    await runTool("kaari", { callId, name: "submit_request", args: { request: "120 l milk" }, heard: { text: "120 litres of lactose-free milk", turn: 1 } });
+    await runTool("kaari", { callId, name: "confirm_read_back", heard: { text: "yes", turn: 2 } });
+    const { threadStore } = await import("@/server/thread/engine");
+    const t = (await threadStore()).peek("kaari")!;
+    const buyer = t.turns.filter((x) => x.role === "buyer").slice(-2);
+    expect(buyer.map((b) => b.role === "buyer" && b.door)).toEqual(["voice", "voice"]);
+    expect(buyer[0].role === "buyer" && buyer[0].text).toBe("120 litres of lactose-free milk");
+    const agent = t.turns.filter((x) => x.role === "agent").slice(-2);
+    expect(agent[0].role === "agent" && agent[0].cards.map((c) => c.type)).toContain("understood");
+    expect(agent[0].role === "agent" && agent[0].line).toMatch(/120 L/);
+    expect(agent[1].role === "agent" && agent[1].cards.some((c) => c.type === "anomaly" || c.type === "options" || c.type === "question")).toBe(true);
+    const { dock } = await getRuntime();
+    expect(dock.ledger.entries().filter((e) => e.type === "agent" && (e.data as { thread?: { door?: string } }).thread?.door === "voice").length).toBeGreaterThan(2);
+  });
+});

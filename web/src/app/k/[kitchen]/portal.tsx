@@ -17,20 +17,22 @@ import { agentNameL, exampleL, placeNameL } from "../../_i18n/kitchen-words";
 import { Target } from "../../_ui/target";
 import { Wordmark } from "../../_ui/wordmark";
 import { RecallNotice } from "../../_radar/recall-notice";
-import { AssistantPanel, type Turn } from "./assistant";
+import { AssistantPanel } from "./assistant";
+import { useThreadState, type ThreadApi } from "./thread-state";
+import { THREAD_PAGE_TEXT } from "./thread.text";
 import { AccountBar, type PortalAccount } from "./account-bar";
 import type { KitchenChoice, KitchenInfo, LiveReply, LiveResult, Overview, PortalRequest, Product } from "./types";
 
 /**
  * The kitchen portal around every /k/<kitchen> page: the kitchen's name, the shop's navigation, the agent's
- * request field (on every page), the basket, and the data the pages share. The agent is the kitchen's own
- * purchasing agent working in the shop: one field, then its work as cards on the Order page. Not a chat.
+ * conversation (the thread, docs/agent-thread.md: on every page in the dock, full width on the Order page), the
+ * basket, and the data the pages share. The thread's state lives here, so every view of it is the same thread.
  */
 
 export type { Lang };
 export type BasketLine = { productId: string; packs: number; product: Product };
 
-/** What the agent bar hands to the Order page. */
+/** What a page hands to the agent: words to send, or an earlier request to repeat. */
 export type Pending =
   | { kind: "ask"; text: string; followUp?: PortalRequest; product?: Product }
   | { kind: "repeat"; request: PortalRequest };
@@ -69,19 +71,16 @@ type Ctx = {
     setFollowUp: (r: PortalRequest | undefined) => void;
     product?: Product;
     setProduct: (p: Product | undefined) => void;
-    busy: boolean;
-    setBusy: (b: boolean) => void;
-    pending?: Pending;
+    /** Send to the thread and show it: the dock opens (the Order page shows it already). */
     send: (p: Pending) => void;
-    take: () => Pending | undefined;
     focus: () => void;
-    /** Open the assistant panel and put the cursor in its field. */
+    /** Open the thread and put the cursor in its field. */
     open: () => void;
     panelOpen: boolean;
     setPanelOpen: (b: boolean) => void;
-    turns: Turn[];
-    setTurns: React.Dispatch<React.SetStateAction<Turn[]>>;
   };
+  /** The kitchen's conversation with its agent (thread-state.ts). */
+  thread: ThreadApi;
   /** The agent bar's input element (kept apart from `agent`, which renders). */
   fieldRef: React.RefObject<HTMLInputElement | null>;
 };
@@ -124,7 +123,6 @@ function readBasket(slug: string): BasketLine[] {
 export function Portal({ kitchen, kitchens, account, children }: { kitchen: KitchenInfo; kitchens: KitchenChoice[]; account?: PortalAccount; children: ReactNode }) {
   const slug = kitchen.slug;
   const base = `/k/${slug}`;
-  const router = useRouter();
   const pathname = usePathname();
 
   const call = useCallback(<T,>(method: "GET" | "POST", path: string, body?: unknown) => api<T>("POST", `/ui-api/kitchens/${encodeURIComponent(slug)}/call`, { method, path, body }), [slug]);
@@ -208,52 +206,46 @@ export function Portal({ kitchen, kitchens, account, children }: { kitchen: Kitc
   const [draft, setDraft] = useState("");
   const [followUp, setFollowUp] = useState<PortalRequest>();
   const [product, setProduct] = useState<Product>();
-  const [busy, setBusy] = useState(false);
-  const [pending, setPending] = useState<Pending>();
-  const pendingRef = useRef<Pending | undefined>(undefined);
   const inputRef = useRef<HTMLInputElement>(null);
-  const send = useCallback(
-    (p: Pending) => {
-      pendingRef.current = p;
-      setPending(p);
-      if (!pathname?.endsWith("/order")) router.push(`${base}/order`);
-    },
-    [base, pathname, router],
-  );
-  const take = useCallback(() => {
-    const p = pendingRef.current;
-    pendingRef.current = undefined;
-    if (p) queueMicrotask(() => setPending(undefined));
-    return p;
-  }, []);
+  const thread = useThreadState(slug);
+  const onOrderPage = pathname === `${base}/order`;
   const [panelOpen, setPanelOpen] = useState(false);
-  const [turns, setTurns] = useState<Turn[]>([]);
   const restored = useRef(false);
   useEffect(() => {
     // Docked and open on wide screens; a sheet behind a button on narrow ones. What the buyer chose survives a reload.
+    // The conversation itself is on the server (thread-state.ts), so a reload loses nothing of it.
     queueMicrotask(() => {
       const wide = window.matchMedia("(min-width: 1280px)").matches;
-      const saved = readSession<{ open?: boolean; turns?: Turn[] }>(`dock-agent:${slug}`);
+      const saved = readSession<{ open?: boolean }>(`dock-agent:${slug}`);
       setPanelOpen(wide ? (saved?.open ?? true) : false);
-      if (saved?.turns) setTurns(saved.turns.filter((t) => t.kind !== "pending"));
       restored.current = true;
     });
   }, [slug]);
   useEffect(() => {
     if (!restored.current) return;
     try {
-      sessionStorage.setItem(`dock-agent:${slug}`, JSON.stringify({ open: panelOpen, turns: turns.slice(-12) }));
+      sessionStorage.setItem(`dock-agent:${slug}`, JSON.stringify({ open: panelOpen }));
     } catch {
-      // private window: the conversation lives as long as the page
+      // private window: the choice lives as long as the page
     }
-  }, [panelOpen, turns, slug]);
+  }, [panelOpen, slug]);
   const focus = useCallback(() => {
-    setPanelOpen(true);
+    if (!onOrderPage) setPanelOpen(true);
     setTimeout(() => inputRef.current?.focus(), 30);
-  }, []);
+  }, [onOrderPage]);
+  const submit = thread.submit;
+  const send = useCallback(
+    (p: Pending) => {
+      const t = THREAD_PAGE_TEXT[lang];
+      const text = p.kind === "ask" ? p.text : t.repeatWords(requestLabel(p.request, lang));
+      void submit({ door: "typed", via: "typed", text, lang });
+      if (!onOrderPage) setPanelOpen(true);
+    },
+    [submit, lang, onOrderPage],
+  );
   const agent = useMemo<Ctx["agent"]>(
-    () => ({ draft, setDraft, followUp, setFollowUp, product, setProduct, busy, setBusy, pending, send, take, focus, open: focus, panelOpen, setPanelOpen, turns, setTurns }),
-    [draft, followUp, product, busy, pending, send, take, focus, panelOpen, turns],
+    () => ({ draft, setDraft, followUp, setFollowUp, product, setProduct, send, focus, open: focus, panelOpen: panelOpen && !onOrderPage, setPanelOpen }),
+    [draft, followUp, product, send, focus, panelOpen, onOrderPage],
   );
 
   // The kitchen as the buyer reads it: its name, its agent's name and the example requests in the buyer's language.
@@ -264,8 +256,8 @@ export function Portal({ kitchen, kitchens, account, children }: { kitchen: Kitc
   );
   const shownKitchens = useMemo(() => kitchens.map((k) => ({ ...k, name: placeNameL(k.name, lang) })), [kitchens, lang]);
   const value = useMemo<Ctx>(
-    () => ({ kitchen: shown, account, kitchens: shownKitchens, base, call, ui, overview, lang, setLang, basket, live, agent, fieldRef: inputRef }),
-    [shown, account, shownKitchens, base, call, ui, overview, lang, setLang, basket, live, agent],
+    () => ({ kitchen: shown, account, kitchens: shownKitchens, base, call, ui, overview, lang, setLang, basket, live, agent, thread, fieldRef: inputRef }),
+    [shown, account, shownKitchens, base, call, ui, overview, lang, setLang, basket, live, agent, thread],
   );
 
   // ----- the keyboard: the agent from anywhere (Ctrl or Cmd + K), the catalogue search with "/" -----
@@ -289,7 +281,7 @@ export function Portal({ kitchen, kitchens, account, children }: { kitchen: Kitc
   return (
     <PortalContext.Provider value={value}>
       <Toaster>
-        <div className={`relative min-h-dvh overflow-x-clip bg-mist text-ink ${panelOpen ? "xl:pr-[27rem] 2xl:pr-[30rem]" : ""}`}>
+        <div className={`relative min-h-dvh overflow-x-clip bg-mist text-ink ${panelOpen && !onOrderPage ? "xl:pr-[27rem] 2xl:pr-[30rem]" : ""}`}>
           <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded-full focus:bg-paper focus:px-4 focus:py-2 focus:shadow-md">
             {tx.skip}
           </a>
