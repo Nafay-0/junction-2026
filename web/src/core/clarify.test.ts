@@ -17,7 +17,7 @@ describe("hard constraints", () => {
     expect(c.requiredAttributes).toEqual(["organic", "lactose_free"]);
     expect(c.forbiddenAllergens).toEqual(["nuts", "soy"]);
     expect(c.sources.map((s) => s.source)).toEqual(["mandate", "mandate", "request", "request", "stated"]);
-    expect(violation(P.regular, c)).toBe("not organic, lactose_free");
+    expect(violation(P.regular, c)).toBe("not organic: its maker does not state it");
     expect(violation(P.organic, c)).toBeUndefined();
   });
 
@@ -30,7 +30,7 @@ describe("hard constraints", () => {
     const m = sampleMandate(NOW, { requiredAttributes: [] });
     const c = hardConstraints(m, need(), [statedPref({ kind: "dimension", id: "p2", dimension: "organic", choice: "none" } as never)]);
     expect(c.excludedAttributes).toEqual(["organic"]);
-    expect(violation(P.organic, c)).toBe("is organic");
+    expect(violation(P.organic, c)).toBe("is organic, which the request does not want");
     expect(violation(P.oat, c)).toBe("contains gluten"); // plant drinks are allowed, gluten is not
     expect(violation({ ...P.box, category: "cream" }, c)).toBe("category cream is not in the mandate");
   });

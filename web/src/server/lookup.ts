@@ -1,3 +1,6 @@
+import { claimEvidence, claimsEvidence, shortfallText, subjectOfProduct } from "@/core/claim-evidence";
+import { nutritionFindings } from "@/core/nutrition";
+import { holdsLabel } from "@/core/vocabulary";
 import { z } from "zod";
 import { MAX_LIVE_IDS_PER_CALL, type LiveOffer, type Product } from "@/core/catalog";
 import { DockError } from "@/core/errors";
@@ -38,12 +41,24 @@ export type LookupInput = z.input<typeof LookupInput>;
 
 /** Why the mandate keeps a product out, in its own terms; empty when it may be bought. */
 export function mandateMisfit(m: Mandate, p: Product): string[] {
-  const why: string[] = [];
-  if (!m.allowedCategories.includes(p.category)) why.push(`category ${p.category} is outside the mandate`);
-  for (const a of m.requiredAttributes) if (!p.attributes.includes(a)) why.push(`not ${a}, which the mandate requires`);
-  for (const a of m.forbiddenAllergens) if (p.allergens.includes(a)) why.push(`contains ${a}, which the mandate forbids`);
-  for (const c of m.requiredCertificates) if (!p.certificates.includes(c)) why.push(`lacks the ${c} label the mandate requires`);
-  return why;
+  return mandateMisfits(m, p).map((x) => x.reason);
+}
+
+/**
+ * Why a product falls outside the mandate, each with its rule and the facts a sentence needs: a dietary claim it is
+ * not shown to meet (core/claim-evidence.ts: claim, declaration, nature or not food), an allergen, a label, a
+ * nutrition rule with the product's own figure and the rule's bound ("13 g sugar per 100 g; at most 12 g").
+ */
+export function mandateMisfits(m: Mandate, p: Product): { rule: string; reason: string; details?: Record<string, unknown> }[] {
+  const out: { rule: string; reason: string; details?: Record<string, unknown> }[] = [];
+  if (!m.allowedCategories.includes(p.category)) out.push({ rule: "category_allowed", reason: `category ${p.category} is outside the mandate` });
+  for (const e of claimsEvidence(subjectOfProduct(p), m.requiredAttributes, { strict: m.allergenEvidence === "declared", rule: true }))
+    if (!e.met) out.push({ rule: "required_attributes", reason: `${shortfallText(e)}, which the mandate requires`, details: { claim: e.claim, shortfall: e.why } });
+  for (const a of m.forbiddenAllergens) if (p.allergens.includes(a)) out.push({ rule: "forbidden_allergens", reason: `contains ${a}, which the mandate forbids`, details: { allergen: a } });
+  for (const f of nutritionFindings(m.nutritionRules ?? [], { productId: p.id, category: p.category, nutrition: p.nutrition }))
+    out.push({ rule: "nutrition_rules", reason: f.reason.replace(new RegExp(`^${p.id} `), `${p.name} `), details: { nutrient: f.rule.nutrient, problem: f.problem, ...(f.value !== undefined ? { value: f.value } : {}), ...(f.rule.max !== undefined ? { max: f.rule.max } : {}), ...(f.rule.min !== undefined ? { min: f.rule.min } : {}), per: p.nutrition?.per ?? "100g", ...(f.rule.categories?.length ? { kinds: f.rule.categories } : {}) } });
+  for (const c of m.requiredCertificates) if (!holdsLabel(p, c)) out.push({ rule: "required_certificates", reason: `lacks the ${c} label the mandate requires`, details: { label: c } });
+  return out;
 }
 
 const r2 = (x: number) => Math.round(x * 100) / 100;
@@ -128,6 +143,7 @@ export async function lookupProducts(dock: Dock, session: AgentSession, raw: unk
   if (words && !input.productIds?.length) {
     found = await dock.findProducts(session, { requestId, text: words, ...(input.category ? { category: input.category } : {}), ...(claims.length ? { requiredClaims: claims } : {}), ...(avoid.length ? { forbiddenAllergens: avoid } : {}), ...(session.mandate.allergenEvidence === "declared" ? { declaredAllergensOnly: true } : {}), limit: 100 });
     hits = found.hits.map((h) => h.product);
+    // What the kitchen's nutrition rules leave out is counted as outside the mandate below, with the rule and its figure.
   } else {
     hits = await dock.searchProducts(session, {
       requestId,
@@ -146,7 +162,7 @@ export async function lookupProducts(dock: Dock, session: AgentSession, raw: unk
       (!input.packSize?.unit || p.unit === input.packSize.unit) &&
       (input.packSize?.min === undefined || p.packSize >= input.packSize.min) &&
       (input.packSize?.max === undefined || p.packSize <= input.packSize.max) &&
-      (input.requiredClaims ?? []).every((c) => p.attributes.includes(c)) &&
+      (input.requiredClaims ?? []).every((c) => claimEvidence(subjectOfProduct(p), c, { strict: session.mandate.allergenEvidence === "declared" }).met) &&
       // smart search applied the allergen rule already (with its fresh-produce reading); the master-data path is strict
       !(input.forbiddenAllergens ?? []).some((a) => p.allergens.includes(a) || p.allergenInfo?.mayContain.includes(a) || (!found && p.allergenInfo?.declared === false)),
   );
@@ -175,7 +191,7 @@ export async function lookupProducts(dock: Dock, session: AgentSession, raw: unk
     matched: filtered.length,
     ...(found ? { search: { path: found.path, notSold: found.notSold, onlyStandins: found.onlyStandins, unsure: found.unsure, notes: found.notes } } : {}),
     products,
-    outsideMandate: { count: outside.length, examples: outside.slice(0, 3).map((p) => ({ productId: p.id, name: p.name, why: mandateMisfit(session.mandate, p) })) },
+    outsideMandate: { count: outside.length, examples: outside.slice(0, 3).map((p) => ({ productId: p.id, name: p.name, why: mandateMisfit(session.mandate, p), rules: mandateMisfits(session.mandate, p).map(({ rule, details }) => ({ rule, ...(details ? { details } : {}) })) })) },
     liveChecked: live ? shown.length : 0,
     ...(guard ? { liveLookupBudget: await guard.budget.remaining(guard.agentKey) } : {}),
   };

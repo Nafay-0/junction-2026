@@ -325,6 +325,19 @@ export const CATEGORY_SLUGS: Record<string, string> = {
   "10515": "margarine",
 };
 
+/** The shop's departments (the first two digits of a category code), as a buyer reads them. */
+export const DEPARTMENT_NAMES: Record<string, string> = {
+  "10": "dairy and cheese", "11": "fresh bakery", "17": "deli, ready meals and produce", "18": "meat and fish", "20": "kitchen equipment", "21": "dry goods",
+  "22": "seasonings, coffee and drinks", "30": "household", "32": "household", "41": "frozen", "52": "confectionery", "63": "cleaning and hygiene",
+  "64": "disposables and table setting", "67": "seasonal", "77": "gases", "84": "alcoholic drinks", "85": "low and non-alcoholic drinks", "90": "office and packaging",
+};
+
+/** A category slug or code's department in words ("dairy and cheese"), or undefined when it has none. */
+export function departmentOf(categoryOrCode: string): string | undefined {
+  const code = categoryCodesFor(categoryOrCode)[0];
+  return code ? DEPARTMENT_NAMES[code.slice(0, 2)] : undefined;
+}
+
 export function categorySlug(code: string): string {
   return CATEGORY_SLUGS[code] ?? `cat_${code}`;
 }
