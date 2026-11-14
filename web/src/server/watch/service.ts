@@ -428,10 +428,12 @@ export async function runWatchFor(rt: Runtime, k: WatchKitchen, opts: { now?: Da
       if (open && open.state === "open") resolve(rt, open, "The product can come for the day again.");
       continue;
     }
-    if (open) {
+    if (open && open.staged === !!st.staged) {
       report.findings.push(open);
       continue;
     }
+    // Staged (or lifted) since: the earlier finding is closed and the new one says what holds now.
+    if (open) resolve(rt, open, st.staged ? "A stock-out was staged for the demo over it." : "The staged stock-out was lifted.");
     report.findings.push(await addFinding(rt, k, key, original, st, short, live, patterns, now));
   }
   report.renewals = await renewDue(rt, k, { now, window: opts.renew ?? "due", live, patterns: opts.families ? patterns.filter((p) => opts.families!.includes(p.family)) : patterns });

@@ -916,35 +916,13 @@ ALL.push(
   },
 );
 
+// Per kitchen: both stock-out cases first (the conversation says one moment at a time, and a held renewal goes first).
 for (const slug of ["hotel-lumo", "koulu-metsola", "kahvila-sointu"] as const) {
-  for (const lang of ["en", "fi"] as const) {
-    ALL.push(
-      {
-        id: `stock-out-${lang}@${slug}`,
-        title: `Supplier stock-out on the test kitchen ${slug}: the agent notices first and proposes a substitute (${lang})`,
-        tag: "supplier stock-out",
-        kitchen: slug,
-        lang,
-        before: stockOutFor(slug),
-        turns: [{ say: lang === "en" ? "Anything I should know about this week's orders?" : "Onko tämän viikon tilauksissa jotain, mitä minun pitää tietää?" }],
-        goal: "answer",
-        expect: [stockOutFound, stockOutSaid, noOrder],
-        limitation: WATCH_WIRING,
-      },
-      {
-        id: `drift-renewal-${lang}@${slug}`,
-        title: `Standing-order drift on the test kitchen ${slug}: the creeping order is held before auto-renewing (${lang})`,
-        tag: "standing-order drift",
-        kitchen: slug,
-        lang,
-        before: driftFor(slug),
-        turns: [{ say: lang === "en" ? "Is this week's recurring order sorted?" : "Onko tämän viikon vakiotilaus kunnossa?" }],
-        goal: "answer",
-        expect: [renewalHeld, renewalSaid, noOrder],
-        limitation: WATCH_WIRING,
-      },
-    );
-  }
+  const say = { en: { stock: "Anything I should know about this week's orders?", drift: "Is this week's recurring order sorted?" }, fi: { stock: "Onko tämän viikon tilauksissa jotain, mitä minun pitää tietää?", drift: "Onko tämän viikon vakiotilaus kunnossa?" } };
+  for (const lang of ["en", "fi"] as const)
+    ALL.push({ id: `stock-out-${lang}@${slug}`, title: `Supplier stock-out on the test kitchen ${slug}: the agent notices first and proposes a substitute (${lang})`, tag: "supplier stock-out", kitchen: slug, lang, before: stockOutFor(slug), turns: [{ say: say[lang].stock }], goal: "answer", expect: [stockOutFound, stockOutSaid, noOrder], limitation: WATCH_WIRING });
+  for (const lang of ["en", "fi"] as const)
+    ALL.push({ id: `drift-renewal-${lang}@${slug}`, title: `Standing-order drift on the test kitchen ${slug}: the creeping order is held before auto-renewing (${lang})`, tag: "standing-order drift", kitchen: slug, lang, before: driftFor(slug), turns: [{ say: say[lang].drift }], goal: "answer", expect: [renewalHeld, renewalSaid, noOrder], limitation: WATCH_WIRING });
 }
 
 /**
