@@ -13,7 +13,7 @@ const opt = (f: string, d?: string) => (args.includes(f) ? args[args.indexOf(f) 
 const base = opt("--url", "http://localhost:4522")!;
 const only = opt("--only")?.split(",");
 
-const REQUESTS: Record<string, { text: string; lang: "en" | "fi" }[]> = {
+const REQUESTS: Record<string, { text: string; lang: "en" | "fi"; mustName?: RegExp[] }[]> = {
   "hotel-lumo": [
     { text: "need 200l laktose free milk for tuesday", lang: "en" },
     { text: "breakfast for 60 guests tomorow, something simple", lang: "en" },
@@ -32,7 +32,7 @@ const REQUESTS: Record<string, { text: string; lang: "en" | "fi" }[]> = {
     { text: "switch auto-renew on for the weekly milk order", lang: "en" },
     { text: "is the weekly milk order going to renew by itself this week?", lang: "en" },
     // Five items: each on the order or named as left out with why.
-    { text: "for tuesday: 200 l lactose free milk, 10 kg butter, 20 l whipping cream, 30 kg natural yoghurt and 5 kg grated cheese", lang: "en" },
+    { text: "for tuesday: 200 l lactose free milk, 10 kg butter, 20 l whipping cream, 30 kg natural yoghurt and 5 kg grated cheese", lang: "en", mustName: [/milk/i, /butter/i, /cream/i, /yog(h)?urt/i, /cheese/i] },
   ],
   "koulu-metsola": [
     { text: "60 l semi skimmed milk for monday lunch", lang: "en" },
@@ -86,7 +86,9 @@ async function main() {
       }
       const line = a?.line ?? "";
       const words = line.replace(/\*\*|\{\{|\}\}/g, "").split(/\s+/).filter(Boolean).length;
-      const leaks = [...codeLeaks(line), ...line.split(/(?<=[.!?])\s+/).filter(insideOrTell).map((x) => `"${x.slice(0, 40)}…"`)];
+      // Every item the buyer named is on the order or named as left out: counted.
+      const unnamed = (q.mustName ?? []).filter((re) => !re.test(line)).map((re) => `UNNAMED ${re.source}`);
+      const leaks = [...unnamed, ...codeLeaks(line), ...line.split(/(?<=[.!?])\s+/).filter(insideOrTell).map((x) => `"${x.slice(0, 40)}…"`)];
       console.log(`> ${q.text}\n  [${a?.status}; ${(a?.cards ?? []).map((c) => c.type + ("kind" in c ? `:${(c as { kind: string }).kind}` : "")).join(",")}; ${words} w; ${Math.round((Date.now() - t0) / 100) / 10} s${leaks.length ? `; CODES ${leaks.join(",")}` : ""}]\n  ${line || "(no line)"}`);
     }
   }
