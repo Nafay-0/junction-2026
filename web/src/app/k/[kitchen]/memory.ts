@@ -1,6 +1,9 @@
 import type { NeedInput } from "@/core/need";
 import type { EarlierRequest } from "../../_client/interpret";
-import { amount, day, helsinkiToday, shortProduct } from "../../_ui/plain";
+import { dayL, measureL, weekdayL } from "../../_i18n/format";
+import type { Lang } from "../../_i18n/lang";
+import { amount, helsinkiToday, shortProduct } from "../../_ui/plain";
+import { MEMORY_TEXT } from "./memory.text";
 import type { PortalRequest } from "./types";
 
 /**
@@ -78,32 +81,34 @@ export function earlierFor(requests: PortalRequest[], max = 6): EarlierRequest[]
 }
 
 /** "your request of Tue 10.11. (“100 L milk for Thursday”)" or "your order of Thu 5.11." */
-export function describeEarlier(r: PortalRequest): string {
-  const d = day(helsinkiToday(new Date(r.at)));
-  if (r.text) return `your request of ${d} (“${r.text.length > 60 ? `${r.text.slice(0, 57)}…` : r.text}”)`;
-  return `your order of ${d}`;
+export function describeEarlier(r: PortalRequest, lang: Lang = "en"): string {
+  const tx = MEMORY_TEXT[lang];
+  const d = dayL(helsinkiToday(new Date(r.at)), lang);
+  if (r.text) return tx.requestOf(d, r.text.length > 60 ? `${r.text.slice(0, 57)}…` : r.text);
+  return tx.orderOf(d);
 }
 
-const FIELD_WORD: Record<string, string> = { item: "the product", quantity: "the amount", attributes: "the requirements", optimise: "what matters most", allergens: "the allergens", deliverBy: "the day" };
-
-export function memoryLineFor(r: PortalRequest, fields: string[]): string {
-  const words = fields.map((f) => FIELD_WORD[f]).filter(Boolean);
-  if (words.length === 0) return `Read against ${describeEarlier(r)}.`;
-  const list = words.length === 1 ? words[0] : `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`;
-  return `From ${describeEarlier(r)}: ${list}, so not asked again.`;
+export function memoryLineFor(r: PortalRequest, fields: string[], lang: Lang = "en"): string {
+  const tx = MEMORY_TEXT[lang];
+  const words = fields.map((f) => tx.field[f]).filter(Boolean);
+  if (words.length === 0) return tx.readAgainst(describeEarlier(r, lang));
+  const list = words.length === 1 ? words[0] : `${words.slice(0, -1).join(", ")}${tx.and}${words.at(-1)}`;
+  return tx.from(describeEarlier(r, lang), list);
 }
 
 /** A one-click repeat: the earlier need, its own words kept, delivered on the next same weekday. */
-export function repeatNeed(r: PortalRequest, today = helsinkiToday()): { need: NeedInput; memoryLine: string } | undefined {
+export function repeatNeed(r: PortalRequest, today = helsinkiToday(), lang: Lang = "en"): { need: NeedInput; memoryLine: string } | undefined {
+  const tx = MEMORY_TEXT[lang];
   const need = needOf(r);
   if (!need) return undefined;
   const was = (need.deliverBy as string | undefined) ?? r.order?.deliveryDate;
   const deliverBy = was ? nextSameWeekday(was, today) : undefined;
-  const qty = need.quantity ? amount(need.quantity.amount, need.quantity.unit) : "the same amount";
-  const text = r.text ? `Repeat: ${r.text.replace(/^(Repeat: )+/, "")}` : `Repeat of the order of ${day(helsinkiToday(new Date(r.at)))}: ${r.order ? r.order.lines.map((l) => `${l.quantity} × ${shortProduct(l.name)}`).join(" + ") : qty}`;
+  const qty = need.quantity ? (lang === "en" ? amount(need.quantity.amount, need.quantity.unit) : measureL(need.quantity.amount, need.quantity.unit, lang)) : tx.sameAmount;
+  const text = r.text ? tx.repeatText(r.text.replace(/^((Repeat|Toisto|Upprepning): )+/, "")) : tx.repeatOrder(dayL(helsinkiToday(new Date(r.at)), lang), r.order ? r.order.lines.map((l) => `${l.quantity} × ${shortProduct(l.name)}`).join(" + ") : qty);
   const next: NeedInput = { ...need, text: text.slice(0, 2000), sameAsLastTime: false };
   if (deliverBy) next.deliverBy = deliverBy;
   else delete next.deliverBy;
-  const line = `Repeats ${describeEarlier(r)}: ${qty}${deliverBy ? `, now for ${day(deliverBy)}, the next ${day(deliverBy).slice(0, 3)}` : ""}. Nothing asked that it already answered.`;
+  const short = deliverBy ? (lang === "en" ? dayL(deliverBy, lang).slice(0, 3) : weekdayL(deliverBy, lang)) : "";
+  const line = tx.repeats(describeEarlier(r, lang), qty, deliverBy ? tx.nowFor(dayL(deliverBy, lang), short) : "");
   return { need: next, memoryLine: line };
 }

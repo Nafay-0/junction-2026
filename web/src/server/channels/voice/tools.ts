@@ -99,7 +99,7 @@ export async function runTool(kitchen: string, input: unknown, req?: Request): P
     }
   } catch (err) {
     const p = asProblem(err);
-    return { forModel: { ok: false, state: "error", say: `Dock could not do that: ${p.message}`, code: p.code }, screen: { problem: p } };
+    return { forModel: { ok: false, state: "error", say: `AimoPilot could not do that: ${p.message}`, code: p.code }, screen: { problem: p } };
   }
 }
 
@@ -142,10 +142,10 @@ async function submit(a: KitchenAgent, call: Call, request: string, heard: Heard
     const p = asProblem(err);
     if (p.code === "need_incomplete") {
       const missing = ((p.details?.missing as string[]) ?? []).map((m) => (m === "item" ? "what to buy" : "how much, with the unit"));
-      return { forModel: { ok: false, state: "incomplete", say: `Dock understood part of it but needs ${missing.join(" and ")}.`, ask: `Ask the caller for ${missing.join(" and ")}.` }, screen: { problem: p, heard: words } };
+      return { forModel: { ok: false, state: "incomplete", say: `AimoPilot understood part of it but needs ${missing.join(" and ")}.`, ask: `Ask the caller for ${missing.join(" and ")}.` }, screen: { problem: p, heard: words } };
     }
     if (p.code === "not_a_purchase_request") return { forModel: { ok: false, state: "not_a_request", say: "That did not sound like something to buy.", ask: "Ask what the kitchen needs." }, screen: { problem: p, heard: words } };
-    return { forModel: { ok: false, state: "error", say: `Dock could not read the request: ${p.message}` }, screen: { problem: p, heard: words } };
+    return { forModel: { ok: false, state: "error", say: `AimoPilot could not read the request: ${p.message}` }, screen: { problem: p, heard: words } };
   }
   const need = NeedSchema.parse(read.need);
   const memory = await a.rt.dock.intake.kitchen(a.session);

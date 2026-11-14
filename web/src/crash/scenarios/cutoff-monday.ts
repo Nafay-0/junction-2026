@@ -12,7 +12,7 @@ export const cutoffMonday: Scenario = {
   title: "By Monday, when the cheapest product's cut-off has passed",
   decision: "Read the earliest delivery date the live service returns, not just the price: the cheapest milk is shipped from the supplier's terminal and its order cut-off for Monday was Thursday 15:00.",
   competentBuyer: "Rules out the terminal product (it now arrives Wednesday), buys the cheapest product that still makes Monday (1 L cartons from the wholesaler's own stock, cut-off Sunday 17:00), and tells the buyer the price.",
-  whyHard: "This is the partner's own example and what its live API returned on our first call: the cheapest 10 L boxes had a cut-off already past. The offer's deliveryDate, orderBy and cutoffPassed say so plainly; an agent that sorts by price alone, or does not tell Dock the need-by date, orders milk that comes two days late.",
+  whyHard: "This is the partner's own example and what its live API returned on our first call: the cheapest 10 L boxes had a cut-off already past. The offer's deliveryDate, orderBy and cutoffPassed say so plainly; an agent that sorts by price alone, or does not tell AimoPilot the need-by date, orders milk that comes two days late.",
   build(seed) {
     const rng = rngFor("cutoff-monday", seed);
     const ids = new Ids(rng, "CM");

@@ -1,4 +1,4 @@
-# Dock web app for Aiven Runtime (also runs anywhere with Docker).
+# AimoPilot web app for Aiven Runtime (also runs anywhere with Docker).
 # Aiven Runtime builds this from the Git repository: build context web/, this file web/Dockerfile.
 # Runtime terminates TLS on 443 and forwards plain HTTP to the port below.
 #

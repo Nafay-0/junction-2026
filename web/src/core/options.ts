@@ -36,7 +36,7 @@ export type Rank = "best" | "better" | "good";
 const RANKS: Rank[] = ["best", "better", "good"];
 
 /** A part of the request an option does not meet. */
-export type GiveUp = { part: "delivery_date" | "product" | "pack_size" | "split"; text: string };
+export type GiveUp = { part: "delivery_date" | "product" | "pack_size" | "split" | "amount"; text: string; code?: string; params?: Record<string, string | number> };
 
 export type PlanLine = {
   productId: string;
@@ -188,7 +188,7 @@ const carbonOf = (p: Product) => (p.carbonKnown === false ? undefined : known(p.
 
 type Sized = { perPack: number; unit: BaseUnit; packs: number; estimated: boolean };
 type Viable = { p: Product; o: LiveOffer; size: Sized; late: boolean; stockKnown: boolean };
-type Plan = { primary: Viable; lines: PlanLine[]; split?: { have: number; rest: number; sub: Viable }; late: boolean; replaces?: string };
+type Plan = { primary: Viable; lines: PlanLine[]; split?: { have: number; rest: number; sub: Viable }; late: boolean; replaces?: string; partial?: { delivered: number; rest: number; why: "weekly_budget" | "approver_authority"; capCents: number } };
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -203,7 +203,7 @@ function sizeFor(p: Product, amount: { amount: number; unit: BaseUnit }, estimat
   if (conv.reason === "content_uncertain" && conv.estimate && estimates.includes(p.id)) {
     return { perPack: r2(conv.estimate.delivered.amount / conv.estimate.salesUnits), unit: amount.unit, packs: conv.estimate.salesUnits, estimated: true };
   }
-  if (conv.reason === "content_uncertain" || conv.reason === "content_unknown") return { error: `pack content not certain, so Dock will not guess the number of packs (${conv.message})`, code: "pack_uncertain" };
+  if (conv.reason === "content_uncertain" || conv.reason === "content_unknown") return { error: `pack content not certain, so AimoPilot will not guess the number of packs (${conv.message})`, code: "pack_uncertain" };
   return { error: conv.message, code: "wrong_unit" };
 }
 
@@ -340,8 +340,39 @@ export function buildOptions(input: OptionsInput): OptionsResult {
     return !over && !heldOver;
   });
 
+  // Never a dead end when a money rule is what blocks: the largest amount that fits now, the rest later. The weekly
+  // budget is a hard cap (no one signs past it); the per-order limit is not (a person may sign), but no one may sign
+  // more than the most a named approver can. Nothing is loosened: the card is a compromise the buyer must choose.
+  if (!affordable.length && plans.length && excluded.some((e) => e.code === "over_budget")) {
+    const leftNow = mandate.weeklyBudgetCents - input.spentThisWeekCents; // held money counted: the card fits either way
+    const signable = Math.max(mandate.perOrderLimitCents, ...mandate.approvers.map((a) => a.maxApprovalCents));
+    const cap = Math.min(leftNow, signable);
+    const pool = [...viable].sort((a, b) => Number(a.late) - Number(b.late) || perUnit(a) - perUnit(b) || a.p.id.localeCompare(b.p.id));
+    for (const v of pool) {
+      const stockPacks = v.stockKnown ? v.o.availablePacks : Infinity;
+      const packs = Math.min(Math.floor(cap / v.o.unitPriceCents), stockPacks, v.size.packs - 1);
+      if (packs < 1) continue;
+      const delivered = r2(packs * v.size.perPack);
+      affordable.push({ primary: v, lines: [line(v, packs)], late: v.late, partial: { delivered, rest: r2(amount.amount - delivered), why: leftNow <= signable ? "weekly_budget" : "approver_authority", capCents: cap } });
+      notes.push(
+        leftNow <= signable
+          ? `The weekly budget is the blocker: ${formatEur(Math.max(0, leftNow))} is left of ${formatEur(mandate.weeklyBudgetCents)} this week, and it is a hard cap that no one can sign past. The most that fits now is ${formatAmount(delivered, amount.unit)}; the rest can be ordered when the budget allows.`
+          : `No one the mandate names may sign more than ${formatEur(signable)} in one order. The most that fits in one order is ${formatAmount(delivered, amount.unit)}; order the rest separately.`,
+      );
+      break;
+    }
+  }
+
   const givesUp = (pl: Plan): GiveUp[] => {
     const out: GiveUp[] = [];
+    if (pl.partial) {
+      const p = pl.partial;
+      out.push(
+        p.why === "weekly_budget"
+          ? { part: "amount", code: "partial_weekly_budget", params: { delivered: p.delivered, rest: p.rest, unit: amount.unit, capCents: p.capCents }, text: `${formatAmount(p.delivered, amount.unit)} now, within the ${formatEur(p.capCents)} left of this week's budget; the other ${formatAmount(p.rest, amount.unit)} when the budget allows.` }
+          : { part: "amount", code: "partial_approver_authority", params: { delivered: p.delivered, rest: p.rest, unit: amount.unit, capCents: p.capCents }, text: `${formatAmount(p.delivered, amount.unit)} in this order, the most anyone the mandate names may sign (${formatEur(p.capCents)}); the other ${formatAmount(p.rest, amount.unit)} in another order.` },
+      );
+    }
     const date = pl.lines.map((l) => l.deliveryDate).sort().at(-1)!;
     if (pl.late && input.neededBy) out.push({ part: "delivery_date", text: `Arrives ${formatDay(date)}, after the ${formatDay(input.neededBy)} you asked for.` });
     // A split or another product gives up something only when the request was about one product (named, or the
@@ -557,7 +588,7 @@ function explainCard(c: Card, all: Card[], input: OptionsInput): void {
 
   const packs = c.lines.reduce((s, l) => s + l.packs, 0);
   if (c.leftover.amount > 0) c.cons.push(`Packs of ${formatAmount(c.lines[0].packSize, unit)} round it up to ${formatAmount(c.delivered.amount, unit)}: ${formatAmount(c.leftover.amount, unit)} more than asked.`);
-  else c.pros.push(`Exact amount: ${c.lines.map((l) => `${l.packs} x ${formatAmount(l.packSize, unit)}`).join(" + ")}.`);
+  else if (!c._plan.partial) c.pros.push(`Exact amount: ${c.lines.map((l) => `${l.packs} x ${formatAmount(l.packSize, unit)}`).join(" + ")}.`);
   if (others.length) {
     const fewest = Math.min(...others.map((x) => x.lines.reduce((s, l) => s + l.packs, 0)));
     if (packs >= MANY_PACKS && fewest * 2 <= packs) c.cons.push(`${packs} separate packs to handle, against ${fewest} for another option.`);

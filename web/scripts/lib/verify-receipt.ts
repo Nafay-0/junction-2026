@@ -11,7 +11,7 @@ export const QUOTE_TYP = "quote+jws";
 
 export async function verifySigned(jws: string, jwks: JSONWebKeySet, expectTyp: string[] = [RECEIPT_TYP, QUOTE_TYP]): Promise<Verified> {
   const header = decodeProtectedHeader(jws);
-  if (!header.typ || !expectTyp.includes(header.typ)) throw new Error(`Not a Dock receipt: typ is ${header.typ ?? "missing"}, expected ${expectTyp.join(" or ")}.`);
+  if (!header.typ || !expectTyp.includes(header.typ)) throw new Error(`Not a AimoPilot receipt: typ is ${header.typ ?? "missing"}, expected ${expectTyp.join(" or ")}.`);
   // Ed25519 is the fully-specified name (RFC 9864); EdDSA is the older name for the same thing.
   const { payload, protectedHeader } = await compactVerify(jws, createLocalJWKSet(jwks), { algorithms: ["Ed25519", "EdDSA"] });
   return { typ: protectedHeader.typ!, kid: protectedHeader.kid!, payload: JSON.parse(new TextDecoder().decode(payload)) };

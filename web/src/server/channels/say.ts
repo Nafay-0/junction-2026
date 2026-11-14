@@ -41,7 +41,7 @@ function stepCore(step: IntakeView): ForModel {
       return {
         ok: true,
         state: step.state,
-        say: `Before looking anything up, Dock wants to check: ${first.message}`,
+        say: `Before looking anything up, AimoPilot wants to check: ${first.message}`,
         ask: `Ask the caller which they want: ${first.choices.map((c) => `"${c.label}"`).join(" or ")}.`,
         checks,
       };
@@ -49,7 +49,7 @@ function stepCore(step: IntakeView): ForModel {
     case "needs_input": {
       const questions = step.questions.map((q) => ({ questionId: q.id, text: q.text, options: q.options.map((o) => ({ optionId: o.id, label: o.label })) }));
       const q = questions[0];
-      return { ok: true, state: step.state, say: "Dock needs one answer before it can show options.", ask: `${q.text} ${q.options.map((o) => o.label).join(", or ")}?`, questions };
+      return { ok: true, state: step.state, say: "AimoPilot needs one answer before it can show options.", ask: `${q.text} ${q.options.map((o) => o.label).join(", or ")}?`, questions };
     }
     case "options_ready": {
       const options = step.options.slice(0, 3).map((o, i) => ({
@@ -68,7 +68,7 @@ function stepCore(step: IntakeView): ForModel {
       return {
         ok: true,
         state: step.state,
-        say: `Dock found ${options.length} option${options.length > 1 ? "s" : ""}, shown on the screen. ${lines.join(" ")}${pre ? ` Dock suggests option ${pre.number}: ${step.preselected!.reason}` : ""}`,
+        say: `AimoPilot found ${options.length} option${options.length > 1 ? "s" : ""}, shown on the screen. ${lines.join(" ")}${pre ? ` AimoPilot suggests option ${pre.number}: ${step.preselected!.reason}` : ""}`,
         ask: "Ask which option the caller wants.",
         options,
       };
@@ -81,7 +81,7 @@ function stepCore(step: IntakeView): ForModel {
           ? "It is within what the agent may spend alone, so the gate would place it straight away."
           : d.outcome === "needs_human_approval"
             ? `It is beyond what the agent may spend alone, so it would wait for ${d.approver.name}, ${d.approver.role}, to sign off on their phone.`
-            : `Dock's gate would refuse it: ${d.reasons.join(" ")}`;
+            : `AimoPilot's gate would refuse it: ${d.reasons.join(" ")}`;
       return {
         ok: true,
         state: step.state,
@@ -94,7 +94,7 @@ function stepCore(step: IntakeView): ForModel {
       };
     }
     case "no_options":
-      return { ok: true, state: step.state, say: `Dock found nothing it can offer: ${step.notes[0] ?? "no product fits."}`, ask: "Ask whether the caller wants to change the request." };
+      return { ok: true, state: step.state, say: `AimoPilot found nothing it can offer: ${step.notes[0] ?? "no product fits."}`, ask: "Ask whether the caller wants to change the request." };
     case "cancelled":
       return { ok: true, state: step.state, say: "The request is cancelled; nothing was ordered." };
   }
@@ -117,7 +117,7 @@ export function orderForModel(o: PublicOrder): ForModel {
       };
     }
     case "rejected":
-      return { ok: true, state: "rejected", say: `Dock's gate refused the order: ${o.decision.reasons.join(" ")}`, total };
+      return { ok: true, state: "rejected", say: `AimoPilot's gate refused the order: ${o.decision.reasons.join(" ")}`, total };
     case "declined":
       return { ok: true, state: "declined", say: `${o.approval?.approver.name ?? "The approver"} declined the order; nothing was ordered.`, total };
     case "withdrawn":

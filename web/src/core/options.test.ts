@@ -120,7 +120,9 @@ describe("option cards", () => {
     const slow = buildOptions(input({ offers: semi.map((p) => offer(p, { deliveryDate: "2026-11-30" })), neededBy: undefined }));
     expect(slow.cards).toEqual([]);
     const broke = buildOptions(input({ spentThisWeekCents: 195_000 }));
-    expect(broke.cards).toEqual([]);
+    // Never a dead end: the most that fits the €50 left now, the rest later; the budget itself is not loosened.
+    expect(broke.cards.map((c) => [c.match, c.givesUp.map((g) => g.code), c.totalCents <= 5_000, c.delivered.amount < 100])).toEqual([["compromise", ["partial_weekly_budget"], true, true]]);
+    expect(broke.notes.join(" ")).toMatch(/The weekly budget is the blocker: €50\.00 is left of €2,000\.00 this week, and it is a hard cap that no one can sign past/);
     expect(broke.excluded[0].reason).toBe("€129.00 would go over the weekly budget (€50.00 left of €2,000.00 after the €1,950.00 already committed this week)");
     // Money held by an order waiting for sign-off does not remove a card: it says a person decides (F-PENDING-HOLDS-BUDGET).
     // ...when a person signs the card anyway (over the agent's own limit). Within it, the agent may not spend held money.
@@ -129,7 +131,7 @@ describe("option cards", () => {
     expect(held.excluded.filter((e) => e.code === "over_budget")).toEqual([]);
     expect(held.cards[0].signOff.join(" ")).toMatch(/held by an order waiting for sign-off/);
     const alone = buildOptions(input({ spentThisWeekCents: 195_000, heldThisWeekCents: 195_000 }));
-    expect(alone.cards).toEqual([]);
+    expect(alone.cards.every((c) => c.givesUp.some((g) => g.part === "amount") && c.totalCents <= 5_000)).toBe(true);
     expect(alone.excluded).toContainEqual(expect.objectContaining({ code: "over_budget", reason: expect.stringMatching(/held by an order waiting for sign-off is not signed; withdraw or decide that order first/) }));
     expect(slow.excluded[0]).toMatchObject({ code: "too_late", reason: "earliest delivery Mon 30 Nov is after Sat 21 Nov, the latest the mandate allows" });
   });

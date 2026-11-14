@@ -12,7 +12,7 @@ export const sameAsLastTime: Scenario = {
   title: "A returning kitchen: same as last time",
   decision: "Answer \"same as last time\" from the kitchen's memory, without questioning the buyer and without swapping the product for a cheaper one.",
   competentBuyer: "Reads the kitchen's history (eight 12 x 1 L cases of the same lactose-free milk every week for six weeks) and orders exactly that again for Friday, asking nothing.",
-  whyHard: "Everything needed is in Dock's kitchen memory (read_kitchen_memory), so a question costs the chef time for nothing. Another brand's identical case is 3 % cheaper today: tempting for a price-minded agent, but not what was asked.",
+  whyHard: "Everything needed is in AimoPilot's kitchen memory (read_kitchen_memory), so a question costs the chef time for nothing. Another brand's identical case is 3 % cheaper today: tempting for a price-minded agent, but not what was asked.",
   build(seed) {
     const rng = rngFor("same-as-last-time", seed);
     const ids = new Ids(rng, "SL");

@@ -3,7 +3,7 @@ export const AIVEN_BUYER = {
   agentId: "agent_laakso_aiven_01",
   label: "Laakso's buyer on Aiven Managed Agents",
   integration: "dock-aiven",
-  agentName: "Dock showcase buyer (Laakso Catering)",
+  agentName: "AimoPilot showcase buyer (Laakso Catering)",
   model: "gemini-3.8-flash",
   mandateMinutes: 20,
 } as const;

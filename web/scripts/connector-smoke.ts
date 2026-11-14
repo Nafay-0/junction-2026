@@ -46,12 +46,12 @@ async function main() {
   let r = await call("submit_need", { need: { text: "1,000 litres of lactose-free milk by Monday", item: { text: "lactose-free milk", category: "milk" }, quantity: { amount: 1000, unit: "L" }, deliverBy } });
   const requestId = r.step.requestId;
   if (r.step.state === "needs_confirmation") {
-    say(`  Dock asks the buyer: ${r.step.concerns.map((c: { message: string }) => c.message).join(" / ")}`);
+    say(`  AimoPilot asks the buyer: ${r.step.concerns.map((c: { message: string }) => c.message).join(" / ")}`);
     say("  (the buyer answers: yes, 1,000 L is right)");
     r = await call("respond_to_concerns", { requestId, responses: r.step.concerns.map((c: { key: string; confirmable: boolean; corrections: { id: string }[] }) => ({ key: c.key, choice: c.confirmable ? "confirm" : c.corrections[0].id })) });
   }
   if (r.step.state === "needs_input") {
-    say(`  Dock asks the buyer: ${r.step.questions.map((q: { text: string }) => q.text).join(" / ")}`);
+    say(`  AimoPilot asks the buyer: ${r.step.questions.map((q: { text: string }) => q.text).join(" / ")}`);
     r = await call("answer_questions", { requestId, answers: r.step.questions.map((q: { id: string; options: { id: string }[] }) => ({ questionId: q.id, optionId: q.options[0].id })) });
   }
   if (r.step.state !== "options_ready") throw new Error(`expected options, got ${r.step.state}: ${r.nextStep}`);

@@ -1,7 +1,5 @@
 # AfterQuery, "Break the Agent": the crash test
 
-> **Name: the team must choose.** Replace `{{NAME}}` ("Dock" in the code, "AimoPilot" in the draft submission).
-
 AfterQuery's RL lead, Daksh Raghuvanshi, is also on the main jury. His stated interest: "teams that can explain
 exactly why an agent fails in their world, and whose reward holds when someone tries to break it"
 (`research/01-event-intel.md`). His bio mentions StoreBench, "a live-commerce environment where no frontier model
@@ -12,7 +10,7 @@ matched a simple scripted operator" (`research/02-challenges.md`). Expect him to
 A safety rating for AI buyers, like a crash test for cars. Thirteen hard purchasing situations, each built around
 one decision a careless buyer gets wrong: 240 litres is 20 cases, not 240; "by Monday" when the cheapest milk's
 order cut-off has passed; low-lactose is not lactose-free; missing allergen data is unknown, not safe; a timeout
-after the order went through means check before ordering again. Each episode gets a fresh, isolated {{NAME}} with its
+after the order went through means check before ordering again. Each episode gets a fresh, isolated AimoPilot with its
 own clock, catalogue and ledger. The agent sees the same tools an MCP client sees. The score comes from the gate's
 own records, never from the agent's account. The rating then maps to a licence level (L0 to L3) with a spending limit.
 

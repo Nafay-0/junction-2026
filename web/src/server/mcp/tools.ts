@@ -67,7 +67,7 @@ const by = z
   .string()
   .min(1)
   .max(120)
-  .describe("The name of the human buyer whose answer this is, if they told you; written to the audit ledger with the answer. Do not invent one: leave it out and Dock says if it needs it.");
+  .describe("The name of the human buyer whose answer this is, if they told you; written to the audit ledger with the answer. Do not invent one: leave it out and AimoPilot says if it needs it.");
 
 const intakeOut = z.object({
   step: IntakeStepSchema,
@@ -85,7 +85,7 @@ const humanAnswerRequired = (what: string) =>
 const relay = z
   .boolean()
   .optional()
-  .describe("Set true only after Dock's form came back unanswered (error.code form_not_answered): you asked the buyer in the chat and pass on their reply.");
+  .describe("Set true only after AimoPilot's form came back unanswered (error.code form_not_answered): you asked the buyer in the chat and pass on their reply.");
 
 /** Requests whose form the client closed unanswered: the agent may relay the buyer's answer instead. In memory, per process. */
 const formUnanswered = new Set<string>();
@@ -110,7 +110,7 @@ const NeedArg = z
     text: n.text.describe("The buyer's request in their own words, kept for the audit trail."),
     item: n.item.extend({
       text: n.item.shape.text.describe("What they want, e.g. 'lactose-free milk'."),
-      category: n.item.shape.category.describe("Product family if known, e.g. 'milk', 'cream', 'yoghurt'. Helps Dock find the right products."),
+      category: n.item.shape.category.describe("Product family if known, e.g. 'milk', 'cream', 'yoghurt'. Helps AimoPilot find the right products."),
       attributes: n.item.shape.attributes.describe("Attributes the product must have, e.g. ['lactose_free', 'fat_1_5']."),
       excludedAttributes: n.item.shape.excludedAttributes.describe("Attributes the buyer explicitly does not want, e.g. ['lactose_free'] for 'ordinary milk'."),
       productId: n.item.shape.productId.describe("A specific product id the buyer named, if any."),
@@ -122,7 +122,7 @@ const NeedArg = z
     deliverBy: n.deliverBy.describe("Latest acceptable delivery date, YYYY-MM-DD."),
     requiredClaims: n.requiredClaims.describe("Claims every option must carry, e.g. ['organic']."),
     forbiddenAllergens: n.forbiddenAllergens.describe("Allergens no option may contain."),
-    optimise: n.optimise.describe(`What the buyer said matters most: ${OPTIMISE_GOALS.join(", ")} or no_preference. Leave unstated if they said nothing; Dock asks if it matters.`),
+    optimise: n.optimise.describe(`What the buyer said matters most: ${OPTIMISE_GOALS.join(", ")} or no_preference. Leave unstated if they said nothing; AimoPilot asks if it matters.`),
     sameAsLastTime: n.sameAsLastTime.describe("true when the buyer says 'same as last time'; quantity may then be left out."),
   })
   .describe("The buyer's need as fields. Fill only what the buyer actually said.");
@@ -132,7 +132,7 @@ const INTAKE_TOOLS = [
     name: "submit_need",
     title: "Start an order from the buyer's need",
     description:
-      "START HERE for any new purchase. Send the buyer's need as structured fields (what, how much, by when, must-haves). Dock checks it against the kitchen's own order history for likely mistakes (for example 1,000 L where they usually order 100 L, or a delivery day it cannot make), asks at most two short questions its memory cannot answer, then offers option cards with pros and cons. Returns a step whose `state` is needs_confirmation, needs_input, options_ready, quoted, no_options or cancelled; `nextStep` says exactly which tool to call next and `waitingFor` says whether you must wait for the human buyer.",
+      "START HERE for any new purchase. Send the buyer's need as structured fields (what, how much, by when, must-haves). AimoPilot checks it against the kitchen's own order history for likely mistakes (for example 1,000 L where they usually order 100 L, or a delivery day it cannot make), asks at most two short questions its memory cannot answer, then offers option cards with pros and cons. Returns a step whose `state` is needs_confirmation, needs_input, options_ready, quoted, no_options or cancelled; `nextStep` says exactly which tool to call next and `waitingFor` says whether you must wait for the human buyer.",
     input: z.object({ need: NeedArg, by: by.optional().describe("The name of the person asking, if you know it.") }),
     output: intakeOut,
     run: async ({ dock, session, defaultBy }, args) => intakeResult(await dock.intake.open(session, { ...args, by: args.by ?? defaultBy })),
@@ -141,7 +141,7 @@ const INTAKE_TOOLS = [
     name: "respond_to_concerns",
     title: "Pass on the buyer's answer to a mistake check",
     description:
-      `Use only when the step is needs_confirmation. Dock found something that looks like a mistake (step.concerns: a message and fixed choices). The answer MUST come from the human buyer: relay each concern's message to them in plain words with its choices, wait for their reply, and pass on exactly what they choose; never confirm or correct on their behalf. ${RELAY_ONLY} For each concern send its key and choice: \"confirm\" (keep it as asked; only if the concern is confirmable) or one of its correction ids. If your MCP client supports elicitation, Dock asks the buyer directly through it and your arguments only pre-fill the form. Until this is answered, quotes and orders for the request are refused.`,
+      `Use only when the step is needs_confirmation. AimoPilot found something that looks like a mistake (step.concerns: a message and fixed choices). The answer MUST come from the human buyer: relay each concern's message to them in plain words with its choices, wait for their reply, and pass on exactly what they choose; never confirm or correct on their behalf. ${RELAY_ONLY} For each concern send its key and choice: \"confirm\" (keep it as asked; only if the concern is confirmable) or one of its correction ids. If your MCP client supports elicitation, AimoPilot asks the buyer directly through it and your arguments only pre-fill the form. Until this is answered, quotes and orders for the request are refused.`,
     input: z.object({
       requestId: intakeId,
       by: by.optional(),
@@ -165,9 +165,9 @@ const INTAKE_TOOLS = [
   }),
   tool({
     name: "answer_questions",
-    title: "Pass on the buyer's answers to Dock's questions",
+    title: "Pass on the buyer's answers to AimoPilot's questions",
     description:
-      "Use when the step is needs_input (at most two questions in step.questions, each with fixed options), or in options_ready to change an answer Dock took from memory (step.fromMemory). The answers MUST come from the human buyer: ask them each question with its options, wait for their reply, and pass on what they pick; never guess or answer for them, even if the answer seems obvious from earlier in the conversation. Send one optionId per questionId; remember: true stores the answer as the kitchen's rule for next time. If your MCP client supports elicitation, Dock asks the buyer directly through it and your arguments only pre-fill the form.",
+      "Use when the step is needs_input (at most two questions in step.questions, each with fixed options), or in options_ready to change an answer AimoPilot took from memory (step.fromMemory). The answers MUST come from the human buyer: ask them each question with its options, wait for their reply, and pass on what they pick; never guess or answer for them, even if the answer seems obvious from earlier in the conversation. Send one optionId per questionId; remember: true stores the answer as the kitchen's rule for next time. If your MCP client supports elicitation, AimoPilot asks the buyer directly through it and your arguments only pre-fill the form.",
     input: z.object({
       requestId: intakeId,
       by: by.optional(),
@@ -211,9 +211,9 @@ const INTAKE_TOOLS = [
   }),
   tool({
     name: "read_kitchen_memory",
-    title: "Read what Dock remembers about this kitchen",
+    title: "Read what AimoPilot remembers about this kitchen",
     description:
-      "The buyer organisation's memory: order history, usual amounts per product family, rules people stated (for example 'Always lactose-free'), and patterns learned from past orders. Dock uses it to spot mistakes and to avoid asking what it already knows. Read it when the buyer asks what they usually order.",
+      "The buyer organisation's memory: order history, usual amounts per product family, rules people stated (for example 'Always lactose-free'), and patterns learned from past orders. AimoPilot uses it to spot mistakes and to avoid asking what it already knows. Read it when the buyer asks what they usually order.",
     input: z.object({}),
     output: z.object({ kitchen: KitchenSchema, nextStep }),
     readOnly: true,
@@ -226,7 +226,7 @@ const CORE_TOOLS = [
     name: "read_mandate",
     title: "Read my mandate",
     description:
-      "Show the signed mandate you are presenting, as Dock verified it: which organisation you buy for, which categories, attributes, allergens and certificates are allowed or required, the per-order limit you may spend alone, the hard weekly budget, the substitution rule, the delivery limit and who can sign off above your limit. Call this first so you only propose what the mandate allows.",
+      "Show the signed mandate you are presenting, as AimoPilot verified it: which organisation you buy for, which categories, attributes, allergens and certificates are allowed or required, the per-order limit you may spend alone, the hard weekly budget, the substitution rule, the delivery limit and who can sign off above your limit. Call this first so you only propose what the mandate allows.",
     input: z.object({}),
     output: z.object({ mandate: MandateOutSchema, liveLookupBudget: budget, nextStep }),
     readOnly: true,
@@ -240,7 +240,7 @@ const CORE_TOOLS = [
     name: "open_request",
     title: "Open a purchase request",
     description:
-      "Lower-level: open a bare purchase request without Dock's mistake checks, questions or option cards. Prefer submit_need for any new order; use this only when you must build a quote line by line yourself. Pass the buyer's need in their own words and, if there is one, the need-by date. Returns a requestId for search_products, check_availability and request_quote. The need-by date becomes a delivery deadline the order must meet.",
+      "Lower-level: open a bare purchase request without AimoPilot's mistake checks, questions or option cards. Prefer submit_need for any new order; use this only when you must build a quote line by line yourself. Pass the buyer's need in their own words and, if there is one, the need-by date. Returns a requestId for search_products, check_availability and request_quote. The need-by date becomes a delivery deadline the order must meet.",
     input: OpenRequestInput.extend({
       text: OpenRequestInput.shape.text.describe("The buyer's need in their own words."),
       neededBy: OpenRequestInput.shape.neededBy.describe("Latest acceptable delivery date, YYYY-MM-DD."),

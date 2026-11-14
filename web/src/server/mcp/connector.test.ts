@@ -118,7 +118,7 @@ describe("connector address: binding", () => {
       const res = await inProcess(`${BASE}/api/mcp/c/${token}`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) });
       expect(res.status).toBe(404);
       expect(res.headers.get("www-authenticate")).toBeNull();
-      expect(((await res.json()) as { error: { message: string } }).error.message).toMatch(/no Dock connector at this address/);
+      expect(((await res.json()) as { error: { message: string } }).error.message).toMatch(/no AimoPilot connector at this address/);
     }
   });
 });
@@ -292,7 +292,7 @@ describe("connector address: rate limits", () => {
     expect(Number(res.headers.get("retry-after"))).toBeGreaterThan(0);
     // Another kitchen's address is unaffected.
     expect((await connect(await addressOf("laakso"))) instanceof Client).toBe(true);
-  });
+  }, 30_000); // a few hundred in-process MCP calls: slow when the whole suite runs in parallel
 
   it("limiter: a sliding window per address and kind", () => {
     let t = Date.parse("2026-11-15T10:00:00Z");

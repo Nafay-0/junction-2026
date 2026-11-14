@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Target } from "../../_ui/target";
 import { AgentNote, Button as KitButton, Plate, Spinner, type ButtonKind, type ButtonSize } from "../../_ui/kit";
+import { useText } from "../../_i18n/provider";
+import { UI_TEXT } from "./ui.text";
 
 export { ErrorPlate, Field, Missing } from "../../_ui/kit";
 
@@ -57,12 +59,14 @@ export type StationState = "done" | "current" | "stopped" | "pending" | "skipped
  * filled; when the gate stops the request, the gate and sign-off stations carry the hazard and the mark.
  */
 export function StationStrip({ states, label }: { states: Record<Station, StationState>; label?: string }) {
+  const tx = useText(UI_TEXT);
   return (
-    <nav aria-label="Where the request is" className="bg-paper">
+    <nav aria-label={tx.whereLabel} className="bg-paper">
       <CompactStrip states={states} />
       <ol className="hidden grid-cols-7 sm:grid">
         {STATIONS.map((s, i) => {
           const st = states[s];
+          const word = tx.stations[s];
           const look =
             st === "current"
               ? "bg-petrol-deep text-paper"
@@ -84,14 +88,9 @@ export function StationStrip({ states, label }: { states: Record<Station, Statio
                     {st === "done" ? "✓" : i + 1}
                   </span>
                 )}
-                <span className={`display truncate text-[0.95rem] sm:text-[1.25rem] ${st === "skipped" ? "line-through decoration-1" : ""}`}>{s}</span>
+                <span title={word.length > 9 ? word : undefined} className={`display truncate text-[0.95rem] ${word.length > 9 ? "sm:text-[1rem] lg:text-[1.08rem] 2xl:text-[1.25rem]" : "sm:text-[1.25rem]"} ${st === "skipped" ? "line-through decoration-1" : ""}`}>{word}</span>
               </span>
-              <span className="sr-only">
-                {", step "}
-                {i + 1}
-                {": "}
-                {st === "current" ? "here now" : st === "stopped" ? "stopped, a person must decide" : st === "done" ? "done" : st === "skipped" ? "not needed" : "not reached yet"}
-              </span>
+              <span className="sr-only">{tx.srStep(i + 1, st)}</span>
             </li>
           );
         })}
@@ -103,6 +102,7 @@ export function StationStrip({ states, label }: { states: Record<Station, Statio
 
 /** On a phone: seven segments and the station the request is at, in words. */
 function CompactStrip({ states }: { states: Record<Station, StationState> }) {
+  const tx = useText(UI_TEXT);
   const i = STATIONS.findIndex((s) => states[s] === "current" || states[s] === "stopped");
   const here = i >= 0 ? STATIONS[i] : undefined;
   const stopped = here ? states[here] === "stopped" : false;
@@ -113,12 +113,10 @@ function CompactStrip({ states }: { states: Record<Station, StationState> }) {
           <span key={s} className={`h-2 flex-1 ${states[s] === "stopped" ? "hazard-thin" : states[s] === "current" ? "bg-petrol-deep" : states[s] === "done" ? "bg-petrol" : "bg-line"}`} />
         ))}
       </div>
-      <p className="mt-1.5 flex items-center gap-2">
+      <p className="mt-1.5 flex flex-wrap items-center gap-x-2">
         {stopped && <Target size={18} tone="safety" />}
-        <span className="display text-[1.3rem]">{here ? `${here}` : "Request"}</span>
-        <span className="text-[0.9rem] text-ink-soft">
-          {here ? `step ${i + 1} of 7${stopped ? ", stopped for a person" : ""}` : "nothing asked yet"}
-        </span>
+        <span className="display text-[1.3rem]">{here ? tx.stations[here] : tx.stations.Request}</span>
+        <span className="text-[0.9rem] text-ink-soft">{here ? tx.compactStep(i + 1, stopped) : tx.nothingYet}</span>
       </p>
     </div>
   );
@@ -160,6 +158,7 @@ export function Lane({ stages, runKey }: { stages: LaneStage[]; runKey: string |
 }
 
 function LaneRow({ n, st, open, last, current, onToggle }: { n: number; st: LaneStage; open: boolean; last: boolean; current: boolean; onToggle: () => void }) {
+  const tx = useText(UI_TEXT);
   const id = `st-${st.key}`;
   const bodyId = `${id}-body`;
   const node =
@@ -185,13 +184,13 @@ function LaneRow({ n, st, open, last, current, onToggle }: { n: number; st: Lane
       <section aria-labelledby={`${id}-h`} className="min-w-0">
         <header className={`flex min-h-10 flex-wrap items-center gap-x-4 gap-y-1 ${open ? "mb-3" : ""}`}>
           <h2 id={`${id}-h`} className="display text-[1.55rem] text-ink sm:text-[1.75rem]">
-            <span className="sr-only">Step {n}: </span>
+            <span className="sr-only">{tx.srLaneStep(n)}</span>
             {st.title}
           </h2>
           <span className="ml-auto flex items-center gap-4 sm:order-last">
             {st.aside}
             <button type="button" aria-expanded={open} aria-controls={bodyId} onClick={onToggle} className="min-h-10 text-[0.95rem] font-semibold text-petrol underline decoration-2 underline-offset-4 hover:text-petrol-deep">
-              {open ? "Fold" : "Open"}
+              {open ? tx.fold : tx.open}
               <span className="sr-only"> {st.title}</span>
             </button>
           </span>

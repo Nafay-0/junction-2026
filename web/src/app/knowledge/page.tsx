@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { DEMO_NOTE } from "../_ui/brand";
-import { Wordmark } from "../_ui/target";
+import { Wordmark } from "../_ui/wordmark";
 import { KnowledgePreview } from "./preview";
 
-export const metadata: Metadata = { title: "Dock: product knowledge map" };
+export const metadata: Metadata = { title: "AimoPilot: product knowledge map" };
 
 /** /knowledge: pick a product, see its alternatives by use with the reasons, or ask which products fit a role. */
 export default function KnowledgePage() {

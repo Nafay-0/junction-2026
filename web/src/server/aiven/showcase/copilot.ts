@@ -96,7 +96,7 @@ async function sqlStep(label: string, sql: string): Promise<Step> {
     const g = guardSql(sql);
     if (!g.ok) return { kind: "sql", label, query: sql, path: "aiven-mcp", columns: [], rows: [], error: g.reason };
     const cfg = showcaseConfig();
-    const r = await mcpCall("aiven_pg_read", { project: cfg.project, service_name: "dock-pg", query: g.wrapped, limit: g.maxRows, reasoning: `Dock operations copilot: ${label}` });
+    const r = await mcpCall("aiven_pg_read", { project: cfg.project, service_name: "dock-pg", query: g.wrapped, limit: g.maxRows, reasoning: `AimoPilot operations copilot: ${label}` });
     if (r.ok) {
       const data = r.data as { rows?: Record<string, unknown>[]; columns?: string[] } | Record<string, unknown>[] | undefined;
       const rows = (Array.isArray(data) ? data : (data?.rows ?? [])).slice(0, g.maxRows);

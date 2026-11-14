@@ -1,4 +1,4 @@
-# Dock weekend runbook
+# AimoPilot weekend runbook
 
 Live site: **https://jolly-wondrous-bunny.eur-1.aiven.app** (Aiven Runtime app `dock-app`). Everything below
 runs from the repository root on a laptop with the shared `web/.env.local`. Background: `infra/aiven.md`.
@@ -95,7 +95,7 @@ as a bearer token.
    midnight UTC). Raise with `DOCK_DEPLOY_LLM_DAILY_USD=10 node infra/aiven-deploy.mjs --config-only`.
 3. Runtime logs: `curl -s -X POST -H "Authorization: aivenv1 $AIVEN_API_TOKEN" -H 'Content-Type: application/json'
    -d '{"log_type":"application-run"}' https://api.aiven.io/v1/project/$AIVEN_PROJECT/service/dock-app/logs`
-   (lines are JSON; look for `level":"error"` and `catalog-index`). Grafana's "Dock overview" has the same.
+   (lines are JSON; look for `level":"error"` and `catalog-index`). Grafana's "AimoPilot overview" has the same.
 4. The partner API (`junction26.valioaimo.fi`) slow or down: live lookups time out with a named refusal; the
    search still works.
 5. PostgreSQL has 20 connections in total: the app holds up to 4, Grafana 3. Close stray `psql` sessions.

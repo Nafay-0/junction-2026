@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { ApiError } from "../../_client/api";
 import { useLive } from "../../_client/use-live";
-import { day, helsinkiToday, measure, money, num } from "../../_ui/plain";
+import { helsinkiToday, money, num } from "../../_ui/plain";
+import { useFormat, useText } from "../../_i18n/provider";
+import { BASKET_TEXT } from "./basket.text";
 import { usePortal, type BasketLine } from "./portal";
 import { Quantity } from "./qty";
-import { PROBLEM, TEMP, TempMark, nameIn, packGlyph, readable } from "./shop";
+import { TEMP, TempMark, nameIn, packGlyph, problemsText, readable } from "./shop";
 import { Glyph } from "../../_ui/glyphs";
 import { Empty, Working, buttonClass } from "../../_ui/kit";
 import { Gate, Quote, SignedOrder } from "./stages";
@@ -24,6 +26,8 @@ type Run = { phase: "idle" | "quoting" | "quoted" | "placing" | "done"; requestI
 
 export function BasketPage() {
   const { basket, live, ui, call, kitchen, overview, base, lang, agent } = usePortal();
+  const tx = useText(BASKET_TEXT);
+  const f = useFormat();
   const next = overview.data?.standing.map((x) => x.nextDue).filter((d): d is string => !!d).sort()[0];
   const [deliverBy, setDeliverBy] = useState("");
   const [run, setRun] = useState<Run>({ phase: "idle" });
@@ -62,7 +66,7 @@ export function BasketPage() {
     }
     return { cents, priced, L, kg, co2, co2Lines };
   }, [basket.lines, live.results]);
-  const names = useMemo(() => Object.fromEntries(basket.lines.map((l) => [l.productId, l.product.name])), [basket.lines]);
+  const names = useMemo(() => Object.fromEntries(basket.lines.map((l) => [l.productId, lang === "en" ? l.product.name : readable(nameIn(l.product, lang))])), [basket.lines, lang]);
 
   const orderId = run.order?.orderId;
   const orderLive = useLive(
@@ -102,35 +106,36 @@ export function BasketPage() {
   const locked = run.phase !== "idle";
 
   const measures = [
-    { label: "Litres", value: totals.L ? measure(Math.round(totals.L * 10) / 10, "L") : "–" },
-    { label: "Kilograms", value: totals.kg ? measure(Math.round(totals.kg * 10) / 10, "kg") : "–" },
-    { label: "Carbon", value: totals.co2Lines ? `${num(totals.co2, 1)} kg` : "no data", note: totals.co2Lines > 0 && totals.co2Lines < basket.lines.length ? `${totals.co2Lines} of ${basket.lines.length} lines` : totals.co2Lines ? "CO2e" : undefined },
+    { label: tx.litres, value: totals.L ? f.measure(Math.round(totals.L * 10) / 10, "L") : "–" },
+    { label: tx.kilograms, value: totals.kg ? f.measure(Math.round(totals.kg * 10) / 10, "kg") : "–" },
+    { label: tx.carbon, value: totals.co2Lines ? `${num(totals.co2, 1)} kg` : tx.noData, note: totals.co2Lines > 0 && totals.co2Lines < basket.lines.length ? tx.linesOf(totals.co2Lines, basket.lines.length) : totals.co2Lines ? "CO2e" : undefined },
   ];
 
   return (
     <div className="mt-5 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_27rem]">
       <section aria-labelledby="basket-h" className="min-w-0">
         <h1 id="basket-h" className="display text-[2.6rem] text-ink sm:text-[3rem]">
-          Basket
+          {tx.title}
         </h1>
-        <p className="max-w-[62ch] leading-snug text-ink-soft">Ordered by hand, checked by the same gate as the agent&apos;s orders: the kitchen&apos;s mandate, limits and sign-off apply to both. The basket stays in this browser tab.</p>
+        <p className="max-w-[62ch] leading-snug text-ink-soft">{tx.intro}</p>
         {basket.lines.length === 0 ? (
           <div className="mt-4">
             <Empty
-              title="The basket is empty"
+              title={tx.empty}
               glyph={<Glyph kind="case" size={48} />}
               action={
                 <>
                   <Link href={`${base}/catalogue`} className={buttonClass("primary")}>
-                    Open the catalogue
+                    {tx.openCatalogue}
                   </Link>
                   <Button kind="quiet" onClick={agent.open}>
-                    Or tell the agent what you need
+                    {tx.tellAgent}
                   </Button>
                 </>
               }
             >
-              {next ? `Your next delivery day is ${day(next)}. ` : ""}Add products from the catalogue; prices are checked live when you add them.
+              {next ? tx.nextDelivery(f.day(next)) : ""}
+              {tx.emptyHelp}
             </Empty>
           </div>
         ) : (
@@ -149,14 +154,14 @@ export function BasketPage() {
                       {readable(nameIn(l.product, lang))}
                     </Link>
                     <p className="text-[0.9rem] text-ink-soft">
-                      {o ? `${money(o.unitPriceCents)} per ${unitWord(l.product, 1)}` : live.busy.includes(l.productId) ? "Checking the price…" : r ? `Not orderable now: ${r.problems.length ? r.problems.map((x) => PROBLEM[x] ?? x).join("; ") : r.message}` : "No live price yet"}
-                      {o?.stockKnown === false ? "; stock not confirmed" : ""}
+                      {o ? tx.perUnit(money(o.unitPriceCents), unitWord(l.product, 1, lang)) : live.busy.includes(l.productId) ? tx.checkingPrice : r ? tx.notOrderable(r.problems.length ? problemsText(r.problems, lang) : r.message) : tx.noLivePrice}
+                      {o?.stockKnown === false ? tx.stockNotConfirmed : ""}
                     </p>
                     <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
                       <Quantity p={l.product} value={l.packs} onChange={(n) => basket.set(l.productId, n)} id={`b-${l.productId}`} disabled={locked} compact />
                       {!locked && (
                         <button type="button" className="min-h-10 text-[0.92rem] text-petrol underline underline-offset-4" onClick={() => basket.remove(l.productId)}>
-                          Remove
+                          {tx.remove}
                         </button>
                       )}
                     </div>
@@ -171,46 +176,46 @@ export function BasketPage() {
         )}
       </section>
 
-      <aside aria-label="Totals and checkout" className="space-y-3 lg:sticky lg:top-3">
+      <aside aria-label={tx.totalsLabel} className="space-y-3 lg:sticky lg:top-3">
         <div className="bg-paper">
           <div aria-hidden className="h-1.5 bg-petrol" />
           <div className="p-5">
-            <p className="text-[0.9rem] font-medium text-ink-soft">Estimate, VAT 0 %</p>
+            <p className="text-[0.9rem] font-medium text-ink-soft">{tx.estimate}</p>
             <p key={totals.cents} className="changed display text-[3.2rem] text-ink tabular">
               {money(totals.cents)}
             </p>
             {totals.priced < basket.lines.length && (
               <p className="text-[0.88rem] text-ink-soft">
-                {basket.lines.length - totals.priced} of {basket.lines.length} lines have no live price yet.
+                {tx.unpriced(basket.lines.length - totals.priced, basket.lines.length)}
               </p>
             )}
             <dl className="mt-4 grid grid-cols-3 gap-px bg-line">
               {measures.map((x) => (
-                <div key={x.label} className="bg-paper py-2 pr-2 [&:not(:first-child)]:pl-3">
-                  <dt className="text-[0.8rem] text-ink-soft">{x.label}</dt>
+                <div key={x.label} className="min-w-0 bg-paper py-2 pr-2 [&:not(:first-child)]:pl-3">
+                  <dt className="break-words text-[0.8rem] text-ink-soft hyphens-auto">{x.label}</dt>
                   <dd className="display text-[1.5rem] tabular">{x.value}</dd>
                   {x.note && <dd className="text-[0.78rem] text-ink-soft">{x.note}</dd>}
                 </div>
               ))}
             </dl>
-            <p className="mt-2 text-[0.8rem] leading-snug text-ink-soft">Carbon is the product group&apos;s average per kilo (a litre counted as a kilo), not a measurement of these products.</p>
+            <p className="mt-2 text-[0.8rem] leading-snug text-ink-soft">{tx.carbonNote}</p>
           </div>
           {basket.lines.length > 0 && run.phase === "idle" && (
             <div className="border-t border-line p-5">
               <label htmlFor="deliver-by" className="text-[0.95rem] font-semibold">
-                Deliver by <span className="font-normal text-ink-soft">(optional)</span>
+                {tx.deliverBy} <span className="font-normal text-ink-soft">{tx.optional}</span>
               </label>
               <input id="deliver-by" type="date" min={helsinkiToday()} value={deliverBy} onChange={(e) => setDeliverBy(e.target.value)} className="mt-1 block min-h-11 w-full border-2 border-petrol px-2" />
               <Button kind="go" size="lg" className="mt-4 w-full" onClick={() => void quote()}>
-                Get a fixed price
+                {tx.getPrice}
               </Button>
-              <p className="mt-2 text-[0.85rem] text-ink-soft">The wholesaler signs the price; it holds for a short time. Nothing is ordered until you place it.</p>
+              <p className="mt-2 text-[0.85rem] text-ink-soft">{tx.priceNote}</p>
             </div>
           )}
-          {run.phase === "quoting" && <Working className="border-t border-line p-5">The wholesaler is fixing the price…</Working>}
+          {run.phase === "quoting" && <Working className="border-t border-line p-5">{tx.fixing}</Working>}
           {run.error && (
             <div className="px-5 pb-5">
-              <ErrorPlate title="That did not go through" message={run.error} onRetry={run.phase === "quoted" ? () => void place() : undefined} />
+              <ErrorPlate title={tx.failed} message={run.error} onRetry={run.phase === "quoted" ? () => void place() : undefined} />
             </div>
           )}
         </div>
@@ -222,7 +227,7 @@ export function BasketPage() {
               <SignedOrder order={shownOrder} names={names} onNew={reset} />
             ) : (
               <Button kind="secondary" onClick={reset}>
-                {shownOrder?.status === "pending_approval" ? "Start a new basket" : "Back to the basket"}
+                {shownOrder?.status === "pending_approval" ? tx.newBasket : tx.backToBasket}
               </Button>
             )}
           </>
