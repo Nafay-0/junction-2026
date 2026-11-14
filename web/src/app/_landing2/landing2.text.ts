@@ -5,6 +5,8 @@
  * recorded attacks, the gate's rule list, the captured conversation in reel-thread.json).
  */
 
+import { defineText } from "../_i18n/lang";
+
 export const L2 = {
   meta: {
     title: "AimoPilot: let AI do the buying, keep the last word",
@@ -160,3 +162,76 @@ export const L2 = {
 
   missing: "Screenshot coming",
 };
+
+/**
+ * "How it looks on your webshop": the buying agent docked in the store the kitchen already uses. In all three
+ * languages like the rest of the customer side (vocabulary: web/docs/LANGUAGE.md); the landing page itself is
+ * English for now, so the page shows `WEBSHOP.en`. Every line is true of the product as captured (scripts/
+ * landing-shots.ts, stage "webshop"): the same catalogue and live prices, a basket order and an agent's order through
+ * the same gate, a passkey sign-off beyond the kitchen's rules, outside agents on MCP and REST to that gate.
+ */
+export const WEBSHOP = defineText({
+  en: {
+    title: "How it looks on your webshop",
+    line: "The buying agent is not a separate app. It opens inside the shop the kitchen already uses, next to the catalogue.",
+    label: "The kitchen's webshop on a desk and on a phone, with its buying agent beside the catalogue: from the closed panel to a request for 1,000 litres of lactose-free milk, a substitute and a sign-off.",
+    deskAlt: "The webshop on a desk: lactose-free milk in the catalogue, and beside it the agent's panel, where the substitute order waits for the kitchen manager's OK.",
+    phoneAlt: "The same agent on a phone, full screen over the shop: the usual milk misses Monday's order cut-off, and three one-litre options with their prices.",
+    steps: [
+      "The kitchen's own shop, milk searched in the catalogue",
+      "Ctrl K: the agent opens beside it, and the chef asks",
+      "The usual milk misses the cut-off: a substitute, priced live",
+      "Over the kitchen's limit: it waits for a person's OK",
+    ],
+    points: [
+      { head: "In the shop you already have", text: "The same catalogue and the same live prices. An order from the basket and an order from the agent pass the same checks." },
+      { head: "Beyond the rules, a person decides", text: "Anything outside the kitchen's rules goes to a named person's phone, to approve with a passkey." },
+      { head: "One open door for every agent", text: "Outside agents reach the same gate over MCP and REST. The shop's own agent is just one client of it." },
+    ],
+    connect: "Connect your own agent",
+    cta: "Open the live shop",
+    note: "Demo on synthetic data. Not the wholesaler's own shop.",
+  },
+  fi: {
+    title: "Näin se näkyy verkkokaupassasi",
+    line: "Ostoagentti ei ole erillinen sovellus. Se avautuu tuotevalikoiman viereen siinä verkkokaupassa, jota keittiö jo käyttää.",
+    label: "Keittiön verkkokauppa tietokoneella ja puhelimella, ostoagentti tuotevalikoiman vieressä: suljetusta paneelista pyyntöön 1 000 litrasta laktoositonta maitoa, korvaavaan tuotteeseen ja hyväksyntään.",
+    deskAlt: "Verkkokauppa tietokoneella: valikoimassa laktoositonta maitoa ja vieressä agentin paneeli, jossa korvaavan tuotteen tilaus odottaa keittiöpäällikön hyväksyntää.",
+    phoneAlt: "Sama agentti puhelimella koko näytöllä kaupan päällä: tavallisen maidon viimeinen jättöaika maanantaiksi on mennyt, tilalle kolme litran vaihtoehtoa hintoineen.",
+    steps: [
+      "Keittiön oma verkkokauppa, maitoa haettu valikoimasta",
+      "Ctrl K: agentti avautuu viereen, ja kokki kysyy",
+      "Tavallisen maidon jättöaika on mennyt: korvaava tuote ajantasaisella hinnalla",
+      "Yli keittiön rajan: tilaus odottaa ihmisen hyväksyntää",
+    ],
+    points: [
+      { head: "Siinä kaupassa, joka teillä jo on", text: "Sama valikoima ja samat ajantasaiset hinnat. Ostoskorista ja agentilta tuleva tilaus käyvät läpi samat tarkistukset." },
+      { head: "Sääntöjen ulkopuolella päättää ihminen", text: "Kaikki keittiön sääntöjen ulkopuolinen menee nimetyn henkilön puhelimeen hyväksyttäväksi pääsyavaimella." },
+      { head: "Sama avoin ovi jokaiselle agentille", text: "Ulkopuoliset agentit tulevat samalle portille MCP:n ja RESTin kautta. Kaupan oma agentti on vain yksi niistä." },
+    ],
+    connect: "Yhdistä oma agenttisi",
+    cta: "Avaa verkkokauppa",
+    note: "Demo synteettisellä datalla. Ei tukun omaa verkkokauppaa.",
+  },
+  sv: {
+    title: "Så ser det ut i din webbutik",
+    line: "Inköpsagenten är ingen separat app. Den öppnas bredvid sortimentet i den webbutik som köket redan använder.",
+    label: "Kökets webbutik på datorn och i telefonen, med inköpsagenten bredvid sortimentet: från den stängda panelen till en förfrågan om 1 000 liter laktosfri mjölk, en ersättande produkt och ett godkännande.",
+    deskAlt: "Webbutiken på datorn: laktosfri mjölk i sortimentet och bredvid agentens panel, där beställningen av den ersättande produkten väntar på kökschefens godkännande.",
+    phoneAlt: "Samma agent i telefonen, i helskärm över butiken: den vanliga mjölken missar sista beställningstid för måndag, och tre enlitersalternativ med priser.",
+    steps: [
+      "Kökets egen webbutik, mjölk sökt i sortimentet",
+      "Ctrl K: agenten öppnas bredvid, och kocken frågar",
+      "Den vanliga mjölken missar sista beställningstid: en ersättande produkt med aktuellt pris",
+      "Över kökets gräns: beställningen väntar på en persons godkännande",
+    ],
+    points: [
+      { head: "I den butik du redan har", text: "Samma sortiment och samma aktuella priser. En beställning från varukorgen och en från agenten går igenom samma kontroller." },
+      { head: "Utanför reglerna avgör en person", text: "Allt som går utanför kökets regler går till en namngiven persons telefon, för godkännande med inloggningsnyckel." },
+      { head: "En öppen dörr för alla agenter", text: "Agenter utifrån når samma grind via MCP och REST. Butikens egen agent är bara en av dem." },
+    ],
+    connect: "Anslut din egen agent",
+    cta: "Öppna webbutiken",
+    note: "Demo med syntetiska data. Inte grossistens egen webbutik.",
+  },
+});

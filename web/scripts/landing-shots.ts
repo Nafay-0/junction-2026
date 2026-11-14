@@ -1,7 +1,10 @@
 /**
  * The landing page's screenshots, made from the running product (headless Chromium, the repo's own Playwright).
  *
- *   pnpm landing:shots --url http://localhost:4760 [--only milk,ops,menu,watch,seller,voice,store,mail,wall] [--keep-png DIR]
+ *   pnpm landing:shots --url http://localhost:4760 [--only milk,ops,menu,watch,seller,voice,store,mail,wall,reel,webshop] [--keep-png DIR]
+ *
+ * The "webshop" stage (the agent docked in the store, for the landing's "How it looks on your webshop") wants the
+ * server started with DOCK_SAMPLE_ACTIVITY=off as well, so no sample orders sit in the shot.
  *
  * The server: a production build with every hosted service switched off, on its own port (from web/):
  *
@@ -56,19 +59,29 @@ const WIDTH: Record<Kind, number> = { phone: 780, desktop: 1920, mail: 1200 };
 const done: string[] = [];
 const failed: string[] = [];
 
+/** The webshop stage's frames have their own manifest beside the second landing page that shows them. */
+const WEBSHOP_MANIFEST = path.join(WEB, "src/app/_landing2/webshop.json");
+const webshopManifest: Record<string, Entry> = fs.existsSync(WEBSHOP_MANIFEST) ? JSON.parse(fs.readFileSync(WEBSHOP_MANIFEST, "utf8")) : {};
+
 function writeManifest() {
-  const sorted = Object.fromEntries(Object.entries(manifest).sort(([a], [b]) => a.localeCompare(b)));
-  fs.writeFileSync(MANIFEST, JSON.stringify(sorted, null, 2) + "\n");
+  for (const [m, file] of [
+    [manifest, MANIFEST],
+    [webshopManifest, WEBSHOP_MANIFEST],
+  ] as const) {
+    if (m === webshopManifest && !Object.keys(m).length) continue;
+    const sorted = Object.fromEntries(Object.entries(m).sort(([a], [b]) => a.localeCompare(b)));
+    fs.writeFileSync(file, JSON.stringify(sorted, null, 2) + "\n");
+  }
 }
 
-/** PNG -> WebP at the kind's width, quality lowered until the file is under MAX_BYTES. */
-function toWebp(png: string, key: string, kind: Kind): { w: number; h: number; bytes: number } {
+/** PNG -> WebP at the kind's width (or `o.width`), quality lowered until the file is under MAX_BYTES (or `o.max`). */
+function toWebp(png: string, key: string, kind: Kind, o: { width?: number; max?: number } = {}): { w: number; h: number; bytes: number } {
   const out = path.join(OUT, `${key}.webp`);
   let bytes = 0;
-  for (const q of [82, 76, 70, 64, 58, 52, 46, 40]) {
-    execFileSync(CWEBP, ["-quiet", "-q", String(q), "-m", "6", "-sharp_yuv", "-resize", String(WIDTH[kind]), "0", png, "-o", out]);
+  for (const q of [82, 76, 70, 64, 58, 52, 46, 40, 34]) {
+    execFileSync(CWEBP, ["-quiet", "-q", String(q), "-m", "6", "-sharp_yuv", "-resize", String(o.width ?? WIDTH[kind]), "0", png, "-o", out]);
     bytes = fs.statSync(out).size;
-    if (bytes <= MAX_BYTES) break;
+    if (bytes <= (o.max ?? MAX_BYTES)) break;
   }
   const buf = fs.readFileSync(out);
   // VP8/VP8L/VP8X header: read the canvas size cwebp wrote.
@@ -109,14 +122,14 @@ async function quiet(page: Page, ms = 20_000) {
   await page.waitForTimeout(700);
 }
 
-async function shoot(page: Page, key: string, kind: Kind, caption: string, o: { fullPage?: boolean; quiet?: boolean } = {}) {
+async function shoot(page: Page, key: string, kind: Kind, caption: string, o: { fullPage?: boolean; quiet?: boolean; width?: number; max?: number; webshop?: boolean } = {}) {
   try {
     if (o.quiet !== false) await quiet(page);
     const png = path.join(TMP, `${key}.png`);
     await page.screenshot({ path: png, fullPage: !!o.fullPage, animations: "disabled", caret: "hide" });
-    const { w, h, bytes } = toWebp(png, key, kind);
+    const { w, h, bytes } = toWebp(png, key, kind, o);
     if (opt("--keep-png")) fs.copyFileSync(png, path.join(opt("--keep-png")!, `${key}.png`));
-    manifest[key] = { src: `/landing/${key}.webp`, w, h, kind, caption };
+    (o.webshop ? webshopManifest : manifest)[key] = { src: `/landing/${key}.webp`, w, h, kind, caption };
     writeManifest();
     done.push(`${key} ${w}x${h} ${(bytes / 1024).toFixed(0)} KB`);
     console.log(`  shot ${key} (${w}x${h}, ${(bytes / 1024).toFixed(0)} KB)`);
@@ -803,7 +816,125 @@ async function reel(browser: Browser) {
   await ctx.close();
 }
 
-const STAGES: Record<string, (b: Browser) => Promise<void>> = { milk, signoff, refused, ops, watch, seller, voice, menu, outside, mail, wall, reel };
+// ------------------------------------------------------------------ the agent inside the shop (landing v2, "webshop")
+
+/**
+ * The store as a kitchen already uses it, with its buying agent docked beside the catalogue: the partner's milk
+ * request from the closed panel to the sign-off, at 1440 x 900 (2x), and the same moments on a 390 px phone (2x).
+ * The landing page cross-fades these as the reader scrolls. Run on a server with DOCK_SAMPLE_ACTIVITY=off so no
+ * sample orders sit in the shot. Desktop frames are written 1600 px wide (the section shows them at most ~800 CSS
+ * px wide), phone frames 780 px; each under 150 KB / 80 KB. Listed in src/app/_landing2/webshop.json.
+ */
+async function webshop(browser: Browser) {
+  const kitchen = "hotel-lumo";
+  const SEARCH = "lactose-free milk";
+  const DESK_O = { width: 1600, max: 150 * 1024, webshop: true };
+  const PHONE_O = { width: 780, max: 80 * 1024, webshop: true };
+  await resetTestAccounts(browser);
+  const desk = await context(browser, "desktop");
+  await signInKitchen(desk, kitchen);
+  await resetThread(desk, kitchen);
+  const phone = await browser.newContext({ ...PHONE, deviceScaleFactor: 2, ...COMMON, baseURL: base });
+  await phone.addCookies([{ name: "aimopilot-lang", value: "en", url: base! }, ...(await desk.cookies())]);
+  const page = await desk.newPage();
+  await passkey(page);
+  const pp = await phone.newPage();
+  const shop = `/k/${kitchen}/catalogue?q=${encodeURIComponent(SEARCH)}`;
+  // The catalogue scrolled so its first row of milk sits just under the store's sticky header.
+  const toCards = async () => {
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior }));
+    const badge = page.locator("main").getByText("Chilled", { exact: true }).first();
+    if (await badge.count()) {
+      const y = await badge.evaluate((el) => el.getBoundingClientRect().top + window.scrollY);
+      await page.evaluate((top) => window.scrollTo({ top, behavior: "instant" as ScrollBehavior }), Math.max(0, y - 165));
+    }
+    await page.waitForTimeout(500);
+  };
+  const panel = page.locator("#assistant");
+  // The agent's opening note (what it noticed before the kitchen did) keeps its steps open; fold them, as a buyer
+  // would, so the request and its answer have the room.
+  const fold = async (p: Page) => {
+    const first = p.locator("#assistant button[aria-expanded]").filter({ hasText: /^\s*\d+ steps?\s*$/ }).first();
+    if ((await first.getAttribute("aria-expanded").catch(() => null)) === "true") await first.click().catch(() => undefined);
+    await p.waitForTimeout(400);
+  };
+
+
+  // 1. The shop as the kitchen knows it: milk searched in the catalogue, the agent's panel closed.
+  await page.goto(shop);
+  await page.waitForTimeout(2500);
+  await quiet(page);
+  await fold(page);
+  const close = panel.getByRole("button", { name: /close/i });
+  if (await close.isVisible().catch(() => false)) await close.click();
+  await page.mouse.move(700, 450);
+  await page.waitForTimeout(800);
+  await toCards();
+  await shoot(page, "shop-1-catalogue", "desktop", "The kitchen's webshop on a desk: the catalogue searched for lactose-free milk, the buying agent's panel closed.", DESK_O);
+
+  // 2. Ctrl K: the panel opens beside the catalogue and the buyer asks; the agent's steps under way.
+  await page.keyboard.press("Control+k");
+  await page.waitForTimeout(800);
+  await toCards();
+  await say(page, MILK, true);
+  await page.waitForTimeout(900);
+  await fold(page);
+  await shoot(page, "shop-2-asked", "desktop", "Ctrl K opens the agent beside the same catalogue; the buyer's request sent and the agent's steps under way.", { ...DESK_O, quiet: false });
+
+  // 3. The reply: the usual milk cannot make Monday, so a substitute, at fixed prices.
+  let t = await idle(desk, kitchen, 1);
+  await page.waitForTimeout(1500);
+  await quiet(page);
+  await fold(page);
+  await toCards();
+  const said = MILK;
+  const reply = panel.getByText(said).last();
+  if (await reply.count()) await topAlign(page, reply, 70).catch(() => undefined);
+  await shoot(page, "shop-3-substitute", "desktop", "The agent's answer beside the catalogue: the usual milk misses the cut-off, a substitute that arrives Monday, priced live.", DESK_O);
+  await pp.goto(`${shop}&agent=open`);
+  await pp.waitForTimeout(3000);
+  await quiet(pp);
+  await fold(pp);
+  const preply = pp.locator("#assistant").getByText(said).last();
+  if (await preply.count()) await topAlign(pp, preply, 105).catch(() => undefined);
+  await shoot(pp, "shop-phone-substitute", "phone", "The same answer on a phone: the agent full screen over the shop, the substitute and its price.", PHONE_O);
+
+  // 4. The buyer picks; over the kitchen's limit, the order waits for a named person's passkey.
+  const opts = cardsOf(t).filter((c) => c.type === "options").at(-1);
+  await say(page, opts?.type === "options" && opts.options.length > 1 ? "the first one" : "yes, order it", true);
+  let buyers = 2;
+  let approvalId: string | undefined;
+  for (let i = 0; i < 3 && !approvalId; i++) {
+    t = await idle(desk, kitchen, buyers);
+    const waiting = cardsOf(t).find((c) => c.type === "gate" && c.outcome === "waiting" && c.approvalId);
+    if (waiting?.type === "gate") approvalId = waiting.approvalId;
+    else {
+      const q = lastAgent(t)!.cards.find((c) => c.type === "question");
+      await say(page, q?.type === "question" ? (q.questions[0]?.options[0]?.label ?? "yes") : "yes, order it", true);
+      buyers++;
+    }
+  }
+  if (!approvalId) throw new Error("no sign-off was asked for");
+  await page.waitForTimeout(1500);
+  await quiet(page);
+  await fold(page);
+  await toCards();
+  const over = /^the first one$|^yes, order it$/;
+  const line = panel.getByText(over).last();
+  if (await line.count()) await topAlign(page, line, 75).catch(() => undefined);
+  await shoot(page, "shop-4-signoff", "desktop", "Over the kitchen's limit: in the same panel the order waits for the named person's OK with a passkey.", DESK_O);
+  await pp.goto(`${shop}&agent=open`);
+  await pp.waitForTimeout(3000);
+  await quiet(pp);
+  await fold(pp);
+  const pline = pp.locator("#assistant").getByText(over).last();
+  if (await pline.count()) await topAlign(pp, pline, 105).catch(() => undefined);
+  await shoot(pp, "shop-phone-signoff", "phone", "The sign-off on a phone: the order waits for the named person's OK with a passkey.", PHONE_O);
+  await phone.close();
+  await desk.close();
+}
+
+const STAGES: Record<string, (b: Browser) => Promise<void>> = { milk, signoff, refused, ops, watch, seller, voice, menu, outside, mail, wall, reel, webshop };
 
 (async () => {
   const browser = await chromium.launch({ args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] });

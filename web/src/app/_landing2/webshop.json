@@ -1,0 +1,44 @@
+{
+  "shop-1-catalogue": {
+    "src": "/landing/shop-1-catalogue.webp",
+    "w": 1600,
+    "h": 1000,
+    "kind": "desktop",
+    "caption": "The kitchen's webshop on a desk: the catalogue searched for lactose-free milk, the buying agent's panel closed."
+  },
+  "shop-2-asked": {
+    "src": "/landing/shop-2-asked.webp",
+    "w": 1600,
+    "h": 1000,
+    "kind": "desktop",
+    "caption": "Ctrl K opens the agent beside the same catalogue; the buyer's request sent and the agent's steps under way."
+  },
+  "shop-3-substitute": {
+    "src": "/landing/shop-3-substitute.webp",
+    "w": 1600,
+    "h": 1000,
+    "kind": "desktop",
+    "caption": "The agent's answer beside the catalogue: the usual milk misses the cut-off, a substitute that arrives Monday, priced live."
+  },
+  "shop-4-signoff": {
+    "src": "/landing/shop-4-signoff.webp",
+    "w": 1600,
+    "h": 1000,
+    "kind": "desktop",
+    "caption": "Over the kitchen's limit: in the same panel the order waits for the named person's OK with a passkey."
+  },
+  "shop-phone-signoff": {
+    "src": "/landing/shop-phone-signoff.webp",
+    "w": 780,
+    "h": 1688,
+    "kind": "phone",
+    "caption": "The sign-off on a phone: the order waits for the named person's OK with a passkey."
+  },
+  "shop-phone-substitute": {
+    "src": "/landing/shop-phone-substitute.webp",
+    "w": 780,
+    "h": 1688,
+    "kind": "phone",
+    "caption": "The same answer on a phone: the agent full screen over the shop, the substitute and its price."
+  }
+}

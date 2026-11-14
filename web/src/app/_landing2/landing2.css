@@ -1485,6 +1485,271 @@
     animation-delay: calc(var(--q) * -1s);
   }
 
+  /* ---------- how it looks on your webshop: the agent docked in the store ---------- */
+
+  /*
+   * At rest (no script, or reduced motion) the stage shows one finished moment: the desk at the sign-off, the phone at
+   * the substitute, every step listed. With `l2-js` the track grows tall and the stage sticks while the scroll plays
+   * the captures in order: the catalogue alone, the agent's panel sliding in over it (the asked frame's own panel,
+   * clipped at its left edge, 62.25 % across), the catalogue settling beside it, the substitute, the sign-off; the
+   * phone rises in with the substitute. Only opacity and transform change.
+   */
+  .l2-shop {
+    display: grid;
+    gap: 2.75rem;
+  }
+  @media (min-width: 1200px) {
+    .l2-shop {
+      grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr);
+      gap: 3rem;
+      align-items: start;
+    }
+  }
+  .l2-shop-stage {
+    position: relative;
+    padding-bottom: 9%;
+  }
+  .l2-shop-desk {
+    margin-left: 12%;
+  }
+  .l2-shop-desk .l2-url {
+    max-width: 75%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .l2-shop-frames {
+    position: relative;
+    aspect-ratio: 1600 / 1000;
+    overflow: hidden;
+    background: var(--color-mist);
+  }
+  .l2-shop-f,
+  .l2-shop-p {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .l2-shop-phone {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 22%;
+    z-index: 1;
+  }
+  .l2-shop-phone .l2-phone {
+    border-radius: 20px;
+    padding: 4px;
+  }
+  .l2-shop-phone .l2-phone-screen {
+    border-radius: 16px;
+  }
+  .l2-shop-pframes {
+    position: relative;
+    aspect-ratio: 780 / 1688;
+  }
+  @media (max-width: 639px) {
+    .l2-shop-stage {
+      padding-bottom: 22%;
+    }
+    .l2-shop-desk {
+      margin-left: 18%;
+    }
+    .l2-shop-phone {
+      width: 30%;
+    }
+  }
+  .l2-shop-steps {
+    margin-top: 1.25rem;
+    display: grid;
+    gap: 0.45rem;
+    font-size: 0.95rem;
+    line-height: 1.4;
+  }
+  .l2-shop-steps li {
+    display: flex;
+    gap: 0.65rem;
+    align-items: baseline;
+  }
+  .l2-shop-n {
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    width: 1.45rem;
+    height: 1.45rem;
+    border-radius: 99px;
+    background: var(--color-petrol-deep);
+    color: var(--color-paper);
+    font-size: 0.75rem;
+    font-weight: 650;
+    transform: translateY(-0.05rem);
+  }
+  .l2-shop-points {
+    display: grid;
+    gap: 1.4rem;
+  }
+  @media (min-width: 640px) and (max-width: 1199px) {
+    .l2-shop-points {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1.5rem;
+    }
+  }
+  .l2-shop-points li {
+    border-top: 2px solid var(--color-petrol-deep);
+    padding-top: 0.7rem;
+  }
+  .l2-shop-head {
+    font-family: var(--font-display);
+    font-weight: 650;
+    font-size: 1.2rem;
+    line-height: 1.2;
+    color: var(--color-petrol-deep);
+  }
+  .l2-shop-text {
+    margin-top: 0.35rem;
+    font-size: 0.98rem;
+    line-height: 1.5;
+    color: var(--color-ink-soft);
+  }
+  .l2-shop-note {
+    margin-top: 1.25rem;
+    font-size: 0.82rem;
+    line-height: 1.45;
+    color: var(--color-ink-soft);
+  }
+
+  /* At rest: one finished moment. */
+  .l2:not(.l2-js) .l2-shop-f:not(.l2-shop-f4),
+  .l2:not(.l2-js) .l2-shop-p2 {
+    display: none;
+  }
+
+  @keyframes l2-shop-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes l2-shop-slide {
+    from {
+      transform: translateX(37.75%);
+    }
+    to {
+      transform: none;
+    }
+  }
+  @keyframes l2-shop-rise {
+    from {
+      opacity: 0;
+      transform: translateY(12%);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes l2-shop-lit {
+    from {
+      opacity: 0.38;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  .l2-js .l2-shop-track {
+    height: 260vh;
+    view-timeline: --l2shop block;
+  }
+  .l2-js .l2-shop-sticky {
+    position: sticky;
+    top: 60px;
+    min-height: calc(100svh - 60px);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 1rem 0;
+  }
+  /* The stage and its steps fit the screen below the header: the stage's width follows the screen's height. */
+  .l2-js .l2-shop-sticky > * {
+    width: 100%;
+    max-width: calc((100svh - 270px) * 1.59);
+  }
+  @media (min-width: 1200px) {
+    .l2-js .l2-shop-side {
+      position: sticky;
+      top: max(84px, calc(50svh - 15rem));
+    }
+  }
+  .l2-js .l2-shop-slide {
+    clip-path: inset(0 0 0 62.25%);
+  }
+  .l2-js .l2-shop-f2,
+  .l2-js .l2-shop-f3,
+  .l2-js .l2-shop-f4,
+  .l2-js .l2-shop-p2 {
+    opacity: 0;
+  }
+  .l2-sdt .l2-shop-slide {
+    animation: l2-shop-slide linear both;
+    animation-timeline: --l2shop;
+    animation-range: contain 12% contain 28%;
+  }
+  .l2-sdt .l2-shop-f2 {
+    animation: l2-shop-in linear both;
+    animation-timeline: --l2shop;
+    animation-range: contain 30% contain 35%;
+  }
+  .l2-sdt .l2-shop-f3 {
+    animation: l2-shop-in linear both;
+    animation-timeline: --l2shop;
+    animation-range: contain 52% contain 58%;
+  }
+  .l2-sdt .l2-shop-f4,
+  .l2-sdt .l2-shop-p2 {
+    animation: l2-shop-in linear both;
+    animation-timeline: --l2shop;
+    animation-range: contain 76% contain 82%;
+  }
+  .l2-sdt .l2-shop-phone {
+    animation: l2-shop-rise linear both;
+    animation-timeline: --l2shop;
+    animation-range: contain 48% contain 56%;
+  }
+  .l2-sdt .l2-shop-steps li {
+    animation: l2-shop-lit linear both;
+    animation-timeline: --l2shop;
+    animation-range: contain calc(var(--at) * 1%) contain calc(var(--at) * 1% + 5%);
+  }
+  /* Without scroll timelines, motion.tsx feeds the same keyframes the track's progress as --p. */
+  .l2-js:not(.l2-sdt) .l2-shop-slide {
+    animation: l2-shop-slide 1s linear both paused;
+    animation-delay: calc(clamp(0, (var(--p, 0) - 0.12) / 0.16, 0.999) * -1s);
+  }
+  .l2-js:not(.l2-sdt) .l2-shop-f2 {
+    animation: l2-shop-in 1s linear both paused;
+    animation-delay: calc(clamp(0, (var(--p, 0) - 0.3) / 0.05, 0.999) * -1s);
+  }
+  .l2-js:not(.l2-sdt) .l2-shop-f3 {
+    animation: l2-shop-in 1s linear both paused;
+    animation-delay: calc(clamp(0, (var(--p, 0) - 0.52) / 0.06, 0.999) * -1s);
+  }
+  .l2-js:not(.l2-sdt) .l2-shop-f4,
+  .l2-js:not(.l2-sdt) .l2-shop-p2 {
+    animation: l2-shop-in 1s linear both paused;
+    animation-delay: calc(clamp(0, (var(--p, 0) - 0.76) / 0.06, 0.999) * -1s);
+  }
+  .l2-js:not(.l2-sdt) .l2-shop-phone {
+    animation: l2-shop-rise 1s linear both paused;
+    animation-delay: calc(clamp(0, (var(--p, 0) - 0.48) / 0.08, 0.999) * -1s);
+  }
+  .l2-js:not(.l2-sdt) .l2-shop-steps li {
+    animation: l2-shop-lit 1s linear both paused;
+    animation-delay: calc(clamp(0, (var(--p, 0) - var(--at) / 100) / 0.05, 0.999) * -1s);
+  }
+
   /* ---------- business, mail, film ---------- */
 
   .l2-biz {
