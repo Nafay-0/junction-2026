@@ -298,6 +298,16 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
       await paused(run);
     } else {
       try {
+        // A short answer to the wholesaler's offer said just before ("no thanks", "not now", "ei kiitos", "yes please"):
+        // recorded by plain code, never left to the model to remember.
+        const offered = await answerOpenOffer(run, body.text!, body.lang ?? "en").catch(() => undefined);
+        if (offered) {
+          if (run.opening) first.done("answered the offer");
+          store.line(thread, run.turnId, offered);
+          store.mark(thread, run.turnId, "line", Date.now() - run.t0);
+          await finishTurn(run);
+          return;
+        }
         // "Switch auto-renew on for the milk": done by plain code (server/watch), said in the store's own words.
         const { autoRenewFromWords } = await import("./watch");
         const auto = await autoRenewFromWords(run, body.text!).catch(() => undefined);
@@ -711,6 +721,22 @@ async function onOrderEvent(rt: Runtime, orgId: string, orderId: string): Promis
     delete t.waits[orderId];
     await resumeAfterSignOff(rt, kitchen, t, wait, order);
   }
+}
+
+/** The buyer's short answer to the offer the last agent turn (or the opening) said: done by plain code, or undefined. */
+async function answerOpenOffer(run: TurnRun, words: string, lang: "en" | "fi" | "sv"): Promise<string | undefined> {
+  if (words.trim().split(/\s+/).length > 8) return undefined;
+  const { openOffer, offerAnswerIn, answerOfferIn } = await import("./offer");
+  const offer = openOffer(run);
+  if (!offer) return undefined;
+  const holder = run.thread.turns.find((x) => x.role === "agent" && x.cards.some((c) => c.cardId === offer.cardId));
+  const later = holder ? run.thread.turns.slice(run.thread.turns.indexOf(holder) + 1).filter((x) => x.role === "agent" && x.turnId !== run.turnId) : [];
+  if (!holder || later.length) return undefined;
+  const LATER = /\b(maybe later|later|not today|another time|myöhemmin|ehkä myöhemmin|ei tänään|senare|kanske senare)\b/i;
+  const answer = offerAnswerIn(words) ?? (LATER.test(words) ? "no" : undefined);
+  if (!answer) return undefined;
+  const r = await answerOfferIn(run, offer.offerId, answer, words, lang);
+  return r.reply || undefined;
 }
 
 /** What happened when the person decided, in one sentence: OK'd and arriving, declined, or the price ran out. */
