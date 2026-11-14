@@ -1,3 +1,4 @@
+import { sessionCookieFor } from "./accounts/test-session";
 import { Client, StreamableHTTPClientTransport, type CallToolResult } from "@modelcontextprotocol/client";
 import { beforeEach, describe, expect, it } from "vitest";
 import { POST as mcpRoute } from "@/app/api/mcp/route";
@@ -69,7 +70,8 @@ describe("each door is recorded, and the operations trace shows it", () => {
   }
 
   it("typed and assistant (the store's console), REST, MCP, connector, voice, photo and the menu planner", async () => {
-    const cookie = "dock_console=0123456789abcdef0123";
+    const own = await sessionCookieFor(await getRuntime(), "kaari"); // the stage kitchen's own signed-in account
+    const cookie = `dock_console=0123456789abcdef0123; ${own}`;
     const viaConsole = async (text: string) => {
       const res = await consoleCall(new Request(`${BASE}/ui-api/kitchens/kaari/call`, { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ method: "POST", path: "/api/v1/intake", body: { need: { ...need(), text }, by: "Sanna" } }) }), { params: Promise.resolve({ kitchen: "kaari" }) } as never);
       return ((await res.json()) as { step: Step }).step.requestId;
@@ -86,7 +88,7 @@ describe("each door is recorded, and the operations trace shows it", () => {
     const viaMcp = ((await mcp.callTool({ name: "submit_need", arguments: { need: need() } })) as CallToolResult).structuredContent as { step: Step };
     expect(await doorOf(viaMcp.step.requestId)).toEqual({ door: "mcp", traceDoor: "mcp", via: "mcp" });
 
-    const addr = ((await (await connectRoute.GET(new Request(`${BASE}/ui-api/connect/kaari`), { params: Promise.resolve({ kitchen: "kaari" }) } as never)).json()) as { connector: { url: string } }).connector.url;
+    const addr = ((await (await connectRoute.GET(new Request(`${BASE}/ui-api/connect/kaari`, { headers: { cookie: own } }), { params: Promise.resolve({ kitchen: "kaari" }) } as never)).json()) as { connector: { url: string } }).connector.url;
     const token = new URL(addr).pathname.split("/").pop()!;
     const conn = new Client({ name: "chat", version: "0" });
     await conn.connect(new StreamableHTTPClientTransport(new URL(`/api/mcp/c/${token}`, BASE), { fetch: async (u, i) => connectorRoute.POST(new Request(u, i), { params: Promise.resolve({ token }) } as never), requestInit: { headers: { "user-agent": "Claude-User/1.0" } } }));

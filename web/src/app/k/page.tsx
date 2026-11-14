@@ -13,7 +13,6 @@ import { ACCOUNT_COOKIE } from "@/server/accounts/http";
 import { testAccountsShown, testResetMinutes } from "@/server/accounts/schedule";
 import { TEST_ACCOUNTS } from "@/server/accounts/test-accounts";
 import { joinLink } from "@/server/approval-links";
-import { resolveKitchen } from "@/server/console-kitchens";
 import { getRuntime } from "@/server/runtime";
 import { LangProvider } from "../_i18n/provider";
 import { DEFAULT_LANG, type Lang } from "../_i18n/lang";
@@ -28,8 +27,8 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /**
- * The door to the shop (/k): sign in, open an account, use a shared test account, or scan to try without one; and
- * the two stage kitchens, open to look around. Built from the shared kit with plain markup (design-v2 restyles it).
+ * The door to the shop (/k): sign in, open an account, use a shared test account, or scan to try without one. No
+ * kitchen is open to strangers, the stage kitchens included: they are accounts like any other.
  */
 export default function KitchenEntry({ searchParams }: PageProps<"/k">) {
   return (
@@ -78,7 +77,6 @@ async function Door({ lang, searchParams }: { lang: Lang; searchParams: PageProp
   const me = signedIn ? rt.accounts.view(signedIn.account) : undefined;
   const approver = await rt.passkeys.sessionApprover(jar.get(SESSION_COOKIE)?.value);
   const mine = approver ? await rt.sandboxes.forApprover(approver.approverId) : undefined;
-  const demos = await Promise.all(["kaari", "laakso"].map((slug) => resolveKitchen(slug)));
   const join = await joinLink(hdrs);
   const shown = testAccountsShown();
   const as = (await searchParams).as; // "Sign in to this account" from a private kitchen's page
@@ -162,26 +160,6 @@ async function Door({ lang, searchParams }: { lang: Lang; searchParams: PageProp
         </div>
       </section>
 
-      <section aria-labelledby="demo" className="space-y-3">
-        <h2 id="demo" className="display text-[1.8rem]">
-          {tx.demoTitle}
-        </h2>
-        <p className="max-w-[72ch] leading-snug text-ink-soft">{tx.demoBody}</p>
-        <ul className="grid gap-4 md:grid-cols-2">
-          {demos.map((k) =>
-            k ? (
-              <li key={k.info.slug}>
-                <Link href={`/k/${k.info.slug}`} className="flex h-full flex-col bg-paper p-5 hover:outline-[3px] hover:outline-petrol">
-                  <span className="display text-[1.6rem]">{k.info.name}</span>
-                  <span className="mt-1 leading-snug">{etx.about[k.info.slug] ?? etx.aDemoKitchen}</span>
-                  <span className="mt-2 text-[0.95rem] text-ink-soft">{etx.agentAlone(moneyShort(k.info.mandate.perOrderLimitCents), k.info.mandate.approvers[0]?.name)}</span>
-                  <span className="mt-3 font-semibold text-petrol">{tx.enter}</span>
-                </Link>
-              </li>
-            ) : null,
-          )}
-        </ul>
-      </section>
     </>
   );
 }

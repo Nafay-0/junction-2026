@@ -16,7 +16,7 @@ import { RateLimiter, type RateRule } from "../limits";
 import type { SandboxService } from "../sandboxes";
 import { cleanRestaurantName, normaliseUsername, usernameProblem } from "./names";
 import { dummyHash, hashPassword, passwordProblem, verifyPassword, PASSWORD_MIN } from "./password";
-import type { Account, AccountKitchen, AccountSession, AccountStore } from "./store";
+import type { Account, AccountKitchen, AccountLink, AccountSession, AccountStore } from "./store";
 import { FORBID_ALLERGENS, MANDATE_DAYS, REQUIRE_CLAIMS, SIGNER_ROLE, mandateFromTerms, termsFromMandate, type MandateTerms } from "./terms";
 import type { MandateBook } from "../mandates";
 import { TEST_ACCOUNTS, testAccountProducts, type TestAccountSeed } from "./test-accounts";
@@ -100,7 +100,6 @@ export function tokenHash(token: string): string {
 export class AccountService {
   private readonly now: () => Date;
   private readonly limiter: RateLimiter;
-  private readonly links = new Map<string, { username: string; expiresAt: number }>();
   private products?: Promise<Product[]>;
 
   constructor(private readonly deps: AccountDeps) {
@@ -327,6 +326,16 @@ export class AccountService {
     return { account: a, kitchen: a.kitchen };
   }
 
+  /**
+   * Sign another mandate of this kitchen (its menu agent's) with the key held for it. Only for a mandate of the
+   * kitchen's own organisation; the caller makes sure it is never wider than the kitchen's buyer mandate.
+   */
+  async signForKitchen(username: string, mandate: Mandate): Promise<string> {
+    const a = await this.deps.store.get(username);
+    if (!a?.kitchen || mandate.issuer.orgId !== a.kitchen.orgId) throw new DockError(404, "kitchen_not_found", "This account has no such kitchen.", "account");
+    return signMandate(mandate, await importEd25519KeyPair(a.kitchen.key.kid, a.kitchen.key.privateJwk));
+  }
+
   /** What the kitchen added to its mandate from its memory page ("Add to signed mandate") stays in every mandate signed for it. */
   private restrict(m: Mandate): Mandate {
     return this.deps.mandates?.restrict(m) ?? m;
@@ -448,23 +457,33 @@ export class AccountService {
     return { signer: { name: approver?.name ?? s.name, role: s.role }, devices: creds.map((c) => ({ createdAt: c.createdAt, lastUsedAt: c.lastUsedAt, deviceType: c.deviceType })) };
   }
 
-  /** A one-time address for a phone to add itself as a signing device (shown as a QR code). 10 minutes. */
-  deviceLink(username: string): { token: string; expiresAt: string } {
-    const t = this.now().getTime();
-    for (const [k, v] of this.links) if (v.expiresAt <= t) this.links.delete(k);
+  /**
+   * A one-time address (10 minutes) for a phone: to add itself as a signing device ("device"), or to continue this
+   * account's session on the phone ("session"). Kept as the SHA-256 of the token in the account store, so a restart
+   * in between strands nobody.
+   */
+  async oneTimeLink(username: string, purpose: AccountLink["purpose"]): Promise<{ token: string; expiresAt: string }> {
+    const now = this.now();
     const token = randomBytes(24).toString("base64url");
-    const expiresAt = t + DEVICE_LINK_MINUTES * 60_000;
-    this.links.set(token, { username, expiresAt });
-    return { token, expiresAt: new Date(expiresAt).toISOString() };
+    const expiresAt = new Date(now.getTime() + DEVICE_LINK_MINUTES * 60_000).toISOString();
+    await this.deps.store.putLink(tokenHash(token), { username, purpose, createdAt: now.toISOString(), expiresAt });
+    return { token, expiresAt };
   }
 
-  /** The account a phone's link names, if the link is open. `take` uses it up. */
-  linkAccount(token: unknown, take = false): string | undefined {
-    if (typeof token !== "string") return undefined;
-    const l = this.links.get(token);
-    if (!l || l.expiresAt <= this.now().getTime()) return undefined;
-    if (take) this.links.delete(token);
+  /** The account a phone's link names, if the link is open and for this purpose. `take` uses it up. */
+  async linkAccount(token: unknown, purpose: AccountLink["purpose"], take = false): Promise<string | undefined> {
+    if (typeof token !== "string" || !/^[A-Za-z0-9_-]{16,64}$/.test(token)) return undefined;
+    const h = tokenHash(token);
+    const l = take ? await this.deps.store.takeLink(h) : await this.deps.store.getLink(h);
+    if (!l || l.purpose !== purpose || Date.parse(l.expiresAt) <= this.now().getTime()) return undefined;
     return l.username;
+  }
+
+  /** A phone opened the "continue on your phone" link: a session of its own for the same account. */
+  async handOff(token: unknown): Promise<SignedIn | undefined> {
+    const username = await this.linkAccount(token, "session", true);
+    const a = username ? await this.deps.store.get(username) : undefined;
+    return a ? this.openSession(a) : undefined;
   }
 
   async beginDevice(a: Account, rp: RelyingParty, via: "session" | "link", link?: string): Promise<PublicKeyCredentialCreationOptionsJSON> {
@@ -479,7 +498,7 @@ export class AccountService {
     const reg = await this.deps.passkeys.verifyRegistration(response);
     const ctx = reg.context.accountDevice as { username: string; via: "session" | "link"; link?: string } | undefined;
     if (!ctx) throw new PasskeyError(400, "registration_unknown", "This passkey prompt was not for adding a signing device.");
-    const allowed = ctx.via === "session" ? expect.username === ctx.username : !!expect.link && expect.link === ctx.link && this.linkAccount(expect.link, true) === ctx.username;
+    const allowed = ctx.via === "session" ? expect.username === ctx.username : !!expect.link && expect.link === ctx.link && (await this.linkAccount(expect.link, "device", true)) === ctx.username;
     if (!allowed) throw new DockError(403, "device_not_yours", "This passkey prompt was started for another kitchen, or its link has expired.", "account");
     const a = await this.deps.store.get(ctx.username);
     const s = a && this.signerOf(a);

@@ -10,7 +10,7 @@ export const USERNAME_RE = /^[a-z0-9][a-z0-9_-]{2,31}$/;
 /** Kitchen addresses and words the store and its routes already use, plus names that would mislead. */
 const RESERVED = new Set([
   "kaari", "laakso", // the built-in demo kitchens: accounts of their own, with passwords from the environment
-  "mine", "signup", "signin", "signout", "sign-up", "sign-in", "sign-out", "login", "logout", "keep", "join", "new", "account", "accounts",
+  "mine", "handoff", "signup", "signin", "signout", "sign-up", "sign-in", "sign-out", "login", "logout", "keep", "join", "new", "account", "accounts",
   "admin", "administrator", "root", "system", "ops", "operations", "staff", "support", "help", "api", "ui-api", "ops-api",
   "approve", "approver", "screen", "wall", "plan", "menu", "call", "channels", "knowledge", "k", "dock", "aimopilot", "valio", "aimo",
   "test", "demo", "null", "undefined", "anonymous", "everyone", "kitchen", "kitchens",

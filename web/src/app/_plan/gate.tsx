@@ -10,7 +10,7 @@ import { GATE_TEXT } from "./gate.text";
 import { cutoff } from "./sheet";
 import { Btn, Field, Sheet } from "./ui";
 
-type ApprovalQr = { mode: "demo_link" | "view_only"; approver: { name: string; role: string }; status: string; url: string; qrSvg: string };
+type ApprovalQr = { mode: "demo_link" | "view_only" | "passkey" | "enrol" | "no_device"; approver: { name: string; role: string }; status: string; url: string; qrSvg: string };
 
 /** The bottom of the sheet: total, delivery, what needs a person, and the one button that asks for a fixed price. */
 export function Totals({ plan, onQuote, busy }: { plan: PlanWire; onQuote: () => void; busy: boolean }) {
@@ -189,6 +189,15 @@ function ApprovalQrPanel({ kitchen, approvalId, base }: { kitchen: string; appro
   }, [kitchen, approvalId, base]);
   if (error) return <p className="max-w-56 text-[0.9rem] text-ink-soft">{error}</p>;
   if (!qr) return <div className="size-48 animate-pulse bg-mist" />;
+  if (qr.mode === "no_device")
+    return (
+      <div className="w-56 text-[0.9rem] leading-snug">
+        <p>{tx.noDevice(qr.approver.name)}</p>
+        <a href={`/k/${encodeURIComponent(kitchen)}/agent#devices`} className="font-semibold text-petrol underline decoration-2 underline-offset-4">
+          {tx.addDevice}
+        </a>
+      </div>
+    );
   return (
     <div className="w-52 text-[0.85rem]">
       <div className="rounded-[1.4rem] bg-safety-ink p-2.5 pb-4">

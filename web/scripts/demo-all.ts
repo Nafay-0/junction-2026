@@ -6,6 +6,10 @@
  *   pnpm demo:all --live                       real models instead of the recorded answers (costs a few cents)
  *   pnpm demo:all --seed                       the 12-product seed catalogue (no partner calls; no knowledge map)
  *
+ * The stage kitchen Ravintola Kaari is an account like any other: the steps that use its store sign in to it. A
+ * server this script starts gets a fresh random DOCK_KAARI_PASSWORD; against --url, the password is
+ * DOCK_KAARI_PASSWORD from web/.env.local or --kaari-password.
+ *
  * By default every model answer comes from scripts/demo-all/recordings.json (the scripted provider in
  * server/agent/scripted.ts; the menu planner's recorded drafts), so a run costs nothing and repeats exactly. The
  * real catalogue is used when the index and the partner key are there, with a handful of live price lookups.
@@ -122,7 +126,9 @@ async function main() {
   loadLocalEnv();
   let server: ChildProcess | undefined;
   const passcode = `demo-all-${Math.random().toString(36).slice(2, 10)}`;
+  let kaariPassword = opt("--kaari-password") ?? process.env.DOCK_KAARI_PASSWORD;
   if (!BASE) {
+    kaariPassword = `demo-all-kaari-${Math.random().toString(36).slice(2, 12)}`;
     const port = await freePort();
     BASE = `http://localhost:${port}`;
     const rec = path.resolve("scripts/demo-all/recordings.json");
@@ -131,6 +137,7 @@ async function main() {
       PORT: String(port),
       DOCK_RATE_LIMITS: "off",
       DOCK_OPS_PASSCODE: passcode,
+      DOCK_KAARI_PASSWORD: kaariPassword,
       DOCK_PUBLIC_URL: "",
       DOCK_AIVEN: undefined,
       DOCK_MEMORY_LLM: "off",
@@ -153,7 +160,7 @@ async function main() {
   const opsPasscode = opt("--passcode") ?? passcode;
 
   try {
-    await run(opsPasscode);
+    await run(opsPasscode, kaariPassword ?? "");
   } finally {
     if (server?.pid) server.kill("SIGTERM"); // only the server this script started, by its own handle
   }
@@ -163,7 +170,7 @@ async function main() {
   process.exit(failed.length ? 1 : 0);
 }
 
-async function run(passcode: string) {
+async function run(passcode: string, kaariPassword: string) {
   const visitor = new Browser();
   const auth = new SoftwareAuthenticator(new URL(BASE).origin);
   let sandbox = "";
@@ -208,9 +215,13 @@ async function run(passcode: string) {
     return check(checked && final?.status === "committed" && final.confirmation, log.join("; "), checked ? "not committed" : "no mistake check ran on 1,000 L");
   });
 
+  // The stage kitchen's own signed-in account: its store, menu planner, photo door, voice door and connector address.
+  const kaari = new Browser();
+  const kaariSignIn = kaariPassword ? await kaari.post("/ui-api/account/signin", { username: "kaari", password: kaariPassword }) : undefined;
+  if (kaariSignIn?.status !== 200) console.log(`NOTE  signing in to the kaari account failed (${kaariSignIn?.status ?? "no DOCK_KAARI_PASSWORD"}); the steps that use its store will fail.\n`);
+
   await step(3, "Alternatives from the product knowledge map, within the kitchen's rules (assistant panel)", async () => {
     if (!realCatalogue) return { ok: "skip", detail: "the seed catalogue has no knowledge map (run without --seed)" };
-    const kaari = new Browser();
     const r = await kaari.post("/ui-api/kitchens/kaari/assistant", { question: "Suggest a substitute for this cream for whipping desserts.", productId: "469050", screen: "the product page of 469050" });
     const products = (r.body?.citations ?? []).filter((c: Json) => c.kind === "product");
     return check(r.status === 200 && products.length > 0 && /product map/i.test(r.body.answer), `${r.body?.answer?.slice(0, 260)}`, `assistant ${r.status}, ${products.length} ranked products`);
@@ -230,7 +241,6 @@ async function run(passcode: string) {
     );
   });
 
-  const kaari = new Browser();
   let signMe: Json;
   await step(5, "A menu request becomes one multi-line order (menu planner)", async () => {
     const r = await kaari.post("/ui-api/plan/kaari", { text: "Salmon soup for 300 on Friday" });
@@ -302,7 +312,7 @@ async function run(passcode: string) {
     const s = await ops.post("/ops-api/control", { action: "suspend", scope: "org", target: KITCHEN_ORG.orgId, reason: "demo:all: suspended to show every door refuses" });
     if (s.status !== 201) return { ok: false, detail: `suspend ${s.status}: ${s.text.slice(0, 200)}` };
     const mandate = await kaariMandate();
-    const door = new Browser();
+    const door = kaari; // the kitchen's own signed-in account: refused for the suspension, not for being a stranger
     const tries: [string, () => Promise<{ status: number; text: string }>][] = [
       ["typed", () => door.call("kaari", "POST", "/api/v1/intake", milkNeed(50))],
       ["REST", () => door.post("/api/v1/intake", milkNeed(50), { authorization: `Mandate ${mandate}`, "dock-agent-id": KITCHEN_ORG.agentId })],

@@ -170,19 +170,26 @@ describe("account changes need the account's own session, from this site", () =>
     expect((await mandate.POST(post("/ui-api/account/mandate", { terms: DEFAULT_TERMS }))).status).toBe(401);
   });
 
-  it("a stage kitchen's rules: open to read, changed only while signed in to its account", async () => {
+  it("a stage kitchen is closed like any account: no reading, ordering or changing without its own sign-in", async () => {
     process.env.DOCK_KAARI_PASSWORD = "stage-password-from-env";
     try {
       resetRuntime();
-      const before = await (await viaConsole("kaari", { method: "GET", path: "/api/v1/kitchen" })).json();
-      const pref = before.kitchen.stated.find((p: { text: string }) => /lactose/i.test(p.text));
-      const forget = (cookie?: string) => portalMemory.POST(post("/ui-api/kitchens/kaari/memory", { action: "forget", preferenceId: pref.id }, cookie), params("kaari"));
       const stranger = await openAccount("aalto", "Ravintola Aalto");
-      expect((await forget()).status).toBe(401);
-      expect((await forget(stranger)).status).toBe(401);
+      expect((await viaConsole("kaari", { method: "GET", path: "/api/v1/kitchen" })).status).toBe(401);
+      expect((await viaConsole("kaari", { method: "GET", path: "/api/v1/kitchen" }, stranger)).status).toBe(403);
+      expect((await portalRoute.GET(get("/ui-api/kitchens/kaari/portal"), params("kaari"))).status).toBe(401);
+      expect((await basketRoute.POST(post("/ui-api/kitchens/kaari/basket", { lines: [{ productId: "VA-1010", packs: 1 }] }), params("kaari"))).status).toBe(401);
+      expect((await eventsRoute.GET(get("/api/v1/events?orgId=org_ravintola_kaari"))).status).toBe(403);
       expect((await signin.POST(post("/ui-api/account/signin", { username: "kaari", password: "wrong-password" }))).status).toBe(401);
       const kaari = cookieOf(await signin.POST(post("/ui-api/account/signin", { username: "kaari", password: "stage-password-from-env" })));
+      const before = await (await viaConsole("kaari", { method: "GET", path: "/api/v1/kitchen" }, kaari)).json();
+      const pref = before.kitchen.stated.find((p: { text: string }) => /lactose/i.test(p.text));
+      const forget = (cookie?: string) => portalMemory.POST(post("/ui-api/kitchens/kaari/memory", { action: "forget", preferenceId: pref.id }, cookie), params("kaari"));
+      expect((await forget()).status).toBe(401);
+      expect((await forget(stranger)).status).toBe(403);
       expect((await forget(kaari)).status).toBe(200);
+      const own = await (await kitchenRoute.GET(get("/ui-api/kitchens/kaari", kaari), params("kaari"))).json();
+      expect(own.kitchens.map((k: { slug: string }) => k.slug)).toEqual(["kaari"]);
     } finally {
       delete process.env.DOCK_KAARI_PASSWORD;
     }
