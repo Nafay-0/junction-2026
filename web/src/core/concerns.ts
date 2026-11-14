@@ -1,5 +1,5 @@
 import type { Product } from "./catalog";
-import { packsFor } from "./catalog/product";
+import { packsFor, piecesPerSalesUnit } from "./catalog/product";
 import {
   activeMemory,
   addDaysIso,
@@ -294,6 +294,27 @@ export function checkQuantity(need: StructuredNeed, ctx: CheckContext): Concern[
 
   const pack = referencePackSize(need, ctx);
   const packCount = isPackCount(q.unit, unit);
+  if (packCount && unit) {
+    const base = unit;
+    // Pieces ("40 burger buns") of a product whose data says how many pieces a pack holds: counted, not questioned as a
+    // unit. The one question is whether that many packs is right, with the packs and the weight in it.
+    const counted = q.unit === "pcs" ? ctx.candidates.map((p) => ({ p, per: piecesPerSalesUnit(p) })).find((x) => x.per && x.per > 0) : undefined;
+    if (counted?.per) {
+      const packs = Math.ceil(q.amount / counted.per - 1e-9);
+      const total = round(packs * counted.p.packSize);
+      return [
+        {
+          key: `unit_unclear:${q.amount}:${q.unit}`,
+          code: "unit_unclear",
+          severity: "warning",
+          message: `${asked} of ${need.item.text}: a pack of ${counted.p.name} holds ${counted.per}, so that is ${packs} ${packs === 1 ? "pack" : "packs"} (${formatAmount(total, base)}).`,
+          confirmable: false,
+          corrections: [{ id: `use_${total}_${base}`, label: `${packs} ${packs === 1 ? "pack" : "packs"} of ${counted.per} pcs (${formatAmount(total, base)})`, patch: { quantity: { amount: total, unit: base } } }],
+          evidence: { pieces: q.amount, perPack: counted.per, packs, productId: counted.p.id },
+        },
+      ];
+    }
+  }
   if (packCount && (!pack || !unit)) {
     const sizes = [...new Set(ctx.candidates.map((p) => p.packSize))].sort((a, b) => a - b).slice(0, 3);
     const base = unit ?? "L";

@@ -317,7 +317,16 @@ function startPlan(run: TurnRun, svc: Svc, m: MenuState, text: string, proposalI
   };
   const job = svc.service
     .plan(svc.kitchen, text, byLine(run), { onProgress })
-    .then(async (planned) => {
+    .then(async (planned0) => {
+      // What the kitchen has from its own order history (and what the words say it has): the same on-hand step as
+      // every other menu path, before the plan is shown or said.
+      let planned = planned0;
+      if (planned0.record.state !== "declined" && planned0.record.settings.covers) {
+        const { menuScenarios } = await import("@/server/agent/menu/runtime");
+        const { saidHave } = await import("@/core/on-hand");
+        const { scenarios } = await menuScenarios();
+        planned = await scenarios.applyOnHand(svc.kitchen, planned0.record.planId, byLine(run), saidHave(text)).catch(() => planned0);
+      }
       if (!mine()) return planned;
       m.planId = planned.record.planId;
       if (planned.record.requestId) run.requests.add(planned.record.requestId);
@@ -643,7 +652,12 @@ export async function dishesCard(run: TurnRun, planId: string, before?: Dishes, 
       const chef = !!p.edits[l.lineId]?.struck;
       const left = leftByBuyer.includes(l.lineId);
       note = !left && (l.onHand || l.pantry || chef) ? { code: "have", basis: l.onHand ? "on_hand" : chef ? "chef" : "staple" } : { code: "left_out", ...(late ? { why: plain(late.text) } : !left && l.struckReason ? { why: l.struckReason } : {}) };
-    } else if (!l.chosen) note = p.settings.covers ? { code: "open", ...(l.doubts[0] ? { why: plain(l.doubts[0].text) } : {}) } : undefined;
+    } else if (!l.chosen) {
+      // Not being bought: its real reason in a few words, the same the one-dish "can't get" group says. "Open" only
+      // while the line is still being matched and priced (the plan not settled yet).
+      const cov = view.totals.coverage.find((c) => c.lineId === l.lineId && c.status === "not_covered");
+      note = cov ? { code: "left_out", why: shortWhy(cov.code, cov.words, deliverBy, run.lang ?? "en") } : p.settings.covers ? { code: "open", ...(l.doubts[0] ? { why: plain(l.doubts[0].text) } : {}) } : undefined;
+    }
     else if (late) note = { code: "late", ...(deliverBy ? { date: deliverBy } : {}), ...(standIns[l.lineId] ? { to: three(standIns[l.lineId]) } : {}) };
     else if (l.replaces) note = { code: "swap", to: name };
     else if (deliverBy && l.chosen.deliveryDate > deliverBy) note = { code: "later", date: l.chosen.deliveryDate };
@@ -666,7 +680,12 @@ export async function dishesCard(run: TurnRun, planId: string, before?: Dishes, 
     }
   }
   const covers = p.settings.covers;
-  const total = view.totals.totalCents;
+  // A line the kitchen's allergen rule stops at the gate (the menu card's preview) is not ordered: it is shown under
+  // "can't get" with that reason, and the total is what would be ordered, the same figure the sentence says.
+  const menuCard = run.store.cards(run.thread).map((x) => x.card).filter((c): c is MenuCard => c.type === "menu" && c.planId === planId).at(-1);
+  const stopped = new Map((menuCard?.dishes ?? []).flatMap((d) => d.lines).flatMap((l) => l.conflicts.filter((c) => c.blocking && c.code === "forbidden_allergens").map((c) => [l.lineId, c.text] as const)));
+  const stoppedLines = view.lines.filter((l) => stopped.has(l.lineId));
+  const total = view.totals.totalCents - stoppedLines.reduce((n, l) => n + (l.chosen?.totalCents ?? 0), 0);
   // One dish: the planner's three groups (you have, I'll order, can't get), each ingredient with its amount and why.
   let groups: Dishes["groups"];
   if (p.draft.dishes.length === 1 && covers) {
@@ -680,21 +699,36 @@ export async function dishesCard(run: TurnRun, planId: string, before?: Dishes, 
       const { readable } = await import("./refusal");
       const fold = (t: string) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       const itself = (ingredient: string, product: string) => fold(ingredient).split(/[^a-z0-9äöå]+/).filter((w) => w.length >= 4 && !/^(fresh|dried|whole|tuore|kuivattu|färsk)$/.test(w)).every((w) => fold(product).includes(w.slice(0, Math.max(3, w.length - 2))));
+      // Amounts a cook says: 2,5 kg not 2,526 kg; 120 g not 118 g (the order's packs stay exact on the sheet).
       const grams = (need: string | null) => {
-        const m = /^0[.,](\d+)\s*(kg|l)$/i.exec(need ?? "");
+        const m = /^(\d+(?:[.,]\d+)?)\s*(kg|l|g|ml)$/i.exec((need ?? "").trim());
         if (!m) return need ?? undefined;
-        const n = Math.round(Number(`0.${m[1]}`) * 1000);
-        return `${n} ${m[2].toLowerCase() === "kg" ? "g" : "ml"}`;
+        let n = Number(m[1].replace(",", "."));
+        let u = m[2].toLowerCase();
+        if ((u === "kg" || u === "l") && n < 1) {
+          n *= 1000;
+          u = u === "kg" ? "g" : "ml";
+        }
+        const r = u === "g" || u === "ml" ? (n >= 100 ? Math.round(n / 10) * 10 : Math.max(1, Math.round(n))) : n >= 10 ? Math.round(n) : Math.round(n * 10) / 10;
+        return `${String(r).replace(".", ",")} ${u}`;
       };
       const staples = g.onHand.filter((x) => x.status === "staple");
       const keep = { en: "staples you keep", fi: "perusaineita, joita teillä on aina", sv: "basvaror ni alltid har" }[lang];
+      const foldN = (t: string) => t.toLowerCase().replace(/\s*\([^)]*\)/g, "").trim();
+      const isStopped = (ingredient: string) => stoppedLines.some((l) => foldN(l.name) === foldN(ingredient));
+      const { attrL } = await import("@/app/_i18n/format");
+      const stopWhy = (ingredient: string) => {
+        const l = stoppedLines.find((x) => foldN(x.name) === foldN(ingredient));
+        const a = /allergen\(s\): ([a-z_ ,]+)/i.exec((l && stopped.get(l.lineId)) ?? "")?.[1]?.split(/,\s*/)[0] ?? "lactose";
+        return { en: `contains ${attrL(a, "en").toLowerCase()}, which your rules rule out`, fi: `sisältää: ${attrL(a, "fi").toLowerCase()}, jonka sääntönne kieltävät`, sv: `innehåller ${attrL(a, "sv").toLowerCase()}, som era regler utesluter` }[lang];
+      };
       groups = {
-        have: g.onHand.map((x) => ({ name: x.ingredient, ...(grams(x.need) ? { need: grams(x.need) } : {}), ...(x.status === "staple" ? (x === staples.at(-1) ? { basis: keep } : {}) : x.basis ? { basis: x.basis } : {}) })),
-        order: g.toOrder.map((x) => ({ name: x.ingredient, ...(grams(x.need) ? { need: grams(x.need) } : {}), ...(x.standIn && !itself(x.ingredient, x.standIn) ? { instead: readable(shortName(x.standIn), lang) } : {}) })),
+        have: g.onHand.map((x) => ({ name: x.ingredient, ...(grams(x.need) ? { need: grams(x.need) } : {}), ...(x.status === "staple" ? (x === staples.at(-1) ? { basis: keep } : {}) : x.basis ? { basis: basisWords(x.basis, lang) } : {}) })),
+        order: g.toOrder.filter((x) => !isStopped(x.ingredient)).map((x) => ({ name: x.ingredient, ...(grams(x.need) ? { need: grams(x.need) } : {}), ...(x.standIn && !itself(x.ingredient, x.standIn) ? { instead: readable(shortName(x.standIn), lang) } : {}) })),
         // The reason in a few words ("cannot arrive by Tue 17 Nov"), never the products and ids behind it (the steps hold those).
-        cannot: g.cannotGet.map((x) => ({ name: x.ingredient, ...(grams(x.need) ? { need: grams(x.need) } : {}), why: x.words.split(/:\s|;\s/)[0].replace(/\s*\((?:[A-Z]{2}-)?\d{4,}\)/g, "").replace(/\.$/, "").slice(0, 120) })),
-        totalToOrderCents: g.totalToOrderCents,
-        complete: g.complete,
+        cannot: [...g.toOrder.filter((x) => isStopped(x.ingredient)).map((x) => ({ name: x.ingredient, ...(grams(x.need) ? { need: grams(x.need) } : {}), why: stopWhy(x.ingredient) })), ...g.cannotGet.map((x) => ({ name: x.ingredient, ...(grams(x.need) ? { need: grams(x.need) } : {}), why: shortWhy(x.code, x.words, deliverBy, lang) }))],
+        totalToOrderCents: total,
+        complete: g.complete && !stoppedLines.length,
       };
     }
   }
@@ -737,7 +771,8 @@ export async function planDifferences(run: TurnRun, planId: string, lang: "en" |
     const chef = !!p.edits[l.lineId]?.struck;
     if (l.status === "struck" && (l.onHand || l.pantry || chef)) continue;
     const fi = l.searchTerms.find((x) => /[äöå]/i.test(x)) ?? l.searchTerms[0];
-    const name = lang === "fi" && fi ? fi : l.name;
+    // The short name in a sentence ("hard cheese"), never the recipe's parenthesis ("(e.g. emmental or aged edam type)").
+    const name = (lang === "fi" && fi ? fi : l.name).replace(/\s*\([^)]*\)/g, "").replace(/,.*$/, "").trim();
     wanted.push({ key: l.lineId, name, ...(l.gross ? { need: l.gross } : {}), ...(deliverBy ? { day: deliverBy } : {}) });
     const open = l.doubts.filter((d) => !d.accepted);
     const hard = open.find((d) => !d.acceptLabel);
@@ -789,4 +824,98 @@ export async function adoptPlan(run: TurnRun, planId: string): Promise<MenuCard>
   const card = await fullCard(run, svc, m, planned);
   show(run, card);
   return card;
+}
+
+// ---------- the earliest day the whole plan can arrive ----------
+
+/**
+ * When some lines cannot arrive by the plan's day: the earliest later delivery day on which every line can, found by
+ * planning the same plan for each candidate day in turn (the kitchen's delivery weekdays, inside its lead time; at most
+ * four days, so a handful of live checks). `move`: the plan stays on that day; otherwise it goes back to its own day and
+ * the day found is offered. Undefined when no day in the window has it all, or nothing is late.
+ */
+export async function earliestWholeDay(run: TurnRun, planId: string, opts: { move: boolean; until?: string }): Promise<string | undefined> {
+  const memo = ((run.thread as unknown as { wholeDay?: Record<string, string | null> }).wholeDay ??= {});
+  const svc = await planner(run);
+  const { record: p, view } = await svc.service.get(svc.kitchen, planId);
+  const current = p.settings.deliverBy ?? view.totals.day.date;
+  const late = (v: PlanView) => v.totals.missing.some((m) => m.code === "cannot_arrive") || !v.totals.day.ok;
+  if (!current || !late(view)) return undefined;
+  const key = `${planId}:${current}`;
+  if (!opts.move && key in memo) return memo[key] ?? undefined;
+  const profile = await run.rt.kitchens.getProfile(svc.kitchen.mandate.issuer.orgId).catch(() => undefined);
+  const weekdays = profile?.deliveryWeekdays?.length ? profile.deliveryWeekdays : [1, 2, 3, 4, 5];
+  const today = localNow(new Date()).date;
+  const latest = addDaysIso(today, svc.kitchen.mandate.delivery.maxLeadDays);
+  const until = opts.until && opts.until < latest ? opts.until : latest;
+  const days: string[] = [];
+  for (let d = addDaysIso(current, 1); d <= until && days.length < 4; d = addDaysIso(d, 1)) if (weekdays.includes(isoWeekday(d))) days.push(d);
+  const st = step(run, "plan", { en: "Looking for the first day everything can arrive", fi: "Etsin ensimmäisen päivän, jolloin kaikki ehtii", sv: "Letar efter första dagen då allt hinner fram" }[run.lang ?? "en"]);
+  let found: string | undefined;
+  for (const d of days) {
+    const after = await svc.service.edit(svc.kitchen, planId, [{ op: "deliverBy", date: d }], byLine(run)).catch(() => undefined);
+    if (after && !late(after.view)) {
+      found = d;
+      break;
+    }
+  }
+  if (!found || !opts.move) await svc.service.edit(svc.kitchen, planId, [{ op: "deliverBy", date: current }], byLine(run)).catch(() => undefined);
+  st.done(found ?? "none in the window");
+  memo[key] = found ?? null;
+  record(run, "whole_day", `Earliest day every line of ${planId} can arrive, after ${current}: ${found ?? "none up to " + until}${found && opts.move ? " (the plan moved there)" : ""}.`, { planId, from: current, found: found ?? null });
+  if (found && opts.move) await refreshMenu(run, planId).catch(() => undefined);
+  return found;
+}
+
+/** Why a line will not be bought, in a few words and the buyer's language: the same on every card. */
+export function shortWhy(code: string | undefined, words: string, day: string | null | undefined, lang: "en" | "fi" | "sv"): string {
+  const d = day ? new Date(`${day}T12:00:00Z`) : undefined;
+  const dayEn = d ? `${d.toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" })} ${d.getUTCDate()} ${d.toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" })}` : "";
+  const dayFi = d ? `${d.getUTCDate()}.${d.getUTCMonth() + 1}.` : "";
+  if (code === "outside_groups") return { en: "not in your product groups", fi: "ei tuoteryhmissänne", sv: "inte i era produktgrupper" }[lang];
+  if (code === "cannot_arrive") return { en: dayEn ? `can't arrive by ${dayEn}` : "can't arrive in time", fi: dayFi ? `ei ehdi ${dayFi} mennessä` : "ei ehdi ajoissa", sv: dayFi ? `hinner inte fram till ${dayFi}` : "hinner inte fram i tid" }[lang];
+  if (code === "not_sold") return { en: "not sold by the wholesaler", fi: "tukulla ei myynnissä", sv: "säljs inte av grossisten" }[lang];
+  if (code === "not_priced") return { en: "no price right now", fi: "ei hintaa nyt", sv: "inget pris just nu" }[lang];
+  return words.split(/:\s|;\s/).slice(-1)[0].replace(/\s*\((?:[A-Z]{2}-)?\d{4,}\)/g, "").replace(/\.$/, "").slice(0, 80);
+}
+
+/**
+ * Why the kitchen has it, in plain words: "about 1,5 kg left from 12 Nov, estimate" (its own order history), "you said
+ * so"; never the planner's working ("goes through about … a day").
+ */
+const englishDaysOf = (t: string) => {
+  const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return t.replace(/\b(\d{1,2})\.(\d{1,2})\.?/, (m, d: string, mo: string) => (Number(mo) >= 1 && Number(mo) <= 12 ? `${Number(d)} ${MON[Number(mo) - 1]}` : m));
+};
+
+export function basisWords(words: string, lang: "en" | "fi" | "sv"): string {
+  const num = (t: string) => t.replace(/(\d+)\.(\d+)/, (_m, a: string, b: string) => String(Math.round(Number(`${a}.${b}`) * 10) / 10).replace(".", ","));
+  const day = (t: string) => (lang === "en" ? englishDaysOf(t.trim()).replace(/\.$/, "") : t.trim());
+  const m0 = /^estimate: bought (.+?) on ([^(,]+?)(?: \(| ,|,).*so about (.+?) left by/.exec(words);
+  const left = m0 ? [m0[0], num(m0[1]), day(m0[2]), num(m0[3])] : undefined;
+  if (left) return { en: `about ${left[3]} left from ${left[2]}, estimate`, fi: `noin ${left[3]} jäljellä (ostettu ${left[2]}), arvio`, sv: `ungefär ${left[3]} kvar sedan ${left[2]}, uppskattning` }[lang];
+  const s0 = /^estimate: bought (.+?) on ([^,]+),/.exec(words);
+  const staple = s0 ? [s0[0], num(s0[1]), day(s0[2])] : undefined;
+  if (staple) return { en: `bought ${staple[1]} on ${staple[2]}, estimate`, fi: `ostettu ${staple[1]} ${staple[2]}, arvio`, sv: `köpt ${staple[1]} ${staple[2]}, uppskattning` }[lang];
+  if (/^said by the chef/.test(words)) return { en: "you said so", fi: "kerroit niin", sv: "du sa det" }[lang];
+  return words;
+}
+
+/**
+ * The planner's note that the plan is delivered before the day asked because the kitchen's rules let the agent order
+ * only so many days ahead, in the buyer's language; said before the question, never left in the steps alone.
+ */
+export async function leadTimeNote(run: TurnRun, planId: string, lang: "en" | "fi" | "sv"): Promise<string | undefined> {
+  const svc = await planner(run);
+  const { record: p } = await svc.service.get(svc.kitchen, planId);
+  const n = p.notes.find((x) => /at most \d+ days ahead/.test(x));
+  const m = n ? /at most (\d+) days ahead, so the plan is delivered by (.+?), before the service day (.+?)\./.exec(n) : null;
+  if (!m) return undefined;
+  const { dayWords } = await import("./refusal");
+  const by = p.settings.deliverBy ? dayWords(p.settings.deliverBy, lang) : m[2];
+  return {
+    en: `Your rules let me order at most ${m[1]} days ahead, so it is planned to arrive ${by}, before the day you asked for.`,
+    fi: `Sääntönne sallivat tilata enintään ${m[1]} päivää etukäteen, joten suunnittelin toimituksen ${by}, ennen pyytämääsi päivää.`,
+    sv: `Era regler låter mig beställa högst ${m[1]} dagar i förväg, så leveransen är planerad till ${by}, före dagen du bad om.`,
+  }[lang];
 }

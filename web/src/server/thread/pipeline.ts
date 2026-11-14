@@ -238,8 +238,12 @@ async function outsideRules(run: TurnRun, what: string): Promise<{ what: string;
   const cats = found.hits.slice(0, 6).map((h: { product: { category: string } }) => h.product.category);
   if (!cats.length) return undefined;
   const allowed = run.session.mandate.allowedCategories;
-  if (cats.some((c: string) => allowed.includes(c))) return undefined;
-  return { what: what.trim(), category: cats[0] };
+  // The kind the words name is the shelf most of the matches are on ("red wine": wines, not the one red wine vinegar).
+  const counts = new Map<string, number>();
+  for (const c of cats) counts.set(c, (counts.get(c) ?? 0) + 1);
+  const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  if (allowed.includes(top) || cats.filter((c: string) => allowed.includes(c)).length * 2 >= cats.length) return undefined;
+  return { what: what.trim(), category: top };
 }
 
 /** A refusal said in each language; `message` is the English one (what the record and the model read). */
@@ -360,7 +364,8 @@ const TYPOS: [RegExp, string][] = [
   [/\b(liters?|litters?|ltrs?)\b/gi, "litres"],
 ];
 export function fixTypos(words: string): string {
-  let w = words;
+  // "A case of red wine": one case, said as a number so the amount is read.
+  let w = words.replace(/\b(a|one|an)\s+(case|box|crate|carton|bottle|pack|sack|bag|tray)\s+of\b/gi, (_m, _a, unit: string) => `1 ${unit} of`);
   for (const [re, to] of TYPOS) w = w.replace(re, to);
   return w;
 }
@@ -590,6 +595,21 @@ export async function openNeed(run: TurnRun, need: NeedInput, words: string, opt
   // Words that set a latest day ("by Monday", "mennessä", "senast") keep it a latest day.
   const latest = opts.latest || /\b(by|before|at the latest|no later than|mennessä|viimeistään|ennen|senast|innan|före)\b/i.test(words);
   if (n.deliverBy && !n.deliverOn && !latest && n.deliverBy > new Date().toISOString().slice(0, 10)) need = { ...need, deliverOn: n.deliverBy } as NeedInput;
+  // A kind the kitchen's rules do not cover at all ("a case of red wine" in a café): refused with its group before the
+  // intake asks anything about the amount (the shelf most matches are on decides the kind, not a red wine vinegar).
+  {
+    const it = need as { item: { text: string; category?: string; productId?: string } };
+    const outside = !it.item.productId ? await outsideRules(run, it.item.text).catch(() => undefined) : undefined;
+    if (outside && (!it.item.category || !run.session.mandate.allowedCategories.includes(it.item.category))) {
+      const gid = groupIdOf(outside.category);
+      const draft = canDraft(run) && !!gid;
+      const refusal: NoticeCard = { type: "notice", cardId: cardId("notice", opts.ref), kind: "refused", ...worded((l) => ({ code: "out_of_mandate", what: outside.what, ...(groupOf(outside.category, l) ? { group: groupOf(outside.category, l) } : {}), groups: groupsOf(run.session.mandate.allowedCategories, l), ...(run.session.mandate.approvers?.[0]?.name ? { signer: run.session.mandate.approvers[0].name } : {}), ...(draft ? { draft: true } : {}) })), ...(draft && gid ? { addGroup: { id: gid, what: outside.what, words } } : {}) };
+      run.store.card(run.thread, run.turnId, refusal);
+      run.facts.push(refusal);
+      record(run, "rules_first", `"${outside.what}" is outside the kitchen's rules (${outside.category}): said before anything is asked.`, {});
+      return [{ words, notice: refusal }];
+    }
+  }
   const parsed = NeedSchema.parse(need) as StructuredNeed;
   const understood = understoodCard({ ref: opts.ref, words, need: parsed, ...(opts.basedOn ? { basedOn: opts.basedOn } : {}), alsoAsked: opts.alsoAsked ?? [], ...(opts.memoryLine ? { memoryUsed: [opts.memoryLine] } : {}) });
   run.store.card(run.thread, run.turnId, understood);
@@ -635,6 +655,18 @@ export async function openNeed(run: TurnRun, need: NeedInput, words: string, opt
 export async function afterStep(run: TurnRun, s: IntakeView, words: string): Promise<ItemOutcome> {
   run.facts.push(s);
   const out: ItemOutcome = { words, requestId: s.requestId, state: s.state };
+  // A kind the kitchen's rules do not cover at all ("a case of red wine" in a café): that is the answer, before any
+  // question about the amount, whose answer would change nothing.
+  if ((s.state === "needs_confirmation" || s.state === "needs_input") && s.family && !run.session.mandate.allowedCategories.includes(s.family) && groupIdOf(s.family)) {
+    const what = s.need.item.text;
+    const gid = groupIdOf(s.family)!;
+    const draft = canDraft(run);
+    const refusal: NoticeCard = { type: "notice", cardId: cardId("notice", s.requestId), requestId: s.requestId, kind: "refused", ...worded((l) => ({ code: "out_of_mandate", what, ...(groupOf(s.family!, l) ? { group: groupOf(s.family!, l) } : {}), groups: groupsOf(run.session.mandate.allowedCategories, l), ...(run.session.mandate.approvers?.[0]?.name ? { signer: run.session.mandate.approvers[0].name } : {}), ...(draft ? { draft: true } : {}) })), ...(draft ? { addGroup: { id: gid, what, words } } : {}) };
+    run.store.card(run.thread, run.turnId, refusal);
+    record(run, "rules_first", `"${what}" is outside the kitchen's rules (${s.family}): said before asking about the amount.`, {}, s.requestId);
+    out.notice = refusal;
+    return out;
+  }
   const anomaly = anomalyCard(s);
   if (anomaly && s.state === "needs_confirmation") {
     run.store.card(run.thread, run.turnId, anomaly);
@@ -714,6 +746,8 @@ export async function afterStep(run: TurnRun, s: IntakeView, words: string): Pro
     }
     if (missing.length) record(run, "not_in_assortment", `The options do not carry "${missing.join(" ")}" (from "${s.need.item.text}")${q.absent.length ? ", and nothing in the assortment does" : ""}: they are shown as stand-ins, not as a match.`, { words: missing, absent: q.absent }, s.requestId);
     run.store.card(run.thread, run.turnId, card);
+    // A pack under a kilo or a litre is also said in grams or millilitres: the fact check knows both.
+    for (const o of card.options) for (const l of o.lines) if (l.packSize && l.packSize < 1 && l.unit !== "pcs") run.facts.push({ packIn: { amount: Math.round(l.packSize * 1000), unit: l.unit === "kg" ? "g" : "ml" } });
     mark(run, "options");
     out.options = card.options.map((o, i) => ({ ref: `o${i + 1}`, optionId: o.optionId, title: o.title, totalCents: o.totalCents, deliveryDate: o.deliveryDate, match: o.match }));
     const routine = missing.length || run.multi ? undefined : await routineChoice(run, s, card.options);
@@ -774,6 +808,8 @@ async function quotedDifferences(run: TurnRun, s: IntakeView): Promise<Differenc
   const [product] = one ? await run.rt.catalog.searchProducts({ ids: [one.productId], limit: 1 }).catch(() => []) : [];
   const lot = one ? (product?.lotSize && product.lotSize > 0.01 ? product.lotSize : 1) : undefined;
   const pack = one && lot ? { count: Math.round(one.quantity / lot), size: Math.round(lot * one.packSize * 1000) / 1000, unit: one.unit } : undefined;
+  // The same pack in the other unit is the same fact ("700 g" for a 0,7 kg lot): the fact check knows both.
+  if (pack) run.facts.push({ pack: { count: pack.count, size: pack.size, unit: pack.unit, ...(pack.size < 1 && pack.unit !== "pcs" ? { smallUnit: Math.round(pack.size * 1000), smallUnitName: pack.unit === "kg" ? "g" : "ml" } : {}) } });
   const on = (s.need as { deliverOn?: string }).deliverOn;
   const day = q.lines.map((l) => l.deliveryDate).sort().at(-1);
   return optionDifferences({ key: s.requestId, name: s.need.item.text, ...(asked ? { amount: asked } : {}), ...((on ?? s.need.deliverBy) ? { day: on ?? s.need.deliverBy } : {}), exact: !!on }, { ...(delivered ? { delivered } : {}), ...(day ? { deliveryDate: day } : {}), ...(pack && pack.size !== 1 ? { pack } : {}) });

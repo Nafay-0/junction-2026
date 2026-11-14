@@ -129,7 +129,7 @@ async function ideasFor(run: TurnRun, words: string, lang: Lang, frame: { covers
   const lines = r.ideas.slice(0, 4).map((d, i) => {
     const groups = [...new Set(d.missing.map((m) => (m.group ? m.group.split(":")[0].toLowerCase() : m.ingredient.toLowerCase())))];
     const can = d.buyable
-      ? { en: "you can buy it all", fi: "kaiken voi ostaa", sv: "allt går att köpa" }[lang]
+      ? { en: "your rules cover all of it", fi: "sääntönne kattavat kaiken", sv: "era regler täcker allt" }[lang]
       : { en: `needs ${groups.join(", ")}, which your rules don't cover`, fi: `tarvitsee: ${groups.join(", ")}, joita sääntönne eivät kata`, sv: `behöver ${groups.join(", ")}, som era regler inte omfattar` }[lang];
     const why = d.reason ? short(d.reason) : "";
     return `${i + 1}. ${nameL(d, lang)}${why ? `: ${why.charAt(0).toLowerCase()}${why.slice(1)}` : ""} (${can}).`;
@@ -140,8 +140,17 @@ async function ideasFor(run: TurnRun, words: string, lang: Lang, frame: { covers
 async function pick(run: TurnRun, ideas: Ideas, d: Ideas["ideas"][number], lang: Lang): Promise<string> {
   const s = step(run, "plan", lang === "fi" ? `Suunnittelen: ${nameL(d, lang)}, hinnat suoraan tukusta` : lang === "sv" ? `Planerar ${nameL(d, lang)} med priser direkt från grossisten` : `Planning ${nameL(d, lang)} with live prices`);
   const { pickIdea } = await import("@/server/agent/menu/thread");
-  const g = await pickIdea(run.k.info.slug, ideas.ideasId, d.dishId, byLine(run), lang, { ...(ideas.covers ? { covers: ideas.covers } : {}), ...(ideas.date ? { date: ideas.date } : {}) });
+  let g = await pickIdea(run.k.info.slug, ideas.ideasId, d.dishId, byLine(run), lang, { ...(ideas.covers ? { covers: ideas.covers } : {}), ...(ideas.date ? { date: ideas.date } : {}) });
   s.done();
+  // No day named ("next week", or none): the first delivery day on which every ingredient can arrive, said as the day.
+  let moved: string | undefined;
+  if (!ideas.date && !g.complete) {
+    const { adoptPlan: adopt, earliestWholeDay } = await import("./menu");
+    await adopt(run, g.planId);
+    const until = /\b(next week|ensi viikolla|nästa vecka)\b/i.test(ideas.words) ? nextSunday() : undefined;
+    moved = await earliestWholeDay(run, g.planId, { move: true, ...(until ? { until } : {}) }).catch(() => undefined);
+    if (moved) g = await (await import("@/server/agent/menu/thread")).dishGroups(run.k.info.slug, g.planId, lang);
+  }
   const { adoptPlan } = await import("./menu");
   await adoptPlan(run, g.planId);
   delete stateOf(run).ideas;
@@ -153,11 +162,20 @@ async function pick(run: TurnRun, ideas: Ideas, d: Ideas["ideas"][number], lang:
   const { dayWords } = await import("./refusal");
   const day = g.day ? `{{${dayWords(g.day, lang)}}}` : "";
   const name = nameL(d, lang);
+  const first = moved ? { en: `The first day everything can arrive is ${day}, so I've planned it for then. `, fi: `Kaikki ehtii aikaisintaan ${day}, joten suunnittelin sen silloin. `, sv: `Allt hinner fram tidigast ${day}, så jag har planerat den dit. ` }[lang] : "";
   if (g.complete)
-    return {
+    return first + {
       en: `${name}${g.covers ? ` for ${g.covers}` : ""}: ${money(g.totalToOrderCents)} for what I'll order${g.perCoverCents ? `, ${money(g.perCoverCents)} a portion` : ""}. Shall I order it${day ? ` for ${day}` : ""}?`,
       fi: `${name}${g.covers ? ` ${g.covers} hengelle` : ""}: tilattavat ${money(g.totalToOrderCents)}${g.perCoverCents ? `, ${money(g.perCoverCents)} annokselta` : ""}. Tilaanko sen${day ? ` (${day})` : ""}?`,
       sv: `${name}${g.covers ? ` för ${g.covers}` : ""}: ${money(g.totalToOrderCents)} för det jag beställer${g.perCoverCents ? `, ${money(g.perCoverCents)} per portion` : ""}. Ska jag beställa den${day ? ` till ${day}` : ""}?`,
     }[lang];
-  return name;
+  return first ? `${first.trim()}` : name;
+}
+
+/** The Sunday that ends next week (Helsinki). */
+function nextSunday(): string {
+  const today = localNow(new Date()).date;
+  let d = addDaysIso(today, 1);
+  while (isoWeekday(d) !== 1) d = addDaysIso(d, 1);
+  return addDaysIso(d, 6);
 }

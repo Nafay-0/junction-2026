@@ -260,6 +260,18 @@ export function createScenarios(deps: ScenarioDeps) {
     return edits;
   }
 
+  /**
+   * The on-hand step for any plan (the seasonal menu, a booking, a dish picked from ideas, a dish asked for): what the
+   * chef said and the estimate from the kitchen's own order history, as the planner's own onHand edits, so the plan
+   * buys only the shortfall. One function for every path.
+   */
+  async function applyOnHand(k: MenuKitchen, planId: string, by: string, said: SaidItem[] = []): Promise<{ record: PlanRecord; view: PlanView }> {
+    const planned = await service.get(k, planId);
+    if (planned.record.state === "declined") return planned;
+    const edits = await onHandEdits(k, planned.record, planned.view, said);
+    return edits.length ? service.edit(k, planId, edits, by) : planned;
+  }
+
   // ---------- scenario 1 ----------
 
   async function seasonal(k: MenuKitchen, words: string, by: string, opts: { month?: number } = {}): Promise<SeasonalResult> {
@@ -276,9 +288,7 @@ export function createScenarios(deps: ScenarioDeps) {
     const first = await service.plan(k, text.slice(0, 3900), by);
     if (first.record.state === "declined") return seasonalResult(k, first.record, first.view, anchor, said, []);
     await service.settled(first.record.planId);
-    let planned = await service.get(k, first.record.planId);
-    const edits = await onHandEdits(k, planned.record, planned.view, said);
-    if (edits.length) planned = await service.edit(k, planned.record.planId, edits, by);
+    let planned = await applyOnHand(k, first.record.planId, by, said);
     const large = planned.view.lines.filter((l) => l.doubts.some((d) => !d.accepted && d.doubtId.endsWith(":large_pack"))).map((l) => l.lineId);
     if (large.length) planned = await service.edit(k, planned.record.planId, large.map((lineId) => ({ op: "repack" as const, lineId })), by);
     const p = planned.record;
@@ -290,7 +300,7 @@ export function createScenarios(deps: ScenarioDeps) {
         source: anchor.source,
       });
     }
-    return seasonalResult(k, p, planned.view, anchor, said, edits.map((e) => e.lineId));
+    return seasonalResult(k, p, planned.view, anchor, said, planned.view.lines.filter((l) => l.onHand).map((l) => l.lineId));
   }
 
   function anchorMatch(a: SeasonalAnchor, l: PlanLineView): boolean {
@@ -524,7 +534,8 @@ export function createScenarios(deps: ScenarioDeps) {
     // The planner's own ways out (the model's ideas by the dish) are welcome if they come within 20 s; the options by
     // role do not wait for them.
     await Promise.race([service.settled(first.record.planId), new Promise((r) => setTimeout(r, opts.waitMs ?? 5_000))]);
-    planned = await service.get(k, first.record.planId);
+    // What the kitchen has, from its own history (and what the words say it has), before anything is said missing.
+    planned = opts.planId ? await service.get(k, first.record.planId) : await applyOnHand(k, first.record.planId, by, saidHave(words));
     // A line not priced yet is not "cannot arrive": ask the wholesaler for it first (one short batched call).
     // Up to three rounds of ten: a three-course menu has more lines than one call holds.
     for (let round = 0; round < 3 && planned.view.lines.some((l) => l.doubts.some((d) => !d.accepted && d.kind === "not_priced")); round++) planned = await service.edit(k, first.record.planId, [{ op: "price" }], by);
@@ -715,7 +726,7 @@ export function createScenarios(deps: ScenarioDeps) {
     return sheetOf(k, planId, [], { by });
   }
 
-  return { anchors, seasonal, event: eventCached, sheetOf, seasonalSheet, order, cached: (planId: string) => cache.get(planId) };
+  return { anchors, seasonal, event: eventCached, sheetOf, seasonalSheet, order, applyOnHand, cached: (planId: string) => cache.get(planId) };
 }
 
 export type Scenarios = ReturnType<typeof createScenarios>;
