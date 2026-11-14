@@ -284,10 +284,19 @@ export async function openNeed(run: TurnRun, need: NeedInput, words: string, opt
     const res = await published<{ step: IntakeView }>(run, "submit_need", { need, by: byLine(run) });
     intake.done(res.step.state);
     run.requests.add(res.step.requestId);
-    if (opts.basedOn) await noteReplacement(run, res.step.requestId, opts.basedOn.requestId);
+    let step0 = res.step;
+    if (opts.basedOn && (await noteReplacement(run, res.step.requestId, opts.basedOn.requestId))) {
+      // "Make it 200" is a repeat of the order it replaces by design: the repeat check's only question is answered by
+      // the buyer's own words (recorded as theirs, or as relayed), and that order goes back once the new one is placed.
+      const dup = step0.state === "needs_confirmation" && step0.concerns.length > 0 && step0.concerns.every((c) => c.code === "duplicate_recent" && c.confirmable);
+      if (dup) {
+        step0 = await run.rt.dock.intake.respondToConcerns(run.session, step0.requestId, { by: byLine(run), responses: step0.concerns.map((c) => ({ key: c.key, choice: "confirm" })) }, humanVia(run, words));
+        record(run, "replaces_repeat", `The repeat check on ${res.step.requestId} is the order it replaces: answered by the buyer's change "${words.slice(0, 80)}".`, {}, res.step.requestId);
+      }
+    }
     run.store.card(run.thread, run.turnId, { ...understood, requestId: res.step.requestId, memoryUsed: [...(opts.memoryLine ? [opts.memoryLine] : []), ...res.step.memoryUsed.map((m) => m.text)], memory: res.step.memoryUsed, ...(res.step.noticed?.length ? { notes: res.step.noticed.map((n) => ({ code: n.code, params: n.params })) } : {}) });
     if (res.step.memoryUsed.length) record(run, "memory_read", `Memory answered for this request: ${res.step.memoryUsed.map((m) => m.text).join("; ")}`, { lines: res.step.memoryUsed }, res.step.requestId);
-    return [await afterStep(run, res.step, words)];
+    return [await afterStep(run, step0, words)];
   } catch (err) {
     intake.fail(err instanceof DockError ? err.code : undefined);
     const notice = noticeFrom(err, opts.ref, words);
@@ -443,12 +452,13 @@ const replacesOf = (run: TurnRun): Record<string, string> => ((run.thread as unk
  * new order, once placed (alone or by the buyer's tap), takes the old one back: one order stands, never both.
  * Only an order that can still go back: waiting for an OK, or placed and before its cut-off with a signed-in person.
  */
-async function noteReplacement(run: TurnRun, requestId: string, earlierRequestId: string): Promise<void> {
+async function noteReplacement(run: TurnRun, requestId: string, earlierRequestId: string): Promise<boolean> {
   const { takeBackUntil } = await import("@/core/orders");
   const old = (await run.rt.dock.listOrders()).find((o) => o.requestId === earlierRequestId && o.orgId === run.session.mandate.issuer.orgId && (o.status === "pending_approval" || (o.status === "committed" && !!run.person && !!takeBackUntil(o))));
-  if (!old) return;
+  if (!old) return false;
   replacesOf(run)[requestId] = old.orderId;
   record(run, "replaces", `The new request ${requestId} changes order ${old.orderId}: placing it takes that order back.`, { orderId: old.orderId }, requestId);
+  return true;
 }
 
 async function replaceEarlier(run: TurnRun, requestId: string, placed: PublicOrder): Promise<{ orderId: string; status: string } | undefined> {

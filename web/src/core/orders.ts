@@ -21,7 +21,7 @@ import { DockError, isDockError, parse } from "./errors";
 import { concernsOfOrder, unaskedNote, type OrderConcern } from "./order-check";
 import { qualifiersOf, wordsNotCarried } from "./qualifiers";
 import { InMemoryIntakeRepository, createIntakeFlow, isVerified, recordCommittedOrder, type HumanVia, type IntakeDeps, type IntakeRepository } from "./intake";
-import { InMemoryKitchenRepository, localNow, type KitchenRepository } from "./kitchen";
+import { InMemoryKitchenRepository, localNow, updateKitchenProfile, type KitchenRepository } from "./kitchen";
 import { SIGN_ALG, type KeyPair } from "./keys";
 import type { Ledger, LedgerHead } from "./ledger";
 import { LiveLookupAllowance, shareKeyOf } from "./live-allowance";
@@ -1553,6 +1553,8 @@ export function createDock(deps: DockDeps) {
           order.status = "withdrawn";
           order.updatedAt = at;
           await repo.saveOrder(order);
+          // Not bought after all: out of the kitchen's history, so "usual" amounts and the repeat check do not count it.
+          await updateKitchenProfile(kitchens, orgId, (p) => (p ? { ...p, history: p.history.filter((h) => h.orderId !== orderId) } : p));
           ledger.append({
             type: "order",
             actor: agentActor(session),
