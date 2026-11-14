@@ -314,7 +314,9 @@ export async function openNeed(run: TurnRun, need: NeedInput, words: string, opt
   // A kitchen's day ("for Thursday", "torstaiksi") is the day it wants the goods, not a latest date: delivered that day
   // when it can be (the intake moves the wholesaler's earliest offer to it). Earlier only when that day cannot be had.
   const n = need as { deliverBy?: string; deliverOn?: string };
-  if (n.deliverBy && !n.deliverOn && n.deliverBy > new Date().toISOString().slice(0, 10)) need = { ...need, deliverOn: n.deliverBy } as NeedInput;
+  // Words that set a latest day ("by Monday", "mennessä", "senast") keep it a latest day.
+  const latest = /\b(by|before|at the latest|no later than|mennessä|viimeistään|ennen|senast|innan|före)\b/i.test(words);
+  if (n.deliverBy && !n.deliverOn && !latest && n.deliverBy > new Date().toISOString().slice(0, 10)) need = { ...need, deliverOn: n.deliverBy } as NeedInput;
   const parsed = NeedSchema.parse(need) as StructuredNeed;
   const understood = understoodCard({ ref: opts.ref, words, need: parsed, ...(opts.basedOn ? { basedOn: opts.basedOn } : {}), alsoAsked: opts.alsoAsked ?? [], ...(opts.memoryLine ? { memoryUsed: [opts.memoryLine] } : {}) });
   run.store.card(run.thread, run.turnId, understood);
