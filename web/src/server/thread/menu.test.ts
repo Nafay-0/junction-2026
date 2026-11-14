@@ -51,6 +51,30 @@ function plannerScript(menus: { when?: RegExp; raw: Raw; alternatives?: { title:
       } else body = { ...menu.raw, dishes: menu.raw.dishes.map(({ ingredients: _i, ...d }) => (void _i, d)), alternatives: menu.alternatives ?? [] };
       return { content: [{ type: "text", text: JSON.stringify(body) }], finishReason: { unified: "stop", raw: undefined }, usage, warnings: [] };
     },
+    // The dish calls stream (the planner shows each ingredient as it is written): the same answer in small pieces.
+    doStream: async (o) => {
+      const text = JSON.stringify(o.prompt);
+      prompts.push(text);
+      const menu = menus.find((m) => !m.when || m.when.test(text)) ?? menus[0];
+      const d = menu.raw.dishes.find((x) => text.includes(`The dish: ${x.name}`)) ?? menu.raw.dishes[0];
+      const json = JSON.stringify({ ingredients: d.ingredients, conflicts: [] });
+      const pieces = json.match(/.{1,40}/g) ?? [json];
+      return {
+        stream: new ReadableStream<LanguageModelV4StreamPart>({
+          async start(c) {
+            c.enqueue({ type: "stream-start", warnings: [] });
+            c.enqueue({ type: "text-start", id: "t" });
+            for (const delta of pieces) {
+              c.enqueue({ type: "text-delta", id: "t", delta });
+              await new Promise((r) => setTimeout(r, delayMs / pieces.length));
+            }
+            c.enqueue({ type: "text-end", id: "t" });
+            c.enqueue({ type: "finish", finishReason: { unified: "stop", raw: undefined }, usage });
+            c.close();
+          },
+        }),
+      };
+    },
   });
   return { model, id: "mock:planner", prompts };
 }
@@ -134,14 +158,17 @@ describe("the menu builder in the thread", () => {
     expect(seen[0].stage).toBe("proposing");
     expect(seen[0].dishes.map((d) => d.name)).toEqual(DAIRY.dishes.map((d) => d.name));
     expect(lines(seen[0])).toHaveLength(0);
-    // 2. The dish written: its lines, still resolving, with the amount per cover and what 300 covers need.
+    // 2. While a dish is written, its lines appear one by one (before the dish is in).
+    const growing = seen.filter((c) => c.stage === "proposing").map((c) => c.dishes[0].lines.length);
+    expect(growing.some((n) => n > 0 && n < DAIRY.dishes[0].ingredients.length)).toBe(true);
+    // 3. The dish written: its lines, still resolving, with the amount per cover and what 300 covers need.
     const written = seen.find((c) => lines(c).length > 0)!;
     expect(written.stage).toBe("proposing");
     expect(lines(written).filter((l) => l.status !== "have").every((l) => l.status === "resolving" && !l.product)).toBe(true);
     const cream = lines(written).find((l) => /cream/i.test(l.ingredient))!;
     expect(cream.perCover).toEqual({ amount: 80, unit: "ml" });
     expect(cream.need).toEqual({ amount: 24, unit: "L" }); // 80 ml × 300 covers
-    // 3. Ready: products, packs, prices, cost per cover, the gate's preview of the plan as one order.
+    // 4. Ready: products, packs, prices, cost per cover, the gate's preview of the plan as one order.
     const last = seen.at(-1)!;
     expect(last.stage).toBe("ready");
     expect(seen.findIndex((c) => c.stage === "ready")).toBeGreaterThan(seen.indexOf(written));

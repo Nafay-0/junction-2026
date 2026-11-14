@@ -9,7 +9,7 @@ import type { Decision } from "@/core/policy";
 import type { Quote } from "@/core/quote";
 import { formatEur, newId } from "@/core/util";
 import { onsiteSession } from "../../ops/onsite";
-import type { CallStats, DraftIngredient, DraftOutline, DraftResult, MenuDraft } from "./draft";
+import type { CallStats, DraftIngredient, DraftOptions, DraftOutline, DraftResult, MenuDraft } from "./draft";
 import type { FixResult, FixRequest } from "./fixes";
 import { toFixOptions } from "./fixes";
 import type { MenuKitchen } from "./kitchens";
@@ -85,7 +85,7 @@ export type PlanDeps = {
   dock: Dock;
   catalog: MenuCatalog;
   now: () => Date;
-  draft: (text: string, ctx: MenuPromptContext, now: Date, onDish?: (ingredients: DraftIngredient[], dish?: { dishId: string; name: string }) => void, onOutline?: (outline: DraftOutline) => void) => Promise<DraftResult & { recorded?: boolean }>;
+  draft: (text: string, ctx: MenuPromptContext, now: Date, onDish?: (ingredients: DraftIngredient[], dish?: { dishId: string; name: string }) => void, onOutline?: (outline: DraftOutline) => void, onDishPartial?: DraftOptions["onDishPartial"]) => Promise<DraftResult & { recorded?: boolean }>;
   fix?: (req: FixRequest, ctx: MenuPromptContext) => Promise<FixResult>;
   /** Which found products are the ingredient (a fast model judging names). Absent: the code's ranking stands. */
   pick?: (lines: PickLine[]) => Promise<PickResult>;
@@ -118,6 +118,8 @@ export class InMemoryPlanStore implements PlanStore {
  */
 export type PlanProgress =
   | { kind: "outline"; planId: string; outline: DraftOutline }
+  /** A dish still being written: the ingredients complete so far, unchecked (the checked list follows as `dish`). */
+  | { kind: "dish_partial"; planId: string; dishId: string; name: string; ingredients: Parameters<NonNullable<DraftOptions["onDishPartial"]>>[0] }
   | { kind: "dish"; planId: string; dishId: string; name: string; ingredients: DraftIngredient[] }
   | { kind: "matched"; planId: string; record: PlanRecord; view: PlanView; ms: number };
 
@@ -444,6 +446,11 @@ export function createPlanService(deps: PlanDeps) {
         outlined = true;
         emit({ kind: "outline", planId, outline });
       },
+      opts.onProgress
+        ? (ings, dish) => {
+            if (!dishesShown.has(dish.dishId)) emit({ kind: "dish_partial", planId, dishId: dish.dishId, name: dish.name, ingredients: ings });
+          }
+        : undefined,
     );
     // A drafter that hands on nothing early (recorded outputs, a list): the same steps, from the full draft.
     if (d.draft.isFoodOrderRequest) {

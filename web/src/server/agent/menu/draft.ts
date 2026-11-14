@@ -1,4 +1,4 @@
-import { generateText, Output, type LanguageModel } from "ai";
+import { generateText, Output, streamText, type LanguageModel } from "ai";
 import { z } from "zod";
 import { recordLlmSpend, reserveLlmCall } from "@/server/limits";
 import { DockError } from "@/core/errors";
@@ -241,6 +241,12 @@ export type DraftOptions = {
   onDish?: (ingredients: DraftIngredient[], dish: { dishId: string; name: string }) => void;
   /** Called once with the outline, before any dish is written. */
   onOutline?: (outline: DraftOutline) => void;
+  /**
+   * Called while a dish is being written, with the ingredients complete so far (the model's answer streamed): the
+   * screen shows each line as the model writes it instead of when the whole dish is in. Unchecked; the checked list
+   * follows in onDish. Given, the dish calls stream; absent, they do not.
+   */
+  onDishPartial?: (ingredients: { key: string; name: string; perCover?: { amount: number; unit: DraftUnit }; pantry?: boolean }[], dish: { dishId: string; name: string }) => void;
 };
 
 export function menuModelSpec(env: Record<string, string | undefined> = process.env): string | undefined {
@@ -283,23 +289,35 @@ export async function draftMenu(opts: DraftOptions): Promise<DraftResult> {
   const deadline = t0 + timeoutMs;
   const calls: CallStats[] = [];
 
-  async function call<T>(step: string, schema: z.ZodType<T>, instructions: string, prompt: string): Promise<T> {
+  async function call<T>(step: string, schema: z.ZodType<T>, instructions: string, prompt: string, partial?: (p: unknown) => void): Promise<T> {
     const s0 = Date.now();
-    let res;
+    let res: { usage: Parameters<typeof tokensFromUsage>[0]; output: unknown };
     try {
       reserveLlmCall(); // public-demo caps: daily calls and spend, DOCK_LLM=off (server/limits.ts)
+      const args = {
+        model,
+        instructions,
+        prompt,
+        output: Output.object({ schema, name: step.startsWith("dish") ? "dish_ingredients" : "menu_outline" }),
+        maxOutputTokens: 12_000,
+        maxRetries: 0,
+        providerOptions: providerOptionsFor(id),
+        abortSignal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
+      };
       res = await withRetry(
-        () =>
-          generateText({
-            model,
-            instructions,
-            prompt,
-            output: Output.object({ schema, name: step.startsWith("dish") ? "dish_ingredients" : "menu_outline" }),
-            maxOutputTokens: 12_000,
-            maxRetries: 0,
-            providerOptions: providerOptionsFor(id),
-            abortSignal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
-          }),
+        async () => {
+          if (!partial) return generateText(args);
+          // Streamed: each partial answer is handed on as it grows; the result is the same checked output.
+          const r = streamText({ ...args, onError: () => undefined });
+          for await (const p of r.partialOutputStream) {
+            try {
+              partial(p);
+            } catch {
+              // a watcher's failure never stops the call
+            }
+          }
+          return { output: await r.output, usage: await r.usage };
+        },
         { deadline, policy: { maxRetries: 1, baseMs: 500, maxMs: 3000 } },
       );
     } catch (err) {
@@ -310,6 +328,21 @@ export async function draftMenu(opts: DraftOptions): Promise<DraftResult> {
     calls.push({ step, ms: Date.now() - s0, tokens, costUsd: costOf(tokens, price) });
     recordLlmSpend(costOf(tokens, price));
     return res.output as T;
+  }
+
+  /** The ingredients complete so far (every one but the one still being written), each once its name and amount are in. */
+  function dishPartial(d: { name: string }, i: number) {
+    let shown = 0;
+    return (p: unknown) => {
+      const ings = ((p as { ingredients?: Partial<LlmIngredient>[] } | undefined)?.ingredients ?? []).slice(0, -1);
+      const done = ings.filter((x) => x?.key && x.name && x.perCover?.amount !== undefined && x.perCover.unit && x.pantry !== undefined);
+      if (done.length <= shown) return;
+      shown = done.length;
+      opts.onDishPartial!(
+        done.map((x) => ({ key: slug(x.key!) || slug(x.name!), name: clean(x.name!, 80), perCover: { amount: Number(x.perCover!.amount), unit: x.perCover!.unit as DraftUnit }, pantry: !!x.pantry })),
+        { dishId: `dish_${i + 1}`, name: d.name },
+      );
+    };
   }
 
   const outline = await call("outline", LlmOutline, outlineSystem(opts.context), outlineUser(text, calendar(now)));
@@ -336,6 +369,7 @@ export async function draftMenu(opts: DraftOptions): Promise<DraftResult> {
         LlmDishDetail,
         dishSystem(opts.context),
         dishUser({ text, dish: d, otherDishes: dishes.filter((x) => x !== d).map((x) => x.name), claims: outline.requiredClaims, allergens: outline.forbiddenAllergens }),
+        opts.onDishPartial ? dishPartial(d, i) : undefined,
       ).then((detail) => {
         // Hand each dish on as soon as it is in, so the catalogue search for it overlaps the dishes still being written.
         try {

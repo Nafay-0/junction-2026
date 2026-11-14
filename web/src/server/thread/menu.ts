@@ -40,7 +40,6 @@ type MenuState = {
   sheetId?: string;
   outline?: DraftOutline;
   dishes: Record<string, DraftIngredient[]>;
-  matched?: Planned;
   /** When the outline and the ready card were shown, ms after the tool started (the record and the eval read them). */
   timings: { outlineMs?: number; matchedMs?: number; readyMs?: number; startedAt: number };
 };
@@ -51,6 +50,9 @@ const menusOf = (run: TurnRun): Record<string, MenuState> => ((run.thread as unk
 const g = globalThis as typeof globalThis & { __dockMenuJobs?: Map<string, Promise<Planned>> };
 const jobs = (g.__dockMenuJobs ??= new Map());
 const jobKey = (run: TurnRun, m: MenuState, proposalId: string) => `${run.thread.threadId}:${m.key}:${proposalId}`;
+/** The lines as matched, before live prices: held here, not on the thread (the thread is persisted, this is large). */
+const g2 = globalThis as typeof globalThis & { __dockMenuMatched?: Map<string, Planned> };
+const matched = (g2.__dockMenuMatched ??= new Map());
 
 async function planner(run: TurnRun) {
   const { menuKitchen } = await import("@/server/agent/menu/runtime");
@@ -263,15 +265,20 @@ function startPlan(run: TurnRun, svc: Svc, m: MenuState, text: string, proposalI
       } else m.chosen ??= proposalId;
       show(run, streamingCard(m));
       onOutline?.();
+    } else if (e.kind === "dish_partial") {
+      // The lines as the model writes them: names and amounts per cover, checked once the dish is in.
+      m.dishes[e.dishId] = e.ingredients.map((x) => ({ key: x.key, name: x.name, perCover: x.perCover ?? { amount: 0, unit: "g" }, pantry: !!x.pantry, yieldPct: 100 }) as DraftIngredient);
+      if (m.stage !== "choose" || m.chosen) show(run, streamingCard(m));
     } else if (e.kind === "dish") {
       m.dishes[e.dishId] = e.ingredients;
       if (m.stage !== "choose" || m.chosen) show(run, streamingCard(m));
     } else if (e.kind === "matched") {
-      m.matched = { record: e.record, view: e.view };
+      matched.set(m.key, { record: e.record, view: e.view });
+      if (matched.size > 100) matched.delete(matched.keys().next().value!);
       m.timings.matchedMs ??= Date.now() - m.timings.startedAt;
       if (m.stage !== "choose") {
         m.stage = "resolving";
-        void fullCard(run, svc, m, m.matched, true).then((c) => m.stage === "resolving" && show(run, c));
+        void fullCard(run, svc, m, matched.get(m.key)!, true).then((c) => m.stage === "resolving" && show(run, c));
       }
     }
   };
@@ -400,8 +407,9 @@ async function choose(run: TurnRun, planId: string, proposalId: string): Promise
   const st = step(run, "plan", proposalId === "p1" ? "Finishing the menu you chose" : "Planning the menu you chose");
   if (proposalId === "p1") {
     const running = jobs.get(jobKey(run, m, "p1"));
-    m.stage = m.matched ? "resolving" : "proposing";
-    show(run, m.matched ? await fullCard(run, svc, m, m.matched, true) : streamingCard(m));
+    const early = matched.get(m.key);
+    m.stage = early ? "resolving" : "proposing";
+    show(run, early ? await fullCard(run, svc, m, early, true) : streamingCard(m));
     const planned = running ? await running : await svc.service.get(svc.kitchen, planId);
     m.stage = planned.record.state === "declined" ? "declined" : "ready";
     show(run, await fullCard(run, svc, m, planned));
@@ -412,7 +420,7 @@ async function choose(run: TurnRun, planId: string, proposalId: string): Promise
   m.planId = "";
   m.outline = undefined;
   m.dishes = {};
-  m.matched = undefined;
+  matched.delete(m.key);
   m.stage = "proposing";
   m.timings = { startedAt: Date.now() };
   show(run, { ...streamingCard(m), planId });
