@@ -151,7 +151,7 @@ live stream: tell the presenter to have visitors reload and tap the request unde
 - One venue address: about 15 visitors can join per minute (rule `join`), and 12 "ask my agent" taps per minute
   (rule `demo-order`); the 16th joiner within a minute sees "Too many requests from your address; try again in N s".
   Ten visitors at once all complete. Stagger larger groups by a minute.
-- One order page (`/k/<kitchen>/order`) watching a request per address is fine; a second one from the same address
-  starts getting 429s within a minute (rule `console-call`). Keep one store page open per table, not one per phone.
+- Order pages: five `/k/<kitchen>/order` pages watching waiting orders from one address got no 429 in 75 s
+  (QA's finding of 429s at two pages no longer reproduces on this build).
 - `demoLimits` in `/api/health`: at the model cap, free text and the assistant stop until midnight UTC with no
   offline fallback (FINDINGS.md); raise the cap before the session rather than during it.

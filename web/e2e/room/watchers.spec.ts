@@ -40,7 +40,7 @@ async function watcher(browser: Browser): Promise<{ page: Page; refusals: string
 
 test.skip(!LIMITS_URL, "needs the limits-on server (E2E_LIMITS_URL)");
 
-for (const n of [1, 2]) {
+for (const n of (process.env.E2E_WATCHERS ?? "1,2").split(",").map(Number)) {
   test(`${n} order page(s) watching a waiting order from one address, 75 s`, async ({ browser }) => {
     test.setTimeout(240_000);
     await new Promise((r) => setTimeout(r, 61_000)); // a fresh rate-limit minute

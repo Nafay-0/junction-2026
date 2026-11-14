@@ -75,9 +75,26 @@ export type RefusalCheck = { name: string; status: number; code?: string; refuse
  * Misbehaviour attempts against a fresh quote: an edited price, lines that differ from the quote, and a second
  * use of the same quote after the real order. "accepted" = Dock answered 2xx with an order (that must never happen).
  */
-export async function refusalChecks(call: Caller, quoteStep: any): Promise<RefusalCheck[]> {
+/**
+ * The order body exactly as the console sends it: the signed quote token and its lines. Since main 4f0e267 a
+ * step's `next.example` is only `{ requestId }` (Dock places the quote it signed for the request), so the explicit
+ * body is built from the step's quote; without it the tamper checks below would silently not run.
+ */
+export function explicitOrderBody(quoteStep: any): any {
   const example = quoteStep?.next?.example;
-  if (!example?.quoteToken) return [];
+  if (example?.quoteToken) return example;
+  const q = quoteStep?.quote;
+  if (!q?.quoteToken) return undefined;
+  return {
+    requestId: quoteStep.requestId ?? example?.requestId,
+    quoteToken: q.quoteToken,
+    lines: (q.quote?.lines ?? []).map(({ productId, quantity, unitPriceCents }: any) => ({ productId, quantity, unitPriceCents })),
+  };
+}
+
+export async function refusalChecks(call: Caller, quoteStep: any): Promise<RefusalCheck[]> {
+  const example = explicitOrderBody(quoteStep);
+  if (!example?.quoteToken) throw new Error("refusalChecks: no quote token in the quote step; the step's shape changed");
   const out: RefusalCheck[] = [];
   const judge = (name: string, r: Reply) => {
     const accepted = r.status >= 200 && r.status < 300 && !!r.body?.order;
@@ -95,7 +112,7 @@ export async function refusalChecks(call: Caller, quoteStep: any): Promise<Refus
 
 /** After the real order: the same quote again must be refused (a quote is used once). */
 export async function reuseCheck(call: Caller, quoteStep: any): Promise<RefusalCheck | undefined> {
-  const example = quoteStep?.next?.example;
+  const example = explicitOrderBody(quoteStep);
   if (!example?.quoteToken) return undefined;
   const r = await call("POST", "/api/v1/orders", example);
   return { name: "quote_reused", status: r.status, code: r.body?.error?.code ?? r.error, refused: r.status >= 400 && r.status < 500, accepted: r.status >= 200 && r.status < 300 && !!r.body?.order };
