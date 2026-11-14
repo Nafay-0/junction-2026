@@ -25,6 +25,7 @@ ledger. That is how "not a chatbot" and "no hallucinated inventory" are both kep
 | `order` | the order record | status, lines, who authorised it, the signed confirmation, what the agent passed over |
 | `memory` | memory recall and the memory writer | what memory answered instead of asking; after an order, what to remember (confirm each) |
 | `records` | order history, requests, products, mandate | answer rows for "what did we order last week?" |
+| `plan` | the menu planner's record (`server/agent/menu`) | a dish or menu for N covers: dishes, covers, day; one row per ingredient with the product, packs and line total; what ordering also accepts or leaves out (by the planner's codes); total, delivery, who signs; one button `plan_order` |
 | `notice` | refusals and failures | not found, not a purchase, incomplete (what is missing), model unavailable, suspended |
 
 A card with the same `cardId` sent again **replaces** the earlier one in place (an anomaly card gets `answered`,
@@ -115,6 +116,7 @@ Every decision the buyer makes ends in exactly one `ThreadAction`, whatever the 
 | taps option 2 / says "the second one" / "the cheaper one" | `{ type: "choose", requestId, optionId }` |
 | says "yes, order it" with a price showing | `{ type: "place", requestId }` |
 | says "keep that" to a memory proposal | `{ type: "remember", itemId, yes: true }` |
+| taps "Order this plan" / says "yes, order it" under a plan card | `{ type: "plan_order", planId }` |
 
 Mapping words onto a card is the model's proposal; plain code checks it: the action must name a choice on a card
 that is open now, a confirmation needs a clear yes in the buyer's own words (`channels/speech.ts yesOrNo`), and
@@ -135,8 +137,13 @@ chef said yes" typed by someone else is relayed, never the chef's own.
 - **The model orchestrates and converses**, on the AI SDK's agent loop (`ToolLoopAgent`), with the same tool
   table the open interface publishes (`server/mcp/tools.ts`, run through `server/mcp/server.ts` as the kitchen's
   own agent, so the on-site agent is one more client of the same gate), minus the tools that carry a buyer's
-  answer, plus three thread tools: `order` (read the words with `interpret.ts`, then the intake, as plain code),
+  answer, plus thread tools: `order` (read the words with `interpret.ts`, then the intake, as plain code),
+  `plan_menu` (a dish or menu for N covers: the menu planner as the kitchen's menu agent, its plan as a `plan` card),
   `buyer_reply` (map the newest buyer words onto an open card, checked as above) and `await_sign_off`.
+- **A plan is one decision.** `plan_order` settles what the card said it would (accepts the planner's acceptable
+  points, leaves out lines nothing fits), fixes one price for the whole plan and sends it through the gate as one
+  order (`server/thread/plan.ts`); the gate and order cards follow as for any order. Editing single lines stays on
+  the menu planner page (`/k/<kitchen>/menu?plan=<planId>` opens the thread's plan there).
 - **Sign-off is the runtime's approval step.** After the gate sends an order to a person, the agent calls
   `await_sign_off`, which always needs approval. The loop pauses. Only the server answers that approval, and only
   when the approver's passkey sign-off (or decline) is recorded on the order; no client, door or model can.
