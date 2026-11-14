@@ -29,6 +29,7 @@ import type { AgentTurn as AgentTurnT, BuyerTurn as BuyerTurnT, Card, OptionsCar
 import { requestLabel, usePortal } from "./portal";
 import { nameIn } from "./shop";
 import { THREAD_PAGE_TEXT } from "./thread.text";
+import { WaitingGate } from "./thread-signoff";
 
 /**
  * The kitchen's conversation with its purchasing agent (docs/agent-thread.md): the buyer's turns, and the agent's
@@ -223,6 +224,8 @@ function CardView({ card, tap, busy, gated, base, turn, thread }: { card: Card; 
       const name = card.approver?.name ?? "";
       const g = tx.gate;
       const title = { waiting: g.waiting(name), approved: g.approved(name), refused: g.refused(f.ruleTitle(card.rule)), placed_alone: g.placed_alone, declined: g.declined, withdrawn: g.withdrawn, expired: g.expired }[card.outcome];
+      if (card.outcome === "waiting" && card.approvalId)
+        return <WaitingGate card={card} kind={tx.kind.gate} title={title} reason={card.reasons.join(" ")} role={card.approver ? f.role(card.approver.role) : undefined} withdraw={card.orderId ? btn("ghost-dark", tx.withdraw, { type: "withdraw", orderId: card.orderId }) : undefined} />;
       return (
         <GateCard
           state={card.outcome}
