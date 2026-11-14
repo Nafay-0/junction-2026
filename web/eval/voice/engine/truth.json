@@ -1,0 +1,7 @@
+{
+  "e01-en-multi.wav": {"lang": "en", "noise": "none", "category": "multi", "said": "Ten litres of cream and twenty litres of lactose-free milk for Friday.", "expect": "order", "item": ["cream"], "amount": 10, "unit": "L", "weekday": "Friday"},
+  "e02-en-day.wav": {"lang": "en", "noise": "none", "category": "day", "said": "Ten litres of cream, delivered on Thursday.", "expect": "order", "item": ["cream"], "amount": 10, "unit": "L", "weekday": "Thursday"},
+  "e03-en-by.wav": {"lang": "en", "noise": "none", "category": "by-day", "said": "Ten litres of cream by Monday.", "expect": "order", "item": ["cream"], "amount": 10, "unit": "L", "weekday": "Monday"},
+  "e04-en-oat.wav": {"lang": "en", "noise": "none", "category": "not-offered", "said": "Twenty litres of oat drink for Wednesday.", "expect": "order", "item": ["oat"], "amount": 20, "unit": "L", "weekday": "Wednesday"},
+  "e05-fi-multi.wav": {"lang": "fi", "noise": "none", "category": "multi", "said": "Kymmenen litraa kermaa ja kaksikymmentä litraa maitoa perjantaiksi.", "expect": "order", "item": ["kerma", "cream"], "amount": 10, "unit": "L", "weekday": "Friday"}
+}

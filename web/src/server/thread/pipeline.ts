@@ -279,7 +279,7 @@ export async function orderFromWords(run: TurnRun, words: string, earlier: Earli
  * order sheet, priced and previewed by the gate once, confirmed once. Items still waiting on a question or a check
  * keep their own card and join by "Add" when answered. The options cards say they were handed to the sheet.
  */
-async function combineItems(run: TurnRun, words: string, items: ItemOutcome[]): Promise<ItemOutcome[]> {
+export async function combineItems(run: TurnRun, words: string, items: ItemOutcome[]): Promise<ItemOutcome[]> {
   if (!run.multi) return items;
   const ready: { s: IntakeView; optionId: string }[] = [];
   for (const it of items) {

@@ -55,7 +55,12 @@ export function providerOf(model: string): VoiceProvider {
 export function liveSetup(opts: { model: string; system: string; mode: CallMode; vocabulary?: string[] }) {
   return {
     model: `models/${opts.model}`,
-    generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } } },
+    generationConfig: {
+      responseModalities: ["AUDIO"],
+      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } },
+      // The extended-thinking model refuses a session without a thinking level (1007); DOCK_VOICE_THINKING sets it.
+      ...(/thinking/.test(opts.model) ? { thinkingConfig: { thinkingLevel: (process.env.DOCK_VOICE_THINKING?.trim() || "low").toUpperCase() } } : {}),
+    },
     systemInstruction: { parts: [{ text: opts.system }] },
     tools: [{ functionDeclarations: VOICE_TOOLS }],
     // Push-to-talk: the browser marks the start and end of each turn, so hall noise between turns is never sent.

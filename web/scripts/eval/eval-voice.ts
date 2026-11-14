@@ -335,7 +335,7 @@ async function main() {
         const before = log.length;
         await speak(replyClip(text, t.lang));
         if (log.length === before) flowLog.push(`(no tool call; agent said: ${said.trim().slice(0, 100)})`);
-        else flowLog.push(...log.slice(before).map((l) => `${l.name}: ${l.state}${l.refused ? ` (${l.refused})` : ""}`));
+        else flowLog.push(...log.slice(before).map((l) => `${l.name}: ${l.state}${l.refused ? ` (${l.refused})` : ""} | ${(l.say ?? "").slice(0, 160)}`));
       }
       if (order) orderMs = Date.now() - t0;
     }
