@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Check, Link2Off, Sparkles } from "lucide-react";
 import { Card, IconDisc, Input, Panel, Spinner } from "../../_ui/kit";
+import { PRODUCT_NAME } from "../../_ui/brand";
 import { PhoneNotice, PhoneProblem, PhoneSkeleton, bigButton } from "../../_ui/phone";
 
 type Ask = {
@@ -30,7 +31,7 @@ export function AnswerScreen({ token }: { token: string }) {
         if (r.ok) setAsk(j as Ask);
         else setProblem(j?.error?.message ?? "This link cannot be used.");
       })
-      .catch(() => setProblem("Dock could not be reached. Try again in a moment."));
+      .catch(() => setProblem(`${PRODUCT_NAME} could not be reached. Try again in a moment.`));
   }, [url]);
 
   if (problem)
@@ -69,7 +70,7 @@ export function AnswerScreen({ token }: { token: string }) {
     const j = r ? await r.json().catch(() => ({})) : {};
     setBusy(false);
     if (r?.ok) setDone(j.message ?? "Thank you.");
-    else setProblem(j?.error?.message ?? "Dock could not take the answer.");
+    else setProblem(j?.error?.message ?? `${PRODUCT_NAME} could not take the answer.`);
   }
 
   return (
@@ -79,7 +80,7 @@ export function AnswerScreen({ token }: { token: string }) {
           <Sparkles size={19} />
         </span>
         <p className="min-w-0 leading-snug">
-          {ask.kitchenName}&apos;s purchasing agent asked Dock for {ask.need ? <q className="font-semibold">{ask.need}</q> : "an order"}. Dock needs your own answer before it goes on.
+          {ask.kitchenName}&apos;s purchasing agent asked {PRODUCT_NAME} for {ask.need ? <q className="font-semibold">{ask.need}</q> : "an order"}. {PRODUCT_NAME} needs your own answer before it goes on.
         </p>
       </Panel>
       {items.map((i) => (

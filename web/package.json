@@ -81,7 +81,8 @@
     "search:vectors": "tsx scripts/search-vectors.ts",
     "search:publish": "tsx scripts/search-publish.ts",
     "search:publish:opensearch": "tsx scripts/search-publish-opensearch.ts",
-    "search:eval": "tsx eval/search/run.ts"
+    "search:eval": "tsx eval/search/run.ts",
+    "ui:shots": "node scripts/ui-shots.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.102",

@@ -23,3 +23,8 @@ export function groupsL(categories: string[], lang: Lang, max = 6): string[] {
   }
   return [...n.entries()].sort((a, b) => b[1] - a[1]).map(([g]) => g).slice(0, max);
 }
+
+/** A sentence from the server with category codes in it ("Standing Thu order (cat_41762)") with the product group instead. */
+export function categoryCodesL(text: string, lang: Lang): string {
+  return text.replace(/\bcat_(\d{3,})\b/g, (code) => groupL(code, lang) ?? code.replace("_", " "));
+}

@@ -241,7 +241,7 @@ function LiveCheck({ rows, untouched }: { rows: NonNullable<TraceStep["products"
               <tr key={p.id}>
                 <td className="font-medium">{p.name}</td>
                 {o.problem ? (
-                  <td colSpan={4}>
+                  <td colSpan={4} data-own-label data-label="Not offered">
                     <NotSo>{o.problem}</NotSo>
                   </td>
                 ) : (

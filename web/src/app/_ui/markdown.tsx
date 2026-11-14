@@ -159,11 +159,13 @@ export function blocks(lines: string[], link: LinkFn, key = "b"): ReactNode[] {
       while (i < lines.length && /^\s*\|/.test(lines[i])) rows.push(cells(lines[i++]));
       out.push(
         <div key={k} className="my-4 overflow-x-auto rounded-xl border border-ink/10 bg-paper">
-          <table className="w-full border-collapse text-left text-[0.88rem]">
+          {/* Words wrap at spaces only here (the article breaks anywhere, which squeezed columns to a letter wide); a
+              wide table scrolls inside its own frame. */}
+          <table className="w-full min-w-[36rem] border-collapse text-left text-[0.88rem] [overflow-wrap:normal]">
             <thead className="bg-mist">
               <tr>
                 {head.map((c, j) => (
-                  <th key={j} className="border-b border-ink/10 px-3 py-2 align-bottom font-semibold">
+                  <th key={j} className="min-w-[7rem] border-b border-ink/10 px-3 py-2 align-bottom font-semibold">
                     {inline(c, link, `${k}h${j}`)}
                   </th>
                 ))}
@@ -173,7 +175,7 @@ export function blocks(lines: string[], link: LinkFn, key = "b"): ReactNode[] {
               {rows.map((r, ri) => (
                 <tr key={ri} className="border-b border-ink/5 last:border-0">
                   {head.map((_, j) => (
-                    <td key={j} className="px-3 py-2 align-top leading-relaxed [&_code]:whitespace-nowrap">
+                    <td key={j} className="min-w-[7rem] px-3 py-2 align-top leading-relaxed [&_code]:[overflow-wrap:anywhere]">
                       {inline(r[j] ?? "", link, `${k}r${ri}c${j}`)}
                     </td>
                   ))}
