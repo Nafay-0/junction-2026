@@ -297,6 +297,8 @@ export type MenuChecks = import("./scenarios").PlanChecks & {
   say: string;
   /** The question for a refused dish ("Which one?"), answered by naming one of `instead`; then plan it with the planner as any menu. */
   ask?: string;
+  /** The count to say is the count shown: lines bought, and apart from them the staples assumed and what is on hand. */
+  counts: { ingredients: number; toBuy: number; staples: number; onHand: number; open: number };
 };
 
 /**
@@ -327,5 +329,105 @@ export async function menuChecks(slug: string, planId: string, lang: Lang = "en"
     const staples = c.coverage.filter((x) => x.basis === "staple").map((x) => lower(x.ingredient));
     if (staples.length) parts.push(t.staples(list([...new Set(staples)], lang)));
   }
-  return { ...c, say: upper(parts.join(" ")), ...(ask ? { ask: upper(ask) } : {}) };
+  const by = (b: string) => new Set(c.coverage.filter((x) => x.basis === b).map((x) => x.lineId)).size;
+  const counts = { ingredients: new Set(c.coverage.map((x) => x.lineId)).size, toBuy: by("ordered"), staples: by("staple"), onHand: by("on_hand"), open: by("open") };
+  if (!c.refusedDish && counts.ingredients) parts.unshift(t.counts(counts.toBuy + counts.open, counts.staples, counts.onHand));
+  return { ...c, counts, say: upper(parts.join(" ")), ...(ask ? { ask: upper(ask) } : {}) };
+}
+
+// ---------- a change to the plan on the table, in words ----------
+
+export type MenuChange = {
+  planId: string;
+  /** What the words were read as (plain code); empty when they ask for no change this can make. */
+  edits: import("./service").PlanEdit[];
+  /** What changed, line by line, in English for the steps. */
+  changed: string[];
+  beforeCents: number;
+  totalCents: number;
+  /** One or two sentences in the kitchen's language: what changed and the new total, or why nothing could. */
+  say: string;
+  /** The changed plan's own checks (a dish refused under the new rule, rule refusals, the day, coverage). */
+  checks: import("./scenarios").PlanChecks;
+};
+
+const CLAIM_WORDS: [RegExp, string][] = [
+  [/lactose[- ]?free|laktoosit(o|t)|laktosfri/i, "lactose_free"],
+  [/gluten[- ]?free|gluteenit(o|t)|glutenfri/i, "gluten_free"],
+  [/\bvegan|vegaani|vegansk/i, "vegan"],
+  [/vegetarian|kasvis|vegetarisk/i, "vegetarian"],
+];
+const ALLERGEN_WORDS_SAID: [RegExp, string][] = [
+  [/\bno nuts?\b|nut[- ]?free|without nuts|pähkinät(o|ö)n|ilman pähkinöitä|utan nötter|nötfri/i, "nuts"],
+  [/no peanuts?|peanut[- ]?free|maapähkinät(o|ö)n|utan jordnötter/i, "peanuts"],
+  [/no fish|fish[- ]?free|kalat(o|o)n|ilman kalaa|utan fisk/i, "fish"],
+  [/no eggs?|egg[- ]?free|munat(o|o)n|kananmunaton|utan ägg/i, "eggs"],
+  [/milk[- ]?free|dairy[- ]?free|no dairy|maidot(o|o)n|mjölkfri/i, "milk"],
+  [/no sesame|sesame[- ]?free|seesamit(o|o)n/i, "sesame"],
+];
+
+/**
+ * A change to the plan on the table, in the buyer's words, made by plain code on the planner's own edits: a dietary
+ * constraint ("make it lactose-free", "no nuts", "vegetarian"), the portions ("for 20", "20 annosta"), one ingredient
+ * swapped ("use oat cream instead of the whipping cream"), a dish dropped ("drop the dessert"). Only what the change
+ * touches is searched and priced again; the rest stays. Returns what changed and the new total, said in one sentence.
+ */
+export async function changeMenu(slug: string, planId: string, words: string, by: string, lang: Lang = "en"): Promise<MenuChange> {
+  const { service, kitchen } = await kit(slug);
+  const before = await service.get(kitchen, planId);
+  const p = before.record;
+  const edits = changeEditsOf(words, p);
+  const t = MENU_SAY_TEXT[lang];
+  if (!edits.length) {
+    const { checksOf } = await import("./scenarios");
+    return { planId, edits, changed: [], beforeCents: before.view.totals.totalCents, totalCents: before.view.totals.totalCents, say: t.noChange, checks: checksOf(before.view) };
+  }
+  const after = await service.edit(kitchen, planId, edits, by);
+  const { checksOf } = await import("./scenarios");
+  const changed: string[] = [];
+  for (const l of after.view.lines) {
+    const was = before.view.lines.find((x) => x.lineId === l.lineId);
+    const a = l.chosen?.products.map((x) => `${x.packs} × ${x.name}`).join(" + ") ?? (l.status === "struck" ? "not bought" : "nothing found");
+    const b = was?.chosen?.products.map((x) => `${x.packs} × ${x.name}`).join(" + ") ?? (was?.status === "struck" ? "not bought" : "nothing found");
+    if (a !== b || l.name !== was?.name) changed.push(`${was?.name ?? l.name}${l.name !== was?.name ? ` → ${l.name}` : ""}: ${b} → ${a}`);
+  }
+  const what = edits.map((e) => (e.op === "rules" ? t.changedRules([...(e.requiredClaims ?? []).map((c) => t.claim[c] ?? c), ...(e.forbiddenAllergens ?? []).map((x) => t.noAllergen(t.allergen[x] ?? x))].join(", ")) : e.op === "covers" ? t.changedCovers(e.covers) : e.op === "ingredient" ? t.changedIngredient(e.name) : e.op === "dropDish" ? t.changedDrop(dishL(p.draft.dishes.find((d) => d.id === e.dishId)!, lang)) : "")).filter(Boolean);
+  const checks = checksOf(after.view);
+  const lines = changed.length ? t.changedLines(changed.length) : t.nothingElse;
+  const refused = checks.refusedDish ? ` ${t.refused(checks.refusedDish.name, "", t.allergen[checks.refusedDish.allergen] ?? checks.refusedDish.allergen, checks.refusedDish.rule.text)}` : "";
+  const say = upper(`${what.join(" ")} ${lines} ${t.newTotal(money(after.view.totals.totalCents), money(before.view.totals.totalCents))}${refused}`.replace(/\s+/g, " ").trim());
+  return { planId, edits, changed, beforeCents: before.view.totals.totalCents, totalCents: after.view.totals.totalCents, say, checks };
+}
+
+
+/** The buyer's words as the planner's edits on this plan (plain code): a constraint, the portions, a swap, a dish dropped. */
+export function changeEditsOf(words: string, p: Pick<import("./service").PlanRecord, "settings" | "specs" | "draft">): import("./service").PlanEdit[] {
+  const edits: import("./service").PlanEdit[] = [];
+  const claims = CLAIM_WORDS.filter(([re]) => re.test(words)).map(([, c]) => c);
+  const allergens = ALLERGEN_WORDS_SAID.filter(([re]) => re.test(words)).map(([, a]) => a);
+  if (claims.length || allergens.length) edits.push({ op: "rules", ...(claims.length ? { requiredClaims: claims } : {}), ...(allergens.length ? { forbiddenAllergens: allergens } : {}) });
+  const covers = /(?:for|make it|to|kaikkiaan|yhteensä|för)?\s*(\d{1,5})\s*(?:portions?|covers?|people|guests|persons?|servings?|annosta|annokselle|hengelle|hengen|portioner|personer|gäster)\b/i.exec(words) ?? /\b(?:make it|for|now)\s+(\d{1,5})\b(?!\s*(?:kg|g|l|ml|dl|%))/i.exec(words);
+  if (covers && Number(covers[1]) > 0 && Number(covers[1]) !== p.settings.covers) edits.push({ op: "covers", covers: Number(covers[1]) });
+  const swap = /(?:use|with)\s+(.+?)\s+(?:instead of|rather than|in place of)\s+(?:the\s+)?(.+?)[.!?]*$/i.exec(words) ?? /(?:replace|swap)\s+(?:the\s+)?(.+?)\s+(?:with|for)\s+(.+?)[.!?]*$/i.exec(words);
+  if (swap) {
+    const [newName, oldName] = /^(?:replace|swap)/i.test(words.trim()) ? [swap[2], swap[1]] : [swap[1], swap[2]];
+    const target = matchLine(p, oldName);
+    if (target) edits.push({ op: "ingredient", lineId: target, name: newName });
+  }
+  const drop = /(?:drop|remove|skip|leave out|without|no more)\s+(?:the\s+)?(.+?)[.!?]*$/i.exec(words) ?? /(?:jätä|poista)\s+(.+?)\s+pois/i.exec(words) ?? /(?:ta bort|stryk)\s+(.+?)[.!?]*$/i.exec(words);
+  if (drop && !swap && !allergens.length) {
+    const dish = p.draft.dishes.find((d) => [d.name, d.nameFi ?? "", d.nameSv ?? "", d.course].some((n) => n && stemsMatch(n, drop[1])));
+    if (dish) edits.push({ op: "dropDish", dishId: dish.id });
+  }
+  return edits;
+}
+
+const stemsOf = (s: string) => fold(s).split(/[^a-z0-9]+/).filter((w) => w.length >= 3).map((w) => w.slice(0, Math.min(6, Math.max(3, w.length - 2))));
+const stemsMatch = (name: string, said: string) => {
+  const n = fold(name);
+  const ws = stemsOf(said).filter((w) => !["the", "and", "ja", "och"].includes(w));
+  return ws.length > 0 && ws.every((w) => n.includes(w));
+};
+function matchLine(p: Pick<import("./service").PlanRecord, "specs">, said: string): string | undefined {
+  return p.specs.find((s) => [s.name, s.key.replace(/_/g, " "), ...s.ingredient.searchTerms].some((n) => stemsMatch(n, said)))?.lineId;
 }

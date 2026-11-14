@@ -14,6 +14,7 @@ const DRAFTS: [RegExp, LlmMenuDraft][] = [
   // The model wrote the fish fingers into the name and the fish away from the lines: the name alone refuses it.
   [/^kalapuikot/, draft({ dishes: [dish("Kalapuikot ja perunamuusi", [ing("potato", "Potato", ["peruna", "potato"], 150, "g"), ing("butter", "Butter", ["voi"], 8, "g")])] })],
   [/^Three main dishes/, draft({ dishes: [dish("Chicken and rice", [ing("chicken", "Chicken breast", ["broilerin rintafilee", "chicken breast"], 90, "g", { role: "main protein" }), ing("rice", "Rice", ["riisi", "rice"], 60, "g")]), dish("Salmon soup", [ing("salmon", "Salmon fillet", ["lohifilee"], 80, "g", { role: "main protein" })]), dish("Chicken with mash", [ing("chicken", "Chicken breast", ["broilerin rintafilee"], 90, "g"), ing("potato", "Potato", ["peruna"], 150, "g")])] })],
+  [/^cream sauce/, draft({ covers: 10, serviceDate: "2026-11-16", dishes: [dish("Cream sauce", [ing("cooking_cream", "Cooking cream", ["ruokakerma", "cooking cream"], 50, "ml"), ing("leek", "Leek", ["purjo", "leek"], 30, "g")]), dish("Rye bread", [ing("rye_bread", "Rye bread", ["ruisleipä", "rye bread"], 40, "g")], { course: "bread" })] })],
   [/^chocolate cake/, draft({ covers: 10, serviceDate: "2026-11-16", dishes: [dish("Chocolate cake", [ing("dark_chocolate", "Dark baking chocolate", ["tumma leivontasuklaa"], 20, "g"), ing("butter", "Butter", ["voi"], 15, "g"), ing("egg", "Egg", ["kananmuna"], 0.5, "pcs"), ing("cocoa", "Cocoa powder", ["kaakaojauhe"], 5, "g"), ing("baking_powder", "Baking powder", ["leivinjauhe"], 1, "g")], { course: "dessert" })] })],
 ];
 
@@ -80,5 +81,24 @@ describe("defect 2: a recipe is complete, and the covers scale every line", () =
     const before = Object.fromEntries(view.lines.map((l) => [l.lineId, l.gross!.amount]));
     const { view: v20 } = await service.edit(kaari, record.planId, [{ op: "covers", covers: 20 }], "chef");
     for (const l of v20.lines) expect(l.gross!.amount).toBeCloseTo(before[l.lineId] * 2, 3);
+  });
+});
+
+describe("a change to the plan on the table: a constraint, the portions, a swap, a dish dropped", () => {
+  it("make it lactose-free re-searches only what the rule touches; the rest stays", async () => {
+    const { service, kaari } = await setup();
+    // A kitchen with no lactose rule of its own: the request adds it.
+    const free = outsideMenuKitchen({ mandate: { ...kaari.mandate, forbiddenAllergens: [] }, agentId: kaari.agentId, door: "menu" }, undefined, MENU_NOW);
+    const { record, view } = await service.plan(free, "cream sauce for 10", "chef");
+    const cream = (v: typeof view) => v.lines.find((l) => l.lineId === "cooking_cream")!.chosen!.products[0].productId;
+    expect(cream(view)).toBe("800011");
+    const { view: lf } = await service.edit(free, record.planId, [{ op: "rules", requiredClaims: ["lactose_free"] }], "chef");
+    expect(cream(lf)).toBe("800010");
+    expect(lf.lines.find((l) => l.lineId === "leek")!.chosen!.products[0].productId).toBe(view.lines.find((l) => l.lineId === "leek")!.chosen!.products[0].productId);
+    const { view: dropped } = await service.edit(free, record.planId, [{ op: "dropDish", dishId: "dish_2" }], "chef");
+    expect(dropped.lines.find((l) => l.lineId === "rye_bread")!.status).toBe("struck");
+    const { view: swapped } = await service.edit(free, record.planId, [{ op: "ingredient", lineId: "leek", name: "Onion", searchTerms: ["sipuli", "onion"] }], "chef");
+    expect(swapped.lines.find((l) => l.lineId === "leek")!.name).toBe("Onion");
+    expect(swapped.lines.find((l) => l.lineId === "leek")!.chosen!.products[0].productId).toBe("800023");
   });
 });

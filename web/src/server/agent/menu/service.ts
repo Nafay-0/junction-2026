@@ -758,6 +758,51 @@ export function createPlanService(deps: PlanDeps) {
           log(p, k, `buyer:${by}`, `${by} decided on the plan: "${doubt.acceptLabel}" for: ${doubt.text}`, { doubtId: e.doubtId, kind: doubt.kind, relayedBy: k.agentId });
           break;
         }
+        case "rules": {
+          // A constraint on the plan on the table ("make it lactose-free", "no nuts"): the request's own rules grow
+          // (never shrink), every line is searched again under them, and a dish made of what they forbid is refused.
+          const claims = new Set([...p.draft.requiredClaims, ...(e.requiredClaims ?? [])]);
+          const allergens = new Set([...p.draft.forbiddenAllergens, ...(e.forbiddenAllergens ?? [])]);
+          p.draft = { ...p.draft, requiredClaims: [...claims], forbiddenAllergens: [...allergens] };
+          const diet = withRequestRules(k.diet, p.draft);
+          for (const spec of p.specs) {
+            if (p.edits[spec.lineId]?.struck ?? spec.pantry) continue;
+            p.candidates[spec.lineId] = await findCandidates(catalog, spec.ingredient, diet, allowedFor(k), 8);
+            delete p.edits[spec.lineId]?.optionId;
+          }
+          for (const dish of p.draft.dishes) {
+            if (p.refused?.some((r) => r.dishId === dish.id)) continue;
+            const c = definingConflict(dish, [...diet.forbiddenAllergens.map((f) => f.allergen)], k.info.rules);
+            if (c) {
+              (p.refused ??= []).push({ dishId: dish.id, name: dish.name, ingredient: c.ingredient, allergen: c.allergen, rule: c.rule });
+              for (const spec of p.specs) if (spec.uses.every((u) => u.dishId === dish.id)) (p.edits[spec.lineId] ??= {}).struck = true;
+            }
+          }
+          log(p, k, `buyer:${by}`, `${by} added to the plan's rules: ${[...(e.requiredClaims ?? []).map((c) => c.replace(/_/g, "-")), ...(e.forbiddenAllergens ?? []).map((a) => `no ${a}`)].join(", ")}; every line searched again under them.`, { requiredClaims: e.requiredClaims ?? [], forbiddenAllergens: e.forbiddenAllergens ?? [] });
+          reprice = true;
+          break;
+        }
+        case "ingredient": {
+          // One ingredient swapped in words ("use lingonberry jam instead of fresh lingonberries"): the same amount and
+          // role, the new ingredient searched under the kitchen's and the plan's rules.
+          const spec = line!;
+          const name = e.name.trim().slice(0, 80);
+          spec.replaces = { name: spec.name, fixTitle: `${name} instead, as the buyer asked`, changesDish: false };
+          spec.name = name;
+          spec.ingredient = { ...spec.ingredient, name, searchTerms: [name, ...(e.searchTerms ?? [])].slice(0, 4), avoid: [] };
+          p.candidates[spec.lineId] = await findCandidates(catalog, spec.ingredient, withRequestRules(k.diet, p.draft), allowedFor(k), 8);
+          delete p.edits[spec.lineId];
+          log(p, k, `buyer:${by}`, `${by} swapped ${spec.replaces.name} for ${name} on the plan.`, { lineId: spec.lineId, from: spec.replaces.name, to: name });
+          reprice = true;
+          break;
+        }
+        case "dropDish": {
+          const dish = p.draft.dishes.find((x) => x.id === e.dishId);
+          if (!dish) throw new DockError(404, "dish_not_found", `No dish ${e.dishId} on this plan.`);
+          for (const spec of p.specs) if (spec.uses.every((u) => u.dishId === dish.id)) (p.edits[spec.lineId] ??= {}).struck = true;
+          log(p, k, `buyer:${by}`, `${by} dropped ${dish.name} from the plan.`, { dishId: dish.id });
+          break;
+        }
         case "applyFix": {
           const fix = (p.fixes[line!.lineId] ?? []).find((f) => f.fixId === e.fixId);
           if (!fix) throw new DockError(404, "fix_not_found", `No proposal ${e.fixId} for this line.`);
@@ -948,6 +993,12 @@ export type PlanEdit =
   | { op: "accept"; doubtId: string }
   | { op: "applyFix"; lineId: string; fixId: string }
   /** What the kitchen has on hand of a line (core/on-hand.ts), or null to take it away; `by` names who said it, else the agent. */
-  | { op: "onHand"; lineId: string; onHand: OnHand | null; by?: string };
+  | { op: "onHand"; lineId: string; onHand: OnHand | null; by?: string }
+  /** A constraint on the whole plan in words ("make it lactose-free", "no nuts"): added to the request's rules. */
+  | { op: "rules"; requiredClaims?: string[]; forbiddenAllergens?: string[] }
+  /** One ingredient replaced by another the buyer named, same amount and role. */
+  | { op: "ingredient"; lineId: string; name: string; searchTerms?: string[] }
+  /** A dish taken off the plan: every line only it uses is struck. */
+  | { op: "dropDish"; dishId: string };
 
 export type PlanService = ReturnType<typeof createPlanService>;
