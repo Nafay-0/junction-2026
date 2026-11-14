@@ -271,6 +271,7 @@ async function main() {
     if (closed) {
       row.error = closed;
       sock.close();
+      calls().end(start.callId, KITCHEN, "eval: did not start");
       return row;
     }
     // Greeting, as the call screen does it.
