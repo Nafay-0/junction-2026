@@ -270,7 +270,7 @@ function RenewalRow({ r, now }: { r: Renewal; now: number }) {
 function Backups({ backups, now }: { backups: View["backups"]; now: number }) {
   const shown = backups.filter((b) => b.state !== "offered" || b.alternatives.length).slice(0, 30);
   if (shown.length === 0) return <Empty title="None yet">Only for a product with a poor delivery record (the wholesaler&apos;s history, below 9 in 10): the kitchen can line up a backup at order time. Nothing is bought unless the product then cannot come.</Empty>;
-  const label: Record<string, { text: string; tone: "good" | "info" | "neutral" | "refused" | "bad" }> = { offered: { text: "Offered", tone: "neutral" }, set: { text: "Lined up", tone: "info" }, declined: { text: "No backup wanted", tone: "neutral" }, used: { text: "Used", tone: "good" } };
+  const label: Record<string, { text: string; tone: "good" | "info" | "neutral" | "refused" | "bad" }> = { cleared: { text: "Cleared by a reset", tone: "neutral" }, offered: { text: "Offered", tone: "neutral" }, set: { text: "Lined up", tone: "info" }, declined: { text: "No backup wanted", tone: "neutral" }, used: { text: "Used", tone: "good" } };
   return (
     <ul className="space-y-2 text-[0.9rem]">
       {shown.map((b) => (

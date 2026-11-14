@@ -36,7 +36,7 @@ export type Backup = {
   requestId?: string;
   orderId?: string;
   alternatives: BackupAlternative[];
-  state: "offered" | "set" | "declined" | "used";
+  state: "offered" | "set" | "declined" | "used" | "cleared";
   chosen?: { productId: string; name: string; insidePreferences: boolean; how: "picked" | "you_choose"; by: string; via: string; at: string };
   used?: { at: string; findingId: string; staged: boolean; requestId?: string; orderId?: string; status?: PublicOrder["status"]; totalCents?: number; approver?: string; refused?: { code: string; rule?: string; message: string } };
   at: string;
@@ -297,4 +297,16 @@ export async function withDeliveryRecords<T extends Record<string, unknown>>(rt:
     console.warn("[backups] delivery records", (err as Error).message);
   }
   return out;
+}
+
+/** A test account reset (server/watch clearForOrgs): its backups no longer stand. Returns how many were cleared. */
+export async function clearBackupsFor(rt: Runtime, orgIds: string[], by: string): Promise<number> {
+  const s = await ready(rt);
+  let n = 0;
+  for (const b of [...s.backups.values()].filter((x) => orgIds.includes(x.orgId) && x.state !== "cleared")) {
+    save(s, { ...b, state: "cleared" });
+    n += 1;
+  }
+  if (n) ledger(rt, { actor: "dock", summary: `Test account reset (${by}): ${n} backup${n === 1 ? "" : "s"} offered, lined up or used no longer stand${n === 1 ? "s" : ""}.`, data: { step: "backup_cleared", orgIds, cleared: n, by } });
+  return n;
 }

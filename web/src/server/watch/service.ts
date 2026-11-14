@@ -1002,7 +1002,8 @@ export async function clearForOrgs(rt: Runtime, orgIds: string[], by: string, no
     autoOff += 1;
   }
   for (const orgId of orgIds) s.cache.delete(orgId);
-  if (lifted || autoOff) ledger(rt, { actor: "dock", summary: `Test account reset (${by}): ${lifted} staged condition${lifted === 1 ? "" : "s"} lifted and auto-renew switched off for ${autoOff} recurring order${autoOff === 1 ? "" : "s"}.`, data: { step: "reset", orgIds, lifted, autoOff, staged: lifted > 0 } });
+  const backups = await (await import("../reliability/service")).clearBackupsFor(rt, orgIds, by);
+  if (lifted || autoOff || backups) ledger(rt, { actor: "dock", summary: `Test account reset (${by}): ${lifted} staged condition${lifted === 1 ? "" : "s"} lifted, auto-renew switched off for ${autoOff} recurring order${autoOff === 1 ? "" : "s"}, ${backups} backup${backups === 1 ? "" : "s"} cleared.`, data: { step: "reset", orgIds, lifted, autoOff, staged: lifted > 0 } });
   return { lifted, autoOff };
 }
 
