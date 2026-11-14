@@ -36,7 +36,7 @@ const SCENARIOS: Record<string, FakeScenario> = {
 
 function setup(scenarios = SCENARIOS, apiOpts: Parameters<typeof fakeValioApi>[1] = {}) {
   const api = fakeValioApi(scenarios, apiOpts);
-  const live = new ValioLiveClient({ baseUrl: "https://valio.test", apiKey: "test-key", fetch: api.fetch, now: () => NOW, sleep: async () => {} });
+  const live = new ValioLiveClient({ baseUrl: "https://valio.test", apiKey: "test-key", fetch: api.fetch, now: () => NOW, sleep: async () => {}, gate: null });
   const valio = new ValioCatalog(index, live, { now: () => NOW });
   return { api, valio, metered: new MeteredCatalog(valio) };
 }

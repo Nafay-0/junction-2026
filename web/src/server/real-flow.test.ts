@@ -41,7 +41,7 @@ let ledger: Ledger;
 
 async function setup(opts: { status?: number; allowance?: LiveLookupAllowance } = {}) {
   api = fakeValioApi(SCENARIOS, { timeNow: "2026-11-13T22:00:00+0200", status: opts.status });
-  const live = new ValioLiveClient({ baseUrl: "http://valio.test", apiKey: "test-key", fetch: api.fetch, now: () => NOW, sleep: async () => {}, maxRetries: 1 });
+  const live = new ValioLiveClient({ baseUrl: "http://valio.test", apiKey: "test-key", fetch: api.fetch, now: () => NOW, sleep: async () => {}, gate: null, maxRetries: 1 });
   const buyer = await generateEd25519KeyPair("hotel-key");
   wholesaler = await generateEd25519KeyPair("dock-wholesaler-test");
   ledger = new Ledger(undefined, () => NOW);

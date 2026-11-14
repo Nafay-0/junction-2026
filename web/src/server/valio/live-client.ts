@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { MAX_LIVE_IDS_PER_CALL } from "@/core/catalog";
 import { reserveLiveLookup } from "@/server/limits";
+import { PartnerBusyError, partnerGate, type PartnerGate } from "./partner-gate";
 
 /**
  * Client for the partner's two live endpoints, POST /api/price and POST /api/availability.
@@ -10,8 +11,9 @@ import { reserveLiveLookup } from "@/server/limits";
  * until their validity window ends (capped). It never lists or scans the catalogue; callers narrow down first.
  *
  * A buyer never waits long on it: one lookup (prices and availability, every batch and retry) has `deadlineMs`
- * (default 8 s, DOCK_LIVE_DEADLINE_MS) in all. A Retry-After that would run past it is not slept on: the lookup
- * fails at once as rate_limited, saying when to try again (QA F-SLOW-PARTNER-WAIT: 30 to 36 s before).
+ * (default 8 s, DOCK_LIVE_DEADLINE_MS) in all. A 429 is never retried: the partner blocks the key for 30 seconds,
+ * so the whole process stops calling for that long (partner-gate.ts), and the lookup fails at once as rate_limited,
+ * saying when to try again. Every call is paced by the same gate (5 a second, 200 a minute by default).
  */
 export const LIVE_DEADLINE_MS = 8000;
 const PER_CALL_TIMEOUT_MS = 5000;
@@ -87,6 +89,11 @@ export type ValioClientConfig = {
   /** Upper bound on caching a price, even when its validity window is longer. */
   priceTtlMs?: number;
   cacheSize?: number;
+  /**
+   * The process-wide pace and 429 block (partner-gate.ts). Default: the one gate of this process, which every client
+   * shares. A wholesaler-shaped fake in a test passes `null` to call without pacing.
+   */
+  gate?: PartnerGate | null;
 };
 
 export type UpstreamStats = { httpRequests: number; retries: number; cacheHits: number; failures: number };
@@ -159,7 +166,8 @@ function retryAfterOf(res?: Response): number | undefined {
 }
 
 export class ValioLiveClient {
-  private readonly cfg: Required<Omit<ValioClientConfig, "fetch" | "now" | "sleep">> & Pick<ValioClientConfig, "fetch">;
+  private readonly cfg: Required<Omit<ValioClientConfig, "fetch" | "now" | "sleep" | "gate">> & Pick<ValioClientConfig, "fetch">;
+  private readonly gate: PartnerGate | null;
   private readonly now: () => Date;
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly cache = new Map<string, CacheEntry<unknown>>();
@@ -180,6 +188,7 @@ export class ValioLiveClient {
       priceTtlMs: config.priceTtlMs ?? 10 * 60_000,
       cacheSize: config.cacheSize ?? 500,
     };
+    this.gate = config.gate === undefined ? partnerGate() : config.gate;
     this.now = config.now ?? (() => new Date());
     this.sleep = config.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
   }
@@ -347,6 +356,16 @@ export class ValioLiveClient {
         this.counters.failures += 1;
         throw new ValioApiError("timeout", `Valio API ${path}: no usable answer within ${Math.round(this.cfg.deadlineMs / 1000)} s.`, undefined, 30);
       }
+      // The process-wide pace, and no call at all while the partner has asked us to wait (partner-gate.ts).
+      try {
+        await this.gate?.acquire(left);
+      } catch (err) {
+        if (err instanceof PartnerBusyError) {
+          this.counters.failures += 1;
+          throw new ValioApiError("rate_limited", err.message, err.reason === "blocked" ? 429 : undefined, err.retryAfterSeconds);
+        }
+        throw err;
+      }
       reserveLiveLookup(); // public-demo cap on partner API requests per day (server/limits.ts)
       this.counters.httpRequests += 1;
       let res: Response | undefined;
@@ -363,7 +382,13 @@ export class ValioLiveClient {
         const timedOut = name === "TimeoutError" || name === "AbortError";
         failure = new ValioApiError(timedOut ? "timeout" : "network", `Valio API ${path}: ${timedOut ? (left < this.cfg.timeoutMs ? `no usable answer within ${Math.round(this.cfg.deadlineMs / 1000)} s` : `no answer within ${this.cfg.timeoutMs} ms`) : "network error"}.`, undefined, timedOut ? 30 : undefined);
       }
-      const retryable = failure !== undefined || (res !== undefined && (res.status === 429 || res.status >= 500));
+      // 429: "blocked for 30 seconds". The whole process stops calling for that long; nothing retries into the block.
+      if (res?.status === 429) {
+        const s = this.gate ? this.gate.block(retryAfterOf(res)) : Math.max(30, retryAfterOf(res) ?? 0);
+        this.counters.failures += 1;
+        throw new ValioApiError("rate_limited", `The wholesaler's price service asked us to wait (it answered 429): no calls for ${s} s.`, 429, s);
+      }
+      const retryable = failure !== undefined || (res !== undefined && res.status >= 500);
       if (!retryable) return res!;
       if (attempt >= this.cfg.maxRetries) {
         this.counters.failures += 1;
