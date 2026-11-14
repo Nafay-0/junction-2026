@@ -23,7 +23,7 @@ export type WholesalerAuditEntry = {
   type: LedgerEntry["type"];
   requestId?: string;
   orderId?: string;
-  kind: "asked" | "claimed" | "quoted" | "decided" | "signed" | "committed" | "refused" | "control" | "private";
+  kind: "asked" | "claimed" | "quoted" | "decided" | "signed" | "committed" | "refused" | "control" | "offered" | "private";
   summary: string;
   data?: Record<string, unknown>;
 };
@@ -72,6 +72,10 @@ export function wholesalerEntry(e: LedgerEntry): WholesalerAuditEntry {
     case "control":
       // The wholesaler's own act (an operator suspended or resumed an agent): theirs to read in full.
       return { ...base, kind: "control", summary: e.summary, data: pick(d, ["action", "scope", "target", "suspensionId", "reason", "by"]) };
+    case "offer":
+      // The selling agent's offers and the kitchen's answers to them: both sides read them in full (what was offered,
+      // why, at what price, and accepted, declined or muted). Nothing of the kitchen's memory is in them.
+      return { ...base, kind: "offered", summary: e.summary, data: pick(d, ["step", "offerId", "productId", "reasons", "line", "price", "validUntil", "rule", "reason", "campaignId", "answer", "scope", "by", "requestId"]) };
     case "agent":
       // The kitchen's conversation with its own agent: the buyer's words and the agent's work stay with the buyer.
       return { ...base, kind: "private", summary: "Buyer-side conversation step, kept with the buyer." };

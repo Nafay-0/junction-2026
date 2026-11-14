@@ -16,6 +16,7 @@ import {
 import type { AlternativesSource } from "./alternatives";
 import type { EventPublisher } from "./events";
 import { CatalogError, ProductQuerySchema, scheduledOn, usableOffer, type LiveOffer, type LiveStatus, type MeteredCatalog, type Product } from "./catalog";
+import { signOffer, type OfferBody } from "./offers";
 import { ClaimStore, availabilityClaimInput, cutoffMs, issueClaim, originClaimInput, priceClaimInput, refOf, type IssuedClaim } from "./claims";
 import { DockError, isDockError, parse } from "./errors";
 import { concernsOfOrder, unaskedNote, type OrderConcern } from "./order-check";
@@ -1620,6 +1621,22 @@ export function createDock(deps: DockDeps) {
     liveAllowance,
     ledger,
     wholesalerPublicJwk: wholesalerKey.publicJwk,
+
+    /**
+     * The wholesaler's selling agent (server/offers): sign what it states about a product for one buyer (its price,
+     * for that buyer, and its origin), kept like every other claim so the buyer's agent can fetch the tokens, and sign
+     * the offer itself (core/offers.ts). Signing only; nothing is ordered or reserved.
+     */
+    async signOfferClaims(audience: string, offer: LiveOffer, product: Product, at: Date = now()): Promise<IssuedClaim[]> {
+      const out: IssuedClaim[] = [];
+      for (const input of [priceClaimInput(offer, at, audience), originClaimInput(product, at)]) {
+        const c = await issueClaim(input, wholesalerKey);
+        claimStore.put(c, input.audience);
+        out.push(c);
+      }
+      return out;
+    },
+    signOffer: (body: OfferBody) => signOffer(body, wholesalerKey),
   };
 
   /**

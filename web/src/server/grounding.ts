@@ -12,9 +12,10 @@ import { groundField, groundText, type CheckOptions, type Facts, type Grounded, 
  *   menu       the menu planner's model-written dish texts, assumptions, warnings and reasons
  *   interpret  the interpreter's structured need (a claim, allergen, product, amount or date nobody said)
  *   memory     memory proposals the writer model made (an item whose words the interaction does not back)
+ *   offer      the selling agent's one-line reason on an offer it signs (server/offers)
  *   aiven      the Aiven agent's and the operations copilot's transcript in the operations portal
  */
-export const GROUNDING_SURFACES = ["assistant", "voice", "menu", "interpret", "memory", "aiven", "thread"] as const;
+export const GROUNDING_SURFACES = ["assistant", "voice", "menu", "interpret", "memory", "aiven", "thread", "offer"] as const;
 export type GroundingSurface = (typeof GROUNDING_SURFACES)[number];
 
 export type GroundingFire = { at: string; surface: GroundingSurface; kinds: Violation["kind"][]; said: string[]; where?: string };
